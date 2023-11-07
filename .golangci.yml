@@ -1,0 +1,17 @@
+linters:
+  enable:
+    - errname
+    - forcetypeassert
+    - gocheckcompilerdirectives
+    - gocyclo
+    - lll
+    - makezero
+  disable:
+    - unused
+
+linters-settings:
+  gocyclo:
+    min-complexity: 15
+  lll:
+    tab-width: 8
+    line-length: 99

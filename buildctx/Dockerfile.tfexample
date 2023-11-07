@@ -1,0 +1,133 @@
+FROM nvidia/cuda:12.1.0-devel-ubuntu18.04
+
+# Install system dependencies
+ENV DEBIAN_FRONTEND=noninteractive
+ENV TZ=Etc/UTC
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        apt-transport-https \
+        ca-certificates \
+        cmake \
+        curl \
+        git \
+        gnupg \
+        libfreetype6-dev \
+        libhdf5-serial-dev \
+        libtbb-dev \
+        libzmq3-dev \
+    && apt-get clean
+
+ENV BAZEL_VER=3.7.2
+
+# Install Bazel
+RUN curl -fsSL https://bazel.build/bazel-release.pub.gpg | gpg --dearmor > bazel.gpg && \
+    mv bazel.gpg /etc/apt/trusted.gpg.d/ && \
+    echo "deb [arch=amd64] https://storage.googleapis.com/bazel-apt stable jdk1.8" | tee /etc/apt/sources.list.d/bazel.list && \
+    apt-get update && \
+    apt-get install -y bazel-$BAZEL_VER && \
+    apt-get clean && \
+    ln -s /usr/bin/bazel-3.7.2 /usr/bin/bazel && \
+    apt update && apt install bazel-3.7.2
+
+# By default running container starts bash shell
+CMD [ "/bin/bash" ]
+
+# Install miniconda
+ENV LANG=C.UTF-8 LC_ALL=C.UTF-8
+
+ENV PATH /opt/conda/bin:$PATH
+
+ENV CONDA_VERSION=py38_4.9.2
+ENV CONDA_MD5=122c8c9beb51e124ab32a0fa6426c656
+
+RUN curl -s https://repo.anaconda.com/miniconda/Miniconda3-${CONDA_VERSION}-Linux-x86_64.sh -o miniconda.sh && \
+    echo "${CONDA_MD5}  miniconda.sh" > miniconda.md5 && \
+    if ! md5sum --status -c miniconda.md5; then exit 1; fi && \
+    mkdir -p /opt && \
+    sh miniconda.sh -b -p /opt/conda && \
+    rm miniconda.sh miniconda.md5 && \
+    ln -s /opt/conda/etc/profile.d/conda.sh /etc/profile.d/conda.sh && \
+    echo ". /opt/conda/etc/profile.d/conda.sh" >> ~/.bashrc && \
+    echo "conda activate base" >> ~/.bashrc && \
+    find /opt/conda/ -follow -type f -name '*.a' -delete && \
+    find /opt/conda/ -follow -type f -name '*.js.map' -delete && \
+    /opt/conda/bin/conda clean -afy
+
+WORKDIR /opt
+
+# Make RUN commands use `bash --login`: -- fixes conda init
+# https://pythonspeed.com/articles/activate-conda-dockerfile/
+SHELL ["/bin/bash", "--login", "-c"]
+
+# Prevent python from loading packages from outside the container
+# default empty pythonpath
+ENV PYTHONPATH=/ignore/pythonpath
+
+## Tensorflow installation
+# For CUDA profiling, TensorFlow requires CUPTI.
+ENV LD_LIBRARY_PATH /usr/include:/usr/local/cuda/extras/CUPTI/lib64:/usr/local/cuda/lib64:$LD_LIBRARY_PATH
+
+# Link the libcuda stub to the location where tensorflow is searching for it and reconfigure
+# dynamic linker run-time bindings
+RUN ln -s /usr/local/cuda/lib64/stubs/libcuda.so /usr/local/cuda/lib64/stubs/libcuda.so.1 \
+    && echo "/usr/local/cuda/lib64/stubs" > /etc/ld.so.conf.d/z-cuda-stubs.conf \
+    && ldconfig
+
+# Install HOOMD and tensorflow deps
+RUN conda install -c conda-forge numpy=1.19.5 pip=20 python=3.7 wheel && \
+    python --version && \
+    python -m pip install --no-deps keras_preprocessing
+
+# due to using CUDA 10.x, NCCL is in a different place than other cuda libs and not automatically found.
+# (see https://forums.developer.nvidia.com/t/cublas-for-10-1-is-missing/71015)
+RUN ln -s /usr/include/cublas_api.h /usr/local/cuda/cublas_api.h && \
+    ln -s /usr/lib/x86_64-linux-gnu/libcublas.so.10.2.2.89 /usr/local/cuda/libcublas.so.10.2.2.89 && \
+    ln -s /usr/lib/x86_64-linux-gnu/libcublas.so.10.2.2.89 /usr/local/cuda/libcublas.so.10 && \
+    ln -s /usr/lib/x86_64-linux-gnu/libcublasLt.so.10.2.2.89 /usr/local/cuda/libcublasLt.so.10.2.2.89 && \
+    ln -s /usr/lib/x86_64-linux-gnu/libcublasLt.so.10.2.2.89 /usr/local/cuda/libcublasLt.so.10
+
+RUN for a in $(ls /usr/include/x86_64-linux-gnu/cudnn*v8*); \
+    do fname=$(echo $a | sed 's/.*\/cudnn/cudnn/' | sed 's/_v8//'); ln -s $a /usr/include/x86_64-linux-gnu/$fname; done
+
+
+# Clone Tensorflow
+# https://github.com/tensorflow/tensorflow/pull/48393
+RUN git clone --depth 1 -b v2.6.0 https://github.com/tensorflow/tensorflow.git
+
+# tell nvidia where to find cuda libs directly
+RUN sh -c "echo '/usr/local/cuda-10.2/lib64' >> /etc/ld.so.conf.d/nvidia.conf" && \
+    ldconfig
+
+# Set TF env variables
+ENV PYTHON_BIN_PATH=/opt/conda/bin/python3 \
+    PYTHON_LIB_PATH=/opt/conda/lib/python3.7/site-packages \
+    # P100 -> 6.0, V100 -> 7.0
+    TF_NEED_CUDA=1 \
+    CUDA_TOOLKIT_PATH=/usr/local/cuda-10.2 \
+    TF_CUDNN_VERSION=8 \
+    TF_CUDA_PATHS=/usr/ \
+    TF_CUDNN_INSTALL_PATH=/usr \
+    TF_NCCL_VERSION=2 \
+    NCCL_INSTALL_PATH=/usr/ \
+    TF_CUBLAS_VERSION=10.2 \
+    TF_CUDA_COMPUTE_CAPABILITIES=6.0,7.0 \
+    TF_CUDA_VERSION=10.2 \
+    GCC_HOST_COMPILER_PATH=/usr/bin/gcc \
+    TF_NEED_TENSORRT=0 \
+    TF_NEED_ROCM=0 \
+    TMP=/tmp \
+    TMP_DIR=/tmp \
+    TF_SET_ANDROID_WORKSPACE=0
+
+RUN sed -ie "s/return subprocess.call/cpu_compiler_flags.append('-fno-use-linker-plugin')\n  return subprocess.call/" tensorflow/third_party/gpus/crosstool/clang/bin/crosstool_wrapper_driver_is_not_gcc.tpl
+
+# Run bazel build
+RUN cd tensorflow && \
+    ./configure && \
+    bazel build -c opt --config=cuda --verbose_failures //tensorflow/tools/pip_package:build_pip_package
+
+# actually install the TF package
+RUN cd tensorflow && \
+    ./bazel-bin/tensorflow/tools/pip_package/build_pip_package /tmp/tensorflow_pkg && \
+    pip install /tmp/tensorflow_pkg/tensorflow-2.6.0-cp37-cp37m-linux_x86_64.whl
