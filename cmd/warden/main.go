@@ -15,10 +15,10 @@ var rootCmd = &cobra.Command{
 	SilenceErrors: true,
 }
 var buildCmd = &cobra.Command{
-	Use:   "build DIR",
+	Use:   "build PATH",
 	Args:  cobra.ExactArgs(1),
 	Short: "Build a project",
-	Long:  "Build a project defined in DIR, a directory that contains a Dockerfile.",
+	Long:  "Build a project. The contents of PATH will be used as the build context",
 	RunE:  build,
 }
 var shellCmd = &cobra.Command{
