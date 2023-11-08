@@ -15,9 +15,11 @@ var rootCmd = &cobra.Command{
 	SilenceErrors: true,
 }
 var buildCmd = &cobra.Command{
-	Use:  "build",
-	Args: cobra.ExactArgs(1),
-	RunE: build,
+	Use:   "build DIR",
+	Args:  cobra.ExactArgs(1),
+	Short: "Build a project",
+	Long:  "Build a project defined in DIR, a directory that contains a Dockerfile.",
+	RunE:  build,
 }
 var shellCmd = &cobra.Command{
 	Use:  "shell",
