@@ -258,7 +258,7 @@ func (d *CtrEnv) startBuildContainer() error {
 			Tty:         true,
 			Workdir:     "/work",
 		},
-		"wardenbuildctr", // TODO: replace with docker:dind
+		"docker:dind",
 		"cat",
 	)
 	if err != nil {
