@@ -11,6 +11,7 @@ import (
 
 	"warden/relay"
 
+	"github.com/google/uuid"
 	"github.com/lesiw/ctrctl"
 )
 
@@ -237,7 +238,7 @@ func (d *CtrEnv) createNetwork() error {
 			Internal: true,
 			Subnet:   "172.24.0.0/29", // TODO: randomize network subnet.
 		},
-		"warden", // TODO: randomize network name
+		"warden-net-"+uuid.New().String(),
 	)
 	if err != nil {
 		return err
@@ -251,7 +252,7 @@ func (d *CtrEnv) startBuildContainer() error {
 		&ctrctl.ContainerRunOpts{
 			Detach:      true,
 			Interactive: true,
-			Name:        "warden-build", // TODO: randomize build container name.
+			Name:        "warden-build-" + uuid.New().String(),
 			Network:     "warden",
 			Privileged:  true, // TODO: investigate nonprivileged alternatives.
 			Tty:         true,

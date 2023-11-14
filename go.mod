@@ -9,6 +9,7 @@ require (
 
 require (
 	github.com/elazarl/goproxy v0.0.0-20221015165544-a0805db90819
+	github.com/google/uuid v1.4.0
 	github.com/inconshreveable/go-vhost v1.0.0
 	github.com/lesiw/ctrctl v0.5.0
 	github.com/miekg/dns v1.1.55
