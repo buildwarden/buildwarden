@@ -11,6 +11,7 @@ import (
 
 var rootCmd = &cobra.Command{
 	Use:           "warden",
+	Version:       "0.0.1",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
