@@ -117,13 +117,15 @@ func (d *CtrEnv) createBuildEnv(proxyErr chan<- error) error {
 		}
 	}
 
-	if err := d.createNetwork(); err != nil {
+	netName := "warden-net-" + uuid.New().String()
+
+	if err := d.createNetwork(netName); err != nil {
 		return err
 	}
 	if err := d.editContainerfile(); err != nil {
 		return err
 	}
-	if err := d.startBuildContainer(); err != nil {
+	if err := d.startBuildContainer(netName); err != nil {
 		return err
 	}
 
@@ -230,7 +232,7 @@ func (d *CtrEnv) teardownBuildEnv() {
 	}
 }
 
-func (d *CtrEnv) createNetwork() error {
+func (d *CtrEnv) createNetwork(name string) error {
 	id, err := ctrctl.NetworkCreate(
 		&ctrctl.NetworkCreateOpts{
 			Driver:   "bridge",
@@ -238,7 +240,7 @@ func (d *CtrEnv) createNetwork() error {
 			Internal: true,
 			Subnet:   "172.24.0.0/29", // TODO: randomize network subnet.
 		},
-		"warden-net-"+uuid.New().String(),
+		name,
 	)
 	if err != nil {
 		return err
@@ -247,13 +249,13 @@ func (d *CtrEnv) createNetwork() error {
 	return nil
 }
 
-func (d *CtrEnv) startBuildContainer() error {
+func (d *CtrEnv) startBuildContainer(network string) error {
 	id, err := ctrctl.ContainerRun(
 		&ctrctl.ContainerRunOpts{
 			Detach:      true,
 			Interactive: true,
 			Name:        "warden-build-" + uuid.New().String(),
-			Network:     "warden",
+			Network:     network,
 			Privileged:  true, // TODO: investigate nonprivileged alternatives.
 			Tty:         true,
 			Workdir:     "/work",
