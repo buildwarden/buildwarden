@@ -53,19 +53,12 @@ func (d *CtrEnv) inBuildEnv(config *BuildConfig, fn func() error) error {
 
 	go func() { fnErr <- fn() }()
 
-	// TODO: loop necessary?
-	for i := 0; i < 2; i++ {
-		select {
-		case err := <-proxyErr:
-			if err != nil {
-				return fmt.Errorf("proxy error: %w", err)
-			}
-		case err := <-fnErr:
-			if err != nil {
-				return fmt.Errorf("build error: %w", err)
-			}
-			return nil
-		}
+	if err := <-fnErr; err != nil {
+		return fmt.Errorf("build error: %w", err)
+	}
+
+	if err := <-proxyErr; err != nil {
+		return fmt.Errorf("proxy error: %w", err)
 	}
 
 	return nil
