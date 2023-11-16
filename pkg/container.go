@@ -2,7 +2,9 @@ package warden
 
 import (
 	"bufio"
+	"crypto/rand"
 	"fmt"
+	"math/big"
 	"net"
 	"os"
 	"os/exec"
@@ -11,7 +13,6 @@ import (
 
 	"warden/relay"
 
-	"github.com/google/uuid"
 	"github.com/lesiw/ctrctl"
 )
 
@@ -28,6 +29,7 @@ type CtrEnv struct {
 	buildConfig     *BuildConfig
 	buildContainer  string
 	relayContainer  string
+	buildId         string
 }
 
 type relayPorts struct {
@@ -117,15 +119,15 @@ func (d *CtrEnv) createBuildEnv(proxyErr chan<- error) error {
 		}
 	}
 
-	netName := "warden-net-" + uuid.New().String()
+	d.buildId = randanum(8)
 
-	if err := d.createNetwork(netName); err != nil {
+	if err := d.createNetwork(); err != nil {
 		return err
 	}
 	if err := d.editContainerfile(); err != nil {
 		return err
 	}
-	if err := d.startBuildContainer(netName); err != nil {
+	if err := d.startBuildContainer(); err != nil {
 		return err
 	}
 
@@ -232,7 +234,7 @@ func (d *CtrEnv) teardownBuildEnv() {
 	}
 }
 
-func (d *CtrEnv) createNetwork(name string) error {
+func (d *CtrEnv) createNetwork() error {
 	id, err := ctrctl.NetworkCreate(
 		&ctrctl.NetworkCreateOpts{
 			Driver:   "bridge",
@@ -240,7 +242,7 @@ func (d *CtrEnv) createNetwork(name string) error {
 			Internal: true,
 			Subnet:   "172.24.0.0/29", // TODO: randomize network subnet.
 		},
-		name,
+		"warden-"+d.buildId,
 	)
 	if err != nil {
 		return err
@@ -249,13 +251,13 @@ func (d *CtrEnv) createNetwork(name string) error {
 	return nil
 }
 
-func (d *CtrEnv) startBuildContainer(network string) error {
+func (d *CtrEnv) startBuildContainer() error {
 	id, err := ctrctl.ContainerRun(
 		&ctrctl.ContainerRunOpts{
 			Detach:      true,
 			Interactive: true,
-			Name:        "warden-build-" + uuid.New().String(),
-			Network:     network,
+			Name:        "warden-" + d.buildId,
+			Network:     "warden-" + d.buildId,
 			Privileged:  true, // TODO: investigate nonprivileged alternatives.
 			Tty:         true,
 			Workdir:     "/work",
@@ -408,4 +410,19 @@ func (d *CtrEnv) wardenDirPath() string {
 
 func (d *CtrEnv) wardenScriptPath() string {
 	return filepath.Join(d.wardenDirPath(), "ext.d")
+}
+
+var anumRunes = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
+
+// randanum produces a cryptograhically-random alphanumeric string.
+func randanum(n int) string {
+	b := make([]rune, n)
+	for i := range b {
+		j, err := rand.Int(rand.Reader, big.NewInt(int64(len(anumRunes))))
+		if err != nil {
+			panic(err)
+		}
+		b[i] = anumRunes[j.Uint64()]
+	}
+	return string(b)
 }
