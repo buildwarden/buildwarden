@@ -15,15 +15,15 @@ jobs:
         with: { go-version: 'v1.21.4' }
       - uses: aquaproj/aqua-installer@v2.1.2
         with: { aqua_version: v2.16.4 }
-      - run: make lint
+      - run: ./build.sh lint
   build:
     runs-on: ${{ matrix.os }}
     strategy:
       matrix: 
-        os: [ macos-latest, ubuntu-latest, windows-latest ]
+        os: [ macos-latest, ubuntu-latest ] #TODO: Add windows-latest
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v4
         with: { go-version: 'v1.21.4' }
-      - run: make build
+      - run: ./build.sh build
       - run: warden --help
