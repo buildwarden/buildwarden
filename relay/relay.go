@@ -22,19 +22,51 @@ var CA_KEY = goproxy.CA_KEY
 var ledger *Ledger
 var httpCannotReachDest = []byte("HTTP/1.1 500 Cannot reach destination\r\n\r\n")
 
-// TODO: Detect upstream DNS automatically.
-// TODO: Support fake DNS requests (always respond with a given IP).
-var DefaultDns = []string{"127.0.0.1:53"}
-
 func RunDns(addr net.TCPAddr) error {
 	server := &dns.Server{Addr: addr.String(), Net: "udp"}
-	dns.HandleFunc(".", func(w dns.ResponseWriter, m *dns.Msg) {
-		r, err := dns.Exchange(m, DefaultDns[0]) // FIXME: Add DNS fallback.
-		if err != nil {
+	dns.HandleFunc(".", func(w dns.ResponseWriter, r *dns.Msg) {
+		m := new(dns.Msg)
+		m.SetReply(r)
+		for _, q := range m.Question {
+			addrs, err := net.LookupHost(q.Name)
+			if err != nil {
+				log.Printf("DNS proxy error: %s\n", err)
+				return
+			}
+			if q.Qtype != dns.TypeA && q.Qtype != dns.TypeAAAA {
+				continue
+			}
+			v4 := q.Qtype == dns.TypeA
+
+			for _, a := range addrs {
+				ip := net.ParseIP(a)
+				if v4 && ip.To4() != nil {
+					m.Answer = append(m.Answer, &dns.A{
+						Hdr: dns.RR_Header{
+							Name:   q.Name,
+							Rrtype: dns.TypeA,
+							Class:  dns.ClassINET,
+							Ttl:    0,
+						},
+						A: ip,
+					})
+				} else if !v4 && ip.To4() == nil {
+					m.Answer = append(m.Answer, &dns.AAAA{
+						Hdr: dns.RR_Header{
+							Name:   q.Name,
+							Rrtype: dns.TypeAAAA,
+							Class:  dns.ClassINET,
+							Ttl:    0,
+						},
+						AAAA: ip,
+					})
+				}
+			}
+		}
+		if err := w.WriteMsg(m); err != nil {
 			log.Printf("DNS proxy error: %s\n", err)
 			return
 		}
-		_ = w.WriteMsg(r)
 	})
 	return server.ListenAndServe()
 }
