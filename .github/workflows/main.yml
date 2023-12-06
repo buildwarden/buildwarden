@@ -12,7 +12,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v4
-        with: { go-version: 'v1.21.4' }
+        with: { go-version: 'v1.21.4', check-latest: true }
       - uses: aquaproj/aqua-installer@v2.1.2
         with: { aqua_version: v2.16.4 }
       - run: ./build.sh lint
@@ -24,6 +24,6 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v4
-        with: { go-version: 'v1.21.4' }
+        with: { go-version: 'v1.21.4', check-latest: true }
       - run: ./build.sh build
       - run: warden --help
