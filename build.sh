@@ -17,12 +17,29 @@ test_simple() {
   )
 }
 
+help_exit() {
+  code="$1"
+  myname="$(basename "$0")"
+  
+  >&2 echo "USAGE: $myname [COMMAND...]"
+  >&2 echo 'COMMANDS:'
+  >&2 echo '    build, fmt, lint, test, tidy'
+  >&2 echo 'EXAMPLES:'
+  >&2 echo '    Just compile:'
+  >&2 echo "        $myname build"
+  >&2 echo '    Do many things:'
+  >&2 echo "        $myname tidy fmt build test"
+
+  exit "$code"
+}
+
+if [ "$*" = '' ]; then
+  help_exit 1
+fi
+
 for arg in "$@"; do
   if [ "$arg" = '-h' ] || [ "$arg" = '--help' ]; then
-    >&2 echo "USAGE: $(basename "$0") [COMMAND...]"
-    >&2 echo 'COMMANDS:'
-    >&2 echo '    build, fmt, lint, test, tidy'
-    exit 0
+    help_exit 0
   fi
 done
 
