@@ -96,6 +96,11 @@ func (d *CtrEnv) Shell(config *BuildConfig) error {
 	shell := func() error {
 		_, err := ctrctl.ContainerExec(
 			&ctrctl.ContainerExecOpts{
+				Cmd: &exec.Cmd{
+					Stdin:  os.Stdin,
+					Stdout: os.Stdout,
+					Stderr: os.Stderr,
+				},
 				Interactive: true,
 				Tty:         true,
 			},
