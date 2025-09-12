@@ -96,7 +96,7 @@ func (l *Ledger) RecordOpenEvent(req *http.Request) {
 	hash.Write([]byte(req.Proto))
 	hash.Write([]byte(req.Method))
 	hash.Write([]byte(req.Host))
-	ent.LedgerEntry.Payload.Hash = base64.StdEncoding.EncodeToString(hash.Sum(nil))
+	ent.Payload.Hash = base64.StdEncoding.EncodeToString(hash.Sum(nil))
 
 	l.opens <- ent
 }
@@ -129,7 +129,7 @@ func (l *Ledger) RecordCloseEvent(res *http.Response) {
 	hash.Write([]byte(res.Request.Method))
 	hash.Write([]byte(res.Request.Host))
 	hash.Write([]byte(body))
-	ent.LedgerEntry.Payload.Hash = base64.StdEncoding.EncodeToString(hash.Sum(nil))
+	ent.Payload.Hash = base64.StdEncoding.EncodeToString(hash.Sum(nil))
 
 	l.closes <- ent
 }
@@ -141,21 +141,21 @@ func (l *Ledger) Loop() {
 		case open, more := <-l.opens:
 			if more {
 				l.writeOpen(open, lastsig)
-				lastsig = open.LedgerEntry.Signature
+				lastsig = open.Signature
 			} else {
 				l.done <- true
 			}
 		case ckp, more := <-l.checkpoints:
 			if more {
 				l.writeCheckpoint(ckp, lastsig)
-				lastsig = ckp.LedgerEntry.Signature
+				lastsig = ckp.Signature
 			} else {
 				l.done <- true
 			}
 		case close, more := <-l.closes:
 			if more {
 				l.writeClose(close, lastsig)
-				lastsig = close.LedgerEntry.Signature
+				lastsig = close.Signature
 			} else {
 				l.done <- true
 			}
