@@ -1,3 +1,4 @@
+version: "2"
 linters:
   enable:
     - errname
@@ -8,10 +9,27 @@ linters:
     - makezero
   disable:
     - unused
-
-linters-settings:
-  gocyclo:
-    min-complexity: 15
-  lll:
-    tab-width: 8
-    line-length: 99
+  settings:
+    gocyclo:
+      min-complexity: 15
+    lll:
+      line-length: 99
+      tab-width: 8
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
