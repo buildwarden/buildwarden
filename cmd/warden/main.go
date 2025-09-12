@@ -23,11 +23,11 @@ var buildCmd = &cobra.Command{
 	RunE:  build,
 }
 var shellCmd = &cobra.Command{
-	Use:  "shell PATH",
+	Use:   "shell PATH",
 	Args:  cobra.ExactArgs(1),
 	Short: "Run a shell in a project",
 	Long:  "Run a shell in a project. The contents of PATH will be used as the context",
-	RunE: shell,
+	RunE:  shell,
 }
 
 func init() {
