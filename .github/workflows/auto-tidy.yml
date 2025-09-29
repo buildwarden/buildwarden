@@ -12,8 +12,8 @@ jobs:
         with: { go-version: 'v1.21.4', check-latest: true }
       - uses: evantorrie/mott-the-tidier@v1-beta
         with: { gomods: go.mod }
-      - uses: aquaproj/aqua-installer@v2.1.2
-        with: { aqua_version: v2.16.4 }
+      - uses: aquaproj/aqua-installer@v4.0.3
+        with: { aqua_version: v4.411.0 }
       - run: ./build.sh lint
       - run: ./build.sh build
       - run: warden --help
