@@ -1,0 +1,5 @@
+FROM alpine:3.20
+RUN apk add --no-cache ca-certificates
+COPY relay /usr/local/bin/relay
+EXPOSE 53/udp 80 443
+ENTRYPOINT ["relay"]
