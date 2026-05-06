@@ -1,316 +1,352 @@
 package relay
 
 import (
-	"bytes"
 	"crypto"
+	"crypto/md5"
 	"crypto/rand"
 	"crypto/rsa"
+	"crypto/sha1"
+	"crypto/sha256"
 	"crypto/sha512"
+	"crypto/x509"
 	"encoding/base64"
 	"encoding/binary"
+	"encoding/hex"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
+	"hash"
 	"io"
 	"log"
-	"net/http"
+	"sync/atomic"
+	"time"
+
+	"golang.org/x/crypto/blake2b"
 )
 
+// Ledger implements the BuildWarden ledger v2 specification.
+// All writes are serialized through a single channel.
 type Ledger struct {
-	key         *rsa.PrivateKey
-	writer      io.Writer
-	opens       chan OpenEntry
-	checkpoints chan CheckpointEntry
-	closes      chan CloseEntry
-	exit        chan bool
-	done        chan bool
-	opensigs    map[*http.Request]string
+	key       *rsa.PrivateKey
+	writer    io.Writer
+	entries   chan entryRequest
+	done      chan struct{}
+	seq       atomic.Int64
+	hashes    []string
+	headerSig string
 }
 
+// entryRequest is the union type sent through the single channel.
+type entryRequest struct {
+	entry  entryInput
+	result chan<- string // nil for fire-and-forget (checkpoint/close), non-nil for synchronous open
+}
+
+type entryInput struct {
+	Type          string
+	OpenSignature string // for checkpoint/close
+	Direction     string // for checkpoint/close
+	Payload       []byte // raw payload bytes (nil for open)
+	Metadata      map[string]any
+}
+
+// LedgerEntry is the JSON structure written to the ledger file.
 type LedgerEntry struct {
-	EntryType string   `json:"entry_type"`
-	Payload   *Payload `json:"payload"`
-	Signature string   `json:"signature"`
+	EntryType     string         `json:"entry_type"`
+	OpenSignature string         `json:"open_signature,omitempty"`
+	Direction     string         `json:"direction,omitempty"`
+	Payload       *PayloadRecord `json:"payload,omitempty"`
+	Signature     string         `json:"signature"`
+	Seq           int64          `json:"seq"`
+	Timestamp     string         `json:"timestamp"`
+	Metadata      map[string]any `json:"metadata,omitempty"`
 }
 
-type OpenEntry struct {
-	LedgerEntry
-	Request *http.Request `json:"-"`
+// HeaderEntry is the JSON structure for the ledger header.
+type HeaderEntry struct {
+	EntryType   string         `json:"entry_type"`
+	Version     string         `json:"version"`
+	Format      string         `json:"format"`
+	Hashes      []string       `json:"hashes"`
+	Environment map[string]any `json:"environment"`
+	Payload     *PayloadRecord `json:"payload"`
+	Signature   string         `json:"signature"`
 }
 
-type CheckpointEntry struct {
-	LedgerEntry
-	OpenSignature string `json:"open_signature"`
+// PayloadRecord holds the content identity of a payload.
+type PayloadRecord struct {
+	Size   int64             `json:"size"`
+	Hashes map[string]string `json:"hashes"`
 }
 
-type CloseEntry struct {
-	LedgerEntry
-	OpenSignature string `json:"open_signature"`
-}
+var ledger *Ledger
 
-type Payload struct {
-	Direction string `json:"direction"`
-	Size      int64  `json:"size"`
-	Hash      string `json:"hash"`
-}
+var defaultHashes = []string{"blake2b_256", "sha256", "sha1", "md5"}
 
-func NewLedger(w io.Writer) error {
+func NewLedger(w io.Writer, environment map[string]any) error {
 	var err error
-	ledger = &Ledger{
-		writer:      w,
-		opens:       make(chan OpenEntry),
-		checkpoints: make(chan CheckpointEntry),
-		closes:      make(chan CloseEntry),
-		exit:        make(chan bool),
-		done:        make(chan bool),
-		opensigs:    make(map[*http.Request]string),
+	l := &Ledger{
+		writer:  w,
+		entries: make(chan entryRequest, 256),
+		done:    make(chan struct{}),
+		hashes:  defaultHashes,
 	}
 
-	ledger.key, err = rsa.GenerateKey(rand.Reader, 2048)
+	l.key, err = rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {
 		return fmt.Errorf("error generating private key for ledger: %w", err)
 	}
 
-	go ledger.Loop()
+	if err := l.writeHeader(environment); err != nil {
+		return fmt.Errorf("error writing ledger header: %w", err)
+	}
+
+	go l.loop()
+	ledger = l
 	return nil
 }
 
 func FinishLedger() {
 	if ledger != nil {
-		ledger.Finish()
+		close(ledger.entries)
+		<-ledger.done
 	}
 }
 
-func (l *Ledger) RecordOpenEvent(req *http.Request) {
-	ent := OpenEntry{
-		LedgerEntry: LedgerEntry{
-			EntryType: "open",
-			Payload: &Payload{
-				Direction: "out",
-				Size:      req.ContentLength,
-			},
-		},
-		Request: req,
+// PublicCertPEM returns the public certificate in PEM format.
+func PublicCertPEM() []byte {
+	if ledger == nil {
+		return nil
 	}
-
-	hash := sha512.New()
-	hash.Write([]byte(req.Proto))
-	hash.Write([]byte(req.Method))
-	hash.Write([]byte(req.Host))
-	ent.Payload.Hash = base64.StdEncoding.EncodeToString(hash.Sum(nil))
-
-	l.opens <- ent
+	return pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PUBLIC KEY",
+		Bytes: x509.MarshalPKCS1PublicKey(&ledger.key.PublicKey),
+	})
 }
 
-func (l *Ledger) RecordCloseEvent(res *http.Response) {
-	sig, ok := l.opensigs[res.Request]
-	if !ok {
-		log.Printf("could not find open signature for response: %+v\n", res)
-	}
-
-	ent := CloseEntry{
-		LedgerEntry: LedgerEntry{
-			EntryType: "close",
-			Payload: &Payload{
-				Direction: "in",
-				Size:      res.ContentLength,
-			},
+// Open records an open entry synchronously and returns the entry's signature
+// (which serves as the channel identifier for subsequent checkpoint/close entries).
+func (l *Ledger) Open(metadata map[string]any) string {
+	result := make(chan string, 1)
+	l.entries <- entryRequest{
+		entry: entryInput{
+			Type:     "open",
+			Metadata: metadata,
 		},
-		OpenSignature: sig,
+		result: result,
 	}
+	return <-result
+}
 
-	body, err := io.ReadAll(res.Body)
+// Checkpoint records a checkpoint entry (fire-and-forget).
+func (l *Ledger) Checkpoint(openSig string, direction string, payload []byte, metadata map[string]any) {
+	l.entries <- entryRequest{
+		entry: entryInput{
+			Type:          "checkpoint",
+			OpenSignature: openSig,
+			Direction:     direction,
+			Payload:       payload,
+			Metadata:      metadata,
+		},
+	}
+}
+
+// Close records a close entry (fire-and-forget).
+func (l *Ledger) Close(openSig string, direction string, payload []byte, metadata map[string]any) {
+	l.entries <- entryRequest{
+		entry: entryInput{
+			Type:          "close",
+			OpenSignature: openSig,
+			Direction:     direction,
+			Payload:       payload,
+			Metadata:      metadata,
+		},
+	}
+}
+
+func (l *Ledger) writeHeader(environment map[string]any) error {
+	certBytes := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PUBLIC KEY",
+		Bytes: x509.MarshalPKCS1PublicKey(&l.key.PublicKey),
+	})
+
+	payload := l.computePayload(certBytes)
+
+	// Signature input for header: entry_type + size + hashes (no prev_sig)
+	var sigInput []byte
+	sigInput = append(sigInput, []byte("header")...)
+	sigInput = append(sigInput, sizeBytes(payload.Size)...)
+	sigInput = append(sigInput, l.rawHashBytes(payload.Hashes)...)
+
+	sig, err := l.sign(sigInput)
 	if err != nil {
-		log.Printf("error reading http.Response body: %v\n", err)
+		return err
 	}
-	res.Body = io.NopCloser(bytes.NewReader(body))
 
-	hash := sha512.New()
-	hash.Write([]byte(res.Proto))
-	hash.Write([]byte(res.Request.Method))
-	hash.Write([]byte(res.Request.Host))
-	hash.Write([]byte(body))
-	ent.Payload.Hash = base64.StdEncoding.EncodeToString(hash.Sum(nil))
+	// Store the initial prev_sig for the loop
+	l.seq.Store(0)
 
-	l.closes <- ent
+	header := HeaderEntry{
+		EntryType:   "header",
+		Version:     "2.0",
+		Format:      "json",
+		Hashes:      l.hashes,
+		Environment: environment,
+		Payload:     payload,
+		Signature:   sig,
+	}
+
+	j, err := json.Marshal(header)
+	if err != nil {
+		return fmt.Errorf("error marshalling header: %w", err)
+	}
+	if _, err := l.writer.Write(append(j, '\n')); err != nil {
+		return fmt.Errorf("error writing header: %w", err)
+	}
+
+	// Store the header signature to bootstrap the chain in loop().
+	l.headerSig = sig
+	return nil
 }
 
-func (l *Ledger) Loop() {
-	var lastsig string
-	for {
-		select {
-		case open, more := <-l.opens:
-			if more {
-				l.writeOpen(open, lastsig)
-				lastsig = open.Signature
-			} else {
-				l.done <- true
+func (l *Ledger) loop() {
+	prevSig := l.headerSig
+	defer close(l.done)
+
+	for req := range l.entries {
+		e := req.entry
+		seq := l.seq.Add(1)
+
+		var sigInput []byte
+		prevSigBytes, _ := base64.StdEncoding.DecodeString(prevSig)
+		sigInput = append(sigInput, prevSigBytes...)
+
+		switch e.Type {
+		case "open":
+			sigInput = append(sigInput, []byte("open")...)
+
+		case "checkpoint", "close":
+			openSigBytes, _ := base64.StdEncoding.DecodeString(e.OpenSignature)
+			sigInput = append(sigInput, openSigBytes...)
+			sigInput = append(sigInput, []byte(e.Type)...)
+			sigInput = append(sigInput, []byte(e.Direction)...)
+
+			payload := l.computePayload(e.Payload)
+			sigInput = append(sigInput, sizeBytes(payload.Size)...)
+			sigInput = append(sigInput, l.rawHashBytes(payload.Hashes)...)
+
+			sig, err := l.sign(sigInput)
+			if err != nil {
+				log.Printf("error signing %s entry: %v", e.Type, err)
+				if req.result != nil {
+					req.result <- ""
+				}
+				continue
 			}
-		case ckp, more := <-l.checkpoints:
-			if more {
-				l.writeCheckpoint(ckp, lastsig)
-				lastsig = ckp.Signature
-			} else {
-				l.done <- true
+
+			entry := LedgerEntry{
+				EntryType:     e.Type,
+				OpenSignature: e.OpenSignature,
+				Direction:     e.Direction,
+				Payload:       payload,
+				Signature:     sig,
+				Seq:           seq,
+				Timestamp:     time.Now().UTC().Format(time.RFC3339Nano),
+				Metadata:      e.Metadata,
 			}
-		case close, more := <-l.closes:
-			if more {
-				l.writeClose(close, lastsig)
-				lastsig = close.Signature
-			} else {
-				l.done <- true
+			l.writeEntry(entry)
+			prevSig = sig
+			if req.result != nil {
+				req.result <- sig
 			}
+			continue
+		}
+
+		// Open entry path (no payload)
+		sig, err := l.sign(sigInput)
+		if err != nil {
+			log.Printf("error signing open entry: %v", err)
+			if req.result != nil {
+				req.result <- ""
+			}
+			continue
+		}
+
+		entry := LedgerEntry{
+			EntryType: "open",
+			Signature: sig,
+			Seq:       seq,
+			Timestamp: time.Now().UTC().Format(time.RFC3339Nano),
+			Metadata:  e.Metadata,
+		}
+		l.writeEntry(entry)
+		prevSig = sig
+		if req.result != nil {
+			req.result <- sig
 		}
 	}
 }
 
-func (l *Ledger) writeOpen(o OpenEntry, prev string) {
-	input := sha512.New()
-
-	prevsig, err := base64.StdEncoding.DecodeString(prev)
+func (l *Ledger) writeEntry(entry LedgerEntry) {
+	j, err := json.Marshal(entry)
 	if err != nil {
-		log.Printf("error decoding previous signature: %v\n", err)
-	}
-	input.Write(prevsig)
-
-	buf := &bytes.Buffer{}
-	err = binary.Write(buf, binary.LittleEndian, o.Payload.Size)
-	if err != nil {
-		log.Printf("error converting payload size to bytes: %v\n", err)
+		log.Printf("error marshalling entry: %v", err)
 		return
 	}
-	input.Write(buf.Bytes())
-
-	hash, err := base64.StdEncoding.DecodeString(o.Payload.Hash)
-	if err != nil {
-		log.Printf("error decoding base64 hash: %v\n", err)
-		return
-	}
-	input.Write(hash)
-
-	sig, err := rsa.SignPKCS1v15(rand.Reader, l.key, crypto.SHA512, input.Sum(nil))
-	if err != nil {
-		log.Printf("error signing entry: %v\n", err)
-		return
-	}
-
-	sigstr := base64.StdEncoding.EncodeToString(sig)
-	l.opensigs[o.Request] = sigstr
-
-	o.Signature = sigstr
-
-	j, err := json.Marshal(o)
-	if err != nil {
-		log.Printf("error mashalling OpenEntry: %v\n", err)
-		return
-	}
-
-	_, err = l.writer.Write(append(j, '\n'))
-	if err != nil {
-		log.Printf("error writing ledger entry: %v\n", err)
-		return
+	if _, err := l.writer.Write(append(j, '\n')); err != nil {
+		log.Printf("error writing ledger entry: %v", err)
 	}
 }
 
-func (l *Ledger) writeCheckpoint(c CheckpointEntry, prev string) {
-	input := sha512.New()
-
-	prevsig, err := base64.StdEncoding.DecodeString(prev)
+func (l *Ledger) sign(input []byte) (string, error) {
+	digest := sha512.Sum512(input)
+	sig, err := rsa.SignPKCS1v15(rand.Reader, l.key, crypto.SHA512, digest[:])
 	if err != nil {
-		log.Printf("error decoding previous signature: %v\n", err)
+		return "", fmt.Errorf("RSA sign: %w", err)
 	}
-	input.Write(prevsig)
+	return base64.StdEncoding.EncodeToString(sig), nil
+}
 
-	buf := &bytes.Buffer{}
-	err = binary.Write(buf, binary.LittleEndian, c.Payload.Size)
-	if err != nil {
-		log.Printf("error converting payload size to bytes: %v\n", err)
-		return
+func (l *Ledger) computePayload(data []byte) *PayloadRecord {
+	hashes := make(map[string]string, len(l.hashes))
+	for _, name := range l.hashes {
+		h := newHash(name)
+		h.Write(data)
+		hashes[name] = hex.EncodeToString(h.Sum(nil))
 	}
-	input.Write(buf.Bytes())
-
-	hash, err := base64.StdEncoding.DecodeString(c.Payload.Hash)
-	if err != nil {
-		log.Printf("error decoding base64 hash: %v\n", err)
-		return
-	}
-	input.Write(hash)
-
-	sig, err := rsa.SignPKCS1v15(rand.Reader, l.key, crypto.SHA512, input.Sum(nil))
-	if err != nil {
-		log.Printf("error signing entry: %v\n", err)
-		return
-	}
-
-	sigstr := base64.StdEncoding.EncodeToString(sig)
-
-	c.Signature = sigstr
-
-	j, err := json.Marshal(c)
-	if err != nil {
-		log.Printf("error mashalling OpenEntry: %v\n", err)
-		return
-	}
-
-	_, err = l.writer.Write(append(j, '\n'))
-	if err != nil {
-		log.Printf("error writing ledger entry: %v\n", err)
-		return
+	return &PayloadRecord{
+		Size:   int64(len(data)),
+		Hashes: hashes,
 	}
 }
 
-func (l *Ledger) writeClose(c CloseEntry, prev string) {
-	input := sha512.New()
-
-	prevsig, err := base64.StdEncoding.DecodeString(prev)
-	if err != nil {
-		log.Printf("error decoding previous signature: %v\n", err)
+func (l *Ledger) rawHashBytes(hashes map[string]string) []byte {
+	var out []byte
+	for _, name := range l.hashes {
+		b, _ := hex.DecodeString(hashes[name])
+		out = append(out, b...)
 	}
-	input.Write(prevsig)
-
-	buf := &bytes.Buffer{}
-	err = binary.Write(buf, binary.LittleEndian, c.Payload.Size)
-	if err != nil {
-		log.Printf("error converting payload size to bytes: %v\n", err)
-		return
-	}
-	input.Write(buf.Bytes())
-
-	hash, err := base64.StdEncoding.DecodeString(c.Payload.Hash)
-	if err != nil {
-		log.Printf("error decoding base64 hash: %v\n", err)
-		return
-	}
-	input.Write(hash)
-
-	sig, err := rsa.SignPKCS1v15(rand.Reader, l.key, crypto.SHA512, input.Sum(nil))
-	if err != nil {
-		log.Printf("error signing entry: %v\n", err)
-		return
-	}
-
-	sigstr := base64.StdEncoding.EncodeToString(sig)
-
-	c.Signature = sigstr
-
-	j, err := json.Marshal(c)
-	if err != nil {
-		log.Printf("error mashalling OpenEntry: %v\n", err)
-		return
-	}
-
-	_, err = l.writer.Write(append(j, '\n'))
-	if err != nil {
-		log.Printf("error writing ledger entry: %v\n", err)
-		return
-	}
+	return out
 }
 
-func (l *Ledger) Finish() {
-	close(l.opens)
-	close(l.checkpoints)
-	close(l.closes)
+func sizeBytes(size int64) []byte {
+	buf := make([]byte, 8)
+	binary.LittleEndian.PutUint64(buf, uint64(size))
+	return buf
+}
 
-	for i := 0; i < 3; i++ {
-		<-ledger.done
+func newHash(name string) hash.Hash {
+	switch name {
+	case "blake2b_256":
+		h, _ := blake2b.New256(nil)
+		return h
+	case "sha256":
+		return sha256.New()
+	case "sha1":
+		return sha1.New()
+	case "md5":
+		return md5.New()
+	default:
+		panic("unsupported hash: " + name)
 	}
 }

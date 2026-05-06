@@ -83,7 +83,6 @@ func (d *CtrEnv) Build(config *BuildConfig) error {
 					Stderr: os.Stderr,
 				},
 				Interactive: true,
-				Tty:         true,
 			},
 			d.buildContainer,
 			"docker", "build", "--network=host", "-f", config.Containerfile, ".",
@@ -149,7 +148,9 @@ func (d *CtrEnv) createBuildEnv(proxyErr chan<- error) error {
 		return err
 	}
 
-	err = relay.NewLedger(output)
+	err = relay.NewLedger(output, map[string]any{
+		"type": "container",
+	})
 	if err != nil {
 		return err
 	}
@@ -198,7 +199,6 @@ func startRelays(ip net.IP, ports relayPorts, err chan<- error) {
 			},
 		)
 	}()
-	fmt.Printf("starting DNS server on port %d\n", ports.dns)
 	go func() {
 		err <- relay.RunDns(
 			net.TCPAddr{
@@ -259,16 +259,14 @@ func (d *CtrEnv) createNetwork() error {
 func (d *CtrEnv) startBuildContainer() error {
 	id, err := ctrctl.ContainerRun(
 		&ctrctl.ContainerRunOpts{
-			Detach:      true,
-			Interactive: true,
-			Name:        "warden-" + d.buildId,
-			Network:     "warden-" + d.buildId,
-			Privileged:  true, // TODO: investigate nonprivileged alternatives.
-			Tty:         true,
-			Workdir:     "/work",
+			Detach:     true,
+			Name:       "warden-" + d.buildId,
+			Network:    "warden-" + d.buildId,
+			Privileged: true, // TODO: investigate nonprivileged alternatives.
+			Workdir:    "/work",
 		},
 		"docker:dind",
-		"cat",
+		"sleep", "infinity",
 	)
 	if err != nil {
 		return err
@@ -295,19 +293,10 @@ func (d *CtrEnv) configureBuildContainer(host net.IP, ports relayPorts) error {
 		{"iptables", "-t", "nat", "-A", "OUTPUT", "-p", "tcp", "--dport", "443",
 			"-j", "DNAT", "--to-destination",
 			fmt.Sprintf("%s:%d", host.String(), ports.https)},
-		{"iptables",
-			"-t", "nat",
-			"-A", "OUTPUT",
-			"-d", host.String(),
+		{"iptables", "-t", "nat", "-A", "OUTPUT",
 			"-p", "udp", "--dport", "53",
 			"-j", "DNAT", "--to-destination",
 			fmt.Sprintf("%s:%d", host.String(), ports.dns)},
-		{"iptables",
-			"-t", "nat",
-			"-A", "POSTROUTING",
-			"-s", host.String(),
-			"-p", "udp", "--sport", fmt.Sprintf("%d", ports.dns),
-			"-j", "SNAT", "--to", ":53"},
 		{"sh", "-c", fmt.Sprintf(`echo "nameserver %s" > /etc/resolv.conf`,
 			host.String())},
 		{"ln", "-s", "/work/.warden", "/.warden"},
