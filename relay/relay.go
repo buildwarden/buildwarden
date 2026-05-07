@@ -178,18 +178,59 @@ func onResponse(res *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
 	}
 	ledger.Checkpoint(rc.openSig, "in", respHeaders, nil)
 
-	// Close: response body (direction: in)
-	body, err := io.ReadAll(res.Body)
-	if err != nil {
-		log.Printf("error reading response body: %v", err)
-		body = []byte{}
-	}
-	res.Body = io.NopCloser(bytes.NewReader(body))
-
-	metadata := map[string]any{"status": res.StatusCode}
-	ledger.Close(rc.openSig, "in", body, metadata)
+	// Replace the response body with a streaming wrapper that tees to
+	// the hashers. The close entry is written when the body is fully read.
+	res.Body = newLedgerBody(res.Body, rc.openSig, res.StatusCode)
 
 	return res
+}
+
+// ledgerBody wraps a response body, streaming bytes through to the reader
+// while simultaneously hashing them. When the body is fully consumed (or the
+// upstream finishes), it writes the close entry to the ledger.
+type ledgerBody struct {
+	source    io.ReadCloser
+	openSig   string
+	status    int
+	buf       bytes.Buffer
+	done      bool
+}
+
+func newLedgerBody(source io.ReadCloser, openSig string, status int) *ledgerBody {
+	return &ledgerBody{
+		source:  source,
+		openSig: openSig,
+		status:  status,
+	}
+}
+
+func (lb *ledgerBody) Read(p []byte) (int, error) {
+	n, err := lb.source.Read(p)
+	if n > 0 {
+		lb.buf.Write(p[:n])
+	}
+	if err == io.EOF && !lb.done {
+		lb.done = true
+		lb.finish()
+	}
+	return n, err
+}
+
+func (lb *ledgerBody) Close() error {
+	// If the client closes before reading everything, drain the rest
+	// from upstream so we can hash the complete response.
+	if !lb.done {
+		lb.done = true
+		remaining, _ := io.ReadAll(lb.source)
+		lb.buf.Write(remaining)
+		lb.finish()
+	}
+	return lb.source.Close()
+}
+
+func (lb *ledgerBody) finish() {
+	metadata := map[string]any{"status": lb.status}
+	ledger.Close(lb.openSig, "in", lb.buf.Bytes(), metadata)
 }
 
 func proxyTlsConnection(c net.Conn, proxy *goproxy.ProxyHttpServer) {
