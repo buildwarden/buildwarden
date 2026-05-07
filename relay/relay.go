@@ -4,13 +4,18 @@ package relay
 import (
 	"bufio"
 	"bytes"
+	"encoding/hex"
 	"fmt"
+	"hash"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"net/http/httputil"
 	"net/url"
+	"os"
+	"path/filepath"
+	"strings"
 
 	"github.com/elazarl/goproxy"
 	"github.com/inconshreveable/go-vhost"
@@ -26,12 +31,43 @@ type reqContext struct {
 
 var httpCannotReachDest = []byte("HTTP/1.1 500 Cannot reach destination\r\n\r\n")
 
+// reservedHosts are hostnames intercepted by the relay rather than forwarded.
+var reservedHosts = map[string]bool{
+	"artifacts": true,
+}
+
+// outDir is the ledger output directory, set by SetOutDir.
+var outDir string
+
+func SetOutDir(dir string) { outDir = dir }
+
 func RunDns(addr net.TCPAddr) error {
 	server := &dns.Server{Addr: addr.String(), Net: "udp"}
 	dns.HandleFunc(".", func(w dns.ResponseWriter, r *dns.Msg) {
 		m := new(dns.Msg)
 		m.SetReply(r)
 		for _, q := range m.Question {
+			name := strings.TrimSuffix(q.Name, ".")
+
+			// Reserved hostnames resolve to the relay itself.
+			if reservedHosts[name] {
+				if q.Qtype == dns.TypeA {
+					m.Answer = append(m.Answer, &dns.A{
+						Hdr: dns.RR_Header{
+							Name:   q.Name,
+							Rrtype: dns.TypeA,
+							Class:  dns.ClassINET,
+							Ttl:    0,
+						},
+						A: net.ParseIP("10.0.87.2"),
+					})
+				}
+				if err := w.WriteMsg(m); err != nil {
+					log.Printf("DNS proxy error: %s\n", err)
+				}
+				return
+			}
+
 			addrs, err := net.LookupHost(q.Name)
 			if err != nil {
 				log.Printf("DNS proxy error: %s\n", err)
@@ -127,6 +163,12 @@ func onRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.R
 		return req, nil
 	}
 
+	// Intercept artifact submissions (POST to reserved hosts).
+	host := strings.Split(req.Host, ":")[0]
+	if reservedHosts[host] && req.Method == "POST" {
+		return handleArtifactPost(req, ctx)
+	}
+
 	// Synchronous open — blocks until signature is on the ledger.
 	openSig := ledger.Open(map[string]any{
 		"method":   req.Method,
@@ -143,20 +185,100 @@ func onRequest(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.R
 	}
 	ledger.Checkpoint(openSig, "out", reqHeaders, nil)
 
-	// If request has a body (POST/PUT), checkpoint it as out.
+	// If request has a body (POST/PUT), stream it through hashers.
 	if req.Body != nil && req.ContentLength != 0 {
-		body, err := io.ReadAll(req.Body)
-		if err != nil {
-			log.Printf("error reading request body: %v", err)
-		} else if len(body) > 0 {
-			ledger.Checkpoint(openSig, "out", body, nil)
-			req.Body = io.NopCloser(bytes.NewReader(body))
+		hashers := newHasherSet(ledger.hashes)
+		req.Body = &hashingReadCloser{
+			source:  req.Body,
+			hashers: hashers,
+			onClose: func(size int64) {
+				ledger.CheckpointHashed(openSig, "out", size, hashers.sums())
+			},
 		}
 	}
 
 	// Store the open signature for the response handler.
 	ctx.UserData = &reqContext{openSig: openSig}
 	return req, nil
+}
+
+func handleArtifactPost(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request, *http.Response) {
+	artifactName := strings.TrimPrefix(req.URL.Path, "/")
+	if artifactName == "" {
+		artifactName = "unnamed"
+	}
+
+	// Record in ledger.
+	openSig := ledger.Open(map[string]any{
+		"method": "POST",
+		"url":    req.URL.String(),
+		"host":   req.Host,
+		"schema": "artifact",
+		"path":   artifactName,
+	})
+
+	// Checkpoint request headers.
+	reqHeaders, err := httputil.DumpRequest(req, false)
+	if err != nil {
+		reqHeaders = []byte{}
+	}
+	ledger.Checkpoint(openSig, "out", reqHeaders, nil)
+
+	// Stream body to disk and hash simultaneously.
+	artifactsDir := filepath.Join(outDir, "artifacts")
+	_ = os.MkdirAll(artifactsDir, 0755)
+	payloadsDir := filepath.Join(outDir, "payloads")
+	_ = os.MkdirAll(payloadsDir, 0755)
+
+	tmpFile, err := os.CreateTemp(payloadsDir, "artifact-*")
+	if err != nil {
+		log.Printf("artifact: error creating temp file: %v", err)
+		resp := goproxy.NewResponse(req, "text/plain", http.StatusInternalServerError, "storage error")
+		return req, resp
+	}
+
+	hashers := newHasherSet(ledger.hashes)
+	var size int64
+	buf := make([]byte, 32*1024)
+	for {
+		n, readErr := req.Body.Read(buf)
+		if n > 0 {
+			hashers.write(buf[:n])
+			tmpFile.Write(buf[:n])
+			size += int64(n)
+		}
+		if readErr != nil {
+			break
+		}
+	}
+	tmpFile.Close()
+	req.Body.Close()
+
+	// Rename payload file to its primary hash.
+	sums := hashers.sums()
+	primaryHash := sums["sha256"]
+	payloadPath := filepath.Join(payloadsDir, primaryHash)
+	os.Rename(tmpFile.Name(), payloadPath)
+
+	// Create symlink: artifacts/<name> -> ../payloads/<hash>
+	symPath := filepath.Join(artifactsDir, artifactName)
+	os.MkdirAll(filepath.Dir(symPath), 0755)
+	os.Symlink(filepath.Join("..", "payloads", primaryHash), symPath)
+
+	// Record body checkpoint and close in ledger.
+	ledger.CheckpointHashed(openSig, "out", size, sums)
+	ledger.CloseHashed(openSig, "in", 0, map[string]string{
+		"blake2b_256": "0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8",
+		"sha256":      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+		"sha1":        "da39a3ee5e6b4b0d3255bfef95601890afd80709",
+		"md5":         "d41d8cd98f00b204e9800998ecf8427e",
+	}, map[string]any{"status": 200})
+
+	log.Printf("artifact: stored %s (%d bytes, sha256:%s)", artifactName, size, primaryHash[:12])
+
+	resp := goproxy.NewResponse(req, "text/plain", http.StatusOK,
+		fmt.Sprintf("artifact stored: %s (%d bytes)\n", artifactName, size))
+	return req, resp
 }
 
 func onResponse(res *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
@@ -189,11 +311,12 @@ func onResponse(res *http.Response, ctx *goproxy.ProxyCtx) *http.Response {
 // while simultaneously hashing them. When the body is fully consumed (or the
 // upstream finishes), it writes the close entry to the ledger.
 type ledgerBody struct {
-	source    io.ReadCloser
-	openSig   string
-	status    int
-	buf       bytes.Buffer
-	done      bool
+	source  io.ReadCloser
+	openSig string
+	status  int
+	hashers *hasherSet
+	size    int64
+	done    bool
 }
 
 func newLedgerBody(source io.ReadCloser, openSig string, status int) *ledgerBody {
@@ -201,13 +324,15 @@ func newLedgerBody(source io.ReadCloser, openSig string, status int) *ledgerBody
 		source:  source,
 		openSig: openSig,
 		status:  status,
+		hashers: newHasherSet(ledger.hashes),
 	}
 }
 
 func (lb *ledgerBody) Read(p []byte) (int, error) {
 	n, err := lb.source.Read(p)
 	if n > 0 {
-		lb.buf.Write(p[:n])
+		lb.hashers.write(p[:n])
+		lb.size += int64(n)
 	}
 	if err == io.EOF && !lb.done {
 		lb.done = true
@@ -217,12 +342,20 @@ func (lb *ledgerBody) Read(p []byte) (int, error) {
 }
 
 func (lb *ledgerBody) Close() error {
-	// If the client closes before reading everything, drain the rest
-	// from upstream so we can hash the complete response.
 	if !lb.done {
 		lb.done = true
-		remaining, _ := io.ReadAll(lb.source)
-		lb.buf.Write(remaining)
+		// Drain remaining bytes through hashers.
+		buf := make([]byte, 32*1024)
+		for {
+			n, err := lb.source.Read(buf)
+			if n > 0 {
+				lb.hashers.write(buf[:n])
+				lb.size += int64(n)
+			}
+			if err != nil {
+				break
+			}
+		}
 		lb.finish()
 	}
 	return lb.source.Close()
@@ -230,7 +363,80 @@ func (lb *ledgerBody) Close() error {
 
 func (lb *ledgerBody) finish() {
 	metadata := map[string]any{"status": lb.status}
-	ledger.Close(lb.openSig, "in", lb.buf.Bytes(), metadata)
+	ledger.CloseHashed(lb.openSig, "in", lb.size, lb.hashers.sums(), metadata)
+}
+
+// hasherSet holds multiple hash.Hash instances for parallel incremental hashing.
+type hasherSet struct {
+	names []string
+	hashes []hash.Hash
+	writer io.Writer
+}
+
+func newHasherSet(names []string) *hasherSet {
+	hs := &hasherSet{names: names, hashes: make([]hash.Hash, len(names))}
+	writers := make([]io.Writer, len(names))
+	for i, name := range names {
+		hs.hashes[i] = newHash(name)
+		writers[i] = hs.hashes[i]
+	}
+	hs.writer = io.MultiWriter(writers...)
+	return hs
+}
+
+func (hs *hasherSet) write(p []byte) {
+	hs.writer.Write(p)
+}
+
+func (hs *hasherSet) sums() map[string]string {
+	result := make(map[string]string, len(hs.names))
+	for i, name := range hs.names {
+		result[name] = hex.EncodeToString(hs.hashes[i].Sum(nil))
+	}
+	return result
+}
+
+// hashingReadCloser wraps a request body, hashing bytes as they are read.
+// When closed, it fires the onClose callback with the total size.
+type hashingReadCloser struct {
+	source  io.ReadCloser
+	hashers *hasherSet
+	size    int64
+	onClose func(int64)
+	done    bool
+}
+
+func (h *hashingReadCloser) Read(p []byte) (int, error) {
+	n, err := h.source.Read(p)
+	if n > 0 {
+		h.hashers.write(p[:n])
+		h.size += int64(n)
+	}
+	if err == io.EOF && !h.done {
+		h.done = true
+		h.onClose(h.size)
+	}
+	return n, err
+}
+
+func (h *hashingReadCloser) Close() error {
+	if !h.done {
+		h.done = true
+		// Drain remaining bytes.
+		buf := make([]byte, 32*1024)
+		for {
+			n, err := h.source.Read(buf)
+			if n > 0 {
+				h.hashers.write(buf[:n])
+				h.size += int64(n)
+			}
+			if err != nil {
+				break
+			}
+		}
+		h.onClose(h.size)
+	}
+	return h.source.Close()
 }
 
 func proxyTlsConnection(c net.Conn, proxy *goproxy.ProxyHttpServer) {

@@ -46,7 +46,9 @@ type entryInput struct {
 	Type          string
 	OpenSignature string // for checkpoint/close
 	Direction     string // for checkpoint/close
-	Payload       []byte // raw payload bytes (nil for open)
+	Payload       []byte // raw payload bytes (nil for open or pre-hashed)
+	Size          int64  // payload size (used with PreHashed)
+	PreHashed     map[string]string // pre-computed hashes (nil means compute from Payload)
 	Metadata      map[string]any
 }
 
@@ -151,6 +153,19 @@ func (l *Ledger) Checkpoint(openSig string, direction string, payload []byte, me
 	}
 }
 
+// CheckpointHashed records a checkpoint entry with pre-computed hashes (fire-and-forget).
+func (l *Ledger) CheckpointHashed(openSig string, direction string, size int64, hashes map[string]string) {
+	l.entries <- entryRequest{
+		entry: entryInput{
+			Type:          "checkpoint",
+			OpenSignature: openSig,
+			Direction:     direction,
+			Size:          size,
+			PreHashed:     hashes,
+		},
+	}
+}
+
 // Close records a close entry (fire-and-forget).
 func (l *Ledger) Close(openSig string, direction string, payload []byte, metadata map[string]any) {
 	l.entries <- entryRequest{
@@ -159,6 +174,20 @@ func (l *Ledger) Close(openSig string, direction string, payload []byte, metadat
 			OpenSignature: openSig,
 			Direction:     direction,
 			Payload:       payload,
+			Metadata:      metadata,
+		},
+	}
+}
+
+// CloseHashed records a close entry with pre-computed hashes (fire-and-forget).
+func (l *Ledger) CloseHashed(openSig string, direction string, size int64, hashes map[string]string, metadata map[string]any) {
+	l.entries <- entryRequest{
+		entry: entryInput{
+			Type:          "close",
+			OpenSignature: openSig,
+			Direction:     direction,
+			Size:          size,
+			PreHashed:     hashes,
 			Metadata:      metadata,
 		},
 	}
@@ -231,7 +260,12 @@ func (l *Ledger) loop() {
 			sigInput = append(sigInput, []byte(e.Type)...)
 			sigInput = append(sigInput, []byte(e.Direction)...)
 
-			payload := l.computePayload(e.Payload)
+			var payload *PayloadRecord
+			if e.PreHashed != nil {
+				payload = &PayloadRecord{Size: e.Size, Hashes: e.PreHashed}
+			} else {
+				payload = l.computePayload(e.Payload)
+			}
 			sigInput = append(sigInput, sizeBytes(payload.Size)...)
 			sigInput = append(sigInput, l.rawHashBytes(payload.Hashes)...)
 
