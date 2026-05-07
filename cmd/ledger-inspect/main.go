@@ -3,6 +3,7 @@ package main
 import (
 	"bufio"
 	"crypto"
+	"crypto/ed25519"
 	"crypto/rsa"
 	"crypto/sha512"
 	"crypto/x509"
@@ -17,13 +18,14 @@ import (
 )
 
 type HeaderEntry struct {
-	EntryType   string         `json:"entry_type"`
-	Version     string         `json:"version"`
-	Format      string         `json:"format"`
-	Hashes      []string       `json:"hashes"`
-	Environment map[string]any `json:"environment"`
-	Payload     *PayloadRecord `json:"payload"`
-	Signature   string         `json:"signature"`
+	EntryType       string         `json:"entry_type"`
+	Version         string         `json:"version"`
+	Format          string         `json:"format"`
+	SignatureScheme string         `json:"signature_scheme"`
+	Hashes          []string       `json:"hashes"`
+	Environment     map[string]any `json:"environment"`
+	Payload         *PayloadRecord `json:"payload"`
+	Signature       string         `json:"signature"`
 }
 
 type LedgerEntry struct {
@@ -71,19 +73,12 @@ func main() {
 	}
 
 	// Extract public key from payload
-	certPEM, err := reconstructCert(header)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warning: cannot extract public key: %v\n", err)
-	}
-	var pubKey *rsa.PublicKey
-	if certPEM != nil {
-		pubKey = certPEM
-	}
+	verifier := reconstructVerifier(header)
 
 	// Verify header signature
 	headerValid := false
-	if pubKey != nil {
-		headerValid = verifyHeader(header, pubKey)
+	if verifier != nil {
+		headerValid = verifyHeader(header, verifier)
 	}
 
 	printHeader(header, headerValid)
@@ -103,8 +98,8 @@ func main() {
 		totalEntries++
 
 		valid := false
-		if pubKey != nil {
-			valid = verifyEntry(entry, prevSig, header.Hashes, pubKey)
+		if verifier != nil {
+			valid = verifyEntry(entry, prevSig, header.Hashes, verifier)
 			if !valid {
 				sigErrors++
 			}
@@ -130,7 +125,7 @@ func main() {
 	fmt.Println(strings.Repeat("═", 80))
 	fmt.Printf("  SUMMARY: %d entries (%d open, %d checkpoint, %d close)\n",
 		totalEntries, opens, checkpoints, closes)
-	if pubKey != nil {
+	if verifier != nil {
 		if sigErrors == 0 {
 			fmt.Printf("  SIGNATURES: ✅ All %d signatures valid\n", totalEntries+1)
 		} else {
@@ -214,39 +209,75 @@ func sigStatus(valid bool) string {
 	return "❌"
 }
 
-func reconstructCert(h HeaderEntry) (*rsa.PublicKey, error) {
-	// We can't reconstruct the cert bytes from the header alone.
-	// Check if a cert file exists alongside the ledger.
-	if len(os.Args) >= 2 {
-		dir := os.Args[1]
-		// Try sibling file
-		for _, name := range []string{"ledger.cert.pem"} {
-			path := strings.TrimSuffix(dir, "ledger") + name
-			data, err := os.ReadFile(path)
-			if err == nil {
-				block, _ := pem.Decode(data)
-				if block != nil {
-					key, err := x509.ParsePKCS1PublicKey(block.Bytes)
-					if err == nil {
-						return key, nil
-					}
-				}
-			}
-		}
-	}
-	return nil, fmt.Errorf("cert file not found")
+// sigVerifier abstracts signature verification for different schemes.
+type sigVerifier interface {
+	verify(input []byte, sigB64 string) bool
 }
 
-func verifyHeader(h HeaderEntry, pubKey *rsa.PublicKey) bool {
+type ed25519Verifier struct {
+	key ed25519.PublicKey
+}
+
+func (v *ed25519Verifier) verify(input []byte, sigB64 string) bool {
+	sigBytes, err := base64.StdEncoding.DecodeString(sigB64)
+	if err != nil {
+		return false
+	}
+	digest := sha512.Sum512(input)
+	return ed25519.Verify(v.key, digest[:], sigBytes)
+}
+
+type rsaVerifier struct {
+	key *rsa.PublicKey
+}
+
+func (v *rsaVerifier) verify(input []byte, sigB64 string) bool {
+	sigBytes, err := base64.StdEncoding.DecodeString(sigB64)
+	if err != nil {
+		return false
+	}
+	digest := sha512.Sum512(input)
+	return rsa.VerifyPKCS1v15(v.key, crypto.SHA512, digest[:], sigBytes) == nil
+}
+
+func reconstructVerifier(h HeaderEntry) sigVerifier {
+	if len(os.Args) < 2 {
+		return nil
+	}
+	path := strings.TrimSuffix(os.Args[1], "ledger") + "ledger.cert.pem"
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil
+	}
+
+	switch {
+	case h.SignatureScheme == "ed25519-sha512" || block.Type == "ED25519 PUBLIC KEY":
+		if len(block.Bytes) == ed25519.PublicKeySize {
+			return &ed25519Verifier{key: ed25519.PublicKey(block.Bytes)}
+		}
+	default:
+		// Legacy RSA
+		key, err := x509.ParsePKCS1PublicKey(block.Bytes)
+		if err == nil {
+			return &rsaVerifier{key: key}
+		}
+	}
+	return nil
+}
+
+func verifyHeader(h HeaderEntry, v sigVerifier) bool {
 	var sigInput []byte
 	sigInput = append(sigInput, []byte("header")...)
 	sigInput = append(sigInput, sizeBytes(h.Payload.Size)...)
 	sigInput = append(sigInput, rawHashBytes(h.Payload.Hashes, h.Hashes)...)
-
-	return verifySig(sigInput, h.Signature, pubKey)
+	return v.verify(sigInput, h.Signature)
 }
 
-func verifyEntry(e LedgerEntry, prevSig string, hashes []string, pubKey *rsa.PublicKey) bool {
+func verifyEntry(e LedgerEntry, prevSig string, hashes []string, v sigVerifier) bool {
 	var sigInput []byte
 	prevSigBytes, _ := base64.StdEncoding.DecodeString(prevSig)
 	sigInput = append(sigInput, prevSigBytes...)
@@ -265,16 +296,7 @@ func verifyEntry(e LedgerEntry, prevSig string, hashes []string, pubKey *rsa.Pub
 		}
 	}
 
-	return verifySig(sigInput, e.Signature, pubKey)
-}
-
-func verifySig(input []byte, sigB64 string, pubKey *rsa.PublicKey) bool {
-	sigBytes, err := base64.StdEncoding.DecodeString(sigB64)
-	if err != nil {
-		return false
-	}
-	digest := sha512.Sum512(input)
-	return rsa.VerifyPKCS1v15(pubKey, crypto.SHA512, digest[:], sigBytes) == nil
+	return v.verify(sigInput, e.Signature)
 }
 
 func sizeBytes(size int64) []byte {

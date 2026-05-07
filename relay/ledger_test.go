@@ -2,13 +2,10 @@ package relay
 
 import (
 	"bytes"
-	"crypto"
-	"crypto/rsa"
+	"crypto/ed25519"
 	"crypto/sha512"
-	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
-	"encoding/pem"
 	"strings"
 	"testing"
 )
@@ -53,6 +50,9 @@ func TestLedgerBasicFlow(t *testing.T) {
 	}
 	if header.Version != "2.0" {
 		t.Errorf("header version = %q, want %q", header.Version, "2.0")
+	}
+	if header.SignatureScheme != "ed25519-sha512" {
+		t.Errorf("header signature_scheme = %q, want %q", header.SignatureScheme, "ed25519-sha512")
 	}
 	if len(header.Hashes) != 4 {
 		t.Errorf("header hashes count = %d, want 4", len(header.Hashes))
@@ -129,26 +129,12 @@ func TestLedgerMultipleChannels(t *testing.T) {
 	ledger = nil
 }
 
-func extractPublicKey(t *testing.T, header HeaderEntry) *rsa.PublicKey {
+func extractPublicKey(t *testing.T, header HeaderEntry) ed25519.PublicKey {
 	t.Helper()
-	// Reconstruct cert bytes from the payload hashes to verify,
-	// but we actually need the raw cert. Since we can't recover it from hashes,
-	// use the global ledger key (still available in test).
-	// For a real verifier, the cert would be read from ledger.cert.pem.
-	// Here we just verify signatures are mathematically valid.
-	certBytes := pem.EncodeToMemory(&pem.Block{
-		Type:  "RSA PUBLIC KEY",
-		Bytes: x509.MarshalPKCS1PublicKey(&ledger.key.PublicKey),
-	})
-	block, _ := pem.Decode(certBytes)
-	key, err := x509.ParsePKCS1PublicKey(block.Bytes)
-	if err != nil {
-		t.Fatalf("parse public key: %v", err)
-	}
-	return key
+	return ledger.key.Public().(ed25519.PublicKey)
 }
 
-func verifySigChain(t *testing.T, header HeaderEntry, entries []LedgerEntry, pubKey *rsa.PublicKey) {
+func verifySigChain(t *testing.T, header HeaderEntry, entries []LedgerEntry, pubKey ed25519.PublicKey) {
 	t.Helper()
 
 	// Verify header signature
@@ -183,15 +169,15 @@ func verifySigChain(t *testing.T, header HeaderEntry, entries []LedgerEntry, pub
 	}
 }
 
-func verifySignature(t *testing.T, label string, input []byte, sigB64 string, pubKey *rsa.PublicKey) {
+func verifySignature(t *testing.T, label string, input []byte, sigB64 string, pubKey ed25519.PublicKey) {
 	t.Helper()
 	sigBytes, err := base64.StdEncoding.DecodeString(sigB64)
 	if err != nil {
 		t.Fatalf("%s: decode signature: %v", label, err)
 	}
 	digest := sha512.Sum512(input)
-	if err := rsa.VerifyPKCS1v15(pubKey, crypto.SHA512, digest[:], sigBytes); err != nil {
-		t.Errorf("%s: signature verification failed: %v", label, err)
+	if !ed25519.Verify(pubKey, digest[:], sigBytes) {
+		t.Errorf("%s: signature verification failed", label)
 	}
 }
 

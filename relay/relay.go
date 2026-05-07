@@ -6,7 +6,6 @@ import (
 	"bytes"
 	"encoding/hex"
 	"fmt"
-	"hash"
 	"io"
 	"log"
 	"net"
@@ -366,32 +365,46 @@ func (lb *ledgerBody) finish() {
 	ledger.CloseHashed(lb.openSig, "in", lb.size, lb.hashers.sums(), metadata)
 }
 
-// hasherSet holds multiple hash.Hash instances for parallel incremental hashing.
+// hasherSet runs multiple hash algorithms in parallel via goroutines.
+// Each algorithm has its own goroutine reading from a pipe.
 type hasherSet struct {
-	names []string
-	hashes []hash.Hash
-	writer io.Writer
+	names   []string
+	writers []*io.PipeWriter
+	results []chan string
 }
 
 func newHasherSet(names []string) *hasherSet {
-	hs := &hasherSet{names: names, hashes: make([]hash.Hash, len(names))}
-	writers := make([]io.Writer, len(names))
-	for i, name := range names {
-		hs.hashes[i] = newHash(name)
-		writers[i] = hs.hashes[i]
+	hs := &hasherSet{
+		names:   names,
+		writers: make([]*io.PipeWriter, len(names)),
+		results: make([]chan string, len(names)),
 	}
-	hs.writer = io.MultiWriter(writers...)
+	for i, name := range names {
+		pr, pw := io.Pipe()
+		hs.writers[i] = pw
+		hs.results[i] = make(chan string, 1)
+		go func(r io.Reader, n string, ch chan<- string) {
+			h := newHash(n)
+			io.Copy(h, r)
+			ch <- hex.EncodeToString(h.Sum(nil))
+		}(pr, name, hs.results[i])
+	}
 	return hs
 }
 
 func (hs *hasherSet) write(p []byte) {
-	hs.writer.Write(p)
+	for _, w := range hs.writers {
+		w.Write(p)
+	}
 }
 
 func (hs *hasherSet) sums() map[string]string {
+	for _, w := range hs.writers {
+		w.Close()
+	}
 	result := make(map[string]string, len(hs.names))
 	for i, name := range hs.names {
-		result[name] = hex.EncodeToString(hs.hashes[i].Sum(nil))
+		result[name] = <-hs.results[i]
 	}
 	return result
 }

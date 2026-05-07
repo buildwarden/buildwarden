@@ -47,6 +47,7 @@ The first line of the ledger. Establishes the chain root.
   "entry_type": "header",
   "version": "2.0",
   "format": "json",
+  "signature_scheme": "ed25519-sha512",
   "hashes": ["blake2b_256", "sha256", "sha1", "md5"],
   "environment": {
     "type": "container",
@@ -74,7 +75,8 @@ sign("header" + size_bytes + blake2b_256 + sha256 + sha1 + md5)
 Where:
 - `size_bytes` is the payload size as a little-endian 64-bit unsigned integer
 - Hash values are concatenated as raw bytes in header-declared order
-- The payload is the public certificate bytes (also written to `ledger.cert.pem` and `ledger.cert.der`)
+- The payload is the public key bytes (also written to `ledger.cert.pem`)
+- The `signature_scheme` field declares which signing algorithm and digest are used
 
 The header's signature becomes the `prev_sig` for the first subsequent entry.
 
@@ -128,13 +130,24 @@ The `hashes` object is included in the JSON for legibility. For signature comput
 
 ## Signature Computation
 
-All signatures use RSA PKCS#1 v1.5 with the relay's ephemeral private key. The digest of the concatenated input is signed.
+The signature scheme is declared in the header's `signature_scheme` field. Implementations must support the scheme declared in the header to verify the ledger.
+
+### Signature Schemes
+
+| Scheme | Algorithm | Digest | Key Type |
+|--------|-----------|--------|----------|
+| `ed25519-sha512` | Ed25519 | SHA-512 | Ed25519 (32-byte public key) |
+| `rsa-pkcs1v15-sha512` | RSA PKCS#1 v1.5 | SHA-512 | RSA (2048-bit minimum) |
+
+The reference implementation uses `ed25519-sha512`. The signature input construction is identical for all schemes — only the final signing primitive differs.
+
+For all schemes, the signature input bytes are first hashed with the declared digest algorithm (SHA-512), then the digest is signed with the declared algorithm.
 
 ### Open Entry
 
 ```
-digest = HASH(prev_sig + "open")
-signature = RSA_SIGN(digest)
+digest = SHA512(prev_sig + "open")
+signature = SIGN(digest)
 ```
 
 - `prev_sig`: raw bytes of the previous entry's signature (decoded from base64)
@@ -145,8 +158,8 @@ The open entry has no payload, no direction, and no open_signature reference. It
 ### Checkpoint Entry
 
 ```
-digest = HASH(prev_sig + open_sig + "checkpoint" + direction + size_bytes + hash_bytes)
-signature = RSA_SIGN(digest)
+digest = SHA512(prev_sig + open_sig + "checkpoint" + direction + size_bytes + hash_bytes)
+signature = SIGN(digest)
 ```
 
 - `open_sig`: raw bytes of the associated open entry's signature
@@ -157,15 +170,15 @@ signature = RSA_SIGN(digest)
 ### Close Entry
 
 ```
-digest = HASH(prev_sig + open_sig + "close" + direction + size_bytes + hash_bytes)
-signature = RSA_SIGN(digest)
+digest = SHA512(prev_sig + open_sig + "close" + direction + size_bytes + hash_bytes)
+signature = SIGN(digest)
 ```
 
 Same structure as checkpoint.
 
 ### Digest Algorithm
 
-The digest algorithm used for signature computation is SHA-512. This is the algorithm applied to the concatenated signature input before RSA signing. It is distinct from the payload hash algorithms.
+The digest algorithm used for signature computation is SHA-512. This is the algorithm applied to the concatenated signature input before signing. It is distinct from the payload hash algorithms.
 
 ## Synchronous Open Protocol
 
