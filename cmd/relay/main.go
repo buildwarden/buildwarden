@@ -41,6 +41,19 @@ func run() int {
 
 	relay.SetOutDir(outDir)
 
+	// Generate ephemeral CA for this build.
+	if err := relay.GenerateCA(); err != nil {
+		fmt.Fprintf(os.Stderr, "error generating CA: %v\n", err)
+		return 1
+	}
+
+	// Write CA cert for the orchestrator to inject into build container.
+	caPath := filepath.Join(outDir, "ca.cert.pem")
+	if err := os.WriteFile(caPath, relay.CA_CERT, 0644); err != nil {
+		fmt.Fprintf(os.Stderr, "error writing CA cert: %v\n", err)
+		return 1
+	}
+
 	// Write public cert files.
 	certPEM := relay.PublicCertPEM()
 	certPath := filepath.Join(outDir, "ledger.cert.pem")

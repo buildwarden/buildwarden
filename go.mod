@@ -8,8 +8,6 @@ require (
 )
 
 require (
-	github.com/elazarl/goproxy v1.2.1
-	github.com/inconshreveable/go-vhost v1.0.0
 	github.com/lesiw/ctrctl v0.5.0
 	github.com/miekg/dns v1.1.55
 	github.com/pavlo-v-chernykh/keystore-go/v4 v4.4.1
@@ -22,6 +20,5 @@ require (
 	golang.org/x/net v0.52.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/sys v0.43.0 // indirect
-	golang.org/x/text v0.36.0 // indirect
 	golang.org/x/tools v0.43.0 // indirect
 )
