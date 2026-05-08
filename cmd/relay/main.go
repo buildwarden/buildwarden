@@ -43,7 +43,8 @@ func run() int {
 
 	// Write public cert files.
 	certPEM := relay.PublicCertPEM()
-	if err := os.WriteFile(filepath.Join(outDir, "ledger.cert.pem"), certPEM, 0644); err != nil {
+	certPath := filepath.Join(outDir, "ledger.cert.pem")
+	if err := os.WriteFile(certPath, certPEM, 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing cert PEM: %v\n", err)
 		return 1
 	}

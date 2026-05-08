@@ -152,7 +152,8 @@ func TestDRR_SlowStreamDoesNotBlockOthers(t *testing.T) {
 	// The fast stream should complete well before the slow stream's 200ms block.
 	time.Sleep(100 * time.Millisecond)
 	if !fastDone.Load() {
-		t.Fatal("fast stream should have completed while slow stream was blocked, but it didn't")
+		t.Fatal("fast stream should have completed while slow " +
+			"stream was blocked, but it didn't")
 	}
 
 	wg.Wait()

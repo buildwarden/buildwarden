@@ -13,7 +13,7 @@ import (
 func BenchmarkEd25519Sign(b *testing.B) {
 	_, priv, _ := ed25519.GenerateKey(rand.Reader)
 	input := make([]byte, 300)
-	rand.Read(input)
+	rand.Read(input) //nolint:errcheck
 	digest := sha512.Sum512(input)
 
 	b.ResetTimer()
@@ -35,7 +35,7 @@ func BenchmarkHashPayload(b *testing.B) {
 	}
 	for _, s := range sizes {
 		data := make([]byte, s.size)
-		rand.Read(data)
+		rand.Read(data) //nolint:errcheck
 		b.Run(s.name, func(b *testing.B) {
 			for b.Loop() {
 				hs := newHasherSet(defaultHashes)
@@ -100,7 +100,9 @@ func BenchmarkLedgerFullRequest(b *testing.B) {
 
 	b.ResetTimer()
 	for b.Loop() {
-		sig := ledger.Open(map[string]any{"method": "GET", "url": "https://example.com/pkg.tar.gz"})
+		sig := ledger.Open(map[string]any{
+			"method": "GET", "url": "https://example.com/pkg.tar.gz",
+		})
 		ledger.Checkpoint(sig, "out", reqHeaders, nil)
 		ledger.Checkpoint(sig, "in", respHeaders, nil)
 		ledger.CloseHashed(sig, "in", 1024, bodyHashes, map[string]any{"status": 200})
@@ -141,11 +143,11 @@ func setupBenchLedger(b *testing.B) {
 func BenchmarkBase64Decode(b *testing.B) {
 	// RSA-2048 signature is 256 bytes, base64 encoded is 344 chars
 	raw := make([]byte, 256)
-	rand.Read(raw)
+	rand.Read(raw) //nolint:errcheck
 	encoded := base64.StdEncoding.EncodeToString(raw)
 
 	b.ResetTimer()
 	for b.Loop() {
-		base64.StdEncoding.DecodeString(encoded)
+		base64.StdEncoding.DecodeString(encoded) //nolint:errcheck
 	}
 }

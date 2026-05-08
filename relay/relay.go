@@ -232,7 +232,8 @@ func handleArtifactPost(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request
 	tmpFile, err := os.CreateTemp(payloadsDir, "artifact-*")
 	if err != nil {
 		log.Printf("artifact: error creating temp file: %v", err)
-		resp := goproxy.NewResponse(req, "text/plain", http.StatusInternalServerError, "storage error")
+		resp := goproxy.NewResponse(
+			req, "text/plain", http.StatusInternalServerError, "storage error")
 		return req, resp
 	}
 
@@ -243,7 +244,7 @@ func handleArtifactPost(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request
 		n, readErr := req.Body.Read(buf)
 		if n > 0 {
 			hashers.write(buf[:n])
-			tmpFile.Write(buf[:n])
+			tmpFile.Write(buf[:n]) //nolint:errcheck
 			size += int64(n)
 		}
 		if readErr != nil {
@@ -257,12 +258,12 @@ func handleArtifactPost(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request
 	sums := hashers.sums()
 	primaryHash := sums["sha256"]
 	payloadPath := filepath.Join(payloadsDir, primaryHash)
-	os.Rename(tmpFile.Name(), payloadPath)
+	os.Rename(tmpFile.Name(), payloadPath) //nolint:errcheck
 
 	// Create symlink: artifacts/<name> -> ../payloads/<hash>
 	symPath := filepath.Join(artifactsDir, artifactName)
-	os.MkdirAll(filepath.Dir(symPath), 0755)
-	os.Symlink(filepath.Join("..", "payloads", primaryHash), symPath)
+	os.MkdirAll(filepath.Dir(symPath), 0755) //nolint:errcheck
+	os.Symlink(filepath.Join("..", "payloads", primaryHash), symPath) //nolint:errcheck
 
 	// Record body checkpoint and close in ledger.
 	ledger.CheckpointHashed(openSig, "out", size, sums)
@@ -273,7 +274,8 @@ func handleArtifactPost(req *http.Request, ctx *goproxy.ProxyCtx) (*http.Request
 		"md5":         "d41d8cd98f00b204e9800998ecf8427e",
 	}, map[string]any{"status": 200})
 
-	log.Printf("artifact: stored %s (%d bytes, sha256:%s)", artifactName, size, primaryHash[:12])
+	log.Printf("artifact: stored %s (%d bytes, sha256:%s)",
+		artifactName, size, primaryHash[:12])
 
 	resp := goproxy.NewResponse(req, "text/plain", http.StatusOK,
 		fmt.Sprintf("artifact stored: %s (%d bytes)\n", artifactName, size))
@@ -385,7 +387,7 @@ func newHasherSet(names []string) *hasherSet {
 		hs.results[i] = make(chan string, 1)
 		go func(r io.Reader, n string, ch chan<- string) {
 			h := newHash(n)
-			io.Copy(h, r)
+			io.Copy(h, r) //nolint:errcheck
 			ch <- hex.EncodeToString(h.Sum(nil))
 		}(pr, name, hs.results[i])
 	}
@@ -394,7 +396,7 @@ func newHasherSet(names []string) *hasherSet {
 
 func (hs *hasherSet) write(p []byte) {
 	for _, w := range hs.writers {
-		w.Write(p)
+		w.Write(p) //nolint:errcheck
 	}
 }
 

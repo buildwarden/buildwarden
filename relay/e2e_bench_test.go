@@ -11,9 +11,25 @@ var testPackages = []struct {
 	name string
 	url  string
 }{
-	{"requests-65KB", "https://files.pythonhosted.org/packages/d7/8e/7540e8a2036f79a125c1d2ebadf69ed7901608859186c856fa0388ef4197/requests-2.33.1-py3-none-any.whl"},
-	{"numpy-16MB", "https://files.pythonhosted.org/packages/68/62/63417c13aa35d57bee1337c67446761dc25ea6543130cf868eace6e8157b/numpy-2.4.4-cp311-cp311-manylinux_2_27_aarch64.manylinux_2_28_aarch64.whl"},
-	{"pytorch-530MB", "https://files.pythonhosted.org/packages/f9/1e/18a9b10b4bd34f12d4e561c52b0ae7158707b8193c6cfc0aad2b48167090/torch-2.11.0-cp310-cp310-manylinux_2_28_x86_64.whl"},
+	{
+		"requests-65KB",
+		"https://files.pythonhosted.org/packages/d7/8e/" +
+			"7540e8a2036f79a125c1d2ebadf69ed7901608859186c856fa0388ef4197/" +
+			"requests-2.33.1-py3-none-any.whl",
+	},
+	{
+		"numpy-16MB",
+		"https://files.pythonhosted.org/packages/68/62/" +
+			"63417c13aa35d57bee1337c67446761dc25ea6543130cf868eace6e8157b/" +
+			"numpy-2.4.4-cp311-cp311-manylinux_2_27_aarch64." +
+			"manylinux_2_28_aarch64.whl",
+	},
+	{
+		"pytorch-530MB",
+		"https://files.pythonhosted.org/packages/f9/1e/" +
+			"18a9b10b4bd34f12d4e561c52b0ae7158707b8193c6cfc0aad2b48167090/" +
+			"torch-2.11.0-cp310-cp310-manylinux_2_28_x86_64.whl",
+	},
 }
 
 // BenchmarkE2EDownload downloads real packages through the production
@@ -61,7 +77,7 @@ func BenchmarkE2ELocalStreaming(b *testing.B) {
 	}
 	for _, s := range sizes {
 		data := make([]byte, s.size)
-		rand.Read(data)
+		rand.Read(data) //nolint:errcheck
 		b.Run(s.name, func(b *testing.B) {
 			for b.Loop() {
 				hs := newHasherSet(defaultHashes)

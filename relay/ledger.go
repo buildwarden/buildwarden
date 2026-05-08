@@ -40,7 +40,8 @@ type Ledger struct {
 // entryRequest is the union type sent through the single channel.
 type entryRequest struct {
 	entry  entryInput
-	result chan<- string // nil for fire-and-forget (checkpoint/close), non-nil for synchronous open
+	// nil for fire-and-forget (checkpoint/close), non-nil for synchronous open
+	result chan<- string
 }
 
 type entryInput struct {
@@ -123,7 +124,7 @@ func PublicCertPEM() []byte {
 	if ledger == nil {
 		return nil
 	}
-	pub := ledger.key.Public().(ed25519.PublicKey)
+	pub, _ := ledger.key.Public().(ed25519.PublicKey)
 	return pem.EncodeToMemory(&pem.Block{
 		Type:  "ED25519 PUBLIC KEY",
 		Bytes: []byte(pub),
@@ -145,7 +146,9 @@ func (l *Ledger) Open(metadata map[string]any) string {
 }
 
 // Checkpoint records a checkpoint entry (fire-and-forget).
-func (l *Ledger) Checkpoint(openSig string, direction string, payload []byte, metadata map[string]any) {
+func (l *Ledger) Checkpoint(
+	openSig string, direction string, payload []byte, metadata map[string]any,
+) {
 	pr := l.computePayload(payload)
 	l.entries <- entryRequest{
 		entry: entryInput{
@@ -160,7 +163,9 @@ func (l *Ledger) Checkpoint(openSig string, direction string, payload []byte, me
 }
 
 // CheckpointHashed records a checkpoint entry with pre-computed hashes (fire-and-forget).
-func (l *Ledger) CheckpointHashed(openSig string, direction string, size int64, hashes map[string]string) {
+func (l *Ledger) CheckpointHashed(
+	openSig string, direction string, size int64, hashes map[string]string,
+) {
 	l.entries <- entryRequest{
 		entry: entryInput{
 			Type:          "checkpoint",
@@ -188,7 +193,10 @@ func (l *Ledger) Close(openSig string, direction string, payload []byte, metadat
 }
 
 // CloseHashed records a close entry with pre-computed hashes (fire-and-forget).
-func (l *Ledger) CloseHashed(openSig string, direction string, size int64, hashes map[string]string, metadata map[string]any) {
+func (l *Ledger) CloseHashed(
+	openSig string, direction string, size int64,
+	hashes map[string]string, metadata map[string]any,
+) {
 	l.entries <- entryRequest{
 		entry: entryInput{
 			Type:          "close",
@@ -202,7 +210,7 @@ func (l *Ledger) CloseHashed(openSig string, direction string, size int64, hashe
 }
 
 func (l *Ledger) writeHeader(environment map[string]any) error {
-	pub := l.key.Public().(ed25519.PublicKey)
+	pub, _ := l.key.Public().(ed25519.PublicKey)
 	certBytes := pem.EncodeToMemory(&pem.Block{
 		Type:  "ED25519 PUBLIC KEY",
 		Bytes: []byte(pub),

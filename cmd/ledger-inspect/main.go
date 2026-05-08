@@ -44,7 +44,7 @@ type PayloadRecord struct {
 	Hashes map[string]string `json:"hashes"`
 }
 
-func main() {
+func main() { //nolint:gocyclo
 	if len(os.Args) < 2 {
 		fmt.Fprintf(os.Stderr, "usage: ledger-inspect <ledger-file>\n")
 		os.Exit(1)
@@ -129,7 +129,8 @@ func main() {
 		if sigErrors == 0 {
 			fmt.Printf("  SIGNATURES: ✅ All %d signatures valid\n", totalEntries+1)
 		} else {
-			fmt.Printf("  SIGNATURES: ❌ %d/%d failed verification\n", sigErrors, totalEntries)
+			fmt.Printf("  SIGNATURES: ❌ %d/%d failed verification\n",
+				sigErrors, totalEntries)
 		}
 	} else {
 		fmt.Printf("  SIGNATURES: ⚠️  Could not verify (no public key)\n")
@@ -159,7 +160,8 @@ func printEntry(e LedgerEntry, valid bool) {
 
 	switch e.EntryType {
 	case "open":
-		fmt.Printf("[%3d] %s OPEN %s  %s\n", e.Seq, check, metaSummary(e.Metadata), e.Timestamp)
+		fmt.Printf("[%3d] %s OPEN %s  %s\n",
+			e.Seq, check, metaSummary(e.Metadata), e.Timestamp)
 	case "checkpoint":
 		dir := dirArrow(e.Direction)
 		fmt.Printf("[%3d] %s  ├─ CHECKPOINT %s %s (%d bytes)\n",

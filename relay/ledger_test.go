@@ -10,7 +10,7 @@ import (
 	"testing"
 )
 
-func TestLedgerBasicFlow(t *testing.T) {
+func TestLedgerBasicFlow(t *testing.T) { //nolint:gocyclo
 	var buf bytes.Buffer
 	err := NewLedger(&buf, map[string]any{"type": "container", "digest": "sha256:abc123"})
 	if err != nil {
@@ -18,16 +18,20 @@ func TestLedgerBasicFlow(t *testing.T) {
 	}
 
 	// Open a channel (synchronous — returns signature)
-	openSig := ledger.Open(map[string]any{"method": "GET", "url": "https://example.com/pkg.tar.gz"})
+	openSig := ledger.Open(map[string]any{
+		"method": "GET", "url": "https://example.com/pkg.tar.gz",
+	})
 	if openSig == "" {
 		t.Fatal("Open returned empty signature")
 	}
 
 	// Checkpoint: request headers out
-	ledger.Checkpoint(openSig, "out", []byte("GET /pkg.tar.gz HTTP/1.1\r\nHost: example.com\r\n\r\n"), nil)
+	reqHeaders := "GET /pkg.tar.gz HTTP/1.1\r\nHost: example.com\r\n\r\n"
+	ledger.Checkpoint(openSig, "out", []byte(reqHeaders), nil)
 
 	// Checkpoint: response headers in
-	ledger.Checkpoint(openSig, "in", []byte("HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n"), nil)
+	respHeaders := "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n"
+	ledger.Checkpoint(openSig, "in", []byte(respHeaders), nil)
 
 	// Close: response body in
 	ledger.Close(openSig, "in", []byte("hello"), map[string]any{"status": 200})
@@ -37,7 +41,8 @@ func TestLedgerBasicFlow(t *testing.T) {
 	// Parse and verify the ledger
 	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
 	if len(lines) != 5 {
-		t.Fatalf("expected 5 lines (header + open + 2 checkpoints + close), got %d", len(lines))
+		t.Fatalf("expected 5 lines (header + open + 2 checkpoints + close),"+
+			" got %d", len(lines))
 	}
 
 	// Verify header
@@ -52,7 +57,8 @@ func TestLedgerBasicFlow(t *testing.T) {
 		t.Errorf("header version = %q, want %q", header.Version, "2.0")
 	}
 	if header.SignatureScheme != "ed25519-sha512" {
-		t.Errorf("header signature_scheme = %q, want %q", header.SignatureScheme, "ed25519-sha512")
+		t.Errorf("header signature_scheme = %q, want %q",
+			header.SignatureScheme, "ed25519-sha512")
 	}
 	if len(header.Hashes) != 4 {
 		t.Errorf("header hashes count = %d, want 4", len(header.Hashes))
@@ -131,17 +137,21 @@ func TestLedgerMultipleChannels(t *testing.T) {
 
 func extractPublicKey(t *testing.T, header HeaderEntry) ed25519.PublicKey {
 	t.Helper()
-	return ledger.key.Public().(ed25519.PublicKey)
+	pub, _ := ledger.key.Public().(ed25519.PublicKey)
+	return pub
 }
 
-func verifySigChain(t *testing.T, header HeaderEntry, entries []LedgerEntry, pubKey ed25519.PublicKey) {
+func verifySigChain(
+	t *testing.T, header HeaderEntry, entries []LedgerEntry, pubKey ed25519.PublicKey,
+) {
 	t.Helper()
 
 	// Verify header signature
 	var headerInput []byte
 	headerInput = append(headerInput, []byte("header")...)
 	headerInput = append(headerInput, sizeBytes(header.Payload.Size)...)
-	headerInput = append(headerInput, rawHashBytesOrdered(header.Payload.Hashes, header.Hashes)...)
+	headerInput = append(headerInput,
+		rawHashBytesOrdered(header.Payload.Hashes, header.Hashes)...)
 
 	verifySignature(t, "header", headerInput, header.Signature, pubKey)
 
@@ -161,7 +171,8 @@ func verifySigChain(t *testing.T, header HeaderEntry, entries []LedgerEntry, pub
 			sigInput = append(sigInput, []byte(e.EntryType)...)
 			sigInput = append(sigInput, []byte(e.Direction)...)
 			sigInput = append(sigInput, sizeBytes(e.Payload.Size)...)
-			sigInput = append(sigInput, rawHashBytesOrdered(e.Payload.Hashes, defaultHashes)...)
+			sigInput = append(sigInput,
+				rawHashBytesOrdered(e.Payload.Hashes, defaultHashes)...)
 		}
 
 		verifySignature(t, entryLabel(i, e), sigInput, e.Signature, pubKey)
@@ -169,7 +180,10 @@ func verifySigChain(t *testing.T, header HeaderEntry, entries []LedgerEntry, pub
 	}
 }
 
-func verifySignature(t *testing.T, label string, input []byte, sigB64 string, pubKey ed25519.PublicKey) {
+func verifySignature(
+	t *testing.T, label string, input []byte, sigB64 string,
+	pubKey ed25519.PublicKey,
+) {
 	t.Helper()
 	sigBytes, err := base64.StdEncoding.DecodeString(sigB64)
 	if err != nil {

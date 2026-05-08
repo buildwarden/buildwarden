@@ -177,7 +177,8 @@ COPY relay /usr/local/bin/relay
 EXPOSE 53/udp 80 443
 ENTRYPOINT ["relay"]
 `
-	if err := os.WriteFile(filepath.Join(buildCtx, "Dockerfile"), []byte(dockerfile), 0644); err != nil {
+	dfPath := filepath.Join(buildCtx, "Dockerfile")
+	if err := os.WriteFile(dfPath, []byte(dockerfile), 0644); err != nil {
 		return fmt.Errorf("error writing relay Dockerfile: %w", err)
 	}
 
