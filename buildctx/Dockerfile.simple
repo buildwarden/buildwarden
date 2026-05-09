@@ -1,4 +1,19 @@
-FROM alpine
+FROM python:3.12-slim
 
-RUN apk add py3-pip
-RUN python3 -m venv /venv && /venv/bin/pip install numpy
+RUN apt-get update && apt-get install -y --no-install-recommends curl && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN pip install --upgrade pip build
+
+# Download the latest requests source distribution and build a wheel
+RUN pip download --no-binary :all: --no-deps requests -d /tmp/sdist && \
+    tar xzf /tmp/sdist/requests-*.tar.gz -C /tmp && \
+    cd /tmp/requests-*/ && \
+    python -m build --wheel && \
+    cp dist/requests-*.whl /tmp/
+
+# Post the built wheel as an artifact
+RUN WHEEL=$(ls /tmp/requests-*.whl) && \
+    curl -fsSL -X POST --data-binary @"$WHEEL" \
+        "http://artifacts/$(basename $WHEEL)" && \
+    echo "Artifact posted: $(basename $WHEEL)"
