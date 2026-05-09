@@ -8,6 +8,7 @@ require (
 )
 
 require (
+	github.com/BurntSushi/toml v1.6.0
 	github.com/fxamacker/cbor/v2 v2.7.0
 	github.com/lesiw/ctrctl v0.5.0
 	github.com/miekg/dns v1.1.55
