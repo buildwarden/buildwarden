@@ -198,8 +198,8 @@ func TestLedger3StreamingHasher(t *testing.T) {
 
 	// Compute via streaming
 	sh := NewStreamingHasher(defaultHashes)
-	sh.Write(data[:10])
-	sh.Write(data[10:])
+	sh.Write(data[:10])  //nolint:errcheck
+	sh.Write(data[10:])  //nolint:errcheck
 	block, size := sh.Finish()
 
 	if size != int64(len(data)) {
@@ -297,7 +297,8 @@ func verifyLedger3Chain(t *testing.T, data []byte, pubKey ed25519.PublicKey) {
 
 		d := sha512.Sum512(sigInput)
 		if !ed25519.Verify(pubKey, d[:], recSig) {
-			t.Fatalf("record %d (type 0x%02x): signature invalid", recordNum, recordType)
+			t.Fatalf("record %d (type 0x%02x): signature invalid",
+			recordNum, recordType)
 		}
 
 		// Schema index + optional metadata

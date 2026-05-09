@@ -119,7 +119,11 @@ func NewLedger3(cfg Ledger3Config) (*Ledger3, error) {
 
 // PublicKey returns the raw Ed25519 public key bytes.
 func (l *Ledger3) PublicKey() ed25519.PublicKey {
-	return l.key.Public().(ed25519.PublicKey)
+	pub, ok := l.key.Public().(ed25519.PublicKey)
+	if !ok {
+		panic("unexpected key type")
+	}
+	return pub
 }
 
 // Open writes an open record synchronously and returns the record's raw signature
@@ -139,7 +143,10 @@ func (l *Ledger3) Open(schemaIndex byte, metadata []byte) []byte {
 }
 
 // Checkpoint writes a checkpoint record (fire-and-forget).
-func (l *Ledger3) Checkpoint(openSig []byte, payloadSize int64, hashBlock []byte, schemaIndex byte, metadata []byte) {
+func (l *Ledger3) Checkpoint(
+	openSig []byte, payloadSize int64, hashBlock []byte,
+	schemaIndex byte, metadata []byte,
+) {
 	l.entries <- entry3Request{
 		entry: entry3Input{
 			Type:        RecordCheckpoint,
@@ -153,7 +160,10 @@ func (l *Ledger3) Checkpoint(openSig []byte, payloadSize int64, hashBlock []byte
 }
 
 // Close writes a close record (fire-and-forget).
-func (l *Ledger3) Close(openSig []byte, payloadSize int64, hashBlock []byte, schemaIndex byte, metadata []byte) {
+func (l *Ledger3) Close(
+	openSig []byte, payloadSize int64, hashBlock []byte,
+	schemaIndex byte, metadata []byte,
+) {
 	l.entries <- entry3Request{
 		entry: entry3Input{
 			Type:        RecordClose,
@@ -167,7 +177,10 @@ func (l *Ledger3) Close(openSig []byte, payloadSize int64, hashBlock []byte, sch
 }
 
 // Artifact writes an artifact record (fire-and-forget). Closes the channel.
-func (l *Ledger3) Artifact(openSig []byte, payloadSize int64, hashBlock []byte, schemaIndex byte, metadata []byte) {
+func (l *Ledger3) Artifact(
+	openSig []byte, payloadSize int64, hashBlock []byte,
+	schemaIndex byte, metadata []byte,
+) {
 	l.entries <- entry3Request{
 		entry: entry3Input{
 			Type:        RecordArtifact,

@@ -23,6 +23,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/miekg/dns"
 )
 
@@ -91,7 +92,7 @@ func CAFingerprint() string {
 
 // reqSigs maps in-flight requests to their ledger open signatures.
 var (
-	reqSigs   = make(map[*http.Request]string)
+	reqSigs   = make(map[*http.Request][]byte)
 	reqSigsMu sync.Mutex
 )
 
@@ -103,15 +104,22 @@ var reservedHosts = map[string]bool{
 // outDir is the ledger output directory, set by SetOutDir.
 var outDir string
 
-// emptyHashes are the well-known hashes of an empty payload.
-var emptyHashes = map[string]string{
-	"blake2b_256": "0e5751c026e543b2e8ab2eb06099daa1d1e5df47778f7787faab45cdf12fe3a8",
-	"sha256":      "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
-	"sha1":        "da39a3ee5e6b4b0d3255bfef95601890afd80709",
-	"md5":         "d41d8cd98f00b204e9800998ecf8427e",
-}
+// ledger3 is the active v3 binary ledger writer.
+var ledger3Active *Ledger3
+
+// Schema indices matching the default schema list order.
+const (
+	schemaHTTPOpen    byte = 0
+	schemaHTTPHeaders byte = 1
+	schemaHTTPBody    byte = 2
+	schemaArtifact    byte = 3
+	schemaRedacted    byte = 4
+)
 
 func SetOutDir(dir string) { outDir = dir }
+
+// SetLedger3 sets the active v3 ledger writer (called from cmd/relay/main.go).
+func SetLedger3(l *Ledger3) { ledger3Active = l }
 
 func RunDns(addr net.TCPAddr) error {
 	server := &dns.Server{Addr: addr.String(), Net: "udp"}
@@ -214,7 +222,7 @@ func RunHttps(addr net.TCPAddr) error {
 }
 
 func onRequest(req *http.Request) (*http.Request, *http.Response) {
-	if ledger == nil {
+	if ledger3Active == nil {
 		return req, nil
 	}
 
@@ -225,30 +233,35 @@ func onRequest(req *http.Request) (*http.Request, *http.Response) {
 	}
 
 	// Synchronous open — blocks until signature is on the ledger.
-	openSig := ledger.Open(map[string]any{
+	openMeta, _ := cbor.Marshal(map[string]any{
 		"method":   req.Method,
 		"url":      req.URL.String(),
 		"protocol": req.Proto,
-		"host":     req.Host,
 	})
+	openSig := ledger3Active.Open(schemaHTTPOpen, openMeta)
 
-	// Checkpoint: request headers (direction: out)
+	// Checkpoint: request headers (direction: out = negative size)
 	reqHeaders, err := httputil.DumpRequest(req, false)
 	if err != nil {
 		log.Printf("error dumping request headers: %v", err)
 		reqHeaders = []byte{}
 	}
-	ledger.Checkpoint(openSig, "out", reqHeaders, nil)
+	hb := ledger3Active.ComputeHashBlock(reqHeaders)
+	headersMeta := buildHeadersMeta(req.Header)
+	ledger3Active.Checkpoint(
+		openSig, -int64(len(reqHeaders)), hb, schemaHTTPHeaders, headersMeta,
+	)
 
 	// If request has a body (POST/PUT), stream it through hashers.
 	if req.Body != nil && req.ContentLength != 0 {
-		hashers := newHasherSet(ledger.hashes)
-		req.Body = &hashingReadCloser{
-			source:  req.Body,
-			hashers: hashers,
-			onClose: func(size int64) {
-				ledger.CheckpointHashed(
-					openSig, "out", size, hashers.sums(),
+		hasher := NewStreamingHasher(ledger3Active.hashes)
+		req.Body = &hashingReadCloser3{
+			source: req.Body,
+			hasher: hasher,
+			onClose: func(hashBlock []byte, size int64) {
+				bodyMeta, _ := cbor.Marshal(map[string]any{})
+				ledger3Active.Checkpoint(
+					openSig, -size, hashBlock, schemaHTTPBody, bodyMeta,
 				)
 			},
 		}
@@ -268,20 +281,23 @@ func handleArtifactPost(req *http.Request) (*http.Request, *http.Response) {
 	}
 
 	// Record in ledger.
-	openSig := ledger.Open(map[string]any{
-		"method": "POST",
-		"url":    req.URL.String(),
-		"host":   req.Host,
-		"schema": "artifact",
-		"path":   artifactName,
+	openMeta, _ := cbor.Marshal(map[string]any{
+		"method":   "POST",
+		"url":      req.URL.String(),
+		"protocol": req.Proto,
 	})
+	openSig := ledger3Active.Open(schemaHTTPOpen, openMeta)
 
 	// Checkpoint request headers.
 	reqHeaders, err := httputil.DumpRequest(req, false)
 	if err != nil {
 		reqHeaders = []byte{}
 	}
-	ledger.Checkpoint(openSig, "out", reqHeaders, nil)
+	hb := ledger3Active.ComputeHashBlock(reqHeaders)
+	headersMeta := buildHeadersMeta(req.Header)
+	ledger3Active.Checkpoint(
+		openSig, -int64(len(reqHeaders)), hb, schemaHTTPHeaders, headersMeta,
+	)
 
 	// Stream body to disk and hash simultaneously.
 	artifactsDir := filepath.Join(outDir, "artifacts")
@@ -298,15 +314,13 @@ func handleArtifactPost(req *http.Request) (*http.Request, *http.Response) {
 		return req, resp
 	}
 
-	hashers := newHasherSet(ledger.hashes)
-	var size int64
+	hasher := NewStreamingHasher(ledger3Active.hashes)
 	buf := make([]byte, 32*1024)
 	for {
 		n, readErr := req.Body.Read(buf)
 		if n > 0 {
-			hashers.write(buf[:n])
+			hasher.Write(buf[:n]) //nolint:errcheck
 			tmpFile.Write(buf[:n]) //nolint:errcheck
-			size += int64(n)
 		}
 		if readErr != nil {
 			break
@@ -315,9 +329,10 @@ func handleArtifactPost(req *http.Request) (*http.Request, *http.Response) {
 	tmpFile.Close()
 	req.Body.Close()
 
+	hashBlock, size := hasher.Finish()
+
 	// Rename payload file to its primary hash.
-	sums := hashers.sums()
-	primaryHash := sums["sha256"]
+	primaryHash := hex.EncodeToString(hashBlock[:32]) // first hash is blake2b_256 (32 bytes)
 	payloadPath := filepath.Join(payloadsDir, primaryHash)
 	os.Rename(tmpFile.Name(), payloadPath) //nolint:errcheck
 
@@ -328,12 +343,14 @@ func handleArtifactPost(req *http.Request) (*http.Request, *http.Response) {
 		filepath.Join("..", "payloads", primaryHash), symPath,
 	)
 
-	// Record body checkpoint and close in ledger.
-	ledger.CheckpointHashed(openSig, "out", size, sums)
-	ledger.CloseHashed(openSig, "in", 0, emptyHashes,
-		map[string]any{"status": 200})
+	// Write artifact record (closes the channel).
+	artMeta, _ := cbor.Marshal(map[string]any{
+		"name":    artifactName,
+		"context": map[string]any{},
+	})
+	ledger3Active.Artifact(openSig, -size, hashBlock, schemaArtifact, artMeta)
 
-	log.Printf("artifact: stored %s (%d bytes, sha256:%s)",
+	log.Printf("artifact: stored %s (%d bytes, hash:%s)",
 		artifactName, size, primaryHash[:12])
 
 	resp := newTextResponse(req, http.StatusOK,
@@ -345,7 +362,7 @@ func handleArtifactPost(req *http.Request) (*http.Request, *http.Response) {
 func onResponse(
 	res *http.Response, req *http.Request,
 ) *http.Response {
-	if ledger == nil || res == nil {
+	if ledger3Active == nil || res == nil {
 		return res
 	}
 
@@ -361,20 +378,24 @@ func onResponse(
 		return res
 	}
 
-	// Checkpoint: response headers (direction: in)
+	// Checkpoint: response headers (direction: in = positive size)
 	respHeaders, err := httputil.DumpResponse(res, false)
 	if err != nil {
 		log.Printf("error dumping response headers: %v", err)
 		respHeaders = []byte{}
 	}
-	ledger.Checkpoint(openSig, "in", respHeaders, nil)
+	hb := ledger3Active.ComputeHashBlock(respHeaders)
+	headersMeta := buildHeadersMeta(res.Header)
+	ledger3Active.Checkpoint(
+		openSig, int64(len(respHeaders)), hb, schemaHTTPHeaders, headersMeta,
+	)
 
 	// For responses with no body (304, 204, 1xx), close immediately.
 	if res.StatusCode == http.StatusNotModified ||
 		res.StatusCode == http.StatusNoContent ||
 		(res.StatusCode >= 100 && res.StatusCode < 200) {
-		ledger.CloseHashed(openSig, "in", 0, emptyHashes,
-			map[string]any{"status": res.StatusCode})
+		bodyMeta, _ := cbor.Marshal(map[string]any{"status": res.StatusCode})
+		ledger3Active.Close(openSig, 0, nil, schemaHTTPBody, bodyMeta)
 		return res
 	}
 
@@ -382,7 +403,7 @@ func onResponse(
 	res.Body = newFairReader(res.Body, res.ContentLength)
 
 	// Stream body through hashers; close entry written on EOF.
-	res.Body = newLedgerBody(res.Body, openSig, res.StatusCode)
+	res.Body = newLedgerBody3(res.Body, openSig, res.StatusCode)
 
 	return res
 }
@@ -404,32 +425,30 @@ func newTextResponse(
 	}
 }
 
-// ledgerBody wraps a response body, streaming bytes through hashers.
-type ledgerBody struct {
+// ledgerBody3 wraps a response body, streaming bytes through hashers for v3 ledger.
+type ledgerBody3 struct {
 	source  io.ReadCloser
-	openSig string
+	openSig []byte
 	status  int
-	hashers *hasherSet
-	size    int64
+	hasher  *StreamingHasher
 	done    bool
 }
 
-func newLedgerBody(
-	source io.ReadCloser, openSig string, status int,
-) *ledgerBody {
-	return &ledgerBody{
+func newLedgerBody3(
+	source io.ReadCloser, openSig []byte, status int,
+) *ledgerBody3 {
+	return &ledgerBody3{
 		source:  source,
 		openSig: openSig,
 		status:  status,
-		hashers: newHasherSet(ledger.hashes),
+		hasher:  NewStreamingHasher(ledger3Active.hashes),
 	}
 }
 
-func (lb *ledgerBody) Read(p []byte) (int, error) {
+func (lb *ledgerBody3) Read(p []byte) (int, error) {
 	n, err := lb.source.Read(p)
 	if n > 0 {
-		lb.hashers.write(p[:n])
-		lb.size += int64(n)
+		lb.hasher.Write(p[:n]) //nolint:errcheck
 	}
 	if err == io.EOF && !lb.done {
 		lb.done = true
@@ -438,15 +457,14 @@ func (lb *ledgerBody) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func (lb *ledgerBody) Close() error {
+func (lb *ledgerBody3) Close() error {
 	if !lb.done {
 		lb.done = true
 		buf := make([]byte, 32*1024)
 		for {
 			n, err := lb.source.Read(buf)
 			if n > 0 {
-				lb.hashers.write(buf[:n])
-				lb.size += int64(n)
+				lb.hasher.Write(buf[:n]) //nolint:errcheck
 			}
 			if err != nil {
 				break
@@ -457,11 +475,10 @@ func (lb *ledgerBody) Close() error {
 	return lb.source.Close()
 }
 
-func (lb *ledgerBody) finish() {
-	metadata := map[string]any{"status": lb.status}
-	ledger.CloseHashed(
-		lb.openSig, "in", lb.size, lb.hashers.sums(), metadata,
-	)
+func (lb *ledgerBody3) finish() {
+	hashBlock, size := lb.hasher.Finish()
+	bodyMeta, _ := cbor.Marshal(map[string]any{"status": lb.status})
+	ledger3Active.Close(lb.openSig, size, hashBlock, schemaHTTPBody, bodyMeta)
 }
 
 // hasherSet runs multiple hash algorithms in parallel via goroutines.
@@ -507,43 +524,102 @@ func (hs *hasherSet) sums() map[string]string {
 	return result
 }
 
-// hashingReadCloser wraps a request body, hashing bytes as they are read.
-type hashingReadCloser struct {
+// hashingReadCloser3 wraps a request body, hashing bytes as they are read (v3).
+type hashingReadCloser3 struct {
 	source  io.ReadCloser
-	hashers *hasherSet
-	size    int64
-	onClose func(int64)
+	hasher  *StreamingHasher
+	onClose func(hashBlock []byte, size int64)
 	done    bool
 }
 
-func (h *hashingReadCloser) Read(p []byte) (int, error) {
+func (h *hashingReadCloser3) Read(p []byte) (int, error) {
 	n, err := h.source.Read(p)
 	if n > 0 {
-		h.hashers.write(p[:n])
-		h.size += int64(n)
+		h.hasher.Write(p[:n]) //nolint:errcheck
 	}
 	if err == io.EOF && !h.done {
 		h.done = true
-		h.onClose(h.size)
+		hashBlock, size := h.hasher.Finish()
+		h.onClose(hashBlock, size)
 	}
 	return n, err
 }
 
-func (h *hashingReadCloser) Close() error {
+func (h *hashingReadCloser3) Close() error {
 	if !h.done {
 		h.done = true
 		buf := make([]byte, 32*1024)
 		for {
 			n, err := h.source.Read(buf)
 			if n > 0 {
-				h.hashers.write(buf[:n])
-				h.size += int64(n)
+				h.hasher.Write(buf[:n]) //nolint:errcheck
 			}
 			if err != nil {
 				break
 			}
 		}
-		h.onClose(h.size)
+		hashBlock, size := h.hasher.Finish()
+		h.onClose(hashBlock, size)
 	}
 	return h.source.Close()
+}
+
+// buildHeadersMeta creates CBOR metadata for the http-headers schema.
+// Includes non-standard headers, with auth-related values redacted.
+func buildHeadersMeta(h http.Header) []byte {
+	var headers [][]string
+	for name, values := range h {
+		if isStandardHeader(name) {
+			continue
+		}
+		for _, v := range values {
+			if isAuthHeader(name) {
+				v = "<redacted>"
+			}
+			headers = append(headers, []string{name, v})
+		}
+	}
+	if headers == nil {
+		// No interesting headers — still attach schema with empty list.
+		headers = [][]string{}
+	}
+	meta, _ := cbor.Marshal(map[string]any{"headers": headers})
+	return meta
+}
+
+var standardHeaders = map[string]bool{
+	"Content-Length":    true,
+	"Content-Type":     true,
+	"Transfer-Encoding": true,
+	"Connection":       true,
+	"Host":             true,
+	"Accept":           true,
+	"Accept-Encoding":  true,
+	"Accept-Language":  true,
+	"Cache-Control":    true,
+	"Date":             true,
+	"Server":           true,
+	"User-Agent":       true,
+	"Vary":             true,
+	"Etag":             true,
+	"Last-Modified":    true,
+	"If-Modified-Since": true,
+	"If-None-Match":    true,
+	"Content-Encoding": true,
+	"Location":         true,
+}
+
+func isStandardHeader(name string) bool {
+	return standardHeaders[http.CanonicalHeaderKey(name)]
+}
+
+var authHeaders = map[string]bool{
+	"Authorization":       true,
+	"Cookie":              true,
+	"Set-Cookie":          true,
+	"Proxy-Authorization": true,
+}
+
+func isAuthHeader(name string) bool {
+	return authHeaders[http.CanonicalHeaderKey(name)]
 }

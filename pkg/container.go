@@ -311,7 +311,10 @@ func (d *CtrEnv) configureBuildContainer() error {
 	// Wait for the rootless docker daemon (started by the image entrypoint).
 	for i := 0; i < 50; i++ {
 		_, err = ctrctl.ContainerExec(
-			&ctrctl.ContainerExecOpts{User: "rootless", Env: "DOCKER_HOST=" + rootlessDockerSock},
+			&ctrctl.ContainerExecOpts{
+				User: "rootless",
+				Env:  "DOCKER_HOST=" + rootlessDockerSock,
+			},
 			d.buildContainer,
 			"docker", "info",
 		)
