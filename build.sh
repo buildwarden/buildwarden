@@ -45,11 +45,13 @@ done
 
 while [ "$#" -gt 0 ]; do
   case "$1" in
-    build) go install ./... ;;
+    build) go build -o warden ./cmd/warden/
+           go build -o ledger-inspect ./cmd/ledger-inspect/ ;;
     fmt)   gofmt -s -w . ;;
     lint)  golangci-lint run
            shellcheck build.sh ;;
-    test)  test_simple ;;
+    test)  go test ./...
+           test_simple ;;
     tidy)  go mod tidy ;;
   esac
   shift

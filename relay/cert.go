@@ -10,8 +10,6 @@ import (
 	"fmt"
 	"strings"
 	"unicode"
-
-	"github.com/elazarl/goproxy"
 )
 
 type asn1Utf8Value struct {
@@ -21,7 +19,7 @@ type asn1Utf8Value struct {
 type asn1Utf8ValueSET []asn1Utf8Value
 
 func CertSubjectHash() (string, error) {
-	block, _ := pem.Decode(goproxy.CA_CERT)
+	block, _ := pem.Decode(CA_CERT)
 	if block == nil {
 		return "", fmt.Errorf("failed to parse certificate PEM")
 	}

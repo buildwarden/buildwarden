@@ -5,13 +5,10 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
-	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
-
-	"warden/relay"
 
 	"github.com/lesiw/ctrctl"
 )
@@ -24,18 +21,22 @@ var exts = []Extension{
 	&ExtBazel{},
 }
 
+const (
+	relayIP   = "10.0.87.2"
+	buildIP   = "10.0.87.3"
+	subnet    = "10.0.87.0/29"
+	gateway   = "10.0.87.1"
+)
+
 type CtrEnv struct {
 	isolatedNetwork string
+	defaultNetwork  string
 	buildConfig     *BuildConfig
 	buildContainer  string
 	relayContainer  string
+	relayImage      string
 	buildId         string
-}
-
-type relayPorts struct {
-	http  int
-	https int
-	dns   int
+	ledgerDir       string
 }
 
 func NewCtrEnv() BuildEnv {
@@ -44,30 +45,18 @@ func NewCtrEnv() BuildEnv {
 
 func (d *CtrEnv) inBuildEnv(config *BuildConfig, fn func() error) error {
 	ctrctl.Verbose = true
+	if cli := os.Getenv("WARDEN_CTR_CLI"); cli != "" {
+		ctrctl.Cli = []string{cli}
+	}
 	d.buildConfig = config
-	proxyErr := make(chan error)
-	fnErr := make(chan error)
 
 	defer d.teardownBuildEnv()
-	if err := d.createBuildEnv(proxyErr); err != nil {
+	if err := d.createBuildEnv(); err != nil {
 		return err
 	}
 
-	go func() { fnErr <- fn() }()
-
-	// TODO: loop necessary?
-	for i := 0; i < 2; i++ {
-		select {
-		case err := <-proxyErr:
-			if err != nil {
-				return fmt.Errorf("proxy error: %w", err)
-			}
-		case err := <-fnErr:
-			if err != nil {
-				return fmt.Errorf("build error: %w", err)
-			}
-			return nil
-		}
+	if err := fn(); err != nil {
+		return fmt.Errorf("build error: %w", err)
 	}
 
 	return nil
@@ -83,7 +72,6 @@ func (d *CtrEnv) Build(config *BuildConfig) error {
 					Stderr: os.Stderr,
 				},
 				Interactive: true,
-				Tty:         true,
 			},
 			d.buildContainer,
 			"docker", "build", "--network=host", "-f", config.Containerfile, ".",
@@ -93,7 +81,7 @@ func (d *CtrEnv) Build(config *BuildConfig) error {
 }
 
 func (d *CtrEnv) Shell(config *BuildConfig) error {
-	shell := func() error {
+	return d.inBuildEnv(config, func() error {
 		_, err := ctrctl.ContainerExec(
 			&ctrctl.ContainerExecOpts{
 				Cmd: &exec.Cmd{
@@ -108,11 +96,10 @@ func (d *CtrEnv) Shell(config *BuildConfig) error {
 			"sh",
 		)
 		return err
-	}
-	return d.inBuildEnv(config, shell)
+	})
 }
 
-func (d *CtrEnv) createBuildEnv(proxyErr chan<- error) error {
+func (d *CtrEnv) createBuildEnv() error {
 	err := os.MkdirAll(filepath.Join(d.wardenDirPath(), "ext.d"), 0755)
 	if err != nil {
 		return fmt.Errorf("error creating %s: %w", d.wardenDirPath(), err)
@@ -126,91 +113,198 @@ func (d *CtrEnv) createBuildEnv(proxyErr chan<- error) error {
 
 	d.buildId = randanum(8)
 
+	// Create a host directory for ledger output.
+	d.ledgerDir, err = os.MkdirTemp("", "warden-ledger-"+d.buildId+"-")
+	if err != nil {
+		return fmt.Errorf("error creating ledger temp dir: %w", err)
+	}
+
+	if err := d.buildRelayImage(); err != nil {
+		return err
+	}
 	if err := d.createNetwork(); err != nil {
 		return err
 	}
 	if err := d.editContainerfile(); err != nil {
 		return err
 	}
+	if err := d.startRelayContainer(); err != nil {
+		return err
+	}
 	if err := d.startBuildContainer(); err != nil {
 		return err
 	}
-
-	listenIp := net.IPv4zero
-	hostIp := net.IPv4(172, 24, 0, 1)
-
-	ports, err := getRelayPorts()
-	if err != nil {
-		return err
-	}
-
-	output, err := os.OpenFile("out.log", os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
-	if err != nil {
-		return err
-	}
-
-	err = relay.NewLedger(output)
-	if err != nil {
-		return err
-	}
-	startRelays(listenIp, ports, proxyErr)
-
-	if err := d.configureBuildContainer(hostIp, ports); err != nil {
+	if err := d.configureBuildContainer(); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func getRelayPorts() (ports relayPorts, err error) {
-	ports.http, err = relay.EphemeralPort(net.IPv4zero, "tcp")
-	if err != nil {
-		err = fmt.Errorf("error getting http proxy port: %w", err)
-		return
+func (d *CtrEnv) buildRelayImage() error {
+	// Cross-compile the relay binary for linux.
+	relayBin := filepath.Join(os.TempDir(), "warden-relay-"+d.buildId)
+	cmd := exec.Command("go", "build", "-o", relayBin, "./cmd/relay")
+	cmd.Env = append(os.Environ(), "GOOS=linux", "CGO_ENABLED=0")
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("error cross-compiling relay: %w", err)
 	}
-	ports.https, err = relay.EphemeralPort(net.IPv4zero, "tcp")
+	defer os.Remove(relayBin)
+
+	// Build the relay container image.
+	// We need a temp build context with the binary and Dockerfile.
+	buildCtx, err := os.MkdirTemp("", "warden-relay-ctx-")
 	if err != nil {
-		err = fmt.Errorf("error getting https proxy port: %w", err)
-		return
+		return fmt.Errorf("error creating relay build context: %w", err)
 	}
-	ports.dns, err = relay.EphemeralPort(net.IPv4zero, "udp")
+	defer os.RemoveAll(buildCtx)
+
+	// Copy binary into build context.
+	binData, err := os.ReadFile(relayBin)
 	if err != nil {
-		err = fmt.Errorf("error getting dns proxy port: %w", err)
-		return
+		return fmt.Errorf("error reading relay binary: %w", err)
 	}
-	return
+	if err := os.WriteFile(filepath.Join(buildCtx, "relay"), binData, 0755); err != nil {
+		return fmt.Errorf("error writing relay binary to context: %w", err)
+	}
+
+	// Write Dockerfile into build context.
+	dockerfile := `FROM alpine:3.20
+RUN apk add --no-cache ca-certificates
+COPY relay /usr/local/bin/relay
+EXPOSE 53/udp 80 443
+ENTRYPOINT ["relay"]
+`
+	dfPath := filepath.Join(buildCtx, "Dockerfile")
+	if err := os.WriteFile(dfPath, []byte(dockerfile), 0644); err != nil {
+		return fmt.Errorf("error writing relay Dockerfile: %w", err)
+	}
+
+	d.relayImage = "warden-relay:" + d.buildId
+	_, err = ctrctl.ImageBuild(
+		&ctrctl.ImageBuildOpts{Tag: d.relayImage},
+		buildCtx,
+		"",
+	)
+	if err != nil {
+		return fmt.Errorf("error building relay image: %w", err)
+	}
+
+	return nil
 }
 
-func startRelays(ip net.IP, ports relayPorts, err chan<- error) {
-	go func() {
-		err <- relay.RunHttp(
-			net.TCPAddr{
-				IP:   ip,
-				Port: ports.http,
-			},
+func (d *CtrEnv) createNetwork() error {
+	// Network for relay and build container. Not marked internal —
+	// the relay needs external access. Build container isolation is
+	// enforced via iptables rules that only allow traffic to the relay.
+	id, err := ctrctl.NetworkCreate(
+		&ctrctl.NetworkCreateOpts{
+			Driver:  "bridge",
+			Gateway: gateway,
+			Subnet:  subnet,
+		},
+		"warden-"+d.buildId,
+	)
+	if err != nil {
+		return err
+	}
+	d.isolatedNetwork = id
+	return nil
+}
+
+func (d *CtrEnv) startRelayContainer() error {
+	id, err := ctrctl.ContainerRun(
+		&ctrctl.ContainerRunOpts{
+			Detach:  true,
+			Name:    "warden-relay-" + d.buildId,
+			Network: "warden-" + d.buildId,
+			Ip:      relayIP,
+			Volume:  d.ledgerDir + ":/ledger",
+		},
+		d.relayImage,
+		"",
+	)
+	if err != nil {
+		return fmt.Errorf("error starting relay container: %w", err)
+	}
+	d.relayContainer = id
+	return nil
+}
+
+func (d *CtrEnv) startBuildContainer() error {
+	id, err := ctrctl.ContainerRun(
+		&ctrctl.ContainerRunOpts{
+			Detach:     true,
+			Name:       "warden-build-" + d.buildId,
+			Network:    "warden-" + d.buildId,
+			Ip:         buildIP,
+			Privileged: true, // TODO: investigate nonprivileged alternatives.
+			Workdir:    "/work",
+		},
+		"docker:dind",
+		"sleep", "infinity",
+	)
+	if err != nil {
+		return err
+	}
+	d.buildContainer = id
+	return nil
+}
+
+func (d *CtrEnv) configureBuildContainer() error {
+	_, err := ctrctl.ContainerCp(
+		nil,
+		d.buildConfig.Context+"/.",
+		fmt.Sprintf("%s:/work", d.buildContainer),
+	)
+	if err != nil {
+		return err
+	}
+
+	cmds := [][]string{
+		// Point DNS at the relay.
+		{"sh", "-c", fmt.Sprintf(`echo "nameserver %s" > /etc/resolv.conf`, relayIP)},
+		// Redirect HTTP/HTTPS to the relay.
+		{"iptables", "-t", "nat", "-A", "OUTPUT", "-p", "tcp", "--dport", "80",
+			"-j", "DNAT", "--to-destination", relayIP + ":80"},
+		{"iptables", "-t", "nat", "-A", "OUTPUT", "-p", "tcp", "--dport", "443",
+			"-j", "DNAT", "--to-destination", relayIP + ":443"},
+		// Isolate: only allow traffic to the relay, drop everything else.
+		{"iptables", "-A", "OUTPUT", "-d", relayIP, "-j", "ACCEPT"},
+		{"iptables", "-A", "OUTPUT", "-d", "127.0.0.0/8", "-j", "ACCEPT"},
+		{"iptables", "-A", "OUTPUT", "-j", "DROP"},
+		// Set up warden extensions.
+		{"ln", "-s", "/work/.warden", "/.warden"},
+		{"find", "/.warden/ext.d/", "-exec", "sh", "{}", ";"},
+	}
+	for _, cmd := range cmds {
+		_, err := ctrctl.ContainerExec(
+			&ctrctl.ContainerExecOpts{Privileged: true},
+			d.buildContainer,
+			cmd[0],
+			cmd[1:]...,
 		)
-	}()
-	go func() {
-		err <- relay.RunHttps(
-			net.TCPAddr{
-				IP:   ip,
-				Port: ports.https,
-			},
-		)
-	}()
-	fmt.Printf("starting DNS server on port %d\n", ports.dns)
-	go func() {
-		err <- relay.RunDns(
-			net.TCPAddr{
-				IP:   ip,
-				Port: ports.dns,
-			},
-		)
-	}()
+		if err != nil {
+			return err
+		}
+	}
+
+	// Start dockerd inside the build container.
+	_, err = ctrctl.ContainerExec(
+		&ctrctl.ContainerExecOpts{Detach: true},
+		d.buildContainer,
+		"dockerd",
+	)
+	if err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func (d *CtrEnv) teardownBuildEnv() {
-	relay.FinishLedger()
 	d.revertContainerfileEdits() // TODO: remove this when moved to wardenDir
 	_ = os.RemoveAll(d.wardenDirPath())
 	if d.relayContainer != "" {
@@ -231,110 +325,18 @@ func (d *CtrEnv) teardownBuildEnv() {
 			fmt.Fprintf(os.Stderr, "container cleanup failure: %s\n", err)
 		}
 	}
+	if d.relayImage != "" {
+		_, _ = ctrctl.ImageRm(nil, d.relayImage)
+	}
 	if d.isolatedNetwork != "" {
 		_, err := ctrctl.NetworkRm(nil, d.isolatedNetwork)
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "network cleanup failure: %s\n", err)
 		}
 	}
-}
-
-func (d *CtrEnv) createNetwork() error {
-	id, err := ctrctl.NetworkCreate(
-		&ctrctl.NetworkCreateOpts{
-			Driver:   "bridge",
-			Gateway:  "172.24.0.1",
-			Internal: true,
-			Subnet:   "172.24.0.0/29", // TODO: randomize network subnet.
-		},
-		"warden-"+d.buildId,
-	)
-	if err != nil {
-		return err
+	if d.ledgerDir != "" {
+		fmt.Fprintf(os.Stderr, "ledger output: %s\n", d.ledgerDir)
 	}
-	d.isolatedNetwork = id
-	return nil
-}
-
-func (d *CtrEnv) startBuildContainer() error {
-	id, err := ctrctl.ContainerRun(
-		&ctrctl.ContainerRunOpts{
-			Detach:      true,
-			Interactive: true,
-			Name:        "warden-" + d.buildId,
-			Network:     "warden-" + d.buildId,
-			Privileged:  true, // TODO: investigate nonprivileged alternatives.
-			Tty:         true,
-			Workdir:     "/work",
-		},
-		"docker:dind",
-		"cat",
-	)
-	if err != nil {
-		return err
-	}
-	d.buildContainer = id
-
-	return nil
-}
-
-func (d *CtrEnv) configureBuildContainer(host net.IP, ports relayPorts) error {
-	_, err := ctrctl.ContainerCp(
-		nil,
-		d.buildConfig.Context+"/.",
-		fmt.Sprintf("%s:/work", d.buildContainer),
-	)
-	if err != nil {
-		return err
-	}
-
-	cmds := [][]string{
-		{"iptables", "-t", "nat", "-A", "OUTPUT", "-p", "tcp", "--dport", "80",
-			"-j", "DNAT", "--to-destination",
-			fmt.Sprintf("%s:%d", host.String(), ports.http)},
-		{"iptables", "-t", "nat", "-A", "OUTPUT", "-p", "tcp", "--dport", "443",
-			"-j", "DNAT", "--to-destination",
-			fmt.Sprintf("%s:%d", host.String(), ports.https)},
-		{"iptables",
-			"-t", "nat",
-			"-A", "OUTPUT",
-			"-d", host.String(),
-			"-p", "udp", "--dport", "53",
-			"-j", "DNAT", "--to-destination",
-			fmt.Sprintf("%s:%d", host.String(), ports.dns)},
-		{"iptables",
-			"-t", "nat",
-			"-A", "POSTROUTING",
-			"-s", host.String(),
-			"-p", "udp", "--sport", fmt.Sprintf("%d", ports.dns),
-			"-j", "SNAT", "--to", ":53"},
-		{"sh", "-c", fmt.Sprintf(`echo "nameserver %s" > /etc/resolv.conf`,
-			host.String())},
-		{"ln", "-s", "/work/.warden", "/.warden"},
-		{"find", "/.warden/ext.d/", "-exec", "sh", "{}", ";"},
-	}
-	for _, cmd := range cmds {
-		_, err := ctrctl.ContainerExec(
-			&ctrctl.ContainerExecOpts{Privileged: true},
-			d.buildContainer,
-			cmd[0],
-			cmd[1:]...,
-		)
-		if err != nil {
-			return err
-		}
-	}
-
-	_, err = ctrctl.ContainerExec(
-		&ctrctl.ContainerExecOpts{Detach: true},
-		d.buildContainer,
-		"dockerd",
-	)
-	if err != nil {
-		return err
-	}
-
-	return nil
 }
 
 func (d *CtrEnv) doBuild() error {
@@ -419,7 +421,7 @@ func (d *CtrEnv) wardenScriptPath() string {
 
 var anumRunes = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 
-// randanum produces a cryptograhically-random alphanumeric string.
+// randanum produces a cryptographically-random alphanumeric string.
 func randanum(n int) string {
 	b := make([]rune, n)
 	for i := range b {
