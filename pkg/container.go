@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 
 	"github.com/lesiw/ctrctl"
 )
@@ -22,10 +23,10 @@ var exts = []Extension{
 }
 
 const (
-	relayIP   = "10.0.87.2"
-	buildIP   = "10.0.87.3"
-	subnet    = "10.0.87.0/29"
-	gateway   = "10.0.87.1"
+	relayIP          = "10.0.87.2"
+	buildIP          = "10.0.87.3"
+	subnet           = "10.0.87.0/29"
+	rootlessDockerSock = "unix:///run/user/1000/docker.sock"
 )
 
 type CtrEnv struct {
@@ -72,6 +73,8 @@ func (d *CtrEnv) Build(config *BuildConfig) error {
 					Stderr: os.Stderr,
 				},
 				Interactive: true,
+				User:        "rootless",
+				Env:         "DOCKER_HOST=" + rootlessDockerSock,
 			},
 			d.buildContainer,
 			"docker", "build", "--network=host", "-f", config.Containerfile, ".",
@@ -105,12 +108,6 @@ func (d *CtrEnv) createBuildEnv() error {
 		return fmt.Errorf("error creating %s: %w", d.wardenDirPath(), err)
 	}
 
-	for _, ext := range exts {
-		if err := ext.BeforeBuild(d); err != nil {
-			return err
-		}
-	}
-
 	d.buildId = randanum(8)
 
 	// Create a host directory for ledger output.
@@ -125,10 +122,18 @@ func (d *CtrEnv) createBuildEnv() error {
 	if err := d.createNetwork(); err != nil {
 		return err
 	}
-	if err := d.editContainerfile(); err != nil {
+	if err := d.startRelayContainer(); err != nil {
 		return err
 	}
-	if err := d.startRelayContainer(); err != nil {
+
+	// Extensions run after the relay is up — they need its CA cert.
+	for _, ext := range exts {
+		if err := ext.BeforeBuild(d); err != nil {
+			return err
+		}
+	}
+
+	if err := d.editContainerfile(); err != nil {
 		return err
 	}
 	if err := d.startBuildContainer(); err != nil {
@@ -196,14 +201,15 @@ ENTRYPOINT ["relay"]
 }
 
 func (d *CtrEnv) createNetwork() error {
-	// Network for relay and build container. Not marked internal —
-	// the relay needs external access. Build container isolation is
-	// enforced via iptables rules that only allow traffic to the relay.
+	// Isolated network for relay and build container.
+	// The relay needs external access to forward build traffic upstream.
+	// Build container isolation is enforced by:
+	//   1. iptables OUTPUT rules (only relay + loopback allowed)
+	//   2. Deleting the default route (no path to gateway even if iptables flushed)
 	id, err := ctrctl.NetworkCreate(
 		&ctrctl.NetworkCreateOpts{
-			Driver:  "bridge",
-			Gateway: gateway,
-			Subnet:  subnet,
+			Driver: "bridge",
+			Subnet: subnet,
 		},
 		"warden-"+d.buildId,
 	)
@@ -234,17 +240,21 @@ func (d *CtrEnv) startRelayContainer() error {
 }
 
 func (d *CtrEnv) startBuildContainer() error {
+	// The container needs --privileged for rootlesskit to create user
+	// namespaces. However, the inner dockerd and all build processes run
+	// as the unprivileged "rootless" user, which cannot modify iptables
+	// or routes in the real network namespace.
 	id, err := ctrctl.ContainerRun(
 		&ctrctl.ContainerRunOpts{
 			Detach:     true,
 			Name:       "warden-build-" + d.buildId,
 			Network:    "warden-" + d.buildId,
 			Ip:         buildIP,
-			Privileged: true, // TODO: investigate nonprivileged alternatives.
+			Privileged: true,
 			Workdir:    "/work",
 		},
-		"docker:dind",
-		"sleep", "infinity",
+		"docker:dind-rootless",
+		"",
 	)
 	if err != nil {
 		return err
@@ -263,6 +273,9 @@ func (d *CtrEnv) configureBuildContainer() error {
 		return err
 	}
 
+	// Network isolation rules applied as privileged exec from the
+	// orchestrator. The rootless build container cannot override these
+	// because it lacks CAP_NET_ADMIN.
 	cmds := [][]string{
 		// Point DNS at the relay.
 		{"sh", "-c", fmt.Sprintf(`echo "nameserver %s" > /etc/resolv.conf`, relayIP)},
@@ -275,13 +288,17 @@ func (d *CtrEnv) configureBuildContainer() error {
 		{"iptables", "-A", "OUTPUT", "-d", relayIP, "-j", "ACCEPT"},
 		{"iptables", "-A", "OUTPUT", "-d", "127.0.0.0/8", "-j", "ACCEPT"},
 		{"iptables", "-A", "OUTPUT", "-j", "DROP"},
+		// Defense-in-depth: replace the default route with one pointing at
+		// the relay. Even if iptables are flushed, all traffic still goes
+		// to the relay (which won't forward unrecognized traffic).
+		{"ip", "route", "replace", "default", "via", relayIP},
 		// Set up warden extensions.
 		{"ln", "-s", "/work/.warden", "/.warden"},
 		{"find", "/.warden/ext.d/", "-exec", "sh", "{}", ";"},
 	}
 	for _, cmd := range cmds {
 		_, err := ctrctl.ContainerExec(
-			&ctrctl.ContainerExecOpts{Privileged: true},
+			&ctrctl.ContainerExecOpts{Privileged: true, User: "0"},
 			d.buildContainer,
 			cmd[0],
 			cmd[1:]...,
@@ -291,14 +308,23 @@ func (d *CtrEnv) configureBuildContainer() error {
 		}
 	}
 
-	// Start dockerd inside the build container.
-	_, err = ctrctl.ContainerExec(
-		&ctrctl.ContainerExecOpts{Detach: true},
-		d.buildContainer,
-		"dockerd",
-	)
+	// Wait for the rootless docker daemon (started by the image entrypoint).
+	for i := 0; i < 50; i++ {
+		_, err = ctrctl.ContainerExec(
+			&ctrctl.ContainerExecOpts{
+				User: "rootless",
+				Env:  "DOCKER_HOST=" + rootlessDockerSock,
+			},
+			d.buildContainer,
+			"docker", "info",
+		)
+		if err == nil {
+			break
+		}
+		time.Sleep(100 * time.Millisecond)
+	}
 	if err != nil {
-		return err
+		return fmt.Errorf("timed out waiting for rootless dockerd: %w", err)
 	}
 
 	return nil

@@ -12,9 +12,14 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"flag"
 	"fmt"
 	"os"
 	"strings"
+
+	"warden/relay"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
 type HeaderEntry struct {
@@ -44,23 +49,60 @@ type PayloadRecord struct {
 	Hashes map[string]string `json:"hashes"`
 }
 
+// channel tracks a complete request lifecycle.
+type channel struct {
+	open        LedgerEntry
+	checkpoints []LedgerEntry
+	close       *LedgerEntry
+	valid       bool // all entries in this channel verified
+}
+
+// v3channel tracks a complete request lifecycle for v3 binary ledgers.
+type v3channel struct {
+	open        relay.Ledger3Record
+	checkpoints []relay.Ledger3Record
+	close       *relay.Ledger3Record
+}
+
+var verbosity int
+
 func main() { //nolint:gocyclo
-	if len(os.Args) < 2 {
-		fmt.Fprintf(os.Stderr, "usage: ledger-inspect <ledger-file>\n")
+	flag.IntVar(&verbosity, "v", 0, "verbosity: 0=compact, 1=tree, 2=json")
+	flag.Usage = func() {
+		fmt.Fprintf(os.Stderr, "usage: ledger-inspect [-v N] <ledger-file>\n")
+		flag.PrintDefaults()
+	}
+	flag.Parse()
+
+	if flag.NArg() < 1 {
+		flag.Usage()
 		os.Exit(1)
 	}
 
-	f, err := os.Open(os.Args[1])
+	f, err := os.Open(flag.Arg(0))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
 	}
 	defer f.Close()
 
+	// Read file to detect format
+	data, err := os.ReadFile(flag.Arg(0))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error reading file: %v\n", err)
+		os.Exit(1)
+	}
+
+	// Detect v3 binary format by magic bytes
+	if relay.IsLedger3(data) {
+		inspectV3(data)
+		return
+	}
+
+	// Fall through to v2 JSON format
 	scanner := bufio.NewScanner(f)
 	scanner.Buffer(make([]byte, 4*1024*1024), 4*1024*1024)
 
-	// Parse header
 	if !scanner.Scan() {
 		fmt.Fprintf(os.Stderr, "error: empty ledger\n")
 		os.Exit(1)
@@ -72,22 +114,14 @@ func main() { //nolint:gocyclo
 		os.Exit(1)
 	}
 
-	// Extract public key from payload
 	verifier := reconstructVerifier(header)
-
-	// Verify header signature
-	headerValid := false
-	if verifier != nil {
-		headerValid = verifyHeader(header, verifier)
-	}
-
+	headerValid := verifier != nil && verifyHeader(header, verifier)
 	printHeader(header, headerValid)
 
-	// Process entries
 	prevSig := header.Signature
-	openChannels := make(map[string]map[string]any) // sig -> metadata
-	var totalEntries, opens, checkpoints, closes int
-	var sigErrors int
+	channels := make(map[string]*channel) // open_sig -> channel
+	var ordered []*channel
+	var totalEntries, sigErrors int
 
 	for scanner.Scan() {
 		var entry LedgerEntry
@@ -107,27 +141,52 @@ func main() { //nolint:gocyclo
 
 		switch entry.EntryType {
 		case "open":
-			opens++
-			openChannels[entry.Signature] = entry.Metadata
+			ch := &channel{open: entry, valid: valid}
+			channels[entry.Signature] = ch
+			ordered = append(ordered, ch)
 		case "checkpoint":
-			checkpoints++
+			if ch, ok := channels[entry.OpenSignature]; ok {
+				ch.checkpoints = append(ch.checkpoints, entry)
+				ch.valid = ch.valid && valid
+			}
 		case "close":
-			closes++
-			delete(openChannels, entry.OpenSignature)
+			if ch, ok := channels[entry.OpenSignature]; ok {
+				ch.close = &entry
+				ch.valid = ch.valid && valid
+			}
 		}
 
-		printEntry(entry, valid)
+		if verbosity >= 1 {
+			printEntryTree(entry, valid)
+		}
+
 		prevSig = entry.Signature
 	}
 
+	// Compact output (default)
+	if verbosity == 0 {
+		for _, ch := range ordered {
+			printCompact(ch)
+		}
+	}
+
 	// Summary
+	opens := len(ordered)
+	var unclosed int
+	for _, ch := range ordered {
+		if ch.close == nil {
+			unclosed++
+		}
+	}
+
 	fmt.Println()
 	fmt.Println(strings.Repeat("═", 80))
-	fmt.Printf("  SUMMARY: %d entries (%d open, %d checkpoint, %d close)\n",
-		totalEntries, opens, checkpoints, closes)
+	fmt.Printf("  SUMMARY: %d entries (%d requests)\n",
+		totalEntries, opens)
 	if verifier != nil {
 		if sigErrors == 0 {
-			fmt.Printf("  SIGNATURES: ✅ All %d signatures valid\n", totalEntries+1)
+			fmt.Printf("  SIGNATURES: ✅ All %d signatures valid\n",
+				totalEntries+1)
 		} else {
 			fmt.Printf("  SIGNATURES: ❌ %d/%d failed verification\n",
 				sigErrors, totalEntries)
@@ -135,11 +194,8 @@ func main() { //nolint:gocyclo
 	} else {
 		fmt.Printf("  SIGNATURES: ⚠️  Could not verify (no public key)\n")
 	}
-	if len(openChannels) > 0 {
-		fmt.Printf("  UNCLOSED CHANNELS: %d\n", len(openChannels))
-		for sig, meta := range openChannels {
-			fmt.Printf("    • %s... %v\n", sig[:16], metaSummary(meta))
-		}
+	if unclosed > 0 {
+		fmt.Printf("  COMPLETENESS: ❌ %d unclosed channels\n", unclosed)
 	} else {
 		fmt.Printf("  COMPLETENESS: ✅ All channels closed\n")
 	}
@@ -149,15 +205,44 @@ func main() { //nolint:gocyclo
 func printHeader(h HeaderEntry, valid bool) {
 	check := sigStatus(valid)
 	fmt.Println(strings.Repeat("═", 80))
-	fmt.Printf("  LEDGER v%s  format=%s  hashes=%v\n", h.Version, h.Format, h.Hashes)
-	fmt.Printf("  environment: %v\n", h.Environment)
-	fmt.Printf("  cert: %d bytes  %s\n", h.Payload.Size, check)
+	fmt.Printf("  LEDGER v%s  format=%s  hashes=%v  %s\n",
+		h.Version, h.Format, h.Hashes, check)
+	if verbosity >= 1 {
+		fmt.Printf("  environment: %v\n", h.Environment)
+	}
 	fmt.Println(strings.Repeat("═", 80))
 }
 
-func printEntry(e LedgerEntry, valid bool) {
-	check := sigStatus(valid)
+func printCompact(ch *channel) {
+	check := sigStatus(ch.valid)
+	meta := metaSummary(ch.open.Metadata)
 
+	status := ""
+	var size int64
+	if ch.close != nil {
+		if s, ok := ch.close.Metadata["status"]; ok {
+			status = fmt.Sprintf(" %v", s)
+		}
+		size = payloadSize(ch.close.Payload)
+	} else {
+		status = " UNCLOSED"
+	}
+
+	// For artifact POSTs, show the uploaded body size (checkpoint out)
+	// rather than the empty close payload.
+	if ch.open.Metadata["schema"] == "artifact" {
+		for _, cp := range ch.checkpoints {
+			if cp.Direction == "out" && payloadSize(cp.Payload) > 0 {
+				size = payloadSize(cp.Payload)
+			}
+		}
+	}
+
+	fmt.Printf("%s%s %s (%d bytes)\n", check, status, meta, size)
+}
+
+func printEntryTree(e LedgerEntry, valid bool) {
+	check := sigStatus(valid)
 	switch e.EntryType {
 	case "open":
 		fmt.Printf("[%3d] %s OPEN %s  %s\n",
@@ -165,11 +250,13 @@ func printEntry(e LedgerEntry, valid bool) {
 	case "checkpoint":
 		dir := dirArrow(e.Direction)
 		fmt.Printf("[%3d] %s  ├─ CHECKPOINT %s %s (%d bytes)\n",
-			e.Seq, check, dir, e.Direction, payloadSize(e.Payload))
+			e.Seq, check, dir, e.Direction,
+			payloadSize(e.Payload))
 	case "close":
 		dir := dirArrow(e.Direction)
 		fmt.Printf("[%3d] %s  └─ CLOSE %s %s (%d bytes)\n",
-			e.Seq, check, dir, e.Direction, payloadSize(e.Payload))
+			e.Seq, check, dir, e.Direction,
+			payloadSize(e.Payload))
 	}
 }
 
@@ -211,7 +298,6 @@ func sigStatus(valid bool) string {
 	return "❌"
 }
 
-// sigVerifier abstracts signature verification for different schemes.
 type sigVerifier interface {
 	verify(input []byte, sigB64 string) bool
 }
@@ -239,14 +325,15 @@ func (v *rsaVerifier) verify(input []byte, sigB64 string) bool {
 		return false
 	}
 	digest := sha512.Sum512(input)
-	return rsa.VerifyPKCS1v15(v.key, crypto.SHA512, digest[:], sigBytes) == nil
+	err = rsa.VerifyPKCS1v15(v.key, crypto.SHA512, digest[:], sigBytes)
+	return err == nil
 }
 
 func reconstructVerifier(h HeaderEntry) sigVerifier {
-	if len(os.Args) < 2 {
+	if flag.NArg() < 1 {
 		return nil
 	}
-	path := strings.TrimSuffix(os.Args[1], "ledger") + "ledger.cert.pem"
+	path := strings.TrimSuffix(flag.Arg(0), "ledger") + "ledger.cert.pem"
 	data, err := os.ReadFile(path)
 	if err != nil {
 		return nil
@@ -257,12 +344,12 @@ func reconstructVerifier(h HeaderEntry) sigVerifier {
 	}
 
 	switch {
-	case h.SignatureScheme == "ed25519-sha512" || block.Type == "ED25519 PUBLIC KEY":
+	case h.SignatureScheme == "ed25519-sha512" ||
+		block.Type == "ED25519 PUBLIC KEY":
 		if len(block.Bytes) == ed25519.PublicKeySize {
 			return &ed25519Verifier{key: ed25519.PublicKey(block.Bytes)}
 		}
 	default:
-		// Legacy RSA
 		key, err := x509.ParsePKCS1PublicKey(block.Bytes)
 		if err == nil {
 			return &rsaVerifier{key: key}
@@ -279,7 +366,9 @@ func verifyHeader(h HeaderEntry, v sigVerifier) bool {
 	return v.verify(sigInput, h.Signature)
 }
 
-func verifyEntry(e LedgerEntry, prevSig string, hashes []string, v sigVerifier) bool {
+func verifyEntry(
+	e LedgerEntry, prevSig string, hashes []string, v sigVerifier,
+) bool {
 	var sigInput []byte
 	prevSigBytes, _ := base64.StdEncoding.DecodeString(prevSig)
 	sigInput = append(sigInput, prevSigBytes...)
@@ -294,7 +383,8 @@ func verifyEntry(e LedgerEntry, prevSig string, hashes []string, v sigVerifier) 
 		sigInput = append(sigInput, []byte(e.Direction)...)
 		if e.Payload != nil {
 			sigInput = append(sigInput, sizeBytes(e.Payload.Size)...)
-			sigInput = append(sigInput, rawHashBytes(e.Payload.Hashes, hashes)...)
+			sigInput = append(sigInput,
+				rawHashBytes(e.Payload.Hashes, hashes)...)
 		}
 	}
 
@@ -314,4 +404,139 @@ func rawHashBytes(hashes map[string]string, order []string) []byte {
 		out = append(out, b...)
 	}
 	return out
+}
+
+func inspectV3(data []byte) {
+	result, err := relay.VerifyLedger3(data)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		os.Exit(1)
+	}
+
+	h := result.Header
+	headerValid := result.SigErrors == 0 || verifyV3Header(h)
+
+	// Print header
+	fmt.Println(strings.Repeat("═", 80))
+	fmt.Printf("  LEDGER v3 (binary)  scheme=%s  hashes=%v  %s\n",
+		h.SigScheme, h.Meta.Hashes, sigStatus(headerValid))
+	if verbosity >= 1 {
+		fmt.Printf("  sig_size=%d  hash_block_size=%d  pub_key_len=%d\n",
+			h.SigSize, h.HashBlockSize, h.PubKeyLen)
+		fmt.Printf("  schemas=%v\n", h.Meta.Schemas)
+		fmt.Printf("  environment: %v\n", h.Meta.Environment)
+	}
+	fmt.Println(strings.Repeat("═", 80))
+
+	// Track channels for compact output
+	channels := make(map[string]*v3channel)
+	var ordered []*v3channel
+
+	for i, rec := range result.Records {
+		if verbosity >= 1 {
+			printV3EntryTree(i, rec, h)
+		}
+
+		sigKey := string(rec.Signature)
+		switch rec.Type {
+		case relay.RecordOpen:
+			ch := &v3channel{open: rec}
+			channels[sigKey] = ch
+			ordered = append(ordered, ch)
+		case relay.RecordCheckpoint:
+			if ch, ok := channels[string(rec.OpenSig)]; ok {
+				ch.checkpoints = append(ch.checkpoints, rec)
+			}
+		case relay.RecordClose, relay.RecordArtifact:
+			if ch, ok := channels[string(rec.OpenSig)]; ok {
+				ch.close = &rec
+			}
+		}
+	}
+
+	// Compact output
+	if verbosity == 0 {
+		for _, ch := range ordered {
+			printV3Compact(ch, h)
+		}
+	}
+
+	// Summary
+	fmt.Println()
+	fmt.Println(strings.Repeat("═", 80))
+	fmt.Printf("  SUMMARY: %d entries (%d requests)\n",
+		result.TotalRecords, len(ordered))
+	if result.SigErrors == 0 {
+		fmt.Printf("  SIGNATURES: ✅ All %d signatures valid\n",
+			result.TotalRecords+1) // +1 for header
+	} else {
+		fmt.Printf("  SIGNATURES: ❌ %d signature error(s)\n", result.SigErrors)
+	}
+	if result.Unclosed > 0 {
+		fmt.Printf("  COMPLETENESS: ❌ %d unclosed channels\n", result.Unclosed)
+	} else {
+		fmt.Printf("  COMPLETENESS: ✅ All channels closed\n")
+	}
+	fmt.Println(strings.Repeat("═", 80))
+}
+
+func verifyV3Header(h relay.Ledger3Header) bool {
+	digest := sha512.Sum512(h.PrefixBytes)
+	return ed25519.Verify(h.PubKey, digest[:], h.Signature)
+}
+
+func printV3EntryTree(seq int, r relay.Ledger3Record, h relay.Ledger3Header) {
+	check := "✅"
+	switch r.Type {
+	case relay.RecordOpen:
+		meta := v3MetaSummary(r, h)
+		fmt.Printf("[%3d] %s OPEN %s\n", seq+1, check, meta)
+	case relay.RecordCheckpoint:
+		dir := dirArrow(r.Direction())
+		fmt.Printf("[%3d] %s  ├─ CHECKPOINT %s %s (%d bytes)\n",
+			seq+1, check, dir, r.Direction(), r.AbsPayloadSize())
+	case relay.RecordClose:
+		dir := dirArrow(r.Direction())
+		fmt.Printf("[%3d] %s  └─ CLOSE %s %s (%d bytes)\n",
+			seq+1, check, dir, r.Direction(), r.AbsPayloadSize())
+	case relay.RecordArtifact:
+		meta := v3MetaSummary(r, h)
+		fmt.Printf("[%3d] %s  └─ ARTIFACT %s (%d bytes)\n",
+			seq+1, check, meta, r.AbsPayloadSize())
+	}
+}
+
+func printV3Compact(ch *v3channel, h relay.Ledger3Header) {
+	meta := v3MetaSummary(ch.open, h)
+	status := ""
+	var size int64
+	if ch.close != nil {
+		size = ch.close.AbsPayloadSize()
+		if ch.close.Type == relay.RecordArtifact {
+			status = " ARTIFACT"
+		}
+	} else {
+		status = " UNCLOSED"
+	}
+	fmt.Printf("✅%s %s (%d bytes)\n", status, meta, size)
+}
+
+func v3MetaSummary(r relay.Ledger3Record, h relay.Ledger3Header) string {
+	if r.Metadata == nil {
+		return ""
+	}
+	var m map[string]any
+	if err := cbor.Unmarshal(r.Metadata, &m); err != nil {
+		return ""
+	}
+	method, _ := m["method"].(string)
+	url, _ := m["url"].(string)
+	name, _ := m["name"].(string)
+	if method != "" && url != "" {
+		return fmt.Sprintf("%s %s", method, url)
+	}
+	if name != "" {
+		return fmt.Sprintf("→ %s", name)
+	}
+	return ""
 }

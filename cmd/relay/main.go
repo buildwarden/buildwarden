@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/pem"
 	"fmt"
 	"net"
 	"os"
@@ -31,14 +32,15 @@ func run() int {
 	}
 	defer ledgerFile.Close()
 
-	err = relay.NewLedger(ledgerFile, map[string]any{
-		"type": "container",
+	l, err := relay.NewLedger3(relay.Ledger3Config{
+		Writer:      ledgerFile,
+		Environment: map[string]any{"type": "container"},
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error initializing ledger: %v\n", err)
 		return 1
 	}
-
+	relay.SetLedger3(l)
 	relay.SetOutDir(outDir)
 
 	// Generate ephemeral CA for this build.
@@ -54,8 +56,11 @@ func run() int {
 		return 1
 	}
 
-	// Write public cert files.
-	certPEM := relay.PublicCertPEM()
+	// Write ledger public key in PEM format.
+	certPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "ED25519 PUBLIC KEY",
+		Bytes: []byte(l.PublicKey()),
+	})
 	certPath := filepath.Join(outDir, "ledger.cert.pem")
 	if err := os.WriteFile(certPath, certPEM, 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing cert PEM: %v\n", err)
@@ -74,7 +79,7 @@ func run() int {
 	// Block until any listener fails.
 	if err := <-errs; err != nil {
 		fmt.Fprintf(os.Stderr, "relay error: %v\n", err)
-		relay.FinishLedger()
+		l.Finish()
 		return 1
 	}
 
