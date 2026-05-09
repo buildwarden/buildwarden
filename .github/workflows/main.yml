@@ -26,4 +26,4 @@ jobs:
       - uses: actions/setup-go@v4
         with: { go-version: 'v1.25.1', check-latest: true }
       - run: ./build.sh build
-      - run: warden --help
+      - run: ./warden --help
