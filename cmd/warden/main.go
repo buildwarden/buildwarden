@@ -70,6 +70,7 @@ func init() {
 }
 
 func main() {
+	orchestrator.SetVersion(version)
 	if err := rootCmd.Execute(); err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
 		os.Exit(1)
@@ -97,6 +98,8 @@ func resolveConfig() (*orchestrator.Config, error) {
 }
 
 func setupRuntime(cfg *orchestrator.Config) error {
+	orchestrator.SetColorMode(cfg.Output.Color)
+
 	runtime := cfg.Runtime.CLI
 	if runtime == "" {
 		detected, err := orchestrator.DetectRuntime()
