@@ -1,89 +1,131 @@
 # BuildWarden
 
-BuildWarden is a platform for build executors that combines network-isolated build containers with an ephemeral HTTPS Man-in-the-Middle relay. It logs all requests and responses during the build process and produces a verifiable, non-falsifiable ledger of all network inputs and outputs.
+BuildWarden produces a cryptographically-signed, tamper-evident ledger of every network resource consumed during a software build. It enables build providers to independently verify build integrity — separately from the source author's own attestations.
 
-This creates a significantly more exhaustive manifest of all possible software included within created artifacts, allowing build providers to independently attest that a build was secure — separately from the source author's own attestations.
-
-## Architecture
+## How It Works
 
 BuildWarden orchestrates two containers on an isolated network:
 
-- **Relay** (`10.0.87.2`) — An SSL-terminating MITM proxy that intercepts all HTTP/HTTPS traffic, records it to the ledger, and forwards requests externally. Also serves as the DNS resolver for the build container.
-- **Build Container** (`10.0.87.3`) — A Docker-in-Docker environment where the actual build runs. Network-isolated via iptables to only communicate with the relay.
-
-The relay generates an ephemeral certificate at startup, signs every ledger entry with it, and the private key is destroyed when the relay container is removed — making the ledger tamper-evident after the fact.
-
-## Building
-
-```sh
-./build.sh build        # Produces: warden, ledger-inspect
-./build.sh test         # Run unit tests and integration test
-./build.sh fmt          # Format code
-./build.sh lint         # Run linters
-./build.sh tidy         # go mod tidy
+```
+┌─────────────────────────────────────────────────────────┐
+│                    Host Machine                          │
+│                                                         │
+│  ┌─────────────┐         ┌─────────────────────────┐   │
+│  │   Relay     │◄────────│    Build Container      │   │
+│  │  10.0.87.2  │         │      10.0.87.3          │   │
+│  │             │         │                         │   │
+│  │  • DNS      │         │  • Docker-in-Docker     │   │
+│  │  • HTTP/S   │  only   │  • Network isolated     │   │
+│  │  • Ledger   │◄─conn──►│  • iptables enforced    │   │
+│  │             │         │                         │   │
+│  └──────┬──────┘         └─────────────────────────┘   │
+│         │                                               │
+│         ▼ external                                      │
+│    ┌─────────┐                                          │
+│    │ Internet│                                          │
+│    └─────────┘                                          │
+└─────────────────────────────────────────────────────────┘
 ```
 
-## Usage
+- **Relay** — TLS-terminating MITM proxy that intercepts all HTTP/HTTPS traffic, records it to the ledger, and serves as DNS resolver. An ephemeral CA is generated per-build; its private key is destroyed with the container.
+- **Build Container** — Rootless Docker-in-Docker environment. Network-isolated via iptables + route replacement so all traffic must flow through the relay.
 
-### Running a build
+The output is a binary ledger with chained Ed25519 signatures — altering, reordering, or removing any entry invalidates all subsequent signatures.
 
-```sh
-./warden build -f Dockerfile ./path/to/context
-```
+## Quick Start
 
-Set `WARDEN_CTR_CLI` to select the container runtime (default: `docker`):
+### Install
 
-```sh
-WARDEN_CTR_CLI=finch ./warden build -f Dockerfile ./context
-WARDEN_CTR_CLI=podman ./warden build -f Dockerfile ./context
-```
-
-The ledger output directory is printed at the end of the build.
-
-### Interactive shell
+Download a prebuilt binary from [Releases](https://github.com/buildwarden/buildwarden/releases), or build from source:
 
 ```sh
-./warden shell ./path/to/context
+make build
 ```
 
-### Inspecting a ledger
+### Run a build
 
 ```sh
-./ledger-inspect /path/to/ledger
+# Use a Dockerfile in the current directory
+warden build
+
+# Specify a project directory
+warden build ./my-project
+
+# Specify a Dockerfile directly (context = parent directory)
+warden build ./my-project/Dockerfile.prod
 ```
 
-Validates the full signature chain, displays entries in a compact tree format, and reports completeness.
+### Inspect a ledger
+
+```sh
+ledger-inspect /path/to/ledger
+
+# Verbose output (shows individual records)
+ledger-inspect -v 1 /path/to/ledger
+```
+
+## Configuration
+
+BuildWarden looks for configuration in two places (merged in order):
+
+1. `~/.config/warden/config.toml` — user defaults
+2. `./warden.toml` — project overrides
+
+```toml
+[runtime]
+cli = "finch"          # container runtime (finch, docker, podman)
+
+[build]
+dockerfile = ""        # override Dockerfile discovery
+context = ""           # override context directory
+
+[output]
+color = "auto"         # auto, always, never
+verbose = false
+```
+
+Environment variables override config: `WARDEN_CTR_CLI`, `NO_COLOR`, `WARDEN_VERBOSE`.
+
+CLI flags override everything: `--runtime`, `--color`, `-v`.
+
+### Runtime autodetection
+
+If no runtime is configured, BuildWarden probes for: **finch** → docker → podman (first functional one wins).
 
 ## Ledger Format
 
-See [docs/design/Ledger-Spec-v2.md](docs/design/Ledger-Spec-v2.md) for the full specification.
+The ledger is a binary file with:
 
-Key properties:
-- **Chained signatures** — Each entry signs over the previous entry's signature, making the ledger tamper-evident and order-sensitive.
-- **Multi-hash payload identity** — blake2b_256, sha256, sha1, md5 for every payload.
-- **Redactable metadata** — URLs and hostnames are not part of signatures, allowing internal builds to strip origin information while preserving integrity.
-- **Asynchronous channels** — Concurrent requests are tracked via open/checkpoint/close entries linked by the open entry's signature.
+- **Chained Ed25519 signatures** — each record signs over the previous signature
+- **Multi-hash payload identity** — blake2b_256, sha256, sha1, md5 for every payload
+- **Redactable metadata** — CBOR-encoded, not part of signatures; can be stripped without affecting integrity
+- **Artifact records** — build outputs are structurally distinguished from network inputs
 
-## Test Dockerfiles
+See [docs/design/Ledger-Spec.md](docs/design/Ledger-Spec.md) for the full specification.
 
-| File | Description | Architecture |
-|------|-------------|--------------|
-| `buildctx/Dockerfile.simple` | Alpine + pip install numpy in venv | Multi-arch |
-| `buildctx/Dockerfile.llvmlite-multiarch` | Ubuntu + apt + wget LLVM source | Multi-arch |
-| `buildctx/Dockerfile.tf-amd64` | TensorFlow build environment | x86_64 only |
-| `buildctx/Dockerfile.tfexample-amd64` | Full TensorFlow from-source build | x86_64 only |
+## Demo Cases
+
+| Dockerfile | Description | Time |
+|-----------|-------------|------|
+| `buildctx/Dockerfile.simple` | Build Python `requests` wheel from source, post artifact | ~1 min |
+| `buildctx/Dockerfile.expanded` | Build + test + type-check requests (shows ledger truncatability) | ~3 min |
+| `buildctx/Dockerfile.cryptography` | Python `cryptography` from source (Rust/Cargo + pip + apt) | ~10 min |
+| `buildctx/Dockerfile.pytorch-aarch64` | PyTorch from source with CUDA (pinnacle scale test) | ~3 hrs |
+
+```sh
+warden build buildctx/Dockerfile.simple
+```
 
 ## Design Documents
 
-- [Initial Proposal](docs/design/Initial-Proposal.md)
+- [Ledger Specification](docs/design/Ledger-Spec.md)
 - [Philosophy](docs/design/Philosophy.md)
-- [Relay and Ledger Spec (v1)](docs/design/Relay-and-Ledger-Spec.md)
-- [Ledger Spec v2](docs/design/Ledger-Spec-v2.md)
+- [Initial Proposal](docs/design/Initial-Proposal.md)
 
-## Security
+## Development
 
-See [CONTRIBUTING](CONTRIBUTING.md#security-issue-notifications) for more information.
+See [DEVELOPING.md](DEVELOPING.md) for build instructions, project structure, and contribution guidelines.
 
 ## License
 
-This project is licensed under the Apache-2.0 License.
+Apache-2.0
