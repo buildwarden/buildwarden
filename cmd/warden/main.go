@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	warden "warden/pkg"
+	"warden/internal/orchestrator"
 
 	"github.com/spf13/cobra"
 )
@@ -53,7 +53,7 @@ func run() int {
 }
 
 func build(cmd *cobra.Command, args []string) error {
-	buildEnv := warden.NewCtrEnv()
+	buildEnv := orchestrator.NewCtrEnv()
 	contextFullPath, err := filepath.Abs(args[0])
 	if err != nil {
 		return fmt.Errorf("error resolving path: %w", err)
@@ -64,7 +64,7 @@ func build(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf(`error reading cli flag "file": %w`, err)
 	}
 
-	config := &warden.BuildConfig{
+	config := &orchestrator.BuildConfig{
 		Context:       contextFullPath,
 		Containerfile: containerfile,
 	}
@@ -76,7 +76,7 @@ func build(cmd *cobra.Command, args []string) error {
 }
 
 func shell(cmd *cobra.Command, args []string) error {
-	buildEnv := warden.NewCtrEnv()
+	buildEnv := orchestrator.NewCtrEnv()
 	contextFullPath, err := filepath.Abs(args[0])
 	if err != nil {
 		return fmt.Errorf("error resolving path: %w", err)
@@ -87,7 +87,7 @@ func shell(cmd *cobra.Command, args []string) error {
 		return fmt.Errorf(`error reading cli flag "file": %w`, err)
 	}
 
-	config := &warden.BuildConfig{
+	config := &orchestrator.BuildConfig{
 		Context:       contextFullPath,
 		Containerfile: containerfile,
 	}

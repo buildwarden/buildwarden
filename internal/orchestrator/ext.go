@@ -1,4 +1,4 @@
-package warden
+package orchestrator
 
 type Extension interface {
 	BeforeBuild(env *CtrEnv) error

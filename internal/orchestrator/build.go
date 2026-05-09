@@ -1,4 +1,4 @@
-package warden
+package orchestrator
 
 type BuildEnv interface {
 	Build(config *BuildConfig) error

@@ -4,230 +4,316 @@ import (
 	"bytes"
 	"crypto/ed25519"
 	"crypto/sha512"
-	"encoding/base64"
-	"encoding/json"
-	"strings"
+	"encoding/binary"
 	"testing"
+
+	"github.com/fxamacker/cbor/v2"
 )
 
-func TestLedgerBasicFlow(t *testing.T) { //nolint:gocyclo
+func TestLedgerHeader(t *testing.T) {
 	var buf bytes.Buffer
-	err := NewLedger(&buf, map[string]any{"type": "container", "digest": "sha256:abc123"})
-	if err != nil {
-		t.Fatalf("NewLedger: %v", err)
-	}
-
-	// Open a channel (synchronous — returns signature)
-	openSig := ledger.Open(map[string]any{
-		"method": "GET", "url": "https://example.com/pkg.tar.gz",
+	l, err := NewLedger(LedgerConfig{
+		Writer:      &buf,
+		Environment: map[string]any{"type": "container", "digest": "sha256:abc"},
 	})
-	if openSig == "" {
-		t.Fatal("Open returned empty signature")
-	}
-
-	// Checkpoint: request headers out
-	reqHeaders := "GET /pkg.tar.gz HTTP/1.1\r\nHost: example.com\r\n\r\n"
-	ledger.Checkpoint(openSig, "out", []byte(reqHeaders), nil)
-
-	// Checkpoint: response headers in
-	respHeaders := "HTTP/1.1 200 OK\r\nContent-Length: 5\r\n\r\n"
-	ledger.Checkpoint(openSig, "in", []byte(respHeaders), nil)
-
-	// Close: response body in
-	ledger.Close(openSig, "in", []byte("hello"), map[string]any{"status": 200})
-
-	FinishLedger()
-
-	// Parse and verify the ledger
-	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
-	if len(lines) != 5 {
-		t.Fatalf("expected 5 lines (header + open + 2 checkpoints + close),"+
-			" got %d", len(lines))
-	}
-
-	// Verify header
-	var header HeaderEntry
-	if err := json.Unmarshal([]byte(lines[0]), &header); err != nil {
-		t.Fatalf("unmarshal header: %v", err)
-	}
-	if header.EntryType != "header" {
-		t.Errorf("header entry_type = %q, want %q", header.EntryType, "header")
-	}
-	if header.Version != "2.0" {
-		t.Errorf("header version = %q, want %q", header.Version, "2.0")
-	}
-	if header.SignatureScheme != "ed25519-sha512" {
-		t.Errorf("header signature_scheme = %q, want %q",
-			header.SignatureScheme, "ed25519-sha512")
-	}
-	if len(header.Hashes) != 4 {
-		t.Errorf("header hashes count = %d, want 4", len(header.Hashes))
-	}
-
-	// Verify entries have correct types and sequencing
-	types := []string{"open", "checkpoint", "checkpoint", "close"}
-	var entries []LedgerEntry
-	for i, line := range lines[1:] {
-		var e LedgerEntry
-		if err := json.Unmarshal([]byte(line), &e); err != nil {
-			t.Fatalf("unmarshal entry %d: %v", i, err)
-		}
-		if e.EntryType != types[i] {
-			t.Errorf("entry %d type = %q, want %q", i, e.EntryType, types[i])
-		}
-		if e.Seq != int64(i+1) {
-			t.Errorf("entry %d seq = %d, want %d", i, e.Seq, i+1)
-		}
-		entries = append(entries, e)
-	}
-
-	// Verify open signature is referenced by checkpoints and close
-	for i, e := range entries[1:] {
-		if e.OpenSignature != openSig {
-			t.Errorf("entry %d open_signature mismatch", i+1)
-		}
-	}
-
-	// Verify close has payload with correct size
-	closeEntry := entries[3]
-	if closeEntry.Payload == nil {
-		t.Fatal("close entry has nil payload")
-	}
-	if closeEntry.Payload.Size != 5 {
-		t.Errorf("close payload size = %d, want 5", closeEntry.Payload.Size)
-	}
-
-	// Verify signature chain is valid using the public key from header
-	pubKey := extractPublicKey(t, header)
-	verifySigChain(t, header, entries, pubKey)
-
-	// Reset global for other tests
-	ledger = nil
-}
-
-func TestLedgerMultipleChannels(t *testing.T) {
-	var buf bytes.Buffer
-	err := NewLedger(&buf, map[string]any{"type": "container"})
 	if err != nil {
 		t.Fatalf("NewLedger: %v", err)
 	}
+	l.Finish()
 
-	// Open two channels
-	sig1 := ledger.Open(map[string]any{"url": "https://a.com"})
-	sig2 := ledger.Open(map[string]any{"url": "https://b.com"})
+	data := buf.Bytes()
 
-	if sig1 == sig2 {
-		t.Error("two opens produced the same signature")
+	// Magic
+	if string(data[0:4]) != "BLDL" {
+		t.Fatalf("magic = %q, want BLDL", data[0:4])
+	}
+	if data[4] != 0x01 {
+		t.Fatalf("version = %d, want 1", data[4])
 	}
 
-	// Close them in reverse order
-	ledger.Close(sig2, "in", []byte("body2"), nil)
-	ledger.Close(sig1, "in", []byte("body1"), nil)
+	// Signature scheme (null-terminated)
+	schemeEnd := bytes.IndexByte(data[5:], 0x00)
+	if schemeEnd < 0 {
+		t.Fatal("no null terminator for signature scheme")
+	}
+	scheme := string(data[5 : 5+schemeEnd])
+	if scheme != "ed25519-sha512" {
+		t.Fatalf("scheme = %q, want ed25519-sha512", scheme)
+	}
+	off := 5 + schemeEnd + 1
 
-	FinishLedger()
+	// Sizes
+	sigSize := binary.BigEndian.Uint16(data[off:])
+	off += 2
+	hashBlockSize := binary.BigEndian.Uint16(data[off:])
+	off += 2
+	pubKeyLen := binary.BigEndian.Uint16(data[off:])
+	off += 2
 
-	lines := strings.Split(strings.TrimSpace(buf.String()), "\n")
-	// header + 2 opens + 2 closes = 5
-	if len(lines) != 5 {
-		t.Fatalf("expected 5 lines, got %d", len(lines))
+	if sigSize != 64 {
+		t.Fatalf("sigSize = %d, want 64", sigSize)
+	}
+	if hashBlockSize != 100 { // 32+32+20+16
+		t.Fatalf("hashBlockSize = %d, want 100", hashBlockSize)
+	}
+	if pubKeyLen != 32 {
+		t.Fatalf("pubKeyLen = %d, want 32", pubKeyLen)
 	}
 
-	ledger = nil
-}
+	// Public key
+	pubKey := data[off : off+int(pubKeyLen)]
+	off += int(pubKeyLen)
+	prefixEnd := off
 
-func extractPublicKey(t *testing.T, header HeaderEntry) ed25519.PublicKey {
-	t.Helper()
-	pub, _ := ledger.key.Public().(ed25519.PublicKey)
-	return pub
-}
-
-func verifySigChain(
-	t *testing.T, header HeaderEntry, entries []LedgerEntry, pubKey ed25519.PublicKey,
-) {
-	t.Helper()
+	if !bytes.Equal(pubKey, []byte(l.PublicKey())) {
+		t.Fatal("public key mismatch")
+	}
 
 	// Verify header signature
-	var headerInput []byte
-	headerInput = append(headerInput, []byte("header")...)
-	headerInput = append(headerInput, sizeBytes(header.Payload.Size)...)
-	headerInput = append(headerInput,
-		rawHashBytesOrdered(header.Payload.Hashes, header.Hashes)...)
+	sig := data[off : off+int(sigSize)]
+	off += int(sigSize)
 
-	verifySignature(t, "header", headerInput, header.Signature, pubKey)
+	digest := sha512.Sum512(data[:prefixEnd])
+	if !ed25519.Verify(l.PublicKey(), digest[:], sig) {
+		t.Fatal("header signature verification failed")
+	}
 
-	// Verify entry chain
-	prevSig := header.Signature
-	for i, e := range entries {
+	// CBOR metadata
+	metaLen := binary.BigEndian.Uint32(data[off:])
+	off += 4
+	metaBytes := data[off : off+int(metaLen)]
+
+	var meta HeaderMeta
+	if err := cbor.Unmarshal(metaBytes, &meta); err != nil {
+		t.Fatalf("unmarshal header meta: %v", err)
+	}
+	if len(meta.Hashes) != 4 {
+		t.Fatalf("meta.Hashes len = %d, want 4", len(meta.Hashes))
+	}
+	if len(meta.Schemas) != 5 {
+		t.Fatalf("meta.Schemas len = %d, want 5", len(meta.Schemas))
+	}
+}
+
+func TestLedgerBasicFlow(t *testing.T) {
+	var buf bytes.Buffer
+	l, err := NewLedger(LedgerConfig{
+		Writer:      &buf,
+		Environment: map[string]any{"type": "test"},
+	})
+	if err != nil {
+		t.Fatalf("NewLedger: %v", err)
+	}
+
+	// Open
+	openSig := l.Open(SchemaNoMetadata, nil)
+	if len(openSig) != 64 {
+		t.Fatalf("open sig len = %d, want 64", len(openSig))
+	}
+
+	// Checkpoint out (request headers)
+	headers := []byte("GET / HTTP/1.1\r\nHost: example.com\r\n\r\n")
+	hb := l.ComputeHashBlock(headers)
+	l.Checkpoint(openSig, -int64(len(headers)), hb, SchemaNoMetadata, nil)
+
+	// Close in (response body)
+	body := []byte("hello world")
+	hb2 := l.ComputeHashBlock(body)
+	l.Close(openSig, int64(len(body)), hb2, SchemaNoMetadata, nil)
+
+	l.Finish()
+
+	// Verify the full signature chain
+	verifyLedgerChain(t, buf.Bytes(), l.PublicKey())
+}
+
+func TestLedgerArtifact(t *testing.T) {
+	var buf bytes.Buffer
+	l, err := NewLedger(LedgerConfig{
+		Writer:      &buf,
+		Environment: map[string]any{"type": "test"},
+	})
+	if err != nil {
+		t.Fatalf("NewLedger: %v", err)
+	}
+
+	openSig := l.Open(SchemaNoMetadata, nil)
+
+	// Artifact with payload
+	artifact := []byte("binary content")
+	hb := l.ComputeHashBlock(artifact)
+	meta, _ := cbor.Marshal(map[string]any{"name": "output.bin", "context": map[string]any{}})
+	l.Artifact(openSig, -int64(len(artifact)), hb, 3, meta) // schema index 3 = artifact
+
+	l.Finish()
+	verifyLedgerChain(t, buf.Bytes(), l.PublicKey())
+}
+
+func TestLedgerEmptyArtifact(t *testing.T) {
+	var buf bytes.Buffer
+	l, err := NewLedger(LedgerConfig{
+		Writer:      &buf,
+		Environment: map[string]any{"type": "test"},
+	})
+	if err != nil {
+		t.Fatalf("NewLedger: %v", err)
+	}
+
+	openSig := l.Open(SchemaNoMetadata, nil)
+
+	// Empty artifact (payload=0, no hash block)
+	meta, _ := cbor.Marshal(map[string]any{"name": "marker", "context": map[string]any{}})
+	l.Artifact(openSig, 0, nil, 3, meta)
+
+	l.Finish()
+	verifyLedgerChain(t, buf.Bytes(), l.PublicKey())
+}
+
+func TestLedgerWithMetadata(t *testing.T) {
+	var buf bytes.Buffer
+	l, err := NewLedger(LedgerConfig{
+		Writer:      &buf,
+		Environment: map[string]any{"type": "test"},
+	})
+	if err != nil {
+		t.Fatalf("NewLedger: %v", err)
+	}
+
+	openMeta, _ := cbor.Marshal(map[string]any{
+		"method": "GET", "url": "https://example.com/file", "protocol": "HTTP/1.1",
+	})
+	openSig := l.Open(0, openMeta) // schema index 0 = http-open
+
+	body := []byte("response")
+	hb := l.ComputeHashBlock(body)
+	bodyMeta, _ := cbor.Marshal(map[string]any{"status": 200})
+	l.Close(openSig, int64(len(body)), hb, 2, bodyMeta) // schema index 2 = http-body
+
+	l.Finish()
+	verifyLedgerChain(t, buf.Bytes(), l.PublicKey())
+}
+
+func TestLedgerStreamingHasher(t *testing.T) {
+	data := []byte("hello world, this is a streaming hash test")
+
+	// Compute via streaming
+	sh := NewStreamingHasher(defaultHashes)
+	sh.Write(data[:10])  //nolint:errcheck
+	sh.Write(data[10:])  //nolint:errcheck
+	block, size := sh.Finish()
+
+	if size != int64(len(data)) {
+		t.Fatalf("size = %d, want %d", size, len(data))
+	}
+
+	// Compute via one-shot for comparison
+	var expected []byte
+	for _, name := range defaultHashes {
+		h := newHash(name)
+		h.Write(data)
+		expected = h.Sum(expected)
+	}
+
+	if !bytes.Equal(block, expected) {
+		t.Fatal("streaming hash block doesn't match one-shot")
+	}
+}
+
+// verifyLedgerChain parses the binary ledger and verifies every signature.
+func verifyLedgerChain(t *testing.T, data []byte, pubKey ed25519.PublicKey) {
+	t.Helper()
+	off := 0
+
+	// Parse header
+	if string(data[off:off+4]) != "BLDL" {
+		t.Fatal("bad magic")
+	}
+	off += 5 // magic + version
+
+	// Signature scheme
+	nullIdx := bytes.IndexByte(data[off:], 0x00)
+	off += nullIdx + 1
+
+	sigSize := int(binary.BigEndian.Uint16(data[off:]))
+	off += 2
+	hashBlockSize := int(binary.BigEndian.Uint16(data[off:]))
+	off += 2
+	pubKeyLen := int(binary.BigEndian.Uint16(data[off:]))
+	off += 2
+	off += pubKeyLen // skip public key bytes
+	prefixEnd := off
+
+	// Verify header signature
+	headerSig := data[off : off+sigSize]
+	off += sigSize
+	digest := sha512.Sum512(data[:prefixEnd])
+	if !ed25519.Verify(pubKey, digest[:], headerSig) {
+		t.Fatal("header signature invalid")
+	}
+
+	// Skip header CBOR metadata
+	metaLen := int(binary.BigEndian.Uint32(data[off:]))
+	off += 4 + metaLen
+
+	prevSig := headerSig
+
+	// Parse records
+	recordNum := 0
+	for off < len(data) {
+		recordType := data[off]
+		off++
+
+		// Build signature input
 		var sigInput []byte
-		prevSigBytes, _ := base64.StdEncoding.DecodeString(prevSig)
-		sigInput = append(sigInput, prevSigBytes...)
+		sigInput = append(sigInput, recordType)
+		sigInput = append(sigInput, data[off:off+sigSize]...)
 
-		switch e.EntryType {
-		case "open":
-			sigInput = append(sigInput, []byte("open")...)
-		case "checkpoint", "close":
-			openSigBytes, _ := base64.StdEncoding.DecodeString(e.OpenSignature)
-			sigInput = append(sigInput, openSigBytes...)
-			sigInput = append(sigInput, []byte(e.EntryType)...)
-			sigInput = append(sigInput, []byte(e.Direction)...)
-			sigInput = append(sigInput, sizeBytes(e.Payload.Size)...)
-			sigInput = append(sigInput,
-				rawHashBytesOrdered(e.Payload.Hashes, defaultHashes)...)
+		// Verify prev_sig field matches
+		if !bytes.Equal(data[off:off+sigSize], prevSig) {
+			t.Fatalf("record %d: prev_sig mismatch", recordNum)
+		}
+		off += sigSize
+
+		// Open signature (not present for open records)
+		if recordType != RecordOpen {
+			sigInput = append(sigInput, data[off:off+sigSize]...)
+			off += sigSize
 		}
 
-		verifySignature(t, entryLabel(i, e), sigInput, e.Signature, pubKey)
-		prevSig = e.Signature
-	}
-}
+		// Payload size
+		payloadSize := int64(binary.BigEndian.Uint64(data[off:]))
+		sigInput = binary.BigEndian.AppendUint64(sigInput, uint64(payloadSize))
+		off += 8
 
-func verifySignature(
-	t *testing.T, label string, input []byte, sigB64 string,
-	pubKey ed25519.PublicKey,
-) {
-	t.Helper()
-	sigBytes, err := base64.StdEncoding.DecodeString(sigB64)
-	if err != nil {
-		t.Fatalf("%s: decode signature: %v", label, err)
-	}
-	digest := sha512.Sum512(input)
-	if !ed25519.Verify(pubKey, digest[:], sigBytes) {
-		t.Errorf("%s: signature verification failed", label)
-	}
-}
+		// Hash block (present only when payload != 0)
+		if payloadSize != 0 {
+			sigInput = append(sigInput, data[off:off+hashBlockSize]...)
+			off += hashBlockSize
+		}
 
-func rawHashBytesOrdered(hashes map[string]string, order []string) []byte {
-	var out []byte
-	for _, name := range order {
-		b, _ := decodeHex(hashes[name])
-		out = append(out, b...)
+		// Record signature
+		recSig := data[off : off+sigSize]
+		off += sigSize
+
+		d := sha512.Sum512(sigInput)
+		if !ed25519.Verify(pubKey, d[:], recSig) {
+			t.Fatalf("record %d (type 0x%02x): signature invalid",
+			recordNum, recordType)
+		}
+
+		// Schema index + optional metadata
+		schemaIdx := data[off]
+		off++
+		if schemaIdx != SchemaNoMetadata {
+			mLen := int(binary.BigEndian.Uint32(data[off:]))
+			off += 4 + mLen
+		}
+
+		prevSig = recSig
+		recordNum++
 	}
-	return out
-}
 
-func decodeHex(s string) ([]byte, error) {
-	return hexDecode(s), nil
-}
-
-func hexDecode(s string) []byte {
-	b := make([]byte, len(s)/2)
-	for i := 0; i < len(s); i += 2 {
-		b[i/2] = hexVal(s[i])<<4 | hexVal(s[i+1])
+	if recordNum == 0 {
+		t.Fatal("no records found")
 	}
-	return b
-}
-
-func hexVal(c byte) byte {
-	switch {
-	case c >= '0' && c <= '9':
-		return c - '0'
-	case c >= 'a' && c <= 'f':
-		return c - 'a' + 10
-	case c >= 'A' && c <= 'F':
-		return c - 'A' + 10
-	}
-	return 0
-}
-
-func entryLabel(i int, e LedgerEntry) string {
-	return e.EntryType + "[" + string(rune('0'+i)) + "]"
 }

@@ -12,8 +12,8 @@ import (
 	"github.com/fxamacker/cbor/v2"
 )
 
-// Ledger3Header holds the parsed header of a v3 binary ledger.
-type Ledger3Header struct {
+// Header holds the parsed header of a binary ledger.
+type Header struct {
 	Version       byte
 	SigScheme     string
 	SigSize       int
@@ -21,12 +21,12 @@ type Ledger3Header struct {
 	PubKeyLen     int
 	PubKey        []byte
 	Signature     []byte
-	Meta          Ledger3HeaderMeta
+	Meta          HeaderMeta
 	PrefixBytes   []byte // raw binary prefix (for signature verification)
 }
 
-// Ledger3Record holds a parsed record from a v3 binary ledger.
-type Ledger3Record struct {
+// Record holds a parsed record from a binary ledger.
+type Record struct {
 	Type        byte
 	PrevSig     []byte
 	OpenSig     []byte // nil for open records
@@ -38,7 +38,7 @@ type Ledger3Record struct {
 }
 
 // Direction returns "in", "out", or "" based on the payload size sign.
-func (r *Ledger3Record) Direction() string {
+func (r *Record) Direction() string {
 	if r.PayloadSize > 0 {
 		return "in"
 	}
@@ -49,7 +49,7 @@ func (r *Ledger3Record) Direction() string {
 }
 
 // AbsPayloadSize returns the absolute value of the payload size.
-func (r *Ledger3Record) AbsPayloadSize() int64 {
+func (r *Record) AbsPayloadSize() int64 {
 	if r.PayloadSize < 0 {
 		return -r.PayloadSize
 	}
@@ -57,7 +57,7 @@ func (r *Ledger3Record) AbsPayloadSize() int64 {
 }
 
 // TypeName returns the human-readable record type name.
-func (r *Ledger3Record) TypeName() string {
+func (r *Record) TypeName() string {
 	switch r.Type {
 	case RecordOpen:
 		return "open"
@@ -72,19 +72,19 @@ func (r *Ledger3Record) TypeName() string {
 	}
 }
 
-// Ledger3VerifyResult holds the outcome of verifying a v3 ledger.
-type Ledger3VerifyResult struct {
-	Header       Ledger3Header
-	Records      []Ledger3Record
+// VerifyResult holds the outcome of verifying a ledger.
+type VerifyResult struct {
+	Header       Header
+	Records      []Record
 	Valid        bool
 	SigErrors    int
 	Unclosed     int
 	TotalRecords int
 }
 
-// ReadLedger3Header parses the header from a v3 binary ledger.
+// ReadHeader parses the header from a binary ledger.
 // Returns the header and the number of bytes consumed.
-func ReadLedger3Header(data []byte) (*Ledger3Header, int, error) {
+func ReadHeader(data []byte) (*Header, int, error) {
 	if len(data) < 5 {
 		return nil, 0, errors.New("data too short for magic+version")
 	}
@@ -92,7 +92,7 @@ func ReadLedger3Header(data []byte) (*Ledger3Header, int, error) {
 		return nil, 0, errors.New("invalid magic bytes")
 	}
 
-	h := &Ledger3Header{Version: data[4]}
+	h := &Header{Version: data[4]}
 	off := 5
 
 	// Signature scheme (null-terminated)
@@ -149,14 +149,14 @@ func ReadLedger3Header(data []byte) (*Ledger3Header, int, error) {
 	return h, off, nil
 }
 
-// ReadLedger3Record parses a single record from data at the given offset.
+// ReadRecord parses a single record from data at the given offset.
 // Returns the record and the number of bytes consumed.
-func ReadLedger3Record(data []byte, sigSize, hashBlockSize int) (*Ledger3Record, int, error) {
+func ReadRecord(data []byte, sigSize, hashBlockSize int) (*Record, int, error) {
 	if len(data) < 1 {
 		return nil, 0, io.EOF
 	}
 
-	r := &Ledger3Record{Type: data[0]}
+	r := &Record{Type: data[0]}
 	off := 1
 
 	// Previous signature
@@ -227,14 +227,14 @@ func ReadLedger3Record(data []byte, sigSize, hashBlockSize int) (*Ledger3Record,
 	return r, off, nil
 }
 
-// VerifyLedger3 parses and verifies an entire v3 binary ledger.
-func VerifyLedger3(data []byte) (*Ledger3VerifyResult, error) {
-	header, off, err := ReadLedger3Header(data)
+// Verify parses and verifies an entire binary ledger.
+func Verify(data []byte) (*VerifyResult, error) {
+	header, off, err := ReadHeader(data)
 	if err != nil {
 		return nil, fmt.Errorf("read header: %w", err)
 	}
 
-	result := &Ledger3VerifyResult{Header: *header}
+	result := &VerifyResult{Header: *header}
 
 	// Verify header signature
 	if !verifyEd25519Sig(header.PubKey, header.PrefixBytes, header.Signature) {
@@ -245,7 +245,7 @@ func VerifyLedger3(data []byte) (*Ledger3VerifyResult, error) {
 	openChannels := make(map[string]bool) // track open channels by hex(open_sig)
 
 	for off < len(data) {
-		rec, n, err := ReadLedger3Record(data[off:], header.SigSize, header.HashBlockSize)
+		rec, n, err := ReadRecord(data[off:], header.SigSize, header.HashBlockSize)
 		if err != nil {
 			if errors.Is(err, io.EOF) {
 				break
@@ -287,12 +287,12 @@ func VerifyLedger3(data []byte) (*Ledger3VerifyResult, error) {
 	return result, nil
 }
 
-// IsLedger3 checks if data begins with the v3 magic bytes.
-func IsLedger3(data []byte) bool {
-	return len(data) >= 5 && string(data[0:4]) == "BLDL" && data[4] == 0x03
+// IsValidLedger checks if data begins with valid ledger magic bytes.
+func IsValidLedger(data []byte) bool {
+	return len(data) >= 5 && string(data[0:4]) == "BLDL" && data[4] == 0x01
 }
 
-func buildRecordSigInput(r *Ledger3Record) []byte {
+func buildRecordSigInput(r *Record) []byte {
 	var buf []byte
 	buf = append(buf, r.Type)
 	buf = append(buf, r.PrevSig...)

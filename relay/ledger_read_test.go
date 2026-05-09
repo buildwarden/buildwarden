@@ -7,23 +7,23 @@ import (
 	"github.com/fxamacker/cbor/v2"
 )
 
-func TestLedger3ReadHeader(t *testing.T) {
+func TestLedgerReadHeader(t *testing.T) {
 	var buf bytes.Buffer
-	l, err := NewLedger3(Ledger3Config{
+	l, err := NewLedger(LedgerConfig{
 		Writer:      &buf,
 		Environment: map[string]any{"type": "test"},
 	})
 	if err != nil {
-		t.Fatalf("NewLedger3: %v", err)
+		t.Fatalf("NewLedger: %v", err)
 	}
 	l.Finish()
 
-	h, _, err := ReadLedger3Header(buf.Bytes())
+	h, _, err := ReadHeader(buf.Bytes())
 	if err != nil {
-		t.Fatalf("ReadLedger3Header: %v", err)
+		t.Fatalf("ReadHeader: %v", err)
 	}
-	if h.Version != 0x03 {
-		t.Errorf("version = %d, want 3", h.Version)
+	if h.Version != 0x01 {
+		t.Errorf("version = %d, want 1", h.Version)
 	}
 	if h.SigScheme != "ed25519-sha512" {
 		t.Errorf("scheme = %q", h.SigScheme)
@@ -42,14 +42,14 @@ func TestLedger3ReadHeader(t *testing.T) {
 	}
 }
 
-func TestLedger3VerifyBasicFlow(t *testing.T) {
+func TestLedgerVerifyBasicFlow(t *testing.T) {
 	var buf bytes.Buffer
-	l, err := NewLedger3(Ledger3Config{
+	l, err := NewLedger(LedgerConfig{
 		Writer:      &buf,
 		Environment: map[string]any{"type": "test"},
 	})
 	if err != nil {
-		t.Fatalf("NewLedger3: %v", err)
+		t.Fatalf("NewLedger: %v", err)
 	}
 
 	openSig := l.Open(SchemaNoMetadata, nil)
@@ -58,9 +58,9 @@ func TestLedger3VerifyBasicFlow(t *testing.T) {
 	l.Close(openSig, int64(len(body)), hb, SchemaNoMetadata, nil)
 	l.Finish()
 
-	result, err := VerifyLedger3(buf.Bytes())
+	result, err := Verify(buf.Bytes())
 	if err != nil {
-		t.Fatalf("VerifyLedger3: %v", err)
+		t.Fatalf("Verify: %v", err)
 	}
 	if !result.Valid {
 		t.Fatalf("ledger invalid, sigErrors=%d", result.SigErrors)
@@ -73,14 +73,14 @@ func TestLedger3VerifyBasicFlow(t *testing.T) {
 	}
 }
 
-func TestLedger3VerifyHTTPFlow(t *testing.T) {
+func TestLedgerVerifyHTTPFlow(t *testing.T) {
 	var buf bytes.Buffer
-	l, err := NewLedger3(Ledger3Config{
+	l, err := NewLedger(LedgerConfig{
 		Writer:      &buf,
 		Environment: map[string]any{"type": "container"},
 	})
 	if err != nil {
-		t.Fatalf("NewLedger3: %v", err)
+		t.Fatalf("NewLedger: %v", err)
 	}
 
 	// Open with http-open metadata
@@ -110,9 +110,9 @@ func TestLedger3VerifyHTTPFlow(t *testing.T) {
 
 	l.Finish()
 
-	result, err := VerifyLedger3(buf.Bytes())
+	result, err := Verify(buf.Bytes())
 	if err != nil {
-		t.Fatalf("VerifyLedger3: %v", err)
+		t.Fatalf("Verify: %v", err)
 	}
 	if !result.Valid {
 		t.Fatalf("ledger invalid, sigErrors=%d", result.SigErrors)
@@ -144,14 +144,14 @@ func TestLedger3VerifyHTTPFlow(t *testing.T) {
 	}
 }
 
-func TestLedger3VerifyArtifact(t *testing.T) {
+func TestLedgerVerifyArtifact(t *testing.T) {
 	var buf bytes.Buffer
-	l, err := NewLedger3(Ledger3Config{
+	l, err := NewLedger(LedgerConfig{
 		Writer:      &buf,
 		Environment: map[string]any{"type": "test"},
 	})
 	if err != nil {
-		t.Fatalf("NewLedger3: %v", err)
+		t.Fatalf("NewLedger: %v", err)
 	}
 
 	openSig := l.Open(SchemaNoMetadata, nil)
@@ -161,9 +161,9 @@ func TestLedger3VerifyArtifact(t *testing.T) {
 	l.Artifact(openSig, -int64(len(artifact)), hb, 3, meta)
 	l.Finish()
 
-	result, err := VerifyLedger3(buf.Bytes())
+	result, err := Verify(buf.Bytes())
 	if err != nil {
-		t.Fatalf("VerifyLedger3: %v", err)
+		t.Fatalf("Verify: %v", err)
 	}
 	if !result.Valid {
 		t.Fatalf("ledger invalid, sigErrors=%d", result.SigErrors)
@@ -176,14 +176,14 @@ func TestLedger3VerifyArtifact(t *testing.T) {
 	}
 }
 
-func TestLedger3VerifyTamperDetection(t *testing.T) {
+func TestLedgerVerifyTamperDetection(t *testing.T) {
 	var buf bytes.Buffer
-	l, err := NewLedger3(Ledger3Config{
+	l, err := NewLedger(LedgerConfig{
 		Writer:      &buf,
 		Environment: map[string]any{"type": "test"},
 	})
 	if err != nil {
-		t.Fatalf("NewLedger3: %v", err)
+		t.Fatalf("NewLedger: %v", err)
 	}
 
 	openSig := l.Open(SchemaNoMetadata, nil)
@@ -198,7 +198,7 @@ func TestLedger3VerifyTamperDetection(t *testing.T) {
 	copy(tampered, data)
 	tampered[len(tampered)/2] ^= 0xFF
 
-	result, err := VerifyLedger3(tampered)
+	result, err := Verify(tampered)
 	if err != nil {
 		// Parse error is acceptable for tampered data
 		return
@@ -211,14 +211,14 @@ func TestLedger3VerifyTamperDetection(t *testing.T) {
 	}
 }
 
-func TestLedger3VerifyMultipleChannels(t *testing.T) {
+func TestLedgerVerifyMultipleChannels(t *testing.T) {
 	var buf bytes.Buffer
-	l, err := NewLedger3(Ledger3Config{
+	l, err := NewLedger(LedgerConfig{
 		Writer:      &buf,
 		Environment: map[string]any{"type": "test"},
 	})
 	if err != nil {
-		t.Fatalf("NewLedger3: %v", err)
+		t.Fatalf("NewLedger: %v", err)
 	}
 
 	sig1 := l.Open(SchemaNoMetadata, nil)
@@ -230,9 +230,9 @@ func TestLedger3VerifyMultipleChannels(t *testing.T) {
 	l.Close(sig1, int64(len(body1)), l.ComputeHashBlock(body1), SchemaNoMetadata, nil)
 	l.Finish()
 
-	result, err := VerifyLedger3(buf.Bytes())
+	result, err := Verify(buf.Bytes())
 	if err != nil {
-		t.Fatalf("VerifyLedger3: %v", err)
+		t.Fatalf("Verify: %v", err)
 	}
 	if !result.Valid {
 		t.Fatalf("ledger invalid, sigErrors=%d", result.SigErrors)
@@ -245,20 +245,20 @@ func TestLedger3VerifyMultipleChannels(t *testing.T) {
 	}
 }
 
-func TestLedger3IsLedger3(t *testing.T) {
-	if IsLedger3([]byte("BLDL\x03rest")) != true {
-		t.Error("should detect v3")
+func TestLedgerIsValidLedger(t *testing.T) {
+	if IsValidLedger([]byte("BLDL\x01rest")) != true {
+		t.Error("should detect valid ledger")
 	}
-	if IsLedger3([]byte(`{"entry_type":"header"`)) != false {
-		t.Error("should not detect JSON as v3")
+	if IsValidLedger([]byte(`{"entry_type":"header"`)) != false {
+		t.Error("should not detect JSON as valid ledger")
 	}
-	if IsLedger3([]byte("BLD")) != false {
-		t.Error("should not detect short data as v3")
+	if IsValidLedger([]byte("BLD")) != false {
+		t.Error("should not detect short data as valid ledger")
 	}
 }
 
-func TestLedger3RecordHelpers(t *testing.T) {
-	r := &Ledger3Record{PayloadSize: 100}
+func TestLedgerRecordHelpers(t *testing.T) {
+	r := &Record{PayloadSize: 100}
 	if r.Direction() != "in" {
 		t.Errorf("positive direction = %q", r.Direction())
 	}

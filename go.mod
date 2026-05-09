@@ -1,6 +1,6 @@
 module warden
 
-go 1.25.0
+go 1.26.3
 
 require (
 	github.com/spf13/cobra v1.7.0
@@ -8,6 +8,7 @@ require (
 )
 
 require (
+	github.com/fxamacker/cbor/v2 v2.7.0
 	github.com/lesiw/ctrctl v0.5.0
 	github.com/miekg/dns v1.1.55
 	github.com/pavlo-v-chernykh/keystore-go/v4 v4.4.1
@@ -15,7 +16,6 @@ require (
 )
 
 require (
-	github.com/fxamacker/cbor/v2 v2.7.0 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/mod v0.34.0 // indirect

@@ -1,6 +1,5 @@
 /build/
-
-warden
+/warden
+/ledger-inspect
 warden-run.log
 out.log
-ledger-inspect
