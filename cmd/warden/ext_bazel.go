@@ -62,6 +62,8 @@ cp /.warden/bazel.bazelrc /etc/bazel.bazelrc
 }
 
 func (e *ExtBazel) Env() map[string]string {
+	// JVM truststore flags — references /.warden/certs.jks created by BeforeBuild.
+	// Covers: bazel (via bazelrc), maven (MAVEN_OPTS), gradle (GRADLE_OPTS)
 	jvmFlags := "-Djavax.net.ssl.trustStore=/.warden/certs.jks " +
 		"-Djavax.net.ssl.trustStorePassword=changeit"
 	return map[string]string{

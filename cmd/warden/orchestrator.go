@@ -49,7 +49,6 @@ var wardenDir = ".warden"
 
 var exts = []Extension{
 	&ExtTrustStore{},
-	&ExtPip{},
 	&ExtBazel{},
 	&ExtCACerts{},
 	&ExtEpoch{},
