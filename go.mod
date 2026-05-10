@@ -1,6 +1,6 @@
 module warden
 
-go 1.26.3
+go 1.25.0
 
 require (
 	github.com/spf13/cobra v1.7.0

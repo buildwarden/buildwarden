@@ -16,7 +16,7 @@ jobs:
           go-version: stable
       - uses: golangci/golangci-lint-action@v6
         with:
-          version: latest
+          version: v2.1
 
   test:
     runs-on: ubuntu-latest
