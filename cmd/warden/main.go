@@ -3,8 +3,6 @@ package main
 import (
 	"os"
 
-	"warden/internal/orchestrator"
-
 	"github.com/lesiw/ctrctl"
 	"github.com/spf13/cobra"
 )
@@ -85,15 +83,14 @@ func init() {
 }
 
 func main() {
-	orchestrator.SetVersion(version)
 	if err := rootCmd.Execute(); err != nil {
-		orchestrator.LogError(err)
+		logError(err)
 		os.Exit(1)
 	}
 }
 
-func resolveConfig() (*orchestrator.Config, error) {
-	cfg, err := orchestrator.LoadConfig()
+func resolveConfig() (*Config, error) {
+	cfg, err := LoadConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -112,12 +109,12 @@ func resolveConfig() (*orchestrator.Config, error) {
 	return cfg, nil
 }
 
-func setupRuntime(cfg *orchestrator.Config) error {
-	orchestrator.SetColorMode(cfg.Output.Color)
+func setupRuntime(cfg *Config) error {
+	setColorMode(cfg.Output.Color)
 
 	runtime := cfg.Runtime.CLI
 	if runtime == "" {
-		detected, err := orchestrator.DetectRuntime()
+		detected, err := DetectRuntime()
 		if err != nil {
 			return err
 		}
@@ -144,7 +141,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		path = args[0]
 	}
 
-	dockerfile, contextDir, err := orchestrator.ResolvePath(path)
+	dockerfile, contextDir, err := ResolvePath(path)
 	if err != nil {
 		return err
 	}
@@ -162,8 +159,8 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		compress = false
 	}
 
-	env := orchestrator.NewCtrEnv()
-	config := &orchestrator.BuildConfig{
+	env := NewCtrEnv()
+	config := &BuildConfig{
 		Context:       contextDir,
 		Containerfile: dockerfile,
 		Capture:       capture,
@@ -188,7 +185,7 @@ func runShell(cmd *cobra.Command, args []string) error {
 		path = args[0]
 	}
 
-	dockerfile, contextDir, err := orchestrator.ResolvePath(path)
+	dockerfile, contextDir, err := ResolvePath(path)
 	if err != nil {
 		return err
 	}
@@ -206,8 +203,8 @@ func runShell(cmd *cobra.Command, args []string) error {
 		compress = false
 	}
 
-	env := orchestrator.NewCtrEnv()
-	config := &orchestrator.BuildConfig{
+	env := NewCtrEnv()
+	config := &BuildConfig{
 		Context:       contextDir,
 		Containerfile: dockerfile,
 		Capture:       capture,

@@ -1,11 +1,10 @@
-package orchestrator
+package main
 
 import (
 	"encoding/pem"
 	"fmt"
 	"os"
 	"path/filepath"
-	"warden/relay"
 
 	"github.com/pavlo-v-chernykh/keystore-go/v4"
 )
@@ -22,7 +21,7 @@ func (e *ExtBazel) BeforeBuild(env *CtrEnv) error {
 		return fmt.Errorf("failed to write bazel.bazelrc: %w", err)
 	}
 
-	block, _ := pem.Decode(relay.CA_CERT)
+	block, _ := pem.Decode(caCertPEM)
 	if block == nil {
 		return fmt.Errorf("failed to parse relay certificate PEM")
 	}

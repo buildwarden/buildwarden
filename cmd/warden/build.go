@@ -1,4 +1,4 @@
-package orchestrator
+package main
 
 type BuildEnv interface {
 	Build(config *BuildConfig) error

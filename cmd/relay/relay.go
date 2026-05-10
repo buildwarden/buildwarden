@@ -1,5 +1,4 @@
-// Package relay provides a transparent HTTPS and DNS proxy that emits a BuildWarden ledger.
-package relay
+package main
 
 import (
 	"crypto/rand"

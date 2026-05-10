@@ -1,4 +1,4 @@
-package relay
+package ledger
 
 import (
 	"bytes"
@@ -11,6 +11,24 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 )
+
+// Record type byte values per the BuildWarden Ledger Specification.
+const (
+	RecordOpen       byte = 0x01
+	RecordCheckpoint byte = 0x02
+	RecordClose      byte = 0x03
+	RecordArtifact   byte = 0x04
+)
+
+// SchemaNoMetadata indicates no metadata is attached to a record.
+const SchemaNoMetadata byte = 0xFF
+
+// HeaderMeta is the CBOR metadata written after the header signature.
+type HeaderMeta struct {
+	Hashes      []string       `cbor:"hashes"`
+	Schemas     []string       `cbor:"schemas"`
+	Environment map[string]any `cbor:"environment"`
+}
 
 // Header holds the parsed header of a binary ledger.
 type Header struct {
@@ -242,7 +260,7 @@ func Verify(data []byte) (*VerifyResult, error) {
 	}
 
 	prevSig := header.Signature
-	openChannels := make(map[string]bool) // track open channels by hex(open_sig)
+	openChannels := make(map[string]bool)
 
 	for off < len(data) {
 		rec, n, err := ReadRecord(data[off:], header.SigSize, header.HashBlockSize)

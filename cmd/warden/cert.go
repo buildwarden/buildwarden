@@ -1,4 +1,4 @@
-package relay
+package main
 
 import (
 	"crypto/sha1"
@@ -12,14 +12,18 @@ import (
 	"unicode"
 )
 
+// caCertPEM holds the relay's ephemeral CA cert, read from the ledger directory
+// by ExtTrustStore and consumed by other extensions (e.g., ExtBazel).
+var caCertPEM []byte
+
 type asn1Utf8Value struct {
 	Type  asn1.ObjectIdentifier
 	Value string `asn1:"utf8"`
 }
 type asn1Utf8ValueSET []asn1Utf8Value
 
-func CertSubjectHash() (string, error) {
-	block, _ := pem.Decode(CA_CERT)
+func certSubjectHash() (string, error) {
+	block, _ := pem.Decode(caCertPEM)
 	if block == nil {
 		return "", fmt.Errorf("failed to parse certificate PEM")
 	}
@@ -46,7 +50,7 @@ func CertSubjectHash() (string, error) {
 			}
 			newSet = append(newSet, asn1Utf8Value{
 				Type:  attr.Type,
-				Value: CanonicalString(val),
+				Value: canonicalString(val),
 			})
 		}
 		encoded, err := asn1.Marshal(newSet)
@@ -60,12 +64,11 @@ func CertSubjectHash() (string, error) {
 	return hash[6:8] + hash[4:6] + hash[2:4] + hash[0:2], nil
 }
 
-func CanonicalString(s string) string {
+func canonicalString(s string) string {
 	var newStr strings.Builder
 	var inSpace bool
 	for _, rune := range s {
 		if rune > 128 {
-			// If this character is not in the ASCII set, perform no further checks.
 			inSpace = false
 			newStr.WriteRune(rune)
 		} else if unicode.IsSpace(rune) {

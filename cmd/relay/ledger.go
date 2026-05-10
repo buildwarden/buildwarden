@@ -1,4 +1,4 @@
-package relay
+package main
 
 import (
 	"crypto/ed25519"
@@ -18,16 +18,6 @@ import (
 	"golang.org/x/crypto/blake2b"
 )
 
-// Record type byte values per the BuildWarden Ledger Specification.
-const (
-	RecordOpen       byte = 0x01
-	RecordCheckpoint byte = 0x02
-	RecordClose      byte = 0x03
-	RecordArtifact   byte = 0x04
-)
-
-// SchemaNoMetadata indicates no metadata is attached to a record.
-const SchemaNoMetadata byte = 0xFF
 
 // Ledger implements the BuildWarden binary ledger specification.
 // All writes are serialized through a single channel.
@@ -58,12 +48,6 @@ type entryInput struct {
 	Metadata    []byte // pre-encoded CBOR (nil when SchemaIndex=0xFF)
 }
 
-// HeaderMeta is the CBOR metadata written after the header signature.
-type HeaderMeta struct {
-	Hashes      []string       `cbor:"hashes"`
-	Schemas     []string       `cbor:"schemas"`
-	Environment map[string]any `cbor:"environment"`
-}
 
 // LedgerConfig holds parameters for creating a new ledger.
 type LedgerConfig struct {

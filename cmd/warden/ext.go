@@ -1,4 +1,4 @@
-package orchestrator
+package main
 
 type Extension interface {
 	BeforeBuild(env *CtrEnv) error

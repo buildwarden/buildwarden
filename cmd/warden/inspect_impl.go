@@ -11,7 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"warden/relay"
+	"warden/ledger"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/klauspost/compress/zstd"
@@ -34,12 +34,12 @@ func runInspectImpl(path string, opts inspectOptions) error {
 		return err
 	}
 
-	if !relay.IsValidLedger(data) {
+	if !ledger.IsValidLedger(data) {
 		return fmt.Errorf(
 			"not a valid BuildWarden ledger (invalid magic bytes)")
 	}
 
-	result, err := relay.Verify(data)
+	result, err := ledger.Verify(data)
 	if err != nil {
 		return err
 	}
@@ -68,13 +68,13 @@ func runInspectImpl(path string, opts inspectOptions) error {
 }
 
 type channel struct {
-	open        relay.Record
-	checkpoints []relay.Record
-	close       *relay.Record
+	open        ledger.Record
+	checkpoints []ledger.Record
+	close       *ledger.Record
 }
 
 func printHuman(
-	w io.Writer, result *relay.VerifyResult, verbosity int,
+	w io.Writer, result *ledger.VerifyResult, verbosity int,
 	ledgerDir string, hasCaps bool,
 ) {
 	h := result.Header
@@ -101,15 +101,15 @@ func printHuman(
 
 		sigKey := string(rec.Signature)
 		switch rec.Type {
-		case relay.RecordOpen:
+		case ledger.RecordOpen:
 			ch := &channel{open: rec}
 			channels[sigKey] = ch
 			ordered = append(ordered, ch)
-		case relay.RecordCheckpoint:
+		case ledger.RecordCheckpoint:
 			if ch, ok := channels[string(rec.OpenSig)]; ok {
 				ch.checkpoints = append(ch.checkpoints, rec)
 			}
-		case relay.RecordClose, relay.RecordArtifact:
+		case ledger.RecordClose, ledger.RecordArtifact:
 			if ch, ok := channels[string(rec.OpenSig)]; ok {
 				ch.close = &rec
 			}
@@ -126,14 +126,14 @@ func printHuman(
 }
 
 func printSummary(
-	w io.Writer, result *relay.VerifyResult, requestCount int,
+	w io.Writer, result *ledger.VerifyResult, requestCount int,
 	ledgerDir string, hasCaps bool,
 ) {
 	var totalBytes int64
 	var artifactCount int
 	for _, rec := range result.Records {
 		totalBytes += rec.AbsPayloadSize()
-		if rec.Type == relay.RecordArtifact {
+		if rec.Type == ledger.RecordArtifact {
 			artifactCount++
 		}
 	}
@@ -204,7 +204,7 @@ type jsonSummary struct {
 }
 
 func printJSON(
-	w io.Writer, result *relay.VerifyResult,
+	w io.Writer, result *ledger.VerifyResult,
 	ledgerDir string, hasCaps bool,
 ) error {
 	h := result.Header
@@ -247,10 +247,10 @@ func printJSON(
 		report.Records = append(report.Records, jr)
 
 		totalBytes += rec.AbsPayloadSize()
-		if rec.Type == relay.RecordArtifact {
+		if rec.Type == ledger.RecordArtifact {
 			artifactCount++
 		}
-		if rec.Type == relay.RecordOpen {
+		if rec.Type == ledger.RecordOpen {
 			openCount++
 		}
 	}
@@ -284,26 +284,26 @@ func printJSON(
 	return nil
 }
 
-func verifyHeader(h relay.Header) bool {
+func verifyHeader(h ledger.Header) bool {
 	digest := sha512.Sum512(h.PrefixBytes)
 	return ed25519.Verify(h.PubKey, digest[:], h.Signature)
 }
 
-func printEntryTree(w io.Writer, seq int, r relay.Record) {
+func printEntryTree(w io.Writer, seq int, r ledger.Record) {
 	check := "✅"
 	switch r.Type {
-	case relay.RecordOpen:
+	case ledger.RecordOpen:
 		meta := metaSummary(r)
 		fmt.Fprintf(w, "[%3d] %s OPEN %s\n", seq+1, check, meta)
-	case relay.RecordCheckpoint:
+	case ledger.RecordCheckpoint:
 		dir := dirArrow(r.Direction())
 		fmt.Fprintf(w, "[%3d] %s  ├─ CHECKPOINT %s %s (%d bytes)\n",
 			seq+1, check, dir, r.Direction(), r.AbsPayloadSize())
-	case relay.RecordClose:
+	case ledger.RecordClose:
 		dir := dirArrow(r.Direction())
 		fmt.Fprintf(w, "[%3d] %s  └─ CLOSE %s %s (%d bytes)\n",
 			seq+1, check, dir, r.Direction(), r.AbsPayloadSize())
-	case relay.RecordArtifact:
+	case ledger.RecordArtifact:
 		meta := metaSummary(r)
 		fmt.Fprintf(w, "[%3d] %s  └─ ARTIFACT %s (%d bytes)\n",
 			seq+1, check, meta, r.AbsPayloadSize())
@@ -316,7 +316,7 @@ func printCompact(w io.Writer, ch *channel) {
 	var size int64
 	if ch.close != nil {
 		size = ch.close.AbsPayloadSize()
-		if ch.close.Type == relay.RecordArtifact {
+		if ch.close.Type == ledger.RecordArtifact {
 			status = " ARTIFACT"
 		}
 	} else {
@@ -325,7 +325,7 @@ func printCompact(w io.Writer, ch *channel) {
 	fmt.Fprintf(w, "✅%s %s (%d bytes)\n", status, meta, size)
 }
 
-func metaSummary(r relay.Record) string {
+func metaSummary(r ledger.Record) string {
 	if r.Metadata == nil {
 		return ""
 	}

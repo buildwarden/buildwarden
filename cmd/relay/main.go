@@ -5,8 +5,6 @@ import (
 	"net"
 	"os"
 	"path/filepath"
-
-	"warden/relay"
 )
 
 func main() {
@@ -29,14 +27,14 @@ func run() int {
 			fmt.Fprintf(os.Stderr, "error creating captures directory: %v\n", err)
 			return 1
 		}
-		relay.SetCaptureMode(mode)
+		SetCaptureMode(mode)
 	}
 
 	ctxDir := os.Getenv("CONTEXT_DIR")
 	if ctxDir == "" {
 		ctxDir = "/context"
 	}
-	relay.SetContextDir(ctxDir)
+	SetContextDir(ctxDir)
 
 	ledgerFile, err := os.Create(filepath.Join(outDir, "ledger"))
 	if err != nil {
@@ -45,7 +43,7 @@ func run() int {
 	}
 	defer ledgerFile.Close()
 
-	l, err := relay.NewLedger(relay.LedgerConfig{
+	l, err := NewLedger(LedgerConfig{
 		Writer:      ledgerFile,
 		Environment: map[string]any{"type": "container"},
 	})
@@ -53,24 +51,24 @@ func run() int {
 		fmt.Fprintf(os.Stderr, "error initializing ledger: %v\n", err)
 		return 1
 	}
-	relay.SetLedger(l)
-	relay.SetOutDir(outDir)
+	SetLedger(l)
+	SetOutDir(outDir)
 
-	if err := relay.DetectSelfIP(); err != nil {
+	if err := DetectSelfIP(); err != nil {
 		fmt.Fprintf(os.Stderr, "error detecting relay IP: %v\n", err)
 		return 1
 	}
-	relay.DetectUpstreamDNS()
+	DetectUpstreamDNS()
 
 	// Generate ephemeral CA for this build.
-	if err := relay.GenerateCA(); err != nil {
+	if err := GenerateCA(); err != nil {
 		fmt.Fprintf(os.Stderr, "error generating CA: %v\n", err)
 		return 1
 	}
 
 	// Write CA cert for the orchestrator to inject into build container.
 	caPath := filepath.Join(outDir, "ca.cert.pem")
-	if err := os.WriteFile(caPath, relay.CA_CERT, 0644); err != nil {
+	if err := os.WriteFile(caPath, CA_CERT, 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing CA cert: %v\n", err)
 		return 1
 	}
@@ -78,9 +76,9 @@ func run() int {
 	listenIP := net.IPv4zero
 	errs := make(chan error, 3)
 
-	go func() { errs <- relay.RunDns(net.TCPAddr{IP: listenIP, Port: 53}) }()
-	go func() { errs <- relay.RunHttp(net.TCPAddr{IP: listenIP, Port: 80}) }()
-	go func() { errs <- relay.RunHttps(net.TCPAddr{IP: listenIP, Port: 443}) }()
+	go func() { errs <- RunDns(net.TCPAddr{IP: listenIP, Port: 53}) }()
+	go func() { errs <- RunHttp(net.TCPAddr{IP: listenIP, Port: 80}) }()
+	go func() { errs <- RunHttps(net.TCPAddr{IP: listenIP, Port: 443}) }()
 
 	fmt.Fprintf(os.Stderr, "relay: listening on :53/udp :80/tcp :443/tcp\n")
 

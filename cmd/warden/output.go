@@ -1,4 +1,4 @@
-package orchestrator
+package main
 
 import (
 	"fmt"
@@ -70,22 +70,16 @@ func (l *Logger) ErrorWithIssueLink(err error) {
 		"\n  If this is unexpected, please file a bug:\n  %s\n\n", link)
 }
 
-// LogError prints an error with an issue-filing link. Exported for use by cmd/.
-func LogError(err error) {
+func logError(err error) {
 	log.ErrorWithIssueLink(err)
 }
 
-// SetColorMode configures color output based on the config value.
-func SetColorMode(mode string) {
+func setColorMode(mode string) {
 	switch mode {
 	case "never":
 		color.NoColor = true
 	case "always":
 		color.NoColor = false
 	}
-	// "auto" is the default — fatih/color detects TTY
 }
 
-var version = "dev"
-
-func SetVersion(v string) { version = v }

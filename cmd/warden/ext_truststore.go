@@ -1,17 +1,15 @@
-package orchestrator
+package main
 
 import (
 	"fmt"
 	"os"
 	"path/filepath"
 	"time"
-	"warden/relay"
 )
 
 type ExtTrustStore struct{}
 
 func (e *ExtTrustStore) BeforeBuild(env *CtrEnv) error {
-	// Wait for the relay to generate its ephemeral CA cert.
 	caPath := filepath.Join(env.ledgerDir, "ca.cert.pem")
 	var caCert []byte
 	for i := 0; i < 50; i++ {
@@ -26,8 +24,7 @@ func (e *ExtTrustStore) BeforeBuild(env *CtrEnv) error {
 		return fmt.Errorf("timed out waiting for CA cert at %s", caPath)
 	}
 
-	// Also set the package-level CA_CERT for other extensions.
-	relay.CA_CERT = caCert
+	caCertPEM = caCert
 
 	err := os.WriteFile(
 		filepath.Join(env.wardenDirPath(), "ca.crt"), caCert, 0644,
@@ -36,7 +33,7 @@ func (e *ExtTrustStore) BeforeBuild(env *CtrEnv) error {
 		return fmt.Errorf("error writing certificate file: %w", err)
 	}
 
-	certhash, err := relay.CertSubjectHash()
+	certhash, err := certSubjectHash()
 	if err != nil {
 		return err
 	}
