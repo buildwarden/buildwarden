@@ -44,7 +44,7 @@ Extensions implement `BeforeBuild(env *CtrEnv) error` and optionally `Env() map[
 2. Write shell scripts to `.warden/ext.d/` (exec'd inside the build container)
 3. Return env vars to inject into the Dockerfile after each `FROM` line
 
-Current extensions: truststore (CA cert injection), pip (PIP_CERT), bazel (JKS truststore).
+Current extensions: truststore (CA cert injection), pip (PIP_CERT), bazel (JKS truststore), epoch (SOURCE_DATE_EPOCH=0).
 
 ## Running Integration Tests
 

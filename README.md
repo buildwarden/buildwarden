@@ -86,6 +86,7 @@ cli = "finch"          # container runtime (finch, docker, podman)
 [build]
 dockerfile = ""        # override Dockerfile discovery
 context = ""           # override context directory
+capture = ""           # payload capture (none, headers, bodies, all)
 
 [output]
 color = "auto"         # auto, always, never
@@ -94,7 +95,7 @@ verbose = false
 
 Environment variables override config: `WARDEN_CTR_CLI`, `NO_COLOR`, `WARDEN_VERBOSE`.
 
-CLI flags override everything: `--runtime`, `--color`, `-v`.
+CLI flags override everything: `--runtime`, `--color`, `--capture`, `-v`.
 
 ### Runtime autodetection
 

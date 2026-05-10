@@ -24,6 +24,7 @@ internal/orchestrator/ext.go          — Extension interface (BeforeBuild hooks
 internal/orchestrator/ext_truststore.go — Injects relay CA into build container trust store
 internal/orchestrator/ext_bazel.go    — Configures Bazel JKS truststore
 internal/orchestrator/ext_pip.go      — Sets PIP_CERT env
+internal/orchestrator/ext_epoch.go    — Sets SOURCE_DATE_EPOCH=0 for reproducible builds
 
 relay/relay.go          — HTTP/HTTPS/DNS proxy, artifact endpoint, ephemeral CA generation
 relay/ledger.go         — Binary ledger writer (Ed25519 signing, chained signatures, streaming hashes)

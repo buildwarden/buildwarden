@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"warden/relay"
@@ -19,6 +20,7 @@ type Options struct {
 	JSON      bool
 	Verbosity int
 	Writer    io.Writer
+	Extract   string
 }
 
 func Run(path string, opts Options) error {
@@ -40,11 +42,22 @@ func Run(path string, opts Options) error {
 		return err
 	}
 
-	if opts.JSON {
-		return printJSON(opts.Writer, result)
+	// Detect sibling captures/ directory for payload enrichment.
+	ledgerDir := filepath.Dir(path)
+	capturesDir := filepath.Join(ledgerDir, "captures")
+	hasCaps := dirExists(capturesDir)
+
+	if opts.Extract != "" && hasCaps {
+		if err := extractPayloads(capturesDir, opts.Extract, opts.Writer); err != nil {
+			return err
+		}
 	}
 
-	printHuman(opts.Writer, result, opts.Verbosity)
+	if opts.JSON {
+		return printJSON(opts.Writer, result, ledgerDir, hasCaps)
+	}
+
+	printHuman(opts.Writer, result, opts.Verbosity, ledgerDir, hasCaps)
 	if !result.Valid {
 		return fmt.Errorf("ledger verification failed: %d signature error(s)",
 			result.SigErrors)
@@ -58,7 +71,10 @@ type channel struct {
 	close       *relay.Record
 }
 
-func printHuman(w io.Writer, result *relay.VerifyResult, verbosity int) {
+func printHuman(
+	w io.Writer, result *relay.VerifyResult, verbosity int,
+	ledgerDir string, hasCaps bool,
+) {
 	h := result.Header
 	headerValid := verifyHeader(h)
 
@@ -104,10 +120,13 @@ func printHuman(w io.Writer, result *relay.VerifyResult, verbosity int) {
 		}
 	}
 
-	printSummary(w, result, len(ordered))
+	printSummary(w, result, len(ordered), ledgerDir, hasCaps)
 }
 
-func printSummary(w io.Writer, result *relay.VerifyResult, requestCount int) {
+func printSummary(
+	w io.Writer, result *relay.VerifyResult, requestCount int,
+	ledgerDir string, hasCaps bool,
+) {
 	var totalBytes int64
 	var artifactCount int
 	for _, rec := range result.Records {
@@ -135,6 +154,11 @@ func printSummary(w io.Writer, result *relay.VerifyResult, requestCount int) {
 		fmt.Fprintf(w, "  COMPLETENESS: ❌ %d unclosed channels\n", result.Unclosed)
 	} else {
 		fmt.Fprintf(w, "  COMPLETENESS: ✅ All channels closed\n")
+	}
+	if hasCaps {
+		capsDir := filepath.Join(ledgerDir, "captures")
+		n := countCaptures(capsDir)
+		fmt.Fprintf(w, "  CAPTURES: %d payload(s) saved in %s\n", n, capsDir)
 	}
 	fmt.Fprintln(w, strings.Repeat("═", 80))
 }
@@ -171,12 +195,16 @@ type jsonSummary struct {
 	Requests     int   `json:"requests"`
 	BytesAudited int64 `json:"bytes_audited"`
 	Artifacts    int   `json:"artifacts"`
+	Captures     int   `json:"captures,omitempty"`
 	SigErrors    int   `json:"sig_errors"`
 	Unclosed     int   `json:"unclosed"`
 	Valid        bool  `json:"valid"`
 }
 
-func printJSON(w io.Writer, result *relay.VerifyResult) error {
+func printJSON(
+	w io.Writer, result *relay.VerifyResult,
+	ledgerDir string, hasCaps bool,
+) error {
 	h := result.Header
 	headerValid := verifyHeader(h)
 
@@ -225,11 +253,17 @@ func printJSON(w io.Writer, result *relay.VerifyResult) error {
 		}
 	}
 
+	var capsCount int
+	if hasCaps {
+		capsCount = countCaptures(filepath.Join(ledgerDir, "captures"))
+	}
+
 	report.Summary = jsonSummary{
 		TotalRecords: result.TotalRecords,
 		Requests:     openCount,
 		BytesAudited: totalBytes,
 		Artifacts:    artifactCount,
+		Captures:     capsCount,
 		SigErrors:    result.SigErrors,
 		Unclosed:     result.Unclosed,
 		Valid:        result.Valid,
@@ -334,4 +368,58 @@ func humanBytes(b int64) string {
 	default:
 		return fmt.Sprintf("%d B", b)
 	}
+}
+
+func dirExists(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
+}
+
+func extractPayloads(capturesDir, destDir string, w io.Writer) error {
+	if err := os.MkdirAll(destDir, 0755); err != nil {
+		return fmt.Errorf("creating extract dir: %w", err)
+	}
+
+	entries, err := os.ReadDir(capturesDir)
+	if err != nil {
+		return fmt.Errorf("reading captures dir: %w", err)
+	}
+
+	var count int
+	var totalSize int64
+	for _, entry := range entries {
+		symPath := filepath.Join(capturesDir, entry.Name())
+		target, err := os.Readlink(symPath)
+		if err != nil {
+			continue
+		}
+		srcPath := filepath.Join(capturesDir, target)
+		info, err := os.Stat(srcPath)
+		if err != nil {
+			continue
+		}
+
+		data, err := os.ReadFile(srcPath)
+		if err != nil {
+			continue
+		}
+		destPath := filepath.Join(destDir, entry.Name())
+		if err := os.WriteFile(destPath, data, 0644); err != nil {
+			continue
+		}
+		count++
+		totalSize += info.Size()
+	}
+
+	fmt.Fprintf(w, "Extracted %d payloads (%s) to %s\n",
+		count, humanBytes(totalSize), destDir)
+	return nil
+}
+
+func countCaptures(capturesDir string) int {
+	entries, err := os.ReadDir(capturesDir)
+	if err != nil {
+		return 0
+	}
+	return len(entries)
 }
