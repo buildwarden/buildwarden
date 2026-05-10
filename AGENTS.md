@@ -12,29 +12,32 @@ The output is a tamper-evident binary ledger of all network I/O during the build
 ## Architecture & Key Files
 
 ```
-cmd/warden/main.go                    — CLI entry point (build, shell subcommands)
-cmd/relay/main.go                     — Relay binary entry point (runs inside relay container)
-internal/inspect/inspect.go           — Ledger verification logic
+cmd/warden/main.go          — CLI entry point (build, shell, inspect, clean subcommands)
+cmd/warden/orchestrator.go  — Container lifecycle, network setup, iptables
+cmd/warden/config.go        — TOML config, runtime detection, path resolution
+cmd/warden/output.go        — Colored terminal output
+cmd/warden/build.go         — BuildEnv interface
+cmd/warden/ext.go              — Extension interface (BeforeBuild hooks)
+cmd/warden/ext_truststore.go   — Injects relay CA into system trust store
+cmd/warden/ext_jks_truststore.go — JKS keystore + MAVEN_OPTS/GRADLE_OPTS for JVM
+cmd/warden/ext_cacerts_env.go  — CA cert env vars for all non-system-CA package managers
+cmd/warden/ext_epoch.go        — Sets SOURCE_DATE_EPOCH=0 for reproducible builds
+cmd/warden/cert.go          — Certificate subject hash computation
+cmd/warden/inspect_impl.go  — Ledger verification and display logic
+cmd/warden/clean.go         — Orphaned resource cleanup
 
-internal/orchestrator/orchestrator.go — Container lifecycle, network setup, iptables
-internal/orchestrator/config.go       — TOML config, runtime detection, path resolution
-internal/orchestrator/output.go       — Colored terminal output
-internal/orchestrator/build.go        — BuildEnv interface
-internal/orchestrator/ext.go          — Extension interface (BeforeBuild hooks)
-internal/orchestrator/ext_truststore.go — Injects relay CA into build container trust store
-internal/orchestrator/ext_bazel.go    — Configures Bazel JKS truststore
-internal/orchestrator/ext_pip.go      — Sets PIP_CERT env
+cmd/relay/main.go           — Relay binary entry point (runs inside relay container)
+cmd/relay/relay.go          — HTTP/HTTPS/DNS proxy, artifact endpoint, ephemeral CA
+cmd/relay/ledger.go         — Binary ledger writer (Ed25519, chained sigs, streaming hashes)
+cmd/relay/ledger_read.go    — Re-exports from ledger/ for local use
+cmd/relay/proxy.go          — TLS interception and connection handling
+cmd/relay/fair.go           — DRR bandwidth fairness scheduler
+cmd/relay/network.go        — Network utilities
 
-relay/relay.go          — HTTP/HTTPS/DNS proxy, artifact endpoint, ephemeral CA generation
-relay/ledger.go         — Binary ledger writer (Ed25519 signing, chained signatures, streaming hashes)
-relay/ledger_read.go    — Ledger reader/verifier
-relay/proxy.go          — TLS interception and connection handling
-relay/cert.go           — Certificate subject hash computation
-relay/fair.go           — DRR bandwidth fairness scheduler
-relay/network.go        — Network utilities
+ledger/ledger.go            — Shared: wire format types, reader, verifier
 
-docs/design/            — Design documents (Ledger-Spec, Philosophy, Initial-Proposal)
-examples/               — Demo/test Dockerfiles
+docs/design/                — Design documents (Ledger-Spec, Philosophy, Initial-Proposal)
+examples/                   — Demo/test Dockerfiles
 ```
 
 ## Build & Test
@@ -44,7 +47,8 @@ make build         # Produces: warden binary
 make test          # Unit tests
 make cover         # Tests with coverage
 make lint          # golangci-lint
-go test ./relay/   # Just relay tests
+go test ./cmd/relay/   # Just relay tests
+go test ./ledger/      # Just ledger format tests
 ```
 
 ## Running

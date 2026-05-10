@@ -21,20 +21,18 @@ make clean     # Remove built binaries
 ## Project Structure
 
 ```
-cmd/warden/              CLI entry point — config loading, argument parsing
-cmd/relay/               Relay binary (runs inside the relay container)
-internal/inspect/        Ledger verification logic (used by warden inspect)
-internal/orchestrator/   Build orchestration — container lifecycle, extensions, config
-relay/                   Relay internals — proxy, ledger writer, DNS, certs, fair scheduler
+cmd/warden/              Host binary — CLI, orchestrator, inspect, extensions
+cmd/relay/               Container binary — proxy, ledger writer, DNS, TLS, fair scheduler
+ledger/                  Shared library — wire format types, reader, verification
 examples/                Example Dockerfiles
 docs/design/             Specifications and design documents
 ```
 
 ### Key boundaries
 
-- **`internal/orchestrator/`** runs on the host. It creates the network, builds the relay image, starts containers, configures iptables, and tears everything down.
-- **`relay/`** runs inside a container. It intercepts traffic, writes the ledger, and generates the ephemeral CA. It could be used as a library by other projects.
-- **`internal/inspect/`** contains the ledger verification logic, accessible via `warden inspect`.
+- **`cmd/warden/`** runs on the host. It creates the network, builds the relay image, starts containers, configures iptables, runs inspect, and tears everything down.
+- **`cmd/relay/`** runs inside a container. It intercepts traffic, writes the ledger, and generates the ephemeral CA. Fully independent of the warden binary.
+- **`ledger/`** is the only shared code — defines the binary ledger format and provides read/verify logic used by both `warden inspect` and the relay's test suite.
 
 ## Extension System
 
@@ -44,7 +42,11 @@ Extensions implement `BeforeBuild(env *CtrEnv) error` and optionally `Env() map[
 2. Write shell scripts to `.warden/ext.d/` (exec'd inside the build container)
 3. Return env vars to inject into the Dockerfile after each `FROM` line
 
-Current extensions: truststore (CA cert injection), pip (PIP_CERT), bazel (JKS truststore).
+Current extensions:
+- **truststore** — Injects CA cert into system trust store (`/etc/ssl/certs/`)
+- **jks_truststore** — Creates Java KeyStore, sets MAVEN_OPTS/GRADLE_OPTS for JVM tools
+- **cacerts_env** — Env vars for non-system-CA package managers (npm, pip, uv, poetry, conda, cargo, gem, nix, hex, composer, conan)
+- **epoch** — Sets SOURCE_DATE_EPOCH=0 for reproducible builds
 
 ## Running Integration Tests
 

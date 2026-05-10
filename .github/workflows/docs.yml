@@ -1,0 +1,46 @@
+name: docs
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'docs/book/**'
+      - '.github/workflows/docs.yml'
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mdBook
+        run: |
+          curl -sSL https://github.com/rust-lang/mdBook/releases/latest/download/mdbook-v0.4.44-x86_64-unknown-linux-gnu.tar.gz | tar xz
+          chmod +x mdbook
+          mv mdbook /usr/local/bin/
+
+      - name: Build docs
+        run: mdbook build docs/book
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: docs/site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/deploy-pages@v4
+        id: deployment

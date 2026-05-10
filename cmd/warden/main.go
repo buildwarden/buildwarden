@@ -3,8 +3,6 @@ package main
 import (
 	"os"
 
-	"warden/internal/orchestrator"
-
 	"github.com/lesiw/ctrctl"
 	"github.com/spf13/cobra"
 )
@@ -12,9 +10,12 @@ import (
 var version = "dev"
 
 var (
-	flagRuntime string
-	flagVerbose bool
-	flagColor   string
+	flagRuntime    string
+	flagVerbose    bool
+	flagColor      string
+	flagCapture    string
+	flagOutput     string
+	flagNoCompress bool
 )
 
 var rootCmd = &cobra.Command{
@@ -64,20 +65,32 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&flagColor, "color", "",
 		"color output (auto, always, never)")
 
+	buildCmd.Flags().StringVar(&flagCapture, "capture", "",
+		"capture payloads to disk (none, headers, bodies, all)")
+	buildCmd.Flags().StringVarP(&flagOutput, "output", "o", "",
+		"output directory for build results (default: warden-output)")
+	buildCmd.Flags().BoolVar(&flagNoCompress, "no-compress", false,
+		"disable zstd compression of ledger and payloads")
+	shellCmd.Flags().StringVar(&flagCapture, "capture", "",
+		"capture payloads to disk (none, headers, bodies, all)")
+	shellCmd.Flags().StringVarP(&flagOutput, "output", "o", "",
+		"output directory for build results (default: warden-output)")
+	shellCmd.Flags().BoolVar(&flagNoCompress, "no-compress", false,
+		"disable zstd compression of ledger and payloads")
+
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(shellCmd)
 }
 
 func main() {
-	orchestrator.SetVersion(version)
 	if err := rootCmd.Execute(); err != nil {
-		orchestrator.LogError(err)
+		logError(err)
 		os.Exit(1)
 	}
 }
 
-func resolveConfig() (*orchestrator.Config, error) {
-	cfg, err := orchestrator.LoadConfig()
+func resolveConfig() (*Config, error) {
+	cfg, err := LoadConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -96,12 +109,12 @@ func resolveConfig() (*orchestrator.Config, error) {
 	return cfg, nil
 }
 
-func setupRuntime(cfg *orchestrator.Config) error {
-	orchestrator.SetColorMode(cfg.Output.Color)
+func setupRuntime(cfg *Config) error {
+	setColorMode(cfg.Output.Color)
 
 	runtime := cfg.Runtime.CLI
 	if runtime == "" {
-		detected, err := orchestrator.DetectRuntime()
+		detected, err := DetectRuntime()
 		if err != nil {
 			return err
 		}
@@ -128,15 +141,32 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		path = args[0]
 	}
 
-	dockerfile, contextDir, err := orchestrator.ResolvePath(path)
+	dockerfile, contextDir, err := ResolvePath(path)
 	if err != nil {
 		return err
 	}
 
-	env := orchestrator.NewCtrEnv()
-	config := &orchestrator.BuildConfig{
+	capture := flagCapture
+	if capture == "" {
+		capture = cfg.Build.Capture
+	}
+	outputDir := flagOutput
+	if outputDir == "" {
+		outputDir = cfg.Build.OutputDir
+	}
+	compress := !flagNoCompress
+	if cfg.Build.Compress != nil && !*cfg.Build.Compress {
+		compress = false
+	}
+
+	env := NewCtrEnv()
+	config := &BuildConfig{
 		Context:       contextDir,
 		Containerfile: dockerfile,
+		Capture:       capture,
+		OutputDir:     outputDir,
+		Compress:      compress,
+		RelayImage:    cfg.Runtime.RelayImage,
 	}
 	return env.Build(config)
 }
@@ -155,15 +185,32 @@ func runShell(cmd *cobra.Command, args []string) error {
 		path = args[0]
 	}
 
-	dockerfile, contextDir, err := orchestrator.ResolvePath(path)
+	dockerfile, contextDir, err := ResolvePath(path)
 	if err != nil {
 		return err
 	}
 
-	env := orchestrator.NewCtrEnv()
-	config := &orchestrator.BuildConfig{
+	capture := flagCapture
+	if capture == "" {
+		capture = cfg.Build.Capture
+	}
+	outputDir := flagOutput
+	if outputDir == "" {
+		outputDir = cfg.Build.OutputDir
+	}
+	compress := !flagNoCompress
+	if cfg.Build.Compress != nil && !*cfg.Build.Compress {
+		compress = false
+	}
+
+	env := NewCtrEnv()
+	config := &BuildConfig{
 		Context:       contextDir,
 		Containerfile: dockerfile,
+		Capture:       capture,
+		OutputDir:     outputDir,
+		Compress:      compress,
+		RelayImage:    cfg.Runtime.RelayImage,
 	}
 	return env.Shell(config)
 }

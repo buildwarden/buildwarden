@@ -1,0 +1,4 @@
+FROM composer:2
+
+WORKDIR /app
+RUN composer require --no-interaction monolog/monolog:3.5.0

@@ -14,7 +14,6 @@ warden build examples/Dockerfile.simple
 | `Dockerfile.expanded` | Same wheel + tests + type-check | Ledger truncatability — test/lint fetches are separate entries from the build | ~3 min |
 | `Dockerfile.cryptography` | Python `cryptography` from source | Multi-ecosystem auditing: Rust/Cargo crates + pip + apt + OpenSSL | ~10 min |
 | `Dockerfile.pytorch-aarch64` | PyTorch from source (ARM64, CUDA) | Large-scale build with hundreds of network fetches, conda + pip + cmake | ~3 hrs |
-| `Dockerfile.tfexample-aarch64` | TensorFlow from source (ARM64, CUDA) | Bazel remote-fetch auditing, artifact posting of built wheel | ~4 hrs |
 
 ## Inspecting results
 
