@@ -344,10 +344,24 @@ func onRequest(req *http.Request) (*http.Request, *http.Response) {
 	return req, nil
 }
 
+func hasPathTraversal(p string) bool {
+	for _, seg := range strings.Split(p, "/") {
+		if seg == "." || seg == ".." {
+			return true
+		}
+	}
+	return false
+}
+
 func handleArtifactPost(req *http.Request) (*http.Request, *http.Response) {
 	artifactName := strings.TrimPrefix(req.URL.Path, "/")
 	if artifactName == "" {
 		artifactName = "unnamed"
+	}
+	if hasPathTraversal(artifactName) {
+		resp := newTextResponse(req, http.StatusBadRequest,
+			"invalid artifact name\n")
+		return req, resp
 	}
 
 	// Record in ledger.
@@ -437,8 +451,12 @@ func handleContextGet(
 		resp := newTextResponse(req, http.StatusBadRequest, "no path\n")
 		return req, resp
 	}
+	if hasPathTraversal(filePath) {
+		resp := newTextResponse(req, http.StatusForbidden, "forbidden\n")
+		return req, resp
+	}
 
-	fullPath := filepath.Join(contextDir, filepath.Clean(filePath))
+	fullPath := filepath.Join(contextDir, filePath)
 	if !strings.HasPrefix(fullPath, contextDir+"/") {
 		resp := newTextResponse(req, http.StatusForbidden, "forbidden\n")
 		return req, resp
