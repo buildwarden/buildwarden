@@ -3,32 +3,31 @@
 ```
 buildwarden/
 ├── cmd/
-│   ├── relay/          # Relay container entrypoint
-│   │   └── main.go
-│   └── warden/         # CLI entrypoint + subcommands
-│       ├── main.go     # Root command, build, shell
-│       ├── clean.go    # warden clean
-│       ├── inspect.go  # warden inspect (command definition)
-│       └── inspect_impl.go  # Inspect logic (verification, display)
-├── internal/
-│   └── orchestrator/   # Host-side build lifecycle
-│       ├── orchestrator.go  # Container creation, teardown, COPY rewrite
-│       ├── config.go        # Config loading (TOML)
-│       ├── output.go        # Colored terminal output
-│       ├── build.go         # BuildConfig, BuildEnv interface
-│       ├── ext.go           # Extension interface
-│       ├── ext_truststore.go  # CA cert injection
-│       ├── ext_pip.go       # pip cert config
-│       ├── ext_bazel.go     # Bazel cert config
-│       └── ext_epoch.go     # SOURCE_DATE_EPOCH
-├── relay/              # Relay library (runs inside container)
-│   ├── relay.go        # DNS, HTTP proxy, artifact handling, context server
-│   ├── proxy.go        # MITM TLS proxy
-│   ├── ledger.go       # Ledger writer (single-writer channel pattern)
-│   ├── ledger_read.go  # Ledger parser/verifier
-│   ├── cert.go         # Ephemeral CA generation
-│   ├── fair.go         # Bandwidth fairness scheduler
-│   └── network.go      # Network utilities
+│   ├── relay/          # Relay container binary
+│   │   ├── main.go        # Entrypoint, wires up ledger + listeners
+│   │   ├── relay.go       # DNS, HTTP proxy, artifact handling, context server
+│   │   ├── proxy.go       # MITM TLS proxy, connection handling
+│   │   ├── ledger.go      # Ledger writer (single-writer channel pattern)
+│   │   ├── ledger_read.go # Re-exports shared types from ledger/
+│   │   ├── fair.go        # Bandwidth fairness scheduler (DRR)
+│   │   └── network.go     # Network utilities
+│   └── warden/         # Host binary (CLI + orchestrator + inspect)
+│       ├── main.go         # Root command, build, shell
+│       ├── orchestrator.go # Container creation, teardown, COPY rewrite
+│       ├── config.go       # Config loading (TOML), runtime detection
+│       ├── output.go       # Colored terminal output
+│       ├── build.go        # BuildConfig, BuildEnv interface
+│       ├── ext.go          # Extension interface
+│       ├── ext_truststore.go # CA cert injection
+│       ├── ext_pip.go      # pip cert config
+│       ├── ext_bazel.go    # Bazel cert config
+│       ├── ext_epoch.go    # SOURCE_DATE_EPOCH
+│       ├── cert.go         # Certificate subject hash computation
+│       ├── clean.go        # warden clean
+│       ├── inspect.go      # warden inspect (command definition)
+│       └── inspect_impl.go # Inspect logic (verification, display)
+├── ledger/             # Shared library — ledger wire format
+│   └── ledger.go       # Types, reader, verifier
 ├── examples/           # Demo Dockerfiles
 ├── docs/
 │   ├── book/           # mdBook documentation (this site)
@@ -46,10 +45,9 @@ buildwarden/
 
 ## Package Boundaries
 
-- **`internal/orchestrator/`** — Host-side only. Imports `ctrctl`. Manages container lifecycle, config, extensions, COPY rewriting.
-- **`relay/`** — Container-side only. Could be used as a library. Does NOT import orchestrator.
-- **`cmd/warden/`** — CLI. Wires orchestrator + cobra. Also contains inspect logic.
-- **`cmd/relay/`** — Minimal entrypoint for the relay container binary.
+- **`cmd/warden/`** — Host-side binary. Imports `ctrctl`. Contains the CLI, orchestrator (container lifecycle, config, extensions, COPY rewriting), and inspect logic.
+- **`cmd/relay/`** — Container-side binary. Proxy, ledger writer, DNS, TLS interception. Fully independent of cmd/warden.
+- **`ledger/`** — The only shared code. Defines the binary ledger wire format types and provides read/verify logic used by `warden inspect` and the relay's test suite.
 
 ## Key Patterns
 

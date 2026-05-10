@@ -22,13 +22,13 @@ BuildWarden orchestrates two containers on an isolated Docker network (10.0.87.0
 - **Relay** (10.0.87.2) — MITM proxy + DNS + ledger writer. Runs `cmd/relay/`.
 - **Build Container** (10.0.87.3) — Rootless DinD, network-isolated via iptables. All traffic forced through relay.
 
-The orchestrator (`internal/orchestrator/`) runs on the host and manages the lifecycle. The relay (`relay/`) runs inside a container and writes the binary ledger.
+The orchestrator (`cmd/warden/`) runs on the host and manages the lifecycle. The relay (`cmd/relay/`) runs inside a container and writes the binary ledger.
 
 ### Package boundaries
 
-- `internal/orchestrator/` — Host-side: container lifecycle, config, extensions, output. Imports `ctrctl`.
-- `relay/` — Container-side: proxy, ledger, DNS, certs. Could be used as a library. Does NOT import orchestrator.
-- `internal/inspect/` — Ledger verification logic, used by `warden inspect` subcommand.
+- `cmd/warden/` — Host-side binary: CLI, orchestrator (container lifecycle, config, extensions, output), inspect. Imports `ctrctl`.
+- `cmd/relay/` — Container-side binary: proxy, ledger writer, DNS, TLS interception, fairness scheduling.
+- `ledger/` — Shared library: ledger wire format types, reader, and verification logic.
 
 ### Ledger format
 

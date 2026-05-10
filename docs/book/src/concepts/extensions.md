@@ -46,10 +46,10 @@ Extensions run in this order:
 
 ## Adding Custom Extensions
 
-Extensions are Go types in `internal/orchestrator/`. To add one:
+Extensions are Go types in `cmd/warden/`. To add one:
 
-1. Create `ext_myext.go` implementing the `Extension` interface
-2. Add it to the `exts` slice in `orchestrator.go`
+1. Create `cmd/warden/ext_myext.go` implementing the `Extension` interface
+2. Add it to the `exts` slice in `cmd/warden/orchestrator.go`
 
 ```go
 type ExtMyTool struct{}
