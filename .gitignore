@@ -1,0 +1,11 @@
+/build/
+/warden
+/warden-relay
+warden-output/
+coverage.out
+docs/site/
+warden-run.log
+out.log
+.warden/
+.claude/
+.DS_Store

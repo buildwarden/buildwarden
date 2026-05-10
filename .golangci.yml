@@ -1,0 +1,35 @@
+version: "2"
+linters:
+  enable:
+    - errname
+    - forcetypeassert
+    - gocheckcompilerdirectives
+    - gocyclo
+    - lll
+    - makezero
+  disable:
+    - unused
+  settings:
+    gocyclo:
+      min-complexity: 15
+    lll:
+      line-length: 99
+      tab-width: 8
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+formatters:
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

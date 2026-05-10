@@ -1,0 +1,9 @@
+.git
+.claude
+.DS_Store
+.warden
+warden-output
+warden
+ledger-inspect
+coverage.out
+*.log

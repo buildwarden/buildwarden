@@ -1,0 +1,6 @@
+FROM gradle:8-jdk21
+
+WORKDIR /app
+RUN gradle init --type basic --dsl groovy && \
+    printf 'plugins { id "java" }\nrepositories { mavenCentral() }\ndependencies { implementation "junit:junit:4.13.2" }\n' > build.gradle && \
+    gradle dependencies --refresh-dependencies

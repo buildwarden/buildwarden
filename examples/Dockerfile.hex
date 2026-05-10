@@ -1,0 +1,3 @@
+FROM elixir:1.17-slim
+
+RUN mix local.hex --force && mix hex.info plug

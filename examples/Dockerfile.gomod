@@ -1,0 +1,10 @@
+FROM golang:1.26
+
+# These overrides are for networks where proxy.golang.org is blocked.
+# They should not be necessary in most environments.
+ARG GOPROXY=direct
+ARG GONOSUMCHECK=*
+ARG GONOSUMDB=*
+
+WORKDIR /app
+RUN go mod init test && go get github.com/sirupsen/logrus@v1.9.3

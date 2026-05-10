@@ -1,0 +1,8 @@
+FROM python:3.12-slim
+
+RUN pip install uv
+
+WORKDIR /app
+RUN uv pip install --system matplotlib
+
+RUN python -c "import matplotlib; print(f'matplotlib {matplotlib.__version__} installed')"
