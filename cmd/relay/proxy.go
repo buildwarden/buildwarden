@@ -19,7 +19,7 @@ import (
 
 // transport is the shared HTTP transport for forwarding requests upstream.
 var transport = &http.Transport{
-	TLSClientConfig:     &tls.Config{InsecureSkipVerify: true},
+	TLSClientConfig:     &tls.Config{},
 	MaxIdleConnsPerHost: 16,
 	IdleConnTimeout:     90 * time.Second,
 }
