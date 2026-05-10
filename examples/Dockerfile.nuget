@@ -1,0 +1,4 @@
+FROM mcr.microsoft.com/dotnet/sdk:8.0
+
+WORKDIR /app
+RUN dotnet new console && dotnet add package Newtonsoft.Json --version 13.0.3

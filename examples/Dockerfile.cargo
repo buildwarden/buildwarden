@@ -1,0 +1,5 @@
+FROM rust:1-slim
+
+RUN cargo init /app
+WORKDIR /app
+RUN cargo add serde@1.0.219 && cargo fetch

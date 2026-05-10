@@ -51,6 +51,7 @@ var exts = []Extension{
 	&ExtTrustStore{},
 	&ExtPip{},
 	&ExtBazel{},
+	&ExtCACerts{},
 	&ExtEpoch{},
 }
 

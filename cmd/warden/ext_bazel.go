@@ -62,5 +62,10 @@ cp /.warden/bazel.bazelrc /etc/bazel.bazelrc
 }
 
 func (e *ExtBazel) Env() map[string]string {
-	return nil
+	jvmFlags := "-Djavax.net.ssl.trustStore=/.warden/certs.jks " +
+		"-Djavax.net.ssl.trustStorePassword=changeit"
+	return map[string]string{
+		"MAVEN_OPTS":  jvmFlags,
+		"GRADLE_OPTS": jvmFlags,
+	}
 }

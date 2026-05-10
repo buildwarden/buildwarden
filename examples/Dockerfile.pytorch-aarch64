@@ -3,6 +3,9 @@
 #   .ci/docker/manywheel/Dockerfile_cuda_aarch64
 #   .ci/pytorch/build.sh
 #
+# NOTE: Work in progress. Confirmed to reach PyTorch's own compilation
+# steps, but full validation is ongoing (requires large disk/RAM/time).
+#
 # Deviations from CI:
 #   - Uses nvidia/cuda base image instead of manylinux + manual CUDA install scripts
 #   - Skips MAGMA (cuSOLVER is default)
