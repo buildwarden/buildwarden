@@ -6,7 +6,7 @@ If you discover a security vulnerability in BuildWarden, please report it respon
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Instead, please email: **security@buildwarden.dev**
+Instead, please email: **jeffe@amazon.com (teruokun)**
 
 Include:
 - Description of the vulnerability
@@ -16,7 +16,7 @@ Include:
 
 ## Response Timeline
 
-- **Acknowledgment**: within 48 hours
+- **Acknowledgment**: within 7 days
 - **Initial assessment**: within 7 days
 - **Fix or mitigation**: targeting 30 days for critical issues
 
