@@ -344,13 +344,71 @@ func onRequest(req *http.Request) (*http.Request, *http.Response) {
 	return req, nil
 }
 
-func hasPathTraversal(p string) bool {
+const maxPathLen = 255
+
+func isSafePath(p string) bool {
+	if p == "" || len(p) > maxPathLen {
+		return false
+	}
+	if p[0] == '/' || p[len(p)-1] == '/' {
+		return false
+	}
 	for _, seg := range strings.Split(p, "/") {
-		if seg == "." || seg == ".." {
-			return true
+		if !isSafeSegment(seg) {
+			return false
 		}
 	}
-	return false
+	return true
+}
+
+func isSafeSegment(s string) bool {
+	if s == "" || s == "." || s == ".." {
+		return false
+	}
+	if s[0] == '.' || s[0] == '-' || s[0] == '_' {
+		return false
+	}
+	last := s[len(s)-1]
+	if last == '.' || last == '-' || last == '_' {
+		return false
+	}
+	for _, c := range s {
+		if !isSafeChar(c) {
+			return false
+		}
+	}
+	return true
+}
+
+func isSafeChar(c rune) bool {
+	return (c >= 'a' && c <= 'z') ||
+		(c >= 'A' && c <= 'Z') ||
+		(c >= '0' && c <= '9') ||
+		c == '-' || c == '_' || c == '.'
+}
+
+func isSafeContextPath(p string) bool {
+	if p == "" || len(p) > maxPathLen {
+		return false
+	}
+	if p[0] == '/' || p[len(p)-1] == '/' {
+		return false
+	}
+	for _, seg := range strings.Split(p, "/") {
+		if seg == "" || seg == "." || seg == ".." {
+			return false
+		}
+		last := seg[len(seg)-1]
+		if last == '.' || last == '-' || last == '_' {
+			return false
+		}
+		for _, c := range seg {
+			if !isSafeChar(c) {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 func handleArtifactPost(req *http.Request) (*http.Request, *http.Response) {
@@ -358,7 +416,7 @@ func handleArtifactPost(req *http.Request) (*http.Request, *http.Response) {
 	if artifactName == "" {
 		artifactName = "unnamed"
 	}
-	if hasPathTraversal(artifactName) {
+	if !isSafePath(artifactName) {
 		resp := newTextResponse(req, http.StatusBadRequest,
 			"invalid artifact name\n")
 		return req, resp
@@ -447,11 +505,7 @@ func handleContextGet(
 	req *http.Request,
 ) (*http.Request, *http.Response) {
 	filePath := strings.TrimPrefix(req.URL.Path, "/")
-	if filePath == "" {
-		resp := newTextResponse(req, http.StatusBadRequest, "no path\n")
-		return req, resp
-	}
-	if hasPathTraversal(filePath) {
+	if !isSafeContextPath(filePath) {
 		resp := newTextResponse(req, http.StatusForbidden, "forbidden\n")
 		return req, resp
 	}
