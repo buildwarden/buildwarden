@@ -17,11 +17,11 @@ buildwarden/
 │       ├── config.go       # Config loading (TOML), runtime detection
 │       ├── output.go       # Colored terminal output
 │       ├── build.go        # BuildConfig, BuildEnv interface
-│       ├── ext.go          # Extension interface
-│       ├── ext_truststore.go # CA cert injection
-│       ├── ext_pip.go      # pip cert config
-│       ├── ext_bazel.go    # Bazel cert config
-│       ├── ext_epoch.go    # SOURCE_DATE_EPOCH
+│       ├── ext.go              # Extension interface
+│       ├── ext_truststore.go   # System CA trust store setup
+│       ├── ext_jks_truststore.go # JKS keystore for JVM (maven, gradle, bazel)
+│       ├── ext_cacerts_env.go  # CA env vars (npm, pip, uv, nix, gem, etc.)
+│       ├── ext_epoch.go        # SOURCE_DATE_EPOCH
 │       ├── cert.go         # Certificate subject hash computation
 │       ├── clean.go        # warden clean
 │       ├── inspect.go      # warden inspect (command definition)

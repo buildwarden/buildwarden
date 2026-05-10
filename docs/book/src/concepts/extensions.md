@@ -18,21 +18,41 @@ RUN find /.warden/ext.d/ -exec sh {} \;
 
 ## Built-in Extensions
 
-### TrustStore
+### TrustStore (`ext_truststore.go`)
 
-Installs the relay's ephemeral CA certificate into the system trust store. This enables `apt`, `curl`, and other tools to trust the relay's MITM certificates.
+Installs the relay's ephemeral CA certificate into the system trust store. This enables `apt`, `apk`, `curl`, and other tools that use the system CA store to trust the relay automatically.
 
 Writes `/.warden/ca.crt` and configures `/etc/ssl/certs/`.
 
-### Pip
+### CA Cert Environment Variables (`ext_cacerts_env.go`)
 
-Sets `PIP_CERT=/etc/ssl/certs/warden.crt` so pip trusts the relay for HTTPS downloads from PyPI.
+Sets environment variables for package managers that don't use the system CA store by default:
 
-### Bazel
+| Env Var | Package Managers |
+|---------|-----------------|
+| `PIP_CERT` | pip |
+| `UV_NATIVE_TLS` | uv |
+| `REQUESTS_CA_BUNDLE` | poetry, conda, conan |
+| `NODE_EXTRA_CA_CERTS` | npm, yarn, pnpm, bun |
+| `SSL_CERT_FILE` | Ruby gem/bundler, Erlang/Elixir, general OpenSSL consumers |
+| `CURL_CA_BUNDLE` | PHP composer, libcurl-based tools |
+| `NIX_SSL_CERT_FILE` | nix |
+| `HEX_CACERTS_PATH` | Elixir hex |
 
-Configures Bazel to use the relay's certificate for remote fetches.
+All values are harmless when the corresponding tool is not installed.
 
-### Epoch
+### JKS TrustStore (`ext_jks_truststore.go`)
+
+Creates a Java KeyStore (JKS) at `/.warden/certs.jks` containing the relay CA, and sets JVM trust flags via:
+
+| Env Var | JVM Tools |
+|---------|-----------|
+| `MAVEN_OPTS` | Maven |
+| `GRADLE_OPTS` | Gradle |
+
+Also writes `/.warden/bazel.bazelrc` to `/etc/bazel.bazelrc` for Bazel's host JVM.
+
+### Epoch (`ext_epoch.go`)
 
 Sets `SOURCE_DATE_EPOCH=0` for reproducible builds. Ensures timestamps in build outputs are deterministic.
 
@@ -40,9 +60,30 @@ Sets `SOURCE_DATE_EPOCH=0` for reproducible builds. Ensures timestamps in build 
 
 Extensions run in this order:
 1. TrustStore (must be first — other extensions depend on TLS working)
-2. Pip
-3. Bazel
+2. JKS TrustStore (creates JKS from CA cert)
+3. CA Certs Env (env vars only, no file I/O)
 4. Epoch
+
+## Package Manager Compatibility
+
+Tested and verified working through warden:
+
+| Manager | Supported By |
+|---------|-------------|
+| apt, apk, dnf | TrustStore (system CA) |
+| go modules | TrustStore (system CA) |
+| cargo | TrustStore (system CA) |
+| nuget/.NET | TrustStore (system CA) |
+| gem/bundler | CA Certs Env (`SSL_CERT_FILE`) |
+| composer | CA Certs Env (`CURL_CA_BUNDLE`) |
+| npm, yarn, pnpm | CA Certs Env (`NODE_EXTRA_CA_CERTS`) |
+| pip | CA Certs Env (`PIP_CERT`) |
+| uv | CA Certs Env (`UV_NATIVE_TLS`) |
+| poetry, conda, conan | CA Certs Env (`REQUESTS_CA_BUNDLE`) |
+| nix | CA Certs Env (`NIX_SSL_CERT_FILE`) |
+| hex/mix | CA Certs Env (`HEX_CACERTS_PATH`) |
+| maven, gradle | JKS TrustStore (`MAVEN_OPTS`/`GRADLE_OPTS`) |
+| bazel | JKS TrustStore (`bazel.bazelrc`) |
 
 ## Adding Custom Extensions
 

@@ -17,11 +17,11 @@ cmd/warden/orchestrator.go  — Container lifecycle, network setup, iptables
 cmd/warden/config.go        — TOML config, runtime detection, path resolution
 cmd/warden/output.go        — Colored terminal output
 cmd/warden/build.go         — BuildEnv interface
-cmd/warden/ext.go           — Extension interface (BeforeBuild hooks)
-cmd/warden/ext_truststore.go — Injects relay CA into build container trust store
-cmd/warden/ext_bazel.go     — Configures Bazel JKS truststore
-cmd/warden/ext_pip.go       — Sets PIP_CERT env
-cmd/warden/ext_epoch.go     — Sets SOURCE_DATE_EPOCH=0 for reproducible builds
+cmd/warden/ext.go              — Extension interface (BeforeBuild hooks)
+cmd/warden/ext_truststore.go   — Injects relay CA into system trust store
+cmd/warden/ext_jks_truststore.go — JKS keystore + MAVEN_OPTS/GRADLE_OPTS for JVM
+cmd/warden/ext_cacerts_env.go  — CA cert env vars for all non-system-CA package managers
+cmd/warden/ext_epoch.go        — Sets SOURCE_DATE_EPOCH=0 for reproducible builds
 cmd/warden/cert.go          — Certificate subject hash computation
 cmd/warden/inspect_impl.go  — Ledger verification and display logic
 cmd/warden/clean.go         — Orphaned resource cleanup
