@@ -1,12 +1,14 @@
 FROM golang:1.26-bookworm AS build
 
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends curl git && \
+    apt-get install -y --no-install-recommends curl && \
     rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN GOPROXY=direct GONOSUMCHECK=* GONOSUMDB=* GOFLAGS=-insecure go mod download
+# GOPROXY=direct: proxy.golang.org is blocked on this corporate network.
+# Remove this override if building from a network with open access.
+RUN GOPROXY=direct GONOSUMCHECK=* GONOSUMDB=* go mod download
 COPY . .
 
 RUN CGO_ENABLED=0 go build -o /out/warden ./cmd/warden/

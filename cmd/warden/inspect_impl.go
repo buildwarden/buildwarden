@@ -1,4 +1,4 @@
-package inspect
+package main
 
 import (
 	"crypto/ed25519"
@@ -14,27 +14,29 @@ import (
 	"warden/relay"
 
 	"github.com/fxamacker/cbor/v2"
+	"github.com/klauspost/compress/zstd"
 )
 
-type Options struct {
+type inspectOptions struct {
 	JSON      bool
 	Verbosity int
 	Writer    io.Writer
 	Extract   string
 }
 
-func Run(path string, opts Options) error {
+func runInspectImpl(path string, opts inspectOptions) error {
 	if opts.Writer == nil {
 		opts.Writer = os.Stdout
 	}
 
-	data, err := os.ReadFile(path)
+	data, err := readLedger(path)
 	if err != nil {
 		return err
 	}
 
 	if !relay.IsValidLedger(data) {
-		return fmt.Errorf("not a valid BuildWarden ledger (invalid magic bytes)")
+		return fmt.Errorf(
+			"not a valid BuildWarden ledger (invalid magic bytes)")
 	}
 
 	result, err := relay.Verify(data)
@@ -422,4 +424,20 @@ func countCaptures(capturesDir string) int {
 		return 0
 	}
 	return len(entries)
+}
+
+func readLedger(path string) ([]byte, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	if strings.HasSuffix(path, ".zst") {
+		dec, err := zstd.NewReader(nil)
+		if err != nil {
+			return nil, fmt.Errorf("zstd init: %w", err)
+		}
+		defer dec.Close()
+		return dec.DecodeAll(data, nil)
+	}
+	return data, nil
 }

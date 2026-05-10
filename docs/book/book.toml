@@ -1,0 +1,12 @@
+[book]
+title = "BuildWarden Documentation"
+authors = ["BuildWarden Contributors"]
+language = "en"
+src = "src"
+
+[build]
+build-dir = "../../site"
+
+[output.html]
+git-repository-url = "https://github.com/buildwarden/buildwarden"
+edit-url-template = "https://github.com/buildwarden/buildwarden/edit/main/docs/book/src/{path}"

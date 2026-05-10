@@ -10,4 +10,6 @@ type BuildConfig struct {
 	Containerfile string
 	Capture       string
 	OutputDir     string
+	Compress      bool
+	RelayImage    string
 }

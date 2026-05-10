@@ -19,7 +19,8 @@ type Config struct {
 }
 
 type RuntimeConfig struct {
-	CLI string `toml:"cli"`
+	CLI        string `toml:"cli"`
+	RelayImage string `toml:"relay_image"`
 }
 
 type BuildCfg struct {
@@ -27,6 +28,7 @@ type BuildCfg struct {
 	Context    string `toml:"context"`
 	Capture    string `toml:"capture"`
 	OutputDir  string `toml:"output_dir"`
+	Compress   *bool  `toml:"compress"`
 }
 
 type OutputConfig struct {

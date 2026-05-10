@@ -12,11 +12,12 @@ import (
 var version = "dev"
 
 var (
-	flagRuntime string
-	flagVerbose bool
-	flagColor   string
-	flagCapture string
-	flagOutput  string
+	flagRuntime    string
+	flagVerbose    bool
+	flagColor      string
+	flagCapture    string
+	flagOutput     string
+	flagNoCompress bool
 )
 
 var rootCmd = &cobra.Command{
@@ -70,10 +71,14 @@ func init() {
 		"capture payloads to disk (none, headers, bodies, all)")
 	buildCmd.Flags().StringVarP(&flagOutput, "output", "o", "",
 		"output directory for build results (default: warden-output)")
+	buildCmd.Flags().BoolVar(&flagNoCompress, "no-compress", false,
+		"disable zstd compression of ledger and payloads")
 	shellCmd.Flags().StringVar(&flagCapture, "capture", "",
 		"capture payloads to disk (none, headers, bodies, all)")
 	shellCmd.Flags().StringVarP(&flagOutput, "output", "o", "",
 		"output directory for build results (default: warden-output)")
+	shellCmd.Flags().BoolVar(&flagNoCompress, "no-compress", false,
+		"disable zstd compression of ledger and payloads")
 
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(shellCmd)
@@ -152,6 +157,10 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	if outputDir == "" {
 		outputDir = cfg.Build.OutputDir
 	}
+	compress := !flagNoCompress
+	if cfg.Build.Compress != nil && !*cfg.Build.Compress {
+		compress = false
+	}
 
 	env := orchestrator.NewCtrEnv()
 	config := &orchestrator.BuildConfig{
@@ -159,6 +168,8 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		Containerfile: dockerfile,
 		Capture:       capture,
 		OutputDir:     outputDir,
+		Compress:      compress,
+		RelayImage:    cfg.Runtime.RelayImage,
 	}
 	return env.Build(config)
 }
@@ -190,6 +201,10 @@ func runShell(cmd *cobra.Command, args []string) error {
 	if outputDir == "" {
 		outputDir = cfg.Build.OutputDir
 	}
+	compress := !flagNoCompress
+	if cfg.Build.Compress != nil && !*cfg.Build.Compress {
+		compress = false
+	}
 
 	env := orchestrator.NewCtrEnv()
 	config := &orchestrator.BuildConfig{
@@ -197,6 +212,8 @@ func runShell(cmd *cobra.Command, args []string) error {
 		Containerfile: dockerfile,
 		Capture:       capture,
 		OutputDir:     outputDir,
+		Compress:      compress,
+		RelayImage:    cfg.Runtime.RelayImage,
 	}
 	return env.Shell(config)
 }

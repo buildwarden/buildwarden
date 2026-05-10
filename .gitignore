@@ -1,6 +1,8 @@
 /build/
 /warden
+/warden-relay
 warden-output/
+docs/site/
 warden-run.log
 out.log
 .warden/

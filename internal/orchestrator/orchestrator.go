@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"crypto/rand"
 	"fmt"
+	"io"
 	"math/big"
 	"os"
 	"os/exec"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/klauspost/compress/zstd"
 	"github.com/lesiw/ctrctl"
 )
 
@@ -70,8 +72,10 @@ type CtrEnv struct {
 	defaultNetwork  string
 	buildConfig     *BuildConfig
 	buildContainer  string
+	buildImage      string
 	relayContainer  string
 	relayImage      string
+	relayBuiltLocal bool
 	buildId         string
 	ledgerDir       string
 	outputDir       string
@@ -166,8 +170,7 @@ func (d *CtrEnv) createBuildEnv() error {
 		return fmt.Errorf("error creating ledger temp dir: %w", err)
 	}
 
-	log.Info("Building relay image...")
-	if err := d.buildRelayImage(); err != nil {
+	if err := d.resolveRelayImage(); err != nil {
 		return err
 	}
 	log.Info("Allocating network...")
@@ -206,8 +209,40 @@ func (d *CtrEnv) createBuildEnv() error {
 	return nil
 }
 
-func (d *CtrEnv) buildRelayImage() error {
-	// Cross-compile the relay binary for linux.
+const relayImageRepo = "ghcr.io/buildwarden/relay"
+
+func (d *CtrEnv) resolveRelayImage() error {
+	img := d.buildConfig.RelayImage
+
+	switch {
+	case img == "dev" || (img == "" && version == "dev"):
+		log.Info("Building relay from source...")
+		d.relayBuiltLocal = true
+		return d.buildRelayFromSource()
+	case img != "":
+		log.Info(fmt.Sprintf("Using relay image: %s", img))
+		d.relayImage = img
+		return d.pullRelayImage()
+	default:
+		d.relayImage = relayImageRepo + ":latest"
+		log.Info(fmt.Sprintf("Pulling relay image: %s", d.relayImage))
+		return d.pullRelayImage()
+	}
+}
+
+func (d *CtrEnv) pullRelayImage() error {
+	args := append(ctrctl.Cli, "pull", d.relayImage)
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("error pulling relay image %s: %w",
+			d.relayImage, err)
+	}
+	return nil
+}
+
+func (d *CtrEnv) buildRelayFromSource() error {
 	relayBin := filepath.Join(os.TempDir(), "warden-relay-"+d.buildId)
 	cmd := exec.Command("go", "build", "-o", relayBin, "./cmd/relay")
 	cmd.Env = append(os.Environ(), "GOOS=linux", "CGO_ENABLED=0")
@@ -218,32 +253,30 @@ func (d *CtrEnv) buildRelayImage() error {
 	}
 	defer os.Remove(relayBin)
 
-	// Build the relay container image.
-	// We need a temp build context with the binary and Dockerfile.
 	buildCtx, err := os.MkdirTemp("", "warden-relay-ctx-")
 	if err != nil {
 		return fmt.Errorf("error creating relay build context: %w", err)
 	}
 	defer os.RemoveAll(buildCtx)
 
-	// Copy binary into build context.
 	binData, err := os.ReadFile(relayBin)
 	if err != nil {
 		return fmt.Errorf("error reading relay binary: %w", err)
 	}
-	if err := os.WriteFile(filepath.Join(buildCtx, "relay"), binData, 0755); err != nil {
-		return fmt.Errorf("error writing relay binary to context: %w", err)
+	if err := os.WriteFile(
+		filepath.Join(buildCtx, "relay"), binData, 0755); err != nil {
+		return fmt.Errorf("error writing relay to context: %w", err)
 	}
 
-	// Write Dockerfile into build context.
 	dockerfile := `FROM alpine:3.20
 RUN apk add --no-cache ca-certificates
 COPY relay /usr/local/bin/relay
 EXPOSE 53/udp 80 443
 ENTRYPOINT ["relay"]
 `
-	dfPath := filepath.Join(buildCtx, "Dockerfile")
-	if err := os.WriteFile(dfPath, []byte(dockerfile), 0644); err != nil {
+	if err := os.WriteFile(
+		filepath.Join(buildCtx, "Dockerfile"),
+		[]byte(dockerfile), 0644); err != nil {
 		return fmt.Errorf("error writing relay Dockerfile: %w", err)
 	}
 
@@ -256,7 +289,6 @@ ENTRYPOINT ["relay"]
 	if err != nil {
 		return fmt.Errorf("error building relay image: %w", err)
 	}
-
 	return nil
 }
 
@@ -298,10 +330,11 @@ func (d *CtrEnv) startRelayContainer() error {
 }
 
 func (d *CtrEnv) startBuildContainer() error {
-	// The container needs --privileged for rootlesskit to create user
-	// namespaces. However, the inner dockerd and all build processes run
-	// as the unprivileged "rootless" user, which cannot modify iptables
-	// or routes in the real network namespace.
+	img, err := d.buildBuildImage()
+	if err != nil {
+		return err
+	}
+
 	id, err := ctrctl.ContainerRun(
 		&ctrctl.ContainerRunOpts{
 			Detach:     true,
@@ -311,7 +344,7 @@ func (d *CtrEnv) startBuildContainer() error {
 			Privileged: true,
 			Workdir:    "/work",
 		},
-		"docker:dind-rootless",
+		img,
 		"",
 	)
 	if err != nil {
@@ -319,6 +352,36 @@ func (d *CtrEnv) startBuildContainer() error {
 	}
 	d.buildContainer = id
 	return nil
+}
+
+func (d *CtrEnv) buildBuildImage() (string, error) {
+	buildCtx, err := os.MkdirTemp("", "warden-build-ctx-")
+	if err != nil {
+		return "", err
+	}
+	defer os.RemoveAll(buildCtx)
+
+	// Pre-configure dockerd with relay DNS so buildkit resolves through it.
+	daemonJSON := fmt.Sprintf(`{"dns": ["%s"]}`, d.subnet.relayIP)
+	os.WriteFile( //nolint:errcheck
+		filepath.Join(buildCtx, "daemon.json"), []byte(daemonJSON), 0644)
+
+	dockerfile := `FROM docker:dind-rootless
+COPY daemon.json /home/rootless/.config/docker/daemon.json
+`
+	os.WriteFile( //nolint:errcheck
+		filepath.Join(buildCtx, "Dockerfile"), []byte(dockerfile), 0644)
+
+	d.buildImage = "warden-build:" + d.buildId
+	_, err = ctrctl.ImageBuild(
+		&ctrctl.ImageBuildOpts{Tag: d.buildImage},
+		buildCtx,
+		"",
+	)
+	if err != nil {
+		return "", fmt.Errorf("error building build image: %w", err)
+	}
+	return d.buildImage, nil
 }
 
 func (d *CtrEnv) configureBuildContainer() error {
@@ -442,8 +505,11 @@ func (d *CtrEnv) teardownBuildEnv() {
 			log.Warn(fmt.Sprintf("container cleanup: %s", err))
 		}
 	}
-	if d.relayImage != "" {
+	if d.relayBuiltLocal && d.relayImage != "" {
 		_, _ = ctrctl.ImageRm(nil, d.relayImage)
+	}
+	if d.buildImage != "" {
+		_, _ = ctrctl.ImageRm(nil, d.buildImage)
 	}
 	if d.isolatedNetwork != "" {
 		_, err := ctrctl.NetworkRm(nil, d.isolatedNetwork)
@@ -468,17 +534,43 @@ func (d *CtrEnv) collectRelayLogs() {
 }
 
 func (d *CtrEnv) collectOutput() {
-	// Move ledger directory contents into output dir.
-	entries, err := os.ReadDir(d.ledgerDir)
-	if err != nil {
-		return
+	// Collect ledger (compress if enabled).
+	ledgerSrc := filepath.Join(d.ledgerDir, "ledger")
+	if d.buildConfig.Compress {
+		d.compressFile(ledgerSrc,
+			filepath.Join(d.outputDir, "ledger.zst"))
+	} else {
+		os.Rename(ledgerSrc, //nolint:errcheck
+			filepath.Join(d.outputDir, "ledger"))
 	}
-	for _, entry := range entries {
-		src := filepath.Join(d.ledgerDir, entry.Name())
-		dst := filepath.Join(d.outputDir, entry.Name())
-		os.Rename(src, dst) //nolint:errcheck
+
+	// Collect CA cert.
+	caSrc := filepath.Join(d.ledgerDir, "ca.cert.pem")
+	if d.buildConfig.Compress {
+		d.compressFile(caSrc,
+			filepath.Join(d.outputDir, "ca.cert.pem.zst"))
+	} else {
+		os.Rename(caSrc, //nolint:errcheck
+			filepath.Join(d.outputDir, "ca.cert.pem"))
 	}
-	os.Remove(d.ledgerDir) //nolint:errcheck
+
+	// Collect artifacts by name (resolve symlinks to get real content).
+	artDir := filepath.Join(d.ledgerDir, "artifacts")
+	if entries, err := os.ReadDir(artDir); err == nil {
+		outArt := filepath.Join(d.outputDir, "artifacts")
+		os.MkdirAll(outArt, 0755) //nolint:errcheck
+		for _, entry := range entries {
+			src := filepath.Join(artDir, entry.Name())
+			real, err := filepath.EvalSymlinks(src)
+			if err != nil {
+				real = src
+			}
+			os.Rename(real, //nolint:errcheck
+				filepath.Join(outArt, entry.Name()))
+		}
+	}
+
+	os.RemoveAll(d.ledgerDir) //nolint:errcheck
 
 	// Write submitted Dockerfile.
 	if d.buildConfig.Containerfile != "" {
@@ -498,6 +590,84 @@ func (d *CtrEnv) collectOutput() {
 			filepath.Join(d.outputDir, "Dockerfile.actual"),
 			data, 0644)
 	}
+}
+
+func (d *CtrEnv) moveDir(src, dst string) {
+	entries, err := os.ReadDir(src)
+	if err != nil {
+		return
+	}
+	for _, entry := range entries {
+		s := filepath.Join(src, entry.Name())
+		if d.buildConfig.Compress {
+			d.compressFile(s, filepath.Join(dst, entry.Name()+".zst"))
+		} else {
+			os.Rename(s, filepath.Join(dst, entry.Name())) //nolint:errcheck
+		}
+	}
+}
+
+// compressedMagic identifies already-compressed formats by their first bytes.
+var compressedMagic = [][]byte{
+	{0x1f, 0x8b},             // gzip
+	{0x28, 0xb5, 0x2f, 0xfd}, // zstd
+	{0xfd, 0x37, 0x7a, 0x58}, // xz
+	{0x50, 0x4b, 0x03, 0x04}, // zip/jar/whl
+	{0x42, 0x5a, 0x68},       // bzip2
+}
+
+func isCompressedFile(path string) bool {
+	f, err := os.Open(path)
+	if err != nil {
+		return false
+	}
+	defer f.Close()
+	buf := make([]byte, 4)
+	n, _ := f.Read(buf)
+	for _, magic := range compressedMagic {
+		if n >= len(magic) {
+			match := true
+			for i, b := range magic {
+				if buf[i] != b {
+					match = false
+					break
+				}
+			}
+			if match {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (d *CtrEnv) compressFile(src, dst string) {
+	if isCompressedFile(src) {
+		uncompDst := strings.TrimSuffix(dst, ".zst")
+		os.Rename(src, uncompDst) //nolint:errcheck
+		return
+	}
+
+	in, err := os.Open(src)
+	if err != nil {
+		return
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return
+	}
+
+	enc, err := zstd.NewWriter(out)
+	if err != nil {
+		out.Close()
+		os.Remove(dst) //nolint:errcheck
+		return
+	}
+	io.Copy(enc, in) //nolint:errcheck
+	enc.Close()
+	out.Close()
 }
 
 func (d *CtrEnv) doBuild() error {

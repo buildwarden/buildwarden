@@ -5,127 +5,144 @@
 [![Release](https://img.shields.io/github/v/release/buildwarden/buildwarden)](https://github.com/buildwarden/buildwarden/releases/latest)
 [![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
 
-BuildWarden produces a cryptographically-signed, tamper-evident ledger of every network resource consumed during a software build. It enables build providers to independently verify build integrity — separately from the source author's own attestations.
+BuildWarden produces a cryptographically-signed, tamper-evident ledger of **every input** to a software build — network fetches, source files, base images, and build artifacts. It enables independent verification of build integrity without trusting the build author.
+
+## Quick Start
+
+### Install
+
+```sh
+curl -sSfL https://raw.githubusercontent.com/buildwarden/buildwarden/main/install.sh | sh
+```
+
+Or download from [Releases](https://github.com/buildwarden/buildwarden/releases), or build from source:
+
+```sh
+make build
+```
+
+Requires a container runtime: [Finch](https://github.com/runfinch/finch), Docker, or Podman.
+
+### Run a build
+
+```sh
+warden build
+```
+
+That's it. BuildWarden finds the Dockerfile in the current directory, runs the build in a network-audited container, and writes results to `warden-output/`:
+
+```
+warden-output/
+├── ledger.zst              # Cryptographic ledger (zstd compressed)
+├── Dockerfile.submitted    # What you wrote
+├── Dockerfile.actual       # What actually ran (with warden injections)
+├── ca.cert.pem.zst         # Ephemeral CA used for TLS interception
+├── relay.log               # Relay DNS/HTTP/artifact event log
+└── artifacts/              # Build outputs posted to the ledger
+    └── myapp-1.0.0.whl
+```
+
+### Inspect the ledger
+
+```sh
+warden inspect warden-output
+```
+
+```
+════════════════════════════════════════════════════════════════════════════════
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  ✅
+════════════════════════════════════════════════════════════════════════════════
+✅ GET https://registry-1.docker.io/v2/library/python/manifests/3.12-slim (10373 bytes)
+✅ GET http://deb.debian.org/debian/dists/bookworm/main/binary-arm64/... (8690780 bytes)
+✅ GET http://cwd/requirements.txt (42 bytes)
+✅ GET https://files.pythonhosted.org/packages/.../requests-2.32.3.tar.gz (131218 bytes)
+✅ ARTIFACT POST http://artifacts/requests-2.32.3-py3-none-any.whl (65027 bytes)
+
+════════════════════════════════════════════════════════════════════════════════
+  SUMMARY: 255 records, 64 requests, 59.8 MB audited, 1 artifact(s)
+  SIGNATURES: ✅ All 256 signatures valid
+  COMPLETENESS: ✅ All channels closed
+════════════════════════════════════════════════════════════════════════════════
+```
+
+Every input is individually hashed and signed into the ledger — source files (via `http://cwd/`), network fetches, container images, and posted artifacts.
 
 ## How It Works
 
 BuildWarden orchestrates two containers on an isolated network:
 
 ```
-┌─────────────────────────────────────────────────────────┐
-│                    Host Machine                          │
-│                                                         │
-│  ┌─────────────┐         ┌─────────────────────────┐   │
-│  │   Relay     │◄────────│    Build Container      │   │
-│  │  10.0.87.2  │         │      10.0.87.3          │   │
-│  │             │         │                         │   │
-│  │  • DNS      │         │  • Docker-in-Docker     │   │
-│  │  • HTTP/S   │  only   │  • Network isolated     │   │
-│  │  • Ledger   │◄─conn──►│  • iptables enforced    │   │
-│  │             │         │                         │   │
-│  └──────┬──────┘         └─────────────────────────┘   │
-│         │                                               │
-│         ▼ external                                      │
-│    ┌─────────┐                                          │
-│    │ Internet│                                          │
-│    └─────────┘                                          │
-└─────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────────────────────────────┐
+│  Host                                                        │
+│                                                              │
+│  ┌──────────────┐           ┌──────────────────────────┐    │
+│  │    Relay     │◄──────────│     Build Container      │    │
+│  │              │           │                          │    │
+│  │  • DNS       │   only    │  • Rootless DinD         │    │
+│  │  • HTTP/S    │◄──conn───►│  • iptables isolated     │    │
+│  │  • Ledger    │           │  • Source via relay      │    │
+│  │  • Context   │           │                          │    │
+│  └──────┬───────┘           └──────────────────────────┘    │
+│         │                                                    │
+│         ▼ external                                           │
+│    ┌──────────┐                                              │
+│    │ Internet │                                              │
+│    └──────────┘                                              │
+└──────────────────────────────────────────────────────────────┘
 ```
 
-- **Relay** — TLS-terminating MITM proxy that intercepts all HTTP/HTTPS traffic, records it to the ledger, and serves as DNS resolver. An ephemeral CA is generated per-build; its private key is destroyed with the container.
-- **Build Container** — Rootless Docker-in-Docker environment. Network-isolated via iptables + route replacement so all traffic must flow through the relay.
+- **Relay** — MITM proxy intercepting all traffic. Records every byte to the ledger. Serves source files from the build context. Ephemeral CA per-build (destroyed on teardown).
+- **Build Container** — Rootless Docker-in-Docker. Network-isolated: all HTTP/HTTPS is DNAT'd to the relay, all other traffic is dropped. Source files enter exclusively through the relay for full provenance.
+- **Dynamic subnets** — Each build allocates a unique /29 from `100.64.87.0/24`, enabling concurrent builds on the same host.
 
-The output is a binary ledger with chained Ed25519 signatures — altering, reordering, or removing any entry invalidates all subsequent signatures.
-
-## Quick Start
-
-### Install
-
-Download a prebuilt binary from [Releases](https://github.com/buildwarden/buildwarden/releases), or build from source:
+## Commands
 
 ```sh
-make build
-```
-
-### Run a build
-
-```sh
-# Use a Dockerfile in the current directory
-warden build
-
-# Specify a project directory
-warden build ./my-project
-
-# Specify a Dockerfile directly (context = parent directory)
-warden build ./my-project/Dockerfile.prod
-```
-
-### Inspect a ledger
-
-```sh
-warden inspect /path/to/ledger
-
-# Verbose output (shows individual records)
-warden inspect --verbosity 1 /path/to/ledger
-
-# Machine-readable output
-warden inspect --json /path/to/ledger
+warden build [path]           # Run a build with full auditing
+warden build -o ./my-output   # Custom output directory
+warden build --no-compress    # Skip zstd compression of ledger
+warden inspect <path>         # Verify and display a ledger
+warden inspect --json <path>  # Machine-readable output
+warden shell [path]           # Interactive shell in audited env
+warden clean                  # Remove orphaned containers/networks
 ```
 
 ## Configuration
 
-BuildWarden looks for configuration in two places (merged in order):
-
-1. `~/.config/warden/config.toml` — user defaults
-2. `./warden.toml` — project overrides
-
 ```toml
+# ~/.config/warden/config.toml or ./warden.toml
+
 [runtime]
-cli = "finch"          # container runtime (finch, docker, podman)
+cli = "finch"                # container runtime (finch, docker, podman)
+relay_image = ""             # relay image override ("dev" = build from source)
 
 [build]
-dockerfile = ""        # override Dockerfile discovery
-context = ""           # override context directory
-capture = ""           # payload capture (none, headers, bodies, all)
+output_dir = "warden-output" # where results are written
+compress = true              # zstd compression of ledger and payloads
+capture = ""                 # payload capture (none, headers, bodies, all)
 
 [output]
-color = "auto"         # auto, always, never
+color = "auto"               # auto, always, never
 verbose = false
 ```
 
-Environment variables override config: `WARDEN_CTR_CLI`, `NO_COLOR`, `WARDEN_VERBOSE`.
+Environment overrides: `WARDEN_CTR_CLI`, `NO_COLOR`, `WARDEN_VERBOSE`.
 
-CLI flags override everything: `--runtime`, `--color`, `--capture`, `-v`.
+## Examples
 
-### Runtime autodetection
-
-If no runtime is configured, BuildWarden probes for: **finch** → docker → podman (first functional one wins).
-
-## Ledger Format
-
-The ledger is a binary file with:
-
-- **Chained Ed25519 signatures** — each record signs over the previous signature
-- **Multi-hash payload identity** — blake2b_256, sha256, sha1, md5 for every payload
-- **Redactable metadata** — CBOR-encoded, not part of signatures; can be stripped without affecting integrity
-- **Artifact records** — build outputs are structurally distinguished from network inputs
-
-See [docs/design/Ledger-Spec.md](docs/design/Ledger-Spec.md) for the full specification.
-
-## Demo Cases
-
-| Dockerfile | Description | Time |
-|-----------|-------------|------|
-| `examples/Dockerfile.simple` | Build Python `requests` wheel from source, post artifact | ~1 min |
-| `examples/Dockerfile.expanded` | Build + test + type-check requests (shows ledger truncatability) | ~3 min |
-| `examples/Dockerfile.cryptography` | Python `cryptography` from source (Rust/Cargo + pip + apt) | ~10 min |
-| `examples/Dockerfile.pytorch-aarch64` | PyTorch from source with CUDA (pinnacle scale test) | ~3 hrs |
+| Dockerfile | What it builds | Time |
+|-----------|---------------|------|
+| `examples/Dockerfile.simple` | Python `requests` wheel from sdist | ~1 min |
+| `examples/Dockerfile.expanded` | Same + tests + type-check (ledger truncatability) | ~3 min |
+| `examples/Dockerfile.cryptography` | Python `cryptography` (Rust/Cargo + pip + apt) | ~3 min |
+| `examples/Dockerfile.pytorch-aarch64` | PyTorch from source, CUDA, aarch64 | ~3 hrs |
 
 ```sh
 warden build examples/Dockerfile.simple
+warden inspect warden-output
 ```
 
-## Design Documents
+## Design
 
 - [Ledger Specification](docs/design/Ledger-Spec.md)
 - [Philosophy](docs/design/Philosophy.md)
@@ -133,7 +150,7 @@ warden build examples/Dockerfile.simple
 
 ## Development
 
-See [DEVELOPING.md](DEVELOPING.md) for build instructions, project structure, and contribution guidelines.
+See [DEVELOPING.md](DEVELOPING.md) for build instructions and project structure.
 
 ## License
 
