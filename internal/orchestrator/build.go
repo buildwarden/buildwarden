@@ -8,4 +8,6 @@ type BuildEnv interface {
 type BuildConfig struct {
 	Context       string
 	Containerfile string
+	Capture       string
+	OutputDir     string
 }

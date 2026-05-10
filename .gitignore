@@ -1,5 +1,8 @@
 /build/
 /warden
+warden-output/
 warden-run.log
 out.log
 .warden/
+.claude/
+.DS_STORE

@@ -1,10 +1,13 @@
-.PHONY: build test lint fmt tidy cover clean
+.PHONY: build test integration-test lint fmt tidy cover clean
 
 build:
 	go build -o warden ./cmd/warden/
 
 test:
 	go test ./...
+
+integration-test:
+	./test-integration.sh
 
 lint:
 	golangci-lint run

@@ -1,10 +1,12 @@
-FROM golang:1.26-alpine AS build
+FROM golang:1.26-bookworm AS build
 
-RUN apk add --no-cache curl git
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends curl git && \
+    rm -rf /var/lib/apt/lists/*
 
 WORKDIR /src
 COPY go.mod go.sum ./
-RUN go mod download
+RUN GOPROXY=direct GONOSUMCHECK=* GONOSUMDB=* GOFLAGS=-insecure go mod download
 COPY . .
 
 RUN CGO_ENABLED=0 go build -o /out/warden ./cmd/warden/

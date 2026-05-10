@@ -21,10 +21,12 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/miekg/dns"
+	"golang.org/x/crypto/blake2b"
 )
 
 // CA_CERT and CA_KEY hold the PEM-encoded ephemeral CA certificate and key.
@@ -92,19 +94,69 @@ func CAFingerprint() string {
 
 // reqSigs maps in-flight requests to their ledger open signatures.
 var (
-	reqSigs   = make(map[*http.Request][]byte)
-	reqSigsMu sync.Mutex
+	reqSigs      = make(map[*http.Request][]byte)
+	reqBaseNames = make(map[*http.Request]string)
+	reqSigsMu    sync.Mutex
 )
 
 // reservedHosts are hostnames intercepted by the relay rather than forwarded.
 var reservedHosts = map[string]bool{
 	"artifacts": true,
+	"cwd":       true,
+}
+
+// contextDir is the path to the mounted build context, served via "cwd".
+var contextDir string
+
+func SetContextDir(dir string) { contextDir = dir }
+
+// selfIP is the relay's own IP, detected from network interfaces at startup.
+var selfIP net.IP
+
+func DetectSelfIP() error {
+	addrs, err := net.InterfaceAddrs()
+	if err != nil {
+		return fmt.Errorf("cannot enumerate interfaces: %w", err)
+	}
+	for _, addr := range addrs {
+		ipNet, ok := addr.(*net.IPNet)
+		if !ok {
+			continue
+		}
+		ip := ipNet.IP.To4()
+		if ip != nil && !ip.IsLoopback() {
+			selfIP = ip
+			return nil
+		}
+	}
+	return fmt.Errorf("no non-loopback IPv4 address found")
 }
 
 // outDir is the ledger output directory, set by SetOutDir.
 var outDir string
 
 var activeLedger *Ledger
+
+// CaptureConfig controls what payload data is saved to disk.
+type CaptureConfig struct {
+	Headers bool
+	Bodies  bool
+}
+
+var captureConfig CaptureConfig
+var captureSeq atomic.Int64
+
+// SetCaptureMode configures payload capture from a mode string.
+func SetCaptureMode(mode string) {
+	switch mode {
+	case "headers":
+		captureConfig = CaptureConfig{Headers: true}
+	case "bodies":
+		captureConfig = CaptureConfig{Bodies: true}
+	case "all":
+		captureConfig = CaptureConfig{Headers: true, Bodies: true}
+	}
+}
 
 // Schema indices matching the default schema list order.
 const (
@@ -120,7 +172,33 @@ func SetOutDir(dir string) { outDir = dir }
 // SetLedger sets the active ledger writer (called from cmd/relay/main.go).
 func SetLedger(l *Ledger) { activeLedger = l }
 
+// upstreamDNS is the upstream resolver address, detected at startup.
+var upstreamDNS string
+
+// DetectUpstreamDNS reads /etc/resolv.conf to find the upstream resolver
+// before we start our own DNS server (avoiding self-referential loops).
+func DetectUpstreamDNS() {
+	data, err := os.ReadFile("/etc/resolv.conf")
+	if err != nil {
+		upstreamDNS = "8.8.8.8:53"
+		return
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && fields[0] == "nameserver" {
+			ns := fields[1]
+			if ns != selfIP.String() && ns != "127.0.0.1" {
+				upstreamDNS = ns + ":53"
+				return
+			}
+		}
+	}
+	upstreamDNS = "8.8.8.8:53"
+}
+
 func RunDns(addr net.TCPAddr) error {
+	dnsClient := &dns.Client{Timeout: 5 * time.Second}
+
 	server := &dns.Server{Addr: addr.String(), Net: "udp"}
 	dns.HandleFunc(".", func(w dns.ResponseWriter, r *dns.Msg) {
 		m := new(dns.Msg)
@@ -128,7 +206,6 @@ func RunDns(addr net.TCPAddr) error {
 		for _, q := range m.Question {
 			name := strings.TrimSuffix(q.Name, ".")
 
-			// Reserved hostnames resolve to the relay itself.
 			if reservedHosts[name] {
 				if q.Qtype == dns.TypeA {
 					m.Answer = append(m.Answer, &dns.A{
@@ -138,7 +215,7 @@ func RunDns(addr net.TCPAddr) error {
 							Class:  dns.ClassINET,
 							Ttl:    0,
 						},
-						A: net.ParseIP("10.0.87.2"),
+						A: selfIP,
 					})
 				}
 				if err := w.WriteMsg(m); err != nil {
@@ -146,47 +223,25 @@ func RunDns(addr net.TCPAddr) error {
 				}
 				return
 			}
-
-			addrs, err := net.LookupHost(q.Name)
-			if err != nil {
-				log.Printf("DNS proxy error: %s\n", err)
-				return
-			}
-			if q.Qtype != dns.TypeA && q.Qtype != dns.TypeAAAA {
-				continue
-			}
-			v4 := q.Qtype == dns.TypeA
-
-			for _, a := range addrs {
-				ip := net.ParseIP(a)
-				if v4 && ip.To4() != nil {
-					m.Answer = append(m.Answer, &dns.A{
-						Hdr: dns.RR_Header{
-							Name:   q.Name,
-							Rrtype: dns.TypeA,
-							Class:  dns.ClassINET,
-							Ttl:    0,
-						},
-						A: ip,
-					})
-				} else if !v4 && ip.To4() == nil {
-					m.Answer = append(m.Answer, &dns.AAAA{
-						Hdr: dns.RR_Header{
-							Name:   q.Name,
-							Rrtype: dns.TypeAAAA,
-							Class:  dns.ClassINET,
-							Ttl:    0,
-						},
-						AAAA: ip,
-					})
-				}
-			}
 		}
-		if err := w.WriteMsg(m); err != nil {
-			log.Printf("DNS proxy error: %s\n", err)
+
+		// Forward the entire query upstream (preserves all question types).
+		resp, _, err := dnsClient.Exchange(r, upstreamDNS)
+		if err != nil {
+			log.Printf("DNS forward error (%s): %v", upstreamDNS, err)
+			m.Rcode = dns.RcodeServerFailure
+			w.WriteMsg(m) //nolint:errcheck
 			return
 		}
+		resp.Id = r.Id
+		if err := w.WriteMsg(resp); err != nil {
+			log.Printf("DNS proxy error: %s\n", err)
+		}
 	})
+	// Also listen on TCP (fallback for clients behind UDP-blocking networks).
+	tcpServer := &dns.Server{Addr: addr.String(), Net: "tcp"}
+	go tcpServer.ListenAndServe() //nolint:errcheck
+
 	return server.ListenAndServe()
 }
 
@@ -225,11 +280,20 @@ func onRequest(req *http.Request) (*http.Request, *http.Response) {
 		return req, nil
 	}
 
-	// Intercept artifact submissions (POST to reserved hosts).
 	host := strings.Split(req.Host, ":")[0]
-	if reservedHosts[host] && req.Method == "POST" {
+
+	// Intercept artifact submissions (POST to reserved hosts).
+	if host == "artifacts" && req.Method == "POST" {
 		return handleArtifactPost(req)
 	}
+
+	// Serve build context files (GET from "cwd" hostname).
+	if host == "cwd" && req.Method == "GET" {
+		return handleContextGet(req)
+	}
+
+	seq := captureSeq.Add(1)
+	baseName := captureBaseName(seq, req.Method, host, req.URL.Path)
 
 	// Synchronous open — blocks until signature is on the ledger.
 	openMeta, _ := cbor.Marshal(map[string]any{
@@ -251,8 +315,15 @@ func onRequest(req *http.Request) (*http.Request, *http.Response) {
 		openSig, -int64(len(reqHeaders)), hb, schemaHTTPHeaders, headersMeta,
 	)
 
+	if captureConfig.Headers {
+		savePayloadBytes(reqHeaders, baseName, "request-headers")
+	}
+
 	// If request has a body (POST/PUT), stream it through hashers.
 	if req.Body != nil && req.ContentLength != 0 {
+		if captureConfig.Bodies {
+			req.Body = newCapturingReadCloser(req.Body, baseName, "request-body")
+		}
 		hasher := NewStreamingHasher(activeLedger.hashes)
 		req.Body = &hashingReadCloser{
 			source: req.Body,
@@ -266,9 +337,10 @@ func onRequest(req *http.Request) (*http.Request, *http.Response) {
 		}
 	}
 
-	// Store the open signature for the response handler.
+	// Store the open signature and capture base name for the response handler.
 	reqSigsMu.Lock()
 	reqSigs[req] = openSig
+	reqBaseNames[req] = baseName
 	reqSigsMu.Unlock()
 	return req, nil
 }
@@ -358,6 +430,56 @@ func handleArtifactPost(req *http.Request) (*http.Request, *http.Response) {
 	return req, resp
 }
 
+func handleContextGet(
+	req *http.Request,
+) (*http.Request, *http.Response) {
+	filePath := strings.TrimPrefix(req.URL.Path, "/")
+	if filePath == "" {
+		resp := newTextResponse(req, http.StatusBadRequest, "no path\n")
+		return req, resp
+	}
+
+	fullPath := filepath.Join(contextDir, filepath.Clean(filePath))
+	if !strings.HasPrefix(fullPath, contextDir+"/") {
+		resp := newTextResponse(req, http.StatusForbidden, "forbidden\n")
+		return req, resp
+	}
+
+	data, err := os.ReadFile(fullPath)
+	if err != nil {
+		resp := newTextResponse(
+			req, http.StatusNotFound,
+			fmt.Sprintf("not found: %s\n", filePath))
+		return req, resp
+	}
+
+	openMeta, _ := cbor.Marshal(map[string]any{
+		"method":   "GET",
+		"url":      req.URL.String(),
+		"protocol": req.Proto,
+	})
+	openSig := activeLedger.Open(schemaHTTPOpen, openMeta)
+
+	hashBlock := activeLedger.ComputeHashBlock(data)
+	closeMeta, _ := cbor.Marshal(map[string]any{
+		"path": filePath,
+	})
+	activeLedger.Close(openSig, int64(len(data)), hashBlock,
+		schemaHTTPBody, closeMeta)
+
+	resp := &http.Response{
+		StatusCode:    http.StatusOK,
+		Status:        "200 OK",
+		Proto:         "HTTP/1.1",
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		Header:        http.Header{"Content-Type": {"application/octet-stream"}},
+		Body:          io.NopCloser(strings.NewReader(string(data))),
+		ContentLength: int64(len(data)),
+	}
+	return req, resp
+}
+
 func onResponse(
 	res *http.Response, req *http.Request,
 ) *http.Response {
@@ -367,8 +489,10 @@ func onResponse(
 
 	reqSigsMu.Lock()
 	openSig, ok := reqSigs[req]
+	baseName := reqBaseNames[req]
 	if ok {
 		delete(reqSigs, req)
+		delete(reqBaseNames, req)
 	}
 	reqSigsMu.Unlock()
 	if !ok {
@@ -389,6 +513,10 @@ func onResponse(
 		openSig, int64(len(respHeaders)), hb, schemaHTTPHeaders, headersMeta,
 	)
 
+	if captureConfig.Headers {
+		savePayloadBytes(respHeaders, baseName, "response-headers")
+	}
+
 	// For responses with no body (304, 204, 1xx), close immediately.
 	if res.StatusCode == http.StatusNotModified ||
 		res.StatusCode == http.StatusNoContent ||
@@ -400,6 +528,11 @@ func onResponse(
 
 	// Apply bandwidth fairness.
 	res.Body = newFairReader(res.Body, res.ContentLength)
+
+	// Capture response body to disk if configured.
+	if captureConfig.Bodies {
+		res.Body = newCapturingReadCloser(res.Body, baseName, "")
+	}
 
 	// Stream body through hashers; close entry written on EOF.
 	res.Body = newLedgerBody(res.Body, openSig, res.StatusCode)
@@ -621,4 +754,128 @@ var authHeaders = map[string]bool{
 
 func isAuthHeader(name string) bool {
 	return authHeaders[http.CanonicalHeaderKey(name)]
+}
+
+// captureBaseName builds a human-readable base name for capture symlinks.
+func captureBaseName(seq int64, method, host, path string) string {
+	slug := strings.ReplaceAll(host, ":", "-")
+	p := strings.TrimPrefix(path, "/")
+	p = strings.ReplaceAll(p, "/", "-")
+	if len(p) > 80 {
+		p = p[:80]
+	}
+	if p != "" {
+		slug += "-" + p
+	}
+	return fmt.Sprintf("%03d-%s-%s", seq, method, slug)
+}
+
+// savePayloadBytes writes data to payloads/{hash} and creates a capture symlink.
+func savePayloadBytes(data []byte, baseName, suffix string) {
+	if len(data) == 0 {
+		return
+	}
+	hash := primaryHash(data)
+	payloadPath := filepath.Join(outDir, "payloads", hash)
+	if _, err := os.Stat(payloadPath); os.IsNotExist(err) {
+		os.WriteFile(payloadPath, data, 0644) //nolint:errcheck
+	}
+	symName := baseName
+	if suffix != "" {
+		symName += "." + suffix
+	}
+	symPath := filepath.Join(outDir, "captures", symName)
+	os.Symlink(filepath.Join("..", "payloads", hash), symPath) //nolint:errcheck
+}
+
+// savePayloadFile renames a temp file to payloads/{hash} and creates a symlink.
+func savePayloadFile(tmpPath string, hashBlock []byte, baseName, suffix string) {
+	hash := hex.EncodeToString(hashBlock[:32])
+	payloadPath := filepath.Join(outDir, "payloads", hash)
+	if _, err := os.Stat(payloadPath); os.IsNotExist(err) {
+		os.Rename(tmpPath, payloadPath) //nolint:errcheck
+	} else {
+		os.Remove(tmpPath) //nolint:errcheck
+	}
+	symName := baseName
+	if suffix != "" {
+		symName += "." + suffix
+	}
+	symPath := filepath.Join(outDir, "captures", symName)
+	os.Symlink(filepath.Join("..", "payloads", hash), symPath) //nolint:errcheck
+}
+
+func primaryHash(data []byte) string {
+	h, _ := blake2b.New256(nil)
+	h.Write(data)
+	return hex.EncodeToString(h.Sum(nil))
+}
+
+// capturingReadCloser wraps a body reader, writing all bytes to a temp file
+// for later capture storage. It composes with hashingReadCloser/ledgerBody.
+type capturingReadCloser struct {
+	source   io.ReadCloser
+	tmp      *os.File
+	baseName string
+	suffix   string
+	hasher   *StreamingHasher
+	done     bool
+}
+
+func newCapturingReadCloser(
+	source io.ReadCloser, baseName, suffix string,
+) *capturingReadCloser {
+	tmp, err := os.CreateTemp(filepath.Join(outDir, "payloads"), "cap-*")
+	if err != nil {
+		log.Printf("capture: error creating temp file: %v", err)
+		return &capturingReadCloser{source: source, done: true}
+	}
+	return &capturingReadCloser{
+		source:   source,
+		tmp:      tmp,
+		baseName: baseName,
+		suffix:   suffix,
+		hasher:   NewStreamingHasher([]string{"blake2b_256"}),
+	}
+}
+
+func (c *capturingReadCloser) Read(p []byte) (int, error) {
+	n, err := c.source.Read(p)
+	if n > 0 && c.tmp != nil {
+		c.tmp.Write(p[:n])  //nolint:errcheck
+		c.hasher.Write(p[:n]) //nolint:errcheck
+	}
+	if err == io.EOF && !c.done {
+		c.done = true
+		c.finalize()
+	}
+	return n, err
+}
+
+func (c *capturingReadCloser) Close() error {
+	if !c.done {
+		c.done = true
+		buf := make([]byte, 32*1024)
+		for {
+			n, err := c.source.Read(buf)
+			if n > 0 && c.tmp != nil {
+				c.tmp.Write(buf[:n])  //nolint:errcheck
+				c.hasher.Write(buf[:n]) //nolint:errcheck
+			}
+			if err != nil {
+				break
+			}
+		}
+		c.finalize()
+	}
+	return c.source.Close()
+}
+
+func (c *capturingReadCloser) finalize() {
+	if c.tmp == nil {
+		return
+	}
+	c.tmp.Close()
+	hashBlock, _ := c.hasher.Finish()
+	savePayloadFile(c.tmp.Name(), hashBlock, c.baseName, c.suffix)
 }

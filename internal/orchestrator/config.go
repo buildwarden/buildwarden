@@ -25,6 +25,8 @@ type RuntimeConfig struct {
 type BuildCfg struct {
 	Dockerfile string `toml:"dockerfile"`
 	Context    string `toml:"context"`
+	Capture    string `toml:"capture"`
+	OutputDir  string `toml:"output_dir"`
 }
 
 type OutputConfig struct {

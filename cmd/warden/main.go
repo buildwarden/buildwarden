@@ -15,6 +15,8 @@ var (
 	flagRuntime string
 	flagVerbose bool
 	flagColor   string
+	flagCapture string
+	flagOutput  string
 )
 
 var rootCmd = &cobra.Command{
@@ -63,6 +65,15 @@ func init() {
 		"verbose output")
 	rootCmd.PersistentFlags().StringVar(&flagColor, "color", "",
 		"color output (auto, always, never)")
+
+	buildCmd.Flags().StringVar(&flagCapture, "capture", "",
+		"capture payloads to disk (none, headers, bodies, all)")
+	buildCmd.Flags().StringVarP(&flagOutput, "output", "o", "",
+		"output directory for build results (default: warden-output)")
+	shellCmd.Flags().StringVar(&flagCapture, "capture", "",
+		"capture payloads to disk (none, headers, bodies, all)")
+	shellCmd.Flags().StringVarP(&flagOutput, "output", "o", "",
+		"output directory for build results (default: warden-output)")
 
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(shellCmd)
@@ -133,10 +144,21 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	capture := flagCapture
+	if capture == "" {
+		capture = cfg.Build.Capture
+	}
+	outputDir := flagOutput
+	if outputDir == "" {
+		outputDir = cfg.Build.OutputDir
+	}
+
 	env := orchestrator.NewCtrEnv()
 	config := &orchestrator.BuildConfig{
 		Context:       contextDir,
 		Containerfile: dockerfile,
+		Capture:       capture,
+		OutputDir:     outputDir,
 	}
 	return env.Build(config)
 }
@@ -160,10 +182,21 @@ func runShell(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	capture := flagCapture
+	if capture == "" {
+		capture = cfg.Build.Capture
+	}
+	outputDir := flagOutput
+	if outputDir == "" {
+		outputDir = cfg.Build.OutputDir
+	}
+
 	env := orchestrator.NewCtrEnv()
 	config := &orchestrator.BuildConfig{
 		Context:       contextDir,
 		Containerfile: dockerfile,
+		Capture:       capture,
+		OutputDir:     outputDir,
 	}
 	return env.Shell(config)
 }

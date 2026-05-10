@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/pem"
 	"fmt"
 	"net"
 	"os"
@@ -25,6 +24,20 @@ func run() int {
 		return 1
 	}
 
+	if mode := os.Getenv("CAPTURE_MODE"); mode != "" && mode != "none" {
+		if err := os.MkdirAll(filepath.Join(outDir, "captures"), 0755); err != nil {
+			fmt.Fprintf(os.Stderr, "error creating captures directory: %v\n", err)
+			return 1
+		}
+		relay.SetCaptureMode(mode)
+	}
+
+	ctxDir := os.Getenv("CONTEXT_DIR")
+	if ctxDir == "" {
+		ctxDir = "/context"
+	}
+	relay.SetContextDir(ctxDir)
+
 	ledgerFile, err := os.Create(filepath.Join(outDir, "ledger"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error creating ledger file: %v\n", err)
@@ -43,6 +56,12 @@ func run() int {
 	relay.SetLedger(l)
 	relay.SetOutDir(outDir)
 
+	if err := relay.DetectSelfIP(); err != nil {
+		fmt.Fprintf(os.Stderr, "error detecting relay IP: %v\n", err)
+		return 1
+	}
+	relay.DetectUpstreamDNS()
+
 	// Generate ephemeral CA for this build.
 	if err := relay.GenerateCA(); err != nil {
 		fmt.Fprintf(os.Stderr, "error generating CA: %v\n", err)
@@ -53,17 +72,6 @@ func run() int {
 	caPath := filepath.Join(outDir, "ca.cert.pem")
 	if err := os.WriteFile(caPath, relay.CA_CERT, 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing CA cert: %v\n", err)
-		return 1
-	}
-
-	// Write ledger public key in PEM format.
-	certPEM := pem.EncodeToMemory(&pem.Block{
-		Type:  "ED25519 PUBLIC KEY",
-		Bytes: []byte(l.PublicKey()),
-	})
-	certPath := filepath.Join(outDir, "ledger.cert.pem")
-	if err := os.WriteFile(certPath, certPEM, 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "error writing cert PEM: %v\n", err)
 		return 1
 	}
 
