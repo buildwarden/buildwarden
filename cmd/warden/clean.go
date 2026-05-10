@@ -36,14 +36,15 @@ func runClean(cmd *cobra.Command, args []string) error {
 
 	removed := 0
 
-	// Clean containers
+	// Clean containers (Volumes: true removes anonymous DinD volumes)
 	containers := listResources("container", "ls", "-a",
 		"--filter", "name=warden-", "--format", "{{.Names}}")
 	for _, name := range containers {
 		if isOrphan(name, liveBuildIDs) {
 			fmt.Fprintf(os.Stderr, "Removing container: %s\n", name)
 			_, _ = ctrctl.ContainerRm(
-				&ctrctl.ContainerRmOpts{Force: true}, name)
+				&ctrctl.ContainerRmOpts{Force: true, Volumes: true},
+				name)
 			removed++
 		}
 	}
@@ -75,6 +76,14 @@ func runClean(cmd *cobra.Command, args []string) error {
 			_, _ = ctrctl.ImageRm(nil, img)
 			removed++
 		}
+	}
+
+	// Prune any dangling anonymous volumes left by DinD containers.
+	pruneArgs := append(ctrctl.Cli, "volume", "prune", "-f")
+	pruneCmd := exec.Command(pruneArgs[0], pruneArgs[1:]...)
+	if out, err := pruneCmd.Output(); err == nil && len(out) > 0 {
+		fmt.Fprintf(os.Stderr, "Pruned dangling volumes\n")
+		removed++
 	}
 
 	if removed == 0 {

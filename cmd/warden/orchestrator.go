@@ -498,7 +498,7 @@ func (d *CtrEnv) teardownBuildEnv() {
 	}
 	if d.buildContainer != "" {
 		_, err := ctrctl.ContainerRm(
-			&ctrctl.ContainerRmOpts{Force: true},
+			&ctrctl.ContainerRmOpts{Force: true, Volumes: true},
 			d.buildContainer,
 		)
 		if err != nil {
