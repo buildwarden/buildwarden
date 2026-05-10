@@ -27,6 +27,8 @@ func (e *ExtCACerts) Env() map[string]string {
 		"SSL_CERT_FILE": bundle,
 		// PHP: composer (libcurl)
 		"CURL_CA_BUNDLE": bundle,
+		// Nix: nix-env, nix-build, nix-shell
+		"NIX_SSL_CERT_FILE": bundle,
 		// Elixir: hex
 		"HEX_CACERTS_PATH": bundle,
 	}
