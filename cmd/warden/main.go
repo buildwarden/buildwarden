@@ -1,7 +1,6 @@
 package main
 
 import (
-	"fmt"
 	"os"
 
 	"warden/internal/orchestrator"
@@ -72,7 +71,7 @@ func init() {
 func main() {
 	orchestrator.SetVersion(version)
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "error: %v\n", err)
+		orchestrator.LogError(err)
 		os.Exit(1)
 	}
 }

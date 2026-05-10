@@ -2,7 +2,6 @@
 
 build:
 	go build -o warden ./cmd/warden/
-	go build -o ledger-inspect ./cmd/ledger-inspect/
 
 test:
 	go test ./...
@@ -21,4 +20,4 @@ cover:
 	go tool cover -func=coverage.out
 
 clean:
-	rm -f warden ledger-inspect coverage.out
+	rm -f warden coverage.out

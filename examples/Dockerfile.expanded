@@ -9,6 +9,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl git && \
 
 RUN pip install --upgrade pip build pytest mypy
 
+ENV SOURCE_DATE_EPOCH=1716940800
+
 # Clone requests source at a pinned release
 RUN git clone --depth 1 --branch v2.32.3 \
         https://github.com/psf/requests.git /src/requests

@@ -19,7 +19,7 @@ RUN pip install --upgrade pip build setuptools-rust
 
 # Clone cryptography at a pinned release
 RUN git clone --depth 1 --branch 44.0.3 \
-        https://github.com/pypa/cryptography.git /src/cryptography
+        https://github.com/pyca/cryptography.git /src/cryptography
 
 WORKDIR /src/cryptography
 

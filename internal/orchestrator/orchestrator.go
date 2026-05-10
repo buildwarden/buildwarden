@@ -20,6 +20,7 @@ var exts = []Extension{
 	&ExtTrustStore{},
 	&ExtPip{},
 	&ExtBazel{},
+	&ExtEpoch{},
 }
 
 const (
@@ -61,6 +62,7 @@ func (d *CtrEnv) inBuildEnv(config *BuildConfig, fn func() error) error {
 
 func (d *CtrEnv) Build(config *BuildConfig) error {
 	return d.inBuildEnv(config, func() error {
+		log.Build("Starting build...")
 		_, err := ctrctl.ContainerExec(
 			&ctrctl.ContainerExecOpts{
 				Cmd: &exec.Cmd{
@@ -75,12 +77,16 @@ func (d *CtrEnv) Build(config *BuildConfig) error {
 			d.buildContainer,
 			"docker", "build", "--network=host", "-f", ".warden/Containerfile", ".",
 		)
+		if err == nil {
+			log.Success("Build complete")
+		}
 		return err
 	})
 }
 
 func (d *CtrEnv) Shell(config *BuildConfig) error {
 	return d.inBuildEnv(config, func() error {
+		log.Info("Dropping into shell (exit to tear down)...")
 		_, err := ctrctl.ContainerExec(
 			&ctrctl.ContainerExecOpts{
 				Cmd: &exec.Cmd{
@@ -105,24 +111,26 @@ func (d *CtrEnv) createBuildEnv() error {
 	}
 
 	d.buildId = randanum(8)
+	log.Info(fmt.Sprintf("Build ID: %s", d.buildId))
 
-	// Create a host directory for ledger output.
 	d.ledgerDir, err = os.MkdirTemp("", "warden-ledger-"+d.buildId+"-")
 	if err != nil {
 		return fmt.Errorf("error creating ledger temp dir: %w", err)
 	}
 
+	log.Info("Building relay image...")
 	if err := d.buildRelayImage(); err != nil {
 		return err
 	}
+	log.Info("Creating isolated network...")
 	if err := d.createNetwork(); err != nil {
 		return err
 	}
+	log.Info("Starting relay...")
 	if err := d.startRelayContainer(); err != nil {
 		return err
 	}
 
-	// Extensions run after the relay is up — they need its CA cert.
 	for _, ext := range exts {
 		if err := ext.BeforeBuild(d); err != nil {
 			return err
@@ -132,13 +140,16 @@ func (d *CtrEnv) createBuildEnv() error {
 	if err := d.editContainerfile(); err != nil {
 		return err
 	}
+	log.Info("Starting build container...")
 	if err := d.startBuildContainer(); err != nil {
 		return err
 	}
+	log.Info("Configuring network isolation...")
 	if err := d.configureBuildContainer(); err != nil {
 		return err
 	}
 
+	log.Success("Environment ready")
 	return nil
 }
 
@@ -327,6 +338,7 @@ func (d *CtrEnv) configureBuildContainer() error {
 }
 
 func (d *CtrEnv) teardownBuildEnv() {
+	log.Info("Tearing down environment...")
 	_ = os.RemoveAll(d.wardenDirPath())
 	if d.relayContainer != "" {
 		_, err := ctrctl.ContainerRm(
@@ -334,7 +346,7 @@ func (d *CtrEnv) teardownBuildEnv() {
 			d.relayContainer,
 		)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "container cleanup failure: %s\n", err)
+			log.Warn(fmt.Sprintf("container cleanup: %s", err))
 		}
 	}
 	if d.buildContainer != "" {
@@ -343,7 +355,7 @@ func (d *CtrEnv) teardownBuildEnv() {
 			d.buildContainer,
 		)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "container cleanup failure: %s\n", err)
+			log.Warn(fmt.Sprintf("container cleanup: %s", err))
 		}
 	}
 	if d.relayImage != "" {
@@ -352,11 +364,11 @@ func (d *CtrEnv) teardownBuildEnv() {
 	if d.isolatedNetwork != "" {
 		_, err := ctrctl.NetworkRm(nil, d.isolatedNetwork)
 		if err != nil {
-			fmt.Fprintf(os.Stderr, "network cleanup failure: %s\n", err)
+			log.Warn(fmt.Sprintf("network cleanup: %s", err))
 		}
 	}
 	if d.ledgerDir != "" {
-		fmt.Fprintf(os.Stderr, "ledger output: %s\n", d.ledgerDir)
+		log.Result(fmt.Sprintf("Ledger: %s", d.ledgerDir))
 	}
 }
 

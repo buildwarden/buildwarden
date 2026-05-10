@@ -47,7 +47,8 @@ func (l *Logger) Build(msg string) {
 }
 
 func (l *Logger) Result(msg string) {
-	fmt.Fprintf(l.out, "%s %s\n", prefixWarden, color.New(color.FgYellow, color.Bold).Sprint(msg))
+	style := color.New(color.FgYellow, color.Bold)
+	fmt.Fprintf(l.out, "%s %s\n", prefixWarden, style.Sprint(msg))
 }
 
 // ErrorWithIssueLink prints an error with a link to file a GitHub issue.
@@ -56,12 +57,22 @@ func (l *Logger) ErrorWithIssueLink(err error) {
 
 	title := url.QueryEscape(fmt.Sprintf("Bug: %s", err.Error()))
 	body := url.QueryEscape(fmt.Sprintf(
-		"## Environment\n- OS: %s/%s\n- Version: %s\n\n## Error\n```\n%s\n```\n\n## Steps to reproduce\n1. \n",
+		"## Environment\n- OS: %s/%s\n- Version: %s\n"+
+			"\n## Error\n```\n%s\n```\n"+
+			"\n## Steps to reproduce\n1. \n",
 		runtime.GOOS, runtime.GOARCH, version, err.Error(),
 	))
-	link := fmt.Sprintf("https://github.com/buildwarden/buildwarden/issues/new?title=%s&body=%s", title, body)
+	link := fmt.Sprintf(
+		"https://github.com/buildwarden/buildwarden/issues/new"+
+			"?title=%s&body=%s", title, body)
 
-	fmt.Fprintf(l.out, "\n  If this is unexpected, please file a bug:\n  %s\n\n", link)
+	fmt.Fprintf(l.out,
+		"\n  If this is unexpected, please file a bug:\n  %s\n\n", link)
+}
+
+// LogError prints an error with an issue-filing link. Exported for use by cmd/.
+func LogError(err error) {
+	log.ErrorWithIssueLink(err)
 }
 
 // SetColorMode configures color output based on the config value.

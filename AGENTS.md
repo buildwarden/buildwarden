@@ -14,7 +14,7 @@ The output is a tamper-evident binary ledger of all network I/O during the build
 ```
 cmd/warden/main.go                    — CLI entry point (build, shell subcommands)
 cmd/relay/main.go                     — Relay binary entry point (runs inside relay container)
-cmd/ledger-inspect/main.go            — Ledger verification tool
+internal/inspect/inspect.go           — Ledger verification logic
 
 internal/orchestrator/orchestrator.go — Container lifecycle, network setup, iptables
 internal/orchestrator/config.go       — TOML config, runtime detection, path resolution
@@ -34,13 +34,13 @@ relay/fair.go           — DRR bandwidth fairness scheduler
 relay/network.go        — Network utilities
 
 docs/design/            — Design documents (Ledger-Spec, Philosophy, Initial-Proposal)
-buildctx/               — Demo/test Dockerfiles
+examples/               — Demo/test Dockerfiles
 ```
 
 ## Build & Test
 
 ```sh
-make build         # Produces: warden, ledger-inspect binaries
+make build         # Produces: warden binary
 make test          # Unit tests
 make cover         # Tests with coverage
 make lint          # golangci-lint
@@ -51,13 +51,13 @@ go test ./relay/   # Just relay tests
 
 ```sh
 # Autodetects runtime (finch > docker > podman)
-./warden build buildctx/Dockerfile.simple
+./warden build examples/Dockerfile.simple
 
 # Explicit runtime
-./warden build --runtime docker buildctx/Dockerfile.simple
+./warden build --runtime docker examples/Dockerfile.simple
 
 # Interactive shell in build environment
-./warden shell ./buildctx
+./warden shell ./examples
 ```
 
 Configuration via `warden.toml` or `~/.config/warden/config.toml`.

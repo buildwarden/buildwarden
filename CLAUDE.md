@@ -5,7 +5,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ## Build Commands
 
 ```sh
-make build     # Compile warden + ledger-inspect
+make build     # Compile warden binary
 make test      # Run unit tests
 make cover     # Tests with coverage report
 make lint      # golangci-lint
@@ -28,7 +28,7 @@ The orchestrator (`internal/orchestrator/`) runs on the host and manages the lif
 
 - `internal/orchestrator/` — Host-side: container lifecycle, config, extensions, output. Imports `ctrctl`.
 - `relay/` — Container-side: proxy, ledger, DNS, certs. Could be used as a library. Does NOT import orchestrator.
-- `cmd/ledger-inspect/` — Standalone verifier. Imports `relay/` only for read types.
+- `internal/inspect/` — Ledger verification logic, used by `warden inspect` subcommand.
 
 ### Ledger format
 

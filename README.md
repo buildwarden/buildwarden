@@ -1,5 +1,10 @@
 # BuildWarden
 
+[![CI](https://github.com/buildwarden/buildwarden/actions/workflows/main.yml/badge.svg)](https://github.com/buildwarden/buildwarden/actions)
+[![Go Report Card](https://goreportcard.com/badge/github.com/buildwarden/buildwarden)](https://goreportcard.com/report/github.com/buildwarden/buildwarden)
+[![Release](https://img.shields.io/github/v/release/buildwarden/buildwarden)](https://github.com/buildwarden/buildwarden/releases/latest)
+[![License](https://img.shields.io/badge/license-Apache--2.0-blue.svg)](LICENSE)
+
 BuildWarden produces a cryptographically-signed, tamper-evident ledger of every network resource consumed during a software build. It enables build providers to independently verify build integrity — separately from the source author's own attestations.
 
 ## How It Works
@@ -58,10 +63,13 @@ warden build ./my-project/Dockerfile.prod
 ### Inspect a ledger
 
 ```sh
-ledger-inspect /path/to/ledger
+warden inspect /path/to/ledger
 
 # Verbose output (shows individual records)
-ledger-inspect -v 1 /path/to/ledger
+warden inspect --verbosity 1 /path/to/ledger
+
+# Machine-readable output
+warden inspect --json /path/to/ledger
 ```
 
 ## Configuration
@@ -107,13 +115,13 @@ See [docs/design/Ledger-Spec.md](docs/design/Ledger-Spec.md) for the full specif
 
 | Dockerfile | Description | Time |
 |-----------|-------------|------|
-| `buildctx/Dockerfile.simple` | Build Python `requests` wheel from source, post artifact | ~1 min |
-| `buildctx/Dockerfile.expanded` | Build + test + type-check requests (shows ledger truncatability) | ~3 min |
-| `buildctx/Dockerfile.cryptography` | Python `cryptography` from source (Rust/Cargo + pip + apt) | ~10 min |
-| `buildctx/Dockerfile.pytorch-aarch64` | PyTorch from source with CUDA (pinnacle scale test) | ~3 hrs |
+| `examples/Dockerfile.simple` | Build Python `requests` wheel from source, post artifact | ~1 min |
+| `examples/Dockerfile.expanded` | Build + test + type-check requests (shows ledger truncatability) | ~3 min |
+| `examples/Dockerfile.cryptography` | Python `cryptography` from source (Rust/Cargo + pip + apt) | ~10 min |
+| `examples/Dockerfile.pytorch-aarch64` | PyTorch from source with CUDA (pinnacle scale test) | ~3 hrs |
 
 ```sh
-warden build buildctx/Dockerfile.simple
+warden build examples/Dockerfile.simple
 ```
 
 ## Design Documents

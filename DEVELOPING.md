@@ -9,7 +9,7 @@
 ## Commands
 
 ```sh
-make build     # Compile warden + ledger-inspect binaries
+make build     # Compile warden binary
 make test      # Run unit tests
 make cover     # Tests with coverage report
 make lint      # Run golangci-lint
@@ -23,10 +23,10 @@ make clean     # Remove built binaries
 ```
 cmd/warden/              CLI entry point — config loading, argument parsing
 cmd/relay/               Relay binary (runs inside the relay container)
-cmd/ledger-inspect/      Ledger verification tool (separate binary)
+internal/inspect/        Ledger verification logic (used by warden inspect)
 internal/orchestrator/   Build orchestration — container lifecycle, extensions, config
 relay/                   Relay internals — proxy, ledger writer, DNS, certs, fair scheduler
-buildctx/                Demo/test Dockerfiles
+examples/                Example Dockerfiles
 docs/design/             Specifications and design documents
 ```
 
@@ -34,7 +34,7 @@ docs/design/             Specifications and design documents
 
 - **`internal/orchestrator/`** runs on the host. It creates the network, builds the relay image, starts containers, configures iptables, and tears everything down.
 - **`relay/`** runs inside a container. It intercepts traffic, writes the ledger, and generates the ephemeral CA. It could be used as a library by other projects.
-- **`cmd/ledger-inspect/`** is intentionally independent — it demonstrates that ledger validation is simple to implement from the spec alone.
+- **`internal/inspect/`** contains the ledger verification logic, accessible via `warden inspect`.
 
 ## Extension System
 
@@ -51,13 +51,13 @@ Current extensions: truststore (CA cert injection), pip (PIP_CERT), bazel (JKS t
 Integration tests require a working container runtime:
 
 ```sh
-warden build buildctx/Dockerfile.simple
+warden build examples/Dockerfile.simple
 ```
 
 Verify the output:
 
 ```sh
-ledger-inspect /tmp/warden-ledger-*/ledger
+warden inspect /tmp/warden-ledger-*/ledger
 ```
 
 ## Cutting a Release

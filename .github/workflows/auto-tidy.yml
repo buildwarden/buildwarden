@@ -1,21 +1,23 @@
 name: auto-tidy
+
 on:
   schedule:
-    - cron: '0 0 * * 1' # Mondays https://youtu.be/2WJYA9YDWi4
+    - cron: '0 0 * * 1'
 
 jobs:
   auto-tidy:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-go@v4
-        with: { go-version: 'v1.21.4', check-latest: true }
-      - uses: evantorrie/mott-the-tidier@v1-beta
-        with: { gomods: go.mod }
-      - uses: aquaproj/aqua-installer@v4.0.3
-        with: { aqua_version: v4.411.0 }
-      - run: ./build.sh lint
-      - run: ./build.sh build
-      - run: warden --help
-      - uses: stefanzweifel/git-auto-commit-action@v4
-        with: { commit_message: '(auto-commit) go mod tidy' }
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: make tidy
+      - run: make lint
+      - run: make build
+      - run: ./warden --help
+      - uses: stefanzweifel/git-auto-commit-action@v5
+        with:
+          commit_message: 'chore: go mod tidy'

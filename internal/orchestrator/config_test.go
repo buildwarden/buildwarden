@@ -9,7 +9,9 @@ import (
 func TestResolvePath_Directory(t *testing.T) {
 	dir := t.TempDir()
 	df := filepath.Join(dir, "Dockerfile")
-	os.WriteFile(df, []byte("FROM alpine"), 0644)
+	if err := os.WriteFile(df, []byte("FROM alpine"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	dockerfile, contextDir, err := ResolvePath(dir)
 	if err != nil {
@@ -26,7 +28,9 @@ func TestResolvePath_Directory(t *testing.T) {
 func TestResolvePath_File(t *testing.T) {
 	dir := t.TempDir()
 	df := filepath.Join(dir, "Dockerfile.prod")
-	os.WriteFile(df, []byte("FROM alpine"), 0644)
+	if err := os.WriteFile(df, []byte("FROM alpine"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	dockerfile, contextDir, err := ResolvePath(df)
 	if err != nil {
@@ -42,14 +46,17 @@ func TestResolvePath_File(t *testing.T) {
 
 func TestResolvePath_Empty(t *testing.T) {
 	dir := t.TempDir()
-	// Resolve symlinks (macOS /var -> /private/var)
 	dir, _ = filepath.EvalSymlinks(dir)
 	df := filepath.Join(dir, "Dockerfile")
-	os.WriteFile(df, []byte("FROM alpine"), 0644)
+	if err := os.WriteFile(df, []byte("FROM alpine"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	orig, _ := os.Getwd()
-	os.Chdir(dir)
-	defer os.Chdir(orig)
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(orig) }()
 
 	dockerfile, contextDir, err := ResolvePath("")
 	if err != nil {
@@ -66,7 +73,9 @@ func TestResolvePath_Empty(t *testing.T) {
 func TestResolvePath_Containerfile(t *testing.T) {
 	dir := t.TempDir()
 	cf := filepath.Join(dir, "Containerfile")
-	os.WriteFile(cf, []byte("FROM alpine"), 0644)
+	if err := os.WriteFile(cf, []byte("FROM alpine"), 0644); err != nil {
+		t.Fatal(err)
+	}
 
 	dockerfile, _, err := ResolvePath(dir)
 	if err != nil {
@@ -94,11 +103,12 @@ func TestResolvePath_NonExistent(t *testing.T) {
 }
 
 func TestLoadConfig_Defaults(t *testing.T) {
-	// In a temp dir with no config files, should get defaults
 	dir := t.TempDir()
 	orig, _ := os.Getwd()
-	os.Chdir(dir)
-	defer os.Chdir(orig)
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(orig) }()
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -120,11 +130,17 @@ cli = "podman"
 [output]
 verbose = true
 `
-	os.WriteFile(filepath.Join(dir, "warden.toml"), []byte(tomlContent), 0644)
+	err := os.WriteFile(
+		filepath.Join(dir, "warden.toml"), []byte(tomlContent), 0644)
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	orig, _ := os.Getwd()
-	os.Chdir(dir)
-	defer os.Chdir(orig)
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(orig) }()
 
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -141,8 +157,10 @@ verbose = true
 func TestLoadConfig_EnvOverrides(t *testing.T) {
 	dir := t.TempDir()
 	orig, _ := os.Getwd()
-	os.Chdir(dir)
-	defer os.Chdir(orig)
+	if err := os.Chdir(dir); err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = os.Chdir(orig) }()
 
 	t.Setenv("WARDEN_CTR_CLI", "docker")
 	t.Setenv("NO_COLOR", "1")
