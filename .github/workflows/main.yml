@@ -1,29 +1,40 @@
-name: 'build the build warden'
+name: ci
 
 on:
   push:
-    branches: [ main, proof-of-concept ]
+    branches: [main, proof-of-concept]
   pull_request:
-    branches: [ main, proof-of-concept ]
+    branches: [main, proof-of-concept]
 
 jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v4
-        with: { go-version: 'v1.25.1', check-latest: true }
-      - uses: aquaproj/aqua-installer@v4.0.3
-        with: { aqua_version: v2.53.11 }
-      - run: ./build.sh lint
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@latest
+      - run: golangci-lint run
+
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: make test
+
   build:
     runs-on: ${{ matrix.os }}
     strategy:
-      matrix: 
-        os: [ macos-latest, ubuntu-latest ] #TODO: Add windows-latest
+      matrix:
+        os: [macos-latest, ubuntu-latest]
     steps:
-      - uses: actions/checkout@v5
-      - uses: actions/setup-go@v4
-        with: { go-version: 'v1.25.1', check-latest: true }
-      - run: ./build.sh build
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: make build
       - run: ./warden --help

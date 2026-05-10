@@ -1,99 +1,169 @@
 package main
 
 import (
-	"fmt"
 	"os"
-	"path/filepath"
-	warden "warden/pkg"
 
+	"warden/internal/orchestrator"
+
+	"github.com/lesiw/ctrctl"
 	"github.com/spf13/cobra"
+)
+
+var version = "dev"
+
+var (
+	flagRuntime string
+	flagVerbose bool
+	flagColor   string
 )
 
 var rootCmd = &cobra.Command{
 	Use:           "warden",
-	Version:       "0.0.1",
+	Version:       version,
+	Short:         "Build software with a verifiable network ledger",
 	SilenceUsage:  true,
 	SilenceErrors: true,
 }
+
 var buildCmd = &cobra.Command{
-	Use:   "build PATH",
-	Args:  cobra.ExactArgs(1),
-	Short: "Build a project",
-	Long:  "Build a project. The contents of PATH will be used as the build context",
-	RunE:  build,
+	Use:   "build [path]",
+	Args:  cobra.MaximumNArgs(1),
+	Short: "Run a build with network auditing",
+	Long: `Run a containerized build with full network auditing.
+
+The path argument can be:
+  - A directory containing a Dockerfile (default: current directory)
+  - A path to a specific Dockerfile (context = its parent directory)
+
+All network traffic during the build is recorded to a cryptographically
+signed ledger. The ledger directory is printed on completion.`,
+	Example: `  warden build
+  warden build ./my-project
+  warden build ./my-project/Dockerfile.prod`,
+	RunE: runBuild,
 }
+
 var shellCmd = &cobra.Command{
-	Use:   "shell PATH",
-	Args:  cobra.ExactArgs(1),
-	Short: "Run a shell in a project",
-	Long:  "Run a shell in a project. The contents of PATH will be used as the context",
-	RunE:  shell,
+	Use:   "shell [path]",
+	Args:  cobra.MaximumNArgs(1),
+	Short: "Open an interactive shell in the build environment",
+	Long: `Open an interactive shell in a network-audited build container.
+
+Useful for debugging builds or exploring what network requests a build makes.
+All traffic is recorded to the ledger just as in a normal build.`,
+	Example: `  warden shell
+  warden shell ./my-project`,
+	RunE: runShell,
 }
 
 func init() {
+	rootCmd.PersistentFlags().StringVar(&flagRuntime, "runtime", "",
+		"container runtime (finch, docker, podman)")
+	rootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false,
+		"verbose output")
+	rootCmd.PersistentFlags().StringVar(&flagColor, "color", "",
+		"color output (auto, always, never)")
+
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(shellCmd)
-
-	buildCmd.PersistentFlags().StringP("file", "f", "Dockerfile",
-		"Path to the containerfile to be built.")
-	shellCmd.PersistentFlags().StringP("file", "f", "Dockerfile",
-		"Path to the containerfile to be built.")
 }
 
 func main() {
-	os.Exit(run())
-}
-
-func run() int {
+	orchestrator.SetVersion(version)
 	if err := rootCmd.Execute(); err != nil {
-		fmt.Fprintf(os.Stderr, "%v\n", err)
-		return 1
+		orchestrator.LogError(err)
+		os.Exit(1)
 	}
-	return 0
 }
 
-func build(cmd *cobra.Command, args []string) error {
-	buildEnv := warden.NewCtrEnv()
-	contextFullPath, err := filepath.Abs(args[0])
+func resolveConfig() (*orchestrator.Config, error) {
+	cfg, err := orchestrator.LoadConfig()
 	if err != nil {
-		return fmt.Errorf("error resolving path: %w", err)
+		return nil, err
 	}
 
-	containerfile, err := cmd.Flags().GetString("file")
-	if err != nil {
-		return fmt.Errorf(`error reading cli flag "file": %w`, err)
+	// CLI flags override config
+	if flagRuntime != "" {
+		cfg.Runtime.CLI = flagRuntime
+	}
+	if flagVerbose {
+		cfg.Output.Verbose = true
+	}
+	if flagColor != "" {
+		cfg.Output.Color = flagColor
 	}
 
-	config := &warden.BuildConfig{
-		Context:       contextFullPath,
-		Containerfile: containerfile,
-	}
-	if err := buildEnv.Build(config); err != nil {
-		return err
-	}
+	return cfg, nil
+}
 
+func setupRuntime(cfg *orchestrator.Config) error {
+	orchestrator.SetColorMode(cfg.Output.Color)
+
+	runtime := cfg.Runtime.CLI
+	if runtime == "" {
+		detected, err := orchestrator.DetectRuntime()
+		if err != nil {
+			return err
+		}
+		runtime = detected
+	}
+	ctrctl.Cli = []string{runtime}
+	if cfg.Output.Verbose {
+		ctrctl.Verbose = true
+	}
 	return nil
 }
 
-func shell(cmd *cobra.Command, args []string) error {
-	buildEnv := warden.NewCtrEnv()
-	contextFullPath, err := filepath.Abs(args[0])
+func runBuild(cmd *cobra.Command, args []string) error {
+	cfg, err := resolveConfig()
 	if err != nil {
-		return fmt.Errorf("error resolving path: %w", err)
+		return err
 	}
-
-	containerfile, err := cmd.Flags().GetString("file")
-	if err != nil {
-		return fmt.Errorf(`error reading cli flag "file": %w`, err)
-	}
-
-	config := &warden.BuildConfig{
-		Context:       contextFullPath,
-		Containerfile: containerfile,
-	}
-	if err := buildEnv.Shell(config); err != nil {
+	if err := setupRuntime(cfg); err != nil {
 		return err
 	}
 
-	return nil
+	path := ""
+	if len(args) > 0 {
+		path = args[0]
+	}
+
+	dockerfile, contextDir, err := orchestrator.ResolvePath(path)
+	if err != nil {
+		return err
+	}
+
+	env := orchestrator.NewCtrEnv()
+	config := &orchestrator.BuildConfig{
+		Context:       contextDir,
+		Containerfile: dockerfile,
+	}
+	return env.Build(config)
+}
+
+func runShell(cmd *cobra.Command, args []string) error {
+	cfg, err := resolveConfig()
+	if err != nil {
+		return err
+	}
+	if err := setupRuntime(cfg); err != nil {
+		return err
+	}
+
+	path := ""
+	if len(args) > 0 {
+		path = args[0]
+	}
+
+	dockerfile, contextDir, err := orchestrator.ResolvePath(path)
+	if err != nil {
+		return err
+	}
+
+	env := orchestrator.NewCtrEnv()
+	config := &orchestrator.BuildConfig{
+		Context:       contextDir,
+		Containerfile: dockerfile,
+	}
+	return env.Shell(config)
 }

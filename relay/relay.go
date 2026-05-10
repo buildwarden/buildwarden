@@ -104,8 +104,7 @@ var reservedHosts = map[string]bool{
 // outDir is the ledger output directory, set by SetOutDir.
 var outDir string
 
-// ledger3 is the active v3 binary ledger writer.
-var ledger3Active *Ledger3
+var activeLedger *Ledger
 
 // Schema indices matching the default schema list order.
 const (
@@ -118,8 +117,8 @@ const (
 
 func SetOutDir(dir string) { outDir = dir }
 
-// SetLedger3 sets the active v3 ledger writer (called from cmd/relay/main.go).
-func SetLedger3(l *Ledger3) { ledger3Active = l }
+// SetLedger sets the active ledger writer (called from cmd/relay/main.go).
+func SetLedger(l *Ledger) { activeLedger = l }
 
 func RunDns(addr net.TCPAddr) error {
 	server := &dns.Server{Addr: addr.String(), Net: "udp"}
@@ -222,7 +221,7 @@ func RunHttps(addr net.TCPAddr) error {
 }
 
 func onRequest(req *http.Request) (*http.Request, *http.Response) {
-	if ledger3Active == nil {
+	if activeLedger == nil {
 		return req, nil
 	}
 
@@ -238,7 +237,7 @@ func onRequest(req *http.Request) (*http.Request, *http.Response) {
 		"url":      req.URL.String(),
 		"protocol": req.Proto,
 	})
-	openSig := ledger3Active.Open(schemaHTTPOpen, openMeta)
+	openSig := activeLedger.Open(schemaHTTPOpen, openMeta)
 
 	// Checkpoint: request headers (direction: out = negative size)
 	reqHeaders, err := httputil.DumpRequest(req, false)
@@ -246,21 +245,21 @@ func onRequest(req *http.Request) (*http.Request, *http.Response) {
 		log.Printf("error dumping request headers: %v", err)
 		reqHeaders = []byte{}
 	}
-	hb := ledger3Active.ComputeHashBlock(reqHeaders)
+	hb := activeLedger.ComputeHashBlock(reqHeaders)
 	headersMeta := buildHeadersMeta(req.Header)
-	ledger3Active.Checkpoint(
+	activeLedger.Checkpoint(
 		openSig, -int64(len(reqHeaders)), hb, schemaHTTPHeaders, headersMeta,
 	)
 
 	// If request has a body (POST/PUT), stream it through hashers.
 	if req.Body != nil && req.ContentLength != 0 {
-		hasher := NewStreamingHasher(ledger3Active.hashes)
-		req.Body = &hashingReadCloser3{
+		hasher := NewStreamingHasher(activeLedger.hashes)
+		req.Body = &hashingReadCloser{
 			source: req.Body,
 			hasher: hasher,
 			onClose: func(hashBlock []byte, size int64) {
 				bodyMeta, _ := cbor.Marshal(map[string]any{})
-				ledger3Active.Checkpoint(
+				activeLedger.Checkpoint(
 					openSig, -size, hashBlock, schemaHTTPBody, bodyMeta,
 				)
 			},
@@ -286,16 +285,16 @@ func handleArtifactPost(req *http.Request) (*http.Request, *http.Response) {
 		"url":      req.URL.String(),
 		"protocol": req.Proto,
 	})
-	openSig := ledger3Active.Open(schemaHTTPOpen, openMeta)
+	openSig := activeLedger.Open(schemaHTTPOpen, openMeta)
 
 	// Checkpoint request headers.
 	reqHeaders, err := httputil.DumpRequest(req, false)
 	if err != nil {
 		reqHeaders = []byte{}
 	}
-	hb := ledger3Active.ComputeHashBlock(reqHeaders)
+	hb := activeLedger.ComputeHashBlock(reqHeaders)
 	headersMeta := buildHeadersMeta(req.Header)
-	ledger3Active.Checkpoint(
+	activeLedger.Checkpoint(
 		openSig, -int64(len(reqHeaders)), hb, schemaHTTPHeaders, headersMeta,
 	)
 
@@ -314,7 +313,7 @@ func handleArtifactPost(req *http.Request) (*http.Request, *http.Response) {
 		return req, resp
 	}
 
-	hasher := NewStreamingHasher(ledger3Active.hashes)
+	hasher := NewStreamingHasher(activeLedger.hashes)
 	buf := make([]byte, 32*1024)
 	for {
 		n, readErr := req.Body.Read(buf)
@@ -348,7 +347,7 @@ func handleArtifactPost(req *http.Request) (*http.Request, *http.Response) {
 		"name":    artifactName,
 		"context": map[string]any{},
 	})
-	ledger3Active.Artifact(openSig, -size, hashBlock, schemaArtifact, artMeta)
+	activeLedger.Artifact(openSig, -size, hashBlock, schemaArtifact, artMeta)
 
 	log.Printf("artifact: stored %s (%d bytes, hash:%s)",
 		artifactName, size, primaryHash[:12])
@@ -362,7 +361,7 @@ func handleArtifactPost(req *http.Request) (*http.Request, *http.Response) {
 func onResponse(
 	res *http.Response, req *http.Request,
 ) *http.Response {
-	if ledger3Active == nil || res == nil {
+	if activeLedger == nil || res == nil {
 		return res
 	}
 
@@ -384,9 +383,9 @@ func onResponse(
 		log.Printf("error dumping response headers: %v", err)
 		respHeaders = []byte{}
 	}
-	hb := ledger3Active.ComputeHashBlock(respHeaders)
+	hb := activeLedger.ComputeHashBlock(respHeaders)
 	headersMeta := buildHeadersMeta(res.Header)
-	ledger3Active.Checkpoint(
+	activeLedger.Checkpoint(
 		openSig, int64(len(respHeaders)), hb, schemaHTTPHeaders, headersMeta,
 	)
 
@@ -395,7 +394,7 @@ func onResponse(
 		res.StatusCode == http.StatusNoContent ||
 		(res.StatusCode >= 100 && res.StatusCode < 200) {
 		bodyMeta, _ := cbor.Marshal(map[string]any{"status": res.StatusCode})
-		ledger3Active.Close(openSig, 0, nil, schemaHTTPBody, bodyMeta)
+		activeLedger.Close(openSig, 0, nil, schemaHTTPBody, bodyMeta)
 		return res
 	}
 
@@ -403,7 +402,7 @@ func onResponse(
 	res.Body = newFairReader(res.Body, res.ContentLength)
 
 	// Stream body through hashers; close entry written on EOF.
-	res.Body = newLedgerBody3(res.Body, openSig, res.StatusCode)
+	res.Body = newLedgerBody(res.Body, openSig, res.StatusCode)
 
 	return res
 }
@@ -425,8 +424,8 @@ func newTextResponse(
 	}
 }
 
-// ledgerBody3 wraps a response body, streaming bytes through hashers for v3 ledger.
-type ledgerBody3 struct {
+// ledgerBody wraps a response body, streaming bytes through hashers.
+type ledgerBody struct {
 	source  io.ReadCloser
 	openSig []byte
 	status  int
@@ -434,18 +433,18 @@ type ledgerBody3 struct {
 	done    bool
 }
 
-func newLedgerBody3(
+func newLedgerBody(
 	source io.ReadCloser, openSig []byte, status int,
-) *ledgerBody3 {
-	return &ledgerBody3{
+) *ledgerBody {
+	return &ledgerBody{
 		source:  source,
 		openSig: openSig,
 		status:  status,
-		hasher:  NewStreamingHasher(ledger3Active.hashes),
+		hasher:  NewStreamingHasher(activeLedger.hashes),
 	}
 }
 
-func (lb *ledgerBody3) Read(p []byte) (int, error) {
+func (lb *ledgerBody) Read(p []byte) (int, error) {
 	n, err := lb.source.Read(p)
 	if n > 0 {
 		lb.hasher.Write(p[:n]) //nolint:errcheck
@@ -457,7 +456,7 @@ func (lb *ledgerBody3) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func (lb *ledgerBody3) Close() error {
+func (lb *ledgerBody) Close() error {
 	if !lb.done {
 		lb.done = true
 		buf := make([]byte, 32*1024)
@@ -475,10 +474,10 @@ func (lb *ledgerBody3) Close() error {
 	return lb.source.Close()
 }
 
-func (lb *ledgerBody3) finish() {
+func (lb *ledgerBody) finish() {
 	hashBlock, size := lb.hasher.Finish()
 	bodyMeta, _ := cbor.Marshal(map[string]any{"status": lb.status})
-	ledger3Active.Close(lb.openSig, size, hashBlock, schemaHTTPBody, bodyMeta)
+	activeLedger.Close(lb.openSig, size, hashBlock, schemaHTTPBody, bodyMeta)
 }
 
 // hasherSet runs multiple hash algorithms in parallel via goroutines.
@@ -524,15 +523,15 @@ func (hs *hasherSet) sums() map[string]string {
 	return result
 }
 
-// hashingReadCloser3 wraps a request body, hashing bytes as they are read (v3).
-type hashingReadCloser3 struct {
+// hashingReadCloser wraps a request body, hashing bytes as they are read.
+type hashingReadCloser struct {
 	source  io.ReadCloser
 	hasher  *StreamingHasher
 	onClose func(hashBlock []byte, size int64)
 	done    bool
 }
 
-func (h *hashingReadCloser3) Read(p []byte) (int, error) {
+func (h *hashingReadCloser) Read(p []byte) (int, error) {
 	n, err := h.source.Read(p)
 	if n > 0 {
 		h.hasher.Write(p[:n]) //nolint:errcheck
@@ -545,7 +544,7 @@ func (h *hashingReadCloser3) Read(p []byte) (int, error) {
 	return n, err
 }
 
-func (h *hashingReadCloser3) Close() error {
+func (h *hashingReadCloser) Close() error {
 	if !h.done {
 		h.done = true
 		buf := make([]byte, 32*1024)

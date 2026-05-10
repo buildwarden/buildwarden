@@ -1,0 +1,38 @@
+# Expanded demo: build requests from source, post artifact, run tests and type-check.
+# Demonstrates the truncatable property of the ledger — test/lint network fetches
+# appear as separate ledger entries from the build itself.
+
+FROM python:3.12-slim
+
+RUN apt-get update && apt-get install -y --no-install-recommends curl git && \
+    rm -rf /var/lib/apt/lists/*
+
+RUN pip install --upgrade pip build pytest mypy
+
+ENV SOURCE_DATE_EPOCH=1716940800
+
+# Clone requests source at a pinned release
+RUN git clone --depth 1 --branch v2.32.3 \
+        https://github.com/psf/requests.git /src/requests
+
+WORKDIR /src/requests
+
+# Build the wheel from source
+RUN python -m build --wheel
+
+# Post the built wheel as an artifact
+RUN WHEEL=$(ls dist/requests-*.whl) && \
+    curl -fsSL -X POST --data-binary @"$WHEEL" \
+        "http://artifacts/$(basename $WHEEL)" && \
+    echo "Artifact posted: $(basename $WHEEL)"
+
+# Install the built wheel + test dependencies
+RUN pip install dist/requests-*.whl && \
+    pip install pytest-httpbin trustme
+
+# Run the test suite (network fetches for test fixtures appear in ledger)
+RUN python -m pytest tests/ -x -q --tb=short 2>&1 | tail -20 || true
+
+# Run type checking
+RUN pip install types-urllib3 types-certifi types-chardet && \
+    python -m mypy src/requests --ignore-missing-imports --no-error-summary 2>&1 | tail -10 || true

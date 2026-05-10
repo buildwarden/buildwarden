@@ -5,15 +5,12 @@
 #
 # Deviations from CI:
 #   - Uses nvidia/cuda base image instead of manylinux + manual CUDA install scripts
-#   - Skips MAGMA (deprecated in 2.11, cuSOLVER is default)
+#   - Skips MAGMA (cuSOLVER is default)
 #   - Skips cuSPARSELt and NCCL (bundled via submodules or not needed for wheel build)
 #   - Skips NVPL (optional BLAS, not required)
 #   - Builds ACL from source for oneDNN aarch64 acceleration
 
 FROM nvidia/cuda:13.2.1-cudnn-devel-ubuntu22.04
-ENV PIP_CERT=/etc/ssl/certs/warden.crt
-COPY .warden /.warden
-RUN find /.warden/ext.d/ -exec sh {} \;
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
@@ -57,15 +54,17 @@ RUN apt-get update && \
         unzip \
         util-linux \
         wget \
-        which \
         xz-utils \
         yasm \
         zlib1g-dev \
         zstd \
     && apt-get clean && rm -rf /var/lib/apt/lists/*
 
-# GCC 13 (CI uses gcc-toolset-13)
+# GCC 13 (not in Ubuntu 22.04 default repos — needs toolchain PPA)
 RUN apt-get update && \
+    apt-get install -y --no-install-recommends software-properties-common && \
+    add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
+    apt-get update && \
     apt-get install -y --no-install-recommends \
         gcc-13 g++-13 gfortran-13 && \
     update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100 && \
@@ -95,12 +94,12 @@ ENV PATH="/opt/venv/bin:$PATH"
 RUN pip install --upgrade pip && \
     pip install \
         numpy \
-        wheel \
+        "wheel<0.44" \
         build \
         packaging \
         requests \
         pyyaml \
-        setuptools \
+        "setuptools<71" \
         cmake \
         ninja
 
@@ -110,19 +109,11 @@ WORKDIR /opt
 ENV PATH=/usr/local/cuda/bin:$PATH
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:/acl/build:$LD_LIBRARY_PATH
 
-# Fetch PyTorch v2.11.0 source tarball
-RUN curl -fsSL https://github.com/pytorch/pytorch/archive/refs/tags/v2.11.0.tar.gz \
-        | tar xz && \
-    mv pytorch-2.11.0 pytorch
+# Clone PyTorch v2.11.0 with submodules
+RUN git clone --depth 1 --branch v2.11.0 --recurse-submodules --shallow-submodules \
+        https://github.com/pytorch/pytorch.git pytorch
 
 WORKDIR /opt/pytorch
-
-# Initialize submodules (required for third_party deps like sleef, fmt, etc.)
-RUN git init && \
-    git remote add origin https://github.com/pytorch/pytorch.git && \
-    git fetch --depth 1 origin v2.11.0 && \
-    git checkout FETCH_HEAD && \
-    git submodule update --init --recursive --depth 1
 
 # Configure build environment matching CI's .ci/pytorch/build.sh for aarch64
 ENV USE_CUDA=1 \
@@ -133,7 +124,6 @@ ENV USE_CUDA=1 \
     TORCH_CUDA_ARCH_LIST="8.0;8.6;8.7;9.0;10.0" \
     USE_NCCL=0 \
     USE_DISTRIBUTED=1 \
-    USE_TENSORPIPE=1 \
     USE_GLOO=1 \
     USE_MPI=0 \
     BUILD_TEST=0 \
@@ -143,8 +133,8 @@ ENV USE_CUDA=1 \
     PYTORCH_BUILD_NUMBER=1 \
     PIP_DEFAULT_TIMEOUT=300
 
-# Build the wheel (same command as CI)
-RUN python -m build --wheel --no-isolation
+# Build the wheel
+RUN python setup.py bdist_wheel
 
 # Install and verify
 RUN pip install dist/torch-*.whl

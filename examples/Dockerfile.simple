@@ -6,7 +6,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends curl && \
 RUN pip install --upgrade pip build
 
 # Download the latest requests source distribution and build a wheel
-RUN pip download --no-binary :all: --no-deps requests -d /tmp/sdist && \
+RUN pip download --no-binary :all: --no-deps requests==2.32.3 -d /tmp/sdist && \
     tar xzf /tmp/sdist/requests-*.tar.gz -C /tmp && \
     cd /tmp/requests-*/ && \
     python -m build --wheel && \

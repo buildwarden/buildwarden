@@ -1,4 +1,4 @@
-# BuildWarden Ledger Specification v3 — Binary Format
+# BuildWarden Ledger Specification
 
 ## Purpose
 
@@ -54,7 +54,7 @@ The header establishes the cryptographic parameters, embeds the public key, and 
 | Offset | Size | Field | Description |
 |--------|------|-------|-------------|
 | 0 | 4 | Magic | ASCII `BLDL` (0x42 0x4C 0x44 0x4C) |
-| 4 | 1 | Version | Ledger spec version (0x03 for this spec) |
+| 4 | 1 | Version | Ledger spec version (0x01 for this spec) |
 | 5 | variable | Signature scheme | Null-terminated UTF-8 string (e.g., `ed25519-sha512\0`) |
 | — | 2 | Signature size | uint16 — byte length of all signatures in this ledger |
 | — | 2 | Hash block size | uint16 — total byte length of concatenated hashes per payload |

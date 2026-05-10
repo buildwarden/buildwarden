@@ -32,7 +32,7 @@ func run() int {
 	}
 	defer ledgerFile.Close()
 
-	l, err := relay.NewLedger3(relay.Ledger3Config{
+	l, err := relay.NewLedger(relay.LedgerConfig{
 		Writer:      ledgerFile,
 		Environment: map[string]any{"type": "container"},
 	})
@@ -40,7 +40,7 @@ func run() int {
 		fmt.Fprintf(os.Stderr, "error initializing ledger: %v\n", err)
 		return 1
 	}
-	relay.SetLedger3(l)
+	relay.SetLedger(l)
 	relay.SetOutDir(outDir)
 
 	// Generate ephemeral CA for this build.
