@@ -365,7 +365,11 @@ func isSafeSegment(s string) bool {
 	if s == "" || s == "." || s == ".." {
 		return false
 	}
-	if s[0] == '.' {
+	if s[0] == '.' || s[0] == '-' || s[0] == '_' {
+		return false
+	}
+	last := s[len(s)-1]
+	if last == '.' || last == '-' || last == '_' {
 		return false
 	}
 	for _, c := range s {
@@ -392,6 +396,10 @@ func isSafeContextPath(p string) bool {
 	}
 	for _, seg := range strings.Split(p, "/") {
 		if seg == "" || seg == "." || seg == ".." {
+			return false
+		}
+		last := seg[len(seg)-1]
+		if last == '.' || last == '-' || last == '_' {
 			return false
 		}
 		for _, c := range seg {
