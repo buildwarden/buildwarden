@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/buildwarden/buildwarden/schemas/v1/http-body.json",
+  "title": "HTTP Body",
+  "description": "Metadata for checkpoint or close records carrying HTTP body content as payload.",
+  "type": "object",
+  "properties": {
+    "status": {
+      "type": "integer",
+      "minimum": 100,
+      "maximum": 599,
+      "description": "HTTP response status code. Present only for response bodies."
+    }
+  },
+  "additionalProperties": false
+}

@@ -175,13 +175,15 @@ The binary ledger is self-describing and compact:
 - **Payload direction**: positive = inbound (downloads), negative = outbound (uploads/artifacts)
 - **Metadata**: CBOR-encoded, not covered by signatures (freely redactable for privacy)
 
-Full specification: [docs/design/Ledger-Spec.md](docs/design/Ledger-Spec.md)
+Full specification: [Ledger Spec](https://buildwarden.github.io/buildwarden/design/ledger-spec.html)
 
-## Design Documents
+## Documentation
 
-- [Ledger Specification](docs/design/Ledger-Spec.md) — Binary format, record types, signature scheme
-- [Philosophy](docs/design/Philosophy.md) — Design principles and threat model
-- [Initial Proposal](docs/design/Initial-Proposal.md) — Original problem statement
+Full documentation is available at **[buildwarden.github.io/buildwarden](https://buildwarden.github.io/buildwarden/)**.
+
+- [Ledger Specification](https://buildwarden.github.io/buildwarden/design/ledger-spec.html) — Binary format, record types, signature scheme
+- [Philosophy](https://buildwarden.github.io/buildwarden/design/philosophy.html) — Design principles and threat model
+- [Initial Proposal](https://buildwarden.github.io/buildwarden/design/initial-proposal.html) — Original problem statement
 
 ## Development
 

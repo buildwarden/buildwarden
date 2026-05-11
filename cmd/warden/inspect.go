@@ -12,6 +12,7 @@ var (
 	inspectJSON    bool
 	inspectVerbose int
 	inspectExtract string
+	inspectNoColor bool
 )
 
 var inspectCmd = &cobra.Command{
@@ -29,16 +30,19 @@ exits 1 if verification fails.`,
 	Example: `  warden inspect warden-output
   warden inspect warden-output/ledger.zst
   warden inspect --json warden-output
-  warden inspect --verbosity 1 ledger.bin`,
+  warden inspect -v ledger.bin
+  warden inspect -vv ledger.bin`,
 	RunE: runInspect,
 }
 
 func init() {
 	inspectCmd.Flags().BoolVar(&inspectJSON, "json", false, "output as JSON")
-	inspectCmd.Flags().IntVar(&inspectVerbose, "verbosity", 0,
-		"verbosity: 0=compact, 1=tree, 2=full")
+	inspectCmd.Flags().CountVarP(&inspectVerbose, "verbose", "v",
+		"increase verbosity (-v=tree, -vv=full)")
 	inspectCmd.Flags().StringVar(&inspectExtract, "extract", "",
 		"extract captured payloads to directory")
+	inspectCmd.Flags().BoolVar(&inspectNoColor, "no-color", false,
+		"disable colored output")
 	rootCmd.AddCommand(inspectCmd)
 }
 
@@ -50,6 +54,7 @@ func runInspect(cmd *cobra.Command, args []string) error {
 		Verbosity: inspectVerbose,
 		Writer:    os.Stdout,
 		Extract:   inspectExtract,
+		NoColor:   inspectNoColor,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)
