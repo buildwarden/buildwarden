@@ -1,3 +1,7 @@
+<p align="center">
+  <img src="logo.png" alt="BuildWarden" width="200">
+</p>
+
 # BuildWarden
 
 [![CI](https://github.com/buildwarden/buildwarden/actions/workflows/main.yml/badge.svg)](https://github.com/buildwarden/buildwarden/actions)
