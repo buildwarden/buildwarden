@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/buildwarden/buildwarden/schemas/v1/http-open.json",
+  "title": "HTTP Open",
+  "description": "Metadata for open records initiating an HTTP/HTTPS channel.",
+  "type": "object",
+  "properties": {
+    "method": {
+      "type": "string",
+      "description": "HTTP method (GET, POST, PUT, DELETE, HEAD, etc.)."
+    },
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "description": "Full request URL including scheme, host, and path."
+    },
+    "protocol": {
+      "type": "string",
+      "description": "Protocol version (HTTP/1.1, HTTP/2, etc.)."
+    }
+  },
+  "required": ["method", "url", "protocol"],
+  "additionalProperties": false
+}

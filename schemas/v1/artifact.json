@@ -1,0 +1,20 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/buildwarden/buildwarden/schemas/v1/artifact.json",
+  "title": "Artifact",
+  "description": "Metadata for artifact records.",
+  "type": "object",
+  "properties": {
+    "name": {
+      "type": "string",
+      "description": "Artifact filename as stored in the ledger's artifacts/ directory."
+    },
+    "context": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "Freeform key-value map for additional artifact metadata."
+    }
+  },
+  "required": ["name", "context"],
+  "additionalProperties": false
+}

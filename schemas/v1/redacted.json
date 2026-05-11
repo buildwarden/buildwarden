@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/buildwarden/buildwarden/schemas/v1/redacted.json",
+  "title": "Redacted",
+  "description": "Metadata for records whose original metadata has been stripped or was never recorded.",
+  "type": "object",
+  "properties": {
+    "owner": {
+      "type": "string",
+      "description": "Identifier of the party responsible for or owning the redacted information."
+    }
+  },
+  "required": ["owner"],
+  "additionalProperties": false
+}

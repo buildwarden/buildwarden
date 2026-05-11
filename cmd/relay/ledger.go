@@ -60,11 +60,11 @@ type LedgerConfig struct {
 var defaultHashes = []string{"blake2b_256", "sha256", "sha1", "md5"}
 
 var defaultSchemas = []string{
-	"https://github.com/buildwarden/buildwarden/schemas/http-open.json",
-	"https://github.com/buildwarden/buildwarden/schemas/http-headers.json",
-	"https://github.com/buildwarden/buildwarden/schemas/http-body.json",
-	"https://github.com/buildwarden/buildwarden/schemas/artifact.json",
-	"https://github.com/buildwarden/buildwarden/schemas/redacted.json",
+	"https://github.com/buildwarden/buildwarden/schemas/v1/http-open.json",
+	"https://github.com/buildwarden/buildwarden/schemas/v1/http-headers.json",
+	"https://github.com/buildwarden/buildwarden/schemas/v1/http-body.json",
+	"https://github.com/buildwarden/buildwarden/schemas/v1/artifact.json",
+	"https://github.com/buildwarden/buildwarden/schemas/v1/redacted.json",
 }
 
 // NewLedger creates a new binary ledger, writes the header, and starts the

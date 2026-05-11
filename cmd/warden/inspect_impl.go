@@ -3,6 +3,7 @@ package main
 import (
 	"crypto/ed25519"
 	"crypto/sha512"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -22,6 +23,7 @@ type inspectOptions struct {
 	Verbosity int
 	Writer    io.Writer
 	Extract   string
+	NoColor   bool
 }
 
 func runInspectImpl(path string, opts inspectOptions) error {
@@ -59,7 +61,7 @@ func runInspectImpl(path string, opts inspectOptions) error {
 		return printJSON(opts.Writer, result, ledgerDir, hasCaps)
 	}
 
-	printHuman(opts.Writer, result, opts.Verbosity, ledgerDir, hasCaps)
+	printHuman(opts.Writer, result, opts.Verbosity, ledgerDir, hasCaps, opts.NoColor)
 	if !result.Valid {
 		return fmt.Errorf("ledger verification failed: %d signature error(s)",
 			result.SigErrors)
@@ -73,9 +75,63 @@ type channel struct {
 	close       *ledger.Record
 }
 
+// channelColors are ANSI colors assigned to concurrent channels to
+// visually distinguish interleaved requests in tree output.
+var channelColors = []string{
+	"\033[36m",  // cyan
+	"\033[33m",  // yellow
+	"\033[35m",  // magenta
+	"\033[32m",  // green
+	"\033[34m",  // blue
+	"\033[91m",  // bright red
+	"\033[96m",  // bright cyan
+	"\033[93m",  // bright yellow
+}
+
+const colorReset = "\033[0m"
+
+type colorTracker struct {
+	openSet   map[string]int
+	nextColor int
+	useColor  bool
+}
+
+func newColorTracker(useColor bool) *colorTracker {
+	return &colorTracker{
+		openSet:  make(map[string]int),
+		useColor: useColor,
+	}
+}
+
+func (ct *colorTracker) assignOpen(sigKey string) {
+	ct.openSet[sigKey] = ct.nextColor % len(channelColors)
+	ct.nextColor++
+}
+
+func (ct *colorTracker) colorFor(rec ledger.Record) string {
+	if !ct.useColor {
+		return ""
+	}
+	if rec.Type == ledger.RecordOpen {
+		return channelColors[ct.openSet[string(rec.Signature)]]
+	}
+	if rec.OpenSig != nil {
+		if idx, ok := ct.openSet[string(rec.OpenSig)]; ok {
+			return channelColors[idx]
+		}
+	}
+	return channelColors[0]
+}
+
+func (ct *colorTracker) closeChannel(rec ledger.Record) {
+	if rec.OpenSig != nil {
+		delete(ct.openSet, string(rec.OpenSig))
+	}
+}
+
 func printHuman(
 	w io.Writer, result *ledger.VerifyResult, verbosity int,
-	ledgerDir string, hasCaps bool,
+	ledgerDir string, hasCaps bool, noColor bool,
 ) {
 	h := result.Header
 	headerValid := verifyHeader(h)
@@ -93,25 +149,19 @@ func printHuman(
 
 	channels := make(map[string]*channel)
 	var ordered []*channel
+	ct := newColorTracker(verbosity >= 1 && !noColor)
+	schemas := h.Meta.Schemas
 
 	for i, rec := range result.Records {
-		if verbosity >= 1 {
-			printEntryTree(w, i, rec)
-		}
-
 		sigKey := string(rec.Signature)
-		switch rec.Type {
-		case ledger.RecordOpen:
-			ch := &channel{open: rec}
-			channels[sigKey] = ch
-			ordered = append(ordered, ch)
-		case ledger.RecordCheckpoint:
-			if ch, ok := channels[string(rec.OpenSig)]; ok {
-				ch.checkpoints = append(ch.checkpoints, rec)
-			}
-		case ledger.RecordClose, ledger.RecordArtifact:
-			if ch, ok := channels[string(rec.OpenSig)]; ok {
-				ch.close = &rec
+		ordered = groupRecord(rec, sigKey, channels, ordered, ct)
+
+		if verbosity >= 1 {
+			printEntryTree(
+				w, i, rec, ct.colorFor(rec), ct.useColor, verbosity, schemas,
+			)
+			if rec.Type == ledger.RecordClose || rec.Type == ledger.RecordArtifact {
+				ct.closeChannel(rec)
 			}
 		}
 	}
@@ -123,6 +173,28 @@ func printHuman(
 	}
 
 	printSummary(w, result, len(ordered), ledgerDir, hasCaps)
+}
+
+func groupRecord(
+	rec ledger.Record, sigKey string,
+	channels map[string]*channel, ordered []*channel, ct *colorTracker,
+) []*channel {
+	switch rec.Type {
+	case ledger.RecordOpen:
+		ch := &channel{open: rec}
+		channels[sigKey] = ch
+		ordered = append(ordered, ch)
+		ct.assignOpen(sigKey)
+	case ledger.RecordCheckpoint:
+		if ch, ok := channels[string(rec.OpenSig)]; ok {
+			ch.checkpoints = append(ch.checkpoints, rec)
+		}
+	case ledger.RecordClose, ledger.RecordArtifact:
+		if ch, ok := channels[string(rec.OpenSig)]; ok {
+			ch.close = &rec
+		}
+	}
+	return ordered
 }
 
 func printSummary(
@@ -176,6 +248,8 @@ type jsonHeader struct {
 	SigScheme     string         `json:"sig_scheme"`
 	SigSize       int            `json:"sig_size"`
 	HashBlockSize int            `json:"hash_block_size"`
+	PubKey        string         `json:"pub_key"`
+	Signature     string         `json:"signature"`
 	Hashes        []string       `json:"hashes"`
 	Schemas       []string       `json:"schemas"`
 	Environment   map[string]any `json:"environment"`
@@ -187,8 +261,11 @@ type jsonRecord struct {
 	Type      string         `json:"type"`
 	Direction string         `json:"direction,omitempty"`
 	Bytes     int64          `json:"bytes"`
+	Schema    string         `json:"schema,omitempty"`
+	PrevSig   string         `json:"prev_sig"`
 	Signature string         `json:"signature"`
 	OpenSig   string         `json:"open_sig,omitempty"`
+	HashBlock string         `json:"hash_block,omitempty"`
 	Metadata  map[string]any `json:"metadata,omitempty"`
 }
 
@@ -210,15 +287,23 @@ func printJSON(
 	h := result.Header
 	headerValid := verifyHeader(h)
 
+	var env map[string]any
+	if h.Meta.Environment != nil {
+		if normalized, ok := normalizeForJSON(h.Meta.Environment).(map[string]any); ok {
+			env = normalized
+		}
+	}
 	report := jsonReport{
 		Header: jsonHeader{
 			Version:       int(h.Version),
 			SigScheme:     h.SigScheme,
 			SigSize:       h.SigSize,
 			HashBlockSize: h.HashBlockSize,
+			PubKey:        base64.StdEncoding.EncodeToString(h.PubKey),
+			Signature:     base64.StdEncoding.EncodeToString(h.Signature),
 			Hashes:        h.Meta.Hashes,
 			Schemas:       h.Meta.Schemas,
-			Environment:   h.Meta.Environment,
+			Environment:   env,
 			Valid:         headerValid,
 		},
 	}
@@ -227,21 +312,29 @@ func printJSON(
 	var artifactCount int
 	openCount := 0
 
+	schemas := h.Meta.Schemas
 	for i, rec := range result.Records {
 		jr := jsonRecord{
 			Seq:       i + 1,
 			Type:      rec.TypeName(),
 			Direction: rec.Direction(),
 			Bytes:     rec.AbsPayloadSize(),
-			Signature: hex.EncodeToString(rec.Signature[:8]),
+			Schema:    resolveSchema(rec.SchemaIndex, schemas),
+			PrevSig:   base64.StdEncoding.EncodeToString(rec.PrevSig),
+			Signature: base64.StdEncoding.EncodeToString(rec.Signature),
 		}
 		if rec.OpenSig != nil {
-			jr.OpenSig = hex.EncodeToString(rec.OpenSig[:8])
+			jr.OpenSig = base64.StdEncoding.EncodeToString(rec.OpenSig)
+		}
+		if rec.HashBlock != nil {
+			jr.HashBlock = hex.EncodeToString(rec.HashBlock)
 		}
 		if rec.Metadata != nil {
 			var m map[string]any
 			if err := cbor.Unmarshal(rec.Metadata, &m); err == nil {
-				jr.Metadata = m
+				if normalized, ok := normalizeForJSON(m).(map[string]any); ok {
+					jr.Metadata = normalized
+				}
 			}
 		}
 		report.Records = append(report.Records, jr)
@@ -289,25 +382,87 @@ func verifyHeader(h ledger.Header) bool {
 	return ed25519.Verify(h.PubKey, digest[:], h.Signature)
 }
 
-func printEntryTree(w io.Writer, seq int, r ledger.Record) {
+func printEntryTree(
+	w io.Writer, seq int, r ledger.Record,
+	color string, useColor bool, verbosity int, schemas []string,
+) {
 	check := "✅"
+	reset := ""
+	if useColor && color != "" {
+		reset = colorReset
+	} else {
+		color = ""
+	}
+
+	sigLabel := ""
+	if verbosity >= 2 {
+		sigLabel = fmt.Sprintf(" sig=%s", hex.EncodeToString(r.Signature[:8]))
+		if r.HashBlock != nil {
+			sigLabel += fmt.Sprintf(
+				" hash=%s", hex.EncodeToString(r.HashBlock[:8]))
+		}
+	}
+
+	schemaLabel := ""
+	if s := resolveSchema(r.SchemaIndex, schemas); s != "" {
+		schemaLabel = fmt.Sprintf(" [%s]", schemaShortName(s))
+	}
+
 	switch r.Type {
 	case ledger.RecordOpen:
 		meta := metaSummary(r)
-		fmt.Fprintf(w, "[%3d] %s OPEN %s\n", seq+1, check, meta)
+		fmt.Fprintf(w, "[%3d] %s %sOPEN %s%s%s%s\n",
+			seq+1, check, color, meta, schemaLabel, sigLabel, reset)
 	case ledger.RecordCheckpoint:
 		dir := dirArrow(r.Direction())
-		fmt.Fprintf(w, "[%3d] %s  ├─ CHECKPOINT %s %s (%d bytes)\n",
-			seq+1, check, dir, r.Direction(), r.AbsPayloadSize())
+		openLabel := channelLabel(r.OpenSig, useColor, color)
+		fmt.Fprintf(w, "[%3d] %s %s ├─ CHECKPOINT %s %s (%d bytes)%s%s%s%s\n",
+			seq+1, check, color, dir, r.Direction(),
+			r.AbsPayloadSize(), schemaLabel, openLabel, sigLabel, reset)
 	case ledger.RecordClose:
 		dir := dirArrow(r.Direction())
-		fmt.Fprintf(w, "[%3d] %s  └─ CLOSE %s %s (%d bytes)\n",
-			seq+1, check, dir, r.Direction(), r.AbsPayloadSize())
+		openLabel := channelLabel(r.OpenSig, useColor, color)
+		fmt.Fprintf(w, "[%3d] %s %s └─ CLOSE %s %s (%d bytes)%s%s%s%s\n",
+			seq+1, check, color, dir, r.Direction(),
+			r.AbsPayloadSize(), schemaLabel, openLabel, sigLabel, reset)
 	case ledger.RecordArtifact:
 		meta := metaSummary(r)
-		fmt.Fprintf(w, "[%3d] %s  └─ ARTIFACT %s (%d bytes)\n",
-			seq+1, check, meta, r.AbsPayloadSize())
+		openLabel := channelLabel(r.OpenSig, useColor, color)
+		fmt.Fprintf(w, "[%3d] %s %s └─ ARTIFACT %s (%d bytes)%s%s%s%s\n",
+			seq+1, check, color, meta,
+			r.AbsPayloadSize(), schemaLabel, openLabel, sigLabel, reset)
 	}
+}
+
+func resolveSchema(idx byte, schemas []string) string {
+	if idx == ledger.SchemaNoMetadata {
+		return ""
+	}
+	if int(idx) < len(schemas) {
+		return schemas[idx]
+	}
+	return fmt.Sprintf("unknown(%d)", idx)
+}
+
+func schemaShortName(url string) string {
+	if i := strings.LastIndex(url, "/"); i >= 0 {
+		name := url[i+1:]
+		if strings.HasSuffix(name, ".json") {
+			return name[:len(name)-5]
+		}
+		return name
+	}
+	return url
+}
+
+func channelLabel(openSig []byte, useColor bool, _ string) string {
+	if openSig == nil {
+		return ""
+	}
+	if !useColor {
+		return fmt.Sprintf(" [%s]", hex.EncodeToString(openSig[:4]))
+	}
+	return ""
 }
 
 func printCompact(w io.Writer, ch *channel) {
@@ -347,9 +502,9 @@ func metaSummary(r ledger.Record) string {
 
 func dirArrow(dir string) string {
 	if dir == "in" {
-		return "◀"
+		return "▶"
 	}
-	return "▶"
+	return "◀"
 }
 
 func sigStatus(valid bool) string {
@@ -424,6 +579,31 @@ func countCaptures(capturesDir string) int {
 		return 0
 	}
 	return len(entries)
+}
+
+func normalizeForJSON(v any) any {
+	switch val := v.(type) {
+	case map[any]any:
+		out := make(map[string]any, len(val))
+		for k, v2 := range val {
+			out[fmt.Sprint(k)] = normalizeForJSON(v2)
+		}
+		return out
+	case map[string]any:
+		out := make(map[string]any, len(val))
+		for k, v2 := range val {
+			out[k] = normalizeForJSON(v2)
+		}
+		return out
+	case []any:
+		out := make([]any, len(val))
+		for i, v2 := range val {
+			out[i] = normalizeForJSON(v2)
+		}
+		return out
+	default:
+		return v
+	}
 }
 
 func readLedger(path string) ([]byte, error) {

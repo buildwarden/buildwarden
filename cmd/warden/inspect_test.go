@@ -245,6 +245,12 @@ func TestRunInspectImpl_JSONOutput(t *testing.T) {
 	if !report.Header.Valid {
 		t.Error("header should be valid")
 	}
+	if report.Header.PubKey == "" {
+		t.Error("header pub_key should be non-empty base64")
+	}
+	if report.Header.Signature == "" {
+		t.Error("header signature should be non-empty base64")
+	}
 	if !report.Summary.Valid {
 		t.Error("summary should be valid")
 	}
@@ -279,6 +285,16 @@ func TestRunInspectImpl_JSONOutputWithRecords(t *testing.T) {
 	}
 	if report.Records[1].Type != "close" {
 		t.Errorf("second record should be close, got %s", report.Records[1].Type)
+	}
+	// Full base64 signatures should be present
+	if report.Records[0].Signature == "" {
+		t.Error("open record should have base64 signature")
+	}
+	if report.Records[0].PrevSig == "" {
+		t.Error("open record should have base64 prev_sig")
+	}
+	if report.Records[1].OpenSig == "" {
+		t.Error("close record should have base64 open_sig")
 	}
 	if report.Summary.TotalRecords != 2 {
 		t.Errorf("expected 2 total records, got %d", report.Summary.TotalRecords)
@@ -343,6 +359,70 @@ func TestRunInspectImpl_Verbosity1(t *testing.T) {
 	// Verbosity >= 1 prints entry tree with sequence numbers
 	if !strings.Contains(output, "[  1]") {
 		t.Error("verbosity 1 should print entry tree with seq numbers")
+	}
+}
+
+func TestRunInspectImpl_Verbosity2(t *testing.T) {
+	data := buildLedgerWithRecord(t)
+	path := writeTempLedger(t, "ledger", data)
+
+	var out bytes.Buffer
+	err := runInspectImpl(path, inspectOptions{
+		Verbosity: 2,
+		Writer:    &out,
+		NoColor:   true,
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	output := out.String()
+	// Verbosity 2 includes signature hex prefixes
+	if !strings.Contains(output, "sig=") {
+		t.Error("verbosity 2 should show sig= labels")
+	}
+}
+
+func TestRunInspectImpl_NoColor(t *testing.T) {
+	data := buildLedgerWithRecord(t)
+	path := writeTempLedger(t, "ledger", data)
+
+	var out bytes.Buffer
+	err := runInspectImpl(path, inspectOptions{
+		Verbosity: 1,
+		Writer:    &out,
+		NoColor:   true,
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	output := out.String()
+	if strings.Contains(output, "\033[") {
+		t.Error("no-color output should not contain ANSI escape codes")
+	}
+}
+
+func TestRunInspectImpl_ColorOutput(t *testing.T) {
+	data := buildLedgerWithRecord(t)
+	path := writeTempLedger(t, "ledger", data)
+
+	var out bytes.Buffer
+	err := runInspectImpl(path, inspectOptions{
+		Verbosity: 1,
+		Writer:    &out,
+		NoColor:   false,
+	})
+	if err != nil {
+		t.Fatalf("expected no error, got: %v", err)
+	}
+
+	output := out.String()
+	if !strings.Contains(output, "\033[") {
+		t.Error("colored output should contain ANSI escape codes")
+	}
+	if !strings.Contains(output, colorReset) {
+		t.Error("colored output should contain reset sequences")
 	}
 }
 
@@ -495,14 +575,14 @@ func TestHumanBytes(t *testing.T) {
 }
 
 func TestDirArrow(t *testing.T) {
-	if got := dirArrow("in"); got != "◀" {
-		t.Errorf("dirArrow(in) = %q, want ◀", got)
+	if got := dirArrow("in"); got != "▶" {
+		t.Errorf("dirArrow(in) = %q, want ▶", got)
 	}
-	if got := dirArrow("out"); got != "▶" {
-		t.Errorf("dirArrow(out) = %q, want ▶", got)
+	if got := dirArrow("out"); got != "◀" {
+		t.Errorf("dirArrow(out) = %q, want ◀", got)
 	}
-	if got := dirArrow(""); got != "▶" {
-		t.Errorf("dirArrow(\"\") = %q, want ▶", got)
+	if got := dirArrow(""); got != "◀" {
+		t.Errorf("dirArrow(\"\") = %q, want ◀", got)
 	}
 }
 

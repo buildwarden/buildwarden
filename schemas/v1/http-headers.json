@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/buildwarden/buildwarden/schemas/v1/http-headers.json",
+  "title": "HTTP Headers",
+  "description": "Metadata for checkpoint records carrying HTTP headers as payload. Only non-standard headers are listed; auth-related headers have values replaced with \"<redacted>\".",
+  "type": "object",
+  "properties": {
+    "headers": {
+      "type": "array",
+      "items": {
+        "type": "array",
+        "prefixItems": [
+          { "type": "string", "description": "Header name." },
+          { "type": "string", "description": "Header value, or \"<redacted>\" for auth-related headers." }
+        ],
+        "minItems": 2,
+        "maxItems": 2
+      },
+      "description": "Non-standard HTTP headers as [name, value] pairs."
+    }
+  },
+  "required": ["headers"],
+  "additionalProperties": false
+}
