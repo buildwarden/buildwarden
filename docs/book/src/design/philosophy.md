@@ -1,4 +1,4 @@
-On Independent Guarantees of Completeness
+# On Independent Guarantees of Completeness
 
 Completeness is a guarantee necessary to assure that nothing was potentially missed due to a lack of measurement.  Attesting the completeness of inputs is not the same as attesting that all inputs are necessarily human-identifiable, safe, or even necessarily used in their entirety, but that all resources have been accounted for in a way that either contains the content itself or a verifiable identifier of the content (e.g. hash).  As such, documents providing a guarantee of completeness should ideally also provide tamper-resistance and clearly show the inputs either directly used or which were available and unmeasured.  It is also important that the process not attempt to characterize the inputs beyond what could be measured outside the build process’s influences.  This is because bundling or vendoring a tool or dependency into an output artifact is common practice for many packages and can be done in such a way that is hard to detect without specific expertise (e.g. static compilation) and so cannot be easily or simply guaranteed to the same degree of confidence that a naive completeness can.
 
@@ -8,7 +8,7 @@ However, most developers today don’t locally build or test in hermetic environ
 
 Note that I am not saying the author needs to guarantee completeness.  It need not be the author and, in most cases, it shouldn’t be.  Having an independent guarantee of completeness of inputs gives the most confidence when the guarantor is able to be held accountable specifically on their completeness and the security of the platform which generates it, not the security of the artifact itself.  This guarantee can come from for-profit CI platforms or non-profit organizations and the same hash-identified artifact can have a completeness document from multiple providers.  As an example, if a vulnerability is found in an SSL library and was recently patched, a rebuild of a consuming package which generates a content-identical artifact using the patched version shows the artifact could not have been vulnerable originally and so can still be safely used.  This applies to vulnerabilities across the spectrum, including the builder themselves having a compromised platform.  It also opens possibilities for standards that can be audited by independent entities and security experts, instead of solely by a self-signed attestation.
 
-What is a Build Ledger?
+## What is a Build Ledger?
 
 A build ledger is a document that provides a completeness guarantee for inputs and outputs during a build process as strictly-ordered entries with a chaining signature.  Its logical specification is as follows:
 
@@ -19,7 +19,7 @@ A build ledger is a document that provides a completeness guarantee for inputs a
     * Note that while complete, if an input is not identifiable at later stages, it is essentially a known unknown which in general will be a yellow/red flag that not all inputs are able to be properly accounted for
 * There is no specific entry marking the end of a ledger.  This is intentional as it allows for truncation of ledgers when additional verification, testing, and documentation generation are done before considering the process successful.
 
-BuildWarden
+## BuildWarden
 
 BuildWarden is intended to be a reference implementation to generate build ledgers through a simple ContainerFile as the declaration of starting environment through a parent container and following instructions with fully tracked http/https inputs and outputs.  All exported artifacts and metadata are simply done as POST/PUT requests to endpoints without a valid top-level domain, e.g. https://artifacts or e.g. https://file-inputs
 
