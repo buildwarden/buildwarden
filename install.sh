@@ -2,7 +2,7 @@
 set -e
 
 REPO="buildwarden/buildwarden"
-INSTALL_DIR="${INSTALL_DIR:-/usr/local/bin}"
+INSTALL_DIR="${INSTALL_DIR:-${HOME}/.local/bin}"
 
 detect_os() {
     case "$(uname -s)" in
@@ -54,6 +54,7 @@ main() {
     curl -sSfL -o "${TMP}/${ARCHIVE}" "$URL"
     tar -xzf "${TMP}/${ARCHIVE}" -C "$TMP"
 
+    mkdir -p "$INSTALL_DIR"
     if [ -w "$INSTALL_DIR" ]; then
         mv "${TMP}/warden" "${INSTALL_DIR}/warden"
     else
@@ -61,7 +62,12 @@ main() {
         sudo mv "${TMP}/warden" "${INSTALL_DIR}/warden"
     fi
 
-    echo "Installed: $(warden --version 2>/dev/null || echo "${INSTALL_DIR}/warden")"
+    echo "Installed: ${INSTALL_DIR}/warden (${VERSION})"
+
+    case ":${PATH}:" in
+        *":${INSTALL_DIR}:"*) ;;
+        *) echo "Add to your PATH: export PATH=\"${INSTALL_DIR}:\$PATH\"" ;;
+    esac
 }
 
 main "$@"
