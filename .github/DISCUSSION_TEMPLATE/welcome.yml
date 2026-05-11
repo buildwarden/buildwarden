@@ -1,0 +1,20 @@
+title: "Welcome to BuildWarden Discussions"
+labels: []
+body:
+  - type: markdown
+    attributes:
+      value: |
+        ## Welcome!
+
+        BuildWarden is an open experiment in build provenance — recording what actually goes into a software build at the network layer, without adding burden to the build author.
+
+        **This is the place to:**
+        - Ask questions about how BuildWarden works or how to use it
+        - Share ideas for the ledger format, extensions, or integrations
+        - Discuss the supply chain provenance problem space broadly
+        - Propose new package manager support or platform integrations
+        - Give feedback on the design philosophy or threat model
+
+        **For bugs or specific feature requests**, please open an [issue](https://github.com/buildwarden/buildwarden/issues/new/choose) instead.
+
+        We welcome skepticism, especially skepticism. If you think the approach is wrong, say so — that's how hypotheses get tested.

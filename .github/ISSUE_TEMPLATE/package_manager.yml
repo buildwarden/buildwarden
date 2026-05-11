@@ -1,0 +1,46 @@
+name: Package Manager Support
+description: Report a package manager that doesn't work through BuildWarden
+labels: ["package-manager"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        BuildWarden currently supports 16+ package managers. If you've found one that fails due to certificate/TLS issues, let us know and we'll add support.
+
+  - type: input
+    id: manager
+    attributes:
+      label: Package manager
+      description: Name and version (e.g., "bun 1.2.0", "sbt 1.10")
+      placeholder: "tool-name version"
+    validations:
+      required: true
+
+  - type: textarea
+    id: dockerfile
+    attributes:
+      label: Minimal Dockerfile
+      description: A Dockerfile that reproduces the failure.
+      render: dockerfile
+      placeholder: |
+        FROM base-image:tag
+        RUN package-manager install some-package
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Error output
+      description: The certificate/TLS error from the build output.
+      render: shell
+    validations:
+      required: true
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: Known workaround (if any)
+      description: Did you find an env var or config that fixes it?
+    validations:
+      required: false
