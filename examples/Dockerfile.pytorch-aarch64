@@ -132,5 +132,4 @@ RUN python -c "import torch; print(f'PyTorch {torch.__version__} CUDA={torch.cud
 
 # Post the wheel artifact to BuildWarden's artifact endpoint
 RUN WHEEL=$(ls dist/torch-*.whl) && \
-    curl -fsSL -X POST --data-binary @"$WHEEL" "http://artifacts/$(basename $WHEEL)" && \
-    echo "Artifact posted: $(basename $WHEEL)"
+    warden-io post "$WHEEL"

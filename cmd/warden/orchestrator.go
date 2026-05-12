@@ -154,6 +154,10 @@ func (d *CtrEnv) createBuildEnv() error {
 		return fmt.Errorf("error creating %s: %w", d.wardenDirPath(), err)
 	}
 
+	if err := d.buildWardenIO(); err != nil {
+		return err
+	}
+
 	d.buildId = randanum(8)
 	log.Info(fmt.Sprintf("Build ID: %s", d.buildId))
 
@@ -238,6 +242,31 @@ func (d *CtrEnv) pullRelayImage() error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("error pulling relay image %s: %w",
 			d.relayImage, err)
+	}
+	return nil
+}
+
+func (d *CtrEnv) buildWardenIO() error {
+	dest := filepath.Join(d.wardenDirPath(), "warden-io")
+
+	// In release mode, look for warden-io next to the warden binary.
+	if version != "dev" {
+		exe, err := os.Executable()
+		if err == nil {
+			candidate := filepath.Join(filepath.Dir(exe), "warden-io")
+			if data, err := os.ReadFile(candidate); err == nil {
+				return os.WriteFile(dest, data, 0755)
+			}
+		}
+	}
+
+	// Dev mode: cross-compile from source.
+	cmd := exec.Command("go", "build", "-o", dest, "./cmd/warden-io")
+	cmd.Env = append(os.Environ(), "GOOS=linux", "CGO_ENABLED=0")
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("error cross-compiling warden-io: %w", err)
 	}
 	return nil
 }
@@ -719,7 +748,8 @@ func (d *CtrEnv) editContainerfile() error {
 			}
 			_, _ = ctrfile.WriteString("COPY .warden /.warden\n")
 			_, _ = ctrfile.WriteString(
-				"RUN find /.warden/ext.d/ -exec sh {} \\;\n")
+				"RUN ln -sf /.warden/warden-io /usr/local/bin/warden-io" +
+					" && find /.warden/ext.d/ -exec sh {} \\;\n")
 			continue
 		}
 
@@ -802,11 +832,10 @@ func buildFetchRun(files []string, dest string) string {
 		dir := dest[:strings.LastIndex(dest, "/")+1]
 		if dir != "" {
 			return fmt.Sprintf(
-				"RUN mkdir -p %s && curl -fsSL -o %s \"http://cwd/%s\"",
-				dir, dest, files[0])
+				"RUN mkdir -p %s && warden-io fetch %s -o %s",
+				dir, files[0], dest)
 		}
-		return fmt.Sprintf(
-			"RUN curl -fsSL -o %s \"http://cwd/%s\"", dest, files[0])
+		return fmt.Sprintf("RUN warden-io fetch %s -o %s", files[0], dest)
 	}
 
 	d := dest
@@ -821,7 +850,7 @@ func buildFetchRun(files []string, dest string) string {
 	fmt.Fprintf(&sb,
 		" | \\\n    xargs -P8 -I{} sh -c "+
 			"'mkdir -p \"%s$(dirname \"{}\")\" && "+
-			"curl -fsSL -o \"%s{}\" \"http://cwd/{}\"'",
+			"warden-io fetch \"{}\" -o \"%s{}\"'",
 		d, d)
 	return sb.String()
 }

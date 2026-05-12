@@ -6,7 +6,7 @@ Docker `COPY` directives introduce build inputs that traditionally bypass networ
 
 1. The orchestrator mounts the build context into the relay container (read-only)
 2. The relay serves these files at `http://cwd/<path>`
-3. `COPY` directives in the Dockerfile are rewritten to `RUN curl` commands that fetch each file from the relay
+3. `COPY` directives in the Dockerfile are rewritten to `RUN warden-io fetch` commands that fetch each file from the relay
 4. Each file transfer creates a ledger entry with full hash verification
 
 ## Example Transformation
@@ -19,10 +19,10 @@ COPY src/ /app/src/
 
 What actually runs:
 ```dockerfile
-RUN mkdir -p /app/ && curl -fsSL -o /app/requirements.txt "http://cwd/requirements.txt"
+RUN mkdir -p /app/ && warden-io fetch requirements.txt -o /app/requirements.txt
 RUN mkdir -p /app/src/ && \
     printf '%s\n' 'src/main.py' 'src/lib.py' 'src/utils.py' | \
-    xargs -P8 -I{} sh -c 'mkdir -p "/app/src/$(dirname "{}")" && curl -fsSL -o "/app/src/{}" "http://cwd/{}"'
+    xargs -P8 -I{} sh -c 'mkdir -p "/app/src/$(dirname "{}")" && warden-io fetch "{}" -o "/app/src/{}"'
 ```
 
 ## What Gets Excluded
@@ -66,9 +66,9 @@ This produces a single ledger entry for the tarball rather than thousands of ind
 
 Source file entries appear as:
 ```
-✅ GET http://cwd/src/main.py (1523 bytes)
-✅ GET http://cwd/src/lib.py (4201 bytes)
-✅ GET http://cwd/requirements.txt (42 bytes)
+✅ CONTEXT GET /src/main.py (1523 bytes)
+✅ CONTEXT GET /src/lib.py (4201 bytes)
+✅ CONTEXT GET /requirements.txt (42 bytes)
 ```
 
 Each with full blake2b_256, sha256, sha1, and md5 hashes in the hash block.

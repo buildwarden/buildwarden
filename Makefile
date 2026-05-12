@@ -3,6 +3,7 @@
 build:
 	go build -o warden ./cmd/warden/
 	GOOS=linux CGO_ENABLED=0 go build -o warden-relay ./cmd/relay/
+	GOOS=linux CGO_ENABLED=0 go build -o warden-io ./cmd/warden-io/
 
 test:
 	go test ./...
@@ -24,4 +25,4 @@ cover:
 	go tool cover -func=coverage.out
 
 clean:
-	rm -f warden warden-relay coverage.out
+	rm -f warden warden-relay warden-io coverage.out

@@ -90,20 +90,38 @@ var channelColors = []string{
 
 const colorReset = "\033[0m"
 
+// Reserved hostname colors — visually distinct from channel rotation.
+const (
+	colorContext  = "\033[2m"        // dim (context fetches are routine plumbing)
+	colorArtifact = "\033[1;32m"     // bold green (artifacts are the valuable output)
+)
+
 type colorTracker struct {
-	openSet   map[string]int
-	nextColor int
-	useColor  bool
+	openSet      map[string]int
+	reservedSet  map[string]string // sigKey -> fixed color for reserved hosts
+	nextColor    int
+	useColor     bool
 }
 
 func newColorTracker(useColor bool) *colorTracker {
 	return &colorTracker{
-		openSet:  make(map[string]int),
-		useColor: useColor,
+		openSet:     make(map[string]int),
+		reservedSet: make(map[string]string),
+		useColor:    useColor,
 	}
 }
 
-func (ct *colorTracker) assignOpen(sigKey string) {
+func (ct *colorTracker) assignOpen(sigKey string, rec ledger.Record) {
+	if host := extractHost(rec); host != "" {
+		switch host {
+		case "cwd":
+			ct.reservedSet[sigKey] = colorContext
+			return
+		case "artifacts":
+			ct.reservedSet[sigKey] = colorArtifact
+			return
+		}
+	}
 	ct.openSet[sigKey] = ct.nextColor % len(channelColors)
 	ct.nextColor++
 }
@@ -111,6 +129,13 @@ func (ct *colorTracker) assignOpen(sigKey string) {
 func (ct *colorTracker) colorFor(rec ledger.Record) string {
 	if !ct.useColor {
 		return ""
+	}
+	key := string(rec.Signature)
+	if rec.Type != ledger.RecordOpen {
+		key = string(rec.OpenSig)
+	}
+	if c, ok := ct.reservedSet[key]; ok {
+		return c
 	}
 	if rec.Type == ledger.RecordOpen {
 		return channelColors[ct.openSet[string(rec.Signature)]]
@@ -123,10 +148,40 @@ func (ct *colorTracker) colorFor(rec ledger.Record) string {
 	return channelColors[0]
 }
 
+func (ct *colorTracker) isReserved(rec ledger.Record) bool {
+	key := string(rec.Signature)
+	if rec.Type != ledger.RecordOpen {
+		key = string(rec.OpenSig)
+	}
+	_, ok := ct.reservedSet[key]
+	return ok
+}
+
 func (ct *colorTracker) closeChannel(rec ledger.Record) {
 	if rec.OpenSig != nil {
 		delete(ct.openSet, string(rec.OpenSig))
+		delete(ct.reservedSet, string(rec.OpenSig))
 	}
+}
+
+func extractHost(rec ledger.Record) string {
+	if rec.Metadata == nil {
+		return ""
+	}
+	var m map[string]any
+	if err := cbor.Unmarshal(rec.Metadata, &m); err != nil {
+		return ""
+	}
+	url, _ := m["url"].(string)
+	if url == "" {
+		return ""
+	}
+	url = strings.TrimPrefix(url, "http://")
+	url = strings.TrimPrefix(url, "https://")
+	if i := strings.IndexAny(url, ":/"); i >= 0 {
+		return url[:i]
+	}
+	return url
 }
 
 func printHuman(
@@ -158,7 +213,7 @@ func printHuman(
 
 		if verbosity >= 1 {
 			printEntryTree(
-				w, i, rec, ct.colorFor(rec), ct.useColor, verbosity, schemas,
+				w, i, rec, ct.colorFor(rec), ct.useColor, verbosity, schemas, ct,
 			)
 			if rec.Type == ledger.RecordClose || rec.Type == ledger.RecordArtifact {
 				ct.closeChannel(rec)
@@ -168,7 +223,7 @@ func printHuman(
 
 	if verbosity == 0 {
 		for _, ch := range ordered {
-			printCompact(w, ch)
+			printCompact(w, ch, noColor)
 		}
 	}
 
@@ -184,7 +239,7 @@ func groupRecord(
 		ch := &channel{open: rec}
 		channels[sigKey] = ch
 		ordered = append(ordered, ch)
-		ct.assignOpen(sigKey)
+		ct.assignOpen(sigKey, rec)
 	case ledger.RecordCheckpoint:
 		if ch, ok := channels[string(rec.OpenSig)]; ok {
 			ch.checkpoints = append(ch.checkpoints, rec)
@@ -385,6 +440,7 @@ func verifyHeader(h ledger.Header) bool {
 func printEntryTree(
 	w io.Writer, seq int, r ledger.Record,
 	color string, useColor bool, verbosity int, schemas []string,
+	ct *colorTracker,
 ) {
 	check := "✅"
 	reset := ""
@@ -408,11 +464,17 @@ func printEntryTree(
 		schemaLabel = fmt.Sprintf(" [%s]", schemaShortName(s))
 	}
 
+	reserved := ct.isReserved(r)
+
 	switch r.Type {
 	case ledger.RecordOpen:
 		meta := metaSummary(r)
-		fmt.Fprintf(w, "[%3d] %s %sOPEN %s%s%s%s\n",
-			seq+1, check, color, meta, schemaLabel, sigLabel, reset)
+		typeLabel := "OPEN"
+		if reserved {
+			typeLabel = reservedTypeLabel(r)
+		}
+		fmt.Fprintf(w, "[%3d] %s %s%s %s%s%s%s\n",
+			seq+1, check, color, typeLabel, meta, schemaLabel, sigLabel, reset)
 	case ledger.RecordCheckpoint:
 		dir := dirArrow(r.Direction())
 		openLabel := channelLabel(r.OpenSig, useColor, color)
@@ -431,6 +493,18 @@ func printEntryTree(
 		fmt.Fprintf(w, "[%3d] %s %s └─ ARTIFACT %s (%d bytes)%s%s%s%s\n",
 			seq+1, check, color, meta,
 			r.AbsPayloadSize(), schemaLabel, openLabel, sigLabel, reset)
+	}
+}
+
+func reservedTypeLabel(r ledger.Record) string {
+	host := extractHost(r)
+	switch host {
+	case "cwd":
+		return "CONTEXT"
+	case "artifacts":
+		return "ARTIFACT"
+	default:
+		return "OPEN"
 	}
 }
 
@@ -465,7 +539,7 @@ func channelLabel(openSig []byte, useColor bool, _ string) string {
 	return ""
 }
 
-func printCompact(w io.Writer, ch *channel) {
+func printCompact(w io.Writer, ch *channel, noColor bool) {
 	meta := metaSummary(ch.open)
 	status := ""
 	var size int64
@@ -477,7 +551,29 @@ func printCompact(w io.Writer, ch *channel) {
 	} else {
 		status = " UNCLOSED"
 	}
-	fmt.Fprintf(w, "✅%s %s (%d bytes)\n", status, meta, size)
+
+	host := extractHost(ch.open)
+	prefix := ""
+	suffix := ""
+	if !noColor {
+		switch host {
+		case "cwd":
+			prefix = colorContext
+			suffix = colorReset
+			if status == "" {
+				status = " CONTEXT"
+			}
+		case "artifacts":
+			prefix = colorArtifact
+			suffix = colorReset
+		}
+	} else {
+		if host == "cwd" && status == "" {
+			status = " CONTEXT"
+		}
+	}
+
+	fmt.Fprintf(w, "%s✅%s %s (%d bytes)%s\n", prefix, status, meta, size, suffix)
 }
 
 func metaSummary(r ledger.Record) string {
@@ -492,12 +588,22 @@ func metaSummary(r ledger.Record) string {
 	url, _ := m["url"].(string)
 	name, _ := m["name"].(string)
 	if method != "" && url != "" {
-		return fmt.Sprintf("%s %s", method, url)
+		return fmt.Sprintf("%s %s", method, friendlyURL(url))
 	}
 	if name != "" {
 		return fmt.Sprintf("→ %s", name)
 	}
 	return ""
+}
+
+func friendlyURL(url string) string {
+	if strings.HasPrefix(url, "http://cwd/") {
+		return strings.TrimPrefix(url, "http://cwd")
+	}
+	if strings.HasPrefix(url, "http://artifacts/") {
+		return strings.TrimPrefix(url, "http://artifacts")
+	}
+	return url
 }
 
 func dirArrow(dir string) string {
