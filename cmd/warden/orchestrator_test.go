@@ -106,7 +106,7 @@ func TestParseCopyFlags_SimpleArgs(t *testing.T) {
 
 func TestBuildFetchRun_SingleFileToFile(t *testing.T) {
 	got := buildFetchRun([]string{"main.go"}, "/app/main.go")
-	want := `RUN mkdir -p /app/ && curl -fsSL -o /app/main.go "http://cwd/main.go"`
+	want := `RUN mkdir -p /app/ && warden-io fetch main.go -o /app/main.go`
 	if got != want {
 		t.Errorf("got:\n%s\nwant:\n%s", got, want)
 	}
@@ -115,7 +115,7 @@ func TestBuildFetchRun_SingleFileToFile(t *testing.T) {
 func TestBuildFetchRun_SingleFileToFileNested(t *testing.T) {
 	// Single file to a non-dir dest with no directory component.
 	got := buildFetchRun([]string{"app.bin"}, "app.bin")
-	want := `RUN curl -fsSL -o app.bin "http://cwd/app.bin"`
+	want := `RUN warden-io fetch app.bin -o app.bin`
 	if got != want {
 		t.Errorf("got:\n%s\nwant:\n%s", got, want)
 	}

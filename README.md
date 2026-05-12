@@ -102,7 +102,7 @@ Every request is individually hashed (BLAKE2b + SHA-256 + SHA-1 + MD5) and signe
 2. The relay intercepts TLS with a per-build ephemeral CA (injected into the container's trust store). It forwards requests upstream, verifying the real server certificates.
 3. Every request/response pair is hashed and signed into the ledger in real time. The signature chain ensures records cannot be reordered, inserted, or removed without detection.
 4. Source files enter the build exclusively through the relay (Dockerfile `COPY` directives are rewritten to fetch via HTTP), giving full provenance over local files too.
-5. Build outputs can be posted back to the ledger as artifacts (`curl -X POST http://artifacts/<name>`), binding them to the same signature chain as their inputs.
+5. Build outputs can be posted back to the ledger as artifacts (`warden-io post <file>`), binding them to the same signature chain as their inputs.
 
 ## Package Manager Support
 

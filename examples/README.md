@@ -31,10 +31,10 @@ warden inspect --json /tmp/warden-ledger-*/ledger
 
 ## Adding your own
 
-Any standard Dockerfile works. To post build artifacts back to the ledger, use the reserved `artifacts` hostname:
+Any standard Dockerfile works. To post build artifacts back to the ledger, use the built-in `warden-io` tool:
 
 ```dockerfile
-RUN curl -X POST --data-binary @output.whl "http://artifacts/output.whl"
+RUN warden-io post output.whl
 ```
 
-The `.warden/` directory is automatically injected into the build context with CA certificates and extension scripts. You don't need to reference it explicitly.
+The `.warden/` directory is automatically injected into the build context with CA certificates, the `warden-io` binary, and extension scripts. The binary is symlinked into PATH — no installation required.
