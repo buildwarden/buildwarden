@@ -37,7 +37,7 @@ func dockerfileToScript(path string) (*ScriptResult, error) {
 		line := scanner.Text()
 
 		if strings.HasSuffix(line, "\\") {
-			continuation += strings.TrimSuffix(line, "\\") + "\n"
+			continuation += strings.TrimSuffix(line, "\\") + "\\\n"
 			continue
 		}
 		if continuation != "" {
