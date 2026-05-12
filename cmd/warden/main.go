@@ -16,7 +16,6 @@ var (
 	flagCapture    string
 	flagOutput     string
 	flagNoCompress bool
-	flagDriver     string
 )
 
 var rootCmd = &cobra.Command{
@@ -72,16 +71,12 @@ func init() {
 		"output directory for build results (default: warden-output)")
 	buildCmd.Flags().BoolVar(&flagNoCompress, "no-compress", false,
 		"disable zstd compression of ledger and payloads")
-	buildCmd.Flags().StringVar(&flagDriver, "driver", "script",
-		"build driver (script, dind)")
 	shellCmd.Flags().StringVar(&flagCapture, "capture", "",
 		"capture payloads to disk (none, headers, bodies, all)")
 	shellCmd.Flags().StringVarP(&flagOutput, "output", "o", "",
 		"output directory for build results (default: warden-output)")
 	shellCmd.Flags().BoolVar(&flagNoCompress, "no-compress", false,
 		"disable zstd compression of ledger and payloads")
-	shellCmd.Flags().StringVar(&flagDriver, "driver", "script",
-		"build driver (script, dind)")
 
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(shellCmd)
@@ -164,7 +159,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		compress = false
 	}
 
-	env := selectDriver(flagDriver)
+	env := NewScriptEnv()
 	config := &BuildConfig{
 		Context:       contextDir,
 		Containerfile: dockerfile,
@@ -208,7 +203,7 @@ func runShell(cmd *cobra.Command, args []string) error {
 		compress = false
 	}
 
-	env := selectDriver(flagDriver)
+	env := NewScriptEnv()
 	config := &BuildConfig{
 		Context:       contextDir,
 		Containerfile: dockerfile,
@@ -220,11 +215,3 @@ func runShell(cmd *cobra.Command, args []string) error {
 	return env.Shell(config)
 }
 
-func selectDriver(driver string) BuildEnv {
-	switch driver {
-	case "dind":
-		return NewCtrEnv()
-	default:
-		return NewScriptEnv()
-	}
-}

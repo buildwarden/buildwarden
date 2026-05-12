@@ -86,7 +86,7 @@ func (b *scriptBuilder) handleDirective(
 	case "WORKDIR":
 		dir := expandEnv(strings.TrimSpace(rest), b.env)
 		b.workdir = dir
-		fmt.Fprintf(&b.sb, "mkdir -p %s && cd %s\n",
+		fmt.Fprintf(&b.sb, "mkdir -p %s\ncd %s\n",
 			shellQuote(dir), shellQuote(dir))
 	case "COPY":
 		return b.handleCopy(rest)

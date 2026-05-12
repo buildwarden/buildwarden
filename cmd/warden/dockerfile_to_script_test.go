@@ -67,7 +67,7 @@ RUN pwd
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !strings.Contains(result.Script, "mkdir -p /app && cd /app") {
+	if !strings.Contains(result.Script, "mkdir -p /app\ncd /app") {
 		t.Errorf("WORKDIR should become mkdir+cd, got:\n%s", result.Script)
 	}
 }

@@ -7,7 +7,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
-	"time"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/lesiw/ctrctl"
@@ -15,9 +14,10 @@ import (
 
 // ScriptEnv implements BuildEnv using direct container exec instead of DinD.
 // The Dockerfile is translated to a shell script and executed inside an
-// unprivileged container. Network isolation is enforced by container runtime
-// topology: the build container is on an isolated bridge with the relay as
-// its sole gateway. No iptables, no CAP_NET_ADMIN, no privileged mode.
+// unprivileged container. Network isolation is enforced by iptables rules
+// applied via a sidecar container sharing the build container's network
+// namespace (Kubernetes init container pattern). The build container has
+// no CAP_NET_ADMIN and cannot modify the rules.
 type ScriptEnv struct {
 	buildConfig    *BuildConfig
 	buildContainer string
@@ -383,12 +383,12 @@ func (s *ScriptEnv) startBuildContainer(image string) error {
 // The --network=container:<name> flag is the container-runtime equivalent
 // of Kubernetes pod-level network namespace sharing.
 
-const netnsDockerfile = `FROM alpine:3.20
+const netnsDockerfile = `FROM alpine:latest
 RUN apk add --no-cache iptables
 ENTRYPOINT ["sh", "-c"]
 `
 
-const netnsImageTag = "warden-netns:alpine3.20"
+const netnsImageTag = "warden-netns:latest"
 
 // ensureNetnsImage builds the warden-netns image if it doesn't already
 // exist. The Dockerfile is deterministic, so the container runtime
@@ -479,14 +479,6 @@ func (s *ScriptEnv) injectWarden() error {
 }
 
 func (s *ScriptEnv) createNetwork() error {
-	// Create a bridge network for the build. The build container is
-	// unprivileged (no CAP_NET_ADMIN) and uses the relay as its DNS
-	// server, so all name resolution goes through the relay.
-	//
-	// NOTE: True network isolation (--internal) requires runtime support
-	// for multi-homing (so the relay can reach the internet). Finch/nerdctl
-	// doesn't support `network connect`. For runtimes that do, this should
-	// be upgraded to an internal network.
 	id, err := ctrctl.NetworkCreate(
 		&ctrctl.NetworkCreateOpts{
 			Driver: "bridge",
@@ -578,7 +570,7 @@ func (s *ScriptEnv) buildRelayFromSource() error {
 		return fmt.Errorf("error writing relay to context: %w", err)
 	}
 
-	dockerfile := `FROM alpine:3.20
+	dockerfile := `FROM alpine:latest
 RUN apk add --no-cache ca-certificates
 COPY relay /usr/local/bin/relay
 EXPOSE 53/udp 80 443
@@ -757,16 +749,3 @@ func (s *ScriptEnv) collectOutput() {
 	}
 }
 
-// waitForRelay polls the relay until it's responsive.
-func (s *ScriptEnv) waitForRelay() error {
-	for i := 0; i < 50; i++ {
-		_, err := ctrctl.ContainerExec(
-			nil, s.relayContainer, "true",
-		)
-		if err == nil {
-			return nil
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
-	return fmt.Errorf("timed out waiting for relay")
-}
