@@ -37,7 +37,7 @@ func TestLedgerReadHeader(t *testing.T) {
 	if len(h.Meta.Hashes) != 4 {
 		t.Errorf("meta hashes = %d", len(h.Meta.Hashes))
 	}
-	if len(h.Meta.Schemas) != 5 {
+	if len(h.Meta.Schemas) != 6 {
 		t.Errorf("meta schemas = %d", len(h.Meta.Schemas))
 	}
 }

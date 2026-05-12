@@ -92,8 +92,9 @@ const colorReset = "\033[0m"
 
 // Reserved hostname colors — visually distinct from channel rotation.
 const (
-	colorContext  = "\033[2m"        // dim (context fetches are routine plumbing)
-	colorArtifact = "\033[1;32m"     // bold green (artifacts are the valuable output)
+	colorContext  = "\033[2m"    // dim (context fetches are routine plumbing)
+	colorArtifact = "\033[1;32m" // bold green (artifacts are the valuable output)
+	colorEnv      = "\033[1;35m" // bold magenta (environment identity)
 )
 
 type colorTracker struct {
@@ -119,6 +120,9 @@ func (ct *colorTracker) assignOpen(sigKey string, rec ledger.Record) {
 			return
 		case "artifacts":
 			ct.reservedSet[sigKey] = colorArtifact
+			return
+		case "environment":
+			ct.reservedSet[sigKey] = colorEnv
 			return
 		}
 	}
@@ -503,6 +507,8 @@ func reservedTypeLabel(r ledger.Record) string {
 		return "CONTEXT"
 	case "artifacts":
 		return "ARTIFACT"
+	case "environment":
+		return "ENVIRONMENT"
 	default:
 		return "OPEN"
 	}
@@ -566,10 +572,23 @@ func printCompact(w io.Writer, ch *channel, noColor bool) {
 		case "artifacts":
 			prefix = colorArtifact
 			suffix = colorReset
+		case "environment":
+			prefix = colorEnv
+			suffix = colorReset
+			if status == "" {
+				status = " ENVIRONMENT"
+			}
 		}
 	} else {
-		if host == "cwd" && status == "" {
-			status = " CONTEXT"
+		switch host {
+		case "cwd":
+			if status == "" {
+				status = " CONTEXT"
+			}
+		case "environment":
+			if status == "" {
+				status = " ENVIRONMENT"
+			}
 		}
 	}
 
@@ -597,11 +616,12 @@ func metaSummary(r ledger.Record) string {
 }
 
 func friendlyURL(url string) string {
-	if strings.HasPrefix(url, "http://cwd/") {
-		return strings.TrimPrefix(url, "http://cwd")
-	}
-	if strings.HasPrefix(url, "http://artifacts/") {
-		return strings.TrimPrefix(url, "http://artifacts")
+	for _, prefix := range []string{
+		"http://cwd", "http://artifacts", "http://environment",
+	} {
+		if strings.HasPrefix(url, prefix+"/") {
+			return strings.TrimPrefix(url, prefix)
+		}
 	}
 	return url
 }

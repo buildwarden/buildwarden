@@ -90,8 +90,8 @@ func TestLedgerHeader(t *testing.T) {
 	if len(meta.Hashes) != 4 {
 		t.Fatalf("meta.Hashes len = %d, want 4", len(meta.Hashes))
 	}
-	if len(meta.Schemas) != 5 {
-		t.Fatalf("meta.Schemas len = %d, want 5", len(meta.Schemas))
+	if len(meta.Schemas) != 6 {
+		t.Fatalf("meta.Schemas len = %d, want 6", len(meta.Schemas))
 	}
 }
 
