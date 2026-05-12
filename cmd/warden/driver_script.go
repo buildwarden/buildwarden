@@ -372,12 +372,62 @@ func (s *ScriptEnv) startBuildContainer(image string) error {
 	return nil
 }
 
+// Network namespace isolation uses a pattern based on Kubernetes init
+// containers (stable since Kubernetes 1.6): a short-lived privileged
+// container shares the pod/build container's network namespace to apply
+// iptables rules, then exits. The rules persist in the namespace because
+// they belong to the namespace, not to any specific container process.
+// The build container has no CAP_NET_ADMIN so it cannot modify the rules.
+//
+// Reference: https://kubernetes.io/docs/concepts/workloads/pods/init-containers/
+// The --network=container:<name> flag is the container-runtime equivalent
+// of Kubernetes pod-level network namespace sharing.
+
+const netnsDockerfile = `FROM alpine:3.20
+RUN apk add --no-cache iptables
+ENTRYPOINT ["sh", "-c"]
+`
+
+const netnsImageTag = "warden-netns:alpine3.20"
+
+// ensureNetnsImage builds the warden-netns image if it doesn't already
+// exist. The Dockerfile is deterministic, so the container runtime
+// deduplicates by instruction hash across all builds on this host.
+func ensureNetnsImage() error {
+	args := append(ctrctl.Cli, "image", "inspect", netnsImageTag)
+	cmd := exec.Command(args[0], args[1:]...)
+	if cmd.Run() == nil {
+		return nil
+	}
+
+	buildCtx, err := os.MkdirTemp("", "warden-netns-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(buildCtx)
+
+	if err := os.WriteFile(
+		filepath.Join(buildCtx, "Dockerfile"),
+		[]byte(netnsDockerfile), 0644); err != nil {
+		return err
+	}
+
+	_, err = ctrctl.ImageBuild(
+		&ctrctl.ImageBuildOpts{Tag: netnsImageTag},
+		buildCtx, "")
+	return err
+}
+
 // isolateBuildContainer applies iptables rules to force all traffic
-// through the relay. Uses a one-shot alpine container sharing the build
-// container's network namespace (since the build image may not have
-// iptables). After this returns, the build container's network is locked
-// down regardless of what's installed in the build image.
+// through the relay. Uses the warden-netns image sharing the build
+// container's network namespace. After this returns, the build
+// container's network is locked down — it has no CAP_NET_ADMIN to
+// modify or flush the rules.
 func (s *ScriptEnv) isolateBuildContainer() error {
+	if err := ensureNetnsImage(); err != nil {
+		return fmt.Errorf("building netns image: %w", err)
+	}
+
 	script := fmt.Sprintf(`set -e
 iptables -t nat -A OUTPUT -p udp --dport 53 -j DNAT --to-destination %[1]s:53
 iptables -t nat -A OUTPUT -p tcp --dport 53 -j DNAT --to-destination %[1]s:53
@@ -388,14 +438,12 @@ iptables -A OUTPUT -d 127.0.0.0/8 -j ACCEPT
 iptables -A OUTPUT -j DROP
 `, s.subnet.relayIP)
 
-	// Run a one-shot container sharing the build container's network
-	// namespace. Alpine has iptables; --privileged gives NET_ADMIN.
 	args := append(ctrctl.Cli, "container", "run",
 		"--rm",
 		"--network", "container:"+s.buildContainer,
 		"--privileged",
-		"alpine:3.20",
-		"sh", "-c", "apk add --no-cache -q iptables && "+script,
+		netnsImageTag,
+		script,
 	)
 	cmd := exec.Command(args[0], args[1:]...)
 	cmd.Stdout = os.Stderr
