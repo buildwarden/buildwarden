@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/fxamacker/cbor/v2"
 	"github.com/lesiw/ctrctl"
 )
 
@@ -36,37 +37,28 @@ func NewScriptEnv() BuildEnv {
 
 func (s *ScriptEnv) Build(config *BuildConfig) error {
 	return s.inBuildEnv(config, func() error {
-		// Translate Dockerfile to script.
 		ctrfilePath := filepath.Join(s.wardenDirPath(), "Containerfile")
 		result, err := dockerfileToScript(ctrfilePath)
 		if err != nil {
 			return fmt.Errorf("translating dockerfile: %w", err)
 		}
 
-		// Write script to .warden/.
 		scriptPath := filepath.Join(s.wardenDirPath(), "build.sh")
 		if err := os.WriteFile(scriptPath, []byte(result.Script), 0755); err != nil {
 			return fmt.Errorf("writing build script: %w", err)
 		}
 
-		// Pull the FROM image through the relay's network (for provenance).
-		log.Build(fmt.Sprintf("Pulling image: %s", result.Image))
-		if err := s.pullBuildBaseImage(result.Image); err != nil {
-			return err
-		}
-
-		// Start the build container — unprivileged, relay is sole gateway.
 		log.Build("Starting build container...")
 		if err := s.startBuildContainer(result.Image); err != nil {
 			return err
 		}
-
-		// Copy .warden/ into the container.
+		if err := s.isolateBuildContainer(); err != nil {
+			return err
+		}
 		if err := s.injectWarden(); err != nil {
 			return err
 		}
 
-		// Execute the build script.
 		log.Build("Executing build...")
 		_, err = ctrctl.ContainerExec(
 			&ctrctl.ContainerExecOpts{
@@ -95,12 +87,10 @@ func (s *ScriptEnv) Shell(config *BuildConfig) error {
 			return fmt.Errorf("translating dockerfile: %w", err)
 		}
 
-		log.Info(fmt.Sprintf("Pulling image: %s", result.Image))
-		if err := s.pullBuildBaseImage(result.Image); err != nil {
+		if err := s.startBuildContainer(result.Image); err != nil {
 			return err
 		}
-
-		if err := s.startBuildContainer(result.Image); err != nil {
+		if err := s.isolateBuildContainer(); err != nil {
 			return err
 		}
 		if err := s.injectWarden(); err != nil {
@@ -168,6 +158,13 @@ func (s *ScriptEnv) setup() error {
 		return err
 	}
 
+	// Pull the base image and write environment record files BEFORE
+	// starting the relay. The relay reads these at startup and records
+	// the environment as the first ledger entry.
+	if err := s.prepareEnvironment(); err != nil {
+		return err
+	}
+
 	log.Info("Allocating network...")
 	sub, err := allocateSubnet()
 	if err != nil {
@@ -197,6 +194,23 @@ func (s *ScriptEnv) setup() error {
 	return nil
 }
 
+func (s *ScriptEnv) prepareEnvironment() error {
+	image, err := extractFromImage(s.buildConfig.Containerfile)
+	if err != nil {
+		return fmt.Errorf("reading FROM image: %w", err)
+	}
+
+	log.Info(fmt.Sprintf("Pulling image: %s", image))
+	if err := s.pullBuildBaseImage(image); err != nil {
+		return err
+	}
+
+	if err := s.writeEnvironment(image); err != nil {
+		log.Warn(fmt.Sprintf("failed to write environment: %s", err))
+	}
+	return nil
+}
+
 func (s *ScriptEnv) pullBuildBaseImage(image string) error {
 	args := append(ctrctl.Cli, "pull", image)
 	cmd := exec.Command(args[0], args[1:]...)
@@ -205,16 +219,13 @@ func (s *ScriptEnv) pullBuildBaseImage(image string) error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("error pulling base image %s: %w", image, err)
 	}
-
-	// Record the image identity in the ledger via the environment endpoint.
-	if err := s.recordEnvironment(image); err != nil {
-		log.Warn(fmt.Sprintf("failed to record environment: %s", err))
-	}
 	return nil
 }
 
-func (s *ScriptEnv) recordEnvironment(image string) error {
-	// Get the image digest (OCI manifest content-address).
+// writeEnvironment writes environment payload + metadata to the ledger
+// volume BEFORE the relay starts. The relay reads these at startup and
+// writes the environment record as the first ledger entry.
+func (s *ScriptEnv) writeEnvironment(image string) error {
 	inspectArgs := append(ctrctl.Cli, "image", "inspect",
 		"--format", "{{json .RepoDigests}}", image)
 	cmd := exec.Command(inspectArgs[0], inspectArgs[1:]...)
@@ -228,33 +239,31 @@ func (s *ScriptEnv) recordEnvironment(image string) error {
 		return fmt.Errorf("could not resolve digest for %s", image)
 	}
 
-	// Try to get the raw OCI manifest from the runtime (externally
-	// verifiable — any registry mirror serves the same bytes for this
-	// digest). Falls back to image config if runtime doesn't support it.
 	payload, mediaType := s.getImageManifest(image)
 
-	// Write payload to the ledger dir (mounted into relay at /ledger).
 	envDir := filepath.Join(s.ledgerDir, "environment")
 	_ = os.MkdirAll(envDir, 0755)
+
 	if err := os.WriteFile(
-		filepath.Join(envDir, "payload.json"), payload, 0644); err != nil {
+		filepath.Join(envDir, "payload"), payload, 0644); err != nil {
 		return err
 	}
 
-	// Post via the relay container using wget against localhost.
-	url := fmt.Sprintf(
-		"http://127.0.0.1:80/image?reference=%s&digest=%s&mediaType=%s",
-		image, digest, mediaType)
-	postArgs := append(ctrctl.Cli, "exec", s.relayContainer,
-		"wget", "-q", "-O", "/dev/null",
-		"--header", "Host: environment",
-		"--post-file", "/ledger/environment/payload.json",
-		url)
-	cmd = exec.Command(postArgs[0], postArgs[1:]...)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("posting to environment endpoint: %w: %s",
-			err, strings.TrimSpace(string(out)))
+	// CBOR-encode the metadata.
+	meta := map[string]any{
+		"reference": image,
+		"digest":    digest,
+		"mediaType": mediaType,
 	}
+	metaBytes, err := cbor.Marshal(meta)
+	if err != nil {
+		return fmt.Errorf("encoding environment metadata: %w", err)
+	}
+	if err := os.WriteFile(
+		filepath.Join(envDir, "metadata"), metaBytes, 0644); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -339,9 +348,10 @@ func parseDigestFromInspect(output string) string {
 }
 
 func (s *ScriptEnv) startBuildContainer(image string) error {
-	// Start an unprivileged container on the isolated network.
-	// The relay is the sole gateway — all traffic routed through it by
-	// container runtime network topology. No iptables needed.
+	// Start unprivileged — no CAP_NET_ADMIN. Network isolation is
+	// applied externally via a sidecar container sharing the network
+	// namespace (see isolateBuildContainer). The build container cannot
+	// modify or flush the iptables rules.
 	args := append(ctrctl.Cli, "container", "run",
 		"--detach",
 		"--name", "warden-build-"+s.buildId,
@@ -359,6 +369,40 @@ func (s *ScriptEnv) startBuildContainer(image string) error {
 		return fmt.Errorf("error starting build container: %w", err)
 	}
 	s.buildContainer = strings.TrimSpace(string(out))
+	return nil
+}
+
+// isolateBuildContainer applies iptables rules to force all traffic
+// through the relay. Uses a one-shot alpine container sharing the build
+// container's network namespace (since the build image may not have
+// iptables). After this returns, the build container's network is locked
+// down regardless of what's installed in the build image.
+func (s *ScriptEnv) isolateBuildContainer() error {
+	script := fmt.Sprintf(`set -e
+iptables -t nat -A OUTPUT -p udp --dport 53 -j DNAT --to-destination %[1]s:53
+iptables -t nat -A OUTPUT -p tcp --dport 53 -j DNAT --to-destination %[1]s:53
+iptables -t nat -A OUTPUT -p tcp --dport 80 -j DNAT --to-destination %[1]s:80
+iptables -t nat -A OUTPUT -p tcp --dport 443 -j DNAT --to-destination %[1]s:443
+iptables -A OUTPUT -d %[1]s -j ACCEPT
+iptables -A OUTPUT -d 127.0.0.0/8 -j ACCEPT
+iptables -A OUTPUT -j DROP
+`, s.subnet.relayIP)
+
+	// Run a one-shot container sharing the build container's network
+	// namespace. Alpine has iptables; --privileged gives NET_ADMIN.
+	args := append(ctrctl.Cli, "container", "run",
+		"--rm",
+		"--network", "container:"+s.buildContainer,
+		"--privileged",
+		"alpine:3.20",
+		"sh", "-c", "apk add --no-cache -q iptables && "+script,
+	)
+	cmd := exec.Command(args[0], args[1:]...)
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("network isolation failed: %w", err)
+	}
 	return nil
 }
 

@@ -144,6 +144,30 @@ func splitDirective(line string) (string, string) {
 	return strings.ToUpper(line[:idx]), strings.TrimSpace(line[idx+1:])
 }
 
+// extractFromImage reads a Dockerfile and returns just the FROM image,
+// ignoring all other directives. Used when we need the image name before
+// the full Dockerfile-to-script translation (which requires COPY rewriting).
+func extractFromImage(path string) (string, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+
+	scanner := bufio.NewScanner(f)
+	for scanner.Scan() {
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		directive, rest := splitDirective(line)
+		if directive == "FROM" {
+			return parseFrom(rest), nil
+		}
+	}
+	return "", fmt.Errorf("no FROM directive found in %s", path)
+}
+
 func parseFrom(rest string) string {
 	// FROM image:tag AS name
 	fields := strings.Fields(rest)

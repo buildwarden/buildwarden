@@ -100,9 +100,8 @@ var (
 
 // reservedHosts are hostnames intercepted by the relay rather than forwarded.
 var reservedHosts = map[string]bool{
-	"artifacts":   true,
-	"cwd":         true,
-	"environment": true,
+	"artifacts": true,
+	"cwd":       true,
 }
 
 // contextDir is the path to the mounted build context, served via "cwd".
@@ -291,11 +290,6 @@ func onRequest(req *http.Request) (*http.Request, *http.Response) {
 	// Serve build context files (GET from "cwd" hostname).
 	if host == "cwd" && req.Method == "GET" {
 		return handleContextGet(req)
-	}
-
-	// Record build environment identity (POST from orchestrator).
-	if host == "environment" && req.Method == "POST" {
-		return handleEnvironmentPost(req)
 	}
 
 	seq := captureSeq.Add(1)
@@ -555,57 +549,6 @@ func handleContextGet(
 		Body:          io.NopCloser(strings.NewReader(string(data))),
 		ContentLength: int64(len(data)),
 	}
-	return req, resp
-}
-
-func handleEnvironmentPost(
-	req *http.Request,
-) (*http.Request, *http.Response) {
-	// The payload is the raw OCI manifest bytes. Metadata (reference,
-	// digest, mediaType) comes from query parameters so the relay can
-	// hash the manifest independently and record it.
-	body, err := io.ReadAll(req.Body)
-	req.Body.Close()
-	if err != nil || len(body) == 0 {
-		resp := newTextResponse(req, http.StatusBadRequest,
-			"environment post requires manifest body\n")
-		return req, resp
-	}
-
-	reference := req.URL.Query().Get("reference")
-	digest := req.URL.Query().Get("digest")
-	mediaType := req.URL.Query().Get("mediaType")
-
-	if reference == "" || digest == "" {
-		resp := newTextResponse(req, http.StatusBadRequest,
-			"reference and digest query params required\n")
-		return req, resp
-	}
-
-	// Open a channel for the environment record.
-	openMeta, _ := cbor.Marshal(map[string]any{
-		"method":   "POST",
-		"url":      req.URL.String(),
-		"protocol": req.Proto,
-	})
-	openSig := activeLedger.Open(schemaHTTPOpen, openMeta)
-
-	// Hash the manifest payload and close with environment schema.
-	hashBlock := activeLedger.ComputeHashBlock(body)
-	closeMeta, _ := cbor.Marshal(map[string]any{
-		"reference": reference,
-		"digest":    digest,
-		"mediaType": mediaType,
-	})
-	activeLedger.Close(
-		openSig, -int64(len(body)), hashBlock, schemaEnvCtr, closeMeta,
-	)
-
-	log.Printf("environment: recorded %s (%s, %d bytes)",
-		reference, digest[:19], len(body))
-
-	resp := newTextResponse(req, http.StatusOK,
-		fmt.Sprintf("environment recorded: %s\n", reference))
 	return req, resp
 }
 
