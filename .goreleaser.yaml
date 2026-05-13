@@ -2,7 +2,7 @@ version: 2
 project_name: buildwarden
 before:
   hooks:
-    - cmd: sh -c 'GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o dist/warden-io-linux-amd64 ./cmd/warden-io && GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o dist/warden-io-linux-arm64 ./cmd/warden-io'
+    - sh -c 'GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o dist/warden-io-linux-amd64 ./cmd/warden-io && GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o dist/warden-io-linux-arm64 ./cmd/warden-io'
 builds:
   - id: warden
     main: ./cmd/warden
@@ -18,10 +18,7 @@ archives:
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
     files:
       - src: dist/warden-io-linux-{{ .Arch }}
-        dst: .
-        info:
-          name: warden-io
-          mode: 0755
+        dst: warden-io
 checksum:
   name_template: checksums.txt
   algorithm: sha256
