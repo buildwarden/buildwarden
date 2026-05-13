@@ -78,7 +78,7 @@ func runClean(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Prune any dangling anonymous volumes left by DinD containers.
+	// Prune any dangling anonymous volumes left by build containers.
 	pruneArgs := append(ctrctl.Cli, "volume", "prune", "-f")
 	pruneCmd := exec.Command(pruneArgs[0], pruneArgs[1:]...)
 	if out, err := pruneCmd.Output(); err == nil && len(out) > 0 {

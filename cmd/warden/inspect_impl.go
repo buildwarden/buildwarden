@@ -92,8 +92,9 @@ const colorReset = "\033[0m"
 
 // Reserved hostname colors — visually distinct from channel rotation.
 const (
-	colorContext  = "\033[2m"        // dim (context fetches are routine plumbing)
-	colorArtifact = "\033[1;32m"     // bold green (artifacts are the valuable output)
+	colorContext  = "\033[2m"    // dim (context fetches are routine plumbing)
+	colorArtifact = "\033[1;32m" // bold green (artifacts are the valuable output)
+	colorEnv      = "\033[1;35m" // bold magenta (environment identity)
 )
 
 type colorTracker struct {
@@ -111,7 +112,13 @@ func newColorTracker(useColor bool) *colorTracker {
 	}
 }
 
-func (ct *colorTracker) assignOpen(sigKey string, rec ledger.Record) {
+func (ct *colorTracker) assignOpen(
+	sigKey string, rec ledger.Record, schemas []string,
+) {
+	if isEnvSchema(rec.SchemaIndex, schemas) {
+		ct.reservedSet[sigKey] = colorEnv
+		return
+	}
 	if host := extractHost(rec); host != "" {
 		switch host {
 		case "cwd":
@@ -124,6 +131,13 @@ func (ct *colorTracker) assignOpen(sigKey string, rec ledger.Record) {
 	}
 	ct.openSet[sigKey] = ct.nextColor % len(channelColors)
 	ct.nextColor++
+}
+
+func isEnvSchema(idx byte, schemas []string) bool {
+	if int(idx) >= len(schemas) {
+		return false
+	}
+	return strings.Contains(schemas[idx], "environment")
 }
 
 func (ct *colorTracker) colorFor(rec ledger.Record) string {
@@ -209,7 +223,7 @@ func printHuman(
 
 	for i, rec := range result.Records {
 		sigKey := string(rec.Signature)
-		ordered = groupRecord(rec, sigKey, channels, ordered, ct)
+		ordered = groupRecord(rec, sigKey, channels, ordered, ct, schemas)
 
 		if verbosity >= 1 {
 			printEntryTree(
@@ -223,7 +237,7 @@ func printHuman(
 
 	if verbosity == 0 {
 		for _, ch := range ordered {
-			printCompact(w, ch, noColor)
+			printCompact(w, ch, noColor, schemas)
 		}
 	}
 
@@ -232,14 +246,15 @@ func printHuman(
 
 func groupRecord(
 	rec ledger.Record, sigKey string,
-	channels map[string]*channel, ordered []*channel, ct *colorTracker,
+	channels map[string]*channel, ordered []*channel,
+	ct *colorTracker, schemas []string,
 ) []*channel {
 	switch rec.Type {
 	case ledger.RecordOpen:
 		ch := &channel{open: rec}
 		channels[sigKey] = ch
 		ordered = append(ordered, ch)
-		ct.assignOpen(sigKey, rec)
+		ct.assignOpen(sigKey, rec, schemas)
 	case ledger.RecordCheckpoint:
 		if ch, ok := channels[string(rec.OpenSig)]; ok {
 			ch.checkpoints = append(ch.checkpoints, rec)
@@ -471,7 +486,7 @@ func printEntryTree(
 		meta := metaSummary(r)
 		typeLabel := "OPEN"
 		if reserved {
-			typeLabel = reservedTypeLabel(r)
+			typeLabel = reservedTypeLabel(r, schemas)
 		}
 		fmt.Fprintf(w, "[%3d] %s %s%s %s%s%s%s\n",
 			seq+1, check, color, typeLabel, meta, schemaLabel, sigLabel, reset)
@@ -496,7 +511,10 @@ func printEntryTree(
 	}
 }
 
-func reservedTypeLabel(r ledger.Record) string {
+func reservedTypeLabel(r ledger.Record, schemas []string) string {
+	if isEnvSchema(r.SchemaIndex, schemas) {
+		return "ENVIRONMENT"
+	}
 	host := extractHost(r)
 	switch host {
 	case "cwd":
@@ -539,8 +557,13 @@ func channelLabel(openSig []byte, useColor bool, _ string) string {
 	return ""
 }
 
-func printCompact(w io.Writer, ch *channel, noColor bool) {
+func printCompact(
+	w io.Writer, ch *channel, noColor bool, schemas []string,
+) {
 	meta := metaSummary(ch.open)
+	if meta == "" && ch.close != nil {
+		meta = metaSummary(*ch.close)
+	}
 	status := ""
 	var size int64
 	if ch.close != nil {
@@ -553,23 +576,37 @@ func printCompact(w io.Writer, ch *channel, noColor bool) {
 	}
 
 	host := extractHost(ch.open)
+	isEnv := isEnvSchema(ch.open.SchemaIndex, schemas)
 	prefix := ""
 	suffix := ""
 	if !noColor {
-		switch host {
-		case "cwd":
+		switch {
+		case isEnv:
+			prefix = colorEnv
+			suffix = colorReset
+			if status == "" {
+				status = " ENVIRONMENT"
+			}
+		case host == "cwd":
 			prefix = colorContext
 			suffix = colorReset
 			if status == "" {
 				status = " CONTEXT"
 			}
-		case "artifacts":
+		case host == "artifacts":
 			prefix = colorArtifact
 			suffix = colorReset
 		}
 	} else {
-		if host == "cwd" && status == "" {
-			status = " CONTEXT"
+		switch {
+		case isEnv:
+			if status == "" {
+				status = " ENVIRONMENT"
+			}
+		case host == "cwd":
+			if status == "" {
+				status = " CONTEXT"
+			}
 		}
 	}
 
@@ -587,8 +624,12 @@ func metaSummary(r ledger.Record) string {
 	method, _ := m["method"].(string)
 	url, _ := m["url"].(string)
 	name, _ := m["name"].(string)
+	reference, _ := m["reference"].(string)
 	if method != "" && url != "" {
 		return fmt.Sprintf("%s %s", method, friendlyURL(url))
+	}
+	if reference != "" {
+		return reference
 	}
 	if name != "" {
 		return fmt.Sprintf("→ %s", name)
@@ -597,11 +638,10 @@ func metaSummary(r ledger.Record) string {
 }
 
 func friendlyURL(url string) string {
-	if strings.HasPrefix(url, "http://cwd/") {
-		return strings.TrimPrefix(url, "http://cwd")
-	}
-	if strings.HasPrefix(url, "http://artifacts/") {
-		return strings.TrimPrefix(url, "http://artifacts")
+	for _, prefix := range []string{"http://cwd", "http://artifacts"} {
+		if strings.HasPrefix(url, prefix+"/") {
+			return strings.TrimPrefix(url, prefix)
+		}
 	}
 	return url
 }

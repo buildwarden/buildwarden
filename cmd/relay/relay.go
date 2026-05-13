@@ -164,6 +164,7 @@ const (
 	schemaHTTPBody    byte = 2
 	schemaArtifact    byte = 3
 	schemaRedacted    byte = 4
+	schemaEnvCtr      byte = 5
 )
 
 func SetOutDir(dir string) { outDir = dir }

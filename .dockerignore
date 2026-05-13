@@ -4,6 +4,8 @@
 .warden
 warden-output
 warden
+warden-io
+warden-relay
 ledger-inspect
 coverage.out
 *.log

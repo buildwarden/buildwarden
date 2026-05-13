@@ -17,16 +17,23 @@ Go version: 1.26.3 (managed via mise). Use `mise exec -- go ...` if GOROOT is mi
 
 ## Architecture
 
-BuildWarden orchestrates two containers on an isolated Docker network (10.0.87.0/29):
+BuildWarden orchestrates two containers on an isolated Docker network (100.64.87.0/29):
 
-- **Relay** (10.0.87.2) — MITM proxy + DNS + ledger writer. Runs `cmd/relay/`.
-- **Build Container** (10.0.87.3) — Rootless DinD, network-isolated via iptables. All traffic forced through relay.
+- **Relay** — MITM proxy + DNS + ledger writer. Runs `cmd/relay/`.
+- **Build Container** — Unprivileged container from the Dockerfile's FROM image. Network-isolated via iptables applied by a one-shot sidecar (Kubernetes init container pattern). All traffic forced through relay.
 
-The orchestrator (`cmd/warden/`) runs on the host and manages the lifecycle. The relay (`cmd/relay/`) runs inside a container and writes the binary ledger.
+The orchestrator (`cmd/warden/`) runs on the host and manages the lifecycle:
+1. Pulls the FROM image, writes environment identity to the ledger volume
+2. Starts the relay (reads environment files, records as first ledger entry)
+3. Starts the build container, applies iptables via a netns sidecar
+4. Translates the Dockerfile to a shell script, executes it via container exec
+
+The Dockerfile is used as a concise build configuration format. Supported directives: FROM, RUN, ENV, WORKDIR, COPY, ARG. Unsupported directives produce clear errors.
 
 ### Package boundaries
 
-- `cmd/warden/` — Host-side binary: CLI, orchestrator (container lifecycle, config, extensions, output), inspect. Imports `ctrctl`.
+- `cmd/warden/` — Host-side binary: CLI, orchestrator (container lifecycle, config, extensions, output), inspect, Dockerfile-to-script translation. Imports `ctrctl`.
+- `cmd/warden-io/` — Container-side binary: fetch context files from relay, post artifacts.
 - `cmd/relay/` — Container-side binary: proxy, ledger writer, DNS, TLS interception, fairness scheduling.
 - `ledger/` — Shared library: ledger wire format types, reader, and verification logic.
 
@@ -42,9 +49,10 @@ All ledger writes go through a channel to a single goroutine (`Ledger.loop()`). 
 
 - Container runtime is abstracted via `ctrctl.Cli` (set from config/autodetection)
 - Extensions inject CA certs and env vars into the build container via `.warden/` directory
-- The relay cross-compiles for linux at build time (`GOOS=linux CGO_ENABLED=0`)
+- The relay and warden-io cross-compile for linux at build time (`GOOS=linux CGO_ENABLED=0`)
 - Containerfile is never modified in-place — a copy goes into `.warden/Containerfile`
-- `artifacts` is a reserved DNS hostname that resolves to the relay IP
+- `artifacts` and `cwd` are reserved DNS hostnames that resolve to the relay IP
+- Network isolation: iptables applied by `warden-netns` sidecar sharing the build container's network namespace; build container has no CAP_NET_ADMIN
 
 ## Linter settings
 

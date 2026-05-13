@@ -159,7 +159,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		compress = false
 	}
 
-	env := NewCtrEnv()
+	env := NewScriptEnv()
 	config := &BuildConfig{
 		Context:       contextDir,
 		Containerfile: dockerfile,
@@ -203,7 +203,7 @@ func runShell(cmd *cobra.Command, args []string) error {
 		compress = false
 	}
 
-	env := NewCtrEnv()
+	env := NewScriptEnv()
 	config := &BuildConfig{
 		Context:       contextDir,
 		Containerfile: dockerfile,
@@ -214,3 +214,4 @@ func runShell(cmd *cobra.Command, args []string) error {
 	}
 	return env.Shell(config)
 }
+

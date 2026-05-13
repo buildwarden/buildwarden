@@ -34,9 +34,8 @@ assert_no_grep() {
     fi
 }
 
-extract_ledger_dir() {
-    # Strip ANSI codes then extract path after "Ledger:"
-    sed 's/\x1b\[[0-9;]*m//g' | grep "Ledger:" | awk '{print $NF}'
+extract_output_dir() {
+    sed 's/\x1b\[[0-9;]*m//g' | grep "Output:" | awk '{print $NF}'
 }
 
 # ─── Build warden ───────────────────────────────────────────────────────────
@@ -49,15 +48,15 @@ make build
 bold ""
 bold "━━━ Test 1: Self-build (COPY provenance + Go modules + artifact) ━━━"
 
-BUILD_OUT=$($WARDEN build . 2>&1)
-LEDGER_DIR=$(echo "$BUILD_OUT" | extract_ledger_dir)
-if [ -z "$LEDGER_DIR" ]; then
+BUILD_OUT=$($WARDEN build -o /tmp/warden-integ-self . 2>&1)
+OUTPUT_DIR=$(echo "$BUILD_OUT" | extract_output_dir)
+if [ -z "$OUTPUT_DIR" ] || [ ! -d "$OUTPUT_DIR" ]; then
     red "FATAL: self-build failed"
     echo "$BUILD_OUT" | tail -10
     exit 1
 fi
 
-INSPECT=$($WARDEN inspect "$LEDGER_DIR/ledger" 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
+INSPECT=$($WARDEN inspect "$OUTPUT_DIR" 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
 INSPECT_FILE=$(mktemp)
 echo "$INSPECT" > "$INSPECT_FILE"
 
@@ -65,48 +64,88 @@ bold "  Ledger integrity:"
 assert_grep "All signatures valid" "All .* signatures valid" "$INSPECT_FILE"
 assert_grep "All channels closed" "All channels closed" "$INSPECT_FILE"
 
+bold "  Environment record:"
+assert_grep "Environment entry" "ENVIRONMENT golang:" "$INSPECT_FILE"
+
 bold "  COPY provenance (source files fetched via relay):"
-assert_grep "go.mod via relay" "GET http://cwd/go.mod" "$INSPECT_FILE"
-assert_grep "go.sum via relay" "GET http://cwd/go.sum" "$INSPECT_FILE"
-assert_grep "cmd/warden/main.go via relay" "GET http://cwd/cmd/warden/main.go" "$INSPECT_FILE"
-assert_grep "relay/relay.go via relay" "GET http://cwd/relay/relay.go" "$INSPECT_FILE"
-assert_grep "relay/ledger.go via relay" "GET http://cwd/relay/ledger.go" "$INSPECT_FILE"
-assert_grep "orchestrator via relay" "GET http://cwd/internal/orchestrator/" "$INSPECT_FILE"
+assert_grep "go.mod via relay" "CONTEXT GET /go.mod" "$INSPECT_FILE"
+assert_grep "go.sum via relay" "CONTEXT GET /go.sum" "$INSPECT_FILE"
+assert_grep "main.go via relay" "CONTEXT GET /cmd/warden/main.go" "$INSPECT_FILE"
+assert_grep "relay.go via relay" "CONTEXT GET /cmd/relay/relay.go" "$INSPECT_FILE"
+assert_grep "ledger.go via relay" "CONTEXT GET /cmd/relay/ledger.go" "$INSPECT_FILE"
+assert_grep "orchestrator via relay" "CONTEXT GET /cmd/warden/orchestrator" "$INSPECT_FILE"
 
 bold "  Security:"
-assert_no_grep "No .git leaked" "cwd/\.git/" "$INSPECT_FILE"
-assert_no_grep "No .warden leaked" "cwd/\.warden/" "$INSPECT_FILE"
+assert_no_grep "No .git leaked" "CONTEXT.*\.git/" "$INSPECT_FILE"
+assert_no_grep "No .warden leaked" "CONTEXT.*\.warden/" "$INSPECT_FILE"
 
-bold "  Expected external sources:"
-assert_grep "Docker Hub registry" "registry-1.docker.io" "$INSPECT_FILE"
-assert_grep "Golang base image" "library/golang" "$INSPECT_FILE"
-assert_grep "Debian package repos" "deb.debian.org" "$INSPECT_FILE"
-
-bold "  Artifact:"
-assert_grep "Warden binary posted" "ARTIFACT.*artifacts/warden" "$INSPECT_FILE"
-
-# Static hash check: go.mod size should match local file
-LOCAL_GOMOD_SIZE=$(wc -c < go.mod | tr -d ' ')
-assert_grep "go.mod size matches local" \
-    "GET http://cwd/go.mod \(${LOCAL_GOMOD_SIZE} bytes\)" "$INSPECT_FILE"
+bold "  Artifacts:"
+assert_grep "Warden binary posted" "ARTIFACT.*warden" "$INSPECT_FILE"
+assert_grep "Relay binary posted" "ARTIFACT.*relay" "$INSPECT_FILE"
 
 rm -f "$INSPECT_FILE"
-green "  Ledger: $LEDGER_DIR"
+green "  Output: $OUTPUT_DIR"
 
 # ─── Test 2: Simple demo ────────────────────────────────────────────────────
 
 bold ""
 bold "━━━ Test 2: Simple demo (pip build + deterministic wheel artifact) ━━━"
 
-BUILD_OUT=$($WARDEN build examples/Dockerfile.simple 2>&1)
-LEDGER_DIR=$(echo "$BUILD_OUT" | extract_ledger_dir)
-if [ -z "$LEDGER_DIR" ]; then
+BUILD_OUT=$($WARDEN build -o /tmp/warden-integ-simple examples/Dockerfile.simple 2>&1)
+OUTPUT_DIR=$(echo "$BUILD_OUT" | extract_output_dir)
+if [ -z "$OUTPUT_DIR" ] || [ ! -d "$OUTPUT_DIR" ]; then
     red "FATAL: simple build failed"
     echo "$BUILD_OUT" | tail -10
     exit 1
 fi
 
-INSPECT=$($WARDEN inspect "$LEDGER_DIR/ledger" 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
+INSPECT=$($WARDEN inspect "$OUTPUT_DIR" 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
+INSPECT_FILE=$(mktemp)
+echo "$INSPECT" > "$INSPECT_FILE"
+
+bold "  Ledger integrity:"
+assert_grep "All signatures valid" "All .* signatures valid" "$INSPECT_FILE"
+assert_grep "All channels closed" "All channels closed" "$INSPECT_FILE"
+
+bold "  Environment record:"
+assert_grep "Python base image" "ENVIRONMENT python:" "$INSPECT_FILE"
+
+bold "  Expected sources:"
+assert_grep "PyPI package index" "pypi.org" "$INSPECT_FILE"
+assert_grep "Python hosted files" "files.pythonhosted.org" "$INSPECT_FILE"
+
+bold "  Deterministic artifact (pinned version):"
+assert_grep "requests sdist fetched" "requests-2.32.3.tar.gz" "$INSPECT_FILE"
+assert_grep "Wheel artifact posted" "ARTIFACT.*requests-2.32.3-py3-none-any.whl" "$INSPECT_FILE"
+assert_grep "Wheel size is 65027 bytes" "65027 bytes" "$INSPECT_FILE"
+
+bold "  JSON output:"
+JSON_OUT=$($WARDEN inspect --json "$OUTPUT_DIR" 2>&1)
+if echo "$JSON_OUT" | python3 -c "import json,sys; d=json.load(sys.stdin); assert d['summary']['valid']" 2>/dev/null; then
+    green "  ✓ JSON valid and ledger passes"
+    PASS=$((PASS + 1))
+else
+    red "  ✗ JSON output invalid or ledger failed"
+    FAIL=$((FAIL + 1))
+fi
+
+rm -f "$INSPECT_FILE"
+green "  Output: $OUTPUT_DIR"
+
+# ─── Test 3: npm (different ecosystem) ─────────────────────────────────────
+
+bold ""
+bold "━━━ Test 3: npm install (Node ecosystem) ━━━"
+
+BUILD_OUT=$($WARDEN build -o /tmp/warden-integ-npm examples/Dockerfile.npm 2>&1)
+OUTPUT_DIR=$(echo "$BUILD_OUT" | extract_output_dir)
+if [ -z "$OUTPUT_DIR" ] || [ ! -d "$OUTPUT_DIR" ]; then
+    red "FATAL: npm build failed"
+    echo "$BUILD_OUT" | tail -10
+    exit 1
+fi
+
+INSPECT=$($WARDEN inspect "$OUTPUT_DIR" 2>&1 | sed 's/\x1b\[[0-9;]*m//g')
 INSPECT_FILE=$(mktemp)
 echo "$INSPECT" > "$INSPECT_FILE"
 
@@ -115,20 +154,15 @@ assert_grep "All signatures valid" "All .* signatures valid" "$INSPECT_FILE"
 assert_grep "All channels closed" "All channels closed" "$INSPECT_FILE"
 
 bold "  Expected sources:"
-assert_grep "Docker Hub registry" "registry-1.docker.io" "$INSPECT_FILE"
-assert_grep "Python base image" "library/python" "$INSPECT_FILE"
-assert_grep "PyPI package index" "pypi.org" "$INSPECT_FILE"
-assert_grep "Python hosted files" "files.pythonhosted.org" "$INSPECT_FILE"
-assert_grep "Debian repos" "deb.debian.org" "$INSPECT_FILE"
-
-bold "  Deterministic artifact (pinned version):"
-assert_grep "requests 2.32.3 sdist fetched" "requests-2.32.3.tar.gz" "$INSPECT_FILE"
-assert_grep "Wheel artifact posted" "ARTIFACT.*requests-2.32.3-py3-none-any.whl" "$INSPECT_FILE"
-# The wheel size is deterministic for this pure-python package with SOURCE_DATE_EPOCH
-assert_grep "Wheel size is 65027 bytes" "65027 bytes" "$INSPECT_FILE"
+assert_grep "npm registry" "registry.npmjs.org" "$INSPECT_FILE"
+assert_grep "lodash package" "lodash" "$INSPECT_FILE"
 
 rm -f "$INSPECT_FILE"
-green "  Ledger: $LEDGER_DIR"
+green "  Output: $OUTPUT_DIR"
+
+# ─── Cleanup ───────────────────────────────────────────────────────────────
+
+rm -rf /tmp/warden-integ-self /tmp/warden-integ-simple /tmp/warden-integ-npm
 
 # ─── Summary ────────────────────────────────────────────────────────────────
 

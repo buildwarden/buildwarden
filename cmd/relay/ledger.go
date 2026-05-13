@@ -65,6 +65,7 @@ var defaultSchemas = []string{
 	"https://github.com/buildwarden/buildwarden/schemas/v1/http-body.json",
 	"https://github.com/buildwarden/buildwarden/schemas/v1/artifact.json",
 	"https://github.com/buildwarden/buildwarden/schemas/v1/redacted.json",
+	"https://github.com/buildwarden/buildwarden/schemas/v1/environment-container.json",
 }
 
 // NewLedger creates a new binary ledger, writes the header, and starts the

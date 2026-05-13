@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/buildwarden/buildwarden/schemas/v1/environment-container.json",
+  "title": "Container Environment",
+  "description": "Metadata for the container image used as the build environment. The signed payload is the raw OCI manifest bytes; the metadata fields below are informational (unsigned).",
+  "type": "object",
+  "properties": {
+    "reference": {
+      "type": "string",
+      "description": "Image reference as specified by the user (e.g. docker.io/library/python:3.12-slim)."
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "OCI manifest digest (sha256 of the raw manifest bytes posted as the payload)."
+    },
+    "mediaType": {
+      "type": "string",
+      "description": "Manifest media type (e.g. application/vnd.oci.image.manifest.v1+json)."
+    }
+  },
+  "required": ["reference", "digest"],
+  "additionalProperties": false
+}
