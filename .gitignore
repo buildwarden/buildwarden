@@ -1,5 +1,6 @@
 /build/
 /warden
+/warden-io
 /warden-relay
 warden-output/
 coverage.out
