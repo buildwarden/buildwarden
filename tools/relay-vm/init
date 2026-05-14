@@ -1,0 +1,28 @@
+#!/bin/sh
+# Relay VM init script — runs as PID 1 inside the initramfs.
+# Mounts virtio-fs shared volume, sources relay config, execs the relay binary.
+
+mount -t devtmpfs devtmpfs /dev
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+
+# Mount the shared volume (virtio-fs tag: "shared")
+mkdir -p /shared
+mount -t virtiofs shared /shared
+
+# Configure networking from shared volume if present
+if [ -f /shared/relay.env ]; then
+    set -a
+    . /shared/relay.env
+    set +a
+fi
+
+# Configure the network interface
+ip link set eth0 up
+ip addr add 10.0.0.1/30 dev eth0
+
+# Set up DNS resolution for upstream forwarding
+echo "nameserver 10.0.2.3" > /etc/resolv.conf
+
+# Exec the relay binary (never returns under normal operation)
+exec /shared/relay

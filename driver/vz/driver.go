@@ -222,21 +222,22 @@ func (d *Driver) resolveImage(image string) (string, error) {
 // bootRelayVM creates and starts the relay VM (Alpine Linux).
 // Two interfaces: private link to build VM + NAT for internet.
 func (d *Driver) bootRelayVM(sharedDir string, vnet *VirtualNetwork) (*VM, error) {
-	cfg := VMConfig{
-		CPUs:      2,
-		MemoryMB:  512,
-		DiskImage: "", // TODO: resolve relay Alpine image
-		SharedDirs: []SharedDir{{
-			Tag:      "shared",
-			HostPath: sharedDir,
-			ReadOnly: false,
-		}},
-		Network: NetworkConfig{
-			Mode:     "filehandle",
-			SocketFD: vnet.RelaySocketFD,
-		},
+	kernelPath, initrdPath, err := d.resolveRelayVMAssets()
+	if err != nil {
+		return nil, fmt.Errorf("resolving relay VM assets: %w", err)
 	}
-	vm, err := NewVM(cfg)
+
+	vm, err := NewLinuxVM(linuxVMConfig{
+		CPUs:               2,
+		MemoryMB:           512,
+		KernelPath:         kernelPath,
+		InitrdPath:         initrdPath,
+		Cmdline:            "console=hvc0",
+		SharedDirPath:      sharedDir,
+		SharedDirTag:       "shared",
+		FileHandleSocketFD: vnet.RelaySocketFD,
+		AttachNAT:          true,
+	})
 	if err != nil {
 		return nil, err
 	}
@@ -246,24 +247,42 @@ func (d *Driver) bootRelayVM(sharedDir string, vnet *VirtualNetwork) (*VM, error
 	return vm, nil
 }
 
+// resolveRelayVMAssets locates the kernel and initramfs for the relay VM.
+// Looks in the cache directory, then falls back to the embedded build tooling.
+func (d *Driver) resolveRelayVMAssets() (kernel, initrd string, err error) {
+	cacheDir := d.Cache.CacheDir
+	kernel = filepath.Join(cacheDir, "relay-vm", "vmlinuz")
+	initrd = filepath.Join(cacheDir, "relay-vm", "initramfs.cpio.gz")
+
+	if _, err := os.Stat(kernel); err == nil {
+		if _, err := os.Stat(initrd); err == nil {
+			return kernel, initrd, nil
+		}
+	}
+
+	return "", "", fmt.Errorf(
+		"relay VM assets not found; run tools/relay-vm/build-initramfs.sh " +
+			"and copy output to %s/relay-vm/",
+		cacheDir)
+}
+
 // bootBuildVM creates and starts the build VM (macOS).
 // Single interface: private link to relay VM (sole network path).
 func (d *Driver) bootBuildVM(diskImage, sharedDir string, vnet *VirtualNetwork) (*VM, error) {
-	cfg := VMConfig{
-		CPUs:      4,
-		MemoryMB:  8192,
-		DiskImage: diskImage,
-		SharedDirs: []SharedDir{{
-			Tag:      "shared",
-			HostPath: sharedDir,
-			ReadOnly: false,
-		}},
-		Network: NetworkConfig{
-			Mode:     "filehandle",
-			SocketFD: vnet.BuildSocketFD,
-		},
-	}
-	vm, err := NewVM(cfg)
+	// Platform state files live alongside the disk image
+	imgDir := filepath.Dir(diskImage)
+
+	vm, err := NewMacOSVM(macOSVMConfig{
+		CPUs:               4,
+		MemoryMB:           8192,
+		DiskImagePath:      diskImage,
+		AuxStoragePath:     filepath.Join(imgDir, "aux-storage"),
+		HardwareModelPath:  filepath.Join(imgDir, "hardware-model"),
+		MachineIDPath:      filepath.Join(imgDir, "machine-id"),
+		SharedDirPath:      sharedDir,
+		SharedDirTag:       "shared",
+		FileHandleSocketFD: vnet.BuildSocketFD,
+	})
 	if err != nil {
 		return nil, err
 	}

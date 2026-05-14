@@ -4,16 +4,46 @@ package vz
 
 import "unsafe"
 
-func createVMConfig(_ VMConfig) (unsafe.Pointer, error) {
-	return nil, errUnsupported
+func createLinuxVM(_ linuxVMConfig) (unsafe.Pointer, error) {
+	return nil, checkPlatform()
+}
+
+func createMacOSVM(_ macOSVMConfig) (unsafe.Pointer, error) {
+	return nil, checkPlatform()
 }
 
 func startVM(_ unsafe.Pointer) error {
-	return errUnsupported
+	return checkPlatform()
 }
 
 func stopVM(_ unsafe.Pointer) error {
-	return errUnsupported
+	return checkPlatform()
 }
 
-var errUnsupported = checkPlatform()
+func vmState(_ unsafe.Pointer) int {
+	return 0
+}
+
+type linuxVMConfig struct {
+	CPUs               int
+	MemoryMB           int
+	KernelPath         string
+	InitrdPath         string
+	Cmdline            string
+	SharedDirPath      string
+	SharedDirTag       string
+	FileHandleSocketFD int
+	AttachNAT          bool
+}
+
+type macOSVMConfig struct {
+	CPUs               int
+	MemoryMB           int
+	DiskImagePath      string
+	AuxStoragePath     string
+	HardwareModelPath  string
+	MachineIDPath      string
+	SharedDirPath      string
+	SharedDirTag       string
+	FileHandleSocketFD int
+}
