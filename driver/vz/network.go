@@ -3,75 +3,72 @@ package vz
 import (
 	"fmt"
 	"net"
+	"syscall"
 )
 
-// UserspaceBridge provides the network layer between the host (relay) and
-// the VM. It uses VZFileHandleNetworkDeviceAttachment to get raw Ethernet
-// frames from the VM via a Unix datagram socket pair, then presents them
-// through a userspace TCP/IP stack (gVisor netstack) as standard Go
-// net.Listener and net.PacketConn interfaces.
+// VirtualNetwork represents an isolated virtual network connecting two VMs
+// via VZFileHandleNetworkDeviceAttachment. Each VM gets one end of a Unix
+// datagram socket pair — Ethernet frames flow directly between them with
+// no external path.
 //
-// This enables the relay to run on the host while the VM's only network
-// path is through the bridge — achieving topological isolation without
-// iptables.
-type UserspaceBridge struct {
-	RelayIP net.IP
-	VMIP    net.IP
+// Topology:
+//
+//	Build VM (macOS) ←—virtio-net—→ [socket pair] ←—virtio-net—→ Relay VM (Alpine)
+//	                                                              ↕ (second interface)
+//	                                                           Host/Internet (NAT)
+//
+// The build VM has only one network interface (the private link to relay).
+// The relay VM has two: the private link and a NAT interface for internet.
+// Network isolation is topological — no iptables needed.
+type VirtualNetwork struct {
+	// BuildSocketFD is the file descriptor for the build VM's network device.
+	BuildSocketFD int
+	// RelaySocketFD is the file descriptor for the relay VM's private interface.
+	RelaySocketFD int
 
-	// socketFD is the host side of the VZFileHandleNetworkDevice socket pair.
-	socketFD int
-
-	// TODO: gVisor netstack stack instance
-	// stack *stack.Stack
+	// Subnet holds the IP allocation for this network.
+	Subnet NetworkSubnet
 }
 
-// NewUserspaceBridge creates a network bridge with the given relay and VM IPs.
-// It creates a Unix datagram socket pair — one end goes to the VM's
-// VZFileHandleNetworkDeviceAttachment, the other is used by the userspace
-// stack on the host.
-func NewUserspaceBridge(relayIP, vmIP string) (*UserspaceBridge, error) {
-	relay := net.ParseIP(relayIP)
-	vm := net.ParseIP(vmIP)
-	if relay == nil || vm == nil {
-		return nil, fmt.Errorf("invalid IP addresses: relay=%s vm=%s", relayIP, vmIP)
+// NetworkSubnet defines the IP addressing for the isolated network.
+type NetworkSubnet struct {
+	RelayIP  net.IP
+	BuildIP  net.IP
+	Netmask  net.IPMask
+	Gateway  net.IP // = RelayIP (relay is the gateway for build VM)
+}
+
+// NewVirtualNetwork creates a Unix datagram socket pair for the isolated
+// link between the build VM and relay VM. Each FD will be passed to a
+// VZFileHandleNetworkDeviceAttachment.
+func NewVirtualNetwork() (*VirtualNetwork, error) {
+	// Create socket pair for the private link between relay and build VMs.
+	// SOCK_DGRAM preserves message boundaries (each message = one Ethernet frame).
+	fds, err := syscall.Socketpair(syscall.AF_UNIX, syscall.SOCK_DGRAM, 0)
+	if err != nil {
+		return nil, fmt.Errorf("creating socket pair: %w", err)
 	}
 
-	// TODO: Create Unix datagram socket pair via syscall.Socketpair
-	// TODO: Initialize gVisor netstack with the host-side FD
-	// TODO: Configure static ARP entry for VM IP -> VM MAC
-	// TODO: Set up IP address on the stack interface
-
-	return &UserspaceBridge{
-		RelayIP:  relay,
-		VMIP:     vm,
-		socketFD: -1,
+	return &VirtualNetwork{
+		BuildSocketFD: fds[0],
+		RelaySocketFD: fds[1],
+		Subnet: NetworkSubnet{
+			RelayIP: net.IPv4(10, 0, 0, 1),
+			BuildIP: net.IPv4(10, 0, 0, 2),
+			Netmask: net.CIDRMask(30, 32),
+			Gateway: net.IPv4(10, 0, 0, 1),
+		},
 	}, nil
 }
 
-// ListenTCP returns a net.Listener on the relay IP for the given port.
-// The listener is backed by the userspace TCP/IP stack.
-func (b *UserspaceBridge) ListenTCP(port uint16) (net.Listener, error) {
-	// TODO: Create TCP listener on the netstack
-	_ = port
-	return nil, fmt.Errorf("netstack TCP listener not yet implemented")
-}
-
-// ListenUDP returns a net.PacketConn on the relay IP for the given port.
-// Used for DNS (port 53).
-func (b *UserspaceBridge) ListenUDP(port uint16) (net.PacketConn, error) {
-	// TODO: Create UDP listener on the netstack
-	_ = port
-	return nil, fmt.Errorf("netstack UDP listener not yet implemented")
-}
-
-// VMSocketFD returns the file descriptor that should be passed to
-// VZFileHandleNetworkDeviceAttachment for the VM's network interface.
-func (b *UserspaceBridge) VMSocketFD() int {
-	return b.socketFD
-}
-
-// Close shuts down the userspace stack and closes the socket pair.
-func (b *UserspaceBridge) Close() error {
-	// TODO: Close netstack, close socket FDs
-	return nil
+// Close releases the socket pair file descriptors.
+func (vn *VirtualNetwork) Close() error {
+	var firstErr error
+	if err := syscall.Close(vn.BuildSocketFD); err != nil && firstErr == nil {
+		firstErr = err
+	}
+	if err := syscall.Close(vn.RelaySocketFD); err != nil && firstErr == nil {
+		firstErr = err
+	}
+	return firstErr
 }

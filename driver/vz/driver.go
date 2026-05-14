@@ -12,8 +12,24 @@ import (
 
 // Driver implements driver.Driver using Apple's Virtualization.framework
 // for macOS/arm64 targets.
+//
+// Architecture (two-VM topology):
+//
+//	Host (orchestrator)
+//	├── Prepares shared volume: relay binary, config, context, ledger dir
+//	├── Creates isolated virtual network (socket pair)
+//	├── Boots Relay VM (Alpine Linux, static relay binary)
+//	│   ├── Private interface → socket pair → Build VM
+//	│   └── NAT interface → host/internet
+//	├── Boots Build VM (macOS from IPSW)
+//	│   └── Single interface → socket pair → Relay VM (sole gateway)
+//	└── Waits for build completion, collects ledger + artifacts
+//
+// Network isolation is topological: the build VM's only network path is
+// through the relay VM. No iptables, no host-side proxy needed.
 type Driver struct {
-	Cache *ImageCache
+	Cache    *ImageCache
+	RelayImg string // Path to relay Alpine VM image (built/cached)
 }
 
 func New() *Driver {
@@ -31,64 +47,109 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	}
 
 	buildID := driver.RandAlphaNum(8)
-	subnet := driver.AllocateVMSubnet()
 
-	// Prepare ledger directory
-	ledgerDir := req.LedgerDir
-	if ledgerDir == "" {
-		var err error
-		ledgerDir, err = os.MkdirTemp("", "warden-ledger-"+buildID+"-")
-		if err != nil {
-			return nil, fmt.Errorf("creating ledger dir: %w", err)
-		}
+	// Prepare output directory
+	outputDir := req.OutputDir
+	if outputDir == "" {
+		outputDir = "warden-output"
+	}
+	if err := os.MkdirAll(outputDir, 0755); err != nil {
+		return nil, fmt.Errorf("creating output dir: %w", err)
 	}
 
-	// Prepare shared directory for host <-> VM communication
+	// Shared volume: accessible by both relay VM and build VM via virtio-fs.
+	// Contains relay binary, ledger output, build context, and agent binary.
 	sharedDir, err := os.MkdirTemp("", "warden-shared-"+buildID+"-")
 	if err != nil {
 		return nil, fmt.Errorf("creating shared dir: %w", err)
 	}
 	defer os.RemoveAll(sharedDir)
 
-	// Place warden-io binary in shared directory
-	if err := d.prepareAgent(sharedDir); err != nil {
-		return nil, fmt.Errorf("preparing agent: %w", err)
+	// Create shared volume structure:
+	//   shared/
+	//   ├── relay          (static relay binary for linux/arm64)
+	//   ├── relay.env      (LEDGER_DIR, CONTEXT_DIR, CAPTURE_MODE)
+	//   ├── context/       (build context files)
+	//   ├── ledger/        (relay writes here)
+	//   ├── agent/         (warden-io binary + build script for macOS)
+	//   └── signal/        (completion signaling between VMs)
+	for _, sub := range []string{"context", "ledger", "agent", "signal"} {
+		if err := os.MkdirAll(filepath.Join(sharedDir, sub), 0755); err != nil {
+			return nil, fmt.Errorf("creating shared/%s: %w", sub, err)
+		}
 	}
 
-	// Place build context and script in shared directory
+	// Place relay binary on shared volume
+	if err := d.prepareRelay(sharedDir); err != nil {
+		return nil, fmt.Errorf("preparing relay: %w", err)
+	}
+
+	// Write relay config (env vars it reads at startup)
+	relayEnv := fmt.Sprintf("LEDGER_DIR=/shared/ledger\nCONTEXT_DIR=/shared/context\n")
+	if req.CaptureMode != "" && req.CaptureMode != "none" {
+		relayEnv += fmt.Sprintf("CAPTURE_MODE=%s\n", req.CaptureMode)
+	}
+	if err := os.WriteFile(filepath.Join(sharedDir, "relay.env"), []byte(relayEnv), 0644); err != nil {
+		return nil, fmt.Errorf("writing relay.env: %w", err)
+	}
+
+	// Place build context on shared volume
 	if err := d.prepareContext(sharedDir, req); err != nil {
 		return nil, fmt.Errorf("preparing context: %w", err)
 	}
 
-	// Resolve and clone disk image
+	// Place build agent (warden-io + script) on shared volume
+	if err := d.prepareAgent(sharedDir, req); err != nil {
+		return nil, fmt.Errorf("preparing agent: %w", err)
+	}
+
+	// Resolve and clone macOS disk image for build VM
 	diskImage, err := d.resolveImage(req.Image)
 	if err != nil {
 		return nil, fmt.Errorf("resolving image: %w", err)
 	}
 
-	clonePath := filepath.Join(sharedDir, "disk.img")
-	if err := CloneDisk(diskImage, clonePath); err != nil {
-		return nil, fmt.Errorf("cloning disk: %w", err)
+	buildDisk := filepath.Join(sharedDir, "build-disk.img")
+	if err := CloneDisk(diskImage, buildDisk); err != nil {
+		return nil, fmt.Errorf("cloning build disk: %w", err)
 	}
 
-	// Create userspace network bridge
-	bridge, err := NewUserspaceBridge(subnet.RelayIP, subnet.BuildIP)
+	// Create isolated virtual network (socket pair)
+	vnet, err := NewVirtualNetwork()
 	if err != nil {
-		return nil, fmt.Errorf("creating network bridge: %w", err)
+		return nil, fmt.Errorf("creating virtual network: %w", err)
 	}
-	defer bridge.Close()
+	defer vnet.Close()
 
-	// Start relay on bridge listeners
-	_ = ctx       // TODO: wire context for cancellation
-	_ = ledgerDir // TODO: start relay with these listeners
-	_ = bridge    // TODO: wire bridge to relay
+	// Boot Relay VM: Alpine Linux with shared volume + two network interfaces
+	// Interface 1: private link (socket pair) — connected to build VM
+	// Interface 2: NAT — connected to host/internet for upstream requests
+	relayVM, err := d.bootRelayVM(sharedDir, vnet)
+	if err != nil {
+		return nil, fmt.Errorf("booting relay VM: %w", err)
+	}
+	defer relayVM.Stop()
 
-	// Boot VM
-	// TODO: create VM config, attach virtio-fs (sharedDir) and virtio-net (bridge)
-	// TODO: start VM, wait for warden-io to signal completion
+	// Wait for relay to write ca.cert.pem (signals it's ready)
+	// TODO: poll shared/ledger/ca.cert.pem
+
+	// Boot Build VM: macOS with shared volume + one network interface
+	// Single interface: private link (socket pair) — relay is sole gateway
+	buildVM, err := d.bootBuildVM(buildDisk, sharedDir, vnet)
+	if err != nil {
+		return nil, fmt.Errorf("booting build VM: %w", err)
+	}
+	defer buildVM.Stop()
+
+	// Wait for build completion (agent writes to shared/signal/done)
+	// TODO: poll or use fsnotify on shared/signal/done
+	_ = ctx
+
+	// Collect outputs from shared volume
+	// TODO: move ledger, artifacts from shared/ledger/ to outputDir
 
 	return &driver.BuildResult{
-		OutputDir: req.OutputDir,
+		OutputDir: outputDir,
 	}, nil
 }
 
@@ -96,28 +157,55 @@ func (d *Driver) Exec(ctx context.Context, req *driver.BuildRequest) error {
 	if err := checkPlatform(); err != nil {
 		return err
 	}
-	// TODO: implement interactive shell via serial console
+	// TODO: boot environment, expose serial console for interactive use
 	return driver.ErrExecNotSupported
 }
 
 func (d *Driver) Close() error { return nil }
 
-func (d *Driver) prepareAgent(sharedDir string) error {
-	// warden-io for macOS is cross-compiled by the build system.
-	// For dev mode, build it on the fly.
-	agentPath := filepath.Join(sharedDir, "warden-io")
-	// TODO: locate or build warden-io for darwin/arm64
-	_ = agentPath
+// prepareRelay places the static relay binary on the shared volume.
+// The relay is the same linux/arm64 binary used in container mode.
+func (d *Driver) prepareRelay(sharedDir string) error {
+	relayDst := filepath.Join(sharedDir, "relay")
+	// TODO: locate pre-built relay binary or cross-compile from source
+	// For dev: go build -o relayDst -GOOS=linux -GOARCH=arm64 ./cmd/relay
+	_ = relayDst
 	return nil
 }
 
+// prepareContext copies or symlinks the build context into the shared volume.
 func (d *Driver) prepareContext(sharedDir string, req *driver.BuildRequest) error {
-	ctxDst := filepath.Join(sharedDir, "context")
-	if err := os.MkdirAll(ctxDst, 0755); err != nil {
-		return err
+	if req.ContextDir == "" {
+		return nil
 	}
-	// TODO: copy or symlink context into shared directory
-	_ = req
+	ctxDst := filepath.Join(sharedDir, "context")
+	// TODO: copy context files into ctxDst
+	// For now, symlink works on same filesystem
+	_ = ctxDst
+	return nil
+}
+
+// prepareAgent places warden-io (macOS build) and the build script on
+// the shared volume. A launchd plist in the base macOS image watches
+// for the agent binary and executes it.
+func (d *Driver) prepareAgent(sharedDir string, req *driver.BuildRequest) error {
+	agentDir := filepath.Join(sharedDir, "agent")
+	// warden-io binary (darwin/arm64)
+	agentBin := filepath.Join(agentDir, "warden-io")
+	// TODO: locate or cross-compile warden-io for darwin/arm64
+	_ = agentBin
+
+	// Build script
+	if req.Script != "" {
+		scriptDst := filepath.Join(agentDir, "build.sh")
+		data, err := os.ReadFile(req.Script)
+		if err != nil {
+			return fmt.Errorf("reading build script: %w", err)
+		}
+		if err := os.WriteFile(scriptDst, data, 0755); err != nil {
+			return fmt.Errorf("writing build script: %w", err)
+		}
+	}
 	return nil
 }
 
@@ -125,12 +213,64 @@ func (d *Driver) resolveImage(image string) (string, error) {
 	if image == "" {
 		return d.Cache.LatestIPSW()
 	}
-	// If it's a path, use directly
 	if _, err := os.Stat(image); err == nil {
 		return image, nil
 	}
-	// Otherwise treat as IPSW URL
 	return d.Cache.RestoreIPSW(image)
+}
+
+// bootRelayVM creates and starts the relay VM (Alpine Linux).
+// Two interfaces: private link to build VM + NAT for internet.
+func (d *Driver) bootRelayVM(sharedDir string, vnet *VirtualNetwork) (*VM, error) {
+	cfg := VMConfig{
+		CPUs:      2,
+		MemoryMB:  512,
+		DiskImage: "", // TODO: resolve relay Alpine image
+		SharedDirs: []SharedDir{{
+			Tag:      "shared",
+			HostPath: sharedDir,
+			ReadOnly: false,
+		}},
+		Network: NetworkConfig{
+			Mode:     "filehandle",
+			SocketFD: vnet.RelaySocketFD,
+		},
+	}
+	vm, err := NewVM(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := vm.Start(); err != nil {
+		return nil, err
+	}
+	return vm, nil
+}
+
+// bootBuildVM creates and starts the build VM (macOS).
+// Single interface: private link to relay VM (sole network path).
+func (d *Driver) bootBuildVM(diskImage, sharedDir string, vnet *VirtualNetwork) (*VM, error) {
+	cfg := VMConfig{
+		CPUs:      4,
+		MemoryMB:  8192,
+		DiskImage: diskImage,
+		SharedDirs: []SharedDir{{
+			Tag:      "shared",
+			HostPath: sharedDir,
+			ReadOnly: false,
+		}},
+		Network: NetworkConfig{
+			Mode:     "filehandle",
+			SocketFD: vnet.BuildSocketFD,
+		},
+	}
+	vm, err := NewVM(cfg)
+	if err != nil {
+		return nil, err
+	}
+	if err := vm.Start(); err != nil {
+		return nil, err
+	}
+	return vm, nil
 }
 
 func checkPlatform() error {
