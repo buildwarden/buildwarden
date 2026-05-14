@@ -11,6 +11,7 @@ var version = "dev"
 
 var (
 	flagRuntime    string
+	flagDriver     string
 	flagVerbose    bool
 	flagColor      string
 	flagCapture    string
@@ -60,6 +61,8 @@ All traffic is recorded to the ledger just as in a normal build.`,
 func init() {
 	rootCmd.PersistentFlags().StringVar(&flagRuntime, "runtime", "",
 		"container runtime (finch, docker, podman)")
+	rootCmd.PersistentFlags().StringVar(&flagDriver, "driver", "",
+		"orchestration driver (container, vz, auto)")
 	rootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false,
 		"verbose output")
 	rootCmd.PersistentFlags().StringVar(&flagColor, "color", "",
@@ -98,6 +101,9 @@ func resolveConfig() (*Config, error) {
 	// CLI flags override config
 	if flagRuntime != "" {
 		cfg.Runtime.CLI = flagRuntime
+	}
+	if flagDriver != "" {
+		cfg.Runtime.Driver = flagDriver
 	}
 	if flagVerbose {
 		cfg.Output.Verbose = true

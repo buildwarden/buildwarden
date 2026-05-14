@@ -27,6 +27,7 @@ type RelayConfig struct {
 
 type RuntimeConfig struct {
 	CLI        string `toml:"cli"`
+	Driver     string `toml:"driver"`
 	RelayImage string `toml:"relay_image"`
 }
 
