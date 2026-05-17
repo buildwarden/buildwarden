@@ -119,16 +119,18 @@ Key considerations:
 - The relay runs inside a Linux VM (same as other drivers)
 
 ### 5. KVM Driver (driver/kvm/)
-**Status: Probably unnecessary as a separate driver**
+**Status: Not currently targeted**
 
 KVM is the Linux kernel's hardware virtualization support. QEMU uses
 KVM as its accelerator on Linux — so `driver/qemu/` with KVM
-acceleration covers this case. A separate KVM driver (using libvirt
-or direct /dev/kvm ioctls) only makes sense if QEMU's overhead is
-unacceptable, which is unlikely for build workloads.
+acceleration (`-enable-kvm`) covers this case without a separate driver.
 
-**Recommendation:** Don't implement a separate KVM driver. The QEMU
-driver on Linux with `-enable-kvm` provides the same performance.
+A dedicated KVM driver (using libvirt or direct /dev/kvm ioctls) would
+bypass QEMU's userspace overhead entirely. We are not currently
+targeting this, but will re-evaluate if feedback or performance data
+indicates that QEMU's overhead is meaningful for build workloads or
+that libvirt integration provides unique operational value for platform
+operators already managing VM fleets through it.
 
 ---
 
