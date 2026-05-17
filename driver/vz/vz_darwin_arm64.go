@@ -128,6 +128,48 @@ func vmState(handle unsafe.Pointer) int {
 	return int(C.vz_vm_state(handle))
 }
 
+// latestSupportedIPSW fetches the URL of the latest macOS IPSW from Apple.
+func latestSupportedIPSW() (string, error) {
+	result := C.vz_latest_supported_ipsw()
+	if result.error != nil {
+		err := fmt.Errorf("fetching latest IPSW: %s", C.GoString(result.error))
+		C.free(unsafe.Pointer(result.error))
+		return "", err
+	}
+	url := C.GoString((*C.char)(result.handle))
+	C.free(result.handle)
+	return url, nil
+}
+
+// restoreIPSW runs the full IPSW restore process: creates disk, platform
+// state files, and installs macOS. Progress is printed to stderr from ObjC.
+func restoreIPSW(ipswPath, diskPath string, diskSizeGB int, auxPath, hwModelPath, machineIDPath string) error {
+	cIpsw := C.CString(ipswPath)
+	defer C.free(unsafe.Pointer(cIpsw))
+	cDisk := C.CString(diskPath)
+	defer C.free(unsafe.Pointer(cDisk))
+	cAux := C.CString(auxPath)
+	defer C.free(unsafe.Pointer(cAux))
+	cHW := C.CString(hwModelPath)
+	defer C.free(unsafe.Pointer(cHW))
+	cMID := C.CString(machineIDPath)
+	defer C.free(unsafe.Pointer(cMID))
+
+	diskBytes := C.uint64_t(diskSizeGB) * 1024 * 1024 * 1024
+
+	errStr := C.vz_restore_ipsw(
+		cIpsw, cDisk, diskBytes, cAux, cHW, cMID,
+		nil,
+	)
+
+	if errStr != nil {
+		err := fmt.Errorf("IPSW restore: %s", C.GoString(errStr))
+		C.free(unsafe.Pointer(errStr))
+		return err
+	}
+	return nil
+}
+
 // Config types for the cgo bridge
 
 type linuxVMConfig struct {

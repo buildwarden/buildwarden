@@ -24,6 +24,14 @@ func vmState(_ unsafe.Pointer) int {
 	return 0
 }
 
+func latestSupportedIPSW() (string, error) {
+	return "", checkPlatform()
+}
+
+func restoreIPSW(_, _, _ string, _ int, _, _ string) error {
+	return checkPlatform()
+}
+
 type linuxVMConfig struct {
 	CPUs               int
 	MemoryMB           int

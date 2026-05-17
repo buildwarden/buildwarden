@@ -292,3 +292,194 @@ int vz_vm_state(void *vm_handle) {
     VZVirtualMachine *vm = (__bridge VZVirtualMachine *)vm_handle;
     return (int)vm.state;
 }
+
+// --- IPSW Restore ---
+
+vz_result vz_latest_supported_ipsw(void) {
+    vz_result result = {NULL, NULL};
+
+    dispatch_semaphore_t sem = dispatch_semaphore_create(0);
+    __block NSURL *ipswURL = nil;
+    __block NSError *fetchError = nil;
+
+    [VZMacOSRestoreImage fetchLatestSupportedWithCompletionHandler:
+        ^(VZMacOSRestoreImage *restoreImage, NSError *error) {
+            if (error != nil) {
+                fetchError = error;
+            } else {
+                ipswURL = restoreImage.URL;
+            }
+            dispatch_semaphore_signal(sem);
+        }];
+
+    dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
+
+    if (fetchError != nil) {
+        result.error = copy_error(fetchError);
+        return result;
+    }
+
+    const char *urlStr = [[ipswURL absoluteString] UTF8String];
+    result.handle = (void *)strdup(urlStr);
+    return result;
+}
+
+char *vz_restore_ipsw(
+    const char *ipsw_path,
+    const char *disk_path,
+    uint64_t disk_size_bytes,
+    const char *aux_storage_path,
+    const char *hardware_model_path,
+    const char *machine_id_path,
+    vz_progress_callback progress_cb
+) {
+    NSString *nsIpsw = [NSString stringWithUTF8String:ipsw_path];
+    NSString *nsDisk = [NSString stringWithUTF8String:disk_path];
+    NSString *nsAux = [NSString stringWithUTF8String:aux_storage_path];
+    NSString *nsHWModel = [NSString stringWithUTF8String:hardware_model_path];
+    NSString *nsMachineId = [NSString stringWithUTF8String:machine_id_path];
+
+    // Load the IPSW restore image
+    dispatch_semaphore_t loadSem = dispatch_semaphore_create(0);
+    __block VZMacOSRestoreImage *restoreImage = nil;
+    __block NSError *loadError = nil;
+
+    [VZMacOSRestoreImage loadFileURL:[NSURL fileURLWithPath:nsIpsw]
+                   completionHandler:^(VZMacOSRestoreImage *image, NSError *error) {
+        restoreImage = image;
+        loadError = error;
+        dispatch_semaphore_signal(loadSem);
+    }];
+
+    dispatch_semaphore_wait(loadSem, DISPATCH_TIME_FOREVER);
+    if (loadError != nil) {
+        return copy_error(loadError);
+    }
+
+    // Get the hardware configuration requirements
+    VZMacOSConfigurationRequirements *requirements =
+        restoreImage.mostFeaturefulSupportedConfiguration;
+    if (requirements == nil) {
+        return strdup("no supported configuration found in IPSW");
+    }
+
+    VZMacHardwareModel *hardwareModel = requirements.hardwareModel;
+
+    // Save hardware model
+    NSData *hwModelData = hardwareModel.dataRepresentation;
+    if (![hwModelData writeToFile:nsHWModel atomically:YES]) {
+        return strdup("failed to save hardware model");
+    }
+
+    // Generate and save machine identifier
+    VZMacMachineIdentifier *machineId = [[VZMacMachineIdentifier alloc] init];
+    NSData *machineIdData = machineId.dataRepresentation;
+    if (![machineIdData writeToFile:nsMachineId atomically:YES]) {
+        return strdup("failed to save machine identifier");
+    }
+
+    // Create auxiliary storage
+    NSError *auxError = nil;
+    VZMacAuxiliaryStorage *auxStorage =
+        [[VZMacAuxiliaryStorage alloc]
+            initCreatingStorageAtURL:[NSURL fileURLWithPath:nsAux]
+                      hardwareModel:hardwareModel
+                            options:VZMacAuxiliaryStorageInitializationOptionAllowOverwrite
+                              error:&auxError];
+    if (auxStorage == nil) {
+        return copy_error(auxError);
+    }
+
+    // Create the disk image
+    int fd = open([nsDisk UTF8String], O_RDWR | O_CREAT | O_TRUNC, 0644);
+    if (fd < 0) {
+        return strdup("failed to create disk image file");
+    }
+    if (ftruncate(fd, disk_size_bytes) != 0) {
+        close(fd);
+        return strdup("failed to set disk image size");
+    }
+    close(fd);
+
+    // Configure the VM for installation
+    VZVirtualMachineConfiguration *config =
+        [[VZVirtualMachineConfiguration alloc] init];
+    config.CPUCount = requirements.minimumSupportedCPUCount;
+    config.memorySize = requirements.minimumSupportedMemorySize;
+
+    // Platform
+    VZMacPlatformConfiguration *platform =
+        [[VZMacPlatformConfiguration alloc] init];
+    platform.hardwareModel = hardwareModel;
+    platform.machineIdentifier = machineId;
+    platform.auxiliaryStorage = auxStorage;
+    config.platform = platform;
+
+    // Boot loader
+    VZMacOSBootLoader *bootLoader = [[VZMacOSBootLoader alloc] init];
+    config.bootLoader = bootLoader;
+
+    // Disk
+    NSError *diskError = nil;
+    VZDiskImageStorageDeviceAttachment *diskAttachment =
+        [[VZDiskImageStorageDeviceAttachment alloc]
+            initWithURL:[NSURL fileURLWithPath:nsDisk]
+               readOnly:NO
+                  error:&diskError];
+    if (diskAttachment == nil) {
+        return copy_error(diskError);
+    }
+    VZVirtioBlockDeviceConfiguration *blockDevice =
+        [[VZVirtioBlockDeviceConfiguration alloc]
+            initWithAttachment:diskAttachment];
+    config.storageDevices = @[blockDevice];
+
+    // Network (NAT for installation — needs internet to activate)
+    VZNATNetworkDeviceAttachment *natAttachment =
+        [[VZNATNetworkDeviceAttachment alloc] init];
+    VZVirtioNetworkDeviceConfiguration *netDevice =
+        [[VZVirtioNetworkDeviceConfiguration alloc] init];
+    netDevice.attachment = natAttachment;
+    config.networkDevices = @[netDevice];
+
+    // Validate
+    NSError *valError = nil;
+    if (![config validateWithError:&valError]) {
+        return copy_error(valError);
+    }
+
+    // Create VM for installation
+    VZVirtualMachine *vm =
+        [[VZVirtualMachine alloc] initWithConfiguration:config];
+
+    // Run the installer
+    dispatch_semaphore_t installSem = dispatch_semaphore_create(0);
+    __block NSError *installError = nil;
+
+    VZMacOSInstaller *installer =
+        [[VZMacOSInstaller alloc] initWithVirtualMachine:vm
+                                       restoreImageURL:[NSURL fileURLWithPath:nsIpsw]];
+
+    // Print progress to stderr
+    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
+        while (!installer.progress.finished && !installer.progress.cancelled) {
+            fprintf(stderr, "\rRestoring macOS: %.0f%%",
+                    installer.progress.fractionCompleted * 100.0);
+            [NSThread sleepForTimeInterval:2.0];
+        }
+        fprintf(stderr, "\rRestoring macOS: done.     \n");
+    });
+
+    [installer installWithCompletionHandler:^(NSError *error) {
+        installError = error;
+        dispatch_semaphore_signal(installSem);
+    }];
+
+    dispatch_semaphore_wait(installSem, DISPATCH_TIME_FOREVER);
+
+    if (installError != nil) {
+        return copy_error(installError);
+    }
+
+    return NULL;
+}

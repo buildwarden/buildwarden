@@ -3,7 +3,9 @@ package vz
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"time"
@@ -180,21 +182,36 @@ func (d *Driver) Close() error { return nil }
 // The relay is the same linux/arm64 binary used in container mode.
 func (d *Driver) prepareRelay(sharedDir string) error {
 	relayDst := filepath.Join(sharedDir, "relay")
-	// TODO: locate pre-built relay binary or cross-compile from source
-	// For dev: go build -o relayDst -GOOS=linux -GOARCH=arm64 ./cmd/relay
-	_ = relayDst
+
+	// Check for a pre-built relay binary next to the warden executable
+	if exe, err := os.Executable(); err == nil {
+		candidate := filepath.Join(filepath.Dir(exe), "warden-relay-linux-arm64")
+		if _, err := os.Stat(candidate); err == nil {
+			return copyFile(candidate, relayDst)
+		}
+	}
+
+	// Fall back to cross-compiling from source
+	cmd := exec.Command("go", "build", "-o", relayDst, "./cmd/relay")
+	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0")
+	cmd.Dir = findModuleRoot()
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return fmt.Errorf("cross-compiling relay: %w", err)
+	}
 	return nil
 }
 
-// prepareContext copies or symlinks the build context into the shared volume.
+// prepareContext recursively copies the build context into the shared volume.
 func (d *Driver) prepareContext(sharedDir string, req *driver.BuildRequest) error {
 	if req.ContextDir == "" {
 		return nil
 	}
 	ctxDst := filepath.Join(sharedDir, "context")
-	// TODO: copy context files into ctxDst
-	// For now, symlink works on same filesystem
-	_ = ctxDst
+	cmd := exec.Command("cp", "-R", req.ContextDir+"/.", ctxDst)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return fmt.Errorf("copying context: %s: %w", string(out), err)
+	}
 	return nil
 }
 
@@ -204,9 +221,27 @@ func (d *Driver) prepareContext(sharedDir string, req *driver.BuildRequest) erro
 func (d *Driver) prepareAgent(sharedDir string, req *driver.BuildRequest) error {
 	agentDir := filepath.Join(sharedDir, "agent")
 
-	// warden-io binary (darwin/arm64)
-	// TODO: locate pre-built or cross-compile warden-io for darwin/arm64
-	// agentBin := filepath.Join(agentDir, "warden-io")
+	// Cross-compile warden-io for the macOS build VM
+	agentBin := filepath.Join(agentDir, "warden-io")
+	if exe, err := os.Executable(); err == nil {
+		candidate := filepath.Join(filepath.Dir(exe), "warden-io-darwin-arm64")
+		if _, errStat := os.Stat(candidate); errStat == nil {
+			if err := copyFile(candidate, agentBin); err != nil {
+				return fmt.Errorf("copying warden-io: %w", err)
+			}
+			goto agentReady
+		}
+	}
+	{
+		cmd := exec.Command("go", "build", "-o", agentBin, "./cmd/warden-io")
+		cmd.Env = append(os.Environ(), "GOOS=darwin", "GOARCH=arm64", "CGO_ENABLED=0")
+		cmd.Dir = findModuleRoot()
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			return fmt.Errorf("cross-compiling warden-io: %w", err)
+		}
+	}
+agentReady:
 
 	// Write the build script
 	buildScript := filepath.Join(agentDir, "build.sh")
@@ -362,15 +397,67 @@ func collectOutputs(sharedDir, outputDir string) error {
 	for _, e := range entries {
 		src := filepath.Join(ledgerSrc, e.Name())
 		dst := filepath.Join(outputDir, e.Name())
-		if e.IsDir() {
-			if err := os.Rename(src, dst); err != nil {
-				return fmt.Errorf("moving %s: %w", e.Name(), err)
-			}
-		} else {
-			if err := os.Rename(src, dst); err != nil {
-				return fmt.Errorf("moving %s: %w", e.Name(), err)
-			}
+		if err := os.Rename(src, dst); err != nil {
+			return fmt.Errorf("moving %s: %w", e.Name(), err)
 		}
 	}
 	return nil
+}
+
+func copyFile(src, dst string) error {
+	in, err := os.Open(src)
+	if err != nil {
+		return err
+	}
+	defer in.Close()
+
+	out, err := os.Create(dst)
+	if err != nil {
+		return err
+	}
+	defer out.Close()
+
+	if _, err := io.Copy(out, in); err != nil {
+		return err
+	}
+
+	// Preserve executable permission
+	info, err := in.Stat()
+	if err == nil {
+		out.Chmod(info.Mode())
+	}
+	return out.Close()
+}
+
+// findModuleRoot locates the go module root by walking up from the
+// executable location or current directory looking for go.mod.
+func findModuleRoot() string {
+	// Try from executable location first
+	if exe, err := os.Executable(); err == nil {
+		dir := filepath.Dir(exe)
+		for {
+			if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+				return dir
+			}
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+
+	// Fall back to current directory
+	dir, _ := os.Getwd()
+	for {
+		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
+			return dir
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			break
+		}
+		dir = parent
+	}
+	return "."
 }

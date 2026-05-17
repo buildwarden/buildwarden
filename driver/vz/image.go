@@ -47,7 +47,7 @@ func isValidImageDir(dir string) bool {
 }
 
 // LatestIPSW returns the path to the disk image of a prepared macOS image.
-// If no prepared image exists, returns an error directing the user to restore.
+// If no prepared image exists, it downloads and restores the latest from Apple.
 func (c *ImageCache) LatestIPSW() (string, error) {
 	dir, err := c.ImageDir()
 	if err != nil {
@@ -56,8 +56,9 @@ func (c *ImageCache) LatestIPSW() (string, error) {
 	if dir != "" {
 		return filepath.Join(dir, "disk.img"), nil
 	}
-	return "", fmt.Errorf(
-		"no prepared macOS image found; run 'warden image restore' to download and prepare one")
+
+	// No cached image — restore from Apple's latest IPSW
+	return c.RestoreIPSW("")
 }
 
 // RestoreIPSW downloads an IPSW file from the given URL, restores it to a
@@ -68,7 +69,17 @@ func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 		return "", fmt.Errorf("creating cache dir: %w", err)
 	}
 
-	// Create a directory for this image based on the URL hash
+	// If URL is empty, fetch the latest from Apple
+	if ipswURL == "" {
+		var err error
+		ipswURL, err = latestSupportedIPSW()
+		if err != nil {
+			return "", fmt.Errorf("fetching latest IPSW URL: %w", err)
+		}
+		fmt.Fprintf(os.Stderr, "Latest macOS IPSW: %s\n", ipswURL)
+	}
+
+	// Create a directory for this image
 	urlHash := shortHash(ipswURL)
 	imgDir := filepath.Join(c.CacheDir, "macos-"+urlHash)
 	if err := os.MkdirAll(imgDir, 0755); err != nil {
@@ -76,16 +87,35 @@ func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 	}
 
 	diskPath := filepath.Join(imgDir, "disk.img")
+	auxPath := filepath.Join(imgDir, "aux-storage")
+	hwModelPath := filepath.Join(imgDir, "hardware-model")
+	machineIDPath := filepath.Join(imgDir, "machine-id")
 
-	// TODO: Download IPSW from ipswURL
-	// TODO: Call VZMacOSRestoreImage + VZMacOSInstaller via cgo
-	// TODO: Save hardware-model, machine-id, aux-storage to imgDir
+	// Download IPSW if not already cached
+	ipswLocal := filepath.Join(c.CacheDir, "ipsw-"+urlHash+".ipsw")
+	if _, err := os.Stat(ipswLocal); err != nil {
+		fmt.Fprintf(os.Stderr, "Downloading IPSW...\n")
+		cmd := exec.Command("curl", "-L", "-o", ipswLocal, "--progress-bar", ipswURL)
+		cmd.Stdout = os.Stderr
+		cmd.Stderr = os.Stderr
+		if err := cmd.Run(); err != nil {
+			os.Remove(ipswLocal)
+			return "", fmt.Errorf("downloading IPSW: %w", err)
+		}
+	}
 
-	// After restore, suppress Setup Assistant and create user
+	// Restore IPSW to disk image (64GB disk)
+	fmt.Fprintf(os.Stderr, "Restoring macOS from IPSW (this takes 10-20 minutes)...\n")
+	if err := restoreIPSW(ipswLocal, diskPath, 64, auxPath, hwModelPath, machineIDPath); err != nil {
+		return "", fmt.Errorf("restoring IPSW: %w", err)
+	}
+
+	// Suppress Setup Assistant and create the warden user
 	if err := PrepareHeadlessImage(diskPath); err != nil {
 		return "", fmt.Errorf("headless setup: %w", err)
 	}
 
+	fmt.Fprintf(os.Stderr, "macOS image ready at %s\n", imgDir)
 	return diskPath, nil
 }
 

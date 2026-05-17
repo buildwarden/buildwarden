@@ -57,4 +57,24 @@ int vz_vm_state(void *vm_handle);
 #define VZ_STATE_STARTING 4
 #define VZ_STATE_STOPPING 5
 
+// --- IPSW Restore ---
+
+// Fetches the latest supported IPSW restore image URL from Apple.
+// Returns the URL string (caller must free).
+vz_result vz_latest_supported_ipsw(void);
+
+// Restores a macOS IPSW to a disk image + platform state files.
+// Creates: disk_path, aux_storage_path, hardware_model_path, machine_id_path.
+// Progress is reported to stderr. Blocks until complete.
+typedef void (*vz_progress_callback)(double fraction);
+char *vz_restore_ipsw(
+    const char *ipsw_path,
+    const char *disk_path,
+    uint64_t disk_size_bytes,
+    const char *aux_storage_path,
+    const char *hardware_model_path,
+    const char *machine_id_path,
+    vz_progress_callback progress_cb
+);
+
 #endif /* VZ_DARWIN_H */
