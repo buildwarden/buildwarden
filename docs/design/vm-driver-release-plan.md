@@ -348,14 +348,20 @@ Multiple `warden build` invocations on the same machine:
 - Resource contention: document recommended resource limits per concurrent build
 - Disk space: COW clones are cheap but the base images are large
 
-### 10. CI/CD Integration
+### 10. Build Platform Operator Integration
 
-How does this work in GitHub Actions / other CI:
-- Linux runners: container driver (existing) or QEMU for cross-platform
-- macOS runners: vz driver (if runner is Apple Silicon with entitlements)
-- Windows runners: Hyper-V or QEMU
-- Need to validate that CI environments allow virtualization
-  (many CI providers disable nested virt)
+BuildWarden is infrastructure-level software run *by* build platform
+operators (GitHub, GitLab, internal CI teams), not *within* CI jobs.
+It requires admin access for VM creation and network isolation.
+
+Operator considerations:
+- Linux hosts: container driver (fastest) or QEMU for cross-platform targets
+- macOS hosts (Apple Silicon): vz driver for macOS/Linux targets
+- Windows hosts: Hyper-V for Windows/Linux targets
+- Operators need to ensure their host environment allows virtualization
+  (bare metal or nested-virt-enabled VMs)
+- Resource allocation guidance: RAM/CPU/disk per concurrent build
+- Image caching strategy for fleet deployment (shared NFS, local disk)
 
 ---
 
