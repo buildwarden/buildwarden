@@ -8,6 +8,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"warden/driver"
+	"warden/driver/qemu"
 	"warden/driver/vz"
 )
 
@@ -161,13 +162,33 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		compress = false
 	}
 
-	// Dispatch to vz driver when requested
-	if cfg.Runtime.Driver == "vz" {
+	// Dispatch to VM drivers when requested
+	switch cfg.Runtime.Driver {
+	case "vz":
 		dockerfile, contextDir, err := ResolvePath(path)
 		if err != nil {
 			return err
 		}
 		d := vz.New()
+		defer d.Close()
+		_, buildErr := d.StartBuild(context.Background(), &driver.BuildRequest{
+			ContextDir:    contextDir,
+			Containerfile: dockerfile,
+			CaptureMode:   capture,
+			OutputDir:     outputDir,
+			Compress:      compress,
+			Stdin:         os.Stdin,
+			Stdout:        os.Stdout,
+			Stderr:        os.Stderr,
+		})
+		return buildErr
+
+	case "qemu":
+		dockerfile, contextDir, err := ResolvePath(path)
+		if err != nil {
+			return err
+		}
+		d := qemu.New()
 		defer d.Close()
 		_, buildErr := d.StartBuild(context.Background(), &driver.BuildRequest{
 			ContextDir:    contextDir,
