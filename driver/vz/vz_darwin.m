@@ -135,9 +135,11 @@ vz_result vz_create_linux_vm(
         return result;
     }
 
-    // Create VM
+    // Create VM on a dedicated serial queue (avoids main queue requirement)
+    dispatch_queue_t vmQueue =
+        dispatch_queue_create("com.buildwarden.vm.relay", DISPATCH_QUEUE_SERIAL);
     VZVirtualMachine *vm =
-        [[VZVirtualMachine alloc] initWithConfiguration:config];
+        [[VZVirtualMachine alloc] initWithConfiguration:config queue:vmQueue];
 
     result.handle = (__bridge_retained void *)vm;
     return result;
@@ -246,9 +248,11 @@ vz_result vz_create_macos_vm(
         return result;
     }
 
-    // Create VM
+    // Create VM on a dedicated serial queue
+    dispatch_queue_t vmQueue =
+        dispatch_queue_create("com.buildwarden.vm.build", DISPATCH_QUEUE_SERIAL);
     VZVirtualMachine *vm =
-        [[VZVirtualMachine alloc] initWithConfiguration:config];
+        [[VZVirtualMachine alloc] initWithConfiguration:config queue:vmQueue];
 
     result.handle = (__bridge_retained void *)vm;
     return result;
@@ -262,10 +266,12 @@ char *vz_start_vm(void *vm_handle) {
     __block NSError *startError = nil;
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
-    [vm startWithCompletionHandler:^(NSError *error) {
-        startError = error;
-        dispatch_semaphore_signal(sem);
-    }];
+    dispatch_async(vm.queue, ^{
+        [vm startWithCompletionHandler:^(NSError *error) {
+            startError = error;
+            dispatch_semaphore_signal(sem);
+        }];
+    });
 
     dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
     return copy_error(startError);
@@ -274,17 +280,22 @@ char *vz_start_vm(void *vm_handle) {
 char *vz_stop_vm(void *vm_handle) {
     VZVirtualMachine *vm = (__bridge VZVirtualMachine *)vm_handle;
 
-    if (![vm canStop]) {
-        return strdup("VM cannot be stopped in current state");
-    }
-
     __block NSError *stopError = nil;
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
-    [vm stopWithCompletionHandler:^(NSError *error) {
-        stopError = error;
-        dispatch_semaphore_signal(sem);
-    }];
+    dispatch_async(vm.queue, ^{
+        if (![vm canStop]) {
+            stopError = [NSError errorWithDomain:@"VZWarden" code:1
+                userInfo:@{NSLocalizedDescriptionKey:
+                    @"VM cannot be stopped in current state"}];
+            dispatch_semaphore_signal(sem);
+            return;
+        }
+        [vm stopWithCompletionHandler:^(NSError *error) {
+            stopError = error;
+            dispatch_semaphore_signal(sem);
+        }];
+    });
 
     dispatch_semaphore_wait(sem, DISPATCH_TIME_FOREVER);
     return copy_error(stopError);
@@ -450,9 +461,11 @@ char *vz_restore_ipsw(
         return copy_error(valError);
     }
 
-    // Create VM for installation
+    // Create VM for installation on a dedicated queue
+    dispatch_queue_t installQueue =
+        dispatch_queue_create("com.buildwarden.vm.install", DISPATCH_QUEUE_SERIAL);
     VZVirtualMachine *vm =
-        [[VZVirtualMachine alloc] initWithConfiguration:config];
+        [[VZVirtualMachine alloc] initWithConfiguration:config queue:installQueue];
 
     // Run the installer
     dispatch_semaphore_t installSem = dispatch_semaphore_create(0);
@@ -472,10 +485,12 @@ char *vz_restore_ipsw(
         fprintf(stderr, "\rRestoring macOS: done.     \n");
     });
 
-    [installer installWithCompletionHandler:^(NSError *error) {
-        installError = error;
-        dispatch_semaphore_signal(installSem);
-    }];
+    dispatch_async(installQueue, ^{
+        [installer installWithCompletionHandler:^(NSError *error) {
+            installError = error;
+            dispatch_semaphore_signal(installSem);
+        }];
+    });
 
     dispatch_semaphore_wait(installSem, DISPATCH_TIME_FOREVER);
 
