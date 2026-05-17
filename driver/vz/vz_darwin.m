@@ -2,6 +2,8 @@
 #import <Foundation/Foundation.h>
 #include "vz_darwin.h"
 #include <stdlib.h>
+#include <fcntl.h>
+#include <unistd.h>
 
 static char *copy_error(NSError *error) {
     if (error == nil) return NULL;

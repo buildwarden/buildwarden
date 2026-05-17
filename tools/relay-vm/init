@@ -1,28 +1,78 @@
 #!/bin/sh
 # Relay VM init script — runs as PID 1 inside the initramfs.
-# Mounts virtio-fs shared volume, sources relay config, execs the relay binary.
+# Mounts virtio-fs shared volume, configures dual networking, execs relay.
+#
+# Network topology:
+#   eth0 = file-handle interface (private link to build VM)
+#   eth1 = NAT interface (internet via host)
+#
+# The relay listens on eth0 (10.0.0.1) for build traffic and forwards
+# upstream requests via eth1.
+
+set -e
 
 mount -t devtmpfs devtmpfs /dev
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
+mount -t tmpfs tmpfs /tmp
 
 # Mount the shared volume (virtio-fs tag: "shared")
 mkdir -p /shared
-mount -t virtiofs shared /shared
+mount -t virtiofs shared /shared || {
+    echo "init: failed to mount virtiofs, trying 9p..."
+    mount -t 9p -o trans=virtio shared /shared
+}
 
-# Configure networking from shared volume if present
+# Source relay configuration
 if [ -f /shared/relay.env ]; then
     set -a
     . /shared/relay.env
     set +a
 fi
 
-# Configure the network interface
-ip link set eth0 up
-ip addr add 10.0.0.1/30 dev eth0
+# Wait for network interfaces to appear
+sleep 1
 
-# Set up DNS resolution for upstream forwarding
-echo "nameserver 10.0.2.3" > /etc/resolv.conf
+# Find available network interfaces (excluding lo)
+IFACES=$(ls /sys/class/net/ | grep -v lo)
+echo "init: found interfaces: $IFACES"
 
-# Exec the relay binary (never returns under normal operation)
+# Configure the private interface (first one = file-handle to build VM)
+# Static IP since this is a point-to-point link
+PRIVATE_IF=$(echo "$IFACES" | head -1)
+if [ -n "$PRIVATE_IF" ]; then
+    ip link set "$PRIVATE_IF" up
+    ip addr add 10.0.0.1/30 dev "$PRIVATE_IF"
+    echo "init: private interface $PRIVATE_IF = 10.0.0.1/30"
+fi
+
+# Configure the NAT interface (second one = internet via host)
+NAT_IF=$(echo "$IFACES" | sed -n '2p')
+if [ -n "$NAT_IF" ]; then
+    ip link set "$NAT_IF" up
+    # VZ NAT provides DHCP — run udhcpc if available
+    if command -v udhcpc >/dev/null 2>&1; then
+        udhcpc -i "$NAT_IF" -s /bin/true -q 2>/dev/null || true
+    else
+        # Fallback: VZ NAT typically uses 192.168.64.0/24 with gateway .1
+        ip addr add 192.168.64.2/24 dev "$NAT_IF"
+        ip route add default via 192.168.64.1
+    fi
+    echo "init: NAT interface $NAT_IF configured"
+fi
+
+# DNS: use the NAT gateway as upstream resolver
+# VZ NAT gateway handles DNS forwarding
+if [ -n "$NAT_IF" ]; then
+    GATEWAY=$(ip route | grep default | awk '{print $3}')
+    if [ -n "$GATEWAY" ]; then
+        echo "nameserver $GATEWAY" > /etc/resolv.conf
+    else
+        echo "nameserver 192.168.64.1" > /etc/resolv.conf
+    fi
+else
+    echo "nameserver 8.8.8.8" > /etc/resolv.conf
+fi
+
+echo "init: starting relay..."
 exec /shared/relay

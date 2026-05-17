@@ -91,6 +91,11 @@ func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 	hwModelPath := filepath.Join(imgDir, "hardware-model")
 	machineIDPath := filepath.Join(imgDir, "machine-id")
 
+	// If already restored, return immediately
+	if isValidImageDir(imgDir) {
+		return diskPath, nil
+	}
+
 	// Download IPSW if not already cached
 	ipswLocal := filepath.Join(c.CacheDir, "ipsw-"+urlHash+".ipsw")
 	if _, err := os.Stat(ipswLocal); err != nil {

@@ -101,10 +101,12 @@ build_initramfs() {
     chmod 755 "$ROOTFS_DIR/bin/busybox"
 
     # Create busybox symlinks for essential commands
-    for cmd in sh mount mkdir cat echo ip ln ls sleep date rm set; do
+    for cmd in sh mount mkdir cat echo ip ln ls sleep date rm set grep \
+               awk sed head udhcpc; do
         ln -s busybox "$ROOTFS_DIR/bin/$cmd"
     done
     ln -s ../bin/busybox "$ROOTFS_DIR/sbin/ip"
+    ln -s ../bin/busybox "$ROOTFS_DIR/sbin/udhcpc"
 
     # Install init script
     cp "$SCRIPT_DIR/init" "$ROOTFS_DIR/init"
