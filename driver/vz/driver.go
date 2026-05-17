@@ -6,6 +6,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"time"
 
 	"warden/driver"
 )
@@ -131,7 +132,10 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	defer relayVM.Stop()
 
 	// Wait for relay to write ca.cert.pem (signals it's ready)
-	// TODO: poll shared/ledger/ca.cert.pem
+	caPath := filepath.Join(sharedDir, "ledger", "ca.cert.pem")
+	if err := waitForFile(ctx, caPath, 30); err != nil {
+		return nil, fmt.Errorf("relay did not start: %w", err)
+	}
 
 	// Boot Build VM: macOS with shared volume + one network interface
 	// Single interface: private link (socket pair) — relay is sole gateway
@@ -141,12 +145,21 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	}
 	defer buildVM.Stop()
 
-	// Wait for build completion (agent writes to shared/signal/done)
-	// TODO: poll or use fsnotify on shared/signal/done
-	_ = ctx
+	// Wait for build completion via heartbeat protocol
+	signalDir := filepath.Join(sharedDir, "signal")
+	isTTY := req.Stdin != nil
+	exitCode, err := WaitForBuild(ctx, signalDir, isTTY)
+	if err != nil {
+		return nil, fmt.Errorf("build failed: %w", err)
+	}
+	if exitCode != 0 {
+		return nil, fmt.Errorf("build exited with code %d", exitCode)
+	}
 
-	// Collect outputs from shared volume
-	// TODO: move ledger, artifacts from shared/ledger/ to outputDir
+	// Collect outputs from shared volume to output directory
+	if err := collectOutputs(sharedDir, outputDir); err != nil {
+		return nil, fmt.Errorf("collecting outputs: %w", err)
+	}
 
 	return &driver.BuildResult{
 		OutputDir: outputDir,
@@ -185,27 +198,40 @@ func (d *Driver) prepareContext(sharedDir string, req *driver.BuildRequest) erro
 	return nil
 }
 
-// prepareAgent places warden-io (macOS build) and the build script on
-// the shared volume. A launchd plist in the base macOS image watches
+// prepareAgent places warden-io (macOS build) and the build/watcher scripts
+// on the shared volume. The launchd plist in the base macOS image watches
 // for the agent binary and executes it.
 func (d *Driver) prepareAgent(sharedDir string, req *driver.BuildRequest) error {
 	agentDir := filepath.Join(sharedDir, "agent")
-	// warden-io binary (darwin/arm64)
-	agentBin := filepath.Join(agentDir, "warden-io")
-	// TODO: locate or cross-compile warden-io for darwin/arm64
-	_ = agentBin
 
-	// Build script
+	// warden-io binary (darwin/arm64)
+	// TODO: locate pre-built or cross-compile warden-io for darwin/arm64
+	// agentBin := filepath.Join(agentDir, "warden-io")
+
+	// Write the build script
+	buildScript := filepath.Join(agentDir, "build.sh")
 	if req.Script != "" {
-		scriptDst := filepath.Join(agentDir, "build.sh")
 		data, err := os.ReadFile(req.Script)
 		if err != nil {
 			return fmt.Errorf("reading build script: %w", err)
 		}
-		if err := os.WriteFile(scriptDst, data, 0755); err != nil {
+		if err := os.WriteFile(buildScript, data, 0755); err != nil {
 			return fmt.Errorf("writing build script: %w", err)
 		}
+	} else {
+		// Default: run nothing (useful for shell mode)
+		if err := os.WriteFile(buildScript, []byte("#!/bin/sh\ntrue\n"), 0755); err != nil {
+			return fmt.Errorf("writing default build script: %w", err)
+		}
 	}
+
+	// Write the watcher script that wraps the build with heartbeat monitoring
+	watcherContent := WatcherScript("/Volumes/My\\ Shared\\ Files/shared/agent/build.sh")
+	watcherPath := filepath.Join(agentDir, "watcher.sh")
+	if err := os.WriteFile(watcherPath, []byte(watcherContent), 0755); err != nil {
+		return fmt.Errorf("writing watcher script: %w", err)
+	}
+
 	return nil
 }
 
@@ -303,4 +329,48 @@ func checkPlatform() error {
 func defaultCacheDir() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".cache", "warden", "images")
+}
+
+// waitForFile polls for a file to exist with non-zero size.
+func waitForFile(ctx context.Context, path string, timeoutSec int) error {
+	deadline := time.Now().Add(time.Duration(timeoutSec) * time.Second)
+	for {
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+		}
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out waiting for %s", filepath.Base(path))
+		}
+		if info, err := os.Stat(path); err == nil && info.Size() > 0 {
+			return nil
+		}
+		time.Sleep(200 * time.Millisecond)
+	}
+}
+
+// collectOutputs moves ledger and artifacts from the shared volume to
+// the final output directory.
+func collectOutputs(sharedDir, outputDir string) error {
+	ledgerSrc := filepath.Join(sharedDir, "ledger")
+	entries, err := os.ReadDir(ledgerSrc)
+	if err != nil {
+		return fmt.Errorf("reading ledger dir: %w", err)
+	}
+
+	for _, e := range entries {
+		src := filepath.Join(ledgerSrc, e.Name())
+		dst := filepath.Join(outputDir, e.Name())
+		if e.IsDir() {
+			if err := os.Rename(src, dst); err != nil {
+				return fmt.Errorf("moving %s: %w", e.Name(), err)
+			}
+		} else {
+			if err := os.Rename(src, dst); err != nil {
+				return fmt.Errorf("moving %s: %w", e.Name(), err)
+			}
+		}
+	}
+	return nil
 }
