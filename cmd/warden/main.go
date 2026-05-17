@@ -1,10 +1,14 @@
 package main
 
 import (
+	"context"
 	"os"
 
 	"github.com/lesiw/ctrctl"
 	"github.com/spf13/cobra"
+
+	"warden/driver"
+	"warden/driver/vz"
 )
 
 var version = "dev"
@@ -138,18 +142,10 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := setupRuntime(cfg); err != nil {
-		return err
-	}
 
 	path := ""
 	if len(args) > 0 {
 		path = args[0]
-	}
-
-	dockerfile, contextDir, err := ResolvePath(path)
-	if err != nil {
-		return err
 	}
 
 	capture := flagCapture
@@ -165,11 +161,35 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		compress = false
 	}
 
-	systemCA := true
-	if cfg.Relay.SystemCABundle != nil {
-		systemCA = *cfg.Relay.SystemCABundle
+	// Dispatch to vz driver when requested
+	if cfg.Runtime.Driver == "vz" {
+		dockerfile, contextDir, err := ResolvePath(path)
+		if err != nil {
+			return err
+		}
+		d := vz.New()
+		defer d.Close()
+		_, buildErr := d.StartBuild(context.Background(), &driver.BuildRequest{
+			ContextDir:    contextDir,
+			Containerfile: dockerfile,
+			CaptureMode:   capture,
+			OutputDir:     outputDir,
+			Compress:      compress,
+			Stdin:         os.Stdin,
+			Stdout:        os.Stdout,
+			Stderr:        os.Stderr,
+		})
+		return buildErr
 	}
 
+	// Default: container driver (existing ScriptEnv path)
+	if err := setupRuntime(cfg); err != nil {
+		return err
+	}
+	dockerfile, contextDir, err := ResolvePath(path)
+	if err != nil {
+		return err
+	}
 	env := NewScriptEnv()
 	config := &BuildConfig{
 		Context:         contextDir,
@@ -189,18 +209,10 @@ func runShell(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := setupRuntime(cfg); err != nil {
-		return err
-	}
 
 	path := ""
 	if len(args) > 0 {
 		path = args[0]
-	}
-
-	dockerfile, contextDir, err := ResolvePath(path)
-	if err != nil {
-		return err
 	}
 
 	capture := flagCapture
@@ -216,11 +228,34 @@ func runShell(cmd *cobra.Command, args []string) error {
 		compress = false
 	}
 
-	systemCA := true
-	if cfg.Relay.SystemCABundle != nil {
-		systemCA = *cfg.Relay.SystemCABundle
+	// Dispatch to vz driver when requested
+	if cfg.Runtime.Driver == "vz" {
+		dockerfile, contextDir, err := ResolvePath(path)
+		if err != nil {
+			return err
+		}
+		d := vz.New()
+		defer d.Close()
+		return d.Exec(context.Background(), &driver.BuildRequest{
+			ContextDir:    contextDir,
+			Containerfile: dockerfile,
+			CaptureMode:   capture,
+			OutputDir:     outputDir,
+			Compress:      compress,
+			Stdin:         os.Stdin,
+			Stdout:        os.Stdout,
+			Stderr:        os.Stderr,
+		})
 	}
 
+	// Default: container driver
+	if err := setupRuntime(cfg); err != nil {
+		return err
+	}
+	dockerfile, contextDir, err := ResolvePath(path)
+	if err != nil {
+		return err
+	}
 	env := NewScriptEnv()
 	config := &BuildConfig{
 		Context:         contextDir,
