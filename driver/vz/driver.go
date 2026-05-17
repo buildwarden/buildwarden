@@ -361,9 +361,14 @@ func checkPlatform() error {
 	return nil
 }
 
-func defaultCacheDir() string {
+// DefaultCacheDir returns the default path for cached VM images.
+func DefaultCacheDir() string {
 	home, _ := os.UserHomeDir()
 	return filepath.Join(home, ".cache", "warden", "images")
+}
+
+func defaultCacheDir() string {
+	return DefaultCacheDir()
 }
 
 // waitForFile polls for a file to exist with non-zero size.
