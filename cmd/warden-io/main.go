@@ -25,17 +25,21 @@ func main() {
 			fatal("post requires a file argument")
 		}
 		os.Exit(runPost(os.Args[2:]))
+	case "trust":
+		os.Exit(runTrust())
 	default:
 		usage()
 	}
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: warden-io <fetch|post> [args...]\n")
+	fmt.Fprintf(os.Stderr, "Usage: warden-io <fetch|post|trust> [args...]\n")
 	fmt.Fprintf(os.Stderr, "  fetch <file> [-o dest]  "+
-		"Fetch a context file\n")
+		"Fetch a context file from relay\n")
 	fmt.Fprintf(os.Stderr, "  post <file> [name]      "+
-		"Post a build artifact\n")
+		"Post a build artifact to relay\n")
+	fmt.Fprintf(os.Stderr, "  trust                   "+
+		"Install relay CA into system trust store\n")
 	os.Exit(1)
 }
 
@@ -67,6 +71,15 @@ func runFetch(args []string) int {
 
 	exitCode := 0
 	for _, f := range files {
+		// Directory fetch: list + download all
+		if strings.HasSuffix(f, "/") || f == "." {
+			if err := fetchDir(f, dest); err != nil {
+				fmt.Fprintf(os.Stderr, "warden-io: fetch %s: %s\n", f, err)
+				exitCode = 1
+			}
+			continue
+		}
+
 		out := dest
 		if out == "" {
 			out = f
@@ -80,6 +93,58 @@ func runFetch(args []string) int {
 		}
 	}
 	return exitCode
+}
+
+func fetchDir(prefix, destDir string) error {
+	if prefix == "." {
+		prefix = ""
+	}
+	listing, err := fetchListing(prefix)
+	if err != nil {
+		return err
+	}
+
+	for _, f := range listing {
+		out := f
+		if destDir != "" {
+			// Strip the prefix from the source to get relative path
+			rel := f
+			if prefix != "" {
+				rel = strings.TrimPrefix(f, prefix)
+			}
+			out = filepath.Join(destDir, rel)
+		}
+		if err := fetchFile(f, out); err != nil {
+			return fmt.Errorf("%s: %w", f, err)
+		}
+	}
+	return nil
+}
+
+func fetchListing(prefix string) ([]string, error) {
+	url := "http://cwd/" + prefix
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return nil, err
+	}
+
+	var files []string
+	for _, line := range strings.Split(strings.TrimSpace(string(body)), "\n") {
+		if line != "" {
+			files = append(files, line)
+		}
+	}
+	return files, nil
 }
 
 func fetchFile(src, dest string) error {
@@ -107,6 +172,59 @@ func fetchFile(src, dest string) error {
 
 	_, err = io.Copy(f, resp.Body)
 	return err
+}
+
+func runTrust() int {
+	resp, err := http.Get("http://artifacts/ca.pem")
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warden-io: trust: %s\n", err)
+		return 1
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintf(os.Stderr, "warden-io: trust: HTTP %d\n", resp.StatusCode)
+		return 1
+	}
+
+	pem, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warden-io: trust: reading CA: %s\n", err)
+		return 1
+	}
+
+	installed := false
+
+	// Alpine/Debian/Ubuntu: /usr/local/share/ca-certificates/ + update-ca-certificates
+	dir := "/usr/local/share/ca-certificates"
+	if err := os.MkdirAll(dir, 0755); err == nil {
+		certPath := filepath.Join(dir, "warden-ca.crt")
+		if err := os.WriteFile(certPath, pem, 0644); err == nil {
+			installed = true
+		}
+	}
+
+	// Append to bundle (works without update-ca-certificates)
+	for _, bundle := range []string{
+		"/etc/ssl/certs/ca-certificates.crt",
+		"/etc/pki/tls/certs/ca-bundle.crt",
+		"/etc/ssl/cert.pem",
+	} {
+		if f, err := os.OpenFile(bundle, os.O_APPEND|os.O_WRONLY, 0644); err == nil {
+			_, _ = f.Write([]byte("\n"))
+			_, _ = f.Write(pem)
+			f.Close()
+			installed = true
+			break
+		}
+	}
+
+	if !installed {
+		fmt.Fprintf(os.Stderr, "warden-io: trust: could not install CA\n")
+		return 1
+	}
+
+	return 0
 }
 
 func runPost(args []string) int {

@@ -38,6 +38,12 @@ func run() int {
 	}
 	SetContextDir(ctxDir)
 
+	sigDir := os.Getenv("SIGNAL_DIR")
+	if sigDir != "" {
+		_ = os.MkdirAll(sigDir, 0755)
+		SetSignalDir(sigDir)
+	}
+
 	ledgerFile, err := os.Create(filepath.Join(outDir, "ledger"))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error creating ledger file: %v\n", err)
@@ -87,8 +93,13 @@ func run() int {
 		return 1
 	}
 
-	listenIP := net.IPv4zero
+	listenIP := selfIP
+	if listenIP == nil {
+		listenIP = net.IPv4zero
+	}
 	errs := make(chan error, 3)
+
+	go RunHeartbeat()
 
 	go func() { errs <- RunDns(net.TCPAddr{IP: listenIP, Port: 53}) }()
 	go func() { errs <- RunHttp(net.TCPAddr{IP: listenIP, Port: 80}) }()

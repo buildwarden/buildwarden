@@ -2,9 +2,12 @@ package qemu
 
 import (
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"syscall"
+	"time"
 )
 
 // vmProcess wraps a running QEMU subprocess.
@@ -13,47 +16,43 @@ type vmProcess struct {
 	name string
 }
 
-// startRelayVM boots the relay VM using direct kernel boot (no disk image).
-// Two network interfaces: a socket for the isolated build link, and user-net
-// for upstream internet access.
-func (d *Driver) startRelayVM(kernelPath, initrdPath, sharedDir, socketPath string) (*vmProcess, error) {
+func (d *Driver) startRelayVM(
+	kernelPath, initrdPath, sharedDir, socketPath string,
+) (*vmProcess, error) {
+	arch := hostQEMUArch()
 	accel := d.detectAccel()
-	binary := d.qemuBinary("aarch64")
+	binary := d.qemuBinary(arch)
+
+	virtfs := fmt.Sprintf(
+		"local,path=%s,mount_tag=shared,security_model=none,id=shared0",
+		sharedDir)
+	buildNet := fmt.Sprintf(
+		"stream,id=buildnet,server=on,addr.type=unix,addr.path=%s",
+		socketPath)
 
 	args := []string{
 		"-machine", fmt.Sprintf("virt,accel=%s", accel),
-		"-cpu", cpuForAccel(accel, "aarch64"),
+		"-cpu", cpuForAccel(accel, arch),
 		"-m", "512",
 		"-smp", "2",
-		"-nographic",
-
-		// Direct kernel boot
+		"-nodefaults",
+		"-display", "none",
+		"-chardev", "stdio,id=ser0",
+		"-serial", "chardev:ser0",
 		"-kernel", kernelPath,
 		"-initrd", initrdPath,
-		"-append", "console=ttyAMA0",
-
-		// Shared directory via virtio-9p (works without virtiofsd daemon)
-		"-virtfs", fmt.Sprintf("local,path=%s,mount_tag=shared,security_model=mapped-xattr,id=shared0", sharedDir),
-
-		// Network 1: isolated link to build VM via socket
+		"-append", consoleArg(arch),
+		"-virtfs", virtfs,
 		"-device", "virtio-net-pci,netdev=buildnet",
-		"-netdev", fmt.Sprintf("socket,id=buildnet,listen=%s", socketPath),
-
-		// Network 2: user-mode networking for internet (upstream requests)
+		"-netdev", buildNet,
 		"-device", "virtio-net-pci,netdev=usernet",
 		"-netdev", "user,id=usernet,restrict=off",
-
-		// No display, no audio
-		"-display", "none",
-		"-nodefaults",
-
-		// virtio-rng for fast boot entropy
 		"-device", "virtio-rng-pci",
 	}
 
 	cmd := exec.Command(binary, args...)
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = d.vmOutput()
+	cmd.Stderr = d.vmOutput()
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	if err := cmd.Start(); err != nil {
@@ -63,42 +62,84 @@ func (d *Driver) startRelayVM(kernelPath, initrdPath, sharedDir, socketPath stri
 	return &vmProcess{cmd: cmd, name: "relay"}, nil
 }
 
-// startBuildVM boots the build VM from a disk image with a single network
-// interface connected to the relay VM's socket (isolated, relay is sole gateway).
-func (d *Driver) startBuildVM(req *buildVMConfig, sharedDir, socketPath string) (*vmProcess, error) {
+// buildVMConfig holds parameters for the build VM.
+type buildVMConfig struct {
+	Arch     string
+	CPUs     int
+	MemoryMB int
+
+	// Disk image boot (production path)
+	DiskImage string
+	SeedISO   string // cloud-init NoCloud seed ISO
+
+	// Direct kernel boot (lightweight/test path)
+	Kernel string
+	Initrd string
+}
+
+func (d *Driver) startBuildVM(
+	cfg *buildVMConfig, sharedDir, socketPath string,
+) (*vmProcess, error) {
 	accel := d.detectAccel()
-	binary := d.qemuBinary(req.Arch)
+	binary := d.qemuBinary(cfg.Arch)
+
+	agentDir := filepath.Join(sharedDir, "agent")
+	signalDir := filepath.Join(sharedDir, "signal")
+
+	agentFS := fmt.Sprintf(
+		"local,path=%s,mount_tag=agent,security_model=none,"+
+			"id=agent0,readonly=on", agentDir)
+	signalFS := fmt.Sprintf(
+		"local,path=%s,mount_tag=signal,security_model=none,"+
+			"id=signal0", signalDir)
+	relayNet := fmt.Sprintf(
+		"stream,id=relaynet,addr.type=unix,addr.path=%s", socketPath)
 
 	args := []string{
 		"-machine", fmt.Sprintf("virt,accel=%s", accel),
-		"-cpu", cpuForAccel(accel, req.Arch),
-		"-m", fmt.Sprintf("%d", req.MemoryMB),
-		"-smp", fmt.Sprintf("%d", req.CPUs),
-		"-nographic",
-
-		// Boot from disk image
-		"-drive", fmt.Sprintf("file=%s,format=qcow2,if=virtio", req.DiskImage),
-
-		// EFI firmware (required for arm64 guests)
-		"-bios", efiCodePath(req.Arch),
-
-		// Shared directory via virtio-9p
-		"-virtfs", fmt.Sprintf("local,path=%s,mount_tag=shared,security_model=mapped-xattr,id=shared0", sharedDir),
-
-		// Network: connect to relay VM's socket (isolated — sole path out)
-		"-device", "virtio-net-pci,netdev=relaynet",
-		"-netdev", fmt.Sprintf("socket,id=relaynet,connect=%s", socketPath),
-
-		// No display
-		"-display", "none",
+		"-cpu", cpuForAccel(accel, cfg.Arch),
+		"-m", fmt.Sprintf("%d", cfg.MemoryMB),
+		"-smp", fmt.Sprintf("%d", cfg.CPUs),
 		"-nodefaults",
-
-		"-device", "virtio-rng-pci",
+		"-display", "none",
+		"-chardev", "stdio,id=ser0",
+		"-serial", "chardev:ser0",
 	}
 
+	if cfg.DiskImage != "" {
+		drive := fmt.Sprintf(
+			"file=%s,format=qcow2,if=virtio", cfg.DiskImage)
+		args = append(args,
+			"-drive", drive,
+			"-bios", efiCodePath(cfg.Arch),
+		)
+		if cfg.SeedISO != "" {
+			args = append(args,
+				"-drive", fmt.Sprintf(
+					"file=%s,format=raw,if=none,id=cidata,"+
+						"media=cdrom,readonly=on", cfg.SeedISO),
+				"-device", "virtio-blk-pci,drive=cidata",
+			)
+		}
+	} else {
+		args = append(args,
+			"-kernel", cfg.Kernel,
+			"-initrd", cfg.Initrd,
+			"-append", consoleArg(cfg.Arch),
+		)
+	}
+
+	args = append(args,
+		"-virtfs", agentFS,
+		"-virtfs", signalFS,
+		"-device", "virtio-net-pci,netdev=relaynet",
+		"-netdev", relayNet,
+		"-device", "virtio-rng-pci",
+	)
+
 	cmd := exec.Command(binary, args...)
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
+	cmd.Stdout = d.vmOutput()
+	cmd.Stderr = d.vmOutput()
 	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
 
 	if err := cmd.Start(); err != nil {
@@ -112,18 +153,16 @@ func (p *vmProcess) stop() {
 	if p.cmd == nil || p.cmd.Process == nil {
 		return
 	}
-	// Send SIGTERM first for graceful shutdown
-	p.cmd.Process.Signal(syscall.SIGTERM)
-	// Give it 5 seconds, then force kill
+	_ = p.cmd.Process.Signal(syscall.SIGTERM)
 	done := make(chan struct{})
 	go func() {
-		p.cmd.Wait()
+		_ = p.cmd.Wait()
 		close(done)
 	}()
 	select {
 	case <-done:
-	case <-timeAfter(5):
-		p.cmd.Process.Kill()
+	case <-time.After(5 * time.Second):
+		_ = p.cmd.Process.Kill()
 		<-done
 	}
 }
@@ -132,12 +171,18 @@ func (p *vmProcess) wait() error {
 	return p.cmd.Wait()
 }
 
-// buildVMConfig holds parameters specific to the build VM.
-type buildVMConfig struct {
-	Arch      string // "aarch64" or "x86_64"
-	CPUs      int
-	MemoryMB  int
-	DiskImage string
+func (d *Driver) vmOutput() io.Writer {
+	if d.Verbose {
+		return os.Stderr
+	}
+	return io.Discard
+}
+
+func consoleArg(arch string) string {
+	if arch == "x86_64" {
+		return "console=ttyS0"
+	}
+	return "console=ttyAMA0"
 }
 
 func cpuForAccel(accel, arch string) string {
@@ -158,7 +203,6 @@ func cpuForAccel(accel, arch string) string {
 func efiCodePath(arch string) string {
 	switch arch {
 	case "aarch64":
-		// Standard homebrew location
 		candidates := []string{
 			"/opt/homebrew/share/qemu/edk2-aarch64-code.fd",
 			"/usr/share/qemu/edk2-aarch64-code.fd",
@@ -185,24 +229,4 @@ func efiCodePath(arch string) string {
 	default:
 		return ""
 	}
-}
-
-func timeAfter(seconds int) <-chan struct{} {
-	ch := make(chan struct{})
-	go func() {
-		select {
-		case <-make(chan struct{}): // never fires, sleep via select
-		}
-	}()
-	_ = seconds
-	// Simple implementation using time.After would need the time import
-	// but we already avoid it for the stub. Use a goroutine with sleep.
-	go func() {
-		for i := 0; i < seconds*10; i++ {
-			// busy-ish wait at 100ms intervals
-			syscall.Select(0, nil, nil, nil, &syscall.Timeval{Usec: 100000})
-		}
-		close(ch)
-	}()
-	return ch
 }

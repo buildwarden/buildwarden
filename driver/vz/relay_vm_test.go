@@ -20,9 +20,9 @@ import (
 //
 // Run: go test -tags integration -run TestRelayVMBoot ./driver/vz/ -v
 func TestRelayVMBoot(t *testing.T) {
-	// Locate relay VM assets
+	// Locate relay VM assets (VZ needs uncompressed Image, not vmlinuz)
 	repoRoot := findModuleRoot()
-	kernelPath := filepath.Join(repoRoot, "tools", "relay-vm", "output", "vmlinuz")
+	kernelPath := filepath.Join(repoRoot, "tools", "relay-vm", "output", "Image")
 	initrdPath := filepath.Join(repoRoot, "tools", "relay-vm", "output", "initramfs.cpio.gz")
 
 	if _, err := os.Stat(kernelPath); err != nil {

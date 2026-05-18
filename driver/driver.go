@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"time"
 )
 
 // Driver is the interface all orchestration backends implement.
@@ -46,6 +47,8 @@ type BuildRequest struct {
 	CaptureMode string
 	// Compress enables zstd compression of output artifacts.
 	Compress bool
+	// Timeout is the maximum build duration. Zero means no limit.
+	Timeout time.Duration
 	// RelayImage specifies the relay container image (container driver only).
 	RelayImage string
 	// Env is extra environment variables for the build.

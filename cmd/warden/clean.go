@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/lesiw/ctrctl"
@@ -86,10 +87,30 @@ func runClean(cmd *cobra.Command, args []string) error {
 		removed++
 	}
 
+	// Clean VM cache (compiled binaries + cached images)
+	if cacheDir, err := os.UserCacheDir(); err == nil {
+		wardenCache := filepath.Join(cacheDir, "warden")
+		if info, err := os.Stat(wardenCache); err == nil && info.IsDir() {
+			var cacheSize int64
+			_ = filepath.Walk(wardenCache,
+				func(_ string, fi os.FileInfo, _ error) error {
+					if fi != nil && !fi.IsDir() {
+						cacheSize += fi.Size()
+					}
+					return nil
+				})
+			if err := os.RemoveAll(wardenCache); err == nil {
+				fmt.Fprintf(os.Stderr,
+					"Removed VM cache (%d MB)\n", cacheSize/(1024*1024))
+				removed++
+			}
+		}
+	}
+
 	if removed == 0 {
 		fmt.Println("Nothing to clean.")
 	} else {
-		fmt.Printf("Removed %d orphaned resource(s).\n", removed)
+		fmt.Printf("Removed %d resource(s).\n", removed)
 	}
 	return nil
 }

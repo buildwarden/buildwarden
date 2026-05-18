@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -282,15 +283,39 @@ func onRequest(req *http.Request) (*http.Request, *http.Response) {
 
 	host := strings.Split(req.Host, ":")[0]
 
-	// Intercept artifact submissions (POST to reserved hosts).
-	if host == "artifacts" && req.Method == "POST" {
-		return handleArtifactPost(req)
+	// Intercept all requests to "artifacts" reserved hostname.
+	if host == "artifacts" {
+		switch req.URL.Path {
+		case "/heartbeat":
+			TouchActivity()
+			return req, newTextResponse(req, http.StatusOK, "ok\n")
+		case "/exit":
+			code := 0
+			if q := req.URL.Query().Get("code"); q != "" {
+				_, _ = fmt.Sscanf(q, "%d", &code)
+			}
+			WriteExitCode(code)
+			return req, newTextResponse(req, http.StatusOK, "ok\n")
+		case "/ca.pem":
+			return handleCACertGet(req)
+		case "/warden-io":
+			return handleAgentBinaryGet(req)
+		default:
+			if req.Method == "POST" {
+				return handleArtifactPost(req)
+			}
+			return req, newTextResponse(req, http.StatusNotFound,
+				"not found\n")
+		}
 	}
 
 	// Serve build context files (GET from "cwd" hostname).
 	if host == "cwd" && req.Method == "GET" {
 		return handleContextGet(req)
 	}
+
+	// Any proxied request = build is alive
+	TouchActivity()
 
 	seq := captureSeq.Add(1)
 	baseName := captureBaseName(seq, req.Method, host, req.URL.Path)
@@ -386,6 +411,48 @@ func isSafeChar(c rune) bool {
 		(c >= 'A' && c <= 'Z') ||
 		(c >= '0' && c <= '9') ||
 		c == '-' || c == '_' || c == '.'
+}
+
+func handleContextList(
+	req *http.Request, prefix string,
+) (*http.Request, *http.Response) {
+	dir := filepath.Join(contextDir, prefix)
+	if !strings.HasPrefix(dir, contextDir) {
+		return req, newTextResponse(req, http.StatusForbidden, "forbidden\n")
+	}
+
+	if _, err := os.Stat(dir); err != nil {
+		return req, newTextResponse(req, http.StatusNotFound,
+			fmt.Sprintf("directory not found: %s\n", prefix))
+	}
+
+	var files []string
+	_ = filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		rel, _ := filepath.Rel(contextDir, p)
+		if isSafeContextPath(rel) {
+			files = append(files, rel)
+		}
+		return nil
+	})
+
+	body := strings.Join(files, "\n")
+	if len(files) > 0 {
+		body += "\n"
+	}
+	resp := &http.Response{
+		StatusCode:    http.StatusOK,
+		Status:        "200 OK",
+		Proto:         "HTTP/1.1",
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		Header:        http.Header{"Content-Type": {"text/plain"}},
+		Body:          io.NopCloser(strings.NewReader(body)),
+		ContentLength: int64(len(body)),
+	}
+	return req, resp
 }
 
 func isSafeContextPath(p string) bool {
@@ -502,19 +569,78 @@ func handleArtifactPost(req *http.Request) (*http.Request, *http.Response) {
 	return req, resp
 }
 
+func handleCACertGet(
+	req *http.Request,
+) (*http.Request, *http.Response) {
+	resp := &http.Response{
+		StatusCode:    http.StatusOK,
+		Status:        "200 OK",
+		Proto:         "HTTP/1.1",
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		Header:        http.Header{"Content-Type": {"application/x-pem-file"}},
+		Body:          io.NopCloser(strings.NewReader(string(CA_CERT))),
+		ContentLength: int64(len(CA_CERT)),
+	}
+	return req, resp
+}
+
+func handleAgentBinaryGet(
+	req *http.Request,
+) (*http.Request, *http.Response) {
+	// Look for warden-io in the context dir's sibling agent dir
+	agentPath := filepath.Join(filepath.Dir(contextDir), "agent", "warden-io")
+	data, err := os.ReadFile(agentPath)
+	if err != nil {
+		return req, newTextResponse(req, http.StatusNotFound,
+			"warden-io not available\n")
+	}
+	resp := &http.Response{
+		StatusCode: http.StatusOK,
+		Status:     "200 OK",
+		Proto:      "HTTP/1.1",
+		ProtoMajor: 1,
+		ProtoMinor: 1,
+		Header: http.Header{
+			"Content-Type": {"application/octet-stream"},
+		},
+		Body:          io.NopCloser(bytes.NewReader(data)),
+		ContentLength: int64(len(data)),
+	}
+	return req, resp
+}
+
 func handleContextGet(
 	req *http.Request,
 ) (*http.Request, *http.Response) {
 	filePath := strings.TrimPrefix(req.URL.Path, "/")
+
+	// Root or directory listing
+	if filePath == "" || strings.HasSuffix(filePath, "/") {
+		return handleContextList(req, filePath)
+	}
+
 	if !isSafeContextPath(filePath) {
 		resp := newTextResponse(req, http.StatusForbidden, "forbidden\n")
 		return req, resp
 	}
 
 	fullPath := filepath.Join(contextDir, filePath)
-	if !strings.HasPrefix(fullPath, contextDir+"/") {
+	if !strings.HasPrefix(fullPath, contextDir+"/") &&
+		fullPath != contextDir {
 		resp := newTextResponse(req, http.StatusForbidden, "forbidden\n")
 		return req, resp
+	}
+
+	info, statErr := os.Stat(fullPath)
+	if statErr != nil {
+		resp := newTextResponse(
+			req, http.StatusNotFound,
+			fmt.Sprintf("not found: %s\n", filePath))
+		return req, resp
+	}
+	if info.IsDir() {
+		return handleContextList(req, filePath+"/")
 	}
 
 	data, err := os.ReadFile(fullPath)

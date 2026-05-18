@@ -312,7 +312,7 @@ func (d *Driver) bootRelayVM(sharedDir string, vnet *VirtualNetwork) (*VM, error
 // Looks in the cache directory, then falls back to the embedded build tooling.
 func (d *Driver) resolveRelayVMAssets() (kernel, initrd string, err error) {
 	cacheDir := d.Cache.CacheDir
-	kernel = filepath.Join(cacheDir, "relay-vm", "vmlinuz")
+	kernel = filepath.Join(cacheDir, "relay-vm", "Image")
 	initrd = filepath.Join(cacheDir, "relay-vm", "initramfs.cpio.gz")
 
 	if _, err := os.Stat(kernel); err == nil {

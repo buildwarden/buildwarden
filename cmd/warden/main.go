@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
+	"time"
 
 	"github.com/lesiw/ctrctl"
 	"github.com/spf13/cobra"
@@ -22,6 +24,9 @@ var (
 	flagCapture    string
 	flagOutput     string
 	flagNoCompress bool
+	flagScript     string
+	flagImage      string
+	flagTimeout    string
 )
 
 var rootCmd = &cobra.Command{
@@ -79,6 +84,12 @@ func init() {
 		"output directory for build results (default: warden-output)")
 	buildCmd.Flags().BoolVar(&flagNoCompress, "no-compress", false,
 		"disable zstd compression of ledger and payloads")
+	buildCmd.Flags().StringVar(&flagScript, "script", "",
+		"build script to run (vm drivers)")
+	buildCmd.Flags().StringVar(&flagImage, "image", "",
+		"disk image for build VM (qemu driver)")
+	buildCmd.Flags().StringVar(&flagTimeout, "timeout", "",
+		"maximum build duration (e.g., 10m, 1h)")
 	shellCmd.Flags().StringVar(&flagCapture, "capture", "",
 		"capture payloads to disk (none, headers, bodies, all)")
 	shellCmd.Flags().StringVarP(&flagOutput, "output", "o", "",
@@ -189,13 +200,25 @@ func runBuild(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		d := qemu.New()
+		d.Verbose = cfg.Output.Verbose
 		defer d.Close()
+		var timeout time.Duration
+		if flagTimeout != "" {
+			var err error
+			timeout, err = time.ParseDuration(flagTimeout)
+			if err != nil {
+				return fmt.Errorf("invalid --timeout: %w", err)
+			}
+		}
 		_, buildErr := d.StartBuild(context.Background(), &driver.BuildRequest{
 			ContextDir:    contextDir,
 			Containerfile: dockerfile,
+			Script:        flagScript,
+			Image:         flagImage,
 			CaptureMode:   capture,
 			OutputDir:     outputDir,
 			Compress:      compress,
+			Timeout:       timeout,
 			Stdin:         os.Stdin,
 			Stdout:        os.Stdout,
 			Stderr:        os.Stderr,

@@ -1,27 +1,45 @@
 #!/bin/sh
-# Relay VM init script — runs as PID 1 inside the initramfs.
-# Mounts virtio-fs shared volume, configures dual networking, execs relay.
+# Relay VM init — the trust boundary.
+#
+# This script and everything it invokes is outside the build VM's influence.
+# The relay VM:
+# 1. Mounts shared volume (9p) for relay binary + ledger output
+# 2. Configures isolated network (build link + internet)
+# 3. Sets up iptables to transparently redirect build traffic to relay
+# 4. Execs the relay binary
 #
 # Network topology:
-#   eth0 = file-handle interface (private link to build VM)
-#   eth1 = NAT interface (internet via host)
+#   eth0 = private link to build VM (10.0.0.1/30)
+#   eth1 = NAT to host/internet (DHCP from QEMU user-net)
 #
-# The relay listens on eth0 (10.0.0.1) for build traffic and forwards
-# upstream requests via eth1.
-
-set -e
+# iptables rules:
+#   PREROUTING on eth0: TCP 80→local:80, TCP 443→local:443, UDP/TCP 53→local:53
+#   POSTROUTING on eth1: MASQUERADE (for relay's own upstream requests)
 
 mount -t devtmpfs devtmpfs /dev
 mount -t proc proc /proc
 mount -t sysfs sysfs /sys
 mount -t tmpfs tmpfs /tmp
 
-# Mount the shared volume (virtio-fs tag: "shared")
+# Load kernel modules in dependency order
+for mod in \
+    rng-core virtio-rng \
+    netfs fuse virtiofs \
+    9pnet 9pnet_virtio 9p \
+    failover net_failover virtio_net \
+    crc32c_generic libcrc32c \
+    nf_defrag_ipv4 nf_defrag_ipv6 x_tables nf_conntrack nf_nat \
+    ip_tables iptable_filter iptable_nat xt_tcpudp \
+    xt_REDIRECT xt_MASQUERADE xt_conntrack xt_state \
+    nfnetlink nf_tables; do
+    [ -f "/lib/modules/${mod}.ko" ] && insmod "/lib/modules/${mod}.ko"
+done
+
+# Mount shared volume
 mkdir -p /shared
-mount -t virtiofs shared /shared || {
-    echo "init: failed to mount virtiofs, trying 9p..."
-    mount -t 9p -o trans=virtio shared /shared
-}
+if ! mount -t virtiofs shared /shared 2>/dev/null; then
+    mount -t 9p -o trans=virtio,version=9p2000.L shared /shared
+fi
 
 # Source relay configuration
 if [ -f /shared/relay.env ]; then
@@ -30,49 +48,78 @@ if [ -f /shared/relay.env ]; then
     set +a
 fi
 
-# Wait for network interfaces to appear
-sleep 1
+# Wait for network interfaces
+TRIES=0
+while [ $TRIES -lt 50 ]; do
+    IFACES=$(ls /sys/class/net/ 2>/dev/null | grep -v lo)
+    [ -n "$IFACES" ] && break
+    TRIES=$((TRIES + 1))
+    sleep 0.1
+done
 
-# Find available network interfaces (excluding lo)
-IFACES=$(ls /sys/class/net/ | grep -v lo)
-echo "init: found interfaces: $IFACES"
-
-# Configure the private interface (first one = file-handle to build VM)
-# Static IP since this is a point-to-point link
+# Configure build link (eth0) — static
 PRIVATE_IF=$(echo "$IFACES" | head -1)
 if [ -n "$PRIVATE_IF" ]; then
     ip link set "$PRIVATE_IF" up
     ip addr add 10.0.0.1/30 dev "$PRIVATE_IF"
-    echo "init: private interface $PRIVATE_IF = 10.0.0.1/30"
 fi
 
-# Configure the NAT interface (second one = internet via host)
+# Configure internet (eth1) — DHCP from QEMU user-net
 NAT_IF=$(echo "$IFACES" | sed -n '2p')
 if [ -n "$NAT_IF" ]; then
     ip link set "$NAT_IF" up
-    # VZ NAT provides DHCP — run udhcpc if available
-    if command -v udhcpc >/dev/null 2>&1; then
-        udhcpc -i "$NAT_IF" -s /bin/true -q 2>/dev/null || true
-    else
-        # Fallback: VZ NAT typically uses 192.168.64.0/24 with gateway .1
-        ip addr add 192.168.64.2/24 dev "$NAT_IF"
-        ip route add default via 192.168.64.1
-    fi
-    echo "init: NAT interface $NAT_IF configured"
+    udhcpc -i "$NAT_IF" -s /bin/true -q 2>/dev/null || {
+        ip addr add 10.0.2.15/24 dev "$NAT_IF"
+        ip route add default via 10.0.2.2
+    }
 fi
 
-# DNS: use the NAT gateway as upstream resolver
-# VZ NAT gateway handles DNS forwarding
+# Disable IPv6 (all iptables rules are IPv4; prevents bypass)
+echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6
+echo 1 > /proc/sys/net/ipv6/conf/default/disable_ipv6
+
+# Enable IP forwarding (only for relay's own outbound, not build VM)
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+# Default policy: DROP all forwarded traffic from build VM.
+# REDIRECT in PREROUTING rewrites destination to local, so redirected
+# packets go to INPUT (local relay), not FORWARD. Non-redirected packets
+# hit FORWARD and are dropped — this blocks all non-proxied egress.
+iptables -P FORWARD DROP
+iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+# Transparent redirect: build VM traffic → local relay process
+if [ -n "$PRIVATE_IF" ]; then
+    iptables -t nat -A PREROUTING -i "$PRIVATE_IF" -p tcp --dport 80 \
+        -j REDIRECT --to-port 80
+    iptables -t nat -A PREROUTING -i "$PRIVATE_IF" -p tcp --dport 443 \
+        -j REDIRECT --to-port 443
+    iptables -t nat -A PREROUTING -i "$PRIVATE_IF" -p udp --dport 53 \
+        -j REDIRECT --to-port 53
+    iptables -t nat -A PREROUTING -i "$PRIVATE_IF" -p tcp --dport 53 \
+        -j REDIRECT --to-port 53
+fi
+
+# Block ICMP forwarding explicitly (belt + suspenders with FORWARD DROP)
+if [ -n "$PRIVATE_IF" ]; then
+    iptables -A INPUT -i "$PRIVATE_IF" -p icmp -j DROP
+fi
+
+# Outbound NAT for relay's own upstream requests
 if [ -n "$NAT_IF" ]; then
-    GATEWAY=$(ip route | grep default | awk '{print $3}')
-    if [ -n "$GATEWAY" ]; then
-        echo "nameserver $GATEWAY" > /etc/resolv.conf
-    else
-        echo "nameserver 192.168.64.1" > /etc/resolv.conf
-    fi
-else
-    echo "nameserver 8.8.8.8" > /etc/resolv.conf
+    iptables -t nat -A POSTROUTING -o "$NAT_IF" -j MASQUERADE
 fi
 
-echo "init: starting relay..."
+# DNS resolver for the relay process
+# QEMU user-net: gateway=10.0.2.2, DNS=10.0.2.3
+# VZ NAT: gateway=192.168.64.1, DNS=same
+GATEWAY=$(ip route 2>/dev/null | grep default | awk '{print $3}')
+case "$GATEWAY" in
+    10.0.2.*)
+        echo "nameserver 10.0.2.3" > /etc/resolv.conf ;;
+    *)
+        echo "nameserver ${GATEWAY:-8.8.8.8}" > /etc/resolv.conf ;;
+esac
+
+echo "init: ready"
 exec /shared/relay

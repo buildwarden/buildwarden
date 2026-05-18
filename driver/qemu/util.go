@@ -4,6 +4,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 )
 
 func copyFile(src, dst string) error {
@@ -25,9 +26,57 @@ func copyFile(src, dst string) error {
 
 	info, err := in.Stat()
 	if err == nil {
-		out.Chmod(info.Mode())
+		_ = out.Chmod(info.Mode())
 	}
 	return out.Close()
+}
+
+func cachedBinaryPath(name, goarch string) string {
+	cacheDir := filepath.Join(cacheBaseDir(), "warden", "bin")
+	_ = os.MkdirAll(cacheDir, 0755)
+	return filepath.Join(cacheDir, name+"-linux-"+goarch)
+}
+
+// isCacheStale returns true if the cached binary is older than the
+// newest source file in the module. Compares against go.sum mtime
+// as a lightweight proxy for "source changed."
+func isCacheStale(cached string) bool {
+	info, err := os.Stat(cached)
+	if err != nil {
+		return true
+	}
+
+	root := findModuleRoot()
+	gosum := filepath.Join(root, "go.sum")
+	sumInfo, err := os.Stat(gosum)
+	if err != nil {
+		return false
+	}
+	if sumInfo.ModTime().After(info.ModTime()) {
+		return true
+	}
+
+	// Also check if the warden binary itself is newer (dev rebuild)
+	if exe, err := os.Executable(); err == nil {
+		if exeInfo, err := os.Stat(exe); err == nil {
+			if exeInfo.ModTime().After(info.ModTime()) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func cacheBaseDir() string {
+	if dir, err := os.UserCacheDir(); err == nil {
+		return dir
+	}
+	if runtime.GOOS == "linux" {
+		if home := os.Getenv("HOME"); home != "" {
+			return filepath.Join(home, ".cache")
+		}
+	}
+	return os.TempDir()
 }
 
 func findModuleRoot() string {

@@ -7,8 +7,14 @@
 
 static char *copy_error(NSError *error) {
     if (error == nil) return NULL;
-    const char *desc = [[error localizedDescription] UTF8String];
-    return strdup(desc);
+    NSMutableString *msg = [NSMutableString stringWithFormat:@"%@ (domain=%@ code=%ld)",
+        [error localizedDescription], error.domain, (long)error.code];
+    if (error.userInfo[NSUnderlyingErrorKey]) {
+        NSError *underlying = error.userInfo[NSUnderlyingErrorKey];
+        [msg appendFormat:@" [underlying: %@ domain=%@ code=%ld]",
+            underlying.localizedDescription, underlying.domain, (long)underlying.code];
+    }
+    return strdup([msg UTF8String]);
 }
 
 // Helper: create a virtio-fs device configuration

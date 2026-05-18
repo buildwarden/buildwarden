@@ -73,31 +73,28 @@ Remaining work:
 - [ ] Rosetta support for amd64 Linux targets on arm64 host
 
 ### 3. QEMU Driver (driver/qemu/)
-**Status: Not started**
+**Status: Functional — transparent proxy e2e working**
 
 Universal fallback. Uses QEMU userspace emulator with optional
 hardware acceleration (HVF on macOS, KVM on Linux).
 
-Architecture choices:
-- Invoke `qemu-system-{arch}` as a subprocess (simplest, most portable)
-- Use virtio-fs (virtiofsd) for shared volumes on Linux
-- Use virtio-9p for shared volumes where virtiofsd isn't available
-- Network isolation via QEMU's built-in networking (`-nic` with
-  restrict=on, only allowing traffic to the relay VM)
+Current implementation:
+- Two-VM topology: relay (Alpine 3.21 initramfs) + build (direct kernel or QCOW2)
+- 9p shared volume for trusted channel (boot script only)
+- `stream` netdev for Unix socket between VMs
+- iptables-legacy REDIRECT for transparent HTTP/HTTPS/DNS proxying
+- MASQUERADE for relay's own upstream traffic
+- Heartbeat protocol for build completion signaling
+- CLI: `warden build --driver qemu [--script] [--image]`
+- Verified: HTTP/HTTPS fetch from build VM recorded in ledger
 
-Key considerations:
-- QEMU is already installed on the development machine (10.0.0)
-- EFI firmware available for arm64 and x86_64 (edk2-aarch64-code.fd, edk2-x86_64-code.fd)
-- Can use the same relay VM kernel+initramfs as the vz driver
-- For macOS guests on macOS host: possible but legally restricted
-  to Apple hardware (same as vz). QEMU's HVF backend supports this.
-- For Windows guests: uses standard QEMU with UEFI boot from a
-  prepared Windows disk image.
-
-Image sourcing:
-- Linux: Alpine/Ubuntu/Debian cloud images (qcow2 format, ~300MB-1GB)
-- Windows: User-provided or Microsoft evaluation images
-- macOS: IPSW restore (reuse vz driver's image preparation)
+Remaining work:
+- [ ] Build context delivery through relay (not 9p mount)
+- [ ] CA cert served from relay endpoint (self-discoverable)
+- [ ] Dockerfile → script translation (reuse container driver logic)
+- [ ] Stock image support (FROM declaration → cloud image fetch)
+- [ ] Graceful VM shutdown (poweroff after watcher exits)
+- [ ] warden-io integration for context fetch + artifact push
 
 ### 4. Hyper-V Driver (driver/hyperv/)
 **Status: Not started**
@@ -367,6 +364,57 @@ Operator considerations:
 
 ---
 
+## Open Questions
+
+### FROM declaration for VM images
+
+The Dockerfile-like format currently maps `FROM` to an OCI image ref
+(container driver). For VM drivers, `FROM` could specify:
+
+- A cloud image URL: `FROM https://dl-cdn.alpinelinux.org/.../alpine-virt-3.21-aarch64.qcow2`
+- A registry ref: `FROM registry.example.com/build-images/ubuntu-24.04:latest`
+- A local path: `FROM ./images/my-build-env.qcow2`
+- A shorthand: `FROM alpine:3.21` (resolved per-driver)
+
+This would keep the Dockerfile as a single-file build configuration
+even for VM-based builds. The driver would interpret `FROM` as "boot
+this image" rather than "pull this container layer."
+
+Questions to resolve:
+- Should `FROM` for QEMU mean "boot from this disk image directly" or
+  "fetch this image, apply remaining Dockerfile directives inside it"?
+- For stock cloud images (Ubuntu, Alpine), how does the warden-io agent
+  get installed? Cloud-init userdata? Pre-baked into a known location?
+- Should there be a `warden image prepare <cloud-image>` command that
+  bakes warden-io + trust config into an image for reuse?
+- How does image caching work? Content-hash after first fetch?
+
+### Trust boundary: what goes on the 9p mount vs through the relay
+
+The 9p shared volume is the trusted channel. Only relay-controlled
+content should be on it:
+- The boot/watcher script (orchestration)
+- Signal files (heartbeat, exit_code) — written by build, read by host
+
+Everything else flows through the relay as HTTP endpoints:
+- **Build context**: fetched by warden-io from `http://cwd/` (same as container driver)
+- **CA certificate**: fetched from `http://artifacts/ca.pem` or similar relay endpoint,
+  allowing any tool inside the build to self-configure TLS trust
+- **Artifacts**: pushed by warden-io to `http://artifacts/`
+- **Ledger writes**: handled by relay internally
+
+This has the property that:
+1. The relay records all meaningful I/O in the ledger
+2. Package managers can manually configure trust if they detect a
+   buildwarden environment (CA cert at a known URL)
+3. The 9p mount surface area is minimal (read-only script + signal files)
+4. Context transfer accounting is identical to the container driver
+
+The CA cert fetch could be omitted from the ledger since it's
+internally controlled (relay serving its own cert to its own client).
+
+---
+
 ## Implementation Priority Order
 
 ### Phase 1: Complete VZ Driver (current work)
@@ -374,26 +422,53 @@ Operator considerations:
 - Validate full build cycle on macOS/arm64
 - Security testing for vz topology
 
-### Phase 2: QEMU Driver
+### Phase 2: QEMU Driver — COMPLETE
 - Linux arm64/amd64 targets (most users)
 - Works on all host platforms
 - Reuses relay VM kernel+initramfs
-- Image sourcing from cloud image registries
-- Security testing for QEMU network isolation
+- Image sourcing from cloud image registries (Alpine, Ubuntu, Debian)
+- Security testing: 12 adversarial tests + 10 independent v2 tests pass
+- Validated: Alpine 3.21, Ubuntu 24.04 cloud images
 
-### Phase 3: Container Driver Transition
+### Phase 3: Firecracker Driver (driver/firecracker/)
+**Status: Not started — future feature for Linux CI fleets**
+
+Firecracker microVMs for high-density build isolation on Linux hosts.
+Targets platform operators running hundreds of concurrent builds.
+
+Why Firecracker over QEMU for this use case:
+- Boot time: <125ms vs QEMU's ~1-2s
+- Memory overhead: ~5MB per microVM vs QEMU's ~30MB+
+- Attack surface: ~50K LOC vs QEMU's millions
+- Purpose-built for multi-tenant isolation (no PCI, no USB, no legacy)
+
+Implementation notes (from QEMU driver lessons):
+- Reuses the same relay VM initramfs (shared trust boundary)
+- MMDS (169.254.169.254) for metadata delivery (no cloud-init ISO)
+- virtio-vsock for host↔VM signaling (alternative to 9p signal dir)
+- Same `driver/script` Containerfile translator
+- Same heartbeat protocol (relay auto-beats during traffic)
+- KVM-only, same-arch-only, Linux hosts only
+- Root images: ext4 from cloud image (no QCOW2, Firecracker uses raw)
+
+Remaining design questions:
+- vsock vs 9p for signal delivery (vsock avoids symlink attacks entirely)
+- Jailer integration for additional host-side sandboxing
+- Snapshot/resume for sub-100ms subsequent builds (warm VM pool)
+
+### Phase 4: Container Driver Transition
 - Wire refactored container driver into CLI
 - Remove old ScriptEnv code path
 - Verify ledger compatibility
 - Re-validate existing security tests
 
-### Phase 4: Hyper-V Driver
+### Phase 5: Hyper-V Driver
 - Windows host support
 - Linux + Windows guest targets
 - PowerShell-based VM management
 - Virtual switch network isolation
 
-### Phase 5: Multi-Target Config + Release Polish
+### Phase 6: Multi-Target Config + Release Polish
 - warden.toml [[target]] array support
 - `warden build --all` for multi-target
 - Image lifecycle management
@@ -401,7 +476,7 @@ Operator considerations:
 - Performance baselines
 - Documentation
 
-### Phase 6: Security Audit
+### Phase 7: Security Audit
 - Independent adversarial agent per driver/platform combo
 - CI gate for isolation code changes
 - External security review of the relay + network topology
