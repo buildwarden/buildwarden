@@ -141,7 +141,9 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 
 	// Boot Build VM: macOS with shared volume + one network interface
 	// Single interface: private link (socket pair) — relay is sole gateway
-	buildVM, err := d.bootBuildVM(buildDisk, sharedDir, vnet)
+	// Platform state files (hardware-model, machine-id, aux-storage) live
+	// alongside the original disk image, not the COW clone.
+	buildVM, err := d.bootBuildVM(buildDisk, filepath.Dir(diskImage), sharedDir, vnet)
 	if err != nil {
 		return nil, fmt.Errorf("booting build VM: %w", err)
 	}
@@ -329,9 +331,10 @@ func (d *Driver) resolveRelayVMAssets() (kernel, initrd string, err error) {
 
 // bootBuildVM creates and starts the build VM (macOS).
 // Single interface: private link to relay VM (sole network path).
-func (d *Driver) bootBuildVM(diskImage, sharedDir string, vnet *VirtualNetwork) (*VM, error) {
-	// Platform state files live alongside the disk image
-	imgDir := filepath.Dir(diskImage)
+// platformDir contains the hardware-model, machine-id, and aux-storage files
+// from the original IPSW restore (separate from the COW clone disk path).
+func (d *Driver) bootBuildVM(diskImage, platformDir, sharedDir string, vnet *VirtualNetwork) (*VM, error) {
+	imgDir := platformDir
 
 	vm, err := NewMacOSVM(macOSVMConfig{
 		CPUs:               4,

@@ -467,42 +467,62 @@ char *vz_restore_ipsw(
         return copy_error(valError);
     }
 
-    // Create VM for installation on a dedicated queue
+    // Create VM for installation.
+    // VZMacOSInstaller requires the run loop to be serviced for internal XPC.
+    // We use a dedicated serial queue and CFRunLoop to ensure XPC callbacks
+    // are processed throughout the long-running installation.
     dispatch_queue_t installQueue =
         dispatch_queue_create("com.buildwarden.vm.install", DISPATCH_QUEUE_SERIAL);
-    VZVirtualMachine *vm =
+
+    __block VZVirtualMachine *vm =
         [[VZVirtualMachine alloc] initWithConfiguration:config queue:installQueue];
 
-    // Run the installer
-    dispatch_semaphore_t installSem = dispatch_semaphore_create(0);
     __block NSError *installError = nil;
-
-    VZMacOSInstaller *installer =
-        [[VZMacOSInstaller alloc] initWithVirtualMachine:vm
-                                       restoreImageURL:[NSURL fileURLWithPath:nsIpsw]];
-
-    // Print progress to stderr
-    dispatch_async(dispatch_get_global_queue(DISPATCH_QUEUE_PRIORITY_DEFAULT, 0), ^{
-        while (!installer.progress.finished && !installer.progress.cancelled) {
-            fprintf(stderr, "\rRestoring macOS: %.0f%%",
-                    installer.progress.fractionCompleted * 100.0);
-            [NSThread sleepForTimeInterval:2.0];
-        }
-        fprintf(stderr, "\rRestoring macOS: done.     \n");
-    });
+    __block BOOL installDone = NO;
 
     dispatch_async(installQueue, ^{
+        VZMacOSInstaller *installer =
+            [[VZMacOSInstaller alloc] initWithVirtualMachine:vm
+                                           restoreImageURL:[NSURL fileURLWithPath:nsIpsw]];
+
+        // Log progress periodically from a background thread
+        dispatch_async(dispatch_get_global_queue(QOS_CLASS_UTILITY, 0), ^{
+            while (!installer.progress.finished && !installer.progress.cancelled) {
+                fprintf(stderr, "\rRestoring macOS: %.0f%%",
+                        installer.progress.fractionCompleted * 100.0);
+                [NSThread sleepForTimeInterval:2.0];
+            }
+            fprintf(stderr, "\rRestoring macOS: done.     \n");
+        });
+
         [installer installWithCompletionHandler:^(NSError *error) {
             installError = error;
-            dispatch_semaphore_signal(installSem);
+            installDone = YES;
+            CFRunLoopStop(CFRunLoopGetMain());
         }];
     });
 
-    dispatch_semaphore_wait(installSem, DISPATCH_TIME_FOREVER);
+    // Run the main run loop to service XPC/VZ internal callbacks.
+    while (!installDone) {
+        CFRunLoopRunInMode(kCFRunLoopDefaultMode, 1.0, true);
+    }
 
     if (installError != nil) {
         return copy_error(installError);
     }
+
+    // Stop the installation VM so the disk image is released.
+    dispatch_semaphore_t stopSem = dispatch_semaphore_create(0);
+    dispatch_async(installQueue, ^{
+        if ([vm canStop]) {
+            [vm stopWithCompletionHandler:^(NSError *error) {
+                dispatch_semaphore_signal(stopSem);
+            }];
+        } else {
+            dispatch_semaphore_signal(stopSem);
+        }
+    });
+    dispatch_semaphore_wait(stopSem, dispatch_time(DISPATCH_TIME_NOW, 10 * NSEC_PER_SEC));
 
     return NULL;
 }

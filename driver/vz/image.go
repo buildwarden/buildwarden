@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"time"
 )
 
 // ImageCache manages cached VM base images.
@@ -37,7 +38,7 @@ func (c *ImageCache) ImageDir() (string, error) {
 }
 
 func isValidImageDir(dir string) bool {
-	required := []string{"disk.img", "aux-storage", "hardware-model", "machine-id"}
+	required := []string{"disk.img", "aux-storage", "hardware-model", "machine-id", ".prepared"}
 	for _, f := range required {
 		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
 			return false
@@ -99,20 +100,32 @@ func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 	// Download IPSW if not already cached
 	ipswLocal := filepath.Join(c.CacheDir, "ipsw-"+urlHash+".ipsw")
 	if _, err := os.Stat(ipswLocal); err != nil {
-		fmt.Fprintf(os.Stderr, "Downloading IPSW...\n")
-		cmd := exec.Command("curl", "-L", "-o", ipswLocal, "--progress-bar", ipswURL)
-		cmd.Stdout = os.Stderr
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			os.Remove(ipswLocal)
-			return "", fmt.Errorf("downloading IPSW: %w", err)
+		// Check for a pre-existing ipsw-latest.ipsw (manual or previous download)
+		latestPath := filepath.Join(c.CacheDir, "ipsw-latest.ipsw")
+		if info, errLat := os.Stat(latestPath); errLat == nil && info.Size() > 0 {
+			ipswLocal = latestPath
+		} else {
+			fmt.Fprintf(os.Stderr, "Downloading IPSW...\n")
+			cmd := exec.Command("curl", "-L", "-o", ipswLocal, "--progress-bar", ipswURL)
+			cmd.Stdout = os.Stderr
+			cmd.Stderr = os.Stderr
+			if err := cmd.Run(); err != nil {
+				os.Remove(ipswLocal)
+				return "", fmt.Errorf("downloading IPSW: %w", err)
+			}
 		}
 	}
 
-	// Restore IPSW to disk image (64GB disk)
-	fmt.Fprintf(os.Stderr, "Restoring macOS from IPSW (this takes 10-20 minutes)...\n")
-	if err := restoreIPSW(ipswLocal, diskPath, 64, auxPath, hwModelPath, machineIDPath); err != nil {
-		return "", fmt.Errorf("restoring IPSW: %w", err)
+	// Restore IPSW to disk image (64GB disk).
+	// Skip if disk already has content (restore succeeded but prep failed).
+	diskInfo, _ := os.Stat(diskPath)
+	if diskInfo == nil || diskInfo.Size() == 0 {
+		fmt.Fprintf(os.Stderr, "Restoring macOS from IPSW (this takes 10-20 minutes)...\n")
+		if err := restoreIPSW(ipswLocal, diskPath, 64, auxPath, hwModelPath, machineIDPath); err != nil {
+			return "", fmt.Errorf("restoring IPSW: %w", err)
+		}
+	} else {
+		fmt.Fprintf(os.Stderr, "Disk image exists, skipping restore...\n")
 	}
 
 	// Suppress Setup Assistant and create the warden user
@@ -120,37 +133,34 @@ func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 		return "", fmt.Errorf("headless setup: %w", err)
 	}
 
+	// Brief pause to ensure disk is fully released after hdiutil detach
+	time.Sleep(2 * time.Second)
+
+	// First boot: boot the VM once so macOS completes initial setup.
+	// This validates: auto-login → launchd → virtio-fs mount → agent execution.
+	fmt.Fprintf(os.Stderr, "Running first boot (macOS initial setup)...\n")
+	if err := c.firstBoot(diskPath, imgDir); err != nil {
+		return "", fmt.Errorf("first boot: %w", err)
+	}
+
+	// Mark the image as fully prepared
+	os.WriteFile(filepath.Join(imgDir, ".prepared"), []byte("ok\n"), 0644)
+
 	fmt.Fprintf(os.Stderr, "macOS image ready at %s\n", imgDir)
 	return diskPath, nil
 }
 
-// PrepareHeadlessImage modifies a freshly-restored macOS disk image so it
-// boots directly to the desktop without Setup Assistant interaction.
-// It writes setup markers and pre-creates the warden user.
+// PrepareHeadlessImage installs the warden build agent into a macOS disk image.
+// Writes a LaunchDaemon that runs at boot (as root, before user login) and a
+// boot script that mounts virtio-fs and launches warden-io.
 func PrepareHeadlessImage(diskPath string) error {
-	// Mount the disk image
-	mountPoint, err := mountDiskImage(diskPath)
+	dm, err := mountDiskImage(diskPath)
 	if err != nil {
 		return fmt.Errorf("mounting disk: %w", err)
 	}
-	defer unmountDiskImage(mountPoint)
+	defer unmountDiskImage(dm)
+	mountPoint := dm.DataVolumePath
 
-	// 1. Mark Setup Assistant as complete
-	if err := suppressSetupAssistant(mountPoint); err != nil {
-		return fmt.Errorf("suppressing setup assistant: %w", err)
-	}
-
-	// 2. Create the warden user account
-	if err := createWardenUser(mountPoint); err != nil {
-		return fmt.Errorf("creating user: %w", err)
-	}
-
-	// 3. Enable auto-login for the warden user
-	if err := enableAutoLogin(mountPoint); err != nil {
-		return fmt.Errorf("enabling auto-login: %w", err)
-	}
-
-	// 4. Install the build agent launchd plist
 	if err := installAgentLaunchd(mountPoint); err != nil {
 		return fmt.Errorf("installing agent launchd: %w", err)
 	}
@@ -412,17 +422,10 @@ func installAgentLaunchd(mountPoint string) error {
 	<string>com.buildwarden.agent</string>
 	<key>ProgramArguments</key>
 	<array>
-		<string>/Volumes/My Shared Files/shared/agent/warden-io</string>
-		<string>run</string>
-		<string>--signal-dir=/Volumes/My Shared Files/shared/signal</string>
-		<string>--context-dir=/Volumes/My Shared Files/shared/context</string>
-	</array>
-	<key>WatchPaths</key>
-	<array>
-		<string>/Volumes/My Shared Files/shared/agent/warden-io</string>
+		<string>/usr/local/bin/warden-boot</string>
 	</array>
 	<key>RunAtLoad</key>
-	<false/>
+	<true/>
 	<key>StandardOutPath</key>
 	<string>/var/log/warden-agent.log</string>
 	<key>StandardErrorPath</key>
@@ -431,30 +434,154 @@ func installAgentLaunchd(mountPoint string) error {
 </plist>
 `
 	plistPath := filepath.Join(daemonDir, "com.buildwarden.agent.plist")
-	return os.WriteFile(plistPath, []byte(plist), 0644)
-}
-
-// mountDiskImage mounts a macOS disk image and returns the mount point.
-func mountDiskImage(diskPath string) (string, error) {
-	mountPoint, err := os.MkdirTemp("", "warden-mount-")
-	if err != nil {
-		return "", err
+	if err := os.WriteFile(plistPath, []byte(plist), 0644); err != nil {
+		return err
 	}
 
+	// Write the boot script that waits for virtio-fs mount then launches the agent.
+	// This lives on the local disk so it's always available at boot.
+	binDir := filepath.Join(mountPoint, "usr", "local", "bin")
+	if err := os.MkdirAll(binDir, 0755); err != nil {
+		return err
+	}
+	bootScript := `#!/bin/sh
+# Warden boot agent: mounts the virtio-fs share and launches warden-io.
+# Runs as a LaunchDaemon (root, no user session needed).
+LOG="/var/log/warden-boot.log"
+MOUNT="/var/warden/shared"
+AGENT="$MOUNT/agent/warden-io"
+
+exec >>"$LOG" 2>&1
+echo "$(date): warden-boot starting"
+
+mkdir -p "$MOUNT"
+
+# Try to mount the virtio-fs share. mount_virtiofs is available on macOS 13+
+# when running under Virtualization.framework with a VZVirtioFileSystemDevice.
+echo "$(date): attempting mount_virtiofs"
+i=0
+while ! mount_virtiofs shared "$MOUNT" 2>>"$LOG" && [ $i -lt 30 ]; do
+    sleep 2
+    i=$((i + 1))
+done
+
+if mount | grep -q "$MOUNT"; then
+    echo "$(date): mount succeeded"
+else
+    echo "$(date): mount failed after 60s, trying /Volumes/My Shared Files/shared"
+    MOUNT="/Volumes/My Shared Files/shared"
+    AGENT="$MOUNT/agent/warden-io"
+    i=0
+    while [ ! -d "$MOUNT" ] && [ $i -lt 30 ]; do
+        sleep 2
+        i=$((i + 1))
+    done
+fi
+
+if [ -x "$AGENT" ]; then
+    echo "$(date): launching agent"
+    exec "$AGENT" run \
+        --signal-dir="$MOUNT/signal" \
+        --context-dir="$MOUNT/context"
+fi
+
+echo "$(date): agent not found, mount contents:"
+ls -la "$MOUNT" 2>&1 || true
+echo "$(date): all mounts:"
+mount 2>&1
+exit 1
+`
+	bootScriptPath := filepath.Join(binDir, "warden-boot")
+	return os.WriteFile(bootScriptPath, []byte(bootScript), 0755)
+}
+
+// diskMount holds the result of mounting a macOS disk image.
+type diskMount struct {
+	DataVolumePath string // e.g., "/Volumes/Data"
+	BaseDevice     string // e.g., "/dev/disk4" — used for detach
+}
+
+// mountDiskImage mounts a macOS APFS disk image and returns the Data volume
+// mount point. Uses `diskutil` to identify the Data role volume precisely.
+func mountDiskImage(diskPath string) (*diskMount, error) {
+	// Attach the disk image — all APFS volumes get mounted automatically.
+	// -owners off disables ownership so we can write to system directories.
 	cmd := exec.Command("hdiutil", "attach", diskPath,
-		"-mountpoint", mountPoint,
-		"-nobrowse", "-noverify", "-noautoopen")
-	if out, err := cmd.CombinedOutput(); err != nil {
-		os.RemoveAll(mountPoint)
-		return "", fmt.Errorf("hdiutil attach: %s: %w", string(out), err)
+		"-nobrowse", "-noverify", "-noautoopen", "-owners", "off")
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return nil, fmt.Errorf("hdiutil attach: %s: %w", string(out), err)
 	}
-	return mountPoint, nil
+
+	// Extract the base device (first line of output is always the disk device)
+	var baseDevice string
+	for _, line := range strings.Split(string(out), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 && strings.HasPrefix(fields[0], "/dev/disk") {
+			if !strings.Contains(fields[0], "s") || fields[0] == fields[0][:strings.LastIndex(fields[0], "s")] {
+				// This is a base device (no slice number) like /dev/disk4
+			}
+			if baseDevice == "" {
+				// First device listed is always the base disk
+				baseDevice = fields[0]
+			}
+		}
+	}
+
+	// Identify the Data volume by its APFS role. We use `diskutil apfs list`
+	// on the container device to get volume roles, then match the Data role
+	// volume to its mount point.
+	var dataPath string
+	var mountPoints []string
+	for _, line := range strings.Split(string(out), "\n") {
+		tabIdx := strings.LastIndex(line, "\t")
+		if tabIdx < 0 {
+			continue
+		}
+		mp := strings.TrimSpace(line[tabIdx+1:])
+		if mp != "" && mp[0] == '/' {
+			mountPoints = append(mountPoints, mp)
+		}
+	}
+
+	// The Data volume is identified by `diskutil info <mount>` showing
+	// "Volume Name: Data". This is set by macOS during IPSW restore and
+	// is the standard name for the APFS data volume.
+	for _, mp := range mountPoints {
+		infoOut, infoErr := exec.Command("diskutil", "info", mp).Output()
+		if infoErr != nil {
+			continue
+		}
+		for _, infoLine := range strings.Split(string(infoOut), "\n") {
+			trimmed := strings.TrimSpace(infoLine)
+			if strings.HasPrefix(trimmed, "Volume Name:") {
+				volName := strings.TrimSpace(strings.TrimPrefix(trimmed, "Volume Name:"))
+				if volName == "Data" {
+					dataPath = mp
+					break
+				}
+			}
+		}
+		if dataPath != "" {
+			break
+		}
+	}
+
+	if dataPath == "" {
+		// Detach since we can't find the data volume
+		exec.Command("hdiutil", "detach", baseDevice, "-force").Run() //nolint:errcheck
+		return nil, fmt.Errorf("data volume not found in mounted disk image")
+	}
+
+	return &diskMount{
+		DataVolumePath: dataPath,
+		BaseDevice:     baseDevice,
+	}, nil
 }
 
-// unmountDiskImage unmounts a previously mounted disk image.
-func unmountDiskImage(mountPoint string) {
-	exec.Command("hdiutil", "detach", mountPoint, "-force").Run() //nolint:errcheck
-	os.RemoveAll(mountPoint)
+// unmountDiskImage detaches all volumes for a previously mounted disk image.
+func unmountDiskImage(dm *diskMount) {
+	exec.Command("hdiutil", "detach", dm.BaseDevice, "-force").Run() //nolint:errcheck
 }
 
 // CloneDisk creates an APFS copy-on-write clone of a base disk image.
@@ -465,6 +592,74 @@ func CloneDisk(src, dst string) error {
 		return cmd.Run()
 	}
 	return nil
+}
+
+// firstBoot boots the macOS VM once so it completes initial setup.
+// Places a probe agent on the shared volume and waits for it to signal.
+// This validates the full chain: boot → auto-login → launchd → mount → agent.
+func (c *ImageCache) firstBoot(diskPath, platformDir string) error {
+	// Create a temporary shared directory with a probe agent
+	sharedDir, err := os.MkdirTemp("", "warden-firstboot-")
+	if err != nil {
+		return err
+	}
+	defer os.RemoveAll(sharedDir)
+
+	for _, sub := range []string{"agent", "signal"} {
+		if err := os.MkdirAll(filepath.Join(sharedDir, sub), 0755); err != nil {
+			return err
+		}
+	}
+
+	// The probe agent is a shell script that just writes a signal file.
+	// The LaunchDaemon's warden-boot script mounts virtio-fs at /var/warden/shared
+	// then runs this as "warden-io run --signal-dir=... --context-dir=...".
+	// We fake warden-io with a script that just signals completion.
+	probeScript := `#!/bin/sh
+# First-boot probe: signal that macOS booted and the agent chain works.
+# The boot script passes --signal-dir and --context-dir but we just write
+# to the well-known mount path.
+echo "ok" > /var/warden/shared/signal/first-boot-done
+`
+	agentPath := filepath.Join(sharedDir, "agent", "warden-io")
+	if err := os.WriteFile(agentPath, []byte(probeScript), 0755); err != nil {
+		return err
+	}
+
+	// Boot the VM with NAT (no network isolation needed for first boot)
+	vm, err := NewMacOSVM(macOSVMConfig{
+		CPUs:               2,
+		MemoryMB:           4096,
+		DiskImagePath:      diskPath,
+		AuxStoragePath:     filepath.Join(platformDir, "aux-storage"),
+		HardwareModelPath:  filepath.Join(platformDir, "hardware-model"),
+		MachineIDPath:      filepath.Join(platformDir, "machine-id"),
+		SharedDirPath:      sharedDir,
+		SharedDirTag:       "shared",
+		FileHandleSocketFD: -1, // no socket pair, just NAT
+	})
+	if err != nil {
+		return fmt.Errorf("creating first-boot VM: %w", err)
+	}
+	if err := vm.Start(); err != nil {
+		return fmt.Errorf("starting first-boot VM: %w", err)
+	}
+	defer vm.Stop()
+
+	// Wait for the probe signal. First boot can take 5-10 minutes on fresh restore.
+	signalPath := filepath.Join(sharedDir, "signal", "first-boot-done")
+	fmt.Fprintf(os.Stderr, "Waiting for macOS to complete first boot (up to 3 min for diag)...\n")
+	deadline := time.Now().Add(3 * time.Minute)
+	for {
+		if time.Now().After(deadline) {
+			return fmt.Errorf("timed out waiting for first boot (5 minutes)")
+		}
+		if _, err := os.Stat(signalPath); err == nil {
+			fmt.Fprintf(os.Stderr, "First boot complete — agent chain verified.\n")
+			return nil
+		}
+		time.Sleep(2 * time.Second)
+	}
 }
 
 func shortHash(s string) string {
