@@ -97,15 +97,16 @@ func run() int {
 	if listenIP == nil {
 		listenIP = net.IPv4zero
 	}
-	errs := make(chan error, 3)
+	errs := make(chan error, 4)
 
 	go RunHeartbeat()
 
 	go func() { errs <- RunDns(net.TCPAddr{IP: listenIP, Port: 53}) }()
 	go func() { errs <- RunHttp(net.TCPAddr{IP: listenIP, Port: 80}) }()
 	go func() { errs <- RunHttps(net.TCPAddr{IP: listenIP, Port: 443}) }()
+	go func() { errs <- RunControlPlane(outDir) }()
 
-	fmt.Fprintf(os.Stderr, "relay: listening on :53/udp :80/tcp :443/tcp\n")
+	fmt.Fprintf(os.Stderr, "relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp\n")
 
 	// Block until any listener fails.
 	if err := <-errs; err != nil {

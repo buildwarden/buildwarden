@@ -131,6 +131,7 @@ build_initramfs() {
     for mod in \
         drivers/char/hw_random/rng-core.ko.gz \
         drivers/char/hw_random/virtio-rng.ko.gz \
+        net/packet/af_packet.ko.gz \
         fs/netfs/netfs.ko.gz \
         fs/fuse/fuse.ko.gz \
         fs/fuse/virtiofs.ko.gz \

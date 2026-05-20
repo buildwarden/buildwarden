@@ -24,6 +24,7 @@ mount -t tmpfs tmpfs /tmp
 # Load kernel modules in dependency order
 for mod in \
     rng-core virtio-rng \
+    af_packet \
     netfs fuse virtiofs \
     9pnet 9pnet_virtio 9p \
     failover net_failover virtio_net \
@@ -64,14 +65,38 @@ if [ -n "$PRIVATE_IF" ]; then
     ip addr add 10.0.0.1/30 dev "$PRIVATE_IF"
 fi
 
-# Configure internet (eth1) — DHCP from QEMU user-net
+# Configure internet (eth1) — DHCP from VZ NAT or QEMU user-net
 NAT_IF=$(echo "$IFACES" | sed -n '2p')
 if [ -n "$NAT_IF" ]; then
     ip link set "$NAT_IF" up
-    udhcpc -i "$NAT_IF" -s /bin/true -q 2>/dev/null || {
-        ip addr add 10.0.2.15/24 dev "$NAT_IF"
-        ip route add default via 10.0.2.2
+
+    # Minimal udhcpc script that applies the lease
+    mkdir -p /usr/share/udhcpc
+    cat > /usr/share/udhcpc/default.script << 'DHCP'
+#!/bin/sh
+case "$1" in
+    bound|renew)
+        ip addr flush dev "$interface"
+        ip addr add "$ip/${mask:-24}" dev "$interface"
+        [ -n "$router" ] && ip route add default via "$router"
+        if [ -n "$dns" ]; then
+            : > /etc/resolv.conf
+            for d in $dns; do echo "nameserver $d" >> /etc/resolv.conf; done
+        fi
+        ;;
+esac
+DHCP
+    chmod 755 /usr/share/udhcpc/default.script
+
+    # DHCP with longer timeout — VZ NAT may take a few seconds to respond
+    echo "init: dhcp on $NAT_IF..."
+    udhcpc -i "$NAT_IF" -q -t 10 -T 2 -A 3 -n 2>&1 || {
+        echo "init: dhcp failed, using static fallback"
+        ip addr add 192.168.64.15/24 dev "$NAT_IF"
+        ip route add default via 192.168.64.1
     }
+    echo "init: nat-if=$(ip addr show "$NAT_IF" 2>/dev/null | grep inet)"
+    echo "init: routes=$(ip route 2>/dev/null)"
 fi
 
 # Disable IPv6 (all iptables rules are IPv4; prevents bypass)
@@ -98,6 +123,8 @@ if [ -n "$PRIVATE_IF" ]; then
         -j REDIRECT --to-port 53
     iptables -t nat -A PREROUTING -i "$PRIVATE_IF" -p tcp --dport 53 \
         -j REDIRECT --to-port 53
+    # Control-plane (agent-to-relay: health, CA fetch, stdout, completion)
+    iptables -A INPUT -i "$PRIVATE_IF" -p tcp --dport 8300 -j ACCEPT
 fi
 
 # Block ICMP forwarding explicitly (belt + suspenders with FORWARD DROP)
@@ -110,16 +137,22 @@ if [ -n "$NAT_IF" ]; then
     iptables -t nat -A POSTROUTING -o "$NAT_IF" -j MASQUERADE
 fi
 
-# DNS resolver for the relay process
-# QEMU user-net: gateway=10.0.2.2, DNS=10.0.2.3
-# VZ NAT: gateway=192.168.64.1, DNS=same
+# DNS resolver for the relay process.
+# Priority: DHCP-provided > NAT gateway (which proxies host DNS) > UPSTREAM_DNS.
+# The NAT gateway (e.g., 192.168.64.1) forwards DNS through the host's resolver,
+# which can reach corporate/private DNS servers that the VM cannot reach directly.
 GATEWAY=$(ip route 2>/dev/null | grep default | awk '{print $3}')
-case "$GATEWAY" in
-    10.0.2.*)
-        echo "nameserver 10.0.2.3" > /etc/resolv.conf ;;
-    *)
-        echo "nameserver ${GATEWAY:-8.8.8.8}" > /etc/resolv.conf ;;
-esac
+if [ ! -s /etc/resolv.conf ]; then
+    if [ -n "$GATEWAY" ]; then
+        echo "nameserver $GATEWAY" > /etc/resolv.conf
+    elif [ -n "$UPSTREAM_DNS" ]; then
+        : > /etc/resolv.conf
+        for d in $UPSTREAM_DNS; do echo "nameserver $d" >> /etc/resolv.conf; done
+    else
+        echo "nameserver 8.8.8.8" > /etc/resolv.conf
+    fi
+fi
+echo "init: dns=$(cat /etc/resolv.conf | grep nameserver | head -1)"
 
 echo "init: ready"
 exec /shared/relay

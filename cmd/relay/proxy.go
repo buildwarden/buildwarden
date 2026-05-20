@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"strings"
 	"sync"
 	"time"
 )
@@ -172,7 +173,7 @@ func roundTrip(req *http.Request) *http.Response {
 			ProtoMajor: 1,
 			ProtoMinor: 1,
 			Header:     http.Header{"Content-Type": {"text/plain"}},
-			Body:       io.NopCloser(nil),
+			Body:       io.NopCloser(strings.NewReader("upstream unreachable\n")),
 		}
 	}
 
