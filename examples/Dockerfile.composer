@@ -1,4 +1,6 @@
 FROM composer:2
 
 WORKDIR /app
+
+# Install a dependency
 RUN composer require --no-interaction monolog/monolog:3.5.0

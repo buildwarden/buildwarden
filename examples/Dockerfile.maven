@@ -1,3 +1,4 @@
 FROM maven:3-eclipse-temurin-21
 
+# Fetch a dependency
 RUN mvn dependency:get -Dartifact=junit:junit:4.13.2 -Dtransitive=false

@@ -11,16 +11,15 @@
 #   - Skips MAGMA (cuSOLVER is default)
 #   - Skips cuSPARSELt and NCCL (bundled via submodules or not needed for wheel build)
 #   - Skips NVPL (optional BLAS, not required)
-#   - Builds ACL from source for oneDNN aarch64 acceleration
 
 FROM nvidia/cuda:13.2.1-cudnn-devel-ubuntu22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV TZ=Etc/UTC
 
-# Install system dependencies (matching CI's yum packages, translated to apt)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+# Install system dependencies
+RUN apt-get update
+RUN apt-get install -y --no-install-recommends \
         autoconf \
         automake \
         bison \
@@ -59,30 +58,24 @@ RUN apt-get update && \
         xz-utils \
         yasm \
         zlib1g-dev \
-        zstd \
-    && apt-get clean && rm -rf /var/lib/apt/lists/*
+        zstd
 
-# GCC 13 (not in Ubuntu 22.04 default repos — needs toolchain PPA)
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends software-properties-common && \
-    add-apt-repository -y ppa:ubuntu-toolchain-r/test && \
-    apt-get update && \
-    apt-get install -y --no-install-recommends \
-        gcc-13 g++-13 gfortran-13 && \
-    update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100 && \
-    update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 100 && \
-    update-alternatives --install /usr/bin/gfortran gfortran /usr/bin/gfortran-13 100 && \
-    apt-get clean && rm -rf /var/lib/apt/lists/*
+# Install GCC 13 from toolchain PPA (not in Ubuntu 22.04 default repos)
+RUN apt-get install -y --no-install-recommends software-properties-common
+RUN add-apt-repository -y ppa:ubuntu-toolchain-r/test
+RUN apt-get update
+RUN apt-get install -y --no-install-recommends gcc-13 g++-13 gfortran-13
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-13 100
+RUN update-alternatives --install /usr/bin/g++ g++ /usr/bin/g++-13 100
+RUN update-alternatives --install /usr/bin/gfortran gfortran /usr/bin/gfortran-13 100
 
-# NOTE: ACL (ARM Compute Library) is skipped — optional oneDNN acceleration
-# that adds build complexity without affecting the demo's purpose.
-
-# Set up Python environment
+# Set up Python virtual environment
 RUN python3 -m venv /opt/venv
 ENV PATH="/opt/venv/bin:$PATH"
 
-RUN pip install --upgrade pip && \
-    pip install --upgrade \
+# Install Python build dependencies
+RUN pip install --upgrade pip
+RUN pip install --upgrade \
         numpy \
         "wheel==0.37.1" \
         build \
@@ -106,22 +99,22 @@ RUN git clone --depth 1 --branch v2.11.0 --recurse-submodules --shallow-submodul
 
 WORKDIR /opt/pytorch
 
-# Configure build environment matching CI's .ci/pytorch/build.sh for aarch64
-ENV USE_CUDA=1 \
-    USE_CUDNN=1 \
-    USE_MKLDNN=1 \
-    USE_MKLDNN_ACL=0 \
-    TORCH_CUDA_ARCH_LIST="8.0;8.6;8.7;9.0;10.0" \
-    USE_NCCL=0 \
-    USE_DISTRIBUTED=1 \
-    USE_GLOO=1 \
-    USE_MPI=0 \
-    BUILD_TEST=0 \
-    MAX_JOBS=4 \
-    CMAKE_BUILD_TYPE=Release \
-    PYTORCH_BUILD_VERSION=2.11.0 \
-    PYTORCH_BUILD_NUMBER=1 \
-    PIP_DEFAULT_TIMEOUT=300
+# Configure build environment (matching CI's .ci/pytorch/build.sh for aarch64)
+ENV USE_CUDA=1
+ENV USE_CUDNN=1
+ENV USE_MKLDNN=1
+ENV USE_MKLDNN_ACL=0
+ENV TORCH_CUDA_ARCH_LIST="8.0;8.6;8.7;9.0;10.0"
+ENV USE_NCCL=0
+ENV USE_DISTRIBUTED=1
+ENV USE_GLOO=1
+ENV USE_MPI=0
+ENV BUILD_TEST=0
+ENV MAX_JOBS=4
+ENV CMAKE_BUILD_TYPE=Release
+ENV PYTORCH_BUILD_VERSION=2.11.0
+ENV PYTORCH_BUILD_NUMBER=1
+ENV PIP_DEFAULT_TIMEOUT=300
 
 # Build the wheel
 RUN python setup.py bdist_wheel
@@ -130,6 +123,5 @@ RUN python setup.py bdist_wheel
 RUN pip install dist/torch-*.whl
 RUN python -c "import torch; print(f'PyTorch {torch.__version__} CUDA={torch.cuda.is_available()}')"
 
-# Post the wheel artifact to BuildWarden's artifact endpoint
-RUN WHEEL=$(ls dist/torch-*.whl) && \
-    warden-io post "$WHEEL"
+# Post the wheel artifact
+RUN warden-io post dist/torch-*.whl

@@ -1,4 +1,6 @@
 FROM node:22-slim
 
 WORKDIR /app
+
+# Install a dependency
 RUN npm install lodash@4.17.21

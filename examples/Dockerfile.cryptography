@@ -1,19 +1,21 @@
 # Medium-complexity demo: Python cryptography library from source.
-# This triggers Rust/Cargo downloads under the hood (cryptography uses a Rust backend),
+# Triggers Rust/Cargo downloads under the hood (cryptography uses a Rust backend),
 # plus pip, apt, and OpenSSL — showing multi-ecosystem ledger entries.
 
 FROM python:3.12-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# Install system dependencies for building cryptography
+RUN apt-get update
+RUN apt-get install -y --no-install-recommends \
         build-essential \
         cargo \
         git \
         libffi-dev \
         libssl-dev \
         pkg-config \
-        rustc \
-    && rm -rf /var/lib/apt/lists/*
+        rustc
 
+# Install Python build tools
 RUN pip install --upgrade pip build setuptools-rust
 
 # Clone cryptography at a pinned release
@@ -22,15 +24,14 @@ RUN git clone --depth 1 --branch 44.0.3 \
 
 WORKDIR /src/cryptography
 
-# Build from source — this triggers cargo to fetch Rust crate dependencies
+# Build from source (triggers cargo to fetch Rust crate dependencies)
 RUN pip install -e ".[test]" 2>&1 | tail -30
 
 # Build a wheel for the artifact
 RUN python -m build --wheel
 
 # Post the wheel
-RUN WHEEL=$(ls dist/cryptography-*.whl) && \
-    warden-io post "$WHEEL"
+RUN warden-io post dist/cryptography-*.whl
 
 # Run a subset of the test suite to generate more ledger entries
 RUN python -m pytest tests/hazmat/primitives/test_hashes.py -x -q --tb=short 2>&1 | tail -5 || true

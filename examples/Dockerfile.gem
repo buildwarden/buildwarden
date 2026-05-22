@@ -1,3 +1,4 @@
 FROM ruby:3.3-slim
 
+# Install a gem
 RUN gem install rake -v 13.2.1 --no-document

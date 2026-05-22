@@ -4,9 +4,11 @@
 
 FROM python:3.12-slim
 
-RUN apt-get update && apt-get install -y --no-install-recommends git && \
-    rm -rf /var/lib/apt/lists/*
+# Install git (needed to clone source)
+RUN apt-get update
+RUN apt-get install -y --no-install-recommends git
 
+# Install Python build and test tools
 RUN pip install --upgrade pip build pytest mypy
 
 ENV SOURCE_DATE_EPOCH=1716940800
@@ -21,16 +23,19 @@ WORKDIR /src/requests
 RUN python -m build --wheel
 
 # Post the built wheel as an artifact
-RUN WHEEL=$(ls dist/requests-*.whl) && \
-    warden-io post "$WHEEL"
+RUN warden-io post dist/requests-*.whl
 
-# Install the built wheel + test dependencies
-RUN pip install dist/requests-*.whl && \
-    pip install pytest-httpbin trustme
+# Install the built wheel
+RUN pip install dist/requests-*.whl
+
+# Install test dependencies
+RUN pip install pytest-httpbin trustme
 
 # Run the test suite (network fetches for test fixtures appear in ledger)
 RUN python -m pytest tests/ -x -q --tb=short 2>&1 | tail -20 || true
 
+# Install type stubs
+RUN pip install types-urllib3 types-certifi types-chardet
+
 # Run type checking
-RUN pip install types-urllib3 types-certifi types-chardet && \
-    python -m mypy src/requests --ignore-missing-imports --no-error-summary 2>&1 | tail -10 || true
+RUN python -m mypy src/requests --ignore-missing-imports --no-error-summary 2>&1 | tail -10 || true

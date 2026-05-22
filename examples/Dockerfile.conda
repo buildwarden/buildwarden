@@ -1,3 +1,4 @@
 FROM continuumio/miniconda3
 
+# Install numpy from conda-forge
 RUN conda install -y -c conda-forge numpy

@@ -1,5 +1,12 @@
 FROM rust:1-slim
 
+# Initialize a new project
 RUN cargo init /app
+
 WORKDIR /app
-RUN cargo add serde@1.0.219 && cargo fetch
+
+# Add a dependency
+RUN cargo add serde@1.0.219
+
+# Download all dependencies
+RUN cargo fetch

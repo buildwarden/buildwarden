@@ -1,3 +1,7 @@
 FROM elixir:1.17-slim
 
-RUN mix local.hex --force && mix hex.info plug
+# Initialize Hex package manager
+RUN mix local.hex --force
+
+# Fetch package info
+RUN mix hex.info plug
