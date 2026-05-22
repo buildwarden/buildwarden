@@ -63,6 +63,11 @@ func run() int {
 		return 1
 	}
 
+	if err := configureUpstreamTLS(outDir); err != nil {
+		fmt.Fprintf(os.Stderr, "error configuring upstream TLS: %v\n", err)
+		return 1
+	}
+
 	if err := DetectSelfIP(); err != nil {
 		fmt.Fprintf(os.Stderr, "error detecting relay IP: %v\n", err)
 		return 1

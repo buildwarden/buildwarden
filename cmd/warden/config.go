@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/BurntSushi/toml"
@@ -14,8 +15,14 @@ import (
 
 type Config struct {
 	Runtime RuntimeConfig `toml:"runtime"`
-	Build   BuildCfg     `toml:"build"`
-	Output  OutputConfig `toml:"output"`
+	Relay   RelayConfig   `toml:"relay"`
+	Build   BuildCfg      `toml:"build"`
+	Output  OutputConfig  `toml:"output"`
+}
+
+type RelayConfig struct {
+	UpstreamCACerts []string `toml:"upstream_ca_certs"`
+	SystemCABundle  *bool    `toml:"system_ca_bundle"`
 }
 
 type RuntimeConfig struct {
@@ -53,6 +60,10 @@ func LoadConfig() (*Config, error) {
 	// Environment variable overrides
 	if cli := os.Getenv("WARDEN_CTR_CLI"); cli != "" {
 		cfg.Runtime.CLI = cli
+	}
+	if caCerts := os.Getenv("WARDEN_UPSTREAM_CA_CERTS"); caCerts != "" {
+		paths := strings.Split(caCerts, ":")
+		cfg.Relay.UpstreamCACerts = append(cfg.Relay.UpstreamCACerts, paths...)
 	}
 	if os.Getenv("NO_COLOR") != "" {
 		cfg.Output.Color = "never"

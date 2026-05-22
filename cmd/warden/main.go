@@ -159,14 +159,21 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		compress = false
 	}
 
+	systemCA := true
+	if cfg.Relay.SystemCABundle != nil {
+		systemCA = *cfg.Relay.SystemCABundle
+	}
+
 	env := NewScriptEnv()
 	config := &BuildConfig{
-		Context:       contextDir,
-		Containerfile: dockerfile,
-		Capture:       capture,
-		OutputDir:     outputDir,
-		Compress:      compress,
-		RelayImage:    cfg.Runtime.RelayImage,
+		Context:         contextDir,
+		Containerfile:   dockerfile,
+		Capture:         capture,
+		OutputDir:       outputDir,
+		Compress:        compress,
+		RelayImage:      cfg.Runtime.RelayImage,
+		UpstreamCACerts: cfg.Relay.UpstreamCACerts,
+		SystemCABundle:  systemCA,
 	}
 	return env.Build(config)
 }
@@ -203,14 +210,21 @@ func runShell(cmd *cobra.Command, args []string) error {
 		compress = false
 	}
 
+	systemCA := true
+	if cfg.Relay.SystemCABundle != nil {
+		systemCA = *cfg.Relay.SystemCABundle
+	}
+
 	env := NewScriptEnv()
 	config := &BuildConfig{
-		Context:       contextDir,
-		Containerfile: dockerfile,
-		Capture:       capture,
-		OutputDir:     outputDir,
-		Compress:      compress,
-		RelayImage:    cfg.Runtime.RelayImage,
+		Context:         contextDir,
+		Containerfile:   dockerfile,
+		Capture:         capture,
+		OutputDir:       outputDir,
+		Compress:        compress,
+		RelayImage:      cfg.Runtime.RelayImage,
+		UpstreamCACerts: cfg.Relay.UpstreamCACerts,
+		SystemCABundle:  systemCA,
 	}
 	return env.Shell(config)
 }

@@ -165,6 +165,14 @@ func (s *ScriptEnv) setup() error {
 		return err
 	}
 
+	if err := prepareUpstreamCACerts(
+		s.ledgerDir,
+		s.buildConfig.UpstreamCACerts,
+		s.buildConfig.SystemCABundle,
+	); err != nil {
+		return err
+	}
+
 	log.Info("Allocating network...")
 	sub, err := allocateSubnet()
 	if err != nil {
@@ -522,6 +530,9 @@ func (s *ScriptEnv) startRelayContainer() error {
 	)
 	if s.buildConfig.Capture != "" && s.buildConfig.Capture != "none" {
 		args = append(args, "--env", "CAPTURE_MODE="+s.buildConfig.Capture)
+	}
+	if !s.buildConfig.SystemCABundle {
+		args = append(args, "--env", "RELAY_SYSTEM_CA=false")
 	}
 	args = append(args, s.relayImage)
 	cmd := exec.Command(args[0], args[1:]...)
