@@ -6,10 +6,12 @@ type BuildEnv interface {
 }
 
 type BuildConfig struct {
-	Context       string
-	Containerfile string
-	Capture       string
-	OutputDir     string
-	Compress      bool
-	RelayImage    string
+	Context         string
+	Containerfile   string
+	Capture         string
+	OutputDir       string
+	Compress        bool
+	RelayImage      string
+	UpstreamCACerts []string
+	SystemCABundle  bool
 }
