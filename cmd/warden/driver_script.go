@@ -384,7 +384,7 @@ func (s *ScriptEnv) startBuildContainer(image string) error {
 // of Kubernetes pod-level network namespace sharing.
 
 const netnsDockerfile = `FROM alpine:latest
-RUN apk add --no-cache iptables
+RUN apk add --no-cache iptables iptables-legacy
 ENTRYPOINT ["sh", "-c"]
 `
 
@@ -428,7 +428,14 @@ func (s *ScriptEnv) isolateBuildContainer() error {
 		return fmt.Errorf("building netns image: %w", err)
 	}
 
+	// Flush Docker's embedded DNS legacy iptables rules (DOCKER_OUTPUT chain)
+	// before applying our own. Docker on Linux injects legacy-iptables DNAT
+	// rules that redirect 127.0.0.11:53 to its embedded DNS resolver. If
+	// these remain, DNS bypasses the relay even after our nftables DNAT rules
+	// are applied (legacy and nftables are separate kernel tables).
 	script := fmt.Sprintf(`set -e
+iptables-legacy -t nat -F DOCKER_OUTPUT 2>/dev/null || true
+iptables-legacy -t nat -F DOCKER_POSTROUTING 2>/dev/null || true
 iptables -t nat -A OUTPUT -p udp --dport 53 -j DNAT --to-destination %[1]s:53
 iptables -t nat -A OUTPUT -p tcp --dport 53 -j DNAT --to-destination %[1]s:53
 iptables -t nat -A OUTPUT -p tcp --dport 80 -j DNAT --to-destination %[1]s:80
@@ -450,6 +457,17 @@ iptables -A OUTPUT -j DROP
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("network isolation failed: %w", err)
+	}
+
+	// Overwrite resolv.conf to point directly at the relay. Docker on
+	// user-defined networks ignores --dns and always sets nameserver to
+	// 127.0.0.11 (its embedded DNS). Writing the relay IP ensures DNS
+	// queries go to the relay regardless of iptables backend mismatches.
+	_, err := ctrctl.ContainerExec(nil, s.buildContainer,
+		"sh", "-c", fmt.Sprintf("echo 'nameserver %s' > /etc/resolv.conf",
+			s.subnet.relayIP))
+	if err != nil {
+		return fmt.Errorf("overwriting resolv.conf: %w", err)
 	}
 	return nil
 }
