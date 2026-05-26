@@ -1,6 +1,7 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net"
 	"os"
@@ -14,6 +15,14 @@ func main() {
 }
 
 func run() int {
+	ingress := flag.String("ingress", "interface",
+		"Network ingress mode: 'interface' (bind ports) or 'fd' (socketpair)")
+	fdNum := flag.Int("fd", 3,
+		"File descriptor number for fd ingress mode")
+	subnet := flag.String("subnet", "10.100.0.0/30",
+		"Subnet for fd ingress (gateway=.1, guest=.2)")
+	flag.Parse()
+
 	outDir := os.Getenv("LEDGER_DIR")
 	if outDir == "" {
 		outDir = "/ledger"
@@ -62,36 +71,103 @@ func run() int {
 	SetLedger(l)
 	SetOutDir(outDir)
 
-	// Record build environment as the first ledger entry (if provided).
-	// The orchestrator writes these files before starting the relay.
 	if err := recordEnvironmentFromVolume(outDir, l); err != nil {
 		fmt.Fprintf(os.Stderr, "error recording environment: %v\n", err)
 		return 1
 	}
 
-	if err := configureUpstreamTLS(outDir); err != nil {
-		fmt.Fprintf(os.Stderr, "error configuring upstream TLS: %v\n", err)
-		return 1
-	}
-
-	if err := DetectSelfIP(); err != nil {
-		fmt.Fprintf(os.Stderr, "error detecting relay IP: %v\n", err)
-		return 1
-	}
-	DetectUpstreamDNS()
-
-	// Generate ephemeral CA for this build.
 	if err := GenerateCA(); err != nil {
 		fmt.Fprintf(os.Stderr, "error generating CA: %v\n", err)
 		return 1
 	}
 
-	// Write CA cert for the orchestrator to inject into build container.
 	caPath := filepath.Join(outDir, "ca.cert.pem")
 	if err := os.WriteFile(caPath, CA_CERT, 0644); err != nil {
 		fmt.Fprintf(os.Stderr, "error writing CA cert: %v\n", err)
 		return 1
 	}
+
+	switch *ingress {
+	case "fd":
+		return runFDIngress(*fdNum, *subnet, outDir, l)
+	case "interface":
+		return runInterfaceIngress(outDir, l)
+	default:
+		fmt.Fprintf(os.Stderr, "unknown ingress mode: %s\n", *ingress)
+		return 1
+	}
+}
+
+// runFDIngress starts the relay using a userspace network stack reading
+// Ethernet frames from an inherited socketpair FD.
+func runFDIngress(fd int, subnetCIDR string, outDir string, l *Ledger) int {
+	gwIP, guestIP, mask, err := parseSubnet(subnetCIDR)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "invalid subnet: %v\n", err)
+		return 1
+	}
+
+	selfIP = gwIP
+	blockedSelfIP = gwIP
+	DetectUpstreamDNS()
+
+	// Channel-based listener for the control plane (port 8300).
+	// Exposes only read-only endpoints (health, CA) — no write operations.
+	ctrlLn := newReadOnlyControlListener(gwIP)
+
+	ing, err := NewFDIngress(FDIngressConfig{
+		FD:         fd,
+		GatewayIP:  gwIP,
+		GuestIP:    guestIP,
+		SubnetMask: mask,
+		ConnHandler: func(conn net.Conn, dstPort uint16) {
+			switch dstPort {
+			case 443:
+				serveTLSConn(conn)
+			case 8300:
+				ctrlLn.deliver(conn)
+			default:
+				serveHTTPConn(conn)
+			}
+		},
+	})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error creating fd ingress: %v\n", err)
+		return 1
+	}
+	defer ing.Close()
+
+	dnsConn, err := ing.ListenUDP(53)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "error listening udp/53: %v\n", err)
+		return 1
+	}
+
+	errs := make(chan error, 2)
+
+	go RunHeartbeat()
+	go func() { errs <- RunDnsWithConn(dnsConn) }()
+
+	fmt.Fprintf(os.Stderr,
+		"relay: fd ingress on fd %d, gateway %s, guest %s\n",
+		fd, gwIP, guestIP)
+
+	if err := <-errs; err != nil {
+		fmt.Fprintf(os.Stderr, "relay error: %v\n", err)
+		l.Finish()
+		return 1
+	}
+	return 0
+}
+
+// runInterfaceIngress starts the relay in the traditional mode, binding
+// directly to network interfaces (container/VM mode).
+func runInterfaceIngress(outDir string, l *Ledger) int {
+	if err := DetectSelfIP(); err != nil {
+		fmt.Fprintf(os.Stderr, "error detecting relay IP: %v\n", err)
+		return 1
+	}
+	DetectUpstreamDNS()
 
 	listenIP := selfIP
 	if listenIP == nil {
@@ -108,14 +184,51 @@ func run() int {
 
 	fmt.Fprintf(os.Stderr, "relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp\n")
 
-	// Block until any listener fails.
 	if err := <-errs; err != nil {
 		fmt.Fprintf(os.Stderr, "relay error: %v\n", err)
 		l.Finish()
 		return 1
 	}
-
 	return 0
+}
+
+// parseSubnet parses a /30 CIDR and returns gateway (.1) and guest (.2) IPs.
+func parseSubnet(cidr string) (gateway, guest net.IP, mask net.IPMask, err error) {
+	ip, ipNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+
+	ones, bits := ipNet.Mask.Size()
+	if bits != 32 {
+		return nil, nil, nil, fmt.Errorf("only IPv4 supported")
+	}
+	_ = ones
+
+	base := ip.Mask(ipNet.Mask).To4()
+	if base == nil {
+		return nil, nil, nil, fmt.Errorf("invalid IPv4 address")
+	}
+
+	// For any subnet, gateway = base+1, guest = base+2
+	gw := make(net.IP, 4)
+	copy(gw, base)
+	addToIP(gw, 1)
+
+	g := make(net.IP, 4)
+	copy(g, base)
+	addToIP(g, 2)
+
+	return gw, g, ipNet.Mask, nil
+}
+
+func addToIP(ip net.IP, n int) {
+	v := int(ip[0])<<24 | int(ip[1])<<16 | int(ip[2])<<8 | int(ip[3])
+	v += n
+	ip[0] = byte(v >> 24)
+	ip[1] = byte(v >> 16)
+	ip[2] = byte(v >> 8)
+	ip[3] = byte(v)
 }
 
 // recordEnvironmentFromVolume reads the environment payload and metadata

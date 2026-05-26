@@ -162,7 +162,8 @@ vz_result vz_create_macos_vm(
     const char *machine_id_path,
     const char *shared_dir_path,
     const char *shared_dir_tag,
-    int file_handle_socket_fd
+    int file_handle_socket_fd,
+    int attach_nat
 ) {
     vz_result result = {NULL, NULL};
 
@@ -242,10 +243,16 @@ vz_result vz_create_macos_vm(
         config.directorySharingDevices = @[fs];
     }
 
-    // Network: file-handle only (isolated — relay is sole gateway)
+    // Network devices
+    NSMutableArray *macNetDevices = [[NSMutableArray alloc] init];
     if (file_handle_socket_fd >= 0) {
-        config.networkDevices =
-            @[make_file_handle_net(file_handle_socket_fd)];
+        [macNetDevices addObject:make_file_handle_net(file_handle_socket_fd)];
+    }
+    if (attach_nat) {
+        [macNetDevices addObject:make_nat_net()];
+    }
+    if (macNetDevices.count > 0) {
+        config.networkDevices = macNetDevices;
     }
 
     // Validate

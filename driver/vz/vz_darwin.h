@@ -40,7 +40,8 @@ vz_result vz_create_macos_vm(
     const char *machine_id_path,
     const char *shared_dir_path,
     const char *shared_dir_tag,
-    int file_handle_socket_fd
+    int file_handle_socket_fd,
+    int attach_nat              // non-zero to attach NAT device
 );
 
 // --- VM lifecycle ---

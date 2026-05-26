@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -16,20 +17,20 @@ import (
 // Driver implements driver.Driver using Apple's Virtualization.framework
 // for macOS/arm64 targets.
 //
-// Architecture (two-VM topology):
+// Architecture (host relay + build VM):
 //
 //	Host (orchestrator)
 //	├── Prepares shared volume: relay binary, config, context, ledger dir
 //	├── Creates isolated virtual network (socket pair)
-//	├── Boots Relay VM (Alpine Linux, static relay binary)
-//	│   ├── Private interface → socket pair → Build VM
-//	│   └── NAT interface → host/internet
+//	├── Starts Relay (host process with --ingress=fd)
+//	│   ├── Reads raw Ethernet frames from socketpair via gvisor netstack
+//	│   └── Has native internet access (host networking)
 //	├── Boots Build VM (macOS from IPSW)
-//	│   └── Single interface → socket pair → Relay VM (sole gateway)
+//	│   └── Single interface → socket pair → Relay (sole gateway)
 //	└── Waits for build completion, collects ledger + artifacts
 //
 // Network isolation is topological: the build VM's only network path is
-// through the relay VM. No iptables, no host-side proxy needed.
+// through the relay process. No iptables, no vmnet needed.
 type Driver struct {
 	Cache    *ImageCache
 	RelayImg string // Path to relay Alpine VM image (built/cached)
@@ -124,14 +125,17 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	}
 	defer vnet.Close()
 
-	// Boot Relay VM: Alpine Linux with shared volume + two network interfaces
-	// Interface 1: private link (socket pair) — connected to build VM
-	// Interface 2: NAT — connected to host/internet for upstream requests
-	relayVM, err := d.bootRelayVM(sharedDir, vnet)
+	// Start host-side relay process.
+	// The relay reads raw Ethernet frames from its end of the socketpair
+	// using gvisor netstack (--ingress=fd). It has native internet access
+	// since it runs on the host. Trust boundary is preserved: the build VM
+	// can only communicate through the socketpair, and the relay controls
+	// all traffic (DNS, HTTP/HTTPS proxy, ledger).
+	relayProc, err := d.startHostRelay(sharedDir, vnet)
 	if err != nil {
-		return nil, fmt.Errorf("booting relay VM: %w", err)
+		return nil, fmt.Errorf("starting relay: %w", err)
 	}
-	defer relayVM.Stop()
+	defer relayProc.Stop()
 
 	// Wait for relay to write ca.cert.pem (signals it's ready)
 	caPath := filepath.Join(sharedDir, "ledger", "ca.cert.pem")
@@ -139,11 +143,11 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		return nil, fmt.Errorf("relay did not start: %w", err)
 	}
 
-	// Boot Build VM: macOS with shared volume + one network interface
-	// Single interface: private link (socket pair) — relay is sole gateway
+	// Boot Build VM: macOS with single network interface (socketpair to relay).
+	// No shared directory — all communication goes through the relay HTTP API.
 	// Platform state files (hardware-model, machine-id, aux-storage) live
 	// alongside the original disk image, not the COW clone.
-	buildVM, err := d.bootBuildVM(buildDisk, filepath.Dir(diskImage), sharedDir, vnet)
+	buildVM, err := d.bootBuildVM(buildDisk, filepath.Dir(diskImage), vnet)
 	if err != nil {
 		return nil, fmt.Errorf("booting build VM: %w", err)
 	}
@@ -180,26 +184,25 @@ func (d *Driver) Exec(ctx context.Context, req *driver.BuildRequest) error {
 
 func (d *Driver) Close() error { return nil }
 
-// prepareRelay places the static relay binary on the shared volume.
-// The relay is the same linux/arm64 binary used in container mode.
+// prepareRelay places the relay binary on the shared volume.
+// For the VZ driver, the relay runs on the host (darwin/arm64).
 func (d *Driver) prepareRelay(sharedDir string) error {
 	relayDst := filepath.Join(sharedDir, "relay")
 
 	// Check for a pre-built relay binary next to the warden executable
 	if exe, err := os.Executable(); err == nil {
-		candidate := filepath.Join(filepath.Dir(exe), "warden-relay-linux-arm64")
+		candidate := filepath.Join(filepath.Dir(exe), "warden-relay")
 		if _, err := os.Stat(candidate); err == nil {
 			return copyFile(candidate, relayDst)
 		}
 	}
 
-	// Fall back to cross-compiling from source
+	// Fall back to building from source (native, no cross-compilation needed)
 	cmd := exec.Command("go", "build", "-o", relayDst, "./cmd/relay")
-	cmd.Env = append(os.Environ(), "GOOS=linux", "GOARCH=arm64", "CGO_ENABLED=0")
 	cmd.Dir = findModuleRoot()
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("cross-compiling relay: %w", err)
+		return fmt.Errorf("building relay: %w", err)
 	}
 	return nil
 }
@@ -282,58 +285,70 @@ func (d *Driver) resolveImage(image string) (string, error) {
 	return d.Cache.RestoreIPSW(image)
 }
 
-// bootRelayVM creates and starts the relay VM (Alpine Linux).
-// Two interfaces: private link to build VM + NAT for internet.
-func (d *Driver) bootRelayVM(sharedDir string, vnet *VirtualNetwork) (*VM, error) {
-	kernelPath, initrdPath, err := d.resolveRelayVMAssets()
-	if err != nil {
-		return nil, fmt.Errorf("resolving relay VM assets: %w", err)
-	}
-
-	vm, err := NewLinuxVM(linuxVMConfig{
-		CPUs:               2,
-		MemoryMB:           512,
-		KernelPath:         kernelPath,
-		InitrdPath:         initrdPath,
-		Cmdline:            "console=hvc0",
-		SharedDirPath:      sharedDir,
-		SharedDirTag:       "shared",
-		FileHandleSocketFD: vnet.RelaySocketFD,
-		AttachNAT:          true,
-	})
-	if err != nil {
-		return nil, err
-	}
-	if err := vm.Start(); err != nil {
-		return nil, err
-	}
-	return vm, nil
+// RelayProcess wraps a host-side relay subprocess.
+type RelayProcess struct {
+	cmd *exec.Cmd
 }
 
-// resolveRelayVMAssets locates the kernel and initramfs for the relay VM.
-// Looks in the cache directory, then falls back to the embedded build tooling.
-func (d *Driver) resolveRelayVMAssets() (kernel, initrd string, err error) {
-	cacheDir := d.Cache.CacheDir
-	kernel = filepath.Join(cacheDir, "relay-vm", "Image")
-	initrd = filepath.Join(cacheDir, "relay-vm", "initramfs.cpio.gz")
+// Stop sends SIGTERM and waits for the relay to exit.
+func (rp *RelayProcess) Stop() {
+	if rp.cmd != nil && rp.cmd.Process != nil {
+		rp.cmd.Process.Signal(os.Interrupt)
+		rp.cmd.Wait()
+	}
+}
 
-	if _, err := os.Stat(kernel); err == nil {
-		if _, err := os.Stat(initrd); err == nil {
-			return kernel, initrd, nil
-		}
+// startHostRelay starts the relay binary as a host process with --ingress=fd.
+// The relay reads raw Ethernet frames from vnet.RelaySocketFD using gvisor
+// netstack, providing DHCP, DNS, HTTP/HTTPS proxy to the build VM.
+func (d *Driver) startHostRelay(sharedDir string, vnet *VirtualNetwork) (*RelayProcess, error) {
+	relayBin := filepath.Join(sharedDir, "relay")
+	if _, err := os.Stat(relayBin); err != nil {
+		return nil, fmt.Errorf("relay binary not found at %s", relayBin)
 	}
 
-	return "", "", fmt.Errorf(
-		"relay VM assets not found; run tools/relay-vm/build-initramfs.sh " +
-			"and copy output to %s/relay-vm/",
-		cacheDir)
+	subnet := fmt.Sprintf("%s/%d",
+		vnet.Subnet.RelayIP.Mask(vnet.Subnet.Netmask),
+		maskBits(vnet.Subnet.Netmask))
+
+	// The relay FD will be passed as fd 3 (first extra FD after stdin/out/err).
+	cmd := exec.Command(relayBin,
+		"--ingress=fd",
+		"--fd=3",
+		"--subnet="+subnet,
+	)
+	cmd.Env = append(os.Environ(),
+		"LEDGER_DIR="+filepath.Join(sharedDir, "ledger"),
+		"CONTEXT_DIR="+filepath.Join(sharedDir, "context"),
+		"SIGNAL_DIR="+filepath.Join(sharedDir, "signal"),
+	)
+	cmd.Stdout = os.Stdout
+	cmd.Stderr = os.Stderr
+
+	// Pass the relay socketpair FD as ExtraFiles[0] → becomes fd 3 in child.
+	cmd.ExtraFiles = []*os.File{
+		os.NewFile(uintptr(vnet.RelaySocketFD), "relay-socket"),
+	}
+
+	if err := cmd.Start(); err != nil {
+		return nil, fmt.Errorf("starting relay process: %w", err)
+	}
+
+	return &RelayProcess{cmd: cmd}, nil
+}
+
+func maskBits(mask net.IPMask) int {
+	ones, _ := mask.Size()
+	return ones
 }
 
 // bootBuildVM creates and starts the build VM (macOS).
-// Single interface: private link to relay VM (sole network path).
+// Single interface: private link to relay (sole network path).
+// No shared directory — all runtime communication goes through the relay's
+// HTTP API (context files, CA cert, artifacts, signals).
 // platformDir contains the hardware-model, machine-id, and aux-storage files
 // from the original IPSW restore (separate from the COW clone disk path).
-func (d *Driver) bootBuildVM(diskImage, platformDir, sharedDir string, vnet *VirtualNetwork) (*VM, error) {
+func (d *Driver) bootBuildVM(diskImage, platformDir string, vnet *VirtualNetwork) (*VM, error) {
 	imgDir := platformDir
 
 	vm, err := NewMacOSVM(macOSVMConfig{
@@ -343,8 +358,6 @@ func (d *Driver) bootBuildVM(diskImage, platformDir, sharedDir string, vnet *Vir
 		AuxStoragePath:     filepath.Join(imgDir, "aux-storage"),
 		HardwareModelPath:  filepath.Join(imgDir, "hardware-model"),
 		MachineIDPath:      filepath.Join(imgDir, "machine-id"),
-		SharedDirPath:      sharedDir,
-		SharedDirTag:       "shared",
 		FileHandleSocketFD: vnet.BuildSocketFD,
 	})
 	if err != nil {

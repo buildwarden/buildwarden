@@ -7,7 +7,12 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"sync/atomic"
 )
+
+const maxOutputBytes = 256 * 1024 * 1024 // 256 MB cap on build output
+
+var outputBytesWritten atomic.Int64
 
 // RunControlPlane starts the operational HTTP server on :8300.
 // Serves: health check, CA cert, stdout streaming, completion signal.
@@ -31,6 +36,11 @@ func RunControlPlane(ledgerDir string) error {
 			http.Error(w, "POST only", http.StatusMethodNotAllowed)
 			return
 		}
+		remaining := maxOutputBytes - outputBytesWritten.Load()
+		if remaining <= 0 {
+			http.Error(w, "output limit exceeded", http.StatusRequestEntityTooLarge)
+			return
+		}
 		outPath := filepath.Join(ledgerDir, "build-output.log")
 		f, err := os.OpenFile(outPath,
 			os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
@@ -39,7 +49,8 @@ func RunControlPlane(ledgerDir string) error {
 			return
 		}
 		defer f.Close()
-		io.Copy(f, r.Body) //nolint:errcheck
+		n, _ := io.Copy(f, io.LimitReader(r.Body, remaining))
+		outputBytesWritten.Add(n)
 		w.WriteHeader(200)
 	})
 
@@ -59,3 +70,4 @@ func RunControlPlane(ledgerDir string) error {
 	}
 	return (&http.Server{Handler: mux}).Serve(ln)
 }
+

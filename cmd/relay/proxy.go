@@ -2,12 +2,14 @@ package main
 
 import (
 	"bufio"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"fmt"
 	"io"
 	"log"
 	"math/big"
@@ -19,10 +21,71 @@ import (
 )
 
 // transport is the shared HTTP transport for forwarding requests upstream.
+// DialContext blocks connections to loopback, link-local, and metadata IPs
+// to prevent SSRF from the build VM reaching host-local services.
 var transport = &http.Transport{
 	TLSClientConfig:     &tls.Config{},
 	MaxIdleConnsPerHost: 16,
 	IdleConnTimeout:     90 * time.Second,
+	DialContext:         safeDialContext,
+}
+
+func safeDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, ip := range ips {
+		if isBlockedIP(ip.IP) {
+			return nil, fmt.Errorf("blocked: connection to %s (%s) denied", host, ip.IP)
+		}
+	}
+
+	// Connect to the first non-blocked resolved IP.
+	var dialer net.Dialer
+	for _, ip := range ips {
+		address := net.JoinHostPort(ip.IP.String(), port)
+		conn, err := dialer.DialContext(ctx, network, address)
+		if err == nil {
+			return conn, nil
+		}
+	}
+	return nil, fmt.Errorf("all addresses for %s failed", host)
+}
+
+// blockedSelfIP is set to the relay's virtual gateway IP in FD mode.
+// Prevents the upstream transport from trying to connect back to ourselves.
+var blockedSelfIP net.IP
+
+func isBlockedIP(ip net.IP) bool {
+	if ip.IsLoopback() {
+		return true
+	}
+	if ip.IsUnspecified() {
+		return true
+	}
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return true
+	}
+	// AWS/GCP/Azure metadata service
+	if ip.Equal(net.ParseIP("169.254.169.254")) {
+		return true
+	}
+	// Alibaba Cloud metadata
+	if ip.Equal(net.ParseIP("100.100.100.200")) {
+		return true
+	}
+	// Relay's own virtual IP (not routable on host network)
+	if blockedSelfIP != nil && ip.Equal(blockedSelfIP) {
+		return true
+	}
+	return false
 }
 
 // signHost generates a TLS certificate for the given hostname, signed by the

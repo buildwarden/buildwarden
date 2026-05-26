@@ -54,4 +54,5 @@ type macOSVMConfig struct {
 	SharedDirPath      string
 	SharedDirTag       string
 	FileHandleSocketFD int
+	AttachNAT          bool
 }

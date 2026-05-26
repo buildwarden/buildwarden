@@ -2,6 +2,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -18,6 +19,7 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -176,9 +178,50 @@ func SetLedger(l *Ledger) { activeLedger = l }
 // upstreamDNS is the upstream resolver address, detected at startup.
 var upstreamDNS string
 
-// DetectUpstreamDNS reads /etc/resolv.conf to find the upstream resolver
-// before we start our own DNS server (avoiding self-referential loops).
+// DetectUpstreamDNS finds the upstream resolver. Checks UPSTREAM_DNS env
+// first, then tries scutil --dns (macOS), then /etc/resolv.conf.
 func DetectUpstreamDNS() {
+	if env := os.Getenv("UPSTREAM_DNS"); env != "" {
+		if !strings.Contains(env, ":") {
+			env += ":53"
+		}
+		upstreamDNS = env
+		return
+	}
+
+	// macOS: scutil --dns gives the real system resolvers. Prefer private/
+	// corporate resolvers over public ones (8.8.8.8 etc.) since the host may
+	// be on a network where public DNS is blocked or unreachable.
+	if out, err := exec.Command("scutil", "--dns").Output(); err == nil {
+		var fallback string
+		for _, line := range strings.Split(string(out), "\n") {
+			line = strings.TrimSpace(line)
+			if strings.HasPrefix(line, "nameserver[") {
+				fields := strings.Fields(line)
+				if len(fields) >= 3 {
+					ns := fields[len(fields)-1]
+					if ns == selfIP.String() || ns == "127.0.0.1" {
+						continue
+					}
+					if fallback == "" {
+						fallback = ns
+					}
+					// Prefer private-range DNS (RFC1918) over public
+					if isPrivateIP(ns) {
+						upstreamDNS = ns + ":53"
+						log.Printf("upstream DNS: %s (from scutil, private)", upstreamDNS)
+						return
+					}
+				}
+			}
+		}
+		if fallback != "" {
+			upstreamDNS = fallback + ":53"
+			log.Printf("upstream DNS: %s (from scutil)", upstreamDNS)
+			return
+		}
+	}
+
 	data, err := os.ReadFile("/etc/resolv.conf")
 	if err != nil {
 		upstreamDNS = "8.8.8.8:53"
@@ -197,11 +240,25 @@ func DetectUpstreamDNS() {
 	upstreamDNS = "8.8.8.8:53"
 }
 
-func RunDns(addr net.TCPAddr) error {
-	dnsClient := &dns.Client{Timeout: 5 * time.Second}
+func isPrivateIP(s string) bool {
+	ip := net.ParseIP(s)
+	if ip == nil {
+		return false
+	}
+	ip = ip.To4()
+	if ip == nil {
+		return false
+	}
+	return ip[0] == 10 ||
+		(ip[0] == 172 && ip[1] >= 16 && ip[1] <= 31) ||
+		(ip[0] == 192 && ip[1] == 168)
+}
 
-	server := &dns.Server{Addr: addr.String(), Net: "udp"}
-	dns.HandleFunc(".", func(w dns.ResponseWriter, r *dns.Msg) {
+func newDNSHandler() dns.HandlerFunc {
+	dnsClient := &dns.Client{Timeout: 5 * time.Second}
+	resolver := &net.Resolver{}
+
+	return func(w dns.ResponseWriter, r *dns.Msg) {
 		m := new(dns.Msg)
 		m.SetReply(r)
 		for _, q := range m.Question {
@@ -226,24 +283,108 @@ func RunDns(addr net.TCPAddr) error {
 			}
 		}
 
-		// Forward the entire query upstream (preserves all question types).
-		resp, _, err := dnsClient.Exchange(r, upstreamDNS)
-		if err != nil {
-			log.Printf("DNS forward error (%s): %v", upstreamDNS, err)
-			m.Rcode = dns.RcodeServerFailure
-			w.WriteMsg(m) //nolint:errcheck
-			return
+		// Resolve using the system resolver (works on macOS where endpoint
+		// security blocks raw UDP). Falls back to raw UDP for container/VM.
+		resp := resolveViaSystem(resolver, r)
+		if resp == nil {
+			var err error
+			resp, _, err = dnsClient.Exchange(r, upstreamDNS)
+			if err != nil {
+				log.Printf("DNS forward error (%s): %v (qtype=%d name=%s)",
+					upstreamDNS, err, r.Question[0].Qtype,
+					r.Question[0].Name)
+				m.Rcode = dns.RcodeServerFailure
+				w.WriteMsg(m) //nolint:errcheck
+				return
+			}
 		}
 		resp.Id = r.Id
 		if err := w.WriteMsg(resp); err != nil {
 			log.Printf("DNS proxy error: %s\n", err)
 		}
-	})
+	}
+}
+
+// resolveViaSystem uses Go's system resolver (cgo/mDNSResponder on macOS)
+// as a fallback when raw UDP DNS forwarding is blocked.
+func resolveViaSystem(r *net.Resolver, req *dns.Msg) *dns.Msg {
+	if len(req.Question) == 0 {
+		return nil
+	}
+	q := req.Question[0]
+	name := strings.TrimSuffix(q.Name, ".")
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	resp := new(dns.Msg)
+	resp.SetReply(req)
+
+	switch q.Qtype {
+	case dns.TypeA, dns.TypeAAAA:
+		ips, err := r.LookupIPAddr(ctx, name)
+		if err != nil {
+			log.Printf("system resolver failed for %s: %v", name, err)
+			return nil
+		}
+		for _, ip := range ips {
+			if v4 := ip.IP.To4(); v4 != nil && q.Qtype == dns.TypeA {
+				resp.Answer = append(resp.Answer, &dns.A{
+					Hdr: dns.RR_Header{
+						Name:   q.Name,
+						Rrtype: dns.TypeA,
+						Class:  dns.ClassINET,
+						Ttl:    60,
+					},
+					A: v4,
+				})
+			} else if v4 == nil && q.Qtype == dns.TypeAAAA {
+				resp.Answer = append(resp.Answer, &dns.AAAA{
+					Hdr: dns.RR_Header{
+						Name:   q.Name,
+						Rrtype: dns.TypeAAAA,
+						Class:  dns.ClassINET,
+						Ttl:    60,
+					},
+					AAAA: ip.IP,
+				})
+			}
+		}
+	case dns.TypeCNAME:
+		cname, err := r.LookupCNAME(ctx, name)
+		if err != nil {
+			return nil
+		}
+		resp.Answer = append(resp.Answer, &dns.CNAME{
+			Hdr: dns.RR_Header{
+				Name:   q.Name,
+				Rrtype: dns.TypeCNAME,
+				Class:  dns.ClassINET,
+				Ttl:    60,
+			},
+			Target: dns.Fqdn(cname),
+		})
+	default:
+		return nil
+	}
+	return resp
+}
+
+func RunDns(addr net.TCPAddr) error {
+	handler := newDNSHandler()
+	server := &dns.Server{Addr: addr.String(), Net: "udp", Handler: handler}
+
 	// Also listen on TCP (fallback for clients behind UDP-blocking networks).
-	tcpServer := &dns.Server{Addr: addr.String(), Net: "tcp"}
+	tcpServer := &dns.Server{Addr: addr.String(), Net: "tcp", Handler: handler}
 	go tcpServer.ListenAndServe() //nolint:errcheck
 
 	return server.ListenAndServe()
+}
+
+func RunDnsWithConn(conn net.PacketConn) error {
+	handler := newDNSHandler()
+	server := &dns.Server{PacketConn: conn, Handler: handler}
+	return server.ActivateAndServe()
 }
 
 func RunHttp(addr net.TCPAddr) error {
@@ -251,6 +392,10 @@ func RunHttp(addr net.TCPAddr) error {
 	if err != nil {
 		return fmt.Errorf("error listening for http: %w", err)
 	}
+	return RunHttpWithListener(listener)
+}
+
+func RunHttpWithListener(listener net.Listener) error {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -266,6 +411,10 @@ func RunHttps(addr net.TCPAddr) error {
 	if err != nil {
 		return fmt.Errorf("error listening for https: %w", err)
 	}
+	return RunHttpsWithListener(listener)
+}
+
+func RunHttpsWithListener(listener net.Listener) error {
 	for {
 		conn, err := listener.Accept()
 		if err != nil {
@@ -371,6 +520,7 @@ func onRequest(req *http.Request) (*http.Request, *http.Response) {
 }
 
 const maxPathLen = 255
+const maxArtifactBytes = 2 * 1024 * 1024 * 1024 // 2 GB per artifact
 
 func isSafePath(p string) bool {
 	if p == "" || len(p) > maxPathLen {
@@ -526,9 +676,21 @@ func handleArtifactPost(req *http.Request) (*http.Request, *http.Response) {
 
 	hasher := NewStreamingHasher(activeLedger.hashes)
 	buf := make([]byte, 32*1024)
+	var artifactSize int64
 	for {
 		n, readErr := req.Body.Read(buf)
 		if n > 0 {
+			artifactSize += int64(n)
+			if artifactSize > maxArtifactBytes {
+				tmpFile.Close()
+				os.Remove(tmpFile.Name())
+				req.Body.Close()
+				resp := newTextResponse(
+					req, http.StatusRequestEntityTooLarge,
+					"artifact size limit exceeded\n",
+				)
+				return req, resp
+			}
 			hasher.Write(buf[:n]) //nolint:errcheck
 			tmpFile.Write(buf[:n]) //nolint:errcheck
 		}

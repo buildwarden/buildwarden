@@ -6,24 +6,28 @@ import (
 	"syscall"
 )
 
-// VirtualNetwork represents an isolated virtual network connecting two VMs
-// via VZFileHandleNetworkDeviceAttachment. Each VM gets one end of a Unix
-// datagram socket pair — Ethernet frames flow directly between them with
-// no external path.
+// VirtualNetwork represents an isolated virtual network connecting the build
+// VM to the host-side relay via VZFileHandleNetworkDeviceAttachment. The
+// build VM gets one end of a Unix datagram socket pair as its sole NIC
+// (no shared directories, no NAT, no other devices). The relay process
+// reads from the other end using gvisor netstack.
 //
 // Topology:
 //
-//	Build VM (macOS) ←—virtio-net—→ [socket pair] ←—virtio-net—→ Relay VM (Alpine)
-//	                                                              ↕ (second interface)
-//	                                                           Host/Internet (NAT)
+//	Build VM (macOS) ←—virtio-net—→ [socket pair] ←—fd—→ Relay (host process)
+//	                  (sole NIC)                          ↕ (native host networking)
+//	                                                  Internet
 //
-// The build VM has only one network interface (the private link to relay).
-// The relay VM has two: the private link and a NAT interface for internet.
-// Network isolation is topological — no iptables needed.
+// Isolation guarantees:
+//   - Build VM has exactly one network interface (the socketpair)
+//   - No virtio-fs, no shared directory, no clipboard, no NAT
+//   - All communication (context, CA, artifacts, signals) goes through the
+//     relay's HTTP API over the socketpair
+//   - NAT guard: createMacOSVM refuses to combine socketpair + NAT
 type VirtualNetwork struct {
 	// BuildSocketFD is the file descriptor for the build VM's network device.
 	BuildSocketFD int
-	// RelaySocketFD is the file descriptor for the relay VM's private interface.
+	// RelaySocketFD is the file descriptor for the host relay process.
 	RelaySocketFD int
 
 	// Subnet holds the IP allocation for this network.

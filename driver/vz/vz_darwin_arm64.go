@@ -67,6 +67,11 @@ func createLinuxVM(cfg linuxVMConfig) (unsafe.Pointer, error) {
 
 // createMacOSVM creates a macOS VM (used for the build).
 func createMacOSVM(cfg macOSVMConfig) (unsafe.Pointer, error) {
+	if cfg.FileHandleSocketFD >= 0 && cfg.AttachNAT {
+		return nil, fmt.Errorf(
+			"macOS VM cannot have both a socketpair and NAT: " +
+				"NAT would bypass network isolation")
+	}
 	cDisk := C.CString(cfg.DiskImagePath)
 	defer C.free(unsafe.Pointer(cDisk))
 	cAux := C.CString(cfg.AuxStoragePath)
@@ -84,6 +89,11 @@ func createMacOSVM(cfg macOSVMConfig) (unsafe.Pointer, error) {
 		defer C.free(unsafe.Pointer(cSharedTag))
 	}
 
+	attachNAT := C.int(0)
+	if cfg.AttachNAT {
+		attachNAT = 1
+	}
+
 	result := C.vz_create_macos_vm(
 		C.int(cfg.CPUs),
 		C.uint64_t(cfg.MemoryMB*1024*1024),
@@ -94,6 +104,7 @@ func createMacOSVM(cfg macOSVMConfig) (unsafe.Pointer, error) {
 		cSharedPath,
 		cSharedTag,
 		C.int(cfg.FileHandleSocketFD),
+		attachNAT,
 	)
 
 	if result.error != nil {
@@ -194,4 +205,5 @@ type macOSVMConfig struct {
 	SharedDirPath      string
 	SharedDirTag       string
 	FileHandleSocketFD int
+	AttachNAT          bool
 }

@@ -21,6 +21,12 @@ type VM struct {
 	kind   string // "linux" or "macos"
 }
 
+// LinuxVMConfig is the exported form for external test harnesses.
+type LinuxVMConfig = linuxVMConfig
+
+// MacOSVMConfig is the exported form for external test harnesses.
+type MacOSVMConfig = macOSVMConfig
+
 // NewLinuxVM creates a Linux VM (used for the relay).
 // Boots directly from kernel + initrd — no disk image needed.
 func NewLinuxVM(cfg linuxVMConfig) (*VM, error) {
