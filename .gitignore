@@ -9,3 +9,4 @@ out.log
 .claude/
 .DS_Store
 .dev/
+.tmp/
