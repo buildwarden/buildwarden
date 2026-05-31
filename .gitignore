@@ -10,3 +10,4 @@ out.log
 .DS_Store
 .dev/
 .tmp/
+/warden-io

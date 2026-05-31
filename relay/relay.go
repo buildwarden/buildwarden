@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
 	"crypto/sha256"
@@ -24,7 +25,6 @@ import (
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
-	"golang.org/x/crypto/blake2b"
 )
 
 // Config holds parameters for starting a relay.
@@ -34,12 +34,30 @@ type Config struct {
 	CaptureMode string
 	SelfIP      net.IP
 	UpstreamDNS string
+	SignalDir   string
+
+	// SSRF controls whether the safe dialer blocks loopback/metadata IPs.
+	// Required for host-mode relay; container/VM modes rely on iptables/hypervisor.
+	SSRF bool
+
+	// BlockedSelfIP is set to the relay's virtual gateway IP in FD mode.
+	// Prevents the upstream transport from connecting back to ourselves.
+	BlockedSelfIP net.IP
 
 	// Injected listeners. When non-nil, the relay uses these instead of
 	// creating its own. This enables relay-on-host mode for VM drivers.
 	DNSPacketConn net.PacketConn
 	HTTPListener  net.Listener
 	HTTPSListener net.Listener
+
+	// ControlListener, when non-nil, is used for the control plane HTTP
+	// server instead of binding :8300. Used in FD mode where the control
+	// plane is served through the netstack.
+	ControlListener net.Listener
+
+	// OutputWriter receives build output from the /v1/output endpoint.
+	// Defaults to os.Stderr if nil.
+	OutputWriter io.Writer
 }
 
 // Relay is the core proxy that intercepts network traffic and writes a ledger.
@@ -64,8 +82,14 @@ type Relay struct {
 	certCache   map[string]*tls.Certificate
 	certCacheMu sync.RWMutex
 
-	selfIP      net.IP
-	upstreamDNS string
+	selfIP        net.IP
+	blockedSelfIP net.IP
+	upstreamDNS   string
+
+	transport *http.Transport
+
+	lastActivity       atomic.Int64
+	outputBytesWritten atomic.Int64
 
 	errs chan error
 }
@@ -90,8 +114,11 @@ const (
 	schemaEnvCtr      byte = 5
 )
 
+const maxOutputBytes = 256 * 1024 * 1024
+const maxArtifactBytes = 2 * 1024 * 1024 * 1024
+
 // Start initializes and starts the relay. It begins listening on DNS, HTTP,
-// and HTTPS ports. Call Wait() to block until a listener fails.
+// HTTPS, and control plane ports. Call Wait() to block until a listener fails.
 func Start(cfg Config) (*Relay, error) {
 	if err := os.MkdirAll(filepath.Join(cfg.LedgerDir, "payloads"), 0755); err != nil {
 		return nil, fmt.Errorf("creating ledger directory: %w", err)
@@ -103,6 +130,10 @@ func Start(cfg Config) (*Relay, error) {
 		}
 	}
 
+	if cfg.SignalDir != "" {
+		_ = os.MkdirAll(cfg.SignalDir, 0755)
+	}
+
 	r := &Relay{
 		cfg:          cfg,
 		outDir:       cfg.LedgerDir,
@@ -110,10 +141,11 @@ func Start(cfg Config) (*Relay, error) {
 		reqSigs:      make(map[*http.Request][]byte),
 		reqBaseNames: make(map[*http.Request]string),
 		certCache:    make(map[string]*tls.Certificate),
-		errs:         make(chan error, 3),
+		errs:         make(chan error, 4),
 	}
 
 	r.setCaptureMode(cfg.CaptureMode)
+	r.buildTransport()
 
 	// Create ledger file
 	ledgerFile, err := os.Create(filepath.Join(cfg.LedgerDir, "ledger"))
@@ -143,6 +175,10 @@ func Start(cfg Config) (*Relay, error) {
 		}
 	}
 
+	if cfg.BlockedSelfIP != nil {
+		r.blockedSelfIP = cfg.BlockedSelfIP
+	}
+
 	// Detect or use provided upstream DNS
 	if cfg.UpstreamDNS != "" {
 		r.upstreamDNS = cfg.UpstreamDNS
@@ -162,11 +198,13 @@ func Start(cfg Config) (*Relay, error) {
 	}
 
 	// Start listeners
+	go r.runHeartbeat()
 	go func() { r.errs <- r.runDNS() }()
 	go func() { r.errs <- r.runHTTP() }()
 	go func() { r.errs <- r.runHTTPS() }()
+	go func() { r.errs <- r.runControlPlane() }()
 
-	log.Printf("relay: listening on :53/udp :80/tcp :443/tcp")
+	log.Printf("relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp")
 	return r, nil
 }
 
@@ -194,6 +232,16 @@ func (r *Relay) CAFingerprint() string {
 	}
 	h := sha256.Sum256(r.mitmCert.Leaf.Raw)
 	return hex.EncodeToString(h[:])
+}
+
+// Ledger returns the underlying ledger writer.
+func (r *Relay) Ledger() *Ledger {
+	return r.ledger
+}
+
+// TouchActivity records that the relay is actively processing traffic.
+func (r *Relay) TouchActivity() {
+	r.lastActivity.Store(time.Now().Unix())
 }
 
 func (r *Relay) setCaptureMode(mode string) {
@@ -273,6 +321,14 @@ func (r *Relay) detectSelfIP() error {
 }
 
 func (r *Relay) detectUpstreamDNS() {
+	if env := os.Getenv("UPSTREAM_DNS"); env != "" {
+		if !strings.Contains(env, ":") {
+			env += ":53"
+		}
+		r.upstreamDNS = env
+		return
+	}
+
 	data, err := os.ReadFile("/etc/resolv.conf")
 	if err != nil {
 		r.upstreamDNS = "8.8.8.8:53"
@@ -330,13 +386,35 @@ func (r *Relay) recordEnvironmentFromVolume() error {
 func (r *Relay) onRequest(req *http.Request) (*http.Request, *http.Response) {
 	host := strings.Split(req.Host, ":")[0]
 
-	if host == "artifacts" && req.Method == "POST" {
-		return r.handleArtifactPost(req)
+	if host == "artifacts" {
+		switch req.URL.Path {
+		case "/heartbeat":
+			r.TouchActivity()
+			return req, newTextResponse(req, http.StatusOK, "ok\n")
+		case "/exit":
+			code := 0
+			if q := req.URL.Query().Get("code"); q != "" {
+				_, _ = fmt.Sscanf(q, "%d", &code)
+			}
+			r.writeExitCode(code)
+			return req, newTextResponse(req, http.StatusOK, "ok\n")
+		case "/ca.pem":
+			return r.handleCACertGet(req)
+		case "/warden-io":
+			return r.handleAgentBinaryGet(req)
+		default:
+			if req.Method == "POST" {
+				return r.handleArtifactPost(req)
+			}
+			return req, newTextResponse(req, http.StatusNotFound, "not found\n")
+		}
 	}
 
 	if host == "cwd" && req.Method == "GET" {
 		return r.handleContextGet(req)
 	}
+
+	r.TouchActivity()
 
 	seq := r.captureSeq.Add(1)
 	baseName := captureBaseName(seq, req.Method, host, req.URL.Path)
@@ -478,9 +556,18 @@ func (r *Relay) handleArtifactPost(req *http.Request) (*http.Request, *http.Resp
 
 	hasher := NewStreamingHasher(r.ledger.hashes)
 	buf := make([]byte, 32*1024)
+	var artifactSize int64
 	for {
 		n, readErr := req.Body.Read(buf)
 		if n > 0 {
+			artifactSize += int64(n)
+			if artifactSize > maxArtifactBytes {
+				tmpFile.Close()
+				os.Remove(tmpFile.Name())
+				req.Body.Close()
+				return req, newTextResponse(req, http.StatusRequestEntityTooLarge,
+					"artifact size limit exceeded\n")
+			}
 			hasher.Write(buf[:n]) //nolint:errcheck
 			tmpFile.Write(buf[:n]) //nolint:errcheck
 		}
@@ -513,15 +600,62 @@ func (r *Relay) handleArtifactPost(req *http.Request) (*http.Request, *http.Resp
 		fmt.Sprintf("artifact stored: %s (%d bytes)\n", artifactName, size))
 }
 
+func (r *Relay) handleCACertGet(req *http.Request) (*http.Request, *http.Response) {
+	resp := &http.Response{
+		StatusCode:    http.StatusOK,
+		Status:        "200 OK",
+		Proto:         "HTTP/1.1",
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		Header:        http.Header{"Content-Type": {"application/x-pem-file"}},
+		Body:          io.NopCloser(strings.NewReader(string(r.caCert))),
+		ContentLength: int64(len(r.caCert)),
+	}
+	return req, resp
+}
+
+func (r *Relay) handleAgentBinaryGet(req *http.Request) (*http.Request, *http.Response) {
+	agentPath := filepath.Join(filepath.Dir(r.contextDir), "agent", "warden-io")
+	data, err := os.ReadFile(agentPath)
+	if err != nil {
+		return req, newTextResponse(req, http.StatusNotFound, "warden-io not available\n")
+	}
+	resp := &http.Response{
+		StatusCode:    http.StatusOK,
+		Status:        "200 OK",
+		Proto:         "HTTP/1.1",
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		Header:        http.Header{"Content-Type": {"application/octet-stream"}},
+		Body:          io.NopCloser(bytes.NewReader(data)),
+		ContentLength: int64(len(data)),
+	}
+	return req, resp
+}
+
 func (r *Relay) handleContextGet(req *http.Request) (*http.Request, *http.Response) {
 	filePath := strings.TrimPrefix(req.URL.Path, "/")
+
+	if filePath == "" || strings.HasSuffix(filePath, "/") {
+		return r.handleContextList(req, filePath)
+	}
+
 	if !isSafeContextPath(filePath) {
 		return req, newTextResponse(req, http.StatusForbidden, "forbidden\n")
 	}
 
 	fullPath := filepath.Join(r.contextDir, filePath)
-	if !strings.HasPrefix(fullPath, r.contextDir+"/") {
+	if !strings.HasPrefix(fullPath, r.contextDir+"/") && fullPath != r.contextDir {
 		return req, newTextResponse(req, http.StatusForbidden, "forbidden\n")
+	}
+
+	info, statErr := os.Stat(fullPath)
+	if statErr != nil {
+		return req, newTextResponse(req, http.StatusNotFound,
+			fmt.Sprintf("not found: %s\n", filePath))
+	}
+	if info.IsDir() {
+		return r.handleContextList(req, filePath+"/")
 	}
 
 	data, err := os.ReadFile(fullPath)
@@ -550,6 +684,48 @@ func (r *Relay) handleContextGet(req *http.Request) (*http.Request, *http.Respon
 		Header:        http.Header{"Content-Type": {"application/octet-stream"}},
 		Body:          io.NopCloser(strings.NewReader(string(data))),
 		ContentLength: int64(len(data)),
+	}
+	return req, resp
+}
+
+func (r *Relay) handleContextList(
+	req *http.Request, prefix string,
+) (*http.Request, *http.Response) {
+	dir := filepath.Join(r.contextDir, prefix)
+	if !strings.HasPrefix(dir, r.contextDir) {
+		return req, newTextResponse(req, http.StatusForbidden, "forbidden\n")
+	}
+
+	if _, err := os.Stat(dir); err != nil {
+		return req, newTextResponse(req, http.StatusNotFound,
+			fmt.Sprintf("directory not found: %s\n", prefix))
+	}
+
+	var files []string
+	_ = filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
+		if err != nil || info.IsDir() {
+			return nil
+		}
+		rel, _ := filepath.Rel(r.contextDir, p)
+		if isSafeContextPath(rel) {
+			files = append(files, rel)
+		}
+		return nil
+	})
+
+	body := strings.Join(files, "\n")
+	if len(files) > 0 {
+		body += "\n"
+	}
+	resp := &http.Response{
+		StatusCode:    http.StatusOK,
+		Status:        "200 OK",
+		Proto:         "HTTP/1.1",
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		Header:        http.Header{"Content-Type": {"text/plain"}},
+		Body:          io.NopCloser(strings.NewReader(body)),
+		ContentLength: int64(len(body)),
 	}
 	return req, resp
 }
@@ -648,112 +824,6 @@ func (h *hashingReadCloser) Close() error {
 		h.onClose(hashBlock, size)
 	}
 	return h.source.Close()
-}
-
-type capturingReadCloser struct {
-	source   io.ReadCloser
-	tmp      *os.File
-	baseName string
-	suffix   string
-	hasher   *StreamingHasher
-	outDir   string
-	done     bool
-}
-
-func (r *Relay) newCapturingReadCloser(source io.ReadCloser, baseName, suffix string) *capturingReadCloser {
-	tmp, err := os.CreateTemp(filepath.Join(r.outDir, "payloads"), "cap-*")
-	if err != nil {
-		log.Printf("capture: error creating temp file: %v", err)
-		return &capturingReadCloser{source: source, done: true}
-	}
-	return &capturingReadCloser{
-		source:   source,
-		tmp:      tmp,
-		baseName: baseName,
-		suffix:   suffix,
-		hasher:   NewStreamingHasher([]string{"blake2b_256"}),
-		outDir:   r.outDir,
-	}
-}
-
-func (c *capturingReadCloser) Read(p []byte) (int, error) {
-	n, err := c.source.Read(p)
-	if n > 0 && c.tmp != nil {
-		c.tmp.Write(p[:n])    //nolint:errcheck
-		c.hasher.Write(p[:n]) //nolint:errcheck
-	}
-	if err == io.EOF && !c.done {
-		c.done = true
-		c.finalize()
-	}
-	return n, err
-}
-
-func (c *capturingReadCloser) Close() error {
-	if !c.done {
-		c.done = true
-		buf := make([]byte, 32*1024)
-		for {
-			n, err := c.source.Read(buf)
-			if n > 0 && c.tmp != nil {
-				c.tmp.Write(buf[:n])    //nolint:errcheck
-				c.hasher.Write(buf[:n]) //nolint:errcheck
-			}
-			if err != nil {
-				break
-			}
-		}
-		c.finalize()
-	}
-	return c.source.Close()
-}
-
-func (c *capturingReadCloser) finalize() {
-	if c.tmp == nil {
-		return
-	}
-	c.tmp.Close()
-	hashBlock, _ := c.hasher.Finish()
-	savePayloadFile(c.outDir, c.tmp.Name(), hashBlock, c.baseName, c.suffix)
-}
-
-func (r *Relay) savePayloadBytes(data []byte, baseName, suffix string) {
-	if len(data) == 0 {
-		return
-	}
-	hash := primaryHashBytes(data)
-	payloadPath := filepath.Join(r.outDir, "payloads", hash)
-	if _, err := os.Stat(payloadPath); os.IsNotExist(err) {
-		os.WriteFile(payloadPath, data, 0644) //nolint:errcheck
-	}
-	symName := baseName
-	if suffix != "" {
-		symName += "." + suffix
-	}
-	symPath := filepath.Join(r.outDir, "captures", symName)
-	os.Symlink(filepath.Join("..", "payloads", hash), symPath) //nolint:errcheck
-}
-
-func savePayloadFile(outDir, tmpPath string, hashBlock []byte, baseName, suffix string) {
-	hash := hex.EncodeToString(hashBlock[:32])
-	payloadPath := filepath.Join(outDir, "payloads", hash)
-	if _, err := os.Stat(payloadPath); os.IsNotExist(err) {
-		os.Rename(tmpPath, payloadPath) //nolint:errcheck
-	} else {
-		os.Remove(tmpPath) //nolint:errcheck
-	}
-	symName := baseName
-	if suffix != "" {
-		symName += "." + suffix
-	}
-	symPath := filepath.Join(outDir, "captures", symName)
-	os.Symlink(filepath.Join("..", "payloads", hash), symPath) //nolint:errcheck
-}
-
-func primaryHashBytes(data []byte) string {
-	h, _ := blake2b.New256(nil)
-	h.Write(data)
-	return hex.EncodeToString(h.Sum(nil))
 }
 
 func newTextResponse(req *http.Request, status int, body string) *http.Response {

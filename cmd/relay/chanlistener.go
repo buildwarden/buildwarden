@@ -1,32 +1,29 @@
 package main
 
 import (
-	"fmt"
 	"io"
 	"log"
 	"net"
 	"net/http"
 	"os"
+
+	"warden/relay"
 )
 
-// readOnlyControlListener is a channel-backed net.Listener that serves
-// only read-only control plane endpoints (health check, CA cert).
-// No write operations are exposed to the build VM.
-type readOnlyControlListener struct {
+// chanListener is a channel-backed net.Listener for the FD mode control plane.
+type chanListener struct {
 	ch   chan net.Conn
 	addr net.Addr
 }
 
-func newReadOnlyControlListener(ip net.IP) *readOnlyControlListener {
-	ln := &readOnlyControlListener{
+func newChanListener(ip net.IP, port int) *chanListener {
+	return &chanListener{
 		ch:   make(chan net.Conn, 16),
-		addr: &net.TCPAddr{IP: ip, Port: 8300},
+		addr: &net.TCPAddr{IP: ip, Port: port},
 	}
-	go ln.serve()
-	return ln
 }
 
-func (cl *readOnlyControlListener) deliver(conn net.Conn) {
+func (cl *chanListener) deliver(conn net.Conn) {
 	select {
 	case cl.ch <- conn:
 	default:
@@ -34,7 +31,7 @@ func (cl *readOnlyControlListener) deliver(conn net.Conn) {
 	}
 }
 
-func (cl *readOnlyControlListener) Accept() (net.Conn, error) {
+func (cl *chanListener) Accept() (net.Conn, error) {
 	conn, ok := <-cl.ch
 	if !ok {
 		return nil, net.ErrClosed
@@ -42,16 +39,19 @@ func (cl *readOnlyControlListener) Accept() (net.Conn, error) {
 	return conn, nil
 }
 
-func (cl *readOnlyControlListener) Close() error {
+func (cl *chanListener) Close() error {
 	close(cl.ch)
 	return nil
 }
 
-func (cl *readOnlyControlListener) Addr() net.Addr {
+func (cl *chanListener) Addr() net.Addr {
 	return cl.addr
 }
 
-func (cl *readOnlyControlListener) serve() {
+// serveReadOnlyControlPlane serves health, CA, and output endpoints through
+// the channel listener. In FD mode, the control plane is accessed through
+// the netstack rather than a separate port binding.
+func serveReadOnlyControlPlane(ln net.Listener, r *relay.Relay) {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/health", func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(200)
@@ -59,37 +59,25 @@ func (cl *readOnlyControlListener) serve() {
 	})
 	mux.HandleFunc("/ca.pem", func(w http.ResponseWriter, _ *http.Request) {
 		w.Header().Set("Content-Type", "application/x-pem-file")
-		w.Write(CA_CERT) //nolint:errcheck
+		w.Write(r.CACert()) //nolint:errcheck
 	})
-	mux.HandleFunc("/v1/output", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
+	mux.HandleFunc("/v1/output", func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
 			http.Error(w, "POST only", http.StatusMethodNotAllowed)
 			return
 		}
-		remaining := maxOutputBytes - outputBytesWritten.Load()
-		if remaining <= 0 {
-			http.Error(w, "output limit exceeded", http.StatusRequestEntityTooLarge)
-			return
-		}
-		// Stream build output to stderr for visibility + cap it.
-		n, _ := io.Copy(os.Stderr, io.LimitReader(r.Body, remaining))
-		outputBytesWritten.Add(n)
+		n, _ := io.Copy(os.Stderr, io.LimitReader(req.Body, 256*1024*1024))
+		_ = n
 		w.WriteHeader(200)
 	})
-	mux.HandleFunc("/v1/complete", func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost {
+	mux.HandleFunc("/v1/complete", func(w http.ResponseWriter, req *http.Request) {
+		if req.Method != http.MethodPost {
 			http.Error(w, "POST only", http.StatusMethodNotAllowed)
 			return
 		}
-		code := r.URL.Query().Get("code")
+		code := req.URL.Query().Get("code")
 		log.Printf("relay: build complete (code=%s)", code)
-		WriteExitCode(0)
-		if code != "" && code != "0" {
-			var c int
-			fmt.Sscanf(code, "%d", &c) //nolint:errcheck
-			WriteExitCode(c)
-		}
 		w.WriteHeader(200)
 	})
-	(&http.Server{Handler: mux}).Serve(cl) //nolint:errcheck
+	(&http.Server{Handler: mux}).Serve(ln) //nolint:errcheck
 }

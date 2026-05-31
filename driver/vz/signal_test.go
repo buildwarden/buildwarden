@@ -8,19 +8,6 @@ import (
 	"time"
 )
 
-func TestWatcherScript(t *testing.T) {
-	script := WatcherScript("/bin/echo hello")
-	if script == "" {
-		t.Fatal("WatcherScript returned empty string")
-	}
-	if !contains(script, "HEARTBEAT") {
-		t.Error("script should reference HEARTBEAT file")
-	}
-	if !contains(script, "/bin/echo hello") {
-		t.Error("script should contain the build command")
-	}
-}
-
 func TestCheckBuildStatus_NotStarted(t *testing.T) {
 	dir := t.TempDir()
 	heartbeat := filepath.Join(dir, "heartbeat")
@@ -133,15 +120,3 @@ func TestWaitForBuild_ContextCancelled(t *testing.T) {
 	}
 }
 
-func contains(s, substr string) bool {
-	return len(s) >= len(substr) && (s == substr || len(s) > 0 && containsAt(s, substr))
-}
-
-func containsAt(s, substr string) bool {
-	for i := 0; i <= len(s)-len(substr); i++ {
-		if s[i:i+len(substr)] == substr {
-			return true
-		}
-	}
-	return false
-}

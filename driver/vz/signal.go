@@ -10,58 +10,21 @@ import (
 	"time"
 )
 
-// Signal protocol between the build VM agent and the host orchestrator.
+// Signal protocol between the build VM and the host orchestrator.
 //
-// The agent runs a watcher script that:
-//  1. Forks the build process
-//  2. While the process is alive, writes signal/heartbeat every interval
-//     containing the current Unix timestamp
-//  3. When the process exits, removes signal/heartbeat and writes
-//     signal/exit_code containing the numeric exit code
+// The build VM signals liveness via HTTP to the relay:
+//   - GET http://artifacts/heartbeat → relay writes signal/heartbeat
+//   - GET http://artifacts/exit?code=N → relay writes signal/exit_code
 //
-// The orchestrator watches:
-//   - If signal/heartbeat is removed AND signal/exit_code exists → build done
-//   - If signal/heartbeat hasn't been updated within 3 intervals → unresponsive
-//   - If signal/exit_code is "0" → success; otherwise → failure
+// The host orchestrator watches signal/:
+//   - If signal/exit_code exists → build done
+//   - If signal/heartbeat hasn't been updated within 3 intervals → dead
+//   - exit_code "0" → success; otherwise → failure
 
 const (
 	heartbeatInterval = 2 * time.Second
 	heartbeatTimeout  = 3 * heartbeatInterval // 6 seconds of silence = dead
 )
-
-// WatcherScript generates the shell script that runs inside the build VM.
-// It forks the actual build command, monitors it, and maintains the
-// heartbeat file on the shared volume.
-func WatcherScript(buildCmd string) string {
-	return fmt.Sprintf(`#!/bin/sh
-SIGNAL_DIR="/shared/signal"
-HEARTBEAT="$SIGNAL_DIR/heartbeat"
-EXIT_CODE="$SIGNAL_DIR/exit_code"
-
-# Clean state
-rm -f "$HEARTBEAT" "$EXIT_CODE"
-
-# Fork the build process
-%s &
-BUILD_PID=$!
-
-# Heartbeat loop: write timestamp while build is alive
-while kill -0 "$BUILD_PID" 2>/dev/null; do
-    date +%%s > "$HEARTBEAT"
-    sleep 2
-done
-
-# Build process exited — capture exit code
-wait "$BUILD_PID"
-CODE=$?
-
-# Remove heartbeat (signals completion to orchestrator)
-rm -f "$HEARTBEAT"
-
-# Write exit code
-echo "$CODE" > "$EXIT_CODE"
-`, buildCmd)
-}
 
 // BuildStatus represents the current state of the build as observed
 // from the host via the shared volume.

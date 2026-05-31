@@ -69,15 +69,14 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	}
 	defer os.RemoveAll(sharedDir)
 
-	// Create shared volume structure:
+	// Create shared volume structure (host-side only, not mounted in VM):
 	//   shared/
-	//   ├── relay          (static relay binary for linux/arm64)
+	//   ├── relay          (relay binary, darwin/arm64 host process)
 	//   ├── relay.env      (LEDGER_DIR, CONTEXT_DIR, CAPTURE_MODE)
-	//   ├── context/       (build context files)
+	//   ├── context/       (build context + build.sh, served via relay)
 	//   ├── ledger/        (relay writes here)
-	//   ├── agent/         (warden-io binary + build script for macOS)
-	//   └── signal/        (completion signaling between VMs)
-	for _, sub := range []string{"context", "ledger", "agent", "signal"} {
+	//   └── signal/        (relay writes heartbeat/exit_code here)
+	for _, sub := range []string{"context", "ledger", "signal"} {
 		if err := os.MkdirAll(filepath.Join(sharedDir, sub), 0755); err != nil {
 			return nil, fmt.Errorf("creating shared/%s: %w", sub, err)
 		}
@@ -147,11 +146,13 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	// No shared directory — all communication goes through the relay HTTP API.
 	// Platform state files (hardware-model, machine-id, aux-storage) live
 	// alongside the original disk image, not the COW clone.
-	buildVM, err := d.bootBuildVM(buildDisk, filepath.Dir(diskImage), vnet)
+	buildVM, err := d.bootBuildVM(
+		buildDisk, filepath.Dir(diskImage), vnet)
 	if err != nil {
 		return nil, fmt.Errorf("booting build VM: %w", err)
 	}
 	defer buildVM.Stop()
+
 
 	// Wait for build completion via heartbeat protocol
 	signalDir := filepath.Join(sharedDir, "signal")
@@ -204,6 +205,12 @@ func (d *Driver) prepareRelay(sharedDir string) error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("building relay: %w", err)
 	}
+
+	// Codesign the relay binary (macOS may block unsigned binaries
+	// from network operations via Endpoint Security).
+	signCmd := exec.Command("codesign", "--force", "--sign", "-", relayDst)
+	signCmd.Run() //nolint:errcheck
+
 	return nil
 }
 
@@ -220,36 +227,13 @@ func (d *Driver) prepareContext(sharedDir string, req *driver.BuildRequest) erro
 	return nil
 }
 
-// prepareAgent places warden-io (macOS build) and the build/watcher scripts
-// on the shared volume. The launchd plist in the base macOS image watches
-// for the agent binary and executes it.
+// prepareAgent places the build script into context/ (served to the VM via
+// relay HTTP). The macOS image already contains warden-io at /usr/local/bin.
+// The image's LaunchDaemon runs `warden-io initialize` which configures
+// networking, installs the CA, fetches build.sh from relay, and executes it.
 func (d *Driver) prepareAgent(sharedDir string, req *driver.BuildRequest) error {
-	agentDir := filepath.Join(sharedDir, "agent")
-
-	// Cross-compile warden-io for the macOS build VM
-	agentBin := filepath.Join(agentDir, "warden-io")
-	if exe, err := os.Executable(); err == nil {
-		candidate := filepath.Join(filepath.Dir(exe), "warden-io-darwin-arm64")
-		if _, errStat := os.Stat(candidate); errStat == nil {
-			if err := copyFile(candidate, agentBin); err != nil {
-				return fmt.Errorf("copying warden-io: %w", err)
-			}
-			goto agentReady
-		}
-	}
-	{
-		cmd := exec.Command("go", "build", "-o", agentBin, "./cmd/warden-io")
-		cmd.Env = append(os.Environ(), "GOOS=darwin", "GOARCH=arm64", "CGO_ENABLED=0")
-		cmd.Dir = findModuleRoot()
-		cmd.Stderr = os.Stderr
-		if err := cmd.Run(); err != nil {
-			return fmt.Errorf("cross-compiling warden-io: %w", err)
-		}
-	}
-agentReady:
-
-	// Write the build script
-	buildScript := filepath.Join(agentDir, "build.sh")
+	ctxDir := filepath.Join(sharedDir, "context")
+	buildScript := filepath.Join(ctxDir, "build.sh")
 	if req.Script != "" {
 		data, err := os.ReadFile(req.Script)
 		if err != nil {
@@ -259,19 +243,11 @@ agentReady:
 			return fmt.Errorf("writing build script: %w", err)
 		}
 	} else {
-		// Default: run nothing (useful for shell mode)
-		if err := os.WriteFile(buildScript, []byte("#!/bin/sh\ntrue\n"), 0755); err != nil {
+		script := "#!/bin/sh\ntrue\n"
+		if err := os.WriteFile(buildScript, []byte(script), 0755); err != nil {
 			return fmt.Errorf("writing default build script: %w", err)
 		}
 	}
-
-	// Write the watcher script that wraps the build with heartbeat monitoring
-	watcherContent := WatcherScript("/Volumes/My\\ Shared\\ Files/shared/agent/build.sh")
-	watcherPath := filepath.Join(agentDir, "watcher.sh")
-	if err := os.WriteFile(watcherPath, []byte(watcherContent), 0755); err != nil {
-		return fmt.Errorf("writing watcher script: %w", err)
-	}
-
 	return nil
 }
 
@@ -313,7 +289,7 @@ func (d *Driver) startHostRelay(sharedDir string, vnet *VirtualNetwork) (*RelayP
 
 	// The relay FD will be passed as fd 3 (first extra FD after stdin/out/err).
 	cmd := exec.Command(relayBin,
-		"--ingress=fd",
+		"--mode=host",
 		"--fd=3",
 		"--subnet="+subnet,
 	)
@@ -343,12 +319,12 @@ func maskBits(mask net.IPMask) int {
 }
 
 // bootBuildVM creates and starts the build VM (macOS).
-// Single interface: private link to relay (sole network path).
-// No shared directory — all runtime communication goes through the relay's
-// HTTP API (context files, CA cert, artifacts, signals).
-// platformDir contains the hardware-model, machine-id, and aux-storage files
-// from the original IPSW restore (separate from the COW clone disk path).
-func (d *Driver) bootBuildVM(diskImage, platformDir string, vnet *VirtualNetwork) (*VM, error) {
+// Single network interface: private link to relay (sole network path).
+// No shared directory — warden-io is baked into the disk image and all
+// runtime communication goes through the relay's HTTP API.
+func (d *Driver) bootBuildVM(
+	diskImage, platformDir string, vnet *VirtualNetwork,
+) (*VM, error) {
 	imgDir := platformDir
 
 	vm, err := NewMacOSVM(macOSVMConfig{

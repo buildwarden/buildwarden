@@ -15,6 +15,8 @@ func main() {
 	}
 
 	switch os.Args[1] {
+	case "initialize", "init":
+		os.Exit(runInitialize(os.Args[2:]))
 	case "fetch":
 		if len(os.Args) < 3 {
 			fatal("fetch requires at least one argument")
@@ -33,7 +35,9 @@ func main() {
 }
 
 func usage() {
-	fmt.Fprintf(os.Stderr, "Usage: warden-io <fetch|post|trust> [args...]\n")
+	fmt.Fprintf(os.Stderr, "Usage: warden-io <command> [args...]\n")
+	fmt.Fprintf(os.Stderr, "  initialize [flags]      "+
+		"Full init: network, CA, env, exec build\n")
 	fmt.Fprintf(os.Stderr, "  fetch <file> [-o dest]  "+
 		"Fetch a context file from relay\n")
 	fmt.Fprintf(os.Stderr, "  post <file> [name]      "+

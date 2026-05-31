@@ -2,24 +2,85 @@ package relay
 
 import (
 	"bufio"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"fmt"
 	"io"
 	"log"
 	"math/big"
 	"net"
 	"net/http"
+	"strings"
 	"time"
 )
 
-var transport = &http.Transport{
-	TLSClientConfig:     &tls.Config{},
-	MaxIdleConnsPerHost: 16,
-	IdleConnTimeout:     90 * time.Second,
+func (r *Relay) buildTransport() {
+	t := &http.Transport{
+		TLSClientConfig:     &tls.Config{},
+		MaxIdleConnsPerHost: 16,
+		IdleConnTimeout:     90 * time.Second,
+	}
+	if r.cfg.SSRF {
+		t.DialContext = r.safeDialContext
+	}
+	r.transport = t
+}
+
+func (r *Relay) safeDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+
+	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+
+	for _, ip := range ips {
+		if r.isBlockedIP(ip.IP) {
+			return nil, fmt.Errorf(
+			"blocked: connection to %s (%s) denied", host, ip.IP)
+
+		}
+	}
+
+	var dialer net.Dialer
+	for _, ip := range ips {
+		address := net.JoinHostPort(ip.IP.String(), port)
+		conn, err := dialer.DialContext(ctx, network, address)
+		if err == nil {
+			return conn, nil
+		}
+	}
+	return nil, fmt.Errorf("all addresses for %s failed", host)
+}
+
+func (r *Relay) isBlockedIP(ip net.IP) bool {
+	if ip.IsLoopback() {
+		return true
+	}
+	if ip.IsUnspecified() {
+		return true
+	}
+	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
+		return true
+	}
+	if ip.Equal(net.ParseIP("169.254.169.254")) {
+		return true
+	}
+	if ip.Equal(net.ParseIP("100.100.100.200")) {
+		return true
+	}
+	if r.blockedSelfIP != nil && ip.Equal(r.blockedSelfIP) {
+		return true
+	}
+	return false
 }
 
 func (r *Relay) signHost(hostname string) (*tls.Certificate, error) {
@@ -68,7 +129,9 @@ func (r *Relay) signHost(hostname string) (*tls.Certificate, error) {
 	return cert, nil
 }
 
-func (r *Relay) serveHTTPConn(conn net.Conn) {
+// ServeHTTPConn handles a single plain-HTTP connection, supporting keep-alive.
+// Exported for use by mode-specific ingress (FD mode).
+func (r *Relay) ServeHTTPConn(conn net.Conn) {
 	defer conn.Close()
 	br := bufio.NewReader(conn)
 
@@ -97,7 +160,9 @@ func (r *Relay) serveHTTPConn(conn net.Conn) {
 	}
 }
 
-func (r *Relay) serveTLSConn(conn net.Conn) {
+// ServeTLSConn handles a single MITM'd TLS connection, supporting keep-alive.
+// Exported for use by mode-specific ingress (FD mode).
+func (r *Relay) ServeTLSConn(conn net.Conn) {
 	defer conn.Close()
 
 	tlsConn := tls.Server(conn, &tls.Config{
@@ -146,7 +211,7 @@ func (r *Relay) roundTrip(req *http.Request) *http.Response {
 	}
 
 	req.RequestURI = ""
-	resp, err := transport.RoundTrip(req)
+	resp, err := r.transport.RoundTrip(req)
 	if err != nil {
 		log.Printf("upstream error: %v", err)
 		resp = &http.Response{
@@ -156,7 +221,7 @@ func (r *Relay) roundTrip(req *http.Request) *http.Response {
 			ProtoMajor: 1,
 			ProtoMinor: 1,
 			Header:     http.Header{"Content-Type": {"text/plain"}},
-			Body:       io.NopCloser(nil),
+			Body:       io.NopCloser(strings.NewReader("upstream unreachable\n")),
 		}
 	}
 

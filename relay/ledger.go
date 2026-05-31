@@ -8,6 +8,7 @@ import (
 	crypto_sha256 "crypto/sha256"
 	"crypto/sha512"
 	"encoding/binary"
+	"encoding/hex"
 	"fmt"
 	"hash"
 	"io"
@@ -68,6 +69,14 @@ type LedgerConfig struct {
 
 // HeaderMeta is the CBOR metadata embedded in the ledger header.
 type HeaderMeta = ledger.HeaderMeta
+type Header = ledger.Header
+type Record = ledger.Record
+type VerifyResult = ledger.VerifyResult
+
+var ReadHeader = ledger.ReadHeader
+var ReadRecord = ledger.ReadRecord
+var Verify = ledger.Verify
+var IsValidLedger = ledger.IsValidLedger
 
 var defaultHashes = []string{"blake2b_256", "sha256", "sha1", "md5"}
 
@@ -117,6 +126,15 @@ func NewLedger(cfg LedgerConfig) (*Ledger, error) {
 
 	go l.loop()
 	return l, nil
+}
+
+// PublicKey returns the raw Ed25519 public key bytes.
+func (l *Ledger) PublicKey() ed25519.PublicKey {
+	pub, ok := l.key.Public().(ed25519.PublicKey)
+	if !ok {
+		panic("unexpected key type")
+	}
+	return pub
 }
 
 // Open writes an open record synchronously and returns its signature.
@@ -203,7 +221,7 @@ func (l *Ledger) ComputeHashBlock(data []byte) []byte {
 }
 
 func (l *Ledger) writeHeader(cfg LedgerConfig) error {
-	pub := l.key.Public().(ed25519.PublicKey)
+	pub := l.PublicKey()
 
 	var prefix []byte
 	prefix = append(prefix, 'B', 'L', 'D', 'L', 0x01)
@@ -356,4 +374,47 @@ func (s *StreamingHasher) Finish() (hashBlock []byte, size int64) {
 		hashBlock = h.Sum(hashBlock)
 	}
 	return hashBlock, s.size
+}
+
+// hasherSet runs multiple hash algorithms in parallel via goroutines.
+type hasherSet struct {
+	names   []string
+	writers []*io.PipeWriter
+	results []chan string
+}
+
+func newHasherSet(names []string) *hasherSet {
+	hs := &hasherSet{
+		names:   names,
+		writers: make([]*io.PipeWriter, len(names)),
+		results: make([]chan string, len(names)),
+	}
+	for i, name := range names {
+		pr, pw := io.Pipe()
+		hs.writers[i] = pw
+		hs.results[i] = make(chan string, 1)
+		go func(r io.Reader, n string, ch chan<- string) {
+			h := newHash(n)
+			io.Copy(h, r) //nolint:errcheck
+			ch <- hex.EncodeToString(h.Sum(nil))
+		}(pr, name, hs.results[i])
+	}
+	return hs
+}
+
+func (hs *hasherSet) write(p []byte) {
+	for _, w := range hs.writers {
+		w.Write(p) //nolint:errcheck
+	}
+}
+
+func (hs *hasherSet) sums() map[string]string {
+	for _, w := range hs.writers {
+		w.Close()
+	}
+	result := make(map[string]string, len(hs.names))
+	for i, name := range hs.names {
+		result[name] = <-hs.results[i]
+	}
+	return result
 }
