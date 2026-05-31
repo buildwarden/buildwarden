@@ -185,6 +185,8 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		_, buildErr := d.StartBuild(context.Background(), &driver.BuildRequest{
 			ContextDir:    contextDir,
 			Containerfile: dockerfile,
+			Script:        flagScript,
+			Image:         flagImage,
 			CaptureMode:   capture,
 			OutputDir:     outputDir,
 			Compress:      compress,
