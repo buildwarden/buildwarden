@@ -149,7 +149,8 @@ func (s *ScriptEnv) setup() error {
 		return fmt.Errorf("error creating output dir: %w", err)
 	}
 
-	s.ledgerDir, err = os.MkdirTemp("", "warden-ledger-"+s.buildId+"-")
+	home, _ := os.UserHomeDir()
+	s.ledgerDir, err = os.MkdirTemp(home, ".warden-ledger-"+s.buildId+"-")
 	if err != nil {
 		return fmt.Errorf("error creating ledger temp dir: %w", err)
 	}
@@ -408,20 +409,24 @@ func ensureNetnsImage() error {
 		return nil
 	}
 
-	buildCtx, err := os.MkdirTemp("", "warden-netns-")
+	home, _ := os.UserHomeDir()
+	buildCtx, err := os.MkdirTemp(home, ".warden-netns-")
 	if err != nil {
 		return err
 	}
 	defer os.RemoveAll(buildCtx)
 
 	if err := os.WriteFile(
-		filepath.Join(buildCtx, "Dockerfile"),
+		filepath.Join(buildCtx, "Containerfile"),
 		[]byte(netnsDockerfile), 0644); err != nil {
 		return err
 	}
 
 	_, err = ctrctl.ImageBuild(
-		&ctrctl.ImageBuildOpts{Tag: netnsImageTag},
+		&ctrctl.ImageBuildOpts{
+			Tag:  netnsImageTag,
+			File: filepath.Join(buildCtx, "Containerfile"),
+		},
 		buildCtx, "")
 	return err
 }
@@ -574,7 +579,14 @@ func (s *ScriptEnv) pullImage(image string) error {
 }
 
 func (s *ScriptEnv) buildRelayFromSource() error {
-	relayBin := filepath.Join(os.TempDir(), "warden-relay-"+s.buildId)
+	// Use a temp dir under HOME so finch/Lima VM can access it.
+	tmpBase, err := os.MkdirTemp(s.buildConfig.Context, ".warden-relay-")
+	if err != nil {
+		return fmt.Errorf("error creating relay temp dir: %w", err)
+	}
+	defer os.RemoveAll(tmpBase)
+
+	relayBin := filepath.Join(tmpBase, "relay")
 	cmd := exec.Command("go", "build", "-o", relayBin, "./cmd/relay")
 	cmd.Env = append(os.Environ(), "GOOS=linux", "CGO_ENABLED=0")
 	cmd.Stdout = os.Stderr
@@ -582,22 +594,8 @@ func (s *ScriptEnv) buildRelayFromSource() error {
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf("error cross-compiling relay: %w", err)
 	}
-	defer os.Remove(relayBin)
 
-	buildCtx, err := os.MkdirTemp("", "warden-relay-ctx-")
-	if err != nil {
-		return fmt.Errorf("error creating relay build context: %w", err)
-	}
-	defer os.RemoveAll(buildCtx)
-
-	binData, err := os.ReadFile(relayBin)
-	if err != nil {
-		return fmt.Errorf("error reading relay binary: %w", err)
-	}
-	if err := os.WriteFile(
-		filepath.Join(buildCtx, "relay"), binData, 0755); err != nil {
-		return fmt.Errorf("error writing relay to context: %w", err)
-	}
+	buildCtx := tmpBase
 
 	dockerfile := `FROM alpine:latest
 RUN apk add --no-cache ca-certificates
@@ -606,14 +604,17 @@ EXPOSE 53/udp 80 443
 ENTRYPOINT ["relay"]
 `
 	if err := os.WriteFile(
-		filepath.Join(buildCtx, "Dockerfile"),
+		filepath.Join(buildCtx, "Containerfile"),
 		[]byte(dockerfile), 0644); err != nil {
-		return fmt.Errorf("error writing relay Dockerfile: %w", err)
+		return fmt.Errorf("error writing relay Containerfile: %w", err)
 	}
 
 	s.relayImage = "warden-relay:" + s.buildId
 	_, err = ctrctl.ImageBuild(
-		&ctrctl.ImageBuildOpts{Tag: s.relayImage},
+		&ctrctl.ImageBuildOpts{
+			Tag:  s.relayImage,
+			File: filepath.Join(buildCtx, "Containerfile"),
+		},
 		buildCtx,
 		"",
 	)
