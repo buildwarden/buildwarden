@@ -43,10 +43,13 @@ func (s *ScriptEnv) Build(config *BuildConfig) error {
 			return fmt.Errorf("translating dockerfile: %w", err)
 		}
 
-		scriptPath := filepath.Join(s.wardenDirPath(), "build.sh")
+		// Write build script to context dir — the relay serves it via
+		// HTTP and warden-io initialize fetches it at runtime.
+		scriptPath := filepath.Join(s.buildConfig.Context, "build.sh")
 		if err := os.WriteFile(scriptPath, []byte(result.Script), 0755); err != nil {
 			return fmt.Errorf("writing build script: %w", err)
 		}
+		defer os.Remove(scriptPath)
 
 		log.Build("Starting build container...")
 		if err := s.startBuildContainer(result.Image); err != nil {
@@ -70,7 +73,8 @@ func (s *ScriptEnv) Build(config *BuildConfig) error {
 				Interactive: true,
 			},
 			s.buildContainer,
-			"sh", "/.warden/build.sh",
+			"warden-io", "initialize",
+			"--gateway="+s.subnet.relayIP,
 		)
 		if err == nil {
 			log.Success("Build complete")
