@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"runtime"
 	"strings"
 	"time"
@@ -152,7 +153,19 @@ func execScript(path string) int {
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr
-	cmd.Env = os.Environ()
+
+	// Ensure warden-io is available in PATH for the build script
+	env := os.Environ()
+	if self, err := os.Executable(); err == nil {
+		selfDir := filepath.Dir(self)
+		for i, e := range env {
+			if strings.HasPrefix(e, "PATH=") {
+				env[i] = "PATH=" + selfDir + ":" + e[5:]
+				break
+			}
+		}
+	}
+	cmd.Env = env
 
 	if err := cmd.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "warden-io: exec: %s\n", err)

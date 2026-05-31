@@ -170,6 +170,9 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		if _, err := os.Stat(image); err != nil {
 			return nil, fmt.Errorf("build image: %w", err)
 		}
+		// qemu-img resolves backing file relative to the overlay's dir,
+		// so make it absolute.
+		image, _ = filepath.Abs(image)
 		// Create COW overlay so base image is never modified
 		overlay := filepath.Join(sharedDir, "build-overlay.qcow2")
 		cmd := exec.Command("qemu-img", "create",
