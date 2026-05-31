@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 	"os/exec"
-	"path/filepath"
 	"syscall"
 	"time"
 )
@@ -78,20 +77,11 @@ type buildVMConfig struct {
 }
 
 func (d *Driver) startBuildVM(
-	cfg *buildVMConfig, sharedDir, socketPath string,
+	cfg *buildVMConfig, socketPath string,
 ) (*vmProcess, error) {
 	accel := d.detectAccel()
 	binary := d.qemuBinary(cfg.Arch)
 
-	agentDir := filepath.Join(sharedDir, "agent")
-	signalDir := filepath.Join(sharedDir, "signal")
-
-	agentFS := fmt.Sprintf(
-		"local,path=%s,mount_tag=agent,security_model=none,"+
-			"id=agent0,readonly=on", agentDir)
-	signalFS := fmt.Sprintf(
-		"local,path=%s,mount_tag=signal,security_model=none,"+
-			"id=signal0", signalDir)
 	relayNet := fmt.Sprintf(
 		"stream,id=relaynet,addr.type=unix,addr.path=%s", socketPath)
 
@@ -130,8 +120,6 @@ func (d *Driver) startBuildVM(
 	}
 
 	args = append(args,
-		"-virtfs", agentFS,
-		"-virtfs", signalFS,
 		"-device", "virtio-net-pci,netdev=relaynet",
 		"-netdev", relayNet,
 		"-device", "virtio-rng-pci",

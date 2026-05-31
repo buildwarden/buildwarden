@@ -29,34 +29,6 @@ func safeReadFile(path string) ([]byte, error) {
 	return os.ReadFile(path)
 }
 
-func watcherScript(buildCmd string) string {
-	return fmt.Sprintf(`#!/bin/sh
-SIGNAL_DIR="/signal"
-HEARTBEAT="$SIGNAL_DIR/heartbeat"
-EXIT_CODE="$SIGNAL_DIR/exit_code"
-BUILD_LOG="$SIGNAL_DIR/build.log"
-
-export PATH="/agent:$PATH"
-
-rm -f "$HEARTBEAT" "$EXIT_CODE" "$BUILD_LOG"
-
-%s > "$BUILD_LOG" 2>&1 &
-BUILD_PID=$!
-
-while kill -0 "$BUILD_PID" 2>/dev/null; do
-    date +%%s > "$HEARTBEAT"
-    sleep 2
-done
-
-wait "$BUILD_PID"
-CODE=$?
-
-rm -f "$HEARTBEAT"
-echo "$CODE" > "$EXIT_CODE"
-poweroff -f 2>/dev/null || true
-`, buildCmd)
-}
-
 func waitForBuild(ctx context.Context, signalDir string, isTTY bool) (int, error) {
 	heartbeatPath := filepath.Join(signalDir, "heartbeat")
 	exitCodePath := filepath.Join(signalDir, "exit_code")

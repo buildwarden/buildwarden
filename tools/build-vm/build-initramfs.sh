@@ -23,9 +23,12 @@ echo "Building build-vm initramfs..."
 rm -rf "$ROOTFS_DIR"
 mkdir -p "$ROOTFS_DIR"
 
-for dir in bin sbin dev proc sys etc tmp shared; do
+for dir in bin sbin dev proc sys etc tmp shared etc/ssl/certs; do
     mkdir -p "$ROOTFS_DIR/$dir"
 done
+
+# Empty CA bundle for warden-io to append the relay's ephemeral CA to
+touch "$ROOTFS_DIR/etc/ssl/certs/ca-certificates.crt"
 
 # Busybox (static, from relay cache)
 cp "$RELAY_CACHE/busybox" "$ROOTFS_DIR/bin/busybox"
@@ -60,6 +63,13 @@ for mod in \
     fi
 done
 rm -rf "$RELAY_CACHE/kernel-extract"
+
+# Cross-compile warden-io for the build VM
+MODULE_ROOT="$SCRIPT_DIR/../.."
+echo "  Cross-compiling warden-io (linux/arm64)..."
+GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
+    go build -ldflags="-s -w" -o "$ROOTFS_DIR/bin/warden-io" \
+    "$MODULE_ROOT/cmd/warden-io"
 
 # Init script
 cp "$SCRIPT_DIR/init" "$ROOTFS_DIR/init"

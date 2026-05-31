@@ -1,13 +1,10 @@
 #!/bin/sh
-# Build VM init — boots, configures network, installs trust, runs agent.
+# Build VM init — boots, configures network, runs warden-io initialize.
 #
-# Mounts:
-#   /agent  = read-only 9p (warden-io, watcher.sh, build.sh)
-#   /signal = read-write 9p (heartbeat, exit_code, build.log)
+# warden-io initialize handles: wait for relay, install CA, fetch build
+# script from relay context endpoint, run it with heartbeats, report exit.
 #
 # Network: single interface → relay at 10.0.0.1 (sole gateway)
-# Trust: CA cert fetched from http://artifacts/ca.pem (relay endpoint)
-# Context: fetched via warden-io from http://cwd/ (relay endpoint)
 
 mount -t devtmpfs devtmpfs /dev
 mount -t proc proc /proc
@@ -22,18 +19,6 @@ echo 1 > /proc/sys/net/ipv6/conf/default/disable_ipv6
 for mod in netfs 9pnet 9pnet_virtio 9p failover net_failover virtio_net; do
     [ -f "/lib/modules/${mod}.ko" ] && insmod "/lib/modules/${mod}.ko"
 done
-
-# Mount agent volume (read-only: warden-io, scripts)
-mkdir -p /agent
-if ! mount -t virtiofs agent /agent 2>/dev/null; then
-    mount -t 9p -o trans=virtio,version=9p2000.L,ro agent /agent
-fi
-
-# Mount signal volume (read-write: heartbeat, exit_code)
-mkdir -p /signal
-if ! mount -t virtiofs signal /signal 2>/dev/null; then
-    mount -t 9p -o trans=virtio,version=9p2000.L signal /signal
-fi
 
 # Wait for network interface
 TRIES=0
@@ -54,8 +39,5 @@ fi
 # DNS via relay (resolves cwd/artifacts to relay IP)
 echo "nameserver 10.0.0.1" > /etc/resolv.conf
 
-# Install CA cert from relay
-/agent/warden-io trust
-
 echo "init: ready"
-exec /bin/sh /agent/watcher.sh
+exec /bin/warden-io initialize --gateway=10.0.0.1

@@ -78,7 +78,7 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	}
 	defer os.RemoveAll(sharedDir)
 
-	for _, sub := range []string{"context", "ledger", "agent", "signal"} {
+	for _, sub := range []string{"context", "ledger", "signal"} {
 		if err := os.MkdirAll(filepath.Join(sharedDir, sub), 0755); err != nil {
 			return nil, fmt.Errorf("creating shared/%s: %w", sub, err)
 		}
@@ -181,8 +181,7 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		buildCfg.DiskImage = overlay
 
 		// Generate cloud-init seed ISO
-		seedDir, err := d.cloudInitSeed(
-			sharedDir, req.Script, req.Containerfile)
+		seedDir, err := d.cloudInitSeed(sharedDir)
 		if err != nil {
 			return nil, fmt.Errorf("generating cloud-init: %w", err)
 		}
@@ -200,30 +199,18 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		buildCfg.Initrd = i
 	}
 	d.status("starting build...")
-	buildProc, err := d.startBuildVM(buildCfg, sharedDir, socketPath)
+	buildProc, err := d.startBuildVM(buildCfg, socketPath)
 	if err != nil {
 		return nil, fmt.Errorf("starting build VM: %w", err)
 	}
 	defer buildProc.stop()
 
 	d.status("running...")
-	// Wait for build via heartbeat
+	// Wait for build via heartbeat (relay writes signal/exit_code when
+	// warden-io reports completion via HTTP)
 	signalDir := filepath.Join(sharedDir, "signal")
 	isTTY := req.Stdin != nil
 	exitCode, err := waitForBuild(ctx, signalDir, isTTY)
-
-	// Surface build output
-	buildLog := filepath.Join(signalDir, "build.log")
-	if logData, readErr := safeReadFile(buildLog); readErr == nil && len(logData) > 0 {
-		out := req.Stderr
-		if out == nil {
-			out = os.Stderr
-		}
-		if d.Verbose || exitCode != 0 || err != nil {
-			out.Write(logData) //nolint:errcheck
-		}
-	}
-
 	if err != nil {
 		return nil, fmt.Errorf("build failed: %w", err)
 	}
@@ -334,10 +321,10 @@ func (d *Driver) prepareContext(sharedDir string, req *driver.BuildRequest) erro
 }
 
 func (d *Driver) prepareAgent(sharedDir string, req *driver.BuildRequest) error {
-	agentDir := filepath.Join(sharedDir, "agent")
-
-	// Build script: explicit --script, or translated from Containerfile
-	buildScript := filepath.Join(agentDir, "build.sh")
+	// Place build script into context/ — warden-io initialize fetches it
+	// from the relay's HTTP context endpoint at runtime.
+	ctxDir := filepath.Join(sharedDir, "context")
+	buildScript := filepath.Join(ctxDir, "build.sh")
 	if req.Script != "" {
 		data, err := os.ReadFile(req.Script)
 		if err != nil {
@@ -361,14 +348,17 @@ func (d *Driver) prepareAgent(sharedDir string, req *driver.BuildRequest) error 
 		}
 	}
 
-	// Cross-compile warden-io for the build VM
+	// Cross-compile warden-io for the build VM (placed in agent/ for the
+	// seed ISO to pick up)
+	agentDir := filepath.Join(sharedDir, "agent")
+	if err := os.MkdirAll(agentDir, 0755); err != nil {
+		return fmt.Errorf("creating agent dir: %w", err)
+	}
 	if err := d.prepareWardenIO(agentDir); err != nil {
 		return fmt.Errorf("preparing warden-io: %w", err)
 	}
 
-	watcherContent := watcherScript("/agent/build.sh")
-	watcherPath := filepath.Join(agentDir, "watcher.sh")
-	return os.WriteFile(watcherPath, []byte(watcherContent), 0755)
+	return nil
 }
 
 func (d *Driver) prepareWardenIO(agentDir string) error {

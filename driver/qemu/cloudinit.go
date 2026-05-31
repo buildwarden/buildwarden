@@ -4,17 +4,15 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
-
-	"warden/driver/script"
 )
 
 // cloudInitSeed generates a NoCloud seed directory for QCOW2 builds.
 // The directory is turned into an ISO and attached as a CDROM drive.
 // Contains: meta-data, network-config, user-data, and the warden-io binary.
-func (d *Driver) cloudInitSeed(
-	sharedDir string, buildScript string, containerfile string,
-) (string, error) {
+//
+// The build script is NOT embedded in cloud-init. Instead, warden-io
+// initialize fetches it from the relay's context endpoint at runtime.
+func (d *Driver) cloudInitSeed(sharedDir string) (string, error) {
 	seedDir := filepath.Join(sharedDir, "cidata")
 	if err := os.MkdirAll(seedDir, 0755); err != nil {
 		return "", err
@@ -55,26 +53,8 @@ ethernets:
 		return "", err
 	}
 
-	// Resolve the build commands
-	var buildCommands string
-	if buildScript != "" {
-		data, err := os.ReadFile(buildScript)
-		if err != nil {
-			return "", fmt.Errorf("reading build script: %w", err)
-		}
-		buildCommands = string(data)
-	} else if containerfile != "" {
-		result, err := script.Translate(containerfile)
-		if err != nil {
-			return "", fmt.Errorf("translating containerfile: %w", err)
-		}
-		buildCommands = result.Script
-	} else {
-		buildCommands = "#!/bin/sh\ntrue\n"
-	}
-
-	// user-data: cloud-config that sets up warden-io and runs the build
-	userData := cloudInitUserData(buildCommands)
+	// user-data: cloud-config that delivers warden-io and runs initialize
+	userData := cloudInitUserData()
 	if err := os.WriteFile(
 		filepath.Join(seedDir, "user-data"),
 		[]byte(userData), 0644); err != nil {
@@ -84,54 +64,13 @@ ethernets:
 	return seedDir, nil
 }
 
-func cloudInitUserData(buildScript string) string {
-	// Escape the build script for embedding in YAML
-	indented := indentScript(buildScript, "        ")
-
-	return fmt.Sprintf(`#cloud-config
-write_files:
-  - path: /etc/resolv.conf
-    permissions: '0644'
-    content: |
-        nameserver 10.0.0.1
-  - path: /opt/warden/build.sh
-    permissions: '0755'
-    content: |
-%s
-  - path: /opt/warden/watcher.sh
-    permissions: '0755'
-    content: |
-        #!/bin/sh
-        export PATH="/opt/warden:$PATH"
-        /opt/warden/build.sh &
-        BUILD_PID=$!
-        while kill -0 "$BUILD_PID" 2>/dev/null; do
-            wget -q -O /dev/null http://artifacts/heartbeat 2>/dev/null || true
-            sleep 2
-        done
-        wait "$BUILD_PID"
-        CODE=$?
-        wget -q -O /dev/null "http://artifacts/exit?code=$CODE" 2>/dev/null || true
-
+func cloudInitUserData() string {
+	return `#cloud-config
 runcmd:
   - mkdir -p /opt/warden /mnt/cidata
   - mount LABEL=CIDATA /mnt/cidata || mount /dev/sr0 /mnt/cidata || true
   - cp /mnt/cidata/warden-io /opt/warden/warden-io && chmod +x /opt/warden/warden-io
-  - /opt/warden/warden-io trust
-  - /opt/warden/watcher.sh
+  - /opt/warden/warden-io initialize --gateway=10.0.0.1
   - poweroff -f
-`, indented)
-}
-
-func indentScript(s string, prefix string) string {
-	lines := strings.Split(s, "\n")
-	var sb strings.Builder
-	for _, line := range lines {
-		if line == "" {
-			sb.WriteString("\n")
-		} else {
-			sb.WriteString(prefix + line + "\n")
-		}
-	}
-	return sb.String()
+`
 }
