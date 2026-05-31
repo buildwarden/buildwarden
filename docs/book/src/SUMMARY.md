@@ -18,6 +18,7 @@
 
 # Usage Guide
 
+- [Drivers](./guide/drivers.md)
 - [Configuration](./guide/configuration.md)
 - [CLI Reference](./guide/cli.md)
 - [Output Directory](./guide/output.md)

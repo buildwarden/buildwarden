@@ -17,25 +17,30 @@ Go version: 1.26.3 (managed via mise). Use `mise exec -- go ...` if GOROOT is mi
 
 ## Architecture
 
-BuildWarden orchestrates two containers on an isolated Docker network (100.64.87.0/29):
+BuildWarden has three drivers (container, qemu, vz) sharing a unified runtime model:
 
-- **Relay** — MITM proxy + DNS + ledger writer. Runs `cmd/relay/`.
-- **Build Container** — Unprivileged container from the Dockerfile's FROM image. Network-isolated via iptables applied by a one-shot sidecar (Kubernetes init container pattern). All traffic forced through relay.
+```
+relay starts → warden-io initialize → fetch build.sh → run with heartbeats → report exit
+```
 
-The orchestrator (`cmd/warden/`) runs on the host and manages the lifecycle:
-1. Pulls the FROM image, writes environment identity to the ledger volume
-2. Starts the relay (reads environment files, records as first ledger entry)
-3. Starts the build container, applies iptables via a netns sidecar
-4. Translates the Dockerfile to a shell script, executes it via container exec
+**Drivers:**
+- **Container** (`--driver container`, default) — Relay as sidecar container, iptables isolation via netns sidecar, `warden-io initialize` exec'd in build container.
+- **QEMU** (`--driver qemu`) — Two-VM topology (relay VM + build VM) connected via Unix socket. Topological isolation. Works on macOS/Linux/Windows.
+- **VZ** (`--driver vz`) — macOS/arm64 only. Relay as host process (gvisor netstack, FD ingress). macOS build VM with single socketpair interface.
 
-The Dockerfile is used as a concise build configuration format. Supported directives: FROM, RUN, ENV, WORKDIR, COPY, ARG. Unsupported directives produce clear errors.
+**Key components:**
+- **Relay** (`relay/` library, `cmd/relay/` binary) — MITM proxy, DNS, ledger writer, control plane, heartbeat. Three modes: container (bind ports), vm (PID 1 in Alpine VM), host (FD ingress + SSRF filter).
+- **warden-io** (`cmd/warden-io/`) — Build-environment agent. Subcommands: initialize (full lifecycle), fetch (context files), post (artifacts), trust (CA install).
+- **Orchestrator** (`cmd/warden/`) — CLI, driver selection, Dockerfile translation, extensions, inspect.
 
 ### Package boundaries
 
-- `cmd/warden/` — Host-side binary: CLI, orchestrator (container lifecycle, config, extensions, output), inspect, Dockerfile-to-script translation. Imports `ctrctl`.
-- `cmd/warden-io/` — Container-side binary: fetch context files from relay, post artifacts.
-- `cmd/relay/` — Container-side binary: proxy, ledger writer, DNS, TLS interception, fairness scheduling.
-- `ledger/` — Shared library: ledger wire format types, reader, and verification logic.
+- `cmd/warden/` — Host-side binary: CLI, orchestrator, config, extensions, inspect, image management. Imports `ctrctl`.
+- `cmd/warden-io/` — Build-environment agent: initialize (network, CA, fetch script, exec with heartbeats, report exit), fetch, post, trust. Cross-compiled for linux and darwin.
+- `cmd/relay/` — Thin mode-based main. Selects container/vm/host mode, calls `relay.Start()`.
+- `relay/` — Relay library: DNS, HTTP/HTTPS MITM, ledger writer, control plane, heartbeat, capture, fairness.
+- `driver/` — Driver interface + implementations (container, qemu, vz). Extension system, subnet allocation.
+- `ledger/` — Shared library: ledger wire format types, reader, verification logic.
 
 ### Ledger format
 
@@ -48,11 +53,12 @@ All ledger writes go through a channel to a single goroutine (`Ledger.loop()`). 
 ## Key conventions
 
 - Container runtime is abstracted via `ctrctl.Cli` (set from config/autodetection)
-- Extensions inject CA certs and env vars into the build container via `.warden/` directory
-- The relay and warden-io cross-compile for linux at build time (`GOOS=linux CGO_ENABLED=0`)
+- Extensions inject CA certs and env vars into the build environment via `.warden/` directory
+- The relay and warden-io cross-compile for linux at build time (`GOOS=linux CGO_ENABLED=0`); warden-io also builds for darwin/arm64 (VZ driver)
 - Containerfile is never modified in-place — a copy goes into `.warden/Containerfile`
 - `artifacts` and `cwd` are reserved DNS hostnames that resolve to the relay IP
-- Network isolation: iptables applied by `warden-netns` sidecar sharing the build container's network namespace; build container has no CAP_NET_ADMIN
+- Network isolation: iptables (container), topological via socket pair (qemu, vz)
+- All drivers use `warden-io initialize` as the build-environment entry point
 
 ## Linter settings
 
