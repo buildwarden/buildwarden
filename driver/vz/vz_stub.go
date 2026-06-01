@@ -28,7 +28,7 @@ func latestSupportedIPSW() (string, error) {
 	return "", checkPlatform()
 }
 
-func restoreIPSW(_, _, _ string, _ int, _, _ string) error {
+func restoreIPSW(_, _ string, _ int, _, _, _ string) error {
 	return checkPlatform()
 }
 
