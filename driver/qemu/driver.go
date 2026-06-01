@@ -11,8 +11,8 @@ import (
 	"syscall"
 	"time"
 
-	"warden/driver"
-	"warden/driver/script"
+	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/script"
 )
 
 // Driver implements driver.Driver using QEMU as the virtualization backend.

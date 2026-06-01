@@ -8,10 +8,10 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"warden/driver"
-	"warden/driver/container"
-	"warden/driver/qemu"
-	"warden/driver/vz"
+	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/container"
+	"github.com/buildwarden/buildwarden/driver/qemu"
+	"github.com/buildwarden/buildwarden/driver/vz"
 )
 
 var version = "dev"

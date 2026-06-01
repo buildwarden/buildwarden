@@ -7,7 +7,7 @@ import (
 
 	"github.com/spf13/cobra"
 
-	"warden/driver/vz"
+	"github.com/buildwarden/buildwarden/driver/vz"
 )
 
 var imageCmd = &cobra.Command{

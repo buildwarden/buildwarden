@@ -12,7 +12,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"warden/ledger"
+	"github.com/buildwarden/buildwarden/ledger"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/klauspost/compress/zstd"

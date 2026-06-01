@@ -12,7 +12,7 @@ import (
 	"strings"
 	"time"
 
-	"warden/driver"
+	"github.com/buildwarden/buildwarden/driver"
 )
 
 // Driver implements driver.Driver using Apple's Virtualization.framework

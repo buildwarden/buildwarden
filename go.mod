@@ -1,4 +1,4 @@
-module warden
+module github.com/buildwarden/buildwarden
 
 go 1.25.0
 

@@ -6,7 +6,7 @@ import (
 	"net"
 	"os"
 
-	"warden/relay"
+	"github.com/buildwarden/buildwarden/relay"
 )
 
 // runHostMode starts the relay with a gvisor netstack reading Ethernet

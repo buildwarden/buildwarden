@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"warden/relay"
+	"github.com/buildwarden/buildwarden/relay"
 )
 
 // runVMMode starts the relay inside a dedicated VM (e.g. Alpine relay VM

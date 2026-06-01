@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 
-	"warden/driver"
+	"github.com/buildwarden/buildwarden/driver"
 )
 
 // editContainerfile creates a rewritten copy of the Containerfile

@@ -9,7 +9,7 @@ import (
 
 	"github.com/fxamacker/cbor/v2"
 
-	"warden/ledger"
+	"github.com/buildwarden/buildwarden/ledger"
 )
 
 func TestLedgerHeader(t *testing.T) {

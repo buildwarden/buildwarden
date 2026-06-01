@@ -15,7 +15,7 @@ import (
 
 	"github.com/lesiw/ctrctl"
 
-	"warden/driver"
+	"github.com/buildwarden/buildwarden/driver"
 )
 
 const (

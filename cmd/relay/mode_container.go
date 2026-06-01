@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"os"
 
-	"warden/relay"
+	"github.com/buildwarden/buildwarden/relay"
 )
 
 // runContainerMode starts the relay as a sidecar container on an isolated

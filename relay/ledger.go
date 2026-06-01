@@ -18,7 +18,7 @@ import (
 	"github.com/fxamacker/cbor/v2"
 	"golang.org/x/crypto/blake2b"
 
-	"warden/ledger"
+	"github.com/buildwarden/buildwarden/ledger"
 )
 
 // Re-export record type constants from the ledger reader package.

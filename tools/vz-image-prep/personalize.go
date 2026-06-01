@@ -28,7 +28,7 @@ import (
 	"time"
 
 	"golang.org/x/sys/unix"
-	"warden/driver/vz"
+	"github.com/buildwarden/buildwarden/driver/vz"
 )
 
 func init() {
