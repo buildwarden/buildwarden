@@ -18,16 +18,24 @@ builds:
     ldflags:
       - -s -w -X main.version={{.Version}}
 archives:
-  - id: default
+  - id: linux
     ids: [warden]
+    builds: [warden]
     name_template: "{{ .ProjectName }}_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    format_overrides:
+      - goos: windows
+        format: zip
     files:
-      - src: dist/warden-io-{{ .Os }}-{{ .Arch }}
+      - src: dist/warden-io-linux-{{ .Arch }}
         dst: warden-io
         info:
           mode: 0755
       - src: dist/warden-relay-linux-{{ .Arch }}
         dst: warden-relay
+        info:
+          mode: 0755
+      - src: dist/warden-io-darwin-arm64
+        dst: warden-io-darwin-arm64
         info:
           mode: 0755
 checksum:

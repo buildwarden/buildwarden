@@ -273,6 +273,9 @@ func runShell(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := validateDriver(cfg.Runtime.Driver); err != nil {
+		return err
+	}
 
 	path := ""
 	if len(args) > 0 {
@@ -283,6 +286,9 @@ func runShell(cmd *cobra.Command, args []string) error {
 	if capture == "" {
 		capture = cfg.Build.Capture
 	}
+	if err := validateCapture(capture); err != nil {
+		return err
+	}
 	outputDir := flagOutput
 	if outputDir == "" {
 		outputDir = cfg.Build.OutputDir
@@ -292,8 +298,8 @@ func runShell(cmd *cobra.Command, args []string) error {
 		compress = false
 	}
 
-	// Dispatch to vz driver when requested
-	if cfg.Runtime.Driver == "vz" {
+	switch cfg.Runtime.Driver {
+	case "vz":
 		dockerfile, contextDir, err := ResolvePath(path)
 		if err != nil {
 			return err
@@ -310,6 +316,10 @@ func runShell(cmd *cobra.Command, args []string) error {
 			Stdout:        os.Stdout,
 			Stderr:        os.Stderr,
 		})
+
+	case "qemu":
+		return fmt.Errorf(
+			"warden shell is not supported with --driver qemu")
 	}
 
 	// Default: container driver
