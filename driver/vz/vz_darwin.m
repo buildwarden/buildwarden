@@ -5,6 +5,17 @@
 #include <fcntl.h>
 #include <unistd.h>
 
+// Wrapper that pairs a VZVirtualMachine with its dispatch queue.
+// VZVirtualMachine does not expose the queue passed at init, so we must
+// retain it ourselves for lifecycle calls (start/stop).
+@interface VZVMHandle : NSObject
+@property (nonatomic, strong) VZVirtualMachine *vm;
+@property (nonatomic, strong) dispatch_queue_t queue;
+@end
+
+@implementation VZVMHandle
+@end
+
 static char *copy_error(NSError *error) {
     if (error == nil) return NULL;
     NSMutableString *msg = [NSMutableString stringWithFormat:@"%@ (domain=%@ code=%ld)",
@@ -147,7 +158,10 @@ vz_result vz_create_linux_vm(
     VZVirtualMachine *vm =
         [[VZVirtualMachine alloc] initWithConfiguration:config queue:vmQueue];
 
-    result.handle = (__bridge_retained void *)vm;
+    VZVMHandle *handle = [[VZVMHandle alloc] init];
+    handle.vm = vm;
+    handle.queue = vmQueue;
+    result.handle = (__bridge_retained void *)handle;
     return result;
 }
 
@@ -267,20 +281,23 @@ vz_result vz_create_macos_vm(
     VZVirtualMachine *vm =
         [[VZVirtualMachine alloc] initWithConfiguration:config queue:vmQueue];
 
-    result.handle = (__bridge_retained void *)vm;
+    VZVMHandle *handle = [[VZVMHandle alloc] init];
+    handle.vm = vm;
+    handle.queue = vmQueue;
+    result.handle = (__bridge_retained void *)handle;
     return result;
 }
 
 // --- VM lifecycle ---
 
 char *vz_start_vm(void *vm_handle) {
-    VZVirtualMachine *vm = (__bridge VZVirtualMachine *)vm_handle;
+    VZVMHandle *h = (__bridge VZVMHandle *)vm_handle;
 
     __block NSError *startError = nil;
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
-    dispatch_async(vm.queue, ^{
-        [vm startWithCompletionHandler:^(NSError *error) {
+    dispatch_async(h.queue, ^{
+        [h.vm startWithCompletionHandler:^(NSError *error) {
             startError = error;
             dispatch_semaphore_signal(sem);
         }];
@@ -291,20 +308,20 @@ char *vz_start_vm(void *vm_handle) {
 }
 
 char *vz_stop_vm(void *vm_handle) {
-    VZVirtualMachine *vm = (__bridge VZVirtualMachine *)vm_handle;
+    VZVMHandle *h = (__bridge VZVMHandle *)vm_handle;
 
     __block NSError *stopError = nil;
     dispatch_semaphore_t sem = dispatch_semaphore_create(0);
 
-    dispatch_async(vm.queue, ^{
-        if (![vm canStop]) {
+    dispatch_async(h.queue, ^{
+        if (![h.vm canStop]) {
             stopError = [NSError errorWithDomain:@"VZWarden" code:1
                 userInfo:@{NSLocalizedDescriptionKey:
                     @"VM cannot be stopped in current state"}];
             dispatch_semaphore_signal(sem);
             return;
         }
-        [vm stopWithCompletionHandler:^(NSError *error) {
+        [h.vm stopWithCompletionHandler:^(NSError *error) {
             stopError = error;
             dispatch_semaphore_signal(sem);
         }];
@@ -315,8 +332,8 @@ char *vz_stop_vm(void *vm_handle) {
 }
 
 int vz_vm_state(void *vm_handle) {
-    VZVirtualMachine *vm = (__bridge VZVirtualMachine *)vm_handle;
-    return (int)vm.state;
+    VZVMHandle *h = (__bridge VZVMHandle *)vm_handle;
+    return (int)h.vm.state;
 }
 
 // --- IPSW Restore ---
