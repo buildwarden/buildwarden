@@ -246,6 +246,10 @@ func (b *build) setup() error {
 		return err
 	}
 
+	if err := b.prepareUpstreamCA(); err != nil {
+		return err
+	}
+
 	logInfo(b.req, "Starting relay...")
 	if err := b.startRelayContainer(); err != nil {
 		return err
@@ -334,7 +338,7 @@ func (b *build) startBuildContainer(image string) error {
 }
 
 const netnsDockerfile = `FROM alpine:latest
-RUN apk add --no-cache iptables
+RUN apk add --no-cache iptables iptables-legacy
 ENTRYPOINT ["sh", "-c"]
 `
 
@@ -376,7 +380,13 @@ func (b *build) isolateBuildContainer() error {
 			"building netns image: %w", err)
 	}
 
+	// Flush Docker's embedded DNS legacy iptables rules before applying ours.
+	// Docker on Linux injects legacy-iptables DNAT rules that redirect
+	// 127.0.0.11:53 to its embedded DNS resolver. If these remain, DNS
+	// bypasses the relay (legacy and nftables are separate kernel tables).
 	script := fmt.Sprintf(`set -e
+iptables-legacy -t nat -F DOCKER_OUTPUT 2>/dev/null || true
+iptables-legacy -t nat -F DOCKER_POSTROUTING 2>/dev/null || true
 iptables -t nat -A OUTPUT -p udp --dport 53 `+
 		`-j DNAT --to-destination %[1]s:53
 iptables -t nat -A OUTPUT -p tcp --dport 53 `+
@@ -403,6 +413,18 @@ iptables -A OUTPUT -j DROP
 	if err := cmd.Run(); err != nil {
 		return fmt.Errorf(
 			"network isolation failed: %w", err)
+	}
+
+	// Overwrite resolv.conf to point directly at the relay. Docker on
+	// user-defined networks ignores --dns and always sets nameserver to
+	// 127.0.0.11. Writing the relay IP ensures DNS queries reach the relay
+	// regardless of iptables backend mismatches.
+	_, err := ctrctl.ContainerExec(nil, b.buildContainer,
+		"sh", "-c",
+		fmt.Sprintf("echo 'nameserver %s' > /etc/resolv.conf",
+			b.subnet.RelayIP))
+	if err != nil {
+		return fmt.Errorf("overwriting resolv.conf: %w", err)
 	}
 	return nil
 }
@@ -455,6 +477,74 @@ func (b *build) createNetwork() error {
 	return nil
 }
 
+func (b *build) prepareUpstreamCA() error {
+	if len(b.req.UpstreamCACerts) == 0 {
+		return nil
+	}
+
+	var bundle []byte
+	for _, p := range b.req.UpstreamCACerts {
+		info, err := os.Stat(p)
+		if err != nil {
+			return fmt.Errorf("upstream CA path %q: %w", p, err)
+		}
+		if info.IsDir() {
+			entries, err := os.ReadDir(p)
+			if err != nil {
+				return fmt.Errorf(
+					"reading CA directory %q: %w", p, err)
+			}
+			for _, entry := range entries {
+				if entry.IsDir() {
+					continue
+				}
+				ext := strings.ToLower(
+					filepath.Ext(entry.Name()))
+				if ext != ".pem" && ext != ".crt" &&
+					ext != ".cer" {
+					continue
+				}
+				data, err := os.ReadFile(
+					filepath.Join(p, entry.Name()))
+				if err != nil {
+					return fmt.Errorf(
+						"reading %s/%s: %w",
+						p, entry.Name(), err)
+				}
+				bundle = appendPEM(bundle, data)
+			}
+		} else {
+			data, err := os.ReadFile(p)
+			if err != nil {
+				return fmt.Errorf(
+					"reading CA cert %q: %w", p, err)
+			}
+			bundle = appendPEM(bundle, data)
+		}
+	}
+
+	if len(bundle) == 0 {
+		return nil
+	}
+
+	bundlePath := filepath.Join(
+		b.ledgerDir, "upstream-ca-bundle.pem")
+	if err := os.WriteFile(bundlePath, bundle, 0644); err != nil {
+		return fmt.Errorf("writing upstream CA bundle: %w", err)
+	}
+	logInfo(b.req, fmt.Sprintf(
+		"Prepared upstream CA bundle (%d bytes)", len(bundle)))
+	return nil
+}
+
+func appendPEM(bundle, data []byte) []byte {
+	bundle = append(bundle, data...)
+	if len(data) > 0 && data[len(data)-1] != '\n' {
+		bundle = append(bundle, '\n')
+	}
+	return bundle
+}
+
 func (b *build) startRelayContainer() error {
 	args := append(ctrctl.Cli, "container", "run",
 		"--detach",
@@ -469,6 +559,10 @@ func (b *build) startRelayContainer() error {
 	if capture != "" && capture != "none" {
 		args = append(args,
 			"--env", "CAPTURE_MODE="+capture)
+	}
+	if !b.req.UpstreamSystemCA {
+		args = append(args,
+			"--env", "RELAY_SYSTEM_CA=false")
 	}
 	args = append(args, b.relayImage)
 

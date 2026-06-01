@@ -51,6 +51,11 @@ type BuildRequest struct {
 	Timeout time.Duration
 	// RelayImage specifies the relay container image (container driver only).
 	RelayImage string
+	// UpstreamCACerts are host paths to additional CA certificate files/dirs
+	// trusted by the relay for upstream TLS connections.
+	UpstreamCACerts []string
+	// UpstreamSystemCA controls whether the system cert pool is included.
+	UpstreamSystemCA bool
 	// Env is extra environment variables for the build.
 	Env map[string]string
 	// Stdin/Stdout/Stderr for build output.

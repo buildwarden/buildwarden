@@ -183,6 +183,11 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		return err
 	}
 
+	systemCA := true
+	if cfg.Relay.SystemCABundle != nil {
+		systemCA = *cfg.Relay.SystemCABundle
+	}
+
 	// Dispatch to VM drivers when requested
 	switch cfg.Runtime.Driver {
 	case "vz":
@@ -193,16 +198,18 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		d := vz.New()
 		defer d.Close()
 		_, buildErr := d.StartBuild(context.Background(), &driver.BuildRequest{
-			ContextDir:    contextDir,
-			Containerfile: dockerfile,
-			Script:        flagScript,
-			Image:         flagImage,
-			CaptureMode:   capture,
-			OutputDir:     outputDir,
-			Compress:      compress,
-			Stdin:         os.Stdin,
-			Stdout:        os.Stdout,
-			Stderr:        os.Stderr,
+			ContextDir:       contextDir,
+			Containerfile:    dockerfile,
+			Script:           flagScript,
+			Image:            flagImage,
+			CaptureMode:      capture,
+			OutputDir:        outputDir,
+			Compress:         compress,
+			UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
+			UpstreamSystemCA: systemCA,
+			Stdin:            os.Stdin,
+			Stdout:           os.Stdout,
+			Stderr:           os.Stderr,
 		})
 		return buildErr
 
@@ -223,17 +230,19 @@ func runBuild(cmd *cobra.Command, args []string) error {
 			}
 		}
 		_, buildErr := d.StartBuild(context.Background(), &driver.BuildRequest{
-			ContextDir:    contextDir,
-			Containerfile: dockerfile,
-			Script:        flagScript,
-			Image:         flagImage,
-			CaptureMode:   capture,
-			OutputDir:     outputDir,
-			Compress:      compress,
-			Timeout:       timeout,
-			Stdin:         os.Stdin,
-			Stdout:        os.Stdout,
-			Stderr:        os.Stderr,
+			ContextDir:       contextDir,
+			Containerfile:    dockerfile,
+			Script:           flagScript,
+			Image:            flagImage,
+			CaptureMode:      capture,
+			OutputDir:        outputDir,
+			Compress:         compress,
+			Timeout:          timeout,
+			UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
+			UpstreamSystemCA: systemCA,
+			Stdin:            os.Stdin,
+			Stdout:           os.Stdout,
+			Stderr:           os.Stderr,
 		})
 		return buildErr
 	}
@@ -255,15 +264,17 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	}
 	defer d.Close()
 	_, buildErr := d.StartBuild(context.Background(), &driver.BuildRequest{
-		ContextDir:    contextDir,
-		Containerfile: dockerfile,
-		CaptureMode:   capture,
-		OutputDir:     outputDir,
-		Compress:      compress,
-		RelayImage:    cfg.Runtime.RelayImage,
-		Stdin:         os.Stdin,
-		Stdout:        os.Stdout,
-		Stderr:        os.Stderr,
+		ContextDir:       contextDir,
+		Containerfile:    dockerfile,
+		CaptureMode:      capture,
+		OutputDir:        outputDir,
+		Compress:         compress,
+		RelayImage:       cfg.Runtime.RelayImage,
+		UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
+		UpstreamSystemCA: systemCA,
+		Stdin:            os.Stdin,
+		Stdout:           os.Stdout,
+		Stderr:           os.Stderr,
 	})
 	return buildErr
 }
@@ -298,6 +309,11 @@ func runShell(cmd *cobra.Command, args []string) error {
 		compress = false
 	}
 
+	systemCA := true
+	if cfg.Relay.SystemCABundle != nil {
+		systemCA = *cfg.Relay.SystemCABundle
+	}
+
 	switch cfg.Runtime.Driver {
 	case "vz":
 		dockerfile, contextDir, err := ResolvePath(path)
@@ -307,14 +323,16 @@ func runShell(cmd *cobra.Command, args []string) error {
 		d := vz.New()
 		defer d.Close()
 		return d.Exec(context.Background(), &driver.BuildRequest{
-			ContextDir:    contextDir,
-			Containerfile: dockerfile,
-			CaptureMode:   capture,
-			OutputDir:     outputDir,
-			Compress:      compress,
-			Stdin:         os.Stdin,
-			Stdout:        os.Stdout,
-			Stderr:        os.Stderr,
+			ContextDir:       contextDir,
+			Containerfile:    dockerfile,
+			CaptureMode:      capture,
+			OutputDir:        outputDir,
+			Compress:         compress,
+			UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
+			UpstreamSystemCA: systemCA,
+			Stdin:            os.Stdin,
+			Stdout:           os.Stdout,
+			Stderr:           os.Stderr,
 		})
 
 	case "qemu":
@@ -339,15 +357,17 @@ func runShell(cmd *cobra.Command, args []string) error {
 	}
 	defer d.Close()
 	return d.Exec(context.Background(), &driver.BuildRequest{
-		ContextDir:    contextDir,
-		Containerfile: dockerfile,
-		CaptureMode:   capture,
-		OutputDir:     outputDir,
-		Compress:      compress,
-		RelayImage:    cfg.Runtime.RelayImage,
-		Stdin:         os.Stdin,
-		Stdout:        os.Stdout,
-		Stderr:        os.Stderr,
+		ContextDir:       contextDir,
+		Containerfile:    dockerfile,
+		CaptureMode:      capture,
+		OutputDir:        outputDir,
+		Compress:         compress,
+		RelayImage:       cfg.Runtime.RelayImage,
+		UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
+		UpstreamSystemCA: systemCA,
+		Stdin:            os.Stdin,
+		Stdout:           os.Stdout,
+		Stderr:           os.Stderr,
 	})
 }
 

@@ -44,6 +44,14 @@ type Config struct {
 	// Prevents the upstream transport from connecting back to ourselves.
 	BlockedSelfIP net.IP
 
+	// UpstreamCACerts are additional PEM-encoded CA certificates trusted
+	// when making outbound TLS connections to upstream servers.
+	UpstreamCACerts [][]byte
+
+	// UpstreamSystemCA controls whether the system certificate pool is
+	// included when UpstreamCACerts are configured. Defaults to true.
+	UpstreamSystemCA *bool
+
 	// Injected listeners. When non-nil, the relay uses these instead of
 	// creating its own. This enables relay-on-host mode for VM drivers.
 	DNSPacketConn net.PacketConn

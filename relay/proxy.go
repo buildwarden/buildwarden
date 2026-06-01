@@ -20,8 +20,29 @@ import (
 )
 
 func (r *Relay) buildTransport() {
+	tlsCfg := &tls.Config{}
+
+	if len(r.cfg.UpstreamCACerts) > 0 {
+		includeSystem := r.cfg.UpstreamSystemCA == nil || *r.cfg.UpstreamSystemCA
+		var pool *x509.CertPool
+		if includeSystem {
+			var err error
+			pool, err = x509.SystemCertPool()
+			if err != nil {
+				pool = x509.NewCertPool()
+			}
+		} else {
+			pool = x509.NewCertPool()
+		}
+		for _, pem := range r.cfg.UpstreamCACerts {
+			pool.AppendCertsFromPEM(pem)
+		}
+		tlsCfg.RootCAs = pool
+		log.Printf("relay: loaded %d upstream CA bundle(s)", len(r.cfg.UpstreamCACerts))
+	}
+
 	t := &http.Transport{
-		TLSClientConfig:     &tls.Config{},
+		TLSClientConfig:     tlsCfg,
 		MaxIdleConnsPerHost: 16,
 		IdleConnTimeout:     90 * time.Second,
 	}

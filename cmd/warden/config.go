@@ -72,6 +72,10 @@ func LoadConfig() (*Config, error) {
 	if img := os.Getenv("WARDEN_IMAGE"); img != "" {
 		cfg.Runtime.RelayImage = img
 	}
+	if caCerts := os.Getenv("WARDEN_UPSTREAM_CA_CERTS"); caCerts != "" {
+		paths := strings.Split(caCerts, ":")
+		cfg.Relay.UpstreamCACerts = append(cfg.Relay.UpstreamCACerts, paths...)
+	}
 	if os.Getenv("NO_COLOR") != "" {
 		cfg.Output.Color = "never"
 	}

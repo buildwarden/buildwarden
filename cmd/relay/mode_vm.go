@@ -11,12 +11,19 @@ import (
 // for QEMU driver). Binds directly to interfaces. No SSRF filter needed
 // because the hypervisor provides isolation.
 func runVMMode(outDir, ctxDir, sigDir, captureMode string) int {
-	r, err := relay.Start(relay.Config{
+	cfg := relay.Config{
 		LedgerDir:   outDir,
 		ContextDir:  ctxDir,
 		CaptureMode: captureMode,
 		SignalDir:   sigDir,
-	})
+	}
+
+	if err := loadUpstreamCA(outDir, &cfg); err != nil {
+		fmt.Fprintf(os.Stderr, "error configuring upstream TLS: %v\n", err)
+		return 1
+	}
+
+	r, err := relay.Start(cfg)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error starting relay: %v\n", err)
 		return 1
