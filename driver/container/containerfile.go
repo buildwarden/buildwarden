@@ -114,21 +114,35 @@ func rewriteCopy(
 	dest := positional[len(positional)-1]
 	sources := positional[:len(positional)-1]
 
-	var files []string
+	var files []fetchFile
 	for _, src := range sources {
 		expanded, err := expandContextPath(
 			src, contextDir)
 		if err != nil {
 			return "", err
 		}
-		files = append(files, expanded...)
+		srcClean := filepath.Clean(src)
+		srcDir := isDir(filepath.Join(contextDir, src))
+		for _, f := range expanded {
+			rel := f
+			if srcDir {
+				// Strip source prefix so files land correctly
+				// under dest. E.g., src="cmd", f="cmd/relay/main.go"
+				// → rel="relay/main.go"
+				rel = strings.TrimPrefix(f, srcClean+"/")
+			}
+			files = append(files, fetchFile{
+				contextPath: f,
+				destPath:    rel,
+			})
+		}
 	}
 
 	if len(files) == 0 {
 		return "# (empty COPY: no matching files)", nil
 	}
 
-	run := buildFetchRun(files, dest)
+	run := buildFetchRunPairs(files, dest)
 	if chown != "" {
 		run += fmt.Sprintf(
 			" && \\\n    chown -R %s %s", chown, dest)
@@ -138,6 +152,11 @@ func rewriteCopy(
 			" && \\\n    chmod -R %s %s", chmod, dest)
 	}
 	return run, nil
+}
+
+func isDir(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && info.IsDir()
 }
 
 func parseCopyFlags(
@@ -186,6 +205,41 @@ func buildFetchRun(files []string, dest string) string {
 			"'mkdir -p \"%s$(dirname \"{}\")\" && "+
 			"warden-io fetch \"{}\" -o \"%s{}\"'",
 		d, d)
+	return sb.String()
+}
+
+type fetchFile struct {
+	contextPath string
+	destPath    string
+}
+
+func buildFetchRunPairs(files []fetchFile, dest string) string {
+	if len(files) == 1 && !strings.HasSuffix(dest, "/") {
+		f := files[0]
+		dir := dest[:strings.LastIndex(dest, "/")+1]
+		if dir != "" {
+			return fmt.Sprintf(
+				"RUN mkdir -p %s && "+
+					"warden-io fetch %s -o %s",
+				dir, f.contextPath, dest)
+		}
+		return fmt.Sprintf(
+			"RUN warden-io fetch %s -o %s",
+			f.contextPath, dest)
+	}
+
+	d := dest
+	if !strings.HasSuffix(d, "/") {
+		d += "/"
+	}
+	var sb strings.Builder
+	fmt.Fprintf(&sb, "RUN mkdir -p %s", dest)
+	for _, f := range files {
+		outPath := d + f.destPath
+		fmt.Fprintf(&sb,
+			" && \\\n    mkdir -p \"%s\" && warden-io fetch \"%s\" -o \"%s\"",
+			filepath.Dir(outPath), f.contextPath, outPath)
+	}
 	return sb.String()
 }
 
