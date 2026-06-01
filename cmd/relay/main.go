@@ -1,12 +1,12 @@
 package main
 
 import (
+	"flag"
 	"fmt"
 	"net"
 	"os"
-	"path/filepath"
 
-	"github.com/fxamacker/cbor/v2"
+	"golang.org/x/sys/unix"
 )
 
 func main() {
@@ -14,144 +14,111 @@ func main() {
 }
 
 func run() int {
+	mode := flag.String("mode", "",
+		"Relay mode: 'host', 'vm', or 'container' (auto-detected if empty)")
+	fdNum := flag.Int("fd", 3,
+		"File descriptor number for host mode fd ingress")
+	subnet := flag.String("subnet", "10.100.0.0/30",
+		"Subnet for host mode (gateway=.1, guest=.2)")
+	flag.Parse()
+
+	if *mode == "" {
+		*mode = detectMode(*fdNum)
+	}
+
 	outDir := os.Getenv("LEDGER_DIR")
 	if outDir == "" {
 		outDir = "/ledger"
-	}
-
-	if err := os.MkdirAll(filepath.Join(outDir, "payloads"), 0755); err != nil {
-		fmt.Fprintf(os.Stderr, "error creating ledger directory: %v\n", err)
-		return 1
-	}
-
-	if mode := os.Getenv("CAPTURE_MODE"); mode != "" && mode != "none" {
-		if err := os.MkdirAll(filepath.Join(outDir, "captures"), 0755); err != nil {
-			fmt.Fprintf(os.Stderr, "error creating captures directory: %v\n", err)
-			return 1
-		}
-		SetCaptureMode(mode)
 	}
 
 	ctxDir := os.Getenv("CONTEXT_DIR")
 	if ctxDir == "" {
 		ctxDir = "/context"
 	}
-	SetContextDir(ctxDir)
 
-	ledgerFile, err := os.Create(filepath.Join(outDir, "ledger"))
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error creating ledger file: %v\n", err)
+	sigDir := os.Getenv("SIGNAL_DIR")
+	captureMode := os.Getenv("CAPTURE_MODE")
+
+	switch *mode {
+	case "host":
+		return runHostMode(*fdNum, *subnet, outDir, ctxDir, sigDir, captureMode)
+	case "vm":
+		return runVMMode(outDir, ctxDir, sigDir, captureMode)
+	case "container":
+		return runContainerMode(outDir, ctxDir, captureMode)
+	default:
+		fmt.Fprintf(os.Stderr, "unknown mode: %s\n", *mode)
 		return 1
 	}
-	defer ledgerFile.Close()
-
-	l, err := NewLedger(LedgerConfig{
-		Writer:      ledgerFile,
-		Environment: map[string]any{"type": "container"},
-	})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "error initializing ledger: %v\n", err)
-		return 1
-	}
-	SetLedger(l)
-	SetOutDir(outDir)
-
-	// Record build environment as the first ledger entry (if provided).
-	// The orchestrator writes these files before starting the relay.
-	if err := recordEnvironmentFromVolume(outDir, l); err != nil {
-		fmt.Fprintf(os.Stderr, "error recording environment: %v\n", err)
-		return 1
-	}
-
-	if err := configureUpstreamTLS(outDir); err != nil {
-		fmt.Fprintf(os.Stderr, "error configuring upstream TLS: %v\n", err)
-		return 1
-	}
-
-	if err := DetectSelfIP(); err != nil {
-		fmt.Fprintf(os.Stderr, "error detecting relay IP: %v\n", err)
-		return 1
-	}
-	DetectUpstreamDNS()
-
-	// Generate ephemeral CA for this build.
-	if err := GenerateCA(); err != nil {
-		fmt.Fprintf(os.Stderr, "error generating CA: %v\n", err)
-		return 1
-	}
-
-	// Write CA cert for the orchestrator to inject into build container.
-	caPath := filepath.Join(outDir, "ca.cert.pem")
-	if err := os.WriteFile(caPath, CA_CERT, 0644); err != nil {
-		fmt.Fprintf(os.Stderr, "error writing CA cert: %v\n", err)
-		return 1
-	}
-
-	listenIP := net.IPv4zero
-	errs := make(chan error, 3)
-
-	go func() { errs <- RunDns(net.TCPAddr{IP: listenIP, Port: 53}) }()
-	go func() { errs <- RunHttp(net.TCPAddr{IP: listenIP, Port: 80}) }()
-	go func() { errs <- RunHttps(net.TCPAddr{IP: listenIP, Port: 443}) }()
-
-	fmt.Fprintf(os.Stderr, "relay: listening on :53/udp :80/tcp :443/tcp\n")
-
-	// Block until any listener fails.
-	if err := <-errs; err != nil {
-		fmt.Fprintf(os.Stderr, "relay error: %v\n", err)
-		l.Finish()
-		return 1
-	}
-
-	return 0
 }
 
-// recordEnvironmentFromVolume reads the environment payload and metadata
-// from the ledger volume and writes it as the first ledger entry. This
-// MUST be the first record after the header — the relay writes it during
-// startup before accepting any network traffic.
-//
-// Expected files:
-//   - <ledgerDir>/environment/payload   (raw bytes to hash — e.g. OCI manifest)
-//   - <ledgerDir>/environment/metadata  (CBOR-encoded metadata)
-//
-// If the environment directory does not exist, this is a no-op (the
-// environment record is optional for backwards compatibility).
-func recordEnvironmentFromVolume(ledgerDir string, l *Ledger) error {
-	envDir := filepath.Join(ledgerDir, "environment")
-	if _, err := os.Stat(envDir); os.IsNotExist(err) {
-		return nil
+// detectMode auto-detects the relay operating mode.
+func detectMode(fdNum int) string {
+	// Check if inherited FD exists and is an AF_UNIX socket → host mode
+	if isUnixSocket(fdNum) {
+		return "host"
 	}
 
-	payload, err := os.ReadFile(filepath.Join(envDir, "payload"))
+	// PID 1 + /shared/relay.env → VM mode (relay is init in its own VM)
+	if os.Getpid() == 1 {
+		if _, err := os.Stat("/shared/relay.env"); err == nil {
+			return "vm"
+		}
+	}
+
+	// Default: container mode
+	return "container"
+}
+
+func isUnixSocket(fd int) bool {
+	_, err := unix.GetsockoptInt(fd, unix.SOL_SOCKET, unix.SO_TYPE)
 	if err != nil {
-		return fmt.Errorf("reading environment payload: %w", err)
+		return false
 	}
-	if len(payload) == 0 {
-		return fmt.Errorf("environment payload is empty")
-	}
-
-	metaBytes, err := os.ReadFile(filepath.Join(envDir, "metadata"))
+	var sa unix.Sockaddr
+	sa, err = unix.Getsockname(fd)
 	if err != nil {
-		return fmt.Errorf("reading environment metadata: %w", err)
+		// If Getsockname fails but SO_TYPE succeeded, it's still a socket.
+		// On macOS socketpairs, Getsockname may return an empty address.
+		return true
+	}
+	_, isUnix := sa.(*unix.SockaddrUnix)
+	return isUnix
+}
+
+// parseSubnet parses a CIDR and returns gateway (.1) and guest (.2) IPs.
+func parseSubnet(cidr string) (gw, guest net.IP, mask net.IPMask, err error) {
+	ip, ipNet, err := net.ParseCIDR(cidr)
+	if err != nil {
+		return nil, nil, nil, err
 	}
 
-	// Validate that metadata is valid CBOR.
-	var meta map[string]any
-	if err := cbor.Unmarshal(metaBytes, &meta); err != nil {
-		return fmt.Errorf("invalid environment metadata CBOR: %w", err)
+	_, bits := ipNet.Mask.Size()
+	if bits != 32 {
+		return nil, nil, nil, fmt.Errorf("only IPv4 supported")
 	}
 
-	// Write as the first record: open + close with environment schema.
-	openMeta, _ := cbor.Marshal(map[string]any{
-		"type": "environment",
-	})
-	openSig := l.Open(schemaEnvCtr, openMeta)
+	base := ip.Mask(ipNet.Mask).To4()
+	if base == nil {
+		return nil, nil, nil, fmt.Errorf("invalid IPv4 address")
+	}
 
-	hashBlock := l.ComputeHashBlock(payload)
-	l.Close(openSig, -int64(len(payload)), hashBlock, schemaEnvCtr, metaBytes)
+	g := make(net.IP, 4)
+	copy(g, base)
+	addToIP(g, 1)
 
-	fmt.Fprintf(os.Stderr, "relay: environment recorded (%d bytes)\n",
-		len(payload))
-	return nil
+	h := make(net.IP, 4)
+	copy(h, base)
+	addToIP(h, 2)
+
+	return g, h, ipNet.Mask, nil
+}
+
+func addToIP(ip net.IP, n int) {
+	v := int(ip[0])<<24 | int(ip[1])<<16 | int(ip[2])<<8 | int(ip[3])
+	v += n
+	ip[0] = byte(v >> 24)
+	ip[1] = byte(v >> 16)
+	ip[2] = byte(v >> 8)
+	ip[3] = byte(v)
 }

@@ -12,7 +12,8 @@ CLI flags override everything.
 ```toml
 [runtime]
 cli = "finch"              # Container runtime: finch, docker, podman
-relay_image = ""           # Relay image override
+driver = ""                # Build driver: container, qemu, vz (default: auto)
+relay_image = ""           # Relay image override (container driver)
                            #   "" = pull ghcr.io/buildwarden/relay:latest (release builds)
                            #        or build from source (dev builds)
                            #   "dev" = always build from source
@@ -29,6 +30,10 @@ capture = ""               # Payload capture mode:
                            #   "bodies" = save request/response bodies
                            #   "all" = save both
 
+[relay]
+upstream_ca_certs = []     # Paths to additional CA cert bundles for upstream
+system_ca_bundle = true    # Include host system CA bundle in relay trust store
+
 [output]
 color = "auto"             # Color mode: auto, always, never
 verbose = false            # Verbose output (shows container runtime commands)
@@ -38,6 +43,8 @@ verbose = false            # Verbose output (shows container runtime commands)
 
 | Variable | Overrides | Description |
 |----------|-----------|-------------|
+| `WARDEN_DRIVER` | `runtime.driver` | Override driver selection |
+| `WARDEN_IMAGE` | — | Base image path for VM drivers |
 | `WARDEN_CTR_CLI` | `runtime.cli` | Container runtime binary name |
 | `NO_COLOR` | `output.color` | Disable colored output (any value) |
 | `WARDEN_VERBOSE` | `output.verbose` | Enable verbose mode (any value) |
@@ -46,16 +53,28 @@ verbose = false            # Verbose output (shows container runtime commands)
 
 | Flag | Scope | Description |
 |------|-------|-------------|
+| `--driver` | Global | Build driver |
 | `--runtime` | Global | Container runtime |
 | `--color` | Global | Color mode |
 | `-v, --verbose` | Global | Verbose output |
 | `-o, --output` | build/shell | Output directory |
+| `--image` | build | Base disk image for VM drivers |
+| `--script` | build | Build script (VM drivers) |
+| `--timeout` | build | Maximum build duration |
 | `--capture` | build/shell | Payload capture mode |
 | `--no-compress` | build/shell | Disable compression |
 
 ## Runtime Autodetection
 
 If no runtime is configured, BuildWarden probes in order: **finch** → docker → podman. The first one that responds to `<runtime> info` within 3 seconds wins.
+
+## Driver Selection
+
+When `driver` is empty (the default), the **container** driver is used. Use `--driver` or `WARDEN_DRIVER` to select a VM driver:
+
+- `container` — Unprivileged container with iptables isolation (default)
+- `qemu` — Two-VM topology, cross-platform, requires `qemu-system-*`
+- `vz` — macOS/arm64 only, uses Virtualization.framework
 
 ## Relay Image
 

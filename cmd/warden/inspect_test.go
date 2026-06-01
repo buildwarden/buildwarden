@@ -11,7 +11,7 @@ import (
 	"strings"
 	"testing"
 
-	"warden/ledger"
+	"github.com/buildwarden/buildwarden/ledger"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/klauspost/compress/zstd"

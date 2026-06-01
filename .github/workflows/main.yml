@@ -2,9 +2,9 @@ name: ci
 
 on:
   push:
-    branches: [main, proof-of-concept]
+    branches: [main]
   pull_request:
-    branches: [main, proof-of-concept]
+    branches: [main]
 
 permissions:
   contents: read
@@ -29,6 +29,16 @@ jobs:
           go-version: stable
       - run: make test
 
+  tidy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: go mod tidy
+      - run: git diff --exit-code go.mod go.sum
+
   build:
     runs-on: ${{ matrix.os }}
     strategy:
@@ -40,4 +50,4 @@ jobs:
         with:
           go-version: stable
       - run: make build
-      - run: ./warden --help
+      - run: ./dist/warden --help

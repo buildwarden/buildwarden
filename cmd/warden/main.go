@@ -1,21 +1,33 @@
 package main
 
 import (
+	"context"
+	"fmt"
 	"os"
+	"os/signal"
+	"time"
 
-	"github.com/lesiw/ctrctl"
 	"github.com/spf13/cobra"
+
+	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/container"
+	"github.com/buildwarden/buildwarden/driver/qemu"
+	"github.com/buildwarden/buildwarden/driver/vz"
 )
 
 var version = "dev"
 
 var (
 	flagRuntime    string
+	flagDriver     string
 	flagVerbose    bool
 	flagColor      string
 	flagCapture    string
 	flagOutput     string
 	flagNoCompress bool
+	flagScript     string
+	flagImage      string
+	flagTimeout    string
 )
 
 var rootCmd = &cobra.Command{
@@ -60,6 +72,8 @@ All traffic is recorded to the ledger just as in a normal build.`,
 func init() {
 	rootCmd.PersistentFlags().StringVar(&flagRuntime, "runtime", "",
 		"container runtime (finch, docker, podman)")
+	rootCmd.PersistentFlags().StringVar(&flagDriver, "driver", "",
+		"orchestration driver (container, qemu, vz)")
 	rootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false,
 		"verbose output")
 	rootCmd.PersistentFlags().StringVar(&flagColor, "color", "",
@@ -71,6 +85,12 @@ func init() {
 		"output directory for build results (default: warden-output)")
 	buildCmd.Flags().BoolVar(&flagNoCompress, "no-compress", false,
 		"disable zstd compression of ledger and payloads")
+	buildCmd.Flags().StringVar(&flagScript, "script", "",
+		"build script to run (vm drivers)")
+	buildCmd.Flags().StringVar(&flagImage, "image", "",
+		"disk image for build VM (qemu driver)")
+	buildCmd.Flags().StringVar(&flagTimeout, "timeout", "",
+		"maximum build duration (e.g., 10m, 1h)")
 	shellCmd.Flags().StringVar(&flagCapture, "capture", "",
 		"capture payloads to disk (none, headers, bodies, all)")
 	shellCmd.Flags().StringVarP(&flagOutput, "output", "o", "",
@@ -99,6 +119,9 @@ func resolveConfig() (*Config, error) {
 	if flagRuntime != "" {
 		cfg.Runtime.CLI = flagRuntime
 	}
+	if flagDriver != "" {
+		cfg.Runtime.Driver = flagDriver
+	}
 	if flagVerbose {
 		cfg.Output.Verbose = true
 	}
@@ -109,31 +132,41 @@ func resolveConfig() (*Config, error) {
 	return cfg, nil
 }
 
-func setupRuntime(cfg *Config) error {
+func resolveRuntime(cfg *Config) (string, error) {
 	setColorMode(cfg.Output.Color)
 
 	runtime := cfg.Runtime.CLI
 	if runtime == "" {
 		detected, err := DetectRuntime()
 		if err != nil {
-			return err
+			return "", err
 		}
 		runtime = detected
 	}
-	ctrctl.Cli = []string{runtime}
-	if cfg.Output.Verbose {
-		ctrctl.Verbose = true
-	}
-	return nil
+	return runtime, nil
 }
 
-func runBuild(cmd *cobra.Command, args []string) error {
+func defaultExtensions() []driver.Extension {
+	return driver.DefaultExtensions()
+}
+
+// buildParams holds resolved build parameters from config and flags.
+type buildParams struct {
+	cfg       *Config
+	path      string
+	capture   string
+	outputDir string
+	compress  bool
+	systemCA  bool
+}
+
+func resolveBuildParams(args []string) (*buildParams, error) {
 	cfg, err := resolveConfig()
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if err := setupRuntime(cfg); err != nil {
-		return err
+	if err := validateDriver(cfg.Runtime.Driver); err != nil {
+		return nil, err
 	}
 
 	path := ""
@@ -141,14 +174,12 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		path = args[0]
 	}
 
-	dockerfile, contextDir, err := ResolvePath(path)
-	if err != nil {
-		return err
-	}
-
 	capture := flagCapture
 	if capture == "" {
 		capture = cfg.Build.Capture
+	}
+	if err := validateCapture(capture); err != nil {
+		return nil, err
 	}
 	outputDir := flagOutput
 	if outputDir == "" {
@@ -159,23 +190,141 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		compress = false
 	}
 
+	if err := validateFlagsForDriver(cfg.Runtime.Driver); err != nil {
+		return nil, err
+	}
+
 	systemCA := true
 	if cfg.Relay.SystemCABundle != nil {
 		systemCA = *cfg.Relay.SystemCABundle
 	}
 
-	env := NewScriptEnv()
-	config := &BuildConfig{
-		Context:         contextDir,
-		Containerfile:   dockerfile,
-		Capture:         capture,
-		OutputDir:       outputDir,
-		Compress:        compress,
-		RelayImage:      cfg.Runtime.RelayImage,
-		UpstreamCACerts: cfg.Relay.UpstreamCACerts,
-		SystemCABundle:  systemCA,
+	return &buildParams{
+		cfg:       cfg,
+		path:      path,
+		capture:   capture,
+		outputDir: outputDir,
+		compress:  compress,
+		systemCA:  systemCA,
+	}, nil
+}
+
+func buildContext() (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt)
+	go func() {
+		select {
+		case <-sig:
+			fmt.Fprintf(os.Stderr,
+				"\nInterrupted, cleaning up... "+
+					"(press ctrl+c again to force)\n")
+			cancel()
+			signal.Stop(sig)
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, cancel
+}
+
+func runBuild(cmd *cobra.Command, args []string) error {
+	bp, err := resolveBuildParams(args)
+	if err != nil {
+		return err
 	}
-	return env.Build(config)
+	cfg := bp.cfg
+
+	ctx, stop := buildContext()
+	defer stop()
+
+	// Dispatch to VM drivers when requested
+	switch cfg.Runtime.Driver {
+	case "vz":
+		dockerfile, contextDir, err := ResolvePath(bp.path)
+		if err != nil {
+			return err
+		}
+		d := vz.New()
+		defer d.Close()
+		_, buildErr := d.StartBuild(ctx, &driver.BuildRequest{
+			ContextDir:       contextDir,
+			Containerfile:    dockerfile,
+			Script:           flagScript,
+			Image:            flagImage,
+			CaptureMode:      bp.capture,
+			OutputDir:        bp.outputDir,
+			Compress:         bp.compress,
+			UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
+			UpstreamSystemCA: bp.systemCA,
+			Stdin:            os.Stdin,
+			Stdout:           os.Stdout,
+			Stderr:           os.Stderr,
+		})
+		return buildErr
+
+	case "qemu":
+		dockerfile, contextDir, err := ResolvePath(bp.path)
+		if err != nil {
+			return err
+		}
+		d := qemu.New()
+		d.Verbose = cfg.Output.Verbose
+		defer d.Close()
+		var timeout time.Duration
+		if flagTimeout != "" {
+			timeout, err = time.ParseDuration(flagTimeout)
+			if err != nil {
+				return fmt.Errorf("invalid --timeout: %w", err)
+			}
+		}
+		_, buildErr := d.StartBuild(ctx, &driver.BuildRequest{
+			ContextDir:       contextDir,
+			Containerfile:    dockerfile,
+			Script:           flagScript,
+			Image:            flagImage,
+			CaptureMode:      bp.capture,
+			OutputDir:        bp.outputDir,
+			Compress:         bp.compress,
+			Timeout:          timeout,
+			UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
+			UpstreamSystemCA: bp.systemCA,
+			Stdin:            os.Stdin,
+			Stdout:           os.Stdout,
+			Stderr:           os.Stderr,
+		})
+		return buildErr
+	}
+
+	// Default: container driver
+	runtime, err := resolveRuntime(cfg)
+	if err != nil {
+		return err
+	}
+	dockerfile, contextDir, err := ResolvePath(bp.path)
+	if err != nil {
+		return err
+	}
+	d := &container.Driver{
+		Runtime:    runtime,
+		Verbose:    cfg.Output.Verbose,
+		Version:    version,
+		Extensions: defaultExtensions(),
+	}
+	defer d.Close()
+	_, buildErr := d.StartBuild(ctx, &driver.BuildRequest{
+		ContextDir:       contextDir,
+		Containerfile:    dockerfile,
+		CaptureMode:      bp.capture,
+		OutputDir:        bp.outputDir,
+		Compress:         bp.compress,
+		RelayImage:       cfg.Runtime.RelayImage,
+		UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
+		UpstreamSystemCA: bp.systemCA,
+		Stdin:            os.Stdin,
+		Stdout:           os.Stdout,
+		Stderr:           os.Stderr,
+	})
+	return buildErr
 }
 
 func runShell(cmd *cobra.Command, args []string) error {
@@ -183,7 +332,7 @@ func runShell(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := setupRuntime(cfg); err != nil {
+	if err := validateDriver(cfg.Runtime.Driver); err != nil {
 		return err
 	}
 
@@ -192,14 +341,12 @@ func runShell(cmd *cobra.Command, args []string) error {
 		path = args[0]
 	}
 
-	dockerfile, contextDir, err := ResolvePath(path)
-	if err != nil {
-		return err
-	}
-
 	capture := flagCapture
 	if capture == "" {
 		capture = cfg.Build.Capture
+	}
+	if err := validateCapture(capture); err != nil {
+		return err
 	}
 	outputDir := flagOutput
 	if outputDir == "" {
@@ -215,17 +362,63 @@ func runShell(cmd *cobra.Command, args []string) error {
 		systemCA = *cfg.Relay.SystemCABundle
 	}
 
-	env := NewScriptEnv()
-	config := &BuildConfig{
-		Context:         contextDir,
-		Containerfile:   dockerfile,
-		Capture:         capture,
-		OutputDir:       outputDir,
-		Compress:        compress,
-		RelayImage:      cfg.Runtime.RelayImage,
-		UpstreamCACerts: cfg.Relay.UpstreamCACerts,
-		SystemCABundle:  systemCA,
+	ctx, stop := buildContext()
+	defer stop()
+
+	switch cfg.Runtime.Driver {
+	case "vz":
+		dockerfile, contextDir, err := ResolvePath(path)
+		if err != nil {
+			return err
+		}
+		d := vz.New()
+		defer d.Close()
+		return d.Exec(ctx, &driver.BuildRequest{
+			ContextDir:       contextDir,
+			Containerfile:    dockerfile,
+			CaptureMode:      capture,
+			OutputDir:        outputDir,
+			Compress:         compress,
+			UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
+			UpstreamSystemCA: systemCA,
+			Stdin:            os.Stdin,
+			Stdout:           os.Stdout,
+			Stderr:           os.Stderr,
+		})
+
+	case "qemu":
+		return fmt.Errorf(
+			"warden shell is not supported with --driver qemu")
 	}
-	return env.Shell(config)
+
+	// Default: container driver
+	runtime, err := resolveRuntime(cfg)
+	if err != nil {
+		return err
+	}
+	dockerfile, contextDir, err := ResolvePath(path)
+	if err != nil {
+		return err
+	}
+	d := &container.Driver{
+		Runtime:    runtime,
+		Verbose:    cfg.Output.Verbose,
+		Version:    version,
+		Extensions: defaultExtensions(),
+	}
+	defer d.Close()
+	return d.Exec(ctx, &driver.BuildRequest{
+		ContextDir:       contextDir,
+		Containerfile:    dockerfile,
+		CaptureMode:      capture,
+		OutputDir:        outputDir,
+		Compress:         compress,
+		RelayImage:       cfg.Runtime.RelayImage,
+		UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
+		UpstreamSystemCA: systemCA,
+		Stdin:            os.Stdin,
+		Stdout:           os.Stdout,
+		Stderr:           os.Stderr,
+	})
 }
 

@@ -7,7 +7,10 @@ ARG GONOSUMDB=*
 WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
-COPY . .
+COPY cmd cmd
+COPY relay relay
+COPY driver driver
+COPY ledger ledger
 
 RUN CGO_ENABLED=0 go build -o /out/warden ./cmd/warden/
 RUN CGO_ENABLED=0 go build -o /out/relay ./cmd/relay/

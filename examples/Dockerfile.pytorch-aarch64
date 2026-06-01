@@ -93,7 +93,8 @@ WORKDIR /opt
 ENV PATH=/usr/local/cuda/bin:$PATH
 ENV LD_LIBRARY_PATH=/usr/local/cuda/lib64:$LD_LIBRARY_PATH
 
-# Clone PyTorch v2.11.0 with submodules
+# PyTorch requires git clone due to deep submodule tree (caffe2, fbgemm, etc.)
+# that is not available via tarball download.
 RUN git clone --depth 1 --branch v2.11.0 --recurse-submodules --shallow-submodules \
         https://github.com/pytorch/pytorch.git pytorch
 

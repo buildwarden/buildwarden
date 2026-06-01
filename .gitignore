@@ -1,7 +1,5 @@
 /build/
-/warden
-/warden-io
-/warden-relay
+dist/
 warden-output/
 coverage.out
 docs/site/
@@ -10,3 +8,6 @@ out.log
 .warden/
 .claude/
 .DS_Store
+.dev/
+.tmp/
+/warden-io

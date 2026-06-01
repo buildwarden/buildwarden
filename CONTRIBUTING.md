@@ -1,59 +1,63 @@
-# Contributing Guidelines
+# Contributing to BuildWarden
 
-Thank you for your interest in contributing to our project. Whether it's a bug report, new feature, correction, or additional
-documentation, we greatly value feedback and contributions from our community.
+Thank you for your interest in contributing! This guide covers development setup, testing, and the PR process.
 
-Please read through this document before submitting any issues or pull requests to ensure we have all the necessary
-information to effectively respond to your bug report or contribution.
+## Development Setup
 
+**Prerequisites (all platforms):**
+- Go 1.25+ (we use [mise](https://mise.jdx.dev/) to manage versions)
+- golangci-lint v2
+- A container runtime: finch, docker, or podman
 
-## Reporting Bugs/Feature Requests
+**macOS (VZ driver):**
+- Xcode Command Line Tools (for CGo / Objective-C compilation)
+- macOS 13+ on Apple Silicon
+- After building, sign the binary for the virtualization entitlement:
+  ```sh
+  codesign --sign - --entitlements entitlements.plist dist/warden
+  ```
+  `make build` does this automatically with ad-hoc signing.
 
-We welcome you to use the GitHub issue tracker to report bugs or suggest features.
+**QEMU driver (any platform):**
+- `qemu-system-aarch64` (or `qemu-system-x86_64`) and `qemu-img`
+- macOS: `brew install qemu`
+- Linux: `apt install qemu-system`
 
-When filing an issue, please check existing open, or recently closed, issues to make sure somebody else hasn't already
-reported the issue. Please try to include as much information as you can. Details like these are incredibly useful:
+## Building and Testing
 
-* A reproducible test case or series of steps
-* The version of our code being used
-* Any modifications you've made relevant to the bug
-* Anything unusual about your environment or deployment
+```sh
+make build       # Compile all binaries to dist/
+make test        # Run unit tests
+make lint        # golangci-lint
+make fmt         # gofmt -s -w
+make tidy        # go mod tidy
+make cover       # Tests with coverage report
+```
 
+`make build` cross-compiles the relay and warden-io for linux/amd64 and linux/arm64. On macOS/arm64 it also builds warden-io for darwin/arm64 and codesigns the host binary.
 
-## Contributing via Pull Requests
-Contributions via pull requests are much appreciated. Before sending us a pull request, please ensure that:
+## Testing
 
-1. You are working against the latest source on the *main* branch.
-2. You check existing open, and recently merged, pull requests to make sure someone else hasn't addressed the problem already.
-3. You open an issue to discuss any significant work - we would hate for your time to be wasted.
+- `make test` runs all unit tests and works on all platforms.
+- VZ-specific code uses build stubs on non-macOS, so tests pass everywhere.
+- Integration tests (`make integration-test`) require a running container runtime.
+- VZ integration tests (`make integration-test-vz`) require macOS/arm64 with a prepared VM image and a codesigned test binary. The Makefile handles signing.
 
-To send us a pull request, please:
+## Pull Requests
 
-1. Fork the repository.
-2. Modify the source; please focus on the specific change you are contributing. If you also reformat all the code, it will be hard for us to focus on your change.
-3. Ensure local tests pass.
-4. Commit to your fork using clear commit messages.
-5. Send us a pull request, answering any default questions in the pull request interface.
-6. Pay attention to any automated CI failures reported in the pull request, and stay involved in the conversation.
-
-GitHub provides additional document on [forking a repository](https://help.github.com/articles/fork-a-repo/) and
-[creating a pull request](https://help.github.com/articles/creating-a-pull-request/).
-
-
-## Finding contributions to work on
-Looking at the existing issues is a great way to find something to contribute on. As our projects, by default, use the default GitHub issue labels (enhancement/bug/duplicate/help wanted/invalid/question/wontfix), looking at any 'help wanted' issues is a great place to start.
-
+1. Fork the repo and create a branch from `main`.
+2. Make your change. Run `make lint && make test` before pushing.
+3. Keep commits focused — one logical change per commit.
+4. Open a PR against `main`. CI will run lint, test, and cross-platform builds.
 
 ## Code of Conduct
+
 This project has adopted the [Amazon Open Source Code of Conduct](https://aws.github.io/code-of-conduct).
-For more information see the [Code of Conduct FAQ](https://aws.github.io/code-of-conduct-faq) or contact
-opensource-codeofconduct@amazon.com with any additional questions or comments.
 
+## Security
 
-## Security issue notifications
-If you discover a potential security issue in this project we ask that you notify AWS/Amazon Security via our [vulnerability reporting page](http://aws.amazon.com/security/vulnerability-reporting/). Please do **not** create a public github issue.
+If you discover a security issue, please report it via our [vulnerability reporting page](http://aws.amazon.com/security/vulnerability-reporting/). Do **not** create a public GitHub issue.
 
+## License
 
-## Licensing
-
-See the [LICENSE](LICENSE) file for our project's licensing. We will ask you to confirm the licensing of your contribution.
+See the [LICENSE](LICENSE) file for details.

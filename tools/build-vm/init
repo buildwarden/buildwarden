@@ -1,0 +1,43 @@
+#!/bin/sh
+# Build VM init — boots, configures network, runs warden-io initialize.
+#
+# warden-io initialize handles: wait for relay, install CA, fetch build
+# script from relay context endpoint, run it with heartbeats, report exit.
+#
+# Network: single interface → relay at 10.0.0.1 (sole gateway)
+
+mount -t devtmpfs devtmpfs /dev
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t tmpfs tmpfs /tmp
+
+# Disable IPv6 (prevents iptables bypass)
+echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6
+echo 1 > /proc/sys/net/ipv6/conf/default/disable_ipv6
+
+# Load kernel modules
+for mod in netfs 9pnet 9pnet_virtio 9p failover net_failover virtio_net; do
+    [ -f "/lib/modules/${mod}.ko" ] && insmod "/lib/modules/${mod}.ko"
+done
+
+# Wait for network interface
+TRIES=0
+while [ $TRIES -lt 50 ]; do
+    IF=$(ls /sys/class/net/ 2>/dev/null | grep -v lo | head -1)
+    [ -n "$IF" ] && break
+    TRIES=$((TRIES + 1))
+    sleep 0.1
+done
+
+# Configure network: point-to-point to relay
+if [ -n "$IF" ]; then
+    ip link set "$IF" up
+    ip addr add 10.0.0.2/30 dev "$IF"
+    ip route add default via 10.0.0.1
+fi
+
+# DNS via relay (resolves cwd/artifacts to relay IP)
+echo "nameserver 10.0.0.1" > /etc/resolv.conf
+
+echo "init: ready"
+exec /bin/warden-io initialize --gateway=10.0.0.1
