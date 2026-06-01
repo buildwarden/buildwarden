@@ -91,7 +91,7 @@ func (b *scriptBuilder) handleDirective(
 		for k, v := range parseEnv(rest) {
 			b.env[k] = v
 			fmt.Fprintf(&b.sb,
-				"export %s=%s\n", k, shellQuote(v))
+				"export %s=%s\n", k, shellQuoteEnv(v))
 		}
 	case "WORKDIR":
 		dir := expandEnv(strings.TrimSpace(rest), b.env)
@@ -173,17 +173,27 @@ func parseEnv(rest string) map[string]string {
 	fields := splitEnvFields(rest)
 	for _, field := range fields {
 		if m := envPairRe.FindStringSubmatch(field); m != nil {
-			result[m[1]] = m[2]
+			result[m[1]] = unquote(m[2])
 		}
 	}
 	if len(result) == 0 {
 		parts := strings.SplitN(rest, " ", 2)
 		if len(parts) == 2 {
 			result[strings.TrimSpace(parts[0])] =
-				strings.TrimSpace(parts[1])
+				unquote(strings.TrimSpace(parts[1]))
 		}
 	}
 	return result
+}
+
+func unquote(s string) string {
+	if len(s) >= 2 {
+		if (s[0] == '"' && s[len(s)-1] == '"') ||
+			(s[0] == '\'' && s[len(s)-1] == '\'') {
+			return s[1 : len(s)-1]
+		}
+	}
+	return s
 }
 
 func splitEnvFields(s string) []string {
@@ -249,4 +259,29 @@ func shellQuote(s string) string {
 		return s
 	}
 	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
+
+// shellQuoteEnv quotes for ENV values, using double quotes to
+// preserve $VAR expansion (matching Dockerfile ENV semantics).
+func shellQuoteEnv(s string) string {
+	if s == "" {
+		return "''"
+	}
+	if !strings.ContainsAny(s,
+		" \t\n'\"\\`!#&|;(){}[]<>?*~$") {
+		return s
+	}
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, c := range s {
+		switch c {
+		case '"', '\\', '`':
+			b.WriteByte('\\')
+			b.WriteRune(c)
+		default:
+			b.WriteRune(c)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
 }

@@ -1,23 +1,19 @@
-# Expanded demo: build requests from source, post artifact, run tests and type-check.
+# Expanded demo: build requests from source, post artifact, run tests.
 # Demonstrates the truncatable property of the ledger — test/lint network fetches
 # appear as separate ledger entries from the build itself.
 
 FROM python:3.12-slim
 
-# Install git (needed to clone source)
-RUN apt-get update
-RUN apt-get install -y --no-install-recommends git
-
-# Install Python build and test tools
-RUN pip install --upgrade pip build pytest mypy
-
-ENV SOURCE_DATE_EPOCH=1716940800
-
-# Clone requests source at a pinned release
-RUN git clone --depth 1 --branch v2.32.3 \
-        https://github.com/psf/requests.git /src/requests
+# Install Python build tool
+RUN pip install --disable-pip-version-check build
 
 WORKDIR /src/requests
+
+# Download requests source at a pinned release
+RUN python -c "from urllib.request import urlopen; import sys; \
+        sys.stdout.buffer.write(urlopen(sys.argv[1]).read())" \
+        https://github.com/psf/requests/archive/refs/tags/v2.34.2.tar.gz \
+        | tar xz --strip-components=1 -C /src/requests
 
 # Build the wheel from source
 RUN python -m build --wheel
@@ -25,17 +21,12 @@ RUN python -m build --wheel
 # Post the built wheel as an artifact
 RUN warden-io post dist/requests-*.whl
 
-# Install the built wheel
-RUN pip install dist/requests-*.whl
+RUN pip install --upgrade pip
 
-# Install test dependencies
-RUN pip install pytest-httpbin trustme
+RUN ls -a
+
+# Install test dependencies from the project's dependency groups
+RUN pip install --disable-pip-version-check --group test .[socks]
 
 # Run the test suite (network fetches for test fixtures appear in ledger)
-RUN python -m pytest tests/ -x -q --tb=short 2>&1 | tail -20 || true
-
-# Install type stubs
-RUN pip install types-urllib3 types-certifi types-chardet
-
-# Run type checking
-RUN python -m mypy src/requests --ignore-missing-imports --no-error-summary 2>&1 | tail -10 || true
+RUN python -m pytest tests/ -k 'not timeout' -v --tb=short

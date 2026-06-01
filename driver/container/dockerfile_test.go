@@ -58,6 +58,21 @@ RUN echo $MY_VAR
 	}
 }
 
+func TestDockerfileToScript_ENV_VarExpansion(t *testing.T) {
+	path := writeDockerfile(t, `FROM alpine
+ENV PATH="/root/.cargo/bin:$PATH"
+`)
+	result, err := DockerfileToScript(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(result.Script, `export PATH="/root/.cargo/bin:$PATH"`) {
+		t.Errorf(
+			"ENV with $VAR should use double quotes, got:\n%s",
+			result.Script)
+	}
+}
+
 func TestDockerfileToScript_WORKDIR(t *testing.T) {
 	path := writeDockerfile(t, `FROM alpine
 WORKDIR /app

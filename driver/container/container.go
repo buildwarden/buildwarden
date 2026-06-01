@@ -72,15 +72,12 @@ func (d *Driver) StartBuild(
 			"translating dockerfile: %w", err)
 	}
 
-	// Write build script to context dir — the relay serves it
-	// via HTTP and warden-io initialize fetches it at runtime.
-	scriptPath := filepath.Join(req.ContextDir, "build.sh")
+	scriptPath := filepath.Join(b.wardenDirPath(), "build.sh")
 	if err := os.WriteFile(
 		scriptPath, []byte(result.Script), 0755); err != nil {
 		return nil, fmt.Errorf(
 			"writing build script: %w", err)
 	}
-	defer os.Remove(scriptPath)
 
 	logInfo(req, "Starting build container...")
 	if err := b.startBuildContainer(result.Image); err != nil {
@@ -107,19 +104,36 @@ func (d *Driver) StartBuild(
 		stdin = os.Stdin
 	}
 
-	_, err = ctrctl.ContainerExec(
-		&ctrctl.ContainerExecOpts{
-			Cmd: &exec.Cmd{
-				Stdin:  stdin,
-				Stdout: stdout,
-				Stderr: stderr,
+	execCmd := &exec.Cmd{
+		Stdin:  stdin,
+		Stdout: stdout,
+		Stderr: stderr,
+	}
+	execDone := make(chan error, 1)
+	go func() {
+		_, execErr := ctrctl.ContainerExec(
+			&ctrctl.ContainerExecOpts{
+				Cmd:         execCmd,
+				Interactive: true,
 			},
-			Interactive: true,
-		},
-		b.buildContainer,
-		"warden-io", "initialize",
-		"--gateway="+b.subnet.RelayIP,
-	)
+			b.buildContainer,
+			"warden-io", "initialize",
+			"--gateway="+b.subnet.RelayIP,
+			"--script=.warden/build.sh",
+		)
+		execDone <- execErr
+	}()
+
+	select {
+	case err = <-execDone:
+	case <-ctx.Done():
+		if execCmd.Process != nil {
+			_ = execCmd.Process.Kill()
+		}
+		_, _ = ctrctl.ContainerStop(nil, b.buildContainer)
+		<-execDone
+		return nil, ctx.Err()
+	}
 	if err != nil {
 		return nil, fmt.Errorf("build error: %w", err)
 	}

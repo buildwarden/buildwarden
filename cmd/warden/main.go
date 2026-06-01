@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"os/signal"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -208,12 +209,33 @@ func resolveBuildParams(args []string) (*buildParams, error) {
 	}, nil
 }
 
+func buildContext() (context.Context, context.CancelFunc) {
+	ctx, cancel := context.WithCancel(context.Background())
+	sig := make(chan os.Signal, 1)
+	signal.Notify(sig, os.Interrupt)
+	go func() {
+		select {
+		case <-sig:
+			fmt.Fprintf(os.Stderr,
+				"\nInterrupted, cleaning up... "+
+					"(press ctrl+c again to force)\n")
+			cancel()
+			signal.Stop(sig)
+		case <-ctx.Done():
+		}
+	}()
+	return ctx, cancel
+}
+
 func runBuild(cmd *cobra.Command, args []string) error {
 	bp, err := resolveBuildParams(args)
 	if err != nil {
 		return err
 	}
 	cfg := bp.cfg
+
+	ctx, stop := buildContext()
+	defer stop()
 
 	// Dispatch to VM drivers when requested
 	switch cfg.Runtime.Driver {
@@ -224,7 +246,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		}
 		d := vz.New()
 		defer d.Close()
-		_, buildErr := d.StartBuild(context.Background(), &driver.BuildRequest{
+		_, buildErr := d.StartBuild(ctx, &driver.BuildRequest{
 			ContextDir:       contextDir,
 			Containerfile:    dockerfile,
 			Script:           flagScript,
@@ -255,7 +277,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 				return fmt.Errorf("invalid --timeout: %w", err)
 			}
 		}
-		_, buildErr := d.StartBuild(context.Background(), &driver.BuildRequest{
+		_, buildErr := d.StartBuild(ctx, &driver.BuildRequest{
 			ContextDir:       contextDir,
 			Containerfile:    dockerfile,
 			Script:           flagScript,
@@ -289,7 +311,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		Extensions: defaultExtensions(),
 	}
 	defer d.Close()
-	_, buildErr := d.StartBuild(context.Background(), &driver.BuildRequest{
+	_, buildErr := d.StartBuild(ctx, &driver.BuildRequest{
 		ContextDir:       contextDir,
 		Containerfile:    dockerfile,
 		CaptureMode:      bp.capture,
@@ -340,6 +362,9 @@ func runShell(cmd *cobra.Command, args []string) error {
 		systemCA = *cfg.Relay.SystemCABundle
 	}
 
+	ctx, stop := buildContext()
+	defer stop()
+
 	switch cfg.Runtime.Driver {
 	case "vz":
 		dockerfile, contextDir, err := ResolvePath(path)
@@ -348,7 +373,7 @@ func runShell(cmd *cobra.Command, args []string) error {
 		}
 		d := vz.New()
 		defer d.Close()
-		return d.Exec(context.Background(), &driver.BuildRequest{
+		return d.Exec(ctx, &driver.BuildRequest{
 			ContextDir:       contextDir,
 			Containerfile:    dockerfile,
 			CaptureMode:      capture,
@@ -382,7 +407,7 @@ func runShell(cmd *cobra.Command, args []string) error {
 		Extensions: defaultExtensions(),
 	}
 	defer d.Close()
-	return d.Exec(context.Background(), &driver.BuildRequest{
+	return d.Exec(ctx, &driver.BuildRequest{
 		ContextDir:       contextDir,
 		Containerfile:    dockerfile,
 		CaptureMode:      capture,

@@ -29,18 +29,10 @@ capture = ""               # Payload capture mode:
                            #   "headers" = save request/response headers
                            #   "bodies" = save request/response bodies
                            #   "all" = save both
-timeout = ""               # Build timeout (e.g. "10m")
 
-[qemu]
-accel = ""                 # QEMU accelerator: hvf, kvm, whpx, tcg (default: auto-detect)
-binary = ""                # Override qemu-system binary path
-cpus = 4                   # Build VM CPU count
-memory = 4096              # Build VM memory (MB)
-
-[vz]
-cpus = 4                   # Build VM CPU count
-memory = 8192              # Build VM memory (MB)
-image_dir = ""             # Override image cache directory (default: ~/.cache/warden/images)
+[relay]
+upstream_ca_certs = []     # Paths to additional CA cert bundles for upstream
+system_ca_bundle = true    # Include host system CA bundle in relay trust store
 
 [output]
 color = "auto"             # Color mode: auto, always, never
@@ -78,12 +70,11 @@ If no runtime is configured, BuildWarden probes in order: **finch** → docker �
 
 ## Driver Selection
 
-When `driver` is empty (the default), BuildWarden selects a driver automatically:
-- If a Dockerfile is present, the **container** driver is used.
-- If `--image` points to a `.qcow2` file, the **qemu** driver is selected.
-- If `--image` points to an `.ipsw` file or the platform is macOS with Virtualization.framework available, the **vz** driver is selected.
+When `driver` is empty (the default), the **container** driver is used. Use `--driver` or `WARDEN_DRIVER` to select a VM driver:
 
-Explicit `--driver` or `WARDEN_DRIVER` overrides autodetection.
+- `container` — Unprivileged container with iptables isolation (default)
+- `qemu` — Two-VM topology, cross-platform, requires `qemu-system-*`
+- `vz` — macOS/arm64 only, uses Virtualization.framework
 
 ## Relay Image
 
