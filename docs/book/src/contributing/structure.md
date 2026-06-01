@@ -9,13 +9,14 @@ buildwarden/
 │   │   ├── mode_vm.go         # VM mode: binds ports (relay is PID 1 in its VM)
 │   │   ├── mode_host.go       # Host mode: FD ingress via gvisor netstack
 │   │   ├── chanlistener.go    # Channel-based net.Listener (for host mode)
-│   │   └── ingress_fd.go      # gvisor netstack: Ethernet frames → TCP/UDP
-│   ├── warden/             # Host binary (CLI + orchestrators)
+│   │   ├── ingress_fd.go      # gvisor netstack: Ethernet frames → TCP/UDP
+│   │   └── ingress_dhcp.go    # DHCP server for FD ingress mode
+│   ├── warden/             # Host binary (CLI + driver dispatch)
 │   │   ├── main.go            # Cobra commands: build, shell, clean, inspect, image
-│   │   ├── driver_script.go   # Container driver orchestrator (ScriptEnv)
-│   │   ├── config.go          # Config loading (TOML), runtime detection
+│   │   ├── config.go          # Config loading (TOML), runtime detection, validation
 │   │   ├── output.go          # Colored terminal output
-│   │   ├── inspect.go         # warden inspect
+│   │   ├── inspect.go         # warden inspect (subcommand registration)
+│   │   ├── inspect_impl.go    # warden inspect (implementation)
 │   │   ├── clean.go           # warden clean
 │   │   └── image.go           # warden image (VZ image management)
 │   ├── warden-io/          # Build-environment agent binary
@@ -28,65 +29,79 @@ buildwarden/
 ├── relay/                  # Relay library (core logic)
 │   ├── relay.go               # Config, Start(), MITM proxy, context/artifact handlers
 │   ├── dns.go                 # DNS server (UDP, forwards upstream)
-│   ├── proxy.go               # HTTP/HTTPS listener setup, TLS config
+│   ├── proxy.go               # HTTP/HTTPS MITM, SSRF filter, TLS cert generation
 │   ├── ledger.go              # Ledger writer (single-writer channel pattern)
 │   ├── heartbeat.go           # Signal-dir heartbeat writer
 │   ├── controlplane.go        # Control plane HTTP (/health, /ca.pem, /v1/output, /v1/complete)
 │   ├── capture.go             # Payload capture to disk
-│   └── fair_test.go, e2e_bench_test.go, ledger_test.go, ledger_read_test.go
+│   └── fair.go                # Fair scheduling for concurrent connections
 ├── driver/                 # Driver interface + implementations
 │   ├── driver.go              # Driver interface, BuildRequest, BuildResult
 │   ├── extension.go           # Extension interface
-│   ├── extensions.go          # Extension registration
+│   ├── extensions.go          # DefaultExtensions()
 │   ├── ext_cacerts.go         # CA cert env vars extension
-│   ├── ext_bazel.go           # Bazel extension
+│   ├── ext_bazel.go           # Bazel/JKS truststore extension
 │   ├── ext_epoch.go           # SOURCE_DATE_EPOCH extension
 │   ├── ext_truststore.go      # System trust store extension
-│   ├── subnet.go              # Subnet allocation
-│   ├── container/             # Container driver (driver.Driver implementation)
-│   │   └── container.go
-│   ├── qemu/                  # QEMU driver
+│   ├── subnet.go              # Subnet allocation, utilities
+│   ├── container/             # Container driver (iptables isolation)
+│   │   ├── container.go          # StartBuild/Exec: relay container, build container, netns
+│   │   ├── containerfile.go      # Containerfile rewriting (COPY → warden-io fetch)
+│   │   ├── dockerfile.go         # Dockerfile-to-shell-script translator
+│   │   ├── compress.go           # Zstd compression, magic byte detection
+│   │   └── environment.go        # OCI manifest extraction, environment record
+│   ├── qemu/                  # QEMU driver (cross-platform VM)
 │   │   ├── driver.go             # StartBuild: prepare, boot relay VM, boot build VM, wait
 │   │   ├── vm.go                 # QEMU subprocess management (relay VM + build VM args)
-│   │   ├── cloudinit.go          # Cloud-init seed ISO generation (NoCloud)
-│   │   ├── seediso.go            # ISO9660 image builder (pure Go + platform tools)
+│   │   ├── cloudinit.go          # Cloud-init user-data generation
+│   │   ├── seediso.go            # ISO9660 seed image builder
 │   │   ├── images.go             # Cloud image resolution + download + caching
 │   │   ├── signal.go             # Host-side waitForBuild (reads signal dir)
 │   │   └── util.go               # File copy, binary caching, module root
 │   ├── vz/                    # VZ driver (macOS Apple Silicon)
 │   │   ├── driver.go             # StartBuild: host relay, boot macOS VM, wait
 │   │   ├── image.go              # IPSW restore, image preparation, personalization
+│   │   ├── network.go            # Socketpair networking for build VM
 │   │   ├── signal.go             # WaitForBuild (reads signal dir)
-│   │   ├── signal_test.go
-│   │   └── vz_darwin_arm64.go    # Virtualization.framework bindings (CGo)
-│   ├── script/                # Dockerfile-to-shell-script translator
-│   └── security/              # Security utilities
+│   │   ├── vm.go                 # VM lifecycle helpers
+│   │   ├── vz_darwin_arm64.go    # Virtualization.framework CGo bindings
+│   │   ├── vz_darwin.h           # Objective-C header
+│   │   ├── vz_darwin.m           # Objective-C implementation
+│   │   └── vz_stub.go            # Build stub for non-macOS platforms
+│   └── script/                # Dockerfile-to-shell-script translator (VM drivers)
+│       └── translate.go
 ├── ledger/                 # Shared library: wire format, reader, verifier
 │   └── ledger.go
 ├── tools/
-│   ├── relay-vm/              # Relay VM initramfs builder (Alpine + kernel modules)
+│   ├── relay-vm/              # Relay VM initramfs builder (Alpine + kernel)
 │   │   ├── build-initramfs.sh
-│   │   └── init                  # Relay VM init script (network, iptables, exec relay)
-│   └── build-vm/             # Build VM initramfs builder (for direct-boot testing)
-│       ├── build-initramfs.sh    # Cross-compiles warden-io into initramfs
-│       └── init                  # Build VM init script (network, exec warden-io initialize)
-├── examples/               # Demo Dockerfiles (apk, apt, pip, cargo, etc.)
+│   │   └── init                  # Relay VM init script (network, exec relay)
+│   ├── build-vm/             # Build VM initramfs builder (direct-boot testing)
+│   │   ├── build-initramfs.sh
+│   │   └── init                  # Build VM init script (exec warden-io initialize)
+│   └── vz-image-prep/        # Standalone VZ image preparation tools
+│       ├── personalize.go        # 4-phase macOS image prep pipeline
+│       ├── netfwd.go             # Transparent TCP/UDP forwarder (image prep)
+│       └── uv-build-test.go      # End-to-end build validation
 ├── docs/
-│   ├── book/               # mdBook documentation
+│   ├── book/               # mdBook documentation (guide, concepts, contributing)
 │   └── design/             # Design specifications and plans
-├── Dockerfile              # Self-build (warden builds itself)
 ├── Dockerfile.relay        # Multi-arch relay container image
 ├── Makefile                # build, test, lint, codesign
+├── .goreleaser.yaml        # Release configuration
 └── CLAUDE.md               # AI assistant context
 ```
 
 ## Package Boundaries
 
-- **`cmd/warden/`** — Host-side binary. CLI, orchestrators (container lifecycle, VM boot), config, extensions, inspect, image management. Imports `ctrctl` for container operations.
+- **`cmd/warden/`** — Host-side binary. CLI, driver dispatch, config, inspect, image management. Dispatches to `driver/container`, `driver/qemu`, or `driver/vz` based on `--driver` flag.
 - **`cmd/warden-io/`** — Build-environment agent. Runs inside the build environment (container or VM). Handles initialization (CA install, script fetch), context fetch, artifact post. Cross-compiled for linux (containers, QEMU VMs) and darwin (VZ macOS VMs).
 - **`cmd/relay/`** — Relay binary. Thin mode-based main that selects container/vm/host mode and calls into the `relay/` library. Cross-compiled for linux (container/VM relay) or built natively (host-mode relay for VZ).
 - **`relay/`** — Relay library. All core logic: DNS, HTTP/HTTPS MITM proxy, ledger writer, control plane, heartbeat, fairness scheduling, capture. Used by `cmd/relay/` in all modes.
-- **`driver/`** — Driver interface and implementations. Each driver implements `driver.Driver` (Name, StartBuild, Exec, Close).
+- **`driver/`** — Driver interface and implementations. Each driver implements `driver.Driver` (Name, StartBuild, Exec, Close). Extensions modify the build environment before execution.
+- **`driver/container/`** — Container driver. Full Dockerfile translation, iptables isolation via netns sidecar, relay as container.
+- **`driver/qemu/`** — QEMU driver. Two-VM topology with cloud images, cross-platform.
+- **`driver/vz/`** — VZ driver. Host relay with gvisor netstack, macOS build VM.
 - **`ledger/`** — Shared wire format library. Binary ledger types, reader, verifier. Used by `warden inspect` and the relay's test suite.
 
 ## Key Patterns

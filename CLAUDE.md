@@ -35,11 +35,15 @@ relay starts → warden-io initialize → fetch build.sh → run with heartbeats
 
 ### Package boundaries
 
-- `cmd/warden/` — Host-side binary: CLI, orchestrator, config, extensions, inspect, image management. Imports `ctrctl`.
+- `cmd/warden/` — Host-side binary: CLI, driver dispatch, config, inspect, image management.
 - `cmd/warden-io/` — Build-environment agent: initialize (network, CA, fetch script, exec with heartbeats, report exit), fetch, post, trust. Cross-compiled for linux and darwin.
 - `cmd/relay/` — Thin mode-based main. Selects container/vm/host mode, calls `relay.Start()`.
 - `relay/` — Relay library: DNS, HTTP/HTTPS MITM, ledger writer, control plane, heartbeat, capture, fairness.
-- `driver/` — Driver interface + implementations (container, qemu, vz). Extension system, subnet allocation.
+- `driver/` — Driver interface, extensions, subnet allocation.
+- `driver/container/` — Container driver: Dockerfile translation, iptables isolation, relay container.
+- `driver/qemu/` — QEMU driver: two-VM topology, cloud images, cross-platform.
+- `driver/vz/` — VZ driver: host relay (gvisor netstack), macOS build VM.
+- `driver/script/` — Dockerfile-to-script translator (shared by VM drivers).
 - `ledger/` — Shared library: ledger wire format types, reader, verification logic.
 
 ### Ledger format
