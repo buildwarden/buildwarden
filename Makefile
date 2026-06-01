@@ -13,6 +13,7 @@ build:
 ifeq ($(UNAME_S),Darwin)
 ifeq ($(UNAME_M),arm64)
 	GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o dist/warden-io-darwin-arm64 ./cmd/warden-io/
+	GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -o dist/warden-relay-darwin-arm64 ./cmd/relay/
 	@$(MAKE) sign
 endif
 endif

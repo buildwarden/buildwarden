@@ -14,6 +14,9 @@ func main() {
 }
 
 func run() int {
+	// Prevent key material from appearing in core dumps.
+	_ = unix.Setrlimit(unix.RLIMIT_CORE, &unix.Rlimit{Cur: 0, Max: 0})
+
 	mode := flag.String("mode", "",
 		"Relay mode: 'host', 'vm', or 'container' (auto-detected if empty)")
 	fdNum := flag.Int("fd", 3,
