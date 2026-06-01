@@ -52,19 +52,25 @@ func LoadConfig() (*Config, error) {
 	// User-level config
 	if home, err := os.UserHomeDir(); err == nil {
 		userPath := filepath.Join(home, ".config", "warden", "config.toml")
-		loadTOML(userPath, cfg)
+		if err := loadTOML(userPath, cfg); err != nil {
+			return nil, err
+		}
 	}
 
 	// Project-level config (overrides user)
-	loadTOML("warden.toml", cfg)
+	if err := loadTOML("warden.toml", cfg); err != nil {
+		return nil, err
+	}
 
 	// Environment variable overrides
 	if cli := os.Getenv("WARDEN_CTR_CLI"); cli != "" {
 		cfg.Runtime.CLI = cli
 	}
-	if caCerts := os.Getenv("WARDEN_UPSTREAM_CA_CERTS"); caCerts != "" {
-		paths := strings.Split(caCerts, ":")
-		cfg.Relay.UpstreamCACerts = append(cfg.Relay.UpstreamCACerts, paths...)
+	if d := os.Getenv("WARDEN_DRIVER"); d != "" {
+		cfg.Runtime.Driver = d
+	}
+	if img := os.Getenv("WARDEN_IMAGE"); img != "" {
+		cfg.Runtime.RelayImage = img
 	}
 	if os.Getenv("NO_COLOR") != "" {
 		cfg.Output.Color = "never"
@@ -76,10 +82,14 @@ func LoadConfig() (*Config, error) {
 	return cfg, nil
 }
 
-func loadTOML(path string, cfg *Config) {
-	if _, err := os.Stat(path); err == nil {
-		toml.DecodeFile(path, cfg) //nolint:errcheck
+func loadTOML(path string, cfg *Config) error {
+	if _, err := os.Stat(path); err != nil {
+		return nil
 	}
+	if _, err := toml.DecodeFile(path, cfg); err != nil {
+		return fmt.Errorf("parsing %s: %w", path, err)
+	}
+	return nil
 }
 
 // DetectRuntime probes for a working container runtime.
@@ -143,4 +153,41 @@ func discoverDockerfile(dir string) (string, error) {
 		}
 	}
 	return "", fmt.Errorf("no Dockerfile or Containerfile found in %s", dir)
+}
+
+func validateDriver(d string) error {
+	switch d {
+	case "", "container", "qemu", "vz":
+		return nil
+	default:
+		return fmt.Errorf(
+			"unknown driver %q (valid: container, qemu, vz)", d)
+	}
+}
+
+func validateCapture(c string) error {
+	switch c {
+	case "", "none", "headers", "bodies", "all":
+		return nil
+	default:
+		return fmt.Errorf(
+			"invalid capture mode %q (valid: none, headers, bodies, all)", c)
+	}
+}
+
+func validateFlagsForDriver(d string) error {
+	isVM := d == "qemu" || d == "vz"
+	if flagScript != "" && !isVM {
+		return fmt.Errorf(
+			"--script requires --driver qemu or --driver vz")
+	}
+	if flagImage != "" && !isVM {
+		return fmt.Errorf(
+			"--image requires --driver qemu or --driver vz")
+	}
+	if flagTimeout != "" && d != "qemu" {
+		return fmt.Errorf(
+			"--timeout requires --driver qemu")
+	}
+	return nil
 }

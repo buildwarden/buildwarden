@@ -5,6 +5,8 @@ import (
 	"testing"
 
 	"github.com/fxamacker/cbor/v2"
+
+	"warden/ledger"
 )
 
 func TestLedgerReadHeader(t *testing.T) {
@@ -18,7 +20,7 @@ func TestLedgerReadHeader(t *testing.T) {
 	}
 	l.Finish()
 
-	h, _, err := ReadHeader(buf.Bytes())
+	h, _, err := ledger.ReadHeader(buf.Bytes())
 	if err != nil {
 		t.Fatalf("ReadHeader: %v", err)
 	}
@@ -58,7 +60,7 @@ func TestLedgerVerifyBasicFlow(t *testing.T) {
 	l.Close(openSig, int64(len(body)), hb, SchemaNoMetadata, nil)
 	l.Finish()
 
-	result, err := Verify(buf.Bytes())
+	result, err := ledger.Verify(buf.Bytes())
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
@@ -110,7 +112,7 @@ func TestLedgerVerifyHTTPFlow(t *testing.T) {
 
 	l.Finish()
 
-	result, err := Verify(buf.Bytes())
+	result, err := ledger.Verify(buf.Bytes())
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
@@ -161,7 +163,7 @@ func TestLedgerVerifyArtifact(t *testing.T) {
 	l.Artifact(openSig, -int64(len(artifact)), hb, 3, meta)
 	l.Finish()
 
-	result, err := Verify(buf.Bytes())
+	result, err := ledger.Verify(buf.Bytes())
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
@@ -198,7 +200,7 @@ func TestLedgerVerifyTamperDetection(t *testing.T) {
 	copy(tampered, data)
 	tampered[len(tampered)/2] ^= 0xFF
 
-	result, err := Verify(tampered)
+	result, err := ledger.Verify(tampered)
 	if err != nil {
 		// Parse error is acceptable for tampered data
 		return
@@ -230,7 +232,7 @@ func TestLedgerVerifyMultipleChannels(t *testing.T) {
 	l.Close(sig1, int64(len(body1)), l.ComputeHashBlock(body1), SchemaNoMetadata, nil)
 	l.Finish()
 
-	result, err := Verify(buf.Bytes())
+	result, err := ledger.Verify(buf.Bytes())
 	if err != nil {
 		t.Fatalf("Verify: %v", err)
 	}
@@ -246,19 +248,19 @@ func TestLedgerVerifyMultipleChannels(t *testing.T) {
 }
 
 func TestLedgerIsValidLedger(t *testing.T) {
-	if IsValidLedger([]byte("BLDL\x01rest")) != true {
+	if ledger.IsValidLedger([]byte("BLDL\x01rest")) != true {
 		t.Error("should detect valid ledger")
 	}
-	if IsValidLedger([]byte(`{"entry_type":"header"`)) != false {
+	if ledger.IsValidLedger([]byte(`{"entry_type":"header"`)) != false {
 		t.Error("should not detect JSON as valid ledger")
 	}
-	if IsValidLedger([]byte("BLD")) != false {
+	if ledger.IsValidLedger([]byte("BLD")) != false {
 		t.Error("should not detect short data as valid ledger")
 	}
 }
 
 func TestLedgerRecordHelpers(t *testing.T) {
-	r := &Record{PayloadSize: 100}
+	r := &ledger.Record{PayloadSize: 100}
 	if r.Direction() != "in" {
 		t.Errorf("positive direction = %q", r.Direction())
 	}

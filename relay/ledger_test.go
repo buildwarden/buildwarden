@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/fxamacker/cbor/v2"
+
+	"warden/ledger"
 )
 
 func TestLedgerHeader(t *testing.T) {
@@ -83,7 +85,7 @@ func TestLedgerHeader(t *testing.T) {
 	off += 4
 	metaBytes := data[off : off+int(metaLen)]
 
-	var meta HeaderMeta
+	var meta ledger.HeaderMeta
 	if err := cbor.Unmarshal(metaBytes, &meta); err != nil {
 		t.Fatalf("unmarshal header meta: %v", err)
 	}

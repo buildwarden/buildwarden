@@ -6,10 +6,10 @@ import (
 	"os"
 	"time"
 
-	"github.com/lesiw/ctrctl"
 	"github.com/spf13/cobra"
 
 	"warden/driver"
+	"warden/driver/container"
 	"warden/driver/qemu"
 	"warden/driver/vz"
 )
@@ -72,7 +72,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&flagRuntime, "runtime", "",
 		"container runtime (finch, docker, podman)")
 	rootCmd.PersistentFlags().StringVar(&flagDriver, "driver", "",
-		"orchestration driver (container, vz, auto)")
+		"orchestration driver (container, qemu, vz)")
 	rootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false,
 		"verbose output")
 	rootCmd.PersistentFlags().StringVar(&flagColor, "color", "",
@@ -131,27 +131,30 @@ func resolveConfig() (*Config, error) {
 	return cfg, nil
 }
 
-func setupRuntime(cfg *Config) error {
+func resolveRuntime(cfg *Config) (string, error) {
 	setColorMode(cfg.Output.Color)
 
 	runtime := cfg.Runtime.CLI
 	if runtime == "" {
 		detected, err := DetectRuntime()
 		if err != nil {
-			return err
+			return "", err
 		}
 		runtime = detected
 	}
-	ctrctl.Cli = []string{runtime}
-	if cfg.Output.Verbose {
-		ctrctl.Verbose = true
-	}
-	return nil
+	return runtime, nil
+}
+
+func defaultExtensions() []driver.Extension {
+	return driver.DefaultExtensions()
 }
 
 func runBuild(cmd *cobra.Command, args []string) error {
 	cfg, err := resolveConfig()
 	if err != nil {
+		return err
+	}
+	if err := validateDriver(cfg.Runtime.Driver); err != nil {
 		return err
 	}
 
@@ -164,6 +167,9 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	if capture == "" {
 		capture = cfg.Build.Capture
 	}
+	if err := validateCapture(capture); err != nil {
+		return err
+	}
 	outputDir := flagOutput
 	if outputDir == "" {
 		outputDir = cfg.Build.OutputDir
@@ -171,6 +177,10 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	compress := !flagNoCompress
 	if cfg.Build.Compress != nil && !*cfg.Build.Compress {
 		compress = false
+	}
+
+	if err := validateFlagsForDriver(cfg.Runtime.Driver); err != nil {
+		return err
 	}
 
 	// Dispatch to VM drivers when requested
@@ -228,26 +238,34 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		return buildErr
 	}
 
-	// Default: container driver (existing ScriptEnv path)
-	if err := setupRuntime(cfg); err != nil {
+	// Default: container driver
+	runtime, err := resolveRuntime(cfg)
+	if err != nil {
 		return err
 	}
 	dockerfile, contextDir, err := ResolvePath(path)
 	if err != nil {
 		return err
 	}
-	env := NewScriptEnv()
-	config := &BuildConfig{
-		Context:         contextDir,
-		Containerfile:   dockerfile,
-		Capture:         capture,
-		OutputDir:       outputDir,
-		Compress:        compress,
-		RelayImage:      cfg.Runtime.RelayImage,
-		UpstreamCACerts: cfg.Relay.UpstreamCACerts,
-		SystemCABundle:  systemCA,
+	d := &container.Driver{
+		Runtime:    runtime,
+		Verbose:    cfg.Output.Verbose,
+		Version:    version,
+		Extensions: defaultExtensions(),
 	}
-	return env.Build(config)
+	defer d.Close()
+	_, buildErr := d.StartBuild(context.Background(), &driver.BuildRequest{
+		ContextDir:    contextDir,
+		Containerfile: dockerfile,
+		CaptureMode:   capture,
+		OutputDir:     outputDir,
+		Compress:      compress,
+		RelayImage:    cfg.Runtime.RelayImage,
+		Stdin:         os.Stdin,
+		Stdout:        os.Stdout,
+		Stderr:        os.Stderr,
+	})
+	return buildErr
 }
 
 func runShell(cmd *cobra.Command, args []string) error {
@@ -295,24 +313,31 @@ func runShell(cmd *cobra.Command, args []string) error {
 	}
 
 	// Default: container driver
-	if err := setupRuntime(cfg); err != nil {
+	runtime, err := resolveRuntime(cfg)
+	if err != nil {
 		return err
 	}
 	dockerfile, contextDir, err := ResolvePath(path)
 	if err != nil {
 		return err
 	}
-	env := NewScriptEnv()
-	config := &BuildConfig{
-		Context:         contextDir,
-		Containerfile:   dockerfile,
-		Capture:         capture,
-		OutputDir:       outputDir,
-		Compress:        compress,
-		RelayImage:      cfg.Runtime.RelayImage,
-		UpstreamCACerts: cfg.Relay.UpstreamCACerts,
-		SystemCABundle:  systemCA,
+	d := &container.Driver{
+		Runtime:    runtime,
+		Verbose:    cfg.Output.Verbose,
+		Version:    version,
+		Extensions: defaultExtensions(),
 	}
-	return env.Shell(config)
+	defer d.Close()
+	return d.Exec(context.Background(), &driver.BuildRequest{
+		ContextDir:    contextDir,
+		Containerfile: dockerfile,
+		CaptureMode:   capture,
+		OutputDir:     outputDir,
+		Compress:      compress,
+		RelayImage:    cfg.Runtime.RelayImage,
+		Stdin:         os.Stdin,
+		Stdout:        os.Stdout,
+		Stderr:        os.Stderr,
+	})
 }
 

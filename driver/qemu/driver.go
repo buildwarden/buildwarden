@@ -51,6 +51,9 @@ func (d *Driver) status(msg string) {
 }
 
 func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*driver.BuildResult, error) {
+	if err := d.checkPrereqs(); err != nil {
+		return nil, err
+	}
 	if req.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, req.Timeout)
@@ -235,6 +238,23 @@ func (d *Driver) Exec(ctx context.Context, req *driver.BuildRequest) error {
 
 func (d *Driver) Close() error { return nil }
 
+func (d *Driver) checkPrereqs() error {
+	binary := d.qemuBinary(hostQEMUArch())
+	if _, err := exec.LookPath(binary); err != nil {
+		return fmt.Errorf(
+			"qemu driver requires %s but it was not found in PATH\n"+
+				"  macOS:  brew install qemu\n"+
+				"  Linux:  apt install qemu-system (or equivalent)\n"+
+				"  Windows: scoop install qemu", binary)
+	}
+	if _, err := exec.LookPath("qemu-img"); err != nil {
+		return fmt.Errorf(
+			"qemu driver requires qemu-img but it was not found in PATH\n"+
+				"  It is typically included with the qemu package")
+	}
+	return nil
+}
+
 // detectAccel returns the best available acceleration for this host.
 func (d *Driver) detectAccel() string {
 	if d.Accel != "" {
@@ -247,6 +267,9 @@ func (d *Driver) detectAccel() string {
 		if _, err := os.Stat("/dev/kvm"); err == nil {
 			return "kvm"
 		}
+		fmt.Fprintf(os.Stderr,
+			"[warden] WARNING: /dev/kvm not available; "+
+				"using software emulation (much slower)\n")
 		return "tcg"
 	case "windows":
 		return "whpx"

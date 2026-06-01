@@ -1,4 +1,4 @@
-package main
+package container
 
 import (
 	"os"
@@ -22,7 +22,7 @@ func TestDockerfileToScript_SimpleRun(t *testing.T) {
 RUN pip install requests
 RUN echo hello
 `)
-	result, err := dockerfileToScript(path)
+	result, err := DockerfileToScript(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -46,7 +46,7 @@ ENV MY_VAR=hello
 ENV MULTI=one TWO=2
 RUN echo $MY_VAR
 `)
-	result, err := dockerfileToScript(path)
+	result, err := DockerfileToScript(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -63,7 +63,7 @@ func TestDockerfileToScript_WORKDIR(t *testing.T) {
 WORKDIR /app
 RUN pwd
 `)
-	result, err := dockerfileToScript(path)
+	result, err := DockerfileToScript(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -77,7 +77,7 @@ func TestDockerfileToScript_ARG(t *testing.T) {
 ARG VERSION=1.0
 RUN echo $VERSION
 `)
-	result, err := dockerfileToScript(path)
+	result, err := DockerfileToScript(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -92,7 +92,7 @@ RUN go build .
 FROM alpine
 COPY --from=builder /app /app
 `)
-	_, err := dockerfileToScript(path)
+	_, err := DockerfileToScript(path)
 	if err == nil {
 		t.Fatal("expected error for multi-stage build")
 	}
@@ -107,7 +107,7 @@ RUN apt-get update && \
     apt-get install -y git && \
     rm -rf /var/lib/apt/lists/*
 `)
-	result, err := dockerfileToScript(path)
+	result, err := DockerfileToScript(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -125,7 +125,7 @@ FROM alpine
 # Another comment
 RUN echo works
 `)
-	result, err := dockerfileToScript(path)
+	result, err := DockerfileToScript(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -145,7 +145,7 @@ CMD ["sh"]
 ENTRYPOINT ["/bin/sh"]
 RUN echo built
 `)
-	result, err := dockerfileToScript(path)
+	result, err := DockerfileToScript(path)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -157,7 +157,7 @@ RUN echo built
 func TestDockerfileToScript_NoFrom(t *testing.T) {
 	path := writeDockerfile(t, `RUN echo oops
 `)
-	_, err := dockerfileToScript(path)
+	_, err := DockerfileToScript(path)
 	if err == nil {
 		t.Fatal("expected error for missing FROM")
 	}
@@ -168,7 +168,7 @@ func TestDockerfileToScript_USERRejected(t *testing.T) {
 USER nobody
 RUN whoami
 `)
-	_, err := dockerfileToScript(path)
+	_, err := DockerfileToScript(path)
 	if err == nil {
 		t.Fatal("expected error for USER directive")
 	}
@@ -191,7 +191,7 @@ RUN pip download --no-binary :all: --no-deps requests==2.32.3 -d /tmp/sdist && \
 RUN WHEEL=$(ls /tmp/requests-*.whl) && \
     warden-io post "$WHEEL"
 `)
-	result, err := dockerfileToScript(path)
+	result, err := DockerfileToScript(path)
 	if err != nil {
 		t.Fatal(err)
 	}

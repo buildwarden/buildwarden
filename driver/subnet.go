@@ -49,31 +49,6 @@ func AllocateSubnet(cli []string) (Subnet, error) {
 		"no available /29 subnet in %s.0/24", WardenBaseNet)
 }
 
-// AllocateVMSubnet returns a subnet for VM-based drivers that don't use
-// container networking. Uses a fixed allocation since VMs have their own
-// isolated virtual network.
-func AllocateVMSubnet() Subnet {
-	return Subnet{
-		CIDR:    fmt.Sprintf("%s.0/29", WardenBaseNet),
-		RelayIP: fmt.Sprintf("%s.2", WardenBaseNet),
-		BuildIP: fmt.Sprintf("%s.3", WardenBaseNet),
-	}
-}
-
-// DetectRuntime probes for a working container runtime.
-func DetectRuntime() (string, error) {
-	for _, name := range []string{"finch", "docker", "podman"} {
-		if _, err := exec.LookPath(name); err != nil {
-			continue
-		}
-		cmd := exec.Command(name, "info")
-		if err := cmd.Run(); err == nil {
-			return name, nil
-		}
-	}
-	return "", fmt.Errorf("no container runtime found (tried finch, docker, podman)")
-}
-
 var anumRunes = []rune("abcdefghijklmnopqrstuvwxyz0123456789")
 
 // RandAlphaNum produces a cryptographically-random alphanumeric string.

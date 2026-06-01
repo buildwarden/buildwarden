@@ -3,7 +3,6 @@ package container
 import (
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/klauspost/compress/zstd"
@@ -73,19 +72,3 @@ func compressFile(src, dst string) {
 	out.Close()
 }
 
-func moveDir(src, dst string, compress bool) {
-	entries, err := os.ReadDir(src)
-	if err != nil {
-		return
-	}
-	for _, entry := range entries {
-		s := filepath.Join(src, entry.Name())
-		if compress {
-			compressFile(s,
-				filepath.Join(dst, entry.Name()+".zst"))
-		} else {
-			os.Rename(s, //nolint:errcheck
-				filepath.Join(dst, entry.Name()))
-		}
-	}
-}

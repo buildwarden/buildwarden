@@ -68,6 +68,9 @@ func (r *Relay) isBlockedIP(ip net.IP) bool {
 	if ip.IsUnspecified() {
 		return true
 	}
+	if ip.IsPrivate() {
+		return true
+	}
 	if ip.IsLinkLocalUnicast() || ip.IsLinkLocalMulticast() {
 		return true
 	}

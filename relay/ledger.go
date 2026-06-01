@@ -67,17 +67,6 @@ type LedgerConfig struct {
 	Schemas     []string
 }
 
-// HeaderMeta is the CBOR metadata embedded in the ledger header.
-type HeaderMeta = ledger.HeaderMeta
-type Header = ledger.Header
-type Record = ledger.Record
-type VerifyResult = ledger.VerifyResult
-
-var ReadHeader = ledger.ReadHeader
-var ReadRecord = ledger.ReadRecord
-var Verify = ledger.Verify
-var IsValidLedger = ledger.IsValidLedger
-
 var defaultHashes = []string{"blake2b_256", "sha256", "sha1", "md5"}
 
 var defaultSchemas = []string{

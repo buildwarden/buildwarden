@@ -9,6 +9,7 @@ import (
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strings"
 	"time"
 
 	"warden/driver"
@@ -349,6 +350,20 @@ func checkPlatform() error {
 	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
 		return fmt.Errorf("vz driver requires macOS on Apple Silicon (got %s/%s)",
 			runtime.GOOS, runtime.GOARCH)
+	}
+	exe, err := os.Executable()
+	if err != nil {
+		return nil
+	}
+	out, err := exec.Command(
+		"codesign", "-d", "--entitlements", ":-", exe).Output()
+	if err != nil || !strings.Contains(string(out),
+		"com.apple.security.virtualization") {
+		return fmt.Errorf(
+			"vz driver requires the com.apple.security.virtualization "+
+				"entitlement\n"+
+				"  Sign the binary: codesign --sign - "+
+				"--entitlements entitlements.plist %s", exe)
 	}
 	return nil
 }

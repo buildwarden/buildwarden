@@ -29,9 +29,11 @@ func runClean(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	if err := setupRuntime(cfg); err != nil {
+	runtime, err := resolveRuntime(cfg)
+	if err != nil {
 		return err
 	}
+	ctrctl.Cli = []string{runtime}
 
 	liveBuildIDs := findLiveWardenProcesses()
 
