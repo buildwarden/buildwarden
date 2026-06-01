@@ -50,7 +50,9 @@ func (d *Driver) status(msg string) {
 	fmt.Fprintf(os.Stderr, "[warden] %s\n", msg)
 }
 
-func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*driver.BuildResult, error) {
+func (d *Driver) StartBuild(
+	ctx context.Context, req *driver.BuildRequest,
+) (*driver.BuildResult, error) {
 	if err := d.checkPrereqs(); err != nil {
 		return nil, err
 	}
@@ -74,55 +76,11 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		return nil, fmt.Errorf("creating output dir: %w", err)
 	}
 
-	// Shared volume structure (same as vz driver)
-	sharedDir, err := os.MkdirTemp("", "warden-shared-"+buildID+"-")
+	sharedDir, err := d.prepareSharedDir(buildID, req)
 	if err != nil {
-		return nil, fmt.Errorf("creating shared dir: %w", err)
+		return nil, err
 	}
 	defer os.RemoveAll(sharedDir)
-
-	for _, sub := range []string{"context", "ledger", "signal"} {
-		if err := os.MkdirAll(filepath.Join(sharedDir, sub), 0755); err != nil {
-			return nil, fmt.Errorf("creating shared/%s: %w", sub, err)
-		}
-	}
-
-	d.status("preparing build environment...")
-
-	// Compile relay and warden-io in parallel
-	type prepResult struct {
-		name string
-		err  error
-	}
-	prepCh := make(chan prepResult, 2)
-	go func() {
-		prepCh <- prepResult{"relay", d.prepareRelay(sharedDir)}
-	}()
-	go func() {
-		prepCh <- prepResult{"agent", d.prepareAgent(sharedDir, req)}
-	}()
-	for i := 0; i < 2; i++ {
-		r := <-prepCh
-		if r.err != nil {
-			return nil, fmt.Errorf("preparing %s: %w", r.name, r.err)
-		}
-	}
-
-	// Write relay config
-	relayEnv := "LEDGER_DIR=/shared/ledger\nCONTEXT_DIR=/shared/context\n" +
-		"SIGNAL_DIR=/shared/signal\n"
-	if req.CaptureMode != "" && req.CaptureMode != "none" {
-		relayEnv += fmt.Sprintf("CAPTURE_MODE=%s\n", req.CaptureMode)
-	}
-	envPath := filepath.Join(sharedDir, "relay.env")
-	if err := os.WriteFile(envPath, []byte(relayEnv), 0644); err != nil {
-		return nil, fmt.Errorf("writing relay.env: %w", err)
-	}
-
-	// Copy build context
-	if err := d.prepareContext(sharedDir, req); err != nil {
-		return nil, fmt.Errorf("preparing context: %w", err)
-	}
 
 	// Resolve relay VM assets (kernel + initrd)
 	kernelPath, initrdPath, err := d.resolveRelayAssets()
@@ -150,59 +108,9 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		return nil, fmt.Errorf("relay did not start: %w", err)
 	}
 
-	// Resolve build VM boot method
-	buildCfg := &buildVMConfig{
-		Arch:     targetArch(req),
-		CPUs:     4,
-		MemoryMB: 4096,
-	}
-
-	// Resolve image: explicit --image, FROM in Containerfile, or direct-boot
-	image := req.Image
-	if image == "" && req.Containerfile != "" {
-		result, err := script.Translate(req.Containerfile)
-		if err == nil && result.Image != "" && result.Image != "scratch" {
-			resolved, err := resolveImage(result.Image)
-			if err == nil && resolved != "" {
-				image = resolved
-			}
-		}
-	}
-
-	if image != "" {
-		if _, err := os.Stat(image); err != nil {
-			return nil, fmt.Errorf("build image: %w", err)
-		}
-		// qemu-img resolves backing file relative to the overlay's dir,
-		// so make it absolute.
-		image, _ = filepath.Abs(image)
-		// Create COW overlay so base image is never modified
-		overlay := filepath.Join(sharedDir, "build-overlay.qcow2")
-		cmd := exec.Command("qemu-img", "create",
-			"-f", "qcow2", "-b", image, "-F", "qcow2", overlay)
-		if out, err := cmd.CombinedOutput(); err != nil {
-			return nil, fmt.Errorf(
-				"creating overlay: %s: %w", string(out), err)
-		}
-		buildCfg.DiskImage = overlay
-
-		// Generate cloud-init seed ISO
-		seedDir, err := d.cloudInitSeed(sharedDir)
-		if err != nil {
-			return nil, fmt.Errorf("generating cloud-init: %w", err)
-		}
-		seedISO := filepath.Join(sharedDir, "seed.iso")
-		if err := generateSeedISO(seedDir, seedISO); err != nil {
-			return nil, fmt.Errorf("generating seed ISO: %w", err)
-		}
-		buildCfg.SeedISO = seedISO
-	} else {
-		k, i, err := d.resolveBuildAssets()
-		if err != nil {
-			return nil, fmt.Errorf("resolving build assets: %w", err)
-		}
-		buildCfg.Kernel = k
-		buildCfg.Initrd = i
+	buildCfg, err := d.resolveBuildVMConfig(req, sharedDir)
+	if err != nil {
+		return nil, err
 	}
 	d.status("starting build...")
 	buildProc, err := d.startBuildVM(buildCfg, socketPath)
@@ -230,6 +138,119 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	}
 
 	return &driver.BuildResult{OutputDir: outputDir}, nil
+}
+
+// prepareSharedDir creates and populates the shared volume used by both
+// the relay VM and build VM. Compiles relay and agent in parallel.
+func (d *Driver) prepareSharedDir(
+	buildID string, req *driver.BuildRequest,
+) (string, error) {
+	sharedDir, err := os.MkdirTemp("", "warden-shared-"+buildID+"-")
+	if err != nil {
+		return "", fmt.Errorf("creating shared dir: %w", err)
+	}
+
+	for _, sub := range []string{"context", "ledger", "signal"} {
+		p := filepath.Join(sharedDir, sub)
+		if err := os.MkdirAll(p, 0755); err != nil {
+			return "", fmt.Errorf("creating shared/%s: %w", sub, err)
+		}
+	}
+
+	d.status("preparing build environment...")
+
+	type prepResult struct {
+		name string
+		err  error
+	}
+	prepCh := make(chan prepResult, 2)
+	go func() {
+		prepCh <- prepResult{"relay", d.prepareRelay(sharedDir)}
+	}()
+	go func() {
+		prepCh <- prepResult{"agent", d.prepareAgent(sharedDir, req)}
+	}()
+	for i := 0; i < 2; i++ {
+		r := <-prepCh
+		if r.err != nil {
+			return "", fmt.Errorf("preparing %s: %w", r.name, r.err)
+		}
+	}
+
+	relayEnv := "LEDGER_DIR=/shared/ledger\nCONTEXT_DIR=/shared/context\n" +
+		"SIGNAL_DIR=/shared/signal\n"
+	if req.CaptureMode != "" && req.CaptureMode != "none" {
+		relayEnv += fmt.Sprintf("CAPTURE_MODE=%s\n", req.CaptureMode)
+	}
+	envPath := filepath.Join(sharedDir, "relay.env")
+	if err := os.WriteFile(envPath, []byte(relayEnv), 0644); err != nil {
+		return "", fmt.Errorf("writing relay.env: %w", err)
+	}
+
+	if err := d.prepareContext(sharedDir, req); err != nil {
+		return "", fmt.Errorf("preparing context: %w", err)
+	}
+
+	return sharedDir, nil
+}
+
+// resolveBuildVMConfig determines how to boot the build VM: either from
+// a disk image (with COW overlay + cloud-init) or via direct kernel boot.
+func (d *Driver) resolveBuildVMConfig(
+	req *driver.BuildRequest, sharedDir string,
+) (*buildVMConfig, error) {
+	cfg := &buildVMConfig{
+		Arch:     targetArch(req),
+		CPUs:     4,
+		MemoryMB: 4096,
+	}
+
+	image := req.Image
+	if image == "" && req.Containerfile != "" {
+		result, err := script.Translate(req.Containerfile)
+		if err == nil && result.Image != "" &&
+			result.Image != "scratch" {
+			resolved, err := resolveImage(result.Image)
+			if err == nil && resolved != "" {
+				image = resolved
+			}
+		}
+	}
+
+	if image == "" {
+		k, i, err := d.resolveBuildAssets()
+		if err != nil {
+			return nil, fmt.Errorf("resolving build assets: %w", err)
+		}
+		cfg.Kernel = k
+		cfg.Initrd = i
+		return cfg, nil
+	}
+
+	if _, err := os.Stat(image); err != nil {
+		return nil, fmt.Errorf("build image: %w", err)
+	}
+	image, _ = filepath.Abs(image)
+
+	overlay := filepath.Join(sharedDir, "build-overlay.qcow2")
+	cmd := exec.Command("qemu-img", "create",
+		"-f", "qcow2", "-b", image, "-F", "qcow2", overlay)
+	if out, err := cmd.CombinedOutput(); err != nil {
+		return nil, fmt.Errorf(
+			"creating overlay: %s: %w", string(out), err)
+	}
+	cfg.DiskImage = overlay
+
+	seedDir, err := d.cloudInitSeed(sharedDir)
+	if err != nil {
+		return nil, fmt.Errorf("generating cloud-init: %w", err)
+	}
+	seedISO := filepath.Join(sharedDir, "seed.iso")
+	if err := generateSeedISO(seedDir, seedISO); err != nil {
+		return nil, fmt.Errorf("generating seed ISO: %w", err)
+	}
+	cfg.SeedISO = seedISO
+	return cfg, nil
 }
 
 func (d *Driver) Exec(ctx context.Context, req *driver.BuildRequest) error {

@@ -90,23 +90,8 @@ func runClean(cmd *cobra.Command, args []string) error {
 	}
 
 	// Clean VM cache (compiled binaries + cached images)
-	if cacheDir, err := os.UserCacheDir(); err == nil {
-		wardenCache := filepath.Join(cacheDir, "warden")
-		if info, err := os.Stat(wardenCache); err == nil && info.IsDir() {
-			var cacheSize int64
-			_ = filepath.Walk(wardenCache,
-				func(_ string, fi os.FileInfo, _ error) error {
-					if fi != nil && !fi.IsDir() {
-						cacheSize += fi.Size()
-					}
-					return nil
-				})
-			if err := os.RemoveAll(wardenCache); err == nil {
-				fmt.Fprintf(os.Stderr,
-					"Removed VM cache (%d MB)\n", cacheSize/(1024*1024))
-				removed++
-			}
-		}
+	if cleanVMCache() {
+		removed++
 	}
 
 	if removed == 0 {
@@ -115,6 +100,32 @@ func runClean(cmd *cobra.Command, args []string) error {
 		fmt.Printf("Removed %d resource(s).\n", removed)
 	}
 	return nil
+}
+
+func cleanVMCache() bool {
+	cacheDir, err := os.UserCacheDir()
+	if err != nil {
+		return false
+	}
+	wardenCache := filepath.Join(cacheDir, "warden")
+	info, err := os.Stat(wardenCache)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+	var cacheSize int64
+	_ = filepath.Walk(wardenCache,
+		func(_ string, fi os.FileInfo, _ error) error {
+			if fi != nil && !fi.IsDir() {
+				cacheSize += fi.Size()
+			}
+			return nil
+		})
+	if err := os.RemoveAll(wardenCache); err != nil {
+		return false
+	}
+	fmt.Fprintf(os.Stderr,
+		"Removed VM cache (%d MB)\n", cacheSize/(1024*1024))
+	return true
 }
 
 func listResources(args ...string) []string {

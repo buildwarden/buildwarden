@@ -154,7 +154,10 @@ func latestSupportedIPSW() (string, error) {
 
 // restoreIPSW runs the full IPSW restore process: creates disk, platform
 // state files, and installs macOS. Progress is printed to stderr from ObjC.
-func restoreIPSW(ipswPath, diskPath string, diskSizeGB int, auxPath, hwModelPath, machineIDPath string) error {
+func restoreIPSW(
+	ipswPath, diskPath string, diskSizeGB int,
+	auxPath, hwModelPath, machineIDPath string,
+) error {
 	cIpsw := C.CString(ipswPath)
 	defer C.free(unsafe.Pointer(cIpsw))
 	cDisk := C.CString(diskPath)

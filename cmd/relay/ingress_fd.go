@@ -70,8 +70,8 @@ func NewFDIngress(cfg FDIngressConfig) (*FDIngress, error) {
 	}
 
 	// Increase socket buffer sizes before setting non-blocking.
-	unix.SetsockoptInt(cfg.FD, unix.SOL_SOCKET, unix.SO_SNDBUF, 4*1024*1024)
-	unix.SetsockoptInt(cfg.FD, unix.SOL_SOCKET, unix.SO_RCVBUF, 4*1024*1024)
+	_ = unix.SetsockoptInt(cfg.FD, unix.SOL_SOCKET, unix.SO_SNDBUF, 4*1024*1024)
+	_ = unix.SetsockoptInt(cfg.FD, unix.SOL_SOCKET, unix.SO_RCVBUF, 4*1024*1024)
 
 	// Set non-blocking so Go's runtime poller can manage the FD.
 	// Inherited FDs from exec may be in blocking mode.

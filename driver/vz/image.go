@@ -11,6 +11,12 @@ import (
 	"time"
 )
 
+// plistHeader is the standard Apple plist XML header.
+const plistHeader = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
+	"<!DOCTYPE plist PUBLIC \"-//Apple//DTD PLIST 1.0//EN\"" +
+	" \"http://www.apple.com/DTDs/PropertyList-1.0.dtd\">\n" +
+	"<plist version=\"1.0\">\n"
+
 // ImageCache manages cached VM base images.
 type ImageCache struct {
 	CacheDir string
@@ -38,7 +44,10 @@ func (c *ImageCache) ImageDir() (string, error) {
 }
 
 func isValidImageDir(dir string) bool {
-	required := []string{"disk.img", "aux-storage", "hardware-model", "machine-id", ".prepared"}
+	required := []string{
+		"disk.img", "aux-storage", "hardware-model",
+		"machine-id", ".prepared",
+	}
 	for _, f := range required {
 		if _, err := os.Stat(filepath.Join(dir, f)); err != nil {
 			return false
@@ -106,7 +115,8 @@ func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 			ipswLocal = latestPath
 		} else {
 			fmt.Fprintf(os.Stderr, "Downloading IPSW...\n")
-			cmd := exec.Command("curl", "-L", "-o", ipswLocal, "--progress-bar", ipswURL)
+			cmd := exec.Command("curl", "-L", "-o", ipswLocal,
+			"--progress-bar", ipswURL)
 			cmd.Stdout = os.Stderr
 			cmd.Stderr = os.Stderr
 			if err := cmd.Run(); err != nil {
@@ -121,7 +131,8 @@ func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 	diskInfo, _ := os.Stat(diskPath)
 	if diskInfo == nil || diskInfo.Size() == 0 {
 		fmt.Fprintf(os.Stderr, "Restoring macOS from IPSW (this takes 10-20 minutes)...\n")
-		if err := restoreIPSW(ipswLocal, diskPath, 64, auxPath, hwModelPath, machineIDPath); err != nil {
+		if err := restoreIPSW(ipswLocal, diskPath, 64,
+		auxPath, hwModelPath, machineIDPath); err != nil {
 			return "", fmt.Errorf("restoring IPSW: %w", err)
 		}
 	} else {
@@ -144,7 +155,7 @@ func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 	}
 
 	// Mark the image as fully prepared
-	os.WriteFile(filepath.Join(imgDir, ".prepared"), []byte("ok\n"), 0644)
+	_ = os.WriteFile(filepath.Join(imgDir, ".prepared"), []byte("ok\n"), 0644)
 
 	fmt.Fprintf(os.Stderr, "macOS image ready at %s\n", imgDir)
 	return diskPath, nil
@@ -285,10 +296,8 @@ func suppressSetupAssistant(mountPoint string) error {
 
 func buildSkipPlist(items []string) string {
 	var sb strings.Builder
-	sb.WriteString(`<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
+	sb.WriteString(plistHeader)
+	sb.WriteString(`<dict>
 	<key>DidSeeCloudSetup</key>
 	<true/>
 	<key>DidSeePrivacy</key>
@@ -338,10 +347,7 @@ func createWardenUser(mountPoint string) error {
 	// The VM is torn down after each build so password strength is irrelevant.
 	passHash := hashPassword(wardenUser)
 
-	userPlist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
+	userPlist := plistHeader + fmt.Sprintf(`<dict>
 	<key>authentication_authority</key>
 	<array>
 		<string>;ShadowHash;HASHLIST:&lt;SALTED-SHA512-PBKDF2&gt;</string>
@@ -425,10 +431,7 @@ func enableAutoLogin(mountPoint string) error {
 	}
 
 	// loginwindow plist to enable auto-login
-	lwPlist := fmt.Sprintf(`<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
+	lwPlist := plistHeader + fmt.Sprintf(`<dict>
 	<key>autoLoginUser</key>
 	<string>%s</string>
 </dict>
@@ -478,10 +481,7 @@ func installAgentLaunchd(mountPoint string) error {
 	// On macOS guests with Virtualization.framework, virtio-fs shares with
 	// the automount tag appear at /Volumes/My Shared Files/<tag>.
 	// We use the tag "shared" so the mount is /Volumes/My Shared Files/shared/
-	plist := `<?xml version="1.0" encoding="UTF-8"?>
-<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
-<plist version="1.0">
-<dict>
+	plist := plistHeader + `<dict>
 	<key>Label</key>
 	<string>com.buildwarden.agent</string>
 	<key>ProgramArguments</key>
@@ -607,30 +607,37 @@ func mountDiskImage(diskPath string) (*diskMount, error) {
 		"-nobrowse", "-noverify", "-noautoopen", "-owners", "on")
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return nil, fmt.Errorf("hdiutil attach: %s: %w", string(out), err)
+		return nil, fmt.Errorf(
+			"hdiutil attach: %s: %w", string(out), err)
 	}
 
-	// Extract the base device (first line of output is always the disk device)
+	baseDevice, mountPoints := parseHdiutilOutput(string(out))
+
+	dataPath := findDataVolume(mountPoints)
+	if dataPath == "" {
+		exec.Command("hdiutil", "detach", baseDevice, "-force").Run() //nolint:errcheck
+		return nil, fmt.Errorf(
+			"data volume not found in mounted disk image")
+	}
+
+	return &diskMount{
+		DataVolumePath: dataPath,
+		BaseDevice:     baseDevice,
+	}, nil
+}
+
+// parseHdiutilOutput extracts the base device and mount points from
+// hdiutil attach output.
+func parseHdiutilOutput(output string) (string, []string) {
 	var baseDevice string
-	for _, line := range strings.Split(string(out), "\n") {
-		fields := strings.Fields(line)
-		if len(fields) >= 2 && strings.HasPrefix(fields[0], "/dev/disk") {
-			if !strings.Contains(fields[0], "s") || fields[0] == fields[0][:strings.LastIndex(fields[0], "s")] {
-				// This is a base device (no slice number) like /dev/disk4
-			}
-			if baseDevice == "" {
-				// First device listed is always the base disk
-				baseDevice = fields[0]
-			}
-		}
-	}
-
-	// Identify the Data volume by its APFS role. We use `diskutil apfs list`
-	// on the container device to get volume roles, then match the Data role
-	// volume to its mount point.
-	var dataPath string
 	var mountPoints []string
-	for _, line := range strings.Split(string(out), "\n") {
+	for _, line := range strings.Split(output, "\n") {
+		fields := strings.Fields(line)
+		if len(fields) >= 2 &&
+			strings.HasPrefix(fields[0], "/dev/disk") &&
+			baseDevice == "" {
+			baseDevice = fields[0]
+		}
 		tabIdx := strings.LastIndex(line, "\t")
 		if tabIdx < 0 {
 			continue
@@ -640,40 +647,29 @@ func mountDiskImage(diskPath string) (*diskMount, error) {
 			mountPoints = append(mountPoints, mp)
 		}
 	}
+	return baseDevice, mountPoints
+}
 
-	// The Data volume is identified by `diskutil info <mount>` showing
-	// "Volume Name: Data". This is set by macOS during IPSW restore and
-	// is the standard name for the APFS data volume.
+// findDataVolume identifies the APFS Data volume from a list of mount
+// points by checking `diskutil info` for "Volume Name: Data".
+func findDataVolume(mountPoints []string) string {
 	for _, mp := range mountPoints {
-		infoOut, infoErr := exec.Command("diskutil", "info", mp).Output()
-		if infoErr != nil {
+		infoOut, err := exec.Command("diskutil", "info", mp).Output()
+		if err != nil {
 			continue
 		}
-		for _, infoLine := range strings.Split(string(infoOut), "\n") {
-			trimmed := strings.TrimSpace(infoLine)
-			if strings.HasPrefix(trimmed, "Volume Name:") {
-				volName := strings.TrimSpace(strings.TrimPrefix(trimmed, "Volume Name:"))
-				if volName == "Data" {
-					dataPath = mp
-					break
-				}
+		for _, line := range strings.Split(string(infoOut), "\n") {
+			trimmed := strings.TrimSpace(line)
+			if !strings.HasPrefix(trimmed, "Volume Name:") {
+				continue
+			}
+			suffix := strings.TrimPrefix(trimmed, "Volume Name:")
+			if strings.TrimSpace(suffix) == "Data" {
+				return mp
 			}
 		}
-		if dataPath != "" {
-			break
-		}
 	}
-
-	if dataPath == "" {
-		// Detach since we can't find the data volume
-		exec.Command("hdiutil", "detach", baseDevice, "-force").Run() //nolint:errcheck
-		return nil, fmt.Errorf("data volume not found in mounted disk image")
-	}
-
-	return &diskMount{
-		DataVolumePath: dataPath,
-		BaseDevice:     baseDevice,
-	}, nil
+	return ""
 }
 
 // unmountDiskImage detaches all volumes for a previously mounted disk image.
@@ -716,7 +712,7 @@ func (c *ImageCache) firstBoot(diskPath, platformDir string) error {
 	if err := vm.Start(); err != nil {
 		return fmt.Errorf("starting first-boot VM: %w", err)
 	}
-	defer vm.Stop()
+	defer func() { _ = vm.Stop() }()
 
 	// Wait 90 seconds for macOS to complete initial setup.
 	// On first boot after IPSW restore, macOS does one-time tasks

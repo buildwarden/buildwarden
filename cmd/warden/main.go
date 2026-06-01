@@ -149,13 +149,23 @@ func defaultExtensions() []driver.Extension {
 	return driver.DefaultExtensions()
 }
 
-func runBuild(cmd *cobra.Command, args []string) error {
+// buildParams holds resolved build parameters from config and flags.
+type buildParams struct {
+	cfg       *Config
+	path      string
+	capture   string
+	outputDir string
+	compress  bool
+	systemCA  bool
+}
+
+func resolveBuildParams(args []string) (*buildParams, error) {
 	cfg, err := resolveConfig()
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err := validateDriver(cfg.Runtime.Driver); err != nil {
-		return err
+		return nil, err
 	}
 
 	path := ""
@@ -168,7 +178,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		capture = cfg.Build.Capture
 	}
 	if err := validateCapture(capture); err != nil {
-		return err
+		return nil, err
 	}
 	outputDir := flagOutput
 	if outputDir == "" {
@@ -180,7 +190,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	}
 
 	if err := validateFlagsForDriver(cfg.Runtime.Driver); err != nil {
-		return err
+		return nil, err
 	}
 
 	systemCA := true
@@ -188,10 +198,27 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		systemCA = *cfg.Relay.SystemCABundle
 	}
 
+	return &buildParams{
+		cfg:       cfg,
+		path:      path,
+		capture:   capture,
+		outputDir: outputDir,
+		compress:  compress,
+		systemCA:  systemCA,
+	}, nil
+}
+
+func runBuild(cmd *cobra.Command, args []string) error {
+	bp, err := resolveBuildParams(args)
+	if err != nil {
+		return err
+	}
+	cfg := bp.cfg
+
 	// Dispatch to VM drivers when requested
 	switch cfg.Runtime.Driver {
 	case "vz":
-		dockerfile, contextDir, err := ResolvePath(path)
+		dockerfile, contextDir, err := ResolvePath(bp.path)
 		if err != nil {
 			return err
 		}
@@ -202,11 +229,11 @@ func runBuild(cmd *cobra.Command, args []string) error {
 			Containerfile:    dockerfile,
 			Script:           flagScript,
 			Image:            flagImage,
-			CaptureMode:      capture,
-			OutputDir:        outputDir,
-			Compress:         compress,
+			CaptureMode:      bp.capture,
+			OutputDir:        bp.outputDir,
+			Compress:         bp.compress,
 			UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
-			UpstreamSystemCA: systemCA,
+			UpstreamSystemCA: bp.systemCA,
 			Stdin:            os.Stdin,
 			Stdout:           os.Stdout,
 			Stderr:           os.Stderr,
@@ -214,7 +241,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		return buildErr
 
 	case "qemu":
-		dockerfile, contextDir, err := ResolvePath(path)
+		dockerfile, contextDir, err := ResolvePath(bp.path)
 		if err != nil {
 			return err
 		}
@@ -223,7 +250,6 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		defer d.Close()
 		var timeout time.Duration
 		if flagTimeout != "" {
-			var err error
 			timeout, err = time.ParseDuration(flagTimeout)
 			if err != nil {
 				return fmt.Errorf("invalid --timeout: %w", err)
@@ -234,12 +260,12 @@ func runBuild(cmd *cobra.Command, args []string) error {
 			Containerfile:    dockerfile,
 			Script:           flagScript,
 			Image:            flagImage,
-			CaptureMode:      capture,
-			OutputDir:        outputDir,
-			Compress:         compress,
+			CaptureMode:      bp.capture,
+			OutputDir:        bp.outputDir,
+			Compress:         bp.compress,
 			Timeout:          timeout,
 			UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
-			UpstreamSystemCA: systemCA,
+			UpstreamSystemCA: bp.systemCA,
 			Stdin:            os.Stdin,
 			Stdout:           os.Stdout,
 			Stderr:           os.Stderr,
@@ -252,7 +278,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
-	dockerfile, contextDir, err := ResolvePath(path)
+	dockerfile, contextDir, err := ResolvePath(bp.path)
 	if err != nil {
 		return err
 	}
@@ -266,12 +292,12 @@ func runBuild(cmd *cobra.Command, args []string) error {
 	_, buildErr := d.StartBuild(context.Background(), &driver.BuildRequest{
 		ContextDir:       contextDir,
 		Containerfile:    dockerfile,
-		CaptureMode:      capture,
-		OutputDir:        outputDir,
-		Compress:         compress,
+		CaptureMode:      bp.capture,
+		OutputDir:        bp.outputDir,
+		Compress:         bp.compress,
 		RelayImage:       cfg.Runtime.RelayImage,
 		UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
-		UpstreamSystemCA: systemCA,
+		UpstreamSystemCA: bp.systemCA,
 		Stdin:            os.Stdin,
 		Stdout:           os.Stdout,
 		Stderr:           os.Stderr,

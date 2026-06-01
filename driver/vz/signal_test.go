@@ -27,7 +27,7 @@ func TestCheckBuildStatus_Running(t *testing.T) {
 	heartbeat := filepath.Join(dir, "heartbeat")
 	exitCode := filepath.Join(dir, "exit_code")
 
-	os.WriteFile(heartbeat, []byte("1234567890"), 0644)
+	_ = os.WriteFile(heartbeat, []byte("1234567890"), 0644)
 
 	status, _ := checkBuildStatus(heartbeat, exitCode)
 	if status != BuildRunning {
@@ -40,7 +40,7 @@ func TestCheckBuildStatus_Completed(t *testing.T) {
 	heartbeat := filepath.Join(dir, "heartbeat")
 	exitCode := filepath.Join(dir, "exit_code")
 
-	os.WriteFile(exitCode, []byte("0\n"), 0644)
+	_ = os.WriteFile(exitCode, []byte("0\n"), 0644)
 
 	status, code := checkBuildStatus(heartbeat, exitCode)
 	if status != BuildCompleted {
@@ -56,7 +56,7 @@ func TestCheckBuildStatus_CompletedWithError(t *testing.T) {
 	heartbeat := filepath.Join(dir, "heartbeat")
 	exitCode := filepath.Join(dir, "exit_code")
 
-	os.WriteFile(exitCode, []byte("1\n"), 0644)
+	_ = os.WriteFile(exitCode, []byte("1\n"), 0644)
 
 	status, code := checkBuildStatus(heartbeat, exitCode)
 	if status != BuildCompleted {
@@ -73,9 +73,9 @@ func TestCheckBuildStatus_Unresponsive(t *testing.T) {
 	exitCode := filepath.Join(dir, "exit_code")
 
 	// Write heartbeat file then backdate it
-	os.WriteFile(heartbeat, []byte("1234567890"), 0644)
+	_ = os.WriteFile(heartbeat, []byte("1234567890"), 0644)
 	staleTime := time.Now().Add(-heartbeatTimeout - time.Second)
-	os.Chtimes(heartbeat, staleTime, staleTime)
+	_ = os.Chtimes(heartbeat, staleTime, staleTime)
 
 	status, _ := checkBuildStatus(heartbeat, exitCode)
 	if status != BuildUnresponsive {
@@ -90,10 +90,10 @@ func TestWaitForBuild_Completed(t *testing.T) {
 	// Simulate build completion after a short delay
 	go func() {
 		time.Sleep(100 * time.Millisecond)
-		os.WriteFile(filepath.Join(signalDir, "heartbeat"), []byte("1"), 0644)
+		_ = os.WriteFile(filepath.Join(signalDir, "heartbeat"), []byte("1"), 0644)
 		time.Sleep(100 * time.Millisecond)
 		os.Remove(filepath.Join(signalDir, "heartbeat"))
-		os.WriteFile(filepath.Join(signalDir, "exit_code"), []byte("0"), 0644)
+		_ = os.WriteFile(filepath.Join(signalDir, "exit_code"), []byte("0"), 0644)
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

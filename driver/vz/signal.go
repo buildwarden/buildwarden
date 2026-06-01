@@ -59,15 +59,7 @@ func WaitForBuild(ctx context.Context, signalDir string, isTTY bool) (exitCode i
 				return code, nil
 
 			case BuildUnresponsive:
-				if isTTY {
-					return -1, fmt.Errorf(
-						"build VM unresponsive (no heartbeat for %v); "+
-							"use --shell to diagnose or ctrl-c to clean up",
-						heartbeatTimeout)
-				}
-				return -1, fmt.Errorf(
-					"build VM unresponsive (no heartbeat for %v)",
-					heartbeatTimeout)
+				return -1, unresponsiveErr(isTTY)
 
 			case BuildRunning, BuildNotStarted:
 				continue
@@ -97,4 +89,14 @@ func checkBuildStatus(heartbeatPath, exitCodePath string) (BuildStatus, int) {
 	}
 
 	return BuildRunning, 0
+}
+
+func unresponsiveErr(isTTY bool) error {
+	msg := fmt.Sprintf(
+		"build VM unresponsive (no heartbeat for %v)",
+		heartbeatTimeout)
+	if isTTY {
+		msg += "; use --shell to diagnose or ctrl-c to clean up"
+	}
+	return fmt.Errorf("%s", msg)
 }

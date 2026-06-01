@@ -46,7 +46,9 @@ func New() *Driver {
 
 func (d *Driver) Name() string { return "vz" }
 
-func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*driver.BuildResult, error) {
+func (d *Driver) StartBuild(
+	ctx context.Context, req *driver.BuildRequest,
+) (*driver.BuildResult, error) {
 	if err := checkPlatform(); err != nil {
 		return nil, err
 	}
@@ -62,50 +64,11 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		return nil, fmt.Errorf("creating output dir: %w", err)
 	}
 
-	// Shared volume: accessible by both relay VM and build VM via virtio-fs.
-	// Contains relay binary, ledger output, build context, and agent binary.
-	sharedDir, err := os.MkdirTemp("", "warden-shared-"+buildID+"-")
+	sharedDir, err := d.prepareSharedDir(buildID, req)
 	if err != nil {
-		return nil, fmt.Errorf("creating shared dir: %w", err)
+		return nil, err
 	}
 	defer os.RemoveAll(sharedDir)
-
-	// Create shared volume structure (host-side only, not mounted in VM):
-	//   shared/
-	//   ├── relay          (relay binary, darwin/arm64 host process)
-	//   ├── relay.env      (LEDGER_DIR, CONTEXT_DIR, CAPTURE_MODE)
-	//   ├── context/       (build context + build.sh, served via relay)
-	//   ├── ledger/        (relay writes here)
-	//   └── signal/        (relay writes heartbeat/exit_code here)
-	for _, sub := range []string{"context", "ledger", "signal"} {
-		if err := os.MkdirAll(filepath.Join(sharedDir, sub), 0755); err != nil {
-			return nil, fmt.Errorf("creating shared/%s: %w", sub, err)
-		}
-	}
-
-	// Place relay binary on shared volume
-	if err := d.prepareRelay(sharedDir); err != nil {
-		return nil, fmt.Errorf("preparing relay: %w", err)
-	}
-
-	// Write relay config (env vars it reads at startup)
-	relayEnv := fmt.Sprintf("LEDGER_DIR=/shared/ledger\nCONTEXT_DIR=/shared/context\n")
-	if req.CaptureMode != "" && req.CaptureMode != "none" {
-		relayEnv += fmt.Sprintf("CAPTURE_MODE=%s\n", req.CaptureMode)
-	}
-	if err := os.WriteFile(filepath.Join(sharedDir, "relay.env"), []byte(relayEnv), 0644); err != nil {
-		return nil, fmt.Errorf("writing relay.env: %w", err)
-	}
-
-	// Place build context on shared volume
-	if err := d.prepareContext(sharedDir, req); err != nil {
-		return nil, fmt.Errorf("preparing context: %w", err)
-	}
-
-	// Place build agent (warden-io + script) on shared volume
-	if err := d.prepareAgent(sharedDir, req); err != nil {
-		return nil, fmt.Errorf("preparing agent: %w", err)
-	}
 
 	// Resolve and clone macOS disk image for build VM
 	diskImage, err := d.resolveImage(req.Image)
@@ -152,8 +115,7 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	if err != nil {
 		return nil, fmt.Errorf("booting build VM: %w", err)
 	}
-	defer buildVM.Stop()
-
+	defer func() { _ = buildVM.Stop() }()
 
 	// Wait for build completion via heartbeat protocol
 	signalDir := filepath.Join(sharedDir, "signal")
@@ -185,6 +147,46 @@ func (d *Driver) Exec(ctx context.Context, req *driver.BuildRequest) error {
 }
 
 func (d *Driver) Close() error { return nil }
+
+// prepareSharedDir creates and populates the shared volume structure.
+func (d *Driver) prepareSharedDir(
+	buildID string, req *driver.BuildRequest,
+) (string, error) {
+	sharedDir, err := os.MkdirTemp("", "warden-shared-"+buildID+"-")
+	if err != nil {
+		return "", fmt.Errorf("creating shared dir: %w", err)
+	}
+
+	for _, sub := range []string{"context", "ledger", "signal"} {
+		p := filepath.Join(sharedDir, sub)
+		if err := os.MkdirAll(p, 0755); err != nil {
+			return "", fmt.Errorf("creating shared/%s: %w", sub, err)
+		}
+	}
+
+	if err := d.prepareRelay(sharedDir); err != nil {
+		return "", fmt.Errorf("preparing relay: %w", err)
+	}
+
+	relayEnv := "LEDGER_DIR=/shared/ledger\nCONTEXT_DIR=/shared/context\n"
+	if req.CaptureMode != "" && req.CaptureMode != "none" {
+		relayEnv += fmt.Sprintf("CAPTURE_MODE=%s\n", req.CaptureMode)
+	}
+	envPath := filepath.Join(sharedDir, "relay.env")
+	if err := os.WriteFile(envPath, []byte(relayEnv), 0644); err != nil {
+		return "", fmt.Errorf("writing relay.env: %w", err)
+	}
+
+	if err := d.prepareContext(sharedDir, req); err != nil {
+		return "", fmt.Errorf("preparing context: %w", err)
+	}
+
+	if err := d.prepareAgent(sharedDir, req); err != nil {
+		return "", fmt.Errorf("preparing agent: %w", err)
+	}
+
+	return sharedDir, nil
+}
 
 // prepareRelay places the relay binary on the shared volume.
 // For the VZ driver, the relay runs on the host (darwin/arm64).
@@ -270,8 +272,8 @@ type RelayProcess struct {
 // Stop sends SIGTERM and waits for the relay to exit.
 func (rp *RelayProcess) Stop() {
 	if rp.cmd != nil && rp.cmd.Process != nil {
-		rp.cmd.Process.Signal(os.Interrupt)
-		rp.cmd.Wait()
+		_ = rp.cmd.Process.Signal(os.Interrupt)
+		_ = rp.cmd.Wait()
 	}
 }
 
@@ -436,7 +438,7 @@ func copyFile(src, dst string) error {
 	// Preserve executable permission
 	info, err := in.Stat()
 	if err == nil {
-		out.Chmod(info.Mode())
+		_ = out.Chmod(info.Mode())
 	}
 	return out.Close()
 }
