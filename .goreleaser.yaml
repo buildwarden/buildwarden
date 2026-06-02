@@ -7,7 +7,8 @@ before:
         GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o dist/warden-io-linux-arm64 ./cmd/warden-io &&
         GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o dist/warden-io-darwin-arm64 ./cmd/warden-io &&
         GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -ldflags="-s -w" -o dist/warden-relay-linux-amd64 ./cmd/relay &&
-        GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o dist/warden-relay-linux-arm64 ./cmd/relay
+        GOOS=linux GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o dist/warden-relay-linux-arm64 ./cmd/relay &&
+        GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build -ldflags="-s -w" -o dist/warden-relay-darwin-arm64 ./cmd/relay
 builds:
   - id: warden
     main: ./cmd/warden
@@ -36,6 +37,10 @@ archives:
           mode: 0755
       - src: dist/warden-io-darwin-arm64
         dst: warden-io-darwin-arm64
+        info:
+          mode: 0755
+      - src: dist/warden-relay-darwin-arm64
+        dst: warden-relay-darwin-arm64
         info:
           mode: 0755
 checksum:

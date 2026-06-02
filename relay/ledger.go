@@ -34,6 +34,7 @@ const (
 // All writes are serialized through a single channel.
 type Ledger struct {
 	key           ed25519.PrivateKey
+	pubKey        ed25519.PublicKey
 	writer        io.Writer
 	entries       chan entryRequest
 	done          chan struct{}
@@ -98,8 +99,14 @@ func NewLedger(cfg LedgerConfig) (*Ledger, error) {
 		hashBlockSize += hashOutputSize(name)
 	}
 
+	pubKey, ok := priv.Public().(ed25519.PublicKey)
+	if !ok {
+		return nil, fmt.Errorf("unexpected public key type")
+	}
+
 	l := &Ledger{
 		key:           priv,
+		pubKey:        pubKey,
 		writer:        cfg.Writer,
 		entries:       make(chan entryRequest, 256),
 		done:          make(chan struct{}),
@@ -118,12 +125,9 @@ func NewLedger(cfg LedgerConfig) (*Ledger, error) {
 }
 
 // PublicKey returns the raw Ed25519 public key bytes.
+// Safe to call after Finish() (the public key is retained).
 func (l *Ledger) PublicKey() ed25519.PublicKey {
-	pub, ok := l.key.Public().(ed25519.PublicKey)
-	if !ok {
-		panic("unexpected key type")
-	}
-	return pub
+	return l.pubKey
 }
 
 // Open writes an open record synchronously and returns its signature.
@@ -193,9 +197,13 @@ func (l *Ledger) Artifact(
 }
 
 // Finish drains the entry channel and waits for the loop to exit.
+// The signing key is zeroed after all writes complete.
 func (l *Ledger) Finish() {
 	close(l.entries)
 	<-l.done
+	for i := range l.key {
+		l.key[i] = 0
+	}
 }
 
 // ComputeHashBlock computes the concatenated hash block for data.
