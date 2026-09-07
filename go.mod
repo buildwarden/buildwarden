@@ -15,8 +15,8 @@ require (
 	github.com/lesiw/ctrctl v0.5.0
 	github.com/miekg/dns v1.1.55
 	github.com/pavlo-v-chernykh/keystore-go/v4 v4.4.1
-	golang.org/x/crypto v0.50.0
-	golang.org/x/sys v0.43.0
+	golang.org/x/crypto v0.51.0
+	golang.org/x/sys v0.45.0
 	gvisor.dev/gvisor v0.0.0-20250503011706-39ed1f5ac29c
 )
 
@@ -27,7 +27,7 @@ require (
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/x448/float16 v0.8.4 // indirect
 	golang.org/x/mod v0.34.0 // indirect
-	golang.org/x/net v0.52.0 // indirect
+	golang.org/x/net v0.55.0 // indirect
 	golang.org/x/sync v0.20.0 // indirect
 	golang.org/x/time v0.7.0 // indirect
 	golang.org/x/tools v0.43.0 // indirect
