@@ -190,20 +190,28 @@ func InstallWindowsImage(m *WindowsMedia, opts WindowsPrepOptions) (string, erro
 	return base, nil
 }
 
-// windowsInstallArgs builds the qemu argument list for the unattended install.
+// windowsInstallArgs builds the qemu argument list for the unattended install,
+// modelled on the virtio-win project's known-good ARM64 recipe: ramfb display,
+// USB keyboard/tablet, a user NIC, and the install/driver/answer media as
+// usb-storage CD-ROMs with explicit format=raw,media=cdrom (WinPE reads USB
+// mass storage in-box, and format=raw makes qemu present them as CD-ROMs).
 func windowsInstallArgs(
 	qarch, accel, base, codeFD, varsFD string, m *WindowsMedia,
 ) []string {
 	args := []string{
 		"-machine", fmt.Sprintf("virt,accel=%s", accel),
 		"-cpu", cpuForAccel(accel, qarch),
-		"-m", "4096",
-		"-smp", "4",
+		"-m", "8192",
+		"-smp", "8",
 		"-nodefaults",
 		"-display", "none",
-		"-no-reboot",
+		"-device", "ramfb",
+		"-device", "qemu-xhci,id=xhci",
+		"-device", "usb-kbd,bus=xhci.0",
+		"-device", "usb-tablet,bus=xhci.0",
+		"-nic", "user,model=virtio-net-pci",
 		"-device", "virtio-rng-pci",
-		"-device", "virtio-gpu-pci",
+		"-no-reboot",
 	}
 	// Firmware: pflash code (ro) + writable vars, else read-only -bios.
 	if varsFD != "" {
@@ -214,22 +222,18 @@ func windowsInstallArgs(
 	} else {
 		args = append(args, "-bios", codeFD)
 	}
-	// Target base disk on virtio; Setup installs the virtio storage driver
-	// (via the Autounattend DriverPaths) so it can write here.
-	args = append(args,
-		"-drive", fmt.Sprintf("file=%s,format=qcow2,if=virtio", base))
-	// Install media, virtio-win drivers, and the answer disk as USB storage:
-	// WinPE reads USB mass storage in-box, avoiding the virtio chicken-and-egg
-	// for the boot media.
-	args = append(args, "-device", "qemu-xhci,id=xhci")
+	// Install ISO, virtio-win drivers, and the answer ISO as USB CD-ROMs.
 	for i, iso := range []string{m.InstallISO, m.VirtioISO, m.AutounattendISO} {
 		id := fmt.Sprintf("cd%d", i)
 		args = append(args,
 			"-drive", fmt.Sprintf(
-				"file=%s,id=%s,media=cdrom,readonly=on,if=none", iso, id),
+				"if=none,id=%s,format=raw,media=cdrom,readonly=on,file=%s", id, iso),
 			"-device", fmt.Sprintf("usb-storage,bus=xhci.0,drive=%s", id),
 		)
 	}
+	// Target disk on virtio-blk; Setup loads viostor via the DriverPaths.
+	args = append(args,
+		"-drive", fmt.Sprintf("file=%s,format=qcow2,if=virtio", base))
 	return args
 }
 
