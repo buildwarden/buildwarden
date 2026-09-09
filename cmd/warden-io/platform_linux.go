@@ -1,4 +1,4 @@
-// +build linux
+//go:build linux
 
 package main
 
@@ -8,6 +8,31 @@ import (
 	"os/exec"
 	"path/filepath"
 )
+
+// scriptCommand builds the command to execute the fetched build script,
+// preferring bash when available and falling back to POSIX sh.
+func scriptCommand(path string) *exec.Cmd {
+	shell := "/bin/sh"
+	if _, err := os.Stat("/bin/bash"); err == nil {
+		shell = "/bin/bash"
+	}
+	return exec.Command(shell, path)
+}
+
+// findCABundle returns the path to the system CA bundle for use as
+// SSL_CERT_FILE and friends.
+func findCABundle() string {
+	for _, path := range []string{
+		"/etc/ssl/certs/ca-certificates.crt",
+		"/etc/pki/tls/certs/ca-bundle.crt",
+		"/etc/ssl/cert.pem",
+	} {
+		if _, err := os.Stat(path); err == nil {
+			return path
+		}
+	}
+	return ""
+}
 
 func configureNetwork(gateway, selfIP string) error {
 	if gateway == "" {

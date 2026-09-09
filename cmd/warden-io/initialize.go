@@ -7,7 +7,6 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 )
@@ -127,29 +126,8 @@ func setCAEnvironment() {
 	os.Setenv("CURL_CA_BUNDLE", bundlePath)
 }
 
-func findCABundle() string {
-	if runtime.GOOS == "darwin" {
-		return "/etc/ssl/cert.pem"
-	}
-	for _, path := range []string{
-		"/etc/ssl/certs/ca-certificates.crt",
-		"/etc/pki/tls/certs/ca-bundle.crt",
-		"/etc/ssl/cert.pem",
-	} {
-		if _, err := os.Stat(path); err == nil {
-			return path
-		}
-	}
-	return ""
-}
-
 func execScript(path string) int {
-	shell := "/bin/sh"
-	if _, err := os.Stat("/bin/bash"); err == nil {
-		shell = "/bin/bash"
-	}
-
-	cmd := exec.Command(shell, path)
+	cmd := scriptCommand(path)
 	cmd.Stdin = os.Stdin
 	cmd.Stdout = os.Stdout
 	cmd.Stderr = os.Stderr

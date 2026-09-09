@@ -8,6 +8,25 @@ import (
 	"os/exec"
 )
 
+// scriptCommand builds the command to execute the fetched build script,
+// preferring bash when available and falling back to POSIX sh.
+func scriptCommand(path string) *exec.Cmd {
+	shell := "/bin/sh"
+	if _, err := os.Stat("/bin/bash"); err == nil {
+		shell = "/bin/bash"
+	}
+	return exec.Command(shell, path)
+}
+
+// findCABundle returns the path to the combined CA bundle for use as
+// SSL_CERT_FILE and friends.
+func findCABundle() string {
+	if _, err := os.Stat("/etc/ssl/cert.pem"); err == nil {
+		return "/etc/ssl/cert.pem"
+	}
+	return ""
+}
+
 func configureNetwork(gateway, selfIP string) error {
 	if gateway == "" {
 		return nil
