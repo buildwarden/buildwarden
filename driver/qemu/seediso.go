@@ -10,24 +10,25 @@ import (
 	"time"
 )
 
-// generateSeedISO creates an ISO9660 image from a directory, labeled
-// "CIDATA" for cloud-init NoCloud detection.
+// generateSeedISO creates an ISO9660 image from a directory with the given
+// volume label ("CIDATA" for cloud-init NoCloud detection; "WARDEN" for the
+// Windows provisioning seed).
 // Uses platform tools (hdiutil on macOS, mkisofs/genisoimage on Linux)
 // with a pure-Go fallback.
-func generateSeedISO(dir, outPath string) error {
-	if err := generateSeedISOExternal(dir, outPath); err == nil {
+func generateSeedISO(dir, outPath, volumeID string) error {
+	if err := generateSeedISOExternal(dir, outPath, volumeID); err == nil {
 		return nil
 	}
-	return generateSeedISOBuiltin(dir, outPath)
+	return generateSeedISOBuiltin(dir, outPath, volumeID)
 }
 
-func generateSeedISOExternal(dir, outPath string) error {
+func generateSeedISOExternal(dir, outPath, volumeID string) error {
 	// macOS: hdiutil
 	if _, err := exec.LookPath("hdiutil"); err == nil {
 		cmd := exec.Command("hdiutil", "makehybrid",
 			"-o", outPath,
 			"-joliet", "-iso",
-			"-default-volume-name", "CIDATA",
+			"-default-volume-name", volumeID,
 			dir)
 		return cmd.Run()
 	}
@@ -36,7 +37,7 @@ func generateSeedISOExternal(dir, outPath string) error {
 		if _, err := exec.LookPath(tool); err == nil {
 			cmd := exec.Command(tool,
 				"-output", outPath,
-				"-volid", "CIDATA",
+				"-volid", volumeID,
 				"-joliet", "-rock",
 				dir)
 			return cmd.Run()
@@ -45,7 +46,7 @@ func generateSeedISOExternal(dir, outPath string) error {
 	return fmt.Errorf("no ISO tool found")
 }
 
-func generateSeedISOBuiltin(dir, outPath string) error {
+func generateSeedISOBuiltin(dir, outPath, volumeID string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
 		return err
@@ -63,7 +64,7 @@ func generateSeedISOBuiltin(dir, outPath string) error {
 		files = append(files, fileEntry{name: e.Name(), data: data})
 	}
 
-	iso := buildISO9660(files, "CIDATA")
+	iso := buildISO9660(files, volumeID)
 	return os.WriteFile(outPath, iso, 0644)
 }
 

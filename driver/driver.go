@@ -35,6 +35,9 @@ type BuildRequest struct {
 	ContextDir string
 	// Image identifies the base environment (OCI ref, IPSW URL, disk path).
 	Image string
+	// GuestOS selects the guest operating system family for VM drivers
+	// ("linux" (default) or "windows"). Ignored by the container driver.
+	GuestOS string
 	// Containerfile is the path to the original Dockerfile/Containerfile.
 	Containerfile string
 	// WardenDir is the prepared .warden directory path on host.

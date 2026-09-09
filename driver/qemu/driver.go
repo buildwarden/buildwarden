@@ -218,6 +218,10 @@ func (d *Driver) resolveBuildVMConfig(
 	}
 
 	if image == "" {
+		if isWindowsGuest(req) {
+			return nil, fmt.Errorf(
+				"windows guest requires a disk image (--image <path>)")
+		}
 		k, i, err := d.resolveBuildAssets()
 		if err != nil {
 			return nil, fmt.Errorf("resolving build assets: %w", err)
@@ -241,12 +245,27 @@ func (d *Driver) resolveBuildVMConfig(
 	}
 	cfg.DiskImage = overlay
 
+	// Windows guests use a WARDEN provisioning seed and a static network;
+	// Linux guests use a cloud-init NoCloud (CIDATA) seed.
+	if isWindowsGuest(req) {
+		seedDir, err := d.windowsSeedDir(sharedDir)
+		if err != nil {
+			return nil, fmt.Errorf("generating windows seed: %w", err)
+		}
+		seedISO := filepath.Join(sharedDir, "seed.iso")
+		if err := generateSeedISO(seedDir, seedISO, windowsSeedName); err != nil {
+			return nil, fmt.Errorf("generating seed ISO: %w", err)
+		}
+		cfg.SeedISO = seedISO
+		return cfg, nil
+	}
+
 	seedDir, err := d.cloudInitSeed(sharedDir)
 	if err != nil {
 		return nil, fmt.Errorf("generating cloud-init: %w", err)
 	}
 	seedISO := filepath.Join(sharedDir, "seed.iso")
-	if err := generateSeedISO(seedDir, seedISO); err != nil {
+	if err := generateSeedISO(seedDir, seedISO, "CIDATA"); err != nil {
 		return nil, fmt.Errorf("generating seed ISO: %w", err)
 	}
 	cfg.SeedISO = seedISO
@@ -368,6 +387,10 @@ func (d *Driver) prepareContext(sharedDir string, req *driver.BuildRequest) erro
 }
 
 func (d *Driver) prepareAgent(sharedDir string, req *driver.BuildRequest) error {
+	if isWindowsGuest(req) {
+		return d.prepareWindowsAgent(sharedDir, req)
+	}
+
 	// Place build script into context/ — warden-io initialize fetches it
 	// from the relay's HTTP context endpoint at runtime.
 	ctxDir := filepath.Join(sharedDir, "context")

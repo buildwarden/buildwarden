@@ -27,6 +27,7 @@ var (
 	flagNoCompress bool
 	flagScript     string
 	flagImage      string
+	flagGuestOS    string
 	flagTimeout    string
 )
 
@@ -89,6 +90,8 @@ func init() {
 		"build script to run (vm drivers)")
 	buildCmd.Flags().StringVar(&flagImage, "image", "",
 		"disk image for build VM (qemu driver)")
+	buildCmd.Flags().StringVar(&flagGuestOS, "guest-os", "",
+		"guest OS for VM drivers: linux (default) or windows")
 	buildCmd.Flags().StringVar(&flagTimeout, "timeout", "",
 		"maximum build duration (e.g., 10m, 1h)")
 	shellCmd.Flags().StringVar(&flagCapture, "capture", "",
@@ -150,6 +153,22 @@ func defaultExtensions() []driver.Extension {
 	return driver.DefaultExtensions()
 }
 
+// validateGuestOS checks the --guest-os value and that the selected driver
+// supports it. Windows guests are currently only supported by the qemu driver.
+func validateGuestOS(guestOS, driverName string) error {
+	switch guestOS {
+	case "", "linux", "windows":
+	default:
+		return fmt.Errorf(
+			"invalid --guest-os %q (want \"linux\" or \"windows\")", guestOS)
+	}
+	if guestOS == "windows" && driverName != "qemu" {
+		return fmt.Errorf(
+			"--guest-os windows is currently only supported by --driver qemu")
+	}
+	return nil
+}
+
 // buildParams holds resolved build parameters from config and flags.
 type buildParams struct {
 	cfg       *Config
@@ -191,6 +210,10 @@ func resolveBuildParams(args []string) (*buildParams, error) {
 	}
 
 	if err := validateFlagsForDriver(cfg.Runtime.Driver); err != nil {
+		return nil, err
+	}
+
+	if err := validateGuestOS(flagGuestOS, cfg.Runtime.Driver); err != nil {
 		return nil, err
 	}
 
@@ -282,6 +305,7 @@ func runBuild(cmd *cobra.Command, args []string) error {
 			Containerfile:    dockerfile,
 			Script:           flagScript,
 			Image:            flagImage,
+			GuestOS:          flagGuestOS,
 			CaptureMode:      bp.capture,
 			OutputDir:        bp.outputDir,
 			Compress:         bp.compress,

@@ -55,3 +55,22 @@ func TestWardenCABundlePath(t *testing.T) {
 		t.Errorf("wardenCABundlePath() = %q, want it under a warden dir", got)
 	}
 }
+
+func TestSplitCIDR(t *testing.T) {
+	cases := []struct {
+		in         string
+		wantIP     string
+		wantPrefix string
+	}{
+		{"10.0.0.2/30", "10.0.0.2", "30"},
+		{"192.168.1.5/24", "192.168.1.5", "24"},
+		{"10.0.0.2", "10.0.0.2", "24"}, // bare address defaults to /24
+	}
+	for _, c := range cases {
+		ip, prefix := splitCIDR(c.in)
+		if ip != c.wantIP || prefix != c.wantPrefix {
+			t.Errorf("splitCIDR(%q) = (%q, %q), want (%q, %q)",
+				c.in, ip, prefix, c.wantIP, c.wantPrefix)
+		}
+	}
+}
