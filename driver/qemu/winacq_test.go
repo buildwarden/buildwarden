@@ -1,7 +1,6 @@
 package qemu
 
 import (
-	"errors"
 	"os"
 	"path/filepath"
 	"strings"
@@ -65,10 +64,46 @@ func TestResolveWindowsISO(t *testing.T) {
 	}
 }
 
-func TestInstallWindowsImageNotWired(t *testing.T) {
-	_, err := InstallWindowsImage(&WindowsMedia{}, WindowsPrepOptions{})
-	if !errors.Is(err, errWindowsInstallNotImplemented) {
-		t.Errorf("InstallWindowsImage should report not-implemented, got %v", err)
+func TestWindowsInstallArgs(t *testing.T) {
+	m := &WindowsMedia{
+		InstallISO:      "/cache/win.iso",
+		VirtioISO:       "/cache/virtio-win.iso",
+		AutounattendISO: "/cache/autounattend.iso",
+	}
+	// With writable UEFI vars (pflash path).
+	args := windowsInstallArgs("aarch64", "hvf",
+		"/cache/windows-arm64.qcow2", "/fw/code.fd", "/fw/vars.fd", m)
+	joined := strings.Join(args, " ")
+	for _, want := range []string{
+		"virt,accel=hvf",
+		"-no-reboot",
+		"if=pflash,format=raw,readonly=on,file=/fw/code.fd",
+		"if=pflash,format=raw,file=/fw/vars.fd",
+		"file=/cache/windows-arm64.qcow2,format=qcow2,if=virtio",
+		"/cache/win.iso",
+		"/cache/virtio-win.iso",
+		"/cache/autounattend.iso",
+		"usb-storage,bus=xhci.0,drive=cd0",
+	} {
+		if !strings.Contains(joined, want) {
+			t.Errorf("windowsInstallArgs missing %q\nargs: %s", want, joined)
+		}
+	}
+
+	// Without vars template, falls back to -bios (no pflash).
+	noVars := strings.Join(
+		windowsInstallArgs("aarch64", "hvf", "/b.qcow2", "/fw/code.fd", "", m), " ")
+	if !strings.Contains(noVars, "-bios /fw/code.fd") {
+		t.Error("windowsInstallArgs should fall back to -bios without vars")
+	}
+	if strings.Contains(noVars, "if=pflash") {
+		t.Error("windowsInstallArgs should not use pflash without a vars file")
+	}
+}
+
+func TestQemuArchOf(t *testing.T) {
+	if qemuArchOf("arm64") != "aarch64" || qemuArchOf("amd64") != "x86_64" {
+		t.Error("qemuArchOf mapping wrong")
 	}
 }
 

@@ -119,11 +119,12 @@ func runWindowsImageRestore() error {
 	fmt.Fprintf(os.Stderr, "  virtio-win:   %s\n", media.VirtioISO)
 	fmt.Fprintf(os.Stderr, "  Autounattend: %s\n", media.AutounattendISO)
 
-	if _, err := qemu.InstallWindowsImage(media, opts); err != nil {
-		fmt.Fprintf(os.Stderr,
-			"\nNext step (chunk 3b): boot the unattended install and capture "+
-				"the base image.\n  Not yet wired: %v\n", err)
+	fmt.Fprintf(os.Stderr, "\nRunning unattended install (headless)...\n")
+	image, err := qemu.InstallWindowsImage(media, opts)
+	if err != nil {
+		return err
 	}
+	fmt.Fprintf(os.Stderr, "Windows base image ready: %s\n", image)
 	return nil
 }
 

@@ -1,14 +1,16 @@
 package qemu
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/buildwarden/buildwarden/driver"
 )
@@ -17,11 +19,6 @@ import (
 // Unlike Windows media, this has a stable, freely-downloadable URL.
 const virtioWinStableURL = "https://fedorapeople.org/groups/virt/" +
 	"virtio-win/direct-downloads/stable-virtio/virtio-win.iso"
-
-// errWindowsInstallNotImplemented marks the live unattended-install
-// orchestration (boot qemu, run Setup, capture the qcow2) as the 3b milestone.
-var errWindowsInstallNotImplemented = errors.New(
-	"windows unattended install orchestration is not yet wired (chunk 3b)")
 
 // WindowsPrepOptions configures Windows image preparation.
 type WindowsPrepOptions struct {
@@ -119,11 +116,147 @@ func AcquireWindowsMedia(opts WindowsPrepOptions) (*WindowsMedia, error) {
 }
 
 // InstallWindowsImage runs the unattended install headlessly under qemu and
-// captures the prepared base image. Not yet wired (chunk 3b): it needs real
-// media to validate device attach order, install-completion detection, and
-// image capture.
-func InstallWindowsImage(_ *WindowsMedia, _ WindowsPrepOptions) (string, error) {
-	return "", errWindowsInstallNotImplemented
+// returns the captured base image path. The Autounattend powers the VM off
+// when prep completes and -no-reboot makes qemu exit, which is how the host
+// detects completion.
+//
+// FIRST CUT (chunk 3b): device details — USB-mounted install/driver/answer
+// ISOs, virtio target disk, pflash UEFI vars, boot order, and the virtio-win
+// drive letter the Autounattend references — are tuned against the real
+// installer. Validate on a Win11 Arm64 ISO before marking Supported.
+func InstallWindowsImage(m *WindowsMedia, opts WindowsPrepOptions) (string, error) {
+	arch := opts.Arch
+	if arch == "" {
+		arch = runtime.GOARCH
+	}
+	qarch := qemuArchOf(arch)
+
+	d := &Driver{}
+	binary := d.qemuBinary(qarch)
+	if _, err := exec.LookPath(binary); err != nil {
+		return "", fmt.Errorf("qemu binary %s not found in PATH: %w", binary, err)
+	}
+	if _, err := exec.LookPath("qemu-img"); err != nil {
+		return "", fmt.Errorf("qemu-img not found in PATH: %w", err)
+	}
+	accel := d.detectAccel()
+
+	imagesDir := filepath.Join(cacheBaseDir(), "warden", "images")
+	if err := os.MkdirAll(imagesDir, 0755); err != nil {
+		return "", err
+	}
+	base := filepath.Join(imagesDir, "windows-"+arch+".qcow2")
+
+	// Fresh target disk for the install.
+	_ = os.Remove(base)
+	if out, err := exec.Command(
+		"qemu-img", "create", "-f", "qcow2", base, "64G").CombinedOutput(); err != nil {
+		return "", fmt.Errorf("creating base disk: %s: %w", string(out), err)
+	}
+
+	// Writable UEFI vars (per-image copy) so the boot entry persists across
+	// the install's several reboots; fall back to read-only -bios.
+	codeFD := efiCodePath(qarch)
+	varsFD := ""
+	if tmpl := efiVarsPath(qarch); tmpl != "" {
+		varsFD = filepath.Join(imagesDir, "windows-"+arch+"-vars.fd")
+		if err := copyFile(tmpl, varsFD); err != nil {
+			varsFD = ""
+		}
+	}
+
+	args := windowsInstallArgs(qarch, accel, base, codeFD, varsFD, m)
+
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Minute)
+	defer cancel()
+	cmd := exec.CommandContext(ctx, binary, args...)
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	fmt.Fprintf(os.Stderr,
+		"[warden] running unattended Windows install (headless, up to 90m)...\n")
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("windows install (qemu): %w", err)
+	}
+	return base, nil
+}
+
+// windowsInstallArgs builds the qemu argument list for the unattended install.
+func windowsInstallArgs(
+	qarch, accel, base, codeFD, varsFD string, m *WindowsMedia,
+) []string {
+	args := []string{
+		"-machine", fmt.Sprintf("virt,accel=%s", accel),
+		"-cpu", cpuForAccel(accel, qarch),
+		"-m", "4096",
+		"-smp", "4",
+		"-nodefaults",
+		"-display", "none",
+		"-no-reboot",
+		"-device", "virtio-rng-pci",
+	}
+	// Firmware: pflash code (ro) + writable vars, else read-only -bios.
+	if varsFD != "" {
+		args = append(args,
+			"-drive", fmt.Sprintf("if=pflash,format=raw,readonly=on,file=%s", codeFD),
+			"-drive", fmt.Sprintf("if=pflash,format=raw,file=%s", varsFD),
+		)
+	} else {
+		args = append(args, "-bios", codeFD)
+	}
+	// Target base disk on virtio; Setup installs the virtio storage driver
+	// (via the Autounattend DriverPaths) so it can write here.
+	args = append(args,
+		"-drive", fmt.Sprintf("file=%s,format=qcow2,if=virtio", base))
+	// Install media, virtio-win drivers, and the answer disk as USB storage:
+	// WinPE reads USB mass storage in-box, avoiding the virtio chicken-and-egg
+	// for the boot media.
+	args = append(args, "-device", "qemu-xhci,id=xhci")
+	for i, iso := range []string{m.InstallISO, m.VirtioISO, m.AutounattendISO} {
+		id := fmt.Sprintf("cd%d", i)
+		args = append(args,
+			"-drive", fmt.Sprintf(
+				"file=%s,id=%s,media=cdrom,readonly=on,if=none", iso, id),
+			"-device", fmt.Sprintf("usb-storage,bus=xhci.0,drive=%s", id),
+		)
+	}
+	return args
+}
+
+// qemuArchOf maps a Go arch to the qemu-system-<arch> token.
+func qemuArchOf(goarch string) string {
+	switch goarch {
+	case "arm64":
+		return "aarch64"
+	case "amd64":
+		return "x86_64"
+	default:
+		return goarch
+	}
+}
+
+// efiVarsPath locates a writable UEFI vars template for the arch, or "".
+func efiVarsPath(arch string) string {
+	var candidates []string
+	switch arch {
+	case "aarch64":
+		candidates = []string{
+			"/opt/homebrew/share/qemu/edk2-aarch64-vars.fd",
+			"/usr/share/qemu/edk2-aarch64-vars.fd",
+			"/usr/share/AAVMF/AAVMF_VARS.fd",
+		}
+	case "x86_64":
+		candidates = []string{
+			"/opt/homebrew/share/qemu/edk2-i386-vars.fd",
+			"/usr/share/qemu/edk2-i386-vars.fd",
+			"/usr/share/OVMF/OVMF_VARS.fd",
+		}
+	}
+	for _, p := range candidates {
+		if _, err := os.Stat(p); err == nil {
+			return p
+		}
+	}
+	return ""
 }
 
 // resolveWindowsISO resolves Windows install media to a local path.

@@ -88,6 +88,11 @@
           <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "{{.TaskCmd}}"</CommandLine>
           <Description>register warden-run startup task</Description>
         </SynchronousCommand>
+        <SynchronousCommand wcm:action="add">
+          <Order>2</Order>
+          <CommandLine>shutdown /s /t 5 /c "warden image prep complete"</CommandLine>
+          <Description>power off so the host can capture the prepared image</Description>
+        </SynchronousCommand>
       </FirstLogonCommands>
     </component>
   </settings>
