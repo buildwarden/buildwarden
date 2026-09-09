@@ -110,11 +110,11 @@ build model should be:
   drivers (a `driver/script` sibling that targets PowerShell), but this is not
   needed for the conda-forge case and can wait.
 
-Open design question to resolve here: does the Windows base image ship a
-preinstalled toolchain (Miniforge + VS Build Tools) baked in, or does the build
-recipe bootstrap it through the relay (so the toolchain download itself is
-witnessed in the ledger)? The latter is more faithful to BuildWarden's thesis
-and is the more interesting demo, at the cost of a longer first build.
+**Decided (2026-09-09): minimal image, toolchain bootstrapped through the
+relay.** The Windows base image does not bake in Miniforge / VS Build Tools;
+the build recipe pulls the toolchain through the relay so its download is
+witnessed in the ledger (faithful to BuildWarden's thesis), at the cost of a
+longer first build. See the image-preparation decisions below.
 
 **conda-forge `win-64` reproduction target** (from the pipeline research): a
 `windows-2022`/`windows-2025`-equivalent image with **VS 2022 (toolset vc143,
@@ -222,6 +222,28 @@ Research confirmed how sharp this edge is:
 **Decouple**: develop and demo the plumbing on ARM locally; validate the
 `win-64` conda-forge build on a genuine x64 host as a separate milestone — that
 is the only fully-supported win-64 conda story.
+
+## Image preparation (decided 2026-09-09)
+
+Windows image prep matches the vz driver's automated lifecycle (`warden image
+restore` / `prepare` / `list` + per-build COW clones). Decisions:
+
+- **Acquisition — both.** Operator-supplied licensed media, and auto-download of
+  a Microsoft evaluation ISO. (The clean eval ISO is x64-only; `win-arm64` has no
+  equally clean auto-download, so local ARM dev supplies ARM64 media.)
+- **Prep — full unattended install from ISO** via a generated `Autounattend.xml`
+  (`driver/qemu/autounattend.go`): LabConfig bypass, virtio-win driver load in
+  WinPE, headless OOBE, ephemeral autologon admin, and a startup Scheduled Task
+  running the WARDEN seed's `warden-run.ps1`.
+- **Firmware — LabConfig bypass** now. **swtpm + Secure Boot is a documented
+  opt-in future feature to prioritize on explicit request** (a customer needing a
+  "supported" Win11 config, a future measured-boot feature, or an ARM64 installer
+  that rejects the bypass). Firmware is built as a pluggable policy so this needs
+  no driver rework. Rationale: the guest is untrusted by design, so an emulated
+  TPM adds nothing to the ledger and does not change compiler output.
+- **Toolchain — minimal image**, bootstrapped through the relay (see Layer 2).
+
+Details and the operator contract live in `tools/win-image-prep/README.md`.
 
 ## Relationship to the Hyper-V plan (reuse vs. discard)
 
