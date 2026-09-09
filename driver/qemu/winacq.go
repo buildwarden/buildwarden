@@ -166,6 +166,11 @@ func InstallWindowsImage(m *WindowsMedia, opts WindowsPrepOptions) (string, erro
 	}
 
 	args := windowsInstallArgs(qarch, accel, base, codeFD, varsFD, m)
+	// Debug knob: WARDEN_QEMU_VNC=127.0.0.1:0 attaches a loopback VNC server so
+	// a stuck headless boot can be watched. Unset keeps the install headless.
+	if vnc := os.Getenv("WARDEN_QEMU_VNC"); vnc != "" {
+		args = append(args, "-vnc", vnc)
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Minute)
 	defer cancel()
