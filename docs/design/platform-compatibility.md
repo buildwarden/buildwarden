@@ -33,7 +33,8 @@ are implemented and tested, and which are planned for future support.
 | Linux/amd64 | qemu | Emulation | Planned | Slow (~10x), fallback only |
 | macOS/arm64 | vz | Native (VZ.framework) | In Progress | IPSW restore, headless prep |
 | macOS/arm64 | qemu | HVF | Possible | Legal on Apple hw, redundant with vz |
-| Windows/amd64 | qemu | Emulation | Planned | Slow, requires user-supplied image |
+| Windows/arm64 | qemu | HVF | In Progress | Local dev target; `warden image --os windows` + unattended install; virtio-win required |
+| Windows/amd64 | qemu | TCG (emulation) | Possible | Very slow on Apple Silicon; native win-64 is validated on x64 hosts (Phase 2) |
 | Linux/arm64 | container | Docker/Finch | Supported | Existing implementation (via Linux VM) |
 | Linux/amd64 | container | Docker/Finch | Supported | Via Rosetta in Finch/Docker Desktop |
 
@@ -88,8 +89,23 @@ are implemented and tested, and which are planned for future support.
   Silicon) or QEMU with HVF (which requires macOS host).
 
 - **Windows guests** require a valid Windows license for the VM image.
-  BuildWarden does not ship Windows images. Users/operators must provide
-  their own (Microsoft offers evaluation images for development).
+  BuildWarden ships no Windows images. Image prep supports **both**
+  operator-supplied licensed media and auto-download of Microsoft media:
+  the official Windows 11 **Arm64** ISO
+  (microsoft.com/software-download/windows11arm64, explicitly permitted for
+  creating VMs) and the x64 Enterprise evaluation ISO. Windows installs
+  **without entering a product key** and runs unactivated — sufficient for
+  development/testing; producing distributable artifacts needs a valid
+  license. Prepared images must include the signed **virtio-win** drivers
+  (the isolated link and boot disk are virtio devices).
+
+- **Apple Silicon nuance.** Microsoft's *named authorization* for running
+  Windows 11 Arm on Apple M-series is specifically **Parallels Desktop**.
+  Running Win11 Arm under **qemu** on Apple Silicon is not in that
+  authorized-solutions list — fine for local development/testing under a
+  valid license, but the license-clean *production* path for the real
+  `win-64` deliverable is an **x86-64 host** (qemu/KVM on Linux, or Hyper-V
+  on Windows) — the Phase 2 target. See `windows-driver-plan.md`.
 
 ---
 
@@ -103,7 +119,7 @@ traffic passing through the relay.
 |--------|-------------------|----------------|
 | container | iptables DNAT + OUTPUT DROP via sidecar | Kernel vuln, container escape, cap escalation |
 | vz | Topological (sole interface → relay VM) | VM escape, virtio device vuln |
-| qemu | QEMU user-net restrict + relay gateway | QEMU escape, device emulation vuln |
+| qemu | Topological (sole socket netdev → relay VM) | QEMU escape, device emulation vuln |
 | hyperv | Virtual switch ACLs + relay gateway | Hyper-V escape, vSwitch vuln |
 
 The VM-based drivers have a stronger security posture than the container

@@ -18,11 +18,14 @@ licensed media you supply or let it auto-download a Microsoft evaluation ISO.
 
 `warden image restore` for Windows will:
 
-1. **Acquire** the base media — a supplied `--iso <path>`, or auto-download a
-   Microsoft evaluation ISO (cached + sha256-verified, like the qemu cloud-image
-   cache). Note: the clean Microsoft *evaluation* ISO is **x64-only**; Windows 11
-   **ARM64** has no equally clean auto-download, so for local `win-arm64` dev you
-   supply ARM64 media. (This is why "both" is the acquisition answer.)
+1. **Acquire** the base media — a supplied `--iso <path>`, or an http(s) URL
+   that is downloaded + cached + sha256-verified (like the qemu cloud-image
+   cache). Microsoft publishes an official **Windows 11 Arm64 ISO**
+   ([microsoft.com/software-download/windows11arm64](https://www.microsoft.com/en-us/software-download/windows11arm64),
+   explicitly permitted for creating VMs) and an x64 Enterprise **evaluation**
+   ISO. Windows installs **without a product key** and runs unactivated, which
+   is enough for development/testing; a valid license is needed to produce
+   distributable artifacts.
 2. **Generate `Autounattend.xml`** (`autounattend.go`) that drives a fully
    unattended install: LabConfig bypass keys, virtio-win driver load in
    WinPE (so Setup sees the virtio boot disk/NIC and installs them boot-start),
