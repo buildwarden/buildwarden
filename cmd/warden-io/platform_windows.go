@@ -100,3 +100,7 @@ func scriptCommand(path string) *exec.Cmd {
 			"-NoProfile", "-ExecutionPolicy", "Bypass", "-File", path)
 	}
 }
+
+// defaultScriptName is the build script fetched from the relay when the caller
+// does not specify one. Windows guests default to a PowerShell script.
+func defaultScriptName() string { return "build.ps1" }

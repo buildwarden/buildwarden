@@ -27,6 +27,10 @@ func findCABundle() string {
 	return ""
 }
 
+// defaultScriptName is the build script fetched from the relay when the caller
+// does not specify one.
+func defaultScriptName() string { return "build.sh" }
+
 func configureNetwork(gateway, selfIP string) error {
 	if gateway == "" {
 		return nil

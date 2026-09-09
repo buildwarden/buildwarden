@@ -27,7 +27,7 @@ func runInitialize(args []string) int {
 		selfIP = os.Getenv("WARDEN_IP")
 	}
 	if script == "" {
-		script = "build.sh"
+		script = defaultScriptName()
 	}
 	_ = selfIP
 
@@ -57,7 +57,7 @@ func runInitialize(args []string) int {
 
 	// Step 5: Fetch build script
 	logStep("fetching build script")
-	scriptPath := "/tmp/build.sh"
+	scriptPath := scriptDestPath(script)
 	if err := fetchFile(script, scriptPath); err != nil {
 		fmt.Fprintf(os.Stderr, "warden-io: fetch script: %s\n", err)
 		return 1
@@ -124,6 +124,13 @@ func setCAEnvironment() {
 	os.Setenv("REQUESTS_CA_BUNDLE", bundlePath)
 	os.Setenv("NODE_EXTRA_CA_CERTS", bundlePath)
 	os.Setenv("CURL_CA_BUNDLE", bundlePath)
+}
+
+// scriptDestPath returns where the fetched build script is written on the
+// guest. It preserves the script's base name (and thus its extension, which
+// scriptCommand uses to pick an interpreter) under the OS temp directory.
+func scriptDestPath(script string) string {
+	return filepath.Join(os.TempDir(), filepath.Base(script))
 }
 
 func execScript(path string) int {
