@@ -7,7 +7,16 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/buildwarden/buildwarden/driver/qemu"
 	"github.com/buildwarden/buildwarden/driver/vz"
+)
+
+var (
+	flagImageOS      string
+	flagImageISO     string
+	flagImageVirtio  string
+	flagImageEdition string
+	flagImageArch    string
 )
 
 var imageCmd = &cobra.Command{
@@ -49,6 +58,17 @@ the latest boot logic without doing a full IPSW restore.`,
 }
 
 func init() {
+	imageRestoreCmd.Flags().StringVar(&flagImageOS, "os", "",
+		"guest OS to prepare: macos (default, vz) or windows (qemu)")
+	imageRestoreCmd.Flags().StringVar(&flagImageISO, "iso", "",
+		"Windows install media (path or URL); required for --os windows")
+	imageRestoreCmd.Flags().StringVar(&flagImageVirtio, "virtio", "",
+		"virtio-win driver ISO (path or URL); default stable channel")
+	imageRestoreCmd.Flags().StringVar(&flagImageEdition, "edition", "",
+		"Windows edition / install.wim image name (default \"Windows 11 Pro\")")
+	imageRestoreCmd.Flags().StringVar(&flagImageArch, "arch", "",
+		"guest arch: arm64 or amd64 (default host arch)")
+
 	imageCmd.AddCommand(imageRestoreCmd)
 	imageCmd.AddCommand(imageListCmd)
 	imageCmd.AddCommand(imagePrepareCmd)
@@ -56,6 +76,14 @@ func init() {
 }
 
 func runImageRestore(_ *cobra.Command, args []string) error {
+	if flagImageOS == "windows" {
+		return runWindowsImageRestore()
+	}
+	if flagImageOS != "" && flagImageOS != "macos" {
+		return fmt.Errorf(
+			"unknown --os %q (want \"macos\" or \"windows\")", flagImageOS)
+	}
+
 	cache := &vz.ImageCache{CacheDir: vz.DefaultCacheDir()}
 
 	ipswURL := ""
@@ -69,6 +97,33 @@ func runImageRestore(_ *cobra.Command, args []string) error {
 	}
 
 	fmt.Fprintf(os.Stderr, "Image ready: %s\n", diskPath)
+	return nil
+}
+
+// runWindowsImageRestore acquires Windows install media and materializes the
+// Autounattend answer ISO. The live unattended install + image capture is the
+// 3b milestone (see qemu.InstallWindowsImage).
+func runWindowsImageRestore() error {
+	opts := qemu.WindowsPrepOptions{
+		ISO:       flagImageISO,
+		VirtioISO: flagImageVirtio,
+		Edition:   flagImageEdition,
+		Arch:      flagImageArch,
+	}
+	media, err := qemu.AcquireWindowsMedia(opts)
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "Windows install media prepared:\n")
+	fmt.Fprintf(os.Stderr, "  install ISO:  %s\n", media.InstallISO)
+	fmt.Fprintf(os.Stderr, "  virtio-win:   %s\n", media.VirtioISO)
+	fmt.Fprintf(os.Stderr, "  Autounattend: %s\n", media.AutounattendISO)
+
+	if _, err := qemu.InstallWindowsImage(media, opts); err != nil {
+		fmt.Fprintf(os.Stderr,
+			"\nNext step (chunk 3b): boot the unattended install and capture "+
+				"the base image.\n  Not yet wired: %v\n", err)
+	}
 	return nil
 }
 
