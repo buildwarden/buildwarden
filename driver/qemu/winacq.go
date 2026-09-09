@@ -240,6 +240,9 @@ func efiVarsPath(arch string) string {
 	switch arch {
 	case "aarch64":
 		candidates = []string{
+			// brew's qemu pairs edk2-aarch64-code.fd with edk2-arm-vars.fd.
+			"/opt/homebrew/share/qemu/edk2-arm-vars.fd",
+			"/usr/share/qemu/edk2-arm-vars.fd",
 			"/opt/homebrew/share/qemu/edk2-aarch64-vars.fd",
 			"/usr/share/qemu/edk2-aarch64-vars.fd",
 			"/usr/share/AAVMF/AAVMF_VARS.fd",
