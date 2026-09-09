@@ -171,6 +171,11 @@ func InstallWindowsImage(m *WindowsMedia, opts WindowsPrepOptions) (string, erro
 	if vnc := os.Getenv("WARDEN_QEMU_VNC"); vnc != "" {
 		args = append(args, "-vnc", vnc)
 	}
+	// Debug knob: WARDEN_QEMU_MONITOR=/path/to.sock exposes the HMP monitor on
+	// a unix socket (e.g. for `screendump`), for headless diagnosis.
+	if mon := os.Getenv("WARDEN_QEMU_MONITOR"); mon != "" {
+		args = append(args, "-monitor", "unix:"+mon+",server,nowait")
+	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Minute)
 	defer cancel()
@@ -198,6 +203,7 @@ func windowsInstallArgs(
 		"-display", "none",
 		"-no-reboot",
 		"-device", "virtio-rng-pci",
+		"-device", "virtio-gpu-pci",
 	}
 	// Firmware: pflash code (ro) + writable vars, else read-only -bios.
 	if varsFD != "" {
