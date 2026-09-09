@@ -211,7 +211,6 @@ func windowsInstallArgs(
 		"-device", "usb-tablet,bus=xhci.0",
 		"-nic", "user,model=virtio-net-pci",
 		"-device", "virtio-rng-pci",
-		"-no-reboot",
 	}
 	// Firmware: pflash code (ro) + writable vars, else read-only -bios.
 	if varsFD != "" {

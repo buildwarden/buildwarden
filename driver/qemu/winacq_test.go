@@ -76,7 +76,6 @@ func TestWindowsInstallArgs(t *testing.T) {
 	joined := strings.Join(args, " ")
 	for _, want := range []string{
 		"virt,accel=hvf",
-		"-no-reboot",
 		"if=pflash,format=raw,readonly=on,file=/fw/code.fd",
 		"if=pflash,format=raw,file=/fw/vars.fd",
 		"file=/cache/windows-arm64.qcow2,format=qcow2,if=virtio",
