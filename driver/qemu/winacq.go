@@ -266,13 +266,16 @@ func driveWindowsInstall(ctx context.Context, sockPath string) {
 
 	// Clear "Press any key to boot from CD". With the OS disk at bootindex=0
 	// (empty on first boot) the firmware probes it first, so the prompt appears
-	// only after that probe — we wait ~4s, then send Enter every 1.5s for ~18s.
-	// That window is centered on the prompt and stops before Setup's UI loads,
-	// so keys don't leak onto Setup controls (which pops a "quit?" dialog).
-	enterKey := map[string]any{
+	// only after that probe — we wait ~4s, then send a key every 1.5s for ~18s.
+	// The key is Down-arrow, NOT Enter: the prompt accepts any key, but if a
+	// press lands on Setup's UI (timing varies) Enter/Space would activate the
+	// Cancel button and open a modal "quit?" dialog that PAUSES the install,
+	// whereas an arrow key is inert on Setup's controls (and the answer file
+	// overrides any locale-dropdown selection).
+	bootKey := map[string]any{
 		"execute": "send-key",
 		"arguments": map[string]any{
-			"keys": []any{map[string]any{"type": "qcode", "data": "ret"}},
+			"keys": []any{map[string]any{"type": "qcode", "data": "down"}},
 		},
 	}
 	go func() {
@@ -287,7 +290,7 @@ func driveWindowsInstall(ctx context.Context, sockPath string) {
 				return
 			default:
 			}
-			send(enterKey)
+			send(bootKey)
 			time.Sleep(1500 * time.Millisecond)
 		}
 	}()
