@@ -1,7 +1,9 @@
 package qemu
 
 import (
+	"bytes"
 	_ "embed"
+	"encoding/xml"
 	"fmt"
 	"strings"
 	"text/template"
@@ -92,10 +94,10 @@ func generateAutounattend(cfg autounattendConfig) string {
 
 	data := autounattendData{
 		ProcArch:      unattendArch(cfg.Arch),
-		Edition:       cfg.Edition,
-		AdminUser:     cfg.AdminUser,
-		AdminPassword: cfg.AdminPassword,
-		TaskCmd:       wardenRunTaskCmd(cfg.SeedLabel),
+		Edition:       xmlText(cfg.Edition),
+		AdminUser:     xmlText(cfg.AdminUser),
+		AdminPassword: xmlText(cfg.AdminPassword),
+		TaskCmd:       xmlText(wardenRunTaskCmd(cfg.SeedLabel)),
 	}
 	for i, key := range labConfigBypassKeys {
 		data.BypassKeys = append(data.BypassKeys,
@@ -106,7 +108,7 @@ func generateAutounattend(cfg autounattendConfig) string {
 	for i, d := range []string{"viostor", "vioscsi", "NetKVM"} {
 		data.DriverPaths = append(data.DriverPaths, driverPathEntry{
 			Key:  i + 1,
-			Path: fmt.Sprintf(`%s\%s\w11\%s`, drv, d, vArch),
+			Path: xmlText(fmt.Sprintf(`%s\%s\w11\%s`, drv, d, vArch)),
 		})
 	}
 
@@ -115,6 +117,19 @@ func generateAutounattend(cfg autounattendConfig) string {
 	// fails on a template bug, which the tests catch.
 	_ = autounattendTmpl.Execute(&sb, data)
 	return sb.String()
+}
+
+// xmlText escapes a string for safe inclusion as XML element-text content.
+// The Autounattend is rendered with text/template (no auto-escaping), and the
+// FirstLogonCommands PowerShell contains a raw '&' (and quotes); left unescaped
+// these produce invalid XML and Windows Setup fails to parse the answer file at
+// PreFinalize ("Whitespace is not allowed at this location" / 0x80131501),
+// which applies the image but never makes the disk bootable. Windows decodes
+// the entities before executing the command, so the runtime string is intact.
+func xmlText(s string) string {
+	var b bytes.Buffer
+	_ = xml.EscapeText(&b, []byte(s))
+	return b.String()
 }
 
 // wardenRunTaskCmd is the PowerShell that first-logon runs to register a

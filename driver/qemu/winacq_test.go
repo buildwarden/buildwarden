@@ -78,11 +78,12 @@ func TestWindowsInstallArgs(t *testing.T) {
 		"virt,accel=hvf",
 		"if=pflash,format=raw,readonly=on,file=/fw/code.fd",
 		"if=pflash,format=raw,file=/fw/vars.fd",
-		"file=/cache/windows-arm64.qcow2,format=qcow2,if=virtio",
+		"if=none,id=osdisk,file=/cache/windows-arm64.qcow2,format=qcow2",
+		"nvme,drive=osdisk,serial=wardenwin,bootindex=0",
 		"/cache/win.iso",
 		"/cache/virtio-win.iso",
 		"/cache/autounattend.iso",
-		"usb-storage,bus=xhci.0,drive=cd0",
+		"usb-storage,bus=xhci.0,drive=cd0,id=usbcd0,bootindex=1",
 	} {
 		if !strings.Contains(joined, want) {
 			t.Errorf("windowsInstallArgs missing %q\nargs: %s", want, joined)

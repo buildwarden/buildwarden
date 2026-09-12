@@ -4,12 +4,16 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/buildwarden/buildwarden/driver"
@@ -166,6 +170,14 @@ func InstallWindowsImage(m *WindowsMedia, opts WindowsPrepOptions) (string, erro
 	}
 
 	args := windowsInstallArgs(qarch, accel, base, codeFD, varsFD, m)
+	// Control channel: a QMP socket the driver owns, used to send the first
+	// "press any key to boot from CD" keypress and to eject the install ISO
+	// after WinPE so the guest's reboots boot the installed disk instead of
+	// dropping to the UEFI shell. Separate from the WARDEN_QEMU_MONITOR debug
+	// HMP socket below.
+	qmpSock := filepath.Join(imagesDir, "windows-"+arch+"-qmp.sock")
+	_ = os.Remove(qmpSock)
+	args = append(args, "-qmp", "unix:"+qmpSock+",server,nowait")
 	// Debug knob: WARDEN_QEMU_VNC=127.0.0.1:0 attaches a loopback VNC server so
 	// a stuck headless boot can be watched. Unset keeps the install headless.
 	if vnc := os.Getenv("WARDEN_QEMU_VNC"); vnc != "" {
@@ -177,17 +189,159 @@ func InstallWindowsImage(m *WindowsMedia, opts WindowsPrepOptions) (string, erro
 		args = append(args, "-monitor", "unix:"+mon+",server,nowait")
 	}
 
-	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Minute)
+	ctx, cancel := context.WithTimeout(context.Background(), installTimeout())
 	defer cancel()
 	cmd := exec.CommandContext(ctx, binary, args...)
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	fmt.Fprintf(os.Stderr,
-		"[warden] running unattended Windows install (headless, up to 90m)...\n")
-	if err := cmd.Run(); err != nil {
+		"[warden] running unattended Windows install (headless, up to %s)...\n",
+		installTimeout())
+	if err := cmd.Start(); err != nil {
+		return "", fmt.Errorf("windows install (qemu start): %w", err)
+	}
+	// Drive the install over QMP (best-effort; never fails the install).
+	driveDone := make(chan struct{})
+	go func() {
+		defer close(driveDone)
+		driveWindowsInstall(ctx, qmpSock)
+	}()
+	err := cmd.Wait()
+	cancel()
+	<-driveDone
+	_ = os.Remove(qmpSock)
+	if err != nil {
 		return "", fmt.Errorf("windows install (qemu): %w", err)
 	}
 	return base, nil
+}
+
+// driveWindowsInstall connects to the install VM's QMP socket and performs the
+// two hands-off actions the unattended flow needs from outside the guest:
+//
+//  1. clears the firmware's "Press any key to boot from CD" prompt with a short
+//     burst of Enter keypresses over the first few seconds of boot, and
+//  2. ejects the bootable install ISO (device usbcd0) on the first guest reset
+//     — which happens when WinPE finishes applying the image and reboots — so
+//     that reboot and every later OOBE reboot boot the installed disk's Windows
+//     Boot Manager instead of dropping to the UEFI interactive shell.
+//
+// It is best-effort: any failure is logged and the install proceeds unaided.
+func driveWindowsInstall(ctx context.Context, sockPath string) {
+	conn := dialQMP(ctx, sockPath)
+	if conn == nil {
+		fmt.Fprintf(os.Stderr,
+			"[warden] QMP control channel unavailable; install runs unaided\n")
+		return
+	}
+	defer conn.Close()
+	// Unblock a pending Decode when the install ends.
+	go func() { <-ctx.Done(); _ = conn.Close() }()
+
+	var wmu sync.Mutex
+	enc := json.NewEncoder(conn)
+	send := func(v any) {
+		wmu.Lock()
+		defer wmu.Unlock()
+		_ = enc.Encode(v)
+	}
+
+	dec := json.NewDecoder(conn)
+	var greeting map[string]json.RawMessage
+	if err := dec.Decode(&greeting); err != nil {
+		return // socket closed before the QMP banner
+	}
+	send(map[string]any{"execute": "qmp_capabilities"})
+
+	// The loopback VNC debug knob needs no password (nothing off-host can reach
+	// 127.0.0.1). Only when WARDEN_QEMU_VNC_PASSWORD is set — e.g. to use macOS
+	// Screen Sharing, which refuses no-auth servers — do we enable+set it. The
+	// `-vnc ...,password=on` option only ENABLES auth; the secret is set here.
+	if pw := os.Getenv("WARDEN_QEMU_VNC_PASSWORD"); pw != "" {
+		send(map[string]any{
+			"execute":   "set_password",
+			"arguments": map[string]any{"protocol": "vnc", "password": pw},
+		})
+	}
+
+	// Clear "Press any key to boot from CD". With the OS disk at bootindex=0
+	// (empty on first boot) the firmware probes it first, so the prompt appears
+	// only after that probe — we wait ~4s, then send Enter every 1.5s for ~18s.
+	// That window is centered on the prompt and stops before Setup's UI loads,
+	// so keys don't leak onto Setup controls (which pops a "quit?" dialog).
+	enterKey := map[string]any{
+		"execute": "send-key",
+		"arguments": map[string]any{
+			"keys": []any{map[string]any{"type": "qcode", "data": "ret"}},
+		},
+	}
+	go func() {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(4 * time.Second):
+		}
+		for i := 0; i < 12; i++ {
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			send(enterKey)
+			time.Sleep(1500 * time.Millisecond)
+		}
+	}()
+
+	// Watch events; eject the install ISO on the first guest reset.
+	ejected := false
+	for {
+		var msg struct {
+			Event string `json:"event"`
+		}
+		if err := dec.Decode(&msg); err != nil {
+			return
+		}
+		if msg.Event == "RESET" && !ejected {
+			ejected = true
+			send(map[string]any{
+				"execute":   "device_del",
+				"arguments": map[string]any{"id": "usbcd0"},
+			})
+			fmt.Fprintf(os.Stderr,
+				"[warden] ejected install ISO after WinPE reboot; "+
+					"reboots now boot the installed disk\n")
+		}
+	}
+}
+
+// dialQMP connects to the QMP unix socket, retrying until it appears (qemu
+// creates it at startup) or the deadline/context elapses.
+func dialQMP(ctx context.Context, sockPath string) net.Conn {
+	deadline := time.Now().Add(20 * time.Second)
+	for time.Now().Before(deadline) {
+		if c, err := net.Dial("unix", sockPath); err == nil {
+			return c
+		}
+		select {
+		case <-ctx.Done():
+			return nil
+		case <-time.After(250 * time.Millisecond):
+		}
+	}
+	return nil
+}
+
+// installTimeout is the wall-clock cap on the qemu install. Win11 (especially
+// ARM64 under HVF) can take well over an hour to apply the image, run bcdboot,
+// reboot several times, and complete OOBE, so the default is deliberately
+// generous. WARDEN_QEMU_INSTALL_TIMEOUT_MIN overrides it (in minutes).
+func installTimeout() time.Duration {
+	if v := os.Getenv("WARDEN_QEMU_INSTALL_TIMEOUT_MIN"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return time.Duration(n) * time.Minute
+		}
+	}
+	return 240 * time.Minute
 }
 
 // windowsInstallArgs builds the qemu argument list for the unattended install,
@@ -221,18 +375,31 @@ func windowsInstallArgs(
 	} else {
 		args = append(args, "-bios", codeFD)
 	}
-	// Install ISO, virtio-win drivers, and the answer ISO as USB CD-ROMs.
+	// Install ISO, virtio-win drivers, and the answer ISO as USB CD-ROMs. Each
+	// gets a device id (usbcd0..2) so the control channel can eject the bootable
+	// install ISO (usbcd0) after WinPE, and a bootindex so the install ISO
+	// (bootindex=1) sits just behind the OS disk (bootindex=0) in boot order.
 	for i, iso := range []string{m.InstallISO, m.VirtioISO, m.AutounattendISO} {
 		id := fmt.Sprintf("cd%d", i)
 		args = append(args,
 			"-drive", fmt.Sprintf(
 				"if=none,id=%s,format=raw,media=cdrom,readonly=on,file=%s", id, iso),
-			"-device", fmt.Sprintf("usb-storage,bus=xhci.0,drive=%s", id),
+			"-device", fmt.Sprintf(
+				"usb-storage,bus=xhci.0,drive=%s,id=usb%s,bootindex=%d", id, id, i+1),
 		)
 	}
-	// Target disk on virtio-blk; Setup loads viostor via the DriverPaths.
+	// OS install disk on emulated NVMe with bootindex=0. NVMe (stornvme.sys) is
+	// in-box on both win-64 and win-arm64, so Setup detects the disk with no
+	// driver injection — unlike virtio-blk, whose viostor driver is injected
+	// from the virtio-win ISO via Autounattend DriverPaths, an injection whose
+	// ISO drive letter is nondeterministic and so fails intermittently (the
+	// empty disk-selection screen). The explicit device also carries
+	// bootindex=0, so the firmware boots the installed Windows Boot Manager
+	// first on every reboot instead of dropping to the UEFI shell (edk2 ignores
+	// -boot order; per-device bootindex is the working lever).
 	args = append(args,
-		"-drive", fmt.Sprintf("file=%s,format=qcow2,if=virtio", base))
+		"-drive", fmt.Sprintf("if=none,id=osdisk,file=%s,format=qcow2", base),
+		"-device", "nvme,drive=osdisk,serial=wardenwin,bootindex=0")
 	return args
 }
 

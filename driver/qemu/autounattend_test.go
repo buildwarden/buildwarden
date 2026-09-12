@@ -1,9 +1,38 @@
 package qemu
 
 import (
+	"encoding/xml"
+	"io"
 	"strings"
 	"testing"
 )
+
+// TestGenerateAutounattendWellFormed guards against the class of bug where a
+// dynamic value (notably the FirstLogonCommands PowerShell, which contains a
+// raw '&') is inserted unescaped and produces invalid XML that Windows Setup
+// rejects at PreFinalize. Renders for both arches and parses every token.
+func TestGenerateAutounattendWellFormed(t *testing.T) {
+	for _, arch := range []string{"arm64", "amd64"} {
+		doc := generateAutounattend(autounattendConfig{
+			Arch:              arch,
+			Edition:           "Windows 11 Pro",
+			AdminUser:         "warden",
+			AdminPassword:     "p@ss & <w0rd>", // specials must not break XML
+			VirtioDriveLetter: "E:",
+			SeedLabel:         windowsSeedName,
+		})
+		dec := xml.NewDecoder(strings.NewReader(doc))
+		for {
+			_, err := dec.Token()
+			if err == io.EOF {
+				break
+			}
+			if err != nil {
+				t.Fatalf("%s: rendered Autounattend is not well-formed XML: %v", arch, err)
+			}
+		}
+	}
+}
 
 func TestGenerateAutounattendARM64(t *testing.T) {
 	xml := generateAutounattend(autounattendConfig{
