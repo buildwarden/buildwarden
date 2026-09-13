@@ -281,11 +281,16 @@ func (d *Driver) resolveBuildVMConfig(
 		if err != nil {
 			return nil, fmt.Errorf("generating windows seed: %w", err)
 		}
-		seedISO := filepath.Join(sharedDir, "seed.iso")
-		if err := generateSeedISO(seedDir, seedISO, windowsSeedName); err != nil {
-			return nil, fmt.Errorf("generating seed ISO: %w", err)
+		// FAT image (not ISO): Windows reads FAT16 natively via usb-storage
+		// with exact long names and a drive letter; our ISO9660 seed shows up
+		// as FileSystemType=Unknown with no letter, so the startup task can't
+		// run warden-run.ps1.
+		seedImg := filepath.Join(sharedDir, "seed.img")
+		if err := generateWindowsSeedFAT(
+			seedDir, seedImg, windowsSeedName); err != nil {
+			return nil, fmt.Errorf("generating windows seed FAT: %w", err)
 		}
-		cfg.SeedISO = seedISO
+		cfg.SeedISO = seedImg
 		return cfg, nil
 	}
 

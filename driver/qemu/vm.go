@@ -69,11 +69,12 @@ type buildVMConfig struct {
 
 	// Disk image boot (production path)
 	DiskImage string
-	SeedISO   string // cloud-init NoCloud seed ISO (Linux) or WARDEN seed (Win)
+	SeedISO   string // cloud-init NoCloud ISO (Linux); FAT seed image (Win)
 
 	// Windows guests need the same device model as image prep: NVMe OS disk,
 	// a writable UEFI vars store carrying the Windows Boot Manager entry, and
-	// the seed as a usb-storage CD-ROM (Windows reads those in-box).
+	// the WARDEN seed as a FAT usb-storage disk (Windows reads FAT16 in-box
+	// with a drive letter and exact long names).
 	Windows bool
 	VarsFD  string
 
@@ -119,9 +120,12 @@ func (d *Driver) startBuildVM(
 			"-device", "nvme,drive=osdisk,serial=wardenwin,bootindex=0",
 		)
 		if cfg.SeedISO != "" {
+			// FAT seed as a read-only usb-storage disk (not media=cdrom):
+			// Windows mounts FAT16 with a drive letter and exact long names,
+			// which the warden-run startup task needs.
 			args = append(args,
 				"-drive", fmt.Sprintf(
-					"if=none,id=seed,format=raw,media=cdrom,readonly=on,file=%s",
+					"if=none,id=seed,format=raw,readonly=on,file=%s",
 					cfg.SeedISO),
 				"-device", "usb-storage,bus=xhci.0,drive=seed",
 			)
