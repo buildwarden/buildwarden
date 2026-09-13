@@ -69,7 +69,13 @@ type buildVMConfig struct {
 
 	// Disk image boot (production path)
 	DiskImage string
-	SeedISO   string // cloud-init NoCloud seed ISO
+	SeedISO   string // cloud-init NoCloud seed ISO (Linux) or WARDEN seed (Win)
+
+	// Windows guests need the same device model as image prep: NVMe OS disk,
+	// a writable UEFI vars store carrying the Windows Boot Manager entry, and
+	// the seed as a usb-storage CD-ROM (Windows reads those in-box).
+	Windows bool
+	VarsFD  string
 
 	// Direct kernel boot (lightweight/test path)
 	Kernel string
@@ -96,7 +102,28 @@ func (d *Driver) startBuildVM(
 		"-serial", "chardev:ser0",
 	}
 
-	if cfg.DiskImage != "" {
+	if cfg.DiskImage != "" && cfg.Windows {
+		// Windows: same in-box device model as image prep — NVMe OS disk
+		// (bootindex=0), writable vars pflash carrying the Boot Manager entry,
+		// and the WARDEN seed as a usb-storage CD-ROM.
+		args = append(args,
+			"-drive", fmt.Sprintf(
+				"if=pflash,format=raw,readonly=on,file=%s", efiCodePath(cfg.Arch)),
+			"-drive", fmt.Sprintf("if=pflash,format=raw,file=%s", cfg.VarsFD),
+			"-device", "qemu-xhci,id=xhci",
+			"-drive", fmt.Sprintf(
+				"if=none,id=osdisk,file=%s,format=qcow2", cfg.DiskImage),
+			"-device", "nvme,drive=osdisk,serial=wardenwin,bootindex=0",
+		)
+		if cfg.SeedISO != "" {
+			args = append(args,
+				"-drive", fmt.Sprintf(
+					"if=none,id=seed,format=raw,media=cdrom,readonly=on,file=%s",
+					cfg.SeedISO),
+				"-device", "usb-storage,bus=xhci.0,drive=seed",
+			)
+		}
+	} else if cfg.DiskImage != "" {
 		drive := fmt.Sprintf(
 			"file=%s,format=qcow2,if=virtio", cfg.DiskImage)
 		args = append(args,
@@ -124,6 +151,16 @@ func (d *Driver) startBuildVM(
 		"-netdev", relayNet,
 		"-device", "virtio-rng-pci",
 	)
+
+	// Debug knobs (build VM only): attach a loopback VNC / HMP monitor to
+	// observe the guest — Windows guests write nothing to serial, so this is
+	// the only way to see the warden-io / networking phase.
+	if vnc := os.Getenv("WARDEN_QEMU_BUILD_VNC"); vnc != "" {
+		args = append(args, "-vnc", vnc)
+	}
+	if mon := os.Getenv("WARDEN_QEMU_BUILD_MONITOR"); mon != "" {
+		args = append(args, "-monitor", "unix:"+mon+",server,nowait")
+	}
 
 	cmd := exec.Command(binary, args...)
 	cmd.Stdout = d.vmOutput()

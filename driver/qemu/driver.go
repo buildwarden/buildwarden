@@ -260,6 +260,23 @@ func (d *Driver) resolveBuildVMConfig(
 	// Windows guests use a WARDEN provisioning seed and a static network;
 	// Linux guests use a cloud-init NoCloud (CIDATA) seed.
 	if isWindowsGuest(req) {
+		cfg.Windows = true
+		// Writable UEFI vars carrying the Windows Boot Manager entry that
+		// bcdboot wrote during image prep; copied per-build so the base's
+		// vars store is never mutated.
+		ga := goArchOf(cfg.Arch)
+		srcVars := filepath.Join(cacheBaseDir(), "warden", "images",
+			"windows-"+ga+"-vars.fd")
+		if _, err := os.Stat(srcVars); err != nil {
+			return nil, fmt.Errorf(
+				"windows base UEFI vars not found at %s (re-run "+
+					"`warden image restore --os windows --arch %s`)", srcVars, ga)
+		}
+		dstVars := filepath.Join(sharedDir, "build-vars.fd")
+		if err := copyFile(srcVars, dstVars); err != nil {
+			return nil, fmt.Errorf("copying UEFI vars: %w", err)
+		}
+		cfg.VarsFD = dstVars
 		seedDir, err := d.windowsSeedDir(sharedDir)
 		if err != nil {
 			return nil, fmt.Errorf("generating windows seed: %w", err)
