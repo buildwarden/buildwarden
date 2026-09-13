@@ -3,10 +3,13 @@ package qemu
 import (
 	"bytes"
 	_ "embed"
+	"encoding/base64"
+	"encoding/binary"
 	"encoding/xml"
 	"fmt"
 	"strings"
 	"text/template"
+	"unicode/utf16"
 )
 
 //go:embed autounattend.xml.tmpl
@@ -134,18 +137,58 @@ func xmlText(s string) string {
 	return b.String()
 }
 
-// wardenRunTaskCmd is the PowerShell that first-logon runs to register a
-// startup Scheduled Task, which on every boot finds the seed volume and runs
-// its warden-run.ps1.
+// psEncodedCommand encodes a PowerShell script for powershell.exe
+// -EncodedCommand (UTF-16LE, base64). This sidesteps every nested-quoting and
+// XML-escaping hazard for a command embedded in the answer file: the payload
+// is pure base64 ([A-Za-z0-9+/=]), all of which is XML- and shell-safe.
+func psEncodedCommand(script string) string {
+	u := utf16.Encode([]rune(script))
+	b := make([]byte, len(u)*2)
+	for i, r := range u {
+		binary.LittleEndian.PutUint16(b[i*2:], r)
+	}
+	return base64.StdEncoding.EncodeToString(b)
+}
+
+// wardenRunTaskCmd is the PowerShell that first-logon runs to register the
+// warden-run startup task. On every boot the task waits for the WARDEN seed
+// volume (the second NVMe disk enumerates a few seconds after the -AtStartup
+// trigger fires) and then runs its warden-run.ps1.
+//
+// Hardening learned from a failed hands-off run:
+//   - Wait/retry loop for the volume: at boot Get-Volume returned nothing when
+//     the trigger fired before the seed enumerated, so `& $null:\...` ran
+//     nothing. The loop polls up to ~180s.
+//   - Battery settings: Register-ScheduledTask defaults
+//     (DisallowStartIfOnBatteries/StopIfGoingOnBatteries) block the task in a
+//     VM whose power state QEMU does not report as AC.
+//   - Execution policy: the image default is Restricted, so the task's
+//     powershell uses -ExecutionPolicy Bypass and we also set LocalMachine
+//     Bypass, or the .ps1 is refused ("running scripts is disabled").
+//   - The wait loop is delivered as a base64 -EncodedCommand so no quoting has
+//     to survive XML + the FirstLogonCommands wrapper.
 func wardenRunTaskCmd(seedLabel string) string {
-	arg := fmt.Sprintf(
-		`-NoProfile -ExecutionPolicy Bypass -Command `+
-			`\"$v = Get-Volume -FileSystemLabel %s; `+
-			`& ($v.DriveLetter + \":\\warden-run.ps1\")\"`,
+	bootstrap := fmt.Sprintf(
+		"$ErrorActionPreference='Continue'; "+
+			"for ($i=0; $i -lt 90; $i++) { "+
+			"$v = Get-Volume -FileSystemLabel '%s' -ErrorAction SilentlyContinue; "+
+			"if ($v -and $v.DriveLetter) { "+
+			"& ($v.DriveLetter.ToString() + ':\\warden-run.ps1'); break } "+
+			"Start-Sleep -Seconds 2 }",
 		seedLabel)
-	return `$a = New-ScheduledTaskAction -Execute 'powershell.exe' ` +
-		`-Argument '` + arg + `'; ` +
-		`$t = New-ScheduledTaskTrigger -AtStartup; ` +
-		`Register-ScheduledTask -TaskName warden-run -Action $a ` +
-		`-Trigger $t -User SYSTEM -RunLevel Highest -Force`
+	boot64 := psEncodedCommand(bootstrap)
+
+	// This registration script uses only single quotes and no '&', so it is
+	// XML-safe (xmlText escapes the quotes; Windows Setup decodes them before
+	// running it). The embedded wait loop is base64, so it carries no quotes.
+	return fmt.Sprintf(
+		"$a = New-ScheduledTaskAction -Execute 'powershell.exe' "+
+			"-Argument '-NoProfile -ExecutionPolicy Bypass -EncodedCommand %s'; "+
+			"$s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries "+
+			"-DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero); "+
+			"$t = New-ScheduledTaskTrigger -AtStartup; "+
+			"Register-ScheduledTask -TaskName warden-run -Action $a -Trigger $t "+
+			"-Settings $s -User SYSTEM -RunLevel Highest -Force; "+
+			"Set-ExecutionPolicy Bypass -Scope LocalMachine -Force",
+		boot64)
 }

@@ -65,7 +65,8 @@ func TestGenerateAutounattendARM64(t *testing.T) {
 		"s3cret-ephemeral",
 		"Register-ScheduledTask",
 		"warden-run",
-		windowsSeedName, // seed volume label referenced by the task
+		"AllowStartIfOnBatteries", // battery-proof settings
+		"EncodedCommand",          // wait-loop delivered as base64
 	} {
 		if !strings.Contains(xml, want) {
 			t.Errorf("autounattend missing %q", want)
