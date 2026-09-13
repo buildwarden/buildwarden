@@ -120,14 +120,16 @@ func (d *Driver) startBuildVM(
 			"-device", "nvme,drive=osdisk,serial=wardenwin,bootindex=0",
 		)
 		if cfg.SeedISO != "" {
-			// FAT seed as a read-only usb-storage disk (not media=cdrom):
-			// Windows mounts FAT16 with a drive letter and exact long names,
-			// which the warden-run startup task needs.
+			// Seed as a second NVMe disk (in-box stornvme.sys). usb-storage in
+			// disk mode did not enumerate in the guest (get-disk showed only
+			// the OS disk), though usb-storage CD-ROM did. NVMe is proven to
+			// enumerate (the OS disk uses it); Windows mounts the MBR+FAT16
+			// partition as a fixed volume with a drive letter, which the
+			// warden-run startup task needs.
 			args = append(args,
 				"-drive", fmt.Sprintf(
-					"if=none,id=seed,format=raw,readonly=on,file=%s",
-					cfg.SeedISO),
-				"-device", "usb-storage,bus=xhci.0,drive=seed",
+					"if=none,id=seed,format=raw,file=%s", cfg.SeedISO),
+				"-device", "nvme,drive=seed,serial=wardenseed",
 			)
 		}
 	} else if cfg.DiskImage != "" {
