@@ -107,6 +107,7 @@ func (d *Driver) startBuildVM(
 		// (bootindex=0), writable vars pflash carrying the Boot Manager entry,
 		// and the WARDEN seed as a usb-storage CD-ROM.
 		args = append(args,
+			"-device", "ramfb",
 			"-drive", fmt.Sprintf(
 				"if=pflash,format=raw,readonly=on,file=%s", efiCodePath(cfg.Arch)),
 			"-drive", fmt.Sprintf("if=pflash,format=raw,file=%s", cfg.VarsFD),
