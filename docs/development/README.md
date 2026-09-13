@@ -86,7 +86,9 @@ one monolith (see GLOBAL-08):
 4. [`in-vm-executor.md`](./in-vm-executor.md)
 5. [`ux-cli-config.md`](./ux-cli-config.md)
 6. [`testing.md`](./testing.md)
-7. [`behavioral-linter.md`](./behavioral-linter.md) — the release-gate agent that
+7. [`security-suite.md`](./security-suite.md) — the TEST-08 security suite design
+   (deep-dive #1).
+8. [`behavioral-linter.md`](./behavioral-linter.md) — the release-gate agent that
    enforces this doc set.
 
 ## Relationship to the other guidance files
@@ -99,10 +101,10 @@ elsewhere. (Trimming them is follow-up work, tracked below.)
 
 ## Open deep-dives (TODO)
 
-- **Deep-dive #1 — Security regression suite + adversarial pen-tester agent**
-  (TEST-08). Design the suite contents, how the adversarial agent is scoped and
-  scored, and the pass/fail criteria. Becomes a mandatory release-gate input for
-  releases that trip GLOBAL-06.
+- **Deep-dive #1 — Security suite + adversarial pen-tester agent** (TEST-08):
+  designed in [`security-suite.md`](./security-suite.md) (SEC-01..08). Remaining
+  build work: the isolated harness, the Arm-A corpus, the Arm-B agent wiring, and
+  the monthly/on-demand cadence.
 - **Deep-dive #2 — Tier-1 static-check extraction** (LINT-02). Decide which
   `automated`-tagged rules become `go/analysis` passes vs ripgrep scripts vs
   git-diff coupling checks, and implement them.

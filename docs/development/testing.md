@@ -116,16 +116,14 @@ that adding a test costs a test's worth of time, not an environment's worth.
 ### TEST-08 — Security suite on boundary-tripping releases
 
 **Severity:** MUST
-**Check:** defined in the deep-dive (STUB)
-
-> **STUB — Deep-dive #1 pending.** This rule is intentionally incomplete.
+**Check:** automated (Arm A corpus) + agent-judgment (Arm B adversarial)
 
 When a release includes changes that trip GLOBAL-06 (security-boundary), a dedicated
-security testing suite runs against it, ideally including an adversarial agent
-assessment: a security-focused pen-tester agent attempting to prove influence or
-escape outside the build environment beyond what the relay is measuring.
+security testing suite runs against it: a deterministic attack-regression corpus
+(Arm A) plus an adversarial pen-tester agent (Arm B) that demonstrates whether a
+hole is open for a malicious actor to exploit, across the two failure classes
+(isolation escape, measurement evasion) and the three boundaries.
 
-The full design (what the suite contains, how the adversarial agent is scoped and
-scored, and the pass/fail criteria) is deferred to Deep-dive #1. Once designed, this
-becomes a mandatory input to the release gate for boundary-tripping releases (see
+The full design lives in [`security-suite.md`](./security-suite.md) (SEC-01..08). It
+is a mandatory input to the release gate for boundary-tripping releases (see
 [`behavioral-linter.md`](./behavioral-linter.md)).
