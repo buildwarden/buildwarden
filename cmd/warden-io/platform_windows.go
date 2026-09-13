@@ -37,6 +37,19 @@ func configureNetwork(gateway, selfIP string) error {
 		return nil // nothing to point at
 	}
 
+	// The relay serves its control endpoints on the magic hostnames
+	// "artifacts" (ca.pem, heartbeat, exit, artifact POST) and "cwd"
+	// (build script + context). On Linux the container gets these via
+	// `--add-host artifacts:<relay>`; Windows has no such mechanism, so map
+	// them in the hosts file to the relay/gateway IP. The relay VM's iptables
+	// then transparently redirects the resulting port-80 traffic to the relay
+	// process. Without this, warden-io fails with "lookup artifacts: no such
+	// host" before it can fetch the CA or the build script.
+	if err := writeRelayHostsEntries(gateway); err != nil {
+		fmt.Fprintf(os.Stderr,
+			"warden-io: hosts entries: %s (continuing)\n", err)
+	}
+
 	var ps strings.Builder
 	if selfIP != "" {
 		ip, prefix := splitCIDR(selfIP)
@@ -76,6 +89,47 @@ func splitCIDR(cidr string) (ip, prefix string) {
 		return cidr[:i], cidr[i+1:]
 	}
 	return cidr, "24"
+}
+
+// relayHostnames are the magic hosts the relay serves the build agent on.
+// warden-io reaches them over HTTP (port 80), which the relay VM's iptables
+// transparently redirects to the relay process.
+var relayHostnames = []string{"artifacts", "cwd"}
+
+// hostsFilePath returns the Windows hosts file path.
+func hostsFilePath() string {
+	root := os.Getenv("SystemRoot")
+	if root == "" {
+		root = `C:\Windows`
+	}
+	return filepath.Join(root, "System32", "drivers", "etc", "hosts")
+}
+
+// writeRelayHostsEntries maps the relay magic hostnames to the relay/gateway
+// IP in the Windows hosts file. It rewrites its own managed lines each call
+// (idempotent) and preserves all other content. Requires admin (the boot task
+// runs as SYSTEM).
+func writeRelayHostsEntries(gateway string) error {
+	const marker = "# warden-io"
+	path := hostsFilePath()
+
+	existing, err := os.ReadFile(path)
+	if err != nil && !os.IsNotExist(err) {
+		return err
+	}
+
+	var b strings.Builder
+	for _, line := range strings.Split(string(existing), "\n") {
+		if strings.Contains(line, marker) {
+			continue // drop a prior managed entry
+		}
+		b.WriteString(line)
+		b.WriteString("\n")
+	}
+	for _, name := range relayHostnames {
+		fmt.Fprintf(&b, "%s\t%s %s\n", gateway, name, marker)
+	}
+	return os.WriteFile(path, []byte(b.String()), 0644)
 }
 
 // installCA writes the relay's per-build CA to a known path (for tools that
