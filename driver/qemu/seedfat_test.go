@@ -46,15 +46,18 @@ func TestGenerateWindowsSeedFAT(t *testing.T) {
 		t.Fatalf("seed image not written: %v", err)
 	}
 
-	// When `file` is available, assert the medium is FAT with the label.
+	// When `file` is available, assert the medium is an MBR disk with a
+	// partition (the FAT filesystem + WARDEN label live inside the partition,
+	// which `file` does not descend into on the whole-disk image). Windows
+	// needs the MBR partition to mount the seed on a usb-storage disk.
 	if _, err := exec.LookPath("file"); err == nil {
 		desc, _ := exec.Command("file", "-b", out).Output()
 		d := string(desc)
-		if !strings.Contains(d, "FAT") {
-			t.Errorf("expected FAT image, got: %s", d)
+		if !strings.Contains(d, "MBR boot sector") {
+			t.Errorf("expected MBR disk image, got: %s", d)
 		}
-		if !strings.Contains(d, "WARDEN") {
-			t.Errorf("expected WARDEN volume label, got: %s", d)
+		if !strings.Contains(d, "partition 1") {
+			t.Errorf("expected a partition table, got: %s", d)
 		}
 	}
 }

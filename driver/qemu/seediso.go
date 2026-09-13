@@ -79,9 +79,13 @@ func generateWindowsSeedFATmacOS(dir, outPath, label string) error {
 	defer os.Remove(dmg)
 
 	// 16 MiB is ample for warden-io.exe (~5 MiB) + warden-run.ps1.
+	// MBRSPUD = MBR partition table with one FAT16 partition. Windows mounts
+	// the partition on a usb-storage disk and assigns a drive letter; a
+	// -layout NONE superfloppy (no partition table) is NOT mounted on a
+	// fixed/usb disk (Windows sees a raw uninitialized disk, no volume).
 	create := exec.Command("hdiutil", "create",
 		"-megabytes", "16", "-fs", "MS-DOS FAT16",
-		"-volname", label, "-layout", "NONE", "-ov", dmg)
+		"-volname", label, "-layout", "MBRSPUD", "-ov", dmg)
 	if out, err := create.CombinedOutput(); err != nil {
 		return fmt.Errorf("hdiutil create FAT: %s: %w", string(out), err)
 	}
@@ -136,8 +140,11 @@ func generateWindowsSeedFATmacOS(dir, outPath, label string) error {
 	return nil
 }
 
-// parseHdiutilAttach extracts the device node and mountpoint from
-// `hdiutil attach` output (columns: /dev/diskN <type> <mountpoint>).
+// parseHdiutilAttach extracts the whole-disk device node and the FAT
+// mountpoint from `hdiutil attach` output. With an MBR layout the output has
+// two device lines (whole disk /dev/diskN and partition /dev/diskNsM); we
+// return the whole-disk node so detach releases the entire image, and the
+// mountpoint from the partition line (which may contain spaces).
 func parseHdiutilAttach(out string) (dev, mount string) {
 	for _, line := range strings.Split(out, "\n") {
 		fields := strings.Fields(line)
@@ -145,12 +152,10 @@ func parseHdiutilAttach(out string) (dev, mount string) {
 			continue
 		}
 		if dev == "" {
-			dev = fields[0]
+			dev = fields[0] // first device line == whole disk
 		}
-		if i := strings.Index(line, "/Volumes/"); i >= 0 {
-			dev = fields[0]
+		if i := strings.Index(line, "/Volumes/"); i >= 0 && mount == "" {
 			mount = strings.TrimSpace(line[i:])
-			return dev, mount
 		}
 	}
 	return dev, mount
@@ -171,6 +176,12 @@ func stripMacOSCruft(mount string) {
 	}
 }
 
+// generateWindowsSeedFATmtools builds the FAT seed with mtools on a Linux
+// host. NOTE: mformat writes a bare (superfloppy) FAT with no partition table,
+// which Windows will NOT mount on a usb-storage disk (it needs an MBR
+// partition, as the macOS path produces via MBRSPUD). This path is a
+// placeholder for a future Linux qemu host and needs an mpartition/MBR step
+// before it is Windows-usable; the current target (macOS) uses hdiutil above.
 func generateWindowsSeedFATmtools(dir, outPath, label string) error {
 	entries, err := os.ReadDir(dir)
 	if err != nil {
