@@ -112,6 +112,8 @@ func (d *Driver) startBuildVM(
 				"if=pflash,format=raw,readonly=on,file=%s", efiCodePath(cfg.Arch)),
 			"-drive", fmt.Sprintf("if=pflash,format=raw,file=%s", cfg.VarsFD),
 			"-device", "qemu-xhci,id=xhci",
+			"-device", "usb-kbd,bus=xhci.0",
+			"-device", "usb-tablet,bus=xhci.0",
 			"-drive", fmt.Sprintf(
 				"if=none,id=osdisk,file=%s,format=qcow2", cfg.DiskImage),
 			"-device", "nvme,drive=osdisk,serial=wardenwin,bootindex=0",
