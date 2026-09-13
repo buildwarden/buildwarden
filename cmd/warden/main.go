@@ -286,7 +286,15 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		return buildErr
 
 	case "qemu":
-		dockerfile, contextDir, err := ResolvePath(bp.path)
+		var dockerfile, contextDir string
+		var err error
+		if flagGuestOS == "windows" {
+			// Windows guests run build.ps1 fetched from the relay, not a
+			// Dockerfile; resolve the context dir without discovering one.
+			contextDir, err = resolveWindowsContext(bp.path)
+		} else {
+			dockerfile, contextDir, err = ResolvePath(bp.path)
+		}
 		if err != nil {
 			return err
 		}

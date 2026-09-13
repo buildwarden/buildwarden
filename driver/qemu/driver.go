@@ -219,16 +219,28 @@ func (d *Driver) resolveBuildVMConfig(
 
 	if image == "" {
 		if isWindowsGuest(req) {
-			return nil, fmt.Errorf(
-				"windows guest requires a disk image (--image <path>)")
+			// Use the base image prepared by `warden image restore --os
+			// windows` (parity with the Linux kernel/initrd resolution). It is
+			// overlaid below, so the cached base is never mutated.
+			ga := goArchOf(cfg.Arch)
+			base := filepath.Join(cacheBaseDir(), "warden", "images",
+				"windows-"+ga+".qcow2")
+			if _, err := os.Stat(base); err != nil {
+				return nil, fmt.Errorf(
+					"no prepared Windows base image at %s (run "+
+						"`warden image restore --os windows --arch %s` first, "+
+						"or pass --image <path>)", base, ga)
+			}
+			image = base
+		} else {
+			k, i, err := d.resolveBuildAssets()
+			if err != nil {
+				return nil, fmt.Errorf("resolving build assets: %w", err)
+			}
+			cfg.Kernel = k
+			cfg.Initrd = i
+			return cfg, nil
 		}
-		k, i, err := d.resolveBuildAssets()
-		if err != nil {
-			return nil, fmt.Errorf("resolving build assets: %w", err)
-		}
-		cfg.Kernel = k
-		cfg.Initrd = i
-		return cfg, nil
 	}
 
 	if _, err := os.Stat(image); err != nil {

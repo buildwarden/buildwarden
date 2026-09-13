@@ -418,6 +418,19 @@ func qemuArchOf(goarch string) string {
 	}
 }
 
+// goArchOf maps a qemu-system-<arch> token back to the Go arch used for cache
+// filenames like windows-<arch>.qcow2 (the inverse of qemuArchOf).
+func goArchOf(qarch string) string {
+	switch qarch {
+	case "aarch64":
+		return "arm64"
+	case "x86_64":
+		return "amd64"
+	default:
+		return qarch
+	}
+}
+
 // efiVarsPath locates a writable UEFI vars template for the arch, or "".
 func efiVarsPath(arch string) string {
 	var candidates []string

@@ -159,6 +159,34 @@ func discoverDockerfile(dir string) (string, error) {
 	return "", fmt.Errorf("no Dockerfile or Containerfile found in %s", dir)
 }
 
+// resolveWindowsContext resolves the build-context directory for a Windows
+// guest build. Unlike the Linux/container path there is no Dockerfile: the
+// guest's warden-io fetches build.ps1 from the relay (served from this context
+// dir), so the directory only needs to contain build.ps1. An empty path means
+// the current directory; a file path resolves to its parent directory.
+func resolveWindowsContext(path string) (string, error) {
+	if path == "" {
+		path = "."
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return "", fmt.Errorf("cannot access %q: %w", abs, err)
+	}
+	if !info.IsDir() {
+		abs = filepath.Dir(abs)
+	}
+	if _, err := os.Stat(filepath.Join(abs, "build.ps1")); err != nil {
+		return "", fmt.Errorf(
+			"no build.ps1 found in %s (Windows guest builds run build.ps1, "+
+				"not a Dockerfile)", abs)
+	}
+	return abs, nil
+}
+
 func validateDriver(d string) error {
 	switch d {
 	case "", "container", "qemu", "vz":
