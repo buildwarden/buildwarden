@@ -103,9 +103,11 @@ func generateAutounattend(cfg autounattendConfig) string {
 		data.BypassKeys = append(data.BypassKeys,
 			bypassEntry{Order: i + 1, Key: key})
 	}
-	// virtio-win driver paths so Setup sees the virtio boot disk and NIC and
-	// installs their drivers boot-start (avoids INACCESSIBLE_BOOT_DEVICE).
-	for i, d := range []string{"viostor", "vioscsi", "NetKVM"} {
+	// The OS disk is NVMe (in-box stornvme.sys), so no virtio block driver
+	// (viostor/vioscsi) needs injecting. Inject only NetKVM so the installed
+	// image carries the virtio-net driver for the build-time NIC that warden-io
+	// configures (static IP) on first boot.
+	for i, d := range []string{"NetKVM"} {
 		data.DriverPaths = append(data.DriverPaths, driverPathEntry{
 			Key:  i + 1,
 			Path: xmlText(fmt.Sprintf(`%s\%s\w11\%s`, drv, d, vArch)),

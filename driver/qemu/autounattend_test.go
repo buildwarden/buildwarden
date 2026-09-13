@@ -89,8 +89,12 @@ func TestGenerateAutounattendAMD64(t *testing.T) {
 	if !strings.Contains(xml, `processorArchitecture="amd64"`) {
 		t.Error("autounattend missing amd64 processorArchitecture")
 	}
-	if !strings.Contains(xml, `E:\viostor\w11\amd64`) {
-		t.Error("autounattend missing amd64 virtio viostor driver path")
+	if !strings.Contains(xml, `E:\NetKVM\w11\amd64`) {
+		t.Error("autounattend missing amd64 NetKVM driver path")
+	}
+	// NVMe OS disk => no virtio block driver injection.
+	if strings.Contains(xml, "viostor") || strings.Contains(xml, "vioscsi") {
+		t.Error("autounattend should not inject viostor/vioscsi (NVMe OS disk)")
 	}
 	if strings.Contains(xml, "ARM64") {
 		t.Error("amd64 autounattend should not reference ARM64 driver dirs")
