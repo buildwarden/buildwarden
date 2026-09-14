@@ -11,6 +11,9 @@
 //	PUT  /v1/artifacts/<name>   stream body -> <dir>/artifacts/<name>
 //	PUT  /v1/ledger             stream body -> <dir>/ledger
 //	POST /v1/output             append body -> <dir>/build-output.log
+//	POST /v1/ready              relay is up; fires Config.OnReady
+//	POST /v1/complete           build finished; fires Config.OnComplete
+//	GET  /v1/status             last completion, else {"state":"running"}
 //	GET  /healthz               liveness
 //
 // Bodies stream straight to disk with a fixed buffer, so multi-GB artifacts
@@ -26,6 +29,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 )
 
@@ -40,6 +44,15 @@ type Config struct {
 	MaxArtifactBytes int64
 	// Logf, if set, receives one-line progress logs.
 	Logf func(format string, args ...any)
+	// OnReady, if set, is invoked when POST /v1/ready is received. It lets a
+	// driver embedding the collector in-process learn the relay has come up.
+	// Optional and nil-safe; called synchronously on the request goroutine.
+	OnReady func()
+	// OnComplete, if set, is invoked when POST /v1/complete is received, with
+	// the decoded signal. It lets an embedding driver react to build
+	// completion. Optional and nil-safe; called synchronously on the request
+	// goroutine, after the signal is stored.
+	OnComplete func(CompletionSignal)
 }
 
 const defaultMaxArtifactBytes = 4 * 1024 * 1024 * 1024 // 4 GiB
@@ -49,6 +62,13 @@ type Collector struct {
 	cfg          Config
 	maxArtifact  int64
 	bytesWritten atomic.Int64
+
+	// mu guards completion; done is closed exactly once when the first
+	// completion arrives (safe for a single embedder waiting on Done).
+	mu         sync.Mutex
+	completion *CompletionSignal
+	done       chan CompletionSignal
+	doneClosed bool
 }
 
 // New validates cfg and returns a Collector.
@@ -63,7 +83,7 @@ func New(cfg Config) (*Collector, error) {
 	if max <= 0 {
 		max = defaultMaxArtifactBytes
 	}
-	return &Collector{cfg: cfg, maxArtifact: max}, nil
+	return &Collector{cfg: cfg, maxArtifact: max, done: make(chan CompletionSignal, 1)}, nil
 }
 
 // BytesWritten reports the total bytes landed so far (across all outputs).
@@ -85,6 +105,10 @@ func (c *Collector) Handler() http.Handler {
 	mux.HandleFunc("/v1/artifacts/", c.auth(c.handleArtifact))
 	mux.HandleFunc("/v1/ledger", c.auth(c.handleLedger))
 	mux.HandleFunc("/v1/output", c.auth(c.handleOutput))
+	mux.HandleFunc("/v1/ready", c.auth(c.handleReady))
+	mux.HandleFunc("/v1/complete", c.auth(c.handleComplete))
+	// /v1/status matches /healthz's auth stance (unauthenticated liveness/state).
+	mux.HandleFunc("/v1/status", c.handleStatus)
 	return mux
 }
 
