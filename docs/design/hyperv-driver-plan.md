@@ -100,6 +100,142 @@ The relay VM init script works identically — the Hyper-V synthetic NIC (hv_net
 
 ---
 
+## Privilege & Elevation Model
+
+The Hyper-V driver is the only BuildWarden driver that requires host-level OS privilege, and getting the elevation UX right is a shipping requirement, not a footnote. This section is the authoritative design for how the driver acquires privilege and what the local-dev and shippable experiences look like. It shapes package structure, so build the `Provisioner` spine (below) before the VM/boot code, and build the dev-setup stub (Phase 0) before anything that needs a network.
+
+### Two Windows privilege tiers
+
+The privileged operations do not all need the same level, and the whole strategy follows from that split:
+
+| Operation set | Cmdlets | Privilege required | UAC prompt |
+|---|---|---|---|
+| Host network standup | `New-VMSwitch`, `New-NetIPAddress`, `New-NetNat`, `Remove-NetNat` | Full **Administrator** | Yes |
+| VM lifecycle | `New-VM`, `Start-VM`, `Stop-VM`, `Remove-VM`, `Add-VMNetworkAdapter`, `New-VHD` (differencing), `Set-VMFirmware`, `Set-VMComPort` | Local **Hyper-V Administrators** group | No |
+
+The key consequence: only the host-network standup forces full Administrator. A developer who is a member of Hyper-V Administrators can run the entire per-build VM path with no elevation and no UAC prompt, as long as the switch/NAT already exist. Everything below is built to isolate that one full-admin operation and do it as rarely as possible (ideally once).
+
+### Provisioner interface (the code-reuse spine)
+
+Every privileged operation sits behind a single interface so that the same logic serves both the in-process path and the service path:
+
+```go
+// driver/hyperv/provision.go
+
+type Provisioner interface {
+    // Full-admin ops
+    EnsureNetwork(ctx context.Context, spec NetworkSpec) (*NetworkResources, error)
+    TeardownNetwork(ctx context.Context, id string) error
+    // Hyper-V Administrators ops
+    CreateVM(ctx context.Context, cfg VMSpec) (*vmHandle, error)
+    StartVM(ctx context.Context, name string) error
+    StopVM(ctx context.Context, name string) error
+    RemoveVM(ctx context.Context, name string) error
+    CreateDiffDisk(ctx context.Context, overlay, base string) error
+    // ... com port, seed disk, etc.
+}
+```
+
+Two implementations:
+
+- `localProvisioner` — in-process; calls hcsshim / PowerShell directly. Used whenever the current process already holds the required privilege.
+- `clientProvisioner` — marshals the identical calls over a named pipe to the privileged service.
+
+The service host instantiates a `localProvisioner` and exposes it over the pipe. `localProvisioner` is therefore the single source of truth for all privileged logic; only the transport is duplicated. This is the minimal client/server wrapper: the interface is the reuse boundary.
+
+### Three runtime outcomes for `warden --driver hyperv`
+
+Resolved **per operation**, not by one global "am I admin?" check. A naive `IsUserAnAdmin()` boolean is a bug here: a Hyper-V Administrators member reads as "not admin" yet can do every VM op directly, and a partial boolean would send them down path 1 and then fail on `New-VMSwitch`.
+
+1. **Process holds the privilege for the op** (full admin, or Hyper-V Admins for VM ops) → `localProvisioner` performs it directly.
+2. **Process lacks it AND the network service is installed and running** → `clientProvisioner` delegates the op to the service.
+3. **Process lacks it AND no service** → fast-error, naming both remediations: rerun from a terminal launched as Administrator, or run the one-time `warden hyperv setup` (for the network) / install the service, both under admin.
+
+In practice the host-network standup is the only operation that routinely lands in outcome 2 or 3; VM ops resolve to outcome 1 under Hyper-V Administrators. Detection at startup probes token elevation and Hyper-V Administrators group membership, then caches a per-op capability verdict.
+
+### The privileged service (staged LATER, not a Phase-1 prerequisite)
+
+The service is a LocalSystem Windows service that is a thin wrapper hosting `localProvisioner` behind a named pipe. It is the best local-dev UX (zero prompts ever, the Docker Desktop model) but it is **not** needed to prove the driver, and it carries an installer, an uninstaller, lifecycle/recovery config, and version lockstep. Do not build it before the driver runs end to end.
+
+Mandatory security properties (this is a privileged endpoint that will run `New-VM` / `New-VMSwitch` on request):
+
+- **Typed op set only.** The pipe carries structured requests (`CreateVM{name, vhdx, switch}`), never raw PowerShell or arbitrary argument strings.
+- **ACL the pipe** to Hyper-V Administrators (or a dedicated group) and authenticate the caller.
+- **Protocol version handshake** on connect. A stale service speaking an old protocol against a new `warden` is a real failure mode; `warden` should detect the mismatch and offer to reinstall/upgrade (itself a one-time elevated op).
+
+This same `Provisioner`-behind-RPC boundary is what a third-party Windows orchestrator reusing the relay will need, so the interface work also pays into the standalone-relay goal.
+
+### `warden hyperv setup`
+
+**Shippable form:** a one-time, elevated command that idempotently creates a durable, named vSwitch + NAT + host IP. After it runs once, routine `warden build --driver hyperv` runs under Hyper-V Administrators with no elevation. It must detect insufficient privilege and emit a clear, actionable error instead of surfacing a raw PowerShell failure.
+
+**Incremental-dev stub (BUILD THIS FIRST, Phase 0):** a minimal `warden hyperv setup` that creates exactly one durable, reused switch (Private or Internal, plus its NAT + host IP) under a fixed dev name (e.g. `warden-dev`). Run it **once** from an elevated shell. The driver then reuses that switch on every build via `--switch <name>` (or the `WARDEN_HYPERV_SWITCH` env var), skipping per-build network standup entirely. This is what lets the implementation agent iterate on the VM/boot/signal/build harness without persistent admin and without running the gateway elevated.
+
+Carry these reuse hazards into the stub (they are the durable-network dangers, and they apply equally to the shippable form):
+
+- **Idempotent create, and verify-on-each-build rather than trust persistence.** Re-assert every build that the switch is still Private/Internal, expected port ACLs are present, and no rogue host vNIC bridges the build VM out. Persistence does not equal correctness; a prior crash or a manual edit can silently weaken isolation.
+- **The build VM must NEVER get a direct NAT route to the internet.** NAT exists only for the relay VM's controlled egress. A build VM with straight NAT defeats the entire audit/MITM model.
+- **Pick a non-colliding subnet.** WSL2, Docker Desktop, and the Hyper-V Default Switch all allocate NATs/prefixes; an overlapping prefix silently breaks routing. Detect existing `New-NetNat` allocations and fail clearly rather than clobbering.
+- **Serialize builds on a shared dev switch.** The static `10.0.0.2/30` relay+build topology fits exactly one pair, so two concurrent builds on one reused switch clash on IPs. Guard with a host lock, or allocate a per-build subnet.
+
+Note that this reuse model diverges from the per-build `createNetwork()` shown earlier under Network Topology: the shippable driver creates the network once (setup) and reuses it, rather than creating and destroying a switch per build. Phase 0 introduces the switch-reuse path; per-build teardown is retained only as an optional ephemeral mode.
+
+### `warden hyperv doctor` (capability preflight)
+
+`warden hyperv doctor` is a read-only preflight that reports exactly which capabilities the CLI has and which it still needs authorization for, then resolves the runtime outcome (1/2/3 from above) per operation and prints the precise next action. It is especially valuable for agent-based development by other contributors: an implementation agent (or a new human contributor) can run it first to learn whether it can iterate directly, must delegate to the service, or needs a one-time elevated `warden hyperv setup`, instead of discovering the boundary through a mid-build `ACCESS_DENIED`.
+
+**Detection is two-layer:**
+
+1. **Query the process token up front** (no side effects, needs no privilege):
+   - Full-Administrator / elevation state via `GetTokenInformation(TokenElevation)` (`golang.org/x/sys/windows`: `windows.OpenCurrentProcessToken()`, then `token.IsElevated()`). Decides whether the host-network standup ops are available.
+   - Hyper-V Administrators membership via `CheckTokenMembership` against the well-known SID `S-1-5-32-578` (`DOMAIN_ALIAS_RID_HYPER_V_ADMINS`). Decides whether the VM-lifecycle ops are available without elevation.
+2. **Classify the real error as a backstop.** Token detection has UAC filtered-token edge cases and the true authority is enforced by HCS, so the op path must still map a cmdlet `ERROR_ACCESS_DENIED` (`WIN32 5`) to the same remediation message rather than surfacing a raw PowerShell failure. Detection chooses the path; error classification catches a wrong guess.
+
+**Token-scope caveat to surface in the output:** the token checks reflect the *current process's* token. Because the gateway spawns `warden` non-elevated, `doctor` will correctly report "not elevated" there; the elevated verdict only appears when `warden` is launched from an elevated terminal (a different token) or routed through the service. `doctor` should state which token it read so the result is not misleading.
+
+**Checks (all cheap and read-only):**
+
+| Capability | How detected | Privilege to detect |
+|---|---|---|
+| Hypervisor present | `Win32_ComputerSystem.HypervisorPresent` (CIM) | read-only |
+| Hyper-V feature enabled | `Get-WindowsOptionalFeature`, or the `vmms` service exists | read-only |
+| Full Administrator (network standup) | token `IsElevated()` | none |
+| Hyper-V Administrators (VM lifecycle) | `CheckTokenMembership(S-1-5-32-578)` | none |
+| Durable/dev switch present | `Get-VMSwitch <name>` | read-only |
+| Network service reachable | dial the named pipe | none |
+
+**Example output shape:**
+
+```
+$ warden hyperv doctor
+Hyper-V hypervisor present ............ yes
+Hyper-V feature enabled ............... yes
+Token read ............................ current process (non-elevated)
+Full Administrator .................... no   (needed for: New-VMSwitch, New-NetNat, New-NetIPAddress)
+Hyper-V Administrators ................ yes  (covers: New-VM, Start-VM, Remove-VM, adapters, VHDX)
+Dev switch 'warden-dev' ............... not found
+Privileged service .................... not installed
+
+Resolved:
+  VM lifecycle ......... OK (direct, Hyper-V Administrators)
+  Network standup ...... BLOCKED
+    -> run `warden hyperv setup` once from an elevated shell, or
+    -> launch warden from an Administrator terminal, or
+    -> install the network service (one-time, elevated)
+```
+
+`doctor` exits non-zero when a required capability for the requested mode is unmet, so it is usable as a CI/agent gate. The same detection routine backs the per-operation outcome resolution in the driver itself, so `doctor` is a thin CLI surface over logic the driver already needs.
+
+### Cloud / headless fleets (Azure, AWS)
+
+The elevation pain largely evaporates on a non-GUI fleet: there is no interactive desktop, so there is no interactive UAC, and automation runs already-elevated as a service account (WinRM/SSH/service). The service model is the natural fit there, and setup is baked into the golden image. The real gate is **nested-virtualization SKU availability**:
+
+- **AWS:** always available on bare-metal (`.metal`) instances, and since February 2026 also on virtual Nitro instances built on Intel Xeon 6 (C8i / M8i / R8i). See [EC2 nested virtualization docs](https://docs.aws.amazon.com/en_us/AWSEC2/latest/UserGuide/amazon-ec2-nested-virtualization.html) and the [launch note](https://aws.amazon.com/about-aws/whats-new/2026/02/amazon-ec2-nested-virtualization-on-virtual).
+- **Azure:** Dv3/Ev3 and newer support it; B-series burstable does **not**; ARM SKUs (Dpsv5) run KVM, not Hyper-V. See the [nested virtualization guide](https://learn.microsoft.com/azure/lab-services/concept-nested-virtualization-template-vm) and [enable-nested-virtualization](https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/enable-nested-virtualization).
+- Windows **Server** enables Hyper-V via `Install-WindowsFeature Hyper-V` (+ reboot), and the auto-created Default Switch is not reliably present, so the durable `warden hyperv setup` path is mandatory there rather than optional.
+
+---
+
 ## PowerShell vs WMI/COM
 
 ### Recommendation: PowerShell cmdlets via `exec.Command`
@@ -973,11 +1109,25 @@ This eliminates the external tool dependency entirely.
 
 ## Implementation Phases
 
+Elevation staging is folded into the phase order: build the privilege spine and the dev-setup stub FIRST (Phase 0) so the harness can be developed without persistent admin, and defer the full service to LAST (Phase 4) since it is not needed to prove the driver.
+
+### Phase 0: Privilege foundation + dev harness (do first)
+
+- [ ] `Provisioner` interface + `localProvisioner` in-process implementation
+- [ ] `warden hyperv setup` **dev stub**: create one durable reused switch (Private/Internal) + NAT + host IP under a fixed dev name (`warden-dev`), idempotent
+- [ ] Driver switch reuse: `--switch <name>` / `WARDEN_HYPERV_SWITCH` to reuse the pre-created switch and skip per-build network standup
+- [ ] Per-operation capability detection (token elevation + Hyper-V Administrators membership), cached at startup
+- [ ] `warden hyperv doctor`: read-only capability preflight (token + group + feature + switch + service), resolves outcome per op, exits non-zero when blocked so it works as a CI/agent gate
+- [ ] Outcome-3 fast-error with both remediations (elevated terminal, or one-time setup) when an op cannot be satisfied
+- [ ] No service yet. Dev loop = Jeff runs the setup stub once from an elevated shell, then the non-elevated gateway iterates against the reused switch (VM ops run under Hyper-V Admins)
+
+**Exit criteria:** `warden --driver hyperv` can create and destroy VMs against the reused dev switch with the gateway running non-elevated.
+
 ### Phase 1: Skeleton + Linux guest (2-3 weeks)
 
 - [ ] Package structure with build tags
 - [ ] PowerShell helpers (`runPS`, `runPSJSON`)
-- [ ] Network creation/cleanup (Private + NAT switches)
+- [ ] Network via `Provisioner` (reused switch in dev; `EnsureNetwork` for the durable switch in prod)
 - [ ] Relay VM boot (reuse existing kernel+initrd from `tools/relay-vm/`)
 - [ ] Named pipe signal monitoring
 - [ ] Linux build VM with cloud-init
@@ -998,8 +1148,19 @@ This eliminates the external tool dependency entirely.
 - [ ] FROM resolution for Windows images
 - [ ] Differencing disk lifecycle
 - [ ] Error handling + cleanup on partial failures
+- [ ] **Shippable `warden hyperv setup`**: durable named switch/NAT/IP, idempotent, privilege detection with a clear actionable error (not a raw PowerShell failure)
 - [ ] Azure nested-virt CI runner setup
 - [ ] Documentation
+
+### Phase 4: Privileged service (later; optional for first ship)
+
+- [ ] `clientProvisioner` (marshals `Provisioner` calls over the pipe)
+- [ ] LocalSystem Windows service host wrapping `localProvisioner`
+- [ ] Installer / uninstaller / recovery config; `warden` can install/upgrade it (one-time elevated op)
+- [ ] Security hardening: typed op set only, pipe ACL'd to Hyper-V Administrators, caller authentication, protocol version handshake
+- [ ] Outcome-2 delegation wired end to end
+
+**Exit criteria:** `warden build --driver hyperv` runs with zero prompts from a non-elevated shell with no dev switch pre-created.
 
 ---
 
