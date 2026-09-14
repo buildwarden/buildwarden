@@ -66,6 +66,15 @@ type Config struct {
 	// OutputWriter receives build output from the /v1/output endpoint.
 	// Defaults to os.Stderr if nil.
 	OutputWriter io.Writer
+
+	// OutputSinkURL, when non-empty, routes the relay's outputs (artifacts,
+	// ledger, build output, and ready/complete signals) to a remote HTTP
+	// collector at this base URL instead of the local filesystem. Empty (the
+	// default) selects the local sink, preserving today's exact behavior.
+	OutputSinkURL string
+	// OutputSinkToken is the bearer token presented on every collector write
+	// when OutputSinkURL is set.
+	OutputSinkToken string
 }
 
 // Relay is the core proxy that intercepts network traffic and writes a ledger.
@@ -77,6 +86,8 @@ type Relay struct {
 	mitmCert *tls.Certificate
 
 	ledger     *Ledger
+	ledgerFile *os.File
+	sink       OutputSink
 	outDir     string
 	contextDir string
 
@@ -155,14 +166,23 @@ func Start(cfg Config) (*Relay, error) {
 	r.setCaptureMode(cfg.CaptureMode)
 	r.buildTransport()
 
-	// Create ledger file
-	ledgerFile, err := os.Create(filepath.Join(cfg.LedgerDir, "ledger"))
+	// Select the output sink. Empty URL => local filesystem sink (default,
+	// today's exact behavior); non-empty => stream to the remote collector.
+	if cfg.OutputSinkURL == "" {
+		r.sink = newLocalSink(r)
+	} else {
+		r.sink = newHTTPSink(cfg.OutputSinkURL, cfg.OutputSinkToken)
+	}
+
+	// Create ledger writer via the sink (local file, or in-memory buffer for
+	// the http sink flushed on Finish/Wait).
+	ledgerWriter, err := r.sink.LedgerWriter()
 	if err != nil {
-		return nil, fmt.Errorf("creating ledger file: %w", err)
+		return nil, err
 	}
 
 	r.ledger, err = NewLedger(LedgerConfig{
-		Writer:      ledgerFile,
+		Writer:      ledgerWriter,
 		Environment: map[string]any{"type": "container"},
 	})
 	if err != nil {
@@ -213,6 +233,13 @@ func Start(cfg Config) (*Relay, error) {
 	go func() { r.errs <- r.runControlPlane() }()
 
 	log.Printf("relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp")
+
+	// Signal readiness once the relay is up and serving. For the local sink
+	// this is a no-op; for the http sink it POSTs /v1/ready to the collector.
+	if err := r.sink.PostReady(); err != nil {
+		log.Printf("relay: PostReady failed: %v", err)
+	}
+
 	return r, nil
 }
 
@@ -220,12 +247,32 @@ func Start(cfg Config) (*Relay, error) {
 func (r *Relay) Wait() error {
 	err := <-r.errs
 	r.ledger.Finish()
+	if ferr := r.sink.FlushLedger(); ferr != nil {
+		log.Printf("relay: flushing ledger: %v", ferr)
+	}
 	return err
 }
 
 // Stop shuts down the relay.
 func (r *Relay) Stop() {
 	r.ledger.Finish()
+	if ferr := r.sink.FlushLedger(); ferr != nil {
+		log.Printf("relay: flushing ledger: %v", ferr)
+	}
+}
+
+// PostComplete signals build completion to the output sink. For the local sink
+// this is a no-op; for the http sink it POSTs /v1/complete with the exit code,
+// message and error string. The orchestrator calls this at build end; the call
+// site over the netstack control plane is finished in a later change.
+func (r *Relay) PostComplete(exitCode int, message, errStr string) error {
+	return r.sink.PostComplete(exitCode, message, errStr)
+}
+
+// hashHex renders the primary (first 32-byte) hash of a ledger hash block as
+// hex, matching the historical content-address for payload files.
+func hashHex(hashBlock []byte) string {
+	return hex.EncodeToString(hashBlock[:32])
 }
 
 // CACert returns the PEM-encoded ephemeral CA certificate.
@@ -551,50 +598,22 @@ func (r *Relay) handleArtifactPost(req *http.Request) (*http.Request, *http.Resp
 		openSig, -int64(len(reqHeaders)), hb, schemaHTTPHeaders, headersMeta,
 	)
 
-	artifactsDir := filepath.Join(r.outDir, "artifacts")
-	_ = os.MkdirAll(artifactsDir, 0755)
-	payloadsDir := filepath.Join(r.outDir, "payloads")
-	_ = os.MkdirAll(payloadsDir, 0755)
-
-	tmpFile, err := os.CreateTemp(payloadsDir, "artifact-*")
+	// Route the artifact body through the output sink. Both sinks hash the
+	// identical byte stream via a StreamingHasher fed through io.TeeReader, so
+	// the ledger record below is byte-identical regardless of where the bytes
+	// land (local content-addressed payload, or streamed to the collector).
+	hasher := NewStreamingHasher(r.ledger.hashes)
+	limited := &limitedReader{r: req.Body, remaining: maxArtifactBytes + 1}
+	hashBlock, size, err := r.sink.PutArtifact(artifactName, limited, hasher)
+	req.Body.Close()
 	if err != nil {
-		log.Printf("artifact: error creating temp file: %v", err)
+		if limited.exceeded {
+			return req, newTextResponse(req, http.StatusRequestEntityTooLarge,
+				"artifact size limit exceeded\n")
+		}
+		log.Printf("artifact: error storing %s: %v", artifactName, err)
 		return req, newTextResponse(req, http.StatusInternalServerError, "storage error")
 	}
-
-	hasher := NewStreamingHasher(r.ledger.hashes)
-	buf := make([]byte, 32*1024)
-	var artifactSize int64
-	for {
-		n, readErr := req.Body.Read(buf)
-		if n > 0 {
-			artifactSize += int64(n)
-			if artifactSize > maxArtifactBytes {
-				tmpFile.Close()
-				os.Remove(tmpFile.Name())
-				req.Body.Close()
-				return req, newTextResponse(req, http.StatusRequestEntityTooLarge,
-					"artifact size limit exceeded\n")
-			}
-			hasher.Write(buf[:n]) //nolint:errcheck
-			tmpFile.Write(buf[:n]) //nolint:errcheck
-		}
-		if readErr != nil {
-			break
-		}
-	}
-	tmpFile.Close()
-	req.Body.Close()
-
-	hashBlock, size := hasher.Finish()
-
-	primaryHash := hex.EncodeToString(hashBlock[:32])
-	payloadPath := filepath.Join(payloadsDir, primaryHash)
-	os.Rename(tmpFile.Name(), payloadPath) //nolint:errcheck
-
-	symPath := filepath.Join(artifactsDir, artifactName)
-	os.MkdirAll(filepath.Dir(symPath), 0755) //nolint:errcheck
-	os.Symlink(filepath.Join("..", "payloads", primaryHash), symPath) //nolint:errcheck
 
 	artMeta, _ := cbor.Marshal(map[string]any{
 		"name":    artifactName,
@@ -602,6 +621,7 @@ func (r *Relay) handleArtifactPost(req *http.Request) (*http.Request, *http.Resp
 	})
 	r.ledger.Artifact(openSig, -size, hashBlock, schemaArtifact, artMeta)
 
+	primaryHash := hashHex(hashBlock)
 	log.Printf("artifact: stored %s (%d bytes, hash:%s)", artifactName, size, primaryHash[:12])
 
 	return req, newTextResponse(req, http.StatusOK,
