@@ -37,8 +37,11 @@ func Doctor(w io.Writer, c Capabilities) (blocked bool) {
 	fmt.Fprintf(w, "%s%s\n", dotted("Token read"), c.TokenScope)
 	fmt.Fprintf(w, "%s%-4s(needed for: New-VMSwitch, New-NetNat, New-NetIPAddress)\n",
 		dotted("Full Administrator"), yesNo(c.Elevated))
-	fmt.Fprintf(w, "%s%-4s(covers: New-VM, Start-VM, Remove-VM, adapters, VHDX)\n",
-		dotted("Hyper-V Administrators"), yesNo(c.HyperVAdmin))
+	hvaNote := "(covers: New-VM, Start-VM, Remove-VM, adapters, VHDX)"
+	if !c.HyperVAdmin && c.HyperVAdminByAccount {
+		hvaNote = "(account IS a member, but this process's token predates it - stale token)"
+	}
+	fmt.Fprintf(w, "%s%-4s%s\n", dotted("Hyper-V Administrators"), yesNo(c.HyperVAdmin), hvaNote)
 
 	switchLabel := "Dev switch"
 	if c.DevSwitch != "" {
@@ -70,9 +73,15 @@ func Doctor(w io.Writer, c Capabilities) (blocked bool) {
 		fmt.Fprintln(w, "  VM lifecycle ......... OK (via privileged service)")
 	case OutcomeBlocked:
 		fmt.Fprintln(w, "  VM lifecycle ......... BLOCKED")
-		fmt.Fprintln(w, "    -> join the local Hyper-V Administrators group, or")
-		fmt.Fprintln(w, "    -> launch warden from an Administrator terminal, or")
-		fmt.Fprintln(w, "    -> install the network service (one-time, elevated)")
+		if c.HyperVAdminByAccount {
+			fmt.Fprintln(w, "    your account is in Hyper-V Administrators, but this process's token predates that change.")
+			fmt.Fprintln(w, "    -> sign out and back in, then restart the gateway (a running process keeps its old token), or")
+			fmt.Fprintln(w, "    -> run this build from a fresh Administrator terminal")
+		} else {
+			fmt.Fprintln(w, "    -> join the local Hyper-V Administrators group (then re-login), or")
+			fmt.Fprintln(w, "    -> launch warden from an Administrator terminal, or")
+			fmt.Fprintln(w, "    -> install the network service (one-time, elevated)")
+		}
 	}
 
 	net := c.NetworkStrategy()

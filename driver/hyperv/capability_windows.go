@@ -39,6 +39,24 @@ func detectPlatform(c *Capabilities) {
 		c.Errors = append(c.Errors, "hyper-v administrators SID: "+err.Error())
 	}
 
+	// If the token doesn't carry the group, check whether the account is a
+	// member per the persistent group membership. A mismatch is the stale-token
+	// signature (the group was joined after this process's logon token was
+	// issued). Locale-independent: resolve the group name from the well-known
+	// SID rather than hard-coding "Hyper-V Administrators".
+	if !c.HyperVAdmin {
+		script := `
+$me = ([System.Security.Principal.WindowsIdentity]::GetCurrent()).User.Value
+try {
+  $g = (New-Object System.Security.Principal.SecurityIdentifier('S-1-5-32-578')).Translate([System.Security.Principal.NTAccount]).Value.Split('\')[-1]
+  $m = Get-LocalGroupMember -Group $g -ErrorAction Stop | Where-Object { $_.SID.Value -eq $me }
+  if ($m) { 'yes' } else { 'no' }
+} catch { 'unknown' }`
+		if out, err := runPS(script); err == nil {
+			c.HyperVAdminByAccount = strings.EqualFold(strings.TrimSpace(out), "yes")
+		}
+	}
+
 	// Hypervisor present (read-only CIM).
 	if out, err := runPS(`(Get-CimInstance Win32_ComputerSystem).HypervisorPresent`); err == nil {
 		c.HypervisorPresent = strings.EqualFold(strings.TrimSpace(out), "True")

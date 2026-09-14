@@ -148,4 +148,19 @@ func TestDoctorReport(t *testing.T) {
 	if !strings.Contains(buf.String(), "unavailable on linux") {
 		t.Errorf("expected unavailable message; got:\n%s", buf.String())
 	}
+
+	// Stale token: account IS a Hyper-V Administrators member but this process's
+	// token predates the change. doctor must diagnose it precisely.
+	buf.Reset()
+	stale := Capabilities{
+		Supported: true, Platform: "windows", TokenScope: "current process (non-elevated)",
+		HypervisorPresent: true, HyperVFeature: true,
+		HyperVAdmin: false, HyperVAdminByAccount: true,
+	}
+	if blocked := Doctor(&buf, stale); !blocked {
+		t.Fatal("expected blocked with a stale token")
+	}
+	if !strings.Contains(buf.String(), "token predates") {
+		t.Errorf("expected stale-token diagnosis; got:\n%s", buf.String())
+	}
 }

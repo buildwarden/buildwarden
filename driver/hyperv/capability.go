@@ -70,7 +70,16 @@ type Capabilities struct {
 	HypervisorPresent bool // Win32_ComputerSystem.HypervisorPresent
 	HyperVFeature     bool // Hyper-V management stack present (vmms service)
 	Elevated          bool // full Administrator (network standup ops)
-	HyperVAdmin       bool // Hyper-V Administrators group (VM lifecycle ops)
+	HyperVAdmin       bool // Hyper-V Administrators group per THIS process's token (VM lifecycle ops)
+
+	// HyperVAdminByAccount is true when the user account is a member of the
+	// Hyper-V Administrators group per the persistent group membership, even
+	// though the current process token does not carry it. A true value here
+	// with HyperVAdmin false is the stale-token signature: the group was joined
+	// after this process's logon token was issued. A long-running parent (the
+	// gateway) keeps its token for life, so its spawned warden inherits the old
+	// token until the parent is restarted in a session that has the group.
+	HyperVAdminByAccount bool
 
 	// DevSwitch is the durable/dev switch name that was probed ("" if none).
 	DevSwitch        string
