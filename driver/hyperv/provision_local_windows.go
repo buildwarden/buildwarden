@@ -140,25 +140,102 @@ func (p *localProvisioner) VerifyNetwork(ctx context.Context, switchName string)
 }
 
 // --- VM lifecycle (Hyper-V Administrators tier) -----------------------------
-// Implemented in the next Phase 0 increment (paired with relay-VM boot). The
-// signatures satisfy Provisioner now so the setup path can land first.
 
+// CreateVM creates a Generation-2 VM attached to spec.SwitchName. With an empty
+// VHDXPath it is created diskless (-NoVHD), which is enough to validate the
+// create/attach/remove path; a real build passes the overlay VHDX and seed
+// media. SecureBoot template is chosen per guest family.
 func (p *localProvisioner) CreateVM(ctx context.Context, spec VMSpec) (*VMHandle, error) {
-	return nil, fmt.Errorf("hyperv: CreateVM not implemented yet (next Phase 0 increment)")
+	if spec.Name == "" {
+		return nil, fmt.Errorf("CreateVM: empty name")
+	}
+	gen := spec.Generation
+	if gen == 0 {
+		gen = 2
+	}
+	mem := spec.MemoryMB
+	if mem == 0 {
+		mem = 2048
+	}
+	cpus := spec.CPUs
+	if cpus == 0 {
+		cpus = 2
+	}
+	name := psEscapeSingle(spec.Name)
+
+	var b strings.Builder
+	b.WriteString("$ErrorActionPreference='Stop'\n")
+	if spec.VHDXPath != "" {
+		fmt.Fprintf(&b, "New-VM -Name '%s' -Generation %d -MemoryStartupBytes %dMB -VHDPath '%s'",
+			name, gen, mem, psEscapeSingle(spec.VHDXPath))
+	} else {
+		fmt.Fprintf(&b, "New-VM -Name '%s' -Generation %d -MemoryStartupBytes %dMB -NoVHD", name, gen, mem)
+	}
+	if spec.SwitchName != "" {
+		fmt.Fprintf(&b, " -SwitchName '%s'", psEscapeSingle(spec.SwitchName))
+	}
+	b.WriteString(" | Out-Null\n")
+	fmt.Fprintf(&b, "Set-VMProcessor -VMName '%s' -Count %d\n", name, cpus)
+	if spec.SeedVHDX != "" {
+		fmt.Fprintf(&b, "Add-VMHardDiskDrive -VMName '%s' -Path '%s'\n", name, psEscapeSingle(spec.SeedVHDX))
+	}
+	if spec.SeedISO != "" {
+		fmt.Fprintf(&b, "Add-VMDvdDrive -VMName '%s' -Path '%s'\n", name, psEscapeSingle(spec.SeedISO))
+	}
+	if gen == 2 {
+		tmpl := "MicrosoftUEFICertificateAuthority" // Linux guests
+		if spec.IsWindows {
+			tmpl = "MicrosoftWindows"
+		}
+		fmt.Fprintf(&b, "Set-VMFirmware -VMName '%s' -SecureBootTemplate '%s'\n", name, tmpl)
+	}
+	b.WriteString("'OK'\n")
+
+	if _, err := runPS(b.String()); err != nil {
+		return nil, fmt.Errorf("CreateVM %q: %w", spec.Name, err)
+	}
+	return &VMHandle{Name: spec.Name, Generation: gen}, nil
 }
 
 func (p *localProvisioner) StartVM(ctx context.Context, name string) error {
-	return fmt.Errorf("hyperv: StartVM not implemented yet (next Phase 0 increment)")
+	if _, err := runPS(fmt.Sprintf("Start-VM -Name '%s'", psEscapeSingle(name))); err != nil {
+		return fmt.Errorf("StartVM %q: %w", name, err)
+	}
+	return nil
 }
 
 func (p *localProvisioner) StopVM(ctx context.Context, name string) error {
-	return fmt.Errorf("hyperv: StopVM not implemented yet (next Phase 0 increment)")
+	if _, err := runPS(fmt.Sprintf("Stop-VM -Name '%s' -Force -TurnOff", psEscapeSingle(name))); err != nil {
+		return fmt.Errorf("StopVM %q: %w", name, err)
+	}
+	return nil
 }
 
+// RemoveVM force-stops (best-effort) then deletes the VM. Idempotent-ish: a
+// missing VM is treated as already removed.
 func (p *localProvisioner) RemoveVM(ctx context.Context, name string) error {
-	return fmt.Errorf("hyperv: RemoveVM not implemented yet (next Phase 0 increment)")
+	n := psEscapeSingle(name)
+	script := fmt.Sprintf(`
+$vm = Get-VM -Name '%[1]s' -ErrorAction SilentlyContinue
+if (-not $vm) { 'gone'; return }
+Stop-VM -Name '%[1]s' -Force -TurnOff -ErrorAction SilentlyContinue
+Remove-VM -Name '%[1]s' -Force
+'OK'
+`, n)
+	if _, err := runPS(script); err != nil {
+		return fmt.Errorf("RemoveVM %q: %w", name, err)
+	}
+	return nil
 }
 
+// CreateDiffDisk creates a differencing VHDX (the Hyper-V equivalent of a QCOW2
+// overlay), so the read-only base image is preserved and each build writes to
+// its own thin overlay.
 func (p *localProvisioner) CreateDiffDisk(ctx context.Context, overlay, base string) error {
-	return fmt.Errorf("hyperv: CreateDiffDisk not implemented yet (next Phase 0 increment)")
+	script := fmt.Sprintf("New-VHD -Path '%s' -ParentPath '%s' -Differencing | Out-Null; 'OK'",
+		psEscapeSingle(overlay), psEscapeSingle(base))
+	if _, err := runPS(script); err != nil {
+		return fmt.Errorf("CreateDiffDisk %q: %w", overlay, err)
+	}
+	return nil
 }
