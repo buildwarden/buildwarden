@@ -460,11 +460,25 @@ full artifact.** A new output-sink seam in the `relay` library:
   ledger streams the same way.
 - Selected by config: `OUTPUT_SINK_URL` set → `httpSink`, else `localSink`.
 
-On Hyper-V the driver runs a tiny host collector bound to the internal-switch IP
-(`192.168.240.1`, never `0.0.0.0`), gated by a per-build bearer token; only the
-relay VM can reach it (the build VM is on the isolated Private switch). Artifacts
-flow build-env → relay → host in one streamed hop; nothing large lands in the
-relay VM, so its VHDXs stay tiny.
+The receiver is a **generalized, reusable component**, not something bespoke to
+the Hyper-V driver: a `collector` package with a standalone `cmd/collector`
+binary (symmetric with `cmd/relay` / `cmd/warden-io`), which drivers embed
+**in-process** (one implementation, two entrypoints — exactly how `relay` is both
+a library and `cmd/relay`). It is the counterpart to the relay's `httpSink`:
+receive streamed artifacts/ledger over chunked HTTP and land them in the output
+dir. A third-party orchestrator on any platform can run `cmd/collector` (or front
+`SINK_URL` with S3/MinIO/WebDAV) and reuse the relay + warden-io unchanged — the
+third of three composable primitives (relay = witness/egress, warden-io =
+in-guest agent, collector = ingress/sink).
+
+On Hyper-V the driver embeds the collector in-process, bound to the
+internal-switch IP (`192.168.240.1`, never `0.0.0.0`) and gated by a per-build
+bearer token; only the relay VM can reach it (the build VM is on the isolated
+Private switch). Because the relay-VM topology gives the host no shared view of
+the guest fs, **the Hyper-V driver has no local sink** — the collector sink is
+its only option; `localSink` remains for container/qemu/vz where the relay writes
+to a host-shared path. Artifacts flow build-env → relay → collector in one
+streamed hop; nothing large lands in the relay VM, so its VHDXs stay tiny.
 
 Protocol choice: plain **HTTP with streamed/chunked bodies** — the relay is
 already an HTTP server, HTTP bodies stream by definition, and it is the
