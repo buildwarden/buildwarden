@@ -1,0 +1,7 @@
+# Files that execute on Linux must keep LF endings regardless of the host's
+# core.autocrlf. In particular tools/relay-vm/**/init becomes the relay VM's
+# PID 1 and is embedded verbatim in the initramfs — a CRLF shebang/line would
+# break the VM boot.
+*.sh                       text eol=lf
+tools/relay-vm/init        text eol=lf
+tools/relay-vm/hyperv/init text eol=lf
