@@ -439,6 +439,52 @@ Linux guests need `hv_vmbus`, `hv_storvsc`, `hv_netvsc`, `hv_utils` modules. Mod
 
 ---
 
+## Output egress: streaming sink (decided 2026-09-14)
+
+The relay VM produces the ledger and, more importantly, build artifacts that can
+be very large — PyTorch-style wheels (100s of MB), container images (GBs). The
+relay-VM topology has no host-shared path (unlike qemu's 9p or vz's host-process
+relay), Hyper-V cannot host-mount a VHDX attached to a running VM, and mounting
+needs elevation anyway — so routing artifacts through a data VHDX would mean a
+full second copy of GB-scale data plus elevation. Instead:
+
+**The relay streams outputs to the host as they are produced, never buffering a
+full artifact.** A new output-sink seam in the `relay` library:
+
+- `localSink` — current behavior (write to `LEDGER_DIR`/output on local fs).
+  Remains the DEFAULT, so the container/qemu/vz drivers are behaviourally
+  unchanged (no Phase-3 macOS-loop-back regression).
+- `httpSink` — streams each artifact as an HTTP `PUT ${SINK_URL}/<name>` with a
+  chunked/streamed body; the artifact handler `io.Copy`s the incoming build-env
+  upload straight through to the sink connection (constant memory, GB-safe). The
+  ledger streams the same way.
+- Selected by config: `OUTPUT_SINK_URL` set → `httpSink`, else `localSink`.
+
+On Hyper-V the driver runs a tiny host collector bound to the internal-switch IP
+(`192.168.240.1`, never `0.0.0.0`), gated by a per-build bearer token; only the
+relay VM can reach it (the build VM is on the isolated Private switch). Artifacts
+flow build-env → relay → host in one streamed hop; nothing large lands in the
+relay VM, so its VHDXs stay tiny.
+
+Protocol choice: plain **HTTP with streamed/chunked bodies** — the relay is
+already an HTTP server, HTTP bodies stream by definition, and it is the
+lowest-common-denominator standard. It also serves the standalone-relay goal: a
+third-party orchestrator collects by running a trivial HTTP endpoint, or fronts
+`SINK_URL` with S3/MinIO/WebDAV. (gRPC and S3-multipart were considered; they add
+dependencies and complexity a reliable host-local hop does not need.)
+
+**Future nice-to-have — make the streaming sink the default across all drivers.**
+Investigate whether the sink seam (`httpSink`, or the abstraction generally)
+should REPLACE the local-fs / 9p / host-process output paths as the default for
+container/qemu/vz too, unifying output egress on one streamed, well-known
+protocol instead of per-driver mechanisms. Upside: one code path, no 9p/host-fs
+coupling, uniform backpressure/capacity behaviour, and the same
+third-party-collectable seam everywhere. Deferred and gated on not regressing the
+existing drivers' zero-copy fast paths; revisit alongside the HCS boot item after
+Phase 1.
+
+---
+
 ## Signaling (Heartbeat / Exit)
 
 ### Approach: Shared VHDX with polling (same pattern as QEMU 9p)
