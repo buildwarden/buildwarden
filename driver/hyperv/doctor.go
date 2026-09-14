@@ -75,18 +75,21 @@ func Doctor(w io.Writer, c Capabilities) (blocked bool) {
 		fmt.Fprintln(w, "    -> install the network service (one-time, elevated)")
 	}
 
-	net := c.Resolve(OpNetworkStandup)
-	switch {
-	case c.DevSwitchPresent:
-		fmt.Fprintf(w, "  Network standup ...... not needed (reusing switch '%s')\n", c.DevSwitch)
-	case net == OutcomeDirect:
-		fmt.Fprintln(w, "  Network standup ...... OK (direct, elevated)")
-	case net == OutcomeDelegate:
-		fmt.Fprintln(w, "  Network standup ...... OK (via privileged service)")
+	net := c.NetworkStrategy()
+	switch net {
+	case NetEphemeralPerBuild:
+		fmt.Fprintln(w, "  Network .............. OK (fresh per-build network, elevated - cleanest isolation)")
+		if c.DevSwitchPresent {
+			fmt.Fprintf(w, "                         (durable switch '%s' present; used only for lower-privilege runs)\n", c.DevSwitch)
+		}
+	case NetDelegateService:
+		fmt.Fprintln(w, "  Network .............. OK (fresh per-build via privileged service)")
+	case NetReuseDurable:
+		fmt.Fprintf(w, "  Network .............. OK (reuse durable switch '%s', lower-privilege path)\n", c.DevSwitch)
 	default:
-		fmt.Fprintln(w, "  Network standup ...... BLOCKED")
-		fmt.Fprintln(w, "    -> run `warden hyperv setup` once from an elevated shell, or")
-		fmt.Fprintln(w, "    -> launch warden from an Administrator terminal, or")
+		fmt.Fprintln(w, "  Network .............. BLOCKED")
+		fmt.Fprintln(w, "    -> run `warden hyperv setup` once from an elevated shell (reusable switch), or")
+		fmt.Fprintln(w, "    -> run this build from an Administrator terminal (fresh per-build network), or")
 		fmt.Fprintln(w, "    -> install the network service (one-time, elevated)")
 	}
 

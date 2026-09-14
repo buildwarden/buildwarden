@@ -105,11 +105,64 @@ func (c Capabilities) Resolve(op Op) Outcome {
 	}
 }
 
+// NetworkStrategy is how the isolated build network will be provisioned given
+// the current privilege and environment.
+//
+// Policy: when the process CAN stand up a network (full Administrator, or the
+// privileged service running as LocalSystem), prefer a FRESH ephemeral per-build
+// network. That is the cleanest isolation and avoids the collisions and
+// side-effects of a shared, long-lived switch. The durable named switch created
+// by `warden hyperv setup` is a LOWER-PRIVILEGE fallback: it exists so a
+// non-elevated Hyper-V Administrators member (which cannot stand up a network)
+// still has an isolated path to reuse.
+type NetworkStrategy int
+
+const (
+	// NetBlocked: no network path is available.
+	NetBlocked NetworkStrategy = iota
+	// NetEphemeralPerBuild: full Administrator; create a fresh isolated network
+	// per build and tear it down after (cleanest isolation, no reuse).
+	NetEphemeralPerBuild
+	// NetDelegateService: delegate standup to the privileged service, which
+	// runs elevated and likewise creates a fresh per-build network.
+	NetDelegateService
+	// NetReuseDurable: non-elevated Hyper-V Administrators; reuse the durable
+	// named switch created by an earlier elevated `warden hyperv setup`.
+	NetReuseDurable
+)
+
+func (s NetworkStrategy) String() string {
+	switch s {
+	case NetEphemeralPerBuild:
+		return "ephemeral per-build"
+	case NetDelegateService:
+		return "delegate to service"
+	case NetReuseDurable:
+		return "reuse durable switch"
+	default:
+		return "blocked"
+	}
+}
+
+// NetworkStrategy resolves how the build network will be provisioned. An
+// elevated process never reuses the durable named switch: it stands up a fresh
+// isolated network per build instead.
+func (c Capabilities) NetworkStrategy() NetworkStrategy {
+	switch {
+	case c.Elevated:
+		return NetEphemeralPerBuild
+	case c.ServiceReachable:
+		return NetDelegateService
+	case c.HyperVAdmin && c.DevSwitchPresent:
+		return NetReuseDurable
+	default:
+		return NetBlocked
+	}
+}
+
 // Ready reports whether the driver can run builds given these capabilities and,
-// if not, a short reason. A build needs: a hypervisor, the Hyper-V stack, VM
-// lifecycle not blocked, and either a reusable durable switch OR the ability to
-// stand up the network. Network standup being blocked does not block builds
-// when a durable/dev switch already exists to reuse.
+// if not, a short reason. A build needs a hypervisor, the Hyper-V stack, VM
+// lifecycle not blocked, and a usable network strategy.
 func (c Capabilities) Ready() (ready bool, reason string) {
 	switch {
 	case !c.Supported:
@@ -120,8 +173,8 @@ func (c Capabilities) Ready() (ready bool, reason string) {
 		return false, "Hyper-V management stack (vmms) not found"
 	case c.Resolve(OpVMLifecycle) == OutcomeBlocked:
 		return false, "VM lifecycle blocked: join Hyper-V Administrators, launch elevated, or install the service"
-	case !c.DevSwitchPresent && c.Resolve(OpNetworkStandup) == OutcomeBlocked:
-		return false, "no reusable switch and network standup blocked: run `warden hyperv setup` (elevated) or launch elevated"
+	case c.NetworkStrategy() == NetBlocked:
+		return false, "no network path: run `warden hyperv setup` (elevated) for a reusable switch, or run this build from an elevated shell for a fresh per-build network"
 	default:
 		return true, ""
 	}

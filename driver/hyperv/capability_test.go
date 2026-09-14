@@ -70,8 +70,37 @@ func TestReady(t *testing.T) {
 	}
 }
 
+func TestNetworkStrategy(t *testing.T) {
+	tests := []struct {
+		name string
+		caps Capabilities
+		want NetworkStrategy
+	}{
+		{"elevated uses fresh per-build even with a durable switch",
+			Capabilities{Elevated: true, DevSwitchPresent: true}, NetEphemeralPerBuild},
+		{"elevated uses fresh per-build without a switch",
+			Capabilities{Elevated: true}, NetEphemeralPerBuild},
+		{"non-elevated hyperv-admin reuses the durable switch",
+			Capabilities{HyperVAdmin: true, DevSwitchPresent: true}, NetReuseDurable},
+		{"non-elevated hyperv-admin without a switch is blocked",
+			Capabilities{HyperVAdmin: true, DevSwitchPresent: false}, NetBlocked},
+		{"service delegates when unprivileged",
+			Capabilities{ServiceReachable: true}, NetDelegateService},
+		{"service beats durable reuse",
+			Capabilities{ServiceReachable: true, HyperVAdmin: true, DevSwitchPresent: true}, NetDelegateService},
+		{"nothing available is blocked", Capabilities{}, NetBlocked},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := tt.caps.NetworkStrategy(); got != tt.want {
+				t.Fatalf("NetworkStrategy() = %v, want %v", got, tt.want)
+			}
+		})
+	}
+}
+
 func TestDoctorReport(t *testing.T) {
-	// Non-elevated Hyper-V Admins member reusing a dev switch: ready, not blocked.
+	// Non-elevated Hyper-V Admins member reusing a durable switch: ready.
 	caps := Capabilities{
 		Supported:         true,
 		Platform:          "windows",
@@ -87,9 +116,27 @@ func TestDoctorReport(t *testing.T) {
 		t.Fatalf("expected not blocked; report:\n%s", buf.String())
 	}
 	out := buf.String()
-	for _, want := range []string{"VM lifecycle ......... OK", "Network standup ...... not needed", "warden-dev"} {
+	for _, want := range []string{"VM lifecycle ......... OK", "reuse durable switch", "warden-dev"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("report missing %q; got:\n%s", want, out)
+		}
+	}
+
+	// Elevated with a durable switch present: fresh per-build, switch noted as
+	// lower-privilege only.
+	buf.Reset()
+	elevated := Capabilities{
+		Supported: true, Platform: "windows", TokenScope: "current process (elevated)",
+		HypervisorPresent: true, HyperVFeature: true, Elevated: true,
+		DevSwitch: "warden-dev", DevSwitchPresent: true,
+	}
+	if blocked := Doctor(&buf, elevated); blocked {
+		t.Fatalf("expected not blocked when elevated; report:\n%s", buf.String())
+	}
+	out = buf.String()
+	for _, want := range []string{"fresh per-build", "lower-privilege runs"} {
+		if !strings.Contains(out, want) {
+			t.Errorf("elevated report missing %q; got:\n%s", want, out)
 		}
 	}
 
