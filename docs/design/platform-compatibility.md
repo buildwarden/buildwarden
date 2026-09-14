@@ -33,7 +33,7 @@ are implemented and tested, and which are planned for future support.
 | Linux/amd64 | qemu | Emulation | Planned | Slow (~10x), fallback only |
 | macOS/arm64 | vz | Native (VZ.framework) | In Progress | IPSW restore, headless prep |
 | macOS/arm64 | qemu | HVF | Possible | Legal on Apple hw, redundant with vz |
-| Windows/arm64 | qemu | HVF | In Progress | Local dev target. Unattended `warden image restore --os windows --arch arm64` **validated hands-off** (NVMe OS disk, in-box driver; boots to desktop, ~87m). Build path (`warden build --guest-os windows`) next |
+| Windows/arm64 | qemu | HVF | Phase 1 validated | Local dev target. `warden build --guest-os windows` **validated end-to-end**: conda-forge NumPy install audited (352 reqs / 273.5 MB, all sigs valid, all channels closed). Image prep (`warden image restore --os windows --arch arm64`) validated hands-off (NVMe OS disk). Interim workarounds: manual warden-io trigger (hands-off first-boot task still stabilizing) + x64 emulation for conda. See `windows-driver-plan.md` |
 | Windows/amd64 | qemu | TCG (emulation) | Possible | Very slow on Apple Silicon; native win-64 is validated on x64 hosts (Phase 2) |
 | Linux/arm64 | container | Docker/Finch | Supported | Existing implementation (via Linux VM) |
 | Linux/amd64 | container | Docker/Finch | Supported | Via Rosetta in Finch/Docker Desktop |

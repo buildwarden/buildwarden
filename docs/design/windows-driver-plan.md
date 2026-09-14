@@ -1,8 +1,93 @@
 # Windows-Native Build Driver — Planning
 
-Status: **Planning**. Supersedes the dev-environment assumptions in
-`hyperv-driver-plan.md` (see "Relationship to the Hyper-V plan"). Windows is a
-**P1** build target per `vm-driver-release-plan.md`.
+Status: **Phase 1 implemented & validated locally** on branch
+`feat/windows-driver` (win-arm64 under the qemu driver on Apple Silicon).
+**Phase 2 pending** (native win-64 + Hyper-V on x86-64). Supersedes the
+dev-environment assumptions in `hyperv-driver-plan.md` (see "Relationship to the
+Hyper-V plan"). Windows is a **P1** build target per `vm-driver-release-plan.md`.
+
+## Phase 1 status (implemented) & Phase 2 hand-off
+
+Phase 1 delivers a working, network-audited Windows build locally on
+Apple-Silicon macOS: `win-arm64` guest under the **qemu** driver, exercising all
+three layers below. It is validated end-to-end against a real conda-forge
+install; a couple of documented temporary workarounds (below) are acceptable at
+this stage and are handed to Phase 2 rather than blocking it.
+
+### Done & validated (Phase 1)
+
+- **L1 guest agent** — `cmd/warden-io/platform_windows.go`: `configureNetwork`
+  (static IP `10.0.0.2/30`, gateway `10.0.0.1`, DNS), `installCA` (`certutil
+  -addstore -f Root` + `SSL_CERT_FILE`/`REQUESTS_CA_BUNDLE`/... env), `.ps1`
+  `execScript`. Crucially it writes **hosts-file entries** mapping the relay's
+  magic hosts `artifacts` and `cwd` to the gateway IP — Windows has no container
+  `--add-host`, and without this warden-io fails with `lookup artifacts: no such
+  host` right after "waiting for relay".
+- **L2 build-input model** — bring-your-own `build.ps1` (no Dockerfile
+  translation on Windows); `resolveWindowsContext` serves it from the context
+  dir via the relay's `cwd` host.
+- **L3 host driver (qemu, win-arm64)** — `warden build --driver qemu --guest-os
+  windows`. Build-VM device model mirrors image prep: **NVMe OS disk** (in-box
+  `stornvme.sys`, no viostor injection), writable UEFI vars pflash carrying the
+  Boot Manager entry, the **WARDEN seed as a FAT16+MBR image on a second NVMe
+  disk** (usb-storage disk did not enumerate; a superfloppy without an MBR was
+  not mounted), `ramfb` for screendump/VNC, and the relay VM on a unix-socket
+  L2 link. Relay VM enforces isolation topologically (transparent iptables
+  REDIRECT of :80/:443/:53, `FORWARD DROP`) — no guest firewall.
+- **Image prep** — `warden image restore --os windows --arch arm64` installs
+  Win11 ARM unattended (Autounattend, NVMe, hands-off OOBE) and captures a
+  bootable base. (Its hands-off first-boot task auto-run is still stabilizing —
+  see workarounds.)
+- **Relay endpoints** — control plane on `gw:8300` (`/health`, `/ca.pem`,
+  `/v1/output`, `/v1/complete`); `artifacts` host on `:80` (`/heartbeat`,
+  `/exit`, `/ca.pem`, `/warden-io`, artifact POST); `cwd` host serves the build
+  context.
+- **VALIDATED: conda-forge NumPy install** (`examples/conda-forge-win/`) — the
+  relay audited **352 requests / 273.5 MB, all 1425 signatures valid, all
+  channels closed**: the 148 MB Miniforge installer (github + release-assets
+  CDN) plus the full numpy closure from conda-forge win-64 (`numpy-2.5.3`,
+  `mkl`, `libblas/libcblas/liblapack`, `llvm-openmp`, `tbb`, ...), each `.conda`
+  hash-verified by conda through the MITM. This is the core thesis proven on
+  Windows.
+
+### Temporary workarounds (Phase 1 only; handed to Phase 2)
+
+1. **x64 emulation for conda** — on win-arm64 there is no native Miniforge and
+   conda-forge's arm64 channel is only partial, so per conda-forge's own
+   guidance we install the **x86_64** Miniforge and run it under Windows' x64
+   emulation, pulling the win-64 channel. Phase 2 (native x86-64) removes the
+   emulation entirely.
+2. **Manual warden-io trigger** — builds are validated by invoking
+   `warden-io initialize` (equivalently `warden-run.ps1`) in the guest by hand
+   rather than relying on the baked-in first-boot scheduled task. The hands-off
+   task auto-run is under active, separate development (it is unstable and,
+   given real-world usage — prep a base image once, then every build provisions
+   per-build via the seed — closer to a nice-to-have than a blocker).
+3. **conda install, not source build** — Phase 1 validates a package *install*
+   (`conda create -c conda-forge numpy`), which fully exercises relay auditing
+   of conda-forge traffic. A source `conda build` (compiling numpy with the
+   conda-forge `vs2022_win-64` MSVC toolchain) is a Phase 2 item.
+
+### Phase 2 hand-off (deferred, not blocking Phase 1)
+
+- **Native win-64 on an x86-64 Windows host** — the L1/L2 plumbing is
+  architecture-agnostic and runs natively; no x64 emulation. This is the
+  "real, verified win-64 conda-forge build" milestone.
+- **Hyper-V host driver (L3)** for the x86-64 desktop — see
+  `hyperv-driver-plan.md`.
+- **Rigorous source `conda build`** over a recipe, MSVC via the conda-forge
+  compiler package.
+- **Finish hands-off image-prep task auto-run** — the first-boot scheduled task
+  reliably firing at boot without a manual trigger (active development).
+- **Definitive build-result capture** — have `build.ps1` post the built
+  artifact / a success marker (`warden-io post`) so an `ARTIFACT POST` record in
+  the ledger proves the build ran to a clean exit (Phase 1 confirmed the full
+  install + hash-verified extraction, but did not capture the final exit code).
+- **Cross-contamination / regression check** — confirm the Windows-specific
+  changes (NVMe build-VM device model, `ramfb`, FAT/NVMe seed, `buildVMConfig`
+  Windows branch, `generateWindowsSeedFAT`, warden-io hosts entries) did **not**
+  regress the existing **VZ** and **Linux+qemu** paths (Linux still uses the
+  `if=virtio` disk + CIDATA ISO seed + serial; VZ untouched).
 
 ## Goal
 
