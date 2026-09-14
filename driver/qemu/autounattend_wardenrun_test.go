@@ -39,7 +39,6 @@ func TestWardenRunTaskCmdWaitLoop(t *testing.T) {
 		"-TaskName warden-run",
 		"AllowStartIfOnBatteries",
 		"DontStopIfGoingOnBatteries",
-		"Set-ExecutionPolicy Bypass -Scope LocalMachine",
 		"-EncodedCommand ",
 	} {
 		if !strings.Contains(cmd, want) {

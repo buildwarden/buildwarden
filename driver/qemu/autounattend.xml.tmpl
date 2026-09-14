@@ -106,7 +106,7 @@
       <FirstLogonCommands>
         <SynchronousCommand wcm:action="add">
           <Order>1</Order>
-          <CommandLine>powershell.exe -NoProfile -ExecutionPolicy Bypass -Command "{{.TaskCmd}}"</CommandLine>
+          <CommandLine>powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "{{.TaskCmd}}"</CommandLine>
           <Description>register warden-run startup task</Description>
         </SynchronousCommand>
         <SynchronousCommand wcm:action="add">

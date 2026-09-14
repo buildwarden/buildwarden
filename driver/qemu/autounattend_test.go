@@ -113,3 +113,65 @@ func TestUnattendArchMapping(t *testing.T) {
 		t.Error("virtioArchDir mapping wrong")
 	}
 }
+
+// TestFirstLogonCommandLineUnderLimit guards the FirstLogonCommands CommandLine
+// against Windows' 1024-char cap. An over-long entry makes the oobeSystem pass
+// fail with "Windows could not complete the installation" (a Setup error that
+// appears before the commands run), which reproducibly stalled hands-off preps.
+// The xml decoder unescapes entities, so len() here is the length Windows sees.
+func TestFirstLogonCommandLineUnderLimit(t *testing.T) {
+	doc := generateAutounattend(autounattendConfig{
+		Arch:              "arm64",
+		Edition:           "Windows 11 Pro",
+		AdminUser:         "warden",
+		AdminPassword:     "s3cret-ephemeral",
+		VirtioDriveLetter: "E:",
+		SeedLabel:         windowsSeedName,
+	})
+	dec := xml.NewDecoder(strings.NewReader(doc))
+	var inCmd bool
+	var cur strings.Builder
+	var cmds []string
+	for {
+		tok, err := dec.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			t.Fatalf("parse: %v", err)
+		}
+		switch e := tok.(type) {
+		case xml.StartElement:
+			if e.Name.Local == "CommandLine" {
+				inCmd = true
+				cur.Reset()
+			}
+		case xml.CharData:
+			if inCmd {
+				cur.Write(e)
+			}
+		case xml.EndElement:
+			if e.Name.Local == "CommandLine" {
+				cmds = append(cmds, cur.String())
+				inCmd = false
+			}
+		}
+	}
+	var found bool
+	for _, c := range cmds {
+		if !strings.Contains(c, "Register-ScheduledTask") {
+			continue
+		}
+		found = true
+		if len(c) >= 1024 {
+			t.Fatalf("FirstLogonCommands CommandLine is %d chars, exceeds Windows' 1024 cap", len(c))
+		}
+		if len(c) > 900 {
+			t.Errorf("FirstLogonCommands CommandLine is %d chars; keep well under 1024 (target <900)", len(c))
+		}
+		t.Logf("FirstLogonCommands CommandLine length = %d chars (limit 1024)", len(c))
+	}
+	if !found {
+		t.Fatal("no FirstLogonCommands CommandLine with Register-ScheduledTask found")
+	}
+}

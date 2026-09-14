@@ -155,40 +155,46 @@ func psEncodedCommand(script string) string {
 // volume (the second NVMe disk enumerates a few seconds after the -AtStartup
 // trigger fires) and then runs its warden-run.ps1.
 //
-// Hardening learned from a failed hands-off run:
-//   - Wait/retry loop for the volume: at boot Get-Volume returned nothing when
-//     the trigger fired before the seed enumerated, so `& $null:\...` ran
-//     nothing. The loop polls up to ~180s.
+// LENGTH IS LOAD-BEARING. A FirstLogonCommands <CommandLine> is capped at 1024
+// characters and misbehaves well before that; an over-long entry makes the
+// oobeSystem pass fail with "Windows could not complete the installation"
+// (a Setup error dialog that appears BEFORE FirstLogonCommands even runs, so
+// the guest never reaches the Order-2 shutdown and prep times out). An earlier
+// version blew past 1024 and reproducibly stalled two hands-off preps at
+// exactly that dialog. This version is kept compact and
+// TestFirstLogonCommandLineUnderLimit guards the rendered length.
+//
+// Hardening kept from the earlier failure analysis:
+//   - Wait/retry loop for the seed volume (polls up to ~180s): at boot
+//     Get-Volume returns nothing until the second NVMe seed enumerates.
 //   - Battery settings: Register-ScheduledTask defaults
 //     (DisallowStartIfOnBatteries/StopIfGoingOnBatteries) block the task in a
 //     VM whose power state QEMU does not report as AC.
-//   - Execution policy: the image default is Restricted, so the task's
-//     powershell uses -ExecutionPolicy Bypass and we also set LocalMachine
-//     Bypass, or the .ps1 is refused ("running scripts is disabled").
 //   - The wait loop is delivered as a base64 -EncodedCommand so no quoting has
 //     to survive XML + the FirstLogonCommands wrapper.
+//
+// Dropped as redundant to stay under the limit: the machine-scope
+// Set-ExecutionPolicy (the task's own powershell already runs -ExecutionPolicy
+// Bypass, under which `& x.ps1` runs) and -ExecutionTimeLimit.
 func wardenRunTaskCmd(seedLabel string) string {
 	bootstrap := fmt.Sprintf(
-		"$ErrorActionPreference='Continue'; "+
-			"for ($i=0; $i -lt 90; $i++) { "+
-			"$v = Get-Volume -FileSystemLabel '%s' -ErrorAction SilentlyContinue; "+
-			"if ($v -and $v.DriveLetter) { "+
-			"& ($v.DriveLetter.ToString() + ':\\warden-run.ps1'); break } "+
-			"Start-Sleep -Seconds 2 }",
+		"for($i=0;$i -lt 90;$i++){"+
+			"$v=Get-Volume -FileSystemLabel '%s' -EA 0;"+
+			"if($v.DriveLetter){&($v.DriveLetter+':\\warden-run.ps1');break};"+
+			"Start-Sleep 2}",
 		seedLabel)
 	boot64 := psEncodedCommand(bootstrap)
 
-	// This registration script uses only single quotes and no '&', so it is
-	// XML-safe (xmlText escapes the quotes; Windows Setup decodes them before
-	// running it). The embedded wait loop is base64, so it carries no quotes.
+	// Single quotes only and no '&', so it is XML-safe (xmlText escapes the
+	// quotes; Windows decodes them before running it). The embedded wait loop
+	// is base64, so it carries no quotes.
 	return fmt.Sprintf(
-		"$a = New-ScheduledTaskAction -Execute 'powershell.exe' "+
-			"-Argument '-NoProfile -ExecutionPolicy Bypass -EncodedCommand %s'; "+
-			"$s = New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries "+
-			"-DontStopIfGoingOnBatteries -ExecutionTimeLimit ([TimeSpan]::Zero); "+
-			"$t = New-ScheduledTaskTrigger -AtStartup; "+
+		"$a=New-ScheduledTaskAction -Execute 'powershell.exe' "+
+			"-Argument '-NoProfile -ExecutionPolicy Bypass -EncodedCommand %s';"+
+			"$s=New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries "+
+			"-DontStopIfGoingOnBatteries;"+
+			"$t=New-ScheduledTaskTrigger -AtStartup;"+
 			"Register-ScheduledTask -TaskName warden-run -Action $a -Trigger $t "+
-			"-Settings $s -User SYSTEM -RunLevel Highest -Force; "+
-			"Set-ExecutionPolicy Bypass -Scope LocalMachine -Force",
+			"-Settings $s -User SYSTEM -RunLevel Highest -Force",
 		boot64)
 }
