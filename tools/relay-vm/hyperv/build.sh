@@ -112,9 +112,34 @@ echo "Packing initramfs with: $CPIO"
 VMLINUZ=$(find "$KX" -name "vmlinuz-*" -type f | head -1)
 cp "$VMLINUZ" "$OUTPUT_DIR/vmlinuz"
 
+# Build the Unified Kernel Image: embed the initramfs + kernel cmdline into the
+# EFI-stub kernel as .initrd/.cmdline PE sections, so it boots standalone as
+# \EFI\BOOT\BOOTX64.EFI with no bootloader (the kernel's own EFI stub reads the
+# embedded sections). Alpine linux-virt has CONFIG_EFI_STUB=y. Section VMAs sit
+# well above the kernel's own sections to avoid overlap.
+if ! command -v objcopy >/dev/null 2>&1; then
+    echo "ERROR: objcopy (binutils) not found; needed to build the UKI" >&2
+    rm -rf "$WORK_DIR"
+    exit 1
+fi
+CMDLINE_FILE="$WORK_DIR/cmdline.txt"
+printf 'console=ttyS0 console=tty0' > "$CMDLINE_FILE"
+objcopy \
+    --add-section .cmdline="$CMDLINE_FILE" \
+    --set-section-flags .cmdline=alloc,load,readonly,data \
+    --change-section-vma .cmdline=0x1000000 \
+    --add-section .initrd="$OUTPUT_DIR/initramfs.cpio.gz" \
+    --set-section-flags .initrd=alloc,load,readonly,data \
+    --change-section-vma .initrd=0x2000000 \
+    "$OUTPUT_DIR/vmlinuz" "$OUTPUT_DIR/warden-relay-boot.efi"
+
 rm -rf "$WORK_DIR"
 
 echo ""
 echo "Hyper-V relay VM artifacts (x86_64, kernel $KVER):"
 echo "  Kernel:    $OUTPUT_DIR/vmlinuz    ($(ls -lh "$OUTPUT_DIR/vmlinuz" | awk '{print $5}'))"
 echo "  Initramfs: $OUTPUT_DIR/initramfs.cpio.gz  ($(ls -lh "$OUTPUT_DIR/initramfs.cpio.gz" | awk '{print $5}'))"
+echo "  UKI (EFI): $OUTPUT_DIR/warden-relay-boot.efi  ($(ls -lh "$OUTPUT_DIR/warden-relay-boot.efi" | awk '{print $5}'))"
+echo ""
+echo "The UKI is the \\EFI\\BOOT\\BOOTX64.EFI payload for the relay boot VHDX."
+echo "Per-build kernel cmdline (relay config) is layered by the driver, not baked here."
