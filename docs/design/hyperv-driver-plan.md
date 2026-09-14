@@ -561,7 +561,7 @@ Step-by-step from `StartBuild()` to first build command executing:
    ├── Add-VMNetworkAdapter (Private switch: build link)
    ├── Add-VMNetworkAdapter (NAT switch: internet)
    ├── Set-VMComPort -Number 1 (named pipe for signals)
-   ├── Set-VMFirmware -BootOrder (direct kernel boot via LinuxDirect)
+   ├── Set-VMFirmware -EnableSecureBoot Off -FirstBootDevice <relay VHDX> (UEFI/GRUB boot)
    └── Start-VM
 
 6. Wait for relay ready
@@ -603,24 +603,40 @@ Step-by-step from `StartBuild()` to first build command executing:
     └── Delete temp VHDX files
 ```
 
-### Direct kernel boot on Hyper-V (Generation 2)
+### Relay VM boot: GRUB/EFI bootable VHDX (verified 2026-09-14)
 
-Hyper-V Generation 2 VMs support direct kernel boot for Linux via the `Set-VMFirmware` cmdlet:
+**Ground truth (Windows 11 Pro 26200, Hyper-V PowerShell module 2.0):** the
+Hyper-V PowerShell module exposes **no** Linux direct-kernel-boot parameters.
+`Set-VMFirmware` and `New-VM` have no `LinuxKernelImagePath` /
+`LinuxInitrdImagePath` / `LinuxKernelCmdLine` (an earlier draft of this plan
+assumed these — they do not exist in the module; the capability was conflated
+with QEMU's `-kernel`). Generation-2 VMs here boot UEFI from a disk only.
+
+So the relay VM boots from a **UEFI-bootable VHDX** that wraps the audited
+minimal initramfs built by `tools/relay-vm/hyperv/`:
+
+- GPT VHDX with an EFI System Partition (FAT32).
+- GRUB2 at `\EFI\BOOT\BOOTX64.EFI` (the firmware's default fallback path), plus
+  our `vmlinuz` + `initramfs.cpio.gz` on the ESP.
+- `grub.cfg`: `linux /vmlinuz console=ttyS0 ...` + `initrd /initramfs.cpio.gz`.
+- Secure Boot **off** (unsigned kernel/bootloader).
 
 ```powershell
-Set-VMFirmware -VMName "warden-relay-$id" `
-    -EnableSecureBoot Off `
-    -BootOrder @(Get-VMHardDiskDrive -VMName "warden-relay-$id")
-
-# Direct kernel boot (requires Windows Server 2019+ or Windows 11+)
-Set-VMHost -EnableEnhancedSessionMode $false
-Set-VMFirmware -VMName "warden-relay-$id" `
-    -LinuxKernelImagePath $kernelPath `
-    -LinuxInitrdImagePath $initrdPath `
-    -LinuxKernelCmdLine "console=ttyS0"
+Set-VMFirmware -VMName "warden-relay-$id" -EnableSecureBoot Off `
+    -FirstBootDevice (Get-VMHardDiskDrive -VMName "warden-relay-$id")
 ```
 
-**Note**: `Set-VMFirmware -LinuxKernelImagePath` is available only on Windows Server 2019+. On older hosts, the relay VM must boot from a disk image (VHDX with GRUB).
+This keeps the minimal, audited Alpine initramfs (the relay trust-boundary
+choice) and stays entirely on the PowerShell driver. The build VM is unaffected
+(cloud images are already bootable VHDXs).
+
+**Future nice-to-have — HCS / `hcsshim` direct kernel boot.** The Host Compute
+Service (`github.com/microsoft/hcsshim`) *can* direct-boot a Linux kernel+initrd
+with no bootloader — it is how Windows boots LCOW (Linux Containers on Windows)
+utility VMs. Adopting it would drop the GRUB/EFI packaging step entirely and is
+the more elegant long-term boot path, at the cost of the lower-level HCS API
+(JSON compute-system schema via a cgo/DLL wrapper) and a heavy dependency.
+Deferred; revisit after Phase 1 proves the driver.
 
 ---
 
