@@ -52,7 +52,7 @@ func (d *Driver) startRelayVM(
 	cmd := exec.Command(binary, args...)
 	cmd.Stdout = d.vmOutput()
 	cmd.Stderr = d.vmOutput()
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.SysProcAttr = procGroupAttr()
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("starting relay QEMU: %w", err)
@@ -174,7 +174,7 @@ func (d *Driver) startBuildVM(
 	cmd := exec.Command(binary, args...)
 	cmd.Stdout = d.vmOutput()
 	cmd.Stderr = d.vmOutput()
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.SysProcAttr = procGroupAttr()
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("starting build QEMU: %w", err)
