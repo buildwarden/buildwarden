@@ -1,0 +1,123 @@
+#!/bin/sh
+# Relay VM init - Hyper-V variant (x86_64). The trust boundary; this script and
+# everything it invokes is outside the build VM's influence.
+#
+# Differences from the qemu/virtio init (tools/relay-vm/init):
+#   - Hyper-V modules: hv_storvsc for the data disk. hv_vmbus and hv_netvsc are
+#     built into Alpine's linux-virt kernel, so VMBus and the synthetic NICs
+#     come up with no insmod.
+#   - /shared is a FAT data VHDX (vfat), not a 9p/virtiofs share (Hyper-V has
+#     neither). The host writes relay binary + config there and, after the VM
+#     stops, mounts it to read the ledger.
+#   - The NAT NIC uses a STATIC IP: Hyper-V's New-NetNat provides routing but no
+#     DHCP server.
+#   - Readiness is signalled to the host over COM1 (/dev/ttyS0), a named pipe.
+#
+# Network topology (unchanged from the other drivers):
+#   eth0 = private link to build VM (10.0.0.1/30)
+#   eth1 = NAT switch to host/internet (static 192.168.240.2/20 by default)
+#   iptables: PREROUTING REDIRECT 80/443/53 on eth0; POSTROUTING MASQUERADE eth1;
+#             FORWARD DROP (no un-proxied egress from the build VM).
+
+mount -t devtmpfs devtmpfs /dev
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t tmpfs tmpfs /tmp
+
+# Load modules (deps first). Missing modules are skipped, not fatal.
+for mod in \
+    hv_storvsc \
+    fat vfat \
+    af_packet \
+    libcrc32c crc32c_generic \
+    nf_defrag_ipv4 nf_defrag_ipv6 x_tables nf_conntrack nf_nat \
+    ip_tables iptable_filter iptable_nat xt_tcpudp \
+    xt_REDIRECT xt_MASQUERADE xt_conntrack xt_state \
+    nfnetlink nf_tables; do
+    [ -f "/lib/modules/${mod}.ko" ] && insmod "/lib/modules/${mod}.ko" 2>/dev/null
+done
+
+# Mount the shared FAT data disk (relay binary + config + ledger output).
+# hv_storvsc surfaces it as /dev/sda; a Windows-partitioned VHDX exposes
+# /dev/sda1, a superfloppy exposes /dev/sda.
+mkdir -p /shared
+TRIES=0
+while [ $TRIES -lt 50 ]; do
+    { [ -b /dev/sda1 ] || [ -b /dev/sda ]; } && break
+    TRIES=$((TRIES + 1)); sleep 0.1
+done
+mount -t vfat /dev/sda1 /shared 2>/dev/null \
+    || mount -t vfat /dev/sda /shared 2>/dev/null \
+    || echo "init: WARN could not mount /shared"
+
+# Optional overrides (NAT_IP/NAT_PREFIX/NAT_GW/UPSTREAM_DNS) from the seed.
+if [ -f /shared/relay.env ]; then
+    set -a; . /shared/relay.env; set +a
+fi
+
+# Wait for the synthetic NICs (hv_netvsc, built-in).
+TRIES=0
+while [ $TRIES -lt 50 ]; do
+    IFACES=$(ls /sys/class/net/ 2>/dev/null | grep -v lo)
+    [ -n "$IFACES" ] && break
+    TRIES=$((TRIES + 1)); sleep 0.1
+done
+
+# eth0 = build link (Private switch): static gateway for the build VM.
+PRIVATE_IF=$(echo "$IFACES" | head -1)
+if [ -n "$PRIVATE_IF" ]; then
+    ip link set "$PRIVATE_IF" up
+    ip addr add 10.0.0.1/30 dev "$PRIVATE_IF"
+fi
+
+# eth1 = NAT switch (relay upstream): STATIC (New-NetNat has no DHCP).
+NAT_IF=$(echo "$IFACES" | sed -n '2p')
+if [ -n "$NAT_IF" ]; then
+    ip link set "$NAT_IF" up
+    ip addr add "${NAT_IP:-192.168.240.2}/${NAT_PREFIX:-20}" dev "$NAT_IF"
+    ip route add default via "${NAT_GW:-192.168.240.1}"
+    echo "init: nat-if=$NAT_IF $(ip addr show "$NAT_IF" 2>/dev/null | grep inet)"
+fi
+
+# All iptables rules are IPv4; disable IPv6 to prevent bypass.
+echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6
+echo 1 > /proc/sys/net/ipv6/conf/default/disable_ipv6
+echo 1 > /proc/sys/net/ipv4/ip_forward
+
+# Default DROP for forwarded build-VM traffic; REDIRECT rewrites proxied
+# packets to the local relay (they hit INPUT, not FORWARD).
+iptables -P FORWARD DROP
+iptables -A FORWARD -m state --state ESTABLISHED,RELATED -j ACCEPT
+
+if [ -n "$PRIVATE_IF" ]; then
+    iptables -t nat -A PREROUTING -i "$PRIVATE_IF" -p tcp --dport 80 \
+        -j REDIRECT --to-port 80
+    iptables -t nat -A PREROUTING -i "$PRIVATE_IF" -p tcp --dport 443 \
+        -j REDIRECT --to-port 443
+    iptables -t nat -A PREROUTING -i "$PRIVATE_IF" -p udp --dport 53 \
+        -j REDIRECT --to-port 53
+    iptables -t nat -A PREROUTING -i "$PRIVATE_IF" -p tcp --dport 53 \
+        -j REDIRECT --to-port 53
+    iptables -A INPUT -i "$PRIVATE_IF" -p tcp --dport 8300 -j ACCEPT
+    iptables -A INPUT -i "$PRIVATE_IF" -p icmp -j DROP
+fi
+if [ -n "$NAT_IF" ]; then
+    iptables -t nat -A POSTROUTING -o "$NAT_IF" -j MASQUERADE
+fi
+
+# DNS for the relay's own upstream resolution (build-VM DNS is redirected here).
+if [ ! -s /etc/resolv.conf ]; then
+    if [ -n "${UPSTREAM_DNS:-}" ]; then
+        : > /etc/resolv.conf
+        for d in $UPSTREAM_DNS; do echo "nameserver $d" >> /etc/resolv.conf; done
+    else
+        echo "nameserver 8.8.8.8" > /etc/resolv.conf
+    fi
+fi
+echo "init: dns=$(grep nameserver /etc/resolv.conf 2>/dev/null | head -1)"
+
+# Signal readiness to the host over COM1 (host reads the named pipe).
+echo "ready" > /dev/ttyS0 2>/dev/null || true
+echo "init: ready"
+
+exec /shared/relay
