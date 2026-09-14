@@ -167,9 +167,11 @@ This same `Provisioner`-behind-RPC boundary is what a third-party Windows orches
 
 ### `warden hyperv setup`
 
-**Shippable form:** a one-time, elevated command that idempotently creates a durable, named vSwitch + NAT + host IP. After it runs once, routine `warden build --driver hyperv` runs under Hyper-V Administrators with no elevation. It must detect insufficient privilege and emit a clear, actionable error instead of surfacing a raw PowerShell failure.
+**Network provisioning policy (decided 2026-09-14):** when the driver *can* stand up a network — full Administrator, or the LocalSystem service — it creates a **fresh, ephemeral per-build network** and tears it down afterward. That is the cleanest isolation and avoids the collisions and side-effects of a shared, long-lived switch. The durable named switch below is a **lower-privilege fallback only**: it exists so a non-elevated Hyper-V Administrators member (which cannot stand up a network) still has an isolated path to reuse. An elevated run never reuses it. `doctor` surfaces the durable switch as available for lower-privilege use.
 
-**Incremental-dev stub (BUILD THIS FIRST, Phase 0):** a minimal `warden hyperv setup` that creates exactly one durable, reused switch (Private or Internal, plus its NAT + host IP) under a fixed dev name (e.g. `warden-dev`). Run it **once** from an elevated shell. The driver then reuses that switch on every build via `--switch <name>` (or the `WARDEN_HYPERV_SWITCH` env var), skipping per-build network standup entirely. This is what lets the implementation agent iterate on the VM/boot/signal/build harness without persistent admin and without running the gateway elevated.
+**Shippable form:** a one-time, elevated command that idempotently creates a durable, named vSwitch + NAT + host IP for the lower-privilege path. After it runs once, a non-elevated `warden build --driver hyperv --switch <name>` runs under Hyper-V Administrators with no elevation. It must detect insufficient privilege and emit a clear, actionable error instead of surfacing a raw PowerShell failure.
+
+**Incremental-dev stub (BUILD THIS FIRST, Phase 0):** a minimal `warden hyperv setup` that creates exactly one durable, reused switch (Private or Internal, plus its NAT + host IP) under a fixed dev name (e.g. `warden-dev`). Run it **once** from an elevated shell. A **non-elevated** build then reuses that switch via `--switch <name>` (or the `WARDEN_HYPERV_SWITCH` env var), skipping per-build network standup entirely (an elevated build ignores it and stands up a fresh network). This is what lets the implementation agent iterate on the VM/boot/signal/build harness without persistent admin and without running the gateway elevated.
 
 Carry these reuse hazards into the stub (they are the durable-network dangers, and they apply equally to the shippable form):
 
@@ -178,7 +180,7 @@ Carry these reuse hazards into the stub (they are the durable-network dangers, a
 - **Pick a non-colliding subnet.** WSL2, Docker Desktop, and the Hyper-V Default Switch all allocate NATs/prefixes; an overlapping prefix silently breaks routing. Detect existing `New-NetNat` allocations and fail clearly rather than clobbering.
 - **Serialize builds on a shared dev switch.** The static `10.0.0.2/30` relay+build topology fits exactly one pair, so two concurrent builds on one reused switch clash on IPs. Guard with a host lock, or allocate a per-build subnet.
 
-Note that this reuse model diverges from the per-build `createNetwork()` shown earlier under Network Topology: the shippable driver creates the network once (setup) and reuses it, rather than creating and destroying a switch per build. Phase 0 introduces the switch-reuse path; per-build teardown is retained only as an optional ephemeral mode.
+These hazards are precisely why an elevated run does **not** reuse a shared switch: the fresh per-build `createNetwork()` + teardown path shown earlier under Network Topology sidesteps all of them (no persistence to verify, no cross-build IP clashes, no shared-switch collisions). The durable reused switch accepts these hazards as the cost of running without elevation, and must guard them (verify-on-each-build, NAT collision detection, a host lock). So the default is fresh per-build whenever the process can stand up a network (full Administrator, or the LocalSystem service); the durable switch is the reuse path for the non-elevated Hyper-V Administrators case only. Phase 0 delivers the durable switch (it is what unblocks the non-elevated dev loop); the ephemeral per-build path is the standing default, not an option.
 
 ### `warden hyperv doctor` (capability preflight)
 
@@ -1113,13 +1115,13 @@ Elevation staging is folded into the phase order: build the privilege spine and 
 
 ### Phase 0: Privilege foundation + dev harness (do first)
 
-- [ ] `Provisioner` interface + `localProvisioner` in-process implementation
-- [ ] `warden hyperv setup` **dev stub**: create one durable reused switch (Private/Internal) + NAT + host IP under a fixed dev name (`warden-dev`), idempotent
-- [ ] Driver switch reuse: `--switch <name>` / `WARDEN_HYPERV_SWITCH` to reuse the pre-created switch and skip per-build network standup
-- [ ] Per-operation capability detection (token elevation + Hyper-V Administrators membership), cached at startup
-- [ ] `warden hyperv doctor`: read-only capability preflight (token + group + feature + switch + service), resolves outcome per op, exits non-zero when blocked so it works as a CI/agent gate
-- [ ] Outcome-3 fast-error with both remediations (elevated terminal, or one-time setup) when an op cannot be satisfied
-- [ ] No service yet. Dev loop = Jeff runs the setup stub once from an elevated shell, then the non-elevated gateway iterates against the reused switch (VM ops run under Hyper-V Admins)
+- [x] `Provisioner` interface + `localProvisioner` in-process implementation (interface + network standup done; VM-lifecycle ops in progress)
+- [x] `warden hyperv setup` **dev stub**: create one durable reused switch (Private/Internal) + NAT + host IP under a fixed dev name (`warden-dev`), idempotent
+- [~] Driver switch reuse: `--switch <name>` / `WARDEN_HYPERV_SWITCH` parsed by setup/doctor; driver-level skip-standup lands with `StartBuild`
+- [x] Per-operation capability detection (token elevation + Hyper-V Administrators membership), plus a stale-token cross-check against persistent group membership
+- [x] `warden hyperv doctor`: read-only capability preflight (token + group + feature + switch + service), resolves outcome per op, exits non-zero when blocked so it works as a CI/agent gate
+- [x] Outcome-3 fast-error with both remediations (elevated terminal, or one-time setup) when an op cannot be satisfied
+- [x] No service yet. Dev loop = Jeff runs the setup stub once from an elevated shell, then the non-elevated gateway iterates against the reused switch (VM ops run under Hyper-V Admins) — validated live: `doctor` resolves VM lifecycle direct + network reuse
 
 **Exit criteria:** `warden --driver hyperv` can create and destroy VMs against the reused dev switch with the gateway running non-elevated.
 
@@ -1127,7 +1129,7 @@ Elevation staging is folded into the phase order: build the privilege spine and 
 
 - [ ] Package structure with build tags
 - [ ] PowerShell helpers (`runPS`, `runPSJSON`)
-- [ ] Network via `Provisioner` (reused switch in dev; `EnsureNetwork` for the durable switch in prod)
+- [ ] Network via `Provisioner`: fresh per-build `EnsureNetwork` + teardown when the process can stand up a network (elevated / service); reuse the durable switch when non-elevated
 - [ ] Relay VM boot (reuse existing kernel+initrd from `tools/relay-vm/`)
 - [ ] Named pipe signal monitoring
 - [ ] Linux build VM with cloud-init
