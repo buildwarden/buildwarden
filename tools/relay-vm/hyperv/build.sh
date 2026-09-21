@@ -59,11 +59,13 @@ KVER=$(ls "$KX/lib/modules/" | head -1)
 echo "  kernel: $KVER"
 mkdir -p "$ROOTFS_DIR/lib/modules"
 
-# Hyper-V + FAT + netfilter modules. hv_vmbus/hv_netvsc are built-in (=y), so
-# they are intentionally NOT listed. Missing modules are skipped, not fatal.
+# FAT/netfilter modules. hv_vmbus/hv_netvsc are built-in (=y), so they are
+# intentionally NOT listed. No data-disk modules (hv_storvsc/fat/vfat): the
+# relay VM has no block device -- outputs stream to the host collector over
+# HTTP. crc32c_generic is copied before libcrc32c so init can load them in that
+# order (libcrc32c's init allocates the crc32c shash). Missing modules are
+# skipped, not fatal.
 for mod in \
-    drivers/scsi/hv_storvsc.ko.gz \
-    fs/fat/fat.ko.gz fs/fat/vfat.ko.gz \
     net/packet/af_packet.ko.gz \
     crypto/crc32c_generic.ko.gz lib/libcrc32c.ko.gz \
     net/ipv4/netfilter/nf_defrag_ipv4.ko.gz \
