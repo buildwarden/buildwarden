@@ -91,6 +91,21 @@ done
 cp "$SCRIPT_DIR/init" "$ROOTFS_DIR/init"
 chmod 755 "$ROOTFS_DIR/init"
 
+# Bake the relay binary into the initramfs at /sbin/relay. The relay VM has no
+# data disk, so the binary ships inside the image itself (linux/amd64, static).
+# Overridable via RELAY_BIN; default is the cached binary the host/CI produces:
+#   GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o .cache/warden-relay ./cmd/relay
+# If absent, the image still boots and init idles in boot-test mode.
+RELAY_BIN="${RELAY_BIN:-$CACHE_DIR/warden-relay}"
+if [ -f "$RELAY_BIN" ]; then
+    mkdir -p "$ROOTFS_DIR/sbin"
+    cp "$RELAY_BIN" "$ROOTFS_DIR/sbin/relay"
+    chmod 755 "$ROOTFS_DIR/sbin/relay"
+    echo "  baked relay: /sbin/relay ($(ls -lh "$RELAY_BIN" | awk '{print $5}'))"
+else
+    echo "  (no relay binary at $RELAY_BIN; image will idle in boot-test mode)"
+fi
+
 # Trim.
 rm -rf "$ROOTFS_DIR/var/cache" "$ROOTFS_DIR/usr/share/man" \
        "$ROOTFS_DIR/usr/share/doc" "$ROOTFS_DIR/usr/include"

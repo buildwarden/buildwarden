@@ -121,9 +121,13 @@ echo "init: ready"
 # gone). /ledger and /context live on tmpfs; large outputs never land here.
 mkdir -p /ledger /context
 if [ -x /sbin/relay ]; then
-    /sbin/relay -mode vm
-    echo "init: relay exited ($?); idling for host teardown" > /dev/ttyS0 2>/dev/null || true
-    echo "init: relay exited; idling for host teardown"
+    # Route the relay's own stdout/stderr to COM1 so the host (and this boot
+    # test) can see its startup diagnostics; the relay's ledger/artifacts go
+    # out-of-band over HTTP to the collector, not through this console.
+    /sbin/relay -mode vm > /dev/ttyS0 2>&1
+    RC=$?
+    echo "init: relay exited ($RC); idling for host teardown" > /dev/ttyS0 2>/dev/null || true
+    echo "init: relay exited ($RC); idling for host teardown"
 else
     echo "init: no relay binary present; idling (boot-test mode)" > /dev/ttyS0 2>/dev/null || true
     echo "init: no relay binary present; idling (boot-test mode)"
