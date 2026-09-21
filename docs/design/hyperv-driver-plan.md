@@ -6,10 +6,23 @@
    Hyper-V sockets (AF_VSOCK equivalent on Windows, `AF_HYPERV`) allow direct host-to-guest or guest-to-guest communication without network interfaces. Should the relay-build link use an Internal vSwitch (L2 Ethernet) or hvsock? hvsock would simplify network isolation but requires the relay to speak raw TCP (no transparent redirect via iptables in the relay VM). Recommendation: use Internal vSwitch for consistency with QEMU/VZ — keeps the same relay init script and iptables rules.
 
 2. **Relay VM kernel: same Alpine initramfs or different?**
-   The relay VM is a Linux VM on both QEMU and VZ. On Hyper-V, Generation 2 VMs with Linux guests work well (Ubuntu/Alpine with Hyper-V Integration Services). Can we reuse the same `tools/relay-vm/` initramfs with a kernel that includes hv_vmbus, hv_storvsc, hv_netvsc modules? Or do we need a separate kernel build with Hyper-V-specific modules?
+   RESOLVED: a dedicated x86_64 build under `tools/relay-vm/hyperv/` (Alpine
+   `linux-virt`). `hv_vmbus` and `hv_netvsc` are compiled into that kernel, so
+   VMBus and the synthetic NICs need no insmod. Only the netfilter stack plus
+   `af_packet` are loaded from the initramfs, and `crc32c_generic` is loaded
+   before `libcrc32c` (its module-init allocates a `crc32c` shash and fails
+   otherwise, which strands `nf_conntrack` and the whole chain). No storage
+   modules are shipped — the relay VM has no data disk (see Q3).
 
-3. **Shared volume mechanism?**
-   QEMU uses virtio-9p. Hyper-V options: (a) SMB share mounted inside VM, (b) Plan 9 over VMBus (not available on Hyper-V), (c) Virtual hard disk (VHDX) attached as secondary disk, (d) Hyper-V Integration Services file copy (limited, no mount). Recommendation: VHDX formatted as ext4 (relay) or NTFS (Windows build) attached as a data disk — host formats, attaches, guest mounts.
+3. **Shared volume mechanism (relay VM)?**
+   RESOLVED: none. The relay VM has no shared volume and no data disk. The relay
+   binary is baked into the initramfs (`/sbin/relay`), build outputs stream to
+   the host `collector` over HTTP (see "Output egress"), and per-build config
+   arrives over the network. This sidesteps the elevation wall (Hyper-V cannot
+   host-mount a VHDX attached to a running VM, and `Mount-VHD` needs full admin)
+   and the GB-scale second copy a data VHDX would force. NOTE: the Windows BUILD
+   VM still uses a seed VHDX for `unattend.xml` + `warden-io.exe` — that is a
+   different VM (see "Windows Guest Provisioning"), not the relay.
 
 4. **Windows guest build: PowerShell Remoting or SSH?**
    OpenSSH is built into Windows Server 2019+ and Windows 10 1803+. PowerShell Remoting (WinRM) is more "native" but harder to bootstrap securely. SSH is simpler and consistent with Linux path. Recommendation: SSH with key injected via unattend.xml.
@@ -609,24 +622,23 @@ Step-by-step from `StartBuild()` to first build command executing:
    ├── New-NetIPAddress (NAT gateway)
    └── New-NetNat (NAT rule)
 
-4. Prepare relay VM disk
-   ├── Create relay-data.vhdx (100MB, contains relay binary + config)
-   │   Format as ext4 (via WSL or pre-formatted template)
-   │   Copy: relay binary, relay.env
-   └── Use relay kernel + initrd for direct boot
+4. Prepare relay VM boot disk
+   ├── Pinned static relay-boot.vhdx (UKI: kernel + initramfs + relay baked in)
+   │   Downloaded + verified by `warden hyperv setup`; built once in CI, not per build
+   └── Read-only, shared across builds (no per-build data disk)
 
 5. Create relay VM
    ├── New-VM -Generation 2 -MemoryStartupBytes 512MB
-   ├── Add-VMHardDiskDrive (relay-data.vhdx)
+   ├── Add-VMHardDiskDrive (relay-boot.vhdx, read-only)
    ├── Add-VMNetworkAdapter (Private switch: build link)
    ├── Add-VMNetworkAdapter (NAT switch: internet)
-   ├── Set-VMComPort -Number 1 (named pipe for signals)
-   ├── Set-VMFirmware -EnableSecureBoot Off -FirstBootDevice <relay VHDX> (UEFI/GRUB boot)
+   ├── Set-VMComPort -Number 1 (named pipe for readiness signal)
+   ├── Set-VMFirmware -EnableSecureBoot Off -FirstBootDevice <relay VHDX> (UEFI/UKI boot)
    └── Start-VM
 
 6. Wait for relay ready
-   ├── Read named pipe for "ready" signal
-   │   OR poll for CA cert on relay-data.vhdx
+   ├── Read named pipe for "ready" signal (init echoes it to COM1)
+   │   OR the relay's ready POST on the collector HTTP channel
    └── Timeout: 30 seconds
 
 7. Prepare build VM
@@ -648,12 +660,12 @@ Step-by-step from `StartBuild()` to first build command executing:
    ├── warden-io fetch-context (download build context from relay)
    ├── Build script runs
    ├── Watcher sends heartbeat to http://artifacts/heartbeat every 2s
-   └── On completion: exit signal sent to relay → relay writes to named pipe
+   └── On completion: exit signal to relay → relay POSTs complete to the collector
 
 10. Host monitors
-    ├── Read named pipe for heartbeat/exit messages
-    ├── Timeout if no heartbeat for 3 intervals
-    └── On exit: collect results
+    ├── Collector receives ready/complete over HTTP (COM1 pipe carries init's readiness echo)
+    ├── Timeout if no heartbeat/progress within the interval budget
+    └── On completion: outputs already streamed to the collector output dir
 
 11. Cleanup
     ├── Stop-VM (both VMs)
@@ -663,28 +675,55 @@ Step-by-step from `StartBuild()` to first build command executing:
     └── Delete temp VHDX files
 ```
 
-### Relay VM boot: GRUB/EFI bootable VHDX (verified 2026-09-14)
+### Relay VM boot: UKI in a UEFI-bootable VHDX (verified 2026-09-21)
 
 **Ground truth (Windows 11 Pro 26200, Hyper-V PowerShell module 2.0):** the
 Hyper-V PowerShell module exposes **no** Linux direct-kernel-boot parameters.
 `Set-VMFirmware` and `New-VM` have no `LinuxKernelImagePath` /
-`LinuxInitrdImagePath` / `LinuxKernelCmdLine` (an earlier draft of this plan
-assumed these — they do not exist in the module; the capability was conflated
-with QEMU's `-kernel`). Generation-2 VMs here boot UEFI from a disk only.
+`LinuxInitrdImagePath` / `LinuxKernelCmdLine` (an earlier draft assumed these —
+they do not exist; the capability was conflated with QEMU's `-kernel`).
+Generation-2 VMs here boot UEFI from a disk only, and Gen2 requires **VHDX** (the
+legacy VHD format is unsupported).
 
-So the relay VM boots from a **UEFI-bootable VHDX** that wraps the audited
-minimal initramfs built by `tools/relay-vm/hyperv/`:
+So the relay VM boots a **Unified Kernel Image (UKI)** from a UEFI-bootable VHDX,
+with no bootloader (no GRUB):
 
-- GPT VHDX with an EFI System Partition (FAT32).
-- GRUB2 at `\EFI\BOOT\BOOTX64.EFI` (the firmware's default fallback path), plus
-  our `vmlinuz` + `initramfs.cpio.gz` on the ESP.
-- `grub.cfg`: `linux /vmlinuz console=ttyS0 ...` + `initrd /initramfs.cpio.gz`.
-- Secure Boot **off** (unsigned kernel/bootloader).
+- The UKI is built by `tools/relay-vm/hyperv/build.sh`: `objcopy` embeds the
+  Alpine `linux-virt` kernel, our `initramfs.cpio.gz`, the cmdline
+  (`console=ttyS0 console=tty0`) and an os-release as `.linux`/`.initrd`/
+  `.cmdline`/`.osrel` PE sections into the **systemd-boot EFI stub**
+  (`linuxx64.efi.stub`), which is the entry point that reads those sections.
+  IMPORTANT: the Linux kernel's OWN EFI stub does not read self-embedded
+  sections — embedding into the bare kernel produces a non-booting image (Gen2
+  sits on a blank logo). The systemd-boot stub implements the UKI convention, so
+  it must be the objcopy base. `ukify` is not required (the manual `objcopy`
+  recipe is what it automates), and the stub is a CI-only build tool — not
+  shipped, not a Go/runtime dependency.
+- The UKI is the single `\EFI\BOOT\BOOTX64.EFI` on a FAT32 EFI System Partition
+  in a GPT VHDX. `build-boot-vhdx.sh` assembles this **entirely in userspace** —
+  no elevation, no Hyper-V role: `mtools` writes the ESP image, `sgdisk` lays the
+  GPT, `qemu-img convert -O vhdx -o subformat=fixed` emits the fixed VHDX. This
+  is the exact step CI runs on a plain Linux runner to publish `relay-boot.vhdx`
+  as a release artifact, so `warden hyperv setup` downloads + verifies a pinned
+  disk instead of building one locally. (`go-diskfs` was evaluated and dropped —
+  it only emits raw images, and Gen2 needs VHDX.)
+- Secure Boot **off** (the UKI is not MS-signed). The boot VHDX is static and
+  read-only: it changes only when the relay VM image is rebuilt, never per build.
 
 ```powershell
 Set-VMFirmware -VMName "warden-relay-$id" -EnableSecureBoot Off `
     -FirstBootDevice (Get-VMHardDiskDrive -VMName "warden-relay-$id")
 ```
+
+**Boot verification (autonomous, non-elevated).** Confirmed via serial capture:
+UEFI → stub UKI → kernel → initramfs → `/init` → netfilter up → `ready`, and the
+baked relay starts and listens (`:53/udp :80/tcp :443/tcp :8300/tcp`) once it has
+a non-loopback IPv4. Two harness facts worth keeping: (1) capture COM1 inside an
+isolated PowerShell Job bounded by `Wait-Job -Timeout` + `Stop-Job` so the
+blocking pipe read can never deadlock the shell; (2) minimal `linux-virt` has no
+Hyper-V framebuffer, so VMConnect video and the WMI thumbnail stay on the
+firmware logo even on a fully successful boot — serial is the authoritative
+signal, not video.
 
 This keeps the minimal, audited Alpine initramfs (the relay trust-boundary
 choice) and stays entirely on the PowerShell driver. The build VM is unaffected
@@ -1206,8 +1245,8 @@ Elevation staging is folded into the phase order: build the privilege spine and 
 - [ ] Package structure with build tags
 - [ ] PowerShell helpers (`runPS`, `runPSJSON`)
 - [ ] Network via `Provisioner`: fresh per-build `EnsureNetwork` + teardown when the process can stand up a network (elevated / service); reuse the durable switch when non-elevated
-- [ ] Relay VM boot (reuse existing kernel+initrd from `tools/relay-vm/`)
-- [ ] Named pipe signal monitoring
+- [x] Relay VM boot image — UKI in a userspace-built fixed VHDX (`tools/relay-vm/hyperv/`), boot-verified via serial (kernel → initramfs → `/init` → `ready`, relay listening)
+- [ ] Relay readiness/completion signals — collector HTTP channel + COM1 readiness echo (replaces the go-winio named pipe)
 - [ ] Linux build VM with cloud-init
 - [ ] End-to-end test: `warden build --driver hyperv` with Ubuntu image
 
@@ -1244,119 +1283,59 @@ Elevation staging is folded into the phase order: build the privilege spine and 
 
 ## Relay VM Adaptation for Hyper-V
 
-The existing `tools/relay-vm/init` script needs minor changes for Hyper-V:
+The Hyper-V relay VM has its own tree under `tools/relay-vm/hyperv/` (init +
+build scripts), distinct from the aarch64/virtio `tools/relay-vm/` used by
+QEMU/VZ. Differences from that variant, as implemented and boot-verified:
 
-1. **Kernel modules**: Replace virtio modules with Hyper-V modules:
-   ```sh
-   # Instead of: virtio_net, 9pnet, 9pnet_virtio
-   # Load: hv_vmbus, hv_storvsc, hv_netvsc, hv_utils
-   ```
+1. **Kernel modules.** `hv_vmbus` and `hv_netvsc` are built into the Alpine
+   `linux-virt` kernel (no insmod). The initramfs ships only `af_packet` and the
+   netfilter stack, loaded by `init` in dependency order — critically
+   `crc32c_generic` BEFORE `libcrc32c` (libcrc32c's init allocates a `crc32c`
+   shash and fails otherwise, which strands `nf_conntrack` and the whole chain).
+   No storage modules: there is no data disk.
 
-2. **Shared volume mount**: Instead of 9p, mount the data VHDX:
-   ```sh
-   # The relay-data.vhdx appears as /dev/sda or /dev/sdb
-   mount /dev/sdb1 /shared
-   ```
+2. **No shared volume.** The relay binary is baked into the initramfs at
+   `/sbin/relay` by `build.sh`, so nothing is mounted. Build outputs stream to
+   the host `collector` over HTTP (see "Output egress"); the relay VM has no
+   block device (`hv_storvsc`/`fat`/`vfat` removed, no `/dev/sda`, no `/shared`).
 
-3. **Signal output**: Write to COM port in addition to files:
-   ```sh
-   # After starting relay, signal readiness
-   echo "ready" > /dev/ttyS0
-   ```
+3. **Config over the network.** Per-build config (collector URL + token) arrives
+   over the NAT link after the interfaces are up, not from a mounted disk. Static
+   NAT defaults (`192.168.240.2/20`, gateway `.240.1`) are baked into `init`
+   because they must be applied before any fetch is possible.
 
-4. **Network interface names**: Hyper-V NICs appear as `eth0`/`eth1` (same as QEMU), so iptables rules are unchanged.
+4. **Readiness signal.** `init` echoes `ready` to `/dev/ttyS0` (COM1, a host
+   named pipe). The relay additionally reports ready/complete to the collector
+   over the same HTTP channel it streams outputs on — this replaced the earlier
+   `go-winio` COM-pipe signal plan and dropped that dependency.
 
-The relay binary itself (`cmd/relay/`) requires **no changes** — it already supports `SIGNAL_DIR` and the HTTP heartbeat/exit endpoints. The named pipe is between the relay VM init script and the host, not between the relay Go binary and the host.
+5. **PID 1 never exits.** `init` SUPERVISES the relay rather than `exec`ing it:
+   it runs `/sbin/relay -mode vm`, routes the relay's stdout/stderr to COM1 for
+   host-visible diagnostics, and idles if the relay is absent or returns — so a
+   missing or failed relay can never panic the kernel ("Attempted to kill init").
 
-### Modified relay VM init (Hyper-V variant)
+6. **Network interface names.** Hyper-V NICs appear as `eth0`/`eth1` (same as
+   QEMU), so the iptables REDIRECT/MASQUERADE rules are unchanged.
 
-```sh
-#!/bin/sh
-# Relay VM init — Hyper-V variant
-# Differences from QEMU: storage modules, shared volume mount, COM signal
+The authoritative init is `tools/relay-vm/hyperv/init`; the boot image is built
+by `build.sh` (UKI) then `build-boot-vhdx.sh` (userspace fixed VHDX). See
+"Relay VM boot" above for the UKI/VHDX mechanics.
 
-mount -t devtmpfs devtmpfs /dev
-mount -t proc proc /proc
-mount -t sysfs sysfs /sys
-mount -t tmpfs tmpfs /tmp
+### Relay Go changes for the VM path (in progress)
 
-# Hyper-V modules (built into kernel or loaded from initramfs)
-for mod in hv_vmbus hv_storvsc hv_netvsc hv_balloon hv_utils; do
-    modprobe $mod 2>/dev/null || true
-done
+The streaming egress (the `httpSink` half of "Output egress") is not yet wired
+into the VM relay: `cmd/relay/mode_vm.go` builds `relay.Config` with no
+`OUTPUT_SINK_URL`, so a VM relay still uses `localSink` (tmpfs). Wiring it up is
+the remaining work:
 
-# Mount data disk (relay binary + config)
-mkdir -p /shared
-# Wait for disk to appear
-TRIES=0
-while [ $TRIES -lt 50 ]; do
-    [ -b /dev/sda1 ] && break
-    TRIES=$((TRIES + 1))
-    sleep 0.1
-done
-mount /dev/sda1 /shared
+- Select `httpSink` in `runVMMode` when `OUTPUT_SINK_URL` is set (pointing at the
+  per-build collector on the isolated NAT switch), passing the per-build token.
+- Deliver `OUTPUT_SINK_URL` + token over the network at boot (bootstrap from the
+  collector; network isolation is the trust boundary). This is the open
+  trust-model detail to settle.
+- Update `detectMode`: it currently keys "vm" on `/shared/relay.env`, which no
+  longer exists — `init` passes an explicit `-mode vm`, so the stale `/shared`
+  branch should be replaced with a baked marker or dropped.
 
-# Source relay configuration
-[ -f /shared/relay.env ] && { set -a; . /shared/relay.env; set +a; }
-
-# Network setup (identical to QEMU variant)
-# ... (same as existing init)
-
-# Signal readiness to host via COM1
-echo "ready" > /dev/ttyS0
-
-# Redirect signal writes to both file and COM port
-export SIGNAL_DIR=/shared/signal
-mkdir -p "$SIGNAL_DIR"
-
-exec /shared/relay
-```
-
-The relay heartbeat module already writes to `SIGNAL_DIR`. To also write to the COM port, we can add a simple background forwarder in the init script that tails the signal files and echoes to `/dev/ttyS0`, or modify `cmd/relay/heartbeat.go` to support a `SIGNAL_DEVICE` environment variable.
-
-### Recommended relay change (minimal)
-
-```go
-// cmd/relay/heartbeat.go — add SIGNAL_DEVICE support
-
-var signalDevice string
-
-func SetSignalDevice(dev string) { signalDevice = dev }
-
-func RunHeartbeat() {
-    if signalDir == "" && signalDevice == "" {
-        return
-    }
-    // ... existing file-based logic ...
-
-    // Additionally write to serial device if configured
-    if signalDevice != "" {
-        devFile, err := os.OpenFile(signalDevice, os.O_WRONLY, 0)
-        if err == nil {
-            defer devFile.Close()
-            // Write heartbeat lines to device
-            go func() {
-                ticker := time.NewTicker(2 * time.Second)
-                for range ticker.C {
-                    ts := lastActivity.Load()
-                    if ts > 0 && time.Since(time.Unix(ts, 0)) < 5*time.Second {
-                        fmt.Fprintf(devFile, "heartbeat:%d\n", ts)
-                    }
-                }
-            }()
-        }
-    }
-}
-
-func WriteExitCode(code int) {
-    // ... existing file-based logic ...
-    if signalDevice != "" {
-        if f, err := os.OpenFile(signalDevice, os.O_WRONLY, 0); err == nil {
-            fmt.Fprintf(f, "exit:%d\n", code)
-            f.Close()
-        }
-    }
-}
-```
-
-This keeps backward compatibility with QEMU/VZ (file-based signals via 9p) while enabling the named pipe approach for Hyper-V.
+No `SIGNAL_DEVICE`/`go-winio` change is needed: ready/complete ride the collector
+HTTP channel, and `init` handles the COM1 readiness echo.
