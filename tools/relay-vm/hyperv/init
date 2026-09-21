@@ -120,4 +120,14 @@ echo "init: dns=$(grep nameserver /etc/resolv.conf 2>/dev/null | head -1)"
 echo "ready" > /dev/ttyS0 2>/dev/null || true
 echo "init: ready"
 
-exec /shared/relay
+# Launch the relay in the foreground. PID 1 must NEVER exit, or the kernel
+# panics ("Attempted to kill init"). If the relay binary is absent -- e.g. a
+# bare boot-bring-up test with no data disk, or a relay that failed to stage --
+# idle instead of exiting, so the host can observe the VM and tear it down
+# cleanly rather than seeing a panic-reboot loop.
+if [ -x /shared/relay ]; then
+    exec /shared/relay
+fi
+echo "init: no relay binary present; idling (boot-test mode)" > /dev/ttyS0 2>/dev/null || true
+echo "init: no relay binary present; idling (boot-test mode)"
+while true; do sleep 3600; done

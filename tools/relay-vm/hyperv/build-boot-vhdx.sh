@@ -11,9 +11,12 @@
 #     -> fixed VHDX                          (qemu-img convert)
 #
 # Hyper-V Gen2 boots the VHDX over UEFI and loads \EFI\BOOT\BOOTX64.EFI (the
-# UKI) with no bootloader -- the kernel's own EFI stub consumes the embedded
-# initramfs and cmdline. (Gen2 requires VHDX; the legacy VHD format is not
-# supported. go-diskfs only emits raw images, which is why it is not used.)
+# UKI) with no bootloader. The UKI's entry point is the systemd-boot EFI stub,
+# which reads the embedded .linux/.initrd/.cmdline PE sections and boots them.
+# (The kernel's OWN EFI stub does NOT read self-embedded sections -- that is why
+# build.sh objcopies into the systemd stub, not the bare kernel.) Gen2 requires
+# VHDX; the legacy VHD format is not supported. go-diskfs only emits raw images,
+# which is why it is not used.
 set -eu
 
 HERE=$(cd "$(dirname "$0")" && pwd)

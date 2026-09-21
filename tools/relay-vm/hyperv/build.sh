@@ -112,26 +112,39 @@ echo "Packing initramfs with: $CPIO"
 VMLINUZ=$(find "$KX" -name "vmlinuz-*" -type f | head -1)
 cp "$VMLINUZ" "$OUTPUT_DIR/vmlinuz"
 
-# Build the Unified Kernel Image: embed the initramfs + kernel cmdline into the
-# EFI-stub kernel as .initrd/.cmdline PE sections, so it boots standalone as
-# \EFI\BOOT\BOOTX64.EFI with no bootloader (the kernel's own EFI stub reads the
-# embedded sections). Alpine linux-virt has CONFIG_EFI_STUB=y. Section VMAs sit
-# well above the kernel's own sections to avoid overlap.
+# Build the Unified Kernel Image (UKI) using the systemd-boot EFI stub as the
+# entry point. The stub (installed as \EFI\BOOT\BOOTX64.EFI) reads the embedded
+# .linux / .initrd / .cmdline PE sections and boots them with no bootloader.
+# IMPORTANT: the Linux kernel's OWN EFI stub does NOT read a self-embedded
+# .initrd/.cmdline section -- it takes the cmdline from EFI LoadOptions and the
+# initrd via the initrd= option / LoadFile2. Embedding sections into the bare
+# kernel therefore produces a non-booting image (Hyper-V Gen2 sits on a blank
+# logo). The systemd-boot stub is the component that implements the UKI section
+# convention, so it must be the objcopy base.
 if ! command -v objcopy >/dev/null 2>&1; then
     echo "ERROR: objcopy (binutils) not found; needed to build the UKI" >&2
     rm -rf "$WORK_DIR"
     exit 1
 fi
+STUB="${UKI_STUB:-/usr/lib/systemd/boot/efi/linuxx64.efi.stub}"
+if [ ! -f "$STUB" ]; then
+    echo "ERROR: systemd-boot EFI stub not found: $STUB" >&2
+    echo "Install it in the build env (CI-only build tool): apt-get install systemd-boot-efi" >&2
+    rm -rf "$WORK_DIR"
+    exit 1
+fi
 CMDLINE_FILE="$WORK_DIR/cmdline.txt"
 printf 'console=ttyS0 console=tty0' > "$CMDLINE_FILE"
+OSREL_FILE="$WORK_DIR/os-release"
+printf 'ID=warden-relay\nNAME="Warden Relay"\nVERSION_ID=1\n' > "$OSREL_FILE"
+# Section VMAs follow the systemd UKI convention; all sit above the stub's own
+# sections and do not overlap (kernel ~12M placed at 32M, initrd ~4.5M at 48M).
 objcopy \
-    --add-section .cmdline="$CMDLINE_FILE" \
-    --set-section-flags .cmdline=alloc,load,readonly,data \
-    --change-section-vma .cmdline=0x1000000 \
-    --add-section .initrd="$OUTPUT_DIR/initramfs.cpio.gz" \
-    --set-section-flags .initrd=alloc,load,readonly,data \
-    --change-section-vma .initrd=0x2000000 \
-    "$OUTPUT_DIR/vmlinuz" "$OUTPUT_DIR/warden-relay-boot.efi"
+    --add-section .osrel="$OSREL_FILE"      --change-section-vma .osrel=0x20000 \
+    --add-section .cmdline="$CMDLINE_FILE"   --change-section-vma .cmdline=0x30000 \
+    --add-section .linux="$OUTPUT_DIR/vmlinuz"            --change-section-vma .linux=0x2000000 \
+    --add-section .initrd="$OUTPUT_DIR/initramfs.cpio.gz" --change-section-vma .initrd=0x3000000 \
+    "$STUB" "$OUTPUT_DIR/warden-relay-boot.efi"
 
 rm -rf "$WORK_DIR"
 
