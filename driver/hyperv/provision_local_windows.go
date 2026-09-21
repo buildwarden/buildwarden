@@ -84,8 +84,19 @@ if (-not (Get-NetNat -Name '%[2]s' -ErrorAction SilentlyContinue)) {
     }
     New-NetNat -Name '%[2]s' -InternalIPInterfaceAddressPrefix '%[5]s' | Out-Null
 }
+
+# Firewall: allow the relay VM (on this NAT subnet) to reach the host-side
+# collector + config responder. The NAT vEthernet sits in the Public profile
+# with inbound blocked by default, so without this the relay's boot-time config
+# fetch and its output streaming are silently dropped. Scoped to the host IP,
+# the NAT subnet, and only the two relay-host ports, so nothing else on the host
+# is exposed.
+$fwName = '%[2]s-relay-ingress'
+if (-not (Get-NetFirewallRule -DisplayName $fwName -ErrorAction SilentlyContinue)) {
+    New-NetFirewallRule -DisplayName $fwName -Direction Inbound -Action Allow -Protocol TCP -LocalPort %[6]d,%[7]d -LocalAddress '%[3]s' -RemoteAddress '%[5]s' | Out-Null
+}
 'OK'
-`, name, nat, hostIP, prefixLen, prefix)
+`, name, nat, hostIP, prefixLen, prefix, defaultConfigPort, defaultCollectorPort)
 
 	out, err := runPS(script)
 	if err != nil {
@@ -106,6 +117,7 @@ func (p *localProvisioner) TeardownNetwork(ctx context.Context, id string) error
 	name := psEscapeSingle(id)
 	nat := psEscapeSingle(id + "-nat")
 	script := fmt.Sprintf(`
+Remove-NetFirewallRule -DisplayName '%[2]s-relay-ingress' -ErrorAction SilentlyContinue
 Remove-NetNat -Name '%[2]s' -Confirm:$false -ErrorAction SilentlyContinue
 Remove-VMSwitch -Name '%[2]s' -Force -ErrorAction SilentlyContinue
 Remove-VMSwitch -Name '%[1]s' -Force -ErrorAction SilentlyContinue

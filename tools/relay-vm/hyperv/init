@@ -60,6 +60,7 @@ PRIVATE_IF=$(echo "$IFACES" | head -1)
 if [ -n "$PRIVATE_IF" ]; then
     ip link set "$PRIVATE_IF" up
     ip addr add 10.0.0.1/30 dev "$PRIVATE_IF"
+    echo "init: build-if=$PRIVATE_IF 10.0.0.1/30" > /dev/ttyS0 2>/dev/null || true
 fi
 
 # eth1 = NAT switch (relay upstream): STATIC (New-NetNat has no DHCP).
@@ -68,7 +69,9 @@ if [ -n "$NAT_IF" ]; then
     ip link set "$NAT_IF" up
     ip addr add "${NAT_IP:-192.168.240.2}/${NAT_PREFIX:-20}" dev "$NAT_IF"
     ip route add default via "${NAT_GW:-192.168.240.1}"
-    echo "init: nat-if=$NAT_IF $(ip addr show "$NAT_IF" 2>/dev/null | grep inet)"
+    NAT_MSG="init: nat-if=$NAT_IF $(ip addr show "$NAT_IF" 2>/dev/null | grep inet | tr '\n' ' ')"
+    echo "$NAT_MSG" > /dev/ttyS0 2>/dev/null || true
+    echo "$NAT_MSG"
 fi
 
 # All iptables rules are IPv4; disable IPv6 to prevent bypass.
