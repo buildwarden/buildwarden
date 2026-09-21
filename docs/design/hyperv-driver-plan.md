@@ -1331,11 +1331,17 @@ sink otherwise (qemu/vz unchanged). Covered by `cmd/relay/mode_vm_test.go`.
 
 Remaining work:
 
-- Deliver `OUTPUT_SINK_URL` + token to the VM per build. On qemu/vz this can ride
-  the existing seed/env path; on Hyper-V (no data disk) `init` fetches it over the
-  isolated NAT link from the collector at boot. The open detail is the trust
-  model: the bootstrap endpoint/port, and how the per-build token is minted and
-  scoped (network isolation is the trust boundary).
+- Config delivery is decided: **pull-at-boot**. The driver mints a per-build
+  token (the collector separates concurrent builds by token) and runs a
+  `relaycfg.Responder` bound to that build's isolated NAT gateway; the relay's
+  `init` GETs `http://<gateway>:8299/config` once, exports `OUTPUT_SINK_URL` /
+  `OUTPUT_SINK_TOKEN` (strict KEY=VALUE parse, never sourced, so the response
+  cannot execute shell), then starts the relay. Landed: the `init` fetch in
+  `tools/relay-vm/hyperv/init` and the `relaycfg` package (serve-once, +tests).
+  Remaining for `createRelayVM`: mint the token, bind the responder to the NAT
+  gateway, and close it once the relay's ready signal reaches the collector.
+- qemu/vz are unaffected: their `/shared` seed/env path still delivers config and
+  their relay keeps the local sink (the sink vars stay unset).
 
 `detectMode` needs no change: the Hyper-V `init` passes an explicit `-mode vm`,
 so its `/shared/relay.env` auto-detect branch is never exercised on this driver,

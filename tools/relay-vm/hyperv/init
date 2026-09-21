@@ -108,6 +108,38 @@ if [ ! -s /etc/resolv.conf ]; then
 fi
 echo "init: dns=$(grep nameserver /etc/resolv.conf 2>/dev/null | head -1)"
 
+# Fetch per-build relay config (collector sink URL + bearer token) from the host
+# config responder on the isolated NAT switch. The driver serves it as strict
+# KEY=VALUE lines at http://<gateway>:<port>/config, once, then closes it. We
+# parse ONLY known keys and never source the body, so a response can never
+# execute shell in the relay (the trust boundary). Bounded retry: the responder
+# is up before this VM boots, so the first attempt usually succeeds; on repeated
+# failure the relay falls back to the local sink. The token is a credential, so
+# it is never echoed to the console.
+CONFIG_URL="http://${NAT_GW:-192.168.240.1}:${RELAY_CONFIG_PORT:-8299}/config"
+GOT_CONFIG=0
+TRIES=0
+while [ $TRIES -lt 30 ]; do
+    if wget -q -T 2 -O /tmp/relay-config "$CONFIG_URL" 2>/dev/null; then
+        GOT_CONFIG=1; break
+    fi
+    TRIES=$((TRIES + 1)); sleep 0.5
+done
+if [ "$GOT_CONFIG" = 1 ] && [ -s /tmp/relay-config ]; then
+    while IFS='=' read -r k v; do
+        case "$k" in
+            OUTPUT_SINK_URL)   export OUTPUT_SINK_URL="$v" ;;
+            OUTPUT_SINK_TOKEN) export OUTPUT_SINK_TOKEN="$v" ;;
+        esac
+    done < /tmp/relay-config
+    rm -f /tmp/relay-config
+    CFG_MSG="init: relay config fetched (sink=${OUTPUT_SINK_URL:-none}, token=$([ -n "${OUTPUT_SINK_TOKEN:-}" ] && echo set || echo unset))"
+else
+    CFG_MSG="init: no relay config fetched; relay will use the local sink"
+fi
+echo "$CFG_MSG" > /dev/ttyS0 2>/dev/null || true
+echo "$CFG_MSG"
+
 # Signal readiness to the host over COM1 (host reads the named pipe).
 echo "ready" > /dev/ttyS0 2>/dev/null || true
 echo "init: ready"
