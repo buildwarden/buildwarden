@@ -42,7 +42,3 @@ func runPSJSON(script string, out any) error {
 	return json.Unmarshal([]byte(res), out)
 }
 
-// psEscapeSingle escapes a value for a single-quoted PowerShell string literal.
-func psEscapeSingle(s string) string {
-	return strings.ReplaceAll(s, "'", "''")
-}

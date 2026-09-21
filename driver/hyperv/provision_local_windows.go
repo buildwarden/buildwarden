@@ -197,6 +197,23 @@ func (p *localProvisioner) CreateVM(ctx context.Context, spec VMSpec) (*VMHandle
 	return &VMHandle{Name: spec.Name, Generation: gen}, nil
 }
 
+// CreateRelayVM creates the Gen2 relay VM: a per-build differencing overlay off
+// the static UKI boot VHDX, Secure Boot off (the UKI is unsigned), both the
+// Private build NIC and the NAT upstream NIC, and COM1 on a host named pipe. The
+// PowerShell is assembled by buildRelayVMScript (pure, unit-tested); this method
+// only runs it. See that builder for the rationale behind each difference from
+// CreateVM.
+func (p *localProvisioner) CreateRelayVM(ctx context.Context, spec RelayVMSpec) (*VMHandle, error) {
+	script, err := buildRelayVMScript(spec)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := runPS(script); err != nil {
+		return nil, fmt.Errorf("CreateRelayVM %q: %w", spec.Name, err)
+	}
+	return &VMHandle{Name: spec.Name, Generation: 2}, nil
+}
+
 func (p *localProvisioner) StartVM(ctx context.Context, name string) error {
 	if _, err := runPS(fmt.Sprintf("Start-VM -Name '%s'", psEscapeSingle(name))); err != nil {
 		return fmt.Errorf("StartVM %q: %w", name, err)

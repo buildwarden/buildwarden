@@ -31,6 +31,12 @@ type Provisioner interface {
 
 	// Hyper-V Administrators operations (VM lifecycle).
 	CreateVM(ctx context.Context, spec VMSpec) (*VMHandle, error)
+	// CreateRelayVM creates the relay VM specifically. It differs from CreateVM
+	// (the build VM) in ways that matter for the trust boundary: an unsigned
+	// UKI booted with Secure Boot off, a per-build differencing overlay off the
+	// static boot VHDX, both the Private build NIC and the NAT upstream NIC, and
+	// COM1 wired to a host named pipe.
+	CreateRelayVM(ctx context.Context, spec RelayVMSpec) (*VMHandle, error)
 	StartVM(ctx context.Context, name string) error
 	StopVM(ctx context.Context, name string) error
 	RemoveVM(ctx context.Context, name string) error
@@ -82,4 +88,22 @@ type VMSpec struct {
 type VMHandle struct {
 	Name       string
 	Generation int
+}
+
+// RelayVMSpec describes the relay VM to create. Unlike VMSpec (the build VM),
+// the relay boots an unsigned UKI, so Secure Boot is off and no SecureBoot
+// template is set; it boots a per-build differencing overlay off the static,
+// read-only boot VHDX so the shared base is never written and concurrent relay
+// VMs never collide; it has two NICs (NIC1/eth0 = the Private build link,
+// NIC2/eth1 = the NAT upstream); and COM1 is wired to a host named pipe that
+// carries init's readiness echo and the relay's stdout.
+type RelayVMSpec struct {
+	Name        string
+	MemoryMB    int    // default 512
+	CPUs        int    // default 2
+	BootVHDX    string // static, read-only UKI boot disk (differencing parent)
+	OverlayVHDX string // per-build differencing child created off BootVHDX
+	BuildSwitch string // Private switch; NIC1 = build link (eth0)
+	NATSwitch   string // Internal NAT switch; NIC2 = upstream (eth1)
+	COMPipePath string // e.g. \\.\pipe\<name>, wired to COM1
 }

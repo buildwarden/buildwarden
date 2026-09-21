@@ -26,6 +26,9 @@ func (unsupportedProvisioner) TeardownNetwork(context.Context, string) error { r
 func (unsupportedProvisioner) CreateVM(context.Context, VMSpec) (*VMHandle, error) {
 	return nil, errUnsupported()
 }
+func (unsupportedProvisioner) CreateRelayVM(context.Context, RelayVMSpec) (*VMHandle, error) {
+	return nil, errUnsupported()
+}
 func (unsupportedProvisioner) StartVM(context.Context, string) error         { return errUnsupported() }
 func (unsupportedProvisioner) StopVM(context.Context, string) error          { return errUnsupported() }
 func (unsupportedProvisioner) RemoveVM(context.Context, string) error        { return errUnsupported() }
