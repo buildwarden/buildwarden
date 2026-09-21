@@ -1321,21 +1321,26 @@ The authoritative init is `tools/relay-vm/hyperv/init`; the boot image is built
 by `build.sh` (UKI) then `build-boot-vhdx.sh` (userspace fixed VHDX). See
 "Relay VM boot" above for the UKI/VHDX mechanics.
 
-### Relay Go changes for the VM path (in progress)
+### Relay Go changes for the VM path
 
-The streaming egress (the `httpSink` half of "Output egress") is not yet wired
-into the VM relay: `cmd/relay/mode_vm.go` builds `relay.Config` with no
-`OUTPUT_SINK_URL`, so a VM relay still uses `localSink` (tmpfs). Wiring it up is
-the remaining work:
+The streaming egress (the `httpSink` half of "Output egress") is now wired into
+the VM relay: `cmd/relay/mode_vm.go` reads `OUTPUT_SINK_URL` / `OUTPUT_SINK_TOKEN`
+from the environment (via `vmConfig`) into `relay.Config`, so `relay.Start`
+selects the `httpSink` when a collector URL is present and the local filesystem
+sink otherwise (qemu/vz unchanged). Covered by `cmd/relay/mode_vm_test.go`.
 
-- Select `httpSink` in `runVMMode` when `OUTPUT_SINK_URL` is set (pointing at the
-  per-build collector on the isolated NAT switch), passing the per-build token.
-- Deliver `OUTPUT_SINK_URL` + token over the network at boot (bootstrap from the
-  collector; network isolation is the trust boundary). This is the open
-  trust-model detail to settle.
-- Update `detectMode`: it currently keys "vm" on `/shared/relay.env`, which no
-  longer exists — `init` passes an explicit `-mode vm`, so the stale `/shared`
-  branch should be replaced with a baked marker or dropped.
+Remaining work:
+
+- Deliver `OUTPUT_SINK_URL` + token to the VM per build. On qemu/vz this can ride
+  the existing seed/env path; on Hyper-V (no data disk) `init` fetches it over the
+  isolated NAT link from the collector at boot. The open detail is the trust
+  model: the bootstrap endpoint/port, and how the per-build token is minted and
+  scoped (network isolation is the trust boundary).
+
+`detectMode` needs no change: the Hyper-V `init` passes an explicit `-mode vm`,
+so its `/shared/relay.env` auto-detect branch is never exercised on this driver,
+and that branch stays correct for qemu/vz (which do exec `/shared/relay` with no
+mode flag and do have a `/shared` 9p mount).
 
 No `SIGNAL_DEVICE`/`go-winio` change is needed: ready/complete ride the collector
 HTTP channel, and `init` handles the COM1 readiness echo.
