@@ -2,6 +2,7 @@ package relay
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -10,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"time"
 )
 
 // OutputSink abstracts where the relay's outputs land. The localSink writes to
@@ -260,12 +262,18 @@ func (s *httpSink) PostComplete(exitCode int, message, errStr string) error {
 }
 
 func (s *httpSink) postSignal(method, path string, body []byte) error {
+	// Bound signal posts so a stuck ready/complete never hangs the relay: the
+	// relay is up and serving regardless of whether the signal lands, so this
+	// must fail fast and let the caller log rather than block forever. Artifact
+	// and output streaming deliberately keep no timeout (GB-scale bodies).
+	ctx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
+	defer cancel()
 	url := s.baseURL + path
 	var r io.Reader
 	if body != nil {
 		r = bytes.NewReader(body)
 	}
-	req, err := http.NewRequest(method, url, r)
+	req, err := http.NewRequestWithContext(ctx, method, url, r)
 	if err != nil {
 		return err
 	}

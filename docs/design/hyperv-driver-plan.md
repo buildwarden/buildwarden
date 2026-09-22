@@ -1329,17 +1329,27 @@ from the environment (via `vmConfig`) into `relay.Config`, so `relay.Start`
 selects the `httpSink` when a collector URL is present and the local filesystem
 sink otherwise (qemu/vz unchanged). Covered by `cmd/relay/mode_vm_test.go`.
 
-Remaining work:
+Config delivery (**pull-at-boot**) and the relay-host orchestration are
+implemented and verified end to end on real Hyper-V:
 
-- Config delivery is decided: **pull-at-boot**. The driver mints a per-build
-  token (the collector separates concurrent builds by token) and runs a
-  `relaycfg.Responder` bound to that build's isolated NAT gateway; the relay's
-  `init` GETs `http://<gateway>:8299/config` once, exports `OUTPUT_SINK_URL` /
-  `OUTPUT_SINK_TOKEN` (strict KEY=VALUE parse, never sourced, so the response
-  cannot execute shell), then starts the relay. Landed: the `init` fetch in
-  `tools/relay-vm/hyperv/init` and the `relaycfg` package (serve-once, +tests).
-  Remaining for `createRelayVM`: mint the token, bind the responder to the NAT
-  gateway, and close it once the relay's ready signal reaches the collector.
+- The driver mints a per-build token (the collector separates concurrent builds
+  by token) and, via `hyperv.StartRelay`, runs the collector and a
+  `relaycfg.Responder` bound to that build's NAT gateway, then creates and boots
+  the relay VM (`CreateRelayVM`) and blocks until the relay POSTs `/v1/ready`.
+  The relay's `init` GETs `http://<gateway>:8299/config` once, exports
+  `OUTPUT_SINK_URL` / `OUTPUT_SINK_TOKEN` (strict KEY=VALUE parse, never sourced),
+  probes the sink's `/healthz`, then starts the relay, which selects the httpSink
+  and streams outputs + ready/complete to the collector. `StartRelay.Close` tears
+  down the servers, the VM, and the per-build overlay.
+- **Firewall**: the NAT vEthernet is in the Public profile with inbound blocked,
+  so `EnsureNetwork` opens a scoped inbound rule for the config + collector ports
+  (`8299`/`8390`) restricted to the host IP and NAT subnet; `TeardownNetwork`
+  removes it. Without it the relay's config fetch and streaming are dropped.
+- Signal posts (ready/complete) are bounded by a 15s timeout so a stuck signal
+  never hangs the relay (artifact/output streaming keep no timeout for GB bodies).
+- Verified: `StartRelay` brings a real relay VM to ready in ~6s, repeatably
+  (`driver/hyperv` live tests, gated on `WARDEN_HYPERV_LIVE=1`).
+
 - qemu/vz are unaffected: their `/shared` seed/env path still delivers config and
   their relay keeps the local sink (the sink vars stay unset).
 

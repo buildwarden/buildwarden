@@ -143,6 +143,17 @@ fi
 echo "$CFG_MSG" > /dev/ttyS0 2>/dev/null || true
 echo "$CFG_MSG"
 
+# Diagnostic: can the relay actually reach its collector? Probe the sink's
+# unauthenticated /healthz over the NAT link. This isolates VM->host
+# reachability for the collector port from any relay-side HTTP issue.
+if [ -n "${OUTPUT_SINK_URL:-}" ]; then
+    if wget -q -T 3 -O /dev/null "${OUTPUT_SINK_URL}/healthz" 2>/dev/null; then
+        echo "init: sink healthz OK ${OUTPUT_SINK_URL}" > /dev/ttyS0 2>/dev/null || true
+    else
+        echo "init: sink healthz FAIL ${OUTPUT_SINK_URL}" > /dev/ttyS0 2>/dev/null || true
+    fi
+fi
+
 # Signal readiness to the host over COM1 (host reads the named pipe).
 echo "ready" > /dev/ttyS0 2>/dev/null || true
 echo "init: ready"
