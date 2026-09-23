@@ -404,19 +404,25 @@ Windows guests are provisioned via `unattend.xml` placed on a secondary VHDX (or
 
 ### Getting warden-io.exe into the VM
 
-> **Status / constraint (2026-09-23):** the per-build seed generator (`buildSeed`)
-> is the one remaining unbuilt piece of the build-VM path; everything downstream
-> (`runBuild` orchestration, `CreateVM` Gen1/Gen2, relay host, collector) is
-> implemented and unit-tested. The seed **must not** rely on offline-mounting the
-> guest disk: `Mount-VHD` requires full Administrator (0x80070522), which would
-> pull the per-build path out of the non-elevated Hyper-V-Administrators tier.
-> So the answer file has to reach the stock eval image via **attached media that
-> OOBE reads on its own** (an `unattend.xml`/`Autounattend.xml` on a small
-> attached volume Windows scans during specialize/oobeSystem), not by writing
-> into the image's `\Windows\Panther`. That mechanism needs a live boot against
-> the actual eval VHD to confirm, so it is gated on obtaining that image. Heed the
-> `FirstLogonCommands` 1024-char limit (move bulk into a script the short command
-> invokes).
+> **Status (2026-09-23):** the seed generators are built and unit-tested — the
+> OOBE `unattend.xml` (auto-answers OOBE, ephemeral one-shot autologon, and a
+> `FirstLogonCommands` entry that launches `warden-run.ps1` off the WARDEN seed),
+> `warden-run.ps1` (same runtime contract as qemu: `warden-io initialize
+> --gateway=10.0.0.1 --ip=10.0.0.2/30`), and the seed staging (warden-io.exe +
+> warden-run.ps1 + unattend.xml + Autounattend.xml). The media is packaged as a
+> **Joliet ISO via the in-box IMAPI2 COM API** (no admin, exact long filenames,
+> gets a drive letter) rather than a hand-rolled level-1 ISO (which 8.3-mangles
+> `warden-io.exe`/`Autounattend.xml`). The IMAPI2 builder is host-verified to
+> produce a valid image. The seed **does not** offline-mount the guest disk
+> (`Mount-VHD` needs Administrator), so the answer file reaches the stock image
+> only via OOBE's implicit media search.
+>
+> **Still needs a live boot against the real eval VHD to confirm:** (1) OOBE
+> implicitly discovers the answer file on the attached DVD; (2) the seed volume
+> gets a drive letter *inside the guest* so the FirstLogonCommand's drive scan
+> finds `warden-run.ps1`; (3) `warden-io initialize` brings up the static link
+> and completes. Heed the `FirstLogonCommands` 1024-char limit (the launcher is a
+> compact base64 `-EncodedCommand`, well under it).
 
 **Option A (preferred): Seed VHDX**
 

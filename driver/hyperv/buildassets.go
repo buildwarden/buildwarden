@@ -118,21 +118,32 @@ func resolveBuildBaseVHDX(req *driver.BuildRequest) (path string, isWindows bool
 	return abs, isWindows, generation, nil
 }
 
-// buildSeed generates the per-build provisioning media the build VM boots with:
-// a cloud-init NoCloud (CIDATA) volume for Linux, or unattend media for Windows.
-// It must carry the static build-network config (10.0.0.2/30, gateway
-// 10.0.0.1), the relay CA trust step, and the warden-io agent that fetches the
-// build script from the relay and reports completion.
-//
-// It is deliberately not implemented yet: the seed's cloud-init flavour is
-// coupled to the chosen build-guest base image (Alpine tiny-cloud vs Ubuntu
-// cloud-init differ, and the NoCloud datasource must be validated against a real
-// Gen2 boot), so building it before that image is chosen would be unverifiable.
-// This is the single remaining piece of the build-VM path.
-func buildSeed(workDir, buildID string, isWindows bool, req *driver.BuildRequest) (seedISO, seedVHDX string, err error) {
-	return "", "", fmt.Errorf(
-		"build-VM seed generation not implemented yet: choose the build-guest base " +
-			"image first (the cloud-init/unattend seed is built to match it), then " +
-			"the CIDATA/unattend media, warden-io injection, and static-network + " +
-			"CA-trust provisioning land here")
+// resolveWardenIOExe locates the Windows guest agent (warden-io.exe) to stage
+// on the seed. Lookup order: WARDEN_IO_WINDOWS_EXE, a prebuilt binary next to
+// the running executable, then the build cache. It does not build (kept pure +
+// testable); ensureWardenIOExe cross-builds on demand. arch is a Go arch
+// ("amd64").
+func resolveWardenIOExe(arch string) (string, error) {
+	name := "warden-io-windows-" + arch + ".exe"
+	if p := os.Getenv("WARDEN_IO_WINDOWS_EXE"); p != "" {
+		if _, err := os.Stat(p); err != nil {
+			return "", fmt.Errorf("WARDEN_IO_WINDOWS_EXE=%q not readable: %w", p, err)
+		}
+		return p, nil
+	}
+	if exe, err := os.Executable(); err == nil {
+		cand := filepath.Join(filepath.Dir(exe), name)
+		if _, err := os.Stat(cand); err == nil {
+			return cand, nil
+		}
+	}
+	cached := filepath.Join(hypervCacheDir(), "bin", name)
+	if _, err := os.Stat(cached); err == nil {
+		return cached, nil
+	}
+	return "", fmt.Errorf(
+		"warden-io.exe (%s) not found: set WARDEN_IO_WINDOWS_EXE, place %s next to "+
+			"the warden binary, or build it with "+
+			"`GOOS=windows GOARCH=%s go build -o %s ./cmd/warden-io`",
+		arch, name, arch, cached)
 }
