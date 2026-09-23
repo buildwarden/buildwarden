@@ -1232,7 +1232,7 @@ Elevation staging is folded into the phase order: build the privilege spine and 
 
 - [x] `Provisioner` interface + `localProvisioner` in-process implementation (interface + network standup done; VM-lifecycle ops in progress)
 - [x] `warden hyperv setup` **dev stub**: create one durable reused switch (Private/Internal) + NAT + host IP under a fixed dev name (`warden-dev`), idempotent
-- [~] Driver switch reuse: `--switch <name>` / `WARDEN_HYPERV_SWITCH` parsed by setup/doctor; driver-level skip-standup lands with `StartBuild`
+- [x] Driver switch reuse: `--switch <name>` / `WARDEN_HYPERV_SWITCH` parsed by setup/doctor; `StartBuild` reuses the durable switch (defaults to `warden-dev`) and re-asserts isolation via `VerifyNetwork` per build instead of standing up a network
 - [x] Per-operation capability detection (token elevation + Hyper-V Administrators membership), plus a stale-token cross-check against persistent group membership
 - [x] `warden hyperv doctor`: read-only capability preflight (token + group + feature + switch + service), resolves outcome per op, exits non-zero when blocked so it works as a CI/agent gate
 - [x] Outcome-3 fast-error with both remediations (elevated terminal, or one-time setup) when an op cannot be satisfied
@@ -1246,8 +1246,8 @@ Elevation staging is folded into the phase order: build the privilege spine and 
 - [ ] PowerShell helpers (`runPS`, `runPSJSON`)
 - [ ] Network via `Provisioner`: fresh per-build `EnsureNetwork` + teardown when the process can stand up a network (elevated / service); reuse the durable switch when non-elevated
 - [x] Relay VM boot image — UKI in a userspace-built fixed VHDX (`tools/relay-vm/hyperv/`), boot-verified via serial (kernel → initramfs → `/init` → `ready`, relay listening)
-- [ ] Relay readiness/completion signals — collector HTTP channel + COM1 readiness echo (replaces the go-winio named pipe)
-- [ ] Linux build VM with cloud-init
+- [x] Relay readiness/completion signals — collector HTTP channel (`/v1/ready` → `OnReady`, `/v1/complete` → `OnComplete`/`Done` with exit code) + COM1 readiness echo; wired through `StartRelay` and blocked on by `runBuild`
+- [~] Linux build VM: `StartBuild` orchestration wired end to end (`runBuild`: `StartRelay` → build-guest differencing overlay → create/start build VM on the Private switch → wait on collector completion → teardown), unit-tested with a fake Provisioner that simulates the relay's config-fetch/ready/complete. **Remaining:** the build-guest base image (no Hyper-V build-image tooling yet — BYO via `--image`/`WARDEN_HYPERV_BUILD_IMAGE` for now) and the cloud-init CIDATA seed (`buildSeed`, coupled to the chosen base image: static net 10.0.0.2/30, relay CA trust, warden-io injection)
 - [ ] End-to-end test: `warden build --driver hyperv` with Ubuntu image
 
 ### Phase 2: Windows guest support (2-3 weeks)
