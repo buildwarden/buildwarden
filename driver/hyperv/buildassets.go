@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/buildwarden/buildwarden/driver"
 )
@@ -45,9 +46,23 @@ func resolveRelayBootVHDX() (string, error) {
 
 // resolveBuildBaseVHDX locates the read-only build-guest base image (the
 // differencing parent for the per-build overlay). Until Hyper-V build-image
-// tooling exists, a caller brings their own bootable Gen2 VHDX via req.Image or
-// WARDEN_HYPERV_BUILD_IMAGE. Returns the path and whether it is a Windows guest.
-func resolveBuildBaseVHDX(req *driver.BuildRequest) (path string, isWindows bool, err error) {
+// tooling exists, a caller brings their own bootable disk via req.Image or
+// WARDEN_HYPERV_BUILD_IMAGE.
+//
+// The disk's format decides the VM generation, and the caller MUST honour it: a
+// Gen1 (BIOS/MBR) disk cannot boot on a Gen2 (UEFI/GPT) VM, and vice versa.
+//
+//   - .vhd  -> Generation 1. This is the shape Microsoft's Windows Server
+//     Evaluation image ships in (MBR/BIOS), so that image boots as-is with no
+//     custom construction and no mbr2gpt conversion. This is the deliberate
+//     starting path for Windows builds: a real, signed OS with zero image
+//     surgery, so any boot issue is ours, not our disk assembly.
+//   - .vhdx -> Generation 2 (UEFI, Secure Boot capable): a Linux cloud image,
+//     or a Windows image already converted to Gen2 by `warden image` prep.
+//
+// WARDEN_HYPERV_BUILD_GEN (1 or 2) overrides the inferred generation for the
+// uncommon case of a .vhdx that must boot Gen1, or a .vhd wrapped for Gen2.
+func resolveBuildBaseVHDX(req *driver.BuildRequest) (path string, isWindows bool, generation int, err error) {
 	isWindows = req != nil && req.GuestOS == "windows"
 
 	candidate := ""
@@ -58,21 +73,39 @@ func resolveBuildBaseVHDX(req *driver.BuildRequest) (path string, isWindows bool
 		candidate = os.Getenv("WARDEN_HYPERV_BUILD_IMAGE")
 	}
 	if candidate == "" {
-		return "", isWindows, fmt.Errorf(
-			"no build-guest base image: pass --image <bootable-gen2.vhdx> or set "+
-				"WARDEN_HYPERV_BUILD_IMAGE. Hyper-V build-image tooling (a `warden "+
-				"image` path producing a cloud-init-ready VHDX) is not built yet")
+		return "", isWindows, 0, fmt.Errorf(
+			"no build-guest base image: pass --image <disk.vhd|.vhdx> or set " +
+				"WARDEN_HYPERV_BUILD_IMAGE. For Windows, point it at Microsoft's " +
+				"Windows Server Evaluation VHD (boots Gen1 as-is, no conversion)")
 	}
-	if filepath.Ext(candidate) != ".vhdx" {
-		return "", isWindows, fmt.Errorf(
-			"build-guest image %q is not a .vhdx; Hyper-V Gen2 boots VHDX only "+
-				"(convert with `qemu-img convert -O vhdx -o subformat=fixed`)", candidate)
+
+	switch strings.ToLower(filepath.Ext(candidate)) {
+	case ".vhd":
+		generation = 1
+	case ".vhdx":
+		generation = 2
+	default:
+		return "", isWindows, 0, fmt.Errorf(
+			"build-guest image %q must be a .vhd (Gen1, e.g. the Windows Server "+
+				"eval image) or .vhdx (Gen2); Hyper-V boots no other format "+
+				"(convert a qcow2/raw with `qemu-img convert -O vhdx`)", candidate)
+	}
+	if v := os.Getenv("WARDEN_HYPERV_BUILD_GEN"); v != "" {
+		switch v {
+		case "1":
+			generation = 1
+		case "2":
+			generation = 2
+		default:
+			return "", isWindows, 0, fmt.Errorf(
+				"WARDEN_HYPERV_BUILD_GEN=%q invalid (want 1 or 2)", v)
+		}
 	}
 	if _, err := os.Stat(candidate); err != nil {
-		return "", isWindows, fmt.Errorf("build-guest image %q not readable: %w", candidate, err)
+		return "", isWindows, 0, fmt.Errorf("build-guest image %q not readable: %w", candidate, err)
 	}
 	abs, _ := filepath.Abs(candidate)
-	return abs, isWindows, nil
+	return abs, isWindows, generation, nil
 }
 
 // buildSeed generates the per-build provisioning media the build VM boots with:

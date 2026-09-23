@@ -309,9 +309,30 @@ Cloud image providers distribute VHDX or offer conversion:
 
 ### Windows Guests
 
-- **Evaluation images**: Microsoft provides Windows Server evaluation VHDs
-- **Custom base**: user provides a sysprepped VHDX with OpenSSH pre-installed
-- **FROM resolution**: `FROM windows-server:2022` maps to known evaluation URL
+Windows is the **primary** build target for the Hyper-V driver (a Linux build on
+a Windows host is better served by the qemu/vz drivers; it is a nice-to-have
+here, not the point).
+
+- **Base image (chosen path): the stock Microsoft Windows Server Evaluation
+  image, booted as-is.** Microsoft ships the eval as a **Gen1 (BIOS/MBR) `.vhd`**,
+  so the driver boots it on a **Generation-1** VM with no image surgery and no
+  `mbr2gpt` conversion. This is deliberate: starting from a real, signed OS with
+  zero custom construction means any boot problem is the driver's, not our disk
+  assembly (the lesson from the relay UKI bring-up). The build guest sits alone
+  on the Private switch, so the absence of Gen1 Secure Boot is not a weakening of
+  the trust boundary.
+- **Optional Gen2 conversion belongs in `warden image` prep, not `hyperv
+  setup`.** If a Gen2/Secure-Boot build guest is ever wanted, the VHD→VHDX +
+  MBR→GPT (`mbr2gpt`) conversion is an image-preparation concern and lives in
+  Warden's image tooling. `hyperv setup` stays scoped to Hyper-V infrastructure
+  (switches, NAT, firewall, service install) and only takes on an image step if
+  that step *hard-requires* the same Administrator elevation setup already needs.
+- **Generation is inferred from the disk format**: `.vhd` → Gen1, `.vhdx` → Gen2,
+  overridable with `WARDEN_HYPERV_BUILD_GEN`. The per-build differencing overlay
+  is created in the matching format (a differencing child must match its parent).
+- **Bring-your-own**: `--image <disk.vhd|.vhdx>` or `WARDEN_HYPERV_BUILD_IMAGE`
+  points at a local base until the pinned download lands in `warden image` prep.
+- **FROM resolution**: `FROM windows-server:2025` maps to the pinned eval image.
 
 ### Image resolution flow
 
@@ -371,6 +392,20 @@ Windows guests are provisioned via `unattend.xml` placed on a secondary VHDX (or
 5. Creates a `SetupComplete.cmd` that runs the build
 
 ### Getting warden-io.exe into the VM
+
+> **Status / constraint (2026-09-23):** the per-build seed generator (`buildSeed`)
+> is the one remaining unbuilt piece of the build-VM path; everything downstream
+> (`runBuild` orchestration, `CreateVM` Gen1/Gen2, relay host, collector) is
+> implemented and unit-tested. The seed **must not** rely on offline-mounting the
+> guest disk: `Mount-VHD` requires full Administrator (0x80070522), which would
+> pull the per-build path out of the non-elevated Hyper-V-Administrators tier.
+> So the answer file has to reach the stock eval image via **attached media that
+> OOBE reads on its own** (an `unattend.xml`/`Autounattend.xml` on a small
+> attached volume Windows scans during specialize/oobeSystem), not by writing
+> into the image's `\Windows\Panther`. That mechanism needs a live boot against
+> the actual eval VHD to confirm, so it is gated on obtaining that image. Heed the
+> `FirstLogonCommands` 1024-char limit (move bulk into a script the short command
+> invokes).
 
 **Option A (preferred): Seed VHDX**
 

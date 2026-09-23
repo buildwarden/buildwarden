@@ -39,7 +39,7 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	if err != nil {
 		return nil, fmt.Errorf("hyperv build: %w", err)
 	}
-	base, isWindows, err := resolveBuildBaseVHDX(req)
+	base, isWindows, generation, err := resolveBuildBaseVHDX(req)
 	if err != nil {
 		return nil, fmt.Errorf("hyperv build: %w", err)
 	}
@@ -74,13 +74,16 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		RelayBootVHDX: relayBoot,
 		RelayOverlay:  filepath.Join(workDir, "relay.vhdx"),
 		BuildBaseVHDX: base,
-		BuildOverlay:  filepath.Join(workDir, "build.vhdx"),
-		SeedISO:       seedISO,
-		SeedVHDX:      seedVHDX,
-		IsWindows:     isWindows,
-		BuildSwitch:   sw,
-		NATSwitch:     sw + "-nat",
-		Timeout:       req.Timeout,
+		// The differencing overlay must share the base disk's format (.vhd off a
+		// Gen1 eval VHD, .vhdx off a Gen2 image).
+		BuildOverlay: filepath.Join(workDir, "build"+filepath.Ext(base)),
+		SeedISO:      seedISO,
+		SeedVHDX:     seedVHDX,
+		IsWindows:    isWindows,
+		Generation:   generation,
+		BuildSwitch:  sw,
+		NATSwitch:    sw + "-nat",
+		Timeout:      req.Timeout,
 	})
 }
 

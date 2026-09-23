@@ -32,6 +32,7 @@ type buildFake struct {
 	buildExit     int // exit code the simulated build reports on /v1/complete
 
 	token         atomic.Value // string, captured from the config fetch
+	lastBuildSpec atomic.Value // VMSpec, captured from CreateVM (build VM)
 	createRelay   atomic.Int32
 	createBuild   atomic.Int32
 	startRelay    atomic.Int32
@@ -48,6 +49,7 @@ func (f *buildFake) TeardownNetwork(context.Context, string) error { return nil 
 
 func (f *buildFake) CreateVM(_ context.Context, spec VMSpec) (*VMHandle, error) {
 	f.createBuild.Add(1)
+	f.lastBuildSpec.Store(spec)
 	return &VMHandle{Name: spec.Name}, nil
 }
 func (f *buildFake) CreateRelayVM(context.Context, RelayVMSpec) (*VMHandle, error) {
@@ -181,6 +183,9 @@ func TestRunBuild_HappyPath(t *testing.T) {
 	if got := fp.createBuild.Load(); got != 1 {
 		t.Errorf("CreateVM (build) = %d, want 1", got)
 	}
+	if spec, ok := fp.lastBuildSpec.Load().(VMSpec); !ok || spec.Generation != 2 {
+		t.Errorf("build VM Generation = %v, want 2 (default for .vhdx base)", fp.lastBuildSpec.Load())
+	}
 	if got := fp.startBuild.Load(); got != 1 {
 		t.Errorf("StartVM (build) = %d, want 1", got)
 	}
@@ -193,6 +198,46 @@ func TestRunBuild_HappyPath(t *testing.T) {
 	}
 	if _, err := os.Stat(cfg.RelayOverlay); !os.IsNotExist(err) {
 		t.Error("relay overlay should be removed on teardown")
+	}
+}
+
+// TestRunBuild_Gen1 confirms a .vhd base drives a Generation-1 build VM (the
+// Windows Server eval image path: BIOS/MBR, no Secure Boot, no conversion).
+func TestRunBuild_Gen1(t *testing.T) {
+	dir := t.TempDir()
+	cfg := baseCfg(t, dir)
+	// Gen1 base + matching .vhd overlay.
+	cfg.BuildBaseVHDX = "build-base.vhd"
+	cfg.BuildOverlay = filepath.Join(dir, "build.vhd")
+	cfg.Generation = 1
+	cfg.IsWindows = true
+	fp := &buildFake{host: cfg.natHostIP, configPort: cfg.configPort, collectorPort: cfg.collectorPort, buildExit: 0}
+
+	if _, err := runBuild(context.Background(), fp, cfg); err != nil {
+		if rerr, ok := fp.relayReadyErr.Load().(error); ok {
+			t.Fatalf("runBuild failed: %v (relay-sim error: %v)", err, rerr)
+		}
+		t.Fatalf("runBuild failed: %v", err)
+	}
+	spec, ok := fp.lastBuildSpec.Load().(VMSpec)
+	if !ok || spec.Generation != 1 {
+		t.Errorf("build VM Generation = %v, want 1", fp.lastBuildSpec.Load())
+	}
+	if !spec.IsWindows {
+		t.Error("build VM IsWindows = false, want true")
+	}
+}
+
+// TestRunBuild_OverlayFormatMismatch rejects a build overlay whose extension
+// does not match the base image (a differencing child must match its parent's
+// on-disk format).
+func TestRunBuild_OverlayFormatMismatch(t *testing.T) {
+	dir := t.TempDir()
+	cfg := baseCfg(t, dir)
+	cfg.BuildBaseVHDX = "build-base.vhd" // Gen1 base
+	cfg.BuildOverlay = filepath.Join(dir, "build.vhdx") // mismatched child
+	if _, err := runBuild(context.Background(), &buildFake{}, cfg); err == nil {
+		t.Fatal("expected a validation error for a base/overlay format mismatch")
 	}
 }
 

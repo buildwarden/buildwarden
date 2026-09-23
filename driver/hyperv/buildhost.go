@@ -4,6 +4,8 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/buildwarden/buildwarden/driver"
@@ -40,6 +42,12 @@ type buildConfig struct {
 	SeedISO       string
 	SeedVHDX      string
 	IsWindows     bool
+
+	// Generation is the build VM's Hyper-V generation, dictated by the base
+	// image format: 1 for a BIOS/MBR .vhd (the Windows Server eval image boots
+	// this way with no conversion), 2 for a UEFI/GPT .vhdx. It MUST match the
+	// base disk or the VM won't boot. Zero defaults to 2.
+	Generation int
 
 	// Network. Both VMs share the Private build switch (relay <-> build only);
 	// the relay additionally attaches the NAT switch for controlled egress. The
@@ -98,11 +106,23 @@ func runBuild(ctx context.Context, prov Provisioner, cfg buildConfig) (*driver.B
 	case cfg.NATSwitch == "":
 		return nil, fmt.Errorf("runBuild: empty NAT switch")
 	}
+	// A differencing child must share its parent's on-disk format, so the build
+	// overlay's extension must match the base image's (.vhd child off a .vhd
+	// base, .vhdx off .vhdx). A mismatch fails opaquely inside New-VHD.
+	if !strings.EqualFold(filepath.Ext(cfg.BuildBaseVHDX), filepath.Ext(cfg.BuildOverlay)) {
+		return nil, fmt.Errorf(
+			"runBuild: build overlay %q must share the base image's extension %q "+
+				"(a differencing child must match its parent's format)",
+			cfg.BuildOverlay, filepath.Ext(cfg.BuildBaseVHDX))
+	}
 	if cfg.MemoryMB == 0 {
 		cfg.MemoryMB = defaultBuildMemoryMB
 	}
 	if cfg.CPUs == 0 {
 		cfg.CPUs = defaultBuildCPUs
+	}
+	if cfg.Generation == 0 {
+		cfg.Generation = 2
 	}
 
 	if err := os.MkdirAll(cfg.OutputDir, 0o755); err != nil {
@@ -143,12 +163,13 @@ func runBuild(ctx context.Context, prov Provisioner, cfg buildConfig) (*driver.B
 	}()
 
 	// 3. Create + start the build VM on the Private build switch (its SOLE NIC;
-	//    no NAT route). Secure Boot is left on for the build VM (the guest OS is
-	//    a signed cloud image), which CreateVM selects via the per-family
-	//    template.
+	//    no NAT route). Generation follows the base image: a Gen1 (.vhd) guest
+	//    such as the Windows Server eval image has no Secure Boot; a Gen2 (.vhdx)
+	//    guest keeps Secure Boot on via the per-family template CreateVM selects.
+	//    Either way the build guest is isolated on the Private switch.
 	if _, err := prov.CreateVM(ctx, VMSpec{
 		Name:       buildVM,
-		Generation: 2,
+		Generation: cfg.Generation,
 		MemoryMB:   cfg.MemoryMB,
 		CPUs:       cfg.CPUs,
 		SwitchName: cfg.BuildSwitch,
