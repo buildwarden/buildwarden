@@ -4,9 +4,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/buildwarden/buildwarden/driver/hyperv"
 	"github.com/buildwarden/buildwarden/driver/qemu"
 	"github.com/buildwarden/buildwarden/driver/vz"
 )
@@ -17,6 +19,11 @@ var (
 	flagImageVirtio  string
 	flagImageEdition string
 	flagImageArch    string
+
+	flagFetchURL            string
+	flagFetchSHA256         string
+	flagFetchAcceptUnpinned bool
+	flagFetchForce          bool
 )
 
 var imageCmd = &cobra.Command{
@@ -69,10 +76,68 @@ func init() {
 	imageRestoreCmd.Flags().StringVar(&flagImageArch, "arch", "",
 		"guest arch: arm64 or amd64 (default host arch)")
 
+	imageFetchCmd.Flags().StringVar(&flagFetchURL, "url", "",
+		"download URL for the image (required on first fetch of an eval VHD)")
+	imageFetchCmd.Flags().StringVar(&flagFetchSHA256, "sha256", "",
+		"expected SHA256 to verify against; pins the image when it matches")
+	imageFetchCmd.Flags().BoolVar(&flagFetchAcceptUnpinned, "accept-unpinned", false,
+		"use the image as the active base even without a pinned hash (no authenticity check)")
+	imageFetchCmd.Flags().BoolVar(&flagFetchForce, "force", false,
+		"re-download even if a valid cached copy exists")
+
 	imageCmd.AddCommand(imageRestoreCmd)
 	imageCmd.AddCommand(imageListCmd)
 	imageCmd.AddCommand(imagePrepareCmd)
+	imageCmd.AddCommand(imageFetchCmd)
 	rootCmd.AddCommand(imageCmd)
+}
+
+var imageFetchCmd = &cobra.Command{
+	Use:   "fetch [image-name]",
+	Args:  cobra.MaximumNArgs(1),
+	Short: "Download, verify, and pin a Hyper-V build-guest base image",
+	Long: `Downloads a build-guest base image (e.g. Microsoft's Windows Server
+Evaluation VHD), verifies it against a pinned SHA256, and records it as the
+active Hyper-V build-guest base so 'warden build' finds it automatically.
+
+The Windows Server evaluation VHD is a Gen1 (BIOS/MBR) disk that boots as-is
+with no conversion. It sits behind the Microsoft Evaluation Center (free
+registration) and has no publicly published checksum, so on the first fetch you
+supply its URL with --url; the tool prints the SHA256 it computed. Pin that hash
+(re-run with --sha256 <hash>, which verifies the already-cached bytes without
+re-downloading) to get an authenticity check on every future fetch.
+
+Run with no arguments to list the known images.`,
+	Example: `  warden image fetch
+  warden image fetch windows-server-2025 --url https://.../server2025.vhd
+  warden image fetch windows-server-2025 --sha256 <hash-printed-on-first-fetch>`,
+	RunE: runImageFetch,
+}
+
+func runImageFetch(cmd *cobra.Command, args []string) error {
+	if len(args) == 0 {
+		fmt.Fprintln(os.Stderr, "Known build-guest base images:")
+		for _, n := range hyperv.EvalImageNames() {
+			if spec, ok := hyperv.LookupEvalImage(n); ok {
+				fmt.Fprintf(os.Stderr, "  %-22s %s\n", n, spec.Version)
+			}
+		}
+		fmt.Fprintln(os.Stderr, "\nFetch one with:\n  warden image fetch <name> --url <download-url>")
+		return nil
+	}
+	path, err := hyperv.FetchEvalImage(cmd.Context(), hyperv.FetchOptions{
+		Name:           strings.TrimSpace(args[0]),
+		URL:            flagFetchURL,
+		SHA256:         flagFetchSHA256,
+		AcceptUnpinned: flagFetchAcceptUnpinned,
+		Force:          flagFetchForce,
+		Progress:       os.Stderr,
+	})
+	if err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "Build-guest base image ready: %s\n", path)
+	return nil
 }
 
 func runImageRestore(_ *cobra.Command, args []string) error {

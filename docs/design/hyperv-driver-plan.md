@@ -327,11 +327,22 @@ here, not the point).
   Warden's image tooling. `hyperv setup` stays scoped to Hyper-V infrastructure
   (switches, NAT, firewall, service install) and only takes on an image step if
   that step *hard-requires* the same Administrator elevation setup already needs.
+- **Acquisition: `warden image fetch <name>`** downloads, SHA256-verifies, and
+  pins a build-guest base image, then records it as the active base so `warden
+  build` finds it with no flags. Because the eval VHD is behind the Evaluation
+  Center (registration) and has no published checksum, the first fetch takes
+  `--url` and prints the computed SHA256; pinning it (`--sha256 <hash>`, or
+  committing it into the registry) verifies the already-cached bytes without
+  re-downloading and enables authenticity checks on every later fetch. An
+  unverified image is cached but refused as the active base unless
+  `--accept-unpinned` is given (secure-by-default for a supply-chain tool). The
+  cache location is `WARDEN_HYPERV_CACHE_DIR` (default per-user cache).
+- **Bring-your-own** still works: `--image <disk.vhd|.vhdx>` or
+  `WARDEN_HYPERV_BUILD_IMAGE` overrides the pinned image. Resolution order:
+  `--image` → `WARDEN_HYPERV_BUILD_IMAGE` → the pinned active image.
 - **Generation is inferred from the disk format**: `.vhd` → Gen1, `.vhdx` → Gen2,
   overridable with `WARDEN_HYPERV_BUILD_GEN`. The per-build differencing overlay
   is created in the matching format (a differencing child must match its parent).
-- **Bring-your-own**: `--image <disk.vhd|.vhdx>` or `WARDEN_HYPERV_BUILD_IMAGE`
-  points at a local base until the pinned download lands in `warden image` prep.
 - **FROM resolution**: `FROM windows-server:2025` maps to the pinned eval image.
 
 ### Image resolution flow

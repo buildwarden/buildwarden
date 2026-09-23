@@ -14,10 +14,14 @@ import (
 // on any platform. StartBuild composes them, then hands the resolved paths to
 // runBuild.
 
-// hypervCacheDir is where `warden hyperv setup` is expected to land pinned,
-// verified boot/image artifacts (per the design: built once in CI, downloaded +
-// verified, never built per build).
+// hypervCacheDir is where `warden hyperv setup` and `warden image fetch` land
+// pinned, verified boot/image artifacts (per the design: built once in CI,
+// downloaded + verified, never built per build). WARDEN_HYPERV_CACHE_DIR
+// overrides the location (ops flexibility; hermetic tests).
 func hypervCacheDir() string {
+	if d := os.Getenv("WARDEN_HYPERV_CACHE_DIR"); d != "" {
+		return d
+	}
 	if base, err := os.UserCacheDir(); err == nil {
 		return filepath.Join(base, "warden", "hyperv")
 	}
@@ -73,10 +77,16 @@ func resolveBuildBaseVHDX(req *driver.BuildRequest) (path string, isWindows bool
 		candidate = os.Getenv("WARDEN_HYPERV_BUILD_IMAGE")
 	}
 	if candidate == "" {
+		// Fall back to the image pinned by `warden image fetch` (its manifest
+		// carries the format-derived generation and guest OS, so honour those
+		// rather than re-inferring from the extension).
+		if p, isWin, gen, ok := resolveActiveEvalImage(); ok {
+			return p, isWin, gen, nil
+		}
 		return "", isWindows, 0, fmt.Errorf(
-			"no build-guest base image: pass --image <disk.vhd|.vhdx> or set " +
-				"WARDEN_HYPERV_BUILD_IMAGE. For Windows, point it at Microsoft's " +
-				"Windows Server Evaluation VHD (boots Gen1 as-is, no conversion)")
+			"no build-guest base image: run `warden image fetch windows-server-2025` "+
+				"to pin Microsoft's eval VHD, or pass --image <disk.vhd|.vhdx> / set "+
+				"WARDEN_HYPERV_BUILD_IMAGE")
 	}
 
 	switch strings.ToLower(filepath.Ext(candidate)) {

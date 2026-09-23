@@ -74,6 +74,7 @@ func TestResolveBuildBaseVHDX_GenOverride(t *testing.T) {
 
 func TestResolveBuildBaseVHDX_Rejections(t *testing.T) {
 	dir := t.TempDir()
+	t.Setenv("WARDEN_HYPERV_CACHE_DIR", dir) // no active manifest here
 	t.Setenv("WARDEN_HYPERV_BUILD_GEN", "")
 
 	// Unsupported format.
