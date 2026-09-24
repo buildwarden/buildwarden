@@ -189,11 +189,11 @@ func resolveWindowsContext(path string) (string, error) {
 
 func validateDriver(d string) error {
 	switch d {
-	case "", "container", "qemu", "vz":
+	case "", "container", "qemu", "vz", "hyperv":
 		return nil
 	default:
 		return fmt.Errorf(
-			"unknown driver %q (valid: container, qemu, vz)", d)
+			"unknown driver %q (valid: container, qemu, vz, hyperv)", d)
 	}
 }
 
@@ -208,18 +208,18 @@ func validateCapture(c string) error {
 }
 
 func validateFlagsForDriver(d string) error {
-	isVM := d == "qemu" || d == "vz"
+	isVM := d == "qemu" || d == "vz" || d == "hyperv"
 	if flagScript != "" && !isVM {
 		return fmt.Errorf(
-			"--script requires --driver qemu or --driver vz")
+			"--script requires --driver qemu, vz, or hyperv")
 	}
 	if flagImage != "" && !isVM {
 		return fmt.Errorf(
-			"--image requires --driver qemu or --driver vz")
+			"--image requires --driver qemu, vz, or hyperv")
 	}
-	if flagTimeout != "" && d != "qemu" {
+	if flagTimeout != "" && d != "qemu" && d != "hyperv" {
 		return fmt.Errorf(
-			"--timeout requires --driver qemu")
+			"--timeout requires --driver qemu or hyperv")
 	}
 	return nil
 }

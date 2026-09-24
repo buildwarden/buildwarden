@@ -56,9 +56,22 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	}
 
 	// The build script is served to the guest via the collector's
-	// /v1/build-script endpoint. When the request omits one, stage a no-op
-	// default so the pipeline still runs end to end (parity with qemu/vz).
+	// /v1/build-script endpoint. Resolution: explicit --script, else the script
+	// in the build context (build.ps1 for Windows, build.sh otherwise -- what
+	// resolveWindowsContext requires and the qemu/vz drivers use), else a no-op
+	// default so the pipeline still runs end to end.
 	buildScript := req.Script
+	if buildScript == "" {
+		name := "build.sh"
+		if isWindows {
+			name = "build.ps1"
+		}
+		if cand := filepath.Join(req.ContextDir, name); req.ContextDir != "" {
+			if _, statErr := os.Stat(cand); statErr == nil {
+				buildScript = cand
+			}
+		}
+	}
 	if buildScript == "" {
 		def := filepath.Join(workDir, "build-default")
 		content := "exit 0\r\n"

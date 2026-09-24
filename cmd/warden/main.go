@@ -11,6 +11,7 @@ import (
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/container"
+	"github.com/buildwarden/buildwarden/driver/hyperv"
 	"github.com/buildwarden/buildwarden/driver/qemu"
 	"github.com/buildwarden/buildwarden/driver/vz"
 )
@@ -154,7 +155,7 @@ func defaultExtensions() []driver.Extension {
 }
 
 // validateGuestOS checks the --guest-os value and that the selected driver
-// supports it. Windows guests are currently only supported by the qemu driver.
+// supports it. Windows guests are supported by the qemu and hyperv drivers.
 func validateGuestOS(guestOS, driverName string) error {
 	switch guestOS {
 	case "", "linux", "windows":
@@ -162,9 +163,9 @@ func validateGuestOS(guestOS, driverName string) error {
 		return fmt.Errorf(
 			"invalid --guest-os %q (want \"linux\" or \"windows\")", guestOS)
 	}
-	if guestOS == "windows" && driverName != "qemu" {
+	if guestOS == "windows" && driverName != "qemu" && driverName != "hyperv" {
 		return fmt.Errorf(
-			"--guest-os windows is currently only supported by --driver qemu")
+			"--guest-os windows is currently only supported by --driver qemu or --driver hyperv")
 	}
 	return nil
 }
@@ -325,6 +326,53 @@ func runBuild(cmd *cobra.Command, args []string) error {
 			Stderr:           os.Stderr,
 		})
 		return buildErr
+
+	case "hyperv":
+		var dockerfile, contextDir string
+		var err error
+		if flagGuestOS == "windows" {
+			// Windows guests run build.ps1 served by the relay, not a
+			// Dockerfile; resolve the context dir without discovering one.
+			contextDir, err = resolveWindowsContext(bp.path)
+		} else {
+			dockerfile, contextDir, err = ResolvePath(bp.path)
+		}
+		if err != nil {
+			return err
+		}
+		d := hyperv.New()
+		d.Verbose = cfg.Output.Verbose
+		// The build reuses the durable dev switch from `warden hyperv setup`.
+		// StartBuild defaults to warden-dev when Switch is empty; allow an
+		// override via WARDEN_HYPERV_SWITCH.
+		if sw := os.Getenv("WARDEN_HYPERV_SWITCH"); sw != "" {
+			d.Switch = sw
+		}
+		defer d.Close()
+		var timeout time.Duration
+		if flagTimeout != "" {
+			timeout, err = time.ParseDuration(flagTimeout)
+			if err != nil {
+				return fmt.Errorf("invalid --timeout: %w", err)
+			}
+		}
+		_, buildErr := d.StartBuild(ctx, &driver.BuildRequest{
+			ContextDir:       contextDir,
+			Containerfile:    dockerfile,
+			Script:           flagScript,
+			Image:            flagImage,
+			GuestOS:          flagGuestOS,
+			CaptureMode:      bp.capture,
+			OutputDir:        bp.outputDir,
+			Compress:         bp.compress,
+			Timeout:          timeout,
+			UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
+			UpstreamSystemCA: bp.systemCA,
+			Stdin:            os.Stdin,
+			Stdout:           os.Stdout,
+			Stderr:           os.Stderr,
+		})
+		return buildErr
 	}
 
 	// Default: container driver
@@ -453,4 +501,3 @@ func runShell(cmd *cobra.Command, args []string) error {
 		Stderr:           os.Stderr,
 	})
 }
-
