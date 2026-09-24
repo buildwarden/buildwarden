@@ -73,6 +73,10 @@ type buildConfig struct {
 	readyTimeout  time.Duration
 }
 
+// keepVMsForDebug reports whether the debug env is set to skip VM/overlay
+// teardown so a failed build can be inspected (console, logs). Off by default.
+func keepVMsForDebug() bool { return os.Getenv("WARDEN_HYPERV_KEEP_VMS") == "1" }
+
 // runBuild composes the full Hyper-V build flow against an already-resolved
 // buildConfig:
 //
@@ -163,7 +167,15 @@ func runBuild(ctx context.Context, prov Provisioner, cfg buildConfig) (*driver.B
 	buildVM := "warden-build-" + cfg.BuildID
 	// Tear the build VM + its overlay down regardless of outcome. Uses a
 	// background context so cleanup still runs when ctx is already cancelled.
+	// WARDEN_HYPERV_KEEP_VMS=1 skips teardown so a failed build VM can be
+	// inspected (console, logs); the caller cleans it up manually.
 	defer func() {
+		if keepVMsForDebug() {
+			fmt.Fprintf(os.Stderr,
+				"warden: WARDEN_HYPERV_KEEP_VMS set; leaving build VM %q (overlay %q) for inspection\n",
+				buildVM, cfg.BuildOverlay)
+			return
+		}
 		_ = prov.RemoveVM(context.Background(), buildVM)
 		_ = os.Remove(cfg.BuildOverlay)
 	}()

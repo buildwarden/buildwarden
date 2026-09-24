@@ -48,7 +48,13 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	if err != nil {
 		return nil, fmt.Errorf("hyperv build: work dir: %w", err)
 	}
-	defer os.RemoveAll(workDir)
+	defer func() {
+		if os.Getenv("WARDEN_HYPERV_KEEP_VMS") == "1" {
+			fmt.Fprintf(os.Stderr, "warden: WARDEN_HYPERV_KEEP_VMS set; leaving work dir %q\n", workDir)
+			return
+		}
+		os.RemoveAll(workDir)
+	}()
 
 	seedISO, seedVHDX, err := buildSeed(workDir, buildID, isWindows, req)
 	if err != nil {
