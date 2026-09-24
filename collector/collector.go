@@ -11,6 +11,7 @@
 //	PUT  /v1/artifacts/<name>   stream body -> <dir>/artifacts/<name>
 //	PUT  /v1/ledger             stream body -> <dir>/ledger
 //	POST /v1/output             append body -> <dir>/build-output.log
+//	GET  /v1/build-script       stream the build script staged for this build
 //	POST /v1/ready              relay is up; fires Config.OnReady
 //	POST /v1/complete           build finished; fires Config.OnComplete
 //	GET  /v1/status             last completion, else {"state":"running"}
@@ -40,6 +41,11 @@ type Config struct {
 	// Token is the bearer token every write must present. Strongly recommended;
 	// empty disables auth (only acceptable on a fully trusted local link).
 	Token string
+	// BuildScriptPath is the host path to the build script staged for this
+	// build. When set, the collector serves its bytes on GET /v1/build-script
+	// so a diskless relay (Hyper-V) can pull the build instructions on demand
+	// and re-serve them to the guest. Empty disables the endpoint (404).
+	BuildScriptPath string
 	// MaxArtifactBytes caps a single artifact; 0 uses the default.
 	MaxArtifactBytes int64
 	// Logf, if set, receives one-line progress logs.
@@ -105,6 +111,7 @@ func (c *Collector) Handler() http.Handler {
 	mux.HandleFunc("/v1/artifacts/", c.auth(c.handleArtifact))
 	mux.HandleFunc("/v1/ledger", c.auth(c.handleLedger))
 	mux.HandleFunc("/v1/output", c.auth(c.handleOutput))
+	mux.HandleFunc("/v1/build-script", c.auth(c.handleBuildScript))
 	mux.HandleFunc("/v1/ready", c.auth(c.handleReady))
 	mux.HandleFunc("/v1/complete", c.auth(c.handleComplete))
 	// /v1/status matches /healthz's auth stance (unauthenticated liveness/state).
@@ -180,6 +187,32 @@ func (c *Collector) handleOutput(w http.ResponseWriter, req *http.Request) {
 	}
 	c.logf("collector: build-output +%d bytes", n)
 	w.WriteHeader(http.StatusOK)
+}
+
+// handleBuildScript streams the staged build script to the relay so it can
+// re-serve it to the guest. GET only; 404 when no script was staged. Read-only
+// (unlike the write endpoints), but auth-gated the same way so a shared
+// collector only hands each build its own script (scoped by the per-build
+// token).
+func (c *Collector) handleBuildScript(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "GET only", http.StatusMethodNotAllowed)
+		return
+	}
+	if c.cfg.BuildScriptPath == "" {
+		http.Error(w, "no build script", http.StatusNotFound)
+		return
+	}
+	f, err := os.Open(c.cfg.BuildScriptPath)
+	if err != nil {
+		http.Error(w, "build script unavailable", http.StatusNotFound)
+		return
+	}
+	defer f.Close()
+	w.Header().Set("Content-Type", "application/octet-stream")
+	w.WriteHeader(http.StatusOK)
+	n, _ := io.Copy(w, f)
+	c.logf("collector: served build-script (%d bytes)", n)
 }
 
 // streamToFile writes body to dst (creating parent dirs) with a size cap,

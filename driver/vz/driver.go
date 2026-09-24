@@ -168,7 +168,8 @@ func (d *Driver) prepareSharedDir(
 		return "", fmt.Errorf("preparing relay: %w", err)
 	}
 
-	relayEnv := "LEDGER_DIR=/shared/ledger\nCONTEXT_DIR=/shared/context\n"
+	relayEnv := "LEDGER_DIR=/shared/ledger\nCONTEXT_DIR=/shared/context\n" +
+		"BUILD_SCRIPT=build.sh\n"
 	if req.CaptureMode != "" && req.CaptureMode != "none" {
 		relayEnv += fmt.Sprintf("CAPTURE_MODE=%s\n", req.CaptureMode)
 	}

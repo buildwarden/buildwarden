@@ -478,6 +478,35 @@ C:\warden\warden-io.exe exit --code %EXITCODE%
 shutdown /s /t 0
 ```
 
+### Build-script delivery (implemented, cross-driver)
+
+The build script (`build.ps1` / `build.sh`) is the user's build instructions. The
+guest never reads it from a disk: `warden-io initialize` fetches it over HTTP
+from the relay at the canonical `http://artifacts/build-script` endpoint, then
+runs it. The local filename (hence interpreter) still comes from the platform
+default / `--script`; only the *source* is standardized, so the guest no longer
+encodes a per-driver script name in the URL.
+
+The relay resolves `/build-script` from one of two sources, ledgering the exact
+bytes served either way (so the build instructions are in the provenance
+record):
+
+- **Share-backed drivers (container / qemu / vz)**: read from `ContextDir` at
+  the relative path in `BUILD_SCRIPT` (`build.sh`, `build.ps1`, or
+  `.warden/build.sh`), delivered via the relay's env (`relay.env` for the VM
+  drivers, `--env` for the container relay).
+- **Diskless relay (Hyper-V)**: the relay VM has no shared disk, so it pulls the
+  script on demand from the collector's token-scoped `GET /v1/build-script` over
+  the isolated NAT link, using the same per-build bearer token as the output
+  sink, and re-serves it to the guest. The driver stages the script and points
+  `collector.Config.BuildScriptPath` at it.
+
+This makes the collector the per-build I/O broker in both directions (inputs
+down, outputs up), all scoped by one per-build token, while the config responder
+stays the minimal unauthenticated bootstrap (URL + token only). Context files
+beyond the entry-point script still travel over the generic `cwd` channel;
+lazy proxying of a large context tree through the collector is a later step.
+
 ### Network isolation enforcement
 
 Network isolation is enforced **at the vSwitch level** (Private switch), not inside the guest. The build VM's only NIC connects to the Private vSwitch where the relay VM is the sole peer. No Windows Firewall rules needed inside the guest — there is simply no route to anything except the relay.

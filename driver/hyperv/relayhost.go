@@ -34,6 +34,11 @@ type RelayHostConfig struct {
 	BuildSwitch string // Private build switch
 	NATSwitch   string // Internal NAT switch
 
+	// BuildScriptPath is the host path to this build's script. The collector
+	// serves it on GET /v1/build-script so the relay can pull it and re-serve it
+	// to the guest (the relay has no shared disk). Empty leaves the endpoint 404.
+	BuildScriptPath string
+
 	// NATHostIP is the host's gateway address on the NAT switch, which the relay
 	// VM reaches for both config and the collector. Default 192.168.240.1.
 	NATHostIP string
@@ -114,9 +119,10 @@ func StartRelay(ctx context.Context, prov Provisioner, cfg RelayHostConfig) (*Re
 	ready := make(chan struct{})
 	var once sync.Once
 	coll, err := collector.New(collector.Config{
-		OutputDir: cfg.OutputDir,
-		Token:     token,
-		OnReady:   func() { once.Do(func() { close(ready) }) },
+		OutputDir:       cfg.OutputDir,
+		Token:           token,
+		BuildScriptPath: cfg.BuildScriptPath,
+		OnReady:         func() { once.Do(func() { close(ready) }) },
 	})
 	if err != nil {
 		return nil, fmt.Errorf("StartRelay: collector: %w", err)

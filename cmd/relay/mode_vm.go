@@ -10,8 +10,8 @@ import (
 // runVMMode starts the relay inside a dedicated VM (e.g. Alpine relay VM
 // for QEMU driver). Binds directly to interfaces. No SSRF filter needed
 // because the hypervisor provides isolation.
-func runVMMode(outDir, ctxDir, sigDir, captureMode string) int {
-	cfg := vmConfig(outDir, ctxDir, sigDir, captureMode)
+func runVMMode(outDir, ctxDir, sigDir, captureMode, scriptRel string) int {
+	cfg := vmConfig(outDir, ctxDir, sigDir, captureMode, scriptRel)
 
 	if err := loadUpstreamCA(outDir, &cfg); err != nil {
 		fmt.Fprintf(os.Stderr, "error configuring upstream TLS: %v\n", err)
@@ -39,12 +39,13 @@ func runVMMode(outDir, ctxDir, sigDir, captureMode string) int {
 // local sink, preserving today's behavior. These env vars are delivered to the
 // VM per build (baked seed or, on Hyper-V, fetched over the isolated network);
 // the relay itself only consumes them.
-func vmConfig(outDir, ctxDir, sigDir, captureMode string) relay.Config {
+func vmConfig(outDir, ctxDir, sigDir, captureMode, scriptRel string) relay.Config {
 	return relay.Config{
 		LedgerDir:       outDir,
 		ContextDir:      ctxDir,
 		CaptureMode:     captureMode,
 		SignalDir:       sigDir,
+		BuildScriptPath: scriptRel,
 		OutputSinkURL:   os.Getenv("OUTPUT_SINK_URL"),
 		OutputSinkToken: os.Getenv("OUTPUT_SINK_TOKEN"),
 	}

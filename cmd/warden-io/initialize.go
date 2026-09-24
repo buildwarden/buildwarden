@@ -55,10 +55,14 @@ func runInitialize(args []string) int {
 	// Step 4: Set environment variables for tools that need explicit CA paths
 	setCAEnvironment()
 
-	// Step 5: Fetch build script
+	// Step 5: Fetch build script from the canonical /build-script endpoint. The
+	// local filename (and therefore the interpreter picked by scriptCommand)
+	// still comes from the platform default or --script; only the source is
+	// standardized, so the guest no longer needs to know where the script
+	// physically lives (shared context vs. streamed from the collector).
 	logStep("fetching build script")
 	scriptPath := scriptDestPath(script)
-	if err := fetchFile(script, scriptPath); err != nil {
+	if err := fetchBuildScript(scriptPath); err != nil {
 		fmt.Fprintf(os.Stderr, "warden-io: fetch script: %s\n", err)
 		return 1
 	}
@@ -91,6 +95,35 @@ func waitForRelay(gateway string) error {
 		time.Sleep(500 * time.Millisecond)
 	}
 	return fmt.Errorf("relay did not become healthy within 60s")
+}
+
+// fetchBuildScript downloads the build script from the relay's canonical
+// build-script endpoint and writes it to dest. Unlike the generic context fetch
+// (http://cwd/<file>), this is a well-known resource the relay resolves itself
+// (from the shared context, or on a diskless relay by streaming from the
+// collector), so the guest never needs to know where the script physically
+// lives.
+func fetchBuildScript(dest string) error {
+	resp, err := http.Get("http://artifacts/build-script")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	if dir := filepath.Dir(dest); dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
+	}
+	f, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.Copy(f, resp.Body)
+	return err
 }
 
 func fetchAndInstallCA() error {

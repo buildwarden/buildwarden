@@ -40,13 +40,18 @@ func run() int {
 	sigDir := os.Getenv("SIGNAL_DIR")
 	captureMode := os.Getenv("CAPTURE_MODE")
 
+	// BUILD_SCRIPT locates the build script the guest fetches from the canonical
+	// /build-script endpoint. Share-backed drivers set it to a path relative to
+	// CONTEXT_DIR; on Hyper-V it is unset and the script comes from the collector.
+	scriptRel := os.Getenv("BUILD_SCRIPT")
+
 	switch *mode {
 	case "host":
-		return runHostMode(*fdNum, *subnet, outDir, ctxDir, sigDir, captureMode)
+		return runHostMode(*fdNum, *subnet, outDir, ctxDir, sigDir, captureMode, scriptRel)
 	case "vm":
-		return runVMMode(outDir, ctxDir, sigDir, captureMode)
+		return runVMMode(outDir, ctxDir, sigDir, captureMode, scriptRel)
 	case "container":
-		return runContainerMode(outDir, ctxDir, captureMode)
+		return runContainerMode(outDir, ctxDir, captureMode, scriptRel)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown mode: %s\n", *mode)
 		return 1

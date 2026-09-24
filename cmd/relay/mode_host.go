@@ -19,7 +19,7 @@ import (
 // The relay does not bind any ports on the host — the TCP forwarder
 // dispatches connections and a netstack UDP listener handles DNS.
 func runHostMode(
-	fd int, subnetCIDR, outDir, ctxDir, sigDir, captureMode string,
+	fd int, subnetCIDR, outDir, ctxDir, sigDir, captureMode, scriptRel string,
 ) int {
 	gwIP, guestIP, mask, err := parseSubnet(subnetCIDR)
 	if err != nil {
@@ -66,7 +66,8 @@ func runHostMode(
 		LedgerDir:       outDir,
 		ContextDir:      ctxDir,
 		CaptureMode:     captureMode,
-		SignalDir:        sigDir,
+		SignalDir:       sigDir,
+		BuildScriptPath: scriptRel,
 		SelfIP:          gwIP,
 		BlockedSelfIP:   gwIP,
 		SSRF:            true,

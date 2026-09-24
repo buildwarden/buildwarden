@@ -43,6 +43,11 @@ type buildConfig struct {
 	SeedVHDX      string
 	IsWindows     bool
 
+	// BuildScriptPath is the host path to the build script. It is served to the
+	// guest via the collector's /v1/build-script endpoint (the relay pulls it
+	// and re-serves it, since the relay has no shared disk).
+	BuildScriptPath string
+
 	// Generation is the build VM's Hyper-V generation, dictated by the base
 	// image format: 1 for a BIOS/MBR .vhd (the Windows Server eval image boots
 	// this way with no conversion), 2 for a UEFI/GPT .vhdx. It MUST match the
@@ -132,16 +137,17 @@ func runBuild(ctx context.Context, prov Provisioner, cfg buildConfig) (*driver.B
 	// 1. Relay host up: collector + config responder on the host, relay VM
 	//    booted and ready. StartRelay tears its own half down on failure.
 	rh, err := StartRelay(ctx, prov, RelayHostConfig{
-		BuildID:       cfg.BuildID,
-		OutputDir:     cfg.OutputDir,
-		BootVHDX:      cfg.RelayBootVHDX,
-		OverlayVHDX:   cfg.RelayOverlay,
-		BuildSwitch:   cfg.BuildSwitch,
-		NATSwitch:     cfg.NATSwitch,
-		NATHostIP:     cfg.natHostIP,
-		ConfigPort:    cfg.configPort,
-		CollectorPort: cfg.collectorPort,
-		ReadyTimeout:  cfg.readyTimeout,
+		BuildID:         cfg.BuildID,
+		OutputDir:       cfg.OutputDir,
+		BootVHDX:        cfg.RelayBootVHDX,
+		OverlayVHDX:     cfg.RelayOverlay,
+		BuildSwitch:     cfg.BuildSwitch,
+		NATSwitch:       cfg.NATSwitch,
+		BuildScriptPath: cfg.BuildScriptPath,
+		NATHostIP:       cfg.natHostIP,
+		ConfigPort:      cfg.configPort,
+		CollectorPort:   cfg.collectorPort,
+		ReadyTimeout:    cfg.readyTimeout,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("runBuild: %w", err)

@@ -75,6 +75,15 @@ type Config struct {
 	// OutputSinkToken is the bearer token presented on every collector write
 	// when OutputSinkURL is set.
 	OutputSinkToken string
+
+	// BuildScriptPath locates the build script the guest fetches from the
+	// canonical http://artifacts/build-script endpoint. When OutputSinkURL is
+	// empty (share-backed drivers: container/qemu/vz), it is a path RELATIVE to
+	// ContextDir (e.g. "build.sh", "build.ps1", ".warden/build.sh"); empty
+	// defaults to "build.sh". When OutputSinkURL is set (Hyper-V and other
+	// diskless relays), it is ignored: the script is fetched on demand from the
+	// collector's GET /v1/build-script instead, since there is no shared disk.
+	BuildScriptPath string
 }
 
 // Relay is the core proxy that intercepts network traffic and writes a ledger.
@@ -457,6 +466,8 @@ func (r *Relay) onRequest(req *http.Request) (*http.Request, *http.Response) {
 			return r.handleCACertGet(req)
 		case "/warden-io":
 			return r.handleAgentBinaryGet(req)
+		case "/build-script":
+			return r.handleBuildScript(req)
 		default:
 			if req.Method == "POST" {
 				return r.handleArtifactPost(req)
@@ -659,6 +670,86 @@ func (r *Relay) handleAgentBinaryGet(req *http.Request) (*http.Request, *http.Re
 		ContentLength: int64(len(data)),
 	}
 	return req, resp
+}
+
+// handleBuildScript serves the canonical build script the guest fetches from
+// http://artifacts/build-script. Two sources: when OutputSinkURL is set
+// (diskless relays like Hyper-V) it pulls the script on demand from the
+// collector's GET /v1/build-script over the trusted host link; otherwise it
+// reads ContextDir/BuildScriptPath (share-backed drivers). Either way the exact
+// bytes served are recorded in the provenance ledger, so the build instructions
+// are part of the witnessed record.
+func (r *Relay) handleBuildScript(req *http.Request) (*http.Request, *http.Response) {
+	data, err := r.loadBuildScript()
+	if err != nil {
+		return req, newTextResponse(req, http.StatusNotFound,
+			fmt.Sprintf("build script unavailable: %s\n", err))
+	}
+
+	openMeta, _ := cbor.Marshal(map[string]any{
+		"method":   "GET",
+		"url":      req.URL.String(),
+		"protocol": req.Proto,
+	})
+	openSig := r.ledger.Open(schemaHTTPOpen, openMeta)
+	hashBlock := r.ledger.ComputeHashBlock(data)
+	closeMeta, _ := cbor.Marshal(map[string]any{"path": "build-script"})
+	r.ledger.Close(openSig, int64(len(data)), hashBlock, schemaHTTPBody, closeMeta)
+
+	resp := &http.Response{
+		StatusCode:    http.StatusOK,
+		Status:        "200 OK",
+		Proto:         "HTTP/1.1",
+		ProtoMajor:    1,
+		ProtoMinor:    1,
+		Header:        http.Header{"Content-Type": {"application/octet-stream"}},
+		Body:          io.NopCloser(bytes.NewReader(data)),
+		ContentLength: int64(len(data)),
+	}
+	return req, resp
+}
+
+// loadBuildScript returns the build-script bytes from the collector (when
+// OutputSinkURL is set) or from ContextDir (otherwise, at BuildScriptPath).
+func (r *Relay) loadBuildScript() ([]byte, error) {
+	if r.cfg.OutputSinkURL != "" {
+		return r.fetchBuildScriptFromCollector()
+	}
+	rel := r.cfg.BuildScriptPath
+	if rel == "" {
+		rel = "build.sh"
+	}
+	if !isSafeContextPath(rel) {
+		return nil, fmt.Errorf("invalid build script path %q", rel)
+	}
+	// isSafeContextPath forbids absolute paths and ".." traversal, so the join
+	// stays within ContextDir.
+	return os.ReadFile(filepath.Join(r.contextDir, rel))
+}
+
+// fetchBuildScriptFromCollector pulls the build script from the collector on
+// demand. The collector is a trusted host endpoint on the isolated NAT link (a
+// private IP), so this uses a dedicated client rather than the relay's
+// SSRF-filtered upstream transport, which would block a private address.
+func (r *Relay) fetchBuildScriptFromCollector() ([]byte, error) {
+	url := strings.TrimRight(r.cfg.OutputSinkURL, "/") + "/v1/build-script"
+	httpReq, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		return nil, err
+	}
+	if r.cfg.OutputSinkToken != "" {
+		httpReq.Header.Set("Authorization", "Bearer "+r.cfg.OutputSinkToken)
+	}
+	client := &http.Client{Timeout: 30 * time.Second}
+	resp, err := client.Do(httpReq)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("collector HTTP %d", resp.StatusCode)
+	}
+	return io.ReadAll(io.LimitReader(resp.Body, maxArtifactBytes))
 }
 
 func (r *Relay) handleContextGet(req *http.Request) (*http.Request, *http.Response) {
@@ -902,7 +993,7 @@ func buildHeadersMeta(h http.Header) []byte {
 }
 
 var standardHeaders = map[string]bool{
-	"Content-Length":     true,
+	"Content-Length":    true,
 	"Content-Type":      true,
 	"Transfer-Encoding": true,
 	"Connection":        true,

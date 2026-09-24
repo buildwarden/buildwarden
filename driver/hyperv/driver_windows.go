@@ -55,6 +55,22 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		return nil, fmt.Errorf("hyperv build: %w", err)
 	}
 
+	// The build script is served to the guest via the collector's
+	// /v1/build-script endpoint. When the request omits one, stage a no-op
+	// default so the pipeline still runs end to end (parity with qemu/vz).
+	buildScript := req.Script
+	if buildScript == "" {
+		def := filepath.Join(workDir, "build-default")
+		content := "exit 0\r\n"
+		if !isWindows {
+			content = "#!/bin/sh\ntrue\n"
+		}
+		if err := os.WriteFile(def, []byte(content), 0o644); err != nil {
+			return nil, fmt.Errorf("hyperv build: default script: %w", err)
+		}
+		buildScript = def
+	}
+
 	p := newLocalProvisioner(d.Verbose)
 
 	// Re-assert isolation every build rather than trusting persistence: a crash
@@ -76,14 +92,15 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		BuildBaseVHDX: base,
 		// The differencing overlay must share the base disk's format (.vhd off a
 		// Gen1 eval VHD, .vhdx off a Gen2 image).
-		BuildOverlay: filepath.Join(workDir, "build"+filepath.Ext(base)),
-		SeedISO:      seedISO,
-		SeedVHDX:     seedVHDX,
-		IsWindows:    isWindows,
-		Generation:   generation,
-		BuildSwitch:  sw,
-		NATSwitch:    sw + "-nat",
-		Timeout:      req.Timeout,
+		BuildOverlay:    filepath.Join(workDir, "build"+filepath.Ext(base)),
+		SeedISO:         seedISO,
+		SeedVHDX:        seedVHDX,
+		IsWindows:       isWindows,
+		Generation:      generation,
+		BuildScriptPath: buildScript,
+		BuildSwitch:     sw,
+		NATSwitch:       sw + "-nat",
+		Timeout:         req.Timeout,
 	})
 }
 

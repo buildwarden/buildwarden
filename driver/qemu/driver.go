@@ -177,8 +177,12 @@ func (d *Driver) prepareSharedDir(
 		}
 	}
 
+	buildScriptName := "build.sh"
+	if isWindowsGuest(req) {
+		buildScriptName = windowsScript
+	}
 	relayEnv := "LEDGER_DIR=/shared/ledger\nCONTEXT_DIR=/shared/context\n" +
-		"SIGNAL_DIR=/shared/signal\n"
+		"SIGNAL_DIR=/shared/signal\nBUILD_SCRIPT=" + buildScriptName + "\n"
 	if req.CaptureMode != "" && req.CaptureMode != "none" {
 		relayEnv += fmt.Sprintf("CAPTURE_MODE=%s\n", req.CaptureMode)
 	}
@@ -323,7 +327,7 @@ func (d *Driver) checkPrereqs() error {
 	}
 	if _, err := exec.LookPath("qemu-img"); err != nil {
 		return fmt.Errorf(
-			"qemu driver requires qemu-img but it was not found in PATH\n"+
+			"qemu driver requires qemu-img but it was not found in PATH\n" +
 				"  It is typically included with the qemu package")
 	}
 	return nil

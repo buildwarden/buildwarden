@@ -11,11 +11,12 @@ import (
 // runContainerMode starts the relay as a sidecar container on an isolated
 // Docker network. Binds directly to interfaces. No SSRF filter needed
 // because iptables rules (applied by init container) provide isolation.
-func runContainerMode(outDir, ctxDir, captureMode string) int {
+func runContainerMode(outDir, ctxDir, captureMode, scriptRel string) int {
 	cfg := relay.Config{
-		LedgerDir:   outDir,
-		ContextDir:  ctxDir,
-		CaptureMode: captureMode,
+		LedgerDir:       outDir,
+		ContextDir:      ctxDir,
+		CaptureMode:     captureMode,
+		BuildScriptPath: scriptRel,
 	}
 
 	if err := loadUpstreamCA(outDir, &cfg); err != nil {

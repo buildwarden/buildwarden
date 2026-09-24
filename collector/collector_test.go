@@ -154,3 +154,59 @@ func TestHealthz(t *testing.T) {
 		t.Fatalf("healthz body = %q", b)
 	}
 }
+
+func getReq(t *testing.T, url, token string) *http.Response {
+	t.Helper()
+	req, err := http.NewRequest(http.MethodGet, url, nil)
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	if token != "" {
+		req.Header.Set("Authorization", "Bearer "+token)
+	}
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	return resp
+}
+
+func TestBuildScriptServed(t *testing.T) {
+	scriptDir := t.TempDir()
+	scriptPath := filepath.Join(scriptDir, "build.ps1")
+	want := []byte("Write-Host 'building'\r\nexit 0\r\n")
+	if err := os.WriteFile(scriptPath, want, 0o644); err != nil {
+		t.Fatalf("write script: %v", err)
+	}
+	srv, _ := newTestServer(t, Config{Token: "sekret", BuildScriptPath: scriptPath})
+
+	// Wrong/absent token is rejected.
+	resp := getReq(t, srv.URL+"/v1/build-script", "")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("no-token status = %d, want 401", resp.StatusCode)
+	}
+
+	// Correct token returns the exact staged bytes.
+	resp = getReq(t, srv.URL+"/v1/build-script", "sekret")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	got, err := io.ReadAll(resp.Body)
+	if err != nil {
+		t.Fatalf("read body: %v", err)
+	}
+	if !bytes.Equal(got, want) {
+		t.Fatalf("served script = %q, want %q", got, want)
+	}
+}
+
+func TestBuildScriptUnsetIs404(t *testing.T) {
+	srv, _ := newTestServer(t, Config{Token: "sekret"}) // no BuildScriptPath
+	resp := getReq(t, srv.URL+"/v1/build-script", "sekret")
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("status = %d, want 404 when no script staged", resp.StatusCode)
+	}
+}

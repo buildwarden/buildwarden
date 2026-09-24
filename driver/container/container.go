@@ -578,6 +578,10 @@ func (b *build) startRelayContainer() error {
 		args = append(args,
 			"--env", "RELAY_SYSTEM_CA=false")
 	}
+	// The build script lives at .warden/build.sh within the mounted context; the
+	// relay serves it to the guest from the canonical /build-script endpoint.
+	args = append(args,
+		"--env", "BUILD_SCRIPT=.warden/build.sh")
 	args = append(args, b.relayImage)
 
 	cmd := exec.Command(args[0], args[1:]...)
