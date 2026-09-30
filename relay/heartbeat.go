@@ -40,6 +40,12 @@ func (r *Relay) writeExitCode(code int) {
 	// /v1/complete). localSink.PostComplete is a no-op, so calling this for every
 	// driver is safe and keeps completion delivery in one place. Bounded inside
 	// postSignal (15s), so a stuck collector can't hang the exit path.
+	//
+	// Flush the ledger BEFORE signaling completion: the orchestrator tears down
+	// the relay VM the moment it sees /v1/complete, so the ledger (and, for the
+	// httpSink, its PUT to the collector) must already be done. finishAndFlush is
+	// idempotent, so a later Wait/Stop won't double-finish.
+	r.finishAndFlush()
 	if err := r.PostComplete(code, "", ""); err != nil {
 		log.Printf("relay: PostComplete(%d) failed: %v", code, err)
 	}

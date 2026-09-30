@@ -458,12 +458,19 @@ Windows guests are provisioned via `unattend.xml` placed on a secondary VHDX (or
 > auto-checkpoints now disabled — then powers off cleanly). Regression test:
 > `TestWriteExitCode_ForwardsToSink`.
 >
-> **Still open:** the collector's **output directory is empty** after a
-> successful build — the relay's ledger/output are not persisted when `runBuild`
-> tears down the relay VM on completion (no graceful relay `Stop`/`FlushLedger`
-> before `RemoveVM`). Build *output* (`build.ps1` stdout) also currently goes to
-> the guest console, not the collector's `/v1/output`. These are the next items:
-> flush the ledger and stream build output before teardown.
+> **Output persistence (resolved 2026-09-30):** the relay's ledger and the
+> build output now land in the collector's output dir. Two fixes: (1) the relay
+> only flushed its ledger on a listener failure (`Wait`), never on normal build
+> completion, so it was lost when `runBuild` tore down the relay VM — now
+> `writeExitCode` calls a guarded `finishAndFlush()` (ledger `Finish` + sink
+> `FlushLedger`) BEFORE signaling `/v1/complete`, so the ledger reaches the
+> collector before teardown; (2) `warden-io` sent build stdout only to the guest
+> console — it now also captures it and POSTs it to the relay's control-plane
+> `/v1/output` (→ collector `build-output.log`) before reporting completion.
+> Verified: a full run yields `ledger` + `build-output.log`, and `warden inspect`
+> reports scheme=ed25519-sha512, all signatures valid, all channels closed, with
+> the `/build-script` fetch audited. The Windows Hyper-V driver now runs a build
+> end to end and produces a complete, signed audit ledger.
 
 **Option A (preferred): Seed VHDX**
 

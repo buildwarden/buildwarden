@@ -280,10 +280,21 @@ func TestWriteExitCode_ForwardsToSink(t *testing.T) {
 	col := newEmulatedCollector()
 	defer col.close()
 
-	// A diskless relay: no SignalDir, sink is the httpSink to the collector.
+	// A diskless relay: no SignalDir, sink is the httpSink to the collector,
+	// with a real ledger wired through the sink's writer (as Start does).
 	r := &Relay{sink: newHTTPSink(col.srv.URL, testToken)}
+	lw, err := r.sink.LedgerWriter()
+	if err != nil {
+		t.Fatalf("LedgerWriter: %v", err)
+	}
+	r.ledger, err = NewLedger(LedgerConfig{Writer: lw, Environment: map[string]any{"type": "test"}})
+	if err != nil {
+		t.Fatalf("NewLedger: %v", err)
+	}
+
 	r.writeExitCode(0)
 
+	// Completion must reach the collector.
 	comp, ok := col.find("/v1/complete")
 	if !ok {
 		t.Fatalf("collector never received /v1/complete from writeExitCode")
@@ -296,6 +307,12 @@ func TestWriteExitCode_ForwardsToSink(t *testing.T) {
 	}
 	if payload.ExitCode != 0 {
 		t.Fatalf("complete exit_code = %d, want 0", payload.ExitCode)
+	}
+	// The ledger must be flushed to the collector BEFORE completion (the
+	// orchestrator tears down the relay VM on completion, so a later flush would
+	// be lost).
+	if _, ok := col.find("/v1/ledger"); !ok {
+		t.Fatalf("collector never received /v1/ledger from writeExitCode")
 	}
 }
 

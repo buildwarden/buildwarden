@@ -99,6 +99,9 @@ type Relay struct {
 	sink       OutputSink
 	outDir     string
 	contextDir string
+	// flushOnce guards the ledger finish+flush so it runs exactly once whether
+	// triggered by build completion (/exit), a listener failure (Wait), or Stop.
+	flushOnce sync.Once
 
 	captureConfig CaptureConfig
 	captureSeq    atomic.Int64
@@ -255,19 +258,29 @@ func Start(cfg Config) (*Relay, error) {
 // Wait blocks until any listener fails.
 func (r *Relay) Wait() error {
 	err := <-r.errs
-	r.ledger.Finish()
-	if ferr := r.sink.FlushLedger(); ferr != nil {
-		log.Printf("relay: flushing ledger: %v", ferr)
-	}
+	r.finishAndFlush()
 	return err
 }
 
 // Stop shuts down the relay.
 func (r *Relay) Stop() {
-	r.ledger.Finish()
-	if ferr := r.sink.FlushLedger(); ferr != nil {
-		log.Printf("relay: flushing ledger: %v", ferr)
-	}
+	r.finishAndFlush()
+}
+
+// finishAndFlush finalizes the ledger and flushes it to the sink exactly once,
+// regardless of which path triggers it (build completion via /exit, a listener
+// failure via Wait, or an explicit Stop). For the local sink the ledger is
+// already on disk and FlushLedger is a no-op; for the http sink (diskless
+// relays like Hyper-V) this PUTs the buffered ledger to the collector. It MUST
+// run before the orchestrator tears down the relay VM, which the /exit path
+// ensures by calling it before signaling completion.
+func (r *Relay) finishAndFlush() {
+	r.flushOnce.Do(func() {
+		r.ledger.Finish()
+		if ferr := r.sink.FlushLedger(); ferr != nil {
+			log.Printf("relay: flushing ledger: %v", ferr)
+		}
+	})
 }
 
 // PostComplete signals build completion to the output sink. For the local sink

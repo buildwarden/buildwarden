@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
@@ -70,7 +71,7 @@ func runInitialize(args []string) int {
 
 	// Step 6: Run build script, report exit code to relay
 	logStep("running " + script)
-	code := execScript(scriptPath)
+	code := execScript(scriptPath, gateway)
 	reportComplete(code)
 	return code
 }
@@ -166,11 +167,20 @@ func scriptDestPath(script string) string {
 	return filepath.Join(os.TempDir(), filepath.Base(script))
 }
 
-func execScript(path string) int {
+func execScript(path, gateway string) int {
 	cmd := scriptCommand(path)
 	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+
+	// Capture build output while still echoing it to the local console (serial),
+	// so it lands in the collector's build-output.log. Buffered, then POSTed once
+	// after the build finishes and BEFORE reportComplete: the orchestrator tears
+	// down the relay VM the moment it sees completion, so the output must already
+	// be delivered. Buffering (vs streaming) keeps the build from ever blocking on
+	// the relay link; large-build streaming is a later refinement.
+	var out bytes.Buffer
+	w := io.MultiWriter(os.Stdout, &out)
+	cmd.Stdout = w
+	cmd.Stderr = w
 
 	// Ensure warden-io is available in PATH for the build script
 	env := os.Environ()
@@ -212,6 +222,10 @@ func execScript(path string) int {
 	err := cmd.Wait()
 	close(done)
 
+	// Deliver the captured output before returning (caller reports completion
+	// right after, which triggers teardown).
+	postBuildOutput(gateway, out.Bytes())
+
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
 			return exitErr.ExitCode()
@@ -220,6 +234,26 @@ func execScript(path string) int {
 		return 1
 	}
 	return 0
+}
+
+// postBuildOutput sends the captured build output to the relay's control-plane
+// /v1/output endpoint (gateway:8300), which forwards it to the collector's
+// build-output.log. Best-effort: a failed post must not fail the build, but the
+// error is logged since a missing build log weakens the audit record.
+func postBuildOutput(gateway string, data []byte) {
+	if gateway == "" || len(data) == 0 {
+		return
+	}
+	url := fmt.Sprintf("http://%s:8300/v1/output", gateway)
+	resp, err := http.Post(url, "text/plain", bytes.NewReader(data))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warden-io: post build output: %s\n", err)
+		return
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintf(os.Stderr, "warden-io: post build output: HTTP %d\n", resp.StatusCode)
+	}
 }
 
 func logStep(msg string) {
