@@ -194,6 +194,11 @@ func (p *localProvisioner) CreateVM(ctx context.Context, spec VMSpec) (*VMHandle
 	if spec.SeedISO != "" {
 		fmt.Fprintf(&b, "Add-VMDvdDrive -VMName '%s' -Path '%s'\n", name, psEscapeSingle(spec.SeedISO))
 	}
+	// COM1 -> host named pipe (Gen2 supports Set-VMComPort): the guest bootstrap
+	// echoes progress here for host-visible diagnostics without mounting the disk.
+	if spec.COMPipePath != "" {
+		fmt.Fprintf(&b, "Set-VMComPort -VMName '%s' -Number 1 -Path '%s'\n", name, psEscapeSingle(spec.COMPipePath))
+	}
 	if gen == 2 {
 		tmpl := "MicrosoftUEFICertificateAuthority" // Linux guests
 		if spec.IsWindows {

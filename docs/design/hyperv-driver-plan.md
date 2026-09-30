@@ -417,12 +417,33 @@ Windows guests are provisioned via `unattend.xml` placed on a secondary VHDX (or
 > (`Mount-VHD` needs Administrator), so the answer file reaches the stock image
 > only via OOBE's implicit media search.
 >
-> **Still needs a live boot against the real eval VHD to confirm:** (1) OOBE
-> implicitly discovers the answer file on the attached DVD; (2) the seed volume
-> gets a drive letter *inside the guest* so the FirstLogonCommand's drive scan
-> finds `warden-run.ps1`; (3) `warden-io initialize` brings up the static link
-> and completes. Heed the `FirstLogonCommands` 1024-char limit (the launcher is a
-> compact base64 `-EncodedCommand`, well under it).
+> **Live-boot findings (2026-09-30):** confirmed against the real Windows Server
+> 2025 eval VHDX. The guest chain **works end to end**: OOBE implicitly discovers
+> the answer file on the attached DVD, `FirstLogonCommands` fires, the seed volume
+> gets a drive letter so the drive-scan finds `warden-run.ps1`, and `warden-io
+> initialize` runs. Proven by captured COM1 serial from a standalone build-VM boot
+> (no relay): `warden-io: relay did not become healthy within 60s` followed by the
+> `warden-run` progress line — i.e. every guest-side step executed; the only
+> failure was the (expected) absent relay. `warden-run.ps1` now mirrors its
+> progress and live `warden-io` output to **COM1** (a host named pipe, wired by
+> `runBuild`) in addition to `C:\warden\warden-run.log`.
+>
+> **Constraint discovered — COM1 capture must not connect during early boot:**
+> attaching a named-pipe *client* to a Gen2 VM's COM1 while it is still in the
+> UEFI firmware phase prevents the guest from booting (flat 4 MB overlay, fast
+> power-off). Bisected cleanly: bare / Secure-Boot-on / seed-DVD / COM1-wired all
+> boot to heartbeat; only a connected reader during early boot breaks it. A late
+> connect (guest already running `warden-io`) captures output but the connection
+> is still disruptive. The reliable guest record is therefore
+> `C:\warden\warden-run.log` on the build overlay (read via an elevated
+> `Mount-VHD`); `tools/relay-vm/hyperv/read-serial-pipe.ps1` is a best-effort
+> reader that heartbeat-gates before connecting.
+>
+> **Still needs:** a full `warden build` run **with the relay up** (run warden in
+> the foreground — a backgrounded run's context is torn down early, which closes
+> the relay before the guest connects) to confirm guest↔relay connectivity, the
+> `/v1/build-script` fetch, and `/v1/complete`. Heed the `FirstLogonCommands`
+> 1024-char limit (the launcher is a compact base64 `-EncodedCommand`, well under it).
 
 **Option A (preferred): Seed VHDX**
 

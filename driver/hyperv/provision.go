@@ -82,6 +82,11 @@ type VMSpec struct {
 	SeedISO  string
 	SeedVHDX string
 	IsWindows bool
+	// COMPipePath, when set, wires the build VM's COM1 to a host named pipe
+	// (e.g. \\.\pipe\<name>). The guest bootstrap echoes its progress there so a
+	// failed boot is observable from the host without mounting the guest disk.
+	// Empty leaves COM1 unwired.
+	COMPipePath string
 }
 
 // VMHandle references a created VM for lifecycle operations.

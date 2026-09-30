@@ -186,6 +186,12 @@ func TestRunBuild_HappyPath(t *testing.T) {
 	if spec, ok := fp.lastBuildSpec.Load().(VMSpec); !ok || spec.Generation != 2 {
 		t.Errorf("build VM Generation = %v, want 2 (default for .vhdx base)", fp.lastBuildSpec.Load())
 	}
+	// COM1 must be wired to a host named pipe for guest-boot diagnostics.
+	if spec, ok := fp.lastBuildSpec.Load().(VMSpec); ok {
+		if !strings.HasPrefix(spec.COMPipePath, `\\.\pipe\warden-build-`) {
+			t.Errorf("build VM COMPipePath = %q, want a \\\\.\\pipe\\warden-build-* path", spec.COMPipePath)
+		}
+	}
 	if got := fp.startBuild.Load(); got != 1 {
 		t.Errorf("StartVM (build) = %d, want 1", got)
 	}

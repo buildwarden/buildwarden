@@ -122,19 +122,48 @@ func firstLogonCommand() string {
 // copy warden-io.exe local, run `initialize` (static network, per-build CA from
 // the relay, fetch + run build.ps1, report exit code), then power off so the
 // host detects completion via the relay's /v1/complete.
+//
+// Every progress line and all live warden-io output are mirrored to COM1 in
+// addition to the local log. COM1 is wired to a host named pipe (see
+// runBuild), so the host can watch the guest boot in real time WITHOUT an
+// elevated Mount-VHD of the guest disk. The serial mirror is strictly
+// best-effort: a missing or busy COM1 never breaks the build.
 func generateWardenRunPS1() string {
 	return fmt.Sprintf(`# warden-run.ps1 - Hyper-V build-guest first-boot bootstrap.
 # Launched by the OOBE FirstLogonCommand from the WARDEN seed volume.
+# Progress + live warden-io output are mirrored to COM1 (a host named pipe) so
+# a failed boot is observable from the host without mounting the guest disk.
 $ErrorActionPreference = 'Continue'
 $seed = $PSScriptRoot
-New-Item -ItemType Directory -Force -Path 'C:\warden' | Out-Null
-Copy-Item -Force (Join-Path $seed 'warden-io.exe') 'C:\warden\warden-io.exe'
 $log = 'C:\warden\warden-run.log'
-"warden-run start $(Get-Date -Format o)" | Out-File -FilePath $log -Encoding utf8
-& 'C:\warden\warden-io.exe' initialize --gateway=%s --ip=%s *>> $log 2>&1
-"warden-io exit=$LASTEXITCODE $(Get-Date -Format o)" | Out-File -FilePath $log -Append -Encoding utf8
+New-Item -ItemType Directory -Force -Path 'C:\warden' | Out-Null
+
+# Best-effort serial console. A missing/busy COM1 must never break the build.
+$com = $null
+try { $com = New-Object System.IO.Ports.SerialPort 'COM1',115200; $com.Open() } catch { $com = $null }
+function Emit($m) {
+  $line = "[warden-run] $(Get-Date -Format o) $m"
+  Add-Content -Path $log -Value $line
+  if ($com) { try { $com.WriteLine($line) } catch {} }
+}
+
+Emit 'start'
+try {
+  Copy-Item -Force (Join-Path $seed 'warden-io.exe') 'C:\warden\warden-io.exe'
+  Emit 'warden-io.exe staged; running initialize --gateway=%s --ip=%s'
+  & 'C:\warden\warden-io.exe' initialize --gateway=%s --ip=%s 2>&1 | ForEach-Object {
+    $t = [string]$_
+    Add-Content -Path $log -Value $t
+    if ($com) { try { $com.WriteLine($t) } catch {} }
+  }
+  Emit "warden-io exit=$LASTEXITCODE"
+} catch {
+  Emit "bootstrap error: $_"
+}
+if ($com) { try { $com.Close() } catch {} }
+Emit 'powering off'
 Stop-Computer -Force
-`, buildGatewayIP, buildGuestCIDR)
+`, buildGatewayIP, buildGuestCIDR, buildGatewayIP, buildGuestCIDR)
 }
 
 // xmlText escapes a string for safe inclusion as XML element text (the unattend

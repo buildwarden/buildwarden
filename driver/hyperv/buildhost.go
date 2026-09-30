@@ -185,16 +185,27 @@ func runBuild(ctx context.Context, prov Provisioner, cfg buildConfig) (*driver.B
 	//    such as the Windows Server eval image has no Secure Boot; a Gen2 (.vhdx)
 	//    guest keeps Secure Boot on via the per-family template CreateVM selects.
 	//    Either way the build guest is isolated on the Private switch.
+	//
+	//    COM1 is wired to a host named pipe so the guest bootstrap's progress is
+	//    observable from the host without mounting the guest disk. The default
+	//    pipe name is derived from the build VM name; WARDEN_HYPERV_BUILD_COM_PIPE
+	//    overrides it for a deterministic path a reader can attach to in advance.
+	comPipe := os.Getenv("WARDEN_HYPERV_BUILD_COM_PIPE")
+	if comPipe == "" {
+		comPipe = `\\.\pipe\` + buildVM
+	}
+	fmt.Fprintf(os.Stderr, "warden: build VM %q COM1 -> %s (attach a serial reader to observe guest boot)\n", buildVM, comPipe)
 	if _, err := prov.CreateVM(ctx, VMSpec{
-		Name:       buildVM,
-		Generation: cfg.Generation,
-		MemoryMB:   cfg.MemoryMB,
-		CPUs:       cfg.CPUs,
-		SwitchName: cfg.BuildSwitch,
-		VHDXPath:   cfg.BuildOverlay,
-		SeedISO:    cfg.SeedISO,
-		SeedVHDX:   cfg.SeedVHDX,
-		IsWindows:  cfg.IsWindows,
+		Name:        buildVM,
+		Generation:  cfg.Generation,
+		MemoryMB:    cfg.MemoryMB,
+		CPUs:        cfg.CPUs,
+		SwitchName:  cfg.BuildSwitch,
+		VHDXPath:    cfg.BuildOverlay,
+		SeedISO:     cfg.SeedISO,
+		SeedVHDX:    cfg.SeedVHDX,
+		IsWindows:   cfg.IsWindows,
+		COMPipePath: comPipe,
 	}); err != nil {
 		return nil, fmt.Errorf("runBuild: create build VM: %w", err)
 	}

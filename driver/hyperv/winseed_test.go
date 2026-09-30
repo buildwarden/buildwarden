@@ -75,6 +75,8 @@ func TestGenerateWardenRunPS1(t *testing.T) {
 		"--gateway=10.0.0.1",
 		"--ip=10.0.0.2/30",
 		"Stop-Computer",
+		"SerialPort",  // progress mirrored to COM1 for host-visible diagnostics
+		"COM1",
 	} {
 		if !strings.Contains(ps, want) {
 			t.Errorf("warden-run.ps1 missing %q", want)
