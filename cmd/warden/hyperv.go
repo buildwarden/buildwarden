@@ -1,8 +1,10 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
+	"os/signal"
 
 	"github.com/spf13/cobra"
 
@@ -113,7 +115,72 @@ func init() {
 		"NAT CIDR for relay egress (default 192.168.240.0/20)")
 	hypervSetupCmd.Flags().StringVar(&flagHyperVHostIP, "host-ip", "",
 		"host gateway IP on the NAT switch (default 192.168.240.1)")
+	hypervServiceCmd.AddCommand(hypervServiceInstallCmd)
+	hypervServiceCmd.AddCommand(hypervServiceUninstallCmd)
+	hypervServiceCmd.AddCommand(hypervServiceRunCmd)
 	hypervCmd.AddCommand(hypervDoctorCmd)
 	hypervCmd.AddCommand(hypervSetupCmd)
+	hypervCmd.AddCommand(hypervServiceCmd)
 	rootCmd.AddCommand(hypervCmd)
+}
+
+var hypervServiceCmd = &cobra.Command{
+	Use:   "service",
+	Short: "Manage the privileged Hyper-V helper service (LocalSystem)",
+	Long: `The privileged helper is a LocalSystem Windows service that performs ONLY
+host network standup (New-VMSwitch / New-NetNat / New-NetIPAddress) on behalf of
+non-elevated builds, over a named pipe ACL'd to Administrators and Hyper-V
+Administrators. With it installed, 'warden build --driver hyperv' runs entirely
+without elevation and stands up a fresh isolated network per build (no shared
+durable switch). VM lifecycle always runs in-process; only network standup is
+delegated.`,
+}
+
+var hypervServiceInstallCmd = &cobra.Command{
+	Use:          "install",
+	Short:        "Install and start the privileged helper service (run once, elevated)",
+	Args:         cobra.NoArgs,
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := hyperv.InstallService(); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "hyperv service install: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), "privileged Hyper-V helper installed and started.")
+		return nil
+	},
+}
+
+var hypervServiceUninstallCmd = &cobra.Command{
+	Use:          "uninstall",
+	Short:        "Stop and remove the privileged helper service (elevated)",
+	Args:         cobra.NoArgs,
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		if err := hyperv.UninstallService(); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "hyperv service uninstall: %v\n", err)
+			os.Exit(1)
+		}
+		fmt.Fprintln(cmd.OutOrStdout(), "privileged Hyper-V helper removed.")
+		return nil
+	},
+}
+
+var hypervServiceRunCmd = &cobra.Command{
+	Use:   "run",
+	Short: "Run the privileged helper (invoked by the SCM; or run in a console to smoke-test)",
+	Long: `Run the privileged helper's pipe server. The Service Control Manager invokes
+this when the service starts; you can also run it directly in an elevated console
+to smoke-test the pipe before installing (Ctrl-C to stop).`,
+	Args:         cobra.NoArgs,
+	SilenceUsage: true,
+	RunE: func(cmd *cobra.Command, args []string) error {
+		ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+		defer stop()
+		if err := hyperv.RunService(ctx); err != nil {
+			fmt.Fprintf(cmd.ErrOrStderr(), "hyperv service run: %v\n", err)
+			os.Exit(1)
+		}
+		return nil
+	},
 }

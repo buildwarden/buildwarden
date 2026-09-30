@@ -168,6 +168,25 @@ In practice the host-network standup is the only operation that routinely lands 
 
 ### The privileged service (staged LATER, not a Phase-1 prerequisite)
 
+> **Status — built (2026-09-30).** Implemented as `warden hyperv service
+> {install,uninstall,run}`. It delegates **only network standup**
+> (`EnsureNetwork`/`TeardownNetwork`) over a named pipe (`\\.\pipe\warden-hyperv-svc`,
+> go-winio) to a LocalSystem service hosting `localProvisioner`; VM lifecycle
+> stays in-process (Hyper-V Administrators). The pipe carries a **typed op set
+> only** (ping / ensure_network / teardown_network — never raw PowerShell), is
+> **ACL'd** to LocalSystem + Administrators + Hyper-V Administrators
+> (`D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;S-1-5-32-578)`), and does a **protocol
+> version handshake** on every request. `Capabilities.ServiceReachable` now pings
+> the pipe, so `NetworkStrategy` resolves to `delegate to service` when it is up
+> (taking precedence over the durable-switch reuse path), and `StartBuild` then
+> stands up a fresh per-build network via the service. The protocol is
+> unit-tested over `net.Pipe` with a fake provisioner; the winio listen/dial +
+> SDDL + ping + capability resolution were smoke-tested non-elevated (`doctor`
+> reports "reachable" / "fresh per-build via privileged service"). The one path
+> that requires the service running as LocalSystem — a real `EnsureNetwork`
+> through it — is validated by installing it: `warden hyperv service install`
+> (elevated) once, then a non-elevated `warden build --driver hyperv`.
+
 The service is a LocalSystem Windows service that is a thin wrapper hosting `localProvisioner` behind a named pipe. It is the best local-dev UX (zero prompts ever, the Docker Desktop model) but it is **not** needed to prove the driver, and it carries an installer, an uninstaller, lifecycle/recovery config, and version lockstep. Do not build it before the driver runs end to end.
 
 Mandatory security properties (this is a privileged endpoint that will run `New-VM` / `New-VMSwitch` on request):

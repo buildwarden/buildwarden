@@ -9,6 +9,7 @@ require (
 
 require (
 	github.com/BurntSushi/toml v1.6.0
+	github.com/Microsoft/go-winio v0.6.2
 	github.com/fatih/color v1.19.0
 	github.com/fxamacker/cbor/v2 v2.9.3
 	github.com/klauspost/compress v1.20.0

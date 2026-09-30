@@ -84,6 +84,6 @@ try {
 		}
 	}
 
-	// Privileged service: not implemented yet (Phase 4), so unreachable.
-	c.ServiceReachable = false
+	// Privileged service: reachable when its ACL'd pipe answers a ping.
+	c.ServiceReachable = serviceReachable()
 }

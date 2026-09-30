@@ -92,15 +92,56 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 
 	p := newLocalProvisioner(d.Verbose)
 
-	// Re-assert isolation every build rather than trusting persistence: a crash
-	// or manual edit can silently weaken the build switch. VerifyNetwork is a
-	// Windows-only Provisioner method, reached via interface assertion.
-	if v, ok := p.(interface {
-		VerifyNetwork(context.Context, string) error
-	}); ok {
-		if err := v.VerifyNetwork(ctx, sw); err != nil {
-			return nil, fmt.Errorf("hyperv build: %w", err)
+	// Resolve how this build's isolated network is provisioned, per the
+	// capability model (see capability.go). Detect reflects THIS process's
+	// token, so the gateway's non-elevated warden lands on reuse-durable or
+	// delegate-to-service; an elevated shell lands on ephemeral-per-build.
+	caps := Detect(sw)
+	var buildSwitch string
+	switch strat := caps.NetworkStrategy(); strat {
+	case NetReuseDurable:
+		// Non-elevated Hyper-V Administrators: reuse the durable switch from
+		// `warden hyperv setup`. Re-assert isolation every build rather than
+		// trusting persistence (a crash or manual edit can weaken it).
+		if v, ok := p.(interface {
+			VerifyNetwork(context.Context, string) error
+		}); ok {
+			if err := v.VerifyNetwork(ctx, sw); err != nil {
+				return nil, fmt.Errorf("hyperv build: %w", err)
+			}
 		}
+		buildSwitch = sw
+
+	case NetEphemeralPerBuild, NetDelegateService:
+		// Stand up a FRESH isolated network for this build and tear it down
+		// after. Elevated -> in-process; non-elevated with the service reachable
+		// -> delegate ONLY the standup to the privileged service (VM ops still
+		// run in-process via the embedded localProvisioner).
+		if strat == NetDelegateService {
+			p = newClientProvisioner(d.Verbose)
+		}
+		buildSwitch = "warden-" + buildID
+		if _, err := p.EnsureNetwork(ctx, NetworkSpec{
+			ID:         buildID,
+			SwitchName: buildSwitch,
+			SwitchType: "Private",
+			NATPrefix:  DefaultNATPrefix,
+			HostIP:     DefaultHostIP,
+		}); err != nil {
+			return nil, fmt.Errorf("hyperv build: network standup: %w", err)
+		}
+		defer func() {
+			if os.Getenv("WARDEN_HYPERV_KEEP_VMS") == "1" {
+				fmt.Fprintf(os.Stderr, "warden: WARDEN_HYPERV_KEEP_VMS set; leaving ephemeral network %q\n", buildSwitch)
+				return
+			}
+			// Background ctx so teardown runs even when ctx is already cancelled.
+			_ = p.TeardownNetwork(context.Background(), buildSwitch)
+		}()
+
+	default: // NetBlocked
+		_, reason := caps.Ready()
+		return nil, fmt.Errorf("hyperv build: %s", reason)
 	}
 
 	return runBuild(ctx, p, buildConfig{
@@ -117,8 +158,8 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		IsWindows:       isWindows,
 		Generation:      generation,
 		BuildScriptPath: buildScript,
-		BuildSwitch:     sw,
-		NATSwitch:       sw + "-nat",
+		BuildSwitch:     buildSwitch,
+		NATSwitch:       buildSwitch + "-nat",
 		Timeout:         req.Timeout,
 	})
 }
