@@ -187,6 +187,10 @@ func (p *localProvisioner) CreateVM(ctx context.Context, spec VMSpec) (*VMHandle
 		fmt.Fprintf(&b, " -SwitchName '%s'", psEscapeSingle(spec.SwitchName))
 	}
 	b.WriteString(" | Out-Null\n")
+	// Ephemeral build VM: no automatic checkpoints (they spawn an .avhdx layer
+	// on top of the overlay, complicating teardown and disk inspection). Matches
+	// the relay VM's config.
+	fmt.Fprintf(&b, "Set-VM -Name '%s' -AutomaticCheckpointsEnabled $false -CheckpointType Disabled\n", name)
 	fmt.Fprintf(&b, "Set-VMProcessor -VMName '%s' -Count %d\n", name, cpus)
 	if spec.SeedVHDX != "" {
 		fmt.Fprintf(&b, "Add-VMHardDiskDrive -VMName '%s' -Path '%s'\n", name, psEscapeSingle(spec.SeedVHDX))
