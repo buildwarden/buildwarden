@@ -485,6 +485,20 @@ Windows guests are provisioned via `unattend.xml` placed on a secondary VHDX (or
 > case-sensitive `"PATH="` match and a hardcoded `":"` separator — both Unix-isms
 > that silently no-op on Windows (`Path=`, `;`), so build scripts couldn't invoke
 > `warden-io`. Now matches case-insensitively and uses `os.PathListSeparator`.
+>
+> **Phase 2 — witnessed source build validated (2026-09-30):**
+> `examples/numpy-source-win` compiles numpy from source with MSVC and BuildWarden
+> witnesses the whole build including toolchain acquisition. `build.ps1` installs
+> VC++ Build Tools (VCTools) unattended — the `vs_BuildTools.exe` bootstrapper +
+> several GB of components download through the relay — then `pip install
+> --no-binary numpy` drives a meson/MSVC compile (build-isolation deps from PyPI
+> also witnessed). Result: `numpy 2.1.3 from-source OK`, and `warden inspect`
+> reports **811 requests, 2.2 GB audited, all 3273 signatures valid, all channels
+> closed** in ~9 min. Heavy builds need more than the 4 GB / 4 vCPU default:
+> `WARDEN_HYPERV_BUILD_MEMORY_MB` and `WARDEN_HYPERV_BUILD_CPUS` override the
+> build VM's resources. (conda-forge's `vs2022_win-64` is only an activation shim,
+> so the MSVC compiler must be installed in the guest; a strict recipe-driven
+> `conda build` of the feedstock is a further step on this same foundation.)
 
 **Option A (preferred): Seed VHDX**
 

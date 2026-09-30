@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -129,6 +130,19 @@ func runBuild(ctx context.Context, prov Provisioner, cfg buildConfig) (*driver.B
 	}
 	if cfg.CPUs == 0 {
 		cfg.CPUs = defaultBuildCPUs
+	}
+	// Env overrides for heavy builds (e.g. a VS Build Tools install + numpy MSVC
+	// compile want more than the 4 GB / 4 vCPU default). Parsed leniently; a bad
+	// value is ignored in favour of the default already set above.
+	if v := os.Getenv("WARDEN_HYPERV_BUILD_MEMORY_MB"); v != "" {
+		if mb, err := strconv.Atoi(v); err == nil && mb >= 512 {
+			cfg.MemoryMB = mb
+		}
+	}
+	if v := os.Getenv("WARDEN_HYPERV_BUILD_CPUS"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n >= 1 {
+			cfg.CPUs = n
+		}
 	}
 	if cfg.Generation == 0 {
 		cfg.Generation = 2
