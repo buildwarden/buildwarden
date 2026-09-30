@@ -1,6 +1,6 @@
 #requires -Version 5.1
 <#
-  read-guest-log.ps1 — read the Windows build guest's C:\warden\warden-run.log
+  read-guest-log.ps1 - read the Windows build guest's C:\warden\warden-run.log
   off a KEPT build overlay (from a `WARDEN_HYPERV_KEEP_VMS=1` run), for
   post-mortem when the build did not complete.
 
@@ -52,7 +52,7 @@ try {
       Get-Content $p
     }
   }
-  if (-not $found) { Write-Host "`n(no $GuestLog on any mounted volume — guest may not have reached first logon)" }
+  if (-not $found) { Write-Host "`n(no $GuestLog on any mounted volume - guest may not have reached first logon)" }
 } finally {
   if ($mounted) { Dismount-VHD -Path $Vhdx -ErrorAction SilentlyContinue; Write-Host "`ndismounted." }
 }

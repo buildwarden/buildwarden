@@ -270,6 +270,35 @@ func TestHTTPSink_ReadyAndComplete(t *testing.T) {
 	}
 }
 
+// TestWriteExitCode_ForwardsToSink confirms the relay's exit path forwards
+// completion to the collector via the sink (the diskless Hyper-V path, which
+// has no SignalDir file to poll). Regression: writeExitCode previously only
+// wrote the exit_code file and returned early when SignalDir was empty, so the
+// collector never received /v1/complete and the host build timed out despite a
+// green build.
+func TestWriteExitCode_ForwardsToSink(t *testing.T) {
+	col := newEmulatedCollector()
+	defer col.close()
+
+	// A diskless relay: no SignalDir, sink is the httpSink to the collector.
+	r := &Relay{sink: newHTTPSink(col.srv.URL, testToken)}
+	r.writeExitCode(0)
+
+	comp, ok := col.find("/v1/complete")
+	if !ok {
+		t.Fatalf("collector never received /v1/complete from writeExitCode")
+	}
+	var payload struct {
+		ExitCode int `json:"exit_code"`
+	}
+	if err := json.Unmarshal(comp.body, &payload); err != nil {
+		t.Fatalf("complete body not JSON: %v (%q)", err, comp.body)
+	}
+	if payload.ExitCode != 0 {
+		t.Fatalf("complete exit_code = %d, want 0", payload.ExitCode)
+	}
+}
+
 // TestLocalSink_NoOpSignals confirms the local sink's signal methods are
 // no-ops (return nil) and never touch the network.
 func TestLocalSink_NoOpSignals(t *testing.T) {

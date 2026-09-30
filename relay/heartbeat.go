@@ -2,6 +2,7 @@ package relay
 
 import (
 	"fmt"
+	"log"
 	"os"
 	"path/filepath"
 	"time"
@@ -28,10 +29,18 @@ func (r *Relay) runHeartbeat() {
 }
 
 func (r *Relay) writeExitCode(code int) {
-	if r.cfg.SignalDir == "" {
-		return
+	// File signal for the shared-dir drivers (qemu/vz poll SignalDir for the
+	// exit_code file). Skipped on a diskless relay (SignalDir empty).
+	if r.cfg.SignalDir != "" {
+		ecPath := filepath.Join(r.cfg.SignalDir, "exit_code")
+		_ = os.WriteFile(ecPath, []byte(fmt.Sprintf("%d\n", code)), 0644)
+		_ = os.Remove(filepath.Join(r.cfg.SignalDir, "heartbeat"))
 	}
-	ecPath := filepath.Join(r.cfg.SignalDir, "exit_code")
-	_ = os.WriteFile(ecPath, []byte(fmt.Sprintf("%d\n", code)), 0644)
-	_ = os.Remove(filepath.Join(r.cfg.SignalDir, "heartbeat"))
+	// Sink signal for the diskless drivers (Hyper-V httpSink -> collector
+	// /v1/complete). localSink.PostComplete is a no-op, so calling this for every
+	// driver is safe and keeps completion delivery in one place. Bounded inside
+	// postSignal (15s), so a stuck collector can't hang the exit path.
+	if err := r.PostComplete(code, "", ""); err != nil {
+		log.Printf("relay: PostComplete(%d) failed: %v", code, err)
+	}
 }

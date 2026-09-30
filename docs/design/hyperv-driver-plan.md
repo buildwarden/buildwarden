@@ -439,11 +439,31 @@ Windows guests are provisioned via `unattend.xml` placed on a secondary VHDX (or
 > `Mount-VHD`); `tools/relay-vm/hyperv/read-serial-pipe.ps1` is a best-effort
 > reader that heartbeat-gates before connecting.
 >
-> **Still needs:** a full `warden build` run **with the relay up** (run warden in
-> the foreground — a backgrounded run's context is torn down early, which closes
-> the relay before the guest connects) to confirm guest↔relay connectivity, the
-> `/v1/build-script` fetch, and `/v1/complete`. Heed the `FirstLogonCommands`
-> 1024-char limit (the launcher is a compact base64 `-EncodedCommand`, well under it).
+> **End-to-end result (2026-09-30):** a full foreground `warden build --driver
+> hyperv --guest-os windows` ran the whole pipeline against the real eval VHDX.
+> The guest `warden-run.log` recorded every step: configure network -> wait for
+> relay -> install CA -> **fetch build script (`/build-script`)** -> **run
+> `build.ps1`** (`hello from build.ps1`) -> `warden-io exit=0` -> power off. So
+> guest↔relay connectivity, the CA install, the build-script fetch, and build
+> execution all work.
+>
+> **Bug fixed (completion signal):** the build ran green but the host build
+> initially timed out because the relay's `/exit` handler only wrote the
+> `exit_code` FILE via `writeExitCode` (the qemu/vz shared-`SignalDir` model) and
+> returned early on a diskless relay (empty `SignalDir`), so the collector never
+> received `/v1/complete`. Fixed by making `writeExitCode` also call
+> `r.PostComplete(code)` through the sink: a no-op on the qemu/vz `localSink`, and
+> the `POST /v1/complete` to the collector on the Hyper-V `httpSink`. After the
+> fix a full run returns exit=0 (build VM boots to a single 1.38 GB overlay —
+> auto-checkpoints now disabled — then powers off cleanly). Regression test:
+> `TestWriteExitCode_ForwardsToSink`.
+>
+> **Still open:** the collector's **output directory is empty** after a
+> successful build — the relay's ledger/output are not persisted when `runBuild`
+> tears down the relay VM on completion (no graceful relay `Stop`/`FlushLedger`
+> before `RemoveVM`). Build *output* (`build.ps1` stdout) also currently goes to
+> the guest console, not the collector's `/v1/output`. These are the next items:
+> flush the ledger and stream build output before teardown.
 
 **Option A (preferred): Seed VHDX**
 
