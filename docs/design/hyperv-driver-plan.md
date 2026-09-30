@@ -471,6 +471,20 @@ Windows guests are provisioned via `unattend.xml` placed on a secondary VHDX (or
 > reports scheme=ed25519-sha512, all signatures valid, all channels closed, with
 > the `/build-script` fetch audited. The Windows Hyper-V driver now runs a build
 > end to end and produces a complete, signed audit ledger.
+>
+> **Real build validated (2026-09-30):** `examples/conda-forge-win` (Miniforge +
+> `conda create -c conda-forge numpy`) ran to success on the native x64 guest.
+> `warden inspect`: **198 requests, 263.6 MB audited, all 803 signatures valid,
+> all channels closed** — the 148 MB Miniforge download, all conda-forge
+> repodata/packages, and the guest's own OS traffic were witnessed, and conda's
+> per-package hash verification passed against the MITM'd bytes (byte-exact).
+> **Artifact capture** also verified: a `warden-io post` from `build.ps1` lands
+> byte-exact in the collector's `artifacts/` (`✅ ARTIFACT POST`, sha256 match).
+>
+> **warden-io PATH fix:** `execScript` prepended the agent's dir to `PATH` with a
+> case-sensitive `"PATH="` match and a hardcoded `":"` separator — both Unix-isms
+> that silently no-op on Windows (`Path=`, `;`), so build scripts couldn't invoke
+> `warden-io`. Now matches case-insensitively and uses `os.PathListSeparator`.
 
 **Option A (preferred): Seed VHDX**
 

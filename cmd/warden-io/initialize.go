@@ -182,15 +182,25 @@ func execScript(path, gateway string) int {
 	cmd.Stdout = w
 	cmd.Stderr = w
 
-	// Ensure warden-io is available in PATH for the build script
+	// Ensure warden-io is on PATH for the build script (e.g. `warden-io post`).
+	// Match the PATH key case-INSENSITIVELY (Windows exposes it as "Path=") and
+	// join with the OS path-list separator (';' on Windows, ':' elsewhere); a
+	// hardcoded ":" + "PATH=" silently no-ops on Windows. Append a PATH if none
+	// exists.
 	env := os.Environ()
 	if self, err := os.Executable(); err == nil {
 		selfDir := filepath.Dir(self)
+		sep := string(os.PathListSeparator)
+		found := false
 		for i, e := range env {
-			if strings.HasPrefix(e, "PATH=") {
-				env[i] = "PATH=" + selfDir + ":" + e[5:]
+			if len(e) >= 5 && strings.EqualFold(e[:5], "PATH=") {
+				env[i] = e[:5] + selfDir + sep + e[5:]
+				found = true
 				break
 			}
+		}
+		if !found {
+			env = append(env, "PATH="+selfDir)
 		}
 	}
 	cmd.Env = env
