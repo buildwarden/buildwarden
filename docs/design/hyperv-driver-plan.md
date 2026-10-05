@@ -103,6 +103,30 @@ New-VMSwitch -Name "warden-build-$id" -SwitchType Private
 # Private = no host access, only VM-to-VM. This is stronger than Internal.
 ```
 
+### NAT reuse vs. per-build (coexistence with a durable switch)
+
+The host gateway IP (`192.168.240.1`) and NAT prefix (`192.168.240.0/20`) are
+fixed, so two interfaces cannot both claim them. That means a fresh per-build
+network and a durable `warden hyperv setup` switch cannot both stand up the NAT
+independently — they would collide on the gateway IP (`New-NetIPAddress ... The
+object already exists`). The split that resolves it:
+
+- **The Private build switch is always per-build.** It is the isolation
+  boundary, so it is never shared: `warden-<id>` is created fresh and torn down
+  after each build.
+- **The NAT egress is shared plumbing, not a boundary.** `EnsureNetwork` reuses
+  an existing warden NAT that already owns the prefix (a durable switch, or a
+  concurrent build) instead of colliding; it only stands up a per-build NAT
+  (`warden-<id>-nat`) when none owns the prefix. The chosen NAT switch name is
+  returned in `NetworkResources.NATName`, and the relay's upstream NIC attaches
+  to that. Teardown is by per-build name convention, so a reused durable NAT is
+  never removed — only the per-build build switch (and a per-build NAT when one
+  was created).
+
+This lets the ephemeral/service path (`NetEphemeralPerBuild` /
+`NetDelegateService`) run cleanly on a machine that also has a durable switch
+left over from an earlier `warden hyperv setup`.
+
 ### Why Private (not Internal) for build link
 
 A **Private** vSwitch ensures the build VM cannot reach the host's network stack at all — traffic can only flow between VMs attached to the same switch. This matches the QEMU model where the unix socket netdev is exclusively relay-to-build.

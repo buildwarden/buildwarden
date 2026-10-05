@@ -97,7 +97,7 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	// token, so the gateway's non-elevated warden lands on reuse-durable or
 	// delegate-to-service; an elevated shell lands on ephemeral-per-build.
 	caps := Detect(sw)
-	var buildSwitch string
+	var buildSwitch, natSwitch string
 	switch strat := caps.NetworkStrategy(); strat {
 	case NetReuseDurable:
 		// Non-elevated Hyper-V Administrators: reuse the durable switch from
@@ -111,6 +111,7 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 			}
 		}
 		buildSwitch = sw
+		natSwitch = sw + "-nat"
 
 	case NetEphemeralPerBuild, NetDelegateService:
 		// Stand up a FRESH isolated network for this build and tear it down
@@ -121,21 +122,32 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 			p = newClientProvisioner(d.Verbose)
 		}
 		buildSwitch = "warden-" + buildID
-		if _, err := p.EnsureNetwork(ctx, NetworkSpec{
+		res, err := p.EnsureNetwork(ctx, NetworkSpec{
 			ID:         buildID,
 			SwitchName: buildSwitch,
 			SwitchType: "Private",
 			NATPrefix:  DefaultNATPrefix,
 			HostIP:     DefaultHostIP,
-		}); err != nil {
+		})
+		if err != nil {
+			// A standup that failed partway can leave the Private build switch
+			// (created first) behind; best-effort clean it so a retry is not
+			// blocked by orphaned switches.
+			_ = p.TeardownNetwork(context.Background(), buildSwitch)
 			return nil, fmt.Errorf("hyperv build: network standup: %w", err)
 		}
+		// The relay's upstream NIC attaches to whichever NAT switch EnsureNetwork
+		// chose: a reused durable/concurrent NAT, or a per-build one it created.
+		natSwitch = res.NATName
 		defer func() {
 			if os.Getenv("WARDEN_HYPERV_KEEP_VMS") == "1" {
 				fmt.Fprintf(os.Stderr, "warden: WARDEN_HYPERV_KEEP_VMS set; leaving ephemeral network %q\n", buildSwitch)
 				return
 			}
 			// Background ctx so teardown runs even when ctx is already cancelled.
+			// Teardown is by per-build name convention, so a reused NAT (a
+			// different name) is never removed - only the per-build build switch
+			// and, when created, the per-build NAT.
 			_ = p.TeardownNetwork(context.Background(), buildSwitch)
 		}()
 
@@ -159,7 +171,7 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		Generation:      generation,
 		BuildScriptPath: buildScript,
 		BuildSwitch:     buildSwitch,
-		NATSwitch:       buildSwitch + "-nat",
+		NATSwitch:       natSwitch,
 		Timeout:         req.Timeout,
 	})
 }
