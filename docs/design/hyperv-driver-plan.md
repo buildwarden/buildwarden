@@ -542,6 +542,19 @@ Windows guests are provisioned via `unattend.xml` placed on a secondary VHDX (or
 > build VM's resources. (conda-forge's `vs2022_win-64` is only an activation shim,
 > so the MSVC compiler must be installed in the guest; a strict recipe-driven
 > `conda build` of the feedstock is a further step on this same foundation.)
+>
+> **Build console forwarding + completion status (2026-10-05):** the collector
+> gained an optional `OutputTee io.Writer`; when set it forwards a copy of the
+> guest build console (POST `/v1/output`) to the writer while still persisting
+> `build-output.log`. The Hyper-V driver wires this to `os.Stdout` unless the new
+> `--quiet` (`-q`) build flag is passed (threaded as `BuildRequest.Quiet`). Note
+> `warden-io` still BUFFERS build output and POSTs it once just before
+> completion, so forwarded output currently arrives as one block at build end,
+> not keystroke-live; true incremental streaming is a later refinement. The CLI
+> also prints a one-line completion status in both modes — `warden: build
+> SUCCEEDED (output: <dir>)` or `warden: build FAILED` — via `reportBuildResult`,
+> so a run is never silent about its outcome. Tee + persistence are covered by
+> `TestOutputTeeForwardsAndPersists` / `TestOutputNoTeePersists`.
 
 **Option A (preferred): Seed VHDX**
 

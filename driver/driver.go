@@ -50,6 +50,10 @@ type BuildRequest struct {
 	CaptureMode string
 	// Compress enables zstd compression of output artifacts.
 	Compress bool
+	// Quiet suppresses forwarding of the guest build console to warden's stdout.
+	// Output is still captured to build-output.log either way; this only governs
+	// whether it is echoed live to the user.
+	Quiet bool
 	// Timeout is the maximum build duration. Zero means no limit.
 	Timeout time.Duration
 	// RelayImage specifies the relay container image (container driver only).

@@ -5,6 +5,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"net"
 	"net/http"
 	"os"
@@ -49,6 +50,10 @@ type RelayHostConfig struct {
 	CollectorPort int
 	// ReadyTimeout bounds the wait for the relay's ready signal. Default 90s.
 	ReadyTimeout time.Duration
+	// OutputTee, if set, receives a live copy of the guest build console as it
+	// is landed to build-output.log, so warden can forward it to the user.
+	// Nil (e.g. under --quiet) suppresses forwarding; output is still captured.
+	OutputTee io.Writer
 }
 
 // RelayHost is a running relay host: the collector + config responder on the
@@ -122,6 +127,7 @@ func StartRelay(ctx context.Context, prov Provisioner, cfg RelayHostConfig) (*Re
 		OutputDir:       cfg.OutputDir,
 		Token:           token,
 		BuildScriptPath: cfg.BuildScriptPath,
+		OutputTee:       cfg.OutputTee,
 		OnReady:         func() { once.Do(func() { close(ready) }) },
 	})
 	if err != nil {

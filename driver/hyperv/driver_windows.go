@@ -5,6 +5,7 @@ package hyperv
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 
@@ -156,6 +157,16 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		return nil, fmt.Errorf("hyperv build: %s", reason)
 	}
 
+	// Forward the guest build console to the user unless --quiet. The CLI sets
+	// req.Stdout to os.Stdout; fall back to it when a caller leaves it nil.
+	var outTee io.Writer
+	if !req.Quiet {
+		outTee = req.Stdout
+		if outTee == nil {
+			outTee = os.Stdout
+		}
+	}
+
 	return runBuild(ctx, p, buildConfig{
 		BuildID:       buildID,
 		OutputDir:     req.OutputDir,
@@ -173,6 +184,7 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		BuildSwitch:     buildSwitch,
 		NATSwitch:       natSwitch,
 		Timeout:         req.Timeout,
+		OutputTee:       outTee,
 	})
 }
 

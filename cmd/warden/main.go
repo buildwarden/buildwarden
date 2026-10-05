@@ -30,6 +30,7 @@ var (
 	flagImage      string
 	flagGuestOS    string
 	flagTimeout    string
+	flagQuiet      bool
 )
 
 var rootCmd = &cobra.Command{
@@ -95,6 +96,8 @@ func init() {
 		"guest OS for VM drivers: linux (default) or windows")
 	buildCmd.Flags().StringVar(&flagTimeout, "timeout", "",
 		"maximum build duration (e.g., 10m, 1h)")
+	buildCmd.Flags().BoolVarP(&flagQuiet, "quiet", "q", false,
+		"suppress forwarding the guest build console to stdout (still captured to build-output.log)")
 	shellCmd.Flags().StringVar(&flagCapture, "capture", "",
 		"capture payloads to disk (none, headers, bodies, all)")
 	shellCmd.Flags().StringVarP(&flagOutput, "output", "o", "",
@@ -283,8 +286,9 @@ func runBuild(cmd *cobra.Command, args []string) error {
 			Stdin:            os.Stdin,
 			Stdout:           os.Stdout,
 			Stderr:           os.Stderr,
+			Quiet:            flagQuiet,
 		})
-		return buildErr
+		return reportBuildResult(bp.outputDir, buildErr)
 
 	case "qemu":
 		var dockerfile, contextDir string
@@ -324,8 +328,9 @@ func runBuild(cmd *cobra.Command, args []string) error {
 			Stdin:            os.Stdin,
 			Stdout:           os.Stdout,
 			Stderr:           os.Stderr,
+			Quiet:            flagQuiet,
 		})
-		return buildErr
+		return reportBuildResult(bp.outputDir, buildErr)
 
 	case "hyperv":
 		var dockerfile, contextDir string
@@ -371,8 +376,9 @@ func runBuild(cmd *cobra.Command, args []string) error {
 			Stdin:            os.Stdin,
 			Stdout:           os.Stdout,
 			Stderr:           os.Stderr,
+			Quiet:            flagQuiet,
 		})
-		return buildErr
+		return reportBuildResult(bp.outputDir, buildErr)
 	}
 
 	// Default: container driver
@@ -400,11 +406,24 @@ func runBuild(cmd *cobra.Command, args []string) error {
 		RelayImage:       cfg.Runtime.RelayImage,
 		UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
 		UpstreamSystemCA: bp.systemCA,
-		Stdin:            os.Stdin,
-		Stdout:           os.Stdout,
-		Stderr:           os.Stderr,
 	})
-	return buildErr
+	return reportBuildResult(bp.outputDir, buildErr)
+}
+
+// reportBuildResult prints a one-line build completion status (in both quiet and
+// normal modes) and returns err unchanged so the process exit code is
+// preserved. On failure the returned err still carries the detail (exit code,
+// message), printed by the top-level handler.
+func reportBuildResult(outputDir string, err error) error {
+	if err != nil {
+		fmt.Fprintln(os.Stderr, "warden: build FAILED")
+		return err
+	}
+	if outputDir == "" {
+		outputDir = "warden-output"
+	}
+	fmt.Fprintf(os.Stderr, "warden: build SUCCEEDED (output: %s)\n", outputDir)
+	return nil
 }
 
 func runShell(cmd *cobra.Command, args []string) error {

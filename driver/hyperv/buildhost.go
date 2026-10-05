@@ -3,6 +3,7 @@ package hyperv
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -64,6 +65,10 @@ type buildConfig struct {
 	MemoryMB int           // build VM; default 4096
 	CPUs     int           // build VM; default 4
 	Timeout  time.Duration // whole-build ceiling; zero means no limit
+
+	// OutputTee, if set, receives a live copy of the guest build console
+	// (forwarded by the collector). Nil (e.g. under --quiet) suppresses it.
+	OutputTee io.Writer
 
 	// Host-binding overrides for the relay host servers, mirrored onto
 	// RelayHostConfig. Empty/zero use the production defaults (NAT gateway
@@ -166,6 +171,7 @@ func runBuild(ctx context.Context, prov Provisioner, cfg buildConfig) (*driver.B
 		ConfigPort:      cfg.configPort,
 		CollectorPort:   cfg.collectorPort,
 		ReadyTimeout:    cfg.readyTimeout,
+		OutputTee:       cfg.OutputTee,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("runBuild: %w", err)

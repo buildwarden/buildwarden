@@ -50,6 +50,12 @@ type Config struct {
 	MaxArtifactBytes int64
 	// Logf, if set, receives one-line progress logs.
 	Logf func(format string, args ...any)
+	// OutputTee, if set, receives a copy of build output as it is landed to
+	// build-output.log (POST /v1/output), so a driver embedding the collector
+	// can forward the guest's build console to the user. Set it to os.Stdout for
+	// live forwarding; leave nil (e.g. under --quiet) to suppress. Writes are
+	// best-effort: a tee error never fails the request or the file write.
+	OutputTee io.Writer
 	// OnReady, if set, is invoked when POST /v1/ready is received. It lets a
 	// driver embedding the collector in-process learn the relay has come up.
 	// Optional and nil-safe; called synchronously on the request goroutine.
@@ -180,13 +186,29 @@ func (c *Collector) handleOutput(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	defer f.Close()
-	n, err := c.copy(f, req.Body, c.maxArtifact)
+	// Persist to the file first; when a tee is configured, also forward a copy
+	// (wrapped so a console write error can never abort the file write).
+	var dstW io.Writer = f
+	if c.cfg.OutputTee != nil {
+		dstW = io.MultiWriter(f, ignoreErrWriter{c.cfg.OutputTee})
+	}
+	n, err := c.copy(dstW, req.Body, c.maxArtifact)
 	if err != nil {
 		c.writeErr(w, err)
 		return
 	}
 	c.logf("collector: build-output +%d bytes", n)
 	w.WriteHeader(http.StatusOK)
+}
+
+// ignoreErrWriter forwards writes to w but always reports success, so a failing
+// tee target (e.g. a closed console) cannot abort an io.MultiWriter mid-copy
+// and lose the primary (file) write.
+type ignoreErrWriter struct{ w io.Writer }
+
+func (e ignoreErrWriter) Write(p []byte) (int, error) {
+	_, _ = e.w.Write(p)
+	return len(p), nil
 }
 
 // handleBuildScript streams the staged build script to the relay so it can

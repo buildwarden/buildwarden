@@ -24,6 +24,66 @@ func newTestServer(t *testing.T, cfg Config) (*httptest.Server, string) {
 	return srv, dir
 }
 
+// TestOutputTeeForwardsAndPersists verifies that a configured OutputTee receives
+// a copy of POST /v1/output while build-output.log is still written.
+func TestOutputTeeForwardsAndPersists(t *testing.T) {
+	var tee bytes.Buffer
+	srv, dir := newTestServer(t, Config{Token: "t", OutputTee: &tee})
+
+	payload := []byte("hello from build.ps1\nnumpy 2.5.3 OK\n")
+	req, err := http.NewRequest(http.MethodPost, srv.URL+"/v1/output", bytes.NewReader(payload))
+	if err != nil {
+		t.Fatalf("NewRequest: %v", err)
+	}
+	req.Header.Set("Authorization", "Bearer t")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+
+	// Tee got a copy.
+	if got := tee.String(); got != string(payload) {
+		t.Errorf("tee = %q, want %q", got, payload)
+	}
+	// File persisted too.
+	onDisk, err := os.ReadFile(filepath.Join(dir, "build-output.log"))
+	if err != nil {
+		t.Fatalf("read build-output.log: %v", err)
+	}
+	if string(onDisk) != string(payload) {
+		t.Errorf("build-output.log = %q, want %q", onDisk, payload)
+	}
+}
+
+// TestOutputNoTeePersists verifies output is still captured when no tee is set
+// (the --quiet path).
+func TestOutputNoTeePersists(t *testing.T) {
+	srv, dir := newTestServer(t, Config{Token: "t"}) // OutputTee nil
+
+	payload := []byte("quiet-mode build output\n")
+	req, _ := http.NewRequest(http.MethodPost, srv.URL+"/v1/output", bytes.NewReader(payload))
+	req.Header.Set("Authorization", "Bearer t")
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatalf("Do: %v", err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	onDisk, err := os.ReadFile(filepath.Join(dir, "build-output.log"))
+	if err != nil {
+		t.Fatalf("read build-output.log: %v", err)
+	}
+	if string(onDisk) != string(payload) {
+		t.Errorf("build-output.log = %q, want %q", onDisk, payload)
+	}
+}
+
 func put(t *testing.T, url, token string, body []byte) *http.Response {
 	t.Helper()
 	req, err := http.NewRequest(http.MethodPut, url, bytes.NewReader(body))
