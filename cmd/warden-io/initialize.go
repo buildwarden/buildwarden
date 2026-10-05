@@ -171,14 +171,15 @@ func execScript(path, gateway string) int {
 	cmd := scriptCommand(path)
 	cmd.Stdin = os.Stdin
 
-	// Capture build output while still echoing it to the local console (serial),
-	// so it lands in the collector's build-output.log. Buffered, then POSTed once
-	// after the build finishes and BEFORE reportComplete: the orchestrator tears
-	// down the relay VM the moment it sees completion, so the output must already
-	// be delivered. Buffering (vs streaming) keeps the build from ever blocking on
-	// the relay link; large-build streaming is a later refinement.
-	var out bytes.Buffer
-	w := io.MultiWriter(os.Stdout, &out)
+	// Capture build output while echoing it to the local console (serial), and
+	// STREAM it to the collector as it is produced rather than buffering the
+	// whole log in memory. The build's stdout/stderr fan out to os.Stdout and an
+	// io.Pipe; a reader goroutine (below) POSTs each chunk to /v1/output, so a
+	// chatty build never costs more than one ~32KB chunk of RAM. Chunk boundaries
+	// don't matter: the collector appends raw bytes, so build-output.log is
+	// byte-identical regardless of how the stream is split.
+	pr, pw := io.Pipe()
+	w := io.MultiWriter(os.Stdout, pw)
 	cmd.Stdout = w
 	cmd.Stderr = w
 
@@ -210,6 +211,32 @@ func execScript(path, gateway string) int {
 		return 1
 	}
 
+	// Stream build output to the collector as it is produced. Reading pr keeps
+	// the build's stdout/stderr flowing: io.Pipe is unbuffered, so the build
+	// blocks only for as long as one chunk POST takes against the local relay
+	// link. If that link fails mid-build the reader keeps draining (and
+	// discarding) so the build never hangs on a dead relay; the tail is then
+	// only in the guest console, which is logged.
+	streamDone := make(chan struct{})
+	go func() {
+		defer close(streamDone)
+		client := &http.Client{Timeout: 30 * time.Second}
+		buf := make([]byte, 32*1024)
+		deliver := gateway != ""
+		for {
+			n, rerr := pr.Read(buf)
+			if n > 0 && deliver {
+				if !postBuildOutputChunk(client, gateway, buf[:n]) {
+					deliver = false
+					fmt.Fprintln(os.Stderr, "warden-io: output streaming disabled after a relay-link error; remaining build output stays in the guest console only")
+				}
+			}
+			if rerr != nil {
+				return
+			}
+		}
+	}()
+
 	// Send heartbeats while build runs
 	done := make(chan struct{})
 	go func() {
@@ -232,9 +259,12 @@ func execScript(path, gateway string) int {
 	err := cmd.Wait()
 	close(done)
 
-	// Deliver the captured output before returning (caller reports completion
-	// right after, which triggers teardown).
-	postBuildOutput(gateway, out.Bytes())
+	// cmd.Wait has copied all stdout/stderr into the pipe; close the writer so
+	// the streamer sees EOF, then wait for it to deliver the final chunk before
+	// returning. The caller reports completion right after, which triggers relay
+	// teardown, so the tail must already be on its way.
+	_ = pw.Close()
+	<-streamDone
 
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -246,24 +276,34 @@ func execScript(path, gateway string) int {
 	return 0
 }
 
-// postBuildOutput sends the captured build output to the relay's control-plane
-// /v1/output endpoint (gateway:8300), which forwards it to the collector's
-// build-output.log. Best-effort: a failed post must not fail the build, but the
-// error is logged since a missing build log weakens the audit record.
-func postBuildOutput(gateway string, data []byte) {
+// postBuildOutputChunk streams one chunk of build output to the relay's
+// control-plane /v1/output endpoint (gateway:8300), which forwards it to the
+// collector's build-output.log. Returns false on failure so the caller can stop
+// delivering (and just drain) rather than stalling the build on a dead link.
+// Best-effort by design: a dropped chunk weakens the convenience log but never
+// fails the build.
+func postBuildOutputChunk(client *http.Client, gateway string, data []byte) bool {
 	if gateway == "" || len(data) == 0 {
-		return
+		return false
 	}
 	url := fmt.Sprintf("http://%s:8300/v1/output", gateway)
-	resp, err := http.Post(url, "text/plain", bytes.NewReader(data))
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "warden-io: post build output: %s\n", err)
-		return
+		return false
+	}
+	req.Header.Set("Content-Type", "text/plain")
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warden-io: post build output: %s\n", err)
+		return false
 	}
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		fmt.Fprintf(os.Stderr, "warden-io: post build output: HTTP %d\n", resp.StatusCode)
+		return false
 	}
+	return true
 }
 
 func logStep(msg string) {

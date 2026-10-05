@@ -547,14 +547,20 @@ Windows guests are provisioned via `unattend.xml` placed on a secondary VHDX (or
 > gained an optional `OutputTee io.Writer`; when set it forwards a copy of the
 > guest build console (POST `/v1/output`) to the writer while still persisting
 > `build-output.log`. The Hyper-V driver wires this to `os.Stdout` unless the new
-> `--quiet` (`-q`) build flag is passed (threaded as `BuildRequest.Quiet`). Note
-> `warden-io` still BUFFERS build output and POSTs it once just before
-> completion, so forwarded output currently arrives as one block at build end,
-> not keystroke-live; true incremental streaming is a later refinement. The CLI
-> also prints a one-line completion status in both modes — `warden: build
-> SUCCEEDED (output: <dir>)` or `warden: build FAILED` — via `reportBuildResult`,
-> so a run is never silent about its outcome. Tee + persistence are covered by
-> `TestOutputTeeForwardsAndPersists` / `TestOutputNoTeePersists`.
+> `--quiet` (`-q`) build flag is passed (threaded as `BuildRequest.Quiet`).
+> `warden-io` STREAMS the output as it is produced: the build's stdout/stderr fan
+> out to the guest console and an `io.Pipe`, and a reader goroutine POSTs each
+> ~32KB chunk to `/v1/output` (one relay sink cycle, one collector append+tee per
+> chunk). This bounds warden-io's memory to a single chunk no matter how much the
+> build prints (no whole-log buffer), and the user sees output live. If the relay
+> link fails mid-build the reader keeps draining and discarding so the build never
+> hangs on a dead link (the tail then stays only in the guest console). A final
+> drain runs after `cmd.Wait` and before `reportComplete`, so the last chunk is
+> delivered before teardown. The CLI also prints a one-line completion status in
+> both modes (`warden: build SUCCEEDED (output: <dir>)` or `warden: build
+> FAILED`) via `reportBuildResult`, so a run is never silent about its outcome.
+> Tests: `TestOutputTeeForwardsAndPersists`, `TestOutputNoTeePersists`,
+> `TestPostBuildOutputChunkDelivers`.
 
 **Option A (preferred): Seed VHDX**
 
