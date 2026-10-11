@@ -74,6 +74,7 @@ process before reaching the internet:
 - `PREROUTING`: redirects inbound build traffic to the local relay process
 - `FORWARD DROP`: prevents any unproxied egress from the build VM
 - `POSTROUTING MASQUERADE`: NAT for the relay's own upstream connections
+- `INPUT`: the build VM may reach the relay control plane (`:8300`) but is dropped from the claim port (`:8301`), so it cannot claim or re-claim the relay
 
 ## VZ Driver — Topological Isolation
 
@@ -96,6 +97,20 @@ entire network.
 There is no software firewall to misconfigure or bypass. The isolation is
 structural: the only network device the VM possesses connects exclusively to
 the relay process. No amount of privilege inside the VM can change this.
+
+## Hyper-V Driver — Topological Isolation
+
+Like QEMU, the Hyper-V driver uses two VMs and the hypervisor enforces the
+topology. The relay VM and build VM share a Private build switch; the relay
+reaches upstream through an Internal NAT switch with a static host-only address
+(`192.168.240.2/20`, created by `warden setup --driver hyperv`). The build VM
+has one interface, on the Private switch, so its only path is the relay.
+
+The same relay-VM iptables rules apply (the init script is shared with QEMU):
+`PREROUTING` redirect, `FORWARD DROP`, `POSTROUTING MASQUERADE`, and an `INPUT`
+rule that lets the build VM reach the control plane but drops it from the claim
+port. The claim endpoint lives only on the host-only NAT switch, so the build
+VM cannot reach it even before iptables.
 
 ## Common DNS Behavior
 

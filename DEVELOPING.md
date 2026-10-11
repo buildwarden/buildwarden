@@ -31,7 +31,7 @@ docs/design/             Specifications and design documents
 ### Key boundaries
 
 - **`cmd/warden/`** runs on the host. It creates the network, builds the relay image, starts containers, configures iptables, runs inspect, and tears everything down.
-- **`cmd/relay/`** runs inside a container. It intercepts traffic, writes the ledger, and generates the ephemeral CA. Fully independent of the warden binary.
+- **`cmd/relay/`** runs inside a container or VM (or as a host process for VZ). It intercepts traffic, records the ledger, and generates the ephemeral CA, streaming every output to the host-side collector rather than writing build state to disk. Fully independent of the warden binary.
 - **`ledger/`** is the only shared code — defines the binary ledger format and provides read/verify logic used by both `warden inspect` and the relay's test suite.
 
 ## Extension System
@@ -59,7 +59,7 @@ warden build examples/Dockerfile.simple
 Verify the output:
 
 ```sh
-warden inspect /tmp/warden-ledger-*/ledger
+warden inspect warden-output
 ```
 
 ## Cutting a Release

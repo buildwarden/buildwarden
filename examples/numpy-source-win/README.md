@@ -29,7 +29,7 @@ The build VM needs more than the default 4 GB / 4 vCPU for the VS install +
 parallel MSVC compile:
 
 ```
-WARDEN_HYPERV_BUILD_MEMORY_MB=8192 WARDEN_HYPERV_BUILD_CPUS=6
+warden build --driver hyperv --guest-os windows --memory 8192 --cpus 6 examples/numpy-source-win
 ```
 
 ## Measured result (2026-09-30, Hyper-V driver)

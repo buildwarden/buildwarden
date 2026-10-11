@@ -17,7 +17,7 @@
 #
 # Every network input above flows through the relay's MITM and is signed into
 # the ledger. On the Hyper-V driver this needs more than the default build-VM
-# resources; run with WARDEN_HYPERV_BUILD_MEMORY_MB=8192 WARDEN_HYPERV_BUILD_CPUS=6.
+# resources; run with --memory 8192 --cpus 6.
 #
 #   warden build --driver hyperv --guest-os windows examples/numpy-source-win
 

@@ -1,6 +1,6 @@
 # Build Drivers
 
-BuildWarden supports three build drivers, each providing the same hermetic build
+BuildWarden supports four build drivers, each providing the same hermetic build
 guarantee with different isolation technologies. The driver determines what
 runs your build code and how network isolation is enforced.
 
@@ -165,18 +165,17 @@ relay — no vmnet entitlement is needed.
 
 ### First-Time Setup
 
-1. **Image restore** — On first use, the VZ driver downloads an IPSW from
-   Apple and restores a macOS VM image. This is a one-time operation.
+On first use, prepare the macOS build image. This downloads an IPSW from Apple,
+restores a macOS VM image, and installs `warden-io` and the LaunchDaemon into
+it:
 
-2. **Image preparation** — Install `warden-io` and the LaunchDaemon into the
-   macOS disk image:
-   ```sh
-   sudo warden image prepare
-   ```
-   This must run as root because it mounts and modifies the VM disk image.
+```sh
+warden image prepare --driver vz
+```
 
-3. **Subsequent builds** — The prepared image is cloned (copy-on-write) for
-   each build, so startup is fast.
+Re-running `warden image prepare --driver vz` on an already-restored image
+refreshes its warden boot agent instead of restoring again. Subsequent builds
+clone the prepared image (copy-on-write) for each build, so startup is fast.
 
 ### Examples
 
@@ -191,6 +190,58 @@ warden build --driver vz --script ./build.sh .
 - The host relay process creates a socketpair and attaches one end to the VM
 - gvisor netstack processes raw Ethernet frames on the host side
 - The build VM sees a single network interface whose only path is the relay
+
+---
+
+## Hyper-V Driver
+
+`--driver hyperv` (Windows only)
+
+The Hyper-V driver runs builds inside a Hyper-V virtual machine. Like QEMU it
+uses a two-VM topology: an Alpine relay VM provides the network bridge, and a
+build VM (Windows or Linux) connects only through it. The relay VM reaches
+upstream through an Internal NAT switch; the build VM sits on a Private build
+switch with no other path.
+
+### Requirements
+
+- Windows with Hyper-V and its management stack enabled
+- Membership in Hyper-V Administrators (or an elevated terminal)
+
+### Setup
+
+Create the durable network builds reuse (one time, from an elevated terminal):
+
+```sh
+warden setup --driver hyperv
+```
+
+Prepare a Windows Server base image (first prepare needs the evaluation VHD URL):
+
+```sh
+warden image prepare --driver hyperv --source https://.../server2025.vhd
+```
+
+Optionally install the privileged helper service so builds run without
+elevation and stand up a fresh isolated network per build:
+
+```sh
+warden hyperv service install     # run once, elevated
+```
+
+### How It Works
+
+- The relay VM boots from a UKI boot disk with `/sbin/relay` baked in
+  (`tools/relay-vm/hyperv/build.sh`)
+- It is reachable on a static host-only NAT IP (`192.168.240.2:8301`) for the
+  claim; the build VM cannot reach the claim port
+- Network isolation is topological, enforced by the switch layout
+
+### Examples
+
+```sh
+warden build --driver hyperv --guest-os windows ./win-project
+```
 
 ---
 
@@ -237,11 +288,11 @@ build ran in a container, a QEMU VM, or a macOS VZ VM.
 
 ### Choosing a Driver
 
-| | Container | QEMU | VZ |
-|---|---|---|---|
-| **Platforms** | macOS, Linux, Windows | macOS, Linux, Windows | macOS (Apple Silicon) |
-| **Isolation** | Network namespace + iptables | Topological (separate VM) | Topological (separate VM) |
-| **Performance** | Native speed | Near-native (HVF/KVM) | Near-native (Hypervisor.framework) |
-| **Build OS** | Linux (container image) | Linux (cloud image) | macOS |
-| **Setup effort** | Minimal | Moderate (build VM assets) | Moderate (image restore + prepare) |
-| **Best for** | Linux builds, CI/CD | Linux builds needing stronger isolation | macOS-native builds (Xcode, Swift) |
+| | Container | QEMU | VZ | Hyper-V |
+|---|---|---|---|---|
+| **Platforms** | macOS, Linux, Windows | macOS, Linux, Windows | macOS (Apple Silicon) | Windows |
+| **Isolation** | Network namespace + iptables | Topological (separate VM) | Topological (separate VM) | Topological (separate VM) |
+| **Performance** | Native speed | Near-native (HVF/KVM) | Near-native (Hypervisor.framework) | Near-native (Hyper-V) |
+| **Build OS** | Linux (container image) | Linux or Windows | macOS | Windows or Linux |
+| **Setup effort** | Minimal | Moderate (relay VM assets) | Moderate (image prepare) | Moderate (host setup + image prepare) |
+| **Best for** | Linux builds, CI/CD | Linux/Windows builds needing stronger isolation | macOS-native builds (Xcode, Swift) | Windows-native builds |

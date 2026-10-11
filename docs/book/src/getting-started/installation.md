@@ -74,11 +74,11 @@ The build produces the following binaries in `dist/`:
 After building from source on macOS Apple Silicon:
 
 ```sh
-make build                    # Builds + codesigns with virtualization entitlement
-sudo warden image prepare     # Downloads macOS IPSW, restores VM, installs warden-io
+make build                           # Builds + codesigns with virtualization entitlement
+warden image prepare --driver vz     # Downloads macOS IPSW, restores VM, installs warden-io
 ```
 
-The `image prepare` step downloads a macOS restore image, creates a VM disk, boots it, and installs the warden-io agent. This only needs to be done once (or when upgrading).
+The `image prepare` step downloads a macOS restore image, creates a VM disk, boots it, and installs the warden-io agent. This only needs to be done once (or when upgrading); re-running it on a prepared image refreshes the warden boot agent.
 
 ## First-time QEMU Setup
 

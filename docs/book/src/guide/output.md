@@ -1,19 +1,24 @@
 # Output Directory
 
-Every `warden build` produces a self-contained output directory with everything needed to verify the build.
+Every `warden build` produces a self-contained output directory with everything needed to verify the build. The layout is identical for every driver.
 
 ## Structure
 
 ```
 warden-output/
-├── ledger.zst              # Cryptographic ledger (compressed)
-├── Dockerfile.submitted    # The original Dockerfile you provided
-├── Dockerfile.actual       # What BuildWarden actually ran
-├── ca.cert.pem.zst         # Ephemeral CA cert (compressed)
-├── relay.log               # Relay application log
-└── artifacts/              # Build outputs posted to the ledger
-    └── myapp-1.0.0.whl
+├── ledger.zst              # Cryptographic ledger (compressed by default)
+├── ca.cert.pem.zst         # Ephemeral CA cert (compressed by default)
+├── build-output.log        # Captured build console output
+├── artifacts/              # Build outputs posted to the ledger
+│   └── myapp-1.0.0.whl
+├── captures/               # Captured payloads (only with --capture)
+│   └── <name> -> ../payloads/<hash>
+└── payloads/               # Content-addressed payload storage
+    └── <hash>
 ```
+
+The container driver also writes `Dockerfile.submitted`, `Dockerfile.actual`,
+`build.sh` (the translated build script), and `relay.log`.
 
 ## File Details
 
@@ -28,22 +33,33 @@ warden inspect warden-output
 
 ### Dockerfile.submitted
 
-Your original Dockerfile, unchanged. Preserved for comparison with what actually ran.
+Your original Dockerfile, unchanged. Preserved for comparison with what actually ran. Written by the container driver only.
 
 ### Dockerfile.actual
 
-The rewritten Dockerfile that BuildWarden executed. Differences from submitted:
+The rewritten Dockerfile that BuildWarden executed. Written by the container
+driver only. Differences from submitted:
 - `COPY .warden /.warden` and extension setup injected after `FROM`
 - `COPY` directives rewritten to `RUN curl` commands for provenance
 - Environment variables from extensions added
 
 ### ca.cert.pem
 
-The ephemeral CA certificate generated for this build's TLS interception. The private key existed only in the relay container's memory and was destroyed on teardown.
+The ephemeral CA certificate generated for this build's TLS interception. The
+private key existed only in the relay's memory and was destroyed on teardown;
+the orchestrator receives only the public certificate when it claims the relay,
+and writes it here.
+
+### build-output.log
+
+The build's console output, streamed from the guest to the collector as the
+build runs. Written for every driver (suppressed from the terminal, but not
+from this file, by `-q/--quiet`).
 
 ### relay.log
 
-Application-level log from the relay process. Contains:
+Application-level log from the relay process. Written by the container driver
+only. Contains:
 - DNS resolution events
 - Artifact storage confirmations
 - Error messages (if any)
@@ -51,14 +67,15 @@ Application-level log from the relay process. Contains:
 ### artifacts/
 
 Named build outputs. Each artifact was:
-1. POSTed to `http://artifacts/<name>` from within the Dockerfile
+1. POSTed to `http://artifacts/<name>` from within the build
 2. Hashed (blake2b_256, sha256, sha1, md5)
 3. Signed into the ledger
-4. Saved to disk
+4. Streamed to the collector and saved to disk
 
 ## Compression
 
-By default, the ledger and CA cert are compressed with zstd. Already-compressed files (zip, gzip, zstd, bzip2) are detected by magic bytes and stored as-is.
+By default, the ledger and CA certificate are compressed with zstd. This
+applies to every driver (previously the container driver only).
 
 Disable with:
 ```sh

@@ -1,5 +1,16 @@
 # Hyper-V Driver Implementation Plan
 
+> **Status note (integration pass):** the relay-host design described below
+> (config responder on :8299, relay pulling `/config` at boot, collector
+> listening on :8390 behind an inbound firewall rule) has been replaced by the
+> cross-driver model: the relay boots unconfigured, the host claims it at its
+> NAT address and serves the collector back over that host-initiated
+> connection (`relaycfg`, `driver.Session`). `warden hyperv doctor|setup` are
+> now `warden doctor|setup --driver hyperv`, and `warden image fetch` is
+> `warden image prepare --driver hyperv`. What changed and what still needs
+> validating on real Hyper-V is listed under Phase 5a in
+> [vm-driver-release-plan.md](vm-driver-release-plan.md).
+
 ## Open Questions
 
 1. **Named Pipes vs Hyper-V Sockets (hvsock) for relay-build link?**
