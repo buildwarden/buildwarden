@@ -3,14 +3,28 @@ package main
 import (
 	"flag"
 	"fmt"
+	"log"
 	"net"
+	"net/http"
 	"os"
+	"strconv"
+
+	"github.com/buildwarden/buildwarden/relay"
+	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
 func main() {
 	os.Exit(run())
 }
 
+// The relay binary boots unconfigured in every mode: it binds its guest-facing
+// listeners, then waits for the orchestrator to claim it (relaycfg) with the
+// build's collector and settings. Modes differ only in how guest traffic
+// arrives:
+//
+//	host       Ethernet frames on an inherited socketpair fd (vz), SSRF on
+//	vm         the relay is init in its own VM (qemu, hyperv)
+//	container  sidecar container on an isolated network (container driver)
 func run() int {
 	// Prevent key material from appearing in core dumps (platform-specific).
 	disableCoreDumps()
@@ -21,63 +35,85 @@ func run() int {
 		"File descriptor number for host mode fd ingress")
 	subnet := flag.String("subnet", "10.100.0.0/30",
 		"Subnet for host mode (gateway=.1, guest=.2)")
+	claimAddr := flag.String("claim-addr", ":"+strconv.Itoa(relaycfg.DefaultPort),
+		"Address to accept the orchestrator's claim on")
 	flag.Parse()
 
 	if *mode == "" {
-		*mode = detectMode(*fdNum)
+		*mode = "container"
+		if isUnixSocket(*fdNum) {
+			*mode = "host"
+		}
 	}
-
-	outDir := os.Getenv("LEDGER_DIR")
-	if outDir == "" {
-		outDir = "/ledger"
-	}
-
-	ctxDir := os.Getenv("CONTEXT_DIR")
-	if ctxDir == "" {
-		ctxDir = "/context"
-	}
-
-	sigDir := os.Getenv("SIGNAL_DIR")
-	captureMode := os.Getenv("CAPTURE_MODE")
-
-	// BUILD_SCRIPT locates the build script the guest fetches from the canonical
-	// /build-script endpoint. Share-backed drivers set it to a path relative to
-	// CONTEXT_DIR; on Hyper-V it is unset and the script comes from the collector.
-	scriptRel := os.Getenv("BUILD_SCRIPT")
 
 	switch *mode {
 	case "host":
-		return runHostMode(*fdNum, *subnet, outDir, ctxDir, sigDir, captureMode, scriptRel)
-	case "vm":
-		return runVMMode(outDir, ctxDir, sigDir, captureMode, scriptRel)
-	case "container":
-		return runContainerMode(outDir, ctxDir, captureMode, scriptRel)
+		return runHostMode(*fdNum, *subnet, *claimAddr)
+	case "vm", "container":
+		// Binds the standard ports directly. No SSRF filter: isolation comes
+		// from the relay VM's iptables or the container's network namespace.
+		return serveClaim(*claimAddr, relay.Config{}, nil)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown mode: %s\n", *mode)
 		return 1
 	}
 }
 
-// detectMode auto-detects the relay operating mode.
-func detectMode(fdNum int) string {
-	// Check if inherited FD exists and is an AF_UNIX socket → host mode
-	if isUnixSocket(fdNum) {
-		return "host"
+// serveClaim waits for the single claim, starts the relay with base merged
+// with the claimed config, and then runs it until it stops. cleanup, if set,
+// runs once the relay has exited.
+func serveClaim(claimAddr string, base relay.Config, cleanup func()) int {
+	if cleanup != nil {
+		defer cleanup()
 	}
-
-	// PID 1 + /shared/relay.env → VM mode (relay is init in its own VM)
-	if os.Getpid() == 1 {
-		if _, err := os.Stat("/shared/relay.env"); err == nil {
-			return "vm"
-		}
+	ln, err := net.Listen("tcp", claimAddr)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "relay: claim listener: %v\n", err)
+		return 1
 	}
+	log.Printf("relay: awaiting claim on %s", ln.Addr())
 
-	// Default: container mode
-	return "container"
+	var r *relay.Relay
+	err = relaycfg.Serve(ln, os.Getenv(relaycfg.TokenEnv),
+		func(c relaycfg.Config, transport http.RoundTripper) (relaycfg.Identity, error) {
+			cfg := applyClaim(base, c)
+			cfg.CollectorTransport = transport
+			started, err := relay.Start(cfg)
+			if err != nil {
+				return relaycfg.Identity{}, err
+			}
+			r = started
+			return relaycfg.Identity{
+				CACert:          string(r.CACert()),
+				LedgerPublicKey: r.LedgerPublicKeyHex(),
+			}, nil
+		})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "relay: %v\n", err)
+		return 1
+	}
+	log.Printf("relay: claimed")
+
+	if err := r.Wait(); err != nil {
+		fmt.Fprintf(os.Stderr, "relay error: %v\n", err)
+		return 1
+	}
+	return 0
 }
 
-// isUnixSocket is implemented per-platform: on unix it inspects the inherited
-// fd; on windows it always returns false (fd ingress is a unix-only transport).
+// applyClaim overlays the orchestrator's per-build config on the mode's base.
+func applyClaim(base relay.Config, c relaycfg.Config) relay.Config {
+	cfg := base
+	cfg.CollectorURL = c.CollectorURL
+	cfg.CollectorToken = c.CollectorToken
+	cfg.CaptureMode = c.CaptureMode
+	cfg.Environment = c.Environment
+	for _, pem := range c.UpstreamCACerts {
+		cfg.UpstreamCACerts = append(cfg.UpstreamCACerts, []byte(pem))
+	}
+	cfg.UpstreamSystemCA = c.UpstreamSystemCA
+	return cfg
+}
 
 // parseSubnet parses a CIDR and returns gateway (.1) and guest (.2) IPs.
 func parseSubnet(cidr string) (gw, guest net.IP, mask net.IPMask, err error) {

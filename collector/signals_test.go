@@ -2,7 +2,9 @@ package collector
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
+	"errors"
 	"io"
 	"net/http"
 	"testing"
@@ -30,22 +32,24 @@ func postSignal(t *testing.T, url, token string, body []byte) *http.Response {
 	return resp
 }
 
-func TestReadyFiresCallback(t *testing.T) {
-	var fired bool
-	srv, _ := newTestServer(t, Config{Token: "t", OnReady: func() { fired = true }})
+func TestReadyClosesChannel(t *testing.T) {
+	srv, c := newTestCollector(t, Config{Token: "t"})
 	resp := postSignal(t, srv.URL+"/v1/ready", "t", nil)
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("status = %d, want 200", resp.StatusCode)
 	}
-	if !fired {
-		t.Fatal("OnReady was not invoked")
+	select {
+	case <-c.Ready():
+	case <-time.After(time.Second):
+		t.Fatal("Ready() was not closed")
 	}
+	// A second ready must not panic on a double close.
+	postSignal(t, srv.URL+"/v1/ready", "t", nil).Body.Close()
 }
 
-func TestCompleteFiresCallbackAndStatus(t *testing.T) {
-	var got CompletionSignal
-	srv, _ := newTestServer(t, Config{Token: "t", OnComplete: func(s CompletionSignal) { got = s }})
+func TestCompleteDeliversAndStatus(t *testing.T) {
+	srv, c := newTestCollector(t, Config{Token: "t"})
 
 	body := []byte(`{"exit_code":42,"message":"done","error":""}`)
 	resp := postSignal(t, srv.URL+"/v1/complete", "t", body)
@@ -53,11 +57,12 @@ func TestCompleteFiresCallbackAndStatus(t *testing.T) {
 	if resp.StatusCode != http.StatusOK {
 		t.Fatalf("complete status = %d, want 200", resp.StatusCode)
 	}
+	got := <-c.Done()
 	if got.ExitCode != 42 || got.Message != "done" {
-		t.Fatalf("OnComplete signal = %+v, want ExitCode 42 / Message \"done\"", got)
+		t.Fatalf("Done signal = %+v, want ExitCode 42 / Message \"done\"", got)
 	}
 	if got.ReceivedAt.IsZero() {
-		t.Fatal("OnComplete signal has zero ReceivedAt")
+		t.Fatal("Done signal has zero ReceivedAt")
 	}
 
 	// A subsequent GET /v1/status returns the stored signal.
@@ -149,5 +154,51 @@ func TestDoneDeliversSignal(t *testing.T) {
 	// Status re-reads the recorded signal after Done was consumed.
 	if got, ok := c.Status(); !ok || got.ExitCode != 7 {
 		t.Fatalf("Status after Done = %+v ok=%v, want ExitCode 7", got, ok)
+	}
+}
+
+func TestWaitReturnsCompletion(t *testing.T) {
+	c, err := New(Config{OutputDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	go c.recordCompletion(CompletionSignal{ExitCode: 3})
+	sig, err := c.Wait(context.Background(), time.Minute)
+	if err != nil || sig.ExitCode != 3 {
+		t.Fatalf("Wait = %+v, %v; want exit 3", sig, err)
+	}
+}
+
+func TestWaitDetectsStaleHeartbeat(t *testing.T) {
+	c, err := New(Config{OutputDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	c.lastHeartbeat.Store(time.Now().Add(-time.Hour).UnixNano())
+	_, err = c.Wait(context.Background(), 10*time.Millisecond)
+	var ue *ErrUnresponsive
+	if !errors.As(err, &ue) {
+		t.Fatalf("Wait err = %v, want ErrUnresponsive", err)
+	}
+}
+
+func TestWaitIgnoresMissingHeartbeat(t *testing.T) {
+	c, err := New(Config{OutputDir: t.TempDir()})
+	if err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
+	defer cancel()
+	_, err = c.Wait(ctx, 10*time.Millisecond)
+	if !errors.Is(err, context.DeadlineExceeded) {
+		t.Fatalf("Wait err = %v, want deadline (no heartbeat yet is not a hang)", err)
+	}
+}
+
+func TestHeartbeatEndpoint(t *testing.T) {
+	srv, c := newTestCollector(t, Config{Token: "t"})
+	postSignal(t, srv.URL+"/v1/heartbeat", "t", nil).Body.Close()
+	if c.LastHeartbeat().IsZero() {
+		t.Fatal("heartbeat not recorded")
 	}
 }

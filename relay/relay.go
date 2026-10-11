@@ -18,23 +18,35 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
 	"time"
 
 	"github.com/fxamacker/cbor/v2"
+
+	"github.com/buildwarden/buildwarden/collector"
+	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
 // Config holds parameters for starting a relay.
 type Config struct {
-	LedgerDir   string
-	ContextDir  string
+	// CollectorURL is the base URL of the build's collector. Required: it is
+	// the relay's only output path and the source of the build script and
+	// context files.
+	CollectorURL string
+	// CollectorToken is the bearer token presented on every collector request.
+	CollectorToken string
+	// CollectorTransport, when set, carries collector requests (the
+	// orchestrator's tunnel); nil dials CollectorURL directly.
+	CollectorTransport http.RoundTripper
+
 	CaptureMode string
 	SelfIP      net.IP
 	UpstreamDNS string
-	SignalDir   string
+
+	// Environment, when set, is recorded as the ledger's first entry.
+	Environment *relaycfg.Environment
 
 	// SSRF controls whether the safe dialer blocks loopback/metadata IPs.
 	// Required for host-mode relay; container/VM modes rely on iptables/hypervisor.
@@ -62,28 +74,6 @@ type Config struct {
 	// server instead of binding :8300. Used in FD mode where the control
 	// plane is served through the netstack.
 	ControlListener net.Listener
-
-	// OutputWriter receives build output from the /v1/output endpoint.
-	// Defaults to os.Stderr if nil.
-	OutputWriter io.Writer
-
-	// OutputSinkURL, when non-empty, routes the relay's outputs (artifacts,
-	// ledger, build output, and ready/complete signals) to a remote HTTP
-	// collector at this base URL instead of the local filesystem. Empty (the
-	// default) selects the local sink, preserving today's exact behavior.
-	OutputSinkURL string
-	// OutputSinkToken is the bearer token presented on every collector write
-	// when OutputSinkURL is set.
-	OutputSinkToken string
-
-	// BuildScriptPath locates the build script the guest fetches from the
-	// canonical http://artifacts/build-script endpoint. When OutputSinkURL is
-	// empty (share-backed drivers: container/qemu/vz), it is a path RELATIVE to
-	// ContextDir (e.g. "build.sh", "build.ps1", ".warden/build.sh"); empty
-	// defaults to "build.sh". When OutputSinkURL is set (Hyper-V and other
-	// diskless relays), it is ignored: the script is fetched on demand from the
-	// collector's GET /v1/build-script instead, since there is no shared disk.
-	BuildScriptPath string
 }
 
 // Relay is the core proxy that intercepts network traffic and writes a ledger.
@@ -94,11 +84,8 @@ type Relay struct {
 	caKey    []byte
 	mitmCert *tls.Certificate
 
-	ledger     *Ledger
-	ledgerFile *os.File
-	sink       OutputSink
-	outDir     string
-	contextDir string
+	ledger *Ledger
+	sink   *collectorClient
 	// flushOnce guards the ledger finish+flush so it runs exactly once whether
 	// triggered by build completion (/exit), a listener failure (Wait), or Stop.
 	flushOnce sync.Once
@@ -151,24 +138,13 @@ const maxArtifactBytes = 2 * 1024 * 1024 * 1024
 // Start initializes and starts the relay. It begins listening on DNS, HTTP,
 // HTTPS, and control plane ports. Call Wait() to block until a listener fails.
 func Start(cfg Config) (*Relay, error) {
-	if err := os.MkdirAll(filepath.Join(cfg.LedgerDir, "payloads"), 0755); err != nil {
-		return nil, fmt.Errorf("creating ledger directory: %w", err)
-	}
-
-	if cfg.CaptureMode != "" && cfg.CaptureMode != "none" {
-		if err := os.MkdirAll(filepath.Join(cfg.LedgerDir, "captures"), 0755); err != nil {
-			return nil, fmt.Errorf("creating captures directory: %w", err)
-		}
-	}
-
-	if cfg.SignalDir != "" {
-		_ = os.MkdirAll(cfg.SignalDir, 0755)
+	if cfg.CollectorURL == "" {
+		return nil, fmt.Errorf("relay: CollectorURL is required")
 	}
 
 	r := &Relay{
 		cfg:          cfg,
-		outDir:       cfg.LedgerDir,
-		contextDir:   cfg.ContextDir,
+		sink:         newCollectorClient(cfg.CollectorURL, cfg.CollectorToken, cfg.CollectorTransport),
 		reqSigs:      make(map[*http.Request][]byte),
 		reqBaseNames: make(map[*http.Request]string),
 		certCache:    make(map[string]*tls.Certificate),
@@ -178,21 +154,10 @@ func Start(cfg Config) (*Relay, error) {
 	r.setCaptureMode(cfg.CaptureMode)
 	r.buildTransport()
 
-	// Select the output sink. Empty URL => local filesystem sink (default,
-	// today's exact behavior); non-empty => stream to the remote collector.
-	if cfg.OutputSinkURL == "" {
-		r.sink = newLocalSink(r)
-	} else {
-		r.sink = newHTTPSink(cfg.OutputSinkURL, cfg.OutputSinkToken)
-	}
-
-	// Create ledger writer via the sink (local file, or in-memory buffer for
-	// the http sink flushed on Finish/Wait).
-	ledgerWriter, err := r.sink.LedgerWriter()
+	ledgerWriter, err := r.sink.openLedger()
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("opening ledger stream: %w", err)
 	}
-
 	r.ledger, err = NewLedger(LedgerConfig{
 		Writer:      ledgerWriter,
 		Environment: map[string]any{"type": "container"},
@@ -202,7 +167,7 @@ func Start(cfg Config) (*Relay, error) {
 	}
 
 	// Record build environment
-	if err := r.recordEnvironmentFromVolume(); err != nil {
+	if err := r.recordEnvironment(); err != nil {
 		return nil, fmt.Errorf("recording environment: %w", err)
 	}
 
@@ -231,12 +196,6 @@ func Start(cfg Config) (*Relay, error) {
 		return nil, fmt.Errorf("generating CA: %w", err)
 	}
 
-	// Write CA cert for orchestrator to inject
-	caPath := filepath.Join(cfg.LedgerDir, "ca.cert.pem")
-	if err := os.WriteFile(caPath, r.caCert, 0644); err != nil {
-		return nil, fmt.Errorf("writing CA cert: %w", err)
-	}
-
 	// Start listeners
 	go r.runHeartbeat()
 	go func() { r.errs <- r.runDNS() }()
@@ -246,9 +205,7 @@ func Start(cfg Config) (*Relay, error) {
 
 	log.Printf("relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp")
 
-	// Signal readiness once the relay is up and serving. For the local sink
-	// this is a no-op; for the http sink it POSTs /v1/ready to the collector.
-	if err := r.sink.PostReady(); err != nil {
+	if err := r.sink.postReady(); err != nil {
 		log.Printf("relay: PostReady failed: %v", err)
 	}
 
@@ -267,34 +224,22 @@ func (r *Relay) Stop() {
 	r.finishAndFlush()
 }
 
-// finishAndFlush finalizes the ledger and flushes it to the sink exactly once,
-// regardless of which path triggers it (build completion via /exit, a listener
-// failure via Wait, or an explicit Stop). For the local sink the ledger is
-// already on disk and FlushLedger is a no-op; for the http sink (diskless
-// relays like Hyper-V) this PUTs the buffered ledger to the collector. It MUST
-// run before the orchestrator tears down the relay VM, which the /exit path
-// ensures by calling it before signaling completion.
+// finishAndFlush finalizes the ledger and PUTs it to the collector exactly
+// once, whichever path triggers it (build completion, a listener failure via
+// Wait, or Stop). The completion path calls it before signalling, since the
+// orchestrator tears the relay down as soon as it sees completion.
 func (r *Relay) finishAndFlush() {
 	r.flushOnce.Do(func() {
 		r.ledger.Finish()
-		if ferr := r.sink.FlushLedger(); ferr != nil {
-			log.Printf("relay: flushing ledger: %v", ferr)
+		if err := r.sink.flushLedger(); err != nil {
+			log.Printf("relay: flushing ledger: %v", err)
 		}
 	})
 }
 
-// PostComplete signals build completion to the output sink. For the local sink
-// this is a no-op; for the http sink it POSTs /v1/complete with the exit code,
-// message and error string. The orchestrator calls this at build end; the call
-// site over the netstack control plane is finished in a later change.
-func (r *Relay) PostComplete(exitCode int, message, errStr string) error {
-	return r.sink.PostComplete(exitCode, message, errStr)
-}
-
-// hashHex renders the primary (first 32-byte) hash of a ledger hash block as
-// hex, matching the historical content-address for payload files.
-func hashHex(hashBlock []byte) string {
-	return hex.EncodeToString(hashBlock[:32])
+// LedgerPublicKeyHex returns the hex Ed25519 key that signs this ledger.
+func (r *Relay) LedgerPublicKeyHex() string {
+	return hex.EncodeToString(r.ledger.PublicKey())
 }
 
 // CACert returns the PEM-encoded ephemeral CA certificate.
@@ -424,27 +369,16 @@ func (r *Relay) detectUpstreamDNS() {
 	r.upstreamDNS = "8.8.8.8:53"
 }
 
-func (r *Relay) recordEnvironmentFromVolume() error {
-	envDir := filepath.Join(r.cfg.LedgerDir, "environment")
-	if _, err := os.Stat(envDir); os.IsNotExist(err) {
+func (r *Relay) recordEnvironment() error {
+	env := r.cfg.Environment
+	if env == nil {
 		return nil
 	}
-
-	payload, err := os.ReadFile(filepath.Join(envDir, "payload"))
-	if err != nil {
-		return fmt.Errorf("reading environment payload: %w", err)
-	}
-	if len(payload) == 0 {
+	if len(env.Payload) == 0 {
 		return fmt.Errorf("environment payload is empty")
 	}
-
-	metaBytes, err := os.ReadFile(filepath.Join(envDir, "metadata"))
-	if err != nil {
-		return fmt.Errorf("reading environment metadata: %w", err)
-	}
-
 	var meta map[string]any
-	if err := cbor.Unmarshal(metaBytes, &meta); err != nil {
+	if err := cbor.Unmarshal(env.Metadata, &meta); err != nil {
 		return fmt.Errorf("invalid environment metadata CBOR: %w", err)
 	}
 
@@ -453,10 +387,10 @@ func (r *Relay) recordEnvironmentFromVolume() error {
 	})
 	openSig := r.ledger.Open(schemaEnvCtr, openMeta)
 
-	hashBlock := r.ledger.ComputeHashBlock(payload)
-	r.ledger.Close(openSig, -int64(len(payload)), hashBlock, schemaEnvCtr, metaBytes)
+	hashBlock := r.ledger.ComputeHashBlock(env.Payload)
+	r.ledger.Close(openSig, -int64(len(env.Payload)), hashBlock, schemaEnvCtr, env.Metadata)
 
-	log.Printf("relay: environment recorded (%d bytes)", len(payload))
+	log.Printf("relay: environment recorded (%d bytes)", len(env.Payload))
 	return nil
 }
 
@@ -473,12 +407,10 @@ func (r *Relay) onRequest(req *http.Request) (*http.Request, *http.Response) {
 			if q := req.URL.Query().Get("code"); q != "" {
 				_, _ = fmt.Sscanf(q, "%d", &code)
 			}
-			r.writeExitCode(code)
+			r.complete(code)
 			return req, newTextResponse(req, http.StatusOK, "ok\n")
 		case "/ca.pem":
 			return r.handleCACertGet(req)
-		case "/warden-io":
-			return r.handleAgentBinaryGet(req)
 		case "/build-script":
 			return r.handleBuildScript(req)
 		default:
@@ -601,7 +533,7 @@ func (r *Relay) handleArtifactPost(req *http.Request) (*http.Request, *http.Resp
 	if artifactName == "" {
 		artifactName = "unnamed"
 	}
-	if !isSafePath(artifactName) {
+	if !collector.IsSafeArtifactPath(artifactName) {
 		return req, newTextResponse(req, http.StatusBadRequest, "invalid artifact name\n")
 	}
 
@@ -622,13 +554,11 @@ func (r *Relay) handleArtifactPost(req *http.Request) (*http.Request, *http.Resp
 		openSig, -int64(len(reqHeaders)), hb, schemaHTTPHeaders, headersMeta,
 	)
 
-	// Route the artifact body through the output sink. Both sinks hash the
-	// identical byte stream via a StreamingHasher fed through io.TeeReader, so
-	// the ledger record below is byte-identical regardless of where the bytes
-	// land (local content-addressed payload, or streamed to the collector).
+	// Stream the body to the collector, hashing the identical byte stream for
+	// the ledger record (constant memory).
 	hasher := NewStreamingHasher(r.ledger.hashes)
 	limited := &limitedReader{r: req.Body, remaining: maxArtifactBytes + 1}
-	hashBlock, size, err := r.sink.PutArtifact(artifactName, limited, hasher)
+	hashBlock, size, err := r.sink.putArtifact(artifactName, limited, hasher)
 	req.Body.Close()
 	if err != nil {
 		if limited.exceeded {
@@ -666,200 +596,67 @@ func (r *Relay) handleCACertGet(req *http.Request) (*http.Request, *http.Respons
 	return req, resp
 }
 
-func (r *Relay) handleAgentBinaryGet(req *http.Request) (*http.Request, *http.Response) {
-	agentPath := filepath.Join(filepath.Dir(r.contextDir), "agent", "warden-io")
-	data, err := os.ReadFile(agentPath)
-	if err != nil {
-		return req, newTextResponse(req, http.StatusNotFound, "warden-io not available\n")
-	}
-	resp := &http.Response{
-		StatusCode:    http.StatusOK,
-		Status:        "200 OK",
-		Proto:         "HTTP/1.1",
-		ProtoMajor:    1,
-		ProtoMinor:    1,
-		Header:        http.Header{"Content-Type": {"application/octet-stream"}},
-		Body:          io.NopCloser(bytes.NewReader(data)),
-		ContentLength: int64(len(data)),
-	}
-	return req, resp
-}
-
 // handleBuildScript serves the canonical build script the guest fetches from
-// http://artifacts/build-script. Two sources: when OutputSinkURL is set
-// (diskless relays like Hyper-V) it pulls the script on demand from the
-// collector's GET /v1/build-script over the trusted host link; otherwise it
-// reads ContextDir/BuildScriptPath (share-backed drivers). Either way the exact
-// bytes served are recorded in the provenance ledger, so the build instructions
-// are part of the witnessed record.
+// http://artifacts/build-script, pulled from the collector. The exact bytes
+// served are recorded in the ledger, so the build instructions are part of
+// the witnessed record.
 func (r *Relay) handleBuildScript(req *http.Request) (*http.Request, *http.Response) {
-	data, err := r.loadBuildScript()
-	if err != nil {
-		return req, newTextResponse(req, http.StatusNotFound,
-			fmt.Sprintf("build script unavailable: %s\n", err))
+	data, _, status, err := r.sink.fetch("/v1/build-script")
+	if err != nil || status != http.StatusOK {
+		return req, newTextResponse(req, http.StatusNotFound, "build script unavailable\n")
 	}
-
-	openMeta, _ := cbor.Marshal(map[string]any{
-		"method":   "GET",
-		"url":      req.URL.String(),
-		"protocol": req.Proto,
-	})
-	openSig := r.ledger.Open(schemaHTTPOpen, openMeta)
-	hashBlock := r.ledger.ComputeHashBlock(data)
-	closeMeta, _ := cbor.Marshal(map[string]any{"path": "build-script"})
-	r.ledger.Close(openSig, int64(len(data)), hashBlock, schemaHTTPBody, closeMeta)
-
-	resp := &http.Response{
-		StatusCode:    http.StatusOK,
-		Status:        "200 OK",
-		Proto:         "HTTP/1.1",
-		ProtoMajor:    1,
-		ProtoMinor:    1,
-		Header:        http.Header{"Content-Type": {"application/octet-stream"}},
-		Body:          io.NopCloser(bytes.NewReader(data)),
-		ContentLength: int64(len(data)),
-	}
-	return req, resp
+	r.recordServed(req, data, "build-script")
+	return req, newBytesResponse(req, data, "application/octet-stream")
 }
 
-// loadBuildScript returns the build-script bytes from the collector (when
-// OutputSinkURL is set) or from ContextDir (otherwise, at BuildScriptPath).
-func (r *Relay) loadBuildScript() ([]byte, error) {
-	if r.cfg.OutputSinkURL != "" {
-		return r.fetchBuildScriptFromCollector()
-	}
-	rel := r.cfg.BuildScriptPath
-	if rel == "" {
-		rel = "build.sh"
-	}
-	if !isSafeContextPath(rel) {
-		return nil, fmt.Errorf("invalid build script path %q", rel)
-	}
-	// isSafeContextPath forbids absolute paths and ".." traversal, so the join
-	// stays within ContextDir.
-	return os.ReadFile(filepath.Join(r.contextDir, rel))
-}
-
-// fetchBuildScriptFromCollector pulls the build script from the collector on
-// demand. The collector is a trusted host endpoint on the isolated NAT link (a
-// private IP), so this uses a dedicated client rather than the relay's
-// SSRF-filtered upstream transport, which would block a private address.
-func (r *Relay) fetchBuildScriptFromCollector() ([]byte, error) {
-	url := strings.TrimRight(r.cfg.OutputSinkURL, "/") + "/v1/build-script"
-	httpReq, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return nil, err
-	}
-	if r.cfg.OutputSinkToken != "" {
-		httpReq.Header.Set("Authorization", "Bearer "+r.cfg.OutputSinkToken)
-	}
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(httpReq)
-	if err != nil {
-		return nil, err
-	}
-	defer resp.Body.Close()
-	if resp.StatusCode != http.StatusOK {
-		return nil, fmt.Errorf("collector HTTP %d", resp.StatusCode)
-	}
-	return io.ReadAll(io.LimitReader(resp.Body, maxArtifactBytes))
-}
-
+// handleContextGet serves the build context at http://cwd/<path>: a file's
+// bytes (recorded in the ledger), or a newline listing for a directory, the
+// root, or a trailing-slash path.
 func (r *Relay) handleContextGet(req *http.Request) (*http.Request, *http.Response) {
 	filePath := strings.TrimPrefix(req.URL.Path, "/")
-
-	if filePath == "" || strings.HasSuffix(filePath, "/") {
-		return r.handleContextList(req, filePath)
-	}
-
-	if !isSafeContextPath(filePath) {
+	trimmed := strings.TrimSuffix(filePath, "/")
+	if trimmed != "" && !collector.IsSafeContextPath(trimmed) {
 		return req, newTextResponse(req, http.StatusForbidden, "forbidden\n")
 	}
 
-	fullPath := filepath.Join(r.contextDir, filePath)
-	if !strings.HasPrefix(fullPath, r.contextDir+"/") && fullPath != r.contextDir {
-		return req, newTextResponse(req, http.StatusForbidden, "forbidden\n")
-	}
-
-	info, statErr := os.Stat(fullPath)
-	if statErr != nil {
+	data, kind, status, err := r.sink.fetch("/v1/context/" + escapePath(filePath))
+	if err != nil || status != http.StatusOK {
 		return req, newTextResponse(req, http.StatusNotFound,
 			fmt.Sprintf("not found: %s\n", filePath))
 	}
-	if info.IsDir() {
-		return r.handleContextList(req, filePath+"/")
+	if kind == "list" {
+		return req, newBytesResponse(req, data, "text/plain")
 	}
+	r.recordServed(req, data, filePath)
+	return req, newBytesResponse(req, data, "application/octet-stream")
+}
 
-	data, err := os.ReadFile(fullPath)
-	if err != nil {
-		return req, newTextResponse(req, http.StatusNotFound,
-			fmt.Sprintf("not found: %s\n", filePath))
-	}
-
+// recordServed records a relay-served input (build script, context file) in
+// the ledger as an inbound GET body.
+func (r *Relay) recordServed(req *http.Request, data []byte, path string) {
 	openMeta, _ := cbor.Marshal(map[string]any{
 		"method":   "GET",
 		"url":      req.URL.String(),
 		"protocol": req.Proto,
 	})
 	openSig := r.ledger.Open(schemaHTTPOpen, openMeta)
-
 	hashBlock := r.ledger.ComputeHashBlock(data)
-	closeMeta, _ := cbor.Marshal(map[string]any{"path": filePath})
+	closeMeta, _ := cbor.Marshal(map[string]any{"path": path})
 	r.ledger.Close(openSig, int64(len(data)), hashBlock, schemaHTTPBody, closeMeta)
-
-	resp := &http.Response{
-		StatusCode:    http.StatusOK,
-		Status:        "200 OK",
-		Proto:         "HTTP/1.1",
-		ProtoMajor:    1,
-		ProtoMinor:    1,
-		Header:        http.Header{"Content-Type": {"application/octet-stream"}},
-		Body:          io.NopCloser(strings.NewReader(string(data))),
-		ContentLength: int64(len(data)),
-	}
-	return req, resp
 }
 
-func (r *Relay) handleContextList(
-	req *http.Request, prefix string,
-) (*http.Request, *http.Response) {
-	dir := filepath.Join(r.contextDir, prefix)
-	if !strings.HasPrefix(dir, r.contextDir) {
-		return req, newTextResponse(req, http.StatusForbidden, "forbidden\n")
-	}
-
-	if _, err := os.Stat(dir); err != nil {
-		return req, newTextResponse(req, http.StatusNotFound,
-			fmt.Sprintf("directory not found: %s\n", prefix))
-	}
-
-	var files []string
-	_ = filepath.Walk(dir, func(p string, info os.FileInfo, err error) error {
-		if err != nil || info.IsDir() {
-			return nil
-		}
-		rel, _ := filepath.Rel(r.contextDir, p)
-		if isSafeContextPath(rel) {
-			files = append(files, rel)
-		}
-		return nil
-	})
-
-	body := strings.Join(files, "\n")
-	if len(files) > 0 {
-		body += "\n"
-	}
-	resp := &http.Response{
+func newBytesResponse(req *http.Request, data []byte, contentType string) *http.Response {
+	return &http.Response{
 		StatusCode:    http.StatusOK,
 		Status:        "200 OK",
 		Proto:         "HTTP/1.1",
 		ProtoMajor:    1,
 		ProtoMinor:    1,
-		Header:        http.Header{"Content-Type": {"text/plain"}},
-		Body:          io.NopCloser(strings.NewReader(body)),
-		ContentLength: int64(len(body)),
+		Header:        http.Header{"Content-Type": {contentType}},
+		Body:          io.NopCloser(bytes.NewReader(data)),
+		ContentLength: int64(len(data)),
+		Request:       req,
 	}
-	return req, resp
 }
 
 // --- helpers ---
@@ -1040,71 +837,4 @@ var authHeaders = map[string]bool{
 
 func isAuthHeader(name string) bool {
 	return authHeaders[http.CanonicalHeaderKey(name)]
-}
-
-const maxPathLen = 255
-
-func isSafePath(p string) bool {
-	if p == "" || len(p) > maxPathLen {
-		return false
-	}
-	if p[0] == '/' || p[len(p)-1] == '/' {
-		return false
-	}
-	for _, seg := range strings.Split(p, "/") {
-		if !isSafeSegment(seg) {
-			return false
-		}
-	}
-	return true
-}
-
-func isSafeSegment(s string) bool {
-	if s == "" || s == "." || s == ".." {
-		return false
-	}
-	if s[0] == '.' || s[0] == '-' || s[0] == '_' {
-		return false
-	}
-	last := s[len(s)-1]
-	if last == '.' || last == '-' || last == '_' {
-		return false
-	}
-	for _, c := range s {
-		if !isSafeChar(c) {
-			return false
-		}
-	}
-	return true
-}
-
-func isSafeChar(c rune) bool {
-	return (c >= 'a' && c <= 'z') ||
-		(c >= 'A' && c <= 'Z') ||
-		(c >= '0' && c <= '9') ||
-		c == '-' || c == '_' || c == '.'
-}
-
-func isSafeContextPath(p string) bool {
-	if p == "" || len(p) > maxPathLen {
-		return false
-	}
-	if p[0] == '/' || p[len(p)-1] == '/' {
-		return false
-	}
-	for _, seg := range strings.Split(p, "/") {
-		if seg == "" || seg == "." || seg == ".." {
-			return false
-		}
-		last := seg[len(seg)-1]
-		if last == '.' || last == '-' || last == '_' {
-			return false
-		}
-		for _, c := range seg {
-			if !isSafeChar(c) {
-				return false
-			}
-		}
-	}
-	return true
 }

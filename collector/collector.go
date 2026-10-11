@@ -1,70 +1,78 @@
-// Package collector receives build outputs (artifacts, ledger, build log)
-// streamed over HTTP by a relay's httpSink and lands them in an output
-// directory. It is the ingress counterpart to the relay's egress sink and a
-// standalone, reusable primitive: run it via cmd/collector, or embed it
-// in-process (as the Hyper-V driver does). Together with the relay (egress /
-// wire witness) and warden-io (in-guest agent) it is one of three composable
-// pieces a third-party orchestrator can reuse.
+// Package collector is the host side of the relay's single output path. Every
+// driver runs one collector per build: the relay streams every output
+// (artifacts, captures, the ledger, build output) and every signal (ready,
+// heartbeat, complete) to it over HTTP, and pulls every build input (the build
+// script and context files) from it. The relay therefore never needs a shared
+// filesystem, and the collector is the one place a deployment would swap local
+// disk for remote storage.
 //
 // Protocol (all but /healthz require Authorization: Bearer <token>):
 //
 //	PUT  /v1/artifacts/<name>   stream body -> <dir>/artifacts/<name>
+//	PUT  /v1/captures/<name>    stream body -> <dir>/payloads/<hash>,
+//	                            linked from <dir>/captures/<name>
+//	                            (hash from the Warden-Hash trailer)
 //	PUT  /v1/ledger             stream body -> <dir>/ledger
 //	POST /v1/output             append body -> <dir>/build-output.log
-//	GET  /v1/build-script       stream the build script staged for this build
-//	POST /v1/ready              relay is up; fires Config.OnReady
-//	POST /v1/complete           build finished; fires Config.OnComplete
+//	GET  /v1/build-script       the build script staged for this build
+//	GET  /v1/context/<path>     a context file, or a newline listing when
+//	                            <path> is a directory (Warden-Context header)
+//	POST /v1/ready              relay is up
+//	POST /v1/heartbeat          the build guest is alive
+//	POST /v1/complete           build finished (JSON exit code)
 //	GET  /v1/status             last completion, else {"state":"running"}
 //	GET  /healthz               liveness
 //
 // Bodies stream straight to disk with a fixed buffer, so multi-GB artifacts
-// (container images, large wheels) transfer in constant memory.
+// transfer in constant memory.
 package collector
 
 import (
 	"crypto/subtle"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
+	"sort"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
 )
+
+// HashTrailer is the HTTP trailer a relay sets on a capture upload, carrying
+// the hex content hash of the body it just streamed. The collector names the
+// content-addressed payload after it.
+const HashTrailer = "Warden-Hash"
+
+// ContextKindHeader tells the relay whether GET /v1/context returned a file
+// ("file") or a directory listing ("list").
+const ContextKindHeader = "Warden-Context"
 
 // Config configures a Collector.
 type Config struct {
 	// OutputDir is where received outputs are written. Required.
 	OutputDir string
-	// Token is the bearer token every write must present. Strongly recommended;
-	// empty disables auth (only acceptable on a fully trusted local link).
+	// Token is the bearer token every request must present. Empty disables
+	// auth (only acceptable on a fully trusted local link).
 	Token string
-	// BuildScriptPath is the host path to the build script staged for this
-	// build. When set, the collector serves its bytes on GET /v1/build-script
-	// so a diskless relay (Hyper-V) can pull the build instructions on demand
-	// and re-serve them to the guest. Empty disables the endpoint (404).
+	// BuildScriptPath is the host path of the build script served on
+	// GET /v1/build-script. Empty makes the endpoint 404.
 	BuildScriptPath string
-	// MaxArtifactBytes caps a single artifact; 0 uses the default.
+	// ContextDir is the host build context served on GET /v1/context/. Empty
+	// makes the endpoint 404.
+	ContextDir string
+	// MaxArtifactBytes caps a single upload; 0 uses the default.
 	MaxArtifactBytes int64
 	// Logf, if set, receives one-line progress logs.
 	Logf func(format string, args ...any)
-	// OutputTee, if set, receives a copy of build output as it is landed to
-	// build-output.log (POST /v1/output), so a driver embedding the collector
-	// can forward the guest's build console to the user. Set it to os.Stdout for
-	// live forwarding; leave nil (e.g. under --quiet) to suppress. Writes are
-	// best-effort: a tee error never fails the request or the file write.
+	// OutputTee, if set, receives a copy of build output as it lands in
+	// build-output.log, so the embedding driver can forward the guest's build
+	// console live. Leave nil (--quiet) to suppress. Tee errors are ignored.
 	OutputTee io.Writer
-	// OnReady, if set, is invoked when POST /v1/ready is received. It lets a
-	// driver embedding the collector in-process learn the relay has come up.
-	// Optional and nil-safe; called synchronously on the request goroutine.
-	OnReady func()
-	// OnComplete, if set, is invoked when POST /v1/complete is received, with
-	// the decoded signal. It lets an embedding driver react to build
-	// completion. Optional and nil-safe; called synchronously on the request
-	// goroutine, after the signal is stored.
-	OnComplete func(CompletionSignal)
 }
 
 const defaultMaxArtifactBytes = 4 * 1024 * 1024 * 1024 // 4 GiB
@@ -75,15 +83,17 @@ type Collector struct {
 	maxArtifact  int64
 	bytesWritten atomic.Int64
 
-	// mu guards completion; done is closed exactly once when the first
-	// completion arrives (safe for a single embedder waiting on Done).
+	ready         chan struct{}
+	readyOnce     sync.Once
+	lastHeartbeat atomic.Int64 // unix nanos; 0 = none yet
+
 	mu         sync.Mutex
 	completion *CompletionSignal
 	done       chan CompletionSignal
 	doneClosed bool
 }
 
-// New validates cfg and returns a Collector.
+// New creates a Collector, creating OutputDir if needed.
 func New(cfg Config) (*Collector, error) {
 	if cfg.OutputDir == "" {
 		return nil, fmt.Errorf("collector: OutputDir is required")
@@ -95,10 +105,15 @@ func New(cfg Config) (*Collector, error) {
 	if max <= 0 {
 		max = defaultMaxArtifactBytes
 	}
-	return &Collector{cfg: cfg, maxArtifact: max, done: make(chan CompletionSignal, 1)}, nil
+	return &Collector{
+		cfg:         cfg,
+		maxArtifact: max,
+		ready:       make(chan struct{}),
+		done:        make(chan CompletionSignal, 1),
+	}, nil
 }
 
-// BytesWritten reports the total bytes landed so far (across all outputs).
+// BytesWritten reports the total bytes landed so far.
 func (c *Collector) BytesWritten() int64 { return c.bytesWritten.Load() }
 
 func (c *Collector) logf(format string, args ...any) {
@@ -107,7 +122,7 @@ func (c *Collector) logf(format string, args ...any) {
 	}
 }
 
-// Handler returns the HTTP handler implementing the collector protocol.
+// Handler returns the collector's HTTP handler.
 func (c *Collector) Handler() http.Handler {
 	mux := http.NewServeMux()
 	mux.HandleFunc("/healthz", func(w http.ResponseWriter, _ *http.Request) {
@@ -115,17 +130,18 @@ func (c *Collector) Handler() http.Handler {
 		_, _ = io.WriteString(w, "ok\n")
 	})
 	mux.HandleFunc("/v1/artifacts/", c.auth(c.handleArtifact))
+	mux.HandleFunc("/v1/captures/", c.auth(c.handleCapture))
 	mux.HandleFunc("/v1/ledger", c.auth(c.handleLedger))
 	mux.HandleFunc("/v1/output", c.auth(c.handleOutput))
 	mux.HandleFunc("/v1/build-script", c.auth(c.handleBuildScript))
+	mux.HandleFunc("/v1/context/", c.auth(c.handleContext))
 	mux.HandleFunc("/v1/ready", c.auth(c.handleReady))
+	mux.HandleFunc("/v1/heartbeat", c.auth(c.handleHeartbeat))
 	mux.HandleFunc("/v1/complete", c.auth(c.handleComplete))
-	// /v1/status matches /healthz's auth stance (unauthenticated liveness/state).
 	mux.HandleFunc("/v1/status", c.handleStatus)
 	return mux
 }
 
-// auth wraps h with constant-time-ish bearer-token enforcement.
 func (c *Collector) auth(h http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, req *http.Request) {
 		if c.cfg.Token != "" {
@@ -139,13 +155,17 @@ func (c *Collector) auth(h http.HandlerFunc) http.HandlerFunc {
 	}
 }
 
+func isWrite(req *http.Request) bool {
+	return req.Method == http.MethodPut || req.Method == http.MethodPost
+}
+
 func (c *Collector) handleArtifact(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPut && req.Method != http.MethodPost {
+	if !isWrite(req) {
 		http.Error(w, "PUT only", http.StatusMethodNotAllowed)
 		return
 	}
 	name := strings.TrimPrefix(req.URL.Path, "/v1/artifacts/")
-	if !isSafeRelPath(name) {
+	if !IsSafeArtifactPath(name) {
 		http.Error(w, "invalid artifact name", http.StatusBadRequest)
 		return
 	}
@@ -159,14 +179,109 @@ func (c *Collector) handleArtifact(w http.ResponseWriter, req *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-func (c *Collector) handleLedger(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPut && req.Method != http.MethodPost {
+// handleCapture lands a captured payload content-addressed, the layout
+// `warden inspect --extract` reads: payloads/<hash> plus captures/<name>
+// linking to it. The hash arrives as a trailer because the relay only knows it
+// once the body has streamed.
+func (c *Collector) handleCapture(w http.ResponseWriter, req *http.Request) {
+	if !isWrite(req) {
 		http.Error(w, "PUT only", http.StatusMethodNotAllowed)
 		return
 	}
-	dst := filepath.Join(c.cfg.OutputDir, "ledger")
-	n, err := c.streamToFile(dst, req.Body, c.maxArtifact)
+	name := strings.TrimPrefix(req.URL.Path, "/v1/captures/")
+	name = sanitizeCaptureName(name)
+	if name == "" {
+		http.Error(w, "invalid capture name", http.StatusBadRequest)
+		return
+	}
+	payloads := filepath.Join(c.cfg.OutputDir, "payloads")
+	if err := os.MkdirAll(payloads, 0o755); err != nil {
+		c.writeErr(w, err)
+		return
+	}
+	tmp, err := os.CreateTemp(payloads, "incoming-*")
 	if err != nil {
+		c.writeErr(w, err)
+		return
+	}
+	_, err = c.copy(tmp, req.Body, c.maxArtifact)
+	closeErr := tmp.Close()
+	if err == nil {
+		err = closeErr
+	}
+	hash := req.Trailer.Get(HashTrailer)
+	if err == nil && !isHexHash(hash) {
+		err = fmt.Errorf("missing or invalid %s trailer", HashTrailer)
+	}
+	if err != nil {
+		_ = os.Remove(tmp.Name())
+		c.writeErr(w, err)
+		return
+	}
+	payload := filepath.Join(payloads, hash)
+	if _, statErr := os.Stat(payload); statErr == nil {
+		_ = os.Remove(tmp.Name()) // identical content already landed
+	} else if err := os.Rename(tmp.Name(), payload); err != nil {
+		_ = os.Remove(tmp.Name())
+		c.writeErr(w, err)
+		return
+	}
+	if err := linkCapture(c.cfg.OutputDir, name, hash); err != nil {
+		c.writeErr(w, err)
+		return
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
+// linkCapture points captures/<name> at ../payloads/<hash>. Where symlinks
+// are unavailable (unprivileged Windows) it falls back to a copy, which
+// `warden inspect` reads as a regular file.
+func linkCapture(outDir, name, hash string) error {
+	dir := filepath.Join(outDir, "captures")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	link := filepath.Join(dir, name)
+	_ = os.Remove(link)
+	if os.Symlink(filepath.Join("..", "payloads", hash), link) == nil {
+		return nil
+	}
+	src, err := os.Open(filepath.Join(outDir, "payloads", hash))
+	if err != nil {
+		return err
+	}
+	defer src.Close()
+	dst, err := os.Create(link)
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(dst, src); err != nil {
+		dst.Close()
+		return err
+	}
+	return dst.Close()
+}
+
+func (c *Collector) handleLedger(w http.ResponseWriter, req *http.Request) {
+	if !isWrite(req) {
+		http.Error(w, "PUT only", http.StatusMethodNotAllowed)
+		return
+	}
+	// The relay streams the ledger for the whole build. If the stream breaks
+	// (the relay died), keep what arrived: every record is individually
+	// signed, so a truncated ledger still verifies up to its last record.
+	dst := filepath.Join(c.cfg.OutputDir, "ledger")
+	f, err := os.Create(dst)
+	if err != nil {
+		c.writeErr(w, err)
+		return
+	}
+	n, err := c.copy(f, req.Body, c.maxArtifact)
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		c.logf("collector: ledger stream ended early after %d bytes: %v", n, err)
 		c.writeErr(w, err)
 		return
 	}
@@ -175,35 +290,30 @@ func (c *Collector) handleLedger(w http.ResponseWriter, req *http.Request) {
 }
 
 func (c *Collector) handleOutput(w http.ResponseWriter, req *http.Request) {
-	if req.Method != http.MethodPost && req.Method != http.MethodPut {
+	if !isWrite(req) {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
 		return
 	}
-	dst := filepath.Join(c.cfg.OutputDir, "build-output.log")
-	f, err := os.OpenFile(dst, os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
+	f, err := os.OpenFile(filepath.Join(c.cfg.OutputDir, "build-output.log"),
+		os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		c.writeErr(w, err)
 		return
 	}
 	defer f.Close()
-	// Persist to the file first; when a tee is configured, also forward a copy
-	// (wrapped so a console write error can never abort the file write).
-	var dstW io.Writer = f
+	var dst io.Writer = f
 	if c.cfg.OutputTee != nil {
-		dstW = io.MultiWriter(f, ignoreErrWriter{c.cfg.OutputTee})
+		dst = io.MultiWriter(f, ignoreErrWriter{c.cfg.OutputTee})
 	}
-	n, err := c.copy(dstW, req.Body, c.maxArtifact)
-	if err != nil {
+	if _, err := c.copy(dst, req.Body, c.maxArtifact); err != nil {
 		c.writeErr(w, err)
 		return
 	}
-	c.logf("collector: build-output +%d bytes", n)
 	w.WriteHeader(http.StatusOK)
 }
 
-// ignoreErrWriter forwards writes to w but always reports success, so a failing
-// tee target (e.g. a closed console) cannot abort an io.MultiWriter mid-copy
-// and lose the primary (file) write.
+// ignoreErrWriter makes a best-effort tee: a failing console never fails the
+// request or the log write it rides alongside.
 type ignoreErrWriter struct{ w io.Writer }
 
 func (e ignoreErrWriter) Write(p []byte) (int, error) {
@@ -211,11 +321,6 @@ func (e ignoreErrWriter) Write(p []byte) (int, error) {
 	return len(p), nil
 }
 
-// handleBuildScript streams the staged build script to the relay so it can
-// re-serve it to the guest. GET only; 404 when no script was staged. Read-only
-// (unlike the write endpoints), but auth-gated the same way so a shared
-// collector only hands each build its own script (scoped by the per-build
-// token).
 func (c *Collector) handleBuildScript(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		http.Error(w, "GET only", http.StatusMethodNotAllowed)
@@ -225,20 +330,80 @@ func (c *Collector) handleBuildScript(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, "no build script", http.StatusNotFound)
 		return
 	}
-	f, err := os.Open(c.cfg.BuildScriptPath)
+	c.serveFile(w, c.cfg.BuildScriptPath)
+}
+
+// handleContext serves the build context with the relay's historical
+// semantics: a file's bytes, or for a directory (or an empty / trailing-slash
+// path) a newline-separated list of the safe file paths beneath it.
+func (c *Collector) handleContext(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "GET only", http.StatusMethodNotAllowed)
+		return
+	}
+	if c.cfg.ContextDir == "" {
+		http.Error(w, "no build context", http.StatusNotFound)
+		return
+	}
+	rel := strings.TrimPrefix(req.URL.Path, "/v1/context/")
+	trimmed := strings.TrimSuffix(rel, "/")
+	if trimmed != "" && !IsSafeContextPath(trimmed) {
+		http.Error(w, "forbidden", http.StatusForbidden)
+		return
+	}
+	full := filepath.Join(c.cfg.ContextDir, filepath.FromSlash(trimmed))
+	info, err := os.Stat(full)
 	if err != nil {
-		http.Error(w, "build script unavailable", http.StatusNotFound)
+		http.Error(w, "not found", http.StatusNotFound)
+		return
+	}
+	if !info.IsDir() && !strings.HasSuffix(rel, "/") && rel != "" {
+		w.Header().Set(ContextKindHeader, "file")
+		c.serveFile(w, full)
+		return
+	}
+	if !info.IsDir() {
+		http.Error(w, "not a directory", http.StatusNotFound)
+		return
+	}
+	var files []string
+	_ = filepath.Walk(full, func(p string, fi os.FileInfo, err error) error {
+		if err != nil || fi.IsDir() {
+			return nil
+		}
+		r, _ := filepath.Rel(c.cfg.ContextDir, p)
+		r = filepath.ToSlash(r)
+		if IsSafeContextPath(r) {
+			files = append(files, r)
+		}
+		return nil
+	})
+	sort.Strings(files)
+	body := strings.Join(files, "\n")
+	if len(files) > 0 {
+		body += "\n"
+	}
+	w.Header().Set(ContextKindHeader, "list")
+	w.Header().Set("Content-Type", "text/plain")
+	w.WriteHeader(http.StatusOK)
+	_, _ = io.WriteString(w, body)
+}
+
+func (c *Collector) serveFile(w http.ResponseWriter, path string) {
+	f, err := os.Open(path)
+	if err != nil {
+		http.Error(w, "unavailable", http.StatusNotFound)
 		return
 	}
 	defer f.Close()
+	if fi, err := f.Stat(); err == nil {
+		w.Header().Set("Content-Length", fmt.Sprint(fi.Size()))
+	}
 	w.Header().Set("Content-Type", "application/octet-stream")
 	w.WriteHeader(http.StatusOK)
-	n, _ := io.Copy(w, f)
-	c.logf("collector: served build-script (%d bytes)", n)
+	_, _ = io.Copy(w, f)
 }
 
-// streamToFile writes body to dst (creating parent dirs) with a size cap,
-// streaming in constant memory. A partial write is cleaned up on error.
 func (c *Collector) streamToFile(dst string, body io.Reader, max int64) (int64, error) {
 	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
 		return 0, err
@@ -248,19 +413,16 @@ func (c *Collector) streamToFile(dst string, body io.Reader, max int64) (int64, 
 		return 0, err
 	}
 	n, err := c.copy(f, body, max)
-	closeErr := f.Close()
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
 	if err != nil {
 		_ = os.Remove(dst)
-		return n, err
 	}
-	if closeErr != nil {
-		_ = os.Remove(dst)
-		return n, closeErr
-	}
-	return n, nil
+	return n, err
 }
 
-// copy streams src->dst with a fixed buffer, enforcing a byte cap.
+// copy streams src into dst with a fixed buffer, enforcing max.
 func (c *Collector) copy(dst io.Writer, src io.Reader, max int64) (int64, error) {
 	buf := make([]byte, 64*1024)
 	var total int64
@@ -300,30 +462,22 @@ func (c *Collector) writeErr(w http.ResponseWriter, err error) {
 	http.Error(w, err.Error(), http.StatusInternalServerError)
 }
 
-// isSafeRelPath allows "/"-separated segments of safe chars, no traversal,
-// no absolute path, no leading/trailing separators. Mirrors the relay's
-// artifact-name policy so names round-trip.
-func isSafeRelPath(p string) bool {
-	if p == "" || len(p) > 1024 {
+func isHexHash(s string) bool {
+	if len(s) != 64 {
 		return false
 	}
-	if p[0] == '/' || p[len(p)-1] == '/' {
-		return false
+	_, err := hex.DecodeString(s)
+	return err == nil
+}
+
+// MarkHeartbeat records guest liveness (exposed for tests and embedders).
+func (c *Collector) MarkHeartbeat() { c.lastHeartbeat.Store(time.Now().UnixNano()) }
+
+// LastHeartbeat returns the time of the last heartbeat, or the zero time.
+func (c *Collector) LastHeartbeat() time.Time {
+	n := c.lastHeartbeat.Load()
+	if n == 0 {
+		return time.Time{}
 	}
-	for _, seg := range strings.Split(p, "/") {
-		if seg == "" || seg == "." || seg == ".." {
-			return false
-		}
-		if seg[0] == '.' {
-			return false
-		}
-		for _, ch := range seg {
-			ok := (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
-				(ch >= '0' && ch <= '9') || ch == '-' || ch == '_' || ch == '.'
-			if !ok {
-				return false
-			}
-		}
-	}
-	return true
+	return time.Unix(0, n)
 }

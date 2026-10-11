@@ -5,6 +5,7 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -22,6 +23,19 @@ func newTestServer(t *testing.T, cfg Config) (*httptest.Server, string) {
 	srv := httptest.NewServer(c.Handler())
 	t.Cleanup(srv.Close)
 	return srv, dir
+}
+
+// newTestCollector is newTestServer but returns the Collector itself.
+func newTestCollector(t *testing.T, cfg Config) (*httptest.Server, *Collector) {
+	t.Helper()
+	cfg.OutputDir = t.TempDir()
+	c, err := New(cfg)
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	srv := httptest.NewServer(c.Handler())
+	t.Cleanup(srv.Close)
+	return srv, c
 }
 
 // TestOutputTeeForwardsAndPersists verifies that a configured OutputTee receives
@@ -268,5 +282,102 @@ func TestBuildScriptUnsetIs404(t *testing.T) {
 	defer resp.Body.Close()
 	if resp.StatusCode != http.StatusNotFound {
 		t.Fatalf("status = %d, want 404 when no script staged", resp.StatusCode)
+	}
+}
+
+// putWithTrailer streams body as a chunked PUT carrying the hash trailer, the
+// way the relay uploads captures.
+func putWithTrailer(t *testing.T, url, token string, body []byte, hash string) *http.Response {
+	t.Helper()
+	pr, pw := io.Pipe()
+	req, err := http.NewRequest(http.MethodPut, url, pr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	req.Header.Set("Authorization", "Bearer "+token)
+	req.Trailer = http.Header{HashTrailer: nil}
+	go func() {
+		_, _ = pw.Write(body)
+		req.Trailer.Set(HashTrailer, hash)
+		_ = pw.Close()
+	}()
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return resp
+}
+
+func TestCaptureContentAddressed(t *testing.T) {
+	srv, dir := newTestServer(t, Config{Token: "t"})
+	hash := strings.Repeat("ab", 32)
+	body := []byte("captured body")
+	for _, name := range []string{"001-GET-example.com-a", "002-GET-example.com-b?x=1"} {
+		resp := putWithTrailer(t, srv.URL+"/v1/captures/"+url.PathEscape(name), "t", body, hash)
+		resp.Body.Close()
+		if resp.StatusCode != http.StatusOK {
+			t.Fatalf("%s: status %d", name, resp.StatusCode)
+		}
+	}
+	got, err := os.ReadFile(filepath.Join(dir, "payloads", hash))
+	if err != nil || string(got) != string(body) {
+		t.Fatalf("payload = %q, %v", got, err)
+	}
+	for _, name := range []string{"001-GET-example.com-a", "002-GET-example.com-b_x_1"} {
+		got, err := os.ReadFile(filepath.Join(dir, "captures", name))
+		if err != nil || string(got) != string(body) {
+			t.Fatalf("capture %s = %q, %v", name, got, err)
+		}
+	}
+}
+
+func TestCaptureRequiresHashTrailer(t *testing.T) {
+	srv, dir := newTestServer(t, Config{Token: "t"})
+	resp := putWithTrailer(t, srv.URL+"/v1/captures/x", "t", []byte("b"), "nothex")
+	resp.Body.Close()
+	if resp.StatusCode == http.StatusOK {
+		t.Fatal("capture without a valid hash trailer was accepted")
+	}
+	if entries, _ := os.ReadDir(filepath.Join(dir, "payloads")); len(entries) != 0 {
+		t.Fatalf("rejected capture left %d payload files", len(entries))
+	}
+}
+
+func TestContextFileAndListing(t *testing.T) {
+	ctxDir := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(ctxDir, "src", "pkg"), 0o755)
+	_ = os.WriteFile(filepath.Join(ctxDir, "src", "a.txt"), []byte("A"), 0o644)
+	_ = os.WriteFile(filepath.Join(ctxDir, "src", "pkg", "b.txt"), []byte("B"), 0o644)
+	srv, _ := newTestServer(t, Config{Token: "t", ContextDir: ctxDir})
+
+	get := func(p string) (*http.Response, string) {
+		req, _ := http.NewRequest(http.MethodGet, srv.URL+"/v1/context/"+p, nil)
+		req.Header.Set("Authorization", "Bearer t")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer resp.Body.Close()
+		b, _ := io.ReadAll(resp.Body)
+		return resp, string(b)
+	}
+
+	resp, body := get("src/a.txt")
+	if resp.StatusCode != 200 || body != "A" || resp.Header.Get(ContextKindHeader) != "file" {
+		t.Fatalf("file: %d %q %q", resp.StatusCode, body, resp.Header.Get(ContextKindHeader))
+	}
+	resp, body = get("src/")
+	if resp.Header.Get(ContextKindHeader) != "list" || body != "src/a.txt\nsrc/pkg/b.txt\n" {
+		t.Fatalf("list: %q", body)
+	}
+	resp, body = get("src")
+	if resp.Header.Get(ContextKindHeader) != "list" || body != "src/a.txt\nsrc/pkg/b.txt\n" {
+		t.Fatalf("dir without slash: %q", body)
+	}
+	if resp, _ = get("src/missing"); resp.StatusCode != 404 {
+		t.Fatalf("missing: %d", resp.StatusCode)
+	}
+	if resp, _ = get("src/../../etc/passwd"); resp.StatusCode == 200 {
+		t.Fatal("traversal served")
 	}
 }

@@ -89,7 +89,7 @@ func NewFDIngress(cfg FDIngressConfig) (*FDIngress, error) {
 	ep := channel.New(chanSize, mtu, tcpip.LinkAddress(cfg.GatewayMAC))
 
 	s := stack.New(stack.Options{
-		NetworkProtocols:   []stack.NetworkProtocolFactory{ipv4.NewProtocol},
+		NetworkProtocols: []stack.NetworkProtocolFactory{ipv4.NewProtocol},
 		TransportProtocols: []stack.TransportProtocolFactory{
 			tcp.NewProtocol, udp.NewProtocol,
 		},
@@ -182,14 +182,14 @@ func (ing *FDIngress) linkKickstart() {
 	// Broadcast to ff:ff:ff:ff:ff:ff so macOS sees it regardless of state.
 	arp := make([]byte, 28)
 	binary.BigEndian.PutUint16(arp[0:2], 1)      // hardware: Ethernet
-	binary.BigEndian.PutUint16(arp[2:4], 0x0800)  // protocol: IPv4
-	arp[4] = 6                                     // hw addr len
-	arp[5] = 4                                     // proto addr len
-	binary.BigEndian.PutUint16(arp[6:8], 2)       // opcode: reply (gratuitous)
-	copy(arp[8:14], gwMAC)                         // sender MAC
-	copy(arp[14:18], gwIP)                         // sender IP
-	copy(arp[18:24], gwMAC)                        // target MAC (self)
-	copy(arp[24:28], gwIP)                         // target IP (self)
+	binary.BigEndian.PutUint16(arp[2:4], 0x0800) // protocol: IPv4
+	arp[4] = 6                                   // hw addr len
+	arp[5] = 4                                   // proto addr len
+	binary.BigEndian.PutUint16(arp[6:8], 2)      // opcode: reply (gratuitous)
+	copy(arp[8:14], gwMAC)                       // sender MAC
+	copy(arp[14:18], gwIP)                       // sender IP
+	copy(arp[18:24], gwMAC)                      // target MAC (self)
+	copy(arp[24:28], gwIP)                       // target IP (self)
 
 	frame := make([]byte, 14+28)
 	copy(frame[0:6], []byte{0xff, 0xff, 0xff, 0xff, 0xff, 0xff}) // dst: broadcast

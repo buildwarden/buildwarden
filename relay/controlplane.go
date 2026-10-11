@@ -32,17 +32,7 @@ func (r *Relay) runControlPlane() error {
 			return
 		}
 
-		// Precedence: an explicit OutputWriter override wins (used by drivers
-		// and tests); otherwise route through the output sink (local file, or
-		// a streamed POST /v1/output to the collector).
-		if r.cfg.OutputWriter != nil {
-			n, _ := io.Copy(r.cfg.OutputWriter, io.LimitReader(req.Body, remaining))
-			r.outputBytesWritten.Add(n)
-			w.WriteHeader(200)
-			return
-		}
-
-		dst, finish, err := r.sink.OutputWriter()
+		dst, finish, err := r.sink.outputWriter()
 		if err != nil {
 			http.Error(w, err.Error(), 500)
 			return
@@ -69,7 +59,7 @@ func (r *Relay) runControlPlane() error {
 			_, _ = fmt.Sscanf(code, "%d", &c)
 			exitCode = c
 		}
-		r.writeExitCode(exitCode)
+		r.complete(exitCode)
 		w.WriteHeader(200)
 	})
 

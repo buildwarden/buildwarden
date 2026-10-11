@@ -1,52 +1,86 @@
-// Command collector receives build outputs (artifacts, ledger, build log)
-// streamed by a relay's httpSink and writes them into an output directory.
+// Command collector is the standalone host side of a build: it claims a relay
+// that is already running (as a container, VM or host process, started by
+// any orchestrator), serves the build's inputs to it, lands every output in an
+// output directory, and exits with the build's result.
 //
-// It is the standalone counterpart to cmd/relay: a reusable primitive a
-// third-party orchestrator can run to collect a build's outputs without
-// adopting the rest of BuildWarden. Drivers embed the collector package
-// in-process instead of spawning this binary.
+// It is the reusable counterpart to cmd/relay for third-party orchestrators
+// that want the ledger without adopting the rest of BuildWarden; warden's own
+// drivers run the same code in-process (driver.Session). Like every driver it
+// only ever connects TO the relay's claim port, so it needs no listener.
 //
-// The bearer token is read from WARDEN_COLLECTOR_TOKEN (not a flag, so it does
-// not appear in the process list). Bind to loopback (default) or an isolated
-// interface only.
+// The relay's claim token, if it was started with one, is read from
+// WARDEN_CLAIM_TOKEN (not a flag, so it does not appear in the process list).
+//
+//	collector --relay 127.0.0.1:8301 --dir out --context . --script build.sh
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
-	"log"
-	"net/http"
 	"os"
+	"os/signal"
+	"strings"
 
-	"github.com/buildwarden/buildwarden/collector"
+	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
 func main() {
+	relay := flag.String("relay", "", "host:port of the relay's claim endpoint (required)")
 	dir := flag.String("dir", "", "output directory (required)")
-	addr := flag.String("addr", "127.0.0.1:8400", "listen address (bind loopback or an isolated interface only)")
+	ctxDir := flag.String("context", "", "build context served to the guest")
+	script := flag.String("script", "", "build script served at http://artifacts/build-script")
+	capture := flag.String("capture", "", "capture payloads (none, headers, bodies, all)")
+	upstreamCAs := flag.String("upstream-ca", "", "extra upstream CA files/dirs, comma-separated")
+	quiet := flag.Bool("quiet", false, "do not echo the guest build console")
 	flag.Parse()
 
-	if *dir == "" {
-		fmt.Fprintln(os.Stderr, "collector: --dir is required")
+	if *relay == "" || *dir == "" {
+		fmt.Fprintln(os.Stderr, "collector: --relay and --dir are required")
 		os.Exit(2)
 	}
-
-	token := os.Getenv("WARDEN_COLLECTOR_TOKEN")
-	if token == "" {
-		log.Printf("collector: WARNING no WARDEN_COLLECTOR_TOKEN set; auth disabled")
+	req := &driver.BuildRequest{
+		OutputDir:        *dir,
+		ContextDir:       *ctxDir,
+		Script:           *script,
+		CaptureMode:      *capture,
+		Quiet:            *quiet,
+		UpstreamSystemCA: true,
 	}
+	if *upstreamCAs != "" {
+		req.UpstreamCACerts = strings.Split(*upstreamCAs, ",")
+	}
+	if err := run(*relay, req); err != nil {
+		fmt.Fprintf(os.Stderr, "collector: %v\n", err)
+		os.Exit(1)
+	}
+}
 
-	c, err := collector.New(collector.Config{
-		OutputDir: *dir,
-		Token:     token,
-		Logf:      log.Printf,
+func run(relayAddr string, req *driver.BuildRequest) error {
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
+	defer stop()
+
+	sess, err := driver.StartSession(driver.SessionConfig{
+		OutputDir:   req.OutputDir,
+		ContextDir:  req.ContextDir,
+		BuildScript: req.Script,
+		OutputTee:   driver.ConsoleTee(req),
 	})
 	if err != nil {
-		log.Fatalf("collector: %v", err)
+		return err
 	}
+	defer sess.Close()
 
-	log.Printf("collector: listening on %s -> %s", *addr, *dir)
-	if err := (&http.Server{Addr: *addr, Handler: c.Handler()}).ListenAndServe(); err != nil {
-		log.Fatalf("collector: %v", err)
+	id, err := sess.ClaimRelay(ctx, relayAddr, os.Getenv(relaycfg.TokenEnv), req, nil)
+	if err != nil {
+		return err
 	}
+	fmt.Fprintf(os.Stderr, "collector: relay claimed (ledger key %s); waiting for the build\n",
+		id.LedgerPublicKey)
+	if err := sess.Wait(ctx); err != nil {
+		return err
+	}
+	fmt.Fprintf(os.Stderr, "collector: build complete -> %s\n", req.OutputDir)
+	return nil
 }
