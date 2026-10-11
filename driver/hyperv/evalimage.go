@@ -50,7 +50,7 @@ type EvalImageSpec struct {
 // SHA256 for it, so the URL and SHA256 are intentionally left empty here: the
 // operator supplies --url on first fetch, pins the printed --sha256, and a
 // maintainer can then commit those pinned values into this table so a later
-// `warden image fetch windows-server-2025` becomes a single command.
+// `warden image prepare --driver hyperv` becomes a single command.
 var evalImageRegistry = map[string]EvalImageSpec{
 	"windows-server-2025": {
 		Name:       "windows-server-2025",
@@ -100,8 +100,8 @@ type FetchOptions struct {
 	Name           string    // registry key (or a bare label when URL is supplied)
 	URL            string    // overrides the registry URL
 	SHA256         string    // overrides/supplies the expected hash (lowercase hex)
-	AcceptUnpinned bool       // use the image even when no expected hash is known
-	Force          bool       // re-download even if a valid cached copy exists
+	AcceptUnpinned bool      // use the image even when no expected hash is known
+	Force          bool      // re-download even if a valid cached copy exists
 	Progress       io.Writer // status sink (nil = quiet)
 }
 
@@ -206,7 +206,7 @@ func FetchEvalImage(ctx context.Context, opts FetchOptions) (string, error) {
 	}
 	if url == "" {
 		return "", fmt.Errorf(
-			"no download URL for %q. %s\nThen: warden image fetch %s --url <that-url>",
+			"no download URL for %q. %s\nThen: warden image prepare --driver hyperv --name %s --source <that-url>",
 			opts.Name, spec.Note, opts.Name)
 	}
 
@@ -299,9 +299,9 @@ func finishFetch(opts FetchOptions, spec EvalImageSpec, dest, gotHash, expected 
 			"UNPINNED: %q downloaded to %s but is not verified against a pinned hash.\n"+
 				"  computed sha256: %s\n"+
 				"To PIN it (verifies the already-cached bytes, no re-download):\n"+
-				"  warden image fetch %s --sha256 %s\n"+
+				"  warden image prepare --driver hyperv --name %s --sha256 %s\n"+
 				"Or to use it as-is without a pinned hash:\n"+
-				"  warden image fetch %s --accept-unpinned",
+				"  warden image prepare --driver hyperv --name %s --accept-unpinned",
 			opts.Name, dest, gotHash, opts.Name, gotHash, opts.Name)
 	}
 
@@ -431,4 +431,11 @@ func firstNonEmpty(a, b string) string {
 		return a
 	}
 	return b
+}
+
+// ActiveImage returns the build-guest base pinned as active by a prior
+// `warden image prepare --driver hyperv`, if any.
+func ActiveImage() (path string, ok bool) {
+	p, _, _, ok := resolveActiveEvalImage()
+	return p, ok
 }

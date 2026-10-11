@@ -3,13 +3,14 @@ package qemu
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"os/signal"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"syscall"
-	"time"
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/script"
@@ -76,39 +77,62 @@ func (d *Driver) StartBuild(
 		return nil, fmt.Errorf("creating output dir: %w", err)
 	}
 
-	sharedDir, err := d.prepareSharedDir(buildID, req)
+	workDir, err := os.MkdirTemp("", "warden-qemu-"+buildID+"-")
+	if err != nil {
+		return nil, fmt.Errorf("creating work dir: %w", err)
+	}
+	defer driver.RemoveWorkDir(req, workDir)
+
+	d.status("preparing build environment...")
+	buildScript, err := driver.StageBuildScript(req, workDir)
+	if err != nil {
+		return nil, fmt.Errorf("staging build script: %w", err)
+	}
+
+	// The relay's claim port is forwarded to host loopback (hostfwd); the
+	// collector rides the tunnel the session opens over it.
+	sess, err := driver.StartSession(driver.SessionConfig{
+		OutputDir:   outputDir,
+		ContextDir:  req.ContextDir,
+		BuildScript: buildScript,
+		OutputTee:   driver.ConsoleTee(req),
+		Verbose:     d.Verbose,
+	})
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(sharedDir)
+	defer sess.Close()
 
-	// Resolve relay VM assets (kernel + initrd)
-	kernelPath, initrdPath, err := d.resolveRelayAssets()
+	kernelPath, initrdPath, err := d.relayInitrd(workDir)
 	if err != nil {
 		return nil, fmt.Errorf("resolving relay assets: %w", err)
 	}
 
-	// Create socket pair for the isolated relay↔build network
-	sockDir, err := os.MkdirTemp("", "warden-net-"+buildID+"-")
+	// Socket for the isolated relay<->build network.
+	socketPath := filepath.Join(workDir, "vlan.sock")
+
+	claimPort, err := driver.FreeLoopbackPort()
 	if err != nil {
-		return nil, fmt.Errorf("creating socket dir: %w", err)
+		return nil, err
 	}
-	defer os.RemoveAll(sockDir)
-	socketPath := filepath.Join(sockDir, "vlan.sock")
+	claimToken, err := driver.RandomToken()
+	if err != nil {
+		return nil, err
+	}
 
 	d.status("starting relay...")
-	relayProc, err := d.startRelayVM(kernelPath, initrdPath, sharedDir, socketPath)
+	relayProc, err := d.startRelayVM(kernelPath, initrdPath, socketPath, claimPort, claimToken)
 	if err != nil {
 		return nil, fmt.Errorf("starting relay VM: %w", err)
 	}
 	defer relayProc.stop()
 
-	caPath := filepath.Join(sharedDir, "ledger", "ca.cert.pem")
-	if err := waitForFile(ctx, caPath, 30); err != nil {
-		return nil, fmt.Errorf("relay did not start: %w", err)
+	claimAddr := net.JoinHostPort("127.0.0.1", strconv.Itoa(claimPort))
+	if _, err := sess.ClaimRelay(ctx, claimAddr, claimToken, req, nil); err != nil {
+		return nil, err
 	}
 
-	buildCfg, err := d.resolveBuildVMConfig(req, sharedDir)
+	buildCfg, err := d.resolveBuildVMConfig(req, workDir)
 	if err != nil {
 		return nil, err
 	}
@@ -120,93 +144,22 @@ func (d *Driver) StartBuild(
 	defer buildProc.stop()
 
 	d.status("running...")
-	// Wait for build via heartbeat (relay writes signal/exit_code when
-	// warden-io reports completion via HTTP)
-	signalDir := filepath.Join(sharedDir, "signal")
-	isTTY := req.Stdin != nil
-	exitCode, err := waitForBuild(ctx, signalDir, isTTY)
-	if err != nil {
-		return nil, fmt.Errorf("build failed: %w", err)
+	if err := sess.Wait(ctx); err != nil {
+		return nil, err
 	}
-	if exitCode != 0 {
-		return nil, fmt.Errorf("build exited with code %d", exitCode)
-	}
-
-	// Collect outputs
-	if err := collectOutputs(sharedDir, outputDir); err != nil {
-		return nil, fmt.Errorf("collecting outputs: %w", err)
-	}
-
+	driver.FinalizeOutput(outputDir, req.Compress)
 	return &driver.BuildResult{OutputDir: outputDir}, nil
-}
-
-// prepareSharedDir creates and populates the shared volume used by both
-// the relay VM and build VM. Compiles relay and agent in parallel.
-func (d *Driver) prepareSharedDir(
-	buildID string, req *driver.BuildRequest,
-) (string, error) {
-	sharedDir, err := os.MkdirTemp("", "warden-shared-"+buildID+"-")
-	if err != nil {
-		return "", fmt.Errorf("creating shared dir: %w", err)
-	}
-
-	for _, sub := range []string{"context", "ledger", "signal"} {
-		p := filepath.Join(sharedDir, sub)
-		if err := os.MkdirAll(p, 0755); err != nil {
-			return "", fmt.Errorf("creating shared/%s: %w", sub, err)
-		}
-	}
-
-	d.status("preparing build environment...")
-
-	type prepResult struct {
-		name string
-		err  error
-	}
-	prepCh := make(chan prepResult, 2)
-	go func() {
-		prepCh <- prepResult{"relay", d.prepareRelay(sharedDir)}
-	}()
-	go func() {
-		prepCh <- prepResult{"agent", d.prepareAgent(sharedDir, req)}
-	}()
-	for i := 0; i < 2; i++ {
-		r := <-prepCh
-		if r.err != nil {
-			return "", fmt.Errorf("preparing %s: %w", r.name, r.err)
-		}
-	}
-
-	buildScriptName := "build.sh"
-	if isWindowsGuest(req) {
-		buildScriptName = windowsScript
-	}
-	relayEnv := "LEDGER_DIR=/shared/ledger\nCONTEXT_DIR=/shared/context\n" +
-		"SIGNAL_DIR=/shared/signal\nBUILD_SCRIPT=" + buildScriptName + "\n"
-	if req.CaptureMode != "" && req.CaptureMode != "none" {
-		relayEnv += fmt.Sprintf("CAPTURE_MODE=%s\n", req.CaptureMode)
-	}
-	envPath := filepath.Join(sharedDir, "relay.env")
-	if err := os.WriteFile(envPath, []byte(relayEnv), 0644); err != nil {
-		return "", fmt.Errorf("writing relay.env: %w", err)
-	}
-
-	if err := d.prepareContext(sharedDir, req); err != nil {
-		return "", fmt.Errorf("preparing context: %w", err)
-	}
-
-	return sharedDir, nil
 }
 
 // resolveBuildVMConfig determines how to boot the build VM: either from
 // a disk image (with COW overlay + cloud-init) or via direct kernel boot.
 func (d *Driver) resolveBuildVMConfig(
-	req *driver.BuildRequest, sharedDir string,
+	req *driver.BuildRequest, workDir string,
 ) (*buildVMConfig, error) {
 	cfg := &buildVMConfig{
 		Arch:     targetArch(req),
-		CPUs:     4,
-		MemoryMB: 4096,
+		CPUs:     driver.OrDefault(req.CPUs, 4),
+		MemoryMB: driver.OrDefault(req.MemoryMB, 4096),
 	}
 
 	image := req.Image
@@ -223,16 +176,15 @@ func (d *Driver) resolveBuildVMConfig(
 
 	if image == "" {
 		if isWindowsGuest(req) {
-			// Use the base image prepared by `warden image restore --os
-			// windows` (parity with the Linux kernel/initrd resolution). It is
+			// Use the base image prepared by `warden image prepare --driver
+			// qemu --os windows` (parity with the Linux kernel/initrd resolution). It is
 			// overlaid below, so the cached base is never mutated.
 			ga := goArchOf(cfg.Arch)
-			base := filepath.Join(cacheBaseDir(), "warden", "images",
-				"windows-"+ga+".qcow2")
+			base := WindowsImagePath(ga)
 			if _, err := os.Stat(base); err != nil {
 				return nil, fmt.Errorf(
 					"no prepared Windows base image at %s (run "+
-						"`warden image restore --os windows --arch %s` first, "+
+						"`warden image prepare --driver qemu --os windows --arch %s` first, "+
 						"or pass --image <path>)", base, ga)
 			}
 			image = base
@@ -252,7 +204,7 @@ func (d *Driver) resolveBuildVMConfig(
 	}
 	image, _ = filepath.Abs(image)
 
-	overlay := filepath.Join(sharedDir, "build-overlay.qcow2")
+	overlay := filepath.Join(workDir, "build-overlay.qcow2")
 	cmd := exec.Command("qemu-img", "create",
 		"-f", "qcow2", "-b", image, "-F", "qcow2", overlay)
 	if out, err := cmd.CombinedOutput(); err != nil {
@@ -269,19 +221,19 @@ func (d *Driver) resolveBuildVMConfig(
 		// bcdboot wrote during image prep; copied per-build so the base's
 		// vars store is never mutated.
 		ga := goArchOf(cfg.Arch)
-		srcVars := filepath.Join(cacheBaseDir(), "warden", "images",
+		srcVars := filepath.Join(driver.CacheDir(), "images",
 			"windows-"+ga+"-vars.fd")
 		if _, err := os.Stat(srcVars); err != nil {
 			return nil, fmt.Errorf(
 				"windows base UEFI vars not found at %s (re-run "+
-					"`warden image restore --os windows --arch %s`)", srcVars, ga)
+					"`warden image prepare --driver qemu --os windows --arch %s`)", srcVars, ga)
 		}
-		dstVars := filepath.Join(sharedDir, "build-vars.fd")
-		if err := copyFile(srcVars, dstVars); err != nil {
+		dstVars := filepath.Join(workDir, "build-vars.fd")
+		if err := driver.CopyFile(srcVars, dstVars); err != nil {
 			return nil, fmt.Errorf("copying UEFI vars: %w", err)
 		}
 		cfg.VarsFD = dstVars
-		seedDir, err := d.windowsSeedDir(sharedDir)
+		seedDir, err := windowsSeedDir(workDir, goArchOf(cfg.Arch))
 		if err != nil {
 			return nil, fmt.Errorf("generating windows seed: %w", err)
 		}
@@ -289,7 +241,7 @@ func (d *Driver) resolveBuildVMConfig(
 		// with exact long names and a drive letter; our ISO9660 seed shows up
 		// as FileSystemType=Unknown with no letter, so the startup task can't
 		// run warden-run.ps1.
-		seedImg := filepath.Join(sharedDir, "seed.img")
+		seedImg := filepath.Join(workDir, "seed.img")
 		if err := generateWindowsSeedFAT(
 			seedDir, seedImg, windowsSeedName); err != nil {
 			return nil, fmt.Errorf("generating windows seed FAT: %w", err)
@@ -298,11 +250,11 @@ func (d *Driver) resolveBuildVMConfig(
 		return cfg, nil
 	}
 
-	seedDir, err := d.cloudInitSeed(sharedDir)
+	seedDir, err := cloudInitSeed(workDir, goArchOf(cfg.Arch))
 	if err != nil {
 		return nil, fmt.Errorf("generating cloud-init: %w", err)
 	}
-	seedISO := filepath.Join(sharedDir, "seed.iso")
+	seedISO := filepath.Join(workDir, "seed.iso")
 	if err := generateSeedISO(seedDir, seedISO, "CIDATA"); err != nil {
 		return nil, fmt.Errorf("generating seed ISO: %w", err)
 	}
@@ -380,127 +332,6 @@ func targetArch(req *driver.BuildRequest) string {
 	return hostQEMUArch()
 }
 
-func (d *Driver) prepareRelay(sharedDir string) error {
-	relayDst := filepath.Join(sharedDir, "relay")
-	goarch := runtime.GOARCH
-
-	// Check next to the warden binary
-	if exe, err := os.Executable(); err == nil {
-		candidate := filepath.Join(
-			filepath.Dir(exe), "warden-relay-linux-"+goarch)
-		if _, err := os.Stat(candidate); err == nil {
-			return copyFile(candidate, relayDst)
-		}
-	}
-
-	// Check build cache
-	cached := cachedBinaryPath("relay", goarch)
-	if !isCacheStale(cached) {
-		return copyFile(cached, relayDst)
-	}
-
-	// Build and cache
-	cmd := exec.Command("go", "build",
-		"-ldflags=-s -w", "-o", cached, "./cmd/relay")
-	cmd.Env = append(os.Environ(),
-		"GOOS=linux", "GOARCH="+goarch, "CGO_ENABLED=0")
-	cmd.Dir = findModuleRoot()
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-	return copyFile(cached, relayDst)
-}
-
-func (d *Driver) prepareContext(sharedDir string, req *driver.BuildRequest) error {
-	if req.ContextDir == "" {
-		return nil
-	}
-	ctxDst := filepath.Join(sharedDir, "context")
-	cmd := exec.Command("cp", "-R", req.ContextDir+"/.", ctxDst)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("copying context: %s: %w", string(out), err)
-	}
-	return nil
-}
-
-func (d *Driver) prepareAgent(sharedDir string, req *driver.BuildRequest) error {
-	if isWindowsGuest(req) {
-		return d.prepareWindowsAgent(sharedDir, req)
-	}
-
-	// Place build script into context/ — warden-io initialize fetches it
-	// from the relay's HTTP context endpoint at runtime.
-	ctxDir := filepath.Join(sharedDir, "context")
-	buildScript := filepath.Join(ctxDir, "build.sh")
-	if req.Script != "" {
-		data, err := os.ReadFile(req.Script)
-		if err != nil {
-			return fmt.Errorf("reading build script: %w", err)
-		}
-		if err := os.WriteFile(buildScript, data, 0755); err != nil {
-			return err
-		}
-	} else if req.Containerfile != "" {
-		result, err := script.Translate(req.Containerfile)
-		if err != nil {
-			return fmt.Errorf("translating containerfile: %w", err)
-		}
-		if err := os.WriteFile(buildScript, []byte(result.Script), 0755); err != nil {
-			return err
-		}
-	} else {
-		noop := []byte("#!/bin/sh\ntrue\n")
-		if err := os.WriteFile(buildScript, noop, 0755); err != nil {
-			return err
-		}
-	}
-
-	// Cross-compile warden-io for the build VM (placed in agent/ for the
-	// seed ISO to pick up)
-	agentDir := filepath.Join(sharedDir, "agent")
-	if err := os.MkdirAll(agentDir, 0755); err != nil {
-		return fmt.Errorf("creating agent dir: %w", err)
-	}
-	if err := d.prepareWardenIO(agentDir); err != nil {
-		return fmt.Errorf("preparing warden-io: %w", err)
-	}
-
-	return nil
-}
-
-func (d *Driver) prepareWardenIO(agentDir string) error {
-	goarch := runtime.GOARCH
-	dst := filepath.Join(agentDir, "warden-io")
-
-	// Check next to the warden binary
-	if exe, err := os.Executable(); err == nil {
-		candidate := filepath.Join(
-			filepath.Dir(exe), "warden-io-linux-"+goarch)
-		if _, err := os.Stat(candidate); err == nil {
-			return copyFile(candidate, dst)
-		}
-	}
-
-	// Check build cache
-	cached := cachedBinaryPath("warden-io", goarch)
-	if !isCacheStale(cached) {
-		return copyFile(cached, dst)
-	}
-
-	// Build and cache
-	cmd := exec.Command("go", "build",
-		"-ldflags=-s -w", "-o", cached, "./cmd/warden-io")
-	cmd.Env = append(os.Environ(),
-		"GOOS=linux", "GOARCH="+goarch, "CGO_ENABLED=0")
-	cmd.Dir = findModuleRoot()
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return err
-	}
-	return copyFile(cached, dst)
-}
-
 func (d *Driver) resolveBuildAssets() (kernel, initrd string, err error) {
 	if exe, err := os.Executable(); err == nil {
 		dir := filepath.Dir(exe)
@@ -513,7 +344,7 @@ func (d *Driver) resolveBuildAssets() (kernel, initrd string, err error) {
 		}
 	}
 
-	root := findModuleRoot()
+	root, _ := driver.ModuleRoot()
 	k := filepath.Join(root, "tools", "relay-vm", "output", "vmlinuz")
 	i := filepath.Join(root, "tools", "build-vm", "output", "initramfs.cpio.gz")
 	if _, err := os.Stat(k); err == nil {
@@ -540,7 +371,7 @@ func (d *Driver) resolveRelayAssets() (kernel, initrd string, err error) {
 	}
 
 	// Check the build output directory
-	root := findModuleRoot()
+	root, _ := driver.ModuleRoot()
 	k := filepath.Join(root, "tools", "relay-vm", "output", "vmlinuz")
 	i := filepath.Join(root, "tools", "relay-vm", "output", "initramfs.cpio.gz")
 	if _, err := os.Stat(k); err == nil {
@@ -553,37 +384,13 @@ func (d *Driver) resolveRelayAssets() (kernel, initrd string, err error) {
 		"relay VM assets not found; run tools/relay-vm/build-initramfs.sh")
 }
 
-func waitForFile(ctx context.Context, path string, timeoutSec int) error {
-	deadline := time.Now().Add(time.Duration(timeoutSec) * time.Second)
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("timed out waiting for %s", filepath.Base(path))
-		}
-		if info, err := os.Stat(path); err == nil && info.Size() > 0 {
-			return nil
-		}
-		time.Sleep(200 * time.Millisecond)
+// Preflight checks the host can run qemu builds: the qemu binaries are on
+// PATH and the relay VM assets exist. It is `warden doctor --driver qemu`.
+func Preflight() error {
+	d := New()
+	if err := d.checkPrereqs(); err != nil {
+		return err
 	}
-}
-
-func collectOutputs(sharedDir, outputDir string) error {
-	ledgerSrc := filepath.Join(sharedDir, "ledger")
-	entries, err := os.ReadDir(ledgerSrc)
-	if err != nil {
-		return fmt.Errorf("reading ledger dir: %w", err)
-	}
-	for _, e := range entries {
-		src := filepath.Join(ledgerSrc, e.Name())
-		dst := filepath.Join(outputDir, e.Name())
-		_ = os.RemoveAll(dst)
-		if err := os.Rename(src, dst); err != nil {
-			return fmt.Errorf("moving %s: %w", e.Name(), err)
-		}
-	}
-	return nil
+	_, _, err := d.resolveRelayAssets()
+	return err
 }

@@ -8,14 +8,17 @@ package container
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	"github.com/lesiw/ctrctl"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
 const (
@@ -44,7 +47,8 @@ type build struct {
 	relayImage      string
 	relayBuiltLocal bool
 	buildID         string
-	ledgerDir       string
+	sess            *driver.Session
+	caCert          []byte
 	outputDir       string
 	subnet          driver.Subnet
 	isolatedNetwork string
@@ -56,11 +60,16 @@ func (d *Driver) StartBuild(
 	ctx context.Context, req *driver.BuildRequest,
 ) (*driver.BuildResult, error) {
 	ctrctl.Cli = []string{d.Runtime}
+	if req.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, req.Timeout)
+		defer cancel()
+	}
 
 	b := &build{d: d, req: req}
 	defer b.teardown()
 
-	if err := b.setup(); err != nil {
+	if err := b.setup(ctx); err != nil {
 		return nil, err
 	}
 
@@ -137,6 +146,11 @@ func (d *Driver) StartBuild(
 	if err != nil {
 		return nil, fmt.Errorf("build error: %w", err)
 	}
+	// The relay flushes the ledger before it reports completion, so this
+	// returns as soon as the collector has everything.
+	if err := b.sess.Wait(ctx); err != nil {
+		return nil, err
+	}
 
 	return &driver.BuildResult{
 		OutputDir: b.outputDir,
@@ -151,7 +165,7 @@ func (d *Driver) Exec(
 	b := &build{d: d, req: req}
 	defer b.teardown()
 
-	if err := b.setup(); err != nil {
+	if err := b.setup(ctx); err != nil {
 		return err
 	}
 
@@ -207,7 +221,7 @@ func (d *Driver) Close() error { return nil }
 
 // --- build lifecycle ---
 
-func (b *build) setup() error {
+func (b *build) setup(ctx context.Context) error {
 	err := os.MkdirAll(
 		filepath.Join(b.wardenDirPath(), "ext.d"), 0755)
 	if err != nil {
@@ -233,19 +247,12 @@ func (b *build) setup() error {
 			"error creating output dir: %w", err)
 	}
 
-	home, _ := os.UserHomeDir()
-	b.ledgerDir, err = os.MkdirTemp(home,
-		".warden-ledger-"+b.buildID+"-")
-	if err != nil {
-		return fmt.Errorf(
-			"error creating ledger temp dir: %w", err)
-	}
-
 	if err := b.resolveRelayImage(); err != nil {
 		return err
 	}
 
-	if err := b.prepareEnvironment(); err != nil {
+	env, err := b.prepareEnvironment()
+	if err != nil {
 		return err
 	}
 
@@ -260,22 +267,40 @@ func (b *build) setup() error {
 		return err
 	}
 
-	if err := b.prepareUpstreamCA(); err != nil {
+	// The build console reaches the terminal through `exec`, so the
+	// collector does not tee it as well.
+	b.sess, err = driver.StartSession(driver.SessionConfig{
+		OutputDir:   b.outputDir,
+		ContextDir:  b.req.ContextDir,
+		BuildScript: filepath.Join(b.wardenDirPath(), "build.sh"),
+		Verbose:     b.d.Verbose,
+	})
+	if err != nil {
 		return err
 	}
 
 	logInfo(b.req, "Starting relay...")
-	if err := b.startRelayContainer(); err != nil {
+	claimToken, err := driver.RandomToken()
+	if err != nil {
 		return err
 	}
+	claimAddr, err := b.startRelayContainer(claimToken)
+	if err != nil {
+		return err
+	}
+	id, err := b.sess.ClaimRelay(ctx, claimAddr, claimToken, b.req, env)
+	if err != nil {
+		return err
+	}
+	b.caCert = []byte(id.CACert)
 
 	extCtx := &driver.ExtensionContext{
 		WardenDir: b.wardenDirPath(),
 		ScriptDir: filepath.Join(
 			b.wardenDirPath(), "ext.d"),
-		LedgerDir: b.ledgerDir,
-		RelayIP:   b.subnet.RelayIP,
-		BuildID:   b.buildID,
+		CACert:  b.caCert,
+		RelayIP: b.subnet.RelayIP,
+		BuildID: b.buildID,
 	}
 	for _, ext := range b.d.Extensions {
 		if err := ext.BeforeBuild(extCtx); err != nil {
@@ -294,26 +319,27 @@ func (b *build) setup() error {
 	return nil
 }
 
-func (b *build) prepareEnvironment() error {
+func (b *build) prepareEnvironment() (*relaycfg.Environment, error) {
 	image, err := driver.ExtractFromImage(
 		b.req.Containerfile)
 	if err != nil {
-		return fmt.Errorf("reading FROM image: %w", err)
+		return nil, fmt.Errorf("reading FROM image: %w", err)
 	}
 
 	logInfo(b.req,
 		fmt.Sprintf("Pulling image: %s", image))
 	if err := b.pullBuildBaseImage(image); err != nil {
-		return err
+		return nil, err
 	}
 
-	if err := writeEnvironment(
-		image, b.ledgerDir); err != nil {
+	env, err := imageEnvironment(image)
+	if err != nil {
 		logWarn(b.req,
 			fmt.Sprintf(
-				"failed to write environment: %s", err))
+				"failed to record environment: %s", err))
+		return nil, nil
 	}
-	return nil
+	return env, nil
 }
 
 func (b *build) pullBuildBaseImage(image string) error {
@@ -491,107 +517,46 @@ func (b *build) createNetwork() error {
 	return nil
 }
 
-func (b *build) prepareUpstreamCA() error {
-	if len(b.req.UpstreamCACerts) == 0 {
-		return nil
-	}
-
-	var bundle []byte
-	for _, p := range b.req.UpstreamCACerts {
-		info, err := os.Stat(p)
-		if err != nil {
-			return fmt.Errorf("upstream CA path %q: %w", p, err)
-		}
-		if info.IsDir() {
-			entries, err := os.ReadDir(p)
-			if err != nil {
-				return fmt.Errorf(
-					"reading CA directory %q: %w", p, err)
-			}
-			for _, entry := range entries {
-				if entry.IsDir() {
-					continue
-				}
-				ext := strings.ToLower(
-					filepath.Ext(entry.Name()))
-				if ext != ".pem" && ext != ".crt" &&
-					ext != ".cer" {
-					continue
-				}
-				data, err := os.ReadFile(
-					filepath.Join(p, entry.Name()))
-				if err != nil {
-					return fmt.Errorf(
-						"reading %s/%s: %w",
-						p, entry.Name(), err)
-				}
-				bundle = appendPEM(bundle, data)
-			}
-		} else {
-			data, err := os.ReadFile(p)
-			if err != nil {
-				return fmt.Errorf(
-					"reading CA cert %q: %w", p, err)
-			}
-			bundle = appendPEM(bundle, data)
-		}
-	}
-
-	if len(bundle) == 0 {
-		return nil
-	}
-
-	bundlePath := filepath.Join(
-		b.ledgerDir, "upstream-ca-bundle.pem")
-	if err := os.WriteFile(bundlePath, bundle, 0644); err != nil {
-		return fmt.Errorf("writing upstream CA bundle: %w", err)
-	}
-	logInfo(b.req, fmt.Sprintf(
-		"Prepared upstream CA bundle (%d bytes)", len(bundle)))
-	return nil
-}
-
-func appendPEM(bundle, data []byte) []byte {
-	bundle = append(bundle, data...)
-	if len(data) > 0 && data[len(data)-1] != '\n' {
-		bundle = append(bundle, '\n')
-	}
-	return bundle
-}
-
-func (b *build) startRelayContainer() error {
+// startRelayContainer starts the relay unconfigured, with its claim port
+// published on host loopback only, and returns that host address. Nothing is
+// mounted: the relay reaches its collector over the session's tunnel.
+func (b *build) startRelayContainer(claimToken string) (string, error) {
+	port := strconv.Itoa(relaycfg.DefaultPort)
 	args := append(ctrctl.Cli, "container", "run",
 		"--detach",
 		"--name", "warden-relay-"+b.buildID,
 		"--network", "warden-"+b.buildID,
 		"--ip", b.subnet.RelayIP,
-		"--volume", b.ledgerDir+":/ledger",
-		"--volume", b.req.ContextDir+":/context:ro",
+		"--publish", "127.0.0.1::"+port,
+		"--env", relaycfg.TokenEnv+"="+claimToken,
+		b.relayImage,
 	)
-
-	capture := b.req.CaptureMode
-	if capture != "" && capture != "none" {
-		args = append(args,
-			"--env", "CAPTURE_MODE="+capture)
-	}
-	if !b.req.UpstreamSystemCA {
-		args = append(args,
-			"--env", "RELAY_SYSTEM_CA=false")
-	}
-	// The build script lives at .warden/build.sh within the mounted context; the
-	// relay serves it to the guest from the canonical /build-script endpoint.
-	args = append(args,
-		"--env", "BUILD_SCRIPT=.warden/build.sh")
-	args = append(args, b.relayImage)
-
-	cmd := exec.Command(args[0], args[1:]...)
-	out, err := cmd.Output()
+	out, err := exec.Command(args[0], args[1:]...).Output()
 	if err != nil {
-		return fmt.Errorf(
+		return "", fmt.Errorf(
 			"error starting relay container: %w", err)
 	}
 	b.relayContainer = strings.TrimSpace(string(out))
-	return nil
+
+	portArgs := append(ctrctl.Cli, "container", "port", b.relayContainer, port+"/tcp")
+	out, err = exec.Command(portArgs[0], portArgs[1:]...).Output()
+	if err != nil {
+		return "", fmt.Errorf("finding the relay's published claim port: %w", err)
+	}
+	return parsePublishedAddr(string(out))
+}
+
+// parsePublishedAddr picks the IPv4 loopback mapping from `container port`
+// output (one "host:port" per line, possibly also an IPv6 one).
+func parsePublishedAddr(out string) (string, error) {
+	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+		line = strings.TrimSpace(line)
+		if host, p, err := net.SplitHostPort(line); err == nil && p != "" &&
+			(host == "127.0.0.1" || host == "0.0.0.0") {
+			return net.JoinHostPort("127.0.0.1", p), nil
+		}
+	}
+	return "", fmt.Errorf("no IPv4 loopback mapping in %q", strings.TrimSpace(out))
 }
 
 func (b *build) resolveRelayImage() error {
@@ -653,7 +618,7 @@ func (b *build) buildRelayFromSource() error {
 	dockerfile := `FROM alpine:latest
 RUN apk add --no-cache ca-certificates
 COPY relay /usr/local/bin/relay
-EXPOSE 53/udp 80 443
+EXPOSE 53/udp 80 443 8301
 ENTRYPOINT ["relay"]
 `
 	if err := os.WriteFile(
@@ -713,10 +678,13 @@ func (b *build) wardenDirPath() string {
 func (b *build) teardown() {
 	logInfo(b.req, "Tearing down environment...")
 
+	if b.sess != nil {
+		b.sess.Close()
+	}
 	if b.relayContainer != "" && b.outputDir != "" {
 		b.collectRelayLogs()
 	}
-	if b.ledgerDir != "" && b.outputDir != "" {
+	if b.sess != nil {
 		b.collectOutput()
 	}
 
@@ -768,44 +736,10 @@ func (b *build) collectRelayLogs() {
 	os.WriteFile(logPath, out, 0644) //nolint:errcheck
 }
 
+// collectOutput finalizes the collector's output (the same as every driver)
+// and adds the container driver's provenance files.
 func (b *build) collectOutput() {
-	compress := b.req.Compress
-
-	ledgerSrc := filepath.Join(b.ledgerDir, "ledger")
-	if compress {
-		compressFile(ledgerSrc,
-			filepath.Join(b.outputDir, "ledger.zst"))
-	} else {
-		os.Rename(ledgerSrc, //nolint:errcheck
-			filepath.Join(b.outputDir, "ledger"))
-	}
-
-	caSrc := filepath.Join(b.ledgerDir, "ca.cert.pem")
-	if compress {
-		compressFile(caSrc,
-			filepath.Join(
-				b.outputDir, "ca.cert.pem.zst"))
-	} else {
-		os.Rename(caSrc, //nolint:errcheck
-			filepath.Join(b.outputDir, "ca.cert.pem"))
-	}
-
-	artDir := filepath.Join(b.ledgerDir, "artifacts")
-	if entries, err := os.ReadDir(artDir); err == nil {
-		outArt := filepath.Join(b.outputDir, "artifacts")
-		os.MkdirAll(outArt, 0755) //nolint:errcheck
-		for _, entry := range entries {
-			src := filepath.Join(artDir, entry.Name())
-			real, err := filepath.EvalSymlinks(src)
-			if err != nil {
-				real = src
-			}
-			os.Rename(real, //nolint:errcheck
-				filepath.Join(outArt, entry.Name()))
-		}
-	}
-
-	os.RemoveAll(b.ledgerDir) //nolint:errcheck
+	driver.FinalizeOutput(b.outputDir, b.req.Compress)
 
 	if b.req.Containerfile != "" {
 		submitted, err := os.ReadFile(

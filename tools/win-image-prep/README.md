@@ -1,7 +1,7 @@
 # Windows build-image preparation (qemu driver)
 
 Goal: give Windows guests the **same first-class, automated image lifecycle**
-the vz driver gives macOS (`warden image restore` / `prepare` / `list`, with
+the vz driver gives macOS (`warden image prepare` / `list`, with
 per-build COW clones). BuildWarden ships no Windows media; you either point it at
 licensed media you supply or let it auto-download a Microsoft evaluation ISO.
 
@@ -16,7 +16,7 @@ licensed media you supply or let it auto-download a Microsoft evaluation ISO.
 
 ## How prep works (Mac-parity)
 
-`warden image restore` for Windows will:
+`warden image prepare --driver qemu --os windows` will:
 
 1. **Acquire** the base media — a supplied `--iso <path>`, or an http(s) URL
    that is downloaded + cached + sha256-verified (like the qemu cloud-image
@@ -113,7 +113,7 @@ the real installer in 3b).
 
 ## Status
 
-**win-arm64: validated, fully hands-off.** `warden image restore --os windows
+**win-arm64: validated, fully hands-off.** `warden image prepare --driver qemu --os windows
 --arch arm64 --iso <win11-arm64.iso>` runs an unattended install end-to-end and
 captures a bootable Windows 11 ARM64 base image with zero manual steps
 (verified: the captured image boots straight to an autologon desktop). The

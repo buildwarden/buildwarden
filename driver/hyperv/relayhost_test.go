@@ -34,7 +34,7 @@ func (f *fakeProv) RemoveVM(context.Context, string) error {
 }
 func (f *fakeProv) CreateDiffDisk(context.Context, string, string) error { return nil }
 
-// With no real relay to POST /v1/ready, StartRelay must hit the ready timeout
+// With no relay listening for the claim, StartRelay must hit the ready timeout
 // and tear everything down: create+start were attempted, the VM is removed, and
 // the per-build overlay file is deleted.
 func TestStartRelay_TimeoutTearsDown(t *testing.T) {
@@ -47,19 +47,18 @@ func TestStartRelay_TimeoutTearsDown(t *testing.T) {
 
 	start := time.Now()
 	_, err := StartRelay(context.Background(), fp, RelayHostConfig{
-		BuildID:     "unit",
-		OutputDir:   dir,
-		BootVHDX:    "boot.vhdx",
-		OverlayVHDX: overlay,
-		BuildSwitch: "warden-dev",
-		NATSwitch:   "warden-dev-nat",
-		NATHostIP:   "127.0.0.1", // servers bind to loopback in the test
-		ConfigPort:  48299,       // high test ports to avoid colliding with defaults
-		CollectorPort: 48390,
-		ReadyTimeout:  400 * time.Millisecond,
+		BuildID:      "unit",
+		OutputDir:    dir,
+		BootVHDX:     "boot.vhdx",
+		OverlayVHDX:  overlay,
+		BuildSwitch:  "warden-dev",
+		NATSwitch:    "warden-dev-nat",
+		RelayIP:      "127.0.0.1", // nothing listens on the claim port
+		ClaimPort:    48301,
+		ReadyTimeout: 400 * time.Millisecond,
 	})
 	if err == nil {
-		t.Fatal("expected a ready-timeout error (no relay to signal ready)")
+		t.Fatal("expected a ready-timeout error (no relay to claim)")
 	}
 	if elapsed := time.Since(start); elapsed < 400*time.Millisecond {
 		t.Errorf("returned in %s, before the ready timeout", elapsed)

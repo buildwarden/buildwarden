@@ -84,7 +84,7 @@ func AcquireWindowsMedia(opts WindowsPrepOptions) (*WindowsMedia, error) {
 	}
 	workDir := opts.WorkDir
 	if workDir == "" {
-		workDir = filepath.Join(cacheBaseDir(), "warden", "winprep")
+		workDir = filepath.Join(driver.CacheDir(), "winprep")
 	}
 	if err := os.MkdirAll(workDir, 0755); err != nil {
 		return nil, err
@@ -145,11 +145,11 @@ func InstallWindowsImage(m *WindowsMedia, opts WindowsPrepOptions) (string, erro
 	}
 	accel := d.detectAccel()
 
-	imagesDir := filepath.Join(cacheBaseDir(), "warden", "images")
+	imagesDir := filepath.Join(driver.CacheDir(), "images")
 	if err := os.MkdirAll(imagesDir, 0755); err != nil {
 		return "", err
 	}
-	base := filepath.Join(imagesDir, "windows-"+arch+".qcow2")
+	base := WindowsImagePath(arch)
 
 	// Fresh target disk for the install.
 	_ = os.Remove(base)
@@ -164,7 +164,7 @@ func InstallWindowsImage(m *WindowsMedia, opts WindowsPrepOptions) (string, erro
 	varsFD := ""
 	if tmpl := efiVarsPath(qarch); tmpl != "" {
 		varsFD = filepath.Join(imagesDir, "windows-"+arch+"-vars.fd")
-		if err := copyFile(tmpl, varsFD); err != nil {
+		if err := driver.CopyFile(tmpl, varsFD); err != nil {
 			varsFD = ""
 		}
 	}
@@ -522,7 +522,7 @@ func cachedISOPath(ref string) string {
 		sum := sha256.Sum256([]byte(ref))
 		safe = safe[:80] + "_" + hex.EncodeToString(sum[:6])
 	}
-	dir := filepath.Join(cacheBaseDir(), "warden", "images")
+	dir := filepath.Join(driver.CacheDir(), "images")
 	_ = os.MkdirAll(dir, 0755)
 	return filepath.Join(dir, safe+".iso")
 }

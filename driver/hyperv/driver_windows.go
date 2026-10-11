@@ -5,7 +5,6 @@ package hyperv
 import (
 	"context"
 	"fmt"
-	"io"
 	"os"
 	"path/filepath"
 
@@ -13,11 +12,11 @@ import (
 )
 
 // StartBuild runs a build on Hyper-V: it verifies the isolated network, brings
-// up the relay host (collector + config responder + relay VM) and the build VM,
+// up the relay host (collector + claimed relay VM) and the build VM,
 // waits for completion, and tears everything down. It composes the resolved
 // assets and delegates the orchestration to runBuild.
 //
-// It reuses a durable dev switch (from `warden hyperv setup`) so the whole
+// It reuses a durable dev switch (from `warden setup --driver hyperv`) so the whole
 // per-build path stays within the Hyper-V Administrators tier (no elevation).
 func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*driver.BuildResult, error) {
 	if req == nil {
@@ -29,7 +28,7 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		defer cancel()
 	}
 
-	sw := d.Switch
+	sw := req.Network
 	if sw == "" {
 		sw = DefaultDevSwitch
 	}
@@ -49,46 +48,18 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	if err != nil {
 		return nil, fmt.Errorf("hyperv build: work dir: %w", err)
 	}
-	defer func() {
-		if os.Getenv("WARDEN_HYPERV_KEEP_VMS") == "1" {
-			fmt.Fprintf(os.Stderr, "warden: WARDEN_HYPERV_KEEP_VMS set; leaving work dir %q\n", workDir)
-			return
-		}
-		os.RemoveAll(workDir)
-	}()
+	defer driver.RemoveWorkDir(req, workDir)
 
 	seedISO, seedVHDX, err := buildSeed(workDir, buildID, isWindows, req)
 	if err != nil {
 		return nil, fmt.Errorf("hyperv build: %w", err)
 	}
 
-	// The build script is served to the guest via the collector's
-	// /v1/build-script endpoint. Resolution: explicit --script, else the script
-	// in the build context (build.ps1 for Windows, build.sh otherwise -- what
-	// resolveWindowsContext requires and the qemu/vz drivers use), else a no-op
-	// default so the pipeline still runs end to end.
-	buildScript := req.Script
-	if buildScript == "" {
-		name := "build.sh"
-		if isWindows {
-			name = "build.ps1"
-		}
-		if cand := filepath.Join(req.ContextDir, name); req.ContextDir != "" {
-			if _, statErr := os.Stat(cand); statErr == nil {
-				buildScript = cand
-			}
-		}
-	}
-	if buildScript == "" {
-		def := filepath.Join(workDir, "build-default")
-		content := "exit 0\r\n"
-		if !isWindows {
-			content = "#!/bin/sh\ntrue\n"
-		}
-		if err := os.WriteFile(def, []byte(content), 0o644); err != nil {
-			return nil, fmt.Errorf("hyperv build: default script: %w", err)
-		}
-		buildScript = def
+	// Same build-script precedence as every VM driver: --script, then
+	// build.ps1/build.sh in the context, then a no-op.
+	buildScript, err := driver.StageBuildScript(req, workDir)
+	if err != nil {
+		return nil, fmt.Errorf("hyperv build: %w", err)
 	}
 
 	p := newLocalProvisioner(d.Verbose)
@@ -102,7 +73,7 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	switch strat := caps.NetworkStrategy(); strat {
 	case NetReuseDurable:
 		// Non-elevated Hyper-V Administrators: reuse the durable switch from
-		// `warden hyperv setup`. Re-assert isolation every build rather than
+		// `warden setup --driver hyperv`. Re-assert isolation every build rather than
 		// trusting persistence (a crash or manual edit can weaken it).
 		if v, ok := p.(interface {
 			VerifyNetwork(context.Context, string) error
@@ -141,8 +112,8 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		// chose: a reused durable/concurrent NAT, or a per-build one it created.
 		natSwitch = res.NATName
 		defer func() {
-			if os.Getenv("WARDEN_HYPERV_KEEP_VMS") == "1" {
-				fmt.Fprintf(os.Stderr, "warden: WARDEN_HYPERV_KEEP_VMS set; leaving ephemeral network %q\n", buildSwitch)
+			if req.KeepVMs {
+				fmt.Fprintf(os.Stderr, "warden: --keep-vms: leaving ephemeral network %q\n", buildSwitch)
 				return
 			}
 			// Background ctx so teardown runs even when ctx is already cancelled.
@@ -157,17 +128,7 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		return nil, fmt.Errorf("hyperv build: %s", reason)
 	}
 
-	// Forward the guest build console to the user unless --quiet. The CLI sets
-	// req.Stdout to os.Stdout; fall back to it when a caller leaves it nil.
-	var outTee io.Writer
-	if !req.Quiet {
-		outTee = req.Stdout
-		if outTee == nil {
-			outTee = os.Stdout
-		}
-	}
-
-	return runBuild(ctx, p, buildConfig{
+	res, err := runBuild(ctx, p, buildConfig{
 		BuildID:       buildID,
 		OutputDir:     req.OutputDir,
 		RelayBootVHDX: relayBoot,
@@ -184,8 +145,18 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		BuildSwitch:     buildSwitch,
 		NATSwitch:       natSwitch,
 		Timeout:         req.Timeout,
-		OutputTee:       outTee,
+		MemoryMB:        req.MemoryMB,
+		CPUs:            req.CPUs,
+		KeepVMs:         req.KeepVMs,
+		OutputTee:       driver.ConsoleTee(req),
+		Request:         req,
+		ContextDir:      req.ContextDir,
 	})
+	if err != nil {
+		return nil, err
+	}
+	driver.FinalizeOutput(req.OutputDir, req.Compress)
+	return res, nil
 }
 
 // Exec is not supported by the Hyper-V driver.

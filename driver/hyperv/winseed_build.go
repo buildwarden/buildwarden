@@ -2,9 +2,7 @@ package hyperv
 
 import (
 	"fmt"
-	"io"
 	"os"
-	"os/exec"
 	"path/filepath"
 
 	"github.com/buildwarden/buildwarden/driver"
@@ -26,11 +24,11 @@ func stageSeedDir(workDir, arch string, _ *driver.BuildRequest) (string, error) 
 		return "", fmt.Errorf("seed dir: %w", err)
 	}
 
-	ioExe, err := ensureWardenIOExe(arch)
+	ioExe, err := driver.GuestBinary("warden-io", "windows", arch)
 	if err != nil {
 		return "", err
 	}
-	if err := copyFile(ioExe, filepath.Join(seedDir, "warden-io.exe")); err != nil {
+	if err := driver.CopyFile(ioExe, filepath.Join(seedDir, "warden-io.exe")); err != nil {
 		return "", fmt.Errorf("stage warden-io.exe: %w", err)
 	}
 
@@ -58,65 +56,4 @@ func unattendProcArch(goarch string) string {
 		return "arm64"
 	}
 	return "amd64"
-}
-
-// ensureWardenIOExe returns a path to warden-io.exe for the guest arch,
-// cross-building it into the cache when no prebuilt/env-supplied binary exists.
-func ensureWardenIOExe(arch string) (string, error) {
-	if p, err := resolveWardenIOExe(arch); err == nil {
-		return p, nil
-	}
-	root, err := moduleRoot()
-	if err != nil {
-		// No module to build from; surface the resolver's actionable guidance.
-		_, rerr := resolveWardenIOExe(arch)
-		return "", rerr
-	}
-	cached := filepath.Join(hypervCacheDir(), "bin", "warden-io-windows-"+arch+".exe")
-	if err := os.MkdirAll(filepath.Dir(cached), 0o755); err != nil {
-		return "", err
-	}
-	cmd := exec.Command("go", "build", "-ldflags=-s -w", "-o", cached, "./cmd/warden-io")
-	cmd.Env = append(os.Environ(), "GOOS=windows", "GOARCH="+arch, "CGO_ENABLED=0")
-	cmd.Dir = root
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return "", fmt.Errorf("cross-building warden-io.exe: %w", err)
-	}
-	return cached, nil
-}
-
-// moduleRoot walks up from the working directory to the dir containing go.mod.
-func moduleRoot() (string, error) {
-	dir, err := os.Getwd()
-	if err != nil {
-		return "", err
-	}
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir, nil
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			return "", fmt.Errorf("go.mod not found from %s upward", dir)
-		}
-		dir = parent
-	}
-}
-
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(out, in); err != nil {
-		out.Close()
-		return err
-	}
-	return out.Close()
 }

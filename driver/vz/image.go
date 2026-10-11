@@ -9,6 +9,8 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/buildwarden/buildwarden/driver"
 )
 
 // plistHeader is the standard Apple plist XML header.
@@ -116,7 +118,7 @@ func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 		} else {
 			fmt.Fprintf(os.Stderr, "Downloading IPSW...\n")
 			cmd := exec.Command("curl", "-L", "-o", ipswLocal,
-			"--progress-bar", ipswURL)
+				"--progress-bar", ipswURL)
 			cmd.Stdout = os.Stderr
 			cmd.Stderr = os.Stderr
 			if err := cmd.Run(); err != nil {
@@ -132,7 +134,7 @@ func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 	if diskInfo == nil || diskInfo.Size() == 0 {
 		fmt.Fprintf(os.Stderr, "Restoring macOS from IPSW (this takes 10-20 minutes)...\n")
 		if err := restoreIPSW(ipswLocal, diskPath, 64,
-		auxPath, hwModelPath, machineIDPath); err != nil {
+			auxPath, hwModelPath, machineIDPath); err != nil {
 			return "", fmt.Errorf("restoring IPSW: %w", err)
 		}
 	} else {
@@ -189,32 +191,14 @@ func installWardenIO(mountPoint string) error {
 	binDir := filepath.Join(mountPoint, "usr", "local", "bin")
 	agentBin := filepath.Join(binDir, "warden-io")
 
-	// Check for pre-built binary next to the warden executable
-	if exe, err := os.Executable(); err == nil {
-		candidate := filepath.Join(filepath.Dir(exe),
-			"warden-io-darwin-arm64")
-		if _, errStat := os.Stat(candidate); errStat == nil {
-			data, err := os.ReadFile(candidate)
-			if err != nil {
-				return err
-			}
-			if err := os.WriteFile(agentBin, data, 0755); err != nil {
-				return err
-			}
-			os.Chown(agentBin, 0, 0) //nolint:errcheck
-			return nil
-		}
+	built, err := driver.GuestBinary("warden-io", "darwin", "arm64")
+	if err != nil {
+		return err
 	}
-
-	// Fall back to building from source
-	cmd := exec.Command("go", "build", "-o", agentBin, "./cmd/warden-io")
-	cmd.Env = append(os.Environ(),
-		"GOOS=darwin", "GOARCH=arm64", "CGO_ENABLED=0")
-	cmd.Dir = findModuleRoot()
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("cross-compiling warden-io: %w", err)
+	if err := driver.CopyFile(built, agentBin); err != nil {
+		return err
 	}
+	_ = os.Chmod(agentBin, 0o755)
 	os.Chown(agentBin, 0, 0) //nolint:errcheck
 	return nil
 }

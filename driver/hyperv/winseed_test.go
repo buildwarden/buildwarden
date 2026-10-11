@@ -75,7 +75,7 @@ func TestGenerateWardenRunPS1(t *testing.T) {
 		"--gateway=10.0.0.1",
 		"--ip=10.0.0.2/30",
 		"Stop-Computer",
-		"SerialPort",  // progress mirrored to COM1 for host-visible diagnostics
+		"SerialPort", // progress mirrored to COM1 for host-visible diagnostics
 		"COM1",
 	} {
 		if !strings.Contains(ps, want) {
@@ -109,14 +109,6 @@ func decodePSEncoded(t *testing.T, b64 string) string {
 }
 
 func TestStageSeedDir(t *testing.T) {
-	// Point at a dummy warden-io.exe so ensureWardenIOExe resolves without a build.
-	dummy := filepath.Join(t.TempDir(), "warden-io.exe")
-	if err := os.WriteFile(dummy, []byte("MZ-stub"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("WARDEN_IO_WINDOWS_EXE", dummy)
-	t.Setenv("WARDEN_HYPERV_CACHE_DIR", t.TempDir())
-
 	seedDir, err := stageSeedDir(t.TempDir(), "amd64", &driver.BuildRequest{GuestOS: "windows"})
 	if err != nil {
 		t.Fatalf("stageSeedDir: %v", err)

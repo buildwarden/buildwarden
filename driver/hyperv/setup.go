@@ -14,7 +14,7 @@ const (
 	DefaultHostIP    = "192.168.240.1"
 )
 
-// SetupOptions configures `warden hyperv setup`.
+// SetupOptions configures `warden setup --driver hyperv`.
 type SetupOptions struct {
 	// SwitchName is the durable build (Private) switch name. Empty -> warden-dev.
 	SwitchName string
@@ -54,7 +54,7 @@ func RunSetup(ctx context.Context, w io.Writer, opts SetupOptions) error {
 		return fmt.Errorf("Hyper-V is not available here; enable the Hyper-V feature and reboot")
 	}
 	if caps.Resolve(OpNetworkStandup) == OutcomeBlocked {
-		return fmt.Errorf("network standup needs full Administrator: re-run `warden hyperv setup` from a terminal launched as Administrator")
+		return fmt.Errorf("network standup needs full Administrator: re-run `warden setup --driver hyperv` from a terminal launched as Administrator")
 	}
 
 	p := newLocalProvisioner(opts.Verbose)
@@ -72,8 +72,8 @@ func RunSetup(ctx context.Context, w io.Writer, opts SetupOptions) error {
 	fmt.Fprintf(w, "  build switch (Private) ... %s\n", res.BuildSwitch)
 	fmt.Fprintf(w, "  NAT switch (Internal) .... %s  (%s, host %s)\n", res.NATName, opts.NATPrefix, opts.HostIP)
 	fmt.Fprintln(w, "\nThis durable network is for NON-elevated builds (Hyper-V Administrators):")
-	fmt.Fprintf(w, "  warden build --driver hyperv --switch %s\n", opts.SwitchName)
-	fmt.Fprintf(w, "  (or set WARDEN_HYPERV_SWITCH=%s)\n", opts.SwitchName)
+	fmt.Fprintf(w, "  warden build --driver hyperv --network %s\n", opts.SwitchName)
+	fmt.Fprintf(w, "  (or set network = \"%s\" under [vm] in warden.toml)\n", opts.SwitchName)
 	fmt.Fprintln(w, "Elevated builds ignore it and stand up a fresh isolated network per build.")
 	return nil
 }

@@ -41,4 +41,3 @@ func runPSJSON(script string, out any) error {
 	}
 	return json.Unmarshal([]byte(res), out)
 }
-

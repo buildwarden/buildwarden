@@ -1,7 +1,7 @@
 #requires -Version 5.1
 <#
   read-guest-log.ps1 - read the Windows build guest's C:\warden\warden-run.log
-  off a KEPT build overlay (from a `WARDEN_HYPERV_KEEP_VMS=1` run), for
+  off a KEPT build overlay (from a `warden build --keep-vms` run), for
   post-mortem when the build did not complete.
 
   MUST RUN ELEVATED: Mount-VHD requires full Administrator. It mounts the overlay

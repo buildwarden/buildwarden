@@ -121,7 +121,7 @@ func (c Capabilities) Resolve(op Op) Outcome {
 // privileged service running as LocalSystem), prefer a FRESH ephemeral per-build
 // network. That is the cleanest isolation and avoids the collisions and
 // side-effects of a shared, long-lived switch. The durable named switch created
-// by `warden hyperv setup` is a LOWER-PRIVILEGE fallback: it exists so a
+// by `warden setup --driver hyperv` is a LOWER-PRIVILEGE fallback: it exists so a
 // non-elevated Hyper-V Administrators member (which cannot stand up a network)
 // still has an isolated path to reuse.
 type NetworkStrategy int
@@ -136,7 +136,7 @@ const (
 	// runs elevated and likewise creates a fresh per-build network.
 	NetDelegateService
 	// NetReuseDurable: non-elevated Hyper-V Administrators; reuse the durable
-	// named switch created by an earlier elevated `warden hyperv setup`.
+	// named switch created by an earlier elevated `warden setup --driver hyperv`.
 	NetReuseDurable
 )
 
@@ -183,14 +183,14 @@ func (c Capabilities) Ready() (ready bool, reason string) {
 	case c.Resolve(OpVMLifecycle) == OutcomeBlocked:
 		return false, "VM lifecycle blocked: join Hyper-V Administrators, launch elevated, or install the service"
 	case c.NetworkStrategy() == NetBlocked:
-		return false, "no network path: run `warden hyperv setup` (elevated) for a reusable switch, or run this build from an elevated shell for a fresh per-build network"
+		return false, "no network path: run `warden setup --driver hyperv` (elevated) for a reusable switch, or run this build from an elevated shell for a fresh per-build network"
 	default:
 		return true, ""
 	}
 }
 
 // Detect probes the current process and host. switchName is the durable/dev
-// switch to check for (from --switch / WARDEN_HYPERV_SWITCH); pass "" to skip
+// switch to check for (from --network / [vm] network); pass "" to skip
 // that probe.
 func Detect(switchName string) Capabilities {
 	c := Capabilities{Platform: runtime.GOOS, DevSwitch: switchName}

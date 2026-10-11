@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"syscall"
 	"time"
+
+	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
 // vmProcess wraps a running QEMU subprocess.
@@ -16,18 +18,21 @@ type vmProcess struct {
 }
 
 func (d *Driver) startRelayVM(
-	kernelPath, initrdPath, sharedDir, socketPath string,
+	kernelPath, initrdPath, socketPath string, claimPort int, claimToken string,
 ) (*vmProcess, error) {
 	arch := hostQEMUArch()
 	accel := d.detectAccel()
 	binary := d.qemuBinary(arch)
 
-	virtfs := fmt.Sprintf(
-		"local,path=%s,mount_tag=shared,security_model=none,id=shared0",
-		sharedDir)
 	buildNet := fmt.Sprintf(
 		"stream,id=buildnet,server=on,addr.type=unix,addr.path=%s",
 		socketPath)
+	// User networking is the relay's upstream; the claim port is forwarded
+	// to host loopback only.
+	userNet := fmt.Sprintf(
+		"user,id=usernet,restrict=off,hostfwd=tcp:127.0.0.1:%d-:%d",
+		claimPort, relaycfg.DefaultPort)
+	cmdline := consoleArg(arch) + " warden.net=dhcp warden.claim_token=" + claimToken
 
 	args := []string{
 		"-machine", fmt.Sprintf("virt,accel=%s", accel),
@@ -40,12 +45,11 @@ func (d *Driver) startRelayVM(
 		"-serial", "chardev:ser0",
 		"-kernel", kernelPath,
 		"-initrd", initrdPath,
-		"-append", consoleArg(arch),
-		"-virtfs", virtfs,
+		"-append", cmdline,
 		"-device", "virtio-net-pci,netdev=buildnet",
 		"-netdev", buildNet,
 		"-device", "virtio-net-pci,netdev=usernet",
-		"-netdev", "user,id=usernet,restrict=off",
+		"-netdev", userNet,
 		"-device", "virtio-rng-pci",
 	}
 

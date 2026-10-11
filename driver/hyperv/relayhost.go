@@ -2,31 +2,29 @@ package hyperv
 
 import (
 	"context"
-	"crypto/rand"
-	"encoding/hex"
 	"fmt"
 	"io"
 	"net"
-	"net/http"
 	"os"
 	"strconv"
-	"sync"
 	"time"
 
-	"github.com/buildwarden/buildwarden/collector"
+	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
-// Defaults for the relay host. The config port MUST match the relay init's
-// RELAY_CONFIG_PORT default, since init fetches http://<gateway>:8299/config.
+// The relay VM's upstream NIC sits on the NAT switch with a static address
+// (New-NetNat provides routing but no DHCP). The orchestrator claims the relay
+// at that address and serves the collector back over the same host-initiated
+// connection, so the host needs no listener and no inbound firewall rule. The
+// address is host-only: the build VM is on the Private switch and never
+// reaches it.
 const (
-	defaultNATHostIP     = "192.168.240.1"
-	defaultConfigPort    = 8299
-	defaultCollectorPort = 8390
-	defaultReadyTimeout  = 90 * time.Second
+	defaultRelayNATIP   = "192.168.240.2"
+	defaultReadyTimeout = 90 * time.Second
 )
 
-// RelayHostConfig configures one build's relay host.
+// RelayHostConfig configures StartRelay.
 type RelayHostConfig struct {
 	BuildID     string // used to name the VM and its resources
 	OutputDir   string // where the collector lands this build's outputs
@@ -35,69 +33,41 @@ type RelayHostConfig struct {
 	BuildSwitch string // Private build switch
 	NATSwitch   string // Internal NAT switch
 
-	// BuildScriptPath is the host path to this build's script. The collector
-	// serves it on GET /v1/build-script so the relay can pull it and re-serve it
-	// to the guest (the relay has no shared disk). Empty leaves the endpoint 404.
+	// Request carries the build's relay settings (capture mode, upstream CAs).
+	Request *driver.BuildRequest
+	// ContextDir and BuildScriptPath are the inputs the collector serves.
+	ContextDir      string
 	BuildScriptPath string
 
-	// NATHostIP is the host's gateway address on the NAT switch, which the relay
-	// VM reaches for both config and the collector. Default 192.168.240.1.
-	NATHostIP string
-	// ConfigPort is where the config responder listens. Default 8299 (must match
-	// the relay init). CollectorPort is where the collector listens; its value
-	// is embedded in the sink URL handed to the relay. Default 8390.
-	ConfigPort    int
-	CollectorPort int
-	// ReadyTimeout bounds the wait for the relay's ready signal. Default 90s.
+	RelayIP      string // relay VM's static NAT address (default 192.168.240.2)
+	ClaimPort    int    // default relaycfg.DefaultPort
 	ReadyTimeout time.Duration
-	// OutputTee, if set, receives a live copy of the guest build console as it
-	// is landed to build-output.log, so warden can forward it to the user.
-	// Nil (e.g. under --quiet) suppresses forwarding; output is still captured.
-	OutputTee io.Writer
+	OutputTee    io.Writer
 }
 
-// RelayHost is a running relay host: the collector + config responder on the
-// host, and the relay VM they serve. The relay is up and streaming-ready by the
-// time StartRelay returns. Call Close to tear it all down.
+// RelayHost is a running, claimed relay VM and the build's session.
 type RelayHost struct {
-	VMName    string
-	Token     string
-	SinkURL   string
-	Collector *collector.Collector
+	VMName  string
+	Session *driver.Session
 
-	collectorSrv *http.Server
-	configSrv    *http.Server
-	prov         Provisioner
-	overlay      string
+	prov    Provisioner
+	overlay string
 }
 
-func mintToken() (string, error) {
-	b := make([]byte, 32)
-	if _, err := rand.Read(b); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(b), nil
-}
-
-// StartRelay wires the relay host end to end: it mints a per-build token, starts
-// the collector and the config responder (both bound to the NAT gateway so only
-// the relay VM on the isolated switch can reach them), creates and starts the
-// relay VM, and blocks until the relay signals ready (it POSTs /v1/ready to the
-// collector once it has fetched its config and come up). On any failure it tears
-// down whatever it already started. The caller owns the returned RelayHost and
-// must Close it when the build is done.
+// StartRelay prepares the build's collector, boots the relay VM, and claims
+// it. On any failure everything it created is torn down.
 func StartRelay(ctx context.Context, prov Provisioner, cfg RelayHostConfig) (*RelayHost, error) {
-	if cfg.NATHostIP == "" {
-		cfg.NATHostIP = defaultNATHostIP
+	if cfg.RelayIP == "" {
+		cfg.RelayIP = defaultRelayNATIP
 	}
-	if cfg.ConfigPort == 0 {
-		cfg.ConfigPort = defaultConfigPort
-	}
-	if cfg.CollectorPort == 0 {
-		cfg.CollectorPort = defaultCollectorPort
+	if cfg.ClaimPort == 0 {
+		cfg.ClaimPort = relaycfg.DefaultPort
 	}
 	if cfg.ReadyTimeout == 0 {
 		cfg.ReadyTimeout = defaultReadyTimeout
+	}
+	if cfg.Request == nil {
+		cfg.Request = &driver.BuildRequest{UpstreamSystemCA: true}
 	}
 	switch {
 	case cfg.BuildID == "":
@@ -114,55 +84,22 @@ func StartRelay(ctx context.Context, prov Provisioner, cfg RelayHostConfig) (*Re
 		return nil, fmt.Errorf("StartRelay: empty NAT switch")
 	}
 
-	token, err := mintToken()
-	if err != nil {
-		return nil, fmt.Errorf("StartRelay: minting token: %w", err)
-	}
-	sinkURL := "http://" + net.JoinHostPort(cfg.NATHostIP, strconv.Itoa(cfg.CollectorPort))
-
-	// Collector: lands outputs; OnReady closes ready exactly once.
-	ready := make(chan struct{})
-	var once sync.Once
-	coll, err := collector.New(collector.Config{
-		OutputDir:       cfg.OutputDir,
-		Token:           token,
-		BuildScriptPath: cfg.BuildScriptPath,
-		OutputTee:       cfg.OutputTee,
-		OnReady:         func() { once.Do(func() { close(ready) }) },
+	sess, err := driver.StartSession(driver.SessionConfig{
+		OutputDir:   cfg.OutputDir,
+		ContextDir:  cfg.ContextDir,
+		BuildScript: cfg.BuildScriptPath,
+		OutputTee:   cfg.OutputTee,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("StartRelay: collector: %w", err)
-	}
-
-	// Config responder: serves {sinkURL, token} once, over the NAT link.
-	resp, err := relaycfg.New(sinkURL, token)
-	if err != nil {
-		return nil, fmt.Errorf("StartRelay: config responder: %w", err)
-	}
-
-	collectorSrv, err := listenAndServe(cfg.NATHostIP, cfg.CollectorPort, coll.Handler())
-	if err != nil {
-		return nil, fmt.Errorf("StartRelay: collector listen: %w", err)
-	}
-	configSrv, err := listenAndServe(cfg.NATHostIP, cfg.ConfigPort, resp.Handler())
-	if err != nil {
-		_ = collectorSrv.Close()
-		return nil, fmt.Errorf("StartRelay: config responder listen: %w", err)
+		return nil, fmt.Errorf("StartRelay: %w", err)
 	}
 
 	h := &RelayHost{
-		VMName:       "warden-relay-" + cfg.BuildID,
-		Token:        token,
-		SinkURL:      sinkURL,
-		Collector:    coll,
-		collectorSrv: collectorSrv,
-		configSrv:    configSrv,
-		prov:         prov,
-		overlay:      cfg.OverlayVHDX,
+		VMName:  "warden-relay-" + cfg.BuildID,
+		Session: sess,
+		prov:    prov,
+		overlay: cfg.OverlayVHDX,
 	}
-
-	// Create + start the relay VM. The responder is already serving, so the
-	// relay's boot-time config fetch succeeds on the first attempt.
 	if _, err := prov.CreateRelayVM(ctx, RelayVMSpec{
 		Name:        h.VMName,
 		BootVHDX:    cfg.BootVHDX,
@@ -171,7 +108,7 @@ func StartRelay(ctx context.Context, prov Provisioner, cfg RelayHostConfig) (*Re
 		NATSwitch:   cfg.NATSwitch,
 		COMPipePath: `\\.\pipe\` + h.VMName,
 	}); err != nil {
-		h.closeServers()
+		sess.Close()
 		return nil, fmt.Errorf("StartRelay: %w", err)
 	}
 	if err := prov.StartVM(ctx, h.VMName); err != nil {
@@ -179,44 +116,22 @@ func StartRelay(ctx context.Context, prov Provisioner, cfg RelayHostConfig) (*Re
 		return nil, fmt.Errorf("StartRelay: %w", err)
 	}
 
-	select {
-	case <-ready:
-		return h, nil
-	case <-time.After(cfg.ReadyTimeout):
+	// The relay VM's command line is baked into its boot disk, so there is no
+	// per-instance claim token here; the claim endpoint is only reachable on
+	// the host-only NAT switch, and only until this claim lands.
+	claimCtx, cancel := context.WithTimeout(ctx, cfg.ReadyTimeout)
+	defer cancel()
+	claimAddr := net.JoinHostPort(cfg.RelayIP, strconv.Itoa(cfg.ClaimPort))
+	if _, err := sess.ClaimRelay(claimCtx, claimAddr, "", cfg.Request, nil); err != nil {
 		_ = h.Close()
-		return nil, fmt.Errorf("StartRelay: relay VM %q did not signal ready within %s", h.VMName, cfg.ReadyTimeout)
-	case <-ctx.Done():
-		_ = h.Close()
-		return nil, ctx.Err()
+		return nil, fmt.Errorf("StartRelay: relay VM %q: %w", h.VMName, err)
 	}
+	return h, nil
 }
 
-// listenAndServe binds an HTTP server to host:port and serves h in the
-// background, returning the server so the caller can Close it.
-func listenAndServe(host string, port int, handler http.Handler) (*http.Server, error) {
-	ln, err := net.Listen("tcp", net.JoinHostPort(host, strconv.Itoa(port)))
-	if err != nil {
-		return nil, err
-	}
-	srv := &http.Server{Handler: handler}
-	go func() { _ = srv.Serve(ln) }()
-	return srv, nil
-}
-
-// closeServers shuts down the host-side HTTP servers without touching the VM.
-func (h *RelayHost) closeServers() {
-	if h.configSrv != nil {
-		_ = h.configSrv.Close()
-	}
-	if h.collectorSrv != nil {
-		_ = h.collectorSrv.Close()
-	}
-}
-
-// Close tears the relay host down: stops the host servers, removes the relay VM,
-// and deletes the per-build differencing overlay. Best-effort and idempotent.
+// Close stops the collector, removes the relay VM and deletes its overlay.
 func (h *RelayHost) Close() error {
-	h.closeServers()
+	h.Session.Close()
 	if h.prov != nil && h.VMName != "" {
 		_ = h.prov.RemoveVM(context.Background(), h.VMName)
 	}

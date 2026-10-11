@@ -14,7 +14,7 @@ import (
 // on any platform. StartBuild composes them, then hands the resolved paths to
 // runBuild.
 
-// hypervCacheDir is where `warden hyperv setup` and `warden image fetch` land
+// hypervCacheDir is where `warden setup --driver hyperv` and `warden image prepare --driver hyperv` land
 // pinned, verified boot/image artifacts (per the design: built once in CI,
 // downloaded + verified, never built per build). WARDEN_HYPERV_CACHE_DIR
 // overrides the location (ops flexibility; hermetic tests).
@@ -45,7 +45,7 @@ func resolveRelayBootVHDX() (string, error) {
 	return "", fmt.Errorf(
 		"relay boot VHDX not found (looked at $WARDEN_RELAY_BOOT_VHDX and %s); "+
 			"build it with tools/relay-vm/hyperv/build.sh + build-boot-vhdx.sh, "+
-			"or wait for `warden hyperv setup` to download the pinned disk", pinned)
+			"or wait for `warden setup --driver hyperv` to download the pinned disk", pinned)
 }
 
 // resolveBuildBaseVHDX locates the read-only build-guest base image (the
@@ -77,15 +77,15 @@ func resolveBuildBaseVHDX(req *driver.BuildRequest) (path string, isWindows bool
 		candidate = os.Getenv("WARDEN_HYPERV_BUILD_IMAGE")
 	}
 	if candidate == "" {
-		// Fall back to the image pinned by `warden image fetch` (its manifest
+		// Fall back to the image pinned by `warden image prepare --driver hyperv` (its manifest
 		// carries the format-derived generation and guest OS, so honour those
 		// rather than re-inferring from the extension).
 		if p, isWin, gen, ok := resolveActiveEvalImage(); ok {
 			return p, isWin, gen, nil
 		}
 		return "", isWindows, 0, fmt.Errorf(
-			"no build-guest base image: run `warden image fetch windows-server-2025` "+
-				"to pin Microsoft's eval VHD, or pass --image <disk.vhd|.vhdx> / set "+
+			"no build-guest base image: run `warden image prepare --driver hyperv` " +
+				"to pin Microsoft's eval VHD, or pass --image <disk.vhd|.vhdx> / set " +
 				"WARDEN_HYPERV_BUILD_IMAGE")
 	}
 
@@ -116,34 +116,4 @@ func resolveBuildBaseVHDX(req *driver.BuildRequest) (path string, isWindows bool
 	}
 	abs, _ := filepath.Abs(candidate)
 	return abs, isWindows, generation, nil
-}
-
-// resolveWardenIOExe locates the Windows guest agent (warden-io.exe) to stage
-// on the seed. Lookup order: WARDEN_IO_WINDOWS_EXE, a prebuilt binary next to
-// the running executable, then the build cache. It does not build (kept pure +
-// testable); ensureWardenIOExe cross-builds on demand. arch is a Go arch
-// ("amd64").
-func resolveWardenIOExe(arch string) (string, error) {
-	name := "warden-io-windows-" + arch + ".exe"
-	if p := os.Getenv("WARDEN_IO_WINDOWS_EXE"); p != "" {
-		if _, err := os.Stat(p); err != nil {
-			return "", fmt.Errorf("WARDEN_IO_WINDOWS_EXE=%q not readable: %w", p, err)
-		}
-		return p, nil
-	}
-	if exe, err := os.Executable(); err == nil {
-		cand := filepath.Join(filepath.Dir(exe), name)
-		if _, err := os.Stat(cand); err == nil {
-			return cand, nil
-		}
-	}
-	cached := filepath.Join(hypervCacheDir(), "bin", name)
-	if _, err := os.Stat(cached); err == nil {
-		return cached, nil
-	}
-	return "", fmt.Errorf(
-		"warden-io.exe (%s) not found: set WARDEN_IO_WINDOWS_EXE, place %s next to "+
-			"the warden binary, or build it with "+
-			"`GOOS=windows GOARCH=%s go build -o %s ./cmd/warden-io`",
-		arch, name, arch, cached)
 }

@@ -8,10 +8,10 @@ import (
 
 func TestResolvePerOperation(t *testing.T) {
 	tests := []struct {
-		name    string
-		caps    Capabilities
-		op      Op
-		want    Outcome
+		name string
+		caps Capabilities
+		op   Op
+		want Outcome
 	}{
 		{"elevated does network standup", Capabilities{Elevated: true}, OpNetworkStandup, OutcomeDirect},
 		{"non-elevated cannot standup network", Capabilities{Elevated: false}, OpNetworkStandup, OutcomeBlocked},

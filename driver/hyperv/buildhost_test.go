@@ -1,10 +1,10 @@
 package hyperv
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"os"
 	"path/filepath"
@@ -12,26 +12,27 @@ import (
 	"sync/atomic"
 	"testing"
 	"time"
+
+	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
 // buildFake is a Provisioner that stands in for a real Hyper-V host AND
-// faithfully simulates the relay VM's boot-time behaviour, so runBuild can be
-// exercised end to end without any VM:
+// simulates the relay VM's behaviour, so runBuild can be exercised end to end
+// without any VM:
 //
-//   - When the relay VM "starts", it fetches its config from the responder
-//     (capturing the token exactly as the real init does) and POSTs /v1/ready,
-//     which is what StartRelay blocks on.
+//   - When the relay VM "starts", it listens for the claim exactly as the real
+//     relay does; on the claim it records the collector URL + token and POSTs
+//     /v1/ready, which is what StartRelay blocks on.
 //   - When the build VM "starts", it POSTs /v1/complete with a configurable exit
 //     code, which is what runBuild blocks on.
 //
 // CreateDiffDisk creates a stub overlay file so overlay cleanup is observable.
 type buildFake struct {
-	host          string
-	configPort    int
-	collectorPort int
-	buildExit     int // exit code the simulated build reports on /v1/complete
+	claimAddr string
+	buildExit int // exit code the simulated build reports on /v1/complete
 
-	token         atomic.Value // string, captured from the config fetch
+	claimed       atomic.Value // relaycfg.Config received by the simulated relay
+	transport     atomic.Value // http.RoundTripper: the collector tunnel
 	lastBuildSpec atomic.Value // VMSpec, captured from CreateVM (build VM)
 	createRelay   atomic.Int32
 	createBuild   atomic.Int32
@@ -82,57 +83,47 @@ func (f *buildFake) CreateDiffDisk(_ context.Context, overlay, _ string) error {
 	return os.WriteFile(overlay, []byte("stub-overlay"), 0o644)
 }
 
-func (f *buildFake) configURL() string {
-	return fmt.Sprintf("http://%s:%d/config", f.host, f.configPort)
-}
-func (f *buildFake) collectorURL(path string) string {
-	return fmt.Sprintf("http://%s:%d%s", f.host, f.collectorPort, path)
+// simulateRelayReady mirrors the relay: accept the tunnel and the claim, then
+// POST /v1/ready to the collector over the tunnel.
+func (f *buildFake) simulateRelayReady() {
+	ln, err := net.Listen("tcp", f.claimAddr)
+	if err != nil {
+		f.relayReadyErr.Store(fmt.Errorf("claim listen: %w", err))
+		return
+	}
+	go func() {
+		_ = relaycfg.Serve(ln, "", func(c relaycfg.Config, rt http.RoundTripper) (relaycfg.Identity, error) {
+			f.claimed.Store(c)
+			f.transport.Store(rt)
+			if err := f.post("/v1/ready", nil); err != nil {
+				f.relayReadyErr.Store(fmt.Errorf("ready POST: %w", err))
+			}
+			return relaycfg.Identity{CACert: "-----BEGIN CERTIFICATE-----\n", LedgerPublicKey: "00"}, nil
+		})
+	}()
 }
 
-// simulateRelayReady mirrors the relay init: GET /config, parse the token, then
-// POST /v1/ready with it.
-func (f *buildFake) simulateRelayReady() {
-	client := &http.Client{Timeout: 3 * time.Second}
-	resp, err := client.Get(f.configURL())
+func (f *buildFake) post(path string, body io.Reader) error {
+	c, _ := f.claimed.Load().(relaycfg.Config)
+	rt, _ := f.transport.Load().(http.RoundTripper)
+	req, _ := http.NewRequest(http.MethodPost, c.CollectorURL+path, body)
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+c.CollectorToken)
+	resp, err := (&http.Client{Transport: rt, Timeout: 3 * time.Second}).Do(req)
 	if err != nil {
-		f.relayReadyErr.Store(fmt.Errorf("config fetch: %w", err))
-		return
+		return err
 	}
-	defer resp.Body.Close()
-	sc := bufio.NewScanner(resp.Body)
-	for sc.Scan() {
-		if v, ok := strings.CutPrefix(sc.Text(), "OUTPUT_SINK_TOKEN="); ok {
-			f.token.Store(v)
-		}
-	}
-	req, _ := http.NewRequest(http.MethodPost, f.collectorURL("/v1/ready"), nil)
-	if tok, ok := f.token.Load().(string); ok {
-		req.Header.Set("Authorization", "Bearer "+tok)
-	}
-	rr, err := client.Do(req)
-	if err != nil {
-		f.relayReadyErr.Store(fmt.Errorf("ready POST: %w", err))
-		return
-	}
-	_, _ = io.Copy(io.Discard, rr.Body)
-	_ = rr.Body.Close()
+	_, _ = io.Copy(io.Discard, resp.Body)
+	return resp.Body.Close()
 }
 
 // simulateBuildComplete mirrors the relay reporting build completion.
 func (f *buildFake) simulateBuildComplete() {
-	client := &http.Client{Timeout: 3 * time.Second}
-	body := strings.NewReader(fmt.Sprintf(`{"exit_code":%d,"message":"done"}`, f.buildExit))
-	req, _ := http.NewRequest(http.MethodPost, f.collectorURL("/v1/complete"), body)
-	req.Header.Set("Content-Type", "application/json")
-	if tok, ok := f.token.Load().(string); ok {
-		req.Header.Set("Authorization", "Bearer "+tok)
-	}
-	rr, err := client.Do(req)
-	if err != nil {
+	if _, ok := f.claimed.Load().(relaycfg.Config); !ok {
 		return
 	}
-	_, _ = io.Copy(io.Discard, rr.Body)
-	_ = rr.Body.Close()
+	_ = f.post("/v1/complete",
+		strings.NewReader(fmt.Sprintf(`{"exit_code":%d,"message":"done"}`, f.buildExit)))
 }
 
 // baseCfg returns a buildConfig wired to loopback + high test ports, with the
@@ -153,9 +144,8 @@ func baseCfg(t *testing.T, dir string) buildConfig {
 		SeedISO:       filepath.Join(dir, "seed.iso"),
 		BuildSwitch:   "warden-dev",
 		NATSwitch:     "warden-dev-nat",
-		natHostIP:     "127.0.0.1",
-		configPort:    49299,
-		collectorPort: 49390,
+		relayIP:       "127.0.0.1",
+		claimPort:     49301,
 		readyTimeout:  5 * time.Second,
 		Timeout:       5 * time.Second,
 	}
@@ -164,7 +154,7 @@ func baseCfg(t *testing.T, dir string) buildConfig {
 func TestRunBuild_HappyPath(t *testing.T) {
 	dir := t.TempDir()
 	cfg := baseCfg(t, dir)
-	fp := &buildFake{host: cfg.natHostIP, configPort: cfg.configPort, collectorPort: cfg.collectorPort, buildExit: 0}
+	fp := &buildFake{claimAddr: "127.0.0.1:49301", buildExit: 0}
 
 	res, err := runBuild(context.Background(), fp, cfg)
 	if err != nil {
@@ -217,7 +207,7 @@ func TestRunBuild_Gen1(t *testing.T) {
 	cfg.BuildOverlay = filepath.Join(dir, "build.vhd")
 	cfg.Generation = 1
 	cfg.IsWindows = true
-	fp := &buildFake{host: cfg.natHostIP, configPort: cfg.configPort, collectorPort: cfg.collectorPort, buildExit: 0}
+	fp := &buildFake{claimAddr: "127.0.0.1:49301", buildExit: 0}
 
 	if _, err := runBuild(context.Background(), fp, cfg); err != nil {
 		if rerr, ok := fp.relayReadyErr.Load().(error); ok {
@@ -240,7 +230,7 @@ func TestRunBuild_Gen1(t *testing.T) {
 func TestRunBuild_OverlayFormatMismatch(t *testing.T) {
 	dir := t.TempDir()
 	cfg := baseCfg(t, dir)
-	cfg.BuildBaseVHDX = "build-base.vhd" // Gen1 base
+	cfg.BuildBaseVHDX = "build-base.vhd"                // Gen1 base
 	cfg.BuildOverlay = filepath.Join(dir, "build.vhdx") // mismatched child
 	if _, err := runBuild(context.Background(), &buildFake{}, cfg); err == nil {
 		t.Fatal("expected a validation error for a base/overlay format mismatch")
@@ -250,7 +240,7 @@ func TestRunBuild_OverlayFormatMismatch(t *testing.T) {
 func TestRunBuild_NonzeroExit(t *testing.T) {
 	dir := t.TempDir()
 	cfg := baseCfg(t, dir)
-	fp := &buildFake{host: cfg.natHostIP, configPort: cfg.configPort, collectorPort: cfg.collectorPort, buildExit: 7}
+	fp := &buildFake{claimAddr: "127.0.0.1:49301", buildExit: 7}
 
 	_, err := runBuild(context.Background(), fp, cfg)
 	if err == nil {
@@ -266,11 +256,11 @@ func TestRunBuild_NonzeroExit(t *testing.T) {
 
 func TestRunBuild_ValidatesConfig(t *testing.T) {
 	cases := map[string]func(*buildConfig){
-		"build ID":    func(c *buildConfig) { c.BuildID = "" },
-		"output dir":  func(c *buildConfig) { c.OutputDir = "" },
-		"relay boot":  func(c *buildConfig) { c.RelayBootVHDX = "" },
-		"build base":  func(c *buildConfig) { c.BuildBaseVHDX = "" },
-		"seed media":  func(c *buildConfig) { c.SeedISO = ""; c.SeedVHDX = "" },
+		"build ID":     func(c *buildConfig) { c.BuildID = "" },
+		"output dir":   func(c *buildConfig) { c.OutputDir = "" },
+		"relay boot":   func(c *buildConfig) { c.RelayBootVHDX = "" },
+		"build base":   func(c *buildConfig) { c.BuildBaseVHDX = "" },
+		"seed media":   func(c *buildConfig) { c.SeedISO = ""; c.SeedVHDX = "" },
 		"build switch": func(c *buildConfig) { c.BuildSwitch = "" },
 	}
 	for name, mut := range cases {

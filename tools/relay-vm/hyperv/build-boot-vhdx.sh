@@ -2,7 +2,7 @@
 # Build the relay boot VHDX from the UKI, entirely in userspace: no elevation,
 # no Hyper-V role, no mkfs, no loop devices. This is the exact step CI runs on a
 # plain Linux runner to publish relay-boot.vhdx as a release artifact, so users'
-# `warden hyperv setup` downloads + verifies it instead of building locally.
+# `warden setup --driver hyperv` downloads + verifies it instead of building locally.
 #
 # Pipeline:
 #   UKI (EFI-stub kernel + embedded initramfs/cmdline, from build.sh)

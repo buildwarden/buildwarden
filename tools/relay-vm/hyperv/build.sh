@@ -88,7 +88,7 @@ for mod in \
 done
 
 # Install init.
-cp "$SCRIPT_DIR/init" "$ROOTFS_DIR/init"
+cp "$SCRIPT_DIR/../init" "$ROOTFS_DIR/init"
 chmod 755 "$ROOTFS_DIR/init"
 
 # Bake the relay binary into the initramfs at /sbin/relay. The relay VM has no

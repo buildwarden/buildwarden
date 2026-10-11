@@ -14,7 +14,7 @@
 package hyperv
 
 // DefaultDevSwitch is the fixed name of the durable, reused development vSwitch
-// created once by `warden hyperv setup` (dev stub) and reused on every build to
+// created once by `warden setup --driver hyperv` (dev stub) and reused on every build to
 // avoid per-build network standup (which requires full Administrator).
 const DefaultDevSwitch = "warden-dev"
 
@@ -23,14 +23,12 @@ const DefaultDevSwitch = "warden-dev"
 type Driver struct {
 	// Verbose enables VM console output.
 	Verbose bool
-
-	// Switch, when non-empty, names a pre-created durable/dev vSwitch to reuse
-	// instead of standing up a network per build. Standing up a network
-	// requires full Administrator; reusing a pre-created switch keeps the
-	// per-build path within the Hyper-V Administrators tier (no elevation).
-	// Populated from --switch / WARDEN_HYPERV_SWITCH.
-	Switch string
 }
+
+// The durable switch a build reuses comes from BuildRequest.Network (--network
+// / [vm] network), defaulting to DefaultDevSwitch. Standing up a network per
+// build requires full Administrator; reusing a pre-created switch keeps the
+// per-build path within the Hyper-V Administrators tier (no elevation).
 
 // New returns a Hyper-V driver.
 func New() *Driver { return &Driver{} }

@@ -3,47 +3,34 @@ package container
 import (
 	"encoding/json"
 	"fmt"
-	"os"
 	"os/exec"
-	"path/filepath"
 	"strings"
 
 	"github.com/fxamacker/cbor/v2"
 	"github.com/lesiw/ctrctl"
+
+	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
-// writeEnvironment writes environment payload and metadata to the
-// ledger volume BEFORE the relay starts. The relay reads these at
-// startup and writes the environment record as the first ledger
-// entry.
-func writeEnvironment(
-	image string, ledgerDir string,
-) error {
+// imageEnvironment describes the build's base image (its manifest and
+// digest) for the relay to record as the ledger's first entry.
+func imageEnvironment(image string) (*relaycfg.Environment, error) {
 	inspectArgs := append(ctrctl.Cli, "image", "inspect",
 		"--format", "{{json .RepoDigests}}", image)
 	cmd := exec.Command(inspectArgs[0], inspectArgs[1:]...)
 	out, err := cmd.Output()
 	if err != nil {
-		return fmt.Errorf("inspecting image: %w", err)
+		return nil, fmt.Errorf("inspecting image: %w", err)
 	}
 
 	digest := parseDigestFromInspect(
 		strings.TrimSpace(string(out)))
 	if digest == "" {
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"could not resolve digest for %s", image)
 	}
 
 	payload, mediaType := getImageManifest(image)
-
-	envDir := filepath.Join(ledgerDir, "environment")
-	_ = os.MkdirAll(envDir, 0755)
-
-	if err := os.WriteFile(
-		filepath.Join(envDir, "payload"),
-		payload, 0644); err != nil {
-		return err
-	}
 
 	meta := map[string]any{
 		"reference": image,
@@ -52,16 +39,10 @@ func writeEnvironment(
 	}
 	metaBytes, err := cbor.Marshal(meta)
 	if err != nil {
-		return fmt.Errorf(
+		return nil, fmt.Errorf(
 			"encoding environment metadata: %w", err)
 	}
-	if err := os.WriteFile(
-		filepath.Join(envDir, "metadata"),
-		metaBytes, 0644); err != nil {
-		return err
-	}
-
-	return nil
+	return &relaycfg.Environment{Payload: payload, Metadata: metaBytes}, nil
 }
 
 // getImageManifest retrieves the raw OCI manifest from the

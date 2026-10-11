@@ -1,4 +1,4 @@
-package container
+package driver
 
 import (
 	"io"
@@ -71,4 +71,3 @@ func compressFile(src, dst string) {
 	enc.Close()
 	out.Close()
 }
-

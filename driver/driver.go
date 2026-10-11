@@ -40,10 +40,6 @@ type BuildRequest struct {
 	GuestOS string
 	// Containerfile is the path to the original Dockerfile/Containerfile.
 	Containerfile string
-	// WardenDir is the prepared .warden directory path on host.
-	WardenDir string
-	// LedgerDir is where the relay writes its output.
-	LedgerDir string
 	// OutputDir is the final output directory for the build.
 	OutputDir string
 	// CaptureMode controls payload capture ("none","headers","bodies","all").
@@ -56,6 +52,16 @@ type BuildRequest struct {
 	Quiet bool
 	// Timeout is the maximum build duration. Zero means no limit.
 	Timeout time.Duration
+	// CPUs and MemoryMB size the build VM (VM drivers). Zero uses the
+	// driver's default.
+	CPUs     int
+	MemoryMB int
+	// Network names a pre-provisioned network to reuse instead of creating
+	// one per build (hyperv: the durable switch from `warden setup`).
+	Network string
+	// KeepVMs leaves the build's VMs, disks and work directory in place for
+	// inspection instead of tearing them down (VM drivers).
+	KeepVMs bool
 	// RelayImage specifies the relay container image (container driver only).
 	RelayImage string
 	// UpstreamCACerts are host paths to additional CA certificate files/dirs

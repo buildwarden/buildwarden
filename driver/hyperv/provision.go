@@ -79,8 +79,8 @@ type VMSpec struct {
 	VHDXPath   string
 	// SeedISO / SeedVHDX carry per-build provisioning media (cloud-init for
 	// Linux guests, unattend media for Windows guests).
-	SeedISO  string
-	SeedVHDX string
+	SeedISO   string
+	SeedVHDX  string
 	IsWindows bool
 	// COMPipePath, when set, wires the build VM's COM1 to a host named pipe
 	// (e.g. \\.\pipe\<name>). The guest bootstrap echoes its progress there so a

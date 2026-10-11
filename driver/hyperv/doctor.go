@@ -24,7 +24,7 @@ func yesNo(b bool) string {
 
 // Doctor writes the capability preflight report to w and reports whether the
 // driver is blocked (a required capability for running builds is unmet). A
-// blocked result is meant to drive a non-zero exit so `warden hyperv doctor`
+// blocked result is meant to drive a non-zero exit so `warden doctor --driver hyperv`
 // works as a CI/agent gate.
 func Doctor(w io.Writer, c Capabilities) (blocked bool) {
 	if !c.Supported {
@@ -97,7 +97,7 @@ func Doctor(w io.Writer, c Capabilities) (blocked bool) {
 		fmt.Fprintf(w, "  Network .............. OK (reuse durable switch '%s', lower-privilege path)\n", c.DevSwitch)
 	default:
 		fmt.Fprintln(w, "  Network .............. BLOCKED")
-		fmt.Fprintln(w, "    -> run `warden hyperv setup` once from an elevated shell (reusable switch), or")
+		fmt.Fprintln(w, "    -> run `warden setup --driver hyperv` once from an elevated shell (reusable switch), or")
 		fmt.Fprintln(w, "    -> run this build from an Administrator terminal (fresh per-build network), or")
 		fmt.Fprintln(w, "    -> install the network service (one-time, elevated)")
 	}

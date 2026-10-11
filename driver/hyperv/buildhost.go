@@ -2,11 +2,11 @@ package hyperv
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -64,30 +64,29 @@ type buildConfig struct {
 
 	MemoryMB int           // build VM; default 4096
 	CPUs     int           // build VM; default 4
+	KeepVMs  bool          // leave the build VM and overlay for inspection
 	Timeout  time.Duration // whole-build ceiling; zero means no limit
 
 	// OutputTee, if set, receives a live copy of the guest build console
 	// (forwarded by the collector). Nil (e.g. under --quiet) suppresses it.
 	OutputTee io.Writer
 
-	// Host-binding overrides for the relay host servers, mirrored onto
-	// RelayHostConfig. Empty/zero use the production defaults (NAT gateway
-	// 192.168.240.1, ports 8299/8390). Tests set these to loopback + high ports.
-	natHostIP     string
-	configPort    int
-	collectorPort int
-	readyTimeout  time.Duration
-}
+	// Request carries the relay settings (capture mode, upstream CAs).
+	Request *driver.BuildRequest
+	// ContextDir is the build context the collector serves to the guest.
+	ContextDir string
 
-// keepVMsForDebug reports whether the debug env is set to skip VM/overlay
-// teardown so a failed build can be inspected (console, logs). Off by default.
-func keepVMsForDebug() bool { return os.Getenv("WARDEN_HYPERV_KEEP_VMS") == "1" }
+	// Test hooks: host/relay addresses and ports (zero = production defaults).
+	relayIP      string
+	claimPort    int
+	readyTimeout time.Duration
+}
 
 // runBuild composes the full Hyper-V build flow against an already-resolved
 // buildConfig:
 //
-//  1. StartRelay stands up the collector + config responder on the host and
-//     boots the relay VM, blocking until the relay signals ready.
+//  1. StartRelay starts the build's collector on the host, boots the relay
+//     VM, and claims it (pushing the build config), blocking until it is ready.
 //  2. A per-build differencing overlay is created off the read-only build-guest
 //     base image, so the base is never mutated and concurrent builds don't
 //     collide.
@@ -136,19 +135,6 @@ func runBuild(ctx context.Context, prov Provisioner, cfg buildConfig) (*driver.B
 	if cfg.CPUs == 0 {
 		cfg.CPUs = defaultBuildCPUs
 	}
-	// Env overrides for heavy builds (e.g. a VS Build Tools install + numpy MSVC
-	// compile want more than the 4 GB / 4 vCPU default). Parsed leniently; a bad
-	// value is ignored in favour of the default already set above.
-	if v := os.Getenv("WARDEN_HYPERV_BUILD_MEMORY_MB"); v != "" {
-		if mb, err := strconv.Atoi(v); err == nil && mb >= 512 {
-			cfg.MemoryMB = mb
-		}
-	}
-	if v := os.Getenv("WARDEN_HYPERV_BUILD_CPUS"); v != "" {
-		if n, err := strconv.Atoi(v); err == nil && n >= 1 {
-			cfg.CPUs = n
-		}
-	}
 	if cfg.Generation == 0 {
 		cfg.Generation = 2
 	}
@@ -157,8 +143,7 @@ func runBuild(ctx context.Context, prov Provisioner, cfg buildConfig) (*driver.B
 		return nil, fmt.Errorf("runBuild: output dir: %w", err)
 	}
 
-	// 1. Relay host up: collector + config responder on the host, relay VM
-	//    booted and ready. StartRelay tears its own half down on failure.
+	// 1. Relay host up: collector on the host, relay VM booted and claimed. StartRelay tears its own half down on failure.
 	rh, err := StartRelay(ctx, prov, RelayHostConfig{
 		BuildID:         cfg.BuildID,
 		OutputDir:       cfg.OutputDir,
@@ -167,9 +152,10 @@ func runBuild(ctx context.Context, prov Provisioner, cfg buildConfig) (*driver.B
 		BuildSwitch:     cfg.BuildSwitch,
 		NATSwitch:       cfg.NATSwitch,
 		BuildScriptPath: cfg.BuildScriptPath,
-		NATHostIP:       cfg.natHostIP,
-		ConfigPort:      cfg.configPort,
-		CollectorPort:   cfg.collectorPort,
+		ContextDir:      cfg.ContextDir,
+		Request:         cfg.Request,
+		RelayIP:         cfg.relayIP,
+		ClaimPort:       cfg.claimPort,
 		ReadyTimeout:    cfg.readyTimeout,
 		OutputTee:       cfg.OutputTee,
 	})
@@ -187,12 +173,12 @@ func runBuild(ctx context.Context, prov Provisioner, cfg buildConfig) (*driver.B
 	buildVM := "warden-build-" + cfg.BuildID
 	// Tear the build VM + its overlay down regardless of outcome. Uses a
 	// background context so cleanup still runs when ctx is already cancelled.
-	// WARDEN_HYPERV_KEEP_VMS=1 skips teardown so a failed build VM can be
-	// inspected (console, logs); the caller cleans it up manually.
+	// --keep-vms skips teardown so a failed build VM can be inspected
+	// (console, logs); the caller cleans it up manually.
 	defer func() {
-		if keepVMsForDebug() {
+		if cfg.KeepVMs {
 			fmt.Fprintf(os.Stderr,
-				"warden: WARDEN_HYPERV_KEEP_VMS set; leaving build VM %q (overlay %q) for inspection\n",
+				"warden: --keep-vms: leaving build VM %q (overlay %q) for inspection\n",
 				buildVM, cfg.BuildOverlay)
 			return
 		}
@@ -237,25 +223,17 @@ func runBuild(ctx context.Context, prov Provisioner, cfg buildConfig) (*driver.B
 	//    collector when warden-io in the guest reports completion; the collector
 	//    delivers that (with the exit code) on Done. Artifacts/ledger/output are
 	//    streamed to OutputDir as the build runs.
-	var timeoutCh <-chan time.Time
+	waitCtx := ctx
 	if cfg.Timeout > 0 {
-		t := time.NewTimer(cfg.Timeout)
-		defer t.Stop()
-		timeoutCh = t.C
+		var cancel context.CancelFunc
+		waitCtx, cancel = context.WithTimeout(ctx, cfg.Timeout)
+		defer cancel()
 	}
-	select {
-	case sig := <-rh.Collector.Done():
-		if sig.ExitCode != 0 {
-			msg := sig.Message
-			if sig.Error != "" {
-				msg = sig.Error
-			}
-			return nil, fmt.Errorf("runBuild: build exited with code %d: %s", sig.ExitCode, msg)
+	if err := rh.Session.Wait(waitCtx); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+			return nil, fmt.Errorf("runBuild: build %q did not complete within %s", buildVM, cfg.Timeout)
 		}
-		return &driver.BuildResult{OutputDir: cfg.OutputDir}, nil
-	case <-timeoutCh:
-		return nil, fmt.Errorf("runBuild: build %q did not complete within %s", buildVM, cfg.Timeout)
-	case <-ctx.Done():
-		return nil, fmt.Errorf("runBuild: %w", ctx.Err())
+		return nil, fmt.Errorf("runBuild: %w", err)
 	}
+	return &driver.BuildResult{OutputDir: cfg.OutputDir}, nil
 }

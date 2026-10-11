@@ -17,7 +17,7 @@ import (
 // switch with the gateway running non-elevated."
 //
 // Requires an actual Hyper-V host with the warden-dev switch present (run
-// `warden hyperv setup` once, elevated) and VM-lifecycle privilege. It skips
+// `warden setup --driver hyperv` once, elevated) and VM-lifecycle privilege. It skips
 // cleanly otherwise. Run with: go test -tags integration -run VMLifecycle ./driver/hyperv/
 func TestVMLifecycleSmoke(t *testing.T) {
 	caps := Detect(DefaultDevSwitch)
@@ -25,7 +25,7 @@ func TestVMLifecycleSmoke(t *testing.T) {
 		t.Skip("not a Windows host")
 	}
 	if !caps.DevSwitchPresent {
-		t.Skipf("switch %q not present; run `warden hyperv setup` first", DefaultDevSwitch)
+		t.Skipf("switch %q not present; run `warden setup --driver hyperv` first", DefaultDevSwitch)
 	}
 	if caps.Resolve(OpVMLifecycle) != OutcomeDirect {
 		t.Skip("VM lifecycle not available directly (need Hyper-V Administrators or elevation)")

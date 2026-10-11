@@ -29,9 +29,9 @@ func (unsupportedProvisioner) CreateVM(context.Context, VMSpec) (*VMHandle, erro
 func (unsupportedProvisioner) CreateRelayVM(context.Context, RelayVMSpec) (*VMHandle, error) {
 	return nil, errUnsupported()
 }
-func (unsupportedProvisioner) StartVM(context.Context, string) error         { return errUnsupported() }
-func (unsupportedProvisioner) StopVM(context.Context, string) error          { return errUnsupported() }
-func (unsupportedProvisioner) RemoveVM(context.Context, string) error        { return errUnsupported() }
+func (unsupportedProvisioner) StartVM(context.Context, string) error  { return errUnsupported() }
+func (unsupportedProvisioner) StopVM(context.Context, string) error   { return errUnsupported() }
+func (unsupportedProvisioner) RemoveVM(context.Context, string) error { return errUnsupported() }
 func (unsupportedProvisioner) CreateDiffDisk(context.Context, string, string) error {
 	return errUnsupported()
 }

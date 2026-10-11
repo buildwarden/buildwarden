@@ -51,8 +51,8 @@ func TestLiveRelayHostEndToEnd(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = h.Close() })
 
-	t.Logf("relay host ready: vm=%s sink=%s", h.VMName, h.SinkURL)
-	if h.Token == "" {
+	t.Logf("relay host ready: vm=%s (claimed, collector tunnel up)", h.VMName)
+	if h.Session.Token == "" {
 		t.Error("expected a minted token")
 	}
 }

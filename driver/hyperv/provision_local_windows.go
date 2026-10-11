@@ -32,7 +32,7 @@ func newLocalProvisioner(verbose bool) Provisioner {
 //     it, so it never gets a direct route to the internet.
 //
 // The NAT egress is shared plumbing, not the isolation boundary, so when a
-// warden NAT already owns spec.NATPrefix (e.g. a durable `warden hyperv setup`
+// warden NAT already owns spec.NATPrefix (e.g. a durable `warden setup --driver hyperv`
 // switch, or a concurrent build), EnsureNetwork REUSES it rather than colliding
 // on the host gateway IP. Only when no NAT owns the prefix does it stand one up
 // per build (named <SwitchName>-nat). The actual NAT switch chosen is returned
@@ -69,7 +69,7 @@ if (-not $build) {
 }
 
 # NAT egress: the relay's controlled upstream. Reuse an existing warden NAT that
-# already owns this prefix (a durable 'warden hyperv setup' switch, or a
+# already owns this prefix (a durable 'warden setup --driver hyperv' switch, or a
 # concurrent build) rather than colliding on the host gateway IP; the NAT subnet
 # is shared egress plumbing, not the isolation boundary (that is the Private
 # switch above). Only stand up a per-build NAT when none owns the prefix.
@@ -80,7 +80,7 @@ if ($existingNat) {
     $reused = 1
     $natSw = Get-VMSwitch -Name $natName -ErrorAction SilentlyContinue
     if (-not $natSw) {
-        throw "a NAT '$natName' owns %[5]s but its vSwitch is missing; remove the stale NAT (elevated: Remove-NetNat -Name $natName) or re-run 'warden hyperv setup'"
+        throw "a NAT '$natName' owns %[5]s but its vSwitch is missing; remove the stale NAT (elevated: Remove-NetNat -Name $natName) or re-run 'warden setup --driver hyperv'"
     }
 } else {
     $natName = '%[2]s'
@@ -105,18 +105,10 @@ if ($reused -eq 0 -and -not (Get-NetNat -Name $natName -ErrorAction SilentlyCont
     New-NetNat -Name $natName -InternalIPInterfaceAddressPrefix '%[5]s' | Out-Null
 }
 
-# Firewall: allow the relay VM (on this NAT subnet) to reach the host-side
-# collector + config responder. The NAT vEthernet sits in the Public profile
-# with inbound blocked by default, so without this the relay's boot-time config
-# fetch and its output streaming are silently dropped. Scoped to the host IP,
-# the NAT subnet, and only the two relay-host ports, so nothing else on the host
-# is exposed. Keyed to the chosen NAT so reuse and fresh converge on one rule.
-$fwName = "$natName-relay-ingress"
-if (-not (Get-NetFirewallRule -DisplayName $fwName -ErrorAction SilentlyContinue)) {
-    New-NetFirewallRule -DisplayName $fwName -Direction Inbound -Action Allow -Protocol TCP -LocalPort %[6]d,%[7]d -LocalAddress '%[3]s' -RemoteAddress '%[5]s' | Out-Null
-}
+# No inbound firewall rule: the host claims the relay and serves its collector
+# over that same host-initiated connection, so nothing listens on the host.
 "NAT=$natName REUSED=$reused"
-`, name, nat, hostIP, prefixLen, prefix, defaultConfigPort, defaultCollectorPort)
+`, name, nat, hostIP, prefixLen, prefix)
 
 	out, err := runPS(script)
 	if err != nil {
@@ -158,7 +150,6 @@ func (p *localProvisioner) TeardownNetwork(ctx context.Context, id string) error
 	name := psEscapeSingle(id)
 	nat := psEscapeSingle(id + "-nat")
 	script := fmt.Sprintf(`
-Remove-NetFirewallRule -DisplayName '%[2]s-relay-ingress' -ErrorAction SilentlyContinue
 Remove-NetNat -Name '%[2]s' -Confirm:$false -ErrorAction SilentlyContinue
 Remove-VMSwitch -Name '%[2]s' -Force -ErrorAction SilentlyContinue
 Remove-VMSwitch -Name '%[1]s' -Force -ErrorAction SilentlyContinue
@@ -186,7 +177,7 @@ func (p *localProvisioner) VerifyNetwork(ctx context.Context, switchName string)
 	case "Private":
 		return nil
 	case "missing":
-		return fmt.Errorf("build switch %q is missing; run `warden hyperv setup`", switchName)
+		return fmt.Errorf("build switch %q is missing; run `warden setup --driver hyperv`", switchName)
 	default:
 		return fmt.Errorf("build switch %q is %s, expected Private (isolation compromised)", switchName, strings.TrimSpace(out))
 	}
