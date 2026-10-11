@@ -78,14 +78,14 @@ type channel struct {
 // channelColors are ANSI colors assigned to concurrent channels to
 // visually distinguish interleaved requests in tree output.
 var channelColors = []string{
-	"\033[36m",  // cyan
-	"\033[33m",  // yellow
-	"\033[35m",  // magenta
-	"\033[32m",  // green
-	"\033[34m",  // blue
-	"\033[91m",  // bright red
-	"\033[96m",  // bright cyan
-	"\033[93m",  // bright yellow
+	"\033[36m", // cyan
+	"\033[33m", // yellow
+	"\033[35m", // magenta
+	"\033[32m", // green
+	"\033[34m", // blue
+	"\033[91m", // bright red
+	"\033[96m", // bright cyan
+	"\033[93m", // bright yellow
 }
 
 const colorReset = "\033[0m"
@@ -98,10 +98,10 @@ const (
 )
 
 type colorTracker struct {
-	openSet      map[string]int
-	reservedSet  map[string]string // sigKey -> fixed color for reserved hosts
-	nextColor    int
-	useColor     bool
+	openSet     map[string]int
+	reservedSet map[string]string // sigKey -> fixed color for reserved hosts
+	nextColor   int
+	useColor    bool
 }
 
 func newColorTracker(useColor bool) *colorTracker {
@@ -692,11 +692,12 @@ func extractPayloads(capturesDir, destDir string, w io.Writer) error {
 	var totalSize int64
 	for _, entry := range entries {
 		symPath := filepath.Join(capturesDir, entry.Name())
-		target, err := os.Readlink(symPath)
-		if err != nil {
-			continue
+		// Captures normally link into ../payloads; where symlinks are
+		// unavailable (unprivileged Windows) the collector copies instead.
+		srcPath := symPath
+		if target, err := os.Readlink(symPath); err == nil {
+			srcPath = filepath.Join(capturesDir, target)
 		}
-		srcPath := filepath.Join(capturesDir, target)
 		info, err := os.Stat(srcPath)
 		if err != nil {
 			continue

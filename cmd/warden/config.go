@@ -17,7 +17,16 @@ type Config struct {
 	Runtime RuntimeConfig `toml:"runtime"`
 	Relay   RelayConfig   `toml:"relay"`
 	Build   BuildCfg      `toml:"build"`
+	VM      VMConfig      `toml:"vm"`
 	Output  OutputConfig  `toml:"output"`
+}
+
+// VMConfig holds defaults for the VM-driver flags (--cpus, --memory,
+// --network); a flag always wins.
+type VMConfig struct {
+	CPUs     int    `toml:"cpus"`
+	MemoryMB int    `toml:"memory_mb"`
+	Network  string `toml:"network"`
 }
 
 type RelayConfig struct {
@@ -159,32 +168,68 @@ func discoverDockerfile(dir string) (string, error) {
 	return "", fmt.Errorf("no Dockerfile or Containerfile found in %s", dir)
 }
 
-// resolveWindowsContext resolves the build-context directory for a Windows
-// guest build. Unlike the Linux/container path there is no Dockerfile: the
-// guest's warden-io fetches build.ps1 from the relay (served from this context
-// dir), so the directory only needs to contain build.ps1. An empty path means
-// the current directory; a file path resolves to its parent directory.
-func resolveWindowsContext(path string) (string, error) {
+// resolveBuildInput resolves the build context and (optional) Dockerfile for
+// any driver. The container driver always builds a Dockerfile. VM drivers
+// build whichever the context provides, with the precedence the drivers apply
+// (driver.StageBuildScript): --script, then a Dockerfile (Linux guests), then
+// build.sh / build.ps1 in the context. A path may name the context directory
+// or a file in it (a Dockerfile, or a build script).
+func resolveBuildInput(path, driverName, guestOS, script string) (dockerfile, contextDir, buildScript string, err error) {
+	if driverName == "" || driverName == "container" {
+		dockerfile, contextDir, err = ResolvePath(path)
+		return dockerfile, contextDir, "", err
+	}
 	if path == "" {
 		path = "."
 	}
 	abs, err := filepath.Abs(path)
 	if err != nil {
-		return "", err
+		return "", "", "", err
 	}
 	info, err := os.Stat(abs)
 	if err != nil {
-		return "", fmt.Errorf("cannot access %q: %w", abs, err)
+		return "", "", "", fmt.Errorf("cannot access %q: %w", path, err)
 	}
+	contextDir = abs
 	if !info.IsDir() {
-		abs = filepath.Dir(abs)
+		contextDir = filepath.Dir(abs)
+		if isScriptName(abs) && script == "" {
+			script = abs
+		}
 	}
-	if _, err := os.Stat(filepath.Join(abs, "build.ps1")); err != nil {
-		return "", fmt.Errorf(
-			"no build.ps1 found in %s (Windows guest builds run build.ps1, "+
-				"not a Dockerfile)", abs)
+
+	windows := guestOS == "windows"
+	if !windows {
+		if !info.IsDir() && !isScriptName(abs) {
+			dockerfile = abs
+		} else if df, err := discoverDockerfile(contextDir); err == nil {
+			dockerfile = df
+		}
 	}
-	return abs, nil
+	if script != "" || dockerfile != "" {
+		return dockerfile, contextDir, script, nil
+	}
+	want := "build.sh"
+	if windows {
+		want = "build.ps1"
+	}
+	if _, err := os.Stat(filepath.Join(contextDir, want)); err != nil {
+		hint := " or a Dockerfile"
+		if windows {
+			hint = ""
+		}
+		return "", "", "", fmt.Errorf(
+			"nothing to build in %s: pass --script, or add %s%s", contextDir, want, hint)
+	}
+	return "", contextDir, "", nil
+}
+
+func isScriptName(p string) bool {
+	switch strings.ToLower(filepath.Ext(p)) {
+	case ".sh", ".ps1":
+		return true
+	}
+	return false
 }
 
 func validateDriver(d string) error {
@@ -209,17 +254,22 @@ func validateCapture(c string) error {
 
 func validateFlagsForDriver(d string) error {
 	isVM := d == "qemu" || d == "vz" || d == "hyperv"
-	if flagScript != "" && !isVM {
-		return fmt.Errorf(
-			"--script requires --driver qemu, vz, or hyperv")
+	for _, f := range []struct {
+		set  bool
+		name string
+	}{
+		{flagScript != "", "--script"},
+		{flagImage != "", "--image"},
+		{flagCPUs != 0, "--cpus"},
+		{flagMemoryMB != 0, "--memory"},
+		{flagKeepVMs, "--keep-vms"},
+	} {
+		if f.set && !isVM {
+			return fmt.Errorf("%s requires a VM driver (--driver qemu, vz, or hyperv)", f.name)
+		}
 	}
-	if flagImage != "" && !isVM {
-		return fmt.Errorf(
-			"--image requires --driver qemu, vz, or hyperv")
-	}
-	if flagTimeout != "" && d != "qemu" && d != "hyperv" {
-		return fmt.Errorf(
-			"--timeout requires --driver qemu or hyperv")
+	if flagNetwork != "" && d != "hyperv" {
+		return fmt.Errorf("--network is only used by --driver hyperv")
 	}
 	return nil
 }

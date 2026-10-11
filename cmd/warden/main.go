@@ -19,10 +19,13 @@ import (
 var version = "dev"
 
 var (
-	flagRuntime    string
-	flagDriver     string
-	flagVerbose    bool
-	flagColor      string
+	flagRuntime string
+	flagDriver  string
+	flagVerbose bool
+	flagColor   string
+
+	// Build/shell flags: one set, accepted by every driver; each driver
+	// rejects only what it genuinely cannot use (validateFlagsForDriver).
 	flagCapture    string
 	flagOutput     string
 	flagNoCompress bool
@@ -31,6 +34,10 @@ var (
 	flagGuestOS    string
 	flagTimeout    string
 	flagQuiet      bool
+	flagCPUs       int
+	flagMemoryMB   int
+	flagNetwork    string
+	flagKeepVMs    bool
 )
 
 var rootCmd = &cobra.Command{
@@ -45,17 +52,19 @@ var buildCmd = &cobra.Command{
 	Use:   "build [path]",
 	Args:  cobra.MaximumNArgs(1),
 	Short: "Run a build with network auditing",
-	Long: `Run a containerized build with full network auditing.
+	Long: `Run a build with full network auditing, on any driver.
 
 The path argument can be:
-  - A directory containing a Dockerfile (default: current directory)
-  - A path to a specific Dockerfile (context = its parent directory)
+  - A directory (default: current directory) holding a Dockerfile, or for
+    VM drivers a build.sh / build.ps1
+  - A path to a specific Dockerfile or build script (context = its directory)
 
 All network traffic during the build is recorded to a cryptographically
-signed ledger. The ledger directory is printed on completion.`,
+signed ledger. The output directory is printed on completion.`,
 	Example: `  warden build
   warden build ./my-project
-  warden build ./my-project/Dockerfile.prod`,
+  warden build ./my-project/Dockerfile.prod
+  warden build --driver qemu --guest-os windows --cpus 8 --memory 16384 ./win-project`,
 	RunE: runBuild,
 }
 
@@ -63,10 +72,11 @@ var shellCmd = &cobra.Command{
 	Use:   "shell [path]",
 	Args:  cobra.MaximumNArgs(1),
 	Short: "Open an interactive shell in the build environment",
-	Long: `Open an interactive shell in a network-audited build container.
+	Long: `Open an interactive shell in a network-audited build environment.
 
 Useful for debugging builds or exploring what network requests a build makes.
-All traffic is recorded to the ledger just as in a normal build.`,
+All traffic is recorded to the ledger just as in a normal build. Drivers that
+cannot attach an interactive session say so.`,
 	Example: `  warden shell
   warden shell ./my-project`,
 	RunE: runShell,
@@ -76,34 +86,39 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&flagRuntime, "runtime", "",
 		"container runtime (finch, docker, podman)")
 	rootCmd.PersistentFlags().StringVar(&flagDriver, "driver", "",
-		"orchestration driver (container, qemu, vz)")
+		"orchestration driver (container, qemu, vz, hyperv)")
 	rootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false,
 		"verbose output")
 	rootCmd.PersistentFlags().StringVar(&flagColor, "color", "",
 		"color output (auto, always, never)")
 
-	buildCmd.Flags().StringVar(&flagCapture, "capture", "",
-		"capture payloads to disk (none, headers, bodies, all)")
-	buildCmd.Flags().StringVarP(&flagOutput, "output", "o", "",
-		"output directory for build results (default: warden-output)")
-	buildCmd.Flags().BoolVar(&flagNoCompress, "no-compress", false,
-		"disable zstd compression of ledger and payloads")
-	buildCmd.Flags().StringVar(&flagScript, "script", "",
-		"build script to run (vm drivers)")
-	buildCmd.Flags().StringVar(&flagImage, "image", "",
-		"disk image for build VM (qemu driver)")
-	buildCmd.Flags().StringVar(&flagGuestOS, "guest-os", "",
-		"guest OS for VM drivers: linux (default) or windows")
-	buildCmd.Flags().StringVar(&flagTimeout, "timeout", "",
-		"maximum build duration (e.g., 10m, 1h)")
+	for _, c := range []*cobra.Command{buildCmd, shellCmd} {
+		f := c.Flags()
+		f.StringVar(&flagCapture, "capture", "",
+			"capture payloads (none, headers, bodies, all)")
+		f.StringVarP(&flagOutput, "output", "o", "",
+			"output directory for build results (default: warden-output)")
+		f.BoolVar(&flagNoCompress, "no-compress", false,
+			"disable zstd compression of the ledger and CA certificate")
+		f.StringVar(&flagTimeout, "timeout", "",
+			"maximum build duration (e.g., 10m, 1h)")
+		f.StringVar(&flagScript, "script", "",
+			"build script to run (VM drivers)")
+		f.StringVar(&flagImage, "image", "",
+			"base disk image for the build VM (VM drivers)")
+		f.StringVar(&flagGuestOS, "guest-os", "",
+			"guest OS for VM drivers: linux (default) or windows")
+		f.IntVar(&flagCPUs, "cpus", 0,
+			"build VM vCPUs (VM drivers; default per driver)")
+		f.IntVar(&flagMemoryMB, "memory", 0,
+			"build VM memory in MiB (VM drivers; default per driver)")
+		f.StringVar(&flagNetwork, "network", "",
+			"pre-provisioned network to reuse (hyperv: the durable switch from `warden setup`)")
+		f.BoolVar(&flagKeepVMs, "keep-vms", false,
+			"leave VMs, disks and the work dir in place for inspection (VM drivers)")
+	}
 	buildCmd.Flags().BoolVarP(&flagQuiet, "quiet", "q", false,
-		"suppress forwarding the guest build console to stdout (still captured to build-output.log)")
-	shellCmd.Flags().StringVar(&flagCapture, "capture", "",
-		"capture payloads to disk (none, headers, bodies, all)")
-	shellCmd.Flags().StringVarP(&flagOutput, "output", "o", "",
-		"output directory for build results (default: warden-output)")
-	shellCmd.Flags().BoolVar(&flagNoCompress, "no-compress", false,
-		"disable zstd compression of ledger and payloads")
+		"do not echo the guest build console (still captured to build-output.log)")
 
 	rootCmd.AddCommand(buildCmd)
 	rootCmd.AddCommand(shellCmd)
@@ -122,7 +137,6 @@ func resolveConfig() (*Config, error) {
 		return nil, err
 	}
 
-	// CLI flags override config
 	if flagRuntime != "" {
 		cfg.Runtime.CLI = flagRuntime
 	}
@@ -135,30 +149,17 @@ func resolveConfig() (*Config, error) {
 	if flagColor != "" {
 		cfg.Output.Color = flagColor
 	}
-
-	return cfg, nil
+	setColorMode(cfg.Output.Color)
+	return cfg, validateDriver(cfg.Runtime.Driver)
 }
 
 func resolveRuntime(cfg *Config) (string, error) {
-	setColorMode(cfg.Output.Color)
-
-	runtime := cfg.Runtime.CLI
-	if runtime == "" {
-		detected, err := DetectRuntime()
-		if err != nil {
-			return "", err
-		}
-		runtime = detected
+	if cfg.Runtime.CLI != "" {
+		return cfg.Runtime.CLI, nil
 	}
-	return runtime, nil
+	return DetectRuntime()
 }
 
-func defaultExtensions() []driver.Extension {
-	return driver.DefaultExtensions()
-}
-
-// validateGuestOS checks the --guest-os value and that the selected driver
-// supports it. Windows guests are supported by the qemu and hyperv drivers.
 func validateGuestOS(guestOS, driverName string) error {
 	switch guestOS {
 	case "", "linux", "windows":
@@ -173,28 +174,43 @@ func validateGuestOS(guestOS, driverName string) error {
 	return nil
 }
 
-// buildParams holds resolved build parameters from config and flags.
-type buildParams struct {
-	cfg       *Config
-	path      string
-	capture   string
-	outputDir string
-	compress  bool
-	systemCA  bool
+// newDriver constructs the configured driver.
+func newDriver(cfg *Config) (driver.Driver, error) {
+	switch cfg.Runtime.Driver {
+	case "vz":
+		return vz.New(), nil
+	case "qemu":
+		d := qemu.New()
+		d.Verbose = cfg.Output.Verbose
+		return d, nil
+	case "hyperv":
+		d := hyperv.New()
+		d.Verbose = cfg.Output.Verbose
+		return d, nil
+	default:
+		runtime, err := resolveRuntime(cfg)
+		if err != nil {
+			return nil, err
+		}
+		return &container.Driver{
+			Runtime:    runtime,
+			Verbose:    cfg.Output.Verbose,
+			Version:    version,
+			Extensions: driver.DefaultExtensions(),
+		}, nil
+	}
 }
 
-func resolveBuildParams(args []string) (*buildParams, error) {
-	cfg, err := resolveConfig()
-	if err != nil {
+// newRequest resolves config and flags into the BuildRequest every driver
+// takes. Precedence everywhere: flag, then warden.toml / user config, then
+// the driver's default.
+func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
+	d := cfg.Runtime.Driver
+	if err := validateFlagsForDriver(d); err != nil {
 		return nil, err
 	}
-	if err := validateDriver(cfg.Runtime.Driver); err != nil {
+	if err := validateGuestOS(flagGuestOS, d); err != nil {
 		return nil, err
-	}
-
-	path := ""
-	if len(args) > 0 {
-		path = args[0]
 	}
 
 	capture := flagCapture
@@ -208,31 +224,66 @@ func resolveBuildParams(args []string) (*buildParams, error) {
 	if outputDir == "" {
 		outputDir = cfg.Build.OutputDir
 	}
+	if outputDir == "" {
+		outputDir = "warden-output"
+	}
 	compress := !flagNoCompress
 	if cfg.Build.Compress != nil && !*cfg.Build.Compress {
 		compress = false
 	}
-
-	if err := validateFlagsForDriver(cfg.Runtime.Driver); err != nil {
-		return nil, err
-	}
-
-	if err := validateGuestOS(flagGuestOS, cfg.Runtime.Driver); err != nil {
-		return nil, err
-	}
-
 	systemCA := true
 	if cfg.Relay.SystemCABundle != nil {
 		systemCA = *cfg.Relay.SystemCABundle
 	}
+	var timeout time.Duration
+	if flagTimeout != "" {
+		var err error
+		if timeout, err = time.ParseDuration(flagTimeout); err != nil {
+			return nil, fmt.Errorf("invalid --timeout: %w", err)
+		}
+	}
+	isVM := d == "qemu" || d == "vz" || d == "hyperv"
+	vmOr := func(flag, conf int) int {
+		if flag != 0 || !isVM {
+			return flag
+		}
+		return conf
+	}
+	network := flagNetwork
+	if network == "" && d == "hyperv" {
+		network = cfg.VM.Network
+	}
 
-	return &buildParams{
-		cfg:       cfg,
-		path:      path,
-		capture:   capture,
-		outputDir: outputDir,
-		compress:  compress,
-		systemCA:  systemCA,
+	path := ""
+	if len(args) > 0 {
+		path = args[0]
+	}
+	dockerfile, contextDir, script, err := resolveBuildInput(path, d, flagGuestOS, flagScript)
+	if err != nil {
+		return nil, err
+	}
+
+	return &driver.BuildRequest{
+		Script:           script,
+		ContextDir:       contextDir,
+		Image:            flagImage,
+		GuestOS:          flagGuestOS,
+		Containerfile:    dockerfile,
+		OutputDir:        outputDir,
+		CaptureMode:      capture,
+		Compress:         compress,
+		Quiet:            flagQuiet,
+		Timeout:          timeout,
+		CPUs:             vmOr(flagCPUs, cfg.VM.CPUs),
+		MemoryMB:         vmOr(flagMemoryMB, cfg.VM.MemoryMB),
+		Network:          network,
+		KeepVMs:          flagKeepVMs,
+		RelayImage:       cfg.Runtime.RelayImage,
+		UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
+		UpstreamSystemCA: systemCA,
+		Stdin:            os.Stdin,
+		Stdout:           os.Stdout,
+		Stderr:           os.Stderr,
 	}, nil
 }
 
@@ -254,269 +305,54 @@ func buildContext() (context.Context, context.CancelFunc) {
 	return ctx, cancel
 }
 
-func runBuild(cmd *cobra.Command, args []string) error {
-	bp, err := resolveBuildParams(args)
+// prepare resolves everything a build or shell needs.
+func prepare(args []string) (driver.Driver, *driver.BuildRequest, error) {
+	cfg, err := resolveConfig()
+	if err != nil {
+		return nil, nil, err
+	}
+	req, err := newRequest(cfg, args)
+	if err != nil {
+		return nil, nil, err
+	}
+	d, err := newDriver(cfg)
+	if err != nil {
+		return nil, nil, err
+	}
+	return d, req, nil
+}
+
+func runBuild(_ *cobra.Command, args []string) error {
+	d, req, err := prepare(args)
 	if err != nil {
 		return err
 	}
-	cfg := bp.cfg
-
+	defer d.Close()
 	ctx, stop := buildContext()
 	defer stop()
 
-	// Dispatch to VM drivers when requested
-	switch cfg.Runtime.Driver {
-	case "vz":
-		dockerfile, contextDir, err := ResolvePath(bp.path)
-		if err != nil {
-			return err
-		}
-		d := vz.New()
-		defer d.Close()
-		_, buildErr := d.StartBuild(ctx, &driver.BuildRequest{
-			ContextDir:       contextDir,
-			Containerfile:    dockerfile,
-			Script:           flagScript,
-			Image:            flagImage,
-			CaptureMode:      bp.capture,
-			OutputDir:        bp.outputDir,
-			Compress:         bp.compress,
-			UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
-			UpstreamSystemCA: bp.systemCA,
-			Stdin:            os.Stdin,
-			Stdout:           os.Stdout,
-			Stderr:           os.Stderr,
-			Quiet:            flagQuiet,
-		})
-		return reportBuildResult(bp.outputDir, buildErr)
-
-	case "qemu":
-		var dockerfile, contextDir string
-		var err error
-		if flagGuestOS == "windows" {
-			// Windows guests run build.ps1 fetched from the relay, not a
-			// Dockerfile; resolve the context dir without discovering one.
-			contextDir, err = resolveWindowsContext(bp.path)
-		} else {
-			dockerfile, contextDir, err = ResolvePath(bp.path)
-		}
-		if err != nil {
-			return err
-		}
-		d := qemu.New()
-		d.Verbose = cfg.Output.Verbose
-		defer d.Close()
-		var timeout time.Duration
-		if flagTimeout != "" {
-			timeout, err = time.ParseDuration(flagTimeout)
-			if err != nil {
-				return fmt.Errorf("invalid --timeout: %w", err)
-			}
-		}
-		_, buildErr := d.StartBuild(ctx, &driver.BuildRequest{
-			ContextDir:       contextDir,
-			Containerfile:    dockerfile,
-			Script:           flagScript,
-			Image:            flagImage,
-			GuestOS:          flagGuestOS,
-			CaptureMode:      bp.capture,
-			OutputDir:        bp.outputDir,
-			Compress:         bp.compress,
-			Timeout:          timeout,
-			UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
-			UpstreamSystemCA: bp.systemCA,
-			Stdin:            os.Stdin,
-			Stdout:           os.Stdout,
-			Stderr:           os.Stderr,
-			Quiet:            flagQuiet,
-		})
-		return reportBuildResult(bp.outputDir, buildErr)
-
-	case "hyperv":
-		var dockerfile, contextDir string
-		var err error
-		if flagGuestOS == "windows" {
-			// Windows guests run build.ps1 served by the relay, not a
-			// Dockerfile; resolve the context dir without discovering one.
-			contextDir, err = resolveWindowsContext(bp.path)
-		} else {
-			dockerfile, contextDir, err = ResolvePath(bp.path)
-		}
-		if err != nil {
-			return err
-		}
-		d := hyperv.New()
-		d.Verbose = cfg.Output.Verbose
-		// The build reuses the durable dev switch from `warden hyperv setup`.
-		// StartBuild defaults to warden-dev when Switch is empty; allow an
-		// override via WARDEN_HYPERV_SWITCH.
-		if sw := os.Getenv("WARDEN_HYPERV_SWITCH"); sw != "" {
-			d.Switch = sw
-		}
-		defer d.Close()
-		var timeout time.Duration
-		if flagTimeout != "" {
-			timeout, err = time.ParseDuration(flagTimeout)
-			if err != nil {
-				return fmt.Errorf("invalid --timeout: %w", err)
-			}
-		}
-		_, buildErr := d.StartBuild(ctx, &driver.BuildRequest{
-			ContextDir:       contextDir,
-			Containerfile:    dockerfile,
-			Script:           flagScript,
-			Image:            flagImage,
-			GuestOS:          flagGuestOS,
-			CaptureMode:      bp.capture,
-			OutputDir:        bp.outputDir,
-			Compress:         bp.compress,
-			Timeout:          timeout,
-			UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
-			UpstreamSystemCA: bp.systemCA,
-			Stdin:            os.Stdin,
-			Stdout:           os.Stdout,
-			Stderr:           os.Stderr,
-			Quiet:            flagQuiet,
-		})
-		return reportBuildResult(bp.outputDir, buildErr)
-	}
-
-	// Default: container driver
-	runtime, err := resolveRuntime(cfg)
-	if err != nil {
-		return err
-	}
-	dockerfile, contextDir, err := ResolvePath(bp.path)
-	if err != nil {
-		return err
-	}
-	d := &container.Driver{
-		Runtime:    runtime,
-		Verbose:    cfg.Output.Verbose,
-		Version:    version,
-		Extensions: defaultExtensions(),
-	}
-	defer d.Close()
-	_, buildErr := d.StartBuild(ctx, &driver.BuildRequest{
-		ContextDir:       contextDir,
-		Containerfile:    dockerfile,
-		CaptureMode:      bp.capture,
-		OutputDir:        bp.outputDir,
-		Compress:         bp.compress,
-		RelayImage:       cfg.Runtime.RelayImage,
-		UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
-		UpstreamSystemCA: bp.systemCA,
-	})
-	return reportBuildResult(bp.outputDir, buildErr)
-}
-
-// reportBuildResult prints a one-line build completion status (in both quiet and
-// normal modes) and returns err unchanged so the process exit code is
-// preserved. On failure the returned err still carries the detail (exit code,
-// message), printed by the top-level handler.
-func reportBuildResult(outputDir string, err error) error {
-	if err != nil {
+	if _, err := d.StartBuild(ctx, req); err != nil {
 		fmt.Fprintln(os.Stderr, "warden: build FAILED")
 		return err
 	}
-	if outputDir == "" {
-		outputDir = "warden-output"
-	}
-	fmt.Fprintf(os.Stderr, "warden: build SUCCEEDED (output: %s)\n", outputDir)
+	fmt.Fprintf(os.Stderr, "warden: build SUCCEEDED (output: %s)\n", req.OutputDir)
 	return nil
 }
 
-func runShell(cmd *cobra.Command, args []string) error {
-	cfg, err := resolveConfig()
+func runShell(_ *cobra.Command, args []string) error {
+	d, req, err := prepare(args)
 	if err != nil {
 		return err
 	}
-	if err := validateDriver(cfg.Runtime.Driver); err != nil {
-		return err
-	}
-
-	path := ""
-	if len(args) > 0 {
-		path = args[0]
-	}
-
-	capture := flagCapture
-	if capture == "" {
-		capture = cfg.Build.Capture
-	}
-	if err := validateCapture(capture); err != nil {
-		return err
-	}
-	outputDir := flagOutput
-	if outputDir == "" {
-		outputDir = cfg.Build.OutputDir
-	}
-	compress := !flagNoCompress
-	if cfg.Build.Compress != nil && !*cfg.Build.Compress {
-		compress = false
-	}
-
-	systemCA := true
-	if cfg.Relay.SystemCABundle != nil {
-		systemCA = *cfg.Relay.SystemCABundle
-	}
-
+	defer d.Close()
 	ctx, stop := buildContext()
 	defer stop()
 
-	switch cfg.Runtime.Driver {
-	case "vz":
-		dockerfile, contextDir, err := ResolvePath(path)
-		if err != nil {
-			return err
+	if err := d.Exec(ctx, req); err != nil {
+		if err == driver.ErrExecNotSupported {
+			return fmt.Errorf("warden shell is not supported by --driver %s", d.Name())
 		}
-		d := vz.New()
-		defer d.Close()
-		return d.Exec(ctx, &driver.BuildRequest{
-			ContextDir:       contextDir,
-			Containerfile:    dockerfile,
-			CaptureMode:      capture,
-			OutputDir:        outputDir,
-			Compress:         compress,
-			UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
-			UpstreamSystemCA: systemCA,
-			Stdin:            os.Stdin,
-			Stdout:           os.Stdout,
-			Stderr:           os.Stderr,
-		})
-
-	case "qemu":
-		return fmt.Errorf(
-			"warden shell is not supported with --driver qemu")
-	}
-
-	// Default: container driver
-	runtime, err := resolveRuntime(cfg)
-	if err != nil {
 		return err
 	}
-	dockerfile, contextDir, err := ResolvePath(path)
-	if err != nil {
-		return err
-	}
-	d := &container.Driver{
-		Runtime:    runtime,
-		Verbose:    cfg.Output.Verbose,
-		Version:    version,
-		Extensions: defaultExtensions(),
-	}
-	defer d.Close()
-	return d.Exec(ctx, &driver.BuildRequest{
-		ContextDir:       contextDir,
-		Containerfile:    dockerfile,
-		CaptureMode:      capture,
-		OutputDir:        outputDir,
-		Compress:         compress,
-		RelayImage:       cfg.Runtime.RelayImage,
-		UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
-		UpstreamSystemCA: systemCA,
-		Stdin:            os.Stdin,
-		Stdout:           os.Stdout,
-		Stderr:           os.Stderr,
-	})
+	return nil
 }
