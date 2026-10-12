@@ -114,6 +114,7 @@ func rewriteCopy(
 	sources := positional[:len(positional)-1]
 
 	var files []fetchFile
+	anyDir := false
 	for _, src := range sources {
 		expanded, err := expandContextPath(
 			src, contextDir)
@@ -122,6 +123,7 @@ func rewriteCopy(
 		}
 		srcClean := filepath.Clean(src)
 		srcDir := isDir(filepath.Join(contextDir, src))
+		anyDir = anyDir || srcDir
 		for _, f := range expanded {
 			rel := f
 			if srcDir {
@@ -139,6 +141,11 @@ func rewriteCopy(
 
 	if len(files) == 0 {
 		return "# (empty COPY: no matching files)", nil
+	}
+	// A directory source copies its contents into dest, as docker does, so
+	// dest is a directory even when the source holds a single file.
+	if anyDir && !strings.HasSuffix(dest, "/") {
+		dest += "/"
 	}
 
 	run := buildFetchRunPairs(files, dest)

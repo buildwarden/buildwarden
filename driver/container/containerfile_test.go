@@ -1,6 +1,8 @@
 package container
 
 import (
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 )
@@ -153,5 +155,25 @@ func TestBuildFetchRun_MultipleFilesToNonDirDest(t *testing.T) {
 	}
 	if !strings.Contains(got, "/dest/") {
 		t.Errorf("expected /dest/ with trailing slash, got:\n%s", got)
+	}
+}
+
+// COPY of a directory lands its contents under dest even when it holds a
+// single file: the single-file shortcut must not turn dest into that file.
+func TestRewriteCopy_DirWithOneFile(t *testing.T) {
+	ctx := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(ctx, "sub"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	in := filepath.Join(ctx, "sub", "in.txt")
+	if err := os.WriteFile(in, []byte("x"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	got, err := rewriteCopy("COPY sub /work/sub", ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.Contains(got, `-o "/work/sub/in.txt"`) {
+		t.Errorf("COPY sub /work/sub should fetch into /work/sub/in.txt, got:\n%s", got)
 	}
 }
