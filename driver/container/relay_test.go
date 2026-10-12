@@ -1,20 +1,40 @@
 package container
 
-import "testing"
+import (
+	"net"
+	"strconv"
+	"testing"
+)
 
-func TestParsePublishedAddr(t *testing.T) {
-	for in, want := range map[string]string{
-		"127.0.0.1:49153\n":              "127.0.0.1:49153",
-		"[::1]:49154\n127.0.0.1:49153\n": "127.0.0.1:49153",
-		"0.0.0.0:32768\n":                "127.0.0.1:32768",
-		"  127.0.0.1:5000  ":             "127.0.0.1:5000",
+func TestIsPortConflict(t *testing.T) {
+	for in, want := range map[string]bool{
+		// nerdctl / finch
+		`level=fatal msg="failed to load networking flags: bind for 127.0.0.1:50111 failed: port is already allocated"`: true,
+		// docker
+		"Error response from daemon: driver failed programming external connectivity on endpoint x: Bind for 127.0.0.1:50111 failed: port is already allocated": true,
+		// podman
+		"Error: rootlessport listen tcp 127.0.0.1:50111: bind: address already in use": true,
+		"Error: no such image: ghcr.io/buildwarden/relay:dev":                          false,
+		"": false,
 	} {
-		got, err := parsePublishedAddr(in)
-		if err != nil || got != want {
-			t.Errorf("parsePublishedAddr(%q) = %q, %v; want %q", in, got, err, want)
+		if got := isPortConflict(in); got != want {
+			t.Errorf("isPortConflict(%q) = %v; want %v", in, got, want)
 		}
 	}
-	if _, err := parsePublishedAddr("[::1]:1\n"); err == nil {
-		t.Error("IPv6-only mapping accepted")
+}
+
+func TestFreeLoopbackPort(t *testing.T) {
+	p, err := freeLoopbackPort()
+	if err != nil {
+		t.Fatal(err)
 	}
+	if p <= 0 || p > 65535 {
+		t.Fatalf("port %d out of range", p)
+	}
+	// The probe listener is closed, so the port is bindable again.
+	l, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", strconv.Itoa(p)))
+	if err != nil {
+		t.Fatalf("port %d not released: %v", p, err)
+	}
+	l.Close()
 }

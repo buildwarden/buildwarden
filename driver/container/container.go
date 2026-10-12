@@ -257,15 +257,12 @@ func (b *build) setup(ctx context.Context) error {
 	}
 
 	logInfo(b.req, "Allocating network...")
-	sub, err := driver.AllocateSubnet(ctrctl.Cli)
+	sub, err := driver.AllocateNetwork("warden-" + b.buildID)
 	if err != nil {
 		return err
 	}
 	b.subnet = sub
-
-	if err := b.createNetwork(); err != nil {
-		return err
-	}
+	b.isolatedNetwork = "warden-" + b.buildID
 
 	// The build console reaches the terminal through `exec`, so the
 	// collector does not tee it as well.
@@ -502,61 +499,81 @@ func (b *build) injectWarden() error {
 	return nil
 }
 
-func (b *build) createNetwork() error {
-	id, err := ctrctl.NetworkCreate(
-		&ctrctl.NetworkCreateOpts{
-			Driver: "bridge",
-			Subnet: b.subnet.CIDR,
-		},
-		"warden-"+b.buildID,
-	)
-	if err != nil {
-		return err
-	}
-	b.isolatedNetwork = id
-	return nil
-}
+// relayPublishAttempts bounds how many host ports startRelayContainer tries
+// before giving up on publishing the claim port.
+const relayPublishAttempts = 8
 
 // startRelayContainer starts the relay unconfigured, with its claim port
 // published on host loopback only, and returns that host address. Nothing is
 // mounted: the relay reaches its collector over the session's tunnel.
+//
+// The host port is chosen here rather than left to the runtime: nerdctl
+// (finch) hands the SAME ephemeral port to containers started concurrently,
+// so two builds would dial one relay. An explicit host port is reserved
+// atomically by the runtime (a second bind is refused), so a collision with
+// another build or process surfaces as a start error and is retried.
 func (b *build) startRelayContainer(claimToken string) (string, error) {
-	port := strconv.Itoa(relaycfg.DefaultPort)
-	args := append(ctrctl.Cli, "container", "run",
-		"--detach",
-		"--name", "warden-relay-"+b.buildID,
-		"--network", "warden-"+b.buildID,
-		"--ip", b.subnet.RelayIP,
-		"--publish", "127.0.0.1::"+port,
-		"--env", relaycfg.TokenEnv+"="+claimToken,
-		b.relayImage,
-	)
-	out, err := exec.Command(args[0], args[1:]...).Output()
-	if err != nil {
-		return "", fmt.Errorf(
-			"error starting relay container: %w", err)
+	name := "warden-relay-" + b.buildID
+	var lastErr error
+	for range relayPublishAttempts {
+		hostPort, err := freeLoopbackPort()
+		if err != nil {
+			return "", err
+		}
+		args := append(ctrctl.Cli, "container", "run",
+			"--detach",
+			"--name", name,
+			"--network", "warden-"+b.buildID,
+			"--ip", b.subnet.RelayIP,
+			"--publish", fmt.Sprintf("127.0.0.1:%d:%d", hostPort, relaycfg.DefaultPort),
+			"--env", relaycfg.TokenEnv+"="+claimToken,
+			b.relayImage,
+		)
+		var stderr strings.Builder
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Stderr = &stderr
+		out, err := cmd.Output()
+		if err == nil {
+			b.relayContainer = strings.TrimSpace(string(out))
+			return net.JoinHostPort("127.0.0.1", strconv.Itoa(hostPort)), nil
+		}
+		lastErr = fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+		if !isPortConflict(stderr.String()) {
+			break
+		}
+		// docker/podman leave a Created container behind on a failed
+		// publish; clear the name before retrying with another port.
+		_, _ = ctrctl.ContainerRm(&ctrctl.ContainerRmOpts{Force: true}, name)
 	}
-	b.relayContainer = strings.TrimSpace(string(out))
-
-	portArgs := append(ctrctl.Cli, "container", "port", b.relayContainer, port+"/tcp")
-	out, err = exec.Command(portArgs[0], portArgs[1:]...).Output()
-	if err != nil {
-		return "", fmt.Errorf("finding the relay's published claim port: %w", err)
-	}
-	return parsePublishedAddr(string(out))
+	return "", fmt.Errorf("error starting relay container: %w", lastErr)
 }
 
-// parsePublishedAddr picks the IPv4 loopback mapping from `container port`
-// output (one "host:port" per line, possibly also an IPv6 one).
-func parsePublishedAddr(out string) (string, error) {
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
-		line = strings.TrimSpace(line)
-		if host, p, err := net.SplitHostPort(line); err == nil && p != "" &&
-			(host == "127.0.0.1" || host == "0.0.0.0") {
-			return net.JoinHostPort("127.0.0.1", p), nil
+// freeLoopbackPort asks the host for a currently unused loopback port. It
+// is only a likely-free candidate: the runtime's own bind is the reservation.
+func freeLoopbackPort() (int, error) {
+	l, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		return 0, fmt.Errorf("finding a free loopback port: %w", err)
+	}
+	defer l.Close()
+	return l.Addr().(*net.TCPAddr).Port, nil
+}
+
+// isPortConflict reports whether a runtime's start error means the chosen
+// host port was already taken (wording differs across docker, nerdctl and
+// podman).
+func isPortConflict(stderr string) bool {
+	s := strings.ToLower(stderr)
+	for _, m := range []string{
+		"port is already allocated",
+		"address already in use",
+		"bind for",
+	} {
+		if strings.Contains(s, m) {
+			return true
 		}
 	}
-	return "", fmt.Errorf("no IPv4 loopback mapping in %q", strings.TrimSpace(out))
+	return false
 }
 
 func (b *build) resolveRelayImage() error {
