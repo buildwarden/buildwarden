@@ -17,7 +17,10 @@ import (
 const (
 	serviceName        = "WardenHyperV"
 	serviceDisplayName = "BuildWarden Hyper-V privileged helper"
-	serviceDescription = "Performs Hyper-V host network standup (New-VMSwitch/New-NetNat/New-NetIPAddress) on behalf of non-elevated BuildWarden builds, over an ACL'd named pipe. Only the typed network-standup operations are exposed."
+	serviceDescription = "Performs Hyper-V host network standup " +
+		"(New-VMSwitch/New-NetNat/New-NetIPAddress) on behalf of " +
+		"non-elevated BuildWarden builds, over an ACL'd named pipe. " +
+		"Only the typed network-standup operations are exposed."
 
 	// pipeSDDL restricts the pipe to LocalSystem (SY), Built-in Administrators
 	// (BA) and Hyper-V Administrators (well-known SID S-1-5-32-578). GA = generic
@@ -50,7 +53,8 @@ func serviceReachable() bool {
 // logic — and the service runs as LocalSystem, so that provisioner holds full
 // Administrator.
 func runPipeServer(ctx context.Context) error {
-	l, err := winio.ListenPipe(ServicePipeName, &winio.PipeConfig{SecurityDescriptor: pipeSDDL})
+	l, err := winio.ListenPipe(
+		ServicePipeName, &winio.PipeConfig{SecurityDescriptor: pipeSDDL})
 	if err != nil {
 		return fmt.Errorf("listen pipe %s: %w", ServicePipeName, err)
 	}
@@ -85,7 +89,9 @@ func runPipeServer(ctx context.Context) error {
 // svcHandler adapts runPipeServer to the Windows SCM lifecycle.
 type svcHandler struct{}
 
-func (svcHandler) Execute(_ []string, r <-chan svc.ChangeRequest, s chan<- svc.Status) (bool, uint32) {
+func (svcHandler) Execute(
+	_ []string, r <-chan svc.ChangeRequest, s chan<- svc.Status,
+) (bool, uint32) {
 	s <- svc.Status{State: svc.StartPending}
 	ctx, cancel := context.WithCancel(context.Background())
 	defer cancel()
@@ -125,7 +131,8 @@ func RunService(ctx context.Context) error {
 	if isSvc {
 		return svc.Run(serviceName, svcHandler{})
 	}
-	fmt.Fprintf(os.Stderr, "warden hyperv service: serving on %s (Ctrl-C to stop)\n", ServicePipeName)
+	fmt.Fprintf(os.Stderr,
+		"warden hyperv service: serving on %s (Ctrl-C to stop)\n", ServicePipeName)
 	return runPipeServer(ctx)
 }
 
@@ -139,13 +146,16 @@ func InstallService() error {
 	}
 	m, err := mgr.Connect()
 	if err != nil {
-		return fmt.Errorf("connect to service manager (run from an elevated shell): %w", err)
+		return fmt.Errorf(
+			"connect to service manager (run from an elevated shell): %w", err)
 	}
-	defer m.Disconnect()
+	defer func() { _ = m.Disconnect() }()
 
 	if existing, err := m.OpenService(serviceName); err == nil {
 		existing.Close()
-		return fmt.Errorf("service %q is already installed; run `warden hyperv service uninstall` first", serviceName)
+		return fmt.Errorf(
+			"service %q is already installed; run "+
+				"`warden hyperv service uninstall` first", serviceName)
 	}
 	s, err := m.CreateService(serviceName, exe, mgr.Config{
 		DisplayName: serviceDisplayName,
@@ -168,9 +178,10 @@ func InstallService() error {
 func UninstallService() error {
 	m, err := mgr.Connect()
 	if err != nil {
-		return fmt.Errorf("connect to service manager (run from an elevated shell): %w", err)
+		return fmt.Errorf(
+			"connect to service manager (run from an elevated shell): %w", err)
 	}
-	defer m.Disconnect()
+	defer func() { _ = m.Disconnect() }()
 	s, err := m.OpenService(serviceName)
 	if err != nil {
 		return fmt.Errorf("service %q is not installed", serviceName)

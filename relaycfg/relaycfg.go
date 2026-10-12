@@ -90,97 +90,129 @@ type Identity struct {
 	LedgerPublicKey string `json:"ledger_public_key"`
 }
 
+// claimServer holds the state the tunnel and claim handlers share for one
+// Serve call: a single claim may be consumed, optionally over one tunnel.
+type claimServer struct {
+	token  string
+	start  func(Config, http.RoundTripper) (Identity, error)
+	result chan error
+
+	mu      sync.Mutex
+	claimed bool
+	tunnel  http.RoundTripper
+}
+
+func (s *claimServer) authorized(w http.ResponseWriter, req *http.Request) bool {
+	if req.Method != http.MethodPost {
+		http.Error(w, "POST only", http.StatusMethodNotAllowed)
+		return false
+	}
+	got := strings.TrimSpace(strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer"))
+	if s.token != "" && subtle.ConstantTimeCompare([]byte(got), []byte(s.token)) != 1 {
+		http.Error(w, "unauthorized", http.StatusUnauthorized)
+		return false
+	}
+	return true
+}
+
+// release returns an unconsumed claim to the pool after a refused request.
+func (s *claimServer) release() {
+	s.mu.Lock()
+	s.claimed = false // a refused claim does not consume the relay
+	s.mu.Unlock()
+}
+
+func (s *claimServer) handleTunnel(w http.ResponseWriter, req *http.Request) {
+	if !s.authorized(w, req) {
+		return
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.tunnel != nil || s.claimed {
+		http.Error(w, "tunnel already open", http.StatusConflict)
+		return
+	}
+	if rt, err := acceptTunnel(w); err == nil {
+		s.tunnel = rt
+	}
+}
+
+func (s *claimServer) handleClaim(w http.ResponseWriter, req *http.Request) {
+	if !s.authorized(w, req) {
+		return
+	}
+	s.mu.Lock()
+	if s.claimed {
+		s.mu.Unlock()
+		http.Error(w, "already claimed", http.StatusConflict)
+		return
+	}
+	s.claimed = true
+	rt := s.tunnel
+	s.mu.Unlock()
+
+	var cfg Config
+	dec := json.NewDecoder(io.LimitReader(req.Body, 16<<20))
+	dec.DisallowUnknownFields()
+	if err := dec.Decode(&cfg); err != nil {
+		s.release()
+		http.Error(w, "invalid claim: "+err.Error(), http.StatusBadRequest)
+		return
+	}
+	rt, ok := s.resolveTransport(w, cfg, rt)
+	if !ok {
+		return
+	}
+	id, err := s.start(cfg, rt)
+	if err != nil {
+		http.Error(w, "relay start failed: "+err.Error(), http.StatusInternalServerError)
+		s.result <- err
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(id)
+	s.result <- nil
+}
+
+// resolveTransport validates cfg.CollectorURL against the open tunnel and
+// returns the transport start should use (nil for a direct CollectorURL). It
+// reports false, having answered the claimant and released the claim, when the
+// config is invalid.
+func (s *claimServer) resolveTransport(
+	w http.ResponseWriter, cfg Config, rt http.RoundTripper,
+) (http.RoundTripper, bool) {
+	switch {
+	case cfg.CollectorURL == "":
+		s.release()
+		http.Error(w, "invalid claim: collector_url is required", http.StatusBadRequest)
+		return nil, false
+	case cfg.CollectorURL == TunnelURL && rt == nil:
+		s.release()
+		http.Error(w, "invalid claim: collector_url selects the tunnel, but none is open",
+			http.StatusBadRequest)
+		return nil, false
+	case cfg.CollectorURL != TunnelURL:
+		return nil, true
+	}
+	return rt, true
+}
+
 // Serve accepts exactly one authorized claim on ln, calls start with its
 // Config and the collector transport (the tunnel's HTTP/2 client when the
 // claim selects TunnelURL, else nil for a direct CollectorURL), replies with
 // the returned Identity, and then closes ln. Requests with a wrong token are
 // refused and do not consume the claim. If start fails, the error is reported
 // to the claimant and returned.
-func Serve(ln net.Listener, token string, start func(Config, http.RoundTripper) (Identity, error)) error {
-	var (
-		mu      sync.Mutex
-		claimed bool
-		tunnel  http.RoundTripper
-		result  = make(chan error, 1)
-	)
-	authorized := func(w http.ResponseWriter, req *http.Request) bool {
-		if req.Method != http.MethodPost {
-			http.Error(w, "POST only", http.StatusMethodNotAllowed)
-			return false
-		}
-		got := strings.TrimSpace(strings.TrimPrefix(req.Header.Get("Authorization"), "Bearer"))
-		if token != "" && subtle.ConstantTimeCompare([]byte(got), []byte(token)) != 1 {
-			http.Error(w, "unauthorized", http.StatusUnauthorized)
-			return false
-		}
-		return true
-	}
-	release := func() {
-		mu.Lock()
-		claimed = false // a refused claim does not consume the relay
-		mu.Unlock()
-	}
+func Serve(
+	ln net.Listener,
+	token string,
+	start func(Config, http.RoundTripper) (Identity, error),
+) error {
+	s := &claimServer{token: token, start: start, result: make(chan error, 1)}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc(tunnelPath, func(w http.ResponseWriter, req *http.Request) {
-		if !authorized(w, req) {
-			return
-		}
-		mu.Lock()
-		defer mu.Unlock()
-		if tunnel != nil || claimed {
-			http.Error(w, "tunnel already open", http.StatusConflict)
-			return
-		}
-		if rt, err := acceptTunnel(w); err == nil {
-			tunnel = rt
-		}
-	})
-	mux.HandleFunc(claimPath, func(w http.ResponseWriter, req *http.Request) {
-		if !authorized(w, req) {
-			return
-		}
-		mu.Lock()
-		if claimed {
-			mu.Unlock()
-			http.Error(w, "already claimed", http.StatusConflict)
-			return
-		}
-		claimed = true
-		rt := tunnel
-		mu.Unlock()
-
-		var cfg Config
-		dec := json.NewDecoder(io.LimitReader(req.Body, 16<<20))
-		dec.DisallowUnknownFields()
-		if err := dec.Decode(&cfg); err != nil {
-			release()
-			http.Error(w, "invalid claim: "+err.Error(), http.StatusBadRequest)
-			return
-		}
-		switch {
-		case cfg.CollectorURL == "":
-			release()
-			http.Error(w, "invalid claim: collector_url is required", http.StatusBadRequest)
-			return
-		case cfg.CollectorURL == TunnelURL && rt == nil:
-			release()
-			http.Error(w, "invalid claim: collector_url selects the tunnel, but none is open",
-				http.StatusBadRequest)
-			return
-		case cfg.CollectorURL != TunnelURL:
-			rt = nil
-		}
-		id, err := start(cfg, rt)
-		if err != nil {
-			http.Error(w, "relay start failed: "+err.Error(), http.StatusInternalServerError)
-			result <- err
-			return
-		}
-		w.Header().Set("Content-Type", "application/json")
-		_ = json.NewEncoder(w).Encode(id)
-		result <- nil
-	})
+	mux.HandleFunc(tunnelPath, s.handleTunnel)
+	mux.HandleFunc(claimPath, s.handleClaim)
 
 	// Shutdown leaves the hijacked tunnel connection open.
 	srv := &http.Server{Handler: mux, ReadHeaderTimeout: 10 * time.Second}
@@ -188,7 +220,7 @@ func Serve(ln net.Listener, token string, start func(Config, http.RoundTripper) 
 	go func() { served <- srv.Serve(ln) }()
 
 	select {
-	case err := <-result:
+	case err := <-s.result:
 		// Let the reply flush before closing the listener.
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
@@ -214,7 +246,8 @@ func Claim(ctx context.Context, addr, token string, cfg Config) (Identity, error
 	client := &http.Client{Timeout: 60 * time.Second}
 	var lastErr error
 	for {
-		req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, bytes.NewReader(body))
+		req, err := http.NewRequestWithContext(
+			ctx, http.MethodPost, url, bytes.NewReader(body))
 		if err != nil {
 			return Identity{}, err
 		}
@@ -224,27 +257,35 @@ func Claim(ctx context.Context, addr, token string, cfg Config) (Identity, error
 		}
 		resp, err := client.Do(req)
 		if err == nil {
-			defer resp.Body.Close()
-			if resp.StatusCode != http.StatusOK {
-				msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
-				return Identity{}, fmt.Errorf("%w: HTTP %d: %s",
-					ErrRejected, resp.StatusCode, strings.TrimSpace(string(msg)))
-			}
-			var id Identity
-			if err := json.NewDecoder(resp.Body).Decode(&id); err != nil {
-				return Identity{}, fmt.Errorf("relaycfg: decoding identity: %w", err)
-			}
-			if id.CACert == "" {
-				return Identity{}, fmt.Errorf("relaycfg: relay returned no CA certificate")
-			}
-			return id, nil
+			return parseClaimResponse(resp)
 		}
 		lastErr = err
 		select {
-		case <-ctx.Done():
-			return Identity{}, fmt.Errorf("relaycfg: relay at %s never accepted the claim: %w (last error: %v)",
-				addr, ctx.Err(), lastErr)
 		case <-time.After(250 * time.Millisecond):
+			continue
+		case <-ctx.Done():
 		}
+		return Identity{}, fmt.Errorf(
+			"relaycfg: relay at %s never accepted the claim: %w (last error: %v)",
+			addr, ctx.Err(), lastErr)
 	}
+}
+
+// parseClaimResponse reads the relay's reply to a claim, returning the relay's
+// Identity or a wrapped ErrRejected for any non-OK status.
+func parseClaimResponse(resp *http.Response) (Identity, error) {
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		msg, _ := io.ReadAll(io.LimitReader(resp.Body, 4096))
+		return Identity{}, fmt.Errorf("%w: HTTP %d: %s",
+			ErrRejected, resp.StatusCode, strings.TrimSpace(string(msg)))
+	}
+	var id Identity
+	if err := json.NewDecoder(resp.Body).Decode(&id); err != nil {
+		return Identity{}, fmt.Errorf("relaycfg: decoding identity: %w", err)
+	}
+	if id.CACert == "" {
+		return Identity{}, fmt.Errorf("relaycfg: relay returned no CA certificate")
+	}
+	return id, nil
 }

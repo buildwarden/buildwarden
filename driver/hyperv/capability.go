@@ -70,7 +70,8 @@ type Capabilities struct {
 	HypervisorPresent bool // Win32_ComputerSystem.HypervisorPresent
 	HyperVFeature     bool // Hyper-V management stack present (vmms service)
 	Elevated          bool // full Administrator (network standup ops)
-	HyperVAdmin       bool // Hyper-V Administrators group per THIS process's token (VM lifecycle ops)
+	// Hyper-V Administrators group per THIS process's token (VM lifecycle ops)
+	HyperVAdmin bool
 
 	// HyperVAdminByAccount is true when the user account is a member of the
 	// Hyper-V Administrators group per the persistent group membership, even
@@ -181,9 +182,12 @@ func (c Capabilities) Ready() (ready bool, reason string) {
 	case !c.HyperVFeature:
 		return false, "Hyper-V management stack (vmms) not found"
 	case c.Resolve(OpVMLifecycle) == OutcomeBlocked:
-		return false, "VM lifecycle blocked: join Hyper-V Administrators, launch elevated, or install the service"
+		return false, "VM lifecycle blocked: join Hyper-V Administrators, " +
+			"launch elevated, or install the service"
 	case c.NetworkStrategy() == NetBlocked:
-		return false, "no network path: run `warden setup --driver hyperv` (elevated) for a reusable switch, or run this build from an elevated shell for a fresh per-build network"
+		return false, "no network path: run `warden setup --driver hyperv` " +
+			"(elevated) for a reusable switch, or run this build from an " +
+			"elevated shell for a fresh per-build network"
 	default:
 		return true, ""
 	}

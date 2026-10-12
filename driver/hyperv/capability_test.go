@@ -13,14 +13,23 @@ func TestResolvePerOperation(t *testing.T) {
 		op   Op
 		want Outcome
 	}{
-		{"elevated does network standup", Capabilities{Elevated: true}, OpNetworkStandup, OutcomeDirect},
-		{"non-elevated cannot standup network", Capabilities{Elevated: false}, OpNetworkStandup, OutcomeBlocked},
-		{"hyperv admin does VM ops directly", Capabilities{HyperVAdmin: true}, OpVMLifecycle, OutcomeDirect},
-		{"elevated also does VM ops", Capabilities{Elevated: true}, OpVMLifecycle, OutcomeDirect},
-		{"hyperv admin cannot standup network", Capabilities{HyperVAdmin: true}, OpNetworkStandup, OutcomeBlocked},
-		{"service delegates VM ops when unprivileged", Capabilities{ServiceReachable: true}, OpVMLifecycle, OutcomeDelegate},
-		{"service delegates network standup", Capabilities{ServiceReachable: true}, OpNetworkStandup, OutcomeDelegate},
-		{"privilege beats service for VM ops", Capabilities{HyperVAdmin: true, ServiceReachable: true}, OpVMLifecycle, OutcomeDirect},
+		{"elevated does network standup",
+			Capabilities{Elevated: true}, OpNetworkStandup, OutcomeDirect},
+		{"non-elevated cannot standup network",
+			Capabilities{Elevated: false}, OpNetworkStandup, OutcomeBlocked},
+		{"hyperv admin does VM ops directly",
+			Capabilities{HyperVAdmin: true}, OpVMLifecycle, OutcomeDirect},
+		{"elevated also does VM ops",
+			Capabilities{Elevated: true}, OpVMLifecycle, OutcomeDirect},
+		{"hyperv admin cannot standup network",
+			Capabilities{HyperVAdmin: true}, OpNetworkStandup, OutcomeBlocked},
+		{"service delegates VM ops when unprivileged",
+			Capabilities{ServiceReachable: true}, OpVMLifecycle, OutcomeDelegate},
+		{"service delegates network standup",
+			Capabilities{ServiceReachable: true}, OpNetworkStandup, OutcomeDelegate},
+		{"privilege beats service for VM ops",
+			Capabilities{HyperVAdmin: true, ServiceReachable: true},
+			OpVMLifecycle, OutcomeDirect},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -39,7 +48,8 @@ func TestReady(t *testing.T) {
 	c.HyperVAdmin = true
 	c.DevSwitchPresent = true
 	if ok, reason := c.Ready(); !ok {
-		t.Fatalf("expected ready with hyperv-admin + dev switch, got not ready: %s", reason)
+		t.Fatalf("expected ready with hyperv-admin + dev switch, got not ready: %s",
+			reason)
 	}
 
 	// VM ops available but no switch and no network privilege: not ready.
@@ -77,7 +87,8 @@ func TestNetworkStrategy(t *testing.T) {
 		want NetworkStrategy
 	}{
 		{"elevated uses fresh per-build even with a durable switch",
-			Capabilities{Elevated: true, DevSwitchPresent: true}, NetEphemeralPerBuild},
+			Capabilities{Elevated: true, DevSwitchPresent: true},
+			NetEphemeralPerBuild},
 		{"elevated uses fresh per-build without a switch",
 			Capabilities{Elevated: true}, NetEphemeralPerBuild},
 		{"non-elevated hyperv-admin reuses the durable switch",
@@ -87,7 +98,10 @@ func TestNetworkStrategy(t *testing.T) {
 		{"service delegates when unprivileged",
 			Capabilities{ServiceReachable: true}, NetDelegateService},
 		{"service beats durable reuse",
-			Capabilities{ServiceReachable: true, HyperVAdmin: true, DevSwitchPresent: true}, NetDelegateService},
+			Capabilities{
+				ServiceReachable: true, HyperVAdmin: true, DevSwitchPresent: true,
+			},
+			NetDelegateService},
 		{"nothing available is blocked", Capabilities{}, NetBlocked},
 	}
 	for _, tt := range tests {
@@ -116,7 +130,9 @@ func TestDoctorReport(t *testing.T) {
 		t.Fatalf("expected not blocked; report:\n%s", buf.String())
 	}
 	out := buf.String()
-	for _, want := range []string{"VM lifecycle ......... OK", "reuse durable switch", "warden-dev"} {
+	for _, want := range []string{
+		"VM lifecycle ......... OK", "reuse durable switch", "warden-dev",
+	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("report missing %q; got:\n%s", want, out)
 		}

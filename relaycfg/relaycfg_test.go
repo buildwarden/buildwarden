@@ -33,10 +33,11 @@ func TestClaimRoundTrip(t *testing.T) {
 	got := make(chan Config, 1)
 	served := make(chan error, 1)
 	go func() {
-		served <- Serve(ln, "claim-tok", func(c Config, _ http.RoundTripper) (Identity, error) {
-			got <- c
-			return Identity{CACert: "PEM", LedgerPublicKey: "abcd"}, nil
-		})
+		served <- Serve(ln, "claim-tok",
+			func(c Config, _ http.RoundTripper) (Identity, error) {
+				got <- c
+				return Identity{CACert: "PEM", LedgerPublicKey: "abcd"}, nil
+			})
 	}()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
@@ -74,7 +75,9 @@ func TestClaimWrongTokenRejectedWithoutConsuming(t *testing.T) {
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, err := Claim(ctx, addr, "wrong", Config{CollectorURL: "http://x"}); !errors.Is(err, ErrRejected) {
+	if _, err := Claim(
+		ctx, addr, "wrong", Config{CollectorURL: "http://x"},
+	); !errors.Is(err, ErrRejected) {
 		t.Fatalf("wrong token: err = %v, want ErrRejected", err)
 	}
 	if _, err := Claim(ctx, addr, "right", Config{CollectorURL: "http://x"}); err != nil {
@@ -92,7 +95,9 @@ func TestClaimRetriesUntilRelayListens(t *testing.T) {
 		if err != nil {
 			return
 		}
-		_ = Serve(ln2, "", func(Config, http.RoundTripper) (Identity, error) { return Identity{CACert: "PEM"}, nil })
+		_ = Serve(ln2, "", func(Config, http.RoundTripper) (Identity, error) {
+			return Identity{CACert: "PEM"}, nil
+		})
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -105,7 +110,9 @@ func TestClaimRequiresCollectorURL(t *testing.T) {
 	ln := listen(t)
 	addr := ln.Addr().String()
 	go func() {
-		_ = Serve(ln, "", func(Config, http.RoundTripper) (Identity, error) { return Identity{CACert: "PEM"}, nil })
+		_ = Serve(ln, "", func(Config, http.RoundTripper) (Identity, error) {
+			return Identity{CACert: "PEM"}, nil
+		})
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -122,11 +129,15 @@ func TestStartFailureReported(t *testing.T) {
 	addr := ln.Addr().String()
 	served := make(chan error, 1)
 	go func() {
-		served <- Serve(ln, "", func(Config, http.RoundTripper) (Identity, error) { return Identity{}, errors.New("boom") })
+		served <- Serve(ln, "", func(Config, http.RoundTripper) (Identity, error) {
+			return Identity{}, errors.New("boom")
+		})
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, err := Claim(ctx, addr, "", Config{CollectorURL: "http://x"}); !errors.Is(err, ErrRejected) {
+	if _, err := Claim(
+		ctx, addr, "", Config{CollectorURL: "http://x"},
+	); !errors.Is(err, ErrRejected) {
 		t.Fatalf("err = %v, want ErrRejected", err)
 	}
 	if err := <-served; err == nil || err.Error() != "boom" {

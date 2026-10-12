@@ -22,7 +22,9 @@ type capturingReadCloser struct {
 	closed bool
 }
 
-func (r *Relay) newCapturingReadCloser(source io.ReadCloser, baseName, suffix string) *capturingReadCloser {
+func (r *Relay) newCapturingReadCloser(
+	source io.ReadCloser, baseName, suffix string,
+) *capturingReadCloser {
 	pr, pw := io.Pipe()
 	c := &capturingReadCloser{source: source, pw: pw, done: make(chan error, 1)}
 	name := captureName(baseName, suffix)

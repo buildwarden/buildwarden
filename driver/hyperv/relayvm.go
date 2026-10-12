@@ -59,17 +59,22 @@ func buildRelayVMScript(spec RelayVMSpec) (string, error) {
 	fmt.Fprintf(&b, "New-VHD -Path '%s' -ParentPath '%s' -Differencing | Out-Null\n",
 		psEscapeSingle(spec.OverlayVHDX), psEscapeSingle(spec.BootVHDX))
 	// Gen2 VM. NIC1 attaches to the Private build switch via -SwitchName.
-	fmt.Fprintf(&b, "New-VM -Name '%s' -Generation 2 -MemoryStartupBytes %dMB -VHDPath '%s' -SwitchName '%s' | Out-Null\n",
+	fmt.Fprintf(&b, "New-VM -Name '%s' -Generation 2 -MemoryStartupBytes "+
+		"%dMB -VHDPath '%s' -SwitchName '%s' | Out-Null\n",
 		name, mem, psEscapeSingle(spec.OverlayVHDX), psEscapeSingle(spec.BuildSwitch))
-	fmt.Fprintf(&b, "Set-VM -Name '%s' -AutomaticCheckpointsEnabled $false -CheckpointType Disabled\n", name)
+	fmt.Fprintf(&b, "Set-VM -Name '%s' -AutomaticCheckpointsEnabled $false "+
+		"-CheckpointType Disabled\n", name)
 	fmt.Fprintf(&b, "Set-VMProcessor -VMName '%s' -Count %d\n", name, cpus)
 	// NIC2: relay upstream on the Internal NAT switch (eth1 in the guest).
-	fmt.Fprintf(&b, "Add-VMNetworkAdapter -VMName '%s' -SwitchName '%s'\n", name, psEscapeSingle(spec.NATSwitch))
+	fmt.Fprintf(&b, "Add-VMNetworkAdapter -VMName '%s' -SwitchName '%s'\n",
+		name, psEscapeSingle(spec.NATSwitch))
 	// Secure Boot OFF (unsigned UKI); boot straight off the overlay disk.
 	fmt.Fprintf(&b, "$drive = Get-VMHardDiskDrive -VMName '%s'\n", name)
-	fmt.Fprintf(&b, "Set-VMFirmware -VMName '%s' -EnableSecureBoot Off -FirstBootDevice $drive\n", name)
+	fmt.Fprintf(&b, "Set-VMFirmware -VMName '%s' -EnableSecureBoot Off "+
+		"-FirstBootDevice $drive\n", name)
 	// COM1 -> host named pipe: readiness echo + relay stdout.
-	fmt.Fprintf(&b, "Set-VMComPort -VMName '%s' -Number 1 -Path '%s'\n", name, psEscapeSingle(spec.COMPipePath))
+	fmt.Fprintf(&b, "Set-VMComPort -VMName '%s' -Number 1 -Path '%s'\n",
+		name, psEscapeSingle(spec.COMPipePath))
 	b.WriteString("'OK'\n")
 	return b.String(), nil
 }

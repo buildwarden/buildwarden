@@ -30,11 +30,13 @@ func TestPostBuildOutputChunkDelivers(t *testing.T) {
 	}
 	var got strings.Builder
 	status := http.StatusOK
-	srv := &http.Server{Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		b, _ := io.ReadAll(r.Body)
-		got.Write(b)
-		w.WriteHeader(status)
-	})}
+	srv := &http.Server{
+		Handler: http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			b, _ := io.ReadAll(r.Body)
+			got.Write(b)
+			w.WriteHeader(status)
+		}),
+	}
 	go srv.Serve(ln) //nolint:errcheck
 	defer srv.Close()
 

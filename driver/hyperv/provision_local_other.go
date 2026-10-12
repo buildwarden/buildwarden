@@ -16,13 +16,18 @@ type unsupportedProvisioner struct{}
 func newLocalProvisioner(verbose bool) Provisioner { return unsupportedProvisioner{} }
 
 func errUnsupported() error {
-	return fmt.Errorf("hyperv provisioner requires a Windows host (current OS: %s)", runtime.GOOS)
+	return fmt.Errorf(
+		"hyperv provisioner requires a Windows host (current OS: %s)", runtime.GOOS)
 }
 
-func (unsupportedProvisioner) EnsureNetwork(context.Context, NetworkSpec) (*NetworkResources, error) {
+func (unsupportedProvisioner) EnsureNetwork(
+	context.Context, NetworkSpec,
+) (*NetworkResources, error) {
 	return nil, errUnsupported()
 }
-func (unsupportedProvisioner) TeardownNetwork(context.Context, string) error { return errUnsupported() }
+func (unsupportedProvisioner) TeardownNetwork(context.Context, string) error {
+	return errUnsupported()
+}
 func (unsupportedProvisioner) CreateVM(context.Context, VMSpec) (*VMHandle, error) {
 	return nil, errUnsupported()
 }

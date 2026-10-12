@@ -25,7 +25,10 @@ func (f *netFake) EnsureNetwork(_ context.Context, spec NetworkSpec) (*NetworkRe
 	if f.ensureErr != nil {
 		return nil, f.ensureErr
 	}
-	return &NetworkResources{BuildSwitch: spec.SwitchName, NATName: spec.SwitchName + "-nat"}, nil
+	return &NetworkResources{
+		BuildSwitch: spec.SwitchName,
+		NATName:     spec.SwitchName + "-nat",
+	}, nil
 }
 func (f *netFake) TeardownNetwork(_ context.Context, id string) error {
 	f.teardownID = id
@@ -60,7 +63,13 @@ func roundTripOverPipe(t *testing.T, prov Provisioner, req svcRequest) (svcRespo
 
 func TestService_EnsureNetworkRoundTrip(t *testing.T) {
 	fake := &netFake{}
-	spec := NetworkSpec{ID: "abc", SwitchName: "warden-abc", SwitchType: "Private", NATPrefix: "192.168.240.0/20", HostIP: "192.168.240.1"}
+	spec := NetworkSpec{
+		ID:         "abc",
+		SwitchName: "warden-abc",
+		SwitchType: "Private",
+		NATPrefix:  "192.168.240.0/20",
+		HostIP:     "192.168.240.1",
+	}
 	resp, err := roundTripOverPipe(t, fake, svcRequest{Op: opEnsureNetwork, Spec: &spec})
 	if err != nil {
 		t.Fatalf("round trip: %v", err)
@@ -78,7 +87,9 @@ func TestService_EnsureNetworkRoundTrip(t *testing.T) {
 
 func TestService_TeardownRoundTrip(t *testing.T) {
 	fake := &netFake{}
-	if _, err := roundTripOverPipe(t, fake, svcRequest{Op: opTeardownNetwork, ID: "warden-abc"}); err != nil {
+	if _, err := roundTripOverPipe(
+		t, fake, svcRequest{Op: opTeardownNetwork, ID: "warden-abc"},
+	); err != nil {
 		t.Fatalf("round trip: %v", err)
 	}
 	if fake.teardownID != "warden-abc" {
@@ -98,7 +109,9 @@ func TestService_Ping(t *testing.T) {
 
 func TestService_VersionMismatchRejected(t *testing.T) {
 	// handleServiceRequest is pure; hit it directly with a wrong version.
-	resp := handleServiceRequest(context.Background(), &netFake{}, svcRequest{Version: 999, Op: opPing})
+	resp := handleServiceRequest(
+		context.Background(), &netFake{}, svcRequest{Version: 999, Op: opPing},
+	)
 	if resp.Err == "" {
 		t.Fatal("expected a version-mismatch error")
 	}
@@ -113,7 +126,10 @@ func TestService_UnsupportedOpRejected(t *testing.T) {
 }
 
 func TestService_EnsureNetworkNilSpec(t *testing.T) {
-	resp := handleServiceRequest(context.Background(), &netFake{}, svcRequest{Version: serviceProtocolVersion, Op: opEnsureNetwork})
+	resp := handleServiceRequest(
+		context.Background(), &netFake{},
+		svcRequest{Version: serviceProtocolVersion, Op: opEnsureNetwork},
+	)
 	if resp.Err == "" {
 		t.Fatal("expected an error for a nil spec")
 	}

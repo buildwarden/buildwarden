@@ -63,7 +63,8 @@ Copy-Item -Force (Join-Path $seed 'warden-io.exe') 'C:\warden\warden-io.exe'
 $log = 'C:\warden\warden-run.log'
 "warden-run start $(Get-Date -Format o)" | Out-File -FilePath $log -Encoding utf8
 & 'C:\warden\warden-io.exe' initialize --gateway=%s --ip=%s *>> $log 2>&1
-"warden-io exit=$LASTEXITCODE $(Get-Date -Format o)" | Out-File -FilePath $log -Append -Encoding utf8
+"warden-io exit=$LASTEXITCODE $(Get-Date -Format o)" |
+    Out-File -FilePath $log -Append -Encoding utf8
 Stop-Computer -Force
 `, relayGatewayIP, buildGuestCIDR)
 }

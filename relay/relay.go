@@ -143,8 +143,9 @@ func Start(cfg Config) (*Relay, error) {
 	}
 
 	r := &Relay{
-		cfg:          cfg,
-		sink:         newCollectorClient(cfg.CollectorURL, cfg.CollectorToken, cfg.CollectorTransport),
+		cfg: cfg,
+		sink: newCollectorClient(
+			cfg.CollectorURL, cfg.CollectorToken, cfg.CollectorTransport),
 		reqSigs:      make(map[*http.Request][]byte),
 		reqBaseNames: make(map[*http.Request]string),
 		certCache:    make(map[string]*tls.Certificate),

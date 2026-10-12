@@ -28,7 +28,9 @@ func TestGenerateAutounattendWellFormed(t *testing.T) {
 				break
 			}
 			if err != nil {
-				t.Fatalf("%s: rendered Autounattend is not well-formed XML: %v", arch, err)
+				t.Fatalf(
+					"%s: rendered Autounattend is not well-formed XML: %v",
+					arch, err)
 			}
 		}
 	}
@@ -164,10 +166,14 @@ func TestFirstLogonCommandLineUnderLimit(t *testing.T) {
 		}
 		found = true
 		if len(c) >= 1024 {
-			t.Fatalf("FirstLogonCommands CommandLine is %d chars, exceeds Windows' 1024 cap", len(c))
+			t.Fatalf(
+				"FirstLogonCommands CommandLine is %d chars, "+
+					"exceeds Windows' 1024 cap", len(c))
 		}
 		if len(c) > 900 {
-			t.Errorf("FirstLogonCommands CommandLine is %d chars; keep well under 1024 (target <900)", len(c))
+			t.Errorf(
+				"FirstLogonCommands CommandLine is %d chars; keep well "+
+					"under 1024 (target <900)", len(c))
 		}
 		t.Logf("FirstLogonCommands CommandLine length = %d chars (limit 1024)", len(c))
 	}

@@ -24,10 +24,14 @@ func newClientProvisioner(verbose bool) Provisioner {
 	return &clientProvisioner{localProvisioner: &localProvisioner{verbose: verbose}}
 }
 
-func (c *clientProvisioner) EnsureNetwork(_ context.Context, spec NetworkSpec) (*NetworkResources, error) {
+func (c *clientProvisioner) EnsureNetwork(
+	_ context.Context, spec NetworkSpec,
+) (*NetworkResources, error) {
 	conn, err := dialServicePipe(5 * time.Second)
 	if err != nil {
-		return nil, fmt.Errorf("dial privileged service (is it installed? `warden hyperv service install`): %w", err)
+		return nil, fmt.Errorf(
+			"dial privileged service (is it installed? "+
+				"`warden hyperv service install`): %w", err)
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(2 * time.Minute))

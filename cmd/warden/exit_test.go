@@ -22,19 +22,48 @@ func TestBuildFailedExitCodes(t *testing.T) {
 		err     error
 		req     *driver.BuildRequest
 		elapsed time.Duration
-		want    error // exitStatus, or nil for "a warden error, unchanged"
+		want    error // exitStatusError, or nil for "a warden error, unchanged"
 	}{
-		{"build script exit code passes through", live,
-			fmt.Errorf("runBuild: %w", &driver.ExitError{Code: 7}), &driver.BuildRequest{}, 0, exitStatus(7)},
-		{"--timeout is 124", live,
-			fmt.Errorf("waiting: %w", context.DeadlineExceeded), timed, 31 * time.Second, exitStatus(exitTimedOut)},
-		{"an internal deadline before --timeout is a warden error", live,
-			fmt.Errorf("claim: %w", context.DeadlineExceeded), timed, 10 * time.Second, nil},
-		{"interrupt is 130", cancelled, context.Canceled, &driver.BuildRequest{}, 0, exitStatus(exitInterrupted)},
-		{"anything else is a warden error", live, errors.New("boom"), &driver.BuildRequest{}, 0, nil},
+		{
+			name: "build script exit code passes through",
+			ctx:  live,
+			err:  fmt.Errorf("runBuild: %w", &driver.ExitError{Code: 7}),
+			req:  &driver.BuildRequest{},
+			want: exitStatusError(7),
+		},
+		{
+			name:    "--timeout is 124",
+			ctx:     live,
+			err:     fmt.Errorf("waiting: %w", context.DeadlineExceeded),
+			req:     timed,
+			elapsed: 31 * time.Second,
+			want:    exitStatusError(exitTimedOut),
+		},
+		{
+			name:    "an internal deadline before --timeout is a warden error",
+			ctx:     live,
+			err:     fmt.Errorf("claim: %w", context.DeadlineExceeded),
+			req:     timed,
+			elapsed: 10 * time.Second,
+			want:    nil,
+		},
+		{
+			name: "interrupt is 130",
+			ctx:  cancelled,
+			err:  context.Canceled,
+			req:  &driver.BuildRequest{},
+			want: exitStatusError(exitInterrupted),
+		},
+		{
+			name: "anything else is a warden error",
+			ctx:  live,
+			err:  errors.New("boom"),
+			req:  &driver.BuildRequest{},
+			want: nil,
+		},
 	} {
 		got := buildFailed(tc.ctx, tc.err, tc.req, tc.elapsed)
-		var es exitStatus
+		var es exitStatusError
 		isStatus := errors.As(got, &es)
 		switch {
 		case tc.want == nil && isStatus:

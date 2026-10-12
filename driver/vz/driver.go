@@ -98,46 +98,21 @@ func (d *Driver) StartBuild(
 	}
 	defer sess.Close()
 
-	buildDisk := filepath.Join(workDir, "build-disk.img")
-	if err := CloneDisk(diskImage, buildDisk); err != nil {
-		return nil, fmt.Errorf("cloning build disk: %w", err)
-	}
-	// The auxiliary storage (NVRAM) is written at boot and locked by the
-	// running VM, so each build boots from its own clone too; otherwise a
-	// second concurrent build fails with "Failed to lock auxiliary storage".
-	buildAux := filepath.Join(workDir, "aux-storage")
-	if err := CloneDisk(filepath.Join(filepath.Dir(diskImage), "aux-storage"), buildAux); err != nil {
-		return nil, fmt.Errorf("cloning auxiliary storage: %w", err)
+	buildDisk, buildAux, err := cloneBuildDisks(workDir, diskImage)
+	if err != nil {
+		return nil, err
 	}
 
-	// Create isolated virtual network (socket pair)
-	vnet, err := NewVirtualNetwork()
+	// Create the isolated virtual network (socket pair), start the host-side
+	// relay (it reads raw Ethernet frames from its end of the socketpair via
+	// gvisor netstack and has native internet access; the build VM can only
+	// reach the network through it), and claim it with the build's config.
+	vnet, relayProc, err := d.setupNetworkAndRelay(ctx, sess, req, workDir, outputDir)
 	if err != nil {
-		return nil, fmt.Errorf("creating virtual network: %w", err)
+		return nil, err
 	}
 	defer vnet.Close()
-
-	// Start the host-side relay. It reads raw Ethernet frames from its end
-	// of the socketpair (gvisor netstack) and has native internet access;
-	// the build VM can only reach the network through it.
-	claimPort, err := driver.FreeLoopbackPort()
-	if err != nil {
-		return nil, err
-	}
-	claimToken, err := driver.RandomToken()
-	if err != nil {
-		return nil, err
-	}
-	relayProc, err := d.startHostRelay(workDir, outputDir, vnet, claimPort, claimToken)
-	if err != nil {
-		return nil, fmt.Errorf("starting relay: %w", err)
-	}
 	defer relayProc.Stop()
-
-	claimAddr := net.JoinHostPort("127.0.0.1", fmt.Sprint(claimPort))
-	if _, err := sess.ClaimRelay(ctx, claimAddr, claimToken, req, nil); err != nil {
-		return nil, err
-	}
 
 	// Boot Build VM: macOS with single network interface (socketpair to relay).
 	// No shared directory — all communication goes through the relay HTTP API.
@@ -150,8 +125,10 @@ func (d *Driver) StartBuild(
 		// VZErrorDomain code 6: macOS caps running macOS guests at two.
 		if strings.Contains(err.Error(), "VZErrorDomain code=6") {
 			return nil, driver.Fixable(
-				"wait for another vz build, or another macOS VM (UTM, Tart, ...), to finish, then retry",
-				"booting build VM: macOS allows at most two running macOS virtual machines, and two are running")
+				"wait for another vz build, or another macOS VM "+
+					"(UTM, Tart, ...), to finish, then retry",
+				"booting build VM: macOS allows at most two running "+
+					"macOS virtual machines, and two are running")
 		}
 		return nil, fmt.Errorf("booting build VM: %w", err)
 	}
@@ -162,6 +139,60 @@ func (d *Driver) StartBuild(
 	}
 	driver.FinalizeOutput(outputDir, req.Compress)
 	return &driver.BuildResult{OutputDir: outputDir}, nil
+}
+
+// cloneBuildDisks makes per-build copy-on-write clones of the base disk and
+// its auxiliary storage. The auxiliary storage (NVRAM) is written at boot and
+// locked by the running VM, so each build boots from its own clone too;
+// otherwise a second concurrent build fails with "Failed to lock auxiliary
+// storage".
+func cloneBuildDisks(workDir, diskImage string) (buildDisk, buildAux string, err error) {
+	buildDisk = filepath.Join(workDir, "build-disk.img")
+	if err = CloneDisk(diskImage, buildDisk); err != nil {
+		return "", "", fmt.Errorf("cloning build disk: %w", err)
+	}
+	buildAux = filepath.Join(workDir, "aux-storage")
+	auxSrc := filepath.Join(filepath.Dir(diskImage), "aux-storage")
+	if err = CloneDisk(auxSrc, buildAux); err != nil {
+		return "", "", fmt.Errorf("cloning auxiliary storage: %w", err)
+	}
+	return buildDisk, buildAux, nil
+}
+
+// setupNetworkAndRelay creates the isolated virtual network, starts the
+// host-side relay, and claims it with the build's configuration. On any
+// failure it tears down whatever it already created; on success the caller
+// owns vnet and relayProc and must close/stop them.
+func (d *Driver) setupNetworkAndRelay(
+	ctx context.Context, sess *driver.Session, req *driver.BuildRequest,
+	workDir, outputDir string,
+) (*VirtualNetwork, *RelayProcess, error) {
+	vnet, err := NewVirtualNetwork()
+	if err != nil {
+		return nil, nil, fmt.Errorf("creating virtual network: %w", err)
+	}
+	claimPort, err := driver.FreeLoopbackPort()
+	if err != nil {
+		_ = vnet.Close()
+		return nil, nil, err
+	}
+	claimToken, err := driver.RandomToken()
+	if err != nil {
+		_ = vnet.Close()
+		return nil, nil, err
+	}
+	relayProc, err := d.startHostRelay(workDir, outputDir, vnet, claimPort, claimToken)
+	if err != nil {
+		_ = vnet.Close()
+		return nil, nil, fmt.Errorf("starting relay: %w", err)
+	}
+	claimAddr := net.JoinHostPort("127.0.0.1", fmt.Sprint(claimPort))
+	if _, err := sess.ClaimRelay(ctx, claimAddr, claimToken, req, nil); err != nil {
+		relayProc.Stop()
+		_ = vnet.Close()
+		return nil, nil, err
+	}
+	return vnet, relayProc, nil
 }
 
 func (d *Driver) Exec(ctx context.Context, req *driver.BuildRequest) error {
@@ -198,7 +229,8 @@ func (d *Driver) resolveImage(image string) (string, error) {
 		return image, nil
 	}
 	if !strings.Contains(image, "://") {
-		return "", driver.Fixable("", "--image %s: no such file (give a disk.img path or an IPSW URL)", image)
+		return "", driver.Fixable("",
+			"--image %s: no such file (give a disk.img path or an IPSW URL)", image)
 	}
 	return d.Cache.RestoreIPSW(image)
 }
@@ -223,7 +255,10 @@ func (rp *RelayProcess) Stop() {
 // startHostRelay starts the relay as a host process in fd-ingress mode. It
 // reads raw Ethernet frames from vnet.RelaySocketFD (gvisor netstack) and
 // waits, unconfigured, for the claim on 127.0.0.1:claimPort.
-func (d *Driver) startHostRelay(workDir, outputDir string, vnet *VirtualNetwork, claimPort int, claimToken string) (*RelayProcess, error) {
+func (d *Driver) startHostRelay(
+	workDir, outputDir string, vnet *VirtualNetwork,
+	claimPort int, claimToken string,
+) (*RelayProcess, error) {
 	built, err := driver.GuestBinary("relay", "darwin", "arm64")
 	if err != nil {
 		return nil, err
@@ -323,7 +358,8 @@ func checkPlatform() error {
 		return driver.Fixable(
 			"sign it: codesign --sign - --entitlements entitlements.plist "+exe+
 				" (make build does this)",
-			"vz driver requires warden to be signed with the com.apple.security.virtualization entitlement")
+			"vz driver requires warden to be signed with the "+
+				"com.apple.security.virtualization entitlement")
 	}
 	return nil
 }

@@ -19,7 +19,9 @@ import (
 // startTestRelay wires a relay to a real in-process collector, with the
 // guest-facing listeners on loopback, and returns a client that reaches the
 // relay's HTTP listener for any host name (as the build guest would).
-func startTestRelay(t *testing.T, cfg collector.Config, capture string) (*Relay, *collector.Collector, *http.Client, string) {
+func startTestRelay(
+	t *testing.T, cfg collector.Config, capture string,
+) (*Relay, *collector.Collector, *http.Client, string) {
 	t.Helper()
 	out := t.TempDir()
 	cfg.OutputDir = out
@@ -76,6 +78,63 @@ func get(t *testing.T, c *http.Client, url string) (int, string) {
 	return resp.StatusCode, string(b)
 }
 
+// getExpect does a GET and fails unless the status and body both match.
+func getExpect(t *testing.T, c *http.Client, url string, wantCode int, wantBody string) {
+	t.Helper()
+	if code, body := get(t, c, url); code != wantCode || body != wantBody {
+		t.Fatalf("GET %s = %d %q, want %d %q", url, code, body, wantCode, wantBody)
+	}
+}
+
+// getExpectCode does a GET and fails unless the status matches.
+func getExpectCode(t *testing.T, c *http.Client, url string, wantCode int) {
+	t.Helper()
+	if code, _ := get(t, c, url); code != wantCode {
+		t.Fatalf("GET %s = %d, want %d", url, code, wantCode)
+	}
+}
+
+// postArtifact POSTs an artifact and fails unless the relay accepts it.
+func postArtifact(t *testing.T, c *http.Client, url, body string) {
+	t.Helper()
+	resp, err := c.Post(url, "application/octet-stream", strings.NewReader(body))
+	if err != nil {
+		t.Fatal(err)
+	}
+	resp.Body.Close()
+	if resp.StatusCode != 200 {
+		t.Fatalf("artifact POST %s: %d", url, resp.StatusCode)
+	}
+}
+
+// waitHeartbeat blocks until the collector has seen a forwarded heartbeat.
+func waitHeartbeat(t *testing.T, col *collector.Collector) {
+	t.Helper()
+	deadline := time.Now().Add(5 * time.Second)
+	for col.LastHeartbeat().IsZero() && time.Now().Before(deadline) {
+		time.Sleep(50 * time.Millisecond)
+	}
+	if col.LastHeartbeat().IsZero() {
+		t.Fatal("heartbeat never forwarded to the collector")
+	}
+}
+
+// verifyLedgerLanded checks the artifact and the flushed, verifiable ledger.
+func verifyLedgerLanded(t *testing.T, out string) {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(out, "artifacts", "dist", "app.bin"))
+	if err != nil || string(b) != "ARTIFACT" {
+		t.Fatalf("artifact landed = %q, %v", b, err)
+	}
+	data, err := os.ReadFile(filepath.Join(out, "ledger"))
+	if err != nil {
+		t.Fatalf("ledger not flushed before completion: %v", err)
+	}
+	if _, err := ledger.Verify(data); err != nil {
+		t.Fatalf("ledger does not verify: %v", err)
+	}
+}
+
 func TestRelayCollectorEndToEnd(t *testing.T) {
 	ctxDir := t.TempDir()
 	_ = os.MkdirAll(filepath.Join(ctxDir, "src"), 0o755)
@@ -90,65 +149,32 @@ func TestRelayCollectorEndToEnd(t *testing.T) {
 		t.Fatal("relay identity incomplete")
 	}
 
-	if code, body := get(t, client, "http://artifacts/build-script"); code != 200 || body != "#!/bin/sh\nmake\n" {
-		t.Fatalf("build-script: %d %q", code, body)
-	}
-	if code, body := get(t, client, "http://cwd/src/main.c"); code != 200 || body != "int main(){}" {
-		t.Fatalf("context file: %d %q", code, body)
-	}
-	if code, body := get(t, client, "http://cwd/src/"); code != 200 || body != "src/main.c\n" {
-		t.Fatalf("context list: %d %q", code, body)
-	}
-	if code, _ := get(t, client, "http://cwd/src/missing"); code != 404 {
-		t.Fatalf("missing context file: %d", code)
-	}
+	getExpect(t, client, "http://artifacts/build-script", 200, "#!/bin/sh\nmake\n")
+	getExpect(t, client, "http://cwd/src/main.c", 200, "int main(){}")
+	getExpect(t, client, "http://cwd/src/", 200, "src/main.c\n")
+	getExpectCode(t, client, "http://cwd/src/missing", 404)
 
-	resp, err := client.Post("http://artifacts/dist/app.bin", "application/octet-stream",
-		strings.NewReader("ARTIFACT"))
-	if err != nil {
-		t.Fatal(err)
-	}
-	resp.Body.Close()
-	if resp.StatusCode != 200 {
-		t.Fatalf("artifact POST: %d", resp.StatusCode)
-	}
+	postArtifact(t, client, "http://artifacts/dist/app.bin", "ARTIFACT")
 
-	if code, _ := get(t, client, "http://artifacts/heartbeat"); code != 200 {
-		t.Fatalf("heartbeat: %d", code)
-	}
-	deadline := time.Now().Add(5 * time.Second)
-	for col.LastHeartbeat().IsZero() && time.Now().Before(deadline) {
-		time.Sleep(50 * time.Millisecond)
-	}
-	if col.LastHeartbeat().IsZero() {
-		t.Fatal("heartbeat never forwarded to the collector")
-	}
+	getExpectCode(t, client, "http://artifacts/heartbeat", 200)
+	waitHeartbeat(t, col)
 
-	if code, _ := get(t, client, "http://artifacts/exit?code=0"); code != 200 {
-		t.Fatalf("exit: %d", code)
-	}
+	getExpectCode(t, client, "http://artifacts/exit?code=0", 200)
 	sig, err := col.Wait(context.Background(), 0)
 	if err != nil || sig.ExitCode != 0 {
 		t.Fatalf("completion = %+v, %v", sig, err)
 	}
 
-	if b, err := os.ReadFile(filepath.Join(out, "artifacts", "dist", "app.bin")); err != nil || string(b) != "ARTIFACT" {
-		t.Fatalf("artifact landed = %q, %v", b, err)
-	}
-	data, err := os.ReadFile(filepath.Join(out, "ledger"))
-	if err != nil {
-		t.Fatalf("ledger not flushed before completion: %v", err)
-	}
-	if _, err := ledger.Verify(data); err != nil {
-		t.Fatalf("ledger does not verify: %v", err)
-	}
+	verifyLedgerLanded(t, out)
 }
 
 func TestRelayCapturesToCollector(t *testing.T) {
 	r, _, _, out := startTestRelay(t, collector.Config{}, "headers")
-	r.savePayloadBytes([]byte("HTTP/1.1 200 OK\r\n\r\n"), "001-GET-example.com", "response-headers")
+	r.savePayloadBytes(
+		[]byte("HTTP/1.1 200 OK\r\n\r\n"), "001-GET-example.com", "response-headers")
 	entries, err := os.ReadDir(filepath.Join(out, "captures"))
-	if err != nil || len(entries) != 1 || entries[0].Name() != "001-GET-example.com.response-headers" {
+	if err != nil || len(entries) != 1 ||
+		entries[0].Name() != "001-GET-example.com.response-headers" {
 		t.Fatalf("captures = %v, %v", entries, err)
 	}
 	if p, _ := os.ReadDir(filepath.Join(out, "payloads")); len(p) != 1 {

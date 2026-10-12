@@ -142,7 +142,8 @@ func loadEvalManifest() (*evalManifest, error) {
 		return nil, err
 	}
 	if err := json.Unmarshal(b, m); err != nil {
-		return nil, fmt.Errorf("eval image manifest %s is corrupt: %w", evalManifestPath(), err)
+		return nil, fmt.Errorf(
+			"eval image manifest %s is corrupt: %w", evalManifestPath(), err)
 	}
 	if m.Images == nil {
 		m.Images = map[string]evalManifestEntry{}
@@ -188,13 +189,15 @@ func resolveActiveEvalImage() (path string, isWindows bool, generation int, ok b
 // cached path.
 func FetchEvalImage(ctx context.Context, opts FetchOptions) (string, error) {
 	if opts.Name == "" {
-		return "", fmt.Errorf("fetch: empty image name (try one of: %s)", strings.Join(EvalImageNames(), ", "))
+		return "", fmt.Errorf("fetch: empty image name (try one of: %s)",
+			strings.Join(EvalImageNames(), ", "))
 	}
 	spec, known := LookupEvalImage(opts.Name)
 	if !known {
 		// Allow a bare label as long as a URL is supplied.
 		if opts.URL == "" {
-			return "", fmt.Errorf("unknown image %q and no --url given (known images: %s)",
+			return "", fmt.Errorf(
+				"unknown image %q and no --url given (known images: %s)",
 				opts.Name, strings.Join(EvalImageNames(), ", "))
 		}
 		spec = EvalImageSpec{Name: opts.Name, OS: "windows", Ext: ".vhd", Generation: 1}
@@ -206,7 +209,8 @@ func FetchEvalImage(ctx context.Context, opts FetchOptions) (string, error) {
 	}
 	if url == "" {
 		return "", fmt.Errorf(
-			"no download URL for %q. %s\nThen: warden image prepare --driver hyperv --name %s --source <that-url>",
+			"no download URL for %q. %s\nThen: warden image prepare "+
+				"--driver hyperv --name %s --source <that-url>",
 			opts.Name, spec.Note, opts.Name)
 	}
 
@@ -226,39 +230,61 @@ func FetchEvalImage(ctx context.Context, opts FetchOptions) (string, error) {
 
 	// Reuse a cached copy when it still verifies (against the expected hash if
 	// pinned, else its integrity sidecar), unless --force.
-	if !opts.Force {
-		if cachedHash, ok := cachedEvalHash(dest); ok {
-			if expected != "" && cachedHash != expected {
-				logf(opts.Progress, "cached %s failed pinned verification (have %s..., want %s...); re-downloading\n",
-					filepath.Base(dest), short(cachedHash), short(expected))
-			} else {
-				logf(opts.Progress, "using cached %s (sha256:%s)\n", filepath.Base(dest), short(cachedHash))
-				return finishFetch(opts, spec, dest, cachedHash, expected)
-			}
-		}
+	if path, done, err := reuseCachedEvalImage(opts, spec, dest, expected); done {
+		return path, err
 	}
 
 	gotHash, n, err := downloadVerified(ctx, url, dest, opts.Progress)
 	if err != nil {
 		return "", err
 	}
-	logf(opts.Progress, "downloaded %s (%d bytes, sha256:%s)\n", filepath.Base(dest), n, short(gotHash))
+	logf(opts.Progress, "downloaded %s (%d bytes, sha256:%s)\n",
+		filepath.Base(dest), n, short(gotHash))
 
 	if expected != "" && gotHash != expected {
 		_ = os.Remove(dest)
 		_ = os.Remove(dest + ".sha256")
 		return "", fmt.Errorf(
-			"pinned verification FAILED for %q:\n  expected sha256 %s\n  got      sha256 %s\n"+
-				"the download does not match the pinned hash; the cached file was removed",
+			"pinned verification FAILED for %q:\n"+
+				"  expected sha256 %s\n  got      sha256 %s\n"+
+				"the download does not match the pinned hash; "+
+				"the cached file was removed",
 			opts.Name, expected, gotHash)
 	}
 	return finishFetch(opts, spec, dest, gotHash, expected)
 }
 
+// reuseCachedEvalImage finishes the fetch from a still-valid cached copy of dest
+// (unless --force). done is true when the cached copy was used, in which case
+// path and err are the finishFetch result and the caller returns them.
+func reuseCachedEvalImage(
+	opts FetchOptions, spec EvalImageSpec, dest, expected string,
+) (path string, done bool, err error) {
+	if opts.Force {
+		return "", false, nil
+	}
+	cachedHash, ok := cachedEvalHash(dest)
+	if !ok {
+		return "", false, nil
+	}
+	if expected != "" && cachedHash != expected {
+		logf(opts.Progress, "cached %s failed pinned verification "+
+			"(have %s..., want %s...); re-downloading\n",
+			filepath.Base(dest), short(cachedHash), short(expected))
+		return "", false, nil
+	}
+	logf(opts.Progress, "using cached %s (sha256:%s)\n",
+		filepath.Base(dest), short(cachedHash))
+	path, err = finishFetch(opts, spec, dest, cachedHash, expected)
+	return path, true, err
+}
+
 // finishFetch records the fetched image in the manifest and decides whether it
 // may become the active base. A pinned (verified) image is activated; an
 // unpinned one is recorded but only activated with AcceptUnpinned.
-func finishFetch(opts FetchOptions, spec EvalImageSpec, dest, gotHash, expected string) (string, error) {
+func finishFetch(
+	opts FetchOptions, spec EvalImageSpec, dest, gotHash, expected string,
+) (string, error) {
 	pinned := expected != "" && gotHash == expected
 
 	m, err := loadEvalManifest()
@@ -296,12 +322,14 @@ func finishFetch(opts FetchOptions, spec EvalImageSpec, dest, gotHash, expected 
 			return "", err
 		}
 		return dest, fmt.Errorf(
-			"UNPINNED: %q downloaded to %s but is not verified against a pinned hash.\n"+
+			"UNPINNED: %q downloaded to %s but is not verified "+
+				"against a pinned hash.\n"+
 				"  computed sha256: %s\n"+
 				"To PIN it (verifies the already-cached bytes, no re-download):\n"+
 				"  warden image prepare --driver hyperv --name %s --sha256 %s\n"+
 				"Or to use it as-is without a pinned hash:\n"+
-				"  warden image prepare --driver hyperv --name %s --accept-unpinned",
+				"  warden image prepare --driver hyperv --name %s "+
+				"--accept-unpinned",
 			opts.Name, dest, gotHash, opts.Name, gotHash, opts.Name)
 	}
 
@@ -310,9 +338,13 @@ func finishFetch(opts FetchOptions, spec EvalImageSpec, dest, gotHash, expected 
 		return "", err
 	}
 	if pinned {
-		logf(opts.Progress, "pinned and activated %q as the Hyper-V build-guest base\n", opts.Name)
+		logf(opts.Progress,
+			"pinned and activated %q as the Hyper-V build-guest base\n",
+			opts.Name)
 	} else {
-		logf(opts.Progress, "activated %q as the Hyper-V build-guest base (UNPINNED - no authenticity check)\n", opts.Name)
+		logf(opts.Progress,
+			"activated %q as the Hyper-V build-guest base "+
+				"(UNPINNED - no authenticity check)\n", opts.Name)
 	}
 	return dest, nil
 }
@@ -320,7 +352,9 @@ func finishFetch(opts FetchOptions, spec EvalImageSpec, dest, gotHash, expected 
 // downloadVerified streams url to dest.part while hashing, then atomically
 // renames to dest and writes a .sha256 integrity sidecar. Returns the hash and
 // byte count.
-func downloadVerified(ctx context.Context, url, dest string, progress io.Writer) (string, int64, error) {
+func downloadVerified(
+	ctx context.Context, url, dest string, progress io.Writer,
+) (string, int64, error) {
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
 	if err != nil {
 		return "", 0, err

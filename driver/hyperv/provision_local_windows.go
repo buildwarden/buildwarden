@@ -39,7 +39,9 @@ func newLocalProvisioner(verbose bool) Provisioner {
 // in NetworkResources.NATName (Reused reflects which path was taken), and the
 // caller attaches the relay's upstream NIC to that name. It is safe to call
 // repeatedly: existing resources are verified rather than recreated.
-func (p *localProvisioner) EnsureNetwork(ctx context.Context, spec NetworkSpec) (*NetworkResources, error) {
+func (p *localProvisioner) EnsureNetwork(
+	ctx context.Context, spec NetworkSpec,
+) (*NetworkResources, error) {
 	if spec.SwitchName == "" {
 		return nil, fmt.Errorf("EnsureNetwork: empty switch name")
 	}
@@ -74,13 +76,16 @@ if (-not $build) {
 # is shared egress plumbing, not the isolation boundary (that is the Private
 # switch above). Only stand up a per-build NAT when none owns the prefix.
 $reused = 0
-$existingNat = Get-NetNat -ErrorAction SilentlyContinue | Where-Object { $_.InternalIPInterfaceAddressPrefix -eq '%[5]s' }
+$existingNat = Get-NetNat -ErrorAction SilentlyContinue |
+    Where-Object { $_.InternalIPInterfaceAddressPrefix -eq '%[5]s' }
 if ($existingNat) {
     $natName = $existingNat.Name
     $reused = 1
     $natSw = Get-VMSwitch -Name $natName -ErrorAction SilentlyContinue
     if (-not $natSw) {
-        throw "a NAT '$natName' owns %[5]s but its vSwitch is missing; remove the stale NAT (elevated: Remove-NetNat -Name $natName) or re-run 'warden setup --driver hyperv'"
+        throw "a NAT '$natName' owns %[5]s but its vSwitch is missing; " +
+            "remove the stale NAT (elevated: Remove-NetNat -Name $natName) " +
+            "or re-run 'warden setup --driver hyperv'"
     }
 } else {
     $natName = '%[2]s'
@@ -95,7 +100,8 @@ if ($existingNat) {
 # Host gateway IP on the NAT switch's host vNIC (idempotent; scoped to the alias
 # so a reused NAT that already has it is left untouched).
 $alias = "vEthernet ($natName)"
-if (-not (Get-NetIPAddress -InterfaceAlias $alias -IPAddress '%[3]s' -ErrorAction SilentlyContinue)) {
+$hasIP = Get-NetIPAddress -InterfaceAlias $alias -IPAddress '%[3]s' -ErrorAction SilentlyContinue
+if (-not $hasIP) {
     New-NetIPAddress -IPAddress '%[3]s' -PrefixLength %[4]d -InterfaceAlias $alias | Out-Null
 }
 
@@ -116,9 +122,12 @@ if ($reused -eq 0 -and -not (Get-NetNat -Name $natName -ErrorAction SilentlyCont
 	}
 	chosenNAT, reused := parseEnsureNetworkOutput(out)
 	if chosenNAT == "" {
-		return nil, fmt.Errorf("EnsureNetwork: could not parse NAT switch from output: %q", strings.TrimSpace(out))
+		return nil, fmt.Errorf(
+			"EnsureNetwork: could not parse NAT switch from output: %q",
+			strings.TrimSpace(out))
 	}
-	return &NetworkResources{BuildSwitch: spec.SwitchName, NATName: chosenNAT, Reused: reused}, nil
+	return &NetworkResources{
+		BuildSwitch: spec.SwitchName, NATName: chosenNAT, Reused: reused}, nil
 }
 
 // parseEnsureNetworkOutput extracts the chosen NAT switch name and reuse flag
@@ -167,9 +176,10 @@ Remove-VMSwitch -Name '%[1]s' -Force -ErrorAction SilentlyContinue
 // correctness (a crash or manual edit can silently weaken isolation).
 func (p *localProvisioner) VerifyNetwork(ctx context.Context, switchName string) error {
 	name := psEscapeSingle(switchName)
-	out, err := runPS(fmt.Sprintf(
-		`$s = Get-VMSwitch -Name '%[1]s' -ErrorAction SilentlyContinue; if (-not $s) { 'missing' } else { $s.SwitchType }`,
-		name))
+	out, err := runPS(fmt.Sprintf(`
+$s = Get-VMSwitch -Name '%[1]s' -ErrorAction SilentlyContinue
+if (-not $s) { 'missing' } else { $s.SwitchType }
+`, name))
 	if err != nil {
 		return fmt.Errorf("VerifyNetwork: %w", err)
 	}
@@ -177,9 +187,13 @@ func (p *localProvisioner) VerifyNetwork(ctx context.Context, switchName string)
 	case "Private":
 		return nil
 	case "missing":
-		return fmt.Errorf("build switch %q is missing; run `warden setup --driver hyperv`", switchName)
+		return fmt.Errorf(
+			"build switch %q is missing; run `warden setup --driver hyperv`",
+			switchName)
 	default:
-		return fmt.Errorf("build switch %q is %s, expected Private (isolation compromised)", switchName, strings.TrimSpace(out))
+		return fmt.Errorf(
+			"build switch %q is %s, expected Private (isolation compromised)",
+			switchName, strings.TrimSpace(out))
 	}
 }
 
@@ -210,10 +224,12 @@ func (p *localProvisioner) CreateVM(ctx context.Context, spec VMSpec) (*VMHandle
 	var b strings.Builder
 	b.WriteString("$ErrorActionPreference='Stop'\n")
 	if spec.VHDXPath != "" {
-		fmt.Fprintf(&b, "New-VM -Name '%s' -Generation %d -MemoryStartupBytes %dMB -VHDPath '%s'",
+		fmt.Fprintf(&b, "New-VM -Name '%s' -Generation %d "+
+			"-MemoryStartupBytes %dMB -VHDPath '%s'",
 			name, gen, mem, psEscapeSingle(spec.VHDXPath))
 	} else {
-		fmt.Fprintf(&b, "New-VM -Name '%s' -Generation %d -MemoryStartupBytes %dMB -NoVHD", name, gen, mem)
+		fmt.Fprintf(&b, "New-VM -Name '%s' -Generation %d "+
+			"-MemoryStartupBytes %dMB -NoVHD", name, gen, mem)
 	}
 	if spec.SwitchName != "" {
 		fmt.Fprintf(&b, " -SwitchName '%s'", psEscapeSingle(spec.SwitchName))
@@ -222,25 +238,30 @@ func (p *localProvisioner) CreateVM(ctx context.Context, spec VMSpec) (*VMHandle
 	// Ephemeral build VM: no automatic checkpoints (they spawn an .avhdx layer
 	// on top of the overlay, complicating teardown and disk inspection). Matches
 	// the relay VM's config.
-	fmt.Fprintf(&b, "Set-VM -Name '%s' -AutomaticCheckpointsEnabled $false -CheckpointType Disabled\n", name)
+	fmt.Fprintf(&b, "Set-VM -Name '%s' -AutomaticCheckpointsEnabled $false "+
+		"-CheckpointType Disabled\n", name)
 	fmt.Fprintf(&b, "Set-VMProcessor -VMName '%s' -Count %d\n", name, cpus)
 	if spec.SeedVHDX != "" {
-		fmt.Fprintf(&b, "Add-VMHardDiskDrive -VMName '%s' -Path '%s'\n", name, psEscapeSingle(spec.SeedVHDX))
+		fmt.Fprintf(&b, "Add-VMHardDiskDrive -VMName '%s' -Path '%s'\n",
+			name, psEscapeSingle(spec.SeedVHDX))
 	}
 	if spec.SeedISO != "" {
-		fmt.Fprintf(&b, "Add-VMDvdDrive -VMName '%s' -Path '%s'\n", name, psEscapeSingle(spec.SeedISO))
+		fmt.Fprintf(&b, "Add-VMDvdDrive -VMName '%s' -Path '%s'\n",
+			name, psEscapeSingle(spec.SeedISO))
 	}
 	// COM1 -> host named pipe (Gen2 supports Set-VMComPort): the guest bootstrap
 	// echoes progress here for host-visible diagnostics without mounting the disk.
 	if spec.COMPipePath != "" {
-		fmt.Fprintf(&b, "Set-VMComPort -VMName '%s' -Number 1 -Path '%s'\n", name, psEscapeSingle(spec.COMPipePath))
+		fmt.Fprintf(&b, "Set-VMComPort -VMName '%s' -Number 1 -Path '%s'\n",
+			name, psEscapeSingle(spec.COMPipePath))
 	}
 	if gen == 2 {
 		tmpl := "MicrosoftUEFICertificateAuthority" // Linux guests
 		if spec.IsWindows {
 			tmpl = "MicrosoftWindows"
 		}
-		fmt.Fprintf(&b, "Set-VMFirmware -VMName '%s' -SecureBootTemplate '%s'\n", name, tmpl)
+		fmt.Fprintf(&b, "Set-VMFirmware -VMName '%s' -SecureBootTemplate '%s'\n",
+			name, tmpl)
 	}
 	b.WriteString("'OK'\n")
 
@@ -256,7 +277,9 @@ func (p *localProvisioner) CreateVM(ctx context.Context, spec VMSpec) (*VMHandle
 // PowerShell is assembled by buildRelayVMScript (pure, unit-tested); this method
 // only runs it. See that builder for the rationale behind each difference from
 // CreateVM.
-func (p *localProvisioner) CreateRelayVM(ctx context.Context, spec RelayVMSpec) (*VMHandle, error) {
+func (p *localProvisioner) CreateRelayVM(
+	ctx context.Context, spec RelayVMSpec,
+) (*VMHandle, error) {
 	script, err := buildRelayVMScript(spec)
 	if err != nil {
 		return nil, err
@@ -268,14 +291,16 @@ func (p *localProvisioner) CreateRelayVM(ctx context.Context, spec RelayVMSpec) 
 }
 
 func (p *localProvisioner) StartVM(ctx context.Context, name string) error {
-	if _, err := runPS(fmt.Sprintf("Start-VM -Name '%s'", psEscapeSingle(name))); err != nil {
+	if _, err := runPS(
+		fmt.Sprintf("Start-VM -Name '%s'", psEscapeSingle(name))); err != nil {
 		return fmt.Errorf("StartVM %q: %w", name, err)
 	}
 	return nil
 }
 
 func (p *localProvisioner) StopVM(ctx context.Context, name string) error {
-	if _, err := runPS(fmt.Sprintf("Stop-VM -Name '%s' -Force -TurnOff", psEscapeSingle(name))); err != nil {
+	if _, err := runPS(fmt.Sprintf(
+		"Stop-VM -Name '%s' -Force -TurnOff", psEscapeSingle(name))); err != nil {
 		return fmt.Errorf("StopVM %q: %w", name, err)
 	}
 	return nil

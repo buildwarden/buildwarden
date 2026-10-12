@@ -117,11 +117,13 @@ func init() {
 		f.IntVar(&flagMemoryMB, "memory", 0,
 			"build VM memory in MiB (VM drivers; default per driver)")
 		f.StringVar(&flagNetwork, "network", "",
-			"pre-provisioned network to reuse (hyperv: the durable switch from `warden setup`)")
+			"pre-provisioned network to reuse "+
+				"(hyperv: the durable switch from `warden setup`)")
 		f.BoolVar(&flagKeepVMs, "keep-vms", false,
 			"leave VMs, disks and the work dir in place for inspection (VM drivers)")
 		f.StringVar(&flagTempDir, "tmpdir", "",
-			"directory to create each build's private work dir in (default: the OS temp dir)")
+			"directory to create each build's private work dir in "+
+				"(default: the OS temp dir)")
 	}
 	buildCmd.Flags().BoolVarP(&flagQuiet, "quiet", "q", false,
 		"do not echo the guest build console (still captured to build-output.log)")
@@ -132,12 +134,13 @@ func init() {
 
 func main() {
 	rootCmd.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
-		return driver.Fixable(fmt.Sprintf("see '%s --help'", c.CommandPath()), "%v", err)
+		help := fmt.Sprintf("see '%s --help'", c.CommandPath())
+		return driver.Fixable(help, "%v", err)
 	})
 	fixableArgs(rootCmd)
 
 	if err := rootCmd.Execute(); err != nil {
-		var es exitStatus
+		var es exitStatusError
 		if errors.As(err, &es) {
 			os.Exit(int(es))
 		}
@@ -161,7 +164,8 @@ func fixableArgs(c *cobra.Command) {
 	if args := c.Args; args != nil {
 		c.Args = func(cmd *cobra.Command, a []string) error {
 			if err := args(cmd, a); err != nil {
-				return driver.Fixable(fmt.Sprintf("see '%s --help'", cmd.CommandPath()), "%v", err)
+				help := fmt.Sprintf("see '%s --help'", cmd.CommandPath())
+				return driver.Fixable(help, "%v", err)
 			}
 			return nil
 		}
@@ -209,7 +213,8 @@ func validateGuestOS(guestOS, driverName string) error {
 	}
 	if guestOS == "windows" && driverName != "qemu" && driverName != "hyperv" {
 		return driver.Fixable("",
-			"--guest-os windows is currently only supported by --driver qemu or --driver hyperv")
+			"--guest-os windows is currently only supported by "+
+				"--driver qemu or --driver hyperv")
 	}
 	return nil
 }
@@ -255,57 +260,20 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 		return nil, err
 	}
 
-	capture := flagCapture
-	if capture == "" {
-		capture = cfg.Build.Capture
-	}
-	if err := validateCapture(capture); err != nil {
+	capture, err := resolveCapture(cfg)
+	if err != nil {
 		return nil, err
 	}
-	outputDir := flagOutput
-	if outputDir == "" {
-		outputDir = cfg.Build.OutputDir
+	timeout, err := resolveTimeout()
+	if err != nil {
+		return nil, err
 	}
-	if outputDir == "" {
-		outputDir = "warden-output"
+	tempDir, err := resolveTempDir(cfg)
+	if err != nil {
+		return nil, err
 	}
-	compress := !flagNoCompress
-	if cfg.Build.Compress != nil && !*cfg.Build.Compress {
-		compress = false
-	}
-	systemCA := true
-	if cfg.Relay.SystemCABundle != nil {
-		systemCA = *cfg.Relay.SystemCABundle
-	}
-	var timeout time.Duration
-	if flagTimeout != "" {
-		var err error
-		if timeout, err = time.ParseDuration(flagTimeout); err != nil {
-			return nil, driver.Fixable("give a Go duration such as 30s, 10m or 1h", "invalid --timeout: %v", err)
-		}
-	}
+
 	isVM := d == "qemu" || d == "vz" || d == "hyperv"
-	vmOr := func(flag, conf int) int {
-		if flag != 0 || !isVM {
-			return flag
-		}
-		return conf
-	}
-	network := flagNetwork
-	if network == "" && d == "hyperv" {
-		network = cfg.VM.Network
-	}
-	tempDir := flagTempDir
-	if tempDir == "" {
-		tempDir = cfg.Build.TempDir
-	}
-	if tempDir != "" {
-		abs, err := filepath.Abs(tempDir)
-		if err != nil {
-			return nil, driver.Fixable("", "invalid --tmpdir: %v", err)
-		}
-		tempDir = abs
-	}
 
 	path := ""
 	if len(args) > 0 {
@@ -322,23 +290,112 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 		Image:            flagImage,
 		GuestOS:          flagGuestOS,
 		Containerfile:    dockerfile,
-		OutputDir:        outputDir,
+		OutputDir:        resolveOutputDir(cfg),
 		CaptureMode:      capture,
-		Compress:         compress,
+		Compress:         resolveCompress(cfg),
 		Quiet:            flagQuiet,
 		Timeout:          timeout,
-		CPUs:             vmOr(flagCPUs, cfg.VM.CPUs),
-		MemoryMB:         vmOr(flagMemoryMB, cfg.VM.MemoryMB),
-		Network:          network,
+		CPUs:             vmFlagOr(flagCPUs, cfg.VM.CPUs, isVM),
+		MemoryMB:         vmFlagOr(flagMemoryMB, cfg.VM.MemoryMB, isVM),
+		Network:          resolveNetwork(cfg, d),
 		KeepVMs:          flagKeepVMs,
 		TempDir:          tempDir,
 		RelayImage:       cfg.Runtime.RelayImage,
 		UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
-		UpstreamSystemCA: systemCA,
+		UpstreamSystemCA: resolveSystemCA(cfg),
 		Stdin:            os.Stdin,
 		Stdout:           os.Stdout,
 		Stderr:           os.Stderr,
 	}, nil
+}
+
+// resolveCapture applies the flag, then warden.toml, then validates the mode.
+func resolveCapture(cfg *Config) (string, error) {
+	capture := flagCapture
+	if capture == "" {
+		capture = cfg.Build.Capture
+	}
+	if err := validateCapture(capture); err != nil {
+		return "", err
+	}
+	return capture, nil
+}
+
+// resolveOutputDir applies the flag, then warden.toml, then the default.
+func resolveOutputDir(cfg *Config) string {
+	if flagOutput != "" {
+		return flagOutput
+	}
+	if cfg.Build.OutputDir != "" {
+		return cfg.Build.OutputDir
+	}
+	return "warden-output"
+}
+
+// resolveCompress is on by default; an explicit compress=false in config wins
+// over the (negated) --no-compress flag's default.
+func resolveCompress(cfg *Config) bool {
+	if cfg.Build.Compress != nil && !*cfg.Build.Compress {
+		return false
+	}
+	return !flagNoCompress
+}
+
+// resolveSystemCA defaults to trusting the system CA bundle unless config opts
+// out.
+func resolveSystemCA(cfg *Config) bool {
+	if cfg.Relay.SystemCABundle != nil {
+		return *cfg.Relay.SystemCABundle
+	}
+	return true
+}
+
+// resolveTimeout parses the --timeout flag; empty means no timeout.
+func resolveTimeout() (time.Duration, error) {
+	if flagTimeout == "" {
+		return 0, nil
+	}
+	timeout, err := time.ParseDuration(flagTimeout)
+	if err != nil {
+		return 0, driver.Fixable(
+			"give a Go duration such as 30s, 10m or 1h",
+			"invalid --timeout: %v", err)
+	}
+	return timeout, nil
+}
+
+// resolveTempDir applies the flag, then warden.toml, and makes it absolute.
+func resolveTempDir(cfg *Config) (string, error) {
+	tempDir := flagTempDir
+	if tempDir == "" {
+		tempDir = cfg.Build.TempDir
+	}
+	if tempDir == "" {
+		return "", nil
+	}
+	abs, err := filepath.Abs(tempDir)
+	if err != nil {
+		return "", driver.Fixable("", "invalid --tmpdir: %v", err)
+	}
+	return abs, nil
+}
+
+// resolveNetwork reuses a pre-provisioned network; only hyperv falls back to
+// the [vm] network when --network is unset.
+func resolveNetwork(cfg *Config, d string) string {
+	if flagNetwork == "" && d == "hyperv" {
+		return cfg.VM.Network
+	}
+	return flagNetwork
+}
+
+// vmFlagOr returns flag when set or when the driver is not a VM driver;
+// otherwise the config default (VM-only flags default per driver).
+func vmFlagOr(flag, conf int, isVM bool) int {
+	if flag != 0 || !isVM {
+		return flag
+	}
+	return conf
 }
 
 func buildContext() (context.Context, context.CancelFunc) {
@@ -404,24 +461,26 @@ func runShell(_ *cobra.Command, args []string) error {
 
 	if err := d.Exec(ctx, req); err != nil {
 		if err == driver.ErrExecNotSupported {
-			return driver.Fixable("use warden build, or --driver container for an interactive shell",
+			return driver.Fixable(
+				"use warden build, or --driver container for an interactive shell",
 				"warden shell is not supported by --driver %s", d.Name())
 		}
 		// Leaving the shell with a non-zero status is the user's own
 		// result: pass it through, quietly.
 		var ee *driver.ExitError
 		if errors.As(err, &ee) {
-			return exitStatus(ee.Code)
+			return exitStatusError(ee.Code)
 		}
 		return err
 	}
 	return nil
 }
 
-// exitStatus ends warden with that exit code, the outcome already reported.
-type exitStatus int
+// exitStatusError ends warden with that exit code, the outcome already
+// reported.
+type exitStatusError int
 
-func (e exitStatus) Error() string { return fmt.Sprintf("exit status %d", int(e)) }
+func (e exitStatusError) Error() string { return fmt.Sprintf("exit status %d", int(e)) }
 
 // Exit codes for build outcomes the user caused rather than warden: a
 // --timeout expiring (as timeout(1) reports it) and an interrupt (128+SIGINT).
@@ -434,7 +493,9 @@ const (
 // script's non-zero exit, --timeout, Ctrl-C) are reported plainly and warden
 // exits with a matching code; anything else is a warden or environment
 // error, reported with the issue link.
-func buildFailed(ctx context.Context, err error, req *driver.BuildRequest, elapsed time.Duration) error {
+func buildFailed(
+	ctx context.Context, err error, req *driver.BuildRequest, elapsed time.Duration,
+) error {
 	var ee *driver.ExitError
 	switch {
 	case errors.As(err, &ee):
@@ -443,13 +504,14 @@ func buildFailed(ctx context.Context, err error, req *driver.BuildRequest, elaps
 			msg += ": " + ee.Detail
 		}
 		fmt.Fprintln(os.Stderr, msg)
-		return exitStatus(ee.Code)
+		return exitStatusError(ee.Code)
 	case req.Timeout > 0 && elapsed >= req.Timeout && errors.Is(err, context.DeadlineExceeded):
-		fmt.Fprintf(os.Stderr, "warden: build FAILED: timed out after %s (--timeout)\n", req.Timeout)
-		return exitStatus(exitTimedOut)
+		fmt.Fprintf(os.Stderr,
+			"warden: build FAILED: timed out after %s (--timeout)\n", req.Timeout)
+		return exitStatusError(exitTimedOut)
 	case ctx.Err() != nil:
 		fmt.Fprintln(os.Stderr, "warden: build interrupted")
-		return exitStatus(exitInterrupted)
+		return exitStatusError(exitInterrupted)
 	}
 	fmt.Fprintln(os.Stderr, "warden: build FAILED")
 	return err

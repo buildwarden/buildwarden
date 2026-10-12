@@ -74,7 +74,9 @@ func StartSession(cfg SessionConfig) (*Session, error) {
 	}
 	var logf func(string, ...any)
 	if cfg.Verbose {
-		logf = func(f string, a ...any) { fmt.Fprintf(os.Stderr, "[warden] "+f+"\n", a...) }
+		logf = func(f string, a ...any) {
+			fmt.Fprintf(os.Stderr, "[warden] "+f+"\n", a...)
+		}
 	}
 	col, err := collector.New(collector.Config{
 		OutputDir:       cfg.OutputDir,
@@ -129,11 +131,14 @@ func (s *Session) ClaimRelay(ctx context.Context, addr, claimToken string,
 	select {
 	case <-s.Collector.Ready():
 	case <-end:
-		return relaycfg.Identity{}, fmt.Errorf("relay tunnel closed before the relay was ready")
+		return relaycfg.Identity{},
+			fmt.Errorf("relay tunnel closed before the relay was ready")
 	case <-ctx.Done():
-		return relaycfg.Identity{}, fmt.Errorf("relay was claimed but never reported ready")
+		return relaycfg.Identity{},
+			fmt.Errorf("relay was claimed but never reported ready")
 	}
-	if err := os.WriteFile(filepath.Join(s.outputDir, "ca.cert.pem"), []byte(id.CACert), 0o644); err != nil {
+	caPath := filepath.Join(s.outputDir, "ca.cert.pem")
+	if err := os.WriteFile(caPath, []byte(id.CACert), 0o644); err != nil {
 		return relaycfg.Identity{}, err
 	}
 	return id, nil
@@ -160,7 +165,7 @@ func (s *Session) Wait(ctx context.Context) error {
 		if sig, ok := s.Collector.Status(); ok {
 			return exitErr(sig) // completion raced the tunnel teardown
 		}
-		var ue *collector.ErrUnresponsive
+		var ue *collector.UnresponsiveError
 		switch {
 		case errors.As(err, &ue):
 			return fmt.Errorf("build failed: %w", err)
@@ -198,7 +203,14 @@ func exitErr(sig collector.CompletionSignal) error {
 func (s *Session) Close() {
 	if s.tunnel != nil {
 		_ = s.tunnel.Close()
+		// Let the tunnel's server wind down before the collector's
+		// directory handles go away under any request it is finishing.
+		select {
+		case <-s.tunnelEnd:
+		case <-time.After(2 * time.Second):
+		}
 	}
+	_ = s.Collector.Close()
 }
 
 // ConsoleTee is where a guest's live build console goes: req.Stdout (or
@@ -294,7 +306,11 @@ func FreeLoopbackPort() (int, error) {
 		return 0, err
 	}
 	defer ln.Close()
-	return ln.Addr().(*net.TCPAddr).Port, nil
+	addr, ok := ln.Addr().(*net.TCPAddr)
+	if !ok {
+		return 0, fmt.Errorf("unexpected listener address type %T", ln.Addr())
+	}
+	return addr.Port, nil
 }
 
 func firstNonEmpty(a, b string) string {

@@ -184,77 +184,24 @@ func execScript(path, gateway string) int {
 	cmd.Stderr = w
 
 	// Ensure warden-io is on PATH for the build script (e.g. `warden-io post`).
-	// Match the PATH key case-INSENSITIVELY (Windows exposes it as "Path=") and
-	// join with the OS path-list separator (';' on Windows, ':' elsewhere); a
-	// hardcoded ":" + "PATH=" silently no-ops on Windows. Append a PATH if none
-	// exists.
-	env := os.Environ()
-	if self, err := os.Executable(); err == nil {
-		selfDir := filepath.Dir(self)
-		sep := string(os.PathListSeparator)
-		found := false
-		for i, e := range env {
-			if len(e) >= 5 && strings.EqualFold(e[:5], "PATH=") {
-				env[i] = e[:5] + selfDir + sep + e[5:]
-				found = true
-				break
-			}
-		}
-		if !found {
-			env = append(env, "PATH="+selfDir)
-		}
-	}
-	cmd.Env = env
+	cmd.Env = buildScriptEnv()
 
 	if err := cmd.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "warden-io: exec: %s\n", err)
 		return 1
 	}
 
-	// Stream build output to the collector as it is produced. Reading pr keeps
-	// the build's stdout/stderr flowing: io.Pipe is unbuffered, so the build
-	// blocks only for as long as one chunk POST takes against the local relay
-	// link. If that link fails mid-build the reader keeps draining (and
-	// discarding) so the build never hangs on a dead relay; the tail is then
-	// only in the guest console, which is logged.
+	// Stream build output to the collector as it is produced; see
+	// streamBuildOutput for the back-pressure and dead-link behaviour.
 	streamDone := make(chan struct{})
 	go func() {
 		defer close(streamDone)
-		client := &http.Client{Timeout: 30 * time.Second}
-		buf := make([]byte, 32*1024)
-		deliver := gateway != ""
-		for {
-			n, rerr := pr.Read(buf)
-			if n > 0 && deliver {
-				if !postBuildOutputChunk(client, gateway, buf[:n]) {
-					deliver = false
-					fmt.Fprintln(os.Stderr, "warden-io: output streaming disabled after a relay-link error; remaining build output stays in the guest console only")
-				}
-			}
-			if rerr != nil {
-				return
-			}
-		}
+		streamBuildOutput(pr, gateway)
 	}()
 
-	// Send heartbeats while build runs
+	// Send heartbeats while the build runs.
 	done := make(chan struct{})
-	go func() {
-		client := &http.Client{Timeout: 2 * time.Second}
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-done:
-				return
-			case <-ticker.C:
-				resp, err := client.Get("http://artifacts/heartbeat")
-				if err == nil {
-					resp.Body.Close()
-				}
-			}
-		}
-	}()
+	go heartbeat(done)
 
 	err := cmd.Wait()
 	close(done)
@@ -274,6 +221,76 @@ func execScript(path, gateway string) int {
 		return 1
 	}
 	return 0
+}
+
+// buildScriptEnv returns the build script's environment with warden-io's own
+// directory prepended to PATH, so the script can call `warden-io post` etc. The
+// PATH key is matched case-INSENSITIVELY (Windows exposes it as "Path=") and
+// joined with the OS path-list separator (';' on Windows, ':' elsewhere); a
+// hardcoded ":" + "PATH=" would silently no-op on Windows. A PATH is appended
+// if none exists, and the environment is left untouched if the executable path
+// cannot be resolved.
+func buildScriptEnv() []string {
+	env := os.Environ()
+	self, err := os.Executable()
+	if err != nil {
+		return env
+	}
+	selfDir := filepath.Dir(self)
+	sep := string(os.PathListSeparator)
+	for i, e := range env {
+		if len(e) >= 5 && strings.EqualFold(e[:5], "PATH=") {
+			env[i] = e[:5] + selfDir + sep + e[5:]
+			return env
+		}
+	}
+	return append(env, "PATH="+selfDir)
+}
+
+// streamBuildOutput reads build output from pr and POSTs it to the collector in
+// chunks until EOF. Reading pr keeps the build's stdout/stderr flowing: io.Pipe
+// is unbuffered, so the build blocks only for as long as one chunk POST takes
+// against the local relay link. If that link fails mid-build the reader keeps
+// draining (and discarding) so the build never hangs on a dead relay; the tail
+// is then only in the guest console, which is logged.
+func streamBuildOutput(pr *io.PipeReader, gateway string) {
+	const disabledMsg = "warden-io: output streaming disabled after a " +
+		"relay-link error; remaining build output stays in the " +
+		"guest console only"
+	client := &http.Client{Timeout: 30 * time.Second}
+	buf := make([]byte, 32*1024)
+	deliver := gateway != ""
+	for {
+		n, rerr := pr.Read(buf)
+		if n > 0 && deliver {
+			if !postBuildOutputChunk(client, gateway, buf[:n]) {
+				deliver = false
+				fmt.Fprintln(os.Stderr, disabledMsg)
+			}
+		}
+		if rerr != nil {
+			return
+		}
+	}
+}
+
+// heartbeat pings the relay every 2s until done is closed, so the relay knows
+// the build is still alive.
+func heartbeat(done <-chan struct{}) {
+	client := &http.Client{Timeout: 2 * time.Second}
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-done:
+			return
+		case <-ticker.C:
+			resp, err := client.Get("http://artifacts/heartbeat")
+			if err == nil {
+				resp.Body.Close()
+			}
+		}
+	}
 }
 
 // postBuildOutputChunk streams one chunk of build output to the relay's

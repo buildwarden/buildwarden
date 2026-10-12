@@ -50,17 +50,22 @@ func RunSetup(ctx context.Context, w io.Writer, opts SetupOptions) error {
 
 	caps := Detect(opts.SwitchName)
 	if !caps.Supported {
-		return driver.Fixable("", "hyperv setup requires a Windows host (current OS: %s)", caps.Platform)
+		return driver.Fixable(
+			"", "hyperv setup requires a Windows host (current OS: %s)", caps.Platform)
 	}
 	if !caps.HypervisorPresent || !caps.HyperVFeature {
 		return driver.Fixable(
-			"enable it from an elevated PowerShell: Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All, then reboot",
+			"enable it from an elevated PowerShell: "+
+				"Enable-WindowsOptionalFeature -Online -FeatureName "+
+				"Microsoft-Hyper-V -All, then reboot",
 			"Hyper-V is not available on this host")
 	}
 	if caps.Resolve(OpNetworkStandup) == OutcomeBlocked {
 		return driver.Fixable(
-			"re-run `warden setup --driver hyperv` from a terminal launched with Run as administrator",
-			"network setup needs full Administrator rights, and this process is not elevated")
+			"re-run `warden setup --driver hyperv` from a terminal "+
+				"launched with Run as administrator",
+			"network setup needs full Administrator rights, and this "+
+				"process is not elevated")
 	}
 
 	p := newLocalProvisioner(opts.Verbose)
@@ -76,11 +81,14 @@ func RunSetup(ctx context.Context, w io.Writer, opts SetupOptions) error {
 
 	fmt.Fprintln(w, "Durable dev network ready.")
 	fmt.Fprintf(w, "  build switch (Private) ... %s\n", res.BuildSwitch)
-	fmt.Fprintf(w, "  NAT switch (Internal) .... %s  (%s, host %s)\n", res.NATName, opts.NATPrefix, opts.HostIP)
-	fmt.Fprintln(w, "\nThis durable network is for NON-elevated builds (Hyper-V Administrators):")
+	fmt.Fprintf(w, "  NAT switch (Internal) .... %s  (%s, host %s)\n",
+		res.NATName, opts.NATPrefix, opts.HostIP)
+	fmt.Fprintln(w,
+		"\nThis durable network is for NON-elevated builds (Hyper-V Administrators):")
 	fmt.Fprintf(w, "  warden build --driver hyperv --network %s\n", opts.SwitchName)
 	fmt.Fprintf(w, "  (or set network = \"%s\" under [vm] in warden.toml)\n", opts.SwitchName)
-	fmt.Fprintln(w, "Elevated builds ignore it and stand up a fresh isolated network per build.")
+	fmt.Fprintln(w,
+		"Elevated builds ignore it and stand up a fresh isolated network per build.")
 	return nil
 }
 

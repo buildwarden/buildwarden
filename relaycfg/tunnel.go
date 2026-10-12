@@ -32,7 +32,8 @@ func acceptTunnel(w http.ResponseWriter) (http.RoundTripper, error) {
 		conn.Close()
 		return nil, err
 	}
-	cc, err := (&http2.Transport{AllowHTTP: true}).NewClientConn(&bufferedConn{conn, rw.Reader})
+	cc, err := (&http2.Transport{AllowHTTP: true}).NewClientConn(
+		&bufferedConn{conn, rw.Reader})
 	if err != nil {
 		conn.Close()
 		return nil, err
@@ -45,14 +46,17 @@ func acceptTunnel(w http.ResponseWriter) (http.RoundTripper, error) {
 // and serves handler (the collector) to the relay over it as HTTP/2. The
 // returned channel is closed when the tunnel ends; closing the returned conn
 // tears it down.
-func OpenTunnel(ctx context.Context, addr, token string, handler http.Handler) (net.Conn, <-chan struct{}, error) {
+func OpenTunnel(
+	ctx context.Context, addr, token string, handler http.Handler,
+) (net.Conn, <-chan struct{}, error) {
 	var lastErr error
 	for {
 		conn, err := dialTunnel(ctx, addr, token)
 		if err == nil {
 			done := make(chan struct{})
 			go func() {
-				(&http2.Server{}).ServeConn(conn, &http2.ServeConnOpts{Handler: handler})
+				(&http2.Server{}).ServeConn(
+					conn, &http2.ServeConnOpts{Handler: handler})
 				close(done)
 			}()
 			return conn, done, nil
@@ -62,11 +66,13 @@ func OpenTunnel(ctx context.Context, addr, token string, handler http.Handler) (
 		}
 		lastErr = err
 		select {
-		case <-ctx.Done():
-			return nil, nil, fmt.Errorf("relaycfg: relay at %s never accepted the tunnel: %w (last error: %v)",
-				addr, ctx.Err(), lastErr)
 		case <-time.After(250 * time.Millisecond):
+			continue
+		case <-ctx.Done():
 		}
+		return nil, nil, fmt.Errorf(
+			"relaycfg: relay at %s never accepted the tunnel: %w (last error: %v)",
+			addr, ctx.Err(), lastErr)
 	}
 }
 
@@ -81,8 +87,10 @@ func dialTunnel(ctx context.Context, addr, token string) (net.Conn, error) {
 	if token != "" {
 		auth = "Authorization: Bearer " + token + "\r\n"
 	}
-	if _, err := io.WriteString(conn, "POST "+tunnelPath+" HTTP/1.1\r\nHost: relay\r\n"+auth+
-		"Connection: Upgrade\r\nUpgrade: "+tunnelUpgrade+"\r\nContent-Length: 0\r\n\r\n"); err != nil {
+	req := "POST " + tunnelPath + " HTTP/1.1\r\nHost: relay\r\n" + auth +
+		"Connection: Upgrade\r\nUpgrade: " + tunnelUpgrade +
+		"\r\nContent-Length: 0\r\n\r\n"
+	if _, err := io.WriteString(conn, req); err != nil {
 		conn.Close()
 		return nil, err
 	}

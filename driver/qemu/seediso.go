@@ -273,14 +273,14 @@ func buildISO9660(files []fileEntry, volumeID string) []byte {
 
 	// --- Primary Volume Descriptor (sector 16) ---
 	pvd := buf[16*sectorSize : 17*sectorSize]
-	pvd[0] = 1    // type: primary
+	pvd[0] = 1 // type: primary
 	copy(pvd[1:6], "CD001")
-	pvd[6] = 1    // version
-	padRight(pvd[8:40], " ", 32)        // system id
-	padRight(pvd[40:72], volumeID, 32)  // volume id
+	pvd[6] = 1                         // version
+	padRight(pvd[8:40], " ", 32)       // system id
+	padRight(pvd[40:72], volumeID, 32) // volume id
 	putBothEndian32(pvd[80:88], totalSectors)
-	putBothEndian16(pvd[120:124], 1)    // volume set size
-	putBothEndian16(pvd[124:128], 1)    // volume sequence number
+	putBothEndian16(pvd[120:124], 1) // volume set size
+	putBothEndian16(pvd[124:128], 1) // volume sequence number
 	putBothEndian16(pvd[128:132], sectorSize)
 	// path table size (simplified: 10 bytes for root)
 	putBothEndian32(pvd[132:140], 10)

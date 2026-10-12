@@ -27,7 +27,8 @@ func TestErrorWithFixHasRemedyAndNoIssueLink(t *testing.T) {
 	}
 	l.ErrorWithFix(err, fe.Fix)
 	out := buf.String()
-	for _, want := range []string{"hyperv build: not elevated", "To fix: run it as administrator"} {
+	wants := []string{"hyperv build: not elevated", "To fix: run it as administrator"}
+	for _, want := range wants {
 		if !strings.Contains(out, want) {
 			t.Errorf("output %q lacks %q", out, want)
 		}
@@ -58,7 +59,8 @@ func TestDetectRuntimeExplainsTheFix(t *testing.T) {
 		_, err := DetectRuntime()
 		var fe *driver.FixableError
 		if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "install") {
-			t.Fatalf("DetectRuntime = %v, want a FixableError with an install hint", err)
+			t.Fatalf("DetectRuntime = %v, "+
+				"want a FixableError with an install hint", err)
 		}
 	})
 	t.Run("installed but stopped", func(t *testing.T) {
@@ -66,7 +68,8 @@ func TestDetectRuntimeExplainsTheFix(t *testing.T) {
 		_, err := DetectRuntime()
 		var fe *driver.FixableError
 		if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "finch vm start") {
-			t.Fatalf("DetectRuntime = %v, want a FixableError saying to start finch's VM", err)
+			t.Fatalf("DetectRuntime = %v, want a FixableError saying to "+
+				"start finch's VM", err)
 		}
 	})
 	t.Run("running", func(t *testing.T) {

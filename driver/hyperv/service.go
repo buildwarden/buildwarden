@@ -66,7 +66,8 @@ func handleServiceRequest(ctx context.Context, prov Provisioner, req svcRequest)
 	resp := svcResponse{Version: serviceProtocolVersion}
 	if req.Version != serviceProtocolVersion {
 		resp.Err = fmt.Sprintf(
-			"protocol version mismatch: service speaks %d, client sent %d; reinstall the service (warden hyperv service install)",
+			"protocol version mismatch: service speaks %d, client sent %d; "+
+				"reinstall the service (warden hyperv service install)",
 			serviceProtocolVersion, req.Version)
 		return resp
 	}
@@ -92,7 +93,8 @@ func handleServiceRequest(ctx context.Context, prov Provisioner, req svcRequest)
 		}
 		resp.OK = true
 	default:
-		resp.Err = fmt.Sprintf("unsupported op %q (the pipe delegates network standup only)", req.Op)
+		resp.Err = fmt.Sprintf(
+			"unsupported op %q (the pipe delegates network standup only)", req.Op)
 	}
 	return resp
 }

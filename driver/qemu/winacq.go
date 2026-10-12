@@ -386,9 +386,11 @@ func windowsInstallArgs(
 		id := fmt.Sprintf("cd%d", i)
 		args = append(args,
 			"-drive", fmt.Sprintf(
-				"if=none,id=%s,format=raw,media=cdrom,readonly=on,file=%s", id, iso),
+				"if=none,id=%s,format=raw,media=cdrom,readonly=on,file=%s",
+				id, iso),
 			"-device", fmt.Sprintf(
-				"usb-storage,bus=xhci.0,drive=%s,id=usb%s,bootindex=%d", id, id, i+1),
+				"usb-storage,bus=xhci.0,drive=%s,id=usb%s,bootindex=%d",
+				id, id, i+1),
 		)
 	}
 	// OS install disk on emulated NVMe with bootindex=0. NVMe (stornvme.sys) is

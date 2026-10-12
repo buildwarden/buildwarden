@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"os/signal"
 
@@ -48,7 +49,8 @@ or agent gate.`,
 		out := cmd.OutOrStdout()
 		switch drv := cfg.Runtime.Driver; drv {
 		case "hyperv":
-			if blocked := hyperv.Doctor(out, hyperv.Detect(hypervNetwork(cfg))); blocked {
+			detected := hyperv.Detect(hypervNetwork(cfg))
+			if blocked := hyperv.Doctor(out, detected); blocked {
 				os.Exit(1)
 			}
 			return nil
@@ -91,7 +93,8 @@ Other drivers need no host setup; their base images are prepared with
 		}
 		if cfg.Runtime.Driver != "hyperv" {
 			fmt.Fprintf(cmd.OutOrStdout(),
-				"--driver %s needs no host setup; prepare a base image with 'warden image prepare'\n",
+				"--driver %s needs no host setup; "+
+					"prepare a base image with 'warden image prepare'\n",
 				driverName(cfg))
 			return nil
 		}
@@ -124,7 +127,8 @@ delegated.`,
 func init() {
 	for _, c := range []*cobra.Command{doctorCmd, setupCmd} {
 		c.Flags().StringVar(&flagNetwork, "network", "",
-			"hyperv: durable build switch name (default: [vm] network, then warden-dev)")
+			"hyperv: durable build switch name "+
+				"(default: [vm] network, then warden-dev)")
 	}
 	setupCmd.Flags().StringVar(&flagSetupNATPrefix, "nat-prefix", "",
 		"hyperv: NAT CIDR for relay egress (default 192.168.240.0/20)")
@@ -136,11 +140,9 @@ func init() {
 		Short: "Install and start the privileged helper service (run once, elevated)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := hyperv.InstallService(); err != nil {
-				return fmt.Errorf("hyperv service install: %w", err)
-			}
-			fmt.Fprintln(cmd.OutOrStdout(), "privileged Hyper-V helper installed and started.")
-			return nil
+			return runServiceOp(cmd.OutOrStdout(), "install",
+				"privileged Hyper-V helper installed and started.",
+				hyperv.InstallService)
 		},
 	})
 	hypervServiceCmd.AddCommand(&cobra.Command{
@@ -148,24 +150,21 @@ func init() {
 		Short: "Stop and remove the privileged helper service (elevated)",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
-			if err := hyperv.UninstallService(); err != nil {
-				return fmt.Errorf("hyperv service uninstall: %w", err)
-			}
-			fmt.Fprintln(cmd.OutOrStdout(), "privileged Hyper-V helper removed.")
-			return nil
+			return runServiceOp(cmd.OutOrStdout(), "uninstall",
+				"privileged Hyper-V helper removed.",
+				hyperv.UninstallService)
 		},
 	})
 	hypervServiceCmd.AddCommand(&cobra.Command{
-		Use:   "run",
-		Short: "Run the privileged helper (invoked by the SCM; or in a console to smoke-test)",
-		Args:  cobra.NoArgs,
+		Use: "run",
+		Short: "Run the privileged helper " +
+			"(invoked by the SCM; or in a console to smoke-test)",
+		Args: cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, _ []string) error {
 			ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 			defer stop()
-			if err := hyperv.RunService(ctx); err != nil {
-				return fmt.Errorf("hyperv service run: %w", err)
-			}
-			return nil
+			return runServiceOp(cmd.OutOrStdout(), "run", "",
+				func() error { return hyperv.RunService(ctx) })
 		},
 	})
 	hypervCmd.AddCommand(hypervServiceCmd)
@@ -192,4 +191,18 @@ func driverName(cfg *Config) string {
 		return "container"
 	}
 	return cfg.Runtime.Driver
+}
+
+// runServiceOp runs a privileged-helper lifecycle operation and reports it. The
+// operation is taken as a func value, not called inline, so the always-failing
+// non-Windows stubs are not folded into an always-true error check
+// (staticcheck SA4023); the platform split stays in the hyperv package.
+func runServiceOp(out io.Writer, label, okMsg string, op func() error) error {
+	if err := op(); err != nil {
+		return fmt.Errorf("hyperv service %s: %w", label, err)
+	}
+	if okMsg != "" {
+		fmt.Fprintln(out, okMsg)
+	}
+	return nil
 }

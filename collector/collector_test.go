@@ -45,7 +45,8 @@ func TestOutputTeeForwardsAndPersists(t *testing.T) {
 	srv, dir := newTestServer(t, Config{Token: "t", OutputTee: &tee})
 
 	payload := []byte("hello from build.ps1\nnumpy 2.5.3 OK\n")
-	req, err := http.NewRequest(http.MethodPost, srv.URL+"/v1/output", bytes.NewReader(payload))
+	req, err := http.NewRequest(
+		http.MethodPost, srv.URL+"/v1/output", bytes.NewReader(payload))
 	if err != nil {
 		t.Fatalf("NewRequest: %v", err)
 	}
@@ -313,7 +314,8 @@ func TestCaptureContentAddressed(t *testing.T) {
 	hash := strings.Repeat("ab", 32)
 	body := []byte("captured body")
 	for _, name := range []string{"001-GET-example.com-a", "002-GET-example.com-b?x=1"} {
-		resp := putWithTrailer(t, srv.URL+"/v1/captures/"+url.PathEscape(name), "t", body, hash)
+		resp := putWithTrailer(
+			t, srv.URL+"/v1/captures/"+url.PathEscape(name), "t", body, hash)
 		resp.Body.Close()
 		if resp.StatusCode != http.StatusOK {
 			t.Fatalf("%s: status %d", name, resp.StatusCode)
@@ -364,7 +366,8 @@ func TestContextFileAndListing(t *testing.T) {
 
 	resp, body := get("src/a.txt")
 	if resp.StatusCode != 200 || body != "A" || resp.Header.Get(ContextKindHeader) != "file" {
-		t.Fatalf("file: %d %q %q", resp.StatusCode, body, resp.Header.Get(ContextKindHeader))
+		t.Fatalf("file: %d %q %q", resp.StatusCode, body,
+			resp.Header.Get(ContextKindHeader))
 	}
 	resp, body = get("src/")
 	if resp.Header.Get(ContextKindHeader) != "list" || body != "src/a.txt\nsrc/pkg/b.txt\n" {

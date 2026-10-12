@@ -43,7 +43,8 @@ func stageSeedDir(workDir, arch string, _ *driver.BuildRequest) (string, error) 
 		ProcArch:      unattendProcArch(arch),
 	})
 	for _, name := range []string{"unattend.xml", "Autounattend.xml"} {
-		if err := os.WriteFile(filepath.Join(seedDir, name), []byte(unattend), 0o644); err != nil {
+		if err := os.WriteFile(
+			filepath.Join(seedDir, name), []byte(unattend), 0o644); err != nil {
 			return "", fmt.Errorf("write %s: %w", name, err)
 		}
 	}

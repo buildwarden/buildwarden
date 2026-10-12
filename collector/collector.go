@@ -91,6 +91,12 @@ type Collector struct {
 	completion *CompletionSignal
 	done       chan CompletionSignal
 	doneClosed bool
+
+	// out and context confine every host-disk access: outputs land only
+	// under OutputDir, and context reads stay inside ContextDir, symlinks
+	// included (see store.go). context is nil when there is no context.
+	out     *os.Root
+	context *os.Root
 }
 
 // New creates a Collector, creating OutputDir if needed.
@@ -101,6 +107,17 @@ func New(cfg Config) (*Collector, error) {
 	if err := os.MkdirAll(cfg.OutputDir, 0o755); err != nil {
 		return nil, fmt.Errorf("collector: creating output dir: %w", err)
 	}
+	out, err := os.OpenRoot(cfg.OutputDir)
+	if err != nil {
+		return nil, fmt.Errorf("collector: opening output dir: %w", err)
+	}
+	var context *os.Root
+	if cfg.ContextDir != "" {
+		if context, err = os.OpenRoot(cfg.ContextDir); err != nil {
+			_ = out.Close()
+			return nil, fmt.Errorf("collector: opening build context: %w", err)
+		}
+	}
 	max := cfg.MaxArtifactBytes
 	if max <= 0 {
 		max = defaultMaxArtifactBytes
@@ -110,7 +127,21 @@ func New(cfg Config) (*Collector, error) {
 		maxArtifact: max,
 		ready:       make(chan struct{}),
 		done:        make(chan CompletionSignal, 1),
+		out:         out,
+		context:     context,
 	}, nil
+}
+
+// Close releases the collector's directory handles. Requests after Close
+// fail.
+func (c *Collector) Close() error {
+	err := c.out.Close()
+	if c.context != nil {
+		if cerr := c.context.Close(); err == nil {
+			err = cerr
+		}
+	}
+	return err
 }
 
 // BytesWritten reports the total bytes landed so far.
@@ -169,7 +200,11 @@ func (c *Collector) handleArtifact(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "invalid artifact name", http.StatusBadRequest)
 		return
 	}
-	dst := filepath.Join(c.cfg.OutputDir, "artifacts", filepath.FromSlash(name))
+	dst, err := localPath("artifacts/" + name)
+	if err != nil {
+		http.Error(w, "invalid artifact name", http.StatusBadRequest)
+		return
+	}
 	n, err := c.streamToFile(dst, req.Body, c.maxArtifact)
 	if err != nil {
 		c.writeErr(w, err)
@@ -194,12 +229,7 @@ func (c *Collector) handleCapture(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "invalid capture name", http.StatusBadRequest)
 		return
 	}
-	payloads := filepath.Join(c.cfg.OutputDir, "payloads")
-	if err := os.MkdirAll(payloads, 0o755); err != nil {
-		c.writeErr(w, err)
-		return
-	}
-	tmp, err := os.CreateTemp(payloads, "incoming-*")
+	tmp, tmpRel, err := c.createOutputTemp("payloads", "incoming-")
 	if err != nil {
 		c.writeErr(w, err)
 		return
@@ -214,52 +244,23 @@ func (c *Collector) handleCapture(w http.ResponseWriter, req *http.Request) {
 		err = fmt.Errorf("missing or invalid %s trailer", HashTrailer)
 	}
 	if err != nil {
-		_ = os.Remove(tmp.Name())
+		_ = c.out.Remove(tmpRel)
 		c.writeErr(w, err)
 		return
 	}
-	payload := filepath.Join(payloads, hash)
-	if _, statErr := os.Stat(payload); statErr == nil {
-		_ = os.Remove(tmp.Name()) // identical content already landed
-	} else if err := os.Rename(tmp.Name(), payload); err != nil {
-		_ = os.Remove(tmp.Name())
+	payload := filepath.Join("payloads", hash)
+	if _, statErr := c.out.Stat(payload); statErr == nil {
+		_ = c.out.Remove(tmpRel) // identical content already landed
+	} else if err := c.out.Rename(tmpRel, payload); err != nil {
+		_ = c.out.Remove(tmpRel)
 		c.writeErr(w, err)
 		return
 	}
-	if err := linkCapture(c.cfg.OutputDir, name, hash); err != nil {
+	if err := c.linkCapture(name, hash); err != nil {
 		c.writeErr(w, err)
 		return
 	}
 	w.WriteHeader(http.StatusOK)
-}
-
-// linkCapture points captures/<name> at ../payloads/<hash>. Where symlinks
-// are unavailable (unprivileged Windows) it falls back to a copy, which
-// `warden inspect` reads as a regular file.
-func linkCapture(outDir, name, hash string) error {
-	dir := filepath.Join(outDir, "captures")
-	if err := os.MkdirAll(dir, 0o755); err != nil {
-		return err
-	}
-	link := filepath.Join(dir, name)
-	_ = os.Remove(link)
-	if os.Symlink(filepath.Join("..", "payloads", hash), link) == nil {
-		return nil
-	}
-	src, err := os.Open(filepath.Join(outDir, "payloads", hash))
-	if err != nil {
-		return err
-	}
-	defer src.Close()
-	dst, err := os.Create(link)
-	if err != nil {
-		return err
-	}
-	if _, err := io.Copy(dst, src); err != nil {
-		dst.Close()
-		return err
-	}
-	return dst.Close()
 }
 
 func (c *Collector) handleLedger(w http.ResponseWriter, req *http.Request) {
@@ -270,8 +271,7 @@ func (c *Collector) handleLedger(w http.ResponseWriter, req *http.Request) {
 	// The relay streams the ledger for the whole build. If the stream breaks
 	// (the relay died), keep what arrived: every record is individually
 	// signed, so a truncated ledger still verifies up to its last record.
-	dst := filepath.Join(c.cfg.OutputDir, "ledger")
-	f, err := os.Create(dst)
+	f, err := c.out.Create("ledger")
 	if err != nil {
 		c.writeErr(w, err)
 		return
@@ -294,7 +294,7 @@ func (c *Collector) handleOutput(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "POST only", http.StatusMethodNotAllowed)
 		return
 	}
-	f, err := os.OpenFile(filepath.Join(c.cfg.OutputDir, "build-output.log"),
+	f, err := c.out.OpenFile("build-output.log",
 		os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o644)
 	if err != nil {
 		c.writeErr(w, err)
@@ -330,54 +330,59 @@ func (c *Collector) handleBuildScript(w http.ResponseWriter, req *http.Request) 
 		http.Error(w, "no build script", http.StatusNotFound)
 		return
 	}
-	c.serveFile(w, c.cfg.BuildScriptPath)
+	// The script path is the driver's own staging path, not build input.
+	f, err := os.Open(c.cfg.BuildScriptPath)
+	if err != nil {
+		http.Error(w, "unavailable", http.StatusNotFound)
+		return
+	}
+	serveFile(w, f)
 }
 
 // handleContext serves the build context with the relay's historical
 // semantics: a file's bytes, or for a directory (or an empty / trailing-slash
-// path) a newline-separated list of the safe file paths beneath it.
+// path) a newline-separated list of the safe file paths beneath it. Every
+// lookup goes through the context root, so a symlink cannot reach outside
+// the context.
 func (c *Collector) handleContext(w http.ResponseWriter, req *http.Request) {
 	if req.Method != http.MethodGet {
 		http.Error(w, "GET only", http.StatusMethodNotAllowed)
 		return
 	}
-	if c.cfg.ContextDir == "" {
+	if c.context == nil {
 		http.Error(w, "no build context", http.StatusNotFound)
 		return
 	}
 	rel := strings.TrimPrefix(req.URL.Path, "/v1/context/")
 	trimmed := strings.TrimSuffix(rel, "/")
-	if trimmed != "" && !IsSafeContextPath(trimmed) {
-		http.Error(w, "forbidden", http.StatusForbidden)
-		return
+	local := "."
+	if trimmed != "" {
+		var err error
+		if local, err = localPath(trimmed); err != nil || !IsSafeContextPath(trimmed) {
+			http.Error(w, "forbidden", http.StatusForbidden)
+			return
+		}
 	}
-	full := filepath.Join(c.cfg.ContextDir, filepath.FromSlash(trimmed))
-	info, err := os.Stat(full)
+	info, err := c.context.Stat(local)
 	if err != nil {
 		http.Error(w, "not found", http.StatusNotFound)
 		return
 	}
 	if !info.IsDir() && !strings.HasSuffix(rel, "/") && rel != "" {
+		f, err := c.context.Open(local)
+		if err != nil {
+			http.Error(w, "unavailable", http.StatusNotFound)
+			return
+		}
 		w.Header().Set(ContextKindHeader, "file")
-		c.serveFile(w, full)
+		serveFile(w, f)
 		return
 	}
 	if !info.IsDir() {
 		http.Error(w, "not a directory", http.StatusNotFound)
 		return
 	}
-	var files []string
-	_ = filepath.Walk(full, func(p string, fi os.FileInfo, err error) error {
-		if err != nil || fi.IsDir() {
-			return nil
-		}
-		r, _ := filepath.Rel(c.cfg.ContextDir, p)
-		r = filepath.ToSlash(r)
-		if IsSafeContextPath(r) {
-			files = append(files, r)
-		}
-		return nil
-	})
+	files := c.contextFiles(local)
 	sort.Strings(files)
 	body := strings.Join(files, "\n")
 	if len(files) > 0 {
@@ -389,12 +394,8 @@ func (c *Collector) handleContext(w http.ResponseWriter, req *http.Request) {
 	_, _ = io.WriteString(w, body)
 }
 
-func (c *Collector) serveFile(w http.ResponseWriter, path string) {
-	f, err := os.Open(path)
-	if err != nil {
-		http.Error(w, "unavailable", http.StatusNotFound)
-		return
-	}
+// serveFile streams f (closing it) as the response body.
+func serveFile(w http.ResponseWriter, f *os.File) {
 	defer f.Close()
 	if fi, err := f.Stat(); err == nil {
 		w.Header().Set("Content-Length", fmt.Sprint(fi.Size()))
@@ -404,11 +405,10 @@ func (c *Collector) serveFile(w http.ResponseWriter, path string) {
 	_, _ = io.Copy(w, f)
 }
 
+// streamToFile lands body at dst, a path local to the output dir, removing
+// the partial file on failure.
 func (c *Collector) streamToFile(dst string, body io.Reader, max int64) (int64, error) {
-	if err := os.MkdirAll(filepath.Dir(dst), 0o755); err != nil {
-		return 0, err
-	}
-	f, err := os.Create(dst)
+	f, err := c.createOutput(dst)
 	if err != nil {
 		return 0, err
 	}
@@ -417,7 +417,7 @@ func (c *Collector) streamToFile(dst string, body io.Reader, max int64) (int64, 
 		err = closeErr
 	}
 	if err != nil {
-		_ = os.Remove(dst)
+		_ = c.out.Remove(dst)
 	}
 	return n, err
 }

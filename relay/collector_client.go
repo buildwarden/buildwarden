@@ -19,8 +19,9 @@ import (
 // collectorClient is the relay's only output (and input) path: every artifact,
 // capture, ledger, build-output stream and signal goes to the build's
 // collector over HTTP (normally on the orchestrator's tunnel, see relaycfg),
-// and the build script and context files are fetched from it. The relay keeps no build state on disk, so it runs identically as a
-// host process, a container or a diskless VM.
+// and the build script and context files are fetched from it. The relay keeps
+// no build state on disk, so it runs identically as a host process, a
+// container or a diskless VM.
 //
 // It deliberately uses its own http.Client rather than the relay's
 // SSRF-filtered upstream transport: the collector is a trusted host endpoint
@@ -42,7 +43,9 @@ func newCollectorClient(baseURL, token string, transport http.RoundTripper) *col
 	}
 }
 
-func (c *collectorClient) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
+func (c *collectorClient) newRequest(
+	ctx context.Context, method, path string, body io.Reader,
+) (*http.Request, error) {
 	req, err := http.NewRequestWithContext(ctx, method, c.baseURL+path, body)
 	if err != nil {
 		return nil, err
@@ -99,9 +102,12 @@ func (h *hashingBody) Read(p []byte) (int, error) {
 
 // putArtifact streams body to PUT /v1/artifacts/<name>, hashing the identical
 // byte stream for the ledger record.
-func (c *collectorClient) putArtifact(name string, body io.Reader, hasher *StreamingHasher) ([]byte, int64, error) {
+func (c *collectorClient) putArtifact(
+	name string, body io.Reader, hasher *StreamingHasher,
+) ([]byte, int64, error) {
 	hb := &hashingBody{r: body, hasher: hasher}
-	req, err := c.newRequest(context.Background(), http.MethodPut, "/v1/artifacts/"+escapePath(name), hb)
+	req, err := c.newRequest(
+		context.Background(), http.MethodPut, "/v1/artifacts/"+escapePath(name), hb)
 	if err != nil {
 		return nil, 0, err
 	}
@@ -116,9 +122,14 @@ func (c *collectorClient) putArtifact(name string, body io.Reader, hasher *Strea
 
 // putCapture streams a captured payload to PUT /v1/captures/<name>, with its
 // content hash as the trailer the collector names the payload after.
-func (c *collectorClient) putCapture(name string, body io.Reader, hasher *StreamingHasher) error {
-	hb := &hashingBody{r: body, hasher: hasher, trailer: http.Header{collector.HashTrailer: nil}}
-	req, err := c.newRequest(context.Background(), http.MethodPut, "/v1/captures/"+url.PathEscape(name), hb)
+func (c *collectorClient) putCapture(
+	name string, body io.Reader, hasher *StreamingHasher,
+) error {
+	hb := &hashingBody{
+		r: body, hasher: hasher, trailer: http.Header{collector.HashTrailer: nil},
+	}
+	req, err := c.newRequest(
+		context.Background(), http.MethodPut, "/v1/captures/"+url.PathEscape(name), hb)
 	if err != nil {
 		return err
 	}
@@ -154,7 +165,9 @@ func (c *collectorClient) outputWriter() (w io.Writer, finish func() error, err 
 
 // stream opens a streaming request whose body is whatever is written to w;
 // finish ends the body and awaits the response. Constant memory.
-func (c *collectorClient) stream(method, path string) (w io.Writer, finish func() error, err error) {
+func (c *collectorClient) stream(
+	method, path string,
+) (w io.Writer, finish func() error, err error) {
 	pr, pw := io.Pipe()
 	req, err := c.newRequest(context.Background(), method, path, pr)
 	if err != nil {

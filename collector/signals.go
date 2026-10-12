@@ -104,10 +104,10 @@ func (c *Collector) Ready() <-chan struct{} { return c.ready }
 // Done delivers the first completion signal, then is closed.
 func (c *Collector) Done() <-chan CompletionSignal { return c.done }
 
-// ErrUnresponsive is returned by Wait when the guest's heartbeat goes stale.
-type ErrUnresponsive struct{ Silence time.Duration }
+// UnresponsiveError is returned by Wait when the guest's heartbeat goes stale.
+type UnresponsiveError struct{ Silence time.Duration }
 
-func (e *ErrUnresponsive) Error() string {
+func (e *UnresponsiveError) Error() string {
 	return fmt.Sprintf("build guest unresponsive (no heartbeat for %s)", e.Silence)
 }
 
@@ -115,7 +115,9 @@ func (e *ErrUnresponsive) Error() string {
 // longer than heartbeatTimeout (only once a first heartbeat has arrived, so a
 // slow boot is never mistaken for a hang), or ctx ends. heartbeatTimeout <= 0
 // disables the liveness check.
-func (c *Collector) Wait(ctx context.Context, heartbeatTimeout time.Duration) (CompletionSignal, error) {
+func (c *Collector) Wait(
+	ctx context.Context, heartbeatTimeout time.Duration,
+) (CompletionSignal, error) {
 	tick := time.NewTicker(time.Second)
 	defer tick.Stop()
 	for {
@@ -134,7 +136,9 @@ func (c *Collector) Wait(ctx context.Context, heartbeatTimeout time.Duration) (C
 				if sig, ok := c.Status(); ok {
 					return sig, nil
 				}
-				return CompletionSignal{}, &ErrUnresponsive{Silence: heartbeatTimeout}
+				return CompletionSignal{}, &UnresponsiveError{
+					Silence: heartbeatTimeout,
+				}
 			}
 		}
 	}

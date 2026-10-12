@@ -126,7 +126,8 @@ func DetectRuntime() (string, error) {
 	}
 	if len(installed) == 0 {
 		return "", driver.Fixable(
-			"install Finch (brew install --cask finch && finch vm init), Docker or Podman, or use a VM driver (--driver qemu or vz)",
+			"install Finch (brew install --cask finch && finch vm init), "+
+				"Docker or Podman, or use a VM driver (--driver qemu or vz)",
 			"no container runtime found (tried finch, docker, podman)")
 	}
 	// Installed but not answering: almost always its VM or daemon is down.
@@ -141,7 +142,8 @@ func runtimeStartHint(name string) string {
 	case "finch":
 		return "start its VM: finch vm start (or finch vm init the first time)"
 	case "podman":
-		return "start its machine: podman machine start (or podman machine init the first time)"
+		return "start its machine: podman machine start " +
+			"(or podman machine init the first time)"
 	default:
 		return "start Docker (Docker Desktop, or the docker service)"
 	}
@@ -200,11 +202,22 @@ func discoverDockerfile(dir string) (string, error) {
 // (driver.StageBuildScript): --script, then a Dockerfile (Linux guests), then
 // build.sh / build.ps1 in the context. A path may name the context directory
 // or a file in it (a Dockerfile, or a build script).
-func resolveBuildInput(path, driverName, guestOS, script string) (dockerfile, contextDir, buildScript string, err error) {
+func resolveBuildInput(
+	path, driverName, guestOS, script string,
+) (dockerfile, contextDir, buildScript string, err error) {
 	if driverName == "" || driverName == "container" {
 		dockerfile, contextDir, err = ResolvePath(path)
 		return dockerfile, contextDir, "", err
 	}
+	return resolveVMBuildInput(path, guestOS, script)
+}
+
+// resolveVMBuildInput resolves the context dir and either a Dockerfile or a
+// build script for a VM driver, applying driver.StageBuildScript's precedence:
+// --script, then a Dockerfile (Linux guests), then build.sh / build.ps1.
+func resolveVMBuildInput(
+	path, guestOS, script string,
+) (dockerfile, contextDir, buildScript string, err error) {
 	if path == "" {
 		path = "."
 	}
@@ -226,15 +239,33 @@ func resolveBuildInput(path, driverName, guestOS, script string) (dockerfile, co
 
 	windows := guestOS == "windows"
 	if !windows {
-		if !info.IsDir() && !isScriptName(abs) {
-			dockerfile = abs
-		} else if df, err := discoverDockerfile(contextDir); err == nil {
-			dockerfile = df
-		}
+		dockerfile = vmDockerfile(abs, contextDir, info.IsDir())
 	}
 	if script != "" || dockerfile != "" {
 		return dockerfile, contextDir, script, nil
 	}
+	if err := requireBuildFile(contextDir, windows); err != nil {
+		return "", "", "", err
+	}
+	return "", contextDir, "", nil
+}
+
+// vmDockerfile returns the Dockerfile to build for a Linux VM guest: the path
+// itself when it names one, else one discovered in the context dir, or "" when
+// there is none.
+func vmDockerfile(abs, contextDir string, isDir bool) string {
+	if !isDir && !isScriptName(abs) {
+		return abs
+	}
+	if df, err := discoverDockerfile(contextDir); err == nil {
+		return df
+	}
+	return ""
+}
+
+// requireBuildFile confirms the context holds the build file a VM guest needs
+// when neither a --script nor a Dockerfile was resolved.
+func requireBuildFile(contextDir string, windows bool) error {
 	want := "build.sh"
 	if windows {
 		want = "build.ps1"
@@ -244,10 +275,11 @@ func resolveBuildInput(path, driverName, guestOS, script string) (dockerfile, co
 		if windows {
 			hint = ""
 		}
-		return "", "", "", driver.Fixable("",
-			"nothing to build in %s: pass --script, or add %s%s", contextDir, want, hint)
+		return driver.Fixable("",
+			"nothing to build in %s: pass --script, or add %s%s",
+			contextDir, want, hint)
 	}
-	return "", contextDir, "", nil
+	return nil
 }
 
 func isScriptName(p string) bool {
@@ -291,7 +323,8 @@ func validateFlagsForDriver(d string) error {
 		{flagKeepVMs, "--keep-vms"},
 	} {
 		if f.set && !isVM {
-			return driver.Fixable("", "%s requires a VM driver (--driver qemu, vz, or hyperv)", f.name)
+			return driver.Fixable("",
+				"%s requires a VM driver (--driver qemu, vz, or hyperv)", f.name)
 		}
 	}
 	if flagNetwork != "" && d != "hyperv" {

@@ -25,18 +25,28 @@ func fakeRelay(t *testing.T, claimToken string) (claimAddr, guestHTTP string) {
 	ctrlLn, _ := net.Listen("tcp", "127.0.0.1:0")
 	dns, _ := net.ListenPacket("udp", "127.0.0.1:0")
 	go func() {
-		_ = relaycfg.Serve(claimLn, claimToken, func(c relaycfg.Config, rt http.RoundTripper) (relaycfg.Identity, error) {
-			r, err := relay.Start(relay.Config{
-				CollectorURL: c.CollectorURL, CollectorToken: c.CollectorToken, CollectorTransport: rt,
-				CaptureMode: c.CaptureMode, SelfIP: net.ParseIP("127.0.0.1"),
-				UpstreamDNS: "127.0.0.1:1", DNSPacketConn: dns,
-				HTTPListener: httpLn, HTTPSListener: httpsLn, ControlListener: ctrlLn,
+		_ = relaycfg.Serve(claimLn, claimToken,
+			func(c relaycfg.Config, rt http.RoundTripper) (relaycfg.Identity, error) {
+				r, err := relay.Start(relay.Config{
+					CollectorURL:       c.CollectorURL,
+					CollectorToken:     c.CollectorToken,
+					CollectorTransport: rt,
+					CaptureMode:        c.CaptureMode,
+					SelfIP:             net.ParseIP("127.0.0.1"),
+					UpstreamDNS:        "127.0.0.1:1",
+					DNSPacketConn:      dns,
+					HTTPListener:       httpLn,
+					HTTPSListener:      httpsLn,
+					ControlListener:    ctrlLn,
+				})
+				if err != nil {
+					return relaycfg.Identity{}, err
+				}
+				return relaycfg.Identity{
+					CACert:          string(r.CACert()),
+					LedgerPublicKey: r.LedgerPublicKeyHex(),
+				}, nil
 			})
-			if err != nil {
-				return relaycfg.Identity{}, err
-			}
-			return relaycfg.Identity{CACert: string(r.CACert()), LedgerPublicKey: r.LedgerPublicKeyHex()}, nil
-		})
 	}()
 	return claimLn.Addr().String(), httpLn.Addr().String()
 }
@@ -63,7 +73,8 @@ func TestSessionClaimAndWait(t *testing.T) {
 	if err != nil {
 		t.Fatalf("ClaimRelay: %v", err)
 	}
-	if b, _ := os.ReadFile(filepath.Join(out, "ca.cert.pem")); string(b) != id.CACert || !strings.Contains(id.CACert, "CERTIFICATE") {
+	caBytes, _ := os.ReadFile(filepath.Join(out, "ca.cert.pem"))
+	if string(caBytes) != id.CACert || !strings.Contains(id.CACert, "CERTIFICATE") {
 		t.Fatal("ca.cert.pem not written from the claim identity")
 	}
 
@@ -113,16 +124,22 @@ func TestStageBuildScriptPrecedence(t *testing.T) {
 		b, _ := os.ReadFile(p)
 		return string(b)
 	}
-	if got := read(&BuildRequest{Script: explicit, ContextDir: ctx, Containerfile: df}); got != "explicit" {
+	if got := read(&BuildRequest{
+		Script: explicit, ContextDir: ctx, Containerfile: df,
+	}); got != "explicit" {
 		t.Fatalf("explicit script: %q", got)
 	}
-	if got := read(&BuildRequest{ContextDir: ctx, Containerfile: df}); !strings.Contains(got, "translated") {
+	if got := read(&BuildRequest{
+		ContextDir: ctx, Containerfile: df,
+	}); !strings.Contains(got, "translated") {
 		t.Fatalf("containerfile translation: %q", got)
 	}
 	if got := read(&BuildRequest{ContextDir: ctx}); got != "from-context" {
 		t.Fatalf("context build.sh: %q", got)
 	}
-	if got := read(&BuildRequest{ContextDir: ctx, GuestOS: "windows", Containerfile: df}); got != "from-context-ps" {
+	if got := read(&BuildRequest{
+		ContextDir: ctx, GuestOS: "windows", Containerfile: df,
+	}); got != "from-context-ps" {
 		t.Fatalf("windows ignores containerfile, uses build.ps1: %q", got)
 	}
 	if got := read(&BuildRequest{GuestOS: "windows"}); got != "exit 0\r\n" {

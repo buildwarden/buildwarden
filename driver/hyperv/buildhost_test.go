@@ -92,13 +92,18 @@ func (f *buildFake) simulateRelayReady() {
 		return
 	}
 	go func() {
-		_ = relaycfg.Serve(ln, "", func(c relaycfg.Config, rt http.RoundTripper) (relaycfg.Identity, error) {
+		_ = relaycfg.Serve(ln, "", func(
+			c relaycfg.Config, rt http.RoundTripper,
+		) (relaycfg.Identity, error) {
 			f.claimed.Store(c)
 			f.transport.Store(rt)
 			if err := f.post("/v1/ready", nil); err != nil {
 				f.relayReadyErr.Store(fmt.Errorf("ready POST: %w", err))
 			}
-			return relaycfg.Identity{CACert: "-----BEGIN CERTIFICATE-----\n", LedgerPublicKey: "00"}, nil
+			return relaycfg.Identity{
+				CACert:          "-----BEGIN CERTIFICATE-----\n",
+				LedgerPublicKey: "00",
+			}, nil
 		})
 	}()
 }
@@ -174,12 +179,14 @@ func TestRunBuild_HappyPath(t *testing.T) {
 		t.Errorf("CreateVM (build) = %d, want 1", got)
 	}
 	if spec, ok := fp.lastBuildSpec.Load().(VMSpec); !ok || spec.Generation != 2 {
-		t.Errorf("build VM Generation = %v, want 2 (default for .vhdx base)", fp.lastBuildSpec.Load())
+		t.Errorf("build VM Generation = %v, want 2 (default for .vhdx base)",
+			fp.lastBuildSpec.Load())
 	}
 	// COM1 must be wired to a host named pipe for guest-boot diagnostics.
 	if spec, ok := fp.lastBuildSpec.Load().(VMSpec); ok {
 		if !strings.HasPrefix(spec.COMPipePath, `\\.\pipe\warden-build-`) {
-			t.Errorf("build VM COMPipePath = %q, want a \\\\.\\pipe\\warden-build-* path", spec.COMPipePath)
+			t.Errorf("build VM COMPipePath = %q, want a "+
+				"\\\\.\\pipe\\warden-build-* path", spec.COMPipePath)
 		}
 	}
 	if got := fp.startBuild.Load(); got != 1 {
@@ -267,7 +274,8 @@ func TestRunBuild_ValidatesConfig(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			cfg := baseCfg(t, t.TempDir())
 			mut(&cfg)
-			if _, err := runBuild(context.Background(), &buildFake{}, cfg); err == nil {
+			if _, err := runBuild(
+				context.Background(), &buildFake{}, cfg); err == nil {
 				t.Errorf("expected a validation error when %s is empty", name)
 			}
 		})

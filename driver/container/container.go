@@ -9,6 +9,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -105,18 +106,7 @@ func (d *Driver) StartBuild(
 	}
 
 	logInfo(req, "Executing build...")
-	stdout := req.Stdout
-	if stdout == nil {
-		stdout = os.Stdout
-	}
-	stderr := req.Stderr
-	if stderr == nil {
-		stderr = os.Stderr
-	}
-	stdin := req.Stdin
-	if stdin == nil {
-		stdin = os.Stdin
-	}
+	stdin, stdout, stderr := stdio(req)
 
 	tail := newTailWriter(stderr)
 	execCmd := &exec.Cmd{
@@ -180,7 +170,9 @@ func (b *build) execFailure(ctx context.Context, execErr error, stderrTail strin
 		return err
 	}
 	if code, ok := execExitCode(execErr, stderrTail); ok {
-		return fmt.Errorf("build environment failed before the build ran (warden-io exited with code %d; see its output above)", code)
+		return fmt.Errorf(
+			"build environment failed before the build ran "+
+				"(warden-io exited with code %d; see its output above)", code)
 	}
 	return fmt.Errorf("build error: %w", execErr)
 }
@@ -216,18 +208,7 @@ func (d *Driver) Exec(
 	}
 
 	logInfo(req, "Dropping into shell (exit to tear down)...")
-	stdout := req.Stdout
-	if stdout == nil {
-		stdout = os.Stdout
-	}
-	stderr := req.Stderr
-	if stderr == nil {
-		stderr = os.Stderr
-	}
-	stdin := req.Stdin
-	if stdin == nil {
-		stdin = os.Stdin
-	}
+	stdin, stdout, stderr := stdio(req)
 
 	// The shell runs under a wrapper that records its exit status: with a
 	// TTY, finch delivers nerdctl's "exit code N" line on the terminal
@@ -270,6 +251,22 @@ func (b *build) shellExitCode(execErr error) (int, bool) {
 }
 
 func (d *Driver) Close() error { return nil }
+
+// stdio resolves the request's stdin, stdout and stderr, defaulting each to
+// the process's own stream when the request leaves it unset.
+func stdio(req *driver.BuildRequest) (stdin io.Reader, stdout, stderr io.Writer) {
+	stdin, stdout, stderr = req.Stdin, req.Stdout, req.Stderr
+	if stdin == nil {
+		stdin = os.Stdin
+	}
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+	return stdin, stdout, stderr
+}
 
 // --- build lifecycle ---
 
@@ -319,6 +316,41 @@ func (b *build) setup(ctx context.Context) error {
 	b.subnet = sub
 	b.isolatedNetwork = "warden-" + b.buildID
 
+	if err := b.startSessionAndRelay(ctx, env); err != nil {
+		return err
+	}
+
+	extCtx := &driver.ExtensionContext{
+		WardenDir: b.wardenDirPath(),
+		ScriptDir: filepath.Join(
+			b.wardenDirPath(), "ext.d"),
+		CACert:  b.caCert,
+		RelayIP: b.subnet.RelayIP,
+		BuildID: b.buildID,
+	}
+	for _, ext := range b.d.Extensions {
+		if err := ext.BeforeBuild(extCtx); err != nil {
+			return err
+		}
+	}
+
+	if err := editContainerfile(
+		b.req.Containerfile,
+		b.req.ContextDir,
+		filepath.Join(b.wardenDirPath(), "Containerfile"),
+		b.d.Extensions,
+	); err != nil {
+		return err
+	}
+
+	return nil
+}
+
+// startSessionAndRelay starts the collector session, boots the relay
+// container, claims it with the build's configuration, and records the
+// relay's CA certificate.
+func (b *build) startSessionAndRelay(ctx context.Context, env *relaycfg.Environment) error {
+	var err error
 	// The build console reaches the terminal through `exec`, so the
 	// collector does not tee it as well.
 	b.sess, err = driver.StartSession(driver.SessionConfig{
@@ -345,30 +377,6 @@ func (b *build) setup(ctx context.Context) error {
 		return err
 	}
 	b.caCert = []byte(id.CACert)
-
-	extCtx := &driver.ExtensionContext{
-		WardenDir: b.wardenDirPath(),
-		ScriptDir: filepath.Join(
-			b.wardenDirPath(), "ext.d"),
-		CACert:  b.caCert,
-		RelayIP: b.subnet.RelayIP,
-		BuildID: b.buildID,
-	}
-	for _, ext := range b.d.Extensions {
-		if err := ext.BeforeBuild(extCtx); err != nil {
-			return err
-		}
-	}
-
-	if err := editContainerfile(
-		b.req.Containerfile,
-		b.req.ContextDir,
-		filepath.Join(b.wardenDirPath(), "Containerfile"),
-		b.d.Extensions,
-	); err != nil {
-		return err
-	}
-
 	return nil
 }
 
@@ -576,12 +584,13 @@ func (b *build) startRelayContainer(claimToken string) (string, error) {
 		if err != nil {
 			return "", fmt.Errorf("finding a free loopback port: %w", err)
 		}
+		publish := fmt.Sprintf("127.0.0.1:%d:%d", hostPort, relaycfg.DefaultPort)
 		args := append(ctrctl.Cli, "container", "run",
 			"--detach",
 			"--name", name,
 			"--network", "warden-"+b.buildID,
 			"--ip", b.subnet.RelayIP,
-			"--publish", fmt.Sprintf("127.0.0.1:%d:%d", hostPort, relaycfg.DefaultPort),
+			"--publish", publish,
 			"--env", relaycfg.TokenEnv+"="+claimToken,
 			b.relayImage,
 		)

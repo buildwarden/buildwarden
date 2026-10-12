@@ -32,7 +32,8 @@ func main() {
 	ctxDir := flag.String("context", "", "build context served to the guest")
 	script := flag.String("script", "", "build script served at http://artifacts/build-script")
 	capture := flag.String("capture", "", "capture payloads (none, headers, bodies, all)")
-	upstreamCAs := flag.String("upstream-ca", "", "extra upstream CA files/dirs, comma-separated")
+	upstreamCAs := flag.String("upstream-ca", "",
+		"extra upstream CA files/dirs, comma-separated")
 	quiet := flag.Bool("quiet", false, "do not echo the guest build console")
 	flag.Parse()
 

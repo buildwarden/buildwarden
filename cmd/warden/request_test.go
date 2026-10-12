@@ -37,7 +37,8 @@ func TestResolveBuildInputVMDrivers(t *testing.T) {
 		t.Fatalf("windows without build.ps1: err = %v", err)
 	}
 	write(t, dir, "build.ps1", "exit 0")
-	if got, _, _, err := resolveBuildInput(dir, "qemu", "windows", ""); err != nil || got != "" {
+	if got, _, _, err := resolveBuildInput(dir, "qemu", "windows", ""); err != nil ||
+		got != "" {
 		t.Fatalf("windows with build.ps1: %q %v", got, err)
 	}
 	// An explicit --script satisfies any context.

@@ -59,15 +59,20 @@ func generateWindowsUnattend(cfg unattendConfig) string {
 	cmd := xmlText(firstLogonCommand())
 
 	return fmt.Sprintf(`<?xml version="1.0" encoding="utf-8"?>
-<unattend xmlns="urn:schemas-microsoft-com:unattend" xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
+<unattend xmlns="urn:schemas-microsoft-com:unattend"
+ xmlns:wcm="http://schemas.microsoft.com/WMIConfig/2002/State">
   <settings pass="oobeSystem">
-    <component name="Microsoft-Windows-International-Core" processorArchitecture="%[1]s" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+    <component name="Microsoft-Windows-International-Core"
+      processorArchitecture="%[1]s" publicKeyToken="31bf3856ad364e35"
+      language="neutral" versionScope="nonSxS">
       <InputLocale>en-US</InputLocale>
       <SystemLocale>en-US</SystemLocale>
       <UILanguage>en-US</UILanguage>
       <UserLocale>en-US</UserLocale>
     </component>
-    <component name="Microsoft-Windows-Shell-Setup" processorArchitecture="%[1]s" publicKeyToken="31bf3856ad364e35" language="neutral" versionScope="nonSxS">
+    <component name="Microsoft-Windows-Shell-Setup"
+      processorArchitecture="%[1]s" publicKeyToken="31bf3856ad364e35"
+      language="neutral" versionScope="nonSxS">
       <UserAccounts>
         <AdministratorPassword>
           <Value>%[2]s</Value>
@@ -113,8 +118,10 @@ func generateWindowsUnattend(cfg unattendConfig) string {
 // escaping and cmd/PowerShell quoting entirely. The scan finds warden-run.ps1
 // at the root of any filesystem drive (the WARDEN seed) and runs it.
 func firstLogonCommand() string {
-	scan := `gdr -PSProvider FileSystem|%{$p=$_.Root+'warden-run.ps1';if(Test-Path $p){& $p;break}}`
-	return "powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand " + psEncodedCommand(scan)
+	scan := `gdr -PSProvider FileSystem|` +
+		`%{$p=$_.Root+'warden-run.ps1';if(Test-Path $p){& $p;break}}`
+	return "powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand " +
+		psEncodedCommand(scan)
 }
 
 // generateWardenRunPS1 is the first-boot bootstrap launched by the OOBE
@@ -140,7 +147,10 @@ New-Item -ItemType Directory -Force -Path 'C:\warden' | Out-Null
 
 # Best-effort serial console. A missing/busy COM1 must never break the build.
 $com = $null
-try { $com = New-Object System.IO.Ports.SerialPort 'COM1',115200; $com.Open() } catch { $com = $null }
+try {
+  $com = New-Object System.IO.Ports.SerialPort 'COM1',115200
+  $com.Open()
+} catch { $com = $null }
 function Emit($m) {
   $line = "[warden-run] $(Get-Date -Format o) $m"
   Add-Content -Path $log -Value $line

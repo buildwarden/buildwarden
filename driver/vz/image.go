@@ -103,26 +103,9 @@ func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 	// Download IPSW if not already cached. The download lands in a .part
 	// file renamed on success, so an interrupted one is never mistaken for
 	// a complete IPSW.
-	ipswLocal := filepath.Join(c.CacheDir, "ipsw-"+urlHash+".ipsw")
-	if _, err := os.Stat(ipswLocal); err != nil {
-		// Check for a pre-existing ipsw-latest.ipsw (manual or previous download)
-		latestPath := filepath.Join(c.CacheDir, "ipsw-latest.ipsw")
-		if info, errLat := os.Stat(latestPath); errLat == nil && info.Size() > 0 {
-			ipswLocal = latestPath
-		} else {
-			fmt.Fprintf(os.Stderr, "Downloading IPSW...\n")
-			part := ipswLocal + ".part"
-			cmd := exec.Command("curl", "-fL", "-C", "-", "-o", part,
-				"--progress-bar", ipswURL)
-			cmd.Stdout = os.Stderr
-			cmd.Stderr = os.Stderr
-			if err := cmd.Run(); err != nil {
-				return "", fmt.Errorf("downloading IPSW (rerun to resume): %w", err)
-			}
-			if err := os.Rename(part, ipswLocal); err != nil {
-				return "", err
-			}
-		}
+	ipswLocal, err := c.ensureIPSWDownloaded(ipswURL, urlHash)
+	if err != nil {
+		return "", err
 	}
 
 	// Restore IPSW to disk image (64GB disk).
@@ -158,6 +141,36 @@ func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 
 	fmt.Fprintf(os.Stderr, "macOS image ready at %s\n", imgDir)
 	return diskPath, nil
+}
+
+// ensureIPSWDownloaded makes sure the IPSW identified by urlHash is present
+// locally and returns its path. An already-cached file is reused as-is; a
+// pre-existing ipsw-latest.ipsw (manual or previous download) is preferred
+// over downloading again; otherwise it is fetched into a .part file renamed
+// on success, so an interrupted download is never mistaken for a complete one.
+func (c *ImageCache) ensureIPSWDownloaded(ipswURL, urlHash string) (string, error) {
+	ipswLocal := filepath.Join(c.CacheDir, "ipsw-"+urlHash+".ipsw")
+	if _, err := os.Stat(ipswLocal); err == nil {
+		return ipswLocal, nil
+	}
+	// Check for a pre-existing ipsw-latest.ipsw (manual or previous download)
+	latestPath := filepath.Join(c.CacheDir, "ipsw-latest.ipsw")
+	if info, errLat := os.Stat(latestPath); errLat == nil && info.Size() > 0 {
+		return latestPath, nil
+	}
+	fmt.Fprintf(os.Stderr, "Downloading IPSW...\n")
+	part := ipswLocal + ".part"
+	cmd := exec.Command("curl", "-fL", "-C", "-", "-o", part,
+		"--progress-bar", ipswURL)
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("downloading IPSW (rerun to resume): %w", err)
+	}
+	if err := os.Rename(part, ipswLocal); err != nil {
+		return "", err
+	}
+	return ipswLocal, nil
 }
 
 // PrepareHeadlessImage installs the warden build agent into a macOS disk image.
@@ -232,7 +245,8 @@ func RequireRoot() error {
 		return nil
 	}
 	return driver.Fixable(PrepareCommand,
-		"preparing a macOS base image needs root (it installs root-owned system files into the image)")
+		"preparing a macOS base image needs root (it installs "+
+			"root-owned system files into the image)")
 }
 
 // giveBackToSudoUser hands what a sudo'd prepare created under dir back to

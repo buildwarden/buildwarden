@@ -50,7 +50,9 @@ func GuestBinary(pkg, goos, goarch string) (string, error) {
 		return cached, nil
 	}
 	if rootErr != nil {
-		return "", fmt.Errorf("%s not found next to warden or in %s, and no source tree to build it from: %w",
+		return "", fmt.Errorf(
+			"%s not found next to warden or in %s, and no source tree "+
+				"to build it from: %w",
 			name, filepath.Dir(cached), rootErr)
 	}
 	if err := os.MkdirAll(filepath.Dir(cached), 0o755); err != nil {
@@ -74,7 +76,8 @@ func isStale(cached, root string) bool {
 		return true
 	}
 	if root != "" {
-		if s, err := os.Stat(filepath.Join(root, "go.sum")); err == nil && s.ModTime().After(info.ModTime()) {
+		gosum := filepath.Join(root, "go.sum")
+		if s, err := os.Stat(gosum); err == nil && s.ModTime().After(info.ModTime()) {
 			return true
 		}
 	}
@@ -89,6 +92,7 @@ func isStale(cached, root string) bool {
 // ModuleRoot finds the buildwarden source tree (the directory holding go.mod),
 // walking up from the warden executable and then from the working directory.
 func ModuleRoot() (string, error) {
+	const moduleDecl = "module github.com/buildwarden/buildwarden"
 	var starts []string
 	if exe, err := os.Executable(); err == nil {
 		starts = append(starts, filepath.Dir(exe))
@@ -99,7 +103,7 @@ func ModuleRoot() (string, error) {
 	for _, dir := range starts {
 		for {
 			if data, err := os.ReadFile(filepath.Join(dir, "go.mod")); err == nil &&
-				strings.Contains(string(data), "module github.com/buildwarden/buildwarden") {
+				strings.Contains(string(data), moduleDecl) {
 				return dir, nil
 			}
 			parent := filepath.Dir(dir)

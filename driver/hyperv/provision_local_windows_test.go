@@ -25,10 +25,12 @@ func TestVMLifecycleSmoke(t *testing.T) {
 		t.Skip("not a Windows host")
 	}
 	if !caps.DevSwitchPresent {
-		t.Skipf("switch %q not present; run `warden setup --driver hyperv` first", DefaultDevSwitch)
+		t.Skipf("switch %q not present; run `warden setup --driver hyperv` first",
+			DefaultDevSwitch)
 	}
 	if caps.Resolve(OpVMLifecycle) != OutcomeDirect {
-		t.Skip("VM lifecycle not available directly (need Hyper-V Administrators or elevation)")
+		t.Skip("VM lifecycle not available directly " +
+			"(need Hyper-V Administrators or elevation)")
 	}
 
 	ctx := context.Background()
@@ -57,7 +59,8 @@ func TestVMLifecycleSmoke(t *testing.T) {
 	}
 
 	// Confirm it exists.
-	out, err := runPS(fmt.Sprintf("if (Get-VM -Name '%s' -ErrorAction SilentlyContinue) { 'yes' } else { 'no' }",
+	out, err := runPS(fmt.Sprintf(
+		"if (Get-VM -Name '%s' -ErrorAction SilentlyContinue) { 'yes' } else { 'no' }",
 		psEscapeSingle(name)))
 	if err != nil {
 		t.Fatalf("Get-VM probe: %v", err)
@@ -70,7 +73,8 @@ func TestVMLifecycleSmoke(t *testing.T) {
 	if err := p.RemoveVM(ctx, name); err != nil {
 		t.Fatalf("RemoveVM: %v", err)
 	}
-	out, err = runPS(fmt.Sprintf("if (Get-VM -Name '%s' -ErrorAction SilentlyContinue) { 'yes' } else { 'no' }",
+	out, err = runPS(fmt.Sprintf(
+		"if (Get-VM -Name '%s' -ErrorAction SilentlyContinue) { 'yes' } else { 'no' }",
 		psEscapeSingle(name)))
 	if err != nil {
 		t.Fatalf("Get-VM probe after remove: %v", err)

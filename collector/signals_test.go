@@ -176,9 +176,9 @@ func TestWaitDetectsStaleHeartbeat(t *testing.T) {
 	}
 	c.lastHeartbeat.Store(time.Now().Add(-time.Hour).UnixNano())
 	_, err = c.Wait(context.Background(), 10*time.Millisecond)
-	var ue *ErrUnresponsive
+	var ue *UnresponsiveError
 	if !errors.As(err, &ue) {
-		t.Fatalf("Wait err = %v, want ErrUnresponsive", err)
+		t.Fatalf("Wait err = %v, want UnresponsiveError", err)
 	}
 }
 

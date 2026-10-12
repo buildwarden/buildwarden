@@ -153,7 +153,8 @@ func TestFetchEvalImage_AcceptUnpinned(t *testing.T) {
 
 func TestFetchEvalImage_UnknownNameNeedsURL(t *testing.T) {
 	t.Setenv("WARDEN_HYPERV_CACHE_DIR", t.TempDir())
-	if _, err := FetchEvalImage(context.Background(), FetchOptions{Name: "no-such-image"}); err == nil {
+	if _, err := FetchEvalImage(
+		context.Background(), FetchOptions{Name: "no-such-image"}); err == nil {
 		t.Fatal("expected an error for an unknown image with no --url")
 	}
 }

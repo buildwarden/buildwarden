@@ -117,26 +117,12 @@ func (d *Driver) StartBuild(
 	// Socket for the isolated relay<->build network.
 	socketPath := filepath.Join(workDir, "vlan.sock")
 
-	claimPort, err := driver.FreeLoopbackPort()
+	relayProc, err := d.startAndClaimRelay(
+		ctx, sess, req, kernelPath, initrdPath, socketPath)
 	if err != nil {
 		return nil, err
-	}
-	claimToken, err := driver.RandomToken()
-	if err != nil {
-		return nil, err
-	}
-
-	d.status("starting relay...")
-	relayProc, err := d.startRelayVM(kernelPath, initrdPath, socketPath, claimPort, claimToken)
-	if err != nil {
-		return nil, fmt.Errorf("starting relay VM: %w", err)
 	}
 	defer relayProc.stop()
-
-	claimAddr := net.JoinHostPort("127.0.0.1", strconv.Itoa(claimPort))
-	if _, err := sess.ClaimRelay(ctx, claimAddr, claimToken, req, nil); err != nil {
-		return nil, err
-	}
 
 	d.status("starting build...")
 	buildProc, err := d.startBuildVM(buildCfg, socketPath)
@@ -153,6 +139,38 @@ func (d *Driver) StartBuild(
 	return &driver.BuildResult{OutputDir: outputDir}, nil
 }
 
+// startAndClaimRelay boots the relay VM and claims it over the loopback-
+// forwarded claim port, returning the running relay process. On a claim
+// failure it stops the relay before returning, so the caller only needs to
+// defer stop on success.
+func (d *Driver) startAndClaimRelay(
+	ctx context.Context, sess *driver.Session, req *driver.BuildRequest,
+	kernelPath, initrdPath, socketPath string,
+) (*vmProcess, error) {
+	claimPort, err := driver.FreeLoopbackPort()
+	if err != nil {
+		return nil, err
+	}
+	claimToken, err := driver.RandomToken()
+	if err != nil {
+		return nil, err
+	}
+
+	d.status("starting relay...")
+	relayProc, err := d.startRelayVM(
+		kernelPath, initrdPath, socketPath, claimPort, claimToken)
+	if err != nil {
+		return nil, fmt.Errorf("starting relay VM: %w", err)
+	}
+
+	claimAddr := net.JoinHostPort("127.0.0.1", strconv.Itoa(claimPort))
+	if _, err := sess.ClaimRelay(ctx, claimAddr, claimToken, req, nil); err != nil {
+		relayProc.stop()
+		return nil, err
+	}
+	return relayProc, nil
+}
+
 // resolveBuildVMConfig determines how to boot the build VM: either from
 // a disk image (with COW overlay + cloud-init) or via direct kernel boot.
 func (d *Driver) resolveBuildVMConfig(
@@ -164,29 +182,13 @@ func (d *Driver) resolveBuildVMConfig(
 		MemoryMB: driver.OrDefault(req.MemoryMB, 4096),
 	}
 
-	image := req.Image
-	if image == "" && req.Containerfile != "" {
-		result, err := script.Translate(req.Containerfile)
-		if err == nil && result.Image != "" &&
-			result.Image != "scratch" {
-			resolved, err := resolveImage(result.Image)
-			if err == nil && resolved != "" {
-				image = resolved
-			}
-		}
-	}
+	image := resolveContainerfileImage(req)
 
 	if image == "" {
 		if isWindowsGuest(req) {
-			// Use the base image prepared by `warden image prepare --driver
-			// qemu --os windows` (parity with the Linux kernel/initrd resolution). It is
-			// overlaid below, so the cached base is never mutated.
-			ga := goArchOf(cfg.Arch)
-			base := WindowsImagePath(ga)
-			if _, err := os.Stat(base); err != nil {
-				return nil, driver.Fixable(
-					fmt.Sprintf("warden image prepare --driver qemu --os windows --arch %s --source <install ISO>, or pass --image <path>", ga),
-					"no prepared Windows base image at %s", base)
+			base, err := resolveWindowsBaseImage(cfg.Arch)
+			if err != nil {
+				return nil, err
 			}
 			image = base
 		} else {
@@ -218,36 +220,9 @@ func (d *Driver) resolveBuildVMConfig(
 	// Linux guests use a cloud-init NoCloud (CIDATA) seed.
 	if isWindowsGuest(req) {
 		cfg.Windows = true
-		// Writable UEFI vars carrying the Windows Boot Manager entry that
-		// bcdboot wrote during image prep; copied per-build so the base's
-		// vars store is never mutated.
-		ga := goArchOf(cfg.Arch)
-		srcVars := filepath.Join(driver.CacheDir(), "images",
-			"windows-"+ga+"-vars.fd")
-		if _, err := os.Stat(srcVars); err != nil {
-			return nil, driver.Fixable(
-				fmt.Sprintf("warden image prepare --driver qemu --os windows --arch %s --force --source <install ISO>", ga),
-				"windows base UEFI vars not found at %s", srcVars)
+		if err := configureWindowsBuildVM(cfg, workDir); err != nil {
+			return nil, err
 		}
-		dstVars := filepath.Join(workDir, "build-vars.fd")
-		if err := driver.CopyFile(srcVars, dstVars); err != nil {
-			return nil, fmt.Errorf("copying UEFI vars: %w", err)
-		}
-		cfg.VarsFD = dstVars
-		seedDir, err := windowsSeedDir(workDir, goArchOf(cfg.Arch))
-		if err != nil {
-			return nil, fmt.Errorf("generating windows seed: %w", err)
-		}
-		// FAT image (not ISO): Windows reads FAT16 natively via usb-storage
-		// with exact long names and a drive letter; our ISO9660 seed shows up
-		// as FileSystemType=Unknown with no letter, so the startup task can't
-		// run warden-run.ps1.
-		seedImg := filepath.Join(workDir, "seed.img")
-		if err := generateWindowsSeedFAT(
-			seedDir, seedImg, windowsSeedName); err != nil {
-			return nil, fmt.Errorf("generating windows seed FAT: %w", err)
-		}
-		cfg.SeedISO = seedImg
 		return cfg, nil
 	}
 
@@ -261,6 +236,79 @@ func (d *Driver) resolveBuildVMConfig(
 	}
 	cfg.SeedISO = seedISO
 	return cfg, nil
+}
+
+// resolveContainerfileImage returns req.Image, or when it is empty, the base
+// image a Containerfile FROM resolves to (empty when there is none or it is
+// "scratch").
+func resolveContainerfileImage(req *driver.BuildRequest) string {
+	if req.Image != "" || req.Containerfile == "" {
+		return req.Image
+	}
+	result, err := script.Translate(req.Containerfile)
+	if err != nil || result.Image == "" || result.Image == "scratch" {
+		return ""
+	}
+	resolved, err := resolveImage(result.Image)
+	if err != nil || resolved == "" {
+		return ""
+	}
+	return resolved
+}
+
+// resolveWindowsBaseImage returns the prepared Windows base image for the arch,
+// or an actionable error when `warden image prepare` has not produced one.
+func resolveWindowsBaseImage(arch string) (string, error) {
+	// Use the base image prepared by `warden image prepare --driver qemu --os
+	// windows` (parity with the Linux kernel/initrd resolution). It is overlaid
+	// below, so the cached base is never mutated.
+	ga := goArchOf(arch)
+	base := WindowsImagePath(ga)
+	if _, err := os.Stat(base); err != nil {
+		return "", driver.Fixable(
+			fmt.Sprintf("warden image prepare --driver qemu --os windows "+
+				"--arch %s --source <install ISO>, or pass --image <path>", ga),
+			"no prepared Windows base image at %s", base)
+	}
+	return base, nil
+}
+
+// configureWindowsBuildVM copies the writable UEFI vars and builds the Windows
+// provisioning seed (FAT image) for the build VM, filling cfg.VarsFD and
+// cfg.SeedISO.
+func configureWindowsBuildVM(cfg *buildVMConfig, workDir string) error {
+	// Writable UEFI vars carrying the Windows Boot Manager entry that
+	// bcdboot wrote during image prep; copied per-build so the base's
+	// vars store is never mutated.
+	ga := goArchOf(cfg.Arch)
+	srcVars := filepath.Join(driver.CacheDir(), "images",
+		"windows-"+ga+"-vars.fd")
+	if _, err := os.Stat(srcVars); err != nil {
+		return driver.Fixable(
+			fmt.Sprintf("warden image prepare --driver qemu --os windows "+
+				"--arch %s --force --source <install ISO>", ga),
+			"windows base UEFI vars not found at %s", srcVars)
+	}
+	dstVars := filepath.Join(workDir, "build-vars.fd")
+	if err := driver.CopyFile(srcVars, dstVars); err != nil {
+		return fmt.Errorf("copying UEFI vars: %w", err)
+	}
+	cfg.VarsFD = dstVars
+	seedDir, err := windowsSeedDir(workDir, goArchOf(cfg.Arch))
+	if err != nil {
+		return fmt.Errorf("generating windows seed: %w", err)
+	}
+	// FAT image (not ISO): Windows reads FAT16 natively via usb-storage
+	// with exact long names and a drive letter; our ISO9660 seed shows up
+	// as FileSystemType=Unknown with no letter, so the startup task can't
+	// run warden-run.ps1.
+	seedImg := filepath.Join(workDir, "seed.img")
+	if err := generateWindowsSeedFAT(
+		seedDir, seedImg, windowsSeedName); err != nil {
+		return fmt.Errorf("generating windows seed FAT: %w", err)
+	}
+	cfg.SeedISO = seedImg
+	return nil
 }
 
 func (d *Driver) Exec(ctx context.Context, req *driver.BuildRequest) error {
@@ -288,9 +336,11 @@ func qemuInstallHint() string {
 	case "darwin":
 		return "install it: brew install qemu"
 	case "windows":
-		return "install it: winget install SoftwareFreedomConservancy.QEMU (or scoop install qemu)"
+		return "install it: winget install " +
+			"SoftwareFreedomConservancy.QEMU (or scoop install qemu)"
 	default:
-		return "install it: apt install qemu-system qemu-utils (or your distro's equivalent)"
+		return "install it: apt install qemu-system qemu-utils " +
+			"(or your distro's equivalent)"
 	}
 }
 
@@ -363,7 +413,10 @@ func (d *Driver) resolveBuildAssets() (kernel, initrd string, err error) {
 	}
 
 	return "", "", driver.Fixable(
-		"build them from the source tree: tools/relay-vm/build-initramfs.sh && tools/build-vm/build-initramfs.sh, or pass --image <qcow2> (warden image prepare --driver qemu)",
+		"build them from the source tree: "+
+			"tools/relay-vm/build-initramfs.sh && "+
+			"tools/build-vm/build-initramfs.sh, or pass --image <qcow2> "+
+			"(warden image prepare --driver qemu)",
 		"qemu build VM boot assets (kernel + initramfs) not found")
 }
 

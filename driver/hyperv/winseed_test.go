@@ -29,7 +29,10 @@ func assertWellFormedXML(t *testing.T, s string) {
 }
 
 func TestGenerateWindowsUnattend(t *testing.T) {
-	xmlStr := generateWindowsUnattend(unattendConfig{AdminPassword: `p&w"<x>`, ProcArch: "amd64"})
+	xmlStr := generateWindowsUnattend(unattendConfig{
+		AdminPassword: `p&w"<x>`,
+		ProcArch:      "amd64",
+	})
 	assertWellFormedXML(t, xmlStr)
 
 	for _, want := range []string{
@@ -57,10 +60,12 @@ func TestFirstLogonCommand_LengthAndPayload(t *testing.T) {
 	if len(cmd) >= 1024 {
 		t.Errorf("FirstLogonCommand length %d must stay under the 1024 limit", len(cmd))
 	}
-	if !strings.HasPrefix(cmd, "powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ") {
+	if !strings.HasPrefix(cmd,
+		"powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ") {
 		t.Fatalf("unexpected command prefix: %q", cmd)
 	}
-	b64 := strings.TrimPrefix(cmd, "powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ")
+	b64 := strings.TrimPrefix(cmd,
+		"powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand ")
 	decoded := decodePSEncoded(t, b64)
 	if !strings.Contains(decoded, "warden-run.ps1") {
 		t.Errorf("encoded command should reference warden-run.ps1, got %q", decoded)
@@ -109,11 +114,15 @@ func decodePSEncoded(t *testing.T, b64 string) string {
 }
 
 func TestStageSeedDir(t *testing.T) {
-	seedDir, err := stageSeedDir(t.TempDir(), "amd64", &driver.BuildRequest{GuestOS: "windows"})
+	seedDir, err := stageSeedDir(
+		t.TempDir(), "amd64", &driver.BuildRequest{GuestOS: "windows"},
+	)
 	if err != nil {
 		t.Fatalf("stageSeedDir: %v", err)
 	}
-	for _, name := range []string{"warden-io.exe", "warden-run.ps1", "unattend.xml", "Autounattend.xml"} {
+	for _, name := range []string{
+		"warden-io.exe", "warden-run.ps1", "unattend.xml", "Autounattend.xml",
+	} {
 		if _, err := os.Stat(filepath.Join(seedDir, name)); err != nil {
 			t.Errorf("seed dir missing %s: %v", name, err)
 		}

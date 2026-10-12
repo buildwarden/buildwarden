@@ -21,7 +21,9 @@ import (
 // VALIDATION NOTE: the ISO packaging (IMAPI2), OOBE implicit-search discovery of
 // the answer file off a DVD, and the seed getting a drive letter are the pieces
 // that need a live boot against the real eval VHD to confirm.
-func buildSeed(workDir, buildID string, isWindows bool, req *driver.BuildRequest) (seedISO, seedVHDX string, err error) {
+func buildSeed(
+	workDir, buildID string, isWindows bool, req *driver.BuildRequest,
+) (seedISO, seedVHDX string, err error) {
 	if !isWindows {
 		return "", "", fmt.Errorf(
 			"Hyper-V Linux build-guest seed not implemented; this milestone targets " +
@@ -81,7 +83,8 @@ $result = $fsi.CreateResultImage()
 		return fmt.Errorf("IMAPI2 ISO build: %w", err)
 	}
 	if !strings.Contains(out, "OK") {
-		return fmt.Errorf("IMAPI2 ISO build: unexpected output: %q", strings.TrimSpace(out))
+		return fmt.Errorf(
+			"IMAPI2 ISO build: unexpected output: %q", strings.TrimSpace(out))
 	}
 	return nil
 }

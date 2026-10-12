@@ -77,7 +77,9 @@ func TestTunnelURLWithoutTunnelRejected(t *testing.T) {
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, err := Claim(ctx, addr, "", Config{CollectorURL: TunnelURL}); !errors.Is(err, ErrRejected) {
+	if _, err := Claim(
+		ctx, addr, "", Config{CollectorURL: TunnelURL},
+	); !errors.Is(err, ErrRejected) {
 		t.Fatalf("err = %v, want ErrRejected", err)
 	}
 }
@@ -92,7 +94,9 @@ func TestTunnelWrongTokenRejected(t *testing.T) {
 	}()
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
-	if _, _, err := OpenTunnel(ctx, addr, "wrong", http.NotFoundHandler()); !errors.Is(err, ErrRejected) {
+	if _, _, err := OpenTunnel(
+		ctx, addr, "wrong", http.NotFoundHandler(),
+	); !errors.Is(err, ErrRejected) {
 		t.Fatalf("err = %v, want ErrRejected", err)
 	}
 }

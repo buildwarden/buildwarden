@@ -82,6 +82,56 @@ type buildConfig struct {
 	readyTimeout time.Duration
 }
 
+// validateBuildConfig rejects a buildConfig that is missing a required field or
+// whose overlay format cannot match its base image.
+func validateBuildConfig(cfg buildConfig) error {
+	switch {
+	case cfg.BuildID == "":
+		return fmt.Errorf("runBuild: empty build ID")
+	case cfg.OutputDir == "":
+		return fmt.Errorf("runBuild: empty output dir")
+	case cfg.RelayBootVHDX == "":
+		return fmt.Errorf("runBuild: empty relay boot VHDX")
+	case cfg.RelayOverlay == "":
+		return fmt.Errorf("runBuild: empty relay overlay path")
+	case cfg.BuildBaseVHDX == "":
+		return fmt.Errorf("runBuild: empty build base VHDX")
+	case cfg.BuildOverlay == "":
+		return fmt.Errorf("runBuild: empty build overlay path")
+	case cfg.SeedISO == "" && cfg.SeedVHDX == "":
+		return fmt.Errorf(
+			"runBuild: no seed media " +
+				"(need SeedISO for Linux or SeedVHDX for Windows)")
+	case cfg.BuildSwitch == "":
+		return fmt.Errorf("runBuild: empty build switch")
+	case cfg.NATSwitch == "":
+		return fmt.Errorf("runBuild: empty NAT switch")
+	}
+	// A differencing child must share its parent's on-disk format, so the build
+	// overlay's extension must match the base image's (.vhd child off a .vhd
+	// base, .vhdx off .vhdx). A mismatch fails opaquely inside New-VHD.
+	if !strings.EqualFold(filepath.Ext(cfg.BuildBaseVHDX), filepath.Ext(cfg.BuildOverlay)) {
+		return fmt.Errorf(
+			"runBuild: build overlay %q must share the base image's extension %q "+
+				"(a differencing child must match its parent's format)",
+			cfg.BuildOverlay, filepath.Ext(cfg.BuildBaseVHDX))
+	}
+	return nil
+}
+
+// applyBuildDefaults fills unset buildConfig fields with their defaults.
+func applyBuildDefaults(cfg *buildConfig) {
+	if cfg.MemoryMB == 0 {
+		cfg.MemoryMB = defaultBuildMemoryMB
+	}
+	if cfg.CPUs == 0 {
+		cfg.CPUs = defaultBuildCPUs
+	}
+	if cfg.Generation == 0 {
+		cfg.Generation = 2
+	}
+}
+
 // runBuild composes the full Hyper-V build flow against an already-resolved
 // buildConfig:
 //
@@ -99,51 +149,20 @@ type buildConfig struct {
 //
 // Everything created is torn down on return (both VMs removed, both overlays
 // deleted, host servers stopped), success or failure.
-func runBuild(ctx context.Context, prov Provisioner, cfg buildConfig) (*driver.BuildResult, error) {
-	switch {
-	case cfg.BuildID == "":
-		return nil, fmt.Errorf("runBuild: empty build ID")
-	case cfg.OutputDir == "":
-		return nil, fmt.Errorf("runBuild: empty output dir")
-	case cfg.RelayBootVHDX == "":
-		return nil, fmt.Errorf("runBuild: empty relay boot VHDX")
-	case cfg.RelayOverlay == "":
-		return nil, fmt.Errorf("runBuild: empty relay overlay path")
-	case cfg.BuildBaseVHDX == "":
-		return nil, fmt.Errorf("runBuild: empty build base VHDX")
-	case cfg.BuildOverlay == "":
-		return nil, fmt.Errorf("runBuild: empty build overlay path")
-	case cfg.SeedISO == "" && cfg.SeedVHDX == "":
-		return nil, fmt.Errorf("runBuild: no seed media (need SeedISO for Linux or SeedVHDX for Windows)")
-	case cfg.BuildSwitch == "":
-		return nil, fmt.Errorf("runBuild: empty build switch")
-	case cfg.NATSwitch == "":
-		return nil, fmt.Errorf("runBuild: empty NAT switch")
+func runBuild(
+	ctx context.Context, prov Provisioner, cfg buildConfig,
+) (*driver.BuildResult, error) {
+	if err := validateBuildConfig(cfg); err != nil {
+		return nil, err
 	}
-	// A differencing child must share its parent's on-disk format, so the build
-	// overlay's extension must match the base image's (.vhd child off a .vhd
-	// base, .vhdx off .vhdx). A mismatch fails opaquely inside New-VHD.
-	if !strings.EqualFold(filepath.Ext(cfg.BuildBaseVHDX), filepath.Ext(cfg.BuildOverlay)) {
-		return nil, fmt.Errorf(
-			"runBuild: build overlay %q must share the base image's extension %q "+
-				"(a differencing child must match its parent's format)",
-			cfg.BuildOverlay, filepath.Ext(cfg.BuildBaseVHDX))
-	}
-	if cfg.MemoryMB == 0 {
-		cfg.MemoryMB = defaultBuildMemoryMB
-	}
-	if cfg.CPUs == 0 {
-		cfg.CPUs = defaultBuildCPUs
-	}
-	if cfg.Generation == 0 {
-		cfg.Generation = 2
-	}
+	applyBuildDefaults(&cfg)
 
 	if err := os.MkdirAll(cfg.OutputDir, 0o755); err != nil {
 		return nil, fmt.Errorf("runBuild: output dir: %w", err)
 	}
 
-	// 1. Relay host up: collector on the host, relay VM booted and claimed. StartRelay tears its own half down on failure.
+	// 1. Relay host up: collector on the host, relay VM booted and claimed.
+	//    StartRelay tears its own half down on failure.
 	rh, err := StartRelay(ctx, prov, RelayHostConfig{
 		BuildID:         cfg.BuildID,
 		OutputDir:       cfg.OutputDir,
@@ -178,7 +197,8 @@ func runBuild(ctx context.Context, prov Provisioner, cfg buildConfig) (*driver.B
 	defer func() {
 		if cfg.KeepVMs {
 			fmt.Fprintf(os.Stderr,
-				"warden: --keep-vms: leaving build VM %q (overlay %q) for inspection\n",
+				"warden: --keep-vms: leaving build VM %q "+
+					"(overlay %q) for inspection\n",
 				buildVM, cfg.BuildOverlay)
 			return
 		}
@@ -200,7 +220,10 @@ func runBuild(ctx context.Context, prov Provisioner, cfg buildConfig) (*driver.B
 	if comPipe == "" {
 		comPipe = `\\.\pipe\` + buildVM
 	}
-	fmt.Fprintf(os.Stderr, "warden: build VM %q COM1 -> %s (attach a serial reader to observe guest boot)\n", buildVM, comPipe)
+	fmt.Fprintf(os.Stderr,
+		"warden: build VM %q COM1 -> %s "+
+			"(attach a serial reader to observe guest boot)\n",
+		buildVM, comPipe)
 	if _, err := prov.CreateVM(ctx, VMSpec{
 		Name:        buildVM,
 		Generation:  cfg.Generation,

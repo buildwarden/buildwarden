@@ -37,7 +37,9 @@ func TestResolveBuildBaseVHDX_GenerationByFormat(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			img := touch(t, dir, tc.file)
-			path, isWin, gen, err := resolveBuildBaseVHDX(&driver.BuildRequest{Image: img, GuestOS: tc.guestOS})
+			path, isWin, gen, err := resolveBuildBaseVHDX(
+				&driver.BuildRequest{Image: img, GuestOS: tc.guestOS},
+			)
 			if err != nil {
 				t.Fatalf("resolveBuildBaseVHDX: %v", err)
 			}
