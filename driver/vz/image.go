@@ -4,9 +4,11 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
 
@@ -58,24 +60,10 @@ func isValidImageDir(dir string) bool {
 	return true
 }
 
-// LatestIPSW returns the path to the disk image of a prepared macOS image.
-// If no prepared image exists, it downloads and restores the latest from Apple.
-func (c *ImageCache) LatestIPSW() (string, error) {
-	dir, err := c.ImageDir()
-	if err != nil {
-		return "", err
-	}
-	if dir != "" {
-		return filepath.Join(dir, "disk.img"), nil
-	}
-
-	// No cached image — restore from Apple's latest IPSW
-	return c.RestoreIPSW("")
-}
-
 // RestoreIPSW downloads an IPSW file from the given URL, restores it to a
 // bootable disk image, and prepares it for headless use (suppresses Setup
-// Assistant, creates the warden user).
+// Assistant, creates the warden user). Readying the image needs root, so
+// that is checked before the download rather than after it.
 func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 	if err := os.MkdirAll(c.CacheDir, 0755); err != nil {
 		return "", fmt.Errorf("creating cache dir: %w", err)
@@ -107,8 +95,14 @@ func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 	if isValidImageDir(imgDir) {
 		return diskPath, nil
 	}
+	if err := RequireRoot(); err != nil {
+		return "", err
+	}
+	defer giveBackToSudoUser(filepath.Dir(c.CacheDir))
 
-	// Download IPSW if not already cached
+	// Download IPSW if not already cached. The download lands in a .part
+	// file renamed on success, so an interrupted one is never mistaken for
+	// a complete IPSW.
 	ipswLocal := filepath.Join(c.CacheDir, "ipsw-"+urlHash+".ipsw")
 	if _, err := os.Stat(ipswLocal); err != nil {
 		// Check for a pre-existing ipsw-latest.ipsw (manual or previous download)
@@ -117,13 +111,16 @@ func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 			ipswLocal = latestPath
 		} else {
 			fmt.Fprintf(os.Stderr, "Downloading IPSW...\n")
-			cmd := exec.Command("curl", "-L", "-o", ipswLocal,
+			part := ipswLocal + ".part"
+			cmd := exec.Command("curl", "-fL", "-C", "-", "-o", part,
 				"--progress-bar", ipswURL)
 			cmd.Stdout = os.Stderr
 			cmd.Stderr = os.Stderr
 			if err := cmd.Run(); err != nil {
-				os.Remove(ipswLocal)
-				return "", fmt.Errorf("downloading IPSW: %w", err)
+				return "", fmt.Errorf("downloading IPSW (rerun to resume): %w", err)
+			}
+			if err := os.Rename(part, ipswLocal); err != nil {
+				return "", err
 			}
 		}
 	}
@@ -211,6 +208,10 @@ func ReprepareImage(imgDir string) error {
 	if _, err := os.Stat(diskPath); err != nil {
 		return fmt.Errorf("disk image not found: %w", err)
 	}
+	if err := RequireRoot(); err != nil {
+		return err
+	}
+	defer giveBackToSudoUser(imgDir)
 
 	if err := PrepareHeadlessImage(diskPath); err != nil {
 		return err
@@ -221,6 +222,38 @@ func ReprepareImage(imgDir string) error {
 		[]byte("ok\n"), 0644)
 
 	return nil
+}
+
+// RequireRoot fails fast when readying a macOS image cannot work: it mounts
+// the disk with ownership enabled and installs root-owned LaunchDaemons, so
+// it needs root, and finding that out after a 25 GB download is too late.
+func RequireRoot() error {
+	if os.Geteuid() == 0 {
+		return nil
+	}
+	return driver.Fixable(PrepareCommand,
+		"preparing a macOS base image needs root (it installs root-owned system files into the image)")
+}
+
+// giveBackToSudoUser hands what a sudo'd prepare created under dir back to
+// the user who ran sudo, so their unprivileged builds can read and clone it
+// (aux-storage is mode 0600). A no-op unless running as root via sudo.
+func giveBackToSudoUser(dir string) {
+	u := sudoUser()
+	if u == nil {
+		return
+	}
+	uid, err1 := strconv.Atoi(u.Uid)
+	gid, err2 := strconv.Atoi(u.Gid)
+	if err1 != nil || err2 != nil {
+		return
+	}
+	_ = filepath.WalkDir(dir, func(p string, _ fs.DirEntry, err error) error {
+		if err == nil {
+			_ = os.Lchown(p, uid, gid)
+		}
+		return nil
+	})
 }
 
 // suppressSetupAssistant writes the markers that tell macOS to skip the

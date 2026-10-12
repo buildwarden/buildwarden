@@ -71,6 +71,7 @@ All ledger writes go through a channel to a single goroutine (`Ledger.loop()`). 
 - `artifacts` and `cwd` are reserved DNS hostnames that resolve to the relay IP
 - Network isolation: iptables (container), topological via separate VM (qemu, vz, hyperv)
 - All drivers use `warden-io initialize` as the build-environment entry point
+- Fail early, say what to do (DEVELOPING.md): a failure with a clear cause (missing root/Administrator, unprepared image, absent tool, bad flag) is a `driver.Fixable(fix, ...)` error naming the exact remedy, checked before any slow or irreversible step when the check is cheap; only unexplained failures get the file-a-bug link
 
 ## Linter settings
 

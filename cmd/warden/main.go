@@ -7,6 +7,7 @@ import (
 	"os"
 	"os/signal"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -130,13 +131,43 @@ func init() {
 }
 
 func main() {
+	rootCmd.SetFlagErrorFunc(func(c *cobra.Command, err error) error {
+		return driver.Fixable(fmt.Sprintf("see '%s --help'", c.CommandPath()), "%v", err)
+	})
+	fixableArgs(rootCmd)
+
 	if err := rootCmd.Execute(); err != nil {
 		var es exitStatus
 		if errors.As(err, &es) {
 			os.Exit(int(es))
 		}
+		// cobra reports an unknown subcommand as a plain error.
+		if strings.HasPrefix(err.Error(), "unknown command ") {
+			err = driver.Fixable("see 'warden --help'", "%v", err)
+		}
+		var fe *driver.FixableError
+		if errors.As(err, &fe) {
+			log.ErrorWithFix(err, fe.Fix)
+			os.Exit(1)
+		}
 		logError(err)
 		os.Exit(1)
+	}
+}
+
+// fixableArgs makes every command's argument-count errors FixableErrors, so
+// a mistyped invocation is answered with its help pointer, not a bug link.
+func fixableArgs(c *cobra.Command) {
+	if args := c.Args; args != nil {
+		c.Args = func(cmd *cobra.Command, a []string) error {
+			if err := args(cmd, a); err != nil {
+				return driver.Fixable(fmt.Sprintf("see '%s --help'", cmd.CommandPath()), "%v", err)
+			}
+			return nil
+		}
+	}
+	for _, sub := range c.Commands() {
+		fixableArgs(sub)
 	}
 }
 
@@ -173,11 +204,11 @@ func validateGuestOS(guestOS, driverName string) error {
 	switch guestOS {
 	case "", "linux", "windows":
 	default:
-		return fmt.Errorf(
+		return driver.Fixable("",
 			"invalid --guest-os %q (want \"linux\" or \"windows\")", guestOS)
 	}
 	if guestOS == "windows" && driverName != "qemu" && driverName != "hyperv" {
-		return fmt.Errorf(
+		return driver.Fixable("",
 			"--guest-os windows is currently only supported by --driver qemu or --driver hyperv")
 	}
 	return nil
@@ -250,7 +281,7 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 	if flagTimeout != "" {
 		var err error
 		if timeout, err = time.ParseDuration(flagTimeout); err != nil {
-			return nil, fmt.Errorf("invalid --timeout: %w", err)
+			return nil, driver.Fixable("give a Go duration such as 30s, 10m or 1h", "invalid --timeout: %v", err)
 		}
 	}
 	isVM := d == "qemu" || d == "vz" || d == "hyperv"
@@ -271,7 +302,7 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 	if tempDir != "" {
 		abs, err := filepath.Abs(tempDir)
 		if err != nil {
-			return nil, fmt.Errorf("invalid --tmpdir: %w", err)
+			return nil, driver.Fixable("", "invalid --tmpdir: %v", err)
 		}
 		tempDir = abs
 	}
@@ -373,7 +404,8 @@ func runShell(_ *cobra.Command, args []string) error {
 
 	if err := d.Exec(ctx, req); err != nil {
 		if err == driver.ErrExecNotSupported {
-			return fmt.Errorf("warden shell is not supported by --driver %s", d.Name())
+			return driver.Fixable("use warden build, or --driver container for an interactive shell",
+				"warden shell is not supported by --driver %s", d.Name())
 		}
 		// Leaving the shell with a non-zero status is the user's own
 		// result: pass it through, quietly.

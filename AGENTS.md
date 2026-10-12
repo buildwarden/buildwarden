@@ -103,6 +103,9 @@ Configuration via `warden.toml` or `~/.config/warden/config.toml`.
 - Body streamed to `payloads/<sha256>`, symlink at `artifacts/<name>`
 - Recorded in ledger with dedicated `artifact` record type
 
+### Fail early, say what to do
+A project standard (full text in DEVELOPING.md). A failure with a clear cause, such as a missing root or Administrator right, an unprepared image, an absent tool, a stopped runtime or a bad flag, returns `driver.Fixable(fix, ...)` naming the exact remedy. warden prints `To fix: ...` and no file-a-bug link. Check for it before any slow or irreversible step (download, restore, VM boot, network standup) whenever the check is cheap relative to a successful run. Recognized opaque platform errors are mapped at the call site.
+
 ## Extension System
 Extensions implement `BeforeBuild(env *CtrEnv) error` and optionally `Env() map[string]string`. They run on the host before the build starts and can write files to the staged `/.warden` tree (`ExtensionContext.WardenDir`, in the build's private work dir, never the build context; copied into the build container as `/.warden`) and scripts to its `ext.d/` (exec'd inside the build container).
 

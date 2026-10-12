@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +9,8 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/buildwarden/buildwarden/driver"
 )
 
 type Config struct {
@@ -103,7 +103,7 @@ func loadTOML(path string, cfg *Config) error {
 		return nil
 	}
 	if _, err := toml.DecodeFile(path, cfg); err != nil {
-		return fmt.Errorf("parsing %s: %w", path, err)
+		return driver.Fixable("fix the TOML syntax in "+path, "parsing %s: %v", path, err)
 	}
 	return nil
 }
@@ -111,10 +111,12 @@ func loadTOML(path string, cfg *Config) error {
 // DetectRuntime probes for a working container runtime.
 // Preference order: finch, docker, podman.
 func DetectRuntime() (string, error) {
+	var installed []string
 	for _, name := range []string{"finch", "docker", "podman"} {
 		if _, err := exec.LookPath(name); err != nil {
 			continue
 		}
+		installed = append(installed, name)
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		err := exec.CommandContext(ctx, name, "info").Run()
 		cancel()
@@ -122,7 +124,27 @@ func DetectRuntime() (string, error) {
 			return name, nil
 		}
 	}
-	return "", errors.New("no container runtime found (tried finch, docker, podman)")
+	if len(installed) == 0 {
+		return "", driver.Fixable(
+			"install Finch (brew install --cask finch && finch vm init), Docker or Podman, or use a VM driver (--driver qemu or vz)",
+			"no container runtime found (tried finch, docker, podman)")
+	}
+	// Installed but not answering: almost always its VM or daemon is down.
+	return "", driver.Fixable(runtimeStartHint(installed[0]),
+		"container runtime %s is installed but not running (`%s info` failed)",
+		strings.Join(installed, ", "), installed[0])
+}
+
+// runtimeStartHint is the command that starts a stopped runtime.
+func runtimeStartHint(name string) string {
+	switch name {
+	case "finch":
+		return "start its VM: finch vm start (or finch vm init the first time)"
+	case "podman":
+		return "start its machine: podman machine start (or podman machine init the first time)"
+	default:
+		return "start Docker (Docker Desktop, or the docker service)"
+	}
 }
 
 // ResolvePath handles the single-argument path logic:
@@ -136,7 +158,7 @@ func ResolvePath(path string) (dockerfile, contextDir string, err error) {
 
 	info, statErr := os.Stat(path)
 	if statErr != nil {
-		return "", "", fmt.Errorf("cannot access %q: %w", path, statErr)
+		return "", "", driver.Fixable("", "cannot access %q: %v", path, statErr)
 	}
 
 	if !info.IsDir() {
@@ -168,7 +190,8 @@ func discoverDockerfile(dir string) (string, error) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("no Dockerfile or Containerfile found in %s", dir)
+	return "", driver.Fixable("pass the Dockerfile's path, or the directory that holds it",
+		"no Dockerfile or Containerfile found in %s", dir)
 }
 
 // resolveBuildInput resolves the build context and (optional) Dockerfile for
@@ -191,7 +214,7 @@ func resolveBuildInput(path, driverName, guestOS, script string) (dockerfile, co
 	}
 	info, err := os.Stat(abs)
 	if err != nil {
-		return "", "", "", fmt.Errorf("cannot access %q: %w", path, err)
+		return "", "", "", driver.Fixable("", "cannot access %q: %v", path, err)
 	}
 	contextDir = abs
 	if !info.IsDir() {
@@ -221,7 +244,7 @@ func resolveBuildInput(path, driverName, guestOS, script string) (dockerfile, co
 		if windows {
 			hint = ""
 		}
-		return "", "", "", fmt.Errorf(
+		return "", "", "", driver.Fixable("",
 			"nothing to build in %s: pass --script, or add %s%s", contextDir, want, hint)
 	}
 	return "", contextDir, "", nil
@@ -240,7 +263,7 @@ func validateDriver(d string) error {
 	case "", "container", "qemu", "vz", "hyperv":
 		return nil
 	default:
-		return fmt.Errorf(
+		return driver.Fixable("",
 			"unknown driver %q (valid: container, qemu, vz, hyperv)", d)
 	}
 }
@@ -250,7 +273,7 @@ func validateCapture(c string) error {
 	case "", "none", "headers", "bodies", "all":
 		return nil
 	default:
-		return fmt.Errorf(
+		return driver.Fixable("",
 			"invalid capture mode %q (valid: none, headers, bodies, all)", c)
 	}
 }
@@ -268,11 +291,11 @@ func validateFlagsForDriver(d string) error {
 		{flagKeepVMs, "--keep-vms"},
 	} {
 		if f.set && !isVM {
-			return fmt.Errorf("%s requires a VM driver (--driver qemu, vz, or hyperv)", f.name)
+			return driver.Fixable("", "%s requires a VM driver (--driver qemu, vz, or hyperv)", f.name)
 		}
 	}
 	if flagNetwork != "" && d != "hyperv" {
-		return fmt.Errorf("--network is only used by --driver hyperv")
+		return driver.Fixable("", "--network is only used by --driver hyperv")
 	}
 	return nil
 }

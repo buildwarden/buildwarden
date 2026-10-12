@@ -33,6 +33,15 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		sw = DefaultDevSwitch
 	}
 
+	// Privilege and network readiness first: a missing group membership or
+	// elevation is the most common blocker, and it costs nothing to check
+	// before any disk or seed work. Detect reflects THIS process's token.
+	caps := Detect(sw)
+	if ready, reason := caps.Ready(); !ready {
+		return nil, driver.Fixable("see `warden doctor --driver hyperv` for each capability and its fix",
+			"hyperv build: %s", reason)
+	}
+
 	buildID := driver.RandAlphaNum(8)
 
 	relayBoot, err := resolveRelayBootVHDX()
@@ -64,11 +73,10 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 
 	p := newLocalProvisioner(d.Verbose)
 
-	// Resolve how this build's isolated network is provisioned, per the
-	// capability model (see capability.go). Detect reflects THIS process's
-	// token, so the gateway's non-elevated warden lands on reuse-durable or
-	// delegate-to-service; an elevated shell lands on ephemeral-per-build.
-	caps := Detect(sw)
+	// Network provisioning per the capability model (see capability.go),
+	// using the capabilities detected above: the gateway's non-elevated
+	// warden lands on reuse-durable or delegate-to-service; an elevated
+	// shell lands on ephemeral-per-build.
 	var buildSwitch, natSwitch string
 	switch strat := caps.NetworkStrategy(); strat {
 	case NetReuseDurable:

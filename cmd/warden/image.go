@@ -118,7 +118,7 @@ func runImagePrepare(cmd *cobra.Command, args []string) error {
 	source := flagImgSource
 	if len(args) > 0 {
 		if source != "" && source != args[0] {
-			return fmt.Errorf("give the source once: [source] or --source")
+			return driver.Fixable("", "give the source once: [source] or --source")
 		}
 		source = args[0]
 	}
@@ -126,6 +126,15 @@ func runImagePrepare(cmd *cobra.Command, args []string) error {
 	var path string
 	switch drv + "/" + osName {
 	case "vz/macos":
+		// Every vz prepare path writes root-owned files into the image, and
+		// restoring needs the virtualization entitlement: check both before
+		// anything is downloaded.
+		if err := vz.Preflight(); err != nil {
+			return err
+		}
+		if err := vz.RequireRoot(); err != nil {
+			return err
+		}
 		cache := &vz.ImageCache{CacheDir: vz.DefaultCacheDir()}
 		existing, _ := cache.ImageDir()
 		path, err = cache.RestoreIPSW(source)
@@ -140,8 +149,8 @@ func runImagePrepare(cmd *cobra.Command, args []string) error {
 
 	case "qemu/windows":
 		if source == "" {
-			return fmt.Errorf("--driver qemu --os windows needs the Windows install ISO: " +
-				"warden image prepare --driver qemu --os windows --source <path-or-url>")
+			return driver.Fixable("warden image prepare --driver qemu --os windows --source <path-or-url>",
+				"--driver qemu --os windows needs the Windows install ISO")
 		}
 		if existing := qemu.WindowsImagePath(flagImgArch); !flagImgForce {
 			if _, statErr := os.Stat(existing); statErr == nil {
@@ -174,7 +183,7 @@ func runImagePrepare(cmd *cobra.Command, args []string) error {
 		})
 
 	default:
-		return fmt.Errorf("no %s image for --driver %q (vz: macos; qemu: linux, windows; hyperv: windows)",
+		return driver.Fixable("", "no %s image for --driver %q (vz: macos; qemu: linux, windows; hyperv: windows)",
 			osName, drv)
 	}
 	if err != nil {

@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"net"
+
+	"github.com/buildwarden/buildwarden/driver"
 )
 
 // Default addressing for the durable dev NAT network (relay egress only). The
@@ -48,13 +50,17 @@ func RunSetup(ctx context.Context, w io.Writer, opts SetupOptions) error {
 
 	caps := Detect(opts.SwitchName)
 	if !caps.Supported {
-		return fmt.Errorf("hyperv setup requires a Windows host (current OS: %s)", caps.Platform)
+		return driver.Fixable("", "hyperv setup requires a Windows host (current OS: %s)", caps.Platform)
 	}
 	if !caps.HypervisorPresent || !caps.HyperVFeature {
-		return fmt.Errorf("Hyper-V is not available here; enable the Hyper-V feature and reboot")
+		return driver.Fixable(
+			"enable it from an elevated PowerShell: Enable-WindowsOptionalFeature -Online -FeatureName Microsoft-Hyper-V -All, then reboot",
+			"Hyper-V is not available on this host")
 	}
 	if caps.Resolve(OpNetworkStandup) == OutcomeBlocked {
-		return fmt.Errorf("network standup needs full Administrator: re-run `warden setup --driver hyperv` from a terminal launched as Administrator")
+		return driver.Fixable(
+			"re-run `warden setup --driver hyperv` from a terminal launched with Run as administrator",
+			"network setup needs full Administrator rights, and this process is not elevated")
 	}
 
 	p := newLocalProvisioner(opts.Verbose)

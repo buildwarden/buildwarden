@@ -53,7 +53,7 @@ runtime's VM shares; the macOS temp dir is shared by all three.
 | the build's own code | The build script exited non-zero (`warden: build FAILED (exit code N)`) |
 | `124` | `--timeout` expired |
 | `130` | Interrupted (Ctrl-C) |
-| `1` | warden or the build environment failed; the error is printed with an issue link |
+| `1` | Any other failure. A known cause (missing root or Administrator, unprepared image, absent tool, bad flag) is printed with `To fix: <what to do>`; only an unexplained failure carries the issue link |
 
 `warden shell` exits with the shell's own exit status.
 

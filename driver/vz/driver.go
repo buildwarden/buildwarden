@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -52,6 +53,11 @@ func (d *Driver) StartBuild(
 	if err := checkPlatform(); err != nil {
 		return nil, err
 	}
+	// The base image is checked first: without one nothing else can run.
+	diskImage, err := d.resolveImage(req.Image)
+	if err != nil {
+		return nil, fmt.Errorf("resolving image: %w", err)
+	}
 	if req.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, req.Timeout)
@@ -91,12 +97,6 @@ func (d *Driver) StartBuild(
 		return nil, err
 	}
 	defer sess.Close()
-
-	// Resolve and clone macOS disk image for build VM
-	diskImage, err := d.resolveImage(req.Image)
-	if err != nil {
-		return nil, fmt.Errorf("resolving image: %w", err)
-	}
 
 	buildDisk := filepath.Join(workDir, "build-disk.img")
 	if err := CloneDisk(diskImage, buildDisk); err != nil {
@@ -147,6 +147,12 @@ func (d *Driver) StartBuild(
 		buildDisk, buildAux, filepath.Dir(diskImage), vnet,
 		driver.OrDefault(req.CPUs, 4), driver.OrDefault(req.MemoryMB, 8192))
 	if err != nil {
+		// VZErrorDomain code 6: macOS caps running macOS guests at two.
+		if strings.Contains(err.Error(), "VZErrorDomain code=6") {
+			return nil, driver.Fixable(
+				"wait for another vz build, or another macOS VM (UTM, Tart, ...), to finish, then retry",
+				"booting build VM: macOS allows at most two running macOS virtual machines, and two are running")
+		}
 		return nil, fmt.Errorf("booting build VM: %w", err)
 	}
 	defer func() { _ = buildVM.Stop() }()
@@ -168,12 +174,31 @@ func (d *Driver) Exec(ctx context.Context, req *driver.BuildRequest) error {
 
 func (d *Driver) Close() error { return nil }
 
+// PrepareCommand is how a user prepares the vz base image. It needs root:
+// readying the image writes root-owned system files into it.
+const PrepareCommand = "sudo warden image prepare --driver vz"
+
+// resolveImage returns the base disk for a build. A build never restores an
+// image itself: that is a 25+ GB download, needs root, and belongs to
+// `warden image prepare`, so a missing image fails immediately with that
+// command.
 func (d *Driver) resolveImage(image string) (string, error) {
 	if image == "" {
-		return d.Cache.LatestIPSW()
+		dir, err := d.Cache.ImageDir()
+		if err != nil {
+			return "", err
+		}
+		if dir == "" {
+			return "", driver.Fixable(PrepareCommand,
+				"no prepared macOS base image in %s", d.Cache.CacheDir)
+		}
+		return filepath.Join(dir, "disk.img"), nil
 	}
 	if _, err := os.Stat(image); err == nil {
 		return image, nil
+	}
+	if !strings.Contains(image, "://") {
+		return "", driver.Fixable("", "--image %s: no such file (give a disk.img path or an IPSW URL)", image)
 	}
 	return d.Cache.RestoreIPSW(image)
 }
@@ -283,7 +308,8 @@ func (d *Driver) bootBuildVM(
 
 func checkPlatform() error {
 	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
-		return fmt.Errorf("vz driver requires macOS on Apple Silicon (got %s/%s)",
+		return driver.Fixable("use --driver qemu or --driver container on this host",
+			"vz driver requires macOS on Apple Silicon (got %s/%s)",
 			runtime.GOOS, runtime.GOARCH)
 	}
 	exe, err := os.Executable()
@@ -294,19 +320,40 @@ func checkPlatform() error {
 		"codesign", "-d", "--entitlements", ":-", exe).Output()
 	if err != nil || !strings.Contains(string(out),
 		"com.apple.security.virtualization") {
-		return fmt.Errorf(
-			"vz driver requires the com.apple.security.virtualization "+
-				"entitlement\n"+
-				"  Sign the binary: codesign --sign - "+
-				"--entitlements entitlements.plist %s", exe)
+		return driver.Fixable(
+			"sign it: codesign --sign - --entitlements entitlements.plist "+exe+
+				" (make build does this)",
+			"vz driver requires warden to be signed with the com.apple.security.virtualization entitlement")
 	}
 	return nil
 }
 
-// DefaultCacheDir returns the default path for cached VM images.
+// DefaultCacheDir returns the default path for cached VM images. Under sudo
+// it is the invoking user's, not root's, so `sudo warden image prepare`
+// prepares the image that user's builds use.
 func DefaultCacheDir() string {
 	home, _ := os.UserHomeDir()
+	if u := sudoUser(); u != nil {
+		home = u.HomeDir
+	}
 	return filepath.Join(home, ".cache", "warden", "images")
+}
+
+// sudoUser is the user who ran warden through sudo, or nil when warden is
+// not running as root on someone's behalf.
+func sudoUser() *user.User {
+	if os.Geteuid() != 0 {
+		return nil
+	}
+	name := os.Getenv("SUDO_USER")
+	if name == "" || name == "root" {
+		return nil
+	}
+	u, err := user.Lookup(name)
+	if err != nil {
+		return nil
+	}
+	return u
 }
 
 func defaultCacheDir() string {

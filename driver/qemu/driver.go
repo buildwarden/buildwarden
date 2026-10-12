@@ -89,6 +89,17 @@ func (d *Driver) StartBuild(
 		return nil, fmt.Errorf("staging build script: %w", err)
 	}
 
+	// Resolve both VMs' boot assets before anything boots, so a missing
+	// image or asset fails in milliseconds rather than after the relay is up.
+	buildCfg, err := d.resolveBuildVMConfig(req, workDir)
+	if err != nil {
+		return nil, err
+	}
+	kernelPath, initrdPath, err := d.relayInitrd(workDir)
+	if err != nil {
+		return nil, fmt.Errorf("resolving relay assets: %w", err)
+	}
+
 	// The relay's claim port is forwarded to host loopback (hostfwd); the
 	// collector rides the tunnel the session opens over it.
 	sess, err := driver.StartSession(driver.SessionConfig{
@@ -102,11 +113,6 @@ func (d *Driver) StartBuild(
 		return nil, err
 	}
 	defer sess.Close()
-
-	kernelPath, initrdPath, err := d.relayInitrd(workDir)
-	if err != nil {
-		return nil, fmt.Errorf("resolving relay assets: %w", err)
-	}
 
 	// Socket for the isolated relay<->build network.
 	socketPath := filepath.Join(workDir, "vlan.sock")
@@ -132,10 +138,6 @@ func (d *Driver) StartBuild(
 		return nil, err
 	}
 
-	buildCfg, err := d.resolveBuildVMConfig(req, workDir)
-	if err != nil {
-		return nil, err
-	}
 	d.status("starting build...")
 	buildProc, err := d.startBuildVM(buildCfg, socketPath)
 	if err != nil {
@@ -182,10 +184,9 @@ func (d *Driver) resolveBuildVMConfig(
 			ga := goArchOf(cfg.Arch)
 			base := WindowsImagePath(ga)
 			if _, err := os.Stat(base); err != nil {
-				return nil, fmt.Errorf(
-					"no prepared Windows base image at %s (run "+
-						"`warden image prepare --driver qemu --os windows --arch %s` first, "+
-						"or pass --image <path>)", base, ga)
+				return nil, driver.Fixable(
+					fmt.Sprintf("warden image prepare --driver qemu --os windows --arch %s --source <install ISO>, or pass --image <path>", ga),
+					"no prepared Windows base image at %s", base)
 			}
 			image = base
 		} else {
@@ -200,7 +201,7 @@ func (d *Driver) resolveBuildVMConfig(
 	}
 
 	if _, err := os.Stat(image); err != nil {
-		return nil, fmt.Errorf("build image: %w", err)
+		return nil, driver.Fixable("", "build image: %v", err)
 	}
 	image, _ = filepath.Abs(image)
 
@@ -224,9 +225,9 @@ func (d *Driver) resolveBuildVMConfig(
 		srcVars := filepath.Join(driver.CacheDir(), "images",
 			"windows-"+ga+"-vars.fd")
 		if _, err := os.Stat(srcVars); err != nil {
-			return nil, fmt.Errorf(
-				"windows base UEFI vars not found at %s (re-run "+
-					"`warden image prepare --driver qemu --os windows --arch %s`)", srcVars, ga)
+			return nil, driver.Fixable(
+				fmt.Sprintf("warden image prepare --driver qemu --os windows --arch %s --force --source <install ISO>", ga),
+				"windows base UEFI vars not found at %s", srcVars)
 		}
 		dstVars := filepath.Join(workDir, "build-vars.fd")
 		if err := driver.CopyFile(srcVars, dstVars); err != nil {
@@ -271,18 +272,26 @@ func (d *Driver) Close() error { return nil }
 func (d *Driver) checkPrereqs() error {
 	binary := d.qemuBinary(hostQEMUArch())
 	if _, err := exec.LookPath(binary); err != nil {
-		return fmt.Errorf(
-			"qemu driver requires %s but it was not found in PATH\n"+
-				"  macOS:  brew install qemu\n"+
-				"  Linux:  apt install qemu-system (or equivalent)\n"+
-				"  Windows: scoop install qemu", binary)
+		return driver.Fixable(qemuInstallHint(),
+			"qemu driver requires %s but it was not found in PATH", binary)
 	}
 	if _, err := exec.LookPath("qemu-img"); err != nil {
-		return fmt.Errorf(
-			"qemu driver requires qemu-img but it was not found in PATH\n" +
-				"  It is typically included with the qemu package")
+		return driver.Fixable(qemuInstallHint()+" (qemu-img ships with qemu)",
+			"qemu driver requires qemu-img but it was not found in PATH")
 	}
 	return nil
+}
+
+// qemuInstallHint is how to install qemu on this OS.
+func qemuInstallHint() string {
+	switch runtime.GOOS {
+	case "darwin":
+		return "install it: brew install qemu"
+	case "windows":
+		return "install it: winget install SoftwareFreedomConservancy.QEMU (or scoop install qemu)"
+	default:
+		return "install it: apt install qemu-system qemu-utils (or your distro's equivalent)"
+	}
 }
 
 // detectAccel returns the best available acceleration for this host.
@@ -353,8 +362,9 @@ func (d *Driver) resolveBuildAssets() (kernel, initrd string, err error) {
 		}
 	}
 
-	return "", "", fmt.Errorf(
-		"build VM assets not found; run tools/build-vm/build-initramfs.sh")
+	return "", "", driver.Fixable(
+		"build them from the source tree: tools/relay-vm/build-initramfs.sh && tools/build-vm/build-initramfs.sh, or pass --image <qcow2> (warden image prepare --driver qemu)",
+		"qemu build VM boot assets (kernel + initramfs) not found")
 }
 
 func (d *Driver) resolveRelayAssets() (kernel, initrd string, err error) {
@@ -380,8 +390,9 @@ func (d *Driver) resolveRelayAssets() (kernel, initrd string, err error) {
 		}
 	}
 
-	return "", "", fmt.Errorf(
-		"relay VM assets not found; run tools/relay-vm/build-initramfs.sh")
+	return "", "", driver.Fixable(
+		"build them from the source tree: tools/relay-vm/build-initramfs.sh",
+		"qemu relay VM assets (kernel + initramfs) not found")
 }
 
 // Preflight checks the host can run qemu builds: the qemu binaries are on

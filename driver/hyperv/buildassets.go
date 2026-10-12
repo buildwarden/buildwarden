@@ -34,7 +34,8 @@ func hypervCacheDir() string {
 func resolveRelayBootVHDX() (string, error) {
 	if p := os.Getenv("WARDEN_RELAY_BOOT_VHDX"); p != "" {
 		if _, err := os.Stat(p); err != nil {
-			return "", fmt.Errorf("WARDEN_RELAY_BOOT_VHDX=%q not readable: %w", p, err)
+			return "", driver.Fixable("point WARDEN_RELAY_BOOT_VHDX at the relay boot VHDX, or unset it",
+				"WARDEN_RELAY_BOOT_VHDX=%q not readable: %v", p, err)
 		}
 		return p, nil
 	}
@@ -42,10 +43,9 @@ func resolveRelayBootVHDX() (string, error) {
 	if _, err := os.Stat(pinned); err == nil {
 		return pinned, nil
 	}
-	return "", fmt.Errorf(
-		"relay boot VHDX not found (looked at $WARDEN_RELAY_BOOT_VHDX and %s); "+
-			"build it with tools/relay-vm/hyperv/build.sh + build-boot-vhdx.sh, "+
-			"or wait for `warden setup --driver hyperv` to download the pinned disk", pinned)
+	return "", driver.Fixable(
+		"build it from the source tree: tools/relay-vm/hyperv/build.sh, then build-boot-vhdx.sh",
+		"relay boot VHDX not found (looked at $WARDEN_RELAY_BOOT_VHDX and %s)", pinned)
 }
 
 // resolveBuildBaseVHDX locates the read-only build-guest base image (the
@@ -83,10 +83,9 @@ func resolveBuildBaseVHDX(req *driver.BuildRequest) (path string, isWindows bool
 		if p, isWin, gen, ok := resolveActiveEvalImage(); ok {
 			return p, isWin, gen, nil
 		}
-		return "", isWindows, 0, fmt.Errorf(
-			"no build-guest base image: run `warden image prepare --driver hyperv` " +
-				"to pin Microsoft's eval VHD, or pass --image <disk.vhd|.vhdx> / set " +
-				"WARDEN_HYPERV_BUILD_IMAGE")
+		return "", isWindows, 0, driver.Fixable(
+			"warden image prepare --driver hyperv (pins Microsoft's eval VHD), or pass --image <disk.vhd|.vhdx>",
+			"no Hyper-V build-guest base image")
 	}
 
 	switch strings.ToLower(filepath.Ext(candidate)) {
