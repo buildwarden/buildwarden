@@ -187,7 +187,9 @@ func validateGuestOS(guestOS, driverName string) error {
 func newDriver(cfg *Config) (driver.Driver, error) {
 	switch cfg.Runtime.Driver {
 	case "vz":
-		return vz.New(), nil
+		d := vz.New()
+		d.Verbose = cfg.Output.Verbose
+		return d, nil
 	case "qemu":
 		d := qemu.New()
 		d.Verbose = cfg.Output.Verbose

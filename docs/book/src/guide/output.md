@@ -17,8 +17,9 @@ warden-output/
     └── <hash>
 ```
 
-The container driver also writes `Dockerfile.submitted`, `Dockerfile.actual`,
-`build.sh` (the translated build script), and `relay.log`.
+The container driver also writes `Dockerfile.submitted`, `Dockerfile.actual`
+and `build.sh` (the translated build script). The container and vz drivers,
+whose relay runs as a container or host process, also write `relay.log`.
 
 ## File Details
 
@@ -58,8 +59,8 @@ from this file, by `-q/--quiet`).
 
 ### relay.log
 
-Application-level log from the relay process. Written by the container driver
-only. Contains:
+Application-level log from the relay process. Written by the container and vz
+drivers (on vz it is echoed to the terminal only with `-v`). Contains:
 - DNS resolution events
 - Artifact storage confirmations
 - Error messages (if any)

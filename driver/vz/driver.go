@@ -3,6 +3,7 @@ package vz
 import (
 	"context"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"os/exec"
@@ -20,20 +21,20 @@ import (
 // Architecture (host relay + build VM):
 //
 //	Host (orchestrator)
-//	├── Prepares shared volume: relay binary, config, context, ledger dir
 //	├── Creates isolated virtual network (socket pair)
-//	├── Starts Relay (host process with --ingress=fd)
+//	├── Starts Relay (host process, --mode=host, frames on fd 3) and claims it
 //	│   ├── Reads raw Ethernet frames from socketpair via gvisor netstack
 //	│   └── Has native internet access (host networking)
 //	├── Boots Build VM (macOS from IPSW)
 //	│   └── Single interface → socket pair → Relay (sole gateway)
-//	└── Waits for build completion, collects ledger + artifacts
+//	└── Waits for build completion; outputs arrive through the collector
 //
 // Network isolation is topological: the build VM's only network path is
 // through the relay process. No iptables, no vmnet needed.
 type Driver struct {
-	Cache    *ImageCache
-	RelayImg string // Path to relay Alpine VM image (built/cached)
+	Cache *ImageCache
+	// Verbose echoes the host relay's log to stderr as well as relay.log.
+	Verbose bool
 }
 
 func New() *Driver {
@@ -101,6 +102,13 @@ func (d *Driver) StartBuild(
 	if err := CloneDisk(diskImage, buildDisk); err != nil {
 		return nil, fmt.Errorf("cloning build disk: %w", err)
 	}
+	// The auxiliary storage (NVRAM) is written at boot and locked by the
+	// running VM, so each build boots from its own clone too; otherwise a
+	// second concurrent build fails with "Failed to lock auxiliary storage".
+	buildAux := filepath.Join(workDir, "aux-storage")
+	if err := CloneDisk(filepath.Join(filepath.Dir(diskImage), "aux-storage"), buildAux); err != nil {
+		return nil, fmt.Errorf("cloning auxiliary storage: %w", err)
+	}
 
 	// Create isolated virtual network (socket pair)
 	vnet, err := NewVirtualNetwork()
@@ -120,7 +128,7 @@ func (d *Driver) StartBuild(
 	if err != nil {
 		return nil, err
 	}
-	relayProc, err := d.startHostRelay(workDir, vnet, claimPort, claimToken)
+	relayProc, err := d.startHostRelay(workDir, outputDir, vnet, claimPort, claimToken)
 	if err != nil {
 		return nil, fmt.Errorf("starting relay: %w", err)
 	}
@@ -136,7 +144,7 @@ func (d *Driver) StartBuild(
 	// Platform state files (hardware-model, machine-id, aux-storage) live
 	// alongside the original disk image, not the COW clone.
 	buildVM, err := d.bootBuildVM(
-		buildDisk, filepath.Dir(diskImage), vnet,
+		buildDisk, buildAux, filepath.Dir(diskImage), vnet,
 		driver.OrDefault(req.CPUs, 4), driver.OrDefault(req.MemoryMB, 8192))
 	if err != nil {
 		return nil, fmt.Errorf("booting build VM: %w", err)
@@ -173,6 +181,7 @@ func (d *Driver) resolveImage(image string) (string, error) {
 // RelayProcess wraps a host-side relay subprocess.
 type RelayProcess struct {
 	cmd *exec.Cmd
+	log *os.File
 }
 
 // Stop sends SIGTERM and waits for the relay to exit.
@@ -181,12 +190,15 @@ func (rp *RelayProcess) Stop() {
 		_ = rp.cmd.Process.Signal(os.Interrupt)
 		_ = rp.cmd.Wait()
 	}
+	if rp.log != nil {
+		_ = rp.log.Close()
+	}
 }
 
 // startHostRelay starts the relay as a host process in fd-ingress mode. It
 // reads raw Ethernet frames from vnet.RelaySocketFD (gvisor netstack) and
 // waits, unconfigured, for the claim on 127.0.0.1:claimPort.
-func (d *Driver) startHostRelay(workDir string, vnet *VirtualNetwork, claimPort int, claimToken string) (*RelayProcess, error) {
+func (d *Driver) startHostRelay(workDir, outputDir string, vnet *VirtualNetwork, claimPort int, claimToken string) (*RelayProcess, error) {
 	built, err := driver.GuestBinary("relay", "darwin", "arm64")
 	if err != nil {
 		return nil, err
@@ -211,8 +223,18 @@ func (d *Driver) startHostRelay(workDir string, vnet *VirtualNetwork, claimPort 
 		"--claim-addr="+net.JoinHostPort("127.0.0.1", fmt.Sprint(claimPort)),
 	)
 	cmd.Env = append(os.Environ(), relaycfg.TokenEnv+"="+claimToken)
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
+	// The relay's own log goes to <output>/relay.log, as on the container
+	// driver; it reaches the terminal only with --verbose.
+	logFile, err := os.Create(filepath.Join(outputDir, "relay.log"))
+	if err != nil {
+		return nil, fmt.Errorf("creating relay.log: %w", err)
+	}
+	var logOut io.Writer = logFile
+	if d.Verbose {
+		logOut = io.MultiWriter(logFile, os.Stderr)
+	}
+	cmd.Stdout = logOut
+	cmd.Stderr = logOut
 
 	// Pass the relay socketpair FD as ExtraFiles[0] → becomes fd 3 in child.
 	cmd.ExtraFiles = []*os.File{
@@ -220,10 +242,11 @@ func (d *Driver) startHostRelay(workDir string, vnet *VirtualNetwork, claimPort 
 	}
 
 	if err := cmd.Start(); err != nil {
+		logFile.Close()
 		return nil, fmt.Errorf("starting relay process: %w", err)
 	}
 
-	return &RelayProcess{cmd: cmd}, nil
+	return &RelayProcess{cmd: cmd, log: logFile}, nil
 }
 
 func maskBits(mask net.IPMask) int {
@@ -236,7 +259,7 @@ func maskBits(mask net.IPMask) int {
 // No shared directory — warden-io is baked into the disk image and all
 // runtime communication goes through the relay's HTTP API.
 func (d *Driver) bootBuildVM(
-	diskImage, platformDir string, vnet *VirtualNetwork, cpus, memoryMB int,
+	diskImage, auxStorage, platformDir string, vnet *VirtualNetwork, cpus, memoryMB int,
 ) (*VM, error) {
 	imgDir := platformDir
 
@@ -244,7 +267,7 @@ func (d *Driver) bootBuildVM(
 		CPUs:               cpus,
 		MemoryMB:           memoryMB,
 		DiskImagePath:      diskImage,
-		AuxStoragePath:     filepath.Join(imgDir, "aux-storage"),
+		AuxStoragePath:     auxStorage,
 		HardwareModelPath:  filepath.Join(imgDir, "hardware-model"),
 		MachineIDPath:      filepath.Join(imgDir, "machine-id"),
 		FileHandleSocketFD: vnet.BuildSocketFD,
