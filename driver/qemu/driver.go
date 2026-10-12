@@ -77,9 +77,9 @@ func (d *Driver) StartBuild(
 		return nil, fmt.Errorf("creating output dir: %w", err)
 	}
 
-	workDir, err := os.MkdirTemp("", "warden-qemu-"+buildID+"-")
+	workDir, err := driver.NewWorkDir(req, "qemu-"+buildID)
 	if err != nil {
-		return nil, fmt.Errorf("creating work dir: %w", err)
+		return nil, err
 	}
 	defer driver.RemoveWorkDir(req, workDir)
 

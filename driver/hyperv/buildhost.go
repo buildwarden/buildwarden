@@ -231,7 +231,8 @@ func runBuild(ctx context.Context, prov Provisioner, cfg buildConfig) (*driver.B
 	}
 	if err := rh.Session.Wait(waitCtx); err != nil {
 		if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
-			return nil, fmt.Errorf("runBuild: build %q did not complete within %s", buildVM, cfg.Timeout)
+			return nil, fmt.Errorf("runBuild: build %q did not complete within %s: %w",
+				buildVM, cfg.Timeout, context.DeadlineExceeded)
 		}
 		return nil, fmt.Errorf("runBuild: %w", err)
 	}

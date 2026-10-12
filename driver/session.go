@@ -172,14 +172,26 @@ func (s *Session) Wait(ctx context.Context) error {
 	return exitErr(sig)
 }
 
+// ExitError reports a build (or shell) that ran to completion and exited
+// non-zero. Code is the build script's own exit code, which warden exits
+// with; it is an expected outcome, not a warden failure.
+type ExitError struct {
+	Code   int
+	Detail string
+}
+
+func (e *ExitError) Error() string {
+	if e.Detail != "" {
+		return fmt.Sprintf("build exited with code %d: %s", e.Code, e.Detail)
+	}
+	return fmt.Sprintf("build exited with code %d", e.Code)
+}
+
 func exitErr(sig collector.CompletionSignal) error {
 	if sig.ExitCode == 0 {
 		return nil
 	}
-	if msg := firstNonEmpty(sig.Error, sig.Message); msg != "" {
-		return fmt.Errorf("build exited with code %d: %s", sig.ExitCode, msg)
-	}
-	return fmt.Errorf("build exited with code %d", sig.ExitCode)
+	return &ExitError{Code: sig.ExitCode, Detail: firstNonEmpty(sig.Error, sig.Message)}
 }
 
 // Close tears down the relay tunnel.

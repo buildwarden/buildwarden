@@ -26,6 +26,7 @@ rejects only the flags it genuinely cannot use.
 - `--memory <MiB>` — Build VM memory in MiB (VM drivers; default per driver)
 - `--network <name>` — Pre-provisioned network to reuse (hyperv: the durable switch from `warden setup`)
 - `--keep-vms` — Leave VMs, disks and the work dir in place for inspection (VM drivers)
+- `--tmpdir <dir>` — Directory each build's private work dir is created in (default: the OS temp dir, which honours `TMPDIR`)
 - `-q, --quiet` — Do not echo the guest build console (still captured to `build-output.log`)
 
 The container driver refuses the VM-only flags (`--script`, `--image`, `--cpus`,
@@ -35,6 +36,26 @@ The container driver refuses the VM-only flags (`--script`, `--image`, `--cpus`,
 Defaults for `--cpus`, `--memory` and `--network` come from the `[vm]` section
 of `warden.toml`. Per-driver VM defaults: qemu 4 CPU / 4096 MiB, vz 4 / 8192,
 hyperv 4 / 4096.
+
+Every build stages its working files (overlay disks, seeds, the container
+driver's `/.warden` tree and relay image context) in its own fresh directory,
+`warden-<driver>-XXXXXXXX`, created like `mktemp -d` under `--tmpdir` (or
+`[build] tmpdir`). Nothing is written into the build context, so concurrent
+builds of the same directory do not interfere. With a VM-backed container
+runtime (finch, Docker Desktop, podman machine) the directory must be one the
+runtime's VM shares; the macOS temp dir is shared by all three.
+
+**Exit status:**
+
+| Exit code | Meaning |
+|-----------|---------|
+| `0` | The build succeeded |
+| the build's own code | The build script exited non-zero (`warden: build FAILED (exit code N)`) |
+| `124` | `--timeout` expired |
+| `130` | Interrupted (Ctrl-C) |
+| `1` | warden or the build environment failed; the error is printed with an issue link |
+
+`warden shell` exits with the shell's own exit status.
 
 **Example:**
 ```sh

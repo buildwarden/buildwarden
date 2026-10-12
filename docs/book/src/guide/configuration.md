@@ -29,6 +29,8 @@ capture = ""               # Payload capture mode:
                            #   "headers" = save request/response headers
                            #   "bodies" = save request/response bodies
                            #   "all" = save both
+tmpdir = ""                # Where each build's private work dir is created
+                           #   ("" = the OS temp dir; --tmpdir wins)
 
 [relay]
 upstream_ca_certs = []     # Paths to additional CA cert bundles for upstream
@@ -74,6 +76,7 @@ verbose = false            # Verbose output (shows container runtime commands)
 | `--memory` | build/shell | Build VM memory in MiB (VM drivers) |
 | `--network` | build/shell | Durable switch to reuse (hyperv) |
 | `--keep-vms` | build/shell | Leave VMs and work dir for inspection (VM drivers) |
+| `--tmpdir` | build/shell | Directory for each build's private work dir (default: OS temp dir) |
 | `-q, --quiet` | build | Do not echo the guest build console |
 
 ## Runtime Autodetection

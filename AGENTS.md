@@ -104,7 +104,7 @@ Configuration via `warden.toml` or `~/.config/warden/config.toml`.
 - Recorded in ledger with dedicated `artifact` record type
 
 ## Extension System
-Extensions implement `BeforeBuild(env *CtrEnv) error` and optionally `Env() map[string]string`. They run on the host before the build starts and can write files to `.warden/` (COPY'd into build image) and scripts to `.warden/ext.d/` (exec'd inside the build container).
+Extensions implement `BeforeBuild(env *CtrEnv) error` and optionally `Env() map[string]string`. They run on the host before the build starts and can write files to the staged `/.warden` tree (`ExtensionContext.WardenDir`, in the build's private work dir, never the build context; copied into the build container as `/.warden`) and scripts to its `ext.d/` (exec'd inside the build container).
 
 ## Container Runtime Abstraction
 Uses `github.com/lesiw/ctrctl` which wraps docker/finch/podman CLI. Runtime is autodetected or configured via `warden.toml` / `--runtime` flag.

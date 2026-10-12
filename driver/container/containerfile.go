@@ -10,11 +10,12 @@ import (
 	"github.com/buildwarden/buildwarden/driver"
 )
 
-// editContainerfile creates a rewritten copy of the Containerfile
-// in the .warden directory. The original is never modified.
+// editContainerfile writes a rewritten copy of the Containerfile to outPath
+// (in the build's work dir). The original is never modified.
 func editContainerfile(
 	containerfile string,
 	contextDir string,
+	outPath string,
 	extensions []driver.Extension,
 ) error {
 	origfile, err := os.Open(containerfile)
@@ -24,9 +25,7 @@ func editContainerfile(
 	}
 	defer origfile.Close()
 
-	ctrfilePath := filepath.Join(
-		contextDir, wardenDir, "Containerfile")
-	ctrfile, err := os.Create(ctrfilePath)
+	ctrfile, err := os.Create(outPath)
 	if err != nil {
 		return fmt.Errorf(
 			"error creating edited containerfile: %w", err)
@@ -260,8 +259,7 @@ func expandContextPath(
 				return walkErr
 			}
 			if fi.IsDir() {
-				switch fi.Name() {
-				case wardenDir, ".git":
+				if fi.Name() == ".git" {
 					return filepath.SkipDir
 				}
 				return nil
@@ -284,8 +282,7 @@ func expandContextPath(
 			continue
 		}
 		rel, _ := filepath.Rel(contextDir, m)
-		if strings.HasPrefix(rel, wardenDir+"/") ||
-			strings.HasPrefix(rel, ".git/") {
+		if strings.HasPrefix(rel, ".git/") {
 			continue
 		}
 		files = append(files, rel)

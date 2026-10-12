@@ -64,9 +64,10 @@ All ledger writes go through a channel to a single goroutine (`Ledger.loop()`). 
 ## Key conventions
 
 - Container runtime is abstracted via `ctrctl.Cli` (set from config/autodetection)
-- Extensions inject CA certs and env vars into the build environment via `.warden/` directory
+- Extensions inject CA certs and env vars into the build environment via the staged `/.warden` tree
 - The relay and warden-io cross-compile for linux at build time (`GOOS=linux CGO_ENABLED=0`); warden-io also builds for darwin/arm64 (VZ driver)
-- Containerfile is never modified in-place — a copy goes into `.warden/Containerfile`
+- Containerfile is never modified in-place — a copy goes into the staged `/.warden/Containerfile`
+- Each build stages its files in its own `driver.NewWorkDir` (under `--tmpdir`, default the OS temp dir); nothing is written into the build context
 - `artifacts` and `cwd` are reserved DNS hostnames that resolve to the relay IP
 - Network isolation: iptables (container), topological via separate VM (qemu, vz, hyperv)
 - All drivers use `warden-io initialize` as the build-environment entry point

@@ -7,6 +7,7 @@ package container
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/lesiw/ctrctl"
 
@@ -22,7 +24,6 @@ import (
 )
 
 const (
-	wardenDir      = ".warden"
 	relayImageRepo = "ghcr.io/buildwarden/relay"
 )
 
@@ -52,6 +53,10 @@ type build struct {
 	outputDir       string
 	subnet          driver.Subnet
 	isolatedNetwork string
+	// workDir is this build's private scratch directory (driver.NewWorkDir).
+	// It holds the staged /.warden tree and the relay image's build context;
+	// nothing is written into the user's build context.
+	workDir string
 }
 
 func (d *Driver) Name() string { return "container" }
@@ -113,10 +118,11 @@ func (d *Driver) StartBuild(
 		stdin = os.Stdin
 	}
 
+	tail := newTailWriter(stderr)
 	execCmd := &exec.Cmd{
 		Stdin:  stdin,
 		Stdout: stdout,
-		Stderr: stderr,
+		Stderr: tail,
 	}
 	execDone := make(chan error, 1)
 	go func() {
@@ -144,7 +150,7 @@ func (d *Driver) StartBuild(
 		return nil, ctx.Err()
 	}
 	if err != nil {
-		return nil, fmt.Errorf("build error: %w", err)
+		return nil, b.execFailure(ctx, err, tail.String())
 	}
 	// The relay flushes the ledger before it reports completion, so this
 	// returns as soon as the collector has everything.
@@ -155,6 +161,28 @@ func (d *Driver) StartBuild(
 	return &driver.BuildResult{
 		OutputDir: b.outputDir,
 	}, nil
+}
+
+// completionGrace is how long a failed exec waits for the guest's completion
+// report, which warden-io sends just before it exits.
+const completionGrace = 5 * time.Second
+
+// execFailure explains a non-zero `exec` of the build. The script's exit code
+// as the guest reported it to the collector is authoritative (nerdctl's own
+// exit status is always 1). With no report, warden-io failed before the
+// script ran (no relay, say): that is an environment error, not a build
+// result.
+func (b *build) execFailure(ctx context.Context, execErr error, stderrTail string) error {
+	wctx, cancel := context.WithTimeout(ctx, completionGrace)
+	defer cancel()
+	var ee *driver.ExitError
+	if err := b.sess.Wait(wctx); errors.As(err, &ee) {
+		return err
+	}
+	if code, ok := execExitCode(execErr, stderrTail); ok {
+		return fmt.Errorf("build environment failed before the build ran (warden-io exited with code %d; see its output above)", code)
+	}
+	return fmt.Errorf("build error: %w", execErr)
 }
 
 func (d *Driver) Exec(
@@ -201,6 +229,9 @@ func (d *Driver) Exec(
 		stdin = os.Stdin
 	}
 
+	// The shell runs under a wrapper that records its exit status: with a
+	// TTY, finch delivers nerdctl's "exit code N" line on the terminal
+	// stream, not stderr, and its own exit status is always 1.
 	_, err = ctrctl.ContainerExec(
 		&ctrctl.ContainerExecOpts{
 			Cmd: &exec.Cmd{
@@ -212,9 +243,30 @@ func (d *Driver) Exec(
 			Tty:         true,
 		},
 		b.buildContainer,
-		"sh",
+		"sh", "-c", "sh; s=$?; echo $s > "+shellExitFile+"; exit $s",
 	)
+	if err != nil {
+		// The shell's own exit status is the user's, not a warden failure.
+		if code, ok := b.shellExitCode(err); ok {
+			return &driver.ExitError{Code: code}
+		}
+	}
 	return err
+}
+
+// shellExitFile is where the shell wrapper records the shell's exit status.
+const shellExitFile = "/.warden/shell-exit"
+
+// shellExitCode returns the exit status of the interactive shell, preferring
+// the one its wrapper recorded over the runtime CLI's own exit status.
+func (b *build) shellExitCode(execErr error) (int, bool) {
+	out, err := ctrctl.ContainerExec(nil, b.buildContainer, "cat", shellExitFile)
+	if err == nil {
+		if n, err := strconv.Atoi(strings.TrimSpace(out)); err == nil {
+			return n, true
+		}
+	}
+	return execExitCode(execErr, "")
 }
 
 func (d *Driver) Close() error { return nil }
@@ -222,9 +274,16 @@ func (d *Driver) Close() error { return nil }
 // --- build lifecycle ---
 
 func (b *build) setup(ctx context.Context) error {
-	err := os.MkdirAll(
-		filepath.Join(b.wardenDirPath(), "ext.d"), 0755)
-	if err != nil {
+	b.buildID = driver.RandAlphaNum(8)
+	logInfo(b.req,
+		fmt.Sprintf("Build ID: %s", b.buildID))
+
+	var err error
+	if b.workDir, err = driver.NewWorkDir(b.req, "container-"+b.buildID); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(
+		filepath.Join(b.wardenDirPath(), "ext.d"), 0755); err != nil {
 		return fmt.Errorf(
 			"error creating %s: %w",
 			b.wardenDirPath(), err)
@@ -233,10 +292,6 @@ func (b *build) setup(ctx context.Context) error {
 	if err := b.buildWardenIO(); err != nil {
 		return err
 	}
-
-	b.buildID = driver.RandAlphaNum(8)
-	logInfo(b.req,
-		fmt.Sprintf("Build ID: %s", b.buildID))
 
 	b.outputDir = b.req.OutputDir
 	if b.outputDir == "" {
@@ -308,6 +363,7 @@ func (b *build) setup(ctx context.Context) error {
 	if err := editContainerfile(
 		b.req.Containerfile,
 		b.req.ContextDir,
+		filepath.Join(b.wardenDirPath(), "Containerfile"),
 		b.d.Extensions,
 	); err != nil {
 		return err
@@ -381,7 +437,9 @@ ENTRYPOINT ["sh", "-c"]
 
 const netnsImageTag = "warden-netns:latest"
 
-func ensureNetnsImage() error {
+// ensureNetnsImage builds the iptables sidecar image once per runtime,
+// using dir (inside the build's work dir) as the image build context.
+func ensureNetnsImage(dir string) error {
 	args := append(ctrctl.Cli,
 		"image", "inspect", netnsImageTag)
 	cmd := exec.Command(args[0], args[1:]...)
@@ -389,12 +447,10 @@ func ensureNetnsImage() error {
 		return nil
 	}
 
-	home, _ := os.UserHomeDir()
-	buildCtx, err := os.MkdirTemp(home, ".warden-netns-")
-	if err != nil {
+	buildCtx := dir
+	if err := os.MkdirAll(buildCtx, 0o755); err != nil {
 		return err
 	}
-	defer os.RemoveAll(buildCtx)
 
 	if err := os.WriteFile(
 		filepath.Join(buildCtx, "Containerfile"),
@@ -402,7 +458,7 @@ func ensureNetnsImage() error {
 		return err
 	}
 
-	_, err = ctrctl.ImageBuild(
+	_, err := ctrctl.ImageBuild(
 		&ctrctl.ImageBuildOpts{
 			Tag:  netnsImageTag,
 			File: filepath.Join(buildCtx, "Containerfile"),
@@ -412,7 +468,7 @@ func ensureNetnsImage() error {
 }
 
 func (b *build) isolateBuildContainer() error {
-	if err := ensureNetnsImage(); err != nil {
+	if err := ensureNetnsImage(filepath.Join(b.workDir, "netns-image")); err != nil {
 		return fmt.Errorf(
 			"building netns image: %w", err)
 	}
@@ -516,9 +572,9 @@ func (b *build) startRelayContainer(claimToken string) (string, error) {
 	name := "warden-relay-" + b.buildID
 	var lastErr error
 	for range relayPublishAttempts {
-		hostPort, err := freeLoopbackPort()
+		hostPort, err := driver.FreeLoopbackPort()
 		if err != nil {
-			return "", err
+			return "", fmt.Errorf("finding a free loopback port: %w", err)
 		}
 		args := append(ctrctl.Cli, "container", "run",
 			"--detach",
@@ -546,17 +602,6 @@ func (b *build) startRelayContainer(claimToken string) (string, error) {
 		_, _ = ctrctl.ContainerRm(&ctrctl.ContainerRmOpts{Force: true}, name)
 	}
 	return "", fmt.Errorf("error starting relay container: %w", lastErr)
-}
-
-// freeLoopbackPort asks the host for a currently unused loopback port. It
-// is only a likely-free candidate: the runtime's own bind is the reservation.
-func freeLoopbackPort() (int, error) {
-	l, err := net.Listen("tcp", "127.0.0.1:0")
-	if err != nil {
-		return 0, fmt.Errorf("finding a free loopback port: %w", err)
-	}
-	defer l.Close()
-	return l.Addr().(*net.TCPAddr).Port, nil
 }
 
 // isPortConflict reports whether a runtime's start error means the chosen
@@ -610,21 +655,25 @@ func (b *build) pullImage(image string) error {
 }
 
 func (b *build) buildRelayFromSource() error {
-	// Use a temp dir under the context dir so finch/Lima VM
-	// can access it (Lima only mounts $HOME by default).
-	tmpBase, err := os.MkdirTemp(
-		b.req.ContextDir, ".warden-relay-")
-	if err != nil {
+	// The image build context lives in the work dir, so it must be a path
+	// the runtime's VM can see (finch, Docker Desktop and podman machine
+	// all share the macOS temp dir; see --tmpdir otherwise).
+	tmpBase := filepath.Join(b.workDir, "relay-image")
+	if err := os.MkdirAll(tmpBase, 0o755); err != nil {
 		return fmt.Errorf(
-			"error creating relay temp dir: %w", err)
+			"error creating relay image dir: %w", err)
 	}
-	defer os.RemoveAll(tmpBase)
 
 	relayBin := filepath.Join(tmpBase, "relay")
 	cmd := exec.Command(
 		"go", "build", "-o", relayBin, "./cmd/relay")
 	cmd.Env = append(os.Environ(),
 		"GOOS=linux", "CGO_ENABLED=0")
+	root, err := driver.ModuleRoot()
+	if err != nil {
+		return fmt.Errorf("building the relay from source: %w", err)
+	}
+	cmd.Dir = root
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -679,6 +728,11 @@ func (b *build) buildWardenIO() error {
 		"go", "build", "-o", dest, "./cmd/warden-io")
 	cmd.Env = append(os.Environ(),
 		"GOOS=linux", "CGO_ENABLED=0")
+	root, err := driver.ModuleRoot()
+	if err != nil {
+		return fmt.Errorf("building warden-io from source: %w", err)
+	}
+	cmd.Dir = root
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -688,8 +742,10 @@ func (b *build) buildWardenIO() error {
 	return nil
 }
 
+// wardenDirPath is the staged tree copied into the build container as
+// /.warden (warden-io, the edited Containerfile, build.sh, extension files).
 func (b *build) wardenDirPath() string {
-	return filepath.Join(b.req.ContextDir, wardenDir)
+	return filepath.Join(b.workDir, "warden")
 }
 
 func (b *build) teardown() {
@@ -705,7 +761,9 @@ func (b *build) teardown() {
 		b.collectOutput()
 	}
 
-	_ = os.RemoveAll(b.wardenDirPath())
+	if b.workDir != "" {
+		_ = os.RemoveAll(b.workDir)
+	}
 
 	if b.relayContainer != "" {
 		_, err := ctrctl.ContainerRm(

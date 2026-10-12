@@ -62,6 +62,11 @@ type BuildRequest struct {
 	// KeepVMs leaves the build's VMs, disks and work directory in place for
 	// inspection instead of tearing them down (VM drivers).
 	KeepVMs bool
+	// TempDir is the directory each build's private work directory is
+	// created in (see NewWorkDir). Empty means the OS default (os.TempDir,
+	// which honours TMPDIR / TMP). For VM-backed container runtimes it must
+	// be a path the runtime's VM can see.
+	TempDir string
 	// RelayImage specifies the relay container image (container driver only).
 	RelayImage string
 	// UpstreamCACerts are host paths to additional CA certificate files/dirs

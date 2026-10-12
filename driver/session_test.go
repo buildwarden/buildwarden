@@ -2,6 +2,7 @@ package driver
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/http"
 	"os"
@@ -75,8 +76,9 @@ func TestSessionClaimAndWait(t *testing.T) {
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 	err = s.Wait(ctx)
-	if err == nil || !strings.Contains(err.Error(), "code 7") {
-		t.Fatalf("Wait = %v, want exit code 7 error", err)
+	var ee *ExitError
+	if !errors.As(err, &ee) || ee.Code != 7 {
+		t.Fatalf("Wait = %v, want *ExitError with code 7", err)
 	}
 	if _, err := os.Stat(filepath.Join(out, "ledger")); err != nil {
 		t.Fatalf("ledger missing after completion: %v", err)

@@ -2,9 +2,11 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/signal"
+	"path/filepath"
 	"time"
 
 	"github.com/spf13/cobra"
@@ -38,6 +40,7 @@ var (
 	flagMemoryMB   int
 	flagNetwork    string
 	flagKeepVMs    bool
+	flagTempDir    string
 )
 
 var rootCmd = &cobra.Command{
@@ -116,6 +119,8 @@ func init() {
 			"pre-provisioned network to reuse (hyperv: the durable switch from `warden setup`)")
 		f.BoolVar(&flagKeepVMs, "keep-vms", false,
 			"leave VMs, disks and the work dir in place for inspection (VM drivers)")
+		f.StringVar(&flagTempDir, "tmpdir", "",
+			"directory to create each build's private work dir in (default: the OS temp dir)")
 	}
 	buildCmd.Flags().BoolVarP(&flagQuiet, "quiet", "q", false,
 		"do not echo the guest build console (still captured to build-output.log)")
@@ -126,6 +131,10 @@ func init() {
 
 func main() {
 	if err := rootCmd.Execute(); err != nil {
+		var es exitStatus
+		if errors.As(err, &es) {
+			os.Exit(int(es))
+		}
 		logError(err)
 		os.Exit(1)
 	}
@@ -253,6 +262,17 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 	if network == "" && d == "hyperv" {
 		network = cfg.VM.Network
 	}
+	tempDir := flagTempDir
+	if tempDir == "" {
+		tempDir = cfg.Build.TempDir
+	}
+	if tempDir != "" {
+		abs, err := filepath.Abs(tempDir)
+		if err != nil {
+			return nil, fmt.Errorf("invalid --tmpdir: %w", err)
+		}
+		tempDir = abs
+	}
 
 	path := ""
 	if len(args) > 0 {
@@ -278,6 +298,7 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 		MemoryMB:         vmOr(flagMemoryMB, cfg.VM.MemoryMB),
 		Network:          network,
 		KeepVMs:          flagKeepVMs,
+		TempDir:          tempDir,
 		RelayImage:       cfg.Runtime.RelayImage,
 		UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
 		UpstreamSystemCA: systemCA,
@@ -331,9 +352,9 @@ func runBuild(_ *cobra.Command, args []string) error {
 	ctx, stop := buildContext()
 	defer stop()
 
+	start := time.Now()
 	if _, err := d.StartBuild(ctx, req); err != nil {
-		fmt.Fprintln(os.Stderr, "warden: build FAILED")
-		return err
+		return buildFailed(ctx, err, req, time.Since(start))
 	}
 	fmt.Fprintf(os.Stderr, "warden: build SUCCEEDED (output: %s)\n", req.OutputDir)
 	return nil
@@ -352,7 +373,50 @@ func runShell(_ *cobra.Command, args []string) error {
 		if err == driver.ErrExecNotSupported {
 			return fmt.Errorf("warden shell is not supported by --driver %s", d.Name())
 		}
+		// Leaving the shell with a non-zero status is the user's own
+		// result: pass it through, quietly.
+		var ee *driver.ExitError
+		if errors.As(err, &ee) {
+			return exitStatus(ee.Code)
+		}
 		return err
 	}
 	return nil
+}
+
+// exitStatus ends warden with that exit code, the outcome already reported.
+type exitStatus int
+
+func (e exitStatus) Error() string { return fmt.Sprintf("exit status %d", int(e)) }
+
+// Exit codes for build outcomes the user caused rather than warden: a
+// --timeout expiring (as timeout(1) reports it) and an interrupt (128+SIGINT).
+const (
+	exitTimedOut    = 124
+	exitInterrupted = 130
+)
+
+// buildFailed reports a failed build. Outcomes of the build itself (its
+// script's non-zero exit, --timeout, Ctrl-C) are reported plainly and warden
+// exits with a matching code; anything else is a warden or environment
+// error, reported with the issue link.
+func buildFailed(ctx context.Context, err error, req *driver.BuildRequest, elapsed time.Duration) error {
+	var ee *driver.ExitError
+	switch {
+	case errors.As(err, &ee):
+		msg := fmt.Sprintf("warden: build FAILED (exit code %d)", ee.Code)
+		if ee.Detail != "" {
+			msg += ": " + ee.Detail
+		}
+		fmt.Fprintln(os.Stderr, msg)
+		return exitStatus(ee.Code)
+	case req.Timeout > 0 && elapsed >= req.Timeout && errors.Is(err, context.DeadlineExceeded):
+		fmt.Fprintf(os.Stderr, "warden: build FAILED: timed out after %s (--timeout)\n", req.Timeout)
+		return exitStatus(exitTimedOut)
+	case ctx.Err() != nil:
+		fmt.Fprintln(os.Stderr, "warden: build interrupted")
+		return exitStatus(exitInterrupted)
+	}
+	fmt.Fprintln(os.Stderr, "warden: build FAILED")
+	return err
 }

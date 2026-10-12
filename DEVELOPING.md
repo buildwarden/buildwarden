@@ -38,8 +38,8 @@ docs/design/             Specifications and design documents
 
 Extensions implement `BeforeBuild(env *CtrEnv) error` and optionally `Env() map[string]string`. They:
 
-1. Write files to `.warden/` (which gets COPY'd into the build image)
-2. Write shell scripts to `.warden/ext.d/` (exec'd inside the build container)
+1. Write files to the staged `/.warden` tree (`ExtensionContext.WardenDir`, in the build's private work dir; copied into the build container as `/.warden`)
+2. Write shell scripts to its `ext.d/` (exec'd inside the build container)
 3. Return env vars to inject into the Dockerfile after each `FROM` line
 
 Current extensions:

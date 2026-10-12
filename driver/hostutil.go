@@ -141,6 +141,23 @@ func OrDefault(v, def int) int {
 	return v
 }
 
+// NewWorkDir creates a fresh, private work directory for one build, like
+// `mktemp -d`: <req.TempDir or the OS temp dir>/warden-<name>-XXXXXXXX, mode
+// 0700. Every build gets its own, so concurrent builds never share staging
+// state, and nothing is ever written into the build context.
+func NewWorkDir(req *BuildRequest, name string) (string, error) {
+	if req.TempDir != "" {
+		if err := os.MkdirAll(req.TempDir, 0o755); err != nil {
+			return "", fmt.Errorf("creating temp dir %s: %w", req.TempDir, err)
+		}
+	}
+	dir, err := os.MkdirTemp(req.TempDir, "warden-"+name+"-")
+	if err != nil {
+		return "", fmt.Errorf("creating work dir: %w", err)
+	}
+	return dir, nil
+}
+
 // RemoveWorkDir deletes a build's work directory (overlay disks, seeds,
 // staged inputs), unless --keep-vms asked to leave it for inspection.
 func RemoveWorkDir(req *BuildRequest, dir string) {

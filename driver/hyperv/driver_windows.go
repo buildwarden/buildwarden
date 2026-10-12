@@ -44,9 +44,9 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 		return nil, fmt.Errorf("hyperv build: %w", err)
 	}
 
-	workDir, err := os.MkdirTemp("", "warden-hyperv-"+buildID+"-")
+	workDir, err := driver.NewWorkDir(req, "hyperv-"+buildID)
 	if err != nil {
-		return nil, fmt.Errorf("hyperv build: work dir: %w", err)
+		return nil, fmt.Errorf("hyperv build: %w", err)
 	}
 	defer driver.RemoveWorkDir(req, workDir)
 

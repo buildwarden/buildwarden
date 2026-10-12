@@ -46,6 +46,9 @@ type BuildCfg struct {
 	Capture    string `toml:"capture"`
 	OutputDir  string `toml:"output_dir"`
 	Compress   *bool  `toml:"compress"`
+	// TempDir is where each build's private work dir is created; --tmpdir
+	// wins, and empty means the OS temp dir.
+	TempDir string `toml:"tmpdir"`
 }
 
 type OutputConfig struct {
