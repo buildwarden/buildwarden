@@ -10,11 +10,12 @@ import (
 	"github.com/buildwarden/buildwarden/driver"
 )
 
-// editContainerfile creates a rewritten copy of the Containerfile
-// in the .warden directory. The original is never modified.
+// editContainerfile writes a rewritten copy of the Containerfile to outPath
+// (in the build's work dir). The original is never modified.
 func editContainerfile(
 	containerfile string,
 	contextDir string,
+	outPath string,
 	extensions []driver.Extension,
 ) error {
 	origfile, err := os.Open(containerfile)
@@ -24,9 +25,7 @@ func editContainerfile(
 	}
 	defer origfile.Close()
 
-	ctrfilePath := filepath.Join(
-		contextDir, wardenDir, "Containerfile")
-	ctrfile, err := os.Create(ctrfilePath)
+	ctrfile, err := os.Create(outPath)
 	if err != nil {
 		return fmt.Errorf(
 			"error creating edited containerfile: %w", err)
@@ -115,6 +114,7 @@ func rewriteCopy(
 	sources := positional[:len(positional)-1]
 
 	var files []fetchFile
+	anyDir := false
 	for _, src := range sources {
 		expanded, err := expandContextPath(
 			src, contextDir)
@@ -123,6 +123,7 @@ func rewriteCopy(
 		}
 		srcClean := filepath.Clean(src)
 		srcDir := isDir(filepath.Join(contextDir, src))
+		anyDir = anyDir || srcDir
 		for _, f := range expanded {
 			rel := f
 			if srcDir {
@@ -140,6 +141,11 @@ func rewriteCopy(
 
 	if len(files) == 0 {
 		return "# (empty COPY: no matching files)", nil
+	}
+	// A directory source copies its contents into dest, as docker does, so
+	// dest is a directory even when the source holds a single file.
+	if anyDir && !strings.HasSuffix(dest, "/") {
+		dest += "/"
 	}
 
 	run := buildFetchRunPairs(files, dest)
@@ -260,8 +266,7 @@ func expandContextPath(
 				return walkErr
 			}
 			if fi.IsDir() {
-				switch fi.Name() {
-				case wardenDir, ".git":
+				if fi.Name() == ".git" {
 					return filepath.SkipDir
 				}
 				return nil
@@ -284,8 +289,7 @@ func expandContextPath(
 			continue
 		}
 		rel, _ := filepath.Rel(contextDir, m)
-		if strings.HasPrefix(rel, wardenDir+"/") ||
-			strings.HasPrefix(rel, ".git/") {
+		if strings.HasPrefix(rel, ".git/") {
 			continue
 		}
 		files = append(files, rel)

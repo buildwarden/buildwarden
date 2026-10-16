@@ -28,8 +28,10 @@ RUN mkdir -p /app/src/ && \
 ## What Gets Excluded
 
 - `.git/` — not part of the build context
-- `.warden/` — ephemeral BuildWarden infrastructure
 - Files matching `.dockerignore` patterns
+
+BuildWarden's own staging (`/.warden` in the build container) lives in a
+per-build temp directory, never in the context.
 
 ## Concurrency
 

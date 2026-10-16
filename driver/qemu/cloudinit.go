@@ -4,6 +4,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+
+	"github.com/buildwarden/buildwarden/driver"
 )
 
 // cloudInitSeed generates a NoCloud seed directory for QCOW2 builds.
@@ -12,18 +14,19 @@ import (
 //
 // The build script is NOT embedded in cloud-init. Instead, warden-io
 // initialize fetches it from the relay's context endpoint at runtime.
-func (d *Driver) cloudInitSeed(sharedDir string) (string, error) {
-	seedDir := filepath.Join(sharedDir, "cidata")
+func cloudInitSeed(workDir, goarch string) (string, error) {
+	seedDir := filepath.Join(workDir, "cidata")
 	if err := os.MkdirAll(seedDir, 0755); err != nil {
 		return "", err
 	}
 
-	// Place warden-io binary on the seed ISO
-	agentBin := filepath.Join(sharedDir, "agent", "warden-io")
-	if _, err := os.Stat(agentBin); err == nil {
-		if err := copyFile(agentBin, filepath.Join(seedDir, "warden-io")); err != nil {
-			return "", fmt.Errorf("copying warden-io to seed: %w", err)
-		}
+	// Place the warden-io guest agent on the seed ISO.
+	agentBin, err := driver.GuestBinary("warden-io", "linux", goarch)
+	if err != nil {
+		return "", err
+	}
+	if err := driver.CopyFile(agentBin, filepath.Join(seedDir, "warden-io")); err != nil {
+		return "", fmt.Errorf("copying warden-io to seed: %w", err)
 	}
 
 	// meta-data

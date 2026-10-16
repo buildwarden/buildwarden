@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,13 +9,24 @@ import (
 	"time"
 
 	"github.com/BurntSushi/toml"
+
+	"github.com/buildwarden/buildwarden/driver"
 )
 
 type Config struct {
 	Runtime RuntimeConfig `toml:"runtime"`
 	Relay   RelayConfig   `toml:"relay"`
 	Build   BuildCfg      `toml:"build"`
+	VM      VMConfig      `toml:"vm"`
 	Output  OutputConfig  `toml:"output"`
+}
+
+// VMConfig holds defaults for the VM-driver flags (--cpus, --memory,
+// --network); a flag always wins.
+type VMConfig struct {
+	CPUs     int    `toml:"cpus"`
+	MemoryMB int    `toml:"memory_mb"`
+	Network  string `toml:"network"`
 }
 
 type RelayConfig struct {
@@ -37,6 +46,9 @@ type BuildCfg struct {
 	Capture    string `toml:"capture"`
 	OutputDir  string `toml:"output_dir"`
 	Compress   *bool  `toml:"compress"`
+	// TempDir is where each build's private work dir is created; --tmpdir
+	// wins, and empty means the OS temp dir.
+	TempDir string `toml:"tmpdir"`
 }
 
 type OutputConfig struct {
@@ -91,7 +103,7 @@ func loadTOML(path string, cfg *Config) error {
 		return nil
 	}
 	if _, err := toml.DecodeFile(path, cfg); err != nil {
-		return fmt.Errorf("parsing %s: %w", path, err)
+		return driver.Fixable("fix the TOML syntax in "+path, "parsing %s: %v", path, err)
 	}
 	return nil
 }
@@ -99,10 +111,12 @@ func loadTOML(path string, cfg *Config) error {
 // DetectRuntime probes for a working container runtime.
 // Preference order: finch, docker, podman.
 func DetectRuntime() (string, error) {
+	var installed []string
 	for _, name := range []string{"finch", "docker", "podman"} {
 		if _, err := exec.LookPath(name); err != nil {
 			continue
 		}
+		installed = append(installed, name)
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		err := exec.CommandContext(ctx, name, "info").Run()
 		cancel()
@@ -110,7 +124,29 @@ func DetectRuntime() (string, error) {
 			return name, nil
 		}
 	}
-	return "", errors.New("no container runtime found (tried finch, docker, podman)")
+	if len(installed) == 0 {
+		return "", driver.Fixable(
+			"install Finch (brew install --cask finch && finch vm init), "+
+				"Docker or Podman, or use a VM driver (--driver qemu or vz)",
+			"no container runtime found (tried finch, docker, podman)")
+	}
+	// Installed but not answering: almost always its VM or daemon is down.
+	return "", driver.Fixable(runtimeStartHint(installed[0]),
+		"container runtime %s is installed but not running (`%s info` failed)",
+		strings.Join(installed, ", "), installed[0])
+}
+
+// runtimeStartHint is the command that starts a stopped runtime.
+func runtimeStartHint(name string) string {
+	switch name {
+	case "finch":
+		return "start its VM: finch vm start (or finch vm init the first time)"
+	case "podman":
+		return "start its machine: podman machine start " +
+			"(or podman machine init the first time)"
+	default:
+		return "start Docker (Docker Desktop, or the docker service)"
+	}
 }
 
 // ResolvePath handles the single-argument path logic:
@@ -124,7 +160,7 @@ func ResolvePath(path string) (dockerfile, contextDir string, err error) {
 
 	info, statErr := os.Stat(path)
 	if statErr != nil {
-		return "", "", fmt.Errorf("cannot access %q: %w", path, statErr)
+		return "", "", driver.Fixable("", "cannot access %q: %v", path, statErr)
 	}
 
 	if !info.IsDir() {
@@ -156,16 +192,111 @@ func discoverDockerfile(dir string) (string, error) {
 			return candidate, nil
 		}
 	}
-	return "", fmt.Errorf("no Dockerfile or Containerfile found in %s", dir)
+	return "", driver.Fixable("pass the Dockerfile's path, or the directory that holds it",
+		"no Dockerfile or Containerfile found in %s", dir)
+}
+
+// resolveBuildInput resolves the build context and (optional) Dockerfile for
+// any driver. The container driver always builds a Dockerfile. VM drivers
+// build whichever the context provides, with the precedence the drivers apply
+// (driver.StageBuildScript): --script, then a Dockerfile (Linux guests), then
+// build.sh / build.ps1 in the context. A path may name the context directory
+// or a file in it (a Dockerfile, or a build script).
+func resolveBuildInput(
+	path, driverName, guestOS, script string,
+) (dockerfile, contextDir, buildScript string, err error) {
+	if driverName == "" || driverName == "container" {
+		dockerfile, contextDir, err = ResolvePath(path)
+		return dockerfile, contextDir, "", err
+	}
+	return resolveVMBuildInput(path, guestOS, script)
+}
+
+// resolveVMBuildInput resolves the context dir and either a Dockerfile or a
+// build script for a VM driver, applying driver.StageBuildScript's precedence:
+// --script, then a Dockerfile (Linux guests), then build.sh / build.ps1.
+func resolveVMBuildInput(
+	path, guestOS, script string,
+) (dockerfile, contextDir, buildScript string, err error) {
+	if path == "" {
+		path = "."
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", "", "", err
+	}
+	info, err := os.Stat(abs)
+	if err != nil {
+		return "", "", "", driver.Fixable("", "cannot access %q: %v", path, err)
+	}
+	contextDir = abs
+	if !info.IsDir() {
+		contextDir = filepath.Dir(abs)
+		if isScriptName(abs) && script == "" {
+			script = abs
+		}
+	}
+
+	windows := guestOS == "windows"
+	if !windows {
+		dockerfile = vmDockerfile(abs, contextDir, info.IsDir())
+	}
+	if script != "" || dockerfile != "" {
+		return dockerfile, contextDir, script, nil
+	}
+	if err := requireBuildFile(contextDir, windows); err != nil {
+		return "", "", "", err
+	}
+	return "", contextDir, "", nil
+}
+
+// vmDockerfile returns the Dockerfile to build for a Linux VM guest: the path
+// itself when it names one, else one discovered in the context dir, or "" when
+// there is none.
+func vmDockerfile(abs, contextDir string, isDir bool) string {
+	if !isDir && !isScriptName(abs) {
+		return abs
+	}
+	if df, err := discoverDockerfile(contextDir); err == nil {
+		return df
+	}
+	return ""
+}
+
+// requireBuildFile confirms the context holds the build file a VM guest needs
+// when neither a --script nor a Dockerfile was resolved.
+func requireBuildFile(contextDir string, windows bool) error {
+	want := "build.sh"
+	if windows {
+		want = "build.ps1"
+	}
+	if _, err := os.Stat(filepath.Join(contextDir, want)); err != nil {
+		hint := " or a Dockerfile"
+		if windows {
+			hint = ""
+		}
+		return driver.Fixable("",
+			"nothing to build in %s: pass --script, or add %s%s",
+			contextDir, want, hint)
+	}
+	return nil
+}
+
+func isScriptName(p string) bool {
+	switch strings.ToLower(filepath.Ext(p)) {
+	case ".sh", ".ps1":
+		return true
+	}
+	return false
 }
 
 func validateDriver(d string) error {
 	switch d {
-	case "", "container", "qemu", "vz":
+	case "", "container", "qemu", "vz", "hyperv":
 		return nil
 	default:
-		return fmt.Errorf(
-			"unknown driver %q (valid: container, qemu, vz)", d)
+		return driver.Fixable("",
+			"unknown driver %q (valid: container, qemu, vz, hyperv)", d)
 	}
 }
 
@@ -174,24 +305,30 @@ func validateCapture(c string) error {
 	case "", "none", "headers", "bodies", "all":
 		return nil
 	default:
-		return fmt.Errorf(
+		return driver.Fixable("",
 			"invalid capture mode %q (valid: none, headers, bodies, all)", c)
 	}
 }
 
 func validateFlagsForDriver(d string) error {
-	isVM := d == "qemu" || d == "vz"
-	if flagScript != "" && !isVM {
-		return fmt.Errorf(
-			"--script requires --driver qemu or --driver vz")
+	isVM := d == "qemu" || d == "vz" || d == "hyperv"
+	for _, f := range []struct {
+		set  bool
+		name string
+	}{
+		{flagScript != "", "--script"},
+		{flagImage != "", "--image"},
+		{flagCPUs != 0, "--cpus"},
+		{flagMemoryMB != 0, "--memory"},
+		{flagKeepVMs, "--keep-vms"},
+	} {
+		if f.set && !isVM {
+			return driver.Fixable("",
+				"%s requires a VM driver (--driver qemu, vz, or hyperv)", f.name)
+		}
 	}
-	if flagImage != "" && !isVM {
-		return fmt.Errorf(
-			"--image requires --driver qemu or --driver vz")
-	}
-	if flagTimeout != "" && d != "qemu" {
-		return fmt.Errorf(
-			"--timeout requires --driver qemu")
+	if flagNetwork != "" && d != "hyperv" {
+		return driver.Fixable("", "--network is only used by --driver hyperv")
 	}
 	return nil
 }

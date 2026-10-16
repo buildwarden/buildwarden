@@ -391,6 +391,13 @@ Questions to resolve:
 
 ### Trust boundary: what goes on the 9p mount vs through the relay
 
+> **Resolved by the integration pass:** there is no shared volume any more.
+> The relay keeps no state on disk; it is claimed by the orchestrator
+> (`relaycfg`) and streams every output to the host collector over a
+> host-initiated tunnel, which also serves the build script and context. The
+> guest-facing HTTP endpoints below are unchanged. The original analysis is
+> kept for history.
+
 The 9p shared volume is the trusted channel. Only relay-controlled
 content should be on it:
 - The boot/watcher script (orchestration)
@@ -463,10 +470,124 @@ Remaining design questions:
 - Re-validate existing security tests
 
 ### Phase 5: Hyper-V Driver
+**Status: Windows guest path implemented and validated end to end (numpy
+source build with MSVC on the Windows Server 2025 eval VHD). Linux guests on
+Hyper-V not started.**
 - Windows host support
 - Linux + Windows guest targets
 - PowerShell-based VM management
 - Virtual switch network isolation
+
+### Phase 5a (next): Hyper-V Windows-guest consolidation
+**Status: Proposed. Owner: Windows x86-64 desktop (needs real Hyper-V; cannot
+be validated from the macOS host).**
+
+**Why.** The integration pass that merges `feat/windows-driver` into `main`
+unifies the cross-driver seams (collector as the single output path, relay
+config pushed to a listening relay, one CLI shape). It deliberately leaves the
+Hyper-V *Windows-guest lifecycle* as implemented, because the remaining
+differences from qemu depend on VHD and Windows behaviour that can only be
+tested on Hyper-V. Today the two Windows guest paths diverge:
+
+| | qemu (Windows guest) | hyperv (Windows guest) |
+|---|---|---|
+| Base image | Installed once from ISO (`image prepare`) | Stock eval VHD, booted as-is |
+| Per build | Differencing disk + seed; startup task runs `warden-run` | Full OOBE every build; FirstLogonCommand runs `warden-run` |
+| Build runs as | SYSTEM (scheduled task) | Auto-logged-on Administrator |
+| Seed media | FAT image (second NVMe disk) | ISO via IMAPI2 (Gen1 IDE DVD) |
+| `warden-run.ps1` / unattend generator | `driver/qemu` | separate copy in `driver/hyperv` (adds COM1 mirroring) |
+
+**Hypothesis to validate (prepare once, as qemu does).**
+`warden image prepare --driver hyperv --os windows` would:
+1. Create a differencing child of the pinned eval VHD (chain: eval VHD ->
+   prepared base -> per-build child; parent never copied or modified).
+2. Boot it once with no network adapter (VM lifecycle privilege only).
+3. Attach a seed ISO whose OOBE answer file's FirstLogonCommand registers the
+   at-startup `warden-run` scheduled task (qemu's command, kept under the
+   1024-char FirstLogonCommands limit), then shuts down.
+4. Wait for VM state Off (timeout + COM1 diagnostics), hash the prepared base
+   and record it in the image manifest as the active base.
+
+Per build then becomes: differencing child of the prepared base plus a `WARDEN`
+seed carrying only `warden-run.ps1` and `warden-io.exe`, identical to qemu.
+
+**Validation checklist (do these before writing the feature).**
+1. *Build account context.* Run `examples/numpy-source-win` from a startup task
+   as SYSTEM. If MSVC/conda/pip misbehave under the systemprofile, try a local
+   `warden` account created at prepare time and used as the task principal.
+2. *Seed discovery.* Confirm `Get-Volume -FileSystemLabel WARDEN` finds the
+   Gen1 IDE DVD from an early-boot SYSTEM task (qemu proved this only for a FAT
+   USB/NVMe disk).
+3. *Eval licensing clock.* Determine whether the 180-day evaluation period
+   then runs from prepare time, whether `slmgr /rearm` applies, and what
+   `image list` / `doctor` should warn about.
+4. *Differencing chain.* Confirm a two-level chain off a Gen1 `.vhd` boots and
+   tears down cleanly, and that moving the cache dir is either supported or
+   detected.
+5. *Per-build time.* Compare build wall time against today's per-build OOBE.
+
+**Alternatives to evaluate if the hypothesis fails.** Keep per-build OOBE but
+share the generators with qemu; flatten the prepared base (Convert-VHD) instead
+of chaining; deliver the seed as a VHDX instead of an ISO; or another
+consolidated approach found on the Windows host.
+
+**Acceptance criteria.**
+- One `warden-run.ps1` and one unattend generator shared by qemu and hyperv
+  (in a shared Windows-guest package), with COM1 mirroring kept where a serial
+  port exists.
+- `warden image prepare` / `image list` behave the same for `--driver qemu`
+  and `--driver hyperv` (same flags, same pin/verify semantics), differing only
+  where the source media genuinely differs (ISO vs eval VHD).
+- `examples/numpy-source-win` and `examples/conda-forge-win` pass on Hyper-V,
+  and the qemu Windows path still passes on macOS/arm64.
+- No dead code left in either driver's seed/bootstrap path.
+
+**Already applied to the Hyper-V driver by the integration pass (re-validate
+on the Windows host).** These were compiled for windows/amd64 and covered by
+the unit tests (fake provisioner + real claim/tunnel), but have NOT run against
+real Hyper-V. Validate them first; if any must be rolled back, record the
+change, the reason, and the evidence under "Rollback notes" below so the
+cross-driver design can be revisited rather than silently diverging.
+
+1. *Relay config is pushed, not pulled.* The relay VM boots unconfigured and
+   listens on :8301; `StartRelay` claims it at its static NAT address
+   (192.168.240.2) after `StartVM`. `relaycfg`'s config responder (:8299) and
+   the init script's `wget /config` loop are gone.
+2. *Collector over a host-initiated tunnel.* The host opens
+   `POST /v1/tunnel` on the claim port and serves the collector over it as
+   HTTP/2, so nothing listens on the host. The collector port (:8390) and the
+   `<nat>-relay-ingress` inbound firewall rule that `EnsureNetwork` created are
+   removed. Check: claim + tunnel succeed through the NAT switch with Windows
+   Firewall in its default state.
+3. *One relay VM init* (`tools/relay-vm/init`, shared with qemu; the
+   Hyper-V-only `tools/relay-vm/hyperv/init` is deleted). It detects Hyper-V via
+   `/sys/bus/vmbus` (static NAT addressing, COM1 mirroring) and drops build-VM
+   access to :8301. Rebuild the boot VHDX (`build.sh` now copies `../init`,
+   `build-boot-vhdx*.ps1|sh`) with a current relay binary: an old boot disk
+   speaks the retired pull protocol and will never accept a claim.
+4. *Features Hyper-V previously lacked, now inherited from the shared path:*
+   build-context files (`http://cwd/...`), `--capture`, upstream CA
+   certificates, ledger/CA compression, heartbeat liveness (build fails after
+   30 s of guest silence once heartbeats start), and a ledger streamed for the
+   whole build. Check each with `examples/numpy-source-win`, plus one
+   `--capture headers` run.
+5. *CLI.* `warden hyperv doctor|setup` became `warden doctor|setup --driver
+   hyperv`; `warden image fetch` became `warden image prepare --driver hyperv`
+   (`--source <url>`, `--sha256`, `--accept-unpinned`, `--force`, `--name`).
+   Env knobs became flags: `WARDEN_HYPERV_SWITCH` -> `--network` / `[vm]
+   network`, `WARDEN_HYPERV_KEEP_VMS` -> `--keep-vms`,
+   `WARDEN_HYPERV_BUILD_CPUS|MEMORY_MB` -> `--cpus` / `--memory`.
+   `warden hyperv service ...` is unchanged.
+6. *Shared staging.* warden-io.exe comes from `driver.GuestBinary` (prebuilt
+   next to warden, else a cache rebuilt when stale; `WARDEN_IO_WINDOWS_EXE`
+   is gone), and the build script from `driver.StageBuildScript` (`--script`,
+   then `build.ps1` in the context, then a no-op).
+
+Untouched, and left to this phase: the seed ISO, the OOBE answer file,
+`warden-run.ps1`, the per-build OOBE lifecycle on the eval VHD, and the
+Gen1/Gen2 handling.
+
+**Rollback notes.** _(none yet)_
 
 ### Phase 6: Multi-Target Config + Release Polish
 - warden.toml [[target]] array support

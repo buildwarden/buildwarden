@@ -51,6 +51,15 @@ func (l *Logger) Result(msg string) {
 	fmt.Fprintf(l.out, "%s %s\n", prefixWarden, style.Sprint(msg))
 }
 
+// ErrorWithFix prints a failure with a known cause and the remedy for it.
+// It is not a bug, so there is no issue link.
+func (l *Logger) ErrorWithFix(err error, fix string) {
+	l.Error(err.Error())
+	if fix != "" {
+		fmt.Fprintf(l.out, "  To fix: %s\n", fix)
+	}
+}
+
 // ErrorWithIssueLink prints an error with a link to file a GitHub issue.
 func (l *Logger) ErrorWithIssueLink(err error) {
 	l.Error(err.Error())

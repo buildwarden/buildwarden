@@ -1,4 +1,5 @@
 /build/
+/warden
 dist/
 warden-output/
 coverage.out

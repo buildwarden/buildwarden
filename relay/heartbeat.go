@@ -1,37 +1,36 @@
 package relay
 
 import (
-	"fmt"
-	"os"
-	"path/filepath"
+	"log"
 	"time"
 )
 
+// Liveness: the build guest pings http://artifacts/heartbeat, which marks
+// activity; while activity is recent the relay forwards a heartbeat to the
+// collector every interval, and the orchestrator treats a stale heartbeat as
+// a hung guest.
+const heartbeatInterval = 2 * time.Second
+
 func (r *Relay) runHeartbeat() {
-	if r.cfg.SignalDir == "" {
-		return
-	}
-
-	hbPath := filepath.Join(r.cfg.SignalDir, "heartbeat")
-	ticker := time.NewTicker(2 * time.Second)
+	ticker := time.NewTicker(heartbeatInterval)
 	defer ticker.Stop()
-
 	for range ticker.C {
 		ts := r.lastActivity.Load()
-		if ts == 0 {
+		if ts == 0 || time.Since(time.Unix(ts, 0)) >= 5*time.Second {
 			continue
 		}
-		if time.Since(time.Unix(ts, 0)) < 5*time.Second {
-			_ = os.WriteFile(hbPath, []byte(fmt.Sprintf("%d\n", ts)), 0644)
+		if err := r.sink.postHeartbeat(); err != nil {
+			log.Printf("relay: heartbeat: %v", err)
 		}
 	}
 }
 
-func (r *Relay) writeExitCode(code int) {
-	if r.cfg.SignalDir == "" {
-		return
+// complete finalizes the build: the ledger is flushed to the collector BEFORE
+// completion is signalled, because the orchestrator tears the relay down the
+// moment it sees /v1/complete.
+func (r *Relay) complete(code int) {
+	r.finishAndFlush()
+	if err := r.sink.postComplete(code, "", ""); err != nil {
+		log.Printf("relay: posting completion (%d): %v", code, err)
 	}
-	ecPath := filepath.Join(r.cfg.SignalDir, "exit_code")
-	_ = os.WriteFile(ecPath, []byte(fmt.Sprintf("%d\n", code)), 0644)
-	_ = os.Remove(filepath.Join(r.cfg.SignalDir, "heartbeat"))
 }

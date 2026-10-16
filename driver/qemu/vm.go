@@ -7,6 +7,8 @@ import (
 	"os/exec"
 	"syscall"
 	"time"
+
+	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
 // vmProcess wraps a running QEMU subprocess.
@@ -16,18 +18,21 @@ type vmProcess struct {
 }
 
 func (d *Driver) startRelayVM(
-	kernelPath, initrdPath, sharedDir, socketPath string,
+	kernelPath, initrdPath, socketPath string, claimPort int, claimToken string,
 ) (*vmProcess, error) {
 	arch := hostQEMUArch()
 	accel := d.detectAccel()
 	binary := d.qemuBinary(arch)
 
-	virtfs := fmt.Sprintf(
-		"local,path=%s,mount_tag=shared,security_model=none,id=shared0",
-		sharedDir)
 	buildNet := fmt.Sprintf(
 		"stream,id=buildnet,server=on,addr.type=unix,addr.path=%s",
 		socketPath)
+	// User networking is the relay's upstream; the claim port is forwarded
+	// to host loopback only.
+	userNet := fmt.Sprintf(
+		"user,id=usernet,restrict=off,hostfwd=tcp:127.0.0.1:%d-:%d",
+		claimPort, relaycfg.DefaultPort)
+	cmdline := consoleArg(arch) + " warden.net=dhcp warden.claim_token=" + claimToken
 
 	args := []string{
 		"-machine", fmt.Sprintf("virt,accel=%s", accel),
@@ -40,19 +45,18 @@ func (d *Driver) startRelayVM(
 		"-serial", "chardev:ser0",
 		"-kernel", kernelPath,
 		"-initrd", initrdPath,
-		"-append", consoleArg(arch),
-		"-virtfs", virtfs,
+		"-append", cmdline,
 		"-device", "virtio-net-pci,netdev=buildnet",
 		"-netdev", buildNet,
 		"-device", "virtio-net-pci,netdev=usernet",
-		"-netdev", "user,id=usernet,restrict=off",
+		"-netdev", userNet,
 		"-device", "virtio-rng-pci",
 	}
 
 	cmd := exec.Command(binary, args...)
 	cmd.Stdout = d.vmOutput()
 	cmd.Stderr = d.vmOutput()
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.SysProcAttr = procGroupAttr()
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("starting relay QEMU: %w", err)
@@ -69,7 +73,14 @@ type buildVMConfig struct {
 
 	// Disk image boot (production path)
 	DiskImage string
-	SeedISO   string // cloud-init NoCloud seed ISO
+	SeedISO   string // cloud-init NoCloud ISO (Linux); FAT seed image (Win)
+
+	// Windows guests need the same device model as image prep: NVMe OS disk,
+	// a writable UEFI vars store carrying the Windows Boot Manager entry, and
+	// the WARDEN seed as a FAT usb-storage disk (Windows reads FAT16 in-box
+	// with a drive letter and exact long names).
+	Windows bool
+	VarsFD  string
 
 	// Direct kernel boot (lightweight/test path)
 	Kernel string
@@ -96,7 +107,36 @@ func (d *Driver) startBuildVM(
 		"-serial", "chardev:ser0",
 	}
 
-	if cfg.DiskImage != "" {
+	if cfg.DiskImage != "" && cfg.Windows {
+		// Windows: same in-box device model as image prep — NVMe OS disk
+		// (bootindex=0), writable vars pflash carrying the Boot Manager entry,
+		// and the WARDEN seed as a usb-storage CD-ROM.
+		args = append(args,
+			"-device", "ramfb",
+			"-drive", fmt.Sprintf(
+				"if=pflash,format=raw,readonly=on,file=%s", efiCodePath(cfg.Arch)),
+			"-drive", fmt.Sprintf("if=pflash,format=raw,file=%s", cfg.VarsFD),
+			"-device", "qemu-xhci,id=xhci",
+			"-device", "usb-kbd,bus=xhci.0",
+			"-device", "usb-tablet,bus=xhci.0",
+			"-drive", fmt.Sprintf(
+				"if=none,id=osdisk,file=%s,format=qcow2", cfg.DiskImage),
+			"-device", "nvme,drive=osdisk,serial=wardenwin,bootindex=0",
+		)
+		if cfg.SeedISO != "" {
+			// Seed as a second NVMe disk (in-box stornvme.sys). usb-storage in
+			// disk mode did not enumerate in the guest (get-disk showed only
+			// the OS disk), though usb-storage CD-ROM did. NVMe is proven to
+			// enumerate (the OS disk uses it); Windows mounts the MBR+FAT16
+			// partition as a fixed volume with a drive letter, which the
+			// warden-run startup task needs.
+			args = append(args,
+				"-drive", fmt.Sprintf(
+					"if=none,id=seed,format=raw,file=%s", cfg.SeedISO),
+				"-device", "nvme,drive=seed,serial=wardenseed",
+			)
+		}
+	} else if cfg.DiskImage != "" {
 		drive := fmt.Sprintf(
 			"file=%s,format=qcow2,if=virtio", cfg.DiskImage)
 		args = append(args,
@@ -125,10 +165,20 @@ func (d *Driver) startBuildVM(
 		"-device", "virtio-rng-pci",
 	)
 
+	// Debug knobs (build VM only): attach a loopback VNC / HMP monitor to
+	// observe the guest — Windows guests write nothing to serial, so this is
+	// the only way to see the warden-io / networking phase.
+	if vnc := os.Getenv("WARDEN_QEMU_BUILD_VNC"); vnc != "" {
+		args = append(args, "-vnc", vnc)
+	}
+	if mon := os.Getenv("WARDEN_QEMU_BUILD_MONITOR"); mon != "" {
+		args = append(args, "-monitor", "unix:"+mon+",server,nowait")
+	}
+
 	cmd := exec.Command(binary, args...)
 	cmd.Stdout = d.vmOutput()
 	cmd.Stderr = d.vmOutput()
-	cmd.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
+	cmd.SysProcAttr = procGroupAttr()
 
 	if err := cmd.Start(); err != nil {
 		return nil, fmt.Errorf("starting build QEMU: %w", err)

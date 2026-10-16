@@ -1,3 +1,5 @@
+//go:build unix
+
 package main
 
 import (
@@ -209,12 +211,12 @@ func buildARPRequest(srcMAC net.HardwareAddr, srcIP, targetIP net.IP) []byte {
 	// ARP payload
 	arp := frame[14:]
 	binary.BigEndian.PutUint16(arp[0:2], 1)      // hardware type: Ethernet
-	binary.BigEndian.PutUint16(arp[2:4], 0x0800)  // protocol type: IPv4
-	arp[4] = 6                                     // hardware size
-	arp[5] = 4                                     // protocol size
-	binary.BigEndian.PutUint16(arp[6:8], 1)       // opcode: request
-	copy(arp[8:14], srcMAC)                        // sender MAC
-	copy(arp[14:18], srcIP.To4())                  // sender IP
+	binary.BigEndian.PutUint16(arp[2:4], 0x0800) // protocol type: IPv4
+	arp[4] = 6                                   // hardware size
+	arp[5] = 4                                   // protocol size
+	binary.BigEndian.PutUint16(arp[6:8], 1)      // opcode: request
+	copy(arp[8:14], srcMAC)                      // sender MAC
+	copy(arp[14:18], srcIP.To4())                // sender IP
 	// target MAC = 0 (unknown)
 	copy(arp[24:28], targetIP.To4()) // target IP
 	return frame
@@ -251,10 +253,10 @@ func buildDHCPDiscover(clientMAC net.HardwareAddr) []byte {
 	ipHdr := make([]byte, 20)
 	ipHdr[0] = 0x45
 	binary.BigEndian.PutUint16(ipHdr[2:4], uint16(ipLen))
-	ipHdr[8] = 64  // TTL
-	ipHdr[9] = 17  // UDP
-	copy(ipHdr[12:16], net.IPv4zero.To4())   // src: 0.0.0.0
-	copy(ipHdr[16:20], net.IPv4bcast.To4())  // dst: 255.255.255.255
+	ipHdr[8] = 64                           // TTL
+	ipHdr[9] = 17                           // UDP
+	copy(ipHdr[12:16], net.IPv4zero.To4())  // src: 0.0.0.0
+	copy(ipHdr[16:20], net.IPv4bcast.To4()) // dst: 255.255.255.255
 	binary.BigEndian.PutUint16(ipHdr[10:12], ipChecksum(ipHdr))
 
 	// Ethernet frame

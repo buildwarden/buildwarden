@@ -21,10 +21,22 @@ type Subnet struct {
 	BuildIP string
 }
 
-// AllocateSubnet finds an available /29 within the warden base /24.
-// It probes each of the 32 possible /29 blocks and returns the first
-// one that doesn't conflict with existing container networks.
-func AllocateSubnet(cli []string) (Subnet, error) {
+// AllocateNetwork creates a bridge network called name on a free /29 within
+// the warden base /24 and returns its addresses. Creation itself is the
+// availability test: the runtime refuses a subnet that overlaps an existing
+// network.
+//
+// That refusal is NOT atomic (nerdctl, at least, lets concurrent creates of
+// the same subnet all succeed), and two bridges sharing a subnet break host
+// access to the relay, since the host reaches it by routing to its IP. So
+// allocation runs under a host-wide lock, which makes it atomic across
+// warden processes on this host.
+func AllocateNetwork(name string) (Subnet, error) {
+	unlock, err := HostLock("network")
+	if err != nil {
+		return Subnet{}, err
+	}
+	defer unlock()
 	for block := 0; block < 32; block++ {
 		base := block * 8
 		sub := Subnet{
@@ -37,12 +49,11 @@ func AllocateSubnet(cli []string) (Subnet, error) {
 				Driver: "bridge",
 				Subnet: sub.CIDR,
 			},
-			"warden-probe",
+			name,
 		)
 		if err != nil {
 			continue
 		}
-		_, _ = ctrctl.NetworkRm(nil, "warden-probe")
 		return sub, nil
 	}
 	return Subnet{}, fmt.Errorf(

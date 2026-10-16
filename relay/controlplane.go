@@ -6,8 +6,6 @@ import (
 	"log"
 	"net"
 	"net/http"
-	"os"
-	"path/filepath"
 )
 
 func (r *Relay) runControlPlane() error {
@@ -34,23 +32,17 @@ func (r *Relay) runControlPlane() error {
 			return
 		}
 
-		var dst io.Writer
-		if r.cfg.OutputWriter != nil {
-			dst = r.cfg.OutputWriter
-		} else {
-			outPath := filepath.Join(r.outDir, "build-output.log")
-			f, err := os.OpenFile(outPath,
-				os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0644)
-			if err != nil {
-				http.Error(w, err.Error(), 500)
-				return
-			}
-			defer f.Close()
-			dst = f
+		dst, finish, err := r.sink.outputWriter()
+		if err != nil {
+			http.Error(w, err.Error(), 500)
+			return
 		}
-
 		n, _ := io.Copy(dst, io.LimitReader(req.Body, remaining))
 		r.outputBytesWritten.Add(n)
+		if err := finish(); err != nil {
+			http.Error(w, err.Error(), 500)
+			return
+		}
 		w.WriteHeader(200)
 	})
 
@@ -67,7 +59,7 @@ func (r *Relay) runControlPlane() error {
 			_, _ = fmt.Sscanf(code, "%d", &c)
 			exitCode = c
 		}
-		r.writeExitCode(exitCode)
+		r.complete(exitCode)
 		w.WriteHeader(200)
 	})
 
