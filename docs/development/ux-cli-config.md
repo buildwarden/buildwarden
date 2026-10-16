@@ -56,7 +56,11 @@ The automated part flags a removed or renamed surface with no alias or deprecati
 **Check:** agent-judgment
 
 A user-facing error states what failed and the concrete fix or next step, not just
-the raw cause.
+the raw cause. Fail early, say what to do: a failure with a clear cause (missing
+privilege, unprepared image, absent tool, stopped container runtime, bad flag) is a
+`driver.Fixable` error naming the exact remedy, checked before any slow or
+irreversible step when the check is cheap. Only unexplained failures point the user
+at filing a bug.
 
 ---
 
@@ -92,6 +96,8 @@ Configuration can be minimal: predictable defaults cover the common use-cases, a
 any of them is easy to override at three levels with clear precedence,
 invocation > project > user (`flag > warden.toml > ~/.config/warden`, the same order
 as ORCH-03). A first-time user should get a sensible run with little or no config.
+Driver and build knobs are flags and config keys, not ad-hoc environment variables,
+so they take part in that precedence and appear in the reference docs.
 
 The automated part checks that defaults resolve with no config file present.
 

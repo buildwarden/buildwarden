@@ -61,9 +61,11 @@ explicit human sign-off (acknowledge, or dismiss with a recorded reason) before 
 release proceeds; SHOULD findings are informational. The agent never auto-blocks and
 never auto-approves trunk.
 
-The sign-off gate needs a concrete home (a required PR check a human toggles, a
-release-checklist item, or a branch-protection rule), tied to how releases are cut
-today (GoReleaser on a tag push). That wiring is decided at implementation time.
+Per PR, the sign-off is the human approval step of the development process
+(FLOW-08). For releases, the gate needs a concrete home (a required PR check a human
+toggles, a release-checklist item, or a branch-protection rule), tied to how
+releases are cut today (GoReleaser on a tag push). That wiring is decided at
+implementation time.
 
 ---
 
@@ -95,10 +97,14 @@ an already-adjudicated item.
 **Severity:** SHOULD
 **Check:** agent-judgment
 
-A repo-local agent under `.kiro/agents/`, triggered two ways: per-PR (fixes are
-cheapest there) and pre-release from trunk (the diff since the last release tag). The
-deterministic tier is plain CI; the agent tier is handed the diff plus the extracted
-rule index.
+A repo-local agent, triggered three ways: in the Review phase of the development
+process, against the feature diff (FLOW-03); per-PR (fixes are cheapest there); and
+pre-release from trunk (the diff since the last release tag). The deterministic tier
+is plain CI; the agent tier is handed the diff plus the extracted rule index.
+
+The agent's prompt and procedure live in this directory; tool-specific definitions
+(`.claude/agents/`, `.kiro/agents/`) are thin wrappers over them (FLOW-14), so every
+tool runs the same check.
 
 ---
 

@@ -2,7 +2,8 @@
 
 Standards for the relay: the `relay/` library and the `cmd/relay/` binary. The
 relay is the MITM proxy, DNS resolver, ledger writer, control plane, and fairness
-scheduler. It is the most security- and correctness-sensitive component, and it
+scheduler, and it streams everything it records to the host-side collector
+(RELAY-07). It is the most security- and correctness-sensitive component, and it
 sits on the path of every byte of build traffic.
 
 See [`README.md`](./README.md) for the rule format. GLOBAL-06 fires on any change
@@ -141,3 +142,24 @@ adopting the standard. See the README's follow-up list.
 The relay is on the path of every byte of build traffic. Hot-path changes run
 against the relay end-to-end benchmark and justify any regression past a set
 threshold.
+
+---
+
+### RELAY-07 — Diskless relay; the collector is the only output path
+
+**Severity:** MUST
+**Check:** automated + agent-judgment
+
+The relay keeps no build state on disk. Every output (ledger, artifacts, payloads,
+build console output) streams to the host-side collector, and every input it serves
+(build context, build script) is pulled from the collector, over the tunnel the host
+opens when it claims the relay. This holds in all three modes (RELAY-04) and for
+every driver, which is what lets the relay VM run without a data disk and keeps the
+output directory identical across drivers.
+
+A new output or input is added to the collector protocol, never as a relay-side
+file or a driver-specific side channel. The collector protocol is part of the
+relay's versioned public interface (GLOBAL-08).
+
+The automated part flags filesystem writes in `relay/` outside test code; the agent
+part judges new output and input paths.
