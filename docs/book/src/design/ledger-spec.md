@@ -101,8 +101,7 @@ The header metadata is a CBOR map containing:
     "https://github.com/buildwarden/buildwarden/schemas/redacted.json"
   ],
   "environment": {
-    "type": "container",
-    "digest": "<container_digest>"
+    "type": "vm-disk-chain/v1"
   }
 }
 ```
@@ -111,7 +110,7 @@ The header metadata is a CBOR map containing:
 |-----|------|-------------|
 | `hashes` | array of text | Ordered list of hash algorithm names. The concatenation of their outputs equals `hash_block_size` bytes. |
 | `schemas` | array of text | Ordered list of JSON Schema URLs. Index position maps to the schema index byte in records. |
-| `environment` | map | Informational build environment description. |
+| `environment` | map | `{"type": <environment type>}`: an untrusted label echoing the type the [environment record](#environment-record)'s signed payload names. Absent when the ledger has no environment record. Ledgers written before environment types were specified carry `{"type": "container"}`, which readers treat as `oci-image/v1`. |
 
 The header metadata is **not signed** and may be modified without invalidating the ledger. It is informational context for consumers.
 
@@ -404,6 +403,131 @@ Attached to any record whose original metadata has been stripped or was never re
 | Field | Type | Description |
 |-------|------|-------------|
 | `owner` | text | Identifier of the party responsible for or owning the redacted information |
+
+### `environment`
+
+Attached to the [environment record](#environment-record)'s `open` and `close`.
+
+```cbor
+{
+  "type": "oci-image/v1",
+  "reference": "docker.io/library/python:3.12-slim",
+  "digest": "sha256:<64 hex>",
+  "mediaType": "application/vnd.oci.image.manifest.v1+json"
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `type` | text | `"environment"` on the open record; on the close record an echo of the payload's environment type (unsigned; the payload is authoritative) |
+| `driver` | text | `vm-disk-chain/v1`: the driver that booted the VM |
+| `reference`, `digest`, `mediaType` | text | `oci-image/v1`: see [`oci-image/v1`](#oci-imagev1) |
+
+---
+
+## Environment Record
+
+The first records after the header describe the build environment: an `open`
+followed by a `close` on the environment metadata schema
+(`schemas/v1/environment.json`; ledgers written before typed environments
+reference `environment-container.json`). The close record's payload size is
+`−len(payload)` and its hash block hashes the **environment payload**, a
+descriptor of what the build ran on. The payload itself is not in the ledger:
+it is written beside it as `environment.json` in the output directory (by the
+collector, the relay's only output path), and a verifier hashes that file and
+compares it with the signed hash block.
+
+| # | Type | Payload Dir | Payload Content | Schema |
+|---|------|-------------|-----------------|--------|
+| 1 | open | — (0) | — | `environment` (`{"type": "environment"}`) |
+| 2 | close | out (−) | Environment payload | `environment` (`{"type": <environment type>, ...}`) |
+
+A ledger may have no environment record (for example one written by a
+third-party orchestrator that sends none).
+
+### What the record proves
+
+The relay signs what the **orchestrator asserts**. The orchestrator is trusted:
+it builds the payload host-side, before the build guest starts, from files the
+guest never writes. The guest is not trusted and has no way to influence the
+payload. The relay does not inspect the environment itself; the record binds
+the orchestrator's statement into the signed chain, and it is exactly as
+trustworthy as the orchestrator and the host it ran on. It is not a
+measurement taken inside the guest.
+
+### Environment types
+
+Because the header label, the schema index and record metadata are all
+unsigned, **the payload names its own type inside the signed bytes**. A reader
+takes the type from the payload, never from the label or metadata; a relay
+refuses an environment whose declared type disagrees with the type its payload
+names, so an honest ledger's label always matches.
+
+Each environment type is specified by a section here and a JSON schema
+(`schemas/v1/environment-<type>.json`) stating what the payload must contain.
+Adding a type is a new section and schema; the wire format does not change.
+Type names carry their own major version (`/v1`).
+
+#### `oci-image/v1`
+
+A container image. Schema: `environment-oci-image.json`.
+
+- **Payload**: the image's OCI image manifest or index (or Docker v2
+  equivalent), exactly as the container runtime returned it. For compatibility
+  with ledgers written before typed environments this is the one type whose
+  payload is not a wrapper object: it is identified by the manifest's own
+  `schemaVersion` together with `layers`, `manifests` or a manifest/index
+  `mediaType`.
+- **Metadata** (unsigned): `reference` (as the user gave it), `digest` (the
+  registry digest of the pulled reference), `mediaType`.
+- **Verify**: hash the payload against the record. `digest` equals
+  `sha256(payload)` only when the runtime returned the registry's exact bytes;
+  runtimes may re-serialize the manifest, and the digest may name an index, so
+  a mismatch there is informational.
+
+#### `vm-disk-chain/v1`
+
+A virtual machine booted from an ordered chain of disk layers plus per-build
+seed files. Schema: `environment-vm-disk-chain.json`.
+
+```json
+{
+  "type": "vm-disk-chain/v1",
+  "driver": "hyperv",
+  "guest_os": "windows",
+  "arch": "amd64",
+  "generation": 1,
+  "layers": [
+    {"role": "disk", "name": "windows-server-2025.vhd", "format": "vhd",
+     "path": "C:\\Users\\me\\AppData\\Local\\warden\\hyperv\\images\\windows-server-2025.vhd",
+     "sha256": "<64 hex>", "size": 10737418240,
+     "source": {"kind": "url", "url": "https://...", "pinned": true}}
+  ],
+  "seed": [
+    {"name": "build-script", "sha256": "<64 hex>", "size": 120},
+    {"name": "warden-io.exe", "sha256": "<64 hex>", "size": 9123456}
+  ]
+}
+```
+
+| Field | Description |
+|-------|-------------|
+| `type` | `"vm-disk-chain/v1"`. |
+| `driver` | The driver that booted the VM (`qemu`, `vz`, `hyperv`). |
+| `guest_os`, `arch` | Guest OS (`linux`, `windows`, `macos`) and Go architecture name. |
+| `generation` | Hyper-V VM generation; omitted elsewhere. |
+| `layers` | Ordered files the VM boots from. Entries with `role: disk` form the disk chain **base-first**: each later disk is a child (differencing / backing-file overlay) of the one before. The per-build writable child is created empty from the last disk and is not a layer. Other roles: `kernel`, `initrd` (direct boot), `nvram` (UEFI variables, VZ auxiliary storage), `platform` (VZ hardware model, machine identifier). |
+| `layers[].sha256`, `size` | SHA-256 and size of the file as booted. |
+| `layers[].path` | Host path at build time, where a verifier finds the file. Host-local; it may reveal the host's directory layout. |
+| `layers[].source` | Provenance. `kind: url` — downloaded from `url`; `pinned` when it verified against an expected hash supplied independently of the download. `kind: local` — supplied by the user, or changed since warden recorded it. `kind: prepared` — produced by warden: `prepared_by` is `"warden <version>"` and `inputs` lists the hashed inputs (`{name, sha256, size?, url?}`) it was produced from, e.g. the install ISO or IPSW, or for a prepared differencing layer the preparation script and payloads. |
+| `seed` | Per-build files handed to the guest (agent binary, bootstrap script, answer files, cloud-init data, the build script as `build-script`), sorted by `name`. They are per-build and generally not available to re-check later; their hashes record what the guest was given. |
+
+The encoding is deterministic for a given descriptor (fixed member order, sorted
+seed).
+
+**Verify**: (1) hash `environment.json` against the record; (2) for each layer,
+hash the file at `path` (or a copy obtained elsewhere) and compare `sha256` and
+`size`. Disks are never embedded in the ledger.
 
 ---
 

@@ -104,9 +104,18 @@ Verify and display a build ledger.
 - `--json` — Output as JSON
 - `--verbosity <n>` — Detail level: 0=compact, 1=tree, 2=full
 - `--extract <dir>` — Extract captured payloads to a directory
+- `--verify-disks` — Re-hash each VM disk layer the environment record names
+  (reads every byte of every base image)
+
+Inspect also decodes the build environment record and checks
+`environment.json` against it; a mismatch fails verification. For VM builds it
+lists the disk layers with their hashes and provenance (downloaded and pinned,
+prepared by warden, or local).
 
 ```sh
 warden inspect warden-output --json | jq '.summary'
+warden inspect warden-output --json | jq '.environment'
+warden inspect --verify-disks warden-output
 ```
 
 ## warden image
@@ -163,6 +172,25 @@ warden image list
 # vz      macos    /Users/me/.cache/warden/vz/images/macOS-15.4
 # qemu    linux    /Users/me/.cache/warden/images/alpine.qcow2
 # hyperv  windows  C:\...\windows-server-2025.vhdx (active)
+```
+
+### warden image verify
+
+```
+warden image verify [--driver <driver>]
+```
+
+Re-hash, in full, every base-image file a VM driver has recorded in its layer
+cache: the hashes builds write into the ledger's environment record. Fetch and
+prepare record each image's hash and provenance once; builds reuse it while the
+file's size and modification time are unchanged. `verify` reads every byte
+instead, re-records a changed file as local (its download/prepare provenance no
+longer applies), drops missing files, and exits 1 if anything drifted. Without
+`--driver` it checks every VM driver's cache on this host.
+
+```sh
+warden image verify --driver hyperv
+# hyperv  ok       C:\...\images\windows-server-2025.vhd
 ```
 
 ## warden doctor

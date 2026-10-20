@@ -35,6 +35,8 @@ type RelayHostConfig struct {
 
 	// Request carries the build's relay settings (capture mode, upstream CAs).
 	Request *driver.BuildRequest
+	// Environment is the ledger's environment record; nil records none.
+	Environment *relaycfg.Environment
 	// ContextDir and BuildScriptPath are the inputs the collector serves.
 	ContextDir      string
 	BuildScriptPath string
@@ -122,7 +124,8 @@ func StartRelay(ctx context.Context, prov Provisioner, cfg RelayHostConfig) (*Re
 	claimCtx, cancel := context.WithTimeout(ctx, cfg.ReadyTimeout)
 	defer cancel()
 	claimAddr := net.JoinHostPort(cfg.RelayIP, strconv.Itoa(cfg.ClaimPort))
-	if _, err := sess.ClaimRelay(claimCtx, claimAddr, "", cfg.Request, nil); err != nil {
+	if _, err := sess.ClaimRelay(
+		claimCtx, claimAddr, "", cfg.Request, cfg.Environment); err != nil {
 		_ = h.Close()
 		return nil, fmt.Errorf("StartRelay: relay VM %q: %w", h.VMName, err)
 	}

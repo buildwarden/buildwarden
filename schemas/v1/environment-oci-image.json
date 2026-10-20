@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/buildwarden/buildwarden/schemas/v1/environment-oci-image.json",
+  "title": "Environment payload: oci-image/v1",
+  "description": "Signed payload of an oci-image/v1 environment record: the container image's OCI image manifest or index (or the Docker v2 equivalent) exactly as the container runtime returned it. It is the one environment type whose payload is not wrapped in a typed descriptor; it is identified by the manifest's own schemaVersion and layers / manifests / mediaType. See https://github.com/opencontainers/image-spec.",
+  "type": "object",
+  "properties": {
+    "schemaVersion": { "const": 2 },
+    "mediaType": { "type": "string" },
+    "config": { "type": "object" },
+    "layers": { "type": "array" },
+    "manifests": { "type": "array" }
+  },
+  "required": ["schemaVersion"],
+  "not": { "required": ["type"] },
+  "anyOf": [
+    { "required": ["layers"] },
+    { "required": ["manifests"] },
+    {
+      "required": ["mediaType"],
+      "properties": { "mediaType": { "pattern": "manifest|image[.]index" } }
+    }
+  ]
+}

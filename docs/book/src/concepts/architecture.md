@@ -108,6 +108,7 @@ request with a bearer token. Endpoints:
 | `PUT /v1/artifacts/<name>` | Store a build artifact |
 | `PUT /v1/captures/<name>` | Store a captured payload (hash in the `Warden-Hash` trailer) |
 | `PUT /v1/ledger` | Stream the ledger for the whole build |
+| `PUT /v1/environment` | The environment record's signed payload, landed as `environment.json` |
 | `POST /v1/output` | Append build console output |
 | `GET /v1/build-script` | The staged build script |
 | `GET /v1/context/<path>` | A context file, or a directory listing |
@@ -130,7 +131,11 @@ orchestrator:
    connection) and serves the collector to the relay over it as HTTP/2.
 2. Pushes the build config (`POST /v1/claim`): collector URL (the tunnel),
    collector bearer token, capture mode, upstream CA PEMs, system-CA flag, and
-   an optional environment record (the container base-image manifest).
+   an optional environment record: a typed descriptor of what the build runs on
+   (the container image manifest, or for VM drivers a `vm-disk-chain/v1`
+   descriptor of the boot disks and per-build seed files; see the ledger
+   spec's *Environment Record*). The relay signs it as the ledger's first
+   record and lands the payload as `<output>/environment.json`.
 3. Receives the relay identity: the ephemeral MITM CA certificate (written to
    `<output>/ca.cert.pem`) and the ledger's Ed25519 public key.
 

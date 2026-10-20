@@ -87,6 +87,7 @@ cannot attach an interactive session say so.`,
 }
 
 func init() {
+	driver.WardenVersion = version
 	rootCmd.PersistentFlags().StringVar(&flagRuntime, "runtime", "",
 		"container runtime (finch, docker, podman)")
 	rootCmd.PersistentFlags().StringVar(&flagDriver, "driver", "",

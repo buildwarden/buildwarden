@@ -24,6 +24,8 @@ type inspectOptions struct {
 	Writer    io.Writer
 	Extract   string
 	NoColor   bool
+	// VerifyDisks re-hashes each disk layer the environment record names.
+	VerifyDisks bool
 }
 
 func runInspectImpl(path string, opts inspectOptions) error {
@@ -57,14 +59,21 @@ func runInspectImpl(path string, opts inspectOptions) error {
 		}
 	}
 
+	env := checkEnvironment(result, ledgerDir, opts.VerifyDisks)
 	if opts.JSON {
-		return printJSON(opts.Writer, result, ledgerDir, hasCaps)
+		if err := printJSON(opts.Writer, result, env, ledgerDir, hasCaps); err != nil {
+			return err
+		}
+	} else {
+		printHuman(opts.Writer, result, env, opts.Verbosity, ledgerDir, hasCaps,
+			opts.NoColor)
+		if !result.Valid {
+			return fmt.Errorf("ledger verification failed: %d signature error(s)",
+				result.SigErrors)
+		}
 	}
-
-	printHuman(opts.Writer, result, opts.Verbosity, ledgerDir, hasCaps, opts.NoColor)
-	if !result.Valid {
-		return fmt.Errorf("ledger verification failed: %d signature error(s)",
-			result.SigErrors)
+	if env.failed() {
+		return fmt.Errorf("environment verification failed: %s", env.Failures[0])
 	}
 	return nil
 }
@@ -199,7 +208,7 @@ func extractHost(rec ledger.Record) string {
 }
 
 func printHuman(
-	w io.Writer, result *ledger.VerifyResult, verbosity int,
+	w io.Writer, result *ledger.VerifyResult, env *envReport, verbosity int,
 	ledgerDir string, hasCaps bool, noColor bool,
 ) {
 	h := result.Header
@@ -214,6 +223,7 @@ func printHuman(
 		fmt.Fprintf(w, "  schemas=%v\n", h.Meta.Schemas)
 		fmt.Fprintf(w, "  environment: %v\n", h.Meta.Environment)
 	}
+	printEnvironment(w, env)
 	fmt.Fprintln(w, strings.Repeat("═", 80))
 
 	channels := make(map[string]*channel)
@@ -308,9 +318,10 @@ func printSummary(
 }
 
 type jsonReport struct {
-	Header  jsonHeader   `json:"header"`
-	Records []jsonRecord `json:"records"`
-	Summary jsonSummary  `json:"summary"`
+	Header      jsonHeader   `json:"header"`
+	Environment *envReport   `json:"environment,omitempty"`
+	Records     []jsonRecord `json:"records"`
+	Summary     jsonSummary  `json:"summary"`
 }
 
 type jsonHeader struct {
@@ -351,16 +362,16 @@ type jsonSummary struct {
 }
 
 func printJSON(
-	w io.Writer, result *ledger.VerifyResult,
+	w io.Writer, result *ledger.VerifyResult, env *envReport,
 	ledgerDir string, hasCaps bool,
 ) error {
 	h := result.Header
 	headerValid := verifyHeader(h)
 
-	var env map[string]any
+	var headerEnv map[string]any
 	if h.Meta.Environment != nil {
 		if normalized, ok := normalizeForJSON(h.Meta.Environment).(map[string]any); ok {
-			env = normalized
+			headerEnv = normalized
 		}
 	}
 	report := jsonReport{
@@ -373,9 +384,10 @@ func printJSON(
 			Signature:     base64.StdEncoding.EncodeToString(h.Signature),
 			Hashes:        h.Meta.Hashes,
 			Schemas:       h.Meta.Schemas,
-			Environment:   env,
+			Environment:   headerEnv,
 			Valid:         headerValid,
 		},
+		Environment: env,
 	}
 
 	var totalBytes int64

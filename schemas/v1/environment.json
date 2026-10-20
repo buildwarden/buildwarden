@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/buildwarden/buildwarden/schemas/v1/environment.json",
+  "title": "Environment Record Metadata",
+  "description": "CBOR metadata on the environment record (open + close). Informational and UNSIGNED: the signed payload names its own type and is described by environment-<type>.json. Readers must take the type from the payload, never from this metadata.",
+  "type": "object",
+  "properties": {
+    "type": {
+      "type": "string",
+      "description": "Echo of the payload's descriptor type (e.g. oci-image/v1, vm-disk-chain/v1). On the open record this is the literal \"environment\"."
+    },
+    "driver": {
+      "type": "string",
+      "description": "vm-disk-chain/v1: the driver that booted the environment."
+    },
+    "reference": {
+      "type": "string",
+      "description": "oci-image/v1: image reference as specified by the user."
+    },
+    "digest": {
+      "type": "string",
+      "pattern": "^sha256:[a-f0-9]{64}$",
+      "description": "oci-image/v1: registry digest of the pulled reference. Equals sha256(payload) only when the runtime returned the registry's exact manifest bytes."
+    },
+    "mediaType": {
+      "type": "string",
+      "description": "oci-image/v1: manifest media type."
+    }
+  },
+  "required": ["type"]
+}

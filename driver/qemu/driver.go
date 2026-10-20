@@ -15,6 +15,7 @@ import (
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/script"
 	"github.com/buildwarden/buildwarden/driver/winguest"
+	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
 // Driver implements driver.Driver using QEMU as the virtualization backend.
@@ -100,6 +101,10 @@ func (d *Driver) StartBuild(
 	if err != nil {
 		return nil, fmt.Errorf("resolving relay assets: %w", err)
 	}
+	env, err := buildEnvironment(buildCfg, buildScript)
+	if err != nil {
+		return nil, fmt.Errorf("describing build environment: %w", err)
+	}
 
 	// The relay's claim port is forwarded to host loopback (hostfwd); the
 	// collector rides the tunnel the session opens over it.
@@ -119,7 +124,7 @@ func (d *Driver) StartBuild(
 	socketPath := filepath.Join(workDir, "vlan.sock")
 
 	relayProc, err := d.startAndClaimRelay(
-		ctx, sess, req, kernelPath, initrdPath, socketPath)
+		ctx, sess, req, env, kernelPath, initrdPath, socketPath)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +151,7 @@ func (d *Driver) StartBuild(
 // defer stop on success.
 func (d *Driver) startAndClaimRelay(
 	ctx context.Context, sess *driver.Session, req *driver.BuildRequest,
-	kernelPath, initrdPath, socketPath string,
+	env *relaycfg.Environment, kernelPath, initrdPath, socketPath string,
 ) (*vmProcess, error) {
 	claimPort, err := driver.FreeLoopbackPort()
 	if err != nil {
@@ -165,7 +170,7 @@ func (d *Driver) startAndClaimRelay(
 	}
 
 	claimAddr := net.JoinHostPort("127.0.0.1", strconv.Itoa(claimPort))
-	if _, err := sess.ClaimRelay(ctx, claimAddr, claimToken, req, nil); err != nil {
+	if _, err := sess.ClaimRelay(ctx, claimAddr, claimToken, req, env); err != nil {
 		relayProc.stop()
 		return nil, err
 	}
@@ -207,6 +212,7 @@ func (d *Driver) resolveBuildVMConfig(
 		return nil, driver.Fixable("", "build image: %v", err)
 	}
 	image, _ = filepath.Abs(image)
+	cfg.BaseImage = image
 
 	overlay := filepath.Join(workDir, "build-overlay.qcow2")
 	cmd := exec.Command("qemu-img", "create",
@@ -231,6 +237,7 @@ func (d *Driver) resolveBuildVMConfig(
 	if err != nil {
 		return nil, fmt.Errorf("generating cloud-init: %w", err)
 	}
+	cfg.SeedDir = seedDir
 	seedISO := filepath.Join(workDir, "seed.iso")
 	if err := generateSeedISO(seedDir, seedISO, "CIDATA"); err != nil {
 		return nil, fmt.Errorf("generating seed ISO: %w", err)
@@ -295,10 +302,12 @@ func configureWindowsBuildVM(cfg *buildVMConfig, workDir string) error {
 		return fmt.Errorf("copying UEFI vars: %w", err)
 	}
 	cfg.VarsFD = dstVars
+	cfg.BaseVarsFD = srcVars
 	seedDir, err := windowsSeedDir(workDir, goArchOf(cfg.Arch))
 	if err != nil {
 		return fmt.Errorf("generating windows seed: %w", err)
 	}
+	cfg.SeedDir = seedDir
 	// FAT image (not ISO): Windows reads FAT16 natively via usb-storage
 	// with exact long names and a drive letter; our ISO9660 seed shows up
 	// as FileSystemType=Unknown with no letter, so the startup task can't
