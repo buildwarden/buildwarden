@@ -20,9 +20,13 @@ hyperv / firecracker) and asserts the others are unaffected. This is the standin
 permanent form of the cross-contamination check: a change made for one driver must
 not silently alter the behavior of another.
 
-The automated part compares which `driver/*` trees the diff actually reaches
-against what the change claims; the agent part judges whether shared code was
-altered in a driver-specific way.
+Lifecycle that every driver shares lives in `driver.Session` and the other
+`driver/` helpers; a driver re-implements it only where its platform genuinely
+differs, and the design says why.
+
+The claim is the design's `drivers` front-matter (FLOW-02). The automated part
+compares which `driver/*` trees the diff actually reaches against that claim; the
+agent part judges whether shared code was altered in a driver-specific way.
 
 ---
 
@@ -37,8 +41,9 @@ both the original and the edited form are recorded to the output directory under
 `inputs/`.
 
 The `inputs/` namespace must not collide with the ledger filename or the relay's
-recorded-artifact layout in the output directory (currently `ledger`, `payloads/`,
-`artifacts/`). Keeping orchestrator-captured inputs in their own `inputs/` subtree
+recorded-artifact layout in the output directory (currently `ledger.zst`,
+`ca.cert.pem.zst`, `build-output.log`, `relay.log`, `artifacts/`, `captures/`,
+`payloads/`). Keeping orchestrator-captured inputs in their own `inputs/` subtree
 is the clean way to prevent accidental collision with relay-recorded artifacts.
 
 This intentionally requires an orchestrator change to create and populate

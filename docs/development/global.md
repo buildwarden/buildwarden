@@ -133,8 +133,11 @@ intentional.
 
 **Versioned seams** (same pre/post-1.0 posture as the ledger format in RELAY-05):
 
-- Relay public interface: control plane, `ca.cert.pem` handoff, DNS / artifact /
-  heartbeat protocol.
+- Relay public interface: the claim protocol (`relaycfg/`: per-build config
+  pushed over a host-initiated tunnel, relay identity and `ca.cert.pem` returned),
+  the collector protocol carried over that tunnel, control plane, and the DNS /
+  artifact / heartbeat protocol. `cmd/collector` is the reference standalone
+  consumer for third-party orchestrators.
 - Executor public interface: the `initialize` invocation contract plus its side
   of the relay protocol.
 

@@ -41,6 +41,8 @@ Body describing the rule, the rationale, and how it is checked.
 | `UX-`     | UX / CLI / configuration                           | `ux-cli-config.md`      |
 | `TEST-`   | Testing and dev-velocity                           | `testing.md`            |
 | `LINT-`   | The behavioral-linter agent itself                 | `behavioral-linter.md`  |
+| `FLOW-`   | Development process: queue, phases, sign-off       | `process.md`            |
+| `SEC-`    | The TEST-08 security suite                         | `security-suite.md`     |
 
 ### Severity
 
@@ -70,7 +72,11 @@ BuildWarden is three independently-meaningful applications, not three layers of
 one monolith (see GLOBAL-08):
 
 - **Relay** — `relay/` (library) + `cmd/relay/` (binary): the MITM proxy, DNS,
-  ledger writer, control plane, fairness scheduler.
+  ledger writer, control plane, fairness scheduler. It keeps no build state on
+  disk; the **collector** (`collector/`, plus the standalone `cmd/collector/`) is
+  its single output path and input source, reached over a tunnel the host opens
+  when it claims the relay (`relaycfg/`). The collector is part of the relay's
+  public contract (GLOBAL-08, RELAY-07), not a fourth application.
 - **Orchestrator** — `cmd/warden/`: the host CLI, driver dispatch, config,
   extensions, inspect, and image lifecycle.
 - **In-VM executor** — `cmd/warden-io/`: the build-environment guest agent
@@ -90,6 +96,9 @@ one monolith (see GLOBAL-08):
    (deep-dive #1).
 8. [`behavioral-linter.md`](./behavioral-linter.md) — the release-gate agent that
    enforces this doc set.
+9. [`process.md`](./process.md) — how features are designed, sequenced, validated,
+   and signed off, by humans, attended agents, and the unattended feature loop.
+   Design documents start from [`../design/TEMPLATE.md`](../design/TEMPLATE.md).
 
 ## Relationship to the other guidance files
 
@@ -99,7 +108,14 @@ authoritative for *standards*; the others should be trimmed to point here rather
 than restate rules, or the drift this doc set is meant to prevent simply moves
 elsewhere. (Trimming them is follow-up work, tracked below.)
 
+Agent definitions and skills (`.claude/`, `.kiro/`) are thin wrappers over this
+directory: they carry phase instructions and cite rule IDs, and never restate rules
+(FLOW-14).
+
 ## Open deep-dives (TODO)
+
+These enter the work queue after the bootstrap steps in
+[`process.md`](./process.md#bootstrap-order).
 
 - **Deep-dive #1 — Security suite + adversarial pen-tester agent** (TEST-08):
   designed in [`security-suite.md`](./security-suite.md) (SEC-01..08). Remaining
@@ -109,7 +125,20 @@ elsewhere. (Trimming them is follow-up work, tracked below.)
   `automated`-tagged rules become `go/analysis` passes vs ripgrep scripts vs
   git-diff coupling checks, and implement them.
 - **Follow-up — Reconcile legacy guidance files** (`CLAUDE.md`, `AGENTS.md`,
-  `DEVELOPING.md`) down to pointers at this directory.
+  `DEVELOPING.md`, `CONTRIBUTING.md`, the mdbook `contributing/` tree) down to
+  pointers at this directory, promoting any rule found only there (for example
+  "fail early, say what to do", now UX-04). Bootstrap step 4.
+- **Follow-up — Workflow bootstrap** (FLOW-03, FLOW-04, FLOW-14): the `workflow`
+  orphan branch and its queue state, the phase agent definitions, and tier-2 in
+  report-only mode. Bootstrap step 5.
+- **Follow-up — Design front-matter retrofit** (FLOW-12): add front-matter to the
+  existing `docs/design/` plans as new designs come to rely on them.
+- **Follow-up — Container inputs under `inputs/`** (ORCH-02): the container driver
+  now translates the Dockerfile into a build script like the VM drivers, so
+  `Dockerfile.actual` no longer records a real mutation. Record the submitted
+  Dockerfile and the translated `build.sh` under `inputs/`, retire
+  `Dockerfile.actual`, and update `docs/book/src/guide/output.md` and `CLAUDE.md`
+  to match.
 - **Follow-up — `specs/` migration** (RELAY-05). Perform the actual move of the
   ledger spec and metadata schemas into the top-level `specs/` layout; this is an
   implementation change separate from adopting the standard.

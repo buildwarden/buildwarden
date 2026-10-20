@@ -39,6 +39,8 @@ Three tiers:
 The expensive tiers are not on the critical path of every PR. They run on the
 relevant CI runner scoped to what changed, on a schedule, and **in full before a
 release**. Per-PR pays for the fast gate plus the tiers the change actually touches.
+Where no CI runner can host a tier (VZ, Hyper-V), it runs in attended native
+sessions under FLOW-09 until one can.
 
 **Caveat, baked into the rule:** scoping tests to touched paths is where tiering can
 quietly fail. A change that looks container-only can break VZ through a shared
@@ -57,7 +59,8 @@ Because platform logic is unit-tested via stubs everywhere and real platform
 behavior is validated in its CI tier, a developer or agent can validate a change
 without owning every OS or VM. A platform path counts as "done" when its stubbed
 unit coverage exists **and** its tier-2 validation exists or the gap is explicitly
-tracked. This is the concrete resolution of the EXEC-03 trust-install-parity
+tracked. A gap is tracked in the design's `tier2_gaps` and on the workflow's
+native-gap backlog; FLOW-09 decides when a gap may not be deferred. This is the concrete resolution of the EXEC-03 trust-install-parity
 concern: the parity logic is unit-tested on every platform, and the actual CA
 install is validated per-guest in tier 2.
 
