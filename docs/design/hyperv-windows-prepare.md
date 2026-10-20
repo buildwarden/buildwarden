@@ -12,7 +12,7 @@ native_validation:
 tier2_gaps:
   - "Gen1 eval .vhd: IDE DVD seed discovery from an early-boot SYSTEM task, and a two-level .vhd chain (no Gen1 image on the validation host yet)"
 rules: [FLOW-01, FLOW-02, FLOW-06, FLOW-07, ORCH-01, UX-01, UX-04, GLOBAL-06, GLOBAL-08, TEST-02, TEST-03]
-concepts: [image-prepare, windows-guest, eval-licensing, differencing-disk, image-refresh, guest-tuning]
+concepts: [image-prepare, generalized-base, sysprep, windows-guest, eval-licensing, differencing-disk, image-refresh, guest-tuning]
 related: [vm-driver-release-plan.md, hyperv-driver-plan.md, windows-driver-plan.md]
 ---
 
@@ -81,6 +81,17 @@ VHDX):
    and the VM plus relay are the boundary, so in-guest AV adds no isolation.
 6. **At most one prepare per driver cache at a time**, enforced by an OS file
    lock, with an atomic switch of the manifest's `active` pointer.
+7. **Two image stages, the same for both drivers.** A *generalized base* is an
+   installed, sysprepped disk with no running grace clock: either Microsoft's
+   eval VHD/VHDX, or the output of warden's ISO *install stage*. The *prepared
+   layer* (OOBE + tuning, Decisions 1-5) is always built from a generalized
+   base and is what the 7-day refresh redoes. The ISO install stage runs
+   `sysprep /generalize /oobe /shutdown` as its last first-logon step, with
+   `PersistAllDeviceInstalls=true` (virtio drivers survive generalize) and
+   without `SkipRearm` (so the install-time grace clock does not carry into the
+   base). It is redone only when its inputs change, never for the grace clock.
+   *Rejected:* refreshing qemu by reinstalling from ISO (a full install per
+   week); `SkipRearm` (the base would carry its install date's grace clock).
 
 ## Questions
 
@@ -102,10 +113,13 @@ None.
   that, with no per-build guest report. Confirm.
 - **No rearm.** `slmgr /rearm` is not used (one rearm available, and it makes the
   base depend on its own history). Confirm.
-- **qemu Windows images follow the same refresh policy** when their install
-  media is an eval edition. qemu prepare installs from an ISO and takes far
-  longer than Hyper-V's OOBE-only prepare, so a weekly refresh costs more there.
-  Proceeding with the shared policy, measured on macOS before qemu adopts it.
+- **A warden-generalized base behaves like Microsoft's.** Measured on the
+  Microsoft image: specialize starts a fresh 10-day grace and leaves the rearm
+  count at 1. Proceeding on the assumption that an ISO-installed, generalized
+  base does the same; validated first on qemu (see Validation plan). Confirm.
+- **Grace refresh applies to eval editions only.** A retail or volume-licence
+  base uses the same stages but activates normally; prepare records its license
+  status and skips `grace_end` when the channel is not `TIMEBASED_EVAL`.
   Confirm.
 - **Defender removal over exclusions.** Removal needs a reboot inside prepare;
   exclusions would leave real-time scanning on for system paths. Proceeding with
@@ -143,10 +157,22 @@ already pinned eval image; no download). Steps:
 9. Hash the prepared layer, mark it read-only, record it in the manifest, and
    swap `active` to it atomically (write temp + rename).
 
+### ISO install stage (qemu now; any driver later)
+
+`warden image prepare --driver qemu --os windows` keeps its ISO + virtio-win
+inputs, but its result is a generalized base rather than a build-ready image:
+the existing unattended install, then `sysprep /generalize /oobe /shutdown`.
+The base is hashed, pinned and recorded with the sha256 of the ISO, the
+virtio-win ISO and the install answer file. The prepared layer is then built
+from it exactly as on Hyper-V. `--source` with an already installed,
+generalized VHD/VHDX (converted with `qemu-img` for qemu) skips the install
+stage on either driver.
+
 ### Manifest
 
-`images/index.json` gains, per prepared base: `path`, `sha256`, `size`,
-`mtime`, `parent` (eval image name + sha256), `generation`, `prepared_at`,
+`images/index.json` records generalized bases (path, sha256, source URL or
+install inputs) and, per prepared layer: `path`, `sha256`, `size`,
+`mtime`, `parent` (generalized base name + sha256), `generation`, `prepared_at`,
 `grace_end`, `warden_version`, and `inputs` (sha256 of the unattend,
 `warden-prepare.ps1`, and the tuning list). These map directly onto a
 `vm-disk-chain/v1` prepared layer once the ledger environment types land.
@@ -184,9 +210,10 @@ under `image_min_grace`.
 - **hyperv:** new prepare path, per-build lifecycle switches to startup task +
   prepared chain; the per-build OOBE, the FirstLogonCommand-per-build path and
   the hyperv copies of `warden-run.ps1` / unattend are removed.
-- **qemu:** `warden-run.ps1`, task registration and tuning move to `winguest`;
-  qemu prepare runs the same tuning and records `grace_end` when the edition is
-  an eval. Install passes and FAT seed unchanged.
+- **qemu:** `warden-run.ps1`, task registration and tuning move to `winguest`.
+  `image prepare` splits into the ISO install stage (ending in generalize) and
+  the shared prepared-layer stage with tuning and `grace_end`. FAT seed
+  unchanged.
 - **container, vz:** unaffected (no Windows guests).
 - **interface:** none. Prepare stays a driver-level image operation behind the
   existing `image prepare` CLI.
@@ -214,8 +241,11 @@ by `warden image verify` / `doctor`, and marked read-only.
   retirement of the old base; a moved cache dir is detected; grace end recorded
   matches `slmgr /xpr`; a base older than `image_refresh_after` triggers exactly one
   background refresh.
-- **Tier 2, macos-qemu (blocking):** qemu Windows build still passes with the
-  shared package and tuning.
+- **Tier 2, macos-qemu (blocking):** first, an ISO-installed generalized base,
+  then prepared: "Initial grace period" counted from the prepare, not the
+  install, and rearm count unchanged. Then the qemu Windows build passes with the
+  shared package and tuning, and a refresh from the generalized base does not
+  reinstall.
 - **Deferred (tier2_gaps):** Gen1 `.vhd` seed discovery and chain (items 2 and
   4 on Gen1), until a Gen1 eval image is on the validation host.
 
@@ -227,6 +257,8 @@ by `warden image verify` / `doctor`, and marked read-only.
    GLOBAL-08)
 2. Rework qemu to use `winguest` (explicit rework task, FLOW-06); no behaviour
    change beyond tuning and the grace record.
+2a. Split qemu `image prepare` into the ISO install stage (generalize, pin the
+   base) and the shared prepared-layer stage (explicit rework task, FLOW-06).
 3. Hyper-V prepare: lock, differencing layer, no-NIC VM, COM1 parsing,
    reboot-until-done loop, hash, manifest, atomic swap. (UX-04)
 4. Hyper-V per-build lifecycle on the prepared chain via the startup task;
