@@ -275,6 +275,18 @@ is refused; a tampered `environment.json` fails inspect.
   macOS laptop, qemu on any qemu host (Linux cloud image and, where prepared,
   Windows qcow2).
 
+**Results, windows-hyperv (2026-10-20, merged into `feat/hyperv-phase5a`).**
+Relay boot VHDX rebuilt with this relay. `examples/conda-forge-win` on the Gen2
+Server 2025 eval VHDX (`--image`): build passed; `environment.json` is
+`vm-disk-chain/v1` (hyperv, windows/amd64, gen 2, one `local` disk layer, five
+seed files); the header label is `vm-disk-chain/v1`; `inspect` reports the
+payload verified and 842 signatures valid; `--verify-disks` re-hashed the
+10.9 GB disk to `[ok]` in ~11 s. First use hashed the disk once; a second build
+did not re-hash it (86 s against the 80 s trivial-build baseline). An
+`environment.json` edited after the build is rejected ("payload MISMATCH",
+non-zero exit). Not yet run: a pinned eval image (`source` other than
+`local`), vz, qemu.
+
 ## Implementation plan
 
 1. `ledger/environment.go`: types, `EnvironmentType`, validation, hash block
