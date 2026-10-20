@@ -6,6 +6,9 @@ import (
 	"encoding/hex"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -175,15 +178,52 @@ func TestResolveBuildBaseVHDX_ManifestFallback(t *testing.T) {
 		t.Fatalf("FetchEvalImage: %v", err)
 	}
 
-	// No --image, no env: resolveBuildBaseVHDX should discover the pinned image.
-	path, isWin, gen, err := resolveBuildBaseVHDX(&driver.BuildRequest{})
-	if err != nil {
-		t.Fatalf("resolveBuildBaseVHDX fallback: %v", err)
+	// No --image, no env, pinned but not prepared: builds boot only prepared
+	// images, so resolution asks for a prepare.
+	_, _, _, err = resolveBuildBaseVHDX(&driver.BuildRequest{})
+	if err == nil || !strings.Contains(err.Error(), "not been prepared") {
+		t.Fatalf("unprepared base: err = %v, want a prepare hint", err)
 	}
-	if path != fetched {
-		t.Errorf("resolved %q, want %q", path, fetched)
+
+	// Once prepared, the chain is the base then the prepared layer.
+	layer := activateTestLayer(t)
+	chain, isWin, gen, err := resolveBuildBaseVHDX(&driver.BuildRequest{})
+	if err != nil {
+		t.Fatalf("resolveBuildBaseVHDX prepared: %v", err)
+	}
+	if len(chain) != 2 || chain[0] != fetched || chain[1] != layer {
+		t.Errorf("chain = %q, want [%q %q]", chain, fetched, layer)
 	}
 	if !isWin || gen != 1 {
 		t.Errorf("resolved isWindows=%v gen=%d, want true,1", isWin, gen)
 	}
+
+	// A moved base breaks the chain: say so instead of booting a broken disk.
+	if err := os.Rename(fetched, fetched+".moved"); err != nil {
+		t.Fatal(err)
+	}
+	if _, _, _, err := resolveBuildBaseVHDX(&driver.BuildRequest{}); err == nil ||
+		!strings.Contains(err.Error(), "chain is incomplete") {
+		t.Fatalf("moved base: err = %v", err)
+	}
+}
+
+// activateTestLayer records a stand-in prepared layer over the active base and
+// makes it active.
+func activateTestLayer(t *testing.T) string {
+	t.Helper()
+	layer := filepath.Join(t.TempDir(), "prepared.vhd")
+	if err := os.WriteFile(layer, []byte("layer"), 0o444); err != nil {
+		t.Fatal(err)
+	}
+	m, err := loadEvalManifest()
+	if err != nil {
+		t.Fatal(err)
+	}
+	m.Prepared = []PreparedBase{{Path: layer, Base: "windows-server-2025", Generation: 1}}
+	m.ActivePrepared = layer
+	if err := saveEvalManifest(m); err != nil {
+		t.Fatal(err)
+	}
+	return layer
 }

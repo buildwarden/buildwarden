@@ -62,6 +62,12 @@ type BuildRequest struct {
 	// KeepVMs leaves the build's VMs, disks and work directory in place for
 	// inspection instead of tearing them down (VM drivers).
 	KeepVMs bool
+	// ImageRefreshAfter is the age at which a prepared base image is
+	// re-prepared in the background, and ImageMinGrace the least evaluation
+	// grace a build may start with (VM drivers with evaluation images; zero
+	// uses the driver's defaults).
+	ImageRefreshAfter time.Duration
+	ImageMinGrace     time.Duration
 	// TempDir is the directory each build's private work directory is
 	// created in (see NewWorkDir). Empty means the OS default (os.TempDir,
 	// which honours TMPDIR / TMP). For VM-backed container runtimes it must

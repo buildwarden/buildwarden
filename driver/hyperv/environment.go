@@ -22,15 +22,12 @@ func LayerCache() *driver.LayerCache {
 }
 
 // describeBuild describes what the build VM boots from as a vm-disk-chain/v1
-// environment: the build-guest base disk and the per-build seed (warden-io,
-// warden-run.ps1, the answer files) plus the build script.
-//
-// The Phase 5a prepared base will add a second disk layer here (the
-// warden-prepared differencing child of the eval VHD, recorded with source
-// kind "prepared" and its preparation inputs); AddLayer already binds a
-// child's cached hash to its parent's.
+// environment: the disk chain base first (the generalized base, then the
+// prepared layer with its preparation inputs), the per-build seed (warden-io,
+// warden-run.ps1) and the build script. AddLayer binds each child's cached
+// hash to its parent's.
 func describeBuild(
-	cache *driver.LayerCache, base string, isWindows bool, generation int,
+	cache *driver.LayerCache, chain []string, isWindows bool, generation int,
 	seedDir, buildScript string,
 ) (*relaycfg.Environment, error) {
 	guestOS := "linux"
@@ -38,9 +35,11 @@ func describeBuild(
 		guestOS = "windows"
 	}
 	b := driver.NewDiskChain(cache, "hyperv", guestOS, runtime.GOARCH, generation)
-	format := strings.TrimPrefix(strings.ToLower(filepath.Ext(base)), ".")
-	if err := b.AddLayer(ledger.LayerRoleDisk, base, format); err != nil {
-		return nil, err
+	for _, disk := range chain {
+		format := strings.TrimPrefix(strings.ToLower(filepath.Ext(disk)), ".")
+		if err := b.AddLayer(ledger.LayerRoleDisk, disk, format); err != nil {
+			return nil, err
+		}
 	}
 	if seedDir != "" {
 		if err := b.AddSeedDir(seedDir); err != nil {

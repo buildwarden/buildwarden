@@ -40,3 +40,12 @@ func (unsupportedProvisioner) RemoveVM(context.Context, string) error { return e
 func (unsupportedProvisioner) CreateDiffDisk(context.Context, string, string) error {
 	return errUnsupported()
 }
+func (unsupportedProvisioner) VMState(context.Context, string) (string, error) {
+	return "", errUnsupported()
+}
+func (unsupportedProvisioner) GuestKVP(context.Context, string) (map[string]string, error) {
+	return nil, errUnsupported()
+}
+func (unsupportedProvisioner) DisksInUse(context.Context) ([]string, error) {
+	return nil, errUnsupported()
+}

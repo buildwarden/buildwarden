@@ -51,9 +51,15 @@ func (d *Driver) StartBuild(
 	if err != nil {
 		return nil, fmt.Errorf("hyperv build: %w", err)
 	}
-	base, isWindows, generation, err := resolveBuildBaseVHDX(req)
+	chain, isWindows, generation, err := resolveBuildBaseVHDX(req)
 	if err != nil {
 		return nil, fmt.Errorf("hyperv build: %w", err)
+	}
+	base := chain[len(chain)-1]
+	if len(chain) > 1 { // the active prepared base, not an explicit --image
+		if err := ensureFreshBase(req, os.Stderr); err != nil {
+			return nil, fmt.Errorf("hyperv build: %w", err)
+		}
 	}
 
 	workDir, err := driver.NewWorkDir(req, "hyperv-"+buildID)
@@ -73,7 +79,7 @@ func (d *Driver) StartBuild(
 	if err != nil {
 		return nil, fmt.Errorf("hyperv build: %w", err)
 	}
-	env, err := describeBuild(LayerCache(), base, isWindows, generation,
+	env, err := describeBuild(LayerCache(), chain, isWindows, generation,
 		buildSeedDir(workDir), buildScript)
 	if err != nil {
 		return nil, fmt.Errorf("hyperv build: describing build environment: %w", err)

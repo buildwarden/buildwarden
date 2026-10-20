@@ -44,3 +44,23 @@ func TestHostLockExcludes(t *testing.T) {
 		t.Fatal("second HostLock did not run")
 	}
 }
+
+func TestTryHostLock(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("LocalAppData", t.TempDir())
+
+	unlock, ok, err := TryHostLock("try")
+	if err != nil || !ok {
+		t.Fatalf("first TryHostLock: ok=%v err=%v", ok, err)
+	}
+	if _, ok2, err2 := TryHostLock("try"); ok2 || err2 != nil {
+		t.Fatalf("second TryHostLock while held: ok=%v err=%v, want false, nil", ok2, err2)
+	}
+	unlock()
+	u, ok3, err3 := TryHostLock("try")
+	if err3 != nil || !ok3 {
+		t.Fatalf("TryHostLock after release: ok=%v err=%v", ok3, err3)
+	}
+	u()
+}

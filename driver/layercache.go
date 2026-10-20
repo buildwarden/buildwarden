@@ -278,3 +278,22 @@ func (c *LayerCache) Source(path string) (ledger.LayerSource, bool) {
 	e, ok := f.Layers[key]
 	return e.Source, ok
 }
+
+// Forget drops a layer's cached entry (for a layer that was deleted).
+func (c *LayerCache) Forget(path string) error {
+	key, err := layerKey(path)
+	if err != nil {
+		return err
+	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	f, err := c.load()
+	if err != nil {
+		return err
+	}
+	if _, ok := f.Layers[key]; !ok {
+		return nil
+	}
+	delete(f.Layers, key)
+	return c.save(f)
+}

@@ -235,6 +235,12 @@ func (p *localProvisioner) CreateVM(ctx context.Context, spec VMSpec) (*VMHandle
 		fmt.Fprintf(&b, " -SwitchName '%s'", psEscapeSingle(spec.SwitchName))
 	}
 	b.WriteString(" | Out-Null\n")
+	// No switch means no network at all (image prepare): New-VM always adds an
+	// adapter, so remove it rather than leave it disconnected.
+	if spec.SwitchName == "" {
+		fmt.Fprintf(&b,
+			"Get-VMNetworkAdapter -VMName '%s' | Remove-VMNetworkAdapter\n", name)
+	}
 	// Ephemeral build VM: no automatic checkpoints (they spawn an .avhdx layer
 	// on top of the overlay, complicating teardown and disk inspection). Matches
 	// the relay VM's config.
@@ -333,4 +339,64 @@ func (p *localProvisioner) CreateDiffDisk(ctx context.Context, overlay, base str
 		return fmt.Errorf("CreateDiffDisk %q: %w", overlay, err)
 	}
 	return nil
+}
+
+// VMState reports the VM's state, or "" when it does not exist.
+func (p *localProvisioner) VMState(ctx context.Context, name string) (string, error) {
+	out, err := runPS(fmt.Sprintf(
+		"$vm = Get-VM -Name '%s' -ErrorAction SilentlyContinue; "+
+			"if ($vm) { [string]$vm.State } else { 'missing' }", psEscapeSingle(name)))
+	if err != nil {
+		return "", fmt.Errorf("VMState %q: %w", name, err)
+	}
+	state := strings.TrimSpace(out)
+	if state == "missing" {
+		return "", nil
+	}
+	return state, nil
+}
+
+// GuestKVP reads the guest-published key-value items over WMI (the
+// root\virtualization\v2 Msvm_KvpExchangeComponent of the VM). Hyper-V
+// Administrators may read it; no elevation is needed.
+func (p *localProvisioner) GuestKVP(
+	ctx context.Context, name string,
+) (map[string]string, error) {
+	out, err := runPS(fmt.Sprintf(`
+$cs = Get-CimInstance -Namespace root\virtualization\v2 -ClassName Msvm_ComputerSystem `+
+		`-Filter "ElementName='%s'"
+if (-not $cs) { return }
+$kvp = Get-CimAssociatedInstance -InputObject $cs -ResultClassName Msvm_KvpExchangeComponent
+foreach ($item in $kvp.GuestExchangeItems) {
+  $x = [xml]$item
+  $n = ($x.INSTANCE.PROPERTY | Where-Object NAME -eq 'Name').VALUE
+  $d = ($x.INSTANCE.PROPERTY | Where-Object NAME -eq 'Data').VALUE
+  "$n=$d"
+}`, psEscapeSingle(name)))
+	if err != nil {
+		return nil, fmt.Errorf("GuestKVP %q: %w", name, err)
+	}
+	return parseKVPLines(out), nil
+}
+
+// DisksInUse walks every VM's attached disks up their differencing chains.
+func (p *localProvisioner) DisksInUse(ctx context.Context) ([]string, error) {
+	out, err := runPS(`
+foreach ($d in (Get-VM | Get-VMHardDiskDrive)) {
+  $p = $d.Path
+  while ($p) {
+    $p
+    $p = (Get-VHD -Path $p -ErrorAction SilentlyContinue).ParentPath
+  }
+}`)
+	if err != nil {
+		return nil, fmt.Errorf("DisksInUse: %w", err)
+	}
+	var disks []string
+	for _, line := range strings.Split(out, "\n") {
+		if line = strings.TrimSpace(line); line != "" {
+			disks = append(disks, line)
+		}
+	}
+	return disks, nil
 }

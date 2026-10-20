@@ -41,6 +41,15 @@ type Provisioner interface {
 	StopVM(ctx context.Context, name string) error
 	RemoveVM(ctx context.Context, name string) error
 	CreateDiffDisk(ctx context.Context, overlay, base string) error
+	// VMState reports a VM's state ("Running", "Off", ...), or "" when no
+	// such VM exists.
+	VMState(ctx context.Context, name string) (string, error)
+	// GuestKVP returns the key-value items the guest published through the
+	// Data Exchange integration service (empty while the guest is not up).
+	GuestKVP(ctx context.Context, name string) (map[string]string, error)
+	// DisksInUse lists every disk file any VM on the host depends on: each
+	// attached disk and all of its differencing parents.
+	DisksInUse(ctx context.Context) ([]string, error)
 }
 
 // NetworkSpec describes the isolated build network to stand up (or reuse).
@@ -75,6 +84,8 @@ type VMSpec struct {
 	Generation int
 	MemoryMB   int
 	CPUs       int
+	// SwitchName is the vSwitch for the VM's only NIC; empty means no network
+	// adapter at all.
 	SwitchName string
 	VHDXPath   string
 	// SeedISO / SeedVHDX carry per-build provisioning media (cloud-init for

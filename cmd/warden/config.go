@@ -27,6 +27,9 @@ type VMConfig struct {
 	CPUs     int    `toml:"cpus"`
 	MemoryMB int    `toml:"memory_mb"`
 	Network  string `toml:"network"`
+	// ImageRefreshAfter / ImageMinGrace: ages such as "7d" or "36h".
+	ImageRefreshAfter string `toml:"image_refresh_after"`
+	ImageMinGrace     string `toml:"image_min_grace"`
 }
 
 type RelayConfig struct {

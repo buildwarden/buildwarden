@@ -12,23 +12,16 @@ import (
 	"github.com/buildwarden/buildwarden/driver/winguest"
 )
 
-// buildSeed assembles the per-build provisioning media the build VM boots with.
-// For a Windows guest it stages the WARDEN seed + OOBE answer file, then
-// packages them into a DVD ISO. Returns the seed ISO path (SeedVHDX unused).
-//
-// The Linux Hyper-V guest path (cloud-init CIDATA) is intentionally not built:
-// the current milestone targets the Windows Server eval VHD.
-//
-// VALIDATION NOTE: the ISO packaging (IMAPI2), OOBE implicit-search discovery of
-// the answer file off a DVD, and the seed getting a drive letter are the pieces
-// that need a live boot against the real eval VHD to confirm.
+// buildSeed assembles the per-build seed ISO the build VM boots with: the
+// WARDEN volume the prepared image's warden-run task looks for. Returns the
+// seed ISO path (SeedVHDX unused). A Linux Hyper-V guest is not built yet.
 func buildSeed(
 	workDir, buildID string, isWindows bool, req *driver.BuildRequest,
 ) (seedISO, seedVHDX string, err error) {
 	if !isWindows {
 		return "", "", fmt.Errorf(
 			"Hyper-V Linux build-guest seed not implemented; this milestone targets " +
-				"the Windows Server eval VHD (use --guest-os windows)")
+				"Windows guests (use --guest-os windows)")
 	}
 	seedDir, err := stageSeedDir(workDir, runtime.GOARCH, req)
 	if err != nil {
@@ -39,6 +32,21 @@ func buildSeed(
 		return "", "", fmt.Errorf("buildSeed: %w", err)
 	}
 	return seedISO, "", nil
+}
+
+// buildPrepareSeed stages the prepare seed in workDir and packages it as an
+// ISO labelled winguest.PrepareSeedLabel. It returns the ISO and the staged
+// directory (whose files are the prepared layer's recorded inputs).
+func buildPrepareSeed(workDir string) (seedISO, seedDir string, err error) {
+	seedDir = filepath.Join(workDir, "prepare-seed")
+	if err := stagePrepareSeedDir(seedDir, runtime.GOARCH); err != nil {
+		return "", "", err
+	}
+	seedISO = filepath.Join(workDir, "prepare-seed.iso")
+	if err := makeSeedISOWindows(seedDir, seedISO, winguest.PrepareSeedLabel); err != nil {
+		return "", "", err
+	}
+	return seedISO, seedDir, nil
 }
 
 // makeSeedISOWindows builds an ISO from seedDir using the in-box IMAPI2 COM API

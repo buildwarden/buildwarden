@@ -285,28 +285,39 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 		return nil, err
 	}
 
+	refreshAfter, err := configAge("image_refresh_after", cfg.VM.ImageRefreshAfter)
+	if err != nil {
+		return nil, err
+	}
+	minGrace, err := configAge("image_min_grace", cfg.VM.ImageMinGrace)
+	if err != nil {
+		return nil, err
+	}
+
 	return &driver.BuildRequest{
-		Script:           script,
-		ContextDir:       contextDir,
-		Image:            flagImage,
-		GuestOS:          flagGuestOS,
-		Containerfile:    dockerfile,
-		OutputDir:        resolveOutputDir(cfg),
-		CaptureMode:      capture,
-		Compress:         resolveCompress(cfg),
-		Quiet:            flagQuiet,
-		Timeout:          timeout,
-		CPUs:             vmFlagOr(flagCPUs, cfg.VM.CPUs, isVM),
-		MemoryMB:         vmFlagOr(flagMemoryMB, cfg.VM.MemoryMB, isVM),
-		Network:          resolveNetwork(cfg, d),
-		KeepVMs:          flagKeepVMs,
-		TempDir:          tempDir,
-		RelayImage:       cfg.Runtime.RelayImage,
-		UpstreamCACerts:  cfg.Relay.UpstreamCACerts,
-		UpstreamSystemCA: resolveSystemCA(cfg),
-		Stdin:            os.Stdin,
-		Stdout:           os.Stdout,
-		Stderr:           os.Stderr,
+		ImageRefreshAfter: refreshAfter,
+		ImageMinGrace:     minGrace,
+		Script:            script,
+		ContextDir:        contextDir,
+		Image:             flagImage,
+		GuestOS:           flagGuestOS,
+		Containerfile:     dockerfile,
+		OutputDir:         resolveOutputDir(cfg),
+		CaptureMode:       capture,
+		Compress:          resolveCompress(cfg),
+		Quiet:             flagQuiet,
+		Timeout:           timeout,
+		CPUs:              vmFlagOr(flagCPUs, cfg.VM.CPUs, isVM),
+		MemoryMB:          vmFlagOr(flagMemoryMB, cfg.VM.MemoryMB, isVM),
+		Network:           resolveNetwork(cfg, d),
+		KeepVMs:           flagKeepVMs,
+		TempDir:           tempDir,
+		RelayImage:        cfg.Runtime.RelayImage,
+		UpstreamCACerts:   cfg.Relay.UpstreamCACerts,
+		UpstreamSystemCA:  resolveSystemCA(cfg),
+		Stdin:             os.Stdin,
+		Stdout:            os.Stdout,
+		Stderr:            os.Stderr,
 	}, nil
 }
 
@@ -516,4 +527,18 @@ func buildFailed(
 	}
 	fmt.Fprintln(os.Stderr, "warden: build FAILED")
 	return err
+}
+
+// configAge parses a [vm] age setting; empty means the driver default.
+func configAge(key, v string) (time.Duration, error) {
+	if v == "" {
+		return 0, nil
+	}
+	d, err := driver.ParseAge(v)
+	if err != nil {
+		return 0, driver.Fixable(
+			"set it to an age such as \"7d\" or \"36h\"",
+			"warden.toml [vm] %s: %v", key, err)
+	}
+	return d, nil
 }

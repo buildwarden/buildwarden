@@ -50,7 +50,7 @@ func TestDescribeBuildEvalImage(t *testing.T) {
 	base, url := fetchPinnedEval(t, body)
 	seed, script := stageTestSeed(t, t.TempDir())
 
-	env, err := describeBuild(LayerCache(), base, true, 1, seed, script)
+	env, err := describeBuild(LayerCache(), []string{base}, true, 1, seed, script)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -67,15 +67,25 @@ func TestDescribeBuildEvalImage(t *testing.T) {
 		l.Source.Kind != want.Kind || l.Source.URL != want.URL || !l.Source.Pinned {
 		t.Fatalf("base layer = %+v, want the pinned eval VHD", l)
 	}
+	assertBuildSeed(t, d.Seed)
+}
+
+// assertBuildSeed checks a build's recorded seed: the agent, the bootstrap
+// and the build script, and no answer file (builds boot a prepared image;
+// answer files belong to the prepare seed).
+func assertBuildSeed(t *testing.T, seed []ledger.SeedFile) {
+	t.Helper()
 	names := map[string]bool{}
-	for _, s := range d.Seed {
+	for _, s := range seed {
 		names[s.Name] = true
 	}
-	for _, want := range []string{"warden-io.exe", "warden-run.ps1", "unattend.xml",
-		"Autounattend.xml", driver.SeedBuildScript} {
+	for _, want := range []string{"warden-io.exe", "warden-run.ps1", driver.SeedBuildScript} {
 		if !names[want] {
-			t.Errorf("seed lacks %s: %+v", want, d.Seed)
+			t.Errorf("seed lacks %s: %+v", want, seed)
 		}
+	}
+	if names["unattend.xml"] || names["Autounattend.xml"] {
+		t.Errorf("build seed carries an answer file: %+v", seed)
 	}
 }
 
@@ -108,7 +118,7 @@ func TestDescribeBuildLocalImage(t *testing.T) {
 	if err := os.WriteFile(img, []byte("gen2"), 0o644); err != nil {
 		t.Fatal(err)
 	}
-	env, err := describeBuild(LayerCache(), img, false, 2, "", "")
+	env, err := describeBuild(LayerCache(), []string{img}, false, 2, "", "")
 	if err != nil {
 		t.Fatal(err)
 	}

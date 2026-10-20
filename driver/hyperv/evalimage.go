@@ -12,6 +12,9 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/ledger"
 )
 
 // Eval-image fetch-and-pin for the Hyper-V build guest.
@@ -118,6 +121,10 @@ func evalManifestPath() string {
 type evalManifest struct {
 	Active string                       `json:"active"`
 	Images map[string]evalManifestEntry `json:"images"`
+	// Prepared lists prepared layers (newest last); ActivePrepared is the path
+	// of the one builds boot from.
+	Prepared       []PreparedBase `json:"prepared,omitempty"`
+	ActivePrepared string         `json:"active_prepared,omitempty"`
 }
 
 type evalManifestEntry struct {
@@ -201,6 +208,10 @@ func FetchEvalImage(ctx context.Context, opts FetchOptions) (string, error) {
 				opts.Name, strings.Join(EvalImageNames(), ", "))
 		}
 		spec = EvalImageSpec{Name: opts.Name, OS: "windows", Ext: ".vhd", Generation: 1}
+	}
+
+	if isLocalImage(opts.URL) {
+		return registerLocalImage(opts)
 	}
 
 	url := opts.URL
@@ -475,4 +486,100 @@ func firstNonEmpty(a, b string) string {
 func ActiveImage() (path string, ok bool) {
 	p, _, _, ok := resolveActiveEvalImage()
 	return p, ok
+}
+
+// isLocalImage reports whether source names an existing local file rather
+// than a URL.
+func isLocalImage(source string) bool {
+	if source == "" || strings.Contains(source, "://") {
+		return false
+	}
+	fi, err := os.Stat(source)
+	return err == nil && fi.Mode().IsRegular()
+}
+
+// registerLocalImage records an already-downloaded generalized image in place
+// (no copy: these are many GB) as a base, with the same pin rules as a
+// download: activated when it matches --sha256, or with --accept-unpinned.
+func registerLocalImage(opts FetchOptions) (string, error) {
+	path, err := filepath.Abs(opts.URL)
+	if err != nil {
+		return "", err
+	}
+	gen, err := diskGeneration(path)
+	if err != nil {
+		return "", err
+	}
+	info, pinned, err := pinLocalImage(opts, path)
+	if err != nil {
+		return "", err
+	}
+	m, err := loadEvalManifest()
+	if err != nil {
+		return "", err
+	}
+	m.Images[opts.Name] = evalManifestEntry{
+		Name: opts.Name, Path: path, SHA256: info.SHA256, Generation: gen,
+		OS: "windows", Pinned: pinned, Bytes: info.Size,
+		FetchedAt: time.Now().UTC().Format(time.RFC3339),
+	}
+	if !pinned && !opts.AcceptUnpinned {
+		if err := saveEvalManifest(m); err != nil {
+			return "", err
+		}
+		return path, fmt.Errorf("UNPINNED: %s is not verified against a pinned hash "+
+			"(sha256 %s).\nPin it: warden image prepare --driver hyperv --name %s "+
+			"--source %s --sha256 %s\nOr use it as-is: add --accept-unpinned",
+			path, info.SHA256, opts.Name, path, info.SHA256)
+	}
+	m.Active = opts.Name
+	if err := saveEvalManifest(m); err != nil {
+		return "", err
+	}
+	logf(opts.Progress, "registered %s in place as base %q (Gen%d, %s)\n",
+		path, opts.Name, gen, pinState(pinned))
+	return path, nil
+}
+
+// diskGeneration is the Hyper-V generation a disk's format boots as.
+func diskGeneration(path string) (int, error) {
+	switch strings.ToLower(filepath.Ext(path)) {
+	case ".vhd":
+		return 1, nil
+	case ".vhdx":
+		return 2, nil
+	}
+	return 0, driver.Fixable("", "%s is not a .vhd (Gen1) or .vhdx (Gen2) image", path)
+}
+
+// pinLocalImage hashes path (or reuses its cached hash) and checks it against
+// the expected digest, if any. A match is recorded as pinned in the layer
+// cache.
+func pinLocalImage(opts FetchOptions, path string) (driver.LayerInfo, bool, error) {
+	cache := LayerCache()
+	cache.Progress = opts.Progress
+	info, err := cache.Lookup(path, "")
+	if err != nil {
+		return info, false, err
+	}
+	expected := strings.ToLower(strings.TrimSpace(opts.SHA256))
+	if spec, ok := LookupEvalImage(opts.Name); ok && expected == "" {
+		expected = spec.SHA256
+	}
+	if expected == "" {
+		return info, false, nil
+	}
+	if info.SHA256 != expected {
+		return info, false, fmt.Errorf("pinned verification FAILED for %s:\n"+
+			"  expected sha256 %s\n  got      sha256 %s", path, expected, info.SHA256)
+	}
+	src := ledger.LayerSource{Kind: ledger.SourceLocal, Pinned: true}
+	return info, true, cache.Record(path, info.SHA256, "", src)
+}
+
+func pinState(pinned bool) string {
+	if pinned {
+		return "pinned"
+	}
+	return "UNPINNED"
 }

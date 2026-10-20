@@ -33,6 +33,11 @@ func (f *fakeProv) RemoveVM(context.Context, string) error {
 	return nil
 }
 func (f *fakeProv) CreateDiffDisk(context.Context, string, string) error { return nil }
+func (f *fakeProv) VMState(context.Context, string) (string, error)      { return "Off", nil }
+func (f *fakeProv) GuestKVP(context.Context, string) (map[string]string, error) {
+	return nil, nil
+}
+func (f *fakeProv) DisksInUse(context.Context) ([]string, error) { return nil, nil }
 
 // With no relay listening for the claim, StartRelay must hit the ready timeout
 // and tear everything down: create+start were attempted, the VM is removed, and

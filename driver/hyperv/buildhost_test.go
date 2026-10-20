@@ -82,6 +82,11 @@ func (f *buildFake) CreateDiffDisk(_ context.Context, overlay, _ string) error {
 	f.diffDisks.Add(1)
 	return os.WriteFile(overlay, []byte("stub-overlay"), 0o644)
 }
+func (f *buildFake) VMState(context.Context, string) (string, error) { return "Off", nil }
+func (f *buildFake) GuestKVP(context.Context, string) (map[string]string, error) {
+	return nil, nil
+}
+func (f *buildFake) DisksInUse(context.Context) ([]string, error) { return nil, nil }
 
 // simulateRelayReady mirrors the relay: accept the tunnel and the claim, then
 // POST /v1/ready to the collector over the tunnel.

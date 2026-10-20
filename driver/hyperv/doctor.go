@@ -3,6 +3,7 @@ package hyperv
 import (
 	"fmt"
 	"io"
+	"time"
 )
 
 // dotted returns "label " padded with dots to a fixed width, for aligned rows.
@@ -63,6 +64,7 @@ func Doctor(w io.Writer, c Capabilities) (blocked bool) {
 		svc = "reachable"
 	}
 	fmt.Fprintf(w, "%s%s\n", dotted("Privileged service"), svc)
+	imageBlocked := writeImageStatus(w, Status(), time.Now())
 
 	// Resolved per-operation outcomes.
 	fmt.Fprintln(w, "\nResolved:")
@@ -77,6 +79,9 @@ func Doctor(w io.Writer, c Capabilities) (blocked bool) {
 	}
 
 	ready, reason := c.Ready()
+	if imageBlocked && ready {
+		ready, reason = false, "the prepared base image cannot start builds (see above)"
+	}
 	if !ready {
 		fmt.Fprintf(w, "\nNot ready: %s\n", reason)
 	}

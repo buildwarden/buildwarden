@@ -42,6 +42,11 @@ func (f *netFake) StartVM(context.Context, string) error                { panic(
 func (f *netFake) StopVM(context.Context, string) error                 { panic("not over pipe") }
 func (f *netFake) RemoveVM(context.Context, string) error               { panic("not over pipe") }
 func (f *netFake) CreateDiffDisk(context.Context, string, string) error { panic("not over pipe") }
+func (f *netFake) VMState(context.Context, string) (string, error)      { panic("not over pipe") }
+func (f *netFake) GuestKVP(context.Context, string) (map[string]string, error) {
+	panic("not over pipe")
+}
+func (f *netFake) DisksInUse(context.Context) ([]string, error) { panic("not over pipe") }
 
 // roundTripOverPipe runs serveConn on one end of a net.Pipe and clientRoundTrip
 // on the other, returning the client's result.
