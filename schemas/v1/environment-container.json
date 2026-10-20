@@ -1,8 +1,8 @@
 {
   "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "https://github.com/buildwarden/buildwarden/schemas/v1/environment-container.json",
-  "title": "Container Environment",
-  "description": "Metadata for the container image used as the build environment. The signed payload is the raw OCI manifest bytes; the metadata fields below are informational (unsigned).",
+  "title": "Container Environment (legacy)",
+  "description": "LEGACY: the environment record metadata schema of ledgers written before typed environments; new ledgers reference environment.json, and the payload type is oci-image/v1 (environment-oci-image.json). Kept so those ledgers resolve. Metadata for the container image used as the build environment. The signed payload is the raw OCI manifest bytes; the metadata fields below are informational (unsigned).",
   "type": "object",
   "properties": {
     "reference": {

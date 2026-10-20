@@ -20,7 +20,7 @@ import (
 // guest-facing listeners on loopback, and returns a client that reaches the
 // relay's HTTP listener for any host name (as the build guest would).
 func startTestRelay(
-	t *testing.T, cfg collector.Config, capture string,
+	t *testing.T, cfg collector.Config, capture string, opts ...func(*Config),
 ) (*Relay, *collector.Collector, *http.Client, string) {
 	t.Helper()
 	out := t.TempDir()
@@ -30,6 +30,9 @@ func startTestRelay(
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Runs after the server and relay stop; Windows cannot remove the
+	// output dir while the collector holds it open.
+	t.Cleanup(func() { _ = col.Close() })
 	srv := httptest.NewServer(col.Handler())
 	t.Cleanup(srv.Close)
 
@@ -38,7 +41,7 @@ func startTestRelay(
 	ctrlLn, _ := net.Listen("tcp", "127.0.0.1:0")
 	dnsConn, _ := net.ListenPacket("udp", "127.0.0.1:0")
 
-	r, err := Start(Config{
+	rcfg := Config{
 		CollectorURL:    srv.URL,
 		CollectorToken:  "tok",
 		CaptureMode:     capture,
@@ -48,7 +51,11 @@ func startTestRelay(
 		HTTPListener:    httpLn,
 		HTTPSListener:   httpsLn,
 		ControlListener: ctrlLn,
-	})
+	}
+	for _, o := range opts {
+		o(&rcfg)
+	}
+	r, err := Start(rcfg)
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}

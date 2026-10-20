@@ -170,6 +170,7 @@ func downloadImage(url, dest string) error {
 	if err := os.Rename(tmp, dest); err != nil {
 		return err
 	}
+	recordDownloadedImage(dest, hash, url)
 	fmt.Fprintf(os.Stderr, "[warden] image cached (sha256:%s)\n", hash[:12])
 	return nil
 }

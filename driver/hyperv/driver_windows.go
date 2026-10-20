@@ -73,6 +73,11 @@ func (d *Driver) StartBuild(
 	if err != nil {
 		return nil, fmt.Errorf("hyperv build: %w", err)
 	}
+	env, err := describeBuild(LayerCache(), base, isWindows, generation,
+		buildSeedDir(workDir), buildScript)
+	if err != nil {
+		return nil, fmt.Errorf("hyperv build: describing build environment: %w", err)
+	}
 
 	p := newLocalProvisioner(d.Verbose)
 
@@ -110,6 +115,7 @@ func (d *Driver) StartBuild(
 		OutputTee:       driver.ConsoleTee(req),
 		Request:         req,
 		ContextDir:      req.ContextDir,
+		Environment:     env,
 	})
 	if err != nil {
 		return nil, err

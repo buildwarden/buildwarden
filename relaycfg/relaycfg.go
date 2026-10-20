@@ -76,8 +76,11 @@ type Config struct {
 	Environment *Environment `json:"environment,omitempty"`
 }
 
-// Environment describes the build's base environment (e.g. an OCI manifest).
+// Environment describes the build's base environment. Payload is a typed
+// environment descriptor (see the ledger spec's environment types) and is what
+// the relay signs; Type, when set, must equal the type the payload names.
 type Environment struct {
+	Type     string `json:"type,omitempty"`
 	Payload  []byte `json:"payload"`
 	Metadata []byte `json:"metadata"` // CBOR
 }

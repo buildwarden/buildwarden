@@ -20,6 +20,7 @@ func newTestServer(t *testing.T, cfg Config) (*httptest.Server, string) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	t.Cleanup(func() { _ = c.Close() }) // after srv.Close; frees the dir on Windows
 	srv := httptest.NewServer(c.Handler())
 	t.Cleanup(srv.Close)
 	return srv, dir
@@ -33,6 +34,7 @@ func newTestCollector(t *testing.T, cfg Config) (*httptest.Server, *Collector) {
 	if err != nil {
 		t.Fatalf("New: %v", err)
 	}
+	t.Cleanup(func() { _ = c.Close() }) // after srv.Close; frees the dir on Windows
 	srv := httptest.NewServer(c.Handler())
 	t.Cleanup(srv.Close)
 	return srv, c
@@ -142,6 +144,36 @@ func TestLedgerRoundTrip(t *testing.T) {
 	got, _ := os.ReadFile(filepath.Join(dir, "ledger"))
 	if string(got) != "LEDGERDATA" {
 		t.Fatalf("ledger = %q", got)
+	}
+}
+
+func TestEnvironmentRoundTrip(t *testing.T) {
+	srv, dir := newTestServer(t, Config{Token: "t"})
+	want := []byte(`{"type":"vm-disk-chain/v1"}`)
+	resp := put(t, srv.URL+"/v1/environment", "t", want)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		t.Fatalf("status = %d, want 200", resp.StatusCode)
+	}
+	got, _ := os.ReadFile(filepath.Join(dir, EnvironmentFile))
+	if !bytes.Equal(got, want) {
+		t.Fatalf("environment = %q, want %q", got, want)
+	}
+
+	resp = put(t, srv.URL+"/v1/environment", "t",
+		bytes.Repeat([]byte("x"), MaxEnvironmentBytes+1))
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusRequestEntityTooLarge {
+		t.Fatalf("oversize: status = %d, want 413", resp.StatusCode)
+	}
+	if _, err := os.Stat(filepath.Join(dir, EnvironmentFile)); !os.IsNotExist(err) {
+		t.Fatalf("oversize payload left %s behind (err=%v)", EnvironmentFile, err)
+	}
+
+	resp = put(t, srv.URL+"/v1/environment", "", want)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("no token: status = %d, want 401", resp.StatusCode)
 	}
 }
 

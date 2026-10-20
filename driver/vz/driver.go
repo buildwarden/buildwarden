@@ -85,6 +85,10 @@ func (d *Driver) StartBuild(
 	if err != nil {
 		return nil, fmt.Errorf("staging build script: %w", err)
 	}
+	env, err := describeBuild(d.Cache.LayerCache(), diskImage, buildScript)
+	if err != nil {
+		return nil, fmt.Errorf("describing build environment: %w", err)
+	}
 
 	// The relay is a host process here, so the collector is on loopback.
 	sess, err := driver.StartSession(driver.SessionConfig{
@@ -107,7 +111,7 @@ func (d *Driver) StartBuild(
 	// relay (it reads raw Ethernet frames from its end of the socketpair via
 	// gvisor netstack and has native internet access; the build VM can only
 	// reach the network through it), and claim it with the build's config.
-	vnet, relayProc, err := d.setupNetworkAndRelay(ctx, sess, req, workDir, outputDir)
+	vnet, relayProc, err := d.setupNetworkAndRelay(ctx, sess, req, env, workDir, outputDir)
 	if err != nil {
 		return nil, err
 	}
@@ -165,7 +169,7 @@ func cloneBuildDisks(workDir, diskImage string) (buildDisk, buildAux string, err
 // owns vnet and relayProc and must close/stop them.
 func (d *Driver) setupNetworkAndRelay(
 	ctx context.Context, sess *driver.Session, req *driver.BuildRequest,
-	workDir, outputDir string,
+	env *relaycfg.Environment, workDir, outputDir string,
 ) (*VirtualNetwork, *RelayProcess, error) {
 	vnet, err := NewVirtualNetwork()
 	if err != nil {
@@ -187,7 +191,7 @@ func (d *Driver) setupNetworkAndRelay(
 		return nil, nil, fmt.Errorf("starting relay: %w", err)
 	}
 	claimAddr := net.JoinHostPort("127.0.0.1", fmt.Sprint(claimPort))
-	if _, err := sess.ClaimRelay(ctx, claimAddr, claimToken, req, nil); err != nil {
+	if _, err := sess.ClaimRelay(ctx, claimAddr, claimToken, req, env); err != nil {
 		relayProc.Stop()
 		_ = vnet.Close()
 		return nil, nil, err

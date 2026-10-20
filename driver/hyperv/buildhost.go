@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
 // Build VM defaults. The build VM is the untrusted guest: its sole NIC is on the
@@ -75,6 +76,9 @@ type buildConfig struct {
 	Request *driver.BuildRequest
 	// ContextDir is the build context the collector serves to the guest.
 	ContextDir string
+	// Environment is the ledger's environment record (what the build VM
+	// boots from); nil records none.
+	Environment *relaycfg.Environment
 
 	// Test hooks: host/relay addresses and ports (zero = production defaults).
 	relayIP      string
@@ -173,6 +177,7 @@ func runBuild(
 		BuildScriptPath: cfg.BuildScriptPath,
 		ContextDir:      cfg.ContextDir,
 		Request:         cfg.Request,
+		Environment:     cfg.Environment,
 		RelayIP:         cfg.relayIP,
 		ClaimPort:       cfg.claimPort,
 		ReadyTimeout:    cfg.readyTimeout,

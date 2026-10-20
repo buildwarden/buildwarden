@@ -13,6 +13,8 @@
 //	                            linked from <dir>/captures/<name>
 //	                            (hash from the Warden-Hash trailer)
 //	PUT  /v1/ledger             stream body -> <dir>/ledger
+//	PUT  /v1/environment        body -> <dir>/environment.json (the
+//	                            environment record's signed payload)
 //	POST /v1/output             append body -> <dir>/build-output.log
 //	GET  /v1/build-script       the build script staged for this build
 //	GET  /v1/context/<path>     a context file, or a newline listing when
@@ -76,6 +78,13 @@ type Config struct {
 }
 
 const defaultMaxArtifactBytes = 4 * 1024 * 1024 * 1024 // 4 GiB
+
+// MaxEnvironmentBytes caps the environment payload: a descriptor or image
+// manifest, never a disk.
+const MaxEnvironmentBytes = 1 << 20
+
+// EnvironmentFile is the output file holding the environment record's payload.
+const EnvironmentFile = "environment.json"
 
 // Collector lands streamed build outputs into OutputDir.
 type Collector struct {
@@ -163,6 +172,7 @@ func (c *Collector) Handler() http.Handler {
 	mux.HandleFunc("/v1/artifacts/", c.auth(c.handleArtifact))
 	mux.HandleFunc("/v1/captures/", c.auth(c.handleCapture))
 	mux.HandleFunc("/v1/ledger", c.auth(c.handleLedger))
+	mux.HandleFunc("/v1/environment", c.auth(c.handleEnvironment))
 	mux.HandleFunc("/v1/output", c.auth(c.handleOutput))
 	mux.HandleFunc("/v1/build-script", c.auth(c.handleBuildScript))
 	mux.HandleFunc("/v1/context/", c.auth(c.handleContext))
@@ -286,6 +296,29 @@ func (c *Collector) handleLedger(w http.ResponseWriter, req *http.Request) {
 		return
 	}
 	c.logf("collector: ledger (%d bytes)", n)
+	w.WriteHeader(http.StatusOK)
+}
+
+func (c *Collector) handleEnvironment(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodPut {
+		http.Error(w, "PUT only", http.StatusMethodNotAllowed)
+		return
+	}
+	f, err := c.out.Create(EnvironmentFile)
+	if err != nil {
+		c.writeErr(w, err)
+		return
+	}
+	n, err := c.copy(f, req.Body, MaxEnvironmentBytes)
+	if closeErr := f.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		_ = c.out.Remove(EnvironmentFile)
+		c.writeErr(w, err)
+		return
+	}
+	c.logf("collector: environment (%d bytes)", n)
 	w.WriteHeader(http.StatusOK)
 }
 

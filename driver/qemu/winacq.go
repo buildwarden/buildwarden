@@ -213,6 +213,9 @@ func InstallWindowsImage(m *WindowsMedia, opts WindowsPrepOptions) (string, erro
 	if err != nil {
 		return "", fmt.Errorf("windows install (qemu): %w", err)
 	}
+	if err := recordPreparedWindows(base, varsFD, m); err != nil {
+		return "", fmt.Errorf("recording prepared image provenance: %w", err)
+	}
 	return base, nil
 }
 

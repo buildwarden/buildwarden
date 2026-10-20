@@ -85,6 +85,13 @@ type buildVMConfig struct {
 	// Direct kernel boot (lightweight/test path)
 	Kernel string
 	Initrd string
+
+	// What the build boots from, for the environment record: the read-only
+	// base under DiskImage's overlay, the cached UEFI vars VarsFD was copied
+	// from, and the seed directory SeedISO was built from.
+	BaseImage  string
+	BaseVarsFD string
+	SeedDir    string
 }
 
 func (d *Driver) startBuildVM(

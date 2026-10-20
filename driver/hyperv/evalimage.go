@@ -251,7 +251,7 @@ func FetchEvalImage(ctx context.Context, opts FetchOptions) (string, error) {
 				"the cached file was removed",
 			opts.Name, expected, gotHash)
 	}
-	return finishFetch(opts, spec, dest, gotHash, expected)
+	return finishFetch(opts, spec, dest, gotHash, expected, true)
 }
 
 // reuseCachedEvalImage finishes the fetch from a still-valid cached copy of dest
@@ -275,15 +275,17 @@ func reuseCachedEvalImage(
 	}
 	logf(opts.Progress, "using cached %s (sha256:%s)\n",
 		filepath.Base(dest), short(cachedHash))
-	path, err = finishFetch(opts, spec, dest, cachedHash, expected)
+	path, err = finishFetch(opts, spec, dest, cachedHash, expected, false)
 	return path, true, err
 }
 
-// finishFetch records the fetched image in the manifest and decides whether it
-// may become the active base. A pinned (verified) image is activated; an
-// unpinned one is recorded but only activated with AcceptUnpinned.
+// finishFetch records the fetched image in the manifest and the layer cache
+// and decides whether it may become the active base. A pinned (verified) image
+// is activated; an unpinned one is recorded but only activated with
+// AcceptUnpinned. fresh reports that gotHash was computed from the bytes just
+// downloaded (rather than read from a cached copy's sidecar).
 func finishFetch(
-	opts FetchOptions, spec EvalImageSpec, dest, gotHash, expected string,
+	opts FetchOptions, spec EvalImageSpec, dest, gotHash, expected string, fresh bool,
 ) (string, error) {
 	pinned := expected != "" && gotHash == expected
 
@@ -315,6 +317,7 @@ func finishFetch(
 		Bytes:      size,
 		FetchedAt:  time.Now().UTC().Format(time.RFC3339),
 	}
+	recordEvalLayer(dest, gotHash, m.Images[opts.Name].URL, pinned, fresh, opts.Progress)
 
 	if !pinned && !opts.AcceptUnpinned {
 		// Cache the bytes, but refuse to make unverified media the active base.
