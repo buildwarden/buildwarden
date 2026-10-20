@@ -287,7 +287,9 @@ through human sign-off (FLOW-08).
 
 ## Bootstrap order
 
-The process starts with this ordering, highest first:
+The process starts with this ordering, highest first. The windows-driver
+integration line (`integrate/windows-driver`) and this doc set have both landed on
+`main`.
 
 1. **Hyper-V Phase 5a — Windows-guest consolidation** (`host:windows-hyperv`,
    attended on the Windows desktop). Re-validate what the windows-driver
@@ -295,15 +297,11 @@ The process starts with this ordering, highest first:
    guest lifecycle with qemu, per Phase 5a in
    [`vm-driver-release-plan.md`](../design/vm-driver-release-plan.md), including
    its rollback notes.
-2. **Land the integration line** (`integrate/windows-driver` into `main`), with
-   human sign-off.
-3. **Land this doc set** (`feat/dev-standards`), merged onto the integrated `main`.
-4. **Reconcile legacy guidance.** Reduce `CLAUDE.md`, `AGENTS.md`, `DEVELOPING.md`,
+2. **Reconcile legacy guidance.** Reduce `CLAUDE.md`, `AGENTS.md`, `DEVELOPING.md`,
    `CONTRIBUTING.md`, and the mdbook `contributing/` tree to pointers here,
-   promoting any rule that exists only there. This follows step 2 because the
-   integration pass changes those files.
-5. **Stand up the workflow.** Create the `workflow` orphan branch and the agent
+   promoting any rule that exists only there.
+3. **Stand up the workflow.** Create the `workflow` orphan branch and the agent
    definitions (FLOW-14), and run behavioral-linter tier 2 in report-only mode
    (LINT-07).
-6. **Normal queue**, in priority order: the open items in the README, then feature
+4. **Normal queue**, in priority order: the open items in the README, then feature
    work such as the Firecracker driver.

@@ -127,10 +127,10 @@ These enter the work queue after the bootstrap steps in
 - **Follow-up — Reconcile legacy guidance files** (`CLAUDE.md`, `AGENTS.md`,
   `DEVELOPING.md`, `CONTRIBUTING.md`, the mdbook `contributing/` tree) down to
   pointers at this directory, promoting any rule found only there (for example
-  "fail early, say what to do", now UX-04). Bootstrap step 4.
+  "fail early, say what to do", now UX-04). Bootstrap step 2.
 - **Follow-up — Workflow bootstrap** (FLOW-03, FLOW-04, FLOW-14): the `workflow`
   orphan branch and its queue state, the phase agent definitions, and tier-2 in
-  report-only mode. Bootstrap step 5.
+  report-only mode. Bootstrap step 3.
 - **Follow-up — Design front-matter retrofit** (FLOW-12): add front-matter to the
   existing `docs/design/` plans as new designs come to rely on them.
 - **Follow-up — Container inputs under `inputs/`** (ORCH-02): the container driver
