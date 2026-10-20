@@ -581,13 +581,41 @@ cross-driver design can be revisited rather than silently diverging.
 6. *Shared staging.* warden-io.exe comes from `driver.GuestBinary` (prebuilt
    next to warden, else a cache rebuilt when stale; `WARDEN_IO_WINDOWS_EXE`
    is gone), and the build script from `driver.StageBuildScript` (`--script`,
-   then `build.ps1` in the context, then a no-op).
+   then `build.ps1` in the context; an empty context is rejected).
 
 Untouched, and left to this phase: the seed ISO, the OOBE answer file,
 `warden-run.ps1`, the per-build OOBE lifecycle on the eval VHD, and the
 Gen1/Gen2 handling.
 
-**Rollback notes.** _(none yet)_
+**Re-validation results (2026-10-20, Windows 11 Pro desktop, Hyper-V).** Run with
+a rebuilt boot VHDX (current relay + shared init), the privileged service
+reinstalled from the same build, and the retired `<nat>-relay-ingress` rule
+removed (Windows Firewall in its default state). The build guest was the Windows
+Server 2025 Datacenter eval **VHDX** passed with `--image` (Gen2): no Gen1 eval
+`.vhd` was available, so checklist items 2 and 4 (Gen1 IDE DVD seed, two-level
+`.vhd` chain) remain open.
+
+| Item | Result |
+|---|---|
+| 1. Relay config pushed | Pass. `TestLiveRelayHostEndToEnd` (`WARDEN_HYPERV_LIVE=1`): claimed at 192.168.240.2, ready in 6-13 s. |
+| 2. Collector over tunnel | Pass, with no warden firewall rules present. |
+| 3. Shared relay VM init | Pass (same run; boot disk rebuilt from `tools/relay-vm/init`). |
+| 4. Inherited features | Pass for context files (`http://cwd/build.ps1`), ledger streaming, `--capture headers` (1628 payloads) and heartbeats on success. Not exercised: upstream CA certificates, and the 30 s silence failure path. |
+| 5. CLI | Pass: `doctor --driver hyperv`, `--image`, `--memory`, `--cpus`, `-o`. |
+| 6. Shared staging | Pass: `build.ps1` from the context, `warden-io.exe` from next to warden. An empty context is now rejected up front ("nothing to build") rather than running a no-op. |
+
+Builds: `examples/conda-forge-win` passed (205 requests, 292 MB, 831 signatures
+valid, all channels closed). `examples/numpy-source-win` with `--memory 8192
+--cpus 6 --capture headers` passed in 488 s (815 requests, 2.2 GB, 3289
+signatures valid). A trivial `build.ps1` takes 81 s end to end, which bounds what
+prepare-once can save per build on this image.
+
+Found in passing (not Hyper-V specific): the relay hardcodes the ledger header
+environment to `{"type": "container"}` (`relay/relay.go`), and VM drivers send no
+`relaycfg.Environment`, so VM-driver ledgers mislabel their environment and do
+not record the base image.
+
+**Rollback notes.** _(none: no integration-pass change needed rolling back)_
 
 ### Phase 6: Multi-Target Config + Release Polish
 - warden.toml [[target]] array support

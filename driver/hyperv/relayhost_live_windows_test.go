@@ -10,13 +10,12 @@ import (
 	"time"
 )
 
-// TestLiveRelayHostEndToEnd is the full pull-at-boot integration: it starts the
-// collector + config responder on the host, creates and boots a real relay VM,
-// and asserts the relay came all the way up -- it fetched its config from the
-// responder over the NAT link, selected the httpSink, connected to the collector
-// and POSTed /v1/ready (which is what makes StartRelay return). This is the
-// first point the boot image, config responder, collector and CreateRelayVM all
-// run together.
+// TestLiveRelayHostEndToEnd is the full claim/tunnel integration: it creates and
+// boots a real relay VM (unconfigured, listening on :8301), claims it at its
+// static NAT address, opens the host-initiated /v1/tunnel and serves the
+// collector over it, and asserts the relay came all the way up (StartRelay
+// returns once the relay reports ready over the tunnel). This is the first point
+// the boot image, claim, tunnel, collector and CreateRelayVM all run together.
 //
 // Gated on WARDEN_HYPERV_LIVE=1. Needs the warden-dev / warden-dev-nat switches
 // with the host gateway 192.168.240.1 assigned, and a built boot VHDX
