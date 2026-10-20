@@ -5,6 +5,8 @@ import (
 	"io"
 	"strings"
 	"testing"
+
+	"github.com/buildwarden/buildwarden/driver/winguest"
 )
 
 // TestGenerateAutounattendWellFormed guards against the class of bug where a
@@ -19,7 +21,7 @@ func TestGenerateAutounattendWellFormed(t *testing.T) {
 			AdminUser:         "warden",
 			AdminPassword:     "p@ss & <w0rd>", // specials must not break XML
 			VirtioDriveLetter: "E:",
-			SeedLabel:         windowsSeedName,
+			SeedLabel:         winguest.SeedLabel,
 		})
 		dec := xml.NewDecoder(strings.NewReader(doc))
 		for {
@@ -43,7 +45,7 @@ func TestGenerateAutounattendARM64(t *testing.T) {
 		AdminUser:         "warden",
 		AdminPassword:     "s3cret-ephemeral",
 		VirtioDriveLetter: "E:",
-		SeedLabel:         windowsSeedName,
+		SeedLabel:         winguest.SeedLabel,
 	})
 
 	// All firmware-bypass keys present.
@@ -87,7 +89,7 @@ func TestGenerateAutounattendAMD64(t *testing.T) {
 		AdminUser:         "warden",
 		AdminPassword:     "x",
 		VirtioDriveLetter: "E:",
-		SeedLabel:         windowsSeedName,
+		SeedLabel:         winguest.SeedLabel,
 	})
 	if !strings.Contains(xml, `processorArchitecture="amd64"`) {
 		t.Error("autounattend missing amd64 processorArchitecture")
@@ -128,7 +130,7 @@ func TestFirstLogonCommandLineUnderLimit(t *testing.T) {
 		AdminUser:         "warden",
 		AdminPassword:     "s3cret-ephemeral",
 		VirtioDriveLetter: "E:",
-		SeedLabel:         windowsSeedName,
+		SeedLabel:         winguest.SeedLabel,
 	})
 	dec := xml.NewDecoder(strings.NewReader(doc))
 	var inCmd bool

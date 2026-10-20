@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/winguest"
 )
 
 // stageSeedDir writes the build-guest seed files into <workDir>/seed and returns
@@ -34,7 +35,7 @@ func stageSeedDir(workDir, arch string, _ *driver.BuildRequest) (string, error) 
 
 	if err := os.WriteFile(
 		filepath.Join(seedDir, "warden-run.ps1"),
-		[]byte(generateWardenRunPS1()), 0o644); err != nil {
+		[]byte(winguest.WardenRunPS1()), 0o644); err != nil {
 		return "", fmt.Errorf("write warden-run.ps1: %w", err)
 	}
 

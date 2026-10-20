@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/winguest"
 )
 
 // buildSeed assembles the per-build provisioning media the build VM boots with.
@@ -34,7 +35,7 @@ func buildSeed(
 		return "", "", fmt.Errorf("buildSeed: %w", err)
 	}
 	seedISO = filepath.Join(workDir, "seed.iso")
-	if err := makeSeedISOWindows(seedDir, seedISO, wardenSeedLabel); err != nil {
+	if err := makeSeedISOWindows(seedDir, seedISO, winguest.SeedLabel); err != nil {
 		return "", "", fmt.Errorf("buildSeed: %w", err)
 	}
 	return seedISO, "", nil

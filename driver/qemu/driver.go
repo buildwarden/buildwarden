@@ -14,6 +14,7 @@ import (
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/script"
+	"github.com/buildwarden/buildwarden/driver/winguest"
 )
 
 // Driver implements driver.Driver using QEMU as the virtualization backend.
@@ -304,7 +305,7 @@ func configureWindowsBuildVM(cfg *buildVMConfig, workDir string) error {
 	// run warden-run.ps1.
 	seedImg := filepath.Join(workDir, "seed.img")
 	if err := generateWindowsSeedFAT(
-		seedDir, seedImg, windowsSeedName); err != nil {
+		seedDir, seedImg, winguest.SeedLabel); err != nil {
 		return fmt.Errorf("generating windows seed FAT: %w", err)
 	}
 	cfg.SeedISO = seedImg

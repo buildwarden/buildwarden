@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/winguest"
 )
 
 // virtioWinStableURL is the signed virtio-win driver ISO (stable channel).
@@ -96,7 +97,7 @@ func AcquireWindowsMedia(opts WindowsPrepOptions) (*WindowsMedia, error) {
 		AdminUser:         adminUser,
 		AdminPassword:     driver.RandAlphaNum(16),
 		VirtioDriveLetter: driveLetter,
-		SeedLabel:         windowsSeedName,
+		SeedLabel:         winguest.SeedLabel,
 	})
 	answerDir := filepath.Join(workDir, "answer")
 	if err := os.MkdirAll(answerDir, 0755); err != nil {

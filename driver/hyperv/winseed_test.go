@@ -72,31 +72,6 @@ func TestFirstLogonCommand_LengthAndPayload(t *testing.T) {
 	}
 }
 
-func TestGenerateWardenRunPS1(t *testing.T) {
-	ps := generateWardenRunPS1()
-	for _, want := range []string{
-		"warden-io.exe",
-		"initialize",
-		"--gateway=10.0.0.1",
-		"--ip=10.0.0.2/30",
-		"Stop-Computer",
-		"SerialPort", // progress mirrored to COM1 for host-visible diagnostics
-		"COM1",
-	} {
-		if !strings.Contains(ps, want) {
-			t.Errorf("warden-run.ps1 missing %q", want)
-		}
-	}
-}
-
-func TestPSEncodedCommand_RoundTrip(t *testing.T) {
-	const script = "Write-Host 'hi & bye'"
-	got := decodePSEncoded(t, psEncodedCommand(script))
-	if got != script {
-		t.Errorf("round-trip = %q, want %q", got, script)
-	}
-}
-
 func decodePSEncoded(t *testing.T, b64 string) string {
 	t.Helper()
 	raw, err := base64.StdEncoding.DecodeString(b64)
