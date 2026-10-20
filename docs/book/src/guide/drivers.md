@@ -216,11 +216,32 @@ Create the durable network builds reuse (one time, from an elevated terminal):
 warden setup --driver hyperv
 ```
 
-Prepare a Windows Server base image (first prepare needs the evaluation VHD URL):
+Prepare a Windows Server base image. The first prepare needs the evaluation
+image: a URL, or a VHD/VHDX you already downloaded (registered in place, not
+copied):
 
 ```sh
 warden image prepare --driver hyperv --source https://.../server2025.vhd
+warden image prepare --driver hyperv --source D:\images\server2025.vhdx --accept-unpinned
 ```
+
+Prepare boots the image once with no network adapter. OOBE runs, a tuning
+script turns off background work builds never need (Windows Update,
+telemetry, maintenance tasks, automatic activation, Defender), registers the
+`warden-run` startup task, and powers off. The result is a read-only
+differencing layer over Microsoft's image, which is never modified. Every
+build boots a throwaway child of that layer and runs as SYSTEM, with no OOBE.
+Prepare takes about three minutes; the ledger records the chain (the
+evaluation image, then the prepared layer with the hashes of its inputs).
+
+The evaluation edition is never activated (prepare has no network), so a
+prepared base has the 10-day initial grace period, counted in wall time from
+the prepare. Builds keep it fresh: once the base is 7 days old, the next build
+starts a background re-prepare (`warden image prepare --driver hyperv` with no
+source does the same by hand), and a build refuses to start with less than a
+day of grace left. Both ages are set in `[vm]` (`image_refresh_after`,
+`image_min_grace`). Only one prepare runs at a time; superseded layers are
+deleted by a later prepare once no VM uses them.
 
 Optionally install the privileged helper service so builds run without
 elevation and stand up a fresh isolated network per build:
@@ -242,6 +263,9 @@ warden hyperv service install     # run once, elevated
 ```sh
 warden build --driver hyperv --guest-os windows ./win-project
 ```
+
+`--image <disk>` overrides the prepared base with a disk that already carries
+the `warden-run` startup task; a stock, unprepared image would wait at OOBE.
 
 ---
 

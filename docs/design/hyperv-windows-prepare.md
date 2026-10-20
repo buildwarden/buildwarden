@@ -130,32 +130,44 @@ None.
 ### `warden image prepare --driver hyperv --os windows`
 
 Same flags and pin/verify semantics as qemu (`--source`, `--sha256`,
-`--accept-unpinned`, `--force`, `--name`), plus `--refresh` (re-prepare from the
-already pinned eval image; no download). Steps:
+`--accept-unpinned`, `--force`, `--name`), plus `--keep-vms`. `--source` may
+also be a local VHD/VHDX, registered in place (no copy; the disk-hash cache
+avoids re-hashing it). With no source, digest or `--force`, prepare skips the
+fetch and re-prepares the pinned base: that is the refresh, so there is no
+separate `--refresh` flag. Steps:
 
-1. Take the prepare lock (`<cache>/prepare.lock`, `LockFileEx`, exclusive,
-   non-blocking). Held: exit 0 with "a prepare is already running (pid N,
-   started T)".
-2. Resolve and verify the pinned eval image (existing `evalimage.go` path; for
-   now also `--image` for a local VHDX, recorded as unpinned unless `--sha256`).
+1. Take the prepare lock (`driver.TryHostLock("hyperv-prepare")`, an OS file
+   lock, non-blocking). Held: exit 0 with "a prepare is already running".
+2. Resolve the active generalized base from the manifest.
 3. Create `prepared/<name>-<timestamp>.vhdx` (or `.vhd` for Gen1) as a
-   differencing child of the eval image.
-4. Build a prepare seed: the OOBE unattend (oobeSystem pass from `winguest`,
-   `LogonCount` 1), `warden-prepare.ps1` (tuning, task registration, grace
-   report), and the `warden-run` task registration command.
-5. Create the VM with **no network adapter** and COM1 on a host pipe (VM
-   lifecycle privilege only; no Mount-VHD).
-6. Boot. OOBE runs, the one-time FirstLogonCommand runs `warden-prepare.ps1`,
-   which applies the tuning, registers the startup task, and powers off. If the
-   tuning left a reboot pending (Defender removal), the script schedules itself
-   to finish on the next boot and the host boots the VM again, until the script
-   reports `[warden-prepare] done` on COM1 and the VM reaches Off.
-7. The script also emits `[warden-prepare] grace-end=<RFC 3339>` and the license
-   status on COM1; the host parses and records them.
-8. Timeout with COM1 tail and the VM's last state as the error (UX-04). On
-   failure the partial layer is deleted and `active` is unchanged.
-9. Hash the prepared layer, mark it read-only, record it in the manifest, and
-   swap `active` to it atomically (write temp + rename).
+   differencing child of the base.
+4. Build a prepare seed ISO labelled `WPREP`: the OOBE answer file
+   (`winguest.OOBEUnattend`, `LogonCount` 1) under both implicit-search names,
+   and `warden-prepare.ps1` (`winguest.PrepareScript`).
+5. Create the VM with **no network adapter** (an empty `SwitchName` now removes
+   the adapter New-VM always adds) and no COM1 (VM lifecycle privilege only;
+   no Mount-VHD).
+6. Boot. OOBE runs; the one FirstLogonCommand runs `warden-prepare.ps1`, which
+   applies the tuning. When Defender removal leaves a reboot pending it
+   registers a one-shot SYSTEM startup task for its `finish` stage and
+   restarts the guest itself; the host only waits for the VM to reach Off.
+   `finish` runs the ngen queue, registers `warden-run`, reports the license,
+   reports `done`, clears its reported items and powers off.
+7. **Progress channel: Hyper-V key-value pair exchange, not COM1.** The guest
+   writes values under `HKLM\SOFTWARE\Microsoft\Virtual Machine\Guest`; the
+   host reads them from `Msvm_KvpExchangeComponent.GuestExchangeItems` over
+   WMI (no elevation). COM1 was rejected: connecting to a Gen2 VM's COM1 pipe
+   during UEFI stops the guest booting, and prepare reboots. Items:
+   `warden-prepare-state` (`running:<step>`, `done`, `error:<msg>`),
+   `warden-grace-minutes`, `warden-license-status`, `warden-license-channel`,
+   `warden-reported-at`. The grace end is the reading time plus the minutes,
+   recorded only for the `TIMEBASED_EVAL` channel.
+8. Timeout (45 min default) or power-off before `done`: a fixable error naming
+   the last guest state and the guest log; the partial layer is deleted and
+   the active layer is unchanged.
+9. Hash the prepared layer, record it in the layer cache as a `prepared`
+   child of the base with the seed files as inputs, mark it read-only, append
+   it to the manifest and make it active (temp file + rename).
 
 ### ISO install stage (qemu now; any driver later)
 
@@ -179,24 +191,26 @@ install inputs) and, per prepared layer: `path`, `sha256`, `size`,
 
 ### Per build
 
-- Resolve `active`; check size, mtime and the child's recorded parent path
-  (cheap). A moved cache dir shows up as a parent mismatch: fail with "re-run
-  `warden image prepare --driver hyperv --refresh`" (checklist item 4).
-- Grace check: under `image_min_grace` left, refuse (UX-04); base older than
-  `image_refresh_after`, spawn a detached
-  `warden image prepare --driver hyperv --refresh` (logs to
-  `<cache>/prepare.log`) and continue on the current base. The lock makes
-  repeated spawns harmless.
-- Differencing child of the prepared base plus a `WARDEN` seed carrying only
+- Resolve the active prepared layer and its base (both files must exist; a
+  moved cache dir fails with "re-run `warden image prepare --driver hyperv`",
+  checklist item 4). A pinned base that was never prepared is a fixable error:
+  builds boot only prepared images. `--image` still names a single disk, which
+  must already carry the `warden-run` task.
+- Freshness: under `image_min_grace` left, refuse (UX-04); older than
+  `image_refresh_after`, start a detached `warden image prepare --driver
+  hyperv` (logging to `<cache>/prepare.log`) and continue on the current base.
+  The lock makes repeated starts harmless.
+- Differencing child of the prepared layer plus a `WARDEN` seed carrying only
   `warden-run.ps1` and `warden-io.exe`. The startup task finds the seed volume,
   runs `warden-run.ps1` as SYSTEM, and powers off, as on qemu.
 
 ### Retiring old prepared bases
 
-After a refresh, an old prepared base is deleted only when no VM still has a
-disk whose parent is that base (`Get-VM | Get-VMHardDiskDrive` ->
-`Get-VHD ParentPath`). Checked at the end of each prepare and at build start;
-deletion failures are logged, never fatal.
+At the end of each prepare, layers older than the active one and the one it
+replaced are deleted, unless a VM still depends on them (every attached disk
+walked up its `Get-VHD ParentPath` chain). Keeping the previous layer covers a
+build that resolved its chain just before the switch. Failures are logged,
+never fatal.
 
 ### `image list` and `doctor`
 
@@ -268,13 +282,50 @@ by `warden image verify` / `doctor`, and marked read-only.
    in the same change (UX-01).
 7. Native validation runs above; record results in this doc.
 
+Status: steps 1-6 implemented on `feat/hyperv-phase5a`; step 2a (qemu ISO
+install ending in generalize) and the macOS qemu validation are not done.
+
+## Validation results
+
+**windows-hyperv, 2026-10-20**, Gen2 Server 2025 Datacenter eval VHDX
+registered in place (`--source <path> --accept-unpinned`), service and relay
+boot disk from this branch.
+
+| Check | Result |
+|---|---|
+| Prepare (OOBE, tuning, Defender reboot, ngen, task) | Pass, 195-196 s on three runs |
+| No network during prepare | Pass: VM created with no adapter |
+| Progress over KVP through the reboot | Pass: `running:<step>` ... `done` |
+| Grace end recorded | Pass: prepare + 10 days, matches the guest's `slmgr /xpr` |
+| Builds as SYSTEM from the startup task (item 1) | Pass: `nt authority\system`; MSVC, conda and pip all work |
+| Grace clock is wall time from prepare (item 3) | Pass: 14395 of 14400 min left 5 min after prepare |
+| Per-build time (item 5) | trivial build 80 s -> 36 s; conda-forge-win 71 s; numpy-source-win 412 s and 515 s (dominated by the ~2 GB VS Build Tools download, so not a reliable comparison with the earlier 488 s) |
+| Ledger chain | Pass: eval image (`local`) then the prepared layer (`prepared`, 3 hashed inputs); signatures valid |
+| Second concurrent prepare | Pass: exits 0 at once, "already running" |
+| Retirement | Pass: the third prepare deleted the first layer and kept the second |
+| Tuning applied | Pass: services disabled, policy keys set, Defender removed, High performance, no leftover KVP items |
+| Activation traffic in builds | Gone after disabling the SoftwareProtectionPlatform tasks; `licensing.mp.microsoft.com` and `slscr.update.microsoft.com` remain (installer-driven) |
+
+Not yet run: a build that starts a background refresh at 7 days and one refused
+under `image_min_grace` (covered by unit tests with a fixed clock); Gen1
+`.vhd` (items 2 and 4 on Gen1); macos-qemu.
+
 ## Consolidation (merge round)
 
 _To be filled in during the merge round._
 
 ## Rollback notes
 
-_(none yet)_
+- **COM1 for prepare progress (design step 7) replaced by KVP.** Evidence:
+  `tools/relay-vm/hyperv/read-serial-pipe.ps1` documents that a client on a
+  Gen2 COM1 pipe during UEFI prevents boot, and prepare reboots. A spike
+  confirmed guest-written items under `...\Virtual Machine\Guest` reach the
+  host without elevation (`...\Auto` holds only intrinsic items).
+- **`Report` must not `New-Item -Force` the existing KVP key**: it recreated
+  the key and dropped every earlier value, so the first prepare recorded no
+  grace end. Fixed and guarded by a unit test.
+- **`Activation\Manual = 1` alone did not stop activation**; the
+  SoftwareProtectionPlatform restart tasks also had to be disabled.
 
 ## Archive summary
 

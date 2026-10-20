@@ -139,7 +139,7 @@ defaults per driver (vz: macos, qemu: linux, hyperv: windows). `[source]` (or
 | `vz` / macos | IPSW (default: latest supported) | Restores the IPSW, or refreshes the warden boot agent of an already-restored image |
 | `qemu` / linux | cloud image ref (`alpine:3.21`, `ubuntu:24.04`, `debian:bookworm`) or qcow2 | Downloads and verifies the cloud image |
 | `qemu` / windows | Windows install ISO (required) | Unattended install; skipped if already prepared unless `--force` |
-| `hyperv` / windows | Windows Server evaluation VHD URL | Needed on first prepare; `--sha256` to pin |
+| `hyperv` / windows | Windows Server evaluation VHD/VHDX: URL, or a local file registered in place | Needed on first prepare (`--sha256` to pin); then prepares the layer builds boot from. With no source, re-prepares the pinned base |
 
 **Flags:**
 - `--os <os>` — Guest OS: macos, linux or windows (default per driver)
@@ -151,6 +151,7 @@ defaults per driver (vz: macos, qemu: linux, hyperv: windows). `[source]` (or
 - `--edition <e>` — Windows edition / install.wim image name (qemu windows)
 - `--virtio <v>` — virtio-win driver ISO path or URL (qemu windows)
 - `--arch <a>` — Guest arch: arm64 or amd64 (default host arch)
+- `--keep-vms` — Leave the prepare VM and its disk for inspection (hyperv)
 
 ```sh
 warden image prepare --driver vz
@@ -171,7 +172,9 @@ List prepared base images for every driver.
 warden image list
 # vz      macos    /Users/me/.cache/warden/vz/images/macOS-15.4
 # qemu    linux    /Users/me/.cache/warden/images/alpine.qcow2
-# hyperv  windows  C:\...\windows-server-2025.vhdx (active)
+# hyperv  windows  base     C:\...\server2025.vhdx (pinned)
+# hyperv  windows  prepared windows-server-2025-20261020T193301Z.vhdx, 2.0d old,
+#                           evaluation grace ends 2026-10-30 19:33Z (8.0d left)
 ```
 
 ### warden image verify
