@@ -610,6 +610,17 @@ valid, all channels closed). `examples/numpy-source-win` with `--memory 8192
 signatures valid). A trivial `build.ps1` takes 81 s end to end, which bounds what
 prepare-once can save per build on this image.
 
+Checklist item 3 (eval licensing clock), measured on the Gen2 Server 2025
+Datacenter eval VHDX right after a per-build OOBE: the guest is **unactivated**,
+in "Initial grace period" (`LicenseStatus` 2, `TIMEBASED_EVAL` channel) with
+10 days remaining. The end is an absolute date ("ends <install + 10 days>",
+against "Trusted time"), so the clock runs on wall time from install, not
+uptime. Rearm count is 1. A long build (numpy) activates online through the
+relay (`activation-v2.sls.microsoft.com/SLActivateProduct`, in the ledger) and
+discards it with the VM; a 30 s build does not get that far. Consequence for
+prepare-once: a base prepared with no network stays in the 10-day initial grace
+from prepare time, not 180 days, unless it is activated during prepare.
+
 Found in passing (not Hyper-V specific): the relay hardcodes the ledger header
 environment to `{"type": "container"}` (`relay/relay.go`), and VM drivers send no
 `relaycfg.Environment`, so VM-driver ledgers mislabel their environment and do
