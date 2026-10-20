@@ -179,55 +179,10 @@ func fetchFile(src, dest string) error {
 }
 
 func runTrust() int {
-	resp, err := http.Get("http://artifacts/ca.pem")
-	if err != nil {
+	if err := fetchAndInstallCA(); err != nil {
 		fmt.Fprintf(os.Stderr, "warden-io: trust: %s\n", err)
 		return 1
 	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		fmt.Fprintf(os.Stderr, "warden-io: trust: HTTP %d\n", resp.StatusCode)
-		return 1
-	}
-
-	pem, err := io.ReadAll(resp.Body)
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "warden-io: trust: reading CA: %s\n", err)
-		return 1
-	}
-
-	installed := false
-
-	// Alpine/Debian/Ubuntu: /usr/local/share/ca-certificates/ + update-ca-certificates
-	dir := "/usr/local/share/ca-certificates"
-	if err := os.MkdirAll(dir, 0755); err == nil {
-		certPath := filepath.Join(dir, "warden-ca.crt")
-		if err := os.WriteFile(certPath, pem, 0644); err == nil {
-			installed = true
-		}
-	}
-
-	// Append to bundle (works without update-ca-certificates)
-	for _, bundle := range []string{
-		"/etc/ssl/certs/ca-certificates.crt",
-		"/etc/pki/tls/certs/ca-bundle.crt",
-		"/etc/ssl/cert.pem",
-	} {
-		if f, err := os.OpenFile(bundle, os.O_APPEND|os.O_WRONLY, 0644); err == nil {
-			_, _ = f.Write([]byte("\n"))
-			_, _ = f.Write(pem)
-			f.Close()
-			installed = true
-			break
-		}
-	}
-
-	if !installed {
-		fmt.Fprintf(os.Stderr, "warden-io: trust: could not install CA\n")
-		return 1
-	}
-
 	return 0
 }
 

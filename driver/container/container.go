@@ -7,19 +7,24 @@ package container
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io"
+	"net"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/lesiw/ctrctl"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
 const (
-	wardenDir      = ".warden"
 	relayImageRepo = "ghcr.io/buildwarden/relay"
 )
 
@@ -44,10 +49,15 @@ type build struct {
 	relayImage      string
 	relayBuiltLocal bool
 	buildID         string
-	ledgerDir       string
+	sess            *driver.Session
+	caCert          []byte
 	outputDir       string
 	subnet          driver.Subnet
 	isolatedNetwork string
+	// workDir is this build's private scratch directory (driver.NewWorkDir).
+	// It holds the staged /.warden tree and the relay image's build context;
+	// nothing is written into the user's build context.
+	workDir string
 }
 
 func (d *Driver) Name() string { return "container" }
@@ -56,11 +66,16 @@ func (d *Driver) StartBuild(
 	ctx context.Context, req *driver.BuildRequest,
 ) (*driver.BuildResult, error) {
 	ctrctl.Cli = []string{d.Runtime}
+	if req.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, req.Timeout)
+		defer cancel()
+	}
 
 	b := &build{d: d, req: req}
 	defer b.teardown()
 
-	if err := b.setup(); err != nil {
+	if err := b.setup(ctx); err != nil {
 		return nil, err
 	}
 
@@ -91,23 +106,13 @@ func (d *Driver) StartBuild(
 	}
 
 	logInfo(req, "Executing build...")
-	stdout := req.Stdout
-	if stdout == nil {
-		stdout = os.Stdout
-	}
-	stderr := req.Stderr
-	if stderr == nil {
-		stderr = os.Stderr
-	}
-	stdin := req.Stdin
-	if stdin == nil {
-		stdin = os.Stdin
-	}
+	stdin, stdout, stderr := stdio(req)
 
+	tail := newTailWriter(stderr)
 	execCmd := &exec.Cmd{
 		Stdin:  stdin,
 		Stdout: stdout,
-		Stderr: stderr,
+		Stderr: tail,
 	}
 	execDone := make(chan error, 1)
 	go func() {
@@ -135,12 +140,41 @@ func (d *Driver) StartBuild(
 		return nil, ctx.Err()
 	}
 	if err != nil {
-		return nil, fmt.Errorf("build error: %w", err)
+		return nil, b.execFailure(ctx, err, tail.String())
+	}
+	// The relay flushes the ledger before it reports completion, so this
+	// returns as soon as the collector has everything.
+	if err := b.sess.Wait(ctx); err != nil {
+		return nil, err
 	}
 
 	return &driver.BuildResult{
 		OutputDir: b.outputDir,
 	}, nil
+}
+
+// completionGrace is how long a failed exec waits for the guest's completion
+// report, which warden-io sends just before it exits.
+const completionGrace = 5 * time.Second
+
+// execFailure explains a non-zero `exec` of the build. The script's exit code
+// as the guest reported it to the collector is authoritative (nerdctl's own
+// exit status is always 1). With no report, warden-io failed before the
+// script ran (no relay, say): that is an environment error, not a build
+// result.
+func (b *build) execFailure(ctx context.Context, execErr error, stderrTail string) error {
+	wctx, cancel := context.WithTimeout(ctx, completionGrace)
+	defer cancel()
+	var ee *driver.ExitError
+	if err := b.sess.Wait(wctx); errors.As(err, &ee) {
+		return err
+	}
+	if code, ok := execExitCode(execErr, stderrTail); ok {
+		return fmt.Errorf(
+			"build environment failed before the build ran "+
+				"(warden-io exited with code %d; see its output above)", code)
+	}
+	return fmt.Errorf("build error: %w", execErr)
 }
 
 func (d *Driver) Exec(
@@ -151,7 +185,7 @@ func (d *Driver) Exec(
 	b := &build{d: d, req: req}
 	defer b.teardown()
 
-	if err := b.setup(); err != nil {
+	if err := b.setup(ctx); err != nil {
 		return err
 	}
 
@@ -174,19 +208,11 @@ func (d *Driver) Exec(
 	}
 
 	logInfo(req, "Dropping into shell (exit to tear down)...")
-	stdout := req.Stdout
-	if stdout == nil {
-		stdout = os.Stdout
-	}
-	stderr := req.Stderr
-	if stderr == nil {
-		stderr = os.Stderr
-	}
-	stdin := req.Stdin
-	if stdin == nil {
-		stdin = os.Stdin
-	}
+	stdin, stdout, stderr := stdio(req)
 
+	// The shell runs under a wrapper that records its exit status: with a
+	// TTY, finch delivers nerdctl's "exit code N" line on the terminal
+	// stream, not stderr, and its own exit status is always 1.
 	_, err = ctrctl.ContainerExec(
 		&ctrctl.ContainerExecOpts{
 			Cmd: &exec.Cmd{
@@ -198,19 +224,63 @@ func (d *Driver) Exec(
 			Tty:         true,
 		},
 		b.buildContainer,
-		"sh",
+		"sh", "-c", "sh; s=$?; echo $s > "+shellExitFile+"; exit $s",
 	)
+	if err != nil {
+		// The shell's own exit status is the user's, not a warden failure.
+		if code, ok := b.shellExitCode(err); ok {
+			return &driver.ExitError{Code: code}
+		}
+	}
 	return err
+}
+
+// shellExitFile is where the shell wrapper records the shell's exit status.
+const shellExitFile = "/.warden/shell-exit"
+
+// shellExitCode returns the exit status of the interactive shell, preferring
+// the one its wrapper recorded over the runtime CLI's own exit status.
+func (b *build) shellExitCode(execErr error) (int, bool) {
+	out, err := ctrctl.ContainerExec(nil, b.buildContainer, "cat", shellExitFile)
+	if err == nil {
+		if n, err := strconv.Atoi(strings.TrimSpace(out)); err == nil {
+			return n, true
+		}
+	}
+	return execExitCode(execErr, "")
 }
 
 func (d *Driver) Close() error { return nil }
 
+// stdio resolves the request's stdin, stdout and stderr, defaulting each to
+// the process's own stream when the request leaves it unset.
+func stdio(req *driver.BuildRequest) (stdin io.Reader, stdout, stderr io.Writer) {
+	stdin, stdout, stderr = req.Stdin, req.Stdout, req.Stderr
+	if stdin == nil {
+		stdin = os.Stdin
+	}
+	if stdout == nil {
+		stdout = os.Stdout
+	}
+	if stderr == nil {
+		stderr = os.Stderr
+	}
+	return stdin, stdout, stderr
+}
+
 // --- build lifecycle ---
 
-func (b *build) setup() error {
-	err := os.MkdirAll(
-		filepath.Join(b.wardenDirPath(), "ext.d"), 0755)
-	if err != nil {
+func (b *build) setup(ctx context.Context) error {
+	b.buildID = driver.RandAlphaNum(8)
+	logInfo(b.req,
+		fmt.Sprintf("Build ID: %s", b.buildID))
+
+	var err error
+	if b.workDir, err = driver.NewWorkDir(b.req, "container-"+b.buildID); err != nil {
+		return err
+	}
+	if err := os.MkdirAll(
+		filepath.Join(b.wardenDirPath(), "ext.d"), 0755); err != nil {
 		return fmt.Errorf(
 			"error creating %s: %w",
 			b.wardenDirPath(), err)
@@ -219,10 +289,6 @@ func (b *build) setup() error {
 	if err := b.buildWardenIO(); err != nil {
 		return err
 	}
-
-	b.buildID = driver.RandAlphaNum(8)
-	logInfo(b.req,
-		fmt.Sprintf("Build ID: %s", b.buildID))
 
 	b.outputDir = b.req.OutputDir
 	if b.outputDir == "" {
@@ -233,39 +299,24 @@ func (b *build) setup() error {
 			"error creating output dir: %w", err)
 	}
 
-	home, _ := os.UserHomeDir()
-	b.ledgerDir, err = os.MkdirTemp(home,
-		".warden-ledger-"+b.buildID+"-")
-	if err != nil {
-		return fmt.Errorf(
-			"error creating ledger temp dir: %w", err)
-	}
-
 	if err := b.resolveRelayImage(); err != nil {
 		return err
 	}
 
-	if err := b.prepareEnvironment(); err != nil {
+	env, err := b.prepareEnvironment()
+	if err != nil {
 		return err
 	}
 
 	logInfo(b.req, "Allocating network...")
-	sub, err := driver.AllocateSubnet(ctrctl.Cli)
+	sub, err := driver.AllocateNetwork("warden-" + b.buildID)
 	if err != nil {
 		return err
 	}
 	b.subnet = sub
+	b.isolatedNetwork = "warden-" + b.buildID
 
-	if err := b.createNetwork(); err != nil {
-		return err
-	}
-
-	if err := b.prepareUpstreamCA(); err != nil {
-		return err
-	}
-
-	logInfo(b.req, "Starting relay...")
-	if err := b.startRelayContainer(); err != nil {
+	if err := b.startSessionAndRelay(ctx, env); err != nil {
 		return err
 	}
 
@@ -273,9 +324,9 @@ func (b *build) setup() error {
 		WardenDir: b.wardenDirPath(),
 		ScriptDir: filepath.Join(
 			b.wardenDirPath(), "ext.d"),
-		LedgerDir: b.ledgerDir,
-		RelayIP:   b.subnet.RelayIP,
-		BuildID:   b.buildID,
+		CACert:  b.caCert,
+		RelayIP: b.subnet.RelayIP,
+		BuildID: b.buildID,
 	}
 	for _, ext := range b.d.Extensions {
 		if err := ext.BeforeBuild(extCtx); err != nil {
@@ -286,6 +337,7 @@ func (b *build) setup() error {
 	if err := editContainerfile(
 		b.req.Containerfile,
 		b.req.ContextDir,
+		filepath.Join(b.wardenDirPath(), "Containerfile"),
 		b.d.Extensions,
 	); err != nil {
 		return err
@@ -294,26 +346,61 @@ func (b *build) setup() error {
 	return nil
 }
 
-func (b *build) prepareEnvironment() error {
+// startSessionAndRelay starts the collector session, boots the relay
+// container, claims it with the build's configuration, and records the
+// relay's CA certificate.
+func (b *build) startSessionAndRelay(ctx context.Context, env *relaycfg.Environment) error {
+	var err error
+	// The build console reaches the terminal through `exec`, so the
+	// collector does not tee it as well.
+	b.sess, err = driver.StartSession(driver.SessionConfig{
+		OutputDir:   b.outputDir,
+		ContextDir:  b.req.ContextDir,
+		BuildScript: filepath.Join(b.wardenDirPath(), "build.sh"),
+		Verbose:     b.d.Verbose,
+	})
+	if err != nil {
+		return err
+	}
+
+	logInfo(b.req, "Starting relay...")
+	claimToken, err := driver.RandomToken()
+	if err != nil {
+		return err
+	}
+	claimAddr, err := b.startRelayContainer(claimToken)
+	if err != nil {
+		return err
+	}
+	id, err := b.sess.ClaimRelay(ctx, claimAddr, claimToken, b.req, env)
+	if err != nil {
+		return err
+	}
+	b.caCert = []byte(id.CACert)
+	return nil
+}
+
+func (b *build) prepareEnvironment() (*relaycfg.Environment, error) {
 	image, err := driver.ExtractFromImage(
 		b.req.Containerfile)
 	if err != nil {
-		return fmt.Errorf("reading FROM image: %w", err)
+		return nil, fmt.Errorf("reading FROM image: %w", err)
 	}
 
 	logInfo(b.req,
 		fmt.Sprintf("Pulling image: %s", image))
 	if err := b.pullBuildBaseImage(image); err != nil {
-		return err
+		return nil, err
 	}
 
-	if err := writeEnvironment(
-		image, b.ledgerDir); err != nil {
+	env, err := imageEnvironment(image)
+	if err != nil {
 		logWarn(b.req,
 			fmt.Sprintf(
-				"failed to write environment: %s", err))
+				"failed to record environment: %s", err))
+		return nil, nil
 	}
-	return nil
+	return env, nil
 }
 
 func (b *build) pullBuildBaseImage(image string) error {
@@ -358,7 +445,9 @@ ENTRYPOINT ["sh", "-c"]
 
 const netnsImageTag = "warden-netns:latest"
 
-func ensureNetnsImage() error {
+// ensureNetnsImage builds the iptables sidecar image once per runtime,
+// using dir (inside the build's work dir) as the image build context.
+func ensureNetnsImage(dir string) error {
 	args := append(ctrctl.Cli,
 		"image", "inspect", netnsImageTag)
 	cmd := exec.Command(args[0], args[1:]...)
@@ -366,12 +455,10 @@ func ensureNetnsImage() error {
 		return nil
 	}
 
-	home, _ := os.UserHomeDir()
-	buildCtx, err := os.MkdirTemp(home, ".warden-netns-")
-	if err != nil {
+	buildCtx := dir
+	if err := os.MkdirAll(buildCtx, 0o755); err != nil {
 		return err
 	}
-	defer os.RemoveAll(buildCtx)
 
 	if err := os.WriteFile(
 		filepath.Join(buildCtx, "Containerfile"),
@@ -379,7 +466,7 @@ func ensureNetnsImage() error {
 		return err
 	}
 
-	_, err = ctrctl.ImageBuild(
+	_, err := ctrctl.ImageBuild(
 		&ctrctl.ImageBuildOpts{
 			Tag:  netnsImageTag,
 			File: filepath.Join(buildCtx, "Containerfile"),
@@ -389,7 +476,7 @@ func ensureNetnsImage() error {
 }
 
 func (b *build) isolateBuildContainer() error {
-	if err := ensureNetnsImage(); err != nil {
+	if err := ensureNetnsImage(filepath.Join(b.workDir, "netns-image")); err != nil {
 		return fmt.Errorf(
 			"building netns image: %w", err)
 	}
@@ -476,118 +563,71 @@ func (b *build) injectWarden() error {
 	return nil
 }
 
-func (b *build) createNetwork() error {
-	id, err := ctrctl.NetworkCreate(
-		&ctrctl.NetworkCreateOpts{
-			Driver: "bridge",
-			Subnet: b.subnet.CIDR,
-		},
-		"warden-"+b.buildID,
-	)
-	if err != nil {
-		return err
-	}
-	b.isolatedNetwork = id
-	return nil
-}
+// relayPublishAttempts bounds how many host ports startRelayContainer tries
+// before giving up on publishing the claim port.
+const relayPublishAttempts = 8
 
-func (b *build) prepareUpstreamCA() error {
-	if len(b.req.UpstreamCACerts) == 0 {
-		return nil
-	}
-
-	var bundle []byte
-	for _, p := range b.req.UpstreamCACerts {
-		info, err := os.Stat(p)
+// startRelayContainer starts the relay unconfigured, with its claim port
+// published on host loopback only, and returns that host address. Nothing is
+// mounted: the relay reaches its collector over the session's tunnel.
+//
+// The host port is chosen here rather than left to the runtime: nerdctl
+// (finch) hands the SAME ephemeral port to containers started concurrently,
+// so two builds would dial one relay. An explicit host port is reserved
+// atomically by the runtime (a second bind is refused), so a collision with
+// another build or process surfaces as a start error and is retried.
+func (b *build) startRelayContainer(claimToken string) (string, error) {
+	name := "warden-relay-" + b.buildID
+	var lastErr error
+	for range relayPublishAttempts {
+		hostPort, err := driver.FreeLoopbackPort()
 		if err != nil {
-			return fmt.Errorf("upstream CA path %q: %w", p, err)
+			return "", fmt.Errorf("finding a free loopback port: %w", err)
 		}
-		if info.IsDir() {
-			entries, err := os.ReadDir(p)
-			if err != nil {
-				return fmt.Errorf(
-					"reading CA directory %q: %w", p, err)
-			}
-			for _, entry := range entries {
-				if entry.IsDir() {
-					continue
-				}
-				ext := strings.ToLower(
-					filepath.Ext(entry.Name()))
-				if ext != ".pem" && ext != ".crt" &&
-					ext != ".cer" {
-					continue
-				}
-				data, err := os.ReadFile(
-					filepath.Join(p, entry.Name()))
-				if err != nil {
-					return fmt.Errorf(
-						"reading %s/%s: %w",
-						p, entry.Name(), err)
-				}
-				bundle = appendPEM(bundle, data)
-			}
-		} else {
-			data, err := os.ReadFile(p)
-			if err != nil {
-				return fmt.Errorf(
-					"reading CA cert %q: %w", p, err)
-			}
-			bundle = appendPEM(bundle, data)
+		publish := fmt.Sprintf("127.0.0.1:%d:%d", hostPort, relaycfg.DefaultPort)
+		args := append(ctrctl.Cli, "container", "run",
+			"--detach",
+			"--name", name,
+			"--network", "warden-"+b.buildID,
+			"--ip", b.subnet.RelayIP,
+			"--publish", publish,
+			"--env", relaycfg.TokenEnv+"="+claimToken,
+			b.relayImage,
+		)
+		var stderr strings.Builder
+		cmd := exec.Command(args[0], args[1:]...)
+		cmd.Stderr = &stderr
+		out, err := cmd.Output()
+		if err == nil {
+			b.relayContainer = strings.TrimSpace(string(out))
+			return net.JoinHostPort("127.0.0.1", strconv.Itoa(hostPort)), nil
 		}
+		lastErr = fmt.Errorf("%w: %s", err, strings.TrimSpace(stderr.String()))
+		if !isPortConflict(stderr.String()) {
+			break
+		}
+		// docker/podman leave a Created container behind on a failed
+		// publish; clear the name before retrying with another port.
+		_, _ = ctrctl.ContainerRm(&ctrctl.ContainerRmOpts{Force: true}, name)
 	}
-
-	if len(bundle) == 0 {
-		return nil
-	}
-
-	bundlePath := filepath.Join(
-		b.ledgerDir, "upstream-ca-bundle.pem")
-	if err := os.WriteFile(bundlePath, bundle, 0644); err != nil {
-		return fmt.Errorf("writing upstream CA bundle: %w", err)
-	}
-	logInfo(b.req, fmt.Sprintf(
-		"Prepared upstream CA bundle (%d bytes)", len(bundle)))
-	return nil
+	return "", fmt.Errorf("error starting relay container: %w", lastErr)
 }
 
-func appendPEM(bundle, data []byte) []byte {
-	bundle = append(bundle, data...)
-	if len(data) > 0 && data[len(data)-1] != '\n' {
-		bundle = append(bundle, '\n')
+// isPortConflict reports whether a runtime's start error means the chosen
+// host port was already taken (wording differs across docker, nerdctl and
+// podman).
+func isPortConflict(stderr string) bool {
+	s := strings.ToLower(stderr)
+	for _, m := range []string{
+		"port is already allocated",
+		"address already in use",
+		"bind for",
+	} {
+		if strings.Contains(s, m) {
+			return true
+		}
 	}
-	return bundle
-}
-
-func (b *build) startRelayContainer() error {
-	args := append(ctrctl.Cli, "container", "run",
-		"--detach",
-		"--name", "warden-relay-"+b.buildID,
-		"--network", "warden-"+b.buildID,
-		"--ip", b.subnet.RelayIP,
-		"--volume", b.ledgerDir+":/ledger",
-		"--volume", b.req.ContextDir+":/context:ro",
-	)
-
-	capture := b.req.CaptureMode
-	if capture != "" && capture != "none" {
-		args = append(args,
-			"--env", "CAPTURE_MODE="+capture)
-	}
-	if !b.req.UpstreamSystemCA {
-		args = append(args,
-			"--env", "RELAY_SYSTEM_CA=false")
-	}
-	args = append(args, b.relayImage)
-
-	cmd := exec.Command(args[0], args[1:]...)
-	out, err := cmd.Output()
-	if err != nil {
-		return fmt.Errorf(
-			"error starting relay container: %w", err)
-	}
-	b.relayContainer = strings.TrimSpace(string(out))
-	return nil
+	return false
 }
 
 func (b *build) resolveRelayImage() error {
@@ -624,21 +664,25 @@ func (b *build) pullImage(image string) error {
 }
 
 func (b *build) buildRelayFromSource() error {
-	// Use a temp dir under the context dir so finch/Lima VM
-	// can access it (Lima only mounts $HOME by default).
-	tmpBase, err := os.MkdirTemp(
-		b.req.ContextDir, ".warden-relay-")
-	if err != nil {
+	// The image build context lives in the work dir, so it must be a path
+	// the runtime's VM can see (finch, Docker Desktop and podman machine
+	// all share the macOS temp dir; see --tmpdir otherwise).
+	tmpBase := filepath.Join(b.workDir, "relay-image")
+	if err := os.MkdirAll(tmpBase, 0o755); err != nil {
 		return fmt.Errorf(
-			"error creating relay temp dir: %w", err)
+			"error creating relay image dir: %w", err)
 	}
-	defer os.RemoveAll(tmpBase)
 
 	relayBin := filepath.Join(tmpBase, "relay")
 	cmd := exec.Command(
 		"go", "build", "-o", relayBin, "./cmd/relay")
 	cmd.Env = append(os.Environ(),
 		"GOOS=linux", "CGO_ENABLED=0")
+	root, err := driver.ModuleRoot()
+	if err != nil {
+		return fmt.Errorf("building the relay from source: %w", err)
+	}
+	cmd.Dir = root
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -649,7 +693,7 @@ func (b *build) buildRelayFromSource() error {
 	dockerfile := `FROM alpine:latest
 RUN apk add --no-cache ca-certificates
 COPY relay /usr/local/bin/relay
-EXPOSE 53/udp 80 443
+EXPOSE 53/udp 80 443 8301
 ENTRYPOINT ["relay"]
 `
 	if err := os.WriteFile(
@@ -693,6 +737,11 @@ func (b *build) buildWardenIO() error {
 		"go", "build", "-o", dest, "./cmd/warden-io")
 	cmd.Env = append(os.Environ(),
 		"GOOS=linux", "CGO_ENABLED=0")
+	root, err := driver.ModuleRoot()
+	if err != nil {
+		return fmt.Errorf("building warden-io from source: %w", err)
+	}
+	cmd.Dir = root
 	cmd.Stdout = os.Stderr
 	cmd.Stderr = os.Stderr
 	if err := cmd.Run(); err != nil {
@@ -702,21 +751,28 @@ func (b *build) buildWardenIO() error {
 	return nil
 }
 
+// wardenDirPath is the staged tree copied into the build container as
+// /.warden (warden-io, the edited Containerfile, build.sh, extension files).
 func (b *build) wardenDirPath() string {
-	return filepath.Join(b.req.ContextDir, wardenDir)
+	return filepath.Join(b.workDir, "warden")
 }
 
 func (b *build) teardown() {
 	logInfo(b.req, "Tearing down environment...")
 
+	if b.sess != nil {
+		b.sess.Close()
+	}
 	if b.relayContainer != "" && b.outputDir != "" {
 		b.collectRelayLogs()
 	}
-	if b.ledgerDir != "" && b.outputDir != "" {
+	if b.sess != nil {
 		b.collectOutput()
 	}
 
-	_ = os.RemoveAll(b.wardenDirPath())
+	if b.workDir != "" {
+		_ = os.RemoveAll(b.workDir)
+	}
 
 	if b.relayContainer != "" {
 		_, err := ctrctl.ContainerRm(
@@ -764,44 +820,10 @@ func (b *build) collectRelayLogs() {
 	os.WriteFile(logPath, out, 0644) //nolint:errcheck
 }
 
+// collectOutput finalizes the collector's output (the same as every driver)
+// and adds the container driver's provenance files.
 func (b *build) collectOutput() {
-	compress := b.req.Compress
-
-	ledgerSrc := filepath.Join(b.ledgerDir, "ledger")
-	if compress {
-		compressFile(ledgerSrc,
-			filepath.Join(b.outputDir, "ledger.zst"))
-	} else {
-		os.Rename(ledgerSrc, //nolint:errcheck
-			filepath.Join(b.outputDir, "ledger"))
-	}
-
-	caSrc := filepath.Join(b.ledgerDir, "ca.cert.pem")
-	if compress {
-		compressFile(caSrc,
-			filepath.Join(
-				b.outputDir, "ca.cert.pem.zst"))
-	} else {
-		os.Rename(caSrc, //nolint:errcheck
-			filepath.Join(b.outputDir, "ca.cert.pem"))
-	}
-
-	artDir := filepath.Join(b.ledgerDir, "artifacts")
-	if entries, err := os.ReadDir(artDir); err == nil {
-		outArt := filepath.Join(b.outputDir, "artifacts")
-		os.MkdirAll(outArt, 0755) //nolint:errcheck
-		for _, entry := range entries {
-			src := filepath.Join(artDir, entry.Name())
-			real, err := filepath.EvalSymlinks(src)
-			if err != nil {
-				real = src
-			}
-			os.Rename(real, //nolint:errcheck
-				filepath.Join(outArt, entry.Name()))
-		}
-	}
-
-	os.RemoveAll(b.ledgerDir) //nolint:errcheck
+	driver.FinalizeOutput(b.outputDir, b.req.Compress)
 
 	if b.req.Containerfile != "" {
 		submitted, err := os.ReadFile(

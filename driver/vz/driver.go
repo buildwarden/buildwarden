@@ -7,12 +7,13 @@ import (
 	"net"
 	"os"
 	"os/exec"
+	"os/user"
 	"path/filepath"
 	"runtime"
 	"strings"
-	"time"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
 // Driver implements driver.Driver using Apple's Virtualization.framework
@@ -21,20 +22,20 @@ import (
 // Architecture (host relay + build VM):
 //
 //	Host (orchestrator)
-//	├── Prepares shared volume: relay binary, config, context, ledger dir
 //	├── Creates isolated virtual network (socket pair)
-//	├── Starts Relay (host process with --ingress=fd)
+//	├── Starts Relay (host process, --mode=host, frames on fd 3) and claims it
 //	│   ├── Reads raw Ethernet frames from socketpair via gvisor netstack
 //	│   └── Has native internet access (host networking)
 //	├── Boots Build VM (macOS from IPSW)
 //	│   └── Single interface → socket pair → Relay (sole gateway)
-//	└── Waits for build completion, collects ledger + artifacts
+//	└── Waits for build completion; outputs arrive through the collector
 //
 // Network isolation is topological: the build VM's only network path is
 // through the relay process. No iptables, no vmnet needed.
 type Driver struct {
-	Cache    *ImageCache
-	RelayImg string // Path to relay Alpine VM image (built/cached)
+	Cache *ImageCache
+	// Verbose echoes the host relay's log to stderr as well as relay.log.
+	Verbose bool
 }
 
 func New() *Driver {
@@ -52,10 +53,17 @@ func (d *Driver) StartBuild(
 	if err := checkPlatform(); err != nil {
 		return nil, err
 	}
+	// The base image is checked first: without one nothing else can run.
+	diskImage, err := d.resolveImage(req.Image)
+	if err != nil {
+		return nil, fmt.Errorf("resolving image: %w", err)
+	}
+	if req.Timeout > 0 {
+		var cancel context.CancelFunc
+		ctx, cancel = context.WithTimeout(ctx, req.Timeout)
+		defer cancel()
+	}
 
-	buildID := driver.RandAlphaNum(8)
-
-	// Prepare output directory
 	outputDir := req.OutputDir
 	if outputDir == "" {
 		outputDir = "warden-output"
@@ -64,78 +72,127 @@ func (d *Driver) StartBuild(
 		return nil, fmt.Errorf("creating output dir: %w", err)
 	}
 
-	sharedDir, err := d.prepareSharedDir(buildID, req)
+	workDir, err := driver.NewWorkDir(req, "vz")
 	if err != nil {
 		return nil, err
 	}
-	defer os.RemoveAll(sharedDir)
+	defer driver.RemoveWorkDir(req, workDir)
 
-	// Resolve and clone macOS disk image for build VM
-	diskImage, err := d.resolveImage(req.Image)
+	// macOS guests run a shell script; a Containerfile is not translated.
+	scriptReq := *req
+	scriptReq.Containerfile = ""
+	buildScript, err := driver.StageBuildScript(&scriptReq, workDir)
 	if err != nil {
-		return nil, fmt.Errorf("resolving image: %w", err)
+		return nil, fmt.Errorf("staging build script: %w", err)
 	}
 
-	buildDisk := filepath.Join(sharedDir, "build-disk.img")
-	if err := CloneDisk(diskImage, buildDisk); err != nil {
-		return nil, fmt.Errorf("cloning build disk: %w", err)
+	// The relay is a host process here, so the collector is on loopback.
+	sess, err := driver.StartSession(driver.SessionConfig{
+		OutputDir:   outputDir,
+		ContextDir:  req.ContextDir,
+		BuildScript: buildScript,
+		OutputTee:   driver.ConsoleTee(req),
+	})
+	if err != nil {
+		return nil, err
+	}
+	defer sess.Close()
+
+	buildDisk, buildAux, err := cloneBuildDisks(workDir, diskImage)
+	if err != nil {
+		return nil, err
 	}
 
-	// Create isolated virtual network (socket pair)
-	vnet, err := NewVirtualNetwork()
+	// Create the isolated virtual network (socket pair), start the host-side
+	// relay (it reads raw Ethernet frames from its end of the socketpair via
+	// gvisor netstack and has native internet access; the build VM can only
+	// reach the network through it), and claim it with the build's config.
+	vnet, relayProc, err := d.setupNetworkAndRelay(ctx, sess, req, workDir, outputDir)
 	if err != nil {
-		return nil, fmt.Errorf("creating virtual network: %w", err)
+		return nil, err
 	}
 	defer vnet.Close()
-
-	// Start host-side relay process.
-	// The relay reads raw Ethernet frames from its end of the socketpair
-	// using gvisor netstack (--ingress=fd). It has native internet access
-	// since it runs on the host. Trust boundary is preserved: the build VM
-	// can only communicate through the socketpair, and the relay controls
-	// all traffic (DNS, HTTP/HTTPS proxy, ledger).
-	relayProc, err := d.startHostRelay(sharedDir, vnet)
-	if err != nil {
-		return nil, fmt.Errorf("starting relay: %w", err)
-	}
 	defer relayProc.Stop()
-
-	// Wait for relay to write ca.cert.pem (signals it's ready)
-	caPath := filepath.Join(sharedDir, "ledger", "ca.cert.pem")
-	if err := waitForFile(ctx, caPath, 30); err != nil {
-		return nil, fmt.Errorf("relay did not start: %w", err)
-	}
 
 	// Boot Build VM: macOS with single network interface (socketpair to relay).
 	// No shared directory — all communication goes through the relay HTTP API.
 	// Platform state files (hardware-model, machine-id, aux-storage) live
 	// alongside the original disk image, not the COW clone.
 	buildVM, err := d.bootBuildVM(
-		buildDisk, filepath.Dir(diskImage), vnet)
+		buildDisk, buildAux, filepath.Dir(diskImage), vnet,
+		driver.OrDefault(req.CPUs, 4), driver.OrDefault(req.MemoryMB, 8192))
 	if err != nil {
+		// VZErrorDomain code 6: macOS caps running macOS guests at two.
+		if strings.Contains(err.Error(), "VZErrorDomain code=6") {
+			return nil, driver.Fixable(
+				"wait for another vz build, or another macOS VM "+
+					"(UTM, Tart, ...), to finish, then retry",
+				"booting build VM: macOS allows at most two running "+
+					"macOS virtual machines, and two are running")
+		}
 		return nil, fmt.Errorf("booting build VM: %w", err)
 	}
 	defer func() { _ = buildVM.Stop() }()
 
-	// Wait for build completion via heartbeat protocol
-	signalDir := filepath.Join(sharedDir, "signal")
-	isTTY := req.Stdin != nil
-	exitCode, err := WaitForBuild(ctx, signalDir, isTTY)
+	if err := sess.Wait(ctx); err != nil {
+		return nil, err
+	}
+	driver.FinalizeOutput(outputDir, req.Compress)
+	return &driver.BuildResult{OutputDir: outputDir}, nil
+}
+
+// cloneBuildDisks makes per-build copy-on-write clones of the base disk and
+// its auxiliary storage. The auxiliary storage (NVRAM) is written at boot and
+// locked by the running VM, so each build boots from its own clone too;
+// otherwise a second concurrent build fails with "Failed to lock auxiliary
+// storage".
+func cloneBuildDisks(workDir, diskImage string) (buildDisk, buildAux string, err error) {
+	buildDisk = filepath.Join(workDir, "build-disk.img")
+	if err = CloneDisk(diskImage, buildDisk); err != nil {
+		return "", "", fmt.Errorf("cloning build disk: %w", err)
+	}
+	buildAux = filepath.Join(workDir, "aux-storage")
+	auxSrc := filepath.Join(filepath.Dir(diskImage), "aux-storage")
+	if err = CloneDisk(auxSrc, buildAux); err != nil {
+		return "", "", fmt.Errorf("cloning auxiliary storage: %w", err)
+	}
+	return buildDisk, buildAux, nil
+}
+
+// setupNetworkAndRelay creates the isolated virtual network, starts the
+// host-side relay, and claims it with the build's configuration. On any
+// failure it tears down whatever it already created; on success the caller
+// owns vnet and relayProc and must close/stop them.
+func (d *Driver) setupNetworkAndRelay(
+	ctx context.Context, sess *driver.Session, req *driver.BuildRequest,
+	workDir, outputDir string,
+) (*VirtualNetwork, *RelayProcess, error) {
+	vnet, err := NewVirtualNetwork()
 	if err != nil {
-		return nil, fmt.Errorf("build failed: %w", err)
+		return nil, nil, fmt.Errorf("creating virtual network: %w", err)
 	}
-	if exitCode != 0 {
-		return nil, fmt.Errorf("build exited with code %d", exitCode)
+	claimPort, err := driver.FreeLoopbackPort()
+	if err != nil {
+		_ = vnet.Close()
+		return nil, nil, err
 	}
-
-	// Collect outputs from shared volume to output directory
-	if err := collectOutputs(sharedDir, outputDir); err != nil {
-		return nil, fmt.Errorf("collecting outputs: %w", err)
+	claimToken, err := driver.RandomToken()
+	if err != nil {
+		_ = vnet.Close()
+		return nil, nil, err
 	}
-
-	return &driver.BuildResult{
-		OutputDir: outputDir,
-	}, nil
+	relayProc, err := d.startHostRelay(workDir, outputDir, vnet, claimPort, claimToken)
+	if err != nil {
+		_ = vnet.Close()
+		return nil, nil, fmt.Errorf("starting relay: %w", err)
+	}
+	claimAddr := net.JoinHostPort("127.0.0.1", fmt.Sprint(claimPort))
+	if _, err := sess.ClaimRelay(ctx, claimAddr, claimToken, req, nil); err != nil {
+		relayProc.Stop()
+		_ = vnet.Close()
+		return nil, nil, err
+	}
+	return vnet, relayProc, nil
 }
 
 func (d *Driver) Exec(ctx context.Context, req *driver.BuildRequest) error {
@@ -148,118 +205,32 @@ func (d *Driver) Exec(ctx context.Context, req *driver.BuildRequest) error {
 
 func (d *Driver) Close() error { return nil }
 
-// prepareSharedDir creates and populates the shared volume structure.
-func (d *Driver) prepareSharedDir(
-	buildID string, req *driver.BuildRequest,
-) (string, error) {
-	sharedDir, err := os.MkdirTemp("", "warden-shared-"+buildID+"-")
-	if err != nil {
-		return "", fmt.Errorf("creating shared dir: %w", err)
-	}
+// PrepareCommand is how a user prepares the vz base image. It needs root:
+// readying the image writes root-owned system files into it.
+const PrepareCommand = "sudo warden image prepare --driver vz"
 
-	for _, sub := range []string{"context", "ledger", "signal"} {
-		p := filepath.Join(sharedDir, sub)
-		if err := os.MkdirAll(p, 0755); err != nil {
-			return "", fmt.Errorf("creating shared/%s: %w", sub, err)
-		}
-	}
-
-	if err := d.prepareRelay(sharedDir); err != nil {
-		return "", fmt.Errorf("preparing relay: %w", err)
-	}
-
-	relayEnv := "LEDGER_DIR=/shared/ledger\nCONTEXT_DIR=/shared/context\n"
-	if req.CaptureMode != "" && req.CaptureMode != "none" {
-		relayEnv += fmt.Sprintf("CAPTURE_MODE=%s\n", req.CaptureMode)
-	}
-	envPath := filepath.Join(sharedDir, "relay.env")
-	if err := os.WriteFile(envPath, []byte(relayEnv), 0644); err != nil {
-		return "", fmt.Errorf("writing relay.env: %w", err)
-	}
-
-	if err := d.prepareContext(sharedDir, req); err != nil {
-		return "", fmt.Errorf("preparing context: %w", err)
-	}
-
-	if err := d.prepareAgent(sharedDir, req); err != nil {
-		return "", fmt.Errorf("preparing agent: %w", err)
-	}
-
-	return sharedDir, nil
-}
-
-// prepareRelay places the relay binary on the shared volume.
-// For the VZ driver, the relay runs on the host (darwin/arm64).
-func (d *Driver) prepareRelay(sharedDir string) error {
-	relayDst := filepath.Join(sharedDir, "relay")
-
-	// Check for a pre-built relay binary next to the warden executable
-	if exe, err := os.Executable(); err == nil {
-		candidate := filepath.Join(filepath.Dir(exe), "warden-relay")
-		if _, err := os.Stat(candidate); err == nil {
-			return copyFile(candidate, relayDst)
-		}
-	}
-
-	// Fall back to building from source (native, no cross-compilation needed)
-	cmd := exec.Command("go", "build", "-o", relayDst, "./cmd/relay")
-	cmd.Dir = findModuleRoot()
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("building relay: %w", err)
-	}
-
-	// Codesign the relay binary (macOS may block unsigned binaries
-	// from network operations via Endpoint Security).
-	signCmd := exec.Command("codesign", "--force", "--sign", "-", relayDst)
-	signCmd.Run() //nolint:errcheck
-
-	return nil
-}
-
-// prepareContext recursively copies the build context into the shared volume.
-func (d *Driver) prepareContext(sharedDir string, req *driver.BuildRequest) error {
-	if req.ContextDir == "" {
-		return nil
-	}
-	ctxDst := filepath.Join(sharedDir, "context")
-	cmd := exec.Command("cp", "-R", req.ContextDir+"/.", ctxDst)
-	if out, err := cmd.CombinedOutput(); err != nil {
-		return fmt.Errorf("copying context: %s: %w", string(out), err)
-	}
-	return nil
-}
-
-// prepareAgent places the build script into context/ (served to the VM via
-// relay HTTP). The macOS image already contains warden-io at /usr/local/bin.
-// The image's LaunchDaemon runs `warden-io initialize` which configures
-// networking, installs the CA, fetches build.sh from relay, and executes it.
-func (d *Driver) prepareAgent(sharedDir string, req *driver.BuildRequest) error {
-	ctxDir := filepath.Join(sharedDir, "context")
-	buildScript := filepath.Join(ctxDir, "build.sh")
-	if req.Script != "" {
-		data, err := os.ReadFile(req.Script)
-		if err != nil {
-			return fmt.Errorf("reading build script: %w", err)
-		}
-		if err := os.WriteFile(buildScript, data, 0755); err != nil {
-			return fmt.Errorf("writing build script: %w", err)
-		}
-	} else {
-		script := "#!/bin/sh\ntrue\n"
-		if err := os.WriteFile(buildScript, []byte(script), 0755); err != nil {
-			return fmt.Errorf("writing default build script: %w", err)
-		}
-	}
-	return nil
-}
-
+// resolveImage returns the base disk for a build. A build never restores an
+// image itself: that is a 25+ GB download, needs root, and belongs to
+// `warden image prepare`, so a missing image fails immediately with that
+// command.
 func (d *Driver) resolveImage(image string) (string, error) {
 	if image == "" {
-		return d.Cache.LatestIPSW()
+		dir, err := d.Cache.ImageDir()
+		if err != nil {
+			return "", err
+		}
+		if dir == "" {
+			return "", driver.Fixable(PrepareCommand,
+				"no prepared macOS base image in %s", d.Cache.CacheDir)
+		}
+		return filepath.Join(dir, "disk.img"), nil
 	}
 	if _, err := os.Stat(image); err == nil {
 		return image, nil
+	}
+	if !strings.Contains(image, "://") {
+		return "", driver.Fixable("",
+			"--image %s: no such file (give a disk.img path or an IPSW URL)", image)
 	}
 	return d.Cache.RestoreIPSW(image)
 }
@@ -267,6 +238,7 @@ func (d *Driver) resolveImage(image string) (string, error) {
 // RelayProcess wraps a host-side relay subprocess.
 type RelayProcess struct {
 	cmd *exec.Cmd
+	log *os.File
 }
 
 // Stop sends SIGTERM and waits for the relay to exit.
@@ -275,16 +247,29 @@ func (rp *RelayProcess) Stop() {
 		_ = rp.cmd.Process.Signal(os.Interrupt)
 		_ = rp.cmd.Wait()
 	}
+	if rp.log != nil {
+		_ = rp.log.Close()
+	}
 }
 
-// startHostRelay starts the relay binary as a host process with --ingress=fd.
-// The relay reads raw Ethernet frames from vnet.RelaySocketFD using gvisor
-// netstack, providing DHCP, DNS, HTTP/HTTPS proxy to the build VM.
-func (d *Driver) startHostRelay(sharedDir string, vnet *VirtualNetwork) (*RelayProcess, error) {
-	relayBin := filepath.Join(sharedDir, "relay")
-	if _, err := os.Stat(relayBin); err != nil {
-		return nil, fmt.Errorf("relay binary not found at %s", relayBin)
+// startHostRelay starts the relay as a host process in fd-ingress mode. It
+// reads raw Ethernet frames from vnet.RelaySocketFD (gvisor netstack) and
+// waits, unconfigured, for the claim on 127.0.0.1:claimPort.
+func (d *Driver) startHostRelay(
+	workDir, outputDir string, vnet *VirtualNetwork,
+	claimPort int, claimToken string,
+) (*RelayProcess, error) {
+	built, err := driver.GuestBinary("relay", "darwin", "arm64")
+	if err != nil {
+		return nil, err
 	}
+	// macOS may block unsigned binaries from network operations via Endpoint
+	// Security, so run an ad-hoc signed copy.
+	relayBin := filepath.Join(workDir, "relay")
+	if err := driver.CopyFile(built, relayBin); err != nil {
+		return nil, err
+	}
+	_ = exec.Command("codesign", "--force", "--sign", "-", relayBin).Run()
 
 	subnet := fmt.Sprintf("%s/%d",
 		vnet.Subnet.RelayIP.Mask(vnet.Subnet.Netmask),
@@ -295,14 +280,21 @@ func (d *Driver) startHostRelay(sharedDir string, vnet *VirtualNetwork) (*RelayP
 		"--mode=host",
 		"--fd=3",
 		"--subnet="+subnet,
+		"--claim-addr="+net.JoinHostPort("127.0.0.1", fmt.Sprint(claimPort)),
 	)
-	cmd.Env = append(os.Environ(),
-		"LEDGER_DIR="+filepath.Join(sharedDir, "ledger"),
-		"CONTEXT_DIR="+filepath.Join(sharedDir, "context"),
-		"SIGNAL_DIR="+filepath.Join(sharedDir, "signal"),
-	)
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
+	cmd.Env = append(os.Environ(), relaycfg.TokenEnv+"="+claimToken)
+	// The relay's own log goes to <output>/relay.log, as on the container
+	// driver; it reaches the terminal only with --verbose.
+	logFile, err := os.Create(filepath.Join(outputDir, "relay.log"))
+	if err != nil {
+		return nil, fmt.Errorf("creating relay.log: %w", err)
+	}
+	var logOut io.Writer = logFile
+	if d.Verbose {
+		logOut = io.MultiWriter(logFile, os.Stderr)
+	}
+	cmd.Stdout = logOut
+	cmd.Stderr = logOut
 
 	// Pass the relay socketpair FD as ExtraFiles[0] → becomes fd 3 in child.
 	cmd.ExtraFiles = []*os.File{
@@ -310,10 +302,11 @@ func (d *Driver) startHostRelay(sharedDir string, vnet *VirtualNetwork) (*RelayP
 	}
 
 	if err := cmd.Start(); err != nil {
+		logFile.Close()
 		return nil, fmt.Errorf("starting relay process: %w", err)
 	}
 
-	return &RelayProcess{cmd: cmd}, nil
+	return &RelayProcess{cmd: cmd, log: logFile}, nil
 }
 
 func maskBits(mask net.IPMask) int {
@@ -326,15 +319,15 @@ func maskBits(mask net.IPMask) int {
 // No shared directory — warden-io is baked into the disk image and all
 // runtime communication goes through the relay's HTTP API.
 func (d *Driver) bootBuildVM(
-	diskImage, platformDir string, vnet *VirtualNetwork,
+	diskImage, auxStorage, platformDir string, vnet *VirtualNetwork, cpus, memoryMB int,
 ) (*VM, error) {
 	imgDir := platformDir
 
 	vm, err := NewMacOSVM(macOSVMConfig{
-		CPUs:               4,
-		MemoryMB:           8192,
+		CPUs:               cpus,
+		MemoryMB:           memoryMB,
 		DiskImagePath:      diskImage,
-		AuxStoragePath:     filepath.Join(imgDir, "aux-storage"),
+		AuxStoragePath:     auxStorage,
 		HardwareModelPath:  filepath.Join(imgDir, "hardware-model"),
 		MachineIDPath:      filepath.Join(imgDir, "machine-id"),
 		FileHandleSocketFD: vnet.BuildSocketFD,
@@ -350,7 +343,8 @@ func (d *Driver) bootBuildVM(
 
 func checkPlatform() error {
 	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
-		return fmt.Errorf("vz driver requires macOS on Apple Silicon (got %s/%s)",
+		return driver.Fixable("use --driver qemu or --driver container on this host",
+			"vz driver requires macOS on Apple Silicon (got %s/%s)",
 			runtime.GOOS, runtime.GOARCH)
 	}
 	exe, err := os.Executable()
@@ -361,117 +355,48 @@ func checkPlatform() error {
 		"codesign", "-d", "--entitlements", ":-", exe).Output()
 	if err != nil || !strings.Contains(string(out),
 		"com.apple.security.virtualization") {
-		return fmt.Errorf(
-			"vz driver requires the com.apple.security.virtualization "+
-				"entitlement\n"+
-				"  Sign the binary: codesign --sign - "+
-				"--entitlements entitlements.plist %s", exe)
+		return driver.Fixable(
+			"sign it: codesign --sign - --entitlements entitlements.plist "+exe+
+				" (make build does this)",
+			"vz driver requires warden to be signed with the "+
+				"com.apple.security.virtualization entitlement")
 	}
 	return nil
 }
 
-// DefaultCacheDir returns the default path for cached VM images.
+// DefaultCacheDir returns the default path for cached VM images. Under sudo
+// it is the invoking user's, not root's, so `sudo warden image prepare`
+// prepares the image that user's builds use.
 func DefaultCacheDir() string {
 	home, _ := os.UserHomeDir()
+	if u := sudoUser(); u != nil {
+		home = u.HomeDir
+	}
 	return filepath.Join(home, ".cache", "warden", "images")
+}
+
+// sudoUser is the user who ran warden through sudo, or nil when warden is
+// not running as root on someone's behalf.
+func sudoUser() *user.User {
+	if os.Geteuid() != 0 {
+		return nil
+	}
+	name := os.Getenv("SUDO_USER")
+	if name == "" || name == "root" {
+		return nil
+	}
+	u, err := user.Lookup(name)
+	if err != nil {
+		return nil
+	}
+	return u
 }
 
 func defaultCacheDir() string {
 	return DefaultCacheDir()
 }
 
-// waitForFile polls for a file to exist with non-zero size.
-func waitForFile(ctx context.Context, path string, timeoutSec int) error {
-	deadline := time.Now().Add(time.Duration(timeoutSec) * time.Second)
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-		}
-		if time.Now().After(deadline) {
-			return fmt.Errorf("timed out waiting for %s", filepath.Base(path))
-		}
-		if info, err := os.Stat(path); err == nil && info.Size() > 0 {
-			return nil
-		}
-		time.Sleep(200 * time.Millisecond)
-	}
-}
-
-// collectOutputs moves ledger and artifacts from the shared volume to
-// the final output directory.
-func collectOutputs(sharedDir, outputDir string) error {
-	ledgerSrc := filepath.Join(sharedDir, "ledger")
-	entries, err := os.ReadDir(ledgerSrc)
-	if err != nil {
-		return fmt.Errorf("reading ledger dir: %w", err)
-	}
-
-	for _, e := range entries {
-		src := filepath.Join(ledgerSrc, e.Name())
-		dst := filepath.Join(outputDir, e.Name())
-		if err := os.Rename(src, dst); err != nil {
-			return fmt.Errorf("moving %s: %w", e.Name(), err)
-		}
-	}
-	return nil
-}
-
-func copyFile(src, dst string) error {
-	in, err := os.Open(src)
-	if err != nil {
-		return err
-	}
-	defer in.Close()
-
-	out, err := os.Create(dst)
-	if err != nil {
-		return err
-	}
-	defer out.Close()
-
-	if _, err := io.Copy(out, in); err != nil {
-		return err
-	}
-
-	// Preserve executable permission
-	info, err := in.Stat()
-	if err == nil {
-		_ = out.Chmod(info.Mode())
-	}
-	return out.Close()
-}
-
-// findModuleRoot locates the go module root by walking up from the
-// executable location or current directory looking for go.mod.
-func findModuleRoot() string {
-	// Try from executable location first
-	if exe, err := os.Executable(); err == nil {
-		dir := filepath.Dir(exe)
-		for {
-			if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-				return dir
-			}
-			parent := filepath.Dir(dir)
-			if parent == dir {
-				break
-			}
-			dir = parent
-		}
-	}
-
-	// Fall back to current directory
-	dir, _ := os.Getwd()
-	for {
-		if _, err := os.Stat(filepath.Join(dir, "go.mod")); err == nil {
-			return dir
-		}
-		parent := filepath.Dir(dir)
-		if parent == dir {
-			break
-		}
-		dir = parent
-	}
-	return "."
-}
+// Preflight checks the host can run vz builds (Apple Silicon macOS and a
+// binary signed with the virtualization entitlement). It is
+// `warden doctor --driver vz`.
+func Preflight() error { return checkPlatform() }

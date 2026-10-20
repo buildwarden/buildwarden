@@ -1,0 +1,263 @@
+package hyperv
+
+import (
+	"context"
+	"errors"
+	"fmt"
+	"io"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
+
+	"github.com/buildwarden/buildwarden/driver"
+)
+
+// Build VM defaults. The build VM is the untrusted guest: its sole NIC is on the
+// Private build switch, so its only peer is the relay at 10.0.0.1 and it has no
+// route to the host network stack or the internet.
+const (
+	defaultBuildMemoryMB = 4096
+	defaultBuildCPUs     = 4
+)
+
+// buildConfig is the fully-resolved input to runBuild: every asset path is
+// already located and the network already chosen. runBuild is pure
+// orchestration over the Provisioner + StartRelay, so it is unit-testable with a
+// fake Provisioner and never touches asset resolution, image acquisition, or
+// seed generation itself.
+type buildConfig struct {
+	BuildID   string
+	OutputDir string
+
+	// Relay assets (relay VM). RelayOverlay is the per-build differencing child
+	// created off the static, read-only RelayBootVHDX.
+	RelayBootVHDX string
+	RelayOverlay  string
+
+	// Build-guest assets (build VM). BuildOverlay is the per-build differencing
+	// child created off the read-only BuildBaseVHDX. Exactly one of SeedISO
+	// (Linux cloud-init CIDATA) or SeedVHDX (Windows unattend) carries the
+	// per-build provisioning media.
+	BuildBaseVHDX string
+	BuildOverlay  string
+	SeedISO       string
+	SeedVHDX      string
+	IsWindows     bool
+
+	// BuildScriptPath is the host path to the build script. It is served to the
+	// guest via the collector's /v1/build-script endpoint (the relay pulls it
+	// and re-serves it, since the relay has no shared disk).
+	BuildScriptPath string
+
+	// Generation is the build VM's Hyper-V generation, dictated by the base
+	// image format: 1 for a BIOS/MBR .vhd (the Windows Server eval image boots
+	// this way with no conversion), 2 for a UEFI/GPT .vhdx. It MUST match the
+	// base disk or the VM won't boot. Zero defaults to 2.
+	Generation int
+
+	// Network. Both VMs share the Private build switch (relay <-> build only);
+	// the relay additionally attaches the NAT switch for controlled egress. The
+	// build VM never attaches to the NAT switch.
+	BuildSwitch string
+	NATSwitch   string
+
+	MemoryMB int           // build VM; default 4096
+	CPUs     int           // build VM; default 4
+	KeepVMs  bool          // leave the build VM and overlay for inspection
+	Timeout  time.Duration // whole-build ceiling; zero means no limit
+
+	// OutputTee, if set, receives a live copy of the guest build console
+	// (forwarded by the collector). Nil (e.g. under --quiet) suppresses it.
+	OutputTee io.Writer
+
+	// Request carries the relay settings (capture mode, upstream CAs).
+	Request *driver.BuildRequest
+	// ContextDir is the build context the collector serves to the guest.
+	ContextDir string
+
+	// Test hooks: host/relay addresses and ports (zero = production defaults).
+	relayIP      string
+	claimPort    int
+	readyTimeout time.Duration
+}
+
+// validateBuildConfig rejects a buildConfig that is missing a required field or
+// whose overlay format cannot match its base image.
+func validateBuildConfig(cfg buildConfig) error {
+	switch {
+	case cfg.BuildID == "":
+		return fmt.Errorf("runBuild: empty build ID")
+	case cfg.OutputDir == "":
+		return fmt.Errorf("runBuild: empty output dir")
+	case cfg.RelayBootVHDX == "":
+		return fmt.Errorf("runBuild: empty relay boot VHDX")
+	case cfg.RelayOverlay == "":
+		return fmt.Errorf("runBuild: empty relay overlay path")
+	case cfg.BuildBaseVHDX == "":
+		return fmt.Errorf("runBuild: empty build base VHDX")
+	case cfg.BuildOverlay == "":
+		return fmt.Errorf("runBuild: empty build overlay path")
+	case cfg.SeedISO == "" && cfg.SeedVHDX == "":
+		return fmt.Errorf(
+			"runBuild: no seed media " +
+				"(need SeedISO for Linux or SeedVHDX for Windows)")
+	case cfg.BuildSwitch == "":
+		return fmt.Errorf("runBuild: empty build switch")
+	case cfg.NATSwitch == "":
+		return fmt.Errorf("runBuild: empty NAT switch")
+	}
+	// A differencing child must share its parent's on-disk format, so the build
+	// overlay's extension must match the base image's (.vhd child off a .vhd
+	// base, .vhdx off .vhdx). A mismatch fails opaquely inside New-VHD.
+	if !strings.EqualFold(filepath.Ext(cfg.BuildBaseVHDX), filepath.Ext(cfg.BuildOverlay)) {
+		return fmt.Errorf(
+			"runBuild: build overlay %q must share the base image's extension %q "+
+				"(a differencing child must match its parent's format)",
+			cfg.BuildOverlay, filepath.Ext(cfg.BuildBaseVHDX))
+	}
+	return nil
+}
+
+// applyBuildDefaults fills unset buildConfig fields with their defaults.
+func applyBuildDefaults(cfg *buildConfig) {
+	if cfg.MemoryMB == 0 {
+		cfg.MemoryMB = defaultBuildMemoryMB
+	}
+	if cfg.CPUs == 0 {
+		cfg.CPUs = defaultBuildCPUs
+	}
+	if cfg.Generation == 0 {
+		cfg.Generation = 2
+	}
+}
+
+// runBuild composes the full Hyper-V build flow against an already-resolved
+// buildConfig:
+//
+//  1. StartRelay starts the build's collector on the host, boots the relay
+//     VM, and claims it (pushing the build config), blocking until it is ready.
+//  2. A per-build differencing overlay is created off the read-only build-guest
+//     base image, so the base is never mutated and concurrent builds don't
+//     collide.
+//  3. The build VM is created on the Private build switch (its sole NIC) with
+//     the overlay + seed media, then started.
+//  4. It blocks until the relay POSTs /v1/complete (warden-io in the guest
+//     reported the build finished) or the timeout/context fires. Outputs are
+//     streamed to OutputDir by the collector as the build runs, so on success
+//     there is nothing left to copy.
+//
+// Everything created is torn down on return (both VMs removed, both overlays
+// deleted, host servers stopped), success or failure.
+func runBuild(
+	ctx context.Context, prov Provisioner, cfg buildConfig,
+) (*driver.BuildResult, error) {
+	if err := validateBuildConfig(cfg); err != nil {
+		return nil, err
+	}
+	applyBuildDefaults(&cfg)
+
+	if err := os.MkdirAll(cfg.OutputDir, 0o755); err != nil {
+		return nil, fmt.Errorf("runBuild: output dir: %w", err)
+	}
+
+	// 1. Relay host up: collector on the host, relay VM booted and claimed.
+	//    StartRelay tears its own half down on failure.
+	rh, err := StartRelay(ctx, prov, RelayHostConfig{
+		BuildID:         cfg.BuildID,
+		OutputDir:       cfg.OutputDir,
+		BootVHDX:        cfg.RelayBootVHDX,
+		OverlayVHDX:     cfg.RelayOverlay,
+		BuildSwitch:     cfg.BuildSwitch,
+		NATSwitch:       cfg.NATSwitch,
+		BuildScriptPath: cfg.BuildScriptPath,
+		ContextDir:      cfg.ContextDir,
+		Request:         cfg.Request,
+		RelayIP:         cfg.relayIP,
+		ClaimPort:       cfg.claimPort,
+		ReadyTimeout:    cfg.readyTimeout,
+		OutputTee:       cfg.OutputTee,
+	})
+	if err != nil {
+		return nil, fmt.Errorf("runBuild: %w", err)
+	}
+	// rh.Close removes the relay VM + relay overlay and stops the host servers.
+	defer func() { _ = rh.Close() }()
+
+	// 2. Per-build differencing overlay off the read-only build-guest base.
+	if err := prov.CreateDiffDisk(ctx, cfg.BuildOverlay, cfg.BuildBaseVHDX); err != nil {
+		return nil, fmt.Errorf("runBuild: build overlay: %w", err)
+	}
+
+	buildVM := "warden-build-" + cfg.BuildID
+	// Tear the build VM + its overlay down regardless of outcome. Uses a
+	// background context so cleanup still runs when ctx is already cancelled.
+	// --keep-vms skips teardown so a failed build VM can be inspected
+	// (console, logs); the caller cleans it up manually.
+	defer func() {
+		if cfg.KeepVMs {
+			fmt.Fprintf(os.Stderr,
+				"warden: --keep-vms: leaving build VM %q "+
+					"(overlay %q) for inspection\n",
+				buildVM, cfg.BuildOverlay)
+			return
+		}
+		_ = prov.RemoveVM(context.Background(), buildVM)
+		_ = os.Remove(cfg.BuildOverlay)
+	}()
+
+	// 3. Create + start the build VM on the Private build switch (its SOLE NIC;
+	//    no NAT route). Generation follows the base image: a Gen1 (.vhd) guest
+	//    such as the Windows Server eval image has no Secure Boot; a Gen2 (.vhdx)
+	//    guest keeps Secure Boot on via the per-family template CreateVM selects.
+	//    Either way the build guest is isolated on the Private switch.
+	//
+	//    COM1 is wired to a host named pipe so the guest bootstrap's progress is
+	//    observable from the host without mounting the guest disk. The default
+	//    pipe name is derived from the build VM name; WARDEN_HYPERV_BUILD_COM_PIPE
+	//    overrides it for a deterministic path a reader can attach to in advance.
+	comPipe := os.Getenv("WARDEN_HYPERV_BUILD_COM_PIPE")
+	if comPipe == "" {
+		comPipe = `\\.\pipe\` + buildVM
+	}
+	fmt.Fprintf(os.Stderr,
+		"warden: build VM %q COM1 -> %s "+
+			"(attach a serial reader to observe guest boot)\n",
+		buildVM, comPipe)
+	if _, err := prov.CreateVM(ctx, VMSpec{
+		Name:        buildVM,
+		Generation:  cfg.Generation,
+		MemoryMB:    cfg.MemoryMB,
+		CPUs:        cfg.CPUs,
+		SwitchName:  cfg.BuildSwitch,
+		VHDXPath:    cfg.BuildOverlay,
+		SeedISO:     cfg.SeedISO,
+		SeedVHDX:    cfg.SeedVHDX,
+		IsWindows:   cfg.IsWindows,
+		COMPipePath: comPipe,
+	}); err != nil {
+		return nil, fmt.Errorf("runBuild: create build VM: %w", err)
+	}
+	if err := prov.StartVM(ctx, buildVM); err != nil {
+		return nil, fmt.Errorf("runBuild: start build VM: %w", err)
+	}
+
+	// 4. Wait for the build to finish. The relay POSTs /v1/complete to the
+	//    collector when warden-io in the guest reports completion; the collector
+	//    delivers that (with the exit code) on Done. Artifacts/ledger/output are
+	//    streamed to OutputDir as the build runs.
+	waitCtx := ctx
+	if cfg.Timeout > 0 {
+		var cancel context.CancelFunc
+		waitCtx, cancel = context.WithTimeout(ctx, cfg.Timeout)
+		defer cancel()
+	}
+	if err := rh.Session.Wait(waitCtx); err != nil {
+		if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
+			return nil, fmt.Errorf("runBuild: build %q did not complete within %s: %w",
+				buildVM, cfg.Timeout, context.DeadlineExceeded)
+		}
+		return nil, fmt.Errorf("runBuild: %w", err)
+	}
+	return &driver.BuildResult{OutputDir: cfg.OutputDir}, nil
+}

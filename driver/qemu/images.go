@@ -10,6 +10,8 @@ import (
 	"path/filepath"
 	"runtime"
 	"strings"
+
+	"github.com/buildwarden/buildwarden/driver"
 )
 
 // resolveImage maps a FROM image reference to a local QCOW2 path.
@@ -140,7 +142,7 @@ func debianArch(goarch string) string {
 func cachedImagePath(ref string) string {
 	safe := strings.NewReplacer(
 		"/", "_", ":", "_", ".", "_").Replace(ref)
-	dir := filepath.Join(cacheBaseDir(), "warden", "images")
+	dir := filepath.Join(driver.CacheDir(), "images")
 	_ = os.MkdirAll(dir, 0755)
 	return filepath.Join(dir, safe+".qcow2")
 }
@@ -195,4 +197,23 @@ func verifyImageIntegrity(path string) bool {
 		return false
 	}
 	return strings.TrimSpace(string(expected)) == actual
+}
+
+// PrepareLinuxImage downloads (or verifies the cached copy of) the cloud
+// image for ref (default alpine:3.21) so builds start without a download.
+// A local qcow2 path is just checked.
+func PrepareLinuxImage(ref string) (string, error) {
+	if ref == "" {
+		ref = "alpine:3.21"
+	}
+	return resolveImage(ref)
+}
+
+// WindowsImagePath is where `warden image prepare --driver qemu --os
+// windows` installs the base image for a guest arch ("" = host arch).
+func WindowsImagePath(arch string) string {
+	if arch == "" {
+		arch = runtime.GOARCH
+	}
+	return filepath.Join(driver.CacheDir(), "images", "windows-"+arch+".qcow2")
 }

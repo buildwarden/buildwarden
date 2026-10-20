@@ -39,4 +39,3 @@ func (cl *chanListener) Close() error {
 func (cl *chanListener) Addr() net.Addr {
 	return cl.addr
 }
-

@@ -109,7 +109,6 @@ build_initramfs() {
 
     # Unpack Alpine minirootfs as base
     tar -xzf "$CACHE_DIR/alpine-minirootfs.tar.gz" -C "$ROOTFS_DIR"
-    mkdir -p "$ROOTFS_DIR/shared"
 
     # Layer iptables + deps (order: libs first, binary last)
     for pkg in libmnl libnftnl libxtables libip4tc libip6tc iptables iptables-legacy; do
@@ -132,12 +131,6 @@ build_initramfs() {
         drivers/char/hw_random/rng-core.ko.gz \
         drivers/char/hw_random/virtio-rng.ko.gz \
         net/packet/af_packet.ko.gz \
-        fs/netfs/netfs.ko.gz \
-        fs/fuse/fuse.ko.gz \
-        fs/fuse/virtiofs.ko.gz \
-        net/9p/9pnet.ko.gz \
-        net/9p/9pnet_virtio.ko.gz \
-        fs/9p/9p.ko.gz \
         net/core/failover.ko.gz \
         drivers/net/net_failover.ko.gz \
         drivers/net/virtio_net.ko.gz \

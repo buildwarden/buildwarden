@@ -32,7 +32,6 @@ escape, but can prevent builds from completing). Consider:
 - [ ] Request timeout (kill slow/stalled upstream fetches after N seconds)
 - [ ] DNS query rate limit (mitigates DNS tunneling bandwidth)
 - [ ] HTTP request body size limit (prevent memory exhaustion)
-- [ ] Signal dir size quota (prevent host tmpdir exhaustion via 9p writes)
 - [ ] Watchdog: relay auto-restarts if it crashes (supervisor in init)
 
 These are availability hardening, not isolation fixes. The security

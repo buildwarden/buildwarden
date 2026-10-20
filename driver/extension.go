@@ -5,9 +5,10 @@ package driver
 type ExtensionContext struct {
 	WardenDir string
 	ScriptDir string
-	LedgerDir string
-	RelayIP   string
-	BuildID   string
+	// CACert is the relay's PEM-encoded ephemeral MITM CA (from the claim).
+	CACert  []byte
+	RelayIP string
+	BuildID string
 }
 
 // Extension modifies the build environment before execution.

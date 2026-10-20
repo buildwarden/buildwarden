@@ -1,3 +1,5 @@
+//go:build unix
+
 package main
 
 import (
@@ -16,13 +18,13 @@ const (
 
 // DHCP option codes
 const (
-	optSubnetMask    = 1
-	optRouter        = 3
-	optDNS           = 6
-	optLeaseTime     = 51
-	optMessageType   = 53
-	optServerID      = 54
-	optEnd           = 255
+	optSubnetMask  = 1
+	optRouter      = 3
+	optDNS         = 6
+	optLeaseTime   = 51
+	optMessageType = 53
+	optServerID    = 54
+	optEnd         = 255
 )
 
 // handleDHCP responds to DHCP discover/request from the guest VM.
@@ -166,8 +168,8 @@ func (ing *FDIngress) buildDHCPReply(
 	ipHeader := make([]byte, 20)
 	ipHeader[0] = 0x45 // version + IHL
 	binary.BigEndian.PutUint16(ipHeader[2:4], uint16(ipLen))
-	ipHeader[8] = 64  // TTL
-	ipHeader[9] = 17  // UDP
+	ipHeader[8] = 64 // TTL
+	ipHeader[9] = 17 // UDP
 	copy(ipHeader[12:16], gwIP)
 	copy(ipHeader[16:20], net.IPv4bcast.To4()) // broadcast
 	// Compute IP header checksum
@@ -211,15 +213,15 @@ func (ing *FDIngress) handleARP(frame []byte) {
 
 	// Build ARP reply
 	reply := make([]byte, 28)
-	binary.BigEndian.PutUint16(reply[0:2], 1)    // hardware type: Ethernet
+	binary.BigEndian.PutUint16(reply[0:2], 1)      // hardware type: Ethernet
 	binary.BigEndian.PutUint16(reply[2:4], 0x0800) // protocol type: IPv4
-	reply[4] = 6                                    // hardware size
-	reply[5] = 4                                    // protocol size
-	binary.BigEndian.PutUint16(reply[6:8], 2)    // opcode: reply
-	copy(reply[8:14], ing.cfg.GatewayMAC)        // sender MAC (us)
-	copy(reply[14:18], ing.cfg.GatewayIP.To4())  // sender IP (us)
-	copy(reply[18:24], senderMAC)                // target MAC
-	copy(reply[24:28], senderIP)                 // target IP
+	reply[4] = 6                                   // hardware size
+	reply[5] = 4                                   // protocol size
+	binary.BigEndian.PutUint16(reply[6:8], 2)      // opcode: reply
+	copy(reply[8:14], ing.cfg.GatewayMAC)          // sender MAC (us)
+	copy(reply[14:18], ing.cfg.GatewayIP.To4())    // sender IP (us)
+	copy(reply[18:24], senderMAC)                  // target MAC
+	copy(reply[24:28], senderIP)                   // target IP
 
 	// Wrap in Ethernet frame
 	ethFrame := make([]byte, 14+28)

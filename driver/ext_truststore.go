@@ -11,29 +11,19 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"time"
 	"unicode"
 )
 
-// caCertPEM holds the relay's ephemeral CA cert, read from the ledger directory.
+// caCertPEM holds the relay's ephemeral CA cert, from the claim identity.
 // Shared between ExtTrustStore and ExtBazel.
 var caCertPEM []byte
 
 type ExtTrustStore struct{}
 
 func (e *ExtTrustStore) BeforeBuild(ctx *ExtensionContext) error {
-	caPath := filepath.Join(ctx.LedgerDir, "ca.cert.pem")
-	var caCert []byte
-	for i := 0; i < 50; i++ {
-		var err error
-		caCert, err = os.ReadFile(caPath)
-		if err == nil && len(caCert) > 0 {
-			break
-		}
-		time.Sleep(100 * time.Millisecond)
-	}
+	caCert := ctx.CACert
 	if len(caCert) == 0 {
-		return fmt.Errorf("timed out waiting for CA cert at %s", caPath)
+		return fmt.Errorf("relay CA certificate not available")
 	}
 
 	caCertPEM = caCert

@@ -1,124 +1,263 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/spf13/cobra"
 
+	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/hyperv"
+	"github.com/buildwarden/buildwarden/driver/qemu"
 	"github.com/buildwarden/buildwarden/driver/vz"
+)
+
+// `warden image` prepares and lists build-guest base images. One verb,
+// `prepare`, covers every driver: it acquires the base (download, restore or
+// install), verifies it, readies it for headless builds, and records it where
+// `warden build --driver <d>` finds it. Every input a driver needs is a flag;
+// nothing is prompted for. Re-running prepare is safe: cached work is reused.
+
+var (
+	flagImgOS             string
+	flagImgSource         string
+	flagImgSHA256         string
+	flagImgAcceptUnpinned bool
+	flagImgForce          bool
+	flagImgName           string
+	flagImgEdition        string
+	flagImgVirtio         string
+	flagImgArch           string
 )
 
 var imageCmd = &cobra.Command{
 	Use:   "image",
-	Short: "Manage VM base images for the vz driver",
+	Short: "Prepare and list build-guest base images (VM drivers)",
 }
 
-var imageRestoreCmd = &cobra.Command{
-	Use:   "restore [ipsw-url]",
+var imagePrepareCmd = &cobra.Command{
+	Use:   "prepare [source]",
 	Args:  cobra.MaximumNArgs(1),
-	Short: "Download and restore a macOS IPSW to a VM image",
-	Long: `Downloads a macOS IPSW restore image and installs it to a local
-VM disk image suitable for use with the vz driver.
+	Short: "Acquire, verify and ready a build-guest base image",
+	Long: `Acquire, verify and ready a build-guest base image for a VM driver.
 
-If no URL is provided, the latest supported IPSW is fetched from Apple.
-The restored image is prepared for headless operation (no Setup Assistant,
-auto-login warden user).
+The driver comes from --driver (or warden.toml); --os defaults per driver
+(vz: macos, qemu: linux, hyperv: windows). [source] (or --source) is a local
+path or URL:
 
-The image is cached and reused for all subsequent builds — each build
-gets an instant copy-on-write clone.`,
-	Example: `  warden image restore
-  warden image restore https://updates.cdn-apple.com/.../Restore.ipsw`,
-	RunE: runImageRestore,
+  --driver vz     --os macos    macOS IPSW (default: latest supported).
+                                An already-restored image has its warden
+                                boot agent refreshed instead.
+  --driver qemu   --os linux    cloud image reference (alpine:3.21,
+                                ubuntu:24.04, debian:bookworm) or a qcow2.
+  --driver qemu   --os windows  Windows install ISO (required), installed
+                                unattended (--edition, --virtio, --arch).
+  --driver hyperv --os windows  Windows Server evaluation VHD URL (needed
+                                on first prepare; --name picks the image).
+
+--sha256 pins the expected digest (verified, and recorded for every later
+prepare); --accept-unpinned uses an image with no known digest; --force
+re-acquires even when a valid cached copy exists.`,
+	Example: `  warden image prepare --driver vz
+  warden image prepare --driver qemu ubuntu:24.04
+  warden image prepare --driver qemu --os windows --source Win11_Arm64.iso
+  warden image prepare --driver hyperv --source https://.../server2025.vhd
+  warden image prepare --driver hyperv --sha256 <hash-printed-on-first-prepare>`,
+	RunE: runImagePrepare,
 }
 
 var imageListCmd = &cobra.Command{
 	Use:   "list",
-	Short: "List cached VM images",
+	Short: "List prepared build-guest base images for every driver",
+	Args:  cobra.NoArgs,
 	RunE:  runImageList,
 }
 
-var imagePrepareCmd = &cobra.Command{
-	Use:   "prepare",
-	Short: "Re-install boot scripts on an existing image",
-	Long: `Updates the warden-boot script and LaunchDaemon on an existing
-prepared macOS VM image. Use after upgrading warden to pick up
-the latest boot logic without doing a full IPSW restore.`,
-	RunE: runImagePrepare,
-}
-
 func init() {
-	imageCmd.AddCommand(imageRestoreCmd)
-	imageCmd.AddCommand(imageListCmd)
+	f := imagePrepareCmd.Flags()
+	f.StringVar(&flagImgOS, "os", "", "guest OS: macos, linux or windows (default per driver)")
+	f.StringVar(&flagImgSource, "source", "",
+		"image source: local path or URL (same as [source])")
+	f.StringVar(&flagImgSHA256, "sha256", "", "expected SHA256; verified and pinned")
+	f.BoolVar(&flagImgAcceptUnpinned, "accept-unpinned", false,
+		"use an image with no known digest (no authenticity check)")
+	f.BoolVar(&flagImgForce, "force", false, "re-acquire even if a valid cached copy exists")
+	f.StringVar(&flagImgName, "name", "",
+		"registry name of the image (hyperv; default windows-server-2025)")
+	f.StringVar(&flagImgEdition, "edition", "",
+		"Windows edition / install.wim image name (qemu windows)")
+	f.StringVar(&flagImgVirtio, "virtio", "",
+		"virtio-win driver ISO path or URL (qemu windows)")
+	f.StringVar(&flagImgArch, "arch", "", "guest arch: arm64 or amd64 (default host arch)")
+
 	imageCmd.AddCommand(imagePrepareCmd)
+	imageCmd.AddCommand(imageListCmd)
 	rootCmd.AddCommand(imageCmd)
 }
 
-func runImageRestore(_ *cobra.Command, args []string) error {
-	cache := &vz.ImageCache{CacheDir: vz.DefaultCacheDir()}
-
-	ipswURL := ""
-	if len(args) > 0 {
-		ipswURL = args[0]
+func defaultImageOS(drv string) string {
+	switch drv {
+	case "vz":
+		return "macos"
+	case "hyperv":
+		return "windows"
+	default:
+		return "linux"
 	}
+}
 
-	diskPath, err := cache.RestoreIPSW(ipswURL)
+func runImagePrepare(cmd *cobra.Command, args []string) error {
+	cfg, err := resolveConfig()
+	if err != nil {
+		return err
+	}
+	drv := cfg.Runtime.Driver
+	osName := flagImgOS
+	if osName == "" {
+		osName = defaultImageOS(drv)
+	}
+	source, err := imageSource(args)
 	if err != nil {
 		return err
 	}
 
-	fmt.Fprintf(os.Stderr, "Image ready: %s\n", diskPath)
+	var path string
+	switch drv + "/" + osName {
+	case "vz/macos":
+		path, err = prepareVZMacos(source)
+	case "qemu/linux":
+		path, err = qemu.PrepareLinuxImage(source)
+	case "qemu/windows":
+		path, err = prepareQemuWindows(source)
+	case "hyperv/windows":
+		path, err = prepareHyperVWindows(cmd.Context(), source)
+	default:
+		return driver.Fixable("",
+			"no %s image for --driver %q "+
+				"(vz: macos; qemu: linux, windows; hyperv: windows)",
+			osName, drv)
+	}
+	if err != nil {
+		return err
+	}
+	// An empty path is the "already prepared" short-circuit: the helper has
+	// printed its own message, so there is nothing more to report.
+	if path != "" {
+		fmt.Fprintf(os.Stderr, "Base image ready: %s\n", path)
+	}
 	return nil
 }
 
-func runImagePrepare(_ *cobra.Command, _ []string) error {
-	cache := &vz.ImageCache{CacheDir: vz.DefaultCacheDir()}
-
-	dir, err := cache.ImageDir()
-	if err != nil {
-		return err
+// imageSource resolves the image source from --source and the positional [source]
+// argument, rejecting a conflicting pair.
+func imageSource(args []string) (string, error) {
+	source := flagImgSource
+	if len(args) > 0 {
+		if source != "" && source != args[0] {
+			return "", driver.Fixable("", "give the source once: [source] or --source")
+		}
+		source = args[0]
 	}
-	if dir == "" {
-		// No prepared image — look for one without .prepared marker
-		entries, _ := os.ReadDir(cache.CacheDir)
-		for _, e := range entries {
-			if !e.IsDir() {
-				continue
-			}
-			d := filepath.Join(cache.CacheDir, e.Name())
-			disk := filepath.Join(d, "disk.img")
-			if info, err := os.Stat(disk); err == nil && info.Size() > 0 {
-				dir = d
-				break
-			}
+	return source, nil
+}
+
+// prepareVZMacos restores (or refreshes) the macOS base image for the vz driver.
+func prepareVZMacos(source string) (string, error) {
+	// Every vz prepare path writes root-owned files into the image, and
+	// restoring needs the virtualization entitlement: check both before
+	// anything is downloaded.
+	if err := vz.Preflight(); err != nil {
+		return "", err
+	}
+	if err := vz.RequireRoot(); err != nil {
+		return "", err
+	}
+	cache := &vz.ImageCache{CacheDir: vz.DefaultCacheDir()}
+	existing, _ := cache.ImageDir()
+	path, err := cache.RestoreIPSW(source)
+	if err == nil && existing != "" && filepath.Dir(path) == existing {
+		// Already restored: refresh the warden boot agent to this build.
+		fmt.Fprintf(os.Stderr, "Refreshing boot agent on %s\n", existing)
+		err = vz.ReprepareImage(existing)
+	}
+	return path, err
+}
+
+// prepareQemuWindows installs the Windows base image for the qemu driver. It
+// returns an empty path when the image was already prepared (it prints its own
+// message and no reinstall is needed unless --force is set).
+func prepareQemuWindows(source string) (string, error) {
+	if source == "" {
+		return "", driver.Fixable(
+			"warden image prepare --driver qemu --os windows --source <path-or-url>",
+			"--driver qemu --os windows needs the Windows install ISO")
+	}
+	if existing := qemu.WindowsImagePath(flagImgArch); !flagImgForce {
+		if _, statErr := os.Stat(existing); statErr == nil {
+			fmt.Fprintf(os.Stderr, "Windows base image already prepared: %s "+
+				"(--force reinstalls it)\n", existing)
+			return "", nil
 		}
 	}
-	if dir == "" {
-		return fmt.Errorf("no image found — run 'warden image restore' first")
+	opts := qemu.WindowsPrepOptions{
+		ISO:       source,
+		VirtioISO: flagImgVirtio,
+		Edition:   flagImgEdition,
+		Arch:      flagImgArch,
 	}
+	media, err := qemu.AcquireWindowsMedia(opts)
+	if err != nil {
+		return "", err
+	}
+	fmt.Fprintf(os.Stderr, "Running unattended Windows install (headless)...\n")
+	return qemu.InstallWindowsImage(media, opts)
+}
 
-	fmt.Fprintf(os.Stderr, "Re-preparing image: %s\n", dir)
-	if err := vz.ReprepareImage(dir); err != nil {
-		return err
+// prepareHyperVWindows fetches the Windows Server evaluation VHD for the hyperv
+// driver.
+func prepareHyperVWindows(ctx context.Context, source string) (string, error) {
+	name := strings.TrimSpace(flagImgName)
+	if name == "" {
+		name = hyperv.EvalImageNames()[0]
 	}
-	fmt.Fprintf(os.Stderr, "Done.\n")
-	return nil
+	return hyperv.FetchEvalImage(ctx, hyperv.FetchOptions{
+		Name:           name,
+		URL:            source,
+		SHA256:         flagImgSHA256,
+		AcceptUnpinned: flagImgAcceptUnpinned,
+		Force:          flagImgForce,
+		Progress:       os.Stderr,
+	})
 }
 
 func runImageList(_ *cobra.Command, _ []string) error {
-	cache := &vz.ImageCache{CacheDir: vz.DefaultCacheDir()}
-
-	dir, err := cache.ImageDir()
-	if err != nil {
-		return err
+	found := false
+	if runtime.GOOS == "darwin" {
+		cache := &vz.ImageCache{CacheDir: vz.DefaultCacheDir()}
+		if dir, err := cache.ImageDir(); err == nil && dir != "" {
+			fmt.Printf("vz      macos    %s\n", dir)
+			found = true
+		}
 	}
-	if dir == "" {
-		fmt.Println("No cached VM images.")
-		fmt.Println("Run 'warden image restore' to download and prepare one.")
-		return nil
+	qemuImages, _ := filepath.Glob(filepath.Join(driver.CacheDir(), "images", "*.qcow2"))
+	for _, p := range qemuImages {
+		osName := "linux"
+		if strings.HasPrefix(filepath.Base(p), "windows-") {
+			osName = "windows"
+		}
+		fmt.Printf("qemu    %-8s %s\n", osName, p)
+		found = true
 	}
-
-	fmt.Printf("Cached image: %s\n", dir)
+	if p, ok := hyperv.ActiveImage(); ok {
+		fmt.Printf("hyperv  windows  %s (active)\n", p)
+		found = true
+	}
+	if !found {
+		fmt.Println("No prepared images. Run 'warden image prepare --driver <driver>'.")
+	}
 	return nil
 }

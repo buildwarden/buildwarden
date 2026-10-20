@@ -35,20 +35,38 @@ type BuildRequest struct {
 	ContextDir string
 	// Image identifies the base environment (OCI ref, IPSW URL, disk path).
 	Image string
+	// GuestOS selects the guest operating system family for VM drivers
+	// ("linux" (default) or "windows"). Ignored by the container driver.
+	GuestOS string
 	// Containerfile is the path to the original Dockerfile/Containerfile.
 	Containerfile string
-	// WardenDir is the prepared .warden directory path on host.
-	WardenDir string
-	// LedgerDir is where the relay writes its output.
-	LedgerDir string
 	// OutputDir is the final output directory for the build.
 	OutputDir string
 	// CaptureMode controls payload capture ("none","headers","bodies","all").
 	CaptureMode string
 	// Compress enables zstd compression of output artifacts.
 	Compress bool
+	// Quiet suppresses forwarding of the guest build console to warden's stdout.
+	// Output is still captured to build-output.log either way; this only governs
+	// whether it is echoed live to the user.
+	Quiet bool
 	// Timeout is the maximum build duration. Zero means no limit.
 	Timeout time.Duration
+	// CPUs and MemoryMB size the build VM (VM drivers). Zero uses the
+	// driver's default.
+	CPUs     int
+	MemoryMB int
+	// Network names a pre-provisioned network to reuse instead of creating
+	// one per build (hyperv: the durable switch from `warden setup`).
+	Network string
+	// KeepVMs leaves the build's VMs, disks and work directory in place for
+	// inspection instead of tearing them down (VM drivers).
+	KeepVMs bool
+	// TempDir is the directory each build's private work directory is
+	// created in (see NewWorkDir). Empty means the OS default (os.TempDir,
+	// which honours TMPDIR / TMP). For VM-backed container runtimes it must
+	// be a path the runtime's VM can see.
+	TempDir string
 	// RelayImage specifies the relay container image (container driver only).
 	RelayImage string
 	// UpstreamCACerts are host paths to additional CA certificate files/dirs

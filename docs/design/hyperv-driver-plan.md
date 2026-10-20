@@ -1,15 +1,39 @@
 # Hyper-V Driver Implementation Plan
 
+> **Status note (integration pass):** the relay-host design described below
+> (config responder on :8299, relay pulling `/config` at boot, collector
+> listening on :8390 behind an inbound firewall rule) has been replaced by the
+> cross-driver model: the relay boots unconfigured, the host claims it at its
+> NAT address and serves the collector back over that host-initiated
+> connection (`relaycfg`, `driver.Session`). `warden hyperv doctor|setup` are
+> now `warden doctor|setup --driver hyperv`, and `warden image fetch` is
+> `warden image prepare --driver hyperv`. What changed and what still needs
+> validating on real Hyper-V is listed under Phase 5a in
+> [vm-driver-release-plan.md](vm-driver-release-plan.md).
+
 ## Open Questions
 
 1. **Named Pipes vs Hyper-V Sockets (hvsock) for relay-build link?**
    Hyper-V sockets (AF_VSOCK equivalent on Windows, `AF_HYPERV`) allow direct host-to-guest or guest-to-guest communication without network interfaces. Should the relay-build link use an Internal vSwitch (L2 Ethernet) or hvsock? hvsock would simplify network isolation but requires the relay to speak raw TCP (no transparent redirect via iptables in the relay VM). Recommendation: use Internal vSwitch for consistency with QEMU/VZ — keeps the same relay init script and iptables rules.
 
 2. **Relay VM kernel: same Alpine initramfs or different?**
-   The relay VM is a Linux VM on both QEMU and VZ. On Hyper-V, Generation 2 VMs with Linux guests work well (Ubuntu/Alpine with Hyper-V Integration Services). Can we reuse the same `tools/relay-vm/` initramfs with a kernel that includes hv_vmbus, hv_storvsc, hv_netvsc modules? Or do we need a separate kernel build with Hyper-V-specific modules?
+   RESOLVED: a dedicated x86_64 build under `tools/relay-vm/hyperv/` (Alpine
+   `linux-virt`). `hv_vmbus` and `hv_netvsc` are compiled into that kernel, so
+   VMBus and the synthetic NICs need no insmod. Only the netfilter stack plus
+   `af_packet` are loaded from the initramfs, and `crc32c_generic` is loaded
+   before `libcrc32c` (its module-init allocates a `crc32c` shash and fails
+   otherwise, which strands `nf_conntrack` and the whole chain). No storage
+   modules are shipped — the relay VM has no data disk (see Q3).
 
-3. **Shared volume mechanism?**
-   QEMU uses virtio-9p. Hyper-V options: (a) SMB share mounted inside VM, (b) Plan 9 over VMBus (not available on Hyper-V), (c) Virtual hard disk (VHDX) attached as secondary disk, (d) Hyper-V Integration Services file copy (limited, no mount). Recommendation: VHDX formatted as ext4 (relay) or NTFS (Windows build) attached as a data disk — host formats, attaches, guest mounts.
+3. **Shared volume mechanism (relay VM)?**
+   RESOLVED: none. The relay VM has no shared volume and no data disk. The relay
+   binary is baked into the initramfs (`/sbin/relay`), build outputs stream to
+   the host `collector` over HTTP (see "Output egress"), and per-build config
+   arrives over the network. This sidesteps the elevation wall (Hyper-V cannot
+   host-mount a VHDX attached to a running VM, and `Mount-VHD` needs full admin)
+   and the GB-scale second copy a data VHDX would force. NOTE: the Windows BUILD
+   VM still uses a seed VHDX for `unattend.xml` + `warden-io.exe` — that is a
+   different VM (see "Windows Guest Provisioning"), not the relay.
 
 4. **Windows guest build: PowerShell Remoting or SSH?**
    OpenSSH is built into Windows Server 2019+ and Windows 10 1803+. PowerShell Remoting (WinRM) is more "native" but harder to bootstrap securely. SSH is simpler and consistent with Linux path. Recommendation: SSH with key injected via unattend.xml.
@@ -90,6 +114,30 @@ New-VMSwitch -Name "warden-build-$id" -SwitchType Private
 # Private = no host access, only VM-to-VM. This is stronger than Internal.
 ```
 
+### NAT reuse vs. per-build (coexistence with a durable switch)
+
+The host gateway IP (`192.168.240.1`) and NAT prefix (`192.168.240.0/20`) are
+fixed, so two interfaces cannot both claim them. That means a fresh per-build
+network and a durable `warden hyperv setup` switch cannot both stand up the NAT
+independently — they would collide on the gateway IP (`New-NetIPAddress ... The
+object already exists`). The split that resolves it:
+
+- **The Private build switch is always per-build.** It is the isolation
+  boundary, so it is never shared: `warden-<id>` is created fresh and torn down
+  after each build.
+- **The NAT egress is shared plumbing, not a boundary.** `EnsureNetwork` reuses
+  an existing warden NAT that already owns the prefix (a durable switch, or a
+  concurrent build) instead of colliding; it only stands up a per-build NAT
+  (`warden-<id>-nat`) when none owns the prefix. The chosen NAT switch name is
+  returned in `NetworkResources.NATName`, and the relay's upstream NIC attaches
+  to that. Teardown is by per-build name convention, so a reused durable NAT is
+  never removed — only the per-build build switch (and a per-build NAT when one
+  was created).
+
+This lets the ephemeral/service path (`NetEphemeralPerBuild` /
+`NetDelegateService`) run cleanly on a machine that also has a durable switch
+left over from an earlier `warden hyperv setup`.
+
 ### Why Private (not Internal) for build link
 
 A **Private** vSwitch ensures the build VM cannot reach the host's network stack at all — traffic can only flow between VMs attached to the same switch. This matches the QEMU model where the unix socket netdev is exclusively relay-to-build.
@@ -97,6 +145,163 @@ A **Private** vSwitch ensures the build VM cannot reach the host's network stack
 ### iptables in Relay VM (unchanged from QEMU)
 
 The relay VM init script works identically — the Hyper-V synthetic NIC (hv_netvsc) appears as a standard Linux Ethernet device. Same PREROUTING REDIRECT rules, same MASQUERADE for outbound.
+
+---
+
+## Privilege & Elevation Model
+
+The Hyper-V driver is the only BuildWarden driver that requires host-level OS privilege, and getting the elevation UX right is a shipping requirement, not a footnote. This section is the authoritative design for how the driver acquires privilege and what the local-dev and shippable experiences look like. It shapes package structure, so build the `Provisioner` spine (below) before the VM/boot code, and build the dev-setup stub (Phase 0) before anything that needs a network.
+
+### Two Windows privilege tiers
+
+The privileged operations do not all need the same level, and the whole strategy follows from that split:
+
+| Operation set | Cmdlets | Privilege required | UAC prompt |
+|---|---|---|---|
+| Host network standup | `New-VMSwitch`, `New-NetIPAddress`, `New-NetNat`, `Remove-NetNat` | Full **Administrator** | Yes |
+| VM lifecycle | `New-VM`, `Start-VM`, `Stop-VM`, `Remove-VM`, `Add-VMNetworkAdapter`, `New-VHD` (differencing), `Set-VMFirmware`, `Set-VMComPort` | Local **Hyper-V Administrators** group | No |
+
+The key consequence: only the host-network standup forces full Administrator. A developer who is a member of Hyper-V Administrators can run the entire per-build VM path with no elevation and no UAC prompt, as long as the switch/NAT already exist. Everything below is built to isolate that one full-admin operation and do it as rarely as possible (ideally once).
+
+### Provisioner interface (the code-reuse spine)
+
+Every privileged operation sits behind a single interface so that the same logic serves both the in-process path and the service path:
+
+```go
+// driver/hyperv/provision.go
+
+type Provisioner interface {
+    // Full-admin ops
+    EnsureNetwork(ctx context.Context, spec NetworkSpec) (*NetworkResources, error)
+    TeardownNetwork(ctx context.Context, id string) error
+    // Hyper-V Administrators ops
+    CreateVM(ctx context.Context, cfg VMSpec) (*vmHandle, error)
+    StartVM(ctx context.Context, name string) error
+    StopVM(ctx context.Context, name string) error
+    RemoveVM(ctx context.Context, name string) error
+    CreateDiffDisk(ctx context.Context, overlay, base string) error
+    // ... com port, seed disk, etc.
+}
+```
+
+Two implementations:
+
+- `localProvisioner` — in-process; calls hcsshim / PowerShell directly. Used whenever the current process already holds the required privilege.
+- `clientProvisioner` — marshals the identical calls over a named pipe to the privileged service.
+
+The service host instantiates a `localProvisioner` and exposes it over the pipe. `localProvisioner` is therefore the single source of truth for all privileged logic; only the transport is duplicated. This is the minimal client/server wrapper: the interface is the reuse boundary.
+
+### Three runtime outcomes for `warden --driver hyperv`
+
+Resolved **per operation**, not by one global "am I admin?" check. A naive `IsUserAnAdmin()` boolean is a bug here: a Hyper-V Administrators member reads as "not admin" yet can do every VM op directly, and a partial boolean would send them down path 1 and then fail on `New-VMSwitch`.
+
+1. **Process holds the privilege for the op** (full admin, or Hyper-V Admins for VM ops) → `localProvisioner` performs it directly.
+2. **Process lacks it AND the network service is installed and running** → `clientProvisioner` delegates the op to the service.
+3. **Process lacks it AND no service** → fast-error, naming both remediations: rerun from a terminal launched as Administrator, or run the one-time `warden hyperv setup` (for the network) / install the service, both under admin.
+
+In practice the host-network standup is the only operation that routinely lands in outcome 2 or 3; VM ops resolve to outcome 1 under Hyper-V Administrators. Detection at startup probes token elevation and Hyper-V Administrators group membership, then caches a per-op capability verdict.
+
+### The privileged service (staged LATER, not a Phase-1 prerequisite)
+
+> **Status — built (2026-09-30).** Implemented as `warden hyperv service
+> {install,uninstall,run}`. It delegates **only network standup**
+> (`EnsureNetwork`/`TeardownNetwork`) over a named pipe (`\\.\pipe\warden-hyperv-svc`,
+> go-winio) to a LocalSystem service hosting `localProvisioner`; VM lifecycle
+> stays in-process (Hyper-V Administrators). The pipe carries a **typed op set
+> only** (ping / ensure_network / teardown_network — never raw PowerShell), is
+> **ACL'd** to LocalSystem + Administrators + Hyper-V Administrators
+> (`D:P(A;;GA;;;SY)(A;;GA;;;BA)(A;;GA;;;S-1-5-32-578)`), and does a **protocol
+> version handshake** on every request. `Capabilities.ServiceReachable` now pings
+> the pipe, so `NetworkStrategy` resolves to `delegate to service` when it is up
+> (taking precedence over the durable-switch reuse path), and `StartBuild` then
+> stands up a fresh per-build network via the service. The protocol is
+> unit-tested over `net.Pipe` with a fake provisioner; the winio listen/dial +
+> SDDL + ping + capability resolution were smoke-tested non-elevated (`doctor`
+> reports "reachable" / "fresh per-build via privileged service"). The one path
+> that requires the service running as LocalSystem — a real `EnsureNetwork`
+> through it — is validated by installing it: `warden hyperv service install`
+> (elevated) once, then a non-elevated `warden build --driver hyperv`.
+
+The service is a LocalSystem Windows service that is a thin wrapper hosting `localProvisioner` behind a named pipe. It is the best local-dev UX (zero prompts ever, the Docker Desktop model) but it is **not** needed to prove the driver, and it carries an installer, an uninstaller, lifecycle/recovery config, and version lockstep. Do not build it before the driver runs end to end.
+
+Mandatory security properties (this is a privileged endpoint that will run `New-VM` / `New-VMSwitch` on request):
+
+- **Typed op set only.** The pipe carries structured requests (`CreateVM{name, vhdx, switch}`), never raw PowerShell or arbitrary argument strings.
+- **ACL the pipe** to Hyper-V Administrators (or a dedicated group) and authenticate the caller.
+- **Protocol version handshake** on connect. A stale service speaking an old protocol against a new `warden` is a real failure mode; `warden` should detect the mismatch and offer to reinstall/upgrade (itself a one-time elevated op).
+
+This same `Provisioner`-behind-RPC boundary is what a third-party Windows orchestrator reusing the relay will need, so the interface work also pays into the standalone-relay goal.
+
+### `warden hyperv setup`
+
+**Network provisioning policy (decided 2026-09-14):** when the driver *can* stand up a network — full Administrator, or the LocalSystem service — it creates a **fresh, ephemeral per-build network** and tears it down afterward. That is the cleanest isolation and avoids the collisions and side-effects of a shared, long-lived switch. The durable named switch below is a **lower-privilege fallback only**: it exists so a non-elevated Hyper-V Administrators member (which cannot stand up a network) still has an isolated path to reuse. An elevated run never reuses it. `doctor` surfaces the durable switch as available for lower-privilege use.
+
+**Shippable form:** a one-time, elevated command that idempotently creates a durable, named vSwitch + NAT + host IP for the lower-privilege path. After it runs once, a non-elevated `warden build --driver hyperv --switch <name>` runs under Hyper-V Administrators with no elevation. It must detect insufficient privilege and emit a clear, actionable error instead of surfacing a raw PowerShell failure.
+
+**Incremental-dev stub (BUILD THIS FIRST, Phase 0):** a minimal `warden hyperv setup` that creates exactly one durable, reused switch (Private or Internal, plus its NAT + host IP) under a fixed dev name (e.g. `warden-dev`). Run it **once** from an elevated shell. A **non-elevated** build then reuses that switch via `--switch <name>` (or the `WARDEN_HYPERV_SWITCH` env var), skipping per-build network standup entirely (an elevated build ignores it and stands up a fresh network). This is what lets the implementation agent iterate on the VM/boot/signal/build harness without persistent admin and without running the gateway elevated.
+
+Carry these reuse hazards into the stub (they are the durable-network dangers, and they apply equally to the shippable form):
+
+- **Idempotent create, and verify-on-each-build rather than trust persistence.** Re-assert every build that the switch is still Private/Internal, expected port ACLs are present, and no rogue host vNIC bridges the build VM out. Persistence does not equal correctness; a prior crash or a manual edit can silently weaken isolation.
+- **The build VM must NEVER get a direct NAT route to the internet.** NAT exists only for the relay VM's controlled egress. A build VM with straight NAT defeats the entire audit/MITM model.
+- **Pick a non-colliding subnet.** WSL2, Docker Desktop, and the Hyper-V Default Switch all allocate NATs/prefixes; an overlapping prefix silently breaks routing. Detect existing `New-NetNat` allocations and fail clearly rather than clobbering.
+- **Serialize builds on a shared dev switch.** The static `10.0.0.2/30` relay+build topology fits exactly one pair, so two concurrent builds on one reused switch clash on IPs. Guard with a host lock, or allocate a per-build subnet.
+
+These hazards are precisely why an elevated run does **not** reuse a shared switch: the fresh per-build `createNetwork()` + teardown path shown earlier under Network Topology sidesteps all of them (no persistence to verify, no cross-build IP clashes, no shared-switch collisions). The durable reused switch accepts these hazards as the cost of running without elevation, and must guard them (verify-on-each-build, NAT collision detection, a host lock). So the default is fresh per-build whenever the process can stand up a network (full Administrator, or the LocalSystem service); the durable switch is the reuse path for the non-elevated Hyper-V Administrators case only. Phase 0 delivers the durable switch (it is what unblocks the non-elevated dev loop); the ephemeral per-build path is the standing default, not an option.
+
+### `warden hyperv doctor` (capability preflight)
+
+`warden hyperv doctor` is a read-only preflight that reports exactly which capabilities the CLI has and which it still needs authorization for, then resolves the runtime outcome (1/2/3 from above) per operation and prints the precise next action. It is especially valuable for agent-based development by other contributors: an implementation agent (or a new human contributor) can run it first to learn whether it can iterate directly, must delegate to the service, or needs a one-time elevated `warden hyperv setup`, instead of discovering the boundary through a mid-build `ACCESS_DENIED`.
+
+**Detection is two-layer:**
+
+1. **Query the process token up front** (no side effects, needs no privilege):
+   - Full-Administrator / elevation state via `GetTokenInformation(TokenElevation)` (`golang.org/x/sys/windows`: `windows.OpenCurrentProcessToken()`, then `token.IsElevated()`). Decides whether the host-network standup ops are available.
+   - Hyper-V Administrators membership via `CheckTokenMembership` against the well-known SID `S-1-5-32-578` (`DOMAIN_ALIAS_RID_HYPER_V_ADMINS`). Decides whether the VM-lifecycle ops are available without elevation.
+2. **Classify the real error as a backstop.** Token detection has UAC filtered-token edge cases and the true authority is enforced by HCS, so the op path must still map a cmdlet `ERROR_ACCESS_DENIED` (`WIN32 5`) to the same remediation message rather than surfacing a raw PowerShell failure. Detection chooses the path; error classification catches a wrong guess.
+
+**Token-scope caveat to surface in the output:** the token checks reflect the *current process's* token. Because the gateway spawns `warden` non-elevated, `doctor` will correctly report "not elevated" there; the elevated verdict only appears when `warden` is launched from an elevated terminal (a different token) or routed through the service. `doctor` should state which token it read so the result is not misleading.
+
+**Checks (all cheap and read-only):**
+
+| Capability | How detected | Privilege to detect |
+|---|---|---|
+| Hypervisor present | `Win32_ComputerSystem.HypervisorPresent` (CIM) | read-only |
+| Hyper-V feature enabled | `Get-WindowsOptionalFeature`, or the `vmms` service exists | read-only |
+| Full Administrator (network standup) | token `IsElevated()` | none |
+| Hyper-V Administrators (VM lifecycle) | `CheckTokenMembership(S-1-5-32-578)` | none |
+| Durable/dev switch present | `Get-VMSwitch <name>` | read-only |
+| Network service reachable | dial the named pipe | none |
+
+**Example output shape:**
+
+```
+$ warden hyperv doctor
+Hyper-V hypervisor present ............ yes
+Hyper-V feature enabled ............... yes
+Token read ............................ current process (non-elevated)
+Full Administrator .................... no   (needed for: New-VMSwitch, New-NetNat, New-NetIPAddress)
+Hyper-V Administrators ................ yes  (covers: New-VM, Start-VM, Remove-VM, adapters, VHDX)
+Dev switch 'warden-dev' ............... not found
+Privileged service .................... not installed
+
+Resolved:
+  VM lifecycle ......... OK (direct, Hyper-V Administrators)
+  Network standup ...... BLOCKED
+    -> run `warden hyperv setup` once from an elevated shell, or
+    -> launch warden from an Administrator terminal, or
+    -> install the network service (one-time, elevated)
+```
+
+`doctor` exits non-zero when a required capability for the requested mode is unmet, so it is usable as a CI/agent gate. The same detection routine backs the per-operation outcome resolution in the driver itself, so `doctor` is a thin CLI surface over logic the driver already needs.
+
+### Cloud / headless fleets (Azure, AWS)
+
+The elevation pain largely evaporates on a non-GUI fleet: there is no interactive desktop, so there is no interactive UAC, and automation runs already-elevated as a service account (WinRM/SSH/service). The service model is the natural fit there, and setup is baked into the golden image. The real gate is **nested-virtualization SKU availability**:
+
+- **AWS:** always available on bare-metal (`.metal`) instances, and since February 2026 also on virtual Nitro instances built on Intel Xeon 6 (C8i / M8i / R8i). See [EC2 nested virtualization docs](https://docs.aws.amazon.com/en_us/AWSEC2/latest/UserGuide/amazon-ec2-nested-virtualization.html) and the [launch note](https://aws.amazon.com/about-aws/whats-new/2026/02/amazon-ec2-nested-virtualization-on-virtual).
+- **Azure:** Dv3/Ev3 and newer support it; B-series burstable does **not**; ARM SKUs (Dpsv5) run KVM, not Hyper-V. See the [nested virtualization guide](https://learn.microsoft.com/azure/lab-services/concept-nested-virtualization-template-vm) and [enable-nested-virtualization](https://learn.microsoft.com/en-us/windows-server/virtualization/hyper-v/enable-nested-virtualization).
+- Windows **Server** enables Hyper-V via `Install-WindowsFeature Hyper-V` (+ reboot), and the auto-created Default Switch is not reliably present, so the durable `warden hyperv setup` path is mandatory there rather than optional.
 
 ---
 
@@ -158,9 +363,41 @@ Cloud image providers distribute VHDX or offer conversion:
 
 ### Windows Guests
 
-- **Evaluation images**: Microsoft provides Windows Server evaluation VHDs
-- **Custom base**: user provides a sysprepped VHDX with OpenSSH pre-installed
-- **FROM resolution**: `FROM windows-server:2022` maps to known evaluation URL
+Windows is the **primary** build target for the Hyper-V driver (a Linux build on
+a Windows host is better served by the qemu/vz drivers; it is a nice-to-have
+here, not the point).
+
+- **Base image (chosen path): the stock Microsoft Windows Server Evaluation
+  image, booted as-is.** Microsoft ships the eval as a **Gen1 (BIOS/MBR) `.vhd`**,
+  so the driver boots it on a **Generation-1** VM with no image surgery and no
+  `mbr2gpt` conversion. This is deliberate: starting from a real, signed OS with
+  zero custom construction means any boot problem is the driver's, not our disk
+  assembly (the lesson from the relay UKI bring-up). The build guest sits alone
+  on the Private switch, so the absence of Gen1 Secure Boot is not a weakening of
+  the trust boundary.
+- **Optional Gen2 conversion belongs in `warden image` prep, not `hyperv
+  setup`.** If a Gen2/Secure-Boot build guest is ever wanted, the VHD→VHDX +
+  MBR→GPT (`mbr2gpt`) conversion is an image-preparation concern and lives in
+  Warden's image tooling. `hyperv setup` stays scoped to Hyper-V infrastructure
+  (switches, NAT, firewall, service install) and only takes on an image step if
+  that step *hard-requires* the same Administrator elevation setup already needs.
+- **Acquisition: `warden image fetch <name>`** downloads, SHA256-verifies, and
+  pins a build-guest base image, then records it as the active base so `warden
+  build` finds it with no flags. Because the eval VHD is behind the Evaluation
+  Center (registration) and has no published checksum, the first fetch takes
+  `--url` and prints the computed SHA256; pinning it (`--sha256 <hash>`, or
+  committing it into the registry) verifies the already-cached bytes without
+  re-downloading and enables authenticity checks on every later fetch. An
+  unverified image is cached but refused as the active base unless
+  `--accept-unpinned` is given (secure-by-default for a supply-chain tool). The
+  cache location is `WARDEN_HYPERV_CACHE_DIR` (default per-user cache).
+- **Bring-your-own** still works: `--image <disk.vhd|.vhdx>` or
+  `WARDEN_HYPERV_BUILD_IMAGE` overrides the pinned image. Resolution order:
+  `--image` → `WARDEN_HYPERV_BUILD_IMAGE` → the pinned active image.
+- **Generation is inferred from the disk format**: `.vhd` → Gen1, `.vhdx` → Gen2,
+  overridable with `WARDEN_HYPERV_BUILD_GEN`. The per-build differencing overlay
+  is created in the matching format (a differencing child must match its parent).
+- **FROM resolution**: `FROM windows-server:2025` maps to the pinned eval image.
 
 ### Image resolution flow
 
@@ -221,6 +458,121 @@ Windows guests are provisioned via `unattend.xml` placed on a secondary VHDX (or
 
 ### Getting warden-io.exe into the VM
 
+> **Status (2026-09-23):** the seed generators are built and unit-tested — the
+> OOBE `unattend.xml` (auto-answers OOBE, ephemeral one-shot autologon, and a
+> `FirstLogonCommands` entry that launches `warden-run.ps1` off the WARDEN seed),
+> `warden-run.ps1` (same runtime contract as qemu: `warden-io initialize
+> --gateway=10.0.0.1 --ip=10.0.0.2/30`), and the seed staging (warden-io.exe +
+> warden-run.ps1 + unattend.xml + Autounattend.xml). The media is packaged as a
+> **Joliet ISO via the in-box IMAPI2 COM API** (no admin, exact long filenames,
+> gets a drive letter) rather than a hand-rolled level-1 ISO (which 8.3-mangles
+> `warden-io.exe`/`Autounattend.xml`). The IMAPI2 builder is host-verified to
+> produce a valid image. The seed **does not** offline-mount the guest disk
+> (`Mount-VHD` needs Administrator), so the answer file reaches the stock image
+> only via OOBE's implicit media search.
+>
+> **Live-boot findings (2026-09-30):** confirmed against the real Windows Server
+> 2025 eval VHDX. The guest chain **works end to end**: OOBE implicitly discovers
+> the answer file on the attached DVD, `FirstLogonCommands` fires, the seed volume
+> gets a drive letter so the drive-scan finds `warden-run.ps1`, and `warden-io
+> initialize` runs. Proven by captured COM1 serial from a standalone build-VM boot
+> (no relay): `warden-io: relay did not become healthy within 60s` followed by the
+> `warden-run` progress line — i.e. every guest-side step executed; the only
+> failure was the (expected) absent relay. `warden-run.ps1` now mirrors its
+> progress and live `warden-io` output to **COM1** (a host named pipe, wired by
+> `runBuild`) in addition to `C:\warden\warden-run.log`.
+>
+> **Constraint discovered — COM1 capture must not connect during early boot:**
+> attaching a named-pipe *client* to a Gen2 VM's COM1 while it is still in the
+> UEFI firmware phase prevents the guest from booting (flat 4 MB overlay, fast
+> power-off). Bisected cleanly: bare / Secure-Boot-on / seed-DVD / COM1-wired all
+> boot to heartbeat; only a connected reader during early boot breaks it. A late
+> connect (guest already running `warden-io`) captures output but the connection
+> is still disruptive. The reliable guest record is therefore
+> `C:\warden\warden-run.log` on the build overlay (read via an elevated
+> `Mount-VHD`); `tools/relay-vm/hyperv/read-serial-pipe.ps1` is a best-effort
+> reader that heartbeat-gates before connecting.
+>
+> **End-to-end result (2026-09-30):** a full foreground `warden build --driver
+> hyperv --guest-os windows` ran the whole pipeline against the real eval VHDX.
+> The guest `warden-run.log` recorded every step: configure network -> wait for
+> relay -> install CA -> **fetch build script (`/build-script`)** -> **run
+> `build.ps1`** (`hello from build.ps1`) -> `warden-io exit=0` -> power off. So
+> guest↔relay connectivity, the CA install, the build-script fetch, and build
+> execution all work.
+>
+> **Bug fixed (completion signal):** the build ran green but the host build
+> initially timed out because the relay's `/exit` handler only wrote the
+> `exit_code` FILE via `writeExitCode` (the qemu/vz shared-`SignalDir` model) and
+> returned early on a diskless relay (empty `SignalDir`), so the collector never
+> received `/v1/complete`. Fixed by making `writeExitCode` also call
+> `r.PostComplete(code)` through the sink: a no-op on the qemu/vz `localSink`, and
+> the `POST /v1/complete` to the collector on the Hyper-V `httpSink`. After the
+> fix a full run returns exit=0 (build VM boots to a single 1.38 GB overlay —
+> auto-checkpoints now disabled — then powers off cleanly). Regression test:
+> `TestWriteExitCode_ForwardsToSink`.
+>
+> **Output persistence (resolved 2026-09-30):** the relay's ledger and the
+> build output now land in the collector's output dir. Two fixes: (1) the relay
+> only flushed its ledger on a listener failure (`Wait`), never on normal build
+> completion, so it was lost when `runBuild` tore down the relay VM — now
+> `writeExitCode` calls a guarded `finishAndFlush()` (ledger `Finish` + sink
+> `FlushLedger`) BEFORE signaling `/v1/complete`, so the ledger reaches the
+> collector before teardown; (2) `warden-io` sent build stdout only to the guest
+> console — it now also captures it and POSTs it to the relay's control-plane
+> `/v1/output` (→ collector `build-output.log`) before reporting completion.
+> Verified: a full run yields `ledger` + `build-output.log`, and `warden inspect`
+> reports scheme=ed25519-sha512, all signatures valid, all channels closed, with
+> the `/build-script` fetch audited. The Windows Hyper-V driver now runs a build
+> end to end and produces a complete, signed audit ledger.
+>
+> **Real build validated (2026-09-30):** `examples/conda-forge-win` (Miniforge +
+> `conda create -c conda-forge numpy`) ran to success on the native x64 guest.
+> `warden inspect`: **198 requests, 263.6 MB audited, all 803 signatures valid,
+> all channels closed** — the 148 MB Miniforge download, all conda-forge
+> repodata/packages, and the guest's own OS traffic were witnessed, and conda's
+> per-package hash verification passed against the MITM'd bytes (byte-exact).
+> **Artifact capture** also verified: a `warden-io post` from `build.ps1` lands
+> byte-exact in the collector's `artifacts/` (`✅ ARTIFACT POST`, sha256 match).
+>
+> **warden-io PATH fix:** `execScript` prepended the agent's dir to `PATH` with a
+> case-sensitive `"PATH="` match and a hardcoded `":"` separator — both Unix-isms
+> that silently no-op on Windows (`Path=`, `;`), so build scripts couldn't invoke
+> `warden-io`. Now matches case-insensitively and uses `os.PathListSeparator`.
+>
+> **Phase 2 — witnessed source build validated (2026-09-30):**
+> `examples/numpy-source-win` compiles numpy from source with MSVC and BuildWarden
+> witnesses the whole build including toolchain acquisition. `build.ps1` installs
+> VC++ Build Tools (VCTools) unattended — the `vs_BuildTools.exe` bootstrapper +
+> several GB of components download through the relay — then `pip install
+> --no-binary numpy` drives a meson/MSVC compile (build-isolation deps from PyPI
+> also witnessed). Result: `numpy 2.1.3 from-source OK`, and `warden inspect`
+> reports **811 requests, 2.2 GB audited, all 3273 signatures valid, all channels
+> closed** in ~9 min. Heavy builds need more than the 4 GB / 4 vCPU default:
+> `WARDEN_HYPERV_BUILD_MEMORY_MB` and `WARDEN_HYPERV_BUILD_CPUS` override the
+> build VM's resources. (conda-forge's `vs2022_win-64` is only an activation shim,
+> so the MSVC compiler must be installed in the guest; a strict recipe-driven
+> `conda build` of the feedstock is a further step on this same foundation.)
+>
+> **Build console forwarding + completion status (2026-10-05):** the collector
+> gained an optional `OutputTee io.Writer`; when set it forwards a copy of the
+> guest build console (POST `/v1/output`) to the writer while still persisting
+> `build-output.log`. The Hyper-V driver wires this to `os.Stdout` unless the new
+> `--quiet` (`-q`) build flag is passed (threaded as `BuildRequest.Quiet`).
+> `warden-io` STREAMS the output as it is produced: the build's stdout/stderr fan
+> out to the guest console and an `io.Pipe`, and a reader goroutine POSTs each
+> ~32KB chunk to `/v1/output` (one relay sink cycle, one collector append+tee per
+> chunk). This bounds warden-io's memory to a single chunk no matter how much the
+> build prints (no whole-log buffer), and the user sees output live. If the relay
+> link fails mid-build the reader keeps draining and discarding so the build never
+> hangs on a dead link (the tail then stays only in the guest console). A final
+> drain runs after `cmd.Wait` and before `reportComplete`, so the last chunk is
+> delivered before teardown. The CLI also prints a one-line completion status in
+> both modes (`warden: build SUCCEEDED (output: <dir>)` or `warden: build
+> FAILED`) via `reportBuildResult`, so a run is never silent about its outcome.
+> Tests: `TestOutputTeeForwardsAndPersists`, `TestOutputNoTeePersists`,
+> `TestPostBuildOutputChunkDelivers`.
+
 **Option A (preferred): Seed VHDX**
 
 Create a small VHDX (formatted NTFS), write warden-io.exe + build.ps1 + unattend.xml to it, attach as secondary disk. Windows sees it as D:\ drive.
@@ -275,6 +627,35 @@ C:\warden\warden-io.exe exit --code %EXITCODE%
 shutdown /s /t 0
 ```
 
+### Build-script delivery (implemented, cross-driver)
+
+The build script (`build.ps1` / `build.sh`) is the user's build instructions. The
+guest never reads it from a disk: `warden-io initialize` fetches it over HTTP
+from the relay at the canonical `http://artifacts/build-script` endpoint, then
+runs it. The local filename (hence interpreter) still comes from the platform
+default / `--script`; only the *source* is standardized, so the guest no longer
+encodes a per-driver script name in the URL.
+
+The relay resolves `/build-script` from one of two sources, ledgering the exact
+bytes served either way (so the build instructions are in the provenance
+record):
+
+- **Share-backed drivers (container / qemu / vz)**: read from `ContextDir` at
+  the relative path in `BUILD_SCRIPT` (`build.sh`, `build.ps1`, or
+  `.warden/build.sh`), delivered via the relay's env (`relay.env` for the VM
+  drivers, `--env` for the container relay).
+- **Diskless relay (Hyper-V)**: the relay VM has no shared disk, so it pulls the
+  script on demand from the collector's token-scoped `GET /v1/build-script` over
+  the isolated NAT link, using the same per-build bearer token as the output
+  sink, and re-serves it to the guest. The driver stages the script and points
+  `collector.Config.BuildScriptPath` at it.
+
+This makes the collector the per-build I/O broker in both directions (inputs
+down, outputs up), all scoped by one per-build token, while the config responder
+stays the minimal unauthenticated bootstrap (URL + token only). Context files
+beyond the entry-point script still travel over the generic `cwd` channel;
+lazy proxying of a large context tree through the collector is a later step.
+
 ### Network isolation enforcement
 
 Network isolation is enforced **at the vSwitch level** (Private switch), not inside the guest. The build VM's only NIC connects to the Private vSwitch where the relay VM is the sole peer. No Windows Firewall rules needed inside the guest — there is simply no route to anything except the relay.
@@ -298,6 +679,66 @@ The `cloudInitSeed()` function and `generateSeedISO()` are reusable — the only
 ### Hyper-V Integration Services
 
 Linux guests need `hv_vmbus`, `hv_storvsc`, `hv_netvsc`, `hv_utils` modules. Modern distro cloud images (Ubuntu 20.04+, Debian 11+, Alpine 3.16+) include these by default.
+
+---
+
+## Output egress: streaming sink (decided 2026-09-14)
+
+The relay VM produces the ledger and, more importantly, build artifacts that can
+be very large — PyTorch-style wheels (100s of MB), container images (GBs). The
+relay-VM topology has no host-shared path (unlike qemu's 9p or vz's host-process
+relay), Hyper-V cannot host-mount a VHDX attached to a running VM, and mounting
+needs elevation anyway — so routing artifacts through a data VHDX would mean a
+full second copy of GB-scale data plus elevation. Instead:
+
+**The relay streams outputs to the host as they are produced, never buffering a
+full artifact.** A new output-sink seam in the `relay` library:
+
+- `localSink` — current behavior (write to `LEDGER_DIR`/output on local fs).
+  Remains the DEFAULT, so the container/qemu/vz drivers are behaviourally
+  unchanged (no Phase-3 macOS-loop-back regression).
+- `httpSink` — streams each artifact as an HTTP `PUT ${SINK_URL}/<name>` with a
+  chunked/streamed body; the artifact handler `io.Copy`s the incoming build-env
+  upload straight through to the sink connection (constant memory, GB-safe). The
+  ledger streams the same way.
+- Selected by config: `OUTPUT_SINK_URL` set → `httpSink`, else `localSink`.
+
+The receiver is a **generalized, reusable component**, not something bespoke to
+the Hyper-V driver: a `collector` package with a standalone `cmd/collector`
+binary (symmetric with `cmd/relay` / `cmd/warden-io`), which drivers embed
+**in-process** (one implementation, two entrypoints — exactly how `relay` is both
+a library and `cmd/relay`). It is the counterpart to the relay's `httpSink`:
+receive streamed artifacts/ledger over chunked HTTP and land them in the output
+dir. A third-party orchestrator on any platform can run `cmd/collector` (or front
+`SINK_URL` with S3/MinIO/WebDAV) and reuse the relay + warden-io unchanged — the
+third of three composable primitives (relay = witness/egress, warden-io =
+in-guest agent, collector = ingress/sink).
+
+On Hyper-V the driver embeds the collector in-process, bound to the
+internal-switch IP (`192.168.240.1`, never `0.0.0.0`) and gated by a per-build
+bearer token; only the relay VM can reach it (the build VM is on the isolated
+Private switch). Because the relay-VM topology gives the host no shared view of
+the guest fs, **the Hyper-V driver has no local sink** — the collector sink is
+its only option; `localSink` remains for container/qemu/vz where the relay writes
+to a host-shared path. Artifacts flow build-env → relay → collector in one
+streamed hop; nothing large lands in the relay VM, so its VHDXs stay tiny.
+
+Protocol choice: plain **HTTP with streamed/chunked bodies** — the relay is
+already an HTTP server, HTTP bodies stream by definition, and it is the
+lowest-common-denominator standard. It also serves the standalone-relay goal: a
+third-party orchestrator collects by running a trivial HTTP endpoint, or fronts
+`SINK_URL` with S3/MinIO/WebDAV. (gRPC and S3-multipart were considered; they add
+dependencies and complexity a reliable host-local hop does not need.)
+
+**Future nice-to-have — make the streaming sink the default across all drivers.**
+Investigate whether the sink seam (`httpSink`, or the abstraction generally)
+should REPLACE the local-fs / 9p / host-process output paths as the default for
+container/qemu/vz too, unifying output egress on one streamed, well-known
+protocol instead of per-driver mechanisms. Upside: one code path, no 9p/host-fs
+coupling, uniform backpressure/capacity behaviour, and the same
+third-party-collectable seam everywhere. Deferred and gated on not regressing the
+existing drivers' zero-copy fast paths; revisit alongside the HCS boot item after
+Phase 1.
 
 ---
 
@@ -411,24 +852,23 @@ Step-by-step from `StartBuild()` to first build command executing:
    ├── New-NetIPAddress (NAT gateway)
    └── New-NetNat (NAT rule)
 
-4. Prepare relay VM disk
-   ├── Create relay-data.vhdx (100MB, contains relay binary + config)
-   │   Format as ext4 (via WSL or pre-formatted template)
-   │   Copy: relay binary, relay.env
-   └── Use relay kernel + initrd for direct boot
+4. Prepare relay VM boot disk
+   ├── Pinned static relay-boot.vhdx (UKI: kernel + initramfs + relay baked in)
+   │   Downloaded + verified by `warden hyperv setup`; built once in CI, not per build
+   └── Read-only, shared across builds (no per-build data disk)
 
 5. Create relay VM
    ├── New-VM -Generation 2 -MemoryStartupBytes 512MB
-   ├── Add-VMHardDiskDrive (relay-data.vhdx)
+   ├── Add-VMHardDiskDrive (relay-boot.vhdx, read-only)
    ├── Add-VMNetworkAdapter (Private switch: build link)
    ├── Add-VMNetworkAdapter (NAT switch: internet)
-   ├── Set-VMComPort -Number 1 (named pipe for signals)
-   ├── Set-VMFirmware -BootOrder (direct kernel boot via LinuxDirect)
+   ├── Set-VMComPort -Number 1 (named pipe for readiness signal)
+   ├── Set-VMFirmware -EnableSecureBoot Off -FirstBootDevice <relay VHDX> (UEFI/UKI boot)
    └── Start-VM
 
 6. Wait for relay ready
-   ├── Read named pipe for "ready" signal
-   │   OR poll for CA cert on relay-data.vhdx
+   ├── Read named pipe for "ready" signal (init echoes it to COM1)
+   │   OR the relay's ready POST on the collector HTTP channel
    └── Timeout: 30 seconds
 
 7. Prepare build VM
@@ -450,12 +890,12 @@ Step-by-step from `StartBuild()` to first build command executing:
    ├── warden-io fetch-context (download build context from relay)
    ├── Build script runs
    ├── Watcher sends heartbeat to http://artifacts/heartbeat every 2s
-   └── On completion: exit signal sent to relay → relay writes to named pipe
+   └── On completion: exit signal to relay → relay POSTs complete to the collector
 
 10. Host monitors
-    ├── Read named pipe for heartbeat/exit messages
-    ├── Timeout if no heartbeat for 3 intervals
-    └── On exit: collect results
+    ├── Collector receives ready/complete over HTTP (COM1 pipe carries init's readiness echo)
+    ├── Timeout if no heartbeat/progress within the interval budget
+    └── On completion: outputs already streamed to the collector output dir
 
 11. Cleanup
     ├── Stop-VM (both VMs)
@@ -465,24 +905,67 @@ Step-by-step from `StartBuild()` to first build command executing:
     └── Delete temp VHDX files
 ```
 
-### Direct kernel boot on Hyper-V (Generation 2)
+### Relay VM boot: UKI in a UEFI-bootable VHDX (verified 2026-09-21)
 
-Hyper-V Generation 2 VMs support direct kernel boot for Linux via the `Set-VMFirmware` cmdlet:
+**Ground truth (Windows 11 Pro 26200, Hyper-V PowerShell module 2.0):** the
+Hyper-V PowerShell module exposes **no** Linux direct-kernel-boot parameters.
+`Set-VMFirmware` and `New-VM` have no `LinuxKernelImagePath` /
+`LinuxInitrdImagePath` / `LinuxKernelCmdLine` (an earlier draft assumed these —
+they do not exist; the capability was conflated with QEMU's `-kernel`).
+Generation-2 VMs here boot UEFI from a disk only, and Gen2 requires **VHDX** (the
+legacy VHD format is unsupported).
+
+So the relay VM boots a **Unified Kernel Image (UKI)** from a UEFI-bootable VHDX,
+with no bootloader (no GRUB):
+
+- The UKI is built by `tools/relay-vm/hyperv/build.sh`: `objcopy` embeds the
+  Alpine `linux-virt` kernel, our `initramfs.cpio.gz`, the cmdline
+  (`console=ttyS0 console=tty0`) and an os-release as `.linux`/`.initrd`/
+  `.cmdline`/`.osrel` PE sections into the **systemd-boot EFI stub**
+  (`linuxx64.efi.stub`), which is the entry point that reads those sections.
+  IMPORTANT: the Linux kernel's OWN EFI stub does not read self-embedded
+  sections — embedding into the bare kernel produces a non-booting image (Gen2
+  sits on a blank logo). The systemd-boot stub implements the UKI convention, so
+  it must be the objcopy base. `ukify` is not required (the manual `objcopy`
+  recipe is what it automates), and the stub is a CI-only build tool — not
+  shipped, not a Go/runtime dependency.
+- The UKI is the single `\EFI\BOOT\BOOTX64.EFI` on a FAT32 EFI System Partition
+  in a GPT VHDX. `build-boot-vhdx.sh` assembles this **entirely in userspace** —
+  no elevation, no Hyper-V role: `mtools` writes the ESP image, `sgdisk` lays the
+  GPT, `qemu-img convert -O vhdx -o subformat=fixed` emits the fixed VHDX. This
+  is the exact step CI runs on a plain Linux runner to publish `relay-boot.vhdx`
+  as a release artifact, so `warden hyperv setup` downloads + verifies a pinned
+  disk instead of building one locally. (`go-diskfs` was evaluated and dropped —
+  it only emits raw images, and Gen2 needs VHDX.)
+- Secure Boot **off** (the UKI is not MS-signed). The boot VHDX is static and
+  read-only: it changes only when the relay VM image is rebuilt, never per build.
 
 ```powershell
-Set-VMFirmware -VMName "warden-relay-$id" `
-    -EnableSecureBoot Off `
-    -BootOrder @(Get-VMHardDiskDrive -VMName "warden-relay-$id")
-
-# Direct kernel boot (requires Windows Server 2019+ or Windows 11+)
-Set-VMHost -EnableEnhancedSessionMode $false
-Set-VMFirmware -VMName "warden-relay-$id" `
-    -LinuxKernelImagePath $kernelPath `
-    -LinuxInitrdImagePath $initrdPath `
-    -LinuxKernelCmdLine "console=ttyS0"
+Set-VMFirmware -VMName "warden-relay-$id" -EnableSecureBoot Off `
+    -FirstBootDevice (Get-VMHardDiskDrive -VMName "warden-relay-$id")
 ```
 
-**Note**: `Set-VMFirmware -LinuxKernelImagePath` is available only on Windows Server 2019+. On older hosts, the relay VM must boot from a disk image (VHDX with GRUB).
+**Boot verification (autonomous, non-elevated).** Confirmed via serial capture:
+UEFI → stub UKI → kernel → initramfs → `/init` → netfilter up → `ready`, and the
+baked relay starts and listens (`:53/udp :80/tcp :443/tcp :8300/tcp`) once it has
+a non-loopback IPv4. Two harness facts worth keeping: (1) capture COM1 inside an
+isolated PowerShell Job bounded by `Wait-Job -Timeout` + `Stop-Job` so the
+blocking pipe read can never deadlock the shell; (2) minimal `linux-virt` has no
+Hyper-V framebuffer, so VMConnect video and the WMI thumbnail stay on the
+firmware logo even on a fully successful boot — serial is the authoritative
+signal, not video.
+
+This keeps the minimal, audited Alpine initramfs (the relay trust-boundary
+choice) and stays entirely on the PowerShell driver. The build VM is unaffected
+(cloud images are already bootable VHDXs).
+
+**Future nice-to-have — HCS / `hcsshim` direct kernel boot.** The Host Compute
+Service (`github.com/microsoft/hcsshim`) *can* direct-boot a Linux kernel+initrd
+with no bootloader — it is how Windows boots LCOW (Linux Containers on Windows)
+utility VMs. Adopting it would drop the GRUB/EFI packaging step entirely and is
+the more elegant long-term boot path, at the cost of the lower-level HCS API
+(JSON compute-system schema via a cgo/DLL wrapper) and a heavy dependency.
+Deferred; revisit after Phase 1 proves the driver.
 
 ---
 
@@ -973,14 +1456,28 @@ This eliminates the external tool dependency entirely.
 
 ## Implementation Phases
 
+Elevation staging is folded into the phase order: build the privilege spine and the dev-setup stub FIRST (Phase 0) so the harness can be developed without persistent admin, and defer the full service to LAST (Phase 4) since it is not needed to prove the driver.
+
+### Phase 0: Privilege foundation + dev harness (do first)
+
+- [x] `Provisioner` interface + `localProvisioner` in-process implementation (interface + network standup done; VM-lifecycle ops in progress)
+- [x] `warden hyperv setup` **dev stub**: create one durable reused switch (Private/Internal) + NAT + host IP under a fixed dev name (`warden-dev`), idempotent
+- [x] Driver switch reuse: `--switch <name>` / `WARDEN_HYPERV_SWITCH` parsed by setup/doctor; `StartBuild` reuses the durable switch (defaults to `warden-dev`) and re-asserts isolation via `VerifyNetwork` per build instead of standing up a network
+- [x] Per-operation capability detection (token elevation + Hyper-V Administrators membership), plus a stale-token cross-check against persistent group membership
+- [x] `warden hyperv doctor`: read-only capability preflight (token + group + feature + switch + service), resolves outcome per op, exits non-zero when blocked so it works as a CI/agent gate
+- [x] Outcome-3 fast-error with both remediations (elevated terminal, or one-time setup) when an op cannot be satisfied
+- [x] No service yet. Dev loop = Jeff runs the setup stub once from an elevated shell, then the non-elevated gateway iterates against the reused switch (VM ops run under Hyper-V Admins) — validated live: `doctor` resolves VM lifecycle direct + network reuse
+
+**Exit criteria:** `warden --driver hyperv` can create and destroy VMs against the reused dev switch with the gateway running non-elevated.
+
 ### Phase 1: Skeleton + Linux guest (2-3 weeks)
 
 - [ ] Package structure with build tags
 - [ ] PowerShell helpers (`runPS`, `runPSJSON`)
-- [ ] Network creation/cleanup (Private + NAT switches)
-- [ ] Relay VM boot (reuse existing kernel+initrd from `tools/relay-vm/`)
-- [ ] Named pipe signal monitoring
-- [ ] Linux build VM with cloud-init
+- [ ] Network via `Provisioner`: fresh per-build `EnsureNetwork` + teardown when the process can stand up a network (elevated / service); reuse the durable switch when non-elevated
+- [x] Relay VM boot image — UKI in a userspace-built fixed VHDX (`tools/relay-vm/hyperv/`), boot-verified via serial (kernel → initramfs → `/init` → `ready`, relay listening)
+- [x] Relay readiness/completion signals — collector HTTP channel (`/v1/ready` → `OnReady`, `/v1/complete` → `OnComplete`/`Done` with exit code) + COM1 readiness echo; wired through `StartRelay` and blocked on by `runBuild`
+- [~] Linux build VM: `StartBuild` orchestration wired end to end (`runBuild`: `StartRelay` → build-guest differencing overlay → create/start build VM on the Private switch → wait on collector completion → teardown), unit-tested with a fake Provisioner that simulates the relay's config-fetch/ready/complete. **Remaining:** the build-guest base image (no Hyper-V build-image tooling yet — BYO via `--image`/`WARDEN_HYPERV_BUILD_IMAGE` for now) and the cloud-init CIDATA seed (`buildSeed`, coupled to the chosen base image: static net 10.0.0.2/30, relay CA trust, warden-io injection)
 - [ ] End-to-end test: `warden build --driver hyperv` with Ubuntu image
 
 ### Phase 2: Windows guest support (2-3 weeks)
@@ -998,126 +1495,98 @@ This eliminates the external tool dependency entirely.
 - [ ] FROM resolution for Windows images
 - [ ] Differencing disk lifecycle
 - [ ] Error handling + cleanup on partial failures
+- [ ] **Shippable `warden hyperv setup`**: durable named switch/NAT/IP, idempotent, privilege detection with a clear actionable error (not a raw PowerShell failure)
 - [ ] Azure nested-virt CI runner setup
 - [ ] Documentation
+
+### Phase 4: Privileged service (later; optional for first ship)
+
+- [ ] `clientProvisioner` (marshals `Provisioner` calls over the pipe)
+- [ ] LocalSystem Windows service host wrapping `localProvisioner`
+- [ ] Installer / uninstaller / recovery config; `warden` can install/upgrade it (one-time elevated op)
+- [ ] Security hardening: typed op set only, pipe ACL'd to Hyper-V Administrators, caller authentication, protocol version handshake
+- [ ] Outcome-2 delegation wired end to end
+
+**Exit criteria:** `warden build --driver hyperv` runs with zero prompts from a non-elevated shell with no dev switch pre-created.
 
 ---
 
 ## Relay VM Adaptation for Hyper-V
 
-The existing `tools/relay-vm/init` script needs minor changes for Hyper-V:
+The Hyper-V relay VM has its own tree under `tools/relay-vm/hyperv/` (init +
+build scripts), distinct from the aarch64/virtio `tools/relay-vm/` used by
+QEMU/VZ. Differences from that variant, as implemented and boot-verified:
 
-1. **Kernel modules**: Replace virtio modules with Hyper-V modules:
-   ```sh
-   # Instead of: virtio_net, 9pnet, 9pnet_virtio
-   # Load: hv_vmbus, hv_storvsc, hv_netvsc, hv_utils
-   ```
+1. **Kernel modules.** `hv_vmbus` and `hv_netvsc` are built into the Alpine
+   `linux-virt` kernel (no insmod). The initramfs ships only `af_packet` and the
+   netfilter stack, loaded by `init` in dependency order — critically
+   `crc32c_generic` BEFORE `libcrc32c` (libcrc32c's init allocates a `crc32c`
+   shash and fails otherwise, which strands `nf_conntrack` and the whole chain).
+   No storage modules: there is no data disk.
 
-2. **Shared volume mount**: Instead of 9p, mount the data VHDX:
-   ```sh
-   # The relay-data.vhdx appears as /dev/sda or /dev/sdb
-   mount /dev/sdb1 /shared
-   ```
+2. **No shared volume.** The relay binary is baked into the initramfs at
+   `/sbin/relay` by `build.sh`, so nothing is mounted. Build outputs stream to
+   the host `collector` over HTTP (see "Output egress"); the relay VM has no
+   block device (`hv_storvsc`/`fat`/`vfat` removed, no `/dev/sda`, no `/shared`).
 
-3. **Signal output**: Write to COM port in addition to files:
-   ```sh
-   # After starting relay, signal readiness
-   echo "ready" > /dev/ttyS0
-   ```
+3. **Config over the network.** Per-build config (collector URL + token) arrives
+   over the NAT link after the interfaces are up, not from a mounted disk. Static
+   NAT defaults (`192.168.240.2/20`, gateway `.240.1`) are baked into `init`
+   because they must be applied before any fetch is possible.
 
-4. **Network interface names**: Hyper-V NICs appear as `eth0`/`eth1` (same as QEMU), so iptables rules are unchanged.
+4. **Readiness signal.** `init` echoes `ready` to `/dev/ttyS0` (COM1, a host
+   named pipe). The relay additionally reports ready/complete to the collector
+   over the same HTTP channel it streams outputs on — this replaced the earlier
+   `go-winio` COM-pipe signal plan and dropped that dependency.
 
-The relay binary itself (`cmd/relay/`) requires **no changes** — it already supports `SIGNAL_DIR` and the HTTP heartbeat/exit endpoints. The named pipe is between the relay VM init script and the host, not between the relay Go binary and the host.
+5. **PID 1 never exits.** `init` SUPERVISES the relay rather than `exec`ing it:
+   it runs `/sbin/relay -mode vm`, routes the relay's stdout/stderr to COM1 for
+   host-visible diagnostics, and idles if the relay is absent or returns — so a
+   missing or failed relay can never panic the kernel ("Attempted to kill init").
 
-### Modified relay VM init (Hyper-V variant)
+6. **Network interface names.** Hyper-V NICs appear as `eth0`/`eth1` (same as
+   QEMU), so the iptables REDIRECT/MASQUERADE rules are unchanged.
 
-```sh
-#!/bin/sh
-# Relay VM init — Hyper-V variant
-# Differences from QEMU: storage modules, shared volume mount, COM signal
+The authoritative init is `tools/relay-vm/hyperv/init`; the boot image is built
+by `build.sh` (UKI) then `build-boot-vhdx.sh` (userspace fixed VHDX). See
+"Relay VM boot" above for the UKI/VHDX mechanics.
 
-mount -t devtmpfs devtmpfs /dev
-mount -t proc proc /proc
-mount -t sysfs sysfs /sys
-mount -t tmpfs tmpfs /tmp
+### Relay Go changes for the VM path
 
-# Hyper-V modules (built into kernel or loaded from initramfs)
-for mod in hv_vmbus hv_storvsc hv_netvsc hv_balloon hv_utils; do
-    modprobe $mod 2>/dev/null || true
-done
+The streaming egress (the `httpSink` half of "Output egress") is now wired into
+the VM relay: `cmd/relay/mode_vm.go` reads `OUTPUT_SINK_URL` / `OUTPUT_SINK_TOKEN`
+from the environment (via `vmConfig`) into `relay.Config`, so `relay.Start`
+selects the `httpSink` when a collector URL is present and the local filesystem
+sink otherwise (qemu/vz unchanged). Covered by `cmd/relay/mode_vm_test.go`.
 
-# Mount data disk (relay binary + config)
-mkdir -p /shared
-# Wait for disk to appear
-TRIES=0
-while [ $TRIES -lt 50 ]; do
-    [ -b /dev/sda1 ] && break
-    TRIES=$((TRIES + 1))
-    sleep 0.1
-done
-mount /dev/sda1 /shared
+Config delivery (**pull-at-boot**) and the relay-host orchestration are
+implemented and verified end to end on real Hyper-V:
 
-# Source relay configuration
-[ -f /shared/relay.env ] && { set -a; . /shared/relay.env; set +a; }
+- The driver mints a per-build token (the collector separates concurrent builds
+  by token) and, via `hyperv.StartRelay`, runs the collector and a
+  `relaycfg.Responder` bound to that build's NAT gateway, then creates and boots
+  the relay VM (`CreateRelayVM`) and blocks until the relay POSTs `/v1/ready`.
+  The relay's `init` GETs `http://<gateway>:8299/config` once, exports
+  `OUTPUT_SINK_URL` / `OUTPUT_SINK_TOKEN` (strict KEY=VALUE parse, never sourced),
+  probes the sink's `/healthz`, then starts the relay, which selects the httpSink
+  and streams outputs + ready/complete to the collector. `StartRelay.Close` tears
+  down the servers, the VM, and the per-build overlay.
+- **Firewall**: the NAT vEthernet is in the Public profile with inbound blocked,
+  so `EnsureNetwork` opens a scoped inbound rule for the config + collector ports
+  (`8299`/`8390`) restricted to the host IP and NAT subnet; `TeardownNetwork`
+  removes it. Without it the relay's config fetch and streaming are dropped.
+- Signal posts (ready/complete) are bounded by a 15s timeout so a stuck signal
+  never hangs the relay (artifact/output streaming keep no timeout for GB bodies).
+- Verified: `StartRelay` brings a real relay VM to ready in ~6s, repeatably
+  (`driver/hyperv` live tests, gated on `WARDEN_HYPERV_LIVE=1`).
 
-# Network setup (identical to QEMU variant)
-# ... (same as existing init)
+- qemu/vz are unaffected: their `/shared` seed/env path still delivers config and
+  their relay keeps the local sink (the sink vars stay unset).
 
-# Signal readiness to host via COM1
-echo "ready" > /dev/ttyS0
+`detectMode` needs no change: the Hyper-V `init` passes an explicit `-mode vm`,
+so its `/shared/relay.env` auto-detect branch is never exercised on this driver,
+and that branch stays correct for qemu/vz (which do exec `/shared/relay` with no
+mode flag and do have a `/shared` 9p mount).
 
-# Redirect signal writes to both file and COM port
-export SIGNAL_DIR=/shared/signal
-mkdir -p "$SIGNAL_DIR"
-
-exec /shared/relay
-```
-
-The relay heartbeat module already writes to `SIGNAL_DIR`. To also write to the COM port, we can add a simple background forwarder in the init script that tails the signal files and echoes to `/dev/ttyS0`, or modify `cmd/relay/heartbeat.go` to support a `SIGNAL_DEVICE` environment variable.
-
-### Recommended relay change (minimal)
-
-```go
-// cmd/relay/heartbeat.go — add SIGNAL_DEVICE support
-
-var signalDevice string
-
-func SetSignalDevice(dev string) { signalDevice = dev }
-
-func RunHeartbeat() {
-    if signalDir == "" && signalDevice == "" {
-        return
-    }
-    // ... existing file-based logic ...
-
-    // Additionally write to serial device if configured
-    if signalDevice != "" {
-        devFile, err := os.OpenFile(signalDevice, os.O_WRONLY, 0)
-        if err == nil {
-            defer devFile.Close()
-            // Write heartbeat lines to device
-            go func() {
-                ticker := time.NewTicker(2 * time.Second)
-                for range ticker.C {
-                    ts := lastActivity.Load()
-                    if ts > 0 && time.Since(time.Unix(ts, 0)) < 5*time.Second {
-                        fmt.Fprintf(devFile, "heartbeat:%d\n", ts)
-                    }
-                }
-            }()
-        }
-    }
-}
-
-func WriteExitCode(code int) {
-    // ... existing file-based logic ...
-    if signalDevice != "" {
-        if f, err := os.OpenFile(signalDevice, os.O_WRONLY, 0); err == nil {
-            fmt.Fprintf(f, "exit:%d\n", code)
-            f.Close()
-        }
-    }
-}
-```
-
-This keeps backward compatibility with QEMU/VZ (file-based signals via 9p) while enabling the named pipe approach for Hyper-V.
+No `SIGNAL_DEVICE`/`go-winio` change is needed: ready/complete ride the collector
+HTTP channel, and `init` handles the COM1 readiness echo.

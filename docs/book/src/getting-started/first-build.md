@@ -39,11 +39,13 @@ After the build completes (same structure for all drivers):
 
 ```
 warden-output/
-├── ledger                  # Cryptographic ledger (or ledger.zst if --compress)
-├── ca.cert.pem             # Ephemeral CA cert
+├── ledger.zst              # Cryptographic ledger (ledger if --no-compress)
+├── ca.cert.pem.zst         # Ephemeral CA cert (ca.cert.pem if --no-compress)
+├── build-output.log        # Captured build console output
 ├── artifacts/              # Build outputs posted via warden-io post
 │   └── myapp.whl
-├── payloads/               # Content-addressed artifact storage
+├── captures/               # Captured payloads (only with --capture)
+├── payloads/               # Content-addressed payload storage
 ├── relay.log               # Relay event log (container driver only)
 ├── Dockerfile.submitted    # Original Dockerfile (container driver only)
 ├── Dockerfile.actual       # Rewritten Dockerfile (container driver only)

@@ -29,10 +29,17 @@ capture = ""               # Payload capture mode:
                            #   "headers" = save request/response headers
                            #   "bodies" = save request/response bodies
                            #   "all" = save both
+tmpdir = ""                # Where each build's private work dir is created
+                           #   ("" = the OS temp dir; --tmpdir wins)
 
 [relay]
 upstream_ca_certs = []     # Paths to additional CA cert bundles for upstream
 system_ca_bundle = true    # Include host system CA bundle in relay trust store
+
+[vm]                       # Defaults for the VM-driver flags; a flag always wins
+cpus = 0                   # Build VM vCPUs (0 = per-driver default)
+memory_mb = 0              # Build VM memory in MiB (0 = per-driver default)
+network = ""               # hyperv: durable build switch name
 
 [output]
 color = "auto"             # Color mode: auto, always, never
@@ -44,8 +51,9 @@ verbose = false            # Verbose output (shows container runtime commands)
 | Variable | Overrides | Description |
 |----------|-----------|-------------|
 | `WARDEN_DRIVER` | `runtime.driver` | Override driver selection |
-| `WARDEN_IMAGE` | — | Base image path for VM drivers |
+| `WARDEN_IMAGE` | `runtime.relay_image` | Relay image override |
 | `WARDEN_CTR_CLI` | `runtime.cli` | Container runtime binary name |
+| `WARDEN_UPSTREAM_CA_CERTS` | `relay.upstream_ca_certs` | Extra upstream CA files/dirs (colon-separated) |
 | `NO_COLOR` | `output.color` | Disable colored output (any value) |
 | `WARDEN_VERBOSE` | `output.verbose` | Enable verbose mode (any value) |
 
@@ -53,16 +61,23 @@ verbose = false            # Verbose output (shows container runtime commands)
 
 | Flag | Scope | Description |
 |------|-------|-------------|
-| `--driver` | Global | Build driver |
+| `--driver` | Global | Orchestration driver (container, qemu, vz, hyperv) |
 | `--runtime` | Global | Container runtime |
 | `--color` | Global | Color mode |
 | `-v, --verbose` | Global | Verbose output |
 | `-o, --output` | build/shell | Output directory |
-| `--image` | build | Base disk image for VM drivers |
-| `--script` | build | Build script (VM drivers) |
-| `--timeout` | build | Maximum build duration |
 | `--capture` | build/shell | Payload capture mode |
 | `--no-compress` | build/shell | Disable compression |
+| `--timeout` | build/shell | Maximum build duration (all drivers) |
+| `--image` | build/shell | Base disk image for the build VM (VM drivers) |
+| `--script` | build/shell | Build script (VM drivers) |
+| `--guest-os` | build/shell | Guest OS: linux (default) or windows (qemu, hyperv) |
+| `--cpus` | build/shell | Build VM vCPUs (VM drivers) |
+| `--memory` | build/shell | Build VM memory in MiB (VM drivers) |
+| `--network` | build/shell | Durable switch to reuse (hyperv) |
+| `--keep-vms` | build/shell | Leave VMs and work dir for inspection (VM drivers) |
+| `--tmpdir` | build/shell | Directory for each build's private work dir (default: OS temp dir) |
+| `-q, --quiet` | build | Do not echo the guest build console |
 
 ## Runtime Autodetection
 
@@ -75,6 +90,7 @@ When `driver` is empty (the default), the **container** driver is used. Use `--d
 - `container` — Unprivileged container with iptables isolation (default)
 - `qemu` — Two-VM topology, cross-platform, requires `qemu-system-*`
 - `vz` — macOS/arm64 only, uses Virtualization.framework
+- `hyperv` — Windows, two-VM topology on Hyper-V with a host-only NAT switch
 
 ## Relay Image
 

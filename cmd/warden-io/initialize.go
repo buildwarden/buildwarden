@@ -1,13 +1,13 @@
 package main
 
 import (
+	"bytes"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"time"
 )
@@ -28,7 +28,7 @@ func runInitialize(args []string) int {
 		selfIP = os.Getenv("WARDEN_IP")
 	}
 	if script == "" {
-		script = "build.sh"
+		script = defaultScriptName()
 	}
 	_ = selfIP
 
@@ -56,10 +56,14 @@ func runInitialize(args []string) int {
 	// Step 4: Set environment variables for tools that need explicit CA paths
 	setCAEnvironment()
 
-	// Step 5: Fetch build script
+	// Step 5: Fetch build script from the canonical /build-script endpoint. The
+	// local filename (and therefore the interpreter picked by scriptCommand)
+	// still comes from the platform default or --script; only the source is
+	// standardized, so the guest no longer needs to know where the script
+	// physically lives (shared context vs. streamed from the collector).
 	logStep("fetching build script")
-	scriptPath := "/tmp/build.sh"
-	if err := fetchFile(script, scriptPath); err != nil {
+	scriptPath := scriptDestPath(script)
+	if err := fetchBuildScript(scriptPath); err != nil {
 		fmt.Fprintf(os.Stderr, "warden-io: fetch script: %s\n", err)
 		return 1
 	}
@@ -67,7 +71,7 @@ func runInitialize(args []string) int {
 
 	// Step 6: Run build script, report exit code to relay
 	logStep("running " + script)
-	code := execScript(scriptPath)
+	code := execScript(scriptPath, gateway)
 	reportComplete(code)
 	return code
 }
@@ -92,6 +96,35 @@ func waitForRelay(gateway string) error {
 		time.Sleep(500 * time.Millisecond)
 	}
 	return fmt.Errorf("relay did not become healthy within 60s")
+}
+
+// fetchBuildScript downloads the build script from the relay's canonical
+// build-script endpoint and writes it to dest. Unlike the generic context fetch
+// (http://cwd/<file>), this is a well-known resource the relay resolves itself
+// (from the shared context, or on a diskless relay by streaming from the
+// collector), so the guest never needs to know where the script physically
+// lives.
+func fetchBuildScript(dest string) error {
+	resp, err := http.Get("http://artifacts/build-script")
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return fmt.Errorf("HTTP %d", resp.StatusCode)
+	}
+	if dir := filepath.Dir(dest); dir != "." && dir != "" {
+		if err := os.MkdirAll(dir, 0755); err != nil {
+			return err
+		}
+	}
+	f, err := os.Create(dest)
+	if err != nil {
+		return err
+	}
+	defer f.Close()
+	_, err = io.Copy(f, resp.Body)
+	return err
 }
 
 func fetchAndInstallCA() error {
@@ -127,72 +160,58 @@ func setCAEnvironment() {
 	os.Setenv("CURL_CA_BUNDLE", bundlePath)
 }
 
-func findCABundle() string {
-	if runtime.GOOS == "darwin" {
-		return "/etc/ssl/cert.pem"
-	}
-	for _, path := range []string{
-		"/etc/ssl/certs/ca-certificates.crt",
-		"/etc/pki/tls/certs/ca-bundle.crt",
-		"/etc/ssl/cert.pem",
-	} {
-		if _, err := os.Stat(path); err == nil {
-			return path
-		}
-	}
-	return ""
+// scriptDestPath returns where the fetched build script is written on the
+// guest. It preserves the script's base name (and thus its extension, which
+// scriptCommand uses to pick an interpreter) under the OS temp directory.
+func scriptDestPath(script string) string {
+	return filepath.Join(os.TempDir(), filepath.Base(script))
 }
 
-func execScript(path string) int {
-	shell := "/bin/sh"
-	if _, err := os.Stat("/bin/bash"); err == nil {
-		shell = "/bin/bash"
-	}
-
-	cmd := exec.Command(shell, path)
+func execScript(path, gateway string) int {
+	cmd := scriptCommand(path)
 	cmd.Stdin = os.Stdin
-	cmd.Stdout = os.Stdout
-	cmd.Stderr = os.Stderr
 
-	// Ensure warden-io is available in PATH for the build script
-	env := os.Environ()
-	if self, err := os.Executable(); err == nil {
-		selfDir := filepath.Dir(self)
-		for i, e := range env {
-			if strings.HasPrefix(e, "PATH=") {
-				env[i] = "PATH=" + selfDir + ":" + e[5:]
-				break
-			}
-		}
-	}
-	cmd.Env = env
+	// Capture build output while echoing it to the local console (serial), and
+	// STREAM it to the collector as it is produced rather than buffering the
+	// whole log in memory. The build's stdout/stderr fan out to os.Stdout and an
+	// io.Pipe; a reader goroutine (below) POSTs each chunk to /v1/output, so a
+	// chatty build never costs more than one ~32KB chunk of RAM. Chunk boundaries
+	// don't matter: the collector appends raw bytes, so build-output.log is
+	// byte-identical regardless of how the stream is split.
+	pr, pw := io.Pipe()
+	w := io.MultiWriter(os.Stdout, pw)
+	cmd.Stdout = w
+	cmd.Stderr = w
+
+	// Ensure warden-io is on PATH for the build script (e.g. `warden-io post`).
+	cmd.Env = buildScriptEnv()
 
 	if err := cmd.Start(); err != nil {
 		fmt.Fprintf(os.Stderr, "warden-io: exec: %s\n", err)
 		return 1
 	}
 
-	// Send heartbeats while build runs
-	done := make(chan struct{})
+	// Stream build output to the collector as it is produced; see
+	// streamBuildOutput for the back-pressure and dead-link behaviour.
+	streamDone := make(chan struct{})
 	go func() {
-		client := &http.Client{Timeout: 2 * time.Second}
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-done:
-				return
-			case <-ticker.C:
-				resp, err := client.Get("http://artifacts/heartbeat")
-				if err == nil {
-					resp.Body.Close()
-				}
-			}
-		}
+		defer close(streamDone)
+		streamBuildOutput(pr, gateway)
 	}()
+
+	// Send heartbeats while the build runs.
+	done := make(chan struct{})
+	go heartbeat(done)
 
 	err := cmd.Wait()
 	close(done)
+
+	// cmd.Wait has copied all stdout/stderr into the pipe; close the writer so
+	// the streamer sees EOF, then wait for it to deliver the final chunk before
+	// returning. The caller reports completion right after, which triggers relay
+	// teardown, so the tail must already be on its way.
+	_ = pw.Close()
+	<-streamDone
 
 	if err != nil {
 		if exitErr, ok := err.(*exec.ExitError); ok {
@@ -202,6 +221,106 @@ func execScript(path string) int {
 		return 1
 	}
 	return 0
+}
+
+// buildScriptEnv returns the build script's environment with warden-io's own
+// directory prepended to PATH, so the script can call `warden-io post` etc. The
+// PATH key is matched case-INSENSITIVELY (Windows exposes it as "Path=") and
+// joined with the OS path-list separator (';' on Windows, ':' elsewhere); a
+// hardcoded ":" + "PATH=" would silently no-op on Windows. A PATH is appended
+// if none exists, and the environment is left untouched if the executable path
+// cannot be resolved.
+func buildScriptEnv() []string {
+	env := os.Environ()
+	self, err := os.Executable()
+	if err != nil {
+		return env
+	}
+	selfDir := filepath.Dir(self)
+	sep := string(os.PathListSeparator)
+	for i, e := range env {
+		if len(e) >= 5 && strings.EqualFold(e[:5], "PATH=") {
+			env[i] = e[:5] + selfDir + sep + e[5:]
+			return env
+		}
+	}
+	return append(env, "PATH="+selfDir)
+}
+
+// streamBuildOutput reads build output from pr and POSTs it to the collector in
+// chunks until EOF. Reading pr keeps the build's stdout/stderr flowing: io.Pipe
+// is unbuffered, so the build blocks only for as long as one chunk POST takes
+// against the local relay link. If that link fails mid-build the reader keeps
+// draining (and discarding) so the build never hangs on a dead relay; the tail
+// is then only in the guest console, which is logged.
+func streamBuildOutput(pr *io.PipeReader, gateway string) {
+	const disabledMsg = "warden-io: output streaming disabled after a " +
+		"relay-link error; remaining build output stays in the " +
+		"guest console only"
+	client := &http.Client{Timeout: 30 * time.Second}
+	buf := make([]byte, 32*1024)
+	deliver := gateway != ""
+	for {
+		n, rerr := pr.Read(buf)
+		if n > 0 && deliver {
+			if !postBuildOutputChunk(client, gateway, buf[:n]) {
+				deliver = false
+				fmt.Fprintln(os.Stderr, disabledMsg)
+			}
+		}
+		if rerr != nil {
+			return
+		}
+	}
+}
+
+// heartbeat pings the relay every 2s until done is closed, so the relay knows
+// the build is still alive.
+func heartbeat(done <-chan struct{}) {
+	client := &http.Client{Timeout: 2 * time.Second}
+	ticker := time.NewTicker(2 * time.Second)
+	defer ticker.Stop()
+	for {
+		select {
+		case <-done:
+			return
+		case <-ticker.C:
+			resp, err := client.Get("http://artifacts/heartbeat")
+			if err == nil {
+				resp.Body.Close()
+			}
+		}
+	}
+}
+
+// postBuildOutputChunk streams one chunk of build output to the relay's
+// control-plane /v1/output endpoint (gateway:8300), which forwards it to the
+// collector's build-output.log. Returns false on failure so the caller can stop
+// delivering (and just drain) rather than stalling the build on a dead link.
+// Best-effort by design: a dropped chunk weakens the convenience log but never
+// fails the build.
+func postBuildOutputChunk(client *http.Client, gateway string, data []byte) bool {
+	if gateway == "" || len(data) == 0 {
+		return false
+	}
+	url := fmt.Sprintf("http://%s:8300/v1/output", gateway)
+	req, err := http.NewRequest(http.MethodPost, url, bytes.NewReader(data))
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warden-io: post build output: %s\n", err)
+		return false
+	}
+	req.Header.Set("Content-Type", "text/plain")
+	resp, err := client.Do(req)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "warden-io: post build output: %s\n", err)
+		return false
+	}
+	defer resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		fmt.Fprintf(os.Stderr, "warden-io: post build output: HTTP %d\n", resp.StatusCode)
+		return false
+	}
+	return true
 }
 
 func logStep(msg string) {

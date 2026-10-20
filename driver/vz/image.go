@@ -4,11 +4,15 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
+	"io/fs"
 	"os"
 	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/buildwarden/buildwarden/driver"
 )
 
 // plistHeader is the standard Apple plist XML header.
@@ -56,24 +60,10 @@ func isValidImageDir(dir string) bool {
 	return true
 }
 
-// LatestIPSW returns the path to the disk image of a prepared macOS image.
-// If no prepared image exists, it downloads and restores the latest from Apple.
-func (c *ImageCache) LatestIPSW() (string, error) {
-	dir, err := c.ImageDir()
-	if err != nil {
-		return "", err
-	}
-	if dir != "" {
-		return filepath.Join(dir, "disk.img"), nil
-	}
-
-	// No cached image — restore from Apple's latest IPSW
-	return c.RestoreIPSW("")
-}
-
 // RestoreIPSW downloads an IPSW file from the given URL, restores it to a
 // bootable disk image, and prepares it for headless use (suppresses Setup
-// Assistant, creates the warden user).
+// Assistant, creates the warden user). Readying the image needs root, so
+// that is checked before the download rather than after it.
 func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 	if err := os.MkdirAll(c.CacheDir, 0755); err != nil {
 		return "", fmt.Errorf("creating cache dir: %w", err)
@@ -105,25 +95,17 @@ func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 	if isValidImageDir(imgDir) {
 		return diskPath, nil
 	}
+	if err := RequireRoot(); err != nil {
+		return "", err
+	}
+	defer giveBackToSudoUser(filepath.Dir(c.CacheDir))
 
-	// Download IPSW if not already cached
-	ipswLocal := filepath.Join(c.CacheDir, "ipsw-"+urlHash+".ipsw")
-	if _, err := os.Stat(ipswLocal); err != nil {
-		// Check for a pre-existing ipsw-latest.ipsw (manual or previous download)
-		latestPath := filepath.Join(c.CacheDir, "ipsw-latest.ipsw")
-		if info, errLat := os.Stat(latestPath); errLat == nil && info.Size() > 0 {
-			ipswLocal = latestPath
-		} else {
-			fmt.Fprintf(os.Stderr, "Downloading IPSW...\n")
-			cmd := exec.Command("curl", "-L", "-o", ipswLocal,
-			"--progress-bar", ipswURL)
-			cmd.Stdout = os.Stderr
-			cmd.Stderr = os.Stderr
-			if err := cmd.Run(); err != nil {
-				os.Remove(ipswLocal)
-				return "", fmt.Errorf("downloading IPSW: %w", err)
-			}
-		}
+	// Download IPSW if not already cached. The download lands in a .part
+	// file renamed on success, so an interrupted one is never mistaken for
+	// a complete IPSW.
+	ipswLocal, err := c.ensureIPSWDownloaded(ipswURL, urlHash)
+	if err != nil {
+		return "", err
 	}
 
 	// Restore IPSW to disk image (64GB disk).
@@ -132,7 +114,7 @@ func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 	if diskInfo == nil || diskInfo.Size() == 0 {
 		fmt.Fprintf(os.Stderr, "Restoring macOS from IPSW (this takes 10-20 minutes)...\n")
 		if err := restoreIPSW(ipswLocal, diskPath, 64,
-		auxPath, hwModelPath, machineIDPath); err != nil {
+			auxPath, hwModelPath, machineIDPath); err != nil {
 			return "", fmt.Errorf("restoring IPSW: %w", err)
 		}
 	} else {
@@ -159,6 +141,36 @@ func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 
 	fmt.Fprintf(os.Stderr, "macOS image ready at %s\n", imgDir)
 	return diskPath, nil
+}
+
+// ensureIPSWDownloaded makes sure the IPSW identified by urlHash is present
+// locally and returns its path. An already-cached file is reused as-is; a
+// pre-existing ipsw-latest.ipsw (manual or previous download) is preferred
+// over downloading again; otherwise it is fetched into a .part file renamed
+// on success, so an interrupted download is never mistaken for a complete one.
+func (c *ImageCache) ensureIPSWDownloaded(ipswURL, urlHash string) (string, error) {
+	ipswLocal := filepath.Join(c.CacheDir, "ipsw-"+urlHash+".ipsw")
+	if _, err := os.Stat(ipswLocal); err == nil {
+		return ipswLocal, nil
+	}
+	// Check for a pre-existing ipsw-latest.ipsw (manual or previous download)
+	latestPath := filepath.Join(c.CacheDir, "ipsw-latest.ipsw")
+	if info, errLat := os.Stat(latestPath); errLat == nil && info.Size() > 0 {
+		return latestPath, nil
+	}
+	fmt.Fprintf(os.Stderr, "Downloading IPSW...\n")
+	part := ipswLocal + ".part"
+	cmd := exec.Command("curl", "-fL", "-C", "-", "-o", part,
+		"--progress-bar", ipswURL)
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	if err := cmd.Run(); err != nil {
+		return "", fmt.Errorf("downloading IPSW (rerun to resume): %w", err)
+	}
+	if err := os.Rename(part, ipswLocal); err != nil {
+		return "", err
+	}
+	return ipswLocal, nil
 }
 
 // PrepareHeadlessImage installs the warden build agent into a macOS disk image.
@@ -189,32 +201,14 @@ func installWardenIO(mountPoint string) error {
 	binDir := filepath.Join(mountPoint, "usr", "local", "bin")
 	agentBin := filepath.Join(binDir, "warden-io")
 
-	// Check for pre-built binary next to the warden executable
-	if exe, err := os.Executable(); err == nil {
-		candidate := filepath.Join(filepath.Dir(exe),
-			"warden-io-darwin-arm64")
-		if _, errStat := os.Stat(candidate); errStat == nil {
-			data, err := os.ReadFile(candidate)
-			if err != nil {
-				return err
-			}
-			if err := os.WriteFile(agentBin, data, 0755); err != nil {
-				return err
-			}
-			os.Chown(agentBin, 0, 0) //nolint:errcheck
-			return nil
-		}
+	built, err := driver.GuestBinary("warden-io", "darwin", "arm64")
+	if err != nil {
+		return err
 	}
-
-	// Fall back to building from source
-	cmd := exec.Command("go", "build", "-o", agentBin, "./cmd/warden-io")
-	cmd.Env = append(os.Environ(),
-		"GOOS=darwin", "GOARCH=arm64", "CGO_ENABLED=0")
-	cmd.Dir = findModuleRoot()
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
-		return fmt.Errorf("cross-compiling warden-io: %w", err)
+	if err := driver.CopyFile(built, agentBin); err != nil {
+		return err
 	}
+	_ = os.Chmod(agentBin, 0o755)
 	os.Chown(agentBin, 0, 0) //nolint:errcheck
 	return nil
 }
@@ -227,6 +221,10 @@ func ReprepareImage(imgDir string) error {
 	if _, err := os.Stat(diskPath); err != nil {
 		return fmt.Errorf("disk image not found: %w", err)
 	}
+	if err := RequireRoot(); err != nil {
+		return err
+	}
+	defer giveBackToSudoUser(imgDir)
 
 	if err := PrepareHeadlessImage(diskPath); err != nil {
 		return err
@@ -237,6 +235,39 @@ func ReprepareImage(imgDir string) error {
 		[]byte("ok\n"), 0644)
 
 	return nil
+}
+
+// RequireRoot fails fast when readying a macOS image cannot work: it mounts
+// the disk with ownership enabled and installs root-owned LaunchDaemons, so
+// it needs root, and finding that out after a 25 GB download is too late.
+func RequireRoot() error {
+	if os.Geteuid() == 0 {
+		return nil
+	}
+	return driver.Fixable(PrepareCommand,
+		"preparing a macOS base image needs root (it installs "+
+			"root-owned system files into the image)")
+}
+
+// giveBackToSudoUser hands what a sudo'd prepare created under dir back to
+// the user who ran sudo, so their unprivileged builds can read and clone it
+// (aux-storage is mode 0600). A no-op unless running as root via sudo.
+func giveBackToSudoUser(dir string) {
+	u := sudoUser()
+	if u == nil {
+		return
+	}
+	uid, err1 := strconv.Atoi(u.Uid)
+	gid, err2 := strconv.Atoi(u.Gid)
+	if err1 != nil || err2 != nil {
+		return
+	}
+	_ = filepath.WalkDir(dir, func(p string, _ fs.DirEntry, err error) error {
+		if err == nil {
+			_ = os.Lchown(p, uid, gid)
+		}
+		return nil
+	})
 }
 
 // suppressSetupAssistant writes the markers that tell macOS to skip the
