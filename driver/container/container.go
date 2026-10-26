@@ -136,7 +136,7 @@ func (d *Driver) StartBuild(
 			_ = execCmd.Process.Kill()
 		}
 		_, _ = ctrctl.ContainerStop(nil, b.buildContainer)
-		<-execDone
+		<-execDone //nolint:errcheck // cancelled: the exec error is moot
 		return nil, ctx.Err()
 	}
 	if err != nil {

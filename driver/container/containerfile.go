@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"strings"
 
@@ -121,7 +122,9 @@ func rewriteCopy(
 		if err != nil {
 			return "", err
 		}
-		srcClean := filepath.Clean(src)
+		// Context paths are slash-separated (they are fetch paths and paths
+		// in the Linux build container), whatever the host's separator.
+		srcClean := path.Clean(filepath.ToSlash(src))
 		srcDir := isDir(filepath.Join(contextDir, src))
 		anyDir = anyDir || srcDir
 		for _, f := range expanded {
@@ -244,7 +247,7 @@ func buildFetchRunPairs(files []fetchFile, dest string) string {
 		outPath := d + f.destPath
 		fmt.Fprintf(&sb,
 			" && \\\n    mkdir -p \"%s\" && warden-io fetch \"%s\" -o \"%s\"",
-			filepath.Dir(outPath), f.contextPath, outPath)
+			path.Dir(outPath), f.contextPath, outPath)
 	}
 	return sb.String()
 }
@@ -260,7 +263,7 @@ func expandContextPath(
 	if err == nil && info.IsDir() {
 		var files []string
 		err = filepath.Walk(fullPattern, func(
-			path string, fi os.FileInfo, walkErr error,
+			p string, fi os.FileInfo, walkErr error,
 		) error {
 			if walkErr != nil {
 				return walkErr
@@ -271,8 +274,8 @@ func expandContextPath(
 				}
 				return nil
 			}
-			rel, _ := filepath.Rel(contextDir, path)
-			files = append(files, rel)
+			rel, _ := filepath.Rel(contextDir, p)
+			files = append(files, filepath.ToSlash(rel))
 			return nil
 		})
 		return files, err
@@ -289,6 +292,7 @@ func expandContextPath(
 			continue
 		}
 		rel, _ := filepath.Rel(contextDir, m)
+		rel = filepath.ToSlash(rel)
 		if strings.HasPrefix(rel, ".git/") {
 			continue
 		}

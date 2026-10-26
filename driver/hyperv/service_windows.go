@@ -109,10 +109,10 @@ func (svcHandler) Execute(
 			case svc.Stop, svc.Shutdown:
 				s <- svc.Status{State: svc.StopPending}
 				cancel()
-				<-errc
+				<-errc //nolint:errcheck // stopping on request is not an error
 				return false, 0
 			}
-		case <-errc:
+		case <-errc: //nolint:errcheck // reported as the service exit code
 			// Server exited on its own (listen error): report a service error.
 			return false, 1
 		}
