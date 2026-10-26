@@ -50,7 +50,7 @@ func (f *prepFake) GuestKVP(context.Context, string) (map[string]string, error) 
 
 func fakeSeed(workDir string) (string, string, error) {
 	dir := filepath.Join(workDir, "prepare-seed")
-	if err := stagePrepareSeedDir(dir, "amd64"); err != nil {
+	if err := winguest.StagePrepareSeed(dir, "amd64"); err != nil {
 		return "", "", err
 	}
 	return filepath.Join(workDir, "prepare-seed.iso"), dir, nil
@@ -83,17 +83,16 @@ func doneSteps(reportedAt string) []prepStep {
 		{state: "Running", kv: map[string]string{winguest.KVPState: "running:services"}},
 		{state: "Running", kv: map[string]string{winguest.KVPState: "running:reboot"}},
 		{state: "Running", kv: map[string]string{
-			winguest.KVPState:          winguest.StateDone,
-			winguest.KVPGraceMinutes:   "14400",
-			winguest.KVPLicenseStatus:  "2",
-			winguest.KVPLicenseChannel: evalChannel,
-			winguest.KVPReportedAt:     reportedAt,
+			winguest.KVPState:         winguest.StateDone,
+			winguest.KVPGraceMinutes:  "14400",
+			winguest.KVPLicenseStatus: "2",
+			winguest.KVPLicenseChannel: "Windows(R) Operating System, " +
+				"TIMEBASED_EVAL channel",
+			winguest.KVPReportedAt: reportedAt,
 		}},
 		{state: "Off"},
 	}
 }
-
-const evalChannel = "Windows(R) Operating System, TIMEBASED_EVAL channel"
 
 var fastPrepare = PrepareOptions{Poll: time.Millisecond, Timeout: 5 * time.Second}
 
@@ -243,21 +242,6 @@ func TestPrepareBaseNeedsBase(t *testing.T) {
 	_, err := prepareBase(context.Background(), &prepFake{}, fakeSeed, fastPrepare)
 	if err == nil || !strings.Contains(err.Error(), "no generalized Hyper-V base image") {
 		t.Fatalf("err = %v", err)
-	}
-}
-
-func TestGraceEndOnlyForEval(t *testing.T) {
-	r := map[string]string{
-		winguest.KVPGraceMinutes:   "60",
-		winguest.KVPReportedAt:     "2026-10-20T00:00:00Z",
-		winguest.KVPLicenseChannel: "Windows(R) Operating System, VOLUME_KMS channel",
-	}
-	if got := graceEnd(r); got != "" {
-		t.Errorf("non-eval grace end = %q, want empty", got)
-	}
-	r[winguest.KVPLicenseChannel] = evalChannel
-	if got := graceEnd(r); got != "2026-10-20T01:00:00Z" {
-		t.Errorf("eval grace end = %q", got)
 	}
 }
 

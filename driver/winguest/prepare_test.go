@@ -95,3 +95,25 @@ func TestPrepareScript(t *testing.T) {
 		t.Error("running state prefix out of sync with the script")
 	}
 }
+
+func TestGeneralizeCommand(t *testing.T) {
+	const prefix = "powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand "
+	cmd := GeneralizeCommand("warden")
+	if !strings.HasPrefix(cmd, prefix) || len(cmd) >= FirstLogonCommandLimit {
+		t.Fatalf("bad command (%d chars): %q", len(cmd), cmd)
+	}
+	script := decodeEncoded(t, strings.TrimPrefix(cmd, prefix))
+	for _, want := range []string{
+		`Remove-Item "$p\unattend.xml","$p\Autounattend.xml"`,
+		"net user Administrator /active:yes",
+		"net user 'warden' /active:no",
+		"sysprep.exe\" /generalize /oobe /shutdown /quiet",
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("generalize script missing %q:\n%s", want, script)
+		}
+	}
+	if strings.Contains(script, "SkipRearm") {
+		t.Error("generalize must not skip the rearm (the grace clock would carry over)")
+	}
+}

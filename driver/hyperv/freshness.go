@@ -3,81 +3,53 @@ package hyperv
 import (
 	"fmt"
 	"io"
+	"path/filepath"
 	"time"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/winguest"
 )
 
-// Prepared bases built from an evaluation image run on the guest's wall-clock
-// grace period (10 days, never activated: prepare has no network). A base is
-// re-prepared in the background once it is refreshAfter old, which leaves a
-// margin for long builds, and a build refuses to start with less than
-// minGrace left. See docs/design/hyperv-windows-prepare.md.
-const (
-	defaultRefreshAfter = 7 * 24 * time.Hour
-	defaultMinGrace     = 24 * time.Hour
-)
+const prepareFix = "warden image prepare --driver hyperv"
 
-// checkPreparedFreshness decides whether a build may use pb at now and
-// whether a background refresh should start. Bases with no grace end (non-
-// evaluation editions) only age into a refresh.
-func checkPreparedFreshness(
-	pb PreparedBase, now time.Time, refreshAfter, minGrace time.Duration,
-) (refresh bool, err error) {
-	if refreshAfter <= 0 {
-		refreshAfter = defaultRefreshAfter
-	}
-	if minGrace <= 0 {
-		minGrace = defaultMinGrace
-	}
-	if pb.GraceEnd != "" {
-		end, perr := time.Parse(time.RFC3339, pb.GraceEnd)
-		if perr == nil && end.Sub(now) < minGrace {
-			return true, driver.Fixable("warden image prepare --driver hyperv",
-				"the prepared Hyper-V base's evaluation grace ends %s (%s left, "+
-					"less than the %s minimum); prepare a fresh base first",
-				end.Format(time.RFC3339), roundAge(end.Sub(now)),
-				roundAge(minGrace))
-		}
-	}
-	at, perr := time.Parse(time.RFC3339, pb.PreparedAt)
-	if perr != nil {
-		return true, nil
-	}
-	return now.Sub(at) >= refreshAfter, nil
+func (pb PreparedBase) freshness() winguest.Freshness {
+	return winguest.Freshness{PreparedAt: pb.PreparedAt, GraceEnd: pb.GraceEnd}
 }
 
-// ensureFreshBase runs the freshness check for the active prepared base and,
-// when it is due, starts a background refresh; the build continues on the
-// current base either way.
+// ensureFreshBase runs the freshness rules (winguest.CheckFreshness) for the
+// active prepared base and, when a refresh is due, starts one in the
+// background; the build continues on the current base either way.
 func ensureFreshBase(req *driver.BuildRequest, progress io.Writer) error {
 	pb, _, ok := activePrepared()
 	if !ok {
 		return nil
 	}
-	refresh, err := checkPreparedFreshness(
-		pb, time.Now(), req.ImageRefreshAfter, req.ImageMinGrace)
+	now := time.Now()
+	refresh, err := winguest.CheckFreshness(
+		pb.freshness(), now, req.ImageRefreshAfter, req.ImageMinGrace, prepareFix)
 	if err != nil || !refresh {
 		return err
 	}
-	if log, started := startBackgroundRefresh(); started {
-		fmt.Fprintf(progress, "[warden] prepared base is %s old; refreshing it in "+
-			"the background (log: %s)\n", roundAge(age(pb)), log)
+	if !prepareRunning() {
+		logPath := filepath.Join(hypervCacheDir(), "prepare.log")
+		if err := driver.StartDetached(logPath,
+			"image", "prepare", "--driver", "hyperv"); err == nil {
+			fmt.Fprintf(progress, "[warden] prepared base is %s old; refreshing it "+
+				"in the background (log: %s)\n",
+				winguest.RoundAge(pb.freshness().Age(now)), logPath)
+		}
 	}
 	return nil
 }
 
-func age(pb PreparedBase) time.Duration {
-	at, err := time.Parse(time.RFC3339, pb.PreparedAt)
+// prepareRunning reports whether a prepare holds the prepare lock.
+func prepareRunning() bool {
+	unlock, free, err := driver.TryHostLock(prepareLockName)
 	if err != nil {
-		return 0
+		return false
 	}
-	return time.Since(at)
-}
-
-func roundAge(d time.Duration) string {
-	if d >= 48*time.Hour {
-		return fmt.Sprintf("%.1fd", d.Hours()/24)
+	if free {
+		unlock()
 	}
-	return d.Round(time.Minute).String()
+	return !free
 }

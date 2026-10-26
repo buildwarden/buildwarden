@@ -13,7 +13,10 @@ import (
 var autounattendTemplate string
 
 // autounattendConfig parameterizes the generated Autounattend.xml used to drive
-// a fully unattended Windows install from ISO during image preparation.
+// a fully unattended Windows install from ISO: the install stage of image
+// preparation, which ends in sysprep /generalize so its result is a
+// generalized base like Microsoft's eval VHD (see
+// docs/design/hyperv-windows-prepare.md).
 //
 // The firmware gate (TPM 2.0 / Secure Boot) is cleared with LabConfig bypass
 // keys. A swtpm + Secure Boot path is a documented opt-in future feature (see
@@ -25,16 +28,14 @@ type autounattendConfig struct {
 	// Edition is the install.wim image name (e.g. "Windows 11 Pro",
 	// "Windows 11 Enterprise Evaluation").
 	Edition string
-	// AdminUser / AdminPassword is the ephemeral local admin baked into the
-	// prepared image for headless autologon. Rotated per prep run.
+	// AdminUser / AdminPassword is the ephemeral local admin the install logs
+	// on as once to generalize the image; it is disabled before sysprep (the
+	// prepare stage's OOBE uses the built-in Administrator). Rotated per run.
 	AdminUser     string
 	AdminPassword string
 	// VirtioDriveLetter is where the virtio-win driver ISO is mounted during
 	// setup (e.g. "E:").
 	VirtioDriveLetter string
-	// SeedLabel is the volume label of the per-build provisioning seed the
-	// startup task looks for (winguest.SeedLabel).
-	SeedLabel string
 }
 
 // unattendArch maps a Go arch to the unattend processorArchitecture token.
@@ -69,7 +70,7 @@ type autounattendData struct {
 	Edition       string
 	AdminUser     string
 	AdminPassword string
-	TaskCmd       string
+	GeneralizeCmd string
 	BypassKeys    []bypassEntry
 	DriverPaths   []driverPathEntry
 }
@@ -97,7 +98,7 @@ func generateAutounattend(cfg autounattendConfig) string {
 		Edition:       winguest.XMLText(cfg.Edition),
 		AdminUser:     winguest.XMLText(cfg.AdminUser),
 		AdminPassword: winguest.XMLText(cfg.AdminPassword),
-		TaskCmd:       winguest.XMLText(winguest.StartupTaskCommand(cfg.SeedLabel)),
+		GeneralizeCmd: winguest.XMLText(winguest.GeneralizeCommand(cfg.AdminUser)),
 	}
 	for i, key := range labConfigBypassKeys {
 		data.BypassKeys = append(data.BypassKeys,

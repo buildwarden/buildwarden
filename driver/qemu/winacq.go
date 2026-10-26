@@ -17,7 +17,6 @@ import (
 	"time"
 
 	"github.com/buildwarden/buildwarden/driver"
-	"github.com/buildwarden/buildwarden/driver/winguest"
 )
 
 // virtioWinStableURL is the signed virtio-win driver ISO (stable channel).
@@ -97,7 +96,6 @@ func AcquireWindowsMedia(opts WindowsPrepOptions) (*WindowsMedia, error) {
 		AdminUser:         adminUser,
 		AdminPassword:     driver.RandAlphaNum(16),
 		VirtioDriveLetter: driveLetter,
-		SeedLabel:         winguest.SeedLabel,
 	})
 	answerDir := filepath.Join(workDir, "answer")
 	if err := os.MkdirAll(answerDir, 0755); err != nil {
@@ -121,9 +119,10 @@ func AcquireWindowsMedia(opts WindowsPrepOptions) (*WindowsMedia, error) {
 }
 
 // InstallWindowsImage runs the unattended install headlessly under qemu and
-// returns the captured base image path. The Autounattend powers the VM off
-// when prep completes and -no-reboot makes qemu exit, which is how the host
-// detects completion.
+// returns the generalized base image path. The install's only first-logon
+// step generalizes the image and powers the VM off (sysprep /shutdown), which
+// makes qemu exit; that is how the host detects completion. The base is then
+// prepared by PrepareWindowsLayer before builds can use it.
 //
 // FIRST CUT (chunk 3b): device details — USB-mounted install/driver/answer
 // ISOs, virtio target disk, pflash UEFI vars, boot order, and the virtio-win
@@ -152,7 +151,10 @@ func InstallWindowsImage(m *WindowsMedia, opts WindowsPrepOptions) (string, erro
 	}
 	base := WindowsImagePath(arch)
 
-	// Fresh target disk for the install.
+	// Fresh target disk for the install. Prepared layers are overlays of the
+	// old base, so they go with it.
+	_ = os.Remove(generalizedMarker(arch))
+	discardWindowsLayers(arch)
 	_ = os.Remove(base)
 	if out, err := exec.Command(
 		"qemu-img", "create", "-f", "qcow2", base, "64G").CombinedOutput(); err != nil {
@@ -216,6 +218,11 @@ func InstallWindowsImage(m *WindowsMedia, opts WindowsPrepOptions) (string, erro
 	}
 	if err := recordPreparedWindows(base, varsFD, m); err != nil {
 		return "", fmt.Errorf("recording prepared image provenance: %w", err)
+	}
+	// The install ended in sysprep /generalize: mark the base as one the
+	// prepare stage can take through OOBE.
+	if err := os.WriteFile(generalizedMarker(arch), nil, 0o644); err != nil {
+		return "", err
 	}
 	return base, nil
 }
@@ -370,7 +377,11 @@ func windowsInstallArgs(
 		"-device", "qemu-xhci,id=xhci",
 		"-device", "usb-kbd,bus=xhci.0",
 		"-device", "usb-tablet,bus=xhci.0",
-		"-nic", "user,model=virtio-net-pci",
+		// No network: Setup bypasses OOBE's network check (BypassNRO) and
+		// NetKVM comes from the virtio-win ISO, so the install needs none,
+		// and without it the Store cannot update an app for the install
+		// user, which would make sysprep /generalize refuse to run.
+		"-nic", "none",
 		"-device", "virtio-rng-pci",
 	}
 	// Firmware: pflash code (ro) + writable vars, else read-only -bios.

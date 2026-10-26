@@ -138,7 +138,7 @@ defaults per driver (vz: macos, qemu: linux, hyperv: windows). `[source]` (or
 |---|---|---|
 | `vz` / macos | IPSW (default: latest supported) | Restores the IPSW, or refreshes the warden boot agent of an already-restored image |
 | `qemu` / linux | cloud image ref (`alpine:3.21`, `ubuntu:24.04`, `debian:bookworm`) or qcow2 | Downloads and verifies the cloud image |
-| `qemu` / windows | Windows install ISO (required) | Unattended install; skipped if already prepared unless `--force` |
+| `qemu` / windows | Windows install ISO (required the first time) | Unattended install ending in `sysprep /generalize` (skipped if already installed unless `--force`), then prepares the layer builds boot from. With no source, re-prepares |
 | `hyperv` / windows | Windows Server evaluation VHD/VHDX: URL, or a local file registered in place | Needed on first prepare (`--sha256` to pin); then prepares the layer builds boot from. With no source, re-prepares the pinned base |
 
 **Flags:**

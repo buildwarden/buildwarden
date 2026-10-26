@@ -11,6 +11,7 @@ import (
 	"runtime"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/script"
@@ -192,11 +193,12 @@ func (d *Driver) resolveBuildVMConfig(
 
 	if image == "" {
 		if isWindowsGuest(req) {
-			base, err := resolveWindowsBaseImage(cfg.Arch)
+			chain, vars, err := resolveWindowsBaseImage(cfg.Arch, req)
 			if err != nil {
 				return nil, err
 			}
-			image = base
+			image = chain[len(chain)-1]
+			cfg.BaseChain, cfg.BaseVarsFD = chain, vars
 		} else {
 			k, i, err := d.resolveBuildAssets()
 			if err != nil {
@@ -264,21 +266,65 @@ func resolveContainerfileImage(req *driver.BuildRequest) string {
 	return resolved
 }
 
-// resolveWindowsBaseImage returns the prepared Windows base image for the arch,
-// or an actionable error when `warden image prepare` has not produced one.
-func resolveWindowsBaseImage(arch string) (string, error) {
-	// Use the base image prepared by `warden image prepare --driver qemu --os
-	// windows` (parity with the Linux kernel/initrd resolution). It is overlaid
-	// below, so the cached base is never mutated.
+// resolveWindowsBaseImage returns the disk chain a Windows build boots from,
+// base first, and the UEFI vars to copy for it: the active prepared layer over
+// the generalized base, or, for a base installed before the generalizing
+// install, that base on its own. A generalized base with no prepared layer is
+// a fixable error. Using a prepared layer runs the freshness rules, which may
+// start a background refresh.
+func resolveWindowsBaseImage(
+	arch string, req *driver.BuildRequest,
+) (chain []string, vars string, err error) {
 	ga := goArchOf(arch)
 	base := WindowsImagePath(ga)
 	if _, err := os.Stat(base); err != nil {
-		return "", driver.Fixable(
+		return nil, "", driver.Fixable(
 			fmt.Sprintf("warden image prepare --driver qemu --os windows "+
 				"--arch %s --source <install ISO>, or pass --image <path>", ga),
 			"no prepared Windows base image at %s", base)
 	}
-	return base, nil
+	if _, err := os.Stat(generalizedMarker(ga)); err != nil {
+		return []string{base}, windowsVarsPath(ga), nil // installed before the split
+	}
+	l, ok := activeWindowsLayer(ga)
+	if !ok {
+		return nil, "", driver.Fixable(prepareFix(ga),
+			"the Windows base for %s has not been prepared for builds yet", ga)
+	}
+	for _, p := range []string{l.Path, l.VarsFD} {
+		if _, err := os.Stat(p); err != nil {
+			return nil, "", driver.Fixable(prepareFix(ga),
+				"prepared Windows layer is incomplete (%s: %v)", p, err)
+		}
+	}
+	if err := ensureFreshWindowsLayer(l, ga, req); err != nil {
+		return nil, "", err
+	}
+	return []string{base, l.Path}, l.VarsFD, nil
+}
+
+// ensureFreshWindowsLayer applies winguest.CheckFreshness and starts a
+// detached re-prepare when one is due; the build continues on l either way.
+func ensureFreshWindowsLayer(l PreparedLayer, ga string, req *driver.BuildRequest) error {
+	now := time.Now()
+	f := winguest.Freshness{PreparedAt: l.PreparedAt, GraceEnd: l.GraceEnd}
+	refresh, err := winguest.CheckFreshness(
+		f, now, req.ImageRefreshAfter, req.ImageMinGrace, prepareFix(ga))
+	if err != nil || !refresh {
+		return err
+	}
+	unlock, free, lerr := driver.TryHostLock(prepareLockName(ga))
+	if lerr != nil || !free {
+		return nil
+	}
+	unlock()
+	logPath := filepath.Join(driver.CacheDir(), "images", "prepare-windows-"+ga+".log")
+	if err := driver.StartDetached(logPath, "image", "prepare", "--driver", "qemu",
+		"--os", "windows", "--arch", ga); err == nil {
+		fmt.Fprintf(os.Stderr, "[warden] prepared Windows layer is %s old; refreshing "+
+			"it in the background (log: %s)\n", winguest.RoundAge(f.Age(now)), logPath)
+	}
+	return nil
 }
 
 // configureWindowsBuildVM copies the writable UEFI vars and builds the Windows
@@ -289,8 +335,10 @@ func configureWindowsBuildVM(cfg *buildVMConfig, workDir string) error {
 	// bcdboot wrote during image prep; copied per-build so the base's
 	// vars store is never mutated.
 	ga := goArchOf(cfg.Arch)
-	srcVars := filepath.Join(driver.CacheDir(), "images",
-		"windows-"+ga+"-vars.fd")
+	srcVars := cfg.BaseVarsFD
+	if srcVars == "" { // an explicit --image: the installed base's vars
+		srcVars = windowsVarsPath(ga)
+	}
 	if _, err := os.Stat(srcVars); err != nil {
 		return driver.Fixable(
 			fmt.Sprintf("warden image prepare --driver qemu --os windows "+

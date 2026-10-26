@@ -199,34 +199,46 @@ func prepareVZMacos(source string) (string, error) {
 	return path, err
 }
 
-// prepareQemuWindows installs the Windows base image for the qemu driver. It
-// returns an empty path when the image was already prepared (it prints its own
-// message and no reinstall is needed unless --force is set).
+// prepareQemuWindows readies the qemu Windows image in its two stages: the
+// install from ISO (ending in sysprep /generalize) when --source asks for it
+// or there is no base yet, then the prepared layer builds boot from. With no
+// source it only re-prepares the layer, which is what the periodic refresh
+// runs.
 func prepareQemuWindows(source string) (string, error) {
-	if source == "" {
+	arch := flagImgArch
+	if arch == "" {
+		arch = runtime.GOARCH
+	}
+	_, statErr := os.Stat(qemu.WindowsImagePath(arch))
+	installed := statErr == nil
+	switch {
+	case source == "" && !installed:
 		return "", driver.Fixable(
 			"warden image prepare --driver qemu --os windows --source <path-or-url>",
 			"--driver qemu --os windows needs the Windows install ISO")
-	}
-	if existing := qemu.WindowsImagePath(flagImgArch); !flagImgForce {
-		if _, statErr := os.Stat(existing); statErr == nil {
-			fmt.Fprintf(os.Stderr, "Windows base image already prepared: %s "+
-				"(--force reinstalls it)\n", existing)
-			return "", nil
+	case source != "" && installed && !flagImgForce:
+		fmt.Fprintf(os.Stderr, "Windows base already installed: %s "+
+			"(--force reinstalls it); preparing it\n", qemu.WindowsImagePath(arch))
+	case source != "":
+		opts := qemu.WindowsPrepOptions{
+			ISO: source, VirtioISO: flagImgVirtio, Edition: flagImgEdition, Arch: arch,
+		}
+		media, err := qemu.AcquireWindowsMedia(opts)
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(os.Stderr, "Running unattended Windows install (headless)...\n")
+		if _, err := qemu.InstallWindowsImage(media, opts); err != nil {
+			return "", err
 		}
 	}
-	opts := qemu.WindowsPrepOptions{
-		ISO:       source,
-		VirtioISO: flagImgVirtio,
-		Edition:   flagImgEdition,
-		Arch:      flagImgArch,
+	layer, err := qemu.PrepareWindowsLayer(arch, flagImgKeepVMs, os.Stderr)
+	if errors.Is(err, qemu.ErrPrepareRunning) {
+		fmt.Fprintln(os.Stderr, "A qemu Windows image prepare is already running; "+
+			"its result will become the active image when it finishes.")
+		return "", nil
 	}
-	media, err := qemu.AcquireWindowsMedia(opts)
-	if err != nil {
-		return "", err
-	}
-	fmt.Fprintf(os.Stderr, "Running unattended Windows install (headless)...\n")
-	return qemu.InstallWindowsImage(media, opts)
+	return layer, err
 }
 
 // prepareHyperVWindows readies the hyperv Windows base: it fetches (or

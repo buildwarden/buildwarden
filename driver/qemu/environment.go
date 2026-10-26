@@ -34,8 +34,14 @@ func describeBuild(
 	}
 	b := driver.NewDiskChain(cache, "qemu", guestOS, goArchOf(cfg.Arch), 0)
 	if cfg.BaseImage != "" {
-		if err := b.AddLayer(ledger.LayerRoleDisk, cfg.BaseImage, "qcow2"); err != nil {
-			return nil, err
+		chain := cfg.BaseChain
+		if len(chain) == 0 {
+			chain = []string{cfg.BaseImage}
+		}
+		for _, disk := range chain {
+			if err := b.AddLayer(ledger.LayerRoleDisk, disk, "qcow2"); err != nil {
+				return nil, err
+			}
 		}
 	} else {
 		if err := b.AddLayer(ledger.LayerRoleKernel, cfg.Kernel, ""); err != nil {

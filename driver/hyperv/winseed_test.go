@@ -54,8 +54,8 @@ func TestStageSeedDir(t *testing.T) {
 
 func TestStagePrepareSeedDir(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "prepare-seed")
-	if err := stagePrepareSeedDir(dir, "amd64"); err != nil {
-		t.Fatalf("stagePrepareSeedDir: %v", err)
+	if err := winguest.StagePrepareSeed(dir, "amd64"); err != nil {
+		t.Fatalf("StagePrepareSeed: %v", err)
 	}
 	for _, name := range []string{"unattend.xml", "Autounattend.xml"} {
 		b, err := os.ReadFile(filepath.Join(dir, name))

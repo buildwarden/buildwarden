@@ -90,6 +90,7 @@ type buildVMConfig struct {
 	// base under DiskImage's overlay, the cached UEFI vars VarsFD was copied
 	// from, and the seed directory SeedISO was built from.
 	BaseImage  string
+	BaseChain  []string // Windows: generalized base then prepared layer
 	BaseVarsFD string
 	SeedDir    string
 }

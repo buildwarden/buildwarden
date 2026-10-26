@@ -79,9 +79,10 @@ network path passes through the relay.
 
 ### Requirements
 
-- `qemu-system-aarch64` (or `qemu-system-x86_64` for x86 hosts)
-- `qemu-img`
-- Works on: macOS (HVF acceleration), Linux (KVM), Windows (WHPX), any (TCG fallback)
+- `qemu-system-aarch64` and `qemu-img`
+- Works on arm64 hosts: macOS (HVF acceleration), Linux (KVM), or any host
+  with TCG emulation (slow). x86_64 guests are not supported yet: the VMs use
+  the arm64 `virt` machine type.
 
 ### Installation
 
@@ -142,6 +143,23 @@ warden build --driver qemu examples/Dockerfile.apk
 
 The Dockerfile's `FROM alpine:3.21` line resolves to the cached Alpine QCOW2
 image automatically.
+
+### Windows guests
+
+```sh
+warden image prepare --driver qemu --os windows --source Win11_Arm64.iso
+```
+
+Windows images are made in two stages. The install stage runs an unattended
+install from the ISO with no network and ends in `sysprep /generalize`, leaving
+a generalized base like Microsoft's evaluation VHDs; it is redone only with
+`--force` or a new ISO. The prepare stage then boots an overlay of that base
+once with no network through OOBE and the same tuning as Hyper-V, registers
+the `warden-run` startup task, and powers off; builds boot a throwaway child of
+that layer as SYSTEM. With no `--source`, `image prepare` only re-prepares,
+and builds start that in the background once the layer is
+`[vm] image_refresh_after` old (see the Hyper-V section for the evaluation
+grace rules, which are the same).
 
 ---
 

@@ -7,8 +7,6 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -264,7 +262,7 @@ func recordPrepared(
 	layer string, base evalManifestEntry, seedDir string,
 	report map[string]string, at time.Time,
 ) (*PreparedBase, error) {
-	inputs, err := seedInputs(seedDir)
+	inputs, err := winguest.SeedInputs(seedDir)
 	if err != nil {
 		return nil, err
 	}
@@ -291,7 +289,7 @@ func recordPrepared(
 		PreparedAt:     at.Format(time.RFC3339),
 		LicenseStatus:  report[winguest.KVPLicenseStatus],
 		LicenseChannel: report[winguest.KVPLicenseChannel],
-		GraceEnd:       graceEnd(report),
+		GraceEnd:       winguest.GraceEnd(report),
 		PreparedBy:     driver.PreparedBy(),
 	}
 	m, err := loadEvalManifest()
@@ -301,51 +299,6 @@ func recordPrepared(
 	m.Prepared = append(m.Prepared, *pb)
 	m.ActivePrepared = layer
 	return pb, saveEvalManifest(m)
-}
-
-// seedInputs hashes the prepare seed's files as the layer's recorded inputs.
-func seedInputs(dir string) ([]ledger.PreparationInput, error) {
-	entries, err := os.ReadDir(dir)
-	if err != nil {
-		return nil, err
-	}
-	var inputs []ledger.PreparationInput
-	for _, e := range entries {
-		if e.IsDir() {
-			continue
-		}
-		p := filepath.Join(dir, e.Name())
-		sum, err := driver.HashFileSHA256(p)
-		if err != nil {
-			return nil, err
-		}
-		fi, err := e.Info()
-		if err != nil {
-			return nil, err
-		}
-		inputs = append(inputs, ledger.PreparationInput{
-			Name: e.Name(), SHA256: sum, Size: fi.Size(),
-		})
-	}
-	sort.Slice(inputs, func(i, j int) bool { return inputs[i].Name < inputs[j].Name })
-	return inputs, nil
-}
-
-// graceEnd turns the guest's reading (minutes left at a UTC instant) into an
-// absolute end, for evaluation editions only; "" otherwise.
-func graceEnd(report map[string]string) string {
-	if !strings.Contains(report[winguest.KVPLicenseChannel], "TIMEBASED_EVAL") {
-		return ""
-	}
-	at, err := time.Parse(time.RFC3339Nano, report[winguest.KVPReportedAt])
-	if err != nil {
-		return ""
-	}
-	minutes, err := strconv.Atoi(report[winguest.KVPGraceMinutes])
-	if err != nil {
-		return ""
-	}
-	return at.Add(time.Duration(minutes) * time.Minute).UTC().Format(time.RFC3339)
 }
 
 func graceNote(end string) string {

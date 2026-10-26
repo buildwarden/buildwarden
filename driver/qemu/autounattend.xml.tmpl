@@ -101,19 +101,14 @@
       <AutoLogon>
         <Enabled>true</Enabled>
         <Username>{{.AdminUser}}</Username>
-        <LogonCount>999</LogonCount>
+        <LogonCount>1</LogonCount>
         <Password><Value>{{.AdminPassword}}</Value><PlainText>true</PlainText></Password>
       </AutoLogon>
       <FirstLogonCommands>
         <SynchronousCommand wcm:action="add">
           <Order>1</Order>
-          <CommandLine>powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -Command "{{.TaskCmd}}"</CommandLine>
-          <Description>register warden-run startup task</Description>
-        </SynchronousCommand>
-        <SynchronousCommand wcm:action="add">
-          <Order>2</Order>
-          <CommandLine>shutdown /s /t 5 /c "warden image prep complete"</CommandLine>
-          <Description>power off so the host can capture the prepared image</Description>
+          <CommandLine>{{.GeneralizeCmd}}</CommandLine>
+          <Description>generalize the installed image and power off</Description>
         </SynchronousCommand>
       </FirstLogonCommands>
     </component>

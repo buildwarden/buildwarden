@@ -39,7 +39,7 @@ func buildSeed(
 // directory (whose files are the prepared layer's recorded inputs).
 func buildPrepareSeed(workDir string) (seedISO, seedDir string, err error) {
 	seedDir = filepath.Join(workDir, "prepare-seed")
-	if err := stagePrepareSeedDir(seedDir, runtime.GOARCH); err != nil {
+	if err := winguest.StagePrepareSeed(seedDir, runtime.GOARCH); err != nil {
 		return "", "", err
 	}
 	seedISO = filepath.Join(workDir, "prepare-seed.iso")

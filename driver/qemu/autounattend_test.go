@@ -21,7 +21,6 @@ func TestGenerateAutounattendWellFormed(t *testing.T) {
 			AdminUser:         "warden",
 			AdminPassword:     "p@ss & <w0rd>", // specials must not break XML
 			VirtioDriveLetter: "E:",
-			SeedLabel:         winguest.SeedLabel,
 		})
 		dec := xml.NewDecoder(strings.NewReader(doc))
 		for {
@@ -45,7 +44,6 @@ func TestGenerateAutounattendARM64(t *testing.T) {
 		AdminUser:         "warden",
 		AdminPassword:     "s3cret-ephemeral",
 		VirtioDriveLetter: "E:",
-		SeedLabel:         winguest.SeedLabel,
 	})
 
 	// All firmware-bypass keys present.
@@ -61,16 +59,15 @@ func TestGenerateAutounattendARM64(t *testing.T) {
 	if !strings.Contains(xml, `E:\NetKVM\w11\ARM64`) {
 		t.Error("autounattend missing arm64 virtio NetKVM driver path")
 	}
-	// Edition, admin, autologon, and the startup-task registration.
+	// Edition, admin, a single autologon, and the generalize step. The
+	// warden-run task is registered later, by the prepare stage.
 	for _, want := range []string{
 		"<Value>Windows 11 Pro</Value>",
 		"<Name>warden</Name>",
 		"<Enabled>true</Enabled>", // AutoLogon
+		"<LogonCount>1</LogonCount>",
 		"s3cret-ephemeral",
-		"Register-ScheduledTask",
-		"warden-run",
-		"AllowStartIfOnBatteries", // battery-proof settings
-		"EncodedCommand",          // wait-loop delivered as base64
+		"EncodedCommand", // generalize script delivered as base64
 	} {
 		if !strings.Contains(xml, want) {
 			t.Errorf("autounattend missing %q", want)
@@ -89,7 +86,6 @@ func TestGenerateAutounattendAMD64(t *testing.T) {
 		AdminUser:         "warden",
 		AdminPassword:     "x",
 		VirtioDriveLetter: "E:",
-		SeedLabel:         winguest.SeedLabel,
 	})
 	if !strings.Contains(xml, `processorArchitecture="amd64"`) {
 		t.Error("autounattend missing amd64 processorArchitecture")
@@ -130,7 +126,6 @@ func TestFirstLogonCommandLineUnderLimit(t *testing.T) {
 		AdminUser:         "warden",
 		AdminPassword:     "s3cret-ephemeral",
 		VirtioDriveLetter: "E:",
-		SeedLabel:         winguest.SeedLabel,
 	})
 	dec := xml.NewDecoder(strings.NewReader(doc))
 	var inCmd bool
@@ -163,7 +158,7 @@ func TestFirstLogonCommandLineUnderLimit(t *testing.T) {
 	}
 	var found bool
 	for _, c := range cmds {
-		if !strings.Contains(c, "Register-ScheduledTask") {
+		if !strings.Contains(c, "-EncodedCommand") {
 			continue
 		}
 		found = true
@@ -180,6 +175,23 @@ func TestFirstLogonCommandLineUnderLimit(t *testing.T) {
 		t.Logf("FirstLogonCommands CommandLine length = %d chars (limit 1024)", len(c))
 	}
 	if !found {
-		t.Fatal("no FirstLogonCommands CommandLine with Register-ScheduledTask found")
+		t.Fatal("no FirstLogonCommands CommandLine with the generalize command found")
+	}
+}
+
+// TestAutounattendGeneralizes checks the install's only first-logon step is
+// winguest's generalize command, so the image it leaves is a generalized base.
+func TestAutounattendGeneralizes(t *testing.T) {
+	doc := generateAutounattend(autounattendConfig{
+		Arch: "arm64", Edition: "Windows 11 Pro", AdminUser: "warden",
+		AdminPassword: "x", VirtioDriveLetter: "E:",
+	})
+	want := winguest.XMLText(winguest.GeneralizeCommand("warden"))
+	if !strings.Contains(doc, want) {
+		t.Error("autounattend does not run winguest.GeneralizeCommand")
+	}
+	if strings.Contains(doc, "Register-ScheduledTask") ||
+		strings.Contains(doc, "shutdown /s") {
+		t.Error("install should no longer register warden-run or shut down itself")
 	}
 }

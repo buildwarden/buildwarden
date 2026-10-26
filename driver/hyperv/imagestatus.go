@@ -6,7 +6,7 @@ import (
 	"path/filepath"
 	"time"
 
-	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/winguest"
 )
 
 // ImageStatus describes the Hyper-V build images for `image list` and
@@ -40,13 +40,7 @@ func Status() ImageStatus {
 			st.Older = append(st.Older, p)
 		}
 	}
-	if unlock, free, err := driver.TryHostLock(prepareLockName); err == nil {
-		if free {
-			unlock()
-		} else {
-			st.RefreshRunning = true
-		}
-	}
+	st.RefreshRunning = prepareRunning()
 	return st
 }
 
@@ -58,10 +52,11 @@ func (s ImageStatus) Summary(now time.Time) string {
 		}
 		return "not prepared (warden image prepare --driver hyperv)"
 	}
-	out := fmt.Sprintf("%s, %s old", filepath.Base(s.Active.Path), roundAge(age(s.Active)))
+	out := fmt.Sprintf("%s, %s old", filepath.Base(s.Active.Path),
+		winguest.RoundAge(s.Active.freshness().Age(now)))
 	if end, err := time.Parse(time.RFC3339, s.Active.GraceEnd); err == nil {
 		out += fmt.Sprintf(", evaluation grace ends %s (%s left)",
-			end.Format("2006-01-02 15:04Z"), roundAge(end.Sub(now)))
+			end.Format("2006-01-02 15:04Z"), winguest.RoundAge(end.Sub(now)))
 	}
 	if s.RefreshRunning {
 		out += ", refresh running"
@@ -76,7 +71,7 @@ func writeImageStatus(w io.Writer, s ImageStatus, now time.Time) (blocked bool) 
 	if s.Active.Path == "" {
 		return false
 	}
-	refresh, err := checkPreparedFreshness(s.Active, now, 0, 0)
+	refresh, err := winguest.CheckFreshness(s.Active.freshness(), now, 0, 0, prepareFix)
 	switch {
 	case err != nil:
 		fmt.Fprintf(w, "  %v\n", err)

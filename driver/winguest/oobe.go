@@ -81,6 +81,25 @@ func OOBEUnattend(cfg OOBEConfig) string {
 		XMLText(cfg.Description))
 }
 
+// GeneralizeCommand is the last FirstLogonCommand of an ISO install: it
+// turns the installed disk into a generalized base like Microsoft's eval VHD.
+// It deletes the answer file Setup cached under Panther (else the next OOBE
+// would reuse it, autologon and generalize again, instead of reading the
+// prepare seed's), enables the built-in Administrator that prepare's OOBE
+// logs on as, disables installUser, and runs sysprep, which powers off.
+// Without SkipRearm, so the grace clock starts again at each specialize.
+func GeneralizeCommand(installUser string) string {
+	script := fmt.Sprintf(
+		"$p=\"$env:windir\\Panther\";"+
+			"Remove-Item \"$p\\unattend.xml\",\"$p\\Autounattend.xml\" -Force -EA 0;"+
+			"net user Administrator /active:yes;"+
+			"net user '%s' /active:no;"+
+			"& \"$env:windir\\System32\\Sysprep\\sysprep.exe\" "+
+			"/generalize /oobe /shutdown /quiet", installUser)
+	return "powershell.exe -NoProfile -ExecutionPolicy Bypass -EncodedCommand " +
+		EncodedCommand(script)
+}
+
 // SeedScriptCommand is a FirstLogonCommand that finds script at the root of
 // any filesystem drive (the attached seed) and runs it. The scan is delivered
 // as a base64 -EncodedCommand, so no quoting has to survive XML and cmd.

@@ -77,7 +77,11 @@ VHDX):
    DiagTrack, SysMain, Server Manager at logon, maintenance and defrag tasks;
    remove Windows Defender; run the .NET ngen queue to completion; high
    performance power plan, hibernation off; automatic activation off (so builds
-   no longer contact the activation service). The guest is the untrusted side
+   no longer contact the activation service); and the remaining background
+   network calls every build would otherwise make through the relay: the
+   connectivity probe, root/disallowed certificate list updates, and
+   ClipSVC/LicenseManager license sync. Revocation checks a build itself makes
+   (CRL/AIA) are left alone. The guest is the untrusted side
    and the VM plus relay are the boundary, so in-guest AV adds no isolation.
 6. **At most one prepare per driver cache at a time**, enforced by an OS file
    lock, with an atomic switch of the manifest's `active` pointer.
@@ -179,6 +183,35 @@ virtio-win ISO and the install answer file. The prepared layer is then built
 from it exactly as on Hyper-V. `--source` with an already installed,
 generalized VHD/VHDX (converted with `qemu-img` for qemu) skips the install
 stage on either driver.
+
+As implemented (step 2a):
+
+- The install's single FirstLogonCommand is `winguest.GeneralizeCommand`: it
+  deletes the answer file Setup cached in `%WINDIR%\Panther` (otherwise the
+  next OOBE would reuse it, autologon and generalize again instead of reading
+  the prepare seed's), enables the built-in Administrator that prepare's OOBE
+  logs on as, disables the install account, and runs sysprep. AutoLogon is
+  limited to one logon so no password is left in Winlogon.
+- The install VM has no network (`-nic none`): Setup bypasses OOBE's network
+  check and NetKVM comes from the virtio-win ISO, and without a network the
+  Store cannot update an app for the install user, the usual reason sysprep
+  refuses to generalize a Windows 11 image.
+- A `windows-<arch>.qcow2.generalized` marker tells a generalized base from one
+  installed before this change (which carries `warden-run` itself and still
+  boots as is). A reinstall deletes the prepared layers, whose backing file it
+  replaces.
+- The prepare stage boots a qcow2 overlay with its own copy of the UEFI vars,
+  no network, and the WPREP seed as a writable FAT disk. qemu has no KVP, so
+  `warden-prepare.ps1` also writes its reported items as a sequenced status
+  block to that volume, and the host scans the raw image for the newest block
+  after qemu exits (`winguest.ParseSeedStatus`).
+- qemu keeps no host-wide VM registry, so retirement keeps the active layer
+  and the one it replaced and deletes older ones without an in-use check.
+
+Assumed, to validate on the macOS host (blocking): the built-in Administrator
+can autologon in prepare's OOBE on a Windows 11 client image once enabled
+before generalize (Server enables it by default); and a generalized ISO
+install gets a fresh 10-day grace at prepare, like Microsoft's image.
 
 ### Manifest
 
@@ -304,7 +337,8 @@ boot disk from this branch.
 | Second concurrent prepare | Pass: exits 0 at once, "already running" |
 | Retirement | Pass: the third prepare deleted the first layer and kept the second |
 | Tuning applied | Pass: services disabled, policy keys set, Defender removed, High performance, no leftover KVP items |
-| Activation traffic in builds | Gone after disabling the SoftwareProtectionPlatform tasks; `licensing.mp.microsoft.com` and `slscr.update.microsoft.com` remain (installer-driven) |
+| Activation traffic in builds | Gone after disabling the SoftwareProtectionPlatform tasks |
+| Other background traffic in builds (2026-10-26) | Gone: the connectivity probe (`NoActiveProbe`), root and disallowed certificate list updates (`DisableRootAutoUpdate`, `EnableDisallowedCertAutoUpdate=0`), and `licensing.mp` / `slscr.update` (ClipSVC and LicenseManager disabled). conda-forge-win 58 s with no background calls; numpy-source-win 482 s, VS Build Tools still verifies its signatures; what remains is the installer's own CRL and AIA fetches for those checks |
 
 Not yet run: a build that starts a background refresh at 7 days and one refused
 under `image_min_grace` (covered by unit tests with a fixed clock); Gen1

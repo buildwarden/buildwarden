@@ -67,6 +67,25 @@ function Report($name, $value) {
     New-ItemProperty -Path $kvp -Name $name -Value ([string]$value) ` + "`" + `
       -PropertyType String -Force -ErrorAction Stop | Out-Null
   } catch { Add-Content -Path $log -Value "kvp write failed: $_" }
+  Write-SeedStatus
+}
+# Mirror every reported item onto a writable prepare seed (qemu's FAT disk):
+# the host has no KVP there and reads the newest block out of the raw image
+# after the VM powers off. A read-only seed (Hyper-V's ISO) is skipped.
+function Write-SeedStatus {
+  try {
+    $v = Get-Volume -FileSystemLabel 'WPREP' -ErrorAction Stop |
+      Where-Object DriveLetter | Select-Object -First 1
+    if (-not $v) { return }
+    $p = Get-ItemProperty -Path $kvp -ErrorAction Stop
+    $lines = @("WARDEN-PREPARE-STATUS seq=$([DateTime]::UtcNow.Ticks)")
+    foreach ($n in ($p.PSObject.Properties.Name | Where-Object { $_ -like 'warden-*' })) {
+      $lines += "$n=$($p.$n)"
+    }
+    $lines += 'END-WARDEN-PREPARE-STATUS'
+    $text = ($lines -join [char]10) + [char]10
+    [IO.File]::WriteAllText("$($v.DriveLetter):\warden-prepare-status.txt", $text)
+  } catch {}
 }
 function Step($name, [scriptblock]$body) {
   Report 'warden-prepare-state' "running:$name"
