@@ -65,12 +65,21 @@ func (f Freshness) Age(now time.Time) time.Duration {
 	return now.Sub(at)
 }
 
-// RoundAge formats an age for people: days past two days, else h/m.
+// RoundAge formats an age for people: "8.0d" past two days, else "24h",
+// "2h5m" or "4m".
 func RoundAge(d time.Duration) string {
 	if d >= 48*time.Hour {
 		return fmt.Sprintf("%.1fd", d.Hours()/24)
 	}
-	return d.Round(time.Minute).String()
+	d = d.Round(time.Minute)
+	h, m := int(d.Hours()), int(d.Minutes())%60
+	switch {
+	case h == 0:
+		return fmt.Sprintf("%dm", m)
+	case m == 0:
+		return fmt.Sprintf("%dh", h)
+	}
+	return fmt.Sprintf("%dh%dm", h, m)
 }
 
 // GraceEnd turns the guest's license report (minutes left at a UTC instant)

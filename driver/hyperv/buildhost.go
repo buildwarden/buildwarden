@@ -84,6 +84,7 @@ type buildConfig struct {
 	relayIP      string
 	claimPort    int
 	readyTimeout time.Duration
+	vmPoll       time.Duration // build VM state poll (zero = 3 s)
 }
 
 // validateBuildConfig rejects a buildConfig that is missing a required field or
@@ -257,7 +258,20 @@ func runBuild(
 		waitCtx, cancel = context.WithTimeout(ctx, cfg.Timeout)
 		defer cancel()
 	}
+	// A guest that powers off (or crashes) without reporting completion would
+	// otherwise leave the host waiting forever: heartbeat silence is only
+	// judged once heartbeats have started. Watch the VM alongside the wait.
+	waitCtx, stopWatch := context.WithCancelCause(waitCtx)
+	defer stopWatch(nil)
+	go watchBuildVM(waitCtx, prov, buildVM, stopWatch, cfg.vmPoll)
 	if err := rh.Session.Wait(waitCtx); err != nil {
+		if errors.Is(context.Cause(waitCtx), errBuildVMOff) && ctx.Err() == nil {
+			return nil, driver.Fixable(
+				"see "+filepath.Join(cfg.OutputDir, "build-output.log")+
+					" for the last thing the guest printed",
+				"runBuild: build VM %q powered off without reporting an exit code",
+				buildVM)
+		}
 		if errors.Is(err, context.DeadlineExceeded) && ctx.Err() == nil {
 			return nil, fmt.Errorf("runBuild: build %q did not complete within %s: %w",
 				buildVM, cfg.Timeout, context.DeadlineExceeded)
@@ -265,4 +279,39 @@ func runBuild(
 		return nil, fmt.Errorf("runBuild: %w", err)
 	}
 	return &driver.BuildResult{OutputDir: cfg.OutputDir}, nil
+}
+
+var errBuildVMOff = errors.New("build VM powered off")
+
+// vmOffGrace is how long after seeing the build VM off the wait still allows
+// for a completion in flight: the guest reports its exit just before it
+// powers off.
+const vmOffGrace = 5 * time.Second
+
+// watchBuildVM polls the build VM's state and cancels the wait with
+// errBuildVMOff once the VM is off (or gone) and the grace has passed.
+func watchBuildVM(
+	ctx context.Context, prov Provisioner, vm string,
+	stop context.CancelCauseFunc, poll time.Duration,
+) {
+	if poll <= 0 {
+		poll = 3 * time.Second
+	}
+	for {
+		select {
+		case <-ctx.Done():
+			return
+		case <-time.After(poll):
+		}
+		state, err := prov.VMState(ctx, vm)
+		if err != nil || (state != "Off" && state != "") {
+			continue
+		}
+		select {
+		case <-ctx.Done():
+		case <-time.After(vmOffGrace):
+			stop(errBuildVMOff)
+		}
+		return
+	}
 }

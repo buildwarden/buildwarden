@@ -30,6 +30,9 @@ import (
 type buildFake struct {
 	claimAddr string
 	buildExit int // exit code the simulated build reports on /v1/complete
+	// powersOffSilently simulates a guest that powers off without ever
+	// reporting completion (the build VM goes Off, nothing reaches /v1/complete).
+	powersOffSilently bool
 
 	claimed       atomic.Value // relaycfg.Config received by the simulated relay
 	transport     atomic.Value // http.RoundTripper: the collector tunnel
@@ -65,7 +68,9 @@ func (f *buildFake) StartVM(_ context.Context, name string) error {
 		f.simulateRelayReady()
 	case strings.HasPrefix(name, "warden-build-"):
 		f.startBuild.Add(1)
-		f.simulateBuildComplete()
+		if !f.powersOffSilently {
+			f.simulateBuildComplete()
+		}
 	}
 	return nil
 }
@@ -82,7 +87,12 @@ func (f *buildFake) CreateDiffDisk(_ context.Context, overlay, _ string) error {
 	f.diffDisks.Add(1)
 	return os.WriteFile(overlay, []byte("stub-overlay"), 0o644)
 }
-func (f *buildFake) VMState(context.Context, string) (string, error) { return "Off", nil }
+func (f *buildFake) VMState(context.Context, string) (string, error) {
+	if f.powersOffSilently {
+		return "Off", nil
+	}
+	return "Running", nil
+}
 func (f *buildFake) GuestKVP(context.Context, string) (map[string]string, error) {
 	return nil, nil
 }
@@ -284,5 +294,29 @@ func TestRunBuild_ValidatesConfig(t *testing.T) {
 				t.Errorf("expected a validation error when %s is empty", name)
 			}
 		})
+	}
+}
+
+// TestRunBuild_VMOffWithoutCompletion: a guest that powers off without
+// reporting an exit code fails the build promptly instead of hanging until the
+// build timeout (heartbeat silence only counts once heartbeats have started).
+func TestRunBuild_VMOffWithoutCompletion(t *testing.T) {
+	dir := t.TempDir()
+	cfg := baseCfg(t, dir)
+	cfg.Timeout = time.Minute
+	cfg.vmPoll = 50 * time.Millisecond
+	fp := &buildFake{claimAddr: "127.0.0.1:49301", powersOffSilently: true}
+
+	start := time.Now()
+	_, err := runBuild(context.Background(), fp, cfg)
+	if err == nil ||
+		!strings.Contains(err.Error(), "powered off without reporting an exit code") {
+		t.Fatalf("err = %v, want the powered-off error", err)
+	}
+	if took := time.Since(start); took > vmOffGrace+10*time.Second {
+		t.Errorf("took %s; the off VM should fail the build within the grace", took)
+	}
+	if got := fp.remove.Load(); got != 2 {
+		t.Errorf("RemoveVM = %d, want 2 (teardown still runs)", got)
 	}
 }

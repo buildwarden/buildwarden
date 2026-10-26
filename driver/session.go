@@ -168,7 +168,12 @@ func (s *Session) Wait(ctx context.Context) error {
 		var ue *collector.UnresponsiveError
 		switch {
 		case errors.As(err, &ue):
-			return fmt.Errorf("build failed: %w", err)
+			// Usually the build itself hung or killed the agent, not warden:
+			// point at what the guest last printed rather than a bug report.
+			return Fixable(
+				"see "+filepath.Join(s.outputDir, "build-output.log")+
+					" for the last thing the build printed",
+				"build failed: %v", err)
 		case tunnelLost.Load():
 			return fmt.Errorf("build failed: lost the connection to the relay")
 		}

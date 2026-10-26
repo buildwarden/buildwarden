@@ -1,6 +1,7 @@
 package hyperv
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -128,10 +129,12 @@ func resolvePreparedChain(isWindows bool) ([]string, bool, int, error) {
 			"no Hyper-V build-guest image")
 	}
 	for _, p := range []string{base.Path, pb.Path} {
-		if _, err := os.Stat(p); err != nil {
+		if _, err := os.Stat(p); errors.Is(err, os.ErrNotExist) {
 			return nil, isWindows, 0, driver.Fixable(fix,
-				"prepared Hyper-V image chain is incomplete (%s: %v); "+
-					"was the cache directory moved?", p, err)
+				"prepared Hyper-V image chain is incomplete: %s is missing "+
+					"(was it moved or deleted?)", p)
+		} else if err != nil {
+			return nil, isWindows, 0, err
 		}
 	}
 	return []string{base.Path, pb.Path}, true, pb.Generation, nil

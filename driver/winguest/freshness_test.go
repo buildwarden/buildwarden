@@ -81,3 +81,18 @@ func TestGraceEndOnlyForEval(t *testing.T) {
 		t.Errorf("eval grace end = %q", got)
 	}
 }
+
+func TestRoundAge(t *testing.T) {
+	for d, want := range map[time.Duration]string{
+		4 * time.Minute:                 "4m",
+		2 * time.Hour:                   "2h",
+		2*time.Hour + 5*time.Minute:     "2h5m",
+		24 * time.Hour:                  "24h",
+		8 * 24 * time.Hour:              "8.0d",
+		90*time.Second + 29*time.Second: "2m",
+	} {
+		if got := RoundAge(d); got != want {
+			t.Errorf("RoundAge(%v) = %q, want %q", d, got, want)
+		}
+	}
+}
