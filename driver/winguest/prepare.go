@@ -145,6 +145,19 @@ Step 'policy' {
   reg add 'HKLM\SOFTWARE\Policies\Microsoft\Windows\WindowsUpdate\AU' ` + "`" + `
     /v NoAutoUpdate /t REG_DWORD /d 1 /f
 }
+# Background traffic every build would otherwise send through the relay (and
+# record in its ledger): the connectivity probe, root/disallowed certificate
+# list updates, and Store-style license sync.
+Step 'background-network' {
+  reg add 'HKLM\SOFTWARE\Policies\Microsoft\Windows\NetworkConnectivityStatusIndicator' ` + "`" + `
+    /v NoActiveProbe /t REG_DWORD /d 1 /f
+  $certs = 'HKLM\SOFTWARE\Policies\Microsoft\SystemCertificates\AuthRoot'
+  reg add $certs /v DisableRootAutoUpdate /t REG_DWORD /d 1 /f
+  reg add $certs /v EnableDisallowedCertAutoUpdate /t REG_DWORD /d 0 /f
+  foreach ($s in 'ClipSVC', 'LicenseManager') {
+    reg add "HKLM\SYSTEM\CurrentControlSet\Services\$s" /v Start /t REG_DWORD /d 4 /f
+  }
+}
 Step 'power' {
   powercfg /setactive 8c5e7fda-e8bf-4a96-9a85-a6e23a8c635c
   powercfg /hibernate off
