@@ -9,8 +9,7 @@ security_boundary: none
 native_validation:
   - {host: windows-hyperv, blocking: true, reason: "changes the Hyper-V Windows guest lifecycle end to end"}
   - {host: macos-qemu, blocking: true, reason: "qemu Windows path moves to the shared guest package and prepare-time tuning"}
-tier2_gaps:
-  - "Gen1 eval .vhd: IDE DVD seed discovery from an early-boot SYSTEM task, and a two-level .vhd chain (no Gen1 image on the validation host yet)"
+tier2_gaps: []
 rules: [FLOW-01, FLOW-02, FLOW-06, FLOW-07, ORCH-01, UX-01, UX-04, GLOBAL-06, GLOBAL-08, TEST-02, TEST-03]
 concepts: [image-prepare, generalized-base, sysprep, windows-guest, eval-licensing, differencing-disk, image-refresh, guest-tuning]
 related: [vm-driver-release-plan.md, hyperv-driver-plan.md, windows-driver-plan.md]
@@ -293,8 +292,11 @@ by `warden image verify` / `doctor`, and marked read-only.
   install, and rearm count unchanged. Then the qemu Windows build passes with the
   shared package and tuning, and a refresh from the generalized base does not
   reinstall.
-- **Deferred (tier2_gaps):** Gen1 `.vhd` seed discovery and chain (items 2 and
-  4 on Gen1), until a Gen1 eval image is on the validation host.
+- **Out of scope:** Gen1 `.vhd` (IDE DVD seed discovery, a two-level `.vhd`
+  chain). Microsoft's current official download is a Gen2 VHDX; the Gen1 code
+  paths stay but are unvalidated, and validating them is a feature request if
+  someone needs a `.vhd` (decided 2026-10-26). Upstream CA certificates are
+  a relay-side check, not a Windows one.
 
 ## Implementation plan
 
@@ -340,9 +342,21 @@ boot disk from this branch.
 | Activation traffic in builds | Gone after disabling the SoftwareProtectionPlatform tasks |
 | Other background traffic in builds (2026-10-26) | Gone: the connectivity probe (`NoActiveProbe`), root and disallowed certificate list updates (`DisableRootAutoUpdate`, `EnableDisallowedCertAutoUpdate=0`), and `licensing.mp` / `slscr.update` (ClipSVC and LicenseManager disabled). conda-forge-win 58 s with no background calls; numpy-source-win 482 s, VS Build Tools still verifies its signatures; what remains is the installer's own CRL and AIA fetches for those checks |
 
-Not yet run: a build that starts a background refresh at 7 days and one refused
-under `image_min_grace` (covered by unit tests with a fixed clock); Gen1
-`.vhd` (items 2 and 4 on Gen1); macos-qemu.
+**windows-hyperv, 2026-10-26** (after the qemu step 2a refactor):
+
+| Check | Result |
+|---|---|
+| Prepare with the shared winguest code | Pass, 199 s; the seed-status write to Hyper-V's read-only ISO is skipped silently |
+| Pin a local base with `--sha256` | Pass: manifest and ledger record the base as `local`, `pinned` |
+| Trivial build | 31-34 s; the first build after a prepare took 85 s (no host-side hashing, so most likely a cold host cache for the new layer) |
+| Refresh at `image_refresh_after` (layer back-dated 8 days) | Pass: the build prints the refresh notice and succeeds on the current layer; a detached prepare runs, a second build meanwhile starts no other, and the new layer becomes active |
+| Refusal under `image_min_grace` (grace end 2 h away) | Pass: the build fails in 1 s with the prepare fix; `doctor` exits 1, "Not ready" |
+| Retirement with a layer in use | Pass: a `--keep-vms` build VM on a layer kept it through a prepare that would otherwise delete it; after removing the VM the next prepare deleted it |
+| Moved or deleted layer | Pass: the build fails in 1 s, "chain is incomplete: <path> is missing" |
+| Guest powers off without reporting (agent killed before its first heartbeat) | **Bug found and fixed**: the host waited until `--timeout` (15 min; forever without one). The Hyper-V host now watches the build VM and fails 5 s after it is off with no completion (40 s end to end) |
+| Heartbeat silence with the guest still up | Pass: "build guest unresponsive (no heartbeat for 30s)" (73 s end to end); now a fixable error pointing at build-output.log instead of a bug-report link |
+
+Not run: macos-qemu. Gen1 `.vhd` is out of scope (see Validation plan).
 
 ## Consolidation (merge round)
 
