@@ -50,6 +50,8 @@ type Provisioner interface {
 	// DisksInUse lists every disk file any VM on the host depends on: each
 	// attached disk and all of its differencing parents.
 	DisksInUse(ctx context.Context) ([]string, error)
+	// ListVMs names the host's VMs whose names start with prefix.
+	ListVMs(ctx context.Context, prefix string) ([]string, error)
 }
 
 // NetworkSpec describes the isolated build network to stand up (or reuse).

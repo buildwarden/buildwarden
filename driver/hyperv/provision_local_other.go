@@ -49,3 +49,6 @@ func (unsupportedProvisioner) GuestKVP(context.Context, string) (map[string]stri
 func (unsupportedProvisioner) DisksInUse(context.Context) ([]string, error) {
 	return nil, errUnsupported()
 }
+func (unsupportedProvisioner) ListVMs(context.Context, string) ([]string, error) {
+	return nil, errUnsupported()
+}

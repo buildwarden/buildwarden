@@ -100,7 +100,12 @@ VHDX):
    scanning the user's Downloads folder for a matching file (explicit sources
    only).
 6. **At most one prepare per driver cache at a time**, enforced by an OS file
-   lock, with an atomic switch of the manifest's `active` pointer.
+   lock, with an atomic switch of the manifest's `active` pointer. Whoever
+   takes the lock first reaps what an interrupted prepare left (Hyper-V): any
+   `warden-prepare-*` VM, unrecorded layer files and `work-*` seed dirs in
+   `prepared/`, keeping anything a VM still uses. Holding the lock means no
+   live prepare owns them; a `--keep-vms` prepare VM is reaped by the next
+   prepare.
 7. **Two image stages, the same for both drivers.** A *generalized base* is an
    installed, sysprepped disk with no running grace clock: either Microsoft's
    eval VHD/VHDX, or the output of warden's ISO *install stage*. The *prepared

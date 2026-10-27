@@ -392,11 +392,26 @@ foreach ($d in (Get-VM | Get-VMHardDiskDrive)) {
 	if err != nil {
 		return nil, fmt.Errorf("DisksInUse: %w", err)
 	}
-	var disks []string
-	for _, line := range strings.Split(out, "\n") {
+	return nonEmptyLines(out), nil
+}
+
+// ListVMs names the host's VMs whose names start with prefix.
+func (p *localProvisioner) ListVMs(ctx context.Context, prefix string) ([]string, error) {
+	out, err := runPS(fmt.Sprintf(
+		"Get-VM -Name '%s*' -ErrorAction SilentlyContinue | ForEach-Object { $_.Name }",
+		psEscapeSingle(prefix)))
+	if err != nil {
+		return nil, fmt.Errorf("ListVMs: %w", err)
+	}
+	return nonEmptyLines(out), nil
+}
+
+func nonEmptyLines(s string) []string {
+	var lines []string
+	for _, line := range strings.Split(s, "\n") {
 		if line = strings.TrimSpace(line); line != "" {
-			disks = append(disks, line)
+			lines = append(lines, line)
 		}
 	}
-	return disks, nil
+	return lines
 }

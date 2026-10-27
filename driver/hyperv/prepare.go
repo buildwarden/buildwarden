@@ -76,6 +76,7 @@ func prepareBase(
 		return nil, ErrPrepareRunning
 	}
 	defer unlock()
+	reapPrepareLeftovers(ctx, prov, opts.Progress)
 
 	base, err := activeGeneralizedBase()
 	if err != nil {
@@ -103,7 +104,7 @@ func prepareBase(
 		}
 	}()
 
-	vm := "warden-prepare-" + strings.ToLower(stamp)
+	vm := prepareVMPrefix + strings.ToLower(stamp)
 	logf(opts.Progress, "preparing %s from %s in VM %s (no network)\n",
 		filepath.Base(layer), base.Name, vm)
 	if _, err := prov.CreateVM(ctx, VMSpec{
