@@ -139,13 +139,13 @@ defaults per driver (vz: macos, qemu: linux, hyperv: windows). `[source]` (or
 | `vz` / macos | IPSW (default: latest supported) | Restores the IPSW, or refreshes the warden boot agent of an already-restored image |
 | `qemu` / linux | cloud image ref (`alpine:3.21`, `ubuntu:24.04`, `debian:bookworm`) or qcow2 | Downloads and verifies the cloud image |
 | `qemu` / windows | Windows install ISO (required the first time) | Unattended install ending in `sysprep /generalize` (skipped if already installed unless `--force`), then prepares the layer builds boot from. With no source, re-prepares |
-| `hyperv` / windows | Windows Server evaluation VHD/VHDX: URL, or a local file registered in place | Needed on first prepare (`--sha256` to pin); then prepares the layer builds boot from. With no source, re-prepares the pinned base |
+| `hyperv` / windows | Windows Server evaluation VHDX: URL, or a local file registered in place (default: `[vm] windows_image`, else Microsoft's current Server 2025 evaluation download) | Fetches or registers the base, then prepares the layer builds boot from. With no source it is the refresh: re-checks a downloaded base for new media and re-prepares |
 
 **Flags:**
 - `--os <os>` — Guest OS: macos, linux or windows (default per driver)
 - `--source <path|url>` — Image source (same as `[source]`)
-- `--sha256 <hash>` — Expected SHA256; verified and pinned for later prepares
-- `--accept-unpinned` — Use an image with no known digest (no authenticity check)
+- `--sha256 <hash>` — Expected SHA256 of the image; verified (the digest of what
+  was used is always recorded)
 - `--force` — Re-acquire even if a valid cached copy exists
 - `--name <n>` — Registry name of the image (hyperv; default windows-server-2025)
 - `--edition <e>` — Windows edition / install.wim image name (qemu windows)

@@ -46,6 +46,7 @@ type PreparedBase struct {
 	SHA256         string `json:"sha256"`
 	Size           int64  `json:"size"`
 	Base           string `json:"base"` // manifest name of the generalized base
+	BasePath       string `json:"base_path,omitempty"`
 	BaseSHA256     string `json:"base_sha256"`
 	Generation     int    `json:"generation"`
 	PreparedAt     string `json:"prepared_at"`
@@ -285,7 +286,7 @@ func recordPrepared(
 	}
 	pb := &PreparedBase{
 		Path: layer, SHA256: sum, Size: fi.Size(), Base: base.Name,
-		BaseSHA256: base.SHA256, Generation: base.Generation,
+		BasePath: base.Path, BaseSHA256: base.SHA256, Generation: base.Generation,
 		PreparedAt:     at.Format(time.RFC3339),
 		LicenseStatus:  report[winguest.KVPLicenseStatus],
 		LicenseChannel: report[winguest.KVPLicenseChannel],
@@ -342,26 +343,41 @@ func activePrepared() (PreparedBase, evalManifestEntry, bool) {
 // retireOldPrepared deletes prepared layers that two refreshes have
 // superseded: everything but the active layer and the one it replaced, which
 // a build that resolved its chain just before the switch may still be
-// starting on. A layer some VM still depends on is kept for a later prepare.
+// starting on. It then deletes replaced base files no remaining layer is
+// built on. Anything a VM still depends on is kept for a later prepare.
 // Failures are logged, never fatal.
 func retireOldPrepared(ctx context.Context, prov Provisioner, progress io.Writer) {
 	m, err := loadEvalManifest()
-	if err != nil || len(m.Prepared) <= 2 {
+	if err != nil || (len(m.Prepared) <= 2 && len(m.OldBases) == 0) {
 		return
 	}
 	inUse, err := prov.DisksInUse(ctx)
 	if err != nil {
-		logf(progress, "warning: not retiring old prepared layers: %v\n", err)
+		logf(progress, "warning: not retiring old images: %v\n", err)
 		return
 	}
 	used := map[string]bool{}
 	for _, d := range inUse {
-		used[strings.ToLower(filepath.Clean(d))] = true
+		used[diskKey(d)] = true
+	}
+	m.Prepared = retireLayers(m, used, progress)
+	m.OldBases = retireBases(m, used, progress)
+	if err := saveEvalManifest(m); err != nil {
+		logf(progress, "warning: %v\n", err)
+	}
+}
+
+func diskKey(p string) string { return strings.ToLower(filepath.Clean(p)) }
+
+// retireLayers returns m.Prepared without the layers it deleted.
+func retireLayers(m *evalManifest, used map[string]bool, progress io.Writer) []PreparedBase {
+	if len(m.Prepared) <= 2 {
+		return m.Prepared
 	}
 	keep := m.Prepared[len(m.Prepared)-2:]
 	var kept []PreparedBase
 	for _, pb := range m.Prepared[:len(m.Prepared)-2] {
-		if pb.Path == m.ActivePrepared || used[strings.ToLower(filepath.Clean(pb.Path))] {
+		if pb.Path == m.ActivePrepared || used[diskKey(pb.Path)] {
 			kept = append(kept, pb)
 			continue
 		}
@@ -374,8 +390,34 @@ func retireOldPrepared(ctx context.Context, prov Provisioner, progress io.Writer
 		_ = LayerCache().Forget(pb.Path)
 		logf(progress, "retired prepared layer %s\n", filepath.Base(pb.Path))
 	}
-	m.Prepared = append(kept, keep...)
-	if err := saveEvalManifest(m); err != nil {
-		logf(progress, "warning: %v\n", err)
+	return append(kept, keep...)
+}
+
+// retireBases returns m.OldBases without the base files it deleted: those no
+// remaining prepared layer is built on and no VM uses. A layer recorded
+// before BasePath existed may be on any base, so then nothing is deleted.
+func retireBases(m *evalManifest, used map[string]bool, progress io.Writer) []string {
+	needed := map[string]bool{}
+	for _, pb := range m.Prepared {
+		if pb.BasePath == "" {
+			return m.OldBases
+		}
+		needed[diskKey(pb.BasePath)] = true
 	}
+	var kept []string
+	for _, b := range m.OldBases {
+		if needed[diskKey(b)] || used[diskKey(b)] {
+			kept = append(kept, b)
+			continue
+		}
+		if err := os.Remove(b); err != nil && !os.IsNotExist(err) {
+			logf(progress, "warning: retiring base %s: %v\n", b, err)
+			kept = append(kept, b)
+			continue
+		}
+		_ = os.Remove(b + ".sha256")
+		_ = LayerCache().Forget(b)
+		logf(progress, "retired base image %s\n", filepath.Base(b))
+	}
+	return kept
 }

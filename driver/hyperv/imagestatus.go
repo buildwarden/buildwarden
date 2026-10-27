@@ -15,6 +15,8 @@ type ImageStatus struct {
 	// Base is the active generalized base path ("" when none is pinned).
 	Base   string
 	Pinned bool
+	// BaseURL is the URL the base came from ("" for a local file).
+	BaseURL string
 	// Active is the prepared layer builds boot from (zero when none).
 	Active PreparedBase
 	// Older are superseded prepared layers not yet retired.
@@ -31,7 +33,7 @@ func Status() ImageStatus {
 		return st
 	}
 	if b, ok := m.Images[m.Active]; ok {
-		st.Base, st.Pinned = b.Path, b.Pinned
+		st.Base, st.Pinned, st.BaseURL = b.Path, b.Pinned, b.URL
 	}
 	for _, p := range m.Prepared {
 		if p.Path == m.ActivePrepared {

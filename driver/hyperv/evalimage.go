@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"os"
+	pathpkg "path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -17,69 +18,63 @@ import (
 	"github.com/buildwarden/buildwarden/ledger"
 )
 
-// Eval-image fetch-and-pin for the Hyper-V build guest.
+// Generalized base images for the Hyper-V build guest (see
+// docs/design/hyperv-windows-prepare.md). A base comes from, in order: an
+// explicit --source (a URL, or a local file registered in place), the
+// [vm] windows_image setting, or the registry's default URL. For Windows Server
+// 2025 that default is Microsoft's evaluation fwlink, which Microsoft repoints
+// at its current media, so "the latest image" means whatever it resolves to.
 //
-// The primary Windows build path boots Microsoft's stock Windows Server
-// Evaluation image (a Gen1 BIOS/MBR .vhd) as-is, with no image surgery. This
-// file is the `warden image` side of that: it downloads a pinned image,
-// verifies it against a pinned SHA256, and records it (with provenance) as the
-// active build-guest base so the driver's resolveBuildBaseVHDX can find it.
-//
-// Security posture (this is a supply-chain tool): a fetch is only "pinned" when
-// the downloaded bytes verify against an expected SHA256 (supplied on the CLI or
-// carried in the registry). When no expected hash is known, the download is NOT
-// silently trusted: the bytes are cached and their computed hash printed, but
-// the image is refused as the active base unless the operator explicitly accepts
-// it. Pinning is then a fast second call that verifies the already-cached bytes.
+// Provenance instead of pinning: nothing is pinned in code. A download comes
+// over HTTPS (the default URL must end on a Microsoft host), and the resolved
+// URL, ETag, Last-Modified and the sha256 computed while downloading are
+// recorded in the manifest and in every build's ledger. --sha256 is an
+// optional extra check. A URL base is downloaded under the file's own name,
+// so new media lands next to the base it replaces; the old base is deleted
+// once no prepared layer or VM uses it.
 //
 // This lives outside the Windows build tag (pure I/O + HTTP, no Hyper-V calls)
 // so it is testable on any platform.
 
-// EvalImageSpec is a known, pinnable build-guest base image.
+// EvalImageSpec is a known build-guest base image.
 type EvalImageSpec struct {
-	Name       string // registry key, e.g. "windows-server-2025"
-	Version    string // human label
-	OS         string // "windows"
-	Ext        string // on-disk extension, e.g. ".vhd"
-	Generation int    // Hyper-V generation the image boots as (1 for the eval VHD)
-	URL        string // pinned download URL; empty means the operator must supply --url
-	SHA256     string // pinned expected hash (lowercase hex); empty means not yet pinned
-	Note       string // licensing / acquisition guidance
+	Name    string // registry key, e.g. "windows-server-2025"
+	Version string // human label
+	OS      string // "windows"
+	// URL is the default source; empty means the operator must supply one.
+	URL string
+	// Official marks a URL whose download must resolve to a Microsoft host.
+	Official bool
+	Note     string // licensing / acquisition guidance
 }
 
-// evalImageRegistry carries the known build-guest base images. The Windows
-// Server evaluation VHD sits behind the Microsoft Evaluation Center
-// (registration required) and Microsoft does not publish a stable, scrapable
-// SHA256 for it, so the URL and SHA256 are intentionally left empty here: the
-// operator supplies --url on first fetch, pins the printed --sha256, and a
-// maintainer can then commit those pinned values into this table so a later
-// `warden image prepare --driver hyperv` becomes a single command.
+// DefaultEvalImage is the registry image `image prepare` uses by default.
+const DefaultEvalImage = "windows-server-2025"
+
+// officialHostSuffix is where Microsoft's evaluation downloads are served from
+// (the fwlink redirects to software-static.download.prss.microsoft.com).
+const officialHostSuffix = ".microsoft.com"
+
+// evalImageRegistry carries the known build-guest base images.
 var evalImageRegistry = map[string]EvalImageSpec{
 	"windows-server-2025": {
-		Name:       "windows-server-2025",
-		Version:    "Windows Server 2025 Evaluation",
-		OS:         "windows",
-		Ext:        ".vhd",
-		Generation: 1,
-		URL:        "",
-		SHA256:     "",
-		Note: "180-day evaluation (activate within 10 days or it auto-shuts-down). " +
-			"Download the VHD from the Microsoft Evaluation Center " +
-			"(https://www.microsoft.com/evalcenter/download-windows-server-2025; " +
-			"free registration) and pass its URL with --url. It is a Gen1 BIOS/MBR " +
-			"VHD and boots on a Generation-1 VM as-is (no conversion).",
+		Name:    "windows-server-2025",
+		Version: "Windows Server 2025 Evaluation",
+		OS:      "windows",
+		URL: "https://go.microsoft.com/fwlink/?linkid=2293215" +
+			"&clcid=0x409&culture=en-us&country=us",
+		Official: true,
+		Note: "180-day evaluation, never activated by warden (prepare has no " +
+			"network), so each prepared layer runs on the 10-day initial grace " +
+			"and is refreshed weekly. The default URL is Microsoft's Evaluation " +
+			"Center link for the current Gen2 VHDX.",
 	},
 	"windows-server-2022": {
-		Name:       "windows-server-2022",
-		Version:    "Windows Server 2022 Evaluation",
-		OS:         "windows",
-		Ext:        ".vhd",
-		Generation: 1,
-		URL:        "",
-		SHA256:     "",
-		Note: "180-day evaluation. Download the VHD from the Microsoft Evaluation " +
-			"Center (registration required) and pass its URL with --url. Gen1 " +
-			"BIOS/MBR VHD, boots on a Generation-1 VM as-is.",
+		Name:    "windows-server-2022",
+		Version: "Windows Server 2022 Evaluation",
+		OS:      "windows",
+		Note: "No default URL: pass the image with --source or set " +
+			"[vm] windows_image.",
 	},
 }
 
@@ -98,14 +93,13 @@ func EvalImageNames() []string {
 	return names
 }
 
-// FetchOptions configures a fetch-and-pin.
+// FetchOptions configures a fetch.
 type FetchOptions struct {
-	Name           string    // registry key (or a bare label when URL is supplied)
-	URL            string    // overrides the registry URL
-	SHA256         string    // overrides/supplies the expected hash (lowercase hex)
-	AcceptUnpinned bool      // use the image even when no expected hash is known
-	Force          bool      // re-download even if a valid cached copy exists
-	Progress       io.Writer // status sink (nil = quiet)
+	Name     string    // registry key (or a bare label when URL is supplied)
+	URL      string    // a URL or local path; empty uses the registry URL
+	SHA256   string    // optional expected hash (lowercase hex), verified
+	Force    bool      // re-download even if the remote looks unchanged
+	Progress io.Writer // status sink (nil = quiet)
 }
 
 // evalImagesDir is where fetched build-guest base images and their manifest live.
@@ -125,6 +119,9 @@ type evalManifest struct {
 	// of the one builds boot from.
 	Prepared       []PreparedBase `json:"prepared,omitempty"`
 	ActivePrepared string         `json:"active_prepared,omitempty"`
+	// OldBases are replaced base files kept until no prepared layer or VM
+	// uses them.
+	OldBases []string `json:"old_bases,omitempty"`
 }
 
 type evalManifestEntry struct {
@@ -137,6 +134,11 @@ type evalManifestEntry struct {
 	Pinned     bool   `json:"pinned"` // verified against an expected hash
 	Bytes      int64  `json:"bytes"`
 	FetchedAt  string `json:"fetched_at"`
+	// What the URL resolved to when fetched; a refresh compares these with a
+	// HEAD request to tell whether the media changed.
+	ResolvedURL  string `json:"resolved_url,omitempty"`
+	ETag         string `json:"etag,omitempty"`
+	LastModified string `json:"last_modified,omitempty"`
 }
 
 func loadEvalManifest() (*evalManifest, error) {
@@ -191,176 +193,173 @@ func resolveActiveEvalImage() (path string, isWindows bool, generation int, ok b
 	return e.Path, e.OS == "windows", e.Generation, true
 }
 
-// FetchEvalImage downloads (if needed), verifies, caches, and pins a
-// build-guest base image, marking it the active base on success. It returns the
-// cached path.
+// FetchEvalImage makes opts' image (or the registry default) the active
+// generalized base and returns its path: a local file is registered in place;
+// a URL is resolved with HEAD and downloaded unless the manifest already holds
+// exactly that remote file.
 func FetchEvalImage(ctx context.Context, opts FetchOptions) (string, error) {
 	if opts.Name == "" {
 		return "", fmt.Errorf("fetch: empty image name (try one of: %s)",
 			strings.Join(EvalImageNames(), ", "))
 	}
 	spec, known := LookupEvalImage(opts.Name)
-	if !known {
-		// Allow a bare label as long as a URL is supplied.
-		if opts.URL == "" {
-			return "", fmt.Errorf(
-				"unknown image %q and no --url given (known images: %s)",
-				opts.Name, strings.Join(EvalImageNames(), ", "))
-		}
-		spec = EvalImageSpec{Name: opts.Name, OS: "windows", Ext: ".vhd", Generation: 1}
+	if !known && opts.URL == "" {
+		return "", fmt.Errorf("unknown image %q and no --source given (known images: %s)",
+			opts.Name, strings.Join(EvalImageNames(), ", "))
 	}
-
 	if isLocalImage(opts.URL) {
 		return registerLocalImage(opts)
 	}
-
-	url := opts.URL
-	if url == "" {
-		url = spec.URL
+	url, remote, err := resolveFetchURL(ctx, opts, spec)
+	if err != nil {
+		return "", err
 	}
-	if url == "" {
-		return "", fmt.Errorf(
-			"no download URL for %q. %s\nThen: warden image prepare "+
-				"--driver hyperv --name %s --source <that-url>",
-			opts.Name, spec.Note, opts.Name)
+	gen, err := diskGeneration(remote.Name)
+	if err != nil {
+		return "", err
 	}
-
-	expected := strings.ToLower(strings.TrimSpace(opts.SHA256))
-	if expected == "" {
-		expected = strings.ToLower(strings.TrimSpace(spec.SHA256))
+	if path, ok, err := unchangedRemote(opts, url, remote); ok || err != nil {
+		return path, err
 	}
-
-	ext := spec.Ext
-	if ext == "" {
-		ext = ".vhd"
-	}
+	dest := filepath.Join(evalImagesDir(), remote.Name)
 	if err := os.MkdirAll(evalImagesDir(), 0o755); err != nil {
 		return "", err
 	}
-	dest := filepath.Join(evalImagesDir(), opts.Name+ext)
-
-	// Reuse a cached copy when it still verifies (against the expected hash if
-	// pinned, else its integrity sidecar), unless --force.
-	if path, done, err := reuseCachedEvalImage(opts, spec, dest, expected); done {
-		return path, err
-	}
-
-	gotHash, n, err := downloadVerified(ctx, url, dest, opts.Progress)
+	gotHash, n, err := downloadVerified(ctx, remote.URL, dest, opts.Progress)
 	if err != nil {
 		return "", err
 	}
 	logf(opts.Progress, "downloaded %s (%d bytes, sha256:%s)\n",
-		filepath.Base(dest), n, short(gotHash))
-
+		remote.Name, n, short(gotHash))
+	expected := strings.ToLower(strings.TrimSpace(opts.SHA256))
 	if expected != "" && gotHash != expected {
 		_ = os.Remove(dest)
 		_ = os.Remove(dest + ".sha256")
-		return "", fmt.Errorf(
-			"pinned verification FAILED for %q:\n"+
-				"  expected sha256 %s\n  got      sha256 %s\n"+
-				"the download does not match the pinned hash; "+
-				"the cached file was removed",
-			opts.Name, expected, gotHash)
+		return "", fmt.Errorf("verification FAILED for %s:\n  expected sha256 %s\n"+
+			"  got      sha256 %s\nthe download was removed",
+			remote.Name, expected, gotHash)
 	}
-	return finishFetch(opts, spec, dest, gotHash, expected, true)
+	return activateBase(opts, evalManifestEntry{
+		Name: opts.Name, Path: dest, URL: url, SHA256: gotHash, Generation: gen,
+		OS: firstNonEmpty(spec.OS, "windows"), Pinned: expected != "", Bytes: n,
+		FetchedAt:   time.Now().UTC().Format(time.RFC3339),
+		ResolvedURL: remote.URL, ETag: remote.ETag, LastModified: remote.LastModified,
+	}, true)
 }
 
-// reuseCachedEvalImage finishes the fetch from a still-valid cached copy of dest
-// (unless --force). done is true when the cached copy was used, in which case
-// path and err are the finishFetch result and the caller returns them.
-func reuseCachedEvalImage(
-	opts FetchOptions, spec EvalImageSpec, dest, expected string,
-) (path string, done bool, err error) {
+// resolveFetchURL picks the URL to fetch (opts.URL, else the registry
+// default) and resolves it. The registry default is only trusted when it
+// lands on a Microsoft host; an explicit URL is the operator's choice.
+func resolveFetchURL(
+	ctx context.Context, opts FetchOptions, spec EvalImageSpec,
+) (string, remoteImage, error) {
+	url := firstNonEmpty(opts.URL, spec.URL)
+	if url == "" {
+		return "", remoteImage{}, driver.Fixable(
+			"warden image prepare --driver hyperv --source <url-or-path>, "+
+				"or set [vm] windows_image",
+			"no default download for %q. %s", opts.Name, spec.Note)
+	}
+	remote, err := resolveRemote(ctx, url)
+	if err != nil {
+		return "", remoteImage{}, err
+	}
+	if spec.Official && opts.URL == "" &&
+		!strings.HasSuffix(strings.ToLower(remote.Host), officialHostSuffix) {
+		return "", remoteImage{}, fmt.Errorf("the default %s download resolved to %s, "+
+			"not a Microsoft host; refusing it (pass --source to use another image)",
+			opts.Name, remote.URL)
+	}
+	return url, remote, nil
+}
+
+// unchangedRemote reports whether the manifest's entry for opts.Name is
+// already this exact remote file (same resolved URL, size and ETag, still on
+// disk), in which case nothing is downloaded and it stays the active base.
+func unchangedRemote(
+	opts FetchOptions, url string, remote remoteImage,
+) (string, bool, error) {
 	if opts.Force {
 		return "", false, nil
 	}
-	cachedHash, ok := cachedEvalHash(dest)
-	if !ok {
+	m, err := loadEvalManifest()
+	if err != nil {
+		return "", false, err
+	}
+	prev, ok := m.Images[opts.Name]
+	if !ok || prev.ResolvedURL != remote.URL || prev.Bytes != remote.Size ||
+		prev.ETag != remote.ETag {
 		return "", false, nil
 	}
-	if expected != "" && cachedHash != expected {
-		logf(opts.Progress, "cached %s failed pinned verification "+
-			"(have %s..., want %s...); re-downloading\n",
-			filepath.Base(dest), short(cachedHash), short(expected))
+	if _, err := os.Stat(prev.Path); err != nil {
 		return "", false, nil
 	}
-	logf(opts.Progress, "using cached %s (sha256:%s)\n",
-		filepath.Base(dest), short(cachedHash))
-	path, err = finishFetch(opts, spec, dest, cachedHash, expected, false)
+	expected := strings.ToLower(strings.TrimSpace(opts.SHA256))
+	if expected != "" && expected != prev.SHA256 {
+		return "", false, fmt.Errorf("verification FAILED for %s: expected sha256 %s, "+
+			"the cached download has %s", prev.Path, expected, prev.SHA256)
+	}
+	logf(opts.Progress, "base %s is current (%s)\n", filepath.Base(prev.Path), url)
+	prev.URL = url
+	prev.Pinned = prev.Pinned || expected != ""
+	path, err := activateBase(opts, prev, false)
 	return path, true, err
 }
 
-// finishFetch records the fetched image in the manifest and the layer cache
-// and decides whether it may become the active base. A pinned (verified) image
-// is activated; an unpinned one is recorded but only activated with
-// AcceptUnpinned. fresh reports that gotHash was computed from the bytes just
-// downloaded (rather than read from a cached copy's sidecar).
-func finishFetch(
-	opts FetchOptions, spec EvalImageSpec, dest, gotHash, expected string, fresh bool,
-) (string, error) {
-	pinned := expected != "" && gotHash == expected
-
+// activateBase records e as opts.Name's base and makes it active. A base file
+// it replaces is kept in OldBases until no prepared layer or VM uses it.
+// fresh reports that e.SHA256 was computed from bytes just downloaded.
+func activateBase(opts FetchOptions, e evalManifestEntry, fresh bool) (string, error) {
 	m, err := loadEvalManifest()
 	if err != nil {
 		return "", err
 	}
-	fi, _ := os.Stat(dest)
-	var size int64
-	if fi != nil {
-		size = fi.Size()
+	if prev, ok := m.Images[opts.Name]; ok && prev.Path != "" && prev.Path != e.Path {
+		m.OldBases = append(m.OldBases, prev.Path)
 	}
-	gen := spec.Generation
-	if gen == 0 {
-		gen = 1
-	}
-	osName := spec.OS
-	if osName == "" {
-		osName = "windows"
-	}
-	m.Images[opts.Name] = evalManifestEntry{
-		Name:       opts.Name,
-		Path:       dest,
-		URL:        firstNonEmpty(opts.URL, spec.URL),
-		SHA256:     gotHash,
-		Generation: gen,
-		OS:         osName,
-		Pinned:     pinned,
-		Bytes:      size,
-		FetchedAt:  time.Now().UTC().Format(time.RFC3339),
-	}
-	recordEvalLayer(dest, gotHash, m.Images[opts.Name].URL, pinned, fresh, opts.Progress)
-
-	if !pinned && !opts.AcceptUnpinned {
-		// Cache the bytes, but refuse to make unverified media the active base.
-		if err := saveEvalManifest(m); err != nil {
-			return "", err
-		}
-		return dest, fmt.Errorf(
-			"UNPINNED: %q downloaded to %s but is not verified "+
-				"against a pinned hash.\n"+
-				"  computed sha256: %s\n"+
-				"To PIN it (verifies the already-cached bytes, no re-download):\n"+
-				"  warden image prepare --driver hyperv --name %s --sha256 %s\n"+
-				"Or to use it as-is without a pinned hash:\n"+
-				"  warden image prepare --driver hyperv --name %s "+
-				"--accept-unpinned",
-			opts.Name, dest, gotHash, opts.Name, gotHash, opts.Name)
-	}
-
+	m.Images[opts.Name] = e
 	m.Active = opts.Name
+	recordEvalLayer(e.Path, e.SHA256, firstNonEmpty(e.ResolvedURL, e.URL), e.Pinned,
+		fresh, opts.Progress)
 	if err := saveEvalManifest(m); err != nil {
 		return "", err
 	}
-	if pinned {
-		logf(opts.Progress,
-			"pinned and activated %q as the Hyper-V build-guest base\n",
-			opts.Name)
-	} else {
-		logf(opts.Progress,
-			"activated %q as the Hyper-V build-guest base "+
-				"(UNPINNED - no authenticity check)\n", opts.Name)
+	logf(opts.Progress, "activated %q as the Hyper-V base: %s\n", opts.Name, e.Path)
+	return e.Path, nil
+}
+
+// remoteImage is what a download URL resolves to.
+type remoteImage struct {
+	URL, Host, Name    string
+	Size               int64
+	ETag, LastModified string
+}
+
+// resolveRemote follows url's redirects with a HEAD request and reports the
+// final location, the file name in its path, and its size and validators.
+func resolveRemote(ctx context.Context, url string) (remoteImage, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodHead, url, nil)
+	if err != nil {
+		return remoteImage{}, err
 	}
-	return dest, nil
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return remoteImage{}, fmt.Errorf("resolving %s: %w", url, err)
+	}
+	_ = resp.Body.Close()
+	if resp.StatusCode != http.StatusOK {
+		return remoteImage{}, fmt.Errorf("resolving %s: HTTP %s", url, resp.Status)
+	}
+	final := resp.Request.URL
+	name := pathpkg.Base(final.Path)
+	if name == "" || name == "/" || name == "." {
+		return remoteImage{}, fmt.Errorf("resolving %s: no file name in %s", url, final)
+	}
+	return remoteImage{
+		URL: final.String(), Host: final.Hostname(), Name: name,
+		Size: resp.ContentLength, ETag: resp.Header.Get("ETag"),
+		LastModified: resp.Header.Get("Last-Modified"),
+	}, nil
 }
 
 // downloadVerified streams url to dest.part while hashing, then atomically
@@ -409,29 +408,6 @@ func downloadVerified(
 		return "", 0, err
 	}
 	return hash, n, nil
-}
-
-// cachedEvalHash returns the hash of a cached file: it prefers the .sha256
-// sidecar, and (defensively) recomputes when the sidecar is missing.
-func cachedEvalHash(dest string) (string, bool) {
-	if _, err := os.Stat(dest); err != nil {
-		return "", false
-	}
-	if b, err := os.ReadFile(dest + ".sha256"); err == nil {
-		if s := strings.ToLower(strings.TrimSpace(string(b))); s != "" {
-			return s, true
-		}
-	}
-	f, err := os.Open(dest)
-	if err != nil {
-		return "", false
-	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", false
-	}
-	return hex.EncodeToString(h.Sum(nil)), true
 }
 
 // progressWriter logs download progress at ~5% (or ~256MiB) boundaries.
@@ -498,9 +474,8 @@ func isLocalImage(source string) bool {
 	return err == nil && fi.Mode().IsRegular()
 }
 
-// registerLocalImage records an already-downloaded generalized image in place
-// (no copy: these are many GB) as a base, with the same pin rules as a
-// download: activated when it matches --sha256, or with --accept-unpinned.
+// registerLocalImage records an image the operator supplied as a local file,
+// in place (no copy: these are many GB), as the active base.
 func registerLocalImage(opts FetchOptions) (string, error) {
 	path, err := filepath.Abs(opts.URL)
 	if err != nil {
@@ -514,31 +489,11 @@ func registerLocalImage(opts FetchOptions) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	m, err := loadEvalManifest()
-	if err != nil {
-		return "", err
-	}
-	m.Images[opts.Name] = evalManifestEntry{
+	return activateBase(opts, evalManifestEntry{
 		Name: opts.Name, Path: path, SHA256: info.SHA256, Generation: gen,
 		OS: "windows", Pinned: pinned, Bytes: info.Size,
 		FetchedAt: time.Now().UTC().Format(time.RFC3339),
-	}
-	if !pinned && !opts.AcceptUnpinned {
-		if err := saveEvalManifest(m); err != nil {
-			return "", err
-		}
-		return path, fmt.Errorf("UNPINNED: %s is not verified against a pinned hash "+
-			"(sha256 %s).\nPin it: warden image prepare --driver hyperv --name %s "+
-			"--source %s --sha256 %s\nOr use it as-is: add --accept-unpinned",
-			path, info.SHA256, opts.Name, path, info.SHA256)
-	}
-	m.Active = opts.Name
-	if err := saveEvalManifest(m); err != nil {
-		return "", err
-	}
-	logf(opts.Progress, "registered %s in place as base %q (Gen%d, %s)\n",
-		path, opts.Name, gen, pinState(pinned))
-	return path, nil
+	}, false)
 }
 
 // diskGeneration is the Hyper-V generation a disk's format boots as.
@@ -563,9 +518,6 @@ func pinLocalImage(opts FetchOptions, path string) (driver.LayerInfo, bool, erro
 		return info, false, err
 	}
 	expected := strings.ToLower(strings.TrimSpace(opts.SHA256))
-	if spec, ok := LookupEvalImage(opts.Name); ok && expected == "" {
-		expected = spec.SHA256
-	}
 	if expected == "" {
 		return info, false, nil
 	}

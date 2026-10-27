@@ -30,6 +30,12 @@ type VMConfig struct {
 	// ImageRefreshAfter / ImageMinGrace: ages such as "7d" or "36h".
 	ImageRefreshAfter string `toml:"image_refresh_after"`
 	ImageMinGrace     string `toml:"image_min_grace"`
+	// WindowsImage is the hyperv base image (a URL or local path) used when
+	// image prepare is given no --source; empty means Microsoft's current
+	// evaluation download. WindowsImageUpdate is "auto" (default: a refresh
+	// picks up new media at that URL) or "reuse" (keep the current base).
+	WindowsImage       string `toml:"windows_image"`
+	WindowsImageUpdate string `toml:"windows_image_update"`
 }
 
 type RelayConfig struct {

@@ -8,37 +8,73 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/ledger"
 )
 
-// evalServer serves fixed bytes as a fake image and counts requests, so a test
-// can assert whether a fetch re-downloaded or used the cache.
+// mediaServer plays Microsoft's download endpoint: /fwlink redirects to
+// /media/<name>, which serves the current bytes (GET or HEAD) with an ETag.
+// setMedia swaps what the link points at; gets counts full downloads.
+type mediaServer struct {
+	*httptest.Server
+	mu   sync.Mutex
+	name string
+	body []byte
+	gets atomic.Int32
+}
+
+func newMediaServer(t *testing.T, name string, body []byte) *mediaServer {
+	t.Helper()
+	ms := &mediaServer{name: name, body: body}
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		ms.mu.Lock()
+		name, body := ms.name, ms.body
+		ms.mu.Unlock()
+		switch r.URL.Path {
+		case "/fwlink":
+			http.Redirect(w, r, "/media/"+name, http.StatusFound)
+		case "/media/" + name:
+			w.Header().Set("ETag", `"`+sum256(body)[:16]+`"`)
+			w.Header().Set("Last-Modified", "Wed, 16 Oct 2024 15:40:30 GMT")
+			w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+			if r.Method == http.MethodGet {
+				ms.gets.Add(1)
+				_, _ = w.Write(body)
+			}
+		default:
+			http.NotFound(w, r)
+		}
+	}
+	ms.Server = httptest.NewServer(http.HandlerFunc(handler))
+	t.Cleanup(ms.Close)
+	return ms
+}
+
+func (ms *mediaServer) setMedia(name string, body []byte) {
+	ms.mu.Lock()
+	ms.name, ms.body = name, body
+	ms.mu.Unlock()
+}
+
+// evalServer serves fixed bytes at any path (one hit per request).
 func evalServer(t *testing.T, body []byte) (*httptest.Server, *atomic.Int32) {
 	t.Helper()
 	var hits atomic.Int32
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		hits.Add(1)
-		w.Header().Set("Content-Length", itoa(len(body)))
-		_, _ = w.Write(body)
+		w.Header().Set("Content-Length", strconv.Itoa(len(body)))
+		if r.Method == http.MethodGet {
+			_, _ = w.Write(body)
+		}
 	}))
 	t.Cleanup(srv.Close)
 	return srv, &hits
-}
-
-func itoa(n int) string {
-	if n == 0 {
-		return "0"
-	}
-	var b []byte
-	for n > 0 {
-		b = append([]byte{byte('0' + n%10)}, b...)
-		n /= 10
-	}
-	return string(b)
 }
 
 func sum256(b []byte) string {
@@ -46,111 +82,141 @@ func sum256(b []byte) string {
 	return hex.EncodeToString(h[:])
 }
 
-func TestFetchEvalImage_PinnedSuccess(t *testing.T) {
+// TestFetchEvalImage_ResolvesAndRecordsProvenance: a URL with no expected hash
+// is downloaded under the resolved file name, activated, and recorded with
+// its resolved URL and validators; nothing needs pinning.
+func TestFetchEvalImage_ResolvesAndRecordsProvenance(t *testing.T) {
 	t.Setenv("WARDEN_HYPERV_CACHE_DIR", t.TempDir())
-	body := []byte("fake-vhd-bytes-pinned")
-	srv, _ := evalServer(t, body)
+	body := []byte("server-2025-media-v1")
+	ms := newMediaServer(t, "26100.1742_serverdatacentereval.vhdx", body)
 
 	path, err := FetchEvalImage(context.Background(), FetchOptions{
-		Name:   "windows-server-2025",
-		URL:    srv.URL + "/server2025.vhd",
-		SHA256: sum256(body),
+		Name: "windows-server-2025", URL: ms.URL + "/fwlink",
 	})
 	if err != nil {
 		t.Fatalf("FetchEvalImage: %v", err)
 	}
-	if path == "" {
-		t.Fatal("empty path")
+	if filepath.Base(path) != "26100.1742_serverdatacentereval.vhdx" {
+		t.Errorf("downloaded to %s, want the resolved file name", path)
 	}
-	// Active + pinned in the manifest, and resolvable.
 	p, isWin, gen, ok := resolveActiveEvalImage()
-	if !ok || p != path {
-		t.Fatalf("resolveActiveEvalImage = %q,%v want %q,true", p, ok, path)
-	}
-	if !isWin || gen != 1 {
-		t.Errorf("active image isWindows=%v gen=%d, want true,1", isWin, gen)
-	}
-	m, _ := loadEvalManifest()
-	if !m.Images["windows-server-2025"].Pinned {
-		t.Error("image should be marked Pinned after a matching hash")
-	}
-}
-
-func TestFetchEvalImage_PinnedMismatch(t *testing.T) {
-	t.Setenv("WARDEN_HYPERV_CACHE_DIR", t.TempDir())
-	body := []byte("fake-vhd-bytes")
-	srv, _ := evalServer(t, body)
-
-	_, err := FetchEvalImage(context.Background(), FetchOptions{
-		Name:   "windows-server-2025",
-		URL:    srv.URL + "/server2025.vhd",
-		SHA256: sum256([]byte("something-else")),
-	})
-	if err == nil {
-		t.Fatal("expected a pinned-verification failure")
-	}
-	// Must not have activated a mismatched image.
-	if _, _, _, ok := resolveActiveEvalImage(); ok {
-		t.Error("a hash-mismatched image must not become the active base")
-	}
-}
-
-func TestFetchEvalImage_UnpinnedRefusedThenPinsFromCache(t *testing.T) {
-	t.Setenv("WARDEN_HYPERV_CACHE_DIR", t.TempDir())
-	body := []byte("fake-vhd-bytes-unpinned")
-	srv, hits := evalServer(t, body)
-
-	// No expected hash and no --accept: cached but refused as active.
-	_, err := FetchEvalImage(context.Background(), FetchOptions{
-		Name: "windows-server-2025",
-		URL:  srv.URL + "/server2025.vhd",
-	})
-	if err == nil {
-		t.Fatal("expected an UNPINNED refusal without --accept-unpinned")
-	}
-	if _, _, _, ok := resolveActiveEvalImage(); ok {
-		t.Error("unpinned image must not be active before it is pinned")
-	}
-	if got := hits.Load(); got != 1 {
-		t.Fatalf("server hits = %d, want 1", got)
-	}
-
-	// Pin it with the computed hash: should verify the CACHED bytes (no
-	// re-download) and activate.
-	if _, err := FetchEvalImage(context.Background(), FetchOptions{
-		Name:   "windows-server-2025",
-		URL:    srv.URL + "/server2025.vhd",
-		SHA256: sum256(body),
-	}); err != nil {
-		t.Fatalf("pin from cache: %v", err)
-	}
-	if got := hits.Load(); got != 1 {
-		t.Errorf("server hits = %d after pin, want still 1 (should reuse cache)", got)
-	}
-	if _, _, _, ok := resolveActiveEvalImage(); !ok {
-		t.Error("image should be active after pinning")
-	}
-}
-
-func TestFetchEvalImage_AcceptUnpinned(t *testing.T) {
-	t.Setenv("WARDEN_HYPERV_CACHE_DIR", t.TempDir())
-	body := []byte("fake-vhd-bytes-accepted")
-	srv, _ := evalServer(t, body)
-
-	if _, err := FetchEvalImage(context.Background(), FetchOptions{
-		Name:           "windows-server-2025",
-		URL:            srv.URL + "/server2025.vhd",
-		AcceptUnpinned: true,
-	}); err != nil {
-		t.Fatalf("accept-unpinned fetch: %v", err)
+	if !ok || p != path || !isWin || gen != 2 {
+		t.Fatalf("active = %q win=%v gen=%d ok=%v", p, isWin, gen, ok)
 	}
 	m, _ := loadEvalManifest()
 	e := m.Images["windows-server-2025"]
-	if e.Pinned {
-		t.Error("accept-unpinned image must be recorded as NOT pinned")
+	if e.Pinned || e.SHA256 != sum256(body) || e.ETag == "" ||
+		!strings.HasSuffix(e.ResolvedURL, "/media/26100.1742_serverdatacentereval.vhdx") ||
+		e.URL != ms.URL+"/fwlink" {
+		t.Errorf("manifest entry = %+v", e)
 	}
-	if m.Active != "windows-server-2025" {
-		t.Error("accept-unpinned image should be active")
+	src, ok := LayerCache().Source(path)
+	if !ok || src.Kind != ledger.SourceURL || src.URL != e.ResolvedURL {
+		t.Errorf("layer source = %+v, want the resolved URL", src)
+	}
+}
+
+func TestFetchEvalImage_UnchangedRemoteIsNotDownloadedAgain(t *testing.T) {
+	t.Setenv("WARDEN_HYPERV_CACHE_DIR", t.TempDir())
+	ms := newMediaServer(t, "media-v1.vhdx", []byte("v1"))
+	opts := FetchOptions{Name: "windows-server-2025", URL: ms.URL + "/fwlink"}
+	if _, err := FetchEvalImage(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := FetchEvalImage(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if got := ms.gets.Load(); got != 1 {
+		t.Errorf("downloads = %d, want 1 (the second fetch only resolves)", got)
+	}
+	opts.Force = true
+	if _, err := FetchEvalImage(context.Background(), opts); err != nil {
+		t.Fatal(err)
+	}
+	if got := ms.gets.Load(); got != 2 {
+		t.Errorf("downloads = %d after --force, want 2", got)
+	}
+}
+
+// TestFetchEvalImage_NewMediaLandsBesideOldBase: when the link moves to new
+// media, it is downloaded next to the old base, which is kept in OldBases.
+func TestFetchEvalImage_NewMediaLandsBesideOldBase(t *testing.T) {
+	t.Setenv("WARDEN_HYPERV_CACHE_DIR", t.TempDir())
+	ms := newMediaServer(t, "media-v1.vhdx", []byte("v1"))
+	opts := FetchOptions{Name: "windows-server-2025", URL: ms.URL + "/fwlink"}
+	v1, err := FetchEvalImage(context.Background(), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	ms.setMedia("media-v2.vhdx", []byte("v2-newer"))
+	v2, err := FetchEvalImage(context.Background(), opts)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if v1 == v2 || filepath.Base(v2) != "media-v2.vhdx" {
+		t.Fatalf("v1=%s v2=%s, want a new file beside the old", v1, v2)
+	}
+	if _, err := os.Stat(v1); err != nil {
+		t.Errorf("old base removed early: %v", err)
+	}
+	m, _ := loadEvalManifest()
+	if len(m.OldBases) != 1 || m.OldBases[0] != v1 || m.Images[m.Active].Path != v2 {
+		t.Errorf("manifest = active %s, old %v", m.Images[m.Active].Path, m.OldBases)
+	}
+}
+
+func TestFetchEvalImage_ExpectedHash(t *testing.T) {
+	t.Setenv("WARDEN_HYPERV_CACHE_DIR", t.TempDir())
+	body := []byte("v1")
+	ms := newMediaServer(t, "media-v1.vhdx", body)
+	_, err := FetchEvalImage(context.Background(), FetchOptions{
+		Name: "windows-server-2025", URL: ms.URL + "/fwlink", SHA256: sum256([]byte("x")),
+	})
+	if err == nil || !strings.Contains(err.Error(), "verification FAILED") {
+		t.Fatalf("mismatch: err = %v", err)
+	}
+	if _, _, _, ok := resolveActiveEvalImage(); ok {
+		t.Error("a mismatched download must not become the active base")
+	}
+	if _, err := FetchEvalImage(context.Background(), FetchOptions{
+		Name: "windows-server-2025", URL: ms.URL + "/fwlink", SHA256: sum256(body),
+	}); err != nil {
+		t.Fatal(err)
+	}
+	m, _ := loadEvalManifest()
+	if !m.Images["windows-server-2025"].Pinned {
+		t.Error("a matching --sha256 should record the base as pinned")
+	}
+}
+
+// TestFetchEvalImage_DefaultURLMustBeMicrosoft: the registry default is only
+// trusted when it resolves to a Microsoft host.
+func TestFetchEvalImage_DefaultURLMustBeMicrosoft(t *testing.T) {
+	t.Setenv("WARDEN_HYPERV_CACHE_DIR", t.TempDir())
+	ms := newMediaServer(t, "media.vhdx", []byte("v1"))
+	orig := evalImageRegistry["windows-server-2025"]
+	t.Cleanup(func() { evalImageRegistry["windows-server-2025"] = orig })
+	spec := orig
+	spec.URL = ms.URL + "/fwlink" // resolves to 127.0.0.1, not microsoft.com
+	evalImageRegistry["windows-server-2025"] = spec
+
+	_, err := FetchEvalImage(context.Background(), FetchOptions{Name: "windows-server-2025"})
+	if err == nil || !strings.Contains(err.Error(), "not a Microsoft host") {
+		t.Fatalf("err = %v, want the non-Microsoft refusal", err)
+	}
+	// The same URL passed explicitly is the operator's choice.
+	if _, err := FetchEvalImage(context.Background(), FetchOptions{
+		Name: "windows-server-2025", URL: ms.URL + "/fwlink",
+	}); err != nil {
+		t.Fatalf("explicit URL: %v", err)
+	}
+}
+
+func TestFetchEvalImage_DefaultRegistryURL(t *testing.T) {
+	spec, ok := LookupEvalImage("windows-server-2025")
+	if !ok || !spec.Official ||
+		!strings.HasPrefix(spec.URL, "https://go.microsoft.com/fwlink/") {
+		t.Fatalf("windows-server-2025 spec = %+v", spec)
 	}
 }
 
@@ -158,7 +224,30 @@ func TestFetchEvalImage_UnknownNameNeedsURL(t *testing.T) {
 	t.Setenv("WARDEN_HYPERV_CACHE_DIR", t.TempDir())
 	if _, err := FetchEvalImage(
 		context.Background(), FetchOptions{Name: "no-such-image"}); err == nil {
-		t.Fatal("expected an error for an unknown image with no --url")
+		t.Fatal("expected an error for an unknown image with no --source")
+	}
+	if _, err := FetchEvalImage(
+		context.Background(), FetchOptions{Name: "windows-server-2022"}); err == nil ||
+		!strings.Contains(err.Error(), "no default download") {
+		t.Fatalf("2022 has no default URL: err = %v", err)
+	}
+}
+
+func TestRegisterLocalImageActivatesInPlace(t *testing.T) {
+	t.Setenv("WARDEN_HYPERV_CACHE_DIR", t.TempDir())
+	local := filepath.Join(t.TempDir(), "server2025.vhdx")
+	if err := os.WriteFile(local, []byte("local-media"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	path, err := FetchEvalImage(context.Background(), FetchOptions{
+		Name: "windows-server-2025", URL: local,
+	})
+	if err != nil || path != local {
+		t.Fatalf("register = %q, %v", path, err)
+	}
+	m, _ := loadEvalManifest()
+	if e := m.Images["windows-server-2025"]; e.URL != "" || e.Pinned || m.Active == "" {
+		t.Errorf("local entry = %+v active=%q", e, m.Active)
 	}
 }
 

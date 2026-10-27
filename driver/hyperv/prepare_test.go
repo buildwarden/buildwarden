@@ -251,3 +251,47 @@ func TestParseKVPLines(t *testing.T) {
 		t.Errorf("parseKVPLines = %v", kv)
 	}
 }
+
+// inUseFake reports a fixed set of disks in use.
+type inUseFake struct {
+	fakeProv
+	disks []string
+}
+
+func (f *inUseFake) DisksInUse(context.Context) ([]string, error) { return f.disks, nil }
+
+func TestRetireOldBases(t *testing.T) {
+	t.Setenv("WARDEN_HYPERV_CACHE_DIR", t.TempDir())
+	dir := t.TempDir()
+	file := func(n string) string {
+		p := filepath.Join(dir, n)
+		if err := os.WriteFile(p, []byte(n), 0o644); err != nil {
+			t.Fatal(err)
+		}
+		return p
+	}
+	unused, needed, busy, active := file("v1.vhdx"), file("v2.vhdx"), file("v3.vhdx"),
+		file("v4.vhdx")
+	layer := file("layer.vhdx")
+	m := &evalManifest{
+		Images:         map[string]evalManifestEntry{},
+		OldBases:       []string{unused, needed, busy},
+		ActivePrepared: layer,
+		Prepared: []PreparedBase{
+			{Path: file("old-layer.vhdx"), BasePath: needed},
+			{Path: layer, BasePath: active},
+		},
+	}
+	if err := saveEvalManifest(m); err != nil {
+		t.Fatal(err)
+	}
+	retireOldPrepared(context.Background(), &inUseFake{disks: []string{busy}}, os.Stderr)
+
+	got, _ := loadEvalManifest()
+	if len(got.OldBases) != 2 || got.OldBases[0] != needed || got.OldBases[1] != busy {
+		t.Errorf("OldBases = %v, want the needed and the in-use base kept", got.OldBases)
+	}
+	if _, err := os.Stat(unused); !os.IsNotExist(err) {
+		t.Error("an unused old base was not deleted")
+	}
+}

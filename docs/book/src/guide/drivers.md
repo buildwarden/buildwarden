@@ -234,14 +234,24 @@ Create the durable network builds reuse (one time, from an elevated terminal):
 warden setup --driver hyperv
 ```
 
-Prepare a Windows Server base image. The first prepare needs the evaluation
-image: a URL, or a VHD/VHDX you already downloaded (registered in place, not
-copied):
+Prepare a Windows Server base image. By default warden downloads Microsoft's
+current Windows Server 2025 evaluation VHDX (about 11 GB) from the Evaluation
+Center link; `--source` or `[vm] windows_image` names another URL, or a file
+you already have (registered in place, not copied):
 
 ```sh
-warden image prepare --driver hyperv --source https://.../server2025.vhd
-warden image prepare --driver hyperv --source D:\images\server2025.vhdx --accept-unpinned
+warden image prepare --driver hyperv
+warden image prepare --driver hyperv --source D:\images\server2025.vhdx
 ```
+
+Nothing is pinned in advance: the download comes over HTTPS (the default link
+must resolve to a Microsoft host), and the resolved URL, ETag and the sha256
+computed while downloading are recorded in the image manifest and in every
+build's ledger. `--sha256` adds an expected-digest check. When Microsoft
+publishes new media behind the link, the next refresh downloads it beside the
+current base and prepares from it; `[vm] windows_image_update = "reuse"`
+keeps the current base instead. A base you supplied as a local file is never
+replaced automatically.
 
 Prepare boots the image once with no network adapter. OOBE runs, a tuning
 script turns off background work builds never need (Windows Update,

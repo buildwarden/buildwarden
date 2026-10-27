@@ -63,7 +63,7 @@ func recordEvalLayer(dest, gotHash, url string, pinned, fresh bool, progress io.
 	cache.Progress = progress
 	src := ledger.LayerSource{Kind: ledger.SourceURL, URL: url, Pinned: pinned}
 	if url == "" {
-		src = ledger.LayerSource{Kind: ledger.SourceLocal}
+		src = ledger.LayerSource{Kind: ledger.SourceLocal, Pinned: pinned}
 	}
 	if !fresh {
 		info, err := cache.Lookup(dest, "")

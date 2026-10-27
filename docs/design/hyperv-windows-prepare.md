@@ -82,6 +82,23 @@ VHDX):
    ClipSVC/LicenseManager license sync. Revocation checks a build itself makes
    (CRL/AIA) are left alone. The guest is the untrusted side
    and the VM plus relay are the boundary, so in-guest AV adds no isolation.
+6a. **Base images: latest from Microsoft, provenance instead of pinning**
+   (decided 2026-10-27). The base comes from `--source`, else `[vm]
+   windows_image` (URL or local path), else the registry default: for Server
+   2025, Microsoft's Evaluation Center fwlink
+   (`go.microsoft.com/fwlink/?linkid=2293215`), which Microsoft repoints at its
+   current media. A HEAD request resolves it; the file is downloaded under its
+   own name beside any previous base, and the resolved URL, ETag,
+   Last-Modified and computed sha256 go into the manifest and the ledger. No
+   hash is pinned in code and `--accept-unpinned` is gone; `--sha256` remains
+   an optional check. Each refresh re-checks a URL base and switches to new
+   media by default (`[vm] windows_image_update = "auto"`; `"reuse"` keeps
+   the current one); a failed check only warns, so refresh still works offline.
+   A base supplied as a local file is never replaced automatically. A replaced
+   base is deleted once no prepared layer or VM uses it. *Rejected:* pinning a
+   hash in code (Microsoft publishes none, and it would freeze the media);
+   scanning the user's Downloads folder for a matching file (explicit sources
+   only).
 6. **At most one prepare per driver cache at a time**, enforced by an OS file
    lock, with an atomic switch of the manifest's `active` pointer.
 7. **Two image stages, the same for both drivers.** A *generalized base* is an
@@ -132,11 +149,11 @@ None.
 
 ### `warden image prepare --driver hyperv --os windows`
 
-Same flags and pin/verify semantics as qemu (`--source`, `--sha256`,
-`--accept-unpinned`, `--force`, `--name`), plus `--keep-vms`. `--source` may
-also be a local VHD/VHDX, registered in place (no copy; the disk-hash cache
-avoids re-hashing it). With no source, digest or `--force`, prepare skips the
-fetch and re-prepares the pinned base: that is the refresh, so there is no
+Flags: `--source`, `--sha256`, `--force`, `--name`, `--keep-vms` (base-image
+sourcing per Decision 6a). `--source` may also be a local VHD/VHDX, registered
+in place (no copy; the disk-hash cache avoids re-hashing it). With no source,
+digest or `--force`, prepare is the refresh: it re-checks a URL base for new
+media (unless `windows_image_update = "reuse"`) and re-prepares, so there is no
 separate `--refresh` flag. Steps:
 
 1. Take the prepare lock (`driver.TryHostLock("hyperv-prepare")`, an OS file
@@ -269,8 +286,19 @@ under `image_min_grace`.
 `security_boundary: none`. Removing Defender and Windows Update changes the
 guest's internal posture only; the guest is already the untrusted side, and the
 host/guest and guest/relay boundaries are unchanged. Prepare runs with no
-network adapter, so the only inputs to the prepared layer are the pinned eval
-image and the seed, whose hashes are recorded. The prepared layer is a cached
+network adapter, so the only inputs to the prepared layer are the base image
+and the seed, whose hashes are recorded.
+
+Base-image trust (Decision 6a) changes the original Hyper-V plan's
+secure-by-default rule (`hyperv-driver-plan.md`: refuse an image with no
+pinned hash unless `--accept-unpinned`). The default download is now trusted
+on HTTPS to a Microsoft host plus recorded provenance, with no prior hash:
+Microsoft publishes none for its evaluation media, and pinning one in code
+would freeze the media. What a build booted is still exactly identified
+(resolved URL, ETag, sha256 in its signed ledger) and can be compared across
+builds and hosts after the fact; `--sha256` restores a prior check for anyone
+who has an independent digest. An explicit `--source` / `[vm] windows_image`
+URL is the operator's choice and has no host restriction. The prepared layer is a cached
 trust input: it is hashed at prepare, checked cheaply per build, fully re-hashed
 by `warden image verify` / `doctor`, and marked read-only.
 
