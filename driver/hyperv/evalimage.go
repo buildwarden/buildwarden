@@ -107,6 +107,12 @@ func evalImagesDir() string {
 	return filepath.Join(hypervCacheDir(), "images")
 }
 
+// ownedBase reports whether p is a base image warden downloaded (into
+// evalImagesDir), and so may delete once it is replaced and unused.
+func ownedBase(p string) bool {
+	return p != "" && diskKey(filepath.Dir(p)) == diskKey(evalImagesDir())
+}
+
 func evalManifestPath() string {
 	return filepath.Join(evalImagesDir(), "index.json")
 }
@@ -307,14 +313,15 @@ func unchangedRemote(
 }
 
 // activateBase records e as opts.Name's base and makes it active. A base file
-// it replaces is kept in OldBases until no prepared layer or VM uses it.
+// it replaces is kept in OldBases until no prepared layer or VM uses it, if
+// warden downloaded it; a file the user registered in place is theirs.
 // fresh reports that e.SHA256 was computed from bytes just downloaded.
 func activateBase(opts FetchOptions, e evalManifestEntry, fresh bool) (string, error) {
 	m, err := loadEvalManifest()
 	if err != nil {
 		return "", err
 	}
-	if prev, ok := m.Images[opts.Name]; ok && prev.Path != "" && prev.Path != e.Path {
+	if prev, ok := m.Images[opts.Name]; ok && ownedBase(prev.Path) && prev.Path != e.Path {
 		m.OldBases = append(m.OldBases, prev.Path)
 	}
 	m.Images[opts.Name] = e

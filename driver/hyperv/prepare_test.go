@@ -262,7 +262,14 @@ func (f *inUseFake) DisksInUse(context.Context) ([]string, error) { return f.dis
 
 func TestRetireOldBases(t *testing.T) {
 	t.Setenv("WARDEN_HYPERV_CACHE_DIR", t.TempDir())
-	dir := t.TempDir()
+	dir := evalImagesDir()
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		t.Fatal(err)
+	}
+	userFile := filepath.Join(t.TempDir(), "mine.vhdx")
+	if err := os.WriteFile(userFile, []byte("user"), 0o644); err != nil {
+		t.Fatal(err)
+	}
 	file := func(n string) string {
 		p := filepath.Join(dir, n)
 		if err := os.WriteFile(p, []byte(n), 0o644); err != nil {
@@ -275,7 +282,7 @@ func TestRetireOldBases(t *testing.T) {
 	layer := file("layer.vhdx")
 	m := &evalManifest{
 		Images:         map[string]evalManifestEntry{},
-		OldBases:       []string{unused, needed, busy},
+		OldBases:       []string{unused, needed, userFile, busy},
 		ActivePrepared: layer,
 		Prepared: []PreparedBase{
 			{Path: file("old-layer.vhdx"), BasePath: needed},
@@ -293,5 +300,8 @@ func TestRetireOldBases(t *testing.T) {
 	}
 	if _, err := os.Stat(unused); !os.IsNotExist(err) {
 		t.Error("an unused old base was not deleted")
+	}
+	if _, err := os.Stat(userFile); err != nil {
+		t.Errorf("a user-registered base outside the cache was touched: %v", err)
 	}
 }

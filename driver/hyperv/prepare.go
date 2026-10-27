@@ -395,7 +395,9 @@ func retireLayers(m *evalManifest, used map[string]bool, progress io.Writer) []P
 
 // retireBases returns m.OldBases without the base files it deleted: those no
 // remaining prepared layer is built on and no VM uses. A layer recorded
-// before BasePath existed may be on any base, so then nothing is deleted.
+// before BasePath existed may be on any base, so then nothing is deleted. A
+// file outside the image cache was registered by the user and is only
+// dropped from the list.
 func retireBases(m *evalManifest, used map[string]bool, progress io.Writer) []string {
 	needed := map[string]bool{}
 	for _, pb := range m.Prepared {
@@ -406,6 +408,9 @@ func retireBases(m *evalManifest, used map[string]bool, progress io.Writer) []st
 	}
 	var kept []string
 	for _, b := range m.OldBases {
+		if !ownedBase(b) {
+			continue
+		}
 		if needed[diskKey(b)] || used[diskKey(b)] {
 			kept = append(kept, b)
 			continue
