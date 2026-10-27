@@ -128,11 +128,12 @@ func rewriteCopy(
 		srcDir := isDir(filepath.Join(contextDir, src))
 		anyDir = anyDir || srcDir
 		for _, f := range expanded {
-			rel := f
+			// A file (or glob match) lands in dest by its base name, as docker
+			// does; a directory's files keep their path under it, with the
+			// source prefix stripped: src="cmd", f="cmd/relay/main.go" →
+			// "relay/main.go".
+			rel := path.Base(f)
 			if srcDir {
-				// Strip source prefix so files land correctly
-				// under dest. E.g., src="cmd", f="cmd/relay/main.go"
-				// → rel="relay/main.go"
 				rel = strings.TrimPrefix(f, srcClean+"/")
 			}
 			files = append(files, fetchFile{

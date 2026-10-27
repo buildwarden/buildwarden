@@ -4,6 +4,7 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"path"
 	"regexp"
 	"strings"
 )
@@ -154,7 +155,7 @@ func (b *builder) handleCopy(rest string) error {
 				fmt.Fprintf(&b.sb,
 					"warden-io fetch %s -o %s\n",
 					shellQuote(src),
-					shellQuote(dest+src))
+					shellQuote(dest+path.Base(src)))
 			}
 		}
 	}

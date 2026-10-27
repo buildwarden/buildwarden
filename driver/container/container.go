@@ -120,6 +120,7 @@ func (d *Driver) StartBuild(
 			&ctrctl.ContainerExecOpts{
 				Cmd:         execCmd,
 				Interactive: true,
+				Workdir:     buildWorkdir,
 			},
 			b.buildContainer,
 			"warden-io", "initialize",
@@ -222,6 +223,7 @@ func (d *Driver) Exec(
 			},
 			Interactive: true,
 			Tty:         true,
+			Workdir:     buildWorkdir,
 		},
 		b.buildContainer,
 		"sh", "-c", "sh; s=$?; echo $s > "+shellExitFile+"; exit $s",
@@ -416,6 +418,10 @@ func (b *build) pullBuildBaseImage(image string) error {
 	return nil
 }
 
+// buildWorkdir is where build commands start. It is created by injectWarden
+// rather than with run --workdir: podman refuses a workdir the image lacks.
+const buildWorkdir = "/work"
+
 func (b *build) startBuildContainer(image string) error {
 	args := append(ctrctl.Cli, "container", "run",
 		"--detach",
@@ -424,13 +430,16 @@ func (b *build) startBuildContainer(image string) error {
 		"--dns", b.subnet.RelayIP,
 		"--add-host", "artifacts:"+b.subnet.RelayIP,
 		"--add-host", "cwd:"+b.subnet.RelayIP,
-		"--workdir", "/work",
 		image,
 		"sleep", "infinity",
 	)
 	cmd := exec.Command(args[0], args[1:]...)
 	out, err := cmd.Output()
 	if err != nil {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) && len(ee.Stderr) > 0 {
+			err = fmt.Errorf("%w: %s", err, strings.TrimSpace(string(ee.Stderr)))
+		}
 		return fmt.Errorf(
 			"error starting build container: %w", err)
 	}
@@ -544,6 +553,9 @@ func (b *build) injectWarden() error {
 	}
 
 	cmds := [][]string{
+		{"mkdir", "-p", buildWorkdir},
+		// cp from a Windows host carries no exec bit.
+		{"chmod", "0755", "/.warden/warden-io"},
 		{"ln", "-sf",
 			"/.warden/warden-io",
 			"/usr/local/bin/warden-io"},
@@ -690,9 +702,11 @@ func (b *build) buildRelayFromSource() error {
 			"error cross-compiling relay: %w", err)
 	}
 
+	// chmod in the image: a context on a Windows host carries no exec bit.
 	dockerfile := `FROM alpine:latest
 RUN apk add --no-cache ca-certificates
 COPY relay /usr/local/bin/relay
+RUN chmod 0755 /usr/local/bin/relay
 EXPOSE 53/udp 80 443 8301
 ENTRYPOINT ["relay"]
 `

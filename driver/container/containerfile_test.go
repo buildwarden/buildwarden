@@ -177,3 +177,32 @@ func TestRewriteCopy_DirWithOneFile(t *testing.T) {
 		t.Errorf("COPY sub /work/sub should fetch into /work/sub/in.txt, got:\n%s", got)
 	}
 }
+
+// A file from a subdirectory, or several glob matches, copied into a
+// directory dest land by base name, as docker places them.
+func TestRewriteCopy_FileIntoDirUsesBaseName(t *testing.T) {
+	ctx := t.TempDir()
+	if err := os.MkdirAll(filepath.Join(ctx, "sub", "deep"), 0o755); err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []string{"sub/deep/d.txt", "sub/a.txt", "sub/b.txt"} {
+		if err := os.WriteFile(filepath.Join(ctx, f), []byte("x"), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cases := map[string][]string{
+		"COPY sub/deep/d.txt /opt/": {`-o "/opt/d.txt"`},
+		"COPY sub/*.txt /opt/":      {`-o "/opt/a.txt"`, `-o "/opt/b.txt"`},
+	}
+	for line, want := range cases {
+		got, err := rewriteCopy(line, ctx)
+		if err != nil {
+			t.Fatal(err)
+		}
+		for _, w := range want {
+			if !strings.Contains(got, w) {
+				t.Errorf("%s: want %s, got:\n%s", line, w, got)
+			}
+		}
+	}
+}
