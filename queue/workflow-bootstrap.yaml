@@ -103,3 +103,6 @@ history:
   - at: 2026-10-28T23:33:52Z
     by: cloud/20261028T2325Z-attended
     event: entered phase 7 (sign-off)
+  - at: 2026-10-28T23:51:33Z
+    by: attended-setup
+    event: 'Branch cleanup (FLOW-16), remote deletes are Jeff''s: docs/housekeeping-guidance is merged (PR 62): git push origin --delete docs/housekeeping-guidance. chore/entire-sessions is contained in this PR: delete it with the PR branch once PR 63 merges (m8-archive).'

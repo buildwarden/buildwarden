@@ -163,3 +163,6 @@ history:
   - at: 2026-10-28T23:33:34Z
     by: cloud/20261028T2325Z-attended
     event: parallel round done; waiting on the merge queue
+  - at: 2026-10-28T23:51:33Z
+    by: attended-setup
+    event: 'Jeff: the Dockerfile and its translated build.sh are the build''s inputs (COPY becomes warden-io fetch, recorded by the ledger). Design Problem/Decisions reframed in db59d5e; behavior unchanged. The branch head moved past the p4 report, so m4-review re-reviews in the merge round.'
