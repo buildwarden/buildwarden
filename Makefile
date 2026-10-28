@@ -1,4 +1,4 @@
-.PHONY: build test integration-test lint fmt tidy cover clean sign relay-vm
+.PHONY: build test integration-test lint fmt tidy cover clean sign relay-vm deadcode
 
 UNAME_S := $(shell uname -s)
 UNAME_M := $(shell uname -m)
@@ -52,6 +52,15 @@ relay-vm:
 
 lint:
 	golangci-lint run
+
+# Code unreachable from any main or test, per platform (FLOW-15). Remove what
+# all three report, or say why it stays.
+DEADCODE := golang.org/x/tools/cmd/deadcode@v0.38.0
+deadcode:
+	@GOBIN=$(CURDIR)/dist go install $(DEADCODE)
+	@for os in linux darwin windows; do \
+		echo "== $$os"; GOOS=$$os $(CURDIR)/dist/deadcode -test ./... ; \
+	done
 
 fmt:
 	gofmt -s -w .

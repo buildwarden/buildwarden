@@ -47,7 +47,7 @@ warden-output/
 ├── artifacts/              # Build outputs posted to the ledger
 │   └── myapp
 ├── Dockerfile.submitted    # What you wrote
-├── Dockerfile.actual       # What actually ran (with warden injections)
+├── build.sh                # What actually ran (translated from it)
 ├── ca.cert.pem.zst         # Ephemeral CA (destroyed after build)
 └── relay.log               # Relay event log
 ```
@@ -194,7 +194,7 @@ make lint      # golangci-lint
 make cover     # Tests with coverage report
 ```
 
-See [DEVELOPING.md](DEVELOPING.md) for project structure and extension system.
+See [DEVELOPING.md](DEVELOPING.md) for project structure, and [How It Works](docs/book/src/concepts/overview.md) for each component as pseudocode.
 
 ## License
 

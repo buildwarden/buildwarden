@@ -21,7 +21,7 @@ make clean     # Remove built binaries
 ## Project Structure
 
 ```
-cmd/warden/              Host binary — CLI, orchestrator, inspect, extensions
+cmd/warden/              Host binary — CLI, orchestrator, inspect
 cmd/relay/               Container binary — proxy, ledger writer, DNS, TLS, fair scheduler
 ledger/                  Shared library — wire format types, reader, verification
 examples/                Example Dockerfiles
@@ -62,19 +62,16 @@ A project standard for every command and driver:
    `driver.ExitError` and warden exits with that code; `--timeout` exits 124
    and Ctrl-C 130. Everything else exits 1.
 
-## Extension System
+## Trust and the Baseline
 
-Extensions implement `BeforeBuild(env *CtrEnv) error` and optionally `Env() map[string]string`. They:
-
-1. Write files to the staged `/.warden` tree (`ExtensionContext.WardenDir`, in the build's private work dir; copied into the build container as `/.warden`)
-2. Write shell scripts to its `ext.d/` (exec'd inside the build container)
-3. Return env vars to inject into the Dockerfile after each `FROM` line
-
-Current extensions:
-- **truststore** — Injects CA cert into system trust store (`/etc/ssl/certs/`)
-- **jks_truststore** — Creates Java KeyStore, sets MAVEN_OPTS/GRADLE_OPTS for JVM tools
-- **cacerts_env** — Env vars for non-system-CA package managers (npm, pip, uv, poetry, conda, cargo, gem, nix, hex, composer, conan)
-- **epoch** — Sets SOURCE_DATE_EPOCH=0 for reproducible builds
+`warden-io initialize` sets up the build environment itself, from the relay
+(`docs/development/bootstrap.md`, BOOT-05). It installs the relay CA per the
+trust mode in the bootstrap config (`bootstrap/`), then applies a fixed
+baseline derived from the CA: a Java truststore written by a minimal JKS writer
+(`cmd/warden-io/jks.go`), `/etc/bazel.bazelrc`, `MAVEN_OPTS`/`GRADLE_OPTS`, the
+CA-bundle variables for non-system-CA package managers, and
+`SOURCE_DATE_EPOCH=0`. Support for a new tool goes in
+`cmd/warden-io/baseline.go`. See `docs/book/src/concepts/baseline.md`.
 
 ## Running Integration Tests
 

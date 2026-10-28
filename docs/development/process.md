@@ -285,6 +285,32 @@ through human sign-off (FLOW-08).
 
 ---
 
+### FLOW-15 — The merge round sweeps duplication, dead code and the overview
+
+**Severity:** MUST
+**Check:** automated + agent-judgment
+
+FLOW-10 looks across features; this sweep looks inside the codebase the feature
+leaves behind. The merge round records its results in the design's consolidation
+section:
+
+- **Dead code.** `make deadcode` reports code unreachable on Linux, macOS and
+  Windows, tests included. A function unreachable on all three is removed, or kept
+  with a stated reason: exported API of the library packages third-party
+  orchestrators embed (`relay/`, `collector/`, `ledger/`, `relaycfg/`,
+  `bootstrap/`), or cgo-only code the cross-platform run cannot see
+  (`driver/vz`), which is checked on a macOS host instead.
+- **Duplication.** Two implementations of one job are merged into one path: two
+  translators, two CA installers, or one setup step done both on the host and in
+  the executor. Where the copies have drifted, the merged path keeps the correct
+  behavior and the design says which one that was.
+- **The overview.** [`concepts/overview.md`](../book/src/concepts/overview.md)
+  holds pseudocode for each core component. A change to a component's flow
+  updates its pseudocode in the same change, so users and agents can read how
+  BuildWarden works without reverse-engineering it.
+
+---
+
 ## Bootstrap order
 
 The process starts with this ordering, highest first. The windows-driver

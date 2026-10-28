@@ -26,7 +26,7 @@ relay boots unconfigured → warden claims it (tunnel + config) → build guest 
 The relay keeps no build state on disk; it streams every output to, and pulls every input from, a host-side **collector** over a tunnel the orchestrator opens on the relay's claim port.
 
 **Drivers:**
-- **Container** (`--driver container`, default) — Relay as sidecar container, iptables isolation via netns sidecar, `warden-io initialize` exec'd in build container.
+- **Container** (`--driver container`, default) — Relay as sidecar container; a namespace holder isolated by the iptables sidecar before the build container exists; build container created with `warden-io initialize` as its entrypoint.
 - **QEMU** (`--driver qemu`) — Two-VM topology (relay VM + build VM). Topological isolation. Works on macOS/Linux/Windows; Linux and Windows guests.
 - **VZ** (`--driver vz`) — macOS/arm64 only. Relay as host process (gvisor netstack, FD ingress). macOS build VM with single socketpair interface.
 - **Hyper-V** (`--driver hyperv`) — Windows. Two-VM topology on Hyper-V with a host-only NAT switch; Windows and Linux guests. One-time `warden setup` creates the durable switches.
@@ -34,23 +34,25 @@ The relay keeps no build state on disk; it streams every output to, and pulls ev
 **Key components:**
 - **Relay** (`relay/` library, `cmd/relay/` binary) — MITM proxy, DNS, ledger writer, control plane, heartbeat. Three modes: container (bind ports), vm (PID 1 in Alpine VM), host (FD ingress + SSRF filter).
 - **warden-io** (`cmd/warden-io/`) — Build-environment agent. Subcommands: initialize (full lifecycle), fetch (context files), post (artifacts), trust (CA install).
-- **Orchestrator** (`cmd/warden/`) — CLI, driver selection, Dockerfile translation, extensions, inspect.
+- **Orchestrator** (`cmd/warden/`) — CLI, driver selection, Dockerfile translation, inspect.
 
 ### Package boundaries
 
 - `cmd/warden/` — Host-side binary: CLI, driver dispatch, config, inspect, image management, doctor/setup.
-- `cmd/warden-io/` — Build-environment agent: initialize (network, CA, fetch script, exec with heartbeats, report exit), fetch, post, trust. Cross-compiled for linux, darwin, and windows.
+- `cmd/warden-io/` — Build-environment agent: initialize (network, CA + trust policy, baseline, fetch script, exec with heartbeats, report exit), fetch, post, trust. Cross-compiled for linux, darwin, and windows.
+- `cmd/warden-pause/` — The container driver's namespace holder: owns the build's network namespace and does nothing else.
 - `cmd/relay/` — Thin mode-based main. Selects container/vm/host mode, calls `relay.Start()`.
 - `cmd/collector/` — Standalone collector for third-party orchestrators (claims a running relay, serves inputs, lands outputs).
 - `relay/` — Relay library: DNS, HTTP/HTTPS MITM, ledger writer, control plane, heartbeat, capture, fairness. Streams outputs to / pulls inputs from the collector (`collector_client.go`); no on-disk build state.
 - `collector/` — The relay's single output path and input source. Run in-process by every driver (`driver.Session`) and standalone by `cmd/collector`.
 - `relaycfg/` — Claim protocol: push the per-build config over a host-initiated tunnel, return the relay identity.
-- `driver/` — Driver interface, shared host-side build logic (`session.go`), extensions, subnet allocation.
+- `driver/` — Driver interface, shared host-side build logic (`session.go`), subnet allocation.
+- `bootstrap/` — The bootstrap config (trust policy) the executor fetches from the relay.
 - `driver/container/` — Container driver: Dockerfile translation, iptables isolation, relay container.
 - `driver/qemu/` — QEMU driver: two-VM topology, cloud images, cross-platform.
 - `driver/vz/` — VZ driver: host relay (gvisor netstack), macOS build VM.
 - `driver/hyperv/` — Hyper-V driver: two-VM topology, host-only NAT switch, host setup/doctor, privileged helper service.
-- `driver/script/` — Dockerfile-to-script translator (shared by VM drivers).
+- `driver/script/` — Dockerfile-to-script translator for every driver (COPY expanded against the context on the host).
 - `ledger/` — Shared library: ledger wire format types, reader, verification logic.
 
 ### Ledger format
@@ -64,9 +66,9 @@ All ledger writes go through a channel to a single goroutine (`Ledger.loop()`). 
 ## Key conventions
 
 - Container runtime is abstracted via `ctrctl.Cli` (set from config/autodetection)
-- Extensions inject CA certs and env vars into the build environment via the staged `/.warden` tree
-- The relay and warden-io cross-compile for linux at build time (`GOOS=linux CGO_ENABLED=0`); warden-io also builds for darwin/arm64 (VZ driver)
-- Containerfile is never modified in-place — a copy goes into the staged `/.warden/Containerfile`
+- `warden-io initialize` sets up trust itself: the CA per the bootstrap config's trust mode, plus a fixed baseline (Java truststore, bazelrc, CA and default env) in `cmd/warden-io/baseline.go`. The host delivers only `warden-io`
+- The relay, warden-io and warden-pause cross-compile for linux at build time (`GOOS=linux CGO_ENABLED=0`); warden-io also builds for darwin/arm64 (VZ driver)
+- Containerfile is never modified; it is translated to `build.sh` on the host, which the guest fetches from the relay
 - Each build stages its files in its own `driver.NewWorkDir` (under `--tmpdir`, default the OS temp dir); nothing is written into the build context
 - `artifacts` and `cwd` are reserved DNS hostnames that resolve to the relay IP
 - Network isolation: iptables (container), topological via separate VM (qemu, vz, hyperv)

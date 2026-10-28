@@ -20,34 +20,10 @@ The output is a tamper-evident binary ledger of all network I/O during the build
 
 ## Architecture & Key Files
 
-```
-cmd/warden/main.go          — CLI entry point (build, shell, inspect, clean subcommands)
-cmd/warden/orchestrator.go  — Container lifecycle, network setup, iptables
-cmd/warden/config.go        — TOML config, runtime detection, path resolution
-cmd/warden/output.go        — Colored terminal output
-cmd/warden/build.go         — BuildEnv interface
-cmd/warden/ext.go              — Extension interface (BeforeBuild hooks)
-cmd/warden/ext_truststore.go   — Injects relay CA into system trust store
-cmd/warden/ext_jks_truststore.go — JKS keystore + MAVEN_OPTS/GRADLE_OPTS for JVM
-cmd/warden/ext_cacerts_env.go  — CA cert env vars for all non-system-CA package managers
-cmd/warden/ext_epoch.go        — Sets SOURCE_DATE_EPOCH=0 for reproducible builds
-cmd/warden/cert.go          — Certificate subject hash computation
-cmd/warden/inspect_impl.go  — Ledger verification and display logic
-cmd/warden/clean.go         — Orphaned resource cleanup
-
-cmd/relay/main.go           — Relay binary entry point (runs inside relay container)
-cmd/relay/relay.go          — HTTP/HTTPS/DNS proxy, artifact endpoint, ephemeral CA
-cmd/relay/ledger.go         — Binary ledger writer (Ed25519, chained sigs, streaming hashes)
-cmd/relay/ledger_read.go    — Re-exports from ledger/ for local use
-cmd/relay/proxy.go          — TLS interception and connection handling
-cmd/relay/fair.go           — DRR bandwidth fairness scheduler
-cmd/relay/network.go        — Network utilities
-
-ledger/ledger.go            — Shared: wire format types, reader, verifier
-
-docs/design/                — Design documents (Ledger-Spec, Philosophy, Initial-Proposal)
-examples/                   — Demo/test Dockerfiles
-```
+The current layout is in `docs/book/src/contributing/structure.md`, and how each
+component works, as pseudocode, is in `docs/book/src/concepts/overview.md`. The
+build-environment bootstrap model every driver follows is
+`docs/development/bootstrap.md`.
 
 ## Build & Test
 
@@ -87,7 +63,7 @@ Configuration via `warden.toml` or `~/.config/warden/config.toml`.
 3. Orchestrator opens a tunnel (`POST /v1/tunnel`) and serves the collector to the relay over it as HTTP/2 (host-initiated; the relay never dials the host)
 4. Orchestrator claims the relay (`POST /v1/claim`) with the build config (collector URL + token, capture mode, upstream CAs, optional environment record)
 5. Relay returns its identity: ephemeral MITM CA cert (written to `<output>/ca.cert.pem`) and the ledger's Ed25519 public key; the claim listener then closes
-6. Orchestrator runs extensions (inject CA into the build environment trust store), starts the build environment, applies network isolation
+6. Orchestrator isolates the build environment, delivers `warden-io` and starts it; `warden-io initialize` installs the CA and the baseline from the relay
 7. Build runs with all traffic flowing through the relay; outputs stream to the collector, and the ledger is flushed before `/v1/complete`
 
 ### Binary Ledger Format
@@ -106,8 +82,8 @@ Configuration via `warden.toml` or `~/.config/warden/config.toml`.
 ### Fail early, say what to do
 A project standard (full text in DEVELOPING.md). A failure with a clear cause, such as a missing root or Administrator right, an unprepared image, an absent tool, a stopped runtime or a bad flag, returns `driver.Fixable(fix, ...)` naming the exact remedy. warden prints `To fix: ...` and no file-a-bug link. Check for it before any slow or irreversible step (download, restore, VM boot, network standup) whenever the check is cheap relative to a successful run. Recognized opaque platform errors are mapped at the call site.
 
-## Extension System
-Extensions implement `BeforeBuild(env *CtrEnv) error` and optionally `Env() map[string]string`. They run on the host before the build starts and can write files to the staged `/.warden` tree (`ExtensionContext.WardenDir`, in the build's private work dir, never the build context; copied into the build container as `/.warden`) and scripts to its `ext.d/` (exec'd inside the build container).
+## Trust and the Baseline
+There are no host-side extensions. `warden-io initialize` installs the relay CA per the bootstrap config's trust mode and applies a fixed baseline (Java truststore, bazelrc, CA and default env) in `cmd/warden-io/baseline.go`. See `docs/book/src/concepts/baseline.md`.
 
 ## Container Runtime Abstraction
 Uses `github.com/lesiw/ctrctl` which wraps docker/finch/podman CLI. Runtime is autodetected or configured via `warden.toml` / `--runtime` flag.

@@ -10,11 +10,12 @@
 
 # Concepts
 
+- [How It Works](./concepts/overview.md)
 - [Architecture](./concepts/architecture.md)
 - [The Ledger](./concepts/ledger.md)
 - [COPY Provenance](./concepts/copy-provenance.md)
 - [Network Isolation](./concepts/network-isolation.md)
-- [Extensions](./concepts/extensions.md)
+- [Trust and the Build Baseline](./concepts/baseline.md)
 
 # Usage Guide
 

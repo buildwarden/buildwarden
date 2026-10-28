@@ -24,7 +24,9 @@ See [`README.md`](./README.md) for the rule format.
       steps inside the environment               |   all of it over the relay:
                                                  |-- GET  /health
                                                  |-- GET  /ca.pem         trust
-                                                 |-- GET  /bootstrap/...  extension material
+                                                 |-- GET  /bootstrap      trust policy
+                                                 |-- baseline, derived from the CA
+                                                 |     by initialize itself
                                                  |-- GET  /build-script
                                                  |-- run the script
                                                  |     '-- GET cwd/<path>  (each COPY)
@@ -34,11 +36,10 @@ See [`README.md`](./README.md) for the rule format.
   (serves every input, lands every output)
 ```
 
-`/bootstrap/...` does not exist yet; [`unified-bootstrap`](../design/unified-bootstrap.md)
-adds it (D1, D3). Every other endpoint is the relay's current guest API.
-
 Only the executor crosses into the environment outside the relay. Everything
 the build consumes or produces passes through the relay, where it is recorded.
+[`concepts/overview.md`](../book/src/concepts/overview.md) walks through each
+step as pseudocode.
 
 ### Per-driver mapping
 
@@ -47,7 +48,7 @@ the build consumes or produces passes through the relay, where it is recorded.
 | qemu, hyperv / Linux | Topology: the only NIC reaches the relay VM | cloud-init `CIDATA` ISO per build | cloud-init `runcmd` |
 | qemu, hyperv / Windows | Topology | `WARDEN` seed disk per build (`warden-io.exe`, `warden-run.ps1`) | `warden-run` startup task baked at prepare |
 | vz / macOS | Topology: one socketpair NIC to the relay | **Baked into the image at prepare** (D2) | launchd daemon baked at prepare |
-| container | iptables applied from a privileged sidecar | **`cp` of `/.warden` into a running container** (D1) | **host `exec` steps, then `exec warden-io initialize`** (D1) |
+| container | A namespace holder, isolated by a privileged iptables sidecar before the build container exists | Tar stream of `warden-io` (mode 0755) copied into the created, not yet started, build container | Container start; entrypoint `warden-io initialize` |
 
 ### Deviation register
 
@@ -56,9 +57,11 @@ needs only the change that removes it. Adding one is a model change (BOOT-07).
 
 | ID | Driver | Invariants | Deviation | Plan |
 |---|---|---|---|---|
-| D1 | container | BOOT-01, BOOT-02, BOOT-03, BOOT-05 | The container is started as `<image> sleep infinity` on a routable bridge, so an image `ENTRYPOINT` runs before isolation; the host then applies isolation, rewrites `resolv.conf`, copies `/.warden` (executor plus extension material) and runs setup through `exec` before starting `initialize`. | [`unified-bootstrap`](../design/unified-bootstrap.md) |
-| D2 | vz | BOOT-02, BOOT-06 | `warden-io` and its launchd daemon are baked into the prepared image, so the executor version is the one from the last prepare. | Tracked; not in the current design |
-| D3 | qemu, vz, hyperv | BOOT-05 | Extensions (truststore, bazel, ...) run only on the container driver; VM guests get none of their material. | Transport fixed by `unified-bootstrap`; VM guest support tracked |
+| D2 | vz | BOOT-02, BOOT-06 | `warden-io` and its launchd daemon are baked into the prepared image, so the executor version is the one from the last prepare, and a stale one lacks newer baseline steps. | Tracked |
+
+D1 (the container driver's host-driven setup) and D3 (setup material on the
+container driver only) were removed by
+[`unified-bootstrap`](../design/unified-bootstrap.md).
 
 ---
 
@@ -124,15 +127,23 @@ build inputs in `cmd/warden-io/`.
 
 ---
 
-### BOOT-05 — Setup material comes from the relay too
+### BOOT-05 — Environment setup is the executor's domain
 
 **Severity:** MUST
 **Check:** agent-judgment
 
-Anything the orchestrator generates to set up the environment, such as extension
-output (a Java truststore, a `bazelrc`, setup scripts), is served by the relay and
-installed by `initialize`, the same way as the CA. It is not copied in by the
-driver.
+`initialize` applies a fixed baseline (trust-store and build-system
+integrations, best-practice defaults) derived from the CA, plus the trust policy
+the orchestrator sends as a declarative config over the relay (`GET /bootstrap`,
+package `bootstrap`). The orchestrator generates no setup material: no files, no
+scripts, no environment variables. The build script it translates from the
+user's build definition is a build input (BOOT-04), not setup. The guest runs no
+setup code it did not ship with.
+
+Signed 2026-10-28 by Bootstrap comparison
+([`unified-bootstrap`](../design/unified-bootstrap.md)); it replaced "setup
+material comes from the relay too", under which host-generated files and scripts
+were served by the relay.
 
 ---
 
@@ -173,8 +184,11 @@ design's `rules`.
 
 The automated part flags a diff that touches the bootstrap surface without
 touching this document, or that changes this document without a design whose
-`rules` cites BOOT-07. The bootstrap surface is `cmd/warden-io/initialize*.go`, the
-relay's guest-facing endpoints, and each driver's executor delivery and start
-code (`driver/container/container.go`, `driver/qemu/cloudinit.go`,
-`driver/winguest/`, `driver/hyperv/winseed*.go`, `driver/vz/image.go`). The agent
-part judges whether a change counts as a model change.
+`rules` cites BOOT-07. The bootstrap surface is the executor's setup
+(`cmd/warden-io/initialize*.go`, `baseline.go`, `trust_*.go`, `jks.go`), the
+bootstrap config (`bootstrap/`), the relay's guest-facing endpoints, and each
+driver's isolation, executor delivery and start code
+(`driver/container/container.go`, `driver/container/images*`, `cmd/warden-pause/`,
+`driver/qemu/cloudinit.go`, `driver/winguest/`, `driver/hyperv/winseed*.go`,
+`driver/vz/image.go`). The agent part judges whether a change counts as a model
+change.

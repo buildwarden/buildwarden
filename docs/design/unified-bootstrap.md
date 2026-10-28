@@ -1,6 +1,6 @@
 ---
 feature: unified-bootstrap
-status: draft
+status: active
 round: parallel
 drivers: [container, qemu, hyperv, vz]
 seams: [executor-initialize, relay-guest-api, collector, bootstrap-model]
@@ -412,8 +412,84 @@ isolation.
    `network-isolation.md`, `extensions.md`, `CLAUDE.md`'s extension convention.
 8. Native validation per the plan above.
 
+## Implementation notes
+
+Steps 1 to 7 are implemented on `feat/unified-bootstrap`. Small adaptations made
+during implementation:
+
+- `initialize` takes `--workdir` (the container driver passes `/work`) rather
+  than hard-coding a workdir, so the VM drivers keep their current one.
+- The container's own stdout is kept as `console.log`, not `build-output.log`,
+  which the collector already owns.
+- docker and podman take the executor as a tar stream on `cp -`. nerdctl (finch)
+  gets a staged-directory `cp` instead, from macOS or Linux hosts that keep the
+  exec bit; whether nerdctl copies into a created, not yet started, container is
+  unvalidated (finch validation is non-blocking).
+- The holder and sidecar are published by the release workflow (job
+  `support-images`) and their digests compiled in through ldflags. Development
+  builds build them locally from `driver/container/images/*.Containerfile`,
+  tagged by content hash.
+- The JKS lives at `/etc/warden/certs.jks` (`%ProgramData%\warden` on Windows), not
+  under `/.warden`, which now holds only the executor.
+- Porting the OpenSSL subject hash broke its ASN.1 SET encoding; fixed, and the
+  canonicalization now also trims whitespace as OpenSSL does (a pre-existing
+  gap). Pinned by a test against `openssl x509 -hash` values.
+
+Validation (2026-10-28, podman 5.8 on Windows):
+
+- The JKS writer is byte-identical to JDK 21 `keytool -importcert -storetype JKS`
+  (timestamp field normalized), and `keytool -list` accepts it.
+- A build on `alpine:3.22`: COPY of a file and a directory, exclusive trust (one
+  root, correct hash link), the baseline files and env, HTTPS through the relay,
+  `/.warden` holding only `warden-io`, `/bootstrap` and `/build-script` recorded in
+  the ledger.
+- Security: an image `ENTRYPOINT` is replaced (it never runs); raw egress
+  (`1.1.1.1:8080`) is blocked; `iptables` in the build container fails without
+  `NET_ADMIN` and egress stays blocked.
+- A build on `eclipse-temurin:21-jdk` (Ubuntu): `java $MAVEN_OPTS` fetches over
+  HTTPS through the JKS (200); the JDK's own store rejects the MITM; Ubuntu's
+  `update-ca-certificates` runs the `99warden` hook and restores exclusive trust.
+  Alpine's `update-ca-certificates` does not run `update.d` hooks.
+- `warden shell`: setup completes before the prompt, the shell starts in `/work`
+  with the baseline env, and its exit code propagates.
+- Not yet run: Linux docker (blocking), macOS finch (tracked), and the VM drivers
+  with the new baseline (Hyper-V and qemu Linux guests now get exclusive trust).
+
 ## Consolidation (merge round)
 
+Sweep (FLOW-15), 2026-10-28:
+
+- **Duplication.** The container driver had its own Dockerfile translator
+  (Containerfile rewrite plus `DockerfileToScript`) next to `driver/script`'s,
+  and they had drifted: `driver/script` single-quoted ENV values (so `ENV
+  PATH=$PATH:...` did not expand on VM guests) and sent COPY globs to the guest
+  as directory fetches, which cannot expand a glob. `driver/script` now does what
+  the container path did, for every driver: COPY expanded on the host against
+  the context, ENV with Dockerfile `$VAR` semantics. `Dockerfile.actual` is
+  retired; `build.sh` is the record of what ran. The extensions duplicated
+  `initialize`'s CA installation and CA env vars; both now have one
+  implementation in `warden-io`.
+- **Dead code** (`deadcode -test`, unreachable on linux, darwin and windows).
+  Removed: `driver.ExtractFromImage` (shelled out to `head`, so it never worked
+  on a Windows host without Git), the unused `Logger` methods in `cmd/warden`,
+  hyperv `pinState`, qemu `vmProcess.wait`, the container driver's
+  `tailWriter`. Kept: exported API of library packages third-party orchestrators
+  embed (`collector.Collector.BytesWritten`, `relay.Relay.CAFingerprint`,
+  `relay.Relay.Ledger`). Not judged here: the `driver/vz` results
+  (`createWardenUser`, `enableAutoLogin`, `NewLinuxVM`, ...), because a
+  cross-platform run cannot see its cgo files; to be checked on a macOS host.
+- **Overview.** `docs/book/src/concepts/overview.md` added with pseudocode for
+  the orchestrator, session and collector, translator, container and VM
+  drivers, `warden-io initialize`, the relay and the holder.
+- Also noted, not changed: `warden clean` detects live builds by container
+  names in `ps` output, but the driver passes container IDs to the runtime, so
+  the check rarely sees a live build.
+
 ## Rollback notes
+
+Revert the `feat/unified-bootstrap` commits. The relay and collector additions
+(`/bootstrap`, `/v1/bootstrap`) are additive: an older executor never requests
+them, and a newer executor treats a missing endpoint as the empty config
+(append trust plus the baseline).
 
 ## Archive summary

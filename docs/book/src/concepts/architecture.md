@@ -21,15 +21,16 @@ relay boots unconfigured --> warden claims it (tunnel + config) --> build guest 
 
 The relay keeps no build state on disk and mounts nothing. It streams every
 output (artifacts, captures, the ledger, build console) to, and pulls every
-input (the build script, context files) from, a **collector** that `warden`
+input (the build script, the bootstrap config, context files) from, a **collector** that `warden`
 runs on the host. The relay never dials the host and `warden` never listens on
 any network: the collector is served to the relay over a tunnel `warden` opens
 on the relay's claim port.
 
 Every driver bootstraps the build environment the same way: isolate it, deliver
 the executor, start it, and let `warden-io initialize` pull everything else from
-the relay. The model, its invariants and the drivers that do not yet follow it
-are in [`docs/development/bootstrap.md`](https://github.com/buildwarden/buildwarden/blob/main/docs/development/bootstrap.md).
+the relay. The model, its invariants and the one remaining deviation are in
+[`docs/development/bootstrap.md`](https://github.com/buildwarden/buildwarden/blob/main/docs/development/bootstrap.md);
+[How It Works](./overview.md) walks through each component as pseudocode.
 
 ## High-level topology
 
@@ -40,8 +41,9 @@ are in [`docs/development/bootstrap.md`](https://github.com/buildwarden/buildwar
   |   Relay   |<-------- only allowed connection -------------->| Build Container |
   | container |                                                 |  (FROM image)   |
   +-----+-----+                                                 +-----------------+
-        |                                                        iptables via
-        v  external                                              netns sidecar
+        |                                                        in the holder's
+        v  external                                              netns, isolated
+                                                                 before it starts
    [ Internet ]
 
 
@@ -88,12 +90,12 @@ ledger.
 
 Runs on the host. Responsibilities:
 
-1. Resolve the build script (translate a Dockerfile, or stage build.sh / build.ps1)
-2. Start a collector that serves the build script and context, and receives all outputs
+1. Resolve the build script (translate a Dockerfile on the host, or stage build.sh / build.ps1)
+2. Start a collector that serves the build script, the bootstrap config and the context, and receives all outputs
 3. Prepare and start the relay, unconfigured (build container image, cross-compile binary, or launch host process / boot relay VM)
 4. Claim the relay: open the collector tunnel, push the build config, receive the relay identity (MITM CA cert + ledger public key)
-5. Start the build environment (container, VM, or macOS VM)
-6. Apply network isolation (iptables sidecar or topological)
+5. Isolate the build environment (holder + iptables sidecar, or topological)
+6. Deliver `warden-io` into it and start it; from then on, only watch
 7. Wait for build completion (heartbeats, exit code) or failure (hung guest, dropped tunnel)
 8. Finalize output (optional zstd compression)
 9. Teardown
@@ -116,6 +118,7 @@ request with a bearer token. Endpoints:
 | `PUT /v1/environment` | The environment record's signed payload, landed as `environment.json` |
 | `POST /v1/output` | Append build console output |
 | `GET /v1/build-script` | The staged build script |
+| `GET /v1/bootstrap` | The bootstrap config (trust policy) |
 | `GET /v1/context/<path>` | A context file, or a directory listing |
 | `POST /v1/ready` | Relay is up |
 | `POST /v1/heartbeat` | Build guest is alive |
@@ -176,7 +179,7 @@ The relay is the network gateway for the build environment. Core services:
 
 The sole agent inside the build environment. Subcommands:
 
-- `initialize` — configure DNS, wait for relay, install CA, fetch build.sh, run it, report exit
+- `initialize` — configure DNS, wait for relay, install the CA per the bootstrap config, apply the [baseline](./baseline.md) (Java truststore, bazelrc, CA and default env), fetch the build script, run it, report exit
 - `fetch` — download a file from the relay context endpoint
 - `post` — upload an artifact to the relay
 - `trust` — install the ephemeral CA into system trust stores
@@ -206,22 +209,25 @@ Each driver implements a common interface covering:
 
 ```
 warden build .
-  |-- Cross-compile relay + warden-io for linux/amd64
-  |-- Start a collector serving the build script + context
+  |-- Translate the Dockerfile to build.sh (COPY expanded against the context)
+  |-- Start a collector serving the build script, bootstrap config + context
   |-- Create isolated Docker network (100.64.x.0/29)
   |-- Start relay container, unconfigured, with its claim port published on 127.0.0.1
   |-- Claim the relay (tunnel + build config); write ca.cert.pem
-  |-- Start build container from Dockerfile's FROM image
-  |-- Start iptables sidecar (shares build container netns, applies rules, exits)
-  |-- docker cp warden-io into build container
-  |-- docker exec warden-io initialize --gateway=<relay_ip>
-  |-- Wait for exit
+  |-- Start the namespace holder on the network (no capabilities)
+  |-- Run the iptables sidecar in the holder's netns (applies rules, exits)
+  |-- Create the build container from the FROM image in the holder's netns,
+  |     entrypoint warden-io initialize --gateway=<relay_ip> (not started)
+  |-- Copy warden-io in (tar stream, mode 0755)
+  |-- Start it: warden-io initialize runs as PID 1
+  |-- Wait for the completion report (or the container exiting without one)
   '-- Teardown containers + network
 ```
 
-Network isolation: a privileged one-shot sidecar enters the build container's
-network namespace, applies iptables rules that allow traffic only to the relay
-IP, then exits. The build container has no `CAP_NET_ADMIN`.
+Network isolation: the build's network namespace belongs to a holder container
+that runs nothing. A privileged one-shot sidecar applies iptables rules to it
+that allow traffic only to the relay IP, then exits, all before the build
+container exists. The build container has no `CAP_NET_ADMIN`.
 
 ### QEMU driver
 
@@ -302,12 +308,13 @@ warden build .
   |-- Start a collector serving the build script + context
   |-- Start relay (unconfigured)
   |-- Claim the relay (open tunnel, push config, receive CA + ledger key)
-  |-- Start build environment
-  |-- Apply network isolation
+  |-- Isolate the build environment
+  |-- Deliver warden-io and start the environment
   |-- warden-io initialize:
   |     |-- Configure network (point DNS at relay)
-  |     |-- Wait for relay health check (http://artifacts/health)
-  |     |-- Fetch + install ephemeral CA
+  |     |-- Wait for relay health check (http://<relay>:8300/health)
+  |     |-- Fetch the CA and the bootstrap config; install the CA
+  |     |-- Apply the baseline (Java truststore, bazelrc, CA and default env)
   |     |-- Fetch the build script (http://artifacts/build-script)
   |     |-- Run build script with periodic heartbeats
   |     '-- Report exit code to the relay control plane
@@ -321,8 +328,9 @@ The build environment talks only to the relay (guest-facing API, unchanged):
 
 | Endpoint | Purpose |
 |----------|---------|
-| `http://artifacts/health` | Relay readiness probe |
+| `http://<relay>:8300/health` | Relay readiness probe (control plane) |
 | `http://artifacts/ca.pem` | Ephemeral CA certificate |
+| `http://artifacts/bootstrap` | Bootstrap config (trust policy) |
 | `http://artifacts/build-script` | Build script |
 | `http://cwd/<path>` | Context files |
 | `http://artifacts/heartbeat` | Heartbeat |
