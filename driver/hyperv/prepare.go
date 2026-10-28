@@ -59,6 +59,10 @@ type PreparedBase struct {
 // PrepareBase prepares the active generalized base with the local
 // provisioner (VM lifecycle only; prepare needs no host network).
 func PrepareBase(ctx context.Context, opts PrepareOptions) (*PreparedBase, error) {
+	if err := checkDirVisible(filepath.Join(evalImagesDir(), "prepared"),
+		"the Hyper-V cache", cacheVisibleFix); err != nil {
+		return nil, err
+	}
 	return prepareBase(ctx, newLocalProvisioner(false), buildPrepareSeed, opts)
 }
 

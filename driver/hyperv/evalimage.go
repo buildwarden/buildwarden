@@ -213,6 +213,11 @@ func FetchEvalImage(ctx context.Context, opts FetchOptions) (string, error) {
 		return "", fmt.Errorf("unknown image %q and no --source given (known images: %s)",
 			opts.Name, strings.Join(EvalImageNames(), ", "))
 	}
+	// Before any download or hash: everything below lands in the cache.
+	if err := checkDirVisible(hypervCacheDir(), "the Hyper-V cache",
+		cacheVisibleFix); err != nil {
+		return "", err
+	}
 	if isLocalImage(opts.URL) {
 		return registerLocalImage(opts)
 	}

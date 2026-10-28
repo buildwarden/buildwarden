@@ -64,6 +64,7 @@ func Doctor(w io.Writer, c Capabilities) (blocked bool) {
 		svc = "reachable"
 	}
 	fmt.Fprintf(w, "%s%s\n", dotted("Privileged service"), svc)
+	cacheBlocked := writeCacheVisibility(w)
 	imageBlocked := writeImageStatus(w, Status(), time.Now())
 
 	// Resolved per-operation outcomes.
@@ -82,10 +83,26 @@ func Doctor(w io.Writer, c Capabilities) (blocked bool) {
 	if imageBlocked && ready {
 		ready, reason = false, "the prepared base image cannot start builds (see above)"
 	}
+	if cacheBlocked && ready {
+		ready, reason = false, "Hyper-V cannot see the image cache (see above)"
+	}
 	if !ready {
 		fmt.Fprintf(w, "\nNot ready: %s\n", reason)
 	}
 	return !ready
+}
+
+// writeCacheVisibility reports whether files warden creates in the image cache
+// are where Hyper-V can see them (see visible.go), and whether that blocks.
+func writeCacheVisibility(w io.Writer) (blocked bool) {
+	dir := hypervCacheDir()
+	if err := checkDirVisible(dir, "the Hyper-V cache", cacheVisibleFix); err != nil {
+		fmt.Fprintf(w, "%sREDIRECTED (%s)\n    -> %s\n", dotted("Image cache"), dir,
+			cacheVisibleFix)
+		return true
+	}
+	fmt.Fprintf(w, "%s%s\n", dotted("Image cache"), dir)
+	return false
 }
 
 // writeVMLifecycle reports the resolved VM-lifecycle outcome and, when blocked,

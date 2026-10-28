@@ -217,7 +217,8 @@ warden build --driver vz --script ./build.sh .
 
 The Hyper-V driver runs builds inside a Hyper-V virtual machine. Like QEMU it
 uses a two-VM topology: an Alpine relay VM provides the network bridge, and a
-build VM (Windows or Linux) connects only through it. The relay VM reaches
+Windows build VM connects only through it (Linux build guests are not yet
+supported on Hyper-V; use the QEMU driver). The relay VM reaches
 upstream through an Internal NAT switch; the build VM sits on a Private build
 switch with no other path.
 
@@ -294,6 +295,21 @@ warden build --driver hyperv --guest-os windows ./win-project
 
 `--image <disk>` overrides the prepared base with a disk that already carries
 the `warden-run` startup task; a stock, unprepared image would wait at OOBE.
+
+### Where the image cache lives
+
+Prepared images and the relay boot disk are cached in
+`%LOCALAPPDATA%\warden\hyperv`, or in `WARDEN_HYPERV_CACHE_DIR` when set.
+Hyper-V's own service opens these files, so they must be where it can see
+them. When warden runs from a terminal started by a packaged (MSIX) app, such
+as some desktop apps' built-in terminals, Windows can silently redirect new
+files under `%LOCALAPPDATA%` into that app's private folder
+(`%LOCALAPPDATA%\Packages\<app>\...`), which Hyper-V cannot see.
+`warden doctor --driver hyperv` shows the cache as `REDIRECTED`, and
+`warden image prepare` stops before any download with the fix: set
+`WARDEN_HYPERV_CACHE_DIR` to a folder outside `AppData`, or run warden from an
+ordinary terminal. The OS temp directory, where each build's work files go by
+default, is not redirected.
 
 ---
 

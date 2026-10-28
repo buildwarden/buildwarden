@@ -47,26 +47,21 @@ func (d *Driver) StartBuild(
 
 	buildID := driver.RandAlphaNum(8)
 
-	relayBoot, err := resolveRelayBootVHDX()
-	if err != nil {
-		return nil, fmt.Errorf("hyperv build: %w", err)
-	}
-	chain, isWindows, generation, err := resolveBuildBaseVHDX(req)
+	relayBoot, chain, isWindows, generation, err := resolveBuildDisks(req)
 	if err != nil {
 		return nil, fmt.Errorf("hyperv build: %w", err)
 	}
 	base := chain[len(chain)-1]
-	if len(chain) > 1 { // the active prepared base, not an explicit --image
-		if err := ensureFreshBase(req, os.Stderr); err != nil {
-			return nil, fmt.Errorf("hyperv build: %w", err)
-		}
-	}
 
 	workDir, err := driver.NewWorkDir(req, "hyperv-"+buildID)
 	if err != nil {
 		return nil, fmt.Errorf("hyperv build: %w", err)
 	}
 	defer driver.RemoveWorkDir(req, workDir)
+	if err := checkDirVisible(workDir, "the build's work directory",
+		"pass --tmpdir a folder outside AppData"); err != nil {
+		return nil, fmt.Errorf("hyperv build: %w", err)
+	}
 
 	seedISO, seedVHDX, err := buildSeed(workDir, buildID, isWindows, req)
 	if err != nil {
@@ -134,6 +129,29 @@ func (d *Driver) StartBuild(
 // model, standing up a fresh isolated network when the privilege allows it. It
 // returns the (possibly updated) provisioner, the chosen switch names, and a
 // cleanup to run on build teardown.
+// resolveBuildDisks resolves the relay boot disk and the build guest's disk
+// chain, checks Hyper-V can see them, and keeps an active prepared base fresh.
+func resolveBuildDisks(req *driver.BuildRequest) (
+	relayBoot string, chain []string, isWindows bool, generation int, err error,
+) {
+	if relayBoot, err = resolveRelayBootVHDX(); err != nil {
+		return "", nil, false, 0, err
+	}
+	if chain, isWindows, generation, err = resolveBuildBaseVHDX(req); err != nil {
+		return "", nil, false, 0, err
+	}
+	err = checkFilesVisible(cacheVisibleFix, append([]string{relayBoot}, chain...)...)
+	if err != nil {
+		return "", nil, false, 0, err
+	}
+	if len(chain) > 1 { // the active prepared base, not an explicit --image
+		if err := ensureFreshBase(req, os.Stderr); err != nil {
+			return "", nil, false, 0, err
+		}
+	}
+	return relayBoot, chain, isWindows, generation, nil
+}
+
 func (d *Driver) provisionBuildNetwork(
 	ctx context.Context, p Provisioner, caps Capabilities,
 	sw, buildID string, req *driver.BuildRequest,
