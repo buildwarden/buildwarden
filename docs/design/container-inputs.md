@@ -43,8 +43,8 @@ submitted next to what ran.
 
 ## Decisions
 
-- **One shared helper, `driver.RecordInputs`**, called by every driver after
-  `FinalizeOutput`, instead of per-driver copies (FLOW-15: one path for one
+- **One shared helper, `driver.RecordInputs`**, called by every driver that
+  translates, straight after staging, instead of per-driver copies (FLOW-15: one path for one
   job). Rejected: keeping the container driver's own code and copying it into
   qemu and hyperv.
 - **Recorded only when the input was altered**: a Dockerfile translated to a
