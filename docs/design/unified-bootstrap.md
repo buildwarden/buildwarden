@@ -267,7 +267,7 @@ Contract changes (GLOBAL-08, EXEC-04):
 ## Cross-driver impact
 
 - **container:** the whole bootstrap path above; D1 removed.
-- **qemu, hyperv / Linux:** no driver code changes. Their `initialize` now gets
+- **qemu / Linux:** no driver code changes. Their `initialize` now gets
   exclusive trust and the baseline (JKS, bazelrc, default env); before, they got
   none. This
   is a behavior change for those builds, intended.
@@ -454,8 +454,16 @@ Validation (2026-10-28, podman 5.8 on Windows):
   Alpine's `update-ca-certificates` does not run `update.d` hooks.
 - `warden shell`: setup completes before the prompt, the shell starts in `/work`
   with the baseline env, and its exit code propagates.
+- Podman: a failing build exits with the script's code (7); a minimal `busybox`
+  image works; two concurrent builds stay separate and leave nothing behind.
+- Hyper-V, Windows Server 2025 guest (relay boot disk rebuilt with the current
+  relay): `/bootstrap` served and recorded (append trust); the baseline env, the
+  JKS and bazelrc under `%ProgramData%`, the CA in `LocalMachine\Root`, a context
+  fetch and HTTPS through the relay all pass (34 s).
 - Not yet run: Linux docker (blocking), macOS finch (tracked), and the VM drivers
-  with the new baseline (Hyper-V and qemu Linux guests now get exclusive trust).
+  with the new baseline (qemu Linux guests now get exclusive trust). Hyper-V has
+  no Linux guest support yet (the seed is not implemented), so qemu on macOS is
+  the only VM-driver Linux check.
 
 ## Consolidation (merge round)
 

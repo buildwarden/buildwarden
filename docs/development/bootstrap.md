@@ -45,10 +45,13 @@ step as pseudocode.
 
 | Driver / guest | (1) Isolation | (2) Executor delivery | (3) Start trigger |
 |---|---|---|---|
-| qemu, hyperv / Linux | Topology: the only NIC reaches the relay VM | cloud-init `CIDATA` ISO per build | cloud-init `runcmd` |
+| qemu / Linux | Topology: the only NIC reaches the relay VM | cloud-init `CIDATA` ISO per build | cloud-init `runcmd` |
 | qemu, hyperv / Windows | Topology | `WARDEN` seed disk per build (`warden-io.exe`, `warden-run.ps1`) | `warden-run` startup task baked at prepare |
 | vz / macOS | Topology: one socketpair NIC to the relay | **Baked into the image at prepare** (D2) | launchd daemon baked at prepare |
 | container | A namespace holder, isolated by a privileged iptables sidecar before the build container exists | Tar stream of `warden-io` (mode 0755) copied into the created, not yet started, build container | Container start; entrypoint `warden-io initialize` |
+
+The Hyper-V driver runs Windows guests only; a Linux guest seed is not yet
+implemented.
 
 ### Deviation register
 

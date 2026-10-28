@@ -29,7 +29,7 @@ The relay keeps no build state on disk; it streams every output to, and pulls ev
 - **Container** (`--driver container`, default) — Relay as sidecar container; a namespace holder isolated by the iptables sidecar before the build container exists; build container created with `warden-io initialize` as its entrypoint.
 - **QEMU** (`--driver qemu`) — Two-VM topology (relay VM + build VM). Topological isolation. Works on macOS/Linux/Windows; Linux and Windows guests.
 - **VZ** (`--driver vz`) — macOS/arm64 only. Relay as host process (gvisor netstack, FD ingress). macOS build VM with single socketpair interface.
-- **Hyper-V** (`--driver hyperv`) — Windows. Two-VM topology on Hyper-V with a host-only NAT switch; Windows and Linux guests. One-time `warden setup` creates the durable switches.
+- **Hyper-V** (`--driver hyperv`) — Windows. Two-VM topology on Hyper-V with a host-only NAT switch; Windows guests (Linux guest seed not yet implemented). One-time `warden setup` creates the durable switches.
 
 **Key components:**
 - **Relay** (`relay/` library, `cmd/relay/` binary) — MITM proxy, DNS, ledger writer, control plane, heartbeat. Three modes: container (bind ports), vm (PID 1 in Alpine VM), host (FD ingress + SSRF filter).

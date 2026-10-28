@@ -120,7 +120,7 @@ buildwarden/
 ## Package Boundaries
 
 - **`cmd/warden/`** — Host-side binary. CLI, driver dispatch, config, inspect, image management, doctor/setup. Dispatches to `driver/container`, `driver/qemu`, `driver/vz`, or `driver/hyperv` based on `--driver` flag.
-- **`cmd/warden-io/`** — Build-environment agent, and the only thing the host puts in the build environment. Bootstraps itself from the relay (CA and trust policy, the baseline, the build script), runs the build, fetches context files, posts artifacts. Cross-compiled for linux (containers, QEMU and Hyper-V VMs), darwin (VZ macOS VMs), and windows.
+- **`cmd/warden-io/`** — Build-environment agent, and the only thing the host puts in the build environment. Bootstraps itself from the relay (CA and trust policy, the baseline, the build script), runs the build, fetches context files, posts artifacts. Cross-compiled for linux (containers, QEMU VMs), darwin (VZ macOS VMs), and windows (QEMU and Hyper-V VMs).
 - **`cmd/warden-pause/`** — The container driver's namespace holder: owns the build's network namespace while it is isolated, and does nothing else.
 - **`cmd/relay/`** — Relay binary. Thin mode-based main that selects container/vm/host mode and calls into the `relay/` library. Cross-compiled for linux (container/VM relay) or built natively (host-mode relay for VZ).
 - **`cmd/collector/`** — Standalone collector for third-party orchestrators: claims an already-running relay, serves inputs, lands outputs, exits with the build result.
@@ -132,7 +132,7 @@ buildwarden/
 - **`driver/container/`** — Container driver. Namespace holder isolated by the iptables sidecar before the build container exists; build container created with `warden-io initialize` as its entrypoint; relay as container.
 - **`driver/qemu/`** — QEMU driver. Two-VM topology with cloud images, cross-platform; Linux and Windows guests.
 - **`driver/vz/`** — VZ driver. Host relay with gvisor netstack, macOS build VM.
-- **`driver/hyperv/`** — Hyper-V driver. Two-VM topology with a host-only NAT switch; Windows and Linux guests. Includes host setup, doctor, and the privileged helper service.
+- **`driver/hyperv/`** — Hyper-V driver. Two-VM topology with a host-only NAT switch; Windows guests (a Linux guest seed is not yet implemented). Includes host setup, doctor, and the privileged helper service.
 - **`ledger/`** — Shared wire format library. Binary ledger types, reader, verifier. Used by `warden inspect` and the relay's test suite.
 
 ## Key Patterns
