@@ -316,3 +316,26 @@ func activateTestLayer(t *testing.T) string {
 	}
 	return layer
 }
+
+// The download's file name comes from the server's final URL; anything but a
+// single plain name is refused, so a redirect cannot place it outside the cache.
+func TestDownloadFileName(t *testing.T) {
+	good := map[string]string{
+		"/26100.1742.amd64fre_serverdatacentereval_en-us.vhdx": "26100.1742.amd64fre_" +
+			"serverdatacentereval_en-us.vhdx",
+		"/dir/image.vhd": "image.vhd",
+	}
+	for in, want := range good {
+		if got, err := downloadFileName(in); err != nil || got != want {
+			t.Errorf("downloadFileName(%q) = %q, %v; want %q", in, got, err, want)
+		}
+	}
+	for _, in := range []string{
+		"", "/", "/dir/", "/..", `/..\..\evil.vhdx`, `/x\evil.vhdx`, "/c:evil.vhdx",
+		"/a..b.vhdx",
+	} {
+		if got, err := downloadFileName(in); err == nil {
+			t.Errorf("downloadFileName(%q) = %q, want an error", in, got)
+		}
+	}
+}

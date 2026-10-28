@@ -53,12 +53,13 @@ func installExclusiveCA(pemData []byte, cert *x509.Certificate) error {
 	if err := os.MkdirAll("/etc/ssl/certs", 0o755); err != nil {
 		return err
 	}
+	const certs = "/etc/ssl/certs"
 	for _, name := range []string{"warden.crt", "ca-certificates.crt"} {
-		if err := os.WriteFile(filepath.Join("/etc/ssl/certs", name), pemData, 0o644); err != nil {
+		if err := os.WriteFile(filepath.Join(certs, name), pemData, 0o644); err != nil {
 			return err
 		}
 	}
-	if err := os.Symlink("warden.crt", filepath.Join("/etc/ssl/certs", hash+".0")); err != nil {
+	if err := os.Symlink("warden.crt", filepath.Join(certs, hash+".0")); err != nil {
 		return err
 	}
 	for _, b := range otherBundles {
@@ -102,7 +103,8 @@ func subjectHash(cert *x509.Certificate) (string, error) {
 			if !ok {
 				continue
 			}
-			canon = append(canon, asn1UTF8Value{Type: attr.Type, Value: canonicalString(val)})
+			canon = append(canon,
+				asn1UTF8Value{Type: attr.Type, Value: canonicalString(val)})
 		}
 		enc, err := asn1.Marshal(canon)
 		if err != nil {

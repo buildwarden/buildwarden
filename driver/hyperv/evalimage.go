@@ -363,15 +363,32 @@ func resolveRemote(ctx context.Context, url string) (remoteImage, error) {
 		return remoteImage{}, fmt.Errorf("resolving %s: HTTP %s", url, resp.Status)
 	}
 	final := resp.Request.URL
-	name := pathpkg.Base(final.Path)
-	if name == "" || name == "/" || name == "." {
-		return remoteImage{}, fmt.Errorf("resolving %s: no file name in %s", url, final)
+	name, err := downloadFileName(final.Path)
+	if err != nil {
+		return remoteImage{}, fmt.Errorf("resolving %s: %w (from %s)", url, err, final)
 	}
 	return remoteImage{
 		URL: final.String(), Host: final.Hostname(), Name: name,
 		Size: resp.ContentLength, ETag: resp.Header.Get("ETag"),
 		LastModified: resp.Header.Get("Last-Modified"),
 	}, nil
+}
+
+// downloadFileName is the cache file name for a download, from the last
+// element of its final (post-redirect) URL path. The server chooses that
+// path, so the name must be one plain file name: a decoded `..\` or `\` would
+// otherwise lead filepath.Join out of the image cache on Windows.
+func downloadFileName(urlPath string) (string, error) {
+	bad := fmt.Errorf("no safe file name in URL path %q", urlPath)
+	name := pathpkg.Base(urlPath)
+	if strings.Contains(name, "..") {
+		return "", bad
+	}
+	if strings.HasSuffix(urlPath, "/") || name == "" || name == "." ||
+		strings.ContainsAny(name, `/\:`) || !filepath.IsLocal(name) {
+		return "", bad
+	}
+	return name, nil
 }
 
 // downloadVerified streams url to dest.part while hashing, then atomically
@@ -540,4 +557,3 @@ func pinLocalImage(opts FetchOptions, path string) (driver.LayerInfo, bool, erro
 	src := ledger.LayerSource{Kind: ledger.SourceLocal, Pinned: true}
 	return info, true, cache.Record(path, info.SHA256, "", src)
 }
-
