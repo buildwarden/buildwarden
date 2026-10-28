@@ -103,6 +103,7 @@ func TestResolvePath_NonExistent(t *testing.T) {
 }
 
 func TestLoadConfig_Defaults(t *testing.T) {
+	t.Setenv("NO_COLOR", "") // the defaults, not the caller's environment
 	dir := t.TempDir()
 	orig, _ := os.Getwd()
 	if err := os.Chdir(dir); err != nil {

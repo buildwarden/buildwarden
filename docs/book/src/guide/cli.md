@@ -246,12 +246,17 @@ in-process; only network standup is delegated.
 ## warden clean
 
 ```
-warden clean
+warden clean [--cache]
 ```
 
-Remove orphaned containers, networks, images, cached VM binaries, and stale
-build artifacts from interrupted or crashed builds. Only removes resources not
-associated with a currently running warden process.
+Remove orphaned containers, networks and per-build images left by interrupted
+or crashed builds. Only removes resources not associated with a currently
+running warden process, and nothing a later build would reuse: prepared and
+downloaded VM images, the Hyper-V relay boot disk and the support images stay.
+
+| Flag | Description |
+|------|-------------|
+| `--cache` | Also remove warden's whole cache directory. The next VM build downloads and prepares its images again. |
 
 ## Global Flags
 

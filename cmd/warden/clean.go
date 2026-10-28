@@ -9,18 +9,29 @@ import (
 
 	"github.com/lesiw/ctrctl"
 	"github.com/spf13/cobra"
+
+	"github.com/buildwarden/buildwarden/driver"
 )
 
 var cleanCmd = &cobra.Command{
 	Use:   "clean",
 	Short: "Remove orphaned warden containers, networks, and images",
-	Long: `Remove containers, networks, and images left behind by interrupted
-or crashed warden builds. Only removes resources that are not associated
-with a currently running warden process.`,
+	Long: `Remove containers, networks, and per-build images left behind by
+interrupted or crashed warden builds. Only removes resources that are not
+associated with a currently running warden process.
+
+Nothing that a later build would reuse is removed: prepared and downloaded
+VM images, the relay boot disk and the support images stay. --cache also
+removes warden's whole cache directory, so the next VM build downloads and
+prepares its images again.`,
 	RunE: runClean,
 }
 
+var flagCleanCache bool
+
 func init() {
+	cleanCmd.Flags().BoolVar(&flagCleanCache, "cache", false,
+		"also remove the whole cache (prepared and downloaded VM images, relay boot disk)")
 	rootCmd.AddCommand(cleanCmd)
 }
 
@@ -81,17 +92,16 @@ func runClean(cmd *cobra.Command, args []string) error {
 		}
 	}
 
-	// Prune any dangling anonymous volumes left by build containers.
-	pruneArgs := append(ctrctl.Cli, "volume", "prune", "-f")
-	pruneCmd := exec.Command(pruneArgs[0], pruneArgs[1:]...)
-	if out, err := pruneCmd.Output(); err == nil && len(out) > 0 {
-		fmt.Fprintf(os.Stderr, "Pruned dangling volumes\n")
-		removed++
-	}
+	// Build containers are removed with their anonymous volumes above; other
+	// dangling volumes on the runtime are not warden's to prune.
 
-	// Clean VM cache (compiled binaries + cached images)
-	if cleanVMCache() {
-		removed++
+	if flagCleanCache {
+		if cleanCache() {
+			removed++
+		}
+	} else if size := dirSize(driver.CacheDir()); size > 0 {
+		fmt.Fprintf(os.Stderr, "Kept the cache (%d MB, %s); --cache removes it\n",
+			size/(1024*1024), driver.CacheDir())
 	}
 
 	if removed == 0 {
@@ -102,30 +112,31 @@ func runClean(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
-func cleanVMCache() bool {
-	cacheDir, err := os.UserCacheDir()
-	if err != nil {
+// cleanCache removes warden's cache directory (clean --cache).
+func cleanCache() bool {
+	dir := driver.CacheDir()
+	size := dirSize(dir)
+	if size == 0 {
 		return false
 	}
-	wardenCache := filepath.Join(cacheDir, "warden")
-	info, err := os.Stat(wardenCache)
-	if err != nil || !info.IsDir() {
+	if err := os.RemoveAll(dir); err != nil {
+		fmt.Fprintf(os.Stderr, "Removing the cache %s: %v\n", dir, err)
 		return false
 	}
-	var cacheSize int64
-	_ = filepath.Walk(wardenCache,
-		func(_ string, fi os.FileInfo, _ error) error {
-			if fi != nil && !fi.IsDir() {
-				cacheSize += fi.Size()
-			}
-			return nil
-		})
-	if err := os.RemoveAll(wardenCache); err != nil {
-		return false
-	}
-	fmt.Fprintf(os.Stderr,
-		"Removed VM cache (%d MB)\n", cacheSize/(1024*1024))
+	fmt.Fprintf(os.Stderr, "Removed the cache (%d MB, %s)\n", size/(1024*1024), dir)
 	return true
+}
+
+// dirSize is the total size of the files under dir (0 if it does not exist).
+func dirSize(dir string) int64 {
+	var size int64
+	_ = filepath.Walk(dir, func(_ string, fi os.FileInfo, _ error) error {
+		if fi != nil && !fi.IsDir() {
+			size += fi.Size()
+		}
+		return nil
+	})
+	return size
 }
 
 func listResources(args ...string) []string {
