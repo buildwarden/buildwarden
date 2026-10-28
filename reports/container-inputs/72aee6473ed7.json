@@ -1,0 +1,134 @@
+{
+  "feature": "container-inputs",
+  "branch": "feat/container-inputs",
+  "head": "72aee6473ed7",
+  "base": "c3ab3e56bf23",
+  "previous_report": "288b2df5cd24",
+  "scope": "git diff origin/main...feat/container-inputs (9 files, +249/-27; commits c32d7e8, 288b2df, 72aee64)",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "tier1": {
+    "make_lint": "pass",
+    "make_test": "pass",
+    "golangci_lint_goos_windows": "pass",
+    "note": "Tier 1 re-ran green at 72aee6473ed7 in this review step; recorded as reported, not re-run by the linter."
+  },
+  "previous_findings": [
+    {
+      "rule": "ORCH-02",
+      "severity": "MUST",
+      "file": "driver/qemu/driver.go",
+      "line": 147,
+      "summary": "qemu/hyperv recorded inputs only on the success path",
+      "status": "resolved",
+      "resolution": "qemu (driver/qemu/driver.go:94) and hyperv (driver/hyperv/driver_windows.go:77) now call RecordInputs right after StageBuildScript, before any VM boots, so a failed build keeps inputs/. The container driver records in setup (driver/container/container.go:324)."
+    },
+    {
+      "rule": "ORCH-01",
+      "severity": "MUST",
+      "file": "driver/hyperv/driver_windows.go",
+      "line": 125,
+      "summary": "Different RecordInputs failure policy per driver (container warned, VM drivers failed a completed build)",
+      "status": "resolved",
+      "resolution": "All three drivers now return a wrapped error at staging time, before anything runs. The policy is recorded in the design's Decisions (docs/design/container-inputs.md:59). The container logWarn path was removed."
+    },
+    {
+      "rule": "ORCH-02",
+      "severity": "MUST",
+      "file": "driver/session.go",
+      "line": 384,
+      "summary": "Containerfile re-read at the end of the build, not at translation",
+      "status": "resolved",
+      "resolution": "The copy now happens immediately after translation. A window of a few milliseconds remains between script.Translate reading the file and CopyFile reading it again; that is acceptable and noted as informational."
+    }
+  ],
+  "findings": [
+    {
+      "rule": "FLOW-01",
+      "severity": "MUST",
+      "check": "automated + agent-judgment",
+      "file": "docs/design/container-inputs.md",
+      "line": 46,
+      "finding": "The design now contradicts itself. The first Decision still says RecordInputs is 'called by every driver after `FinalizeOutput`'. The Decision added in 72aee64 (line 59), the Cross-driver impact section and the code all say it is called at staging, before the build starts. The design no longer accurately covers the change it is archived to explain (FLOW-12 reuse).",
+      "suggestion": "Change lines 46-47 to 'called by every driver right after staging the build script', or drop the timing from that bullet and leave it to the 'Recorded at staging' Decision."
+    }
+  ],
+  "counts": {
+    "MUST": 1,
+    "MUST-review": 0,
+    "SHOULD": 0
+  },
+  "suppressions": [],
+  "informational": [
+    {
+      "rule": "UX-01",
+      "file": "docs/book/src/getting-started/first-build.md",
+      "line": 50,
+      "status": "carried",
+      "note": "Still lists Dockerfile.submitted. This is deliberately left for the Guide phase (design Implementation plan step 6). Not a finding."
+    },
+    {
+      "rule": "FLOW-06",
+      "file": "docs/design/container-inputs.md",
+      "line": 59,
+      "status": "carried, updated",
+      "note": "Two plan changes after Design are both recorded in the design: Implement dropped the no-op vz call, and Review moved recording to staging ('Changed in Review'). Neither is a silent redesign."
+    },
+    {
+      "rule": "FLOW-07",
+      "file": "docs/design/container-inputs.md",
+      "line": 76,
+      "status": "carried",
+      "note": "Assumed questions a1 (remove top-level Dockerfile.submitted/build.sh with no compatibility copy) and a2 (fixed name inputs/Dockerfile) must be confirmed before sign-off (FLOW-08). UX-03 names flags, subcommands and config keys, not the output layout, so the removal is not raised as a UX-03 finding."
+    },
+    {
+      "rule": "FLOW-15",
+      "file": "driver/container/container.go",
+      "line": 353,
+      "status": "carried",
+      "note": "Pre-existing, out of LINT-04 scope. The container driver translates through its own stageBuildScript, not driver.StageBuildScript, so translates(req) agrees with what was staged only by construction. This is a candidate for the merge-round duplication sweep."
+    },
+    {
+      "rule": "GLOBAL-01",
+      "file": "driver/hyperv/driver_windows.go",
+      "line": 71,
+      "status": "carried, partly resolved",
+      "note": "The pre-existing precedence comment ('--script, then build.ps1/build.sh in the context, then a no-op') still omits the Dockerfile translation, which the new RecordInputs call two lines below depends on. The container.go comment nit is resolved: collectOutput's comment again describes only FinalizeOutput."
+    },
+    {
+      "rule": "UX-01",
+      "file": "docs/book/src/guide/output.md",
+      "line": 34,
+      "status": "carried",
+      "note": "Cosmetic: the paragraph was not reflowed. One line runs to about 120 columns."
+    },
+    {
+      "rule": "ORCH-02",
+      "file": "driver/session.go",
+      "line": 386,
+      "status": "new",
+      "note": "Residual: script.Translate and CopyFile each read req.Containerfile, milliseconds apart. Copying the bytes Translate read would close the gap entirely. This is not worth a finding at this window size."
+    },
+    {
+      "rule": "ORCH-01",
+      "file": "driver/hyperv/driver_windows.go",
+      "line": 77,
+      "status": "new",
+      "note": "hyperv now writes to req.OutputDir before runBuild validates that it is non-empty (driver/hyperv/buildhost.go:96). A caller that passes an empty OutputDir would get ./inputs/ in the working directory before the validation error. cmd/warden always sets OutputDir (resolveOutputDir), and driver.Driver is an internal API (GLOBAL-08), so this is not reachable from the CLI. qemu defaults the value before its call."
+    }
+  ],
+  "judged_clean": [
+    "ORCH-01 (one recording policy across container, qemu and hyperv; vz exclusion stated in the design)",
+    "ORCH-02 (inputs recorded on every build path that translated, under inputs/, with no reserved-name collision)",
+    "ORCH-04 (inputs/ is durable output; a build that fails early leaves only inputs/, consistent with keeping a failed build's inputs)",
+    "UX-04 (a recording failure now fails before any slow work)",
+    "GLOBAL-01 (RecordInputs doc comment updated to the new call timing)",
+    "GLOBAL-03 (all three call sites wrap with %w)",
+    "GLOBAL-04 / TEST-01 / TEST-04 (helper test unchanged and still deterministic; driver call sites are tracked in tier2_gaps)",
+    "GLOBAL-05", "GLOBAL-06 (no boundary touched)", "GLOBAL-07", "GLOBAL-08",
+    "TEST-02 / TEST-03",
+    "FLOW-02",
+    "FLOW-15 overview (StartBuild pseudocode now shows recording right after translation)",
+    "UX-01 (output.md statements remain accurate, now including failed builds)",
+    "BOOT-04"
+  ]
+}

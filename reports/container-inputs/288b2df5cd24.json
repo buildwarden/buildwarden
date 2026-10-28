@@ -1,0 +1,104 @@
+{
+  "feature": "container-inputs",
+  "branch": "feat/container-inputs",
+  "head": "288b2df5cd24",
+  "base": "c3ab3e56bf23",
+  "scope": "git diff origin/main...feat/container-inputs (9 files, +240/-26; commits c32d7e8, 288b2df)",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "tier1": {
+    "make_lint": "pass",
+    "make_test": "pass",
+    "golangci_lint_goos_windows": "pass",
+    "note": "Tier 1 ran green earlier in this review step; recorded as reported, not re-run by the linter."
+  },
+  "findings": [
+    {
+      "rule": "ORCH-02",
+      "severity": "MUST",
+      "check": "automated + agent-judgment",
+      "file": "driver/qemu/driver.go",
+      "line": 147,
+      "finding": "qemu (driver/qemu/driver.go:147) and hyperv (driver/hyperv/driver_windows.go:125) call RecordInputs only on the success path, after sess.Wait / runBuild return nil. A failed Linux-guest build from a Dockerfile, which is when a user most needs to compare what ran with what they wrote, gets no inputs/. The container driver records from teardown(), so its failed builds do get inputs/. ORCH-02 has no success condition, and docs/book/src/guide/output.md:32 says qemu and hyperv write inputs/ for any Linux guest built from a Dockerfile.",
+      "suggestion": "Record inputs on every path once the script is staged. Simplest: call RecordInputs right after StageBuildScript, since the output dir already exists and both files are final then. Alternatively, defer it after staging. Then the doc claim holds for failed builds too."
+    },
+    {
+      "rule": "ORCH-01",
+      "severity": "MUST",
+      "check": "automated + agent-judgment",
+      "file": "driver/hyperv/driver_windows.go",
+      "line": 125,
+      "finding": "The same RecordInputs failure is handled differently per driver, and the design does not say why. The container driver (driver/container/container.go:840) logs a WARNING and the build still reports SUCCEEDED. qemu (driver/qemu/driver.go:147) and hyperv return an error after the build and ledger have completed: cmd/warden runBuild sends that to buildFailed, the BuildResult is dropped, and a successful build is reported as FAILED. ORCH-01 allows a per-driver divergence only where the platform differs and the design states the reason. Nothing platform-specific is involved here.",
+      "suggestion": "Pick one policy and record it in the design's Decisions. The two options are fail, since ORCH-02 is a MUST, or warn. Apply it in all three drivers. If inputs are recorded at staging time (see the ORCH-02 finding above), a recording failure fails before any VM or container starts (UX-04, check early), and the post-build divergence goes away."
+    },
+    {
+      "rule": "ORCH-02",
+      "severity": "MUST",
+      "check": "automated + agent-judgment",
+      "file": "driver/session.go",
+      "line": 384,
+      "finding": "RecordInputs re-reads req.Containerfile from the user's tree at the end of the build, not when it was translated. inputs/build.sh is the staged copy that ran, but inputs/Dockerfile is whatever the file holds minutes or hours later. An editor save or git checkout during the build would leave a provenance record that pairs a Dockerfile with a translation it did not produce, while output.md documents it as 'Your Dockerfile, unchanged'. The old container-only code had the same timing; this diff moves it into the shared helper and extends it to qemu and hyperv. Likelihood is low.",
+      "suggestion": "Capture the submitted bytes when StageBuildScript translates them: copy into workDir next to the script, or record into <output>/inputs/ at staging time. Then copy that capture, not the live path. This fits naturally with the staging-time fix for the first ORCH-02 finding."
+    }
+  ],
+  "counts": {
+    "MUST": 3,
+    "MUST-review": 0,
+    "SHOULD": 0
+  },
+  "suppressions": [],
+  "informational": [
+    {
+      "rule": "UX-01",
+      "file": "docs/book/src/getting-started/first-build.md",
+      "line": 50,
+      "note": "Still lists Dockerfile.submitted. This is deliberately left for the Guide phase (design Implementation plan step 6). Not a finding."
+    },
+    {
+      "rule": "FLOW-06",
+      "file": "docs/design/container-inputs.md",
+      "line": 98,
+      "note": "Implement dropped the vz RecordInputs call (a no-op that exceeded gocyclo). This is recorded in the design's Cross-driver impact and in the queue history as a scope reduction with no behavior change. Not judged a silent redesign."
+    },
+    {
+      "rule": "FLOW-07",
+      "file": "docs/design/container-inputs.md",
+      "line": 70,
+      "note": "Assumed questions a1 (remove top-level Dockerfile.submitted/build.sh with no compatibility copy) and a2 (fixed name inputs/Dockerfile) are still open in the queue. They must be confirmed before sign-off (FLOW-08). UX-03 names flags, subcommands and config keys, not the output layout, so the removal is not raised as a UX-03 finding."
+    },
+    {
+      "rule": "FLOW-15",
+      "file": "driver/container/container.go",
+      "line": 350,
+      "note": "Pre-existing, out of LINT-04 scope. The container driver translates through its own stageBuildScript, not driver.StageBuildScript, so the design's 'recording cannot drift from what was staged' guarantee holds for container only by construction: it always translates and rejects --script and windows guests. This is a candidate for the merge-round duplication sweep."
+    },
+    {
+      "rule": "GLOBAL-01",
+      "file": "driver/hyperv/driver_windows.go",
+      "line": 71,
+      "note": "Pre-existing untouched comment ('--script, then build.ps1/build.sh in the context, then a no-op') omits the Dockerfile-translation step this feature now relies on for hyperv Linux guests. The touched comment at driver/container/container.go:837 says 'the same as every driver', which vz does not do. Both are nits."
+    },
+    {
+      "rule": "UX-01",
+      "file": "docs/book/src/guide/output.md",
+      "line": 34,
+      "note": "Cosmetic: the paragraph was not reflowed after the edit. One line runs to about 120 columns."
+    }
+  ],
+  "judged_clean": [
+    "GLOBAL-01 (RecordInputs and translates carry accurate doc comments)",
+    "GLOBAL-03 (errors returned and wrapped with %w at call sites; no panics)",
+    "GLOBAL-04 / TEST-01 (table-driven pure-Go unit test lands with the helper)",
+    "GLOBAL-05", "GLOBAL-06 (no boundary touched; security_boundary: none is correct)",
+    "GLOBAL-07 (filepath.Join throughout; hyperv change in a build-tagged file)",
+    "GLOBAL-08 (no versioned seam touched)",
+    "TEST-04 (t.TempDir fixtures, no wall clock, network or randomness)",
+    "TEST-02 / TEST-03 (qemu/hyperv end-to-end gap tracked in tier2_gaps)",
+    "FLOW-01 (design present, from template, covers the change)",
+    "FLOW-02 (front-matter declares drivers, surfaces: [output], rules; conservative vz inclusion is acceptable)",
+    "FLOW-15 overview (StartBuild pseudocode updated)",
+    "UX-01 (output.md and README updated for the output-layout change)",
+    "ORCH-02 reserved names (inputs/ collides with no reserved output name)",
+    "ORCH-04 (inputs/ is durable output written outside the work dir; no teardown touches it)",
+    "BOOT-04 (the script the guest fetches is unchanged; recording is host-side only)"
+  ]
+}
