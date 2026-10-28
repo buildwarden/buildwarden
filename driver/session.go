@@ -372,7 +372,9 @@ func translates(req *BuildRequest) bool {
 // the script was translated from the Containerfile, the submitted file goes to
 // <output>/inputs/Dockerfile and the staged script to <output>/inputs/build.sh.
 // req is the request given to StageBuildScript, and script the path it
-// returned. An input run as given is not recorded.
+// returned. Drivers call it straight after staging, before the build starts,
+// so a failed build keeps its inputs and a failure to record fails the build
+// before anything runs. An input run as given is not recorded.
 func RecordInputs(outputDir string, req *BuildRequest, script string) error {
 	if !translates(req) {
 		return nil

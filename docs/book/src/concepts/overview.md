@@ -41,6 +41,7 @@ differ per driver.
 ```
 StartBuild(req):
     script := translate(req.Containerfile, req.ContextDir)   # see Translator
+    if script was translated: keep both under <output>/inputs/  # ORCH-02; not vz
     session := StartSession(output dir, context, script, guest OS)
     relay := start the relay, unconfigured                 # per driver
     session.ClaimRelay(relay)                              # tunnel + config
@@ -49,8 +50,6 @@ StartBuild(req):
     start it                                               # per driver
     session.Wait()          # until warden-io reports exit, or a failure
     teardown; finalize output (optional zstd)
-    if script was translated from req.Containerfile:      # not vz
-        keep both under <output>/inputs/ (Dockerfile, build.sh; ORCH-02)
 ```
 
 ## Session and collector (`driver/session.go`, `collector/`)

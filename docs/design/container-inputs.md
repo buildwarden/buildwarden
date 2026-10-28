@@ -56,6 +56,12 @@ submitted next to what ran.
   `StageBuildScript` and `RecordInputs`, so the recording cannot drift from what
   was staged.
 - **vz does not call it**: it never translates (see Cross-driver impact).
+- **Recorded at staging, before the build starts**, in every driver: a failed
+  build keeps its inputs, the Containerfile is copied moments after it was
+  translated rather than at the end of the build, and a failure to record
+  fails the build before anything runs (one policy for all drivers, ORCH-01).
+  Changed in Review: the first implementation recorded after the build, which
+  dropped inputs on failure and handled errors differently per driver.
 - **Fixed names**: `inputs/Dockerfile` (the submitted file, whatever it was
   called) and `inputs/build.sh` (the translation).
 
@@ -88,10 +94,11 @@ The container driver always translates, so its builds always get both files.
 
 ## Cross-driver impact
 
-- **container**: `collectOutput` calls `RecordInputs` in place of writing
-  `Dockerfile.submitted` and `build.sh` at the top level.
-- **qemu**: calls `RecordInputs` after `FinalizeOutput`; Linux guests built from
-  a Dockerfile gain `inputs/`.
+- **container**: `setup` calls `RecordInputs` once the output directory
+  exists, and `collectOutput` no longer writes `Dockerfile.submitted` and
+  `build.sh` at the top level.
+- **qemu**: calls `RecordInputs` right after `StageBuildScript`; Linux guests
+  built from a Dockerfile gain `inputs/`.
 - **hyperv**: the same; Windows guests never translate, so no change for them.
 - **vz**: unchanged. macOS guests run a shell script and never translate (the
   driver clears `Containerfile` before staging), so there is nothing to record.
@@ -113,7 +120,8 @@ available. Native hosts are tracked, not blocking (see front-matter).
 2. Unit tests for both, table-driven over the precedence cases (TEST-01).
 3. Container driver: replace the top-level copies in `collectOutput` with
    `RecordInputs` (ORCH-02, FLOW-15).
-4. qemu and hyperv: call `RecordInputs` after `FinalizeOutput` (ORCH-01).
+4. qemu and hyperv: call `RecordInputs` right after `StageBuildScript`
+   (ORCH-01).
 5. Update the output reference (`docs/book/src/guide/output.md`) and the
    `StartBuild` pseudocode in `docs/book/src/concepts/overview.md` (UX-01,
    FLOW-15).

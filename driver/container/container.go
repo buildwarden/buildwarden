@@ -321,6 +321,9 @@ func (b *build) setup(ctx context.Context) error {
 		return fmt.Errorf(
 			"error creating output dir: %w", err)
 	}
+	if err := driver.RecordInputs(b.outputDir, b.req, b.scriptPath()); err != nil {
+		return fmt.Errorf("recording inputs: %w", err)
+	}
 
 	if err := b.resolveRelayImage(); err != nil {
 		return err
@@ -833,13 +836,9 @@ func (b *build) collectLogs() {
 	}
 }
 
-// collectOutput finalizes the collector's output and records the translated
-// Containerfile under inputs/, the same as every driver.
+// collectOutput finalizes the collector's output (the same as every driver).
 func (b *build) collectOutput() {
 	driver.FinalizeOutput(b.outputDir, b.req.Compress)
-	if err := driver.RecordInputs(b.outputDir, b.req, b.scriptPath()); err != nil {
-		logWarn(b.req, fmt.Sprintf("recording inputs: %s", err))
-	}
 }
 
 // logInfo writes an informational message to stderr via the
