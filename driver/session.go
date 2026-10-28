@@ -14,6 +14,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/buildwarden/buildwarden/bootstrap"
 	"github.com/buildwarden/buildwarden/collector"
 	"github.com/buildwarden/buildwarden/driver/script"
 	"github.com/buildwarden/buildwarden/relaycfg"
@@ -50,6 +51,9 @@ type SessionConfig struct {
 	// ContextDir and BuildScript are the build inputs the collector serves.
 	ContextDir  string
 	BuildScript string
+	// GuestOS picks the bootstrap config the collector serves
+	// (bootstrap.ForGuest; empty means a Linux guest).
+	GuestOS string
 	// OutputTee receives the live build console (nil under --quiet).
 	OutputTee io.Writer
 	// Verbose logs collector traffic to stderr.
@@ -83,6 +87,7 @@ func StartSession(cfg SessionConfig) (*Session, error) {
 		Token:           token,
 		ContextDir:      cfg.ContextDir,
 		BuildScriptPath: cfg.BuildScript,
+		Bootstrap:       bootstrap.ForGuest(cfg.GuestOS).Marshal(),
 		OutputTee:       cfg.OutputTee,
 		Logf:            logf,
 	})

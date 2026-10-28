@@ -176,6 +176,7 @@ func runBuild(
 		BuildSwitch:     cfg.BuildSwitch,
 		NATSwitch:       cfg.NATSwitch,
 		BuildScriptPath: cfg.BuildScriptPath,
+		GuestOS:         guestOS(cfg.IsWindows),
 		ContextDir:      cfg.ContextDir,
 		Request:         cfg.Request,
 		Environment:     cfg.Environment,
@@ -314,4 +315,12 @@ func watchBuildVM(
 		}
 		return
 	}
+}
+
+// guestOS names the build guest's OS family for the bootstrap config.
+func guestOS(windows bool) string {
+	if windows {
+		return "windows"
+	}
+	return "linux"
 }

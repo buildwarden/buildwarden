@@ -318,6 +318,29 @@ func TestBuildScriptUnsetIs404(t *testing.T) {
 	}
 }
 
+func TestBootstrapServed(t *testing.T) {
+	want := []byte(`{"version":1,"trust":{"mode":"exclusive"}}`)
+	srv, _ := newTestServer(t, Config{Token: "sekret", Bootstrap: want})
+	resp := getReq(t, srv.URL+"/v1/bootstrap", "")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusUnauthorized {
+		t.Fatalf("no-token status = %d, want 401", resp.StatusCode)
+	}
+	resp = getReq(t, srv.URL+"/v1/bootstrap", "sekret")
+	got, _ := io.ReadAll(resp.Body)
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusOK || !bytes.Equal(got, want) {
+		t.Fatalf("got %d %q, want 200 %q", resp.StatusCode, got, want)
+	}
+
+	srv, _ = newTestServer(t, Config{Token: "sekret"})
+	resp = getReq(t, srv.URL+"/v1/bootstrap", "sekret")
+	resp.Body.Close()
+	if resp.StatusCode != http.StatusNotFound {
+		t.Fatalf("unset status = %d, want 404", resp.StatusCode)
+	}
+}
+
 // putWithTrailer streams body as a chunked PUT carrying the hash trailer, the
 // way the relay uploads captures.
 func putWithTrailer(t *testing.T, url, token string, body []byte, hash string) *http.Response {

@@ -40,6 +40,8 @@ type RelayHostConfig struct {
 	// ContextDir and BuildScriptPath are the inputs the collector serves.
 	ContextDir      string
 	BuildScriptPath string
+	// GuestOS picks the bootstrap config ("windows" or "linux").
+	GuestOS string
 
 	RelayIP      string // relay VM's static NAT address (default 192.168.240.2)
 	ClaimPort    int    // default relaycfg.DefaultPort
@@ -90,6 +92,7 @@ func StartRelay(ctx context.Context, prov Provisioner, cfg RelayHostConfig) (*Re
 		OutputDir:   cfg.OutputDir,
 		ContextDir:  cfg.ContextDir,
 		BuildScript: cfg.BuildScriptPath,
+		GuestOS:     cfg.GuestOS,
 		OutputTee:   cfg.OutputTee,
 	})
 	if err != nil {

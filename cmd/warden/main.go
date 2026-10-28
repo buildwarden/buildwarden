@@ -241,10 +241,9 @@ func newDriver(cfg *Config) (driver.Driver, error) {
 			return nil, err
 		}
 		return &container.Driver{
-			Runtime:    runtime,
-			Verbose:    cfg.Output.Verbose,
-			Version:    version,
-			Extensions: driver.DefaultExtensions(),
+			Runtime: runtime,
+			Verbose: cfg.Output.Verbose,
+			Version: version,
 		}, nil
 	}
 }

@@ -7,6 +7,8 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+
+	"github.com/buildwarden/buildwarden/bootstrap"
 )
 
 func main() {
@@ -178,8 +180,14 @@ func fetchFile(src, dest string) error {
 	return err
 }
 
+// runTrust installs the relay CA, appended to the system roots, outside a
+// build (initialize installs it per the bootstrap config).
 func runTrust() int {
-	if err := fetchAndInstallCA(); err != nil {
+	ca, err := fetchCA()
+	if err == nil {
+		err = installCA(ca.pem, ca.cert, bootstrap.TrustAppend)
+	}
+	if err != nil {
 		fmt.Fprintf(os.Stderr, "warden-io: trust: %s\n", err)
 		return 1
 	}

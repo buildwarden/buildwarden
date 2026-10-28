@@ -3,9 +3,12 @@
 package main
 
 import (
+	"crypto/x509"
 	"fmt"
 	"os"
 	"os/exec"
+
+	"github.com/buildwarden/buildwarden/bootstrap"
 )
 
 // scriptCommand builds the command to execute the fetched build script,
@@ -75,7 +78,19 @@ set State:/Network/Service/warden/DNS
 	return nil
 }
 
-func installCA(pem []byte) error {
+// wardenDataDir holds the files warden-io derives for the build (the Java
+// truststore, the shell environment).
+func wardenDataDir() string { return "/etc/warden" }
+
+// bazelSystemRC is the system-wide bazelrc Bazel reads on macOS.
+func bazelSystemRC() string { return "/etc/bazel.bazelrc" }
+
+// installCA adds the relay CA to the System keychain and the combined bundle.
+// Exclusive trust is not implemented on macOS guests; it appends instead.
+func installCA(pem []byte, _ *x509.Certificate, mode string) error {
+	if mode == bootstrap.TrustExclusive {
+		logStep("exclusive trust is not supported on macOS; adding the CA instead")
+	}
 	tmpFile := "/tmp/warden-ca.pem"
 	if err := os.WriteFile(tmpFile, pem, 0644); err != nil {
 		return fmt.Errorf("writing temp CA: %w", err)

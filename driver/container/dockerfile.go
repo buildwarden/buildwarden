@@ -119,10 +119,6 @@ func (b *scriptBuilder) handleCopy(rest string) error {
 		return fmt.Errorf(
 			"COPY --from= (multi-stage) not supported")
 	}
-	if strings.HasPrefix(rest, ".warden ") ||
-		strings.HasPrefix(rest, ".warden\t") {
-		return nil
-	}
 	return fmt.Errorf("unexpected COPY directive " +
 		"(should be rewritten before script generation)")
 }

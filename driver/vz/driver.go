@@ -95,6 +95,7 @@ func (d *Driver) StartBuild(
 		OutputDir:   outputDir,
 		ContextDir:  req.ContextDir,
 		BuildScript: buildScript,
+		GuestOS:     "darwin",
 		OutputTee:   driver.ConsoleTee(req),
 	})
 	if err != nil {

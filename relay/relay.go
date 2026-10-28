@@ -434,31 +434,40 @@ func (r *Relay) recordEnvironment() error {
 	return nil
 }
 
+// handleArtifacts serves the relay's guest API on the reserved host
+// "artifacts": heartbeat, exit, the CA, the build script, the bootstrap
+// config, and artifact uploads.
+func (r *Relay) handleArtifacts(req *http.Request) (*http.Request, *http.Response) {
+	switch req.URL.Path {
+	case "/heartbeat":
+		r.TouchActivity()
+		return req, newTextResponse(req, http.StatusOK, "ok\n")
+	case "/exit":
+		code := 0
+		if q := req.URL.Query().Get("code"); q != "" {
+			_, _ = fmt.Sscanf(q, "%d", &code)
+		}
+		r.complete(code)
+		return req, newTextResponse(req, http.StatusOK, "ok\n")
+	case "/ca.pem":
+		return r.handleCACertGet(req)
+	case "/build-script":
+		return r.handleBuildScript(req)
+	case "/bootstrap":
+		return r.handleBootstrap(req)
+	default:
+		if req.Method == "POST" {
+			return r.handleArtifactPost(req)
+		}
+		return req, newTextResponse(req, http.StatusNotFound, "not found\n")
+	}
+}
+
 func (r *Relay) onRequest(req *http.Request) (*http.Request, *http.Response) {
 	host := strings.Split(req.Host, ":")[0]
 
 	if host == "artifacts" {
-		switch req.URL.Path {
-		case "/heartbeat":
-			r.TouchActivity()
-			return req, newTextResponse(req, http.StatusOK, "ok\n")
-		case "/exit":
-			code := 0
-			if q := req.URL.Query().Get("code"); q != "" {
-				_, _ = fmt.Sscanf(q, "%d", &code)
-			}
-			r.complete(code)
-			return req, newTextResponse(req, http.StatusOK, "ok\n")
-		case "/ca.pem":
-			return r.handleCACertGet(req)
-		case "/build-script":
-			return r.handleBuildScript(req)
-		default:
-			if req.Method == "POST" {
-				return r.handleArtifactPost(req)
-			}
-			return req, newTextResponse(req, http.StatusNotFound, "not found\n")
-		}
+		return r.handleArtifacts(req)
 	}
 
 	if host == "cwd" && req.Method == "GET" {
@@ -647,6 +656,19 @@ func (r *Relay) handleBuildScript(req *http.Request) (*http.Request, *http.Respo
 	}
 	r.recordServed(req, data, "build-script")
 	return req, newBytesResponse(req, data, "application/octet-stream")
+}
+
+// handleBootstrap serves the build's bootstrap config (package bootstrap) at
+// http://artifacts/bootstrap, pulled from the collector and recorded like the
+// build script. A collector without one gives 404, which the executor reads as
+// the empty config.
+func (r *Relay) handleBootstrap(req *http.Request) (*http.Request, *http.Response) {
+	data, _, status, err := r.sink.fetch("/v1/bootstrap")
+	if err != nil || status != http.StatusOK {
+		return req, newTextResponse(req, http.StatusNotFound, "no bootstrap config\n")
+	}
+	r.recordServed(req, data, "bootstrap")
+	return req, newBytesResponse(req, data, "application/json")
 }
 
 // handleContextGet serves the build context at http://cwd/<path>: a file's

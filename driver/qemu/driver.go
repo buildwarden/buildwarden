@@ -113,6 +113,7 @@ func (d *Driver) StartBuild(
 		OutputDir:   outputDir,
 		ContextDir:  req.ContextDir,
 		BuildScript: buildScript,
+		GuestOS:     req.GuestOS,
 		OutputTee:   driver.ConsoleTee(req),
 		Verbose:     d.Verbose,
 	})

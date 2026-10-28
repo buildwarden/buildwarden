@@ -151,12 +151,14 @@ func TestRelayCollectorEndToEnd(t *testing.T) {
 
 	r, col, client, out := startTestRelay(t, collector.Config{
 		ContextDir: ctxDir, BuildScriptPath: script,
+		Bootstrap: []byte(`{"version":1}`),
 	}, "")
 	if r.LedgerPublicKeyHex() == "" || len(r.CACert()) == 0 {
 		t.Fatal("relay identity incomplete")
 	}
 
 	getExpect(t, client, "http://artifacts/build-script", 200, "#!/bin/sh\nmake\n")
+	getExpect(t, client, "http://artifacts/bootstrap", 200, `{"version":1}`)
 	getExpect(t, client, "http://cwd/src/main.c", 200, "int main(){}")
 	getExpect(t, client, "http://cwd/src/", 200, "src/main.c\n")
 	getExpectCode(t, client, "http://cwd/src/missing", 404)

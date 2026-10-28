@@ -2,9 +2,9 @@
 // driver runs one collector per build: the relay streams every output
 // (artifacts, captures, the ledger, build output) and every signal (ready,
 // heartbeat, complete) to it over HTTP, and pulls every build input (the build
-// script and context files) from it. The relay therefore never needs a shared
-// filesystem, and the collector is the one place a deployment would swap local
-// disk for remote storage.
+// script, the bootstrap config and context files) from it. The relay therefore
+// never needs a shared filesystem, and the collector is the one place a
+// deployment would swap local disk for remote storage.
 //
 // Protocol (all but /healthz require Authorization: Bearer <token>):
 //
@@ -17,6 +17,7 @@
 //	                            environment record's signed payload)
 //	POST /v1/output             append body -> <dir>/build-output.log
 //	GET  /v1/build-script       the build script staged for this build
+//	GET  /v1/bootstrap          the build's bootstrap config (package bootstrap)
 //	GET  /v1/context/<path>     a context file, or a newline listing when
 //	                            <path> is a directory (Warden-Context header)
 //	POST /v1/ready              relay is up
@@ -64,6 +65,9 @@ type Config struct {
 	// BuildScriptPath is the host path of the build script served on
 	// GET /v1/build-script. Empty makes the endpoint 404.
 	BuildScriptPath string
+	// Bootstrap is the bootstrap config served on GET /v1/bootstrap. Empty
+	// makes the endpoint 404, which the executor reads as the empty config.
+	Bootstrap []byte
 	// ContextDir is the host build context served on GET /v1/context/. Empty
 	// makes the endpoint 404.
 	ContextDir string
@@ -175,6 +179,7 @@ func (c *Collector) Handler() http.Handler {
 	mux.HandleFunc("/v1/environment", c.auth(c.handleEnvironment))
 	mux.HandleFunc("/v1/output", c.auth(c.handleOutput))
 	mux.HandleFunc("/v1/build-script", c.auth(c.handleBuildScript))
+	mux.HandleFunc("/v1/bootstrap", c.auth(c.handleBootstrap))
 	mux.HandleFunc("/v1/context/", c.auth(c.handleContext))
 	mux.HandleFunc("/v1/ready", c.auth(c.handleReady))
 	mux.HandleFunc("/v1/heartbeat", c.auth(c.handleHeartbeat))
@@ -370,6 +375,21 @@ func (c *Collector) handleBuildScript(w http.ResponseWriter, req *http.Request) 
 		return
 	}
 	serveFile(w, f)
+}
+
+func (c *Collector) handleBootstrap(w http.ResponseWriter, req *http.Request) {
+	if req.Method != http.MethodGet {
+		http.Error(w, "GET only", http.StatusMethodNotAllowed)
+		return
+	}
+	if len(c.cfg.Bootstrap) == 0 {
+		http.Error(w, "no bootstrap config", http.StatusNotFound)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Content-Length", fmt.Sprint(len(c.cfg.Bootstrap)))
+	w.WriteHeader(http.StatusOK)
+	_, _ = w.Write(c.cfg.Bootstrap)
 }
 
 // handleContext serves the build context with the relay's historical

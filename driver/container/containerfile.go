@@ -7,8 +7,6 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
-
-	"github.com/buildwarden/buildwarden/driver"
 )
 
 // editContainerfile writes a rewritten copy of the Containerfile to outPath
@@ -17,7 +15,6 @@ func editContainerfile(
 	containerfile string,
 	contextDir string,
 	outPath string,
-	extensions []driver.Extension,
 ) error {
 	origfile, err := os.Open(containerfile)
 	if err != nil {
@@ -33,45 +30,9 @@ func editContainerfile(
 	}
 	defer ctrfile.Close()
 
-	env := make(map[string]string)
-	for _, ext := range extensions {
-		extenv := ext.Env()
-		if extenv == nil {
-			continue
-		}
-		for k, v := range extenv {
-			if _, ok := env[k]; ok {
-				return fmt.Errorf("env collision: %s", k)
-			}
-			env[k] = v
-		}
-	}
-	var enventries []string
-	for k, v := range env {
-		enventries = append(enventries,
-			fmt.Sprintf("%s=%s", k, v))
-	}
-
 	scanner := bufio.NewScanner(origfile)
 	for scanner.Scan() {
 		line := scanner.Text()
-
-		if strings.HasPrefix(line, "FROM ") {
-			_, _ = ctrfile.WriteString(line + "\n")
-			if len(enventries) > 0 {
-				_, _ = ctrfile.WriteString("ENV " +
-					strings.Join(enventries,
-						" \\\n") + "\n")
-			}
-			_, _ = ctrfile.WriteString(
-				"COPY .warden /.warden\n")
-			_, _ = ctrfile.WriteString(
-				"RUN ln -sf /.warden/warden-io" +
-					" /usr/local/bin/warden-io" +
-					" && find /.warden/ext.d/" +
-					" -exec sh {} \\;\n")
-			continue
-		}
 
 		if isCopyDirective(line) {
 			rewritten, err := rewriteCopy(
