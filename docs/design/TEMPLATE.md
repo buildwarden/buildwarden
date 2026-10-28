@@ -5,7 +5,8 @@ feature: <feature-slug>
 status: draft            # draft | active | archived
 round: parallel          # parallel | merge
 drivers: []              # container, qemu, vz, hyperv, firecracker; or [interface]
-seams: []                # e.g. relay-claim, collector, executor-initialize, ledger-format
+seams: []                # e.g. relay-claim, collector, executor-initialize, ledger-format,
+                         # bootstrap-model (BOOT-07: needs the Bootstrap comparison below)
 surfaces: []             # e.g. cli, config, output
 security_boundary: none  # none | host-env | env-relay | env-beyond (GLOBAL-06)
 native_validation: []    # - {host: windows-hyperv, blocking: true, reason: "..."}
@@ -48,6 +49,13 @@ The behavior and structure of the change.
 
 For each driver named in `drivers`, what changes; for the others, why they are
 unaffected (ORCH-01).
+
+## Bootstrap comparison
+
+Required when the design changes the bootstrap model (BOOT-07); delete otherwise.
+The current and proposed model diagrams, a table with one row per invariant
+(BOOT-01 to BOOT-06: current, proposed, per-driver effect), and what the change
+gains and costs. Sign-off must accept this section explicitly.
 
 ## Security note
 

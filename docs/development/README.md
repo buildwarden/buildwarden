@@ -38,6 +38,7 @@ Body describing the rule, the rationale, and how it is checked.
 | `RELAY-`  | Relay (`relay/`, `cmd/relay/`)                     | `relay.md`              |
 | `ORCH-`   | Orchestrator (`cmd/warden/`)                       | `orchestrator.md`       |
 | `EXEC-`   | In-VM executor (`cmd/warden-io/`)                  | `in-vm-executor.md`     |
+| `BOOT-`   | Build-environment bootstrap model (all drivers)    | `bootstrap.md`          |
 | `UX-`     | UX / CLI / configuration                           | `ux-cli-config.md`      |
 | `TEST-`   | Testing and dev-velocity                           | `testing.md`            |
 | `LINT-`   | The behavioral-linter agent itself                 | `behavioral-linter.md`  |
@@ -90,6 +91,9 @@ one monolith (see GLOBAL-08):
 2. [`relay.md`](./relay.md)
 3. [`orchestrator.md`](./orchestrator.md)
 4. [`in-vm-executor.md`](./in-vm-executor.md)
+   - [`bootstrap.md`](./bootstrap.md) — the bootstrap model every driver shares:
+     isolate, deliver the executor, start it, then everything over the relay.
+     Changing the model needs a signed comparison (BOOT-07).
 5. [`ux-cli-config.md`](./ux-cli-config.md)
 6. [`testing.md`](./testing.md)
 7. [`security-suite.md`](./security-suite.md) — the TEST-08 security suite design

@@ -26,6 +26,11 @@ runs on the host. The relay never dials the host and `warden` never listens on
 any network: the collector is served to the relay over a tunnel `warden` opens
 on the relay's claim port.
 
+Every driver bootstraps the build environment the same way: isolate it, deliver
+the executor, start it, and let `warden-io initialize` pull everything else from
+the relay. The model, its invariants and the drivers that do not yet follow it
+are in [`docs/development/bootstrap.md`](https://github.com/buildwarden/buildwarden/blob/main/docs/development/bootstrap.md).
+
 ## High-level topology
 
 ```

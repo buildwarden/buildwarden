@@ -70,7 +70,7 @@ All ledger writes go through a channel to a single goroutine (`Ledger.loop()`). 
 - Each build stages its files in its own `driver.NewWorkDir` (under `--tmpdir`, default the OS temp dir); nothing is written into the build context
 - `artifacts` and `cwd` are reserved DNS hostnames that resolve to the relay IP
 - Network isolation: iptables (container), topological via separate VM (qemu, vz, hyperv)
-- All drivers use `warden-io initialize` as the build-environment entry point
+- All drivers use `warden-io initialize` as the build-environment entry point, under one bootstrap model (isolate, deliver the executor, start it, everything else over the relay): `docs/development/bootstrap.md`. Changing that model needs a design with a signed Bootstrap comparison (BOOT-07); don't alter it as a side effect
 - Fail early, say what to do (DEVELOPING.md): a failure with a clear cause (missing root/Administrator, unprepared image, absent tool, bad flag) is a `driver.Fixable(fix, ...)` error naming the exact remedy, checked before any slow or irreversible step when the check is cheap; only unexplained failures get the file-a-bug link
 
 ## Linter settings
