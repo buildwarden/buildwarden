@@ -65,6 +65,12 @@ can compare the claim against the diff and the queue can route the work:
 - `surfaces` — which user-facing surfaces change (UX-01, ORCH-03).
 - `security_boundary` — which GLOBAL-06 boundary is altered, if any. Any value other
   than `none` requires a security note in the design.
+- `alters_relationships` — `true` when the change alters a component's role or
+  how components interact: a versioned seam (GLOBAL-08), the bootstrap model
+  (BOOT rules), which component owns a responsibility (relay, collector,
+  executor, orchestrator, a driver), or the `driver.Driver` / `driver.Session`
+  contract. Changes inside one component's existing role are `false`. FLOW-05
+  limits how many such features are in flight.
 - `native_validation` — which native hosts must validate the change, and whether
   each blocks merge (FLOW-09).
 - `tier2_gaps` — platform validation knowingly deferred (TEST-03).
@@ -133,9 +139,12 @@ expired lease may be reclaimed.
 **Check:** automated
 
 Workers rank steps by: merge-round before parallel-round, then later phase before
-earlier, then queue priority. The parallel round holds a limited number of features
-in progress (default 3); a new feature does not start design while the limit is
-reached. During the parallel round a feature branch periodically merges `main` with
+earlier, then queue priority. At most 5 features are in progress at once, and at
+most 1 of them declares `alters_relationships: true` (FLOW-02), because two such
+features reshape the same structure and make each other's consolidation costly. A
+new feature does not start design while its limit is reached; a feature whose
+design discovers it alters relationships waits at the end of Design until the slot
+is free. During the parallel round a feature branch periodically merges `main` with
 conflict-only fixes, so the merge-round consolidation stays small.
 
 ---
@@ -169,7 +178,8 @@ Each question is one of:
 
 Every question states the options considered and a recommended answer. Later
 phases route questions back through Design, which escalates only what the design
-has not already settled.
+has not already settled. Questions live in the feature's queue state on the
+`workflow` branch and in the loop's digest, not as GitHub issues.
 
 ---
 
@@ -266,10 +276,12 @@ front-matter and are retrofitted when a new design first relies on them.
 **Severity:** SHOULD
 **Check:** automated
 
-The unattended loop takes one step per session: read state, claim, work, write
-state, exit. All state it needs lives in the repository, never in a long-running
-conversation. Each feature has a work budget; exhausting it escalates to a `human`
-step. The loop posts a periodic digest (what moved, what is blocked on a human,
+The unattended loop runs once a day. Each run takes steps one at a time (read
+state, claim, work, write state) until no `cloud` step is ready or the run's
+budget is spent, and writes state after every step so an interrupted run loses at
+most the step in progress. All state it needs lives in the repository, never in a
+long-running conversation. Each feature has a work budget; exhausting it escalates
+to a `human` step. The loop posts a periodic digest (what moved, what is blocked on a human,
 what is waiting on a native host, what was spent), and notifies when a new
 blocking question appears.
 
@@ -364,21 +376,19 @@ the remote, or deleting a remote branch (FLOW-16).
 
 ## Bootstrap order
 
-The process starts with this ordering, highest first. The windows-driver
-integration line (`integrate/windows-driver`) and this doc set have both landed on
-`main`.
+Done so far: the windows-driver integration line and this doc set landed on
+`main`; Hyper-V Phase 5a is complete (re-validation in
+[`vm-driver-release-plan.md`](../design/vm-driver-release-plan.md), consolidation
+in the archived [`hyperv-windows-prepare.md`](../design/hyperv-windows-prepare.md));
+and the legacy guidance files (`CLAUDE.md`, `AGENTS.md`, `CONTRIBUTING.md`, the
+mdbook `contributing/` tree) now point here instead of restating rules, with
+`DEVELOPING.md` folded into `CONTRIBUTING.md` and UX-04 / UX-09.
 
-1. **Hyper-V Phase 5a — Windows-guest consolidation** (`host:windows-hyperv`,
-   attended on the Windows desktop). Re-validate what the windows-driver
-   integration pass applied to the Hyper-V driver, then consolidate the Windows
-   guest lifecycle with qemu, per Phase 5a in
-   [`vm-driver-release-plan.md`](../design/vm-driver-release-plan.md), including
-   its rollback notes.
-2. **Reconcile legacy guidance.** Reduce `CLAUDE.md`, `AGENTS.md`, `DEVELOPING.md`,
-   `CONTRIBUTING.md`, and the mdbook `contributing/` tree to pointers here,
-   promoting any rule that exists only there.
-3. **Stand up the workflow.** Create the `workflow` orphan branch and the agent
-   definitions (FLOW-14), and run behavioral-linter tier 2 in report-only mode
-   (LINT-07).
-4. **Normal queue**, in priority order: the open items in the README, then feature
+Remaining, highest first:
+
+1. **Stand up the workflow.** Create the `workflow` orphan branch with the queue
+   state and the native-gap backlog (seeded from the README), the agent
+   definitions (FLOW-14), the daily loop (FLOW-13), and behavioral-linter tier 2
+   in report-only mode (LINT-07).
+2. **Normal queue**, in priority order: the open items in the README, then feature
    work such as the Firecracker driver.

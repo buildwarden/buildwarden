@@ -1,54 +1,91 @@
 # Contributing to BuildWarden
 
-Thank you for your interest in contributing! This guide covers development setup, testing, and the PR process.
+Thank you for your interest in contributing! This guide covers setup, building,
+testing, and how a change gets merged. The standards a change is held to live in
+[`docs/development/`](https://github.com/buildwarden/buildwarden/tree/main/docs/development),
+and the process for designing, reviewing and merging a feature is
+[`process.md`](https://github.com/buildwarden/buildwarden/blob/main/docs/development/process.md).
 
-## Development Setup
+## Setup
 
-**Prerequisites (all platforms):**
-- Go 1.25+ (we use [mise](https://mise.jdx.dev/) to manage versions)
+**All platforms:**
+
+- Go at the version in `go.mod` (we manage it with [mise](https://mise.jdx.dev/);
+  run `mise exec -- go ...` if your `GOROOT` is misconfigured)
 - golangci-lint v2
 - A container runtime: finch, docker, or podman
 
-**macOS (VZ driver):**
-- Xcode Command Line Tools (for CGo / Objective-C compilation)
-- macOS 13+ on Apple Silicon
-- After building, sign the binary for the virtualization entitlement:
-  ```sh
-  codesign --sign - --entitlements entitlements.plist dist/warden
-  ```
-  `make build` does this automatically with ad-hoc signing.
+**VZ driver (macOS 13+ on Apple Silicon):**
+
+- Xcode Command Line Tools, for cgo and Objective-C
+- The host binary needs the virtualization entitlement. `make build` signs it
+  ad hoc; to sign by hand:
+  `codesign --sign - --entitlements entitlements.plist dist/warden`
 
 **QEMU driver (any platform):**
-- `qemu-system-aarch64` (or `qemu-system-x86_64`) and `qemu-img`
-- macOS: `brew install qemu`
-- Linux: `apt install qemu-system`
 
-## Building and Testing
+- `qemu-system-aarch64` or `qemu-system-x86_64`, plus `qemu-img`
+  (`brew install qemu` on macOS, `apt install qemu-system` on Linux)
+
+**Hyper-V driver (Windows):**
+
+- Hyper-V and its management stack enabled
+- Membership in Hyper-V Administrators, or an elevated terminal
+- One-time network setup from an elevated terminal: `warden setup --driver hyperv`
+
+## Building and testing
 
 ```sh
-make build       # Compile all binaries to dist/
-make test        # Run unit tests
-make lint        # golangci-lint
-make fmt         # gofmt -s -w
-make tidy        # go mod tidy
-make cover       # Tests with coverage report
+make build               # Compile all binaries to dist/
+make test                # Unit tests: run on every platform, no external dependencies
+make lint                # golangci-lint
+make fmt                 # gofmt -s -w
+make tidy                # go mod tidy
+make cover               # Tests with a coverage report
+make deadcode            # Code unreachable on Linux, macOS and Windows
+make integration-test    # Real builds plus ledger checks; needs a container runtime
+make integration-test-vz # VZ end to end; needs macOS/arm64 and a prepared image
+make clean               # Remove built binaries
 ```
 
-`make build` cross-compiles the relay and warden-io for linux/amd64 and linux/arm64. On macOS/arm64 it also builds warden-io for darwin/arm64 and codesigns the host binary.
+`make build` cross-compiles the relay and `warden-io` for linux/amd64 and
+linux/arm64; on macOS/arm64 it also builds `warden-io` for darwin/arm64 and signs
+the host binary. Platform-specific code has build-tagged stubs, so `make test`
+passes everywhere. The test tiers and what each one needs are in
+[`testing.md`](https://github.com/buildwarden/buildwarden/blob/main/docs/development/testing.md).
 
-## Testing
+Local builds report `version = "dev"`, which builds the relay from source. After
+changing the relay or orchestrator, a quick end-to-end check is:
 
-- `make test` runs all unit tests and works on all platforms.
-- VZ-specific code uses build stubs on non-macOS, so tests pass everywhere.
-- Integration tests (`make integration-test`) require a running container runtime.
-- VZ integration tests (`make integration-test-vz`) require macOS/arm64 with a prepared VM image and a codesigned test binary. The Makefile handles signing.
+```sh
+./warden build .                          # self-build: COPY provenance, Go modules, artifacts
+./warden build examples/Dockerfile.simple # pip and Debian packages
+./warden inspect warden-output            # check the ledger
+./warden clean                            # if a build crashed or was interrupted
+```
 
-## Pull Requests
+## Pull requests
 
-1. Fork the repo and create a branch from `main`.
-2. Make your change. Run `make lint && make test` before pushing.
-3. Keep commits focused — one logical change per commit.
-4. Open a PR against `main`. CI will run lint, test, and cross-platform builds.
+1. Fork the repo and branch from `main`.
+2. Changes that make design decisions start with a design document in
+   `docs/design/`, written from
+   [`TEMPLATE.md`](https://github.com/buildwarden/buildwarden/blob/main/docs/design/TEMPLATE.md)
+   (FLOW-01). Dependency bumps, typo fixes and CI-only changes are labelled
+   `no-design` instead.
+3. Run `make lint && make test` before pushing. Keep commits focused: one logical
+   change per commit.
+4. Open a PR against `main`. CI runs lint, tests and cross-platform builds, and a
+   maintainer signs off before merging (FLOW-08).
+
+## Cutting a release
+
+1. Make sure `make test` passes on `main`. The full release gate (tier-1
+   checks, the test matrix, the security suite and the behavioral report) is
+   described in
+   [`behavioral-linter.md`](https://github.com/buildwarden/buildwarden/blob/main/docs/development/behavioral-linter.md)
+   and is being built out.
+2. Tag the commit and push the tag: `git tag v0.x.y && git push origin v0.x.y`.
+3. GoReleaser, run by GitHub Actions, builds and publishes the binaries.
 
 ## Code of Conduct
 
@@ -60,4 +97,4 @@ If you discover a security issue, please report it via our [vulnerability report
 
 ## License
 
-See the [LICENSE](LICENSE) file for details.
+See the [LICENSE](https://github.com/buildwarden/buildwarden/blob/main/LICENSE) file for details.

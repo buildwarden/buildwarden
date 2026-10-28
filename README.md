@@ -187,14 +187,10 @@ Full documentation is available at **[buildwarden.github.io/buildwarden](https:/
 
 ## Development
 
-```sh
-make build     # Compile warden + relay binaries
-make test      # Run unit tests (97 tests, race-clean)
-make lint      # golangci-lint
-make cover     # Tests with coverage report
-```
-
-See [DEVELOPING.md](DEVELOPING.md) for project structure, and [How It Works](docs/book/src/concepts/overview.md) for each component as pseudocode.
+[CONTRIBUTING.md](CONTRIBUTING.md) covers setup, building, testing and pull
+requests. [How It Works](docs/book/src/concepts/overview.md) describes each
+component as pseudocode, and [`docs/development/`](docs/development/README.md)
+holds the standards and the development process.
 
 ## License
 

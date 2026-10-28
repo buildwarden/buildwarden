@@ -478,9 +478,14 @@ Hyper-V not started.**
 - PowerShell-based VM management
 - Virtual switch network isolation
 
-### Phase 5a (next): Hyper-V Windows-guest consolidation
-**Status: Proposed. Owner: Windows x86-64 desktop (needs real Hyper-V; cannot
-be validated from the macOS host).**
+### Phase 5a: Hyper-V Windows-guest consolidation
+**Status: Done (2026-10-28). Owner: Windows x86-64 desktop.** Re-validation of
+the integration pass is recorded below. The consolidation shipped as the archived
+[`hyperv-windows-prepare.md`](hyperv-windows-prepare.md) design (merged in #60):
+one Windows guest package (`driver/winguest`) for qemu and Hyper-V, and
+prepare-once images. Checklist items 2 and 4 (Gen1 `.vhd`) are out of scope. Still
+to validate natively: the shared guest package on qemu under macOS (see the
+native-gap backlog in [`docs/development/README.md`](../development/README.md)).
 
 **Why.** The integration pass that merges `feat/windows-driver` into `main`
 unifies the cross-driver seams (collector as the single output path, relay

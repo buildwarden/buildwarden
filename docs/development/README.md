@@ -106,11 +106,17 @@ one monolith (see GLOBAL-08):
 
 ## Relationship to the other guidance files
 
-`CLAUDE.md`, `AGENTS.md`, `DEVELOPING.md`, `CONTRIBUTING.md`, and the mdbook
-`contributing/` tree predate this doc set. Where they overlap, this directory is
-authoritative for *standards*; the others should be trimmed to point here rather
-than restate rules, or the drift this doc set is meant to prevent simply moves
-elsewhere. (Trimming them is follow-up work, tracked below.)
+This directory is authoritative for *standards*. The other guidance files point
+here rather than restate rules, so the drift this doc set prevents does not move
+elsewhere:
+
+- `AGENTS.md` is the tool-neutral map for agents; `CLAUDE.md` imports it.
+- `CONTRIBUTING.md` holds setup, commands, testing, pull requests and releases;
+  the mdbook's `contributing/development.md` includes it verbatim.
+- The mdbook's `contributing/structure.md` describes the package layout and cites
+  rule IDs for the patterns it mentions.
+
+A new rule found in one of those files is moved here and replaced by its ID.
 
 Agent definitions and skills (`.claude/`, `.kiro/`) are thin wrappers over this
 directory: they carry phase instructions and cite rule IDs, and never restate rules
@@ -128,13 +134,22 @@ These enter the work queue after the bootstrap steps in
 - **Deep-dive #2 — Tier-1 static-check extraction** (LINT-02). Decide which
   `automated`-tagged rules become `go/analysis` passes vs ripgrep scripts vs
   git-diff coupling checks, and implement them.
-- **Follow-up — Reconcile legacy guidance files** (`CLAUDE.md`, `AGENTS.md`,
-  `DEVELOPING.md`, `CONTRIBUTING.md`, the mdbook `contributing/` tree) down to
-  pointers at this directory, promoting any rule found only there (for example
-  "fail early, say what to do", now UX-04). Bootstrap step 2.
 - **Follow-up — Workflow bootstrap** (FLOW-03, FLOW-04, FLOW-14): the `workflow`
   orphan branch and its queue state, the phase agent definitions, and tier-2 in
-  report-only mode. Bootstrap step 3.
+  report-only mode. Bootstrap step 1.
+- **Native-gap backlog** (FLOW-09, TEST-03): validation deferred by merged
+  designs. It moves to the `workflow` branch once that exists. Most of it clears
+  in one macOS session.
+  - `macos-qemu`: the shared Windows guest package and prepare-time tuning
+    (`hyperv-windows-prepare`; declared blocking but merged unrun).
+  - `macos-qemu`: a qemu Linux guest with exclusive trust (`unified-bootstrap`).
+  - `macos-finch`: copying the executor into a created container
+    (`unified-bootstrap`).
+  - `macos-vz`: the vz environment descriptor (`ledger-environment-types`) and
+    `make deadcode` for `driver/vz` (`unified-bootstrap`).
+  - `qemu-any`: the qemu environment descriptors (`ledger-environment-types`).
+  - `windows-hyperv`: a pinned eval image with `--verify-disks`
+    (`ledger-environment-types`).
 - **Follow-up — Design front-matter retrofit** (FLOW-12): add front-matter to the
   existing `docs/design/` plans as new designs come to rely on them.
 - **Follow-up — Container inputs under `inputs/`** (ORCH-02): record the
