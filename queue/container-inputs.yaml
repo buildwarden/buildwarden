@@ -3,7 +3,7 @@ title: Record container inputs under inputs/ (ORCH-02)
 priority: 2
 status: in_progress
 round: parallel
-phase: 3
+phase: 4
 design: docs/design/container-inputs.md
 branch: feat/container-inputs
 alters_relationships: false
@@ -33,10 +33,17 @@ steps:
   - id: p3-implement
     phase: 3
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p4-review
+    phase: 4
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261028T2325Z-attended
-      expires: 2026-10-29T01:23:08.360539384Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 4
@@ -98,3 +105,12 @@ history:
   - at: 2026-10-28T23:23:08Z
     by: cloud/20261028T2325Z-attended
     event: claimed p3-implement until 2026-10-29T01:23:08Z
+  - at: 2026-10-28T23:25:42Z
+    by: cloud/20261028T2325Z-attended
+    event: 'Implement amended the design in place: vz no longer calls RecordInputs (a no-op that broke gocyclo); recorded in the design Cross-driver impact (FLOW-06: a scope reduction, not a redesign)'
+  - at: 2026-10-28T23:25:55Z
+    by: cloud/20261028T2325Z-attended
+    event: done p3-implement
+  - at: 2026-10-28T23:25:55Z
+    by: cloud/20261028T2325Z-attended
+    event: entered phase 4 (review)
