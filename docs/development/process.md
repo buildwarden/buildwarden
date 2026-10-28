@@ -96,9 +96,9 @@ its branch. The phases are:
 | 3 | Implement | Tasks done; `make lint` and `make test` green; reference docs updated in the same change (UX-01). |
 | 4 | Review | Behavioral-linter tier 1 green; tier-2 report produced for the diff (LINT-04). |
 | 5 | Guide | User-facing narrative docs (guides, examples) written or updated. |
-| 6 | Publish | Parallel round: branch pushed. Merge round: PR opened, CI green (FLOW-11), blocking native validation done (FLOW-09). |
+| 6 | Publish | Parallel round: branch pushed at each checkpoint (FLOW-17). Merge round: PR opened with the human's confirmation, CI green (FLOW-11), blocking native validation done (FLOW-09). |
 | 7 | Sign-off | A human signs off the PR and its tier-2 report (FLOW-08) and merges it. |
-| 8 | Archive | Design marked archived (FLOW-12); feature branch deleted. |
+| 8 | Archive | Design marked archived (FLOW-12); merged branches and validation leftovers cleaned up (FLOW-16). |
 
 A transition happens only when the phase's done-when checks pass mechanically
 (files present, sections filled, commands green), never on an agent's own report
@@ -183,6 +183,9 @@ and auto-merge is not enabled by agents. The human sign-off step covers the PR, 
 tier-2 behavioral report (acknowledge, or dismiss with a recorded reason), and any
 unconfirmed assumptions (FLOW-07). Changes that declare a `security_boundary`
 additionally need the security note acknowledged (GLOBAL-06).
+
+Pushing a feature branch is not a trunk change and needs no confirmation
+(FLOW-17); opening the PR to `main` does.
 
 ---
 
@@ -308,6 +311,54 @@ section:
   holds pseudocode for each core component. A change to a component's flow
   updates its pseudocode in the same change, so users and agents can read how
   BuildWarden works without reverse-engineering it.
+
+---
+
+### FLOW-16 — Merged branches are cleaned up
+
+**Severity:** MUST
+**Check:** automated + agent-judgment
+
+When a feature's PR merges, the Archive phase removes what the feature no
+longer needs:
+
+- its branch, on the remote and locally, and any worktree checked out on it;
+- the branches it was stacked on, once they are merged too;
+- the leftovers of its validation: test images and containers, downloaded
+  media, scratch output, and anything created outside the documented cache
+  locations.
+
+The exception is a branch whose design names unfinished work meant to continue
+on that same branch: its implementation plan lists the remaining tasks and says
+the branch stays open for them. Follow-up work tracked anywhere else (a
+deviation, a deferred question, a validation left for another host) is not a
+reason to keep a branch; it starts from trunk on a new one.
+
+Deleting a branch loses any commit not on trunk, so a branch is deleted only
+after it is shown to be contained in trunk (`git branch --merged`, or the PR's
+merge commit), with git's safe forms (`git branch -d`, never `-D`) and never by
+force-pushing. Caches a later build reuses (prepared images, support images)
+stay. An agent without permission to delete lists the exact commands for the
+human instead of skipping the step.
+
+The automated part reports remote and local branches already merged into trunk
+that no open design claims.
+
+---
+
+### FLOW-17 — Feature branches are pushed at checkpoints
+
+**Severity:** MUST
+**Check:** agent-judgment
+
+An agent pushes its feature branch to the remote, without asking, whenever the
+work reaches a successful checkpoint: the change is committed, and `make test`
+and `make lint` are green (lint run for each platform whose build-tagged files
+the change touches). The pushed branch is the backup and the hand-off point.
+
+What still needs the human's confirmation is opening the PR to `main`. Pushing
+never includes `main` itself, a force-push, rewriting history that is already on
+the remote, or deleting a remote branch (FLOW-16).
 
 ---
 

@@ -1,6 +1,6 @@
 ---
 feature: unified-bootstrap
-status: active
+status: archived
 round: parallel
 drivers: [container, qemu, hyperv, vz]
 seams: [executor-initialize, relay-guest-api, collector, bootstrap-model]
@@ -503,3 +503,30 @@ them, and a newer executor treats a missing endpoint as the empty config
 (append trust plus the baseline).
 
 ## Archive summary
+
+Merged 2026-10-28 in buildwarden/buildwarden#60.
+
+- **Built.** The container driver follows the shared bootstrap model: a
+  capability-free namespace holder isolated by the iptables sidecar before the
+  build container exists; the build container created with `warden-io
+  initialize` as its entrypoint, `warden-io` copied in as a tar stream, then
+  started, with no host `exec` after. Extensions removed: `initialize` applies a
+  fixed baseline from the CA (JKS written by a minimal writer byte-identical to
+  `keytool`, bazelrc, CA and default env) and the trust policy from `GET
+  /bootstrap`. Holder and sidecar published by the release workflow and run by
+  digest. One Dockerfile translator for every driver.
+- **Model change.** BOOT-05 rewritten by a signed Bootstrap comparison:
+  environment setup is the executor's domain; the orchestrator sends policy,
+  never files, scripts or env.
+- **Rejected.** A bind mount for the executor (breaks remote `DOCKER_HOST`); a
+  derived image per base; serving host-generated setup files over the relay
+  (the previous draft); PKCS#12 and running `keytool` in the guest; racing the
+  sidecar against an entrypoint.
+- **For future designs.** Relay image pinning is deferred to a component
+  image-publishing feature, which may come with splitting the components into
+  their own repositories. VZ's baked executor (D2) is the one remaining
+  deviation. Still to validate natively: finch (copy into a created container),
+  a qemu Linux guest with exclusive trust, and `make deadcode` for `driver/vz`
+  on macOS. Hyper-V has no Linux guest support. Running warden from a terminal
+  started by an MSIX-packaged app redirects new files under `%LOCALAPPDATA%`;
+  the Hyper-V driver detects it (`visible.go`).
