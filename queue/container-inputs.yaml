@@ -1,7 +1,7 @@
 feature: container-inputs
 title: Record container inputs under inputs/ (ORCH-02)
 priority: 2
-status: queued
+status: in_progress
 round: parallel
 phase: 0
 design: docs/design/container-inputs.md
@@ -14,17 +14,23 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261028T2325Z-attended
+      expires: 2026-10-29T01:21:48.163014489Z
 budget:
   estimate:
     runs: 4
     steps: 18
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 1
 questions: []
 history:
   - at: 2026-10-28T23:18:38Z
     by: attended-setup
     event: queued at priority 2 (intake)
+  - at: 2026-10-28T23:21:48Z
+    by: cloud/20261028T2325Z-attended
+    event: started (FLOW-05)
+  - at: 2026-10-28T23:21:48Z
+    by: cloud/20261028T2325Z-attended
+    event: claimed p0-branch-setup until 2026-10-29T01:21:48Z
