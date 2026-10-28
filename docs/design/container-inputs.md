@@ -55,6 +55,7 @@ submitted next to what ran.
 - **The same precedence decides both**: a `translates(req)` predicate shared by
   `StageBuildScript` and `RecordInputs`, so the recording cannot drift from what
   was staged.
+- **vz does not call it**: it never translates (see Cross-driver impact).
 - **Fixed names**: `inputs/Dockerfile` (the submitted file, whatever it was
   called) and `inputs/build.sh` (the translation).
 
@@ -74,7 +75,7 @@ None.
 ## Design
 
 ```
-RecordInputs(outputDir, req, script):
+RecordInputs(outputDir, req, script):     # container, qemu, hyperv
     if not translates(req): return          # --script, context script, Windows, vz
     mkdir outputDir/inputs
     copy req.Containerfile -> inputs/Dockerfile   (unchanged)
@@ -92,9 +93,11 @@ The container driver always translates, so its builds always get both files.
 - **qemu**: calls `RecordInputs` after `FinalizeOutput`; Linux guests built from
   a Dockerfile gain `inputs/`.
 - **hyperv**: the same; Windows guests never translate, so no change for them.
-- **vz**: calls it with its request copy whose `Containerfile` is cleared, so it
-  records nothing; the call keeps every driver's `StartBuild` the same shape
-  (ORCH-01).
+- **vz**: unchanged. macOS guests run a shell script and never translate (the
+  driver clears `Containerfile` before staging), so there is nothing to record.
+  An earlier draft called `RecordInputs` there anyway for symmetry; it was
+  dropped in Implement because the no-op call pushed `StartBuild` over the
+  gocyclo limit.
 
 ## Validation plan
 
@@ -110,12 +113,12 @@ available. Native hosts are tracked, not blocking (see front-matter).
 2. Unit tests for both, table-driven over the precedence cases (TEST-01).
 3. Container driver: replace the top-level copies in `collectOutput` with
    `RecordInputs` (ORCH-02, FLOW-15).
-4. qemu, hyperv and vz: call `RecordInputs` after `FinalizeOutput` (ORCH-01).
+4. qemu and hyperv: call `RecordInputs` after `FinalizeOutput` (ORCH-01).
 5. Update the output reference (`docs/book/src/guide/output.md`) and the
    `StartBuild` pseudocode in `docs/book/src/concepts/overview.md` (UX-01,
    FLOW-15).
-6. Update the narrative layouts in `README.md` and
-   `getting-started/first-build.md` (UX-01).
+6. Update the layout in `README.md` (UX-01). The Guide phase updates the
+   narrative in `getting-started/first-build.md`.
 
 ## Consolidation (merge round)
 

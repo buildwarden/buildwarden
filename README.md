@@ -46,8 +46,9 @@ warden-output/
 ├── ledger.zst              # Signed ledger of all network I/O
 ├── artifacts/              # Build outputs posted to the ledger
 │   └── myapp
-├── Dockerfile.submitted    # What you wrote
-├── build.sh                # What actually ran (translated from it)
+├── inputs/
+│   ├── Dockerfile          # What you wrote
+│   └── build.sh            # What actually ran (translated from it)
 ├── ca.cert.pem.zst         # Ephemeral CA (destroyed after build)
 └── relay.log               # Relay event log
 ```

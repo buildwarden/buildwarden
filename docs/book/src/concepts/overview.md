@@ -49,6 +49,8 @@ StartBuild(req):
     start it                                               # per driver
     session.Wait()          # until warden-io reports exit, or a failure
     teardown; finalize output (optional zstd)
+    if script was translated from req.Containerfile:      # not vz
+        keep both under <output>/inputs/ (Dockerfile, build.sh; ORCH-02)
 ```
 
 ## Session and collector (`driver/session.go`, `collector/`)

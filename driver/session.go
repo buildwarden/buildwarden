@@ -346,7 +346,7 @@ func StageBuildScript(req *BuildRequest, workDir string) (string, error) {
 	if req.Script != "" {
 		return dst, CopyFile(req.Script, dst)
 	}
-	if !windows && req.Containerfile != "" {
+	if translates(req) {
 		res, err := script.Translate(req.Containerfile, req.ContextDir)
 		if err != nil {
 			return "", fmt.Errorf("translating %s: %w", req.Containerfile, err)
@@ -359,6 +359,32 @@ func StageBuildScript(req *BuildRequest, workDir string) (string, error) {
 		}
 	}
 	return dst, os.WriteFile(dst, []byte(noop), 0o755)
+}
+
+// translates reports whether StageBuildScript builds the script by
+// translating the request's Containerfile, the one way it alters an input.
+func translates(req *BuildRequest) bool {
+	return req.Script == "" && !strings.EqualFold(req.GuestOS, "windows") &&
+		req.Containerfile != ""
+}
+
+// RecordInputs keeps an altered input next to what it became (ORCH-02): when
+// the script was translated from the Containerfile, the submitted file goes to
+// <output>/inputs/Dockerfile and the staged script to <output>/inputs/build.sh.
+// req is the request given to StageBuildScript, and script the path it
+// returned. An input run as given is not recorded.
+func RecordInputs(outputDir string, req *BuildRequest, script string) error {
+	if !translates(req) {
+		return nil
+	}
+	dir := filepath.Join(outputDir, "inputs")
+	if err := os.MkdirAll(dir, 0o755); err != nil {
+		return err
+	}
+	if err := CopyFile(req.Containerfile, filepath.Join(dir, "Dockerfile")); err != nil {
+		return err
+	}
+	return CopyFile(script, filepath.Join(dir, "build.sh"))
 }
 
 func fileExists(p string) bool {

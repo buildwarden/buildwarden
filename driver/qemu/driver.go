@@ -144,6 +144,9 @@ func (d *Driver) StartBuild(
 		return nil, err
 	}
 	driver.FinalizeOutput(outputDir, req.Compress)
+	if err := driver.RecordInputs(outputDir, req, buildScript); err != nil {
+		return nil, fmt.Errorf("recording inputs: %w", err)
+	}
 	return &driver.BuildResult{OutputDir: outputDir}, nil
 }
 

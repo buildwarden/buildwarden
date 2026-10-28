@@ -122,6 +122,9 @@ func (d *Driver) StartBuild(
 		return nil, err
 	}
 	driver.FinalizeOutput(req.OutputDir, req.Compress)
+	if err := driver.RecordInputs(req.OutputDir, req, buildScript); err != nil {
+		return nil, fmt.Errorf("hyperv build: recording inputs: %w", err)
+	}
 	return res, nil
 }
 
