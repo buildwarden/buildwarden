@@ -396,7 +396,7 @@ Attached to any record whose original metadata has been stripped or was never re
 
 ```cbor
 {
-  "owner": "corp.amazon.com"
+  "owner": "build.example.com"
 }
 ```
 

@@ -110,11 +110,13 @@ buildwarden/
 │       └── README.md
 ├── docs/
 │   ├── book/               # mdBook documentation (guide, concepts, contributing)
-│   └── design/             # Design specifications and plans
+│   ├── design/             # Design documents: the archive, plus TEMPLATE.md
+│   └── development/        # Development standards and process (the rulebook)
 ├── Dockerfile.relay        # Multi-arch relay container image
 ├── Makefile                # build, test, lint, codesign
 ├── .goreleaser.yaml        # Release configuration
-└── CLAUDE.md               # AI assistant context
+├── AGENTS.md               # Agent context: a map into docs/development and the book
+└── CLAUDE.md               # Imports AGENTS.md for Claude Code
 ```
 
 ## Package Boundaries
@@ -137,19 +139,20 @@ buildwarden/
 
 ## Key Patterns
 
-### Unified runtime model
+### Runtime model
 
-All drivers follow the same execution pattern:
-1. The orchestrator starts a collector and boots the relay unconfigured
-2. The orchestrator claims the relay (tunnel + build config), receiving its CA cert + ledger key
-3. The orchestrator isolates the build environment, delivers `warden-io`, and starts it (`docs/development/bootstrap.md`)
-4. `warden-io initialize` installs the CA, applies the baseline and fetches the build script, all from the relay
-5. Build runs with periodic heartbeats; the relay forwards heartbeats and streams outputs (artifacts, captures, ledger, console) to the collector
-6. Exit code reported to the relay, which flushes the ledger and posts `/v1/complete`
+Every driver follows one sequence: start a collector, boot the relay unconfigured,
+claim it, isolate the build environment, deliver and start `warden-io`, and stream
+everything back through the relay. The step-by-step pseudocode is in
+[How It Works](../concepts/overview.md), and the bootstrap rules every driver
+follows are in
+[`docs/development/bootstrap.md`](https://github.com/buildwarden/buildwarden/blob/main/docs/development/bootstrap.md).
 
 ### Single-writer ledger
 
-All ledger writes go through a channel to a single goroutine (`Ledger.loop()`). Records are strictly ordered without locks.
+All ledger writes go through one goroutine (`Ledger.loop()`), so records are
+strictly ordered without locks. The rule is RELAY-01 in
+[`docs/development/relay.md`](https://github.com/buildwarden/buildwarden/blob/main/docs/development/relay.md).
 
 ### Relay modes
 
@@ -160,7 +163,9 @@ The relay binary detects its mode at startup:
 
 ### Trust and the baseline
 
-`warden-io initialize` installs the relay CA per the bootstrap config's trust mode and applies a fixed baseline (Java truststore, bazelrc, CA and default env vars) derived from the CA alone. Support for a new tool is added to `cmd/warden-io/baseline.go`, so it reaches every driver. See [Trust and the Build Baseline](../concepts/baseline.md).
+`warden-io initialize` installs the relay CA and a fixed baseline itself, from the
+relay; support for a new tool goes in `cmd/warden-io/baseline.go` so it reaches
+every driver. See [Trust and the Build Baseline](../concepts/baseline.md).
 
 ### Dynamic subnet allocation
 

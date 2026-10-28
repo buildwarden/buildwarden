@@ -7,7 +7,7 @@ import "fmt"
 // warden prints it with its Fix and without the file-a-bug link, because it
 // is not a bug.
 //
-// The project standard (DEVELOPING.md, "Fail early, say what to do"): when a
+// The project standard (UX-04 in docs/development/ux-cli-config.md): when a
 // failure has a clear cause, detect it as early as is cheap, before any slow
 // or irreversible work, and return a FixableError naming the exact command
 // or change that resolves it.

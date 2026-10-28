@@ -50,17 +50,32 @@ The automated part flags a removed or renamed surface with no alias or deprecati
 
 ---
 
-### UX-04 — Actionable errors
+### UX-04 — Fail early, say what to do
 
 **Severity:** MUST
 **Check:** agent-judgment
 
 A user-facing error states what failed and the concrete fix or next step, not just
-the raw cause. Fail early, say what to do: a failure with a clear cause (missing
-privilege, unprepared image, absent tool, stopped container runtime, bad flag) is a
-`driver.Fixable` error naming the exact remedy, checked before any slow or
-irreversible step when the check is cheap. Only unexplained failures point the user
-at filing a bug.
+the raw cause. This holds for every command and driver:
+
+1. **A failure with a clear cause names its fix.** A missing privilege (root for
+   `warden image prepare --driver vz`, Administrator or Hyper-V Administrators on
+   Windows), an unprepared image, an absent tool, a stopped container runtime or a
+   bad flag is not a bug. It returns a `driver.FixableError`
+   (`driver.Fixable(fix, format, args...)`) whose `Fix` is the exact command or
+   change that resolves it. warden prints `ERROR: <what is wrong>` plus
+   `To fix: <what to do>` and leaves out the file-a-bug link, which is reserved for
+   failures warden cannot explain.
+2. **Check as early as it is cheap.** The check runs before any slow, costly or
+   irreversible work: a download, a disk restore, a VM boot, a network standup. The
+   bar is the successful run: a check belongs up front when it adds negligible time
+   to a build or prepare that would have succeeded (a `stat`, a `LookPath`, a uid or
+   token check, a manifest read). Checks that are themselves slow belong in
+   `warden doctor --driver <d>`, not on every run.
+3. **Recognized platform errors are mapped.** When a known limit surfaces as an
+   opaque OS or framework error (for example VZErrorDomain code 6, Apple's
+   two-running-macOS-VMs limit), it is translated into a `FixableError` at the call
+   site.
 
 ---
 
@@ -111,3 +126,18 @@ The automated part checks that defaults resolve with no config file present.
 Configuration errors or mismatches are validated and surfaced as early as possible,
 at load/parse/startup, before any real work begins, rather than failing deep into a
 build. The automated part checks that config validation runs at startup.
+
+---
+
+### UX-09 — Exit codes stay meaningful
+
+**Severity:** MUST
+**Check:** automated + agent-judgment
+
+A build's own non-zero exit is a `driver.ExitError`, and warden exits with that
+code. `--timeout` exits 124 and Ctrl-C exits 130. Every other failure exits 1.
+Scripts and agents driving warden can then tell "the build failed" from "warden
+could not run the build".
+
+The automated part is a table test over the exit paths; the agent part judges new
+ones.

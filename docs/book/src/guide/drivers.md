@@ -40,6 +40,15 @@ network namespace.
 
 No additional setup is needed beyond installing a container runtime.
 
+Heavy builds (PyTorch, for example) need a larger runtime VM on macOS. For Finch,
+in `~/.finch/finch.yaml`:
+
+```yaml
+cpus: 6
+memory: 16GiB
+datadisk: 150GiB
+```
+
 ### How It Works
 
 - Uses your Dockerfile/Containerfile as the build specification

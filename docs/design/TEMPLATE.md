@@ -9,6 +9,7 @@ seams: []                # e.g. relay-claim, collector, executor-initialize, led
                          # bootstrap-model (BOOT-07: needs the Bootstrap comparison below)
 surfaces: []             # e.g. cli, config, output
 security_boundary: none  # none | host-env | env-relay | env-beyond (GLOBAL-06)
+alters_relationships: false  # true if a component's role or interactions change (FLOW-02, FLOW-05)
 native_validation: []    # - {host: windows-hyperv, blocking: true, reason: "..."}
 tier2_gaps: []           # platform validation knowingly deferred (TEST-03)
 rules: []                # rule IDs relied on or changed, e.g. ORCH-01, UX-01
