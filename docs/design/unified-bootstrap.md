@@ -217,7 +217,9 @@ That costs us in five ways:
    holder pool. Confirm.
 5. **Proceeding with the relay image's `:latest` pull left as it is here.** It has
    the same tag-trust and version-skew problem as the sidecar, but is not part of
-   the bootstrap path. Tracked as a follow-up. Confirm.
+   the bootstrap path. Tracked as a follow-up. Confirm. *Confirmed 2026-10-28:*
+   deferred to a later feature on component image publishing, which may come
+   with splitting the components into their own repositories.
 
 ## Design
 
