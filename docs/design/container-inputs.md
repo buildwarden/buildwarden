@@ -22,14 +22,19 @@ related: [unified-bootstrap.md]
 
 ## Problem
 
-ORCH-02 requires that when the orchestrator alters a build input, both the
-original and the edited form are recorded under `inputs/` in the output
-directory. Every driver now translates a Dockerfile into `build.sh` the same way
-(`unified-bootstrap`), but only the container driver keeps the pair, and it
-writes them at the top of the output directory as `Dockerfile.submitted` and
-`build.sh`. The qemu and hyperv drivers translate a Dockerfile for Linux guests
-and keep neither file, so the build's record does not show what the user
-submitted next to what ran.
+Since `unified-bootstrap`, a Dockerfile build no longer runs the Dockerfile:
+the host translates it into `build.sh`, rewriting each `COPY` into explicit
+`warden-io fetch` calls, and the guest runs that script. The files those calls
+fetch come through the relay, so the ledger already records every one of them.
+What the ledger does not hold is the pair that defines the build: the
+Dockerfile the user submitted and the script it became. Those two are the
+build's inputs now, and ORCH-02 says inputs the orchestrator produces or alters
+are recorded under `inputs/`.
+
+Today only the container driver keeps the pair, at the top of the output
+directory as `Dockerfile.submitted` and `build.sh`. The qemu and hyperv drivers
+translate a Dockerfile for Linux guests and keep neither, so their record does
+not show what the user submitted next to what ran.
 
 ## Prior art
 
@@ -44,14 +49,19 @@ submitted next to what ran.
 ## Decisions
 
 - **One shared helper, `driver.RecordInputs`**, called by every driver that
-  translates, straight after staging, instead of per-driver copies (FLOW-15: one path for one
-  job). Rejected: keeping the container driver's own code and copying it into
-  qemu and hyperv.
-- **Recorded only when the input was altered**: a Dockerfile translated to a
-  script. A `--script` or a context `build.sh` / `build.ps1` runs as given, so
-  there is nothing to record (ORCH-02 covers alterations). Rejected: always
-  copying the script that ran, which duplicates an input the user already has
-  byte for byte.
+  translates, straight after staging, instead of per-driver copies (FLOW-15:
+  one path for one job). Rejected: keeping the container driver's own code and
+  copying it into qemu and hyperv.
+- **`inputs/` holds the Dockerfile and its translation, not the `COPY`
+  sources**: the translation turns every `COPY` into a `warden-io fetch`, and
+  the relay records each fetched file in the ledger, so copying them again
+  under `inputs/` would duplicate the ledger. Rejected: snapshotting the build
+  context.
+- **Recorded when a Dockerfile was translated**: that is when the orchestrator
+  produces an input the user did not write. A `--script` or a context
+  `build.sh` / `build.ps1` runs as given, and the guest fetches it through the
+  relay like any other input. Rejected: always copying the script that ran,
+  which duplicates a file the user already has byte for byte.
 - **The same precedence decides both**: a `translates(req)` predicate shared by
   `StageBuildScript` and `RecordInputs`, so the recording cannot drift from what
   was staged.
