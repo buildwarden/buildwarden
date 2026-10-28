@@ -347,7 +347,7 @@ func StageBuildScript(req *BuildRequest, workDir string) (string, error) {
 		return dst, CopyFile(req.Script, dst)
 	}
 	if !windows && req.Containerfile != "" {
-		res, err := script.Translate(req.Containerfile)
+		res, err := script.Translate(req.Containerfile, req.ContextDir)
 		if err != nil {
 			return "", fmt.Errorf("translating %s: %w", req.Containerfile, err)
 		}

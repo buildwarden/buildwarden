@@ -30,6 +30,7 @@ import (
 	"github.com/lesiw/ctrctl"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/script"
 	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
@@ -66,9 +67,9 @@ type build struct {
 	subnet          driver.Subnet
 	isolatedNetwork string
 	// workDir is this build's private scratch directory (driver.NewWorkDir).
-	// It holds the staged inputs (the edited Containerfile, build.sh), the
-	// executor and the support images' build contexts; nothing is written
-	// into the user's build context.
+	// It holds the staged build script, the executor and the support
+	// images' build contexts; nothing is written into the user's build
+	// context.
 	workDir string
 }
 
@@ -344,15 +345,10 @@ func (b *build) setup(ctx context.Context) error {
 	return b.startSessionAndRelay(ctx, env)
 }
 
-// stageBuildScript writes the edited Containerfile (COPY rewritten to fetches)
-// and the build script translated from it.
+// stageBuildScript writes the build script translated from the Containerfile
+// (the same translation every driver's Linux guest runs).
 func (b *build) stageBuildScript() error {
-	ctrfilePath := filepath.Join(b.stagePath(), "Containerfile")
-	if err := editContainerfile(
-		b.req.Containerfile, b.req.ContextDir, ctrfilePath); err != nil {
-		return err
-	}
-	result, err := DockerfileToScript(ctrfilePath)
+	result, err := script.Translate(b.req.Containerfile, b.req.ContextDir)
 	if err != nil {
 		return fmt.Errorf(
 			"translating dockerfile: %w", err)
@@ -763,8 +759,8 @@ func (b *build) buildWardenIO() error {
 	return goBuildLinux("./cmd/warden-io", dest)
 }
 
-// stagePath holds the build's staged inputs: the edited Containerfile and
-// build.sh, served by the collector and kept as provenance.
+// stagePath holds the build's staged input, build.sh, served by the collector
+// and kept as provenance.
 func (b *build) stagePath() string {
 	return filepath.Join(b.workDir, "stage")
 }
@@ -851,15 +847,6 @@ func (b *build) collectOutput() {
 					"Dockerfile.submitted"),
 				submitted, 0644)
 		}
-	}
-
-	actual := filepath.Join(
-		b.stagePath(), "Containerfile")
-	if data, err := os.ReadFile(actual); err == nil {
-		os.WriteFile( //nolint:errcheck
-			filepath.Join(b.outputDir,
-				"Dockerfile.actual"),
-			data, 0644)
 	}
 
 	if data, err := os.ReadFile(b.scriptPath()); err == nil {

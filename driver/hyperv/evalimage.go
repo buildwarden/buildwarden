@@ -536,9 +536,3 @@ func pinLocalImage(opts FetchOptions, path string) (driver.LayerInfo, bool, erro
 	return info, true, cache.Record(path, info.SHA256, "", src)
 }
 
-func pinState(pinned bool) string {
-	if pinned {
-		return "pinned"
-	}
-	return "UNPINNED"
-}

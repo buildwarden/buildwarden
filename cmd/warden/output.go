@@ -16,39 +16,10 @@ type Logger struct {
 
 var log = &Logger{out: os.Stderr}
 
-var (
-	prefixWarden = color.New(color.FgCyan).Sprint("[warden]")
-	prefixRelay  = color.New(color.FgMagenta).Sprint("[relay] ")
-	prefixBuild  = color.New(color.FgBlue).Sprint("[build] ")
-)
-
-func (l *Logger) Info(msg string) {
-	fmt.Fprintf(l.out, "%s %s\n", prefixWarden, msg)
-}
-
-func (l *Logger) Success(msg string) {
-	fmt.Fprintf(l.out, "%s %s\n", prefixWarden, color.GreenString(msg))
-}
-
-func (l *Logger) Warn(msg string) {
-	fmt.Fprintf(l.out, "%s %s\n", prefixWarden, color.YellowString(msg))
-}
+var prefixWarden = color.New(color.FgCyan).Sprint("[warden]")
 
 func (l *Logger) Error(msg string) {
 	fmt.Fprintf(l.out, "%s %s\n", prefixWarden, color.RedString("ERROR: %s", msg))
-}
-
-func (l *Logger) Relay(msg string) {
-	fmt.Fprintf(l.out, "%s %s\n", prefixRelay, msg)
-}
-
-func (l *Logger) Build(msg string) {
-	fmt.Fprintf(l.out, "%s %s\n", prefixBuild, msg)
-}
-
-func (l *Logger) Result(msg string) {
-	style := color.New(color.FgYellow, color.Bold)
-	fmt.Fprintf(l.out, "%s %s\n", prefixWarden, style.Sprint(msg))
 }
 
 // ErrorWithFix prints a failure with a known cause and the remedy for it.

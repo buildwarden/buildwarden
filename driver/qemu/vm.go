@@ -213,10 +213,6 @@ func (p *vmProcess) stop() {
 	}
 }
 
-func (p *vmProcess) wait() error {
-	return p.cmd.Wait()
-}
-
 func (d *Driver) vmOutput() io.Writer {
 	if d.Verbose {
 		return os.Stderr

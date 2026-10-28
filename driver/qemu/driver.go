@@ -256,7 +256,7 @@ func resolveContainerfileImage(req *driver.BuildRequest) string {
 	if req.Image != "" || req.Containerfile == "" {
 		return req.Image
 	}
-	result, err := script.Translate(req.Containerfile)
+	result, err := script.Translate(req.Containerfile, req.ContextDir)
 	if err != nil || result.Image == "" || result.Image == "scratch" {
 		return ""
 	}
