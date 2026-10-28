@@ -5,7 +5,7 @@
 //
 //	wf validate -state DIR
 //	wf status   -state DIR
-//	wf next     -state DIR -worker cloud
+//	wf next     -state DIR -worker cloud [-feature F]
 //	wf claim    -state DIR -worker W -feature F -step S [-new-run]
 //	wf release  -state DIR -worker W -feature F -step S -why TEXT
 //	wf check    -state DIR -repo DIR -feature F [-run]
@@ -123,6 +123,9 @@ func status(s *queue.State, _ opts) error {
 
 func next(s *queue.State, o opts) error {
 	pick, blocked := s.Next(o.worker, o.now)
+	if o.feature != "" {
+		pick, blocked = s.NextFor(o.feature, o.worker, o.now)
+	}
 	for _, b := range blocked {
 		fmt.Printf("blocked\t%s\t%s\n", b.Feature, b.Reason)
 	}

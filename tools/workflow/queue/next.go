@@ -150,6 +150,32 @@ func (s *State) altersHolder(f *Feature) string {
 	return ""
 }
 
+// NextFor is Next restricted to one feature, for an attended run on it: the
+// in-progress limit still counts every feature.
+func (s *State) NextFor(name, worker string, now time.Time) (*Pick, []Blocked) {
+	f, err := s.Find(name)
+	if err != nil {
+		return nil, []Blocked{{name, err.Error()}}
+	}
+	if f.Status == "queued" && Kind(worker) == "cloud" {
+		inProgress := 0
+		for _, o := range s.Features {
+			if o.Status == "in_progress" {
+				inProgress++
+			}
+		}
+		if n := s.Config.Limits.InProgress; n > 0 && inProgress >= n {
+			return nil, []Blocked{{name, "the in-progress limit (FLOW-05)"}}
+		}
+	}
+	st, why := s.ready(f, worker, now)
+	if st == nil {
+		return nil, []Blocked{{name, why}}
+	}
+	return &Pick{Feature: f, Step: st, Starts: f.Status == "queued" &&
+		Kind(worker) == "cloud"}, nil
+}
+
 func allDone(ids []string, done map[string]bool) bool {
 	for _, id := range ids {
 		if !done[id] {

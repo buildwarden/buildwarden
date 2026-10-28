@@ -54,9 +54,9 @@ the priority order, push it, and stop.
 
 Repeat while this run has taken fewer than `run_budget.steps` steps:
 
-1. `dist/wf next -state .dev/workflow -worker $W`. `none` ends the loop; keep
-   the `blocked` lines for the digest. Attended: if the pick is not the named
-   feature, end the loop.
+1. `dist/wf next -state .dev/workflow -worker $W` (attended: add
+   `-feature <feature>`). `none` ends the loop; keep the `blocked` lines for
+   the digest.
 2. Claim it: `dist/wf claim -state .dev/workflow -worker $W -feature F -step S`,
    adding `-new-run` on this run's first claim of F. Commit on the workflow
    checkout (`F: claim S`) and `git push origin workflow`. A rejected push

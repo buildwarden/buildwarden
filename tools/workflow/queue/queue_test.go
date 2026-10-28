@@ -82,6 +82,18 @@ func TestNextStartsFeatureOnlyWhenAllBlocked(t *testing.T) {
 	}
 }
 
+func TestNextForOneFeature(t *testing.T) {
+	a, q := feature("a", 1, "in_progress"), feature("q", 2, "queued")
+	s := state(a, q)
+	if p, _ := s.NextFor("q", "cloud", now); p == nil || p.Feature != q || !p.Starts {
+		t.Fatalf("NextFor = %+v, want q started", p)
+	}
+	s.Config.Limits.InProgress = 1
+	if p, _ := s.NextFor("q", "cloud", now); p != nil {
+		t.Fatal("NextFor ignored the in-progress limit")
+	}
+}
+
 func TestLeasesAndRunaway(t *testing.T) {
 	a := feature("a", 1, "in_progress")
 	s := state(a)
