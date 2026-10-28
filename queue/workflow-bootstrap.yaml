@@ -1,0 +1,84 @@
+feature: workflow-bootstrap
+title: Stand up the feature workflow (bootstrap step 1)
+priority: 1
+status: in_progress
+round: merge
+phase: 6
+design: docs/design/workflow-bootstrap.md
+branch: claude/buildwarden-workflow-setup-w0ai39
+alters_relationships: false
+source: docs/development/process.md#bootstrap-order
+steps:
+  - id: m6-confirm-pr
+    phase: 6
+    affinity: human
+    status: done
+    lease: &id001
+      claimed_by: ''
+      expires: null
+    note: Jeff asked for this PR to main in the setup request.
+  - id: m6-publish
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - m6-confirm-pr
+    lease: *id001
+    note: PR open, CI green (FLOW-11).
+budget:
+  estimate:
+    runs: 1
+    steps: 4
+  spent:
+    runs: 0
+    steps: 0
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: 'Priority order of the seeded queue: workflow-bootstrap, container-inputs, tier1-static-checks, specs-migration, firecracker-driver, security-suite, design-front-matter-retrofit.'
+    options:
+      - this order
+      - firecracker-driver before tier1-static-checks
+      - security-suite before firecracker-driver
+    recommended: 'this order: the small item first, then the checks that make Review deterministic, then the large features. Unattended runs wait on it (config.yaml priority_confirmed).'
+  - id: a2
+    kind: assumed
+    status: open
+    question: Run budget of 8 steps per daily run, calibrated against /usage.
+    options:
+      - 8 steps
+      - 4 steps
+      - 16 steps
+    recommended: 8 steps
+  - id: a3
+    kind: assumed
+    status: open
+    question: Without the Entire CLI, an unattended run carries on and flags "sessions not recorded" first in the digest.
+    options:
+      - carry on and flag
+      - stop the run
+    recommended: carry on and flag
+  - id: a4
+    kind: assumed
+    status: open
+    question: Feature branches are named feat/<feature>.
+    options:
+      - feat/<feature>
+      - feature/<feature>
+    recommended: feat/<feature>
+  - id: a5
+    kind: assumed
+    status: open
+    question: This bootstrap merges as one PR outside the loop it creates; its queue item starts at merge-round Publish.
+    options:
+      - one PR outside the loop
+      - re-run it through every phase
+    recommended: one PR outside the loop
+history:
+  - at: 2026-10-28T23:18:38Z
+    by: attended-setup
+    event: queued at priority 1 (intake)
+  - at: 2026-10-28T23:19:04Z
+    by: attended-setup
+    event: built in an attended session outside the loop (assumption a5); PR to main requested by Jeff

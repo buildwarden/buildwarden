@@ -1,0 +1,30 @@
+feature: container-inputs
+title: Record container inputs under inputs/ (ORCH-02)
+priority: 2
+status: queued
+round: parallel
+phase: 0
+design: docs/design/container-inputs.md
+branch: feat/container-inputs
+alters_relationships: null
+source: 'docs/development/README.md: Follow-up - Container inputs under inputs/'
+steps:
+  - id: p0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 4
+    steps: 18
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-10-28T23:18:38Z
+    by: attended-setup
+    event: queued at priority 2 (intake)

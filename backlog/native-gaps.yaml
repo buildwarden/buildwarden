@@ -1,0 +1,40 @@
+# Native-gap backlog (FLOW-09, TEST-03): validation deferred by merged designs.
+# Drained by /workflow-native <host>, which tests main plus every waiting branch
+# in one sitting. Seeded 2026-10-28 from docs/development/README.md.
+gaps:
+  - id: qemu-windows-guest-package
+    host: macos-qemu
+    what: The shared Windows guest package and prepare-time tuning on qemu.
+    design: docs/design/hyperv-windows-prepare.md
+    note: Declared blocking in the design but merged unrun.
+    status: open
+  - id: qemu-linux-exclusive-trust
+    host: macos-qemu
+    what: A qemu Linux guest with exclusive trust.
+    design: docs/design/unified-bootstrap.md
+    status: open
+  - id: finch-executor-copy
+    host: macos-finch
+    what: Copying the executor into a created container.
+    design: docs/design/unified-bootstrap.md
+    status: open
+  - id: vz-environment-descriptor
+    host: macos-vz
+    what: The vz environment descriptor.
+    design: docs/design/ledger-environment-types.md
+    status: open
+  - id: vz-deadcode
+    host: macos-vz
+    what: make deadcode for driver/vz (cgo-only, invisible to the cross-platform run; FLOW-15).
+    design: docs/design/unified-bootstrap.md
+    status: open
+  - id: qemu-environment-descriptors
+    host: qemu-any
+    what: The qemu environment descriptors.
+    design: docs/design/ledger-environment-types.md
+    status: open
+  - id: hyperv-eval-image-verify-disks
+    host: windows-hyperv
+    what: A pinned eval image with --verify-disks.
+    design: docs/design/ledger-environment-types.md
+    status: open

@@ -1,0 +1,42 @@
+feature: firecracker-driver
+title: Firecracker driver
+priority: 5
+status: queued
+round: parallel
+phase: 0
+design: docs/design/firecracker-driver-plan.md
+branch: feat/firecracker-driver
+alters_relationships: null
+source: docs/design/firecracker-driver-plan.md (latest plan commit f9b07c5, not yet pushed)
+steps:
+  - id: p0-push-plan
+    phase: 0
+    affinity: human
+    status: pending
+    lease: &id001
+      claimed_by: ''
+      expires: null
+    note: Push the plan's latest commit f9b07c5 from Jeff's Mac (it is not on any remote), so Design starts from it.
+  - id: p0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    needs:
+      - p0-push-plan
+    lease: *id001
+    note: Branch from the pushed plan commit; Design retrofits the plan front-matter (FLOW-12).
+budget:
+  estimate:
+    runs: 12
+    steps: 60
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-10-28T23:18:38Z
+    by: attended-setup
+    event: queued at priority 5 (intake)
+  - at: 2026-10-28T23:19:04Z
+    by: attended-setup
+    event: 'p0-push-plan added: f9b07c5 lives only on Jeff''s Mac'

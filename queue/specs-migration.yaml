@@ -1,0 +1,30 @@
+feature: specs-migration
+title: Move the ledger spec and schemas to specs/ (RELAY-05)
+priority: 4
+status: queued
+round: parallel
+phase: 0
+design: docs/design/specs-migration.md
+branch: feat/specs-migration
+alters_relationships: null
+source: 'docs/development/README.md: Follow-up - specs/ migration'
+steps:
+  - id: p0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 4
+    steps: 20
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-10-28T23:18:38Z
+    by: attended-setup
+    event: queued at priority 4 (intake)

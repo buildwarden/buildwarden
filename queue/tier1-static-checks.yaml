@@ -1,0 +1,30 @@
+feature: tier1-static-checks
+title: 'Tier-1 static-check extraction (LINT-02, Deep-dive #2)'
+priority: 3
+status: queued
+round: parallel
+phase: 0
+design: docs/design/tier1-static-checks.md
+branch: feat/tier1-static-checks
+alters_relationships: null
+source: 'docs/development/README.md: Deep-dive #2'
+steps:
+  - id: p0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 6
+    steps: 30
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-10-28T23:18:38Z
+    by: attended-setup
+    event: queued at priority 3 (intake)

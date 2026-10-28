@@ -1,0 +1,30 @@
+feature: design-front-matter-retrofit
+title: Retrofit FLOW-02 front-matter onto the older designs (FLOW-12)
+priority: 7
+status: queued
+round: parallel
+phase: 0
+design: docs/design/design-front-matter-retrofit.md
+branch: feat/design-front-matter-retrofit
+alters_relationships: null
+source: 'docs/development/README.md: Follow-up - Design front-matter retrofit'
+steps:
+  - id: p0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 3
+    steps: 14
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-10-28T23:18:38Z
+    by: attended-setup
+    event: queued at priority 7 (intake)
