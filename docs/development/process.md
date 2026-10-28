@@ -13,8 +13,9 @@ See [`README.md`](./README.md) for the rule format.
 Features move through a work queue. Each feature passes through the development
 phases **twice**:
 
-1. **Parallel round.** Features are designed and implemented concurrently, each on
-   its own feature branch, against the `main` they forked from.
+1. **Parallel round.** Each feature is designed and implemented on its own
+   feature branch, against the `main` it forked from. Work goes depth first on
+   the top-priority feature; others advance only while it is blocked (FLOW-05).
 2. **Merge round.** Features enter a serial merge queue. The feature on deck merges
    current `main`, then repeats design as a **consolidation pass** against every
    feature that landed while it was in the parallel round, and carries the result
@@ -133,19 +134,29 @@ expired lease may be reclaimed.
 
 ---
 
-### FLOW-05 — Finish before starting
+### FLOW-05 — Depth first on the top-priority feature
 
 **Severity:** SHOULD
 **Check:** automated
 
-Workers rank steps by: merge-round before parallel-round, then later phase before
-earlier, then queue priority. At most 5 features are in progress at once, and at
-most 1 of them declares `alters_relationships: true` (FLOW-02), because two such
-features reshape the same structure and make each other's consolidation costly. A
-new feature does not start design while its limit is reached; a feature whose
-design discovers it alters relationships waits at the end of Design until the slot
-is free. During the parallel round a feature branch periodically merges `main` with
-conflict-only fixes, so the merge-round consolidation stays small.
+Work goes deep, not wide. A worker takes the next ready step of the
+highest-priority feature in progress, and keeps taking that feature's steps until
+it blocks: on a `human` or `host:<name>` step, an exhausted budget, or the merge
+queue. Only then does it take steps from the next feature down, and it returns to
+the higher-priority feature as soon as that one has a ready step again.
+
+While interfaces are still stabilizing, a feature developed in parallel is likely
+to need an involved rebase and consolidation once the features ahead of it land.
+Parallel features are therefore the fallback that keeps work moving while the
+human is away, not a goal. A new feature starts Design only when every feature in
+progress is blocked.
+
+At most 5 features are in progress at once, and at most 1 of them declares
+`alters_relationships: true` (FLOW-02), because two such features reshape the same
+structure and make each other's consolidation costly. A feature whose design
+discovers it alters relationships waits at the end of Design until that slot is
+free. A feature waiting behind others periodically merges `main` with
+conflict-only fixes, so its merge-round consolidation stays as small as it can.
 
 ---
 
@@ -280,8 +291,10 @@ The unattended loop runs once a day. Each run takes steps one at a time (read
 state, claim, work, write state) until no `cloud` step is ready or the run's
 budget is spent, and writes state after every step so an interrupted run loses at
 most the step in progress. All state it needs lives in the repository, never in a
-long-running conversation. Each feature has a work budget; exhausting it escalates
-to a `human` step. The loop posts a periodic digest (what moved, what is blocked on a human,
+long-running conversation. A run spends its budget in FLOW-05 order, so the
+top-priority feature can use all of it. Each feature also has a work budget, which
+is a runaway check rather than a share of the run: exhausting it escalates to a
+`human` step. The loop posts a periodic digest (what moved, what is blocked on a human,
 what is waiting on a native host, what was spent), and notifies when a new
 blocking question appears.
 
