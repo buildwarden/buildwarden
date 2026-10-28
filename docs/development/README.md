@@ -135,7 +135,8 @@ These enter the work queue after the bootstrap steps in
   `automated`-tagged rules become `go/analysis` passes vs ripgrep scripts vs
   git-diff coupling checks, and implement them.
 - **Follow-up — Workflow bootstrap** (FLOW-03, FLOW-04, FLOW-14): the `workflow`
-  orphan branch and its queue state, the phase agent definitions, and tier-2 in
+  orphan branch and its queue state, the phase agent definitions, session
+  recording to `buildwarden/buildwarden-sessions` (FLOW-18), and tier-2 in
   report-only mode. Bootstrap step 1.
 - **Native-gap backlog** (FLOW-09, TEST-03): validation deferred by merged
   designs. It moves to the `workflow` branch once that exists. Most of it clears

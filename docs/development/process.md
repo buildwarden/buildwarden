@@ -374,6 +374,33 @@ the remote, or deleting a remote branch (FLOW-16).
 
 ---
 
+### FLOW-18 — Agent sessions are recorded privately
+
+**Severity:** MUST
+**Check:** automated + agent-judgment
+
+Agent sessions are recorded with the Entire Checkpoints CLI, which links each
+session's prompts and transcript to the commits it produced. Recording serves
+three uses: a daily run resumes the previous run's session instead of starting
+cold (`entire session resume`), the Review phase and the human sign-off read why a
+change was made alongside the diff, and past sessions become searchable memory.
+
+The recordings go only to the private `buildwarden/buildwarden-sessions`
+repository, named by the `checkpoint_remote` setting in `.entire/settings.json`.
+They are never pushed to this public repository, and the CLI's temporary shadow
+branches, which can hold unredacted data, are never pushed anywhere. Secret
+redaction is best-effort, so a session does not handle secrets in its prompts.
+
+Session memory is supplementary: the standards and the archived designs
+(FLOW-12) are authoritative, and where they disagree with a recalled session, they
+win.
+
+The automated part checks that the public remote carries no `entire/` refs and
+that the settings name the private remote; the agent part judges what a session
+put into its prompts.
+
+---
+
 ## Bootstrap order
 
 Done so far: the windows-driver integration line and this doc set landed on
@@ -388,7 +415,8 @@ Remaining, highest first:
 
 1. **Stand up the workflow.** Create the `workflow` orphan branch with the queue
    state and the native-gap backlog (seeded from the README), the agent
-   definitions (FLOW-14), the daily loop (FLOW-13), and behavioral-linter tier 2
-   in report-only mode (LINT-07).
+   definitions (FLOW-14), the daily loop (FLOW-13), session recording to the
+   private sessions repository (FLOW-18), and behavioral-linter tier 2 in
+   report-only mode (LINT-07).
 2. **Normal queue**, in priority order: the open items in the README, then feature
    work such as the Firecracker driver.

@@ -87,13 +87,11 @@ changing the relay or orchestrator, a quick end-to-end check is:
 2. Tag the commit and push the tag: `git tag v0.x.y && git push origin v0.x.y`.
 3. GoReleaser, run by GitHub Actions, builds and publishes the binaries.
 
-## Code of Conduct
-
-This project has adopted the [Amazon Open Source Code of Conduct](https://aws.github.io/code-of-conduct).
-
 ## Security
 
-If you discover a security issue, please report it via our [vulnerability reporting page](http://aws.amazon.com/security/vulnerability-reporting/). Do **not** create a public GitHub issue.
+Report security issues as described in
+[`SECURITY.md`](https://github.com/buildwarden/buildwarden/blob/main/SECURITY.md).
+Do **not** open a public GitHub issue for them.
 
 ## License
 

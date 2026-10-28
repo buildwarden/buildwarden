@@ -6,7 +6,7 @@ If you discover a security vulnerability in BuildWarden, please report it respon
 
 **Do not open a public GitHub issue for security vulnerabilities.**
 
-Instead, please email: **jeffe@amazon.com (teruokun)**
+Instead, please email: **jeff@edwardsj.com** (Jeff Edwards, maintainer)
 
 Include:
 - Description of the vulnerability
