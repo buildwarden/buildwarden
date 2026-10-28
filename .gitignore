@@ -11,3 +11,5 @@ out.log
 .dev/
 .tmp/
 /warden-io
+.claude/settings.local.json
+.claude/worktrees/

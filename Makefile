@@ -32,6 +32,7 @@ endif
 
 test:
 	go test ./...
+	cd tools/workflow && go test ./...
 
 integration-test:
 	./test-integration.sh
@@ -52,6 +53,7 @@ relay-vm:
 
 lint:
 	golangci-lint run
+	cd tools/workflow && golangci-lint run -c ../../.golangci.yml
 
 # Code unreachable from any main or test, per platform (FLOW-15). Remove what
 # all three report, or say why it stays.

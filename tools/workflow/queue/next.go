@@ -1,0 +1,177 @@
+package queue
+
+import (
+	"fmt"
+	"strings"
+	"time"
+)
+
+// Pick is the step a worker should take next.
+type Pick struct {
+	Feature *Feature
+	Step    *Step
+	// Starts is true when taking the step starts a queued feature.
+	Starts bool
+}
+
+// Blocked says why an in-progress feature has no step for the worker.
+type Blocked struct {
+	Feature string
+	Reason  string
+}
+
+// Satisfies reports whether a worker may take a step of the given affinity
+// (FLOW-04). A worker is its kind (cloud, human, host:<name>), optionally
+// followed by /<session> to tell its leases apart.
+func Satisfies(worker, affinity string) bool { return Kind(worker) == affinity }
+
+// Kind strips the /<session> suffix from a worker.
+func Kind(worker string) string { return strings.SplitN(worker, "/", 2)[0] }
+
+// Next picks the worker's next step in FLOW-05 order: the highest-priority
+// in-progress feature with a ready step, else (cloud only) a new feature when
+// every in-progress one is blocked and the in-progress limit allows. It also
+// returns why each in-progress feature it passed over is blocked, for the
+// digest.
+func (s *State) Next(worker string, now time.Time) (*Pick, []Blocked) {
+	var blocked []Blocked
+	inProgress := 0
+	for _, f := range s.Features {
+		if f.Status != "in_progress" {
+			continue
+		}
+		inProgress++
+		st, why := s.ready(f, worker, now)
+		if st != nil {
+			return &Pick{Feature: f, Step: st}, blocked
+		}
+		blocked = append(blocked, Blocked{f.Feature, why})
+	}
+	if Kind(worker) != "cloud" {
+		return nil, blocked
+	}
+	if n := s.Config.Limits.InProgress; n > 0 && inProgress >= n {
+		return nil, blocked
+	}
+	for _, f := range s.Features {
+		if f.Status != "queued" {
+			continue
+		}
+		if st, _ := s.ready(f, worker, now); st != nil {
+			return &Pick{Feature: f, Step: st, Starts: true}, blocked
+		}
+	}
+	return nil, blocked
+}
+
+// ready returns the feature's first step the worker can take now, or why
+// there is none.
+func (s *State) ready(f *Feature, worker string, now time.Time) (*Step, string) {
+	done := map[string]bool{}
+	for _, st := range f.Steps {
+		if st.Status == "done" {
+			done[st.ID] = true
+		}
+	}
+	var waits []string
+	for i := range f.Steps {
+		st := &f.Steps[i]
+		if st.Status != "pending" || !allDone(st.Needs, done) {
+			continue
+		}
+		if !Satisfies(worker, st.Affinity) {
+			waits = append(waits, fmt.Sprintf("%s step %s", st.Affinity, st.ID))
+			continue
+		}
+		if st.Lease.Held(now) && st.Lease.ClaimedBy != worker {
+			waits = append(waits, fmt.Sprintf("step %s leased to %s", st.ID,
+				st.Lease.ClaimedBy))
+			continue
+		}
+		if Kind(worker) == "cloud" {
+			if why := s.cloudHold(f, st); why != "" {
+				waits = append(waits, why)
+				continue
+			}
+		}
+		return st, ""
+	}
+	if len(waits) == 0 {
+		return nil, "no pending step (phase done-when not yet advanced?)"
+	}
+	return nil, "waiting on " + strings.Join(waits, ", ")
+}
+
+// cloudHold returns why the unattended loop must not take the step yet.
+func (s *State) cloudHold(f *Feature, st *Step) string {
+	if q := f.OpenBlocking(); len(q) > 0 {
+		return fmt.Sprintf("blocking question %s", q[0].ID)
+	}
+	if s.Runaway(f) {
+		return fmt.Sprintf("runaway budget (%d of %d estimated steps spent; "+
+			"escalate to human, FLOW-13)",
+			f.Budget.Spent.Steps, f.Budget.Estimate.Steps)
+	}
+	if f.alters() && st.Phase >= 2 && f.Round == "parallel" {
+		if holder := s.altersHolder(f); holder != "" {
+			return fmt.Sprintf("the alters_relationships slot, held by %s (FLOW-05)",
+				holder)
+		}
+	}
+	if strings.HasSuffix(st.ID, "merge-round") {
+		for _, o := range s.Features {
+			if o != f && o.Status == "in_progress" && o.Round == "merge" {
+				return fmt.Sprintf("the merge queue, behind %s", o.Feature)
+			}
+		}
+	}
+	return ""
+}
+
+// altersHolder returns another in-progress feature that alters relationships
+// and is past Design, which holds the one slot FLOW-05 allows.
+func (s *State) altersHolder(f *Feature) string {
+	for _, o := range s.Features {
+		if o != f && o.Status == "in_progress" && o.alters() && (o.Phase >= 2 ||
+			o.Round == "merge") {
+			return o.Feature
+		}
+	}
+	return ""
+}
+
+func allDone(ids []string, done map[string]bool) bool {
+	for _, id := range ids {
+		if !done[id] {
+			return false
+		}
+	}
+	return true
+}
+
+// Claim leases the step to worker for the configured lease time and counts it
+// against the feature's budget. newRun counts a run too, the first time a run
+// touches the feature.
+func (s *State) Claim(f *Feature, st *Step, worker string, now time.Time, newRun bool) {
+	mins := s.Config.LeaseMinutes
+	if mins == 0 {
+		mins = 120
+	}
+	exp := now.Add(time.Duration(mins) * time.Minute).UTC()
+	st.Lease = Lease{ClaimedBy: worker, Expires: &exp}
+	if f.Status == "queued" {
+		f.Status = "in_progress"
+		f.Log(now, worker, "started (FLOW-05)")
+	}
+	f.Budget.Spent.Steps++
+	if newRun {
+		f.Budget.Spent.Runs++
+	}
+	f.Log(now, worker, "claimed %s until %s", st.ID, exp.Format(time.RFC3339))
+}
+
+// Release drops a lease without completing the step.
+func (s *State) Release(f *Feature, st *Step, worker string, now time.Time, why string) {
+	st.Lease = Lease{}
+	f.Log(now, worker, "released %s: %s", st.ID, why)
+}

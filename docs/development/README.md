@@ -124,39 +124,37 @@ directory: they carry phase instructions and cite rule IDs, and never restate ru
 
 ## Open deep-dives (TODO)
 
-These enter the work queue after the bootstrap steps in
-[`process.md`](./process.md#bootstrap-order).
+Each item is a feature in the work queue on the `workflow` branch
+(`queue/<slug>.yaml`, slug in brackets), where its state, priority and
+questions live (FLOW-03, FLOW-07). The queue is authoritative; this list says
+what each item is.
 
-- **Deep-dive #1 — Security suite + adversarial pen-tester agent** (TEST-08):
+- **Deep-dive #1 — Security suite + adversarial pen-tester agent** (TEST-08)
+  [`security-suite`]:
   designed in [`security-suite.md`](./security-suite.md) (SEC-01..08). Remaining
   build work: the isolated harness, the Arm-A corpus, the Arm-B agent wiring, and
   the monthly/on-demand cadence.
-- **Deep-dive #2 — Tier-1 static-check extraction** (LINT-02). Decide which
+- **Deep-dive #2 — Tier-1 static-check extraction** (LINT-02)
+  [`tier1-static-checks`]. Decide which
   `automated`-tagged rules become `go/analysis` passes vs ripgrep scripts vs
   git-diff coupling checks, and implement them.
-- **Follow-up — Workflow bootstrap** (FLOW-03, FLOW-04, FLOW-14): the `workflow`
-  orphan branch and its queue state, the phase agent definitions, session
-  recording to `buildwarden/buildwarden-sessions` (FLOW-18), and tier-2 in
-  report-only mode. Bootstrap step 1.
+- **Follow-up — Workflow bootstrap** [`workflow-bootstrap`]: the queue, phase
+  agents, daily loop and FLOW-18 guard, designed in
+  [`workflow-bootstrap.md`](../design/workflow-bootstrap.md). Bootstrap step 1.
 - **Native-gap backlog** (FLOW-09, TEST-03): validation deferred by merged
-  designs. It moves to the `workflow` branch once that exists. Most of it clears
-  in one macOS session.
-  - `macos-qemu`: the shared Windows guest package and prepare-time tuning
-    (`hyperv-windows-prepare`; declared blocking but merged unrun).
-  - `macos-qemu`: a qemu Linux guest with exclusive trust (`unified-bootstrap`).
-  - `macos-finch`: copying the executor into a created container
-    (`unified-bootstrap`).
-  - `macos-vz`: the vz environment descriptor (`ledger-environment-types`) and
-    `make deadcode` for `driver/vz` (`unified-bootstrap`).
-  - `qemu-any`: the qemu environment descriptors (`ledger-environment-types`).
-  - `windows-hyperv`: a pinned eval image with `--verify-disks`
-    (`ledger-environment-types`).
-- **Follow-up — Design front-matter retrofit** (FLOW-12): add front-matter to the
-  existing `docs/design/` plans as new designs come to rely on them.
-- **Follow-up — Container inputs under `inputs/`** (ORCH-02): record the
+  designs, kept in `backlog/native-gaps.yaml` on the `workflow` branch and
+  drained by native sessions (`/workflow-native <host>`).
+- **Follow-up — Design front-matter retrofit** (FLOW-12)
+  [`design-front-matter-retrofit`]: add front-matter to the existing
+  `docs/design/` plans as new designs come to rely on them.
+- **Follow-up — Container inputs under `inputs/`** (ORCH-02)
+  [`container-inputs`]: record the
   submitted Dockerfile and the translated `build.sh` under `inputs/`.
   `Dockerfile.actual` was retired by `unified-bootstrap` (every driver now runs
   the same translation, and `build.sh` is what ran).
-- **Follow-up — `specs/` migration** (RELAY-05). Perform the actual move of the
+- **Follow-up — `specs/` migration** (RELAY-05) [`specs-migration`]. Perform
+  the actual move of the
   ledger spec and metadata schemas into the top-level `specs/` layout; this is an
   implementation change separate from adopting the standard.
+- **Feature — Firecracker driver** [`firecracker-driver`]: the plan in
+  [`firecracker-driver-plan.md`](../design/firecracker-driver-plan.md).

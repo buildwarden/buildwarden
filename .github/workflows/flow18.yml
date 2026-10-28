@@ -1,0 +1,22 @@
+name: flow18
+
+# FLOW-18: sessions are recorded only to buildwarden/buildwarden-sessions. A ref
+# pushed under entire/ triggers no workflow, so the check also runs daily.
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    - cron: '17 12 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  sessions-private:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: tools/workflow/flow18-check.sh origin

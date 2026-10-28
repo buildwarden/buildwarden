@@ -426,10 +426,12 @@ mdbook `contributing/` tree) now point here instead of restating rules, with
 
 Remaining, highest first:
 
-1. **Stand up the workflow.** Create the `workflow` orphan branch with the queue
-   state and the native-gap backlog (seeded from the README), the agent
-   definitions (FLOW-14), the daily loop (FLOW-13), session recording to the
-   private sessions repository (FLOW-18), and behavioral-linter tier 2 in
-   report-only mode (LINT-07).
-2. **Normal queue**, in priority order: the open items in the README, then feature
-   work such as the Firecracker driver.
+1. **Stand up the workflow**
+   ([`workflow-bootstrap.md`](../design/workflow-bootstrap.md)): the `workflow`
+   orphan branch with the queue state and the native-gap backlog, the agent
+   definitions under `.claude/` (FLOW-14), the daily loop (FLOW-13), session
+   recording to the private sessions repository (FLOW-18), and
+   behavioral-linter tier 2 in report-only mode (LINT-07).
+2. **Normal queue**, in the priority order recorded on the `workflow` branch:
+   the open items in the README, then feature work such as the Firecracker
+   driver.
