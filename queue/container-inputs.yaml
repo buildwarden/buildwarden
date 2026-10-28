@@ -54,10 +54,18 @@ steps:
   - id: p6-publish
     phase: 6
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p6-merge-round
+    phase: 6
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261028T2325Z-attended
-      expires: 2026-10-29T01:33:23.491575727Z
+      claimed_by: ""
+      expires: null
+    note: Waits for the serial merge queue (FLOW-05).
 budget:
   estimate:
     runs: 4
@@ -149,3 +157,9 @@ history:
   - at: 2026-10-28T23:33:23Z
     by: cloud/20261028T2325Z-attended
     event: claimed p6-publish until 2026-10-29T01:33:23Z
+  - at: 2026-10-28T23:33:34Z
+    by: cloud/20261028T2325Z-attended
+    event: done p6-publish
+  - at: 2026-10-28T23:33:34Z
+    by: cloud/20261028T2325Z-attended
+    event: parallel round done; waiting on the merge queue
