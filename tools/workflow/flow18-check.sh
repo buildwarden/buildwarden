@@ -4,6 +4,9 @@
 # the public remote carries any entire/ ref (checkpoint refs or shadow branches).
 #
 #   tools/workflow/flow18-check.sh [remote]   # remote defaults to origin
+#
+# Run it from a checkout of main: a feature branch forked before the settings
+# landed has no .entire/settings.json until it merges main.
 set -eu
 
 remote="${1:-origin}"

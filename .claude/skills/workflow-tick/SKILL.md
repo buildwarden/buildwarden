@@ -36,14 +36,16 @@ If it fails, stop: push nothing, and report the failure as the run's only
 output (FLOW-18). Then:
 
 ```bash
-command -v entire && entire status
+command -v entire && entire doctor --force && entire status
 (cd tools/workflow && go build -o ../../dist/wf ./cmd/wf)
 git fetch origin main workflow
 git worktree add -B workflow .dev/workflow origin/workflow 2>/dev/null ||
   git -C .dev/workflow reset --hard origin/workflow
 ```
 
-If `entire` is missing, carry on but make "sessions not recorded (FLOW-18)"
+`entire doctor --force` installs Entire's git hooks, which a fresh clone lacks;
+`entire status` must name `buildwarden/buildwarden-sessions` as the
+checkpoint remote. If `entire` is missing, carry on but make "sessions not recorded (FLOW-18)"
 the digest's first line. Set `W=cloud/<UTC timestamp>` as this run's worker.
 
 Read `.dev/workflow/config.yaml`. Unattended and `priority_confirmed: false`:
