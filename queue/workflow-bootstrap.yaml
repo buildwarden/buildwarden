@@ -3,35 +3,47 @@ title: Stand up the feature workflow (bootstrap step 1)
 priority: 1
 status: in_progress
 round: merge
-phase: 6
+phase: 7
 design: docs/design/workflow-bootstrap.md
 branch: claude/buildwarden-workflow-setup-w0ai39
 alters_relationships: false
 source: docs/development/process.md#bootstrap-order
+pr:
+  number: 63
+  ci: green
 steps:
   - id: m6-confirm-pr
     phase: 6
     affinity: human
     status: done
-    lease: &id001
-      claimed_by: ''
+    lease:
+      claimed_by: ""
       expires: null
     note: Jeff asked for this PR to main in the setup request.
   - id: m6-publish
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - m6-confirm-pr
-    lease: *id001
+    lease:
+      claimed_by: ""
+      expires: null
     note: PR open, CI green (FLOW-11).
+  - id: m7-sign-off
+    phase: 7
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
     steps: 4
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 1
 questions:
   - id: a1
     kind: assumed
@@ -82,3 +94,12 @@ history:
   - at: 2026-10-28T23:19:04Z
     by: attended-setup
     event: built in an attended session outside the loop (assumption a5); PR to main requested by Jeff
+  - at: 2026-10-28T23:33:52Z
+    by: cloud/20261028T2325Z-attended
+    event: claimed m6-publish until 2026-10-29T01:33:52Z
+  - at: 2026-10-28T23:33:52Z
+    by: cloud/20261028T2325Z-attended
+    event: done m6-publish
+  - at: 2026-10-28T23:33:52Z
+    by: cloud/20261028T2325Z-attended
+    event: entered phase 7 (sign-off)
