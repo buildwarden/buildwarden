@@ -117,26 +117,38 @@ That costs us in five ways:
    Output reaches the console through the relay as on the VM drivers, and the
    container's own stdout is kept as `build-output.log` for failures before the
    relay is reachable.
-5. **Extensions become `initialize` features driven by a declarative bootstrap
-   config.** This is the model change; see the Bootstrap comparison.
-   - The orchestrator no longer generates files or scripts. It decides *which*
-     features a build gets and with what parameters, and the collector serves
-     that as a small JSON document at `GET /v1/bootstrap`, passed through by the
-     relay as `GET /bootstrap` and recorded like the build script (RELAY-02).
-   - `initialize` fetches it after the CA and implements every feature natively,
-     per platform, from two inputs only: the config and `/ca.pem`. Each applied
-     feature is logged as a step, so it shows in the build output.
+5. **Extensions become `initialize`'s own baseline; the bootstrap config carries
+   only trust policy.** This is the model change; see the Bootstrap comparison.
+   - Trust-store and build-system integrations, and other best-practice defaults
+     for every build, are `warden-io`'s domain. `initialize` always applies them,
+     per platform, from the CA alone: they are not configurable and not
+     conditional. Each is a few small file writes, so there is no cost worth
+     avoiding when a build does not use the tool. Each is logged as a step, so it
+     shows in the build output.
+   - Build-specific environment variables are not part of bootstrap at all: they
+     come from the build's own `ENV` lines, in the translated build script.
+   - The one orchestrator decision left is trust policy. The collector serves it
+     as a small JSON document at `GET /v1/bootstrap`, passed through by the relay
+     as `GET /bootstrap` and recorded like the build script (RELAY-02):
+
+     ```json
+     { "version": 1, "trust": { "mode": "exclusive" } }
+     ```
+
    - Today's extensions map onto it as follows:
 
-     | Extension today | `initialize` feature |
+     | Extension today | `initialize` |
      |---|---|
-     | truststore: `ca.crt`, `certhook.sh`, `truststore.sh` | `trust.mode`: `exclusive` (the warden CA is the only system root, re-applied by a `ca-certificates` update hook, as the extension does today) or `append` (what `installCA` does today) |
-     | bazel: `certs.jks`, `bazel.bazelrc`, `bazel.sh` | `java.truststore` (Decision 6) and `bazel.rc` (write `/etc/bazel.bazelrc` pointing at it) |
-     | cacerts: env vars | merged into `setCAEnvironment` with the existing CA env vars |
-     | epoch: `SOURCE_DATE_EPOCH=0` | `env` |
+     | truststore: `ca.crt`, `certhook.sh`, `truststore.sh` | `trust.mode` from the config: `exclusive` (the warden CA is the only system root, re-applied by a `ca-certificates` update hook, as the extension does today) or `append` (what `installCA` does today) |
+     | bazel: `certs.jks`, `bazel.bazelrc`, `bazel.sh` | always: the JKS (Decision 6), `MAVEN_OPTS`/`GRADLE_OPTS` pointing at it, and `/etc/bazel.bazelrc` |
+     | cacerts: env vars | always: merged into `setCAEnvironment` with the existing CA env vars |
+     | epoch: `SOURCE_DATE_EPOCH=0` | always; a build's own `ENV` overrides it |
 
+   - The baseline env is set on the build script's process, so the script's own
+     `ENV` lines win. A build that sets `MAVEN_OPTS` itself replaces the
+     truststore flags; that is the build's choice, and the same as today.
    - A relay without the endpoint (an older relay) gives an empty config, which
-     is today's VM behavior: `append` trust and the CA env vars.
+     means `append` trust; the baseline still applies.
    - *Rejected:* serving the generated files and scripts through the relay (the
      previous draft of this design). It records them, but keeps host-generated
      root scripts and a binary keystore as inputs, keeps them POSIX-only, and
@@ -178,9 +190,14 @@ That costs us in five ways:
 1. **Remote-runtime support for the copy.** Decision 3 relies on `cp` into a
    created container, which docker, podman and nerdctl all support, remotely
    included. Is remote `DOCKER_HOST` a supported configuration we must keep
-   working? *Recommended:* yes; it is why Decision 3 rejects the bind mount.
+   working? *Resolved 2026-10-28:* yes; it is why Decision 3 rejects the bind
+   mount.
 2. **Sign-off on the Bootstrap comparison** below (BOOT-07), which rewrites
-   BOOT-05.
+   BOOT-05. *Accepted 2026-10-28,* with two refinements now in the design: the
+   integrations are an always-on `initialize` baseline and the config carries
+   only trust policy (Decision 5); and the BOOT-05 text states that the
+   orchestrator still generates the build script, which is translation of the
+   user's build definition, not setup material.
 
 ### Assumed
 
@@ -194,8 +211,8 @@ That costs us in five ways:
    treatment. Confirm.
 3. **Proceeding without fixing D2 (VZ executor baked at prepare)** in this design.
    It now matters more: a stale baked `warden-io` lacks features the config asks
-   for, so `initialize` reports unknown config keys as a step failure rather than
-   ignoring them. Confirm, or pull D2 in.
+   for: it would silently skip the baseline it does not know, and it reports
+   unknown config keys as a step failure rather than ignoring them. Confirm, or pull D2 in.
 4. **Proceeding with one holder container per build** rather than reusing a warm
    holder pool. Confirm.
 5. **Proceeding with the relay image's `:latest` pull left as it is here.** It has
@@ -217,8 +234,9 @@ That costs us in five ways:
   start  ----------------------------------->  initialize
                                                  |-- resolv.conf -> relay
                                                  |-- GET /ca.pem      system trust
-                                                 |-- GET /bootstrap   features:
-                                                 |     trust mode, JKS, bazelrc, env
+                                                 |-- GET /bootstrap   trust mode
+                                                 |-- baseline: JKS, bazelrc,
+                                                 |     CA env, SOURCE_DATE_EPOCH
                                                  |-- GET /build-script, run it
                                                  |     '-- GET cwd/<path> per COPY
                                                  '-- POST heartbeat, artifacts, exit
@@ -229,28 +247,29 @@ Scope after this design:
 
 | Party | Owns |
 |---|---|
-| Orchestrator | Allocating the network; isolation (holder, sidecar, or VM topology); claiming the relay and pointing it at the collector; delivering the executor; one start; observing. It decides the feature set and generates nothing that runs in the guest. |
+| Orchestrator | Allocating the network; isolation (holder, sidecar, or VM topology); claiming the relay and pointing it at the collector; delivering the executor; one start; observing. It translates the user's build definition into the build script (host-side, because that needs the context: glob and directory expansion, explicit modes where the host filesystem has none, `ARG`/`ENV` expansion, rejecting unsupported directives before anything boots) and sets the trust policy. It generates no setup material. |
 | Relay | The only path in or out: serves `/ca.pem`, `/bootstrap`, `/build-script`, `cwd/`, and records all of it. |
-| `initialize` | Everything inside the environment: network and DNS, system trust, the Java truststore, tool config, env, the workdir, running the script, reporting. Its only start-up input is `--gateway` (and a static address on VMs). |
+| `initialize` | Everything inside the environment: network and DNS, system trust, the always-on baseline (Java truststore, tool config, default env), the workdir, running the script, reporting. Its only start-up input is `--gateway` (and a static address on VMs). |
 
 Contract changes (GLOBAL-08, EXEC-04):
 
 - Relay guest API: `GET /bootstrap` (the config, `{"version":1,...}`); an absent
   endpoint means an empty config.
 - Collector protocol: `GET /v1/bootstrap`.
-- Executor: `initialize` fetches and applies the config, creates the workdir,
-  writes JKS; `--hold` for shell mode; unknown config keys fail the step.
-- Extension interface: `BeforeBuild` and `Env` are replaced by a function that
-  returns the build's bootstrap config. `ExtensionContext`, `caCertPEM` and the
+- Executor: `initialize` fetches and applies the trust policy, applies the
+  baseline, creates the workdir; `--hold` for shell mode; unknown config keys fail the step.
+- Extension interface: removed. `driver.Session` builds the trust policy; the
+  Containerfile rewrite no longer injects extension `ENV` lines. `ExtensionContext`, `caCertPEM` and the
   `keystore-go` dependency go (it stays only if the test oracle needs it).
 
 ## Cross-driver impact
 
 - **container:** the whole bootstrap path above; D1 removed.
 - **qemu, hyperv / Linux:** no driver code changes. Their `initialize` now gets
-  the features (exclusive trust, JKS, bazelrc, env); before, they got none. This
+  exclusive trust and the baseline (JKS, bazelrc, default env); before, they got
+  none. This
   is a behavior change for those builds, intended.
-- **qemu, hyperv / Windows, vz:** `env` and the Java truststore apply; system
+- **qemu, hyperv / Windows, vz:** the baseline applies (JKS at a platform path); system
   trust stays `append` (assumed question 2). VZ only once its baked `warden-io`
   is re-prepared (D2).
 - **Shared:** the collector serves the config; `driver.Session` builds it.
@@ -278,10 +297,11 @@ Contract changes (GLOBAL-08, EXEC-04):
   (1) isolate --> (2) deliver executor --> (3) start
                                               initialize
                                                 |-- GET /ca.pem
-                                                |-- GET /bootstrap      declarative
-                                                |     config only; initialize
-                                                |     derives every setup file
-                                                |     from it and the CA
+                                                |-- GET /bootstrap      trust policy
+                                                |     only (declarative)
+                                                |-- baseline, always: every setup
+                                                |     file derived from the CA by
+                                                |     initialize itself
                                                 |-- GET /build-script, run it
                                                 '-- POST heartbeat, artifacts, exit
 ```
@@ -294,7 +314,7 @@ Contract changes (GLOBAL-08, EXEC-04):
 | BOOT-02 Executor only out-of-band | Unchanged | Unchanged | container: `cp` carries only `warden-io` |
 | BOOT-03 One start | Unchanged | Unchanged | container: `exec` steps removed |
 | BOOT-04 Build inputs from relay | Unchanged | Unchanged | none |
-| BOOT-05 Setup material | "Anything the orchestrator generates to set up the environment is served by the relay and installed by `initialize`." | "The orchestrator generates no setup material. It sends a declarative bootstrap config over the relay, and `initialize` derives every setup step and file from that config and the CA. The guest runs no setup code it did not ship with." | all: features reach every driver; no host-written scripts run as root in any guest |
+| BOOT-05 Setup material | "Anything the orchestrator generates to set up the environment is served by the relay and installed by `initialize`." | "Environment setup is the executor's domain. `initialize` applies a fixed baseline (trust-store and build-system integrations, best-practice defaults) derived from the CA, plus the trust policy the orchestrator sends as a declarative config over the relay. The orchestrator generates no setup material; the build script it translates from the user's build definition is a build input (BOOT-04), not setup. The guest runs no setup code it did not ship with." | all: features reach every driver; no host-written scripts run as root in any guest |
 | BOOT-06 Hooks, not content | Unchanged | Unchanged | none; but a stale baked executor (D2) now also lacks features |
 
 ### Gains
@@ -374,12 +394,13 @@ isolation.
 1. Holder and sidecar images: Containerfiles, a static `pause`, CI publishing next
    to the relay image, digests recorded in the binary, content-hash tags for
    `dev` (GLOBAL-06, ORCH-01).
-2. Executor: the bootstrap config fetch and validation; `trust.mode`, the JKS
-   writer, `bazel.rc`, `env`; workdir creation; `--hold` (EXEC-02, EXEC-04,
+2. Executor: the bootstrap config fetch and validation; `trust.mode`; the
+   baseline (JKS writer, bazelrc, `MAVEN_OPTS`/`GRADLE_OPTS`, CA env,
+   `SOURCE_DATE_EPOCH`); workdir creation; `--hold` (EXEC-02, EXEC-04,
    BOOT-04, BOOT-05). The JKS writer lands with its `keytool` comparison test.
 3. Collector and relay: `/v1/bootstrap` and `/bootstrap`, recorded per RELAY-02;
    update the relay and collector contract docs (GLOBAL-08).
-4. Orchestrator: replace the `Extension` interface with the config builder;
+4. Orchestrator: remove the `Extension` interface in favor of the trust policy;
    delete the extension file writers, `ext.d`, `caCertPEM` and the `/.warden`
    extension staging (BOOT-05).
 5. Container driver: holder plus sidecar, create, tar copy, start, wait; delete
