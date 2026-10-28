@@ -98,7 +98,7 @@ its branch. The phases are:
 | 5 | Guide | User-facing narrative docs (guides, examples) written or updated. |
 | 6 | Publish | Parallel round: branch pushed. Merge round: PR opened, CI green (FLOW-11), blocking native validation done (FLOW-09). |
 | 7 | Sign-off | A human signs off the PR and its tier-2 report (FLOW-08) and merges it. |
-| 8 | Archive | Design marked archived (FLOW-12); feature branch deleted. |
+| 8 | Archive | Design marked archived (FLOW-12); merged branches and validation leftovers cleaned up (FLOW-16). |
 
 A transition happens only when the phase's done-when checks pass mechanically
 (files present, sections filled, commands green), never on an agent's own report
@@ -308,6 +308,38 @@ section:
   holds pseudocode for each core component. A change to a component's flow
   updates its pseudocode in the same change, so users and agents can read how
   BuildWarden works without reverse-engineering it.
+
+---
+
+### FLOW-16 — Merged branches are cleaned up
+
+**Severity:** MUST
+**Check:** automated + agent-judgment
+
+When a feature's PR merges, the Archive phase removes what the feature no
+longer needs:
+
+- its branch, on the remote and locally, and any worktree checked out on it;
+- the branches it was stacked on, once they are merged too;
+- the leftovers of its validation: test images and containers, downloaded
+  media, scratch output, and anything created outside the documented cache
+  locations.
+
+The exception is a branch whose design names unfinished work meant to continue
+on that same branch: its implementation plan lists the remaining tasks and says
+the branch stays open for them. Follow-up work tracked anywhere else (a
+deviation, a deferred question, a validation left for another host) is not a
+reason to keep a branch; it starts from trunk on a new one.
+
+Deleting a branch loses any commit not on trunk, so a branch is deleted only
+after it is shown to be contained in trunk (`git branch --merged`, or the PR's
+merge commit), with git's safe forms (`git branch -d`, never `-D`) and never by
+force-pushing. Caches a later build reuses (prepared images, support images)
+stay. An agent without permission to delete lists the exact commands for the
+human instead of skipping the step.
+
+The automated part reports remote and local branches already merged into trunk
+that no open design claims.
 
 ---
 

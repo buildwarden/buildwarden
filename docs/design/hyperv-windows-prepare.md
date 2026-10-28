@@ -1,6 +1,6 @@
 ---
 feature: hyperv-windows-prepare
-status: draft
+status: archived
 round: parallel
 drivers: [hyperv, qemu]
 seams: [image-manifest, windows-guest-seed]
@@ -410,4 +410,23 @@ _To be filled in during the merge round._
 
 ## Archive summary
 
-_To be filled in on merge._
+Merged 2026-10-28 in buildwarden/buildwarden#60 (with `unified-bootstrap`).
+
+- **Built.** Windows guests on Hyper-V and qemu boot a per-build child of a
+  prepared layer over a never-modified generalized base. Prepare runs once, with
+  no network, tunes the guest (Update, telemetry, activation, Defender, the
+  background calls), registers the `warden-run` startup task, and reports
+  progress over KVP. Builds run as SYSTEM. Builds refresh the layer in the
+  background after 7 days and refuse with less than a day of evaluation grace.
+  The base defaults to Microsoft's current eval download; `--source` takes a URL
+  or a file registered in place, which is never deleted. One prepare at a time;
+  an interrupted prepare's VM and files are reaped by the next. One Windows guest
+  package (`driver/winguest`) for both drivers.
+- **Rejected.** Per-build OOBE; activating during prepare; COM1 for progress
+  (it blocks Gen2 boot during UEFI, so KVP instead); reinstalling qemu from ISO
+  on refresh; scanning Downloads for media.
+- **For future designs.** Gen1 `.vhd` is out of scope. macos-qemu validation of
+  the shared guest package was not run. The prepared cache must be visible to
+  Hyper-V's service (see `unified-bootstrap`'s MSIX note). A download's file
+  name comes from the server's final URL and is checked to be one plain name.
+

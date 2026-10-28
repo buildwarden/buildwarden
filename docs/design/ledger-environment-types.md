@@ -1,6 +1,6 @@
 ---
 feature: ledger-environment-types
-status: draft
+status: archived
 round: parallel
 drivers: [container, qemu, vz, hyperv]
 seams: [ledger-format, relay-claim, collector]
@@ -315,4 +315,19 @@ None yet.
 
 ## Archive summary
 
-To be filled in on merge.
+Merged 2026-10-28 in buildwarden/buildwarden#60 (via `feat/hyperv-phase5a`).
+
+- **Built.** Every build's ledger opens with a signed environment record: a
+  typed descriptor (`oci-image/v1` for containers, `vm-disk-chain/v1` for the
+  VM drivers, naming each disk layer's hash and provenance and the per-build
+  seed files), whose payload lands as `environment.json`. The relay derives the
+  header label from the payload and refuses a mismatch. `warden inspect`
+  verifies the payload, and `--verify-disks` re-hashes the disks. A shared
+  `driver.LayerCache` keeps multi-GB layers from being re-hashed per build.
+- **Rejected.** Free-form descriptors; a header label the orchestrator chooses
+  separately from the signed payload.
+- **For future designs.** The relay signs what the orchestrator asserts; it does
+  not inspect disks itself. The `prepared` source kind is what Hyper-V and qemu
+  prepare record. Not run natively: vz and qemu descriptors, and a pinned eval
+  image with `--verify-disks`.
+
