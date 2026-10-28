@@ -38,3 +38,9 @@ gaps:
     what: A pinned eval image with --verify-disks.
     design: docs/design/ledger-environment-types.md
     status: open
+  - id: container-inputs-linux-vm-guests
+    host: macos-qemu
+    what: A qemu (and Hyper-V) Linux-guest build from a Dockerfile writes inputs/Dockerfile and inputs/build.sh end to end.
+    design: docs/design/container-inputs.md
+    note: Tracked, not blocking (FLOW-09); unit-tested in tier 0.
+    status: open

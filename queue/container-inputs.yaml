@@ -3,10 +3,10 @@ title: Record container inputs under inputs/ (ORCH-02)
 priority: 2
 status: in_progress
 round: parallel
-phase: 1
+phase: 2
 design: docs/design/container-inputs.md
 branch: feat/container-inputs
-alters_relationships: null
+alters_relationships: false
 source: 'docs/development/README.md: Follow-up - Container inputs under inputs/'
 steps:
   - id: p0-branch-setup
@@ -19,10 +19,17 @@ steps:
   - id: p1-design
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p2-plan
+    phase: 2
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261028T2325Z-attended
-      expires: 2026-10-29T01:22:08.809123116Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 4
@@ -30,7 +37,23 @@ budget:
   spent:
     runs: 1
     steps: 2
-questions: []
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: Remove the top-level Dockerfile.submitted and build.sh outright, without a compatibility copy (pre-1.0 output layout)?
+    options:
+      - remove them
+      - keep a top-level copy for one release
+    recommended: remove them
+  - id: a2
+    kind: assumed
+    status: open
+    question: Record the submitted file as inputs/Dockerfile whatever its name (Containerfile, ...)?
+    options:
+      - fixed name inputs/Dockerfile
+      - keep the submitted base name
+    recommended: fixed name inputs/Dockerfile
 history:
   - at: 2026-10-28T23:18:38Z
     by: attended-setup
@@ -50,3 +73,9 @@ history:
   - at: 2026-10-28T23:22:08Z
     by: cloud/20261028T2325Z-attended
     event: claimed p1-design until 2026-10-29T01:22:08Z
+  - at: 2026-10-28T23:23:00Z
+    by: cloud/20261028T2325Z-attended
+    event: done p1-design
+  - at: 2026-10-28T23:23:00Z
+    by: cloud/20261028T2325Z-attended
+    event: entered phase 2 (plan)
