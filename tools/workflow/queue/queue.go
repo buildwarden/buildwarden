@@ -4,6 +4,7 @@
 package queue
 
 import (
+	"bytes"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -176,11 +177,13 @@ func (s *State) Find(name string) (*Feature, error) {
 
 // Save writes one feature back to queue/<feature>.yaml.
 func (s *State) Save(f *Feature) error {
-	data, err := yaml.Marshal(f)
-	if err != nil {
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(f); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(s.Dir, "queue", f.Feature+".yaml"), data, 0o644)
+	return os.WriteFile(filepath.Join(s.Dir, "queue", f.Feature+".yaml"), buf.Bytes(), 0o644)
 }
 
 func readYAML(path string, v any) error {
@@ -323,6 +326,7 @@ func (f *Feature) Step(id string) (*Step, error) {
 
 // Log appends a history event.
 func (f *Feature) Log(now time.Time, by, format string, a ...any) {
-	f.History = append(f.History, Event{At: now.UTC(), By: by, Event: fmt.Sprintf(format,
-		a...)})
+	f.History = append(f.History, Event{At: now.UTC().Truncate(time.Second), By: by,
+		Event: fmt.Sprintf(format,
+			a...)})
 }

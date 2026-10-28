@@ -29,8 +29,9 @@ func Satisfies(worker, affinity string) bool { return Kind(worker) == affinity }
 func Kind(worker string) string { return strings.SplitN(worker, "/", 2)[0] }
 
 // Next picks the worker's next step in FLOW-05 order: the highest-priority
-// in-progress feature with a ready step, else (cloud only) a new feature when
-// every in-progress one is blocked and the in-progress limit allows. It also
+// in-progress feature with a ready step; else, for the cloud, a new feature
+// when every in-progress one is blocked and the in-progress limit allows, and
+// for a human or host, a queued feature's step of its affinity. It also
 // returns why each in-progress feature it passed over is blocked, for the
 // digest.
 func (s *State) Next(worker string, now time.Time) (*Pick, []Blocked) {
@@ -48,6 +49,15 @@ func (s *State) Next(worker string, now time.Time) (*Pick, []Blocked) {
 		blocked = append(blocked, Blocked{f.Feature, why})
 	}
 	if Kind(worker) != "cloud" {
+		// A human or host may also do a queued feature's preparatory step
+		// (pushing a plan, say); that does not start the feature.
+		for _, f := range s.Features {
+			if f.Status == "queued" {
+				if st, _ := s.ready(f, worker, now); st != nil {
+					return &Pick{Feature: f, Step: st}, blocked
+				}
+			}
+		}
 		return nil, blocked
 	}
 	if n := s.Config.Limits.InProgress; n > 0 && inProgress >= n {
@@ -151,7 +161,7 @@ func allDone(ids []string, done map[string]bool) bool {
 
 // Claim leases the step to worker for the configured lease time and counts it
 // against the feature's budget. newRun counts a run too, the first time a run
-// touches the feature.
+// touches the feature. A cloud claim on a queued feature starts it.
 func (s *State) Claim(f *Feature, st *Step, worker string, now time.Time, newRun bool) {
 	mins := s.Config.LeaseMinutes
 	if mins == 0 {
@@ -159,7 +169,7 @@ func (s *State) Claim(f *Feature, st *Step, worker string, now time.Time, newRun
 	}
 	exp := now.Add(time.Duration(mins) * time.Minute).UTC()
 	st.Lease = Lease{ClaimedBy: worker, Expires: &exp}
-	if f.Status == "queued" {
+	if f.Status == "queued" && Kind(worker) == "cloud" {
 		f.Status = "in_progress"
 		f.Log(now, worker, "started (FLOW-05)")
 	}

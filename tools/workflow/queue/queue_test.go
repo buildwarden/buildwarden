@@ -50,6 +50,16 @@ func TestNextIsDepthFirst(t *testing.T) {
 	if got := next(t, s, "host:macos-vz"); got != "none" {
 		t.Fatalf("host next = %q", got)
 	}
+	q := feature("q", 3, "queued")
+	q.Steps[0].Affinity = "host:macos-vz"
+	s.Features = append(s.Features, q)
+	if got := next(t, s, "host:macos-vz"); got != "q p0-branch-setup" {
+		t.Fatalf("host next = %q, want the queued feature's host step", got)
+	}
+	s.Claim(q, &q.Steps[0], "host:macos-vz", now, true)
+	if q.Status != "queued" {
+		t.Fatal("a host claim started a queued feature")
+	}
 }
 
 func TestNextStartsFeatureOnlyWhenAllBlocked(t *testing.T) {
