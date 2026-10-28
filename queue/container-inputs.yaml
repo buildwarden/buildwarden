@@ -3,7 +3,7 @@ title: Record container inputs under inputs/ (ORCH-02)
 priority: 2
 status: in_progress
 round: parallel
-phase: 5
+phase: 6
 design: docs/design/container-inputs.md
 branch: feat/container-inputs
 alters_relationships: false
@@ -47,10 +47,17 @@ steps:
   - id: p5-guide
     phase: 5
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p6-publish
+    phase: 6
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261028T2325Z-attended
-      expires: 2026-10-29T01:33:09.449264437Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 4
@@ -133,3 +140,9 @@ history:
   - at: 2026-10-28T23:33:09Z
     by: cloud/20261028T2325Z-attended
     event: claimed p5-guide until 2026-10-29T01:33:09Z
+  - at: 2026-10-28T23:33:21Z
+    by: cloud/20261028T2325Z-attended
+    event: done p5-guide
+  - at: 2026-10-28T23:33:21Z
+    by: cloud/20261028T2325Z-attended
+    event: entered phase 6 (publish)
