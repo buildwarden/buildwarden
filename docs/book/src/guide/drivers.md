@@ -79,9 +79,10 @@ network path passes through the relay.
 
 ### Requirements
 
-- `qemu-system-aarch64` (or `qemu-system-x86_64` for x86 hosts)
-- `qemu-img`
-- Works on: macOS (HVF acceleration), Linux (KVM), Windows (WHPX), any (TCG fallback)
+- `qemu-system-aarch64` and `qemu-img`
+- Works on arm64 hosts: macOS (HVF acceleration), Linux (KVM), or any host
+  with TCG emulation (slow). x86_64 guests are not supported yet: the VMs use
+  the arm64 `virt` machine type.
 
 ### Installation
 
@@ -143,6 +144,23 @@ warden build --driver qemu examples/Dockerfile.apk
 The Dockerfile's `FROM alpine:3.21` line resolves to the cached Alpine QCOW2
 image automatically.
 
+### Windows guests
+
+```sh
+warden image prepare --driver qemu --os windows --source Win11_Arm64.iso
+```
+
+Windows images are made in two stages. The install stage runs an unattended
+install from the ISO with no network and ends in `sysprep /generalize`, leaving
+a generalized base like Microsoft's evaluation VHDs; it is redone only with
+`--force` or a new ISO. The prepare stage then boots an overlay of that base
+once with no network through OOBE and the same tuning as Hyper-V, registers
+the `warden-run` startup task, and powers off; builds boot a throwaway child of
+that layer as SYSTEM. With no `--source`, `image prepare` only re-prepares,
+and builds start that in the background once the layer is
+`[vm] image_refresh_after` old (see the Hyper-V section for the evaluation
+grace rules, which are the same).
+
 ---
 
 ## VZ Driver
@@ -199,7 +217,8 @@ warden build --driver vz --script ./build.sh .
 
 The Hyper-V driver runs builds inside a Hyper-V virtual machine. Like QEMU it
 uses a two-VM topology: an Alpine relay VM provides the network bridge, and a
-build VM (Windows or Linux) connects only through it. The relay VM reaches
+Windows build VM connects only through it (Linux build guests are not yet
+supported on Hyper-V; use the QEMU driver). The relay VM reaches
 upstream through an Internal NAT switch; the build VM sits on a Private build
 switch with no other path.
 
@@ -216,11 +235,42 @@ Create the durable network builds reuse (one time, from an elevated terminal):
 warden setup --driver hyperv
 ```
 
-Prepare a Windows Server base image (first prepare needs the evaluation VHD URL):
+Prepare a Windows Server base image. By default warden downloads Microsoft's
+current Windows Server 2025 evaluation VHDX (about 11 GB) from the Evaluation
+Center link; `--source` or `[vm] windows_image` names another URL, or a file
+you already have (registered in place, not copied):
 
 ```sh
-warden image prepare --driver hyperv --source https://.../server2025.vhd
+warden image prepare --driver hyperv
+warden image prepare --driver hyperv --source D:\images\server2025.vhdx
 ```
+
+Nothing is pinned in advance: the download comes over HTTPS (the default link
+must resolve to a Microsoft host), and the resolved URL, ETag and the sha256
+computed while downloading are recorded in the image manifest and in every
+build's ledger. `--sha256` adds an expected-digest check. When Microsoft
+publishes new media behind the link, the next refresh downloads it beside the
+current base and prepares from it; `[vm] windows_image_update = "reuse"`
+keeps the current base instead. A base you supplied as a local file is never
+replaced automatically.
+
+Prepare boots the image once with no network adapter. OOBE runs, a tuning
+script turns off background work builds never need (Windows Update,
+telemetry, maintenance tasks, automatic activation, Defender), registers the
+`warden-run` startup task, and powers off. The result is a read-only
+differencing layer over Microsoft's image, which is never modified. Every
+build boots a throwaway child of that layer and runs as SYSTEM, with no OOBE.
+Prepare takes about three minutes; the ledger records the chain (the
+evaluation image, then the prepared layer with the hashes of its inputs).
+
+The evaluation edition is never activated (prepare has no network), so a
+prepared base has the 10-day initial grace period, counted in wall time from
+the prepare. Builds keep it fresh: once the base is 7 days old, the next build
+starts a background re-prepare (`warden image prepare --driver hyperv` with no
+source does the same by hand), and a build refuses to start with less than a
+day of grace left. Both ages are set in `[vm]` (`image_refresh_after`,
+`image_min_grace`). Only one prepare runs at a time; superseded layers are
+deleted by a later prepare once no VM uses them.
 
 Optionally install the privileged helper service so builds run without
 elevation and stand up a fresh isolated network per build:
@@ -242,6 +292,24 @@ warden hyperv service install     # run once, elevated
 ```sh
 warden build --driver hyperv --guest-os windows ./win-project
 ```
+
+`--image <disk>` overrides the prepared base with a disk that already carries
+the `warden-run` startup task; a stock, unprepared image would wait at OOBE.
+
+### Where the image cache lives
+
+Prepared images and the relay boot disk are cached in
+`%LOCALAPPDATA%\warden\hyperv`, or in `WARDEN_HYPERV_CACHE_DIR` when set.
+Hyper-V's own service opens these files, so they must be where it can see
+them. When warden runs from a terminal started by a packaged (MSIX) app, such
+as some desktop apps' built-in terminals, Windows can silently redirect new
+files under `%LOCALAPPDATA%` into that app's private folder
+(`%LOCALAPPDATA%\Packages\<app>\...`), which Hyper-V cannot see.
+`warden doctor --driver hyperv` shows the cache as `REDIRECTED`, and
+`warden image prepare` stops before any download with the fix: set
+`WARDEN_HYPERV_CACHE_DIR` to a folder outside `AppData`, or run warden from an
+ordinary terminal. The OS temp directory, where each build's work files go by
+default, is not redirected.
 
 ---
 

@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -12,6 +13,22 @@ import (
 // runtime's own check is not atomic. The lock is an OS file lock, so it is
 // released if the process dies while holding it.
 func HostLock(name string) (func(), error) {
+	return hostLock(name, true)
+}
+
+// TryHostLock is HostLock without waiting: ok is false (and err nil) when
+// another process holds the lock.
+func TryHostLock(name string) (unlock func(), ok bool, err error) {
+	unlock, err = hostLock(name, false)
+	if errors.Is(err, errLockHeld) {
+		return nil, false, nil
+	}
+	return unlock, err == nil, err
+}
+
+var errLockHeld = errors.New("lock is held")
+
+func hostLock(name string, wait bool) (func(), error) {
 	dir, err := os.UserCacheDir()
 	if err != nil {
 		dir = os.TempDir()
@@ -24,8 +41,11 @@ func HostLock(name string) (func(), error) {
 	if err != nil {
 		return nil, fmt.Errorf("opening lock %s: %w", name, err)
 	}
-	if err := lockFile(f); err != nil {
+	if err := lockFile(f, wait); err != nil {
 		f.Close()
+		if !wait && isLockHeld(err) {
+			return nil, errLockHeld
+		}
 		return nil, fmt.Errorf("taking lock %s: %w", name, err)
 	}
 	return func() {

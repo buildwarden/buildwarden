@@ -136,10 +136,7 @@ func TestSignalAuthEnforced(t *testing.T) {
 }
 
 func TestDoneDeliversSignal(t *testing.T) {
-	c, err := New(Config{OutputDir: t.TempDir()})
-	if err != nil {
-		t.Fatalf("New: %v", err)
-	}
+	c := newBareCollector(t)
 	// Drive completion directly through the recording path used by the handler.
 	c.recordCompletion(CompletionSignal{ExitCode: 7, Message: "ok", ReceivedAt: time.Now()})
 
@@ -158,10 +155,7 @@ func TestDoneDeliversSignal(t *testing.T) {
 }
 
 func TestWaitReturnsCompletion(t *testing.T) {
-	c, err := New(Config{OutputDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
+	c := newBareCollector(t)
 	go c.recordCompletion(CompletionSignal{ExitCode: 3})
 	sig, err := c.Wait(context.Background(), time.Minute)
 	if err != nil || sig.ExitCode != 3 {
@@ -170,12 +164,9 @@ func TestWaitReturnsCompletion(t *testing.T) {
 }
 
 func TestWaitDetectsStaleHeartbeat(t *testing.T) {
-	c, err := New(Config{OutputDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
+	c := newBareCollector(t)
 	c.lastHeartbeat.Store(time.Now().Add(-time.Hour).UnixNano())
-	_, err = c.Wait(context.Background(), 10*time.Millisecond)
+	_, err := c.Wait(context.Background(), 10*time.Millisecond)
 	var ue *UnresponsiveError
 	if !errors.As(err, &ue) {
 		t.Fatalf("Wait err = %v, want UnresponsiveError", err)
@@ -183,13 +174,10 @@ func TestWaitDetectsStaleHeartbeat(t *testing.T) {
 }
 
 func TestWaitIgnoresMissingHeartbeat(t *testing.T) {
-	c, err := New(Config{OutputDir: t.TempDir()})
-	if err != nil {
-		t.Fatal(err)
-	}
+	c := newBareCollector(t)
 	ctx, cancel := context.WithTimeout(context.Background(), 1500*time.Millisecond)
 	defer cancel()
-	_, err = c.Wait(ctx, 10*time.Millisecond)
+	_, err := c.Wait(ctx, 10*time.Millisecond)
 	if !errors.Is(err, context.DeadlineExceeded) {
 		t.Fatalf("Wait err = %v, want deadline (no heartbeat yet is not a hang)", err)
 	}
@@ -201,4 +189,16 @@ func TestHeartbeatEndpoint(t *testing.T) {
 	if c.LastHeartbeat().IsZero() {
 		t.Fatal("heartbeat not recorded")
 	}
+}
+
+// newBareCollector is a Collector with no server, closed on cleanup (an open
+// collector holds its output dir, which Windows will not delete).
+func newBareCollector(t *testing.T) *Collector {
+	t.Helper()
+	c, err := New(Config{OutputDir: t.TempDir()})
+	if err != nil {
+		t.Fatalf("New: %v", err)
+	}
+	t.Cleanup(func() { _ = c.Close() })
+	return c
 }

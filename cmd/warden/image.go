@@ -2,11 +2,13 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strings"
+	"time"
 
 	"github.com/spf13/cobra"
 
@@ -23,15 +25,15 @@ import (
 // nothing is prompted for. Re-running prepare is safe: cached work is reused.
 
 var (
-	flagImgOS             string
-	flagImgSource         string
-	flagImgSHA256         string
-	flagImgAcceptUnpinned bool
-	flagImgForce          bool
-	flagImgName           string
-	flagImgEdition        string
-	flagImgVirtio         string
-	flagImgArch           string
+	flagImgOS      string
+	flagImgSource  string
+	flagImgSHA256  string
+	flagImgForce   bool
+	flagImgName    string
+	flagImgEdition string
+	flagImgVirtio  string
+	flagImgArch    string
+	flagImgKeepVMs bool
 )
 
 var imageCmd = &cobra.Command{
@@ -56,17 +58,26 @@ path or URL:
                                 ubuntu:24.04, debian:bookworm) or a qcow2.
   --driver qemu   --os windows  Windows install ISO (required), installed
                                 unattended (--edition, --virtio, --arch).
-  --driver hyperv --os windows  Windows Server evaluation VHD URL (needed
-                                on first prepare; --name picks the image).
+  --driver hyperv --os windows  Windows Server evaluation VHDX: a URL, or a
+                                local file registered in place. Default:
+                                [vm] windows_image, else Microsoft's current
+                                Server 2025 evaluation download. Then
+                                prepares it: one network-free boot through
+                                OOBE and tuning, producing the layer builds
+                                boot from. With no source it is the refresh:
+                                re-checks a downloaded base for new media
+                                ([vm] windows_image_update) and re-prepares.
 
---sha256 pins the expected digest (verified, and recorded for every later
-prepare); --accept-unpinned uses an image with no known digest; --force
-re-acquires even when a valid cached copy exists.`,
+--sha256 verifies the download against an expected digest (optional: the
+digest of what was used is always recorded); --force re-acquires even when a
+valid cached copy exists.`,
 	Example: `  warden image prepare --driver vz
   warden image prepare --driver qemu ubuntu:24.04
   warden image prepare --driver qemu --os windows --source Win11_Arm64.iso
   warden image prepare --driver hyperv --source https://.../server2025.vhd
-  warden image prepare --driver hyperv --sha256 <hash-printed-on-first-prepare>`,
+  warden image prepare --driver hyperv --sha256 <hash-printed-on-first-prepare>
+  warden image prepare --driver hyperv --source D:\images\server2025.vhdx
+  warden image prepare --driver hyperv`,
 	RunE: runImagePrepare,
 }
 
@@ -83,13 +94,13 @@ func init() {
 	f.StringVar(&flagImgSource, "source", "",
 		"image source: local path or URL (same as [source])")
 	f.StringVar(&flagImgSHA256, "sha256", "", "expected SHA256; verified and pinned")
-	f.BoolVar(&flagImgAcceptUnpinned, "accept-unpinned", false,
-		"use an image with no known digest (no authenticity check)")
 	f.BoolVar(&flagImgForce, "force", false, "re-acquire even if a valid cached copy exists")
 	f.StringVar(&flagImgName, "name", "",
 		"registry name of the image (hyperv; default windows-server-2025)")
 	f.StringVar(&flagImgEdition, "edition", "",
 		"Windows edition / install.wim image name (qemu windows)")
+	f.BoolVar(&flagImgKeepVMs, "keep-vms", false,
+		"leave the prepare VM and its disk for inspection (hyperv)")
 	f.StringVar(&flagImgVirtio, "virtio", "",
 		"virtio-win driver ISO path or URL (qemu windows)")
 	f.StringVar(&flagImgArch, "arch", "", "guest arch: arm64 or amd64 (default host arch)")
@@ -134,7 +145,7 @@ func runImagePrepare(cmd *cobra.Command, args []string) error {
 	case "qemu/windows":
 		path, err = prepareQemuWindows(source)
 	case "hyperv/windows":
-		path, err = prepareHyperVWindows(cmd.Context(), source)
+		path, err = prepareHyperVWindows(cmd.Context(), source, cfg)
 	default:
 		return driver.Fixable("",
 			"no %s image for --driver %q "+
@@ -187,51 +198,120 @@ func prepareVZMacos(source string) (string, error) {
 	return path, err
 }
 
-// prepareQemuWindows installs the Windows base image for the qemu driver. It
-// returns an empty path when the image was already prepared (it prints its own
-// message and no reinstall is needed unless --force is set).
+// prepareQemuWindows readies the qemu Windows image in its two stages: the
+// install from ISO (ending in sysprep /generalize) when --source asks for it
+// or there is no base yet, then the prepared layer builds boot from. With no
+// source it only re-prepares the layer, which is what the periodic refresh
+// runs.
 func prepareQemuWindows(source string) (string, error) {
-	if source == "" {
+	arch := flagImgArch
+	if arch == "" {
+		arch = runtime.GOARCH
+	}
+	_, statErr := os.Stat(qemu.WindowsImagePath(arch))
+	installed := statErr == nil
+	switch {
+	case source == "" && !installed:
 		return "", driver.Fixable(
 			"warden image prepare --driver qemu --os windows --source <path-or-url>",
 			"--driver qemu --os windows needs the Windows install ISO")
-	}
-	if existing := qemu.WindowsImagePath(flagImgArch); !flagImgForce {
-		if _, statErr := os.Stat(existing); statErr == nil {
-			fmt.Fprintf(os.Stderr, "Windows base image already prepared: %s "+
-				"(--force reinstalls it)\n", existing)
-			return "", nil
+	case source != "" && installed && !flagImgForce:
+		fmt.Fprintf(os.Stderr, "Windows base already installed: %s "+
+			"(--force reinstalls it); preparing it\n", qemu.WindowsImagePath(arch))
+	case source != "":
+		opts := qemu.WindowsPrepOptions{
+			ISO: source, VirtioISO: flagImgVirtio, Edition: flagImgEdition, Arch: arch,
+		}
+		media, err := qemu.AcquireWindowsMedia(opts)
+		if err != nil {
+			return "", err
+		}
+		fmt.Fprintf(os.Stderr, "Running unattended Windows install (headless)...\n")
+		if _, err := qemu.InstallWindowsImage(media, opts); err != nil {
+			return "", err
 		}
 	}
-	opts := qemu.WindowsPrepOptions{
-		ISO:       source,
-		VirtioISO: flagImgVirtio,
-		Edition:   flagImgEdition,
-		Arch:      flagImgArch,
+	layer, err := qemu.PrepareWindowsLayer(arch, flagImgKeepVMs, os.Stderr)
+	if errors.Is(err, qemu.ErrPrepareRunning) {
+		fmt.Fprintln(os.Stderr, "A qemu Windows image prepare is already running; "+
+			"its result will become the active image when it finishes.")
+		return "", nil
 	}
-	media, err := qemu.AcquireWindowsMedia(opts)
+	return layer, err
+}
+
+// prepareHyperVWindows readies the hyperv Windows base, then prepares the
+// layer builds boot from. The base comes from --source, else [vm]
+// windows_image, else (first time only) the registry's default URL. Without
+// an explicit --source this is also the periodic refresh: a base that came
+// from a URL is re-checked for new media unless [vm] windows_image_update is
+// "reuse", a failed check only warns, and a base registered from a local
+// path is never replaced unless the configuration names another.
+func prepareHyperVWindows(ctx context.Context, source string, cfg *Config) (string, error) {
+	name := strings.TrimSpace(flagImgName)
+	if name == "" {
+		name = hyperv.DefaultEvalImage
+	}
+	switch cfg.VM.WindowsImageUpdate {
+	case "", "auto", "reuse":
+	default:
+		return "", driver.Fixable(`set it to "auto" or "reuse"`,
+			"warden.toml [vm] windows_image_update = %q", cfg.VM.WindowsImageUpdate)
+	}
+	if src, fetch, tolerant := hypervImageSource(source, cfg, hyperv.Status()); fetch {
+		_, err := hyperv.FetchEvalImage(ctx, hyperv.FetchOptions{
+			Name: name, URL: src, SHA256: flagImgSHA256, Force: flagImgForce,
+			Progress: os.Stderr,
+		})
+		if err != nil && !tolerant {
+			return "", err
+		}
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "warning: could not check the base image for new "+
+				"media (%v); preparing the current base\n", err)
+		}
+	}
+	pb, err := hyperv.PrepareBase(ctx, hyperv.PrepareOptions{
+		KeepVM: flagImgKeepVMs, Progress: os.Stderr,
+	})
+	if errors.Is(err, hyperv.ErrPrepareRunning) {
+		fmt.Fprintln(os.Stderr, "A Hyper-V image prepare is already running; "+
+			"its result will become the active base when it finishes.")
+		return "", nil
+	}
 	if err != nil {
 		return "", err
 	}
-	fmt.Fprintf(os.Stderr, "Running unattended Windows install (headless)...\n")
-	return qemu.InstallWindowsImage(media, opts)
+	return pb.Path, nil
 }
 
-// prepareHyperVWindows fetches the Windows Server evaluation VHD for the hyperv
-// driver.
-func prepareHyperVWindows(ctx context.Context, source string) (string, error) {
-	name := strings.TrimSpace(flagImgName)
-	if name == "" {
-		name = hyperv.EvalImageNames()[0]
+// hypervImageSource decides whether image prepare fetches a base first, from
+// where ("" = the registry default), and whether a failed fetch may be
+// skipped because a usable base is already active.
+func hypervImageSource(
+	source string, cfg *Config, st hyperv.ImageStatus,
+) (src string, fetch, tolerant bool) {
+	if source != "" || flagImgSHA256 != "" || flagImgForce || st.Base == "" {
+		return firstNonEmptyStr(source, cfg.VM.WindowsImage), true, false
 	}
-	return hyperv.FetchEvalImage(ctx, hyperv.FetchOptions{
-		Name:           name,
-		URL:            source,
-		SHA256:         flagImgSHA256,
-		AcceptUnpinned: flagImgAcceptUnpinned,
-		Force:          flagImgForce,
-		Progress:       os.Stderr,
-	})
+	reuse := cfg.VM.WindowsImageUpdate == "reuse"
+	if c := cfg.VM.WindowsImage; c != "" {
+		if reuse && (c == st.Base || c == st.BaseURL) {
+			return "", false, false
+		}
+		return c, true, true
+	}
+	if st.BaseURL != "" && !reuse {
+		return st.BaseURL, true, true
+	}
+	return "", false, false
+}
+
+func firstNonEmptyStr(a, b string) string {
+	if a != "" {
+		return a
+	}
+	return b
 }
 
 func runImageList(_ *cobra.Command, _ []string) error {
@@ -252,8 +332,17 @@ func runImageList(_ *cobra.Command, _ []string) error {
 		fmt.Printf("qemu    %-8s %s\n", osName, p)
 		found = true
 	}
-	if p, ok := hyperv.ActiveImage(); ok {
-		fmt.Printf("hyperv  windows  %s (active)\n", p)
+	if st := hyperv.Status(); st.Base != "" {
+		pin := "pinned"
+		if !st.Pinned {
+			pin = "UNPINNED"
+		}
+		fmt.Printf("hyperv  windows  base     %s (%s)\n", st.Base, pin)
+		fmt.Printf("hyperv  windows  prepared %s\n", st.Summary(time.Now()))
+		for _, p := range st.Older {
+			fmt.Printf("hyperv  windows  older    %s (deleted by the next prepare)\n",
+				p.Path)
+		}
 		found = true
 	}
 	if !found {

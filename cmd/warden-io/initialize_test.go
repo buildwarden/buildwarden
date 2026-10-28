@@ -48,3 +48,25 @@ func TestDefaultScriptNameForPlatform(t *testing.T) {
 		t.Errorf("defaultScriptName() = %q, want a build.* name", got)
 	}
 }
+
+func TestParseInitArgs(t *testing.T) {
+	a := parseInitArgs([]string{
+		"--gateway=10.0.0.1", "--ip", "10.0.0.2/30", "--script=b.ps1",
+		"--workdir", "/work", "--hold", "--unknown=x",
+	})
+	want := initArgs{
+		gateway: "10.0.0.1", selfIP: "10.0.0.2/30", script: "b.ps1",
+		workdir: "/work", hold: true,
+	}
+	if a != want {
+		t.Errorf("parseInitArgs = %+v, want %+v", a, want)
+	}
+}
+
+func TestShellEnvScript(t *testing.T) {
+	got := shellEnvScript(map[string]string{"B": "it's", "A": "1"}, "/work")
+	want := "export A='1'\nexport B='it'\\''s'\ncd '/work'\n"
+	if got != want {
+		t.Errorf("shellEnvScript = %q, want %q", got, want)
+	}
+}

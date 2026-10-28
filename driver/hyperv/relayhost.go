@@ -35,9 +35,13 @@ type RelayHostConfig struct {
 
 	// Request carries the build's relay settings (capture mode, upstream CAs).
 	Request *driver.BuildRequest
+	// Environment is the ledger's environment record; nil records none.
+	Environment *relaycfg.Environment
 	// ContextDir and BuildScriptPath are the inputs the collector serves.
 	ContextDir      string
 	BuildScriptPath string
+	// GuestOS picks the bootstrap config ("windows" or "linux").
+	GuestOS string
 
 	RelayIP      string // relay VM's static NAT address (default 192.168.240.2)
 	ClaimPort    int    // default relaycfg.DefaultPort
@@ -88,6 +92,7 @@ func StartRelay(ctx context.Context, prov Provisioner, cfg RelayHostConfig) (*Re
 		OutputDir:   cfg.OutputDir,
 		ContextDir:  cfg.ContextDir,
 		BuildScript: cfg.BuildScriptPath,
+		GuestOS:     cfg.GuestOS,
 		OutputTee:   cfg.OutputTee,
 	})
 	if err != nil {
@@ -122,7 +127,8 @@ func StartRelay(ctx context.Context, prov Provisioner, cfg RelayHostConfig) (*Re
 	claimCtx, cancel := context.WithTimeout(ctx, cfg.ReadyTimeout)
 	defer cancel()
 	claimAddr := net.JoinHostPort(cfg.RelayIP, strconv.Itoa(cfg.ClaimPort))
-	if _, err := sess.ClaimRelay(claimCtx, claimAddr, "", cfg.Request, nil); err != nil {
+	if _, err := sess.ClaimRelay(
+		claimCtx, claimAddr, "", cfg.Request, cfg.Environment); err != nil {
 		_ = h.Close()
 		return nil, fmt.Errorf("StartRelay: relay VM %q: %w", h.VMName, err)
 	}

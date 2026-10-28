@@ -2,6 +2,8 @@ package main
 
 import (
 	"bytes"
+	"crypto/x509"
+	"encoding/pem"
 	"fmt"
 	"io"
 	"net/http"
@@ -10,71 +12,131 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+
+	"github.com/buildwarden/buildwarden/bootstrap"
 )
 
-// runInitialize orchestrates the full build environment initialization:
-//  1. Configure network (platform-specific DNS/IP)
-//  2. Wait for relay health
-//  3. Fetch + install CA
-//  4. Set environment variables
-//  5. Fetch build script from relay
-//  6. Exec build script
+// initArgs are initialize's flags. Everything else comes from the relay.
+type initArgs struct {
+	gateway, selfIP, script string
+	// workdir is created and entered before the script runs.
+	workdir string
+	// hold stops after setup, for an interactive shell (warden shell): it
+	// writes the build environment to shellEnvPath() and blocks.
+	hold bool
+}
+
+// runInitialize bootstraps the build environment from the relay and runs the
+// build (docs/development/bootstrap.md):
+//  1. Configure the network (platform-specific DNS/IP) and wait for the relay
+//  2. Fetch the CA and the bootstrap config; install the CA per its trust mode
+//  3. Apply the baseline (Java truststore, bazelrc, CA and default env)
+//  4. Enter the workdir; with --hold, stop here
+//  5. Fetch the build script, run it with heartbeats, report its exit
 func runInitialize(args []string) int {
-	gateway, selfIP, script := parseInitArgs(args)
-	if gateway == "" {
-		gateway = os.Getenv("WARDEN_GATEWAY")
+	a := parseInitArgs(args)
+	if a.gateway == "" {
+		a.gateway = os.Getenv("WARDEN_GATEWAY")
 	}
-	if selfIP == "" {
-		selfIP = os.Getenv("WARDEN_IP")
+	if a.selfIP == "" {
+		a.selfIP = os.Getenv("WARDEN_IP")
 	}
-	if script == "" {
-		script = defaultScriptName()
+	if a.script == "" {
+		a.script = defaultScriptName()
 	}
-	_ = selfIP
 
-	// Step 1: Platform-specific network configuration
 	logStep("configuring network")
-	if err := configureNetwork(gateway, selfIP); err != nil {
-		fmt.Fprintf(os.Stderr, "warden-io: network config: %s\n", err)
-		return 1
+	if err := configureNetwork(a.gateway, a.selfIP); err != nil {
+		return fail("network config", err)
 	}
-
-	// Step 2: Wait for relay health
 	logStep("waiting for relay")
-	if err := waitForRelay(gateway); err != nil {
-		fmt.Fprintf(os.Stderr, "warden-io: relay not ready: %s\n", err)
-		return 1
+	if err := waitForRelay(a.gateway); err != nil {
+		return fail("relay not ready", err)
 	}
 
-	// Step 3: Fetch and install CA
-	logStep("installing CA")
-	if err := fetchAndInstallCA(); err != nil {
-		fmt.Fprintf(os.Stderr, "warden-io: CA install: %s\n", err)
-		return 1
+	env, err := setUp(a.workdir)
+	if err != nil {
+		return fail("setup", err)
+	}
+	if a.hold {
+		return holdForShell(env, a.workdir)
 	}
 
-	// Step 4: Set environment variables for tools that need explicit CA paths
-	setCAEnvironment()
-
-	// Step 5: Fetch build script from the canonical /build-script endpoint. The
-	// local filename (and therefore the interpreter picked by scriptCommand)
-	// still comes from the platform default or --script; only the source is
-	// standardized, so the guest no longer needs to know where the script
-	// physically lives (shared context vs. streamed from the collector).
+	// The local filename (and therefore the interpreter scriptCommand picks)
+	// comes from the platform default or --script; the source is always the
+	// relay's /build-script.
 	logStep("fetching build script")
-	scriptPath := scriptDestPath(script)
+	scriptPath := scriptDestPath(a.script)
 	if err := fetchBuildScript(scriptPath); err != nil {
-		fmt.Fprintf(os.Stderr, "warden-io: fetch script: %s\n", err)
-		return 1
+		return fail("fetch script", err)
 	}
 	os.Chmod(scriptPath, 0755) //nolint:errcheck
 
-	// Step 6: Run build script, report exit code to relay
-	logStep("running " + script)
-	code := execScript(scriptPath, gateway)
+	logStep("running " + a.script)
+	code := execScript(scriptPath, a.gateway)
 	reportComplete(code)
 	return code
 }
+
+// setUp installs the CA per the bootstrap config, applies the baseline (its
+// environment is set on this process, so the build script inherits it) and
+// enters the workdir. It returns the baseline environment.
+func setUp(workdir string) (map[string]string, error) {
+	logStep("installing CA")
+	ca, err := fetchCA()
+	if err != nil {
+		return nil, fmt.Errorf("CA: %w", err)
+	}
+	cfg, err := fetchBootstrap()
+	if err != nil {
+		return nil, fmt.Errorf("bootstrap config: %w", err)
+	}
+	if err := installCA(ca.pem, ca.cert, cfg.TrustMode()); err != nil {
+		return nil, fmt.Errorf("CA install: %w", err)
+	}
+
+	logStep("applying baseline (trust " + cfg.TrustMode() + ")")
+	env, err := applyBaseline(ca, findCABundle())
+	if err != nil {
+		return nil, fmt.Errorf("baseline: %w", err)
+	}
+	for k, v := range env {
+		os.Setenv(k, v) //nolint:errcheck
+	}
+
+	if workdir != "" {
+		if err := os.MkdirAll(workdir, 0755); err != nil {
+			return nil, fmt.Errorf("workdir: %w", err)
+		}
+		if err := os.Chdir(workdir); err != nil {
+			return nil, fmt.Errorf("workdir: %w", err)
+		}
+	}
+	return env, nil
+}
+
+func fail(what string, err error) int {
+	fmt.Fprintf(os.Stderr, "warden-io: %s: %s\n", what, err)
+	return 1
+}
+
+// holdForShell records the build environment for an interactive shell to
+// source and blocks until the environment is torn down. The file's appearance
+// tells the orchestrator setup is done.
+func holdForShell(env map[string]string, workdir string) int {
+	if self, err := os.Executable(); err == nil {
+		env["PATH"] = filepath.Dir(self) + string(os.PathListSeparator) + os.Getenv("PATH")
+	}
+	script := shellEnvScript(env, workdir)
+	if err := writeFileMkdir(shellEnvPath(), []byte(script), 0o644); err != nil {
+		return fail("hold", err)
+	}
+	logStep("ready; holding for a shell")
+	select {}
+}
+
+// shellEnvPath is where --hold writes the environment a shell sources.
+func shellEnvPath() string { return filepath.Join(wardenDataDir(), "shell.env") }
 
 func waitForRelay(gateway string) error {
 	healthURL := "http://artifacts/health"
@@ -127,37 +189,56 @@ func fetchBuildScript(dest string) error {
 	return err
 }
 
-func fetchAndInstallCA() error {
-	resp, err := http.Get("http://artifacts/ca.pem")
-	if err != nil {
-		return err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("HTTP %d", resp.StatusCode)
-	}
-
-	pem, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return fmt.Errorf("reading CA: %w", err)
-	}
-
-	return installCA(pem)
+// caCert is the relay's CA as served and as parsed.
+type caCert struct {
+	pem  []byte
+	cert *x509.Certificate
 }
 
-func setCAEnvironment() {
-	bundlePath := findCABundle()
-	if bundlePath == "" {
-		return
+func fetchCA() (*caCert, error) {
+	data, status, err := relayGet("http://artifacts/ca.pem")
+	if err != nil {
+		return nil, err
 	}
+	if status != http.StatusOK {
+		return nil, fmt.Errorf("HTTP %d", status)
+	}
+	block, _ := pem.Decode(data)
+	if block == nil {
+		return nil, fmt.Errorf("no PEM certificate")
+	}
+	cert, err := x509.ParseCertificate(block.Bytes)
+	if err != nil {
+		return nil, fmt.Errorf("parsing CA: %w", err)
+	}
+	return &caCert{pem: data, cert: cert}, nil
+}
 
-	// Set environment variables used by common tools
-	os.Setenv("SSL_CERT_FILE", bundlePath)
-	os.Setenv("CARGO_HTTP_CAINFO", bundlePath)
-	os.Setenv("REQUESTS_CA_BUNDLE", bundlePath)
-	os.Setenv("NODE_EXTRA_CA_CERTS", bundlePath)
-	os.Setenv("CURL_CA_BUNDLE", bundlePath)
+// fetchBootstrap reads the build's bootstrap config. A relay or collector
+// without one (404) gives the empty config; anything this executor does not
+// understand is an error rather than a guess.
+func fetchBootstrap() (bootstrap.Config, error) {
+	data, status, err := relayGet("http://artifacts/bootstrap")
+	if err != nil {
+		return bootstrap.Config{}, err
+	}
+	switch status {
+	case http.StatusOK:
+		return bootstrap.Parse(data)
+	case http.StatusNotFound:
+		return bootstrap.Config{}, nil
+	}
+	return bootstrap.Config{}, fmt.Errorf("HTTP %d", status)
+}
+
+func relayGet(url string) ([]byte, int, error) {
+	resp, err := http.Get(url)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer resp.Body.Close()
+	data, err := io.ReadAll(resp.Body)
+	return data, resp.StatusCode, err
 }
 
 // scriptDestPath returns where the fetched build script is written on the
@@ -336,31 +417,31 @@ func reportComplete(code int) {
 	}
 }
 
-func parseInitArgs(args []string) (gateway, selfIP, script string) {
+func parseInitArgs(args []string) initArgs {
+	var a initArgs
+	str := map[string]*string{
+		"--gateway": &a.gateway, "--ip": &a.selfIP,
+		"--script": &a.script, "--workdir": &a.workdir,
+	}
 	for i := 0; i < len(args); i++ {
 		arg := args[i]
-		if val, ok := strings.CutPrefix(arg, "--gateway="); ok {
-			gateway = val
-		} else if arg == "--gateway" {
-			i++
-			if i < len(args) {
-				gateway = args[i]
-			}
-		} else if val, ok := strings.CutPrefix(arg, "--ip="); ok {
-			selfIP = val
-		} else if arg == "--ip" {
-			i++
-			if i < len(args) {
-				selfIP = args[i]
-			}
-		} else if val, ok := strings.CutPrefix(arg, "--script="); ok {
-			script = val
-		} else if arg == "--script" {
-			i++
-			if i < len(args) {
-				script = args[i]
-			}
+		if arg == "--hold" {
+			a.hold = true
+			continue
 		}
+		name, val, hasVal := strings.Cut(arg, "=")
+		dst, ok := str[name]
+		if !ok {
+			continue
+		}
+		if !hasVal {
+			i++
+			if i >= len(args) {
+				break
+			}
+			val = args[i]
+		}
+		*dst = val
 	}
-	return
+	return a
 }

@@ -20,7 +20,7 @@ import (
 // guest-facing listeners on loopback, and returns a client that reaches the
 // relay's HTTP listener for any host name (as the build guest would).
 func startTestRelay(
-	t *testing.T, cfg collector.Config, capture string,
+	t *testing.T, cfg collector.Config, capture string, opts ...func(*Config),
 ) (*Relay, *collector.Collector, *http.Client, string) {
 	t.Helper()
 	out := t.TempDir()
@@ -30,6 +30,9 @@ func startTestRelay(
 	if err != nil {
 		t.Fatal(err)
 	}
+	// Runs after the server and relay stop; Windows cannot remove the
+	// output dir while the collector holds it open.
+	t.Cleanup(func() { _ = col.Close() })
 	srv := httptest.NewServer(col.Handler())
 	t.Cleanup(srv.Close)
 
@@ -38,7 +41,7 @@ func startTestRelay(
 	ctrlLn, _ := net.Listen("tcp", "127.0.0.1:0")
 	dnsConn, _ := net.ListenPacket("udp", "127.0.0.1:0")
 
-	r, err := Start(Config{
+	rcfg := Config{
 		CollectorURL:    srv.URL,
 		CollectorToken:  "tok",
 		CaptureMode:     capture,
@@ -48,7 +51,11 @@ func startTestRelay(
 		HTTPListener:    httpLn,
 		HTTPSListener:   httpsLn,
 		ControlListener: ctrlLn,
-	})
+	}
+	for _, o := range opts {
+		o(&rcfg)
+	}
+	r, err := Start(rcfg)
 	if err != nil {
 		t.Fatalf("Start: %v", err)
 	}
@@ -144,12 +151,14 @@ func TestRelayCollectorEndToEnd(t *testing.T) {
 
 	r, col, client, out := startTestRelay(t, collector.Config{
 		ContextDir: ctxDir, BuildScriptPath: script,
+		Bootstrap: []byte(`{"version":1}`),
 	}, "")
 	if r.LedgerPublicKeyHex() == "" || len(r.CACert()) == 0 {
 		t.Fatal("relay identity incomplete")
 	}
 
 	getExpect(t, client, "http://artifacts/build-script", 200, "#!/bin/sh\nmake\n")
+	getExpect(t, client, "http://artifacts/bootstrap", 200, `{"version":1}`)
 	getExpect(t, client, "http://cwd/src/main.c", 200, "int main(){}")
 	getExpect(t, client, "http://cwd/src/", 200, "src/main.c\n")
 	getExpectCode(t, client, "http://cwd/src/missing", 404)

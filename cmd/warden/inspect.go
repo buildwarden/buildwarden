@@ -13,6 +13,7 @@ var (
 	inspectVerbose int
 	inspectExtract string
 	inspectNoColor bool
+	inspectDisks   bool
 )
 
 var inspectCmd = &cobra.Command{
@@ -26,12 +27,18 @@ The path can be a ledger file directly, or a warden output directory
 
 Verifies the cryptographic signature chain and displays a summary of all
 recorded network requests and artifacts. Exits 0 if the ledger is valid,
-exits 1 if verification fails.`,
+exits 1 if verification fails.
+
+The build environment record is decoded and its payload (environment.json
+beside the ledger) checked against the signed record. With --verify-disks,
+each VM disk layer it names is re-hashed at its recorded path, which reads
+every byte of every base image.`,
 	Example: `  warden inspect warden-output
   warden inspect warden-output/ledger.zst
   warden inspect --json warden-output
   warden inspect -v ledger.bin
-  warden inspect -vv ledger.bin`,
+  warden inspect -vv ledger.bin
+  warden inspect --verify-disks warden-output`,
 	RunE: runInspect,
 }
 
@@ -43,6 +50,8 @@ func init() {
 		"extract captured payloads to directory")
 	inspectCmd.Flags().BoolVar(&inspectNoColor, "no-color", false,
 		"disable colored output")
+	inspectCmd.Flags().BoolVar(&inspectDisks, "verify-disks", false,
+		"re-hash the VM disk layers the environment record names")
 	rootCmd.AddCommand(inspectCmd)
 }
 
@@ -55,6 +64,8 @@ func runInspect(cmd *cobra.Command, args []string) error {
 		Writer:    os.Stdout,
 		Extract:   inspectExtract,
 		NoColor:   inspectNoColor,
+
+		VerifyDisks: inspectDisks,
 	})
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "error: %v\n", err)

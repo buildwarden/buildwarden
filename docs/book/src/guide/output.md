@@ -8,6 +8,7 @@ Every `warden build` produces a self-contained output directory with everything 
 warden-output/
 ├── ledger.zst              # Cryptographic ledger (compressed by default)
 ├── ca.cert.pem.zst         # Ephemeral CA cert (compressed by default)
+├── environment.json        # Signed environment descriptor (what the build ran on)
 ├── build-output.log        # Captured build console output
 ├── artifacts/              # Build outputs posted to the ledger
 │   └── myapp-1.0.0.whl
@@ -17,8 +18,8 @@ warden-output/
     └── <hash>
 ```
 
-The container driver also writes `Dockerfile.submitted`, `Dockerfile.actual`
-and `build.sh` (the translated build script). The container and vz drivers,
+The container driver also writes `Dockerfile.submitted`, `build.sh` (the
+translated build script) and `console.log`. The container and vz drivers,
 whose relay runs as a container or host process, also write `relay.log`.
 
 ## File Details
@@ -36,13 +37,28 @@ warden inspect warden-output
 
 Your original Dockerfile, unchanged. Preserved for comparison with what actually ran. Written by the container driver only.
 
-### Dockerfile.actual
+### build.sh
 
-The rewritten Dockerfile that BuildWarden executed. Written by the container
-driver only. Differences from submitted:
-- `COPY .warden /.warden` and extension setup injected after `FROM`
-- `COPY` directives rewritten to `RUN curl` commands for provenance
-- Environment variables from extensions added
+The build script translated from your Containerfile: what the build environment
+actually ran. Each `COPY` became one `warden-io fetch` per file, resolved
+against the build context on the host. The relay also recorded these exact
+bytes in the ledger when the guest fetched them.
+
+### console.log
+
+The build container's own console: `warden-io`'s setup steps followed by the
+build's output as the container printed it. It is the place to look when a
+build fails before the relay is reachable. Written by the container driver only.
+
+### environment.json
+
+The payload of the ledger's environment record: a descriptor of what the build
+ran on, whose hash the relay signed as the ledger's first record. For the
+container driver it is the base image's manifest (`oci-image/v1`); for the VM
+drivers it is a `vm-disk-chain/v1` descriptor listing the boot disks (hash,
+size, path, and provenance) and the per-build seed files. `warden inspect`
+checks it against the ledger, and `warden inspect --verify-disks` re-hashes the
+disks it names. Absent when the build recorded no environment.
 
 ### ca.cert.pem
 

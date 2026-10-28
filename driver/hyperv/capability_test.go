@@ -114,6 +114,7 @@ func TestNetworkStrategy(t *testing.T) {
 }
 
 func TestDoctorReport(t *testing.T) {
+	t.Setenv("WARDEN_HYPERV_CACHE_DIR", t.TempDir())
 	// Non-elevated Hyper-V Admins member reusing a durable switch: ready.
 	caps := Capabilities{
 		Supported:         true,

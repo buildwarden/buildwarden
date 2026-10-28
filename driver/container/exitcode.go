@@ -2,41 +2,11 @@ package container
 
 import (
 	"errors"
-	"io"
 	"regexp"
 	"strconv"
-	"sync"
 
 	"github.com/lesiw/ctrctl"
 )
-
-// tailWriter passes writes through to w and keeps the last max bytes, so the
-// runtime's own final error line can be read after `exec` returns.
-type tailWriter struct {
-	w   io.Writer
-	max int
-
-	mu  sync.Mutex
-	buf []byte
-}
-
-func newTailWriter(w io.Writer) *tailWriter { return &tailWriter{w: w, max: 4096} }
-
-func (t *tailWriter) Write(p []byte) (int, error) {
-	t.mu.Lock()
-	t.buf = append(t.buf, p...)
-	if over := len(t.buf) - t.max; over > 0 {
-		t.buf = t.buf[over:]
-	}
-	t.mu.Unlock()
-	return t.w.Write(p)
-}
-
-func (t *tailWriter) String() string {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-	return string(t.buf)
-}
 
 // nerdctlExecExit is the line nerdctl (finch) prints when an exec'd command
 // fails; nerdctl itself then exits 1 whatever the command's code was.

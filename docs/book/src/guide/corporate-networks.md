@@ -37,6 +37,4 @@ The relay forwards DNS queries to the upstream resolver configured in the contai
 
 ## Certificate Trust
 
-The relay generates an ephemeral CA per build and injects it into the build container's trust store. Tools that use the system certificate store (apt, pip, curl, most language package managers) will trust the relay automatically.
-
-Tools with their own certificate bundles may need explicit configuration via extensions. BuildWarden includes extensions for pip and Bazel. See [Extensions](../concepts/extensions.md) for adding support for other tools.
+The relay generates an ephemeral CA per build, and `warden-io` installs it in the build environment's trust store before your build runs. Tools that use the system certificate store (apt, curl, most language package managers) trust the relay automatically, and `warden-io` also points pip, npm, Maven, Gradle, Bazel and others at it. See [Trust and the Build Baseline](../concepts/baseline.md) for the full list.

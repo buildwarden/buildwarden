@@ -3,11 +3,14 @@
 package main
 
 import (
+	"crypto/x509"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
 	"strings"
+
+	"github.com/buildwarden/buildwarden/bootstrap"
 )
 
 // wardenCADir is where the relay CA is written on Windows guests. Tools that
@@ -132,12 +135,24 @@ func writeRelayHostsEntries(gateway string) error {
 	return os.WriteFile(path, []byte(b.String()), 0644)
 }
 
+// wardenDataDir holds the files warden-io derives for the build (the Java
+// truststore, the shell environment).
+func wardenDataDir() string { return wardenCADir() }
+
+// bazelSystemRC is the system-wide bazelrc Bazel reads on Windows.
+func bazelSystemRC() string {
+	return filepath.Join(filepath.Dir(wardenCADir()), "bazel.bazelrc")
+}
+
 // installCA writes the relay's per-build CA to a known path (for tools that
 // read an explicit bundle) and imports it into the machine Root store via
 // certutil so Schannel-based tooling trusts the MITM CA. The certutil step
 // requires administrative rights; it is non-fatal because the explicit-bundle
 // environment variables cover openssl-based tools regardless.
-func installCA(pem []byte) error {
+func installCA(pem []byte, _ *x509.Certificate, mode string) error {
+	if mode == bootstrap.TrustExclusive {
+		logStep("exclusive trust is not supported on Windows; adding the CA instead")
+	}
 	dir := wardenCADir()
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return fmt.Errorf("creating CA dir: %w", err)

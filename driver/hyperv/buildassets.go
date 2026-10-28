@@ -1,6 +1,7 @@
 package hyperv
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -51,27 +52,24 @@ func resolveRelayBootVHDX() (string, error) {
 		"relay boot VHDX not found (looked at $WARDEN_RELAY_BOOT_VHDX and %s)", pinned)
 }
 
-// resolveBuildBaseVHDX locates the read-only build-guest base image (the
-// differencing parent for the per-build overlay). Until Hyper-V build-image
-// tooling exists, a caller brings their own bootable disk via req.Image or
-// WARDEN_HYPERV_BUILD_IMAGE.
+// resolveBuildBaseVHDX locates the read-only disk chain the build VM's
+// per-build overlay is created off, base first; the last element is the
+// overlay's parent. Resolution: --image (or WARDEN_HYPERV_BUILD_IMAGE), a disk
+// that is already prepared, so a chain of one; otherwise the active prepared
+// layer from `warden image prepare --driver hyperv`, a chain of its
+// generalized base and the layer.
 //
 // The disk's format decides the VM generation, and the caller MUST honour it: a
 // Gen1 (BIOS/MBR) disk cannot boot on a Gen2 (UEFI/GPT) VM, and vice versa.
 //
-//   - .vhd  -> Generation 1. This is the shape Microsoft's Windows Server
-//     Evaluation image ships in (MBR/BIOS), so that image boots as-is with no
-//     custom construction and no mbr2gpt conversion. This is the deliberate
-//     starting path for Windows builds: a real, signed OS with zero image
-//     surgery, so any boot issue is ours, not our disk assembly.
-//   - .vhdx -> Generation 2 (UEFI, Secure Boot capable): a Linux cloud image,
-//     or a Windows image already converted to Gen2 by `warden image` prep.
+//   - .vhd  -> Generation 1 (Microsoft's Windows Server eval VHD shape).
+//   - .vhdx -> Generation 2 (UEFI, Secure Boot capable).
 //
 // WARDEN_HYPERV_BUILD_GEN (1 or 2) overrides the inferred generation for the
 // uncommon case of a .vhdx that must boot Gen1, or a .vhd wrapped for Gen2.
 func resolveBuildBaseVHDX(
 	req *driver.BuildRequest,
-) (path string, isWindows bool, generation int, err error) {
+) (chain []string, isWindows bool, generation int, err error) {
 	isWindows = req != nil && req.GuestOS == "windows"
 
 	candidate := ""
@@ -82,16 +80,7 @@ func resolveBuildBaseVHDX(
 		candidate = os.Getenv("WARDEN_HYPERV_BUILD_IMAGE")
 	}
 	if candidate == "" {
-		// Fall back to the image pinned by `warden image prepare --driver
-		// hyperv` (its manifest carries the format-derived generation and guest
-		// OS, so honour those rather than re-inferring from the extension).
-		if p, isWin, gen, ok := resolveActiveEvalImage(); ok {
-			return p, isWin, gen, nil
-		}
-		return "", isWindows, 0, driver.Fixable(
-			"warden image prepare --driver hyperv (pins Microsoft's eval "+
-				"VHD), or pass --image <disk.vhd|.vhdx>",
-			"no Hyper-V build-guest base image")
+		return resolvePreparedChain(isWindows)
 	}
 
 	switch strings.ToLower(filepath.Ext(candidate)) {
@@ -100,9 +89,9 @@ func resolveBuildBaseVHDX(
 	case ".vhdx":
 		generation = 2
 	default:
-		return "", isWindows, 0, fmt.Errorf(
-			"build-guest image %q must be a .vhd (Gen1, e.g. the Windows Server "+
-				"eval image) or .vhdx (Gen2); Hyper-V boots no other format "+
+		return nil, isWindows, 0, fmt.Errorf(
+			"build-guest image %q must be a .vhd (Gen1) or .vhdx (Gen2); "+
+				"Hyper-V boots no other format "+
 				"(convert a qcow2/raw with `qemu-img convert -O vhdx`)", candidate)
 	}
 	if v := os.Getenv("WARDEN_HYPERV_BUILD_GEN"); v != "" {
@@ -112,14 +101,41 @@ func resolveBuildBaseVHDX(
 		case "2":
 			generation = 2
 		default:
-			return "", isWindows, 0, fmt.Errorf(
+			return nil, isWindows, 0, fmt.Errorf(
 				"WARDEN_HYPERV_BUILD_GEN=%q invalid (want 1 or 2)", v)
 		}
 	}
 	if _, err := os.Stat(candidate); err != nil {
-		return "", isWindows, 0, fmt.Errorf(
+		return nil, isWindows, 0, fmt.Errorf(
 			"build-guest image %q not readable: %w", candidate, err)
 	}
 	abs, _ := filepath.Abs(candidate)
-	return abs, isWindows, generation, nil
+	return []string{abs}, isWindows, generation, nil
+}
+
+// resolvePreparedChain returns the active prepared layer and its base. A
+// pinned base that was never prepared, or a chain whose files have moved, is
+// a fixable error: builds boot only prepared images.
+func resolvePreparedChain(isWindows bool) ([]string, bool, int, error) {
+	const fix = "warden image prepare --driver hyperv"
+	pb, base, ok := activePrepared()
+	if !ok {
+		if _, pinned := ActiveImage(); pinned {
+			return nil, isWindows, 0, driver.Fixable(fix,
+				"the Hyper-V base image has not been prepared for builds yet")
+		}
+		return nil, isWindows, 0, driver.Fixable(
+			fix+" --source <eval-image-url-or-path> (or pass --image <prepared disk>)",
+			"no Hyper-V build-guest image")
+	}
+	for _, p := range []string{base.Path, pb.Path} {
+		if _, err := os.Stat(p); errors.Is(err, os.ErrNotExist) {
+			return nil, isWindows, 0, driver.Fixable(fix,
+				"prepared Hyper-V image chain is incomplete: %s is missing "+
+					"(was it moved or deleted?)", p)
+		} else if err != nil {
+			return nil, isWindows, 0, err
+		}
+	}
+	return []string{base.Path, pb.Path}, true, pb.Generation, nil
 }

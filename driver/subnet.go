@@ -4,8 +4,6 @@ import (
 	"crypto/rand"
 	"fmt"
 	"math/big"
-	"os/exec"
-	"strings"
 
 	"github.com/lesiw/ctrctl"
 )
@@ -75,21 +73,3 @@ func RandAlphaNum(n int) string {
 	return string(b)
 }
 
-// ExtractFromImage reads the FROM line from a Containerfile and returns
-// the image reference.
-func ExtractFromImage(containerfile string) (string, error) {
-	data, err := exec.Command("head", "-50", containerfile).Output()
-	if err != nil {
-		return "", fmt.Errorf("reading containerfile: %w", err)
-	}
-	for _, line := range strings.Split(string(data), "\n") {
-		line = strings.TrimSpace(line)
-		if strings.HasPrefix(line, "FROM ") {
-			parts := strings.Fields(line)
-			if len(parts) >= 2 {
-				return parts[1], nil
-			}
-		}
-	}
-	return "", fmt.Errorf("no FROM directive found in %s", containerfile)
-}

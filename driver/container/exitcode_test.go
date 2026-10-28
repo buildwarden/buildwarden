@@ -1,10 +1,8 @@
 package container
 
 import (
-	"bytes"
 	"errors"
 	"os/exec"
-	"strings"
 	"testing"
 
 	"github.com/lesiw/ctrctl"
@@ -41,22 +39,5 @@ func TestExecExitCode(t *testing.T) {
 			t.Errorf("%s: execExitCode = %d, %v; want %d, %v",
 				tc.name, code, ok, tc.code, tc.wantOK)
 		}
-	}
-}
-
-func TestTailWriter(t *testing.T) {
-	var out bytes.Buffer
-	tw := newTailWriter(&out)
-	tw.max = 8
-	for _, s := range []string{"hello ", "world", "!"} {
-		if _, err := tw.Write([]byte(s)); err != nil {
-			t.Fatal(err)
-		}
-	}
-	if out.String() != "hello world!" {
-		t.Errorf("passthrough = %q", out.String())
-	}
-	if got := tw.String(); got != "o world!" || !strings.HasSuffix(out.String(), got) {
-		t.Errorf("tail = %q, want %q", got, "o world!")
 	}
 }

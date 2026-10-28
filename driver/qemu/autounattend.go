@@ -1,22 +1,22 @@
 package qemu
 
 import (
-	"bytes"
 	_ "embed"
-	"encoding/base64"
-	"encoding/binary"
-	"encoding/xml"
 	"fmt"
 	"strings"
 	"text/template"
-	"unicode/utf16"
+
+	"github.com/buildwarden/buildwarden/driver/winguest"
 )
 
 //go:embed autounattend.xml.tmpl
 var autounattendTemplate string
 
 // autounattendConfig parameterizes the generated Autounattend.xml used to drive
-// a fully unattended Windows install from ISO during image preparation.
+// a fully unattended Windows install from ISO: the install stage of image
+// preparation, which ends in sysprep /generalize so its result is a
+// generalized base like Microsoft's eval VHD (see
+// docs/design/hyperv-windows-prepare.md).
 //
 // The firmware gate (TPM 2.0 / Secure Boot) is cleared with LabConfig bypass
 // keys. A swtpm + Secure Boot path is a documented opt-in future feature (see
@@ -28,16 +28,14 @@ type autounattendConfig struct {
 	// Edition is the install.wim image name (e.g. "Windows 11 Pro",
 	// "Windows 11 Enterprise Evaluation").
 	Edition string
-	// AdminUser / AdminPassword is the ephemeral local admin baked into the
-	// prepared image for headless autologon. Rotated per prep run.
+	// AdminUser / AdminPassword is the ephemeral local admin the install logs
+	// on as once to generalize the image; it is disabled before sysprep (the
+	// prepare stage's OOBE uses the built-in Administrator). Rotated per run.
 	AdminUser     string
 	AdminPassword string
 	// VirtioDriveLetter is where the virtio-win driver ISO is mounted during
 	// setup (e.g. "E:").
 	VirtioDriveLetter string
-	// SeedLabel is the volume label of the per-build provisioning seed the
-	// startup task looks for (see windows.go / windowsSeedName).
-	SeedLabel string
 }
 
 // unattendArch maps a Go arch to the unattend processorArchitecture token.
@@ -72,7 +70,7 @@ type autounattendData struct {
 	Edition       string
 	AdminUser     string
 	AdminPassword string
-	TaskCmd       string
+	GeneralizeCmd string
 	BypassKeys    []bypassEntry
 	DriverPaths   []driverPathEntry
 }
@@ -97,10 +95,10 @@ func generateAutounattend(cfg autounattendConfig) string {
 
 	data := autounattendData{
 		ProcArch:      unattendArch(cfg.Arch),
-		Edition:       xmlText(cfg.Edition),
-		AdminUser:     xmlText(cfg.AdminUser),
-		AdminPassword: xmlText(cfg.AdminPassword),
-		TaskCmd:       xmlText(wardenRunTaskCmd(cfg.SeedLabel)),
+		Edition:       winguest.XMLText(cfg.Edition),
+		AdminUser:     winguest.XMLText(cfg.AdminUser),
+		AdminPassword: winguest.XMLText(cfg.AdminPassword),
+		GeneralizeCmd: winguest.XMLText(winguest.GeneralizeCommand(cfg.AdminUser)),
 	}
 	for i, key := range labConfigBypassKeys {
 		data.BypassKeys = append(data.BypassKeys,
@@ -113,7 +111,7 @@ func generateAutounattend(cfg autounattendConfig) string {
 	for i, d := range []string{"NetKVM"} {
 		data.DriverPaths = append(data.DriverPaths, driverPathEntry{
 			Key:  i + 1,
-			Path: xmlText(fmt.Sprintf(`%s\%s\w11\%s`, drv, d, vArch)),
+			Path: winguest.XMLText(fmt.Sprintf(`%s\%s\w11\%s`, drv, d, vArch)),
 		})
 	}
 
@@ -122,79 +120,4 @@ func generateAutounattend(cfg autounattendConfig) string {
 	// fails on a template bug, which the tests catch.
 	_ = autounattendTmpl.Execute(&sb, data)
 	return sb.String()
-}
-
-// xmlText escapes a string for safe inclusion as XML element-text content.
-// The Autounattend is rendered with text/template (no auto-escaping), and the
-// FirstLogonCommands PowerShell contains a raw '&' (and quotes); left unescaped
-// these produce invalid XML and Windows Setup fails to parse the answer file at
-// PreFinalize ("Whitespace is not allowed at this location" / 0x80131501),
-// which applies the image but never makes the disk bootable. Windows decodes
-// the entities before executing the command, so the runtime string is intact.
-func xmlText(s string) string {
-	var b bytes.Buffer
-	_ = xml.EscapeText(&b, []byte(s))
-	return b.String()
-}
-
-// psEncodedCommand encodes a PowerShell script for powershell.exe
-// -EncodedCommand (UTF-16LE, base64). This sidesteps every nested-quoting and
-// XML-escaping hazard for a command embedded in the answer file: the payload
-// is pure base64 ([A-Za-z0-9+/=]), all of which is XML- and shell-safe.
-func psEncodedCommand(script string) string {
-	u := utf16.Encode([]rune(script))
-	b := make([]byte, len(u)*2)
-	for i, r := range u {
-		binary.LittleEndian.PutUint16(b[i*2:], r)
-	}
-	return base64.StdEncoding.EncodeToString(b)
-}
-
-// wardenRunTaskCmd is the PowerShell that first-logon runs to register the
-// warden-run startup task. On every boot the task waits for the WARDEN seed
-// volume (the second NVMe disk enumerates a few seconds after the -AtStartup
-// trigger fires) and then runs its warden-run.ps1.
-//
-// LENGTH IS LOAD-BEARING. A FirstLogonCommands <CommandLine> is capped at 1024
-// characters and misbehaves well before that; an over-long entry makes the
-// oobeSystem pass fail with "Windows could not complete the installation"
-// (a Setup error dialog that appears BEFORE FirstLogonCommands even runs, so
-// the guest never reaches the Order-2 shutdown and prep times out). An earlier
-// version blew past 1024 and reproducibly stalled two hands-off preps at
-// exactly that dialog. This version is kept compact and
-// TestFirstLogonCommandLineUnderLimit guards the rendered length.
-//
-// Hardening kept from the earlier failure analysis:
-//   - Wait/retry loop for the seed volume (polls up to ~180s): at boot
-//     Get-Volume returns nothing until the second NVMe seed enumerates.
-//   - Battery settings: Register-ScheduledTask defaults
-//     (DisallowStartIfOnBatteries/StopIfGoingOnBatteries) block the task in a
-//     VM whose power state QEMU does not report as AC.
-//   - The wait loop is delivered as a base64 -EncodedCommand so no quoting has
-//     to survive XML + the FirstLogonCommands wrapper.
-//
-// Dropped as redundant to stay under the limit: the machine-scope
-// Set-ExecutionPolicy (the task's own powershell already runs -ExecutionPolicy
-// Bypass, under which `& x.ps1` runs) and -ExecutionTimeLimit.
-func wardenRunTaskCmd(seedLabel string) string {
-	bootstrap := fmt.Sprintf(
-		"for($i=0;$i -lt 90;$i++){"+
-			"$v=Get-Volume -FileSystemLabel '%s' -EA 0;"+
-			"if($v.DriveLetter){&($v.DriveLetter+':\\warden-run.ps1');break};"+
-			"Start-Sleep 2}",
-		seedLabel)
-	boot64 := psEncodedCommand(bootstrap)
-
-	// Single quotes only and no '&', so it is XML-safe (xmlText escapes the
-	// quotes; Windows decodes them before running it). The embedded wait loop
-	// is base64, so it carries no quotes.
-	return fmt.Sprintf(
-		"$a=New-ScheduledTaskAction -Execute 'powershell.exe' "+
-			"-Argument '-NoProfile -ExecutionPolicy Bypass -EncodedCommand %s';"+
-			"$s=New-ScheduledTaskSettingsSet -AllowStartIfOnBatteries "+
-			"-DontStopIfGoingOnBatteries;"+
-			"$t=New-ScheduledTaskTrigger -AtStartup;"+
-			"Register-ScheduledTask -TaskName warden-run -Action $a -Trigger $t "+
-			"-Settings $s -User SYSTEM -RunLevel Highest -Force",
-		boot64)
 }

@@ -1,4 +1,4 @@
-package container
+package script
 
 import (
 	"os"
@@ -17,12 +17,12 @@ func writeDockerfile(t *testing.T, content string) string {
 	return p
 }
 
-func TestDockerfileToScript_SimpleRun(t *testing.T) {
+func TestTranslate_SimpleRun(t *testing.T) {
 	path := writeDockerfile(t, `FROM python:3.12-slim
 RUN pip install requests
 RUN echo hello
 `)
-	result, err := DockerfileToScript(path)
+	result, err := Translate(path, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -40,13 +40,13 @@ RUN echo hello
 	}
 }
 
-func TestDockerfileToScript_ENV(t *testing.T) {
+func TestTranslate_ENV(t *testing.T) {
 	path := writeDockerfile(t, `FROM alpine
 ENV MY_VAR=hello
 ENV MULTI=one TWO=2
 RUN echo $MY_VAR
 `)
-	result, err := DockerfileToScript(path)
+	result, err := Translate(path, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -58,11 +58,11 @@ RUN echo $MY_VAR
 	}
 }
 
-func TestDockerfileToScript_ENV_VarExpansion(t *testing.T) {
+func TestTranslate_ENV_VarExpansion(t *testing.T) {
 	path := writeDockerfile(t, `FROM alpine
 ENV PATH="/root/.cargo/bin:$PATH"
 `)
-	result, err := DockerfileToScript(path)
+	result, err := Translate(path, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -73,12 +73,12 @@ ENV PATH="/root/.cargo/bin:$PATH"
 	}
 }
 
-func TestDockerfileToScript_WORKDIR(t *testing.T) {
+func TestTranslate_WORKDIR(t *testing.T) {
 	path := writeDockerfile(t, `FROM alpine
 WORKDIR /app
 RUN pwd
 `)
-	result, err := DockerfileToScript(path)
+	result, err := Translate(path, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -87,12 +87,12 @@ RUN pwd
 	}
 }
 
-func TestDockerfileToScript_ARG(t *testing.T) {
+func TestTranslate_ARG(t *testing.T) {
 	path := writeDockerfile(t, `FROM alpine
 ARG VERSION=1.0
 RUN echo $VERSION
 `)
-	result, err := DockerfileToScript(path)
+	result, err := Translate(path, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,13 +101,13 @@ RUN echo $VERSION
 	}
 }
 
-func TestDockerfileToScript_MultiStage_Rejected(t *testing.T) {
+func TestTranslate_MultiStage_Rejected(t *testing.T) {
 	path := writeDockerfile(t, `FROM golang:1.22 AS builder
 RUN go build .
 FROM alpine
 COPY --from=builder /app /app
 `)
-	_, err := DockerfileToScript(path)
+	_, err := Translate(path, "")
 	if err == nil {
 		t.Fatal("expected error for multi-stage build")
 	}
@@ -116,13 +116,13 @@ COPY --from=builder /app /app
 	}
 }
 
-func TestDockerfileToScript_LineContinuation(t *testing.T) {
+func TestTranslate_LineContinuation(t *testing.T) {
 	path := writeDockerfile(t, `FROM alpine
 RUN apt-get update && \
     apt-get install -y git && \
     rm -rf /var/lib/apt/lists/*
 `)
-	result, err := DockerfileToScript(path)
+	result, err := Translate(path, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -134,13 +134,13 @@ RUN apt-get update && \
 	}
 }
 
-func TestDockerfileToScript_Comments(t *testing.T) {
+func TestTranslate_Comments(t *testing.T) {
 	path := writeDockerfile(t, `# This is a comment
 FROM alpine
 # Another comment
 RUN echo works
 `)
-	result, err := DockerfileToScript(path)
+	result, err := Translate(path, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -152,7 +152,7 @@ RUN echo works
 	}
 }
 
-func TestDockerfileToScript_MetadataDirectivesIgnored(t *testing.T) {
+func TestTranslate_MetadataDirectivesIgnored(t *testing.T) {
 	path := writeDockerfile(t, `FROM alpine
 EXPOSE 8080
 LABEL version="1.0"
@@ -160,7 +160,7 @@ CMD ["sh"]
 ENTRYPOINT ["/bin/sh"]
 RUN echo built
 `)
-	result, err := DockerfileToScript(path)
+	result, err := Translate(path, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -169,21 +169,21 @@ RUN echo built
 	}
 }
 
-func TestDockerfileToScript_NoFrom(t *testing.T) {
+func TestTranslate_NoFrom(t *testing.T) {
 	path := writeDockerfile(t, `RUN echo oops
 `)
-	_, err := DockerfileToScript(path)
+	_, err := Translate(path, "")
 	if err == nil {
 		t.Fatal("expected error for missing FROM")
 	}
 }
 
-func TestDockerfileToScript_USERRejected(t *testing.T) {
+func TestTranslate_USERRejected(t *testing.T) {
 	path := writeDockerfile(t, `FROM alpine
 USER nobody
 RUN whoami
 `)
-	_, err := DockerfileToScript(path)
+	_, err := Translate(path, "")
 	if err == nil {
 		t.Fatal("expected error for USER directive")
 	}
@@ -192,7 +192,7 @@ RUN whoami
 	}
 }
 
-func TestDockerfileToScript_RealWorldSimple(t *testing.T) {
+func TestTranslate_RealWorldSimple(t *testing.T) {
 	path := writeDockerfile(t, `FROM python:3.12-slim
 
 RUN pip install --upgrade pip build
@@ -206,7 +206,7 @@ RUN pip download --no-binary :all: --no-deps requests==2.32.3 -d /tmp/sdist && \
 RUN WHEEL=$(ls /tmp/requests-*.whl) && \
     warden-io post "$WHEEL"
 `)
-	result, err := DockerfileToScript(path)
+	result, err := Translate(path, "")
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -215,5 +215,69 @@ RUN WHEEL=$(ls /tmp/requests-*.whl) && \
 	}
 	if !strings.Contains(result.Script, "warden-io post") {
 		t.Error("script should contain artifact post")
+	}
+}
+
+// translateIn writes files (path -> content) and a Containerfile into a fresh
+// build context and translates it.
+func translateIn(t *testing.T, files map[string]string, containerfile string) string {
+	t.Helper()
+	ctx := t.TempDir()
+	for name, body := range files {
+		p := filepath.Join(ctx, filepath.FromSlash(name))
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	cf := filepath.Join(ctx, "Containerfile")
+	if err := os.WriteFile(cf, []byte(containerfile), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	r, err := Translate(cf, ctx)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return r.Script
+}
+
+// COPY sources are expanded on the host against the context: a file (or glob
+// match) lands in a directory dest by its base name, as docker places it; a
+// directory's files keep their path under it, even when it holds one file.
+func TestTranslateCopyExpandsOnHost(t *testing.T) {
+	files := map[string]string{
+		"sub/deep/d.txt": "x", "sub/a.txt": "x", "sub/b.txt": "x", "one/in.txt": "x",
+		".git/config": "x",
+	}
+	cases := map[string][]string{
+		"COPY sub/deep/d.txt /opt/": {"warden-io fetch sub/deep/d.txt -o /opt/d.txt"},
+		"COPY sub/*.txt /opt/": {
+			"warden-io fetch sub/a.txt -o /opt/a.txt",
+			"warden-io fetch sub/b.txt -o /opt/b.txt",
+		},
+		"COPY one /work/one": {"warden-io fetch one/in.txt -o /work/one/in.txt"},
+		"COPY sub /data/": {
+			"mkdir -p /data/deep",
+			"warden-io fetch sub/deep/d.txt -o /data/deep/d.txt",
+		},
+		"COPY sub/a.txt /etc/app/conf": {
+			"mkdir -p /etc/app", "warden-io fetch sub/a.txt -o /etc/app/conf",
+		},
+		"COPY --chmod=0755 sub/a.txt /bin/": {"chmod -R 0755 /bin/"},
+		"COPY nothing* /x/":                 {"# (empty COPY: no matching files)"},
+	}
+	for line, want := range cases {
+		got := translateIn(t, files, "FROM alpine\n"+line+"\n")
+		for _, w := range want {
+			if !strings.Contains(got, w+"\n") {
+				t.Errorf("%s: want %q, got:\n%s", line, w, got)
+			}
+		}
+	}
+	got := translateIn(t, files, "FROM alpine\nCOPY . /src/\n")
+	if strings.Contains(got, ".git") {
+		t.Errorf("COPY . should skip .git, got:\n%s", got)
 	}
 }

@@ -26,6 +26,7 @@ import (
 	"github.com/fxamacker/cbor/v2"
 
 	"github.com/buildwarden/buildwarden/collector"
+	"github.com/buildwarden/buildwarden/ledger"
 	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
@@ -129,10 +130,14 @@ const (
 	schemaHTTPBody    byte = 2
 	schemaArtifact    byte = 3
 	schemaRedacted    byte = 4
-	schemaEnvCtr      byte = 5
+	schemaEnv         byte = 5
 )
 
 const maxOutputBytes = 256 * 1024 * 1024
+
+// maxEnvironmentBytes bounds the environment payload (a descriptor or image
+// manifest, never a disk); the collector enforces the same cap.
+const maxEnvironmentBytes = collector.MaxEnvironmentBytes
 const maxArtifactBytes = 2 * 1024 * 1024 * 1024
 
 // Start initializes and starts the relay. It begins listening on DNS, HTTP,
@@ -152,6 +157,11 @@ func Start(cfg Config) (*Relay, error) {
 		errs:         make(chan error, 4),
 	}
 
+	headerEnv, err := environmentLabel(cfg.Environment)
+	if err != nil {
+		return nil, fmt.Errorf("relay: %w", err)
+	}
+
 	r.setCaptureMode(cfg.CaptureMode)
 	r.buildTransport()
 
@@ -161,7 +171,7 @@ func Start(cfg Config) (*Relay, error) {
 	}
 	r.ledger, err = NewLedger(LedgerConfig{
 		Writer:      ledgerWriter,
-		Environment: map[string]any{"type": "container"},
+		Environment: headerEnv,
 	})
 	if err != nil {
 		return nil, fmt.Errorf("initializing ledger: %w", err)
@@ -370,56 +380,94 @@ func (r *Relay) detectUpstreamDNS() {
 	r.upstreamDNS = "8.8.8.8:53"
 }
 
+// environmentLabel returns the header's unsigned environment label: the type
+// the payload names in its own (signed) bytes, so the label can only echo the
+// record. A claim declaring a different type is refused. Nil when the build
+// has no environment record.
+func environmentLabel(env *relaycfg.Environment) (map[string]any, error) {
+	if env == nil {
+		return nil, nil
+	}
+	if len(env.Payload) == 0 {
+		return nil, fmt.Errorf("environment payload is empty")
+	}
+	if len(env.Payload) > maxEnvironmentBytes {
+		return nil, fmt.Errorf("environment payload is %d bytes (limit %d)",
+			len(env.Payload), maxEnvironmentBytes)
+	}
+	t, err := ledger.EnvironmentType(env.Payload)
+	if err != nil {
+		return nil, err
+	}
+	if env.Type != "" && env.Type != t {
+		return nil, fmt.Errorf(
+			"environment declared as %q but its payload names %q", env.Type, t)
+	}
+	return map[string]any{"type": t}, nil
+}
+
+// recordEnvironment writes the environment record (open + close carrying the
+// payload's hash) and lands the exact hashed bytes with the collector, so the
+// record can be verified from the output directory.
 func (r *Relay) recordEnvironment() error {
 	env := r.cfg.Environment
 	if env == nil {
 		return nil
 	}
-	if len(env.Payload) == 0 {
-		return fmt.Errorf("environment payload is empty")
-	}
 	var meta map[string]any
 	if err := cbor.Unmarshal(env.Metadata, &meta); err != nil {
 		return fmt.Errorf("invalid environment metadata CBOR: %w", err)
+	}
+	if err := r.sink.putEnvironment(env.Payload); err != nil {
+		return fmt.Errorf("landing environment payload: %w", err)
 	}
 
 	openMeta, _ := cbor.Marshal(map[string]any{
 		"type": "environment",
 	})
-	openSig := r.ledger.Open(schemaEnvCtr, openMeta)
+	openSig := r.ledger.Open(schemaEnv, openMeta)
 
 	hashBlock := r.ledger.ComputeHashBlock(env.Payload)
-	r.ledger.Close(openSig, -int64(len(env.Payload)), hashBlock, schemaEnvCtr, env.Metadata)
+	r.ledger.Close(openSig, -int64(len(env.Payload)), hashBlock, schemaEnv, env.Metadata)
 
 	log.Printf("relay: environment recorded (%d bytes)", len(env.Payload))
 	return nil
+}
+
+// handleArtifacts serves the relay's guest API on the reserved host
+// "artifacts": heartbeat, exit, the CA, the build script, the bootstrap
+// config, and artifact uploads.
+func (r *Relay) handleArtifacts(req *http.Request) (*http.Request, *http.Response) {
+	switch req.URL.Path {
+	case "/heartbeat":
+		r.TouchActivity()
+		return req, newTextResponse(req, http.StatusOK, "ok\n")
+	case "/exit":
+		code := 0
+		if q := req.URL.Query().Get("code"); q != "" {
+			_, _ = fmt.Sscanf(q, "%d", &code)
+		}
+		r.complete(code)
+		return req, newTextResponse(req, http.StatusOK, "ok\n")
+	case "/ca.pem":
+		return r.handleCACertGet(req)
+	case "/build-script":
+		return r.handleBuildScript(req)
+	case "/bootstrap":
+		return r.handleBootstrap(req)
+	default:
+		if req.Method == "POST" {
+			return r.handleArtifactPost(req)
+		}
+		return req, newTextResponse(req, http.StatusNotFound, "not found\n")
+	}
 }
 
 func (r *Relay) onRequest(req *http.Request) (*http.Request, *http.Response) {
 	host := strings.Split(req.Host, ":")[0]
 
 	if host == "artifacts" {
-		switch req.URL.Path {
-		case "/heartbeat":
-			r.TouchActivity()
-			return req, newTextResponse(req, http.StatusOK, "ok\n")
-		case "/exit":
-			code := 0
-			if q := req.URL.Query().Get("code"); q != "" {
-				_, _ = fmt.Sscanf(q, "%d", &code)
-			}
-			r.complete(code)
-			return req, newTextResponse(req, http.StatusOK, "ok\n")
-		case "/ca.pem":
-			return r.handleCACertGet(req)
-		case "/build-script":
-			return r.handleBuildScript(req)
-		default:
-			if req.Method == "POST" {
-				return r.handleArtifactPost(req)
-			}
-			return req, newTextResponse(req, http.StatusNotFound, "not found\n")
-		}
+		return r.handleArtifacts(req)
 	}
 
 	if host == "cwd" && req.Method == "GET" {
@@ -608,6 +656,19 @@ func (r *Relay) handleBuildScript(req *http.Request) (*http.Request, *http.Respo
 	}
 	r.recordServed(req, data, "build-script")
 	return req, newBytesResponse(req, data, "application/octet-stream")
+}
+
+// handleBootstrap serves the build's bootstrap config (package bootstrap) at
+// http://artifacts/bootstrap, pulled from the collector and recorded like the
+// build script. A collector without one gives 404, which the executor reads as
+// the empty config.
+func (r *Relay) handleBootstrap(req *http.Request) (*http.Request, *http.Response) {
+	data, _, status, err := r.sink.fetch("/v1/bootstrap")
+	if err != nil || status != http.StatusOK {
+		return req, newTextResponse(req, http.StatusNotFound, "no bootstrap config\n")
+	}
+	r.recordServed(req, data, "bootstrap")
+	return req, newBytesResponse(req, data, "application/json")
 }
 
 // handleContextGet serves the build context at http://cwd/<path>: a file's

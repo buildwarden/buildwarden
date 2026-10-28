@@ -1,7 +1,7 @@
 # Orchestrator Standards
 
 Standards for the orchestrator: `cmd/warden/`. The orchestrator is the host CLI,
-driver dispatch, config, extensions, inspect, and image lifecycle. It is the
+driver dispatch, config, inspect, and image lifecycle. It is the
 opinionated integrator (GLOBAL-08): it enforces strong security boundaries by
 default and treats the relay and executor as fixed, non-substitutable dependencies.
 

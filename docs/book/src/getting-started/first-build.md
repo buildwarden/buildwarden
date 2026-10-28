@@ -48,8 +48,8 @@ warden-output/
 ├── payloads/               # Content-addressed payload storage
 ├── relay.log               # Relay event log (container driver only)
 ├── Dockerfile.submitted    # Original Dockerfile (container driver only)
-├── Dockerfile.actual       # Rewritten Dockerfile (container driver only)
-└── build.sh                # Translated build script (container driver only)
+├── build.sh                # Translated build script (container driver only)
+└── console.log             # Build container console (container driver only)
 ```
 
 ## Posting artifacts

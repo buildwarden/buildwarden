@@ -85,6 +85,14 @@ type buildVMConfig struct {
 	// Direct kernel boot (lightweight/test path)
 	Kernel string
 	Initrd string
+
+	// What the build boots from, for the environment record: the read-only
+	// base under DiskImage's overlay, the cached UEFI vars VarsFD was copied
+	// from, and the seed directory SeedISO was built from.
+	BaseImage  string
+	BaseChain  []string // Windows: generalized base then prepared layer
+	BaseVarsFD string
+	SeedDir    string
 }
 
 func (d *Driver) startBuildVM(
@@ -203,10 +211,6 @@ func (p *vmProcess) stop() {
 		_ = p.cmd.Process.Kill()
 		<-done
 	}
-}
-
-func (p *vmProcess) wait() error {
-	return p.cmd.Wait()
 }
 
 func (d *Driver) vmOutput() io.Writer {

@@ -9,11 +9,14 @@ import (
 	"github.com/fxamacker/cbor/v2"
 	"github.com/lesiw/ctrctl"
 
+	"github.com/buildwarden/buildwarden/ledger"
 	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
-// imageEnvironment describes the build's base image (its manifest and
-// digest) for the relay to record as the ledger's first entry.
+// imageEnvironment describes the build's base image as an oci-image/v1
+// environment (its manifest, with the digest as metadata) for the relay to
+// record as the ledger's first entry. A runtime that yields no manifest gives
+// no environment record: anything else would not name its own type.
 func imageEnvironment(image string) (*relaycfg.Environment, error) {
 	inspectArgs := append(ctrctl.Cli, "image", "inspect",
 		"--format", "{{json .RepoDigests}}", image)
@@ -31,8 +34,19 @@ func imageEnvironment(image string) (*relaycfg.Environment, error) {
 	}
 
 	payload, mediaType := getImageManifest(image)
+	return ociEnvironment(image, digest, mediaType, payload)
+}
 
+// ociEnvironment builds the oci-image/v1 record from a manifest payload.
+func ociEnvironment(
+	image, digest, mediaType string, payload []byte,
+) (*relaycfg.Environment, error) {
+	if t, err := ledger.EnvironmentType(payload); err != nil || t != ledger.EnvTypeOCIImage {
+		return nil, fmt.Errorf(
+			"container runtime returned no image manifest for %s", image)
+	}
 	meta := map[string]any{
+		"type":      ledger.EnvTypeOCIImage,
 		"reference": image,
 		"digest":    digest,
 		"mediaType": mediaType,
@@ -42,7 +56,9 @@ func imageEnvironment(image string) (*relaycfg.Environment, error) {
 		return nil, fmt.Errorf(
 			"encoding environment metadata: %w", err)
 	}
-	return &relaycfg.Environment{Payload: payload, Metadata: metaBytes}, nil
+	return &relaycfg.Environment{
+		Type: ledger.EnvTypeOCIImage, Payload: payload, Metadata: metaBytes,
+	}, nil
 }
 
 // getImageManifest retrieves the raw OCI manifest from the

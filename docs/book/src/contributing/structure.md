@@ -22,10 +22,15 @@ buildwarden/
 │   │   └── main.go            # Claim a running relay, serve inputs, land outputs
 │   ├── warden-io/          # Build-environment agent binary
 │   │   ├── main.go            # Subcommands: initialize, fetch, post, trust
-│   │   ├── initialize.go      # Full init: network, CA, fetch script, exec, heartbeats
+│   │   ├── initialize.go      # Full init: network, CA + bootstrap config, baseline, script, heartbeats
+│   │   ├── baseline.go        # Always-on baseline: Java truststore, bazelrc, CA and default env
+│   │   ├── jks.go             # Minimal JKS writer (matches keytool byte for byte)
+│   │   ├── trust_linux.go     # Exclusive system trust, OpenSSL subject hash
 │   │   ├── platform_darwin.go # macOS: keychain CA install, network config
-│   │   ├── platform_linux.go  # Linux: update-ca-certificates, resolv.conf
+│   │   ├── platform_linux.go  # Linux: CA install, resolv.conf
 │   │   └── platform_windows.go # Windows: cert store, network config
+│   ├── warden-pause/       # Container driver's namespace holder (blocks until signalled)
+│   │   └── main.go
 │   └── warden-vmnet/       # macOS vmnet.framework helper (C, for future use)
 │       └── main.c
 ├── relay/                  # Relay library (core logic)
@@ -38,8 +43,10 @@ buildwarden/
 │   ├── controlplane.go        # Control plane HTTP (/health, /ca.pem, /v1/output, /v1/complete)
 │   ├── capture.go             # Payload capture (streamed to the collector)
 │   └── fair.go                # Fair scheduling for concurrent connections
+├── bootstrap/              # The bootstrap config the executor fetches (trust policy)
+│   └── bootstrap.go
 ├── collector/              # Collector library (relay's single output path + input source)
-│   ├── collector.go           # HTTP handler: artifacts, captures, ledger, output, context
+│   ├── collector.go           # HTTP handler: artifacts, captures, ledger, output, inputs
 │   ├── signals.go             # ready / heartbeat / complete / status signalling
 │   └── paths.go               # Shared artifact/context path safety rules
 ├── relaycfg/               # Claim protocol between orchestrator and relay
@@ -50,17 +57,11 @@ buildwarden/
 │   ├── session.go             # Shared Session: collector, claim, wait, output finalize
 │   ├── compress.go            # Zstd compression of ledger + CA cert (all drivers)
 │   ├── hostutil.go            # Host-side helpers
-│   ├── extension.go           # Extension interface
-│   ├── extensions.go          # DefaultExtensions()
-│   ├── ext_cacerts.go         # CA cert env vars extension
-│   ├── ext_bazel.go           # Bazel/JKS truststore extension
-│   ├── ext_epoch.go           # SOURCE_DATE_EPOCH extension
-│   ├── ext_truststore.go      # System trust store extension
 │   ├── subnet.go              # Subnet allocation, utilities
 │   ├── container/             # Container driver (iptables isolation)
-│   │   ├── container.go          # StartBuild/Exec: relay container, build container, netns
-│   │   ├── containerfile.go      # Containerfile rewriting (COPY → warden-io fetch)
-│   │   ├── dockerfile.go         # Dockerfile-to-shell-script translator
+│   │   ├── container.go          # StartBuild/Exec: holder, sidecar, create, copy, start
+│   │   ├── images.go             # Holder + sidecar images: by digest, or built for dev
+│   │   ├── images/               # holder.Containerfile, netns.Containerfile
 │   │   └── environment.go        # OCI manifest extraction, environment record
 │   ├── qemu/                  # QEMU driver (cross-platform VM)
 │   │   ├── driver.go             # StartBuild: prepare, boot relay VM, boot build VM, wait
@@ -88,8 +89,8 @@ buildwarden/
 │   │   ├── service.go            # Privileged helper service (network standup)
 │   │   ├── evalimage.go          # Windows Server eval VHD fetch + pin
 │   │   └── relayvm.go            # Relay VM lifecycle
-│   └── script/                # Dockerfile-to-shell-script translator (VM drivers)
-│       └── translate.go
+│   └── script/                # Dockerfile-to-shell-script translator (every driver)
+│       └── translate.go          # COPY expanded against the context on the host
 ├── ledger/                 # Shared library: wire format, reader, verifier
 │   └── ledger.go
 ├── tools/
@@ -119,17 +120,19 @@ buildwarden/
 ## Package Boundaries
 
 - **`cmd/warden/`** — Host-side binary. CLI, driver dispatch, config, inspect, image management, doctor/setup. Dispatches to `driver/container`, `driver/qemu`, `driver/vz`, or `driver/hyperv` based on `--driver` flag.
-- **`cmd/warden-io/`** — Build-environment agent. Runs inside the build environment (container or VM). Handles initialization (CA install, script fetch), context fetch, artifact post. Cross-compiled for linux (containers, QEMU VMs), darwin (VZ macOS VMs), and windows.
+- **`cmd/warden-io/`** — Build-environment agent, and the only thing the host puts in the build environment. Bootstraps itself from the relay (CA and trust policy, the baseline, the build script), runs the build, fetches context files, posts artifacts. Cross-compiled for linux (containers, QEMU VMs), darwin (VZ macOS VMs), and windows (QEMU and Hyper-V VMs).
+- **`cmd/warden-pause/`** — The container driver's namespace holder: owns the build's network namespace while it is isolated, and does nothing else.
 - **`cmd/relay/`** — Relay binary. Thin mode-based main that selects container/vm/host mode and calls into the `relay/` library. Cross-compiled for linux (container/VM relay) or built natively (host-mode relay for VZ).
 - **`cmd/collector/`** — Standalone collector for third-party orchestrators: claims an already-running relay, serves inputs, lands outputs, exits with the build result.
 - **`relay/`** — Relay library. All core logic: DNS, HTTP/HTTPS MITM proxy, ledger writer, control plane, heartbeat, fairness scheduling, capture. Keeps no build state on disk; streams every output to, and pulls every input from, the collector. Used by `cmd/relay/` in all modes.
-- **`collector/`** — The host side of the relay's single output path and the source of its build inputs (artifacts, captures, ledger, build output, build script, context). Run in-process by every driver (`driver.Session`) and standalone by `cmd/collector`.
+- **`collector/`** — The host side of the relay's single output path and the source of its build inputs (artifacts, captures, ledger, build output, build script, bootstrap config, context).
+- **`bootstrap/`** — The bootstrap config: the declarative trust policy the executor fetches from the relay (BOOT-05). Policy only; no paths, contents or commands. Run in-process by every driver (`driver.Session`) and standalone by `cmd/collector`.
 - **`relaycfg/`** — The claim protocol: a relay boots unconfigured, the orchestrator pushes the per-build config over a host-initiated tunnel and receives the relay's identity (MITM CA cert + ledger key).
-- **`driver/`** — Driver interface, shared host-side build logic (`Session`: collector, claim, wait, output finalize), and implementations. Each driver implements `driver.Driver` (Name, StartBuild, Exec, Close). Extensions modify the build environment before execution.
-- **`driver/container/`** — Container driver. Full Dockerfile translation, iptables isolation via netns sidecar, relay as container.
+- **`driver/`** — Driver interface, shared host-side build logic (`Session`: collector, claim, wait, output finalize), and implementations. Each driver implements `driver.Driver` (Name, StartBuild, Exec, Close).
+- **`driver/container/`** — Container driver. Namespace holder isolated by the iptables sidecar before the build container exists; build container created with `warden-io initialize` as its entrypoint; relay as container.
 - **`driver/qemu/`** — QEMU driver. Two-VM topology with cloud images, cross-platform; Linux and Windows guests.
 - **`driver/vz/`** — VZ driver. Host relay with gvisor netstack, macOS build VM.
-- **`driver/hyperv/`** — Hyper-V driver. Two-VM topology with a host-only NAT switch; Windows and Linux guests. Includes host setup, doctor, and the privileged helper service.
+- **`driver/hyperv/`** — Hyper-V driver. Two-VM topology with a host-only NAT switch; Windows guests (a Linux guest seed is not yet implemented). Includes host setup, doctor, and the privileged helper service.
 - **`ledger/`** — Shared wire format library. Binary ledger types, reader, verifier. Used by `warden inspect` and the relay's test suite.
 
 ## Key Patterns
@@ -139,8 +142,8 @@ buildwarden/
 All drivers follow the same execution pattern:
 1. The orchestrator starts a collector and boots the relay unconfigured
 2. The orchestrator claims the relay (tunnel + build config), receiving its CA cert + ledger key
-3. `warden-io initialize` runs inside the build environment
-4. warden-io fetches the build script from the relay's `build-script` endpoint
+3. The orchestrator isolates the build environment, delivers `warden-io`, and starts it (`docs/development/bootstrap.md`)
+4. `warden-io initialize` installs the CA, applies the baseline and fetches the build script, all from the relay
 5. Build runs with periodic heartbeats; the relay forwards heartbeats and streams outputs (artifacts, captures, ledger, console) to the collector
 6. Exit code reported to the relay, which flushes the ledger and posts `/v1/complete`
 
@@ -155,9 +158,9 @@ The relay binary detects its mode at startup:
 - **VM mode**: same as container but relay is PID 1 in its own Alpine VM
 - **Host mode**: receives connections via gvisor netstack on an inherited FD (no port binding on host); SSRF filtering active
 
-### Extension system
+### Trust and the baseline
 
-Extensions implement `BeforeBuild(ctx) + Env() map[string]string`. They inject CA certs, env vars, and setup scripts into the build environment.
+`warden-io initialize` installs the relay CA per the bootstrap config's trust mode and applies a fixed baseline (Java truststore, bazelrc, CA and default env vars) derived from the CA alone. Support for a new tool is added to `cmd/warden-io/baseline.go`, so it reaches every driver. See [Trust and the Build Baseline](../concepts/baseline.md).
 
 ### Dynamic subnet allocation
 

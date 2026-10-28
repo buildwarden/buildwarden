@@ -136,6 +136,10 @@ func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 		return "", fmt.Errorf("first boot: %w", err)
 	}
 
+	if err := c.recordPreparedImage(imgDir, ipswInput(ipswURL, ipswLocal)); err != nil {
+		return "", fmt.Errorf("recording prepared image provenance: %w", err)
+	}
+
 	// Mark the image as fully prepared
 	_ = os.WriteFile(filepath.Join(imgDir, ".prepared"), []byte("ok\n"), 0644)
 
@@ -225,9 +229,14 @@ func ReprepareImage(imgDir string) error {
 		return err
 	}
 	defer giveBackToSudoUser(imgDir)
+	cache := &ImageCache{CacheDir: filepath.Dir(imgDir)}
+	defer giveBackToSudoUser(cache.LayerCache().Path)
 
 	if err := PrepareHeadlessImage(diskPath); err != nil {
 		return err
+	}
+	if err := cache.recordPreparedImage(imgDir, nil); err != nil {
+		return fmt.Errorf("recording prepared image provenance: %w", err)
 	}
 
 	// Update the .prepared marker

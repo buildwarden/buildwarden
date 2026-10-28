@@ -1,9 +1,17 @@
+// Package script translates a Containerfile into the POSIX shell build script
+// every driver's Linux guest runs. Translation happens on the host because it
+// needs the build context: COPY sources (files, directories, globs) are
+// expanded against it here and become explicit `warden-io fetch` commands, so
+// the guest fetches exactly the files the host resolved, each through the
+// relay (BOOT-04).
 package script
 
 import (
 	"bufio"
 	"fmt"
 	"os"
+	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 )
@@ -15,23 +23,25 @@ type Result struct {
 }
 
 type builder struct {
-	image   string
-	sb      strings.Builder
-	env     map[string]string
-	workdir string
+	contextDir string
+	image      string
+	sb         strings.Builder
+	env        map[string]string
 }
 
-// Translate converts a Dockerfile/Containerfile into a shell script.
-// COPY directives emit `warden-io fetch` commands to pull files through
-// the relay. The resulting script is portable across drivers and platforms.
-func Translate(path string) (*Result, error) {
+// Translate converts the Containerfile at path into a shell script, resolving
+// COPY sources against contextDir (the current directory when empty).
+func Translate(path, contextDir string) (*Result, error) {
 	f, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer f.Close()
 
-	b := &builder{env: make(map[string]string)}
+	if contextDir == "" {
+		contextDir = "."
+	}
+	b := &builder{contextDir: contextDir, env: make(map[string]string)}
 	b.sb.WriteString("#!/bin/sh\nset -e\n")
 
 	scanner := bufio.NewScanner(f)
@@ -86,12 +96,11 @@ func (b *builder) handleDirective(directive, rest string) error {
 	case "ENV":
 		for k, v := range parseEnv(rest) {
 			b.env[k] = v
-			fmt.Fprintf(&b.sb, "export %s=%s\n", k, shellQuote(v))
+			fmt.Fprintf(&b.sb, "export %s=%s\n", k, shellQuoteEnv(v))
 		}
 	case "WORKDIR":
 		dir := expandEnv(strings.TrimSpace(rest), b.env)
-		b.workdir = dir
-		fmt.Fprintf(&b.sb, "mkdir -p %s && cd %s\n",
+		fmt.Fprintf(&b.sb, "mkdir -p %s\ncd %s\n",
 			shellQuote(dir), shellQuote(dir))
 	case "COPY":
 		return b.handleCopy(rest)
@@ -103,61 +112,44 @@ func (b *builder) handleDirective(directive, rest string) error {
 				": ${%s:=%s}\nexport %s\n", k, shellQuote(v), k)
 		}
 	default:
-		return rejectOrIgnore(directive)
+		return rejectOrIgnore(directive, rest)
 	}
 	return nil
 }
 
+// fetchFile is one file a COPY fetches: its context path and its path under
+// the destination directory.
+type fetchFile struct {
+	contextPath string
+	destPath    string
+}
+
+// handleCopy expands the COPY sources against the build context and writes one
+// fetch per file. A file (or glob match) lands in a directory dest by its base
+// name, as docker places it; a directory's files keep their path under it.
 func (b *builder) handleCopy(rest string) error {
 	if strings.Contains(rest, "--from=") {
 		return fmt.Errorf("COPY --from= (multi-stage) not supported")
 	}
-	if strings.HasPrefix(rest, ".warden ") ||
-		strings.HasPrefix(rest, ".warden\t") {
-		return nil
-	}
-
 	chown, chmod, positional := parseCopyFlags(rest)
 	if len(positional) < 2 {
 		return fmt.Errorf("COPY requires source and destination")
 	}
-
 	dest := positional[len(positional)-1]
-	sources := positional[:len(positional)-1]
-
-	// Single source to a non-directory destination
-	if len(sources) == 1 && !strings.HasSuffix(dest, "/") &&
-		!isGlobOrDir(sources[0]) {
-		dir := ""
-		if idx := strings.LastIndex(dest, "/"); idx > 0 {
-			dir = dest[:idx]
-		}
-		if dir != "" {
-			fmt.Fprintf(&b.sb, "mkdir -p %s\n", shellQuote(dir))
-		}
-		fmt.Fprintf(&b.sb, "warden-io fetch %s -o %s\n",
-			shellQuote(sources[0]), shellQuote(dest))
-	} else {
-		// Multiple sources or directory/glob → fetch to directory
-		if !strings.HasSuffix(dest, "/") {
-			dest += "/"
-		}
-		fmt.Fprintf(&b.sb, "mkdir -p %s\n", shellQuote(dest))
-		for _, src := range sources {
-			if isGlobOrDir(src) {
-				// Directory or glob: use warden-io directory fetch
-				fmt.Fprintf(&b.sb,
-					"warden-io fetch %s -o %s\n",
-					shellQuote(ensureTrailingSlash(src)),
-					shellQuote(dest))
-			} else {
-				fmt.Fprintf(&b.sb,
-					"warden-io fetch %s -o %s\n",
-					shellQuote(src),
-					shellQuote(dest+src))
-			}
-		}
+	files, anyDir, err := b.resolveCopySources(positional[:len(positional)-1])
+	if err != nil {
+		return err
 	}
+	if len(files) == 0 {
+		b.sb.WriteString("# (empty COPY: no matching files)\n")
+		return nil
+	}
+	// Several files, or a directory source (even one holding a single file),
+	// copy into dest as a directory.
+	if anyDir || len(files) > 1 {
+		dest = strings.TrimSuffix(dest, "/") + "/"
+	}
+	b.writeFetches(files, dest)
 
 	if chown != "" {
 		fmt.Fprintf(&b.sb, "chown -R %s %s\n", chown, shellQuote(dest))
@@ -168,22 +160,112 @@ func (b *builder) handleCopy(rest string) error {
 	return nil
 }
 
-func isGlobOrDir(s string) bool {
-	return strings.ContainsAny(s, "*?[") || strings.HasSuffix(s, "/")
-}
-
-func ensureTrailingSlash(s string) string {
-	if strings.HasSuffix(s, "/") {
-		return s
+// resolveCopySources expands COPY sources against the build context. anyDir
+// reports whether any source is a directory.
+func (b *builder) resolveCopySources(sources []string) (files []fetchFile, anyDir bool,
+	err error) {
+	for _, src := range sources {
+		expanded, err := expandContextPath(src, b.contextDir)
+		if err != nil {
+			return nil, false, err
+		}
+		// Context paths are slash-separated (they are fetch paths and paths
+		// in the Linux guest), whatever the host's separator.
+		srcClean := path.Clean(filepath.ToSlash(src))
+		srcDir := isDir(filepath.Join(b.contextDir, src))
+		anyDir = anyDir || srcDir
+		for _, f := range expanded {
+			rel := path.Base(f)
+			if srcDir {
+				rel = strings.TrimPrefix(f, srcClean+"/")
+			}
+			files = append(files, fetchFile{contextPath: f, destPath: rel})
+		}
 	}
-	return s + "/"
+	return files, anyDir, nil
 }
 
-func rejectOrIgnore(directive string) error {
+// writeFetches writes the fetch commands: one file to a file dest, or each
+// file under a directory dest (ending in "/").
+func (b *builder) writeFetches(files []fetchFile, dest string) {
+	if !strings.HasSuffix(dest, "/") {
+		if dir := path.Dir(dest); dir != "." && dir != "/" {
+			fmt.Fprintf(&b.sb, "mkdir -p %s\n", shellQuote(dir))
+		}
+		fmt.Fprintf(&b.sb, "warden-io fetch %s -o %s\n",
+			shellQuote(files[0].contextPath), shellQuote(dest))
+	} else {
+		fmt.Fprintf(&b.sb, "mkdir -p %s\n", shellQuote(dest))
+		for _, f := range files {
+			out := dest + f.destPath
+			if dir := path.Dir(out); dir+"/" != dest {
+				fmt.Fprintf(&b.sb, "mkdir -p %s\n", shellQuote(dir))
+			}
+			fmt.Fprintf(&b.sb, "warden-io fetch %s -o %s\n",
+				shellQuote(f.contextPath), shellQuote(out))
+		}
+	}
+}
+
+// expandContextPath resolves a source path or glob against the build context
+// directory, returning slash-separated context paths of the files it names.
+// .git is never copied.
+func expandContextPath(src, contextDir string) ([]string, error) {
+	fullPattern := filepath.Join(contextDir, src)
+
+	info, err := os.Stat(fullPattern)
+	if err == nil && info.IsDir() {
+		var files []string
+		err = filepath.Walk(fullPattern, func(
+			p string, fi os.FileInfo, walkErr error,
+		) error {
+			if walkErr != nil {
+				return walkErr
+			}
+			if fi.IsDir() {
+				if fi.Name() == ".git" {
+					return filepath.SkipDir
+				}
+				return nil
+			}
+			rel, _ := filepath.Rel(contextDir, p)
+			files = append(files, filepath.ToSlash(rel))
+			return nil
+		})
+		return files, err
+	}
+
+	matches, err := filepath.Glob(fullPattern)
+	if err != nil {
+		return nil, err
+	}
+	var files []string
+	for _, m := range matches {
+		info, err := os.Stat(m)
+		if err != nil || info.IsDir() {
+			continue
+		}
+		rel, _ := filepath.Rel(contextDir, m)
+		rel = filepath.ToSlash(rel)
+		if strings.HasPrefix(rel, ".git/") {
+			continue
+		}
+		files = append(files, rel)
+	}
+	return files, nil
+}
+
+func isDir(p string) bool {
+	info, err := os.Stat(p)
+	return err == nil && info.IsDir()
+}
+
+func rejectOrIgnore(directive, rest string) error {
 	switch directive {
 	case "USER":
 		return fmt.Errorf(
-			"USER directive not supported in script mode")
+			"USER directive not supported in script mode "+
+				"(build runs as root): %s", rest)
 	case "SHELL":
 		return fmt.Errorf(
 			"SHELL directive not supported in script mode")
@@ -235,17 +317,27 @@ func parseEnv(rest string) map[string]string {
 	fields := splitEnvFields(rest)
 	for _, field := range fields {
 		if m := envPairRe.FindStringSubmatch(field); m != nil {
-			result[m[1]] = m[2]
+			result[m[1]] = unquote(m[2])
 		}
 	}
 	if len(result) == 0 {
 		parts := strings.SplitN(rest, " ", 2)
 		if len(parts) == 2 {
 			result[strings.TrimSpace(parts[0])] =
-				strings.TrimSpace(parts[1])
+				unquote(strings.TrimSpace(parts[1]))
 		}
 	}
 	return result
+}
+
+func unquote(s string) string {
+	if len(s) >= 2 {
+		if (s[0] == '"' && s[len(s)-1] == '"') ||
+			(s[0] == '\'' && s[len(s)-1] == '\'') {
+			return s[1 : len(s)-1]
+		}
+	}
+	return s
 }
 
 func splitEnvFields(s string) []string {
@@ -270,7 +362,7 @@ func splitEnvFields(s string) []string {
 				current.Reset()
 			}
 		case ch == '\\' && i+1 < len(s) && s[i+1] == '\n':
-			i++
+			i++ // skip continuation
 		default:
 			current.WriteByte(ch)
 		}
@@ -306,4 +398,28 @@ func shellQuote(s string) string {
 		return s
 	}
 	return "'" + strings.ReplaceAll(s, "'", "'\\''") + "'"
+}
+
+// shellQuoteEnv quotes for ENV values, using double quotes to preserve $VAR
+// expansion (matching Dockerfile ENV semantics).
+func shellQuoteEnv(s string) string {
+	if s == "" {
+		return "''"
+	}
+	if !strings.ContainsAny(s, " \t\n'\"\\`!#&|;(){}[]<>?*~$") {
+		return s
+	}
+	var b strings.Builder
+	b.WriteByte('"')
+	for _, c := range s {
+		switch c {
+		case '"', '\\', '`':
+			b.WriteByte('\\')
+			b.WriteRune(c)
+		default:
+			b.WriteRune(c)
+		}
+	}
+	b.WriteByte('"')
+	return b.String()
 }

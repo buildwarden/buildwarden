@@ -16,3 +16,8 @@ func buildSeed(
 ) (seedISO, seedVHDX string, err error) {
 	return "", "", fmt.Errorf("hyperv build seed generation is only supported on Windows")
 }
+
+// buildPrepareSeed is a stub off Windows (IMAPI2 is Windows-only).
+func buildPrepareSeed(string) (seedISO, seedDir string, err error) {
+	return "", "", fmt.Errorf("hyperv image prepare is only supported on Windows")
+}

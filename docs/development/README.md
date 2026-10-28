@@ -38,6 +38,7 @@ Body describing the rule, the rationale, and how it is checked.
 | `RELAY-`  | Relay (`relay/`, `cmd/relay/`)                     | `relay.md`              |
 | `ORCH-`   | Orchestrator (`cmd/warden/`)                       | `orchestrator.md`       |
 | `EXEC-`   | In-VM executor (`cmd/warden-io/`)                  | `in-vm-executor.md`     |
+| `BOOT-`   | Build-environment bootstrap model (all drivers)    | `bootstrap.md`          |
 | `UX-`     | UX / CLI / configuration                           | `ux-cli-config.md`      |
 | `TEST-`   | Testing and dev-velocity                           | `testing.md`            |
 | `LINT-`   | The behavioral-linter agent itself                 | `behavioral-linter.md`  |
@@ -78,7 +79,7 @@ one monolith (see GLOBAL-08):
   when it claims the relay (`relaycfg/`). The collector is part of the relay's
   public contract (GLOBAL-08, RELAY-07), not a fourth application.
 - **Orchestrator** — `cmd/warden/`: the host CLI, driver dispatch, config,
-  extensions, inspect, and image lifecycle.
+  inspect, and image lifecycle.
 - **In-VM executor** — `cmd/warden-io/`: the build-environment guest agent
   (`initialize` / `fetch` / `post` / `trust`).
 
@@ -90,6 +91,9 @@ one monolith (see GLOBAL-08):
 2. [`relay.md`](./relay.md)
 3. [`orchestrator.md`](./orchestrator.md)
 4. [`in-vm-executor.md`](./in-vm-executor.md)
+   - [`bootstrap.md`](./bootstrap.md) — the bootstrap model every driver shares:
+     isolate, deliver the executor, start it, then everything over the relay.
+     Changing the model needs a signed comparison (BOOT-07).
 5. [`ux-cli-config.md`](./ux-cli-config.md)
 6. [`testing.md`](./testing.md)
 7. [`security-suite.md`](./security-suite.md) — the TEST-08 security suite design
@@ -133,12 +137,10 @@ These enter the work queue after the bootstrap steps in
   report-only mode. Bootstrap step 3.
 - **Follow-up — Design front-matter retrofit** (FLOW-12): add front-matter to the
   existing `docs/design/` plans as new designs come to rely on them.
-- **Follow-up — Container inputs under `inputs/`** (ORCH-02): the container driver
-  now translates the Dockerfile into a build script like the VM drivers, so
-  `Dockerfile.actual` no longer records a real mutation. Record the submitted
-  Dockerfile and the translated `build.sh` under `inputs/`, retire
-  `Dockerfile.actual`, and update `docs/book/src/guide/output.md` and `CLAUDE.md`
-  to match.
+- **Follow-up — Container inputs under `inputs/`** (ORCH-02): record the
+  submitted Dockerfile and the translated `build.sh` under `inputs/`.
+  `Dockerfile.actual` was retired by `unified-bootstrap` (every driver now runs
+  the same translation, and `build.sh` is what ran).
 - **Follow-up — `specs/` migration** (RELAY-05). Perform the actual move of the
   ledger spec and metadata schemas into the top-level `specs/` layout; this is an
   implementation change separate from adopting the standard.

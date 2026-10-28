@@ -1,0 +1,84 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/buildwarden/buildwarden/schemas/v1/environment-vm-disk-chain.json",
+  "title": "Environment payload: vm-disk-chain/v1",
+  "description": "Signed payload of a vm-disk-chain/v1 environment record: what a VM build booted from. The relay signs this descriptor as asserted by the orchestrator (trusted); the build guest never writes it. Disks are never embedded: a verifier re-hashes the files and compares sha256/size.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["type", "driver", "guest_os", "arch", "layers"],
+  "properties": {
+    "type": { "const": "vm-disk-chain/v1" },
+    "driver": { "type": "string", "description": "qemu, vz, hyperv, ..." },
+    "guest_os": { "type": "string", "description": "linux, windows, macos" },
+    "arch": { "type": "string", "description": "Go architecture name, e.g. amd64, arm64" },
+    "generation": { "type": "integer", "minimum": 1, "description": "Hyper-V VM generation (hyperv only)" },
+    "layers": {
+      "type": "array",
+      "minItems": 1,
+      "description": "Ordered. Entries with role disk form the disk chain base-first (each later disk is a child of the previous). The per-build writable child is created empty from the last disk and is not a layer.",
+      "items": { "$ref": "#/$defs/layer" }
+    },
+    "seed": {
+      "type": "array",
+      "description": "Per-build files handed to the guest (agent, bootstrap, answer files, build script), sorted by name.",
+      "items": { "$ref": "#/$defs/seed" }
+    }
+  },
+  "$defs": {
+    "sha256": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+    "layer": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["role", "name", "sha256", "size", "source"],
+      "properties": {
+        "role": { "enum": ["disk", "kernel", "initrd", "nvram", "platform"] },
+        "name": { "type": "string", "minLength": 1 },
+        "format": { "type": "string", "description": "vhd, vhdx, qcow2, raw, ..." },
+        "path": { "type": "string", "description": "Host path at build time; where a verifier finds the file." },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "size": { "type": "integer", "minimum": 0 },
+        "source": { "$ref": "#/$defs/source" }
+      }
+    },
+    "source": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind"],
+      "properties": {
+        "kind": { "enum": ["url", "local", "prepared"] },
+        "url": { "type": "string" },
+        "pinned": { "type": "boolean", "description": "url: verified against an independently supplied expected hash" },
+        "prepared_by": { "type": "string", "description": "prepared: \"warden <version>\"" },
+        "inputs": {
+          "type": "array",
+          "description": "prepared: the hashed inputs the layer was produced from",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["name"],
+            "properties": {
+              "name": { "type": "string" },
+              "sha256": { "$ref": "#/$defs/sha256" },
+              "size": { "type": "integer", "minimum": 0 },
+              "url": { "type": "string" }
+            }
+          }
+        }
+      },
+      "allOf": [
+        { "if": { "properties": { "kind": { "const": "url" } } }, "then": { "required": ["url"] } },
+        { "if": { "properties": { "kind": { "const": "prepared" } } }, "then": { "required": ["prepared_by"] } }
+      ]
+    },
+    "seed": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "sha256", "size"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "sha256": { "$ref": "#/$defs/sha256" },
+        "size": { "type": "integer", "minimum": 0 }
+      }
+    }
+  }
+}

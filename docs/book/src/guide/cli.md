@@ -104,9 +104,18 @@ Verify and display a build ledger.
 - `--json` — Output as JSON
 - `--verbosity <n>` — Detail level: 0=compact, 1=tree, 2=full
 - `--extract <dir>` — Extract captured payloads to a directory
+- `--verify-disks` — Re-hash each VM disk layer the environment record names
+  (reads every byte of every base image)
+
+Inspect also decodes the build environment record and checks
+`environment.json` against it; a mismatch fails verification. For VM builds it
+lists the disk layers with their hashes and provenance (downloaded and pinned,
+prepared by warden, or local).
 
 ```sh
 warden inspect warden-output --json | jq '.summary'
+warden inspect warden-output --json | jq '.environment'
+warden inspect --verify-disks warden-output
 ```
 
 ## warden image
@@ -129,19 +138,20 @@ defaults per driver (vz: macos, qemu: linux, hyperv: windows). `[source]` (or
 |---|---|---|
 | `vz` / macos | IPSW (default: latest supported) | Restores the IPSW, or refreshes the warden boot agent of an already-restored image |
 | `qemu` / linux | cloud image ref (`alpine:3.21`, `ubuntu:24.04`, `debian:bookworm`) or qcow2 | Downloads and verifies the cloud image |
-| `qemu` / windows | Windows install ISO (required) | Unattended install; skipped if already prepared unless `--force` |
-| `hyperv` / windows | Windows Server evaluation VHD URL | Needed on first prepare; `--sha256` to pin |
+| `qemu` / windows | Windows install ISO (required the first time) | Unattended install ending in `sysprep /generalize` (skipped if already installed unless `--force`), then prepares the layer builds boot from. With no source, re-prepares |
+| `hyperv` / windows | Windows Server evaluation VHDX: URL, or a local file registered in place (default: `[vm] windows_image`, else Microsoft's current Server 2025 evaluation download) | Fetches or registers the base, then prepares the layer builds boot from. With no source it is the refresh: re-checks a downloaded base for new media and re-prepares |
 
 **Flags:**
 - `--os <os>` — Guest OS: macos, linux or windows (default per driver)
 - `--source <path|url>` — Image source (same as `[source]`)
-- `--sha256 <hash>` — Expected SHA256; verified and pinned for later prepares
-- `--accept-unpinned` — Use an image with no known digest (no authenticity check)
+- `--sha256 <hash>` — Expected SHA256 of the image; verified (the digest of what
+  was used is always recorded)
 - `--force` — Re-acquire even if a valid cached copy exists
 - `--name <n>` — Registry name of the image (hyperv; default windows-server-2025)
 - `--edition <e>` — Windows edition / install.wim image name (qemu windows)
 - `--virtio <v>` — virtio-win driver ISO path or URL (qemu windows)
 - `--arch <a>` — Guest arch: arm64 or amd64 (default host arch)
+- `--keep-vms` — Leave the prepare VM and its disk for inspection (hyperv)
 
 ```sh
 warden image prepare --driver vz
@@ -162,7 +172,28 @@ List prepared base images for every driver.
 warden image list
 # vz      macos    /Users/me/.cache/warden/vz/images/macOS-15.4
 # qemu    linux    /Users/me/.cache/warden/images/alpine.qcow2
-# hyperv  windows  C:\...\windows-server-2025.vhdx (active)
+# hyperv  windows  base     C:\...\server2025.vhdx (pinned)
+# hyperv  windows  prepared windows-server-2025-20261020T193301Z.vhdx, 2.0d old,
+#                           evaluation grace ends 2026-10-30 19:33Z (8.0d left)
+```
+
+### warden image verify
+
+```
+warden image verify [--driver <driver>]
+```
+
+Re-hash, in full, every base-image file a VM driver has recorded in its layer
+cache: the hashes builds write into the ledger's environment record. Fetch and
+prepare record each image's hash and provenance once; builds reuse it while the
+file's size and modification time are unchanged. `verify` reads every byte
+instead, re-records a changed file as local (its download/prepare provenance no
+longer applies), drops missing files, and exits 1 if anything drifted. Without
+`--driver` it checks every VM driver's cache on this host.
+
+```sh
+warden image verify --driver hyperv
+# hyperv  ok       C:\...\images\windows-server-2025.vhd
 ```
 
 ## warden doctor
@@ -215,12 +246,17 @@ in-process; only network standup is delegated.
 ## warden clean
 
 ```
-warden clean
+warden clean [--cache]
 ```
 
-Remove orphaned containers, networks, images, cached VM binaries, and stale
-build artifacts from interrupted or crashed builds. Only removes resources not
-associated with a currently running warden process.
+Remove orphaned containers, networks and per-build images left by interrupted
+or crashed builds. Only removes resources not associated with a currently
+running warden process, and nothing a later build would reuse: prepared and
+downloaded VM images, the Hyper-V relay boot disk and the support images stay.
+
+| Flag | Description |
+|------|-------------|
+| `--cache` | Also remove warden's whole cache directory. The next VM build downloads and prepares its images again. |
 
 ## Global Flags
 

@@ -11,9 +11,12 @@ import (
 	"runtime"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/script"
+	"github.com/buildwarden/buildwarden/driver/winguest"
+	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
 // Driver implements driver.Driver using QEMU as the virtualization backend.
@@ -99,6 +102,10 @@ func (d *Driver) StartBuild(
 	if err != nil {
 		return nil, fmt.Errorf("resolving relay assets: %w", err)
 	}
+	env, err := buildEnvironment(buildCfg, buildScript)
+	if err != nil {
+		return nil, fmt.Errorf("describing build environment: %w", err)
+	}
 
 	// The relay's claim port is forwarded to host loopback (hostfwd); the
 	// collector rides the tunnel the session opens over it.
@@ -106,6 +113,7 @@ func (d *Driver) StartBuild(
 		OutputDir:   outputDir,
 		ContextDir:  req.ContextDir,
 		BuildScript: buildScript,
+		GuestOS:     req.GuestOS,
 		OutputTee:   driver.ConsoleTee(req),
 		Verbose:     d.Verbose,
 	})
@@ -118,7 +126,7 @@ func (d *Driver) StartBuild(
 	socketPath := filepath.Join(workDir, "vlan.sock")
 
 	relayProc, err := d.startAndClaimRelay(
-		ctx, sess, req, kernelPath, initrdPath, socketPath)
+		ctx, sess, req, env, kernelPath, initrdPath, socketPath)
 	if err != nil {
 		return nil, err
 	}
@@ -145,7 +153,7 @@ func (d *Driver) StartBuild(
 // defer stop on success.
 func (d *Driver) startAndClaimRelay(
 	ctx context.Context, sess *driver.Session, req *driver.BuildRequest,
-	kernelPath, initrdPath, socketPath string,
+	env *relaycfg.Environment, kernelPath, initrdPath, socketPath string,
 ) (*vmProcess, error) {
 	claimPort, err := driver.FreeLoopbackPort()
 	if err != nil {
@@ -164,7 +172,7 @@ func (d *Driver) startAndClaimRelay(
 	}
 
 	claimAddr := net.JoinHostPort("127.0.0.1", strconv.Itoa(claimPort))
-	if _, err := sess.ClaimRelay(ctx, claimAddr, claimToken, req, nil); err != nil {
+	if _, err := sess.ClaimRelay(ctx, claimAddr, claimToken, req, env); err != nil {
 		relayProc.stop()
 		return nil, err
 	}
@@ -186,11 +194,12 @@ func (d *Driver) resolveBuildVMConfig(
 
 	if image == "" {
 		if isWindowsGuest(req) {
-			base, err := resolveWindowsBaseImage(cfg.Arch)
+			chain, vars, err := resolveWindowsBaseImage(cfg.Arch, req)
 			if err != nil {
 				return nil, err
 			}
-			image = base
+			image = chain[len(chain)-1]
+			cfg.BaseChain, cfg.BaseVarsFD = chain, vars
 		} else {
 			k, i, err := d.resolveBuildAssets()
 			if err != nil {
@@ -206,6 +215,7 @@ func (d *Driver) resolveBuildVMConfig(
 		return nil, driver.Fixable("", "build image: %v", err)
 	}
 	image, _ = filepath.Abs(image)
+	cfg.BaseImage = image
 
 	overlay := filepath.Join(workDir, "build-overlay.qcow2")
 	cmd := exec.Command("qemu-img", "create",
@@ -230,6 +240,7 @@ func (d *Driver) resolveBuildVMConfig(
 	if err != nil {
 		return nil, fmt.Errorf("generating cloud-init: %w", err)
 	}
+	cfg.SeedDir = seedDir
 	seedISO := filepath.Join(workDir, "seed.iso")
 	if err := generateSeedISO(seedDir, seedISO, "CIDATA"); err != nil {
 		return nil, fmt.Errorf("generating seed ISO: %w", err)
@@ -245,7 +256,7 @@ func resolveContainerfileImage(req *driver.BuildRequest) string {
 	if req.Image != "" || req.Containerfile == "" {
 		return req.Image
 	}
-	result, err := script.Translate(req.Containerfile)
+	result, err := script.Translate(req.Containerfile, req.ContextDir)
 	if err != nil || result.Image == "" || result.Image == "scratch" {
 		return ""
 	}
@@ -256,21 +267,65 @@ func resolveContainerfileImage(req *driver.BuildRequest) string {
 	return resolved
 }
 
-// resolveWindowsBaseImage returns the prepared Windows base image for the arch,
-// or an actionable error when `warden image prepare` has not produced one.
-func resolveWindowsBaseImage(arch string) (string, error) {
-	// Use the base image prepared by `warden image prepare --driver qemu --os
-	// windows` (parity with the Linux kernel/initrd resolution). It is overlaid
-	// below, so the cached base is never mutated.
+// resolveWindowsBaseImage returns the disk chain a Windows build boots from,
+// base first, and the UEFI vars to copy for it: the active prepared layer over
+// the generalized base, or, for a base installed before the generalizing
+// install, that base on its own. A generalized base with no prepared layer is
+// a fixable error. Using a prepared layer runs the freshness rules, which may
+// start a background refresh.
+func resolveWindowsBaseImage(
+	arch string, req *driver.BuildRequest,
+) (chain []string, vars string, err error) {
 	ga := goArchOf(arch)
 	base := WindowsImagePath(ga)
 	if _, err := os.Stat(base); err != nil {
-		return "", driver.Fixable(
+		return nil, "", driver.Fixable(
 			fmt.Sprintf("warden image prepare --driver qemu --os windows "+
 				"--arch %s --source <install ISO>, or pass --image <path>", ga),
 			"no prepared Windows base image at %s", base)
 	}
-	return base, nil
+	if _, err := os.Stat(generalizedMarker(ga)); err != nil {
+		return []string{base}, windowsVarsPath(ga), nil // installed before the split
+	}
+	l, ok := activeWindowsLayer(ga)
+	if !ok {
+		return nil, "", driver.Fixable(prepareFix(ga),
+			"the Windows base for %s has not been prepared for builds yet", ga)
+	}
+	for _, p := range []string{l.Path, l.VarsFD} {
+		if _, err := os.Stat(p); err != nil {
+			return nil, "", driver.Fixable(prepareFix(ga),
+				"prepared Windows layer is incomplete (%s: %v)", p, err)
+		}
+	}
+	if err := ensureFreshWindowsLayer(l, ga, req); err != nil {
+		return nil, "", err
+	}
+	return []string{base, l.Path}, l.VarsFD, nil
+}
+
+// ensureFreshWindowsLayer applies winguest.CheckFreshness and starts a
+// detached re-prepare when one is due; the build continues on l either way.
+func ensureFreshWindowsLayer(l PreparedLayer, ga string, req *driver.BuildRequest) error {
+	now := time.Now()
+	f := winguest.Freshness{PreparedAt: l.PreparedAt, GraceEnd: l.GraceEnd}
+	refresh, err := winguest.CheckFreshness(
+		f, now, req.ImageRefreshAfter, req.ImageMinGrace, prepareFix(ga))
+	if err != nil || !refresh {
+		return err
+	}
+	unlock, free, lerr := driver.TryHostLock(prepareLockName(ga))
+	if lerr != nil || !free {
+		return nil
+	}
+	unlock()
+	logPath := filepath.Join(driver.CacheDir(), "images", "prepare-windows-"+ga+".log")
+	if err := driver.StartDetached(logPath, "image", "prepare", "--driver", "qemu",
+		"--os", "windows", "--arch", ga); err == nil {
+		fmt.Fprintf(os.Stderr, "[warden] prepared Windows layer is %s old; refreshing "+
+			"it in the background (log: %s)\n", winguest.RoundAge(f.Age(now)), logPath)
+	}
+	return nil
 }
 
 // configureWindowsBuildVM copies the writable UEFI vars and builds the Windows
@@ -281,8 +336,10 @@ func configureWindowsBuildVM(cfg *buildVMConfig, workDir string) error {
 	// bcdboot wrote during image prep; copied per-build so the base's
 	// vars store is never mutated.
 	ga := goArchOf(cfg.Arch)
-	srcVars := filepath.Join(driver.CacheDir(), "images",
-		"windows-"+ga+"-vars.fd")
+	srcVars := cfg.BaseVarsFD
+	if srcVars == "" { // an explicit --image: the installed base's vars
+		srcVars = windowsVarsPath(ga)
+	}
 	if _, err := os.Stat(srcVars); err != nil {
 		return driver.Fixable(
 			fmt.Sprintf("warden image prepare --driver qemu --os windows "+
@@ -294,17 +351,19 @@ func configureWindowsBuildVM(cfg *buildVMConfig, workDir string) error {
 		return fmt.Errorf("copying UEFI vars: %w", err)
 	}
 	cfg.VarsFD = dstVars
+	cfg.BaseVarsFD = srcVars
 	seedDir, err := windowsSeedDir(workDir, goArchOf(cfg.Arch))
 	if err != nil {
 		return fmt.Errorf("generating windows seed: %w", err)
 	}
+	cfg.SeedDir = seedDir
 	// FAT image (not ISO): Windows reads FAT16 natively via usb-storage
 	// with exact long names and a drive letter; our ISO9660 seed shows up
 	// as FileSystemType=Unknown with no letter, so the startup task can't
 	// run warden-run.ps1.
 	seedImg := filepath.Join(workDir, "seed.img")
 	if err := generateWindowsSeedFAT(
-		seedDir, seedImg, windowsSeedName); err != nil {
+		seedDir, seedImg, winguest.SeedLabel); err != nil {
 		return fmt.Errorf("generating windows seed FAT: %w", err)
 	}
 	cfg.SeedISO = seedImg

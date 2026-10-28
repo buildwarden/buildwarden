@@ -16,12 +16,25 @@ ensures no traffic can bypass this path.
 
 ## Container Driver — iptables Isolation
 
-A privileged sidecar container shares the build container's network namespace.
-It applies iptables rules then exits (Kubernetes init-container pattern). The
-build container has no `CAP_NET_ADMIN` and cannot modify the rules after they
-are applied.
+The build's network namespace is isolated before the build container exists,
+in the Kubernetes pod pattern:
 
-The relay IP is on the same Docker bridge network as the build container.
+1. A **namespace holder** (`warden-holder`, a single static binary that does
+   nothing) starts on the per-build bridge network and owns the namespace. It
+   runs with no capabilities, a read-only root and no shell.
+2. A privileged **sidecar** (`warden-netns`) joins the holder's namespace,
+   applies the iptables rules below, and exits.
+3. The **build container** is created from your `FROM` image inside that
+   namespace (`--network container:<holder>`), with `warden-io initialize` as
+   its entrypoint, and only then started.
+
+Nothing from your image runs before the rules are in place, including the
+image's own `ENTRYPOINT`, which is replaced. The build container has no
+`CAP_NET_ADMIN` and cannot modify the rules. Release builds run the holder and
+sidecar images by digest, so a different image carrying the same name is never
+run privileged.
+
+The relay IP is on the same bridge network as the holder.
 
 ### NAT rules (DNAT)
 
@@ -46,9 +59,11 @@ iptables -A OUTPUT -j DROP
 
 ### Why the build container cannot escape
 
+- Isolation precedes execution — no code from the image runs on an open network
 - No `CAP_NET_ADMIN` — cannot flush or modify iptables rules
 - No route to any host other than relay and loopback
 - The sidecar exits after applying rules — no persistent privileged process
+- The holder runs no code that could use the namespace before it is isolated
 
 ## QEMU Driver — Topological Isolation
 

@@ -138,6 +138,16 @@ func (c *collectorClient) putCapture(
 	return c.do(req, http.StatusOK)
 }
 
+// putEnvironment lands the environment payload as <output>/environment.json.
+func (c *collectorClient) putEnvironment(payload []byte) error {
+	req, err := c.newRequest(context.Background(), http.MethodPut, "/v1/environment",
+		bytes.NewReader(payload))
+	if err != nil {
+		return err
+	}
+	return c.do(req, http.StatusOK)
+}
+
 // openLedger starts streaming the ledger to the collector: one long PUT whose
 // body is everything the ledger writes, so a relay that dies mid-build still
 // leaves every record written so far. flushLedger ends the stream.

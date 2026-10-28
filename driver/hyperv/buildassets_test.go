@@ -37,7 +37,7 @@ func TestResolveBuildBaseVHDX_GenerationByFormat(t *testing.T) {
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			img := touch(t, dir, tc.file)
-			path, isWin, gen, err := resolveBuildBaseVHDX(
+			chain, isWin, gen, err := resolveBuildBaseVHDX(
 				&driver.BuildRequest{Image: img, GuestOS: tc.guestOS},
 			)
 			if err != nil {
@@ -49,8 +49,8 @@ func TestResolveBuildBaseVHDX_GenerationByFormat(t *testing.T) {
 			if isWin != tc.wantWin {
 				t.Errorf("isWindows = %v, want %v", isWin, tc.wantWin)
 			}
-			if !filepath.IsAbs(path) {
-				t.Errorf("path %q is not absolute", path)
+			if len(chain) != 1 || !filepath.IsAbs(chain[0]) {
+				t.Errorf("chain %q: want one absolute path", chain)
 			}
 		})
 	}

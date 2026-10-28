@@ -3,10 +3,13 @@
 package main
 
 import (
+	"crypto/x509"
 	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
+
+	"github.com/buildwarden/buildwarden/bootstrap"
 )
 
 // scriptCommand builds the command to execute the fetched build script,
@@ -52,16 +55,24 @@ func configureNetwork(gateway, selfIP string) error {
 	return nil
 }
 
-func installCA(pem []byte) error {
-	// Write to system CA directory
-	dir := "/usr/local/share/ca-certificates"
-	if err := os.MkdirAll(dir, 0755); err != nil {
+// wardenDataDir holds the files warden-io derives for the build (the Java
+// truststore, the shell environment).
+func wardenDataDir() string { return "/etc/warden" }
+
+// bazelSystemRC is the system-wide bazelrc Bazel reads on Linux.
+func bazelSystemRC() string { return "/etc/bazel.bazelrc" }
+
+// installCA installs the relay CA as a system root: exclusively (the only
+// root) or appended to the existing ones. See bootstrap.Trust*.
+func installCA(pem []byte, cert *x509.Certificate, mode string) error {
+	if err := os.MkdirAll(filepath.Dir(wardenCAPath), 0755); err != nil {
 		return fmt.Errorf("creating CA dir: %w", err)
 	}
-
-	certPath := filepath.Join(dir, "warden-ca.crt")
-	if err := os.WriteFile(certPath, pem, 0644); err != nil {
+	if err := os.WriteFile(wardenCAPath, pem, 0644); err != nil {
 		return fmt.Errorf("writing CA cert: %w", err)
+	}
+	if mode == bootstrap.TrustExclusive {
+		return installExclusiveCA(pem, cert)
 	}
 
 	// Try update-ca-certificates (Debian/Ubuntu/Alpine)
