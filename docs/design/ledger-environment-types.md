@@ -6,6 +6,7 @@ drivers: [container, qemu, vz, hyperv]
 seams: [ledger-format, relay-claim, collector]
 surfaces: [cli, output]
 security_boundary: env-relay
+alters_relationships: true
 native_validation:
   - {host: windows-hyperv, blocking: true, reason: "hyperv descriptor (eval VHD / --image chain, seed hashes) only runs on Hyper-V"}
   - {host: macos-vz, blocking: true, reason: "vz descriptor (prepared disk.img, aux-storage, platform files) only runs on macOS/arm64"}
