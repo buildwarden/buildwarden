@@ -6,7 +6,7 @@ priority_confirmed: true
 
 # Steps one daily run may take. Starts small; calibrate against /usage.
 run_budget:
-  steps: 8
+  steps: 12
 
 limits:
   in_progress: 5           # features in progress at once (FLOW-05)

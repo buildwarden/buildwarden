@@ -64,37 +64,41 @@ questions:
     answer: 'Reordered: workflow-bootstrap, container-inputs, design-front-matter-retrofit, tier1-static-checks, specs-migration, firecracker-driver, security-suite (retrofit early)'
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: Run budget of 8 steps per daily run, calibrated against /usage.
     options:
       - 8 steps
       - 4 steps
       - 16 steps
     recommended: 8 steps
+    answer: 12 steps per run
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: Without the Entire CLI, an unattended run carries on and flags "sessions not recorded" first in the digest.
     options:
       - carry on and flag
       - stop the run
     recommended: carry on and flag
+    answer: carry on and flag
   - id: a4
     kind: assumed
-    status: open
+    status: confirmed
     question: Feature branches are named feat/<feature>.
     options:
       - feat/<feature>
       - feature/<feature>
     recommended: feat/<feature>
+    answer: feat/<feature>
   - id: a5
     kind: assumed
-    status: open
+    status: confirmed
     question: This bootstrap merges as one PR outside the loop it creates; its queue item starts at merge-round Publish.
     options:
       - one PR outside the loop
       - re-run it through every phase
     recommended: one PR outside the loop
+    answer: one PR outside the loop
 history:
   - at: 2026-10-28T23:18:38Z
     by: attended-setup
@@ -123,3 +127,15 @@ history:
   - at: 2026-10-29T00:12:14Z
     by: human/jeff
     event: 'assumed question a1 confirmed: Reordered: workflow-bootstrap, container-inputs, design-front-matter-retrofit, tier1-static-checks, specs-migration, firecracker-driver, security-suite (retrofit early)'
+  - at: 2026-10-29T00:13:49Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: 12 steps per run'
+  - at: 2026-10-29T00:13:49Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: carry on and flag'
+  - at: 2026-10-29T00:13:49Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: feat/<feature>'
+  - at: 2026-10-29T00:13:49Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: one PR outside the loop'
