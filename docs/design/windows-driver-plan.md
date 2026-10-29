@@ -1,3 +1,22 @@
+---
+# Retrofitted (FLOW-12) onto a pre-standard plan; body unchanged.
+feature: windows-driver-plan
+status: archived
+round: parallel
+drivers: [container, qemu, vz, hyperv]  # cmd/warden-io changes reach every driver
+seams: [executor-initialize, relay-guest-api, windows-guest-seed]
+surfaces: [cli, config]
+security_boundary: env-relay            # Windows CA trust install and topological isolation; no separate security section
+alters_relationships: true              # executor gains a Windows guest; build.ps1 input model
+native_validation:
+  - {host: macos-qemu, blocking: true, reason: "Phase 1 win-arm64 under qemu on Apple Silicon"}
+  - {host: windows-hyperv, blocking: true, reason: "Phase 2 native win-64 on Hyper-V"}
+tier2_gaps: []
+rules: [EXEC-01, EXEC-02, EXEC-03, EXEC-04, ORCH-01, ORCH-05, BOOT-02, BOOT-04, GLOBAL-06, GLOBAL-07, TEST-02]
+concepts: [windows-guest, warden-io-windows, build-ps1, conda-forge, image-prepare, autounattend, licensing, win-arm64]
+related: [hyperv-driver-plan.md, vm-driver-release-plan.md, platform-compatibility.md, hyperv-windows-prepare.md]
+---
+
 # Windows-Native Build Driver — Planning
 
 Status: **Phase 1 implemented & validated locally** on branch
