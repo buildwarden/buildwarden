@@ -21,16 +21,32 @@ import (
 type Config struct {
 	// PriorityConfirmed gates unattended runs: the loop does no work until the
 	// human has confirmed the priority order.
-	PriorityConfirmed bool `yaml:"priority_confirmed"`
-	RunBudget         struct {
-		Steps int `yaml:"steps"`
-	} `yaml:"run_budget"`
-	Limits struct {
+	PriorityConfirmed bool       `yaml:"priority_confirmed"`
+	RunBudget         StepBudget `yaml:"run_budget"`
+	// NativeBudget bounds one scheduled native session's batch, so native
+	// work never competes with the cloud loop (FLOW-13). Nil falls back to
+	// RunBudget.
+	NativeBudget *StepBudget `yaml:"native_budget,omitempty"`
+	Limits       struct {
 		InProgress          int `yaml:"in_progress"`
 		AltersRelationships int `yaml:"alters_relationships"`
 	} `yaml:"limits"`
 	LeaseMinutes  int     `yaml:"lease_minutes"`
 	RunawayFactor float64 `yaml:"runaway_factor"`
+}
+
+// StepBudget is how many steps one run may take.
+type StepBudget struct {
+	Steps int `yaml:"steps"`
+}
+
+// Budget returns the steps one run may take: the native budget for a native
+// session, falling back to the run budget when config.yaml sets none.
+func (c Config) Budget(native bool) int {
+	if native && c.NativeBudget != nil {
+		return c.NativeBudget.Steps
+	}
+	return c.RunBudget.Steps
 }
 
 // Feature is one queue/<feature>.yaml file.
@@ -210,6 +226,14 @@ var affinityRe = regexp.MustCompile(`^(cloud|human|host:[a-z0-9-]+)$`)
 // Validate checks the schema of every feature and the FLOW-05 limits.
 func (s *State) Validate() []error {
 	var errs []error
+	if s.Config.RunBudget.Steps < 1 {
+		errs = append(errs, fmt.Errorf("config: run_budget.steps %d is below 1",
+			s.Config.RunBudget.Steps))
+	}
+	if nb := s.Config.NativeBudget; nb != nil && nb.Steps < 1 {
+		errs = append(errs, fmt.Errorf("config: native_budget.steps %d is below 1",
+			nb.Steps))
+	}
 	prio := map[int]string{}
 	inProgress, alters := 0, 0
 	for _, f := range s.Features {

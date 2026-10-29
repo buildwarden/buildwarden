@@ -15,6 +15,7 @@
 //	wf new      -state DIR -worker W -feature F -title T -priority N
 //	            -estimate-steps N -estimate-runs N [-source S]
 //	wf gate     -state DIR -repo DIR -machine M -stamp FILE [-sweep-days N] [-record]
+//	wf budget   -state DIR [-native]
 //
 // DIR is a checkout of the workflow branch; -repo is a checkout of the code
 // with origin fetched. A worker is cloud, human or host:<name>, optionally
@@ -26,6 +27,10 @@
 // machine M (hosts.yaml) has a ready host step, or open backlog gaps and main
 // or a waiting branch moved since the stamp; 3 when idle. -record writes the
 // stamp after a finished session.
+//
+// budget prints the steps one run may take: run_budget, or with -native the
+// native_budget a scheduled native session spends (FLOW-13), falling back to
+// run_budget.
 package main
 
 import (
@@ -41,7 +46,7 @@ import (
 )
 
 const usage = "usage: wf " +
-	"validate|status|next|claim|release|check|done|answer|back|new|gate [flags]"
+	"validate|status|next|claim|release|check|done|answer|back|new|gate|budget [flags]"
 
 // errIdle is gate's "nothing to do", exit status 3.
 var errIdle = errors.New("idle")
@@ -50,7 +55,7 @@ type opts struct {
 	state, repo, worker, feature, step, why, question, answer string
 	title, source, machine, stamp                             string
 	priority, estSteps, estRuns, sweepDays                    int
-	newRun, run, record                                       bool
+	newRun, run, record, native                               bool
 	now                                                       time.Time
 }
 
@@ -90,6 +95,7 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.StringVar(&o.stamp, "stamp", "", "gate: file recording the last finished session")
 	fs.IntVar(&o.sweepDays, "sweep-days", 7, "gate: re-sweep open gaps after this many days")
 	fs.BoolVar(&o.record, "record", false, "gate: write the stamp instead of deciding")
+	fs.BoolVar(&o.native, "native", false, "budget: the native session's budget")
 	_ = fs.Parse(args)
 
 	s, err := queue.Load(o.state)
@@ -99,6 +105,7 @@ func run(cmd string, args []string, now time.Time) error {
 	cmds := map[string]func(*queue.State, opts) error{
 		"validate": validate, "status": status, "next": next, "check": checkPhase,
 		"answer": answer, "back": back, "new": newFeature, "gate": gate,
+		"budget": budget,
 	}
 	for _, c := range []string{"claim", "release", "done"} {
 		cmds[c] = func(s *queue.State, o opts) error { return stepCmd(c, s, o) }
@@ -119,6 +126,11 @@ func validate(s *queue.State, _ opts) error {
 		return fmt.Errorf("%d problems", len(errs))
 	}
 	fmt.Printf("ok: %d features\n", len(s.Features))
+	return nil
+}
+
+func budget(s *queue.State, o opts) error {
+	fmt.Println(s.Config.Budget(o.native))
 	return nil
 }
 

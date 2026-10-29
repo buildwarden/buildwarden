@@ -300,7 +300,10 @@ state, claim, work, write state) until no `cloud` step is ready or the run's
 budget is spent, and writes state after every step so an interrupted run loses at
 most the step in progress. All state it needs lives in the repository, never in a
 long-running conversation. A run spends its budget in FLOW-05 order, so the
-top-priority feature can use all of it. Each feature also has a work budget, which
+top-priority feature can use all of it. A scheduled native session (FLOW-09)
+spends its own budget, `native_budget`, which falls back to the run's budget when
+unset, so native and integration testing never compete with the cloud loop. Each
+feature also has a work budget, which
 is a runaway check rather than a share of the run: exhausting it escalates to a
 `human` step. The loop posts a periodic digest (what moved, what is blocked on a human,
 what is waiting on a native host, what was spent), and notifies when a new
