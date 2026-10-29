@@ -8,9 +8,12 @@ WORKDIR /src
 COPY go.mod go.sum ./
 RUN go mod download
 COPY cmd cmd
-COPY relay relay
+COPY bootstrap bootstrap
+COPY collector collector
 COPY driver driver
 COPY ledger ledger
+COPY relay relay
+COPY relaycfg relaycfg
 
 RUN CGO_ENABLED=0 go build -o /out/warden ./cmd/warden/
 RUN CGO_ENABLED=0 go build -o /out/relay ./cmd/relay/
