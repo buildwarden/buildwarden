@@ -37,13 +37,23 @@ steps:
     lease:
       claimed_by: ""
       expires: null
+  - id: m8-cleanup
+    phase: 8
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Open and merge the archive PR from feat/workflow-bootstrap-archive (fd1e386, sets docs/design/workflow-bootstrap.md status: archived and fills its Archive summary): https://github.com/buildwarden/buildwarden/pull/new/feat/workflow-bootstrap-archive. Remote branches: claude/buildwarden-workflow-setup-w0ai39, docs/housekeeping-guidance and chore/entire-sessions are already gone from origin, so no git push origin --delete is needed for them; after the archive PR merges, run git push origin --delete feat/workflow-bootstrap-archive.'
   - id: m8-archive
     phase: 8
     affinity: cloud
     status: pending
+    needs:
+      - m8-cleanup
     lease:
-      claimed_by: cloud/20261029T095640Z
-      expires: 2026-10-29T11:56:51.524627444Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -142,3 +152,6 @@ history:
   - at: 2026-10-29T09:56:51Z
     by: cloud/20261029T095640Z
     event: claimed m8-archive until 2026-10-29T11:56:51Z
+  - at: 2026-10-29T09:58:43Z
+    by: cloud/20261029T095640Z
+    event: 'released m8-archive: design archived on feat/workflow-bootstrap-archive (fd1e386), not yet on main; waits on m8-cleanup (Jeff merges archive PR)'
