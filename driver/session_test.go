@@ -152,7 +152,7 @@ func TestRecordInputsOnlyWhenTranslated(t *testing.T) {
 	_ = os.WriteFile(filepath.Join(ctx, "build.sh"), []byte("from-context"), 0o755)
 	explicit := filepath.Join(t.TempDir(), "x.sh")
 	_ = os.WriteFile(explicit, []byte("explicit"), 0o755)
-	df := filepath.Join(t.TempDir(), "Containerfile")
+	df := filepath.Join(t.TempDir(), "Dockerfile")
 	submitted := "FROM alpine\nRUN echo translated\n"
 	_ = os.WriteFile(df, []byte(submitted), 0o644)
 
@@ -178,7 +178,7 @@ func TestRecordInputsOnlyWhenTranslated(t *testing.T) {
 			if err := RecordInputs(out, &tc.req, script); err != nil {
 				t.Fatal(err)
 			}
-			got, err := os.ReadFile(filepath.Join(out, "inputs", "Dockerfile"))
+			got, err := os.ReadFile(filepath.Join(out, "inputs", "Containerfile"))
 			if !tc.recorded {
 				if _, err := os.Stat(filepath.Join(out, "inputs")); err == nil {
 					t.Fatal("inputs/ written for an input run as given")
@@ -186,8 +186,11 @@ func TestRecordInputsOnlyWhenTranslated(t *testing.T) {
 				return
 			}
 			if err != nil || string(got) != submitted {
-				t.Fatalf("inputs/Dockerfile = %q, %v; want the submitted file",
+				t.Fatalf("inputs/Containerfile = %q, %v; want the submitted file",
 					got, err)
+			}
+			if _, err := os.Stat(filepath.Join(out, "inputs", "Dockerfile")); err == nil {
+				t.Fatal("inputs/Dockerfile written; the submitted file keeps a fixed name")
 			}
 			ran, _ := os.ReadFile(script)
 			rec, err := os.ReadFile(filepath.Join(out, "inputs", "build.sh"))
