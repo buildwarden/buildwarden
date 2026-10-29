@@ -189,8 +189,9 @@ func TestRecordInputsOnlyWhenTranslated(t *testing.T) {
 				t.Fatalf("inputs/Containerfile = %q, %v; want the submitted file",
 					got, err)
 			}
-			if _, err := os.Stat(filepath.Join(out, "inputs", "Dockerfile")); err == nil {
-				t.Fatal("inputs/Dockerfile written; the submitted file keeps a fixed name")
+			stale := filepath.Join(out, "inputs", "Dockerfile")
+			if _, err := os.Stat(stale); err == nil {
+				t.Fatal("inputs/Dockerfile written; want inputs/Containerfile")
 			}
 			ran, _ := os.ReadFile(script)
 			rec, err := os.ReadFile(filepath.Join(out, "inputs", "build.sh"))
