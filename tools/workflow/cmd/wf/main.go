@@ -40,7 +40,8 @@ import (
 	"github.com/buildwarden/buildwarden/tools/workflow/queue"
 )
 
-const usage = "usage: wf validate|status|next|claim|release|check|done|answer|back|new|gate [flags]"
+const usage = "usage: wf " +
+	"validate|status|next|claim|release|check|done|answer|back|new|gate [flags]"
 
 // errIdle is gate's "nothing to do", exit status 3.
 var errIdle = errors.New("idle")

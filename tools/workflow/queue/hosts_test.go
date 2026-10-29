@@ -50,7 +50,8 @@ func TestGateRunsForAReadyHostStep(t *testing.T) {
 	s := nativeState(a)
 	mac, _ := s.Machine("mac")
 	g, err := s.Gate(mac, repo, nil, 7, now)
-	if err != nil || !g.Run || !strings.Contains(g.Reasons[0], "host:macos-qemu\ta\tp0-branch-setup") {
+	want := "host:macos-qemu\ta\tp0-branch-setup"
+	if err != nil || !g.Run || !strings.Contains(g.Reasons[0], want) {
 		t.Fatalf("mac gate = %+v, %v; want the macos-qemu step", g, err)
 	}
 	win, _ := s.Machine("win")

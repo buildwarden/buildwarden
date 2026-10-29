@@ -45,7 +45,8 @@ func (s *State) loadNative() error {
 	var gaps struct {
 		Gaps []Gap `yaml:"gaps"`
 	}
-	if err := readOptional(filepath.Join(s.Dir, "backlog", "native-gaps.yaml"), &gaps); err != nil {
+	gapsPath := filepath.Join(s.Dir, "backlog", "native-gaps.yaml")
+	if err := readOptional(gapsPath, &gaps); err != nil {
 		return err
 	}
 	s.Gaps = gaps.Gaps
@@ -76,15 +77,15 @@ func (s *State) validateNative() []string {
 		return nil
 	}
 	var errs []string
+	bad := func(format string, a ...any) { errs = append(errs, fmt.Sprintf(format, a...)) }
 	servedBy := map[string]string{}
 	for _, m := range s.Machines {
 		for _, h := range m.Hosts {
 			if !affinityRe.MatchString("host:" + h) {
-				errs = append(errs, fmt.Sprintf("hosts.yaml: %s: bad host name %q", m.Name, h))
+				bad("hosts.yaml: %s: bad host name %q", m.Name, h)
 			}
 			if o, dup := servedBy[h]; dup {
-				errs = append(errs, fmt.Sprintf("hosts.yaml: host %s served by both %s and %s",
-					h, o, m.Name))
+				bad("hosts.yaml: host %s served by both %s and %s", h, o, m.Name)
 			}
 			servedBy[h] = m.Name
 		}
@@ -93,15 +94,13 @@ func (s *State) validateNative() []string {
 		for _, st := range f.Steps {
 			h, ok := strings.CutPrefix(st.Affinity, "host:")
 			if ok && st.Status == "pending" && servedBy[h] == "" {
-				errs = append(errs, fmt.Sprintf("%s: step %s: no machine serves host %s",
-					f.Feature, st.ID, h))
+				bad("%s: step %s: no machine serves host %s", f.Feature, st.ID, h)
 			}
 		}
 	}
 	for _, g := range s.Gaps {
 		if g.Status == "open" && servedBy[g.Host] == "" {
-			errs = append(errs, fmt.Sprintf("backlog: gap %s: no machine serves host %s",
-				g.ID, g.Host))
+			bad("backlog: gap %s: no machine serves host %s", g.ID, g.Host)
 		}
 	}
 	return errs
@@ -163,8 +162,9 @@ func (s *State) Gate(m *Machine, repo string, last *GateStamp, sweepDays int,
 		g.Reasons = append(g.Reasons, fmt.Sprintf("gaps\tno sweep in %d days\t%s",
 			sweepDays, strings.Join(open, ",")))
 	default:
-		g.Reasons = append(g.Reasons, fmt.Sprintf("idle\t%d open gaps, nothing moved since %s",
-			len(open), last.At.Format(time.RFC3339)))
+		g.Reasons = append(g.Reasons, fmt.Sprintf(
+			"idle\t%d open gaps, nothing moved since %s", len(open),
+			last.At.Format(time.RFC3339)))
 	}
 	if !g.Run && len(g.Reasons) == 0 {
 		g.Reasons = append(g.Reasons, "idle\tno host step ready and no open gaps")
