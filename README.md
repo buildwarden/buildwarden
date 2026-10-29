@@ -23,12 +23,15 @@ hand-edited when a `wf` command can make the change.
 | `digest/<YYYY-MM-DD>.md` | One file per day (Pacific), a section per run: what moved, what is blocked on Jeff, what waits on a host, what was spent (FLOW-13). |
 | `reports/<feature>/<sha12>.{md,json}` | The behavioral linter's tier-2 report for a branch head (LINT-04, LINT-05), report-only (LINT-07). |
 | `native/<host>/<date>/` | Logs a native session attaches to a failure. |
+| `native/status/<machine>.yaml` | Each machine's last scheduled run, written by `native-tick.sh` from an EXIT trap: `machine`, `last_run` (UTC), `outcome` (`worked`, `idle`, `skipped`, `failed`), a one-line `reason`, and `since` (when this outcome began). Pushed only when the outcome or reason changes, or the last push is a day old. Never log contents (FLOW-18). Checked by `wf validate`. |
 
 ## `config.yaml`
 
 ```yaml
 priority_confirmed: false   # unattended runs do nothing until the human confirms the order
 run_budget: {steps: 8}      # steps one run may take; calibrate against /usage
+native_budget: {steps: 8}   # steps one scheduled native session may take (FLOW-13);
+                            # unset falls back to run_budget; `wf budget -native`
 limits:
   in_progress: 5            # FLOW-05
   alters_relationships: 1   # FLOW-05: of those, past Design with alters_relationships: true
@@ -42,16 +45,18 @@ runaway_factor: 2           # FLOW-13: escalate at this multiple of the step est
 feature: container-inputs        # == file name
 title: Record container inputs under inputs/ (ORCH-02)
 priority: 2                      # 1 is highest; unique
+kind: feature                    # feature (default, omitted) | process (FLOW-03)
+holds: []                        # process only: affinity patterns held while in progress
 status: in_progress              # queued | in_progress | done
-round: parallel                  # parallel | merge (FLOW-03)
-phase: 1                         # FLOW-03 phase: 0 branch-setup .. 8 archive
+round: parallel                  # parallel | merge | process (FLOW-03)
+phase: 1                         # FLOW-03 phase: 0 branch-setup .. 8 archive; process 1..4
 design: docs/design/container-inputs.md
 branch: feat/container-inputs
 alters_relationships: null       # null until Design decides (FLOW-02)
 source: where the item came from
 pr: {number: 0, ci: pending}     # merge round only: pending | green | red
 steps:
-  - id: p1-design                # <p|m><phase>-<name>[-r<n>]
+  - id: p1-design                # <p|m|x><phase>-<name>[-r<n>]
     phase: 1
     affinity: cloud              # cloud | human | host:<name> (FLOW-04)
     status: pending              # pending | done
@@ -91,6 +96,18 @@ the transition happens only if the check passes.
 | 7 | | `m7-sign-off` (human; its check is the merge) |
 | 8 | | `m8-archive` |
 
+A **process item** (`kind: process`, FLOW-03) changes the rules the loops run
+under (`docs/development/`, `.claude/`, `tools/workflow/`). It has its own
+round, `process`, with human steps only (FLOW-14): `x1-design` (the design
+file exists on the branch), `x2-implement` (branch pushed), `x3-sign-off`
+(merged into `main`) and `x4-archive` (design archived, branch deleted).
+Process items sort ahead of every feature. While one is in progress, `wf next`
+gives a worker matching its `holds` (`cloud`, `host:*`, `host:macos-vz`) no
+new step and reports `held by process item <name>`; `wf claim` refuses it and
+`wf gate` starts no sweep for a held host. A step already claimed stays
+claimed, and finishing the process item releases the hold. Intake:
+`wf new ... -kind process -holds cloud,host:*`.
+
 Design adds the steps it finds: `p1-answer-<q>` (human) for a blocking
 question, `m6-validate-<host>` (`host:<host>`) for blocking native validation.
 A return to Design (FLOW-06) re-seeds phase 1 with `-r<n>` ids; the third
@@ -125,4 +142,4 @@ slot another feature holds. Its `blocked` lines feed the digest.
 
 Other commands: `wf validate`, `wf status`, `wf check` (done-when without
 moving), `wf release`, `wf back` (FLOW-06), `wf answer` (human only, FLOW-07),
-`wf new` (intake).
+`wf new` (intake), `wf budget [-native]`.

@@ -8,6 +8,12 @@ priority_confirmed: true
 run_budget:
   steps: 12
 
+# Steps one scheduled native session may take (FLOW-13), so native and
+# integration testing never compete with the cloud loop. Unset falls back to
+# run_budget. Starts at 8; calibrate against /usage.
+native_budget:
+  steps: 8
+
 limits:
   in_progress: 5           # features in progress at once (FLOW-05)
   alters_relationships: 1  # of those, past Design with alters_relationships: true
