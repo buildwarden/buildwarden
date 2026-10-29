@@ -370,8 +370,8 @@ func translates(req *BuildRequest) bool {
 
 // RecordInputs keeps an altered input next to what it became (ORCH-02): when
 // the script was translated from the Containerfile, the submitted file goes to
-// <output>/inputs/Dockerfile and the staged script to <output>/inputs/build.sh.
-// req is the request given to StageBuildScript, and script the path it
+// <output>/inputs/Containerfile, whatever it was called, and the staged script
+// to <output>/inputs/build.sh. req is the request given to StageBuildScript, and script the path it
 // returned. Drivers call it straight after staging, before the build starts,
 // so a failed build keeps its inputs and a failure to record fails the build
 // before anything runs. An input run as given is not recorded.
@@ -383,7 +383,7 @@ func RecordInputs(outputDir string, req *BuildRequest, script string) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	if err := CopyFile(req.Containerfile, filepath.Join(dir, "Dockerfile")); err != nil {
+	if err := CopyFile(req.Containerfile, filepath.Join(dir, "Containerfile")); err != nil {
 		return err
 	}
 	return CopyFile(script, filepath.Join(dir, "build.sh"))
