@@ -1,0 +1,57 @@
+{
+  "feature": "container-inputs",
+  "branch": "feat/container-inputs",
+  "head": "3a7a1b36e0e1",
+  "base": "cd42fc73c265",
+  "previous_report": "f7fd0d802971",
+  "scope": "git diff origin/main...feat/container-inputs (11 files, +366/-31). Re-judged this round: git diff 2062df4..3a7a1b3 (commits ca2f897..3a7a1b3, plan tasks 7-12: README.md, docs/book/src/getting-started/first-build.md, docs/book/src/guide/output.md, driver/session.go, driver/session_test.go, test-integration.sh) plus design commits d959fa7 and 2062df4. The rest is carried from f7fd0d802971; the base moved from c3ab3e56bf23 to cd42fc73c265 by Jeff's rebase.",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "tier1": {
+    "make_lint": "pass (linux; golangci-lint v2.5.0 rebuilt with go1.26.3; 0 issues in both the root and tools/workflow runs)",
+    "make_test": "pass (all packages ok)",
+    "go_test_driver_uncached": "pass (go test -count=1 -run 'TestRecordInputs|TestStageBuildScript' ./driver/: all 4 RecordInputs subtests pass)",
+    "golangci_lint_goos_windows_driver": "pass (0 issues; the diff still holds driver/hyperv/driver_windows.go from round 1)",
+    "test_integration_sh": "not run: no Docker daemon in this session (/var/run/docker.sock absent), and the implementer reports that containers here have no outbound network. Only bash -n passed. The integration test is not wired into .github/workflows.",
+    "task_11_sweep": "8 hits. 5 are the intended absence assertions (driver/session_test.go:192,194; test-integration.sh:147,148,151). 3 are unrelated fixtures that name a user's input file Dockerfile and match the (dir, \"Dockerfile\") pattern (driver/script/translate_test.go:13; cmd/warden/config_test.go:11,50). None is a recorded name.",
+    "automated_custom_checks": "None exist yet (Deep-dive #2)."
+  },
+  "previous_findings": [
+    {"rule": "ORCH-02", "severity": "MUST", "file": "driver/qemu/driver.go", "line": 147, "summary": "qemu/hyperv recorded inputs only on the success path", "status": "resolved", "resolved_in": "72aee6473ed7"},
+    {"rule": "ORCH-01", "severity": "MUST", "file": "driver/hyperv/driver_windows.go", "line": 125, "summary": "Different RecordInputs failure policy per driver", "status": "resolved", "resolved_in": "72aee6473ed7"},
+    {"rule": "ORCH-02", "severity": "MUST", "file": "driver/session.go", "line": 384, "summary": "Containerfile re-read at the end of the build", "status": "resolved", "resolved_in": "72aee6473ed7"},
+    {"rule": "FLOW-01", "severity": "MUST", "file": "docs/design/container-inputs.md", "line": 46, "summary": "First Decision contradicted the staging-time Decision", "status": "resolved", "resolved_in": "f7fd0d802971"}
+  ],
+  "findings": [],
+  "counts": {"MUST": 0, "MUST-review": 0, "SHOULD": 0},
+  "suppressions": [],
+  "informational": [
+    {"rule": "TEST-02", "file": "test-integration.sh", "line": 132, "status": "new", "note": "The new tier 1 check has not run anywhere: this session has no Docker daemon, and test-integration.sh is not in CI. By reading it: it sits after Test 2's examples/Dockerfile.simple build, uses the same OUTPUT_DIR that the container driver writes (b.outputDir = req.OutputDir, container.go:316), compares bytes with cmp -s, and follows the script's green/red/PASS/FAIL pattern. It looks correct. TEST-03 allows a check that runs where a runtime is available. Running it once on a host with a runtime would close this item."},
+    {"rule": "ORCH-02", "file": "driver/session.go", "line": 389, "status": "new", "note": "The a2 rework is complete across code and docs. RecordInputs writes inputs/Containerfile, and its doc comment says so. The test submits a file named Dockerfile, asserts it lands as inputs/Containerfile, and asserts that no inputs/Dockerfile exists. README, first-build.md and output.md all name inputs/Containerfile. No live inputs/Dockerfile reference remains."},
+    {"rule": "FLOW-03", "file": "docs/design/container-inputs.md", "line": 158, "status": "new", "note": "The Implementation plan still says tasks 7 to 12 'are open', but they are implemented in ca2f897..3a7a1b3. This is housekeeping: mark them Done, as tasks 1 to 6 are, at Guide or Publish."},
+    {"rule": "FLOW-09", "file": "docs/design/container-inputs.md", "line": 11, "status": "new (pre-existing text)", "note": "The macos-vz native_validation reason says 'the shared call is a no-op there', but vz does not call RecordInputs (it was dropped in Implement; see Cross-driver impact). The non-blocking decision stays correct; only the reason text is stale."},
+    {"rule": "UX-01", "file": "docs/book/src/guide/output.md", "line": 35, "status": "carried, updated", "note": "Cosmetic: the paragraph is still not reflowed; the line now runs to 105 columns. design:84-85 likewise has a short line ('Changed after Publish (Jeff,') that was not reflowed."},
+    {"rule": "FLOW-06", "file": "docs/design/container-inputs.md", "line": 75, "status": "carried, updated", "note": "The a2 change is recorded in the Decisions ('Changed after Publish (Jeff, answering a2)') and in tasks 7-12, which follows FLOW-06. The two earlier plan changes are still recorded."},
+    {"rule": "FLOW-07", "file": "docs/design/container-inputs.md", "line": 98, "status": "resolved", "note": "a1 is confirmed and a2 is answered by Jeff, and the queue records both. Nothing is left for sign-off on the questions."},
+    {"rule": "UX-01", "file": "docs/book/src/getting-started/first-build.md", "line": 50, "status": "resolved", "note": "The page now shows inputs/Containerfile and inputs/build.sh."},
+    {"rule": "FLOW-15", "file": "driver/container/container.go", "line": 353, "status": "carried", "note": "Pre-existing, out of LINT-04 scope. The container driver's own stageBuildScript is a candidate for the merge-round duplication sweep."},
+    {"rule": "ORCH-02", "file": "driver/session.go", "line": 389, "status": "carried", "note": "script.Translate and CopyFile each read req.Containerfile, milliseconds apart. Not worth a finding at this window size."},
+    {"rule": "ORCH-01", "file": "driver/hyperv/driver_windows.go", "line": 78, "status": "carried", "note": "hyperv writes inputs/ before runBuild validates that OutputDir is non-empty. The CLI cannot reach this case."}
+  ],
+  "judged_clean": [
+    "ORCH-02 (fixed name inputs/Containerfile; no collision with the reserved names; only translated inputs recorded)",
+    "ORCH-01 (one shared helper and one failure policy; the r2 change is confined to the shared helper)",
+    "ORCH-04",
+    "GLOBAL-01 (RecordInputs doc comment names inputs/Containerfile and the call timing)",
+    "GLOBAL-02 (3a7a1b3 keeps the test within lll)",
+    "GLOBAL-03",
+    "GLOBAL-04 / TEST-01 / TEST-04 (tests land with the rework; deterministic, using TempDir)",
+    "GLOBAL-06 (no boundary touched)",
+    "GLOBAL-07 / GLOBAL-08",
+    "TEST-02 / TEST-03 (tier 0 plus a runtime-gated tier 1 check; the qemu and hyperv end-to-end gap stays in tier2_gaps)",
+    "UX-01 (README, first-build.md and output.md updated in the same change; 'your Dockerfile' is kept where it means the user's file)",
+    "UX-03 (pre-1.0 output-layout change confirmed by Jeff in a1/a2; UX-03 does not cover the output layout)",
+    "FLOW-01 / FLOW-02 / FLOW-06 / FLOW-07",
+    "FLOW-15 overview (names <output>/inputs/ only; no change needed)",
+    "FLOW-17 (branch pushed at 3a7a1b3)"
+  ]
+}
