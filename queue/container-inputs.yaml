@@ -3,7 +3,7 @@ title: Record container inputs under inputs/ (ORCH-02)
 priority: 2
 status: in_progress
 round: parallel
-phase: 6
+phase: 1
 design: docs/design/container-inputs.md
 branch: feat/container-inputs
 alters_relationships: false
@@ -58,14 +58,13 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: p6-merge-round
-    phase: 6
+  - id: p1-design-r2
+    phase: 1
     affinity: cloud
     status: pending
     lease:
       claimed_by: ""
       expires: null
-    note: Waits for the serial merge queue (FLOW-05).
 budget:
   estimate:
     runs: 4
@@ -76,20 +75,22 @@ budget:
 questions:
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: Remove the top-level Dockerfile.submitted and build.sh outright, without a compatibility copy (pre-1.0 output layout)?
     options:
       - remove them
       - keep a top-level copy for one release
     recommended: remove them
+    answer: remove them
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: Record the submitted file as inputs/Dockerfile whatever its name (Containerfile, ...)?
     options:
       - fixed name inputs/Dockerfile
       - keep the submitted base name
     recommended: fixed name inputs/Dockerfile
+    answer: 'REJECTED the Dockerfile name: always record the submitted file as inputs/Containerfile (the open-standard name), whatever its original name'
 history:
   - at: 2026-10-28T23:18:38Z
     by: attended-setup
@@ -166,3 +167,12 @@ history:
   - at: 2026-10-28T23:51:33Z
     by: attended-setup
     event: 'Jeff: the Dockerfile and its translated build.sh are the build''s inputs (COPY becomes warden-io fetch, recorded by the ledger). Design Problem/Decisions reframed in db59d5e; behavior unchanged. The branch head moved past the p4 report, so m4-review re-reviews in the merge round.'
+  - at: 2026-10-29T00:16:42Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: remove them'
+  - at: 2026-10-29T00:16:42Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: REJECTED the Dockerfile name: always record the submitted file as inputs/Containerfile (the open-standard name), whatever its original name'
+  - at: 2026-10-29T00:16:42Z
+    by: human/jeff
+    event: 'back to design: Jeff rejected assumption a2: the submitted file is recorded as inputs/Containerfile, not inputs/Dockerfile. The design, implementation, tests and reference docs must change from inputs/Dockerfile to inputs/Containerfile; Plan adds the rename of already-implemented code as explicit tasks.'
