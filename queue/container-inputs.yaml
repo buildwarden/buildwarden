@@ -70,15 +70,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261029T095640Z
+      expires: 2026-10-29T12:00:49.32081405Z
 budget:
   estimate:
     runs: 4
     steps: 18
   spent:
     runs: 2
-    steps: 8
+    steps: 9
 questions:
   - id: a1
     kind: assumed
@@ -195,3 +195,6 @@ history:
   - at: 2026-10-29T10:00:37Z
     by: cloud/20261029T095640Z
     event: entered phase 2 (plan)
+  - at: 2026-10-29T10:00:49Z
+    by: cloud/20261029T095640Z
+    event: claimed p2-plan-r2 until 2026-10-29T12:00:49Z
