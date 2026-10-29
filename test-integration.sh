@@ -129,6 +129,29 @@ else
     FAIL=$((FAIL + 1))
 fi
 
+bold "  Recorded inputs (ORCH-02):"
+if cmp -s examples/Dockerfile.simple "$OUTPUT_DIR/inputs/Containerfile"; then
+    green "  ✓ inputs/Containerfile is the submitted file"
+    PASS=$((PASS + 1))
+else
+    red "  ✗ inputs/Containerfile missing or differs from examples/Dockerfile.simple"
+    FAIL=$((FAIL + 1))
+fi
+if [ -f "$OUTPUT_DIR/inputs/build.sh" ]; then
+    green "  ✓ inputs/build.sh recorded"
+    PASS=$((PASS + 1))
+else
+    red "  ✗ inputs/build.sh missing"
+    FAIL=$((FAIL + 1))
+fi
+if [ ! -e "$OUTPUT_DIR/inputs/Dockerfile" ]; then
+    green "  ✓ no inputs/Dockerfile"
+    PASS=$((PASS + 1))
+else
+    red "  ✗ inputs/Dockerfile written; the submitted file keeps a fixed name"
+    FAIL=$((FAIL + 1))
+fi
+
 rm -f "$INSPECT_FILE"
 green "  Output: $OUTPUT_DIR"
 
