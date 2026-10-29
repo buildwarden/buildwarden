@@ -9,6 +9,14 @@
 # only then starts a headless Claude Code session on the workflow-native skill
 # in unattended mode. An idle night starts no agent and costs nothing.
 #
+# Every exit after the lock is taken records the run in
+# native/status/<machine>.yaml on the workflow branch (FLOW-09): outcome
+# worked, idle, skipped or failed, with a one-line reason. It is pushed only
+# when the outcome or reason changes, or the last push is a day old, so idle
+# nights do not churn the branch. Workflow changes a session left uncommitted
+# or unpushed are saved under $BW_STATE_DIR/leftover/<run>/ and reported as a
+# failure, never reset away.
+#
 # Environment (all optional):
 #   BW_MIN_FREE_GB  free disk needed to start (default 40)
 #   BW_SWEEP_DAYS   re-sweep open backlog gaps after this many days (default 7)
@@ -44,40 +52,144 @@ if ! mkdir "$lock" 2>/dev/null; then
 	echo "taking over a stale lock"
 fi
 echo $$ >"$lock/pid"
-trap 'rm -rf "$lock"' EXIT
+
+outcome="" reason="" stage="setup"
+# skip and stop end the run with a fixed one-line reason, so an unchanged
+# situation writes an unchanged status file.
+skip() { outcome=skipped reason="skip: $1"; echo "$reason"; exit 0; }
+stop() { outcome=failed reason="stop: $1"; echo "$reason"; exit 1; }
+
+# epoch converts a UTC timestamp to seconds, with GNU date (Git Bash, Linux)
+# or BSD date (macOS).
+# shellcheck disable=SC2329 # called from the EXIT trap
+epoch() {
+	date -u -d "$1" +%s 2>/dev/null || date -u -j -f %Y-%m-%dT%H:%M:%SZ "$1" +%s 2>/dev/null ||
+		echo 0
+}
+
+# save_leftover keeps what a session left in the workflow checkout before it
+# is reset: uncommitted changes, untracked files and unpushed commits.
+# shellcheck disable=SC2329 # called from the EXIT trap
+save_leftover() {
+	local wt="$1" d="$state/leftover/$run"
+	mkdir -p "$d"
+	git -C "$wt" diff HEAD >"$d/uncommitted.patch"
+	git -C "$wt" ls-files -z --others --exclude-standard |
+		tar -C "$wt" --null -T - -cf "$d/untracked.tar"
+	git -C "$wt" format-patch -q -o "$d/commits" origin/workflow..HEAD
+	echo "saved the session's leftover workflow changes in $d"
+}
+
+# reset_workflow returns 1, after saving them, when a session left changes or
+# unpushed commits in the workflow checkout.
+reset_workflow() {
+	local wt="$1"
+	if [ -n "$(git -C "$wt" status --porcelain)" ] ||
+		[ -n "$(git -C "$wt" rev-list origin/workflow..HEAD 2>/dev/null)" ]; then
+		save_leftover "$wt"
+		return 1
+	fi
+}
+
+# record_status writes and pushes native/status/<machine>.yaml (see the top).
+# shellcheck disable=SC2329 # called from the EXIT trap
+record_status() {
+	local wt=.dev/workflow f prev_outcome prev_reason prev_since prev_last since attempt
+	cd "$repo" || return
+	git fetch -q origin workflow || { echo "status: cannot fetch workflow"; return; }
+	if [ ! -d "$wt" ]; then
+		git worktree add -q -B workflow "$wt" origin/workflow || return
+	fi
+	if ! reset_workflow "$wt"; then
+		outcome=failed reason="session left uncommitted workflow changes"
+	fi
+	f="$wt/native/status/$machine.yaml"
+	for attempt in 1 2 3; do
+		git -C "$wt" reset -q --hard origin/workflow
+		git -C "$wt" clean -fdq
+		prev_outcome=$(sed -n 's/^outcome: //p' "$f" 2>/dev/null)
+		prev_reason=$(sed -n 's/^reason: "\(.*\)"$/\1/p' "$f" 2>/dev/null)
+		prev_since=$(sed -n 's/^since: //p' "$f" 2>/dev/null)
+		prev_last=$(sed -n 's/^last_run: //p' "$f" 2>/dev/null)
+		if [ "$prev_outcome" = "$outcome" ] && [ "$prev_reason" = "$reason" ] &&
+			[ $(($(date -u +%s) - $(epoch "$prev_last"))) -lt 86400 ]; then
+			echo "status: $outcome, unchanged since $prev_since; not pushed"
+			return
+		fi
+		since="$now"
+		[ "$prev_outcome" = "$outcome" ] && [ -n "$prev_since" ] && since="$prev_since"
+		mkdir -p "$(dirname "$f")"
+		cat >"$f" <<-EOF
+			# Written by native-tick.sh; see the workflow README. One line of reason, no logs (FLOW-18).
+			machine: $machine
+			last_run: $now
+			outcome: $outcome
+			reason: "$reason"
+			since: $since
+		EOF
+		git -C "$wt" add "native/status/$machine.yaml"
+		git -C "$wt" commit -q -m "$machine: status $outcome"
+		if git -C "$wt" push -q origin workflow; then
+			echo "status: pushed $outcome ($reason)"
+			return
+		fi
+		echo "status: push rejected (attempt $attempt); refetching"
+		git fetch -q origin workflow
+	done
+	echo "status: not pushed after 3 attempts"
+}
+
+# shellcheck disable=SC2329 # called from the EXIT trap
+on_exit() {
+	local rc=$?
+	set +e
+	if [ -z "$reason" ]; then
+		outcome=failed reason="exit $rc during $stage"
+	fi
+	reason=$(printf '%s' "$reason" | tr -d '"\134' | tr '\n' ' ' | cut -c1-120)
+	record_status
+	rm -rf "$lock"
+	exit "$rc"
+}
+now="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+trap on_exit EXIT
 
 # Keep a month of logs.
 find "$state/logs" -name '*.log' -mtime +30 -delete 2>/dev/null || true
 
 if [ "${BW_FORCE:-}" != 1 ] && [ "$(uname -s)" = Darwin ] &&
 	! pmset -g batt | grep -q "AC Power"; then
-	echo "skip: on battery"
-	exit 0
+	skip "on battery"
 fi
 free_gb=$(df -Pk "$repo" | awk 'NR==2 {print int($4/1024/1024)}')
 if [ "$free_gb" -lt "${BW_MIN_FREE_GB:-40}" ]; then
-	echo "skip: ${free_gb}G free, need ${BW_MIN_FREE_GB:-40}G (VM images and test caches)"
-	exit 0
+	echo "${free_gb}G free, need ${BW_MIN_FREE_GB:-40}G (VM images and test caches)"
+	skip "low disk"
 fi
 
 cd "$repo"
 if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
-	echo "stop: the dedicated checkout has local changes; it is for the native loop only"
 	git status --short
-	exit 1
+	stop "the dedicated checkout has local changes"
 fi
+stage="sync"
 git fetch -q --prune origin
 git switch -q main
 git reset -q --hard origin/main
 git worktree prune
 if [ -d .dev/workflow ]; then
+	reset_workflow .dev/workflow || true
 	git -C .dev/workflow reset -q --hard origin/workflow
+	git -C .dev/workflow clean -fdq
 else
 	git worktree add -q -B workflow .dev/workflow origin/workflow
 fi
+stage="flow18-check"
 tools/workflow/flow18-check.sh
+stage="build wf"
 mkdir -p dist
 (cd tools/workflow && go build -o ../../dist/wf ./cmd/wf)
+stage="gate"
 
 stamp="$state/gate-$machine.json"
 if [ "${BW_FORCE:-}" = 1 ]; then
@@ -90,12 +202,13 @@ else
 	set -e
 	case $rc in
 	0) ;;
-	3) echo "idle: no agent started"; exit 0 ;;
-	*) echo "stop: wf gate failed ($rc)"; exit 1 ;;
+	3) outcome=idle reason="idle: gate found no work"; echo "idle: no agent started"; exit 0 ;;
+	*) stop "wf gate failed" ;;
 	esac
 fi
 
-command -v claude >/dev/null || { echo "stop: claude is not on PATH"; exit 1; }
+command -v claude >/dev/null || stop "claude is not on PATH"
+stage="claude"
 # Stamp what this session starts from, so a branch that moves while it runs
 # triggers the next one.
 dist/wf gate -state .dev/workflow -repo . -machine "$machine" -stamp "$stamp.pending" -record
@@ -107,6 +220,13 @@ claude -p "Invoke the workflow-native skill with the arguments \"unattended $mac
 rc=$?
 set -e
 echo "claude exited $rc"
+if [ $rc -eq 0 ]; then
+	outcome=worked
+else
+	outcome=failed
+fi
+reason="claude exited $rc"
+stage="cleanup"
 
 # Leave the checkout on main and clean, whatever the session did.
 git switch -q -f main && git reset -q --hard origin/main

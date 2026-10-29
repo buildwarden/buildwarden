@@ -163,11 +163,13 @@ skipped when item 1 is green (see the Validation plan for the outcome).
   - `reason` is one line of at most 120 characters;
   - `last_run` and `since` are set, and `since` is not after `last_run`.
 - *(this design)* **The permission fix** in the same item:
-  - `settings.native.json` also allows `git -C .dev/workflow push origin HEAD:workflow`
-    and binaries built under `.scratch/`.
-  - The skill names the exact command forms to use: `git -C .dev/workflow ...`
-    from the checkout root, never an absolute path or a `cd`, and
-    `git -C <scratch worktree> ...` for scratch worktrees.
+  - The skill names the one form `settings.native.json` already allows:
+    `git -C .dev/workflow ...` from the checkout root, never an absolute path
+    or a `cd`.
+  - Widening the allow list (`git -C .dev/workflow push origin HEAD:workflow`,
+    git and binaries under `.scratch/` for testing a branch) widens what an
+    unattended agent may do. That is Jeff's decision, so it is left out of
+    this change and listed as a question below.
 
 ### 5. One morning summary notification
 
@@ -269,6 +271,15 @@ None.
   wrapper commit them. Confirm.
 - Proceeding with `x2-implement`'s done-when as "branch pushed". Confirm.
 - Proceeding with `wf gate` honoring holds. Confirm.
+- Proceeding without widening `settings.native.json`. The Mac's
+  2026-10-29 run also could not run a branch binary from a `.scratch/`
+  worktree. Options:
+  - allow `Bash(git -C .scratch/:*)` and `Bash(.scratch/:*)`;
+  - test branches in the dedicated checkout itself, one at a time;
+  - leave branch tests to attended runs.
+
+  Recommended: the first, since `make:*` already lets the agent run
+  anything. Confirm.
 
 ## Design
 

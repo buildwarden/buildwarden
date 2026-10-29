@@ -144,6 +144,8 @@ type State struct {
 	// files are optional.
 	Machines []Machine
 	Gaps     []Gap
+	// Statuses are native/status/*.yaml, one per machine (FLOW-09).
+	Statuses []MachineStatus
 }
 
 // Load reads config.yaml and queue/*.yaml under dir.

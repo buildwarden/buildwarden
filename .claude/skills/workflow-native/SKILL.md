@@ -28,6 +28,15 @@ it in the queue and the digest instead), and never change anything on the
 machine outside the checkout, the documented caches, and the VMs, images and
 containers this session creates.
 
+## Git on the workflow checkout (unattended)
+
+Nobody is there to approve a prompt, and `settings.native.json` allows git on
+the workflow checkout only in this form, run from the checkout root:
+`git -C .dev/workflow <add|commit|push origin workflow|...>`. Never an
+absolute path, and never `cd .dev/workflow && git ...`. A session that still
+cannot commit or push leaves its changes for the wrapper, which saves them and
+reports the run as failed.
+
 ## Set up
 
 On the machine itself. The FLOW-18 check, `dist/wf` and the `.dev/workflow`

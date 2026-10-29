@@ -33,7 +33,19 @@ type Gap struct {
 	Status string `yaml:"status"` // open | done
 }
 
-// loadNative reads the optional hosts.yaml and backlog/native-gaps.yaml.
+// MachineStatus is native/status/<machine>.yaml, written by native-tick.sh
+// on every scheduled run so a failure before the agent starts is still seen.
+type MachineStatus struct {
+	File    string    `yaml:"-"`
+	Machine string    `yaml:"machine"`
+	LastRun time.Time `yaml:"last_run"`
+	Outcome string    `yaml:"outcome"` // worked | idle | skipped | failed
+	Reason  string    `yaml:"reason"`  // one line, never log contents (FLOW-18)
+	Since   time.Time `yaml:"since"`
+}
+
+// loadNative reads the optional hosts.yaml, backlog/native-gaps.yaml and
+// native/status/*.yaml.
 func (s *State) loadNative() error {
 	var hosts struct {
 		Machines []Machine `yaml:"machines"`
@@ -50,7 +62,47 @@ func (s *State) loadNative() error {
 		return err
 	}
 	s.Gaps = gaps.Gaps
+	paths, err := filepath.Glob(filepath.Join(s.Dir, "native", "status", "*.yaml"))
+	if err != nil {
+		return err
+	}
+	for _, p := range paths {
+		st := MachineStatus{File: filepath.Base(p)}
+		if err := readYAML(p, &st); err != nil {
+			return err
+		}
+		s.Statuses = append(s.Statuses, st)
+	}
 	return nil
+}
+
+// validateStatus checks the shape of the machine status files.
+func (s *State) validateStatus() []string {
+	var errs []string
+	for _, st := range s.Statuses {
+		bad := func(format string, a ...any) {
+			errs = append(errs, fmt.Sprintf("native/status/%s: ", st.File)+
+				fmt.Sprintf(format, a...))
+		}
+		if st.Machine+".yaml" != st.File {
+			bad("machine %q does not match the file name", st.Machine)
+		}
+		if len(s.Machines) > 0 {
+			if _, err := s.Machine(st.Machine); err != nil {
+				bad("machine %q is not in hosts.yaml", st.Machine)
+			}
+		}
+		if !oneOf(st.Outcome, "worked", "idle", "skipped", "failed") {
+			bad("outcome %q is not worked, idle, skipped or failed", st.Outcome)
+		}
+		if r := st.Reason; r == "" || strings.ContainsAny(r, "\r\n") || len(r) > 120 {
+			bad("reason must be one line of 1 to 120 characters")
+		}
+		if st.LastRun.IsZero() || st.Since.IsZero() || st.Since.After(st.LastRun) {
+			bad("last_run and since must be set, and since not after last_run")
+		}
+	}
+	return errs
 }
 
 func readOptional(path string, v any) error {
@@ -73,10 +125,10 @@ func (s *State) Machine(name string) (*Machine, error) {
 // validateNative checks that each host name has one machine and that every
 // host step and open gap names a host some machine serves.
 func (s *State) validateNative() []string {
+	errs := s.validateStatus()
 	if len(s.Machines) == 0 {
-		return nil
+		return errs
 	}
-	var errs []string
 	bad := func(format string, a ...any) { errs = append(errs, fmt.Sprintf(format, a...)) }
 	servedBy := map[string]string{}
 	for _, m := range s.Machines {

@@ -165,3 +165,38 @@ func TestLoadReadsHostsAndGaps(t *testing.T) {
 		t.Fatalf("loaded %+v %+v", s.Machines, s.Gaps)
 	}
 }
+
+func TestValidateMachineStatus(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(dir, "native", "status"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("run_budget: {steps: 8}\n"),
+		0o644)
+	_ = os.WriteFile(filepath.Join(dir, "hosts.yaml"),
+		[]byte("machines:\n  - {name: mac, hosts: [macos-vz]}\n"), 0o644)
+	write := func(name, body string) {
+		_ = os.WriteFile(filepath.Join(dir, "native", "status", name), []byte(body), 0o644)
+	}
+	write("mac.yaml", "machine: mac\nlast_run: 2026-10-29T20:13:35Z\noutcome: failed\n"+
+		"reason: \"claude exited 1\"\nsince: 2026-10-29T04:40:00Z\n")
+	s, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if errs := s.Validate(); len(errs) != 0 || len(s.Statuses) != 1 {
+		t.Fatalf("Validate = %v, statuses %d; want a clean single status", errs,
+			len(s.Statuses))
+	}
+	write("pc.yaml", "machine: other\nlast_run: 2026-10-29T04:00:00Z\noutcome: broken\n"+
+		"reason: \"\"\nsince: 2026-10-30T00:00:00Z\n")
+	s, _ = Load(dir)
+	got := ""
+	for _, e := range s.Validate() {
+		got += e.Error() + "\n"
+	}
+	for _, want := range []string{"does not match the file name", "not in hosts.yaml",
+		`outcome "broken"`, "one line", "since not after last_run"} {
+		if !strings.Contains(got, want) {
+			t.Errorf("Validate = %q, want %q", got, want)
+		}
+	}
+}

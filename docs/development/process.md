@@ -251,7 +251,10 @@ every waiting branch in one sitting rather than one session per feature. Each
 native machine also runs a scheduled session that starts an agent only when a
 host step it serves is ready, or when `main` or a waiting branch has moved since
 its last sweep of open backlog entries; it is bound by the unattended loop's limits
-(FLOW-13) and records what it did in the digest. A failure
+(FLOW-13) and records what it did in the digest. Every scheduled run, including
+one that stops before an agent starts, also records the machine's outcome and a
+one-line reason in `native/status/<machine>.yaml` on the `workflow` branch, so a
+silent failure is still visible. A failure
 found there returns the feature (or a new fix item) to Design or Implement with the
 logs attached. The full matrix before a release (TEST-02) is the backstop for every
 tracked gap.
