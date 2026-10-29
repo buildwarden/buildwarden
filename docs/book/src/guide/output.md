@@ -19,12 +19,13 @@ warden-output/
 ```
 
 A build from a Dockerfile also gets `inputs/`, holding the Dockerfile you
-submitted and the `build.sh` it was translated to (ORCH-02):
+submitted, kept as `Containerfile`, and the `build.sh` it was translated to
+(ORCH-02):
 
 ```
 warden-output/
 └── inputs/
-    ├── Dockerfile          # Your Dockerfile, unchanged
+    ├── Containerfile       # Your Dockerfile, unchanged
     └── build.sh            # The translated build script: what ran
 ```
 
@@ -45,10 +46,11 @@ Inspect with:
 warden inspect warden-output
 ```
 
-### inputs/Dockerfile
+### inputs/Containerfile
 
-Your original Dockerfile (or Containerfile, whatever its name), unchanged.
-Preserved for comparison with what actually ran.
+Your original Dockerfile, unchanged. It is kept under the fixed name
+`Containerfile` whatever it was called (`Dockerfile`, `Containerfile`,
+`Dockerfile.simple`, ...). Preserved for comparison with what actually ran.
 
 ### inputs/build.sh
 

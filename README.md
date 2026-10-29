@@ -47,7 +47,7 @@ warden-output/
 ├── artifacts/              # Build outputs posted to the ledger
 │   └── myapp
 ├── inputs/
-│   ├── Dockerfile          # What you wrote
+│   ├── Containerfile       # What you wrote (your Dockerfile, unchanged)
 │   └── build.sh            # What actually ran (translated from it)
 ├── ca.cert.pem.zst         # Ephemeral CA (destroyed after build)
 └── relay.log               # Relay event log
