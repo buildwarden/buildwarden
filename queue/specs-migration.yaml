@@ -1,6 +1,6 @@
 feature: specs-migration
 title: Move the ledger spec and schemas to specs/ (RELAY-05)
-priority: 4
+priority: 5
 status: queued
 round: parallel
 phase: 0
@@ -28,3 +28,6 @@ history:
   - at: 2026-10-28T23:18:38Z
     by: attended-setup
     event: queued at priority 4 (intake)
+  - at: 2026-10-29T00:12:09Z
+    by: human/jeff
+    event: 'priority 4 -> 5 (Jeff reordered: retrofit early)'

@@ -1,6 +1,6 @@
 feature: security-suite
 title: 'Build the TEST-08 security suite and pen-tester agent (Deep-dive #1)'
-priority: 6
+priority: 7
 status: queued
 round: parallel
 phase: 0
@@ -31,3 +31,6 @@ history:
   - at: 2026-10-28T23:19:04Z
     by: attended-setup
     event: The suite design (SEC-01..08) is docs/development/security-suite.md; this item builds it. Design decides which steps need an isolated host.
+  - at: 2026-10-29T00:12:09Z
+    by: human/jeff
+    event: 'priority 6 -> 7 (Jeff reordered: retrofit early)'

@@ -2,7 +2,7 @@
 
 # Unattended runs do no work until the human confirms the priority order in
 # queue/*.yaml (set by the workflow-human skill).
-priority_confirmed: false
+priority_confirmed: true
 
 # Steps one daily run may take. Starts small; calibrate against /usage.
 run_budget:

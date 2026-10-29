@@ -1,6 +1,6 @@
 feature: tier1-static-checks
 title: 'Tier-1 static-check extraction (LINT-02, Deep-dive #2)'
-priority: 3
+priority: 4
 status: queued
 round: parallel
 phase: 0
@@ -28,3 +28,6 @@ history:
   - at: 2026-10-28T23:18:38Z
     by: attended-setup
     event: queued at priority 3 (intake)
+  - at: 2026-10-29T00:12:09Z
+    by: human/jeff
+    event: 'priority 3 -> 4 (Jeff reordered: retrofit early)'

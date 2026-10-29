@@ -54,13 +54,14 @@ budget:
 questions:
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Priority order of the seeded queue: workflow-bootstrap, container-inputs, tier1-static-checks, specs-migration, firecracker-driver, security-suite, design-front-matter-retrofit.'
     options:
       - this order
       - firecracker-driver before tier1-static-checks
       - security-suite before firecracker-driver
     recommended: 'this order: the small item first, then the checks that make Review deterministic, then the large features. Unattended runs wait on it (config.yaml priority_confirmed).'
+    answer: 'Reordered: workflow-bootstrap, container-inputs, design-front-matter-retrofit, tier1-static-checks, specs-migration, firecracker-driver, security-suite (retrofit early)'
   - id: a2
     kind: assumed
     status: open
@@ -119,3 +120,6 @@ history:
   - at: 2026-10-29T00:02:11Z
     by: human/jeff
     event: entered phase 8 (archive)
+  - at: 2026-10-29T00:12:14Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: Reordered: workflow-bootstrap, container-inputs, design-front-matter-retrofit, tier1-static-checks, specs-migration, firecracker-driver, security-suite (retrofit early)'
