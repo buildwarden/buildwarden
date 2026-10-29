@@ -155,34 +155,59 @@ available. Native hosts are tracked, not blocking (see front-matter).
 
 ## Implementation plan
 
-1. Add `translates(req)` and `RecordInputs` to `driver/session.go`, used by
-   `StageBuildScript` (ORCH-02, GLOBAL-01).
-2. Unit tests for both, table-driven over the precedence cases (TEST-01).
-3. Container driver: replace the top-level copies in `collectOutput` with
-   `RecordInputs` (ORCH-02, FLOW-15).
-4. qemu and hyperv: call `RecordInputs` right after `StageBuildScript`
-   (ORCH-01).
-5. Update the output reference (`docs/book/src/guide/output.md`) and the
+Tasks 1 to 6 are done: they shipped in the first round (p3 Implement, p5
+Guide) with the submitted file recorded as `inputs/Dockerfile`. Tasks 7 to 12
+are the a2 rework (FLOW-06) and are open.
+
+1. Done. Add `translates(req)` and `RecordInputs` to `driver/session.go`,
+   `translates` shared with `StageBuildScript` (ORCH-02, GLOBAL-01).
+2. Done. Tier 0 unit tests (TEST-02), table-driven over the precedence cases
+   (translated, `--script`, context script, Windows guest):
+   `TestRecordInputsOnlyWhenTranslated` and the `StageBuildScript` cases it
+   agrees with (TEST-01, TEST-03).
+3. Done. Container driver: `setup` calls `RecordInputs` once the output
+   directory exists, and `collectOutput` no longer writes the top-level
+   `Dockerfile.submitted` and `build.sh` (ORCH-02, ORCH-01, FLOW-15; a1).
+4. Done. qemu and hyperv call `RecordInputs` right after `StageBuildScript`,
+   failing the build before it starts if recording fails (ORCH-01, ORCH-02).
+   vz does not call it (Cross-driver impact).
+5. Done. Output reference `docs/book/src/guide/output.md` and the
    `StartBuild` pseudocode in `docs/book/src/concepts/overview.md` (UX-01,
-   FLOW-15).
-6. Update the layout in `README.md` (UX-01). The Guide phase updates the
-   narrative in `getting-started/first-build.md`.
-
-Rework for a2 (FLOW-06; steps 1 to 6 shipped with `inputs/Dockerfile`):
-
-7. `driver/session.go`: `RecordInputs` writes `inputs/Containerfile`, and its
-   doc comment says so (ORCH-02).
-8. `driver/session_test.go`: `TestRecordInputsOnlyWhenTranslated` submits a
-   file named `Dockerfile`, reads `inputs/Containerfile`, and asserts
-   `inputs/Dockerfile` is absent (TEST-01).
-9. Reference docs (UX-01): `docs/book/src/guide/output.md` (the layout block
-   and the `### inputs/Dockerfile` entry, retitled `### inputs/Containerfile`),
-   `README.md`'s layout, and `docs/book/src/getting-started/first-build.md`'s
-   layout. `overview.md` names no file and needs no change (FLOW-15).
-10. Check no `inputs/Dockerfile` remains in code, tests or reference docs:
-    `grep -rn 'inputs/Dockerfile\|"inputs", "Dockerfile"' driver cmd docs/book
-    README.md test-integration.sh` finds nothing (this design keeps the name
-    only as the rejected option).
+   FLOW-15). Its `inputs/Dockerfile` wording is reworked in task 10.
+6. Done. Layout in `README.md` (UX-01); the Guide phase updated the narrative
+   in `docs/book/src/getting-started/first-build.md` (UX-01). Both are
+   reworked in task 10.
+7. Rework `driver/session.go`: `RecordInputs` copies `req.Containerfile` to
+   `inputs/Containerfile` (today `filepath.Join(dir, "Dockerfile")`), and its
+   doc comment names `<output>/inputs/Containerfile` (ORCH-02, a2).
+8. Rework the tier 0 test `TestRecordInputsOnlyWhenTranslated` in
+   `driver/session_test.go` (TEST-01, TEST-02): rename the submitted fixture
+   from `Containerfile` to `Dockerfile`, so the test proves the fixed name
+   rather than an unchanged base name; read `inputs/Containerfile` and fix
+   the failure message; in the translated case assert `inputs/Dockerfile`
+   does not exist; the run-as-given cases keep asserting no `inputs/` (ORCH-02).
+9. Tier 1 check in `test-integration.sh` (TEST-02, container driver, where a
+   runtime is available): after Test 2's `examples/Dockerfile.simple` build,
+   assert `inputs/Containerfile` matches the submitted file byte for byte,
+   `inputs/build.sh` exists, and `inputs/Dockerfile` does not, with the
+   script's `green`/`red` and PASS/FAIL counters (ORCH-02, TEST-03). The qemu
+   and hyperv end-to-end gap stays tracked in `tier2_gaps`.
+10. Rework the reference docs in the same change (UX-01):
+    `docs/book/src/guide/output.md` (the `inputs/` layout block, and the
+    `### inputs/Dockerfile` entry retitled `### inputs/Containerfile`, saying
+    the submitted file is kept under that fixed name whatever it was called);
+    the `inputs/` lines of `README.md`'s layout; the `inputs/` lines of
+    `docs/book/src/getting-started/first-build.md`'s layout. Prose that means
+    the file the user wrote keeps "your Dockerfile" (Design). `overview.md`
+    names no file and needs no change (FLOW-15).
+11. Sweep for the old name (ORCH-02, UX-01): `grep -rn
+    'inputs/Dockerfile\|"inputs", "Dockerfile"\|(dir, "Dockerfile")' driver cmd
+    docs/book README.md test-integration.sh` returns only the absence
+    assertions added in tasks 8 and 9; this design keeps the name only as the
+    rejected option.
+12. Gate before pushing (TEST-01, FLOW-17): `make test`, and `make lint` for
+    linux (only untagged files in `driver/` change); push
+    `feat/container-inputs`.
 
 ## Consolidation (merge round)
 
