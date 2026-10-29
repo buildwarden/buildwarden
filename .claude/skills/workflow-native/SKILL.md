@@ -33,7 +33,11 @@ containers this session creates.
 Nobody is there to approve a prompt, and `settings.native.json` allows git on
 the workflow checkout only in this form, run from the checkout root:
 `git -C .dev/workflow <add|commit|push origin workflow|...>`. Never an
-absolute path, and never `cd .dev/workflow && git ...`. A session that still
+absolute path, and never `cd .dev/workflow && git ...`. A branch under test
+goes in a worktree under `.scratch/` (`git worktree add .scratch/<name> <ref>`),
+driven with `git -C .scratch/<name> ...`, with its binaries run as
+`.scratch/<name>/dist/warden ...` and its targets with
+`make -C .scratch/<name> <target>`. A session that still
 cannot commit or push leaves its changes for the wrapper, which saves them and
 reports the run as failed.
 

@@ -25,6 +25,8 @@
       "Bash(git merge-base:*)",
       "Bash(git -C .dev/workflow:*)",
       "Bash(git push origin workflow)",
+      "Bash(git -C .scratch/:*)",
+      "Bash(.scratch/:*)",
       "Bash(git push origin feat/:*)",
       "Bash(dist/wf:*)",
       "Bash(./dist/wf:*)",
