@@ -1,0 +1,15 @@
+# Native machines (FLOW-04, FLOW-09): which host names each machine's scheduled
+# native session serves. Each host name has exactly one machine, so moving a
+# capability between machines is an edit here, not a code change. Read by
+# `wf gate` and `wf validate`; the procedure is the workflow-native skill.
+#
+# Host names: <os>-<driver> is specific to that platform (macos-vz,
+# windows-hyperv); <capability>-any can run on any native host that has it and
+# goes to the always-on machine.
+machines:
+  - name: macbook
+    hosts: [macos-vz, macos-qemu, macos-finch]
+    note: Jeff's MacBook Pro (arm64). Asleep or away at times; launchd runs a missed slot on wake.
+  - name: windows-desktop
+    hosts: [windows-hyperv, qemu-any, container-any]
+    note: Always-on Windows desktop. Takes any-OS native work (qemu with WHPX, a container runtime).

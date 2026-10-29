@@ -39,8 +39,14 @@ gaps:
     design: docs/design/ledger-environment-types.md
     status: open
   - id: container-inputs-linux-vm-guests
-    host: macos-qemu
+    host: qemu-any
     what: A qemu (and Hyper-V) Linux-guest build from a Dockerfile writes inputs/Dockerfile and inputs/build.sh end to end.
     design: docs/design/container-inputs.md
-    note: Tracked, not blocking (FLOW-09); unit-tested in tier 0.
+    note: Tracked, not blocking (FLOW-09); unit-tested in tier 0. Re-homed from macos-qemu to qemu-any (2026-10-29, native-host-loop) since it is not Mac-specific.
+    status: open
+  - id: container-inputs-integration-test
+    host: container-any
+    what: make integration-test on feat/container-inputs, including the new inputs/ check in test-integration.sh, which has never run (cloud sessions have no container runtime or outbound network; CI does not run the script).
+    design: docs/design/container-inputs.md
+    note: Wanted before container-inputs sign-off (2026-10-29 digest).
     status: open

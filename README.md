@@ -18,6 +18,7 @@ hand-edited when a `wf` command can make the change.
 |---|---|
 | `config.yaml` | Loop settings: the priority gate, run budget, FLOW-05 limits, lease length, runaway factor. |
 | `queue/<feature>.yaml` | One file per feature: its state, steps, budget, questions and history. |
+| `hosts.yaml` | Native machines and the host names each one's scheduled session serves (FLOW-04, FLOW-09); read by `wf gate` and `wf validate`. |
 | `backlog/native-gaps.yaml` | Validation deferred by merged designs, per host (FLOW-09, TEST-03). |
 | `digest/<YYYY-MM-DD>.md` | One file per day (Pacific), a section per run: what moved, what is blocked on Jeff, what waits on a host, what was spent (FLOW-13). |
 | `reports/<feature>/<sha12>.{md,json}` | The behavioral linter's tier-2 report for a branch head (LINT-04, LINT-05), report-only (LINT-07). |
