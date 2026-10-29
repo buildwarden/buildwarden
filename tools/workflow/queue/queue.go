@@ -5,6 +5,7 @@ package queue
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -116,6 +117,10 @@ type State struct {
 	Dir      string
 	Config   Config
 	Features []*Feature
+	// Machines and Gaps are hosts.yaml and backlog/native-gaps.yaml; both
+	// files are optional.
+	Machines []Machine
+	Gaps     []Gap
 }
 
 // Load reads config.yaml and queue/*.yaml under dir.
@@ -142,6 +147,9 @@ func Load(dir string) (*State, error) {
 	sort.Slice(s.Features, func(i, j int) bool {
 		return s.Features[i].Priority < s.Features[j].Priority
 	})
+	if err := s.loadNative(); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
 
@@ -229,6 +237,9 @@ func (s *State) Validate() []error {
 		errs = append(errs, fmt.Errorf(
 			"%d features past Design alter relationships, limit %d (FLOW-05)",
 			alters, n))
+	}
+	for _, e := range s.validateNative() {
+		errs = append(errs, errors.New(e))
 	}
 	return errs
 }

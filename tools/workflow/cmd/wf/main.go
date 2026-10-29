@@ -14,15 +14,22 @@
 //	wf back     -state DIR -worker W -feature F -why FINDING
 //	wf new      -state DIR -worker W -feature F -title T -priority N
 //	            -estimate-steps N -estimate-runs N [-source S]
+//	wf gate     -state DIR -repo DIR -machine M -stamp FILE [-sweep-days N] [-record]
 //
 // DIR is a checkout of the workflow branch; -repo is a checkout of the code
 // with origin fetched. A worker is cloud, human or host:<name>, optionally
 // with a /<session> suffix that tells its leases apart. Commands that change
 // state write the queue file; the caller commits and pushes it, and re-reads
 // state if the push is rejected.
+//
+// gate is the scheduled native session's go/no-go (FLOW-09): it exits 0 when
+// machine M (hosts.yaml) has a ready host step, or open backlog gaps and main
+// or a waiting branch moved since the stamp; 3 when idle. -record writes the
+// stamp after a finished session.
 package main
 
 import (
+	"errors"
 	"flag"
 	"fmt"
 	"os"
@@ -33,13 +40,16 @@ import (
 	"github.com/buildwarden/buildwarden/tools/workflow/queue"
 )
 
-const usage = "usage: wf validate|status|next|claim|release|check|done|answer|back|new [flags]"
+const usage = "usage: wf validate|status|next|claim|release|check|done|answer|back|new|gate [flags]"
+
+// errIdle is gate's "nothing to do", exit status 3.
+var errIdle = errors.New("idle")
 
 type opts struct {
 	state, repo, worker, feature, step, why, question, answer string
-	title, source                                             string
-	priority, estSteps, estRuns                               int
-	newRun, run                                               bool
+	title, source, machine, stamp                             string
+	priority, estSteps, estRuns, sweepDays                    int
+	newRun, run, record                                       bool
 	now                                                       time.Time
 }
 
@@ -49,6 +59,9 @@ func main() {
 		os.Exit(2)
 	}
 	if err := run(os.Args[1], os.Args[2:], time.Now().UTC()); err != nil {
+		if errors.Is(err, errIdle) {
+			os.Exit(3)
+		}
 		fmt.Fprintln(os.Stderr, "wf:", err)
 		os.Exit(1)
 	}
@@ -72,6 +85,10 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.IntVar(&o.priority, "priority", 0, "new: priority, 1 highest")
 	fs.IntVar(&o.estSteps, "estimate-steps", 0, "new: estimated steps")
 	fs.IntVar(&o.estRuns, "estimate-runs", 0, "new: estimated runs")
+	fs.StringVar(&o.machine, "machine", "", "gate: the machine's name in hosts.yaml")
+	fs.StringVar(&o.stamp, "stamp", "", "gate: file recording the last finished session")
+	fs.IntVar(&o.sweepDays, "sweep-days", 7, "gate: re-sweep open gaps after this many days")
+	fs.BoolVar(&o.record, "record", false, "gate: write the stamp instead of deciding")
 	_ = fs.Parse(args)
 
 	s, err := queue.Load(o.state)
@@ -80,7 +97,7 @@ func run(cmd string, args []string, now time.Time) error {
 	}
 	cmds := map[string]func(*queue.State, opts) error{
 		"validate": validate, "status": status, "next": next, "check": checkPhase,
-		"answer": answer, "back": back, "new": newFeature,
+		"answer": answer, "back": back, "new": newFeature, "gate": gate,
 	}
 	for _, c := range []string{"claim", "release", "done"} {
 		cmds[c] = func(s *queue.State, o opts) error { return stepCmd(c, s, o) }
@@ -270,4 +287,35 @@ func lastLines(s string, n int) string {
 		lines = lines[len(lines)-n:]
 	}
 	return strings.Join(lines, "\n     ")
+}
+
+// gate decides whether a machine's scheduled native session should start an
+// agent, or (-record) stamps what a finished session saw.
+func gate(s *queue.State, o opts) error {
+	if o.machine == "" || o.stamp == "" {
+		return fmt.Errorf("gate needs -machine and -stamp")
+	}
+	m, err := s.Machine(o.machine)
+	if err != nil {
+		return err
+	}
+	last, err := queue.ReadStamp(o.stamp)
+	if err != nil {
+		return err
+	}
+	g, err := s.Gate(m, o.repo, last, o.sweepDays, o.now)
+	if err != nil {
+		return err
+	}
+	if o.record {
+		fmt.Printf("recorded\t%s\n", g.Print)
+		return queue.WriteStamp(o.stamp, queue.GateStamp{Print: g.Print, At: o.now})
+	}
+	for _, r := range g.Reasons {
+		fmt.Println(r)
+	}
+	if !g.Run {
+		return errIdle
+	}
+	return nil
 }
