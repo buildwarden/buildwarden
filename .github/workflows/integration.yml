@@ -24,11 +24,6 @@ on:
       - 'test-integration.sh'
       - 'Dockerfile*'
       - 'go.mod'
-  # Temporary, removed before the PR (native-loop-followups.md, item 1):
-  # workflow_dispatch only exists once this file is on main, so these runs
-  # prove the job on the branch and on feat/container-inputs before merge.
-  push:
-    branches: [feat/native-loop-followups]
 
 permissions:
   contents: read
@@ -37,25 +32,13 @@ jobs:
   tier1:
     runs-on: ubuntu-latest
     timeout-minutes: 45
-    strategy:
-      fail-fast: false
-      matrix:
-        # Temporary with the push trigger above; one empty entry otherwise.
-        ref: ${{ fromJSON(github.event_name == 'push' && '["", "feat/container-inputs"]' || '[""]') }}
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ matrix.ref || inputs.ref || '' }}
+          ref: ${{ inputs.ref || '' }}
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      # Temporary, with the push trigger: feat/container-inputs predates this
-      # branch's Dockerfile and test-integration.sh fixes, so its run applies
-      # them as a patch on top of its own script (which adds the inputs/ check).
-      - if: matrix.ref != ''
-        run: |
-          git fetch -q --depth=50 origin +refs/heads/main:refs/tmp/main ${{ github.sha }}:refs/tmp/head
-          git diff refs/tmp/main refs/tmp/head -- Dockerfile test-integration.sh | git apply -v
       - run: docker version
       # Refs older than the dist/warden fix in test-integration.sh call ./warden.
       - run: ln -sf dist/warden warden
@@ -63,6 +46,6 @@ jobs:
       - if: failure()
         uses: actions/upload-artifact@v4
         with:
-          name: warden-output-${{ strategy.job-index }}
+          name: warden-output
           path: /tmp/warden-integ-*
           if-no-files-found: ignore

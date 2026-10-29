@@ -383,4 +383,49 @@ Operationally:
 
 ## Rollback notes
 
+- **Item 1, outcome (2026-10-29).** Hosted runners run tier 1; the relay's
+  isolation needed nothing extra. Item 2 (the native fallback) is skipped.
+  The first runs found three defects that kept tier 1 from passing anywhere,
+  fixed here:
+  - `test-integration.sh` ran `./warden`, but `make build` writes
+    `dist/warden`;
+  - the self-build `Dockerfile` predated `bootstrap/`, `collector/` and
+    `relaycfg/`;
+  - the script looked for an `Output:` line that warden no longer prints
+    (it now ends with `build SUCCEEDED (output: <dir>)`), and under
+    `pipefail` it exited silently.
+
+  Green: run 40961607311
+  (https://github.com/buildwarden/buildwarden/actions/runs/40961607311).
+  - This branch: 26 passed.
+  - `feat/container-inputs`, with the two fixes applied as a patch: 29
+    passed, including its `inputs/` checks. Backlog entry
+    `container-inputs-integration-test` is done. Container-inputs needs
+    `main` merged after this lands to pass on its own.
+  - The temporary push trigger and overlay are removed. After merge, run
+    `gh workflow run integration.yml` and
+    `gh workflow run integration.yml -f ref=feat/container-inputs`.
+- **Item 4.** The trap is tested against a scratch bare remote with a
+  stand-in `claude`, and all eleven cases pass:
+  - outcomes: worked, idle, skipped (low disk), failed (claude), failed
+    (FLOW-18 stage);
+  - pushes: no push when nothing changed, a re-push after 24 hours, one
+    rejected push then a retry;
+  - other paths: leftovers saved, the lock held, `wf validate` on the result.
+
+  `shellcheck` is clean. The test found that `git reset --hard` kept a
+  session's untracked files, so they were reported again on every run. The
+  wrapper now saves them, then runs `git clean`.
+- **Item 5.** Routine `trig_019JtGP4CX7YN4GqvLJQMaSt`
+  (https://claude.ai/code/routines/trig_019JtGP4CX7YN4GqvLJQMaSt):
+  - schedule: `CRON_TZ=America/Los_Angeles 40 7 * * *`;
+  - environment `bw-loop`, Sonnet;
+  - tools: Bash, Read, Glob and Grep only, no connectors.
+- **Item 7.** The Mac's first run (2026-10-29) could not push its own
+  results, so they were pushed from this session (`68e2633`, claim token
+  redacted). Archiving `native-host-loop` waits on Windows.
+- **Locally:** `make test` fails only `TestWriteJKSMatchesKeytool`, because
+  this Mac's `/usr/bin/keytool` is Apple's stub with no Java runtime. That
+  is environmental, and CI's `ci` workflow has Java.
+
 ## Archive summary
