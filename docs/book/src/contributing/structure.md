@@ -106,8 +106,11 @@ buildwarden/
 │   │   ├── personalize.go        # 4-phase macOS image prep pipeline
 │   │   ├── netfwd.go             # Transparent TCP/UDP forwarder (image prep)
 │   │   └── uv-build-test.go      # End-to-end build validation
-│   └── win-image-prep/       # Windows image preparation notes/tools
-│       └── README.md
+│   ├── win-image-prep/       # Windows image preparation notes/tools
+│   │   └── README.md
+│   └── workflow/             # Feature-loop tooling (own Go module; FLOW-03, FLOW-18)
+│       ├── cmd/wf/               # Queue tool: next step, leases, done-when checks
+│       └── flow18-check.sh       # Sessions stay out of the public repo
 ├── docs/
 │   ├── book/               # mdBook documentation (guide, concepts, contributing)
 │   ├── design/             # Design documents: the archive, plus TEMPLATE.md

@@ -7,8 +7,9 @@ docs/site/
 warden-run.log
 out.log
 .warden/
-.claude/
 .DS_Store
 .dev/
 .tmp/
 /warden-io
+.claude/settings.local.json
+.claude/worktrees/

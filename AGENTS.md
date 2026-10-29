@@ -19,6 +19,7 @@ tamper-evident ledger and streams all of its outputs to a host-side
 | The package layout | [`docs/book/src/contributing/structure.md`](docs/book/src/contributing/structure.md) |
 | The bootstrap model every driver follows | [`docs/development/bootstrap.md`](docs/development/bootstrap.md) |
 | Designs, past and in progress | [`docs/design/`](docs/design/); new ones start from [`TEMPLATE.md`](docs/design/TEMPLATE.md) |
+| The feature loop: queue state, phase agents, entry points | the `workflow` branch's `README.md`; [`.claude/skills/`](.claude/skills/) (`workflow-tick`, `workflow-human`, `workflow-native`, `workflow-intake`) and [`.claude/agents/`](.claude/agents/) |
 | The ledger wire format | [`docs/book/src/design/ledger-spec.md`](docs/book/src/design/ledger-spec.md) and [`schemas/`](schemas/) |
 | Setup, commands, tests, releases | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
 | User-facing behavior (CLI, config, output) | [`docs/book/src/guide/`](docs/book/src/guide/) |
