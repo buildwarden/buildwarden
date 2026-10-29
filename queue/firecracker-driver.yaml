@@ -4,17 +4,17 @@ priority: 6
 status: queued
 round: parallel
 phase: 0
-design: docs/design/firecracker-driver-plan.md
+design: docs/design/firecracker-spike-plan.md
 branch: feat/firecracker-driver
 alters_relationships: null
-source: docs/design/firecracker-driver-plan.md (latest plan commit f9b07c5, not yet pushed)
+source: "docs/design/firecracker-spike-plan.md on feat/firecracker-driver (Jeff pushed 55842b3); older plan docs/design/firecracker-driver-plan.md on main"
 steps:
   - id: p0-push-plan
     phase: 0
     affinity: human
-    status: pending
-    lease: &id001
-      claimed_by: ''
+    status: done
+    lease:
+      claimed_by: ""
       expires: null
     note: Push the plan's latest commit f9b07c5 from Jeff's Mac (it is not on any remote), so Design starts from it.
   - id: p0-branch-setup
@@ -23,8 +23,10 @@ steps:
     status: pending
     needs:
       - p0-push-plan
-    lease: *id001
-    note: Branch from the pushed plan commit; Design retrofits the plan front-matter (FLOW-12).
+    lease:
+      claimed_by: ""
+      expires: null
+    note: "Branch feat/firecracker-driver exists at 55842b3, forked from 362a3e5 before PR 63: merge main into it (it lacks .entire/settings.json, so FLOW-18 fails until then). Design works from firecracker-spike-plan.md, folds in or retires the open questions of firecracker-driver-plan.md, and retrofits front-matter (FLOW-12)."
 budget:
   estimate:
     runs: 12
@@ -43,3 +45,9 @@ history:
   - at: 2026-10-29T00:12:09Z
     by: human/jeff
     event: 'priority 5 -> 6 (Jeff reordered: retrofit early)'
+  - at: 2026-10-29T00:16:53Z
+    by: human/jeff
+    event: done p0-push-plan
+  - at: 2026-10-29T00:16:53Z
+    by: human/jeff
+    event: 'Jeff pushed the plan as 55842b3 (supersedes f9b07c5); design is now docs/design/firecracker-spike-plan.md'
