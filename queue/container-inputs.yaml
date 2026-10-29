@@ -176,3 +176,6 @@ history:
   - at: 2026-10-29T00:16:42Z
     by: human/jeff
     event: 'back to design: Jeff rejected assumption a2: the submitted file is recorded as inputs/Containerfile, not inputs/Dockerfile. The design, implementation, tests and reference docs must change from inputs/Dockerfile to inputs/Containerfile; Plan adds the rename of already-implemented code as explicit tasks.'
+  - at: 2026-10-29T00:28:10Z
+    by: human/jeff
+    event: 'branch rebased onto main cd42fc7 and force-pushed (db59d5e -> be62eb1) on Jeff''s one-off FLOW-17 exception; make test and make lint (linux, windows, darwin) green'
