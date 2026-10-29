@@ -143,7 +143,8 @@ what each item is.
   [`workflow-bootstrap.md`](../design/workflow-bootstrap.md). Bootstrap step 1.
 - **Native-gap backlog** (FLOW-09, TEST-03): validation deferred by merged
   designs, kept in `backlog/native-gaps.yaml` on the `workflow` branch and
-  drained by native sessions (`/workflow-native <host>`).
+  drained by native sessions (`/workflow-native <host>`, and the scheduled
+  per-machine sessions of [`native-host-loop.md`](../design/native-host-loop.md)).
 - **Follow-up — Design front-matter retrofit** (FLOW-12)
   [`design-front-matter-retrofit`]: add front-matter to the existing
   `docs/design/` plans as new designs come to rely on them.

@@ -125,7 +125,11 @@ Every pending step carries an affinity:
   unattended loop.
 - `human` — answering blocking questions, confirming assumptions, sign-off.
 - `host:<name>` — work that needs native hardware, for example `host:macos-vz`
-  (the macOS/arm64 laptop) or `host:windows-hyperv` (the Windows desktop).
+  (the macOS/arm64 laptop) or `host:windows-hyperv` (the Windows desktop). A
+  name `<os>-<driver>` is specific to that platform; `<capability>-any` (such as
+  `qemu-any` or `container-any`) runs on any native machine that has the
+  capability. The workflow branch's `hosts.yaml` gives each host name to exactly
+  one machine.
 
 A worker takes only steps whose affinity it satisfies. A step is claimed with a
 lease (claimant plus expiry) recorded on the `workflow` branch; a push rejected
@@ -226,7 +230,11 @@ per host in the design:
   branch's native-gap backlog, satisfying TEST-03, and the feature may merge.
 
 Native sessions drain their host's steps and backlog in batches, testing `main` plus
-every waiting branch in one sitting rather than one session per feature. A failure
+every waiting branch in one sitting rather than one session per feature. Each
+native machine also runs a scheduled session that starts an agent only when a
+host step it serves is ready, or when `main` or a waiting branch has moved since
+its last sweep of open backlog entries; it is bound by the unattended loop's limits
+(FLOW-13) and records what it did in the digest. A failure
 found there returns the feature (or a new fix item) to Design or Implement with the
 logs attached. The full matrix before a release (TEST-02) is the backstop for every
 tracked gap.

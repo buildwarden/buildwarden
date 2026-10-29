@@ -112,7 +112,8 @@ If the file exists, append a new `## Run <W>` section. Sections, in order:
 - **Blocked on Jeff**: open blocking questions (options and recommendation),
   assumptions awaiting confirmation, `confirm-pr`, `sign-off`, `cleanup` and
   `escalate` steps, runaway budgets (FLOW-13), priority confirmation.
-- **Waiting on a host**: `host:<name>` steps and open native gaps, by host.
+- **Waiting on a host**: `host:<name>` steps and open native gaps, by
+  machine (`hosts.yaml`), and any native run already in today's digest.
 - **Spent**: steps this run against `run_budget.steps`, and each touched
   feature's spent against estimate, in steps and runs.
 - **Notes**: FLOW-18 check result, whether Entire recorded the session.
