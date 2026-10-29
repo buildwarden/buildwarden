@@ -1,3 +1,20 @@
+---
+# Retrofitted (FLOW-12) onto a pre-standard proposal; body unchanged.
+feature: remote-execution-and-measured-hermeticity
+status: draft
+round: parallel
+drivers: [container, qemu, vz, hyperv]  # ledger/ changes reach every driver
+seams: [ledger-format]
+surfaces: [cli, config, output]
+security_boundary: env-relay            # per-action relay ledgers and cache provenance; no security section yet
+alters_relationships: true              # BuildWarden as an RE API backend; ledgers composed from cached results
+native_validation: []
+tier2_gaps: []
+rules: [RELAY-01, RELAY-02, RELAY-05, GLOBAL-05, GLOBAL-06, GLOBAL-08]
+concepts: [remote-execution, re-api, measured-hermeticity, action-cache, provenance, environment-record, cache-invalidation, bazel]
+related: [ledger-environment-types.md]
+---
+
 # Remote Execution and Measured Hermeticity
 
 ## Overview
