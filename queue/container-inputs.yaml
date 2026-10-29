@@ -63,15 +63,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261029T095640Z
+      expires: 2026-10-29T11:58:54.105293047Z
 budget:
   estimate:
     runs: 4
     steps: 18
   spent:
-    runs: 1
-    steps: 7
+    runs: 2
+    steps: 8
 questions:
   - id: a1
     kind: assumed
@@ -178,4 +178,7 @@ history:
     event: 'back to design: Jeff rejected assumption a2: the submitted file is recorded as inputs/Containerfile, not inputs/Dockerfile. The design, implementation, tests and reference docs must change from inputs/Dockerfile to inputs/Containerfile; Plan adds the rename of already-implemented code as explicit tasks.'
   - at: 2026-10-29T00:28:10Z
     by: human/jeff
-    event: 'branch rebased onto main cd42fc7 and force-pushed (db59d5e -> be62eb1) on Jeff''s one-off FLOW-17 exception; make test and make lint (linux, windows, darwin) green'
+    event: branch rebased onto main cd42fc7 and force-pushed (db59d5e -> be62eb1) on Jeff's one-off FLOW-17 exception; make test and make lint (linux, windows, darwin) green
+  - at: 2026-10-29T09:58:54Z
+    by: cloud/20261029T095640Z
+    event: claimed p1-design-r2 until 2026-10-29T11:58:54Z
