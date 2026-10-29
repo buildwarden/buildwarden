@@ -1,0 +1,23 @@
+[warden] preparing build environment...
+[warden] starting relay...
+[warden] starting build...
+[warden] running...
+hello-file
+hello-dir
+total 8409
+drwxr-xr-x    2 root     root          1024 Oct 29 20:21 .
+drwxr-xr-x    3 root     root          1024 Oct 29 20:21 ..
+-rwxr-xr-x    1 root     root       8607795 Oct 29 20:21 warden-io
+CA-BUNDLE-CERTS=1
+wget: download timed out
+EGRESS-BLOCKED
+wget: bad address 'dl-cdn.alpinelinux.org'
+fetch https://dl-cdn.alpinelinux.org/alpine/v3.21/main/aarch64/APKINDEX.tar.gz
+WARNING: fetching https://dl-cdn.alpinelinux.org/alpine/v3.21/main: temporary error (try again later)
+fetch https://dl-cdn.alpinelinux.org/alpine/v3.21/community/aarch64/APKINDEX.tar.gz
+WARNING: fetching https://dl-cdn.alpinelinux.org/alpine/v3.21/community: temporary error (try again later)
+ERROR: unable to select packages:
+  jq (no such package):
+    required by: world[jq]
+artifact stored: out.txt (11 bytes)
+warden: build SUCCEEDED (output: .scratch/qemu-main)

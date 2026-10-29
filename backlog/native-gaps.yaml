@@ -6,28 +6,86 @@ gaps:
     host: macos-qemu
     what: The shared Windows guest package and prepare-time tuning on qemu.
     design: docs/design/hyperv-windows-prepare.md
-    note: Declared blocking in the design but merged unrun.
+    note: >-
+      Declared blocking in the design but merged unrun. 2026-10-29
+      (host:macos-qemu/20261029T201335Z, unattended): not run. The ISO-install
+      stage needs a Windows arm64 ISO and none was reachable from the session
+      (the sandbox blocks paths outside the checkout); the cache holds
+      windows-arm64.qcow2 but its provenance (ISO-installed generalized base or
+      not) could not be checked. The build half would also hit the guest-DNS
+      failure under qemu-linux-exclusive-trust. Needs an attended run with the ISO.
     status: open
   - id: qemu-linux-exclusive-trust
     host: macos-qemu
     what: A qemu Linux guest with exclusive trust.
     design: docs/design/unified-bootstrap.md
+    note: >-
+      2026-10-29 (host:macos-qemu/20261029T201335Z, unattended, main 137feae,
+      qemu-system-aarch64 from Homebrew, alpine_3_21.qcow2): partial pass.
+      Exclusive trust holds: /etc/ssl/certs/ca-certificates.crt holds 1 cert,
+      /bootstrap fetched over the relay, COPY of a file and a directory recorded
+      (CONTEXT GET /one.txt, /sub/two.txt), egress to 1.1.1.1:8080 blocked, 14
+      signatures valid. Not shown: the Java/Maven case (ubuntu:24.04) and any
+      HTTPS fetch, because guest DNS failed. The relay forwards to qemu
+      user-mode DNS 10.0.2.3:53 and times out ("DNS forward error ... i/o
+      timeout"), likely the unattended session's sandbox blocking qemu's raw
+      UDP to the host resolver (host HTTP through the proxy worked). Rerun
+      attended outside the sandbox. Logs: native/macos-qemu/2026-10-29/.
+      Side finding: the build reported SUCCEEDED although RUN "wget ... && echo"
+      and RUN "apk add jq" failed (driver/script/translate.go joins RUNs under
+      one set -e, so a failure inside an && list does not stop the build);
+      proposed fix item in the 2026-10-29 digest.
     status: open
   - id: finch-executor-copy
     host: macos-finch
     what: Copying the executor into a created container.
     design: docs/design/unified-bootstrap.md
-    status: open
+    status: done
+    done: 2026-10-29
+    evidence: >-
+      host:macos-finch/20261029T201335Z, finch v1.19.0, `warden build --driver
+      container --runtime finch` on main 137feae and feat/container-inputs:
+      alpine:3.20 with an ENTRYPOINT that writes a marker. Both: COPY of a file
+      and a directory recorded (CONTEXT GET /one.txt, /sub/two.txt), /.warden
+      held only warden-io (-rwxr-xr-x root), ENTRYPOINT not run, egress to
+      1.1.1.1:8080 blocked, `inspect --verify-disks` 14 signatures valid, all
+      channels closed. Java/Maven on main (maven:3.9-eclipse-temurin-21):
+      MAVEN_OPTS=-Djavax.net.ssl.trustStore=/etc/warden/certs.jks, `mvn
+      dependency:get junit:junit:4.13.2` fetched through the relay. The branch
+      also wrote inputs/Containerfile and inputs/build.sh.
   - id: vz-environment-descriptor
     host: macos-vz
     what: The vz environment descriptor.
     design: docs/design/ledger-environment-types.md
-    status: open
+    status: done
+    done: 2026-10-29
+    evidence: >-
+      host:macos-vz/20261029T201335Z, main 137feae, macOS 27.0.1 (26A434) host
+      and guest, cached image macos-90a1b1f94f64b00a. `warden build --driver vz
+      build.sh` succeeded; `warden inspect --verify-disks`: ENVIRONMENT
+      vm-disk-chain/v1 payload verified, vz macos/arm64, disk.img 64.0 GB,
+      aux-storage (nvram), hardware-model and machine-id (platform), all [ok],
+      seed 1 per-build file, 8 signatures valid, all channels closed. `go test
+      ./driver/vz ./cmd/warden` ok. No waiting branch touches driver/vz. The
+      design's "Not yet run: vz" line is now out of date.
   - id: vz-deadcode
     host: macos-vz
     what: make deadcode for driver/vz (cgo-only, invisible to the cross-platform run; FLOW-15).
     design: docs/design/unified-bootstrap.md
-    status: open
+    status: done
+    done: 2026-10-29
+    evidence: >-
+      host:macos-vz/20261029T201335Z, main 137feae, deadcode v0.38.0 on the
+      darwin/arm64 host (cgo on). The darwin run's driver/vz findings match the
+      linux and windows runs one for one (createLinuxVM appears as
+      vz_darwin_arm64.go natively, vz_stub.go elsewhere), so the cgo-only code
+      hides nothing extra. All three report as unreachable: image.go
+      suppressSetupAssistant, buildSkipPlist, createWardenUser, hashPassword,
+      enableAutoLogin, encodeKCPassword; vm.go NewLinuxVM, VM.State,
+      VM.IsRunning; createLinuxVM. No callers in git grep, and driver/vz has no
+      integration-tagged tests (so `make integration-test-vz`'s
+      TestRelayVMBoot does not exist). A removal item is proposed in the
+      2026-10-29 digest.
   - id: qemu-environment-descriptors
     host: qemu-any
     what: The qemu environment descriptors.
