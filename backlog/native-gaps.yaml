@@ -107,4 +107,17 @@ gaps:
     what: make integration-test on feat/container-inputs, including the new inputs/ check in test-integration.sh, which has never run (cloud sessions have no container runtime or outbound network; CI does not run the script).
     design: docs/design/container-inputs.md
     note: Wanted before container-inputs sign-off (2026-10-29 digest).
-    status: open
+    status: done
+    done: 2026-10-29
+    evidence: >-
+      https://github.com/buildwarden/buildwarden/actions/runs/40961607311 (job
+      "tier1 (feat/container-inputs)"): make integration-test on a hosted
+      ubuntu runner with Docker, 29 passed, 0 failed, including the new
+      inputs/ checks (inputs/Containerfile is the submitted file,
+      inputs/build.sh recorded, no inputs/Dockerfile). The run applied
+      feat/native-loop-followups' Dockerfile COPY fix and test-integration.sh
+      fixes (dist/warden path, the SUCCEEDED output line) as a patch, since
+      the branch predates them; on its own it needs those from main after
+      native-loop-followups merges (its m0-merge-main). Tier 1 now runs in
+      CI (.github/workflows/integration.yml), so this no longer needs a native
+      host.
