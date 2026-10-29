@@ -39,8 +39,19 @@ Three tiers:
 The expensive tiers are not on the critical path of every PR. They run on the
 relevant CI runner scoped to what changed, on a schedule, and **in full before a
 release**. Per-PR pays for the fast gate plus the tiers the change actually touches.
-Where no CI runner can host a tier (VZ, Hyper-V), it runs in attended native
-sessions under FLOW-09 until one can.
+Where no CI runner can host a tier (VZ, Hyper-V), it runs in native sessions
+under FLOW-09 until one can.
+
+Where each tier runs today:
+
+- Tier 0: the `ci` workflow, on every push to `main` and every PR.
+- Tier 1: the `integration` workflow (`make integration-test` on a hosted
+  Ubuntu runner with Docker). It runs on PRs that reach `driver/container/`,
+  the `driver/` root, a shared package (`relay/`, `ledger/`, `collector/`),
+  `cmd/`, `test-integration.sh`, a `Dockerfile` or `go.mod`; weekly on
+  `main`; and on demand for any ref (`workflow_dispatch` with `ref`).
+- Tier 2: native sessions (FLOW-09) on the machines in the `workflow`
+  branch's `hosts.yaml`.
 
 **Caveat, baked into the rule:** scoping tests to touched paths is where tiering can
 quietly fail. A change that looks container-only can break VZ through a shared

@@ -4,7 +4,7 @@
 # Requires: a working container runtime (finch/docker/podman)
 set -euo pipefail
 
-WARDEN="./warden"
+WARDEN="${WARDEN:-./dist/warden}"   # make build writes dist/warden
 PASS=0
 FAIL=0
 
@@ -162,7 +162,10 @@ green "  Output: $OUTPUT_DIR"
 
 # ─── Cleanup ───────────────────────────────────────────────────────────────
 
-rm -rf /tmp/warden-integ-self /tmp/warden-integ-simple /tmp/warden-integ-npm
+# Keep the outputs of a failed run for inspection (CI uploads them).
+if [ "$FAIL" -eq 0 ]; then
+    rm -rf /tmp/warden-integ-self /tmp/warden-integ-simple /tmp/warden-integ-npm
+fi
 
 # ─── Summary ────────────────────────────────────────────────────────────────
 

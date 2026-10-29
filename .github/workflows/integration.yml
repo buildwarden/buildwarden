@@ -1,0 +1,61 @@
+name: integration
+
+# Tier 1 (TEST-02): the integration tests that need a container runtime. Runs
+# on demand for any ref, weekly on main, and on pull requests that reach the
+# container driver or a shared package (the TEST-02 caveat). The release
+# full matrix is still the backstop.
+on:
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: 'Branch, tag or SHA to test; empty means the dispatched ref'
+        required: false
+        default: ''
+  schedule:
+    - cron: '0 6 * * 1'
+  pull_request:
+    paths:
+      - 'driver/container/**'
+      - 'driver/*.go'
+      - 'relay/**'
+      - 'ledger/**'
+      - 'collector/**'
+      - 'cmd/**'
+      - 'test-integration.sh'
+      - 'Dockerfile*'
+      - 'go.mod'
+  # Temporary, removed before the PR (native-loop-followups.md, item 1):
+  # workflow_dispatch only exists once this file is on main, so these runs
+  # prove the job on the branch and on feat/container-inputs before merge.
+  push:
+    branches: [feat/native-loop-followups]
+
+permissions:
+  contents: read
+
+jobs:
+  tier1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        # Temporary with the push trigger above; one empty entry otherwise.
+        ref: ${{ fromJSON(github.event_name == 'push' && '["", "feat/container-inputs"]' || '[""]') }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ matrix.ref || inputs.ref || '' }}
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - run: docker version
+      # Refs older than the dist/warden fix in test-integration.sh call ./warden.
+      - run: ln -sf dist/warden warden
+      - run: make integration-test
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: warden-output-${{ strategy.job-index }}
+          path: /tmp/warden-integ-*
+          if-no-files-found: ignore
