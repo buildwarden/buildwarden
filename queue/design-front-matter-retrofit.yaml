@@ -3,7 +3,7 @@ title: Retrofit FLOW-02 front-matter onto the older designs (FLOW-12)
 priority: 3
 status: in_progress
 round: parallel
-phase: 4
+phase: 1
 design: docs/design/design-front-matter-retrofit.md
 branch: feat/design-front-matter-retrofit
 alters_relationships: false
@@ -37,13 +37,13 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: p4-review
-    phase: 4
+  - id: p1-design-r2
+    phase: 1
     affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261029T095640Z
-      expires: 2026-10-29T12:30:17.145729053Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 3
@@ -178,3 +178,6 @@ history:
   - at: 2026-10-29T10:30:17Z
     by: cloud/20261029T095640Z
     event: claimed p4-review until 2026-10-29T12:30:17Z
+  - at: 2026-10-29T10:35:19Z
+    by: cloud/20261029T095640Z
+    event: 'back to design: p4-review 7b11f043ab61: 4 MUST in the design''s own front-matter values (firecracker-driver-plan drivers and seams miss relay/qemu reach and relay-claim; windows-driver-plan and remote-execution set security_boundary with no security note, a4 silent on it) and 2 SHOULD (hyperv-driver-plan archived hides unbuilt Linux guest; native_validation misses regression hosts)'

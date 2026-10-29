@@ -1,0 +1,134 @@
+{
+  "feature": "design-front-matter-retrofit",
+  "branch": "feat/design-front-matter-retrofit",
+  "head": "7b11f043ab61",
+  "base": "cd42fc73c265",
+  "scope": "git diff origin/main...feat/design-front-matter-retrofit (10 files, +518/-0; commits c650e29..7b11f04)",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "tier1": {
+    "make_lint": "pass",
+    "make_test": "pass",
+    "golangci_lint": "2.5.0 built with go1.26.3 (scratchpad bin on PATH); 0 issues in the root module and tools/workflow",
+    "front_matter_parse": "pass: check.ParseDesign + Front.problems over every docs/design/*.md except TEMPLATE.md, via go test -overlay with the scratch test; 11 documents, no problems, alters_relationships set on all",
+    "body_unchanged": "pass: all 10 files have one hunk and 0 removed lines; the six prepended blocks are byte-identical to the design's Design section, each followed by one blank line; the three archived designs gain one line after security_boundary",
+    "build_tagged_files": "none touched; no per-platform lint owed (FLOW-17)",
+    "note": "Re-run by the linter at 7b11f04, not taken from the implementer's report. No custom tier-1 static checks exist yet (LINT-02, Deep-dive #2)."
+  },
+  "findings": [
+    {
+      "rule": "FLOW-02",
+      "severity": "MUST",
+      "check": "automated + agent-judgment",
+      "file": "docs/design/firecracker-driver-plan.md",
+      "line": 6,
+      "finding": "drivers: [firecracker] understates the plan's reach. The plan changes the relay binary: relay-to-host vsock signals for 'CA ready' and 'ledger complete' (firecracker-driver-plan.md:381, 'This minimizes changes to the relay binary'). It also shares helpers with qemu (util.go, line 801). FLOW-02 says a change to a shared package declares every dependent driver. The design's own Decision 5 (design-front-matter-retrofit.md:86) applies that rule to hyperv-driver-plan (relay/) and windows-driver-plan (cmd/warden-io), but not here.",
+      "suggestion": "drivers: [container, qemu, vz, hyperv, firecracker]  # relay/ gains vsock signaling. Amend the block at design-front-matter-retrofit.md:181 first, then the file."
+    },
+    {
+      "rule": "FLOW-02",
+      "severity": "MUST",
+      "check": "automated + agent-judgment",
+      "file": "docs/design/firecracker-driver-plan.md",
+      "line": 7,
+      "finding": "seams omits relay-claim. The plan injects per-build relay config (relay.env, line 442), extracts the CA cert from the relay (line 449), and the warm pool injects build-specific config into a resumed relay over vsock (line 660). GLOBAL-08 defines the claim protocol as exactly this: per-build config pushed to the relay, relay identity and ca.cert.pem returned. A plan for an alternative config path is a claim-seam change, and the most likely retrieval key for the firecracker-driver design.",
+      "suggestion": "seams: [relay-claim, relay-guest-api, collector]  # config/CA via rootfs or vsock predate relaycfg; outputs from relay rootfs predate RELAY-07"
+    },
+    {
+      "rule": "FLOW-02",
+      "severity": "MUST",
+      "check": "automated + agent-judgment",
+      "file": "docs/design/windows-driver-plan.md",
+      "line": 9,
+      "finding": "security_boundary: env-relay, but the document has no security note. The YAML comment says so ('no separate security section'). FLOW-02: 'Any value other than none requires a security note in the design.' Decision 6 points the comment at an existing security section where one exists. Here none does, so the retrofit leaves a front-matter that violates the rule it implements. a4 ('front-matter only') does not tell Jeff that this is a consequence for this document.",
+      "suggestion": "Design decision, not an implement fix. Either (a) a4 option (b)-style: a short security note (2-3 lines) after the front-matter naming the boundary touched (guest CA trust-store install via certutil; topological isolation in the relay VM, no guest firewall), or (b) state the exception explicitly in the design and in a4 so Jeff's confirmation covers it, then suppress this finding with that reason."
+    },
+    {
+      "rule": "FLOW-02",
+      "severity": "MUST",
+      "check": "automated + agent-judgment",
+      "file": "docs/design/remote-execution-and-measured-hermeticity.md",
+      "line": 9,
+      "finding": "Same as windows-driver-plan.md:9. security_boundary: env-relay with 'no security section yet' and no security note. This document is draft, so the first design that builds on it inherits a non-none boundary with no note. The proposal changes the relay itself: the relay ledger incorporates records from cached sub-ledgers it did not observe. GLOBAL-06 makes any change to the relay high-severity regardless.",
+      "suggestion": "As for windows-driver-plan.md:9: a one-paragraph security note (relay incorporates unobserved sub-ledger records; the cache and CAS become trusted provenance inputs; the RE API is a new network-facing service), or an explicit exception recorded in the design and confirmed under a4."
+    },
+    {
+      "rule": "FLOW-12",
+      "severity": "SHOULD",
+      "check": "automated",
+      "file": "docs/design/hyperv-driver-plan.md",
+      "line": 4,
+      "finding": "status: archived hides unbuilt scope. The plan's own Phase 1 is 'Skeleton + Linux guest' (line 1491) and it has a Linux Guest Provisioning section (line 685). vm-driver-release-plan.md:495 says 'Linux guests on Hyper-V not started'. The design's problem table calls it 'implemented'. A future design searching drivers: [hyperv] would read the Linux-guest path as done. FLOW-12's letter is met (merged plans are archived), so this is advisory.",
+      "suggestion": "Keep archived and add a comment, e.g. status: archived  # Windows guests built; Linux guests on Hyper-V not built (vm-driver-release-plan Phase 5). Or use active if Jeff treats it as the live plan for Linux guests."
+    },
+    {
+      "rule": "FLOW-02",
+      "severity": "SHOULD",
+      "check": "automated + agent-judgment",
+      "file": "docs/design/windows-driver-plan.md",
+      "line": 11,
+      "finding": "native_validation does not match the conservative drivers list. drivers declares container, qemu, vz and hyperv because cmd/warden-io is shared, and the plan itself requires a regression check on the VZ and Linux+qemu paths (lines 105-109). native_validation names only macos-qemu (for win-arm64) and windows-hyperv. hyperv-driver-plan.md:11 has the same gap for its relay/ change. Decision 7 makes these descriptive, but a reader would conclude vz needed no native run.",
+      "suggestion": "Add {host: macos-vz, blocking: false, reason: \"plan's cross-contamination check: VZ path untouched by Windows changes\"} and widen the macos-qemu reason to cover Linux+qemu; or add a comment that only the plan's primary hosts are listed."
+    }
+  ],
+  "counts": {
+    "MUST": 4,
+    "MUST-review": 0,
+    "SHOULD": 2
+  },
+  "suppressions": [],
+  "routing": {
+    "tier1_red": false,
+    "wf_implement_fix": "none: tier 1 is green and the implementation matches the design byte for byte",
+    "must_findings_route": "back-to-design. All four MUST findings are against values the design chose (its Design section blocks and Decisions 5/6, question a4), not deviations by implement. Sending them to wf-implement would make implement change design decisions (FLOW-06). Design amends the firecracker block (drivers, seams) and either adds a security-note exception question (or widens a4) or adds two short notes; implement then re-applies."
+  },
+  "informational": [
+    {
+      "rule": "FLOW-02",
+      "file": "docs/design/hyperv-windows-prepare.md",
+      "line": 9,
+      "note": "alters_relationships: true is the conservative choice (a3 a). Under a3 (b) it could fairly be false: it moves Windows guest code from two drivers into shared driver/winguest, inside the orchestrator/driver role, and its seams are not GLOBAL-08 versioned seams. No tool reads design front-matter status or alters_relationships (only queue/*.yaml feeds the FLOW-05 limit), so neither value has an operational effect. ledger-environment-types (ledger-format, relay-claim) and unified-bootstrap (bootstrap-model) are clearly true."
+    },
+    {
+      "rule": "FLOW-12",
+      "file": "docs/design/platform-compatibility.md",
+      "line": 4,
+      "note": "status: active is the right label for a living reference, but the body is stale and out of LINT-04 scope. Lines 82 and 84 list hyperv as Planned while vm-driver-release-plan Phase 5 records the Windows guest path validated. Line 73 lists qemu/KVM on Linux/amd64 as Planned while Phase 2 says QEMU is COMPLETE. A retrieval reader trusting 'active' gets old facts. A follow-up queue item to refresh the matrix is suggested; a4 keeps it out of this feature."
+    },
+    {
+      "rule": "FLOW-12",
+      "file": "docs/design/remote-execution-and-measured-hermeticity.md",
+      "line": 4,
+      "note": "status: draft is right for the RE backend, but Decision 4's 'nothing it describes is built' is not quite true. 'Environment as first record' (line 65) shipped through ledger-environment-types under different type names (oci-image/v1, vm-disk-chain/v1, not environment-container/vm-image). related already links that design; a comment on status or related naming the supersession would help retrieval."
+    },
+    {
+      "rule": "FLOW-12",
+      "file": "docs/design/windows-driver-plan.md",
+      "line": 4,
+      "note": "status: archived is supported: vm-driver-release-plan.md:495 records the Phase 2 Windows guest path validated end to end on Hyper-V. The 'Phase 2 pending' banner (line 24) stays stale under a4, as the design says."
+    },
+    {
+      "rule": "FLOW-09",
+      "file": "docs/design/firecracker-driver-plan.md",
+      "line": 12,
+      "note": "linux-kvm is a new host name, the only one this diff introduces, as the design says. No native host or backlog entry uses it yet. When firecracker-driver queues an m6-validate step, it will need a host session by that name."
+    },
+    {
+      "rule": "FLOW-07",
+      "file": "docs/design/design-front-matter-retrofit.md",
+      "line": 120,
+      "note": "Assumed questions a1-a9 are all still open in the queue and must be confirmed before sign-off (FLOW-08). The findings above bear on a4/a5 (security notes) and a7 (firecracker values, which firecracker-driver would otherwise amend)."
+    },
+    {
+      "rule": "UX-01",
+      "file": "docs/design/design-front-matter-retrofit.md",
+      "line": 1,
+      "note": "UX-01 / FLOW-15: none owed. The diff touches only docs/design/*.md, with no surface, guide page or component flow."
+    },
+    {
+      "rule": "FLOW-02",
+      "file": "docs/design/vm-driver-release-plan.md",
+      "line": 1,
+      "note": "Verified accurate: vm-driver-release-plan (active; Phases 1, 3, 6, 7 open; tier2_gaps matches backlog qemu-windows-guest-package), hyperv-driver-plan seams/drivers/security (host-env, Privilege & Elevation Model), firecracker status draft and host-env (TAP devices, jailer, host vsock listener), platform-compatibility none/false, remote-execution drivers/ledger-format, windows-driver-plan seams. Every rule ID in the new front-matter exists in the rule index."
+    }
+  ]
+}
