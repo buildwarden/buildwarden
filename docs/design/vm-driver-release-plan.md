@@ -1,3 +1,24 @@
+---
+# Retrofitted (FLOW-12) onto a pre-standard roadmap; body unchanged.
+feature: vm-driver-release-plan
+status: active
+round: parallel
+drivers: [container, qemu, vz, hyperv, firecracker]
+seams: [relay-claim, collector, ledger-format, image-manifest, windows-guest-seed]
+surfaces: [cli, config, output]
+security_boundary: host-env             # also env-relay; see "Security Testing Framework"
+alters_relationships: true
+native_validation:
+  - {host: macos-vz, blocking: true, reason: "Phase 1 vz driver runs only on macOS/arm64"}
+  - {host: windows-hyperv, blocking: true, reason: "Phase 5 and 5a Hyper-V Windows-guest lifecycle"}
+  - {host: macos-qemu, blocking: false, reason: "shared Windows guest package on qemu, tracked as qemu-windows-guest-package"}
+tier2_gaps:
+  - "shared Windows guest package (driver/winguest) on qemu under macOS: not yet validated natively"
+rules: [ORCH-01, ORCH-04, ORCH-05, GLOBAL-06, GLOBAL-07, GLOBAL-08, RELAY-05, RELAY-07, TEST-02, TEST-03, TEST-08, SEC-01, UX-04, UX-07]
+concepts: [release-plan, driver-matrix, security-testing, escape-vectors, image-lifecycle, relay-vm-distribution, ledger-compatibility, image-prepare, claim, collector]
+related: [hyperv-driver-plan.md, windows-driver-plan.md, firecracker-driver-plan.md, hyperv-windows-prepare.md, platform-compatibility.md]
+---
+
 # VM Driver Release Plan
 
 ## Target Matrix
