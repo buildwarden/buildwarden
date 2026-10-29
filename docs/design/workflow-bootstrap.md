@@ -1,6 +1,6 @@
 ---
 feature: workflow-bootstrap
-status: active
+status: archived
 round: parallel
 drivers: []
 seams: []
@@ -151,3 +151,37 @@ repository. The FLOW-18 check was run against a scratch remote carrying
 ## Rollback notes
 
 ## Archive summary
+
+Merged 2026-10-29 in buildwarden/buildwarden#63, built in an attended session
+outside the loop it creates (assumption a5).
+
+- **Built.** `wf`, the queue tool, in its own Go module under `tools/workflow/`
+  (`queue/` for the model, FLOW-05 ordering, leases and budgets; `check/` for
+  each phase's done-when; `cmd/wf`), with its only dependency
+  `go.yaml.in/yaml/v3`. Queue state on the `workflow` orphan branch
+  (`config.yaml`, `queue/`, `backlog/`, `digest/`, `reports/`; schema in its
+  `README.md`). Seven thin phase agents (`.claude/agents/wf-*.md`) and four
+  entry-point skills (`workflow-tick`, `workflow-human`, `workflow-native`,
+  `workflow-intake`). The FLOW-18 guard `tools/workflow/flow18-check.sh` and
+  its `flow18` CI workflow. Session recording from `chore/entire-sessions`
+  merged unchanged. The daily scheduled task runs `/workflow-tick` at 02:55 PT.
+  Late additions in the same PR: a human or host may take a queued feature's
+  preparatory step; `wf next -feature` limits an attended run to the named
+  feature; the tick installs Entire's git hooks on a fresh clone.
+- **Answers recorded after the design was written.** Priority order changed:
+  `design-front-matter-retrofit` moved to third, after `container-inputs`
+  (the list under Questions is the original proposal). Run budget set to 12
+  steps, not 8. The other assumptions were confirmed as written.
+- **Rejected.** Queue state on `main` or in GitHub issues; agents editing queue
+  YAML by hand as the transition mechanism; a shell script over `yq`; a YAML
+  dependency in the product module; a review gate that waits for a clean
+  tier-2 report.
+- **For future designs.** Transitions rest on `wf done`'s mechanical checks,
+  so a new done-when condition goes into `tools/workflow/check/check.go`, not
+  into an agent's prose. Agent definitions cite rule IDs and never restate
+  them (FLOW-14); a change to a rule changes `process.md`, then the agent if
+  its steps change. State lives only on the `workflow` branch and every step
+  pushes it, so nothing may depend on a long-lived conversation. Agents never
+  push `main` or delete remote branches; cleanup that needs either becomes a
+  `human` step (as `m8-cleanup` did here). The archive check reads the design
+  from `origin/main`, so archiving always needs a human-merged PR.
