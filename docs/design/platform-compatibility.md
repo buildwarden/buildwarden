@@ -1,3 +1,20 @@
+---
+# Retrofitted (FLOW-12) onto a pre-standard reference; body unchanged.
+feature: platform-compatibility
+status: active
+round: parallel
+drivers: [container, qemu, vz, hyperv]
+seams: []
+surfaces: []
+security_boundary: none
+alters_relationships: false
+native_validation: []
+tier2_gaps: []
+rules: [ORCH-01, ORCH-05, GLOBAL-07, TEST-02, TEST-03, TEST-08]
+concepts: [platform-matrix, host-target, driver-availability, licensing, network-isolation, graduation-criteria]
+related: [windows-driver-plan.md, vm-driver-release-plan.md]
+---
+
 # Platform Compatibility Matrix
 
 BuildWarden is infrastructure-level software that requires administrative
