@@ -17,6 +17,11 @@ Same as `workflow-tick` step 1 (the FLOW-18 check, build `dist/wf`, check out
 
 ## Work through, in this order
 
+0. **Process items** (`kind: process`, FLOW-03) before anything else: their
+   `x1-design` .. `x4-archive` steps are all Jeff's, and while one is in
+   progress it holds the workers its `holds` name (FLOW-05). Show each with
+   its phase, holds and branch; record each step with `dist/wf claim` and
+   `dist/wf done` as `human/jeff`.
 1. **Priority order.** If `config.yaml` has `priority_confirmed: false`, show
    `dist/wf status` and the proposed order with its reasons, ask Jeff to
    confirm or reorder, renumber the `priority` fields as he says, and set

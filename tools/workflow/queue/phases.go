@@ -11,6 +11,21 @@ import (
 var PhaseNames = []string{"branch-setup", "design", "plan", "implement", "review", "guide",
 	"publish", "sign-off", "archive"}
 
+// processPhaseNames are a process item's phases, numbered from 1.
+var processPhaseNames = []string{"", "design", "implement", "sign-off", "archive"}
+
+// PhaseName names the feature's current phase.
+func PhaseName(f *Feature) string {
+	names := PhaseNames
+	if f.Round == "process" {
+		names = processPhaseNames
+	}
+	if f.Phase < 0 || f.Phase >= len(names) {
+		return "?"
+	}
+	return names[f.Phase]
+}
+
 type template struct {
 	name     string
 	affinity string
@@ -40,16 +55,37 @@ var templates = map[string][][]template{
 		{{"sign-off", "human", nil}},
 		{{"archive", "cloud", nil}},
 	},
+	// A process item changes the rules the loops run under, which the loop
+	// may not do unattended (FLOW-14): human throughout, phases 1 to 4.
+	"process": {
+		nil,
+		{{"design", "human", nil}},
+		{{"implement", "human", nil}},
+		{{"sign-off", "human", nil}},
+		{{"archive", "human", nil}},
+	},
+}
+
+// roundLetters prefix step ids: p1-design, m6-publish, x3-sign-off.
+var roundLetters = map[string]string{"parallel": "p", "merge": "m", "process": "x"}
+
+func letterRound(l string) string {
+	for r, x := range roundLetters {
+		if x == l {
+			return r
+		}
+	}
+	return ""
 }
 
 var (
-	stepIDRe = regexp.MustCompile(`^([pm])([0-8])-([a-z0-9-]+)$`)
+	stepIDRe = regexp.MustCompile(`^([pmx])([0-8])-([a-z0-9-]+)$`)
 	retryRe  = regexp.MustCompile(`-r[0-9]+$`)
 )
 
 // StepID builds a step id: round letter, phase digit, name.
 func StepID(round string, phase int, name string) string {
-	return fmt.Sprintf("%c%d-%s", round[0], phase, name)
+	return fmt.Sprintf("%s%d-%s", roundLetters[round], phase, name)
 }
 
 // IsGate reports whether the step is its phase's last template step, whose
@@ -59,10 +95,10 @@ func IsGate(st *Step) bool {
 	if m == nil {
 		return false
 	}
-	round := map[string]string{"p": "parallel", "m": "merge"}[m[1]]
+	round := letterRound(m[1])
 	phase := int(m[2][0] - '0')
 	ts := templates[round]
-	if phase >= len(ts) {
+	if phase >= len(ts) || len(ts[phase]) == 0 {
 		return false
 	}
 	last := ts[phase][len(ts[phase])-1]
@@ -72,7 +108,7 @@ func IsGate(st *Step) bool {
 // Seed adds the template steps for the feature's current round and phase.
 func Seed(f *Feature) {
 	ts := templates[f.Round]
-	if f.Phase >= len(ts) {
+	if f.Phase >= len(ts) || len(ts[f.Phase]) == 0 {
 		return
 	}
 	// A phase entered again (FLOW-06) gets fresh ids: <id>-r2, <id>-r3, ...
@@ -151,12 +187,12 @@ func Complete(f *Feature, st *Step, by string, now time.Time) {
 			Note: "Waits for the serial merge queue (FLOW-05).",
 		})
 		f.Log(now, by, "parallel round done; waiting on the merge queue")
-	case f.Round == "merge" && f.Phase == 8:
+	case f.Round == "merge" && f.Phase == 8, f.Round == "process" && f.Phase == 4:
 		f.Status = "done"
 		f.Log(now, by, "archived; feature done")
 	default:
 		f.Phase++
-		f.Log(now, by, "entered phase %d (%s)", f.Phase, PhaseNames[f.Phase])
+		f.Log(now, by, "entered phase %d (%s)", f.Phase, PhaseName(f))
 		Seed(f)
 	}
 }
@@ -166,5 +202,5 @@ func stepRound(id string) string {
 	if m == nil {
 		return ""
 	}
-	return map[string]string{"p": "parallel", "m": "merge"}[m[1]]
+	return letterRound(m[1])
 }

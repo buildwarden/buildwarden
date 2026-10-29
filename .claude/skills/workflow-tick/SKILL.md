@@ -108,6 +108,10 @@ Repeat while this run has taken fewer than `run_budget.steps` steps:
 Write `.dev/workflow/digest/<YYYY-MM-DD>.md`, the date in America/Los_Angeles.
 If the file exists, append a new `## Run <W>` section. Sections, in order:
 
+- **Process items** first, when any is queued or in progress (FLOW-03,
+  FLOW-05): each one's phase and what it holds (`dist/wf status` prints
+  `process item, holds: ...`), and any `held by process item` lines from
+  `wf next`.
 - **Moved**: each step taken, its outcome, and the branch head it left.
 - **Blocked on Jeff**: open blocking questions (options and recommendation),
   assumptions awaiting confirmation, `confirm-pr`, `sign-off`, `cleanup` and

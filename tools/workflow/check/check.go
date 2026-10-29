@@ -35,6 +35,10 @@ type Result struct {
 // Phase runs the done-when checks for the feature's current phase.
 func Phase(env Env, f *queue.Feature) []Result {
 	c := &checker{env: env, f: f}
+	if f.Round == "process" {
+		c.process()
+		return c.out
+	}
 	merge := f.Round == "merge"
 	switch f.Phase {
 	case 0:
@@ -72,6 +76,22 @@ func Phase(env Env, f *queue.Feature) []Result {
 		c.archived()
 	}
 	return c.out
+}
+
+// process runs a process item's done-when checks: x1 design written, x2
+// branch pushed, x3 merged by a human, x4 archived.
+func (c *checker) process() {
+	switch c.f.Phase {
+	case 1:
+		_, err := c.git("cat-file", "-e", "refs/heads/"+c.f.Branch+":"+c.f.Design)
+		c.add("design present (FLOW-01)", err == nil, "%s on %s", c.f.Design, c.f.Branch)
+	case 2:
+		c.pushed()
+	case 3:
+		c.merged()
+	case 4:
+		c.archived()
+	}
 }
 
 // OK reports whether every result passed.

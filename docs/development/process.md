@@ -109,7 +109,19 @@ its branch. The phases are:
 
 A transition happens only when the phase's done-when checks pass mechanically
 (files present, sections filled, commands green), never on an agent's own report
-that it is done. Queue state lives on the `workflow` orphan branch, not on `main`,
+that it is done.
+
+A **process item** (queue `kind: process`) changes the rules the loops run
+under: `docs/development/`, `.claude/` or `tools/workflow/`. The loop may not
+make such changes unattended (FLOW-14), so a process item takes a shorter path
+with every step `human`:
+
+| # | Phase | Done when |
+|---|-------|-----------|
+| 1 | Design | The design document exists on the branch. |
+| 2 | Implement | The branch is pushed (FLOW-17). |
+| 3 | Sign-off | A human merged it into `main` (FLOW-08). |
+| 4 | Archive | Design archived with its summary; branch deleted (FLOW-12, FLOW-16). | Queue state lives on the `workflow` orphan branch, not on `main`,
 so that high-churn bookkeeping stays out of the code history.
 
 ---
@@ -143,7 +155,12 @@ expired lease may be reclaimed.
 **Severity:** SHOULD
 **Check:** automated
 
-Work goes deep, not wide. A worker takes the next ready step of the
+Work goes deep, not wide. Process items (FLOW-03) come before every feature,
+whatever their priority. While one is in progress, a worker matching one of
+its `holds` (affinity patterns such as `cloud` or `host:*`) takes no new step,
+so disruptive work waits for the rules to settle; a step it already claimed
+stays claimed, and finishing the process item releases the hold. Otherwise a
+worker takes the next ready step of the
 highest-priority feature in progress, and keeps taking that feature's steps until
 it blocks: on a `human` or `host:<name>` step, an exhausted budget, or the merge
 queue. Only then does it take steps from the next feature down, and it returns to

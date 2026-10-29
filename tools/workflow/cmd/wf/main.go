@@ -14,6 +14,7 @@
 //	wf back     -state DIR -worker W -feature F -why FINDING
 //	wf new      -state DIR -worker W -feature F -title T -priority N
 //	            -estimate-steps N -estimate-runs N [-source S]
+//	            [-kind process -holds PATTERN,...]
 //	wf gate     -state DIR -repo DIR -machine M -stamp FILE [-sweep-days N] [-record]
 //	wf budget   -state DIR [-native]
 //
@@ -53,7 +54,7 @@ var errIdle = errors.New("idle")
 
 type opts struct {
 	state, repo, worker, feature, step, why, question, answer string
-	title, source, machine, stamp                             string
+	title, source, machine, stamp, kind, holds                string
 	priority, estSteps, estRuns, sweepDays                    int
 	newRun, run, record, native                               bool
 	now                                                       time.Time
@@ -88,6 +89,9 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.StringVar(&o.answer, "answer", "", "the human's answer")
 	fs.StringVar(&o.title, "title", "", "new: the feature's title")
 	fs.StringVar(&o.source, "source", "", "new: where the item came from")
+	fs.StringVar(&o.kind, "kind", "", "new: feature (default) or process")
+	fs.StringVar(&o.holds, "holds", "",
+		"new: process only, comma-separated affinity patterns it holds")
 	fs.IntVar(&o.priority, "priority", 0, "new: priority, 1 highest")
 	fs.IntVar(&o.estSteps, "estimate-steps", 0, "new: estimated steps")
 	fs.IntVar(&o.estRuns, "estimate-runs", 0, "new: estimated runs")
@@ -138,9 +142,11 @@ func status(s *queue.State, _ opts) error {
 	for _, f := range s.Features {
 		b := f.Budget
 		fmt.Printf("%d\t%s\t%s\t%s/%d %s\tsteps %d/%d\truns %d/%d\n",
-			f.Priority, f.Feature, f.Status, f.Round, f.Phase,
-			queue.PhaseNames[f.Phase],
+			f.Priority, f.Feature, f.Status, f.Round, f.Phase, queue.PhaseName(f),
 			b.Spent.Steps, b.Estimate.Steps, b.Spent.Runs, b.Estimate.Runs)
+		if f.IsProcess() {
+			fmt.Printf("\t  process item, holds: %s\n", holdList(f.Holds))
+		}
 		for _, q := range f.Questions {
 			if q.Status == "open" {
 				fmt.Printf("\t  %s question %s: %s (recommended: %s)\n",
@@ -149,6 +155,13 @@ func status(s *queue.State, _ opts) error {
 		}
 	}
 	return nil
+}
+
+func holdList(hs []string) string {
+	if len(hs) == 0 {
+		return "nothing"
+	}
+	return strings.Join(hs, ", ")
 }
 
 func next(s *queue.State, o opts) error {
@@ -199,12 +212,8 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 	}
 	switch cmd {
 	case "claim":
-		if st.Status != "pending" {
-			return fmt.Errorf("%s is %s", st.ID, st.Status)
-		}
-		if st.Lease.Held(o.now) && st.Lease.ClaimedBy != o.worker {
-			return fmt.Errorf("%s is leased to %s until %s",
-				st.ID, st.Lease.ClaimedBy, st.Lease.Expires)
+		if err := claimable(s, f, st, o); err != nil {
+			return err
 		}
 		s.Claim(f, st, o.worker, o.now, o.newRun)
 	case "release":
@@ -217,6 +226,24 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 		queue.Complete(f, st, o.worker, o.now)
 	}
 	return s.Save(f)
+}
+
+// claimable says why the worker may not claim the step: it is not pending,
+// someone else holds it, or a process item holds the worker (FLOW-05). A step
+// the worker already holds stays claimable.
+func claimable(s *queue.State, f *queue.Feature, st *queue.Step, o opts) error {
+	if st.Status != "pending" {
+		return fmt.Errorf("%s is %s", st.ID, st.Status)
+	}
+	mine := st.Lease.Held(o.now) && st.Lease.ClaimedBy == o.worker
+	if st.Lease.Held(o.now) && !mine {
+		return fmt.Errorf("%s is leased to %s until %s",
+			st.ID, st.Lease.ClaimedBy, st.Lease.Expires)
+	}
+	if h := s.Hold(f, o.worker); h != "" && !mine {
+		return fmt.Errorf("%s is held by process item %s (FLOW-05)", o.worker, h)
+	}
+	return nil
 }
 
 func answer(s *queue.State, o opts) error {
@@ -265,8 +292,13 @@ func newFeature(s *queue.State, o opts) error {
 	if o.feature == "" || o.title == "" || o.priority < 1 || o.estSteps < 1 {
 		return fmt.Errorf("new needs -feature, -title, -priority and -estimate-steps")
 	}
+	kind, holds, err := kindFlags(o)
+	if err != nil {
+		return err
+	}
 	f := &queue.Feature{
 		Feature: o.feature, Title: o.title, Priority: o.priority, Source: o.source,
+		Kind: kind, Holds: holds,
 		Design: "docs/design/" + o.feature + ".md", Branch: "feat/" + o.feature,
 		Budget: queue.Budget{Estimate: queue.Count{Runs: o.estRuns, Steps: o.estSteps}},
 	}
@@ -280,6 +312,26 @@ func newFeature(s *queue.State, o opts) error {
 		}
 	}
 	return nil
+}
+
+// kindFlags parses new's -kind and -holds; a plain feature stores no kind.
+func kindFlags(o opts) (string, []string, error) {
+	if o.kind != "" && o.kind != "feature" && o.kind != "process" {
+		return "", nil, fmt.Errorf("-kind is feature or process, not %q", o.kind)
+	}
+	var holds []string
+	for _, h := range strings.Split(o.holds, ",") {
+		if h = strings.TrimSpace(h); h != "" {
+			holds = append(holds, h)
+		}
+	}
+	if len(holds) > 0 && o.kind != "process" {
+		return "", nil, fmt.Errorf("-holds needs -kind process")
+	}
+	if o.kind == "process" {
+		return "process", holds, nil
+	}
+	return "", nil, nil
 }
 
 func runChecks(o opts, f *queue.Feature) bool {

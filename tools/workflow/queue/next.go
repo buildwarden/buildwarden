@@ -2,6 +2,7 @@ package queue
 
 import (
 	"fmt"
+	"path"
 	"strings"
 	"time"
 )
@@ -28,12 +29,41 @@ func Satisfies(worker, affinity string) bool { return Kind(worker) == affinity }
 // Kind strips the /<session> suffix from a worker.
 func Kind(worker string) string { return strings.SplitN(worker, "/", 2)[0] }
 
-// Next picks the worker's next step in FLOW-05 order: the highest-priority
-// in-progress feature with a ready step; else, for the cloud, a new feature
-// when every in-progress one is blocked and the in-progress limit allows, and
-// for a human or host, a queued feature's step of its affinity. It also
-// returns why each in-progress feature it passed over is blocked, for the
-// digest.
+// Hold returns the in-progress process item, other than f, whose holds match
+// the worker, or "" when the worker may take new steps of f (FLOW-05).
+func (s *State) Hold(f *Feature, worker string) string {
+	for _, o := range s.Features {
+		if o == f || !o.IsProcess() || o.Status != "in_progress" {
+			continue
+		}
+		for _, h := range o.Holds {
+			if ok, _ := path.Match(h, Kind(worker)); ok {
+				return o.Feature
+			}
+		}
+	}
+	return ""
+}
+
+// leasedTo returns the feature's pending step the worker already holds a
+// live lease on: a hold never takes away a step already claimed.
+func leasedTo(f *Feature, worker string, now time.Time) *Step {
+	for i := range f.Steps {
+		st := &f.Steps[i]
+		if st.Status == "pending" && st.Lease.Held(now) && st.Lease.ClaimedBy == worker {
+			return st
+		}
+	}
+	return nil
+}
+
+// Next picks the worker's next step in FLOW-05 order: process items first,
+// then the highest-priority in-progress feature with a ready step; else, for
+// the cloud, a new feature when every in-progress one is blocked and the
+// in-progress limit allows, and for a human or host, a queued feature's step
+// of its affinity. A worker an in-progress process item holds gets only the
+// steps it already has leased. It also returns why each in-progress feature
+// it passed over is blocked, for the digest.
 func (s *State) Next(worker string, now time.Time) (*Pick, []Blocked) {
 	var blocked []Blocked
 	inProgress := 0
@@ -42,36 +72,44 @@ func (s *State) Next(worker string, now time.Time) (*Pick, []Blocked) {
 			continue
 		}
 		inProgress++
+		if h := s.Hold(f, worker); h != "" {
+			if st := leasedTo(f, worker, now); st != nil {
+				return &Pick{Feature: f, Step: st}, blocked
+			}
+			blocked = append(blocked, Blocked{f.Feature, "held by process item " + h})
+			continue
+		}
 		st, why := s.ready(f, worker, now)
 		if st != nil {
 			return &Pick{Feature: f, Step: st}, blocked
 		}
 		blocked = append(blocked, Blocked{f.Feature, why})
 	}
-	if Kind(worker) != "cloud" {
-		// A human or host may also do a queued feature's preparatory step
-		// (pushing a plan, say); that does not start the feature.
-		for _, f := range s.Features {
-			if f.Status == "queued" {
-				if st, _ := s.ready(f, worker, now); st != nil {
-					return &Pick{Feature: f, Step: st}, blocked
-				}
-			}
-		}
-		return nil, blocked
+	return s.nextQueued(worker, inProgress, now), blocked
+}
+
+// nextQueued is Next's fallback once no in-progress feature has a step: a
+// queued feature's step, which only a cloud claim (or any claim on a process
+// item) starts.
+func (s *State) nextQueued(worker string, inProgress int, now time.Time) *Pick {
+	if s.Hold(nil, worker) != "" {
+		return nil
 	}
-	if n := s.Config.Limits.InProgress; n > 0 && inProgress >= n {
-		return nil, blocked
+	cloud := Kind(worker) == "cloud"
+	if n := s.Config.Limits.InProgress; cloud && n > 0 && inProgress >= n {
+		return nil
 	}
+	// A human or host may also do a queued feature's preparatory step
+	// (pushing a plan, say); that does not start a feature.
 	for _, f := range s.Features {
 		if f.Status != "queued" {
 			continue
 		}
 		if st, _ := s.ready(f, worker, now); st != nil {
-			return &Pick{Feature: f, Step: st, Starts: true}, blocked
+			return &Pick{Feature: f, Step: st, Starts: cloud || f.IsProcess()}
 		}
 	}
-	return nil, blocked
+	return nil
 }
 
 // ready returns the feature's first step the worker can take now, or why
@@ -168,12 +206,18 @@ func (s *State) NextFor(name, worker string, now time.Time) (*Pick, []Blocked) {
 			return nil, []Blocked{{name, "the in-progress limit (FLOW-05)"}}
 		}
 	}
+	if h := s.Hold(f, worker); h != "" {
+		if st := leasedTo(f, worker, now); st != nil {
+			return &Pick{Feature: f, Step: st}, nil
+		}
+		return nil, []Blocked{{name, "held by process item " + h}}
+	}
 	st, why := s.ready(f, worker, now)
 	if st == nil {
 		return nil, []Blocked{{name, why}}
 	}
 	return &Pick{Feature: f, Step: st, Starts: f.Status == "queued" &&
-		Kind(worker) == "cloud"}, nil
+		(Kind(worker) == "cloud" || f.IsProcess())}, nil
 }
 
 func allDone(ids []string, done map[string]bool) bool {
@@ -187,7 +231,8 @@ func allDone(ids []string, done map[string]bool) bool {
 
 // Claim leases the step to worker for the configured lease time and counts it
 // against the feature's budget. newRun counts a run too, the first time a run
-// touches the feature. A cloud claim on a queued feature starts it.
+// touches the feature. A cloud claim on a queued feature starts it, and so
+// does any claim on a queued process item, whose steps are all human.
 func (s *State) Claim(f *Feature, st *Step, worker string, now time.Time, newRun bool) {
 	mins := s.Config.LeaseMinutes
 	if mins == 0 {
@@ -195,7 +240,7 @@ func (s *State) Claim(f *Feature, st *Step, worker string, now time.Time, newRun
 	}
 	exp := now.Add(time.Duration(mins) * time.Minute).UTC()
 	st.Lease = Lease{ClaimedBy: worker, Expires: &exp}
-	if f.Status == "queued" && Kind(worker) == "cloud" {
+	if f.Status == "queued" && (Kind(worker) == "cloud" || f.IsProcess()) {
 		f.Status = "in_progress"
 		f.Log(now, worker, "started (FLOW-05)")
 	}

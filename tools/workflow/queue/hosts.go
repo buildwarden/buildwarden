@@ -133,10 +133,7 @@ func (s *State) Gate(m *Machine, repo string, last *GateStamp, sweepDays int,
 				p.Feature.Feature, p.Step.ID))
 		}
 	}
-	serves := map[string]bool{}
-	for _, h := range m.Hosts {
-		serves[h] = true
-	}
+	serves := s.unheld(m, g)
 	var open []string
 	for _, gap := range s.Gaps {
 		if gap.Status == "open" && serves[gap.Host] {
@@ -170,6 +167,21 @@ func (s *State) Gate(m *Machine, repo string, last *GateStamp, sweepDays int,
 		g.Reasons = append(g.Reasons, "idle\tno host step ready and no open gaps")
 	}
 	return g, nil
+}
+
+// unheld returns the machine's hosts that no in-progress process item holds;
+// a held host starts no backlog sweep, and the gate says why.
+func (s *State) unheld(m *Machine, g *Gate) map[string]bool {
+	serves := map[string]bool{}
+	for _, h := range m.Hosts {
+		if by := s.Hold(nil, "host:"+h); by != "" {
+			g.Reasons = append(g.Reasons, fmt.Sprintf(
+				"held\thost:%s\tby process item %s", h, by))
+			continue
+		}
+		serves[h] = true
+	}
+	return serves
 }
 
 // fingerprint hashes origin/main and the branch of every in-progress feature,
