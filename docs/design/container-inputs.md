@@ -72,8 +72,20 @@ not show what the user submitted next to what ran.
   fails the build before anything runs (one policy for all drivers, ORCH-01).
   Changed in Review: the first implementation recorded after the build, which
   dropped inputs on failure and handled errors differently per driver.
-- **Fixed names**: `inputs/Dockerfile` (the submitted file, whatever it was
-  called) and `inputs/build.sh` (the translation).
+- **Fixed names, the open-standard one for the submitted file**:
+  `inputs/Containerfile` holds the submitted file whatever it was called
+  (`Dockerfile`, `Containerfile`, or any file passed as the build path or set
+  as the `dockerfile` config key), and `inputs/build.sh` holds the
+  translation. `Containerfile` is the tool-neutral name for the format (the
+  open-standard name, in Jeff's answer), and BuildWarden already uses it
+  internally (`BuildRequest.Containerfile`, `script.Translate`), so the record
+  names the format rather than one vendor's tool. A fixed name means a
+  reader, or a verifier script, finds the submitted file without knowing what
+  the user called it. Changed after Publish (Jeff,
+  answering a2): the first implementation used `inputs/Dockerfile`. Rejected:
+  `inputs/Dockerfile` (one vendor's name for an open format); keeping the
+  submitted base name (the record's layout would vary per build, and a file
+  such as `ci.dockerfile` could land under any name).
 
 ## Questions
 
@@ -83,10 +95,11 @@ None.
 
 ### Assumed
 
-- Proceeding with removing the top-level `Dockerfile.submitted` and `build.sh`
-  outright, without a compatibility copy (pre-1.0 output layout). Confirm.
-- Proceeding with the fixed name `inputs/Dockerfile` even when the user's file
-  is named `Containerfile` or anything else. Confirm.
+- a1, **confirmed** (Jeff): remove the top-level `Dockerfile.submitted` and
+  `build.sh` outright, without a compatibility copy (pre-1.0 output layout).
+- a2, **answered** (Jeff rejected the assumed `inputs/Dockerfile`): always
+  record the submitted file as `inputs/Containerfile`, the open-standard name,
+  whatever its original name. Applied throughout this revision.
 
 ## Design
 
@@ -94,13 +107,27 @@ None.
 RecordInputs(outputDir, req, script):     # container, qemu, hyperv
     if not translates(req): return          # --script, context script, Windows, vz
     mkdir outputDir/inputs
-    copy req.Containerfile -> inputs/Dockerfile   (unchanged)
-    copy script            -> inputs/build.sh     (what the guest fetched)
+    copy req.Containerfile -> inputs/Containerfile  (unchanged bytes, any original name)
+    copy script            -> inputs/build.sh       (what the guest fetched)
 
 translates(req) = req.Script == "" and guest is not Windows and req.Containerfile != ""
 ```
 
 The container driver always translates, so its builds always get both files.
+
+The resulting layout:
+
+```
+<output>/
+└── inputs/
+    ├── Containerfile   # the file submitted (Dockerfile, Containerfile, ...), unchanged
+    └── build.sh        # its translation: what ran
+```
+
+Only the recorded name changes with a2; the user still submits a `Dockerfile`
+or a `Containerfile` as today (`cmd/warden/config.go` looks for both), and the
+reference docs keep saying "your Dockerfile" where they mean the file the user
+wrote, naming `inputs/Containerfile` only for the recorded copy.
 
 ## Cross-driver impact
 
@@ -119,7 +146,10 @@ The container driver always translates, so its builds always get both files.
 ## Validation plan
 
 Tier 0: unit tests for `RecordInputs` (translated, `--script`, context script,
-Windows guest) and that `StageBuildScript` and `RecordInputs` agree. Tier 1/2:
+Windows guest) and that `StageBuildScript` and `RecordInputs` agree. The
+translated case submits a file named `Dockerfile` and asserts it lands as
+`inputs/Containerfile` and that no `inputs/Dockerfile` exists, so the
+fixed-name rule is tested against the common original name. Tier 1/2:
 the container-driver integration test (`test-integration.sh`) where a runtime is
 available. Native hosts are tracked, not blocking (see front-matter).
 
@@ -137,6 +167,22 @@ available. Native hosts are tracked, not blocking (see front-matter).
    FLOW-15).
 6. Update the layout in `README.md` (UX-01). The Guide phase updates the
    narrative in `getting-started/first-build.md`.
+
+Rework for a2 (FLOW-06; steps 1 to 6 shipped with `inputs/Dockerfile`):
+
+7. `driver/session.go`: `RecordInputs` writes `inputs/Containerfile`, and its
+   doc comment says so (ORCH-02).
+8. `driver/session_test.go`: `TestRecordInputsOnlyWhenTranslated` submits a
+   file named `Dockerfile`, reads `inputs/Containerfile`, and asserts
+   `inputs/Dockerfile` is absent (TEST-01).
+9. Reference docs (UX-01): `docs/book/src/guide/output.md` (the layout block
+   and the `### inputs/Dockerfile` entry, retitled `### inputs/Containerfile`),
+   `README.md`'s layout, and `docs/book/src/getting-started/first-build.md`'s
+   layout. `overview.md` names no file and needs no change (FLOW-15).
+10. Check no `inputs/Dockerfile` remains in code, tests or reference docs:
+    `grep -rn 'inputs/Dockerfile\|"inputs", "Dockerfile"' driver cmd docs/book
+    README.md test-integration.sh` finds nothing (this design keeps the name
+    only as the rejected option).
 
 ## Consolidation (merge round)
 
