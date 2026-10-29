@@ -3,7 +3,7 @@ title: Stand up the feature workflow (bootstrap step 1)
 priority: 1
 status: in_progress
 round: merge
-phase: 7
+phase: 8
 design: docs/design/workflow-bootstrap.md
 branch: claude/buildwarden-workflow-setup-w0ai39
 alters_relationships: false
@@ -33,6 +33,13 @@ steps:
   - id: m7-sign-off
     phase: 7
     affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: m8-archive
+    phase: 8
+    affinity: cloud
     status: pending
     lease:
       claimed_by: ""
@@ -106,3 +113,9 @@ history:
   - at: 2026-10-28T23:51:33Z
     by: attended-setup
     event: 'Branch cleanup (FLOW-16), remote deletes are Jeff''s: docs/housekeeping-guidance is merged (PR 62): git push origin --delete docs/housekeeping-guidance. chore/entire-sessions is contained in this PR: delete it with the PR branch once PR 63 merges (m8-archive).'
+  - at: 2026-10-29T00:02:11Z
+    by: human/jeff
+    event: done m7-sign-off
+  - at: 2026-10-29T00:02:11Z
+    by: human/jeff
+    event: entered phase 8 (archive)
