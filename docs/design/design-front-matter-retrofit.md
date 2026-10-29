@@ -334,16 +334,63 @@ the retrofitted documents describe those documents, not this change.
 
 ## Implementation plan
 
-1. Prepend the front-matter block from Design to each of the six pre-standard
-   documents, body unchanged (FLOW-02, FLOW-12).
-2. Add `alters_relationships: true` to the three archived designs (FLOW-02,
-   FLOW-12).
-3. Run the Tier-0 parse check and the top-only diff check, and record the
-   output (FLOW-03, TEST-02).
-4. Run `make test` and `make lint`; commit and push the branch (FLOW-17).
-5. In the PR description, list the `docs/development/README.md` edit that
-   retires the follow-up bullet, and the archive-wide check proposed to
-   `tier1-static-checks`, for the human (FLOW-14, LINT-02).
+Each task names the assumed questions it rests on; a different answer touches
+only the tasks that name it. No task edits a document body, `tools/workflow/`,
+`docs/development/` or `.claude/` (Decision 2, FLOW-14).
+
+1. Prepend the `firecracker-driver-plan.md` block from Design, then one blank
+   line, before the existing first line (FLOW-02, FLOW-12, GLOBAL-08).
+   Assumes a1, a2 (`draft`), a5, a6, a7; under a7 (b) this task is dropped.
+2. Prepend the `hyperv-driver-plan.md` block (FLOW-02, FLOW-12, GLOBAL-06).
+   Assumes a1, a2 (`archived`), a5, a6.
+3. Prepend the `platform-compatibility.md` block (FLOW-02, FLOW-12). Assumes
+   a1, a2 (`active`), a6.
+4. Prepend the `remote-execution-and-measured-hermeticity.md` block (FLOW-02,
+   FLOW-12, GLOBAL-06). Assumes a1, a2 (`draft`), a5, a6.
+5. Prepend the `vm-driver-release-plan.md` block (FLOW-02, FLOW-12, TEST-03:
+   its `tier2_gaps` entry names the already-tracked
+   `qemu-windows-guest-package` gap, so no backlog entry is added). Assumes
+   a1, a2 (`active`), a5, a6.
+6. Prepend the `windows-driver-plan.md` block (FLOW-02, FLOW-12, GLOBAL-06).
+   Assumes a1, a2 (`archived`), a4 (its "Phase 2 pending" banner stays), a5,
+   a6.
+7. Rework of already-archived designs (FLOW-06, FLOW-02): insert
+   `alters_relationships: true` directly after `security_boundary` in
+   `hyperv-windows-prepare.md`, `ledger-environment-types.md` and
+   `unified-bootstrap.md`; no other line changes. Assumes a3 (a); under a3 (b)
+   the value per file changes, under a3 (c) this task is dropped.
+8. Tier-0 parse check (TEST-02 tier 0, TEST-01, FLOW-02, FLOW-03): run
+   `check.ParseDesign` and `Front.problems(<base name>)` over every
+   `docs/design/*.md` except `TEMPLATE.md`, using the real parser through
+   `go test -overlay` with a scratch `_test.go` kept in the session
+   scratchpad, so nothing under `tools/workflow/` is created or edited
+   (FLOW-14, a8). Pass: no problems for the nine touched files, and
+   `alters_relationships` set on each; `workflow-bootstrap.md` and this design
+   report only the expected feature-versus-base-name result, if any. Paste the
+   output into the implementation commit message. (Planning ran this check on
+   the proposed blocks: all nine passed.) Assumes a6 (the base-name comparison)
+   and a8.
+9. Body-unchanged diff check (TEST-02 tier 0, FLOW-12, GLOBAL-08): for each of
+   the nine files, `git diff origin/main -- <file>` shows only added lines,
+   and only inside the leading front-matter block (plus its trailing blank
+   line for the six retrofits). Record the result with task 8's. Assumes a4.
+10. Run `make test` and `make lint` (TEST-01, FLOW-17); no build-tagged file
+    changes, so no per-platform lint run is owed. Commit the nine files and
+    push `feat/design-front-matter-retrofit` (FLOW-17).
+11. Reference docs and overview (UX-01, FLOW-15): none owed. The change has no
+    user-facing surface (`surfaces: []`) and changes no component flow, so
+    `docs/book/src/guide/` and `docs/book/src/concepts/overview.md` are
+    untouched; record "UX-01/FLOW-15: none" in the commit message so the
+    review phase can check it.
+12. Native validation (FLOW-09, TEST-03): none. No `m6-validate-<host>` step
+    and no backlog entry; the retrofitted `native_validation` values are
+    descriptive only (Decision 7).
+13. For the PR description, written at Publish (FLOW-08, FLOW-14, LINT-02):
+    the exact `docs/development/README.md` edit that retires the "Follow-up -
+    Design front-matter retrofit" bullet, for the human to apply at sign-off
+    (a9); and the archive-wide front-matter check proposed to
+    `tier1-static-checks` (a8). Under a9 (b) or a8 (b) these become attended
+    steps on this branch instead.
 
 ## Consolidation (merge round)
 
