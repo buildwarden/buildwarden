@@ -34,8 +34,9 @@ assert_no_grep() {
     fi
 }
 
+# The build's last line is "warden: build SUCCEEDED (output: <dir>)".
 extract_output_dir() {
-    sed 's/\x1b\[[0-9;]*m//g' | grep "Output:" | awk '{print $NF}'
+    sed 's/\x1b\[[0-9;]*m//g' | sed -n 's/.*build SUCCEEDED (output: \(.*\))$/\1/p' | tail -1
 }
 
 # ─── Build warden ───────────────────────────────────────────────────────────

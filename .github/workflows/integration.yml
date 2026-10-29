@@ -49,12 +49,13 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      # Temporary, with the push trigger: feat/container-inputs predates the
-      # Dockerfile's COPY fix, so its run takes only that file from this branch.
+      # Temporary, with the push trigger: feat/container-inputs predates this
+      # branch's Dockerfile and test-integration.sh fixes, so its run applies
+      # them as a patch on top of its own script (which adds the inputs/ check).
       - if: matrix.ref != ''
         run: |
-          git fetch -q --depth=1 origin ${{ github.sha }}
-          git checkout FETCH_HEAD -- Dockerfile
+          git fetch -q --depth=50 origin +refs/heads/main:refs/tmp/main ${{ github.sha }}:refs/tmp/head
+          git diff refs/tmp/main refs/tmp/head -- Dockerfile test-integration.sh | git apply -v
       - run: docker version
       # Refs older than the dist/warden fix in test-integration.sh call ./warden.
       - run: ln -sf dist/warden warden
