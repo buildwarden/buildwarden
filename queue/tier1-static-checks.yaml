@@ -3,10 +3,10 @@ title: 'Tier-1 static-check extraction (LINT-02, Deep-dive #2)'
 priority: 4
 status: in_progress
 round: parallel
-phase: 1
+phase: 2
 design: docs/design/tier1-static-checks.md
 branch: feat/tier1-static-checks
-alters_relationships: null
+alters_relationships: false
 source: 'docs/development/README.md: Deep-dive #2'
 steps:
   - id: p0-branch-setup
@@ -19,10 +19,17 @@ steps:
   - id: p1-design
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p2-plan
+    phase: 2
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261030T095602Z
-      expires: 2026-10-30T12:17:48.931155578Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 6
@@ -30,7 +37,71 @@ budget:
   spent:
     runs: 1
     steps: 2
-questions: []
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: Put tier 1 in its own Go module at tools/tier1/ (Decision 1)?
+    options:
+      - tools/tier1/ as its own module
+      - a package inside tools/workflow/ (needs Jeff's attended edits, FLOW-14; ties tier 1 to the queue tool)
+      - internal/tier1 in the product module (adds x/tools and YAML to the module third parties embed)
+    recommended: tools/tier1/ as its own module
+  - id: a2
+    kind: assumed
+    status: open
+    question: 'Accept design-front-matter-retrofit a8 in diff-scoped form: tier 1 validates the FLOW-02 front-matter of every design the diff touches, and "tier1 designs -all" checks the whole archive in the release job and on demand, never per PR (LINT-04)?'
+    options:
+      - diff-scoped check plus -all at release
+      - archive-wide check on every PR (contradicts LINT-04; needs a rule change)
+      - decline the handoff; leave it to wf's phase-1 gate, which covers only the feature's own design
+    recommended: diff-scoped check plus -all at release (if a8 ends as "no permanent check", drop -all and keep the diff-scoped check)
+  - id: a3
+    kind: assumed
+    status: open
+    question: 'Share one front-matter validator (FLOW-15): tier1 imports tools/workflow/check through a replace directive, and an attended human-affinity task (p3-export-problems) exports Front.problems as Problems in tools/workflow? Until it is done, the front-matter check is not built and the other checks proceed.'
+    options:
+      - attended export, then share the validator
+      - duplicate the ~30 lines of key and enum rules in tier1, with a fixture parity test
+      - move the parser into a third shared module (more churn, and a tools/workflow edit anyway)
+    recommended: attended export; if Jeff declines, the duplicate with a parity test
+  - id: a4
+    kind: assumed
+    status: open
+    question: Wire tier 1 into make lint (so the phase-3 and phase-4 gates run it with no tools/workflow edit), into a main.yml job on PRs and pushes to main, and into a release.yml job against the previous tag that the release jobs need (the LINT-03 release-gate home)? Once merged, in-flight branches whose diffs break a MUST check fail make lint until their merge round fixes them.
+    options:
+      - inside make lint, plus CI and the release job
+      - a separate make tier1 target that wf runs (needs a tools/workflow edit)
+      - CI only (the loop's Review gate never sees it)
+    recommended: inside make lint, plus CI and the release job
+  - id: a5
+    kind: assumed
+    status: open
+    question: 'Suppress findings with "Tier1-Allow: <RULE> <path-glob>: <reason>" commit trailers in the diff range, each printed in the output so the tier-2 report and sign-off see it (LINT-05, FLOW-08)?'
+    options:
+      - commit trailers
+      - a checked-in suppressions file
+      - inline comments, for line findings only
+      - no suppressions in tier 1 (contradicts LINT-05)
+    recommended: commit trailers
+  - id: a6
+    kind: assumed
+    status: open
+    question: Emit GLOBAL-04's mechanical half ("non-test code changed, no test changed in that package") as a non-failing hint for tier 2 rather than a hard tier-1 failure?
+    options:
+      - a hint
+      - a MUST failure that a suppression can clear
+      - leave GLOBAL-04 entirely to tier 2
+    recommended: a hint
+  - id: a7
+    kind: assumed
+    status: open
+    question: 'Scope: ship the first slice in the design''s "Checks in this feature" table. Every other automated rule gets a rules.yaml entry, either owned elsewhere (wf, flow18, make test, CI, branch protection, security suite) or follow-up with a reason, and sign-off queues one follow-up item?'
+    options:
+      - this slice
+      - every automated rule in this feature (well over the 6-run, 30-step budget; some have no mechanical form yet)
+      - the coupling checks only
+    recommended: this slice
 history:
   - at: 2026-10-28T23:18:38Z
     by: attended-setup
@@ -53,3 +124,9 @@ history:
   - at: 2026-10-30T10:17:48Z
     by: cloud/20261030T095602Z
     event: claimed p1-design until 2026-10-30T12:17:48Z
+  - at: 2026-10-30T10:23:47Z
+    by: cloud/20261030T095602Z
+    event: done p1-design
+  - at: 2026-10-30T10:23:47Z
+    by: cloud/20261030T095602Z
+    event: entered phase 2 (plan)
