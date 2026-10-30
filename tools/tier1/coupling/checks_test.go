@@ -4,6 +4,9 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/buildwarden/buildwarden/tools/tier1"
+	"github.com/buildwarden/buildwarden/tools/tier1/diff"
+	"github.com/buildwarden/buildwarden/tools/tier1/internal/gittest"
 	"github.com/buildwarden/buildwarden/tools/tier1/report"
 	"github.com/buildwarden/buildwarden/tools/tier1/rules"
 )
@@ -76,11 +79,39 @@ func TestSeverities(t *testing.T) {
 	c := checker(t, map[string]string{"docs/design/f.md": d(nil),
 		"cmd/warden-io/jks.go": pkg, "relay/x.go": pkg})
 	for _, f := range c.All() {
-		want := map[string]report.Severity{"BOOT-07": report.MustReview,
+		want := map[string]report.Severity{"BOOT-07": report.Hint,
 			"ORCH-01": report.Must, "GLOBAL-04": report.Hint}[f.Rule]
 		if f.Severity != want {
 			t.Errorf("%s: severity %q, want %q", f.Rule, f.Severity, want)
 		}
+	}
+}
+
+func TestBootstrapDocSeverity(t *testing.T) {
+	c := checker(t, map[string]string{"docs/design/f.md": d(nil),
+		"docs/development/bootstrap.md": "m\n"})
+	got := c.BootstrapSurface()
+	if len(got) != 1 || got[0].Severity != report.MustReview {
+		t.Errorf("bootstrap.md with no BOOT-07 design must stay MUST-review: %+v", got)
+	}
+}
+
+func TestCommentOnlyChange(t *testing.T) {
+	r := gittest.New(t, map[string]string{"docs/design/TEMPLATE.md": tmpl,
+		"driver/fixable.go": "package driver\n\n// Old says.\nfunc F() {}\n",
+		"driver/vz/a.go":    "package vz\n\nfunc G() {}\n"})
+	r.Commit("comments", map[string]string{"docs/design/f.md": d(nil),
+		"driver/fixable.go": "package driver\n\n// New says, at length.\nfunc F() {\n}\n",
+		"driver/vz/a.go":    "package vz\n\nfunc G() { _ = 1 }\n"})
+	dd, err := diff.Load(r.Dir, "origin/main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, _ := rules.ParseConfig(tier1.RulesYAML)
+	c := &Checker{Diff: dd, Cfg: cfg, Index: &rules.Index{}, Designs: LoadDesigns(dd, nil)}
+	got := c.DriversClaim()
+	if len(got) != 1 || got[0].File != "driver/vz/a.go" {
+		t.Errorf("a comment-only change reached the shared package: %+v", got)
 	}
 }
 

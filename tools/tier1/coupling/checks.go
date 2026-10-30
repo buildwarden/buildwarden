@@ -1,6 +1,8 @@
 package coupling
 
 import (
+	"go/scanner"
+	"go/token"
 	"path"
 	"sort"
 	"strings"
@@ -21,18 +23,70 @@ func (c *Checker) All() []report.Finding {
 	return out
 }
 
-// paths is every path the diff touched, both sides of a rename included,
-// sorted.
+// paths is every path the diff changed, both sides of a rename included,
+// sorted. A Go file whose change is only comments or layout is left out:
+// history showed comment fixes in shared driver files failing drivers-claim
+// (task 11).
 func (c *Checker) paths() []string {
-	var out []string
+	if c.changed != nil {
+		return c.changed
+	}
+	c.changed = []string{}
 	for _, f := range c.Diff.Files {
-		out = append(out, f.Path)
+		if !c.codeChanged(f) {
+			continue
+		}
+		c.changed = append(c.changed, f.Path)
 		if f.Old != "" {
-			out = append(out, f.Old)
+			c.changed = append(c.changed, f.Old)
 		}
 	}
-	sort.Strings(out)
-	return out
+	sort.Strings(c.changed)
+	return c.changed
+}
+
+// codeChanged reports whether f changes anything but the comments and layout
+// of a Go file.
+func (c *Checker) codeChanged(f diff.File) bool {
+	if f.Status != 'M' || !strings.HasSuffix(f.Path, ".go") {
+		return true
+	}
+	a, okA := c.Diff.Show(c.Diff.Base, f.Path)
+	b, okB := c.Diff.Show(c.Diff.Head, f.Path)
+	return !okA || !okB || !sameTokens(a, b)
+}
+
+// sameTokens reports whether two Go sources have the same token stream,
+// ignoring comments and the semicolons the scanner inserts at line ends.
+func sameTokens(a, b string) bool {
+	ta, tb := goTokens(a), goTokens(b)
+	if len(ta) != len(tb) {
+		return false
+	}
+	for i := range ta {
+		if ta[i] != tb[i] {
+			return false
+		}
+	}
+	return true
+}
+
+func goTokens(src string) []string {
+	fset := token.NewFileSet()
+	file := fset.AddFile("", fset.Base(), len(src))
+	var s scanner.Scanner
+	s.Init(file, []byte(src), nil, 0)
+	var out []string
+	for {
+		_, tok, lit := s.Scan()
+		if tok == token.EOF {
+			return out
+		}
+		if tok == token.SEMICOLON && lit == "\n" {
+			continue
+		}
+		out = append(out, tok.String()+" "+lit)
+	}
 }
 
 // first returns the first touched path matching any of globs, or "".
@@ -82,15 +136,19 @@ func (c *Checker) DriversClaim() []report.Finding {
 	return out
 }
 
-// BootstrapSurface is BOOT-07's automated part, both directions.
+// BootstrapSurface is BOOT-07's automated part, both directions. A surface
+// change without the model document is a hint: most surface changes are not
+// model changes, and judging that is BOOT-07's agent part. On history it
+// fired on container-inputs, whose change is not a model change (task 11).
 func (c *Checker) BootstrapSurface() []report.Finding {
 	b := c.Cfg.Bootstrap
 	var out []report.Finding
 	if p := c.first(b.Surface...); p != "" && !c.Diff.Touched(b.Doc) {
-		out = append(out, c.finding("BOOT-07", "bootstrap-surface", p,
-			"%s is on the bootstrap surface and %s is not in the diff; update "+
-				"the model, or say why it is unchanged in a Tier1-Allow trailer",
-			p, b.Doc))
+		f := c.finding("BOOT-07", "bootstrap-surface", p,
+			"%s is on the bootstrap surface and %s is not in the diff; tier 2 "+
+				"judges whether this is a model change", p, b.Doc)
+		f.Severity = report.Hint
+		out = append(out, f)
 	}
 	if c.Diff.Touched(b.Doc) && !c.Designs.Rules["BOOT-07"] {
 		out = append(out, c.finding("BOOT-07", "bootstrap-surface", b.Doc,
@@ -100,7 +158,9 @@ func (c *Checker) BootstrapSurface() []report.Finding {
 }
 
 // SchemaDoc is RELAY-05's deterministic half: a schema and its document
-// change together, in both directions.
+// change together. A document change with no schema change is a hint, since
+// ledger-spec.md is prose for the binary format as well and a prose fix
+// changes no schema (PR #62, task 11).
 func (c *Checker) SchemaDoc() []report.Finding {
 	var out []report.Finding
 	for _, pair := range c.Cfg.SchemaDoc {
@@ -110,8 +170,10 @@ func (c *Checker) SchemaDoc() []report.Finding {
 			out = append(out, c.finding("RELAY-05", "schema-doc", code,
 				"%s changed without %s", code, pair.Doc))
 		case code == "" && doc:
-			out = append(out, c.finding("RELAY-05", "schema-doc", pair.Doc,
-				"%s changed with nothing under %s", pair.Doc, pair.Code))
+			f := c.finding("RELAY-05", "schema-doc", pair.Doc,
+				"%s changed with nothing under %s", pair.Doc, pair.Code)
+			f.Severity = report.Hint
+			out = append(out, f)
 		}
 	}
 	return out

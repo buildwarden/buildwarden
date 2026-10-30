@@ -664,6 +664,42 @@ not part of the runaway check.
       entry. Those changes, and any rule sharpening from task 11, go in the
       PR description for Jeff (FLOW-14, FLOW-08).
 
+**Notes (task 11, run against history).** `tier1 -base <first parent>` ran
+on the merge commits of PRs #60 to #64, and `tier1` (base `origin/main`) on
+`container-inputs`, `design-front-matter-retrofit`, `firecracker-driver`,
+`native-loop-followups`, `workflow-bootstrap-archive` and `main`, each in a
+detached worktree with this branch's binary. Task 10 is not built yet, so the
+FLOW-02 half of `design-front-matter` did not run; task 10 reruns these diffs.
+
+- **Retuned: Go changes that touch only comments or layout no longer reach a
+  path** for `drivers-claim`, `bootstrap-surface` and `seam-contract` (a
+  token comparison with comments dropped). PR #62 corrected a comment in
+  `driver/fixable.go`; with the design it edited incidentally as the claim,
+  `drivers-claim` failed it for not declaring every driver.
+- **Demoted to a hint, for Review:** `bootstrap-surface`'s "surface changed,
+  `bootstrap.md` did not" direction. It fired on `container-inputs`
+  (`driver/container/container.go`), whose change is not a model change, and
+  BOOT-07 leaves that judgment to its agent part. The other direction,
+  `bootstrap.md` changed with no design citing BOOT-07, stays MUST-review.
+- **Demoted to a hint, for Review:** `schema-doc`'s "spec changed, no schema
+  did" direction. PR #62 fixed prose in `ledger-spec.md`, which also
+  describes the binary format and has no schema counterpart. A schema change
+  without the spec still fails. A rule sharpening for the PR description:
+  RELAY-05's "fails if one changes without the other" holds for a
+  `metadata-<name>/` pair once `specs-migration` lands, and the reverse
+  direction can be a MUST then.
+- **True positives, kept:** PR #60 removed `--accept-unpinned` with no alias
+  or deprecation (UX-03), and added the exported `BuildGuestCIDR` with no doc
+  comment (GLOBAL-01). Its `gofmt` finding is SHOULD.
+- **Calibration artifacts, no change:** on PRs #60 and #61, `rule-index`
+  reported FLOW-16, FLOW-18 and UX-09 as mapped but missing, because the
+  binary embeds this branch's `rules.yaml` and those rules came later. `make
+  lint` builds tier 1 from the tree it checks, so the two always match.
+- **Result:** after the retune, every in-flight branch and `main` exit 0.
+  `container-inputs` carries one BOOT-07 hint. PRs #61 to #64 exit 0 apart
+  from the PR #61 artifact; PR #60 exits 1 on its two true positives.
+  GLOBAL-04 hints appear on most code diffs, as expected for a hint.
+
 ## Consolidation (merge round)
 
 ## Rollback notes

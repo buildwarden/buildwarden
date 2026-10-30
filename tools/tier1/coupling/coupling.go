@@ -85,6 +85,7 @@ type Checker struct {
 	Index    *rules.Index
 	Designs  *Designs
 	NoDesign bool
+	changed  []string // the paths() cache
 }
 
 func (c *Checker) finding(rule, check, file, format string, a ...any) report.Finding {
