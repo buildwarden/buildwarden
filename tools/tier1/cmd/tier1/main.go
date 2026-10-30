@@ -9,6 +9,7 @@
 package main
 
 import (
+	"encoding/json"
 	"errors"
 	"flag"
 	"fmt"
@@ -16,8 +17,10 @@ import (
 	"os"
 	"strings"
 
+	"github.com/buildwarden/buildwarden/tools/tier1"
 	"github.com/buildwarden/buildwarden/tools/tier1/diff"
 	"github.com/buildwarden/buildwarden/tools/tier1/report"
+	"github.com/buildwarden/buildwarden/tools/tier1/rules"
 )
 
 func main() {
@@ -95,8 +98,15 @@ func check(o options) (*report.Report, error) {
 	if err != nil {
 		return nil, err
 	}
+	ix, cfg, err := loadRules(o.repo)
+	if err != nil {
+		return nil, err
+	}
 	r := &report.Report{Base: d.Base, Head: d.Head}
 	r.Add(d.Bad...)
+	if touchedUnder(d, rules.Dir+"/", "tools/tier1/rules.yaml") {
+		r.Add(rules.SelfCheck(ix, cfg)...)
+	}
 	d.Suppress(r)
 	r.Finish()
 	return r, nil
@@ -110,6 +120,54 @@ func runRules(args []string, stdout, stderr io.Writer) int {
 	if err := fs.Parse(args); err != nil {
 		return report.ExitUsage
 	}
-	_, _ = asJSON, repo
+	ix, cfg, err := loadRules(*repo)
+	if err != nil {
+		return fail(stderr, err)
+	}
+	if *asJSON {
+		enc := json.NewEncoder(stdout)
+		enc.SetIndent("", "  ")
+		if err := enc.Encode(ix.Rules); err != nil {
+			return fail(stderr, err)
+		}
+	} else {
+		for _, r := range ix.Rules {
+			fmt.Fprintf(stdout, "%-10s %-11s %-40s %s\n",
+				r.ID, r.Severity, r.Check, r.Title)
+		}
+	}
+	problems := rules.SelfCheck(ix, cfg)
+	for _, f := range problems {
+		fmt.Fprintf(stderr, "%s:%d [%s] %s\n", f.File, f.Line, f.Rule, f.Message)
+	}
+	if len(problems) > 0 {
+		return report.ExitFail
+	}
 	return report.ExitClean
+}
+
+func loadRules(repo string) (*rules.Index, *rules.Config, error) {
+	ix, err := rules.Load(repo)
+	if err != nil {
+		return nil, nil, err
+	}
+	if len(ix.Rules) == 0 {
+		return nil, nil, fmt.Errorf("no rules found under %s/%s; is -repo the repo root?",
+			repo, rules.Dir)
+	}
+	cfg, err := rules.ParseConfig(tier1.RulesYAML)
+	return ix, cfg, err
+}
+
+// touchedUnder reports whether the diff touched any path equal to, or under
+// (for a prefix ending in "/"), one of prefixes.
+func touchedUnder(d *diff.Diff, prefixes ...string) bool {
+	for _, f := range d.Files {
+		for _, p := range prefixes {
+			if diff.Match(p, f.Path) || (f.Old != "" && diff.Match(p, f.Old)) {
+				return true
+			}
+		}
+	}
+	return false
 }
