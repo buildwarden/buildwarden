@@ -3,7 +3,7 @@ title: 'Tier-1 static-check extraction (LINT-02, Deep-dive #2)'
 priority: 4
 status: in_progress
 round: parallel
-phase: 0
+phase: 1
 design: docs/design/tier1-static-checks.md
 branch: feat/tier1-static-checks
 alters_relationships: null
@@ -12,10 +12,17 @@ steps:
   - id: p0-branch-setup
     phase: 0
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p1-design
+    phase: 1
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261030T095602Z
-      expires: 2026-10-30T12:17:14.964619576Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 6
@@ -37,3 +44,9 @@ history:
   - at: 2026-10-30T10:17:14Z
     by: cloud/20261030T095602Z
     event: claimed p0-branch-setup until 2026-10-30T12:17:14Z
+  - at: 2026-10-30T10:17:46Z
+    by: cloud/20261030T095602Z
+    event: done p0-branch-setup
+  - at: 2026-10-30T10:17:46Z
+    by: cloud/20261030T095602Z
+    event: entered phase 1 (design)
