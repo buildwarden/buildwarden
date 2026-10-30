@@ -110,7 +110,7 @@ func check(o options) (*report.Report, error) {
 	}
 	c := &coupling.Checker{Diff: d, Cfg: cfg, Index: ix,
 		Designs: coupling.LoadDesigns(d, o.designs), NoDesign: o.noDesign}
-	r.Add(c.NoDesignInDiff()...)
+	r.Add(c.All()...)
 	d.Suppress(r)
 	r.Finish()
 	return r, nil
