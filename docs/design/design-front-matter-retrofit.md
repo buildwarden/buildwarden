@@ -9,7 +9,7 @@ security_boundary: none
 alters_relationships: false
 native_validation: []
 tier2_gaps: []
-rules: [FLOW-01, FLOW-02, FLOW-07, FLOW-09, FLOW-12, FLOW-14, GLOBAL-06, GLOBAL-08, TEST-02, TEST-03, LINT-02]
+rules: [FLOW-01, FLOW-02, FLOW-07, FLOW-09, FLOW-12, FLOW-14, GLOBAL-06, GLOBAL-08, RELAY-03, RELAY-04, TEST-02, TEST-03, TEST-08, LINT-02]
 concepts: [design-archive, front-matter, retrofit, archive-retrieval]
 related: [workflow-bootstrap.md, firecracker-driver-plan.md, hyperv-driver-plan.md, platform-compatibility.md, remote-execution-and-measured-hermeticity.md, vm-driver-release-plan.md, windows-driver-plan.md, hyperv-windows-prepare.md, ledger-environment-types.md, unified-bootstrap.md]
 ---
@@ -66,12 +66,27 @@ it.
    duplicates work and risks two branches writing conflicting front-matter for
    one file. Rejected: lazy only (the README wording; slower to make the archive
    searchable).
-2. **Front-matter only; document bodies are not edited** (a4). The retrofit
-   prepends a front-matter block and changes nothing below it, so the diff is
-   mechanical and reviewable. Stale status banners, missing Archive summaries
-   and the template's section headings are not added. Rejected: rewriting the
-   documents into template shape (large, opinionated, and history the archive
-   should keep as written).
+2. **Existing lines are never edited; the retrofit only adds** (a4). Each
+   document gets a front-matter block prepended. The two documents whose
+   `security_boundary` is not `none` and whose body has no security section
+   (`windows-driver-plan.md`, `remote-execution-and-measured-hermeticity.md`)
+   also get a short `## Security note (retrofit)` section appended at the end
+   of the file. No existing line changes, so the diff is still added lines
+   only and mechanically checkable. Stale status banners, missing Archive
+   summaries and the template's other section headings are not added.
+   Why the notes rather than an exception (review 7b11f043ab61, MUST 3-4):
+   FLOW-02 is a MUST ("any value other than `none` requires a security note in
+   the design"), and confirming an assumption cannot waive it. An exception is
+   a rule change, which is Jeff's to make (FLOW-14), not something a design
+   grants itself. Lowering the boundary to `none` would understate it, against
+   conservative derivation. And `remote-execution-and-measured-hermeticity` is
+   a draft that the next design will build on; it changes the relay itself, so
+   GLOBAL-06 makes it high-severity, and a boundary with no note would be
+   inherited silently. The notes record what each document's own text says
+   about the boundary and what TEST-08 should exercise; they add no new
+   design. Rejected: front-matter only with a recorded FLOW-02 exception (a4
+   (b)); rewriting the documents into template shape (large, opinionated, and
+   history the archive should keep as written).
 3. **`feature` is the file's base name** (a6), for example
    `feature: firecracker-driver-plan`. Rejected: the feature's queue slug, which
    collides where a queue item names a different design
@@ -92,7 +107,8 @@ it.
 6. **`security_boundary` takes the single most severe boundary the document
    alters** (a5), ordered `host-env` > `env-relay` > `env-beyond`. Where a
    document's existing body has a security section, a YAML comment points to it
-   as the security note; no `## Security note` section is added (Decision 2).
+   as the security note. Where it has none, the comment points to the appended
+   `## Security note (retrofit)` (Decision 2, a4).
    Rejected: proposing a list-valued `security_boundary` (a FLOW-02 change for
    human sign-off; not needed to make the archive searchable).
 7. **`native_validation` and `tier2_gaps` on retrofitted documents are
@@ -100,16 +116,53 @@ it.
    the document itself names. They create no queue steps and no backlog entries;
    the one tracked gap named (`vm-driver-release-plan.md`, qemu Windows guest
    package) is already `qemu-windows-guest-package` in the native-gap backlog.
+   Hosts follow `drivers` (review 7b11f043ab61, SHOULD 6): the primary hosts a
+   plan targets keep the blocking value the plan gives them, and every further
+   driver that `drivers` lists because of a shared-package change (Decision 5)
+   gets one `blocking: false` regression entry on its host: `container` on
+   `container-any`, `qemu` on `qemu-any`, `vz` on `macos-vz`, `hyperv` on
+   `windows-hyperv`. This covers the VZ and Linux+qemu regression check that
+   `windows-driver-plan.md` names in its Phase 2 hand-off, and the "no
+   regression on container/qemu/vz" condition on `hyperv-driver-plan.md`'s
+   relay output sink. `vm-driver-release-plan` (a roadmap whose phases name
+   their own hosts) and `platform-compatibility` (a reference, not a change)
+   are not widened this way. The host names are ones already used in the
+   archive and the native-gap backlog; `linux-kvm` remains the one new name.
 8. **The three archived designs gain `alters_relationships: true`** (a3): each
    changes a versioned seam or moves a responsibility between components
    (`unified-bootstrap`: bootstrap model; `ledger-environment-types`: ledger
    format and claim; `hyperv-windows-prepare`: Windows guest code moved from two
    drivers into the shared `driver/winguest`). No other key is changed.
-9. **Out of scope**: `docs/book/src/design/` (the ledger spec, philosophy and
-   initial proposal are book pages governed by RELAY-05, not archive designs);
-   `firecracker-spike-plan.md` and `container-inputs.md`, which are on other
-   feature branches and get front-matter from their own design phases;
-   `TEMPLATE.md`.
+9. **Rework after review 7b11f043ab61** (p1-design-r2). The findings were
+   against values this design chose, so they are fixed here and Implement
+   re-applies the blocks:
+   - `firecracker-driver-plan`: `drivers` widens to every relay-dependent
+     driver, because the plan changes the relay binary (relay-to-host vsock
+     "CA ready" and "ledger complete" signals) and shares `util.go` with qemu.
+     `seams` gains `relay-claim`, because the plan injects a per-build
+     `relay.env`, extracts the CA from the relay, and hands the warm pool's
+     resumed relay its build config over vsock, which is the claim GLOBAL-08
+     names. Decision 5 now applies to it as to the Hyper-V and Windows plans.
+     `rules` gains RELAY-04 (a relay change states its modes) and RELAY-03:
+     the warm pool snapshots a relay after "CA generated, listeners up", so
+     every restored relay would share one CA key, which RELAY-03 forbids. The
+     retrofit records this in a YAML comment for the `firecracker-driver`
+     design to settle and does not edit the plan (Decision 2).
+   - `windows-driver-plan`, `remote-execution-and-measured-hermeticity`:
+     appended security notes (Decision 2, a4).
+   - `hyperv-driver-plan`: keeps `archived` (a2), with a comment on `status`
+     naming its unbuilt scope, Phase 1's Linux build guest
+     (`vm-driver-release-plan.md` Phase 5: "Linux guests on Hyper-V not
+     started"), so a search on `status` does not read it as complete.
+   - `windows-driver-plan`, `hyperv-driver-plan`: regression hosts added to
+     `native_validation` (Decision 7). The same rule adds them to
+     `firecracker-driver-plan` (its widened `drivers`) and
+     `remote-execution-and-measured-hermeticity` (no primary host yet).
+10. **Out of scope**: `docs/book/src/design/` (the ledger spec, philosophy
+    and initial proposal are book pages governed by RELAY-05, not archive
+    designs); `firecracker-spike-plan.md` and `container-inputs.md`, which are
+    on other feature branches and get front-matter from their own design
+    phases; `TEMPLATE.md`.
 
 ## Questions
 
@@ -125,23 +178,36 @@ None.
 - **a2. Status mapping.** Proceeding with `archived` for `hyperv-driver-plan`
   and `windows-driver-plan`, `active` for `vm-driver-release-plan` and
   `platform-compatibility`, `draft` for `firecracker-driver-plan` and
-  `remote-execution-and-measured-hermeticity`; confirm. Options: (a) this
-  mapping; (b) every retrofitted document `archived`; (c) every one `active`.
-  Recommended: (a).
+  `remote-execution-and-measured-hermeticity`; confirm. `hyperv-driver-plan`'s
+  `status` carries a comment naming its unbuilt Linux-guest phase (Decision 9).
+  Options: (a) this mapping; (b) as (a) but `hyperv-driver-plan` `active`
+  until its Linux-guest phase is built or dropped; (c) every retrofitted
+  document `archived`; (d) every one `active`. Recommended: (a); the
+  Windows-guest work it planned is merged and the Linux-guest phase is a
+  `vm-driver-release-plan` item, which is `active`.
 - **a3. Complete the archived designs.** Proceeding with adding
   `alters_relationships: true` to `hyperv-windows-prepare.md`,
   `ledger-environment-types.md` and `unified-bootstrap.md`; confirm. Options:
   (a) add `true` to all three (conservative); (b) judge each, possibly `false`
   for `hyperv-windows-prepare`; (c) leave archived designs untouched.
   Recommended: (a).
-- **a4. Front-matter only.** Proceeding without editing document bodies (no
-  Archive summary, no Security note section, stale banners such as
-  `windows-driver-plan.md`'s "Phase 2 pending" left as written); confirm.
-  Options: (a) front-matter only; (b) also add a one-line retrofit banner;
-  (c) also write Archive summaries for the two archived plans. Recommended: (a).
+- **a4. Add only; no existing line edited.** Proceeding with a prepended
+  front-matter block on every document, plus a short appended
+  `## Security note (retrofit)` on the two whose `security_boundary` is not
+  `none` and whose body has no security section (`windows-driver-plan.md`,
+  `remote-execution-and-measured-hermeticity.md`), as FLOW-02 requires. No
+  Archive summary; stale banners such as `windows-driver-plan.md`'s "Phase 2
+  pending" are left as written; confirm. Options: (a) front-matter plus the
+  two appended security notes; (b) front-matter only, recording a FLOW-02
+  exception for the two documents (a rule change for Jeff, FLOW-14; leaves a
+  MUST unmet on a draft the next design builds on); (c) as (a), plus a
+  one-line retrofit banner; (d) as (a), plus Archive summaries for the two
+  archived plans. Recommended: (a) (Decision 2).
 - **a5. One security boundary per document.** Proceeding with the single most
-  severe boundary, others named in a YAML comment; confirm. Options: (a) single
-  value; (b) propose a FLOW-02 amendment allowing a list. Recommended: (a).
+  severe boundary, others named in a YAML comment that also points to the
+  document's security note (its own security section, or the appended note
+  under a4); confirm. Options: (a) single value plus comment; (b) propose a
+  FLOW-02 amendment allowing a list. Recommended: (a).
 - **a6. Feature slug.** Proceeding with `feature` = the file's base name;
   confirm. Options: (a) base name; (b) the matching queue slug where one exists.
   Recommended: (a).
@@ -167,8 +233,16 @@ None.
 ## Design
 
 Each listed document gets the block below prepended, followed by a blank line,
-before its existing first line. Keys follow `TEMPLATE.md` order; no other line
-changes. A leading comment marks the block as a retrofit.
+before its existing first line. Keys follow `TEMPLATE.md` order. A leading
+comment marks the block as a retrofit. `windows-driver-plan.md` and
+`remote-execution-and-measured-hermeticity.md` also get the security note
+given under their block appended after their existing last line, separated by
+one blank line. The note's heading is written outside its fence, because
+`check.ParseDesign` splits sections on any line starting `## `, fenced or not.
+No existing line changes (Decision 2).
+
+The code branch at 7b11f04 carries the first-round blocks; the blocks below
+replace them (Implementation plan task 0).
 
 ### `firecracker-driver-plan.md`
 
@@ -178,15 +252,19 @@ changes. A leading comment marks the block as a retrofit.
 feature: firecracker-driver-plan
 status: draft
 round: parallel
-drivers: [firecracker]
-seams: [relay-guest-api, collector]   # vsock heartbeat/exit; outputs read from relay rootfs predate RELAY-07
+drivers: [container, qemu, vz, hyperv, firecracker]  # relay/ gains vsock "CA ready"/"ledger complete" signals; util.go shared with qemu
+seams: [relay-claim, relay-guest-api, collector]     # per-build relay.env and CA extraction; warm-pool config injected over vsock; outputs read from relay rootfs predate RELAY-07
 surfaces: [cli, config]
 security_boundary: host-env           # also env-relay; see "Security Considerations"
-alters_relationships: true            # warm-pool manager, vsock signaling
+alters_relationships: true            # warm-pool manager, vsock signaling, relay claim over vsock
 native_validation:
   - {host: linux-kvm, blocking: true, reason: "driver/firecracker runs only on a Linux KVM host"}
+  - {host: container-any, blocking: false, reason: "regression: relay/ vsock signaling change"}
+  - {host: qemu-any, blocking: false, reason: "regression: relay/ change and util.go shared with qemu"}
+  - {host: macos-vz, blocking: false, reason: "regression: relay/ vsock signaling change"}
+  - {host: windows-hyperv, blocking: false, reason: "regression: relay/ vsock signaling change"}
 tier2_gaps: []
-rules: [ORCH-01, ORCH-03, ORCH-04, GLOBAL-06, GLOBAL-07, GLOBAL-08, RELAY-07, BOOT-01, BOOT-02, BOOT-04, TEST-02, TEST-08]
+rules: [ORCH-01, ORCH-03, ORCH-04, GLOBAL-06, GLOBAL-07, GLOBAL-08, RELAY-03, RELAY-04, RELAY-07, BOOT-01, BOOT-02, BOOT-04, TEST-02, TEST-08]  # RELAY-03: warm-pool snapshot is taken after CA generation, so restored relays would share a CA key
 concepts: [firecracker, microvm, vsock, mmds, jailer, warm-pool, snapshot-resume, tap-networking, two-vm-topology]
 related: [vm-driver-release-plan.md]
 ---
@@ -198,7 +276,7 @@ related: [vm-driver-release-plan.md]
 ---
 # Retrofitted (FLOW-12) onto a pre-standard plan; body unchanged.
 feature: hyperv-driver-plan
-status: archived
+status: archived                        # Windows-guest path merged; Phase 1 Linux build guest not built (vm-driver-release-plan Phase 5)
 round: parallel
 drivers: [container, qemu, vz, hyperv]  # output sink added to relay/ (shared package)
 seams: [relay-claim, collector, relay-guest-api]
@@ -207,6 +285,9 @@ security_boundary: host-env             # also env-relay; see "Security Consider
 alters_relationships: true
 native_validation:
   - {host: windows-hyperv, blocking: true, reason: "driver/hyperv runs only on Hyper-V"}
+  - {host: container-any, blocking: false, reason: "regression: relay/ output sink; localSink must stay the default"}
+  - {host: qemu-any, blocking: false, reason: "regression: relay/ output sink; localSink must stay the default"}
+  - {host: macos-vz, blocking: false, reason: "regression: relay/ output sink; localSink must stay the default"}
 tier2_gaps: []
 rules: [ORCH-01, ORCH-03, ORCH-04, ORCH-05, GLOBAL-06, GLOBAL-07, GLOBAL-08, RELAY-07, BOOT-01, BOOT-02, UX-04, TEST-02]
 concepts: [hyperv, windows-host, vswitch, nat, elevation, privileged-service, unattend, differencing-disk, output-egress, collector, uki-relay-boot]
@@ -239,21 +320,56 @@ related: [windows-driver-plan.md, vm-driver-release-plan.md]
 
 ```yaml
 ---
-# Retrofitted (FLOW-12) onto a pre-standard proposal; body unchanged.
+# Retrofitted (FLOW-12) onto a pre-standard proposal; existing lines unchanged, security note appended.
 feature: remote-execution-and-measured-hermeticity
 status: draft
 round: parallel
-drivers: [container, qemu, vz, hyperv]  # ledger/ changes reach every driver
+drivers: [container, qemu, vz, hyperv]  # ledger/ and relay changes reach every driver
 seams: [ledger-format]
 surfaces: [cli, config, output]
-security_boundary: env-relay            # per-action relay ledgers and cache provenance; no security section yet
+security_boundary: env-relay            # per-action relay ledgers and cache provenance; see "Security note (retrofit)"
 alters_relationships: true              # BuildWarden as an RE API backend; ledgers composed from cached results
-native_validation: []
+native_validation:
+  - {host: container-any, blocking: false, reason: "regression: ledger/ and relay changes reach every driver"}
+  - {host: qemu-any, blocking: false, reason: "regression: ledger/ and relay changes reach every driver"}
+  - {host: macos-vz, blocking: false, reason: "regression: ledger/ and relay changes reach every driver"}
+  - {host: windows-hyperv, blocking: false, reason: "regression: ledger/ and relay changes reach every driver"}
 tier2_gaps: []
-rules: [RELAY-01, RELAY-02, RELAY-05, GLOBAL-05, GLOBAL-06, GLOBAL-08]
+rules: [RELAY-01, RELAY-02, RELAY-03, RELAY-05, GLOBAL-05, GLOBAL-06, GLOBAL-08, TEST-08]
 concepts: [remote-execution, re-api, measured-hermeticity, action-cache, provenance, environment-record, cache-invalidation, bazel]
 related: [ledger-environment-types.md]
 ---
+```
+
+Appended after the existing last line: one blank line, the heading line
+`## Security note (retrofit)`, one blank line, then this text:
+
+```markdown
+Added when front-matter was retrofitted (FLOW-02, FLOW-12). It restates what
+this proposal's text implies for GLOBAL-06; it is not a security design. The
+first design that builds on this proposal writes its own note and settles the
+open points below.
+
+- **Boundary:** env-relay, and the relay itself. A parent build's ledger
+  incorporates environment and network records from cached sub-ledgers that
+  its own relay did not observe ("Cache hit behavior"), and each worker relay
+  writes an environment record as the first ledger entry. Both change what a
+  signed ledger attests, which GLOBAL-06 makes high-severity.
+- **How the posture changes:** a parent ledger's claims now rest on the action
+  cache and on other relays' signatures, as well as on its own observation. A
+  forged, tampered or replayed cache entry (`ledger_digest`,
+  `environment_digest`, `hermetic`) would put false provenance into a validly
+  signed parent ledger. Open points: verify each sub-ledger's signature chain
+  and the worker relay's key before incorporating it; recompute `hermetic`
+  from the verified sub-ledger, never from the stored flag; mark incorporated
+  records as incorporated rather than observed; keep one fresh relay per
+  action (RELAY-03), as "Worker model" already requires.
+- **What TEST-08 should exercise:** a sub-ledger with a broken signature, a
+  wrong `ledger_digest` or an unknown signing key is rejected, not
+  incorporated; a cache entry whose stored `hermetic` disagrees with its
+  ledger; deduplication by hash block cannot hide a record whose content
+  differs; an action marked `requires-network` reaches the network only
+  through a relay (its worker's, or the parent build's under `no-remote`).
 ```
 
 ### `vm-driver-release-plan.md`
@@ -285,23 +401,53 @@ related: [hyperv-driver-plan.md, windows-driver-plan.md, firecracker-driver-plan
 
 ```yaml
 ---
-# Retrofitted (FLOW-12) onto a pre-standard plan; body unchanged.
+# Retrofitted (FLOW-12) onto a pre-standard plan; existing lines unchanged, security note appended.
 feature: windows-driver-plan
 status: archived
 round: parallel
 drivers: [container, qemu, vz, hyperv]  # cmd/warden-io changes reach every driver
 seams: [executor-initialize, relay-guest-api, windows-guest-seed]
 surfaces: [cli, config]
-security_boundary: env-relay            # Windows CA trust install and topological isolation; no separate security section
+security_boundary: env-relay            # Windows CA trust install and topological isolation; see "Security note (retrofit)"
 alters_relationships: true              # executor gains a Windows guest; build.ps1 input model
 native_validation:
   - {host: macos-qemu, blocking: true, reason: "Phase 1 win-arm64 under qemu on Apple Silicon"}
   - {host: windows-hyperv, blocking: true, reason: "Phase 2 native win-64 on Hyper-V"}
+  - {host: macos-vz, blocking: false, reason: "regression check the plan requires: VZ path untouched"}
+  - {host: qemu-any, blocking: false, reason: "regression check the plan requires: Linux+qemu disk, seed and serial unchanged"}
+  - {host: container-any, blocking: false, reason: "regression: cmd/warden-io changes reach the container driver"}
 tier2_gaps: []
-rules: [EXEC-01, EXEC-02, EXEC-03, EXEC-04, ORCH-01, ORCH-05, BOOT-02, BOOT-04, GLOBAL-06, GLOBAL-07, TEST-02]
+rules: [EXEC-01, EXEC-02, EXEC-03, EXEC-04, ORCH-01, ORCH-05, BOOT-02, BOOT-04, GLOBAL-06, GLOBAL-07, TEST-02, TEST-08]
 concepts: [windows-guest, warden-io-windows, build-ps1, conda-forge, image-prepare, autounattend, licensing, win-arm64]
 related: [hyperv-driver-plan.md, vm-driver-release-plan.md, platform-compatibility.md, hyperv-windows-prepare.md]
 ---
+```
+
+Appended after the existing last line: one blank line, the heading line
+`## Security note (retrofit)`, one blank line, then this text:
+
+```markdown
+Added when front-matter was retrofitted (FLOW-02, FLOW-12). It gathers what
+this plan already says about GLOBAL-06; it adds no design.
+
+- **Boundary:** env-relay. The Windows guest is a new kind of inner build
+  environment behind the same relay.
+- **How the posture changes:** `warden-io` on Windows imports the relay's
+  per-build CA into the machine root store (`certutil -addstore -f Root`) and
+  sets the CA environment variables, so every Schannel and OpenSSL client in
+  the guest trusts the relay's MITM CA for that build. Isolation stays
+  topological and host-enforced: the guest's single NIC faces the relay VM,
+  which redirects :80, :443 and :53 and drops forwarding; there is no
+  in-guest firewall to rely on, so administrator rights inside the guest do
+  not open a path. The prepared Windows image (autounattend, first-boot
+  task) is trusted input fixed before the build; per build, only the
+  executor and its seed cross outside the relay (BOOT-02).
+- **What TEST-08 should exercise:** egress from the Windows guest that
+  bypasses the relay (direct IP, other ports, IPv6, SMB/NetBIOS, ICMP,
+  DNS-over-HTTPS); that the per-build CA does not persist into the prepared
+  image or a later build; that the seed carries nothing beyond the executor,
+  launcher and network configuration; and the adversarial "escape the build
+  env" agent the plan's own Phasing and graduation gates require.
 ```
 
 ### Archived designs
@@ -312,8 +458,8 @@ after `security_boundary` (template order). Nothing else changes.
 
 ## Cross-driver impact
 
-None. The change touches only Markdown front-matter under `docs/design/`; no
-driver tree, shared package, seam or user-facing surface changes, so `drivers`,
+None. The change touches only Markdown under `docs/design/` (front-matter,
+plus two appended security notes); no driver tree, shared package, seam or user-facing surface changes, so `drivers`,
 `seams` and `surfaces` are empty (ORCH-01). The `drivers` values written into
 the retrofitted documents describe those documents, not this change.
 
@@ -326,7 +472,9 @@ the retrofitted documents describe those documents, not this change.
   that is never committed (a8); its output goes in the implementation commit
   message. (Phase 1 already parsed each proposed block with `ParseDesign`.)
 - A diff check: for each retrofitted document, `git diff` shows only added
-  lines at the top of the file (Decision 2).
+  lines: the front-matter at the top of the file, plus the appended security
+  note at the end for `windows-driver-plan.md` and
+  `remote-execution-and-measured-hermeticity.md` (Decision 2).
 - `make test` and `make lint` stay green (nothing they cover changes).
 - **Tier 1 / 2.** None. No native host validates this change: it reaches no
   driver tree and alters no host's behavior, so FLOW-09 adds no
@@ -335,25 +483,43 @@ the retrofitted documents describe those documents, not this change.
 ## Implementation plan
 
 Each task names the assumed questions it rests on; a different answer touches
-only the tasks that name it. No task edits a document body, `tools/workflow/`,
-`docs/development/` or `.claude/` (Decision 2, FLOW-14).
+only the tasks that name it. No task edits an existing line of a document
+body, `tools/workflow/`, `docs/development/` or `.claude/` (Decision 2,
+FLOW-14).
 
+0. Rework (p1-design-r2, review 7b11f043ab61; FLOW-06): the branch at 7b11f04
+   already carries the first-round blocks. For `firecracker-driver-plan.md`,
+   `hyperv-driver-plan.md`, `remote-execution-and-measured-hermeticity.md` and
+   `windows-driver-plan.md`, replace the whole leading front-matter block
+   (first `---` through the closing `---`) with the block from Design; leave
+   the blank line after it and every body line as they are. Tasks 1, 2, 4
+   and 6 then describe the end state; the other five files are already
+   correct and are not touched again.
 1. Prepend the `firecracker-driver-plan.md` block from Design, then one blank
-   line, before the existing first line (FLOW-02, FLOW-12, GLOBAL-08).
-   Assumes a1, a2 (`draft`), a5, a6, a7; under a7 (b) this task is dropped.
-2. Prepend the `hyperv-driver-plan.md` block (FLOW-02, FLOW-12, GLOBAL-06).
-   Assumes a1, a2 (`archived`), a5, a6.
+   line, before the existing first line (FLOW-02, FLOW-12, GLOBAL-08,
+   RELAY-03, RELAY-04). Assumes a1, a2 (`draft`), a5, a6, a7; under a7 (b)
+   this task is dropped.
+2. Prepend the `hyperv-driver-plan.md` block (FLOW-02, FLOW-12, GLOBAL-06),
+   including the comment on `status` and the three regression hosts. Assumes
+   a1, a2 (`archived`; under a2 (b) `status` is `active` and the comment
+   goes), a5, a6.
 3. Prepend the `platform-compatibility.md` block (FLOW-02, FLOW-12). Assumes
    a1, a2 (`active`), a6.
 4. Prepend the `remote-execution-and-measured-hermeticity.md` block (FLOW-02,
-   FLOW-12, GLOBAL-06). Assumes a1, a2 (`draft`), a5, a6.
+   FLOW-12, GLOBAL-06), and append its security note from Design after the
+   existing last line, separated by one blank line (FLOW-02, GLOBAL-06,
+   TEST-08). Assumes a1, a2 (`draft`), a4 (a), a5, a6; under a4 (b) the note
+   is not appended and the `security_boundary` comment reads "no security
+   section; FLOW-02 exception (a4)".
 5. Prepend the `vm-driver-release-plan.md` block (FLOW-02, FLOW-12, TEST-03:
    its `tier2_gaps` entry names the already-tracked
    `qemu-windows-guest-package` gap, so no backlog entry is added). Assumes
    a1, a2 (`active`), a5, a6.
-6. Prepend the `windows-driver-plan.md` block (FLOW-02, FLOW-12, GLOBAL-06).
-   Assumes a1, a2 (`archived`), a4 (its "Phase 2 pending" banner stays), a5,
-   a6.
+6. Prepend the `windows-driver-plan.md` block (FLOW-02, FLOW-12, GLOBAL-06),
+   and append its security note from Design after the existing last line,
+   separated by one blank line (FLOW-02, GLOBAL-06, TEST-08). Assumes a1, a2
+   (`archived`), a4 (a) (the note; its "Phase 2 pending" banner stays), a5,
+   a6; under a4 (b) as for task 4.
 7. Rework of already-archived designs (FLOW-06, FLOW-02): insert
    `alters_relationships: true` directly after `security_boundary` in
    `hyperv-windows-prepare.md`, `ledger-environment-types.md` and
@@ -371,9 +537,13 @@ only the tasks that name it. No task edits a document body, `tools/workflow/`,
    the proposed blocks: all nine passed.) Assumes a6 (the base-name comparison)
    and a8.
 9. Body-unchanged diff check (TEST-02 tier 0, FLOW-12, GLOBAL-08): for each of
-   the nine files, `git diff origin/main -- <file>` shows only added lines,
-   and only inside the leading front-matter block (plus its trailing blank
-   line for the six retrofits). Record the result with task 8's. Assumes a4.
+   the nine files, `git diff origin/main -- <file>` shows 0 removed lines and
+   only added lines, inside the leading front-matter block (plus its trailing
+   blank line for the six retrofits) and, for `windows-driver-plan.md` and
+   `remote-execution-and-measured-hermeticity.md` only, a second hunk at the
+   end of the file that is exactly the appended security note. Each of the
+   six new blocks and two notes is byte-identical to Design. Record the
+   result with task 8's. Assumes a4.
 10. Run `make test` and `make lint` (TEST-01, FLOW-17); no build-tagged file
     changes, so no per-platform lint run is owed. Commit the nine files and
     push `feat/design-front-matter-retrofit` (FLOW-17).
