@@ -88,6 +88,7 @@ func (ix *Index) parse(file, text string) {
 		cur = nil
 	}
 	for i, line := range strings.Split(text, "\n") {
+		line = strings.TrimSuffix(line, "\r")
 		if m := headerRe.FindStringSubmatch(line); m != nil {
 			finish()
 			cur = &Rule{ID: m[1], Title: m[2], File: file, Line: i + 1}

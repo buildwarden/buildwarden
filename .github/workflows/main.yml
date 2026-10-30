@@ -21,6 +21,49 @@ jobs:
       - run: golangci-lint run
       - run: golangci-lint run -c ../../.golangci.yml
         working-directory: tools/workflow
+      - run: golangci-lint run -c ../../.golangci.yml
+        working-directory: tools/tier1
+
+  # Tier-1 static checks over the PR's diff, or a push's (LINT-02, LINT-04).
+  tier1:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0
+      - run: go build -o ../../dist/tier1 ./cmd/tier1
+        working-directory: tools/tier1
+      - name: tier1
+        env:
+          BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+          FLAGS: ${{ contains(github.event.pull_request.labels.*.name, 'no-design') && '-no-design' || '' }}
+        run: |
+          ./dist/tier1 -base "$BASE" -json $FLAGS > tier1.json || code=$?
+          ./dist/tier1 -base "$BASE" $FLAGS || true
+          exit "${code:-0}"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: tier1-report
+          path: tier1.json
+
+  # tools/tier1 compares git paths, which must work on every platform (GLOBAL-07).
+  tier1-test:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - run: go test ./...
+        working-directory: tools/tier1
 
   test:
     runs-on: ubuntu-latest
@@ -40,6 +83,8 @@ jobs:
           go-version: stable
       - run: go mod tidy
       - run: git diff --exit-code go.mod go.sum
+      - run: go mod tidy && git diff --exit-code go.mod go.sum
+        working-directory: tools/tier1
 
   build:
     runs-on: ${{ matrix.os }}

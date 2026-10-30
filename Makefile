@@ -1,4 +1,4 @@
-.PHONY: build test integration-test lint fmt tidy cover clean sign relay-vm deadcode
+.PHONY: build test integration-test lint tier1 fmt tidy cover clean sign relay-vm deadcode
 
 UNAME_S := $(shell uname -s)
 UNAME_M := $(shell uname -m)
@@ -33,6 +33,7 @@ endif
 test:
 	go test ./...
 	cd tools/workflow && go test ./...
+	cd tools/tier1 && go test ./...
 
 integration-test:
 	./test-integration.sh
@@ -54,6 +55,18 @@ relay-vm:
 lint:
 	golangci-lint run
 	cd tools/workflow && golangci-lint run -c ../../.golangci.yml
+	cd tools/tier1 && golangci-lint run -c ../../.golangci.yml
+	@$(MAKE) --no-print-directory tier1
+
+# Tier-1 static checks over the diff from TIER1_BASE to HEAD (LINT-02). Pass
+# TIER1_FLAGS=-no-design for a change that needs no design (FLOW-01).
+TIER1_BASE ?= origin/main
+TIER1_FLAGS ?=
+EXE := $(if $(filter Windows_NT,$(OS)),.exe,)
+tier1:
+	@mkdir -p dist
+	cd tools/tier1 && go build -o ../../dist/tier1$(EXE) ./cmd/tier1
+	./dist/tier1$(EXE) -base $(TIER1_BASE) $(TIER1_FLAGS)
 
 # Code unreachable from any main or test, per platform (FLOW-15). Remove what
 # all three report, or say why it stays.
