@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/buildwarden/buildwarden/tools/tier1"
+	"github.com/buildwarden/buildwarden/tools/tier1/analyzers"
 	"github.com/buildwarden/buildwarden/tools/tier1/coupling"
 	"github.com/buildwarden/buildwarden/tools/tier1/diff"
 	"github.com/buildwarden/buildwarden/tools/tier1/report"
@@ -117,6 +118,11 @@ func check(o options) (*report.Report, error) {
 		return nil, err
 	}
 	r.Add(sf...)
+	af, err := analyzers.Run(d, ix.Severity)
+	if err != nil {
+		return nil, err
+	}
+	r.Add(d.OnChangedLines(af)...)
 	d.Suppress(r)
 	r.Finish()
 	return r, nil
