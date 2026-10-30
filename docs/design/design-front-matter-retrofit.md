@@ -158,7 +158,29 @@ it.
      `native_validation` (Decision 7). The same rule adds them to
      `firecracker-driver-plan` (its widened `drivers`) and
      `remote-execution-and-measured-hermeticity` (no primary host yet).
-10. **Out of scope**: `docs/book/src/design/` (the ledger spec, philosophy
+10. **Rework after review fdd14b44f1f8** (p1-design-r3). All three findings
+    were in the security-note text this design prescribes, so they are fixed
+    here and Implement re-applies only the two notes. The front-matter blocks
+    are unchanged. Every claim in a note must be one its own document
+    supports (Decision 2: the notes add no design).
+    - `windows-driver-plan` (MUST): the note no longer says administrator
+      rights inside the guest cannot open a path. The plan argues isolation
+      from host-enforced topology only, its guest has an autologon admin, and
+      its adversarial isolation check (Phasing chunk 4, graduation gate) is
+      not in Phase 1's "Done & validated" list. The note now says the
+      argument relies on no in-guest control, and leaves the
+      guest-administrator question to that gate.
+    - `windows-driver-plan` (SHOULD): the prepared image is "input fixed at
+      prepare" (BOOT-06), not "trusted input"; the plan calls the guest
+      "untrusted by design".
+    - `remote-execution-and-measured-hermeticity` (SHOULD): the Boundary
+      bullet adds CAS input staging outside the relay (lifecycle step 4,
+      against BOOT-02 today) and the RE API services as a new network-facing
+      surface; the TEST-08 bullet adds digest-mismatched CAS blobs and
+      unauthenticated Execute or ActionCache writes. `security_boundary`
+      stays `env-relay`: both changes are about what reaches the build
+      environment and the ledger, not the host-to-environment boundary.
+11. **Out of scope**: `docs/book/src/design/` (the ledger spec, philosophy
     and initial proposal are book pages governed by RELAY-05, not archive
     designs); `firecracker-spike-plan.md` and `container-inputs.md`, which are
     on other feature branches and get front-matter from their own design
@@ -241,8 +263,9 @@ one blank line. The note's heading is written outside its fence, because
 `check.ParseDesign` splits sections on any line starting `## `, fenced or not.
 No existing line changes (Decision 2).
 
-The code branch at 7b11f04 carries the first-round blocks; the blocks below
-replace them (Implementation plan task 0).
+The code branch at fdd14b4 carries the round-2 blocks, which match those
+below, and the round-2 notes; the two notes below replace the round-2 notes
+(Decision 10, Implementation plan task 0).
 
 ### `firecracker-driver-plan.md`
 
@@ -354,7 +377,13 @@ open points below.
   incorporates environment and network records from cached sub-ledgers that
   its own relay did not observe ("Cache hit behavior"), and each worker relay
   writes an environment record as the first ledger entry. Both change what a
-  signed ledger attests, which GLOBAL-06 makes high-severity.
+  signed ledger attests, which GLOBAL-06 makes high-severity. The proposal
+  also implies two further boundary changes. Inputs are staged from
+  content-addressed storage into the sandbox outside the relay ("Action
+  execution lifecycle", step 4), which BOOT-02 does not allow today; only the
+  action's cache key (`input_root_digest`) records them. And the RE API
+  services (Execute, ContentAddressableStorage, ActionCache) are a new
+  network-facing surface whose contents feed parent ledgers.
 - **How the posture changes:** a parent ledger's claims now rest on the action
   cache and on other relays' signatures, as well as on its own observation. A
   forged, tampered or replayed cache entry (`ledger_digest`,
@@ -369,7 +398,9 @@ open points below.
   incorporated; a cache entry whose stored `hermetic` disagrees with its
   ledger; deduplication by hash block cannot hide a record whose content
   differs; an action marked `requires-network` reaches the network only
-  through a relay (its worker's, or the parent build's under `no-remote`).
+  through a relay (its worker's, or the parent build's under `no-remote`);
+  CAS blobs that differ from their digests; an unauthenticated Execute or
+  ActionCache write.
 ```
 
 ### `vm-driver-release-plan.md`
@@ -437,11 +468,14 @@ this plan already says about GLOBAL-06; it adds no design.
   sets the CA environment variables, so every Schannel and OpenSSL client in
   the guest trusts the relay's MITM CA for that build. Isolation stays
   topological and host-enforced: the guest's single NIC faces the relay VM,
-  which redirects :80, :443 and :53 and drops forwarding; there is no
-  in-guest firewall to rely on, so administrator rights inside the guest do
-  not open a path. The prepared Windows image (autounattend, first-boot
-  task) is trusted input fixed before the build; per build, only the
-  executor and its seed cross outside the relay (BOOT-02).
+  which redirects :80, :443 and :53 and drops forwarding. There is no
+  in-guest firewall, so the isolation argument does not rely on any in-guest
+  control; whether a guest administrator can open a path is what the
+  adversarial gate below must show, and the plan does not record that gate
+  as run. The prepared Windows image (autounattend, first-boot task) is input fixed at
+  prepare, before the build (BOOT-06: it carries the startup hook, not build
+  content); per build, only the executor and its seed cross outside the
+  relay (BOOT-02).
 - **What TEST-08 should exercise:** egress from the Windows guest that
   bypasses the relay (direct IP, other ports, IPv6, SMB/NetBIOS, ICMP,
   DNS-over-HTTPS); that the per-build CA does not persist into the prepared
@@ -482,59 +516,57 @@ the retrofitted documents describe those documents, not this change.
 
 ## Implementation plan
 
-Round 2 (p2-plan-r2, after review 7b11f043ab61). Each task carries one
-status. **Done** means it shipped in round 1 and round 2 does not change it:
-Implement does not touch it again, and the task names the commit.
-**Rework** means it shipped in round 1 and p1-design-r2 changed its values:
+Round 3 (p1-design-r3, after review fdd14b44f1f8; p2-plan-r3 may refine
+it). Each task carries one status. **Done** means it shipped and round 3
+does not change it: Implement does not touch it again, and the task names
+the commit. **Rework** means it shipped and p1-design-r3 changed its text:
 Implement redoes it through task 0 (FLOW-06). **To do** means it is not done
-yet, or is a check that must run again on the round-2 tree.
+yet, or is a check that must run again on the round-3 tree.
 
 Each task names the assumed questions it rests on (a1-a9, all still open). A
 different answer touches only the tasks that name it. No task edits an
 existing body line of a retrofitted document, `tools/workflow/`,
-`docs/development/` or `.claude/` (Decision 2, FLOW-14). Planning simulated
-the round-2 end state of the six retrofitted files (task 0's replacement
-plus the two appended notes). It parsed every `docs/design/*.md` with
-`check.ParseDesign` and `Front.problems(<base name>)` through a scratch
-`go test -overlay` test: there were no problems in any of the eleven
-documents, `alters_relationships` was set on all of them, and both notes
-parsed as a `Security note (retrofit)` section. The blocks for
-`platform-compatibility.md` and `vm-driver-release-plan.md` on the branch
-are already byte-identical to Design.
+`docs/development/` or `.claude/` (Decision 2, FLOW-14). The round-2 tree
+(fdd14b4) passed the parse and diff checks (review fdd14b44f1f8, tier 1).
+Round 3 changes only text inside the two appended notes; the new note text
+has no line starting `## ` or `---`, so the section split and front-matter
+parse are unaffected, and task 8 re-confirms this.
 
-0. **Rework**, the round-2 procedure (FLOW-06, FLOW-02; review
-   7b11f043ab61). In each of `firecracker-driver-plan.md`,
-   `hyperv-driver-plan.md`, `remote-execution-and-measured-hermeticity.md`
-   and `windows-driver-plan.md`, replace the leading front-matter block
-   (the first `---` line through the closing `---` line, inclusive) with
-   that file's block from Design. Leave the blank line after the block and
-   every body line as they are. For the latter two files, also append the
-   security note (tasks 4 and 6). Make one commit per file, citing this task,
-   the file's task number and the review. Tasks 1, 2, 4 and 6 give each
-   file's end state and acceptance. The other five touched files are
-   **Done** and stay as they are. Assumes a1, a2, a4, a5, a6, a7, as broken
-   down per file in tasks 1, 2, 4 and 6.
-1. **Rework** (round 1: e62353d): `firecracker-driver-plan.md` begins with
+0. **Rework**, the round-3 procedure (FLOW-06, FLOW-02, GLOBAL-06; review
+   fdd14b44f1f8, Decision 10). In each of `windows-driver-plan.md` and
+   `remote-execution-and-measured-hermeticity.md`, replace the round-2 note
+   text, that is every line after the blank line that follows the
+   `## Security note (retrofit)` heading, through the end of the file, with
+   that file's note from Design, verbatim, ending in a newline. Leave the
+   front-matter block, the heading line, the blank lines around it, and
+   every original body line as they are. Make one commit per file, citing
+   this task, the file's task number and the review. Tasks 4 and 6 give
+   each file's end state and acceptance. The other seven touched files are
+   **Done** and stay as they are. Assumes a4 (a) and a5.
+1. **Done** (round 2: ba605ac): `firecracker-driver-plan.md` begins with
    its Design block, then one blank line, then the unchanged original first
    line. The block widens `drivers`, adds `relay-claim` to `seams`, adds
    RELAY-03 and RELAY-04 with a comment to `rules`, and adds four regression
    hosts (FLOW-02, FLOW-12, GLOBAL-08, RELAY-03, RELAY-04). Assumes a1, a2
    (`draft`), a5, a6 and a7. Under a7 (b), the file reverts to its
    `origin/main` content and this task is dropped.
-2. **Rework** (round 1: bdbd8e7): `hyperv-driver-plan.md` begins with its
+2. **Done** (round 2: 4805056): `hyperv-driver-plan.md` begins with its
    Design block. The block adds the comment on `status` and three regression
    hosts (FLOW-02, FLOW-12, GLOBAL-06). Assumes a1, a2 (`archived`), a5 and
    a6. Under a2 (b), `status` becomes `active` and its comment is dropped.
 3. **Done** (51aedd3): `platform-compatibility.md` block (FLOW-02,
    FLOW-12). Assumes a1, a2 (`active`) and a6.
-4. **Rework** (round 1: cf58469): `remote-execution-and-measured-hermeticity.md`
-   begins with its Design block, whose header comment and `security_boundary`
-   comment now point to the note (FLOW-02, FLOW-12, GLOBAL-06). Append after
-   the existing last line, in this order:
+4. **Rework** (round 2: d5f83c3; round 3 changes the note only):
+   `remote-execution-and-measured-hermeticity.md` begins with its Design
+   block, whose header comment and `security_boundary` comment point to the
+   note (FLOW-02, FLOW-12, GLOBAL-06); the block is already on the branch.
+   After the existing last line of the original body come, in this order:
    - one blank line;
    - the line `## Security note (retrofit)`;
    - one blank line;
-   - the note text from Design, verbatim, ending in a newline.
+   - the note text from Design, verbatim, ending in a newline. Its Boundary
+     bullet names CAS input staging outside the relay and the RE API
+     surface, and its TEST-08 bullet the two added cases (Decision 10).
 
    This satisfies FLOW-02, GLOBAL-06 and TEST-08 (the note names what TEST-08
    should exercise; this feature writes no test of it). Assumes a1, a2
@@ -546,11 +578,15 @@ are already byte-identical to Design.
    TEST-03). Its `tier2_gaps` entry names the gap already tracked as
    `qemu-windows-guest-package`, so no backlog entry is added. Assumes a1,
    a2 (`active`), a5 and a6.
-6. **Rework** (round 1: 95c1027): `windows-driver-plan.md` begins with its
-   Design block. The block's header comment and `security_boundary` comment
-   point to the note, and it adds the `macos-vz`, `qemu-any` and
-   `container-any` regression hosts (FLOW-02, FLOW-12, GLOBAL-06). Append
-   its security note exactly as in task 4 (FLOW-02, GLOBAL-06, TEST-08). The
+6. **Rework** (round 2: fdd14b4; round 3 changes the note only):
+   `windows-driver-plan.md` begins with its Design block, already on the
+   branch. The block's header comment and `security_boundary` comment point
+   to the note, and it adds the `macos-vz`, `qemu-any` and `container-any`
+   regression hosts (FLOW-02, FLOW-12, GLOBAL-06). Its security note follows
+   the original body exactly as in task 4 (FLOW-02, GLOBAL-06, TEST-08). The
+   note relies on no in-guest control, leaves the guest-administrator
+   question to the adversarial gate, and calls the prepared image input
+   fixed at prepare (BOOT-06) (Decision 10). The
    "Phase 2 pending" banner stays. Assumes a1, a2 (`archived`), a4 (a), a5
    and a6. Under a4 (b), as for task 4.
 7. **Done** (7b11f04): rework of the three archived designs (FLOW-06,
@@ -558,7 +594,7 @@ are already byte-identical to Design.
    `hyperv-windows-prepare.md`, `ledger-environment-types.md` and
    `unified-bootstrap.md`. Assumes a3 (a). Under a3 (b), the value changes
    per file; under a3 (c), the three lines are reverted.
-8. **To do**, again on the round-2 tree: the tier-0 parse check (TEST-02
+8. **To do**, again on the round-3 tree: the tier-0 parse check (TEST-02
    tier 0, TEST-01, FLOW-02).
    - Run `check.ParseDesign` and `Front.problems(<base name>)` over every
      `docs/design/*.md` on the branch except `TEMPLATE.md`. Use the real
@@ -573,7 +609,7 @@ are already byte-identical to Design.
    - Paste the output into the last rework commit's message.
 
    Assumes a6 (the base-name comparison) and a8.
-9. **To do**, again on the round-2 tree: the diff checks (TEST-02 tier 0,
+9. **To do**, again on the round-3 tree: the diff checks (TEST-02 tier 0,
    FLOW-12, FLOW-02). `origin/main` has moved since the branch point (to
    137feae; it touched no file here), so diff against the merge base.
    - (a) For each of the nine files, `git diff -U0 origin/main...HEAD --
@@ -588,8 +624,11 @@ are already byte-identical to Design.
      - The three archived designs each have a single added
        `alters_relationships` line.
    - (b) The six blocks and two notes are byte-identical to Design.
-   - (c) `git diff --stat 7b11f04..HEAD` lists only the four reworked files
-     and this design, so the five **Done** files are untouched.
+   - (c) `git diff --stat fdd14b4..HEAD` lists only the two reworked files
+     and this design (and any later plan commit to it), so the seven
+     **Done** files are untouched.
+   - (d) In each reworked file, `git diff -U0 fdd14b4..HEAD` touches only
+     lines after the `## Security note (retrofit)` heading.
 
    Record the result with task 8's. Assumes a4 (the second hunk).
 10. **To do**: run `make test` and `make lint` (TEST-01, FLOW-17). Put the
