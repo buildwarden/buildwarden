@@ -482,85 +482,146 @@ the retrofitted documents describe those documents, not this change.
 
 ## Implementation plan
 
-Each task names the assumed questions it rests on; a different answer touches
-only the tasks that name it. No task edits an existing line of a document
-body, `tools/workflow/`, `docs/development/` or `.claude/` (Decision 2,
-FLOW-14).
+Round 2 (p2-plan-r2, after review 7b11f043ab61). Each task carries one
+status. **Done** means it shipped in round 1 and round 2 does not change it:
+Implement does not touch it again, and the task names the commit.
+**Rework** means it shipped in round 1 and p1-design-r2 changed its values:
+Implement redoes it through task 0 (FLOW-06). **To do** means it is not done
+yet, or is a check that must run again on the round-2 tree.
 
-0. Rework (p1-design-r2, review 7b11f043ab61; FLOW-06): the branch at 7b11f04
-   already carries the first-round blocks. For `firecracker-driver-plan.md`,
-   `hyperv-driver-plan.md`, `remote-execution-and-measured-hermeticity.md` and
-   `windows-driver-plan.md`, replace the whole leading front-matter block
-   (first `---` through the closing `---`) with the block from Design; leave
-   the blank line after it and every body line as they are. Tasks 1, 2, 4
-   and 6 then describe the end state; the other five files are already
-   correct and are not touched again.
-1. Prepend the `firecracker-driver-plan.md` block from Design, then one blank
-   line, before the existing first line (FLOW-02, FLOW-12, GLOBAL-08,
-   RELAY-03, RELAY-04). Assumes a1, a2 (`draft`), a5, a6, a7; under a7 (b)
-   this task is dropped.
-2. Prepend the `hyperv-driver-plan.md` block (FLOW-02, FLOW-12, GLOBAL-06),
-   including the comment on `status` and the three regression hosts. Assumes
-   a1, a2 (`archived`; under a2 (b) `status` is `active` and the comment
-   goes), a5, a6.
-3. Prepend the `platform-compatibility.md` block (FLOW-02, FLOW-12). Assumes
-   a1, a2 (`active`), a6.
-4. Prepend the `remote-execution-and-measured-hermeticity.md` block (FLOW-02,
-   FLOW-12, GLOBAL-06), and append its security note from Design after the
-   existing last line, separated by one blank line (FLOW-02, GLOBAL-06,
-   TEST-08). Assumes a1, a2 (`draft`), a4 (a), a5, a6; under a4 (b) the note
-   is not appended and the `security_boundary` comment reads "no security
-   section; FLOW-02 exception (a4)".
-5. Prepend the `vm-driver-release-plan.md` block (FLOW-02, FLOW-12, TEST-03:
-   its `tier2_gaps` entry names the already-tracked
-   `qemu-windows-guest-package` gap, so no backlog entry is added). Assumes
-   a1, a2 (`active`), a5, a6.
-6. Prepend the `windows-driver-plan.md` block (FLOW-02, FLOW-12, GLOBAL-06),
-   and append its security note from Design after the existing last line,
-   separated by one blank line (FLOW-02, GLOBAL-06, TEST-08). Assumes a1, a2
-   (`archived`), a4 (a) (the note; its "Phase 2 pending" banner stays), a5,
-   a6; under a4 (b) as for task 4.
-7. Rework of already-archived designs (FLOW-06, FLOW-02): insert
-   `alters_relationships: true` directly after `security_boundary` in
+Each task names the assumed questions it rests on (a1-a9, all still open). A
+different answer touches only the tasks that name it. No task edits an
+existing body line of a retrofitted document, `tools/workflow/`,
+`docs/development/` or `.claude/` (Decision 2, FLOW-14). Planning simulated
+the round-2 end state of the six retrofitted files (task 0's replacement
+plus the two appended notes). It parsed every `docs/design/*.md` with
+`check.ParseDesign` and `Front.problems(<base name>)` through a scratch
+`go test -overlay` test: there were no problems in any of the eleven
+documents, `alters_relationships` was set on all of them, and both notes
+parsed as a `Security note (retrofit)` section. The blocks for
+`platform-compatibility.md` and `vm-driver-release-plan.md` on the branch
+are already byte-identical to Design.
+
+0. **Rework**, the round-2 procedure (FLOW-06, FLOW-02; review
+   7b11f043ab61). In each of `firecracker-driver-plan.md`,
+   `hyperv-driver-plan.md`, `remote-execution-and-measured-hermeticity.md`
+   and `windows-driver-plan.md`, replace the leading front-matter block
+   (the first `---` line through the closing `---` line, inclusive) with
+   that file's block from Design. Leave the blank line after the block and
+   every body line as they are. For the latter two files, also append the
+   security note (tasks 4 and 6). Make one commit per file, citing this task,
+   the file's task number and the review. Tasks 1, 2, 4 and 6 give each
+   file's end state and acceptance. The other five touched files are
+   **Done** and stay as they are. Assumes a1, a2, a4, a5, a6, a7, as broken
+   down per file in tasks 1, 2, 4 and 6.
+1. **Rework** (round 1: e62353d): `firecracker-driver-plan.md` begins with
+   its Design block, then one blank line, then the unchanged original first
+   line. The block widens `drivers`, adds `relay-claim` to `seams`, adds
+   RELAY-03 and RELAY-04 with a comment to `rules`, and adds four regression
+   hosts (FLOW-02, FLOW-12, GLOBAL-08, RELAY-03, RELAY-04). Assumes a1, a2
+   (`draft`), a5, a6 and a7. Under a7 (b), the file reverts to its
+   `origin/main` content and this task is dropped.
+2. **Rework** (round 1: bdbd8e7): `hyperv-driver-plan.md` begins with its
+   Design block. The block adds the comment on `status` and three regression
+   hosts (FLOW-02, FLOW-12, GLOBAL-06). Assumes a1, a2 (`archived`), a5 and
+   a6. Under a2 (b), `status` becomes `active` and its comment is dropped.
+3. **Done** (51aedd3): `platform-compatibility.md` block (FLOW-02,
+   FLOW-12). Assumes a1, a2 (`active`) and a6.
+4. **Rework** (round 1: cf58469): `remote-execution-and-measured-hermeticity.md`
+   begins with its Design block, whose header comment and `security_boundary`
+   comment now point to the note (FLOW-02, FLOW-12, GLOBAL-06). Append after
+   the existing last line, in this order:
+   - one blank line;
+   - the line `## Security note (retrofit)`;
+   - one blank line;
+   - the note text from Design, verbatim, ending in a newline.
+
+   This satisfies FLOW-02, GLOBAL-06 and TEST-08 (the note names what TEST-08
+   should exercise; this feature writes no test of it). Assumes a1, a2
+   (`draft`), a4 (a), a5 and a6. Under a4 (b), no note is appended, and the
+   `security_boundary` comment reads "no security section; FLOW-02 exception
+   (a4)". That option is a rule change for Jeff (FLOW-14), so Implement
+   does not apply it unattended.
+5. **Done** (894629d): `vm-driver-release-plan.md` block (FLOW-02, FLOW-12,
+   TEST-03). Its `tier2_gaps` entry names the gap already tracked as
+   `qemu-windows-guest-package`, so no backlog entry is added. Assumes a1,
+   a2 (`active`), a5 and a6.
+6. **Rework** (round 1: 95c1027): `windows-driver-plan.md` begins with its
+   Design block. The block's header comment and `security_boundary` comment
+   point to the note, and it adds the `macos-vz`, `qemu-any` and
+   `container-any` regression hosts (FLOW-02, FLOW-12, GLOBAL-06). Append
+   its security note exactly as in task 4 (FLOW-02, GLOBAL-06, TEST-08). The
+   "Phase 2 pending" banner stays. Assumes a1, a2 (`archived`), a4 (a), a5
+   and a6. Under a4 (b), as for task 4.
+7. **Done** (7b11f04): rework of the three archived designs (FLOW-06,
+   FLOW-02). `alters_relationships: true` follows `security_boundary` in
    `hyperv-windows-prepare.md`, `ledger-environment-types.md` and
-   `unified-bootstrap.md`; no other line changes. Assumes a3 (a); under a3 (b)
-   the value per file changes, under a3 (c) this task is dropped.
-8. Tier-0 parse check (TEST-02 tier 0, TEST-01, FLOW-02, FLOW-03): run
-   `check.ParseDesign` and `Front.problems(<base name>)` over every
-   `docs/design/*.md` except `TEMPLATE.md`, using the real parser through
-   `go test -overlay` with a scratch `_test.go` kept in the session
-   scratchpad, so nothing under `tools/workflow/` is created or edited
-   (FLOW-14, a8). Pass: no problems for the nine touched files, and
-   `alters_relationships` set on each; `workflow-bootstrap.md` and this design
-   report only the expected feature-versus-base-name result, if any. Paste the
-   output into the implementation commit message. (Planning ran this check on
-   the proposed blocks: all nine passed.) Assumes a6 (the base-name comparison)
-   and a8.
-9. Body-unchanged diff check (TEST-02 tier 0, FLOW-12, GLOBAL-08): for each of
-   the nine files, `git diff origin/main -- <file>` shows 0 removed lines and
-   only added lines, inside the leading front-matter block (plus its trailing
-   blank line for the six retrofits) and, for `windows-driver-plan.md` and
-   `remote-execution-and-measured-hermeticity.md` only, a second hunk at the
-   end of the file that is exactly the appended security note. Each of the
-   six new blocks and two notes is byte-identical to Design. Record the
-   result with task 8's. Assumes a4.
-10. Run `make test` and `make lint` (TEST-01, FLOW-17); no build-tagged file
-    changes, so no per-platform lint run is owed. Commit the nine files and
-    push `feat/design-front-matter-retrofit` (FLOW-17).
-11. Reference docs and overview (UX-01, FLOW-15): none owed. The change has no
-    user-facing surface (`surfaces: []`) and changes no component flow, so
-    `docs/book/src/guide/` and `docs/book/src/concepts/overview.md` are
-    untouched; record "UX-01/FLOW-15: none" in the commit message so the
-    review phase can check it.
-12. Native validation (FLOW-09, TEST-03): none. No `m6-validate-<host>` step
-    and no backlog entry; the retrofitted `native_validation` values are
-    descriptive only (Decision 7).
-13. For the PR description, written at Publish (FLOW-08, FLOW-14, LINT-02):
-    the exact `docs/development/README.md` edit that retires the "Follow-up -
-    Design front-matter retrofit" bullet, for the human to apply at sign-off
-    (a9); and the archive-wide front-matter check proposed to
-    `tier1-static-checks` (a8). Under a9 (b) or a8 (b) these become attended
-    steps on this branch instead.
+   `unified-bootstrap.md`. Assumes a3 (a). Under a3 (b), the value changes
+   per file; under a3 (c), the three lines are reverted.
+8. **To do**, again on the round-2 tree: the tier-0 parse check (TEST-02
+   tier 0, TEST-01, FLOW-02).
+   - Run `check.ParseDesign` and `Front.problems(<base name>)` over every
+     `docs/design/*.md` on the branch except `TEMPLATE.md`. Use the real
+     parser through `go test -overlay` with a scratch `_test.go` kept in the
+     session scratchpad, so nothing under `tools/workflow/` is created or
+     edited (FLOW-14, a8).
+   - Pass: no problems in any of the eleven documents, and
+     `alters_relationships` set on each.
+   - For the two noted files, `Sections` also contains
+     `Security note (retrofit)`.
+   - `native-host-loop.md` is on `origin/main` only and is not in scope.
+   - Paste the output into the last rework commit's message.
+
+   Assumes a6 (the base-name comparison) and a8.
+9. **To do**, again on the round-2 tree: the diff checks (TEST-02 tier 0,
+   FLOW-12, FLOW-02). `origin/main` has moved since the branch point (to
+   137feae; it touched no file here), so diff against the merge base.
+   - (a) For each of the nine files, `git diff -U0 origin/main...HEAD --
+     <file>` shows 0 removed lines.
+     - `windows-driver-plan.md` and
+       `remote-execution-and-measured-hermeticity.md` have exactly two
+       hunks. The first is the leading block plus its trailing blank line.
+       The second, at the end of the file, is the blank line, the heading
+       line, the blank line and the note.
+     - Each of the other four retrofits has exactly one hunk: the block plus
+       its blank line.
+     - The three archived designs each have a single added
+       `alters_relationships` line.
+   - (b) The six blocks and two notes are byte-identical to Design.
+   - (c) `git diff --stat 7b11f04..HEAD` lists only the four reworked files
+     and this design, so the five **Done** files are untouched.
+
+   Record the result with task 8's. Assumes a4 (the second hunk).
+10. **To do**: run `make test` and `make lint` (TEST-01, FLOW-17). Put the
+    go1.26.3 toolchain that golangci-lint needs on `PATH`. No build-tagged
+    file changes, so no per-platform lint run is owed. Push
+    `feat/design-front-matter-retrofit` after the rework commits, without
+    force (FLOW-16, FLOW-17). Assumes nothing open.
+11. **To do**, reference docs and overview (UX-01, FLOW-15): none are owed.
+    The change has no user-facing surface (`surfaces: []`) and changes no
+    component flow, so `docs/book/src/guide/` and
+    `docs/book/src/concepts/overview.md` stay as they are. Record
+    "UX-01/FLOW-15: none" in the last rework commit's message so that Review
+    can check it. Assumes nothing open.
+12. **To do**, native validation (FLOW-09, TEST-03): none. This feature adds
+    no `m6-validate-<host>` step and no backlog entry. The retrofitted
+    `native_validation` values, including `linux-kvm`, which no machine in
+    `hosts.yaml` serves yet, are descriptive only (Decision 7). Assumes
+    nothing open.
+13. **To do**, for the PR description written at Publish (FLOW-08, FLOW-14,
+    LINT-02). It contains:
+    - the exact `docs/development/README.md` edit that retires the
+      "Follow-up - Design front-matter retrofit" bullet, for the human to
+      apply at sign-off (a9);
+    - the archive-wide front-matter check proposed to
+      `tier1-static-checks` (a8);
+    - the RELAY-03 warm-pool CA point recorded in the firecracker block's
+      `rules` comment, for the `firecracker-driver` design (a7);
+    - the review's informational suggestion of a follow-up item to refresh
+      the stale `platform-compatibility.md` body, for intake (FLOW-12).
+
+    Under a9 (b) or a8 (b), the first two become attended steps on this
+    branch instead. Assumes a7, a8 and a9.
 
 ## Consolidation (merge round)
 
