@@ -3,15 +3,19 @@
 feature: firecracker-driver-plan
 status: draft
 round: parallel
-drivers: [firecracker]
-seams: [relay-guest-api, collector]   # vsock heartbeat/exit; outputs read from relay rootfs predate RELAY-07
+drivers: [container, qemu, vz, hyperv, firecracker]  # relay/ gains vsock "CA ready"/"ledger complete" signals; util.go shared with qemu
+seams: [relay-claim, relay-guest-api, collector]     # per-build relay.env and CA extraction; warm-pool config injected over vsock; outputs read from relay rootfs predate RELAY-07
 surfaces: [cli, config]
 security_boundary: host-env           # also env-relay; see "Security Considerations"
-alters_relationships: true            # warm-pool manager, vsock signaling
+alters_relationships: true            # warm-pool manager, vsock signaling, relay claim over vsock
 native_validation:
   - {host: linux-kvm, blocking: true, reason: "driver/firecracker runs only on a Linux KVM host"}
+  - {host: container-any, blocking: false, reason: "regression: relay/ vsock signaling change"}
+  - {host: qemu-any, blocking: false, reason: "regression: relay/ change and util.go shared with qemu"}
+  - {host: macos-vz, blocking: false, reason: "regression: relay/ vsock signaling change"}
+  - {host: windows-hyperv, blocking: false, reason: "regression: relay/ vsock signaling change"}
 tier2_gaps: []
-rules: [ORCH-01, ORCH-03, ORCH-04, GLOBAL-06, GLOBAL-07, GLOBAL-08, RELAY-07, BOOT-01, BOOT-02, BOOT-04, TEST-02, TEST-08]
+rules: [ORCH-01, ORCH-03, ORCH-04, GLOBAL-06, GLOBAL-07, GLOBAL-08, RELAY-03, RELAY-04, RELAY-07, BOOT-01, BOOT-02, BOOT-04, TEST-02, TEST-08]  # RELAY-03: warm-pool snapshot is taken after CA generation, so restored relays would share a CA key
 concepts: [firecracker, microvm, vsock, mmds, jailer, warm-pool, snapshot-resume, tap-networking, two-vm-topology]
 related: [vm-driver-release-plan.md]
 ---
