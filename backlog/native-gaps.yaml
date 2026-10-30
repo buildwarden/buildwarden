@@ -14,6 +14,10 @@ gaps:
       windows-arm64.qcow2 but its provenance (ISO-installed generalized base or
       not) could not be checked. The build half would also hit the guest-DNS
       failure under qemu-linux-exclusive-trust. Needs an attended run with the ISO.
+      2026-10-30 (host:macos-qemu/20261030T172645Z, unattended): still not
+      run, because the session cannot read outside the checkout (ls of
+      ~/Downloads was blocked) and has no ISO. Guest DNS now works, so the
+      build half is no longer blocked by that.
     status: open
   - id: qemu-linux-exclusive-trust
     host: macos-qemu
@@ -35,7 +39,27 @@ gaps:
       and RUN "apk add jq" failed (driver/script/translate.go joins RUNs under
       one set -e, so a failure inside an && list does not stop the build);
       proposed fix item in the 2026-10-29 digest.
-    status: open
+    status: done
+    done: 2026-10-30
+    evidence: >-
+      host:macos-qemu/20261030T172645Z, unattended, QEMU 11.1.1 (Homebrew),
+      main 384b6ce and feat/container-inputs ddd11fe, both with the cached
+      alpine_3_21.qcow2 and ubuntu_24_04.qcow2. Guest DNS now works from the
+      unattended session. alpine:3.21 `apk add jq` over HTTPS through the relay:
+      SUCCEEDED, 4 dl-cdn GETs recorded, `inspect --verify-disks` 26 signatures
+      valid, all channels closed. ubuntu:24.04 Java/Maven (apt `maven`, which
+      pulls openjdk-21-jre-headless): MAVEN_OPTS=-Djavax.net.ssl.trustStore=/etc/warden/certs.jks,
+      `mvn dependency:get junit:junit:4.13.2` fetched over HTTPS from
+      repo.maven.apache.org through the relay, 2678 signatures valid, all
+      channels closed, ENVIRONMENT vm-disk-chain/v1 verified. Same results on
+      the branch, which also wrote inputs/Containerfile and inputs/build.sh. One
+      branch alpine run failed once on a transient "temporary error" fetching
+      the main APKINDEX and passed on rerun. Also seen: the prepared
+      ubuntu_24_04 guest root is 2.4G, so maven plus openjdk-21-jdk-headless
+      fails with ENOSPC (the 2026-10-29 Dockerfile), and `warden build` /
+      `image prepare` have no disk-size option. A non-prepared base
+      (maven:3.9-eclipse-temurin-21) needs the build-vm kernel/initramfs, which
+      this checkout does not build. Logs: native/macos-qemu/2026-10-30/.
   - id: finch-executor-copy
     host: macos-finch
     what: Copying the executor into a created container.
