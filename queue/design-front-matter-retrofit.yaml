@@ -3,7 +3,7 @@ title: Retrofit FLOW-02 front-matter onto the older designs (FLOW-12)
 priority: 3
 status: in_progress
 round: parallel
-phase: 1
+phase: 2
 design: docs/design/design-front-matter-retrofit.md
 branch: feat/design-front-matter-retrofit
 alters_relationships: false
@@ -40,10 +40,17 @@ steps:
   - id: p1-design-r2
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p2-plan-r2
+    phase: 2
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261030T095602Z
-      expires: 2026-10-30T11:56:17.672617874Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 3
@@ -64,9 +71,10 @@ questions:
   - id: a2
     kind: assumed
     status: open
-    question: 'Status mapping: archived for hyperv-driver-plan and windows-driver-plan, active for vm-driver-release-plan and platform-compatibility, draft for firecracker-driver-plan and remote-execution-and-measured-hermeticity?'
+    question: 'Status mapping: archived for hyperv-driver-plan and windows-driver-plan, active for vm-driver-release-plan and platform-compatibility, draft for firecracker-driver-plan and remote-execution-and-measured-hermeticity? hyperv-driver-plan''s status carries a comment naming its unbuilt Linux-guest phase.'
     options:
       - this mapping
+      - this mapping, but hyperv-driver-plan active until its Linux-guest phase is built or dropped
       - every retrofitted document archived
       - every retrofitted document active
     recommended: this mapping
@@ -82,16 +90,17 @@ questions:
   - id: a4
     kind: assumed
     status: open
-    question: Prepend front-matter only and leave document bodies unchanged (no Archive summary, no Security note section, stale banners kept)?
+    question: Add only, never edit an existing line - prepend front-matter to every document, and append a short Security note (retrofit) to windows-driver-plan and remote-execution-and-measured-hermeticity, whose security_boundary is not none and whose body has no security section (FLOW-02)? No Archive summary; stale banners kept.
     options:
-      - front-matter only
-      - also add a one-line retrofit banner
-      - also write Archive summaries for the two archived plans
-    recommended: front-matter only
+      - front-matter plus the two appended security notes
+      - front-matter only, recording a FLOW-02 exception for the two documents (a rule change for Jeff, FLOW-14)
+      - as the first, plus a one-line retrofit banner
+      - as the first, plus Archive summaries for the two archived plans
+    recommended: front-matter plus the two appended security notes
   - id: a5
     kind: assumed
     status: open
-    question: Record a single security_boundary per document (the most severe, host-env > env-relay > env-beyond), naming the others in a YAML comment?
+    question: Record a single security_boundary per document (the most severe, host-env > env-relay > env-beyond), naming the others in a YAML comment that also points to the document's security note (its own security section, or the appended note under a4)?
     options:
       - single value plus comment
       - propose a FLOW-02 amendment allowing a list
@@ -184,3 +193,9 @@ history:
   - at: 2026-10-30T09:56:17Z
     by: cloud/20261030T095602Z
     event: claimed p1-design-r2 until 2026-10-30T11:56:17Z
+  - at: 2026-10-30T10:02:04Z
+    by: cloud/20261030T095602Z
+    event: done p1-design-r2
+  - at: 2026-10-30T10:02:04Z
+    by: cloud/20261030T095602Z
+    event: entered phase 2 (plan)
