@@ -1,0 +1,50 @@
+name: integration
+
+# Tier 1 (TEST-02): the integration tests that need a container runtime. Runs
+# on demand (gh workflow run integration.yml --ref <branch>), weekly on main,
+# and on pull requests that reach the container driver or a shared package
+# (the TEST-02 caveat). The release full matrix is still the backstop.
+on:
+  # No ref input: a dispatched branch runs in its own context, so its code
+  # can never write a cache the default branch restores (CodeQL).
+  workflow_dispatch:
+  schedule:
+    - cron: '0 6 * * 1'
+  pull_request:
+    paths:
+      - 'driver/container/**'
+      - 'driver/*.go'
+      - 'relay/**'
+      - 'ledger/**'
+      - 'collector/**'
+      - 'cmd/**'
+      - 'test-integration.sh'
+      - 'Dockerfile*'
+      - 'go.mod'
+
+permissions:
+  contents: read
+
+jobs:
+  tier1:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # The build runs the checked-out code; keep it from writing a Go cache.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - run: docker version
+      # Refs older than the dist/warden fix in test-integration.sh call ./warden.
+      - run: ln -sf dist/warden warden
+      - run: make integration-test
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: warden-output
+          path: /tmp/warden-integ-*
+          if-no-files-found: ignore

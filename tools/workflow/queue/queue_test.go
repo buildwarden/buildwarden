@@ -19,6 +19,7 @@ func feature(name string, prio int, status string) *Feature {
 
 func state(fs ...*Feature) *State {
 	s := &State{Features: fs}
+	s.Config.RunBudget.Steps = 12
 	s.Config.Limits.InProgress = 5
 	s.Config.Limits.AltersRelationships = 1
 	return s
@@ -228,5 +229,35 @@ func TestBackToDesignEscalatesOnTheThirdReturn(t *testing.T) {
 	}
 	if errs := state(f).Validate(); len(errs) != 0 {
 		t.Fatalf("Validate: %v", errs)
+	}
+}
+
+func TestNativeBudget(t *testing.T) {
+	dir := t.TempDir()
+	write := func(cfg string) *State {
+		t.Helper()
+		_ = os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o644)
+		s, err := Load(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	s := write("run_budget: {steps: 12}\n")
+	if got := s.Config.Budget(true); got != 12 {
+		t.Fatalf("native budget without native_budget = %d, want run_budget's 12", got)
+	}
+	s = write("run_budget: {steps: 12}\nnative_budget: {steps: 8}\n")
+	if s.Config.Budget(true) != 8 || s.Config.Budget(false) != 12 {
+		t.Fatalf("budgets = native %d, run %d; want 8 and 12", s.Config.Budget(true),
+			s.Config.Budget(false))
+	}
+	if errs := s.Validate(); len(errs) != 0 {
+		t.Fatalf("Validate: %v", errs)
+	}
+	s = write("run_budget: {steps: 12}\nnative_budget: {steps: 0}\n")
+	errs := s.Validate()
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "native_budget") {
+		t.Fatalf("Validate = %v, want the native_budget problem", errs)
 	}
 }

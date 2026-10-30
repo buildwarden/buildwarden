@@ -172,3 +172,23 @@ func TestMakeSkippedWithoutRun(t *testing.T) {
 		t.Fatalf("phase 5 (surfaces [output], no guide change): want fail")
 	}
 }
+
+func TestProcessChecks(t *testing.T) {
+	env := Env{Repo: repo(t, design)}
+	f := demo(1)
+	f.Kind, f.Round = "process", "process"
+	for _, phase := range []int{1, 2} {
+		f.Phase = phase
+		if rs := Phase(env, f); !OK(rs) {
+			t.Errorf("x%d: %s", phase, failures(rs))
+		}
+	}
+	f.Phase = 3
+	if rs := Phase(env, f); OK(rs) || !strings.Contains(failures(rs), "merged") {
+		t.Errorf("x3 before merge: %s, want the merge check failing", failures(rs))
+	}
+	f.Phase, f.Design = 1, "docs/design/missing.md"
+	if rs := Phase(env, f); OK(rs) {
+		t.Error("x1 passed without a design file")
+	}
+}

@@ -109,7 +109,19 @@ its branch. The phases are:
 
 A transition happens only when the phase's done-when checks pass mechanically
 (files present, sections filled, commands green), never on an agent's own report
-that it is done. Queue state lives on the `workflow` orphan branch, not on `main`,
+that it is done.
+
+A **process item** (queue `kind: process`) changes the rules the loops run
+under: `docs/development/`, `.claude/` or `tools/workflow/`. The loop may not
+make such changes unattended (FLOW-14), so a process item takes a shorter path
+with every step `human`:
+
+| # | Phase | Done when |
+|---|-------|-----------|
+| 1 | Design | The design document exists on the branch. |
+| 2 | Implement | The branch is pushed (FLOW-17). |
+| 3 | Sign-off | A human merged it into `main` (FLOW-08). |
+| 4 | Archive | Design archived with its summary; branch deleted (FLOW-12, FLOW-16). | Queue state lives on the `workflow` orphan branch, not on `main`,
 so that high-churn bookkeeping stays out of the code history.
 
 ---
@@ -143,7 +155,12 @@ expired lease may be reclaimed.
 **Severity:** SHOULD
 **Check:** automated
 
-Work goes deep, not wide. A worker takes the next ready step of the
+Work goes deep, not wide. Process items (FLOW-03) come before every feature,
+whatever their priority. While one is in progress, a worker matching one of
+its `holds` (affinity patterns such as `cloud` or `host:*`) takes no new step,
+so disruptive work waits for the rules to settle; a step it already claimed
+stays claimed, and finishing the process item releases the hold. Otherwise a
+worker takes the next ready step of the
 highest-priority feature in progress, and keeps taking that feature's steps until
 it blocks: on a `human` or `host:<name>` step, an exhausted budget, or the merge
 queue. Only then does it take steps from the next feature down, and it returns to
@@ -234,7 +251,10 @@ every waiting branch in one sitting rather than one session per feature. Each
 native machine also runs a scheduled session that starts an agent only when a
 host step it serves is ready, or when `main` or a waiting branch has moved since
 its last sweep of open backlog entries; it is bound by the unattended loop's limits
-(FLOW-13) and records what it did in the digest. A failure
+(FLOW-13) and records what it did in the digest. Every scheduled run, including
+one that stops before an agent starts, also records the machine's outcome and a
+one-line reason in `native/status/<machine>.yaml` on the `workflow` branch, so a
+silent failure is still visible. A failure
 found there returns the feature (or a new fix item) to Design or Implement with the
 logs attached. The full matrix before a release (TEST-02) is the backstop for every
 tracked gap.
@@ -300,7 +320,10 @@ state, claim, work, write state) until no `cloud` step is ready or the run's
 budget is spent, and writes state after every step so an interrupted run loses at
 most the step in progress. All state it needs lives in the repository, never in a
 long-running conversation. A run spends its budget in FLOW-05 order, so the
-top-priority feature can use all of it. Each feature also has a work budget, which
+top-priority feature can use all of it. A scheduled native session (FLOW-09)
+spends its own budget, `native_budget`, which falls back to the run's budget when
+unset, so native and integration testing never compete with the cloud loop. Each
+feature also has a work budget, which
 is a runaway check rather than a share of the run: exhausting it escalates to a
 `human` step. The loop posts a periodic digest (what moved, what is blocked on a human,
 what is waiting on a native host, what was spent), and notifies when a new
