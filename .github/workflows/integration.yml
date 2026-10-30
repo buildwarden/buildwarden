@@ -1,16 +1,13 @@
 name: integration
 
 # Tier 1 (TEST-02): the integration tests that need a container runtime. Runs
-# on demand for any ref, weekly on main, and on pull requests that reach the
-# container driver or a shared package (the TEST-02 caveat). The release
-# full matrix is still the backstop.
+# on demand (gh workflow run integration.yml --ref <branch>), weekly on main,
+# and on pull requests that reach the container driver or a shared package
+# (the TEST-02 caveat). The release full matrix is still the backstop.
 on:
+  # No ref input: a dispatched branch runs in its own context, so its code
+  # can never write a cache the default branch restores (CodeQL).
   workflow_dispatch:
-    inputs:
-      ref:
-        description: 'Branch, tag or SHA to test; empty means the dispatched ref'
-        required: false
-        default: ''
   schedule:
     - cron: '0 6 * * 1'
   pull_request:
@@ -35,10 +32,8 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: ${{ inputs.ref || '' }}
           persist-credentials: false
-      # No Go cache: a dispatched ref is untrusted code running in the default
-      # branch's context, and must not write a cache main later restores.
+      # The build runs the checked-out code; keep it from writing a Go cache.
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod

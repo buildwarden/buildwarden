@@ -74,7 +74,11 @@ hand-off plan, except where marked *(this design)*.
   rootful Docker daemon, which is the privilege the relay's network isolation
   needs.
 - Triggers:
-  - `workflow_dispatch` with a `ref` input, to test any branch;
+  - `workflow_dispatch`, to test a branch on demand
+    (`gh workflow run integration.yml --ref <branch>`). The plan's `ref`
+    input was dropped: CodeQL flagged it as cache poisoning, because it runs
+    any ref in the default branch's context. A dispatched branch runs in its
+    own context instead, and the job uses no Go cache and no persisted token;
   - a weekly schedule (Mondays 06:00 UTC), to test `main`;
   - `pull_request` on the paths the TEST-02 caveat makes shared:
     - `driver/container/**`, `driver/*.go`;
@@ -339,7 +343,7 @@ Operationally:
   `feat/container-inputs`, via the temporary push trigger. When the latter is
   green, the backlog entry `container-inputs-integration-test` is set to done
   with the run URL. After merge: one `workflow_dispatch` run on `main` and
-  one with `ref: feat/container-inputs`.
+  one on `feat/container-inputs` (`--ref`), once that branch has merged main.
 - **Native**, not blocking: the Mac's next scheduled run writes its status
   file. Windows is covered by its first run after install.
 
@@ -399,7 +403,7 @@ Operationally:
     `main` merged after this lands to pass on its own.
   - The temporary push trigger and overlay are removed. After merge, run
     `gh workflow run integration.yml` and
-    `gh workflow run integration.yml -f ref=feat/container-inputs`.
+    `gh workflow run integration.yml --ref feat/container-inputs` (once that branch has merged main, so it has the workflow).
 - **Item 4.** The trap is tested against a scratch bare remote with a
   stand-in `claude`, and all eleven cases pass:
   - outcomes: worked, idle, skipped (low disk), failed (claude), failed

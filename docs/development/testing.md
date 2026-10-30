@@ -49,7 +49,8 @@ Where each tier runs today:
   Ubuntu runner with Docker). It runs on PRs that reach `driver/container/`,
   the `driver/` root, a shared package (`relay/`, `ledger/`, `collector/`),
   `cmd/`, `test-integration.sh`, a `Dockerfile` or `go.mod`; weekly on
-  `main`; and on demand for any ref (`workflow_dispatch` with `ref`).
+  `main`; and on demand for a branch that has the workflow
+  (`gh workflow run integration.yml --ref <branch>`).
 - Tier 2: native sessions (FLOW-09) on the machines in the `workflow`
   branch's `hosts.yaml`.
 
