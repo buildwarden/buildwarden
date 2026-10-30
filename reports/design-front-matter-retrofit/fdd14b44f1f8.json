@@ -1,0 +1,87 @@
+{
+  "feature": "design-front-matter-retrofit",
+  "branch": "feat/design-front-matter-retrofit",
+  "head": "fdd14b44f1f8",
+  "base": "cd42fc73c265",
+  "round": 2,
+  "previous_report": "7b11f043ab61",
+  "scope": "git diff origin/main...feat/design-front-matter-retrofit (10 files, +815/-0; commits c650e29..fdd14b4). origin/main is at 137feae; the branch merges cleanly (git merge-tree).",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass: golangci-lint 2.5.0 built with go1.26.3 (scratchpad bin on PATH); 0 issues in the root module and tools/workflow",
+    "make_test": "pass: GOFLAGS=-count=1, uncached; every package ok",
+    "front_matter_parse": "pass: check.ParseDesign + Front.problems over every docs/design/*.md except TEMPLATE.md, via go test -overlay with the scratch test; 11 documents, problems=0, alters_relationships set on all, the 'Security note (retrofit)' section present in windows-driver-plan and remote-execution-and-measured-hermeticity",
+    "body_unchanged": "pass: 0 removed lines in all nine files; 2 hunks (block, appended note) for windows-driver-plan and remote-execution-and-measured-hermeticity, 1 hunk for the other four retrofits, exactly '+alters_relationships: true' for the three archived designs; the six blocks and two notes are byte-identical to the design's Design section over the merge-base body",
+    "rule_ids": "pass: every rule ID in the six new rules lists exists in the docs/development rule index",
+    "host_names": "pass: container-any, qemu-any, macos-vz, macos-qemu and windows-hyperv are all registered in hosts.yaml; linux-kvm is the one new name, as the design says",
+    "build_tagged_files": "none touched; no per-platform lint owed (FLOW-17)",
+    "custom_static_checks": "none exist yet (LINT-02, Deep-dive #2)",
+    "note": "Re-run by the linter at fdd14b4, not taken from the implementer's report. The implementer's report matched on every check."
+  },
+  "prior_findings": [
+    {"id": "7b11f043ab61#1", "rule": "FLOW-02", "severity": "MUST", "file": "docs/design/firecracker-driver-plan.md", "line": 6, "status": "fixed", "evidence": "drivers: [container, qemu, vz, hyperv, firecracker] with a comment naming the relay/ vsock signals and the util.go shared with qemu; regression hosts added for each dependent driver."},
+    {"id": "7b11f043ab61#2", "rule": "FLOW-02", "severity": "MUST", "file": "docs/design/firecracker-driver-plan.md", "line": 7, "status": "fixed", "evidence": "seams: [relay-claim, relay-guest-api, collector]. RELAY-03, RELAY-04 and GLOBAL-08 added to rules. The RELAY-03 comment is supported: the warm pool snapshots the relay after 'CA generated, listeners up' (firecracker-driver-plan.md:681)."},
+    {"id": "7b11f043ab61#3", "rule": "FLOW-02", "severity": "MUST", "file": "docs/design/windows-driver-plan.md", "line": 9, "status": "fixed, with a new finding in the added text", "evidence": "A '## Security note (retrofit)' section is appended (line 476), and the comment points to it. The note-missing violation is gone, but one claim in the new note is not supported by the plan: see finding 1."},
+    {"id": "7b11f043ab61#4", "rule": "FLOW-02", "severity": "MUST", "file": "docs/design/remote-execution-and-measured-hermeticity.md", "line": 9, "status": "fixed", "evidence": "A security note is appended (line 301). Its claims match the proposal's text (Cache hit behavior, Worker model, action lifecycle step 3, requires-network handling). One omission is reported as SHOULD finding 3."},
+    {"id": "7b11f043ab61#5", "rule": "FLOW-12", "severity": "SHOULD", "file": "docs/design/hyperv-driver-plan.md", "line": 4, "status": "fixed", "evidence": "status: archived now has a comment naming the unbuilt Phase 1 Linux build guest (hyperv-driver-plan.md:1494; vm-driver-release-plan.md:495-496)."},
+    {"id": "7b11f043ab61#6", "rule": "FLOW-02", "severity": "SHOULD", "file": "docs/design/windows-driver-plan.md", "line": 11, "status": "fixed", "evidence": "native_validation now has macos-vz, qemu-any and container-any non-blocking regression entries, matching the plan's Phase 2 regression check (lines 108-112). hyperv-driver-plan gains the same, as do firecracker and remote-execution (Decision 7)."}
+  ],
+  "findings": [
+    {
+      "rule": "FLOW-02",
+      "related_rules": ["GLOBAL-06", "TEST-08"],
+      "severity": "MUST",
+      "check": "automated + agent-judgment",
+      "file": "docs/design/windows-driver-plan.md",
+      "line": 489,
+      "design_source": "docs/design/design-front-matter-retrofit.md:441",
+      "finding": "Security note claim the plan does not support: 'there is no in-guest firewall to rely on, so administrator rights inside the guest do not open a path.' The plan says isolation is host-enforced and not built on in-guest firewall rules (lines 57-58, 155-156, 373-374). It never says that guest administrator rights cannot open a path, and it has not validated that. Isolation validation (chunk 4, line 449) and the graduation gate's adversarial agent (line 472) are not in Phase 1's 'Done & validated' list. The guest runs with an ephemeral autologon admin (line 343). The relay's isolation as written is IPv4 iptables (REDIRECT :80/:443/:53, FORWARD DROP); the plan says nothing on IPv6. The note's own TEST-08 bullet lists IPv6, SMB/NetBIOS and ICMP as vectors still to test. The note's header says it 'adds no design', and Decision 2 says the notes record only what each document's text says. This clause is an unvalidated assurance on the env-relay boundary.",
+      "suggestion": "In the design's Design section (line 441), then re-applied by implement, replace the clause with: 'there is no in-guest firewall, so the isolation argument does not rely on any in-guest control; whether a guest administrator can open a path is what the adversarial gate below must show, and the plan has not yet run it.'"
+    },
+    {
+      "rule": "FLOW-02",
+      "related_rules": ["GLOBAL-06", "BOOT-06"],
+      "severity": "SHOULD",
+      "check": "automated + agent-judgment",
+      "file": "docs/design/windows-driver-plan.md",
+      "line": 491,
+      "design_source": "docs/design/design-front-matter-retrofit.md:443",
+      "finding": "'The prepared Windows image (autounattend, first-boot task) is trusted input fixed before the build.' 'Fixed before the build' is supported: the image is prepared once and every build gets a per-build clone (lines 84-87, 336). 'Trusted' is not the plan's word. The plan calls the guest 'untrusted by design' (line 349), and the image carries an ephemeral autologon admin and a LabConfig bypass (lines 342-343). A reader could take 'trusted' as a security property rather than 'relied on'. This is graded SHOULD rather than MUST because, read as 'relied on' (part of the trusted computing base), it is accurate.",
+      "suggestion": "'...is input fixed at prepare, before the build (BOOT-06: it carries the startup hook, not build content)'. Or say 'relied on' instead of 'trusted'."
+    },
+    {
+      "rule": "GLOBAL-06",
+      "related_rules": ["FLOW-02", "BOOT-02"],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "docs/design/remote-execution-and-measured-hermeticity.md",
+      "line": 308,
+      "design_source": "docs/design/design-front-matter-retrofit.md:353",
+      "finding": "The note leaves out two boundary changes that the proposal's own text implies. (1) Action lifecycle step 4 (line 108): 'Inputs are staged from content-addressed storage into the sandbox.' The input root reaches the build environment outside the relay. BOOT-02 forbids that for context files, and only the cache key, not the ledger, records it. This is the proposal's largest env-relay change, and the note's 'Boundary' bullet does not name it. (2) The RE API gRPC service, CAS and ActionCache (lines 196-201) are a new network-facing service whose stored values feed parent ledgers. The note covers cache-entry forgery, but not the service as an attack surface. The note's claims are all supported, so this is an omission, not an unsupported claim.",
+      "suggestion": "Add to 'Boundary': 'action inputs are staged from CAS into the sandbox, outside the relay (Action execution lifecycle, step 4), which BOOT-02 does not allow today; the first design must route them through the relay or record them'. Add to 'What TEST-08 should exercise': 'an input root whose CAS blobs differ from their digests; an unauthenticated Execute or ActionCache write'."
+    }
+  ],
+  "counts": {
+    "MUST": 1,
+    "MUST-review": 0,
+    "SHOULD": 2
+  },
+  "suppressions": [],
+  "suppressions_note": "The previous report recorded none, so none carry over.",
+  "routing": {
+    "tier1_red": false,
+    "wf_implement_fix": "none: tier 1 is green and the implementation matches the design byte for byte",
+    "must_findings_route": "back-to-design. The MUST finding is in the security note text that the design's Design section prescribes (design-front-matter-retrofit.md:441), and implement re-applied it byte for byte. Fixing it in implement would change a design decision (FLOW-06). Design rewords one clause, and optionally takes the two SHOULDs, which sit in the same two notes (design lines 353 and 443). Implement then re-applies. Budget: 2 of 3 estimated runs are spent; this is a third round."
+  },
+  "informational": [
+    {"rule": "FLOW-02", "file": "docs/design/windows-driver-plan.md", "line": 485, "note": "'every Schannel and OpenSSL client ... trusts the relay's MITM CA' is slightly broader than the plan. Schannel trusts it through the machine root store; OpenSSL-based tools (conda, pip) trust it only through the SSL_CERT_FILE / REQUESTS_CA_BUNDLE / CARGO_HTTP_CAINFO / NODE_EXTRA_CA_CERTS variables (lines 186-192). It is supported in substance, and it overstates exposure, not protection."},
+    {"rule": "BOOT-02", "file": "docs/design/windows-driver-plan.md", "line": 491, "note": "'per build, only the executor and its seed cross outside the relay (BOOT-02)' is supported by the built path: build.ps1 comes through the relay's cwd host (lines 46-48), and the CA through /ca.pem. bootstrap.md:49 lists the Windows seed as warden-io.exe and warden-run.ps1, and static addressing in the launcher is allowed (bootstrap.md:108-110). The plan's reuse list (lines 369-370) still names an older option with the build recipe on the seed disk. That option was not built, and the archive keeps it as written."},
+    {"rule": "FLOW-02", "file": "docs/design/remote-execution-and-measured-hermeticity.md", "line": 313, "note": "The open point 'recompute hermetic from the verified sub-ledger, never from the stored flag' partly restates the proposal (line 137: hermetic 'is recomputed from the ledger whenever the cache entry is validated'). The new part is 'verified'. Accurate."},
+    {"rule": "LINT-04", "file": "docs/design/design-front-matter-retrofit.md", "line": 1, "note": "origin/main moved to 137feae and added docs/design/native-host-loop.md. That file already carries complete FLOW-02 front-matter, including alters_relationships, so the archive-wide parse check still holds after merge. git merge-tree reports no conflicts."},
+    {"rule": "FLOW-07", "file": "docs/design/design-front-matter-retrofit.md", "line": 173, "note": "Assumed questions a1-a9 are still open and must be confirmed before sign-off (FLOW-08). a4's text now describes the two appended notes. Finding 1 bears on what Jeff confirms under a4."},
+    {"rule": "FLOW-12", "file": "docs/design/platform-compatibility.md", "line": 4, "note": "Carried from 7b11f043ab61, unchanged and out of scope under a4: the body's matrix is stale (hyperv and qemu/KVM listed as Planned). The remote-execution 'Environment as first record' supersession and the windows 'Phase 2 pending' banner remain as before."},
+    {"rule": "UX-01", "file": "docs/design/design-front-matter-retrofit.md", "line": 1, "note": "UX-01 / FLOW-15: none owed. Only docs/design/*.md is touched."},
+    {"rule": "FLOW-02", "file": "docs/design/firecracker-driver-plan.md", "line": 1, "note": "Verified accurate this round: firecracker drivers, seams, rules and the RELAY-03 comment (line 681); the hyperv status comment (hyperv-driver-plan.md:1494, vm-driver-release-plan.md:495-496); the regression hosts on all four plans (Decision 7) and their reasons; remote-execution note bullets for Boundary, posture and TEST-08 against lines 58-63, 107, 137-147, 209-210; windows note CA install, env variables, topology and redirects (lines 42-43, 57-58, 186-192) and its TEST-08 bullet (lines 449-451, 470-472)."}
+  ]
+}
