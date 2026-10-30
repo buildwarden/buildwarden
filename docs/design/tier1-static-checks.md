@@ -414,36 +414,255 @@ way (ORCH-01).
 
 ## Implementation plan
 
-Planning (phase 2) expands this list into tasks. The order:
+Phase 2 (p2-plan). This plan expands Design's ten-step order into tasks.
+Every task names the rules it must satisfy and the assumed questions it rests
+on. All of a1 to a7 are still open, and a different answer changes only the
+tasks that name it. "Test tier 0" means TEST-02's unit tier: pure-Go,
+table-driven, and run by `make test` on every platform (TEST-01). No task
+here needs test tier 1 or 2.
 
-1. Scaffold `tools/tier1`: module, `cmd/tier1`, the `diff` package (base
-   resolution, changed files and lines, `Tier1-Allow` trailers), text and
-   JSON output, exit codes (LINT-04, LINT-05, UX-02, UX-04, TEST-01).
-2. `rules`: the index parser, `tier1 rules -json`, `rules.yaml` covering every
-   `automated` rule, and the self-check (LINT-01, LINT-02, LINT-06, LINT-08).
-3. Coupling checks: `drivers-claim`, `bootstrap-surface`, `schema-doc`,
-   `seam-contract`, the GLOBAL-04 hint, and the design union (ORCH-01,
-   BOOT-07, RELAY-05, GLOBAL-08, EXEC-04, GLOBAL-04, FLOW-02).
-4. `surface` extractor, then `surface-docs` and `surface-removed` (UX-01,
+**Steps.** Three phase-3 steps carry the tasks, and the queue file lists the
+two that are not template steps. `p3-implement` (cloud, the gate) carries
+tasks 1 to 8 and 11 to 13, and may take several claims.
+`p3-export-problems` (human, a3) carries task 9. It is attended only, because
+unattended runs do not edit `tools/workflow/` (FLOW-14). It has no `needs`, so
+Jeff can take it at any point, even before phase 3 starts.
+`p3-front-matter-check` (cloud, `needs: [p3-export-problems]`) carries task
+10.
+
+No cloud task waits on the human step except task 10. The design union and
+the FLOW-01 "no design in the diff" finding need only the already-exported
+`check.ParseDesign`, so they are in task 4 rather than task 10.
+
+`wf` advances phase 3 only when all three steps are done. It runs the gate
+check (`make lint`, `make test`, docs touched) only when `p3-implement` is
+marked done. Mark `p3-implement` done once its own tasks are finished, even
+if task 10 is still waiting; releasing it and claiming it again each run
+would spend budget for nothing. Task 10 runs `make lint` and `make test`
+itself before its `wf done`, and phase 4's gate runs both again on the final
+tree.
+
+**Rework of existing code** (FLOW-06): task 9 (`tools/workflow/check`,
+attended), task 12 (`Makefile`, `.github/workflows/main.yml`,
+`.github/workflows/release.yml`) and task 13 (`CONTRIBUTING.md`,
+`docs/book/src/contributing/structure.md`). Everything else is new code under
+`tools/tier1/`.
+
+**`overview.md`** (FLOW-15): no update is owed.
+`docs/book/src/concepts/overview.md` holds pseudocode for the product's
+components (orchestrator, session, drivers, executor, relay). Tier 1 is
+contributor tooling and changes none of their flows, just as `tools/workflow`
+has no entry there.
+
+**Budget** (FLOW-13). The estimate is 6 runs and 30 steps. One run and 3
+steps are spent, which leaves 27 steps.
+
+| Steps left | Count |
+|---|---|
+| `p3-implement` claims (tasks 1 to 8 and 11 to 13) | 4 to 5 |
+| `p3-export-problems`, `p3-front-matter-check` | 2 |
+| `p4-review` (plus one claim if Review finds a fix) | 1 to 2 |
+| `p5-guide`, `p6-publish`, `p6-merge-round` | 3 |
+| Merge round, `m0` to `m8` (10 steps, two of them human) | 10 |
+| **Total** | **20 to 22** |
+
+The total fits within 27 steps, well below the runaway threshold of 60
+(factor 2). Runs are the tight part. Six runs hold if implementation fits in
+two runs and Jeff takes `p3-export-problems` before `p3-implement` finishes.
+A late export, the serial merge queue, or the human waits in the merge round
+(`m6-confirm-pr`, `m7-sign-off`) each add a run, so expect 6 to 8. Runs are
+not part of the runaway check.
+
+1. **Scaffold `tools/tier1`** (a1; LINT-05, UX-02, UX-04, GLOBAL-01,
+   GLOBAL-03, TEST-01).
+   - `go.mod` is module `github.com/buildwarden/buildwarden/tools/tier1`,
+     with a `go` line no lower than `tools/workflow`'s. It requires
+     `golang.org/x/tools` and `go.yaml.in/yaml/v3`, the same YAML library as
+     `tools/workflow`. It also requires `tools/workflow`, with
+     `replace github.com/buildwarden/buildwarden/tools/workflow => ../workflow`.
+   - `cmd/tier1/main.go` parses the flags and subcommands in Design.
+   - A `report` package holds the finding, hint and suppression types, the
+     text output grouped by severity, the JSON output, `report.schema.json`,
+     and exit codes 0, 1 and 2.
+   - Tests, tier 0 (TEST-02): golden text and JSON for a fixed set of
+     findings; the exit-code table (SHOULD and hints only give 0, MUST or
+     MUST-review gives 1, usage errors give 2); every key the JSON emits is
+     declared in `report.schema.json`.
+2. **`diff` package** (a5; LINT-04, LINT-05, UX-04, GLOBAL-07, TEST-04).
+   - Base: `-base REV`, or by default `git merge-base origin/main HEAD`. An
+     unresolvable base exits 2 and prints the fix (`git fetch origin main`).
+     It never falls back to a whole-repo run.
+   - Changed paths come from `git diff --name-status -z` (renames
+     included). Added and changed line ranges come from `--unified=0`. Paths
+     stay `/`-separated as git prints them.
+   - `Tier1-Allow: <RULE-ID> <path-glob>: <reason>` trailers are read from
+     every commit in `base..HEAD`. A trailer with no reason is itself a
+     finding, and each applied suppression is recorded with its commit.
+   - Tests, tier 0 (TEST-02): table tests over a scratch git repository, as
+     in `tools/workflow/check/check_test.go`. They cover added, modified,
+     renamed and deleted paths, line ranges, valid trailers, a trailer with
+     no reason, a trailer outside the range, and the unresolvable-base error.
+     Commit dates and identities are fixed through the environment (TEST-04).
+3. **`rules` package and the `rule-index` self-check** (a7; LINT-01,
+   LINT-02, LINT-06, LINT-08).
+   - The parser reads every `### <ID> — <title>` header in
+     `docs/development/*.md`, with its `**Severity:**` and `**Check:**`
+     lines. It skips `docs/development/README.md`, whose `RELAY-01` header is
+     a format example. It accepts the qualified check forms in use, for
+     example `automated (Arm A) + agent-judgment (Arm B)`.
+   - `tier1 rules [-json]` prints the index.
+   - `tools/tier1/rules.yaml` maps all 54 `automated`-tagged rules on `main`
+     today to a check ID, an owner or `follow-up`, following the three
+     Design tables. It also holds the path data for tasks 5 and 6: RELAY-05's
+     schema/spec pairs, BOOT-07's bootstrap surface, and GLOBAL-08's seam to
+     contract-document map.
+   - The self-check runs as Design says: when `docs/development/` or
+     `rules.yaml` is in the diff, and with `-all`.
+   - Tests, tier 0 (TEST-02): the real `docs/development/` parses with no
+     findings and every `automated` rule is mapped. Fixtures cover a header
+     with no `Severity`, an invalid `Check`, an unmapped `automated` rule and
+     a mapping to a removed rule.
+4. **Design union and the FLOW-01 half of `design-front-matter`** (FLOW-01,
+   FLOW-02, ORCH-01).
+   - In a `coupling` package, parse every `docs/design/*.md` the diff adds
+     or modifies, except `TEMPLATE.md`, at `HEAD` with the exported
+     `check.ParseDesign`. Take the union of their `drivers`, `seams` and
+     `rules` (Decision 6). Use `-design PATH` to name designs explicitly.
+   - Changed code with no design in the diff is a FLOW-01 finding, cleared
+     by `-no-design` or a `Tier1-Allow: FLOW-01` trailer. "Code" starts as
+     every path outside `docs/` and top-level `*.md`; task 11 retunes it on
+     history.
+   - Tests, tier 0 (TEST-02): scratch-repo tables for one design, two
+     designs (the release diff), `TEMPLATE.md` ignored, code with no design,
+     docs-only with no design, and `-no-design`.
+5. **Coupling checks** (a6; ORCH-01, FLOW-02, BOOT-07, RELAY-05, GLOBAL-08,
+   EXEC-04, GLOBAL-04, TEST-02).
+   - `drivers-claim`: compare the paths the diff reaches against the union's
+     `drivers`. A shared package (`driver/*.go`, `relay/`, `ledger/`,
+     `collector/`, `relaycfg/`, `bootstrap/`) needs every driver declared
+     (the TEST-02 caveat).
+   - `bootstrap-surface`: use BOOT-07's surface list from `rules.yaml`. The
+     "relay's guest-facing endpoints" become named `relay/` files there.
+     Check both directions of BOOT-07's automated part.
+   - `schema-doc`: check both directions of RELAY-05's pairs.
+   - `seam-contract`: check only the seams that have a contract document in
+     `rules.yaml`. The others are `follow-up`.
+   - The `tests-with-change` hint (GLOBAL-04) never fails and lists under
+     `hints`.
+   - Tests, tier 0 (TEST-02): a positive and a negative scratch-repo case
+     for each check. That includes a shared-package change with too few
+     drivers declared, and a `bootstrap.md` change with no design citing
+     BOOT-07.
+6. **`surface` extractor, `surface-docs` and `surface-removed`** (UX-01,
    ORCH-03, UX-03).
-5. Analyzers: `ledger-single-writer`, `relay-diskless`, `executor-no-cgo`,
-   `large-literal` (RELAY-01, RELAY-07, EXEC-01, EXEC-05).
-6. `golangci.yml` for GLOBAL-01, GLOBAL-02 and GLOBAL-03, run by `tier1` with
-   `--new-from-merge-base` (GLOBAL-01, GLOBAL-02, GLOBAL-03).
-7. `p3-export-problems` (`human` affinity, a3). This is an attended edit
-   exporting `check.Front.problems` from `tools/workflow`. Then build
-   `design-front-matter` and `tier1 designs [-all]` on it (FLOW-02, FLOW-12,
-   FLOW-14, FLOW-15). If a3 falls back, this task becomes the duplicate plus
-   a parity test, and it takes `cloud` affinity.
-8. Run against history and the in-flight branches. Retune or demote the noisy
-   checks and record the results (LINT-07, TEST-04).
-9. Wiring: `make lint` and `make test` cover `tools/tier1`; the `tier1` job
-   in `main.yml`, with tests on three OS runners; the release job in
-   `release.yml` (LINT-03, GLOBAL-07, FLOW-03).
-10. Docs: `CONTRIBUTING.md` (running tier 1, suppressing a finding) and
-    `contributing/structure.md` (`tools/tier1`) (UX-01, FLOW-14). The README's
-    Deep-dive #2 entry and any rule sharpening found in step 8 are proposed
-    to Jeff in the PR description, not edited (FLOW-14).
+   - Extract cobra flag names (literal names passed to `Flags()` and
+     `PersistentFlags()` definers) and `toml:` tags from the config types
+     under `cmd/warden/`, using `go/parser` over each file's text at base
+     (`git show <base>:<path>`) and at `HEAD`. No type-checking and no
+     worktree are needed.
+   - `surface-docs` fails when the set changed but neither
+     `docs/book/src/guide/cli.md` nor `configuration.md` did.
+   - `surface-removed` fails when a name present at base is gone at head,
+     with no alias and no `Deprecated` / `MarkDeprecated` marking.
+   - Tests, tier 0 (TEST-02): a fixture cobra command tree and config struct
+     under `testdata/` cover an added flag, a removed flag, a deprecated
+     flag, a renamed `toml` key, and no change.
+7. **Analyzers** (RELAY-01, RELAY-07, EXEC-01, EXEC-05).
+   - Each is a `go/analysis` pass in `analyzers/`, run through
+     `go/analysis/checker` over the packages holding changed `.go` files,
+     for the host `GOOS`. Findings are kept only on changed lines.
+   - `ledger-single-writer` (RELAY-01) flags `l.writer.Write`, calls to
+     `(*Ledger).sign`, and assignments to `prevSigRaw` outside
+     `(*Ledger).loop`. It must also allow `(*Ledger).writeHeader`, which
+     `NewLedger` calls before `go l.loop()` starts (`relay/ledger.go`). That
+     allowance is a precision the Design row does not state.
+   - `relay-diskless` (RELAY-07) flags `os.Create`, `os.WriteFile`,
+     `os.OpenFile`, `os.CreateTemp`, `os.Mkdir*` and the `ioutil` writers in
+     non-test `relay/` files. There are none on `main` today.
+   - `executor-no-cgo` (EXEC-01) flags `import "C"` under `cmd/warden-io/`.
+   - `large-literal` (EXEC-05) flags string literals over 4 KiB. It is
+     SHOULD, so its findings are informational.
+   - Tests, tier 0 (TEST-02): `analysistest` testdata with positive and
+     negative cases for each analyzer, including `writeHeader` allowed and a
+     new helper that writes the ledger flagged.
+8. **The tier-1 golangci-lint config** (GLOBAL-01, GLOBAL-02, GLOBAL-03,
+   UX-04).
+   - `tools/tier1/golangci.yml` turns on `revive` `exported` (stutter check
+     off), the `gofmt -s` formatter, `errorlint` errorf, and `forbidigo` for
+     `panic` with `cmd/**` main packages and `_test.go` excluded.
+   - `tier1` runs it from the repo root with
+     `--new-from-merge-base=<base>` and JSON output, and maps each issue to
+     its rule. If `golangci-lint` is missing, it exits 2 with the install
+     command.
+   - Tests, tier 0 (TEST-02): canned golangci JSON maps to the right rules
+     and severities. TEST-01 forbids external tools in unit tests, so the
+     live run is exercised through `make lint` (task 12).
+9. **`p3-export-problems`, human, attended only** (a3; FLOW-14, FLOW-15).
+   This is rework of existing code.
+   - In `tools/workflow/check/check.go`, rename `(*Front).problems` to
+     `Problems`, give it a doc comment, and update its one caller in
+     `(*checker).design`.
+   - Run `cd tools/workflow && go test ./... && golangci-lint run -c
+     ../../.golangci.yml`. Commit on `feat/tier1-static-checks`, then run
+     `wf done` for the step.
+   - Unattended runs never do this task. If Jeff declines a3, he marks the
+     step done with the decision in its note and records the answer on a3,
+     and task 10 takes the fallback.
+10. **`p3-front-matter-check`: the FLOW-02 half of `design-front-matter`,
+    and `tier1 designs [-all]`** (a2, a3; FLOW-02, FLOW-12, FLOW-15).
+    - Every touched design's front-matter goes through `check.Front.Problems`,
+      with the feature name taken from the file stem.
+    - `tier1 designs -all` validates every design that has front-matter. It
+      lists a design with none as pre-standard (FLOW-12 allows that) without
+      failing. Six designs on `main` have none until
+      `design-front-matter-retrofit` merges, and a failing `-all` would block
+      every release before then.
+    - If a3 falls back, duplicate the key and enum rules instead. The parity
+      test then runs the exported `check.Phase` (phase 1) over the same
+      scratch-repo fixtures and compares its `front-matter (FLOW-02)`
+      results with tier 1's.
+    - Tests, tier 0 (TEST-02): valid and invalid fixtures for each FLOW-02
+      key and enum, a missing key, and a pre-standard design under `-all`.
+    - Run `make lint` and `make test` before `wf done`.
+11. **Run against history** before task 12 blocks anything (a6, a7;
+    LINT-07, TEST-04).
+    - Run `tier1 -base <parent>` on the merge commits of PRs #60 to #64, and
+      on each in-flight branch against its merge base: `container-inputs`,
+      `design-front-matter-retrofit`, `firecracker-driver`,
+      `native-loop-followups` and `workflow-bootstrap-archive`.
+    - Record each finding and false positive in a "Notes" paragraph at the
+      end of this section.
+    - Retune any check that is noisy on known-good history, or demote it to
+      a hint (the GLOBAL-04 treatment). A demotion changes a severity Design
+      chose, so it is flagged for Review, and any rule sharpening is proposed
+      for the PR description (FLOW-14).
+    - If task 10 lands later, it reruns this over the same diffs.
+12. **Wiring** (a4; LINT-03, TEST-01, TEST-02, GLOBAL-07, FLOW-03). This is
+    rework of existing code.
+    - `Makefile` `lint`: build `dist/tier1` from `tools/tier1`, run it, and
+      run `golangci-lint` over `tools/tier1` with the root config.
+      `Makefile` `test`: add `cd tools/tier1 && go test ./...`.
+    - `.github/workflows/main.yml`:
+      - A `tier1` job with `fetch-depth: 0`. It runs `tier1 -json` against
+        the PR base SHA, or `github.event.before` on a push to `main`, and
+        uploads the JSON.
+      - A `tools/tier1` test job on `ubuntu-latest`, `macos-latest` and
+        `windows-latest` (GLOBAL-07).
+      - `tools/tier1` added to the `lint` and `tidy` jobs.
+    - `.github/workflows/release.yml`: a `tier1` job that runs `tier1`
+      against the previous `v*` tag, plus `tier1 designs -all`. The
+      `release` job `needs` it.
+    - Acceptance: `make lint` on this branch runs tier 1 over this feature's
+      own diff and passes.
+13. **Docs** (UX-01, FLOW-14, FLOW-15). This is rework of existing docs.
+    - `CONTRIBUTING.md`: `make lint` now runs tier 1. Cover the base and how
+      to fetch it, `GOOS=<os> make lint` for other platforms, the
+      `Tier1-Allow` trailer, the exit codes, and `tier1 rules`.
+    - `docs/book/src/contributing/structure.md`: a `tools/tier1/` entry next
+      to `tools/workflow/`.
+    - No edit to `docs/development/`, `.claude/` or the README's Deep-dive #2
+      entry. Those changes, and any rule sharpening from task 11, go in the
+      PR description for Jeff (FLOW-14, FLOW-08).
 
 ## Consolidation (merge round)
 
