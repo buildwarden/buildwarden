@@ -16,6 +16,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/buildwarden/buildwarden/tools/tier1/diff"
 	"github.com/buildwarden/buildwarden/tools/tier1/report"
 )
 
@@ -38,11 +39,10 @@ func (m *multi) String() string     { return strings.Join(*m, ",") }
 func (m *multi) Set(v string) error { *m = append(*m, v); return nil }
 
 // fixable is an environment error that names its fix (UX-04).
-type fixable struct {
-	what, fix string
+type fixable interface {
+	error
+	Fix() string
 }
-
-func (e *fixable) Error() string { return e.what }
 
 func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "rules" {
@@ -82,16 +82,22 @@ func run(args []string, stdout, stderr io.Writer) int {
 
 func fail(stderr io.Writer, err error) int {
 	fmt.Fprintf(stderr, "ERROR: %v\n", err)
-	var fx *fixable
+	var fx fixable
 	if errors.As(err, &fx) {
-		fmt.Fprintf(stderr, "To fix: %s\n", fx.fix)
+		fmt.Fprintf(stderr, "To fix: %s\n", fx.Fix())
 	}
 	return report.ExitUsage
 }
 
 // check runs every stage over the diff and returns the finished report.
 func check(o options) (*report.Report, error) {
-	r := &report.Report{}
+	d, err := diff.Load(o.repo, o.base)
+	if err != nil {
+		return nil, err
+	}
+	r := &report.Report{Base: d.Base, Head: d.Head}
+	r.Add(d.Bad...)
+	d.Suppress(r)
 	r.Finish()
 	return r, nil
 }
