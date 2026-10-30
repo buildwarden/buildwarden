@@ -3,7 +3,7 @@ title: 'Tier-1 static-check extraction (LINT-02, Deep-dive #2)'
 priority: 4
 status: in_progress
 round: parallel
-phase: 2
+phase: 3
 design: docs/design/tier1-static-checks.md
 branch: feat/tier1-static-checks
 alters_relationships: false
@@ -26,10 +26,35 @@ steps:
   - id: p2-plan
     phase: 2
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p3-export-problems
+    phase: 3
+    affinity: human
     status: pending
     lease:
-      claimed_by: cloud/20261030T095602Z
-      expires: 2026-10-30T12:23:53.224748407Z
+      claimed_by: ""
+      expires: null
+    note: 'a3, attended only (FLOW-14): in tools/workflow/check/check.go rename (*Front).problems to Problems with a doc comment, update its one caller in (*checker).design, run go test and golangci-lint in tools/workflow, and commit on feat/tier1-static-checks (plan task 9). Takeable now; no cloud task waits on it except p3-front-matter-check. If you decline a3, mark this done with the decision here and answer a3; p3-front-matter-check then builds the duplicate plus parity test. If you would rather run it as a process item (README: process items change tools/workflow/), say so.'
+  - id: p3-front-matter-check
+    phase: 3
+    affinity: cloud
+    status: pending
+    needs:
+      - p3-export-problems
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Plan task 10: the FLOW-02 half of design-front-matter and tier1 designs [-all] on check.Front.Problems (or the a3 fallback). Needs tasks 1 and 4 on the branch; if absent, do them first under this claim. Run make lint and make test before wf done: wf runs the phase-3 gate check only when p3-implement is done, and the phase advances when this step finishes.'
+  - id: p3-implement
+    phase: 3
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 6
@@ -133,3 +158,12 @@ history:
   - at: 2026-10-30T10:23:53Z
     by: cloud/20261030T095602Z
     event: claimed p2-plan until 2026-10-30T12:23:53Z
+  - at: 2026-10-30T10:29:53Z
+    by: cloud/20261030T095602Z
+    event: 'plan: 13 tasks in the design''s Implementation plan; added p3-export-problems (human, a3, attended tools/workflow export) and p3-front-matter-check (cloud, needs p3-export-problems); other tasks do not wait on the human step. Budget: about 20-22 of the 27 remaining steps; runs tight (6-8). Planning finding for Design/Review, not a return: ledger-single-writer must allow (*Ledger).writeHeader, which NewLedger calls before go l.loop(); tier1 designs -all lists pre-standard designs (FLOW-12) without failing until design-front-matter-retrofit merges.'
+  - at: 2026-10-30T10:30:31Z
+    by: cloud/20261030T095602Z
+    event: done p2-plan
+  - at: 2026-10-30T10:30:31Z
+    by: cloud/20261030T095602Z
+    event: entered phase 3 (implement)
