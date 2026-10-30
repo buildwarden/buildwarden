@@ -21,6 +21,7 @@ import (
 	"github.com/buildwarden/buildwarden/tools/tier1/analyzers"
 	"github.com/buildwarden/buildwarden/tools/tier1/coupling"
 	"github.com/buildwarden/buildwarden/tools/tier1/diff"
+	"github.com/buildwarden/buildwarden/tools/tier1/golangci"
 	"github.com/buildwarden/buildwarden/tools/tier1/report"
 	"github.com/buildwarden/buildwarden/tools/tier1/rules"
 	"github.com/buildwarden/buildwarden/tools/tier1/surface"
@@ -123,6 +124,11 @@ func check(o options) (*report.Report, error) {
 		return nil, err
 	}
 	r.Add(d.OnChangedLines(af)...)
+	gf, err := golangci.Run(o.repo, d.Base, ix.Severity)
+	if err != nil {
+		return nil, err
+	}
+	r.Add(d.OnChangedLines(gf)...)
 	d.Suppress(r)
 	r.Finish()
 	return r, nil

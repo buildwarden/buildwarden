@@ -8,3 +8,8 @@ import _ "embed"
 //
 //go:embed rules.yaml
 var RulesYAML []byte
+
+// GolangciYAML is golangci.yml: the diff-scoped tier-1 golangci-lint config.
+//
+//go:embed golangci.yml
+var GolangciYAML []byte
