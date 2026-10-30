@@ -53,8 +53,8 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261030T095602Z
-      expires: 2026-10-30T12:30:37.075471864Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 6
@@ -170,3 +170,6 @@ history:
   - at: 2026-10-30T10:30:37Z
     by: cloud/20261030T095602Z
     event: claimed p3-implement until 2026-10-30T12:30:37Z
+  - at: 2026-10-30T10:52:26Z
+    by: cloud/20261030T095602Z
+    event: 'released p3-implement: make lint fails on pre-existing tools/workflow lll issues (8, from PR #64, reproduce on origin/main 137feae); feature work green at b53b93d (make test ok, root and tools/tier1 lint 0 issues, make tier1 exit 0). tools/workflow fix is attended (FLOW-14)'
