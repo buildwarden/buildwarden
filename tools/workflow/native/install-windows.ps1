@@ -46,37 +46,68 @@ function In-Bash($bash, $cmd) {
     return ($out -join "`n")
 }
 
-function Check {
-    Write-Host "Checking $Repo for machine $Machine"
-    $bash = Find-Bash
-    if (-not $bash) { Bad 'Git Bash not found (install Git for Windows; Claude Code needs it too)'; return }
-    Ok "Git Bash: $bash"
-    $script:Bash = $bash
-    $script:UnixRepo = In-Bash $bash "cygpath -u '$Repo'"
-    foreach ($t in 'git', 'go', 'make', 'claude') {
-        $p = In-Bash $bash "command -v $t"
-        if ($p) { Ok "${t}: $p" } else { Bad "$t not on PATH in Git Bash" }
-    }
-    if (In-Bash $bash "cd '$($script:UnixRepo)/tools/workflow' && go version") { Ok 'go builds tools/workflow' }
-    else { Bad 'go cannot build tools/workflow (version in tools/workflow/go.mod)' }
-    if (In-Bash $bash 'command -v entire') { Ok 'entire: sessions will be recorded (FLOW-18)' }
-    else { Warn 'entire not installed: sessions will not be recorded (FLOW-18)' }
+# Served-Hosts returns the host names hosts.yaml gives $machine, from a
+# "hosts: [a, b]" line under its "- name:" entry.
+function Served-Hosts($yaml, $machine) {
+    $re = '(?m)^\s*- name: ' + [regex]::Escape($machine) + '\s*\r?\n\s*hosts: \[([^\]]*)\]'
+    if ($yaml -match $re) { return @($Matches[1] -split ',' | ForEach-Object { $_.Trim() } | Where-Object { $_ }) }
+    return @()
+}
 
-    # windows-hyperv
+function Check-HypervHost {
     if (Get-Command Get-VMHost -ErrorAction SilentlyContinue) {
         try { $null = Get-VMHost; Ok 'Hyper-V reachable without elevation (windows-hyperv)' }
         catch { Bad 'Get-VMHost failed: add yourself to "Hyper-V Administrators" and log off/on' }
     } else { Bad 'Hyper-V PowerShell module missing (windows-hyperv)' }
-    # qemu-any
-    if (In-Bash $bash 'command -v qemu-system-x86_64') { Ok 'qemu (qemu-any); WHPX acceleration needs the Windows Hypervisor Platform feature' }
-    else { Warn 'no qemu-system-x86_64 in Git Bash PATH: qemu-any work will fail (or move qemu-any to another machine in hosts.yaml)' }
-    # container-any
+    # Builds need the relay boot disk and a prepared base in warden's Hyper-V cache.
+    $cache = if ($env:WARDEN_HYPERV_CACHE_DIR) { $env:WARDEN_HYPERV_CACHE_DIR } else { "$env:LOCALAPPDATA\warden\hyperv" }
+    if (Test-Path (Join-Path $cache 'relay-boot.vhdx')) { Ok "relay boot VHDX in $cache (windows-hyperv)" }
+    else { Warn "no relay-boot.vhdx in ${cache}: build it (tools/relay-vm/hyperv) and copy it there; windows-hyperv builds will fail" }
+    if (Get-ChildItem (Join-Path $cache 'images\prepared') -Filter *.vhdx -ErrorAction SilentlyContinue) { Ok 'prepared Hyper-V base image (windows-hyperv)' }
+    else { Warn 'no prepared Hyper-V base: run warden image prepare --driver hyperv; windows-hyperv builds will fail' }
+}
+
+function Check-QemuHost($bash) {
+    # The qemu driver boots the virt machine and an aarch64 relay, so it runs
+    # only on arm64 hosts (2026-10-30).
+    if ($env:PROCESSOR_ARCHITECTURE -ne 'ARM64') {
+        Bad "qemu-any is served here, but the qemu driver runs only on arm64 hosts: move qemu-any to another machine in hosts.yaml"
+    } elseif (In-Bash $bash 'command -v qemu-system-aarch64') { Ok 'qemu (qemu-any); WHPX acceleration needs the Windows Hypervisor Platform feature' }
+    else { Warn 'no qemu-system-aarch64 in Git Bash PATH: qemu-any work will fail' }
+}
+
+function Check-ContainerHost($bash) {
     $rt = $null
     foreach ($r in 'docker', 'podman', 'finch') {
         if (In-Bash $bash "command -v $r && $r info") { $rt = $r; break }
     }
     if ($rt) { Ok "container runtime: $rt (container-any)" }
-    else { Warn 'no working docker/podman/finch: container-any work will fail (or move container-any to the macbook in hosts.yaml)' }
+    else { Warn 'no working docker/podman/finch (podman: podman machine init; podman machine start): container-any work will fail' }
+}
+
+function Check {
+    Write-Host "Checking $Repo for machine $Machine"
+    # Check with the PATH a scheduled task gets (the registry's), not this
+    # shell's, which misses anything installed since it started.
+    $env:Path = [Environment]::GetEnvironmentVariable('Path', 'Machine') + ';' + [Environment]::GetEnvironmentVariable('Path', 'User')
+    $bash = Find-Bash
+    if (-not $bash) { Bad 'Git Bash not found (install Git for Windows; Claude Code needs it too)'; return }
+    Ok "Git Bash: $bash"
+    $script:Bash = $bash
+    $script:UnixRepo = In-Bash $bash "cygpath -u '$Repo'"
+    # jq: flow18-check.sh, run at the start of every session.
+    foreach ($t in 'git', 'go', 'make', 'jq', 'claude') {
+        $p = In-Bash $bash "command -v $t"
+        if ($p) { Ok "${t}: $p" } else { Bad "$t not on PATH in Git Bash" }
+    }
+    if (In-Bash $bash "cd '$($script:UnixRepo)/tools/workflow' && go version") { Ok 'go builds tools/workflow' }
+    else { Bad 'go cannot build tools/workflow (version in tools/workflow/go.mod)' }
+    $auth = In-Bash $bash 'claude auth status'
+    if ($auth -match '"loggedIn":\s*true') { Ok 'claude is logged in' }
+    elseif ($auth) { Bad "claude is not logged in: run 'claude' once and sign in" }
+    else { Warn "could not read 'claude auth status': make sure claude is logged in" }
+    if (In-Bash $bash 'command -v entire') { Ok 'entire: sessions will be recorded (FLOW-18)' }
+    else { Warn 'entire not installed: sessions will not be recorded (FLOW-18)' }
 
     $url = In-Bash $bash "git -C '$($script:UnixRepo)' remote get-url origin"
     if ($url -match 'buildwarden/buildwarden(\.git)?$') { Ok "origin is $url" } else { Bad "origin is '$url', want buildwarden/buildwarden" }
@@ -86,13 +117,24 @@ function Check {
     if ($null -ne (In-Bash $bash "git -C '$($script:UnixRepo)' push --dry-run -q origin refs/remotes/origin/workflow:refs/heads/workflow")) {
         Ok 'can push the workflow branch'
     } else { Bad 'cannot push the workflow branch (credentials?)' }
-    $hosts = In-Bash $bash "git -C '$($script:UnixRepo)' show origin/workflow:hosts.yaml"
-    if ($hosts -match "name: $Machine(\r?\n|$)") { Ok "hosts.yaml names machine $Machine" } else { Bad "hosts.yaml on origin/workflow has no machine $Machine" }
+
+    # Check only the capabilities hosts.yaml gives this machine.
+    $served = Served-Hosts (In-Bash $bash "git -C '$($script:UnixRepo)' show origin/workflow:hosts.yaml") $Machine
+    if ($served.Count -eq 0) { Bad "hosts.yaml on origin/workflow has no machine $Machine (or no hosts for it)" }
+    else { Ok "hosts.yaml: $Machine serves $($served -join ', ')" }
+    foreach ($h in $served) {
+        switch ($h) {
+            'windows-hyperv' { Check-HypervHost }
+            'qemu-any' { Check-QemuHost $bash }
+            'container-any' { Check-ContainerHost $bash }
+            default { Warn "no check for host $h on Windows" }
+        }
+    }
+
     $drive = (Get-Item $Repo).PSDrive
     $freeGb = [int]($drive.Free / 1GB)
     if ($freeGb -ge 40) { Ok "${freeGb}G free on $($drive.Name):" } else { Warn "${freeGb}G free; runs skip below 40G (BW_MIN_FREE_GB)" }
     if (Get-ScheduledTask -TaskName $TaskName -ErrorAction SilentlyContinue) { Ok "installed: task '$TaskName'" } else { Warn 'not installed yet' }
-    Write-Host "claude must be logged in for headless runs: run 'claude' once in this checkout if unsure."
     if ($script:Problems -eq 0) { Write-Host 'Ready.' } else { Write-Host "$($script:Problems) problem(s)." }
 }
 
