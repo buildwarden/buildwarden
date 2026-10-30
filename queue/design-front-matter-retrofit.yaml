@@ -42,15 +42,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261030T095602Z
+      expires: 2026-10-30T11:56:17.672617874Z
 budget:
   estimate:
     runs: 3
     steps: 14
   spent:
-    runs: 1
-    steps: 5
+    runs: 2
+    steps: 6
 questions:
   - id: a1
     kind: assumed
@@ -181,3 +181,6 @@ history:
   - at: 2026-10-29T10:35:19Z
     by: cloud/20261029T095640Z
     event: 'back to design: p4-review 7b11f043ab61: 4 MUST in the design''s own front-matter values (firecracker-driver-plan drivers and seams miss relay/qemu reach and relay-claim; windows-driver-plan and remote-execution set security_boundary with no security note, a4 silent on it) and 2 SHOULD (hyperv-driver-plan archived hides unbuilt Linux guest; native_validation misses regression hosts)'
+  - at: 2026-10-30T09:56:17Z
+    by: cloud/20261030T095602Z
+    event: claimed p1-design-r2 until 2026-10-30T11:56:17Z
