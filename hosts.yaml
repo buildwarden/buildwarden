@@ -8,8 +8,10 @@
 # goes to the always-on machine.
 machines:
   - name: macbook
-    hosts: [macos-vz, macos-qemu, macos-finch]
-    note: Jeff's MacBook Pro (arm64). Asleep or away at times; launchd runs a missed slot on wake.
+    hosts: [macos-vz, macos-qemu, macos-finch, qemu-any]
+    note: >-
+      Jeff's MacBook Pro (arm64). Asleep or away at times; launchd runs a missed slot on wake.
+      Holds qemu-any because the qemu driver runs only on aarch64 hosts (2026-10-30).
   - name: windows-desktop
-    hosts: [windows-hyperv, qemu-any, container-any]
-    note: Always-on Windows desktop. Takes any-OS native work (qemu with WHPX, a container runtime).
+    hosts: [windows-hyperv, container-any]
+    note: Always-on Windows desktop. Takes any-OS native work that runs here (a container runtime).
