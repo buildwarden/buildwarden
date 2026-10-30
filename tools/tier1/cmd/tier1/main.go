@@ -22,6 +22,7 @@ import (
 	"github.com/buildwarden/buildwarden/tools/tier1/diff"
 	"github.com/buildwarden/buildwarden/tools/tier1/report"
 	"github.com/buildwarden/buildwarden/tools/tier1/rules"
+	"github.com/buildwarden/buildwarden/tools/tier1/surface"
 )
 
 func main() {
@@ -111,6 +112,11 @@ func check(o options) (*report.Report, error) {
 	c := &coupling.Checker{Diff: d, Cfg: cfg, Index: ix,
 		Designs: coupling.LoadDesigns(d, o.designs), NoDesign: o.noDesign}
 	r.Add(c.All()...)
+	sf, err := surface.Check(d, cfg.Surface.Dir, cfg.Surface.Docs, ix.Severity)
+	if err != nil {
+		return nil, err
+	}
+	r.Add(sf...)
 	d.Suppress(r)
 	r.Finish()
 	return r, nil

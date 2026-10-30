@@ -223,6 +223,16 @@ func (d *Diff) Show(rev, path string) (string, bool) {
 	return out, err == nil
 }
 
+// List returns the paths under dir at rev, or none when dir does not exist
+// there.
+func (d *Diff) List(rev, dir string) []string {
+	out, err := d.git("ls-tree", "-r", "--name-only", "-z", rev, "--", dir)
+	if err != nil || out == "" {
+		return nil
+	}
+	return strings.Split(strings.TrimSuffix(out, "\x00"), "\x00")
+}
+
 // OnChangedLines keeps the findings that are file-level or fall on a line the
 // diff added or changed (LINT-04).
 func (d *Diff) OnChangedLines(fs []report.Finding) []report.Finding {
