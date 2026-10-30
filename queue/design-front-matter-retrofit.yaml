@@ -3,7 +3,7 @@ title: Retrofit FLOW-02 front-matter onto the older designs (FLOW-12)
 priority: 3
 status: in_progress
 round: parallel
-phase: 2
+phase: 1
 design: docs/design/design-front-matter-retrofit.md
 branch: feat/design-front-matter-retrofit
 alters_relationships: false
@@ -65,13 +65,23 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: p2-plan-r3
-    phase: 2
+  - id: p1-design-r4
+    phase: 1
     affinity: cloud
     status: pending
+    needs:
+      - p1-escalate-3
     lease:
-      claimed_by: cloud/20261030T095602Z
-      expires: 2026-10-30T12:15:14.967212439Z
+      claimed_by: ""
+      expires: null
+  - id: p1-escalate-3
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Returned to Design more than twice (FLOW-06): the human decides.'
 budget:
   estimate:
     runs: 3
@@ -256,3 +266,9 @@ history:
   - at: 2026-10-30T10:15:14Z
     by: cloud/20261030T095602Z
     event: claimed p2-plan-r3 until 2026-10-30T12:15:14Z
+  - at: 2026-10-30T10:24:00Z
+    by: cloud/20261030T095602Z
+    event: 'p2-plan-r3 finding (back-to-design, FLOW-06): the round-3 notes cite rules their own documents'' front-matter `rules` omit, against FLOW-02 ("rule IDs the design relies on or changes", conservative derivation) and Decision 5. windows-driver-plan note relies on BOOT-06 (prepared image carries the startup hook only), rules lack BOOT-06; remote-execution note says CAS input staging outside the relay is something BOOT-02 does not allow today, rules lack BOOT-02. Fixing either edits a Design-prescribed block, which Decision 10 holds unchanged, so planning cannot. This design''s own rules also lack BOOT-02 and BOOT-06, which Decision 10 cites. Third return to Design: FLOW-06 escalates to a human step.'
+  - at: 2026-10-30T10:17:01Z
+    by: cloud/20261030T095602Z
+    event: 'back to design: p2-plan-r3: round-3 notes cite BOOT-06 (windows-driver-plan) and BOOT-02 (remote-execution) but the prescribed blocks'' rules omit them (FLOW-02; review 7b11f043ab61 rated such gaps MUST); fix is in Design blocks, not the plan'
