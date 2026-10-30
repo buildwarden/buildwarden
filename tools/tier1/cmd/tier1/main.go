@@ -18,6 +18,7 @@ import (
 	"strings"
 
 	"github.com/buildwarden/buildwarden/tools/tier1"
+	"github.com/buildwarden/buildwarden/tools/tier1/coupling"
 	"github.com/buildwarden/buildwarden/tools/tier1/diff"
 	"github.com/buildwarden/buildwarden/tools/tier1/report"
 	"github.com/buildwarden/buildwarden/tools/tier1/rules"
@@ -107,6 +108,9 @@ func check(o options) (*report.Report, error) {
 	if touchedUnder(d, rules.Dir+"/", "tools/tier1/rules.yaml") {
 		r.Add(rules.SelfCheck(ix, cfg)...)
 	}
+	c := &coupling.Checker{Diff: d, Cfg: cfg, Index: ix,
+		Designs: coupling.LoadDesigns(d, o.designs), NoDesign: o.noDesign}
+	r.Add(c.NoDesignInDiff()...)
 	d.Suppress(r)
 	r.Finish()
 	return r, nil
