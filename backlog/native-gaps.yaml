@@ -114,17 +114,52 @@ gaps:
     host: qemu-any
     what: The qemu environment descriptors.
     design: docs/design/ledger-environment-types.md
+    note: >-
+      2026-10-30 (host:windows-hyperv/20261030T173857Z, attended, main
+      384b6ce, QEMU 11.1.0 for Windows): not run. The qemu driver cannot run
+      on an x86_64 host: startRelayVM and the build VM pass `-machine virt`,
+      which qemu-system-x86_64 lacks (q35/pc/microvm only), and
+      tools/relay-vm/build-initramfs.sh builds only an aarch64 relay, so
+      `warden doctor --driver qemu` fails on missing relay assets. WHPX
+      accel and `-chardev stdio` work in this QEMU. Needs either qemu-any
+      moved to the macbook in hosts.yaml or x86_64 support in the qemu
+      driver (proposed to Jeff).
     status: open
   - id: hyperv-eval-image-verify-disks
     host: windows-hyperv
     what: A pinned eval image with --verify-disks.
     design: docs/design/ledger-environment-types.md
-    status: open
+    status: done
+    done: 2026-10-30
+    evidence: >-
+      host:windows-hyperv/20261030T173857Z, attended, main 384b6ce, Windows 11
+      Pro 26300 host. `warden image prepare --driver hyperv` (no source)
+      downloaded Microsoft's Server 2025 eval VHDX (11686379520 bytes,
+      sha256:2d175924c8e6) and prepared windows-server-2025-20261030T175627Z
+      (sha256:6097aa868b1f, 3 inputs). `warden build --driver hyperv
+      --guest-os windows` of a build.ps1 succeeded; environment.json is
+      vm-disk-chain/v1, hyperv windows/amd64 gen 2, base layer source kind
+      `url` (the pinned download, not `local`), prepared layer kind
+      `prepared`, 3 seed files. `warden inspect --verify-disks`: payload
+      verified, both disks [ok] (12 s), 15 signatures valid, all channels
+      closed. feat/container-inputs ddd11fe, same image: build succeeded,
+      both disks [ok], 11 signatures valid, no inputs/ (correct: build.ps1
+      is not translated). Relay boot VHDX: the 2026-10-28 local build via
+      WARDEN_RELAY_BOOT_VHDX (newer than the last relay change, 5ab774b).
+      Side findings (logs: native/windows-hyperv/2026-10-30/): MITM HTTPS
+      responses to clients that send no Accept-Encoding hang, and Windows
+      curl.exe rejects relay leaf certs with CRYPT_E_NO_REVOCATION_CHECK;
+      fix items proposed to Jeff.
   - id: container-inputs-linux-vm-guests
     host: qemu-any
     what: A qemu (and Hyper-V) Linux-guest build from a Dockerfile writes inputs/Dockerfile and inputs/build.sh end to end.
     design: docs/design/container-inputs.md
-    note: Tracked, not blocking (FLOW-09); unit-tested in tier 0. Re-homed from macos-qemu to qemu-any (2026-10-29, native-host-loop) since it is not Mac-specific.
+    note: >-
+      Tracked, not blocking (FLOW-09); unit-tested in tier 0. Re-homed from
+      macos-qemu to qemu-any (2026-10-29, native-host-loop) since it is not
+      Mac-specific. 2026-10-30 (host:windows-hyperv/20261030T173857Z): not
+      run; the qemu driver does not run on x86_64 hosts (see
+      qemu-environment-descriptors), and Hyper-V builds no Linux guests yet.
     status: open
   - id: container-inputs-integration-test
     host: container-any

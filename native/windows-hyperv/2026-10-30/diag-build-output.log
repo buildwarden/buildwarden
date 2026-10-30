@@ -1,0 +1,68 @@
+== env
+HEX_CACERTS_PATH=C:\ProgramData\warden\warden-ca.pem
+NIX_SSL_CERT_FILE=C:\ProgramData\warden\warden-ca.pem
+NODE_EXTRA_CA_CERTS=C:\ProgramData\warden\warden-ca.pem
+PIP_CERT=C:\ProgramData\warden\warden-ca.pem
+SSL_CERT_FILE=C:\ProgramData\warden\warden-ca.pem
+
+Current WinHTTP proxy settings:
+
+    Direct access (no proxy server).
+
+Ethernet 10.0.0.2 gw=10.0.0.1 dns=10.0.0.1
+mtu Ethernet=1500
+mtu Loopback Pseudo-Interface 1=4294967295
+== root store
+CN=BuildWarden Ephemeral CA, O=BuildWarden 3E7B00DE205E20CCB604C2EB779544CFBA860847
+root count: 15
+== curl -sS https
+curl.exe : * Host pypi.org:443 was resolved.
+At line:1 char:1
++ curl.exe -sS -v --max-time 30 -o c.out https://pypi.org/simple/six/ 2 ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (* Host pypi.org:443 was resolved.:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+* IPv6: (none)
+* IPv4: 151.101.192.223, 151.101.64.223, 151.101.0.223, 151.101.128.223
+*   Trying 151.101.192.223:443...
+* Connected to pypi.org (151.101.192.223) port 443
+* schannel: disabled automatic use of client certificate
+* ALPN: curl offers http/1.1
+* schannel: next InitializeSecurityContext failed: CRYPT_E_NO_REVOCATION_CHECK (0x80092012) - The revocation function 
+was unable to check revocation for the certificate.
+* Closing connection
+* schannel: shutting down SSL/TLS connection with pypi.org port 443
+curl: (35) schannel: next InitializeSecurityContext failed: CRYPT_E_NO_REVOCATION_CHECK (0x80092012) - The revocation 
+function was unable to check revocation for the certificate.
+exit=35 secs=0
+== curl -sS --ssl-no-revoke https
+< X-Cache-Hits: 0, 613, 9
+< X-Content-Type-Options: nosniff
+< X-Frame-Options: deny
+< X-Permitted-Cross-Domain-Policies: none
+< X-Pypi-Last-Serial: 26356948
+< X-Served-By: cache-iad-kjyo7100135-IAD, cache-iad-kjyo7100037-IAD, cache-bfi-kbfi7400022-BFI
+< X-Timer: S1793384299.486809,VS0,VE0
+< X-Xss-Protection: 1; mode=block
+< 
+* no chunk, no close, no size. Assume close to signal end
+{ [16337 bytes data]
+* Operation timed out after 30009 milliseconds with 16337 bytes received
+* Closing connection
+* schannel: shutting down SSL/TLS connection with pypi.org port 443
+curl: (28) Operation timed out after 30009 milliseconds with 16337 bytes received
+exit=28 secs=30
+== curl http
+< X-Cache: MISS
+< X-Cache-Hits: 0
+< X-Content-Type-Options: nosniff
+< X-Frame-Options: deny
+< X-Permitted-Cross-Domain-Policies: none
+< X-Served-By: cache-bfi-krnt7300112-BFI
+< X-Timer: S1793384330.504769,VS0,VE0
+< X-Xss-Protection: 1; mode=block
+< 
+{ [16 bytes data]
+* Closing connection
+exit=0
