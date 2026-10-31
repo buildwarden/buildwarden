@@ -7,6 +7,7 @@ seams: []
 surfaces: []
 security_boundary: none
 alters_relationships: false
+design_review: required
 native_validation: []
 tier2_gaps: []
 rules: [LINT-01, LINT-02, LINT-03, LINT-04, LINT-05, LINT-06, LINT-07, LINT-08, GLOBAL-01, GLOBAL-02, GLOBAL-03, GLOBAL-04, GLOBAL-07, GLOBAL-08, EXEC-01, EXEC-04, EXEC-05, RELAY-01, RELAY-05, RELAY-07, ORCH-01, ORCH-03, UX-01, UX-02, UX-03, UX-04, BOOT-07, FLOW-01, FLOW-02, FLOW-03, FLOW-08, FLOW-12, FLOW-14, FLOW-15, TEST-01, TEST-02]
@@ -721,6 +722,26 @@ same diffs.
   `workflow-bootstrap-archive` and `design-front-matter-retrofit` pass.
   `firecracker-driver` fails: it adds `firecracker-spike-plan.md` with no
   front-matter, a true positive for that branch's merge round.
+
+## Design review
+
+- **r1, 2026-10-31: approved** (Jeff, attended session, FLOW-19), approved at
+  `004d833`. Held after the design predated FLOW-19 and `wf migrate` put a review
+  ahead of Implement. a1 to a7 were already confirmed.
+  - Confirmed: the two demotions to hints from the history run (BOOT-07's
+    "surface changed, `bootstrap.md` did not"; RELAY-05's "spec changed, no
+    schema did").
+  - Merging today's `main` (workflow-streamline) left tier 1 failing its own
+    diff, so Implement continues with: map FLOW-19 in `rules.yaml` to the
+    owner `wf` (A), and carry `design_review` in this design (B, done with
+    this entry).
+  - `tier1 designs -all` failed nine archived designs for lacking
+    `design_review` (C). The fix belongs to the shared validator, not to tier
+    1: buildwarden/buildwarden#76 exempts archived designs.
+  - Keep the attended export of `Front.Problems` in `tools/workflow/check`
+    (a3), made before FLOW-14 kept feature branches out of `tools/workflow/`,
+    and record it in Consolidation. Record the plan's references to the old
+    rounds and steps in Consolidation rather than rewriting the plan.
 
 ## Consolidation (merge round)
 
