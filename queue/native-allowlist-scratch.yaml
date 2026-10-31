@@ -1,0 +1,33 @@
+feature: native-allowlist-scratch
+title: 'Native allowlist: run branch binaries under .scratch/ and the FLOW-18 recheck'
+priority: 10
+kind: process
+holds:
+  - host:*
+status: queued
+round: process
+phase: 1
+design: docs/design/native-allowlist-scratch.md
+branch: feat/native-allowlist-scratch
+alters_relationships: null
+source: 'host:macbook digests 2026-10-30 and 2026-10-31: Bash(.scratch/:*) does not match .scratch/<name>/dist/warden; flow18-check.sh needs approval. Proposed: Bash(.scratch/*/dist/warden:*), Bash(tools/workflow/flow18-check.sh)'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 4
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-10-31T14:51:23Z
+    by: human/jeff
+    event: queued at priority 10 (intake)
