@@ -4,7 +4,7 @@
 # Requires: a working container runtime (finch/docker/podman)
 set -euo pipefail
 
-WARDEN="./warden"
+WARDEN="${WARDEN:-./dist/warden}"   # make build writes dist/warden
 PASS=0
 FAIL=0
 
@@ -34,8 +34,9 @@ assert_no_grep() {
     fi
 }
 
+# The build's last line is "warden: build SUCCEEDED (output: <dir>)".
 extract_output_dir() {
-    sed 's/\x1b\[[0-9;]*m//g' | grep "Output:" | awk '{print $NF}'
+    sed 's/\x1b\[[0-9;]*m//g' | sed -n 's/.*build SUCCEEDED (output: \(.*\))$/\1/p' | tail -1
 }
 
 # ─── Build warden ───────────────────────────────────────────────────────────
@@ -48,7 +49,7 @@ make build
 bold ""
 bold "━━━ Test 1: Self-build (COPY provenance + Go modules + artifact) ━━━"
 
-BUILD_OUT=$($WARDEN build -o /tmp/warden-integ-self . 2>&1)
+BUILD_OUT=$($WARDEN build -o /tmp/warden-integ-self . 2>&1) || true  # a failed build is reported below
 OUTPUT_DIR=$(echo "$BUILD_OUT" | extract_output_dir)
 if [ -z "$OUTPUT_DIR" ] || [ ! -d "$OUTPUT_DIR" ]; then
     red "FATAL: self-build failed"
@@ -91,7 +92,7 @@ green "  Output: $OUTPUT_DIR"
 bold ""
 bold "━━━ Test 2: Simple demo (pip build + deterministic wheel artifact) ━━━"
 
-BUILD_OUT=$($WARDEN build -o /tmp/warden-integ-simple examples/Dockerfile.simple 2>&1)
+BUILD_OUT=$($WARDEN build -o /tmp/warden-integ-simple examples/Dockerfile.simple 2>&1) || true  # a failed build is reported below
 OUTPUT_DIR=$(echo "$BUILD_OUT" | extract_output_dir)
 if [ -z "$OUTPUT_DIR" ] || [ ! -d "$OUTPUT_DIR" ]; then
     red "FATAL: simple build failed"
@@ -160,7 +161,7 @@ green "  Output: $OUTPUT_DIR"
 bold ""
 bold "━━━ Test 3: npm install (Node ecosystem) ━━━"
 
-BUILD_OUT=$($WARDEN build -o /tmp/warden-integ-npm examples/Dockerfile.npm 2>&1)
+BUILD_OUT=$($WARDEN build -o /tmp/warden-integ-npm examples/Dockerfile.npm 2>&1) || true  # a failed build is reported below
 OUTPUT_DIR=$(echo "$BUILD_OUT" | extract_output_dir)
 if [ -z "$OUTPUT_DIR" ] || [ ! -d "$OUTPUT_DIR" ]; then
     red "FATAL: npm build failed"
@@ -185,7 +186,10 @@ green "  Output: $OUTPUT_DIR"
 
 # ─── Cleanup ───────────────────────────────────────────────────────────────
 
-rm -rf /tmp/warden-integ-self /tmp/warden-integ-simple /tmp/warden-integ-npm
+# Keep the outputs of a failed run for inspection (CI uploads them).
+if [ "$FAIL" -eq 0 ]; then
+    rm -rf /tmp/warden-integ-self /tmp/warden-integ-simple /tmp/warden-integ-npm
+fi
 
 # ─── Summary ────────────────────────────────────────────────────────────────
 

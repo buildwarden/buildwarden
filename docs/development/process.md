@@ -103,13 +103,25 @@ its branch. The phases are:
 | 3 | Implement | Tasks done; `make lint` and `make test` green; reference docs updated in the same change (UX-01). |
 | 4 | Review | Behavioral-linter tier 1 green; tier-2 report produced for the diff (LINT-04). |
 | 5 | Guide | User-facing narrative docs (guides, examples) written or updated. |
-| 6 | Publish | Parallel round: branch pushed at each checkpoint (FLOW-17). Merge round: PR opened with the human's confirmation, CI green (FLOW-11), blocking native validation done (FLOW-09). |
+| 6 | Publish | Parallel round: branch pushed at each checkpoint (FLOW-17). Merge round: PR opened (no confirmation needed, FLOW-08), CI green (FLOW-11), blocking native validation done (FLOW-09). |
 | 7 | Sign-off | A human signs off the PR and its tier-2 report (FLOW-08) and merges it. |
 | 8 | Archive | Design marked archived (FLOW-12); merged branches and validation leftovers cleaned up (FLOW-16). |
 
 A transition happens only when the phase's done-when checks pass mechanically
 (files present, sections filled, commands green), never on an agent's own report
-that it is done. Queue state lives on the `workflow` orphan branch, not on `main`,
+that it is done.
+
+A **process item** (queue `kind: process`) changes the rules the loops run
+under: `docs/development/`, `.claude/` or `tools/workflow/`. The loop may not
+make such changes unattended (FLOW-14), so a process item takes a shorter path
+with every step `human`:
+
+| # | Phase | Done when |
+|---|-------|-----------|
+| 1 | Design | The design document exists on the branch. |
+| 2 | Implement | The branch is pushed (FLOW-17). |
+| 3 | Sign-off | A human merged it into `main` (FLOW-08). |
+| 4 | Archive | Design archived with its summary; branch deleted (FLOW-12, FLOW-16). | Queue state lives on the `workflow` orphan branch, not on `main`,
 so that high-churn bookkeeping stays out of the code history.
 
 ---
@@ -125,7 +137,11 @@ Every pending step carries an affinity:
   unattended loop.
 - `human` — answering blocking questions, confirming assumptions, sign-off.
 - `host:<name>` — work that needs native hardware, for example `host:macos-vz`
-  (the macOS/arm64 laptop) or `host:windows-hyperv` (the Windows desktop).
+  (the macOS/arm64 laptop) or `host:windows-hyperv` (the Windows desktop). A
+  name `<os>-<driver>` is specific to that platform; `<capability>-any` (such as
+  `qemu-any` or `container-any`) runs on any native machine that has the
+  capability. The workflow branch's `hosts.yaml` gives each host name to exactly
+  one machine.
 
 A worker takes only steps whose affinity it satisfies. A step is claimed with a
 lease (claimant plus expiry) recorded on the `workflow` branch; a push rejected
@@ -139,7 +155,12 @@ expired lease may be reclaimed.
 **Severity:** SHOULD
 **Check:** automated
 
-Work goes deep, not wide. A worker takes the next ready step of the
+Work goes deep, not wide. Process items (FLOW-03) come before every feature,
+whatever their priority. While one is in progress, a worker matching one of
+its `holds` (affinity patterns such as `cloud` or `host:*`) takes no new step,
+so disruptive work waits for the rules to settle; a step it already claimed
+stays claimed, and finishing the process item releases the hold. Otherwise a
+worker takes the next ready step of the
 highest-priority feature in progress, and keeps taking that feature's steps until
 it blocks: on a `human` or `host:<name>` step, an exhausted budget, or the merge
 queue. Only then does it take steps from the next feature down, and it returns to
@@ -205,8 +226,10 @@ tier-2 behavioral report (acknowledge, or dismiss with a recorded reason), and a
 unconfirmed assumptions (FLOW-07). Changes that declare a `security_boundary`
 additionally need the security note acknowledged (GLOBAL-06).
 
-Pushing a feature branch is not a trunk change and needs no confirmation
-(FLOW-17); opening the PR to `main` does.
+Neither pushing a feature branch (FLOW-17) nor opening its PR to `main` is a
+trunk change, and neither needs confirmation. An agent opens the PR once the work
+is ready (the merge round's Publish, an archive, a fix); the human's review is
+the merge, or comments on the PR when more is wanted.
 
 ---
 
@@ -226,7 +249,14 @@ per host in the design:
   branch's native-gap backlog, satisfying TEST-03, and the feature may merge.
 
 Native sessions drain their host's steps and backlog in batches, testing `main` plus
-every waiting branch in one sitting rather than one session per feature. A failure
+every waiting branch in one sitting rather than one session per feature. Each
+native machine also runs a scheduled session that starts an agent only when a
+host step it serves is ready, or when `main` or a waiting branch has moved since
+its last sweep of open backlog entries; it is bound by the unattended loop's limits
+(FLOW-13) and records what it did in the digest. Every scheduled run, including
+one that stops before an agent starts, also records the machine's outcome and a
+one-line reason in `native/status/<machine>.yaml` on the `workflow` branch, so a
+silent failure is still visible. A failure
 found there returns the feature (or a new fix item) to Design or Implement with the
 logs attached. The full matrix before a release (TEST-02) is the backstop for every
 tracked gap.
@@ -292,7 +322,10 @@ state, claim, work, write state) until no `cloud` step is ready or the run's
 budget is spent, and writes state after every step so an interrupted run loses at
 most the step in progress. All state it needs lives in the repository, never in a
 long-running conversation. A run spends its budget in FLOW-05 order, so the
-top-priority feature can use all of it. Each feature also has a work budget, which
+top-priority feature can use all of it. A scheduled native session (FLOW-09)
+spends its own budget, `native_budget`, which falls back to the run's budget when
+unset, so native and integration testing never compete with the cloud loop. Each
+feature also has a work budget, which
 is a runaway check rather than a share of the run: exhausting it escalates to a
 `human` step. The loop posts a periodic digest (what moved, what is blocked on a human,
 what is waiting on a native host, what was spent), and notifies when a new
@@ -381,7 +414,7 @@ work reaches a successful checkpoint: the change is committed, and `make test`
 and `make lint` are green (lint run for each platform whose build-tagged files
 the change touches). The pushed branch is the backup and the hand-off point.
 
-What still needs the human's confirmation is opening the PR to `main`. Pushing
+Opening the PR to `main` needs no confirmation either (FLOW-08). Pushing
 never includes `main` itself, a force-push, rewriting history that is already on
 the remote, or deleting a remote branch (FLOW-16).
 

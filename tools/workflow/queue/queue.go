@@ -5,8 +5,10 @@ package queue
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
 	"regexp"
 	"sort"
@@ -20,11 +22,13 @@ import (
 type Config struct {
 	// PriorityConfirmed gates unattended runs: the loop does no work until the
 	// human has confirmed the priority order.
-	PriorityConfirmed bool `yaml:"priority_confirmed"`
-	RunBudget         struct {
-		Steps int `yaml:"steps"`
-	} `yaml:"run_budget"`
-	Limits struct {
+	PriorityConfirmed bool       `yaml:"priority_confirmed"`
+	RunBudget         StepBudget `yaml:"run_budget"`
+	// NativeBudget bounds one scheduled native session's batch, so native
+	// work never competes with the cloud loop (FLOW-13). Nil falls back to
+	// RunBudget.
+	NativeBudget *StepBudget `yaml:"native_budget,omitempty"`
+	Limits       struct {
 		InProgress          int `yaml:"in_progress"`
 		AltersRelationships int `yaml:"alters_relationships"`
 	} `yaml:"limits"`
@@ -32,17 +36,37 @@ type Config struct {
 	RunawayFactor float64 `yaml:"runaway_factor"`
 }
 
+// StepBudget is how many steps one run may take.
+type StepBudget struct {
+	Steps int `yaml:"steps"`
+}
+
+// Budget returns the steps one run may take: the native budget for a native
+// session, falling back to the run budget when config.yaml sets none.
+func (c Config) Budget(native bool) int {
+	if native && c.NativeBudget != nil {
+		return c.NativeBudget.Steps
+	}
+	return c.RunBudget.Steps
+}
+
 // Feature is one queue/<feature>.yaml file.
 type Feature struct {
 	Feature string `yaml:"feature"`
 	Title   string `yaml:"title"`
 	// Priority orders features; 1 is the highest. Unique across the queue.
-	Priority int    `yaml:"priority"`
-	Status   string `yaml:"status"` // queued | in_progress | done
-	Round    string `yaml:"round"`  // parallel | merge
-	Phase    int    `yaml:"phase"`  // FLOW-03 phase, 0..8
-	Design   string `yaml:"design"`
-	Branch   string `yaml:"branch"`
+	Priority int `yaml:"priority"`
+	// Kind is feature (the default, empty) or process: a change to the rules
+	// the loops run under, which sorts ahead of every feature (FLOW-05).
+	Kind string `yaml:"kind,omitempty"`
+	// Holds lists the affinity patterns (cloud, host:*, host:macos-vz) whose
+	// workers take no new step while this process item is in progress.
+	Holds  []string `yaml:"holds,omitempty"`
+	Status string   `yaml:"status"` // queued | in_progress | done
+	Round  string   `yaml:"round"`  // parallel | merge | process
+	Phase  int      `yaml:"phase"`  // FLOW-03 phase, 0..8
+	Design string   `yaml:"design"`
+	Branch string   `yaml:"branch"`
 	// AltersRelationships is nil until Design decides it (FLOW-02).
 	AltersRelationships *bool      `yaml:"alters_relationships"`
 	Source              string     `yaml:"source,omitempty"`
@@ -116,6 +140,12 @@ type State struct {
 	Dir      string
 	Config   Config
 	Features []*Feature
+	// Machines and Gaps are hosts.yaml and backlog/native-gaps.yaml; both
+	// files are optional.
+	Machines []Machine
+	Gaps     []Gap
+	// Statuses are native/status/*.yaml, one per machine (FLOW-09).
+	Statuses []MachineStatus
 }
 
 // Load reads config.yaml and queue/*.yaml under dir.
@@ -139,11 +169,27 @@ func Load(dir string) (*State, error) {
 		}
 		s.Features = append(s.Features, f)
 	}
-	sort.Slice(s.Features, func(i, j int) bool {
-		return s.Features[i].Priority < s.Features[j].Priority
-	})
+	s.sortFeatures()
+	if err := s.loadNative(); err != nil {
+		return nil, err
+	}
 	return s, nil
 }
+
+// sortFeatures orders process items ahead of every feature, then by priority
+// (FLOW-05).
+func (s *State) sortFeatures() {
+	sort.SliceStable(s.Features, func(i, j int) bool {
+		a, b := s.Features[i], s.Features[j]
+		if a.IsProcess() != b.IsProcess() {
+			return a.IsProcess()
+		}
+		return a.Priority < b.Priority
+	})
+}
+
+// IsProcess reports whether the item is a process change (kind: process).
+func (f *Feature) IsProcess() bool { return f.Kind == "process" }
 
 // Add creates a queued feature at the given priority, moving the features at
 // or below it down one, and returns every feature it changed.
@@ -159,9 +205,13 @@ func (s *State) Add(f *Feature, now time.Time, by string) ([]*Feature, error) {
 		}
 	}
 	f.Status, f.Round, f.Phase = "queued", "parallel", 0
+	if f.IsProcess() {
+		f.Round, f.Phase = "process", 1
+	}
 	Seed(f)
 	f.Log(now, by, "queued at priority %d (intake)", f.Priority)
 	s.Features = append(s.Features, f)
+	s.sortFeatures()
 	return changed, nil
 }
 
@@ -197,11 +247,22 @@ func readYAML(path string, v any) error {
 	return nil
 }
 
-var affinityRe = regexp.MustCompile(`^(cloud|human|host:[a-z0-9-]+)$`)
+var (
+	affinityRe = regexp.MustCompile(`^(cloud|human|host:[a-z0-9-]+)$`)
+	holdRe     = regexp.MustCompile(`^(cloud|human|host:[a-z0-9*?-]+)$`)
+)
 
 // Validate checks the schema of every feature and the FLOW-05 limits.
 func (s *State) Validate() []error {
 	var errs []error
+	if s.Config.RunBudget.Steps < 1 {
+		errs = append(errs, fmt.Errorf("config: run_budget.steps %d is below 1",
+			s.Config.RunBudget.Steps))
+	}
+	if nb := s.Config.NativeBudget; nb != nil && nb.Steps < 1 {
+		errs = append(errs, fmt.Errorf("config: native_budget.steps %d is below 1",
+			nb.Steps))
+	}
 	prio := map[int]string{}
 	inProgress, alters := 0, 0
 	for _, f := range s.Features {
@@ -230,6 +291,9 @@ func (s *State) Validate() []error {
 			"%d features past Design alter relationships, limit %d (FLOW-05)",
 			alters, n))
 	}
+	for _, e := range s.validateNative() {
+		errs = append(errs, errors.New(e))
+	}
 	return errs
 }
 
@@ -237,9 +301,7 @@ func (f *Feature) validate(bad func(string, ...any)) {
 	if !oneOf(f.Status, "queued", "in_progress", "done") {
 		bad("status %q is not queued, in_progress or done", f.Status)
 	}
-	if !oneOf(f.Round, "parallel", "merge") {
-		bad("round %q is not parallel or merge", f.Round)
-	}
+	f.validateKind(bad)
 	if f.Phase < 0 || f.Phase > 8 {
 		bad("phase %d is outside 0..8", f.Phase)
 	}
@@ -254,6 +316,32 @@ func (f *Feature) validate(bad func(string, ...any)) {
 	}
 }
 
+func (f *Feature) validateKind(bad func(string, ...any)) {
+	switch {
+	case !oneOf(f.Kind, "", "feature", "process"):
+		bad("kind %q is not feature or process", f.Kind)
+	case f.IsProcess():
+		if f.Round != "process" {
+			bad("a process item's round is process, not %q", f.Round)
+		}
+		if f.Phase < 1 || f.Phase > 4 {
+			bad("process phase %d is outside 1..4", f.Phase)
+		}
+		for _, h := range f.Holds {
+			if _, err := path.Match(h, ""); err != nil || !holdRe.MatchString(h) {
+				bad("hold %q is not cloud, human or host:<pattern>", h)
+			}
+		}
+	default:
+		if !oneOf(f.Round, "parallel", "merge") {
+			bad("round %q is not parallel or merge", f.Round)
+		}
+		if len(f.Holds) > 0 {
+			bad("only a process item holds workers")
+		}
+	}
+}
+
 func (f *Feature) validateSteps(bad func(string, ...any)) {
 	ids := map[string]bool{}
 	for _, st := range f.Steps {
@@ -262,7 +350,7 @@ func (f *Feature) validateSteps(bad func(string, ...any)) {
 		}
 		ids[st.ID] = true
 		if !stepIDRe.MatchString(st.ID) {
-			bad("step id %q is not <p|m><phase>-<name>", st.ID)
+			bad("step id %q is not <p|m|x><phase>-<name>", st.ID)
 		}
 		if !affinityRe.MatchString(st.Affinity) {
 			bad("step %s affinity %q is not cloud, human or host:<name>",

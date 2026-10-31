@@ -290,8 +290,10 @@ warden hyperv service install     # run once, elevated
 
 ### How It Works
 
-- The relay VM boots from a UKI boot disk with `/sbin/relay` baked in
-  (`tools/relay-vm/hyperv/build.sh`)
+- The relay VM boots from a UKI boot disk with `/sbin/relay` baked in. From a
+  source tree, `tools/relay-vm/hyperv/refresh-cache.sh` (Git Bash, needs WSL)
+  builds it into the cache below, and rebuilds it only when the relay source
+  has changed since; `--check` reports whether it is current
 - It is reachable on a static host-only NAT IP (`192.168.240.2:8301`) for the
   claim; the build VM cannot reach the claim port
 - Network isolation is topological, enforced by the switch layout

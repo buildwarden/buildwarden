@@ -19,6 +19,7 @@ func feature(name string, prio int, status string) *Feature {
 
 func state(fs ...*Feature) *State {
 	s := &State{Features: fs}
+	s.Config.RunBudget.Steps = 12
 	s.Config.Limits.InProgress = 5
 	s.Config.Limits.AltersRelationships = 1
 	return s
@@ -155,11 +156,11 @@ func TestCompleteWalksBothRounds(t *testing.T) {
 	}
 	want := "p0-branch-setup p1-design p2-plan p3-implement p4-review p5-guide p6-publish " +
 		"p6-merge-round m0-merge-main m1-consolidate m2-plan m3-implement m4-review " +
-		"m5-guide m6-confirm-pr m6-publish m7-sign-off m8-archive"
+		"m5-guide m6-publish m7-sign-off m8-archive"
 	if got := strings.Join(ids, " "); got != want {
 		t.Fatalf("steps:\n got %s\nwant %s", got, want)
 	}
-	if !IsGate(&f.Steps[1]) || IsGate(&f.Steps[7]) || IsGate(&f.Steps[14]) ||
+	if !IsGate(&f.Steps[1]) || IsGate(&f.Steps[7]) || !IsGate(&f.Steps[14]) ||
 		!IsGate(&f.Steps[15]) || !IsGate(&f.Steps[16]) {
 		t.Fatal("gate steps are each phase's last template step")
 	}
@@ -228,5 +229,35 @@ func TestBackToDesignEscalatesOnTheThirdReturn(t *testing.T) {
 	}
 	if errs := state(f).Validate(); len(errs) != 0 {
 		t.Fatalf("Validate: %v", errs)
+	}
+}
+
+func TestNativeBudget(t *testing.T) {
+	dir := t.TempDir()
+	write := func(cfg string) *State {
+		t.Helper()
+		_ = os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(cfg), 0o644)
+		s, err := Load(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		return s
+	}
+	s := write("run_budget: {steps: 12}\n")
+	if got := s.Config.Budget(true); got != 12 {
+		t.Fatalf("native budget without native_budget = %d, want run_budget's 12", got)
+	}
+	s = write("run_budget: {steps: 12}\nnative_budget: {steps: 8}\n")
+	if s.Config.Budget(true) != 8 || s.Config.Budget(false) != 12 {
+		t.Fatalf("budgets = native %d, run %d; want 8 and 12", s.Config.Budget(true),
+			s.Config.Budget(false))
+	}
+	if errs := s.Validate(); len(errs) != 0 {
+		t.Fatalf("Validate: %v", errs)
+	}
+	s = write("run_budget: {steps: 12}\nnative_budget: {steps: 0}\n")
+	errs := s.Validate()
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "native_budget") {
+		t.Fatalf("Validate = %v, want the native_budget problem", errs)
 	}
 }

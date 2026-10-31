@@ -220,6 +220,7 @@ relay --mode=container|vm|host:
         http://artifacts/
             /ca.pem, /bootstrap, /build-script -> serve (pulled from the collector;
                                                   bootstrap and script recorded)
+            /ca.crl    -> the CA's empty CRL, which every leaf names (not recorded)
             /heartbeat -> forward to the collector
             /exit      -> flush the ledger, POST /v1/complete
             POST /<name> -> stream the artifact to the collector, recorded

@@ -109,7 +109,8 @@ buildwarden/
 │   ├── win-image-prep/       # Windows image preparation notes/tools
 │   │   └── README.md
 │   └── workflow/             # Feature-loop tooling (own Go module; FLOW-03, FLOW-18)
-│       ├── cmd/wf/               # Queue tool: next step, leases, done-when checks
+│       ├── cmd/wf/               # Queue tool: next step, leases, done-when checks, native gate
+│       ├── native/               # Scheduled native sessions: wrapper, installers, permissions
 │       └── flow18-check.sh       # Sessions stay out of the public repo
 ├── docs/
 │   ├── book/               # mdBook documentation (guide, concepts, contributing)
