@@ -1,6 +1,6 @@
 ---
 feature: container-inputs
-status: draft
+status: archived
 round: merge
 drivers: [container, qemu, vz, hyperv]
 seams: []
@@ -299,3 +299,40 @@ Rebased onto `main` at `cd42fc7` (Jeff, 2026-10-29); `main` merged at
 ## Rollback notes
 
 ## Archive summary
+
+Merged 2026-10-31 in buildwarden/buildwarden#72 (`73f149b`), after a parallel
+round, a second parallel round for a2, and a merge round.
+
+- **Built.** `driver.RecordInputs` (`driver/session.go`) copies the submitted
+  file to `inputs/Containerfile` and the translated script to
+  `inputs/build.sh` when a Dockerfile was translated. It shares the
+  `translates(req)` predicate with `StageBuildScript`, and the container,
+  qemu and hyperv drivers call it straight after staging. The container
+  driver's top-level `Dockerfile.submitted` and `build.sh` are gone (a1).
+  `test-integration.sh` checks `inputs/` in Test 2, and `overview.md` has the
+  step in `StartBuild`.
+- **Decisions taken:**
+  - one shared helper, not per-driver copies;
+  - only the Dockerfile and its translation, since the ledger already records
+    every `COPY` source the guest fetches;
+  - recorded only when the orchestrator translated, since a script the user
+    wrote runs as given;
+  - recorded at staging, before the build, so a failed build keeps its inputs
+    and a failure to record fails the build early (changed in Review);
+  - the fixed name `inputs/Containerfile`, the open-standard name, whatever the
+    file was called (a2, Jeff);
+  - ORCH-02 amended with the record-at-staging convention in this PR (a3,
+    Jeff).
+- **Rejected:** snapshotting the build context; always copying the script
+  that ran; `inputs/Dockerfile` or keeping the submitted base name; a
+  compatibility copy at the old top-level names; a no-op call in vz.
+- **Validated.** Tier 1 in CI (integration workflow); qemu Linux guest on
+  `qemu-any` and a Windows build writing no `inputs/` on windows-hyperv, both
+  tracked, both done. No native gap remains.
+- **For future designs touching `inputs`, `output-layout`,
+  `dockerfile-translation` or `provenance`:** an input the orchestrator alters
+  goes through `driver.RecordInputs` at staging (ORCH-02), and anything it
+  decides about translation goes through `translates`, so staging and
+  recording cannot drift. vz never translates, and hyperv records nothing
+  until it builds Linux guests; both pick the helper up with no other change
+  when that is no longer true.

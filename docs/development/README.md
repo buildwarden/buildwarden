@@ -148,11 +148,6 @@ what each item is.
 - **Follow-up — Design front-matter retrofit** (FLOW-12)
   [`design-front-matter-retrofit`]: add front-matter to the existing
   `docs/design/` plans as new designs come to rely on them.
-- **Follow-up — Container inputs under `inputs/`** (ORCH-02)
-  [`container-inputs`]: record the
-  submitted Dockerfile and the translated `build.sh` under `inputs/`.
-  `Dockerfile.actual` was retired by `unified-bootstrap` (every driver now runs
-  the same translation, and `build.sh` is what ran).
 - **Follow-up — `specs/` migration** (RELAY-05) [`specs-migration`]. Perform
   the actual move of the
   ledger spec and metadata schemas into the top-level `specs/` layout; this is an
