@@ -155,3 +155,23 @@ jobs:
           go-version: stable
       - run: make build
       - run: ./dist/warden --help
+
+  # Build-only: docs.yml deploys from main and holds pages: write, so PRs build
+  # the book here instead (design ci-path-filters, Decision 7).
+  book:
+    needs: changes
+    if: needs.changes.outputs.book == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install mdBook
+        run: |
+          curl -sSL https://github.com/rust-lang/mdBook/releases/download/v0.4.44/mdbook-v0.4.44-x86_64-unknown-linux-gnu.tar.gz | tar xz
+          chmod +x mdbook
+          mv mdbook /usr/local/bin/
+
+      - name: Build docs
+        run: mdbook build docs/book
