@@ -1,6 +1,6 @@
 ---
 feature: specs-migration
-status: active
+status: archived
 drivers: []
 seams: [ledger-format]
 surfaces: []
@@ -439,6 +439,61 @@ the schema's file location changes.
 
 ## Consolidation
 
+`main` merged at `b717821` without conflicts.
+
+- **Landed since the fork (`ba4217a`):** #82 (ci-path-filters), #83
+  (test-rules-docs-only) and #84 (its archive summary). This branch's
+  `specs/*` classifier case merged beside #82's "Go files are code" case: Go
+  files still classify as code first, `specs/**`, the book's `specs/` mirror
+  and `SUMMARY.md` run the Go tests and the book. TEST-02 (#83) names the
+  docs-only set as `docs/**` except `docs/development/**`; with this change
+  the book's `specs/` mirror and `SUMMARY.md` leave that set too. The one-line
+  TEST-02 update rides the queued `relay05-specs-wording` process item
+  (FLOW-14), a minimal change to that approved design.
+- **Terminology:** "spec" for the prose `v<N>.md`, "schema" for
+  `v<N>.schema.json`, "schema `$id`" for the stable name, matching RELAY-05.
+- **Abstractions:** one copy of every field table (in its schema's doc); the
+  book includes rather than copies; tier 1 reads the layout from `rules.yaml`.
+- **Seams:** `ledger-format` declared conservatively; its bytes and every
+  `$id` are unchanged.
+- **Rules proposed:** RELAY-05's wording (queued as `relay05-specs-wording`),
+  plus the TEST-02 line above.
+- **FLOW-15 sweep:** `rules.Pair` removed with its only users; no dead code
+  added; `overview.md` unchanged (no component flow changed).
+
 ## Rollback notes
 
 ## Archive summary
+
+Implemented 2026-10-31 in an attended session, approved at design review r1.
+
+- **Built.** `specs/` per RELAY-05: `build-ledger/v1.md` (the wire format,
+  prose only, with a schema index table), seven `metadata-<name>/` and two
+  `environment-<type>/` directories each holding `v1.md` beside
+  `v1.schema.json` (moved with `git mv`, every `$id` byte-identical), and
+  `specs/README.md` (layout, `$id`-to-file table, `$id` policy). The book
+  publishes them through one-line include pages under `docs/book/src/specs/`
+  with redirects for `design/ledger-spec.html` and `specs/README.html`.
+  `specs/specs_test.go` ties every ledger header URI to exactly one schema,
+  keeps `$id`s unique, and keeps every doc in the book. Tier 1's `schema-doc`
+  check is per directory with both directions MUST, plus a HEAD-tree layout
+  check when the diff touches `specs/` or with `tier1 -all`. CI runs the Go
+  tests and the book for `specs/**`; `docs.yml` redeploys on it.
+- **Decisions taken:** ledger bytes unchanged; `$id`s are names, not locations,
+  kept for good; one directory per schema, `environment-<type>/` for signed
+  payload schemas; field tables live only in each schema's doc; include
+  rather than copy into the book; `schemas/` removed with no stub (a5).
+- **Rejected:** rewriting `$id`s to the new paths; symlinks (GLOBAL-07); a CI
+  copy step into the book; keeping the spec in the book and moving only the
+  schemas.
+- **Validated.** mdBook 0.4.44 build and a link/anchor crawl (0 broken);
+  `make lint` (tier 1 0 MUST, also `GOOS=windows`/`darwin`), `make test`; the
+  tier-1 check fires on each scratch mismatch and passes on the tree; review by
+  workflow (five finders, three skeptics each): 0 MUST, 1 SHOULD (the `-all`
+  run) fixed.
+- **For future designs touching `specs`, `schemas` or `ledger-format`:** a new
+  schema version is a new `v<N>.md` plus `v<N>.schema.json` in its directory,
+  with a new `$id`; never edit an existing `$id`. Known gap: the relay writes
+  a `path` field under `metadata-http-body/v1`, which forbids extra fields
+  (queued as `http-body-path-drift`).
+
