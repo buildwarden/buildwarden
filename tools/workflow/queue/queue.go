@@ -65,22 +65,22 @@ type Feature struct {
 	Status string   `yaml:"status"` // queued | in_progress | done
 	// Round is feature or process. parallel and merge remain only on
 	// finished items from before the single round (wf migrate).
-	Round  string   `yaml:"round"`
-	Phase  int      `yaml:"phase"`  // FLOW-03 phase, 0..8
-	Design string   `yaml:"design"`
-	Branch string   `yaml:"branch"`
+	Round  string `yaml:"round"`
+	Phase  int    `yaml:"phase"` // FLOW-03 phase, 0..8
+	Design string `yaml:"design"`
+	Branch string `yaml:"branch"`
 	// AltersRelationships is nil until Design decides it (FLOW-02).
 	AltersRelationships *bool `yaml:"alters_relationships"`
 	// DesignReview is empty until Design decides it: required, or skip when
 	// the design meets the FLOW-19 criteria. It decides whether Plan seeds
 	// a design-review step.
-	DesignReview        string     `yaml:"design_review,omitempty"`
-	Source              string     `yaml:"source,omitempty"`
-	PR                  *PR        `yaml:"pr,omitempty"`
-	Steps               []Step     `yaml:"steps"`
-	Budget              Budget     `yaml:"budget"`
-	Questions           []Question `yaml:"questions"`
-	History             []Event    `yaml:"history"`
+	DesignReview string     `yaml:"design_review,omitempty"`
+	Source       string     `yaml:"source,omitempty"`
+	PR           *PR        `yaml:"pr,omitempty"`
+	Steps        []Step     `yaml:"steps"`
+	Budget       Budget     `yaml:"budget"`
+	Questions    []Question `yaml:"questions"`
+	History      []Event    `yaml:"history"`
 }
 
 // PR records the feature's pull request, opened in Publish (FLOW-08, FLOW-11).
@@ -231,7 +231,8 @@ func (s *State) Find(name string) (*Feature, error) {
 	return nil, fmt.Errorf("no feature %q in %s/queue", name, s.Dir)
 }
 
-// Save writes one feature back to queue/<feature>.yaml.
+// Save writes one feature back to queue/<feature>.yaml and regenerates
+// QUEUE.md, so the summary is committed with the change that produced it.
 func (s *State) Save(f *Feature) error {
 	var buf bytes.Buffer
 	enc := yaml.NewEncoder(&buf)
@@ -239,7 +240,11 @@ func (s *State) Save(f *Feature) error {
 	if err := enc.Encode(f); err != nil {
 		return err
 	}
-	return os.WriteFile(filepath.Join(s.Dir, "queue", f.Feature+".yaml"), buf.Bytes(), 0o644)
+	if err := os.WriteFile(filepath.Join(s.Dir, "queue", f.Feature+".yaml"), buf.Bytes(),
+		0o644); err != nil {
+		return err
+	}
+	return s.WriteSummary()
 }
 
 func readYAML(path string, v any) error {

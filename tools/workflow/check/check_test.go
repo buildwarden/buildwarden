@@ -344,3 +344,16 @@ func TestArchivedDesignNeedsNoDesignReview(t *testing.T) {
 		}
 	}
 }
+
+// TestApprovalMayWrap: a Design review entry's "approved at <sha>" may break
+// across lines, as Markdown reflow leaves it (FLOW-19).
+func TestApprovalMayWrap(t *testing.T) {
+	entry := "\n## Design review\n\n- r1: approved\n  at `abc1234`.\n"
+	d, err := ParseDesign(design+entry, tmpl)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := approvals(d); len(got) != 1 || got[0] != "abc1234" {
+		t.Fatalf("approvals = %v", got)
+	}
+}
