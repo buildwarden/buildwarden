@@ -63,12 +63,18 @@ type Feature struct {
 	// workers take no new step while this process item is in progress.
 	Holds  []string `yaml:"holds,omitempty"`
 	Status string   `yaml:"status"` // queued | in_progress | done
-	Round  string   `yaml:"round"`  // parallel | merge | process
+	// Round is feature or process. parallel and merge remain only on
+	// finished items from before the single round (wf migrate).
+	Round  string   `yaml:"round"`
 	Phase  int      `yaml:"phase"`  // FLOW-03 phase, 0..8
 	Design string   `yaml:"design"`
 	Branch string   `yaml:"branch"`
 	// AltersRelationships is nil until Design decides it (FLOW-02).
-	AltersRelationships *bool      `yaml:"alters_relationships"`
+	AltersRelationships *bool `yaml:"alters_relationships"`
+	// DesignReview is empty until Design decides it: required, or skip when
+	// the design meets the FLOW-19 criteria. It decides whether Plan seeds
+	// a design-review step.
+	DesignReview        string     `yaml:"design_review,omitempty"`
 	Source              string     `yaml:"source,omitempty"`
 	PR                  *PR        `yaml:"pr,omitempty"`
 	Steps               []Step     `yaml:"steps"`
@@ -77,7 +83,7 @@ type Feature struct {
 	History             []Event    `yaml:"history"`
 }
 
-// PR records the merge-round pull request (FLOW-08, FLOW-11).
+// PR records the feature's pull request, opened in Publish (FLOW-08, FLOW-11).
 type PR struct {
 	Number int    `yaml:"number"`
 	CI     string `yaml:"ci"` // pending | green | red
@@ -204,7 +210,7 @@ func (s *State) Add(f *Feature, now time.Time, by string) ([]*Feature, error) {
 			changed = append(changed, o)
 		}
 	}
-	f.Status, f.Round, f.Phase = "queued", "parallel", 0
+	f.Status, f.Round, f.Phase = "queued", "feature", 0
 	if f.IsProcess() {
 		f.Round, f.Phase = "process", 1
 	}
@@ -302,6 +308,9 @@ func (f *Feature) validate(bad func(string, ...any)) {
 		bad("status %q is not queued, in_progress or done", f.Status)
 	}
 	f.validateKind(bad)
+	if !oneOf(f.DesignReview, "", "required", "skip") {
+		bad("design_review %q is not required or skip", f.DesignReview)
+	}
 	if f.Phase < 0 || f.Phase > 8 {
 		bad("phase %d is outside 0..8", f.Phase)
 	}
@@ -333,8 +342,9 @@ func (f *Feature) validateKind(bad func(string, ...any)) {
 			}
 		}
 	default:
-		if !oneOf(f.Round, "parallel", "merge") {
-			bad("round %q is not parallel or merge", f.Round)
+		legacy := f.Status == "done" && oneOf(f.Round, "parallel", "merge")
+		if f.Round != "feature" && !legacy {
+			bad("round %q is not feature (run wf migrate)", f.Round)
 		}
 		if len(f.Holds) > 0 {
 			bad("only a process item holds workers")
@@ -350,7 +360,7 @@ func (f *Feature) validateSteps(bad func(string, ...any)) {
 		}
 		ids[st.ID] = true
 		if !stepIDRe.MatchString(st.ID) {
-			bad("step id %q is not <p|m|x><phase>-<name>", st.ID)
+			bad("step id %q is not <f|x><phase>-<name>", st.ID)
 		}
 		if !affinityRe.MatchString(st.Affinity) {
 			bad("step %s affinity %q is not cloud, human or host:<name>",

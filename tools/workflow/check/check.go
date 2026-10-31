@@ -39,18 +39,14 @@ func Phase(env Env, f *queue.Feature) []Result {
 		c.process()
 		return c.out
 	}
-	merge := f.Round == "merge"
 	switch f.Phase {
 	case 0:
-		if merge {
-			c.mainMerged()
-		} else {
-			c.branchOnRemote()
-		}
+		c.branchOnRemote()
 	case 1:
-		c.design(merge)
+		c.design()
 	case 2:
 		c.plan()
+		c.reviewed()
 	case 3:
 		c.onBranchHead()
 		c.make("lint")
@@ -65,32 +61,37 @@ func Phase(env Env, f *queue.Feature) []Result {
 		c.docsTouched("guides or examples updated", "docs/book/src/guide/",
 			"docs/book/src/getting-started/", "examples/", "README.md")
 	case 6:
-		if merge {
-			c.prGreen()
-		} else {
-			c.pushed()
+		c.mainMerged()
+		if d, err := c.loadDesign(c.f.Branch); err == nil {
+			c.section(d, "Consolidation")
 		}
+		c.archivedOn(c.f.Branch)
+		c.prGreen()
 	case 7:
 		c.merged()
 	case 8:
-		c.archived()
+		c.closed()
 	}
 	return c.out
 }
 
-// process runs a process item's done-when checks: x1 design written, x2
-// branch pushed, x3 merged by a human, x4 archived.
+// process runs a process item's done-when checks: x1 design written and
+// reviewed, x2 archived on the pushed branch with its PR green, x3 merged by
+// a human, x4 closed.
 func (c *checker) process() {
 	switch c.f.Phase {
 	case 1:
 		_, err := c.git("cat-file", "-e", "refs/heads/"+c.f.Branch+":"+c.f.Design)
 		c.add("design present (FLOW-01)", err == nil, "%s on %s", c.f.Design, c.f.Branch)
+		c.reviewed()
 	case 2:
 		c.pushed()
+		c.archivedOn(c.f.Branch)
+		c.prGreen()
 	case 3:
 		c.merged()
 	case 4:
-		c.archived()
+		c.closed()
 	}
 }
 
@@ -222,25 +223,56 @@ func (c *checker) prGreen() {
 	c.add("PR open with CI green (FLOW-11)", ok, "pr %+v", c.f.PR)
 }
 
+// merged confirms the human's merge (FLOW-08): the branch head, local or
+// remote, is contained in origin/main, or, once GitHub has deleted the
+// branch, origin/main carries the PR's merge commit.
 func (c *checker) merged() {
-	_, err := c.git("merge-base", "--is-ancestor", "refs/heads/"+c.f.Branch, "origin/main")
-	c.add("merged by a human (FLOW-08)", err == nil, "%s is contained in origin/main",
-		c.f.Branch)
+	const name = "merged by a human (FLOW-08)"
+	for _, ref := range []string{"refs/heads/" + c.f.Branch,
+		"refs/remotes/origin/" + c.f.Branch} {
+		if _, err := c.git("rev-parse", "--verify", "--quiet", ref); err != nil {
+			continue
+		}
+		_, err := c.git("merge-base", "--is-ancestor", ref, "origin/main")
+		c.add(name, err == nil, "%s is contained in origin/main", ref)
+		return
+	}
+	if c.f.PR == nil || c.f.PR.Number == 0 {
+		c.add(name, false, "no %s branch and no PR recorded", c.f.Branch)
+		return
+	}
+	out, _ := c.git("log", "origin/main", "--format=%h %s", "-E",
+		fmt.Sprintf("--grep=(Merge pull request |\\()#%d([^0-9]|$)", c.f.PR.Number))
+	c.add(name, out != "", "PR #%d on origin/main: %s", c.f.PR.Number, firstLine(out))
 }
 
-func (c *checker) archived() {
-	d, err := c.loadDesign("origin/main")
+// archivedOn checks that the design is archived with its summary at rev: on
+// the branch in Publish, so the archive lands in the feature PR, and on main
+// at Close (FLOW-12).
+func (c *checker) archivedOn(rev string) {
+	d, err := c.loadDesign(rev)
 	if err != nil {
 		c.add("design archived (FLOW-12)", false, "%v", err)
-	} else {
-		c.add("design archived (FLOW-12)", d.Front.Status == "archived",
-			"status %q on main", d.Front.Status)
-		c.section(d, "Archive summary")
+		return
 	}
-	c.add("branch deleted (FLOW-16)", c.remoteHead(c.f.Branch) == "", "origin/%s", c.f.Branch)
+	c.add("design archived (FLOW-12)", d.Front.Status == "archived",
+		"status %q on %s", d.Front.Status, rev)
+	c.section(d, "Archive summary")
 }
 
-func (c *checker) design(merge bool) {
+// closed is Close's done-when: merged, archived on main, and the branch gone
+// from the remote (GitHub deletes it on merge) and from this checkout
+// (FLOW-16).
+func (c *checker) closed() {
+	c.merged()
+	c.archivedOn("origin/main")
+	c.add("remote branch deleted (FLOW-16)", c.remoteHead(c.f.Branch) == "",
+		"origin/%s", c.f.Branch)
+	_, err := c.git("rev-parse", "--verify", "--quiet", "refs/heads/"+c.f.Branch)
+	c.add("local branch deleted (FLOW-16)", err != nil, "refs/heads/%s", c.f.Branch)
+}
+
+func (c *checker) design() {
 	d, err := c.loadDesign(c.f.Branch)
 	if err != nil {
 		c.add("design present (FLOW-01)", false, "%v", err)
@@ -267,9 +299,7 @@ func (c *checker) design(merge bool) {
 			c.section(d, "Bootstrap comparison")
 		}
 	}
-	if merge {
-		c.section(d, "Consolidation (merge round)")
-	}
+	c.reviewDecision(d)
 	open := c.f.OpenBlocking()
 	c.add("no open blocking question (FLOW-07)", len(open) == 0, "%d open", len(open))
 }
@@ -308,7 +338,7 @@ type Design struct {
 type Front struct {
 	Feature          string   `yaml:"feature"`
 	Status           string   `yaml:"status"`
-	Round            string   `yaml:"round"`
+	DesignReview     string   `yaml:"design_review"`
 	Drivers          []string `yaml:"drivers"`
 	Seams            []string `yaml:"seams"`
 	Surfaces         []string `yaml:"surfaces"`
@@ -327,9 +357,9 @@ type Front struct {
 
 func (fm *Front) problems(feature string) []string {
 	var out []string
-	for _, k := range []string{"feature", "status", "round", "drivers", "seams", "surfaces",
-		"security_boundary", "alters_relationships", "native_validation", "tier2_gaps",
-		"rules", "concepts"} {
+	for _, k := range []string{"feature", "status", "drivers", "seams", "surfaces",
+		"security_boundary", "alters_relationships", "design_review", "native_validation",
+		"tier2_gaps", "rules", "concepts"} {
 		if !fm.present[k] {
 			out = append(out, "missing "+k)
 		}

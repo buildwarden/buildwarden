@@ -15,18 +15,22 @@ func process(name string, prio int, status string, holds ...string) *Feature {
 	return f
 }
 
-func TestProcessTemplateWalksFourHumanPhases(t *testing.T) {
+func TestProcessTemplateHumanDesignThenCloud(t *testing.T) {
 	f := process("x", 1, "in_progress")
 	var ids []string
 	for f.Status != "done" {
 		st := &f.Steps[len(f.Steps)-1]
-		if st.Affinity != "human" || !IsGate(st) {
-			t.Fatalf("step %+v: want a human gate", st)
+		want := "cloud"
+		if st.Phase == 1 {
+			want = "human"
+		}
+		if st.Affinity != want || !IsGate(f, st) {
+			t.Fatalf("step %+v: want a %s gate", st, want)
 		}
 		ids = append(ids, st.ID)
-		Complete(f, st, "human/jeff", now)
+		Complete(f, st, "test", now)
 	}
-	if got := strings.Join(ids, " "); got != "x1-design x2-implement x3-sign-off x4-archive" {
+	if got := strings.Join(ids, " "); got != "x1-design x2-implement x3-merge x4-close" {
 		t.Fatalf("steps = %q", got)
 	}
 	if errs := state(f).Validate(); len(errs) != 0 {
@@ -66,7 +70,7 @@ func TestProcessSortsFirstAndStartsOnAnyClaim(t *testing.T) {
 
 func TestHoldsBlockMatchingWorkersUntilDone(t *testing.T) {
 	a := feature("a", 1, "in_progress")
-	a.Steps = append(a.Steps, Step{ID: "p0-on-mac", Affinity: "host:macos-vz",
+	a.Steps = append(a.Steps, Step{ID: "f0-on-mac", Affinity: "host:macos-vz",
 		Status: "pending"})
 	p := process("rules", 2, "in_progress", "cloud", "host:*")
 	s := state(a, p)
@@ -99,7 +103,7 @@ func TestHoldsBlockMatchingWorkersUntilDone(t *testing.T) {
 	for p.Status != "done" {
 		Complete(p, &p.Steps[len(p.Steps)-1], "human/jeff", now)
 	}
-	if got := next(t, s, "cloud/run"); got != "a p0-branch-setup" {
+	if got := next(t, s, "cloud/run"); got != "a f0-branch-setup" {
 		t.Fatalf("cloud next after release = %q", got)
 	}
 }
@@ -112,7 +116,7 @@ func TestHoldLeavesAClaimedStepClaimed(t *testing.T) {
 	s.Features = append(s.Features, p)
 	s.sortFeatures()
 
-	if got := next(t, s, "cloud/run"); got != "a p0-branch-setup" {
+	if got := next(t, s, "cloud/run"); got != "a f0-branch-setup" {
 		t.Fatalf("next = %q, want the step cloud/run already holds", got)
 	}
 	if got := next(t, s, "cloud/other"); got != "none" {
@@ -122,7 +126,7 @@ func TestHoldLeavesAClaimedStepClaimed(t *testing.T) {
 		t.Fatalf("lease = %+v; the hold must not drop it", a.Steps[0].Lease)
 	}
 	pick, _ := s.NextFor("a", "cloud/run", now)
-	if pick == nil || pick.Step.ID != "p0-branch-setup" {
+	if pick == nil || pick.Step.ID != "f0-branch-setup" {
 		t.Fatalf("NextFor = %+v, want the leased step", pick)
 	}
 	if _, blocked := s.NextFor("a", "cloud/other", now); len(blocked) != 1 ||

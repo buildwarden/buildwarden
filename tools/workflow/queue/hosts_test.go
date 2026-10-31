@@ -50,7 +50,7 @@ func TestGateRunsForAReadyHostStep(t *testing.T) {
 	s := nativeState(a)
 	mac, _ := s.Machine("mac")
 	g, err := s.Gate(mac, repo, nil, 7, now)
-	want := "host:macos-qemu\ta\tp0-branch-setup"
+	want := "host:macos-qemu\ta\tf0-branch-setup"
 	if err != nil || !g.Run || !strings.Contains(g.Reasons[0], want) {
 		t.Fatalf("mac gate = %+v, %v; want the macos-qemu step", g, err)
 	}
@@ -126,7 +126,7 @@ func TestValidateNative(t *testing.T) {
 	}
 	want := []string{
 		"host qemu-any served by both win and other",
-		"step p0-branch-setup: no machine serves host windows-container",
+		"step f0-branch-setup: no machine serves host windows-container",
 		"gap g1: no machine serves host macos-finch",
 	}
 	if len(got) != len(want) {
