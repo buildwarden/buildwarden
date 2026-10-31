@@ -3,7 +3,7 @@ title: Clear tier 1's release-range findings before the next tag (GLOBAL-01, GLO
 priority: 8
 status: in_progress
 round: feature
-phase: 5
+phase: 6
 design: docs/design/pre-release-cleanup.md
 branch: feat/pre-release-cleanup
 alters_relationships: false
@@ -48,7 +48,32 @@ steps:
   - id: f5-guide
     phase: 5
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main
+    phase: 6
+    affinity: cloud
     status: pending
+    lease:
+      claimed_by: cloud/20261031T205751Z
+      expires: 2026-10-31T23:55:56.284625003Z
+  - id: f6-consolidate
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-merge-main
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-consolidate
     lease:
       claimed_by: ""
       expires: null
@@ -58,7 +83,7 @@ budget:
     steps: 9
   spent:
     runs: 1
-    steps: 5
+    steps: 7
 questions: []
 history:
   - at: 2026-10-31T21:31:39Z
@@ -112,3 +137,15 @@ history:
   - at: 2026-10-31T21:55:43Z
     by: cloud/20261031T205751Z
     event: entered phase 5 (guide)
+  - at: 2026-10-31T21:55:56Z
+    by: cloud/20261031T205751Z
+    event: claimed f5-guide until 2026-10-31T23:55:56Z
+  - at: 2026-10-31T21:55:56Z
+    by: cloud/20261031T205751Z
+    event: done f5-guide
+  - at: 2026-10-31T21:55:56Z
+    by: cloud/20261031T205751Z
+    event: entered phase 6 (publish)
+  - at: 2026-10-31T21:55:56Z
+    by: cloud/20261031T205751Z
+    event: claimed f6-merge-main until 2026-10-31T23:55:56Z
