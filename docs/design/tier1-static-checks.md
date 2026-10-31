@@ -1,7 +1,6 @@
 ---
 feature: tier1-static-checks
-status: draft
-round: parallel
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -60,8 +59,8 @@ deterministic for each feature after this one.
   to this feature. That assumption is unconfirmed, so it is treated as a
   candidate input (Question a2), not a requirement.
 - **`unified-bootstrap.md`** (archived) and the `Makefile`'s `deadcode` target.
-  `make deadcode` is the FLOW-15 sweep. It is whole-repo and run in the merge
-  round, so it stays outside the diff-scoped tier 1 (LINT-04) and is not
+  `make deadcode` is the FLOW-15 sweep. It is whole-repo and run at Publish
+  consolidation, so it stays outside the diff-scoped tier 1 (LINT-04) and is not
   duplicated here.
 - **Standards.** LINT-01 (the extractable rule index), LINT-02 (two tiers,
   every rule mapped), LINT-03 (tier 1 hard-fails), LINT-04 (diff-scoped),
@@ -240,7 +239,7 @@ needs no edit there, so nothing stops planning.
     - CI only. Then the loop's Review gate never sees it.
   - **Recommended:** inside `make lint`, plus CI and the release job.
   - Note: once this merges, `make lint` fails on in-flight branches whose
-    diffs violate a MUST check. Their merge-round consolidation (FLOW-10) is
+    diffs violate a MUST check. Their Publish consolidation (FLOW-10) is
     where that is paid.
 - **a5. Suppressions.** Proceeding with `Tier1-Allow:` commit trailers
   (Decision 5), each printed in the output for the tier-2 report and sign-off;
@@ -342,7 +341,7 @@ Exit codes:
 | `flow18-check.sh` | FLOW-18 |
 | `make test` / CI matrix | TEST-01, GLOBAL-07, ORCH-05, EXEC-01's cross-build half, TEST-05 (round-trip tests exist as tests) |
 | Branch protection, PR checks | FLOW-08, FLOW-11, LINT-03 (through the release job in Decision 8) |
-| `make deadcode`, merge round | FLOW-15 (whole-repo by design, not diff-scoped) |
+| `make deadcode`, Publish consolidation | FLOW-15 (whole-repo by design, not diff-scoped) |
 | Tier 1 itself | LINT-04, LINT-05 (properties of this tool) |
 | Security suite (`security-suite` item) | TEST-08, SEC-02, SEC-06, SEC-08 |
 
@@ -721,7 +720,7 @@ same diffs.
   `design_tolerate`; #62 to #64, `container-inputs`, `native-loop-followups`,
   `workflow-bootstrap-archive` and `design-front-matter-retrofit` pass.
   `firecracker-driver` fails: it adds `firecracker-spike-plan.md` with no
-  front-matter, a true positive for that branch's merge round.
+  front-matter, a true positive for that branch's consolidation.
 
 ## Design review
 
@@ -743,8 +742,127 @@ same diffs.
     and record it in Consolidation. Record the plan's references to the old
     rounds and steps in Consolidation rather than rewriting the plan.
 
-## Consolidation (merge round)
+## Consolidation
+
+`main` merged at `154833b` in `4b5266d` (#75, #76) and at `867219f` in
+`539fec0` (#77), without conflicts; the fork point was #64 (`137feae`).
+
+- **Landed since the fork:** #65 native-loop-followups, #67
+  relay-gzip-framing, #69 native-leftovers, #66 workflow-bootstrap-archive,
+  #70 and #71 relay-leaf-crl, #72 container-inputs, #73 and #74, #75
+  workflow-streamline, #76 design-review-archived and #77
+  design-front-matter-retrofit. #65 to #74 change no rule header or `Check:`
+  line, so the rule index and `rules.yaml` need nothing from them; #65's
+  `integration.yml` is the TEST-02 tier, not this one. The overlaps:
+  - **#75 workflow-streamline** (one round). It added FLOW-19, which
+    `rules.yaml` now maps to the owner `wf` (design review r1, A). The
+    template dropped `round` and gained `design_review`, so the coupling
+    fixtures carry `design_review` instead of `round` (`79af3f5`) and this
+    design drops `round: parallel`. LINT-03's per-PR sign-off is now the
+    human's merge, with the MUST findings listed in the PR body; Decision 5's
+    "human sign-off" reads as that merge, and the printed suppressions are
+    what it sees.
+  - **#76** exempts archived designs from `design_review` in the shared
+    validator. Its new test called the unexported `problems`; the merge made
+    it call the exported `Problems` (`79af3f5`). That and the a3 export
+    (`47f80c3`, Jeff, attended) are this branch's only `tools/workflow` edits.
+    The export was made before FLOW-14 kept feature branches out of
+    `tools/workflow/`, and r1 keeps it.
+  - **#77** gave the six pre-standard designs front-matter. `tier1 designs
+    -all` on the merged tree: 17 checked, 2 failing (`native-host-loop.md`,
+    `native-loop-followups.md`, missing `design_review`; archived by
+    `pre-release-cleanup`), 0 pre-standard, 4 tolerated. All four
+    `design_tolerate` entries still match a problem, so none is stale: #76
+    exempts only `design_review`, not the three designs' missing
+    `alters_relationships`, and the `firecracker-driver-plan.md` entry, dormant
+    when the plan was written, is now the one that keeps it passing.
+- **Terminology:** "merge round" in Prior art, a4, the Mapped-elsewhere table,
+  the task-10 notes and `rules.yaml`'s FLOW-15 owner now read "Publish
+  consolidation". The Implementation plan's `p3-*` steps, `p6-merge-round`, the
+  `m0` to `m8` merge round and its budget table predate the one-round loop and
+  are kept as written (r1): they ran as `f3-implement` claims plus the attended
+  export, `f4-review` and Publish. "Tier 1" is overloaded: LINT-02's static
+  checks here, TEST-02's integration tier in `integration.yml` and
+  `testing.md`. The design and `CONTRIBUTING.md` say "test tier" for the
+  latter; a qualifier in the standards is proposed below.
+- **Abstractions:** one front-matter validator. `coupling/frontmatter.go` and
+  `coupling.go` call `check.ParseDesign` and `check.Front.Problems` (a3), so
+  tier 1 and `wf` cannot disagree on FLOW-02; no key or enum list is
+  duplicated in `tools/tier1`. Base resolution, line ranges and trailers live
+  only in `diff/`; the surface extractor is shared by `surface-docs` and
+  `surface-removed`.
+- **Seams:** none declared; no versioned seam changed on `main` overlaps.
+- **FLOW-15 sweep:** `make deadcode` (linux, darwin, windows; run with a
+  go1.26.3 build of `deadcode` v0.38.0, since `dist/deadcode` was a go1.24
+  build) reports nothing from this feature, which changes no product code, and
+  `deadcode -test ./...` in `tools/tier1` and `tools/workflow` reports nothing.
+  Unreachable on all three, as on `main`: `Collector.BytesWritten`,
+  `Relay.CAFingerprint` and `Relay.Ledger` (exported library API), and the
+  `driver/vz` helpers (cgo-only, checked on macOS). Duplication: none, as
+  above. `overview.md`: no update owed, as the plan says.
+- **Proposed, not made here (FLOW-14):**
+  - queue the follow-up item for the `follow-up` rules in `rules.yaml` (a7),
+    with the rule sharpenings below;
+  - RELAY-05: the reverse direction (spec without schema) can become MUST once
+    `specs-migration` pairs each `metadata-<name>/` schema with its document;
+  - TEST-02 and LINT-02: name the tiers "test tier" and "lint tier" where
+    both could be meant;
+  - `docs/development/README.md`: Deep-dive #2 is done once this merges and
+    its entry can go, pointing to this design.
 
 ## Rollback notes
 
+None. Nothing validated was reverted; the two checks demoted to hints by the
+history run are recorded in the task-11 notes and the Archive summary.
+
 ## Archive summary
+
+Archived at Publish (`f6-open-pr`) on 2026-10-31, after one design round,
+design review r1 (Jeff), one fix round from tier-2 review, and merges of
+`main` at `154833b` and `867219f`.
+
+- **Built.** `tools/tier1`, its own Go module, run by `make lint` (built for
+  the host, run with the caller's `GOOS`), a `tier1` CI job on PRs and pushes
+  to `main`, a three-OS `tier1-test` job, and a release job that runs it
+  against the previous `v*` tag plus `tier1 designs -all` and that `release`
+  needs. Checks: `rule-index`; `design-front-matter` (FLOW-01 and FLOW-02 on
+  the shared `wf` validator); `drivers-claim`, `bootstrap-surface`,
+  `schema-doc`, `seam-contract`; `surface-docs` and `surface-removed`;
+  analyzers `ledger-single-writer`, `relay-diskless`, `executor-no-cgo`,
+  `large-literal`; a diff-scoped golangci config for GLOBAL-01 to 03; the
+  GLOBAL-04 hint. `rules.yaml` maps all 55 `automated` rules: 21 to checks,
+  21 to owners, 13 `follow-up`. `tier1 rules -json` is the index tier 2 gets.
+- **Decisions taken:** its own module (a1); three mechanisms, no ripgrep;
+  diff-scoped with no whole-repo fallback, PR base or `github.event.before`
+  in CI; severity decides the exit code (0, 1, 2); `Tier1-Allow:` commit
+  trailers with a required reason, printed (a5); the designs in the diff are
+  the claim; the attended export of `Front.Problems` (a3); `designs -all` at
+  release only (a2); wiring inside `make lint` (a4); the first slice (a7).
+  A push to `main` passes `-no-design`, since FLOW-01 is judged on the PR and
+  the `no-design` label (Review MUST 2). Hints, never failing: GLOBAL-04 (a6),
+  and two demotions from the history run that r1 confirmed: BOOT-07's
+  "surface changed, `bootstrap.md` did not" and RELAY-05's "spec changed, no
+  schema did".
+- **Rejected:** a package in `tools/workflow` or the product module; a
+  golangci plugin; ripgrep scripts; a suppressions file or inline comments;
+  an archive-wide check per PR; a `wf`-run `make tier1`; duplicating the
+  validator; for the release gate (Review MUST 3), starting the base at tier
+  1's first commit (Jeff, option a). The base stays the previous tag, and
+  `pre-release-cleanup` clears the 25 release-range code findings and
+  archives the two native designs before the next tag.
+- **Validated.** Tier 0 tests in every package; the run over PRs #60 to #64
+  and five in-flight branches (one retune, two demotions, true positives on
+  #60 and `firecracker-driver`); tier-2 reports `79af3f5cf53d` (3 MUST, 6
+  SHOULD) and `5460fee0e61e` (MUST resolved).
+- **For future designs touching these `concepts`:** a new `automated` rule
+  needs a `rules.yaml` entry or tier 1 fails the change; path data (drivers,
+  bootstrap surface, schema pairs, seams, surface) lives there, so
+  `specs-migration` and new seams edit data, not code. `seams` is empty, so
+  `seam-contract` checks nothing until a seam gets a contract document. The
+  release gate fails until `pre-release-cleanup` lands. `ci-path-filters` must
+  keep the `tier1` job for `docs/design/**`. Known gaps, the Review's SHOULD
+  findings: `Tier1-Allow` matched on any body line, not trailers only;
+  suppressions do not list what they cleared; analyzers and golangci read the
+  working tree while ranges come from HEAD; directive comments
+  (`//go:build`) dropped by the comment-only retune; a bad `-design PATH`
+  ignored silently; three golangci-lint versions in use.

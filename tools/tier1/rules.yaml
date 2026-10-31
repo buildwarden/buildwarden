@@ -43,7 +43,7 @@ rules:
   FLOW-11: {owner: "branch protection and PR checks"}
   FLOW-12: {check: [design-front-matter]}
   FLOW-13: {owner: "wf (the queue)"}
-  FLOW-15: {owner: "make deadcode in the merge round (whole-repo by design)"}
+  FLOW-15: {owner: "make deadcode at Publish consolidation (whole-repo by design)"}
   FLOW-16: {owner: "wf (the merged-branch report)"}
   FLOW-18: {owner: "tools/workflow/flow18-check.sh"}
   FLOW-19: {owner: "wf (the design_review decision, skip criteria and approvals: tools/workflow/check)"}
