@@ -1,0 +1,62 @@
+{
+  "feature": "design-front-matter-retrofit",
+  "branch": "feat/design-front-matter-retrofit",
+  "head": "ca7df3f25edd",
+  "base": "cd42fc73c265",
+  "round": 3,
+  "step": "f4-review",
+  "previous_report": "fdd14b44f1f8",
+  "scope": "git diff origin/main...feat/design-front-matter-retrofit (8 files, +938/-3; commits c650e29..ca7df3f). origin/main is at 154833b (workflow-streamline #75, #76); per the dispatch, main is not merged here, and f6-merge-main merges it later.",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass: golangci-lint 2.6.2 built with go1.26.3 (/tmp/claude-0/bin on PATH); 0 issues in the root module and tools/workflow",
+    "make_test": "pass: every package ok (17 ok lines, no FAIL)",
+    "front_matter_parse": "pass: check.ParseDesign + Front.problems over every docs/design/*.md except TEMPLATE.md, via go test -overlay with a scratch test (nothing under tools/workflow written). problems=[] for the six retrofits (want firecracker-driver for firecracker-driver-plan, base name elsewhere), this design and workflow-bootstrap; exactly [missing alters_relationships] for hyperv-windows-prepare, ledger-environment-types and unified-bootstrap (a3, expected); Sections contains 'Security note (retrofit)' for windows-driver-plan and remote-execution-and-measured-hermeticity",
+    "body_unchanged": "pass: 0 removed lines under docs/design; the six blocks and two appended notes are byte-identical to the design's Design section over the merge-base body (scripted comparison); the three archived designs are identical to the merge base",
+    "rule_ids": "pass: every rule ID in the seven rules lists (six retrofits plus this design) exists in the docs/development rule index (83 IDs)",
+    "host_names": "pass: container-any, qemu-any, macos-vz, macos-qemu and windows-hyperv are registered in hosts.yaml; linux-kvm is the one new name, as the design says",
+    "build_tagged_files": "none touched; no per-platform lint owed (FLOW-17)",
+    "custom_static_checks": "none exist yet (LINT-02, Deep-dive #2)",
+    "fixes_made": "none; tier 1 was green at ca7df3f"
+  },
+  "prior_findings": [
+    {"id": "fdd14b44f1f8#1", "rule": "FLOW-02", "severity": "MUST", "file": "docs/design/windows-driver-plan.md", "line": 488, "status": "fixed", "evidence": "The clause asserting guest administrator rights cannot open a path is gone. The note now says the isolation argument relies on no in-guest control and that the adversarial gate, which the plan does not record as run, must show it (lines 488-492). Supported by the plan: Done & validated (line 39 on) omits the isolation check, chunk 4 (line 449) and the graduation gates (line 468) require it."},
+    {"id": "fdd14b44f1f8#2", "rule": "FLOW-02", "severity": "SHOULD", "file": "docs/design/windows-driver-plan.md", "line": 492, "status": "fixed, with a narrower residue", "evidence": "'trusted input' is now 'input fixed at prepare, before the build'. The BOOT-06 gloss added with it overstates the plan slightly: see finding 1."},
+    {"id": "fdd14b44f1f8#3", "rule": "GLOBAL-06", "severity": "SHOULD", "file": "docs/design/remote-execution-and-measured-hermeticity.md", "line": 313, "status": "fixed", "evidence": "Boundary bullet names CAS input staging outside the relay (lifecycle step 4, proposal line 108) against BOOT-02, and the RE API services as a new network-facing surface; TEST-08 bullet adds digest-mismatched CAS blobs and unauthenticated Execute/ActionCache writes. BOOT-02 is now in rules (Decision 12)."}
+  ],
+  "findings": [
+    {
+      "rule": "FLOW-02",
+      "related_rules": ["BOOT-06", "GLOBAL-06"],
+      "severity": "SHOULD",
+      "check": "automated + agent-judgment",
+      "file": "docs/design/windows-driver-plan.md",
+      "line": 493,
+      "design_source": "docs/design/design-front-matter-retrofit.md:538",
+      "finding": "The gloss '(BOOT-06: it carries the startup hook, not build content)' says a little more than the plan or BOOT-06. BOOT-06 requires that an image carry 'nothing per-build and nothing tied to a warden version'; it does not forbid every non-hook content. The plan leaves open whether the Windows toolchain is baked into the image or bootstrapped through the relay (Phasing chunk 2, line 443: 'decide baked-toolchain vs. relay-bootstrapped toolchain'). A baked conda toolchain would be content that BOOT-06 allows but that the gloss rules out, so the note settles a question the plan leaves open, against Decision 2 ('they add no new design'). Low security weight: a baked toolchain is fixed at prepare and is not per-build. This wording came from the previous report's own suggestion, and Jeff's p1-escalate-3 direction said to change nothing else in the notes, so it is recorded here rather than sent back.",
+      "suggestion": "If the note is touched again: '(BOOT-06: it carries the startup hook and nothing per-build)', which is BOOT-06's own wording. Otherwise leave it for the PR body."
+    }
+  ],
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 0,
+    "SHOULD": 1
+  },
+  "suppressions": [],
+  "suppressions_note": "The previous report recorded none, so none carry over.",
+  "routing": {
+    "tier1_red": false,
+    "wf_implement_fix": "none: tier 1 is green and the implementation matches the design byte for byte",
+    "must_findings_route": "none: no MUST findings. The SHOULD goes in the PR body for acknowledgement at merge (FLOW-08)."
+  },
+  "informational": [
+    {"rule": "FLOW-19", "file": "docs/design/design-front-matter-retrofit.md", "line": 1, "note": "For f6-merge-main, not this diff (LINT-04). On origin/main, Front.problems requires design_review on every non-archived design (tools/workflow/check/check.go:366 on main). After main merges, it will report 'missing design_review' for this design (draft) and for the five non-archived retrofits: firecracker-driver-plan (draft), remote-execution-and-measured-hermeticity (draft), hyperv-driver-plan, vm-driver-release-plan and platform-compatibility (active). Only windows-driver-plan (archived) is exempt under #76. The Validation plan's tier-0 expectation (problems=[] for the six retrofits) will no longer hold. The merge round should decide the key for this design and whether retrofitted documents get one (FLOW-19's wording targets designs going through the gate; the retrofits never did), or record that the tier1-static-checks hand-off (a8) must tolerate them, as it already must for the three archived designs (a3)."},
+    {"rule": "FLOW-12", "file": "docs/development/process.md", "line": 281, "note": "FLOW-12 still says pre-standard designs 'are retrofitted when a new design first relies on them'. After this feature, no pre-standard design without front-matter is left, and the README follow-up is gone. The sentence is now historical, not wrong. Changing it is a rule edit for Jeff (FLOW-14), so it is not a finding."},
+    {"rule": "GLOBAL-02", "file": "docs/design/windows-driver-plan.md", "line": 492, "note": "One appended line is 86 characters long, where the rest of the note wraps at about 78 ('as run. The prepared Windows image (autounattend, first-boot task) is input fixed at'). It matches the design byte for byte (design line 537), so it is cosmetic and left as written."},
+    {"rule": "FLOW-14", "file": "docs/development/README.md", "line": 147, "note": "The follow-up bullet was removed in Jeff's attended step p3-remove-readme-bullet (ca7df3f), as a9 directs. No other reference to the follow-up remains in docs/development, AGENTS.md or TEMPLATE.md."},
+    {"rule": "FLOW-02", "file": "docs/design/firecracker-driver-plan.md", "line": 3, "note": "Verified the round-4 changes against Jeff's answers. feature: firecracker-driver, with the shared-slug comment (a6). hyperv-driver-plan status: active, with its Phase 1 Linux guest comment (a2). BOOT-06 in windows-driver-plan rules and BOOT-02 in remote-execution rules (p1-escalate-3). BOOT-02, BOOT-06 and FLOW-06 in this design's rules. The three archived designs reverted to main (a3). Every rule a note cites is now in its document's rules, except FLOW-02/FLOW-12 in the notes' opening lines, which Decision 12 excludes on stated grounds."},
+    {"rule": "FLOW-02", "file": "docs/design/remote-execution-and-measured-hermeticity.md", "line": 315, "note": "'only the action's cache key (input_root_digest) records them' is supported: the key is hash(command + sorted_environment + input_root_digest + platform_properties) (line 121), and the lifecycle has the relay record network traffic and artifacts (steps 5-6), not staged inputs (step 4)."},
+    {"rule": "UX-01", "file": "docs/design/design-front-matter-retrofit.md", "line": 1, "note": "UX-01 / FLOW-15: none owed. Only docs/design/*.md and one docs/development/README.md bullet are touched."}
+  ]
+}
