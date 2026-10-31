@@ -144,9 +144,6 @@ what each item is.
 - **Native-gap backlog** (FLOW-09, TEST-03): validation deferred by merged
   designs, kept in `backlog/native-gaps.yaml` on the `workflow` branch and
   drained by native sessions (`/workflow-native <host>`).
-- **Follow-up — Design front-matter retrofit** (FLOW-12)
-  [`design-front-matter-retrofit`]: add front-matter to the existing
-  `docs/design/` plans as new designs come to rely on them.
 - **Follow-up — Container inputs under `inputs/`** (ORCH-02)
   [`container-inputs`]: record the
   submitted Dockerfile and the translated `build.sh` under `inputs/`.
