@@ -1,17 +1,17 @@
 feature: pre-release-cleanup
 title: Clear tier 1's release-range findings before the next tag (GLOBAL-01, GLOBAL-03, FLOW-12)
 priority: 8
-status: in_progress
+status: done
 round: feature
-phase: 6
+phase: 8
 design: docs/design/pre-release-cleanup.md
 branch: feat/pre-release-cleanup
 alters_relationships: false
 design_review: skip
+source: 'tier1-static-checks review MUST 3, Jeff 2026-10-31: fix 25 findings, nolint the RandAlphaNum panic, archive native-host-loop and native-loop-followups, then release'
 pr:
   number: 80
-  ci: pending
-source: 'tier1-static-checks review MUST 3, Jeff 2026-10-31: fix 25 findings, nolint the RandAlphaNum panic, archive native-host-loop and native-loop-followups, then release'
+  ci: green
 steps:
   - id: f0-branch-setup
     phase: 0
@@ -74,19 +74,33 @@ steps:
   - id: f6-open-pr
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f6-consolidate
     lease:
-      claimed_by: cloud/20261031T205751Z
-      expires: 2026-10-31T23:56:50.708924789Z
+      claimed_by: ""
+      expires: null
+  - id: f7-merge
+    phase: 7
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f8-close
+    phase: 8
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
     steps: 9
   spent:
     runs: 1
-    steps: 9
+    steps: 10
 questions: []
 history:
   - at: 2026-10-31T21:31:39Z
@@ -164,3 +178,15 @@ history:
   - at: 2026-10-31T21:56:50Z
     by: cloud/20261031T205751Z
     event: claimed f6-open-pr until 2026-10-31T23:56:50Z
+  - at: 2026-10-31T22:01:47Z
+    by: cloud/20261031T205751Z
+    event: 'done f6-open-pr and f7-merge by hand: PR #80 green (15 checks) and merged by Jeff before f6-open-pr was recorded (gap: wf-merged-counts-as-pushed).'
+  - at: 2026-10-31T22:01:47Z
+    by: cloud/20261031T205751Z
+    event: claimed f8-close until 2026-11-01T00:01:47Z
+  - at: 2026-10-31T22:01:47Z
+    by: cloud/20261031T205751Z
+    event: done f8-close
+  - at: 2026-10-31T22:01:47Z
+    by: cloud/20261031T205751Z
+    event: closed; feature done
