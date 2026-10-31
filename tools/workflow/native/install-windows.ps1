@@ -61,8 +61,10 @@ function Check-HypervHost {
     } else { Bad 'Hyper-V PowerShell module missing (windows-hyperv)' }
     # Builds need the relay boot disk and a prepared base in warden's Hyper-V cache.
     $cache = if ($env:WARDEN_HYPERV_CACHE_DIR) { $env:WARDEN_HYPERV_CACHE_DIR } else { "$env:LOCALAPPDATA\warden\hyperv" }
-    if (Test-Path (Join-Path $cache 'relay-boot.vhdx')) { Ok "relay boot VHDX in $cache (windows-hyperv)" }
-    else { Warn "no relay-boot.vhdx in ${cache}: build it (tools/relay-vm/hyperv) and copy it there; windows-hyperv builds will fail" }
+    # Each run rebuilds it when the relay source moves; this only reports.
+    if (In-Bash $script:Bash "'$($script:UnixRepo)/tools/relay-vm/hyperv/refresh-cache.sh' --check") {
+        Ok "relay boot VHDX in $cache is built from the current relay (windows-hyperv)"
+    } else { Warn "relay boot VHDX in $cache is missing or stale: each run rebuilds it (tools/relay-vm/hyperv/refresh-cache.sh), which needs WSL" }
     if (Get-ChildItem (Join-Path $cache 'images\prepared') -Filter *.vhdx -ErrorAction SilentlyContinue) { Ok 'prepared Hyper-V base image (windows-hyperv)' }
     else { Warn 'no prepared Hyper-V base: run warden image prepare --driver hyperv; windows-hyperv builds will fail' }
 }
