@@ -130,15 +130,15 @@ steps:
     needs:
       - m6-confirm-pr
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261031T013930Z
+      expires: 2026-10-31T04:05:43.8531566Z
 budget:
   estimate:
     runs: 2
     steps: 12
   spent:
     runs: 1
-    steps: 15
+    steps: 16
 questions:
   - id: a1
     kind: assumed
@@ -322,3 +322,6 @@ history:
   - at: 2026-10-31T02:05:37Z
     by: human/jeff
     event: done m6-confirm-pr
+  - at: 2026-10-31T02:05:43Z
+    by: cloud/20261031T013930Z
+    event: claimed m6-publish until 2026-10-31T04:05:43Z
