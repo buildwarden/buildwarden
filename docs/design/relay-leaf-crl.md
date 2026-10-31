@@ -243,6 +243,28 @@ No rework of implemented code (FLOW-06): nothing of this feature exists yet.
 
 ## Consolidation (merge round)
 
+Forked from `main` at `35a9ad1`; `main` merged at `d43e5a0` (m0).
+
+- **Landed since the fork:** only #66, which archives
+  `docs/design/workflow-bootstrap.md`. It touches no relay code, no seam this
+  design declares and none of its concepts, so there is nothing to reconcile.
+- **Terminology:** "relay trust material" (Decision 5, a1) is the name this
+  design gives `/ca.pem` and `/ca.crl`. No other design uses a different term
+  for them.
+- **Abstractions:** `handleCACRLGet` uses the shared `newBytesResponse`.
+  `handleCACertGet` still builds its response by hand. Moving it onto the same
+  helper would be a cleanup with no behavior change, outside this feature, so
+  it isn't done here.
+- **FLOW-15 sweep:** `make deadcode` (linux, darwin, windows) reports nothing
+  this feature added. `Relay.CAFingerprint` and `Relay.Ledger` were already
+  unreachable on `main`. `overview.md` has `/ca.crl` in the relay pseudocode.
+- **Rule proposed for sign-off (FLOW-14):** RELAY-02 to name the exception
+  for relay trust material that `/ca.pem` and now `/ca.crl` rely on, for
+  example: "The relay's own trust material (its CA certificate and CRL) is
+  served unrecorded. It is not a build input, and the CA is in the output as
+  `ca.cert.pem`." Not made here; `docs/development/` changes only at human
+  sign-off.
+
 ## Rollback notes
 
 ## Archive summary
