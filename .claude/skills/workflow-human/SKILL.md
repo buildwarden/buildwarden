@@ -1,6 +1,6 @@
 ---
 name: workflow-human
-description: An attended session with Jeff that drains the workflow queue's human steps - blocking questions, assumption confirmations, PR confirmations, sign-off, cleanup, escalations and the priority order. Use when Jeff asks what the loop needs from him.
+description: An attended session with Jeff that drains the workflow queue's human steps - blocking questions, assumption confirmations, sign-off, cleanup, escalations and the priority order. Use when Jeff asks what the loop needs from him.
 ---
 
 # Human session
@@ -32,15 +32,12 @@ Same as `workflow-tick` step 1 (the FLOW-18 check, build `dist/wf`, check out
    which also completes the matching `-answer-<Q>` step.
 3. **Assumptions**, batched per feature: confirm each the same way, or turn a
    rejected one into a blocking question for Design.
-4. **`confirm-pr` steps.** Show the branch, the design, the tier-2 report
-   (`reports/<feature>/`), and CI state. On yes, `dist/wf done` the step;
-   the next tick opens the PR.
-5. **`sign-off` steps.** Show the PR, the tier-2 report with its MUST findings
+4. **`sign-off` steps.** Show the PR, the tier-2 report with its MUST findings
    to acknowledge or dismiss with a recorded reason, any unconfirmed
    assumption, and the security note if `security_boundary` is set (FLOW-08,
    LINT-03). Jeff merges the PR himself; you never do. Once it is merged,
    `dist/wf done` the step: its check confirms the merge.
-6. **`cleanup`, `escalate` and runaway steps.** Show the commands or the
+5. **`cleanup`, `escalate` and runaway steps.** Show the commands or the
    decision needed; record the outcome in the queue history; raise an
    estimate only on Jeff's word.
 

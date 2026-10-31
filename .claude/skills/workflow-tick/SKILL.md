@@ -18,8 +18,8 @@ feature's cloud steps.
 
 - Merge, approve, or enable auto-merge on any PR (FLOW-08, LINT-03).
 - Push `main`, force-push, rewrite pushed history, or delete a remote branch
-  (FLOW-16, FLOW-17). Open a PR only for an `m6-publish` whose
-  `m6-confirm-pr` a human has done (FLOW-08).
+  (FLOW-16, FLOW-17). Opening a PR needs no confirmation (FLOW-08):
+  `m6-publish` and `m8-archive` open theirs.
 - Edit `docs/development/`, `.claude/`, or `tools/workflow/` unattended
   (FLOW-14). Propose changes as a question for the human instead.
 - Put secrets in prompts (FLOW-18).
@@ -114,7 +114,7 @@ If the file exists, append a new `## Run <W>` section. Sections, in order:
   `wf next`.
 - **Moved**: each step taken, its outcome, and the branch head it left.
 - **Blocked on Jeff**: open blocking questions (options and recommendation),
-  assumptions awaiting confirmation, `confirm-pr`, `sign-off`, `cleanup` and
+  assumptions awaiting confirmation, `sign-off`, `cleanup` and
   `escalate` steps, runaway budgets (FLOW-13), priority confirmation.
 - **Waiting on a host**: `host:<name>` steps and open native gaps, by
   machine (`hosts.yaml`), and any native run already in today's digest.

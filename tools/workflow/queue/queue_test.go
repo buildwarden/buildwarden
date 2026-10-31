@@ -156,11 +156,11 @@ func TestCompleteWalksBothRounds(t *testing.T) {
 	}
 	want := "p0-branch-setup p1-design p2-plan p3-implement p4-review p5-guide p6-publish " +
 		"p6-merge-round m0-merge-main m1-consolidate m2-plan m3-implement m4-review " +
-		"m5-guide m6-confirm-pr m6-publish m7-sign-off m8-archive"
+		"m5-guide m6-publish m7-sign-off m8-archive"
 	if got := strings.Join(ids, " "); got != want {
 		t.Fatalf("steps:\n got %s\nwant %s", got, want)
 	}
-	if !IsGate(&f.Steps[1]) || IsGate(&f.Steps[7]) || IsGate(&f.Steps[14]) ||
+	if !IsGate(&f.Steps[1]) || IsGate(&f.Steps[7]) || !IsGate(&f.Steps[14]) ||
 		!IsGate(&f.Steps[15]) || !IsGate(&f.Steps[16]) {
 		t.Fatal("gate steps are each phase's last template step")
 	}

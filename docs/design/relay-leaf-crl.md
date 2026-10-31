@@ -1,6 +1,6 @@
 ---
 feature: relay-leaf-crl
-status: draft
+status: archived
 round: parallel
 drivers: [container, qemu, vz, hyperv]   # relay/ is shared: every driver's guest gets the new certificates
 seams: [relay-guest-api]
@@ -271,3 +271,40 @@ Forked from `main` at `35a9ad1`; `main` merged at `d43e5a0` (m0).
 ## Rollback notes
 
 ## Archive summary
+
+Merged 2026-10-30 in buildwarden/buildwarden#70 (`98b0ee1`), taken through
+every loop phase in one attended session at priority 1.
+
+- **Built.** `generateCA` (`relay/relay.go`) also signs an empty CRL with the
+  CA key, valid for the CA's lifetime, and keeps it in memory (`caCRL`).
+  `signHost` (`relay/proxy.go`) puts `CRLDistributionPoints:
+  ["http://artifacts/ca.crl"]` (`caCRLURL`) on every leaf, and
+  `handleArtifacts` serves the DER from `handleCACRLGet` as
+  `application/pkix-crl`. Tests are in `relay/crl_test.go`. `overview.md` lists
+  the endpoint.
+- **Decisions taken:**
+  - a CRL, not OCSP;
+  - the URL `http://artifacts/ca.crl` on the existing reserved host (a2);
+  - only the leaves change, since the CA is a trusted root and already has
+    `KeyUsageCRLSign`;
+  - `NextUpdate` set to the CA's `NotAfter`;
+  - **served unrecorded**, as relay trust material like `/ca.pem` (a1, Jeff:
+    a relay-internal artifact that can't affect build outputs).
+- **Rejected:**
+  - recording each fetch in the ledger;
+  - a new reserved hostname;
+  - a guest-side `_curlrc` with `ssl-revoke-best-effort` or `ssl-no-revoke`,
+    which would fix only `curl.exe` and weaken checks the build makes upstream.
+- **Validated.** windows-hyperv (blocking): `curl.exe` with no revocation flag
+  fetched two HTTPS hosts, `certutil -urlcache` showed Schannel fetching
+  `http://artifacts/ca.crl`, and `inspect --verify-disks` had 15 valid
+  signatures and no `/ca.crl` record.
+- **For future designs touching `mitm-ca`, `leaf-certificates` or
+  `revocation`:**
+  - any new leaf template must keep the distribution point, or Windows
+    clients break again;
+  - the CRL must outlive every leaf, so a longer-lived CA needs a matching
+    `NextUpdate` or a reissued CRL;
+  - anything else the relay serves as trust material follows Decision 5 (not
+    recorded). RELAY-02's text doesn't name that exception yet; the
+    Consolidation section has the proposed wording.
