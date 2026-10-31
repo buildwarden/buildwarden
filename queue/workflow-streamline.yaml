@@ -2,7 +2,7 @@ feature: workflow-streamline
 title: 'Streamline the feature loop: one round, archive in the feature PR, human gates only for design, questions and merge'
 priority: 1
 kind: process
-status: queued
+status: in_progress
 round: process
 phase: 1
 design: docs/design/workflow-streamline.md
@@ -15,17 +15,23 @@ steps:
     affinity: human
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: human/jeff
+      expires: 2026-10-31T22:04:51.663803134Z
 budget:
   estimate:
     runs: 2
     steps: 8
   spent:
     runs: 0
-    steps: 0
+    steps: 1
 questions: []
 history:
   - at: 2026-10-31T20:04:39Z
     by: human/jeff
     event: queued at priority 1 (intake)
+  - at: 2026-10-31T20:04:51Z
+    by: human/jeff
+    event: started (FLOW-05)
+  - at: 2026-10-31T20:04:51Z
+    by: human/jeff
+    event: claimed x1-design until 2026-10-31T22:04:51Z

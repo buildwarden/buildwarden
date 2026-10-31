@@ -1,7 +1,7 @@
 feature: container-inputs
 title: Record container inputs under inputs/ (ORCH-02)
 priority: 4
-status: in_progress
+status: done
 round: merge
 phase: 8
 design: docs/design/container-inputs.md
@@ -170,7 +170,7 @@ steps:
   - id: m8-cleanup
     phase: 8
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -178,7 +178,7 @@ steps:
   - id: m8-archive
     phase: 8
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - m8-cleanup
     lease:
@@ -190,7 +190,7 @@ budget:
     steps: 18
   spent:
     runs: 3
-    steps: 23
+    steps: 25
 questions:
   - id: a1
     kind: assumed
@@ -452,3 +452,18 @@ history:
   - at: 2026-10-31T20:04:10Z
     by: cloud/20261031T200309Z
     event: 'released m8-archive: '
+  - at: 2026-10-31T20:14:16Z
+    by: human/jeff
+    event: claimed m8-cleanup until 2026-10-31T22:14:16Z
+  - at: 2026-10-31T20:14:16Z
+    by: human/jeff
+    event: done m8-cleanup
+  - at: 2026-10-31T20:14:16Z
+    by: cloud/20261031T201416Z
+    event: claimed m8-archive until 2026-10-31T22:14:16Z
+  - at: 2026-10-31T20:14:16Z
+    by: cloud/20261031T201416Z
+    event: done m8-archive
+  - at: 2026-10-31T20:14:16Z
+    by: cloud/20261031T201416Z
+    event: archived; feature done
