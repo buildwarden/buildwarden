@@ -510,7 +510,9 @@ Design decides whether the review is needed and records it as
 allowed only when the design declares `alters_relationships: false`, no `seams`,
 `security_boundary: none` and no blocking `native_validation`; raises no assumed
 question; and the branch changes no rule in this directory. Every skipped review
-is listed in the digest, so the human can call one back.
+is listed in the digest, so the human can call one back. An archived design
+need not carry `design_review`: it is past the gate, and designs archived
+before this rule never had the key.
 
 When a feature returns to Design (FLOW-06), a fresh review follows the new
 plan. Whether it may be skipped is judged on what changed since the last
