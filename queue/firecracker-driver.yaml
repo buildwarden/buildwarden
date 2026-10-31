@@ -2,7 +2,7 @@ feature: firecracker-driver
 title: Firecracker driver
 priority: 9
 status: queued
-round: parallel
+round: feature
 phase: 0
 design: docs/design/firecracker-spike-plan.md
 branch: feat/firecracker-driver
@@ -17,7 +17,7 @@ steps:
       claimed_by: ""
       expires: null
     note: Push the plan's latest commit f9b07c5 from Jeff's Mac (it is not on any remote), so Design starts from it.
-  - id: p0-branch-setup
+  - id: f0-branch-setup
     phase: 0
     affinity: cloud
     status: pending
@@ -54,3 +54,6 @@ history:
   - at: 2026-10-29T00:28:10Z
     by: human/jeff
     event: branch rebased onto main cd42fc7 and force-pushed (55842b3 -> 180c1db) on Jeff's one-off FLOW-17 exception; make test and make lint (linux, windows, darwin) green
+  - at: 2026-10-31T20:44:50Z
+    by: human/jeff
+    event: migrated to the feature round at phase 0 (workflow-streamline)

@@ -48,19 +48,21 @@ priority: 2                      # 1 is highest; unique
 kind: feature                    # feature (default, omitted) | process (FLOW-03)
 holds: []                        # process only: affinity patterns held while in progress
 status: in_progress              # queued | in_progress | done
-round: parallel                  # parallel | merge | process (FLOW-03)
-phase: 1                         # FLOW-03 phase: 0 branch-setup .. 8 archive; process 1..4
+round: feature                   # feature | process (FLOW-03); parallel and merge only
+                                 #   on items finished before workflow-streamline
+phase: 1                         # FLOW-03 phase: 0 branch-setup .. 8 close; process 1..4
 design: docs/design/container-inputs.md
 branch: feat/container-inputs
 alters_relationships: null       # null until Design decides (FLOW-02)
+design_review: required          # unset until Design decides: required | skip (FLOW-19)
 source: where the item came from
-pr: {number: 0, ci: pending}     # merge round only: pending | green | red
+pr: {number: 0, ci: pending}     # set by Publish (f6-open-pr, x2-implement): pending | green | red
 steps:
-  - id: p1-design                # <p|m|x><phase>-<name>[-r<n>]
+  - id: f1-design                # <f|x><phase>-<name>[-r<n>]
     phase: 1
     affinity: cloud              # cloud | human | host:<name> (FLOW-04)
     status: pending              # pending | done
-    needs: [p1-answer-q1]        # step ids that must be done first
+    needs: [f1-answer-q1]        # step ids that must be done first
     lease: {claimed_by: "cloud/20261029T095500Z", expires: 2026-10-29T11:55:00Z}
     note: optional
 budget:                          # FLOW-13 runaway check, not a share of the run
@@ -75,7 +77,7 @@ questions:                       # FLOW-07; never GitHub issues
     recommended: ...
     answer: set by the human
 history:                         # append-only
-  - {at: 2026-10-29T09:55:00Z, by: cloud/20261029T095500Z, event: claimed p1-design}
+  - {at: 2026-10-29T09:55:00Z, by: cloud/20261029T095500Z, event: claimed f1-design}
 ```
 
 ### Steps and phases
@@ -84,23 +86,24 @@ Each phase starts with template steps, and the phase's last template step is
 its **gate**: marking it done runs the phase's FLOW-03 done-when check, and
 the transition happens only if the check passes.
 
-| Phase | Parallel round | Merge round |
-|---|---|---|
-| 0 | `p0-branch-setup` | `m0-merge-main` |
-| 1 | `p1-design` | `m1-consolidate` |
-| 2 | `p2-plan` | `m2-plan` |
-| 3 | `p3-implement` | `m3-implement` |
-| 4 | `p4-review` | `m4-review` |
-| 5 | `p5-guide` | `m5-guide` |
-| 6 | `p6-publish`, then `p6-merge-round` (waits for the serial merge queue) | `m6-publish` (opens the PR; no confirmation, FLOW-08) |
-| 7 | | `m7-sign-off` (human; its check is the merge) |
-| 8 | | `m8-archive` |
+| Phase | Steps |
+|---|---|
+| 0 | `f0-branch-setup` |
+| 1 | `f1-design` (decides `design_review`) |
+| 2 | `f2-plan`, then `f2-design-review` (human, FLOW-19) unless `design_review: skip` |
+| 3 | `f3-implement` |
+| 4 | `f4-review` |
+| 5 | `f5-guide` |
+| 6 | `f6-merge-main` (waits for the PR slot, FLOW-05), `f6-consolidate`, `f6-open-pr` (archives the design on the branch and opens the PR; no confirmation, FLOW-08) |
+| 7 | `f7-merge` (cloud; passes once the human has merged, takes no claim or budget) |
+| 8 | `f8-close` (cloud, inline in the tick; no PR, FLOW-16) |
 
 A **process item** (`kind: process`, FLOW-03) changes the rules the loops run
 under (`docs/development/`, `.claude/`, `tools/workflow/`). It has its own
-round, `process`, with human steps only (FLOW-14): `x1-design` (the design
-file exists on the branch), `x2-implement` (branch pushed), `x3-sign-off`
-(merged into `main`) and `x4-archive` (design archived, branch deleted).
+round, `process`: `x1-design` (human: the design on the branch, approved in its
+design review), `x2-implement` (cloud: implemented, archived and its PR green),
+`x3-merge` (merged into `main`) and `x4-close` (branch gone, design archived on
+`main`).
 Process items sort ahead of every feature. While one is in progress, `wf next`
 gives a worker matching its `holds` (`cloud`, `host:*`, `host:macos-vz`) no
 new step and reports `held by process item <name>`; `wf claim` refuses it and
@@ -108,10 +111,14 @@ new step and reports `held by process item <name>`; `wf claim` refuses it and
 claimed, and finishing the process item releases the hold. Intake:
 `wf new ... -kind process -holds cloud,host:*`.
 
-Design adds the steps it finds: `p1-answer-<q>` (human) for a blocking
-question, `m6-validate-<host>` (`host:<host>`) for blocking native validation.
-A return to Design (FLOW-06) re-seeds phase 1 with `-r<n>` ids; the third
-return adds a human `escalate` step.
+Design adds the steps it finds: `f1-answer-<q>` (human) for a blocking
+question, `f6-validate-<host>` (`host:<host>`) for blocking native validation.
+A return to Design (`wf back`, FLOW-06) re-seeds phase 1 with `-r<n>` ids, so
+Plan seeds a fresh design review; the third return adds a human `escalate`
+step. Consolidation returning work the approved plan covers uses
+`wf back -to 3` (back to Implement, no new review). Items finished before
+workflow-streamline keep their `p`/`m` step ids as history; `wf migrate` moved
+the unfinished ones on 2026-10-31.
 
 ## Claiming a step
 

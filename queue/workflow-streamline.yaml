@@ -2,16 +2,16 @@ feature: workflow-streamline
 title: 'Streamline the feature loop: one round, archive in the feature PR, human gates only for design, questions and merge'
 priority: 1
 kind: process
-status: in_progress
+status: done
 round: process
-phase: 3
+phase: 4
 design: docs/design/workflow-streamline.md
 branch: feat/workflow-streamline
 alters_relationships: null
+source: 'Jeff, 2026-10-31: too many gates and PRs per feature (separate archive PR, cleanup step, doubled rounds)'
 pr:
   number: 75
   ci: green
-source: 'Jeff, 2026-10-31: too many gates and PRs per feature (separate archive PR, cleanup step, doubled rounds)'
 steps:
   - id: x1-design
     phase: 1
@@ -27,10 +27,17 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: x3-sign-off
+  - id: x3-merge
     phase: 3
-    affinity: human
-    status: pending
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
+    affinity: cloud
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -39,8 +46,8 @@ budget:
     runs: 2
     steps: 8
   spent:
-    runs: 0
-    steps: 2
+    runs: 1
+    steps: 3
 questions:
   - id: a1
     kind: assumed
@@ -103,3 +110,21 @@ history:
   - at: 2026-10-31T20:39:00Z
     by: human/jeff
     event: entered phase 3 (sign-off)
+  - at: 2026-10-31T20:44:50Z
+    by: human/jeff
+    event: migrated to the process round at phase 3 (workflow-streamline)
+  - at: 2026-10-31T20:44:58Z
+    by: cloud/20261031T204458Z
+    event: done x3-merge
+  - at: 2026-10-31T20:44:58Z
+    by: cloud/20261031T204458Z
+    event: entered phase 4 (close)
+  - at: 2026-10-31T20:44:59Z
+    by: cloud/20261031T204458Z
+    event: claimed x4-close until 2026-10-31T22:44:59Z
+  - at: 2026-10-31T20:44:59Z
+    by: cloud/20261031T204458Z
+    event: done x4-close
+  - at: 2026-10-31T20:44:59Z
+    by: cloud/20261031T204458Z
+    event: closed; feature done

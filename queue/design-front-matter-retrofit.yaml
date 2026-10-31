@@ -2,7 +2,7 @@ feature: design-front-matter-retrofit
 title: Retrofit FLOW-02 front-matter onto the older designs (FLOW-12)
 priority: 5
 status: in_progress
-round: parallel
+round: feature
 phase: 4
 design: docs/design/design-front-matter-retrofit.md
 branch: feat/design-front-matter-retrofit
@@ -105,7 +105,7 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: p4-review
+  - id: f4-review
     phase: 4
     affinity: cloud
     status: pending
@@ -380,3 +380,6 @@ history:
   - at: 2026-10-31T14:51:07Z
     by: human/jeff
     event: estimate raised to 20 steps / 4 runs (Jeff, over budget at 16/14 steps, 3/3 runs)
+  - at: 2026-10-31T20:44:50Z
+    by: human/jeff
+    event: migrated to the feature round at phase 4 (workflow-streamline)

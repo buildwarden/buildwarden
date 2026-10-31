@@ -2,7 +2,7 @@ feature: tier1-static-checks
 title: 'Tier-1 static-check extraction (LINT-02, Deep-dive #2)'
 priority: 6
 status: in_progress
-round: parallel
+round: feature
 phase: 3
 design: docs/design/tier1-static-checks.md
 branch: feat/tier1-static-checks
@@ -48,14 +48,24 @@ steps:
       claimed_by: ""
       expires: null
     note: 'Plan task 10: the FLOW-02 half of design-front-matter and tier1 designs [-all] on check.Front.Problems (or the a3 fallback). Needs tasks 1 and 4 on the branch; if absent, do them first under this claim. Run make lint and make test before wf done: wf runs the phase-3 gate check only when p3-implement is done, and the phase advances when this step finishes.'
-  - id: p3-implement
+  - id: f3-implement
     phase: 3
     affinity: cloud
     status: pending
+    needs:
+      - f3-design-review
     lease:
       claimed_by: ""
       expires: null
     note: 'Jeff, 2026-10-31: first merge origin/main into feat/tier1-static-checks (it carries 0227e58, the tools/workflow lll fix the make lint gate needs), resolve any conflicts, then finish the remaining tasks.'
+  - id: f3-design-review
+    phase: 3
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: Design review (FLOW-19) for a design that predates it; the human may waive it by completing this step with a recorded reason.
 budget:
   estimate:
     runs: 6
@@ -214,3 +224,6 @@ history:
   - at: 2026-10-31T10:38:10Z
     by: cloud/20261031T095649Z
     event: done p3-front-matter-check
+  - at: 2026-10-31T20:44:50Z
+    by: human/jeff
+    event: migrated to the feature round at phase 3 (workflow-streamline)

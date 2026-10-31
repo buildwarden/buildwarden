@@ -2,14 +2,14 @@ feature: security-suite
 title: 'Build the TEST-08 security suite and pen-tester agent (Deep-dive #1)'
 priority: 10
 status: queued
-round: parallel
+round: feature
 phase: 0
 design: docs/design/security-suite.md
 branch: feat/security-suite
 alters_relationships: null
 source: 'docs/development/README.md: Deep-dive #1; design in docs/development/security-suite.md'
 steps:
-  - id: p0-branch-setup
+  - id: f0-branch-setup
     phase: 0
     affinity: cloud
     status: pending
@@ -34,3 +34,6 @@ history:
   - at: 2026-10-29T00:12:09Z
     by: human/jeff
     event: 'priority 6 -> 7 (Jeff reordered: retrofit early)'
+  - at: 2026-10-31T20:44:50Z
+    by: human/jeff
+    event: migrated to the feature round at phase 0 (workflow-streamline)
