@@ -592,8 +592,9 @@ describe those documents, not this change.
 
 ## Implementation plan
 
-Round 4 (p1-design-r4, after Jeff's decision on p1-escalate-3; p2-plan-r4 may
-refine it). Every assumed question is answered (a1-a9), so no task is
+Round 4 (p1-design-r4, after Jeff's decision on p1-escalate-3; checked and
+refined by Plan in step p2-plan-r3, whose id is left over from round 3).
+Every assumed question is answered (a1-a9), so no task is
 conditional. Each task carries one status. **Done** means it shipped and
 round 4 does not change it: Implement does not touch it again, and the task
 names the commit. **Rework** means it shipped and round 4 changes it:
@@ -645,9 +646,10 @@ the task, the file and Decision 12 (or 8 or 10).
      block, which adds BOOT-06 after BOOT-04 (Decision 12).
    - Replace the round-2 note text exactly as in task 4, with this file's
      note from Design (Decision 10). The "Phase 2 pending" banner stays.
-7. **Rework** (round 1: 7b11f04), the three archived designs (FLOW-02,
-   FLOW-12, a3). In each of `hyperv-windows-prepare.md`,
-   `ledger-environment-types.md` and `unified-bootstrap.md`, delete line 9,
+7. **Rework**, a revert (round 1: 7b11f04 added the line; a3 removes it),
+   the three archived designs (FLOW-02, FLOW-12, a3). In each of
+   `hyperv-windows-prepare.md`, `ledger-environment-types.md` and
+   `unified-bootstrap.md`, delete line 9,
    `alters_relationships: true`, which round 1 added. Equivalently,
    `git checkout $(git merge-base origin/main HEAD) -- <file>`. Acceptance:
    `git diff $(git merge-base origin/main HEAD) HEAD -- <file>` is empty.
@@ -669,8 +671,10 @@ the task, the file and Decision 12 (or 8 or 10).
    - Paste the output into the last rework commit's message.
 9. **To do**, on the round-4 tree: the diff checks (TEST-02 tier 0, FLOW-12,
    FLOW-02). `origin/main` has moved since the branch point (to cc6119e; it
-   touched no file here), so diff against the merge base `MB=$(git
-   merge-base origin/main HEAD)`.
+   touched none of the files this feature changes, only
+   `workflow-bootstrap.md`, which task 8 parses as it is on the branch), so
+   diff against the merge base `MB=$(git merge-base origin/main HEAD)`
+   (cd42fc7 today), not against `origin/main`.
    - (a) For each of the six retrofitted files, `git diff -U0 $MB HEAD --
      <file>` shows 0 removed lines. `windows-driver-plan.md` and
      `remote-execution-and-measured-hermeticity.md` have exactly two hunks:
@@ -679,10 +683,16 @@ the task, the file and Decision 12 (or 8 or 10).
      Each of the other four has exactly one hunk: the block plus its blank
      line.
    - (b) The three archived designs have no diff against `$MB` (task 7).
-   - (c) The six blocks and two notes are byte-identical to Design.
+   - (c) The six blocks and two notes are byte-identical to the fenced text
+     in this design's Design section as committed at 363fcfc (round 4; the
+     plan commit from p2-plan-r3 edits only the Implementation plan, so the
+     Design section at HEAD is the same). The two **Done** blocks also match
+     51aedd3 and 894629d; the four reworked blocks now differ from
+     ba605ac, 4805056, d5f83c3 and fdd14b4 only by the line tasks 1, 2, 4
+     and 6 name, and the two notes replace those commits' round-2 notes.
    - (d) `git diff --stat 0638781 HEAD` lists only the four reworked
-     retrofits, the three archived designs, this design (if a later plan
-     commit touches it) and, if Jeff's step has landed,
+     retrofits, the three archived designs, this design (363fcfc and the
+     p2-plan-r3 plan commit) and, if Jeff's step has landed,
      `docs/development/README.md`; the two **Done** files are untouched.
    - (e) `git diff -U0 0638781 HEAD` changes exactly one line in
      `firecracker-driver-plan.md` (3) and in `hyperv-driver-plan.md` (4); in
@@ -690,8 +700,11 @@ the task, the file and Decision 12 (or 8 or 10).
      `## Security note (retrofit)` heading.
 
    Record the result with task 8's.
-10. **To do**: run `make test` and `make lint` (TEST-01, FLOW-17). Put the
-    go1.26.3 toolchain that golangci-lint needs on `PATH`. No build-tagged
+10. **To do**: TEST-02 tier 0, the universal gate: run `make test` and
+    `make lint` (TEST-01, FLOW-17). No tier 1 or tier 2 run is owed: the
+    change touches no Go file, driver or shared package (Validation plan,
+    TEST-02 caveat). Put the go1.26.3 toolchain that golangci-lint needs on
+    `PATH`. No build-tagged
     file changes, so no per-platform lint run is owed. Push
     `feat/design-front-matter-retrofit` after the rework commits, without
     force (FLOW-16, FLOW-17).
