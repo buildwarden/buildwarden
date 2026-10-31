@@ -1,0 +1,21 @@
+════════════════════════════════════════════════════════════════════════════════
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  ✅
+  ENVIRONMENT  vm-disk-chain/v1  payload verified
+    qemu linux/arm64
+    disk     alpine_3_21.qcow2  197.5 MB  sha256:ebaef97d702d  local  [ok]
+    seed     5 per-build files
+════════════════════════════════════════════════════════════════════════════════
+[1;35m✅ ENVIRONMENT  (894 bytes)[0m
+[1;32m✅ GET /bootstrap (42 bytes)[0m
+[1;32m✅ GET /build-script (99 bytes)[0m
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.21/main/aarch64/APKINDEX.tar.gz (488084 bytes)
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.21/community/aarch64/APKINDEX.tar.gz (1974349 bytes)
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.21/main/aarch64/oniguruma-6.9.9-r0.apk (184236 bytes)
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.21/main/aarch64/jq-1.7.1-r0.apk (273311 bytes)
+[1;32m✅ ARTIFACT POST /jq.txt (9 bytes)[0m
+
+════════════════════════════════════════════════════════════════════════════════
+  SUMMARY: 25 records, 8 requests, 2.8 MB audited, 1 artifact(s)
+  SIGNATURES: ✅ All 26 signatures valid
+  COMPLETENESS: ✅ All channels closed
+════════════════════════════════════════════════════════════════════════════════

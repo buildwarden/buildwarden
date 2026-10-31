@@ -163,7 +163,23 @@ gaps:
       Mac-specific. 2026-10-30 (host:windows-hyperv/20261030T173857Z): not
       run; the qemu driver does not run on x86_64 hosts (see
       qemu-environment-descriptors), and Hyper-V builds no Linux guests yet.
-    status: open
+    status: done
+    done: 2026-10-30
+    evidence: >-
+      host:qemu-any/20261031T023128Z, attended, on the macbook (qemu-any moved
+      there in hosts.yaml), QEMU 11.1.1, feat/container-inputs ddd11fe with its
+      own relay initramfs. `warden build --driver qemu` of a `FROM alpine:3.21`
+      Dockerfile (apk add jq over HTTPS) wrote inputs/Containerfile (the
+      submitted file, unchanged) and inputs/build.sh (`#!/bin/sh`, `set -e`,
+      the RUN line); `inspect --verify-disks` verified vm-disk-chain/v1, 26
+      signatures valid. The entry's "inputs/Dockerfile" is stale: the branch
+      names it inputs/Containerfile, as the CI evidence does. Hyper-V half not
+      applicable: Hyper-V builds no Linux guests. 1 of 6 branch runs failed on
+      the transient APKINDEX "temporary error" seen on 2026-10-30 (the failed
+      fetch never reached the ledger); main had 0 of 7. Logs:
+      native/macos-qemu/2026-10-30/ (alpine-container-inputs-flake-2.log,
+      descriptors-alpine-container-inputs-ddd11fe.inspect.log,
+      container-inputs-qemu-inputs-build.sh).
   - id: container-inputs-integration-test
     host: container-any
     what: make integration-test on feat/container-inputs, including the new inputs/ check in test-integration.sh, which has never run (cloud sessions have no container runtime or outbound network; CI does not run the script).
