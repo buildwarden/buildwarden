@@ -3,7 +3,7 @@ title: 'Tier-1 static-check extraction (LINT-02, Deep-dive #2)'
 priority: 6
 status: in_progress
 round: feature
-phase: 3
+phase: 4
 design: docs/design/tier1-static-checks.md
 branch: feat/tier1-static-checks
 alters_relationships: false
@@ -52,12 +52,12 @@ steps:
   - id: f3-implement
     phase: 3
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f3-design-review
     lease:
-      claimed_by: cloud/20261031T205751Z
-      expires: 2026-10-31T23:09:25.449584295Z
+      claimed_by: ""
+      expires: null
     note: 'Jeff, 2026-10-31, and design review r1: merge origin/main into the branch (it carries the tools/workflow lll fix, workflow-streamline, and #76 once merged) and resolve conflicts; then map FLOW-19 in tools/tier1/rules.yaml to owner wf and update the coupling front-matter fixtures for design_review; make lint must pass with tier 1 over this diff. The design already carries design_review (8e0eed8).'
   - id: f3-design-review
     phase: 3
@@ -67,6 +67,13 @@ steps:
       claimed_by: ""
       expires: null
     note: Design review (FLOW-19) for a design that predates it; the human may waive it by completing this step with a recorded reason.
+  - id: f4-review
+    phase: 4
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 6
@@ -237,3 +244,9 @@ history:
   - at: 2026-10-31T21:09:25Z
     by: cloud/20261031T205751Z
     event: claimed f3-implement until 2026-10-31T23:09:25Z
+  - at: 2026-10-31T21:11:21Z
+    by: cloud/20261031T205751Z
+    event: done f3-implement
+  - at: 2026-10-31T21:11:21Z
+    by: cloud/20261031T205751Z
+    event: entered phase 4 (review)
