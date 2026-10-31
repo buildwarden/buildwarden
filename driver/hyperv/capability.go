@@ -32,11 +32,12 @@ func (o Op) String() string {
 type Outcome int
 
 const (
-	// OutcomeDirect: the process holds the privilege; perform in-process.
+	// OutcomeDirect means the process holds the privilege; perform in-process.
 	OutcomeDirect Outcome = iota
-	// OutcomeDelegate: delegate the op to the privileged service.
+	// OutcomeDelegate means delegate the op to the privileged service.
 	OutcomeDelegate
-	// OutcomeBlocked: neither available; needs one-time setup or elevation.
+	// OutcomeBlocked means neither is available; the op needs one-time setup or
+	// elevation.
 	OutcomeBlocked
 )
 
@@ -128,16 +129,17 @@ func (c Capabilities) Resolve(op Op) Outcome {
 type NetworkStrategy int
 
 const (
-	// NetBlocked: no network path is available.
+	// NetBlocked means no network path is available.
 	NetBlocked NetworkStrategy = iota
-	// NetEphemeralPerBuild: full Administrator; create a fresh isolated network
-	// per build and tear it down after (cleanest isolation, no reuse).
+	// NetEphemeralPerBuild means full Administrator: create a fresh isolated
+	// network per build and tear it down after (cleanest isolation, no reuse).
 	NetEphemeralPerBuild
-	// NetDelegateService: delegate standup to the privileged service, which
-	// runs elevated and likewise creates a fresh per-build network.
+	// NetDelegateService means delegate standup to the privileged service,
+	// which runs elevated and likewise creates a fresh per-build network.
 	NetDelegateService
-	// NetReuseDurable: non-elevated Hyper-V Administrators; reuse the durable
-	// named switch created by an earlier elevated `warden setup --driver hyperv`.
+	// NetReuseDurable means non-elevated Hyper-V Administrators: reuse the
+	// durable named switch created by an earlier elevated
+	// `warden setup --driver hyperv`.
 	NetReuseDurable
 )
 

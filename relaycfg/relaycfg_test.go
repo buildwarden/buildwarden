@@ -106,6 +106,43 @@ func TestClaimRetriesUntilRelayListens(t *testing.T) {
 	}
 }
 
+// TestGiveUpKeepsDialError checks that when the relay never listens, the
+// error Claim and OpenTunnel return wraps both the context's error and the
+// last dial failure, so a caller can classify either with errors.Is/As.
+func TestGiveUpKeepsDialError(t *testing.T) {
+	tests := []struct {
+		name string
+		call func(ctx context.Context, addr string) error
+	}{
+		{"Claim", func(ctx context.Context, addr string) error {
+			_, err := Claim(ctx, addr, "", Config{CollectorURL: "http://x"})
+			return err
+		}},
+		{"OpenTunnel", func(ctx context.Context, addr string) error {
+			_, _, err := OpenTunnel(ctx, addr, "", http.NotFoundHandler())
+			return err
+		}},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			ln := listen(t)
+			addr := ln.Addr().String()
+			ln.Close() // nothing listens
+			ctx, cancel := context.WithTimeout(
+				context.Background(), 600*time.Millisecond)
+			defer cancel()
+			err := tt.call(ctx, addr)
+			if !errors.Is(err, context.DeadlineExceeded) {
+				t.Errorf("err = %v, want it to wrap context.DeadlineExceeded", err)
+			}
+			var opErr *net.OpError
+			if !errors.As(err, &opErr) {
+				t.Errorf("err = %v, want it to wrap the last *net.OpError", err)
+			}
+		})
+	}
+}
+
 func TestClaimRequiresCollectorURL(t *testing.T) {
 	ln := listen(t)
 	addr := ln.Addr().String()

@@ -71,7 +71,7 @@ func OpenTunnel(
 		case <-ctx.Done():
 		}
 		return nil, nil, fmt.Errorf(
-			"relaycfg: relay at %s never accepted the tunnel: %w (last error: %v)",
+			"relaycfg: relay at %s never accepted the tunnel: %w (last error: %w)",
 			addr, ctx.Err(), lastErr)
 	}
 }

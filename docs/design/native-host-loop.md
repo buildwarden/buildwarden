@@ -1,6 +1,6 @@
 ---
 feature: native-host-loop
-status: draft
+status: archived
 round: parallel
 drivers: []
 seams: []
@@ -227,3 +227,52 @@ Run `install-macos.sh uninstall` and `install-windows.ps1 uninstall`, plus
 validation off. `wf gate` is only called by the wrapper.
 
 ## Archive summary
+
+Merged 2026-10-29 in buildwarden/buildwarden#64 (`137feae`), attended and
+outside the queue; archived by `pre-release-cleanup`.
+
+- **Built.** `hosts.yaml` on the workflow branch maps each machine to the
+  host names it serves (`tools/workflow/queue/hosts.go`), and `wf validate`
+  rejects a host name on two machines or a pending host step or open gap no
+  machine serves. `wf gate -machine M` decides, with no agent, whether a
+  scheduled session starts: exit 0 for a ready host step, or for open gaps
+  once `origin/main` or an in-progress branch has moved or `-sweep-days`
+  passed; exit 3 otherwise. `tools/workflow/native/` holds the wrapper
+  `native-tick.sh` (lock, power and disk checks, clean reset to origin,
+  FLOW-18 check, gate, then `claude -p` on `workflow-native unattended`),
+  `install-macos.sh` and `install-windows.ps1` (`check`, `install`,
+  `uninstall`), and `settings.native.json`. The `workflow-native` skill
+  gained its unattended mode, and FLOW-04 and FLOW-09 their host names and
+  scheduled sessions.
+- **Decisions taken:**
+  - one scheduled session per machine, not per host name;
+  - `<os>-<driver>` names for platform work, `<capability>-any` for work any
+    capable machine can do;
+  - a zero-token gate in front of the agent, stamped from the state the
+    session started from;
+  - one wrapper for both machines (launchd on the Mac, Git Bash on Windows);
+  - installers whose `check` changes nothing and blocks `install`;
+  - a deny-list settings file as a guard against accidents, with the
+    dedicated checkout and FLOW-08 as the real boundary.
+- **Rejected:** an agent that checks for work itself (tokens every idle
+  night); YAML parsed in shell; a second skill; Cowork scheduled tasks,
+  whose shell is a Linux VM with no native hypervisor.
+- **Changed after merge:** the native batch spends `native_budget`, not
+  `run_budget` (`native-loop-followups.md`); `qemu-any` moved to the
+  `macbook`, since the qemu driver runs only on aarch64 hosts (2026-10-30);
+  the installers check only the capabilities `hosts.yaml` gives the machine.
+- **Validated.** `wf gate` and `hosts.yaml` unit tests, `shellcheck`, and the
+  gate against the real queue. The Mac's scheduled runs have pushed their own
+  `## Run host:macbook/...` digest sections since 2026-10-30 (`df15edf`; the
+  2026-10-29 section was pushed from an attended session, `68e2633`). The
+  Windows desktop is installed and its wrapper writes its status file, but by
+  this archive it had pushed no worked scheduled run of its own: no host step
+  or open backlog gap named `windows-hyperv` or `container-any`, so its gate
+  never had work. That remaining check is the `windows-hyperv` backlog entry
+  `native-host-loop-windows-scheduled-run`.
+- **For future designs touching `workflow`, `native-validation`,
+  `scheduled-sessions`, `hosts` or `gate`:** route work by editing
+  `hosts.yaml`, not code; anything that should wake a machine must be
+  visible to `wf gate` (a host step or an open gap), and the gate must stay
+  free to run; the loop may not edit `.claude/` or `tools/workflow/`
+  unattended (FLOW-14), so changes here are process items.
