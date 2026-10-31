@@ -92,7 +92,7 @@ the transition happens only if the check passes.
 | 3 | `p3-implement` | `m3-implement` |
 | 4 | `p4-review` | `m4-review` |
 | 5 | `p5-guide` | `m5-guide` |
-| 6 | `p6-publish`, then `p6-merge-round` (waits for the serial merge queue) | `m6-confirm-pr` (human), `m6-publish` |
+| 6 | `p6-publish`, then `p6-merge-round` (waits for the serial merge queue) | `m6-publish` (opens the PR; no confirmation, FLOW-08) |
 | 7 | | `m7-sign-off` (human; its check is the merge) |
 | 8 | | `m8-archive` |
 
