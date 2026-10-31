@@ -56,8 +56,8 @@ steps:
     needs:
       - f3-design-review
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261031T205751Z
+      expires: 2026-10-31T23:09:25.449584295Z
     note: 'Jeff, 2026-10-31, and design review r1: merge origin/main into the branch (it carries the tools/workflow lll fix, workflow-streamline, and #76 once merged) and resolve conflicts; then map FLOW-19 in tools/tier1/rules.yaml to owner wf and update the coupling front-matter fixtures for design_review; make lint must pass with tier 1 over this diff. The design already carries design_review (8e0eed8).'
   - id: f3-design-review
     phase: 3
@@ -72,8 +72,8 @@ budget:
     runs: 6
     steps: 30
   spent:
-    runs: 2
-    steps: 7
+    runs: 3
+    steps: 8
 questions:
   - id: a1
     kind: assumed
@@ -234,3 +234,6 @@ history:
   - at: 2026-10-31T20:52:23Z
     by: human/jeff
     event: done f3-design-review
+  - at: 2026-10-31T21:09:25Z
+    by: cloud/20261031T205751Z
+    event: claimed f3-implement until 2026-10-31T23:09:25Z
