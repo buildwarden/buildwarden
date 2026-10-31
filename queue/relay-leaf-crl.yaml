@@ -142,13 +142,23 @@ steps:
     lease:
       claimed_by: ""
       expires: null
+  - id: m8-cleanup
+    phase: 8
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Open and merge the archive PR from feat/relay-leaf-crl-archive (763cdfd, sets docs/design/relay-leaf-crl.md status: archived and fills its Archive summary): https://github.com/buildwarden/buildwarden/pull/new/feat/relay-leaf-crl-archive. feat/relay-leaf-crl is already gone from origin (deleted by Jeff after #70) and locally. After the archive PR merges, run git push origin --delete feat/relay-leaf-crl-archive.'
   - id: m8-archive
     phase: 8
     affinity: cloud
     status: pending
+    needs:
+      - m8-cleanup
     lease:
-      claimed_by: cloud/20261031T013930Z
-      expires: 2026-10-31T04:11:40.4077394Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -357,3 +367,6 @@ history:
   - at: 2026-10-31T02:11:40Z
     by: cloud/20261031T013930Z
     event: claimed m8-archive until 2026-10-31T04:11:40Z
+  - at: 2026-10-31T02:12:35Z
+    by: cloud/20261031T013930Z
+    event: 'released m8-archive: design archived on feat/relay-leaf-crl-archive (763cdfd), not yet on main; waits on m8-cleanup (Jeff merges the archive PR)'
