@@ -195,13 +195,14 @@ questions:
     answer: 'REJECTED the Dockerfile name: always record the submitted file as inputs/Containerfile (the open-standard name), whatever its original name'
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: Propose the convention this feature settled (a driver records an input it alters at staging, before the build starts, through the shared driver.RecordInputs) as an ORCH-02 amendment, and where?
     options:
       - a follow-up process item after this merges
       - fold the amendment into this PR at sign-off
       - no rule; the convention stays in this design
     recommended: a follow-up process item after this merges
+    answer: fold the amendment into this PR at sign-off (1a30ece amends ORCH-02 in docs/development/orchestrator.md)
 history:
   - at: 2026-10-28T23:18:38Z
     by: attended-setup
@@ -416,3 +417,6 @@ history:
   - at: 2026-10-31T10:21:58Z
     by: cloud/20261031T095649Z
     event: entered phase 7 (sign-off)
+  - at: 2026-10-31T14:50:44Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: fold the amendment into this PR at sign-off (1a30ece amends ORCH-02 in docs/development/orchestrator.md)'
