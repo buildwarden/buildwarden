@@ -1,7 +1,7 @@
 ---
 # Retrofitted (FLOW-12) onto a pre-standard plan; body unchanged.
 feature: hyperv-driver-plan
-status: archived                        # Windows-guest path merged; Phase 1 Linux build guest not built (vm-driver-release-plan Phase 5)
+status: active                          # Windows-guest path merged; active until the Phase 1 Linux build guest is built or dropped (vm-driver-release-plan Phase 5)
 round: parallel
 drivers: [container, qemu, vz, hyperv]  # output sink added to relay/ (shared package)
 seams: [relay-claim, collector, relay-guest-api]
