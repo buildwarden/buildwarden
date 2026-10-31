@@ -22,8 +22,9 @@ func design(name string, drivers, seams, rs []string) string {
 		rs = []string{"FLOW-01"}
 	}
 	list := func(xs []string) string { return "[" + strings.Join(xs, ", ") + "]" }
-	return fmt.Sprintf("---\nfeature: %s\nstatus: draft\nround: parallel\ndrivers: %s\n"+
-		"seams: %s\nsurfaces: []\nsecurity_boundary: none\nalters_relationships: false\n"+
+	return fmt.Sprintf("---\nfeature: %s\nstatus: draft\ndesign_review: required\n"+
+		"drivers: %s\nseams: %s\nsurfaces: []\nsecurity_boundary: none\n"+
+		"alters_relationships: false\n"+
 		"native_validation: []\ntier2_gaps: []\nrules: %s\nconcepts: [x]\n---\n\n# %s\n",
 		name, list(drivers), list(seams), list(rs), name)
 }

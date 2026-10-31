@@ -17,7 +17,7 @@ import (
 const validFront = `---
 feature: x
 status: draft
-round: parallel
+design_review: required
 drivers: [qemu]
 seams: []
 surfaces: []
@@ -94,7 +94,7 @@ func TestValidate(t *testing.T) {
 			tolerated: []string{"missing alters_relationships"}},
 	}
 	// Every FLOW-02 key, dropped, is reported missing.
-	for _, k := range []string{"feature", "status", "round", "drivers", "seams",
+	for _, k := range []string{"feature", "status", "design_review", "drivers", "seams",
 		"surfaces", "security_boundary", "alters_relationships", "native_validation",
 		"tier2_gaps", "rules", "concepts"} {
 		v := Validate("docs/design/x.md", withLine(k, ""), tmpl, nil, false)
