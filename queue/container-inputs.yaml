@@ -1,6 +1,6 @@
 feature: container-inputs
 title: Record container inputs under inputs/ (ORCH-02)
-priority: 3
+priority: 4
 status: in_progress
 round: merge
 phase: 8
@@ -174,12 +174,13 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-    note: 'Merge the archive PR buildwarden/buildwarden#74. The remote branch feat/container-inputs is already deleted; the local one was removed with git branch -d.'
+    note: Merge the archive PR buildwarden/buildwarden#74. The remote branch feat/container-inputs is already deleted; the local one was removed with git branch -d.
   - id: m8-archive
     phase: 8
     affinity: cloud
     status: pending
-    needs: [m8-cleanup]
+    needs:
+      - m8-cleanup
     lease:
       claimed_by: ""
       expires: null

@@ -1,6 +1,6 @@
 feature: workflow-bootstrap
 title: Stand up the feature workflow (bootstrap step 1)
-priority: 2
+priority: 3
 status: done
 round: merge
 phase: 8

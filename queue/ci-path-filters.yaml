@@ -1,6 +1,6 @@
 feature: ci-path-filters
 title: CI runs only the checks a change's paths need (docs-only PRs skip Go lint, test, tidy and build)
-priority: 6
+priority: 7
 status: queued
 round: parallel
 phase: 0

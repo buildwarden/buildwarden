@@ -1,6 +1,6 @@
 feature: tier1-static-checks
 title: 'Tier-1 static-check extraction (LINT-02, Deep-dive #2)'
-priority: 5
+priority: 6
 status: in_progress
 round: parallel
 phase: 3

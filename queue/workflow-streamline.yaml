@@ -1,0 +1,31 @@
+feature: workflow-streamline
+title: 'Streamline the feature loop: one round, archive in the feature PR, human gates only for design, questions and merge'
+priority: 1
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/workflow-streamline.md
+branch: feat/workflow-streamline
+alters_relationships: null
+source: 'Jeff, 2026-10-31: too many gates and PRs per feature (separate archive PR, cleanup step, doubled rounds)'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 2
+    steps: 8
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-10-31T20:04:39Z
+    by: human/jeff
+    event: queued at priority 1 (intake)
