@@ -1,6 +1,6 @@
 ---
 feature: ci-path-filters
-status: active
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -363,6 +363,22 @@ checkout sets `persist-credentials: false`. Re-checked: `docs/ex/bad.go` and
   TEST-02 rewording is queued as its own process item.
 
 ## Consolidation
+
+`main` merged at `89a0e3b` without conflicts.
+
+- **Landed since the fork (`d266143`):** #80 (pre-release-cleanup: comments,
+  `relaycfg` `%w`, two archived designs) and #81 (wf-merged-counts-as-pushed:
+  `tools/workflow/check`). Neither touches `.github/workflows/main.yml`. Both
+  are "code" under this classifier, so PRs like them still run everything.
+- **Terminology:** "docs-only" here means the classifier's `code=false`; the
+  `no-design` label (#79, FLOW-01) is unrelated and unchanged.
+- **Overlap with tier1-static-checks:** honored as that design asked: the
+  `tier1` job stays unconditional, so docs-only PRs still get the front-matter
+  and rule checks.
+- **Rules proposed:** the TEST-01 / TEST-02 rewording above, queued as the
+  process item `test-rules-docs-only` (a8).
+- **FLOW-15 sweep:** no Go code changed; no dead code or duplication.
+  `overview.md` unchanged.
 
 ## Rollback notes
 
