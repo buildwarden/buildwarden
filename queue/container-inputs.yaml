@@ -2,8 +2,8 @@ feature: container-inputs
 title: Record container inputs under inputs/ (ORCH-02)
 priority: 3
 status: in_progress
-round: parallel
-phase: 6
+round: merge
+phase: 0
 design: docs/design/container-inputs.md
 branch: feat/container-inputs
 alters_relationships: false
@@ -103,11 +103,18 @@ steps:
   - id: p6-merge-round
     phase: 6
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+    note: Waits for the serial merge queue (FLOW-05).
+  - id: m0-merge-main
+    phase: 0
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261031T095649Z
-      expires: 2026-10-31T11:57:10.673548666Z
-    note: Waits for the serial merge queue (FLOW-05).
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 4
@@ -279,3 +286,9 @@ history:
   - at: 2026-10-31T09:57:10Z
     by: cloud/20261031T095649Z
     event: claimed p6-merge-round until 2026-10-31T11:57:10Z
+  - at: 2026-10-31T09:57:13Z
+    by: cloud/20261031T095649Z
+    event: done p6-merge-round
+  - at: 2026-10-31T09:57:13Z
+    by: cloud/20261031T095649Z
+    event: entered the merge round
