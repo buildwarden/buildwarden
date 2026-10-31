@@ -44,7 +44,7 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-    note: 'Open and merge the archive PR from feat/workflow-bootstrap-archive (fd1e386, sets docs/design/workflow-bootstrap.md status: archived and fills its Archive summary): https://github.com/buildwarden/buildwarden/pull/new/feat/workflow-bootstrap-archive. Remote branches: claude/buildwarden-workflow-setup-w0ai39, docs/housekeeping-guidance and chore/entire-sessions are already gone from origin, so no git push origin --delete is needed for them; after the archive PR merges, run git push origin --delete feat/workflow-bootstrap-archive.'
+    note: 'Open and merge the archive PR from feat/workflow-bootstrap-archive (fd1e386, sets docs/design/workflow-bootstrap.md status: archived and fills its Archive summary): now open as https://github.com/buildwarden/buildwarden/pull/66 (CI green, merges cleanly, 2026-10-30). Remote branches: claude/buildwarden-workflow-setup-w0ai39, docs/housekeeping-guidance and chore/entire-sessions are already gone from origin, so no git push origin --delete is needed for them; after the archive PR merges, run git push origin --delete feat/workflow-bootstrap-archive.'
   - id: m8-archive
     phase: 8
     affinity: cloud
