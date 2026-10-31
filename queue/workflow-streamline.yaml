@@ -10,7 +10,7 @@ branch: feat/workflow-streamline
 alters_relationships: null
 pr:
   number: 75
-  ci: pending
+  ci: green
 source: 'Jeff, 2026-10-31: too many gates and PRs per feature (separate archive PR, cleanup step, doubled rounds)'
 steps:
   - id: x1-design
