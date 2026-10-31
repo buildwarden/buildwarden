@@ -6,7 +6,6 @@ drivers: [hyperv, qemu]
 seams: [image-manifest, windows-guest-seed]
 surfaces: [cli, config, output]
 security_boundary: none
-alters_relationships: true
 native_validation:
   - {host: windows-hyperv, blocking: true, reason: "changes the Hyper-V Windows guest lifecycle end to end"}
   - {host: macos-qemu, blocking: true, reason: "qemu Windows path moves to the shared guest package and prepare-time tuning"}

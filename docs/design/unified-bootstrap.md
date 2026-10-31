@@ -6,7 +6,6 @@ drivers: [container, qemu, hyperv, vz]
 seams: [executor-initialize, relay-guest-api, collector, bootstrap-model]
 surfaces: []
 security_boundary: env-beyond
-alters_relationships: true
 native_validation:
   - {host: windows-podman, blocking: true, reason: "exec-bit and workdir differences found 2026-10-27"}
   - {host: linux-docker, blocking: true, reason: "default runtime; --network container: rules"}
