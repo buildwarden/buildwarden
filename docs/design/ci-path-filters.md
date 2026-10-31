@@ -323,7 +323,7 @@ TEST-02 caveat).
    `needs: changes` to `lint`, `tier1`, `tier1-test`, `test`, `tidy`,
    `build`, with the `if:` from the table; `tier1` gets no `if:`. Rework of
    tier1-static-checks' task 12 jobs; their steps are unchanged.
-3. **`book` job** (Decision 7). Build-only mdBook v0.4.44, same install
+3. **`book` job** (Decision 7; UX-01). Build-only mdBook v0.4.44, same install
    lines as `docs.yml`, `permissions: contents: read`.
 4. **`ci-ok` gate job** (Decision 1; LINT-03, FLOW-11). `needs` every job,
    `if: always()`, `jq` over `toJSON(needs)`.
