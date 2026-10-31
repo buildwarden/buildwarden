@@ -1,6 +1,6 @@
 ---
 # Retrofitted (FLOW-12) onto a pre-standard plan; body unchanged.
-feature: firecracker-driver-plan
+feature: firecracker-driver           # queue slug (a6); shared with firecracker-spike-plan.md until the firecracker-driver design resolves it
 status: draft
 round: parallel
 drivers: [container, qemu, vz, hyperv, firecracker]  # relay/ gains vsock "CA ready"/"ledger complete" signals; util.go shared with qemu
