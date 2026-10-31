@@ -1,0 +1,31 @@
+feature: test-rules-docs-only
+title: TEST-01/TEST-02 allow docs-only changes to skip the Go suites
+priority: 10
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/test-rules-docs-only.md
+branch: feat/test-rules-docs-only
+alters_relationships: null
+source: 'ci-path-filters design review a8 (Jeff, 2026-10-31): reword TEST-01 and TEST-02 per that design''s Proposed rule changes'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 4
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-10-31T22:05:14Z
+    by: human/jeff
+    event: queued at priority 10 (intake)
