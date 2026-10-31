@@ -12,7 +12,55 @@ permissions:
   contents: read
 
 jobs:
+  # Classifies a PR's changed paths so that docs-only PRs skip the Go jobs
+  # (design ci-path-filters). Fail-open: every output is true unless each path
+  # was positively classified, and on every non-PR event.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+      gotests: ${{ steps.classify.outputs.gotests }}
+      book: ${{ steps.classify.outputs.book }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - id: classify
+        env:
+          EVENT: ${{ github.event_name }}
+        # A PR checks out GitHub's merge commit, so HEAD^1..HEAD is the PR's
+        # change against the current base. --no-renames lists both sides of a
+        # rename, so moving code into docs/ still counts as code; quotePath=false
+        # keeps non-ASCII paths matchable.
+        run: |
+          all() { printf 'code=true\ngotests=true\nbook=true\n' >> "$GITHUB_OUTPUT"; }
+          [ "$EVENT" = pull_request ] || { all; exit 0; }
+          files=$(git -c core.quotePath=false diff --name-only --no-renames HEAD^1 HEAD) && [ -n "$files" ] || { all; exit 0; }
+          code=false rules=false book=false
+          while IFS= read -r p; do
+            case "$p" in
+              # Go source and module files compile wherever they are, docs/
+              # included (review 458a36af2b41, MUST 1).
+              *.go|go.mod|go.sum|go.work|*/go.mod|*/go.sum|*/go.work) code=true ;;
+              # TestRealIndex (tools/tier1/rules) parses the real rule files.
+              docs/development/*) rules=true ;;
+              docs/book/*) book=true ;;
+              docs/*) ;;
+              */*) code=true ;;
+              # docs/book/src/contributing/development.md includes it.
+              CONTRIBUTING.md) book=true ;;
+              *.md) ;;
+              *) code=true ;;
+            esac
+          done <<< "$files"
+          gotests=$code
+          if [ "$rules" = true ]; then gotests=true; fi
+          printf 'code=%s\ngotests=%s\nbook=%s\n' "$code" "$gotests" "$book" >> "$GITHUB_OUTPUT"
+
   lint:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -28,6 +76,8 @@ jobs:
 
   # Tier-1 static checks over the PR's diff, or a push's (LINT-02, LINT-04).
   tier1:
+    # Runs on every PR; it needs changes only so a failed classifier shows once.
+    needs: changes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -58,6 +108,8 @@ jobs:
 
   # tools/tier1 compares git paths, which must work on every platform (GLOBAL-07).
   tier1-test:
+    needs: changes
+    if: needs.changes.outputs.gotests == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -71,6 +123,8 @@ jobs:
         working-directory: tools/tier1
 
   test:
+    needs: changes
+    if: needs.changes.outputs.gotests == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -80,6 +134,8 @@ jobs:
       - run: make test
 
   tidy:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -92,6 +148,8 @@ jobs:
         working-directory: tools/tier1
 
   build:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -103,3 +161,37 @@ jobs:
           go-version: stable
       - run: make build
       - run: ./dist/warden --help
+
+  # Build-only: docs.yml deploys from main and holds pages: write, so PRs build
+  # the book here instead (design ci-path-filters, Decision 7).
+  book:
+    needs: changes
+    if: needs.changes.outputs.book == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+
+      - name: Install mdBook
+        run: |
+          curl -sSL https://github.com/rust-lang/mdBook/releases/download/v0.4.44/mdbook-v0.4.44-x86_64-unknown-linux-gnu.tar.gz | tar xz
+          chmod +x mdbook
+          mv mdbook /usr/local/bin/
+
+      - name: Build docs
+        run: mdbook build docs/book
+
+  # The one check to require: skipped jobs pass, so required checks need not
+  # track the filters or matrix names. It lists changes because a job skipped
+  # after a failed need reports skipped, which would otherwise hide the failure.
+  ci-ok:
+    needs: [changes, lint, tier1, tier1-test, test, tidy, build, book]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<< "$NEEDS"
