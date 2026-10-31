@@ -8,6 +8,9 @@ design: docs/design/design-front-matter-retrofit.md
 branch: feat/design-front-matter-retrofit
 alters_relationships: false
 design_review: required
+pr:
+  number: 77
+  ci: pending
 source: 'docs/development/README.md: Follow-up - Design front-matter retrofit'
 steps:
   - id: p0-branch-setup
