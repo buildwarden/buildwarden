@@ -8,6 +8,9 @@ design: docs/design/ci-path-filters.md
 branch: feat/ci-path-filters
 alters_relationships: false
 design_review: required
+pr:
+  number: 82
+  ci: pending
 source: 'Jeff, 2026-10-30: docs-only updates should skip the testing rounds since there are no code changes'
 steps:
   - id: f0-branch-setup
