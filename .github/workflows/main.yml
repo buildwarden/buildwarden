@@ -175,3 +175,15 @@ jobs:
 
       - name: Build docs
         run: mdbook build docs/book
+
+  # The one check to require: skipped jobs pass, so required checks need not
+  # track the filters or matrix names. It lists changes because a job skipped
+  # after a failed need reports skipped, which would otherwise hide the failure.
+  ci-ok:
+    needs: [changes, lint, tier1, tier1-test, test, tidy, build, book]
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - env:
+          NEEDS: ${{ toJSON(needs) }}
+        run: jq -e 'all(.[]; .result == "success" or .result == "skipped")' <<< "$NEEDS"
