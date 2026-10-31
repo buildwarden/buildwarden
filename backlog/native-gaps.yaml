@@ -18,6 +18,13 @@ gaps:
       run, because the session cannot read outside the checkout (ls of
       ~/Downloads was blocked) and has no ISO. Guest DNS now works, so the
       build half is no longer blocked by that.
+      2026-10-31 (host:qemu-any/20261031T114004Z, unattended): still not run,
+      no ISO reachable (~/Downloads blocked again). Provenance now known: the
+      build descriptor shows windows-arm64.qcow2 is `prepared` from install-iso
+      sha256:638aa2c88e94 + virtio-win + autounattend ISOs (ISO-installed), but
+      main cc6119e's qemu Windows build on it times out with a silent guest that
+      never fetches /bootstrap (twice, 40m and 25m). Re-prepare it from the ISO
+      with main in an attended run. Logs: native/qemu-any/2026-10-31/.
     status: open
   - id: qemu-linux-exclusive-trust
     host: macos-qemu
@@ -124,6 +131,21 @@ gaps:
       accel and `-chardev stdio` work in this QEMU. Needs either qemu-any
       moved to the macbook in hosts.yaml or x86_64 support in the qemu
       driver (proposed to Jeff).
+      2026-10-31 (host:qemu-any/20261031T114004Z, unattended, macbook, main
+      cc6119e, QEMU 11.1.1, relay initramfs from main). Linux half passes:
+      alpine_3_21.qcow2 build of `apk add jq` SUCCEEDED; `inspect
+      --verify-disks` vm-disk-chain/v1 payload verified, qemu linux/arm64,
+      disk sha256:ebaef97d702d `local` [ok], 5 seed files, 23 signatures
+      valid, all channels closed; an environment.json edited after the build
+      is rejected ("payload MISMATCH", exit 1). Waiting branches: only
+      feat/container-inputs touches driver/, at ddd11fe, verified the same way
+      by the attended host:qemu-any/20261031T023128Z run (its branch binary
+      cannot run under the native allowlist). Windows half (the design's "where
+      prepared") fails: main's build on the cached windows-arm64.qcow2 times
+      out with a silent guest, ledger holding only the ENVIRONMENT record
+      (whose descriptor is well formed: disk + nvram, source `prepared`). Kept
+      open on the Windows half, which waits on re-preparing the base
+      (qemu-windows-guest-package). Logs: native/qemu-any/2026-10-31/.
     status: open
   - id: hyperv-eval-image-verify-disks
     host: windows-hyperv
