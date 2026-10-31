@@ -8,6 +8,7 @@ seams: []
 surfaces: []
 security_boundary: none
 alters_relationships: false
+design_review: required
 native_validation: []
 tier2_gaps: []
 rules: [ORCH-01, ORCH-05, GLOBAL-07, TEST-02, TEST-03, TEST-08]

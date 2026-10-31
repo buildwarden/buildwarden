@@ -7,6 +7,7 @@ seams: []
 surfaces: []
 security_boundary: none
 alters_relationships: false
+design_review: required
 native_validation: []
 tier2_gaps: []
 rules: [FLOW-01, FLOW-02, FLOW-06, FLOW-07, FLOW-09, FLOW-12, FLOW-14, GLOBAL-06, GLOBAL-08, RELAY-03, RELAY-04, BOOT-02, BOOT-06, TEST-02, TEST-03, TEST-08, LINT-02]
@@ -342,6 +343,7 @@ seams: [relay-claim, relay-guest-api, collector]     # per-build relay.env and C
 surfaces: [cli, config]
 security_boundary: host-env           # also env-relay; see "Security Considerations"
 alters_relationships: true            # warm-pool manager, vsock signaling, relay claim over vsock
+design_review: required
 native_validation:
   - {host: linux-kvm, blocking: true, reason: "driver/firecracker runs only on a Linux KVM host"}
   - {host: container-any, blocking: false, reason: "regression: relay/ vsock signaling change"}
@@ -368,6 +370,7 @@ seams: [relay-claim, collector, relay-guest-api]
 surfaces: [cli, config]
 security_boundary: host-env             # also env-relay; see "Security Considerations", "Privilege & Elevation Model"
 alters_relationships: true
+design_review: required
 native_validation:
   - {host: windows-hyperv, blocking: true, reason: "driver/hyperv runs only on Hyper-V"}
   - {host: container-any, blocking: false, reason: "regression: relay/ output sink; localSink must stay the default"}
@@ -393,6 +396,7 @@ seams: []
 surfaces: []
 security_boundary: none
 alters_relationships: false
+design_review: required
 native_validation: []
 tier2_gaps: []
 rules: [ORCH-01, ORCH-05, GLOBAL-07, TEST-02, TEST-03, TEST-08]
@@ -414,6 +418,7 @@ seams: [ledger-format]
 surfaces: [cli, config, output]
 security_boundary: env-relay            # per-action relay ledgers and cache provenance; see "Security note (retrofit)"
 alters_relationships: true              # BuildWarden as an RE API backend; ledgers composed from cached results
+design_review: required
 native_validation:
   - {host: container-any, blocking: false, reason: "regression: ledger/ and relay changes reach every driver"}
   - {host: qemu-any, blocking: false, reason: "regression: ledger/ and relay changes reach every driver"}
@@ -478,6 +483,7 @@ seams: [relay-claim, collector, ledger-format, image-manifest, windows-guest-see
 surfaces: [cli, config, output]
 security_boundary: host-env             # also env-relay; see "Security Testing Framework"
 alters_relationships: true
+design_review: required
 native_validation:
   - {host: macos-vz, blocking: true, reason: "Phase 1 vz driver runs only on macOS/arm64"}
   - {host: windows-hyperv, blocking: true, reason: "Phase 5 and 5a Hyper-V Windows-guest lifecycle"}
@@ -738,9 +744,71 @@ the task, the file and Decision 12 (or 8 or 10).
     only checks that the bullet is gone from the branch, and if it is not,
     says so in the PR description rather than editing the README.
 
-## Consolidation (merge round)
+## Consolidation
 
-Filled in during the merge round (FLOW-10).
+Publish, step `f6-consolidate`, after `origin/main` at 154833b was merged in
+c867efb (FLOW-10, FLOW-15). Since the fork at cd42fc7, `main` landed #64-#76.
+
+- **workflow-streamline (#75) and #76: `design_review`.** FLOW-19 adds the
+  required front-matter key `design_review`, and #76 exempts archived designs
+  from it. After the merge, `Front.problems` reported `missing design_review`
+  on this design and on the five retrofitted documents that are not archived,
+  so the Validation plan's tier-0 result no longer held. Each of those six now
+  carries `design_review: required`, in template position after
+  `alters_relationships`. The five Design blocks above carry the line too, so
+  they stay byte-identical to the files. The value follows from FLOW-19's skip
+  criteria. Four of the retrofits declare seams, a security boundary or
+  `alters_relationships: true`, and this design raised assumed questions, so
+  `skip` is not allowed for any of those. `platform-compatibility` could meet
+  the criteria, but under conservative derivation (FLOW-02, Decision 5) it
+  takes `required` as well. The line is an addition, so Decision 2 still
+  holds: no existing line is edited. `windows-driver-plan` is archived and is
+  unchanged.
+- **Template changes (#75).** This section heading follows the template's
+  rename (from "Consolidation (merge round)"). The template no longer has a
+  `round` key. The retrofit blocks and this design keep `round: parallel`
+  (Decision 4), which matches every other pre-#75 design on `main`, archived
+  or not. No validator reads the key. Whether to remove `round` from the
+  whole archive belongs with the a8 hand-off to `tier1-static-checks`, not
+  here. This design has no "Design review" section: the feature joined the
+  feature round at phase 4 (workflow-streamline migration), after the point
+  where a review is seeded. Its review-equivalent was Jeff's p1-escalate-3
+  decision and his answers to a1-a9.
+- **Designs that landed on `main`** (Decision 11: out of scope, not edited).
+  `container-inputs`, `relay-leaf-crl`, `workflow-bootstrap` and
+  `workflow-streamline` pass the validator. `native-host-loop` and
+  `native-loop-followups` were merged with `status: draft` and no
+  `design_review`, so the validator reports `missing design_review` on both.
+  They are `main`'s own designs, so this is a follow-up for intake, listed in
+  the PR description. #73 changed the body of the archived
+  `hyperv-windows-prepare.md` but not its front-matter, so a3 and Decision 8
+  are unaffected. That file and the other two archived designs show no diff
+  against the new merge base.
+- **Tier-0 re-run** on the consolidated tree, using the scratch `go test
+  -overlay` with main's validator: no problems in the six retrofits, this
+  design or `workflow-bootstrap`. The three archived designs report exactly
+  `missing alters_relationships` (a3). Both noted files have the `Security
+  note (retrofit)` section. All six blocks match Design byte for byte, and no
+  line under `docs/design/` is removed against the merge base, which is now
+  154833b rather than the cd42fc7 named in the Implementation plan.
+- **Terminology, seams, shared abstractions.** Nothing to reconcile. No
+  feature that landed adds a seam name or host name that the retrofit
+  vocabulary conflicts with. `linux-kvm` is still the one new host name.
+- **Rules proposed** (Jeff's call, FLOW-14; not edited here). FLOW-12
+  (`process.md`) still says pre-standard designs are retrofitted "when a new
+  design first relies on them". None are left after this feature, so the
+  sentence can be dropped. The docs/development/README.md follow-up bullet is
+  gone (Jeff's step p3-remove-readme-bullet; the merge kept it retired).
+- **FLOW-15 sweep.** No Go code, component flow or user-facing surface
+  changed. `make deadcode` (built with go1.26.3) gives the same report
+  for linux, darwin and windows before and after this change, all of it
+  code already on `main`. There is no duplication to remove, and
+  `docs/book/src/concepts/overview.md` and `docs/book/src/guide/` are
+  unchanged (UX-01).
+- **Review ca7df3f25edd, SHOULD 1** (the BOOT-06 gloss in the
+  `windows-driver-plan` note). Not applied, because Jeff's p1-escalate-3
+  direction fixed the note text (Decision 12). It goes in the PR description
+  for acknowledgement at merge.
 
 ## Rollback notes
 

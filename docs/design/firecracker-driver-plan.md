@@ -8,6 +8,7 @@ seams: [relay-claim, relay-guest-api, collector]     # per-build relay.env and C
 surfaces: [cli, config]
 security_boundary: host-env           # also env-relay; see "Security Considerations"
 alters_relationships: true            # warm-pool manager, vsock signaling, relay claim over vsock
+design_review: required
 native_validation:
   - {host: linux-kvm, blocking: true, reason: "driver/firecracker runs only on a Linux KVM host"}
   - {host: container-any, blocking: false, reason: "regression: relay/ vsock signaling change"}

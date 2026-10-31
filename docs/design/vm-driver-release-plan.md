@@ -8,6 +8,7 @@ seams: [relay-claim, collector, ledger-format, image-manifest, windows-guest-see
 surfaces: [cli, config, output]
 security_boundary: host-env             # also env-relay; see "Security Testing Framework"
 alters_relationships: true
+design_review: required
 native_validation:
   - {host: macos-vz, blocking: true, reason: "Phase 1 vz driver runs only on macOS/arm64"}
   - {host: windows-hyperv, blocking: true, reason: "Phase 5 and 5a Hyper-V Windows-guest lifecycle"}

@@ -8,6 +8,7 @@ seams: [ledger-format]
 surfaces: [cli, config, output]
 security_boundary: env-relay            # per-action relay ledgers and cache provenance; see "Security note (retrofit)"
 alters_relationships: true              # BuildWarden as an RE API backend; ledgers composed from cached results
+design_review: required
 native_validation:
   - {host: container-any, blocking: false, reason: "regression: ledger/ and relay changes reach every driver"}
   - {host: qemu-any, blocking: false, reason: "regression: ledger/ and relay changes reach every driver"}

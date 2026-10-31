@@ -8,6 +8,7 @@ seams: [relay-claim, collector, relay-guest-api]
 surfaces: [cli, config]
 security_boundary: host-env             # also env-relay; see "Security Considerations", "Privilege & Elevation Model"
 alters_relationships: true
+design_review: required
 native_validation:
   - {host: windows-hyperv, blocking: true, reason: "driver/hyperv runs only on Hyper-V"}
   - {host: container-any, blocking: false, reason: "regression: relay/ output sink; localSink must stay the default"}
