@@ -30,7 +30,7 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-    note: Blocking (FLOW-09). A Windows guest build runs curl.exe over HTTPS with no --ssl-no-revoke and succeeds; inspect --verify-disks shows the /ca.crl record and all signatures valid. Refresh the cached relay boot VHDX first (tools/relay-vm/hyperv/refresh-cache.sh).
+    note: Blocking (FLOW-09). A Windows guest build runs curl.exe over HTTPS with no --ssl-no-revoke and succeeds; inspect --verify-disks shows all signatures valid and no /ca.crl record (a1). Refresh the cached relay boot VHDX first (tools/relay-vm/hyperv/refresh-cache.sh).
   - id: p2-plan
     phase: 2
     affinity: cloud
@@ -48,12 +48,13 @@ budget:
 questions:
   - id: a1
     kind: assumed
-    status: open
-    question: Record each CRL fetch in the ledger (RELAY-02), as /bootstrap is, rather than serving it unrecorded as /ca.pem is?
+    status: confirmed
+    question: Record each CRL fetch in the ledger (RELAY-02), as /bootstrap is, rather than serving it unrecorded as /ca.pem is? (design now serves it unrecorded, per Jeff)
     options:
       - record it
       - serve it unrecorded like /ca.pem
     recommended: record it
+    answer: 'Serve it unrecorded, like /ca.pem. Jeff (in chat, 2026-10-30): serving the blank revocation list should be considered a relay internal artifact, not something relevant to the actual inputs, since it should not affect the build outputs in a meaningful way.'
   - id: a2
     kind: assumed
     status: open
@@ -96,3 +97,6 @@ history:
   - at: 2026-10-31T01:42:07Z
     by: cloud/20261031T013930Z
     event: entered phase 2 (plan)
+  - at: 2026-10-31T01:43:03Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: Serve it unrecorded, like /ca.pem. Jeff (in chat, 2026-10-30): serving the blank revocation list should be considered a relay internal artifact, not something relevant to the actual inputs, since it should not affect the build outputs in a meaningful way.'
