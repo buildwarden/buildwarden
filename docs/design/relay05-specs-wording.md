@@ -1,6 +1,6 @@
 ---
 feature: relay05-specs-wording
-status: active
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -106,10 +106,22 @@ None.
 
 ## Consolidation
 
-Filled in at Publish.
+`main` merged after specs-migration (#85): the layout this wording describes
+is on `main`. The TEST-02 change was added at specs-migration's consolidation,
+a minimal change after r1.
 
 ## Rollback notes
 
 ## Archive summary
 
-Filled in at Publish.
+Implemented 2026-10-31, right after specs-migration (#85) merged.
+
+- **Built.** RELAY-05: the `environment-<type>/` family and `specs/README.md`
+  in the target layout; a "Schema identity" paragraph (an `$id` is a stable
+  name; pre-migration ids never change; new ids mirror their `specs/` path);
+  the layout stated as in place. TEST-02: the book's `specs/` mirror and
+  `SUMMARY.md` leave the docs-only set. The README's `specs/` follow-up is
+  retired.
+- **Decisions taken:** land after the layout is on `main`; wording only.
+- **For future designs touching `specs` or `schemas`:** RELAY-05 is the
+  normative layout; `specs/README.md` carries the `$id` table.
