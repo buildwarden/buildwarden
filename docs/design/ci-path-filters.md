@@ -1,6 +1,6 @@
 ---
 feature: ci-path-filters
-status: draft
+status: active
 drivers: []
 seams: []
 surfaces: []
@@ -334,7 +334,9 @@ TEST-02 caveat).
 
 ## Design review
 
-(none yet)
+- **r1, 2026-10-31: approved** (Jeff, attended session, FLOW-19).
+  Approved at `3d5d382`. a1 to a8 confirmed as recommended; for a8 the TEST-01 /
+  TEST-02 rewording is queued as its own process item.
 
 ## Consolidation
 
