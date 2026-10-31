@@ -10,7 +10,7 @@ alters_relationships: false
 design_review: required
 pr:
   number: 79
-  ci: pending
+  ci: green
 source: 'docs/development/README.md: Deep-dive #2'
 steps:
   - id: p0-branch-setup
