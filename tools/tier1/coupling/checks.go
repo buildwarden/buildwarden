@@ -4,6 +4,8 @@ import (
 	"go/scanner"
 	"go/token"
 	"path"
+	"regexp"
+	"slices"
 	"sort"
 	"strings"
 
@@ -158,23 +160,99 @@ func (c *Checker) BootstrapSurface() []report.Finding {
 	return out
 }
 
-// SchemaDoc is RELAY-05's deterministic half: a schema and its document
-// change together. A document change with no schema change is a hint, since
-// ledger-spec.md is prose for the binary format as well and a prose fix
-// changes no schema (PR #62, task 11).
+// SchemaDoc is RELAY-05's deterministic half over rules.yaml's schema_doc
+// root (specs/). A changed <dir>/v<N>.schema.json without its v<N>.md, or
+// the reverse, is a MUST in both directions: a paired document describes
+// only its schema, so a prose-only fix to one is rare and carries a
+// Tier1-Allow trailer. When the diff touches the root, HEAD's tree is
+// checked for the layout too (specsLayout).
 func (c *Checker) SchemaDoc() []report.Finding {
+	s := c.Cfg.SchemaDoc
+	if s.Root == "" {
+		return nil
+	}
+	root := strings.TrimSuffix(s.Root, "/") + "/"
 	var out []report.Finding
-	for _, pair := range c.Cfg.SchemaDoc {
-		code, doc := c.first(pair.Code), c.Diff.Touched(pair.Doc)
+	touched := false
+	for _, p := range c.paths() {
+		rel, ok := strings.CutPrefix(p, root)
+		if !ok {
+			continue
+		}
+		touched = true
+		dir, n, ext, ok := specFile(rel)
+		if !ok || slices.Contains(s.ProseOnly, dir) {
+			continue
+		}
+		if partner := specPartner(root, dir, n, ext); !c.Diff.Touched(partner) {
+			out = append(out, c.finding("RELAY-05", "schema-doc", p,
+				"%s changed without %s; they change together", p, partner))
+		}
+	}
+	if touched || c.WholeTree {
+		out = append(out, c.specsLayout(root, s.ProseOnly)...)
+	}
+	return out
+}
+
+var specFileRe = regexp.MustCompile(`^([^/]+)/v([1-9][0-9]*)(\.md|\.schema\.json)$`)
+
+// specFile splits a path relative to the specs root into its directory,
+// major version and extension, and reports false for any other name.
+func specFile(rel string) (dir, n, ext string, ok bool) {
+	m := specFileRe.FindStringSubmatch(rel)
+	if m == nil {
+		return "", "", "", false
+	}
+	return m[1], m[2], m[3], true
+}
+
+// specPartner is the other half of a schema/document pair.
+func specPartner(root, dir, n, ext string) string {
+	if ext == ".md" {
+		ext = ".schema.json"
+	} else {
+		ext = ".md"
+	}
+	return root + dir + "/v" + n + ext
+}
+
+// specsLayout checks the specs tree at HEAD, listed with git so paths are
+// the same on every platform: each schema has its same-major document and
+// each document in a paired directory its schema, prose-only directories
+// hold no schema, and every file is a v<N>.md or v<N>.schema.json one level
+// down. At the root only README.md (the index) and Go test files (the
+// tier-0 conformance test) are allowed.
+func (c *Checker) specsLayout(root string, proseOnly []string) []report.Finding {
+	var out []report.Finding
+	have := map[string]bool{}
+	files := c.Diff.List(c.Diff.Head, root)
+	for _, p := range files {
+		have[p] = true
+	}
+	for _, p := range files {
+		rel := strings.TrimPrefix(p, root)
+		atRoot := !strings.Contains(rel, "/")
+		if rel == "README.md" || atRoot && strings.HasSuffix(rel, "_test.go") {
+			continue
+		}
+		dir, n, ext, ok := specFile(rel)
 		switch {
-		case code != "" && !doc:
-			out = append(out, c.finding("RELAY-05", "schema-doc", code,
-				"%s changed without %s", code, pair.Doc))
-		case code == "" && doc:
-			f := c.finding("RELAY-05", "schema-doc", pair.Doc,
-				"%s changed with nothing under %s", pair.Doc, pair.Code)
-			f.Severity = report.Hint
-			out = append(out, f)
+		case !ok:
+			out = append(out, c.finding("RELAY-05", "schema-doc", p,
+				"%s is not a <dir>/v<N>.md or <dir>/v<N>.schema.json under %s",
+				p, root))
+		case slices.Contains(proseOnly, dir):
+			if ext == ".schema.json" {
+				out = append(out, c.finding("RELAY-05", "schema-doc", p,
+					"%s is in prose-only %s%s/, which holds no machine schema",
+					p, root, dir))
+			}
+		default:
+			if partner := specPartner(root, dir, n, ext); !have[partner] {
+				out = append(out, c.finding("RELAY-05", "schema-doc", p,
+					"%s has no %s beside it at HEAD", p, partner))
+			}
 		}
 	}
 	return out
