@@ -72,7 +72,7 @@ func (r *Relay) safeDialContext(ctx context.Context, network, addr string) (net.
 	for _, ip := range ips {
 		if r.isBlockedIP(ip.IP) {
 			return nil, fmt.Errorf(
-				"blocked: connection to %s (%s) denied", host, ip.IP)
+			"blocked: connection to %s (%s) denied", host, ip.IP)
 
 		}
 	}
