@@ -14,7 +14,7 @@ native_validation:
   - {host: macos-vz, blocking: false, reason: "regression: ledger/ and relay changes reach every driver"}
   - {host: windows-hyperv, blocking: false, reason: "regression: ledger/ and relay changes reach every driver"}
 tier2_gaps: []
-rules: [RELAY-01, RELAY-02, RELAY-03, RELAY-05, GLOBAL-05, GLOBAL-06, GLOBAL-08, TEST-08]
+rules: [RELAY-01, RELAY-02, RELAY-03, RELAY-05, GLOBAL-05, GLOBAL-06, GLOBAL-08, BOOT-02, TEST-08]
 concepts: [remote-execution, re-api, measured-hermeticity, action-cache, provenance, environment-record, cache-invalidation, bazel]
 related: [ledger-environment-types.md]
 ---
@@ -309,7 +309,13 @@ open points below.
   incorporates environment and network records from cached sub-ledgers that
   its own relay did not observe ("Cache hit behavior"), and each worker relay
   writes an environment record as the first ledger entry. Both change what a
-  signed ledger attests, which GLOBAL-06 makes high-severity.
+  signed ledger attests, which GLOBAL-06 makes high-severity. The proposal
+  also implies two further boundary changes. Inputs are staged from
+  content-addressed storage into the sandbox outside the relay ("Action
+  execution lifecycle", step 4), which BOOT-02 does not allow today; only the
+  action's cache key (`input_root_digest`) records them. And the RE API
+  services (Execute, ContentAddressableStorage, ActionCache) are a new
+  network-facing surface whose contents feed parent ledgers.
 - **How the posture changes:** a parent ledger's claims now rest on the action
   cache and on other relays' signatures, as well as on its own observation. A
   forged, tampered or replayed cache entry (`ledger_digest`,
@@ -324,4 +330,6 @@ open points below.
   incorporated; a cache entry whose stored `hermetic` disagrees with its
   ledger; deduplication by hash block cannot hide a record whose content
   differs; an action marked `requires-network` reaches the network only
-  through a relay (its worker's, or the parent build's under `no-remote`).
+  through a relay (its worker's, or the parent build's under `no-remote`);
+  CAS blobs that differ from their digests; an unauthenticated Execute or
+  ActionCache write.
