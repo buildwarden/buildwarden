@@ -28,7 +28,7 @@ steps:
   - id: f2-plan
     phase: 2
     affinity: cloud
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -47,7 +47,7 @@ budget:
     steps: 9
   spent:
     runs: 1
-    steps: 2
+    steps: 3
 questions:
   - id: a1
     kind: assumed
@@ -145,3 +145,9 @@ history:
   - at: 2026-10-31T22:02:20Z
     by: cloud/20261031T205751Z
     event: entered phase 2 (plan)
+  - at: 2026-10-31T22:02:30Z
+    by: cloud/20261031T205751Z
+    event: claimed f2-plan until 2026-11-01T00:02:30Z
+  - at: 2026-10-31T22:02:30Z
+    by: cloud/20261031T205751Z
+    event: done f2-plan
