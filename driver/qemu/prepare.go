@@ -255,7 +255,10 @@ func runPrepareVM(goarch, layer, vars, seedImg string) error {
 }
 
 // windowsPrepareArgs is the build VM's Windows device model with no network
-// and the WPREP seed as a writable second NVMe disk.
+// and the WPREP seed as a writable removable USB disk. Unlike the build VM's
+// seed it cannot be NVMe: after sysprep /generalize, OOBE looks for
+// unattend.xml on removable media only, so on a fixed disk it stops at the
+// interactive region screen.
 func windowsPrepareArgs(qarch, accel, layer, vars, seedImg string) []string {
 	return []string{
 		"-machine", fmt.Sprintf("virt,accel=%s", accel),
@@ -274,7 +277,7 @@ func windowsPrepareArgs(qarch, accel, layer, vars, seedImg string) []string {
 		"-drive", fmt.Sprintf("if=none,id=osdisk,file=%s,format=qcow2", layer),
 		"-device", "nvme,drive=osdisk,serial=wardenwin,bootindex=0",
 		"-drive", fmt.Sprintf("if=none,id=seed,format=raw,file=%s", seedImg),
-		"-device", "nvme,drive=seed,serial=wardenprep",
+		"-device", "usb-storage,bus=xhci.0,drive=seed,removable=on",
 		"-nic", "none",
 		"-device", "virtio-rng-pci",
 	}
