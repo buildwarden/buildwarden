@@ -66,10 +66,12 @@ func RandAlphaNum(n int) string {
 	for i := range b {
 		j, err := rand.Int(rand.Reader, big.NewInt(int64(len(anumRunes))))
 		if err != nil {
-			panic(err)
+			// Since Go 1.24 the standard library treats a failing crypto/rand
+			// source as fatal, so this is not an ordinary failure, and an
+			// error return would give every caller a case it cannot handle.
+			panic(err) //nolint:forbidigo // crypto/rand failure is fatal (Go 1.24+), not an ordinary failure
 		}
 		b[i] = anumRunes[j.Uint64()]
 	}
 	return string(b)
 }
-
