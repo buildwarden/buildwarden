@@ -99,14 +99,12 @@ None.
 - a2, **answered** (Jeff rejected the assumed `inputs/Dockerfile`): always
   record the submitted file as `inputs/Containerfile`, the open-standard name,
   whatever its original name. Applied throughout this revision.
-- a3, **assumed** (merge round, open for sign-off): the convention this
+- a3, **answered** at sign-off (Jeff chose to fold the amendment into this
+  PR rather than the assumed follow-up process item): the convention this
   feature settles, that a driver records an input it alters at staging,
-  before the build starts, through the shared `driver.RecordInputs`, is
-  proposed as an amendment to ORCH-02 in a follow-up process item after this
-  merges, not in this PR (FLOW-14: `docs/development/` changes only at human
-  sign-off). Options: a follow-up process item (recommended); fold the
-  amendment into this PR at sign-off; no rule, leaving the convention to this
-  design. See Consolidation.
+  before the build starts, through the shared `driver.RecordInputs`, is now
+  part of ORCH-02 in `docs/development/orchestrator.md` (FLOW-14:
+  `docs/development/` changes at human sign-off).
 
 ## Design
 
@@ -292,7 +290,8 @@ Rebased onto `main` at `cd42fc7` (Jeff, 2026-10-29); `main` merged at
   the convention this feature settled, for example: "A driver that alters an
   input records it when it stages the input, before the build starts, through
   the shared `driver.RecordInputs`, so a failed build keeps its inputs and a
-  failure to record fails the build before anything runs." Not made here.
+  failure to record fails the build before anything runs." Made at sign-off
+  (a3).
 - **For the archive:** the `docs/development/README.md` follow-up
   "Container inputs under `inputs/`" is this feature and is removed when it is
   archived.
