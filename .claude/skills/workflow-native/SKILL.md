@@ -28,6 +28,19 @@ it in the queue and the digest instead), and never change anything on the
 machine outside the checkout, the documented caches, and the VMs, images and
 containers this session creates.
 
+## Git on the workflow checkout (unattended)
+
+Nobody is there to approve a prompt, and `settings.native.json` allows git on
+the workflow checkout only in this form, run from the checkout root:
+`git -C .dev/workflow <add|commit|push origin workflow|...>`. Never an
+absolute path, and never `cd .dev/workflow && git ...`. A branch under test
+goes in a worktree under `.scratch/` (`git worktree add .scratch/<name> <ref>`),
+driven with `git -C .scratch/<name> ...`, with its binaries run as
+`.scratch/<name>/dist/warden ...` and its targets with
+`make -C .scratch/<name> <target>`. A session that still
+cannot commit or push leaves its changes for the wrapper, which saves them and
+reports the run as failed.
+
 ## Set up
 
 On the machine itself. The FLOW-18 check, `dist/wf` and the `.dev/workflow`
@@ -44,8 +57,10 @@ For each host this session serves:
   rejected push lost the claim (FLOW-04): reset to `origin/workflow`, ask again.
 - Backlog: every `open` entry for this host in `backlog/native-gaps.yaml`.
 
-Unattended, the batch is bounded by `run_budget.steps` in `config.yaml`,
-counting claimed steps and backlog entries together, taken in FLOW-05 order
+Unattended, the batch is bounded by the native budget,
+`dist/wf budget -state .dev/workflow -native` (`native_budget` in
+`config.yaml`, falling back to `run_budget`; FLOW-13), counting claimed steps
+and backlog entries together, taken in FLOW-05 order
 for steps and file order for the backlog. Queue steps come before the backlog.
 
 ## Work
@@ -85,7 +100,7 @@ Unattended: append a `## Run host:<machine>/<timestamp>` section to
 **Moved** (per host and branch: what ran, pass or fail, evidence),
 **Blocked on Jeff** (anything this machine cannot do: a missing tool, a
 failure that needs a decision, a proposed fix item), **Spent** (steps and
-backlog entries against `run_budget.steps`), and **Notes** (FLOW-18 check,
+backlog entries against the native budget), and **Notes** (FLOW-18 check,
 whether Entire recorded the session, free disk at the end). Commit and push it.
 If a feature was unblocked or returned to Design, or a backlog entry failed,
 notify Jeff (the PushNotification tool when available) naming the feature and

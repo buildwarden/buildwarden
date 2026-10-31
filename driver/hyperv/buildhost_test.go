@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync/atomic"
 	"testing"
@@ -149,8 +150,9 @@ func (f *buildFake) simulateBuildComplete() {
 		strings.NewReader(fmt.Sprintf(`{"exit_code":%d,"message":"done"}`, f.buildExit)))
 }
 
-// baseCfg returns a buildConfig wired to loopback + high test ports, with the
-// relay overlay pre-created so teardown-removal is observable.
+// baseCfg returns a buildConfig wired to loopback and a free claim port, with
+// the relay overlay pre-created so teardown-removal is observable. The port is
+// picked at runtime: a fixed one can sit in a range Windows has excluded.
 func baseCfg(t *testing.T, dir string) buildConfig {
 	t.Helper()
 	relayOverlay := filepath.Join(dir, "relay.vhdx")
@@ -168,16 +170,32 @@ func baseCfg(t *testing.T, dir string) buildConfig {
 		BuildSwitch:   "warden-dev",
 		NATSwitch:     "warden-dev-nat",
 		relayIP:       "127.0.0.1",
-		claimPort:     49301,
+		claimPort:     freePort(t),
 		readyTimeout:  5 * time.Second,
 		Timeout:       5 * time.Second,
 	}
 }
 
+// freePort returns a loopback TCP port that was free a moment ago.
+func freePort(t *testing.T) int {
+	t.Helper()
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
+	return ln.Addr().(*net.TCPAddr).Port //nolint:forcetypeassert // a tcp listener
+}
+
+// claimAddr is where the fake relay listens for cfg's claim.
+func claimAddr(cfg buildConfig) string {
+	return net.JoinHostPort(cfg.relayIP, strconv.Itoa(cfg.claimPort))
+}
+
 func TestRunBuild_HappyPath(t *testing.T) {
 	dir := t.TempDir()
 	cfg := baseCfg(t, dir)
-	fp := &buildFake{claimAddr: "127.0.0.1:49301", buildExit: 0}
+	fp := &buildFake{claimAddr: claimAddr(cfg), buildExit: 0}
 
 	res, err := runBuild(context.Background(), fp, cfg)
 	if err != nil {
@@ -232,7 +250,7 @@ func TestRunBuild_Gen1(t *testing.T) {
 	cfg.BuildOverlay = filepath.Join(dir, "build.vhd")
 	cfg.Generation = 1
 	cfg.IsWindows = true
-	fp := &buildFake{claimAddr: "127.0.0.1:49301", buildExit: 0}
+	fp := &buildFake{claimAddr: claimAddr(cfg), buildExit: 0}
 
 	if _, err := runBuild(context.Background(), fp, cfg); err != nil {
 		if rerr, ok := fp.relayReadyErr.Load().(error); ok {
@@ -265,7 +283,7 @@ func TestRunBuild_OverlayFormatMismatch(t *testing.T) {
 func TestRunBuild_NonzeroExit(t *testing.T) {
 	dir := t.TempDir()
 	cfg := baseCfg(t, dir)
-	fp := &buildFake{claimAddr: "127.0.0.1:49301", buildExit: 7}
+	fp := &buildFake{claimAddr: claimAddr(cfg), buildExit: 7}
 
 	_, err := runBuild(context.Background(), fp, cfg)
 	if err == nil {
@@ -308,7 +326,7 @@ func TestRunBuild_VMOffWithoutCompletion(t *testing.T) {
 	cfg := baseCfg(t, dir)
 	cfg.Timeout = time.Minute
 	cfg.vmPoll = 50 * time.Millisecond
-	fp := &buildFake{claimAddr: "127.0.0.1:49301", powersOffSilently: true}
+	fp := &buildFake{claimAddr: claimAddr(cfg), powersOffSilently: true}
 
 	start := time.Now()
 	_, err := runBuild(context.Background(), fp, cfg)

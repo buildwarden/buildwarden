@@ -33,7 +33,19 @@ type Gap struct {
 	Status string `yaml:"status"` // open | done
 }
 
-// loadNative reads the optional hosts.yaml and backlog/native-gaps.yaml.
+// MachineStatus is native/status/<machine>.yaml, written by native-tick.sh
+// on every scheduled run so a failure before the agent starts is still seen.
+type MachineStatus struct {
+	File    string    `yaml:"-"`
+	Machine string    `yaml:"machine"`
+	LastRun time.Time `yaml:"last_run"`
+	Outcome string    `yaml:"outcome"` // worked | idle | skipped | failed
+	Reason  string    `yaml:"reason"`  // one line, never log contents (FLOW-18)
+	Since   time.Time `yaml:"since"`
+}
+
+// loadNative reads the optional hosts.yaml, backlog/native-gaps.yaml and
+// native/status/*.yaml.
 func (s *State) loadNative() error {
 	var hosts struct {
 		Machines []Machine `yaml:"machines"`
@@ -45,11 +57,52 @@ func (s *State) loadNative() error {
 	var gaps struct {
 		Gaps []Gap `yaml:"gaps"`
 	}
-	if err := readOptional(filepath.Join(s.Dir, "backlog", "native-gaps.yaml"), &gaps); err != nil {
+	gapsPath := filepath.Join(s.Dir, "backlog", "native-gaps.yaml")
+	if err := readOptional(gapsPath, &gaps); err != nil {
 		return err
 	}
 	s.Gaps = gaps.Gaps
+	paths, err := filepath.Glob(filepath.Join(s.Dir, "native", "status", "*.yaml"))
+	if err != nil {
+		return err
+	}
+	for _, p := range paths {
+		st := MachineStatus{File: filepath.Base(p)}
+		if err := readYAML(p, &st); err != nil {
+			return err
+		}
+		s.Statuses = append(s.Statuses, st)
+	}
 	return nil
+}
+
+// validateStatus checks the shape of the machine status files.
+func (s *State) validateStatus() []string {
+	var errs []string
+	for _, st := range s.Statuses {
+		bad := func(format string, a ...any) {
+			errs = append(errs, fmt.Sprintf("native/status/%s: ", st.File)+
+				fmt.Sprintf(format, a...))
+		}
+		if st.Machine+".yaml" != st.File {
+			bad("machine %q does not match the file name", st.Machine)
+		}
+		if len(s.Machines) > 0 {
+			if _, err := s.Machine(st.Machine); err != nil {
+				bad("machine %q is not in hosts.yaml", st.Machine)
+			}
+		}
+		if !oneOf(st.Outcome, "worked", "idle", "skipped", "failed") {
+			bad("outcome %q is not worked, idle, skipped or failed", st.Outcome)
+		}
+		if r := st.Reason; r == "" || strings.ContainsAny(r, "\r\n") || len(r) > 120 {
+			bad("reason must be one line of 1 to 120 characters")
+		}
+		if st.LastRun.IsZero() || st.Since.IsZero() || st.Since.After(st.LastRun) {
+			bad("last_run and since must be set, and since not after last_run")
+		}
+	}
+	return errs
 }
 
 func readOptional(path string, v any) error {
@@ -72,19 +125,19 @@ func (s *State) Machine(name string) (*Machine, error) {
 // validateNative checks that each host name has one machine and that every
 // host step and open gap names a host some machine serves.
 func (s *State) validateNative() []string {
+	errs := s.validateStatus()
 	if len(s.Machines) == 0 {
-		return nil
+		return errs
 	}
-	var errs []string
+	bad := func(format string, a ...any) { errs = append(errs, fmt.Sprintf(format, a...)) }
 	servedBy := map[string]string{}
 	for _, m := range s.Machines {
 		for _, h := range m.Hosts {
 			if !affinityRe.MatchString("host:" + h) {
-				errs = append(errs, fmt.Sprintf("hosts.yaml: %s: bad host name %q", m.Name, h))
+				bad("hosts.yaml: %s: bad host name %q", m.Name, h)
 			}
 			if o, dup := servedBy[h]; dup {
-				errs = append(errs, fmt.Sprintf("hosts.yaml: host %s served by both %s and %s",
-					h, o, m.Name))
+				bad("hosts.yaml: host %s served by both %s and %s", h, o, m.Name)
 			}
 			servedBy[h] = m.Name
 		}
@@ -93,15 +146,13 @@ func (s *State) validateNative() []string {
 		for _, st := range f.Steps {
 			h, ok := strings.CutPrefix(st.Affinity, "host:")
 			if ok && st.Status == "pending" && servedBy[h] == "" {
-				errs = append(errs, fmt.Sprintf("%s: step %s: no machine serves host %s",
-					f.Feature, st.ID, h))
+				bad("%s: step %s: no machine serves host %s", f.Feature, st.ID, h)
 			}
 		}
 	}
 	for _, g := range s.Gaps {
 		if g.Status == "open" && servedBy[g.Host] == "" {
-			errs = append(errs, fmt.Sprintf("backlog: gap %s: no machine serves host %s",
-				g.ID, g.Host))
+			bad("backlog: gap %s: no machine serves host %s", g.ID, g.Host)
 		}
 	}
 	return errs
@@ -134,10 +185,7 @@ func (s *State) Gate(m *Machine, repo string, last *GateStamp, sweepDays int,
 				p.Feature.Feature, p.Step.ID))
 		}
 	}
-	serves := map[string]bool{}
-	for _, h := range m.Hosts {
-		serves[h] = true
-	}
+	serves := s.unheld(m, g)
 	var open []string
 	for _, gap := range s.Gaps {
 		if gap.Status == "open" && serves[gap.Host] {
@@ -163,13 +211,29 @@ func (s *State) Gate(m *Machine, repo string, last *GateStamp, sweepDays int,
 		g.Reasons = append(g.Reasons, fmt.Sprintf("gaps\tno sweep in %d days\t%s",
 			sweepDays, strings.Join(open, ",")))
 	default:
-		g.Reasons = append(g.Reasons, fmt.Sprintf("idle\t%d open gaps, nothing moved since %s",
-			len(open), last.At.Format(time.RFC3339)))
+		g.Reasons = append(g.Reasons, fmt.Sprintf(
+			"idle\t%d open gaps, nothing moved since %s", len(open),
+			last.At.Format(time.RFC3339)))
 	}
 	if !g.Run && len(g.Reasons) == 0 {
 		g.Reasons = append(g.Reasons, "idle\tno host step ready and no open gaps")
 	}
 	return g, nil
+}
+
+// unheld returns the machine's hosts that no in-progress process item holds;
+// a held host starts no backlog sweep, and the gate says why.
+func (s *State) unheld(m *Machine, g *Gate) map[string]bool {
+	serves := map[string]bool{}
+	for _, h := range m.Hosts {
+		if by := s.Hold(nil, "host:"+h); by != "" {
+			g.Reasons = append(g.Reasons, fmt.Sprintf(
+				"held\thost:%s\tby process item %s", h, by))
+			continue
+		}
+		serves[h] = true
+	}
+	return serves
 }
 
 // fingerprint hashes origin/main and the branch of every in-progress feature,

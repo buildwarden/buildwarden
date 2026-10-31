@@ -120,24 +120,25 @@ None.
 
 ### Assumed
 
-- Proceeding with `qemu-any` and `container-any` on the Windows desktop.
-  Confirm. If its first `check` shows no qemu or no container runtime, the
-  fallback is one line in `hosts.yaml` moving that host name to the `macbook`.
-- Proceeding with re-homing the gap `container-inputs-linux-vm-guests` from
-  `macos-qemu` to `qemu-any`, and adding the gap
-  `container-inputs-integration-test` (host `container-any`) for the
-  never-run `make integration-test`. Confirm. Leaving
+All six confirmed by Jeff on 2026-10-29, in the Cowork session that planned
+`native-loop-followups.md`:
+
+- **Confirmed:** `qemu-any` and `container-any` on the Windows desktop. If its
+  first `check` shows no qemu or no container runtime, that host name moves to
+  the `macbook` in `hosts.yaml`.
+- **Confirmed:** re-homing `container-inputs-linux-vm-guests` to `qemu-any`,
+  adding `container-inputs-integration-test` (`container-any`), and leaving
   `qemu-windows-guest-package` and `qemu-linux-exclusive-trust` on
-  `macos-qemu`, as their designs named.
-- Proceeding with the schedules above: Mac daily at 04:40, Windows every 6
-  hours. Confirm.
-- Proceeding with the native run's batch counting against the same
-  `run_budget.steps` as a cloud run, rather than a separate `native_budget`.
-  Confirm.
-- Proceeding with notifications through the PushNotification tool when the
-  headless session has it, and otherwise the digest alone, which the next
-  cloud tick's notification carries. Confirm.
-- Proceeding with this change outside the queue, with no queue item. Confirm.
+  `macos-qemu`.
+- **Confirmed:** the schedules: the Mac daily at 04:40, Windows every 6 hours.
+- **Superseded:** the native batch counting against `run_budget.steps`. Jeff
+  chose a separate `native_budget` instead (`native-loop-followups.md`, item
+  3).
+- **Confirmed:** notifications through PushNotification when available,
+  otherwise the digest. A morning summary task now adds one daily
+  notification (`native-loop-followups.md`, item 5).
+- **Confirmed:** this change merged outside the queue (PR #64). It is
+  retro-recorded as a done process item (`native-loop-followups.md`, item 6).
 
 ## Design
 

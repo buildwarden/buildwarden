@@ -91,6 +91,9 @@ func (d *Driver) StartBuild(
 	if err != nil {
 		return nil, fmt.Errorf("staging build script: %w", err)
 	}
+	if err := driver.RecordInputs(outputDir, req, buildScript); err != nil {
+		return nil, fmt.Errorf("recording inputs: %w", err)
+	}
 
 	// Resolve both VMs' boot assets before anything boots, so a missing
 	// image or asset fails in milliseconds rather than after the relay is up.
