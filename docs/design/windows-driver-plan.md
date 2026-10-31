@@ -15,7 +15,7 @@ native_validation:
   - {host: qemu-any, blocking: false, reason: "regression check the plan requires: Linux+qemu disk, seed and serial unchanged"}
   - {host: container-any, blocking: false, reason: "regression: cmd/warden-io changes reach the container driver"}
 tier2_gaps: []
-rules: [EXEC-01, EXEC-02, EXEC-03, EXEC-04, ORCH-01, ORCH-05, BOOT-02, BOOT-04, GLOBAL-06, GLOBAL-07, TEST-02, TEST-08]
+rules: [EXEC-01, EXEC-02, EXEC-03, EXEC-04, ORCH-01, ORCH-05, BOOT-02, BOOT-04, BOOT-06, GLOBAL-06, GLOBAL-07, TEST-02, TEST-08]
 concepts: [windows-guest, warden-io-windows, build-ps1, conda-forge, image-prepare, autounattend, licensing, win-arm64]
 related: [hyperv-driver-plan.md, vm-driver-release-plan.md, platform-compatibility.md, hyperv-windows-prepare.md]
 ---
@@ -485,11 +485,14 @@ this plan already says about GLOBAL-06; it adds no design.
   sets the CA environment variables, so every Schannel and OpenSSL client in
   the guest trusts the relay's MITM CA for that build. Isolation stays
   topological and host-enforced: the guest's single NIC faces the relay VM,
-  which redirects :80, :443 and :53 and drops forwarding; there is no
-  in-guest firewall to rely on, so administrator rights inside the guest do
-  not open a path. The prepared Windows image (autounattend, first-boot
-  task) is trusted input fixed before the build; per build, only the
-  executor and its seed cross outside the relay (BOOT-02).
+  which redirects :80, :443 and :53 and drops forwarding. There is no
+  in-guest firewall, so the isolation argument does not rely on any in-guest
+  control; whether a guest administrator can open a path is what the
+  adversarial gate below must show, and the plan does not record that gate
+  as run. The prepared Windows image (autounattend, first-boot task) is input fixed at
+  prepare, before the build (BOOT-06: it carries the startup hook, not build
+  content); per build, only the executor and its seed cross outside the
+  relay (BOOT-02).
 - **What TEST-08 should exercise:** egress from the Windows guest that
   bypasses the relay (direct IP, other ports, IPv6, SMB/NetBIOS, ICMP,
   DNS-over-HTTPS); that the per-build CA does not persist into the prepared
