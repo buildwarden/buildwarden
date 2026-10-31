@@ -73,8 +73,12 @@ type build struct {
 	workDir string
 }
 
+// Name implements driver.Driver; it returns "container".
 func (d *Driver) Name() string { return "container" }
 
+// StartBuild implements driver.Driver. It isolates the build's network
+// namespace, starts the relay and the build container, waits for the build to
+// finish within req.Timeout, and tears everything down before returning.
 func (d *Driver) StartBuild(
 	ctx context.Context, req *driver.BuildRequest,
 ) (*driver.BuildResult, error) {
@@ -171,6 +175,10 @@ func (b *build) containerLogs() string {
 	return string(out)
 }
 
+// Exec implements driver.Driver. It sets up the same isolated environment as
+// StartBuild, but starts the build container in hold mode instead of running
+// the script, waits for its setup to finish, and attaches an interactive shell;
+// the environment is torn down when the shell exits.
 func (d *Driver) Exec(
 	ctx context.Context, req *driver.BuildRequest,
 ) error {
@@ -268,6 +276,8 @@ func (b *build) shellExitCode(execErr error) (int, bool) {
 	return execExitCode(execErr, "")
 }
 
+// Close implements driver.Driver. Each build tears down its own containers,
+// so the driver holds nothing to release.
 func (d *Driver) Close() error { return nil }
 
 // stdio resolves the request's stdin, stdout and stderr, defaulting each to

@@ -38,6 +38,8 @@ type Driver struct {
 	Verbose bool
 }
 
+// New returns a Driver whose image cache lives in the default cache
+// directory.
 func New() *Driver {
 	cacheDir := defaultCacheDir()
 	return &Driver{
@@ -45,8 +47,12 @@ func New() *Driver {
 	}
 }
 
+// Name implements driver.Driver; it returns "vz".
 func (d *Driver) Name() string { return "vz" }
 
+// StartBuild implements driver.Driver. It starts the host relay, boots the
+// macOS build VM with the relay as its only network path, and waits for the
+// build to finish. It fails on any host but macOS/arm64.
 func (d *Driver) StartBuild(
 	ctx context.Context, req *driver.BuildRequest,
 ) (*driver.BuildResult, error) {
@@ -200,6 +206,9 @@ func (d *Driver) setupNetworkAndRelay(
 	return vnet, relayProc, nil
 }
 
+// Exec implements driver.Driver. Interactive mode is not implemented for vz:
+// it returns driver.ErrExecNotSupported on a supported host, and the platform
+// error on any other.
 func (d *Driver) Exec(ctx context.Context, req *driver.BuildRequest) error {
 	if err := checkPlatform(); err != nil {
 		return err
@@ -208,6 +217,8 @@ func (d *Driver) Exec(ctx context.Context, req *driver.BuildRequest) error {
 	return driver.ErrExecNotSupported
 }
 
+// Close implements driver.Driver. Each build stops its own VM and relay, so
+// the driver holds nothing to release.
 func (d *Driver) Close() error { return nil }
 
 // PrepareCommand is how a user prepares the vz base image. It needs root:
