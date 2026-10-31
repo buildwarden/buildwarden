@@ -262,10 +262,14 @@ outside the queue; archived by `pre-release-cleanup`.
   `macbook`, since the qemu driver runs only on aarch64 hosts (2026-10-30);
   the installers check only the capabilities `hosts.yaml` gives the machine.
 - **Validated.** `wf gate` and `hosts.yaml` unit tests, `shellcheck`, and the
-  gate against the real queue. The Mac's scheduled runs have pushed
-  `## Run host:macbook/...` digest sections since 2026-10-29. The Windows
-  desktop is installed and its wrapper writes its status file, but by this
-  archive it had pushed no worked scheduled run of its own.
+  gate against the real queue. The Mac's scheduled runs have pushed their own
+  `## Run host:macbook/...` digest sections since 2026-10-30 (`df15edf`; the
+  2026-10-29 section was pushed from an attended session, `68e2633`). The
+  Windows desktop is installed and its wrapper writes its status file, but by
+  this archive it had pushed no worked scheduled run of its own: no host step
+  or open backlog gap named `windows-hyperv` or `container-any`, so its gate
+  never had work. That remaining check is the `windows-hyperv` backlog entry
+  `native-host-loop-windows-scheduled-run`.
 - **For future designs touching `workflow`, `native-validation`,
   `scheduled-sessions`, `hosts` or `gate`:** route work by editing
   `hosts.yaml`, not code; anything that should wake a machine must be

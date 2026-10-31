@@ -59,7 +59,12 @@ clears the rest:
    that cannot be handled. Rejected: changing the signature to return an error.
 3. **Archive both native designs** with their summaries filled from their own
    Decisions, Questions and Consolidation sections and their merge PRs (#64,
-   #65), as FLOW-12 asks of any merged design.
+   #65), as FLOW-12 asks of any merged design. This overrides
+   native-loop-followups' condition (its item 7 and plan step 12) of archiving
+   native-host-loop only once the Windows desktop has pushed a worked scheduled
+   run: both features are merged and the release gate needs them archived. The
+   unmet Windows check moves to a `windows-hyperv` backlog entry,
+   `native-host-loop-windows-scheduled-run`, so it stays tracked (TEST-03).
 4. **No behavior change.** Comments, two format verbs, one directive, two
    design documents.
 

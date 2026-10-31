@@ -52,7 +52,9 @@ func (d *Driver) Name() string { return "vz" }
 
 // StartBuild implements driver.Driver. It starts the host relay, boots the
 // macOS build VM with the relay as its only network path, and waits for the
-// build to finish. It fails on any host but macOS/arm64.
+// build to finish. It fails with a fixable platform error on any host but
+// macOS/arm64, and on macOS/arm64 when the binary lacks the virtualization
+// entitlement.
 func (d *Driver) StartBuild(
 	ctx context.Context, req *driver.BuildRequest,
 ) (*driver.BuildResult, error) {
@@ -207,8 +209,9 @@ func (d *Driver) setupNetworkAndRelay(
 }
 
 // Exec implements driver.Driver. Interactive mode is not implemented for vz:
-// it returns driver.ErrExecNotSupported on a supported host, and the platform
-// error on any other.
+// it returns driver.ErrExecNotSupported once the platform checks pass, and
+// otherwise the same fixable platform error as StartBuild (another host, or a
+// binary without the virtualization entitlement).
 func (d *Driver) Exec(ctx context.Context, req *driver.BuildRequest) error {
 	if err := checkPlatform(); err != nil {
 		return err
