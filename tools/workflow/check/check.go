@@ -61,6 +61,9 @@ func Phase(env Env, f *queue.Feature) []Result {
 		c.docsTouched("guides or examples updated", "docs/book/src/guide/",
 			"docs/book/src/getting-started/", "examples/", "README.md")
 	case 6:
+		if c.mergedEarly() {
+			break
+		}
 		c.mainMerged()
 		if d, err := c.loadDesign(c.f.Branch); err == nil {
 			c.section(d, "Consolidation")
@@ -85,6 +88,9 @@ func (c *checker) process() {
 		c.add("design present (FLOW-01)", err == nil, "%s on %s", c.f.Design, c.f.Branch)
 		c.reviewed()
 	case 2:
+		if c.mergedEarly() {
+			break
+		}
 		c.pushed()
 		c.archivedOn(c.f.Branch)
 		c.prGreen()
@@ -244,6 +250,22 @@ func (c *checker) merged() {
 	out, _ := c.git("log", "origin/main", "--format=%h %s", "-E",
 		fmt.Sprintf("--grep=(Merge pull request |\\()#%d([^0-9]|$)", c.f.PR.Number))
 	c.add(name, out != "", "PR #%d on origin/main: %s", c.f.PR.Number, firstLine(out))
+}
+
+// mergedEarly handles a PR the human merged before Publish's step was
+// recorded: GitHub has deleted the branch and main has moved past it, so the
+// push, main-merged and PR checks cannot pass any more. The merge supersedes
+// them (FLOW-08); what remains is that the design landed archived (FLOW-12).
+// It reports nothing and returns false while the PR is not merged.
+func (c *checker) mergedEarly() bool {
+	probe := &checker{env: c.env, f: c.f}
+	probe.merged()
+	if !OK(probe.out) {
+		return false
+	}
+	c.out = append(c.out, probe.out...)
+	c.archivedOn("origin/main")
+	return true
 }
 
 // archivedOn checks that the design is archived with its summary at rev: on

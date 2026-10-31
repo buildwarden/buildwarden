@@ -1,6 +1,6 @@
 ---
 feature: wf-merged-counts-as-pushed
-status: active
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -92,10 +92,26 @@ PR; the process item's phase 2 likewise.
 
 ## Consolidation
 
-Filled in at Publish.
+Branched from `main` at `3362163`, still `main`: nothing landed to reconcile.
+FLOW-15: one helper added (`mergedEarly`), reached from both phases it serves;
+it reuses `merged()` and `archivedOn()` rather than repeating them.
 
 ## Rollback notes
 
 ## Archive summary
 
-Filled in at Publish.
+Implemented 2026-10-31 in the attended session where the gap appeared three
+times (#78, #79, #80).
+
+- **Built.** `check.mergedEarly`: in feature phase 6 and process phase 2, when
+  the PR is already merged (branch contained in `main`, or the PR's merge
+  commit on `main` once the branch is gone), the phase passes on that merge
+  plus the design archived with its summary on `origin/main`. Unmerged, the
+  checks are unchanged. Test: `TestPublishPassesOnAnEarlyMerge`.
+- **Decisions taken:** the merge supersedes push, main-merged and PR-green
+  (FLOW-08); no recorded `ci: green` required (Jeff, r1).
+- **Rejected:** requiring `ci: green` as well; hand-advancing items with a
+  history note (what the gap forced three times).
+- **For future designs touching `done-when` or `merge-detection`:** a check
+  that compares the branch with `main` or the remote must say what it means
+  once the human has merged and GitHub has deleted the branch.

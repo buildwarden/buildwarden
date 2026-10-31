@@ -357,3 +357,32 @@ func TestApprovalMayWrap(t *testing.T) {
 		t.Fatalf("approvals = %v", got)
 	}
 }
+
+// TestPublishPassesOnAnEarlyMerge: the human merged the PR before Publish's
+// step was recorded, and GitHub deleted the branch. Publish then passes on the
+// merge plus the design archived on main; before the merge it still needs the
+// push, main and a green PR (FLOW-08, FLOW-12).
+func TestPublishPassesOnAnEarlyMerge(t *testing.T) {
+	work := repo(t, design)
+	commit(t, work, archived)
+	env := Env{Repo: work}
+	f := demo(6)
+	f.PR = &queue.PR{Number: 7, CI: "pending"}
+	if got := failures(Phase(env, f)); !strings.Contains(got, "PR open with CI green") {
+		t.Fatalf("phase 6 before the merge: %q, want the PR check", got)
+	}
+	git(t, work, "checkout", "-q", "main")
+	git(t, work, "merge", "-q", "--no-ff", "-m",
+		"Merge pull request #7 from o/feat/demo", "feat/demo")
+	git(t, work, "push", "-q", "origin", "main", ":feat/demo")
+	git(t, work, "branch", "-q", "-D", "feat/demo")
+	git(t, work, "fetch", "-q", "--prune", "origin")
+	if rs := Phase(env, f); !OK(rs) {
+		t.Errorf("phase 6 after an early merge: %s", failures(rs))
+	}
+	p := demo(2)
+	p.Kind, p.Round, p.PR = "process", "process", &queue.PR{Number: 7}
+	if rs := Phase(env, p); !OK(rs) {
+		t.Errorf("x2 after an early merge: %s", failures(rs))
+	}
+}
