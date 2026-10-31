@@ -1,17 +1,17 @@
 feature: ci-path-filters
 title: CI runs only the checks a change's paths need (docs-only PRs skip Go lint, test, tidy and build)
 priority: 11
-status: in_progress
+status: done
 round: feature
-phase: 6
+phase: 8
 design: docs/design/ci-path-filters.md
 branch: feat/ci-path-filters
 alters_relationships: false
 design_review: required
+source: 'Jeff, 2026-10-30: docs-only updates should skip the testing rounds since there are no code changes'
 pr:
   number: 82
   ci: pending
-source: 'Jeff, 2026-10-30: docs-only updates should skip the testing rounds since there are no code changes'
 steps:
   - id: f0-branch-setup
     phase: 0
@@ -84,19 +84,33 @@ steps:
   - id: f6-open-pr
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f6-consolidate
     lease:
-      claimed_by: cloud/20261031T205751Z
-      expires: 2026-11-01T00:15:49.308291955Z
+      claimed_by: ""
+      expires: null
+  - id: f7-merge
+    phase: 7
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f8-close
+    phase: 8
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
     steps: 9
   spent:
     runs: 1
-    steps: 10
+    steps: 11
 questions:
   - id: a1
     kind: assumed
@@ -286,3 +300,24 @@ history:
   - at: 2026-10-31T22:22:15Z
     by: cloud/20261031T205751Z
     event: 'f6-open-pr held: #82 merged with an empty Archive summary (the early-merge check caught it); summary added in #84, which completes Close once merged'
+  - at: 2026-10-31T22:25:27Z
+    by: cloud/20261031T205751Z
+    event: done f6-open-pr
+  - at: 2026-10-31T22:25:27Z
+    by: cloud/20261031T205751Z
+    event: entered phase 7 (merge)
+  - at: 2026-10-31T22:25:27Z
+    by: cloud/20261031T205751Z
+    event: done f7-merge
+  - at: 2026-10-31T22:25:27Z
+    by: cloud/20261031T205751Z
+    event: entered phase 8 (close)
+  - at: 2026-10-31T22:25:27Z
+    by: cloud/20261031T205751Z
+    event: claimed f8-close until 2026-11-01T00:25:27Z
+  - at: 2026-10-31T22:25:27Z
+    by: cloud/20261031T205751Z
+    event: done f8-close
+  - at: 2026-10-31T22:25:27Z
+    by: cloud/20261031T205751Z
+    event: closed; feature done
