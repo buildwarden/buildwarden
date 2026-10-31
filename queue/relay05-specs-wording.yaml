@@ -9,6 +9,9 @@ design: docs/design/relay05-specs-wording.md
 branch: feat/relay05-specs-wording
 alters_relationships: null
 source: specs-migration design (Proposed rule changes), approved at r1 2026-10-31
+pr:
+  number: 86
+  ci: pending
 steps:
   - id: x1-design
     phase: 1
@@ -21,17 +24,17 @@ steps:
     phase: 2
     affinity: cloud
     status: pending
-    note: 'Wait until specs-migration has merged (design Decision 1), then merge main and edit RELAY-05.'
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261031T205751Z
+      expires: 2026-11-01T01:00:23.034820946Z
+    note: Wait until specs-migration has merged (design Decision 1), then merge main and edit RELAY-05.
 budget:
   estimate:
     runs: 1
     steps: 4
   spent:
     runs: 0
-    steps: 1
+    steps: 2
 questions: []
 history:
   - at: 2026-10-31T22:30:29Z
@@ -49,3 +52,6 @@ history:
   - at: 2026-10-31T22:32:20Z
     by: human/jeff
     event: entered phase 2 (implement)
+  - at: 2026-10-31T23:00:23Z
+    by: cloud/20261031T205751Z
+    event: claimed x2-implement until 2026-11-01T01:00:23Z
