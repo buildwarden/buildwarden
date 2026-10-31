@@ -1,3 +1,25 @@
+---
+# Retrofitted (FLOW-12) onto a pre-standard plan; existing lines unchanged, security note appended.
+feature: windows-driver-plan
+status: archived
+round: parallel
+drivers: [container, qemu, vz, hyperv]  # cmd/warden-io changes reach every driver
+seams: [executor-initialize, relay-guest-api, windows-guest-seed]
+surfaces: [cli, config]
+security_boundary: env-relay            # Windows CA trust install and topological isolation; see "Security note (retrofit)"
+alters_relationships: true              # executor gains a Windows guest; build.ps1 input model
+native_validation:
+  - {host: macos-qemu, blocking: true, reason: "Phase 1 win-arm64 under qemu on Apple Silicon"}
+  - {host: windows-hyperv, blocking: true, reason: "Phase 2 native win-64 on Hyper-V"}
+  - {host: macos-vz, blocking: false, reason: "regression check the plan requires: VZ path untouched"}
+  - {host: qemu-any, blocking: false, reason: "regression check the plan requires: Linux+qemu disk, seed and serial unchanged"}
+  - {host: container-any, blocking: false, reason: "regression: cmd/warden-io changes reach the container driver"}
+tier2_gaps: []
+rules: [EXEC-01, EXEC-02, EXEC-03, EXEC-04, ORCH-01, ORCH-05, BOOT-02, BOOT-04, BOOT-06, GLOBAL-06, GLOBAL-07, TEST-02, TEST-08]
+concepts: [windows-guest, warden-io-windows, build-ps1, conda-forge, image-prepare, autounattend, licensing, win-arm64]
+related: [hyperv-driver-plan.md, vm-driver-release-plan.md, platform-compatibility.md, hyperv-windows-prepare.md]
+---
+
 # Windows-Native Build Driver — Planning
 
 Status: **Phase 1 implemented & validated locally** on branch
@@ -450,3 +472,30 @@ integration-tested end to end (valid ledger); **security-validated by an
 independent adversarial agent** (zero unrecorded egress); performance baselined
 (boot, build latency, throughput); image sourcing documented; error handling
 graceful.
+
+## Security note (retrofit)
+
+Added when front-matter was retrofitted (FLOW-02, FLOW-12). It gathers what
+this plan already says about GLOBAL-06; it adds no design.
+
+- **Boundary:** env-relay. The Windows guest is a new kind of inner build
+  environment behind the same relay.
+- **How the posture changes:** `warden-io` on Windows imports the relay's
+  per-build CA into the machine root store (`certutil -addstore -f Root`) and
+  sets the CA environment variables, so every Schannel and OpenSSL client in
+  the guest trusts the relay's MITM CA for that build. Isolation stays
+  topological and host-enforced: the guest's single NIC faces the relay VM,
+  which redirects :80, :443 and :53 and drops forwarding. There is no
+  in-guest firewall, so the isolation argument does not rely on any in-guest
+  control; whether a guest administrator can open a path is what the
+  adversarial gate below must show, and the plan does not record that gate
+  as run. The prepared Windows image (autounattend, first-boot task) is input fixed at
+  prepare, before the build (BOOT-06: it carries the startup hook, not build
+  content); per build, only the executor and its seed cross outside the
+  relay (BOOT-02).
+- **What TEST-08 should exercise:** egress from the Windows guest that
+  bypasses the relay (direct IP, other ports, IPv6, SMB/NetBIOS, ICMP,
+  DNS-over-HTTPS); that the per-build CA does not persist into the prepared
+  image or a later build; that the seed carries nothing beyond the executor,
+  launcher and network configuration; and the adversarial "escape the build
+  env" agent the plan's own Phasing and graduation gates require.

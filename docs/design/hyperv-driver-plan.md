@@ -1,3 +1,25 @@
+---
+# Retrofitted (FLOW-12) onto a pre-standard plan; body unchanged.
+feature: hyperv-driver-plan
+status: active                          # Windows-guest path merged; active until the Phase 1 Linux build guest is built or dropped (vm-driver-release-plan Phase 5)
+round: parallel
+drivers: [container, qemu, vz, hyperv]  # output sink added to relay/ (shared package)
+seams: [relay-claim, collector, relay-guest-api]
+surfaces: [cli, config]
+security_boundary: host-env             # also env-relay; see "Security Considerations", "Privilege & Elevation Model"
+alters_relationships: true
+design_review: required
+native_validation:
+  - {host: windows-hyperv, blocking: true, reason: "driver/hyperv runs only on Hyper-V"}
+  - {host: container-any, blocking: false, reason: "regression: relay/ output sink; localSink must stay the default"}
+  - {host: qemu-any, blocking: false, reason: "regression: relay/ output sink; localSink must stay the default"}
+  - {host: macos-vz, blocking: false, reason: "regression: relay/ output sink; localSink must stay the default"}
+tier2_gaps: []
+rules: [ORCH-01, ORCH-03, ORCH-04, ORCH-05, GLOBAL-06, GLOBAL-07, GLOBAL-08, RELAY-07, BOOT-01, BOOT-02, UX-04, TEST-02]
+concepts: [hyperv, windows-host, vswitch, nat, elevation, privileged-service, unattend, differencing-disk, output-egress, collector, uki-relay-boot]
+related: [vm-driver-release-plan.md, windows-driver-plan.md, hyperv-windows-prepare.md]
+---
+
 # Hyper-V Driver Implementation Plan
 
 > **Status note (integration pass):** the relay-host design described below
