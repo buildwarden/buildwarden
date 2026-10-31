@@ -10,7 +10,8 @@ import (
 
 // approvedRe finds an approval in the design's Design review section: each
 // approval names the commit the approved design was read at (FLOW-19).
-var approvedRe = regexp.MustCompile("(?i)approved at `?([0-9a-f]{7,40})")
+// The phrase may wrap across lines.
+var approvedRe = regexp.MustCompile("(?i)approved\\s+at\\s+`?([0-9a-f]{7,40})")
 
 // approvals returns the commits of the design's recorded approvals, oldest
 // first.

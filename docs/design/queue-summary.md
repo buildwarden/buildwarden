@@ -1,6 +1,6 @@
 ---
 feature: queue-summary
-status: active
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -113,10 +113,34 @@ live `workflow` branch.
 
 ## Consolidation
 
-Filled in at Publish.
+Branched from `main` at `867219f`, which is still `main`: nothing landed to
+reconcile. One fix rode along: the FLOW-19 approval pattern in
+`check/review.go` required "approved at" on one line, so this design's own
+first entry, reflowed across two lines, was not counted. It now allows any
+whitespace, with a test. FLOW-15: no dead code added (`Summary`,
+`WriteSummary` and `status -md` are all reached); no duplication, since the
+summary reads the same `State` as `wf status`.
 
 ## Rollback notes
 
 ## Archive summary
 
-Filled in at Publish.
+Implemented 2026-10-31 in the attended session that approved it, as a process
+item alongside `tier1-static-checks`.
+
+- **Built.** `queue.Summary` renders Needs Jeff (blocking questions, ready
+  human steps, PRs waiting for the merge, runaway budgets), Active (phase,
+  next steps, spent against estimate), Waiting on a host, Backlog and Recently
+  done (7 days). `State.Save` and `wf validate` write it to `QUEUE.md` on the
+  `workflow` branch; `wf status -md` prints it. The "updated" time is the
+  newest history event, so the output depends only on the state.
+- **Decisions taken:** Go inside `wf`; regenerated on every write and on
+  `validate`; deterministic.
+- **Rejected:** a Python script (a second parser, plus Python on every
+  machine); a pre-push hook (unversioned, absent on fresh clones and the
+  scheduled sessions).
+- **Validated.** Golden test over every section, determinism, `Save` writing
+  the file; a dry run on the live queue.
+- **For future designs touching `workflow` or `feature-queue`:** a new queue
+  field the human acts on belongs in Needs Jeff; change `summary.go` and
+  `testdata/queue.md` together (`go test ./queue -run Golden -update`).

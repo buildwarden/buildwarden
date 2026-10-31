@@ -56,7 +56,7 @@ type opts struct {
 	state, repo, worker, feature, step, why, question, answer string
 	title, source, machine, stamp, kind, holds                string
 	priority, estSteps, estRuns, sweepDays, to                int
-	newRun, run, record, native                               bool
+	newRun, run, record, native, md                           bool
 	now                                                       time.Time
 }
 
@@ -101,6 +101,7 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.IntVar(&o.sweepDays, "sweep-days", 7, "gate: re-sweep open gaps after this many days")
 	fs.BoolVar(&o.record, "record", false, "gate: write the stamp instead of deciding")
 	fs.BoolVar(&o.native, "native", false, "budget: the native session's budget")
+	fs.BoolVar(&o.md, "md", false, "status: print the QUEUE.md summary instead")
 	_ = fs.Parse(args)
 
 	s, err := queue.Load(o.state)
@@ -131,7 +132,7 @@ func validate(s *queue.State, _ opts) error {
 		return fmt.Errorf("%d problems", len(errs))
 	}
 	fmt.Printf("ok: %d features\n", len(s.Features))
-	return nil
+	return s.WriteSummary()
 }
 
 func budget(s *queue.State, o opts) error {
@@ -139,7 +140,11 @@ func budget(s *queue.State, o opts) error {
 	return nil
 }
 
-func status(s *queue.State, _ opts) error {
+func status(s *queue.State, o opts) error {
+	if o.md {
+		fmt.Print(queue.Summary(s))
+		return nil
+	}
 	for _, f := range s.Features {
 		b := f.Budget
 		fmt.Printf("%d\t%s\t%s\t%s/%d %s\tsteps %d/%d\truns %d/%d\n",
