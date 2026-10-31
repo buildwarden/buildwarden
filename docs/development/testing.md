@@ -48,7 +48,8 @@ Where each tier runs today:
 
 - Tier 0: the `ci` workflow, on every push to `main` and on every PR that
   changes a path outside the docs-only set: `docs/**` except
-  `docs/development/**`, and top-level `*.md`, with Go source and module files
+  `docs/development/**`, `docs/book/src/specs/**` and
+  `docs/book/src/SUMMARY.md`, and top-level `*.md`, with Go source and module files
   (`*.go`, `go.mod`, `go.sum`, `go.work`) never docs-only wherever they are.
   `main.yml`'s `changes` job is that set's implementation.
 - Tier 1: the `integration` workflow (`make integration-test` on a hosted
