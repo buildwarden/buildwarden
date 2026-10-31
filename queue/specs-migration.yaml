@@ -1,9 +1,9 @@
 feature: specs-migration
 title: Move the ledger spec and schemas to specs/ (RELAY-05)
 priority: 12
-status: queued
+status: in_progress
 round: feature
-phase: 0
+phase: 1
 design: docs/design/specs-migration.md
 branch: feat/specs-migration
 alters_relationships: null
@@ -12,17 +12,24 @@ steps:
   - id: f0-branch-setup
     phase: 0
     affinity: cloud
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
+  - id: f1-design
+    phase: 1
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: cloud/20261031T205751Z
+      expires: 2026-11-01T00:20:48.953010978Z
 budget:
   estimate:
     runs: 4
     steps: 20
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 2
 questions: []
 history:
   - at: 2026-10-28T23:18:38Z
@@ -34,3 +41,18 @@ history:
   - at: 2026-10-31T20:44:50Z
     by: human/jeff
     event: migrated to the feature round at phase 0 (workflow-streamline)
+  - at: 2026-10-31T22:20:46Z
+    by: cloud/20261031T205751Z
+    event: started (FLOW-05)
+  - at: 2026-10-31T22:20:46Z
+    by: cloud/20261031T205751Z
+    event: claimed f0-branch-setup until 2026-11-01T00:20:46Z
+  - at: 2026-10-31T22:20:48Z
+    by: cloud/20261031T205751Z
+    event: done f0-branch-setup
+  - at: 2026-10-31T22:20:48Z
+    by: cloud/20261031T205751Z
+    event: entered phase 1 (design)
+  - at: 2026-10-31T22:20:48Z
+    by: cloud/20261031T205751Z
+    event: claimed f1-design until 2026-11-01T00:20:48Z
