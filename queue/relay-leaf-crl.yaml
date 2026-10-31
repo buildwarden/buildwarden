@@ -119,7 +119,7 @@ steps:
   - id: m6-confirm-pr
     phase: 6
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -151,21 +151,23 @@ questions:
     answer: 'Serve it unrecorded, like /ca.pem. Jeff (in chat, 2026-10-30): serving the blank revocation list should be considered a relay internal artifact, not something relevant to the actual inputs, since it should not affect the build outputs in a meaningful way.'
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: http://artifacts/ca.crl as the distribution point, rather than a new reserved hostname or a path under cwd?
     options:
       - http://artifacts/ca.crl
       - a new reserved hostname
       - a path under cwd
     recommended: http://artifacts/ca.crl
+    answer: 'http://artifacts/ca.crl. Jeff (in chat, 2026-10-30), asked to confirm opening the PR with a2 and a3 as recommended: we effectively already discussed it so we can move to pr.'
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: Leave the existing --ssl-no-revoke in the native diagnostic scripts on the workflow branch, and validate with a build script that uses no revocation flag?
     options:
       - yes, leave them
       - edit them to drop the flag
     recommended: yes, leave them
+    answer: 'Yes, leave them. Jeff (in chat, 2026-10-30), asked to confirm opening the PR with a2 and a3 as recommended: we effectively already discussed it so we can move to pr.'
 history:
   - at: 2026-10-31T01:38:52Z
     by: human/jeff
@@ -311,3 +313,12 @@ history:
   - at: 2026-10-31T02:04:42Z
     by: cloud/20261031T013930Z
     event: entered phase 6 (publish)
+  - at: 2026-10-31T02:05:37Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: http://artifacts/ca.crl. Jeff (in chat, 2026-10-30), asked to confirm opening the PR with a2 and a3 as recommended: we effectively already discussed it so we can move to pr.'
+  - at: 2026-10-31T02:05:37Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: Yes, leave them. Jeff (in chat, 2026-10-30), asked to confirm opening the PR with a2 and a3 as recommended: we effectively already discussed it so we can move to pr.'
+  - at: 2026-10-31T02:05:37Z
+    by: human/jeff
+    event: done m6-confirm-pr
