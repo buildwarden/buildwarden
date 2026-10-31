@@ -227,6 +227,17 @@ tasks 7 to 12, the a2 rework (FLOW-06), shipped in the second round
     linux (only untagged files in `driver/` change); push
     `feat/container-inputs`.
 
+Merge round (m2): the consolidation pass adds no tasks, and no rework of
+implemented code is owed (FLOW-06). What `main` brought in (`c9940d6`) reaches
+this feature only in `test-integration.sh` (the `dist/warden` path and the
+`extract_output_dir` fix, which Test 2's `inputs/` checks already use) and in
+`overview.md` (the unrecorded `/ca.crl` route, apart from `StartBuild`'s
+`inputs/` line), so neither the code nor the reference docs owe a change
+(UX-01, FLOW-15). The sweep in task 11 still returns only the absence
+assertions. Tasks 1 to 12 are done; the merged head re-runs tier 1 in the PR's
+`integration` workflow and is re-reviewed in m4 (FLOW-03, FLOW-10, TEST-02).
+The ORCH-02 amendment (a3) is a sign-off decision, not a task here (FLOW-14).
+
 ## Consolidation (merge round)
 
 Rebased onto `main` at `cd42fc7` (Jeff, 2026-10-29); `main` merged at
