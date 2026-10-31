@@ -1,6 +1,6 @@
 ---
 feature: pre-release-cleanup
-status: draft
+status: archived
 drivers: [container, qemu, vz, hyperv]
 seams: []
 surfaces: []
@@ -116,10 +116,44 @@ Design. Scope agreed with Jeff in the session of 2026-10-31.
 
 ## Consolidation
 
-Filled in at Publish.
+`main` merged at `d266143` without conflicts.
+
+- **Landed since the fork:** #78 (queue-summary: `wf` writes `QUEUE.md`) and
+  #79 (tier1-static-checks). #79 is the gate this feature clears: with it
+  merged in, `make lint` runs tier 1 over this branch (0 MUST), and the release
+  gate itself, `tier1 -base v0.5.0` and `tier1 designs -all`, both exit 0 at
+  this head. What remains in the release range is 3 SHOULD (gofmt in three
+  files this feature does not touch, left alone per GLOBAL-02) and hints.
+- **Terminology and abstractions:** nothing to reconcile; no code path is added.
+- **FLOW-15 sweep:** no code added or removed, so no dead code; no duplication.
+  `overview.md` unchanged (no flow changes).
 
 ## Rollback notes
 
 ## Archive summary
 
-Filled in at Publish.
+Implemented 2026-10-31 in the attended session that merged tier 1 (#79), as
+the decision on that review's MUST 3.
+
+- **Built.** Doc comments for the 23 GLOBAL-01 findings since v0.5.0 (driver
+  methods and constructors on container, qemu and vz, `driver.ErrExecNotSupported`,
+  `winguest.BuildGatewayIP` and `BuildGuestCIDR`, and the seven hyperv
+  capability constants in Go's `// Name ...` form); the last dial error in
+  `relaycfg`'s give-up errors wrapped with a second `%w`, with
+  `TestGiveUpKeepsDialError`; an inline `//nolint:forbidigo` with its reason on
+  `driver.RandAlphaNum`'s `crypto/rand` panic; `native-host-loop.md` and
+  `native-loop-followups.md` archived with their summaries.
+- **Decisions taken:** fix rather than suppress; one stated exception (the
+  `crypto/rand` panic, fatal in the standard library since Go 1.24); archive
+  native-host-loop ahead of native-loop-followups' Windows condition, moving
+  that check to backlog `native-host-loop-windows-scheduled-run`.
+- **Rejected:** starting the release range at tier 1's first commit (the
+  review's option (a)); `Tier1-Allow` trailers for the doc comments; changing
+  `RandAlphaNum` to return an error.
+- **Validated.** `make lint` (with tier 1) and `make test`; the release gate
+  `tier1 -base v0.5.0` and `tier1 designs -all` exit 0; the new relaycfg test
+  fails with `%v` restored. Tier-2 reports `964fdeccd440` (0 MUST, 3 SHOULD)
+  and `8ac5085fdb4b` (all resolved).
+- **For future designs touching `release-gate` or `tier1`:** the next tag's
+  gate is clean from v0.5.0; three gofmt SHOULDs remain in untouched files and
+  will surface when those files are next edited.
