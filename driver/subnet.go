@@ -69,7 +69,7 @@ func RandAlphaNum(n int) string {
 			// Since Go 1.24 the standard library treats a failing crypto/rand
 			// source as fatal, so this is not an ordinary failure, and an
 			// error return would give every caller a case it cannot handle.
-			panic(err) //nolint:forbidigo // crypto/rand failure is fatal (Go 1.24+), not an ordinary failure
+			panic(err) //nolint:forbidigo // a crypto/rand failure is fatal (Go 1.24+)
 		}
 		b[i] = anumRunes[j.Uint64()]
 	}
