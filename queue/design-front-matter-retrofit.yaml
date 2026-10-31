@@ -3,7 +3,7 @@ title: Retrofit FLOW-02 front-matter onto the older designs (FLOW-12)
 priority: 4
 status: in_progress
 round: parallel
-phase: 1
+phase: 2
 design: docs/design/design-front-matter-retrofit.md
 branch: feat/design-front-matter-retrofit
 alters_relationships: false
@@ -68,12 +68,12 @@ steps:
   - id: p1-design-r4
     phase: 1
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - p1-escalate-3
     lease:
-      claimed_by: cloud/20261031T095649Z
-      expires: 2026-10-31T12:16:02.518014474Z
+      claimed_by: ""
+      expires: null
     note: 'Jeff, 2026-10-31 (p1-escalate-3): add BOOT-06 to the rules front-matter of windows-driver-plan and BOOT-02 to that of remote-execution-and-measured-hermeticity, and add both to this design''s own rules, so the round-3 security notes cite only rules their blocks list (FLOW-02). Change nothing else in the notes. Also apply Jeff''s non-default answers: a2, hyperv-driver-plan status active (not archived) until its Linux-guest phase is built or dropped; a3, do not add alters_relationships to hyperv-windows-prepare, ledger-environment-types or unified-bootstrap (revert it if the branch added it); a6, feature is the matching queue slug where one exists, else the base name (firecracker-driver-plan becomes firecracker-driver, sharing it with firecracker-spike-plan, which Jeff accepted); a9, the README bullet is removed by the attended step p3-remove-readme-bullet, not left for sign-off. Update the design text and plan to match.'
   - id: p3-remove-readme-bullet
     phase: 3
@@ -91,6 +91,13 @@ steps:
       claimed_by: ""
       expires: null
     note: 'Returned to Design more than twice (FLOW-06): the human decides. Decided 2026-10-31 by Jeff: go to round 4 (p1-design-r4).'
+  - id: p2-plan-r3
+    phase: 2
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 3
@@ -326,3 +333,9 @@ history:
   - at: 2026-10-31T10:16:02Z
     by: cloud/20261031T095649Z
     event: claimed p1-design-r4 until 2026-10-31T12:16:02Z
+  - at: 2026-10-31T10:23:36Z
+    by: cloud/20261031T095649Z
+    event: done p1-design-r4
+  - at: 2026-10-31T10:23:36Z
+    by: cloud/20261031T095649Z
+    event: entered phase 2 (plan)
