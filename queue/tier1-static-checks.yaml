@@ -45,8 +45,8 @@ steps:
     needs:
       - p3-export-problems
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261031T095649Z
+      expires: 2026-10-31T12:29:56.6618809Z
     note: 'Plan task 10: the FLOW-02 half of design-front-matter and tier1 designs [-all] on check.Front.Problems (or the a3 fallback). Needs tasks 1 and 4 on the branch; if absent, do them first under this claim. Run make lint and make test before wf done: wf runs the phase-3 gate check only when p3-implement is done, and the phase advances when this step finishes.'
   - id: p3-implement
     phase: 3
@@ -60,8 +60,8 @@ budget:
     runs: 6
     steps: 30
   spent:
-    runs: 1
-    steps: 5
+    runs: 2
+    steps: 6
 questions:
   - id: a1
     kind: assumed
@@ -207,3 +207,6 @@ history:
   - at: 2026-10-31T04:11:21Z
     by: human/jeff
     event: 'assumed question a7 confirmed: this slice'
+  - at: 2026-10-31T10:29:56Z
+    by: cloud/20261031T095649Z
+    event: claimed p3-front-matter-check until 2026-10-31T12:29:56Z
