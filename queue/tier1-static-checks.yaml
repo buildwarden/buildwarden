@@ -65,43 +65,47 @@ budget:
 questions:
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: Put tier 1 in its own Go module at tools/tier1/ (Decision 1)?
     options:
       - tools/tier1/ as its own module
       - a package inside tools/workflow/ (needs Jeff's attended edits, FLOW-14; ties tier 1 to the queue tool)
       - internal/tier1 in the product module (adds x/tools and YAML to the module third parties embed)
     recommended: tools/tier1/ as its own module
+    answer: tools/tier1/ as its own module
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Accept design-front-matter-retrofit a8 in diff-scoped form: tier 1 validates the FLOW-02 front-matter of every design the diff touches, and "tier1 designs -all" checks the whole archive in the release job and on demand, never per PR (LINT-04)?'
     options:
       - diff-scoped check plus -all at release
       - archive-wide check on every PR (contradicts LINT-04; needs a rule change)
       - decline the handoff; leave it to wf's phase-1 gate, which covers only the feature's own design
     recommended: diff-scoped check plus -all at release (if a8 ends as "no permanent check", drop -all and keep the diff-scoped check)
+    answer: diff-scoped check plus -all at release
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Share one front-matter validator (FLOW-15): tier1 imports tools/workflow/check through a replace directive, and an attended human-affinity task (p3-export-problems) exports Front.problems as Problems in tools/workflow? Until it is done, the front-matter check is not built and the other checks proceed.'
     options:
       - attended export, then share the validator
       - duplicate the ~30 lines of key and enum rules in tier1, with a fixture parity test
       - move the parser into a third shared module (more churn, and a tools/workflow edit anyway)
     recommended: attended export; if Jeff declines, the duplicate with a parity test
+    answer: attended export, then share the validator (done in p3-export-problems, 47f80c3)
   - id: a4
     kind: assumed
-    status: open
+    status: confirmed
     question: Wire tier 1 into make lint (so the phase-3 and phase-4 gates run it with no tools/workflow edit), into a main.yml job on PRs and pushes to main, and into a release.yml job against the previous tag that the release jobs need (the LINT-03 release-gate home)? Once merged, in-flight branches whose diffs break a MUST check fail make lint until their merge round fixes them.
     options:
       - inside make lint, plus CI and the release job
       - a separate make tier1 target that wf runs (needs a tools/workflow edit)
       - CI only (the loop's Review gate never sees it)
     recommended: inside make lint, plus CI and the release job
+    answer: inside make lint, plus CI and the release job
   - id: a5
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Suppress findings with "Tier1-Allow: <RULE> <path-glob>: <reason>" commit trailers in the diff range, each printed in the output so the tier-2 report and sign-off see it (LINT-05, FLOW-08)?'
     options:
       - commit trailers
@@ -109,24 +113,27 @@ questions:
       - inline comments, for line findings only
       - no suppressions in tier 1 (contradicts LINT-05)
     recommended: commit trailers
+    answer: commit trailers
   - id: a6
     kind: assumed
-    status: open
+    status: confirmed
     question: Emit GLOBAL-04's mechanical half ("non-test code changed, no test changed in that package") as a non-failing hint for tier 2 rather than a hard tier-1 failure?
     options:
       - a hint
       - a MUST failure that a suppression can clear
       - leave GLOBAL-04 entirely to tier 2
     recommended: a hint
+    answer: a hint
   - id: a7
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Scope: ship the first slice in the design''s "Checks in this feature" table. Every other automated rule gets a rules.yaml entry, either owned elsewhere (wf, flow18, make test, CI, branch protection, security suite) or follow-up with a reason, and sign-off queues one follow-up item?'
     options:
       - this slice
       - every automated rule in this feature (well over the 6-run, 30-step budget; some have no mechanical form yet)
       - the coupling checks only
     recommended: this slice
+    answer: this slice
 history:
   - at: 2026-10-28T23:18:38Z
     by: attended-setup
@@ -179,3 +186,24 @@ history:
   - at: 2026-10-31T04:04:16Z
     by: human/jeff
     event: done p3-export-problems
+  - at: 2026-10-31T04:11:21Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: tools/tier1/ as its own module'
+  - at: 2026-10-31T04:11:21Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: diff-scoped check plus -all at release'
+  - at: 2026-10-31T04:11:21Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: attended export, then share the validator (done in p3-export-problems, 47f80c3)'
+  - at: 2026-10-31T04:11:21Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: inside make lint, plus CI and the release job'
+  - at: 2026-10-31T04:11:21Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: commit trailers'
+  - at: 2026-10-31T04:11:21Z
+    by: human/jeff
+    event: 'assumed question a6 confirmed: a hint'
+  - at: 2026-10-31T04:11:21Z
+    by: human/jeff
+    event: 'assumed question a7 confirmed: this slice'
