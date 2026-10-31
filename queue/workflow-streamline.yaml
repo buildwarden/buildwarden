@@ -4,7 +4,7 @@ priority: 1
 kind: process
 status: in_progress
 round: process
-phase: 1
+phase: 2
 design: docs/design/workflow-streamline.md
 branch: feat/workflow-streamline
 alters_relationships: null
@@ -13,10 +13,17 @@ steps:
   - id: x1-design
     phase: 1
     affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x2-implement
+    phase: 2
+    affinity: human
     status: pending
     lease:
-      claimed_by: human/jeff
-      expires: 2026-10-31T22:04:51.663803134Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -24,7 +31,11 @@ budget:
   spent:
     runs: 0
     steps: 1
-questions: []
+questions:
+  - {id: a1, kind: assumed, status: confirmed, options: ['one open PR at a time','every finished feature opens its PR'], recommended: 'one open PR at a time', question: 'One open feature PR at a time?', answer: 'Confirmed at design review r1'}
+  - {id: a2, kind: assumed, status: confirmed, options: ['cloud implements after design review','process items stay attended'], recommended: 'cloud implements after design review', question: 'Cloud Implement and Publish for process items after the design review?', answer: 'Confirmed at design review r1'}
+  - {id: a3, kind: assumed, status: confirmed, options: ['mechanical skip criteria','agent judges triviality'], recommended: 'mechanical skip criteria', question: 'Mechanical skip criteria for trivial designs?', answer: 'Confirmed at r1; a re-review judges the delta from the last approved design'}
+  - {id: a4, kind: assumed, status: confirmed, options: ['escalations only','keep sign-off and cleanup steps'], recommended: 'escalations only', question: 'Escalations as the only other human steps?', answer: 'Confirmed at design review r1'}
 history:
   - at: 2026-10-31T20:04:39Z
     by: human/jeff
@@ -35,3 +46,9 @@ history:
   - at: 2026-10-31T20:04:51Z
     by: human/jeff
     event: claimed x1-design until 2026-10-31T22:04:51Z
+  - at: 2026-10-31T20:25:52Z
+    by: human/jeff
+    event: done x1-design
+  - at: 2026-10-31T20:25:52Z
+    by: human/jeff
+    event: entered phase 2 (implement)
