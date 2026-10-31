@@ -81,7 +81,8 @@ None (`drivers: []`).
 
 ## Design review
 
-Pending.
+- **r1, 2026-10-31: approved** (Jeff, attended session, FLOW-19).
+  Approved at `4e7365d`.
 
 ## Consolidation
 
