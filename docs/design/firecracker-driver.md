@@ -1,6 +1,6 @@
 ---
 feature: firecracker-driver
-status: draft
+status: active
 drivers: [container, qemu, vz, hyperv, firecracker]  # firecracker is new; qemu loses its Linux-guest seed, image catalog and relay-initrd helpers to driver/linuxguest and driver/relayvm, and its relay initramfs build gains an arch parameter; container, vz and hyperv declared for the cmd/warden wiring and the new shared driver/ packages (TEST-02 caveat)
 seams: [bootstrap-model]   # the per-driver mapping in bootstrap.md gains a firecracker row; every invariant unchanged (see Bootstrap comparison, question a2)
 surfaces: [cli, config]    # --driver firecracker and runtime.driver = "firecracker"; warden setup, doctor, clean and image for the driver
@@ -1051,17 +1051,23 @@ Follow-ups for intake (workflow-intake; not this feature's work):
 
 ## Design review
 
-<!-- No review yet. design_review: required (FLOW-19): alters_relationships,
-the bootstrap-model seam, security_boundary host-env, blocking linux-kvm
-validation, a proposed docs/development change (FLOW-14) and eleven assumed
-questions. The review must explicitly accept the Bootstrap comparison and the
-Proposed standards change (BOOT-07).
-
-Draft history before the first review: three critics (feasibility, security,
-consistency) reviewed the first draft (5397ea9). Accepted findings rewrote
-Decisions 1, 4 to 8 and 10 to 14, the Security note, the Validation plan and the
-Implementation plan; added a10 and a11; reworded a1, a4, a5, a6 and a8; added
-the f2-spike-linux-kvm queue step. -->
+- **r1, 2026-10-31: approved** (Jeff, attended session, FLOW-19).
+  Approved at `2df5953`. a1 to a11 confirmed as recommended; confirming a2
+  accepts the Bootstrap comparison (BOOT-07). Decisions taken at the review:
+  - **a8, `linux-kvm` on `windows-desktop` under WSL2, is proposed and
+    experimental.** It may need a real Linux root host. If the spike or the
+    blocking validation is blocked by the host itself, the native session
+    records the evidence and adds a human escalation step: only Jeff can
+    provision or procure dedicated Linux KVM hardware, and that step surfaces
+    in QUEUE.md's Needs Jeff and in /workflow-human. Recorded on the spike's
+    queue step and in `hosts.yaml`.
+  - **a9, x86_64 only:** confirmed for availability of validation, not because
+    arm64 is expected to behave the same. arm64 Firecracker differs (PE
+    `Image` kernel, GIC, CPU templates, the aarch64 relay initramfs, an arm64
+    cloud image) and stays a tracked gap with no support claimed until an
+    arm64 Linux KVM host exists.
+  - **The Proposed standards change to `bootstrap.md`** moves to its own
+    process item (FLOW-14) rather than this feature's diff.
 
 ## Consolidation
 
