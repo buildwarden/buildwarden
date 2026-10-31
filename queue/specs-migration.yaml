@@ -3,7 +3,7 @@ title: Move the ledger spec and schemas to specs/ (RELAY-05)
 priority: 12
 status: in_progress
 round: feature
-phase: 5
+phase: 6
 design: docs/design/specs-migration.md
 branch: feat/specs-migration
 alters_relationships: false
@@ -57,7 +57,32 @@ steps:
   - id: f5-guide
     phase: 5
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main
+    phase: 6
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate
+    phase: 6
+    affinity: cloud
     status: pending
+    needs:
+      - f6-merge-main
+    lease:
+      claimed_by: cloud/20261031T205751Z
+      expires: 2026-11-01T00:54:30.646722552Z
+  - id: f6-open-pr
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-consolidate
     lease:
       claimed_by: ""
       expires: null
@@ -67,7 +92,7 @@ budget:
     steps: 20
   spent:
     runs: 1
-    steps: 6
+    steps: 9
 questions:
   - id: a1
     kind: assumed
@@ -210,3 +235,21 @@ history:
   - at: 2026-10-31T22:54:10Z
     by: cloud/20261031T205751Z
     event: entered phase 5 (guide)
+  - at: 2026-10-31T22:54:23Z
+    by: cloud/20261031T205751Z
+    event: claimed f5-guide until 2026-11-01T00:54:23Z
+  - at: 2026-10-31T22:54:23Z
+    by: cloud/20261031T205751Z
+    event: done f5-guide
+  - at: 2026-10-31T22:54:23Z
+    by: cloud/20261031T205751Z
+    event: entered phase 6 (publish)
+  - at: 2026-10-31T22:54:23Z
+    by: cloud/20261031T205751Z
+    event: claimed f6-merge-main until 2026-11-01T00:54:23Z
+  - at: 2026-10-31T22:54:30Z
+    by: cloud/20261031T205751Z
+    event: done f6-merge-main
+  - at: 2026-10-31T22:54:30Z
+    by: cloud/20261031T205751Z
+    event: claimed f6-consolidate until 2026-11-01T00:54:30Z
