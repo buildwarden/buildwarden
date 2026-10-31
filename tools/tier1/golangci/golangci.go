@@ -16,7 +16,7 @@ import (
 )
 
 // Install is the command that installs the golangci-lint tier 1 expects.
-const Install = "go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.5.0"
+const Install = "go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.2"
 
 // linters maps a golangci-lint linter to its rule and check ID.
 var linters = map[string][2]string{
