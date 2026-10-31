@@ -113,15 +113,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261031T095649Z
+      expires: 2026-10-31T11:57:20.087811263Z
 budget:
   estimate:
     runs: 4
     steps: 18
   spent:
     runs: 3
-    steps: 14
+    steps: 15
 questions:
   - id: a1
     kind: assumed
@@ -292,3 +292,6 @@ history:
   - at: 2026-10-31T09:57:13Z
     by: cloud/20261031T095649Z
     event: entered the merge round
+  - at: 2026-10-31T09:57:20Z
+    by: cloud/20261031T095649Z
+    event: claimed m0-merge-main until 2026-10-31T11:57:20Z
