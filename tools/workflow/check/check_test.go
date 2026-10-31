@@ -338,7 +338,7 @@ func TestArchivedDesignNeedsNoDesignReview(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		got := strings.Join(d.Front.problems("demo"), "; ")
+		got := strings.Join(d.Front.Problems("demo"), "; ")
 		if strings.Contains(got, "missing design_review") != wantMissing {
 			t.Errorf("status %s: problems %q", status, got)
 		}

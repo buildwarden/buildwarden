@@ -1,0 +1,28 @@
+package main
+
+import "github.com/spf13/cobra"
+
+var root = &cobra.Command{Use: "warden"}
+
+type Config struct {
+	Runtime string   `toml:"runtime"`
+	Relay   Relay    `toml:"relay,omitempty"`
+	Skip    string   `toml:"-"`
+	Plain   string
+}
+
+type Relay struct {
+	Mode string `toml:"mode"`
+}
+
+func init() {
+	root.PersistentFlags().StringVar(&flagDriver, "driver", "", "the driver")
+	root.Flags().BoolVarP(&quiet, "quiet", "q", false, "less output")
+	for _, c := range []*cobra.Command{root} {
+		f := c.Flags()
+		f.String("network", "", "the network")
+		f.MarkDeprecated("network", "use --net")
+		_ = f.Lookup("network")
+	}
+	_ = strings.Repeat("not-a-flag", 2)
+}
