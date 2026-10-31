@@ -41,12 +41,12 @@ steps:
   - id: p3-front-matter-check
     phase: 3
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - p3-export-problems
     lease:
-      claimed_by: cloud/20261031T095649Z
-      expires: 2026-10-31T12:29:56.6618809Z
+      claimed_by: ""
+      expires: null
     note: 'Plan task 10: the FLOW-02 half of design-front-matter and tier1 designs [-all] on check.Front.Problems (or the a3 fallback). Needs tasks 1 and 4 on the branch; if absent, do them first under this claim. Run make lint and make test before wf done: wf runs the phase-3 gate check only when p3-implement is done, and the phase advances when this step finishes.'
   - id: p3-implement
     phase: 3
@@ -210,3 +210,6 @@ history:
   - at: 2026-10-31T10:29:56Z
     by: cloud/20261031T095649Z
     event: claimed p3-front-matter-check until 2026-10-31T12:29:56Z
+  - at: 2026-10-31T10:38:10Z
+    by: cloud/20261031T095649Z
+    event: done p3-front-matter-check
