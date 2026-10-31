@@ -210,13 +210,36 @@ API on `artifacts`.
 
 ## Implementation plan
 
-1. Generate and keep the CRL with the CA (`relay/relay.go`); RELAY-03.
-2. Add the distribution point to `signHost` (`relay/proxy.go`).
-3. Serve `/ca.crl` in `handleArtifacts`, unrecorded like `/ca.pem` (Decision 5).
-4. Tier-0 tests from the validation plan.
-5. `overview.md`: add `/ca.crl` to the relay pseudocode (FLOW-15).
-6. Native validation on windows-hyperv, with the cached relay boot VHDX
-   refreshed by `tools/relay-vm/hyperv/refresh-cache.sh`.
+1. `generateCA` (`relay/relay.go`) also signs the empty CRL with the CA key
+   (`x509.CreateRevocationList`: number 1, `ThisUpdate`/`NextUpdate` = the CA's
+   `NotBefore`/`NotAfter`) and keeps its DER in a new `caCRL` field next to
+   `caCert`. Nothing is written to disk or to the ledger. RELAY-03, GLOBAL-06.
+2. `signHost` (`relay/proxy.go`) sets `CRLDistributionPoints` to
+   `http://artifacts/ca.crl` through one shared constant. GLOBAL-06, RELAY-04
+   (one code path for every mode).
+3. `handleArtifacts` (`relay/relay.go`) serves `/ca.crl` with
+   `application/pkix-crl` from a `handleCACRLGet` beside `handleCACertGet`,
+   matched before the POST upload fallback and not recorded (Decision 5).
+   RELAY-02 (the exception named in Decision 5), GLOBAL-01.
+4. Tier-0 tests in `relay/` (TEST-01, TEST-02 tier 0, GLOBAL-04):
+   - a leaf from `signHost` names `http://artifacts/ca.crl`;
+   - a GET through the relay's HTTP listener returns a CRL that parses, has
+     no entries, verifies with `CheckSignatureFrom` against the served CA,
+     and has a `NextUpdate` no earlier than the CA's `NotAfter`;
+   - two GETs return identical bytes, and the fetch adds no ledger record;
+   - a POST to `/ca.crl` gets the CRL and uploads nothing.
+5. `docs/book/src/concepts/overview.md`: add `/ca.crl` to the relay's
+   `http://artifacts/` list (FLOW-15). No user-facing reference doc changes:
+   no flag, config or output changes (UX-01).
+6. `make lint` (and `GOOS=linux`/`GOOS=darwin` lint of `relay/`) and
+   `make test` (FLOW-17).
+7. Native validation on windows-hyperv (`m6-validate-windows-hyperv`, FLOW-09,
+   TEST-02 tier 2): refresh the cached relay boot VHDX
+   (`tools/relay-vm/hyperv/refresh-cache.sh`), then a Windows guest build runs
+   `curl.exe` over HTTPS with no `--ssl-no-revoke` and
+   `inspect --verify-disks` passes with no `/ca.crl` record.
+
+No rework of implemented code (FLOW-06): nothing of this feature exists yet.
 
 ## Consolidation (merge round)
 
