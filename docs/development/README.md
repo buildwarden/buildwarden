@@ -145,9 +145,6 @@ what each item is.
   designs, kept in `backlog/native-gaps.yaml` on the `workflow` branch and
   drained by native sessions (`/workflow-native <host>`, and the scheduled
   per-machine sessions of [`native-host-loop.md`](../design/native-host-loop.md)).
-- **Follow-up — Design front-matter retrofit** (FLOW-12)
-  [`design-front-matter-retrofit`]: add front-matter to the existing
-  `docs/design/` plans as new designs come to rely on them.
 - **Follow-up — `specs/` migration** (RELAY-05) [`specs-migration`]. Perform
   the actual move of the
   ledger spec and metadata schemas into the top-level `specs/` layout; this is an
