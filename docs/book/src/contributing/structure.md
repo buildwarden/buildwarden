@@ -112,7 +112,7 @@ buildwarden/
 │   │   ├── cmd/tier1/            # Entry point: flags, stages, exit codes
 │   │   ├── diff/                 # Base, changed paths and lines, Tier1-Allow trailers
 │   │   ├── rules/                # Rule index from docs/development/, rules.yaml self-check
-│   │   ├── coupling/             # Path-set checks against the designs in the diff
+│   │   ├── coupling/             # Path-set checks; design front-matter (FLOW-02)
 │   │   ├── surface/              # Cobra flags and toml keys at base and HEAD
 │   │   ├── analyzers/            # go/analysis passes for the relay and the executor
 │   │   ├── golangci/             # Runs golangci.yml on changed lines, maps issues to rules

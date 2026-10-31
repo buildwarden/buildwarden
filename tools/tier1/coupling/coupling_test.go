@@ -14,8 +14,13 @@ import (
 
 const tmpl = "---\nfeature: \n---\n\n# T\n\n## Problem\n"
 
-// design returns a design document with the given claim.
+// design returns a design document with the given claim and otherwise valid
+// FLOW-02 front-matter; with no rules it cites FLOW-01, since rules may not
+// be empty.
 func design(name string, drivers, seams, rs []string) string {
+	if len(rs) == 0 {
+		rs = []string{"FLOW-01"}
+	}
 	list := func(xs []string) string { return "[" + strings.Join(xs, ", ") + "]" }
 	return fmt.Sprintf("---\nfeature: %s\nstatus: draft\nround: parallel\ndrivers: %s\n"+
 		"seams: %s\nsurfaces: []\nsecurity_boundary: none\nalters_relationships: false\n"+

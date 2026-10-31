@@ -173,6 +173,10 @@ type Config struct {
 		Dir  string   `yaml:"dir"`
 		Docs []string `yaml:"docs"`
 	} `yaml:"surface"`
+	// DesignTolerate maps a design path to the front-matter keys whose FLOW-02
+	// problems are listed for it rather than failed: designs kept as merged
+	// although they predate a key (FLOW-12).
+	DesignTolerate map[string][]string `yaml:"design_tolerate"`
 }
 
 // ParseConfig parses rules.yaml, rejecting unknown keys so a typo is not a

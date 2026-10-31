@@ -117,3 +117,17 @@ seams: []
 surface:
   dir: cmd/warden/
   docs: [docs/book/src/guide/cli.md, docs/book/src/guide/configuration.md]
+
+# FLOW-02, FLOW-12: designs kept as merged although their front-matter predates
+# a FLOW-02 key or value. Each lists the keys whose problems tier 1 reports as a
+# hint instead of failing, in the per-diff check and in `tier1 designs -all`.
+# Designs with no front-matter at all need no entry: they are pre-standard.
+design_tolerate:
+  # Archived before alters_relationships existed; left untouched by Jeff's
+  # answer to design-front-matter-retrofit a3.
+  docs/design/hyperv-windows-prepare.md: [alters_relationships]
+  docs/design/ledger-environment-types.md: [alters_relationships]
+  docs/design/unified-bootstrap.md: [alters_relationships]
+  # design-front-matter-retrofit a6 gives it the queue slug firecracker-driver,
+  # not its file stem, until the firecracker-driver design resolves it.
+  docs/design/firecracker-driver-plan.md: [feature]

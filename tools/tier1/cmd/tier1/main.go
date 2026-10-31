@@ -3,6 +3,7 @@
 //
 //	tier1 [-base REV] [-json] [-design PATH]... [-no-design] [-repo DIR]
 //	tier1 rules [-json]
+//	tier1 designs [-all] [-base REV] [-repo DIR]
 //
 // Exit 0 is clean (or SHOULD findings and hints only), 1 is an unsuppressed
 // MUST or MUST-review finding, and 2 is a usage or environment error.
@@ -54,6 +55,9 @@ type fixable interface {
 func run(args []string, stdout, stderr io.Writer) int {
 	if len(args) > 0 && args[0] == "rules" {
 		return runRules(args[1:], stdout, stderr)
+	}
+	if len(args) > 0 && args[0] == "designs" {
+		return runDesigns(args[1:], stdout, stderr)
 	}
 	var o options
 	fs := flag.NewFlagSet("tier1", flag.ContinueOnError)
@@ -163,6 +167,76 @@ func runRules(args []string, stdout, stderr io.Writer) int {
 		fmt.Fprintf(stderr, "%s:%d [%s] %s\n", f.File, f.Line, f.Rule, f.Message)
 	}
 	if len(problems) > 0 {
+		return report.ExitFail
+	}
+	return report.ExitClean
+}
+
+// runDesigns prints the FLOW-02 verdict of every design the diff touches, or
+// with -all of every design in docs/design/. A design with no front-matter is
+// listed as pre-standard under -all, and a problem rules.yaml tolerates is
+// listed; neither fails (FLOW-12).
+func runDesigns(args []string, stdout, stderr io.Writer) int {
+	fs := flag.NewFlagSet("tier1 designs", flag.ContinueOnError)
+	fs.SetOutput(stderr)
+	all := fs.Bool("all", false, "check every design, not only those the diff touches")
+	base := fs.String("base", "origin/main", "diff against the merge base of REV and HEAD")
+	repo := fs.String("repo", ".", "the repository root")
+	if err := fs.Parse(args); err != nil {
+		return report.ExitUsage
+	}
+	if fs.NArg() > 0 {
+		fmt.Fprintf(stderr, "tier1 designs: unexpected argument %q\n", fs.Arg(0))
+		return report.ExitUsage
+	}
+	cfg, err := rules.ParseConfig(tier1.RulesYAML)
+	if err != nil {
+		return fail(stderr, err)
+	}
+	var vs []coupling.Verdict
+	scope := "touched since " + *base
+	if *all {
+		d, err := diff.Open(*repo)
+		if err != nil {
+			return fail(stderr, err)
+		}
+		vs, scope = coupling.AllDesigns(d, cfg), "all"
+	} else {
+		d, err := diff.Load(*repo, *base)
+		if err != nil {
+			return fail(stderr, err)
+		}
+		vs = coupling.TouchedDesigns(d, cfg)
+	}
+	return printDesigns(stdout, scope, vs)
+}
+
+// printDesigns writes one line per design and returns ExitFail when any
+// breaks FLOW-02.
+func printDesigns(w io.Writer, scope string, vs []coupling.Verdict) int {
+	fmt.Fprintf(w, "tier1 designs (%s): %d checked\n", scope, len(vs))
+	var failed, pre, tolerated int
+	for _, v := range vs {
+		switch {
+		case len(v.Problems) > 0:
+			failed++
+			fmt.Fprintf(w, "  FAIL          %s: %s\n", v.Path,
+				strings.Join(v.Problems, "; "))
+		case v.PreStandard:
+			pre++
+			fmt.Fprintf(w, "  pre-standard  %s: no front-matter (FLOW-12)\n", v.Path)
+		case len(v.Tolerated) == 0:
+			fmt.Fprintf(w, "  ok            %s\n", v.Path)
+		}
+		if len(v.Tolerated) > 0 {
+			tolerated++
+			fmt.Fprintf(w, "  tolerated     %s: %s (rules.yaml design_tolerate)\n",
+				v.Path, strings.Join(v.Tolerated, "; "))
+		}
+	}
+	fmt.Fprintf(w, "%d failing, %d pre-standard, %d with tolerated problems\n",
+		failed, pre, tolerated)
+	if failed > 0 {
 		return report.ExitFail
 	}
 	return report.ExitClean

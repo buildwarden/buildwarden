@@ -700,6 +700,28 @@ FLOW-02 half of `design-front-matter` did not run; task 10 reruns these diffs.
   from the PR #61 artifact; PR #60 exits 1 on its two true positives.
   GLOBAL-04 hints appear on most code diffs, as expected for a hint.
 
+**Notes (task 10, the FLOW-02 half).** Built on `check.Front.Problems` (a3),
+with the feature name taken from the file stem. `tier1 designs` reran over the
+same diffs.
+
+- **Pre-standard, two forms (FLOW-12).** A design with no front-matter is
+  listed, not failed, under `-all`; in a diff it is listed only when it also
+  had none at base, so a new design without front-matter fails. Archived
+  designs kept as merged although they lack a later key are listed in
+  `rules.yaml` `design_tolerate` by path and key, and their problems become
+  hints: the three that lack `alters_relationships`
+  (`design-front-matter-retrofit` a3), and `firecracker-driver-plan.md`,
+  whose retrofit `feature` is the queue slug `firecracker-driver`, not its
+  stem (that feature's a6). The fourth entry is dormant until the retrofit
+  merges; flagged for Review, since it widens the hand-off by one design.
+- **Result.** `tier1 designs -all` exits 0 on `main` (6 pre-standard, 3
+  tolerated) and on the retrofit branch (0 pre-standard, 4 tolerated). PRs
+  #60 and #61 touched the three archived designs and pass only through
+  `design_tolerate`; #62 to #64, `container-inputs`, `native-loop-followups`,
+  `workflow-bootstrap-archive` and `design-front-matter-retrofit` pass.
+  `firecracker-driver` fails: it adds `firecracker-spike-plan.md` with no
+  front-matter, a true positive for that branch's merge round.
+
 ## Consolidation (merge round)
 
 ## Rollback notes

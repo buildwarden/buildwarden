@@ -63,12 +63,10 @@ func (e *BaseError) Fix() string { return e.fix }
 
 // Load resolves the merge base of rev and HEAD in dir and reads the diff.
 func Load(dir, rev string) (*Diff, error) {
-	d := &Diff{Dir: dir, lines: map[string][]Range{}, paths: map[string]bool{}}
-	head, err := d.git("rev-parse", "--verify", "HEAD^{commit}")
+	d, err := Open(dir)
 	if err != nil {
-		return nil, fmt.Errorf("%s is not a git checkout with a commit: %w", dir, err)
+		return nil, err
 	}
-	d.Head = strings.TrimSpace(head)
 	if _, err := d.git("rev-parse", "--verify", "--quiet", rev+"^{commit}"); err != nil {
 		return nil, &BaseError{Rev: rev, Cause: "no such commit in this checkout",
 			fix: fetchFix(rev)}
@@ -86,6 +84,18 @@ func Load(dir, rev string) (*Diff, error) {
 		return nil, err
 	}
 	return d, d.readTrailers()
+}
+
+// Open returns a Diff with no base and no changed files, for reading the tree
+// at HEAD with Show and List (tier1 designs -all).
+func Open(dir string) (*Diff, error) {
+	d := &Diff{Dir: dir, lines: map[string][]Range{}, paths: map[string]bool{}}
+	head, err := d.git("rev-parse", "--verify", "HEAD^{commit}")
+	if err != nil {
+		return nil, fmt.Errorf("%s is not a git checkout with a commit: %w", dir, err)
+	}
+	d.Head = strings.TrimSpace(head)
+	return d, nil
 }
 
 func fetchFix(rev string) string {

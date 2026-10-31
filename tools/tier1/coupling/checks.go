@@ -11,11 +11,12 @@ import (
 	"github.com/buildwarden/buildwarden/tools/tier1/report"
 )
 
-// All runs every coupling check in this file and the FLOW-01 check.
+// All runs every coupling check in this file and both halves of
+// design-front-matter.
 func (c *Checker) All() []report.Finding {
 	var out []report.Finding
 	for _, check := range []func() []report.Finding{
-		c.NoDesignInDiff, c.DriversClaim, c.BootstrapSurface, c.SchemaDoc,
+		c.NoDesignInDiff, c.FrontMatter, c.DriversClaim, c.BootstrapSurface, c.SchemaDoc,
 		c.SeamContract, c.TestsWithChange,
 	} {
 		out = append(out, check()...)

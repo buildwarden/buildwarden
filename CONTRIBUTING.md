@@ -74,6 +74,16 @@ golangci-lint config limited to the lines you changed.
   `GOOS=<os> make lint`.
 - **No design.** A change that needs no design (FLOW-01) passes
   `TIER1_FLAGS=-no-design`; in CI the `no-design` label does the same.
+- **Design front-matter.** Every `docs/design/*.md` the change adds, modifies
+  or renames must have front-matter that passes the same FLOW-02 validator
+  `wf` uses, with the file name (without `.md`) as the `feature`. An existing
+  design that never had front-matter predates FLOW-02 and is listed as a hint
+  rather than failed (FLOW-12); a new design without front-matter fails.
+  `dist/tier1 designs` prints the verdict for each touched design, and
+  `dist/tier1 designs -all` for every design. Archived designs kept as merged
+  although they lack a later key are listed under `design_tolerate` in
+  `tools/tier1/rules.yaml`, and their tolerated problems are reported without
+  failing.
 - **Suppressing a finding.** Add a trailer to any commit in the change:
   `Tier1-Allow: <RULE-ID> <path-glob>: <reason>`, for example
   `Tier1-Allow: UX-01 cmd/warden/*: guide pages follow in #123`. The reason is
