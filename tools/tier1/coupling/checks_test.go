@@ -214,3 +214,33 @@ func TestSchemaDocAllowed(t *testing.T) {
 		t.Errorf("findings %+v, suppressed %+v", r.Findings, r.Suppressed)
 	}
 }
+
+// TestSchemaDocWholeTree: the specs/ layout is checked on HEAD's tree only
+// when the diff touches specs/, unless WholeTree (`tier1 -all`) asks for an
+// audit of the tree as it stands (design specs-migration, Decision 6).
+func TestSchemaDocWholeTree(t *testing.T) {
+	bad := map[string]string{}
+	for k, v := range specsBase {
+		bad[k] = v
+	}
+	bad["specs/stray.md"] = "s\n"
+	r := gittest.New(t, bad)
+	r.Commit("unrelated", map[string]string{"README.md": "r\n"})
+	dd, err := diff.Load(r.Dir, "origin/main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := rules.ParseConfig(tier1.RulesYAML)
+	if err != nil {
+		t.Fatal(err)
+	}
+	c := &Checker{Diff: dd, Cfg: cfg, Index: &rules.Index{}, Designs: LoadDesigns(dd, nil)}
+	if got := c.SchemaDoc(); len(got) != 0 {
+		t.Errorf("diff mode, specs/ untouched: %+v, want none", got)
+	}
+	c.WholeTree = true
+	got := c.SchemaDoc()
+	if len(got) != 1 || !strings.Contains(got[0].Message, "specs/stray.md is not") {
+		t.Errorf("whole-tree mode: %+v, want the stray file", got)
+	}
+}

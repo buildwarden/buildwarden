@@ -189,7 +189,7 @@ func (c *Checker) SchemaDoc() []report.Finding {
 				"%s changed without %s; they change together", p, partner))
 		}
 	}
-	if touched {
+	if touched || c.WholeTree {
 		out = append(out, c.specsLayout(root, s.ProseOnly)...)
 	}
 	return out

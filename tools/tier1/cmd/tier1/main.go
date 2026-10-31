@@ -39,6 +39,7 @@ type options struct {
 	designs  multi
 	noDesign bool
 	repo     string
+	all      bool
 }
 
 type multi []string
@@ -70,6 +71,8 @@ func run(args []string, stdout, stderr io.Writer) int {
 	fs.BoolVar(&o.noDesign, "no-design", false,
 		"the change needs no design (FLOW-01): the PR's no-design label")
 	fs.StringVar(&o.repo, "repo", ".", "the repository root")
+	fs.BoolVar(&o.all, "all", false,
+		"also check whole-tree invariants (the specs/ layout) whatever the diff touches")
 	if err := fs.Parse(args); err != nil {
 		return report.ExitUsage
 	}
@@ -116,7 +119,8 @@ func check(o options) (*report.Report, error) {
 		r.Add(rules.SelfCheck(ix, cfg)...)
 	}
 	c := &coupling.Checker{Diff: d, Cfg: cfg, Index: ix,
-		Designs: coupling.LoadDesigns(d, o.designs), NoDesign: o.noDesign}
+		Designs: coupling.LoadDesigns(d, o.designs), NoDesign: o.noDesign,
+		WholeTree: o.all}
 	r.Add(c.All()...)
 	sf, err := surface.Check(d, cfg.Surface.Dir, cfg.Surface.Docs, ix.Severity)
 	if err != nil {
