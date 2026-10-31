@@ -1,0 +1,31 @@
+feature: bootstrap-firecracker-row
+title: 'bootstrap.md: the Firecracker mapping row and BOOT-07 surface list'
+priority: 16
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/bootstrap-firecracker-row.md
+branch: feat/bootstrap-firecracker-row
+alters_relationships: null
+source: 'firecracker-driver design review r1 (Jeff, 2026-10-31): its Proposed standards change moves to a process item (FLOW-14); design already accepted, land with or right after the driver'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 4
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-10-31T23:52:02Z
+    by: human/jeff
+    event: queued at priority 16 (intake)

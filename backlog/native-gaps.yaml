@@ -251,3 +251,21 @@ gaps:
       had named windows-hyperv or container-any, so its gate never had work.
       This entry gives it some.
     status: open
+  - id: firecracker-qemu-linuxguest
+    host: qemu-any
+    what: A qemu Linux guest build after the firecracker-driver feature moves the cloud-init seed, ISO writer and cloud-image code to driver/linuxguest and the relay asset lookup, relay initrd and cpio append to driver/relayvm, and gives tools/relay-vm/build-initramfs.sh an ARCH parameter (default aarch64, output unchanged).
+    design: docs/design/firecracker-driver.md
+    note: Tracked (FLOW-09) regression check; test feat/firecracker-driver once it carries the extraction.
+    status: open
+  - id: firecracker-hyperv-cli-wiring
+    host: windows-hyperv
+    what: A Hyper-V build after the firecracker-driver feature's cmd/warden driver wiring and new shared driver/ packages (the relay init and Hyper-V boot disk are not touched).
+    design: docs/design/firecracker-driver.md
+    note: Tracked (FLOW-09) regression check; test feat/firecracker-driver once it carries the cmd/warden change.
+    status: open
+  - id: firecracker-vz-cli-wiring
+    host: macos-vz
+    what: A VZ build after the firecracker-driver feature's cmd/warden driver wiring and new shared driver/ packages.
+    design: docs/design/firecracker-driver.md
+    note: Tracked (FLOW-09) regression check.
+    status: open

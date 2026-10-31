@@ -13,5 +13,11 @@ machines:
       Jeff's MacBook Pro (arm64). Asleep or away at times; launchd runs a missed slot on wake.
       Holds qemu-any because the qemu driver runs only on aarch64 hosts (2026-10-30).
   - name: windows-desktop
-    hosts: [windows-hyperv, container-any]
-    note: Always-on Windows desktop. Takes any-OS native work that runs here (a container runtime).
+    hosts: [windows-hyperv, container-any, linux-kvm]
+    note: >-
+      Always-on Windows desktop. Takes any-OS native work that runs here (a container runtime).
+      linux-kvm is PROPOSED / EXPERIMENTAL (Jeff, firecracker-driver design review r1,
+      2026-10-31): served from WSL2 with nested virtualization, which may not be enough for
+      Firecracker. If a linux-kvm step proves blocked here (no /dev/kvm, missing kernel features,
+      nested KVM too unreliable), the session records why and adds a human escalation step,
+      because only Jeff can provision or procure a dedicated Linux host.

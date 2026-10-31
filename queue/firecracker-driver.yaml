@@ -3,10 +3,11 @@ title: Firecracker driver
 priority: 15
 status: in_progress
 round: feature
-phase: 1
-design: docs/design/firecracker-spike-plan.md
+phase: 2
+design: docs/design/firecracker-driver.md
 branch: feat/firecracker-driver
-alters_relationships: null
+alters_relationships: true
+design_review: required
 source: docs/design/firecracker-spike-plan.md on feat/firecracker-driver (Jeff pushed 55842b3, rebased onto main as 180c1db); older plan docs/design/firecracker-driver-plan.md on main
 steps:
   - id: p0-push-plan
@@ -30,18 +31,163 @@ steps:
   - id: f1-design
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-spike-linux-kvm
+    phase: 2
+    affinity: host:linux-kvm
+    status: pending
+    needs:
+      - f1-design
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Phase 0 spike (docs/design/firecracker-driver.md Implementation plan step 1) on a Linux KVM host, on feat/firecracker-driver. In phase 2 so Implement cannot start before it. Claimable once a8 is confirmed and hosts.yaml serves linux-kvm. A failed decision returns the feature to Design (FLOW-06). EXPERIMENTAL host (Jeff, review r1): linux-kvm runs from WSL2 on windows-desktop and may need real Linux hardware. If the spike is blocked by the host itself (no nested /dev/kvm, a WSL kernel missing bridge/tun/br_netfilter/nf_tables bridge/conntrack zones, or nested KVM too unreliable to judge the driver), record the evidence under native/linux-kvm/<date>/ and add a human step f2-escalate-linux-host that this step needs, saying Jeff must provision or procure a dedicated Linux KVM host; it then shows under Needs Jeff in QUEUE.md and in /workflow-human.'
+  - id: f6-validate-linux-kvm
+    phase: 6
+    affinity: host:linux-kvm
     status: pending
     lease:
-      claimed_by: cloud/20261031T205751Z
-      expires: 2026-11-01T00:57:17.309701519Z
+      claimed_by: ""
+      expires: null
+    note: Blocking native validation (FLOW-09) per docs/design/firecracker-driver.md Validation plan. f6-open-pr must need this step once phase 6 is seeded. No machine serves linux-kvm in hosts.yaml yet (question a8 recommends windows-desktop under WSL2, plus a CI job that may later cover it), so wf validate flags this step until hosts.yaml lists it.
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review
+    phase: 2
+    affinity: human
+    status: pending
+    needs:
+      - f2-plan
+    lease:
+      claimed_by: human/jeff
+      expires: 2026-11-01T01:52:02.117912481Z
 budget:
   estimate:
     runs: 12
     steps: 60
   spent:
     runs: 1
-    steps: 2
-questions: []
+    steps: 4
+questions:
+  - id: a1
+    kind: assumed
+    status: confirmed
+    question: How does the archive record the two superseded plans? Overrides the front-matter retrofit's a2 (draft when nothing is built) and a6 (queue slug as feature); its a7 anticipated archiving. Archived keeps them out of live-design searches but a status-only search reads them as delivered; draft keeps the retrofit's meaning but leaves two unbuilt competing designs; the shared slug fails tier-1 unless tolerated.
+    options:
+      - archived with a superseded comment, feature = file stem, design_tolerate entry dropped
+      - both stay draft with a superseded comment, shared slug kept, design_tolerate lists both
+      - add a superseded status to TEMPLATE and wf's validator (process item), (a) until then
+    recommended: archived with a superseded comment, feature = file stem, design_tolerate entry dropped
+    answer: Confirmed as recommended at design review r1
+  - id: a2
+    kind: assumed
+    status: confirmed
+    question: Treat the new firecracker row in bootstrap.md's per-driver mapping as a bootstrap-model change (seam bootstrap-model, Bootstrap comparison accepted in review, alters_relationships true), though no BOOT invariant changes?
+    options:
+      - yes, conservatively (BOOT-07, FLOW-02)
+      - no, the row only matches the code (no seam, alters_relationships false)
+    recommended: yes, conservatively (BOOT-07, FLOW-02)
+    answer: Confirmed as recommended at design review r1
+  - id: a3
+    kind: assumed
+    status: confirmed
+    question: 'Host networking: a root-once, idempotent `warden setup --driver firecracker [--slots N]` (default 16, at most 256) creates durable per-slot bridges, user-owned TAPs, sysctls, a warden_fc bridge table and WARDEN-FC rules (upstream 100.64.88.0/22), so builds run unprivileged under a per-slot host lock?'
+    options:
+      - durable setup slots, unprivileged builds
+      - per-build TAP and iptables creation, warden run as root or with CAP_NET_ADMIN
+      - slirp4netns for the relay upstream
+    recommended: durable setup slots, unprivileged builds
+    answer: Confirmed as recommended at design review r1
+  - id: a4
+    kind: assumed
+    status: confirmed
+    question: No jailer and no extra VMM confinement in this feature (Firecracker as the invoking user with its default seccomp filters, no API socket; blast radius stated as the warden user's full authority); confinement is a follow-up design?
+    options:
+      - no confinement now, follow-up design
+      - unprivileged Landlock via a warden re-exec helper now
+      - optional --jailer (requires root builds)
+      - jailer on by default
+    recommended: no confinement now, follow-up design
+    answer: Confirmed as recommended at design review r1
+  - id: a5
+    kind: assumed
+    status: confirmed
+    question: One pinned 6.1 LTS guest kernel (uncompressed vmlinux) for both VMs, built by tools/firecracker-vm/build-kernel.sh from Firecracker's guest config plus a required =y options fragment, source-tree built like qemu's assets (release packaging a gap for vm-driver-release-plan); not configurable?
+    options:
+      - pinned 6.1 built by script, source-tree built
+      - pinned 5.10 or 6.6
+      - download Firecracker's CI-published kernels by pinned hash (lack required options)
+      - user-configurable kernel
+    recommended: pinned 6.1 built by script, source-tree built
+    answer: Confirmed as recommended at design review r1
+  - id: a6
+    kind: assumed
+    status: confirmed
+    question: Convert each cloud image to raw once into <cache>/firecracker/images (prepared layer) and copy it per build with cp --reflink=auto into a per-build dir on the cache's filesystem, full copy where reflink is unavailable; device-mapper thin snapshots later?
+    options:
+      - convert once, reflink copy on the cache filesystem
+      - convert per build
+      - device-mapper thin snapshots now
+      - require --temp-dir on the cache's filesystem
+    recommended: convert once, reflink copy on the cache filesystem
+    answer: Confirmed as recommended at design review r1
+  - id: a7
+    kind: assumed
+    status: confirmed
+    question: The relay's upstream is blocked from opening connections to the host and to other slots (required), but link-local and private ranges such as 169.254.169.254 stay reachable, keeping parity with the qemu and container drivers?
+    options:
+      - parity, with a cross-driver security-suite follow-up
+      - block 169.254.0.0/16 for firecracker only
+      - block link-local on every driver (separate design)
+    recommended: parity, with a cross-driver security-suite follow-up
+    answer: Confirmed as recommended at design review r1
+  - id: a8
+    kind: assumed
+    status: confirmed
+    question: Where does linux-kvm run? windows-desktop under WSL2 (nested virtualization, kvm group, WSL kernel with bridge/tun/br_netfilter/legacy NAT/nft bridge, warden setup re-run each native run) for the Phase 0 spike (f2-spike-linux-kvm) and blocking validation, plus a CI tier-2 job on ubuntu-latest with /dev/kvm that may later replace the native step?
+    options:
+      - windows-desktop under WSL2 plus the CI job
+      - the CI job alone
+      - a new dedicated Linux machine
+    recommended: windows-desktop under WSL2 plus the CI job
+    answer: Confirmed, but linux-kvm on windows-desktop (WSL2) is proposed/experimental; if blocked by the host, escalate to Jeff to provision or procure dedicated Linux KVM hardware
+  - id: a9
+    kind: assumed
+    status: confirmed
+    question: x86_64 Firecracker hosts only in this feature, with arm64 a tracked gap until an arm64 Linux KVM host exists?
+    options:
+      - x86_64 only
+      - x86_64 and arm64 now
+    recommended: x86_64 only
+    answer: 'Confirmed: x86_64 only for initial completion because only it can be validated; arm64 differs and stays a tracked gap'
+  - id: a10
+    kind: assumed
+    status: confirmed
+    question: Close host-local access to the relay (:80, :443, :53 and the unauthenticated :8300 control plane are reachable from any local user through wfc<i>u) with a host WARDEN-FC OUTPUT filter allowing only NEW tcp/8301 from the slot owner's UID, rather than a relay init change?
+    options:
+      - host OUTPUT filter
+      - relay init accepts only 8301 and established on its upstream (cross-driver relay change, follow-up)
+      - both
+    recommended: host OUTPUT filter
+    answer: Confirmed as recommended at design review r1
+  - id: a11
+    kind: assumed
+    status: confirmed
+    question: Setup refuses (with printed fix commands) when the filter FORWARD policy is ACCEPT or when firewalld or an nft-only ruleset would drop slot forwarding, rather than warning or changing host firewall posture itself?
+    options:
+      - refuse with the fix
+      - warn and continue
+      - change the FORWARD policy or firewalld zones automatically
+    recommended: refuse with the fix
+    answer: Confirmed as recommended at design review r1
 history:
   - at: 2026-10-28T23:18:38Z
     by: attended-setup
@@ -79,3 +225,51 @@ history:
   - at: 2026-10-31T22:57:17Z
     by: cloud/20261031T205751Z
     event: claimed f1-design until 2026-11-01T00:57:17Z
+  - at: 2026-10-31T23:51:50Z
+    by: cloud/20261031T205751Z
+    event: done f1-design
+  - at: 2026-10-31T23:51:50Z
+    by: cloud/20261031T205751Z
+    event: entered phase 2 (plan)
+  - at: 2026-10-31T23:52:01Z
+    by: cloud/20261031T205751Z
+    event: claimed f2-plan until 2026-11-01T01:52:01Z
+  - at: 2026-10-31T23:52:01Z
+    by: cloud/20261031T205751Z
+    event: done f2-plan
+  - at: 2026-10-31T23:52:01Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: Confirmed as recommended at design review r1'
+  - at: 2026-10-31T23:52:01Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: Confirmed as recommended at design review r1'
+  - at: 2026-10-31T23:52:01Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: Confirmed as recommended at design review r1'
+  - at: 2026-10-31T23:52:01Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: Confirmed as recommended at design review r1'
+  - at: 2026-10-31T23:52:01Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: Confirmed as recommended at design review r1'
+  - at: 2026-10-31T23:52:02Z
+    by: human/jeff
+    event: 'assumed question a6 confirmed: Confirmed as recommended at design review r1'
+  - at: 2026-10-31T23:52:02Z
+    by: human/jeff
+    event: 'assumed question a7 confirmed: Confirmed as recommended at design review r1'
+  - at: 2026-10-31T23:52:02Z
+    by: human/jeff
+    event: 'assumed question a10 confirmed: Confirmed as recommended at design review r1'
+  - at: 2026-10-31T23:52:02Z
+    by: human/jeff
+    event: 'assumed question a11 confirmed: Confirmed as recommended at design review r1'
+  - at: 2026-10-31T23:52:02Z
+    by: human/jeff
+    event: 'assumed question a8 confirmed: Confirmed, but linux-kvm on windows-desktop (WSL2) is proposed/experimental; if blocked by the host, escalate to Jeff to provision or procure dedicated Linux KVM hardware'
+  - at: 2026-10-31T23:52:02Z
+    by: human/jeff
+    event: 'assumed question a9 confirmed: Confirmed: x86_64 only for initial completion because only it can be validated; arm64 differs and stays a tracked gap'
+  - at: 2026-10-31T23:52:02Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-01T01:52:02Z
