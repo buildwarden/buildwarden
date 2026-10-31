@@ -1,18 +1,17 @@
 ---
 feature: container-inputs
 status: draft
-round: parallel
+round: merge
 drivers: [container, qemu, vz, hyperv]
 seams: []
 surfaces: [output]
 security_boundary: none
 alters_relationships: false
 native_validation:
-  - {host: macos-vz, blocking: false, reason: "vz never translates; the shared call is a no-op there, covered by unit tests"}
-  - {host: macos-qemu, blocking: false, reason: "qemu Linux guests translate a Dockerfile; the shared helper is unit-tested and the qemu call is one line"}
-  - {host: windows-hyperv, blocking: false, reason: "Windows guests never translate; Linux guests on Hyper-V share the helper"}
-tier2_gaps:
-  - "qemu and hyperv Linux-guest builds with a Dockerfile: inputs/ checked by unit test only, not end to end"
+  - {host: macos-vz, blocking: false, reason: "vz never translates and does not call RecordInputs (dropped in Implement), so its code is unchanged"}
+  - {host: qemu-any, blocking: false, reason: "qemu Linux guests translate a Dockerfile; the shared helper is unit-tested and the qemu call is one line. Validated end to end 2026-10-30 (backlog container-inputs-linux-vm-guests, done)"}
+  - {host: windows-hyperv, blocking: false, reason: "Windows guests never translate and Hyper-V builds no Linux guests yet, so the hyperv call records nothing today. A Windows build writing no inputs/ was checked 2026-10-30"}
+tier2_gaps: []
 rules: [ORCH-02, ORCH-01, UX-01, FLOW-15, GLOBAL-01, TEST-01, TEST-02, TEST-03]
 concepts: [inputs, output-layout, dockerfile-translation, provenance]
 related: [unified-bootstrap.md]
@@ -100,6 +99,14 @@ None.
 - a2, **answered** (Jeff rejected the assumed `inputs/Dockerfile`): always
   record the submitted file as `inputs/Containerfile`, the open-standard name,
   whatever its original name. Applied throughout this revision.
+- a3, **assumed** (merge round, open for sign-off): the convention this
+  feature settles, that a driver records an input it alters at staging,
+  before the build starts, through the shared `driver.RecordInputs`, is
+  proposed as an amendment to ORCH-02 in a follow-up process item after this
+  merges, not in this PR (FLOW-14: `docs/development/` changes only at human
+  sign-off). Options: a follow-up process item (recommended); fold the
+  amendment into this PR at sign-off; no rule, leaving the convention to this
+  design. See Consolidation.
 
 ## Design
 
@@ -137,6 +144,9 @@ wrote, naming `inputs/Containerfile` only for the recorded copy.
 - **qemu**: calls `RecordInputs` right after `StageBuildScript`; Linux guests
   built from a Dockerfile gain `inputs/`.
 - **hyperv**: the same; Windows guests never translate, so no change for them.
+  Hyper-V does not build Linux guests yet (`buildSeed` refuses them before
+  staging), so today the call records nothing; it is there so the Linux-guest
+  path, when it lands, records inputs like qemu without another change.
 - **vz**: unchanged. macOS guests run a shell script and never translate (the
   driver clears `Containerfile` before staging), so there is nothing to record.
   An earlier draft called `RecordInputs` there anyway for symmetry; it was
@@ -149,15 +159,22 @@ Tier 0: unit tests for `RecordInputs` (translated, `--script`, context script,
 Windows guest) and that `StageBuildScript` and `RecordInputs` agree. The
 translated case submits a file named `Dockerfile` and asserts it lands as
 `inputs/Containerfile` and that no `inputs/Dockerfile` exists, so the
-fixed-name rule is tested against the common original name. Tier 1/2:
-the container-driver integration test (`test-integration.sh`) where a runtime is
-available. Native hosts are tracked, not blocking (see front-matter).
+fixed-name rule is tested against the common original name. Tier 1: the
+container-driver integration test (`test-integration.sh`) checks `inputs/`
+after Test 2. Since native-loop-followups it runs in CI (the `integration`
+workflow, on PRs that reach the `driver/` root or `test-integration.sh`), so
+this feature's PR runs it; it passed on the branch in run 40961607311 (29
+passed, backlog `container-inputs-integration-test`, done). Tier 2: native
+hosts are tracked, not blocking (see front-matter); the qemu Linux-guest
+build was validated on `qemu-any` (backlog `container-inputs-linux-vm-guests`,
+done), and no gap remains open.
 
 ## Implementation plan
 
-Tasks 1 to 6 are done: they shipped in the first round (p3 Implement, p5
-Guide) with the submitted file recorded as `inputs/Dockerfile`. Tasks 7 to 12
-are the a2 rework (FLOW-06) and are open.
+All twelve tasks are done. Tasks 1 to 6 shipped in the first round (p3
+Implement, p5 Guide) with the submitted file recorded as `inputs/Dockerfile`;
+tasks 7 to 12, the a2 rework (FLOW-06), shipped in the second round
+(`ca2f897` to `ddd11fe`). The merge round adds none.
 
 1. Done. Add `translates(req)` and `RecordInputs` to `driver/session.go`,
    `translates` shared with `StageBuildScript` (ORCH-02, GLOBAL-01).
@@ -177,22 +194,23 @@ are the a2 rework (FLOW-06) and are open.
 6. Done. Layout in `README.md` (UX-01); the Guide phase updated the narrative
    in `docs/book/src/getting-started/first-build.md` (UX-01). Both are
    reworked in task 10.
-7. Rework `driver/session.go`: `RecordInputs` copies `req.Containerfile` to
+7. Done. Rework `driver/session.go`: `RecordInputs` copies `req.Containerfile` to
    `inputs/Containerfile` (today `filepath.Join(dir, "Dockerfile")`), and its
    doc comment names `<output>/inputs/Containerfile` (ORCH-02, a2).
-8. Rework the tier 0 test `TestRecordInputsOnlyWhenTranslated` in
+8. Done. Rework the tier 0 test `TestRecordInputsOnlyWhenTranslated` in
    `driver/session_test.go` (TEST-01, TEST-02): rename the submitted fixture
    from `Containerfile` to `Dockerfile`, so the test proves the fixed name
    rather than an unchanged base name; read `inputs/Containerfile` and fix
    the failure message; in the translated case assert `inputs/Dockerfile`
    does not exist; the run-as-given cases keep asserting no `inputs/` (ORCH-02).
-9. Tier 1 check in `test-integration.sh` (TEST-02, container driver, where a
+9. Done. Tier 1 check in `test-integration.sh` (TEST-02, container driver, where a
    runtime is available): after Test 2's `examples/Dockerfile.simple` build,
    assert `inputs/Containerfile` matches the submitted file byte for byte,
    `inputs/build.sh` exists, and `inputs/Dockerfile` does not, with the
    script's `green`/`red` and PASS/FAIL counters (ORCH-02, TEST-03). The qemu
-   and hyperv end-to-end gap stays tracked in `tier2_gaps`.
-10. Rework the reference docs in the same change (UX-01):
+   and hyperv end-to-end gap was tracked in `tier2_gaps`, and has since closed
+   (Validation plan).
+10. Done. Rework the reference docs in the same change (UX-01):
     `docs/book/src/guide/output.md` (the `inputs/` layout block, and the
     `### inputs/Dockerfile` entry retitled `### inputs/Containerfile`, saying
     the submitted file is kept under that fixed name whatever it was called);
@@ -200,16 +218,73 @@ are the a2 rework (FLOW-06) and are open.
     `docs/book/src/getting-started/first-build.md`'s layout. Prose that means
     the file the user wrote keeps "your Dockerfile" (Design). `overview.md`
     names no file and needs no change (FLOW-15).
-11. Sweep for the old name (ORCH-02, UX-01): `grep -rn
+11. Done. Sweep for the old name (ORCH-02, UX-01): `grep -rn
     'inputs/Dockerfile\|"inputs", "Dockerfile"\|(dir, "Dockerfile")' driver cmd
     docs/book README.md test-integration.sh` returns only the absence
     assertions added in tasks 8 and 9; this design keeps the name only as the
     rejected option.
-12. Gate before pushing (TEST-01, FLOW-17): `make test`, and `make lint` for
+12. Done. Gate before pushing (TEST-01, FLOW-17): `make test`, and `make lint` for
     linux (only untagged files in `driver/` change); push
     `feat/container-inputs`.
 
 ## Consolidation (merge round)
+
+Rebased onto `main` at `cd42fc7` (Jeff, 2026-10-29); `main` merged at
+`cc6119e` in `c9940d6` (m0), without conflicts.
+
+- **Landed since the fork:** #64 native-host-loop, #65
+  native-loop-followups, #67 relay-gzip-framing, #69 native-leftovers, #66
+  workflow-bootstrap-archive, #70 relay-leaf-crl and #71 its archive. None
+  touches `driver/session.go`, the container, qemu or vz drivers, or the
+  output layout. The overlaps:
+  - native-host-loop moved this design's native gaps to `<capability>-any`
+    host names (`hosts.yaml`): the qemu Linux-guest gap is on `qemu-any`, not
+    `macos-qemu`, so `native_validation` now names `qemu-any`. Both backlog
+    entries this feature owns are done (Validation plan), so `tier2_gaps` is
+    empty. The `container-inputs-linux-vm-guests` entry's `what` still says
+    `inputs/Dockerfile`; its evidence already notes the branch writes
+    `inputs/Containerfile`, and the entry is closed, so it is left as is.
+  - native-loop-followups made tier 1 a CI workflow and fixed
+    `test-integration.sh` (`dist/warden`, the `build SUCCEEDED (output: ...)`
+    line). This branch's `inputs/` checks sit in Test 2 and use the
+    `OUTPUT_DIR` that the fixed `extract_output_dir` sets, so the merge needed
+    no change; the earlier green run applied those fixes as a patch, and the
+    PR now runs the workflow on the merged script.
+  - #69 changed `driver/hyperv/buildassets.go` and its test (the relay boot
+    VHDX cache), apart from the `RecordInputs` call in `driver_windows.go`.
+  - relay-leaf-crl added `/ca.crl`, served unrecorded and written to no
+    output file, so ORCH-02's reserved output names are unchanged.
+  - FLOW-08 and the workflow tooling (process items, holds, `native_budget`,
+    PRs opened without confirmation) change how m6 Publish opens the PR, not
+    this design.
+- **Terminology:** `inputs/`, `Containerfile` (the format, a2) and "your
+  Dockerfile" (the file the user wrote) match ORCH-02, `BuildRequest` and the
+  reference docs. No design that landed uses another term for them.
+- **Abstractions:** one path. `driver.RecordInputs` and `StageBuildScript`
+  share `translates`, and container, qemu and hyperv call the one helper. The
+  container driver's own top-level copy is gone (task 3); no other code
+  copies the Dockerfile or `build.sh` into the output.
+- **Seams:** none declared, and no versioned seam changed on `main` overlaps.
+- **Stale items fixed here:** the plan called tasks 7 to 12 open; they are
+  done. The vz `native_validation` reason said the shared call is a no-op
+  there; vz has not called `RecordInputs` since Implement. The hyperv call is
+  now the one that records nothing (no Linux guests yet), which Cross-driver
+  impact says, with the reason it stays.
+- **FLOW-15 sweep:** `make deadcode` (linux, darwin, windows) reports nothing
+  this feature added; `RecordInputs` and `translates` are reachable on all
+  three. Unreachable on all three, as on `main`: `Collector.BytesWritten`,
+  `Relay.CAFingerprint` and `Relay.Ledger` (exported library API), and
+  `driver/vz` helpers (cgo-only, checked on macOS). Duplication: none, as
+  above. `overview.md` already has `inputs/` in the `StartBuild` pseudocode
+  ("not vz"), and nothing that landed changes that flow.
+- **Rule proposed for sign-off (FLOW-10, FLOW-14; a3):** amend ORCH-02 with
+  the convention this feature settled, for example: "A driver that alters an
+  input records it when it stages the input, before the build starts, through
+  the shared `driver.RecordInputs`, so a failed build keeps its inputs and a
+  failure to record fails the build before anything runs." Not made here.
+- **For the archive:** the `docs/development/README.md` follow-up
+  "Container inputs under `inputs/`" is this feature and is removed when it is
+  archived.
 
 ## Rollback notes
 
