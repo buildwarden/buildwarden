@@ -3,7 +3,7 @@ title: CI runs only the checks a change's paths need (docs-only PRs skip Go lint
 priority: 11
 status: in_progress
 round: feature
-phase: 3
+phase: 4
 design: docs/design/ci-path-filters.md
 branch: feat/ci-path-filters
 alters_relationships: false
@@ -44,10 +44,17 @@ steps:
   - id: f3-implement
     phase: 3
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f4-review
+    phase: 4
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261031T205751Z
-      expires: 2026-11-01T00:05:40.547699618Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -202,3 +209,9 @@ history:
   - at: 2026-10-31T22:05:40Z
     by: cloud/20261031T205751Z
     event: claimed f3-implement until 2026-11-01T00:05:40Z
+  - at: 2026-10-31T22:08:22Z
+    by: cloud/20261031T205751Z
+    event: done f3-implement
+  - at: 2026-10-31T22:08:22Z
+    by: cloud/20261031T205751Z
+    event: entered phase 4 (review)
