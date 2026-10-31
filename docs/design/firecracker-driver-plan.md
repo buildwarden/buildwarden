@@ -1,7 +1,8 @@
 ---
 # Retrofitted (FLOW-12) onto a pre-standard plan; body unchanged.
-feature: firecracker-driver           # queue slug (a6); shared with firecracker-spike-plan.md until the firecracker-driver design resolves it
-status: draft
+# Superseded by firecracker-driver.md (never built); its open questions are folded in or retired there.
+feature: firecracker-driver-plan      # file stem; the firecracker-driver queue slug is carried by firecracker-driver.md (a1 there)
+status: archived                      # superseded, not merged as a feature
 round: parallel
 drivers: [container, qemu, vz, hyperv, firecracker]  # relay/ gains vsock "CA ready"/"ledger complete" signals; util.go shared with qemu
 seams: [relay-claim, relay-guest-api, collector]     # per-build relay.env and CA extraction; warm-pool config injected over vsock; outputs read from relay rootfs predate RELAY-07
@@ -18,7 +19,7 @@ native_validation:
 tier2_gaps: []
 rules: [ORCH-01, ORCH-03, ORCH-04, GLOBAL-06, GLOBAL-07, GLOBAL-08, RELAY-03, RELAY-04, RELAY-07, BOOT-01, BOOT-02, BOOT-04, TEST-02, TEST-08]  # RELAY-03: warm-pool snapshot is taken after CA generation, so restored relays would share a CA key
 concepts: [firecracker, microvm, vsock, mmds, jailer, warm-pool, snapshot-resume, tap-networking, two-vm-topology]
-related: [vm-driver-release-plan.md]
+related: [vm-driver-release-plan.md, firecracker-driver.md]
 ---
 
 # Firecracker Driver Implementation Plan

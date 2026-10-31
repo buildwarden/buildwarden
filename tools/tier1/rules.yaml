@@ -129,6 +129,3 @@ design_tolerate:
   docs/design/hyperv-windows-prepare.md: [alters_relationships]
   docs/design/ledger-environment-types.md: [alters_relationships]
   docs/design/unified-bootstrap.md: [alters_relationships]
-  # design-front-matter-retrofit a6 gives it the queue slug firecracker-driver,
-  # not its file stem, until the firecracker-driver design resolves it.
-  docs/design/firecracker-driver-plan.md: [feature]

@@ -1,3 +1,23 @@
+---
+# Front-matter added by the firecracker-driver design (FLOW-12); body unchanged.
+# Superseded by firecracker-driver.md (never built): its intent (new driver/firecracker,
+# relay unchanged in vm mode, qemu topology, spike first) is kept there; its signaling,
+# MMDS, rootfs-injection, vsock, jailer and warm-pool items are folded in or retired there.
+feature: firecracker-spike-plan       # file stem; the firecracker-driver queue slug is carried by firecracker-driver.md (a1 there)
+status: archived                      # superseded, not merged as a feature
+drivers: [container, qemu, vz, hyperv, firecracker]  # cmd/warden wiring; helpers shared with qemu and vz (waitForFile, collectOutputs, cachedBinaryPath)
+seams: [collector, bootstrap-model]   # signals and ledger read from a mounted relay rootfs predate RELAY-07; CA written into the build rootfs and build material over MMDS depart from BOOT-02, BOOT-04, BOOT-05
+surfaces: [cli, config]
+security_boundary: host-env           # also env-relay; see sections 4.3, 4.7, 9.1
+alters_relationships: true            # host reads relay and guest rootfs; MMDS metadata injection
+native_validation:
+  - {host: linux-kvm, blocking: true, reason: "driver/firecracker runs only on a Linux KVM host"}
+tier2_gaps: []
+rules: [ORCH-01, ORCH-03, ORCH-04, GLOBAL-06, GLOBAL-07, RELAY-03, RELAY-04, RELAY-07, BOOT-02, BOOT-04, BOOT-05, TEST-02]
+concepts: [firecracker, microvm, vsock, mmds, jailer, warm-pool, snapshot-resume, tap-networking, two-vm-topology, spike]
+related: [firecracker-driver-plan.md, firecracker-driver.md]
+---
+
 # Firecracker Driver — Design Document
 
 **Date:** 2026-10-08
