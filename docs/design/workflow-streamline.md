@@ -1,7 +1,6 @@
 ---
 feature: workflow-streamline
-status: active
-round: process
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -331,10 +330,76 @@ None. This changes the development process only, no driver code (`drivers: []`).
 
 ## Consolidation
 
-Filled in at Publish.
+`main` merged at `34264d9` in `d1278df`, without conflicts.
+
+- **Landed since the fork:** #74, the container-inputs archive (the last
+  separate archive PR), and #73, qemu attaching the Windows prepare seed as
+  removable USB. Neither touches `docs/development/`, `.claude/` or
+  `tools/workflow/`.
+- **Terminology:** "merge round", "parallel round", "sign-off step" and
+  "Archive phase" are gone from the rules, agents and skills. "Sign-off" now
+  means the human's merge (FLOW-08). The new terms are the PR slot, the design
+  review, Merge and Close.
+- **Abstractions:** one path per job. Consolidation and the FLOW-15 sweep live
+  only in `f6-consolidate`; archiving lives only in `f6-open-pr` (and its
+  process-item twin in `x2-implement`); `wf-archive` is removed.
+- **Rules proposed:** FLOW-19 is new, and FLOW-03 to FLOW-08, FLOW-10, FLOW-12
+  and FLOW-14 to FLOW-16 are amended, all in this PR.
+- **Sweep:** `tools/workflow` has no dead code left from the rounds: the
+  merge-round transition, the merge-queue hold and the `m`/`p` templates are
+  removed. The `p`/`m` letters stay valid in step ids only for finished items'
+  history. `overview.md` describes BuildWarden's components, not the
+  development loop, so it is unchanged.
+- **Left for Close, after the merge:** update the `workflow` branch's
+  `README.md` schema (round `feature`, `design_review`, the new step names),
+  then run `wf migrate` and push the migrated queue. Until then, the old `wf`
+  on `main` and the queue agree; the new `wf` refuses the queue until it is
+  migrated.
 
 ## Rollback notes
 
 ## Archive summary
 
-Filled in at Publish.
+Implemented 2026-10-31 in one attended session at priority 1, right after the
+container-inputs archive (#74) showed the overhead once more.
+
+- **Built.** One `feature` round (step ids `f<phase>-<name>`): Plan seeds a
+  human `f2-design-review` unless Design records a valid `design_review: skip`;
+  Publish is `f6-merge-main` (behind a one-PR slot), `f6-consolidate` and
+  `f6-open-pr` (archives the design on the branch and opens the PR); `f7-merge`
+  completes by check once the human merges; `f8-close` is inline bookkeeping.
+  Process items: human design and review, then cloud implement and PR, merge,
+  close. `wf back -to 3` returns consolidation work to Implement; `wf migrate`
+  moves in-flight items. FLOW-19 checks: the recorded decision, the skip
+  criteria, a re-review judged against the design at its last `approved at
+  <sha>`, and one approval per seeded review. The merge check also works
+  after GitHub deletes the branch, from the PR's merge commit.
+- **Decisions taken:**
+  - one round, with consolidation in Publish sending the feature back only
+    when it finds real work;
+  - a design review after Plan, so the design and the plan are reviewed
+    together, held as one interactive session, not a PR thread (Jeff);
+  - a re-review is judged on the delta from the last approved design, so a
+    minimal change needs no re-approval (Jeff, at r1);
+  - skip criteria checked mechanically, with skipped reviews listed in the
+    digest;
+  - the human's merge is the sign-off, with tier-2 MUST findings listed in the
+    PR body;
+  - the archive ships in the feature PR; GitHub's auto-delete removes the
+    branch;
+  - one open feature PR at a time (a1); process items implemented by the loop
+    on their branch after review (a2); escalations as the only other human
+    steps (a4).
+- **Rejected:** keeping the merge round and skipping unchanged phases; a
+  separate archive PR; a gate after Design (no plan to check yet); review on a
+  PR; letting Design judge triviality freely; every finished feature opening
+  its PR at once.
+- **Validated.** Tier 0 tests for the phase walk, the skipped review, the PR
+  slot, both kinds of `back`, each phase's checks (including an invalid skip
+  and the re-review delta) and `wf migrate`; a dry run of `wf migrate` on a
+  copy of the live queue, which validated and picked the right next step.
+- **For future designs touching `workflow`, `phases`, `design-review` or
+  `sign-off`:** the human's three touchpoints (questions, the design review,
+  the merge) are the design. A new human step needs a reason it can't be one
+  of those three or an escalation. A change to what makes a design trivial
+  changes `check/review.go` and FLOW-19 together.
