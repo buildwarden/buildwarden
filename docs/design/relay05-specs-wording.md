@@ -9,7 +9,7 @@ alters_relationships: false
 design_review: required
 native_validation: []
 tier2_gaps: []
-rules: [RELAY-05, FLOW-14]
+rules: [RELAY-05, TEST-02, FLOW-14]
 concepts: [specs, schemas, ledger-format, rules]
 related: [specs-migration.md]
 ---
@@ -77,6 +77,13 @@ In `docs/development/relay.md`, RELAY-05:
 
 In `docs/development/README.md`: remove "Follow-up — `specs/` migration".
 
+In `docs/development/testing.md`, TEST-02 tier 0, the docs-only set becomes
+"`docs/**` except `docs/development/**`, `docs/book/src/specs/**` and
+`docs/book/src/SUMMARY.md`, and top-level `*.md`": specs-migration's
+`specs/specs_test.go` reads the book's `specs/` mirror and `SUMMARY.md`, so
+`main.yml`'s `changes` job runs the Go tests for them. Added at specs-migration's
+consolidation, a minimal change after r1 (no impact field changed).
+
 ## Cross-driver impact
 
 None.
@@ -88,8 +95,8 @@ None.
 
 ## Implementation plan
 
-1. Edit RELAY-05 as above and drop the README follow-up, after
-   `specs-migration` merges (RELAY-05, FLOW-14).
+1. Edit RELAY-05 and TEST-02 as above and drop the README follow-up, after
+   `specs-migration` merges (RELAY-05, TEST-02, FLOW-14).
 2. `make lint`, `make test` (TEST-01).
 
 ## Design review
