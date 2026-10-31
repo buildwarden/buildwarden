@@ -4,14 +4,14 @@ priority: 10
 kind: process
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/test-rules-docs-only.md
 branch: feat/test-rules-docs-only
 alters_relationships: null
+source: 'ci-path-filters design review a8 (Jeff, 2026-10-31): reword TEST-01 and TEST-02 per that design''s Proposed rule changes'
 pr:
   number: 83
-  ci: pending
-source: 'ci-path-filters design review a8 (Jeff, 2026-10-31): reword TEST-01 and TEST-02 per that design''s Proposed rule changes'
+  ci: green
 steps:
   - id: x1-design
     phase: 1
@@ -23,10 +23,17 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261031T205751Z
-      expires: 2026-11-01T00:20:01.805034229Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -54,3 +61,9 @@ history:
   - at: 2026-10-31T22:20:01Z
     by: cloud/20261031T205751Z
     event: claimed x2-implement until 2026-11-01T00:20:01Z
+  - at: 2026-10-31T22:23:57Z
+    by: cloud/20261031T205751Z
+    event: done x2-implement
+  - at: 2026-10-31T22:23:57Z
+    by: cloud/20261031T205751Z
+    event: entered phase 3 (merge)
