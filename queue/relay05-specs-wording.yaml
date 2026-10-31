@@ -2,16 +2,16 @@ feature: relay05-specs-wording
 title: 'RELAY-05: environment-<type>/ family, $id policy, drop the migration note'
 priority: 13
 kind: process
-status: in_progress
+status: done
 round: process
-phase: 2
+phase: 4
 design: docs/design/relay05-specs-wording.md
 branch: feat/relay05-specs-wording
 alters_relationships: null
 source: specs-migration design (Proposed rule changes), approved at r1 2026-10-31
 pr:
   number: 86
-  ci: pending
+  ci: green
 steps:
   - id: x1-design
     phase: 1
@@ -23,18 +23,32 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
-    status: pending
+    status: done
     lease:
-      claimed_by: cloud/20261031T205751Z
-      expires: 2026-11-01T01:00:23.034820946Z
+      claimed_by: ""
+      expires: null
     note: Wait until specs-migration has merged (design Decision 1), then merge main and edit RELAY-05.
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
     steps: 4
   spent:
     runs: 0
-    steps: 2
+    steps: 3
 questions: []
 history:
   - at: 2026-10-31T22:30:29Z
@@ -55,3 +69,24 @@ history:
   - at: 2026-10-31T23:00:23Z
     by: cloud/20261031T205751Z
     event: claimed x2-implement until 2026-11-01T01:00:23Z
+  - at: 2026-10-31T23:03:08Z
+    by: cloud/20261031T205751Z
+    event: done x2-implement
+  - at: 2026-10-31T23:03:08Z
+    by: cloud/20261031T205751Z
+    event: entered phase 3 (merge)
+  - at: 2026-10-31T23:03:08Z
+    by: cloud/20261031T205751Z
+    event: done x3-merge
+  - at: 2026-10-31T23:03:08Z
+    by: cloud/20261031T205751Z
+    event: entered phase 4 (close)
+  - at: 2026-10-31T23:03:08Z
+    by: cloud/20261031T205751Z
+    event: claimed x4-close until 2026-11-01T01:03:08Z
+  - at: 2026-10-31T23:03:08Z
+    by: cloud/20261031T205751Z
+    event: done x4-close
+  - at: 2026-10-31T23:03:08Z
+    by: cloud/20261031T205751Z
+    event: closed; feature done
