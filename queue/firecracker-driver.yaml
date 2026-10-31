@@ -1,9 +1,9 @@
 feature: firecracker-driver
 title: Firecracker driver
 priority: 15
-status: queued
+status: in_progress
 round: feature
-phase: 0
+phase: 1
 design: docs/design/firecracker-spike-plan.md
 branch: feat/firecracker-driver
 alters_relationships: null
@@ -20,20 +20,27 @@ steps:
   - id: f0-branch-setup
     phase: 0
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - p0-push-plan
     lease:
       claimed_by: ""
       expires: null
     note: Branch feat/firecracker-driver exists at 180c1db, rebased onto main cd42fc7 (FLOW-18 check passes). Design works from firecracker-spike-plan.md, folds in or retires the open questions of firecracker-driver-plan.md, and retrofits front-matter (FLOW-12).
+  - id: f1-design
+    phase: 1
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 12
     steps: 60
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 1
 questions: []
 history:
   - at: 2026-10-28T23:18:38Z
@@ -57,3 +64,15 @@ history:
   - at: 2026-10-31T20:44:50Z
     by: human/jeff
     event: migrated to the feature round at phase 0 (workflow-streamline)
+  - at: 2026-10-31T22:57:04Z
+    by: cloud/20261031T205751Z
+    event: started (FLOW-05)
+  - at: 2026-10-31T22:57:04Z
+    by: cloud/20261031T205751Z
+    event: claimed f0-branch-setup until 2026-11-01T00:57:04Z
+  - at: 2026-10-31T22:57:07Z
+    by: cloud/20261031T205751Z
+    event: done f0-branch-setup
+  - at: 2026-10-31T22:57:07Z
+    by: cloud/20261031T205751Z
+    event: entered phase 1 (design)
