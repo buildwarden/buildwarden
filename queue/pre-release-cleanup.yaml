@@ -3,10 +3,11 @@ title: Clear tier 1's release-range findings before the next tag (GLOBAL-01, GLO
 priority: 8
 status: in_progress
 round: feature
-phase: 1
+phase: 3
 design: docs/design/pre-release-cleanup.md
 branch: feat/pre-release-cleanup
-alters_relationships: null
+alters_relationships: false
+design_review: skip
 source: 'tier1-static-checks review MUST 3, Jeff 2026-10-31: fix 25 findings, nolint the RandAlphaNum panic, archive native-host-loop and native-loop-followups, then release'
 steps:
   - id: f0-branch-setup
@@ -19,17 +20,31 @@ steps:
   - id: f1-design
     phase: 1
     affinity: cloud
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f3-implement
+    phase: 3
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: cloud/20261031T205751Z
+      expires: 2026-10-31T23:41:16.942704953Z
 budget:
   estimate:
     runs: 1
     steps: 9
   spent:
     runs: 1
-    steps: 1
+    steps: 4
 questions: []
 history:
   - at: 2026-10-31T21:31:39Z
@@ -47,3 +62,24 @@ history:
   - at: 2026-10-31T21:39:20Z
     by: cloud/20261031T205751Z
     event: entered phase 1 (design)
+  - at: 2026-10-31T21:40:56Z
+    by: cloud/20261031T205751Z
+    event: claimed f1-design until 2026-10-31T23:40:56Z
+  - at: 2026-10-31T21:40:56Z
+    by: cloud/20261031T205751Z
+    event: done f1-design
+  - at: 2026-10-31T21:40:56Z
+    by: cloud/20261031T205751Z
+    event: entered phase 2 (plan)
+  - at: 2026-10-31T21:41:16Z
+    by: cloud/20261031T205751Z
+    event: claimed f2-plan until 2026-10-31T23:41:16Z
+  - at: 2026-10-31T21:41:16Z
+    by: cloud/20261031T205751Z
+    event: done f2-plan
+  - at: 2026-10-31T21:41:16Z
+    by: cloud/20261031T205751Z
+    event: entered phase 3 (implement)
+  - at: 2026-10-31T21:41:16Z
+    by: cloud/20261031T205751Z
+    event: claimed f3-implement until 2026-10-31T23:41:16Z
