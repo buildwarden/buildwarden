@@ -1,6 +1,6 @@
 feature: specs-migration
 title: Move the ledger spec and schemas to specs/ (RELAY-05)
-priority: 5
+priority: 6
 status: queued
 round: parallel
 phase: 0

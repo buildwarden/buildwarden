@@ -1,13 +1,13 @@
 feature: firecracker-driver
 title: Firecracker driver
-priority: 6
+priority: 7
 status: queued
 round: parallel
 phase: 0
 design: docs/design/firecracker-spike-plan.md
 branch: feat/firecracker-driver
 alters_relationships: null
-source: "docs/design/firecracker-spike-plan.md on feat/firecracker-driver (Jeff pushed 55842b3, rebased onto main as 180c1db); older plan docs/design/firecracker-driver-plan.md on main"
+source: docs/design/firecracker-spike-plan.md on feat/firecracker-driver (Jeff pushed 55842b3, rebased onto main as 180c1db); older plan docs/design/firecracker-driver-plan.md on main
 steps:
   - id: p0-push-plan
     phase: 0
@@ -26,7 +26,7 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-    note: "Branch feat/firecracker-driver exists at 180c1db, rebased onto main cd42fc7 (FLOW-18 check passes). Design works from firecracker-spike-plan.md, folds in or retires the open questions of firecracker-driver-plan.md, and retrofits front-matter (FLOW-12)."
+    note: Branch feat/firecracker-driver exists at 180c1db, rebased onto main cd42fc7 (FLOW-18 check passes). Design works from firecracker-spike-plan.md, folds in or retires the open questions of firecracker-driver-plan.md, and retrofits front-matter (FLOW-12).
 budget:
   estimate:
     runs: 12
@@ -50,7 +50,7 @@ history:
     event: done p0-push-plan
   - at: 2026-10-29T00:16:53Z
     by: human/jeff
-    event: 'Jeff pushed the plan as 55842b3 (supersedes f9b07c5); design is now docs/design/firecracker-spike-plan.md'
+    event: Jeff pushed the plan as 55842b3 (supersedes f9b07c5); design is now docs/design/firecracker-spike-plan.md
   - at: 2026-10-29T00:28:10Z
     by: human/jeff
-    event: 'branch rebased onto main cd42fc7 and force-pushed (55842b3 -> 180c1db) on Jeff''s one-off FLOW-17 exception; make test and make lint (linux, windows, darwin) green'
+    event: branch rebased onto main cd42fc7 and force-pushed (55842b3 -> 180c1db) on Jeff's one-off FLOW-17 exception; make test and make lint (linux, windows, darwin) green

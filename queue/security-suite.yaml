@@ -1,6 +1,6 @@
 feature: security-suite
 title: 'Build the TEST-08 security suite and pen-tester agent (Deep-dive #1)'
-priority: 7
+priority: 8
 status: queued
 round: parallel
 phase: 0
@@ -14,7 +14,7 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ''
+      claimed_by: ""
       expires: null
 budget:
   estimate:

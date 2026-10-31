@@ -1,0 +1,30 @@
+feature: relay-leaf-crl
+title: Relay leaf certificates name a CRL the relay serves (Windows Schannel revocation check)
+priority: 1
+status: queued
+round: parallel
+phase: 0
+design: docs/design/relay-leaf-crl.md
+branch: feat/relay-leaf-crl
+alters_relationships: null
+source: 'native/windows-hyperv/2026-10-30 finding 2: curl.exe (Schannel) rejects relay leaf certs with CRYPT_E_NO_REVOCATION_CHECK; Jeff, high-priority fix'
+steps:
+  - id: p0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 2
+    steps: 12
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-10-31T01:38:52Z
+    by: human/jeff
+    event: queued at priority 1 (intake)
