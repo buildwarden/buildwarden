@@ -2,8 +2,8 @@ feature: relay-leaf-crl
 title: Relay leaf certificates name a CRL the relay serves (Windows Schannel revocation check)
 priority: 1
 status: in_progress
-round: parallel
-phase: 6
+round: merge
+phase: 0
 design: docs/design/relay-leaf-crl.md
 branch: feat/relay-leaf-crl
 alters_relationships: false
@@ -69,11 +69,18 @@ steps:
   - id: p6-merge-round
     phase: 6
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+    note: Waits for the serial merge queue (FLOW-05).
+  - id: m0-merge-main
+    phase: 0
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261031T013930Z
-      expires: 2026-10-31T04:02:13.3529747Z
-    note: Waits for the serial merge queue (FLOW-05).
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -193,3 +200,9 @@ history:
   - at: 2026-10-31T02:02:13Z
     by: cloud/20261031T013930Z
     event: claimed p6-merge-round until 2026-10-31T04:02:13Z
+  - at: 2026-10-31T02:02:15Z
+    by: cloud/20261031T013930Z
+    event: done p6-merge-round
+  - at: 2026-10-31T02:02:15Z
+    by: cloud/20261031T013930Z
+    event: entered the merge round
