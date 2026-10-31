@@ -326,3 +326,21 @@ func TestProcessChecks(t *testing.T) {
 		t.Error("x1 passed without a design file")
 	}
 }
+
+// TestArchivedDesignNeedsNoDesignReview: design_review decides a gate before
+// implementation, so a design archived without it, as every design archived
+// before FLOW-19 is, still passes; a draft without it does not.
+func TestArchivedDesignNeedsNoDesignReview(t *testing.T) {
+	for status, wantMissing := range map[string]bool{"archived": false, "draft": true} {
+		text := strings.Replace(design, "design_review: skip\n", "", 1)
+		text = strings.Replace(text, "status: draft", "status: "+status, 1)
+		d, err := ParseDesign(text, tmpl)
+		if err != nil {
+			t.Fatal(err)
+		}
+		got := strings.Join(d.Front.problems("demo"), "; ")
+		if strings.Contains(got, "missing design_review") != wantMissing {
+			t.Errorf("status %s: problems %q", status, got)
+		}
+	}
+}

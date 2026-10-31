@@ -360,7 +360,10 @@ func (fm *Front) problems(feature string) []string {
 	for _, k := range []string{"feature", "status", "drivers", "seams", "surfaces",
 		"security_boundary", "alters_relationships", "design_review", "native_validation",
 		"tier2_gaps", "rules", "concepts"} {
-		if !fm.present[k] {
+		// design_review decides a gate before implementation (FLOW-19); an
+		// archived design is past it, and designs archived before FLOW-19
+		// never had the key.
+		if !fm.present[k] && (k != "design_review" || fm.Status != "archived") {
 			out = append(out, "missing "+k)
 		}
 	}
