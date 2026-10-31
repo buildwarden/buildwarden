@@ -3,7 +3,7 @@ title: Record container inputs under inputs/ (ORCH-02)
 priority: 3
 status: in_progress
 round: merge
-phase: 7
+phase: 8
 design: docs/design/container-inputs.md
 branch: feat/container-inputs
 alters_relationships: false
@@ -163,7 +163,23 @@ steps:
   - id: m7-sign-off
     phase: 7
     affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: m8-cleanup
+    phase: 8
+    affinity: human
     status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Merge the archive PR buildwarden/buildwarden#74. The remote branch feat/container-inputs is already deleted; the local one was removed with git branch -d.'
+  - id: m8-archive
+    phase: 8
+    affinity: cloud
+    status: pending
+    needs: [m8-cleanup]
     lease:
       claimed_by: ""
       expires: null
@@ -173,7 +189,7 @@ budget:
     steps: 18
   spent:
     runs: 3
-    steps: 21
+    steps: 23
 questions:
   - id: a1
     kind: assumed
@@ -420,3 +436,18 @@ history:
   - at: 2026-10-31T14:50:44Z
     by: human/jeff
     event: 'assumed question a3 confirmed: fold the amendment into this PR at sign-off (1a30ece amends ORCH-02 in docs/development/orchestrator.md)'
+  - at: 2026-10-31T20:02:49Z
+    by: human/jeff
+    event: claimed m7-sign-off until 2026-10-31T22:02:49Z
+  - at: 2026-10-31T20:03:01Z
+    by: human/jeff
+    event: done m7-sign-off
+  - at: 2026-10-31T20:03:01Z
+    by: human/jeff
+    event: entered phase 8 (archive)
+  - at: 2026-10-31T20:03:09Z
+    by: cloud/20261031T200309Z
+    event: claimed m8-archive until 2026-10-31T22:03:09Z
+  - at: 2026-10-31T20:04:10Z
+    by: cloud/20261031T200309Z
+    event: 'released m8-archive: '
