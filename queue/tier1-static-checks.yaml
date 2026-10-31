@@ -33,7 +33,7 @@ steps:
   - id: p3-export-problems
     phase: 3
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -61,7 +61,7 @@ budget:
     steps: 30
   spent:
     runs: 1
-    steps: 4
+    steps: 5
 questions:
   - id: a1
     kind: assumed
@@ -173,3 +173,9 @@ history:
   - at: 2026-10-30T10:52:26Z
     by: cloud/20261030T095602Z
     event: 'released p3-implement: make lint fails on pre-existing tools/workflow lll issues (8, from PR #64, reproduce on origin/main 137feae); feature work green at b53b93d (make test ok, root and tools/tier1 lint 0 issues, make tier1 exit 0). tools/workflow fix is attended (FLOW-14)'
+  - at: 2026-10-31T04:04:16Z
+    by: human/jeff
+    event: claimed p3-export-problems until 2026-10-31T06:04:16Z
+  - at: 2026-10-31T04:04:16Z
+    by: human/jeff
+    event: done p3-export-problems
