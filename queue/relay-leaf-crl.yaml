@@ -1,7 +1,7 @@
 feature: relay-leaf-crl
 title: Relay leaf certificates name a CRL the relay serves (Windows Schannel revocation check)
 priority: 1
-status: in_progress
+status: done
 round: merge
 phase: 8
 design: docs/design/relay-leaf-crl.md
@@ -153,12 +153,12 @@ steps:
   - id: m8-archive
     phase: 8
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - m8-cleanup
     lease:
-      claimed_by: cloud/20261031T013930Z
-      expires: 2026-10-31T04:25:00.5450906Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -376,3 +376,9 @@ history:
   - at: 2026-10-31T02:25:00Z
     by: cloud/20261031T013930Z
     event: claimed m8-archive until 2026-10-31T04:25:00Z
+  - at: 2026-10-31T02:25:02Z
+    by: cloud/20261031T013930Z
+    event: done m8-archive
+  - at: 2026-10-31T02:25:02Z
+    by: cloud/20261031T013930Z
+    event: archived; feature done
