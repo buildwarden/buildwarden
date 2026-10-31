@@ -147,9 +147,10 @@ gaps:
       is not translated). Relay boot VHDX: the 2026-10-28 local build via
       WARDEN_RELAY_BOOT_VHDX (newer than the last relay change, 5ab774b).
       Side findings (logs: native/windows-hyperv/2026-10-30/): MITM HTTPS
-      responses to clients that send no Accept-Encoding hang, and Windows
-      curl.exe rejects relay leaf certs with CRYPT_E_NO_REVOCATION_CHECK;
-      fix items proposed to Jeff.
+      responses to clients that send no Accept-Encoding hang (fixed in #67,
+      merged c93ea05; the cached relay boot VHDX now follows origin/main via
+      tools/relay-vm/hyperv/refresh-cache.sh, #69), and Windows curl.exe
+      rejects relay leaf certs with CRYPT_E_NO_REVOCATION_CHECK (open).
   - id: container-inputs-linux-vm-guests
     host: qemu-any
     what: A qemu (and Hyper-V) Linux-guest build from a Dockerfile writes inputs/Dockerfile and inputs/build.sh end to end.

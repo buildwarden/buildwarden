@@ -31,3 +31,11 @@ Schannel: `CRYPT_E_NO_REVOCATION_CHECK (0x80092012)`; works with
 revocation info, and curl's Schannel backend fails closed on that. Options:
 the trust baseline writes a curlrc with `ssl-no-revoke` for Windows guests,
 or the relay serves a CRL for its ephemeral CA.
+
+## Resolution
+
+1 is fixed by `DisableCompression: true` (#67, merged as c93ea05). Verified
+on this host with the cached relay boot VHDX, rebuilt from that commit by
+`tools/relay-vm/hyperv/refresh-cache.sh` (#69): `Invoke-WebRequest` and
+`curl.exe` fetch the page in under 1 s, the gzip request gets 5613 gzip
+bytes, and there are 23 valid signatures. 2 is still open.
