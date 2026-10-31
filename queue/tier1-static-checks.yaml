@@ -7,6 +7,7 @@ phase: 3
 design: docs/design/tier1-static-checks.md
 branch: feat/tier1-static-checks
 alters_relationships: false
+design_review: required
 source: 'docs/development/README.md: Deep-dive #2'
 steps:
   - id: p0-branch-setup
@@ -57,11 +58,11 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-    note: 'Jeff, 2026-10-31: first merge origin/main into feat/tier1-static-checks (it carries 0227e58, the tools/workflow lll fix the make lint gate needs), resolve any conflicts, then finish the remaining tasks.'
+    note: 'Jeff, 2026-10-31, and design review r1: merge origin/main into the branch (it carries the tools/workflow lll fix, workflow-streamline, and #76 once merged) and resolve conflicts; then map FLOW-19 in tools/tier1/rules.yaml to owner wf and update the coupling front-matter fixtures for design_review; make lint must pass with tier 1 over this diff. The design already carries design_review (8e0eed8).'
   - id: f3-design-review
     phase: 3
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -72,7 +73,7 @@ budget:
     steps: 30
   spent:
     runs: 2
-    steps: 6
+    steps: 7
 questions:
   - id: a1
     kind: assumed
@@ -227,3 +228,9 @@ history:
   - at: 2026-10-31T20:44:50Z
     by: human/jeff
     event: migrated to the feature round at phase 3 (workflow-streamline)
+  - at: 2026-10-31T20:45:38Z
+    by: human/jeff
+    event: claimed f3-design-review until 2026-10-31T22:45:38Z
+  - at: 2026-10-31T20:52:23Z
+    by: human/jeff
+    event: done f3-design-review
