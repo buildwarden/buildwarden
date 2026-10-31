@@ -283,3 +283,6 @@ history:
   - at: 2026-10-31T22:15:49Z
     by: cloud/20261031T205751Z
     event: claimed f6-open-pr until 2026-11-01T00:15:49Z
+  - at: 2026-10-31T22:22:15Z
+    by: cloud/20261031T205751Z
+    event: 'f6-open-pr held: #82 merged with an empty Archive summary (the early-merge check caught it); summary added in #84, which completes Close once merged'
