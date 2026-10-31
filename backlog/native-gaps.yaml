@@ -25,6 +25,22 @@ gaps:
       main cc6119e's qemu Windows build on it times out with a silent guest that
       never fetches /bootstrap (twice, 40m and 25m). Re-prepare it from the ISO
       with main in an attended run. Logs: native/qemu-any/2026-10-31/.
+      2026-10-31 (host:macos-qemu/20261031T023128Z, attended, main cc6119e):
+      re-ran from the ISO with --force. The install passed (~1h40m, ISO
+      ejected after WinPE, sysprep /generalize, .generalized marker). The
+      prepare stage then hung at the interactive OOBE region screen until its
+      4h timeout: the WPREP seed is a fixed NVMe disk, and OOBE reads
+      unattend.xml from removable media only. Fixed on
+      fix/qemu-prepare-seed-removable (PR #73, seed as usb-storage
+      removable=on): prepare passed in 3m06s, state=done, retail channel (no
+      grace end). The Windows build from the new layer still FAILS like the
+      unattended run's: the guest boots to the desktop (tray shows no network),
+      sends the relay nothing, and powers off within ~2 min; the host then
+      waits forever, because qemu has no build-VM exit watch (Hyper-V got one
+      on 2026-10-26). COM1 is silent on qemu virt, and the session did not sign
+      in to the guest to read C:\warden\warden-run.log. Not checked: grace
+      from the prepare and the rearm count (need eval media; this ISO is
+      retail), and a refresh without reinstall. Logs: native/macos-qemu/2026-10-31/.
     status: open
   - id: qemu-linux-exclusive-trust
     host: macos-qemu
@@ -146,6 +162,9 @@ gaps:
       (whose descriptor is well formed: disk + nvram, source `prepared`). Kept
       open on the Windows half, which waits on re-preparing the base
       (qemu-windows-guest-package). Logs: native/qemu-any/2026-10-31/.
+      2026-10-31 attended: a base freshly re-prepared from the ISO (with PR
+      #73) fails the same way, so the Windows half waits on a fix to the
+      qemu Windows build guest, not just on re-preparing.
     status: open
   - id: hyperv-eval-image-verify-disks
     host: windows-hyperv
