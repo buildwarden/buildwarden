@@ -1,0 +1,31 @@
+feature: relay05-specs-wording
+title: 'RELAY-05: environment-<type>/ family, $id policy, drop the migration note'
+priority: 13
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/relay05-specs-wording.md
+branch: feat/relay05-specs-wording
+alters_relationships: null
+source: specs-migration design (Proposed rule changes), approved at r1 2026-10-31
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 4
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-10-31T22:30:29Z
+    by: human/jeff
+    event: queued at priority 13 (intake)

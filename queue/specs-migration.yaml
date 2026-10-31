@@ -3,7 +3,7 @@ title: Move the ledger spec and schemas to specs/ (RELAY-05)
 priority: 12
 status: in_progress
 round: feature
-phase: 2
+phase: 3
 design: docs/design/specs-migration.md
 branch: feat/specs-migration
 alters_relationships: false
@@ -34,9 +34,16 @@ steps:
   - id: f2-design-review
     phase: 2
     affinity: human
-    status: pending
+    status: done
     needs:
       - f2-plan
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f3-implement
+    phase: 3
+    affinity: cloud
+    status: pending
     lease:
       claimed_by: ""
       expires: null
@@ -46,61 +53,67 @@ budget:
     steps: 20
   spent:
     runs: 1
-    steps: 3
+    steps: 4
 questions:
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: Directory mapping - one specs/ directory per existing schema, named after it (metadata-http-open/, metadata-http-headers/, ..., metadata-environment-container/ legacy), rather than a grouped metadata-http/?
     options:
       - one directory per schema
       - grouped metadata-http/ holding three schemas
       - one directory per schema with short names
     recommended: one directory per schema
+    answer: Confirmed as recommended at design review r1
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: $id policy - every existing $id (https://github.com/buildwarden/buildwarden/schemas/v1/<name>.json) and the relay's header URIs stay unchanged forever as stable names; new schemas take ids mirroring their specs/ path?
     options:
       - keep legacy ids, new ids mirror specs/ paths
       - re-id everything to specs/ paths and change the header URIs
       - keep the legacy schemas/v1/ form for new ids too
     recommended: keep legacy ids, new ids mirror specs/ paths
+    answer: Confirmed as recommended at design review r1
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: Environment payload schemas (oci-image/v1, vm-disk-chain/v1) go in a new specs/environment-<type>/ family, with a RELAY-05 layout amendment proposed (FLOW-14)?
     options:
       - environment-<type>/
       - metadata-environment-<type>/ (fits today's layout text literally)
       - inside build-ledger/
     recommended: environment-<type>/
+    answer: Confirmed as recommended at design review r1
   - id: a4
     kind: assumed
-    status: open
+    status: confirmed
     question: Tier 1 schema-doc's reverse direction (document changed, schema not) becomes MUST for paired specs/ directories, prose-only fixes using a Tier1-Allow trailer?
     options:
       - MUST, as RELAY-05 reads
       - keep it a hint
     recommended: MUST, as RELAY-05 reads
+    answer: Confirmed as recommended at design review r1
   - id: a5
     kind: assumed
-    status: open
+    status: confirmed
     question: Compatibility - remove schemas/ with no stub, redirect the old book URL design/ledger-spec.html to specs/build-ledger/v1.html, and note in the release changelog that raw schemas/v1/ file URLs stop working?
     options:
       - remove, redirect the book page, changelog note
       - keep schemas/v1/ copies for one release
       - a schemas/README.md stub
     recommended: remove, redirect the book page, changelog note
+    answer: Confirmed as recommended at design review r1
   - id: a6
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Front-matter - seams: [ledger-format] (declared conservatively: its documents and published locations move, its bytes do not), alters_relationships: false, drivers: []?'
     options:
       - as stated
       - 'seams: [] since the format does not change'
       - 'also alters_relationships: true'
     recommended: as stated
+    answer: Confirmed as recommended at design review r1
 history:
   - at: 2026-10-28T23:18:38Z
     by: attended-setup
@@ -138,3 +151,30 @@ history:
   - at: 2026-10-31T22:27:24Z
     by: cloud/20261031T205751Z
     event: done f2-plan
+  - at: 2026-10-31T22:30:29Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: Confirmed as recommended at design review r1'
+  - at: 2026-10-31T22:30:29Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: Confirmed as recommended at design review r1'
+  - at: 2026-10-31T22:30:29Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: Confirmed as recommended at design review r1'
+  - at: 2026-10-31T22:30:29Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: Confirmed as recommended at design review r1'
+  - at: 2026-10-31T22:30:29Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: Confirmed as recommended at design review r1'
+  - at: 2026-10-31T22:30:29Z
+    by: human/jeff
+    event: 'assumed question a6 confirmed: Confirmed as recommended at design review r1'
+  - at: 2026-10-31T22:30:29Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-01T00:30:29Z
+  - at: 2026-10-31T22:30:29Z
+    by: human/jeff
+    event: done f2-design-review
+  - at: 2026-10-31T22:30:29Z
+    by: human/jeff
+    event: entered phase 3 (implement)
