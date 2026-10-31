@@ -84,6 +84,13 @@ func Parse(data []byte, sev func(string) report.Severity) ([]report.Finding, err
 	var fs []report.Finding
 	for _, is := range out.Issues {
 		m, ok := linters[is.FromLinter]
+		if !ok && is.FromLinter == "typecheck" {
+			// The packages did not load (a toolchain golangci-lint cannot
+			// read, or code that does not compile): an environment error,
+			// with golangci-lint's own message (UX-04).
+			return nil, fmt.Errorf("golangci-lint could not type-check %s:%d: %s",
+				filepath.ToSlash(is.Pos.Filename), is.Pos.Line, is.Text)
+		}
 		if !ok {
 			return nil, fmt.Errorf("golangci-lint: linter %q is not in tier 1's map",
 				is.FromLinter)

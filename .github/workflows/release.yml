@@ -62,7 +62,7 @@ jobs:
           fetch-depth: 0
       - uses: actions/setup-go@v5
         with:
-          go-version: stable
+          go-version-file: go.mod  # golangci-lint reads this toolchain's export data
       - run: go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@v2.6.2
       - run: go build -o ../../dist/tier1 ./cmd/tier1
         working-directory: tools/tier1

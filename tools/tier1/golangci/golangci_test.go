@@ -1,6 +1,7 @@
 package golangci
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/buildwarden/buildwarden/tools/tier1/report"
@@ -56,5 +57,17 @@ func TestParseErrors(t *testing.T) {
 	}
 	if got, err := Parse([]byte(`{"Issues":null}`), sev); err != nil || len(got) != 0 {
 		t.Errorf("no issues: %v %v", got, err)
+	}
+}
+
+// TestParseTypecheckIsAnEnvironmentError: packages that did not load come
+// back as "typecheck" issues; Parse reports golangci-lint's message rather
+// than an unmapped linter, so a toolchain mismatch explains itself (UX-04).
+func TestParseTypecheckIsAnEnvironmentError(t *testing.T) {
+	data := []byte(`{"Issues":[{"FromLinter":"typecheck","Text":"could not import os",` +
+		`"Pos":{"Filename":"cmd/x/main.go","Line":9}}]}`)
+	_, err := Parse(data, func(string) report.Severity { return report.Must })
+	if err == nil || !strings.Contains(err.Error(), "cmd/x/main.go:9: could not import os") {
+		t.Fatalf("Parse error = %v", err)
 	}
 }
