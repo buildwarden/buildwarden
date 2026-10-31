@@ -1,6 +1,6 @@
 ---
 feature: relay05-specs-wording
-status: draft
+status: active
 drivers: []
 seams: []
 surfaces: []
@@ -94,7 +94,8 @@ None.
 
 ## Design review
 
-Pending.
+- **r1, 2026-10-31: approved** (Jeff, attended session, FLOW-19).
+  Approved at `4d9e947`. Implement once specs-migration has merged.
 
 ## Consolidation
 
