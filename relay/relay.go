@@ -83,6 +83,7 @@ type Relay struct {
 
 	caCert   []byte
 	caKey    []byte
+	caCRL    []byte // DER; the empty CRL every leaf names (caCRLURL)
 	mitmCert *tls.Certificate
 
 	ledger *Ledger
@@ -331,6 +332,17 @@ func (r *Relay) generateCA() error {
 	}
 	tlsCert.Leaf, _ = x509.ParseCertificate(tlsCert.Certificate[0])
 	r.mitmCert = &tlsCert
+
+	// Every leaf names this CRL, so a guest that checks revocation (Windows
+	// Schannel) gets an answer. It revokes nothing and lasts as long as the CA.
+	r.caCRL, err = x509.CreateRevocationList(rand.Reader, &x509.RevocationList{
+		Number:     big.NewInt(1),
+		ThisUpdate: template.NotBefore,
+		NextUpdate: template.NotAfter,
+	}, tlsCert.Leaf, caKey)
+	if err != nil {
+		return fmt.Errorf("creating CA CRL: %w", err)
+	}
 	return nil
 }
 
@@ -451,6 +463,8 @@ func (r *Relay) handleArtifacts(req *http.Request) (*http.Request, *http.Respons
 		return req, newTextResponse(req, http.StatusOK, "ok\n")
 	case "/ca.pem":
 		return r.handleCACertGet(req)
+	case caCRLPath:
+		return r.handleCACRLGet(req)
 	case "/build-script":
 		return r.handleBuildScript(req)
 	case "/bootstrap":
@@ -643,6 +657,12 @@ func (r *Relay) handleCACertGet(req *http.Request) (*http.Request, *http.Respons
 		ContentLength: int64(len(r.caCert)),
 	}
 	return req, resp
+}
+
+// handleCACRLGet serves the CA's empty CRL. Like the CA itself it is relay
+// trust material, not a build input, so it is not recorded in the ledger.
+func (r *Relay) handleCACRLGet(req *http.Request) (*http.Request, *http.Response) {
+	return req, newBytesResponse(req, r.caCRL, "application/pkix-crl")
 }
 
 // handleBuildScript serves the canonical build script the guest fetches from
