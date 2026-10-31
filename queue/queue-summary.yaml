@@ -8,6 +8,9 @@ phase: 2
 design: docs/design/queue-summary.md
 branch: feat/queue-summary
 alters_relationships: null
+pr:
+  number: 78
+  ci: pending
 source: 'Jeff, 2026-10-31: visibility into active, backlog and what needs him; shape approved in session'
 steps:
   - id: x1-design
