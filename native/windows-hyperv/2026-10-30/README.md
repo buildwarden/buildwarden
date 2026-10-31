@@ -38,4 +38,6 @@ or the relay serves a CRL for its ephemeral CA.
 on this host with the cached relay boot VHDX, rebuilt from that commit by
 `tools/relay-vm/hyperv/refresh-cache.sh` (#69): `Invoke-WebRequest` and
 `curl.exe` fetch the page in under 1 s, the gzip request gets 5613 gzip
-bytes, and there are 23 valid signatures. 2 is still open.
+bytes, and there are 23 valid signatures. 2 is fixed in #70 (merged as
+98b0ee1): leaf certificates name `http://artifacts/ca.crl`, an empty
+CRL the relay serves, and `curl.exe` works with no `--ssl-no-revoke`.
