@@ -332,6 +332,20 @@ TEST-02 caveat).
    docs-only run's link go in the PR description, with the Proposed rule
    changes for Jeff (FLOW-14, FLOW-08).
 
+**Notes (phase 3).** The classify step and the `ci-ok` command were extracted
+from `main.yml` with a YAML parser and run under `bash -e`, with `git` stubbed
+to print each file list. Outputs as `code`/`gotests`/`book`: `README.md`
+false/false/false; `driver/README.md` true/true/false; `docs/design/x.md`
+false/false/false; `docs/development/process.md` false/true/false;
+`docs/book/src/SUMMARY.md` false/false/true; `.github/workflows/main.yml`,
+`go.mod` and the `--no-renames` pair `relay/x.go` + `docs/x.go` true/true/false;
+a design plus a book file false/false/true; a non-PR event, an empty diff and a
+failing `git diff` true/true/true. All match Decision 2; a real `git mv` of
+`relay/x.go` to `docs/x.go` also lists both paths and classifies as code. The
+`ci-ok` `jq` exits 0 for all-success and for skipped Go jobs, and non-zero for
+a `failure`, a `cancelled`, a failed `changes` with skipped dependents, and
+malformed input. actionlint 1.7.7 reports no findings on `main.yml`.
+
 ## Design review
 
 - **r1, 2026-10-31: approved** (Jeff, attended session, FLOW-19).
