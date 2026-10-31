@@ -269,7 +269,7 @@ func Claim(ctx context.Context, addr, token string, cfg Config) (Identity, error
 		case <-ctx.Done():
 		}
 		return Identity{}, fmt.Errorf(
-			"relaycfg: relay at %s never accepted the claim: %w (last error: %v)",
+			"relaycfg: relay at %s never accepted the claim: %w (last error: %w)",
 			addr, ctx.Err(), lastErr)
 	}
 }

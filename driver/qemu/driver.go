@@ -44,16 +44,21 @@ type Driver struct {
 	Verbose bool
 }
 
+// New returns a Driver that auto-detects its QEMU binary and acceleration
+// backend.
 func New() *Driver {
 	return &Driver{}
 }
 
+// Name implements driver.Driver; it returns "qemu".
 func (d *Driver) Name() string { return "qemu" }
 
 func (d *Driver) status(msg string) {
 	fmt.Fprintf(os.Stderr, "[warden] %s\n", msg)
 }
 
+// StartBuild implements driver.Driver. It boots the relay VM and the build VM,
+// whose only network path is the relay, and waits for the build to finish.
 func (d *Driver) StartBuild(
 	ctx context.Context, req *driver.BuildRequest,
 ) (*driver.BuildResult, error) {
@@ -373,10 +378,14 @@ func configureWindowsBuildVM(cfg *buildVMConfig, workDir string) error {
 	return nil
 }
 
+// Exec implements driver.Driver. The qemu driver has no interactive mode, so
+// it returns driver.ErrExecNotSupported.
 func (d *Driver) Exec(ctx context.Context, req *driver.BuildRequest) error {
 	return driver.ErrExecNotSupported
 }
 
+// Close implements driver.Driver. Each build stops its own VMs, so the driver
+// holds nothing to release.
 func (d *Driver) Close() error { return nil }
 
 func (d *Driver) checkPrereqs() error {

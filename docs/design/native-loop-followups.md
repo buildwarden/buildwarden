@@ -1,6 +1,6 @@
 ---
 feature: native-loop-followups
-status: draft
+status: archived
 round: parallel
 drivers: []
 seams: []
@@ -428,3 +428,44 @@ Operationally:
   is environmental, and CI's `ci` workflow has Java.
 
 ## Archive summary
+
+Merged 2026-10-30 in buildwarden/buildwarden#65 (`384b6ce`), as the first
+process item; archived by `pre-release-cleanup`.
+
+- **Built.** `.github/workflows/integration.yml` runs `make integration-test`
+  on hosted Ubuntu: on dispatch, weekly on Mondays, and on pull requests that
+  touch the shared paths. `test-integration.sh` takes `WARDEN` (default
+  `./dist/warden`), and TEST-02 says tier 1 runs there. `native_budget`
+  bounds a native batch, falls back to `run_budget.steps`, and is printed by
+  `wf budget -native`. `native-tick.sh` writes
+  `native/status/<machine>.yaml` from an `EXIT` trap, pushes it only on a
+  change or after 24 hours, retries a rejected push, and saves a session's
+  uncommitted workflow changes under `$state/leftover/` as a failure before
+  any reset; `wf validate` checks the files. The queue gained `kind:
+  process` and `holds`: process items sort first, and a held worker gets no
+  new pick from `wf next`, `wf claim` or `wf gate`. A cloud scheduled task
+  sends one morning summary.
+- **Decisions taken:**
+  - tier 1 on hosted runners, whose rootful Docker is enough for the
+    relay's isolation, so the native fallback (item 2) was skipped;
+  - a temporary `push` trigger to prove the job before merge, removed
+    before the PR;
+  - a held lock is the one exit that writes no status;
+  - fixed one-line reasons, so an unchanged situation changes nothing;
+  - process items human throughout, this work itself queued as one.
+- **Rejected:** a `ref` input on the dispatch (CodeQL: cache poisoning);
+  having the wrapper commit a session's leftovers; native runs sharing the
+  cloud budget.
+- **Changed after merge:** `workflow-streamline` (#75) replaced the `x1`-`x4`
+  process steps with design, implement, merge and close, the implement step
+  run by the cloud on the branch after the human's design.
+- **Validated.** Unit tests for the budget, process items, holds and status
+  files; the trap's eleven cases against a scratch bare remote. Tier 1 was
+  green on the branch and on `feat/container-inputs` (run 40961607311); the
+  post-merge dispatch runs were not made, but pull-request runs on later
+  branches were green. Both machines have pushed status files.
+- **For future designs touching `integration-ci`, `budget`,
+  `machine-status`, `process-lane` or `notifications`:** a status file holds
+  only a fixed one-line reason (FLOW-18); `wf` on `main` validates the
+  workflow branch, so a new queue field lands on the branch only after the
+  `wf` that reads it merges; tier 1's path filter is the TEST-02 shared set.

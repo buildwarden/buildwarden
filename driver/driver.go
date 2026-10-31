@@ -25,6 +25,8 @@ type Driver interface {
 	Close() error
 }
 
+// ErrExecNotSupported is returned by Driver.Exec when the driver has no
+// interactive mode.
 var ErrExecNotSupported = errors.New("driver does not support interactive exec")
 
 // BuildRequest encapsulates everything a driver needs to run a build.

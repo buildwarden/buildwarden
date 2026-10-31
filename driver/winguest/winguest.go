@@ -26,9 +26,11 @@ const (
 	// SeedLabel is the volume label of the per-build seed the startup task
 	// looks for.
 	SeedLabel = "WARDEN"
-	// BuildGatewayIP and BuildGuestCIDR are the static build-link addresses;
-	// they must match the relay VM's build NIC. There is no DHCP on that link.
+	// BuildGatewayIP is the relay's static address on the build link; it must
+	// match the relay VM's build NIC. There is no DHCP on that link.
 	BuildGatewayIP = "10.0.0.1"
+	// BuildGuestCIDR is the build VM's static address and prefix on the build
+	// link, the other host of BuildGatewayIP's /30.
 	BuildGuestCIDR = "10.0.0.2/30"
 	// FirstLogonCommandLimit is Windows Setup's cap on a FirstLogonCommands
 	// <CommandLine>. An over-long entry fails the oobeSystem pass with
