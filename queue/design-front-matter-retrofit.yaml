@@ -101,10 +101,10 @@ steps:
   - id: p3-implement-r3
     phase: 3
     affinity: cloud
-    status: pending
+    status: done
     lease:
-      claimed_by: cloud/20261031T095649Z
-      expires: 2026-10-31T12:26:38.452239049Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 3
@@ -358,3 +358,6 @@ history:
   - at: 2026-10-31T10:26:38Z
     by: cloud/20261031T095649Z
     event: claimed p3-implement-r3 until 2026-10-31T12:26:38Z
+  - at: 2026-10-31T10:29:37Z
+    by: cloud/20261031T095649Z
+    event: done p3-implement-r3
