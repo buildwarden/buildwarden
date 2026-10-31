@@ -222,7 +222,8 @@ As implemented (step 2a):
   boots as is). A reinstall deletes the prepared layers, whose backing file it
   replaces.
 - The prepare stage boots a qcow2 overlay with its own copy of the UEFI vars,
-  no network, and the WPREP seed as a writable FAT disk. qemu has no KVP, so
+  no network, and the WPREP seed as a writable FAT disk on removable USB (OOBE
+  reads `unattend.xml` from removable media only). qemu has no KVP, so
   `warden-prepare.ps1` also writes its reported items as a sequenced status
   block to that volume, and the host scans the raw image for the newest block
   after qemu exits (`winguest.ParseSeedStatus`).

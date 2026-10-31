@@ -143,12 +143,8 @@ what each item is.
   [`workflow-bootstrap.md`](../design/workflow-bootstrap.md). Bootstrap step 1.
 - **Native-gap backlog** (FLOW-09, TEST-03): validation deferred by merged
   designs, kept in `backlog/native-gaps.yaml` on the `workflow` branch and
-  drained by native sessions (`/workflow-native <host>`).
-- **Follow-up — Container inputs under `inputs/`** (ORCH-02)
-  [`container-inputs`]: record the
-  submitted Dockerfile and the translated `build.sh` under `inputs/`.
-  `Dockerfile.actual` was retired by `unified-bootstrap` (every driver now runs
-  the same translation, and `build.sh` is what ran).
+  drained by native sessions (`/workflow-native <host>`, and the scheduled
+  per-machine sessions of [`native-host-loop.md`](../design/native-host-loop.md)).
 - **Follow-up — `specs/` migration** (RELAY-05) [`specs-migration`]. Perform
   the actual move of the
   ledger spec and metadata schemas into the top-level `specs/` layout; this is an

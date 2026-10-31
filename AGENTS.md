@@ -32,8 +32,8 @@ tamper-evident ledger and streams all of its outputs to a host-side
   build-tagged files you touched (FLOW-17). If `go` misbehaves, run it through
   `mise exec -- go ...`.
 - Push your feature branch at each green checkpoint; never push `main`,
-  force-push, or delete a remote branch (FLOW-16, FLOW-17). Opening a PR to `main`
-  and merging it are the human's call (FLOW-08).
+  force-push, or delete a remote branch (FLOW-16, FLOW-17). Open the PR to `main`
+  once the work is ready, without asking; merging it is the human's call (FLOW-08).
 - A user-facing change updates its reference docs in the same change (UX-01), and
   a change to a component's flow updates its pseudocode in `overview.md`
   (FLOW-15).

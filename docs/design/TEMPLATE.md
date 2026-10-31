@@ -3,13 +3,13 @@
 # docs/development/process.md. Delete comments once filled in.
 feature: <feature-slug>
 status: draft            # draft | active | archived
-round: parallel          # parallel | merge
 drivers: []              # container, qemu, vz, hyperv, firecracker; or [interface]
 seams: []                # e.g. relay-claim, collector, executor-initialize, ledger-format,
                          # bootstrap-model (BOOT-07: needs the Bootstrap comparison below)
 surfaces: []             # e.g. cli, config, output
 security_boundary: none  # none | host-env | env-relay | env-beyond (GLOBAL-06)
 alters_relationships: false  # true if a component's role or interactions change (FLOW-02, FLOW-05)
+design_review: required  # required | skip (FLOW-19: skip only when its criteria hold)
 native_validation: []    # - {host: windows-hyperv, blocking: true, reason: "..."}
 tier2_gaps: []           # platform validation knowingly deferred (TEST-03)
 rules: []                # rule IDs relied on or changed, e.g. ORCH-01, UX-01
@@ -40,7 +40,7 @@ recommended answer.
 
 ### Assumed
 
-"Proceeding with X; confirm." Each must be confirmed before sign-off.
+"Proceeding with X; confirm." Each is confirmed in the design review (FLOW-19).
 
 ## Design
 
@@ -73,10 +73,18 @@ whether each blocks merge (FLOW-09), and any deferred gaps.
 Ordered tasks, each citing the rules it must satisfy. Rework of already-implemented
 code is listed as explicit tasks (FLOW-06).
 
-## Consolidation (merge round)
+## Design review
 
-Filled in during the merge round (FLOW-10): features landed since the fork,
-terminology aligned, abstractions shared, seams reconciled, rules proposed.
+One entry per review (FLOW-19): the date, the outcome (approved, or changes),
+the decisions taken, and for an approval, `approved at <sha>`, the commit the
+approved design was read at. A re-review also says what changed since the last
+approval.
+
+## Consolidation
+
+Filled in at Publish (FLOW-10, FLOW-15): features landed since the fork,
+terminology aligned, abstractions shared, seams reconciled, rules proposed, and
+the dead-code, duplication and overview sweep.
 
 ## Rollback notes
 
@@ -84,5 +92,6 @@ Anything validated, found wanting, and reverted, with the evidence.
 
 ## Archive summary
 
-Filled in on merge (FLOW-12): what was built, decisions taken and rejected, and what
-a future design touching these `concepts` needs to know.
+Filled in at Publish, in the feature's PR, and refreshed when the PR changes
+(FLOW-12): what was built, decisions taken and rejected, and what a future design
+touching these `concepts` needs to know.
