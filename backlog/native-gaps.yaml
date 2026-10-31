@@ -240,3 +240,14 @@ gaps:
       native-loop-followups merges (its m0-merge-main). Tier 1 now runs in
       CI (.github/workflows/integration.yml), so this no longer needs a native
       host.
+  - id: native-host-loop-windows-scheduled-run
+    host: windows-hyperv
+    what: The Windows desktop's scheduled native session completes a worked run (not idle) and pushes its own `## Run host:windows-desktop/...` digest section, as native-host-loop's blocking windows-hyperv validation asked.
+    design: docs/design/native-host-loop.md
+    note: >-
+      Moved here when pre-release-cleanup archived native-host-loop (2026-10-31)
+      ahead of native-loop-followups' condition. The wrapper is installed and
+      writes native/status/windows-desktop.yaml, but no host step or open gap
+      had named windows-hyperv or container-any, so its gate never had work.
+      This entry gives it some.
+    status: open

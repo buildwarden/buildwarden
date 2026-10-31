@@ -1,0 +1,79 @@
+{
+  "feature": "pre-release-cleanup",
+  "branch": "feat/pre-release-cleanup",
+  "head": "964fdeccd440",
+  "base": "3de0aef13b1a",
+  "round": "feature",
+  "step": "f4-review",
+  "previous_report": null,
+  "scope": "git diff $(git merge-base origin/main HEAD)...feat/pre-release-cleanup (13 files, +299/-18; commits 28c0614..964fdec). The merge base is 3de0aef (#78); origin/main has since gained #79 (tier1-static-checks, d266143), which merges in at f6-merge-main.",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass: golangci-lint 2.6.2 built with go1.26.3 (/tmp/claude-0/bin on PATH); 0 issues in the root module and tools/workflow. The branch predates #79, so make lint does not yet run tier 1; tier 1 was run separately (below).",
+    "make_test": "pass: 17 ok lines, no FAIL, exit 0",
+    "custom_static_checks": "tier 1 built from origin/main (d266143, #79) into /tmp/claude-0/tier1-main via a temporary worktree. tier1-main -base 3de0aef (the feature diff): exit 0, 0 MUST, 0 MUST-review, 0 SHOULD, 6 hints (GLOBAL-04 tests-with-change for driver/, driver/container/, driver/hyperv/, driver/qemu/, driver/vz/, driver/winguest/), 0 suppressed.",
+    "build_tagged_files": "none touched (capability.go has no build tag; driver_windows.go is untouched); no per-platform lint owed (FLOW-17). A whole-package run of tier 1's golangci config with GOOS=windows over ./driver/... ./relaycfg/... reports no revive, errorlint or forbidigo issue.",
+    "fixes_made": "none; tier 1 was green at 964fdec",
+    "extra_runs": [
+      "Release gate: tier1-main -base v0.5.0 (resolves to 70df10e) at 964fdec: exit 0, 0 MUST, 0 MUST-review, 3 SHOULD (GLOBAL-02 gofmt-touched: driver/hyperv/relayhost_test.go:40, driver/vz/network.go:35, relay/proxy.go:75), 8 hints (4 GLOBAL-04, 4 tolerated FLOW-02). The 34 MUST of tier1-static-checks' MUST 3 are cleared.",
+      "tier1-main designs -all at 964fdec: exit 0, 18 checked, 0 failing, 0 pre-standard, 4 tolerated; native-host-loop.md and native-loop-followups.md now ok.",
+      "Mutation: with the two second %w reverted to %v in a scratch worktree, TestGiveUpKeepsDialError fails in both subtests (errors.As *net.OpError). At HEAD it passes 10 of 10 runs (-count=10).",
+      "gh run list --workflow integration.yml: no workflow_dispatch run exists; the 5 runs since #65 merged (2026-10-30 17:23Z) are pull_request runs on fix/relay-gzip-framing, feat/relay-leaf-crl and feat/container-inputs, all success."
+    ]
+  },
+  "prior_findings": [],
+  "findings": [
+    {
+      "rule": "FLOW-12",
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "docs/design/native-host-loop.md",
+      "line": 265,
+      "finding": "'The Mac's scheduled runs have pushed ## Run host:macbook/... digest sections since 2026-10-29' is not quite right for 2026-10-29. That run (host:macbook/20261029T201335Z) could not commit or push; its section was pushed from an attended session (workflow 68e2633, recorded in native-loop-followups.md's Rollback notes, item 7, and the reason for that design's item 4 permission fix). The Mac's runs have pushed their own sections since 2026-10-30 (df15edf, e73fa37). The Windows sentence is accurate (native/status/windows-desktop.yaml: outcome idle, 'idle: gate found no work', pushed 25f2e34; no host:windows-desktop section in any digest), but it leaves out why: no open backlog gap or host step names windows-hyperv or container-any, so the gate has never had work to start a session for.",
+      "suggestion": "Write: 'The Mac's first run (2026-10-29) did its work but could not push it, which led to native-loop-followups' status trap and permission fix; its scheduled runs have pushed their own digest sections since 2026-10-30.' Then add to the Windows sentence: 'its gate has found no windows-hyperv or container-any work since install'."
+    },
+    {
+      "rule": "FLOW-12",
+      "related_rules": ["FLOW-09"],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "docs/design/pre-release-cleanup.md",
+      "line": 60,
+      "finding": "Decision 3 archives native-host-loop before the condition that native-loop-followups.md set for it: item 7 and implementation step 12 say to archive once both machines have pushed a successful ## Run host:<machine>/... section, and Windows has not. native-host-loop's own blocking windows-hyperv validation (check, install, one Start-ScheduledTask run) is also not fully met: Windows is installed and writes status, but has had no worked run. The archive summary states these facts honestly. The design does not say that it supersedes the earlier condition, and nothing in the queue or backlog tracks the remaining Windows check, so it can drop out of view once the design is archived.",
+      "suggestion": "Add one sentence to Decision 3: archiving now supersedes native-loop-followups item 7's condition, because FLOW-12 and the release gate need it (scope agreed with Jeff on 2026-10-31), and the Windows desktop's first worked scheduled run stays open as <where>. A native-gap entry on windows-hyperv would do; it also gives the Windows gate its first work. Optionally add this to the Consolidation section at Publish."
+    },
+    {
+      "rule": "GLOBAL-01",
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "driver/vz/driver.go",
+      "line": 209,
+      "finding": "Exec's new doc says it returns driver.ErrExecNotSupported 'on a supported host, and the platform error on any other'. checkPlatform (line 360) also fails on macOS/arm64 when the warden binary lacks the com.apple.security.virtualization entitlement, so on a supported host an unsigned build gets the entitlement error, not ErrExecNotSupported. cmd/warden/main.go:474 compares with ErrExecNotSupported, so the distinction is visible to callers. StartBuild's 'It fails on any host but macOS/arm64' (line 55) is true but incomplete in the same way. The other 21 comments match the code (see informational).",
+      "suggestion": "Exec: 'It returns checkPlatform's error when vz cannot run here (not macOS/arm64, or warden lacks the virtualization entitlement), and driver.ErrExecNotSupported otherwise.' StartBuild: 'It fails unless the host is macOS/arm64 and warden carries the virtualization entitlement.'"
+    }
+  ],
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 0,
+    "SHOULD": 3
+  },
+  "suppressions": [],
+  "suppressions_note": "This is the feature's first tier-2 report, so there is no previous report to carry suppressions from. Tier 1 applied no Tier1-Allow trailers; the one inline //nolint:forbidigo is judged below.",
+  "routing": {
+    "tier1_red": false,
+    "wf_implement_fix": "none: tier 1 is green at 964fdec",
+    "must_findings_route": "No MUST findings, so nothing goes back to wf-implement. The three SHOULD findings go in the PR body for acknowledgement at merge (FLOW-08). Each is a wording edit of one or two sentences that Publish can fold in."
+  },
+  "informational": [
+    {"rule": "GLOBAL-01", "file": "driver/container/container.go", "line": 76, "note": "There are 23 comments: 16 new (container: Name, StartBuild, Exec, Close; driver: ErrExecNotSupported; qemu: New, Name, StartBuild, Exec, Close; vz: New, Name, StartBuild, Exec, Close; winguest: BuildGuestCIDR) and 7 rewritten into '// Name means ...' form (hyperv capability.go: OutcomeDirect, OutcomeDelegate, OutcomeBlocked, NetBlocked, NetEphemeralPerBuild, NetDelegateService, NetReuseDurable). Checked against the code: container StartBuild (holder netns, relay via startSessionAndRelay, req.Timeout context, deferred teardown) and Exec (startEnvironment(true) hold mode, waitHeld, ContainerExec shell, teardown on return); qemu New/StartBuild (Accel/QEMUBinary empty means detectAccel/qemuBinary auto-detect; relay VM plus build VM on a socket vlan); vz New (defaultCacheDir) and StartBuild (host relay process, socketpair); winguest BuildGuestCIDR (10.0.0.2/30, the other host of 10.0.0.1's /30); ErrExecNotSupported (qemu, vz, hyperv/driver_windows.go:230). None is boilerplate that misdescribes behavior, apart from the vz platform wording in finding 3. Each Close comment is accurate because every build defers its own teardown."},
+    {"rule": "GLOBAL-03", "file": "relaycfg/relaycfg.go", "line": 272, "note": "The second %w is correct. Go 1.20+ fmt.Errorf wraps several errors, and errors.Is/As walk both. lastErr is always non-nil at the return (it is set before the select). The message text is unchanged, because %w formats like %v. No caller branches on the chain in a way the change affects (driver/session.go only checks *url.Error elsewhere). The new test proves it: the mutation run fails both subtests. One theoretical flake: if the deadline lands during an in-flight attempt, lastErr is a context error and errors.As(*net.OpError) fails. A dial to a closed loopback port is refused in microseconds, so the window is negligible (10/10 green)."},
+    {"rule": "GLOBAL-03", "file": "driver/subnet.go", "line": 72, "note": "The nolint is narrow and sound. It covers one line and names one linter, forbidigo, which tier 1's golangci config enables for '^panic$'. The root .golangci.yml does not enable forbidigo or nolintlint, so the directive is inert there and harmless. The reason is accurate: since Go 1.24, crypto/rand.Reader never returns an error and crashes the program on an entropy-source failure, and go.mod is go 1.26.3. With a positive big.Int bound, the err branch is effectively unreachable. The three-line comment above the panic restates the trailer's reason, but it is the 'why' GLOBAL-01 allows."},
+    {"rule": "FLOW-12", "file": "docs/design/native-loop-followups.md", "line": 462, "note": "The summary is faithful to Decisions 1 to 7, Assumed, the Rollback notes outcomes (that design's Consolidation section is empty) and workflow-streamline.md's process-item table (#75). Both flagged facts are stated accurately: no workflow_dispatch run of integration.yml exists (gh run list), every later pull-request run is green, and both machines have pushed status files. One small omission: the container-inputs green run (40961607311) had the two script fixes applied as a patch."},
+    {"rule": "FLOW-12", "file": "docs/design/native-host-loop.md", "line": 3, "note": "In both native designs, the diff touches only the front-matter status line (draft to archived) and appends to the empty Archive summary section. No other line changed. Facts checked: #64 merged as 137feae on 2026-10-29 and #65 as 384b6ce on 2026-10-30. qemu-any moved to the macbook in workflow 377a5a1 on 2026-10-30. The installers read hosts.yaml since 987f67b."},
+    {"rule": "GLOBAL-02", "file": "driver/vz/network.go", "line": 35, "note": "The release gate passes but reports 3 SHOULD gofmt-touched findings, in driver/hyperv/relayhost_test.go:40, driver/vz/network.go:35 and relay/proxy.go:75. They are outside this design's scope and do not block. gofmt -s -w on those three files would make the next release's tier-1 output clean."},
+    {"rule": "GLOBAL-04", "file": "driver/", "line": 1, "note": "All 6 tests-with-change hints are acceptable, because those packages changed comments only. relaycfg got its test."},
+    {"rule": "GLOBAL-01", "file": "driver/hyperv/capability.go", "line": 20, "note": "Op.String, Outcome.String and NetworkStrategy.String have no doc comments. Tier 1's revive config does not flag them (whole-package run, GOOS=windows), and fmt.Stringer methods are conventionally exempt, so there is no finding."},
+    {"rule": "FLOW-19", "file": "docs/design/pre-release-cleanup.md", "line": 9, "note": "design_review: skip holds. No relationship, seam, security-boundary or rule change, and no assumed question. Its Consolidation and Archive summary sections say 'Filled in at Publish', which is expected at f4. After f6-merge-main, make lint runs tier 1 itself; rerun -base v0.5.0 then to confirm the gate on the merged tree."}
+  ]
+}

@@ -3,7 +3,7 @@ title: Clear tier 1's release-range findings before the next tag (GLOBAL-01, GLO
 priority: 8
 status: in_progress
 round: feature
-phase: 4
+phase: 5
 design: docs/design/pre-release-cleanup.md
 branch: feat/pre-release-cleanup
 alters_relationships: false
@@ -41,10 +41,17 @@ steps:
   - id: f4-review
     phase: 4
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f5-guide
+    phase: 5
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261031T205751Z
-      expires: 2026-10-31T23:49:24.921503879Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -99,3 +106,9 @@ history:
   - at: 2026-10-31T21:49:24Z
     by: cloud/20261031T205751Z
     event: claimed f4-review until 2026-10-31T23:49:24Z
+  - at: 2026-10-31T21:55:43Z
+    by: cloud/20261031T205751Z
+    event: done f4-review
+  - at: 2026-10-31T21:55:43Z
+    by: cloud/20261031T205751Z
+    event: entered phase 5 (guide)
