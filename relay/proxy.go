@@ -41,10 +41,16 @@ func (r *Relay) buildTransport() {
 		log.Printf("relay: loaded %d upstream CA bundle(s)", len(r.cfg.UpstreamCACerts))
 	}
 
+	// DisableCompression: the guest's request goes upstream as sent and its
+	// response comes back as sent. Otherwise, for a guest that sends no
+	// Accept-Encoding, the transport asks for gzip and decompresses, and the
+	// response it returns has no length and is written with no framing, so
+	// the guest never sees the body end on a kept-alive connection.
 	t := &http.Transport{
 		TLSClientConfig:     tlsCfg,
 		MaxIdleConnsPerHost: 16,
 		IdleConnTimeout:     90 * time.Second,
+		DisableCompression:  true,
 	}
 	if r.cfg.SSRF {
 		t.DialContext = r.safeDialContext
