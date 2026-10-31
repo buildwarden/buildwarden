@@ -1,7 +1,7 @@
 feature: relay-leaf-crl
 title: Relay leaf certificates name a CRL the relay serves (Windows Schannel revocation check)
 priority: 1
-status: queued
+status: in_progress
 round: parallel
 phase: 0
 design: docs/design/relay-leaf-crl.md
@@ -14,17 +14,23 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261031T013930Z
+      expires: 2026-10-31T03:39:31.3900402Z
 budget:
   estimate:
     runs: 2
     steps: 12
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 1
 questions: []
 history:
   - at: 2026-10-31T01:38:52Z
     by: human/jeff
     event: queued at priority 1 (intake)
+  - at: 2026-10-31T01:39:31Z
+    by: cloud/20261031T013930Z
+    event: started (FLOW-05)
+  - at: 2026-10-31T01:39:31Z
+    by: cloud/20261031T013930Z
+    event: claimed p0-branch-setup until 2026-10-31T03:39:31Z
