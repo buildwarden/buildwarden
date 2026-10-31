@@ -383,3 +383,37 @@ checkout sets `persist-credentials: false`. Re-checked: `docs/ex/bad.go` and
 ## Rollback notes
 
 ## Archive summary
+
+Merged 2026-10-31 in buildwarden/buildwarden#82, approved at design review r1.
+This summary landed in a follow-up: the Publish edit that should have written
+it matched no placeholder, and the PR merged before Publish's check ran; the
+early-merge check (#81) caught the empty section at Close.
+
+- **Built.** In `main.yml`: a `changes` job that classifies the PR's merge
+  commit (`git diff HEAD^1 HEAD`, `--no-renames`, `core.quotePath=false`, fail
+  open on any error or empty diff) into `code`, `gotests` and `book`; `lint`,
+  `tidy`, `build` gated on `code`, `test` and `tier1-test` on `gotests`; `tier1`
+  unconditional; a build-only `book` job for `docs/book/**` and
+  `CONTRIBUTING.md`; a `ci-ok` job (`if: always()`) that fails on any failed or
+  cancelled needed job and passes on skipped ones, the single check to require
+  if branch protection is turned on. Pushes to `main` and every non-PR event run
+  everything. `CONTRIBUTING.md` Pull requests step 4 describes it.
+- **Decisions taken:** a changes job over workflow-level `paths-ignore` (a
+  skipped workflow reports no status); conservative classes where anything
+  unlisted is code and Go source and module files are code at any depth (review
+  MUST 1); `docs/development/**` still runs the Go tests (tier 1's rule-index
+  test reads it); an inline classifier over `dorny/paths-filter`; the book built
+  here rather than by a PR trigger on `docs.yml` (Pages permissions and its
+  deploy concurrency group); landing against the old TEST-01/02 wording and
+  rewording them separately (a8, `test-rules-docs-only`).
+- **Rejected:** `paths-ignore`; requiring individual jobs (matrix names);
+  reusing tier 1's `not_code` list (it answers a different question).
+- **Validated.** actionlint; the classifier against a path table (including Go
+  under `docs/`, renames, non-ASCII, empty and failing diffs) and the `ci-ok`
+  jq expression against passing and failing `needs`; tier-2 reports
+  `458a36af2b41` (1 MUST, 1 SHOULD) and `a19b06b47d24` (resolved). The first
+  docs-only PR after merge is this summary's own.
+- **For future designs touching `ci` or `github-actions`:** add a new job to
+  `ci-ok`'s `needs`; classify new path kinds in `changes`, defaulting to code;
+  a file that tests or the build read outside its own package must not land
+  under a docs-only path.
