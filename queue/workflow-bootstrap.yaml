@@ -1,7 +1,7 @@
 feature: workflow-bootstrap
 title: Stand up the feature workflow (bootstrap step 1)
 priority: 2
-status: in_progress
+status: done
 round: merge
 phase: 8
 design: docs/design/workflow-bootstrap.md
@@ -48,12 +48,12 @@ steps:
   - id: m8-archive
     phase: 8
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - m8-cleanup
     lease:
-      claimed_by: cloud/20261031T013930Z
-      expires: 2026-10-31T04:01:56.7805213Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -161,3 +161,9 @@ history:
   - at: 2026-10-31T02:01:56Z
     by: cloud/20261031T013930Z
     event: claimed m8-archive until 2026-10-31T04:01:56Z
+  - at: 2026-10-31T02:01:58Z
+    by: cloud/20261031T013930Z
+    event: done m8-archive
+  - at: 2026-10-31T02:01:58Z
+    by: cloud/20261031T013930Z
+    event: archived; feature done
