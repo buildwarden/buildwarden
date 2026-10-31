@@ -2,16 +2,16 @@ feature: wf-merged-counts-as-pushed
 title: 'wf: a branch already merged into main satisfies the pushed, main-merged and PR checks'
 priority: 9
 kind: process
-status: in_progress
+status: done
 round: process
-phase: 2
+phase: 4
 design: docs/design/wf-merged-counts-as-pushed.md
 branch: feat/wf-merged-counts-as-pushed
 alters_relationships: null
+source: 'queue-summary close, 2026-10-31: Jeff merged #78 before x2-implement was recorded; GitHub auto-deleted the branch and the x2 ''branch pushed'' check could not pass (advanced by hand). Again on tier1-static-checks (#79): merged before f6-open-pr was recorded, so ''current main merged'' failed because main contains the branch'
 pr:
   number: 81
-  ci: pending
-source: 'queue-summary close, 2026-10-31: Jeff merged #78 before x2-implement was recorded; GitHub auto-deleted the branch and the x2 ''branch pushed'' check could not pass (advanced by hand). Again on tier1-static-checks (#79): merged before f6-open-pr was recorded, so ''current main merged'' failed because main contains the branch'
+  ci: green
 steps:
   - id: x1-design
     phase: 1
@@ -23,17 +23,31 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
-    status: pending
+    status: done
     lease:
-      claimed_by: cloud/20261031T205751Z
-      expires: 2026-11-01T00:05:57.963544809Z
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
     steps: 4
   spent:
     runs: 1
-    steps: 2
+    steps: 3
 questions: []
 history:
   - at: 2026-10-31T21:40:16Z
@@ -54,3 +68,24 @@ history:
   - at: 2026-10-31T22:05:57Z
     by: cloud/20261031T205751Z
     event: claimed x2-implement until 2026-11-01T00:05:57Z
+  - at: 2026-10-31T22:10:32Z
+    by: cloud/20261031T205751Z
+    event: done x2-implement
+  - at: 2026-10-31T22:10:32Z
+    by: cloud/20261031T205751Z
+    event: entered phase 3 (merge)
+  - at: 2026-10-31T22:10:32Z
+    by: cloud/20261031T205751Z
+    event: done x3-merge
+  - at: 2026-10-31T22:10:32Z
+    by: cloud/20261031T205751Z
+    event: entered phase 4 (close)
+  - at: 2026-10-31T22:10:32Z
+    by: cloud/20261031T205751Z
+    event: claimed x4-close until 2026-11-01T00:10:32Z
+  - at: 2026-10-31T22:10:32Z
+    by: cloud/20261031T205751Z
+    event: done x4-close
+  - at: 2026-10-31T22:10:32Z
+    by: cloud/20261031T205751Z
+    event: closed; feature done
