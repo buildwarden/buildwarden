@@ -3,14 +3,14 @@ title: Relay leaf certificates name a CRL the relay serves (Windows Schannel rev
 priority: 1
 status: in_progress
 round: merge
-phase: 6
+phase: 7
 design: docs/design/relay-leaf-crl.md
 branch: feat/relay-leaf-crl
-pr:
-  number: 70
-  ci: pending
 alters_relationships: false
 source: 'native/windows-hyperv/2026-10-30 finding 2: curl.exe (Schannel) rejects relay leaf certs with CRYPT_E_NO_REVOCATION_CHECK; Jeff, high-priority fix'
+pr:
+  number: 70
+  ci: green
 steps:
   - id: p0-branch-setup
     phase: 0
@@ -129,12 +129,19 @@ steps:
   - id: m6-publish
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - m6-confirm-pr
     lease:
-      claimed_by: cloud/20261031T013930Z
-      expires: 2026-10-31T04:05:43.8531566Z
+      claimed_by: ""
+      expires: null
+  - id: m7-sign-off
+    phase: 7
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -328,3 +335,9 @@ history:
   - at: 2026-10-31T02:05:43Z
     by: cloud/20261031T013930Z
     event: claimed m6-publish until 2026-10-31T04:05:43Z
+  - at: 2026-10-31T02:11:23Z
+    by: cloud/20261031T013930Z
+    event: done m6-publish
+  - at: 2026-10-31T02:11:23Z
+    by: cloud/20261031T013930Z
+    event: entered phase 7 (sign-off)
