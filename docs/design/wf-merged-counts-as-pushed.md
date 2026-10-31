@@ -1,6 +1,6 @@
 ---
 feature: wf-merged-counts-as-pushed
-status: draft
+status: active
 drivers: []
 seams: []
 surfaces: []
@@ -86,7 +86,9 @@ PR; the process item's phase 2 likewise.
 
 ## Design review
 
-Pending.
+- **r1, 2026-10-31: approved** (Jeff, attended session, FLOW-19), with the
+  recommendation of not also requiring a recorded `ci: green`.
+  Approved at `8a40a03`.
 
 ## Consolidation
 
