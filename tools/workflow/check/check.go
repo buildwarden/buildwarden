@@ -227,7 +227,7 @@ func (c *checker) design(merge bool) {
 		return
 	}
 	c.add("design present (FLOW-01)", true, "%s on %s", c.f.Design, c.f.Branch)
-	for _, e := range d.Front.problems(c.f.Feature) {
+	for _, e := range d.Front.Problems(c.f.Feature) {
 		c.add("front-matter (FLOW-02)", false, "%s", e)
 	}
 	if d.Front.Alters == nil || c.f.AltersRelationships == nil ||
@@ -305,7 +305,10 @@ type Front struct {
 	present   map[string]bool
 }
 
-func (fm *Front) problems(feature string) []string {
+// Problems lists the ways the front-matter breaks FLOW-02 for the named
+// feature: a missing key, or a value outside the allowed set. It is empty when
+// the front-matter is valid.
+func (fm *Front) Problems(feature string) []string {
 	var out []string
 	for _, k := range []string{"feature", "status", "round", "drivers", "seams", "surfaces",
 		"security_boundary", "alters_relationships", "native_validation", "tier2_gaps",
