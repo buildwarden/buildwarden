@@ -72,8 +72,8 @@ steps:
     needs:
       - p1-escalate-3
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261031T095649Z
+      expires: 2026-10-31T12:16:02.518014474Z
     note: 'Jeff, 2026-10-31 (p1-escalate-3): add BOOT-06 to the rules front-matter of windows-driver-plan and BOOT-02 to that of remote-execution-and-measured-hermeticity, and add both to this design''s own rules, so the round-3 security notes cite only rules their blocks list (FLOW-02). Change nothing else in the notes. Also apply Jeff''s non-default answers: a2, hyperv-driver-plan status active (not archived) until its Linux-guest phase is built or dropped; a3, do not add alters_relationships to hyperv-windows-prepare, ledger-environment-types or unified-bootstrap (revert it if the branch added it); a6, feature is the matching queue slug where one exists, else the base name (firecracker-driver-plan becomes firecracker-driver, sharing it with firecracker-spike-plan, which Jeff accepted); a9, the README bullet is removed by the attended step p3-remove-readme-bullet, not left for sign-off. Update the design text and plan to match.'
   - id: p3-remove-readme-bullet
     phase: 3
@@ -96,8 +96,8 @@ budget:
     runs: 3
     steps: 14
   spent:
-    runs: 2
-    steps: 12
+    runs: 3
+    steps: 13
 questions:
   - id: a1
     kind: assumed
@@ -323,3 +323,6 @@ history:
   - at: 2026-10-31T04:09:39Z
     by: human/jeff
     event: 'assumed question a9 confirmed: an attended step removes it on this branch'
+  - at: 2026-10-31T10:16:02Z
+    by: cloud/20261031T095649Z
+    event: claimed p1-design-r4 until 2026-10-31T12:16:02Z
