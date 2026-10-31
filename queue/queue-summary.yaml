@@ -4,7 +4,7 @@ priority: 1
 kind: process
 status: in_progress
 round: process
-phase: 1
+phase: 2
 design: docs/design/queue-summary.md
 branch: feat/queue-summary
 alters_relationships: null
@@ -13,10 +13,17 @@ steps:
   - id: x1-design
     phase: 1
     affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x2-implement
+    phase: 2
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: human/jeff
-      expires: 2026-10-31T23:33:50.350151314Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -35,3 +42,9 @@ history:
   - at: 2026-10-31T21:33:50Z
     by: human/jeff
     event: claimed x1-design until 2026-10-31T23:33:50Z
+  - at: 2026-10-31T21:34:05Z
+    by: human/jeff
+    event: done x1-design
+  - at: 2026-10-31T21:34:05Z
+    by: human/jeff
+    event: entered phase 2 (implement)
