@@ -8,6 +8,9 @@ phase: 2
 design: docs/design/test-rules-docs-only.md
 branch: feat/test-rules-docs-only
 alters_relationships: null
+pr:
+  number: 83
+  ci: pending
 source: 'ci-path-filters design review a8 (Jeff, 2026-10-31): reword TEST-01 and TEST-02 per that design''s Proposed rule changes'
 steps:
   - id: x1-design
