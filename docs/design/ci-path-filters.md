@@ -346,6 +346,16 @@ failing `git diff` true/true/true. All match Decision 2; a real `git mv` of
 a `failure`, a `cancelled`, a failed `changes` with skipped dependents, and
 malformed input. actionlint 1.7.7 reports no findings on `main.yml`.
 
+
+**Notes (review 458a36af2b41).** Applied in Review: Go source and module files
+(`*.go`, `go.mod`, `go.sum`, `go.work`, at any depth) classify as code even under
+`docs/` (MUST 1: the root module compiles them, so `docs/ex/bad.go` would have
+skipped lint, test and build); `CONTRIBUTING.md` sets `book` (the book includes
+it); `git -c core.quotePath=false` keeps non-ASCII paths matchable; the `book`
+checkout sets `persist-credentials: false`. Re-checked: `docs/ex/bad.go` and
+`docs/x/go.mod` give code/gotests true; `CONTRIBUTING.md` gives book only;
+`docs/book/src/café.md` gives book; the earlier table's rows are unchanged.
+
 ## Design review
 
 - **r1, 2026-10-31: approved** (Jeff, attended session, FLOW-19).

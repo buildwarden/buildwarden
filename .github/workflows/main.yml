@@ -31,19 +31,25 @@ jobs:
           EVENT: ${{ github.event_name }}
         # A PR checks out GitHub's merge commit, so HEAD^1..HEAD is the PR's
         # change against the current base. --no-renames lists both sides of a
-        # rename, so moving code into docs/ still counts as code.
+        # rename, so moving code into docs/ still counts as code; quotePath=false
+        # keeps non-ASCII paths matchable.
         run: |
           all() { printf 'code=true\ngotests=true\nbook=true\n' >> "$GITHUB_OUTPUT"; }
           [ "$EVENT" = pull_request ] || { all; exit 0; }
-          files=$(git diff --name-only --no-renames HEAD^1 HEAD) && [ -n "$files" ] || { all; exit 0; }
+          files=$(git -c core.quotePath=false diff --name-only --no-renames HEAD^1 HEAD) && [ -n "$files" ] || { all; exit 0; }
           code=false rules=false book=false
           while IFS= read -r p; do
             case "$p" in
+              # Go source and module files compile wherever they are, docs/
+              # included (review 458a36af2b41, MUST 1).
+              *.go|go.mod|go.sum|go.work|*/go.mod|*/go.sum|*/go.work) code=true ;;
               # TestRealIndex (tools/tier1/rules) parses the real rule files.
               docs/development/*) rules=true ;;
               docs/book/*) book=true ;;
               docs/*) ;;
               */*) code=true ;;
+              # docs/book/src/contributing/development.md includes it.
+              CONTRIBUTING.md) book=true ;;
               *.md) ;;
               *) code=true ;;
             esac
@@ -166,6 +172,8 @@ jobs:
       contents: read
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Install mdBook
         run: |
