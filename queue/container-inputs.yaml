@@ -7,6 +7,7 @@ phase: 6
 design: docs/design/container-inputs.md
 branch: feat/container-inputs
 alters_relationships: false
+pr: {number: 72, ci: pending}
 source: 'docs/development/README.md: Follow-up - Container inputs under inputs/'
 steps:
   - id: p0-branch-setup
