@@ -1,6 +1,6 @@
 ---
 feature: test-rules-docs-only
-status: draft
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -86,10 +86,24 @@ None (`drivers: []`).
 
 ## Consolidation
 
-Filled in at Publish.
+Branched from `main` at `89a0e3b`, still `main`. #82 (ci-path-filters) is open
+and implements the docs-only set this wording names; either can merge first,
+since the wording describes #82's classifier and #82 already lands against the
+old wording by Jeff's a8.
 
 ## Rollback notes
 
 ## Archive summary
 
-Filled in at Publish.
+Implemented 2026-10-31 as ci-path-filters' a8 follow-up.
+
+- **Built.** TEST-01: `make test` is the gate every change that can affect it
+  passes; CI skips it only for TEST-02's docs-only paths, and every push to
+  `main` runs it. TEST-02 tier 0 names the docs-only set (`docs/**` except
+  `docs/development/**`, top-level `*.md`, never Go source or module files)
+  and points to `main.yml`'s `changes` job as its implementation.
+- **Decisions taken:** reword rather than weaken; name the set once, in
+  TEST-02.
+- **Rejected:** dropping "every change" from TEST-01.
+- **For future designs touching `testing` or `ci`:** change TEST-02's
+  docs-only set and the `changes` job together.
