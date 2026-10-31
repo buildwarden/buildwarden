@@ -1,0 +1,134 @@
+# Tier 1's map of the standards (LINT-02) and the path data its coupling
+# checks read. The rule-index self-check fails when an `automated`-tagged rule
+# in docs/development/ has no entry here, or an entry names a rule that no
+# longer exists. Each entry has exactly one of:
+#   check:     the tier-1 check IDs that enforce the rule's automated part
+#   owner:     what enforces it outside tier 1
+#   follow-up: why tier 1 does not check it yet
+
+rules:
+  LINT-01: {check: [rule-index]}
+  LINT-02: {check: [rule-index]}
+  LINT-03: {owner: "branch protection and the release workflow's tier1 job"}
+  LINT-04: {owner: "tier1 itself: every run is diff-scoped"}
+  LINT-05: {owner: "tier1 itself: report.schema.json and Tier1-Allow trailers"}
+
+  BOOT-04: {follow-up: "needs the set of build-input paths named in code"}
+  BOOT-07: {check: [bootstrap-surface]}
+
+  GLOBAL-01: {check: [exported-doc]}
+  GLOBAL-02: {check: [gofmt-touched]}
+  GLOBAL-03: {check: [error-wrap]}
+  GLOBAL-04: {check: [tests-with-change]}
+  GLOBAL-07: {owner: "make test on the CI matrix"}
+  GLOBAL-08: {check: [seam-contract]}
+
+  EXEC-01: {check: [executor-no-cgo]}
+  EXEC-03: {follow-up: "platform_*.go coverage for the trust path"}
+  EXEC-04: {check: [seam-contract]}
+  EXEC-05: {check: [large-literal]}
+
+  ORCH-01: {check: [drivers-claim]}
+  ORCH-02: {follow-up: "needs a model of which writes are input mutations"}
+  ORCH-03: {check: [surface-docs]}
+  ORCH-05: {owner: "the CI matrix"}
+
+  FLOW-01: {check: [design-front-matter]}
+  FLOW-02: {check: [design-front-matter, drivers-claim]}
+  FLOW-03: {owner: "wf (tools/workflow/check)"}
+  FLOW-04: {owner: "wf (the queue)"}
+  FLOW-05: {owner: "wf (the queue)"}
+  FLOW-08: {owner: "branch protection and PR checks"}
+  FLOW-09: {follow-up: "tier2_gaps consistency"}
+  FLOW-11: {owner: "branch protection and PR checks"}
+  FLOW-12: {check: [design-front-matter]}
+  FLOW-13: {owner: "wf (the queue)"}
+  FLOW-15: {owner: "make deadcode at Publish consolidation (whole-repo by design)"}
+  FLOW-16: {owner: "wf (the merged-branch report)"}
+  FLOW-18: {owner: "tools/workflow/flow18-check.sh"}
+  FLOW-19: {owner: "wf (the design_review decision, skip criteria and approvals: tools/workflow/check)"}
+
+  RELAY-01: {check: [ledger-single-writer]}
+  RELAY-02: {follow-up: "the round-trip test exists; a check that new serving paths use it does not"}
+  RELAY-05: {check: [schema-doc]}
+  RELAY-06: {follow-up: "a benchmark threshold, which needs the benchmark in CI"}
+  RELAY-07: {check: [relay-diskless]}
+
+  SEC-02: {owner: "the security suite (security-suite item)"}
+  SEC-06: {owner: "the security suite (security-suite item)"}
+  SEC-08: {owner: "the security suite (security-suite item)"}
+
+  TEST-01: {owner: "make test"}
+  TEST-02: {follow-up: "test scoping and tier2_gaps consistency"}
+  TEST-03: {follow-up: "test scoping and tier2_gaps consistency"}
+  TEST-05: {owner: "make test (the round-trip tests exist as tests)"}
+  TEST-07: {follow-up: "test scoping and tier2_gaps consistency"}
+  TEST-08: {owner: "the security suite (security-suite item)"}
+
+  UX-01: {check: [surface-docs]}
+  UX-02: {follow-up: "TTY detection and a structured mode per command"}
+  UX-03: {check: [surface-removed]}
+  UX-07: {follow-up: "a test, not a static check: defaults with no config"}
+  UX-08: {follow-up: "a test, not a static check: validation at startup"}
+  UX-09: {follow-up: "a test, not a static check: exit-code tables"}
+
+# FLOW-01: a changed path that matches none of these is code, and code needs a
+# design in the diff.
+not_code: ["docs/", "*.md", ".github/", "LICENSE"]
+
+# ORCH-01: driver/<dir>/ belongs to that driver; a change to a shared path
+# needs every driver in `all` declared (the TEST-02 caveat). `interface` in a
+# design's drivers covers every driver.
+drivers:
+  all: [container, qemu, vz, hyperv]
+  dirs: [container, qemu, vz, hyperv, firecracker]
+  shared: ["driver/*.go", "driver/winguest/", "driver/script/", "relay/", "ledger/",
+    "collector/", "relaycfg/", "bootstrap/"]
+
+# BOOT-07: the bootstrap surface and the document that owns the model. The
+# relay's guest-facing endpoints are the control plane (/ca.pem, /v1/output,
+# /v1/complete).
+bootstrap:
+  doc: docs/development/bootstrap.md
+  surface:
+    - "cmd/warden-io/initialize*.go"
+    - cmd/warden-io/baseline.go
+    - "cmd/warden-io/trust_*.go"
+    - cmd/warden-io/jks.go
+    - bootstrap/
+    - relay/controlplane.go
+    - driver/container/container.go
+    - "driver/container/images*"
+    - cmd/warden-pause/
+    - driver/qemu/cloudinit.go
+    - driver/winguest/
+    - "driver/hyperv/winseed*.go"
+    - driver/vz/image.go
+
+# RELAY-05: each machine schema and its document change together.
+schema_doc:
+  - {code: "schemas/", doc: docs/book/src/design/ledger-spec.md}
+
+# GLOBAL-08, EXEC-04: versioned seams with a contract document. The relay's
+# claim and collector protocols and the executor's initialize contract have
+# no contract document yet, so they are follow-up and none is listed.
+seams: []
+
+# UX-01, ORCH-03, UX-03: the user-facing surface and its reference docs.
+surface:
+  dir: cmd/warden/
+  docs: [docs/book/src/guide/cli.md, docs/book/src/guide/configuration.md]
+
+# FLOW-02, FLOW-12: designs kept as merged although their front-matter predates
+# a FLOW-02 key or value. Each lists the keys whose problems tier 1 reports as a
+# hint instead of failing, in the per-diff check and in `tier1 designs -all`.
+# Designs with no front-matter at all need no entry: they are pre-standard.
+design_tolerate:
+  # Archived before alters_relationships existed; left untouched by Jeff's
+  # answer to design-front-matter-retrofit a3.
+  docs/design/hyperv-windows-prepare.md: [alters_relationships]
+  docs/design/ledger-environment-types.md: [alters_relationships]
+  docs/design/unified-bootstrap.md: [alters_relationships]
+  # design-front-matter-retrofit a6 gives it the queue slug firecracker-driver,
+  # not its file stem, until the firecracker-driver design resolves it.
+  docs/design/firecracker-driver-plan.md: [feature]

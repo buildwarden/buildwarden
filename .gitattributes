@@ -5,3 +5,7 @@
 *.sh                       text eol=lf
 tools/relay-vm/init        text eol=lf
 tools/relay-vm/hyperv/init text eol=lf
+# Golden files are compared byte for byte; a CRLF checkout on Windows would
+# fail them (GLOBAL-07).
+tools/tier1/**/testdata/**    text eol=lf
+tools/workflow/**/testdata/** text eol=lf

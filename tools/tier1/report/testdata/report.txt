@@ -1,0 +1,15 @@
+tier1: 0123456789ab...fedcba987654
+
+MUST (1):
+  relay/x.go:9 [RELAY-07 relay-diskless] os.Create in relay/
+
+SHOULD (1):
+  cmd/warden-io/a.go:3 [EXEC-05 large-literal] string literal of 5000 bytes
+
+hints (not failing; for tier 2) (1):
+  relay [GLOBAL-04 tests-with-change] non-test code changed, no test changed
+
+suppressed (Tier1-Allow, 1):
+  UX-01 cmd/warden/*: docs follow (commit aaaaaaaaaaaa)
+
+1 MUST, 0 MUST-review, 1 SHOULD, 1 hints, 1 suppressed
