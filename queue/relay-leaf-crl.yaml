@@ -6,6 +6,9 @@ round: merge
 phase: 6
 design: docs/design/relay-leaf-crl.md
 branch: feat/relay-leaf-crl
+pr:
+  number: 70
+  ci: pending
 alters_relationships: false
 source: 'native/windows-hyperv/2026-10-30 finding 2: curl.exe (Schannel) rejects relay leaf certs with CRYPT_E_NO_REVOCATION_CHECK; Jeff, high-priority fix'
 steps:
