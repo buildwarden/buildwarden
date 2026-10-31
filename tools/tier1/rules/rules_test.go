@@ -109,3 +109,25 @@ func TestUnknownKey(t *testing.T) {
 		t.Error("an unknown rules.yaml key parsed")
 	}
 }
+
+// TestSchemaDocConfig pins schema_doc's layout form: a pair list from the old
+// form, or a misspelt key, is an error rather than an empty check.
+func TestSchemaDocConfig(t *testing.T) {
+	yml := "schema_doc:\n  root: specs/\n  prose_only: [build-ledger]\n"
+	c, err := ParseConfig([]byte(yml))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if c.SchemaDoc.Root != "specs/" || len(c.SchemaDoc.ProseOnly) != 1 ||
+		c.SchemaDoc.ProseOnly[0] != "build-ledger" {
+		t.Errorf("schema_doc = %+v", c.SchemaDoc)
+	}
+	for _, bad := range []string{
+		"schema_doc:\n  - {code: schemas/, doc: spec.md}\n",
+		"schema_doc:\n  roots: specs/\n",
+	} {
+		if _, err := ParseConfig([]byte(bad)); err == nil {
+			t.Errorf("parsed %q", bad)
+		}
+	}
+}

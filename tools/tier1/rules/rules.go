@@ -148,10 +148,12 @@ type Seam struct {
 	Contract string   `yaml:"contract"`
 }
 
-// Pair is a code path set and the document that changes with it.
-type Pair struct {
-	Code string `yaml:"code"`
-	Doc  string `yaml:"doc"`
+// SchemaDoc is RELAY-05's specs/ layout: under Root, each
+// <dir>/v<N>.schema.json has a v<N>.md beside it. ProseOnly names the
+// directories that hold documents only.
+type SchemaDoc struct {
+	Root      string   `yaml:"root"`
+	ProseOnly []string `yaml:"prose_only"`
 }
 
 // Config is rules.yaml.
@@ -167,8 +169,8 @@ type Config struct {
 		Doc     string   `yaml:"doc"`
 		Surface []string `yaml:"surface"`
 	} `yaml:"bootstrap"`
-	SchemaDoc []Pair `yaml:"schema_doc"`
-	Seams     []Seam `yaml:"seams"`
+	SchemaDoc SchemaDoc `yaml:"schema_doc"`
+	Seams     []Seam    `yaml:"seams"`
 	Surface   struct {
 		Dir  string   `yaml:"dir"`
 		Docs []string `yaml:"docs"`

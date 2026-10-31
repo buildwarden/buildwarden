@@ -10,3 +10,10 @@ build-dir = "../../site"
 [output.html]
 git-repository-url = "https://github.com/buildwarden/buildwarden"
 edit-url-template = "https://github.com/buildwarden/buildwarden/edit/main/docs/book/src/{path}"
+
+# The ledger spec moved to specs/ (RELAY-05); keep its old published URL.
+# specs/README.md renders as specs/index.html, but a link to it from an
+# included spec document renders as README.html, so that name forwards too.
+[output.html.redirect]
+"/design/ledger-spec.html" = "../specs/build-ledger/v1.html"
+"/specs/README.html" = "index.html"

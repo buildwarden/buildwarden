@@ -93,6 +93,12 @@ buildwarden/
 │       └── translate.go          # COPY expanded against the context on the host
 ├── ledger/                 # Shared library: wire format, reader, verifier
 │   └── ledger.go
+├── specs/                  # Ledger format specs, versioned (RELAY-05); published in the book
+│   ├── README.md             # Index: layout, $id -> file table, $id policy
+│   ├── build-ledger/v1.md    # Wire format (prose only)
+│   ├── metadata-<name>/      # A record metadata schema: v<N>.md beside v<N>.schema.json
+│   ├── environment-<type>/   # A signed environment payload: v<N>.md beside v<N>.schema.json
+│   └── specs_test.go         # Tier-0: relay header, schemas and book mirror agree
 ├── tools/
 │   ├── relay-vm/              # Relay VM assets (Alpine + kernel)
 │   │   ├── build-initramfs.sh    # Build the prebuilt relay initramfs
@@ -150,6 +156,7 @@ buildwarden/
 - **`driver/vz/`** — VZ driver. Host relay with gvisor netstack, macOS build VM.
 - **`driver/hyperv/`** — Hyper-V driver. Two-VM topology with a host-only NAT switch; Windows guests (a Linux guest seed is not yet implemented). Includes host setup, doctor, and the privileged helper service.
 - **`ledger/`** — Shared wire format library. Binary ledger types, reader, verifier. Used by `warden inspect` and the relay's test suite.
+- **`specs/`** — The ledger format's documents, not code: one wire-format spec per ledger major version and each schema's document beside its machine schema (RELAY-05). `docs/book/src/specs/` mirrors it with one-line includes. Its only Go file is a test.
 
 ## Key Patterns
 

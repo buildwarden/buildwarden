@@ -85,7 +85,11 @@ type Checker struct {
 	Index    *rules.Index
 	Designs  *Designs
 	NoDesign bool
-	changed  []string // the paths() cache
+	// WholeTree also runs the checks of invariants that hold over the whole
+	// tree (the specs/ layout) when the diff does not touch them: `tier1
+	// -all`, for an audit of HEAD rather than of a change.
+	WholeTree bool
+	changed   []string // the paths() cache
 }
 
 func (c *Checker) finding(rule, check, file, format string, a ...any) report.Finding {
