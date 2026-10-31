@@ -1,0 +1,30 @@
+feature: pre-release-cleanup
+title: Clear tier 1's release-range findings before the next tag (GLOBAL-01, GLOBAL-03, FLOW-12)
+priority: 8
+status: queued
+round: feature
+phase: 0
+design: docs/design/pre-release-cleanup.md
+branch: feat/pre-release-cleanup
+alters_relationships: null
+source: 'tier1-static-checks review MUST 3, Jeff 2026-10-31: fix 25 findings, nolint the RandAlphaNum panic, archive native-host-loop and native-loop-followups, then release'
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 9
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-10-31T21:31:39Z
+    by: human/jeff
+    event: queued at priority 8 (intake)

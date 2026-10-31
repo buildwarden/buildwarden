@@ -1,0 +1,31 @@
+feature: queue-summary
+title: 'QUEUE.md: a generated summary of the queue on the workflow branch'
+priority: 1
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/queue-summary.md
+branch: feat/queue-summary
+alters_relationships: null
+source: 'Jeff, 2026-10-31: visibility into active, backlog and what needs him; shape approved in session'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 6
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-10-31T21:31:39Z
+    by: human/jeff
+    event: queued at priority 1 (intake)

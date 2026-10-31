@@ -1,6 +1,6 @@
 feature: container-inputs
 title: Record container inputs under inputs/ (ORCH-02)
-priority: 4
+priority: 5
 status: done
 round: merge
 phase: 8
