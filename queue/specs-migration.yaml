@@ -3,7 +3,7 @@ title: Move the ledger spec and schemas to specs/ (RELAY-05)
 priority: 12
 status: in_progress
 round: feature
-phase: 3
+phase: 4
 design: docs/design/specs-migration.md
 branch: feat/specs-migration
 alters_relationships: false
@@ -43,10 +43,17 @@ steps:
   - id: f3-implement
     phase: 3
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f4-review
+    phase: 4
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261031T205751Z
-      expires: 2026-11-01T00:30:46.010637261Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 4
@@ -181,3 +188,9 @@ history:
   - at: 2026-10-31T22:30:46Z
     by: cloud/20261031T205751Z
     event: claimed f3-implement until 2026-11-01T00:30:46Z
+  - at: 2026-10-31T22:43:22Z
+    by: cloud/20261031T205751Z
+    event: done f3-implement
+  - at: 2026-10-31T22:43:22Z
+    by: cloud/20261031T205751Z
+    event: entered phase 4 (review)
