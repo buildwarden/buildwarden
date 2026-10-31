@@ -3,12 +3,14 @@ title: Record container inputs under inputs/ (ORCH-02)
 priority: 3
 status: in_progress
 round: merge
-phase: 6
+phase: 7
 design: docs/design/container-inputs.md
 branch: feat/container-inputs
 alters_relationships: false
-pr: {number: 72, ci: pending}
 source: 'docs/development/README.md: Follow-up - Container inputs under inputs/'
+pr:
+  number: 72
+  ci: green
 steps:
   - id: p0-branch-setup
     phase: 0
@@ -154,10 +156,17 @@ steps:
   - id: m6-publish
     phase: 6
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: m7-sign-off
+    phase: 7
+    affinity: human
     status: pending
     lease:
-      claimed_by: cloud/20261031T095649Z
-      expires: 2026-10-31T12:13:52.717478846Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 4
@@ -401,3 +410,9 @@ history:
   - at: 2026-10-31T10:13:52Z
     by: cloud/20261031T095649Z
     event: claimed m6-publish until 2026-10-31T12:13:52Z
+  - at: 2026-10-31T10:21:58Z
+    by: cloud/20261031T095649Z
+    event: done m6-publish
+  - at: 2026-10-31T10:21:58Z
+    by: cloud/20261031T095649Z
+    event: entered phase 7 (sign-off)
