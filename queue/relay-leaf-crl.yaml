@@ -26,10 +26,10 @@ steps:
   - id: m6-validate-windows-hyperv
     phase: 6
     affinity: host:windows-hyperv
-    status: pending
+    status: done
     lease:
-      claimed_by: host:windows-hyperv/20261031T015530Z
-      expires: 2026-10-31T03:55:30.7550817Z
+      claimed_by: ""
+      expires: null
     note: Blocking (FLOW-09). A Windows guest build runs curl.exe over HTTPS with no --ssl-no-revoke and succeeds; inspect --verify-disks shows all signatures valid and no /ca.crl record (a1). Refresh the cached relay boot VHDX first (tools/relay-vm/hyperv/refresh-cache.sh).
   - id: p2-plan
     phase: 2
@@ -167,3 +167,9 @@ history:
   - at: 2026-10-31T01:55:30Z
     by: host:windows-hyperv/20261031T015530Z
     event: claimed m6-validate-windows-hyperv until 2026-10-31T03:55:30Z
+  - at: 2026-10-31T01:58:26Z
+    by: host:windows-hyperv/20261031T015530Z
+    event: done m6-validate-windows-hyperv
+  - at: 2026-10-31T01:58:38Z
+    by: host:windows-hyperv/20261031T015530Z
+    event: 'evidence m6-validate-windows-hyperv: pass on windows-desktop (Win 11 Pro 26300 Hyper-V), feat/relay-leaf-crl 0ca42d9, relay boot VHDX rebuilt by refresh-cache.sh (relay source 0ca42d99a6fc), Server 2025 eval prepared windows-server-2025-20261030T175627Z. warden build --driver hyperv --guest-os windows; build.ps1 runs curl.exe with no --ssl-no-revoke: pypi.org/simple/six/ 200 16337 B, github.com/ 200 529588 B. certutil -urlcache lists http://artifacts/ca.crl (Schannel fetched it); GET /ca.crl 200 application/pkix-crl 439 B. inspect --verify-disks: 15 signatures valid, all channels closed, disks [ok], no /ca.crl record.'
