@@ -64,15 +64,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261031T013930Z
+      expires: 2026-10-31T03:58:50.1902123Z
 budget:
   estimate:
     runs: 2
     steps: 12
   spent:
     runs: 1
-    steps: 7
+    steps: 8
 questions:
   - id: a1
     kind: assumed
@@ -173,3 +173,6 @@ history:
   - at: 2026-10-31T01:58:38Z
     by: host:windows-hyperv/20261031T015530Z
     event: 'evidence m6-validate-windows-hyperv: pass on windows-desktop (Win 11 Pro 26300 Hyper-V), feat/relay-leaf-crl 0ca42d9, relay boot VHDX rebuilt by refresh-cache.sh (relay source 0ca42d99a6fc), Server 2025 eval prepared windows-server-2025-20261030T175627Z. warden build --driver hyperv --guest-os windows; build.ps1 runs curl.exe with no --ssl-no-revoke: pypi.org/simple/six/ 200 16337 B, github.com/ 200 529588 B. certutil -urlcache lists http://artifacts/ca.crl (Schannel fetched it); GET /ca.crl 200 application/pkix-crl 439 B. inspect --verify-disks: 15 signatures valid, all channels closed, disks [ok], no /ca.crl record.'
+  - at: 2026-10-31T01:58:50Z
+    by: cloud/20261031T013930Z
+    event: claimed p6-publish until 2026-10-31T03:58:50Z
