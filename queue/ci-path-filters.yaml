@@ -65,7 +65,7 @@ steps:
   - id: f6-merge-main
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -76,8 +76,8 @@ steps:
     needs:
       - f6-merge-main
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261031T205751Z
+      expires: 2026-11-01T00:15:13.079315545Z
   - id: f6-open-pr
     phase: 6
     affinity: cloud
@@ -93,7 +93,7 @@ budget:
     steps: 9
   spent:
     runs: 1
-    steps: 7
+    steps: 9
 questions:
   - id: a1
     kind: assumed
@@ -265,3 +265,12 @@ history:
   - at: 2026-10-31T22:14:41Z
     by: cloud/20261031T205751Z
     event: entered phase 6 (publish)
+  - at: 2026-10-31T22:14:52Z
+    by: cloud/20261031T205751Z
+    event: claimed f6-merge-main until 2026-11-01T00:14:52Z
+  - at: 2026-10-31T22:15:13Z
+    by: cloud/20261031T205751Z
+    event: done f6-merge-main
+  - at: 2026-10-31T22:15:13Z
+    by: cloud/20261031T205751Z
+    event: claimed f6-consolidate until 2026-11-01T00:15:13Z
