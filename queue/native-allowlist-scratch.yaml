@@ -1,6 +1,6 @@
 feature: native-allowlist-scratch
 title: 'Native allowlist: run branch binaries under .scratch/ and the FLOW-18 recheck'
-priority: 13
+priority: 14
 kind: process
 holds:
   - host:*

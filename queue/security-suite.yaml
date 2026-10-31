@@ -1,6 +1,6 @@
 feature: security-suite
 title: 'Build the TEST-08 security suite and pen-tester agent (Deep-dive #1)'
-priority: 12
+priority: 13
 status: queued
 round: feature
 phase: 0

@@ -1,0 +1,31 @@
+feature: wf-merged-counts-as-pushed
+title: 'wf: a branch already merged into main satisfies the pushed and PR checks'
+priority: 9
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/wf-merged-counts-as-pushed.md
+branch: feat/wf-merged-counts-as-pushed
+alters_relationships: null
+source: 'queue-summary close, 2026-10-31: Jeff merged #78 before x2-implement was recorded; GitHub auto-deleted the branch and the x2 ''branch pushed'' check could not pass (advanced by hand)'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 4
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-10-31T21:40:16Z
+    by: human/jeff
+    event: queued at priority 9 (intake)
