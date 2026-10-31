@@ -1,0 +1,52 @@
+{
+  "feature": "container-inputs",
+  "branch": "feat/container-inputs",
+  "head": "e4f6f7d5521a",
+  "base": "cc6119e",
+  "previous_report": "3a7a1b36e0e1",
+  "step": "m4-review",
+  "scope": "git diff origin/main...feat/container-inputs (11 files, +455/-33; LINT-04). Re-judged this round: ddd11fe (output.md reflow), the merge of main c9940d6 (test-integration.sh auto-merged, overview.md), c7e32f3 (m1 consolidation) and e4f6f7d (m2 plan). Code under driver/ is unchanged since 3a7a1b3 and carried forward from 3a7a1b36e0e1 (LINT-05).",
+  "rule_index": "84 rules extracted from docs/development/*.md (LINT-01): 14 automated, 29 agent-judgment, 41 hybrid.",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "tier1": {
+    "make_lint": "pass (linux; golangci-lint v2.5.0 built with go1.26.3; 0 issues in root and tools/workflow)",
+    "golangci_lint_goos_windows_driver": "pass (0 issues; diff holds driver/hyperv/driver_windows.go)",
+    "golangci_lint_goos_darwin_driver": "pass (0 issues)",
+    "make_test": "pass (all packages ok)",
+    "go_test_driver_uncached": "pass (go test -count=1 ./driver/)",
+    "make_deadcode": "pass (run with the go1.26.3 toolchain first on PATH; /usr/local/go is go1.24.7 and the first attempt failed to load packages). Nothing this feature added is reported; RecordInputs and translates are reachable on linux, darwin and windows. Collector.BytesWritten, Relay.CAFingerprint, Relay.Ledger and the driver/vz helpers are unreachable on all three, as the design says.",
+    "test_integration_sh": "not run here: no Docker daemon (/var/run/docker.sock absent). bash -n passes. The merged script now runs in CI (.github/workflows/integration.yml, pull_request paths include driver/*.go and test-integration.sh), so the PR runs it on the merged head. Prior evidence: run 40961607311 job 'tier1 (feat/container-inputs)' succeeded (gh run view confirms the green job; the log itself returned 403 here), with main's fixes applied as a patch.",
+    "automated_custom_checks": "None exist yet (Deep-dive #2)."
+  },
+  "previous_findings": [
+    {"rule": "ORCH-02", "severity": "MUST", "file": "driver/qemu/driver.go", "line": 147, "status": "resolved", "resolved_in": "72aee6473ed7"},
+    {"rule": "ORCH-01", "severity": "MUST", "file": "driver/hyperv/driver_windows.go", "line": 125, "status": "resolved", "resolved_in": "72aee6473ed7"},
+    {"rule": "ORCH-02", "severity": "MUST", "file": "driver/session.go", "line": 384, "status": "resolved", "resolved_in": "72aee6473ed7"},
+    {"rule": "FLOW-01", "severity": "MUST", "file": "docs/design/container-inputs.md", "line": 46, "status": "resolved", "resolved_in": "f7fd0d802971"}
+  ],
+  "findings": [],
+  "counts": {"MUST": 0, "MUST-review": 0, "SHOULD": 0},
+  "suppressions": [],
+  "informational": [
+    {"rule": "TEST-02", "file": "test-integration.sh", "line": 133, "status": "updated", "note": "Merge checked: main replaced the OUTPUT_DIR derivation with extract_output_dir (the build SUCCEEDED line) and the dist/warden path; the branch's three inputs/ checks sit inside Test 2 after main's JSON check, before rm -f INSPECT_FILE, and read the OUTPUT_DIR that Test 2 sets from examples/Dockerfile.simple. Both sides are kept and the result is coherent. It has not yet run unpatched on the merged head; the PR's integration workflow will run it (paths match driver/*.go and test-integration.sh). Close at Publish when that job is green (FLOW-11)."},
+    {"rule": "FLOW-03", "file": "docs/design/container-inputs.md", "line": 174, "status": "resolved", "note": "The plan now says all twelve tasks are done, and tasks 7-12 are each marked Done."},
+    {"rule": "FLOW-09", "file": "docs/design/container-inputs.md", "line": 11, "status": "resolved", "note": "The macos-vz reason now says vz does not call RecordInputs, matching driver/vz (no call) and Cross-driver impact."},
+    {"rule": "FLOW-09", "file": "docs/design/container-inputs.md", "line": 12, "status": "new, verified", "note": "Host re-homed from macos-qemu to qemu-any. hosts.yaml on the workflow branch defines qemu-any (macbook) and windows-hyperv; backlog/native-gaps.yaml has container-inputs-linux-vm-guests on qemu-any, status done 2026-10-30, with evidence of inputs/Containerfile and inputs/build.sh from a qemu build of ddd11fe."},
+    {"rule": "TEST-03", "file": "docs/design/container-inputs.md", "line": 14, "status": "new, verified", "note": "tier2_gaps: [] is justified. Both backlog entries the feature owns (container-inputs-linux-vm-guests, container-inputs-integration-test) are done, and the Hyper-V half does not apply: winseed_windows.go buildSeed refuses non-Windows guests at driver_windows.go:66, before StageBuildScript (74) and RecordInputs (78). The closed backlog entry's 'what' still says inputs/Dockerfile; the design notes it and its evidence corrects it, so it is left as is."},
+    {"rule": "FLOW-01", "file": "docs/design/container-inputs.md", "line": 146, "status": "new, verified", "note": "The hyperv rationale (call records nothing today; kept so a Linux-guest path records inputs like qemu without another change) matches the code. Keeping a call that is currently a no-op on hyperv, while vz's was dropped, is consistent: hyperv's request can carry a Containerfile once Linux guests land, vz clears it before staging."},
+    {"rule": "FLOW-10", "file": "docs/design/container-inputs.md", "line": 242, "status": "new", "note": "The Consolidation section is filled in: landed PRs, terminology, abstractions, seams, stale items, the FLOW-15 sweep (claims re-verified by make deadcode here) and the rule proposal. Phase-1 merge-round done-when holds."},
+    {"rule": "FLOW-14", "file": "docs/design/container-inputs.md", "line": 102, "status": "open for sign-off", "note": "Assumption a3 is open (queue status: open): propose the staging-time RecordInputs convention as an ORCH-02 amendment. Recommended: a follow-up process item after this merges. docs/development/ is untouched in the diff, as FLOW-14 requires. Jeff decides at sign-off (FLOW-07, FLOW-08)."},
+    {"rule": "UX-01", "file": "docs/book/src/guide/output.md", "line": 35, "status": "resolved", "note": "The paragraph is reflowed to 80 columns (ddd11fe), and the inputs/build.sh entry says 'your Dockerfile'."},
+    {"rule": "UX-01", "file": "docs/design/container-inputs.md", "line": 197, "status": "new, cosmetic", "note": "Adding 'Done.' pushed three plan lines to 81-82 columns (197, 206, 226). Reflow at Archive or ignore."},
+    {"rule": "FLOW-15", "file": "driver/container/container.go", "line": 353, "status": "carried", "note": "Pre-existing, out of LINT-04 scope. The design's duplication sweep found no other copy of the Dockerfile or build.sh into the output."},
+    {"rule": "ORCH-02", "file": "driver/session.go", "line": 389, "status": "carried", "note": "script.Translate and CopyFile each read req.Containerfile, milliseconds apart. Not worth a finding."},
+    {"rule": "ORCH-01", "file": "driver/hyperv/driver_windows.go", "line": 78, "status": "carried", "note": "hyperv writes inputs/ before OutputDir is validated; unreachable from the CLI, and today unreachable at all since buildSeed refuses Linux guests first."}
+  ],
+  "judged_clean": [
+    "ORCH-02 / ORCH-01 / ORCH-04 (driver code unchanged since 3a7a1b3; one shared helper, one failure policy)",
+    "GLOBAL-01 / GLOBAL-02 / GLOBAL-03 / GLOBAL-04 / GLOBAL-06 / GLOBAL-07 / GLOBAL-08",
+    "TEST-01 / TEST-02 / TEST-03 / TEST-04 (tier 0 tests; tier 1 check in CI on the PR; tier 2 validated on qemu-any; no gap left)",
+    "UX-01 / UX-03",
+    "FLOW-01 / FLOW-02 / FLOW-06 / FLOW-07 (a3 open by design, for sign-off) / FLOW-09 / FLOW-10 / FLOW-14 / FLOW-15 / FLOW-17 (branch pushed at e4f6f7d)"
+  ]
+}
