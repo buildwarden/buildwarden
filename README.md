@@ -186,6 +186,15 @@ Full documentation is available at **[buildwarden.github.io/buildwarden](https:/
 - [Philosophy](https://buildwarden.github.io/buildwarden/design/philosophy.html) — Design principles and threat model
 - [Initial Proposal](https://buildwarden.github.io/buildwarden/design/initial-proposal.html) — Original problem statement
 
+## Security
+
+To report a vulnerability, see [SECURITY.md](SECURITY.md).
+
+An ad-hoc security review of the architecture, the relay, and each driver —
+findings ranked by probability and severity, with recommendations — is in
+[SECURITY-REVIEW-2026-10.md](SECURITY-REVIEW-2026-10.md). It is triaged through
+the normal development workflow, one item at a time.
+
 ## Development
 
 [CONTRIBUTING.md](CONTRIBUTING.md) covers setup, building, testing and pull
