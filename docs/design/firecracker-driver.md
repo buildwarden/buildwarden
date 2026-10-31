@@ -1039,15 +1039,17 @@ Follow-ups for intake (workflow-intake; not this feature's work):
 - Relay VM init fails closed: check every iptables command, enable forwarding
   only after the rules exist, print the rule set to the console, and accept
   only `8301` and ESTABLISHED on the upstream interface (every driver; a10's
-  second option).
+  second option; RELAY-02, RELAY-04, GLOBAL-06).
 - `tools/build-vm`: stop baking `warden-io` and writing DNS in the init, or
   register the deviation (BOOT-02, BOOT-03, BOOT-06).
 - Release packaging of the VM assets (kernel, relay and direct-boot
-  initramfs), in `vm-driver-release-plan`.
-- VMM confinement: jailer or unprivileged Landlock plus cgroup scope (a4).
-- Link-local and metadata-address blocking across drivers (a7).
+  initramfs), in `vm-driver-release-plan` (UX-04, TEST-02).
+- VMM confinement: jailer or unprivileged Landlock plus cgroup scope (a4;
+  GLOBAL-06).
+- Link-local and metadata-address blocking across drivers (a7; GLOBAL-06,
+  ORCH-01).
 - Pinned hashes for the default cloud images instead of trust on first
-  download (qemu and firecracker).
+  download (qemu and firecracker; BOOT-04, GLOBAL-06).
 
 ## Design review
 
