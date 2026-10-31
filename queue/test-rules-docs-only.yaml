@@ -2,9 +2,9 @@ feature: test-rules-docs-only
 title: TEST-01/TEST-02 allow docs-only changes to skip the Go suites
 priority: 10
 kind: process
-status: in_progress
+status: done
 round: process
-phase: 3
+phase: 4
 design: docs/design/test-rules-docs-only.md
 branch: feat/test-rules-docs-only
 alters_relationships: null
@@ -30,7 +30,14 @@ steps:
   - id: x3-merge
     phase: 3
     affinity: cloud
-    status: pending
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
+    affinity: cloud
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -40,7 +47,7 @@ budget:
     steps: 4
   spent:
     runs: 1
-    steps: 2
+    steps: 3
 questions: []
 history:
   - at: 2026-10-31T22:05:14Z
@@ -67,3 +74,18 @@ history:
   - at: 2026-10-31T22:23:57Z
     by: cloud/20261031T205751Z
     event: entered phase 3 (merge)
+  - at: 2026-10-31T22:24:25Z
+    by: cloud/20261031T205751Z
+    event: done x3-merge
+  - at: 2026-10-31T22:24:25Z
+    by: cloud/20261031T205751Z
+    event: entered phase 4 (close)
+  - at: 2026-10-31T22:24:26Z
+    by: cloud/20261031T205751Z
+    event: claimed x4-close until 2026-11-01T00:24:26Z
+  - at: 2026-10-31T22:24:26Z
+    by: cloud/20261031T205751Z
+    event: done x4-close
+  - at: 2026-10-31T22:24:26Z
+    by: cloud/20261031T205751Z
+    event: closed; feature done
