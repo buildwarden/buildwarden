@@ -18,10 +18,11 @@ feature's cloud steps.
 
 - Merge, approve, or enable auto-merge on any PR (FLOW-08, LINT-03).
 - Push `main`, force-push, rewrite pushed history, or delete a remote branch
-  (FLOW-16, FLOW-17). Open a PR only for an `m6-publish` whose
-  `m6-confirm-pr` a human has done (FLOW-08).
-- Edit `docs/development/`, `.claude/`, or `tools/workflow/` unattended
-  (FLOW-14). Propose changes as a question for the human instead.
+  (FLOW-16, FLOW-17). Opening a PR needs no confirmation (FLOW-08):
+  `f6-open-pr` and a process item's `x2-implement` open theirs.
+- Edit `docs/development/`, `.claude/`, or `tools/workflow/` anywhere but on
+  a process item's branch after its design review (FLOW-14). On a feature
+  branch, propose the change in the design for its review instead.
 - Put secrets in prompts (FLOW-18).
 
 ## 1. Set up
@@ -54,7 +55,13 @@ the priority order, push it, and stop.
 
 ## 2. Take steps
 
-Repeat while this run has taken fewer than `run_budget.steps` steps:
+First, confirm merges, which spend no budget and need no claim: for each
+feature in phase 7 (`f7-merge`) and each process item in phase 3 (`x3-merge`),
+run `dist/wf done -state .dev/workflow -repo . -worker $W -feature F -step S`.
+It passes once the human has merged the PR (FLOW-08) and moves the item to
+Close; otherwise leave it pending. Commit and push any that moved.
+
+Then repeat while this run has taken fewer than `run_budget.steps` steps:
 
 1. `dist/wf next -state .dev/workflow -worker $W` (attended: add
    `-feature <feature>`). `none` ends the loop; keep the `blocked` lines for
@@ -65,27 +72,38 @@ Repeat while this run has taken fewer than `run_budget.steps` steps:
    means the claim lost (FLOW-04): `git fetch origin workflow`,
    `git -C .dev/workflow reset --hard origin/workflow`, and go back to 1.
 3. Check out the feature branch in the code checkout (`git switch <branch>`
-   after a fetch; `p0-branch-setup` creates it). The tree must be clean.
+   after a fetch; `f0-branch-setup` creates it). The tree must be clean.
+   Close is the exception: it works on `main`.
 4. Dispatch with the Agent tool, `subagent_type` by step name:
 
    | Step | Agent |
    |---|---|
-   | `p0-branch-setup`, `m0-merge-main`, `p6-publish`, `m6-publish` | `wf-publish` |
-   | `p1-design`, `m1-consolidate` | `wf-design` |
+   | `f0-branch-setup`, `f6-merge-main`, `f6-consolidate`, `f6-open-pr` | `wf-publish` |
+   | `f1-design` | `wf-design` |
    | `*-plan` | `wf-plan` |
-   | `*-implement` | `wf-implement` |
+   | `f3-implement`, `f3-implement-r<n>` | `wf-implement` |
+   | `x2-implement` | `wf-implement`, then `wf-publish` to archive and open the PR |
    | `*-review` | `wf-review` |
    | `*-guide` | `wf-guide` |
-   | `m8-archive` | `wf-archive` |
-   | `p6-merge-round` | none: go straight to 5 |
+   | `f8-close`, `x4-close` | none: do it inline, below |
 
-   Steps may carry an `-r<n>` suffix after a return to Design. Give the agent
+   Close (FLOW-16) takes no PR and no human step: confirm the branch head is
+   in `origin/main`, remove any worktree on the branch, `git branch -d` it
+   (never `-D`), clear the feature's validation leftovers outside the
+   documented caches, then go to 5. If the remote branch is still there,
+   release the step and add a `human` step `f8-escalate-branch` whose note
+   gives the exact `git push origin --delete <branch>` command, and make
+   `f8-close` need it.
+
+   Steps may carry an `-r<n>` suffix after a return to an earlier phase. Give the agent
    the feature name, step id, the queue file path, the code checkout path, and
    the workflow checkout path. In Review, a red tier 1 goes to `wf-implement`
    for the fix and back to `wf-review`, inside the same step.
 5. Finish the step on the workflow checkout:
    - The agent returned `back-to-design`:
      `dist/wf back -state .dev/workflow -worker $W -feature F -why "<finding>"`.
+     Consolidation returning work the approved plan covers adds `-to 3`
+     (back to Implement, FLOW-10).
    - Otherwise:
      `dist/wf done -state .dev/workflow -repo . -worker $W -feature F -step S -run`.
      It runs the phase's done-when check (FLOW-03). If it fails, run
@@ -108,11 +126,19 @@ Repeat while this run has taken fewer than `run_budget.steps` steps:
 Write `.dev/workflow/digest/<YYYY-MM-DD>.md`, the date in America/Los_Angeles.
 If the file exists, append a new `## Run <W>` section. Sections, in order:
 
+- **Process items** first, when any is queued or in progress (FLOW-03,
+  FLOW-05): each one's phase and what it holds (`dist/wf status` prints
+  `process item, holds: ...`), and any `held by process item` lines from
+  `wf next`.
 - **Moved**: each step taken, its outcome, and the branch head it left.
 - **Blocked on Jeff**: open blocking questions (options and recommendation),
-  assumptions awaiting confirmation, `confirm-pr`, `sign-off`, `cleanup` and
-  `escalate` steps, runaway budgets (FLOW-13), priority confirmation.
-- **Waiting on a host**: `host:<name>` steps and open native gaps, by host.
+  design reviews waiting (`*-design-review` steps, FLOW-19), open PRs waiting
+  for his merge (phase 7), `escalate` steps, runaway budgets (FLOW-13),
+  priority confirmation.
+- **Design reviews skipped** this run (`design_review: skip`), each with the
+  reason Design gave, so Jeff can call one back (FLOW-19).
+- **Waiting on a host**: `host:<name>` steps and open native gaps, by
+  machine (`hosts.yaml`), and any native run already in today's digest.
 - **Spent**: steps this run against `run_budget.steps`, and each touched
   feature's spent against estimate, in steps and runs.
 - **Notes**: FLOW-18 check result, whether Entire recorded the session.

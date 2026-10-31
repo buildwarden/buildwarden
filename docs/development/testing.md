@@ -18,7 +18,9 @@ See [`README.md`](./README.md) for the rule format.
 **Check:** automated + agent-judgment
 
 `make test` (pure-Go, table-driven unit tests) runs on every supported platform
-with no external dependencies and is the gate every change passes. Platform-specific
+with no external dependencies and is the gate every change that can affect it
+passes: CI skips it only for changes confined to the docs-only paths in TEST-02,
+and every push to `main` runs it. Platform-specific
 code has build-tagged stubs so this layer compiles and runs everywhere; this is the
 *testing* reason the GLOBAL-07 / EXEC-01 stub discipline exists, not just
 cross-compilation. A slow or flaky universal gate is itself a velocity defect.
@@ -39,8 +41,24 @@ Three tiers:
 The expensive tiers are not on the critical path of every PR. They run on the
 relevant CI runner scoped to what changed, on a schedule, and **in full before a
 release**. Per-PR pays for the fast gate plus the tiers the change actually touches.
-Where no CI runner can host a tier (VZ, Hyper-V), it runs in attended native
-sessions under FLOW-09 until one can.
+Where no CI runner can host a tier (VZ, Hyper-V), it runs in native sessions
+under FLOW-09 until one can.
+
+Where each tier runs today:
+
+- Tier 0: the `ci` workflow, on every push to `main` and on every PR that
+  changes a path outside the docs-only set: `docs/**` except
+  `docs/development/**`, and top-level `*.md`, with Go source and module files
+  (`*.go`, `go.mod`, `go.sum`, `go.work`) never docs-only wherever they are.
+  `main.yml`'s `changes` job is that set's implementation.
+- Tier 1: the `integration` workflow (`make integration-test` on a hosted
+  Ubuntu runner with Docker). It runs on PRs that reach `driver/container/`,
+  the `driver/` root, a shared package (`relay/`, `ledger/`, `collector/`),
+  `cmd/`, `test-integration.sh`, a `Dockerfile` or `go.mod`; weekly on
+  `main`; and on demand for a branch that has the workflow
+  (`gh workflow run integration.yml --ref <branch>`).
+- Tier 2: native sessions (FLOW-09) on the machines in the `workflow`
+  branch's `hosts.yaml`.
 
 **Caveat, baked into the rule:** scoping tests to touched paths is where tiering can
 quietly fail. A change that looks container-only can break VZ through a shared

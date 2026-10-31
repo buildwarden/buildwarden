@@ -9,7 +9,22 @@ import (
 
 // PhaseNames are the FLOW-03 phases, by number.
 var PhaseNames = []string{"branch-setup", "design", "plan", "implement", "review", "guide",
-	"publish", "sign-off", "archive"}
+	"publish", "merge", "close"}
+
+// processPhaseNames are a process item's phases, numbered from 1.
+var processPhaseNames = []string{"", "design", "implement", "merge", "close"}
+
+// PhaseName names the feature's current phase.
+func PhaseName(f *Feature) string {
+	names := PhaseNames
+	if f.Round == "process" {
+		names = processPhaseNames
+	}
+	if f.Phase < 0 || f.Phase >= len(names) {
+		return "?"
+	}
+	return names[f.Phase]
+}
 
 type template struct {
 	name     string
@@ -20,59 +35,92 @@ type template struct {
 // templates are the steps each phase starts with, per round. Design adds
 // others (answer-<question>, validate-<host>) as it finds them.
 var templates = map[string][][]template{
-	"parallel": {
+	"feature": {
 		{{"branch-setup", "cloud", nil}},
 		{{"design", "cloud", nil}},
-		{{"plan", "cloud", nil}},
+		// The design review is seeded unless Design recorded a valid skip
+		// (FLOW-19); see seeded.
+		{{"plan", "cloud", nil}, {"design-review", "human", []string{"plan"}}},
 		{{"implement", "cloud", nil}},
 		{{"review", "cloud", nil}},
 		{{"guide", "cloud", nil}},
-		{{"publish", "cloud", nil}},
+		// merge-main waits for the PR slot (FLOW-05); open-pr archives the
+		// design on the branch and opens the PR (FLOW-08, FLOW-12).
+		{{"merge-main", "cloud", nil}, {"consolidate", "cloud", []string{"merge-main"}},
+			{"open-pr", "cloud", []string{"consolidate"}}},
+		// Completes by its check once a human has merged the PR (FLOW-08).
+		{{"merge", "cloud", nil}},
+		{{"close", "cloud", nil}},
 	},
-	"merge": {
-		{{"merge-main", "cloud", nil}},
-		{{"consolidate", "cloud", nil}},
-		{{"plan", "cloud", nil}},
+	// A process item changes the rules the loops run under. Its design is
+	// the human's (the design review, FLOW-19); after that the loop works on
+	// the branch, and the human's merge is the sign-off (FLOW-14).
+	"process": {
+		nil,
+		{{"design", "human", nil}},
 		{{"implement", "cloud", nil}},
-		{{"review", "cloud", nil}},
-		{{"guide", "cloud", nil}},
-		{{"confirm-pr", "human", nil}, {"publish", "cloud", []string{"confirm-pr"}}},
-		{{"sign-off", "human", nil}},
-		{{"archive", "cloud", nil}},
+		{{"merge", "cloud", nil}},
+		{{"close", "cloud", nil}},
 	},
 }
 
+// seeded reports whether the template step belongs in the feature's phase:
+// every step but a design review that Design recorded as skipped.
+func seeded(f *Feature, t template) bool {
+	return t.name != "design-review" || f.DesignReview != "skip"
+}
+
+// roundLetters prefix step ids: f1-design, f6-open-pr, x3-merge. The
+// parallel and merge rounds' p and m ids remain only in finished items'
+// history (wf migrate moved the rest).
+var roundLetters = map[string]string{"feature": "f", "process": "x", "parallel": "p",
+	"merge": "m"}
+
+func letterRound(l string) string {
+	for r, x := range roundLetters {
+		if x == l {
+			return r
+		}
+	}
+	return ""
+}
+
 var (
-	stepIDRe = regexp.MustCompile(`^([pm])([0-8])-([a-z0-9-]+)$`)
+	stepIDRe = regexp.MustCompile(`^([fxpm])([0-8])-([a-z0-9-]+)$`)
 	retryRe  = regexp.MustCompile(`-r[0-9]+$`)
 )
 
 // StepID builds a step id: round letter, phase digit, name.
 func StepID(round string, phase int, name string) string {
-	return fmt.Sprintf("%c%d-%s", round[0], phase, name)
+	return fmt.Sprintf("%s%d-%s", roundLetters[round], phase, name)
 }
 
-// IsGate reports whether the step is its phase's last template step, whose
-// completion the FLOW-03 done-when check must confirm.
-func IsGate(st *Step) bool {
+// IsGate reports whether the step is its phase's last seeded template step,
+// whose completion the FLOW-03 done-when check must confirm.
+func IsGate(f *Feature, st *Step) bool {
 	m := stepIDRe.FindStringSubmatch(st.ID)
 	if m == nil {
 		return false
 	}
-	round := map[string]string{"p": "parallel", "m": "merge"}[m[1]]
+	round := letterRound(m[1])
 	phase := int(m[2][0] - '0')
 	ts := templates[round]
-	if phase >= len(ts) {
+	if phase >= len(ts) || len(ts[phase]) == 0 {
 		return false
 	}
-	last := ts[phase][len(ts[phase])-1]
-	return last.name == retryRe.ReplaceAllString(m[3], "")
+	var last string
+	for _, t := range ts[phase] {
+		if seeded(f, t) {
+			last = t.name
+		}
+	}
+	return last == retryRe.ReplaceAllString(m[3], "")
 }
 
 // Seed adds the template steps for the feature's current round and phase.
 func Seed(f *Feature) {
 	ts := templates[f.Round]
-	if f.Phase >= len(ts) {
+	if f.Phase >= len(ts) || len(ts[f.Phase]) == 0 {
 		return
 	}
 	// A phase entered again (FLOW-06) gets fresh ids: <id>-r2, <id>-r3, ...
@@ -81,6 +129,9 @@ func Seed(f *Feature) {
 		suffix = fmt.Sprintf("-r%d", n)
 	}
 	for _, t := range ts[f.Phase] {
+		if !seeded(f, t) {
+			continue
+		}
 		st := Step{ID: StepID(f.Round, f.Phase, t.name) + suffix, Phase: f.Phase,
 			Affinity: t.affinity, Status: "pending"}
 		for _, n := range t.needs {
@@ -95,10 +146,16 @@ func (f *Feature) hasStep(id string) bool {
 	return err == nil
 }
 
-// Back returns the feature to Design with the finding recorded (FLOW-06).
-// Pending steps of later phases are dropped. After the second return the
-// redesign waits on a human step instead of looping again.
-func Back(f *Feature, by string, now time.Time, finding string) {
+// Back returns the feature to an earlier phase with the finding recorded:
+// Design (FLOW-06), or Implement when Publish's consolidation finds work the
+// plan already covers (FLOW-10). Pending steps of later phases are dropped and
+// the phase is seeded again with fresh ids, so a return to Design also seeds
+// a fresh design review after Plan (FLOW-19). After the second return to
+// Design the redesign waits on a human step instead of looping again.
+func Back(f *Feature, by string, now time.Time, finding string, to int) {
+	if to != 3 {
+		to = 1
+	}
 	returns := 0
 	for _, e := range f.History {
 		if strings.HasPrefix(e.Event, "back to design") {
@@ -107,12 +164,17 @@ func Back(f *Feature, by string, now time.Time, finding string) {
 	}
 	kept := f.Steps[:0]
 	for _, st := range f.Steps {
-		if st.Status == "done" || st.Phase <= 1 {
+		if st.Status == "done" || st.Phase < to {
 			kept = append(kept, st)
 		}
 	}
 	f.Steps = kept
-	f.Phase = 1
+	f.Phase = to
+	if to == 3 {
+		f.Log(now, by, "back to implement: %s", finding)
+		Seed(f)
+		return
+	}
 	f.Log(now, by, "back to design: %s", finding)
 	Seed(f)
 	if returns >= 2 {
@@ -126,9 +188,8 @@ func Back(f *Feature, by string, now time.Time, finding string) {
 }
 
 // Complete marks a step done and, once every step of the current phase is
-// done, moves the feature on: the next phase, the merge queue after the
-// parallel round's Publish, the merge round when it is taken, or done after
-// Archive. The caller has already run the done-when check for gate steps.
+// done, moves the feature on: the next phase, or done after Close. The caller
+// has already run the done-when check for gate steps.
 func Complete(f *Feature, st *Step, by string, now time.Time) {
 	st.Status = "done"
 	st.Lease = Lease{}
@@ -139,26 +200,15 @@ func Complete(f *Feature, st *Step, by string, now time.Time) {
 			return
 		}
 	}
-	switch {
-	case st.ID == StepID("parallel", 6, "merge-round"):
-		f.Round, f.Phase = "merge", 0
-		f.Log(now, by, "entered the merge round")
-		Seed(f)
-	case f.Round == "parallel" && f.Phase == 6:
-		f.Steps = append(f.Steps, Step{
-			ID:    StepID("parallel", 6, "merge-round"),
-			Phase: 6, Affinity: "cloud", Status: "pending",
-			Note: "Waits for the serial merge queue (FLOW-05).",
-		})
-		f.Log(now, by, "parallel round done; waiting on the merge queue")
-	case f.Round == "merge" && f.Phase == 8:
+	last := len(templates[f.Round]) - 1
+	if f.Phase >= last {
 		f.Status = "done"
-		f.Log(now, by, "archived; feature done")
-	default:
-		f.Phase++
-		f.Log(now, by, "entered phase %d (%s)", f.Phase, PhaseNames[f.Phase])
-		Seed(f)
+		f.Log(now, by, "closed; feature done")
+		return
 	}
+	f.Phase++
+	f.Log(now, by, "entered phase %d (%s)", f.Phase, PhaseName(f))
+	Seed(f)
 }
 
 func stepRound(id string) string {
@@ -166,5 +216,5 @@ func stepRound(id string) string {
 	if m == nil {
 		return ""
 	}
-	return map[string]string{"p": "parallel", "m": "merge"}[m[1]]
+	return letterRound(m[1])
 }

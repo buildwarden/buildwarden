@@ -68,11 +68,15 @@ func (d *Driver) StartBuild(
 		return nil, fmt.Errorf("hyperv build: %w", err)
 	}
 
-	// Same build-script precedence as every VM driver: --script, then
-	// build.ps1/build.sh in the context, then a no-op.
+	// Same build-script precedence as every VM driver: --script, then (Linux
+	// guests) the translated Dockerfile, then build.ps1/build.sh in the
+	// context, then a no-op.
 	buildScript, err := driver.StageBuildScript(req, workDir)
 	if err != nil {
 		return nil, fmt.Errorf("hyperv build: %w", err)
+	}
+	if err := driver.RecordInputs(req.OutputDir, req, buildScript); err != nil {
+		return nil, fmt.Errorf("hyperv build: recording inputs: %w", err)
 	}
 	env, err := describeBuild(LayerCache(), chain, isWindows, generation,
 		buildSeedDir(workDir), buildScript)

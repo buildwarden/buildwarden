@@ -61,8 +61,8 @@ explicit human sign-off (acknowledge, or dismiss with a recorded reason) before 
 release proceeds; SHOULD findings are informational. The agent never auto-blocks and
 never auto-approves trunk.
 
-Per PR, the sign-off is the human approval step of the development process
-(FLOW-08). For releases, the gate needs a concrete home (a required PR check a human
+Per PR, the sign-off is the human's merge (FLOW-08): the PR body lists the
+MUST findings, and a dismissal is recorded as a PR comment. For releases, the gate needs a concrete home (a required PR check a human
 toggles, a release-checklist item, or a branch-protection rule), tied to how
 releases are cut today (GoReleaser on a tag push). That wiring is decided at
 implementation time.

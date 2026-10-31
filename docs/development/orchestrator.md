@@ -40,6 +40,10 @@ to a Containerfile; it covers any input form. If the orchestrator alters an inpu
 both the original and the edited form are recorded to the output directory under
 `inputs/`.
 
+A driver that alters an input records it when it stages the input, before the
+build starts, through the shared `driver.RecordInputs`. A failed build therefore
+keeps its inputs, and a failure to record fails the build before anything runs.
+
 The `inputs/` namespace must not collide with the ledger filename or the relay's
 recorded-artifact layout in the output directory (currently `ledger.zst`,
 `ca.cert.pem.zst`, `build-output.log`, `relay.log`, `artifacts/`, `captures/`,

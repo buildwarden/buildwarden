@@ -12,7 +12,12 @@ intake only frames the item. Rules: FLOW-01, FLOW-05, FLOW-12, FLOW-13.
 2. Search `docs/design/` front-matter (`concepts`, `drivers`, `seams`) and the
    queue for overlap (FLOW-01, FLOW-12). If an item already covers the idea,
    say so and stop, or extend that item with Jeff's agreement.
-3. Agree with Jeff: a kebab-case slug, a one-line title, the priority (show
+3. Agree with Jeff on the kind (FLOW-03): `process` when the change is to
+   the rules the loops run under (`docs/development/`, `.claude/`,
+   `tools/workflow/`), otherwise a feature. A process item also lists the
+   workers it holds while in progress (`cloud`, `host:*`, `host:<name>`), or
+   none when it disrupts no running work (FLOW-05). Then agree on
+   a kebab-case slug, a one-line title, the priority (show
    `dist/wf status`; a new item never jumps the top-priority feature in
    progress without his say, FLOW-05), and an estimate in steps and runs.
    Size guide: small 7 to 9 steps, one run; medium 12 to 18; large 25 or more.
@@ -22,7 +27,7 @@ intake only frames the item. Rules: FLOW-01, FLOW-05, FLOW-12, FLOW-13.
    ```bash
    dist/wf new -state .dev/workflow -worker human/jeff -feature <slug> \
      -title "<title>" -priority <n> -estimate-steps <n> -estimate-runs <n> \
-     -source "<where it came from>"
+     -source "<where it came from>" [-kind process -holds cloud,host:*]
    dist/wf validate -state .dev/workflow
    ```
 

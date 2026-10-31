@@ -13,3 +13,4 @@ out.log
 /warden-io
 .claude/settings.local.json
 .claude/worktrees/
+.scratch/

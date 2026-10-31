@@ -170,7 +170,7 @@ needs an image re-prepare to take effect.
 A change that alters the model above (the diagram, an invariant, the per-driver
 mapping beyond correcting it to match the code, or the deviation register by
 adding an entry) is a model change. A model change needs a design document with a
-**Bootstrap comparison** section, and the human sign-off step (FLOW-08) must
+**Bootstrap comparison** section, and the design review (FLOW-19) must
 explicitly accept that comparison before implementation starts. The comparison
 contains:
 

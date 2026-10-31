@@ -146,3 +146,60 @@ func TestStageBuildScriptPrecedence(t *testing.T) {
 		t.Fatalf("windows no-op: %q", got)
 	}
 }
+
+func TestRecordInputsOnlyWhenTranslated(t *testing.T) {
+	ctx := t.TempDir()
+	_ = os.WriteFile(filepath.Join(ctx, "build.sh"), []byte("from-context"), 0o755)
+	explicit := filepath.Join(t.TempDir(), "x.sh")
+	_ = os.WriteFile(explicit, []byte("explicit"), 0o755)
+	df := filepath.Join(t.TempDir(), "Dockerfile")
+	submitted := "FROM alpine\nRUN echo translated\n"
+	_ = os.WriteFile(df, []byte(submitted), 0o644)
+
+	for _, tc := range []struct {
+		name     string
+		req      BuildRequest
+		recorded bool
+	}{
+		{"translated", BuildRequest{ContextDir: ctx, Containerfile: df}, true},
+		{"explicit script",
+			BuildRequest{Script: explicit, ContextDir: ctx, Containerfile: df}, false},
+		{"context script", BuildRequest{ContextDir: ctx}, false},
+		{"windows guest",
+			BuildRequest{ContextDir: ctx, GuestOS: "windows", Containerfile: df},
+			false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			out := t.TempDir()
+			script, err := StageBuildScript(&tc.req, t.TempDir())
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err := RecordInputs(out, &tc.req, script); err != nil {
+				t.Fatal(err)
+			}
+			got, err := os.ReadFile(filepath.Join(out, "inputs", "Containerfile"))
+			if !tc.recorded {
+				if _, err := os.Stat(filepath.Join(out, "inputs")); err == nil {
+					t.Fatal("inputs/ written for an input run as given")
+				}
+				return
+			}
+			if err != nil || string(got) != submitted {
+				t.Fatalf("inputs/Containerfile = %q, %v; want the submitted file",
+					got, err)
+			}
+			stale := filepath.Join(out, "inputs", "Dockerfile")
+			if _, err := os.Stat(stale); err == nil {
+				t.Fatal("inputs/Dockerfile written; want inputs/Containerfile")
+			}
+			ran, _ := os.ReadFile(script)
+			rec, err := os.ReadFile(filepath.Join(out, "inputs", "build.sh"))
+			if err != nil || string(rec) != string(ran) ||
+				!strings.Contains(string(rec), "translated") {
+				t.Fatalf("inputs/build.sh = %q, %v; want the translation %q",
+					rec, err, ran)
+			}
+		})
+	}
+}

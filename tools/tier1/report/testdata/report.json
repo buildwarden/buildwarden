@@ -1,0 +1,47 @@
+{
+  "base": "0123456789abcdef",
+  "head": "fedcba9876543210",
+  "findings": [
+    {
+      "rule": "EXEC-05",
+      "severity": "SHOULD",
+      "file": "cmd/warden-io/a.go",
+      "line": 3,
+      "check": "large-literal",
+      "message": "string literal of 5000 bytes"
+    },
+    {
+      "rule": "RELAY-07",
+      "severity": "MUST",
+      "file": "relay/x.go",
+      "line": 9,
+      "check": "relay-diskless",
+      "message": "os.Create in relay/"
+    }
+  ],
+  "hints": [
+    {
+      "rule": "GLOBAL-04",
+      "severity": "hint",
+      "file": "relay",
+      "line": 0,
+      "check": "tests-with-change",
+      "message": "non-test code changed, no test changed"
+    }
+  ],
+  "suppressed": [
+    {
+      "rule": "UX-01",
+      "path": "cmd/warden/*",
+      "reason": "docs follow",
+      "commit": "aaaaaaaaaaaaaaaa"
+    }
+  ],
+  "counts": {
+    "MUST": 1,
+    "MUST-review": 0,
+    "SHOULD": 1,
+    "hint": 1,
+    "suppressed": 1
+  }
+}

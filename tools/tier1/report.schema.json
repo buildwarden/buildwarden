@@ -1,0 +1,61 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://github.com/buildwarden/buildwarden/tools/tier1/report.schema.json",
+  "title": "tier1 report",
+  "description": "The output of tier1 -json (LINT-05). Keyed by rule ID and file:line; stable across reruns of the same diff.",
+  "type": "object",
+  "additionalProperties": false,
+  "required": ["base", "head", "findings", "hints", "suppressed", "counts"],
+  "properties": {
+    "base": {"type": "string", "description": "The resolved merge base the diff starts from."},
+    "head": {"type": "string", "description": "The commit checked."},
+    "findings": {"type": "array", "items": {"$ref": "#/$defs/finding"}},
+    "hints": {
+      "type": "array",
+      "description": "Mechanical signals that never fail, for tier 2 to judge.",
+      "items": {"$ref": "#/$defs/finding"}
+    },
+    "suppressed": {
+      "type": "array",
+      "description": "Tier1-Allow trailers that cleared a finding.",
+      "items": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["rule", "path", "reason", "commit"],
+        "properties": {
+          "rule": {"type": "string"},
+          "path": {"type": "string", "description": "The trailer's path glob."},
+          "reason": {"type": "string"},
+          "commit": {"type": "string"}
+        }
+      }
+    },
+    "counts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["MUST", "MUST-review", "SHOULD", "hint", "suppressed"],
+      "properties": {
+        "MUST": {"type": "integer"},
+        "MUST-review": {"type": "integer"},
+        "SHOULD": {"type": "integer"},
+        "hint": {"type": "integer"},
+        "suppressed": {"type": "integer"}
+      }
+    }
+  },
+  "$defs": {
+    "finding": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["rule", "severity", "file", "line", "check", "message"],
+      "properties": {
+        "rule": {"type": "string", "description": "A rule ID such as RELAY-01."},
+        "severity": {"enum": ["MUST", "MUST-review", "SHOULD", "hint"]},
+        "file": {"type": "string", "description": "A /-separated path from the repo root."},
+        "line": {"type": "integer", "description": "0 for a file-level finding."},
+        "check": {"type": "string", "description": "The tier-1 check ID."},
+        "message": {"type": "string"}
+      }
+    }
+  }
+}

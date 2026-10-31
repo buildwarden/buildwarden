@@ -1,0 +1,2 @@
+# Golden files and fixtures compare byte for byte on every platform.
+testdata/** text eol=lf

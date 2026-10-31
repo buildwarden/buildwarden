@@ -1,0 +1,46 @@
+# Tier 1's golangci-lint config: the rules a stock linter already expresses.
+# tier1 runs it from the repo root with --new-from-merge-base, so only lines
+# the diff touched are checked (LINT-04). The root .golangci.yml is separate
+# and whole-repo.
+version: "2"
+
+run:
+  # Paths below are relative to the root module, wherever this file is.
+  relative-path-mode: gomod
+
+linters:
+  default: none
+  enable:
+    - revive     # GLOBAL-01: exported identifiers carry doc comments
+    - errorlint  # GLOBAL-03: wrap with %w
+    - forbidigo  # GLOBAL-03: no panic in library paths
+  settings:
+    revive:
+      rules:
+        - name: exported
+          arguments: ["disableStutteringCheck"]
+    errorlint:
+      errorf: true
+      asserts: false
+      comparison: false
+    forbidigo:
+      forbid:
+        - pattern: '^panic$'
+          msg: "library paths do not panic for ordinary failures; return an error (GLOBAL-03)"
+  exclusions:
+    rules:
+      - path: '_test\.go$'
+        linters: [forbidigo]
+      - path: '^cmd/'
+        linters: [forbidigo]
+
+formatters:
+  enable:
+    - gofmt      # GLOBAL-02: gofmt -s on touched lines
+  settings:
+    gofmt:
+      simplify: true
+
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0

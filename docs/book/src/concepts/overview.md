@@ -41,6 +41,7 @@ differ per driver.
 ```
 StartBuild(req):
     script := translate(req.Containerfile, req.ContextDir)   # see Translator
+    if script was translated: keep both under <output>/inputs/  # ORCH-02; not vz
     session := StartSession(output dir, context, script, guest OS)
     relay := start the relay, unconfigured                 # per driver
     session.ClaimRelay(relay)                              # tunnel + config
@@ -219,6 +220,7 @@ relay --mode=container|vm|host:
         http://artifacts/
             /ca.pem, /bootstrap, /build-script -> serve (pulled from the collector;
                                                   bootstrap and script recorded)
+            /ca.crl    -> the CA's empty CRL, which every leaf names (not recorded)
             /heartbeat -> forward to the collector
             /exit      -> flush the ledger, POST /v1/complete
             POST /<name> -> stream the artifact to the collector, recorded

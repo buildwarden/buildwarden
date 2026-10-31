@@ -41,6 +41,8 @@ func TestWindowsPrepareArgsHaveNoNetwork(t *testing.T) {
 		"file=/l.qcow2,format=qcow2",
 		"if=pflash,format=raw,file=/v.fd",
 		"if=none,id=seed,format=raw,file=/s.img",
+		// OOBE reads unattend.xml from removable media only.
+		"usb-storage,bus=xhci.0,drive=seed,removable=on",
 	} {
 		if !strings.Contains(args, want) {
 			t.Errorf("prepare args missing %q:\n%s", want, args)

@@ -108,8 +108,19 @@ buildwarden/
 │   │   └── uv-build-test.go      # End-to-end build validation
 │   ├── win-image-prep/       # Windows image preparation notes/tools
 │   │   └── README.md
+│   ├── tier1/                # Tier-1 static checks, run by make lint (own Go module; LINT-02)
+│   │   ├── cmd/tier1/            # Entry point: flags, stages, exit codes
+│   │   ├── diff/                 # Base, changed paths and lines, Tier1-Allow trailers
+│   │   ├── rules/                # Rule index from docs/development/, rules.yaml self-check
+│   │   ├── coupling/             # Path-set checks; design front-matter (FLOW-02)
+│   │   ├── surface/              # Cobra flags and toml keys at base and HEAD
+│   │   ├── analyzers/            # go/analysis passes for the relay and the executor
+│   │   ├── golangci/             # Runs golangci.yml on changed lines, maps issues to rules
+│   │   ├── rules.yaml            # Every automated rule: check, owner or follow-up
+│   │   └── report.schema.json    # The -json output
 │   └── workflow/             # Feature-loop tooling (own Go module; FLOW-03, FLOW-18)
-│       ├── cmd/wf/               # Queue tool: next step, leases, done-when checks
+│       ├── cmd/wf/               # Queue tool: next step, leases, done-when checks, native gate
+│       ├── native/               # Scheduled native sessions: wrapper, installers, permissions
 │       └── flow18-check.sh       # Sessions stay out of the public repo
 ├── docs/
 │   ├── book/               # mdBook documentation (guide, concepts, contributing)

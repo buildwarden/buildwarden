@@ -1,3 +1,25 @@
+---
+# Retrofitted (FLOW-12) onto a pre-standard proposal; existing lines unchanged, security note appended.
+feature: remote-execution-and-measured-hermeticity
+status: draft
+round: parallel
+drivers: [container, qemu, vz, hyperv]  # ledger/ and relay changes reach every driver
+seams: [ledger-format]
+surfaces: [cli, config, output]
+security_boundary: env-relay            # per-action relay ledgers and cache provenance; see "Security note (retrofit)"
+alters_relationships: true              # BuildWarden as an RE API backend; ledgers composed from cached results
+design_review: required
+native_validation:
+  - {host: container-any, blocking: false, reason: "regression: ledger/ and relay changes reach every driver"}
+  - {host: qemu-any, blocking: false, reason: "regression: ledger/ and relay changes reach every driver"}
+  - {host: macos-vz, blocking: false, reason: "regression: ledger/ and relay changes reach every driver"}
+  - {host: windows-hyperv, blocking: false, reason: "regression: ledger/ and relay changes reach every driver"}
+tier2_gaps: []
+rules: [RELAY-01, RELAY-02, RELAY-03, RELAY-05, GLOBAL-05, GLOBAL-06, GLOBAL-08, BOOT-02, TEST-08]
+concepts: [remote-execution, re-api, measured-hermeticity, action-cache, provenance, environment-record, cache-invalidation, bazel]
+related: [ledger-environment-types.md]
+---
+
 # Remote Execution and Measured Hermeticity
 
 ## Overview
@@ -276,3 +298,39 @@ By pointing any RE API client at this backend, builds immediately gain:
 - **Audit trail** — every cached result traceable to its execution environment, inputs, and (absence of) network activity
 
 None of this requires changes to build rules, action definitions, or client configuration beyond pointing `--remote_executor` at the BuildWarden backend.
+
+## Security note (retrofit)
+
+Added when front-matter was retrofitted (FLOW-02, FLOW-12). It restates what
+this proposal's text implies for GLOBAL-06; it is not a security design. The
+first design that builds on this proposal writes its own note and settles the
+open points below.
+
+- **Boundary:** env-relay, and the relay itself. A parent build's ledger
+  incorporates environment and network records from cached sub-ledgers that
+  its own relay did not observe ("Cache hit behavior"), and each worker relay
+  writes an environment record as the first ledger entry. Both change what a
+  signed ledger attests, which GLOBAL-06 makes high-severity. The proposal
+  also implies two further boundary changes. Inputs are staged from
+  content-addressed storage into the sandbox outside the relay ("Action
+  execution lifecycle", step 4), which BOOT-02 does not allow today; only the
+  action's cache key (`input_root_digest`) records them. And the RE API
+  services (Execute, ContentAddressableStorage, ActionCache) are a new
+  network-facing surface whose contents feed parent ledgers.
+- **How the posture changes:** a parent ledger's claims now rest on the action
+  cache and on other relays' signatures, as well as on its own observation. A
+  forged, tampered or replayed cache entry (`ledger_digest`,
+  `environment_digest`, `hermetic`) would put false provenance into a validly
+  signed parent ledger. Open points: verify each sub-ledger's signature chain
+  and the worker relay's key before incorporating it; recompute `hermetic`
+  from the verified sub-ledger, never from the stored flag; mark incorporated
+  records as incorporated rather than observed; keep one fresh relay per
+  action (RELAY-03), as "Worker model" already requires.
+- **What TEST-08 should exercise:** a sub-ledger with a broken signature, a
+  wrong `ledger_digest` or an unknown signing key is rejected, not
+  incorporated; a cache entry whose stored `hermetic` disagrees with its
+  ledger; deduplication by hash block cannot hide a record whose content
+  differs; an action marked `requires-network` reaches the network only
+  through a relay (its worker's, or the parent build's under `no-remote`);
+  CAS blobs that differ from their digests; an unauthenticated Execute or
+  ActionCache write.
