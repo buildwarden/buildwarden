@@ -47,13 +47,6 @@ func TestCouplingChecks(t *testing.T) {
 			"docs/design/f.md":              d(nil, "BOOT-01"),
 			"docs/development/bootstrap.md": "m\n"},
 			(*Checker).BootstrapSurface, []string{"no design in the diff cites"}},
-		{"schema without spec", map[string]string{"schemas/v1/a.json": "{}\n"},
-			(*Checker).SchemaDoc, []string{"schemas/v1/a.json changed without"}},
-		{"spec without schema", map[string]string{
-			"docs/book/src/design/ledger-spec.md": "s\n"},
-			(*Checker).SchemaDoc, []string{"with nothing under schemas/"}},
-		{"schema with spec", map[string]string{"schemas/v1/a.json": "{}\n",
-			"docs/book/src/design/ledger-spec.md": "s\n"}, (*Checker).SchemaDoc, nil},
 		{"test changed with code", map[string]string{"relay/x.go": pkg,
 			"relay/x_test.go": pkg}, (*Checker).TestsWithChange, nil},
 		{"code without test", map[string]string{"relay/x.go": pkg, "relay/a/y.go": pkg,
@@ -125,5 +118,99 @@ func TestSeamContract(t *testing.T) {
 	got := c.SeamContract()
 	if len(got) != 1 || got[0].Rule != "GLOBAL-08" || got[0].File != "relaycfg/x.go" {
 		t.Errorf("seam change without its contract: %+v", got)
+	}
+}
+
+// specsBase is a well-formed specs/ tree: the index, the conformance test,
+// a prose-only ledger spec and one schema with its document.
+var specsBase = map[string]string{
+	"docs/design/TEMPLATE.md":         tmpl,
+	"specs/README.md":                 "index\n",
+	"specs/specs_test.go":             "package specs_test\n",
+	"specs/build-ledger/v1.md":        "wire\n",
+	"specs/metadata-a/v1.md":          "a\n",
+	"specs/metadata-a/v1.schema.json": "{}\n",
+	"schemas/v1/b.json":               "{}\n",
+}
+
+// specsChecker commits change, with msg as the commit message, on a branch
+// off a repo holding specsBase.
+func specsChecker(t *testing.T, msg string, change map[string]string) *Checker {
+	t.Helper()
+	r := gittest.New(t, specsBase)
+	r.Commit(msg, change)
+	dd, err := diff.Load(r.Dir, "origin/main")
+	if err != nil {
+		t.Fatal(err)
+	}
+	cfg, err := rules.ParseConfig(tier1.RulesYAML)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return &Checker{Diff: dd, Cfg: cfg, Index: &rules.Index{}, Designs: LoadDesigns(dd, nil)}
+}
+
+func TestSchemaDoc(t *testing.T) {
+	const (
+		md     = "specs/metadata-a/v1.md"
+		schema = "specs/metadata-a/v1.schema.json"
+	)
+	cases := []struct {
+		name   string
+		change map[string]string
+		want   []string // a substring of each finding's message, in order
+	}{
+		{"schema without its document", map[string]string{schema: `{"a":1}` + "\n"},
+			[]string{schema + " changed without " + md}},
+		{"document without its schema", map[string]string{md: "a, fixed\n"},
+			[]string{md + " changed without " + schema}},
+		{"both changed", map[string]string{schema: `{"a":1}` + "\n", md: "a, fixed\n"},
+			nil},
+		{"ledger spec alone", map[string]string{"specs/build-ledger/v1.md": "wire 2\n"},
+			nil},
+		{"index and test alone", map[string]string{"specs/README.md": "index 2\n",
+			"specs/specs_test.go": "package specs_test\n\n// x\n"}, nil},
+		{"schema moved in with its document", map[string]string{"schemas/v1/b.json": "",
+			"specs/metadata-b/v1.schema.json": "{}\n",
+			"specs/metadata-b/v1.md":          "b\n"},
+			nil},
+		{"new major with no document", map[string]string{
+			"specs/metadata-a/v2.schema.json": "{}\n"},
+			[]string{"changed without specs/metadata-a/v2.md",
+				"v2.schema.json has no specs/metadata-a/v2.md beside it"}},
+		{"schema in a prose-only directory", map[string]string{
+			"specs/build-ledger/v1.schema.json": "{}\n"},
+			[]string{"prose-only specs/build-ledger/"}},
+		{"stray names", map[string]string{"specs/metadata-a/notes.md": "n\n",
+			"specs/extra.md": "e\n", "specs/metadata-a/x/v1.md": "x\n"},
+			[]string{"specs/extra.md is not", "specs/metadata-a/notes.md is not",
+				"specs/metadata-a/x/v1.md is not"}},
+	}
+	for _, tc := range cases {
+		got := specsChecker(t, "change", tc.change).SchemaDoc()
+		if len(got) != len(tc.want) {
+			t.Errorf("%s: %d findings, want %d: %+v",
+				tc.name, len(got), len(tc.want), got)
+			continue
+		}
+		for i, w := range tc.want {
+			if !strings.Contains(got[i].Message, w) || got[i].Rule != "RELAY-05" ||
+				got[i].Severity != report.Must {
+				t.Errorf("%s: %+v, want a RELAY-05 MUST containing %q",
+					tc.name, got[i], w)
+			}
+		}
+	}
+}
+
+func TestSchemaDocAllowed(t *testing.T) {
+	c := specsChecker(t, "fix a typo\n\n"+
+		"Tier1-Allow: RELAY-05 specs/metadata-a/*: prose-only typo fix",
+		map[string]string{"specs/metadata-a/v1.md": "a, fixed\n"})
+	r := &report.Report{}
+	r.Add(c.SchemaDoc()...)
+	c.Diff.Suppress(r)
+	if len(r.Findings) != 0 || len(r.Suppressed) != 1 {
+		t.Errorf("findings %+v, suppressed %+v", r.Findings, r.Suppressed)
 	}
 }

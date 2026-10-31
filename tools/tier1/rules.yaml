@@ -105,9 +105,11 @@ bootstrap:
     - "driver/hyperv/winseed*.go"
     - driver/vz/image.go
 
-# RELAY-05: each machine schema and its document change together.
+# RELAY-05: under specs/, each <dir>/v<N>.schema.json has a v<N>.md beside
+# it, and the two change together. prose_only dirs hold documents only.
 schema_doc:
-  - {code: "schemas/", doc: docs/book/src/design/ledger-spec.md}
+  root: specs/
+  prose_only: [build-ledger]
 
 # GLOBAL-08, EXEC-04: versioned seams with a contract document. The relay's
 # claim and collector protocols and the executor's initialize contract have
