@@ -2,9 +2,9 @@ feature: relay05-specs-wording
 title: 'RELAY-05: environment-<type>/ family, $id policy, drop the migration note'
 priority: 13
 kind: process
-status: queued
+status: in_progress
 round: process
-phase: 1
+phase: 2
 design: docs/design/relay05-specs-wording.md
 branch: feat/relay05-specs-wording
 alters_relationships: null
@@ -13,7 +13,15 @@ steps:
   - id: x1-design
     phase: 1
     affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x2-implement
+    phase: 2
+    affinity: cloud
     status: pending
+    note: 'Wait until specs-migration has merged (design Decision 1), then merge main and edit RELAY-05.'
     lease:
       claimed_by: ""
       expires: null
@@ -23,9 +31,21 @@ budget:
     steps: 4
   spent:
     runs: 0
-    steps: 0
+    steps: 1
 questions: []
 history:
   - at: 2026-10-31T22:30:29Z
     by: human/jeff
     event: queued at priority 13 (intake)
+  - at: 2026-10-31T22:32:20Z
+    by: human/jeff
+    event: started (FLOW-05)
+  - at: 2026-10-31T22:32:20Z
+    by: human/jeff
+    event: claimed x1-design until 2026-11-01T00:32:20Z
+  - at: 2026-10-31T22:32:20Z
+    by: human/jeff
+    event: done x1-design
+  - at: 2026-10-31T22:32:20Z
+    by: human/jeff
+    event: entered phase 2 (implement)
