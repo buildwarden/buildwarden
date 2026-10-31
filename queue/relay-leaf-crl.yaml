@@ -28,8 +28,8 @@ steps:
     affinity: host:windows-hyperv
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: host:windows-hyperv/20261031T015530Z
+      expires: 2026-10-31T03:55:30.7550817Z
     note: Blocking (FLOW-09). A Windows guest build runs curl.exe over HTTPS with no --ssl-no-revoke and succeeds; inspect --verify-disks shows all signatures valid and no /ca.crl record (a1). Refresh the cached relay boot VHDX first (tools/relay-vm/hyperv/refresh-cache.sh).
   - id: p2-plan
     phase: 2
@@ -72,7 +72,7 @@ budget:
     steps: 12
   spent:
     runs: 1
-    steps: 6
+    steps: 7
 questions:
   - id: a1
     kind: assumed
@@ -164,3 +164,6 @@ history:
   - at: 2026-10-31T01:55:10Z
     by: cloud/20261031T013930Z
     event: entered phase 6 (publish)
+  - at: 2026-10-31T01:55:30Z
+    by: host:windows-hyperv/20261031T015530Z
+    event: claimed m6-validate-windows-hyperv until 2026-10-31T03:55:30Z
