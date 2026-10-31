@@ -47,8 +47,9 @@ warden-output/
 ├── captures/               # Captured payloads (only with --capture)
 ├── payloads/               # Content-addressed payload storage
 ├── relay.log               # Relay event log (container driver only)
-├── Dockerfile.submitted    # Original Dockerfile (container driver only)
-├── build.sh                # Translated build script (container driver only)
+├── inputs/                 # Only for a build from a Dockerfile (ORCH-02)
+│   ├── Containerfile       #   the Dockerfile you submitted, unchanged
+│   └── build.sh            #   the script it was translated to: what ran
 └── console.log             # Build container console (container driver only)
 ```
 

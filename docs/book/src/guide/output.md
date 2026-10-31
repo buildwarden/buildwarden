@@ -18,9 +18,23 @@ warden-output/
     └── <hash>
 ```
 
-The container driver also writes `Dockerfile.submitted`, `build.sh` (the
-translated build script) and `console.log`. The container and vz drivers,
-whose relay runs as a container or host process, also write `relay.log`.
+A build from a Dockerfile also gets `inputs/`, holding the Dockerfile you
+submitted, kept as `Containerfile`, and the `build.sh` it was translated to
+(ORCH-02):
+
+```
+warden-output/
+└── inputs/
+    ├── Containerfile       # Your Dockerfile, unchanged
+    └── build.sh            # The translated build script: what ran
+```
+
+The container driver always builds from a Dockerfile, so its output always has
+`inputs/`; the qemu and hyperv drivers write it for a Linux guest built from a
+Dockerfile. A `--script` or a `build.sh` / `build.ps1` from the context runs as
+given, so it is not copied. The container driver also writes `console.log`.
+The container and vz drivers, whose relay runs as a container or host process,
+also write `relay.log`.
 
 ## File Details
 
@@ -33,13 +47,15 @@ Inspect with:
 warden inspect warden-output
 ```
 
-### Dockerfile.submitted
+### inputs/Containerfile
 
-Your original Dockerfile, unchanged. Preserved for comparison with what actually ran. Written by the container driver only.
+Your original Dockerfile, unchanged. It is kept under the fixed name
+`Containerfile` whatever it was called (`Dockerfile`, `Containerfile`,
+`Dockerfile.simple`, ...). Preserved for comparison with what actually ran.
 
-### build.sh
+### inputs/build.sh
 
-The build script translated from your Containerfile: what the build environment
+The build script translated from your Dockerfile: what the build environment
 actually ran. Each `COPY` became one `warden-io fetch` per file, resolved
 against the build context on the host. The relay also recorded these exact
 bytes in the ledger when the guest fetched them.

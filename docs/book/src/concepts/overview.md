@@ -41,6 +41,7 @@ differ per driver.
 ```
 StartBuild(req):
     script := translate(req.Containerfile, req.ContextDir)   # see Translator
+    if script was translated: keep both under <output>/inputs/  # ORCH-02; not vz
     session := StartSession(output dir, context, script, guest OS)
     relay := start the relay, unconfigured                 # per driver
     session.ClaimRelay(relay)                              # tunnel + config
