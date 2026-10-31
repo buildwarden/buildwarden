@@ -145,7 +145,7 @@ steps:
   - id: m8-cleanup
     phase: 8
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -370,3 +370,6 @@ history:
   - at: 2026-10-31T02:12:35Z
     by: cloud/20261031T013930Z
     event: 'released m8-archive: design archived on feat/relay-leaf-crl-archive (763cdfd), not yet on main; waits on m8-cleanup (Jeff merges the archive PR)'
+  - at: 2026-10-31T02:24:58Z
+    by: human/jeff
+    event: done m8-cleanup
