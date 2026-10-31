@@ -8,6 +8,9 @@ phase: 2
 design: docs/design/wf-merged-counts-as-pushed.md
 branch: feat/wf-merged-counts-as-pushed
 alters_relationships: null
+pr:
+  number: 81
+  ci: pending
 source: 'queue-summary close, 2026-10-31: Jeff merged #78 before x2-implement was recorded; GitHub auto-deleted the branch and the x2 ''branch pushed'' check could not pass (advanced by hand). Again on tier1-static-checks (#79): merged before f6-open-pr was recorded, so ''current main merged'' failed because main contains the branch'
 steps:
   - id: x1-design
