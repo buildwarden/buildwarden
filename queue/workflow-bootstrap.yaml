@@ -40,7 +40,7 @@ steps:
   - id: m8-cleanup
     phase: 8
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -155,3 +155,6 @@ history:
   - at: 2026-10-29T09:58:43Z
     by: cloud/20261029T095640Z
     event: 'released m8-archive: design archived on feat/workflow-bootstrap-archive (fd1e386), not yet on main; waits on m8-cleanup (Jeff merges archive PR)'
+  - at: 2026-10-31T02:01:48Z
+    by: human/jeff
+    event: done m8-cleanup
