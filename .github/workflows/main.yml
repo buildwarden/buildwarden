@@ -12,6 +12,46 @@ permissions:
   contents: read
 
 jobs:
+  # Classifies a PR's changed paths so that docs-only PRs skip the Go jobs
+  # (design ci-path-filters). Fail-open: every output is true unless each path
+  # was positively classified, and on every non-PR event.
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      code: ${{ steps.classify.outputs.code }}
+      gotests: ${{ steps.classify.outputs.gotests }}
+      book: ${{ steps.classify.outputs.book }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
+          persist-credentials: false
+      - id: classify
+        env:
+          EVENT: ${{ github.event_name }}
+        # A PR checks out GitHub's merge commit, so HEAD^1..HEAD is the PR's
+        # change against the current base. --no-renames lists both sides of a
+        # rename, so moving code into docs/ still counts as code.
+        run: |
+          all() { printf 'code=true\ngotests=true\nbook=true\n' >> "$GITHUB_OUTPUT"; }
+          [ "$EVENT" = pull_request ] || { all; exit 0; }
+          files=$(git diff --name-only --no-renames HEAD^1 HEAD) && [ -n "$files" ] || { all; exit 0; }
+          code=false rules=false book=false
+          while IFS= read -r p; do
+            case "$p" in
+              # TestRealIndex (tools/tier1/rules) parses the real rule files.
+              docs/development/*) rules=true ;;
+              docs/book/*) book=true ;;
+              docs/*) ;;
+              */*) code=true ;;
+              *.md) ;;
+              *) code=true ;;
+            esac
+          done <<< "$files"
+          gotests=$code
+          if [ "$rules" = true ]; then gotests=true; fi
+          printf 'code=%s\ngotests=%s\nbook=%s\n' "$code" "$gotests" "$book" >> "$GITHUB_OUTPUT"
+
   lint:
     runs-on: ubuntu-latest
     steps:
