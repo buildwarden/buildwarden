@@ -21,4 +21,5 @@ findings never block on their own. Tier 2 is report-only (LINT-07).
    diffable, counts by severity, suppressions with reasons carried over from
    the previous report).
 5. Fixing findings is not your job. Return the counts; the tick sends MUST
-   findings back to `wf-implement` and records the rest for sign-off (FLOW-08).
+   findings back to `wf-implement` and records the rest for the PR body, where the human acknowledges them at merge
+   (FLOW-08).

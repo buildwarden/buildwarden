@@ -160,28 +160,51 @@ func (s *State) cloudHold(f *Feature, st *Step) string {
 			"escalate to human, FLOW-13)",
 			f.Budget.Spent.Steps, f.Budget.Estimate.Steps)
 	}
-	if f.alters() && st.Phase >= 2 && f.Round == "parallel" {
+	if f.alters() && st.Phase >= 2 && f.Phase < 6 {
 		if holder := s.altersHolder(f); holder != "" {
 			return fmt.Sprintf("the alters_relationships slot, held by %s (FLOW-05)",
 				holder)
 		}
 	}
-	if strings.HasSuffix(st.ID, "merge-round") {
-		for _, o := range s.Features {
-			if o != f && o.Status == "in_progress" && o.Round == "merge" {
-				return fmt.Sprintf("the merge queue, behind %s", o.Feature)
-			}
+	if base := retryRe.ReplaceAllString(st.ID, ""); base == StepID(f.Round, 6, "merge-main") {
+		if holder := s.prSlotHolder(f); holder != "" {
+			return fmt.Sprintf("the PR slot, held by %s (FLOW-05)", holder)
 		}
 	}
 	return ""
+}
+
+// prSlotHolder returns another in-progress feature past the start of
+// Publish, which holds the one open feature PR FLOW-05 allows.
+func (s *State) prSlotHolder(f *Feature) string {
+	for _, o := range s.Features {
+		if o == f || o.IsProcess() || o.Status != "in_progress" || o.Phase < 6 {
+			continue
+		}
+		if o.Phase > 6 || o.stepDone(6, "merge-main") {
+			return o.Feature
+		}
+	}
+	return ""
+}
+
+// stepDone reports whether a step of the given phase and template name is
+// done, in any of its -r<n> forms.
+func (f *Feature) stepDone(phase int, name string) bool {
+	for _, st := range f.Steps {
+		if st.Phase == phase && st.Status == "done" &&
+			retryRe.ReplaceAllString(st.ID, "") == StepID(f.Round, phase, name) {
+			return true
+		}
+	}
+	return false
 }
 
 // altersHolder returns another in-progress feature that alters relationships
 // and is past Design, which holds the one slot FLOW-05 allows.
 func (s *State) altersHolder(f *Feature) string {
 	for _, o := range s.Features {
-		if o != f && o.Status == "in_progress" && o.alters() && (o.Phase >= 2 ||
-			o.Round == "merge") {
+		if o != f && o.Status == "in_progress" && o.alters() && o.Phase >= 2 {
 			return o.Feature
 		}
 	}

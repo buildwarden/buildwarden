@@ -47,7 +47,7 @@ import (
 )
 
 const usage = "usage: wf " +
-	"validate|status|next|claim|release|check|done|answer|back|new|gate|budget [flags]"
+	"validate|status|next|claim|release|check|done|answer|back|new|gate|budget|migrate [flags]"
 
 // errIdle is gate's "nothing to do", exit status 3.
 var errIdle = errors.New("idle")
@@ -55,7 +55,7 @@ var errIdle = errors.New("idle")
 type opts struct {
 	state, repo, worker, feature, step, why, question, answer string
 	title, source, machine, stamp, kind, holds                string
-	priority, estSteps, estRuns, sweepDays                    int
+	priority, estSteps, estRuns, sweepDays, to                int
 	newRun, run, record, native                               bool
 	now                                                       time.Time
 }
@@ -83,7 +83,8 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.StringVar(&o.feature, "feature", "", "feature name")
 	fs.StringVar(&o.step, "step", "", "step id")
 	fs.BoolVar(&o.newRun, "new-run", false, "first claim of this feature in this run")
-	fs.StringVar(&o.why, "why", "", "reason for a release")
+	fs.StringVar(&o.why, "why", "", "reason for a release, or back's finding")
+	fs.IntVar(&o.to, "to", 1, "back: the phase to return to, 1 (Design) or 3 (Implement)")
 	fs.BoolVar(&o.run, "run", false, "run make lint / make test where a check needs them")
 	fs.StringVar(&o.question, "question", "", "question id")
 	fs.StringVar(&o.answer, "answer", "", "the human's answer")
@@ -109,7 +110,7 @@ func run(cmd string, args []string, now time.Time) error {
 	cmds := map[string]func(*queue.State, opts) error{
 		"validate": validate, "status": status, "next": next, "check": checkPhase,
 		"answer": answer, "back": back, "new": newFeature, "gate": gate,
-		"budget": budget,
+		"budget": budget, "migrate": migrate,
 	}
 	for _, c := range []string{"claim", "release", "done"} {
 		cmds[c] = func(s *queue.State, o opts) error { return stepCmd(c, s, o) }
@@ -219,7 +220,7 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 	case "release":
 		s.Release(f, st, o.worker, o.now, o.why)
 	case "done":
-		if queue.IsGate(st) && !runChecks(o, f) {
+		if queue.IsGate(f, st) && !runChecks(o, f) {
 			return fmt.Errorf("%s done-when not met; phase stays %d (FLOW-03)", st.ID,
 				f.Phase)
 		}
@@ -283,11 +284,34 @@ func back(s *queue.State, o opts) error {
 	if o.worker == "" || o.why == "" {
 		return fmt.Errorf("back needs -worker and -why (the finding, FLOW-06)")
 	}
-	queue.Back(f, o.worker, o.now, o.why)
+	if o.to != 1 && o.to != 3 {
+		return fmt.Errorf("back -to is 1 (Design) or 3 (Implement), not %d", o.to)
+	}
+	queue.Back(f, o.worker, o.now, o.why, o.to)
 	return s.Save(f)
 }
 
 // newFeature queues a feature (the workflow-intake entry point).
+// migrate moves every unfinished item onto the single feature round and the
+// new process phases, once, after workflow-streamline merges.
+func migrate(s *queue.State, o opts) error {
+	if o.worker == "" {
+		return fmt.Errorf("migrate needs -worker")
+	}
+	changed, err := s.Migrate(o.worker, o.now)
+	if err != nil {
+		return err
+	}
+	for _, f := range changed {
+		fmt.Printf("migrated\t%s\t%s/%d %s\n", f.Feature, f.Round, f.Phase,
+			queue.PhaseName(f))
+		if err := s.Save(f); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func newFeature(s *queue.State, o opts) error {
 	if o.feature == "" || o.title == "" || o.priority < 1 || o.estSteps < 1 {
 		return fmt.Errorf("new needs -feature, -title, -priority and -estimate-steps")
