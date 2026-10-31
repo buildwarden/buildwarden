@@ -150,7 +150,9 @@ gaps:
       responses to clients that send no Accept-Encoding hang (fixed in #67,
       merged c93ea05; the cached relay boot VHDX now follows origin/main via
       tools/relay-vm/hyperv/refresh-cache.sh, #69), and Windows curl.exe
-      rejects relay leaf certs with CRYPT_E_NO_REVOCATION_CHECK (open).
+      rejects relay leaf certs with CRYPT_E_NO_REVOCATION_CHECK (fixed on
+      feat/relay-leaf-crl, queue item relay-leaf-crl, validated 2026-10-30;
+      awaits its merge round).
   - id: container-inputs-linux-vm-guests
     host: qemu-any
     what: A qemu (and Hyper-V) Linux-guest build from a Dockerfile writes inputs/Dockerfile and inputs/build.sh end to end.
