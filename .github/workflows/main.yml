@@ -5,6 +5,8 @@ on:
     branches: [main]
   pull_request:
     branches: [main]
+    # labeled/unlabeled: adding or removing `no-design` reruns tier 1 (FLOW-01).
+    types: [opened, synchronize, reopened, labeled, unlabeled]
 
 permissions:
   contents: read
@@ -40,7 +42,10 @@ jobs:
       - name: tier1
         env:
           BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
-          FLAGS: ${{ contains(github.event.pull_request.labels.*.name, 'no-design') && '-no-design' || '' }}
+          # FLOW-01 is judged on the PR, where the no-design label lives. A push
+          # to main spans merged PRs that already passed it, and its payload
+          # carries no labels, so it is not judged again there.
+          FLAGS: ${{ (github.event_name == 'push' || contains(github.event.pull_request.labels.*.name, 'no-design')) && '-no-design' || '' }}
         run: |
           ./dist/tier1 -base "$BASE" -json $FLAGS > tier1.json || code=$?
           ./dist/tier1 -base "$BASE" $FLAGS || true

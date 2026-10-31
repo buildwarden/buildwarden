@@ -62,11 +62,14 @@ lint:
 # TIER1_FLAGS=-no-design for a change that needs no design (FLOW-01).
 TIER1_BASE ?= origin/main
 TIER1_FLAGS ?=
-EXE := $(if $(filter Windows_NT,$(OS)),.exe,)
+# tier1 is built for the host, whatever GOOS the caller set, and then run with
+# that GOOS, so `GOOS=<os> make lint` checks <os>'s build-tagged files (FLOW-17).
+HOSTEXE := $(if $(filter windows,$(shell go env GOHOSTOS)),.exe,)
 tier1:
 	@mkdir -p dist
-	cd tools/tier1 && go build -o ../../dist/tier1$(EXE) ./cmd/tier1
-	./dist/tier1$(EXE) -base $(TIER1_BASE) $(TIER1_FLAGS)
+	cd tools/tier1 && GOOS=$$(go env GOHOSTOS) GOARCH=$$(go env GOHOSTARCH) \
+		go build -o ../../dist/tier1$(HOSTEXE) ./cmd/tier1
+	./dist/tier1$(HOSTEXE) -base $(TIER1_BASE) $(TIER1_FLAGS)
 
 # Code unreachable from any main or test, per platform (FLOW-15). Remove what
 # all three report, or say why it stays.
