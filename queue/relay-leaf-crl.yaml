@@ -149,7 +149,7 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-    note: 'Open and merge the archive PR from feat/relay-leaf-crl-archive (763cdfd, sets docs/design/relay-leaf-crl.md status: archived and fills its Archive summary): https://github.com/buildwarden/buildwarden/pull/new/feat/relay-leaf-crl-archive. feat/relay-leaf-crl is already gone from origin (deleted by Jeff after #70) and locally. After the archive PR merges, run git push origin --delete feat/relay-leaf-crl-archive.'
+    note: 'Open and merge the archive PR from feat/relay-leaf-crl-archive (763cdfd, sets docs/design/relay-leaf-crl.md status: archived and fills its Archive summary): now open as https://github.com/buildwarden/buildwarden/pull/71. feat/relay-leaf-crl is already gone from origin (deleted by Jeff after #70) and locally. After the archive PR merges, run git push origin --delete feat/relay-leaf-crl-archive.'
   - id: m8-archive
     phase: 8
     affinity: cloud
