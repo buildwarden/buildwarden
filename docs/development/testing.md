@@ -18,7 +18,9 @@ See [`README.md`](./README.md) for the rule format.
 **Check:** automated + agent-judgment
 
 `make test` (pure-Go, table-driven unit tests) runs on every supported platform
-with no external dependencies and is the gate every change passes. Platform-specific
+with no external dependencies and is the gate every change that can affect it
+passes: CI skips it only for changes confined to the docs-only paths in TEST-02,
+and every push to `main` runs it. Platform-specific
 code has build-tagged stubs so this layer compiles and runs everywhere; this is the
 *testing* reason the GLOBAL-07 / EXEC-01 stub discipline exists, not just
 cross-compilation. A slow or flaky universal gate is itself a velocity defect.
@@ -44,7 +46,11 @@ under FLOW-09 until one can.
 
 Where each tier runs today:
 
-- Tier 0: the `ci` workflow, on every push to `main` and every PR.
+- Tier 0: the `ci` workflow, on every push to `main` and on every PR that
+  changes a path outside the docs-only set: `docs/**` except
+  `docs/development/**`, and top-level `*.md`, with Go source and module files
+  (`*.go`, `go.mod`, `go.sum`, `go.work`) never docs-only wherever they are.
+  `main.yml`'s `changes` job is that set's implementation.
 - Tier 1: the `integration` workflow (`make integration-test` on a hosted
   Ubuntu runner with Docker). It runs on PRs that reach `driver/container/`,
   the `driver/` root, a shared package (`relay/`, `ledger/`, `collector/`),
