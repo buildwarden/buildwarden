@@ -3,7 +3,7 @@ title: CI runs only the checks a change's paths need (docs-only PRs skip Go lint
 priority: 11
 status: in_progress
 round: feature
-phase: 4
+phase: 6
 design: docs/design/ci-path-filters.md
 branch: feat/ci-path-filters
 alters_relationships: false
@@ -51,17 +51,49 @@ steps:
   - id: f4-review
     phase: 4
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f5-guide
+    phase: 5
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main
+    phase: 6
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261031T205751Z
-      expires: 2026-11-01T00:08:27.111684922Z
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-merge-main
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-consolidate
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
     steps: 9
   spent:
     runs: 1
-    steps: 6
+    steps: 7
 questions:
   - id: a1
     kind: assumed
@@ -218,3 +250,18 @@ history:
   - at: 2026-10-31T22:08:27Z
     by: cloud/20261031T205751Z
     event: claimed f4-review until 2026-11-01T00:08:27Z
+  - at: 2026-10-31T22:14:38Z
+    by: cloud/20261031T205751Z
+    event: done f4-review
+  - at: 2026-10-31T22:14:38Z
+    by: cloud/20261031T205751Z
+    event: entered phase 5 (guide)
+  - at: 2026-10-31T22:14:41Z
+    by: cloud/20261031T205751Z
+    event: claimed f5-guide until 2026-11-01T00:14:41Z
+  - at: 2026-10-31T22:14:41Z
+    by: cloud/20261031T205751Z
+    event: done f5-guide
+  - at: 2026-10-31T22:14:41Z
+    by: cloud/20261031T205751Z
+    event: entered phase 6 (publish)

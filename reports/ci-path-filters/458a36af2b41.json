@@ -1,0 +1,92 @@
+{
+  "feature": "ci-path-filters",
+  "branch": "feat/ci-path-filters",
+  "head": "458a36af2b41",
+  "base": "d266143c10eb",
+  "round": "feature",
+  "step": "f4-review",
+  "previous_report": null,
+  "scope": "git diff origin/main...feat/ci-path-filters (3 files, +448/-2; commits 3d5d382..458a36a): .github/workflows/main.yml, CONTRIBUTING.md, docs/design/ci-path-filters.md. The merge base is d266143 (#79); origin/main has since gained #80 (pre-release-cleanup, 3362163), which merges in at f6-merge-main and touches neither file the change edits.",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03). Rule index: 85 rules in docs/development/*.md, of which 29 agent-judgment and 40 hybrid were considered; the ones the diff can reach are TEST-01, TEST-02, UX-01, FLOW-06, FLOW-14, FLOW-15, FLOW-17, GLOBAL-06, GLOBAL-07, LINT-08.",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass: golangci-lint 2.6.2 built with go1.26.3 (/tmp/claude-0/bin first on PATH); 0 issues in the root module, tools/workflow and tools/tier1.",
+    "make_test": "pass: 25 ok lines, no FAIL, exit 0",
+    "custom_static_checks": "make lint's tier1 target (dist/tier1 -base origin/main, resolving to d266143c10eb...458a36af2b41): exit 0, 0 MUST, 0 MUST-review, 0 SHOULD, 0 hints, 0 suppressed.",
+    "build_tagged_files": "none touched; no per-platform lint owed (FLOW-17).",
+    "fixes_made": "none; tier 1 was green at 458a36a",
+    "extra_runs": [
+      "actionlint 1.7.7 on .github/workflows/main.yml at 458a36a: no findings (also none on origin/main's main.yml).",
+      "Classifier re-run: the classify step's shell, run under bash -eo pipefail in scratch repos against real merge commits (git merge --no-ff), so HEAD^1..HEAD is a true first-parent diff. docs/design + README.md: false/false/false. docs/book: false/false/true. docs/development: false/true/false. git mv cmd/m.go docs/design/m.go: true/true/false. Deleted cmd/m.go: true/true/false. Empty PR: true/true/true. .golangci.yml, Makefile: true/true/false. 'docs/design/a b.md': false/false/false. Non-ASCII 'docs/design/é.md': true/true/false (quoted by core.quotePath, fail-open). New docs/ex/bad.go that does not compile: false/false/false, while go vet ./... in the same tree fails on it (MUST 1).",
+      "ci-ok jq expression against needs JSON: success+skipped exits 0; a cancelled leg, a failed changes with skipped dependents, and a failed job each exit 1."
+    ]
+  },
+  "prior_findings": [],
+  "findings": [
+    {
+      "rule": "TEST-02",
+      "related_rules": ["TEST-01"],
+      "severity": "MUST",
+      "check": "hybrid (agent-judgment half)",
+      "file": ".github/workflows/main.yml",
+      "line": 45,
+      "finding": "The docs classes match any file under docs/, not just documents. A PR that adds or edits a .go file (or a go.mod/go.sum) anywhere under docs/ gets code=false: lint, tidy and build are skipped, and test and tier1-test are skipped too unless the file is under docs/development/. go test ./..., golangci-lint run and go vet in the root module compile every package below the root, docs/ included, so a broken Go file under docs/ passes the PR and turns the first push to main red. Shown in a scratch repo: docs/ex/bad.go with an undefined call classifies false/false/false, and go vet ./... fails on it. Decision 2's reason ('No Go package lives under docs/') describes today's tree, which a PR can change; its own principle is that anything not positively known to be docs runs the full set. Tier 1 runs on such a PR but does not compile packages. docs/book/*.go is caught the same way (book=true only).",
+      "suggestion": "Make the Go arm the first case: `*.go|go.mod|go.sum|go.work|*/go.mod|*/go.sum|*/go.work) code=true ;;` (case's * crosses slashes, so *.go covers every directory). Or narrow the docs arms to the file types docs/ actually holds (docs/*.md, docs/book/book.toml, docs/book images/theme) and let the rest fall to code. Add the case to the phase-3 classifier table and one line to Decision 2 ('Go source and module files are code wherever they are'), which keeps Decision 2's intent and is not a redesign (FLOW-06)."
+    },
+    {
+      "rule": "TEST-02",
+      "related_rules": ["UX-01"],
+      "severity": "SHOULD",
+      "check": "hybrid (agent-judgment half)",
+      "file": ".github/workflows/main.yml",
+      "line": 47,
+      "finding": "CONTRIBUTING.md is mdBook input: docs/book/src/contributing/development.md:2 is `{{#include ../../../../CONTRIBUTING.md}}`. The classifier puts root *.md in the plain docs class, so a PR that changes only CONTRIBUTING.md runs no book build, and Decisions 2 and 7 describe the book's input as docs/book/** only. mdBook reports a broken include as an error message but probably still builds, so the chance of a red Pages deploy is small; the gap is mainly that the design's table is wrong about what the book reads. docs.yml has the same gap on main (its paths filter omits CONTRIBUTING.md, so the published Development page goes stale until the next docs/book change). That predates this change, and the design leaves docs.yml alone on purpose.",
+      "suggestion": "Add `CONTRIBUTING.md) book=true ;;` before the `*.md)` arm, and mark CONTRIBUTING.md as book input in Decision 2's table. Raise the docs.yml paths gap (add 'CONTRIBUTING.md') as a separate small item rather than in this change."
+    }
+  ],
+  "hints": [
+    {
+      "rule": "TEST-02",
+      "file": ".github/workflows/main.yml",
+      "line": 38,
+      "note": "git diff --name-only quotes paths with non-ASCII bytes (core.quotePath), for example \"docs/book/src/caf\\303\\251.md\". The quoted string matches */*, so it is classified as code, which is fail-open for the Go jobs. But a PR that only adds a non-ASCII file under docs/book/ gets book=false and skips the mdBook build. `git -c core.quotePath=false diff ...` lists the path as is."
+    },
+    {
+      "rule": "GLOBAL-06",
+      "file": ".github/workflows/main.yml",
+      "line": 168,
+      "note": "The book job's checkout keeps the default persist-credentials, then runs an mdBook binary downloaded with curl and not checked against a hash. The token is read-only (contents: read), and docs.yml does the same thing on main. Setting `persist-credentials: false`, as the changes job and integration.yml do, keeps the token out of .git/config for a job that needs no git access after checkout. A sha256sum -c of the tarball would close the rest."
+    },
+    {
+      "rule": "TEST-02",
+      "file": ".github/workflows/main.yml",
+      "line": 57,
+      "note": "The `if:` lines test `== 'true'`, so a missing output skips the job, and ci-ok passes on skipped. Today no path lets changes succeed without writing all three outputs: every exit writes them, and under bash -e a failed write fails the step. So fail-open holds. `!= 'false'` would make it hold by construction if the step is edited later."
+    }
+  ],
+  "counts": {
+    "MUST": 1,
+    "MUST-review": 0,
+    "SHOULD": 1,
+    "hint": 3
+  },
+  "suppressions": [],
+  "suppressions_note": "This is the feature's first tier-2 report, so there is no previous report to carry suppressions from. Tier 1 applied no Tier1-Allow trailers.",
+  "routing": {
+    "tier1_red": false,
+    "wf_implement_fix": "MUST 1 goes back to wf-implement: a one-line case arm in main.yml, plus a classifier-table line in the design's phase-3 notes and Decision 2.",
+    "must_findings_route": "MUST 1 goes to wf-implement. SHOULD 1 and the three hints go in the PR body for acknowledgement at merge (FLOW-08). SHOULD 1 is one more case arm, so wf-implement can take it in the same commit."
+  },
+  "informational": [
+    {"rule": "TEST-02", "file": ".github/workflows/main.yml", "line": 38, "note": "Diff base and shallow fetch: on pull_request (including the labeled/unlabeled types from #79, which keep event_name pull_request and check out the same refs/pull/N/merge), GITHUB_SHA is GitHub's synthetic merge, whose first parent is the base tip and second the PR head, whatever the PR's own history holds (merge commits from main in the branch do not matter). fetch-depth: 2 fetches the merge and both parents, so HEAD^1's tree is present. PRs with conflicts get no merge ref and do not trigger the workflow. Renames (--no-renames lists both sides), deletions and empty diffs behave as the design says; re-run above."},
+    {"rule": "TEST-01", "file": "tools/tier1/rules/rules_test.go", "line": 14, "note": "What Go reads from outside code paths: TestRealIndex (tools/tier1/rules) reads docs/development/*.md, which is covered by rules -> gotests. Every //go:embed target is inside its own package (driver/qemu, driver/container/images, tools/tier1). report_test reads tools/tier1/report.schema.json (code). No test reads a root *.md or anything else under docs/. No symlinks are tracked. docs/ holds only .md files and docs/book/book.toml. Tier 1's runtime reads docs/development/bootstrap.md, docs/book/src/design/ledger-spec.md and docs/book/src/guide/{cli,configuration}.md, and tier1 runs on every PR. Makefile, go.mod, go.sum, .golangci.yml, .mise.toml, aqua.yaml, LICENSE, .github/** and .claude/** all fall to code."},
+    {"rule": "TEST-02", "file": ".github/workflows/main.yml", "line": 182, "note": "ci-ok: needs lists all 8 other jobs, changes included, so a failed classifier (dependents report skipped) turns it red. A failed or cancelled matrix leg makes that job's result failure or cancelled, and either one fails the jq. Skipped passes. Keeping if: always() is right: with !cancelled() a cancelled run would leave ci-ok skipped, which a required check counts as passing."},
+    {"rule": "TEST-02", "file": ".github/workflows/main.yml", "line": 72, "note": "tier1 has no if:, so it runs on every PR that the classifier lets through, and on every push. Its needs: changes means a failed classifier skips it, and ci-ok then shows the failure. Its steps, BASE and FLAGS are unchanged."},
+    {"rule": "GLOBAL-06", "file": ".github/workflows/main.yml", "line": 161, "note": "Permissions: the workflow stays at contents: read. book re-states contents: read, which is redundant but harmless. No job gains pages, id-token or write scopes. The changes job checks out without persisted credentials. book has no concurrency key, so it cannot join or cancel docs.yml's 'pages' group. docs.yml, release.yml, relay-image.yml, auto-tidy.yml, integration.yml and flow18.yml are untouched."},
+    {"rule": "TEST-02", "file": ".github/workflows/main.yml", "line": 37, "note": "push to main and tags: the on: block is unchanged (push to main, PRs to main; no tag trigger, and tags go to release.yml). Any non-pull_request event sets every output true. The only change on a main push is that book and ci-ok also run, which Decision 7 accepts, and tier1 now starts after changes (a few seconds)."},
+    {"rule": "LINT-08", "file": "docs/development/testing.md", "line": 47, "note": "TEST-02's 'Tier 0: the ci workflow, on every push to main and every PR' and TEST-01's 'the gate every change passes' will no longer read literally once this merges. Design review r1 accepted a8 (land against the current text, with the rewording queued as its own process item; Jeff owns docs/development under FLOW-14). The PR body should carry the Proposed rule changes, as implementation step 6 says."},
+    {"rule": "UX-01", "file": "CONTRIBUTING.md", "line": 126, "note": "The new step 4 matches the classifier, apart from SHOULD 1 (book input) and MUST 1 (non-Markdown files under docs/). If MUST 1 is fixed by narrowing to file types, the wording 'changes only docs/' still holds. No overview.md change is owed (FLOW-15): no product component's flow changed."},
+    {"rule": "FLOW-17", "file": ".github/workflows/main.yml", "line": 1, "note": "The branch is pushed: origin/feat/ci-path-filters equals 458a36a. Docs-only behavior on GitHub can only be shown after the merge, as the Validation plan says, because any PR built on this branch carries .github/. main has no branch protection, so nothing is pending on matrix names. ci-ok is the check to require when Jeff turns protection on."},
+    {"rule": "FLOW-06", "file": "docs/design/ci-path-filters.md", "line": 335, "note": "The phase-3 notes match the shipped step text and my independent re-run. The shipped classify step differs from the design sketch only in using if/then for the gotests line (safe under bash -e) and in its comments."}
+  ]
+}
