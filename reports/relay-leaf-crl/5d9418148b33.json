@@ -1,0 +1,68 @@
+{
+  "feature": "relay-leaf-crl",
+  "branch": "feat/relay-leaf-crl",
+  "head": "5d9418148b33",
+  "base": "d43e5a0537e8",
+  "scope": "git diff origin/main...feat/relay-leaf-crl (5 files, +423/-0); merge round, after m0 merged main d43e5a0",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03). Run inline in an attended session, not by a separate wf-review agent.",
+  "tier1": {
+    "make_lint": "pass",
+    "make_test": "pass",
+    "golangci_lint_goos_linux_relay": "pass",
+    "golangci_lint_goos_darwin_relay": "pass",
+    "golangci_lint_goos_windows_relay": "pass"
+  },
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 0,
+    "SHOULD": 0
+  },
+  "resolved_in_review": [
+    {
+      "rule": "GLOBAL-02",
+      "severity": "SHOULD",
+      "file": "relay/proxy.go",
+      "line": 75,
+      "finding": "gofmt -w had re-indented an untouched line in safeDialContext.",
+      "resolution": "reverted in 0ca42d9 (carried over from 0ca42d99a6fc)"
+    }
+  ],
+  "notes_for_signoff": [
+    {
+      "rule": "RELAY-02",
+      "severity": "MUST",
+      "note": "The diff follows the design's Decision 5, which Jeff confirmed (a1): /ca.crl is served unrecorded, like /ca.pem. RELAY-02's text says every byte sent to the build is recorded and names no exception for relay trust material. /ca.pem already relied on that unstated exception. Sign-off may want RELAY-02 to say so (a FLOW-14 rule change; not made here). TestRelayServesCACRL asserts the no-record behaviour and was mutation-checked: with recordServed added, it fails."
+    },
+    {
+      "rule": "GLOBAL-06",
+      "severity": "MUST-review",
+      "note": "Relay change: the design's Security note covers the new endpoint, key use and trust posture. The endpoint takes no input and serves fixed bytes; the POST upload fallback is shadowed for /ca.crl only (tested)."
+    },
+    {
+      "rule": "RELAY-03",
+      "severity": "MUST-review",
+      "note": "The CA key signs the CRL in memory inside generateCA; nothing is persisted."
+    },
+    {
+      "rule": "FLOW-09",
+      "severity": "MUST",
+      "note": "m6-validate-windows-hyperv (blocking) is still to run: tier 0 cannot exercise Schannel."
+    }
+  ],
+  "rules_checked_clean": [
+    "GLOBAL-01",
+    "GLOBAL-03",
+    "GLOBAL-04",
+    "GLOBAL-07",
+    "RELAY-04",
+    "RELAY-07",
+    "ORCH-01",
+    "TEST-01",
+    "TEST-04",
+    "FLOW-15",
+    "UX-01"
+  ],
+  "suppressions": [],
+  "previous_report": "0ca42d99a6fc",
+  "since_previous": "No code change since 0ca42d99a6fc: relay/ is identical; the merge of main brought only docs/design/workflow-bootstrap.md, and the design gained its Consolidation section and a merge-round plan note."
+}
