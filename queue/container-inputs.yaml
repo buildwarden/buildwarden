@@ -105,16 +105,16 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261031T095649Z
+      expires: 2026-10-31T11:57:10.673548666Z
     note: Waits for the serial merge queue (FLOW-05).
 budget:
   estimate:
     runs: 4
     steps: 18
   spent:
-    runs: 2
-    steps: 13
+    runs: 3
+    steps: 14
 questions:
   - id: a1
     kind: assumed
@@ -276,3 +276,6 @@ history:
   - at: 2026-10-29T10:19:23Z
     by: cloud/20261029T095640Z
     event: parallel round done; waiting on the merge queue
+  - at: 2026-10-31T09:57:10Z
+    by: cloud/20261031T095649Z
+    event: claimed p6-merge-round until 2026-10-31T11:57:10Z
