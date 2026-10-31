@@ -108,8 +108,8 @@ live `workflow` branch.
 ## Design review
 
 - **r1, 2026-10-31: approved** (Jeff, attended session; the shape, the
-  sections and Go-in-`wf` over a Python script and a pre-push hook), approved
-  at `e161d87`.
+  sections and Go-in-`wf` over a Python script and a pre-push hook).
+  Approved at `e161d87`.
 
 ## Consolidation
 
