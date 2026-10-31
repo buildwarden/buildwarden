@@ -1,0 +1,28 @@
+{
+  "feature": "specs-migration",
+  "head": "0561aa0bcaa7",
+  "base": "origin/main",
+  "step": "f4-review",
+  "method": "workflow: 5 finders x 3 skeptics",
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 0,
+    "SHOULD": 0
+  },
+  "resolved": [
+    {
+      "rule": "LINT-04",
+      "file": "tools/tier1/coupling/checks.go",
+      "line": 192,
+      "how": "tier1 -all (Checker.WholeTree)"
+    }
+  ],
+  "refuted": [
+    "http-body path field (pre-existing)",
+    "dir-wide Tier1-Allow hides layout",
+    "schema outside specs/",
+    "redirect drops fragment"
+  ],
+  "findings": [],
+  "suppressions": []
+}

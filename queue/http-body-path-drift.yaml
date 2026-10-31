@@ -1,0 +1,30 @@
+feature: http-body-path-drift
+title: Relay writes a path field under http-body, whose schema forbids extra fields
+priority: 14
+status: queued
+round: feature
+phase: 0
+design: docs/design/http-body-path-drift.md
+branch: feat/http-body-path-drift
+alters_relationships: null
+source: 'specs-migration review (refuted as pre-existing, 2026-10-31): relay/relay.go recordServed writes {"path": ...} under metadata-http-body/v1, additionalProperties: false; decide schema v2 or producer change'
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 9
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-10-31T22:54:14Z
+    by: human/jeff
+    event: queued at priority 14 (intake)
