@@ -1,6 +1,6 @@
 ---
 feature: specs-migration
-status: draft
+status: active
 drivers: []
 seams: [ledger-format]
 surfaces: []
@@ -431,6 +431,11 @@ the schema's file location changes.
     including tier 1 on this diff. Push.
 
 ## Design review
+
+- **r1, 2026-10-31: approved** (Jeff, attended session, FLOW-19).
+  Approved at `73a52c6`. a1 to a6 confirmed as recommended, including a5
+  (remove `schemas/` with no stub). The RELAY-05 rewording is queued as its
+  own process item.
 
 ## Consolidation
 
