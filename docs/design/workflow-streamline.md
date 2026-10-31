@@ -1,12 +1,13 @@
 ---
 feature: workflow-streamline
-status: draft
+status: active
 round: process
 drivers: []
 seams: []
 surfaces: []
 security_boundary: none
 alters_relationships: false
+design_review: required
 native_validation: []
 tier2_gaps: []
 rules: [FLOW-03, FLOW-04, FLOW-05, FLOW-06, FLOW-07, FLOW-08, FLOW-10, FLOW-12, FLOW-14, FLOW-15, FLOW-16, FLOW-17, LINT-03]
@@ -78,16 +79,25 @@ first sees the whole picture at the PR.
   the design's new **Design review** section and in the queue.
 - **Assumptions are confirmed in the design review,** not at sign-off. That
   moves every intent question ahead of implementation (FLOW-07).
-- **A changed plan gets a new review.** When a feature returns to Design
-  (FLOW-06), from Implement, Review, or Publish's consolidation, the design
-  review step is seeded again (`-r2`, ...). The review covers what changed
-  and why.
+- **A changed plan gets a new review, unless the change is trivial against
+  the approved design.** When a feature returns to Design (FLOW-06), from
+  Implement, Review, or Publish's consolidation, the design review step is
+  seeded again (`-r2`, ...) and covers what changed and why. Triviality for a
+  re-review is judged on the delta from the **last approved design**, not on
+  the design as a whole or on `main` (Jeff, at review r1): a minimal change
+  doesn't need re-approval, even when the design itself needed review the
+  first time.
 - **"Trivial" is decided mechanically, not by the agent's judgment.** Design
   may mark the review `skip` only when all of these hold:
   `alters_relationships: false`, no `seams`, `security_boundary: none`, no
   blocking `native_validation`, no assumed questions, and the plan changes no
   rule. `wf check` enforces this, and the digest lists every skipped review so
   Jeff can call one back. Rejected: letting Design judge triviality freely.
+  For a re-review, the same criteria apply to the delta from the design at
+  the approved commit, which the Design review section records: the impact
+  fields (`alters_relationships`, `seams`, `security_boundary`, blocking
+  `native_validation`) are unchanged from the approved design, no question
+  was added, and no rule was added to what the plan changes.
 - **Merging is the sign-off.** No `sign-off` queue step for Jeff to claim.
   Phase 7 is `merge`: a cloud step that a tick completes once its check shows
   the branch head is in `origin/main`. Jeff still acknowledges or dismisses
@@ -124,19 +134,20 @@ implementation changes the plan.
 
 ### Assumed
 
-- a1: proceeding with **one open feature PR at a time**. The alternative is
-  every finished feature opening its PR, with each merge triggering a
-  re-merge and re-consolidation of every other open PR. That means more CI
-  runs and more re-review for Jeff. Confirm.
-- a2: proceeding with **cloud Implement and Publish for process items after
-  Jeff's design review,** with his merge as the sign-off. The alternative is
-  to keep process items attended throughout. Confirm.
-- a3: proceeding with **the skip criteria above** as the definition of a
-  trivial design. Confirm, or tighten them, for example "no new exported API".
-- a4: proceeding with **escalations as the only other human steps**: runaway
+All confirmed by Jeff at review r1, with the approval.
+
+- a1, **confirmed**: one open feature PR at a time. The alternative was every
+  finished feature opening its PR, with each merge triggering a re-merge and
+  re-consolidation of every other open PR: more CI runs and more re-review.
+- a2, **confirmed**: cloud Implement and Publish for process items after
+  Jeff's design review, with his merge as the sign-off. The alternative was
+  keeping process items attended throughout.
+- a3, **confirmed**: the skip criteria above define a trivial design, and a
+  re-review applies them to the delta from the approved design.
+- a4, **confirmed**: escalations are the only other human steps: runaway
   budget (FLOW-13), CI repair exhausted (FLOW-11), a third return to Design
   (FLOW-06), and a remote branch that did not auto-delete. Blocking questions
-  stay as they are (FLOW-07). Confirm.
+  stay as they are (FLOW-07).
 
 ## Design
 
@@ -201,6 +212,11 @@ Design front-matter gains:
 ```yaml
 design_review: required   # required | skip (FLOW-19 criteria; wf check enforces skip)
 ```
+
+Each approval in the Design review section names the commit the approved
+design was read at (`approved at <sha>`). On a return to Design, `wf check`
+compares the current design with the design at that commit to decide whether
+`skip` is valid for the re-review.
 
 ### Tooling (`tools/workflow`)
 
@@ -283,7 +299,7 @@ None. This changes the development process only, no driver code (`drivers: []`).
 | tier1-static-checks | parallel/3 implement | feature/3. Its design was never reviewed, so a design review step is added before Implement continues, unless Jeff waives it. |
 | queued features | parallel/0 | feature/0 |
 | native-allowlist-scratch | process/1 | process/1, new phase table |
-| workflow-streamline | process/1 | This item: its own design review is the session that follows this draft. |
+| workflow-streamline | process/2 | This item, reviewed and approved at r1. |
 
 ## Implementation plan
 
@@ -304,7 +320,14 @@ None. This changes the development process only, no driver code (`drivers: []`).
 
 ## Design review
 
-Pending. This draft goes to Jeff as the first design review session.
+- **r1, 2026-10-31: approved** (Jeff, attended session), approved at
+  `796bba2` plus the r1 caveat below. a1 to a4 confirmed with the approval.
+  - Caveat, folded in without another review: when a feature returns to
+    Design after consolidation finds breaking changes, triviality is judged
+    against the previously approved design, not against `main`'s current
+    design, so minimal changes don't trigger re-approval.
+  - Jeff also asked for these reviews to be one interactive session with him,
+    not a PR thread or a list of questions. That is FLOW-19's form.
 
 ## Consolidation
 
