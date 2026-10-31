@@ -157,15 +157,15 @@ steps:
     needs:
       - m8-cleanup
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261031T013930Z
+      expires: 2026-10-31T04:25:00.5450906Z
 budget:
   estimate:
     runs: 2
     steps: 12
   spent:
     runs: 2
-    steps: 17
+    steps: 18
 questions:
   - id: a1
     kind: assumed
@@ -373,3 +373,6 @@ history:
   - at: 2026-10-31T02:24:58Z
     by: human/jeff
     event: done m8-cleanup
+  - at: 2026-10-31T02:25:00Z
+    by: cloud/20261031T013930Z
+    event: claimed m8-archive until 2026-10-31T04:25:00Z
