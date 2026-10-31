@@ -8,6 +8,9 @@ design: docs/design/specs-migration.md
 branch: feat/specs-migration
 alters_relationships: false
 design_review: required
+pr:
+  number: 85
+  ci: pending
 source: 'docs/development/README.md: Follow-up - specs/ migration'
 steps:
   - id: f0-branch-setup
