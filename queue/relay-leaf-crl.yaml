@@ -3,7 +3,7 @@ title: Relay leaf certificates name a CRL the relay serves (Windows Schannel rev
 priority: 1
 status: in_progress
 round: parallel
-phase: 4
+phase: 5
 design: docs/design/relay-leaf-crl.md
 branch: feat/relay-leaf-crl
 alters_relationships: false
@@ -48,10 +48,17 @@ steps:
   - id: p4-review
     phase: 4
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: p5-guide
+    phase: 5
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261031T013930Z
-      expires: 2026-10-31T03:53:32.9170285Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -135,3 +142,9 @@ history:
   - at: 2026-10-31T01:53:32Z
     by: cloud/20261031T013930Z
     event: claimed p4-review until 2026-10-31T03:53:32Z
+  - at: 2026-10-31T01:54:39Z
+    by: cloud/20261031T013930Z
+    event: done p4-review
+  - at: 2026-10-31T01:54:39Z
+    by: cloud/20261031T013930Z
+    event: entered phase 5 (guide)
