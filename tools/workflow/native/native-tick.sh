@@ -207,6 +207,16 @@ else
 	esac
 fi
 
+stage="native assets"
+# A host's cached build assets follow origin/main, so a session never tests
+# behind a merged fix. windows-hyperv: the relay boot VHDX in warden's cache.
+served=$(awk -v m="$machine" '
+	$1 == "-" && $2 == "name:" { mine = ($3 == m); next }
+	mine && $1 == "hosts:" { print; mine = 0 }' .dev/workflow/hosts.yaml)
+case "$served" in
+*windows-hyperv*) tools/relay-vm/hyperv/refresh-cache.sh || stop "relay boot VHDX refresh failed" ;;
+esac
+
 command -v claude >/dev/null || stop "claude is not on PATH"
 stage="claude"
 # Stamp what this session starts from, so a branch that moves while it runs

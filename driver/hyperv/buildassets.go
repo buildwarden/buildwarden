@@ -47,8 +47,8 @@ func resolveRelayBootVHDX() (string, error) {
 		return pinned, nil
 	}
 	return "", driver.Fixable(
-		"build it from the source tree: tools/relay-vm/hyperv/build.sh, "+
-			"then build-boot-vhdx.sh",
+		"build it from the source tree (Git Bash, needs WSL): "+
+			"tools/relay-vm/hyperv/refresh-cache.sh",
 		"relay boot VHDX not found (looked at $WARDEN_RELAY_BOOT_VHDX and %s)", pinned)
 }
 

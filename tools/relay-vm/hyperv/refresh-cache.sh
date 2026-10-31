@@ -27,10 +27,12 @@ cd "$repo"
 mod="$(go list -m)"
 paths=$(go list -deps -f '{{if .Module}}{{if .Module.Main}}{{.ImportPath}}{{end}}{{end}}' ./cmd/relay |
 	sed "s|^$mod/||")
+# This script is not an input to the disk, so editing it does not make it stale.
+self=":!tools/relay-vm/hyperv/refresh-cache.sh"
 # shellcheck disable=SC2086 # paths is a list of package directories
-src="$(git log -1 --format=%H -- $paths go.mod go.sum tools/relay-vm)"
+src="$(git log -1 --format=%H -- $paths go.mod go.sum tools/relay-vm "$self")"
 # shellcheck disable=SC2086
-[ -z "$(git status --porcelain -- $paths go.mod go.sum tools/relay-vm)" ] || src="$src-dirty"
+[ -z "$(git status --porcelain -- $paths go.mod go.sum tools/relay-vm "$self")" ] || src="$src-dirty"
 have="$(cat "$stampf" 2>/dev/null || true)"
 
 if [ "$mode" != --force ] && [ -f "$disk" ] && [ "$have" = "$src" ] && [ "${src%-dirty}" = "$src" ]; then
@@ -52,7 +54,7 @@ for f in alpine-minirootfs.tar.gz linux-virt.apk iptables.apk iptables-legacy.ap
 	fi
 done
 GOOS=linux GOARCH=amd64 CGO_ENABLED=0 go build -o "$here/.cache/warden-relay" ./cmd/relay
-wslhere="$(wsl.exe -d "$distro" wslpath -a "$(cygpath -w "$here")" | tr -d '\r')"
+wslhere="$(wsl.exe -d "$distro" wslpath -a "$(cygpath -m "$here")" | tr -d '\r')"
 wsl.exe -d "$distro" sh -c "cd '$wslhere' && sh build.sh && sh build-boot-vhdx.sh"
 
 mkdir -p "$cache"
