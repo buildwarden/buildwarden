@@ -1,5 +1,5 @@
 feature: wf-merged-counts-as-pushed
-title: 'wf: a branch already merged into main satisfies the pushed and PR checks'
+title: 'wf: a branch already merged into main satisfies the pushed, main-merged and PR checks'
 priority: 9
 kind: process
 status: queued
@@ -8,7 +8,7 @@ phase: 1
 design: docs/design/wf-merged-counts-as-pushed.md
 branch: feat/wf-merged-counts-as-pushed
 alters_relationships: null
-source: 'queue-summary close, 2026-10-31: Jeff merged #78 before x2-implement was recorded; GitHub auto-deleted the branch and the x2 ''branch pushed'' check could not pass (advanced by hand)'
+source: 'queue-summary close, 2026-10-31: Jeff merged #78 before x2-implement was recorded; GitHub auto-deleted the branch and the x2 ''branch pushed'' check could not pass (advanced by hand). Again on tier1-static-checks (#79): merged before f6-open-pr was recorded, so ''current main merged'' failed because main contains the branch'
 steps:
   - id: x1-design
     phase: 1

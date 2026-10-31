@@ -1,17 +1,17 @@
 feature: tier1-static-checks
 title: 'Tier-1 static-check extraction (LINT-02, Deep-dive #2)'
 priority: 7
-status: in_progress
+status: done
 round: feature
-phase: 6
+phase: 8
 design: docs/design/tier1-static-checks.md
 branch: feat/tier1-static-checks
 alters_relationships: false
 design_review: required
+source: 'docs/development/README.md: Deep-dive #2'
 pr:
   number: 79
   ci: green
-source: 'docs/development/README.md: Deep-dive #2'
 steps:
   - id: p0-branch-setup
     phase: 0
@@ -103,19 +103,33 @@ steps:
   - id: f6-open-pr
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f6-consolidate
     lease:
-      claimed_by: cloud/20261031T205751Z
-      expires: 2026-10-31T23:38:23.296247068Z
+      claimed_by: ""
+      expires: null
+  - id: f7-merge
+    phase: 7
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f8-close
+    phase: 8
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 6
     steps: 30
   spent:
     runs: 3
-    steps: 13
+    steps: 14
 questions:
   - id: a1
     kind: assumed
@@ -318,3 +332,15 @@ history:
   - at: 2026-10-31T21:38:23Z
     by: cloud/20261031T205751Z
     event: claimed f6-open-pr until 2026-10-31T23:38:23Z
+  - at: 2026-10-31T21:48:58Z
+    by: cloud/20261031T205751Z
+    event: 'done f6-open-pr and f7-merge by hand: PR #79 went green on f73ee18 (all 14 checks) and Jeff merged it (d266143) before f6-open-pr was recorded; the "current main merged" check then fails because main now contains the branch. Same gap as wf-merged-counts-as-pushed, which now covers it.'
+  - at: 2026-10-31T21:48:58Z
+    by: cloud/20261031T205751Z
+    event: claimed f8-close until 2026-10-31T23:48:58Z
+  - at: 2026-10-31T21:48:58Z
+    by: cloud/20261031T205751Z
+    event: done f8-close
+  - at: 2026-10-31T21:48:58Z
+    by: cloud/20261031T205751Z
+    event: closed; feature done
