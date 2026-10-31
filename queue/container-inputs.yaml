@@ -3,7 +3,7 @@ title: Record container inputs under inputs/ (ORCH-02)
 priority: 3
 status: in_progress
 round: merge
-phase: 1
+phase: 2
 design: docs/design/container-inputs.md
 branch: feat/container-inputs
 alters_relationships: false
@@ -118,10 +118,17 @@ steps:
   - id: m1-consolidate
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: m2-plan
+    phase: 2
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261031T095649Z
-      expires: 2026-10-31T11:59:46.285395102Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 4
@@ -148,6 +155,15 @@ questions:
       - keep the submitted base name
     recommended: fixed name inputs/Dockerfile
     answer: 'REJECTED the Dockerfile name: always record the submitted file as inputs/Containerfile (the open-standard name), whatever its original name'
+  - id: a3
+    kind: assumed
+    status: open
+    question: Propose the convention this feature settled (a driver records an input it alters at staging, before the build starts, through the shared driver.RecordInputs) as an ORCH-02 amendment, and where?
+    options:
+      - a follow-up process item after this merges
+      - fold the amendment into this PR at sign-off
+      - no rule; the convention stays in this design
+    recommended: a follow-up process item after this merges
 history:
   - at: 2026-10-28T23:18:38Z
     by: attended-setup
@@ -311,3 +327,9 @@ history:
   - at: 2026-10-31T09:59:46Z
     by: cloud/20261031T095649Z
     event: claimed m1-consolidate until 2026-10-31T11:59:46Z
+  - at: 2026-10-31T10:04:56Z
+    by: cloud/20261031T095649Z
+    event: done m1-consolidate
+  - at: 2026-10-31T10:04:56Z
+    by: cloud/20261031T095649Z
+    event: entered phase 2 (plan)
