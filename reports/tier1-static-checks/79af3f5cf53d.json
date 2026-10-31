@@ -1,0 +1,140 @@
+{
+  "feature": "tier1-static-checks",
+  "branch": "feat/tier1-static-checks",
+  "head": "79af3f5cf53d",
+  "base": "154833b61899",
+  "round": "feature",
+  "step": "f4-review",
+  "previous_report": null,
+  "scope": "git diff origin/main...feat/tier1-static-checks (46 files, +4854/-9; commits de31c74..79af3f5). origin/main (154833b, #75 and #76) is merged in, so the merge base is origin/main's tip.",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass: golangci-lint 2.6.2 built with go1.26.3 (/tmp/claude-0/bin on PATH); 0 issues in the root module, tools/workflow and tools/tier1; then dist/tier1 -base origin/main: 0 MUST, 0 MUST-review, 0 SHOULD, 2 hints, 0 suppressed, exit 0",
+    "make_test": "pass: 25 ok lines, no FAIL (root module, tools/workflow, tools/tier1)",
+    "custom_static_checks": "dist/tier1 -json -base origin/main, exit 0: findings [], suppressed [], hints = 2 x GLOBAL-04 tests-with-change (tools/tier1/, tools/tier1/internal/gittest/). The dispatch expected 3 hints; the run at 79af3f5 reports 2.",
+    "build_tagged_files": "none touched; no per-platform lint owed (FLOW-17)",
+    "fixes_made": "none; tier 1 was green at 79af3f5",
+    "extra_runs": [
+      "Release simulation: dist/tier1 -base v0.5.0 (git describe --tags --abbrev=0 --match 'v*' HEAD^) at 79af3f5: exit 1, 34 MUST, 4 SHOULD, 9 hints. See finding 3.",
+      "dist/tier1 designs -all at 79af3f5: exit 1, 2 failing (native-host-loop.md, native-loop-followups.md: missing design_review; main's state, out of scope per dispatch), 6 pre-standard, 3 tolerated.",
+      "Push-to-main simulation, dist/tier1 -base <first parent> in detached worktrees: #73 exit 0; #67, #69, #74, #76 exit 1 with one FLOW-01 each. See finding 2.",
+      "GOOS=darwin make tier1 on linux: dist/tier1 is built as Mach-O and the run fails ('Syntax error: \"(\" unexpected'). See finding 1.",
+      "tools/tier1/golangci.yml run over tools/tier1 and tools/workflow (not covered by tier 1's golangci stage): 0 issues."
+    ]
+  },
+  "prior_findings": [],
+  "findings": [
+    {
+      "rule": "FLOW-17",
+      "related_rules": ["GLOBAL-07", "UX-04"],
+      "severity": "MUST",
+      "check": "agent-judgment",
+      "file": "Makefile",
+      "line": 68,
+      "finding": "The tier1 target builds the tool with the caller's GOOS/GOARCH, so the per-platform lint FLOW-17 and CONTRIBUTING.md:74 ask for ('GOOS=<os> make lint') always fails: go build produces a binary for the target OS and line 69 cannot execute it. Verified: GOOS=darwin make tier1 on linux builds a Mach-O dist/tier1 and the shell reports 'Syntax error: \"(\" unexpected'. EXE (line 66) also follows the host's $(OS), not the build target. After merge, no agent can satisfy FLOW-17 for a change to build-tagged files of another platform.",
+      "suggestion": "Build the tool for the host and run it with the inherited GOOS, so the analyzers and golangci still load the target: cd tools/tier1 && GOOS=$$(go env GOHOSTOS) GOARCH=$$(go env GOHOSTARCH) go build -o ../../dist/tier1$(EXE) ./cmd/tier1, with EXE taken from GOHOSTOS. Add a check to the acceptance step that GOOS=windows make lint and GOOS=darwin make lint run on linux."
+    },
+    {
+      "rule": "FLOW-01",
+      "related_rules": ["LINT-03", "LINT-04"],
+      "severity": "MUST",
+      "check": "automated + agent-judgment",
+      "file": ".github/workflows/main.yml",
+      "line": 43,
+      "finding": "The tier1 job reads the no-design label from github.event.pull_request, which is empty on push. The push-to-main run (BASE = github.event.before) therefore reports FLOW-01 for every merged no-design change and turns main's CI red. Verified on recent merges with this binary: #67 (relay-gzip-framing), #69 (native-leftovers), #74 and #76 (design-review-archived) each exit 1 with one FLOW-01 finding. Two smaller wiring gaps share this cause: (a) the pull_request trigger (line 6) has the default types, so adding the label after the PR opens does not rerun the job, and a re-run reuses the original payload, so the job stays red until a new push; (b) the repository has no no-design label yet (GET /repos/buildwarden/buildwarden/labels), although CONTRIBUTING.md:76 tells contributors to use it.",
+      "suggestion": "On push events pass -no-design, because the PR run already enforced FLOW-01, or look up the merged PR's labels (gh api repos/{owner}/{repo}/commits/$GITHUB_SHA/pulls). Add 'types: [opened, synchronize, reopened, labeled, unlabeled]' to pull_request. Note in the PR body that Jeff needs to create the no-design label."
+    },
+    {
+      "rule": "LINT-03",
+      "related_rules": ["LINT-04", "FLOW-02", "FLOW-12"],
+      "severity": "MUST",
+      "check": "automated",
+      "file": ".github/workflows/release.yml",
+      "line": 72,
+      "finding": "The new release gate will fail the first tag cut after this merges. Simulated at 79af3f5 against v0.5.0 (the previous v* tag), tier1 exits 1 with 34 MUST: (a) 8 FLOW-02 findings: six designs added under docs/design/ since v0.5.0 with no front-matter count as new rather than pre-standard, because v0.5.0 predates docs/design/; the other two are the native designs missing design_review; (b) 23 GLOBAL-01 and 3 GLOBAL-03 findings in driver/ and relaycfg/ code that landed between v0.5.0 and now, before tier 1 existed. Line 73 (designs -all) also exits 1 today on the two native designs (main's state, flagged elsewhere). The plan's history run (task 11) covered PR merges and branches but not the release range, so the design's 'every in-flight branch and main exit 0' does not cover this. LINT-03 makes tier-1 red block a release outright, so this wiring blocks the next release until someone decides what to do.",
+      "suggestion": "Decide before merge, and record the decision in the PR body. Either (a) start the release job's base at the later of the previous tag and the commit that added tools/tier1 (e.g. git log --diff-filter=A --format=%H -1 -- tools/tier1/go.mod), so the first gate covers only changes made under tier 1 (LINT-04's 'do not re-flag pre-existing debt'); or (b) queue a follow-up that clears the 34 findings (doc comments, %w, the driver/subnet.go panic) and lands design-front-matter-retrofit before the next tag; or (c) commit Tier1-Allow trailers with reasons. Option (a) is the only one inside this feature."
+    },
+    {
+      "rule": "LINT-05",
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "tools/tier1/diff/diff.go",
+      "line": 193,
+      "finding": "Trailers are taken from any line of the commit body whose trimmed text starts with 'Tier1-Allow:', not from the trailer block. An indented example in a commit message (such as the CONTRIBUTING example) becomes a real suppression. A wrapped prose line that happens to start with 'Tier1-Allow:' becomes a LINT-05 MUST failure (diff.go:206).",
+      "suggestion": "Read only real trailers: git log --format='%H%x00%(trailers:key=Tier1-Allow,valueonly,unfold)%x1e', or git interpret-trailers --parse. Add a test with an indented example in a body paragraph."
+    },
+    {
+      "rule": "LINT-05",
+      "related_rules": ["FLOW-08"],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "tools/tier1/diff/diff.go",
+      "line": 260,
+      "finding": "Suppress records each trailer once (rule, glob, reason, commit) and drops the findings it cleared. A broad glob such as 'RELAY-07 relay/**' therefore hides what it suppressed from the human at sign-off, which works against Decision 5's 'cannot silence a check without the human seeing that it did'. counts.suppressed counts trailers, not findings. Unused trailers are not listed at all.",
+      "suggestion": "Carry the cleared findings (rule, file, line, message) under each suppression entry in the report and in report.schema.json, print them in the suppressed section, and count findings. Optionally list trailers that matched nothing as hints."
+    },
+    {
+      "rule": "LINT-04",
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "tools/tier1/analyzers/run.go",
+      "line": 52,
+      "finding": "The changed-line ranges come from the committed diff (base..HEAD), but the analyzers (packages.Load) and golangci-lint (golangci.go:190) read the working tree. With uncommitted edits, which is normal during make lint, positions do not match the ranges. A committed violation shifted by a local edit is dropped, and an uncommitted one can land on a 'changed' line. CONTRIBUTING says 'committed changes only'. CI checkouts are clean, so only local runs and agent sessions are affected.",
+      "suggestion": "Warn when tracked .go files differ from HEAD (git status --porcelain), or exit 2 under a strict flag. Alternatively, run those two stages in a temporary worktree at HEAD."
+    },
+    {
+      "rule": "ORCH-01",
+      "related_rules": ["LINT-02"],
+      "severity": "SHOULD",
+      "check": "automated + agent-judgment",
+      "file": "tools/tier1/coupling/checks.go",
+      "line": 202,
+      "finding": "The task-11 retune drops every comment when it compares tokens. That also drops directives: //go:build constraints, //go:embed, //export and the cgo preamble. A change that only edits '//go:build linux' to '//go:build linux || darwin' in driver/*.go changes which platforms compile the file, but it is treated as comment-only. drivers-claim, bootstrap-surface and seam-contract then never see it.",
+      "suggestion": "Scan with scanner.ScanComments, and keep comments that start with '//go:', '// +build' or '//export' (and the comment group just before import \"C\") as tokens. Add a test case for a build-constraint-only change."
+    },
+    {
+      "rule": "UX-04",
+      "related_rules": ["GLOBAL-07", "FLOW-01"],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "tools/tier1/coupling/coupling.go",
+      "line": 55,
+      "finding": "An explicit -design PATH that does not exist at HEAD, or does not parse, is kept with Design.Err set, and Err is never reported. Examples are a typo or a Windows path such as docs\\design\\x.md. Because NoDesignInDiff (line 110) tests len(List) > 0, such a path silently satisfies FLOW-01 while it adds nothing to the drivers/seams/rules claim.",
+      "suggestion": "Normalize explicit paths with filepath.ToSlash. Fail with exit 2 when an explicit design is missing or unparsable, and name the bad path."
+    },
+    {
+      "rule": "LINT-05",
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": ".github/workflows/main.yml",
+      "line": 37,
+      "finding": "Three golangci-lint versions are in play. The tier1 CI and release jobs pin v2.5.0 (main.yml:37, release.yml:66, and golangci.go:154's install hint). The lint job installs @latest (main.yml:20). Local sessions run 2.6.2. revive and errorlint output can differ between versions, so the same diff can pass locally and fail in CI or at release, against LINT-05's 'reproducible'.",
+      "suggestion": "Pin one version, for example in a Makefile or env variable that both workflows and golangci.Install read, and match it to the toolchain sessions use."
+    }
+  ],
+  "counts": {
+    "MUST": 3,
+    "MUST-review": 0,
+    "SHOULD": 6
+  },
+  "suppressions": [],
+  "suppressions_note": "This is the feature's first tier-2 report, so there is no previous report to carry suppressions from. Tier 1 applied no Tier1-Allow trailers (suppressed: [] in its JSON).",
+  "routing": {
+    "tier1_red": false,
+    "wf_implement_fix": "none for tier 1: it is green at 79af3f5",
+    "must_findings_route": "Findings 1 to 3 go back to wf-implement. 1 is a Makefile fix. 2 is a main.yml fix, plus a label Jeff creates. 3 needs a decision: option (a) is a release.yml change inside this feature; (b) and (c) need Jeff. The SHOULD findings go in the PR body for acknowledgement at merge (FLOW-08)."
+  },
+  "informational": [
+    {"rule": "GLOBAL-04", "file": "tools/tier1/tier1.go", "line": 1, "note": "Both tier-1 hints are acceptable. tools/tier1/ holds only the go:embed package, and internal/gittest is a test helper exercised by every scratch-repo test."},
+    {"rule": "FLOW-14", "file": "tools/workflow/check/check.go", "line": 361, "note": "The tools/workflow change is limited to what a3 agreed: (*Front).problems renamed to Problems with a doc comment, its one caller in (*checker).design, and the #76 test's call site (check_test.go:341). The edit came from Jeff's attended step 47f80c3. Design review r1 records it for Consolidation."},
+    {"rule": "FLOW-12", "file": "tools/tier1/rules.yaml", "line": 134, "note": "The plan flagged the fourth design_tolerate entry (firecracker-driver-plan.md: [feature]) for Review. It is narrow and stays dormant until the retrofit merges, and a6 supports it. Tolerating the key 'feature' also tolerates a missing feature key, which is acceptable for a retrofit."},
+    {"rule": "GLOBAL-01", "file": "tools/tier1/golangci/golangci.go", "line": 190, "note": "Tier 1's golangci stage lints the root module only (./... from the repo root), so tools/tier1 and tools/workflow get just the root config. Running tools/tier1/golangci.yml over both modules gives 0 issues, so there is no finding."},
+    {"rule": "LINT-04", "file": "tools/tier1/diff/diff.go", "line": 158, "note": "readLines takes any line starting with '+++ ' as a file header, so an added line whose content starts with '++ ' would reset the path until the next header. No Go source line can start that way, so line findings (Go only) are unaffected."},
+    {"rule": "FLOW-01", "file": "tools/tier1/coupling/coupling.go", "line": 123, "note": "The FLOW-01 finding is anchored on the alphabetically first code path, so a Tier1-Allow: FLOW-01 trailer must use a glob that matches that path ('**' always works). CONTRIBUTING could say so."},
+    {"rule": "GLOBAL-07", "file": ".github/workflows/main.yml", "line": 55, "note": "The windows-latest tier1-test job has not run yet: there is no PR and no CI run on the branch. analyzers.scoped compares filepath.Rel(root, ...) with go/packages paths. Check the first run for short-name temp paths (RUNNER~1) that would put TestRun's package out of scope."},
+    {"rule": "UX-01", "file": "docs/book/src/contributing/structure.md", "line": 111, "note": "The tools/tier1 entry omits report/, golangci.yml and internal/gittest/. This is cosmetic. CONTRIBUTING.md covers the base, GOOS, -no-design, trailers, exit codes and tier1 rules, as task 13 asks. FLOW-15: no overview.md update is owed (contributor tooling)."},
+    {"rule": "UX-03", "file": "tools/tier1/surface/surface.go", "line": 176, "note": "surface-removed treats any remaining string literal with the removed name as an alias or deprecation. This is lenient by design: a removed flag named in an error message passes. Judging that is left to tier 2."},
+    {"rule": "FLOW-03", "file": "docs/design/tier1-static-checks.md", "line": 425, "note": "Per the dispatch, the plan's p3-*/merge-round references predate workflow-streamline (#75). They are recorded in Consolidation at Publish and are not findings."}
+  ]
+}
