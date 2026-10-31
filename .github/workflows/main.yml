@@ -53,6 +53,8 @@ jobs:
           printf 'code=%s\ngotests=%s\nbook=%s\n' "$code" "$gotests" "$book" >> "$GITHUB_OUTPUT"
 
   lint:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -68,6 +70,8 @@ jobs:
 
   # Tier-1 static checks over the PR's diff, or a push's (LINT-02, LINT-04).
   tier1:
+    # Runs on every PR; it needs changes only so a failed classifier shows once.
+    needs: changes
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -98,6 +102,8 @@ jobs:
 
   # tools/tier1 compares git paths, which must work on every platform (GLOBAL-07).
   tier1-test:
+    needs: changes
+    if: needs.changes.outputs.gotests == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
@@ -111,6 +117,8 @@ jobs:
         working-directory: tools/tier1
 
   test:
+    needs: changes
+    if: needs.changes.outputs.gotests == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -120,6 +128,8 @@ jobs:
       - run: make test
 
   tidy:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -132,6 +142,8 @@ jobs:
         working-directory: tools/tier1
 
   build:
+    needs: changes
+    if: needs.changes.outputs.code == 'true'
     runs-on: ${{ matrix.os }}
     strategy:
       matrix:
