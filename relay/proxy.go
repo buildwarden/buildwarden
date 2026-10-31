@@ -72,7 +72,7 @@ func (r *Relay) safeDialContext(ctx context.Context, network, addr string) (net.
 	for _, ip := range ips {
 		if r.isBlockedIP(ip.IP) {
 			return nil, fmt.Errorf(
-			"blocked: connection to %s (%s) denied", host, ip.IP)
+				"blocked: connection to %s (%s) denied", host, ip.IP)
 
 		}
 	}
@@ -113,6 +113,12 @@ func (r *Relay) isBlockedIP(ip net.IP) bool {
 	return false
 }
 
+// The CRL every leaf names, served on the reserved host by handleCACRLGet.
+const (
+	caCRLPath = "/ca.crl"
+	caCRLURL  = "http://artifacts" + caCRLPath
+)
+
 func (r *Relay) signHost(hostname string) (*tls.Certificate, error) {
 	r.certCacheMu.RLock()
 	if cert, ok := r.certCache[hostname]; ok {
@@ -130,6 +136,8 @@ func (r *Relay) signHost(hostname string) (*tls.Certificate, error) {
 		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
 		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		DNSNames:     []string{hostname},
+		// Schannel fails a leaf with nowhere to check revocation.
+		CRLDistributionPoints: []string{caCRLURL},
 	}
 	if ip := net.ParseIP(hostname); ip != nil {
 		template.IPAddresses = []net.IP{ip}
