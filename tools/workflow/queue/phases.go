@@ -51,7 +51,7 @@ var templates = map[string][][]template{
 		{{"implement", "cloud", nil}},
 		{{"review", "cloud", nil}},
 		{{"guide", "cloud", nil}},
-		{{"confirm-pr", "human", nil}, {"publish", "cloud", []string{"confirm-pr"}}},
+		{{"publish", "cloud", nil}}, // opens the PR; no confirmation (FLOW-08)
 		{{"sign-off", "human", nil}},
 		{{"archive", "cloud", nil}},
 	},

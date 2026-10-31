@@ -103,7 +103,7 @@ its branch. The phases are:
 | 3 | Implement | Tasks done; `make lint` and `make test` green; reference docs updated in the same change (UX-01). |
 | 4 | Review | Behavioral-linter tier 1 green; tier-2 report produced for the diff (LINT-04). |
 | 5 | Guide | User-facing narrative docs (guides, examples) written or updated. |
-| 6 | Publish | Parallel round: branch pushed at each checkpoint (FLOW-17). Merge round: PR opened with the human's confirmation, CI green (FLOW-11), blocking native validation done (FLOW-09). |
+| 6 | Publish | Parallel round: branch pushed at each checkpoint (FLOW-17). Merge round: PR opened (no confirmation needed, FLOW-08), CI green (FLOW-11), blocking native validation done (FLOW-09). |
 | 7 | Sign-off | A human signs off the PR and its tier-2 report (FLOW-08) and merges it. |
 | 8 | Archive | Design marked archived (FLOW-12); merged branches and validation leftovers cleaned up (FLOW-16). |
 
@@ -226,8 +226,10 @@ tier-2 behavioral report (acknowledge, or dismiss with a recorded reason), and a
 unconfirmed assumptions (FLOW-07). Changes that declare a `security_boundary`
 additionally need the security note acknowledged (GLOBAL-06).
 
-Pushing a feature branch is not a trunk change and needs no confirmation
-(FLOW-17); opening the PR to `main` does.
+Neither pushing a feature branch (FLOW-17) nor opening its PR to `main` is a
+trunk change, and neither needs confirmation. An agent opens the PR once the work
+is ready (the merge round's Publish, an archive, a fix); the human's review is
+the merge, or comments on the PR when more is wanted.
 
 ---
 
@@ -412,7 +414,7 @@ work reaches a successful checkpoint: the change is committed, and `make test`
 and `make lint` are green (lint run for each platform whose build-tagged files
 the change touches). The pushed branch is the backup and the hand-off point.
 
-What still needs the human's confirmation is opening the PR to `main`. Pushing
+Opening the PR to `main` needs no confirmation either (FLOW-08). Pushing
 never includes `main` itself, a force-push, rewriting history that is already on
 the remote, or deleting a remote branch (FLOW-16).
 
