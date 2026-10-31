@@ -74,7 +74,7 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-    note: 'Jeff, 2026-10-31 (p1-escalate-3): add BOOT-06 to the rules front-matter of windows-driver-plan and BOOT-02 to that of remote-execution-and-measured-hermeticity, and add both to this design''s own rules, so the round-3 security notes cite only rules their blocks list (FLOW-02). Change nothing else in the notes.'
+    note: 'Jeff, 2026-10-31 (p1-escalate-3): add BOOT-06 to the rules front-matter of windows-driver-plan and BOOT-02 to that of remote-execution-and-measured-hermeticity, and add both to this design''s own rules, so the round-3 security notes cite only rules their blocks list (FLOW-02). Change nothing else in the notes. Also apply Jeff''s non-default answers: a2, hyperv-driver-plan status active (not archived) until its Linux-guest phase is built or dropped; a3, do not add alters_relationships to hyperv-windows-prepare, ledger-environment-types or unified-bootstrap (revert it if the branch added it).'
   - id: p1-escalate-3
     phase: 1
     affinity: human
@@ -93,16 +93,17 @@ budget:
 questions:
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: Retrofit all six pre-standard designs in this feature, rather than lazily as designs come to rely on them?
     options:
       - all six now
       - only those a queued feature relies on
       - lazily, per FLOW-12 wording
     recommended: all six now
+    answer: all six now
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Status mapping: archived for hyperv-driver-plan and windows-driver-plan, active for vm-driver-release-plan and platform-compatibility, draft for firecracker-driver-plan and remote-execution-and-measured-hermeticity? hyperv-driver-plan''s status carries a comment naming its unbuilt Linux-guest phase.'
     options:
       - this mapping
@@ -110,18 +111,20 @@ questions:
       - every retrofitted document archived
       - every retrofitted document active
     recommended: this mapping
+    answer: this mapping, but hyperv-driver-plan active until its Linux-guest phase is built or dropped
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: Add the missing alters_relationships key, as true, to the archived hyperv-windows-prepare, ledger-environment-types and unified-bootstrap designs?
     options:
       - add true to all three (conservative)
       - judge each, possibly false for hyperv-windows-prepare
       - leave archived designs untouched
     recommended: add true to all three (conservative)
+    answer: leave archived designs untouched
   - id: a4
     kind: assumed
-    status: open
+    status: confirmed
     question: Add only, never edit an existing line - prepend front-matter to every document, and append a short Security note (retrofit) to windows-driver-plan and remote-execution-and-measured-hermeticity, whose security_boundary is not none and whose body has no security section (FLOW-02)? No Archive summary; stale banners kept.
     options:
       - front-matter plus the two appended security notes
@@ -129,6 +132,7 @@ questions:
       - as the first, plus a one-line retrofit banner
       - as the first, plus Archive summaries for the two archived plans
     recommended: front-matter plus the two appended security notes
+    answer: front-matter plus the two appended security notes
   - id: a5
     kind: assumed
     status: open
@@ -279,3 +283,15 @@ history:
   - at: 2026-10-31T04:01:26Z
     by: human/jeff
     event: done p1-escalate-3
+  - at: 2026-10-31T04:06:29Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: all six now'
+  - at: 2026-10-31T04:06:29Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: this mapping, but hyperv-driver-plan active until its Linux-guest phase is built or dropped'
+  - at: 2026-10-31T04:06:29Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: leave archived designs untouched'
+  - at: 2026-10-31T04:06:29Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: front-matter plus the two appended security notes'
