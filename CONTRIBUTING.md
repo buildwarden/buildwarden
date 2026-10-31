@@ -123,8 +123,11 @@ changing the relay or orchestrator, a quick end-to-end check is:
    `no-design` instead.
 3. Run `make lint && make test` before pushing. Keep commits focused: one logical
    change per commit.
-4. Open a PR against `main`. CI runs lint, tests and cross-platform builds, and a
-   maintainer signs off before merging (FLOW-08).
+4. Open a PR against `main`. On a PR that changes code, CI runs lint, tests and
+   cross-platform builds. A PR that changes only `docs/` (outside
+   `docs/development/`) or top-level Markdown files runs tier 1, the FLOW-18
+   check and, when it touches `docs/book/`, an mdBook build. The `ci-ok` check
+   sums up the run. A maintainer signs off before merging (FLOW-08).
 
 ## Cutting a release
 
