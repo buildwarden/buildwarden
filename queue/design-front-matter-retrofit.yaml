@@ -3,15 +3,15 @@ title: Retrofit FLOW-02 front-matter onto the older designs (FLOW-12)
 priority: 5
 status: in_progress
 round: feature
-phase: 6
+phase: 7
 design: docs/design/design-front-matter-retrofit.md
 branch: feat/design-front-matter-retrofit
 alters_relationships: false
 design_review: required
+source: 'docs/development/README.md: Follow-up - Design front-matter retrofit'
 pr:
   number: 77
-  ci: pending
-source: 'docs/development/README.md: Follow-up - Design front-matter retrofit'
+  ci: green
 steps:
   - id: p0-branch-setup
     phase: 0
@@ -142,12 +142,19 @@ steps:
   - id: f6-open-pr
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f6-consolidate
     lease:
-      claimed_by: cloud/20261031T205751Z
-      expires: 2026-10-31T23:07:07.862463979Z
+      claimed_by: ""
+      expires: null
+  - id: f7-merge
+    phase: 7
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 4
@@ -449,3 +456,9 @@ history:
   - at: 2026-10-31T21:07:07Z
     by: cloud/20261031T205751Z
     event: claimed f6-open-pr until 2026-10-31T23:07:07Z
+  - at: 2026-10-31T21:14:01Z
+    by: cloud/20261031T205751Z
+    event: done f6-open-pr
+  - at: 2026-10-31T21:14:01Z
+    by: cloud/20261031T205751Z
+    event: entered phase 7 (merge)
