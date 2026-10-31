@@ -241,6 +241,9 @@ API on `artifacts`.
 
 No rework of implemented code (FLOW-06): nothing of this feature exists yet.
 
+Merge round (m2): the consolidation pass adds no tasks. Tasks 1-7 are done,
+and the merged head re-runs tier 1 and the review (FLOW-03, FLOW-10).
+
 ## Consolidation (merge round)
 
 Forked from `main` at `35a9ad1`; `main` merged at `d43e5a0` (m0).
