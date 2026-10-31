@@ -74,7 +74,15 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-    note: 'Jeff, 2026-10-31 (p1-escalate-3): add BOOT-06 to the rules front-matter of windows-driver-plan and BOOT-02 to that of remote-execution-and-measured-hermeticity, and add both to this design''s own rules, so the round-3 security notes cite only rules their blocks list (FLOW-02). Change nothing else in the notes. Also apply Jeff''s non-default answers: a2, hyperv-driver-plan status active (not archived) until its Linux-guest phase is built or dropped; a3, do not add alters_relationships to hyperv-windows-prepare, ledger-environment-types or unified-bootstrap (revert it if the branch added it).'
+    note: 'Jeff, 2026-10-31 (p1-escalate-3): add BOOT-06 to the rules front-matter of windows-driver-plan and BOOT-02 to that of remote-execution-and-measured-hermeticity, and add both to this design''s own rules, so the round-3 security notes cite only rules their blocks list (FLOW-02). Change nothing else in the notes. Also apply Jeff''s non-default answers: a2, hyperv-driver-plan status active (not archived) until its Linux-guest phase is built or dropped; a3, do not add alters_relationships to hyperv-windows-prepare, ledger-environment-types or unified-bootstrap (revert it if the branch added it); a6, feature is the matching queue slug where one exists, else the base name (firecracker-driver-plan becomes firecracker-driver, sharing it with firecracker-spike-plan, which Jeff accepted); a9, the README bullet is removed by the attended step p3-remove-readme-bullet, not left for sign-off. Update the design text and plan to match.'
+  - id: p3-remove-readme-bullet
+    phase: 3
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'a9, attended only (FLOW-14): on feat/design-front-matter-retrofit, remove the "Follow-up - Design front-matter retrofit" bullet from docs/development/README.md (the edit the design gives for the PR description), then commit and push. Takeable now.'
   - id: p1-escalate-3
     phase: 1
     affinity: human
@@ -135,45 +143,50 @@ questions:
     answer: front-matter plus the two appended security notes
   - id: a5
     kind: assumed
-    status: open
+    status: confirmed
     question: Record a single security_boundary per document (the most severe, host-env > env-relay > env-beyond), naming the others in a YAML comment that also points to the document's security note (its own security section, or the appended note under a4)?
     options:
       - single value plus comment
       - propose a FLOW-02 amendment allowing a list
     recommended: single value plus comment
+    answer: single value plus comment
   - id: a6
     kind: assumed
-    status: open
+    status: confirmed
     question: Set each retrofitted document's feature key to its file base name (e.g. firecracker-driver-plan)?
     options:
       - file base name
       - the matching queue slug where one exists
     recommended: file base name
+    answer: 'the matching queue slug where one exists (Jeff accepts that firecracker-driver-plan then shares feature: firecracker-driver with firecracker-spike-plan; firecracker-driver''s design resolves it)'
   - id: a7
     kind: assumed
-    status: open
+    status: confirmed
     question: Retrofit firecracker-driver-plan.md here, with the firecracker-driver design amending it later, although that queue item's note says its design retrofits it?
     options:
       - retrofit here; firecracker-driver amends
       - skip it and leave it to firecracker-driver
     recommended: retrofit here; firecracker-driver amends
+    answer: retrofit here; firecracker-driver amends
   - id: a8
     kind: assumed
-    status: open
+    status: confirmed
     question: Hand a permanent archive-wide front-matter check to tier1-static-checks (LINT-02) instead of adding it under tools/workflow in this feature?
     options:
       - hand it to tier1-static-checks
       - add a test under tools/workflow/check in an attended step of this feature
       - no permanent check
     recommended: hand it to tier1-static-checks
+    answer: hand it to tier1-static-checks
   - id: a9
     kind: assumed
-    status: open
+    status: confirmed
     question: Leave the README follow-up bullet for the human to remove at sign-off (FLOW-14), with the exact edit in the PR description?
     options:
       - human removes it at sign-off
       - an attended step removes it on this branch
     recommended: human removes it at sign-off
+    answer: an attended step removes it on this branch
 history:
   - at: 2026-10-28T23:18:38Z
     by: attended-setup
@@ -295,3 +308,18 @@ history:
   - at: 2026-10-31T04:06:29Z
     by: human/jeff
     event: 'assumed question a4 confirmed: front-matter plus the two appended security notes'
+  - at: 2026-10-31T04:09:39Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: single value plus comment'
+  - at: 2026-10-31T04:09:39Z
+    by: human/jeff
+    event: 'assumed question a6 confirmed: the matching queue slug where one exists (Jeff accepts that firecracker-driver-plan then shares feature: firecracker-driver with firecracker-spike-plan; firecracker-driver''s design resolves it)'
+  - at: 2026-10-31T04:09:39Z
+    by: human/jeff
+    event: 'assumed question a7 confirmed: retrofit here; firecracker-driver amends'
+  - at: 2026-10-31T04:09:39Z
+    by: human/jeff
+    event: 'assumed question a8 confirmed: hand it to tier1-static-checks'
+  - at: 2026-10-31T04:09:39Z
+    by: human/jeff
+    event: 'assumed question a9 confirmed: an attended step removes it on this branch'
