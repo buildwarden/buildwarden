@@ -4,10 +4,13 @@ priority: 1
 kind: process
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/workflow-streamline.md
 branch: feat/workflow-streamline
 alters_relationships: null
+pr:
+  number: 75
+  ci: pending
 source: 'Jeff, 2026-10-31: too many gates and PRs per feature (separate archive PR, cleanup step, doubled rounds)'
 steps:
   - id: x1-design
@@ -20,6 +23,13 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-sign-off
+    phase: 3
+    affinity: human
     status: pending
     lease:
       claimed_by: ""
@@ -30,12 +40,44 @@ budget:
     steps: 8
   spent:
     runs: 0
-    steps: 1
+    steps: 2
 questions:
-  - {id: a1, kind: assumed, status: confirmed, options: ['one open PR at a time','every finished feature opens its PR'], recommended: 'one open PR at a time', question: 'One open feature PR at a time?', answer: 'Confirmed at design review r1'}
-  - {id: a2, kind: assumed, status: confirmed, options: ['cloud implements after design review','process items stay attended'], recommended: 'cloud implements after design review', question: 'Cloud Implement and Publish for process items after the design review?', answer: 'Confirmed at design review r1'}
-  - {id: a3, kind: assumed, status: confirmed, options: ['mechanical skip criteria','agent judges triviality'], recommended: 'mechanical skip criteria', question: 'Mechanical skip criteria for trivial designs?', answer: 'Confirmed at r1; a re-review judges the delta from the last approved design'}
-  - {id: a4, kind: assumed, status: confirmed, options: ['escalations only','keep sign-off and cleanup steps'], recommended: 'escalations only', question: 'Escalations as the only other human steps?', answer: 'Confirmed at design review r1'}
+  - id: a1
+    kind: assumed
+    status: confirmed
+    question: One open feature PR at a time?
+    options:
+      - one open PR at a time
+      - every finished feature opens its PR
+    recommended: one open PR at a time
+    answer: Confirmed at design review r1
+  - id: a2
+    kind: assumed
+    status: confirmed
+    question: Cloud Implement and Publish for process items after the design review?
+    options:
+      - cloud implements after design review
+      - process items stay attended
+    recommended: cloud implements after design review
+    answer: Confirmed at design review r1
+  - id: a3
+    kind: assumed
+    status: confirmed
+    question: Mechanical skip criteria for trivial designs?
+    options:
+      - mechanical skip criteria
+      - agent judges triviality
+    recommended: mechanical skip criteria
+    answer: Confirmed at r1; a re-review judges the delta from the last approved design
+  - id: a4
+    kind: assumed
+    status: confirmed
+    question: Escalations as the only other human steps?
+    options:
+      - escalations only
+      - keep sign-off and cleanup steps
+    recommended: escalations only
+    answer: Confirmed at design review r1
 history:
   - at: 2026-10-31T20:04:39Z
     by: human/jeff
@@ -52,3 +94,12 @@ history:
   - at: 2026-10-31T20:25:52Z
     by: human/jeff
     event: entered phase 2 (implement)
+  - at: 2026-10-31T20:26:08Z
+    by: human/jeff
+    event: claimed x2-implement until 2026-10-31T22:26:08Z
+  - at: 2026-10-31T20:39:00Z
+    by: human/jeff
+    event: done x2-implement
+  - at: 2026-10-31T20:39:00Z
+    by: human/jeff
+    event: entered phase 3 (sign-off)
