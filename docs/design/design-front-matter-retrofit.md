@@ -1,6 +1,6 @@
 ---
 feature: design-front-matter-retrofit
-status: draft
+status: archived
 round: parallel
 drivers: []
 seams: []
@@ -816,4 +816,48 @@ None.
 
 ## Archive summary
 
-Filled in on merge (FLOW-12).
+Archived at Publish (`f6-open-pr`), after four design rounds (FLOW-06; the
+fourth after Jeff's p1-escalate-3 decision), the feature round and a merge
+of `main` at 154833b.
+
+- **Built.** FLOW-02 front-matter prepended to the six pre-standard designs
+  (`firecracker-driver-plan`, `hyperv-driver-plan`, `platform-compatibility`,
+  `remote-execution-and-measured-hermeticity`, `vm-driver-release-plan`,
+  `windows-driver-plan`), plus a `## Security note (retrofit)` appended to
+  `windows-driver-plan` and `remote-execution-and-measured-hermeticity`. No
+  existing line was edited. The three archived designs
+  (`hyperv-windows-prepare`, `ledger-environment-types`, `unified-bootstrap`)
+  are unchanged and still lack `alters_relationships` (a3). At consolidation
+  the five non-archived retrofits and this design gained
+  `design_review: required` (FLOW-19, #75/#76).
+- **Decisions taken:**
+  - retrofit all six now, not lazily (a1);
+  - add only, with a security note where `security_boundary` is not `none`
+    and the body has none, since FLOW-02 is a MUST (a4);
+  - `feature` is the queue slug where one exists, so the firecracker plan
+    shares `firecracker-driver` with `firecracker-spike-plan` (a6, Jeff);
+  - `status` by current standing; `hyperv-driver-plan` `active` until its
+    Linux build guest is built or dropped (a2, Jeff);
+  - conservative values: every dependent driver for a shared-package change,
+    `alters_relationships: true` when unclear, one most-severe boundary (a5),
+    and every rule a note cites in `rules` (Decision 12);
+  - `native_validation` and `tier2_gaps` are descriptive only.
+- **Rejected:** lazy retrofit; a recorded FLOW-02 exception instead of the
+  notes; rewriting documents into template shape; a list-valued
+  `security_boundary`; base-name slugs everywhere; `archived` for
+  `hyperv-driver-plan`; adding `alters_relationships: true` to the archived
+  designs; a check under `tools/workflow/` on this branch (a8).
+- **Validated.** Tier 0 only: `check.ParseDesign` and `Front.problems` via a
+  scratch `go test -overlay` report nothing for the retrofits, this design and
+  `workflow-bootstrap`, and exactly `missing alters_relationships` for the
+  three archived designs; no line under `docs/design/` removed against the
+  merge base; `make lint` and `make test` green. No native host owed.
+- **For future designs touching `design-archive`, `front-matter`, `retrofit`
+  or `archive-retrieval`:** no pre-standard design is left. The permanent
+  archive-wide check is handed to `tier1-static-checks` (a8); it must exempt
+  or tolerate the three archived designs' missing `alters_relationships`, and
+  should decide whether the pre-#75 `round` key, still on these retrofits and
+  every older design, is dropped archive-wide. The retrofitted values were
+  derived from text, not from a design review: a design building on one of
+  those plans re-derives its own, and `firecracker-driver` settles the shared
+  slug and the RELAY-03 warm-pool CA point in the firecracker block.
