@@ -36,15 +36,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261031T013930Z
+      expires: 2026-10-31T03:49:55.9926313Z
 budget:
   estimate:
     runs: 2
     steps: 12
   spent:
     runs: 1
-    steps: 2
+    steps: 3
 questions:
   - id: a1
     kind: assumed
@@ -100,3 +100,6 @@ history:
   - at: 2026-10-31T01:43:03Z
     by: human/jeff
     event: 'assumed question a1 confirmed: Serve it unrecorded, like /ca.pem. Jeff (in chat, 2026-10-30): serving the blank revocation list should be considered a relay internal artifact, not something relevant to the actual inputs, since it should not affect the build outputs in a meaningful way.'
+  - at: 2026-10-31T01:49:55Z
+    by: cloud/20261031T013930Z
+    event: claimed p2-plan until 2026-10-31T03:49:55Z
