@@ -55,6 +55,7 @@ steps:
     lease:
       claimed_by: ""
       expires: null
+    note: 'Jeff, 2026-10-31: first merge origin/main into feat/tier1-static-checks (it carries 0227e58, the tools/workflow lll fix the make lint gate needs), resolve any conflicts, then finish the remaining tasks.'
 budget:
   estimate:
     runs: 6

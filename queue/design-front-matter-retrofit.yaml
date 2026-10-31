@@ -3,7 +3,7 @@ title: Retrofit FLOW-02 front-matter onto the older designs (FLOW-12)
 priority: 4
 status: in_progress
 round: parallel
-phase: 3
+phase: 4
 design: docs/design/design-front-matter-retrofit.md
 branch: feat/design-front-matter-retrofit
 alters_relationships: false
@@ -78,7 +78,7 @@ steps:
   - id: p3-remove-readme-bullet
     phase: 3
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -105,13 +105,20 @@ steps:
     lease:
       claimed_by: ""
       expires: null
+  - id: p4-review
+    phase: 4
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
-    runs: 3
-    steps: 14
+    runs: 4
+    steps: 20
   spent:
     runs: 3
-    steps: 15
+    steps: 16
 questions:
   - id: a1
     kind: assumed
@@ -361,3 +368,15 @@ history:
   - at: 2026-10-31T10:29:37Z
     by: cloud/20261031T095649Z
     event: done p3-implement-r3
+  - at: 2026-10-31T14:51:00Z
+    by: human/jeff
+    event: claimed p3-remove-readme-bullet until 2026-10-31T16:51:00Z
+  - at: 2026-10-31T14:51:00Z
+    by: human/jeff
+    event: done p3-remove-readme-bullet
+  - at: 2026-10-31T14:51:00Z
+    by: human/jeff
+    event: entered phase 4 (review)
+  - at: 2026-10-31T14:51:07Z
+    by: human/jeff
+    event: 'estimate raised to 20 steps / 4 runs (Jeff, over budget at 16/14 steps, 3/3 runs)'
