@@ -1,7 +1,7 @@
 feature: security-suite
 title: 'Build the TEST-08 security suite and pen-tester agent (Deep-dive #1)'
 priority: 18
-status: queued
+status: in_progress
 round: feature
 phase: 0
 design: docs/design/security-suite.md
@@ -14,15 +14,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261101T105730Z
+      expires: 2026-11-01T13:07:47.474857171Z
 budget:
   estimate:
     runs: 10
     steps: 50
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 1
 questions: []
 history:
   - at: 2026-10-28T23:18:38Z
@@ -37,3 +37,9 @@ history:
   - at: 2026-10-31T20:44:50Z
     by: human/jeff
     event: migrated to the feature round at phase 0 (workflow-streamline)
+  - at: 2026-11-01T11:07:47Z
+    by: cloud/20261101T105730Z
+    event: started (FLOW-05)
+  - at: 2026-11-01T11:07:47Z
+    by: cloud/20261101T105730Z
+    event: claimed f0-branch-setup until 2026-11-01T13:07:47Z
