@@ -3,10 +3,11 @@ title: Relay writes a path field under http-body, whose schema forbids extra fie
 priority: 15
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/http-body-path-drift.md
 branch: feat/http-body-path-drift
-alters_relationships: null
+alters_relationships: false
+design_review: required
 source: 'specs-migration review (refuted as pre-existing, 2026-10-31): relay/relay.go recordServed writes {"path": ...} under metadata-http-body/v1, additionalProperties: false; decide schema v2 or producer change'
 steps:
   - id: f0-branch-setup
@@ -19,10 +20,26 @@ steps:
   - id: f1-design
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261101T105730Z
-      expires: 2026-11-01T12:58:28.139176328Z
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review
+    phase: 2
+    affinity: human
+    status: pending
+    needs:
+      - f2-plan
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -30,7 +47,35 @@ budget:
   spent:
     runs: 1
     steps: 2
-questions: []
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: 'Fix the drift in the producer, with relay-served inputs'' http-body close metadata becoming {"status": 200}, rather than a schema v2 admitting path? (path duplicates the OPEN record''s url; v0.6.0 is the only release that wrote it)'
+    options:
+      - 'producer writes {"status": 200}'
+      - producer writes {} (the v1 doc reserves the empty map for request bodies)
+      - 'schema v2 admitting path: new $id, header index 2 moves to it (alters a versioned seam)'
+      - widen v1 in place (forbidden by RELAY-05)
+    recommended: 'producer writes {"status": 200}'
+  - id: a2
+    kind: assumed
+    status: open
+    question: Record the v0.6.0 deviation (an extra path key in served-input http-body closes; readers ignore it) as a note in specs/metadata-http-body/v1.md, committed with a Tier1-Allow RELAY-05 trailer since its schema is unchanged?
+    options:
+      - note in metadata-http-body/v1.md with a Tier1-Allow trailer
+      - note in build-ledger/v1.md (prose-only, no trailer)
+      - no note; release notes only
+    recommended: note in metadata-http-body/v1.md with a Tier1-Allow trailer
+  - id: a3
+    kind: assumed
+    status: open
+    question: Guard against future drift with a shallow conformance test over the relay's end-to-end ledger (top-level metadata keys checked against each schema's properties where additionalProperties is false, no new dependency)?
+    options:
+      - shallow key check, no new dependency
+      - full JSON Schema validation with a third-party validator
+      - only a targeted assertion on served-input closes
+    recommended: shallow key check, no new dependency
 history:
   - at: 2026-10-31T22:54:14Z
     by: human/jeff
@@ -50,3 +95,9 @@ history:
   - at: 2026-11-01T10:58:28Z
     by: cloud/20261101T105730Z
     event: claimed f1-design until 2026-11-01T12:58:28Z
+  - at: 2026-11-01T11:03:27Z
+    by: cloud/20261101T105730Z
+    event: done f1-design
+  - at: 2026-11-01T11:03:27Z
+    by: cloud/20261101T105730Z
+    event: entered phase 2 (plan)
