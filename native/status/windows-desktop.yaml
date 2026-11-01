@@ -1,6 +1,6 @@
 # Written by native-tick.sh; see the workflow README. One line of reason, no logs (FLOW-18).
 machine: windows-desktop
-last_run: 2026-10-31T23:10:02Z
-outcome: failed
-reason: "stop: relay boot VHDX refresh failed"
-since: 2026-10-31T23:10:02Z
+last_run: 2026-11-01T05:10:02Z
+outcome: worked
+reason: "claude exited 0"
+since: 2026-11-01T05:10:02Z
