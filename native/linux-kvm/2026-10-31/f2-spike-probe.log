@@ -1,0 +1,55 @@
+# f2-spike-linux-kvm probe, host:linux-kvm/20261101T051002Z (windows-desktop, WSL2 Ubuntu)
+Sun Nov  1 05:12:10 UTC 2026
+Linux Balrog 6.18.54.1-microsoft-standard-WSL2-warden+ #1 SMP PREEMPT_DYNAMIC Sun Nov  1 00:31:50 UTC 2026 x86_64 x86_64 x86_64 GNU/Linux
+PRETTY_NAME="Ubuntu 22.04.3 LTS"
+NAME="Ubuntu"
+--- /dev/kvm
+crw-rw---- 1 root kvm 10, 232 Oct 31 22:12 /dev/kvm
+access=none
+uid=1000(jeff) gid=1000(jeff) groups=1000(jeff),4(adm),20(dialout),24(cdrom),25(floppy),27(sudo),29(audio),30(dip),44(video),46(plugdev),116(netdev)
+nested kvm_intel: Y
+--- binaries
+: 
+: 
+: 
+: 
+: 
+: 
+: 
+--- kernel config
+CONFIG_KVM=m
+CONFIG_KVM_INTEL=m
+CONFIG_BRIDGE_NETFILTER=m
+CONFIG_NF_CONNTRACK_ZONES=y
+CONFIG_NF_TABLES=y
+CONFIG_NFT_CT=m
+CONFIG_NFT_NAT=y
+CONFIG_NETFILTER_XT_MATCH_OWNER=m
+CONFIG_IP_NF_NAT=m
+CONFIG_IP_NF_RAW=m
+CONFIG_IP6_NF_IPTABLES=m
+CONFIG_NF_TABLES_BRIDGE=m
+CONFIG_BRIDGE=m
+CONFIG_TUN=m
+--- loaded modules
+br_netfilter
+bridge
+kvm
+kvm_intel
+nf_conntrack
+nft_meta_bridge
+tun
+--- resources
+24
+               total        used        free      shared  buff/cache   available
+Mem:           32000         719       29816           5        1465       30964
+/dev/sdd       1007G  2.3G  954G   1% /
+firecracker: MISSING
+jailer: MISSING
+/usr/bin/qemu-img
+/usr/sbin/iptables
+/usr/sbin/ip6tables
+/usr/sbin/nft
+/usr/sbin/ip
+iptables v1.8.7 (nf_tables)
+bash: line 1: firecracker: command not found
