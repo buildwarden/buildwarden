@@ -21,8 +21,8 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261101T105730Z
-      expires: 2026-11-01T13:08:27.030396307Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 10
@@ -59,3 +59,6 @@ history:
   - at: 2026-11-01T11:08:27Z
     by: cloud/20261101T105730Z
     event: claimed f1-design until 2026-11-01T13:08:27Z
+  - at: 2026-11-01T11:11:51Z
+    by: cloud/20261101T105730Z
+    event: 'released f1-design: unattended design agent halted by a safety classifier while drafting; no design written. Needs Jeff to scope it (attended, or a harness/front-matter/tiers-only design without detailed attack techniques)'
