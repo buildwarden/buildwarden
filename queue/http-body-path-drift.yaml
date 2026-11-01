@@ -1,7 +1,7 @@
 feature: http-body-path-drift
 title: Relay writes a path field under http-body, whose schema forbids extra fields
 priority: 15
-status: queued
+status: in_progress
 round: feature
 phase: 0
 design: docs/design/http-body-path-drift.md
@@ -14,17 +14,23 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261101T105730Z
+      expires: 2026-11-01T12:57:43.297263639Z
 budget:
   estimate:
     runs: 1
     steps: 9
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 1
 questions: []
 history:
   - at: 2026-10-31T22:54:14Z
     by: human/jeff
     event: queued at priority 14 (intake)
+  - at: 2026-11-01T10:57:43Z
+    by: cloud/20261101T105730Z
+    event: started (FLOW-05)
+  - at: 2026-11-01T10:57:43Z
+    by: cloud/20261101T105730Z
+    event: claimed f0-branch-setup until 2026-11-01T12:57:43Z
