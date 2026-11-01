@@ -250,7 +250,14 @@ gaps:
       writes native/status/windows-desktop.yaml, but no host step or open gap
       had named windows-hyperv or container-any, so its gate never had work.
       This entry gives it some.
-    status: open
+    status: done
+    done: 2026-10-31
+    evidence: >-
+      host:windows-desktop/20261101T051002Z (unattended, scheduled): a worked run.
+      The gate found work, the session claimed firecracker-driver f2-spike-linux-kvm,
+      probed the WSL2 host, released the step with evidence under native/linux-kvm/2026-10-31/,
+      pushed the queue change, and pushed its own `## Run host:windows-desktop/20261101T051002Z`
+      section to digest/2026-10-31.md.
   - id: firecracker-qemu-linuxguest
     host: qemu-any
     what: A qemu Linux guest build after the firecracker-driver feature moves the cloud-init seed, ISO writer and cloud-image code to driver/linuxguest and the relay asset lookup, relay initrd and cpio append to driver/relayvm, and gives tools/relay-vm/build-initramfs.sh an ARCH parameter (default aarch64, output unchanged).
@@ -261,7 +268,10 @@ gaps:
     host: windows-hyperv
     what: A Hyper-V build after the firecracker-driver feature's cmd/warden driver wiring and new shared driver/ packages (the relay init and Hyper-V boot disk are not touched).
     design: docs/design/firecracker-driver.md
-    note: Tracked (FLOW-09) regression check; test feat/firecracker-driver once it carries the cmd/warden change.
+    note: >-
+      Tracked (FLOW-09) regression check; test feat/firecracker-driver once it carries the cmd/warden change.
+      2026-10-31 (host:windows-hyperv/20261101T051002Z, unattended): not run; the branch
+      (3a27a78) is still design-only, with no cmd/warden or driver/ change against main.
     status: open
   - id: firecracker-vz-cli-wiring
     host: macos-vz
