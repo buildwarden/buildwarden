@@ -248,23 +248,79 @@ test (D4) is tier 0.
 
 ## Implementation plan
 
-1. **Producer fix** (rework of existing code, FLOW-06): in `relay/relay.go`,
-   `recordServed` drops its `path` parameter and writes
-   `{"status": http.StatusOK}` under `schemaHTTPBody`; update its doc comment
-   and the three callers. Rules: RELAY-01 (write stays on `Ledger.Close`),
-   RELAY-02 (served bytes unchanged), RELAY-05 (conforms to v1).
-2. **Conformance test** (D4): a relay test that reuses the
-   `relay_collector_test.go` harness, reads the landed ledger with the
-   `ledger` package, maps header `$id`s to `specs/*/v*.schema.json` files, and
-   checks top-level keys for schemas with `additionalProperties: false`; plus
-   an explicit assertion that the three served-input closes carry
-   `{"status": 200}`. Rules: TEST-01, TEST-02, TEST-04 (deterministic),
-   GLOBAL-07 (`io/fs`-style forward-slash paths as `specs_test.go` does).
-3. **Spec note** (D3): add the "Known producer deviation" paragraph to
-   `specs/metadata-http-body/v1.md`; commit with
+Each task names the assumed questions it rests on, so a changed answer in the
+design review shows which tasks move. Tasks 1 to 3 land in one commit (the
+test is run red against the current producer before task 3, then committed
+green with it, FLOW-17); task 4 is its own commit because it carries the
+trailer.
+
+1. **Share the end-to-end scenario** (rework of existing test code, FLOW-06;
+   rests on a3). In `relay/relay_collector_test.go`, move the body of
+   `TestRelayCollectorEndToEnd` up to and including `verifyLedgerLanded` into
+   a helper that returns the collector output directory, and have
+   `TestRelayCollectorEndToEnd` call it with its assertions unchanged, so the
+   conformance test drives exactly the existing scenario (build script,
+   bootstrap, context file and listing, a 404, an artifact POST, heartbeat,
+   exit). Rules: TEST-01, TEST-04.
+2. **Metadata conformance test** (D4; tier 0, TEST-02; rests on a3 for its
+   shape and on a1 for the served-input assertion). A new
+   `relay/ledger_conformance_test.go` in package `relay`, pure Go with no new
+   dependency, that runs the task 1 scenario and checks the landed ledger:
+   - loads every `specs/*/v*.schema.json` through `fs.Glob` on
+     `os.DirFS("..")` (forward-slash `io/fs` paths, as `specs/specs_test.go`
+     does) into a map from `$id` to its `properties` keys and whether
+     `additionalProperties` is `false`;
+   - reads the ledger with `ledger.Verify`, and for each record whose schema
+     index is not `0xFF` resolves the index through the header's `schemas`
+     list to a schema file by `$id` (an index or `$id` that does not resolve
+     fails), decodes the metadata CBOR as a map, and, when that schema sets
+     `additionalProperties: false`, fails on each top-level key not in its
+     `properties`, naming the record, its type, the `$id` and the key;
+   - finds the `OPEN` records for `http://artifacts/build-script`,
+     `http://artifacts/bootstrap` and `http://cwd/src/main.c`, and asserts
+     that the `CLOSE` matching each by open signature carries exactly
+     `{"status": 200}` under `http-body`.
+   Run it before task 3 and confirm it fails on the `path` key, which shows it
+   catches this drift. Rules: TEST-01, TEST-02, TEST-04, GLOBAL-07, RELAY-05.
+3. **Producer fix** (D1; rework of existing code, FLOW-06; rests on a1). In
+   `relay/relay.go`, `recordServed` drops its `path` parameter and writes
+   `{"status": http.StatusOK}` under `schemaHTTPBody`; its doc comment names
+   all three served inputs (build script, bootstrap config, context file) and
+   the v1 metadata; `handleBuildScript`, `handleBootstrap` and
+   `handleContextGet` drop the third argument. The `OPEN` record, hash block,
+   served bytes and record order are untouched. Task 2's test and the existing
+   relay and `specs` tests pass. Rules: RELAY-01 (the write stays on
+   `Ledger.Close`), RELAY-02 (response bytes unchanged), RELAY-04 (shared,
+   mode-independent handlers), RELAY-05 (conforms to v1), GLOBAL-06.
+4. **Spec note** (D3; rests on a2, and on a1 for "current relays do not write
+   it"). Add a "Known producer deviation" paragraph after the field table in
+   `specs/metadata-http-body/v1.md`: ledgers written by the v0.6.0 relay, and
+   unreleased builds from `b716d9e` onward, carry a `path` text field in the
+   `http-body` close records of relay-served inputs; it duplicates the path of
+   the matching `OPEN` record's `url`; readers ignore it; current relays write
+   `{"status": 200}` instead. `v1.schema.json` does not change. Commit this
+   file alone with the trailer below, in the `"<RULE-ID> <path-glob>:
+   <reason>"` form `tools/tier1/diff` parses (a reasonless or malformed
+   trailer is itself a LINT-05 finding):
    `Tier1-Allow: RELAY-05 specs/metadata-http-body/v1.md: prose-only erratum for v0.6.0 ledgers; schema unchanged (http-body-path-drift)`.
-   Rules: RELAY-05 (documents stay accurate for ledgers already written).
-4. `make test`, `make lint`; push the branch (FLOW-17).
+   The book page `docs/book/src/specs/metadata-http-body/v1.md` includes the
+   document, so it needs no edit. Rules: RELAY-05, LINT-05.
+5. **Docs owed: none, confirmed** (rests on a1). No user-facing surface
+   changes, so no reference doc under `docs/book/src/guide/` changes (UX-01);
+   the relay flow is unchanged and `overview.md`'s relay pseudocode does not
+   describe served-input metadata, so it stays as is (FLOW-15). The ledger
+   spec's Default Schemas table, `specs/README.md` and `specs/specs_test.go`
+   stay unchanged because no `$id` or header index moves (GLOBAL-08). Check
+   each again against the final diff before task 6. Rules: UX-01, FLOW-15,
+   GLOBAL-08.
+6. **Verify and push**. `make test` and `make lint` green; no build-tagged
+   file is touched, so the host platform's lint suffices. `make lint` runs
+   tools/tier1, whose report must list the `schema-doc` finding on
+   `specs/metadata-http-body/v1.md` as suppressed by task 4's trailer, with no
+   other finding. Push `feat/http-body-path-drift`. The integration workflow
+   (TEST-02 tier 1) runs on the PR because `relay/` is a shared package; no
+   integration test is added, and nothing goes to tier 2 or native
+   validation. Rules: TEST-01, TEST-02, LINT-04, FLOW-09, FLOW-17.
 
 ## Design review
 
