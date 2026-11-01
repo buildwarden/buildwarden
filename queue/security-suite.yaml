@@ -3,7 +3,7 @@ title: 'Build the TEST-08 security suite and pen-tester agent (Deep-dive #1)'
 priority: 18
 status: in_progress
 round: feature
-phase: 0
+phase: 1
 design: docs/design/security-suite.md
 branch: feat/security-suite
 alters_relationships: null
@@ -12,10 +12,17 @@ steps:
   - id: f0-branch-setup
     phase: 0
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f1-design
+    phase: 1
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261101T105730Z
-      expires: 2026-11-01T13:07:47.474857171Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 10
@@ -43,3 +50,9 @@ history:
   - at: 2026-11-01T11:07:47Z
     by: cloud/20261101T105730Z
     event: claimed f0-branch-setup until 2026-11-01T13:07:47Z
+  - at: 2026-11-01T11:08:24Z
+    by: cloud/20261101T105730Z
+    event: done f0-branch-setup
+  - at: 2026-11-01T11:08:24Z
+    by: cloud/20261101T105730Z
+    event: entered phase 1 (design)
