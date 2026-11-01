@@ -29,8 +29,8 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261101T105730Z
+      expires: 2026-11-01T13:03:39.522638588Z
   - id: f2-design-review
     phase: 2
     affinity: human
@@ -46,7 +46,7 @@ budget:
     steps: 9
   spent:
     runs: 1
-    steps: 2
+    steps: 3
 questions:
   - id: a1
     kind: assumed
@@ -101,3 +101,6 @@ history:
   - at: 2026-11-01T11:03:27Z
     by: cloud/20261101T105730Z
     event: entered phase 2 (plan)
+  - at: 2026-11-01T11:03:39Z
+    by: cloud/20261101T105730Z
+    event: claimed f2-plan until 2026-11-01T13:03:39Z
