@@ -1,6 +1,6 @@
 feature: http-body-path-drift
 title: Relay writes a path field under http-body, whose schema forbids extra fields
-priority: 14
+priority: 15
 status: queued
 round: feature
 phase: 0

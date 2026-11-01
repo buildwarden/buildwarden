@@ -1,6 +1,6 @@
 feature: queue-summary
 title: 'QUEUE.md: a generated summary of the queue on the workflow branch'
-priority: 1
+priority: 2
 kind: process
 status: done
 round: process

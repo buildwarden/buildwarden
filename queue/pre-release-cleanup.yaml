@@ -1,6 +1,6 @@
 feature: pre-release-cleanup
 title: Clear tier 1's release-range findings before the next tag (GLOBAL-01, GLOBAL-03, FLOW-12)
-priority: 8
+priority: 9
 status: done
 round: feature
 phase: 8

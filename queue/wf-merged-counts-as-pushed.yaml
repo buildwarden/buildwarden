@@ -1,6 +1,6 @@
 feature: wf-merged-counts-as-pushed
 title: 'wf: a branch already merged into main satisfies the pushed, main-merged and PR checks'
-priority: 9
+priority: 10
 kind: process
 status: done
 round: process

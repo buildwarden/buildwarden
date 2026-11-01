@@ -1,6 +1,6 @@
 feature: relay05-specs-wording
 title: 'RELAY-05: environment-<type>/ family, $id policy, drop the migration note'
-priority: 13
+priority: 14
 kind: process
 status: done
 round: process

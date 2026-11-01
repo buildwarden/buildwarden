@@ -1,6 +1,6 @@
 feature: firecracker-driver
 title: Firecracker driver
-priority: 15
+priority: 16
 status: in_progress
 round: feature
 phase: 2

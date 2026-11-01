@@ -1,6 +1,6 @@
 feature: test-rules-docs-only
 title: TEST-01/TEST-02 allow docs-only changes to skip the Go suites
-priority: 10
+priority: 11
 kind: process
 status: done
 round: process
