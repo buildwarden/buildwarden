@@ -42,8 +42,8 @@ steps:
     needs:
       - f1-design
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: host:linux-kvm/20261101T051002Z
+      expires: 2026-11-01T07:10:55.835311Z
     note: 'Phase 0 spike (docs/design/firecracker-driver.md Implementation plan step 1) on a Linux KVM host, on feat/firecracker-driver. In phase 2 so Implement cannot start before it. Claimable once a8 is confirmed and hosts.yaml serves linux-kvm. A failed decision returns the feature to Design (FLOW-06). EXPERIMENTAL host (Jeff, review r1): linux-kvm runs from WSL2 on windows-desktop and may need real Linux hardware. If the spike is blocked by the host itself (no nested /dev/kvm, a WSL kernel missing bridge/tun/br_netfilter/nf_tables bridge/conntrack zones, or nested KVM too unreliable to judge the driver), record the evidence under native/linux-kvm/<date>/ and add a human step f2-escalate-linux-host that this step needs, saying Jeff must provision or procure a dedicated Linux KVM host; it then shows under Needs Jeff in QUEUE.md and in /workflow-human.'
   - id: f6-validate-linux-kvm
     phase: 6
@@ -75,7 +75,7 @@ budget:
     steps: 60
   spent:
     runs: 1
-    steps: 4
+    steps: 5
 questions:
   - id: a1
     kind: assumed
@@ -276,3 +276,6 @@ history:
   - at: 2026-10-31T23:52:28Z
     by: human/jeff
     event: done f2-design-review
+  - at: 2026-11-01T05:10:55Z
+    by: host:linux-kvm/20261101T051002Z
+    event: claimed f2-spike-linux-kvm until 2026-11-01T07:10:55Z
