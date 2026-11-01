@@ -74,7 +74,7 @@ None.
 ## Design review
 
 - **r1, 2026-11-01: approved** (Jeff, attended session, FLOW-19), as
-  presented in the session. Approved at the commit that adds this design.
+  presented in the session. Approved at `75b860e`.
 
 ## Consolidation
 
