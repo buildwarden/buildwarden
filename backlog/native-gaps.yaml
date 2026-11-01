@@ -272,6 +272,8 @@ gaps:
       Tracked (FLOW-09) regression check; test feat/firecracker-driver once it carries the cmd/warden change.
       2026-10-31 (host:windows-hyperv/20261101T051002Z, unattended): not run; the branch
       (3a27a78) is still design-only, with no cmd/warden or driver/ change against main.
+      2026-11-01 (host:windows-hyperv/20261101T111001Z, unattended): not run; the branch
+      is unchanged at 3a27a78 (docs and tools/tier1/rules.yaml only against main a3e18fb).
     status: open
   - id: firecracker-vz-cli-wiring
     host: macos-vz

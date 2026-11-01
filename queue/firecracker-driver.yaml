@@ -58,10 +58,12 @@ steps:
     phase: 6
     affinity: host:linux-kvm
     status: pending
+    needs:
+      - f2-spike-linux-kvm
     lease:
       claimed_by: ""
       expires: null
-    note: Blocking native validation (FLOW-09) per docs/design/firecracker-driver.md Validation plan. f6-open-pr must need this step once phase 6 is seeded. No machine serves linux-kvm in hosts.yaml yet (question a8 recommends windows-desktop under WSL2, plus a CI job that may later cover it), so wf validate flags this step until hosts.yaml lists it.
+    note: 'Blocking native validation (FLOW-09) per docs/design/firecracker-driver.md Validation plan. f6-open-pr must need this step once phase 6 is seeded. No machine serves linux-kvm in hosts.yaml yet (question a8 recommends windows-desktop under WSL2, plus a CI job that may later cover it), so wf validate flags this step until hosts.yaml lists it. needs f2-spike-linux-kvm added by host:linux-kvm/20261101T111001Z (unattended): wf next offered this phase-6 step while the feature is in phase 2 (ready() checks needs, not the feature phase), and wf gate woke windows-desktop for it; the Validation plan needs the implemented driver, so there was nothing to run. Stopgap until wf skips steps of a later phase; it should also need f3-implement once phase 3 is seeded.'
   - id: f2-plan
     phase: 2
     affinity: cloud
@@ -294,3 +296,6 @@ history:
   - at: 2026-11-01T05:12:37Z
     by: host:linux-kvm/20261101T051002Z
     event: 'f2-provision-linux-kvm added (human); f2-spike-linux-kvm needs it'
+  - at: 2026-11-01T11:14:00Z
+    by: host:linux-kvm/20261101T111001Z
+    event: 'f6-validate-linux-kvm now needs f2-spike-linux-kvm: wf next offered the phase-6 step in phase 2 and the gate woke windows-desktop for it; not claimed (nothing implemented to validate)'
