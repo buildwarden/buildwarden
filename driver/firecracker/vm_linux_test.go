@@ -3,6 +3,7 @@
 package firecracker
 
 import (
+	"os"
 	"strings"
 	"syscall"
 	"testing"
@@ -24,5 +25,22 @@ func TestVMMCommand(t *testing.T) {
 	}
 	if k := vmmCommand("fc", "x", true).SysProcAttr; k.Pdeathsig != 0 || !k.Setpgid {
 		t.Fatalf("--keep-vms attrs = %+v (kept VMs must outlive warden)", k)
+	}
+}
+
+// TestProcessRecord checks that a running process's record matches it in
+// liveVMMs, and that a pid /proc cannot describe fails instead of writing an
+// entry nothing would ever match.
+func TestProcessRecord(t *testing.T) {
+	rec, err := processRecord(os.Getpid(), true)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if live := liveVMMs([]vmmRecord{rec}, os.ReadFile, os.Readlink); len(live) != 1 ||
+		!live[0].keep {
+		t.Fatalf("this process's record %+v is not live", rec)
+	}
+	if _, err := processRecord(1<<30, false); err == nil {
+		t.Fatal("a pid with no /proc entry was recorded")
 	}
 }

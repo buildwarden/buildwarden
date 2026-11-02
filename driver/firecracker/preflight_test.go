@@ -175,7 +175,7 @@ func TestDoctorUnderSudo(t *testing.T) {
 	for _, s := range []Slot{0, 1} {
 		h.files[slotLockPath(s)] = ""
 		h.files[filepath.Join(filepath.FromSlash(jeffLocks), s.LockName()+".pids")] =
-			"4242 987654 /usr/local/bin/firecracker\n"
+			"4242 987654 - /usr/local/bin/firecracker\n"
 	}
 	h.heldLocks[slotLockPath(1)] = true
 	h.files["/proc/4242/stat"] = statLine

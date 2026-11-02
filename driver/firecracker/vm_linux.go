@@ -10,6 +10,7 @@ import (
 	"path/filepath"
 	"runtime"
 	"strconv"
+	"strings"
 	"syscall"
 )
 
@@ -79,19 +80,37 @@ func startVMM(work, name string, cfg vmConfig, verbose, keep bool) (*vmm, error)
 	if err := <-started; err != nil {
 		return nil, fmt.Errorf("starting the %s VM: %w", name, err)
 	}
-	v.rec = processRecord(c.Process.Pid, keep)
+	if v.rec, err = processRecord(c.Process.Pid, keep); err != nil {
+		// A VMM its pid file cannot name would never be found and reaped.
+		v.stop()
+		err = fmt.Errorf("starting the %s VM: recording its process: %w", name, err)
+		if tail := consoleTail(console, 20); tail != "" {
+			err = fmt.Errorf("%w; last console lines:\n%s", err, indent(tail))
+		}
+		return nil, err
+	}
 	return v, nil
 }
 
-// processRecord is a started VMM's pid-file entry.
-func processRecord(pid int, keep bool) vmmRecord {
+// processRecord is a started VMM's pid-file entry, read from /proc. It fails
+// rather than record an entry liveVMMs could never match.
+func processRecord(pid int, keep bool) (vmmRecord, error) {
 	r := vmmRecord{pid: pid, keep: keep}
 	proc := "/proc/" + strconv.Itoa(pid)
-	if stat, err := os.ReadFile(proc + "/stat"); err == nil {
-		r.start, _ = procStartTime(string(stat))
+	stat, err := os.ReadFile(proc + "/stat")
+	if err != nil {
+		return r, err
 	}
-	r.exe, _ = os.Readlink(proc + "/exe")
-	return r
+	if r.start, err = procStartTime(string(stat)); err != nil {
+		return r, fmt.Errorf("%s/stat: %w", proc, err)
+	}
+	if r.exe, err = os.Readlink(proc + "/exe"); err != nil {
+		return r, err
+	}
+	if strings.ContainsAny(r.exe, "\n") {
+		return r, fmt.Errorf("the firecracker path %q holds a newline", r.exe)
+	}
+	return r, nil
 }
 
 // stop kills the VMM and waits for it to exit.

@@ -31,6 +31,25 @@ func TestPidFileRoundTrip(t *testing.T) {
 	}
 }
 
+// TestPidFileSpacedPath checks that a firecracker path holding spaces (or
+// ending in " keep") round trips, so its VMMs are still found and reaped.
+func TestPidFileSpacedPath(t *testing.T) {
+	recs := []vmmRecord{
+		{pid: 4242, start: 987654, exe: "/opt/my tools/firecracker"},
+		{pid: 4243, start: 987700, exe: "/opt/odd/fc keep", keep: true},
+		{pid: 4244, start: 987800, exe: "/opt/odd/fc keep"},
+	}
+	text := formatPidFile(recs)
+	got := parsePidFile(text)
+	if len(got) != 3 || got[0] != recs[0] || got[1] != recs[1] || got[2] != recs[2] {
+		t.Fatalf("round trip of %q = %+v", text, got)
+	}
+	// A line in another layout is skipped, not misread.
+	if got := parsePidFile("4242 987654 /usr/local/bin/firecracker keep\n"); len(got) != 0 {
+		t.Fatalf("misread an old-layout line as %+v", got)
+	}
+}
+
 // TestLiveVMMs is stale-VMM detection: only a pid that still runs the
 // recorded executable from the recorded start time counts.
 func TestLiveVMMs(t *testing.T) {

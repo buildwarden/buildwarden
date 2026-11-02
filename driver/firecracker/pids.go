@@ -29,14 +29,17 @@ func pidFilePath(s Slot) string {
 	return filepath.Join(driver.LockDir(), s.LockName()+".pids")
 }
 
+// formatPidFile writes one "<pid> <start> keep|- <exe>" line per record. The
+// exe is last and runs to the end of the line, so a path with spaces round
+// trips; processRecord refuses one with a newline.
 func formatPidFile(recs []vmmRecord) string {
 	var b strings.Builder
 	for _, r := range recs {
-		fmt.Fprintf(&b, "%d %d %s", r.pid, r.start, r.exe)
+		flag := "-"
 		if r.keep {
-			b.WriteString(" keep")
+			flag = "keep"
 		}
-		b.WriteByte('\n')
+		fmt.Fprintf(&b, "%d %d %s %s\n", r.pid, r.start, flag, r.exe)
 	}
 	return b.String()
 }
@@ -46,8 +49,8 @@ func formatPidFile(recs []vmmRecord) string {
 func parsePidFile(s string) []vmmRecord {
 	var recs []vmmRecord
 	for _, line := range strings.Split(s, "\n") {
-		f := strings.Fields(line)
-		if len(f) < 3 {
+		f := strings.SplitN(line, " ", 4)
+		if len(f) < 4 || f[3] == "" || (f[2] != "keep" && f[2] != "-") {
 			continue
 		}
 		pid, err1 := strconv.Atoi(f[0])
@@ -55,8 +58,8 @@ func parsePidFile(s string) []vmmRecord {
 		if err1 != nil || err2 != nil || pid <= 1 {
 			continue
 		}
-		recs = append(recs, vmmRecord{pid: pid, start: start, exe: f[2],
-			keep: len(f) > 3 && f[3] == "keep"})
+		recs = append(recs, vmmRecord{pid: pid, start: start, exe: f[3],
+			keep: f[2] == "keep"})
 	}
 	return recs
 }
