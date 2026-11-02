@@ -240,9 +240,12 @@ func switchCreds(c cred) (restore func() error, err error) {
 		if err := unix.Setgroups(groups); err != nil {
 			return fmt.Errorf("restoring groups: %w", err)
 		}
-		if got, err := unix.Getgroups(); err != nil || !slices.Equal(got, groups) {
-			return fmt.Errorf("restoring groups: got %v (%v), want %v", got, err,
-				groups)
+		got, err := unix.Getgroups()
+		if err != nil {
+			return fmt.Errorf("reading groups back: %w", err)
+		}
+		if !slices.Equal(got, groups) {
+			return fmt.Errorf("restoring groups: got %v, want %v", got, groups)
 		}
 		return nil
 	}
