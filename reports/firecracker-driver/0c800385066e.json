@@ -1,0 +1,207 @@
+{
+  "feature": "firecracker-driver",
+  "branch": "feat/firecracker-driver",
+  "head": "0c800385066e",
+  "base": "6899b79b91a0",
+  "round": "feature",
+  "step": "f4-review",
+  "previous_report": null,
+  "scope": "git diff origin/main...feat/firecracker-driver (88 files, +11501/-434; commits 4850b51..0c80038). The merge base is 6899b79; origin/main has since moved to e418871 (#85 to #88), and a trial merge (git merge-tree) is clean.",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass on the windows host: golangci-lint 2.15.0 (go1.26.3), 0 issues in the root module, tools/workflow and tools/tier1; then dist/tier1 -base origin/main: 0 MUST, 0 MUST-review, 0 SHOULD, 1 hint, 0 suppressed, exit 0",
+    "make_lint_per_platform": "GOOS=linux make lint and GOOS=darwin make lint: both pass, same tier1 result (FLOW-17: build-tagged *_linux.go and *_other.go files are touched)",
+    "make_test": "pass: 29 ok lines, no FAIL (root module, tools/workflow, tools/tier1) on windows",
+    "linux_tier0": "The *_linux.go tests do not run on a windows make test. Cross-compiled test binaries (GOOS=linux GOARCH=amd64 go test -c) for driver/firecracker, driver/linuxguest, driver/relayvm, driver, tools/firecracker-vm and cmd/warden, run under WSL: all PASS. TestWaitBuild* also passed -count=100 -cpu=1.",
+    "custom_static_checks": "dist/tier1 -json -base origin/main, exit 0: findings [], suppressed [], hints = 1 x BOOT-07 bootstrap-surface (driver/firecracker/deliver_linux.go; bootstrap.md not in the diff). Judged below as acceptable (informational, BOOT-07).",
+    "fixes_made": "none; tier 1 was green at 0c80038"
+  },
+  "prior_findings": [],
+  "findings": [
+    {
+      "id": 1,
+      "rule": "LINT-08",
+      "related_rules": ["GLOBAL-06", "GLOBAL-05"],
+      "severity": "MUST",
+      "check": "agent-judgment",
+      "file": "cmd/warden/warden.exe",
+      "line": 1,
+      "finding": "Commit 10a1f61 (task 8) adds an 18,178,560-byte Windows build of warden at cmd/warden/warden.exe. It is a local build output: the repo root's warden.exe is excluded only in .git/info/exclude, and .gitignore ignores /warden but not *.exe. Merged, it puts an unverifiable executable into main's tree and history, which nothing rebuilds or checks. The branch is already pushed. No rule or tier-1 check catches a committed build artifact, so this is also a gap in the doc set (LINT-08).",
+      "suggestion": "In a new commit (no force-push, FLOW-17): git rm --cached cmd/warden/warden.exe and add /cmd/warden/warden.exe, or *.exe outside testdata, to .gitignore. Note in the PR body that a squash merge keeps the blob out of main's history; that choice is Jeff's at merge (FLOW-08). Optionally queue a tier-1 check that refuses new binaries outside testdata."
+    },
+    {
+      "id": 2,
+      "rule": "GLOBAL-06",
+      "related_rules": ["ORCH-04", "UX-04"],
+      "severity": "MUST-review",
+      "check": "agent-judgment",
+      "file": "driver/firecracker/slots.go",
+      "line": 138,
+      "finding": "setupSteps starts with flushSteps. These delete every WARDEN-FC jump, flush and delete the chains, and delete the warden_fc bridge table. The jumps come back only at the end, after every slot's steps. Each slot also runs 'ip addr flush dev wfc<i>u' and re-adds the address (line 209). Re-running setup while builds run therefore leaves those slots with no isolation rules for the whole run: about 40 execs per slot, so seconds for 16 slots and longer for 256. In that window: (a) the a10 OUTPUT filter is gone, so any local user can reach a running relay's :8300 control plane (unauthenticated /v1/complete and /v1/output); (b) INPUT from wfc<i>u is unrestricted, so a compromised relay can open connections to host services; (c) the bridge-table host drop is gone, leaving only the sysctl layers. The address flush also breaks the running builds' claim tunnels. Re-running setup is expected: the docs call it idempotent; a8's native host and the CI job re-run it each time; growing --slots on a busy fleet host means re-running it.",
+      "suggestion": "Make the reload atomic and non-disruptive: load each table's WARDEN-FC chains with one iptables-restore --noflush (and ip6tables-restore), or build them under new names and swap the jumps last. Load the bridge table with one nft -f transaction. Skip 'ip addr flush/add' when wfc<i>u already has host(i)/30. Alternatively, refuse setup while any slot's pid file shows live VMMs, naming the fix. Add a tier-0 test that the step list never leaves a moment with no jump into WARDEN-FC (for example, new jumps are inserted before old ones are deleted)."
+    },
+    {
+      "id": 3,
+      "rule": "UX-04",
+      "related_rules": ["ORCH-04"],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "driver/firecracker/doctor.go",
+      "line": 340,
+      "finding": "Under sudo, doctor's per-user checks look at root, not at the user builds run as. Only slotUID follows SUDO_USER. checkOrphans and checkReflink use driver.LockDir() and WorkRoot(), both derived from os.UserCacheDir(). Under default sudo (HOME reset to /root) the orphan check reads root's empty lock dir and prints 'ok' even when the user's slots hold orphans. The reflink check probes root's cache filesystem, and checkKVM always passes as root. Under sudo -E, or a sudoers file that keeps HOME, the check is harmful: TryHostLock creates root-owned 0600 firecracker-slot-<i>.lock files, and possibly a root-owned locks dir, in the user's cache. The user's next build then fails with 'opening lock ...: permission denied', since acquireSlot returns that error without trying the next slot. The CI job runs 'sudo dist/warden doctor' (firecracker.yml:97) but with sudo's default HOME.",
+      "suggestion": "When euid is 0 and SUDO_USER is set, resolve that user's home (user.Lookup) and read its pid files without taking locks. Or print 'skip orphaned VMMs / reflink / kvm access (run without sudo)' for those rows. Never create lock files as root. Add a fake-host test for the root branch."
+    },
+    {
+      "id": 4,
+      "rule": "UX-04",
+      "related_rules": [],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "driver/firecracker/driver_linux.go",
+      "line": 154,
+      "finding": "A slot is taken only after stage(). On the disk path, stage converts the image if needed, copies the multi-GB rootfs (a full copy without reflink), and writes the seed ISO. With every slot busy, a build pays all of that and then fails with 'all N firecracker slots are in use'. The rootfs copy is deleted again. The design's StartBuild pseudocode takes the slot before delivery; preflight already knows the slots, and TryHostLock is a cheap check (UX-04 item 2).",
+      "suggestion": "Acquire the slot (acquireSlot) before deliver(), after the cheap image checks (checkDiskTools, EnsureRaw's cache hit). Or do a non-binding free-slot probe in preflight. Keep stage's order for the cheap checks."
+    },
+    {
+      "id": 5,
+      "rule": "FLOW-06",
+      "related_rules": ["FLOW-12", "FLOW-15"],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "docs/design/firecracker-driver.md",
+      "line": 703,
+      "finding": "Implement departed from the design's letter in several ways, none of which the design records. The design's last change is d31aa30, the spike. The departures: the pure logic lives in portable files behind a host interface, where Packages lists *_linux.go names (images_linux.go does not exist); the qemu-img gate also refuses a qcow2 external data-file; genisoimage/mkisofs is a new up-front host requirement for the disk path, missing from the StartBuild preflight list; kept VMs are marked 'keep' in the pid file, skipped by acquireSlot and reaped by warden clean; the relay memory is 256 MiB; image prepare defaults to ubuntu:24.04; the recorded arch is amd64; and StartBuild delivers before taking the slot (finding 4). Each one is acceptable and none changes a Decision or a BOOT invariant, so none needs Design again. But today the reasons live only in the Implement report, and the archived design (FLOW-12) would not match the code.",
+      "suggestion": "Before Publish, add an Implementation notes subsection, or extend Packages and Rollback notes, listing these departures with one line of reason each. Update the StartBuild preflight list to name genisoimage/mkisofs."
+    },
+    {
+      "id": 6,
+      "rule": "BOOT-07",
+      "related_rules": ["FLOW-14"],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "docs/development/bootstrap.md",
+      "line": 195,
+      "finding": "The tier-1 BOOT-07 hint is acceptable. The firecracker row is a model change whose Bootstrap comparison was accepted at review r1 (a2 confirmed), and the review moved the bootstrap.md edit to the process item bootstrap-firecracker-row (FLOW-14). That item is queued at priority 17, with its x1-design step human-affinity and pending. Until it lands, though, the doc that wins (FLOW-14) and the machine list disagree. bootstrap.md:195 still names driver/qemu/cloudinit.go, which this branch deletes (it moved to driver/linuxguest/seed.go). tools/tier1/rules.yaml already lists driver/linuxguest/ and the driver/firecracker files. bootstrap.md also has no firecracker row for a driver that ships.",
+      "suggestion": "Say this in the PR body. Ask Jeff to take bootstrap-firecracker-row's x1-design right after this merge, or to fold the two-line correction into this PR, since its design is already accepted. The surface-list path correction is 'correcting it to match the code', not a model change."
+    },
+    {
+      "id": 7,
+      "rule": "TEST-02",
+      "related_rules": ["FLOW-09"],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": ".github/workflows/firecracker.yml",
+      "line": 11,
+      "finding": "The pull_request path filter leaves out shared packages that the firecracker build path depends on: ledger/**, collector/**, relaycfg/**, bootstrap/**, driver/script/**, go.mod and go.sum. driver/*.go covers only the driver/ root. A change there that breaks Firecracker would not run this job, against the TEST-02 caveat that a shared-package change triggers every dependent tier. Also, as Implement flagged, the workflow has never run. workflow_dispatch works only once the file is on main, so its first run will be on this feature's own PR. The design says the job is not required until it has passed on this branch (a8), and the blocking validation is still f6-validate-linux-kvm.",
+      "suggestion": "Add the shared paths, or reuse integration.yml's shared-package list so the two stay in step. In the PR body, note that the job's first run is the PR itself, and that a red run is a CI-repair item (FLOW-11), not a merge gate, until it has passed once."
+    },
+    {
+      "id": 8,
+      "rule": "GLOBAL-05",
+      "related_rules": ["TEST-02"],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "tools/firecracker-vm/build-initramfs.sh",
+      "line": 30,
+      "finding": "The direct-boot initramfs takes whatever busybox-static Alpine 3.21's APKINDEX lists today, with no version pin or hash. build-kernel.sh:40 fetches Firecracker's guest config by tag from raw.githubusercontent.com with no hash; only the kernel tarball is checked. The CI comment at firecracker.yml:75 says the scripts 'pin every input they download'. They do not, so the asset cache keyed on the scripts' hash can keep serving a busybox that a fresh build would no longer produce. The ledger records the assets by hash, so provenance holds; reproducibility does not.",
+      "suggestion": "Pin busybox-static to a version and sha256, and the guest config to a sha256, as build-kernel.sh does for the tarball. Or correct the CI comment and add the APKINDEX-resolved version to the cache key."
+    },
+    {
+      "id": 9,
+      "rule": "ORCH-04",
+      "related_rules": [],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "driver/firecracker/images.go",
+      "line": 172,
+      "finding": "A conversion killed partway (kill -9, OOM, reboot) leaves <cache>/firecracker/images/<name>.raw.tmp, often several GB. Only a later conversion of the same source overwrites it, and warden clean (reapWorkDirs) never looks in ImageDir. ORCH-04 lists 'partial or aborted image builds' as transient resources with a teardown reachable from the clean path.",
+      "suggestion": "In Clean, remove ImageDir/*.raw.tmp files whose firecracker-convert-<sum> lock is free. The lock name needs the hash, so name the temp file <raw>.tmp, where the raw name already holds sum[:12], and derive the lock from it."
+    },
+    {
+      "id": 10,
+      "rule": "ORCH-04",
+      "related_rules": ["UX-04"],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "driver/firecracker/pids.go",
+      "line": 52,
+      "finding": "The pid file is space-separated, and exe is written raw. With a firecracker on a PATH containing a space (~/My Tools/firecracker), parsePidFile reads only the first word as exe and the 'keep' marker as part of the path. liveVMMs then never matches the record, so orphans are never reaped. A slot whose kept VMs still hold its TAPs is handed to the next build, which fails opening the TAP with EBUSY instead of skipping the slot. processRecord (vm_linux.go:192) has the same gap: when it cannot read /proc it records start 0 and exe '', a record nothing matches.",
+      "suggestion": "Put exe last and parse the remainder of the line as exe, after an optional 'keep' field placed before it. Or quote it with strconv.Quote. If /proc cannot be read at start, return an error, or record the pid with a flag that tells the reaper to check only the pid. Add a test with a spaced exe path."
+    },
+    {
+      "id": 11,
+      "rule": "TEST-04",
+      "related_rules": [],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "driver/firecracker/wait_test.go",
+      "line": 35,
+      "finding": "TestWaitBuildExitOrdering orders its events on the wall clock under t.Parallel: completion and exit 10 to 60 ms apart, a 200 ms grace, and an assertion that a relay exit returns within 200 ms. It passed -count=100 -cpu=1 under WSL, but its correctness rests on scheduler timing. TEST-04 asks unit-tier tests to avoid wall-clock, and this is the exit-ordering race the design wants pinned deterministically.",
+      "suggestion": "Pass the grace as a channel, or a func returning <-chan time.Time, and have the test close channels in a fixed order. For example: close build, then close complete, then fire grace. The order is then explicit, with no sleeps or timing thresholds."
+    },
+    {
+      "id": 12,
+      "rule": "TEST-08",
+      "related_rules": ["SEC-03", "SEC-01"],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "docs/design/firecracker-driver.md",
+      "line": 1049,
+      "finding": "Plan step 13 says to add the Security note's TEST-08 cases (18 rows, including the new 'other local user' and 'operator' positions) to the security-suite corpus for the release. No corpus exists yet. The security-suite queue item does not mention firecracker, and the native-gap backlog tracks only the qemu, hyperv and vz regression gaps. Once the design is archived, nothing points the security suite at these cases.",
+      "suggestion": "Add a note to queue/security-suite.yaml, or a backlog entry, that carries the firecracker case table. Say in the PR body that step 13 is deferred to the security suite, and that the release shipping this trips GLOBAL-06, so TEST-08 applies."
+    }
+  ],
+  "counts": {
+    "MUST": 1,
+    "MUST-review": 1,
+    "SHOULD": 10
+  },
+  "suppressions": [],
+  "suppressions_note": "This is the feature's first tier-2 report, so there is no previous report to carry suppressions from. Tier 1 applied no Tier1-Allow trailers (suppressed: [] in its JSON).",
+  "back_to_design": false,
+  "back_to_design_note": "Nothing invalidates a Decision, a confirmed question or a BOOT invariant. Finding 2's fix (an atomic reload) is inside Decision 4's 'idempotent setup', and finding 5 asks Implement to record its departures, not to redesign.",
+  "routing": {
+    "tier1_red": false,
+    "wf_implement_fix": "none for tier 1: it is green at 0c80038",
+    "must_findings_route": "Finding 1 (MUST: the committed warden.exe) and finding 2 (MUST-review, GLOBAL-06: setup's reload window) go back to wf-implement. Both are fixes inside the feature. Finding 2 needs Jeff's sign-off at merge either way (LINT-03). The SHOULD findings go in the PR body for acknowledgement at merge (FLOW-08). Finding 5 is cheapest done together with the MUST fixes."
+  },
+  "informational": [
+    {
+      "rule": "BOOT-07",
+      "file": "driver/firecracker/deliver_linux.go",
+      "line": 0,
+      "note": "The tier-1 bootstrap-surface hint: a model change, accepted at review r1 through a2 and the Bootstrap comparison. The bootstrap.md edit is deferred to bootstrap-firecracker-row by the review's decision. See finding 6 for the interim drift."
+    },
+    {
+      "rule": "FLOW-06",
+      "file": "driver/firecracker",
+      "line": 0,
+      "note": "The departures Implement flagged, each judged acceptable: (1) portable files behind the host interface give tier-0 tests on every OS, and rules.yaml's slots*.go and vm*.go globs follow them; (2) the data-file refusal is stricter than the design and documented in cli.md; (3) requiring genisoimage/mkisofs up front is UX-04 item 2, since the built-in level-1 writer cannot produce the file names cloud-init reads; (4) keep-marked pid records implement Decision 12's --keep-vms 'slot held'; (5) relay 256 MiB is inside the spike's 128 to 512 MiB result; (6) the ubuntu:24.04 default is the validated image; (7) amd64 matches a9 (x86_64 only), and hostSupported refuses other arches. Only recording them is missing (finding 5)."
+    },
+    {
+      "rule": "GLOBAL-06",
+      "file": "docs/design/firecracker-driver.md",
+      "line": 817,
+      "note": "The change trips GLOBAL-06 (host-env and env-relay). The design carries the security note, so the PR body should link or summarize it, with finding 2 added."
+    },
+    {
+      "rule": "ORCH-01",
+      "file": "tools/tier1/rules.yaml",
+      "line": 83,
+      "note": "drivers.all gains firecracker. After merge, every in-flight design whose diff reaches a shared path must also declare firecracker, or tier 1 fails DriversClaim. This is intended by the design, but Publish should name it for the other open branches (FLOW-10). The qemu extraction itself is behavior-preserving: golden seed (poweroff -f) and relay-initrd tests, unchanged asset lookup order, RelayInitrd with runtime.GOARCH as before."
+    },
+    {
+      "rule": "FLOW-17",
+      "file": "feat/firecracker-driver",
+      "line": 0,
+      "note": "origin/main moved to e418871 (#85 to #88, including 3515f31, which touches tools/relay-vm). The trial merge is clean. Publish should re-run tier 1 after merging main, since main's tier1 rules and specs layout changed."
+    },
+    {
+      "rule": "LINT-04",
+      "file": "driver/linuxguest/images.go",
+      "line": 250,
+      "note": "Pre-existing behavior, out of scope: a FROM image the catalog cannot resolve, or whose download fails, falls back silently to direct boot. That was qemu's behavior and it is moved unchanged. For firecracker it means a launcher-only busybox initramfs. Possible follow-up: warn or fail when FROM names an image that does not resolve."
+    }
+  ]
+}
