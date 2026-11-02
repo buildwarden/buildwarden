@@ -1,0 +1,13 @@
+# f6-validate-linux-kvm, host:linux-kvm/20261102T231002Z (unattended), feat/firecracker-driver 96ca21a
+# The direct-boot build (the Validation plan's first build) stops in preflight before any VM starts.
+
+== dist/warden build --driver firecracker --script build.sh --timeout 5m -o .scratch/fc/out-direct .scratch/fc/direct
+warden: build FAILED
+[warden] ERROR: the relay needs an off-host upstream DNS server, and the host has only local resolvers: 10.255.255.254
+  To fix: WSL's only resolver is its DNS-tunnelling address 10.255.255.254 on the host itself: set generateResolvConf=false under [network] in /etc/wsl.conf and list the Windows host's DNS servers as nameservers in /etc/resolv.conf (or set dnsTunneling=false in .wslconfig)
+
+# This is also the Validation plan's distro case "a host with a local resolver (preflight refuses)": it refuses,
+# with a fix that names the WSL case (the spike's Decision 5 finding asked for that wording).
+# The Ubuntu 24.04 build, the isolation, concurrency, kill and teardown cases could not run: all start with
+# the same preflight. The fix is a WSL host configuration change outside the checkout, which an unattended
+# session may not make (workflow-native Never list); human step f6-provision-linux-kvm-dns added.

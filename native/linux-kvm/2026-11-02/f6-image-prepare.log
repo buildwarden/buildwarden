@@ -1,0 +1,19 @@
+# f6-validate-linux-kvm, host:linux-kvm/20261102T231002Z (unattended), feat/firecracker-driver 96ca21a
+
+== dist/warden image prepare --driver firecracker ~/fc-spike/images/noble-server-cloudimg-amd64.img
+[warden] hashing noble-server-cloudimg-amd64.img (592.5 MiB, first use or changed)...
+[warden] converting noble-server-cloudimg-amd64.img to raw (once per image)...
+Base image ready: /home/jeff/.cache/warden/firecracker/images/noble-server-cloudimg-amd64-04e8f2461a16.raw
+
+real	0m4.540s
+user	0m6.192s
+sys	0m3.226s
+rc=0
+total 1826984
+drwxr-xr-x 2 jeff jeff       4096 Nov  2 15:18 .
+drwxr-xr-x 4 jeff jeff       4096 Nov  2 15:18 ..
+-rw------- 1 jeff jeff        817 Nov  2 15:18 layers.json
+-rw-r--r-- 1 jeff jeff 3758096384 Nov  2 15:18 noble-server-cloudimg-amd64-04e8f2461a16.raw
+
+# The source is the spike's local copy of Ubuntu 24.04's cloud image (the ubuntu:24.04 reference would download it).
+# Kept in the documented cache (~/.cache/warden/firecracker/images) for the attended or next run.

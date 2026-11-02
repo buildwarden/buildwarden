@@ -1,0 +1,115 @@
+17:	chain WARDEN-FC-IN {
+18-		iifname "wfc0b" counter packets 0 bytes 0 drop
+19-		iifname "wfc0u" ip saddr 100.64.88.2 ct state established counter packets 0 bytes 0 accept
+20-		iifname "wfc1b" counter packets 0 bytes 0 drop
+21-		iifname "wfc1u" ip saddr 100.64.88.6 ct state established counter packets 0 bytes 0 accept
+22-		iifname "wfc2b" counter packets 0 bytes 0 drop
+23-		iifname "wfc2u" ip saddr 100.64.88.10 ct state established counter packets 0 bytes 0 accept
+24-		iifname "wfc3b" counter packets 0 bytes 0 drop
+25-		iifname "wfc3u" ip saddr 100.64.88.14 ct state established counter packets 0 bytes 0 accept
+26-		iifname "wfc*" counter packets 0 bytes 0 drop
+27-	}
+28-
+29:	chain WARDEN-FC-FWD {
+30-		iifname "wfc0u" oifname "eth0" meta l4proto tcp ip saddr 100.64.88.2 tcp flags & (syn|rst) == syn counter packets 0 bytes 0 tcp option maxseg size set rt mtu
+31-		iifname "eth0" oifname "wfc0u" meta l4proto tcp ip daddr 100.64.88.2 tcp flags & (syn|rst) == syn # tcpmss match 1241:65535 counter packets 0 bytes 0 tcp option maxseg size set 1240
+32-		iifname "wfc0u" oifname "eth0" ip saddr 100.64.88.2 counter packets 0 bytes 0 accept
+33-		iifname "eth0" oifname "wfc0u" ip daddr 100.64.88.2 ct state related,established counter packets 0 bytes 0 accept
+34-		iifname "wfc0u" counter packets 0 bytes 0 drop
+35-		iifname "wfc0b" oifname "wfc0b" counter packets 0 bytes 0 accept
+36-		iifname "wfc1u" oifname "eth0" meta l4proto tcp ip saddr 100.64.88.6 tcp flags & (syn|rst) == syn counter packets 0 bytes 0 tcp option maxseg size set rt mtu
+37-		iifname "eth0" oifname "wfc1u" meta l4proto tcp ip daddr 100.64.88.6 tcp flags & (syn|rst) == syn # tcpmss match 1241:65535 counter packets 0 bytes 0 tcp option maxseg size set 1240
+38-		iifname "wfc1u" oifname "eth0" ip saddr 100.64.88.6 counter packets 0 bytes 0 accept
+39-		iifname "eth0" oifname "wfc1u" ip daddr 100.64.88.6 ct state related,established counter packets 0 bytes 0 accept
+40-		iifname "wfc1u" counter packets 0 bytes 0 drop
+41-		iifname "wfc1b" oifname "wfc1b" counter packets 0 bytes 0 accept
+42-		iifname "wfc2u" oifname "eth0" meta l4proto tcp ip saddr 100.64.88.10 tcp flags & (syn|rst) == syn counter packets 0 bytes 0 tcp option maxseg size set rt mtu
+43-		iifname "eth0" oifname "wfc2u" meta l4proto tcp ip daddr 100.64.88.10 tcp flags & (syn|rst) == syn # tcpmss match 1241:65535 counter packets 0 bytes 0 tcp option maxseg size set 1240
+44-		iifname "wfc2u" oifname "eth0" ip saddr 100.64.88.10 counter packets 0 bytes 0 accept
+45-		iifname "eth0" oifname "wfc2u" ip daddr 100.64.88.10 ct state related,established counter packets 0 bytes 0 accept
+46-		iifname "wfc2u" counter packets 0 bytes 0 drop
+47-		iifname "wfc2b" oifname "wfc2b" counter packets 0 bytes 0 accept
+48-		iifname "wfc3u" oifname "eth0" meta l4proto tcp ip saddr 100.64.88.14 tcp flags & (syn|rst) == syn counter packets 0 bytes 0 tcp option maxseg size set rt mtu
+49-		iifname "eth0" oifname "wfc3u" meta l4proto tcp ip daddr 100.64.88.14 tcp flags & (syn|rst) == syn # tcpmss match 1241:65535 counter packets 0 bytes 0 tcp option maxseg size set 1240
+50-		iifname "wfc3u" oifname "eth0" ip saddr 100.64.88.14 counter packets 0 bytes 0 accept
+51-		iifname "eth0" oifname "wfc3u" ip daddr 100.64.88.14 ct state related,established counter packets 0 bytes 0 accept
+52-		iifname "wfc3u" counter packets 0 bytes 0 drop
+53-		iifname "wfc3b" oifname "wfc3b" counter packets 0 bytes 0 accept
+54-		iifname "wfc*" counter packets 0 bytes 0 drop
+55-		oifname "wfc*" counter packets 0 bytes 0 drop
+56-	}
+57-
+58:	chain WARDEN-FC-OUT {
+59-		oifname "wfc0u" meta l4proto tcp ip daddr 100.64.88.2 tcp dport 8301 ct state new skuid 1000 counter packets 0 bytes 0 accept
+60-		oifname "wfc1u" meta l4proto tcp ip daddr 100.64.88.6 tcp dport 8301 ct state new skuid 1000 counter packets 0 bytes 0 accept
+61-		oifname "wfc2u" meta l4proto tcp ip daddr 100.64.88.10 tcp dport 8301 ct state new skuid 1000 counter packets 0 bytes 0 accept
+62-		oifname "wfc3u" meta l4proto tcp ip daddr 100.64.88.14 tcp dport 8301 ct state new skuid 1000 counter packets 0 bytes 0 accept
+63-		oifname "wfc*" ip daddr 100.64.88.0/22 ct state established counter packets 0 bytes 0 accept
+64-		oifname "wfc*" meta l4proto icmp ip daddr 100.64.88.0/22 ct state related counter packets 0 bytes 0 accept
+65-		oifname "wfc*" counter packets 0 bytes 0 drop
+66-	}
+67-}
+68-table ip6 filter {
+69-	chain FORWARD {
+70-		type filter hook forward priority filter; policy drop;
+71-		counter packets 0 bytes 0 jump WARDEN-FC6
+72-	}
+73-
+74-	chain INPUT {
+75-		type filter hook input priority filter; policy accept;
+76-		counter packets 0 bytes 0 jump WARDEN-FC6
+77-	}
+78-
+79-	chain OUTPUT {
+80-		type filter hook output priority filter; policy accept;
+81-		counter packets 0 bytes 0 jump WARDEN-FC6
+82-	}
+83-
+84:	chain WARDEN-FC6 {
+85-		iifname "wfc*" counter packets 0 bytes 0 drop
+86-		oifname "wfc*" counter packets 0 bytes 0 drop
+87-	}
+88-}
+89-table ip raw {
+90-	chain PREROUTING {
+91-		type filter hook prerouting priority raw; policy accept;
+92-		counter packets 12 bytes 2192 jump WARDEN-FC-RAW
+93-	}
+94-
+95:	chain WARDEN-FC-RAW {
+96-		iifname "wfc0b" counter packets 0 bytes 0 
+97-		iifname "wfc1b" counter packets 0 bytes 0 
+98-		iifname "wfc2b" counter packets 0 bytes 0 
+99-		iifname "wfc3b" counter packets 0 bytes 0 
+100-	}
+101-}
+102-table ip nat {
+103-	chain POSTROUTING {
+104-		type nat hook postrouting priority srcnat; policy accept;
+105-		counter packets 0 bytes 0 jump WARDEN-FC-NAT
+106-	}
+107-
+108:	chain WARDEN-FC-NAT {
+109-		oifname "eth0" ip saddr 100.64.88.0/22 counter packets 0 bytes 0 masquerade 
+110-	}
+111-}
+112-table bridge warden_fc {
+113-	chain input {
+114-		type filter hook input priority 0; policy accept;
+115-		iifname "wfc*" drop
+116-	}
+117-
+118-	chain forward {
+119-		type filter hook forward priority 0; policy accept;
+120-		iifname "wfc0r" oifname "wfc0g" accept
+121-		iifname "wfc0g" oifname "wfc0r" accept
+122-		iifname "wfc1r" oifname "wfc1g" accept
+123-		iifname "wfc1g" oifname "wfc1r" accept
+124-		iifname "wfc2r" oifname "wfc2g" accept
+125-		iifname "wfc2g" oifname "wfc2r" accept
+126-		iifname "wfc3r" oifname "wfc3g" accept
+127-		iifname "wfc3g" oifname "wfc3r" accept
+128-		iifname "wfc*" drop
+129-		oifname "wfc*" drop
+130-	}
+131-}

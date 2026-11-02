@@ -1,0 +1,5 @@
+== FORWARD ACCEPT refusal
+[warden] ERROR: the filter FORWARD policy is ACCEPT, so enabling ip_forward would route between this host's other interfaces
+  To fix: set the filter FORWARD policy to DROP and keep it across reboots: iptables -P FORWARD DROP && ip6tables -P FORWARD DROP
+rc=1
+-P FORWARD DROP

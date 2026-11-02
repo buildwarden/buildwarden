@@ -1,0 +1,14 @@
+warden: build VM "warden-build-82mfatz0" COM1 -> \\.\pipe\warden-build-82mfatz0 (attach a serial reader to observe guest boot)
+== guest
+Microsoft Windows NT 10.0.26100.0
+== https via Invoke-WebRequest
+status=200
+== https via curl.exe (no --ssl-no-revoke)
+code=200 bytes=16337
+curl exit=0
+== direct egress to 1.1.1.1:8080 (expected blocked)
+completed=False connected=False
+== relay CA in root store
+warden roots: 1
+done
+warden: build SUCCEEDED (output: .scratch/hv/out-main)

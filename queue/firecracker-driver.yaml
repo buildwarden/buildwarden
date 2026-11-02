@@ -60,10 +60,19 @@ steps:
     status: pending
     needs:
       - f2-spike-linux-kvm
+      - f6-provision-linux-kvm-dns
     lease:
-      claimed_by: host:linux-kvm/20261102T231002Z
-      expires: 2026-11-03T01:16:06.3489484Z
+      claimed_by: ""
+      expires: null
     note: 'Blocking native validation (FLOW-09) per docs/design/firecracker-driver.md Validation plan. f6-open-pr must need this step once phase 6 is seeded. No machine serves linux-kvm in hosts.yaml yet (question a8 recommends windows-desktop under WSL2, plus a CI job that may later cover it), so wf validate flags this step until hosts.yaml lists it. needs f2-spike-linux-kvm added by host:linux-kvm/20261101T111001Z (unattended): wf next offered this phase-6 step while the feature is in phase 2 (ready() checks needs, not the feature phase), and wf gate woke windows-desktop for it; the Validation plan needs the implemented driver, so there was nothing to run. Stopgap until wf skips steps of a later phase; it should also need f3-implement once phase 3 is seeded.'
+  - id: f6-provision-linux-kvm-dns
+    phase: 6
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Added by host:linux-kvm/20261102T231002Z (unattended). The WSL2 host is provisioned (kvm group, Firecracker v1.17.0, passwordless sudo, FORWARD DROP boot unit) and sudo warden setup --driver firecracker works, but every firecracker build stops in preflight: the host''s only resolver is WSL''s DNS-tunnelling address 10.255.255.254 on lo, which Decision 5 excludes (the relay needs an off-host upstream DNS server). The fix is a WSL configuration change outside the checkout, which an unattended session may not make. Jeff, pick one: (a) in /etc/wsl.conf set generateResolvConf=false under [network], then write /etc/resolv.conf with off-host nameservers (the spike passed 8.8.8.8 and 8.8.4.4; the LAN router or the Windows host''s DNS servers also work if they are not on the WSL host itself), then wsl --shutdown; (b) in %USERPROFILE%\.wslconfig set dnsTunneling=false under [wsl2] and wsl --shutdown, which makes WSL write the Windows host''s DNS servers to /etc/resolv.conf (check that none is a loopback or host-local address). (a) is recommended: it does not change how the rest of WSL resolves names through Windows. Done when `sudo warden doctor --driver firecracker` on feat/firecracker-driver reports upstream DNS ok; the next native run then takes f6-validate-linux-kvm. Evidence: native/linux-kvm/2026-11-02/f6-doctor.log and f6-direct-build-preflight.log.'
   - id: f2-plan
     phase: 2
     affinity: cloud
@@ -362,3 +371,9 @@ history:
   - at: 2026-11-02T23:16:06Z
     by: host:linux-kvm/20261102T231002Z
     event: claimed f6-validate-linux-kvm until 2026-11-03T01:16:06Z
+  - at: 2026-11-02T23:23:08Z
+    by: host:linux-kvm/20261102T231002Z
+    event: 'released f6-validate-linux-kvm: not run (unattended, feat/firecracker-driver 96ca21a): every build stops in preflight because the WSL host''s only resolver is its DNS-tunnelling address 10.255.255.254 on lo, which Decision 5 excludes; the fix is a WSL configuration change outside the checkout (dnsTunneling=false in .wslconfig, or generateResolvConf=false plus a static /etc/resolv.conf), which this session may not make. Passed on the way: sudo warden setup --slots 4 (16 interfaces, bridge table and WARDEN-FC chains loaded), idempotent re-run (0 created, 16 verified), setup refuses with FORWARD policy ACCEPT, sudo warden doctor all ok but upstream DNS, image prepare of Ubuntu 24.04 (raw in 4.5 s). Evidence native/linux-kvm/2026-11-02/f6-*. Human step f6-provision-linux-kvm-dns added; this step needs it.'
+  - at: 2026-11-02T23:23:42Z
+    by: host:linux-kvm/20261102T231002Z
+    event: f6-provision-linux-kvm-dns added (human); f6-validate-linux-kvm needs it

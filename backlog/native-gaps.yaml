@@ -274,7 +274,22 @@ gaps:
       (3a27a78) is still design-only, with no cmd/warden or driver/ change against main.
       2026-11-01 (host:windows-hyperv/20261101T111001Z, unattended): not run; the branch
       is unchanged at 3a27a78 (docs and tools/tier1/rules.yaml only against main a3e18fb).
-    status: open
+    status: done
+    done: 2026-11-02
+    evidence: >-
+      host:windows-hyperv/20261102T231002Z, unattended, Windows 11 Pro 26300, Hyper-V
+      Administrators, prepared base windows-server-2025-20261030T175627Z, cached relay boot
+      VHDX from relay source 3515f310b2f5 (current). `warden build --driver hyperv
+      --guest-os windows` of a build.ps1 (HTTPS via Invoke-WebRequest and curl.exe without
+      --ssl-no-revoke, direct TCP to 1.1.1.1:8080, relay CA count): main e418871 SUCCEEDED,
+      both fetches 200 (577 and 16337 bytes), direct egress not connected, 1 warden root;
+      `inspect --verify-disks` vm-disk-chain/v1 verified, both disks [ok], 20 signatures
+      valid, all channels closed. feat/firecracker-driver 96ca21a (f3-implement done, f4-review
+      fixes applied): same build SUCCEEDED with the same guest output, both disks [ok], 20
+      signatures valid, all channels closed. The branch leaves cmd/warden-io, cmd/relay,
+      driver/hyperv and the shared relay/ledger/collector packages unchanged, so the run
+      exercises the cmd/warden wiring and the driver/ root changes on the Hyper-V path.
+      Logs: native/windows-hyperv/2026-11-02/.
   - id: firecracker-vz-cli-wiring
     host: macos-vz
     what: A VZ build after the firecracker-driver feature's cmd/warden driver wiring and new shared driver/ packages.
