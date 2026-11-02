@@ -79,7 +79,10 @@ jobs:
             /usr/local/bin/firecracker
           firecracker --version
 
-      # Keyed by the scripts, which pin every input they download.
+      # Keyed by the scripts. The tools/firecracker-vm ones pin and hash every
+      # download; tools/relay-vm/build-initramfs.sh takes Alpine 3.21's current
+      # packages, so a cached relay initramfs can trail them until a script
+      # changes.
       - name: Cache boot assets
         id: assets
         uses: actions/cache@v4

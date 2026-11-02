@@ -7,7 +7,7 @@
 #
 # Output: tools/firecracker-vm/output/initramfs.cpio.gz
 #
-# Dependencies: curl, cpio, gzip, tar
+# Dependencies: curl, cpio, gzip, tar, sha256sum
 # Usage: ./tools/firecracker-vm/build-initramfs.sh
 
 set -eu
@@ -19,23 +19,26 @@ ROOTFS_DIR="$SCRIPT_DIR/.rootfs"
 
 ALPINE_VERSION="3.21"
 ALPINE_MIRROR="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/main/x86_64"
+# Pinned for reproducible assets. Alpine keeps only a branch's current
+# package, so when it moves the download fails: set both from the new one.
+BUSYBOX_VERSION="1.37.0-r14"
+BUSYBOX_SHA256="feef45f02f31ee30b6b47eed9b643a0f99e63a21a08a90e7c680066a712405bd"
+BUSYBOX_APK="busybox-static-${BUSYBOX_VERSION}.apk"
 
 mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
 
 fetch_busybox() {
-    if [ -f "$CACHE_DIR/busybox-static.apk" ]; then
-        echo "Using cached busybox-static"
-        return
+    if [ ! -f "$CACHE_DIR/$BUSYBOX_APK" ]; then
+        echo "Downloading $BUSYBOX_APK..."
+        if ! curl -fsSL "${ALPINE_MIRROR}/${BUSYBOX_APK}" -o "$CACHE_DIR/$BUSYBOX_APK.part"; then
+            echo "Error: Alpine $ALPINE_VERSION no longer has $BUSYBOX_APK; set" >&2
+            echo "BUSYBOX_VERSION and BUSYBOX_SHA256 in $0 to the current" >&2
+            echo "busybox-static (its APKINDEX) and rebuild." >&2
+            exit 1
+        fi
+        mv "$CACHE_DIR/$BUSYBOX_APK.part" "$CACHE_DIR/$BUSYBOX_APK"
     fi
-    curl -fsSL "${ALPINE_MIRROR}/APKINDEX.tar.gz" -o "$CACHE_DIR/APKINDEX.tar.gz"
-    PKG_NAME=$(tar -xzf "$CACHE_DIR/APKINDEX.tar.gz" -O APKINDEX 2>/dev/null | \
-        awk '/^P:busybox-static$/{found=1} found && /^V:/{print "busybox-static-"substr($0,3)".apk"; exit}')
-    if [ -z "$PKG_NAME" ]; then
-        echo "Error: Could not find busybox-static package" >&2
-        exit 1
-    fi
-    echo "Downloading $PKG_NAME..."
-    curl -fsSL "${ALPINE_MIRROR}/${PKG_NAME}" -o "$CACHE_DIR/busybox-static.apk"
+    (cd "$CACHE_DIR" && echo "$BUSYBOX_SHA256  $BUSYBOX_APK" | sha256sum -c -)
 }
 
 build_initramfs() {
@@ -46,7 +49,7 @@ build_initramfs() {
         "$ROOTFS_DIR/sys" "$ROOTFS_DIR/tmp" "$ROOTFS_DIR/etc" "$ROOTFS_DIR/root"
 
     mkdir -p "$CACHE_DIR/busybox-extract"
-    tar -xzf "$CACHE_DIR/busybox-static.apk" -C "$CACHE_DIR/busybox-extract" 2>/dev/null || true
+    tar -xzf "$CACHE_DIR/$BUSYBOX_APK" -C "$CACHE_DIR/busybox-extract" 2>/dev/null || true
     cp "$CACHE_DIR/busybox-extract/bin/busybox.static" "$ROOTFS_DIR/bin/busybox"
     rm -rf "$CACHE_DIR/busybox-extract"
     chmod 755 "$ROOTFS_DIR/bin/busybox"

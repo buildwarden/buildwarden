@@ -22,6 +22,7 @@ KERNEL_VERSION="6.1.191"
 KERNEL_SHA256="02f15b77d213e15607923832ef9382e2414ea90df6c007f15a910e139645c35d" # kernel.org sha256sums.asc
 FIRECRACKER_VERSION="v1.17.0"
 GUEST_CONFIG="microvm-kernel-ci-x86_64-6.1.config"
+GUEST_CONFIG_SHA256="153ca1b40f3312bfb40b7587b471ea548a915f98f480f0d0892a1537957a2147" # v1.17.0 tag
 
 KERNEL_TARBALL="linux-$KERNEL_VERSION.tar.xz"
 KERNEL_URL="https://cdn.kernel.org/pub/linux/kernel/v6.x/$KERNEL_TARBALL"
@@ -37,8 +38,10 @@ if [ ! -f "$KERNEL_TARBALL" ]; then
 fi
 echo "$KERNEL_SHA256  $KERNEL_TARBALL" | sha256sum -c -
 if [ ! -f "$GUEST_CONFIG" ]; then
-	curl -fsSL -o "$GUEST_CONFIG" "$GUEST_CONFIG_URL"
+	curl -fsSL -o "$GUEST_CONFIG.part" "$GUEST_CONFIG_URL"
+	mv "$GUEST_CONFIG.part" "$GUEST_CONFIG"
 fi
+echo "$GUEST_CONFIG_SHA256  $GUEST_CONFIG" | sha256sum -c -
 
 SRC="$CACHE_DIR/linux-$KERNEL_VERSION"
 if [ ! -d "$SRC" ]; then
