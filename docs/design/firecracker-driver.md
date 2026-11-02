@@ -1091,7 +1091,117 @@ Follow-ups for intake (workflow-intake; not this feature's work):
 
 ## Consolidation
 
-<!-- Filled in at Publish (FLOW-10, FLOW-15). -->
+`main` merged at `e418871` (merge commit `a1e6a95`), conflict fixes only.
+Since the fork at `cd42fc7`, 24 PRs landed (#64 to #88). The ones this feature
+meets:
+
+- **#72 container-inputs (ORCH-02).** `driver.RecordInputs` now keeps a
+  translated Containerfile and its `build.sh` under `<output>/inputs/`, called
+  straight after `StageBuildScript`. The firecracker driver calls it at the same
+  point as qemu and hyperv (`driver_linux.go`), so `overview.md`'s "keep both
+  under inputs/ ... not vz" holds for it with no change.
+- **#85 specs-migration and #86 relay05-specs-wording (RELAY-05).** The
+  `vm-disk-chain/v1` document moved to `specs/environment-vm-disk-chain/v1.md`.
+  Firecracker writes that payload with a new `driver` value and the existing
+  `kernel` and `initrd` layer roles. The schema leaves `driver` open (a string
+  whose description ends "..."), so nothing changes in the format or the
+  schema. The document's "Written by" line and `driver` list now name
+  firecracker. Its note on the per-build writable disk, which said the disk is
+  "created empty from the last disk", now also covers firecracker's per-build
+  copy of the raw image (still not a layer). Both are wording; `specs_test.go`
+  passes.
+- **#70 relay-leaf-crl.** The relay serves `/ca.crl`, which every leaf names.
+  The firecracker relay VM runs the same `cmd/relay`, so it serves the CRL with
+  no driver change.
+- **#79 tier1-static-checks, #80 pre-release-cleanup.** `make lint` runs tier 1
+  over this branch, and the doc comments that #80 added to every driver's
+  exported methods exist on the firecracker driver too. `rules.yaml`'s
+  `drivers.shared`, `drivers.all` and `bootstrap.surface` entries are this
+  feature's (Packages).
+- **#82 ci-path-filters, #83 test-rules-docs-only.** `main.yml`'s `changes`
+  job classifies the new paths as code (`driver/`, `tools/`, `*.go`), so tier
+  0 runs on them. `.github/workflows/firecracker.yml` uses a plain `paths`
+  filter like `integration.yml`. That works because the job is not a required
+  check. TEST-02's new "Where each tier runs today" list does not name it (see
+  Conventions).
+- **#65 native-loop-followups.** It added the tier-1 `integration` workflow,
+  whose `driver/*.go` and `cmd/**` paths also cover this feature's changes to
+  the `driver/` root and `cmd/warden`. The `firecracker` workflow does not
+  parse the build's last line, which #65 changed in `test-integration.sh`.
+- **#69 native-leftovers and #88 hyperv-fetch-cache-apkindex.**
+  `tools/relay-vm/hyperv/refresh-cache.sh` builds the Hyper-V relay with
+  `hyperv/build.sh`, not `tools/relay-vm/build-initramfs.sh`, so the `ARCH`
+  and no-modules parameters do not reach it. Prior art already covers why
+  those two x86_64 relay builds stay separate (VMBus modules, an offline cache,
+  a UKI).
+- **#67 relay-gzip-framing, #73 qemu-prepare-seed-removable.** #67 is
+  relay-only, and the firecracker relay VM runs the same relay. #73 changes the
+  qemu Windows prepare seed's device (`driver/qemu/prepare.go`), which this
+  feature does not touch. The Linux seed in `driver/linuxguest` is the build
+  VM's, not the prepare VM's.
+- The rest are workflow tooling, `.claude/` and process docs (#64, #66, #71,
+  #74 to #78, #81, #84, #87), with no overlap.
+
+**Terminology.** The guide, CLI help, overview and code use the same words for
+the same things: network slot, `warden setup --driver firecracker`, direct
+boot, disk-image build, relay VM and build VM. `CONTRIBUTING.md`'s per-driver
+prerequisites had no Firecracker entry, and now has one that points at the
+installation guide.
+
+**Versioned seams.** `bootstrap-model`: main's only change to `bootstrap.md`
+is #75's wording (model changes are now accepted at the design review,
+FLOW-19), and this feature's mapping row and BOOT-07 surface list are the
+`bootstrap-firecracker-row` process item (design review r1). The
+`vm-disk-chain/v1` payload is also changed by #85, but #85 only moved the file,
+and this feature changes no member. The relay, executor, collector and Driver
+contract are not changed (Cross-driver impact).
+
+**Conventions for future work** (FLOW-14: proposed here, not written on this
+branch):
+
+- TEST-02's "Where each tier runs today" should list the `firecracker`
+  workflow as a hosted tier-2 job (on demand, and on PRs reaching its paths)
+  once that job has passed on this branch and is relied on. Until then the
+  blocking tier 2 is the native `linux-kvm` session. This fits the
+  `bootstrap-firecracker-row` process item, which already edits
+  `docs/development/` for this driver.
+- `docs/development/README.md`'s roadmap entry "Feature — Firecracker driver"
+  still points at the superseded `firecracker-driver-plan.md`. It should be
+  removed when this feature merges, or pointed at this design. It belongs to
+  the same process item (or Close).
+
+**FLOW-15 sweep.**
+
+- *Dead code.* `make deadcode` on linux, darwin and windows finds nothing in
+  `driver/firecracker`, `driver/linuxguest`, `driver/relayvm` or `cmd/warden`
+  that is unreachable on all three. The firecracker functions reported on
+  darwin and windows (`consoleTail`, `Driver.status`, `pidFilePath`,
+  `vmConfig.write`, `afterGrace`) are reached from the Linux build. What is
+  unreachable everywhere was already so on `main`: `driver/vz` cgo-only
+  helpers, checked on macOS, and `relay.Relay.CAFingerprint`, `Relay.Ledger`
+  and `collector.Collector.BytesWritten`, which are library API.
+- *Duplication.* One finding. `driver/linuxguest/images.go`'s private
+  `hashFile` is byte-for-byte `driver.HashFileSHA256`. It came over unchanged
+  from `driver/qemu/images.go`, where the duplicate predates the fork. Merging
+  them (three call sites in `linuxguest`) is code work, so it goes back to
+  Implement under the plan's extraction task. Checked and kept apart:
+  - setup's `tryLock`, which opens the user's lock read-only and never
+    creates it, unlike `driver.TryHostLock`;
+  - firecracker's `sudoUser`, which sits behind the `host` interface for
+    tier-0 tests, while vz's is a darwin-only helper;
+  - the qemu and firecracker `describeBuild`, which share
+    `driver.NewDiskChain` and differ only in their layers;
+  - the two x86_64 relay initramfs builds (Prior art).
+- *Overview.* `overview.md` has firecracker in the driver list and a
+  Firecracker line in each step of "VM drivers" (claim with slot, isolate,
+  deliver, start, watch), and that matches `driver_linux.go`.
+
+**Archive.** Not done in this step. The design is archived and its summary
+filled at `f6-open-pr` (FLOW-12). That should wait for the blocking
+`f6-validate-linux-kvm` (FLOW-09), whose first attempt at `96ca21a` stopped in
+preflight on WSL's loopback resolver
+(`native/linux-kvm/2026-11-02/f6-README.md`). The summary would otherwise
+describe a driver that has never passed its validation plan.
 
 ## Rollback notes
 
