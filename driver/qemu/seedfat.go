@@ -8,7 +8,6 @@ import (
 	"strings"
 )
 
-
 // generateWindowsSeedFAT builds a raw FAT16 filesystem image (superfloppy, no
 // partition table) from a directory, with the given volume label. Windows
 // reads FAT16 natively via usb-storage with exact long filenames and assigns

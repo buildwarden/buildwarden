@@ -46,7 +46,6 @@ func TestAppendFileCPIO(t *testing.T) {
 	}
 }
 
-
 // TestAppendFileCPIOGolden pins the composed initrd to the bytes the qemu
 // driver produced before this code moved here (TEST-04), so the move changes
 // nothing a qemu relay boots.
