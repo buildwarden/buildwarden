@@ -14,6 +14,8 @@ import (
 // it makes opts.Slots network slots owned by the user who ran sudo, with the
 // bridge table and WARDEN-FC rules that isolate them (Decision 4). It is
 // idempotent: existing interfaces are verified, warden's own rules reloaded.
+// It refuses to run while any slot is in use, since the reload would leave
+// that slot's VMs unfiltered.
 func RunSetup(out io.Writer, opts SetupOptions) error {
 	if err := hostSupported(); err != nil {
 		return err

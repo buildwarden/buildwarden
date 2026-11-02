@@ -98,6 +98,9 @@ type setupParams struct {
 	uid       int
 	uplink    string // the default route's interface
 	uplinkMTU int
+	// addrOK holds the slots whose upstream TAP already has exactly its host
+	// address, which setup leaves alone rather than flush and re-add.
+	addrOK map[Slot]bool
 }
 
 // flushSteps remove every WARDEN-FC chain, the jumps into them and the bridge
@@ -205,9 +208,13 @@ func slotSteps(s Slot, p setupParams, uid string) []step {
 	}
 	out = append(out,
 		cmd("ip", "link", "set", r, "master", b),
-		cmd("ip", "link", "set", g, "master", b),
-		cmd("ip", "addr", "flush", "dev", u),
-		cmd("ip", "addr", "add", host+"/30", "dev", u),
+		cmd("ip", "link", "set", g, "master", b))
+	if !p.addrOK[s] {
+		out = append(out,
+			cmd("ip", "addr", "flush", "dev", u),
+			cmd("ip", "addr", "add", host+"/30", "dev", u))
+	}
+	out = append(out,
 		sysctl("net.ipv4.conf."+b+".rp_filter=1", "net.ipv4.conf."+u+".rp_filter=1",
 			"net.ipv4.conf."+b+".arp_ignore=8"),
 	)
@@ -253,6 +260,21 @@ func slotSteps(s Slot, p setupParams, uid string) []step {
 			strconv.Itoa(int(s)+1))...),
 	)
 	return out
+}
+
+// onlyAddr reports whether `ip -o -4 addr show dev X` lists exactly one
+// address, cidr.
+func onlyAddr(out, cidr string) bool {
+	var addrs []string
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Fields(line)
+		for i := 0; i+1 < len(f); i++ {
+			if f[i] == "inet" {
+				addrs = append(addrs, f[i+1])
+			}
+		}
+	}
+	return len(addrs) == 1 && addrs[0] == cidr
 }
 
 // uplinkFromRoute picks the interface of `ip route show default`.

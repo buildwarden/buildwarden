@@ -5,6 +5,7 @@ package firecracker
 import (
 	"errors"
 	"fmt"
+	"io/fs"
 	"os"
 	"strconv"
 	"syscall"
@@ -103,4 +104,27 @@ func writePidFile(s Slot, vms ...*vmm) error {
 		return err
 	}
 	return os.WriteFile(pidFilePath(s), []byte(formatPidFile(recs)), 0o600)
+}
+
+func (realHost) tryLock(path string) (func(), bool, error) {
+	// flock needs no write access, so O_RDONLY locks a file root does not own
+	// without changing it.
+	f, err := os.Open(path)
+	if errors.Is(err, fs.ErrNotExist) {
+		return func() {}, false, nil
+	}
+	if err != nil {
+		return nil, false, err
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, true, nil
+		}
+		return nil, false, fmt.Errorf("locking %s: %w", path, err)
+	}
+	return func() {
+		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
+		f.Close()
+	}, false, nil
 }

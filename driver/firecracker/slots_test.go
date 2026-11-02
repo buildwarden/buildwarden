@@ -247,6 +247,100 @@ func TestSetupRuns(t *testing.T) {
 	}
 }
 
+const jeffLocks = "/home/jeff/.cache/buildwarden/locks"
+
+func slotLockPath(s Slot) string {
+	return filepath.Join(filepath.FromSlash(jeffLocks), s.LockName()+".lock")
+}
+
+// TestSetupRefusesBusySlots checks that setup changes nothing while a slot is
+// in use, since its reload would leave that slot's VMs unfiltered.
+func TestSetupRefusesBusySlots(t *testing.T) {
+	for name, mut := range map[string]func(*fakeHost){
+		// A VMM has the build VM's TAP open.
+		"tap attached": func(h *fakeHost) { h.files["/sys/class/net/wfc1g/carrier"] = "1\n" },
+		// A build holds the slot but has not started its VMMs.
+		"lock held": func(h *fakeHost) { h.heldLocks[slotLockPath(0)] = true },
+	} {
+		t.Run(name, func(t *testing.T) {
+			h := postureHost().withSlots(2, 1000)
+			for _, s := range []Slot{0, 1} {
+				h.files[slotLockPath(s)] = ""
+				h.files["/sys/class/net/"+s.GuestTap()+"/carrier"] = "0\n"
+			}
+			mut(h)
+			err := setup(h, &bytes.Buffer{}, SetupOptions{Slots: 2})
+			var fe *driver.FixableError
+			if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "warden clean") ||
+				!strings.Contains(err.Error(), "in use") {
+				t.Fatalf("setup = %v, want a fixable in-use error", err)
+			}
+			if ranContains(h, "-D INPUT") || ranContains(h, "ip addr") ||
+				ranContains(h, "ip_forward") {
+				t.Fatalf("refused setup changed the host:\n%s", strings.Join(h.ran, "\n"))
+			}
+			if len(h.unlocked) != len(h.locked) {
+				t.Fatalf("locks taken %v, released %v", h.locked, h.unlocked)
+			}
+		})
+	}
+}
+
+// TestSetupHoldsSlotLocks checks that setup holds every slot lock the owner
+// has until its last command, so no build starts on a slot mid-reload.
+func TestSetupHoldsSlotLocks(t *testing.T) {
+	h := postureHost().withSlots(2, 1000)
+	h.files[slotLockPath(0)] = ""
+	h.files[slotLockPath(1)] = ""
+	if err := setup(h, &bytes.Buffer{}, SetupOptions{Slots: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if len(h.locked) != 2 || len(h.unlocked) != 2 {
+		t.Fatalf("locks taken %v, released %v", h.locked, h.unlocked)
+	}
+	for _, n := range h.ranAtUnlock {
+		if n != len(h.ran) || h.ran[n-1] != "sysctl -qw net.ipv4.ip_forward=1" {
+			t.Fatalf("a slot lock was released after %d of %d commands", n, len(h.ran))
+		}
+	}
+}
+
+// TestSetupKeepsUpstreamAddr checks that a re-run leaves an upstream TAP's
+// correct address alone (flushing it would break a claim tunnel) and fixes a
+// wrong one.
+func TestSetupKeepsUpstreamAddr(t *testing.T) {
+	h := postureHost()
+	h.outputs["ip -o -4 addr show dev wfc0u"] = "7: wfc0u    inet 100.64.88.1/30 " +
+		"scope global wfc0u\\       valid_lft forever preferred_lft forever\n"
+	h.outputs["ip -o -4 addr show dev wfc1u"] = "8: wfc1u    inet 100.64.88.9/30 " +
+		"scope global wfc1u\n"
+	if err := setup(h, &bytes.Buffer{}, SetupOptions{Slots: 2}); err != nil {
+		t.Fatal(err)
+	}
+	if ranContains(h, "ip addr flush dev wfc0u") ||
+		ranContains(h, "ip addr add 100.64.88.1/30 dev wfc0u") {
+		t.Fatalf("setup re-addressed wfc0u:\n%s", strings.Join(h.ran, "\n"))
+	}
+	if !ranContains(h, "ip addr flush dev wfc1u") ||
+		!ranContains(h, "ip addr add 100.64.88.5/30 dev wfc1u") {
+		t.Fatalf("setup left wfc1u's wrong address:\n%s", strings.Join(h.ran, "\n"))
+	}
+}
+
+func TestOnlyAddr(t *testing.T) {
+	for out, want := range map[string]bool{
+		"7: wfc0u    inet 100.64.88.1/30 scope global wfc0u\n": true,
+		"": false,
+		"7: wfc0u    inet 100.64.88.1/24 scope global wfc0u\n": false,
+		"7: wfc0u inet 100.64.88.1/30 scope global\n" +
+			"7: wfc0u inet 10.1.1.1/8 scope global\n": false,
+	} {
+		if got := onlyAddr(out, "100.64.88.1/30"); got != want {
+			t.Errorf("onlyAddr(%q) = %v, want %v", out, got, want)
+		}
+	}
+}
+
 func TestUplinkFromRoute(t *testing.T) {
 	if got := uplinkFromRoute("default via 10.0.0.1 dev enp3s0 proto dhcp metric " +
 		"100\n"); got != "enp3s0" {

@@ -83,6 +83,14 @@ func (realHost) reflink(dir string) error {
 	return nil
 }
 
+func (realHost) userHome(name string) (string, error) {
+	u, err := user.Lookup(name)
+	if err != nil {
+		return "", fmt.Errorf("looking up %s: %w", name, err)
+	}
+	return u.HomeDir, nil
+}
+
 func (realHost) lookupOwner(name string) (int, bool, error) {
 	u, err := user.Lookup(name)
 	if err != nil {

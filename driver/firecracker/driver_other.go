@@ -19,3 +19,6 @@ func (d *Driver) StartBuild(context.Context, *driver.BuildRequest) (*driver.Buil
 
 // killVMMs has nothing to kill off Linux: no VMM ever ran here.
 func killVMMs([]vmmRecord) error { return nil }
+
+// tryLock finds every lock free off Linux: no build ever held one here.
+func (realHost) tryLock(string) (func(), bool, error) { return func() {}, false, nil }

@@ -379,8 +379,15 @@ user who ran sudo. Setup also loads the `warden_fc` bridge table and the
 `WARDEN-FC` iptables chains that isolate the slots (see
 [Network Isolation](../concepts/network-isolation.md#firecracker-slots)),
 and sets `net.ipv4.ip_forward=1` last. It is idempotent: existing
-interfaces are verified, and warden's own table and chains are reloaded;
-no other rule is touched.
+interfaces are verified, an upstream TAP that already has its address keeps
+it, and warden's own table and chains are reloaded; no other rule is touched.
+
+Because the reload briefly removes the slots' rules, setup refuses while any
+slot is in use: a VM has one of its TAPs open (a running build, VMs left by
+`--keep-vms`, or ones a killed warden left behind), or a build holds the
+slot. Wait for the builds to finish, or stop leftover VMs with `warden clean
+--driver firecracker` run as the build user, then re-run setup. While setup
+runs it holds the slots, so a build starting then finds them all in use.
 
 Setup refuses, printing the fix, when the host's firewall would make it
 unsafe or ineffective:

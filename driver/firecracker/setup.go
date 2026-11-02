@@ -3,6 +3,7 @@ package firecracker
 import (
 	"fmt"
 	"io"
+	"path/filepath"
 	"strconv"
 	"strings"
 
@@ -27,6 +28,13 @@ type host interface {
 	getenv(key string) string
 	// lookupOwner returns a user's uid and whether it is in the kvm group.
 	lookupOwner(name string) (uid int, inKVM bool, err error)
+	// userHome returns a user's home directory.
+	userHome(name string) (string, error)
+	// tryLock takes the host lock held in the existing file path without
+	// waiting. It never creates the file, so a root warden leaves nothing in a
+	// user's lock dir: a missing file is free (a no-op unlock). held is true
+	// when another process holds the lock.
+	tryLock(path string) (unlock func(), held bool, err error)
 	euid() int
 }
 
@@ -162,8 +170,14 @@ func setup(h host, out io.Writer, opts SetupOptions) error {
 	if err != nil {
 		return err
 	}
+	release, err := quiesceSlots(h, o)
+	if err != nil {
+		return err
+	}
+	defer release()
 	created, verified, err := runSteps(h, setupSteps(setupParams{
 		slots: n, user: o.name, uid: o.uid, uplink: up, uplinkMTU: mtu,
+		addrOK: upstreamAddrsOK(h, n),
 	}))
 	if err != nil {
 		return err
@@ -176,6 +190,99 @@ func setup(h host, out io.Writer, opts SetupOptions) error {
 	fmt.Fprintln(out,
 		"  this is runtime state: re-run setup after a reboot (see the drivers guide)")
 	return nil
+}
+
+const slotsBusyFix = "wait for the builds on them to finish, or stop VMs left by " +
+	"--keep-vms (warden clean --driver firecracker, as the build user), then " +
+	"re-run sudo warden setup --driver firecracker"
+
+// quiesceSlots refuses setup while any slot is in use, and otherwise holds the
+// owner's slot locks until setup is done so no build takes a slot meanwhile.
+// Setup reloads every slot's rules, so a slot in use would run unfiltered for
+// the reload (GLOBAL-06). A slot is in use when a process has one of its TAPs
+// attached (the kernel reports carrier on a TAP only then), which finds
+// running builds, --keep-vms VMs and orphans whoever started them; or when a
+// build holds its lock before its VMMs start.
+func quiesceSlots(h host, o owner) (release func(), err error) {
+	dir, err := ownerLockDir(h, o.name)
+	if err != nil {
+		return nil, err
+	}
+	var unlocks []func()
+	release = func() {
+		for _, u := range unlocks {
+			u()
+		}
+	}
+	var busy []string
+	for i := 0; i < MaxSlots; i++ {
+		s := Slot(i)
+		if !h.exists("/sys/class/net/" + s.UpstreamTap()) {
+			continue
+		}
+		if tapAttached(h, s) {
+			busy = append(busy, strconv.Itoa(i))
+			continue
+		}
+		unlock, held, err := h.tryLock(filepath.Join(dir, s.LockName()+".lock"))
+		if err != nil {
+			release()
+			return nil, err
+		}
+		if held {
+			busy = append(busy, strconv.Itoa(i))
+			continue
+		}
+		unlocks = append(unlocks, unlock)
+	}
+	if len(busy) > 0 {
+		release()
+		return nil, driver.Fixable(slotsBusyFix,
+			"firecracker slot(s) %s are in use, and re-running setup now would drop "+
+				"their isolation rules while it reloads them", strings.Join(busy, ", "))
+	}
+	return release, nil
+}
+
+// tapAttached reports whether a VMM has one of s's TAPs open.
+func tapAttached(h host, s Slot) bool {
+	for _, tap := range []string{s.RelayTap(), s.GuestTap(), s.UpstreamTap()} {
+		b, err := h.readFile("/sys/class/net/" + tap + "/carrier")
+		if err == nil && strings.TrimSpace(string(b)) == "1" {
+			return true
+		}
+	}
+	return false
+}
+
+// ownerLockDir is driver.LockDir as the user name sees it. Under sudo HOME is
+// usually root's, so it is found from the user's home; XDG_CACHE_HOME counts
+// only when HOME is still the user's (sudo -E).
+func ownerLockDir(h host, name string) (string, error) {
+	home, err := h.userHome(name)
+	if err != nil {
+		return "", err
+	}
+	cache := filepath.Join(home, ".cache")
+	if x := h.getenv("XDG_CACHE_HOME"); x != "" && h.getenv("HOME") == home {
+		cache = x
+	}
+	return filepath.Join(cache, "buildwarden", "locks"), nil
+}
+
+// upstreamAddrsOK finds the slots whose upstream TAP already has exactly its
+// host address, so re-running setup does not flush it.
+func upstreamAddrsOK(h host, n int) map[Slot]bool {
+	ok := map[Slot]bool{}
+	for i := 0; i < n; i++ {
+		s := Slot(i)
+		out, err := h.output([]string{"ip", "-o", "-4", "addr", "show", "dev",
+			s.UpstreamTap()})
+		if err == nil && onlyAddr(out, s.HostAddr()+"/30") {
+			ok[s] = true
+		}
+	}
+	return ok
 }
 
 // runSteps runs a command list, returning the probed resources it created and

@@ -242,7 +242,9 @@ Idempotent host preparation. Hyper-V and Firecracker need it.
   sysctls, plus the `warden_fc` bridge table and the `WARDEN-FC` iptables and
   ip6tables chains, and `net.ipv4.ip_forward=1` last. It refuses, printing the
   fix, when the filter FORWARD policy is ACCEPT, firewalld is running, or an
-  nftables forward chain drops by default. The slots are runtime state: run it
+  nftables forward chain drops by default, and while any slot is in use (a VM
+  has its TAPs open, or a build holds it), since the reload would leave that
+  slot unfiltered. The slots are runtime state: run it
   after every boot (the [drivers guide](drivers.md#firecracker-driver) has a
   systemd unit). Afterwards builds need only `/dev/kvm`.
 

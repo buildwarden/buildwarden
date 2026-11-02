@@ -118,6 +118,21 @@ between this host's other interfaces. Set it to DROP (and keep it across reboots
 	fi
 }
 
+# Refuses while a VMM has a slot's TAP open (the kernel reports carrier on a
+# TAP only then): reloading the rules would leave that slot unfiltered.
+# `warden setup` also refuses while a build holds a slot's lock.
+idle() {
+	busy=""
+	for c in /sys/class/net/wfc*[rgu]/carrier; do
+		[ -e "$c" ] || continue
+		if [ "$(cat "$c" 2>/dev/null)" = 1 ]; then
+			busy="$busy $(basename "$(dirname "$c")")"
+		fi
+	done
+	[ -z "$busy" ] || die "slots in use (TAPs attached:$busy); wait for their builds or
+stop VMs left by --keep-vms (warden clean --driver firecracker), then retry"
+}
+
 tap() {
 	ip link show "$1" >/dev/null 2>&1 || ip tuntap add dev "$1" mode tap user "$user"
 	sysctl -qw "net.ipv6.conf.$1.disable_ipv6=1"
@@ -125,6 +140,7 @@ tap() {
 
 up() {
 	posture
+	idle
 	up_if="$(uplink)"
 	[ -n "$up_if" ] || die "no default route"
 	up_mtu="$(cat "/sys/class/net/$up_if/mtu")"
@@ -161,8 +177,11 @@ up() {
 		tap "$u"
 		ip link set "$r" master "$b"
 		ip link set "$g" master "$b"
-		ip addr flush dev "$u"
-		ip addr add "$host/30" dev "$u"
+		# Re-addressing a correct TAP would break a claim tunnel.
+		if [ "$(ip -o -4 addr show dev "$u" | awk '{ print $4 }')" != "$host/30" ]; then
+			ip addr flush dev "$u"
+			ip addr add "$host/30" dev "$u"
+		fi
 		sysctl -qw "net.ipv4.conf.$b.rp_filter=1" "net.ipv4.conf.$u.rp_filter=1" \
 			"net.ipv4.conf.$b.arp_ignore=8"
 		for l in "$b" "$r" "$g" "$u"; do ip link set "$l" up; done

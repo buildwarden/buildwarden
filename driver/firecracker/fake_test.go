@@ -22,13 +22,20 @@ type fakeHost struct {
 	inKVM   bool
 	noRW    bool
 	noRefl  bool
+	// heldLocks are lock files another process holds; locked and unlocked
+	// record the ones taken and released.
+	heldLocks map[string]bool
+	locked    []string
+	unlocked  []string
+	// ranAtUnlock is len(ran) at each unlock, to show what ran under a lock.
+	ranAtUnlock []int
 }
 
 func newFakeHost() *fakeHost {
 	return &fakeHost{
 		fail: map[string]bool{}, outputs: map[string]string{}, files: map[string]string{},
 		links: map[string]string{}, missing: map[string]bool{}, env: map[string]string{},
-		uid: 1000, inKVM: true,
+		heldLocks: map[string]bool{}, uid: 1000, inKVM: true,
 	}
 }
 
@@ -99,6 +106,28 @@ func (f *fakeHost) lookupOwner(name string) (int, bool, error) {
 		return 0, false, errors.New("unknown user " + name)
 	}
 	return 1000, f.inKVM, nil
+}
+
+func (f *fakeHost) userHome(name string) (string, error) {
+	if name != "jeff" {
+		return "", errors.New("unknown user " + name)
+	}
+	return "/home/jeff", nil
+}
+
+// tryLock treats a lock file as existing when it is in files, like exists.
+func (f *fakeHost) tryLock(path string) (func(), bool, error) {
+	if _, ok := f.files[path]; !ok {
+		return func() {}, false, nil
+	}
+	if f.heldLocks[path] {
+		return nil, true, nil
+	}
+	f.locked = append(f.locked, path)
+	return func() {
+		f.unlocked = append(f.unlocked, path)
+		f.ranAtUnlock = append(f.ranAtUnlock, len(f.ran))
+	}, false, nil
 }
 
 // withSlots gives the fake n slots owned by uid.
