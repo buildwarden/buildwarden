@@ -1,0 +1,58 @@
+# f2-spike-linux-kvm runs, windows-desktop WSL2, 2026-11-02T19:55Z
+host kernel: 6.18.54.1-microsoft-standard-WSL2-warden+; firecracker: Firecracker v1.17.0; nested=Y
+uplink: eth0 mtu 1280; FORWARD policy: -P FORWARD DROP
+
+== run1
+spike: relay claimed in 1.052s
+hello from firecracker
+spike: build finished in 466ms: <nil>
+
+== run-iso
+spike: relay claimed in 1.029s
+PATH=/bin:/usr/sbin:/usr/bin:/sbin:/bin
+TCP-DIRECT: failed rc=1 (good)
+TCP-8443: failed rc=1 (good)
+UDP-NTP: no reply rc=143 (good)
+UDP-9999: sent
+HTTP-PROXIED: 577 bytes
+TCP-8080-WGET: failed (good)
+spike: build finished in 2m26.552s: <nil>
+
+== run-ubuntu
+spike: relay claimed in 1.051s
+KERNEL: 6.1.191
+PRETTY_NAME="Ubuntu 24.04.5 LTS"
+ROOT: /dev/vda1
+TCP-DIRECT: failed (good)
+UDP-9999: sent
+spike: build finished in 24.707s: <nil>
+
+== run-ubuntu2
+spike: relay claimed in 1.071s
+FETCH https://example.com/ -> 502 21 bytes
+FETCH https://www.google.com/ -> 502 21 bytes
+FETCH https://github.com/ -> 502 21 bytes
+FETCH https://cloud-images.ubuntu.com/noble/current/SHA256SUMS -> 000 21 bytes
+FETCH http://example.com/ -> 200 577 bytes
+FETCH http://archive.ubuntu.com/ubuntu/dists/noble/Release -> 200 254968 bytes
+spike: build finished in 2m10.659s: <nil>
+
+== run-tls2
+spike: relay claimed in 1.119s
+HTTPS code=200
+spike: build finished in 5.045s: <nil>
+
+== run-big
+spike: relay claimed in 1.061s
+BIG: 7464385 bytes sha256=06094a1108ae9e82aa4c23a775aa92758f53f1175d422270d9d6162cb9ade558
+spike: build finished in 4.996s: <nil>
+
+== relay memory (fc-mem.sh: 7.4 MB HTTPS build at each size)
+512 MiB (default, run-big) and 256, 192, 128 MiB: all rc=0, sha256 matched, all 13 signatures valid, no OOM
+
+== relay console (last run): entropy and readiness
+[    0.005650] random: crng init done
+init: ready; relay awaiting claim on :8301
+2026/11/02 19:51:16 relay: awaiting claim on 0.0.0.0:8301
+2026/11/02 19:51:17 relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp
+2026/11/02 19:51:17 relay: claimed

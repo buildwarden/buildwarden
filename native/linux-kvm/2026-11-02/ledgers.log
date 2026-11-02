@@ -1,0 +1,28 @@
+== warden inspect out1
+✅ GET /bootstrap (42 bytes)
+✅ GET /build-script (45 bytes)
+  SUMMARY: 4 records, 2 requests, 87 B audited
+  SIGNATURES: ✅ All 5 signatures valid
+  COMPLETENESS: ✅ All channels closed
+== warden inspect out-iso
+✅ GET /bootstrap (42 bytes)
+✅ GET /build-script (822 bytes)
+✅ GET http://example.com/ (577 bytes)
+  SUMMARY: 8 records, 3 requests, 1.8 KB audited
+  SIGNATURES: ✅ All 9 signatures valid
+  COMPLETENESS: ✅ All channels closed
+== warden inspect out-ubuntu
+✅ GET /bootstrap (42 bytes)
+✅ GET /build-script (413 bytes)
+✅ GET https://example.com/ (21 bytes)
+  SUMMARY: 8 records, 3 requests, 623 B audited
+  SIGNATURES: ✅ All 9 signatures valid
+  COMPLETENESS: ✅ All channels closed
+== warden inspect out-big
+✅ GET /bootstrap (42 bytes)
+✅ GET /build-script (415 bytes)
+✅ GET https://github.com/firecracker-microvm/firecracker/releases/download/v1.17.0/firecracker-v1.17.0-x86_64.tgz (0 bytes)
+✅ GET https://release-assets.githubusercontent.com/github-production-release-asset/107505869/9ecdc0ab-2b4a-43e8-8321-9cc04e266c7e?sp=r&sv=
+  SUMMARY: 12 records, 4 requests, 7.1 MB audited
+  SIGNATURES: ✅ All 13 signatures valid
+  COMPLETENESS: ✅ All channels closed
