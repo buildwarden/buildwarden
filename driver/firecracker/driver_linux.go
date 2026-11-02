@@ -54,6 +54,14 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	}
 	defer unlockBuild()
 
+	// The slot comes first so a busy host fails before the image conversion
+	// and rootfs copy, which can take minutes (UX-04).
+	slot, release, err := acquireSlot(pre.slots)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
 	outputDir, err := makeOutputDir(req)
 	if err != nil {
 		return nil, err
@@ -85,11 +93,6 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	}
 	defer sess.Close()
 
-	slot, release, err := acquireSlot(pre.slots)
-	if err != nil {
-		return nil, err
-	}
-	defer release()
 	r := &run{d: d, req: req, slot: slot, work: workDir}
 	defer r.teardown()
 
@@ -129,7 +132,7 @@ type staged struct {
 
 // stage records the build's inputs (ORCH-02) and readies both VMs' boot
 // files and the environment record, so a missing image or asset fails before
-// a slot is taken or a VM boots.
+// a VM boots.
 func (d *Driver) stage(req *driver.BuildRequest, pre *preflighted,
 	workDir, outputDir, buildID string) (*staged, error) {
 	d.status("preparing build environment...")
