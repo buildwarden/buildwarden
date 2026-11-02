@@ -1,0 +1,141 @@
+{
+  "feature": "firecracker-driver",
+  "branch": "feat/firecracker-driver",
+  "head": "94f00dd21412",
+  "base": "6899b79b91a0",
+  "round": "feature",
+  "step": "f4-review",
+  "previous_report": "reports/firecracker-driver/96ca21adae7b.json",
+  "scope": "git diff origin/main...feat/firecracker-driver (90 files, +12556/-434). The merge base is still 6899b79; origin/main is at e418871, unchanged since the previous report. This pass judged the fix range 96ca21a..94f00dd (2 commits: 22f7c93 rules.yaml, 94f00dd lockAs; 10 files, +354/-35) in depth.",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass on the windows host: 0 issues in the root module, tools/workflow and tools/tier1; then dist/tier1 -base origin/main (6899b79b91a0...94f00dd21412): 0 MUST, 0 MUST-review, 0 SHOULD, 1 hint, 0 suppressed, exit 0",
+    "make_lint_per_platform": "GOOS=linux make lint and GOOS=darwin make lint: both pass, same tier1 result (FLOW-17: slots_linux.go, slots_linux_test.go and driver_other.go are touched)",
+    "make_test": "pass: 29 ok lines, no FAIL (root module, tools/workflow, tools/tier1) on windows",
+    "linux_tier0": "Cross-compiled linux/amd64 test binaries (CGO_ENABLED=0) for driver/firecracker, driver, driver/linuxguest, driver/relayvm, tools/firecracker-vm and cmd/warden, run under WSL Ubuntu: all PASS. LockAs, TestSetup* and TryLock tests passed -count=50 -cpu=1 as the user. As root (sudo): TestLockAsExcludesBuild and TestLockAsUsesUserCreds passed -count=20. A throwaway probe test (built from a temporary file, removed; the code checkout stayed clean) took 16 lockAs locks as root for nobody and read /proc/self/task/*/status: see finding 15.",
+    "custom_static_checks": "dist/tier1 -json -base origin/main, exit 0: findings [], suppressed [], hints = 1 x BOOT-07 bootstrap-surface (driver/firecracker/deliver_linux.go; bootstrap.md not in the diff). Same hint, judged the same way (finding 6). setup.go and posture.go are now on the surface (22f7c93); the hint names only the first surface file.",
+    "fixes_made": "none; tier 1 was green at 94f00dd"
+  },
+  "prior_findings": [
+    {"id": 6, "rule": "BOOT-07", "severity": "SHOULD", "status": "carried forward unchanged", "note": "Still true: bootstrap.md is not in the diff, line 195 still names driver/qemu/cloudinit.go (deleted on this branch), there is no firecracker row, and bootstrap-firecracker-row's x1-design is still pending."},
+    {"id": 12, "rule": "TEST-08", "severity": "SHOULD", "status": "carried forward unchanged", "note": "Still true: queue/security-suite.yaml does not mention firecracker, and plan step 13 (docs/design/firecracker-driver.md:1052) has no corpus to land in."},
+    {"id": 13, "rule": "GLOBAL-06", "severity": "SHOULD", "status": "resolved, residuals in finding 16", "note": "94f00dd takes fix (a): quiesceSlots calls lockAs for every made slot and every slot below n, creating missing lock files and directories as the build user, so a build starting during setup finds every slot it could take held. TestSetupHoldsSlotLocks checks, at the bridge-table flush, that slots with a file, without one, and the one --slots adds are all held; TestLockAsExcludesBuild checks the real lock is the one acquireSlot takes. The Implementation note no longer says 'no window' and states the residuals. One defect in lockAs itself is finding 15."},
+    {"id": 14, "rule": "BOOT-07", "severity": "SHOULD", "status": "resolved", "note": "22f7c93 adds driver/firecracker/setup.go and driver/firecracker/posture.go to rules.yaml's bootstrap surface. The bootstrap.md half stays with finding 6."}
+  ],
+  "lockas_review": {
+    "per_thread_switch": "correct: unix.Setgroups is RawSyscall(SYS_SETGROUPS) and SetfsgidRetGid/SetfsuidRetUid are plain setfs[ug]id syscalls in x/sys v0.47.0, so they change only the calling thread (package syscall's Setgroups would use AllThreadsSyscall). Order is groups, fsgid, fsuid, each while still privileged; the double call reads each id back. An fsuid other than 0 clears the thread's effective fs capabilities (DAC_OVERRIDE, DAC_READ_SEARCH, FOWNER, CHOWN...), so path walk, mkdir and open are the user's.",
+    "no_other_goroutine": "correct: LockOSThread runs before any switch, and a locked M runs only its goroutine; blocking syscalls (mkdir, open, flock) keep the M. New threads needed meanwhile are cloned by the template thread (newm checks lockedExt), which LockOSThread starts from a still-root thread, so no thread inherits the user's creds by clone. The probe confirmed every live non-leader thread had fsuid 0 and groups 0 after 16 calls.",
+    "thread_disposal": "wrong for one thread: see finding 15. Non-main threads are terminated on goroutine exit, but when the goroutine ran on m0 the runtime wedges the main thread (mexit: 'This is the main thread. Just wedge it.') with the user's fsuid, fsgid and groups for the life of the process.",
+    "symlink_toctou": "sound: every check on the path is the user's, so a link the user plants reaches only what the user could open read-write anyway; no root check precedes the open, so there is no check/use gap. The fd is O_CLOEXEC (os.OpenFile), so setup's ip/nft children do not inherit it. Not O_NOFOLLOW/O_NONBLOCK, and a non-regular file is not refused; acting as the user makes that harmless, matching hostLock.",
+    "error_paths": "sound: lookupCred and every switch failure return an error; a half-switched thread is still disposed of as above; quiesceSlots releases the locks it took before returning; lock files already created stay, user-owned, as a build would make them. A home the user cannot write now fails setup with a plain 'creating lock dir' error, but the user's builds would fail the same way.",
+    "other_threads_root": "true for every thread that runs Go code (probe-verified); the wedged m0 is the exception in kernel-visible state (finding 15)."
+  },
+  "findings": [
+    {
+      "id": 6,
+      "rule": "BOOT-07",
+      "related_rules": ["FLOW-14"],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "docs/development/bootstrap.md",
+      "line": 195,
+      "finding": "Carried forward unchanged. The tier-1 BOOT-07 hint is acceptable: the firecracker row is a model change accepted at review r1 (a2), and the bootstrap.md edit moved to the process item bootstrap-firecracker-row (x1-design still pending with Jeff). Until it lands the doc that wins (FLOW-14) and the machine list disagree: bootstrap.md:195 names driver/qemu/cloudinit.go, which this branch deletes; rules.yaml lists the firecracker surface, now including setup.go and posture.go; bootstrap.md has no firecracker row.",
+      "suggestion": "Say this in the PR body. Either Jeff takes bootstrap-firecracker-row right after merge (carrying slots*.go, vm*.go, deliver_linux.go, setup.go, posture.go and tools/firecracker-vm/ into the row), or the path correction, which corrects the doc to match the code, is folded in here."
+    },
+    {
+      "id": 12,
+      "rule": "TEST-08",
+      "related_rules": ["SEC-03", "SEC-01"],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "docs/design/firecracker-driver.md",
+      "line": 1052,
+      "finding": "Carried forward unchanged. Plan step 13 (add the Security note's 18 TEST-08 cases to the corpus) cannot be done: no corpus exists, and queue/security-suite.yaml does not mention firecracker. Once the design is archived nothing points the security suite at these cases.",
+      "suggestion": "Add the case table, or a pointer to it, to queue/security-suite.yaml or the backlog. Say in the PR body that step 13 is deferred and that the release shipping this trips GLOBAL-06, so TEST-08 applies."
+    },
+    {
+      "id": 15,
+      "rule": "GLOBAL-06",
+      "related_rules": ["GLOBAL-01", "GLOBAL-04"],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "driver/firecracker/slots_linux.go",
+      "line": 148,
+      "finding": "The thread-disposal claim is false for the main thread. lockAs's comment says the runtime 'discards' the never-unlocked thread. That holds for every thread except m0: when a locked goroutine exits on m0, runtime.mexit wedges m0 (parks it for good) instead of exiting, because exiting a Linux main thread leaves a zombie. The new goroutine goes into the caller's runnext, so when the caller blocks on <-done the same M runs it; in warden the caller is setup on the main goroutine, so the first lockAs call lands on m0 in practice. Observed under WSL as root, 5 runs out of 5, after 16 lockAs calls for nobody: the thread-group leader (/proc/self/status, so ps, top and anything else reading the process's status) reports 'Uid: 0 0 0 65534' and 'Groups: 65534', while the other live threads report 0. Impact is low, not a boundary break: the wedged thread never runs Go code again (the runtime throws if it wakes), only signal handlers may run on it and they do no path lookups, and the kernel's ptrace and kill checks use the target's uid/euid/suid, which stay 0, so the build user gains nothing. But the code ships a safety argument that is wrong, the process-visible identity of a root process is the build user's, and TestLockAsUsesUserCreds's 'warden stays root' check (slots_linux_test.go:128) samples one thread through one write, so it cannot see this. Separately, any fsuid change makes the kernel reset the process's dumpable flag to suid_dumpable (usually 0), so setup is non-dumpable after its first lockAs: harmless for a short root command, worth knowing.",
+      "suggestion": "Restore the thread before the goroutine returns and keep it locked: after openLockAs (success or failure) call SetfsuidRetUid(0), SetfsgidRetGid(0) and unix.Setgroups with the groups read by unix.Getgroups before the switch, each read back. Then whichever thread the runtime keeps or kills holds root's creds again, and an un-restorable thread is still never reused. (Alternatively runtime.LockOSThread in cmd/warden's main init on Linux keeps m0 for the main goroutine, but restoring is local and simpler.) Fix the comment to say what happens on m0. Extend TestLockAsUsesUserCreds to read every /proc/self/task/*/status after lockAs and require fsuid 0, fsgid 0 and root's groups on every task; it fails today."
+    },
+    {
+      "id": 16,
+      "rule": "GLOBAL-06",
+      "related_rules": ["UX-04", "FLOW-06"],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "docs/design/firecracker-driver.md",
+      "line": 1232,
+      "finding": "The two stated residuals are accurate and, as documented, acceptable for Jeff to sign off; they belong in the PR's security note. (1) XDG_CACHE_HOME: ownerLockDir uses it only when sudo keeps HOME as the user's. Default sudoers env_reset drops XDG_CACHE_HOME, so any user whose builds use a non-default XDG_CACHE_HOME has setup hold locks under ~/.cache that no build takes. Running VMs are still found by carrier; what is lost is a build starting during setup or holding its slot before its VMMs start, the finding-2 window. Setup cannot see the user's environment, and the drivers guide (drivers.md:390-395) tells such users to start no build while it runs. The root-owned setup gate (option b in the previous report) would close this and the next residual; Implement judged it not needed, which is a defensible trade for a seconds-long command run by the operator. (2) slots.sh checks carrier and held locks but holds none through its reload; it is the documented debugging stand-in, and its comment says to run it only while no build starts. Two small points in slots.sh's new lock check (slots.sh:134-141): it reads only ~/.cache (never XDG_CACHE_HOME), the same residual as (1); and root opens the user's file between a '[ -f ]' test and the '9<' redirect, so a user who swaps in a FIFO in that gap hangs root's script on open (a symlink only makes root open a file read-only, which is harmless). The FIFO case is self-inflicted by the owner and low.",
+      "suggestion": "Put both residuals, as the Implementation note states them, in the PR body's security note for acknowledgement at merge (FLOW-08). In slots.sh, run the check as the user, mirroring lockAs: 'runuser -u \"$user\" -- flock -n \"$f\" true' (or setpriv --reuid/--regid/--init-groups), which removes root's open of a user path and the FIFO hang. Take the setup gate later only if a user reports the XDG case."
+    }
+  ],
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 0,
+    "SHOULD": 4
+  },
+  "resolved_since_previous": [13, 14],
+  "carried_forward": [6, 12],
+  "new_since_previous": [15, 16],
+  "suppressions": [],
+  "suppressions_note": "The previous report recorded no suppressions, and tier 1 applied no Tier1-Allow trailers (suppressed: [] in its JSON), so none carry over.",
+  "back_to_design": false,
+  "back_to_design_note": "Nothing invalidates a Decision, a confirmed question or a BOOT invariant. lockAs is an implementation of the previous report's option (a), inside Decision 4's idempotent setup; finding 15 is a local fix in lockAs, and finding 16 records residuals the design note already states.",
+  "routing": {
+    "tier1_red": false,
+    "wf_implement_fix": "none for tier 1: it is green at 94f00dd",
+    "must_findings_route": "No MUST or MUST-review findings, so nothing must go back to wf-implement. Finding 15 is a small in-feature fix (restore creds, fix the comment, test every task) worth doing before Publish if the tick sends work back. Otherwise findings 6, 12, 15 and 16 go in the PR body for acknowledgement at merge (FLOW-08), with 16's residuals (and 15, if not fixed) in the security note, since GLOBAL-06 needs Jeff's sign-off at merge (LINT-03)."
+  },
+  "informational": [
+    {
+      "rule": "BOOT-07",
+      "file": "driver/firecracker/deliver_linux.go",
+      "line": 0,
+      "note": "The tier-1 bootstrap-surface hint: an accepted model change; the bootstrap.md edit is deferred to bootstrap-firecracker-row. See finding 6."
+    },
+    {
+      "rule": "GLOBAL-05",
+      "file": "cmd/warden/warden.exe",
+      "line": 0,
+      "note": "Unchanged: 10a1f61's 18 MB warden.exe blob stays in the branch's history (no force-push, FLOW-17). A squash merge keeps it out of main; a merge commit or rebase merge brings it in. The PR body should say so; the merge method is Jeff's call (FLOW-08). No rule or tier-1 check refuses a committed binary (LINT-08 doc-set gap, still unqueued)."
+    },
+    {
+      "rule": "GLOBAL-06",
+      "file": "docs/design/firecracker-driver.md",
+      "line": 817,
+      "note": "The change trips GLOBAL-06 (host-env and env-relay). The PR body should carry the design's security note, the finding-2 and finding-13 fixes (setup refuses busy slots, then holds every slot's lock, creating missing ones as the build user), and finding 16's residuals."
+    },
+    {
+      "rule": "ORCH-01",
+      "file": "tools/tier1/rules.yaml",
+      "line": 83,
+      "note": "Unchanged: drivers.all gains firecracker; Publish should tell the open branches (FLOW-10)."
+    },
+    {
+      "rule": "FLOW-17",
+      "file": "feat/firecracker-driver",
+      "line": 0,
+      "note": "origin/main is still e418871; Publish should re-run tier 1 after merging main."
+    },
+    {
+      "rule": "TEST-02",
+      "file": ".github/workflows/firecracker.yml",
+      "line": 1,
+      "note": "The job has still never run; its first run is this feature's PR. A red first run is a FLOW-11 repair item, not a merge gate (a8). TestLockAsUsesUserCreds skips unless root, so CI runs it only if the job runs tests as root; it ran here under sudo."
+    },
+    {
+      "rule": "LINT-04",
+      "file": "driver/linuxguest/images.go",
+      "line": 250,
+      "note": "Pre-existing, out of scope, unchanged: an unresolvable FROM falls back silently to direct boot (qemu's behavior, moved unchanged)."
+    }
+  ]
+}
