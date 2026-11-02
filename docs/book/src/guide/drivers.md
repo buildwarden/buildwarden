@@ -387,7 +387,12 @@ slot is in use: a VM has one of its TAPs open (a running build, VMs left by
 `--keep-vms`, or ones a killed warden left behind), or a build holds the
 slot. Wait for the builds to finish, or stop leftover VMs with `warden clean
 --driver firecracker` run as the build user, then re-run setup. While setup
-runs it holds the slots, so a build starting then finds them all in use.
+runs it holds every slot's lock, so a build starting then finds them all in
+use. It creates any lock file a build has not made yet, as the build user, in
+`~/.cache/buildwarden/locks`. It uses `XDG_CACHE_HOME` instead only when sudo
+keeps it along with your `HOME`; if your builds keep their cache elsewhere
+and sudo drops it, setup holds the wrong locks, so start no build while it
+runs.
 
 Setup refuses, printing the fix, when the host's firewall would make it
 unsafe or ineffective:

@@ -6,6 +6,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 
@@ -289,16 +290,38 @@ func TestSetupRefusesBusySlots(t *testing.T) {
 	}
 }
 
-// TestSetupHoldsSlotLocks checks that setup holds every slot lock the owner
-// has until its last command, so no build starts on a slot mid-reload.
+// TestSetupHoldsSlotLocks checks that setup holds every slot's lock until its
+// last command, so no build starts on a slot mid-reload: slots with a lock
+// file, slots no build has used (no file yet), and the slot --slots adds.
 func TestSetupHoldsSlotLocks(t *testing.T) {
-	h := postureHost().withSlots(2, 1000)
+	h := postureHost().withSlots(3, 1000)
 	h.files[slotLockPath(0)] = ""
-	h.files[slotLockPath(1)] = ""
-	if err := setup(h, &bytes.Buffer{}, SetupOptions{Slots: 2}); err != nil {
+	all := []Slot{0, 1, 2, 3}
+	var excluded []Slot
+	h.onRun = func(line string) {
+		// A build starting while the rules are flushed tries each slot's
+		// lock, as acquireSlot does, and must find every one taken.
+		if line != "nft delete table bridge "+nftTable {
+			return
+		}
+		for _, s := range all {
+			if h.lockedNow(slotLockPath(s)) {
+				excluded = append(excluded, s)
+			}
+		}
+	}
+	if err := setup(h, &bytes.Buffer{}, SetupOptions{Slots: 4}); err != nil {
 		t.Fatal(err)
 	}
-	if len(h.locked) != 2 || len(h.unlocked) != 2 {
+	if !slices.Equal(excluded, all) {
+		t.Fatalf("mid-reload a build was kept off slots %v, want %v", excluded, all)
+	}
+	for _, s := range all {
+		if _, ok := h.files[slotLockPath(s)]; !ok {
+			t.Errorf("setup made no lock file for slot %d", s)
+		}
+	}
+	if len(h.locked) != len(all) || len(h.unlocked) != len(all) {
 		t.Fatalf("locks taken %v, released %v", h.locked, h.unlocked)
 	}
 	for _, n := range h.ranAtUnlock {

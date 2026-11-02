@@ -7,9 +7,14 @@ import (
 	"fmt"
 	"io/fs"
 	"os"
+	"os/user"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"syscall"
 	"time"
+
+	"golang.org/x/sys/unix"
 
 	"github.com/buildwarden/buildwarden/driver"
 )
@@ -127,4 +132,103 @@ func (realHost) tryLock(path string) (func(), bool, error) {
 		_ = syscall.Flock(int(f.Fd()), syscall.LOCK_UN)
 		f.Close()
 	}, false, nil
+}
+
+func (realHost) lockAs(path, name string) (func(), bool, error) {
+	c, err := lookupCred(name)
+	if err != nil {
+		return nil, false, err
+	}
+	type result struct {
+		f    *os.File
+		held bool
+		err  error
+	}
+	done := make(chan result, 1)
+	go func() {
+		// The thread takes the user's credentials and is never unlocked, so
+		// the runtime discards it when the goroutine ends rather than reuse
+		// it with them.
+		runtime.LockOSThread()
+		f, held, err := openLockAs(path, c)
+		done <- result{f, held, err}
+	}()
+	r := <-done
+	if r.err != nil || r.held {
+		return nil, r.held, r.err
+	}
+	return func() {
+		_ = syscall.Flock(int(r.f.Fd()), syscall.LOCK_UN)
+		r.f.Close()
+	}, false, nil
+}
+
+// cred is a user's filesystem identity.
+type cred struct {
+	uid, gid int
+	groups   []int
+}
+
+func lookupCred(name string) (cred, error) {
+	u, err := user.Lookup(name)
+	if err != nil {
+		return cred{}, fmt.Errorf("looking up %s: %w", name, err)
+	}
+	var c cred
+	if c.uid, err = strconv.Atoi(u.Uid); err != nil {
+		return cred{}, fmt.Errorf("uid of %s: %w", name, err)
+	}
+	if c.gid, err = strconv.Atoi(u.Gid); err != nil {
+		return cred{}, fmt.Errorf("gid of %s: %w", name, err)
+	}
+	ids, err := u.GroupIds()
+	if err != nil {
+		return cred{}, fmt.Errorf("groups of %s: %w", name, err)
+	}
+	for _, id := range ids {
+		g, err := strconv.Atoi(id)
+		if err != nil {
+			return cred{}, fmt.Errorf("group %q of %s: %w", id, name, err)
+		}
+		c.groups = append(c.groups, g)
+	}
+	return c, nil
+}
+
+// openLockAs creates and locks path as driver.TryHostLock would, on a thread
+// switched to c. The fs ids and groups are per-thread syscalls here (x/sys,
+// unlike package syscall, does not apply them to every thread), and an fsuid
+// other than 0 drops the thread's file capabilities, so every check on the
+// path is the user's. A warden already running as the user switches nothing.
+func openLockAs(path string, c cred) (*os.File, bool, error) {
+	if os.Geteuid() != c.uid {
+		if err := unix.Setgroups(c.groups); err != nil {
+			return nil, false, fmt.Errorf("taking uid %d's groups: %w", c.uid, err)
+		}
+		// setfs[ug]id report failure only by not changing the id, so each is
+		// read back by a second call.
+		_, _ = unix.SetfsgidRetGid(c.gid)
+		if prev, _ := unix.SetfsgidRetGid(c.gid); prev != c.gid {
+			return nil, false, fmt.Errorf("taking gid %d failed", c.gid)
+		}
+		_, _ = unix.SetfsuidRetUid(c.uid)
+		if prev, _ := unix.SetfsuidRetUid(c.uid); prev != c.uid {
+			return nil, false, fmt.Errorf("taking uid %d failed", c.uid)
+		}
+	}
+	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
+		return nil, false, fmt.Errorf("creating lock dir: %w", err)
+	}
+	f, err := os.OpenFile(path, os.O_CREATE|os.O_RDWR, 0o600)
+	if err != nil {
+		return nil, false, fmt.Errorf("opening lock %s: %w", path, err)
+	}
+	if err := syscall.Flock(int(f.Fd()), syscall.LOCK_EX|syscall.LOCK_NB); err != nil {
+		f.Close()
+		if errors.Is(err, syscall.EWOULDBLOCK) {
+			return nil, true, nil
+		}
+		return nil, false, fmt.Errorf("locking %s: %w", path, err)
+	}
+	return f, false, nil
 }

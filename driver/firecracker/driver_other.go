@@ -22,3 +22,6 @@ func killVMMs([]vmmRecord) error { return nil }
 
 // tryLock finds every lock free off Linux: no build ever held one here.
 func (realHost) tryLock(string) (func(), bool, error) { return func() {}, false, nil }
+
+// lockAs finds every lock free off Linux, where setup refuses to run.
+func (realHost) lockAs(string, string) (func(), bool, error) { return func() {}, false, nil }

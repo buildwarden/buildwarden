@@ -104,7 +104,7 @@ down() {
 }
 
 posture() {
-	for c in ip nft iptables ip6tables; do
+	for c in ip nft iptables ip6tables flock getent; do
 		command -v "$c" >/dev/null || die "$c is missing"
 	done
 	if command -v systemctl >/dev/null && systemctl is-active -q firewalld 2>/dev/null; then
@@ -118,9 +118,12 @@ between this host's other interfaces. Set it to DROP (and keep it across reboots
 	fi
 }
 
-# Refuses while a VMM has a slot's TAP open (the kernel reports carrier on a
-# TAP only then): reloading the rules would leave that slot unfiltered.
-# `warden setup` also refuses while a build holds a slot's lock.
+# Refuses while a slot is in use, as `warden setup` does: a VMM has its TAP
+# open (the kernel reports carrier on a TAP only then), or a build holds its
+# lock in the owner's lock dir before starting its VMMs. Reloading the rules
+# would leave that slot unfiltered. Unlike setup, it does not hold the locks
+# through the reload, so a build starting while it runs can still take a slot
+# mid-reload: run it only while no build starts.
 idle() {
 	busy=""
 	for c in /sys/class/net/wfc*[rgu]/carrier; do
@@ -129,7 +132,15 @@ idle() {
 			busy="$busy $(basename "$(dirname "$c")")"
 		fi
 	done
-	[ -z "$busy" ] || die "slots in use (TAPs attached:$busy); wait for their builds or
+	locks="$(getent passwd "$user" | cut -d: -f6)/.cache/buildwarden/locks"
+	for f in "$locks"/firecracker-slot-*.lock; do
+		[ -f "$f" ] || continue
+		# A read-only redirect, so root creates nothing in the user's dir.
+		if ! flock -n 9 9<"$f"; then
+			busy="$busy $(basename "$f" .lock)"
+		fi
+	done
+	[ -z "$busy" ] || die "slots in use:$busy; wait for their builds or
 stop VMs left by --keep-vms (warden clean --driver firecracker), then retry"
 }
 

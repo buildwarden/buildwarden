@@ -1218,14 +1218,28 @@ None changes a Decision or a confirmed question.
   (the kernel reports carrier on a TAP only then, checked on the spike host,
   so running builds, `--keep-vms` VMs and orphans are found whoever started
   them), or a build holds the slot's lock in the build user's lock dir. It
-  then holds the free slots' locks until it ends, so no build starts
-  mid-reload. Locks are taken on existing files only, so root never creates
-  a file in the user's cache; a slot the user never built on has none, a
-  residual race only for a user's first build. An upstream TAP that already
-  has exactly its host address is not flushed. An atomic reload
-  (`iptables-restore --noflush`, one `nft -f`) was the alternative; refusing
-  is smaller and leaves no window. `slots.sh` has the same carrier check and
-  address skip.
+  then holds the lock of every slot it finds or makes until it ends, so no
+  build starts mid-reload. A slot no build has used, a slot `--slots` adds,
+  or every slot when the lock dir does not exist yet, has no lock file, and
+  a build would create and take it; setup creates it (and any missing
+  directory) on a thread switched to the build user's fs ids and groups, so
+  files are the user's, 0600 in 0700 directories as a build makes them, and
+  root follows no link the user planted (f4 report 96ca21a, finding 13). A
+  root-owned setup lock that builds take shared was the alternative; it is
+  wider (every build takes a second lock) and was not needed. An upstream
+  TAP that already has exactly its host address is not flushed. An atomic
+  reload (`iptables-restore --noflush`, one `nft -f`) was the other
+  alternative; refusing is smaller. Residual windows:
+  - setup finds the lock dir from the user's home, using `XDG_CACHE_HOME`
+    only when sudo keeps it with the user's `HOME`. A user whose builds set
+    `XDG_CACHE_HOME` elsewhere, under a sudo that drops it, has setup hold
+    locks no build takes: the carrier check still finds running VMs, but a
+    build starting during setup, or holding its slot before its VMMs start,
+    is not seen. The drivers guide says to start no build while setup runs
+    in that case.
+  - `slots.sh` has the same carrier and lock checks and address skip, but
+    holds no lock through its reload, so a build starting while it runs can
+    land mid-reload. It is the debugging stand-in, documented as such.
 - **Doctor under sudo (f4 finding 3)** checks the user who ran sudo: their
   pid files (without creating lock files), their kvm group membership
   instead of opening `/dev/kvm` as root, and it skips the reflink probe,

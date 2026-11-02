@@ -29,6 +29,8 @@ type fakeHost struct {
 	unlocked  []string
 	// ranAtUnlock is len(ran) at each unlock, to show what ran under a lock.
 	ranAtUnlock []int
+	// onRun, when set, sees each command line run before it runs.
+	onRun func(line string)
 }
 
 func newFakeHost() *fakeHost {
@@ -41,6 +43,9 @@ func newFakeHost() *fakeHost {
 
 func (f *fakeHost) run(args []string) error {
 	line := strings.Join(args, " ")
+	if f.onRun != nil {
+		f.onRun(line)
+	}
 	f.ran = append(f.ran, line)
 	if f.fail[line] {
 		return errors.New("exit status 1")
@@ -128,6 +133,34 @@ func (f *fakeHost) tryLock(path string) (func(), bool, error) {
 		f.unlocked = append(f.unlocked, path)
 		f.ranAtUnlock = append(f.ranAtUnlock, len(f.ran))
 	}, false, nil
+}
+
+// lockedNow reports whether path's lock is taken here and not yet released,
+// so another process's flock on it would fail.
+func (f *fakeHost) lockedNow(path string) bool {
+	n := 0
+	for _, p := range f.locked {
+		if p == path {
+			n++
+		}
+	}
+	for _, p := range f.unlocked {
+		if p == path {
+			n--
+		}
+	}
+	return n > 0
+}
+
+// lockAs creates a missing lock file, as jeff only, then is tryLock.
+func (f *fakeHost) lockAs(path, name string) (func(), bool, error) {
+	if name != "jeff" {
+		return nil, false, errors.New("unknown user " + name)
+	}
+	if _, ok := f.files[path]; !ok {
+		f.files[path] = ""
+	}
+	return f.tryLock(path)
 }
 
 // withSlots gives the fake n slots owned by uid.

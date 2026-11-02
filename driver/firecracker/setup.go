@@ -35,6 +35,11 @@ type host interface {
 	// user's lock dir: a missing file is free (a no-op unlock). held is true
 	// when another process holds the lock.
 	tryLock(path string) (unlock func(), held bool, err error)
+	// lockAs is tryLock run with user name's credentials, creating the file
+	// and its missing directories as a build would (0600, 0700), so setup can
+	// hold a slot no build has used yet. Acting as the user, root never
+	// follows a link the user planted.
+	lockAs(path, name string) (unlock func(), held bool, err error)
 	euid() int
 }
 
@@ -170,7 +175,7 @@ func setup(h host, out io.Writer, opts SetupOptions) error {
 	if err != nil {
 		return err
 	}
-	release, err := quiesceSlots(h, o)
+	release, err := quiesceSlots(h, o, n)
 	if err != nil {
 		return err
 	}
@@ -197,13 +202,15 @@ const slotsBusyFix = "wait for the builds on them to finish, or stop VMs left by
 	"re-run sudo warden setup --driver firecracker"
 
 // quiesceSlots refuses setup while any slot is in use, and otherwise holds the
-// owner's slot locks until setup is done so no build takes a slot meanwhile.
-// Setup reloads every slot's rules, so a slot in use would run unfiltered for
-// the reload (GLOBAL-06). A slot is in use when a process has one of its TAPs
-// attached (the kernel reports carrier on a TAP only then), which finds
-// running builds, --keep-vms VMs and orphans whoever started them; or when a
-// build holds its lock before its VMMs start.
-func quiesceSlots(h host, o owner) (release func(), err error) {
+// lock of every slot setup makes or finds until setup is done, so no build
+// takes one meanwhile. Setup reloads every slot's rules, so a slot in use
+// would run unfiltered for the reload (GLOBAL-06). A slot is in use when a
+// process has one of its TAPs attached (the kernel reports carrier on a TAP
+// only then), which finds running builds, --keep-vms VMs and orphans whoever
+// started them; or when a build holds its lock before its VMMs start. A slot
+// no build has used has no lock file yet, and a build would create and take
+// it, so setup creates it as the owner (lockAs) rather than skip it.
+func quiesceSlots(h host, o owner, n int) (release func(), err error) {
 	dir, err := ownerLockDir(h, o.name)
 	if err != nil {
 		return nil, err
@@ -217,14 +224,15 @@ func quiesceSlots(h host, o owner) (release func(), err error) {
 	var busy []string
 	for i := 0; i < MaxSlots; i++ {
 		s := Slot(i)
-		if !h.exists("/sys/class/net/" + s.UpstreamTap()) {
+		made := h.exists("/sys/class/net/" + s.UpstreamTap())
+		if !made && i >= n {
 			continue
 		}
-		if tapAttached(h, s) {
+		if made && tapAttached(h, s) {
 			busy = append(busy, strconv.Itoa(i))
 			continue
 		}
-		unlock, held, err := h.tryLock(filepath.Join(dir, s.LockName()+".lock"))
+		unlock, held, err := h.lockAs(filepath.Join(dir, s.LockName()+".lock"), o.name)
 		if err != nil {
 			release()
 			return nil, err
@@ -258,7 +266,8 @@ func tapAttached(h host, s Slot) bool {
 
 // ownerLockDir is driver.LockDir as the user name sees it. Under sudo HOME is
 // usually root's, so it is found from the user's home; XDG_CACHE_HOME counts
-// only when HOME is still the user's (sudo -E).
+// only when HOME is still the user's (sudo -E). A user whose XDG_CACHE_HOME
+// sudo drops gets the wrong dir, and setup then holds locks no build takes.
 func ownerLockDir(h host, name string) (string, error) {
 	home, err := h.userHome(name)
 	if err != nil {
