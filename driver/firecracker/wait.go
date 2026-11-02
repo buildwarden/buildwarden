@@ -14,6 +14,10 @@ import (
 // after the VMM is gone.
 const completionGrace = 10 * time.Second
 
+// afterGrace is waitBuild's grace in a real build: completionGrace from the
+// build VM's exit.
+func afterGrace() <-chan time.Time { return time.After(completionGrace) }
+
 // Why waitBuild stopped the session's wait itself.
 var (
 	errBuildVMExited = errors.New("the build VM stopped before the build completed")
@@ -21,14 +25,15 @@ var (
 )
 
 // waitBuild runs wait (the session's Wait) until the build completes, and
-// watches both VMMs: when the build VM's process exits, a completion within
-// grace still wins; when the relay VM's exits, the build fails at once. wait
-// itself returns the completion when it has one, even if its context ends,
+// watches both VMMs: when the build VM's process exits, a completion before
+// the channel grace() returns fires still wins; when the relay VM's exits,
+// the build fails at once. wait itself returns the completion when it has
+// one, even if its context ends,
 // so cancelling it after the grace yields a completion that raced the exit.
 // A stop waitBuild caused is reported as errBuildVMExited or
 // errRelayVMExited.
 func waitBuild(ctx context.Context, wait func(context.Context) error,
-	buildExited, relayExited <-chan struct{}, grace time.Duration) error {
+	buildExited, relayExited <-chan struct{}, grace func() <-chan time.Time) error {
 	wctx, cancel := context.WithCancel(ctx)
 	defer cancel()
 	done := make(chan error, 1)
@@ -47,11 +52,7 @@ func waitBuild(ctx context.Context, wait func(context.Context) error,
 			return err
 		case <-buildExited:
 			buildExited = nil
-			if graceEnd == nil {
-				t := time.NewTimer(grace)
-				defer t.Stop()
-				graceEnd = t.C
-			}
+			graceEnd = grace()
 		case <-graceEnd:
 			graceEnd = nil
 			cause = errBuildVMExited

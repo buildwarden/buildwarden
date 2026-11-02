@@ -230,7 +230,7 @@ func (r *run) startBuild(boot buildBoot) error {
 // wait waits for the build with the exit ordering of Decision 8, turning a
 // VM that stopped first into a failure with its console.
 func (r *run) wait(ctx context.Context, sess *driver.Session) error {
-	err := waitBuild(ctx, sess.Wait, r.build.done, r.relay.done, completionGrace)
+	err := waitBuild(ctx, sess.Wait, r.build.done, r.relay.done, afterGrace)
 	switch {
 	case errors.Is(err, errBuildVMExited):
 		return r.vmFailure(err, r.build)
