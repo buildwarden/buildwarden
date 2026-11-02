@@ -107,6 +107,8 @@ bootstrap:
     - "driver/firecracker/slots*.go"
     - driver/firecracker/deliver_linux.go
     - "driver/firecracker/vm*.go"
+    - driver/firecracker/setup.go
+    - driver/firecracker/posture.go
     - tools/firecracker-vm/
 
 # RELAY-05: each machine schema and its document change together.
