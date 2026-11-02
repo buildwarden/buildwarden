@@ -63,4 +63,5 @@ By default, the ledger is compressed with zstd when written to the output direct
 
 ## Full Specification
 
-See [Ledger Specification](../design/ledger-spec.md) for the complete binary format.
+See the [Ledger Specification](../specs/build-ledger/v1.md) for the complete binary format, and the
+[Specifications](../specs/README.md) index for each metadata schema.

@@ -114,11 +114,21 @@ specs/
   metadata-<name>/
     v1.md
     v1.schema.json
+  environment-<type>/
+    v1.md                signed environment payload schema documentation
+    v1.schema.json
+  README.md              index of the specs
 ```
 
 `build-ledger/` is prose only (it describes a binary wire format, with no JSON
 counterpart). Each `metadata-<name>/` carries the doc and the machine schema
-together.
+together. `environment-<type>/` holds the schemas of signed environment
+payloads (an OCI image, a VM disk chain), paired like `metadata-<name>/`.
+
+**Schema identity.** A schema's `$id` is a stable name, not a location. Ids
+already written into ledgers, including the pre-migration
+`https://github.com/buildwarden/buildwarden/schemas/v1/<name>.json` forms,
+never change; new schemas take ids that mirror their `specs/` path.
 
 **Enforced-to-match**, split by what is checkable:
 
@@ -128,9 +138,8 @@ together.
 - Agent-judgment: field-level parity, i.e. the doc actually describes what the
   schema enforces and has not drifted in meaning.
 
-Performing this migration (moving the existing ledger spec, folding the current
-top-level `schemas/` into `specs/`) is an implementation change separate from
-adopting the standard. See the README's follow-up list.
+The layout is in place: the ledger spec and every schema live under `specs/`,
+and tier 1's `schema-doc` check enforces the deterministic half.
 
 ---
 

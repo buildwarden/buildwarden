@@ -145,9 +145,5 @@ what each item is.
   designs, kept in `backlog/native-gaps.yaml` on the `workflow` branch and
   drained by native sessions (`/workflow-native <host>`, and the scheduled
   per-machine sessions of [`native-host-loop.md`](../design/native-host-loop.md)).
-- **Follow-up — `specs/` migration** (RELAY-05) [`specs-migration`]. Perform
-  the actual move of the
-  ledger spec and metadata schemas into the top-level `specs/` layout; this is an
-  implementation change separate from adopting the standard.
 - **Feature — Firecracker driver** [`firecracker-driver`]: the plan in
   [`firecracker-driver-plan.md`](../design/firecracker-driver-plan.md).

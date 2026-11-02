@@ -16,7 +16,11 @@ Arguments:
 - `<host>`: attended, one host name; ask which host this is if it is missing.
 - `unattended <machine>`: started by `tools/workflow/native/native-tick.sh`
   after `wf gate` found work for the machine. Every host the machine serves in
-  `hosts.yaml`; nobody is watching.
+  `hosts.yaml`; nobody is watching. When the prompt names **stale hosts** (a
+  cached asset such as the Hyper-V relay boot disk failed to refresh), take no
+  step or backlog entry for those hosts this run, work the machine's other
+  hosts as usual, and say in the digest which hosts were skipped and why. With
+  nothing else to do, end the run without claiming anything.
 
 ## Never (unattended)
 

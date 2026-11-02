@@ -210,12 +210,22 @@ fi
 stage="native assets"
 # A host's cached build assets follow origin/main, so a session never tests
 # behind a merged fix. windows-hyperv: the relay boot VHDX in warden's cache.
+# A failed refresh stales only the hosts that use the asset: the session still
+# runs, told to skip them, so the machine's other hosts are not blocked.
 served=$(awk -v m="$machine" '
 	$1 == "-" && $2 == "name:" { mine = ($3 == m); next }
 	mine && $1 == "hosts:" { print; mine = 0 }' .dev/workflow/hosts.yaml)
+stale=""
 case "$served" in
-*windows-hyperv*) tools/relay-vm/hyperv/refresh-cache.sh || stop "relay boot VHDX refresh failed" ;;
+*windows-hyperv*)
+	if ! tools/relay-vm/hyperv/refresh-cache.sh; then
+		stale="windows-hyperv"
+		echo "native assets: relay boot VHDX refresh failed; skipping windows-hyperv this run"
+	fi
+	;;
 esac
+skip=""
+[ -z "$stale" ] || skip=" Stale hosts: $stale (relay boot VHDX refresh failed); skip their steps and gaps this run and say why in the digest."
 
 command -v claude >/dev/null || stop "claude is not on PATH"
 stage="claude"
@@ -223,7 +233,7 @@ stage="claude"
 # triggers the next one.
 dist/wf gate -state .dev/workflow -repo . -machine "$machine" -stamp "$stamp.pending" -record
 set +e
-claude -p "Invoke the workflow-native skill with the arguments \"unattended $machine\" and follow it exactly. Worker session id: $run." \
+claude -p "Invoke the workflow-native skill with the arguments \"unattended $machine\" and follow it exactly. Worker session id: $run.$skip" \
 	--settings tools/workflow/native/settings.native.json \
 	--permission-mode acceptEdits \
 	--max-turns "${BW_MAX_TURNS:-400}"
@@ -236,6 +246,7 @@ else
 	outcome=failed
 fi
 reason="claude exited $rc"
+[ -z "$stale" ] || reason="$reason; skipped $stale (relay boot VHDX refresh failed)"
 stage="cleanup"
 
 # Leave the checkout on main and clean, whatever the session did.

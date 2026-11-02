@@ -98,6 +98,9 @@ golangci-lint config limited to the lines you changed.
   changed with no test change (GLOBAL-04).
 - **Output.** `dist/tier1 -json` prints the report in the form
   `tools/tier1/report.schema.json` declares, keyed by rule and `file:line`.
+- **Whole-tree audit.** `dist/tier1 -all` also runs the checks of invariants
+  that hold over the whole tree, today the `specs/` layout (RELAY-05), even
+  when the diff does not touch them.
 - **The rule index.** `dist/tier1 rules [-json]` prints every rule parsed from
   `docs/development/`. `tools/tier1/rules.yaml` maps each `automated`-tagged
   rule to a tier-1 check, an outside owner or `follow-up`, and tier 1 fails a

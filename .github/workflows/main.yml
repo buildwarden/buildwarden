@@ -37,7 +37,7 @@ jobs:
           all() { printf 'code=true\ngotests=true\nbook=true\n' >> "$GITHUB_OUTPUT"; }
           [ "$EVENT" = pull_request ] || { all; exit 0; }
           files=$(git -c core.quotePath=false diff --name-only --no-renames HEAD^1 HEAD) && [ -n "$files" ] || { all; exit 0; }
-          code=false rules=false book=false
+          code=false rules=false book=false specs=false
           while IFS= read -r p; do
             case "$p" in
               # Go source and module files compile wherever they are, docs/
@@ -45,6 +45,10 @@ jobs:
               *.go|go.mod|go.sum|go.work|*/go.mod|*/go.sum|*/go.work) code=true ;;
               # TestRealIndex (tools/tier1/rules) parses the real rule files.
               docs/development/*) rules=true ;;
+              # The book includes specs/ documents, and specs/specs_test.go
+              # reads every schema and document there and their book mirror
+              # pages and SUMMARY.md entries (RELAY-05).
+              specs/*|docs/book/src/specs/*|docs/book/src/SUMMARY.md) book=true specs=true ;;
               docs/book/*) book=true ;;
               docs/*) ;;
               */*) code=true ;;
@@ -55,7 +59,7 @@ jobs:
             esac
           done <<< "$files"
           gotests=$code
-          if [ "$rules" = true ]; then gotests=true; fi
+          if [ "$rules" = true ] || [ "$specs" = true ]; then gotests=true; fi
           printf 'code=%s\ngotests=%s\nbook=%s\n' "$code" "$gotests" "$book" >> "$GITHUB_OUTPUT"
 
   lint:
