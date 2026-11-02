@@ -1224,7 +1224,14 @@ None changes a Decision or a confirmed question.
   a build would create and take it; setup creates it (and any missing
   directory) on a thread switched to the build user's fs ids and groups, so
   files are the user's, 0600 in 0700 directories as a build makes them, and
-  root follows no link the user planted (f4 report 96ca21a, finding 13). A
+  root follows no link the user planted (f4 report 96ca21a, finding 13).
+  Before that thread's goroutine ends, on every path, it takes back root's
+  fs ids and groups, each read back, and only then is unlocked for reuse:
+  the runtime discards a thread that ends locked, but parks the main thread
+  for good with whatever ids it holds, so a thread left with the user's ids
+  would show them to `ps`. One that cannot be restored stays locked; it runs
+  no Go code again, and its uid, euid and suid stay 0 (f4 report 94f00dd,
+  finding 15). A
   root-owned setup lock that builds take shared was the alternative; it is
   wider (every build takes a second lock) and was not needed. An upstream
   TAP that already has exactly its host address is not flushed. An atomic

@@ -10,6 +10,7 @@ import (
 	"os/user"
 	"path/filepath"
 	"runtime"
+	"slices"
 	"strconv"
 	"syscall"
 	"time"
@@ -146,12 +147,30 @@ func (realHost) lockAs(path, name string) (func(), bool, error) {
 	}
 	done := make(chan result, 1)
 	go func() {
-		// The thread takes the user's credentials and is never unlocked, so
-		// the runtime discards it when the goroutine ends rather than reuse
-		// it with them.
+		// The thread takes the user's fs ids and groups, and gives them back
+		// before the goroutine ends: the runtime discards a thread still
+		// locked then, except the main thread, which it parks for good with
+		// whatever ids it holds. Only a thread whose root ids were restored
+		// and read back is unlocked for reuse. One that could not be restored
+		// stays locked; parked or discarded, it runs no Go code again, and
+		// its uid, euid and suid stay 0, so the user gains nothing over it.
 		runtime.LockOSThread()
-		f, held, err := openLockAs(path, c)
-		done <- result{f, held, err}
+		var r result
+		restore, err := switchCreds(c)
+		if err == nil {
+			r.f, r.held, r.err = openLockAs(path)
+		} else {
+			r.err = err
+		}
+		if err := restore(); err != nil {
+			if r.f != nil {
+				r.f.Close()
+			}
+			r = result{err: errors.Join(r.err, err)}
+		} else {
+			runtime.UnlockOSThread()
+		}
+		done <- r
 	}()
 	r := <-done
 	if r.err != nil || r.held {
@@ -195,27 +214,71 @@ func lookupCred(name string) (cred, error) {
 	return c, nil
 }
 
-// openLockAs creates and locks path as driver.TryHostLock would, on a thread
-// switched to c. The fs ids and groups are per-thread syscalls here (x/sys,
-// unlike package syscall, does not apply them to every thread), and an fsuid
-// other than 0 drops the thread's file capabilities, so every check on the
-// path is the user's. A warden already running as the user switches nothing.
-func openLockAs(path string, c cred) (*os.File, bool, error) {
-	if os.Geteuid() != c.uid {
-		if err := unix.Setgroups(c.groups); err != nil {
-			return nil, false, fmt.Errorf("taking uid %d's groups: %w", c.uid, err)
-		}
-		// setfs[ug]id report failure only by not changing the id, so each is
-		// read back by a second call.
-		_, _ = unix.SetfsgidRetGid(c.gid)
-		if prev, _ := unix.SetfsgidRetGid(c.gid); prev != c.gid {
-			return nil, false, fmt.Errorf("taking gid %d failed", c.gid)
-		}
-		_, _ = unix.SetfsuidRetUid(c.uid)
-		if prev, _ := unix.SetfsuidRetUid(c.uid); prev != c.uid {
-			return nil, false, fmt.Errorf("taking uid %d failed", c.uid)
-		}
+// switchCreds switches the calling thread's fs ids and groups to c. The fs ids
+// and groups are per-thread syscalls here (x/sys, unlike package syscall, does
+// not apply them to every thread), and an fsuid other than 0 drops the thread's
+// file capabilities, so every check on a path is then the user's. A warden
+// already running as the user switches nothing. The returned function gives
+// the thread back the ids and groups it had, reading each back, and is to be
+// called even when switchCreds fails part way.
+func switchCreds(c cred) (restore func() error, err error) {
+	if os.Geteuid() == c.uid {
+		return func() error { return nil }, nil
 	}
+	groups, err := unix.Getgroups()
+	if err != nil {
+		return func() error { return nil }, fmt.Errorf("reading groups: %w", err)
+	}
+	fsuid, fsgid := os.Geteuid(), os.Getegid()
+	restore = func() error {
+		if err := setFsuid(fsuid); err != nil {
+			return fmt.Errorf("restoring uid %d: %w", fsuid, err)
+		}
+		if err := setFsgid(fsgid); err != nil {
+			return fmt.Errorf("restoring gid %d: %w", fsgid, err)
+		}
+		if err := unix.Setgroups(groups); err != nil {
+			return fmt.Errorf("restoring groups: %w", err)
+		}
+		if got, err := unix.Getgroups(); err != nil || !slices.Equal(got, groups) {
+			return fmt.Errorf("restoring groups: got %v (%v), want %v", got, err,
+				groups)
+		}
+		return nil
+	}
+	if err := unix.Setgroups(c.groups); err != nil {
+		return restore, fmt.Errorf("taking uid %d's groups: %w", c.uid, err)
+	}
+	if err := setFsgid(c.gid); err != nil {
+		return restore, fmt.Errorf("taking gid %d: %w", c.gid, err)
+	}
+	if err := setFsuid(c.uid); err != nil {
+		return restore, fmt.Errorf("taking uid %d: %w", c.uid, err)
+	}
+	return restore, nil
+}
+
+// setFsuid and setFsgid set the thread's fs id. setfs[ug]id report failure
+// only by not changing the id, so each is read back by a second call.
+func setFsuid(id int) error {
+	_, _ = unix.SetfsuidRetUid(id)
+	if prev, _ := unix.SetfsuidRetUid(id); prev != id {
+		return fmt.Errorf("fsuid is %d", prev)
+	}
+	return nil
+}
+
+func setFsgid(id int) error {
+	_, _ = unix.SetfsgidRetGid(id)
+	if prev, _ := unix.SetfsgidRetGid(id); prev != id {
+		return fmt.Errorf("fsgid is %d", prev)
+	}
+	return nil
+}
+
+// openLockAs creates and locks path as driver.TryHostLock would, on a thread
+// switchCreds has switched to the lock's owner.
+func openLockAs(path string) (*os.File, bool, error) {
 	if err := os.MkdirAll(filepath.Dir(path), 0o700); err != nil {
 		return nil, false, fmt.Errorf("creating lock dir: %w", err)
 	}
