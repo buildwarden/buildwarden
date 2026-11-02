@@ -97,13 +97,14 @@ budget:
 questions:
   - id: a12
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Slot rules for an uplink MTU below 1500 (Phase 0 spike; design Rollback notes and Decision 4). Without them every upstream HTTPS fetch failed on WSL''s 1280-byte uplink: the relay sizes its segments from the server''s SYN-ACK, and the host''s path-MTU ICMP to the relay was dropped as RELATED. Neither addition lets a NEW connection reach a relay or a build segment.'
     options:
       - TCP MSS clamped both ways on the upstream forward path, plus RELATED accepted for replies to a relay's own flows (FORWARD from the uplink; OUTPUT icmp only)
       - MSS clamping only
       - set the TAPs' MTU to the uplink's (the relay's own NIC stays 1500, so its segments are still too big)
     recommended: TCP MSS clamped both ways on the upstream forward path, plus RELATED accepted for replies to a relay's own flows (FORWARD from the uplink; OUTPUT icmp only)
+    answer: Confirmed option 1 (two-way MSS clamping plus RELATED for the relay's own flows) after discussion, 2026-11-02
   - id: a1
     kind: assumed
     status: confirmed
@@ -336,3 +337,6 @@ history:
   - at: 2026-11-02T19:56:41Z
     by: host:linux-kvm/20261102T191851Z
     event: 'f2-spike-linux-kvm evidence (attended): every decision held, feature stays in phase 2. feat/firecracker-driver d31aa30: build-kernel.sh (Linux 6.1.191, Firecracker v1.17.0 guest config, kernel_config_test.go), relay initramfs ARCH=x86_64 NO_MODULES=1 (aarch64 contents unchanged), direct-boot initramfs and launcher, slots.sh, spike harness. Direct boot RUN echo hello to a verified ledger (claim 1.05 s, build 0.47 s); Ubuntu 24.04 raw + CIDATA, root=PARTUUID via the Linux-filesystem fallback, 7.4 MB HTTPS download bit-exact and recorded; direct TCP/UDP/NTP from the build VM fail with no uplink packet; crng init done at 0.008 s; relay fine at 128-512 MiB; Firecracker pinned at v1.17.0. Design changes: launcher exports PATH (Decision 6); MSS clamp both ways and RELATED replies (Decision 4, question a12 assumed, open for Jeff). WSL findings: custom kernel for NF_TABLES_BRIDGE, FORWARD DROP boot unit, uplink MTU 1280, DNS-tunnelling resolver excluded by Decision 5. Evidence native/linux-kvm/2026-11-02/.'
+  - at: 2026-11-02T21:11:16Z
+    by: human/jeff
+    event: 'assumed question a12 confirmed: Confirmed option 1 (two-way MSS clamping plus RELATED for the relay''s own flows) after discussion, 2026-11-02'
