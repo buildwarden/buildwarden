@@ -130,7 +130,7 @@ func EnsureRaw(source string) (string, error) {
 	if converted(raw, sum) {
 		return raw, nil
 	}
-	unlock, err := driver.HostLock("firecracker-convert-" + sum[:12])
+	unlock, err := driver.HostLock(convertLockName(sum[:12]))
 	if err != nil {
 		return "", err
 	}

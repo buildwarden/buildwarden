@@ -13,11 +13,52 @@ import (
 
 // Clean is `warden clean`'s firecracker part: it kills VMMs recorded on a
 // slot no build holds (including VMs --keep-vms left), and removes the
-// per-build rootfs copies and work dirs of builds that are no longer running.
+// per-build rootfs copies and work dirs of builds that are no longer running,
+// and the partial raw images of conversions that were killed.
 // tempDir is where work dirs are made (empty: the OS temp dir). It needs no
 // container runtime and returns how many resources it removed.
 func Clean(out io.Writer, tempDir string) int {
-	return reapVMMs(out) + reapWorkDirs(out, tempDir)
+	return reapVMMs(out) + reapWorkDirs(out, tempDir) + reapConversions(out)
+}
+
+// reapConversions removes the *.raw.tmp a killed conversion left in ImageDir,
+// skipping those whose conversion is still running (it holds the lock).
+func reapConversions(out io.Writer) int {
+	removed := 0
+	tmps, _ := filepath.Glob(filepath.Join(ImageDir(), "*.raw.tmp"))
+	for _, tmp := range tmps {
+		lock, ok := convertLockOf(filepath.Base(tmp))
+		if !ok {
+			continue
+		}
+		unlock, ok, err := driver.TryHostLock(lock)
+		if err != nil || !ok {
+			continue
+		}
+		if err := os.Remove(tmp); err == nil {
+			fmt.Fprintf(out, "Removed partial firecracker image: %s\n", tmp)
+			removed++
+		}
+		unlock()
+	}
+	return removed
+}
+
+// convertLockName is held while a source whose sha256 starts with prefix (12
+// hex digits, as in its raw image's name) is converted.
+func convertLockName(prefix string) string { return "firecracker-convert-" + prefix }
+
+// convertLockOf is the conversion lock of a <stem>-<12 hex>.raw.tmp name.
+func convertLockOf(name string) (string, bool) {
+	stem, ok := strings.CutSuffix(name, ".raw.tmp")
+	if !ok || len(stem) < 13 || stem[len(stem)-13] != '-' {
+		return "", false
+	}
+	prefix := stem[len(stem)-12:]
+	if strings.Trim(prefix, "0123456789abcdef") != "" {
+		return "", false
+	}
+	return convertLockName(prefix), true
 }
 
 // reapVMMs kills the VMMs recorded on slots no build holds.

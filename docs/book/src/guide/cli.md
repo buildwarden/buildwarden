@@ -290,7 +290,8 @@ downloaded VM images, the Hyper-V relay boot disk and the support images stay.
 With `--driver firecracker` it needs no container runtime: it kills VMMs
 recorded on a network slot that no build holds (left by a warden that was
 killed, or by `--keep-vms`), and removes the work dirs and per-build rootfs
-copies of builds that are no longer running.
+copies of builds that are no longer running and the partial raw images
+(`*.raw.tmp`) of image conversions that were killed.
 
 | Flag | Description |
 |------|-------------|
