@@ -20,6 +20,13 @@ on:
       - 'relay/**'
       - 'cmd/relay/**'
       - 'cmd/warden-io/**'
+      - 'ledger/**'
+      - 'collector/**'
+      - 'relaycfg/**'
+      - 'bootstrap/**'
+      - 'driver/script/**'
+      - 'go.mod'
+      - 'go.sum'
       - '.github/workflows/firecracker.yml'
 
 permissions:
