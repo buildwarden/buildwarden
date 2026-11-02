@@ -425,6 +425,9 @@ same for each TAP), `nft delete table bridge warden_fc`, and remove the
 
 `warden doctor --driver firecracker` checks all of the above; run it with
 sudo to include the rules and the FORWARD policy, which only root can read.
+Under sudo the other checks are of the user who ran sudo (their slots, kvm
+group and leftover VMMs), and the reflink probe is skipped: run doctor
+without sudo for it.
 
 ### Upstream DNS
 

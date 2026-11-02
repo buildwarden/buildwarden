@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"path/filepath"
 	"strings"
 
 	"github.com/buildwarden/buildwarden/driver"
@@ -74,7 +75,7 @@ func doctor(h host, out io.Writer, local func(net.IP) bool) bool {
 		r.check("host", err)
 		return true
 	}
-	r.check("/dev/kvm", checkKVM(h))
+	r.check("/dev/kvm", checkBuildKVM(h))
 	r.check("firecracker", checkFirecracker(h))
 	_, err := findAssets()
 	r.check("boot assets", err)
@@ -94,7 +95,13 @@ func doctor(h host, out io.Writer, local func(net.IP) bool) bool {
 	}
 	dns, err := upstreamResolvers(h.readFile, local)
 	r.check("upstream DNS for the relay: "+strings.Join(dns, ", "), err)
-	r.warn("reflink copies on the cache filesystem", checkReflink(h))
+	if name, ok := sudoUser(h); ok {
+		// The probe would write as root into the user's cache.
+		fmt.Fprintf(out, "skip  reflink copies on the cache filesystem (probing them "+
+			"as root would write into %s's cache: run doctor without sudo)\n", name)
+	} else {
+		r.warn("reflink copies on the cache filesystem", checkReflink(h))
+	}
 	r.warn("orphaned VMMs", checkOrphans(h, slots))
 	return r.blocked
 }
@@ -194,15 +201,58 @@ func checkReflink(h host) error {
 	return nil
 }
 
-// checkOrphans reports VMMs recorded on a slot no build holds.
+// sudoUser is the user who ran sudo when warden runs as root under it: the
+// user builds run as, whose slots, locks and cache doctor checks.
+func sudoUser(h host) (string, bool) {
+	name := h.getenv("SUDO_USER")
+	return name, h.euid() == 0 && name != "" && name != "root"
+}
+
+// checkBuildKVM is checkKVM for the user builds run as. Root opens /dev/kvm
+// whatever its group, so under sudo the user's kvm membership is checked.
+func checkBuildKVM(h host) error {
+	name, ok := sudoUser(h)
+	if !ok {
+		return checkKVM(h)
+	}
+	if !h.exists("/dev/kvm") {
+		return driver.Fixable(kvmFix, "/dev/kvm is not present")
+	}
+	_, inKVM, err := h.lookupOwner(name)
+	if err != nil {
+		return err
+	}
+	if !inKVM {
+		return driver.Fixable(fmt.Sprintf("sudo usermod -aG kvm %s, then log in again",
+			name), "%s is not in the kvm group, so builds cannot open /dev/kvm", name)
+	}
+	return nil
+}
+
+// buildLockDir is the lock dir of the user builds run as (driver.LockDir, or
+// under sudo the user's own).
+func buildLockDir(h host) (string, error) {
+	if name, ok := sudoUser(h); ok {
+		return ownerLockDir(h, name)
+	}
+	return driver.LockDir(), nil
+}
+
+// checkOrphans reports VMMs recorded on a slot no build holds. It reads the
+// build user's pid files and creates no lock file, so under sudo it leaves
+// nothing root-owned in the user's lock dir.
 func checkOrphans(h host, slots []Slot) error {
+	dir, err := buildLockDir(h)
+	if err != nil {
+		return err
+	}
 	var found []string
 	for _, s := range slots {
-		unlock, ok, err := driver.TryHostLock(s.LockName())
-		if err != nil || !ok {
+		unlock, held, err := h.tryLock(filepath.Join(dir, s.LockName()+".lock"))
+		if err != nil || held {
 			continue
 		}
-		b, err := h.readFile(pidFilePath(s))
+		b, err := h.readFile(filepath.Join(dir, s.LockName()+".pids"))
 		unlock()
 		if err != nil {
 			continue

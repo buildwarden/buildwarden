@@ -147,7 +147,7 @@ func checkSlots(h host) ([]Slot, error) {
 // slotUID is the user whose slots count: this user, or under sudo the user
 // who ran it, so `sudo warden doctor` checks the slots builds will use.
 func slotUID(h host) int {
-	if name := h.getenv("SUDO_USER"); h.euid() == 0 && name != "" {
+	if name, ok := sudoUser(h); ok {
 		if uid, _, err := h.lookupOwner(name); err == nil {
 			return uid
 		}

@@ -222,7 +222,9 @@ off-host upstream resolver, reflink support on the cache filesystem (a warning)
 and VMMs left on a slot with no warden (a warning). Run as root (`sudo warden
 doctor --driver firecracker`) it also checks the `warden_fc` bridge table, that
 each `WARDEN-FC` jump is first in its chain, and the FORWARD policy, and counts
-the slots of the user who ran sudo. Exits non-zero when a required capability is unmet, so it works as a CI or agent gate.
+the slots, `/dev/kvm` access (kvm group membership) and leftover VMMs of the
+user who ran sudo, skipping the reflink probe so nothing is written into that
+user's cache. Exits non-zero when a required capability is unmet, so it works as a CI or agent gate.
 Replaces the old `warden hyperv doctor`.
 
 ## warden setup

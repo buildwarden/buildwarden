@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"errors"
 	"net"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -159,5 +160,43 @@ func TestBuildIDOf(t *testing.T) {
 		if got := buildIDOf(name); got != want {
 			t.Errorf("buildIDOf(%q) = %q, want %q", name, got, want)
 		}
+	}
+}
+
+// TestDoctorUnderSudo checks that `sudo warden doctor` reports on the user
+// who ran sudo, not root, and writes nothing into that user's cache.
+func TestDoctorUnderSudo(t *testing.T) {
+	supportedHost(t)
+	h := postureHost().withSlots(2, 1000)
+	h.inKVM = false
+	h.outputs["firecracker --version"] = "Firecracker v1.17.0\n"
+	h.files[resolvConf] = "nameserver 8.8.8.8\n"
+	// Slot 0's VMM outlived its warden; slot 1's build is still running.
+	for _, s := range []Slot{0, 1} {
+		h.files[slotLockPath(s)] = ""
+		h.files[filepath.Join(filepath.FromSlash(jeffLocks), s.LockName()+".pids")] =
+			"4242 987654 /usr/local/bin/firecracker\n"
+	}
+	h.heldLocks[slotLockPath(1)] = true
+	h.files["/proc/4242/stat"] = statLine
+	h.links["/proc/4242/exe"] = "/usr/local/bin/firecracker"
+	h.noRefl = true
+	var out bytes.Buffer
+	doctor(h, &out, func(net.IP) bool { return false })
+	s := out.String()
+	for _, want := range []string{
+		"FAIL  /dev/kvm", "sudo usermod -aG kvm jeff",
+		"network slots owned by this user: 2",
+		"skip  reflink copies on the cache filesystem",
+		"warn  orphaned VMMs", "VMMs with no warden: slot 0 pid 4242\n",
+	} {
+		if !strings.Contains(s, want) {
+			t.Errorf("sudo doctor output lacks %q:\n%s", want, s)
+		}
+	}
+	if len(h.locked) != 1 || h.locked[0] != slotLockPath(0) ||
+		len(h.unlocked) != 1 {
+		t.Errorf("sudo doctor locked %v, released %v; want slot 0's existing lock",
+			h.locked, h.unlocked)
 	}
 }
