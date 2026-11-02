@@ -1,0 +1,140 @@
+{
+  "feature": "firecracker-driver",
+  "branch": "feat/firecracker-driver",
+  "head": "96ca21adae7b",
+  "base": "6899b79b91a0",
+  "round": "feature",
+  "step": "f4-review",
+  "previous_report": "reports/firecracker-driver/0c800385066e.json",
+  "scope": "git diff origin/main...feat/firecracker-driver (90 files, +12237/-434; commits 4850b51..96ca21a). The merge base is still 6899b79; origin/main is at e418871, unchanged since the previous report. This pass also reviewed the fix range 0c80038..96ca21a (11 commits, a969a0d..96ca21a; 30 files, +840/-104) finding by finding.",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass on the windows host: 0 issues in the root module, tools/workflow and tools/tier1; then dist/tier1 -base origin/main (6899b79b91a0...96ca21adae7b): 0 MUST, 0 MUST-review, 0 SHOULD, 1 hint, 0 suppressed, exit 0",
+    "make_lint_per_platform": "GOOS=linux make lint and GOOS=darwin make lint: both pass, same tier1 result (FLOW-17: build-tagged *_linux.go and *_other.go files are touched, including driver_other.go and slots_linux.go in the fix range)",
+    "make_test": "pass: 29 ok lines, no FAIL (root module, tools/workflow, tools/tier1) on windows",
+    "linux_tier0": "Cross-compiled linux/amd64 test binaries for driver/firecracker, driver, driver/linuxguest, driver/relayvm, tools/firecracker-vm and cmd/warden, run under WSL: all PASS. TestWaitBuild*, TestSetup* and the pid-file tests also passed -count=50 -cpu=1.",
+    "custom_static_checks": "dist/tier1 -json -base origin/main, exit 0: findings [], suppressed [], hints = 1 x BOOT-07 bootstrap-surface (driver/firecracker/deliver_linux.go; bootstrap.md not in the diff). Same hint as the previous report, judged the same way (finding 6).",
+    "fixes_made": "none; tier 1 was green at 96ca21a"
+  },
+  "prior_findings": [
+    {"id": 1, "rule": "LINT-08", "severity": "MUST", "status": "resolved", "note": "a969a0d untracks cmd/warden/warden.exe and .gitignore gains warden*.exe; no tracked file matches it. The 18 MB blob stays in the branch's history (10a1f61), so only a squash merge keeps it out of main's history: a PR-body item for Jeff at merge (informational below). The optional tier-1 binary check was not queued; it stays a doc-set gap, noted informationally."},
+    {"id": 2, "rule": "GLOBAL-06", "severity": "MUST-review", "status": "resolved, with a residual (finding 13)", "note": "c069b25: setup refuses while any existing slot has a TAP with carrier 1 or its lock held, holds the free slots' locks until its last command, and skips the upstream address flush when the TAP has exactly its /30. Refusal (not an atomic reload) is a valid choice from the suggested fixes. Tested by TestSetupRefusesBusySlots, TestSetupHoldsSlotLocks, TestSetupKeepsUpstreamAddr. The residual race Implement noted is real and somewhat wider than 'a user's first build': finding 13."},
+    {"id": 3, "rule": "UX-04", "severity": "SHOULD", "status": "resolved", "note": "89e7d34: under sudo, doctor checks SUDO_USER's kvm group, reads that user's pid files through tryLock (O_RDONLY, never creates), and skips the reflink probe; no root-owned file is created. Documented in cli.md and drivers.md."},
+    {"id": 4, "rule": "UX-04", "severity": "SHOULD", "status": "resolved", "note": "0e500f4: acquireSlot now runs right after preflight and the build lock, before makeOutputDir and stage."},
+    {"id": 5, "rule": "FLOW-06", "severity": "SHOULD", "status": "resolved", "note": "b0bef63 adds an Implementation notes subsection recording each departure with a reason, and genisoimage/mkisofs in the StartBuild preflight list. One sentence in it overstates the finding-2 fix ('leaves no window'); that correction is part of finding 13."},
+    {"id": 6, "rule": "BOOT-07", "severity": "SHOULD", "status": "carried forward unchanged", "note": "Still true: bootstrap.md is not in the diff, line 195 still names driver/qemu/cloudinit.go, and bootstrap-firecracker-row's x1-design is still pending with Jeff."},
+    {"id": 7, "rule": "TEST-02", "severity": "SHOULD", "status": "resolved", "note": "2849826 adds ledger/, collector/, relaycfg/, bootstrap/, driver/script/, go.mod and go.sum to the path filter. The never-run caveat stays a PR-body note."},
+    {"id": 8, "rule": "GLOBAL-05", "severity": "SHOULD", "status": "resolved", "note": "df7a581 pins busybox-static 1.37.0-r14 by version and sha256 with a fail-and-bump message, hashes the guest config, downloads through .part files, and corrects the CI cache comment (tools/relay-vm's script is not pinned, which the comment now says)."},
+    {"id": 9, "rule": "ORCH-04", "severity": "SHOULD", "status": "resolved", "note": "5262866: Clean reaps ImageDir/*.raw.tmp whose convert lock is free, deriving the lock from the 12-hex suffix; EnsureRaw uses the same convertLockName. Tested in clean_test.go."},
+    {"id": 10, "rule": "ORCH-04", "severity": "SHOULD", "status": "resolved", "note": "98b0028: records are '<pid> <start> keep|- <exe>' with exe last (SplitN 4), processRecord fails when /proc is unreadable or exe has a newline, and startVMM stops the VMM in that case. No pid file of the old format exists outside this branch, so no compatibility path is needed."},
+    {"id": 11, "rule": "TEST-04", "severity": "SHOULD", "status": "resolved", "note": "937d3db: waitBuild takes grace as func() <-chan time.Time; the tests drive the channels in a fixed order."},
+    {"id": 12, "rule": "TEST-08", "severity": "SHOULD", "status": "carried forward unchanged", "note": "Still true: queue/security-suite.yaml does not mention firecracker, and plan step 13 (now docs/design/firecracker-driver.md:1052) has no corpus to land in."}
+  ],
+  "findings": [
+    {
+      "id": 6,
+      "rule": "BOOT-07",
+      "related_rules": ["FLOW-14"],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "docs/development/bootstrap.md",
+      "line": 195,
+      "finding": "Carried forward unchanged. The tier-1 BOOT-07 hint is acceptable. The firecracker row is a model change whose Bootstrap comparison was accepted at review r1 (a2 confirmed), and the review moved the bootstrap.md edit to the process item bootstrap-firecracker-row (FLOW-14). That item is queued at priority 17, with its x1-design step human-affinity and pending. Until it lands, though, the doc that wins (FLOW-14) and the machine list disagree. bootstrap.md:195 still names driver/qemu/cloudinit.go, which this branch deletes (it moved to driver/linuxguest/seed.go). tools/tier1/rules.yaml already lists driver/linuxguest/ and the driver/firecracker files. bootstrap.md also has no firecracker row for a driver that ships.",
+      "suggestion": "Say this in the PR body. Ask Jeff to take bootstrap-firecracker-row's x1-design right after this merge, or to fold the two-line correction into this PR, since its design is already accepted. The surface-list path correction is 'correcting it to match the code', not a model change."
+    },
+    {
+      "id": 12,
+      "rule": "TEST-08",
+      "related_rules": ["SEC-03", "SEC-01"],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "docs/design/firecracker-driver.md",
+      "line": 1052,
+      "finding": "Carried forward unchanged (the line moved from 1049). Plan step 13 says to add the Security note's TEST-08 cases (18 rows, including the new 'other local user' and 'operator' positions) to the security-suite corpus for the release. No corpus exists yet. The security-suite queue item does not mention firecracker, and the native-gap backlog tracks only the qemu, hyperv and vz regression gaps. Once the design is archived, nothing points the security suite at these cases.",
+      "suggestion": "Add a note to queue/security-suite.yaml, or a backlog entry, that carries the firecracker case table. Say in the PR body that step 13 is deferred to the security suite, and that the release shipping this trips GLOBAL-06, so TEST-08 applies."
+    },
+    {
+      "id": 13,
+      "rule": "GLOBAL-06",
+      "related_rules": ["ORCH-04", "FLOW-06"],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "driver/firecracker/setup.go",
+      "line": 227,
+      "finding": "The residual of finding 2 is real, and wider than the design's 'only for a user's first build'. quiesceSlots treats a slot whose lock file does not exist as free and holds nothing for it (tryLock returns a no-op unlock). acquireSlot walks the slots in order, skips the ones setup holds, and on reaching a slot with no lock file creates the file and takes it. So a build that starts while setup runs is steered onto exactly the slots setup cannot hold: any slot never used since it was created (every slot above the host's peak concurrency, every slot added by growing --slots, or all of them when the lock dir does not exist yet). That build can boot its VMs while flushSteps has removed the slot's WARDEN-FC jumps and bridge table, which is the window finding 2 described, for the overlap. Two smaller widenings: ownerLockDir guesses the lock dir (XDG_CACHE_HOME only when HOME is the user's), so a user whose shell sets XDG_CACHE_HOME but whose sudo resets the environment has every lock file 'missing' and loses the lock-held-before-VMMs-start check entirely; and tools/firecracker-vm/slots.sh's idle() checks carrier only, so it never sees a build that holds its lock but has not started its VMMs. Exposure needs a build to start during setup's run (seconds) and boot before setup ends; with the slot now taken before staging (finding 4), a cached raw image and a reflink copy make that plausible rather than theoretical. Preflight does not check the rules (that needs root), so nothing in the build notices. The Implementation note (docs/design/firecracker-driver.md:1224-1227) calls the residual first-build-only and says refusing 'leaves no window', which overstates it.",
+      "suggestion": "Close the gap rather than document it. Either (a) have setup create each missing slot lock file as the owner before trying it (MkdirAll the lock dir, open O_CREAT 0600, fchown to o.uid and the owner's gid for each file and each directory it created), so every existing slot has a lock setup can hold; or (b) add a setup gate builds respect: setup creates /run/buildwarden/firecracker-setup.lock (root-owned, 0644) and takes it LOCK_EX for the reload; acquireSlot takes it LOCK_SH (read access suffices for flock) before taking a slot and holds it until its VMMs run, failing with a 'setup is running, retry' fix when it is held. (b) also covers a wrong ownerLockDir guess and could replace slots.sh's carrier-only check. Add a fake-host test with a slot that has no lock file. Then correct the Implementation note's 'residual race only for a user's first build' and 'leaves no window'. If Jeff accepts the residual instead, the note should state it as the slots-never-used race above, and the PR body's security note should carry it."
+    },
+    {
+      "id": 14,
+      "rule": "BOOT-07",
+      "related_rules": ["GLOBAL-06"],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "tools/tier1/rules.yaml",
+      "line": 107,
+      "finding": "setup.go belongs on the bootstrap surface. BOOT-07 defines the surface as each driver's isolation, executor delivery and start code. setup() drives the isolation reload (runSteps over setupSteps), and quiesceSlots now decides whether that reload may run at all: a change that weakens it silently re-opens finding 2, and the automated BOOT-07 check would not flag it, because rules.yaml lists only slots*.go, vm*.go and deliver_linux.go for this driver. posture.go is the same kind of code: its checks refuse setup on hosts whose firewall state would leave the slots unisolated (a11). For this diff it changes nothing (slots.go is touched, so the hint already fires); it matters for later changes on main.",
+      "suggestion": "Add driver/firecracker/setup.go and driver/firecracker/posture.go to tools/tier1/rules.yaml's bootstrap surface in this branch. That is a surface-list correction to match the code, not a model change. Carry the same two paths into bootstrap-firecracker-row's edit of bootstrap.md:190-196 so the doc and the machine list agree (finding 6)."
+    }
+  ],
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 0,
+    "SHOULD": 4
+  },
+  "resolved_since_previous": [1, 2, 3, 4, 5, 7, 8, 9, 10, 11],
+  "new_since_previous": [13, 14],
+  "suppressions": [],
+  "suppressions_note": "The previous report recorded no suppressions, and tier 1 applied no Tier1-Allow trailers (suppressed: [] in its JSON), so none carry over.",
+  "back_to_design": false,
+  "back_to_design_note": "Nothing invalidates a Decision, a confirmed question or a BOOT invariant. Refusing setup on busy slots is inside Decision 4's idempotent setup; finding 13's fix is a lock-file detail inside it, and finding 14 is a surface-list correction.",
+  "routing": {
+    "tier1_red": false,
+    "wf_implement_fix": "none for tier 1: it is green at 96ca21a",
+    "must_findings_route": "No MUST or MUST-review findings remain, so nothing must go back to wf-implement. Findings 13 and 14 are cheap in-feature fixes; if the tick sends work back anyway, they are the ones worth doing before Publish. Otherwise all four SHOULD findings go in the PR body for acknowledgement at merge (FLOW-08), with finding 13 added to the security note, since GLOBAL-06 needs Jeff's sign-off at merge either way (LINT-03)."
+  },
+  "informational": [
+    {
+      "rule": "BOOT-07",
+      "file": "driver/firecracker/deliver_linux.go",
+      "line": 0,
+      "note": "The tier-1 bootstrap-surface hint: a model change, accepted at review r1 through a2 and the Bootstrap comparison. The bootstrap.md edit is deferred to bootstrap-firecracker-row by the review's decision. See finding 6."
+    },
+    {
+      "rule": "GLOBAL-05",
+      "file": "cmd/warden/warden.exe",
+      "line": 0,
+      "note": "Finding 1 is fixed in the tree, but 10a1f61's 18 MB warden.exe blob stays in feat/firecracker-driver's history (no force-push, FLOW-17). A squash merge keeps it out of main's history; a merge commit or rebase merge brings it in. The PR body should say so, and the merge method is Jeff's call (FLOW-08). Nothing in the rules or tier 1 refuses a committed binary; the optional tier-1 check from finding 1 is still unqueued (LINT-08 doc-set gap)."
+    },
+    {
+      "rule": "GLOBAL-06",
+      "file": "docs/design/firecracker-driver.md",
+      "line": 817,
+      "note": "The change trips GLOBAL-06 (host-env and env-relay). The PR body should carry the design's security note, the finding-2 fix (setup refuses on busy slots) and finding 13's residual unless it is closed."
+    },
+    {
+      "rule": "ORCH-01",
+      "file": "tools/tier1/rules.yaml",
+      "line": 83,
+      "note": "Unchanged from the previous report: drivers.all gains firecracker, so after merge every in-flight design whose diff reaches a shared path must declare firecracker. Publish should tell the open branches (FLOW-10)."
+    },
+    {
+      "rule": "FLOW-17",
+      "file": "feat/firecracker-driver",
+      "line": 0,
+      "note": "origin/main is still e418871; Publish should re-run tier 1 after merging main."
+    },
+    {
+      "rule": "TEST-02",
+      "file": ".github/workflows/firecracker.yml",
+      "line": 1,
+      "note": "The job has still never run; its first run is this feature's PR. A red first run is a FLOW-11 repair item, not a merge gate, until it has passed once (a8)."
+    },
+    {
+      "rule": "LINT-04",
+      "file": "driver/linuxguest/images.go",
+      "line": 250,
+      "note": "Pre-existing, out of scope, unchanged: an unresolvable FROM falls back silently to direct boot (qemu's behavior, moved unchanged)."
+    }
+  ]
+}
