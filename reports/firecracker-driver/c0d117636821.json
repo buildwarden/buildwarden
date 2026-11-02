@@ -1,0 +1,175 @@
+{
+  "feature": "firecracker-driver",
+  "branch": "feat/firecracker-driver",
+  "head": "c0d117636821",
+  "base": "6899b79b91a0",
+  "round": "feature",
+  "step": "f4-review",
+  "previous_report": "reports/firecracker-driver/e68c41338370.json",
+  "scope": "git diff origin/main...feat/firecracker-driver (90 files). The merge base is still 6899b79; origin/main is at e418871, unchanged. This pass judged the fix range e68c413..c0d1176 (1 commit: c0d1176, driver/firecracker/slots_linux.go, +6/-3) in depth.",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass on the windows host: 0 issues in the root module, tools/workflow and tools/tier1; then dist/tier1 -base origin/main (6899b79b91a0...c0d117636821): 0 MUST, 0 MUST-review, 0 SHOULD, 1 hint, 0 suppressed, exit 0",
+    "make_lint_per_platform": "GOOS=linux make lint and GOOS=darwin make lint: both pass, same tier1 result (FLOW-17: slots_linux.go is touched). The GLOBAL-03 error-wrap finding at slots_linux.go:244 is gone.",
+    "make_test": "pass: 29 ok lines, no FAIL (root module, tools/workflow, tools/tier1) on windows",
+    "linux_tier0": "Not re-run by the linter. The tick reports the LockAs tests pass 10x as root under WSL at c0d1176.",
+    "custom_static_checks": "tier1: findings none, suppressed none, hints = 1 x BOOT-07 bootstrap-surface (driver/firecracker/deliver_linux.go), judged as before (finding 6).",
+    "counts": {
+      "MUST": 0,
+      "MUST-review": 0,
+      "SHOULD": 0,
+      "hint": 1,
+      "suppressed": 0
+    },
+    "fixes_made": "none"
+  },
+  "prior_findings": [
+    {
+      "id": 6,
+      "rule": "BOOT-07",
+      "severity": "SHOULD",
+      "status": "carried forward unchanged",
+      "note": "Still true."
+    },
+    {
+      "id": 12,
+      "rule": "TEST-08",
+      "severity": "SHOULD",
+      "status": "carried forward unchanged",
+      "note": "Still true."
+    },
+    {
+      "id": 16,
+      "rule": "GLOBAL-06",
+      "severity": "SHOULD",
+      "status": "carried forward unchanged",
+      "note": "Unchanged since e68c41338370."
+    },
+    {
+      "id": 17,
+      "rule": "GLOBAL-03",
+      "severity": "MUST",
+      "tier": 1,
+      "status": "resolved",
+      "note": "c0d1176 takes the suggested fix exactly: a Getgroups error is wrapped with %w ('reading groups back: %w'), a mismatch is a separate error wrapping nothing. GOOS=linux make lint passes. Behaviour is unchanged on every path (error or mismatch still fails restore and leaves the thread locked; a match returns nil). The inner got, err := shadows the closure's outer err, which is legal and lint-clean."
+    }
+  ],
+  "findings": [
+    {
+      "id": 6,
+      "rule": "BOOT-07",
+      "related_rules": [
+        "FLOW-14"
+      ],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "docs/development/bootstrap.md",
+      "line": 195,
+      "finding": "Carried forward unchanged. The tier-1 BOOT-07 hint is an accepted model change (r1, a2), with the bootstrap.md edit moved to process item bootstrap-firecracker-row (still pending). Until it lands, bootstrap.md:195 names driver/qemu/cloudinit.go (deleted on this branch), has no firecracker row, and disagrees with rules.yaml's surface (which includes setup.go and posture.go).",
+      "suggestion": "Say this in the PR body. Either Jeff takes bootstrap-firecracker-row right after merge, carrying slots*.go, vm*.go, deliver_linux.go, setup.go, posture.go and tools/firecracker-vm/ into the row, or the path correction is folded in here."
+    },
+    {
+      "id": 12,
+      "rule": "TEST-08",
+      "related_rules": [
+        "SEC-03",
+        "SEC-01"
+      ],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "docs/design/firecracker-driver.md",
+      "line": 1052,
+      "finding": "Carried forward unchanged. Plan step 13 (add the Security note's TEST-08 cases to the corpus) cannot be done: no corpus exists, and queue/security-suite.yaml does not mention firecracker.",
+      "suggestion": "Add the case table, or a pointer to it, to queue/security-suite.yaml or the backlog. Say in the PR body that step 13 is deferred and that the release trips GLOBAL-06, so TEST-08 applies."
+    },
+    {
+      "id": 16,
+      "rule": "GLOBAL-06",
+      "related_rules": [
+        "UX-04",
+        "FLOW-06"
+      ],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "docs/design/firecracker-driver.md",
+      "line": 1240,
+      "finding": "Carried forward, narrowed by e68c413. Remaining residuals, accurately stated in the design note and acceptable for Jeff to sign off: (1) XDG_CACHE_HOME: under a sudo that drops it, setup (and slots.sh, which reads only ~/.cache) holds or checks locks no build takes; running VMs are still found by carrier, a build starting during setup is not. (2) slots.sh holds no lock through its reload; it is the documented debugging stand-in. An owner-planted FIFO now blocks the user's flock child and so the script; self-inflicted and low.",
+      "suggestion": "Carry both residuals into the PR body's security note for acknowledgement at merge (FLOW-08). Take the root-owned setup gate later only if a user reports the XDG case."
+    }
+  ],
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 0,
+    "SHOULD": 3
+  },
+  "counts_note": "Tier 1: MUST 0. Tier 2: MUST 0, MUST-review 0, SHOULD 3 (unchanged).",
+  "resolved_since_previous": [
+    17
+  ],
+  "carried_forward": [
+    6,
+    12,
+    16
+  ],
+  "new_since_previous": [],
+  "suppressions": [],
+  "suppressions_note": "The previous report recorded no suppressions, and tier 1 applied no Tier1-Allow trailers, so none carry over.",
+  "back_to_design": false,
+  "back_to_design_note": "Nothing invalidates a Decision, a confirmed question or a BOOT invariant; c0d1176 is a lint-level fix.",
+  "routing": {
+    "tier1_red": false,
+    "wf_implement_fix": "none: tier 1 is green at c0d1176",
+    "must_findings_route": "No MUST or MUST-review findings. Findings 6, 12 and 16 go in the PR body for acknowledgement at merge (FLOW-08), with 16's residuals in the security note, since GLOBAL-06 needs Jeff's sign-off at merge (LINT-03)."
+  },
+  "informational": [
+    {
+      "rule": "BOOT-07",
+      "file": "driver/firecracker/deliver_linux.go",
+      "line": 0,
+      "note": "The tier-1 bootstrap-surface hint: an accepted model change; the bootstrap.md edit is deferred to bootstrap-firecracker-row. See finding 6."
+    },
+    {
+      "rule": "FLOW-09",
+      "file": "native/linux-kvm/2026-11-02/f6-README.md",
+      "line": 0,
+      "note": "Native f6 first attempt (unattended, windows-desktop WSL2, at 96ca21a). Passed: sudo warden setup --slots 4, idempotent re-run, refusal under FORWARD ACCEPT, sudo warden doctor all ok except upstream DNS, loaded rules as designed, image prepare. Every build stopped in preflight because WSL's only resolver (10.255.255.254 on lo) is excluded by Decision 5, which is the designed behaviour, not a defect. Human step f6-provision-linux-kvm-dns gates the next attempt; the run predates 94f00dd, b748c1a and e68c413, so f6 must re-run on the final head."
+    },
+    {
+      "rule": "GLOBAL-05",
+      "file": "cmd/warden/warden.exe",
+      "line": 0,
+      "note": "Unchanged: 10a1f61's 18 MB warden.exe blob stays in the branch's history. A squash merge keeps it out of main; the merge method is Jeff's call (FLOW-08)."
+    },
+    {
+      "rule": "GLOBAL-06",
+      "file": "docs/design/firecracker-driver.md",
+      "line": 817,
+      "note": "The PR body should carry the design's security note, the finding-2, finding-13 and finding-15 fixes, and finding 16's residuals."
+    },
+    {
+      "rule": "ORCH-01",
+      "file": "tools/tier1/rules.yaml",
+      "line": 83,
+      "note": "Unchanged: drivers.all gains firecracker; Publish should tell the open branches (FLOW-10)."
+    },
+    {
+      "rule": "FLOW-17",
+      "file": "feat/firecracker-driver",
+      "line": 0,
+      "note": "origin/main is still e418871; Publish should re-run tier 1 (including GOOS=linux) after merging main."
+    },
+    {
+      "rule": "TEST-02",
+      "file": ".github/workflows/firecracker.yml",
+      "line": 1,
+      "note": "The job has still never run; a red first run is a FLOW-11 repair item, not a merge gate (a8). TestLockAsUsesUserCreds skips unless root."
+    },
+    {
+      "rule": "LINT-04",
+      "file": "driver/linuxguest/images.go",
+      "line": 250,
+      "note": "Pre-existing, out of scope, unchanged: an unresolvable FROM falls back silently to direct boot."
+    }
+  ]
+}
