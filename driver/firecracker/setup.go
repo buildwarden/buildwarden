@@ -239,7 +239,8 @@ func quiesceSlots(h host, o owner) (release func(), err error) {
 		release()
 		return nil, driver.Fixable(slotsBusyFix,
 			"firecracker slot(s) %s are in use, and re-running setup now would drop "+
-				"their isolation rules while it reloads them", strings.Join(busy, ", "))
+				"their isolation rules while it reloads them",
+			strings.Join(busy, ", "))
 	}
 	return release, nil
 }

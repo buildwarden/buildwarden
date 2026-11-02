@@ -258,7 +258,9 @@ func slotLockPath(s Slot) string {
 func TestSetupRefusesBusySlots(t *testing.T) {
 	for name, mut := range map[string]func(*fakeHost){
 		// A VMM has the build VM's TAP open.
-		"tap attached": func(h *fakeHost) { h.files["/sys/class/net/wfc1g/carrier"] = "1\n" },
+		"tap attached": func(h *fakeHost) {
+			h.files["/sys/class/net/wfc1g/carrier"] = "1\n"
+		},
 		// A build holds the slot but has not started its VMMs.
 		"lock held": func(h *fakeHost) { h.heldLocks[slotLockPath(0)] = true },
 	} {
@@ -277,7 +279,8 @@ func TestSetupRefusesBusySlots(t *testing.T) {
 			}
 			if ranContains(h, "-D INPUT") || ranContains(h, "ip addr") ||
 				ranContains(h, "ip_forward") {
-				t.Fatalf("refused setup changed the host:\n%s", strings.Join(h.ran, "\n"))
+				t.Fatalf("refused setup changed the host:\n%s",
+					strings.Join(h.ran, "\n"))
 			}
 			if len(h.unlocked) != len(h.locked) {
 				t.Fatalf("locks taken %v, released %v", h.locked, h.unlocked)
