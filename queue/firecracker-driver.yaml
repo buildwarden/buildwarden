@@ -43,8 +43,8 @@ steps:
       - f1-design
       - f2-provision-linux-kvm
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: host:linux-kvm/20261102T191851Z
+      expires: 2026-11-02T21:18:51.7295384Z
     note: 'Phase 0 spike (docs/design/firecracker-driver.md Implementation plan step 1) on a Linux KVM host, on feat/firecracker-driver. In phase 2 so Implement cannot start before it. Claimable once a8 is confirmed and hosts.yaml serves linux-kvm. A failed decision returns the feature to Design (FLOW-06). EXPERIMENTAL host (Jeff, review r1): linux-kvm runs from WSL2 on windows-desktop and may need real Linux hardware. If the spike is blocked by the host itself (no nested /dev/kvm, a WSL kernel missing bridge/tun/br_netfilter/nf_tables bridge/conntrack zones, or nested KVM too unreliable to judge the driver), record the evidence under native/linux-kvm/<date>/ and add a human step f2-escalate-linux-host that this step needs, saying Jeff must provision or procure a dedicated Linux KVM host; it then shows under Needs Jeff in QUEUE.md and in /workflow-human.'
   - id: f2-provision-linux-kvm
     phase: 2
@@ -86,7 +86,7 @@ budget:
     steps: 60
   spent:
     runs: 1
-    steps: 6
+    steps: 7
 questions:
   - id: a1
     kind: assumed
@@ -308,3 +308,6 @@ history:
   - at: 2026-11-02T19:15:47Z
     by: human/jeff
     event: 'f2-provision-linux-kvm evidence (attended session): (1) jeff in kvm group, /dev/kvm opens as jeff (KVM_GET_API_VERSION 12); (2) Firecracker v1.17.0 x86_64 from the official release, sha256 06094a11...d558 verified, at ~/.local/bin/firecracker (firecracker --version: Firecracker v1.17.0); jailer not installed (Decision 11); (3) root path decided: Jeff gave the WSL Ubuntu user passwordless sudo (WSL used only for BuildWarden testing), so slot setup is sudo tools/firecracker-vm/slots.sh up (feat/firecracker-driver 2a77ef8). Host posture still Jeff''s: filter FORWARD policy is ACCEPT, which slots.sh refuses (a11), and WSL drops iptables state on restart, so it needs a boot unit setting FORWARD DROP. Kernel: custom 6.18.54.1-microsoft-standard-WSL2-warden+ (stock config plus NF_TABLES_BRIDGE), built under %LOCALAPPDATA%\warden\wsl-kernel.'
+  - at: 2026-11-02T19:18:51Z
+    by: host:linux-kvm/20261102T191851Z
+    event: claimed f2-spike-linux-kvm until 2026-11-02T21:18:51Z
