@@ -126,6 +126,7 @@ up() {
 	posture
 	up_if="$(uplink)"
 	[ -n "$up_if" ] || die "no default route"
+	up_mtu="$(cat "/sys/class/net/$up_if/mtu")"
 	flush_rules
 
 	nft -f - <<-EOF
@@ -171,8 +172,16 @@ up() {
 		ipt -A WARDEN-FC-IN -i "$b" -j DROP
 		ipt -A WARDEN-FC-IN -i "$u" -s "$relay" -m conntrack --ctstate ESTABLISHED -j ACCEPT
 
+		# The uplink's MTU can be below the TAPs' 1500 (a VPN, WSL's 1280):
+		# clamp the MSS both ways, since the relay sizes its segments from the
+		# server's SYN-ACK, and let ICMP errors (RELATED) back for PMTU discovery.
+		ipt -A WARDEN-FC-FWD -i "$u" -s "$relay" -o "$up_if" -p tcp \
+			--tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+		ipt -A WARDEN-FC-FWD -i "$up_if" -o "$u" -d "$relay" -p tcp \
+			--tcp-flags SYN,RST SYN -m tcpmss --mss "$((up_mtu - 39)):65535" \
+			-j TCPMSS --set-mss "$((up_mtu - 40))"
 		ipt -A WARDEN-FC-FWD -i "$u" -s "$relay" -o "$up_if" -j ACCEPT
-		ipt -A WARDEN-FC-FWD -i "$up_if" -o "$u" -d "$relay" -m conntrack --ctstate ESTABLISHED -j ACCEPT
+		ipt -A WARDEN-FC-FWD -i "$up_if" -o "$u" -d "$relay" -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
 		ipt -A WARDEN-FC-FWD -i "$u" -j DROP
 		ipt -A WARDEN-FC-FWD -i "$b" -o "$b" -j ACCEPT
 
@@ -190,6 +199,8 @@ up() {
 	ipt -A WARDEN-FC-FWD -i wfc+ -j DROP
 	ipt -A WARDEN-FC-FWD -o wfc+ -j DROP
 	ipt -A WARDEN-FC-OUT -o wfc+ -d "$NET" -m conntrack --ctstate ESTABLISHED -j ACCEPT
+	# The host's ICMP errors (fragmentation needed) for a relay's own flows.
+	ipt -A WARDEN-FC-OUT -o wfc+ -d "$NET" -p icmp -m conntrack --ctstate RELATED -j ACCEPT
 	ipt -A WARDEN-FC-OUT -o wfc+ -j DROP
 	ipt -t nat -A WARDEN-FC-NAT -s "$NET" -o "$up_if" -j MASQUERADE
 	ip6t -A WARDEN-FC6 -i wfc+ -j DROP
@@ -204,7 +215,7 @@ up() {
 
 	# Only once the drops are in place.
 	sysctl -qw net.ipv4.ip_forward=1
-	echo "warden-fc-slots: $slots slot(s) for $user (uid $uid), uplink $up_if"
+	echo "warden-fc-slots: $slots slot(s) for $user (uid $uid), uplink $up_if (mtu $up_mtu)"
 }
 
 status() {

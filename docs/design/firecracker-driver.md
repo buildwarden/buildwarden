@@ -180,12 +180,16 @@ cache trusts the first download of a cloud image.
      - INPUT: `-i wfc+b` drop; from `wfc<i>u` accept ESTABLISHED only, and
        only from the slot's relay address; drop the rest from `wfc+`;
      - FORWARD: from `wfc<i>u` with source the slot's relay address to the
-       uplink accept, and replies (ESTABLISHED) back; any other source from
+       uplink accept, and replies (ESTABLISHED, and RELATED for ICMP errors)
+       back; TCP MSS clamped both ways to the uplink's MTU (the relay's SYNs
+       `--clamp-mss-to-pmtu`, SYN-ACKs to it `--set-mss <MTU - 40>`), since the
+       uplink can be below the TAPs' 1500 (spike, a12); any other source from
        `wfc<i>u` drop (anti-spoof, so un-NATed build traffic can never leave
        even if the relay's own rules are missing); within the same `wfc<i>b`
        accept (needed when `br_netfilter` is loaded); every other `wfc+`
        forward drop;
-     - OUTPUT (host to relays): to `100.64.88.0/22` accept ESTABLISHED; accept
+     - OUTPUT (host to relays): to `100.64.88.0/22` accept ESTABLISHED, and
+       `icmp` RELATED (the host's path-MTU errors, a12); accept
        NEW `tcp/8301` only from the slot owner's UID (`-m owner --uid-owner`);
        drop everything else, so no other local user reaches the relay's
        `:80`, `:443`, `:53` or `:8300`, and the warden user reaches only the
@@ -242,7 +246,9 @@ cache trusts the first download of a cloud image.
    - *Direct-boot path* (no resolvable image): a new x86_64 base initramfs
      (`tools/firecracker-vm/build-initramfs.sh`: static busybox and a launcher,
      no `warden-io`, no modules) with `warden-io` appended per build as a cpio
-     at `/bin/warden-io`. The launcher mounts `/dev`, `/proc` and `/sys`, sets
+     at `/bin/warden-io`. The launcher exports a standard `PATH` (the kernel
+     starts PID 1 with none, and `warden-io` passes its own to the build
+     script; spike), mounts `/dev`, `/proc` and `/sys`, sets
      the static `10.0.0.2/30` via `10.0.0.1` on its only NIC, and execs
      `warden-io initialize --gateway=10.0.0.1`. It writes no DNS (that is
      `initialize`'s, BOOT-03) and nothing else.
@@ -578,6 +584,15 @@ Each is "proceeding with the recommendation; confirm" in the design review
   slot forwarding, and prints the commands to fix it. Options: refuse with the
   fix (recommended: the operator owns host posture); warn and continue; change
   the FORWARD policy or firewalld zones automatically.
+- **a12 — Slot rules for an uplink MTU below 1500** (Phase 0 spike, Rollback
+  notes). Proceeding with Decision 4's two additions: TCP MSS clamped both ways
+  on the upstream forward path, and RELATED accepted for replies to a relay's
+  own flows (FORWARD from the uplink; OUTPUT `icmp` only). Without them every
+  upstream HTTPS fetch failed on WSL's 1280-byte uplink. Neither lets a NEW
+  connection reach a relay or a build segment. Options: both (recommended:
+  clamping covers paths that drop ICMP, RELATED lets PMTU discovery work
+  elsewhere); clamping only; set the TAPs' MTU to the uplink's instead (the
+  relay's own NIC stays at 1500, so its segments are still too big).
 
 ## Design
 
@@ -1077,7 +1092,84 @@ Follow-ups for intake (workflow-intake; not this feature's work):
 
 ## Rollback notes
 
-<!-- None yet. The Phase 0 spike records its findings here. -->
+### Phase 0 spike (f2-spike-linux-kvm, 2026-11-02)
+
+Run attended on windows-desktop's `linux-kvm` host: WSL2 with nested KVM
+(`kvm_intel nested=Y`), a custom WSL kernel (Microsoft's
+`linux-msft-wsl-6.18.54.1` with the running config plus `NF_TABLES_BRIDGE`,
+which the stock WSL kernel leaves out), Firecracker v1.17.0 from the official
+release (sha256 checked), x86_64 only. The throwaway harness is
+`tools/firecracker-vm/spike/` (build tag `spike`) on one slot made by
+`tools/firecracker-vm/slots.sh`. Evidence: `native/linux-kvm/2026-11-02/` on
+the workflow branch.
+
+No decision failed; the feature stays in its phase. What held, and what the
+spike changed or settled:
+
+- **Decision 1 (relay unchanged, `vm` mode, shared init).** Held. The
+  unchanged init and relay ran on the x86_64 no-modules initramfs; the init's
+  `insmod` loop found nothing to load. Claim at `<relay>:8301` in 1.02–1.07 s
+  from VMM start, every run.
+- **Decision 4 (slots).** Held, with two additions (question a12, assumed):
+  - *MSS clamping both ways.* The uplink's MTU can be below the TAPs' 1500
+    (WSL's `eth0` is 1280 here; a VPN does the same). The relay sizes its
+    segments from the server's SYN-ACK, so its 1388-byte TLS ClientHello never
+    left the host and every upstream HTTPS fetch ended in EOF, while small HTTP
+    worked. Fix: in `WARDEN-FC`, `TCPMSS --clamp-mss-to-pmtu` on the relay's
+    SYNs to the uplink and `--set-mss <uplink MTU - 40>` on SYN-ACKs back to
+    the relay. After it, a 7,464,385-byte HTTPS download matched its published
+    sha256 and was recorded.
+  - *RELATED ICMP.* FORWARD from the uplink to a relay accepts
+    `ESTABLISHED,RELATED`, and OUTPUT accepts `icmp` RELATED to
+    `100.64.88.0/22`, so path-MTU errors reach the relay. Both are replies to
+    the relay's own flows; nothing NEW reaches it.
+  - Posture: WSL forgets iptables state on restart, so the FORWARD DROP the
+    operator sets (a11) needs a boot unit there; `slots.sh` refused ACCEPT as
+    designed. WSL's distros share one network namespace; Podman
+    (`podman-machine-default`, rootless) kept working with a slot up.
+- **Decision 5 (claim and DNS).** Held. Finding: WSL's only resolver is its
+  DNS-tunnelling address `10.255.255.254` on `lo`, which the exclusion rule
+  drops, so on a default WSL host the preflight's fixable error fires; the
+  spike passed the Windows host's resolvers (`8.8.8.8,8.8.4.4`). The fix text
+  should name that case.
+- **Decision 6 (direct boot).** Held, with one change: the kernel starts
+  PID 1 with no `PATH`, and `warden-io` hands its own `PATH` on to the build
+  script, so only `/bin` resolved (`nc: not found`). The launcher now exports
+  `PATH=/usr/sbin:/usr/bin:/sbin:/bin` before it execs `warden-io`. With it,
+  `FROM alpine` / `RUN echo hello` reached a verified ledger (5 signatures);
+  the build VM ran in about 0.4 s.
+- **Decision 7 (raw rootfs, PARTUUID).** Held. Ubuntu 24.04's cloud image
+  (`noble-server-cloudimg-amd64.img`, qcow2, no backing file) has no x86-64
+  root type GUID; its root is the single Linux-filesystem partition (1, next
+  to BIOS boot, ESP and XBOOTLDR), which the fallback picks. It booted the
+  pinned kernel from `/dev/vda1` with the `CIDATA` seed on a read-only
+  virtio-blk drive; `reboot -f` ended the VMM. Ubuntu builds took 5–25 s.
+- **Decision 8 (process model).** Held: `--no-api --config-file`, stdin
+  `/dev/null`, `Setpgid` and `Pdeathsig`; the exit ordering (build VM exit,
+  then a grace for completion) worked on both paths. The relay console shows
+  `random: crng init done` at 0.008 s of boot, long before the relay listens.
+  Relay memory: the 7.4 MB HTTPS build ran at 512, 256, 192 and 128 MiB with
+  no OOM; the default can drop if Implement wants it (256 MiB leaves room).
+  Pinned Firecracker version: **v1.17.0** (has the entropy device).
+- **Decision 10 (boot assets).** Held. `build-kernel.sh` pins Linux 6.1.191
+  (kernel.org sha256) with Firecracker v1.17.0's
+  `microvm-kernel-ci-x86_64-6.1.config`; every option in
+  `kernel-required.config` survived `olddefconfig` as `=y`, and modules are
+  off. Plan item b's "aarch64 output unchanged (checked by hash)" is checked by
+  *content* hash: the cpio archive stores mtimes, so two builds never match
+  byte for byte, but the old and new scripts gave identical paths, links and
+  file hashes, and byte-identical `vmlinuz` and `Image`. The guest logs
+  `virtio-mmio: probe ... failed with error -16` once per device because
+  Firecracker announces devices both by ACPI and on the command line; the
+  devices work.
+- **Isolation (Validation plan).** From the build VM, TCP to `1.1.1.1:22`,
+  `93.184.215.14:8443` and `1.1.1.1:8080` failed, NTP to `1.1.1.1` got no
+  reply, and a UDP send to `1.1.1.1:9999` left the guest; a capture on the
+  host's uplink saw no packet to those addresses. HTTP and HTTPS fetches went
+  through the relay and were recorded. A guest-side `bad record MAC` / `bad
+  certificate` pair at every Ubuntu boot is snapd reaching
+  `api.snapcraft.io` before `warden-io` installs the CA, not corruption (the
+  large download was bit-exact).
 
 ## Archive summary
 
