@@ -4,7 +4,9 @@
 # assemble the initramfs has no network. Then run the build from WSL:
 #     wsl -d Ubuntu bash -lc 'cd tools/relay-vm/hyperv && sh build.sh'
 #
-# Versions are pinned; bump them together when moving to a new Alpine release.
+# The Alpine release and minirootfs are pinned; bump them together when moving to
+# a new release. Package versions are resolved from the branch's APKINDEX, because
+# main/ keeps only each package's latest build and a pinned .apk soon 404s.
 # Usage:  pwsh tools/relay-vm/hyperv/fetch-cache.ps1
 
 $ErrorActionPreference = 'Stop'
@@ -13,30 +15,34 @@ New-Item -ItemType Directory -Force -Path $cache | Out-Null
 
 $alpine   = '3.21'
 $rootfsV  = '3.21.7'       # alpine-minirootfs
-$kernelV  = '6.12.109-r0'  # linux-virt
-$iptV     = '1.8.11-r1'    # iptables + iptables-legacy + libxtables + libip4tc + libip6tc
-$mnlV     = '1.0.5-r2'     # libmnl
-$nftnlV   = '1.2.8-r0'     # libnftnl
 
 $main = "https://dl-cdn.alpinelinux.org/alpine/v$alpine/main/x86_64"
 $rel  = "https://dl-cdn.alpinelinux.org/alpine/v$alpine/releases/x86_64"
 
-$dl = [ordered]@{
-    'alpine-minirootfs.tar.gz' = "$rel/alpine-minirootfs-$rootfsV-x86_64.tar.gz"
-    'linux-virt.apk'           = "$main/linux-virt-$kernelV.apk"
-    'iptables.apk'             = "$main/iptables-$iptV.apk"
-    'iptables-legacy.apk'      = "$main/iptables-legacy-$iptV.apk"
-    'libxtables.apk'           = "$main/libxtables-$iptV.apk"
-    'libip4tc.apk'             = "$main/libip4tc-$iptV.apk"
-    'libip6tc.apk'             = "$main/libip6tc-$iptV.apk"
-    'libmnl.apk'               = "$main/libmnl-$mnlV.apk"
-    'libnftnl.apk'             = "$main/libnftnl-$nftnlV.apk"
+$index = Join-Path $cache 'APKINDEX.tar.gz'
+Invoke-WebRequest "$main/APKINDEX.tar.gz" -OutFile $index -UseBasicParsing
+$versions = @{}
+$pkg = $null
+# System32 bsdtar by path: a Git Bash PATH puts GNU tar first, which reads C: as a host.
+$tar = Join-Path $env:SystemRoot 'System32\tar.exe'
+foreach ($line in (& $tar -xzf $index -O APKINDEX)) {
+    if ($line.StartsWith('P:')) { $pkg = $line.Substring(2) }
+    elseif ($line.StartsWith('V:') -and $pkg) { $versions[$pkg] = $line.Substring(2) }
+}
+if ($LASTEXITCODE -ne 0) { throw "could not read APKINDEX from $index" }
+
+$dl = [ordered]@{ 'alpine-minirootfs.tar.gz' = "$rel/alpine-minirootfs-$rootfsV-x86_64.tar.gz" }
+# iptables + iptables-legacy + libxtables + libip4tc + libip6tc, libmnl, libnftnl
+foreach ($p in 'linux-virt', 'iptables', 'iptables-legacy', 'libxtables', 'libip4tc',
+               'libip6tc', 'libmnl', 'libnftnl') {
+    if (-not $versions.ContainsKey($p)) { throw "$p is not in the Alpine $alpine APKINDEX" }
+    $dl["$p.apk"] = "$main/$p-$($versions[$p]).apk"
 }
 
 foreach ($name in $dl.Keys) {
     $out = Join-Path $cache $name
     Invoke-WebRequest $dl[$name] -OutFile $out -UseBasicParsing
-    '{0,-24} {1,12:N0} bytes' -f $name, (Get-Item $out).Length
+    '{0,-24} {1,12:N0} bytes  {2}' -f $name, (Get-Item $out).Length, ($dl[$name] -split '/')[-1]
 }
 Write-Host "`nCache ready: $cache"
 Write-Host "Next: wsl -d Ubuntu bash -lc 'cd tools/relay-vm/hyperv && sh build.sh'"
