@@ -24,6 +24,24 @@ brew install qemu
 apt install qemu-system
 ```
 
+### Firecracker driver
+
+Requires an x86_64 Linux host with KVM (`/dev/kvm`), your user in the `kvm`
+group, and the `firecracker` binary (v1.17.0 or later) on `PATH`:
+
+```sh
+sudo usermod -aG kvm "$USER"     # then log in again
+v=v1.17.0
+curl -fsSLO https://github.com/firecracker-microvm/firecracker/releases/download/$v/firecracker-$v-x86_64.tgz
+curl -fsSLO https://github.com/firecracker-microvm/firecracker/releases/download/$v/firecracker-$v-x86_64.tgz.sha256.txt
+sha256sum -c firecracker-$v-x86_64.tgz.sha256.txt
+tar -xzf firecracker-$v-x86_64.tgz
+sudo install -m 0755 release-$v-x86_64/firecracker-$v-x86_64 /usr/local/bin/firecracker
+
+# Host networking and disk-image tools (Debian/Ubuntu)
+sudo apt install iproute2 nftables iptables qemu-utils genisoimage
+```
+
 ### VZ driver
 
 Requires macOS on Apple Silicon. No extra installation is needed — Virtualization.framework is built into macOS.
@@ -87,6 +105,22 @@ brew install qemu                           # macOS (or apt install qemu-system 
 tools/relay-vm/build-initramfs.sh           # Build relay VM kernel + initramfs
 tools/build-vm/build-initramfs.sh           # Build test VM initramfs (includes warden-io)
 ```
+
+## First-time Firecracker Setup
+
+```sh
+make build
+tools/firecracker-vm/build-kernel.sh                       # pinned guest kernel
+ARCH=x86_64 NO_MODULES=1 tools/relay-vm/build-initramfs.sh # x86_64 relay initramfs
+tools/firecracker-vm/build-initramfs.sh                    # direct-boot initramfs
+sudo dist/warden setup --driver firecracker                # network slots (each boot)
+dist/warden doctor --driver firecracker
+```
+
+The kernel build needs `make`, `gcc`, `flex`, `bison`, `bc`, `libelf-dev` and
+`libssl-dev`. The slots do not survive a reboot; the
+[drivers guide](../guide/drivers.md#firecracker-driver) shows a systemd unit
+that re-creates them at boot.
 
 ## Verify Installation
 

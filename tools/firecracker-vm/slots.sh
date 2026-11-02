@@ -1,7 +1,8 @@
 #!/bin/sh
 # Creates or removes the Firecracker network slots of Decision 4 in
-# docs/design/firecracker-driver.md. Spike stand-in for
-# `warden setup --driver firecracker`; it goes when that lands.
+# docs/design/firecracker-driver.md, by hand: the Phase 0 spike's stand-in for
+# `warden setup --driver firecracker`, which is the supported path. Kept for
+# debugging slot rules; keep the two in step (driver/firecracker/slots.go).
 #
 # Root only. Installed root-owned (never run from a user-writable path under
 # sudo) as /usr/local/sbin/warden-fc-slots, so a scoped NOPASSWD sudoers entry
