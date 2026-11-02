@@ -104,7 +104,7 @@ down() {
 }
 
 posture() {
-	for c in ip nft iptables ip6tables flock getent; do
+	for c in ip nft iptables ip6tables flock getent runuser; do
 		command -v "$c" >/dev/null || die "$c is missing"
 	done
 	if command -v systemctl >/dev/null && systemctl is-active -q firewalld 2>/dev/null; then
@@ -135,8 +135,9 @@ idle() {
 	locks="$(getent passwd "$user" | cut -d: -f6)/.cache/buildwarden/locks"
 	for f in "$locks"/firecracker-slot-*.lock; do
 		[ -f "$f" ] || continue
-		# A read-only redirect, so root creates nothing in the user's dir.
-		if ! flock -n 9 9<"$f"; then
+		# Opened as the owner, as warden setup does, so root opens no path in
+		# the user's dir.
+		if ! runuser -u "$user" -- flock -n "$f" true; then
 			busy="$busy $(basename "$f" .lock)"
 		fi
 	done

@@ -1244,7 +1244,8 @@ None changes a Decision or a confirmed question.
     build starting during setup, or holding its slot before its VMMs start,
     is not seen. The drivers guide says to start no build while setup runs
     in that case.
-  - `slots.sh` has the same carrier and lock checks and address skip, but
+  - `slots.sh` has the same carrier and lock checks and address skip (its
+    lock check runs `flock` as the owner, via `runuser`), but
     holds no lock through its reload, so a build starting while it runs can
     land mid-reload. It is the debugging stand-in, documented as such.
 - **Doctor under sudo (f4 finding 3)** checks the user who ran sudo: their
