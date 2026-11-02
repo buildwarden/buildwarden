@@ -120,7 +120,26 @@ dist/warden doctor --driver firecracker
 The kernel build needs `make`, `gcc`, `flex`, `bison`, `bc`, `libelf-dev` and
 `libssl-dev`. The slots do not survive a reboot; the
 [drivers guide](../guide/drivers.md#firecracker-driver) shows a systemd unit
-that re-creates them at boot.
+that re-creates them at boot. Setup refuses, with the fix, when the host's
+`FORWARD` policy is `ACCEPT` or firewalld is running, and while any slot is in
+use by a build or by VMs a `--keep-vms` build left running.
+
+Optionally cache the default disk image before the first build, so that
+build does not pay for the download and conversion:
+
+```sh
+dist/warden image prepare --driver firecracker   # ubuntu:24.04
+```
+
+The relay needs a DNS server that is not on the host itself. A host whose only
+resolver is local (a resolver-less systemd-resolved stub, a local dnsmasq, or
+WSL's `10.255.255.254`) gets an error that says how to fix it; see
+[Upstream DNS](../guide/drivers.md#upstream-dns).
+
+WSL2 is experimental: it needs nested virtualization and a custom WSL kernel
+built with `NF_TABLES_BRIDGE`, which the stock kernel leaves out, and WSL
+loses the slots and its iptables state whenever its VM shuts down, so re-run
+setup after each restart.
 
 ## Verify Installation
 
