@@ -135,12 +135,24 @@ func ownedSlots(h host, uid int) []Slot {
 }
 
 func checkSlots(h host) ([]Slot, error) {
-	slots := ownedSlots(h, h.euid())
+	uid := slotUID(h)
+	slots := ownedSlots(h, uid)
 	if len(slots) == 0 {
 		return nil, driver.Fixable(setupFix,
-			"no firecracker network slots owned by this user (uid %d)", h.euid())
+			"no firecracker network slots owned by this user (uid %d)", uid)
 	}
 	return slots, nil
+}
+
+// slotUID is the user whose slots count: this user, or under sudo the user
+// who ran it, so `sudo warden doctor` checks the slots builds will use.
+func slotUID(h host) int {
+	if name := h.getenv("SUDO_USER"); h.euid() == 0 && name != "" {
+		if uid, _, err := h.lookupOwner(name); err == nil {
+			return uid
+		}
+	}
+	return h.euid()
 }
 
 // hostLocal reports whether ip is assigned to one of this host's interfaces.

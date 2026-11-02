@@ -89,6 +89,11 @@ func TestOwnedSlots(t *testing.T) {
 	if len(got) != 2 || got[0] != 0 || got[1] != 2 {
 		t.Fatalf("owned = %v, want [0 2]", got)
 	}
+	root := newFakeHost().withSlots(1, 1000)
+	root.uid, root.env["SUDO_USER"] = 0, "jeff"
+	if got, err := checkSlots(root); err != nil || len(got) != 1 {
+		t.Fatalf("sudo doctor sees %v, %v; want the invoking user's slot", got, err)
+	}
 	_, err := checkSlots(newFakeHost())
 	if !strings.Contains(fixOf(t, err), "warden setup --driver firecracker") {
 		t.Fatal("no-slot fix does not name setup")
