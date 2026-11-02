@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/firecracker"
 	"github.com/buildwarden/buildwarden/driver/hyperv"
 	"github.com/buildwarden/buildwarden/driver/linuxguest"
 	"github.com/buildwarden/buildwarden/driver/qemu"
@@ -49,7 +50,7 @@ var imagePrepareCmd = &cobra.Command{
 	Long: `Acquire, verify and ready a build-guest base image for a VM driver.
 
 The driver comes from --driver (or warden.toml); --os defaults per driver
-(vz: macos, qemu: linux, hyperv: windows). [source] (or --source) is a local
+(vz: macos, qemu and firecracker: linux, hyperv: windows). [source] (or --source) is a local
 path or URL:
 
   --driver vz     --os macos    macOS IPSW (default: latest supported).
@@ -57,6 +58,11 @@ path or URL:
                                 boot agent refreshed instead.
   --driver qemu   --os linux    cloud image reference (alpine:3.21,
                                 ubuntu:24.04, debian:bookworm) or a qcow2.
+  --driver firecracker          cloud image reference (default ubuntu:24.04)
+                --os linux    or a local qcow2 or raw image, downloaded if
+                              needed and converted once to the raw image
+                              builds copy. Images with a backing file or an
+                              external data file are refused.
   --driver qemu   --os windows  Windows install ISO (required), installed
                                 unattended (--edition, --virtio, --arch).
   --driver hyperv --os windows  Windows Server evaluation VHDX: a URL, or a
@@ -74,6 +80,7 @@ digest of what was used is always recorded); --force re-acquires even when a
 valid cached copy exists.`,
 	Example: `  warden image prepare --driver vz
   warden image prepare --driver qemu ubuntu:24.04
+  warden image prepare --driver firecracker ubuntu:24.04
   warden image prepare --driver qemu --os windows --source Win11_Arm64.iso
   warden image prepare --driver hyperv --source https://.../server2025.vhd
   warden image prepare --driver hyperv --sha256 <hash-printed-on-first-prepare>
@@ -143,6 +150,8 @@ func runImagePrepare(cmd *cobra.Command, args []string) error {
 		path, err = prepareVZMacos(source)
 	case "qemu/linux":
 		path, err = linuxguest.PrepareImage(source)
+	case "firecracker/linux":
+		path, err = firecracker.PrepareImage(source)
 	case "qemu/windows":
 		path, err = prepareQemuWindows(source)
 	case "hyperv/windows":
@@ -150,7 +159,8 @@ func runImagePrepare(cmd *cobra.Command, args []string) error {
 	default:
 		return driver.Fixable("",
 			"no %s image for --driver %q "+
-				"(vz: macos; qemu: linux, windows; hyperv: windows)",
+				"(vz: macos; qemu: linux, windows; hyperv: windows; "+
+				"firecracker: linux)",
 			osName, drv)
 	}
 	if err != nil {
@@ -331,6 +341,10 @@ func runImageList(_ *cobra.Command, _ []string) error {
 			osName = "windows"
 		}
 		fmt.Printf("qemu    %-8s %s\n", osName, p)
+		found = true
+	}
+	for _, p := range firecracker.ListImages() {
+		fmt.Printf("firecracker linux %s\n", p)
 		found = true
 	}
 	if st := hyperv.Status(); st.Base != "" {

@@ -301,11 +301,11 @@ func isScriptName(p string) bool {
 
 func validateDriver(d string) error {
 	switch d {
-	case "", "container", "qemu", "vz", "hyperv":
+	case "", "container", "qemu", "vz", "hyperv", "firecracker":
 		return nil
 	default:
 		return driver.Fixable("",
-			"unknown driver %q (valid: container, qemu, vz, hyperv)", d)
+			"unknown driver %q (valid: container, qemu, vz, hyperv, firecracker)", d)
 	}
 }
 
@@ -319,8 +319,17 @@ func validateCapture(c string) error {
 	}
 }
 
+// isVMDriver reports whether d is a VM driver, which takes the VM flags.
+func isVMDriver(d string) bool {
+	switch d {
+	case "qemu", "vz", "hyperv", "firecracker":
+		return true
+	}
+	return false
+}
+
 func validateFlagsForDriver(d string) error {
-	isVM := d == "qemu" || d == "vz" || d == "hyperv"
+	isVM := isVMDriver(d)
 	for _, f := range []struct {
 		set  bool
 		name string
@@ -333,11 +342,17 @@ func validateFlagsForDriver(d string) error {
 	} {
 		if f.set && !isVM {
 			return driver.Fixable("",
-				"%s requires a VM driver (--driver qemu, vz, or hyperv)", f.name)
+				"%s requires a VM driver (--driver qemu, vz, hyperv or "+
+					"firecracker)", f.name)
 		}
 	}
 	if flagNetwork != "" && d != "hyperv" {
-		return driver.Fixable("", "--network is only used by --driver hyperv")
+		fix := ""
+		if d == "firecracker" {
+			fix = "drop --network: firecracker builds use the slots " +
+				"'warden setup --driver firecracker' made"
+		}
+		return driver.Fixable(fix, "--network is only used by --driver hyperv")
 	}
 	return nil
 }

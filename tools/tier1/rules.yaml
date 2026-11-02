@@ -80,7 +80,7 @@ not_code: ["docs/", "*.md", ".github/", "LICENSE"]
 # needs every driver in `all` declared (the TEST-02 caveat). `interface` in a
 # design's drivers covers every driver.
 drivers:
-  all: [container, qemu, vz, hyperv]
+  all: [container, qemu, vz, hyperv, firecracker]
   dirs: [container, qemu, vz, hyperv, firecracker]
   shared: ["driver/*.go", "driver/winguest/", "driver/linuxguest/", "driver/relayvm/",
     "driver/script/", "relay/", "ledger/", "collector/", "relaycfg/", "bootstrap/"]
@@ -104,6 +104,10 @@ bootstrap:
     - driver/winguest/
     - "driver/hyperv/winseed*.go"
     - driver/vz/image.go
+    - "driver/firecracker/slots*.go"
+    - driver/firecracker/deliver_linux.go
+    - "driver/firecracker/vm*.go"
+    - tools/firecracker-vm/
 
 # RELAY-05: each machine schema and its document change together.
 schema_doc:

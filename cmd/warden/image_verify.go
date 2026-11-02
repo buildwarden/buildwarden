@@ -9,6 +9,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/firecracker"
 	"github.com/buildwarden/buildwarden/driver/hyperv"
 	"github.com/buildwarden/buildwarden/driver/qemu"
 	"github.com/buildwarden/buildwarden/driver/vz"
@@ -39,8 +40,9 @@ func init() {
 
 func layerCaches(drv string) (map[string]*driver.LayerCache, error) {
 	all := map[string]*driver.LayerCache{
-		"qemu":   qemu.LayerCache(),
-		"hyperv": hyperv.LayerCache(),
+		"qemu":        qemu.LayerCache(),
+		"hyperv":      hyperv.LayerCache(),
+		"firecracker": firecracker.LayerCache(),
 	}
 	if runtime.GOOS == "darwin" {
 		all["vz"] = (&vz.ImageCache{CacheDir: vz.DefaultCacheDir()}).LayerCache()
@@ -50,7 +52,8 @@ func layerCaches(drv string) (map[string]*driver.LayerCache, error) {
 	}
 	c, ok := all[drv]
 	if !ok {
-		return nil, driver.Fixable("warden image verify --driver qemu|hyperv|vz",
+		return nil, driver.Fixable("warden image verify --driver "+
+			"qemu|hyperv|vz|firecracker",
 			"driver %q has no base-image layer cache on this host", drv)
 	}
 	return map[string]*driver.LayerCache{drv: c}, nil
@@ -62,7 +65,7 @@ func runImageVerify(_ *cobra.Command, _ []string) error {
 		return err
 	}
 	drift := 0
-	for _, name := range []string{"qemu", "vz", "hyperv"} {
+	for _, name := range []string{"qemu", "vz", "hyperv", "firecracker"} {
 		c, ok := caches[name]
 		if !ok {
 			continue
