@@ -28,12 +28,18 @@ func TryHostLock(name string) (unlock func(), ok bool, err error) {
 
 var errLockHeld = errors.New("lock is held")
 
-func hostLock(name string, wait bool) (func(), error) {
+// LockDir is the private directory host locks live in. Drivers keep state
+// tied to a lock beside it (the Firecracker slots' pid files).
+func LockDir() string {
 	dir, err := os.UserCacheDir()
 	if err != nil {
 		dir = os.TempDir()
 	}
-	dir = filepath.Join(dir, "buildwarden", "locks")
+	return filepath.Join(dir, "buildwarden", "locks")
+}
+
+func hostLock(name string, wait bool) (func(), error) {
+	dir := LockDir()
 	if err := os.MkdirAll(dir, 0o700); err != nil {
 		return nil, fmt.Errorf("creating lock dir: %w", err)
 	}
