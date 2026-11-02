@@ -82,8 +82,8 @@ not_code: ["docs/", "*.md", ".github/", "LICENSE"]
 drivers:
   all: [container, qemu, vz, hyperv]
   dirs: [container, qemu, vz, hyperv, firecracker]
-  shared: ["driver/*.go", "driver/winguest/", "driver/script/", "relay/", "ledger/",
-    "collector/", "relaycfg/", "bootstrap/"]
+  shared: ["driver/*.go", "driver/winguest/", "driver/linuxguest/", "driver/relayvm/",
+    "driver/script/", "relay/", "ledger/", "collector/", "relaycfg/", "bootstrap/"]
 
 # BOOT-07: the bootstrap surface and the document that owns the model. The
 # relay's guest-facing endpoints are the control plane (/ca.pem, /v1/output,
@@ -100,7 +100,7 @@ bootstrap:
     - driver/container/container.go
     - "driver/container/images*"
     - cmd/warden-pause/
-    - driver/qemu/cloudinit.go
+    - driver/linuxguest/
     - driver/winguest/
     - "driver/hyperv/winseed*.go"
     - driver/vz/image.go

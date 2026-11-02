@@ -14,6 +14,7 @@ import (
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/hyperv"
+	"github.com/buildwarden/buildwarden/driver/linuxguest"
 	"github.com/buildwarden/buildwarden/driver/qemu"
 	"github.com/buildwarden/buildwarden/driver/vz"
 )
@@ -141,7 +142,7 @@ func runImagePrepare(cmd *cobra.Command, args []string) error {
 	case "vz/macos":
 		path, err = prepareVZMacos(source)
 	case "qemu/linux":
-		path, err = qemu.PrepareLinuxImage(source)
+		path, err = linuxguest.PrepareImage(source)
 	case "qemu/windows":
 		path, err = prepareQemuWindows(source)
 	case "hyperv/windows":

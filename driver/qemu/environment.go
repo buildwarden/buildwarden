@@ -6,17 +6,14 @@ import (
 	"path/filepath"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/linuxguest"
 	"github.com/buildwarden/buildwarden/ledger"
 	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
-// LayerCache is the qemu driver's layer-hash cache, beside its cached images.
-func LayerCache() *driver.LayerCache {
-	return &driver.LayerCache{
-		Path:     filepath.Join(driver.CacheDir(), "images", driver.LayerCacheFile),
-		Progress: os.Stderr,
-	}
-}
+// LayerCache is the qemu driver's layer-hash cache, beside its cached images
+// (the cloud image cache it shares with linuxguest).
+func LayerCache() *driver.LayerCache { return linuxguest.LayerCache() }
 
 // buildEnvironment describes what the build VM boots from as a
 // vm-disk-chain/v1 environment: the base disk (or the direct-boot kernel and
@@ -67,16 +64,6 @@ func describeBuild(
 		}
 	}
 	return b.Environment()
-}
-
-// recordDownloadedImage records a freshly downloaded cloud image's hash and
-// URL, so builds describe it without re-hashing and with its provenance.
-func recordDownloadedImage(path, sha256Hex, url string) {
-	err := LayerCache().Record(path, sha256Hex, "",
-		ledger.LayerSource{Kind: ledger.SourceURL, URL: url})
-	if err != nil {
-		fmt.Fprintf(os.Stderr, "[warden] warning: %v\n", err)
-	}
 }
 
 // recordPreparedWindows records the installed Windows base and its UEFI vars
