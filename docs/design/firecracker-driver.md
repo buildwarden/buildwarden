@@ -634,8 +634,9 @@ only out of the uplink, and the host reaches the relay only on its claim port.
 ```
 StartBuild(req):                                   # driver/firecracker, linux only
     preflight: /dev/kvm rw, firecracker >= pinned, kernel + relay + direct-boot
-               assets (relayvm), qemu-img (disk path), a setup slot owned by
-               this user, an off-host upstream resolver            # UX-04
+               assets (relayvm), qemu-img and genisoimage or mkisofs (disk
+               path), a setup slot owned by this user, an off-host upstream
+               resolver                                            # UX-04
     script := StageBuildScript; RecordInputs                      # ORCH-02
     resolve build boot: disk path (cached raw, else qemu-img info check +
                         convert) or direct boot
@@ -676,7 +677,9 @@ warden setup --driver firecracker [--slots N]:   # root, idempotent, 1 <= N <= 2
     check: Linux, /dev/kvm, the invoking (sudo) user's kvm group membership,
            nft + iptables + ip6tables present
     refuse (fixable, printed commands): filter FORWARD policy ACCEPT;
-           firewalld running or nft-only rules that drop wfc* forwarding
+           firewalld running or nft-only rules that drop wfc* forwarding;
+           any slot in use (a TAP attached, or its lock held), holding the
+           free slots' locks until setup ends (Implementation notes)
     for i in 0..N-1: create or verify wfc<i>b, wfc<i>r, wfc<i>g, wfc<i>u
                      (TAPs owned by the user; IPv6 off on all four;
                       rp_filter=1 on b and u; arp_ignore=8 on b;
@@ -1170,6 +1173,67 @@ spike changed or settled:
   certificate` pair at every Ubuntu boot is snapd reaching
   `api.snapcraft.io` before `warden-io` installs the CA, not corruption (the
   large download was bit-exact).
+
+### Implementation notes (f3-implement, f4-review fixes)
+
+Where the code departs from this design's letter (FLOW-06), with the reason.
+None changes a Decision or a confirmed question.
+
+- **Portable files behind a host interface.** Packages names `*_linux.go`
+  files; the slot naming, setup and doctor command lists, image checks and
+  conversion, pid files and the exit ordering live in portable files
+  (`slots.go`, `setup.go`, `doctor.go`, `preflight.go`, `images.go`,
+  `pids.go`, `wait.go`) and reach the machine through a `host` interface
+  (`realHost`, or a fake in tests). Only process start, delivery, slot
+  locking and the StartBuild flow are `*_linux.go`. Tier 0 then runs them on
+  every platform (TEST-01). There is no `images_linux.go`; `rules.yaml`'s
+  bootstrap surface follows the real file names.
+- **qcow2 data-file refusal.** Besides a backing file, the `qemu-img info`
+  gate refuses an image with an external data file, which would pull an
+  arbitrary host file into the converted rootfs. Stricter than the design.
+- **ISO tool required up front.** A disk-image build needs `genisoimage` or
+  `mkisofs` (cloud-init reads the seed by its exact file names, which the
+  built-in level-1 ISO writer cannot produce). It is checked with
+  `qemu-img` before anything is staged (UX-04 item 2), and doctor warns.
+- **`keep` marker in pid records.** A `--keep-vms` VMM's pid-file record is
+  marked `keep`: such a slot is skipped, not reaped, by the next build (the
+  "slot held" of Decision 12), and `warden clean` reaps it. Records are
+  `<pid> <start> keep|- <exe>`, the exe last so a path with spaces round
+  trips (f4 finding 10).
+- **Relay memory 256 MiB**, not qemu's 512: inside the spike's 128 to 512
+  MiB result, with room for large captured bodies.
+- **`warden image prepare --driver firecracker` defaults to `ubuntu:24.04`**,
+  the image the spike and the native validation ran.
+- **Arch recorded as `amd64`.** The environment record and the guest-binary
+  lookups use Go's `amd64` (as qemu's records do) where Decision 14 wrote
+  `x86_64`; the host is x86_64 only either way (a9).
+- **Slot taken first.** StartBuild takes its slot right after preflight,
+  before the image conversion and rootfs copy, so a busy host fails before
+  minutes of staging (f4 finding 4).
+- **Setup refuses while a slot is in use (f4 finding 2, GLOBAL-06).**
+  Setup's reload flushes every `WARDEN-FC` rule and the bridge table before
+  rebuilding them, which would leave a running build's slot unfiltered for
+  the reload. Setup instead refuses, with a fix naming `warden clean` or
+  waiting, while any slot is in use: a process has one of its TAPs attached
+  (the kernel reports carrier on a TAP only then, checked on the spike host,
+  so running builds, `--keep-vms` VMs and orphans are found whoever started
+  them), or a build holds the slot's lock in the build user's lock dir. It
+  then holds the free slots' locks until it ends, so no build starts
+  mid-reload. Locks are taken on existing files only, so root never creates
+  a file in the user's cache; a slot the user never built on has none, a
+  residual race only for a user's first build. An upstream TAP that already
+  has exactly its host address is not flushed. An atomic reload
+  (`iptables-restore --noflush`, one `nft -f`) was the alternative; refusing
+  is smaller and leaves no window. `slots.sh` has the same carrier check and
+  address skip.
+- **Doctor under sudo (f4 finding 3)** checks the user who ran sudo: their
+  pid files (without creating lock files), their kvm group membership
+  instead of opening `/dev/kvm` as root, and it skips the reflink probe,
+  which would write as root into their cache.
+- **Pinned asset inputs (f4 finding 8).** `build-initramfs.sh` pins
+  busybox-static `1.37.0-r14` by version and sha256, and `build-kernel.sh`
+  the guest config's sha256. Alpine keeps only a branch's current package, so
+  a moved busybox fails the build with the fix (bump both).
 
 ## Archive summary
 
