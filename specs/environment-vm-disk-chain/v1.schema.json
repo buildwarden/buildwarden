@@ -8,7 +8,7 @@
   "required": ["type", "driver", "guest_os", "arch", "layers"],
   "properties": {
     "type": { "const": "vm-disk-chain/v1" },
-    "driver": { "type": "string", "description": "qemu, vz, hyperv, ..." },
+    "driver": { "type": "string", "description": "qemu, vz, hyperv, firecracker, ..." },
     "guest_os": { "type": "string", "description": "linux, windows, macos" },
     "arch": { "type": "string", "description": "Go architecture name, e.g. amd64, arm64" },
     "generation": { "type": "integer", "minimum": 1, "description": "Hyper-V VM generation (hyperv only)" },
