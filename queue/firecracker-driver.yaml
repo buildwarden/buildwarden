@@ -85,15 +85,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261102T220201Z
+      expires: 2026-11-03T00:02:11.0328706Z
 budget:
   estimate:
     runs: 12
     steps: 60
   spent:
-    runs: 1
-    steps: 7
+    runs: 2
+    steps: 8
 questions:
   - id: a12
     kind: assumed
@@ -340,3 +340,6 @@ history:
   - at: 2026-11-02T21:11:16Z
     by: human/jeff
     event: 'assumed question a12 confirmed: Confirmed option 1 (two-way MSS clamping plus RELATED for the relay''s own flows) after discussion, 2026-11-02'
+  - at: 2026-11-02T22:02:11Z
+    by: cloud/20261102T220201Z
+    event: claimed f3-implement until 2026-11-03T00:02:11Z
