@@ -153,14 +153,15 @@ steps:
     needs:
       - f6-merge-main-r2
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261102T220201Z
+      expires: 2026-11-03T02:09:43.7506125Z
   - id: f6-open-pr-r2
     phase: 6
     affinity: cloud
     status: pending
     needs:
       - f6-consolidate-r2
+      - f6-validate-linux-kvm
     lease:
       claimed_by: ""
       expires: null
@@ -170,7 +171,7 @@ budget:
     steps: 60
   spent:
     runs: 3
-    steps: 17
+    steps: 18
 questions:
   - id: a12
     kind: assumed
@@ -501,3 +502,6 @@ history:
   - at: 2026-11-03T00:09:30Z
     by: cloud/20261102T220201Z
     event: done f6-merge-main-r2
+  - at: 2026-11-03T00:09:43Z
+    by: cloud/20261102T220201Z
+    event: claimed f6-consolidate-r2 until 2026-11-03T02:09:43Z
