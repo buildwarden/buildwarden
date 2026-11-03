@@ -163,15 +163,15 @@ steps:
       - f6-consolidate-r2
       - f6-validate-linux-kvm
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261103T003746Z
+      expires: 2026-11-03T03:10:14.5649855Z
 budget:
   estimate:
     runs: 12
     steps: 60
   spent:
     runs: 3
-    steps: 20
+    steps: 21
 questions:
   - id: a12
     kind: assumed
@@ -526,3 +526,6 @@ history:
   - at: 2026-11-03T01:05:31Z
     by: host:linux-kvm/20261103T005339Z
     event: 'f6-validate-linux-kvm evidence (attended, Jeff watching): feat/firecracker-driver 824abd7 on windows-desktop WSL2 (6.18.54.1-warden+, Firecracker v1.17.0). Passed: setup --slots 4 and doctor; direct-boot build 5.3 s; Ubuntu 24.04 build with COPY and HTTPS 46 s; exclusive trust (1 cert); direct egress to 1.1.1.1:22 and 8.8.8.8:853 blocked; two concurrent builds on slots 0 and 1 with br_netfilter; build VM killed gives a prompt failure (10.1 s grace); warden kill -9 leaves no VMMs and the next build on slot 0 succeeds; nobody cannot reach relay :8300 or :8301; teardown clean; all 7 ledgers verify. Distro cases (Jeff: pass, gaps documented): FORWARD ACCEPT refusal carried from 96ca21a (posture.go unchanged); LAN-resolver and firewalld deferred to backlog firecracker-distro-lan-resolver and firecracker-distro-firewalld. Finding: a WSL distro restart re-applies rp_filter=2 to slot interfaces (doctor catches it; preflight does not). Evidence native/linux-kvm/2026-11-02/f6-attended/.'
+  - at: 2026-11-03T01:10:14Z
+    by: cloud/20261103T003746Z
+    event: claimed f6-open-pr-r2 until 2026-11-03T03:10:14Z
