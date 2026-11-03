@@ -63,8 +63,8 @@ steps:
       - f6-provision-linux-kvm-dns
       - f3-implement-r2
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: host:linux-kvm/20261103T005339Z
+      expires: 2026-11-03T02:53:44.9610896Z
     note: 'Blocking native validation (FLOW-09) per docs/design/firecracker-driver.md Validation plan. f6-open-pr must need this step once phase 6 is seeded. No machine serves linux-kvm in hosts.yaml yet (question a8 recommends windows-desktop under WSL2, plus a CI job that may later cover it), so wf validate flags this step until hosts.yaml lists it. needs f2-spike-linux-kvm added by host:linux-kvm/20261101T111001Z (unattended): wf next offered this phase-6 step while the feature is in phase 2 (ready() checks needs, not the feature phase), and wf gate woke windows-desktop for it; the Validation plan needs the implemented driver, so there was nothing to run. Stopgap until wf skips steps of a later phase; it should also need f3-implement once phase 3 is seeded.'
   - id: f6-provision-linux-kvm-dns
     phase: 6
@@ -171,7 +171,7 @@ budget:
     steps: 60
   spent:
     runs: 3
-    steps: 19
+    steps: 20
 questions:
   - id: a12
     kind: assumed
@@ -517,3 +517,6 @@ history:
   - at: 2026-11-03T00:52:02Z
     by: human/jeff
     event: done f6-provision-linux-kvm-dns
+  - at: 2026-11-03T00:53:44Z
+    by: host:linux-kvm/20261103T005339Z
+    event: claimed f6-validate-linux-kvm until 2026-11-03T02:53:44Z
