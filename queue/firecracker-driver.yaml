@@ -9,6 +9,9 @@ branch: feat/firecracker-driver
 alters_relationships: true
 design_review: required
 source: docs/design/firecracker-spike-plan.md on feat/firecracker-driver (Jeff pushed 55842b3, rebased onto main as 180c1db); older plan docs/design/firecracker-driver-plan.md on main
+pr:
+  number: 90
+  ci: pending
 steps:
   - id: p0-push-plan
     phase: 0
@@ -529,3 +532,6 @@ history:
   - at: 2026-11-03T01:10:14Z
     by: cloud/20261103T003746Z
     event: claimed f6-open-pr-r2 until 2026-11-03T03:10:14Z
+  - at: 2026-11-03T01:31:46Z
+    by: cloud/20261103T003746Z
+    event: 'PR #90 opened (wf-publish: main 216dff5 merged, design archived). CI repair 1: driver/relayvm golden test compared gzip bytes, which CI Go 1.27.3 encodes differently from go.mod 1.26.3 (216e555). Repair 2: the firecracker tier2 job failed DNS because the runner VPC resolver 10.0.0.2 is inside the relay build link 10.0.0.0/30; preflight and doctor now refuse it and the job sets public upstreams (8486b4d; Jeff); cross-driver move queued as build-link-subnet. The container integration job failed at docker info (runner flake) and was re-run.'
