@@ -1,6 +1,6 @@
 ---
 feature: wf-squash-merged-pr
-status: draft
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -178,12 +178,61 @@ Tier 0: the `check` and `queue` tests above, `make test` and `make lint` (the
 
 ## Consolidation
 
-Filled in at Publish.
+Branched from `origin/main` at `0728b26` (#91), still `main`: nothing landed
+to reconcile. #90 and #91, the two squash merges this design was checked
+against, are both on `main` at the fork.
+
+- **FLOW-15 sweep:** one helper added (`refMerged`), reached from `merged()`,
+  which `mergedEarly()`, the merge steps and `closed()` already share, so the
+  squash proof is in one place. `validateGaps()` reuses `oneOf()`. `overview.md`
+  describes the product components, not `tools/workflow`, and is unchanged.
+- **Found outside the design:** a stale `refs/remotes/origin/<branch>`, left
+  unpruned at a head older than the PR's (the tick fetches without
+  `--prune`), has a tree no PR commit matches, so `merged()` fails safe and
+  the step escalates. Proposed as a follow-up in the PR: `git fetch --prune
+  origin` before the Merge and Close checks, or ignore the remote ref once
+  `ls-remote` shows the branch is gone.
+- **Task 5** (the workflow branch `README.md` gap statuses) is made on
+  `workflow` after merge; the PR gives the text.
 
 ## Rollback notes
 
-None yet.
+Revert the PR. `merged()` then fails on a squash-merged branch whose ref is
+still around, as before, and a `deferred` gap passes `wf validate` unchecked.
 
 ## Archive summary
 
-Filled in at Publish.
+Approved at design review r1 (2026-11-03, Jeff); implemented and published
+the same day as a process item. The PR to `main` carries this design.
+
+- **Built.** `check.merged()` checks every branch ref still around, local and
+  remote. Each must be an ancestor of `origin/main` or, for a squash merge,
+  match the tree of a commit on `origin/main` naming the PR (`refMerged`).
+  With no ref left, the PR commit alone passes, as before. A failure names
+  the ref's tree and each PR commit's tree. Tests: `TestMergedBySquash`,
+  `TestSquashOfAnOlderHeadFails`, `TestCloseAfterASquash`.
+  `queue.validateGaps()`: gap status is `open | deferred | done`, and
+  `deferred` needs a note (`TestValidateGapStatus`,
+  `TestGateSkipsDeferredGaps`). FLOW-16 names the squash proof and allows
+  `git branch -D` for that case alone, after `wf check` passes; the
+  `workflow-tick` Close step and the `workflow-native` backlog step say the
+  same.
+- **Decisions taken:** a squash counts as merged only with an equal tree (a1);
+  `-D` only for a branch proved that way (a2); `deferred` is a third gap
+  status with a required note, skipped by the gate and native sessions, not
+  listed in `QUEUE.md` (a3, Jeff's option (b) at r1).
+- **Rejected:** trusting the PR-number commit alone while a ref exists (it
+  could delete commits pushed after the squash); allowing merge commits only
+  through the repository setting (a human can still squash in the UI);
+  keeping "never `-D`" and escalating every squash; re-homing a waiting gap to
+  a host nobody serves; listing deferred gaps under Needs Jeff.
+- **Verified live:** with the branch build, bootstrap-firecracker-row's
+  `x3-merge` (PR #91, squashed as `0728b26`) passes, read-only.
+- **For a future design touching `merge-detection`, `squash-merge`,
+  `branch-cleanup`, `native-gaps` or `backlog`:** equal trees are the normal
+  case only because Publish merges current `main` into the branch just before
+  the PR; a squash after `main` moved under the branch fails and escalates.
+  The check reads whatever refs are present, so a stale unpruned remote ref
+  also fails it (the open follow-up). A new gap status must be added to
+  `validateGaps()`, the gate in `hosts.go`, and the workflow branch
+  `README.md`.
