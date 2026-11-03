@@ -316,6 +316,15 @@ gaps:
       session still cannot fetch an image. The gate woke the machine because waiting branches
       moved (bootstrap-firecracker-row 798d96a, http-body-path-drift ad39ceb), neither of which
       touches driver/, cmd/ or tools/firecracker-vm, so no branch needs this case yet.
+      2026-11-03 (host:linux-kvm/20261103T171002Z, unattended, main still 1ef5547): not run,
+      nothing changed (firewalld inactive and dpkg `un` in WSL Ubuntu; distros Ubuntu and
+      podman-machine-default only; no image fetch possible). Woken because feat/build-link-subnet
+      appeared (design only, docs/design/build-link-subnet.md) and http-body-path-drift moved to
+      05d49e8 (relay/ only); neither touches driver/, cmd/ or tools/firecracker-vm. The 11:10Z
+      run was recorded `failed` by the wrapper, so its gate stamp never advanced and the same
+      moves re-trigger. Third consecutive skip; while the entry is `status: open` on linux-kvm
+      every branch move wakes this machine for it. Jeff can re-home it (host:) to a machine with
+      firewalld, or close it with a decision.
     status: open
   - id: firecracker-distro-lan-resolver
     host: linux-kvm
