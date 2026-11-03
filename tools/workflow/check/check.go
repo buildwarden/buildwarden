@@ -229,27 +229,77 @@ func (c *checker) prGreen() {
 	c.add("PR open with CI green (FLOW-11)", ok, "pr %+v", c.f.PR)
 }
 
-// merged confirms the human's merge (FLOW-08): the branch head, local or
-// remote, is contained in origin/main, or, once GitHub has deleted the
-// branch, origin/main carries the PR's merge commit.
+// merged confirms the human's merge (FLOW-08). Each branch head still
+// around, local or remote, must be contained in origin/main, or, for a
+// squash merge, origin/main must carry a commit naming the PR whose tree is
+// the head's tree (FLOW-16). Once GitHub has deleted the branch, the PR's
+// commit on origin/main alone is the proof.
 func (c *checker) merged() {
 	const name = "merged by a human (FLOW-08)"
+	var prCommits []string
+	if c.f.PR != nil && c.f.PR.Number > 0 {
+		out, _ := c.git("log", "origin/main", "--format=%h %s", "-E",
+			fmt.Sprintf("--grep=(Merge pull request |\\()#%d([^0-9]|$)", c.f.PR.Number))
+		if out != "" {
+			prCommits = strings.Split(out, "\n")
+		}
+	}
+	var infos []string
 	for _, ref := range []string{"refs/heads/" + c.f.Branch,
 		"refs/remotes/origin/" + c.f.Branch} {
 		if _, err := c.git("rev-parse", "--verify", "--quiet", ref); err != nil {
 			continue
 		}
-		_, err := c.git("merge-base", "--is-ancestor", ref, "origin/main")
-		c.add(name, err == nil, "%s is contained in origin/main", ref)
+		info, ok := c.refMerged(ref, prCommits)
+		if !ok {
+			c.add(name, false, "%s", info)
+			return
+		}
+		infos = append(infos, info)
+	}
+	if len(infos) > 0 {
+		c.add(name, true, "%s", strings.Join(infos, "; "))
 		return
 	}
 	if c.f.PR == nil || c.f.PR.Number == 0 {
 		c.add(name, false, "no %s branch and no PR recorded", c.f.Branch)
 		return
 	}
-	out, _ := c.git("log", "origin/main", "--format=%h %s", "-E",
-		fmt.Sprintf("--grep=(Merge pull request |\\()#%d([^0-9]|$)", c.f.PR.Number))
-	c.add(name, out != "", "PR #%d on origin/main: %s", c.f.PR.Number, firstLine(out))
+	c.add(name, len(prCommits) > 0, "PR #%d on origin/main: %s", c.f.PR.Number,
+		firstLine(strings.Join(prCommits, "\n")))
+}
+
+// refMerged reports whether ref is on origin/main: an ancestor of it, or
+// squashed into one of prCommits with an identical tree. The tree comparison
+// is what makes deleting a squashed branch safe: a head pushed past the
+// squash, or a squash of an older head, has a different tree.
+func (c *checker) refMerged(ref string, prCommits []string) (string, bool) {
+	if _, err := c.git("merge-base", "--is-ancestor", ref, "origin/main"); err == nil {
+		return ref + " is contained in origin/main", true
+	}
+	if len(prCommits) == 0 {
+		return ref + " is not contained in origin/main and no PR commit is on it", false
+	}
+	tree, _ := c.git("rev-parse", ref+"^{tree}")
+	var seen []string
+	for _, line := range prCommits {
+		sha := strings.Fields(line)[0]
+		pt, _ := c.git("rev-parse", sha+"^{tree}")
+		if pt != "" && pt == tree {
+			return fmt.Sprintf("%s squash-merged as %s (tree %s)", ref, line, short(tree)),
+				true
+		}
+		seen = append(seen, fmt.Sprintf("%s tree %s", sha, short(pt)))
+	}
+	return fmt.Sprintf("%s (tree %s) is not contained in origin/main, and no PR commit "+
+		"has its tree: %s", ref, short(tree), strings.Join(seen, ", ")), false
+}
+
+func short(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
 }
 
 // mergedEarly handles a PR the human merged before Publish's step was
