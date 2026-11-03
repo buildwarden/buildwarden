@@ -1110,8 +1110,11 @@ meets:
   tier-1 `schema-doc` check requires the two to change together. The
   document's note on the per-build writable disk, which said the disk is
   "created empty from the last disk", now also covers firecracker's per-build
-  copy of the raw image (still not a layer). All three are wording;
-  `specs_test.go` passes.
+  copy of the raw image (still not a layer). The schema's `layers` description
+  carried the same "created empty" sentence and lagged the document until the
+  second consolidation pass (review finding 18), which gave it the document's
+  wording. All are description text only, the format and constraints are
+  unchanged, and `specs_test.go` passes.
 - **#70 relay-leaf-crl.** The relay serves `/ca.crl`, which every leaf names.
   The firecracker relay VM runs the same `cmd/relay`, so it serves the CRL with
   no driver change.
@@ -1198,6 +1201,10 @@ branch):
 - *Overview.* `overview.md` has firecracker in the driver list and a
   Firecracker line in each step of "VM drivers" (claim with slot, isolate,
   deliver, start, watch), and that matches `driver_linux.go`.
+- *Second pass (after the return to Implement).* The only code since the first
+  pass is `be859f8`, which drops `linuxguest`'s `hashFile` for
+  `driver.HashFileSHA256`. It leaves no new dead code or duplication and
+  changes no flow, so `overview.md` needs nothing.
 
 **Archive.** Not done in this step. The design is archived and its summary
 filled at `f6-open-pr` (FLOW-12). That should wait for the blocking
