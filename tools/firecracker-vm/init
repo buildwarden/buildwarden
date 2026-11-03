@@ -1,0 +1,35 @@
+#!/bin/sh
+# Firecracker direct-boot launcher (Decision 6 of docs/design/firecracker-driver.md).
+#
+# Mounts the pseudo-filesystems, sets the build link to the relay, and execs
+# warden-io, which the driver appends per build as /bin/warden-io. Trust, the
+# build script and context come from the relay; DNS is warden-io's (BOOT-03).
+# When warden-io exits, PID 1 is gone, the kernel panics and panic=1 resets
+# the VM, which ends the Firecracker process.
+
+# The kernel starts PID 1 with no PATH, and warden-io passes its own on to
+# the build script.
+export PATH=/usr/sbin:/usr/bin:/sbin:/bin
+
+mount -t devtmpfs devtmpfs /dev
+mount -t proc proc /proc
+mount -t sysfs sysfs /sys
+mount -t tmpfs tmpfs /tmp
+
+# Disable IPv6 (prevents iptables bypass)
+echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6
+echo 1 > /proc/sys/net/ipv6/conf/default/disable_ipv6
+
+# The only NIC is the build link; virtio-net is built into the kernel.
+IF=$(ls /sys/class/net/ | grep -v '^lo$' | head -1)
+if [ -z "$IF" ]; then
+    echo "init: no network interface" >&2
+    exit 1
+fi
+ip link set lo up
+ip link set "$IF" up
+ip addr add 10.0.0.2/30 dev "$IF"
+ip route add default via 10.0.0.1
+
+echo "init: ready"
+exec /bin/warden-io initialize --gateway=10.0.0.1

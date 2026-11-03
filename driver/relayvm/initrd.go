@@ -1,4 +1,4 @@
-package qemu
+package relayvm
 
 import (
 	"compress/gzip"
@@ -6,35 +6,30 @@ import (
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 
 	"github.com/buildwarden/buildwarden/driver"
 )
 
-// relayInitrd returns the relay VM kernel and an initrd that is the prebuilt
-// base initramfs (tools/relay-vm) with the current relay binary appended at
-// /sbin/relay as a second cpio archive. The kernel unpacks concatenated
-// archives in order, so the base image never has to be rebuilt when the relay
-// changes, and the VM needs no shared disk to find its binary.
-func (d *Driver) relayInitrd(workDir string) (kernel, initrd string, err error) {
-	kernel, base, err := d.resolveRelayAssets()
+// RelayInitrd writes <workDir>/relay-initrd: the base relay initramfs with the
+// current relay binary for linux/goarch appended at /sbin/relay as a second
+// cpio archive. The kernel unpacks concatenated archives in order, so the base
+// image never has to be rebuilt when the relay changes, and the VM needs no
+// shared disk to find its binary.
+func RelayInitrd(base, workDir, goarch string) (string, error) {
+	relayBin, err := driver.GuestBinary("relay", "linux", goarch)
 	if err != nil {
-		return "", "", err
+		return "", err
 	}
-	relayBin, err := driver.GuestBinary("relay", "linux", runtime.GOARCH)
-	if err != nil {
-		return "", "", err
+	initrd := filepath.Join(workDir, "relay-initrd")
+	if err := AppendFileCPIO(base, initrd, relayBin, "sbin/relay"); err != nil {
+		return "", fmt.Errorf("composing relay initrd: %w", err)
 	}
-	initrd = filepath.Join(workDir, "relay-initrd")
-	if err := appendFileCPIO(base, initrd, relayBin, "sbin/relay"); err != nil {
-		return "", "", fmt.Errorf("composing relay initrd: %w", err)
-	}
-	return kernel, initrd, nil
+	return initrd, nil
 }
 
-// appendFileCPIO writes base followed by a gzip'd newc cpio archive holding
+// AppendFileCPIO writes base followed by a gzip'd newc cpio archive holding
 // src at path (mode 0755).
-func appendFileCPIO(base, out, src, path string) error {
+func AppendFileCPIO(base, out, src, path string) error {
 	dst, err := os.Create(out)
 	if err != nil {
 		return err

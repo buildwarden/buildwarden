@@ -30,7 +30,7 @@ Three rules hold for every driver (the full model is
 ```
 warden build <context>:
     req := resolve flags and config (driver, runtime, output dir, ...)
-    driver := select(req.driver)            # container | qemu | vz | hyperv
+    driver := select(req.driver)            # container | qemu | vz | hyperv | firecracker
     driver.StartBuild(req)                  # below; every driver has this shape
     print the result; exit with the build script's exit code
 ```
@@ -140,24 +140,35 @@ published with each release and run by digest.
 `warden shell` does the same with `initialize --hold`, then opens a shell in the
 held environment.
 
-## VM drivers (`driver/qemu`, `driver/hyperv`, `driver/vz`)
+## VM drivers (`driver/qemu`, `driver/hyperv`, `driver/vz`, `driver/firecracker`)
 
 ```
 start the relay VM (or, on VZ, a host relay process); claim it
+    firecracker: first take a free network slot made by `warden setup` (a host
+                 lock), kill VMMs a dead warden left on it, and claim the relay
+                 at the slot's upstream address
 
 isolate:   the build VM's only network interface leads to the relay
-           (QEMU socket pair, Hyper-V private switch, VZ socketpair)
+           (QEMU socket pair, Hyper-V private switch, VZ socketpair,
+            Firecracker: a TAP on the slot's host bridge, whose only other
+            port is the relay and which drops every frame bound for the host)
 
 deliver:   Linux guest   -> cloud-init CIDATA disk carrying warden-io
+                            (Firecracker: a read-only drive beside a per-build
+                             raw rootfs copy, or, with no image, warden-io
+                             appended to a launcher-only initramfs)
            Windows guest -> WARDEN seed disk carrying warden-io.exe and warden-run.ps1
            macOS (VZ)    -> warden-io baked into the prepared image (a known deviation)
 
 start:     boot the VM. Its launcher runs warden-io initialize:
-           Linux   -> cloud-init runcmd
+           Linux   -> cloud-init runcmd (Firecracker: ending in reboot -f), or
+                      the direct-boot launcher's exec of initialize
            Windows -> the warden-run startup task in the prepared image
            macOS   -> a launchd daemon
 
 watch:     wait for the session's completion
+           firecracker: the build VM's process exiting allows a 10 s grace for
+                        the completion; the relay VM's exiting fails at once
 ```
 
 ## warden-io initialize (`cmd/warden-io`)

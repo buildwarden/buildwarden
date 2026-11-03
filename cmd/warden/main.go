@@ -14,6 +14,7 @@ import (
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/container"
+	"github.com/buildwarden/buildwarden/driver/firecracker"
 	"github.com/buildwarden/buildwarden/driver/hyperv"
 	"github.com/buildwarden/buildwarden/driver/qemu"
 	"github.com/buildwarden/buildwarden/driver/vz"
@@ -91,7 +92,7 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&flagRuntime, "runtime", "",
 		"container runtime (finch, docker, podman)")
 	rootCmd.PersistentFlags().StringVar(&flagDriver, "driver", "",
-		"orchestration driver (container, qemu, vz, hyperv)")
+		"orchestration driver (container, qemu, vz, hyperv, firecracker)")
 	rootCmd.PersistentFlags().BoolVarP(&flagVerbose, "verbose", "v", false,
 		"verbose output")
 	rootCmd.PersistentFlags().StringVar(&flagColor, "color", "",
@@ -235,6 +236,10 @@ func newDriver(cfg *Config) (driver.Driver, error) {
 		d := hyperv.New()
 		d.Verbose = cfg.Output.Verbose
 		return d, nil
+	case "firecracker":
+		d := firecracker.New()
+		d.Verbose = cfg.Output.Verbose
+		return d, nil
 	default:
 		runtime, err := resolveRuntime(cfg)
 		if err != nil {
@@ -273,7 +278,7 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 		return nil, err
 	}
 
-	isVM := d == "qemu" || d == "vz" || d == "hyperv"
+	isVM := isVMDriver(d)
 
 	path := ""
 	if len(args) > 0 {

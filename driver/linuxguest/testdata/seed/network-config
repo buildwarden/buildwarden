@@ -1,0 +1,11 @@
+version: 2
+ethernets:
+  eth0:
+    match:
+      name: "e*"
+    addresses:
+      - 10.0.0.2/30
+    gateway4: 10.0.0.1
+    nameservers:
+      addresses:
+        - 10.0.0.1

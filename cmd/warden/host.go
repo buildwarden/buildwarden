@@ -9,6 +9,8 @@ import (
 
 	"github.com/spf13/cobra"
 
+	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/firecracker"
 	"github.com/buildwarden/buildwarden/driver/hyperv"
 	"github.com/buildwarden/buildwarden/driver/qemu"
 	"github.com/buildwarden/buildwarden/driver/vz"
@@ -25,6 +27,7 @@ import (
 var (
 	flagSetupNATPrefix string
 	flagSetupHostIP    string
+	flagSetupSlots     int
 )
 
 var doctorCmd = &cobra.Command{
@@ -37,6 +40,10 @@ var doctorCmd = &cobra.Command{
   vz         Apple Silicon macOS; warden signed with the virtualization entitlement
   hyperv     hypervisor and management stack present; which privilege tier this
              process holds and which operations run, delegate, or are blocked
+  firecracker  /dev/kvm, the firecracker binary and boot assets, network slots
+             owned by this user and their sysctls, an off-host resolver,
+             reflink on the cache, orphaned VMMs; run as root it also checks
+             the bridge table, WARDEN-FC rules and FORWARD policy
 
 Exits non-zero when a required capability is unmet, so it is usable as a CI
 or agent gate.`,
@@ -51,6 +58,11 @@ or agent gate.`,
 		case "hyperv":
 			detected := hyperv.Detect(hypervNetwork(cfg))
 			if blocked := hyperv.Doctor(out, detected); blocked {
+				os.Exit(1)
+			}
+			return nil
+		case "firecracker":
+			if blocked := firecracker.Doctor(out); blocked {
 				os.Exit(1)
 			}
 			return nil
@@ -82,6 +94,12 @@ var setupCmd = &cobra.Command{
            rule for relay egress). Run from an elevated terminal; afterwards
            builds run as a Hyper-V Administrators member with no elevation.
            Existing resources are verified, not recreated.
+  firecracker  as root (sudo), create --slots network slots (default 16, at
+           most 256) owned by the invoking user: a bridge and three TAPs
+           each, their sysctls, the warden_fc bridge table and the WARDEN-FC
+           iptables chains. Refuses, printing the fix, on a host whose filter
+           FORWARD policy is ACCEPT or whose firewalld or nftables would drop
+           the relays' traffic. Runtime state: re-run after every reboot.
 
 Other drivers need no host setup; their base images are prepared with
 'warden image prepare'.`,
@@ -90,6 +108,13 @@ Other drivers need no host setup; their base images are prepared with
 		cfg, err := resolveConfig()
 		if err != nil {
 			return err
+		}
+		if cfg.Runtime.Driver == "firecracker" {
+			return firecracker.RunSetup(cmd.OutOrStdout(),
+				firecracker.SetupOptions{Slots: flagSetupSlots})
+		}
+		if flagSetupSlots != 0 {
+			return driver.Fixable("", "--slots is only used by --driver firecracker")
 		}
 		if cfg.Runtime.Driver != "hyperv" {
 			fmt.Fprintf(cmd.OutOrStdout(),
@@ -134,6 +159,8 @@ func init() {
 		"hyperv: NAT CIDR for relay egress (default 192.168.240.0/20)")
 	setupCmd.Flags().StringVar(&flagSetupHostIP, "host-ip", "",
 		"hyperv: host gateway IP on the NAT switch (default 192.168.240.1)")
+	setupCmd.Flags().IntVar(&flagSetupSlots, "slots", 0,
+		"firecracker: network slots to create, 1-256 (default 16)")
 
 	hypervServiceCmd.AddCommand(&cobra.Command{
 		Use:   "install",

@@ -127,6 +127,55 @@ rule that lets the build VM reach the control plane but drops it from the claim
 port. The claim endpoint lives only on the host-only NAT switch, so the build
 VM cannot reach it even before iptables.
 
+## Firecracker Driver — Topological Isolation
+
+The Firecracker driver uses the same two VMs and the same relay init as QEMU,
+but the link between them is on the host: a network slot that `sudo warden
+setup --driver firecracker` makes once per boot, so builds need no privilege.
+
+<a id="firecracker-slots"></a>
+
+### Network slots
+
+| Interface | Role | Address |
+|---|---|---|
+| `wfc<i>b` | Bridge joining the two TAPs below; IPv6 off, `rp_filter=1`, `arp_ignore=8` | none |
+| `wfc<i>r` | Relay VM's build NIC (eth0, `10.0.0.1/30` inside) | none |
+| `wfc<i>g` | Build VM's only NIC (eth0, `10.0.0.2/30` inside) | none |
+| `wfc<i>u` | Relay VM's upstream NIC (eth1); IPv6 off, `rp_filter=1` | host `100.64.88.0 + 4i + 1`/30, relay `+ 2` |
+
+Every slot reuses `10.0.0.1`/`10.0.0.2`: each bridge is its own segment with
+no host route. The TAPs belong to the user builds run as.
+
+### Bridge table and WARDEN-FC rules
+
+- `nft` bridge table `warden_fc`: its input hook drops every frame arriving
+  on a `wfc*` port, so nothing from a build segment reaches the host stack;
+  its forward hook passes frames only between a slot's own `wfc<i>r` and
+  `wfc<i>g`.
+- `WARDEN-FC-IN` (first in INPUT): drop `wfc<i>b`; from `wfc<i>u` accept only
+  ESTABLISHED from the slot's relay address; drop the rest of `wfc+`.
+- `WARDEN-FC-FWD` (first in FORWARD): from `wfc<i>u` with the relay's
+  address to the uplink accept, and its replies (ESTABLISHED, RELATED for
+  ICMP errors) back; TCP MSS clamped both ways to the uplink's MTU; anything
+  else from `wfc<i>u` dropped (anti-spoof: un-NATed build traffic never
+  leaves even if the relay's own rules are missing); within one bridge
+  accept; every other `wfc+` forward dropped.
+- `WARDEN-FC-OUT` (first in OUTPUT): to the relays accept ESTABLISHED and
+  ICMP RELATED, NEW `tcp/8301` only from the slot owner's uid, and drop the
+  rest, so no other local user reaches a relay's `:80`, `:443`, `:53` or
+  `:8300`, and the owner reaches only the claim port.
+- `WARDEN-FC6`: ip6tables drops all INPUT, FORWARD and OUTPUT on `wfc+`.
+- `WARDEN-FC-RAW` (raw PREROUTING): conntrack zone `i+1` per bridge, so
+  identical flows in two slots never share conntrack entries when
+  `br_netfilter` is loaded.
+- `WARDEN-FC-NAT`: MASQUERADE from `100.64.88.0/22` out of the uplink.
+
+Inside the relay VM the same iptables rules as QEMU's apply. Setup refuses to
+run on a host whose filter FORWARD policy is ACCEPT, or whose firewalld or
+nftables ruleset would drop the relays' traffic, because a DROP in WARDEN-FC
+is final but an ACCEPT there cannot override another table's drop.
+
 ## Common DNS Behavior
 
 All drivers configure the build environment to use the relay as its DNS server:

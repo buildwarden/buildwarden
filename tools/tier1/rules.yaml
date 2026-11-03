@@ -80,10 +80,10 @@ not_code: ["docs/", "*.md", ".github/", "LICENSE"]
 # needs every driver in `all` declared (the TEST-02 caveat). `interface` in a
 # design's drivers covers every driver.
 drivers:
-  all: [container, qemu, vz, hyperv]
+  all: [container, qemu, vz, hyperv, firecracker]
   dirs: [container, qemu, vz, hyperv, firecracker]
-  shared: ["driver/*.go", "driver/winguest/", "driver/script/", "relay/", "ledger/",
-    "collector/", "relaycfg/", "bootstrap/"]
+  shared: ["driver/*.go", "driver/winguest/", "driver/linuxguest/", "driver/relayvm/",
+    "driver/script/", "relay/", "ledger/", "collector/", "relaycfg/", "bootstrap/"]
 
 # BOOT-07: the bootstrap surface and the document that owns the model. The
 # relay's guest-facing endpoints are the control plane (/ca.pem, /v1/output,
@@ -100,10 +100,16 @@ bootstrap:
     - driver/container/container.go
     - "driver/container/images*"
     - cmd/warden-pause/
-    - driver/qemu/cloudinit.go
+    - driver/linuxguest/
     - driver/winguest/
     - "driver/hyperv/winseed*.go"
     - driver/vz/image.go
+    - "driver/firecracker/slots*.go"
+    - driver/firecracker/deliver_linux.go
+    - "driver/firecracker/vm*.go"
+    - driver/firecracker/setup.go
+    - driver/firecracker/posture.go
+    - tools/firecracker-vm/
 
 # RELAY-05: under specs/, each <dir>/v<N>.schema.json has a v<N>.md beside
 # it, and the two change together. prose_only dirs hold documents only.
@@ -131,6 +137,3 @@ design_tolerate:
   docs/design/hyperv-windows-prepare.md: [alters_relationships]
   docs/design/ledger-environment-types.md: [alters_relationships]
   docs/design/unified-bootstrap.md: [alters_relationships]
-  # design-front-matter-retrofit a6 gives it the queue slug firecracker-driver,
-  # not its file stem, until the firecracker-driver design resolves it.
-  docs/design/firecracker-driver-plan.md: [feature]

@@ -14,3 +14,5 @@ out.log
 .claude/settings.local.json
 .claude/worktrees/
 .scratch/
+# Built Windows binaries (warden.exe, warden-io-*.exe, ...) anywhere in the tree.
+warden*.exe

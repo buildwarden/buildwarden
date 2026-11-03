@@ -29,9 +29,11 @@ func TestCouplingChecks(t *testing.T) {
 			[]string{"reaches driver/vz/"}},
 		{"shared with too few drivers", map[string]string{
 			"docs/design/f.md": d([]string{"qemu", "vz"}), "relay/x.go": pkg},
-			(*Checker).DriversClaim, []string{"must also declare [container hyperv]"}},
+			(*Checker).DriversClaim, []string{"must also declare [container hyperv " +
+				"firecracker]"}},
 		{"shared with every driver", map[string]string{
-			"docs/design/f.md":  d([]string{"container", "qemu", "vz", "hyperv"}),
+			"docs/design/f.md": d([]string{"container", "qemu", "vz", "hyperv",
+				"firecracker"}),
 			"driver/session.go": pkg}, (*Checker).DriversClaim, nil},
 		{"shared under interface", map[string]string{
 			"docs/design/f.md": d([]string{"interface"}), "driver/vz/x.go": pkg,

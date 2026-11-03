@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/buildwarden/buildwarden/driver"
@@ -37,4 +38,13 @@ func windowsSeedDir(workDir, goarch string) (string, error) {
 		return "", err
 	}
 	return seedDir, nil
+}
+
+// WindowsImagePath is where `warden image prepare --driver qemu --os
+// windows` installs the base image for a guest arch ("" = host arch).
+func WindowsImagePath(arch string) string {
+	if arch == "" {
+		arch = runtime.GOARCH
+	}
+	return filepath.Join(driver.CacheDir(), "images", "windows-"+arch+".qcow2")
 }

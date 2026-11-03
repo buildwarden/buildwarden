@@ -84,3 +84,30 @@ func TestValidateFlagsForDriver(t *testing.T) {
 		t.Fatalf("--network refused by hyperv: %v", err)
 	}
 }
+
+func TestFirecrackerIsAVMDriver(t *testing.T) {
+	defer func() { flagCPUs, flagKeepVMs, flagImage, flagNetwork = 0, false, "", "" }()
+	if err := validateDriver("firecracker"); err != nil {
+		t.Fatalf("validateDriver(firecracker) = %v", err)
+	}
+	flagCPUs, flagKeepVMs, flagImage = 2, true, "disk.qcow2"
+	if err := validateFlagsForDriver("firecracker"); err != nil {
+		t.Fatalf("VM flags refused by firecracker: %v", err)
+	}
+	if err := validateFlagsForDriver("container"); err == nil ||
+		!strings.Contains(err.Error(), "firecracker") {
+		t.Fatalf("the VM-driver hint does not name firecracker: %v", err)
+	}
+	flagCPUs, flagKeepVMs, flagImage = 0, false, ""
+	flagNetwork = "warden-dev"
+	if err := validateFlagsForDriver("firecracker"); err == nil {
+		t.Fatal("--network accepted by firecracker")
+	}
+	if err := validateGuestOS("windows", "firecracker"); err == nil {
+		t.Fatal("--guest-os windows accepted by firecracker")
+	}
+	caches, err := layerCaches("firecracker")
+	if err != nil || caches["firecracker"] == nil {
+		t.Fatalf("layerCaches(firecracker) = %v, %v", caches, err)
+	}
+}
