@@ -4,7 +4,7 @@ priority: 21
 kind: process
 status: in_progress
 round: process
-phase: 3
+phase: 4
 design: docs/design/wf-squash-merged-pr.md
 branch: feat/wf-squash-merged-pr
 alters_relationships: null
@@ -29,6 +29,13 @@ steps:
       expires: null
   - id: x3-merge
     phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
     affinity: cloud
     status: pending
     lease:
@@ -67,3 +74,9 @@ history:
   - at: 2026-11-03T21:39:00Z
     by: cloud/20261103T210005Z-attended
     event: entered phase 3 (merge)
+  - at: 2026-11-03T21:43:59Z
+    by: cloud/20261103T210005Z-attended
+    event: done x3-merge
+  - at: 2026-11-03T21:43:59Z
+    by: cloud/20261103T210005Z-attended
+    event: entered phase 4 (close)
