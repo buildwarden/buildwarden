@@ -1,6 +1,6 @@
 ---
 feature: firecracker-driver
-status: active
+status: archived
 drivers: [container, qemu, vz, hyperv, firecracker]  # firecracker is new; qemu loses its Linux-guest seed, image catalog and relay-initrd helpers to driver/linuxguest and driver/relayvm, and its relay initramfs build gains an arch parameter; container, vz and hyperv declared for the cmd/warden wiring and the new shared driver/ packages (TEST-02 caveat)
 seams: [bootstrap-model]   # the per-driver mapping in bootstrap.md gains a firecracker row; every invariant unchanged (see Bootstrap comparison, question a2)
 surfaces: [cli, config]    # --driver firecracker and runtime.driver = "firecracker"; warden setup, doctor, clean and image for the driver
@@ -8,15 +8,16 @@ security_boundary: host-env  # also env-relay (host-local access to the relay is
 alters_relationships: true   # conservative: a new driver and a new bootstrap-model mapping row (a2); no relay, executor, collector or Driver-contract change
 design_review: required
 native_validation:
-  - {host: linux-kvm, blocking: true, reason: "driver/firecracker runs only on a Linux host with /dev/kvm; cloud sessions have none, and no CI job validates it yet (question a8). The Phase 0 spike also runs here (queue step f2-spike-linux-kvm)"}
+  - {host: linux-kvm, blocking: true, reason: "driver/firecracker runs only on a Linux host with /dev/kvm; cloud sessions have none, and no CI job validates it yet (question a8). The Phase 0 spike also runs here (queue step f2-spike-linux-kvm). Passed attended 2026-11-02 at 824abd7 (workflow native/linux-kvm/2026-11-02/f6-attended/README.md); FORWARD-ACCEPT refusal carried from 96ca21a; firewalld and LAN-resolver cases tracked in tier2_gaps"}
   - {host: qemu-any, blocking: false, reason: "regression: Linux-guest seed, image catalog and relay-initrd helpers move to driver/linuxguest and driver/relayvm; tools/relay-vm/build-initramfs.sh gains an arch parameter (default unchanged)"}
-  - {host: windows-hyperv, blocking: false, reason: "regression only: cmd/warden driver wiring and the shared driver/ packages; Hyper-V's relay boot disk and init are not touched"}
+  - {host: windows-hyperv, blocking: false, reason: "regression only: cmd/warden driver wiring and the shared driver/ packages; Hyper-V's relay boot disk and init are not touched. Passed at 96ca21a (backlog native-gaps firecracker-hyperv-cli-wiring, done)"}
   - {host: macos-vz, blocking: false, reason: "regression only: cmd/warden driver wiring and the shared driver/ packages"}
 tier2_gaps:
-  - {host: qemu-any, gap: "Linux guest build after the driver/linuxguest and driver/relayvm extraction and the relay initramfs arch parameter"}
-  - {host: windows-hyperv, gap: "Hyper-V build after the cmd/warden wiring change"}
-  - {host: macos-vz, gap: "VZ build after the cmd/warden wiring change"}
+  - {host: qemu-any, gap: "Linux guest build after the driver/linuxguest and driver/relayvm extraction and the relay initramfs arch parameter (backlog firecracker-qemu-linuxguest)"}
+  - {host: macos-vz, gap: "VZ build after the cmd/warden wiring change (backlog firecracker-vz-cli-wiring)"}
   - {host: linux-kvm, gap: "arm64 Firecracker hosts: no arm64 Linux KVM machine; x86_64 only in this feature (question a9)"}
+  - {host: linux-kvm, gap: "a distro running firewalld: setup and doctor with firewalld managing the FORWARD chain (backlog firecracker-distro-firewalld)"}
+  - {host: linux-kvm, gap: "a host whose only resolver is a LAN address: preflight's resolver check and fix text (backlog firecracker-distro-lan-resolver)"}
 rules: [ORCH-01, ORCH-02, ORCH-03, ORCH-04, GLOBAL-06, GLOBAL-07, GLOBAL-08, RELAY-02, RELAY-03, RELAY-04, RELAY-07, BOOT-01, BOOT-02, BOOT-03, BOOT-04, BOOT-05, BOOT-06, BOOT-07, EXEC-01, UX-01, UX-04, UX-07, TEST-02, TEST-03, TEST-04, TEST-08, SEC-01, FLOW-02, FLOW-06, FLOW-07, FLOW-09, FLOW-12, FLOW-14, FLOW-15, FLOW-19]
 concepts: [firecracker, microvm, kvm, two-vm-topology, tap-networking, host-bridge, network-slots, host-setup, direct-kernel-boot, cloud-init, raw-rootfs, gpt, image-cache, jailer, landlock, warm-pool, snapshot-resume, vsock, mmds, conntrack-zones, guest-kernel-config]
 related: [firecracker-spike-plan.md, firecracker-driver-plan.md, unified-bootstrap.md, relay-leaf-crl.md, ledger-environment-types.md, hyperv-windows-prepare.md, hyperv-driver-plan.md, vm-driver-release-plan.md, platform-compatibility.md, design-front-matter-retrofit.md]
@@ -1206,12 +1207,15 @@ branch):
   `driver.HashFileSHA256`. It leaves no new dead code or duplication and
   changes no flow, so `overview.md` needs nothing.
 
-**Archive.** Not done in this step. The design is archived and its summary
-filled at `f6-open-pr` (FLOW-12). That should wait for the blocking
-`f6-validate-linux-kvm` (FLOW-09), whose first attempt at `96ca21a` stopped in
+- *Last merge before the PR.* `main` merged again at `216dff5` (merge commit
+  `846ca3e`), clean. It adds PR #89 (`native-allowlist-scratch`), which touches
+  only `tools/workflow/native/settings.native.json` and its archived design;
+  nothing this feature meets.
+
+**Archive.** Done at `f6-open-pr`, after the blocking `f6-validate-linux-kvm`
+passed at `824abd7` (FLOW-09); its first attempt at `96ca21a` had stopped in
 preflight on WSL's loopback resolver
-(`native/linux-kvm/2026-11-02/f6-README.md`). The summary would otherwise
-describe a driver that has never passed its validation plan.
+(`native/linux-kvm/2026-11-02/f6-README.md`).
 
 ## Rollback notes
 
@@ -1377,6 +1381,73 @@ None changes a Decision or a confirmed question.
   the guest config's sha256. Alpine keeps only a branch's current package, so
   a moved busybox fails the build with the fix (bump both).
 
+### Native validation (f6-validate-linux-kvm, 2026-11-02)
+
+Passed attended at `824abd7` on windows-desktop's WSL2 `linux-kvm` host
+(evidence `native/linux-kvm/2026-11-02/f6-attended/README.md` on the workflow
+branch): setup with 4 slots, doctor as the user and under sudo, a direct-boot
+build, an Ubuntu 24.04 disk build with COPY and HTTPS, exclusive trust, blocked
+egress to unproxied addresses, two concurrent builds with `br_netfilter`
+loaded, the build VM killed mid-build, warden killed with `kill -9` (Pdeathsig
+took both VMMs, the slot was reused), another local user refused at the
+relay's ports, clean teardown, and every ledger verified. The FORWARD-ACCEPT
+refusal is carried from the first attempt at `96ca21a` (`posture.go` unchanged
+since). The firewalld and LAN-resolver cases were not run and are tracked
+(`tier2_gaps`; Jeff's call, 2026-11-02). The Windows Hyper-V regression passed
+at `96ca21a`. Findings, none blocking:
+
+- **WSL distro restarts loosen the slot `rp_filter`.** WSL's utility VM keeps
+  the slots, the nft table and the chains across a distro restart, but the
+  distro's systemd-sysctl applies Ubuntu's `rp_filter = 2` to every interface,
+  so the bridge and upstream TAP go from strict to loose. Doctor reports it;
+  preflight does not check sysctls, so builds still run. Isolation held (the
+  bridge-table and `WARDEN-FC` anti-spoof rules were intact). WSL-specific: on
+  a Linux host a reboot removes the interfaces too. Candidate fix: a preflight
+  check of the slot's sysctls, or a WSL note in the drivers guide.
+- **`--script` resolves against the current directory**, not the build
+  context, on every VM driver (shared `driver.StageBuildScript` behaviour on
+  `main`); the `cli.md` example reads as if it were relative to the project.
+- **An expected build-VM failure prints the bug-report link**, because the
+  error is not marked fixable. Minor.
+
 ## Archive summary
 
-<!-- Filled in at Publish (FLOW-12). -->
+Opened as a PR from `feat/firecracker-driver` (2026-11-02).
+
+- **Built.** A `firecracker` driver for x86_64 Linux hosts with `/dev/kvm`:
+  two Firecracker microVMs per build (the unchanged relay in `vm` mode on its
+  own x86_64 no-modules initramfs, and the build VM), each a `firecracker
+  --no-api --config-file` process with stdin `/dev/null`, `Setpgid` and
+  `Pdeathsig`. Networking is durable per-host slots that a root `warden setup
+  --driver firecracker [--slots N]` creates once (bridge, three TAPs, a /30 in
+  `100.64.88.0/22`, a bridge-family nft table, `WARDEN-FC` iptables chains with
+  MSS clamping and RELATED ICMP); builds then run unprivileged, take a slot by
+  lock and claim the relay over the upstream TAP. The build VM boots the pinned
+  Linux 6.1 kernel directly, either from a minimal build initramfs or from a
+  cloud image converted once to a raw rootfs (root found by GPT type GUID or
+  the single Linux-filesystem partition, PARTUUID) and copied per build, with
+  the qemu Linux-guest seed. `warden doctor`, `clean`, `image prepare/list/
+  verify` and the VM flags learn the driver. The qemu relay-VM lifecycle and
+  Linux-guest code moved to `driver/relayvm` and `driver/linuxguest`; the
+  relay initramfs build gained an arch parameter. Environment records carry
+  exact layers (`vm-disk-chain/v1`, now naming firecracker).
+- **Rejected.** A Firecracker-specific relay or init; vsock or rootfs mounts
+  for signaling; MMDS; per-build TAP and rule creation (needs `CAP_NET_ADMIN`
+  per build); the API socket; a warm pool or snapshots (cloned keys and CSPRNG
+  state, RELAY-03); the jailer (needs root per VM); converting images per
+  build; an atomic rule reload or a root-owned setup lock (setup refuses while
+  a slot is in use instead).
+- **For future designs.** x86_64 only; arm64 is untested (a9). No confinement
+  beyond Firecracker's seccomp: a VMM escape has the warden user's authority
+  (Security note); the jailer, Landlock or per-slot namespaces are a follow-up
+  for multi-tenant hosts. A warm pool must snapshot before claim, force a
+  reseed on restore and test that restored relays' keys differ (Decision 9).
+  Setup's lock coverage depends on finding the user's lock dir
+  (`XDG_CACHE_HOME` under sudo) and `slots.sh` holds no lock through its
+  reload. WSL needs a boot unit for the FORWARD DROP, a non-loopback resolver,
+  and re-running setup after a distro restart resets `rp_filter`. The uplink
+  MTU can be below the TAPs', so MSS clamping both ways is load-bearing. The
+  `firecracker.yml` CI job first runs on this PR. Open native gaps: qemu-any
+  Linux guests after the extraction, macos-vz CLI wiring, firewalld, a LAN
+  resolver. The `bootstrap.md` firecracker row is the process item
+  `bootstrap-firecracker-row`, merged after this feature.
