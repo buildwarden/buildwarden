@@ -3,7 +3,7 @@ title: Firecracker driver
 priority: 16
 status: in_progress
 round: feature
-phase: 5
+phase: 6
 design: docs/design/firecracker-driver.md
 branch: feat/firecracker-driver
 alters_relationships: true
@@ -135,7 +135,32 @@ steps:
   - id: f5-guide-r2
     phase: 5
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main-r2
+    phase: 6
+    affinity: cloud
     status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate-r2
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-merge-main-r2
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr-r2
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-consolidate-r2
     lease:
       claimed_by: ""
       expires: null
@@ -145,7 +170,7 @@ budget:
     steps: 60
   spent:
     runs: 3
-    steps: 15
+    steps: 16
 questions:
   - id: a12
     kind: assumed
@@ -461,3 +486,12 @@ history:
   - at: 2026-11-03T00:08:32Z
     by: cloud/20261102T220201Z
     event: entered phase 5 (guide)
+  - at: 2026-11-03T00:09:14Z
+    by: cloud/20261102T220201Z
+    event: claimed f5-guide-r2 until 2026-11-03T02:09:14Z
+  - at: 2026-11-03T00:09:14Z
+    by: cloud/20261102T220201Z
+    event: done f5-guide-r2
+  - at: 2026-11-03T00:09:14Z
+    by: cloud/20261102T220201Z
+    event: entered phase 6 (publish)
