@@ -431,7 +431,8 @@ func TestMergedBySquash(t *testing.T) {
 	git(t, work, "fetch", "-q", "origin")
 	git(t, work, "checkout", "-q", "main")
 	git(t, work, "branch", "-q", "-D", "feat/demo")
-	if got := failures(Phase(env, f)); !strings.Contains(got, "refs/remotes/origin/feat/demo") {
+	got := failures(Phase(env, f))
+	if !strings.Contains(got, "refs/remotes/origin/feat/demo") {
 		t.Errorf("remote head past the squash: %q, want it named as unmerged", got)
 	}
 }

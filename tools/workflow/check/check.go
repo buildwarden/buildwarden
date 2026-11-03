@@ -237,9 +237,9 @@ func (c *checker) prGreen() {
 func (c *checker) merged() {
 	const name = "merged by a human (FLOW-08)"
 	var prCommits []string
-	if c.f.PR != nil && c.f.PR.Number > 0 {
+	if pr := c.f.PR; pr != nil && pr.Number > 0 {
 		out, _ := c.git("log", "origin/main", "--format=%h %s", "-E",
-			fmt.Sprintf("--grep=(Merge pull request |\\()#%d([^0-9]|$)", c.f.PR.Number))
+			fmt.Sprintf("--grep=(Merge pull request |\\()#%d([^0-9]|$)", pr.Number))
 		if out != "" {
 			prCommits = strings.Split(out, "\n")
 		}
@@ -286,8 +286,8 @@ func (c *checker) refMerged(ref string, prCommits []string) (string, bool) {
 		sha := strings.Fields(line)[0]
 		pt, _ := c.git("rev-parse", sha+"^{tree}")
 		if pt != "" && pt == tree {
-			return fmt.Sprintf("%s squash-merged as %s (tree %s)", ref, line, short(tree)),
-				true
+			return fmt.Sprintf("%s squash-merged as %s (tree %s)", ref, line,
+				short(tree)), true
 		}
 		seen = append(seen, fmt.Sprintf("%s tree %s", sha, short(pt)))
 	}

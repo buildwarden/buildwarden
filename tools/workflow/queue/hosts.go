@@ -127,13 +127,14 @@ func (s *State) Machine(name string) (*Machine, error) {
 func (s *State) validateGaps() []string {
 	var errs []string
 	for _, g := range s.Gaps {
+		bad := func(format string, a ...any) {
+			errs = append(errs, "backlog: gap "+g.ID+": "+fmt.Sprintf(format, a...))
+		}
 		if !oneOf(g.Status, "open", "deferred", "done") {
-			errs = append(errs, fmt.Sprintf(
-				"backlog: gap %s: status %q is not open, deferred or done", g.ID, g.Status))
+			bad("status %q is not open, deferred or done", g.Status)
 		}
 		if g.Status == "deferred" && strings.TrimSpace(g.Note) == "" {
-			errs = append(errs, fmt.Sprintf(
-				"backlog: gap %s: deferred needs a note saying what it waits on", g.ID))
+			bad("deferred needs a note saying what it waits on")
 		}
 	}
 	return errs
