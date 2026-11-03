@@ -1,0 +1,183 @@
+---
+feature: wf-squash-merged-pr
+status: draft
+drivers: []
+seams: []
+surfaces: []
+security_boundary: none
+alters_relationships: false
+design_review: required
+native_validation: []
+tier2_gaps: []
+rules: [FLOW-08, FLOW-09, FLOW-13, FLOW-16, TEST-03]
+concepts: [workflow, merge-detection, squash-merge, branch-cleanup, native-gaps, backlog]
+related: [wf-merged-counts-as-pushed.md]
+---
+
+# wf recognises squash merges; backlog gaps can be deferred
+
+## Problem
+
+**Squash merges.** firecracker-driver's PR #90 was squash-merged to `main` as
+`1ef5547 Firecracker driver (#90)`, and GitHub deleted its branch. The queue
+could not move past Publish. `f6-open-pr-r2` was released, and on 2026-11-03
+Jeff marked f6, f7 and f8 done by hand. While it was stuck, it held the single
+PR slot, so http-body-path-drift could not publish.
+
+The cause is `check.merged()` in `tools/workflow/check/check.go`. It walks
+`refs/heads/<branch>` and then `refs/remotes/origin/<branch>`. At the first
+ref that exists, it asks whether that ref is an ancestor of `origin/main` and
+returns the answer. It falls back to searching `main`'s log for the PR number
+only when neither ref exists. A squash merge never makes the branch head an
+ancestor of `main`, so the check fails whenever a ref is still around. That
+covers a cloud checkout that still has the local branch, and a remote-tracking
+ref that has not been pruned. `mergedEarly()` (phase 6, process phase 2),
+`f7-merge`/`x3-merge` and `closed()` (phase 8, process phase 4) all go through
+`merged()`, so all of them fail the same way. PR #91 was squash-merged too
+(`0728b26 ... (#91)`), so the next tick's `x3-merge` will hit this as soon as
+the cloud checkout holds `feat/bootstrap-firecracker-row`.
+
+Close has a second problem: FLOW-16 deletes a merged branch only with
+`git branch -d`, never `-D`, and `-d` refuses a squash-merged branch. Even
+with merge detection fixed, Close cannot delete the local branch, and per
+FLOW-16 it would escalate.
+
+**Deferred gaps.** `backlog/native-gaps.yaml` entries are `open | done`.
+`firecracker-distro-firewalld` needs a host that does not exist yet. Each push
+to a waiting branch woke windows-desktop for it, three runs in a row, and
+each run skipped it. On 2026-11-03 Jeff set it to `status: deferred`. The gate
+(`hosts.go`) wakes only for `open`, so the wake-ups stop. But `deferred` is
+undocumented, `wf validate` does not check gap statuses, and a deferred gap
+appears nowhere in `QUEUE.md`, so it could be forgotten.
+
+## Prior art
+
+- `wf-merged-counts-as-pushed` (eca1a46) added `mergedEarly()` and the
+  PR-number search for a branch GitHub has deleted. This design extends the
+  same search to a branch that still exists but was squashed.
+- FLOW-16 already allows proof by "the PR's merge commit". A squash commit is
+  the PR's merge commit for a squash merge. What a squash cannot show is that
+  the branch's content is on `main`, which is what FLOW-16's safety rule is
+  for.
+
+## Decisions
+
+1. **`merged()` accepts a squash merge** (question a1). For each existing ref,
+   the check passes when the ref is an ancestor of `origin/main` (as today),
+   or when `origin/main` has a commit naming the PR (the existing
+   `(Merge pull request |\()#N` search) whose tree equals the ref's tree. The
+   tree comparison is the proof: the squash produced exactly the branch's
+   content, so deleting the branch loses nothing. With no ref, the PR search
+   alone passes, as today, because GitHub deletes the branch only on merge.
+
+   Checked against the real squash merges: the trees of PR #90's head and
+   `1ef5547` are identical (`b855cee`), and so are PR #91's head and `0728b26`
+   (`bfdb82e`). Publish merges current `main` into the branch just before the
+   PR (f6's "current main merged"), which makes equal trees the normal case.
+
+   If the PR commit exists but the trees differ (`main` moved under the
+   branch between its last main-merge and the squash), the check fails and
+   names both commits, and the step escalates as any failed merge check does.
+
+   *Rejected:* trusting the PR-number commit alone when a ref exists. That
+   could delete commits pushed to the branch after the squash. Also rejected:
+   requiring merge commits through the repository setting alone, because a
+   human can still pick squash in the GitHub UI.
+
+2. **FLOW-16 names the squash case** (question a2). The rule text becomes:
+   contained in trunk means `git branch --merged`, the PR's merge commit, or,
+   for a squash merge, a commit on trunk naming the PR whose tree equals the
+   branch head's tree. In that last case Close deletes the local branch with
+   `git branch -D`, the one use of `-D` the rule allows, and only after
+   `wf check` passed. The `workflow-tick` Close step says the same.
+
+3. **`deferred` is a gap status** (question a3). Backlog gaps are
+   `open | deferred | done`.
+   - `deferred` needs a dated `note` saying what it waits on and who
+     provides it.
+   - `wf validate` rejects any other status, and a deferred gap without a
+     note.
+   - The gate and `workflow-native` skip deferred gaps.
+   - `QUEUE.md`'s Needs Jeff section lists each deferred gap with the first
+     line of its note, so it stays visible.
+   - The status goes back to `open` once the wait is over, by hand or
+     through `workflow-human`.
+
+## Questions
+
+### Blocking
+
+None.
+
+### Assumed
+
+- **a1. How a squash merge counts as merged.** Proceeding with: a commit on
+  `origin/main` naming the PR whose tree equals the branch ref's tree; confirm.
+  Options:
+  - (a) the PR commit plus tree equality;
+  - (b) the PR commit alone, even when a ref exists;
+  - (c) no wf change: set the repository to allow merge commits only, and
+    record a squash by hand.
+
+  Recommended: (a).
+- **a2. FLOW-16 and `-D`.** Proceeding with allowing `git branch -D` only for a
+  squash-merged branch proved by a1(a); confirm. Options:
+  - (a) allow it in that case;
+  - (b) keep "never `-D`" and always escalate a squash-merged local branch to
+    Jeff.
+
+  Recommended: (a).
+- **a3. Deferred gaps.** Proceeding with `deferred` as a third status that
+  needs a note, is skipped by the gate, and is listed in QUEUE.md's Needs Jeff;
+  confirm. Options:
+  - (a) as stated;
+  - (b) `deferred` without the Needs Jeff listing;
+  - (c) no new status: re-home the entry to a `host:` nobody serves.
+
+  Recommended: (a).
+- **a4. Holds nothing.** The change reaches the running loop only when merged,
+  and no step in flight depends on the old behaviour; confirm.
+
+## Design
+
+| Site | Change |
+|---|---|
+| `tools/workflow/check/check.go` `merged()` | per ref: ancestor, **or** PR commit on `origin/main` with an equal tree; failure detail names the PR commit and both trees |
+| `tools/workflow/check/check_test.go` | squash merge with the local ref present passes; squash with differing trees fails; a ref pushed past the squash fails; the existing deleted-branch and `#50`/`#5` cases stay |
+| `tools/workflow/queue/hosts.go` | validate gap status ∈ {open, deferred, done}; deferred needs a note (the gate already wakes only for `open`) |
+| `tools/workflow/queue/summary.go` | Needs Jeff lists deferred gaps; `testdata/queue.md` golden updated |
+| `docs/development/process.md` FLOW-16 | the squash case and its single `-D` |
+| `.claude/skills/workflow-tick/SKILL.md` Close | squash-merged branch: `-D` after `wf check` passes |
+| `.claude/skills/workflow-native/SKILL.md` | backlog: `open` entries only; deferred ones are not retried |
+| workflow branch `README.md` | gap statuses (follow-up commit on `workflow` after merge) |
+
+## Validation plan
+
+Tier 0: the `check` and `queue` tests above, `make test` and `make lint` (the
+`tools/workflow` module). No native validation: nothing here runs on a host.
+
+## Implementation plan
+
+1. `merged()` with tree equality, plus tests (FLOW-08, FLOW-16).
+2. Gap status validation and the Needs Jeff listing, plus tests and golden
+   (FLOW-09, TEST-03).
+3. FLOW-16 text, then the `workflow-tick` Close and `workflow-native` backlog
+   wording (FLOW-14).
+4. `make test`, `make lint`. Archive the design, then open the PR (x2).
+5. After merge: the workflow branch `README.md` gap schema line.
+
+## Design review
+
+None yet.
+
+## Consolidation
+
+Filled in at Publish.
+
+## Rollback notes
+
+None yet.
+
+## Archive summary
+
+Filled in at Publish.
