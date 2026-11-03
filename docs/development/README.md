@@ -145,5 +145,3 @@ what each item is.
   designs, kept in `backlog/native-gaps.yaml` on the `workflow` branch and
   drained by native sessions (`/workflow-native <host>`, and the scheduled
   per-machine sessions of [`native-host-loop.md`](../design/native-host-loop.md)).
-- **Feature — Firecracker driver** [`firecracker-driver`]: the plan in
-  [`firecracker-driver-plan.md`](../design/firecracker-driver-plan.md).
