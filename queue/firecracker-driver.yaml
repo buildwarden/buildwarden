@@ -508,3 +508,6 @@ history:
   - at: 2026-11-03T00:11:47Z
     by: cloud/20261102T220201Z
     event: done f6-consolidate-r2
+  - at: 2026-11-03T00:36:42Z
+    by: human/jeff
+    event: 'done f6-provision-linux-kvm-dns: option (a), /etc/wsl.conf [network] generateResolvConf=false and a static /etc/resolv.conf with 8.8.8.8 and 8.8.4.4 (Jeff, 2026-11-02). Verified attended on feat/firecracker-driver 824abd7: sudo warden setup --driver firecracker --slots 4 ok (16 interfaces), sudo warden doctor reports upstream DNS for the relay ok (8.8.8.8, 8.8.4.4); boot assets not built in that scratch tree (the native run builds them). Slots removed afterwards (slots.sh down).'
