@@ -1,0 +1,191 @@
+{
+  "feature": "firecracker-driver",
+  "branch": "feat/firecracker-driver",
+  "head": "be859f8108d2",
+  "base": "e4188716c87f",
+  "round": "feature",
+  "step": "f4-review-r2",
+  "previous_report": "reports/firecracker-driver/c0d117636821.json",
+  "scope": "git diff origin/main...feat/firecracker-driver (LINT-04). After the a1e6a95 merge of origin/main, the merge base is origin/main itself (e418871). Tier 1 ran on the full diff. Tier 2 judged in depth only the range c0d1176..be859f8, branch-side: a1bb0e3 (guide pages), a1e6a95 (merge, no conflicts), 5914299 / e470d3f / ea94596 (consolidation: design section, specs/environment-vm-disk-chain/v1.md and v1.schema.json, CONTRIBUTING.md) and be859f8 (linuxguest uses driver.HashFileSHA256). Main's own changes that came in through the merge are out of scope.",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass on the windows host: 0 issues in the root module, tools/workflow and tools/tier1; then dist/tier1 (e4188716c87f...be859f8108d2): 0 MUST, 0 MUST-review, 0 SHOULD, 1 hint, 0 suppressed, exit 0",
+    "make_lint_per_platform": "GOOS=linux make lint and GOOS=darwin make lint: both pass with 0 issues and the same tier1 result (FLOW-17).",
+    "make_test": "pass: 30 ok lines, no FAIL, exit 0 (root module, tools/workflow, tools/tier1) on windows. specs/specs_test.go, which arrived with the merge, is among them.",
+    "linux_tier0": "Not re-run by the linter. be859f8 changes only driver/linuxguest/images.go, which has no build tag and is covered by the windows run and by GOOS=linux lint.",
+    "custom_static_checks": "tier1: findings none, suppressed none, hints = 1 x BOOT-07 bootstrap-surface (driver/firecracker/deliver_linux.go), judged as before (finding 6). RELAY-05's schema-doc check passes: e470d3f changed the schema together with its document.",
+    "counts": {
+      "MUST": 0,
+      "MUST-review": 0,
+      "SHOULD": 0,
+      "hint": 1,
+      "suppressed": 0
+    },
+    "fixes_made": "none"
+  },
+  "prior_findings": [
+    {
+      "id": 6,
+      "rule": "BOOT-07",
+      "severity": "SHOULD",
+      "status": "carried forward unchanged",
+      "note": "Still true. The merge brought only #75's wording change to bootstrap.md; the firecracker row and the cloudinit.go path are still the bootstrap-firecracker-row process item."
+    },
+    {
+      "id": 12,
+      "rule": "TEST-08",
+      "severity": "SHOULD",
+      "status": "carried forward unchanged",
+      "note": "Still true; nothing in the range touches the security corpus or queue/security-suite.yaml."
+    },
+    {
+      "id": 16,
+      "rule": "GLOBAL-06",
+      "severity": "SHOULD",
+      "status": "carried forward unchanged",
+      "note": "No slot or lock code changed in the range. The installation guide now states setup's refusals accurately."
+    }
+  ],
+  "findings": [
+    {
+      "id": 6,
+      "rule": "BOOT-07",
+      "related_rules": ["FLOW-14"],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "docs/development/bootstrap.md",
+      "line": 195,
+      "finding": "Carried forward unchanged. The tier-1 BOOT-07 hint is an accepted model change (r1, a2), with the bootstrap.md edit moved to process item bootstrap-firecracker-row (still pending). Until it lands, bootstrap.md names driver/qemu/cloudinit.go (deleted on this branch), has no firecracker row, and disagrees with rules.yaml's surface (which includes setup.go and posture.go).",
+      "suggestion": "Say this in the PR body. Either Jeff takes bootstrap-firecracker-row right after merge, carrying slots*.go, vm*.go, deliver_linux.go, setup.go, posture.go and tools/firecracker-vm/ into the row, or the path correction is folded in here."
+    },
+    {
+      "id": 12,
+      "rule": "TEST-08",
+      "related_rules": ["SEC-03", "SEC-01"],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "docs/design/firecracker-driver.md",
+      "line": 1052,
+      "finding": "Carried forward unchanged. Plan step 13 (add the Security note's TEST-08 cases to the corpus) cannot be done: no corpus exists, and queue/security-suite.yaml does not mention firecracker.",
+      "suggestion": "Add the case table, or a pointer to it, to queue/security-suite.yaml or the backlog. Say in the PR body that step 13 is deferred and that the release trips GLOBAL-06, so TEST-08 applies."
+    },
+    {
+      "id": 16,
+      "rule": "GLOBAL-06",
+      "related_rules": ["UX-04", "FLOW-06"],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "docs/design/firecracker-driver.md",
+      "line": 1240,
+      "finding": "Carried forward unchanged. Remaining residuals, accurately stated in the design note and acceptable for Jeff to sign off: (1) XDG_CACHE_HOME: under a sudo that drops it, setup (and slots.sh, which reads only ~/.cache) holds or checks locks no build takes; running VMs are still found by carrier, a build starting during setup is not. (2) slots.sh holds no lock through its reload; it is the documented debugging stand-in. An owner-planted FIFO blocks the user's flock child and so the script; self-inflicted and low.",
+      "suggestion": "Carry both residuals into the PR body's security note for acknowledgement at merge (FLOW-08). Take the root-owned setup gate later only if a user reports the XDG case."
+    },
+    {
+      "id": 18,
+      "rule": "RELAY-05",
+      "related_rules": ["FLOW-15"],
+      "severity": "SHOULD",
+      "check": "automated + agent-judgment",
+      "file": "specs/environment-vm-disk-chain/v1.schema.json",
+      "line": 18,
+      "finding": "New. The schema and its document now describe the per-build writable disk differently. 5914299 rewrote v1.md:49 to read: the per-build writable disk is not a layer, either an empty child of the last disk or, for firecracker, a copy of the raw image. The schema's `layers` description at v1.schema.json:18 still says only that the writable child 'is created empty from the last disk'. e470d3f updated just the `driver` description, which is the part tier 1's schema-doc check looks at, and the design (firecracker-driver.md:1111, 'All three are wording') reads as if the schema had been aligned too. RELAY-05 says doc and machine schema are 'enforced to match'. Here they disagree only in a non-normative description string, and specs_test.go does not compare descriptions, so this is SHOULD. Checked: the format did not change. The diff against origin/main touches only the two description strings and two prose lines; `driver` stays an open string, with no enum or const; required members, roles, additionalProperties and $id are unchanged; specs_test passes.",
+      "suggestion": "One-line wording fix on the branch (wf-implement or Publish): set the `layers` description to match the document, e.g. 'The per-build writable disk is not a layer: an empty child of the last disk, or (firecracker, a raw image with no overlay) a copy of it.' Optionally make the design's sentence at :1111 say which strings changed."
+    }
+  ],
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 0,
+    "SHOULD": 4
+  },
+  "counts_note": "Tier 1: MUST 0. Tier 2: MUST 0, MUST-review 0, SHOULD 4 (6, 12 and 16 carried forward; 18 new).",
+  "resolved_since_previous": [],
+  "carried_forward": [6, 12, 16],
+  "new_since_previous": [18],
+  "suppressions": [],
+  "suppressions_note": "The previous report recorded no suppressions, and tier 1 applied no Tier1-Allow trailers, so none carry over.",
+  "range_review": [
+    {
+      "commit": "be859f8",
+      "verdict": "clean",
+      "note": "driver.HashFileSHA256 (driver/layercache.go:239) is the same function: open, sha256 over io.Copy, lowercase hex. So DownloadImage's .sha256 sidecar and VerifyImageIntegrity give byte-identical results, and existing caches still verify. linuxguest already imported driver, so there is no new dependency and no cycle. Both call sites are converted and no hashFile reference is left anywhere in the repo. The design's 'three call sites' (5914299) is corrected to 'both' in the same commit."
+    },
+    {
+      "commit": "e470d3f / ea94596",
+      "verdict": "clean apart from finding 18",
+      "note": "The change is to a description only. The schema's constraints are unchanged and driver stays an open string. RELAY-05's tier-1 schema-doc coupling is satisfied."
+    },
+    {
+      "commit": "5914299",
+      "verdict": "clean apart from finding 18",
+      "note": "The Consolidation section matches the code. Checked: RecordInputs is called in driver_linux.go; overview.md has the firecracker lines; the dead-code and duplication claims are true. The CONTRIBUTING.md prerequisites match the code: firecracker v1.17.0 (preflight.go:18), genisoimage or mkisofs (preflight.go:236), and the qemu-img checks in doctor. The installation.md anchor link resolves. The proposed conventions (the TEST-02 tier list, the README roadmap pointer) are proposals only, which is correct under FLOW-14."
+    },
+    {
+      "commit": "a1bb0e3",
+      "verdict": "clean",
+      "note": "UX-01 and UX-02. The guide claims match the code and the reference guide. The catalog FROMs (ubuntu:24.04, debian:bookworm, alpine:3.21) match drivers.md#images and linuxguest; ubuntu:24.04 is firecracker's DefaultImage (driver.go:49). The --keep-vms pid output is at driver_linux.go:259. 'relay.log (container and vz drivers)' now matches output.md, which corrects an older 'container only'. The inputs/ claim for firecracker matches the RecordInputs call. The anchors installation.md#first-time-firecracker-setup, drivers.md#upstream-dns, #images and #cloud-images all exist. The examples.md caveat is accurate."
+    },
+    {
+      "commit": "a1e6a95",
+      "verdict": "clean",
+      "note": "The merge had no conflicts. Tier 1 and make test are green on the merged tree. The auto-merged rules.yaml keeps the branch's drivers.all, drivers.shared and bootstrap.surface entries, and checks_test.go passes."
+    }
+  ],
+  "back_to_design": false,
+  "back_to_design_note": "Nothing in the range touches a Decision, a confirmed question or a BOOT invariant. The ledger format is unchanged.",
+  "routing": {
+    "tier1_red": false,
+    "wf_implement_fix": "none required: tier 1 is green at be859f8 and there are no MUST or MUST-review findings",
+    "must_findings_route": "No MUST or MUST-review findings. Finding 18 is a one-line SHOULD that the tick may hand to wf-implement or Publish as an optional cleanup; otherwise it goes in the PR body. Findings 6, 12 and 16 go in the PR body for acknowledgement at merge (FLOW-08), with 16's residuals in the security note (LINT-03)."
+  },
+  "informational": [
+    {
+      "rule": "BOOT-07",
+      "file": "driver/firecracker/deliver_linux.go",
+      "line": 0,
+      "note": "The tier-1 bootstrap-surface hint: an accepted model change; the bootstrap.md edit is deferred to bootstrap-firecracker-row. See finding 6."
+    },
+    {
+      "rule": "FLOW-09",
+      "file": "native/linux-kvm/2026-11-02/f6-README.md",
+      "line": 0,
+      "note": "Unchanged. The first native f6 attempt, at 96ca21a, stopped in preflight on WSL's loopback resolver, as designed. f6-validate-linux-kvm must re-run on the final head, now be859f8 or later. The design is archived at f6-open-pr, after that run (FLOW-12)."
+    },
+    {
+      "rule": "GLOBAL-05",
+      "file": "cmd/warden/warden.exe",
+      "line": 0,
+      "note": "Unchanged: 10a1f61's 18 MB warden.exe blob stays in the branch's history. A squash merge keeps it out of main; the merge method is Jeff's call (FLOW-08)."
+    },
+    {
+      "rule": "GLOBAL-06",
+      "file": "docs/design/firecracker-driver.md",
+      "line": 817,
+      "note": "The PR body should carry the design's security note, the finding-2, finding-13 and finding-15 fixes, and finding 16's residuals."
+    },
+    {
+      "rule": "ORCH-01",
+      "file": "tools/tier1/rules.yaml",
+      "line": 0,
+      "note": "Unchanged: drivers.all gains firecracker; Publish should tell the open branches (FLOW-10)."
+    },
+    {
+      "rule": "TEST-02",
+      "file": ".github/workflows/firecracker.yml",
+      "line": 1,
+      "note": "The job has still never run; a red first run is a FLOW-11 repair item, not a merge gate (a8). The Consolidation section proposes listing it in TEST-02 once it is relied on."
+    },
+    {
+      "rule": "FLOW-17",
+      "file": "feat/firecracker-driver",
+      "line": 0,
+      "note": "main is merged (e418871), and tier 1 was re-run on windows, linux and darwin after the merge, as the previous report asked."
+    },
+    {
+      "rule": "LINT-04",
+      "file": "driver/linuxguest/images.go",
+      "line": 0,
+      "note": "Pre-existing, out of scope, unchanged: an unresolvable FROM falls back silently to direct boot."
+    }
+  ]
+}
