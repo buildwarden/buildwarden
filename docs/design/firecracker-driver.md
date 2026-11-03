@@ -1104,12 +1104,14 @@ meets:
   `vm-disk-chain/v1` document moved to `specs/environment-vm-disk-chain/v1.md`.
   Firecracker writes that payload with a new `driver` value and the existing
   `kernel` and `initrd` layer roles. The schema leaves `driver` open (a string
-  whose description ends "..."), so nothing changes in the format or the
-  schema. The document's "Written by" line and `driver` list now name
-  firecracker. Its note on the per-build writable disk, which said the disk is
+  whose description ends "..."), so the format and the schema's constraints
+  do not change. The document's "Written by" line and `driver` list now name
+  firecracker, and so does the schema's `driver` description, since RELAY-05's
+  tier-1 `schema-doc` check requires the two to change together. The
+  document's note on the per-build writable disk, which said the disk is
   "created empty from the last disk", now also covers firecracker's per-build
-  copy of the raw image (still not a layer). Both are wording; `specs_test.go`
-  passes.
+  copy of the raw image (still not a layer). All three are wording;
+  `specs_test.go` passes.
 - **#70 relay-leaf-crl.** The relay serves `/ca.crl`, which every leaf names.
   The firecracker relay VM runs the same `cmd/relay`, so it serves the CRL with
   no driver change.
