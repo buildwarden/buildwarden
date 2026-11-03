@@ -29,48 +29,48 @@ steps:
     affinity: host:linux-kvm
     status: pending
     needs:
-      - f1-design
+      - f2-design-review
     lease:
       claimed_by: ""
       expires: null
-    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan: with pre-change boot assets the firecracker build and doctor refuse with the rebuild fix; after rebuilding, a direct-boot and a disk build succeed on the new link 100.127.255.252/30 and their ledgers verify. Nothing to run before f3-implement: Plan adds f3-implement to needs once seeded, and f6-open-pr must need this step.'
+    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan: with pre-change boot assets the firecracker build and doctor refuse with the rebuild fix; after rebuilding, a direct-boot and a disk build succeed on the new link 100.127.255.252/30 and their ledgers verify. Nothing to run before f3-implement. needs f2-design-review set by f2-plan (cloud/20261103T105654Z) as a stopgap: wf validate rejects a need on f3-implement until phase 3 seeds it. When phase 3 is seeded, add f3-implement to needs; when phase 6 is seeded, make f6-open-pr need this step.'
   - id: f6-validate-qemu-any
     phase: 6
     affinity: host:qemu-any
     status: pending
     needs:
-      - f1-design
+      - f2-design-review
     lease:
       claimed_by: ""
       expires: null
-    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan: stale relay and build-vm initramfs refused with the fix; after rebuilding, a direct-boot and a cloud-image Linux guest build succeed on the new link. Nothing to run before f3-implement: Plan adds f3-implement to needs once seeded, and f6-open-pr must need this step.'
+    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan: stale relay and build-vm initramfs refused with the fix; after rebuilding, a direct-boot and a cloud-image Linux guest build succeed on the new link. Nothing to run before f3-implement. needs f2-design-review set by f2-plan (cloud/20261103T105654Z) as a stopgap: wf validate rejects a need on f3-implement until phase 3 seeds it. When phase 3 is seeded, add f3-implement to needs; when phase 6 is seeded, make f6-open-pr need this step.'
   - id: f6-validate-macos-vz
     phase: 6
     affinity: host:macos-vz
     status: pending
     needs:
-      - f1-design
+      - f2-design-review
     lease:
       claimed_by: ""
       expires: null
-    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan: an image prepared before the change is refused with the re-prepare fix; after re-prepare a build succeeds on the new link; the host-mode relay refuses a dial into the link. Nothing to run before f3-implement: Plan adds f3-implement to needs once seeded, and f6-open-pr must need this step.'
+    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan: an image prepared before the change is refused with the re-prepare fix; after re-prepare a build succeeds on the new link; the host-mode relay refuses a dial into the link. Nothing to run before f3-implement. needs f2-design-review set by f2-plan (cloud/20261103T105654Z) as a stopgap: wf validate rejects a need on f3-implement until phase 3 seeds it. When phase 3 is seeded, add f3-implement to needs; when phase 6 is seeded, make f6-open-pr need this step.'
   - id: f6-validate-windows-hyperv
     phase: 6
     affinity: host:windows-hyperv
     status: pending
     needs:
-      - f1-design
+      - f2-design-review
     lease:
       claimed_by: ""
       expires: null
-    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan: a relay-boot.vhdx without the new link record is refused with the refresh-cache.sh fix; after refreshing, a Windows guest build succeeds on the new link; setup refuses a --nat-prefix overlapping the link. Nothing to run before f3-implement: Plan adds f3-implement to needs once seeded, and f6-open-pr must need this step.'
+    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan: a relay-boot.vhdx without the new link record is refused with the refresh-cache.sh fix; after refreshing, a Windows guest build succeeds on the new link; setup refuses a --nat-prefix overlapping the link. Nothing to run before f3-implement. needs f2-design-review set by f2-plan (cloud/20261103T105654Z) as a stopgap: wf validate rejects a need on f3-implement until phase 3 seeds it. When phase 3 is seeded, add f3-implement to needs; when phase 6 is seeded, make f6-open-pr need this step.'
   - id: f2-plan
     phase: 2
     affinity: cloud
-    status: pending
+    status: done
     lease:
-      claimed_by: cloud/20261103T105654Z
-      expires: 2026-11-03T13:36:45.071481999Z
+      claimed_by: ""
+      expires: null
   - id: f2-design-review
     phase: 2
     affinity: human
@@ -186,3 +186,6 @@ history:
   - at: 2026-11-03T11:36:45Z
     by: cloud/20261103T105654Z
     event: claimed f2-plan until 2026-11-03T13:36:45Z
+  - at: 2026-11-03T11:42:59Z
+    by: cloud/20261103T105654Z
+    event: done f2-plan
