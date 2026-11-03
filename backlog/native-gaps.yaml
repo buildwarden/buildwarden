@@ -325,7 +325,8 @@ gaps:
       moves re-trigger. Third consecutive skip; while the entry is `status: open` on linux-kvm
       every branch move wakes this machine for it. Jeff can re-home it (host:) to a machine with
       firewalld, or close it with a decision.
-    status: open
+      2026-11-03 (human/jeff, workflow-human): deferred at Jeff's word until he provides a firewalld (Fedora/RHEL-family) KVM host; native sessions should not wake or retry for it.
+    status: deferred
   - id: firecracker-distro-lan-resolver
     host: linux-kvm
     what: The firecracker-driver Validation plan's local-resolver case. With /etc/resolv.conf naming only an address on the host itself (one of its LAN addresses, not loopback), a firecracker build refuses in preflight and gives the fix.

@@ -1,0 +1,31 @@
+feature: human-review-shows-design
+title: workflow-human design review puts the design and its assumptions in front of Jeff
+priority: 22
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/human-review-shows-design.md
+branch: feat/human-review-shows-design
+alters_relationships: null
+source: 'workflow-human 2026-11-03, build-link-subnet r1 (Jeff): when going over a design, include the document that names the assumptions in the communication instead of assuming Jeff has it locally. Change .claude/skills/workflow-human step 3: publish the design (artifact page or full Questions section inline) and quote each assumption with its options when asking.'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 4
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-03T20:30:51Z
+    by: human/jeff
+    event: queued at priority 22 (intake)

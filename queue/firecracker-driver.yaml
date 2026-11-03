@@ -1,9 +1,9 @@
 feature: firecracker-driver
 title: Firecracker driver
 priority: 16
-status: in_progress
+status: done
 round: feature
-phase: 6
+phase: 8
 design: docs/design/firecracker-driver.md
 branch: feat/firecracker-driver
 alters_relationships: true
@@ -161,10 +161,24 @@ steps:
   - id: f6-open-pr-r2
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f6-consolidate-r2
       - f6-validate-linux-kvm
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f7-merge
+    phase: 7
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f8-close
+    phase: 8
+    affinity: cloud
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -541,3 +555,18 @@ history:
   - at: 2026-11-03T11:22:30Z
     by: cloud/20261103T105654Z
     event: 'released f6-open-pr-r2: PR #90 merged (squash, 2026-11-03T01:38Z, all 19 checks green; pr.ci recorded green) but f6 checks cannot pass: feat/firecracker-driver is deleted and a squash merge never makes origin/main its ancestor. Needs Jeff/attended to advance the queue past phase 6 (wf gap: merged PR before f6 done)'
+  - at: 2026-11-03T20:30:09Z
+    by: human/jeff
+    event: 'Jeff (workflow-human): PR #90 squash-merged to main as 1ef5547 (2026-11-03T01:38Z, 19 checks green); feat/firecracker-driver already deleted on origin. The wf f6/f8 checks cannot pass on a squash-merged, deleted branch, so f6-open-pr-r2, f7-merge and f8-close are marked done by hand at Jeff''s word; wf fix queued as a process item.'
+  - at: 2026-11-03T20:30:09Z
+    by: human/jeff
+    event: done f6-open-pr-r2 (by hand)
+  - at: 2026-11-03T20:30:09Z
+    by: human/jeff
+    event: done f7-merge (by hand)
+  - at: 2026-11-03T20:30:09Z
+    by: human/jeff
+    event: done f8-close (by hand)
+  - at: 2026-11-03T20:30:09Z
+    by: human/jeff
+    event: closed; feature done
