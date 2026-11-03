@@ -400,34 +400,222 @@ VHDX or vz image is refused before any VM boots.
 
 ## Implementation plan
 
-Drafted here; Plan (phase 2) refines it after the design review.
+Plan (phase 2, 2026-11-03). Each task names the rules it must satisfy and the
+assumed questions it rests on; a change to an assumption at the design review
+changes the tasks that cite it. Tasks 4 to 9 and 18 rework code that already
+exists (FLOW-06).
 
-1. Add `driver/buildlink` (`link.env`, embed, accessors, `CheckRecord`) with
-   its tier-0 tests: validation, disjointness, and the stray-literal scan
-   (GLOBAL-08, GLOBAL-07, TEST-02).
-2. Move the Go consumers to it: `driver/linuxguest` seed and goldens,
-   `driver/winguest`, `driver/vz` network and `warden-boot` render,
-   `driver/firecracker` posture, preflight and doctor text, and
-   `tools/vz-image-prep` (ORCH-01, UX-04).
-3. Shell inits and image builds: `tools/relay-vm/init`, `tools/build-vm/init`
-   and `tools/firecracker-vm/init` source `/etc/warden/link.env`. Each
-   `build-initramfs.sh` copies it in and writes the record, and the Hyper-V
-   boot-disk build and `refresh-cache.sh` write `relay-boot.link.env`
-   (BOOT-06).
-4. Stale-asset refusal: the record check in `driver/relayvm` asset lookup,
-   qemu's build assets, Hyper-V's VHDX resolution and vz's prepared image
-   lookup and prepare, with doctor lines for each (UX-04, ORCH-01).
-5. Guards: Hyper-V `--nat-prefix` overlap refusal; host-mode relay blocks its
-   `--subnet` (a8, GLOBAL-06, RELAY-04); `cmd/warden-vmnet` `--subnet`
-   required.
-6. CI: drop the DNS workaround in `firecracker.yml`, and extend its asset
-   cache key (TEST-02).
-7. Docs in the same change: `network-isolation.md`, `drivers.md` (Upstream
-   DNS, per-driver upgrade note), `structure.md`, `win-image-prep/README.md`,
-   and `overview.md` pseudocode for the stale-asset check (UX-01, FLOW-15).
-8. Native validation per the Validation plan: queue steps
-   `f6-validate-{linux-kvm,qemu-any,macos-vz,windows-hyperv}`, and the
-   macos-qemu backlog gap (FLOW-09, TEST-03).
+**Plan notes for the design review** (FLOW-19). Planning read the code each
+site reaches and found the design workable as written, with these points where
+the design text and the code disagree. The plan takes the reading below; the
+review confirms it or sends the design back:
+
+- *a8 changes `relay/`.* The host-mode filter is `Relay.isBlockedIP` in
+  `relay/proxy.go`, fed by `relay.Config.BlockedSelfIP`
+  (`relay/relay.go`), so blocking the whole `--subnet` changes `relay/`, not
+  only `cmd/relay/mode_host.go`. The site table's "Unchanged: `relay/`" should
+  read "unchanged except a8's blocked prefix" (task 18; GLOBAL-06, RELAY-04).
+- *`cmd/warden-vmnet` has no callers.* `tools/vz-image-prep` uses its own
+  `vz-netfwd` (`netfwd.go`), and nothing in the tree runs `warden-vmnet`.
+  Making `--subnet` required still removes its default; there is no Go caller
+  to pass `buildlink.Net` (task 8; GLOBAL-08).
+- *The stray-literal allowlist and the docs.* Decision 2 allows the addresses
+  only in the definition, `docs/design/` and the refusal tests, but the docs
+  row writes the new link into `docs/book/` and
+  `tools/win-image-prep/README.md`, as UX-01 requires. The scan allows the new
+  link in reference docs (`docs/book/**`, `tools/*/README.md`) and the old one
+  only under `docs/design/` (task 3).
+- *Reference docs the docs row leaves out.* `guide/cli.md` (`warden doctor`'s
+  per-driver checks, and `warden setup --nat-prefix`) and the `warden doctor`
+  help text in `cmd/warden/host.go` describe what this change alters, so
+  UX-01 owes them too (task 20).
+- *`firecracker.yml`.* Its `pull_request.paths` filter must gain
+  `driver/buildlink/**`, or a change to the link would skip tier 2 (TEST-02's
+  conservative scoping). Of the cache-key additions, `link.env` is an input of
+  the cached assets; `tools/build-vm/init` is not (the job builds only
+  `tools/firecracker-vm` and the x86_64 relay), and is kept only because the
+  design names it (task 19).
+- *Tier labels.* The Validation plan calls `make lint` tier 1. Under TEST-02,
+  tier 1 is the `integration` workflow, which this change reaches through
+  `relay/` and `cmd/`; the plan runs both (tasks 22, 23).
+- *Record names.* Decision 3's `<release-name>.link.env` is read as the
+  asset's release file name plus `.link.env` (for example
+  `relay-vm-initramfs.cpio.gz.link.env`), one record per initramfs. No release
+  workflow ships these assets today, so nothing in `release.yml` changes
+  (UX-04).
+- *Hyper-V staleness.* `refresh-cache.sh` stamps the cached disk with the last
+  commit of `cmd/relay`'s packages and `tools/relay-vm`; `driver/buildlink`
+  is in neither, so the stamp gains it, or a link change would leave the disk
+  "current" (task 12; BOOT-06, UX-04).
+
+### The definition
+
+1. Add `driver/buildlink`: `link.env` with the four keys of the Design section,
+   and `buildlink.go` embedding it, exposing `Net`, `Relay`, `Guest`,
+   `GuestCIDR()`, `Mask()`, `Record()` and `CheckRecord(path)`, and validating
+   at init (both hosts inside `Net`, prefix 30, keys complete). Imports only the
+   standard library, nothing from `driver`; the container driver does not import
+   it. (GLOBAL-08, ORCH-01, ORCH-03, GLOBAL-07; a1, a2, a6)
+2. Tier-0 tests (TEST-02 tier 0, TEST-01: pure Go, table-driven, no external
+   dependency) for `driver/buildlink`: the file parses and validates, and a
+   malformed copy is rejected; `CheckRecord` on a missing, a different and an
+   equal record; disjointness of `Net` from the container base
+   (`driver/subnet.go`), Firecracker's upstream range, Hyper-V's
+   `DefaultNATPrefix` and qemu's user-mode `10.0.2.0/24`, read from the
+   packages' own constants (exported where needed) in an external test package
+   rather than restated. (TEST-02, TEST-01, GLOBAL-06; a1, a3)
+3. Tier-0 stray-literal test: walks the module tree from the root (no `git`
+   needed, TEST-01), skipping `.git`, `.dev`, `dist`, gitignored build outputs
+   and caches, and binary files, and fails on `100.127.255.252`,
+   `100.127.255.253`, `100.127.255.254`, `10.0.0.0/30`, `10.0.0.1` or
+   `10.0.0.2` outside an allowlist kept in the test: `driver/buildlink/`,
+   `docs/design/`, the new link in reference docs (`docs/book/**`,
+   `tools/*/README.md`), and the named refusal tests. Matches are on whole
+   addresses, so `10.0.0.20` or `110.0.0.1` do not trip it. (TEST-02, TEST-01,
+   GLOBAL-08; a2)
+
+### Go consumers (rework)
+
+4. `driver/linuxguest/seed.go`: render the network-config v2 addresses,
+   gateway and nameserver, and the `runcmd` `initialize --gateway`, from
+   `buildlink`; update `testdata/seed/{network-config,user-data}` goldens.
+   The `initialize` contract is unchanged, only its value. (BOOT-06, EXEC-04,
+   ORCH-01; a2, a7)
+5. `driver/winguest`: `BuildGatewayIP` and `BuildGuestCIDR` become variables
+   derived from `buildlink` (names kept for `run.go` and callers);
+   `WardenRunPS1`'s tier-0 test checks the rendered `--gateway`/`--ip`.
+   (BOOT-06, EXEC-04, TEST-02; a2, a7)
+6. `driver/vz`: `network_unix.go` takes relay, build and gateway addresses and
+   the mask from `buildlink`, so the host relay's `--subnet` (built in
+   `driver.go`) becomes `buildlink.Net`; `image.go` renders the `warden-boot`
+   script's `GW`, `SELF`, `MASK` and its comments from `buildlink` at prepare.
+   Tier-0 test of the rendered script (no darwin tag on `image.go`, so it runs
+   everywhere). (ORCH-01, GLOBAL-07, BOOT-07: the D2 deviation is unchanged;
+   a2, a3)
+7. `driver/firecracker`: `posture.go`'s `buildLink` becomes `buildlink.Net`;
+   the preflight and doctor fix text names the new link; the `slots.go`
+   comment follows. Tests: a resolver at `buildlink.Guest` is excluded with the
+   fix, and one at `10.0.0.2` now passes (the allowlisted refusal test);
+   `slots_test.go`'s `uplinkFromRoute` example moves to an address outside the
+   scan. (UX-04, ORCH-01, TEST-02 tier 0; a4)
+8. `tools/vz-image-prep/{personalize,uv-build-test,netfwd}.go`
+   (`//go:build ignore`, built as single files in the module): take the link
+   from `buildlink` and render their shell snippets from it; `netfwd`'s
+   default `--subnet` is `buildlink.Net`. `cmd/warden-vmnet/main.c`: `--subnet`
+   becomes required, so the file holds no address. (GLOBAL-07, GLOBAL-08; a2)
+9. `cmd/warden-io`: the `initialize_test.go` and `platform_windows_test.go`
+   parsing examples and the `platform_windows.go` comments use other example
+   addresses; parsing behaviour is unchanged. (EXEC-04, TEST-02 tier 0; a7)
+
+### Shell inits and baked assets
+
+10. `tools/relay-vm/init` sources `/etc/warden/link.env` and assigns
+    `$WARDEN_LINK_RELAY/$WARDEN_LINK_PREFIX` to the build interface (header
+    comment and log line follow). `tools/relay-vm/build-initramfs.sh` copies
+    `driver/buildlink/link.env` to `/etc/warden/link.env` in the image and,
+    after the cpio is written, copies it beside the output as the record
+    (`output/link.env`, `output/x86_64/link.env`). (BOOT-06, GLOBAL-08; a2, a3)
+11. `tools/build-vm/init` and `tools/firecracker-vm/init` source
+    `/etc/warden/link.env` for address, default route, resolver and
+    `initialize --gateway`; their `build-initramfs.sh` copy the file in and
+    write the record beside `output/initramfs.cpio.gz`. (BOOT-06, EXEC-04; a2,
+    a3)
+12. Hyper-V relay boot disk: `tools/relay-vm/hyperv/build.sh` copies
+    `link.env` into the initramfs it bakes into the UKI; `build-boot-vhdx.sh`
+    and `build-boot-vhdx-native.ps1` carry the record to the output;
+    `refresh-cache.sh` writes `relay-boot.link.env` beside `relay-boot.vhdx`
+    (and keeps the `.prev` pair together) and adds `driver/buildlink` to its
+    source stamp. (BOOT-06, UX-04; a2, a3)
+
+### Stale-asset refusal
+
+13. `driver/relayvm`: each asset set (`QEMURelay`, `Firecracker`) names its
+    records (release `<Release>.link.env`, source tree `link.env` in the
+    output directory), resolved from the same place `Find` chose, so a record
+    never comes from the other location. qemu (relay assets, and
+    `resolveBuildAssets` for the direct-boot build initramfs) and Firecracker
+    (relay and build initramfs) call `buildlink.CheckRecord` on every
+    initramfs before booting and wrap a failure in `driver.Fixable` naming the
+    rebuild (`tools/relay-vm/build-initramfs.sh`, `tools/build-vm/` or
+    `tools/firecracker-vm/build-initramfs.sh`, or upgrading the release
+    assets). `qemu.Preflight` (qemu's doctor) and `firecracker.Doctor` report
+    the same. (UX-04, ORCH-01, BOOT-06; a3)
+14. `driver/hyperv`: `resolveRelayBootVHDX` checks `relay-boot.link.env`
+    beside the cached disk, or `<name>.link.env` beside a
+    `WARDEN_RELAY_BOOT_VHDX` override, and refuses with
+    `tools/relay-vm/hyperv/refresh-cache.sh`; `hyperv.Doctor` reports it.
+    (UX-04, ORCH-01; a3)
+15. `driver/vz`: both prepare paths (`image.go`'s first prepare and
+    `ReprepareImage`) write `link.env` into the prepared image directory after
+    the boot script is installed; `StartBuild` and `vz.Preflight` (vz's
+    doctor) refuse a prepared image whose record is missing or different, with
+    `warden image prepare --driver vz`. With no prepared image, Preflight
+    reports as today. (UX-04, BOOT-06, BOOT-07; a3)
+16. Tier-0 tests for the refusals in tasks 13 to 15, on temporary
+    directories: a missing, a different and an equal record for each asset set,
+    each refusal a `driver.Fixable` whose fix names the command, and the
+    record taken from the same location as its asset. Kept free of platform
+    build tags so they run everywhere. (TEST-02 tier 0, TEST-01, GLOBAL-07,
+    UX-04; a3)
+
+### Guards
+
+17. `driver/hyperv` setup: `RunSetup` refuses a `--nat-prefix` that overlaps
+    `buildlink.Net` before changing anything, as a fixable error naming a
+    non-overlapping prefix (the default); tier-0 test. (UX-04, GLOBAL-06; a4)
+18. Host-mode relay (rework): `relay.Config` gains a blocked prefix that
+    `isBlockedIP` checks (the existing `BlockedSelfIP` check is kept or folded
+    into it); `cmd/relay/mode_host.go` passes the parsed `--subnet`; the
+    `cmd/relay/main.go` `--subnet` comment says vz passes `buildlink.Net`, and
+    its default is unchanged. The `relay` package does not import `buildlink`.
+    Container and VM modes leave the prefix unset, so their behaviour is
+    unchanged. Tier-0 test of `isBlockedIP`: every address in the subnet is
+    blocked, another `100.64.0.0/10` address is not. (GLOBAL-06, RELAY-04,
+    GLOBAL-08, TEST-02 tier 0; a8)
+
+### CI
+
+19. `.github/workflows/firecracker.yml`: remove the "Off-host DNS for the
+    relay" step and its comment; the asset cache key adds
+    `driver/buildlink/link.env` and `tools/build-vm/init`; `pull_request.paths`
+    adds `driver/buildlink/**`. (TEST-02 tier 2; a4)
+
+### Docs
+
+20. Reference docs in the same change: `concepts/network-isolation.md` (slot
+    table addresses, the host-mode SSRF bullet now naming the link subnet),
+    `guide/drivers.md` (Upstream DNS names the new link; an upgrade note per
+    VM driver: rebuild the initramfs, run `refresh-cache.sh`, re-prepare vz),
+    `contributing/structure.md` (the fixed link), `tools/win-image-prep/README.md`
+    (gateway and guest addresses), `guide/cli.md` (`warden doctor`'s stale-asset
+    checks per VM driver; `warden setup --nat-prefix` refuses an overlap), and
+    the `warden doctor` help text in `cmd/warden/host.go`. (UX-01, UX-04)
+21. `concepts/overview.md` pseudocode: the VM drivers block checks the baked
+    assets' link records before starting anything, refusing with the fix; the
+    Relay block notes that host mode refuses dials into its own subnet.
+    (FLOW-15)
+
+### Verification
+
+22. `make test` and `make lint` for linux, darwin (`driver/vz`,
+    `cmd/relay/mode_host.go`) and windows (`driver/hyperv`, `cmd/warden-io`,
+    `driver/vz/network_windows.go`); push the branch at each green checkpoint.
+    (TEST-01, FLOW-17, GLOBAL-07)
+23. Tier 1: run the `integration` workflow on the branch, since `relay/` and
+    `cmd/` change, and record the result. (TEST-02 tier 1)
+24. Tier 2, CI: `firecracker.yml` passes on the PR with the runner's own VPC
+    resolver; the disk and direct-boot builds succeed. (TEST-02 tier 2; a4)
+25. Tier 2, native: the blocking steps `f6-validate-linux-kvm`, `-qemu-any`,
+    `-macos-vz` and `-windows-hyperv` run the Validation plan's three cases
+    plus their per-host cases, after implementation (each needs
+    `f3-implement`, and `f6-open-pr` needs all four). macos-qemu stays a
+    tracked gap: the backlog item `build-link-subnet-qemu-windows` is added on
+    the workflow branch. (FLOW-09, TEST-03; a5)
+26. Security (TEST-08): the Security note's cases are covered at tier 0 here
+    (tasks 7, 16, 18) and in native validation (task 25); Firecracker's
+    anti-spoof rule matches no link address, so its test needs no change. The
+    Arm A corpus does not exist yet (security-suite is in Design), so
+    Consolidation hands the Security note's list to it. (GLOBAL-06, TEST-08)
 
 ## Design review
 
