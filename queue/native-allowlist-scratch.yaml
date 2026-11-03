@@ -6,11 +6,14 @@ holds:
   - host:*
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/native-allowlist-scratch.md
 branch: feat/native-allowlist-scratch
 alters_relationships: null
 source: 'host:macbook digests 2026-10-30 and 2026-10-31: Bash(.scratch/:*) does not match .scratch/<name>/dist/warden; flow18-check.sh needs approval. Proposed: Bash(.scratch/*/dist/warden:*), Bash(tools/workflow/flow18-check.sh)'
+pr:
+  number: 89
+  ci: green
 steps:
   - id: x1-design
     phase: 1
@@ -22,10 +25,17 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261103T003746Z
-      expires: 2026-11-03T02:37:46.5550941Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -53,3 +63,9 @@ history:
   - at: 2026-11-03T00:37:46Z
     by: cloud/20261103T003746Z
     event: claimed x2-implement until 2026-11-03T02:37:46Z
+  - at: 2026-11-03T00:49:19Z
+    by: cloud/20261103T003746Z
+    event: done x2-implement
+  - at: 2026-11-03T00:49:19Z
+    by: cloud/20261103T003746Z
+    event: entered phase 3 (merge)
