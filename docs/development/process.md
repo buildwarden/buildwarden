@@ -428,9 +428,12 @@ deviation, a deferred question, a validation left for another host) is not a
 reason to keep a branch; it starts from trunk on a new one.
 
 Deleting a branch loses any commit not on trunk, so a branch is deleted only
-after it is shown to be contained in trunk (`git branch --merged`, or the PR's
-merge commit), with git's safe forms (`git branch -d`, never `-D`) and never by
-force-pushing. Caches a later build reuses (prepared images, support images)
+after it is shown to be contained in trunk (`git branch --merged`, the PR's
+merge commit, or, for a squash merge, a commit on trunk naming the PR whose
+tree equals the branch head's tree), with git's safe forms (`git branch -d`)
+and never by force-pushing. `git branch -d` refuses a squash-merged branch, so
+that case alone deletes the local branch with `git branch -D`, and only after
+`wf check` has shown the equal tree. Caches a later build reuses (prepared images, support images)
 stay. An agent without permission to delete lists the exact commands for the
 human instead of skipping the step.
 
