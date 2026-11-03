@@ -1184,9 +1184,10 @@ branch):
   and `collector.Collector.BytesWritten`, which are library API.
 - *Duplication.* One finding. `driver/linuxguest/images.go`'s private
   `hashFile` is byte-for-byte `driver.HashFileSHA256`. It came over unchanged
-  from `driver/qemu/images.go`, where the duplicate predates the fork. Merging
-  them (three call sites in `linuxguest`) is code work, so it goes back to
-  Implement under the plan's extraction task. Checked and kept apart:
+  from `driver/qemu/images.go`, where the duplicate predates the fork. It went
+  back to Implement under the plan's extraction task and is done: both
+  `linuxguest` call sites use `driver.HashFileSHA256` and `hashFile` is gone.
+  Checked and kept apart:
   - setup's `tryLock`, which opens the user's lock read-only and never
     creates it, unlike `driver.TryHostLock`;
   - firecracker's `sudoUser`, which sits behind the `host` interface for

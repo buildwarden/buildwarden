@@ -1,10 +1,7 @@
 package linuxguest
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -185,7 +182,7 @@ func DownloadImage(url, dest string) error {
 		return err
 	}
 
-	hash, err := hashFile(tmp)
+	hash, err := driver.HashFileSHA256(tmp)
 	if err != nil {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("hashing image: %w", err)
@@ -203,19 +200,6 @@ func DownloadImage(url, dest string) error {
 	return nil
 }
 
-func hashFile(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
 // VerifyImageIntegrity reports whether path still matches the hash
 // DownloadImage wrote beside it (true when there is none).
 func VerifyImageIntegrity(path string) bool {
@@ -223,7 +207,7 @@ func VerifyImageIntegrity(path string) bool {
 	if err != nil {
 		return true // no hash file = skip verification
 	}
-	actual, err := hashFile(path)
+	actual, err := driver.HashFileSHA256(path)
 	if err != nil {
 		return false
 	}
