@@ -27,7 +27,7 @@
       "Bash(git push origin workflow)",
       "Bash(git -C .scratch/*)",
       "Bash(.scratch/*/dist/warden*)",
-      "Bash(git push origin feat/:*)",
+      "Bash(git push origin feat/*)",
       "Bash(dist/wf:*)",
       "Bash(./dist/wf:*)",
       "Bash(tools/workflow/*)",

@@ -29,7 +29,7 @@ mixes branch and `main` builds in one place.
 The cause is the rule syntax. In Claude Code a trailing `:*` is the same as a
 trailing ` *`: the rule's text, then a space, then anything. So
 `Bash(.scratch/:*)` matches only a command that is literally `.scratch/`
-followed by a space, which never occurs. Four rules have this shape:
+followed by a space, which never occurs. Five rules have this shape:
 
 | Rule | Meant to allow | Actually matches |
 |---|---|---|
@@ -37,6 +37,7 @@ followed by a space, which never occurs. Four rules have this shape:
 | `Bash(git -C .scratch/:*)` | `git -C .scratch/<name> ...` | nothing |
 | `Bash(tools/workflow/:*)` | `tools/workflow/flow18-check.sh`, `native/*.sh` | nothing |
 | `Bash(dist/warden:*)`, `Bash(./warden:*)` | the built CLI | not `dist/warden.exe` on Windows |
+| `Bash(git push origin feat/:*)` | `git push origin feat/<name>` | nothing |
 
 ## Prior art
 
@@ -95,6 +96,8 @@ In `tools/workflow/native/settings.native.json`:
   `Bash(tools/workflow/:*)`, `Bash(./warden:*)` and `Bash(dist/warden:*)` with
   `Bash(git -C .scratch/*)`, `Bash(.scratch/*/dist/warden*)`,
   `Bash(tools/workflow/*)`, `Bash(./warden*)` and `Bash(dist/warden*)`.
+  `Bash(git push origin feat/:*)` becomes `Bash(git push origin feat/*)`
+  (folded in at implementation; see Design review).
 - `deny`: add the seven `git -C * push ...` rules of Decision 2 and
   `Bash(wsl --unregister*)`.
 
@@ -134,6 +137,11 @@ JSON change.
   Decisions confirmed: the mid-pattern wildcard rules (D1); the `git -C *
   push` denies (D2); root in the WSL test distro through `Bash(wsl:*)` stays,
   recorded here, with a `wsl --unregister` deny (D3).
+- **Folded in at implementation, 2026-11-02, Jeff:** `Bash(git push origin
+  feat/:*)` has the same trailing-space bug and never matched a feature-branch
+  push. Jeff changed it to `Bash(git push origin feat/*)` himself (auto mode
+  blocks an agent editing this file beyond the approved design). Same class of
+  fix as D1 and no new capability, so no second review.
 
 ## Consolidation
 
