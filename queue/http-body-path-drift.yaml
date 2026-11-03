@@ -3,7 +3,7 @@ title: Relay writes a path field under http-body, whose schema forbids extra fie
 priority: 15
 status: in_progress
 round: feature
-phase: 3
+phase: 4
 design: docs/design/http-body-path-drift.md
 branch: feat/http-body-path-drift
 alters_relationships: false
@@ -50,10 +50,17 @@ steps:
   - id: f3-implement-r2
     phase: 3
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f4-review
+    phase: 4
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261103T105654Z
-      expires: 2026-11-03T13:14:22.463445396Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -160,3 +167,9 @@ history:
   - at: 2026-11-03T11:14:22Z
     by: cloud/20261103T105654Z
     event: claimed f3-implement-r2 until 2026-11-03T13:14:22Z
+  - at: 2026-11-03T11:16:57Z
+    by: cloud/20261103T105654Z
+    event: done f3-implement-r2
+  - at: 2026-11-03T11:16:57Z
+    by: cloud/20261103T105654Z
+    event: entered phase 4 (review)
