@@ -440,7 +440,10 @@ The relay resolves names for the build through the host's resolvers: those
 in `/etc/resolv.conf`, or systemd-resolved's upstream list when its
 `127.0.0.53` stub fronts them. A loopback resolver or one on the host's own
 address (a local dnsmasq, unbound or libvirt) is left out, since the slot
-rules do not let the relay open connections to the host. With none left the
+rules do not let the relay open connections to the host. So is one inside
+`10.0.0.0/30`, the relay's link to the build VM in every VM driver, such as
+the `10.0.0.2` resolver of an AWS VPC on `10.0.0.0/16`: the relay would send
+its queries to the build VM. With none left the
 build stops before booting and says how to fix it. Under WSL, whose only
 resolver is its DNS-tunnelling address `10.255.255.254`, set
 `generateResolvConf=false` under `[network]` in `/etc/wsl.conf` and list the

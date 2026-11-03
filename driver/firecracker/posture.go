@@ -86,13 +86,19 @@ func parseNameservers(conf string) []string {
 	return out
 }
 
+// buildLink is the relay's private link to the build VM (relay 10.0.0.1, build
+// VM 10.0.0.2), the same in every VM driver. The relay routes an address in it
+// to the build VM, never upstream.
+var buildLink = net.IPNet{IP: net.IPv4(10, 0, 0, 0), Mask: net.CIDRMask(30, 32)}
+
 // selectResolvers splits nameservers into those the relay can use and those
 // it cannot: a loopback address or one assigned to the host is reached from
-// the relay as NEW traffic to the host, which WARDEN-FC drops.
+// the relay as NEW traffic to the host, which WARDEN-FC drops, and one inside
+// buildLink (an AWS VPC resolver at 10.0.0.2, say) is routed to the build VM.
 func selectResolvers(servers []string, local func(net.IP) bool) (use, excluded []string) {
 	for _, s := range servers {
 		ip := net.ParseIP(s)
-		if ip == nil || ip.IsLoopback() || local(ip) {
+		if ip == nil || ip.IsLoopback() || local(ip) || buildLink.Contains(ip) {
 			excluded = append(excluded, s)
 			continue
 		}
@@ -134,6 +140,13 @@ func upstreamResolvers(readFile func(string) ([]byte, error), local func(net.IP)
 		"in " + resolvConf + " (under systemd-resolved, set DNS= in " +
 		"/etc/systemd/resolved.conf)"
 	for _, s := range excluded {
+		if buildLink.Contains(net.ParseIP(s)) {
+			fix = "the relay's link to the build VM is " + buildLink.String() +
+				", so it cannot reach a resolver there: list an off-host DNS " +
+				"server outside it as a nameserver in " + resolvConf +
+				" (under systemd-resolved, set DNS= in " +
+				"/etc/systemd/resolved.conf)"
+		}
 		if s == wslTunnelResolver {
 			fix = "WSL's only resolver is its DNS-tunnelling address " +
 				wslTunnelResolver +
@@ -146,7 +159,7 @@ func upstreamResolvers(readFile func(string) ([]byte, error), local func(net.IP)
 	}
 	what := "none listed"
 	if len(excluded) > 0 {
-		what = "only local resolvers: " + strings.Join(excluded, ", ")
+		what = "only resolvers it cannot reach: " + strings.Join(excluded, ", ")
 	}
 	return nil, driver.Fixable(fix,
 		"the relay needs an off-host upstream DNS server, and the host has %s", what)

@@ -98,6 +98,22 @@ func TestUpstreamResolvers(t *testing.T) {
 		!strings.Contains(err.Error(), "10.255.255.254") {
 		t.Fatalf("wsl: %v", err)
 	}
+	// An AWS VPC resolver at 10.0.0.2 is inside the relay's build link, so the
+	// relay would route it to the build VM: refused, with a fix that says so.
+	_, err = upstreamResolvers(files(map[string]string{
+		resolvConf:       "nameserver 127.0.0.53\n",
+		resolvedUpstream: "nameserver 10.0.0.2\n",
+	}), none)
+	if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "10.0.0.0/30") ||
+		!strings.Contains(err.Error(), "10.0.0.2") {
+		t.Fatalf("build link: %v", err)
+	}
+	got, err = upstreamResolvers(files(map[string]string{
+		resolvConf: "nameserver 10.0.0.2\nnameserver 10.0.0.4\n",
+	}), none)
+	if err != nil || strings.Join(got, ",") != "10.0.0.4" {
+		t.Fatalf("build link mixed: %v %v", got, err)
+	}
 	// A local dnsmasq on a LAN address is refused too.
 	_, err = upstreamResolvers(files(map[string]string{resolvConf: "nameserver 127.0.0.1\n"}),
 		none)

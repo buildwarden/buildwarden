@@ -233,9 +233,11 @@ cache trusts the first download of a cloud image.
    (from `/run/systemd/resolve/resolv.conf` when systemd-resolved fronts
    `127.0.0.53`), excluding any loopback address and any address assigned to
    the host itself (a local dnsmasq, libvirt or unbound on a LAN address),
-   which INPUT would drop as NEW traffic. With none left, the preflight fails
-   with a fixable error naming the local resolver and how to point warden at
-   an off-host one (UX-04); doctor reports the same.
+   which INPUT would drop as NEW traffic, and any address inside the relay's
+   build link `10.0.0.0/30`, which the relay routes to the build VM (added
+   after CI tier 2's first run; see Rollback notes). With none left, the
+   preflight fails with a fixable error naming the excluded resolvers and how
+   to point warden at an off-host one (UX-04); doctor reports the same.
 
 6. **Executor delivery: the qemu Linux-guest seed, and a minimal direct-boot
    launcher** (spike 4.10; BOOT-02, BOOT-03, BOOT-06).
@@ -1409,6 +1411,17 @@ at `96ca21a`. Findings, none blocking:
   `main`); the `cli.md` example reads as if it were relative to the project.
 - **An expected build-VM failure prints the bug-report link**, because the
   error is not marked fixable. Minor.
+
+### CI tier 2 (first run on PR #90)
+
+The hosted `firecracker` job's Ubuntu build failed to resolve names: the
+runner's only resolver was its VPC's `10.0.0.2`, inside `10.0.0.0/30`, the
+relay's link to the build VM in every VM driver, so the relay sent its queries
+to the build VM. Decision 5's exclusions now include that link (Jeff,
+2026-11-02): preflight and doctor refuse such a resolver with a fix that names
+the link, and the job gives systemd-resolved public upstreams before setup.
+Moving every VM driver's build link off `10.0.0.0/30`, so that no upstream
+address can clash with it, is a cross-driver change queued as its own feature.
 
 ## Archive summary
 
