@@ -619,7 +619,36 @@ review confirms it or sends the design back:
 
 ## Design review
 
-None yet (`design_review: required`).
+- **r1, 2026-11-03: changes requested** (Jeff, attended session, FLOW-19).
+  Read at `fe166f3`. Sent back to Design (FLOW-06).
+  - **a1: the default is confirmed: `100.127.255.252/30`.**
+  - **a6 is reversed: the link must be manually configurable.** Put the
+    setting in the advanced configuration options. It covers a collision,
+    or some other limitation nobody knows about yet, on a user's network.
+    Fixed-only is rejected.
+  - **a2, a3, a4, a5, a7 and a8 are not confirmed.** Re-evaluate each one
+    with a configurable link in mind. In particular:
+    - **a2:** `link.env` becomes the default, not the only definition.
+      Decide how a configured value reaches the baked assets: the relay and
+      build initramfs, the Hyper-V UKI (its command line is baked in), and
+      the vz `warden-boot` script (baked at prepare). The choices are
+      passing the value at boot or rebuilding per value.
+    - **a3:** the record check compares against the configured value. The
+      refusal's fix has to cover a deliberate change of the setting.
+    - **a4 and a8:** the guards (Firecracker resolver exclusion, Hyper-V
+      `--nat-prefix` overlap, host-mode subnet block) follow the configured
+      link.
+    - **a7:** the setting is a new config surface (UX-01; surfaces gain
+      config). Re-check the seams and `alters_relationships`.
+    - **Validation of the setting:** a /30, and disjoint from BuildWarden's
+      own ranges. Add tier-0 coverage for it, and check ORCH-03.
+  - **Carry forward into the revised design:** the plan's reconciliation
+    notes (a8 touches `relay/`; `warden-vmnet` has no callers; the allowlist
+    for reference docs; `guide/cli.md` and the doctor help; the
+    `firecracker.yml` paths; tier labels; record names; the Hyper-V stamp).
+    Also two text fixes: Decision 2 has four keys, not three, and
+    `tools/build-vm/init` is dropped from the firecracker cache key, since
+    that job never builds it.
 
 ## Consolidation
 
