@@ -123,15 +123,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261102T220201Z
+      expires: 2026-11-03T02:02:25.2188774Z
 budget:
   estimate:
     runs: 12
     steps: 60
   spent:
     runs: 3
-    steps: 13
+    steps: 14
 questions:
   - id: a12
     kind: assumed
@@ -428,4 +428,7 @@ history:
     event: 'back to implement: f6-consolidate (ea94596): driver/linuxguest/images.go hashFile duplicates driver.HashFileSHA256; switch its three uses and delete it (FLOW-15 duplication, covered by the plan''s extraction task)'
   - at: 2026-11-03T00:02:12Z
     by: cloud/20261102T220201Z
-    event: 'f6-validate-linux-kvm and f6-provision-linux-kvm-dns restored after wf back -to 3 dropped them (pending host and human phase-6 steps); f6-validate-linux-kvm now also needs f3-implement-r2. When phase 6 is reseeded, f6-open-pr must need f6-validate-linux-kvm (f6-consolidate finding)'
+    event: f6-validate-linux-kvm and f6-provision-linux-kvm-dns restored after wf back -to 3 dropped them (pending host and human phase-6 steps); f6-validate-linux-kvm now also needs f3-implement-r2. When phase 6 is reseeded, f6-open-pr must need f6-validate-linux-kvm (f6-consolidate finding)
+  - at: 2026-11-03T00:02:25Z
+    by: cloud/20261102T220201Z
+    event: claimed f3-implement-r2 until 2026-11-03T02:02:25Z
