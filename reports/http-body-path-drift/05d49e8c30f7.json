@@ -1,0 +1,116 @@
+{
+  "feature": "http-body-path-drift",
+  "branch": "feat/http-body-path-drift",
+  "head": "05d49e8c30f7",
+  "base": "a3e18fbaf2e3",
+  "round": "feature",
+  "step": "f4-review",
+  "review_round": 2,
+  "previous_report": "reports/http-body-path-drift/ad39ceb99938.json",
+  "commits_since_previous": ["72af1e160d52", "05d49e8c30f7"],
+  "scope": "git diff origin/main...feat/http-body-path-drift (5 files, +560/-8): docs/design/http-body-path-drift.md, relay/ledger_conformance_test.go, relay/relay.go, relay/relay_collector_test.go, specs/metadata-http-body/v1.md. Merge base a3e18fb; origin/main is 1ef5547. Since ad39ceb only specs/metadata-http-body/v1.md (72af1e1) and docs/design/http-body-path-drift.md (05d49e8) changed; no Go file changed.",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "tier1": {
+    "result": "green",
+    "toolchain": "go1.26.3 (/usr/local/go/bin first on PATH), golangci-lint 2.15.0 (~/go/bin)",
+    "make_lint": "pass: 0 issues in the root module, tools/workflow and tools/tier1; then dist/tier1 -base origin/main (a3e18fbaf2e3...05d49e8c30f7): 0 MUST, 0 MUST-review, 0 SHOULD, 0 hints, 1 suppressed",
+    "make_lint_per_platform": "not needed: no build-tagged file is touched (FLOW-17)",
+    "make_test": "pass: every package ok (root module, tools/workflow, tools/tier1), no FAIL. TestLedgerMetadataConformsToSpecs and TestRelayCollectorEndToEnd re-run -count=1: ok (4.3 s)",
+    "custom_static_checks": "dist/tier1 -json -base origin/main, exit 0: findings [], hints [], suppressed = 1 x RELAY-05 specs/metadata-http-body/v1.md, reason 'correct the releases the deviation note names; schema unchanged (http-body-path-drift)', commit 72af1e160d52",
+    "fixes_made": "none; code checkout left clean"
+  },
+  "implementer_claims_verified": {
+    "v0_1_0_pre_v1_id": "verified. v0.1.0 cmd/relay/ledger.go names https://github.com/buildwarden/buildwarden/schemas/http-body.json at index 2, and no schema file exists anywhere in the v0.1.0 tree. It does write {\"path\": filePath} (cmd/relay/relay.go:536), but under that unpublished id, so this document's note correctly starts at v0.2.0.",
+    "v0_2_0_to_v0_5_0_context_closes": "verified. In each of v0.2.0, v0.3.0, v0.4.0, v0.5.0, cmd/relay/relay.go handleContextGet closes with closeMeta {\"path\": filePath} under schemaHTTPBody, and cmd/relay/ledger.go lists .../schemas/v1/http-body.json third (index 2). schemas/v1/http-body.json in v0.2.0 and v0.5.0 has additionalProperties: false. No build-script or bootstrap handler exists in cmd/relay/relay.go at v0.2.0 or v0.5.0.",
+    "b716d9e_build_script": "verified. b716d9e (2026-09-24) adds handleBuildScript with cbor {\"path\": \"build-script\"} closed under schemaHTTPBody; first tag containing it is v0.6.0.",
+    "5ab774b_bootstrap": "verified. 5ab774b (2026-10-28) adds handleBootstrap calling r.recordServed(req, data, \"bootstrap\"); first tag containing it is v0.6.0.",
+    "4ea4f50_refactor_only": "verified. 4ea4f50 (2026-10-11) removes the inline build-script close and the inline context-file close and folds both into recordServed(req, data, path); it adds no new served input. The previous report's 'and 4ea4f50 to the bootstrap config' was wrong; 5ab774b is the bootstrap commit.",
+    "v0_6_0_three_callers": "verified. v0.6.0 relay/relay.go:677, :690, :712 call recordServed with \"build-script\", \"bootstrap\" and filePath; :726 writes {\"path\": path} under v1 http-body (relay/ledger.go:76)."
+  },
+  "spec_note_sentences": [
+    {"line": "31-33", "text": "Ledgers written by relays v0.2.0 through v0.6.0 carry a path text field in some http-body close records of relay-served inputs, under this document's $id at index 2.", "verdict": "supported", "evidence": "tags v0.2.0-v0.6.0 as above; specs/metadata-http-body/v1.schema.json $id equals the v0.2.0-v0.6.0 index-2 entry. 'some' is right: request-body and upstream closes never carried it."},
+    {"line": "33", "text": "From v0.2.0 it is on the close of each build-context file.", "verdict": "supported", "evidence": "handleContextGet in every tag from v0.2.0 records each served file with {\"path\": filePath}; v0.6.0 skips only directory listings (kind == \"list\"), which are not recorded at all."},
+    {"line": "33-35", "text": "In v0.6.0 it is also on the close of the build script (unreleased builds from b716d9e onward) and of the bootstrap config (from 5ab774b onward).", "verdict": "supported", "evidence": "b716d9e and 5ab774b, both first in v0.6.0. Wording nit only: the second parenthetical drops 'unreleased builds', but reads in parallel with the first."},
+    {"line": "35-37", "text": "It duplicates the path of the matching open record's url in its http-open metadata.", "verdict": "supported", "evidence": "open url is req.URL.String() and path is req.URL.Path without the leading slash (or the literal endpoint name), in v0.2.0 and v0.6.0."},
+    {"line": "37", "text": "Readers ignore it.", "verdict": "supported", "evidence": "no non-test Go code reads path from ledger metadata; cmd/warden inspect metaSummary reads only method, url, name, reference (re-checked from the previous report; no reader changed since)."},
+    {"line": "38", "text": "Current relays write {\"status\": 200} for these records instead.", "verdict": "supported", "evidence": "relay/relay.go:728 at HEAD, closeMeta {\"status\": http.StatusOK}; the conformance test asserts it for all three served inputs."}
+  ],
+  "design_correction_check": "docs/design/http-body-path-drift.md now states the corrected history at :39-47, option C at :114, D3 at :130-136, a2 at :165, the reader note at :203, task 4 at :305-308, and records a 'Factual correction' entry at :343-348. Every factual claim matches the tags. Left as historical record, correctly: Jeff's r1 entry at :338 ('the v0.6.0 deviation note') and task 4's trailer at :314, which is the ad39ceb trailer verbatim; the plan does not mention 72af1e1's second trailer, which is harmless (the commit and this report record it). The queue's a1 question text on the workflow branch still says 'v0.6.0 is the only release that wrote it'; the PR body should carry the correction, as finding 1 asked.",
+  "flow_19_rereview": {
+    "needed": false,
+    "reason": "Jeff's approval rests on decisions a1 (producer writes {\"status\": 200}), a2 (note in the http-body v1 doc with a Tier1-Allow trailer) and a3 (shallow key check), on the security note and on the plan. The correction moves none of them. a1: option C (schema v2) still cannot fix old ledgers, because a header cannot be re-pointed, and five releases of non-conforming ledgers instead of one only strengthens that; option D (widen v1 in place) stays forbidden by RELAY-05, because v1's schema has said additionalProperties: false since v0.2.0, so 'every v1 ledger carries path' is a longer-standing producer bug, not a published meaning. a2: the note's location and route are unchanged; only its release range is. a3: untouched. Security: metadata is unsigned and served bytes unchanged in every release, so GLOBAL-06's 'posture unchanged' still holds. Plan: no task added, removed or reordered. FLOW-19's re-review path is a back-to-Design finding, and nothing here is one. The 05d49e8 entry in the Design review section is the right record; Jeff sees it, and the PR body note, at merge (FLOW-08). One point for him to see there: the corrected premise is the only fact that could have tempted option D, and it does not."
+  },
+  "relay_judgment": {
+    "RELAY-01": "holds (unchanged since ad39ceb): the close goes through r.ledger.Close on the single-writer loop.",
+    "RELAY-02": "holds (unchanged): served bytes and ComputeHashBlock(data) unchanged.",
+    "RELAY-04": "holds (unchanged): recordServed and its callers are mode-independent.",
+    "RELAY-05": "holds: the producer conforms to http-body v1, v1.schema.json is unchanged, and the deviation note now names the right releases (finding 1 fixed).",
+    "RELAY-07": "holds: no filesystem write added.",
+    "GLOBAL-06": "the design's security note still holds; 'posture unchanged' is correct."
+  },
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 0,
+    "SHOULD": 2
+  },
+  "previous_findings": [
+    {"id": 1, "rule": "RELAY-05", "severity": "MUST", "file": "specs/metadata-http-body/v1.md", "line": 31, "status": "fixed", "by": ["72af1e160d52", "05d49e8c30f7"], "note": "Note rewritten; every sentence checked against the tags. Design corrected at all places finding 1 named, plus option C, a2 and the reader note. The PR body still owes the 'a1/a2 confirmed on the wrong premise, choice unchanged' sentence."},
+    {"id": 2, "rule": "TEST-05", "severity": "SHOULD", "file": "relay/ledger_conformance_test.go", "line": 70, "status": "open", "note": "carried, still optional; code unchanged since ad39ceb"},
+    {"id": 3, "rule": "TEST-07", "severity": "SHOULD", "file": "relay/relay_collector_test.go", "line": 188, "status": "open", "note": "carried, still optional; code unchanged since ad39ceb"}
+  ],
+  "findings": [
+    {
+      "id": 2,
+      "rule": "TEST-05",
+      "related_rules": ["RELAY-05"],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "relay/ledger_conformance_test.go",
+      "line": 70,
+      "status": "open (carried from ad39ceb99938)",
+      "finding": "The drift guard is real (verified red on the old producer and on an injected key in artifact metadata at ad39ceb) but covers only what the end-to-end scenario reaches: records under http-open, http-headers, http-body (served inputs only) and artifact. The other http-body producers, the request-body checkpoint {} (relay/relay.go:527), the bodiless upstream response close (relay.go:578) and the streamed response close (relay.go:799), and redacted and environment metadata, are never written in that scenario, so a future extra key there passes.",
+      "suggestion": "Optional follow-up, not for this PR: drive one proxied upstream GET and one request-body POST through the scenario (or a second scenario against an httptest upstream), or state the covered schema indices in the test's doc comment."
+    },
+    {
+      "id": 3,
+      "rule": "TEST-07",
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "relay/relay_collector_test.go",
+      "line": 188,
+      "status": "open (carried from ad39ceb99938)",
+      "finding": "TestRelayCollectorEndToEnd now only calls runEndToEndScenario, and TestLedgerMetadataConformsToSpecs runs the same whole scenario again (about 2 s each, a relay plus a real collector).",
+      "suggestion": "Optional: run the scenario once and make the conformance check a subtest of TestRelayCollectorEndToEnd over the returned directory, or mark the two tests t.Parallel() if the scenario holds no shared state."
+    }
+  ],
+  "suppressions": [
+    {
+      "source": "tier1 Tier1-Allow trailer",
+      "rule": "RELAY-05",
+      "path": "specs/metadata-http-body/v1.md",
+      "commit": "72af1e160d52",
+      "reason": "correct the releases the deviation note names; schema unchanged (http-body-path-drift)",
+      "applied_by_tier1": true,
+      "judgment": "justified and correctly scoped: one rule, one exact path, on a commit that touches only that file, for a prose-only edit; v1.schema.json unchanged."
+    },
+    {
+      "source": "tier1 Tier1-Allow trailer",
+      "rule": "RELAY-05",
+      "path": "specs/metadata-http-body/v1.md",
+      "commit": "ad39ceb99938",
+      "reason": "prose-only erratum for v0.6.0 ledgers; schema unchanged (http-body-path-drift)",
+      "applied_by_tier1": false,
+      "judgment": "still valid in scope (same rule, path, prose-only, single-file commit); its 'v0.6.0' wording is now stale history. tier1 reports one suppression per finding, taking the first matching trailer in git log order (newest first, tools/tier1/diff/diff.go:280), so 72af1e1's trailer is the one shown."
+    }
+  ],
+  "suppressions_carried_over": [
+    {"from": "ad39ceb99938", "rule": "RELAY-05", "path": "specs/metadata-http-body/v1.md", "commit": "ad39ceb99938", "status": "carried, superseded in tier1 output by 72af1e160d52"}
+  ],
+  "two_trailers_same_file": "fine. Trailers are per-commit and diff-wide (tools/tier1/diff/diff.go readTrailers over base..head); each of the two commits needs its own because each is a prose-only edit to one half of the schema-doc pair, and neither widens the other's scope. tier1 dedupes to one suppression line (Suppress marks an allow used once), so the report is not noisy. A squash merge would concatenate both bodies, giving two valid trailers on one commit, which tier1 also parses. No finding.",
+  "notes": [
+    "Previous report ad39ceb99938 attributed the bootstrap close to 4ea4f50; that was wrong, 5ab774b added it and 4ea4f50 only refactored into recordServed. This report corrects it.",
+    "Queue question a1's text still says v0.6.0 is the only release that wrote path; queue state is the tick's to edit, and the PR body should say a1/a2 were confirmed on that premise and the choice stands."
+  ],
+  "back_to_design": false,
+  "back_to_implement": false
+}
