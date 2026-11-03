@@ -3,7 +3,7 @@ title: Relay writes a path field under http-body, whose schema forbids extra fie
 priority: 15
 status: in_progress
 round: feature
-phase: 4
+phase: 3
 design: docs/design/http-body-path-drift.md
 branch: feat/http-body-path-drift
 alters_relationships: false
@@ -47,13 +47,13 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: f4-review
-    phase: 4
+  - id: f3-implement-r2
+    phase: 3
     affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261103T105654Z
-      expires: 2026-11-03T13:09:16.470660568Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -154,3 +154,6 @@ history:
   - at: 2026-11-03T11:09:16Z
     by: cloud/20261103T105654Z
     event: claimed f4-review until 2026-11-03T13:09:16Z
+  - at: 2026-11-03T11:14:07Z
+    by: cloud/20261103T105654Z
+    event: 'back to implement: f4-review ad39ceb99938: 1 MUST (RELAY-05) - the spec note says only v0.6.0 wrote path, but v0.2.0-v0.5.0 wrote it on context-file closes too; correct specs/metadata-http-body/v1.md:31 (new commit, fresh Tier1-Allow trailer) and the design''s factual premise (:39-42, :128, :300-301). Decision a1 unchanged. 2 SHOULD optional (TEST-05 coverage, TEST-07 scenario runs twice)'

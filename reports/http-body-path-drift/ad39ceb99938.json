@@ -1,0 +1,91 @@
+{
+  "feature": "http-body-path-drift",
+  "branch": "feat/http-body-path-drift",
+  "head": "ad39ceb99938",
+  "base": "a3e18fbaf2e3",
+  "round": "feature",
+  "step": "f4-review",
+  "previous_report": null,
+  "scope": "git diff origin/main...feat/http-body-path-drift (5 files, +546/-8): docs/design/http-body-path-drift.md, relay/ledger_conformance_test.go, relay/relay.go, relay/relay_collector_test.go, specs/metadata-http-body/v1.md. Merge base a3e18fb; origin/main is 1ef5547 (Firecracker driver), which does not touch relay/ and touches only specs/environment-vm-disk-chain under specs/.",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "tier1": {
+    "result": "green",
+    "toolchain": "go1.26.3 (/usr/local/go/bin first on PATH), golangci-lint 2.15.0 (~/go/bin)",
+    "make_lint": "pass: 0 issues in the root module, tools/workflow and tools/tier1; then dist/tier1 -base origin/main (a3e18fbaf2e3...ad39ceb99938): 0 MUST, 0 MUST-review, 0 SHOULD, 0 hints, 1 suppressed",
+    "make_lint_per_platform": "not needed: no build-tagged file is touched (FLOW-17)",
+    "make_test": "pass: every package ok (root module, tools/workflow, tools/tier1), no FAIL. TestLedgerMetadataConformsToSpecs and TestRelayCollectorEndToEnd re-run -count=1: PASS",
+    "custom_static_checks": "dist/tier1 -json -base origin/main, exit 0: findings [], hints [], suppressed = 1 x RELAY-05 specs/metadata-http-body/v1.md (commit ad39ceb99938)",
+    "implementer_claims_verified": {
+      "conformance_red_then_green": "verified. In a scratch worktree at ad39ceb with f43833b's relay/relay.go hunk reverse-applied, TestLedgerMetadataConformsToSpecs fails: 'key \"path\" is not a property of .../schemas/v1/http-body.json' on records 1, 3, 5, and the three served-input CLOSE assertions fail with map[path:build-script], map[path:bootstrap], map[path:src/main.c]. A second mutation (an extra \"bogus\" key in the artifact metadata, relay.go:635) also fails the generic check, so it is not only the targeted assertion that catches drift. Worktree removed; code checkout clean.",
+      "make_test_lint_tier1_green_1_suppressed": "verified, as above",
+      "gofmt_predates": "verified. gofmt -l relay/ lists relay/ledger_test.go and relay/proxy.go at ad39ceb, at the base a3e18fb, and at origin/main 1ef5547; neither file is in the diff, and every touched file is gofmt-clean (GLOBAL-02)"
+    },
+    "fixes_made": "none"
+  },
+  "spec_note_claims": {
+    "only_v0_6_0_wrote_path": "FALSE. git grep over the tags: v0.1.0 through v0.5.0 all have cmd/relay/relay.go handleContextGet writing closeMeta {\"path\": filePath} under schemaHTTPBody (index 2). v0.2.0 through v0.5.0 name https://github.com/buildwarden/buildwarden/schemas/v1/http-body.json at index 2 (cmd/relay/ledger.go:65), and their schemas/v1/http-body.json already has additionalProperties: false; v0.1.0 named schemas/http-body.json, which had no published schema file. b716d9e (2026-09-24) only widened the key to the build script, and 4ea4f50 to the bootstrap config. So v0.2.0-v0.5.0 ledgers carry path on every build-context-file close; v0.6.0 adds the build-script and bootstrap closes.",
+    "readers_ignore_it": "true. No Go code outside tests reads a \"path\" key from ledger metadata; cmd/warden inspect metaSummary (cmd/warden/inspect_impl.go:636-639) reads only method, url, name, reference. inspect_env.go's Path json tag is environment metadata, not http-body.",
+    "metadata_outside_signature": "true. relay/ledger.go loop() signs type, prev_sig, open_sig (non-OPEN), payload size and hash block only; schema index and CBOR metadata are appended after the signature. specs/build-ledger/v1.md:15 says metadata is not part of signatures.",
+    "path_duplicates_open_url": "true for every release: path is req.URL.Path with the leading slash trimmed (build-script, bootstrap, src/main.c against http://artifacts/build-script, http://artifacts/bootstrap, http://cwd/src/main.c)."
+  },
+  "relay_judgment": {
+    "RELAY-01": "holds: the close still goes through r.ledger.Close on the single-writer loop; no new write site.",
+    "RELAY-02": "holds: newBytesResponse(req, data, ...) and ComputeHashBlock(data) are unchanged; only close metadata changes, which is not served to the build.",
+    "RELAY-04": "holds: recordServed and its three callers are mode-independent request handlers; container, vm and host are touched identically, as the design states.",
+    "RELAY-05": "the producer now conforms to http-body v1; the schema file is unchanged; the doc note is inaccurate about which releases deviated (finding 1).",
+    "RELAY-07": "holds: no filesystem write added.",
+    "GLOBAL-06": "the design carries the required security note; posture unchanged is correct (metadata is unsigned, served bytes and hashes are identical, no key/CA/filter code touched).",
+    "Tier1-Allow": "justified and correctly scoped: one rule (RELAY-05), one exact path (specs/metadata-http-body/v1.md), on a commit (ad39ceb) that touches only that file, for a prose-only addition with v1.schema.json unchanged. The reason text repeats the 'v0.6.0' scoping of finding 1."
+  },
+  "counts": {
+    "MUST": 1,
+    "MUST-review": 0,
+    "SHOULD": 2
+  },
+  "findings": [
+    {
+      "id": 1,
+      "rule": "RELAY-05",
+      "related_rules": ["FLOW-06"],
+      "severity": "MUST",
+      "check": "hybrid",
+      "file": "specs/metadata-http-body/v1.md",
+      "line": 31,
+      "finding": "The Known producer deviation note understates the deviation. It says ledgers written by the v0.6.0 relay, and unreleased builds from b716d9e onward, carry path. The release history says otherwise: v0.2.0, v0.3.0, v0.4.0 and v0.5.0 (cmd/relay/relay.go handleContextGet, line 536-537 in each tag) also write {\"path\": <file>} on every build-context-file close under index 2, and their header names the same schemas/v1/http-body.json $id with additionalProperties: false. b716d9e only extended the key to the build script (and 4ea4f50 to the bootstrap config). A third-party reader of this long-lived spec would take v0.2.0-v0.5.0 ledgers to conform strictly, and they do not. The same false premise is in the design (docs/design/http-body-path-drift.md:39-42 'v0.5.0 had no such field; v0.6.0 ... is the only release whose ledgers carry it', and D3 at :128, plan step 4 at :300-301) and in the a1/a2 question text Jeff confirmed. The decision does not move: option C's own argument (old ledgers stay non-conforming to the v1 schema they name) gets stronger, and readers-ignore-it and metadata-unsigned stay true.",
+      "suggestion": "wf-implement: in a new commit (no amend, no force-push) rewrite the note to say ledgers from v0.2.0 through v0.6.0 carry a path text field on the http-body close of each build-context file, and v0.6.0 (from b716d9e and 4ea4f50) also on the build-script and bootstrap closes; keep 'duplicates the open record's url', 'readers ignore it' and 'current relays write {\"status\": 200}'. Commit it alone with a fresh trailer, e.g. 'Tier1-Allow: RELAY-05 specs/metadata-http-body/v1.md: correct the releases the deviation note names; schema unchanged (http-body-path-drift)'. Correct the design's History paragraph (:39-42), D3 (:128) and plan step 4 (:300-301) to the same facts in the same or a separate commit, and say in the PR body that a1/a2 were confirmed on the 'v0.6.0 only' premise, which was wrong but does not change the choice. Not back-to-design."
+    },
+    {
+      "id": 2,
+      "rule": "TEST-05",
+      "related_rules": ["RELAY-05"],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "relay/ledger_conformance_test.go",
+      "line": 70,
+      "finding": "The drift guard is real (verified red on the old producer and on an injected key in artifact metadata) but covers only what the end-to-end scenario reaches: records under http-open, http-headers, http-body (served inputs only) and artifact. The other http-body producers, the request-body checkpoint {} (relay/relay.go:527), the bodiless upstream response close {\"status\"} (relay.go:578) and the streamed response close (relay.go:799), and redacted and environment metadata, are never written in that scenario, so a future extra key there passes. The design says this honestly ('every metadata producer the scenario reaches'); the gap is in what the guard promises beyond this bug.",
+      "suggestion": "Optional follow-up, not for this PR: drive one proxied upstream GET and one request-body POST through the scenario (or a second scenario against an httptest upstream) so every http-body producer is checked, or state the covered schema indices in the test's doc comment."
+    },
+    {
+      "id": 3,
+      "rule": "TEST-07",
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "relay/relay_collector_test.go",
+      "line": 188,
+      "finding": "TestRelayCollectorEndToEnd now only calls runEndToEndScenario, and TestLedgerMetadataConformsToSpecs runs the same whole scenario again (about 2 s each, a relay plus a real collector), so the relay package pays for the scenario twice; the conformance test's first call already performs every assertion TestRelayCollectorEndToEnd makes.",
+      "suggestion": "Optional: run the scenario once and make the conformance check a subtest of TestRelayCollectorEndToEnd (t.Run(\"metadata conforms to specs\", ...)) over the returned directory, or mark the two tests t.Parallel() if the scenario holds no shared state."
+    }
+  ],
+  "suppressions": [
+    {
+      "source": "tier1 Tier1-Allow trailer",
+      "rule": "RELAY-05",
+      "path": "specs/metadata-http-body/v1.md",
+      "commit": "ad39ceb99938",
+      "reason": "prose-only erratum for v0.6.0 ledgers; schema unchanged (http-body-path-drift)",
+      "judgment": "justified and correctly scoped; reason text inherits finding 1's v0.6.0-only scoping"
+    }
+  ],
+  "suppressions_carried_over": [],
+  "back_to_design": false
+}
