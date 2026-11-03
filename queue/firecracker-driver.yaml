@@ -3,7 +3,7 @@ title: Firecracker driver
 priority: 16
 status: in_progress
 round: feature
-phase: 6
+phase: 3
 design: docs/design/firecracker-driver.md
 branch: feat/firecracker-driver
 alters_relationships: true
@@ -61,6 +61,7 @@ steps:
     needs:
       - f2-spike-linux-kvm
       - f6-provision-linux-kvm-dns
+      - f3-implement-r2
     lease:
       claimed_by: ""
       expires: null
@@ -117,21 +118,10 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: f6-consolidate
-    phase: 6
+  - id: f3-implement-r2
+    phase: 3
     affinity: cloud
     status: pending
-    needs:
-      - f6-merge-main
-    lease:
-      claimed_by: cloud/20261102T220201Z
-      expires: 2026-11-03T01:52:07.3945142Z
-  - id: f6-open-pr
-    phase: 6
-    affinity: cloud
-    status: pending
-    needs:
-      - f6-consolidate
     lease:
       claimed_by: ""
       expires: null
@@ -433,3 +423,9 @@ history:
   - at: 2026-11-02T23:52:07Z
     by: cloud/20261102T220201Z
     event: claimed f6-consolidate until 2026-11-03T01:52:07Z
+  - at: 2026-11-03T00:01:51Z
+    by: cloud/20261102T220201Z
+    event: 'back to implement: f6-consolidate (ea94596): driver/linuxguest/images.go hashFile duplicates driver.HashFileSHA256; switch its three uses and delete it (FLOW-15 duplication, covered by the plan''s extraction task)'
+  - at: 2026-11-03T00:02:12Z
+    by: cloud/20261102T220201Z
+    event: 'f6-validate-linux-kvm and f6-provision-linux-kvm-dns restored after wf back -to 3 dropped them (pending host and human phase-6 steps); f6-validate-linux-kvm now also needs f3-implement-r2. When phase 6 is reseeded, f6-open-pr must need f6-validate-linux-kvm (f6-consolidate finding)'
