@@ -1,6 +1,6 @@
 ---
 feature: bootstrap-firecracker-row
-status: draft
+status: active
 drivers: []
 seams: []
 surfaces: []
@@ -116,6 +116,12 @@ driver's files.
    noting it merges after `firecracker-driver`.
 
 ## Design review
+
+- **r1, 2026-11-02, Jeff: approved** as drafted, approved at a01f7ae.
+  Decisions confirmed: land after `firecracker-driver` merges (Jeff merges the
+  driver first); remove the `docs/development/README.md` entry rather than
+  repoint it; the TEST-02 `testing.md` listing of the `firecracker` job stays
+  out until that job has passed and is relied on.
 
 ## Consolidation
 
