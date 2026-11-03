@@ -3,7 +3,7 @@ title: Move every VM driver's relay-to-build link off 10.0.0.0/30
 priority: 18
 status: in_progress
 round: feature
-phase: 2
+phase: 1
 design: docs/design/build-link-subnet.md
 branch: feat/build-link-subnet
 alters_relationships: false
@@ -24,46 +24,6 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: f6-validate-linux-kvm
-    phase: 6
-    affinity: host:linux-kvm
-    status: pending
-    needs:
-      - f2-design-review
-    lease:
-      claimed_by: ""
-      expires: null
-    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan: with pre-change boot assets the firecracker build and doctor refuse with the rebuild fix; after rebuilding, a direct-boot and a disk build succeed on the new link 100.127.255.252/30 and their ledgers verify. Nothing to run before f3-implement. needs f2-design-review set by f2-plan (cloud/20261103T105654Z) as a stopgap: wf validate rejects a need on f3-implement until phase 3 seeds it. When phase 3 is seeded, add f3-implement to needs; when phase 6 is seeded, make f6-open-pr need this step.'
-  - id: f6-validate-qemu-any
-    phase: 6
-    affinity: host:qemu-any
-    status: pending
-    needs:
-      - f2-design-review
-    lease:
-      claimed_by: ""
-      expires: null
-    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan: stale relay and build-vm initramfs refused with the fix; after rebuilding, a direct-boot and a cloud-image Linux guest build succeed on the new link. Nothing to run before f3-implement. needs f2-design-review set by f2-plan (cloud/20261103T105654Z) as a stopgap: wf validate rejects a need on f3-implement until phase 3 seeds it. When phase 3 is seeded, add f3-implement to needs; when phase 6 is seeded, make f6-open-pr need this step.'
-  - id: f6-validate-macos-vz
-    phase: 6
-    affinity: host:macos-vz
-    status: pending
-    needs:
-      - f2-design-review
-    lease:
-      claimed_by: ""
-      expires: null
-    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan: an image prepared before the change is refused with the re-prepare fix; after re-prepare a build succeeds on the new link; the host-mode relay refuses a dial into the link. Nothing to run before f3-implement. needs f2-design-review set by f2-plan (cloud/20261103T105654Z) as a stopgap: wf validate rejects a need on f3-implement until phase 3 seeds it. When phase 3 is seeded, add f3-implement to needs; when phase 6 is seeded, make f6-open-pr need this step.'
-  - id: f6-validate-windows-hyperv
-    phase: 6
-    affinity: host:windows-hyperv
-    status: pending
-    needs:
-      - f2-design-review
-    lease:
-      claimed_by: ""
-      expires: null
-    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan: a relay-boot.vhdx without the new link record is refused with the refresh-cache.sh fix; after refreshing, a Windows guest build succeeds on the new link; setup refuses a --nat-prefix overlapping the link. Nothing to run before f3-implement. needs f2-design-review set by f2-plan (cloud/20261103T105654Z) as a stopgap: wf validate rejects a need on f3-implement until phase 3 seeds it. When phase 3 is seeded, add f3-implement to needs; when phase 6 is seeded, make f6-open-pr need this step.'
   - id: f2-plan
     phase: 2
     affinity: cloud
@@ -71,12 +31,10 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: f2-design-review
-    phase: 2
-    affinity: human
+  - id: f1-design-r2
+    phase: 1
+    affinity: cloud
     status: pending
-    needs:
-      - f2-plan
     lease:
       claimed_by: ""
       expires: null
@@ -90,7 +48,7 @@ budget:
 questions:
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: The relay-to-build link's range (Decision 1). Every VM driver uses it; the relay routes any upstream address inside it to the build VM.
     options:
       - RFC 6598 top /30, 100.127.255.252/30 (relay .253, build VM .254)
@@ -98,6 +56,7 @@ questions:
       - link-local 169.254.87.0/30
       - keep 10.0.0.0/30 and policy-route the relay's upstream sockets
     recommended: RFC 6598 top /30, 100.127.255.252/30 (relay .253, build VM .254)
+    answer: Default 100.127.255.252/30, but the link must be manually configurable (advanced configuration options) in case of a collision or other unknown limitation (Jeff, r1)
   - id: a2
     kind: assumed
     status: open
@@ -136,12 +95,13 @@ questions:
     recommended: tracked (backlog build-link-subnet-qemu-windows)
   - id: a6
     kind: assumed
-    status: open
+    status: confirmed
     question: A configuration knob for the link (Decision 5, ORCH-03).
     options:
       - fixed link, no warden.toml key or flag
       - a config key with a per-value asset record
     recommended: fixed link, no warden.toml key or flag
+    answer: 'Reversed: a configurable link in the advanced configuration options, defaulting to 100.127.255.252/30 (Jeff, r1)'
   - id: a7
     kind: assumed
     status: open
@@ -189,3 +149,12 @@ history:
   - at: 2026-11-03T11:42:59Z
     by: cloud/20261103T105654Z
     event: done f2-plan
+  - at: 2026-11-03T20:16:19Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: Default 100.127.255.252/30, but the link must be manually configurable (advanced configuration options) in case of a collision or other unknown limitation (Jeff, r1)'
+  - at: 2026-11-03T20:16:19Z
+    by: human/jeff
+    event: 'assumed question a6 confirmed: Reversed: a configurable link in the advanced configuration options, defaulting to 100.127.255.252/30 (Jeff, r1)'
+  - at: 2026-11-03T20:16:19Z
+    by: human/jeff
+    event: 'back to design: Design review r1 (Jeff): keep 100.127.255.252/30 as the default but make the link manually configurable (advanced config). a6 reversed; re-evaluate a2, a3, a4, a7 and a8 for a configurable link (how a configured value reaches the baked initramfs, Hyper-V UKI and vz boot script; record check against the configured value; guards follow the configured link; new config surface; validation of the setting: a /30 disjoint from BuildWarden''s ranges). Carry forward the plan''s reconciliation notes and two fixes: Decision 2 has four keys; drop tools/build-vm/init from the firecracker cache key. See the Design review entry at de64be3.'
