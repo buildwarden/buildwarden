@@ -98,8 +98,8 @@ appears nowhere in `QUEUE.md`, so it could be forgotten.
    - `wf validate` rejects any other status, and a deferred gap without a
      note.
    - The gate and `workflow-native` skip deferred gaps.
-   - `QUEUE.md`'s Needs Jeff section lists each deferred gap with the first
-     line of its note, so it stays visible.
+   - `QUEUE.md` does not list deferred gaps. They stay in
+     `backlog/native-gaps.yaml`, where their notes say what they wait on.
    - The status goes back to `open` once the wait is over, by hand or
      through `workflow-human`.
 
@@ -128,13 +128,13 @@ None.
 
   Recommended: (a).
 - **a3. Deferred gaps.** Proceeding with `deferred` as a third status that
-  needs a note, is skipped by the gate, and is listed in QUEUE.md's Needs Jeff;
-  confirm. Options:
+  needs a note and is skipped by the gate, without a QUEUE.md listing (Jeff,
+  r1; this was option (b)); confirm. Options:
   - (a) as stated;
   - (b) `deferred` without the Needs Jeff listing;
   - (c) no new status: re-home the entry to a `host:` nobody serves.
 
-  Recommended: (a).
+  Recommended: (b), Jeff's choice at r1.
 - **a4. Holds nothing.** The change reaches the running loop only when merged,
   and no step in flight depends on the old behaviour; confirm.
 
@@ -145,7 +145,6 @@ None.
 | `tools/workflow/check/check.go` `merged()` | per ref: ancestor, **or** PR commit on `origin/main` with an equal tree; failure detail names the PR commit and both trees |
 | `tools/workflow/check/check_test.go` | squash merge with the local ref present passes; squash with differing trees fails; a ref pushed past the squash fails; the existing deleted-branch and `#50`/`#5` cases stay |
 | `tools/workflow/queue/hosts.go` | validate gap status ∈ {open, deferred, done}; deferred needs a note (the gate already wakes only for `open`) |
-| `tools/workflow/queue/summary.go` | Needs Jeff lists deferred gaps; `testdata/queue.md` golden updated |
 | `docs/development/process.md` FLOW-16 | the squash case and its single `-D` |
 | `.claude/skills/workflow-tick/SKILL.md` Close | squash-merged branch: `-D` after `wf check` passes |
 | `.claude/skills/workflow-native/SKILL.md` | backlog: `open` entries only; deferred ones are not retried |
@@ -159,7 +158,7 @@ Tier 0: the `check` and `queue` tests above, `make test` and `make lint` (the
 ## Implementation plan
 
 1. `merged()` with tree equality, plus tests (FLOW-08, FLOW-16).
-2. Gap status validation and the Needs Jeff listing, plus tests and golden
+2. Gap status validation (status set, note on deferred), plus tests
    (FLOW-09, TEST-03).
 3. FLOW-16 text, then the `workflow-tick` Close and `workflow-native` backlog
    wording (FLOW-14).
@@ -168,7 +167,14 @@ Tier 0: the `check` and `queue` tests above, `make test` and `make lint` (the
 
 ## Design review
 
-None yet.
+- **r1, 2026-11-03: approved** (Jeff, attended session, FLOW-19). Approved at
+  `68484a6`, with one change folded in and no second review.
+  - a1 (the PR commit plus equal trees), a2 (`-D` only for a proven squash)
+    and a4 (holds nothing) are confirmed as recommended.
+  - a3 is changed: `deferred` is a gap status with a required note, skipped
+    by the gate and by native sessions, but QUEUE.md does not list deferred
+    gaps (option (b)). Decision 3, the Design table (no `summary.go` change)
+    and task 2 are updated to match.
 
 ## Consolidation
 
