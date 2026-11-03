@@ -1,6 +1,6 @@
 ---
 feature: native-allowlist-scratch
-status: draft
+status: active
 drivers: []
 seams: []
 surfaces: []
@@ -129,6 +129,11 @@ JSON change.
 2. `make lint` and `make test`; archive this design (FLOW-12) and open the PR.
 
 ## Design review
+
+- **r1, 2026-11-02, Jeff: approved** as drafted, approved at 91ff7f0.
+  Decisions confirmed: the mid-pattern wildcard rules (D1); the `git -C *
+  push` denies (D2); root in the WSL test distro through `Bash(wsl:*)` stays,
+  recorded here, with a `wsl --unregister` deny (D3).
 
 ## Consolidation
 
