@@ -1,0 +1,7 @@
+== host /etc/resolv.conf after the cases
+nameserver 8.8.8.8
+nameserver 8.8.4.4
+== mounts on /etc/resolv.conf in the host namespace
+0
+== firecracker processes
+none

@@ -1,0 +1,7 @@
+Kept the cache (7760 MB, /home/jeff/.cache/warden); --cache removes it
+Nothing to clean.
+slots down exit 0
+wfc interfaces left: 0
+-P FORWARD DROP
+disk:
+/dev/sdd       1007G   12G  944G   2% /

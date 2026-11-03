@@ -304,6 +304,12 @@ gaps:
       Tracked (TEST-03) and deferred from f6-validate-linux-kvm on 2026-11-02 (Jeff). windows-desktop's
       WSL2 Ubuntu has no firewalld, and installing it would change the test host.
       This needs a firewalld distro (Fedora, RHEL or a derivative) with KVM, or a disposable VM with nested KVM.
+      2026-11-02 (host:linux-kvm/20261103T051002Z, unattended, main 1ef5547): not run. firewalld is
+      not installed in windows-desktop's WSL Ubuntu (systemctl is-active: inactive), installing it
+      changes the test host, and WSL distros share one network namespace, so a second WSL distro
+      running firewalld would manage the Ubuntu host's chains too. The unattended session cannot
+      download an ISO or image for a disposable VM (curl and wget are denied). Needs Jeff to provide
+      a firewalld host, or an attended run on one.
     status: open
   - id: firecracker-distro-lan-resolver
     host: linux-kvm
@@ -315,4 +321,22 @@ gaps:
       Already covered: the loopback-resolver refusal ran on 96ca21a (native/linux-kvm/2026-11-02/f6-direct-build-preflight.log),
       and resolver selection has tier-0 tests. Run it by hand on a disposable host, or as a tier-0
       test of the resolver selector that is given the host's addresses.
-    status: open
+    status: done
+    done: 2026-11-02
+    evidence: >-
+      host:linux-kvm/20261103T051002Z, unattended, main 1ef5547 (the merged driver), windows-desktop
+      WSL2 Ubuntu 22.04 (6.18.54.1-warden+, Firecracker v1.17.0). The host's /etc/resolv.conf
+      (8.8.8.8, 8.8.4.4) was never changed: each case ran warden as jeff inside a private mount
+      namespace (sudo unshare -m --propagation private, then runuser) with a temporary resolv.conf
+      bind-mounted over /etc/resolv.conf. With only the host's eth0 address 172.19.128.47 listed:
+      `warden doctor --driver firecracker` reports "FAIL upstream DNS for the relay ... the host has
+      only resolvers it cannot reach: 172.19.128.47" with the fix "point the host's resolver at an
+      off-host DNS server: list one as a nameserver in /etc/resolv.conf (under systemd-resolved, set
+      DNS= in /etc/systemd/resolved.conf)", exit 1; `warden build --driver firecracker --script` on a
+      slot made by `sudo warden setup --slots 1` refuses in preflight with the same error and fix,
+      exit 1, no firecracker process started. With 172.19.128.47 then 8.8.8.8 listed, doctor uses
+      8.8.8.8 only. Control in the same namespace mechanism with the real resolvers: the direct-boot
+      build SUCCEEDED (guest 6.1.191), inspect shows 7 signatures valid and all channels closed, so
+      the refusal is the resolver check and not the namespace. Afterwards the host resolv.conf was
+      unchanged, no bind mount was left, slots.sh down left 0 wfc interfaces and FORWARD DROP.
+      Logs and the run script: native/linux-kvm/2026-11-02/lan-resolver/.

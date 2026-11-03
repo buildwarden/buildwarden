@@ -1,0 +1,5 @@
+warden: build FAILED
+[warden] ERROR: the relay needs an off-host upstream DNS server, and the host has only resolvers it cannot reach: 172.19.128.47
+  To fix: point the host's resolver at an off-host DNS server: list one as a nameserver in /etc/resolv.conf (under systemd-resolved, set DNS= in /etc/systemd/resolved.conf)
+exit 1
+firecracker processes before=0 after=0

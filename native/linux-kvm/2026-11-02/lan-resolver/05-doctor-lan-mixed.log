@@ -1,0 +1,13 @@
+ok    /dev/kvm
+ok    firecracker
+ok    boot assets
+ok    disk-image builds (qemu-img, genisoimage)
+ok    network slots owned by this user: 1 (wfc0 to wfc0)
+ok    slot sysctls
+ok    firewalld
+skip  rules and FORWARD policy (reading them needs root: sudo warden doctor --driver firecracker)
+ok    upstream DNS for the relay: 8.8.8.8
+warn  reflink copies on the cache filesystem
+      each disk-image build copies its whole rootfs (cp: failed to clone '/home/jeff/.cache/warden/firecracker/work/reflink-probe-2223378707.copy' from '/home/jeff/.cache/warden/firecracker/work/reflink-probe-2223378707': Operation not supported); a cache on btrfs or XFS (reflink=1) makes it instant
+ok    orphaned VMMs
+exit 0

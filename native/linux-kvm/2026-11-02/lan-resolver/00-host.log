@@ -1,0 +1,36 @@
+== date
+2026-11-03T05:18:13Z
+== host
+6.18.54.1-microsoft-standard-WSL2-warden+
+PRETTY_NAME="Ubuntu 22.04.3 LTS"
+uid=1000(jeff) gid=1000(jeff) groups=1000(jeff),4(adm),20(dialout),24(cdrom),25(floppy),27(sudo),29(audio),30(dip),44(video),46(plugdev),109(kvm),116(netdev)
+== firecracker
+Firecracker v1.17.0
+== warden
+[warden] ERROR: unknown command "version" for "warden"
+  To fix: see 'warden --help'
+warden version dev
+== assets beside the binary
+total 90424
+drwxrwxrwx 1 jeff jeff     4096 Nov  2 21:16 .
+drwxrwxrwx 1 jeff jeff     4096 Nov  2 21:16 ..
+-rwxrwxrwx 1 jeff jeff   644445 Nov  2 21:16 firecracker-build-initramfs.cpio.gz
+-rwxrwxrwx 1 jeff jeff  3965465 Nov  2 21:16 firecracker-relay-initramfs.cpio.gz
+-rwxrwxrwx 1 jeff jeff 44966696 Nov  2 21:16 firecracker-vmlinux
+-rwxrwxrwx 1 jeff jeff 17478460 Nov  2 21:16 warden
+-rwxrwxrwx 1 jeff jeff  9184932 Nov  2 21:16 warden-io-linux-amd64
+-rwxrwxrwx 1 jeff jeff 16335791 Nov  2 21:16 warden-relay-linux-amd64
+ebaf41770128712e6d5f7df7cff30ad7bbbcf1d33232d2ec927276f98dffb8a7  /mnt/c/Users/jeff/buildwarden-native/.scratch/main/dist/firecracker-build-initramfs.cpio.gz
+b5b657e0a7a36ee53579eb377379e30b6bad05b4fdf059acdef5e829f3af3b67  /mnt/c/Users/jeff/buildwarden-native/.scratch/main/dist/firecracker-relay-initramfs.cpio.gz
+169495b7a8e38be727862e607de44c08e5ff173c3125ce0ac37f041f4b672c23  /mnt/c/Users/jeff/buildwarden-native/.scratch/main/dist/firecracker-vmlinux
+== host addresses
+lo               UNKNOWN        127.0.0.1/8 10.255.255.254/32 
+eth0             UP             172.19.128.47/20 
+== host /etc/resolv.conf (unchanged throughout)
+nameserver 8.8.8.8
+nameserver 8.8.4.4
+== LAN address used as the only resolver: 172.19.128.47
+== FORWARD policy
+-P FORWARD DROP
+== firewalld
+inactive

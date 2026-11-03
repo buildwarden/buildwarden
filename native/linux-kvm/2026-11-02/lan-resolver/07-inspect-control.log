@@ -1,0 +1,25 @@
+════════════════════════════════════════════════════════════════════════════════
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  ✅
+  ENVIRONMENT  vm-disk-chain/v1  payload verified
+    firecracker linux/amd64
+    kernel   firecracker-vmlinux  42.9 MB  sha256:169495b7a8e3  local
+    initrd   firecracker-build-initramfs.cpio.gz  629.3 KB  sha256:ebaf41770128  local
+    seed     3 per-build files
+════════════════════════════════════════════════════════════════════════════════
+[1;35m✅ ENVIRONMENT  (968 bytes)[0m
+[1;32m✅ GET /bootstrap (42 bytes)[0m
+[1;32m✅ GET /build-script (48 bytes)[0m
+
+════════════════════════════════════════════════════════════════════════════════
+  SUMMARY: 6 records, 3 requests, 1.0 KB audited
+  SIGNATURES: ✅ All 7 signatures valid
+  COMPLETENESS: ✅ All channels closed
+════════════════════════════════════════════════════════════════════════════════
+exit 0
+total 24
+drwxr-xr-x 2 jeff jeff 4096 Nov  2 21:18 .
+drwxrwxrwt 9 root root 4096 Nov  2 21:18 ..
+-rw-r--r-- 1 jeff jeff   32 Nov  2 21:18 build-output.log
+-rw-r--r-- 1 jeff jeff  907 Nov  2 21:18 ca.cert.pem.zst
+-rw-r--r-- 1 jeff jeff  968 Nov  2 21:18 environment.json
+-rw-r--r-- 1 jeff jeff 1230 Nov  2 21:18 ledger.zst
