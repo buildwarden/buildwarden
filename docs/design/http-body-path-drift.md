@@ -1,7 +1,7 @@
 ---
 feature: http-body-path-drift
 status: draft
-drivers: [container, qemu, vz, hyperv]  # relay/ is shared (FLOW-02, TEST-02 caveat); no driver tree changes
+drivers: [container, qemu, vz, hyperv, firecracker]  # relay/ is shared (FLOW-02, TEST-02 caveat); no driver tree changes
 seams: [ledger-format]                  # the metadata bytes the relay writes into ledgers change; the v1 contract does not
 surfaces: []
 security_boundary: env-relay            # GLOBAL-06: any change to the relay itself; posture unchanged, see Security note
@@ -204,14 +204,17 @@ flow is unchanged (FLOW-15). No user-facing surface changes (UX-01).
 
 ## Cross-driver impact
 
-`relay/` is shared, so all four drivers are declared (FLOW-02). For each of
-container, qemu, vz and hyperv the guest fetches the build script, bootstrap
-config and context files from the same relay endpoints, and the only
+`relay/` is shared, so every driver is declared (FLOW-02). For each of
+container, qemu, vz, hyperv and firecracker the guest fetches the build
+script, bootstrap config and context files from the same relay endpoints, and
+the only
 difference it can observe is none: the HTTP response is byte-identical
 (RELAY-02). The ledger each driver's build produces differs only in those
 close records' metadata. No driver tree changes. RELAY-04: the change sits in
 mode-independent request handling, so container, vm and host modes are
-touched identically. Firecracker has no driver yet.
+touched identically. Firecracker (in flight on `feat/firecracker-driver`, and
+likely to merge first) uses the same relay endpoints and is affected the same
+way; it is declared for that reason.
 
 ## Security note
 
@@ -324,7 +327,13 @@ trailer.
 
 ## Design review
 
-Pending (`design_review: required`).
+- **r1, 2026-11-02, Jeff: approved**, approved at 07bbeee. Assumptions
+  confirmed as recommended: a1 (the producer writes `{"status": 200}`), a2
+  (the v0.6.0 deviation note goes in `specs/metadata-http-body/v1.md` with a
+  `Tier1-Allow` trailer), a3 (shallow top-level key check, no new
+  dependency). Folded in at approval: `firecracker` added to `drivers` and to
+  Cross-driver impact, since that driver shares the relay and is likely to
+  merge first.
 
 ## Consolidation
 
