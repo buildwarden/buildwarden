@@ -1,6 +1,6 @@
 ---
 feature: bootstrap-firecracker-row
-status: active
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -125,8 +125,45 @@ driver's files.
 
 ## Consolidation
 
+`origin/main` at `1ef5547` (#90, the Firecracker driver) merged at `ca812fb`
+before the edit, so the driver this item depends on (Decision 1) is on `main`.
+
+- **Landed since the fork:** #90. `bootstrap.md`'s surface list now matches
+  `bootstrap.surface` in `tools/tier1/rules.yaml` on `main`;
+  `firecracker-driver.md` is archived there.
+- **Left alone, outside this design:** `firecracker-driver-plan.md` stays on
+  `main` and other designs cite it in `related:`; `hyperv-driver-plan.md` still
+  names `cloudinit.go` as history; the TEST-02 `testing.md` listing of the
+  `firecracker` job (Decision 4).
+- **FLOW-15 sweep:** no Go code changed, so no dead code or duplication.
+  `overview.md` does not list per-driver bootstrap files and is unchanged.
+
 ## Rollback notes
 
 Revert the commit; nothing else depends on the wording.
 
 ## Archive summary
+
+Approved at design review r1 (2026-11-02); the PR to `main` carries this
+design.
+
+- **Built.** `docs/development/bootstrap.md`: a `firecracker / Linux` row in
+  "Per-driver mapping" (topology isolation through a per-slot, addressless host
+  bridge; `CIDATA` virtio-blk drive or a per-build initramfs append; cloud-init
+  `runcmd` or the launcher's exec of `warden-io initialize`), and BOOT-07's
+  surface list with `driver/linuxguest/` in place of `driver/qemu/cloudinit.go`
+  plus the firecracker `slots*.go`, `setup.go`, `posture.go`, `vm*.go`,
+  `deliver_linux.go` and `tools/firecracker-vm/`.
+  `docs/development/README.md`: the "Feature — Firecracker driver" entry
+  removed.
+- **Decisions taken:** land after the driver merged; the row word for word from
+  the driver's accepted Bootstrap comparison; the surface list word for word
+  from `tools/tier1/rules.yaml`; remove the README entry rather than repoint it.
+- **Rejected:** folding the edit into the driver's PR (FLOW-14); listing the
+  `firecracker` job under TEST-02 now.
+- **For a future design touching `bootstrap-model`, `firecracker` or
+  `rules`:** BOOT-07's prose list and `bootstrap.surface` in `rules.yaml` must
+  stay identical; a driver that moves or adds isolation, delivery or start
+  files changes both, and the prose half goes through the human (FLOW-14),
+  usually as a process item like this one. Open: the TEST-02 `testing.md`
+  listing of the `firecracker` job, once that job is relied on.
