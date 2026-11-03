@@ -4,11 +4,14 @@ priority: 21
 kind: process
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/wf-squash-merged-pr.md
 branch: feat/wf-squash-merged-pr
 alters_relationships: null
 source: 'workflow-human 2026-11-03 (Jeff): firecracker-driver PR #90 was squash-merged and its branch deleted, so f6-open-pr-r2''s checks (main merged into the branch, design archived on it) and Close''s branch-in-main check could never pass; marked done by hand. Same session: firecracker-distro-firewalld set to status: deferred (gate wakes only for open); make deferred a documented backlog status in README.md and wf validate.'
+pr:
+  number: 92
+  ci: green
 steps:
   - id: x1-design
     phase: 1
@@ -20,10 +23,17 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261103T210005Z-attended
-      expires: 2026-11-03T23:04:45.26695875Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -51,3 +61,9 @@ history:
   - at: 2026-11-03T21:04:45Z
     by: cloud/20261103T210005Z-attended
     event: claimed x2-implement until 2026-11-03T23:04:45Z
+  - at: 2026-11-03T21:39:00Z
+    by: cloud/20261103T210005Z-attended
+    event: done x2-implement
+  - at: 2026-11-03T21:39:00Z
+    by: cloud/20261103T210005Z-attended
+    event: entered phase 3 (merge)
