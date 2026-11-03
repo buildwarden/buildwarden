@@ -2,7 +2,7 @@ feature: wf-squash-merged-pr
 title: 'wf records a squash-merged PR with a deleted branch as Publish, Merge and Close done; backlog gaps gain status: deferred'
 priority: 21
 kind: process
-status: in_progress
+status: done
 round: process
 phase: 4
 design: docs/design/wf-squash-merged-pr.md
@@ -37,10 +37,10 @@ steps:
   - id: x4-close
     phase: 4
     affinity: cloud
-    status: pending
+    status: done
     lease:
-      claimed_by: cloud/20261103T210005Z-attended
-      expires: 2026-11-03T23:44:36.710674181Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -83,3 +83,9 @@ history:
   - at: 2026-11-03T21:44:36Z
     by: cloud/20261103T210005Z-attended
     event: claimed x4-close until 2026-11-03T23:44:36Z
+  - at: 2026-11-03T21:45:02Z
+    by: cloud/20261103T210005Z-attended
+    event: done x4-close
+  - at: 2026-11-03T21:45:02Z
+    by: cloud/20261103T210005Z-attended
+    event: closed; feature done
