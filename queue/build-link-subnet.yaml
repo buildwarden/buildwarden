@@ -3,10 +3,11 @@ title: Move every VM driver's relay-to-build link off 10.0.0.0/30
 priority: 18
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/build-link-subnet.md
 branch: feat/build-link-subnet
-alters_relationships: null
+alters_relationships: false
+design_review: required
 source: 'firecracker-driver PR #90, CI tier 2 first run (2026-11-02): the runner''s VPC resolver 10.0.0.2 sits inside the relay''s build link 10.0.0.0/30 (relay 10.0.0.1, guest 10.0.0.2) shared by linuxguest (qemu, firecracker), winguest (qemu, hyperv), vz and tools/relay-vm/init, so the relay routes it to the build VM. PR #90 adds a firecracker preflight/doctor refusal; this moves the link for every VM driver so no upstream address can clash. Queued before security-suite at Jeff''s word.'
 steps:
   - id: f0-branch-setup
@@ -19,10 +20,66 @@ steps:
   - id: f1-design
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-validate-linux-kvm
+    phase: 6
+    affinity: host:linux-kvm
+    status: pending
+    needs:
+      - f1-design
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan: with pre-change boot assets the firecracker build and doctor refuse with the rebuild fix; after rebuilding, a direct-boot and a disk build succeed on the new link 100.127.255.252/30 and their ledgers verify. Nothing to run before f3-implement: Plan adds f3-implement to needs once seeded, and f6-open-pr must need this step.'
+  - id: f6-validate-qemu-any
+    phase: 6
+    affinity: host:qemu-any
+    status: pending
+    needs:
+      - f1-design
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan: stale relay and build-vm initramfs refused with the fix; after rebuilding, a direct-boot and a cloud-image Linux guest build succeed on the new link. Nothing to run before f3-implement: Plan adds f3-implement to needs once seeded, and f6-open-pr must need this step.'
+  - id: f6-validate-macos-vz
+    phase: 6
+    affinity: host:macos-vz
+    status: pending
+    needs:
+      - f1-design
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan: an image prepared before the change is refused with the re-prepare fix; after re-prepare a build succeeds on the new link; the host-mode relay refuses a dial into the link. Nothing to run before f3-implement: Plan adds f3-implement to needs once seeded, and f6-open-pr must need this step.'
+  - id: f6-validate-windows-hyperv
+    phase: 6
+    affinity: host:windows-hyperv
+    status: pending
+    needs:
+      - f1-design
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan: a relay-boot.vhdx without the new link record is refused with the refresh-cache.sh fix; after refreshing, a Windows guest build succeeds on the new link; setup refuses a --nat-prefix overlapping the link. Nothing to run before f3-implement: Plan adds f3-implement to needs once seeded, and f6-open-pr must need this step.'
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261103T105654Z
-      expires: 2026-11-03T13:23:19.581854673Z
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review
+    phase: 2
+    affinity: human
+    status: pending
+    needs:
+      - f2-plan
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 5
@@ -30,7 +87,77 @@ budget:
   spent:
     runs: 1
     steps: 2
-questions: []
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: The relay-to-build link's range (Decision 1). Every VM driver uses it; the relay routes any upstream address inside it to the build VM.
+    options:
+      - RFC 6598 top /30, 100.127.255.252/30 (relay .253, build VM .254)
+      - RFC 6598 next to BuildWarden's block, 100.64.86.0/30
+      - link-local 169.254.87.0/30
+      - keep 10.0.0.0/30 and policy-route the relay's upstream sockets
+    recommended: RFC 6598 top /30, 100.127.255.252/30 (relay .253, build VM .254)
+  - id: a2
+    kind: assumed
+    status: open
+    question: Where the address is defined (Decision 2).
+    options:
+      - one embedded file driver/buildlink/link.env, read by Go via embed and copied into every initramfs for the inits to source, plus a tier-0 stray-literal test
+      - a Go constant plus a drift test over the shell copies
+      - the kernel command line (impossible for Hyper-V's baked UKI)
+    recommended: one embedded file driver/buildlink/link.env, read by Go via embed and copied into every initramfs for the inits to source, plus a tier-0 stray-literal test
+  - id: a3
+    kind: assumed
+    status: open
+    question: 'Assets baked with the old link: relay and build initramfs, the Hyper-V relay boot VHDX, prepared vz images (Decision 3).'
+    options:
+      - a link record beside each baked asset; build and doctor refuse a missing or different one with the rebuild/re-prepare fix
+      - document the rebuild only
+      - the relay answers on both addresses for a transition
+    recommended: a link record beside each baked asset; build and doctor refuse a missing or different one with the rebuild/re-prepare fix
+  - id: a4
+    kind: assumed
+    status: open
+    question: 'PR #90''s firecracker resolver refusal and the CI DNS workaround (Decision 4).'
+    options:
+      - keep the exclusion retargeted at the new link; drop the firecracker.yml DNS workaround so CI exercises the VPC-resolver case
+      - remove the exclusion, since the new range is out of common use
+      - keep both the exclusion and the workaround
+    recommended: keep the exclusion retargeted at the new link; drop the firecracker.yml DNS workaround so CI exercises the VPC-resolver case
+  - id: a5
+    kind: assumed
+    status: open
+    question: 'macos-qemu (Windows guest on qemu) as tracked rather than blocking: driver/qemu does not change, its shared pieces are validated on windows-hyperv and qemu-any, and qemu Windows builds already fail on main (backlog qemu-windows-guest-package).'
+    options:
+      - tracked (backlog build-link-subnet-qemu-windows)
+      - 'blocking, criterion: gets no further than on main'
+      - blocking, waiting on the qemu Windows fix
+    recommended: tracked (backlog build-link-subnet-qemu-windows)
+  - id: a6
+    kind: assumed
+    status: open
+    question: A configuration knob for the link (Decision 5, ORCH-03).
+    options:
+      - fixed link, no warden.toml key or flag
+      - a config key with a per-value asset record
+    recommended: fixed link, no warden.toml key or flag
+  - id: a7
+    kind: assumed
+    status: open
+    question: 'seams [] and alters_relationships false: initialize --gateway/--ip keeps its contract (EXEC-04), claim/collector/guest API unchanged, no ledger/schema/environment-record format names the address (RELAY-05), no BOOT invariant, mapping row or deviation changes (BOOT-07).'
+    options:
+      - 'as stated: no seam, alters_relationships false'
+      - conservatively declare executor-initialize and alters_relationships true
+    recommended: 'as stated: no seam, alters_relationships false'
+  - id: a8
+    kind: assumed
+    status: open
+    question: The vz host-mode relay blocks upstream dials into its whole --subnet, not only the gateway, since an RFC 6598 guest address is no longer covered by the SSRF filter's RFC 1918 block (a small relay change; Security note).
+    options:
+      - block the subnet
+      - leave the relay alone
+    recommended: block the subnet
 history:
   - at: 2026-11-03T01:30:28Z
     by: human/jeff
@@ -50,3 +177,9 @@ history:
   - at: 2026-11-03T11:23:19Z
     by: cloud/20261103T105654Z
     event: claimed f1-design until 2026-11-03T13:23:19Z
+  - at: 2026-11-03T11:36:34Z
+    by: cloud/20261103T105654Z
+    event: done f1-design
+  - at: 2026-11-03T11:36:34Z
+    by: cloud/20261103T105654Z
+    event: entered phase 2 (plan)

@@ -346,3 +346,13 @@ gaps:
       the refusal is the resolver check and not the namespace. Afterwards the host resolv.conf was
       unchanged, no bind mount was left, slots.sh down left 0 wfc interfaces and FORWARD DROP.
       Logs and the run script: native/linux-kvm/2026-11-02/lan-resolver/.
+  - id: build-link-subnet-qemu-windows
+    host: macos-qemu
+    what: A qemu Windows guest build on the new relay-to-build link 100.127.255.252/30 (warden-run.ps1 from the per-build WARDEN seed passes --gateway=100.127.255.253 --ip=100.127.255.254/30; the rebuilt aarch64 relay initramfs answers there).
+    design: docs/design/build-link-subnet.md
+    note: >-
+      Tracked (TEST-03), not blocking (design question a5): driver/qemu does not change, and the
+      shared pieces (driver/winguest, the relay init) are validated by windows-hyperv and qemu-any.
+      qemu Windows builds already fail on main (qemu-windows-guest-package), so run this once that
+      is fixed, on main after build-link-subnet merges or on its branch if still waiting.
+    status: open
