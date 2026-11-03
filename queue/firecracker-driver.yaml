@@ -69,7 +69,7 @@ steps:
   - id: f6-provision-linux-kvm-dns
     phase: 6
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -171,7 +171,7 @@ budget:
     steps: 60
   spent:
     runs: 3
-    steps: 18
+    steps: 19
 questions:
   - id: a12
     kind: assumed
@@ -511,3 +511,9 @@ history:
   - at: 2026-11-03T00:36:42Z
     by: human/jeff
     event: 'done f6-provision-linux-kvm-dns: option (a), /etc/wsl.conf [network] generateResolvConf=false and a static /etc/resolv.conf with 8.8.8.8 and 8.8.4.4 (Jeff, 2026-11-02). Verified attended on feat/firecracker-driver 824abd7: sudo warden setup --driver firecracker --slots 4 ok (16 interfaces), sudo warden doctor reports upstream DNS for the relay ok (8.8.8.8, 8.8.4.4); boot assets not built in that scratch tree (the native run builds them). Slots removed afterwards (slots.sh down).'
+  - at: 2026-11-03T00:52:02Z
+    by: human/jeff
+    event: claimed f6-provision-linux-kvm-dns until 2026-11-03T02:52:02Z
+  - at: 2026-11-03T00:52:02Z
+    by: human/jeff
+    event: done f6-provision-linux-kvm-dns
