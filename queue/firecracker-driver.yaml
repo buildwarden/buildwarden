@@ -3,7 +3,7 @@ title: Firecracker driver
 priority: 16
 status: in_progress
 round: feature
-phase: 3
+phase: 4
 design: docs/design/firecracker-driver.md
 branch: feat/firecracker-driver
 alters_relationships: true
@@ -121,10 +121,17 @@ steps:
   - id: f3-implement-r2
     phase: 3
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f4-review-r2
+    phase: 4
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261102T220201Z
-      expires: 2026-11-03T02:02:25.2188774Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 12
@@ -432,3 +439,9 @@ history:
   - at: 2026-11-03T00:02:25Z
     by: cloud/20261102T220201Z
     event: claimed f3-implement-r2 until 2026-11-03T02:02:25Z
+  - at: 2026-11-03T00:04:15Z
+    by: cloud/20261102T220201Z
+    event: done f3-implement-r2
+  - at: 2026-11-03T00:04:15Z
+    by: cloud/20261102T220201Z
+    event: entered phase 4 (review)
