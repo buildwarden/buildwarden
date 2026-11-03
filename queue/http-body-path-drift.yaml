@@ -3,7 +3,7 @@ title: Relay writes a path field under http-body, whose schema forbids extra fie
 priority: 15
 status: in_progress
 round: feature
-phase: 2
+phase: 3
 design: docs/design/http-body-path-drift.md
 branch: feat/http-body-path-drift
 alters_relationships: false
@@ -34,9 +34,16 @@ steps:
   - id: f2-design-review
     phase: 2
     affinity: human
-    status: pending
+    status: done
     needs:
       - f2-plan
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f3-implement
+    phase: 3
+    affinity: cloud
+    status: pending
     lease:
       claimed_by: ""
       expires: null
@@ -46,11 +53,11 @@ budget:
     steps: 9
   spent:
     runs: 1
-    steps: 3
+    steps: 4
 questions:
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Fix the drift in the producer, with relay-served inputs'' http-body close metadata becoming {"status": 200}, rather than a schema v2 admitting path? (path duplicates the OPEN record''s url; v0.6.0 is the only release that wrote it)'
     options:
       - 'producer writes {"status": 200}'
@@ -58,24 +65,27 @@ questions:
       - 'schema v2 admitting path: new $id, header index 2 moves to it (alters a versioned seam)'
       - widen v1 in place (forbidden by RELAY-05)
     recommended: 'producer writes {"status": 200}'
+    answer: Confirmed as recommended at design review r1 (2026-11-02)
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: Record the v0.6.0 deviation (an extra path key in served-input http-body closes; readers ignore it) as a note in specs/metadata-http-body/v1.md, committed with a Tier1-Allow RELAY-05 trailer since its schema is unchanged?
     options:
       - note in metadata-http-body/v1.md with a Tier1-Allow trailer
       - note in build-ledger/v1.md (prose-only, no trailer)
       - no note; release notes only
     recommended: note in metadata-http-body/v1.md with a Tier1-Allow trailer
+    answer: Confirmed as recommended at design review r1 (2026-11-02)
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: Guard against future drift with a shallow conformance test over the relay's end-to-end ledger (top-level metadata keys checked against each schema's properties where additionalProperties is false, no new dependency)?
     options:
       - shallow key check, no new dependency
       - full JSON Schema validation with a third-party validator
       - only a targeted assertion on served-input closes
     recommended: shallow key check, no new dependency
+    answer: Confirmed as recommended at design review r1 (2026-11-02)
 history:
   - at: 2026-10-31T22:54:14Z
     by: human/jeff
@@ -107,3 +117,21 @@ history:
   - at: 2026-11-01T11:07:37Z
     by: cloud/20261101T105730Z
     event: done f2-plan
+  - at: 2026-11-03T00:31:12Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: Confirmed as recommended at design review r1 (2026-11-02)'
+  - at: 2026-11-03T00:31:12Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: Confirmed as recommended at design review r1 (2026-11-02)'
+  - at: 2026-11-03T00:31:13Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: Confirmed as recommended at design review r1 (2026-11-02)'
+  - at: 2026-11-03T00:31:13Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-03T02:31:13Z
+  - at: 2026-11-03T00:31:13Z
+    by: human/jeff
+    event: done f2-design-review
+  - at: 2026-11-03T00:31:13Z
+    by: human/jeff
+    event: entered phase 3 (implement)
