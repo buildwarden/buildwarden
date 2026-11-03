@@ -1,0 +1,31 @@
+[warden] preparing build environment...
+[warden] starting relay on slot 0...
+[warden] starting build...
+[warden] running...
+slow-start
+warden: build FAILED
+[warden] ERROR: build failed: the build VM stopped before the build completed; last build console lines:
+  [    0.350110] registered taskstats version 1
+  [    0.350809] Loading compiled-in X.509 certificates
+  [    0.351635] zswap: loaded using pool lzo/zbud
+  [    0.352427] Key type .fscrypt registered
+  [    0.352951] Key type fscrypt-provisioning registered
+  [    0.354120] Key type encrypted registered
+  [    0.408378] clk: Disabling unused clocks
+  [    0.410223] Freeing unused kernel image (initmem) memory: 2644K
+  [    0.410734] Write protecting the kernel read-only data: 20480k
+  [    0.413988] Freeing unused kernel image (text/rodata gap) memory: 2044K
+  [    0.416114] Freeing unused kernel image (rodata/data gap) memory: 1388K
+  [    0.416602] Run /init as init process
+  init: ready
+  warden-io: configuring network
+  warden-io: waiting for relay
+  warden-io: installing CA
+  warden-io: applying baseline (trust exclusive)
+  warden-io: fetching build script
+  warden-io: running build.sh
+  slow-start
+
+  If this is unexpected, please file a bug:
+  <bug-report URL elided>
+

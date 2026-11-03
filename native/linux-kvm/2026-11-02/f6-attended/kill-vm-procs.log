@@ -1,0 +1,3 @@
+630 /home/jeff/fcval/bin/warden build --driver firecracker --script slow/build.sh --timeout 5m -o out-kill slow
+648 /home/jeff/.local/bin/firecracker --no-api --config-file /tmp/warden-firecracker-h1r1zl1w-2612690818/relay.json
+656 /home/jeff/.local/bin/firecracker --no-api --config-file /tmp/warden-firecracker-h1r1zl1w-2612690818/build.json

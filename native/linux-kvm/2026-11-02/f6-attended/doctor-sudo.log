@@ -1,0 +1,13 @@
+ok    /dev/kvm
+ok    firecracker
+ok    boot assets
+ok    disk-image builds (qemu-img, genisoimage)
+ok    network slots owned by this user: 4 (wfc0 to wfc3)
+FAIL  slot sysctls
+      8 sysctl(s) not as setup sets them, e.g. net.ipv4.conf.wfc0b.rp_filter
+      to fix: sudo warden setup --driver firecracker (re-run it after a reboot)
+ok    bridge table and WARDEN-FC rules
+ok    host firewall posture
+ok    upstream DNS for the relay: 8.8.8.8, 8.8.4.4
+skip  reflink copies on the cache filesystem (probing them as root would write into jeff's cache: run doctor without sudo)
+ok    orphaned VMMs

@@ -57,14 +57,14 @@ steps:
   - id: f6-validate-linux-kvm
     phase: 6
     affinity: host:linux-kvm
-    status: pending
+    status: done
     needs:
       - f2-spike-linux-kvm
       - f6-provision-linux-kvm-dns
       - f3-implement-r2
     lease:
-      claimed_by: host:linux-kvm/20261103T005339Z
-      expires: 2026-11-03T02:53:44.9610896Z
+      claimed_by: ""
+      expires: null
     note: 'Blocking native validation (FLOW-09) per docs/design/firecracker-driver.md Validation plan. f6-open-pr must need this step once phase 6 is seeded. No machine serves linux-kvm in hosts.yaml yet (question a8 recommends windows-desktop under WSL2, plus a CI job that may later cover it), so wf validate flags this step until hosts.yaml lists it. needs f2-spike-linux-kvm added by host:linux-kvm/20261101T111001Z (unattended): wf next offered this phase-6 step while the feature is in phase 2 (ready() checks needs, not the feature phase), and wf gate woke windows-desktop for it; the Validation plan needs the implemented driver, so there was nothing to run. Stopgap until wf skips steps of a later phase; it should also need f3-implement once phase 3 is seeded.'
   - id: f6-provision-linux-kvm-dns
     phase: 6
@@ -520,3 +520,9 @@ history:
   - at: 2026-11-03T00:53:44Z
     by: host:linux-kvm/20261103T005339Z
     event: claimed f6-validate-linux-kvm until 2026-11-03T02:53:44Z
+  - at: 2026-11-03T01:05:31Z
+    by: host:linux-kvm/20261103T005339Z
+    event: done f6-validate-linux-kvm
+  - at: 2026-11-03T01:05:31Z
+    by: host:linux-kvm/20261103T005339Z
+    event: 'f6-validate-linux-kvm evidence (attended, Jeff watching): feat/firecracker-driver 824abd7 on windows-desktop WSL2 (6.18.54.1-warden+, Firecracker v1.17.0). Passed: setup --slots 4 and doctor; direct-boot build 5.3 s; Ubuntu 24.04 build with COPY and HTTPS 46 s; exclusive trust (1 cert); direct egress to 1.1.1.1:22 and 8.8.8.8:853 blocked; two concurrent builds on slots 0 and 1 with br_netfilter; build VM killed gives a prompt failure (10.1 s grace); warden kill -9 leaves no VMMs and the next build on slot 0 succeeds; nobody cannot reach relay :8300 or :8301; teardown clean; all 7 ledgers verify. Distro cases (Jeff: pass, gaps documented): FORWARD ACCEPT refusal carried from 96ca21a (posture.go unchanged); LAN-resolver and firewalld deferred to backlog firecracker-distro-lan-resolver and firecracker-distro-firewalld. Finding: a WSL distro restart re-applies rp_filter=2 to slot interfaces (doctor catches it; preflight does not). Evidence native/linux-kvm/2026-11-02/f6-attended/.'

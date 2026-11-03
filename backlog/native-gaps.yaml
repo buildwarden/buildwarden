@@ -296,3 +296,23 @@ gaps:
     design: docs/design/firecracker-driver.md
     note: Tracked (FLOW-09) regression check.
     status: open
+  - id: firecracker-distro-firewalld
+    host: linux-kvm
+    what: The firecracker-driver Validation plan's firewalld distro case. On a host running firewalld, `sudo warden setup --driver firecracker` refuses and gives the zone fix; after the fix is applied, setup and a build work.
+    design: docs/design/firecracker-driver.md
+    note: >-
+      Tracked (TEST-03) and deferred from f6-validate-linux-kvm on 2026-11-02 (Jeff). windows-desktop's
+      WSL2 Ubuntu has no firewalld, and installing it would change the test host.
+      This needs a firewalld distro (Fedora, RHEL or a derivative) with KVM, or a disposable VM with nested KVM.
+    status: open
+  - id: firecracker-distro-lan-resolver
+    host: linux-kvm
+    what: The firecracker-driver Validation plan's local-resolver case. With /etc/resolv.conf naming only an address on the host itself (one of its LAN addresses, not loopback), a firecracker build refuses in preflight and gives the fix.
+    design: docs/design/firecracker-driver.md
+    note: >-
+      Tracked (TEST-03) and deferred from f6-validate-linux-kvm on 2026-11-02 (Jeff). An attended session
+      may not swap the host's resolv.conf, because auto mode blocks it as weakening the host.
+      Already covered: the loopback-resolver refusal ran on 96ca21a (native/linux-kvm/2026-11-02/f6-direct-build-preflight.log),
+      and resolver selection has tier-0 tests. Run it by hand on a disposable host, or as a tier-0
+      test of the resolver selector that is given the host's addresses.
+    status: open
