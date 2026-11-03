@@ -60,6 +60,7 @@ For each host this session serves:
   each (`dist/wf claim`), pushing the workflow branch after each claim. A
   rejected push lost the claim (FLOW-04): reset to `origin/workflow`, ask again.
 - Backlog: every `open` entry for this host in `backlog/native-gaps.yaml`.
+  A `deferred` entry is not retried: its note says what it waits on.
 
 Unattended, the batch is bounded by the native budget,
 `dist/wf budget -state .dev/workflow -native` (`native_budget` in
