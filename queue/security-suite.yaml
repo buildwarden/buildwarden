@@ -1,6 +1,6 @@
 feature: security-suite
 title: 'Build the TEST-08 security suite and pen-tester agent (Deep-dive #1)'
-priority: 18
+priority: 19
 status: in_progress
 round: feature
 phase: 1
@@ -62,3 +62,6 @@ history:
   - at: 2026-11-01T11:11:51Z
     by: cloud/20261101T105730Z
     event: 'released f1-design: unattended design agent halted by a safety classifier while drafting; no design written. Needs Jeff to scope it (attended, or a harness/front-matter/tiers-only design without detailed attack techniques)'
+  - at: 2026-11-03T01:30:28Z
+    by: human/jeff
+    event: renumbered one lower so build-link-subnet goes in at 18, before security-suite (Jeff, 2026-11-02)

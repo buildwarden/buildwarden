@@ -1,0 +1,30 @@
+feature: build-link-subnet
+title: Move every VM driver's relay-to-build link off 10.0.0.0/30
+priority: 18
+status: queued
+round: feature
+phase: 0
+design: docs/design/build-link-subnet.md
+branch: feat/build-link-subnet
+alters_relationships: null
+source: 'firecracker-driver PR #90, CI tier 2 first run (2026-11-02): the runner''s VPC resolver 10.0.0.2 sits inside the relay''s build link 10.0.0.0/30 (relay 10.0.0.1, guest 10.0.0.2) shared by linuxguest (qemu, firecracker), winguest (qemu, hyperv), vz and tools/relay-vm/init, so the relay routes it to the build VM. PR #90 adds a firecracker preflight/doctor refusal; this moves the link for every VM driver so no upstream address can clash. Queued before security-suite at Jeff''s word.'
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 5
+    steps: 30
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-03T01:30:28Z
+    by: human/jeff
+    event: queued at priority 18 (intake)
