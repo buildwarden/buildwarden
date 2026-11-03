@@ -674,7 +674,7 @@ func (r *Relay) handleBuildScript(req *http.Request) (*http.Request, *http.Respo
 	if err != nil || status != http.StatusOK {
 		return req, newTextResponse(req, http.StatusNotFound, "build script unavailable\n")
 	}
-	r.recordServed(req, data, "build-script")
+	r.recordServed(req, data)
 	return req, newBytesResponse(req, data, "application/octet-stream")
 }
 
@@ -687,7 +687,7 @@ func (r *Relay) handleBootstrap(req *http.Request) (*http.Request, *http.Respons
 	if err != nil || status != http.StatusOK {
 		return req, newTextResponse(req, http.StatusNotFound, "no bootstrap config\n")
 	}
-	r.recordServed(req, data, "bootstrap")
+	r.recordServed(req, data)
 	return req, newBytesResponse(req, data, "application/json")
 }
 
@@ -709,13 +709,15 @@ func (r *Relay) handleContextGet(req *http.Request) (*http.Request, *http.Respon
 	if kind == "list" {
 		return req, newBytesResponse(req, data, "text/plain")
 	}
-	r.recordServed(req, data, filePath)
+	r.recordServed(req, data)
 	return req, newBytesResponse(req, data, "application/octet-stream")
 }
 
-// recordServed records a relay-served input (build script, context file) in
-// the ledger as an inbound GET body.
-func (r *Relay) recordServed(req *http.Request, data []byte, path string) {
+// recordServed records a relay-served input (the build script, the bootstrap
+// config or a context file) in the ledger as an inbound GET response body. The
+// close carries http-body v1 metadata, {"status": 200}, like any other
+// response body; the served path is already the OPEN record's url.
+func (r *Relay) recordServed(req *http.Request, data []byte) {
 	openMeta, _ := cbor.Marshal(map[string]any{
 		"method":   "GET",
 		"url":      req.URL.String(),
@@ -723,7 +725,7 @@ func (r *Relay) recordServed(req *http.Request, data []byte, path string) {
 	})
 	openSig := r.ledger.Open(schemaHTTPOpen, openMeta)
 	hashBlock := r.ledger.ComputeHashBlock(data)
-	closeMeta, _ := cbor.Marshal(map[string]any{"path": path})
+	closeMeta, _ := cbor.Marshal(map[string]any{"status": http.StatusOK})
 	r.ledger.Close(openSig, int64(len(data)), hashBlock, schemaHTTPBody, closeMeta)
 }
 
