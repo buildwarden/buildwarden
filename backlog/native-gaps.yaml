@@ -310,6 +310,12 @@ gaps:
       running firewalld would manage the Ubuntu host's chains too. The unattended session cannot
       download an ISO or image for a disposable VM (curl and wget are denied). Needs Jeff to provide
       a firewalld host, or an attended run on one.
+      2026-11-03 (host:linux-kvm/20261103T111001Z, unattended, main still 1ef5547): not run,
+      nothing changed. firewalld is still not installed in WSL Ubuntu (systemctl is-active:
+      inactive, dpkg: un), the only WSL distros are Ubuntu and podman-machine-default, and the
+      session still cannot fetch an image. The gate woke the machine because waiting branches
+      moved (bootstrap-firecracker-row 798d96a, http-body-path-drift ad39ceb), neither of which
+      touches driver/, cmd/ or tools/firecracker-vm, so no branch needs this case yet.
     status: open
   - id: firecracker-distro-lan-resolver
     host: linux-kvm
