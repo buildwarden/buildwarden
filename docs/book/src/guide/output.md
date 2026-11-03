@@ -30,8 +30,8 @@ warden-output/
 ```
 
 The container driver always builds from a Dockerfile, so its output always has
-`inputs/`; the qemu and hyperv drivers write it for a Linux guest built from a
-Dockerfile. A `--script` or a `build.sh` / `build.ps1` from the context runs as
+`inputs/`; the qemu, hyperv and firecracker drivers write it for a Linux guest
+built from a Dockerfile. A `--script` or a `build.sh` / `build.ps1` from the context runs as
 given, so it is not copied. The container driver also writes `console.log`.
 The container and vz drivers, whose relay runs as a container or host process,
 also write `relay.log`.

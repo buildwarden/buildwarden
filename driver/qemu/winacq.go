@@ -17,6 +17,7 @@ import (
 	"time"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/linuxguest"
 )
 
 // virtioWinStableURL is the signed virtio-win driver ISO (stable channel).
@@ -107,7 +108,7 @@ func AcquireWindowsMedia(opts WindowsPrepOptions) (*WindowsMedia, error) {
 		return nil, err
 	}
 	answerISO := filepath.Join(workDir, "autounattend.iso")
-	if err := generateSeedISO(answerDir, answerISO, "UNATTEND"); err != nil {
+	if err := linuxguest.GenerateSeedISO(answerDir, answerISO, "UNATTEND"); err != nil {
 		return nil, fmt.Errorf("building autounattend ISO: %w", err)
 	}
 
@@ -518,13 +519,13 @@ func isURL(s string) bool {
 func downloadCachedISO(url string) (string, error) {
 	cached := cachedISOPath(url)
 	if _, err := os.Stat(cached); err == nil {
-		if verifyImageIntegrity(cached) {
+		if linuxguest.VerifyImageIntegrity(cached) {
 			return cached, nil
 		}
 		_ = os.Remove(cached)
 		_ = os.Remove(cached + ".sha256")
 	}
-	if err := downloadImage(url, cached); err != nil {
+	if err := linuxguest.DownloadImage(url, cached); err != nil {
 		return "", fmt.Errorf("downloading %s: %w", url, err)
 	}
 	return cached, nil

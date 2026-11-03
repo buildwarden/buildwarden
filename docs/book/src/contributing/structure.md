@@ -66,10 +66,7 @@ buildwarden/
 │   ├── qemu/                  # QEMU driver (cross-platform VM)
 │   │   ├── driver.go             # StartBuild: prepare, boot relay VM, boot build VM, wait
 │   │   ├── vm.go                 # QEMU subprocess management (relay VM + build VM args)
-│   │   ├── initrd.go             # Append the relay binary to the prebuilt initramfs
-│   │   ├── cloudinit.go          # Cloud-init user-data generation
-│   │   ├── seediso.go            # ISO9660 seed image builder
-│   │   ├── images.go             # Cloud image resolution + download + caching
+│   │   ├── seedfat.go            # FAT seed image for Windows guests
 │   │   ├── windows.go            # Windows guest support
 │   │   ├── winacq.go             # Windows media acquisition + unattended install
 │   │   └── autounattend.go       # Autounattend.xml generation
@@ -89,6 +86,25 @@ buildwarden/
 │   │   ├── service.go            # Privileged helper service (network standup)
 │   │   ├── evalimage.go          # Windows Server eval VHD fetch + pin
 │   │   └── relayvm.go            # Relay VM lifecycle
+│   ├── firecracker/           # Firecracker driver (x86_64 Linux with KVM)
+│   │   ├── driver_linux.go       # StartBuild: slot, relay VM + claim, build VM, wait, teardown
+│   │   ├── deliver_linux.go      # Both delivery paths: raw rootfs + CIDATA seed, or direct boot
+│   │   ├── vm.go, vm_linux.go    # Firecracker config JSON; --no-api process start, pids
+│   │   ├── slots.go              # Slot naming, addresses, the setup command list
+│   │   ├── slots_linux.go        # Slot locking and stale-VMM reaping
+│   │   ├── setup.go, doctor.go   # warden setup / doctor --driver firecracker
+│   │   ├── posture.go            # Firewall posture refusals, upstream resolver selection
+│   │   ├── images.go, gpt.go     # qemu-img gate + raw conversion cache; GPT root finder
+│   │   ├── wait.go               # Exit ordering: build VM exit, completion grace
+│   │   ├── clean.go              # warden clean: orphaned VMMs, stale work dirs
+│   │   └── driver_other.go       # Stub for non-Linux hosts
+│   ├── linuxguest/            # Linux guest family (qemu, firecracker)
+│   │   ├── seed.go               # Cloud-init NoCloud seed (runcmd tail per driver)
+│   │   ├── seediso.go            # ISO9660 seed image builder
+│   │   └── images.go             # Cloud image resolution + download + caching
+│   ├── relayvm/               # Relay VM lifecycle shared by qemu and firecracker
+│   │   ├── assets.go             # Boot asset lookup (beside warden, then the tools output)
+│   │   └── initrd.go             # Append a binary to a prebuilt initramfs as a cpio
 │   └── script/                # Dockerfile-to-shell-script translator (every driver)
 │       └── translate.go          # COPY expanded against the context on the host
 ├── ledger/                 # Shared library: wire format, reader, verifier
@@ -102,9 +118,15 @@ buildwarden/
 ├── tools/
 │   ├── relay-vm/              # Relay VM assets (Alpine + kernel)
 │   │   ├── build-initramfs.sh    # Build the prebuilt relay initramfs
-│   │   ├── init                  # ONE relay VM init script (qemu + hyperv)
+│   │   ├── init                  # ONE relay VM init script (qemu, hyperv, firecracker)
 │   │   └── hyperv/               # Hyper-V UKI boot-disk build (/sbin/relay baked in)
 │   │       └── build.sh
+│   ├── firecracker-vm/       # Firecracker boot assets (x86_64)
+│   │   ├── build-kernel.sh       # Pinned 6.1 guest kernel (vmlinux) for both VMs
+│   │   ├── kernel-required.config # Options that must be built in (checked by a test)
+│   │   ├── build-initramfs.sh    # Direct-boot base initramfs (busybox + launcher)
+│   │   ├── init                  # Direct-boot launcher (exec warden-io initialize)
+│   │   └── slots.sh              # Hand-made slots for debugging (warden setup does this)
 │   ├── build-vm/             # Build VM initramfs builder (direct-boot testing)
 │   │   ├── build-initramfs.sh
 │   │   └── init                  # Build VM init script (exec warden-io initialize)

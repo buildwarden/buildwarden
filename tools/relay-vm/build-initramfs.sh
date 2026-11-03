@@ -10,21 +10,43 @@
 # Output: tools/relay-vm/output/initramfs.cpio.gz
 #         tools/relay-vm/output/vmlinuz
 #
+# ARCH=x86_64 builds for Firecracker instead (output/x86_64/, cache
+# .cache-x86_64/). NO_MODULES=1 leaves out the Alpine kernel and its modules,
+# for a guest kernel with everything built in, so the init's insmod loop
+# finds nothing to load; x86_64, which only Firecracker uses, requires it.
+# The default (aarch64, with modules) is unchanged for qemu and VZ.
+#
 # Dependencies: curl, cpio, gzip, tar
 # Usage: ./tools/relay-vm/build-initramfs.sh
+#        ARCH=x86_64 NO_MODULES=1 ./tools/relay-vm/build-initramfs.sh
 
 set -eu
 
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-OUTPUT_DIR="$SCRIPT_DIR/output"
-CACHE_DIR="$SCRIPT_DIR/.cache"
+ALPINE_ARCH="${ARCH:-aarch64}"
+NO_MODULES="${NO_MODULES:-}"
+case "$ALPINE_ARCH" in
+aarch64)
+    [ -z "$NO_MODULES" ] || { echo "Error: NO_MODULES is for ARCH=x86_64 only" >&2; exit 1; }
+    OUTPUT_DIR="$SCRIPT_DIR/output"
+    CACHE_DIR="$SCRIPT_DIR/.cache"
+    ;;
+x86_64)
+    [ -n "$NO_MODULES" ] || { echo "Error: ARCH=x86_64 needs NO_MODULES=1" >&2; exit 1; }
+    OUTPUT_DIR="$SCRIPT_DIR/output/x86_64"
+    CACHE_DIR="$SCRIPT_DIR/.cache-x86_64"
+    ;;
+*)
+    echo "Error: ARCH must be aarch64 or x86_64" >&2
+    exit 1
+    ;;
+esac
 ROOTFS_DIR="$SCRIPT_DIR/.rootfs"
 
 ALPINE_VERSION="3.21"
-ALPINE_ARCH="aarch64"
 ALPINE_MIRROR="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/main/${ALPINE_ARCH}"
 MINIROOTFS_URL="https://dl-cdn.alpinelinux.org/alpine/v${ALPINE_VERSION}/releases/${ALPINE_ARCH}"
-MINIROOTFS_FILE="alpine-minirootfs-3.21.7-aarch64.tar.gz"
+MINIROOTFS_FILE="alpine-minirootfs-3.21.7-${ALPINE_ARCH}.tar.gz"
 
 mkdir -p "$OUTPUT_DIR" "$CACHE_DIR"
 
@@ -120,12 +142,33 @@ build_initramfs() {
     ln -sf xtables-legacy-multi "$ROOTFS_DIR/usr/sbin/iptables" 2>/dev/null || true
 
     # Extract kernel modules
+    mkdir -p "$ROOTFS_DIR/lib/modules"
+    [ -n "$NO_MODULES" ] || install_modules
+
+    # Install our init script
+    cp "$SCRIPT_DIR/init" "$ROOTFS_DIR/init"
+    chmod 755 "$ROOTFS_DIR/init"
+
+    # Remove unnecessary files to reduce size
+    rm -rf "$ROOTFS_DIR/var/cache" \
+           "$ROOTFS_DIR/usr/share/man" \
+           "$ROOTFS_DIR/usr/share/doc" \
+           "$ROOTFS_DIR/usr/include"
+
+    # Pack as cpio archive
+    (cd "$ROOTFS_DIR" && find . | cpio -o -H newc 2>/dev/null | gzip -9) \
+        > "$OUTPUT_DIR/initramfs.cpio.gz"
+
+    rm -rf "$ROOTFS_DIR"
+    echo "Initramfs built: $(ls -lh "$OUTPUT_DIR/initramfs.cpio.gz" | awk '{print $5}')"
+}
+
+install_modules() {
     echo "Extracting kernel modules..."
     mkdir -p "$CACHE_DIR/kernel-extract"
     tar -xzf "$CACHE_DIR/linux-virt.apk" \
         -C "$CACHE_DIR/kernel-extract" 2>/dev/null || true
     KVER=$(ls "$CACHE_DIR/kernel-extract/lib/modules/" | head -1)
-    mkdir -p "$ROOTFS_DIR/lib/modules"
 
     for mod in \
         drivers/char/hw_random/rng-core.ko.gz \
@@ -158,31 +201,22 @@ build_initramfs() {
         fi
     done
     rm -rf "$CACHE_DIR/kernel-extract"
-
-    # Install our init script
-    cp "$SCRIPT_DIR/init" "$ROOTFS_DIR/init"
-    chmod 755 "$ROOTFS_DIR/init"
-
-    # Remove unnecessary files to reduce size
-    rm -rf "$ROOTFS_DIR/var/cache" \
-           "$ROOTFS_DIR/usr/share/man" \
-           "$ROOTFS_DIR/usr/share/doc" \
-           "$ROOTFS_DIR/usr/include"
-
-    # Pack as cpio archive
-    (cd "$ROOTFS_DIR" && find . | cpio -o -H newc 2>/dev/null | gzip -9) \
-        > "$OUTPUT_DIR/initramfs.cpio.gz"
-
-    rm -rf "$ROOTFS_DIR"
-    echo "Initramfs built: $(ls -lh "$OUTPUT_DIR/initramfs.cpio.gz" | awk '{print $5}')"
 }
 
 # --- Main ---
 
 fetch_minirootfs
-fetch_kernel
+[ -n "$NO_MODULES" ] || fetch_kernel
 fetch_iptables
 build_initramfs
+
+if [ "$ALPINE_ARCH" = x86_64 ]; then
+    echo ""
+    echo "Relay VM artifacts (Firecracker, x86_64, no modules):"
+    echo "  Initramfs: $OUTPUT_DIR/initramfs.cpio.gz"
+    echo "  Kernel:    tools/firecracker-vm/build-kernel.sh"
+    exit 0
+fi
 
 cp "$CACHE_DIR/vmlinuz" "$OUTPUT_DIR/vmlinuz"
 

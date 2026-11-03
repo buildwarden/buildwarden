@@ -11,6 +11,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/firecracker"
 )
 
 var cleanCmd = &cobra.Command{
@@ -19,6 +20,11 @@ var cleanCmd = &cobra.Command{
 	Long: `Remove containers, networks, and per-build images left behind by
 interrupted or crashed warden builds. Only removes resources that are not
 associated with a currently running warden process.
+
+With --driver firecracker it needs no container runtime: it kills VMMs left
+on a network slot by a warden that did not exit cleanly (or by --keep-vms)
+and removes the work dirs and per-build rootfs copies of builds that are no
+longer running.
 
 Nothing that a later build would reuse is removed: prepared and downloaded
 VM images, the relay boot disk and the support images stay. --cache also
@@ -40,6 +46,16 @@ func runClean(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	removed := 0
+	if cfg.Runtime.Driver == "firecracker" {
+		tempDir, err := resolveTempDir(cfg)
+		if err != nil {
+			return err
+		}
+		removed += firecracker.Clean(os.Stderr, tempDir)
+		finishClean(removed)
+		return nil
+	}
 	runtime, err := resolveRuntime(cfg)
 	if err != nil {
 		return err
@@ -47,8 +63,6 @@ func runClean(cmd *cobra.Command, args []string) error {
 	ctrctl.Cli = []string{runtime}
 
 	liveBuildIDs := findLiveWardenProcesses()
-
-	removed := 0
 
 	// Clean containers (Volumes: true removes anonymous DinD volumes)
 	containers := listResources("container", "ls", "-a",
@@ -94,7 +108,13 @@ func runClean(cmd *cobra.Command, args []string) error {
 
 	// Build containers are removed with their anonymous volumes above; other
 	// dangling volumes on the runtime are not warden's to prune.
+	finishClean(removed)
+	return nil
+}
 
+// finishClean handles the cache (removed with --cache, else its size noted)
+// and reports the count.
+func finishClean(removed int) {
 	if flagCleanCache {
 		if cleanCache() {
 			removed++
@@ -109,7 +129,6 @@ func runClean(cmd *cobra.Command, args []string) error {
 	} else {
 		fmt.Printf("Removed %d resource(s).\n", removed)
 	}
-	return nil
 }
 
 // cleanCache removes warden's cache directory (clean --cache).
