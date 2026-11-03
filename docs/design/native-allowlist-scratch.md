@@ -1,6 +1,6 @@
 ---
 feature: native-allowlist-scratch
-status: active
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -145,8 +145,51 @@ JSON change.
 
 ## Consolidation
 
+`origin/main` has not moved since the fork (`e418871`, #88); no merge needed.
+
+- **Landed since the fork:** nothing.
+- **Same bug elsewhere:** no other allow rule in the repository's JSON settings
+  has the `<prefix>/:*` shape. The deny `Bash(rm -rf /:*)` has the trailing
+  ` *` form, so it denies `rm -rf /` and `rm -rf / ...` but not `rm -rf /etc`;
+  a deny is not the boundary here (the sandbox and the machine's own
+  permissions are), so it is left as is and named for a later pass rather than
+  changed outside the approved design.
+- **History:** the archived `native-loop-followups.md` names `.scratch/:*`; it
+  is an archive and stays as written.
+- **Terminology:** "trailing ` *`" and "mid-pattern wildcard" as in the Claude
+  Code permissions reference.
+- **FLOW-15 sweep:** no Go code changed, so no dead code or duplication.
+  `overview.md` describes no settings file and is unchanged.
+
 ## Rollback notes
 
 Revert the commit; the old rules simply prompt again.
 
 ## Archive summary
+
+Approved at design review r1 (2026-11-02); the PR to `main` carries this
+design.
+
+- **Built.** In `tools/workflow/native/settings.native.json`: the six allow
+  rules ending in `:*` after a `/` or a program name, which never matched (a
+  trailing `:*` is a trailing ` *`), became mid-pattern wildcards:
+  `Bash(git -C .scratch/*)`, `Bash(.scratch/*/dist/warden*)`,
+  `Bash(tools/workflow/*)`, `Bash(./warden*)`, `Bash(dist/warden*)`, and
+  `Bash(git push origin feat/*)` (Jeff's own edit, folded in). New denies:
+  seven `Bash(git -C * push ...)` rules (to `main`, `HEAD:main`, `--force`,
+  `-f`, `* --force`, `--delete`, `--mirror`) and `Bash(wsl --unregister*)`.
+- **Decisions taken:** branch binaries are allowed only as
+  `.scratch/*/dist/warden*`, not `.scratch/*`; no space before the last `*` so
+  `warden.exe` matches on Windows; push denies independent of the `-C`
+  directory; root inside the WSL test distro through `Bash(wsl:*)` stays, by
+  Jeff's choice (passwordless sudo in a BuildWarden-only distro; firecracker
+  `warden setup` needs root).
+- **Rejected:** `Bash(.scratch/*)` (would run anything a branch puts there);
+  changing `Bash(wsl:*)`.
+- **For a future design touching `native-session` or `permissions`:** write
+  prefix rules as `prefix*` or `prefix *`, never `prefix/:*`; compound
+  commands must match per part; these rules filter command text and are not a
+  security boundary, branch protection on `main` is. Validation is the next
+  native run on macbook and windows-desktop running `flow18-check.sh` and
+  `.scratch/<name>/dist/warden version` without a denial. Open: the
+  `rm -rf /:*` deny is narrower than it reads.
