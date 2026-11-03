@@ -64,9 +64,28 @@ func TestAppendFileCPIOGolden(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	if !bytes.Equal(got, want) {
-		t.Fatalf("initrd differs from the golden fixture:\n got %x\nwant %x", got, want)
+	// The gzip bytes depend on the Go release's compress/flate, so compare
+	// the base archive and the decompressed cpio the guest unpacks.
+	n := len("BASE-INITRAMFS")
+	if !bytes.Equal(got[:n], want[:n]) {
+		t.Fatalf("base archive differs: got %q, want %q", got[:n], want[:n])
 	}
+	if g, w := gunzip(t, got[n:]), gunzip(t, want[n:]); !bytes.Equal(g, w) {
+		t.Fatalf("appended cpio differs from the golden fixture:\n got %x\nwant %x", g, w)
+	}
+}
+
+func gunzip(t *testing.T, b []byte) []byte {
+	t.Helper()
+	zr, err := gzip.NewReader(bytes.NewReader(b))
+	if err != nil {
+		t.Fatal(err)
+	}
+	out, err := io.ReadAll(zr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return out
 }
 
 func TestFindAllFromOnePlace(t *testing.T) {
