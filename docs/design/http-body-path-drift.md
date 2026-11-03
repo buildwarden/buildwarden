@@ -36,10 +36,15 @@ which RELAY-05 says is all it should need, rejects or flags these records.
 
 The drift was found by the specs-migration review and refuted there as
 pre-existing (see the archived [`specs-migration.md`](specs-migration.md),
-Consolidation and Archive summary). History: `b716d9e` (2026-09-24) introduced
-`{"path": "build-script"}`, and `4ea4f50` (2026-10-11, diskless relay) widened
-it to the bootstrap config and every context file. v0.5.0 had no such field;
-**v0.6.0 (2026-10-31) is the only release whose ledgers carry it**.
+Consolidation and Archive summary). History: every release wrote
+`path` on build-context-file closes; from v0.2.0 (2026-05-11) the
+header names `schemas/v1/http-body.json` at index 2, so **ledgers from v0.2.0
+through v0.6.0 carry it** on those closes. `b716d9e` (2026-09-24) added
+`{"path": "build-script"}`, `4ea4f50` (2026-10-11, diskless relay) folded both
+into `recordServed`, and `5ab774b` (2026-10-28) added the bootstrap config, so
+v0.6.0 (2026-10-31) also carries it on the build-script and bootstrap closes.
+(Corrected after review ad39ceb99938, which found that an earlier version of
+this paragraph said v0.6.0 was the only such release.)
 
 The decision to make is whether the schema moves to v2 to admit `path`, or the
 producer stops writing it.
@@ -106,9 +111,9 @@ Alternatives:
   Default Schemas table, `specs/README.md` and `specs_test.go` updated. This
   changes a versioned seam's contract (GLOBAL-08) for a redundant field, would
   make the change `alters_relationships: true` and take FLOW-05's single slot,
-  and still leaves the v0.6.0 ledgers non-conforming to the v1 schema they name
-  (a header cannot be re-pointed after the fact without breaking index
-  stability for other readers). Lost: high cost, no information gained.
+  and still leaves the v0.2.0 to v0.6.0 ledgers non-conforming to the v1
+  schema they name (a header cannot be re-pointed after the fact without
+  breaking index stability for other readers). Lost: high cost, no information gained.
 - **D. Widen v1 in place** (add `path` to the v1 schema). Forbidden by
   RELAY-05: a published version's meaning does not change under ledgers already
   written against it. Rejected.
@@ -122,15 +127,15 @@ back into conformance with it. That is a change inside the relay's existing
 role, so `alters_relationships` is `false` (the same pairing the archived
 `specs-migration.md` used).
 
-### D3: document the v0.6.0 deviation where readers look (assumed a2)
+### D3: document the v0.2.0 to v0.6.0 deviation where readers look (assumed a2)
 
 `specs/metadata-http-body/v1.md` gains a short "Known producer deviation" note:
-ledgers written by the v0.6.0 relay (and unreleased builds from `b716d9e`
-onward) carry a `path` text field in `http-body` close records of relay-served
-inputs; it duplicates the path of the matching `OPEN` record's `url`, readers
-should ignore it, and current relays do not write it. The schema file does not
-change, so the commit carries a `Tier1-Allow: RELAY-05
-specs/metadata-http-body/v1.md: ...` trailer, the route `schema-doc` provides
+ledgers written by relays v0.2.0 through v0.6.0 carry a `path` text field in
+`http-body` close records of build-context files, and v0.6.0 ledgers also in
+those of the build script and bootstrap config; it duplicates the path of the
+matching `OPEN` record's `url`, readers should ignore it, and current relays
+do not write it. The schema file does not change, so the commit carries a
+`Tier1-Allow: RELAY-05 specs/metadata-http-body/v1.md: ...` trailer, the route `schema-doc` provides
 for a prose-only fix to one half of a pair.
 
 ### D4: guard against the next drift with a conformance test (assumed a3)
@@ -157,7 +162,7 @@ trivially reversible; the design review confirms it.
   writes `{"status": 200}`; (B) producer writes `{}`; (C) schema v2 admitting
   `path`, new `$id`, header index 2 moves to it; (D) widen v1 in place.
   Recommended: A. Proceeding with A; confirm.
-- **a2. Note the v0.6.0 deviation in `specs/metadata-http-body/v1.md` (D3).**
+- **a2. Note the v0.2.0 to v0.6.0 deviation in `specs/metadata-http-body/v1.md` (D3).**
   Options: (A) note in the http-body v1 document, with a `Tier1-Allow` trailer
   since its schema is unchanged; (B) note in `specs/build-ledger/v1.md`
   (prose-only, no trailer needed, but away from the field table readers
@@ -195,8 +200,8 @@ list are identical, and the ledger stays a v1 ledger naming the same six
 `$id`s.
 
 Readers: `warden inspect` is unaffected (it never read `path`). A reader of a
-v0.6.0 ledger sees the extra key and, per the D3 note, ignores it; signature
-verification never involved metadata.
+v0.2.0 to v0.6.0 ledger sees the extra key and, per the D3 note, ignores it;
+signature verification never involved metadata.
 
 `docs/book/src/concepts/overview.md` needs no change: its relay pseudocode says
 served inputs are "recorded" and does not describe their metadata, and the
@@ -297,9 +302,10 @@ trailer.
    mode-independent handlers), RELAY-05 (conforms to v1), GLOBAL-06.
 4. **Spec note** (D3; rests on a2, and on a1 for "current relays do not write
    it"). Add a "Known producer deviation" paragraph after the field table in
-   `specs/metadata-http-body/v1.md`: ledgers written by the v0.6.0 relay, and
-   unreleased builds from `b716d9e` onward, carry a `path` text field in the
-   `http-body` close records of relay-served inputs; it duplicates the path of
+   `specs/metadata-http-body/v1.md`: ledgers written by relays v0.2.0 through
+   v0.6.0 carry a `path` text field in the `http-body` close records of
+   build-context files, and v0.6.0 ledgers also in those of the build script
+   and bootstrap config; it duplicates the path of
    the matching `OPEN` record's `url`; readers ignore it; current relays write
    `{"status": 200}` instead. `v1.schema.json` does not change. Commit this
    file alone with the trailer below, in the `"<RULE-ID> <path-glob>:
@@ -334,6 +340,12 @@ trailer.
   dependency). Folded in at approval: `firecracker` added to `drivers` and to
   Cross-driver impact, since that driver shares the relay and is likely to
   merge first.
+- **Factual correction, 2026-11-03, after review ad39ceb99938:** a1 and a2
+  were confirmed on the premise that only v0.6.0 ledgers carry `path`. The tags
+  show v0.2.0 through v0.6.0 carry it on build-context-file closes (v0.6.0
+  also on build-script and bootstrap closes). History, option C, D3, a2, the
+  Design section's reader note and task 4 now say so. No decision, option or
+  task changed, and the corrected premise strengthens the case against C.
 
 ## Consolidation
 
