@@ -185,7 +185,8 @@ func (d *Driver) startAndClaimRelay(
 	}
 
 	claimAddr := net.JoinHostPort("127.0.0.1", strconv.Itoa(claimPort))
-	if _, err := sess.ClaimRelay(ctx, claimAddr, claimToken, req, env); err != nil {
+	if _, err := sess.ClaimRelay(ctx, claimAddr, claimToken, req, env,
+		req.Link().Claim(), driver.OldRelayFix); err != nil {
 		relayProc.stop()
 		return nil, err
 	}

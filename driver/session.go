@@ -30,7 +30,7 @@ import (
 //
 //	s, _ := driver.StartSession(cfg)              // collector ready (no listener)
 //	(driver boots the relay, unconfigured)
-//	id, _ := s.ClaimRelay(ctx, addr, tok, req, nil) // tunnel up, relay configured
+//	id, _ := s.ClaimRelay(ctx, addr, tok, req, nil, link, fix) // tunnel up, relay configured
 //	(driver boots the build guest)
 //	_ = s.Wait(ctx)                               // completion or failure
 //	s.Close(); driver.FinalizeOutput(...)
@@ -102,8 +102,15 @@ func StartSession(cfg SessionConfig) (*Session, error) {
 // configuration, waits for the relay to report ready, and writes its CA
 // certificate to <output>/ca.cert.pem. env is the optional environment record
 // (the container driver's base image manifest).
+//
+// link is the build link the relay configures its build segment from (nil
+// sends none: the container driver, and a claimant whose relay is already
+// addressed). A relay too old to know the field refuses the claim; that
+// refusal is returned as a FixableError with oldRelayFix, before the caller
+// boots any build guest.
 func (s *Session) ClaimRelay(ctx context.Context, addr, claimToken string,
-	req *BuildRequest, env *relaycfg.Environment) (relaycfg.Identity, error) {
+	req *BuildRequest, env *relaycfg.Environment,
+	link *relaycfg.BuildLink, oldRelayFix string) (relaycfg.Identity, error) {
 	cas, err := LoadUpstreamCAs(req.UpstreamCACerts)
 	if err != nil {
 		return relaycfg.Identity{}, err
@@ -113,6 +120,7 @@ func (s *Session) ClaimRelay(ctx context.Context, addr, claimToken string,
 		CollectorToken: s.Token,
 		CaptureMode:    req.CaptureMode,
 		Environment:    env,
+		BuildLink:      link,
 	}
 	if len(cas) > 0 {
 		cfg.UpstreamCACerts = []string{string(cas)}
@@ -131,6 +139,11 @@ func (s *Session) ClaimRelay(ctx context.Context, addr, claimToken string,
 	s.tunnel, s.tunnelEnd = conn, end
 	id, err := relaycfg.Claim(ctx, addr, claimToken, cfg)
 	if err != nil {
+		if errors.Is(err, relaycfg.ErrRejected) &&
+			strings.Contains(err.Error(), `unknown field "build_link"`) {
+			return relaycfg.Identity{}, Fixable(oldRelayFix,
+				"the relay predates the build link in its claim (%v)", err)
+		}
 		return relaycfg.Identity{}, fmt.Errorf("claiming relay: %w", err)
 	}
 	select {
@@ -306,6 +319,12 @@ func RandomToken() (string, error) {
 	}
 	return hex.EncodeToString(b), nil
 }
+
+// OldRelayFix is the old-relay fix for drivers that append warden's own relay
+// binary to the relay per build (qemu, Firecracker, vz): a relay that predates
+// the build link means a mismatched install.
+const OldRelayFix = "reinstall warden so its relay binary matches it " +
+	"(in a source tree: make build)"
 
 // FreeLoopbackPort reserves and releases a loopback TCP port, for forwarding
 // a relay's claim port to the host. The tiny reuse race is acceptable: a

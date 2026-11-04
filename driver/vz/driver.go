@@ -200,7 +200,8 @@ func (d *Driver) setupNetworkAndRelay(
 		return nil, nil, fmt.Errorf("starting relay: %w", err)
 	}
 	claimAddr := net.JoinHostPort("127.0.0.1", fmt.Sprint(claimPort))
-	if _, err := sess.ClaimRelay(ctx, claimAddr, claimToken, req, env); err != nil {
+	if _, err := sess.ClaimRelay(ctx, claimAddr, claimToken, req, env,
+		req.Link().Claim(), driver.OldRelayFix); err != nil {
 		relayProc.Stop()
 		_ = vnet.Close()
 		return nil, nil, err

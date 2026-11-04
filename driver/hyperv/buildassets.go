@@ -30,6 +30,11 @@ func hypervCacheDir() string {
 	return filepath.Join(".", ".warden-cache", "hyperv")
 }
 
+// RefreshRelayBootFix rebuilds and installs the relay boot VHDX (its relay
+// binary and init) from the source tree.
+const RefreshRelayBootFix = "build it from the source tree (Git Bash, needs WSL): " +
+	"tools/relay-vm/hyperv/refresh-cache.sh"
+
 // resolveRelayBootVHDX locates the static, read-only relay boot VHDX (the UKI
 // disk). Resolution order: WARDEN_RELAY_BOOT_VHDX, then the pinned path under the
 // hyperv cache. Returns an actionable error when neither is present.
@@ -46,9 +51,7 @@ func resolveRelayBootVHDX() (string, error) {
 	if _, err := os.Stat(pinned); err == nil {
 		return pinned, nil
 	}
-	return "", driver.Fixable(
-		"build it from the source tree (Git Bash, needs WSL): "+
-			"tools/relay-vm/hyperv/refresh-cache.sh",
+	return "", driver.Fixable(RefreshRelayBootFix,
 		"relay boot VHDX not found (looked at $WARDEN_RELAY_BOOT_VHDX and %s)", pinned)
 }
 

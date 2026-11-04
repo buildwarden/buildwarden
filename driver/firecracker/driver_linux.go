@@ -202,7 +202,8 @@ func (r *run) startRelay(ctx context.Context, sess *driver.Session, pre *preflig
 		case <-cctx.Done():
 		}
 	}()
-	if _, err := sess.ClaimRelay(cctx, r.slot.ClaimAddr(), token, r.req, env); err != nil {
+	if _, err := sess.ClaimRelay(cctx, r.slot.ClaimAddr(), token, r.req, env,
+		r.req.Link().Claim(), driver.OldRelayFix); err != nil {
 		if r.relay.exited() {
 			return r.vmFailure(errRelayVMExited, r.relay)
 		}
