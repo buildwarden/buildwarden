@@ -55,7 +55,7 @@ steps:
 budget:
   estimate:
     runs: 5
-    steps: 30
+    steps: 60
   spent:
     runs: 2
     steps: 5
@@ -244,3 +244,6 @@ history:
   - at: 2026-11-04T21:42:24Z
     by: human/jeff
     event: 'back to design: design review r2 (Jeff, at ef8c014): changes. a2 answered (c): deliver the link in the relay claim, the relay configures its own build interface (relay-claim seam change, no relay-side bake, no Hyper-V rebake); a3 records only where something still bakes the link; a7 superseded (re-decide seams, alters_relationships); a4, a5, a8, a9, a10 confirmed. Weigh the network-overview doc''s open questions; BOOT-07 comparison if interface setup moves into the relay'
+  - at: 2026-11-04T17:30:00Z
+    by: human/jeff
+    event: 'step estimate raised 30 -> 60 (Jeff): the r2 change (link delivered in the relay claim) is driven by his own decisions, and the old estimate no longer fits'
