@@ -10,11 +10,19 @@ findings never block on their own. Tier 2 is report-only (LINT-07).
 
 1. Scope: `git diff origin/main...<branch>` only (LINT-04).
 2. Tier 1: `make lint`, `make test`, and the `automated` checks that exist so
-   far (LINT-02; Deep-dive #2 adds more). Record each result.
+   far (LINT-02; Deep-dive #2 adds more), the FLOW-14 rule-change clearance
+   among them (`dist/wf check`). When the branch changes `tools/tier1/` or
+   `tools/workflow/check/`, also run main's enforcement against it (FLOW-14):
+   `make enforcement`, and `wf check -feature <F>` built from the merge base
+   (a `git worktree add` of `git merge-base origin/main <branch>`, its
+   `tools/workflow` built to a scratch `wf`, run with `-repo` on the branch
+   checkout). Record each result.
 3. Tier 2: extract the rule index from `docs/development/*.md` (LINT-01: the
    `### <ID> — <title>` headers with their Severity and Check lines). For each
    `agent-judgment` rule and the judgment half of each `hybrid` rule, judge the
-   diff. Each finding: rule ID, severity, `file:line`, what is wrong, a
+   diff, against the rules as the branch changes them. For each approved rule
+   change, judge whether the edit matches the wording the Design review
+   approved at its sha (FLOW-14). Each finding: rule ID, severity, `file:line`, what is wrong, a
    suggested fix.
 4. Write `reports/<feature>/<sha12>.json` and `.md` on the workflow checkout,
    `<sha12>` the branch head's 12-character short hash (LINT-05: stable,

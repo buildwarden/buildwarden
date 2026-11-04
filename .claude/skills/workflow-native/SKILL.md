@@ -26,7 +26,9 @@ Arguments:
 
 The `workflow-tick` skill's Never list applies unchanged: no merge, approval or
 auto-merge; no push to `main`, force-push or remote branch delete; no edits to
-`docs/development/`, `.claude/` or `tools/workflow/`; no secrets in prompts.
+`docs/development/`, `.claude/` or `tools/workflow/`, except a rule change the
+feature's design review approved, in its `paths` (FLOW-14); no secrets in
+prompts.
 Also: never take `human` or `cloud` steps, never ask a question and wait (record
 it in the queue and the digest instead), and never change anything on the
 machine outside the checkout, the documented caches, and the VMs, images and

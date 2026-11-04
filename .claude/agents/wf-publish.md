@@ -18,15 +18,18 @@ FLOW-08, FLOW-10, FLOW-11, FLOW-12, FLOW-15, FLOW-16, FLOW-17, FLOW-18.
   wording and terminology here. Work beyond that goes back: `wf back -to 3`
   when the approved plan already covers it, `wf back -to 1` with the finding
   when the plan must change (FLOW-06, which seeds a new design review). A
-  convention that should bind future work is proposed as a rule change for
-  the design review or as a follow-up item, never written into
-  `docs/development/` or `.claude/` on a feature branch (FLOW-14).
+  convention that should bind future work lands in this PR only as a rule
+  change the design review approved; otherwise `wf back -to 1` for a review
+  of it, or a follow-up item (FLOW-10, FLOW-14). Never write into
+  `.claude/` or `tools/workflow/` outside `check/` on a feature branch.
 - `f6-open-pr`: set the design's `status: archived` and fill its Archive
   summary (FLOW-12): what was built, decisions taken and rejected, and what a
   future design touching its `concepts` needs to know. Commit, push, and open
   the PR to `main` without asking (FLOW-08). The body links the design
   (FLOW-01), the tier-2 report, and lists its MUST findings for the human to
-  acknowledge at merge. Record `pr.number` in the queue file. Then repair CI:
+  acknowledge at merge. A design with `rule_changes` gets a **Rule changes**
+  section in the body: each rule, its change and paths, and the commit its
+  approval names (FLOW-14). Record `pr.number` in the queue file. Then repair CI:
   at most three attempts per distinct failure, then add a `human` step and
   stop (FLOW-11). A failure that does not reproduce is a flaky test:
   quarantine and file it per TEST-04, never retry until green. Set `pr.ci:

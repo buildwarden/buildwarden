@@ -36,9 +36,17 @@ feature names in its `source`.
    before; otherwise `required`. Write it in the front-matter and the queue
    file. Copy `alters_relationships` into the queue file too; if it is `true`,
    FLOW-05's slot decides whether planning may start (`wf next` enforces it).
+6. Rule changes (FLOW-14): when the feature needs a rule or its enforcement
+   changed, declare each change in `rule_changes` (`rule`, `change: add |
+   amend | retire`, and every path it edits, enforcement included) and fill
+   the Rule changes section: current and proposed wording, severity and check
+   before and after, why the feature needs it, and what the enforcement
+   change does. A design with `rule_changes` cannot skip its review (FLOW-19).
 
-Never edit `docs/development/` or `.claude/` on a feature branch; propose a rule
-change in the design for the design review instead (FLOW-14).
+Never edit `docs/development/`, `tools/tier1/`, `.claude/` or `tools/workflow/`
+here: a rule change is declared in the design and made in Implement once the
+review approves it; `.claude/` and `tools/workflow/` outside `check/` change
+only through a process item (FLOW-14).
 
 Commit on the feature branch. Return: what you wrote, the questions raised, the
 `design_review` decision with its reason, and which phase-1 done-when items you
