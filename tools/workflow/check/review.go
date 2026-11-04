@@ -14,10 +14,12 @@ import (
 var approvedRe = regexp.MustCompile("(?i)approved\\s+at\\s+`?([0-9a-f]{7,40})")
 
 // approvals returns the commits of the design's recorded approvals, oldest
-// first.
+// first. A rule change's own approval (`rule change <ID> approved at <sha>`)
+// is not one.
 func approvals(d *Design) []string {
 	var out []string
-	for _, m := range approvedRe.FindAllStringSubmatch(d.Sections["Design review"], -1) {
+	text := ruleApprovedRe.ReplaceAllString(d.Sections["Design review"], "")
+	for _, m := range approvedRe.FindAllStringSubmatch(text, -1) {
 		out = append(out, m[1])
 	}
 	return out
@@ -69,6 +71,10 @@ func (c *checker) reviewed() {
 // change after a return to Design needs no re-approval.
 func (c *checker) skipValid(d *Design) {
 	const name = "design review skip is valid (FLOW-19)"
+	if n := len(d.Front.RuleChanges); n > 0 {
+		c.add(name, false, "the design declares %d rule_changes, each approved in review", n)
+		return
+	}
 	for _, q := range c.f.Questions {
 		if (q.Kind == "assumed" && q.Status != "confirmed") ||
 			(q.Kind == "blocking" && q.Status == "open") {
