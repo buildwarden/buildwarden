@@ -117,15 +117,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261104T214530Z-attended
+      expires: 2026-11-05T00:49:36.518228133Z
 budget:
   estimate:
-    runs: 5
-    steps: 60
+    runs: 12
+    steps: 120
   spent:
     runs: 3
-    steps: 8
+    steps: 9
 questions:
   - id: a1
     kind: assumed
@@ -469,3 +469,9 @@ history:
   - at: 2026-11-04T22:45:09Z
     by: human/jeff
     event: entered phase 3 (implement)
+  - at: 2026-11-04T23:20:00Z
+    by: human/jeff
+    event: 'estimate raised to 12 runs (was 5) and 120 steps (was 60) (Jeff): plan r3 is 56 tasks on five platforms, a very large change; liberal step budget, Implement started attended'
+  - at: 2026-11-04T22:49:36Z
+    by: cloud/20261104T214530Z-attended
+    event: claimed f3-implement until 2026-11-05T00:49:36Z
