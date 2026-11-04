@@ -3,7 +3,7 @@ title: Move every VM driver's relay-to-build link off 10.0.0.0/30
 priority: 18
 status: in_progress
 round: feature
-phase: 2
+phase: 1
 design: docs/design/build-link-subnet.md
 branch: feat/build-link-subnet
 alters_relationships: false
@@ -45,55 +45,13 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: f2-design-review-r2
-    phase: 2
-    affinity: human
+  - id: f1-design-r3
+    phase: 1
+    affinity: cloud
     status: pending
-    needs:
-      - f2-plan-r2
     lease:
       claimed_by: ""
       expires: null
-  - id: f6-validate-linux-kvm
-    phase: 6
-    affinity: host:linux-kvm
-    status: pending
-    needs:
-      - f2-design-review-r2
-    lease:
-      claimed_by: ""
-      expires: null
-    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan (plan task 38): the four cases on the default link and on 100.126.255.252/30 (pre-change assets refused; after the named rebuild a build succeeds and its ledger verifies; a non-default link reported by doctor and built; an overlapping --build-link refused at startup). Reaches driver/firecracker (boot args, resolver exclusion against the resolved link), tools/firecracker-vm/init and the x86_64 relay init; plus a direct-boot and a disk build, a host resolver inside the configured link excluded with the fix, and the guest-sourced canary drop (TEST-08). Added by f2-plan-r2 needing only f2-design-review-r2; add f3-implement to its needs once Implement is seeded, and f6-open-pr must need this step once phase 6 is seeded.'
-  - id: f6-validate-qemu-any
-    phase: 6
-    affinity: host:qemu-any
-    status: pending
-    needs:
-      - f2-design-review-r2
-    lease:
-      claimed_by: ""
-      expires: null
-    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan (plan task 38): the four cases on the default link and on 100.126.255.252/30 (pre-change assets refused; after the named rebuild a build succeeds and its ledger verifies; a non-default link reported by doctor and built; an overlapping --build-link refused at startup). Reaches driver/qemu (relay and direct-boot command lines, asset record check), tools/build-vm/init, the aarch64 relay init and the linuxguest seed; plus a direct-boot and a cloud-image Linux build. Added by f2-plan-r2 needing only f2-design-review-r2; add f3-implement to its needs once Implement is seeded, and f6-open-pr must need this step once phase 6 is seeded.'
-  - id: f6-validate-macos-vz
-    phase: 6
-    affinity: host:macos-vz
-    status: pending
-    needs:
-      - f2-design-review-r2
-    lease:
-      claimed_by: ""
-      expires: null
-    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan (plan task 38): the four cases on the default link and on 100.126.255.252/30 (pre-change assets refused; after the named rebuild a build succeeds and its ledger verifies; a non-default link reported by doctor and built; an overlapping --build-link refused at startup). Reaches driver/vz (network, warden-boot baked at prepare, image record check) and the relay/ host-mode subnet block; plus the subnet block on the configured link. Added by f2-plan-r2 needing only f2-design-review-r2; add f3-implement to its needs once Implement is seeded, and f6-open-pr must need this step once phase 6 is seeded.'
-  - id: f6-validate-windows-hyperv
-    phase: 6
-    affinity: host:windows-hyperv
-    status: pending
-    needs:
-      - f2-design-review-r2
-    lease:
-      claimed_by: ""
-      expires: null
-    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan (plan task 38): the four cases on the default link and on 100.126.255.252/30 (pre-change assets refused; after the named rebuild a build succeeds and its ledger verifies; a non-default link reported by doctor and built; an overlapping --build-link refused at startup). Reaches driver/hyperv (relay-boot VHDX record, NAT-prefix overlap refusal), refresh-cache.sh --link and driver/winguest; plus a Windows guest build and the --nat-prefix overlap refusal. Added by f2-plan-r2 needing only f2-design-review-r2; add f3-implement to its needs once Implement is seeded, and f6-open-pr must need this step once phase 6 is seeded.'
 budget:
   estimate:
     runs: 5
@@ -115,40 +73,44 @@ questions:
     answer: Default 100.127.255.252/30, but the link must be manually configurable (advanced configuration options) in case of a collision or other unknown limitation (Jeff, r1)
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: Where the default link is defined and how a configured link reaches each consumer (Decision 2).
     options:
       - 'one embedded driver/buildlink/link.env for the default; per build: warden.link_* kernel command-line keys for the qemu and Firecracker relay and direct-boot inits, the seeds and vz --subnet as today; baked: the Hyper-V relay VHDX (refresh-cache.sh --link) and the vz image (warden image prepare); plus a tier-0 stray-literal test'
       - bake the link into every initramfs and rebuild per value
       - deliver the link in the relay claim and let the relay address its build interface (a relay-claim seam change; removes the Hyper-V rebake)
     recommended: 'one embedded driver/buildlink/link.env for the default; per build: warden.link_* kernel command-line keys for the qemu and Firecracker relay and direct-boot inits, the seeds and vz --subnet as today; baked: the Hyper-V relay VHDX (refresh-cache.sh --link) and the vz image (warden image prepare); plus a tier-0 stray-literal test'
+    answer: '(c) deliver the link in the relay claim: the relay configures its own build interface (relay-claim seam change; removes Hyper-V''s rebake) (Jeff, r2)'
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: Link records on link-carrying boot assets and what they are checked against (Decision 3).
     options:
       - 'a record beside every asset, checked before boot and in doctor: present for per-build-channel assets (qemu and Firecracker initramfs), equal to the resolved link for baked assets (Hyper-V VHDX, vz image); each refusal names its rebuild/refresh/re-prepare command with the link'
       - compare every record with the resolved link (a rebuild per value even where the command line carries it)
       - document the rebuild only
     recommended: 'a record beside every asset, checked before boot and in doctor: present for per-build-channel assets (qemu and Firecracker initramfs), equal to the resolved link for baked assets (Hyper-V VHDX, vz image); each refusal names its rebuild/refresh/re-prepare command with the link'
+    answer: link records, unless the a2 claim-borne delivery removes the need; Design re-decides which baked assets still carry the link (Jeff, r2)
   - id: a4
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Guards against the resolved link (Decision 4): PR #90''s Firecracker resolver refusal, the CI DNS workaround, Hyper-V --nat-prefix, host interfaces.'
     options:
       - 'Firecracker resolver exclusion follows the resolved link (fix names both remedies: an off-link resolver or another build_link); drop the firecracker.yml DNS workaround; Hyper-V --nat-prefix overlap refusal; host-interface overlap refusal on every VM driver'
       - remove the Firecracker exclusion, now that the link can be moved
       - keep the CI DNS workaround too
     recommended: 'Firecracker resolver exclusion follows the resolved link (fix names both remedies: an off-link resolver or another build_link); drop the firecracker.yml DNS workaround; Hyper-V --nat-prefix overlap refusal; host-interface overlap refusal on every VM driver'
+    answer: (a) as designed (Jeff, r2)
   - id: a5
     kind: assumed
-    status: open
+    status: confirmed
     question: 'macos-qemu (Windows guest on qemu) as tracked rather than blocking: driver/qemu''s changes are guest-agnostic (relay command line, asset record check) and validated on qemu-any, driver/winguest on windows-hyperv, and qemu Windows builds already fail on main (backlog qemu-windows-guest-package).'
     options:
       - tracked (backlog build-link-subnet-qemu-windows)
       - 'blocking, criterion: gets no further than on main'
       - blocking, waiting on the qemu Windows fix
     recommended: tracked (backlog build-link-subnet-qemu-windows)
+    answer: (a) tracked, backlog build-link-subnet-qemu-windows (Jeff, r2)
   - id: a6
     kind: assumed
     status: confirmed
@@ -160,23 +122,25 @@ questions:
     answer: 'Reversed: a configurable link in the advanced configuration options, defaulting to 100.127.255.252/30 (Jeff, r1)'
   - id: a7
     kind: assumed
-    status: open
+    status: confirmed
     question: 'seams [] and alters_relationships false: initialize --gateway/--ip keeps its contract (EXEC-04); claim, collector and guest API unchanged; the relay VM kernel command line gains warden.link_* keys but is the orchestrator''s boot configuration, not a relay seam (GLOBAL-08); driver.BuildRequest gains an additive BuildLink input like CPUs or Network; no ledger/schema/environment-record format names the address (RELAY-05); no BOOT invariant, mapping row or deviation changes, the vz bake of the configured link being the existing D2 (BOOT-07). drivers declares container conservatively.'
     options:
       - 'as stated: no seam, alters_relationships false'
       - conservatively declare executor-initialize and alters_relationships true
     recommended: 'as stated: no seam, alters_relationships false'
+    answer: 'superseded by a2 (c): the claim carries the link, so relay-claim is a changed seam; Design re-decides seams and alters_relationships (r2)'
   - id: a8
     kind: assumed
-    status: open
+    status: confirmed
     question: The vz host-mode relay blocks upstream dials into its whole --subnet (the resolved link), not only the gateway, since an RFC 6598 guest address is not covered by the SSRF filter's RFC 1918 block. This changes relay/ (a blocked prefix in relay.Config checked by isBlockedIP) as well as cmd/relay/mode_host.go; container and VM modes leave it unset (Security note).
     options:
       - block the subnet
       - leave the relay alone
     recommended: block the subnet
+    answer: (a) block the subnet; with the claim carrying the link Design may apply it in every mode (Jeff, r2)
   - id: a9
     kind: assumed
-    status: open
+    status: confirmed
     question: Where the build-link setting lives (Decision 5, a6 reversed in r1).
     options:
       - '[vm] build_link in warden.toml / config.toml and --build-link on build, shell, doctor, setup (hyperv) and image prepare (vz); flag over project over user; long form only; no environment variable (UX-07); documented as an advanced option in configuration.md and per command in cli.md'
@@ -184,15 +148,17 @@ questions:
       - a new [advanced] table
       - the first option plus a WARDEN_BUILD_LINK environment variable
     recommended: '[vm] build_link in warden.toml / config.toml and --build-link on build, shell, doctor, setup (hyperv) and image prepare (vz); flag over project over user; long form only; no environment variable (UX-07); documented as an advanced option in configuration.md and per command in cli.md'
+    answer: (a) [vm] build_link plus --build-link; Design trims the command list once the claim carries the link (Jeff, r2)
   - id: a10
     kind: assumed
-    status: open
+    status: confirmed
     question: Validating the build-link setting (Decision 5).
     options:
       - 'at load and startup: IPv4, exactly /30, network-aligned; not 0/8, loopback, link-local, multicast or class E; disjoint from the container base, Firecracker upstream, Hyper-V default NAT and qemu user-mode ranges. At build start and in doctor: no host interface address inside the link, Firecracker resolvers, Hyper-V NAT prefix at setup. A host network that only contains the link is a doctor warning'
       - syntax and prefix only
       - the first option, and also refuse when a host network contains the link
     recommended: 'at load and startup: IPv4, exactly /30, network-aligned; not 0/8, loopback, link-local, multicast or class E; disjoint from the container base, Firecracker upstream, Hyper-V default NAT and qemu user-mode ranges. At build start and in doctor: no host interface address inside the link, Firecracker resolvers, Hyper-V NAT prefix at setup. A host network that only contains the link is a doctor warning'
+    answer: (a) as designed (Jeff, r2)
 history:
   - at: 2026-11-03T01:30:28Z
     by: human/jeff
@@ -251,3 +217,30 @@ history:
   - at: 2026-11-04T16:20:00Z
     by: human/jeff
     event: 'design review r2 paused, incomplete (workflow-human): Jeff is concerned about rebuilds and cache invalidation; first an overview of the existing network setup (host, relay, baked vs configurable, per driver). No assumption answered; f2-design-review-r2 stays pending'
+  - at: 2026-11-04T21:42:00Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: (c) deliver the link in the relay claim: the relay configures its own build interface (relay-claim seam change; removes Hyper-V''s rebake) (Jeff, r2)'
+  - at: 2026-11-04T21:42:00Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: link records, unless the a2 claim-borne delivery removes the need; Design re-decides which baked assets still carry the link (Jeff, r2)'
+  - at: 2026-11-04T21:42:00Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: (a) as designed (Jeff, r2)'
+  - at: 2026-11-04T21:42:00Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: (a) tracked, backlog build-link-subnet-qemu-windows (Jeff, r2)'
+  - at: 2026-11-04T21:42:00Z
+    by: human/jeff
+    event: 'assumed question a7 confirmed: superseded by a2 (c): the claim carries the link, so relay-claim is a changed seam; Design re-decides seams and alters_relationships (r2)'
+  - at: 2026-11-04T21:42:00Z
+    by: human/jeff
+    event: 'assumed question a8 confirmed: (a) block the subnet; with the claim carrying the link Design may apply it in every mode (Jeff, r2)'
+  - at: 2026-11-04T21:42:00Z
+    by: human/jeff
+    event: 'assumed question a9 confirmed: (a) [vm] build_link plus --build-link; Design trims the command list once the claim carries the link (Jeff, r2)'
+  - at: 2026-11-04T21:42:00Z
+    by: human/jeff
+    event: 'assumed question a10 confirmed: (a) as designed (Jeff, r2)'
+  - at: 2026-11-04T21:42:24Z
+    by: human/jeff
+    event: 'back to design: design review r2 (Jeff, at ef8c014): changes. a2 answered (c): deliver the link in the relay claim, the relay configures its own build interface (relay-claim seam change, no relay-side bake, no Hyper-V rebake); a3 records only where something still bakes the link; a7 superseded (re-decide seams, alters_relationships); a4, a5, a8, a9, a10 confirmed. Weigh the network-overview doc''s open questions; BOOT-07 comparison if interface setup moves into the relay'
