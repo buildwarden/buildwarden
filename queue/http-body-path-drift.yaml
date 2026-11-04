@@ -3,12 +3,15 @@ title: Relay writes a path field under http-body, whose schema forbids extra fie
 priority: 15
 status: in_progress
 round: feature
-phase: 6
+phase: 7
 design: docs/design/http-body-path-drift.md
 branch: feat/http-body-path-drift
 alters_relationships: false
 design_review: required
 source: 'specs-migration review (refuted as pre-existing, 2026-10-31): relay/relay.go recordServed writes {"path": ...} under metadata-http-body/v1, additionalProperties: false; decide schema v2 or producer change'
+pr:
+  number: 93
+  ci: green
 steps:
   - id: f0-branch-setup
     phase: 0
@@ -87,12 +90,19 @@ steps:
   - id: f6-open-pr
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f6-consolidate
     lease:
-      claimed_by: cloud/20261104T105656Z
-      expires: 2026-11-04T13:06:06.501192203Z
+      claimed_by: ""
+      expires: null
+  - id: f7-merge
+    phase: 7
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -238,3 +248,9 @@ history:
   - at: 2026-11-04T11:06:06Z
     by: cloud/20261104T105656Z
     event: claimed f6-open-pr until 2026-11-04T13:06:06Z
+  - at: 2026-11-04T11:18:48Z
+    by: cloud/20261104T105656Z
+    event: done f6-open-pr
+  - at: 2026-11-04T11:18:48Z
+    by: cloud/20261104T105656Z
+    event: entered phase 7 (merge)
