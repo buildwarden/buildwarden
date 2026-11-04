@@ -314,7 +314,17 @@ tasks:
 
 ## Design review
 
-Recorded at x1-design (FLOW-19).
+- **r1, 2026-11-04: approved at `9f88987`** (Jeff, workflow-human, x1-design,
+  FLOW-19). The design was published as a review page at `9f88987`, with
+  the seven assumed questions first.
+  - **All seven confirmed as drafted (a):** a1 scope (rules and their
+    enforcement; `.claude/` and the rest of `tools/workflow/` stay
+    process-item only), a2 the `rule_changes` key plus a **Rule changes**
+    section, a3 each change approved by name, a4 the `wf check` at
+    Implement, Review and Publish, a5 main's enforcement also run against a
+    branch that changes it, a6 a change found after the review goes back to
+    Design, a7 build-link-subnet's BOOT-03 approved in a review addendum
+    once this item merges, with task 49 done before its Publish.
 
 ## Consolidation
 
