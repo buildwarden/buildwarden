@@ -1,0 +1,31 @@
+feature: design-approved-rule-changes
+title: Rule and enforcement changes a feature's design needs are approved in its design review and made in its Implement
+priority: 23
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/design-approved-rule-changes.md
+branch: feat/design-approved-rule-changes
+alters_relationships: null
+source: 'workflow-human 2026-11-04 (Jeff), from build-link-subnet task 49: Implement could not apply the BOOT-03 wording the design proposed (FLOW-14). If a feature''s design intentionally requires altering development rules and/or their enforcement, those changes are explicitly reviewed in the design review and, if approved, are cleared to be made as part of the feature''s implementation.'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 5
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-04T23:39:59Z
+    by: human/jeff
+    event: queued at priority 23 (intake)
