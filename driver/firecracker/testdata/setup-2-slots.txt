@@ -1,0 +1,109 @@
+until-fail: iptables -w -t filter -D INPUT -j WARDEN-FC-IN
+may-fail: iptables -w -t filter -F WARDEN-FC-IN
+may-fail: iptables -w -t filter -X WARDEN-FC-IN
+until-fail: iptables -w -t filter -D FORWARD -j WARDEN-FC-FWD
+may-fail: iptables -w -t filter -F WARDEN-FC-FWD
+may-fail: iptables -w -t filter -X WARDEN-FC-FWD
+until-fail: iptables -w -t filter -D OUTPUT -j WARDEN-FC-OUT
+may-fail: iptables -w -t filter -F WARDEN-FC-OUT
+may-fail: iptables -w -t filter -X WARDEN-FC-OUT
+until-fail: iptables -w -t raw -D PREROUTING -j WARDEN-FC-RAW
+may-fail: iptables -w -t raw -F WARDEN-FC-RAW
+may-fail: iptables -w -t raw -X WARDEN-FC-RAW
+until-fail: iptables -w -t nat -D POSTROUTING -j WARDEN-FC-NAT
+may-fail: iptables -w -t nat -F WARDEN-FC-NAT
+may-fail: iptables -w -t nat -X WARDEN-FC-NAT
+until-fail: ip6tables -w -D INPUT -j WARDEN-FC6
+until-fail: ip6tables -w -D FORWARD -j WARDEN-FC6
+until-fail: ip6tables -w -D OUTPUT -j WARDEN-FC6
+may-fail: ip6tables -w -F WARDEN-FC6
+may-fail: ip6tables -w -X WARDEN-FC6
+may-fail: nft delete table bridge warden_fc
+nft add table bridge warden_fc
+nft add chain bridge warden_fc input { type filter hook input priority 0 ; policy accept ; }
+nft add rule bridge warden_fc input iifname wfc* drop
+nft add chain bridge warden_fc forward { type filter hook forward priority 0 ; policy accept ; }
+iptables -w -N WARDEN-FC-IN
+iptables -w -N WARDEN-FC-FWD
+iptables -w -N WARDEN-FC-OUT
+iptables -w -t raw -N WARDEN-FC-RAW
+iptables -w -t nat -N WARDEN-FC-NAT
+ip6tables -w -N WARDEN-FC6
+unless ip link show wfc0b: ip link add wfc0b type bridge
+sysctl -qw net.ipv6.conf.wfc0b.disable_ipv6=1
+unless ip link show wfc0r: ip tuntap add dev wfc0r mode tap user jeff
+sysctl -qw net.ipv6.conf.wfc0r.disable_ipv6=1
+unless ip link show wfc0g: ip tuntap add dev wfc0g mode tap user jeff
+sysctl -qw net.ipv6.conf.wfc0g.disable_ipv6=1
+unless ip link show wfc0u: ip tuntap add dev wfc0u mode tap user jeff
+sysctl -qw net.ipv6.conf.wfc0u.disable_ipv6=1
+ip link set wfc0r master wfc0b
+ip link set wfc0g master wfc0b
+ip addr flush dev wfc0u
+ip addr add 100.64.88.1/30 dev wfc0u
+sysctl -qw net.ipv4.conf.wfc0b.rp_filter=1 net.ipv4.conf.wfc0u.rp_filter=1 net.ipv4.conf.wfc0b.arp_ignore=8
+ip link set wfc0b up
+ip link set wfc0r up
+ip link set wfc0g up
+ip link set wfc0u up
+nft add rule bridge warden_fc forward iifname wfc0r oifname wfc0g accept
+nft add rule bridge warden_fc forward iifname wfc0g oifname wfc0r accept
+iptables -w -A WARDEN-FC-IN -i wfc0b -j DROP
+iptables -w -A WARDEN-FC-IN -i wfc0u -s 100.64.88.2 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+iptables -w -A WARDEN-FC-FWD -i wfc0u -s 100.64.88.2 -o eth0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+iptables -w -A WARDEN-FC-FWD -i eth0 -o wfc0u -d 100.64.88.2 -p tcp --tcp-flags SYN,RST SYN -m tcpmss --mss 1241:65535 -j TCPMSS --set-mss 1240
+iptables -w -A WARDEN-FC-FWD -i wfc0u -s 100.64.88.2 -o eth0 -j ACCEPT
+iptables -w -A WARDEN-FC-FWD -i eth0 -o wfc0u -d 100.64.88.2 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -w -A WARDEN-FC-FWD -i wfc0u -j DROP
+iptables -w -A WARDEN-FC-FWD -i wfc0b -o wfc0b -j ACCEPT
+iptables -w -A WARDEN-FC-OUT -o wfc0u -d 100.64.88.2 -p tcp --dport 8301 -m conntrack --ctstate NEW -m owner --uid-owner 1000 -j ACCEPT
+iptables -w -t raw -A WARDEN-FC-RAW -i wfc0b -j CT --zone 1
+unless ip link show wfc1b: ip link add wfc1b type bridge
+sysctl -qw net.ipv6.conf.wfc1b.disable_ipv6=1
+unless ip link show wfc1r: ip tuntap add dev wfc1r mode tap user jeff
+sysctl -qw net.ipv6.conf.wfc1r.disable_ipv6=1
+unless ip link show wfc1g: ip tuntap add dev wfc1g mode tap user jeff
+sysctl -qw net.ipv6.conf.wfc1g.disable_ipv6=1
+unless ip link show wfc1u: ip tuntap add dev wfc1u mode tap user jeff
+sysctl -qw net.ipv6.conf.wfc1u.disable_ipv6=1
+ip link set wfc1r master wfc1b
+ip link set wfc1g master wfc1b
+ip addr flush dev wfc1u
+ip addr add 100.64.88.5/30 dev wfc1u
+sysctl -qw net.ipv4.conf.wfc1b.rp_filter=1 net.ipv4.conf.wfc1u.rp_filter=1 net.ipv4.conf.wfc1b.arp_ignore=8
+ip link set wfc1b up
+ip link set wfc1r up
+ip link set wfc1g up
+ip link set wfc1u up
+nft add rule bridge warden_fc forward iifname wfc1r oifname wfc1g accept
+nft add rule bridge warden_fc forward iifname wfc1g oifname wfc1r accept
+iptables -w -A WARDEN-FC-IN -i wfc1b -j DROP
+iptables -w -A WARDEN-FC-IN -i wfc1u -s 100.64.88.6 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+iptables -w -A WARDEN-FC-FWD -i wfc1u -s 100.64.88.6 -o eth0 -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu
+iptables -w -A WARDEN-FC-FWD -i eth0 -o wfc1u -d 100.64.88.6 -p tcp --tcp-flags SYN,RST SYN -m tcpmss --mss 1241:65535 -j TCPMSS --set-mss 1240
+iptables -w -A WARDEN-FC-FWD -i wfc1u -s 100.64.88.6 -o eth0 -j ACCEPT
+iptables -w -A WARDEN-FC-FWD -i eth0 -o wfc1u -d 100.64.88.6 -m conntrack --ctstate ESTABLISHED,RELATED -j ACCEPT
+iptables -w -A WARDEN-FC-FWD -i wfc1u -j DROP
+iptables -w -A WARDEN-FC-FWD -i wfc1b -o wfc1b -j ACCEPT
+iptables -w -A WARDEN-FC-OUT -o wfc1u -d 100.64.88.6 -p tcp --dport 8301 -m conntrack --ctstate NEW -m owner --uid-owner 1000 -j ACCEPT
+iptables -w -t raw -A WARDEN-FC-RAW -i wfc1b -j CT --zone 2
+nft add rule bridge warden_fc forward iifname wfc* drop
+nft add rule bridge warden_fc forward oifname wfc* drop
+iptables -w -A WARDEN-FC-IN -i wfc+ -j DROP
+iptables -w -A WARDEN-FC-FWD -i wfc+ -j DROP
+iptables -w -A WARDEN-FC-FWD -o wfc+ -j DROP
+iptables -w -A WARDEN-FC-OUT -o wfc+ -d 100.64.88.0/22 -m conntrack --ctstate ESTABLISHED -j ACCEPT
+iptables -w -A WARDEN-FC-OUT -o wfc+ -d 100.64.88.0/22 -p icmp -m conntrack --ctstate RELATED -j ACCEPT
+iptables -w -A WARDEN-FC-OUT -o wfc+ -j DROP
+iptables -w -t nat -A WARDEN-FC-NAT -s 100.64.88.0/22 -o eth0 -j MASQUERADE
+ip6tables -w -A WARDEN-FC6 -i wfc+ -j DROP
+ip6tables -w -A WARDEN-FC6 -o wfc+ -j DROP
+iptables -w -I INPUT 1 -j WARDEN-FC-IN
+iptables -w -I FORWARD 1 -j WARDEN-FC-FWD
+iptables -w -I OUTPUT 1 -j WARDEN-FC-OUT
+iptables -w -t raw -I PREROUTING 1 -j WARDEN-FC-RAW
+iptables -w -t nat -I POSTROUTING 1 -j WARDEN-FC-NAT
+ip6tables -w -I INPUT 1 -j WARDEN-FC6
+ip6tables -w -I FORWARD 1 -j WARDEN-FC6
+ip6tables -w -I OUTPUT 1 -j WARDEN-FC6
+sysctl -qw net.ipv4.ip_forward=1

@@ -1,10 +1,7 @@
-package qemu
+package linuxguest
 
 import (
-	"crypto/sha256"
-	"encoding/hex"
 	"fmt"
-	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -12,11 +9,14 @@ import (
 	"strings"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/script"
+	"github.com/buildwarden/buildwarden/ledger"
 )
 
-// resolveImage maps a FROM image reference to a local QCOW2 path.
-// Downloads cloud images on first use and caches them.
-func resolveImage(imageRef string) (string, error) {
+// ResolveImage maps a FROM image reference to a local cloud image path (the
+// catalog's images are qcow2). Downloads cloud images on first use and caches
+// them under ImageDir.
+func ResolveImage(imageRef string) (string, error) {
 	if imageRef == "" || imageRef == "scratch" {
 		return "", nil
 	}
@@ -38,7 +38,7 @@ func resolveImage(imageRef string) (string, error) {
 
 	cached := cachedImagePath(imageRef)
 	if _, err := os.Stat(cached); err == nil {
-		if verifyImageIntegrity(cached) {
+		if VerifyImageIntegrity(cached) {
 			return cached, nil
 		}
 		fmt.Fprintf(os.Stderr,
@@ -47,7 +47,7 @@ func resolveImage(imageRef string) (string, error) {
 		_ = os.Remove(cached + ".sha256")
 	}
 
-	if err := downloadImage(url, cached); err != nil {
+	if err := DownloadImage(url, cached); err != nil {
 		return "", fmt.Errorf("downloading %s: %w", imageRef, err)
 	}
 	return cached, nil
@@ -55,7 +55,7 @@ func resolveImage(imageRef string) (string, error) {
 
 func cloudImageURL(ref string) string {
 	arch := runtime.GOARCH
-	qemuArch := hostQEMUArch()
+	alpineArch := hostAlpineArch()
 
 	name, tag := splitImageRef(ref)
 
@@ -68,7 +68,7 @@ func cloudImageURL(ref string) string {
 		return fmt.Sprintf(
 			"https://dl-cdn.alpinelinux.org/alpine/v%s/releases/cloud/"+
 				"generic_alpine-%s.0-%s-uefi-cloudinit-r0.qcow2",
-			ver, ver, qemuArch)
+			ver, ver, alpineArch)
 
 	case name == "ubuntu" || strings.HasPrefix(name, "ubuntu:"):
 		ver := tag
@@ -139,15 +139,40 @@ func debianArch(goarch string) string {
 	}
 }
 
+// hostAlpineArch is the host's architecture as Alpine and the kernel name it.
+func hostAlpineArch() string {
+	switch runtime.GOARCH {
+	case "arm64":
+		return "aarch64"
+	case "amd64":
+		return "x86_64"
+	default:
+		return runtime.GOARCH
+	}
+}
+
+// ImageDir is the cloud image cache, shared with qemu's other base images.
+func ImageDir() string { return filepath.Join(driver.CacheDir(), "images") }
+
+// LayerCache is the layer-hash cache beside the images in ImageDir.
+func LayerCache() *driver.LayerCache {
+	return &driver.LayerCache{
+		Path:     filepath.Join(ImageDir(), driver.LayerCacheFile),
+		Progress: os.Stderr,
+	}
+}
+
 func cachedImagePath(ref string) string {
 	safe := strings.NewReplacer(
 		"/", "_", ":", "_", ".", "_").Replace(ref)
-	dir := filepath.Join(driver.CacheDir(), "images")
+	dir := ImageDir()
 	_ = os.MkdirAll(dir, 0755)
 	return filepath.Join(dir, safe+".qcow2")
 }
 
-func downloadImage(url, dest string) error {
+// DownloadImage downloads url to dest with curl, writes its sha256 beside it
+// as dest.sha256, and records it in LayerCache with the URL as its source.
+func DownloadImage(url, dest string) error {
 	fmt.Fprintf(os.Stderr, "[warden] downloading image...\n")
 	tmp := dest + ".tmp"
 	cmd := exec.Command("curl", "-fSL", "--progress-bar", "-o", tmp, url)
@@ -157,7 +182,7 @@ func downloadImage(url, dest string) error {
 		return err
 	}
 
-	hash, err := hashFile(tmp)
+	hash, err := driver.HashFileSHA256(tmp)
 	if err != nil {
 		_ = os.Remove(tmp)
 		return fmt.Errorf("hashing image: %w", err)
@@ -175,46 +200,58 @@ func downloadImage(url, dest string) error {
 	return nil
 }
 
-func hashFile(path string) (string, error) {
-	f, err := os.Open(path)
-	if err != nil {
-		return "", err
-	}
-	defer f.Close()
-	h := sha256.New()
-	if _, err := io.Copy(h, f); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(h.Sum(nil)), nil
-}
-
-func verifyImageIntegrity(path string) bool {
+// VerifyImageIntegrity reports whether path still matches the hash
+// DownloadImage wrote beside it (true when there is none).
+func VerifyImageIntegrity(path string) bool {
 	expected, err := os.ReadFile(path + ".sha256")
 	if err != nil {
 		return true // no hash file = skip verification
 	}
-	actual, err := hashFile(path)
+	actual, err := driver.HashFileSHA256(path)
 	if err != nil {
 		return false
 	}
 	return strings.TrimSpace(string(expected)) == actual
 }
 
-// PrepareLinuxImage downloads (or verifies the cached copy of) the cloud
-// image for ref (default alpine:3.21) so builds start without a download.
-// A local qcow2 path is just checked.
-func PrepareLinuxImage(ref string) (string, error) {
+// DefaultImage is the cloud image `warden image prepare` fetches when given no
+// source.
+const DefaultImage = "alpine:3.21"
+
+// PrepareImage downloads (or verifies the cached copy of) the cloud image for
+// ref (default DefaultImage) so builds start without a download. A local path
+// is just checked.
+func PrepareImage(ref string) (string, error) {
 	if ref == "" {
-		ref = "alpine:3.21"
+		ref = DefaultImage
 	}
-	return resolveImage(ref)
+	return ResolveImage(ref)
 }
 
-// WindowsImagePath is where `warden image prepare --driver qemu --os
-// windows` installs the base image for a guest arch ("" = host arch).
-func WindowsImagePath(arch string) string {
-	if arch == "" {
-		arch = runtime.GOARCH
+// ContainerfileImage returns req.Image, or when it is empty, the local cloud
+// image a Containerfile FROM resolves to (empty when there is none, it is
+// "scratch", or it does not resolve).
+func ContainerfileImage(req *driver.BuildRequest) string {
+	if req.Image != "" || req.Containerfile == "" {
+		return req.Image
 	}
-	return filepath.Join(driver.CacheDir(), "images", "windows-"+arch+".qcow2")
+	result, err := script.Translate(req.Containerfile, req.ContextDir)
+	if err != nil || result.Image == "" || result.Image == "scratch" {
+		return ""
+	}
+	resolved, err := ResolveImage(result.Image)
+	if err != nil || resolved == "" {
+		return ""
+	}
+	return resolved
+}
+
+// recordDownloadedImage records a freshly downloaded cloud image's hash and
+// URL, so builds describe it without re-hashing and with its provenance.
+func recordDownloadedImage(path, sha256Hex, url string) {
+	err := LayerCache().Record(path, sha256Hex, "",
+		ledger.LayerSource{Kind: ledger.SourceURL, URL: url})
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "[warden] warning: %v\n", err)
+	}
 }

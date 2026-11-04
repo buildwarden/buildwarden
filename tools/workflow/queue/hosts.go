@@ -30,7 +30,7 @@ type Gap struct {
 	What   string `yaml:"what"`
 	Design string `yaml:"design"`
 	Note   string `yaml:"note,omitempty"`
-	Status string `yaml:"status"` // open | done
+	Status string `yaml:"status"` // open | deferred | done
 }
 
 // MachineStatus is native/status/<machine>.yaml, written by native-tick.sh
@@ -122,10 +122,28 @@ func (s *State) Machine(name string) (*Machine, error) {
 	return nil, fmt.Errorf("no machine %q in %s/hosts.yaml", name, s.Dir)
 }
 
-// validateNative checks that each host name has one machine and that every
-// host step and open gap names a host some machine serves.
+// validateGaps checks each backlog gap's status, and that a deferred gap has
+// a note saying what it waits on: nothing else wakes a session for it.
+func (s *State) validateGaps() []string {
+	var errs []string
+	for _, g := range s.Gaps {
+		bad := func(format string, a ...any) {
+			errs = append(errs, "backlog: gap "+g.ID+": "+fmt.Sprintf(format, a...))
+		}
+		if !oneOf(g.Status, "open", "deferred", "done") {
+			bad("status %q is not open, deferred or done", g.Status)
+		}
+		if g.Status == "deferred" && strings.TrimSpace(g.Note) == "" {
+			bad("deferred needs a note saying what it waits on")
+		}
+	}
+	return errs
+}
+
+// validateNative checks the gaps, and that each host name has one machine and
+// that every host step and open gap names a host some machine serves.
 func (s *State) validateNative() []string {
-	errs := s.validateStatus()
+	errs := append(s.validateStatus(), s.validateGaps()...)
 	if len(s.Machines) == 0 {
 		return errs
 	}

@@ -9,6 +9,14 @@ warden build examples/Dockerfile.simple
 warden inspect warden-output
 ```
 
+The examples are written for the container driver: their `FROM` images
+(`python:3.12-slim` and the like) are container images, not ones the VM
+drivers' image catalogs resolve. To run one under `--driver qemu` or
+`--driver firecracker`, base it on a catalog image such as `ubuntu:24.04`
+and install the toolchain it expects (see
+[Cloud Images](./drivers.md#cloud-images) and the Firecracker
+[Images](./drivers.md#images)).
+
 ## Available Examples
 
 ### Dockerfile.simple

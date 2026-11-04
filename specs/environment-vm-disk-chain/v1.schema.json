@@ -8,14 +8,14 @@
   "required": ["type", "driver", "guest_os", "arch", "layers"],
   "properties": {
     "type": { "const": "vm-disk-chain/v1" },
-    "driver": { "type": "string", "description": "qemu, vz, hyperv, ..." },
+    "driver": { "type": "string", "description": "qemu, vz, hyperv, firecracker, ..." },
     "guest_os": { "type": "string", "description": "linux, windows, macos" },
     "arch": { "type": "string", "description": "Go architecture name, e.g. amd64, arm64" },
     "generation": { "type": "integer", "minimum": 1, "description": "Hyper-V VM generation (hyperv only)" },
     "layers": {
       "type": "array",
       "minItems": 1,
-      "description": "Ordered. Entries with role disk form the disk chain base-first (each later disk is a child of the previous). The per-build writable child is created empty from the last disk and is not a layer.",
+      "description": "Ordered. Entries with role disk form the disk chain base-first (each later disk is a child of the previous). The per-build writable disk is not a layer: an empty child of the last disk, or for firecracker, which boots a raw image with no overlay, a copy of it.",
       "items": { "$ref": "#/$defs/layer" }
     },
     "seed": {

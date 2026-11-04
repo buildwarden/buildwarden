@@ -1,6 +1,8 @@
 package driver
 
 import (
+	"os"
+	"path/filepath"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -63,4 +65,20 @@ func TestTryHostLock(t *testing.T) {
 		t.Fatalf("TryHostLock after release: ok=%v err=%v", ok3, err3)
 	}
 	u()
+}
+
+// TestLockDir checks that locks live in LockDir, where drivers keep state
+// tied to a lock (the Firecracker slots' pid files).
+func TestLockDir(t *testing.T) {
+	t.Setenv("XDG_CACHE_HOME", t.TempDir())
+	t.Setenv("HOME", t.TempDir())
+	t.Setenv("LocalAppData", t.TempDir())
+	unlock, err := HostLock("lockdir-probe")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer unlock()
+	if _, err := os.Stat(filepath.Join(LockDir(), "lockdir-probe.lock")); err != nil {
+		t.Fatalf("lock file not in LockDir: %v", err)
+	}
 }

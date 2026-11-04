@@ -1,7 +1,7 @@
 # Architecture
 
 BuildWarden executes builds inside isolated environments while recording a
-tamper-evident ledger of all network activity. Four drivers implement the
+tamper-evident ledger of all network activity. Five drivers implement the
 same lifecycle on different platforms:
 
 | Driver | Flag | Platform | Isolation mechanism |
@@ -10,6 +10,7 @@ same lifecycle on different platforms:
 | QEMU | `--driver qemu` | macOS, Linux, Windows | Topological (separate VM) |
 | VZ | `--driver vz` | macOS/arm64 only | Topological (socketpair, no vmnet) |
 | Hyper-V | `--driver hyperv` | Windows | Topological (separate VM, host-only NAT) |
+| Firecracker | `--driver firecracker` | x86_64 Linux with KVM | Topological (microVM on a per-slot host bridge) |
 
 All four share a single runtime model: `warden` (the orchestrator) boots an
 unconfigured relay, claims it with the build's configuration, then boots the
@@ -299,6 +300,32 @@ switch. The claim endpoint is only on the host-only NAT switch, so the build
 VM cannot reach it. One-time host setup (`warden setup --driver hyperv`) creates
 the durable switches; the relay VM's `/sbin/relay` is baked into its UKI boot
 disk by `tools/relay-vm/hyperv/build.sh`.
+
+### Firecracker driver
+
+```
+warden build --driver firecracker .
+  |-- Preflight: /dev/kvm, firecracker >= v1.17.0, boot assets, a slot, an off-host resolver
+  |-- Stage the build script; record inputs
+  |-- Prepare build VM: raw rootfs (converted once, reflink-copied per build) + CIDATA
+  |     seed on a read-only drive, or the direct-boot initramfs with warden-io appended
+  |-- Start a collector serving the build script + context
+  |-- Take a free network slot (host lock); kill VMMs a dead warden left on it
+  |-- Boot relay VM (firecracker --no-api; relay appended to the x86_64 initramfs),
+  |     unconfigured, on the slot's bridge and upstream TAP
+  |-- Claim the relay at the slot's upstream address, port 8301; write ca.cert.pem
+  |-- Boot build VM (its only NIC on the slot's bridge)
+  |-- warden-io initialize runs via cloud-init, or the direct-boot launcher
+  |-- Wait for exit (a completion may land up to 10 s after the build VM exits)
+  '-- Teardown VMs, the rootfs copy and the slot's pid file; release the slot
+```
+
+Network isolation is topological, like QEMU, but the link is a host bridge per
+slot whose only other port is the relay; the bridge has no address, and a
+bridge-family nft table and the `WARDEN-FC` iptables chains keep build
+segments, other slots and other local users apart (see
+[Network Isolation](network-isolation.md)). `sudo warden setup --driver
+firecracker` makes the slots once per boot, so builds run unprivileged.
 
 ## Lifecycle (common)
 

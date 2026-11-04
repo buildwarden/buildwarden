@@ -137,10 +137,53 @@ func TestValidateNative(t *testing.T) {
 			t.Fatalf("validate[%d] = %q, want %q", i, got[i], want[i])
 		}
 	}
-	// Without hosts.yaml nothing is checked, as before.
+	// Without hosts.yaml no host is checked, as before.
 	s.Machines = nil
 	if errs := s.Validate(); len(errs) != 0 {
 		t.Fatalf("validate without hosts.yaml = %v", errs)
+	}
+}
+
+// TestValidateGapStatus: a gap is open, deferred or done, and a deferred one
+// says what it waits on (FLOW-09, TEST-03), with or without hosts.yaml.
+func TestValidateGapStatus(t *testing.T) {
+	for _, machines := range [][]Machine{nil, nativeState().Machines} {
+		s := state()
+		s.Machines = machines
+		s.Gaps = []Gap{
+			{ID: "g1", Host: "macos-vz", Status: "open"},
+			{ID: "g2", Host: "macos-vz", Status: "deferred",
+				Note: "2026-11-03: waits on a firewalld host from Jeff."},
+			{ID: "g3", Host: "macos-vz", Status: "done"},
+			{ID: "g4", Host: "macos-vz", Status: "skipped"},
+			{ID: "g5", Host: "macos-vz", Status: "deferred", Note: " "},
+		}
+		var got []string
+		for _, e := range s.Validate() {
+			got = append(got, e.Error())
+		}
+		want := []string{`gap g4: status "skipped" is not open, deferred or done`,
+			"gap g5: deferred needs a note"}
+		if len(got) != len(want) {
+			t.Fatalf("machines %v: validate = %q, want %d problems", machines, got,
+				len(want))
+		}
+		for i := range want {
+			if !strings.Contains(got[i], want[i]) {
+				t.Errorf("validate[%d] = %q, want %q", i, got[i], want[i])
+			}
+		}
+	}
+}
+
+// TestGateSkipsDeferredGaps: a deferred gap wakes no native session.
+func TestGateSkipsDeferredGaps(t *testing.T) {
+	repo, _ := gitRepo(t)
+	s := nativeState()
+	s.Gaps = []Gap{{ID: "g1", Host: "qemu-any", Status: "deferred", Note: "waits"}}
+	win, _ := s.Machine("win")
+	if g, err := s.Gate(win, repo, nil, 7, now); err != nil || g.Run {
+		t.Fatalf("gate on a deferred gap = %+v, %v; want idle", g, err)
 	}
 }
 

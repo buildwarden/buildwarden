@@ -12,7 +12,8 @@ CLI flags override everything.
 ```toml
 [runtime]
 cli = "finch"              # Container runtime: finch, docker, podman
-driver = ""                # Build driver: container, qemu, vz (default: auto)
+driver = ""                # Build driver: container, qemu, vz, hyperv, firecracker
+                           #   (default: auto, the container driver)
 relay_image = ""           # Relay image override (container driver)
                            #   "" = pull ghcr.io/buildwarden/relay:latest (release builds)
                            #        or build from source (dev builds)
@@ -37,7 +38,8 @@ upstream_ca_certs = []     # Paths to additional CA cert bundles for upstream
 system_ca_bundle = true    # Include host system CA bundle in relay trust store
 
 [vm]                       # Defaults for the VM-driver flags; a flag always wins
-cpus = 0                   # Build VM vCPUs (0 = per-driver default)
+cpus = 0                   # Build VM vCPUs (0 = per-driver default; vz, qemu,
+                           #   hyperv and firecracker)
 memory_mb = 0              # Build VM memory in MiB (0 = per-driver default)
 network = ""               # hyperv: durable build switch name
 image_refresh_after = "7d" # hyperv: re-prepare the base in the background at this age
@@ -66,7 +68,7 @@ verbose = false            # Verbose output (shows container runtime commands)
 
 | Flag | Scope | Description |
 |------|-------|-------------|
-| `--driver` | Global | Orchestration driver (container, qemu, vz, hyperv) |
+| `--driver` | Global | Orchestration driver (container, qemu, vz, hyperv, firecracker) |
 | `--runtime` | Global | Container runtime |
 | `--color` | Global | Color mode |
 | `-v, --verbose` | Global | Verbose output |
@@ -96,6 +98,8 @@ When `driver` is empty (the default), the **container** driver is used. Use `--d
 - `qemu` — Two-VM topology, cross-platform, requires `qemu-system-*`
 - `vz` — macOS/arm64 only, uses Virtualization.framework
 - `hyperv` — Windows, two-VM topology on Hyper-V with a host-only NAT switch
+- `firecracker` — x86_64 Linux with KVM, two Firecracker microVMs on a network
+  slot made by `sudo warden setup --driver firecracker`; no config keys of its own
 
 ## Relay Image
 

@@ -1,6 +1,6 @@
 # Build Drivers
 
-BuildWarden supports four build drivers, each providing the same hermetic build
+BuildWarden supports five build drivers, each providing the same hermetic build
 guarantee with different isolation technologies. The driver determines what
 runs your build code and how network isolation is enforced.
 
@@ -324,6 +324,168 @@ default, is not redirected.
 
 ---
 
+## Firecracker Driver
+
+`--driver firecracker` (x86_64 Linux with KVM)
+
+The Firecracker driver runs each build in a Firecracker microVM, for Linux
+hosts running many builds at once. It uses the QEMU driver's two-VM
+topology: an Alpine relay VM, booted from the same relay initramfs and init,
+and a Linux build VM whose only network interface is on a per-slot host
+bridge whose only other port is the relay. Each VM is one `firecracker`
+process with no API socket, no vsock, no MMDS and stdin `/dev/null`.
+
+### Requirements
+
+- An x86_64 Linux host with `/dev/kvm`, and your user in the `kvm` group
+- Firecracker v1.17.0 or later on `PATH`
+- `nft`, `iptables` and `ip6tables` (legacy or nft), and `ip` (iproute2)
+- For disk-image builds: `qemu-img` (`qemu-utils`) and `genisoimage` or
+  `mkisofs`
+- An upstream DNS server that is not on the host itself (see below)
+
+arm64 hosts are not supported yet.
+
+### Boot assets
+
+Both VMs boot one pinned guest kernel (Linux 6.1 LTS with every feature
+built in), and the driver needs two initramfs images. Build them once from
+the source tree:
+
+```sh
+tools/firecracker-vm/build-kernel.sh                     # output/vmlinux
+ARCH=x86_64 NO_MODULES=1 tools/relay-vm/build-initramfs.sh
+tools/firecracker-vm/build-initramfs.sh                  # direct-boot initramfs
+```
+
+warden finds them beside its binary (`firecracker-vmlinux`,
+`firecracker-relay-initramfs.cpio.gz`, `firecracker-build-initramfs.cpio.gz`)
+or in those scripts' output directories.
+
+### Setup
+
+Builds run unprivileged. A root setup step, once per boot, creates the
+network slots they take:
+
+```sh
+sudo warden setup --driver firecracker            # 16 slots
+sudo warden setup --driver firecracker --slots 64 # up to 256
+```
+
+Each slot `i` is a bridge `wfc<i>b` with no address joining two TAPs (the
+relay's build NIC `wfc<i>r` and the build VM's `wfc<i>g`), plus the relay's
+upstream TAP `wfc<i>u` on a /30 in `100.64.88.0/22`. The TAPs belong to the
+user who ran sudo. Setup also loads the `warden_fc` bridge table and the
+`WARDEN-FC` iptables chains that isolate the slots (see
+[Network Isolation](../concepts/network-isolation.md#firecracker-slots)),
+and sets `net.ipv4.ip_forward=1` last. It is idempotent: existing
+interfaces are verified, an upstream TAP that already has its address keeps
+it, and warden's own table and chains are reloaded; no other rule is touched.
+
+Because the reload briefly removes the slots' rules, setup refuses while any
+slot is in use: a VM has one of its TAPs open (a running build, VMs left by
+`--keep-vms`, or ones a killed warden left behind), or a build holds the
+slot. Wait for the builds to finish, or stop leftover VMs with `warden clean
+--driver firecracker` run as the build user, then re-run setup. While setup
+runs it holds every slot's lock, so a build starting then finds them all in
+use. It creates any lock file a build has not made yet, as the build user, in
+`~/.cache/buildwarden/locks`. It uses `XDG_CACHE_HOME` instead only when sudo
+keeps it along with your `HOME`; if your builds keep their cache elsewhere
+and sudo drops it, setup holds the wrong locks, so start no build while it
+runs.
+
+Setup refuses, printing the fix, when the host's firewall would make it
+unsafe or ineffective:
+
+- the filter `FORWARD` policy is `ACCEPT` (enabling forwarding would route
+  between your other interfaces): `iptables -P FORWARD DROP && ip6tables -P
+  FORWARD DROP`, kept across reboots;
+- firewalld is running: put the upstream TAPs in its trusted zone,
+  `firewall-cmd --permanent --zone=trusted --add-interface=wfc+u`;
+- an nftables forward chain drops by default: setup prints the `nft insert
+  rule` lines that let `wfc*u` traffic through.
+
+The slots are runtime state and vanish at reboot. Run setup at boot with a
+systemd unit (`builder` is the user builds run as):
+
+```ini
+# /etc/systemd/system/warden-firecracker.service
+[Unit]
+Description=BuildWarden Firecracker network slots
+After=network-online.target
+Wants=network-online.target
+
+[Service]
+Type=oneshot
+Environment=SUDO_USER=builder
+ExecStart=/usr/local/bin/warden setup --driver firecracker --slots 16
+
+[Install]
+WantedBy=multi-user.target
+```
+
+To remove the slots, delete the interfaces (`ip link del wfc<i>b`, and the
+same for each TAP), `nft delete table bridge warden_fc`, and remove the
+`WARDEN-FC-*` chains and the jumps into them. warden has no command for it.
+
+`warden doctor --driver firecracker` checks all of the above; run it with
+sudo to include the rules and the FORWARD policy, which only root can read.
+Under sudo the other checks are of the user who ran sudo (their slots, kvm
+group and leftover VMMs), and the reflink probe is skipped: run doctor
+without sudo for it.
+
+### Upstream DNS
+
+The relay resolves names for the build through the host's resolvers: those
+in `/etc/resolv.conf`, or systemd-resolved's upstream list when its
+`127.0.0.53` stub fronts them. A loopback resolver or one on the host's own
+address (a local dnsmasq, unbound or libvirt) is left out, since the slot
+rules do not let the relay open connections to the host. So is one inside
+`10.0.0.0/30`, the relay's link to the build VM in every VM driver, such as
+the `10.0.0.2` resolver of an AWS VPC on `10.0.0.0/16`: the relay would send
+its queries to the build VM. With none left the
+build stops before booting and says how to fix it. Under WSL, whose only
+resolver is its DNS-tunnelling address `10.255.255.254`, set
+`generateResolvConf=false` under `[network]` in `/etc/wsl.conf` and list the
+Windows host's DNS servers in `/etc/resolv.conf`.
+
+### Images
+
+A build boots one of two ways:
+
+- **Disk image.** With a `FROM` the qemu catalog resolves (`ubuntu:24.04`,
+  `debian:bookworm`, `alpine:3.21`) or `--image <path>` (qcow2 or raw), the
+  image is converted to raw once into `~/.cache/warden/firecracker/images`
+  and copied per build into `~/.cache/warden/firecracker/work/<id>` with
+  `cp --reflink=auto` (instant on btrfs or XFS, a full copy elsewhere).
+  warden delivers `warden-io` on a cloud-init `CIDATA` seed on a read-only
+  drive; the image's own kernel is not used. An image with a backing file or
+  an external data file is refused.
+- **Direct boot.** With no resolvable image, the build VM boots a small
+  initramfs that holds only a launcher, with `warden-io` appended per build.
+
+Prepare an image ahead of the first build:
+
+```sh
+warden image prepare --driver firecracker              # ubuntu:24.04
+warden image prepare --driver firecracker ./custom.qcow2
+```
+
+### Examples
+
+```sh
+warden build --driver firecracker .                        # Dockerfile FROM ubuntu:24.04
+warden build --driver firecracker --script build.sh ./src  # direct boot
+warden build --driver firecracker --cpus 8 --memory 8192 .
+```
+
+`--keep-vms` leaves both VMs running and the slot held, and prints their
+pids; `warden clean --driver firecracker` stops them. It also kills any VMM
+left by a warden that was killed, and removes stale work dirs; the next
+build on a slot kills such leftovers too.
+
+---
+
 ## Common Patterns
 
 Regardless of which driver you use, the build environment works the same way
@@ -363,15 +525,15 @@ warden inspect warden-output/
 
 This verifies the Ed25519 signature chain and displays all recorded network
 activity, context fetches, and artifact posts — regardless of whether the
-build ran in a container, a QEMU VM, or a macOS VZ VM.
+build ran in a container, a QEMU or Firecracker VM, or a macOS VZ VM.
 
 ### Choosing a Driver
 
-| | Container | QEMU | VZ | Hyper-V |
-|---|---|---|---|---|
-| **Platforms** | macOS, Linux, Windows | macOS, Linux, Windows | macOS (Apple Silicon) | Windows |
-| **Isolation** | Network namespace + iptables | Topological (separate VM) | Topological (separate VM) | Topological (separate VM) |
-| **Performance** | Native speed | Near-native (HVF/KVM) | Near-native (Hypervisor.framework) | Near-native (Hyper-V) |
-| **Build OS** | Linux (container image) | Linux or Windows | macOS | Windows or Linux |
-| **Setup effort** | Minimal | Moderate (relay VM assets) | Moderate (image prepare) | Moderate (host setup + image prepare) |
-| **Best for** | Linux builds, CI/CD | Linux/Windows builds needing stronger isolation | macOS-native builds (Xcode, Swift) | Windows-native builds |
+| | Container | QEMU | VZ | Hyper-V | Firecracker |
+|---|---|---|---|---|---|
+| **Platforms** | macOS, Linux, Windows | macOS, Linux, Windows | macOS (Apple Silicon) | Windows | Linux x86_64 with KVM |
+| **Isolation** | Network namespace + iptables | Topological (separate VM) | Topological (separate VM) | Topological (separate VM) | Topological (microVM, per-slot bridge) |
+| **Performance** | Native speed | Near-native (HVF/KVM) | Near-native (Hypervisor.framework) | Near-native (Hyper-V) | Near-native (KVM), fast boot |
+| **Build OS** | Linux (container image) | Linux or Windows | macOS | Windows or Linux | Linux |
+| **Setup effort** | Minimal | Moderate (relay VM assets) | Moderate (image prepare) | Moderate (host setup + image prepare) | Moderate (boot assets + root setup each boot) |
+| **Best for** | Linux builds, CI/CD | Linux/Windows builds needing stronger isolation | macOS-native builds (Xcode, Swift) | Windows-native builds | Many concurrent Linux builds on one host |

@@ -33,6 +33,16 @@ and the process for designing, reviewing and merging a feature is
 - Membership in Hyper-V Administrators, or an elevated terminal
 - One-time network setup from an elevated terminal: `warden setup --driver hyperv`
 
+**Firecracker driver (x86_64 Linux with KVM):**
+
+- `/dev/kvm`, your user in the `kvm` group, and `firecracker` v1.17.0 or later
+  on `PATH`
+- `iproute2`, `nftables`, `iptables`, `qemu-img` and `genisoimage` (or
+  `mkisofs`); the guest kernel build needs `make`, `gcc`, `flex`, `bison`,
+  `bc`, `libelf-dev` and `libssl-dev`
+- Boot assets and network slots, re-created after each host boot:
+  [installation.md](https://github.com/buildwarden/buildwarden/blob/main/docs/book/src/getting-started/installation.md#first-time-firecracker-setup)
+
 ## Building and testing
 
 ```sh

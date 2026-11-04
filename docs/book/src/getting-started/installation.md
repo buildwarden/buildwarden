@@ -24,6 +24,24 @@ brew install qemu
 apt install qemu-system
 ```
 
+### Firecracker driver
+
+Requires an x86_64 Linux host with KVM (`/dev/kvm`), your user in the `kvm`
+group, and the `firecracker` binary (v1.17.0 or later) on `PATH`:
+
+```sh
+sudo usermod -aG kvm "$USER"     # then log in again
+v=v1.17.0
+curl -fsSLO https://github.com/firecracker-microvm/firecracker/releases/download/$v/firecracker-$v-x86_64.tgz
+curl -fsSLO https://github.com/firecracker-microvm/firecracker/releases/download/$v/firecracker-$v-x86_64.tgz.sha256.txt
+sha256sum -c firecracker-$v-x86_64.tgz.sha256.txt
+tar -xzf firecracker-$v-x86_64.tgz
+sudo install -m 0755 release-$v-x86_64/firecracker-$v-x86_64 /usr/local/bin/firecracker
+
+# Host networking and disk-image tools (Debian/Ubuntu)
+sudo apt install iproute2 nftables iptables qemu-utils genisoimage
+```
+
 ### VZ driver
 
 Requires macOS on Apple Silicon. No extra installation is needed — Virtualization.framework is built into macOS.
@@ -87,6 +105,41 @@ brew install qemu                           # macOS (or apt install qemu-system 
 tools/relay-vm/build-initramfs.sh           # Build relay VM kernel + initramfs
 tools/build-vm/build-initramfs.sh           # Build test VM initramfs (includes warden-io)
 ```
+
+## First-time Firecracker Setup
+
+```sh
+make build
+tools/firecracker-vm/build-kernel.sh                       # pinned guest kernel
+ARCH=x86_64 NO_MODULES=1 tools/relay-vm/build-initramfs.sh # x86_64 relay initramfs
+tools/firecracker-vm/build-initramfs.sh                    # direct-boot initramfs
+sudo dist/warden setup --driver firecracker                # network slots (each boot)
+dist/warden doctor --driver firecracker
+```
+
+The kernel build needs `make`, `gcc`, `flex`, `bison`, `bc`, `libelf-dev` and
+`libssl-dev`. The slots do not survive a reboot; the
+[drivers guide](../guide/drivers.md#firecracker-driver) shows a systemd unit
+that re-creates them at boot. Setup refuses, with the fix, when the host's
+`FORWARD` policy is `ACCEPT` or firewalld is running, and while any slot is in
+use by a build or by VMs a `--keep-vms` build left running.
+
+Optionally cache the default disk image before the first build, so that
+build does not pay for the download and conversion:
+
+```sh
+dist/warden image prepare --driver firecracker   # ubuntu:24.04
+```
+
+The relay needs a DNS server that is not on the host itself. A host whose only
+resolver is local (a resolver-less systemd-resolved stub, a local dnsmasq, or
+WSL's `10.255.255.254`) gets an error that says how to fix it; see
+[Upstream DNS](../guide/drivers.md#upstream-dns).
+
+WSL2 is experimental: it needs nested virtualization and a custom WSL kernel
+built with `NF_TABLES_BRIDGE`, which the stock kernel leaves out, and WSL
+loses the slots and its iptables state whenever its VM shuts down, so re-run
+setup after each restart.
 
 ## Verify Installation
 

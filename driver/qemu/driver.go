@@ -14,7 +14,8 @@ import (
 	"time"
 
 	"github.com/buildwarden/buildwarden/driver"
-	"github.com/buildwarden/buildwarden/driver/script"
+	"github.com/buildwarden/buildwarden/driver/linuxguest"
+	"github.com/buildwarden/buildwarden/driver/relayvm"
 	"github.com/buildwarden/buildwarden/driver/winguest"
 	"github.com/buildwarden/buildwarden/relaycfg"
 )
@@ -198,7 +199,7 @@ func (d *Driver) resolveBuildVMConfig(
 		MemoryMB: driver.OrDefault(req.MemoryMB, 4096),
 	}
 
-	image := resolveContainerfileImage(req)
+	image := linuxguest.ContainerfileImage(req)
 
 	if image == "" {
 		if isWindowsGuest(req) {
@@ -244,35 +245,17 @@ func (d *Driver) resolveBuildVMConfig(
 		return cfg, nil
 	}
 
-	seedDir, err := cloudInitSeed(workDir, goArchOf(cfg.Arch))
+	seedDir, err := linuxguest.Seed(workDir, goArchOf(cfg.Arch), linuxguest.PowerOff)
 	if err != nil {
 		return nil, fmt.Errorf("generating cloud-init: %w", err)
 	}
 	cfg.SeedDir = seedDir
 	seedISO := filepath.Join(workDir, "seed.iso")
-	if err := generateSeedISO(seedDir, seedISO, "CIDATA"); err != nil {
+	if err := linuxguest.GenerateSeedISO(seedDir, seedISO, "CIDATA"); err != nil {
 		return nil, fmt.Errorf("generating seed ISO: %w", err)
 	}
 	cfg.SeedISO = seedISO
 	return cfg, nil
-}
-
-// resolveContainerfileImage returns req.Image, or when it is empty, the base
-// image a Containerfile FROM resolves to (empty when there is none or it is
-// "scratch").
-func resolveContainerfileImage(req *driver.BuildRequest) string {
-	if req.Image != "" || req.Containerfile == "" {
-		return req.Image
-	}
-	result, err := script.Translate(req.Containerfile, req.ContextDir)
-	if err != nil || result.Image == "" || result.Image == "scratch" {
-		return ""
-	}
-	resolved, err := resolveImage(result.Image)
-	if err != nil || resolved == "" {
-		return ""
-	}
-	return resolved
 }
 
 // resolveWindowsBaseImage returns the disk chain a Windows build boots from,
@@ -492,31 +475,27 @@ func (d *Driver) resolveBuildAssets() (kernel, initrd string, err error) {
 }
 
 func (d *Driver) resolveRelayAssets() (kernel, initrd string, err error) {
-	// Check alongside the warden binary
-	if exe, err := os.Executable(); err == nil {
-		dir := filepath.Dir(exe)
-		k := filepath.Join(dir, "relay-vm-vmlinuz")
-		i := filepath.Join(dir, "relay-vm-initramfs.cpio.gz")
-		if _, err := os.Stat(k); err == nil {
-			if _, err := os.Stat(i); err == nil {
-				return k, i, nil
-			}
-		}
+	paths, ok := relayvm.Find(relayvm.QEMURelay)
+	if !ok {
+		return "", "", driver.Fixable(
+			"build them from the source tree: tools/relay-vm/build-initramfs.sh",
+			"qemu relay VM assets (kernel + initramfs) not found")
 	}
+	return paths[0], paths[1], nil
+}
 
-	// Check the build output directory
-	root, _ := driver.ModuleRoot()
-	k := filepath.Join(root, "tools", "relay-vm", "output", "vmlinuz")
-	i := filepath.Join(root, "tools", "relay-vm", "output", "initramfs.cpio.gz")
-	if _, err := os.Stat(k); err == nil {
-		if _, err := os.Stat(i); err == nil {
-			return k, i, nil
-		}
+// relayInitrd returns the relay VM kernel and the per-build relay initrd
+// (relayvm.RelayInitrd) in workDir.
+func (d *Driver) relayInitrd(workDir string) (kernel, initrd string, err error) {
+	kernel, base, err := d.resolveRelayAssets()
+	if err != nil {
+		return "", "", err
 	}
-
-	return "", "", driver.Fixable(
-		"build them from the source tree: tools/relay-vm/build-initramfs.sh",
-		"qemu relay VM assets (kernel + initramfs) not found")
+	initrd, err = relayvm.RelayInitrd(base, workDir, runtime.GOARCH)
+	if err != nil {
+		return "", "", err
+	}
+	return kernel, initrd, nil
 }
 
 // Preflight checks the host can run qemu builds: the qemu binaries are on

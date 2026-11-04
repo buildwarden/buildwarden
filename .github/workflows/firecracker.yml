@@ -1,0 +1,150 @@
+name: firecracker
+
+# Tier 2 (TEST-02) for the firecracker driver on a hosted runner with KVM
+# (docs/design/firecracker-driver.md, question a8): build the pinned boot
+# assets, run `warden setup` and doctor, and the tier-2 checklist's builds.
+# Not required for merge until it has passed on feat/firecracker-driver; until
+# then the blocking validation is the native linux-kvm session (FLOW-09).
+on:
+  workflow_dispatch:
+  pull_request:
+    paths:
+      - 'driver/firecracker/**'
+      - 'driver/relayvm/**'
+      - 'driver/linuxguest/**'
+      - 'driver/*.go'
+      - 'tools/firecracker-vm/**'
+      - 'tools/relay-vm/build-initramfs.sh'
+      - 'tools/relay-vm/init'
+      - 'cmd/warden/**'
+      - 'relay/**'
+      - 'cmd/relay/**'
+      - 'cmd/warden-io/**'
+      - 'ledger/**'
+      - 'collector/**'
+      - 'relaycfg/**'
+      - 'bootstrap/**'
+      - 'driver/script/**'
+      - 'go.mod'
+      - 'go.sum'
+      - '.github/workflows/firecracker.yml'
+
+permissions:
+  contents: read
+
+env:
+  FIRECRACKER_VERSION: v1.17.0
+
+jobs:
+  tier2:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      # The build runs the checked-out code; keep it from writing a Go cache.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      # The standard udev rule hosted runners need before /dev/kvm opens.
+      - name: Grant /dev/kvm
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' |
+            sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+          sudo groupadd -f kvm
+          sudo usermod -aG kvm "$USER"
+          ls -l /dev/kvm
+
+      - name: Install host tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-utils genisoimage \
+            nftables iptables cpio bc flex bison libelf-dev libssl-dev
+
+      # Checked against the release's own published sha256.
+      - name: Install Firecracker
+        run: |
+          base=https://github.com/firecracker-microvm/firecracker/releases/download/$FIRECRACKER_VERSION
+          tgz=firecracker-$FIRECRACKER_VERSION-x86_64.tgz
+          curl -fsSLO "$base/$tgz"
+          curl -fsSLO "$base/$tgz.sha256.txt"
+          sha256sum -c "$tgz.sha256.txt"
+          tar -xzf "$tgz"
+          sudo install -m 0755 "release-$FIRECRACKER_VERSION-x86_64/firecracker-$FIRECRACKER_VERSION-x86_64" \
+            /usr/local/bin/firecracker
+          firecracker --version
+
+      # Keyed by the scripts. The tools/firecracker-vm ones pin and hash every
+      # download; tools/relay-vm/build-initramfs.sh takes Alpine 3.21's current
+      # packages, so a cached relay initramfs can trail them until a script
+      # changes.
+      - name: Cache boot assets
+        id: assets
+        uses: actions/cache@v4
+        with:
+          path: |
+            tools/firecracker-vm/output
+            tools/relay-vm/output/x86_64
+          key: firecracker-assets-${{ hashFiles('tools/firecracker-vm/build-*.sh', 'tools/firecracker-vm/*.config', 'tools/firecracker-vm/init', 'tools/relay-vm/build-initramfs.sh', 'tools/relay-vm/init') }}
+      - name: Build boot assets
+        if: steps.assets.outputs.cache-hit != 'true'
+        run: |
+          tools/firecracker-vm/build-kernel.sh
+          ARCH=x86_64 NO_MODULES=1 tools/relay-vm/build-initramfs.sh
+          tools/firecracker-vm/build-initramfs.sh
+
+      - run: make build
+
+      # The runner's VPC resolver can be 10.0.0.2, inside the relay's build link
+      # (10.0.0.0/30), where the relay cannot reach it; the driver refuses it,
+      # so give systemd-resolved public upstreams the relay can use.
+      - name: Off-host DNS for the relay
+        run: |
+          sudo mkdir -p /etc/systemd/resolved.conf.d
+          printf '[Resolve]\nDNS=1.1.1.1 8.8.8.8\n' |
+            sudo tee /etc/systemd/resolved.conf.d/warden.conf
+          sudo systemctl restart systemd-resolved
+          cat /run/systemd/resolve/resolv.conf
+
+      # Docker leaves the runner's FORWARD policy at DROP, as setup requires.
+      - name: warden setup and doctor
+        run: |
+          sudo dist/warden setup --driver firecracker --slots 2
+          sudo dist/warden doctor --driver firecracker
+          dist/warden doctor --driver firecracker
+
+      - name: Direct-boot build
+        run: |
+          mkdir -p /tmp/fc-direct
+          printf '#!/bin/sh\necho hello from firecracker\n' > /tmp/fc-direct/build.sh
+          dist/warden build --driver firecracker -o /tmp/fc-out-direct /tmp/fc-direct
+          dist/warden inspect /tmp/fc-out-direct
+
+      - name: Ubuntu 24.04 build with a COPY and an HTTPS fetch
+        run: |
+          mkdir -p /tmp/fc-ubuntu
+          echo payload > /tmp/fc-ubuntu/input.txt
+          cat > /tmp/fc-ubuntu/Dockerfile <<'EOF'
+          FROM ubuntu:24.04
+          COPY input.txt /tmp/input.txt
+          RUN cat /tmp/input.txt && curl -fsS https://example.com/ -o /dev/null
+          EOF
+          dist/warden build --driver firecracker -o /tmp/fc-out-ubuntu /tmp/fc-ubuntu
+          dist/warden inspect --verify-disks /tmp/fc-out-ubuntu
+
+      - name: Teardown leaves nothing behind
+        run: |
+          test -z "$(ls -A "$HOME/.cache/warden/firecracker/work" 2>/dev/null)"
+          ! pgrep -x firecracker
+
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: firecracker-output
+          path: /tmp/fc-out-*
+          if-no-files-found: ignore
