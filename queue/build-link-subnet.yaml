@@ -36,15 +36,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261104T105656Z
+      expires: 2026-11-04T13:20:31.321312298Z
 budget:
   estimate:
     runs: 5
     steps: 30
   spent:
-    runs: 1
-    steps: 3
+    runs: 2
+    steps: 4
 questions:
   - id: a1
     kind: assumed
@@ -158,3 +158,6 @@ history:
   - at: 2026-11-03T20:16:19Z
     by: human/jeff
     event: 'back to design: Design review r1 (Jeff): keep 100.127.255.252/30 as the default but make the link manually configurable (advanced config). a6 reversed; re-evaluate a2, a3, a4, a7 and a8 for a configurable link (how a configured value reaches the baked initramfs, Hyper-V UKI and vz boot script; record check against the configured value; guards follow the configured link; new config surface; validation of the setting: a /30 disjoint from BuildWarden''s ranges). Carry forward the plan''s reconciliation notes and two fixes: Decision 2 has four keys; drop tools/build-vm/init from the firecracker cache key. See the Design review entry at de64be3.'
+  - at: 2026-11-04T11:20:31Z
+    by: cloud/20261104T105656Z
+    event: claimed f1-design-r2 until 2026-11-04T13:20:31Z
