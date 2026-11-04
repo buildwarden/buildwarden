@@ -78,10 +78,11 @@ func TestNoStrayLinkLiterals(t *testing.T) {
 		}
 		rel, _ := filepath.Rel(root, path)
 		rel = filepath.ToSlash(rel)
+		kinds := map[string]*regexp.Regexp{"new": newLink, "old": oldLink}
 		for i, line := range strings.Split(string(b), "\n") {
-			for kind, re := range map[string]*regexp.Regexp{"new": newLink, "old": oldLink} {
+			for kind, re := range kinds {
 				if re.MatchString(line) && !strayAllowed(rel, kind) {
-					t.Errorf("%s:%d: %s build link literal outside driver/buildlink: %s",
+					t.Errorf("%s:%d: %s build link literal: %s",
 						rel, i+1, kind, strings.TrimSpace(line))
 				}
 			}
