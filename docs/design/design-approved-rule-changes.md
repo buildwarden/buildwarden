@@ -284,33 +284,48 @@ The loop's own agents and queue tooling stay outside the route (Decision 1).
 
 ## Implementation plan
 
-Written at x2-implement, after the review (process item, FLOW-03). Expected
-tasks:
+Written at x2-implement, after the review (process item, FLOW-03). Each task
+is one commit on this branch.
 
-1. `docs/development/process.md`:
-   - FLOW-14 gains the second route and becomes `automated + agent-judgment`;
-   - FLOW-19 gains the per-change approval and the skip criterion;
-   - FLOW-10's "same PR" sentence is aligned;
-   - FLOW-03's done-when tables name the check.
-2. `docs/development/bootstrap.md` BOOT-07: a model change made under the
-   new route.
-3. `docs/design/TEMPLATE.md`: the `rule_changes` key and the **Rule changes**
-   section.
-4. `tools/workflow/check`:
-   - `Front.RuleChanges` and its `Problems` validation;
-   - the skip criterion;
-   - the clearance check at Implement, Review and Publish, with tests.
-5. Review and CI run main's tier1 when the branch changes enforcement
-   (`wf-review` and `.github/workflows/main.yml`).
-6. `tools/tier1/rules.yaml`: FLOW-14's owner.
-7. Agents and skills:
-   - wf-design: declare each change and write the section;
-   - wf-plan: a task per approved change;
-   - wf-implement: cleared for approved paths only;
-   - wf-review: judge the edit against the approved wording;
-   - wf-publish: the PR body section;
-   - workflow-tick's and workflow-native's "never" lines name the exception;
-   - workflow-human step 3: ask each change on its own.
+1. `docs/development/process.md` (FLOW-14, FLOW-19, FLOW-10, FLOW-03,
+   FLOW-02, LINT-01):
+   - FLOW-02 lists the `rule_changes` key;
+   - FLOW-03's feature table names the rule-change clearance at Implement,
+     Review and Publish, and the process-item paragraph says which paths stay
+     process-item only;
+   - FLOW-10's "same PR" is allowed only for a change the review approved;
+     otherwise back to Design (FLOW-06) or a follow-up item;
+   - FLOW-14 gains the second route (Decisions 1, 4, 5, 6, 7) and becomes
+     `automated + agent-judgment`;
+   - FLOW-19 gains the per-change approval line and the `rule_changes` skip
+     criterion.
+2. `docs/development/bootstrap.md` BOOT-07 (BOOT-07, FLOW-14): a model change
+   a feature needs edits `bootstrap.md` in its Implement as an approved rule
+   change, or in a process item.
+3. `docs/design/TEMPLATE.md` (FLOW-02, FLOW-19): the `rule_changes` key and
+   the **Rule changes** section.
+4. `tools/workflow/check` (FLOW-03, FLOW-14, FLOW-19, GLOBAL-01, TEST-01,
+   TEST-02 tier 0):
+   - `Front.RuleChanges` and its `Problems` (bad `change`, bad rule ID, empty
+     or unclearable `paths`); tier1's FLOW-02 check reuses `Problems`;
+   - rule-change approvals (`rule change <ID> approved at <sha>`) parsed apart
+     from the design's own approvals, so they do not count as one;
+   - Design requires the **Rule changes** section when `rule_changes` is
+     non-empty; the skip criteria refuse `skip` with a non-empty
+     `rule_changes`;
+   - the clearance check at phases 3, 4 and 6, process items exempt;
+   - tests over git fixtures for each Validation plan case.
+5. Decision 6 (FLOW-14, LINT-02, LINT-04, TEST-01): `wf drops` compares
+   main's tier1 report with the branch's and fails on a dropped finding no
+   approved change names; `tools/workflow/enforcement-check.sh` builds tier1
+   from the merge base, runs both, and compares; `make enforcement` runs it;
+   the CI `tier1` job runs it. Tier-0 test of the comparison over a fixture.
+6. `tools/tier1/rules.yaml` (LINT-01, LINT-02): FLOW-14's owner.
+7. Agents and skills (FLOW-14): wf-design, wf-plan, wf-implement, wf-review,
+   wf-publish, workflow-tick, workflow-native, and a small addition to
+   workflow-human step 3.
+8. `overview.md` (FLOW-15): no component flow changes; none expected.
+9. Consolidation, `make lint`, `make test` (FLOW-10, FLOW-17).
 
 ## Design review
 
