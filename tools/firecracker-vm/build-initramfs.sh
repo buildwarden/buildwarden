@@ -5,7 +5,8 @@
 # warden-io per build as a second cpio at /bin/warden-io, and the guest
 # kernel (build-kernel.sh) has everything built in.
 #
-# Output: tools/firecracker-vm/output/initramfs.cpio.gz
+# Output: tools/firecracker-vm/output/initramfs.cpio.gz and its link-channel
+# stamp
 #
 # Dependencies: curl, cpio, gzip, tar, sha256sum
 # Usage: ./tools/firecracker-vm/build-initramfs.sh
@@ -64,9 +65,33 @@ build_initramfs() {
     cp "$SCRIPT_DIR/init" "$ROOTFS_DIR/init"
     chmod 755 "$ROOTFS_DIR/init"
 
+    # udhcpc's script for the init's one DHCP request: it records the lease
+    # and configures nothing. Kept identical in tools/build-vm/build-initramfs.sh
+    # and tools/firecracker-vm/build-initramfs.sh (a tier-0 test checks).
+    cat > "$ROOTFS_DIR/etc/warden-lease.sh" <<'LEASE'
+#!/bin/sh
+# udhcpc script: records the build link's lease for init and configures
+# nothing (no address, route or resolver; init applies them). A value that
+# is not a dotted quad is not recorded.
+case "$1" in
+    bound | renew)
+        gw="${router%% *}"
+        for v in "$ip" "$subnet" "$gw"; do
+            echo "$v" | grep -q '^[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}$' || exit 0
+        done
+        printf 'ip=%s\nmask=%s\nrouter=%s\n' "$ip" "$subnet" "$gw" > /tmp/warden-lease
+        ;;
+esac
+exit 0
+LEASE
+    chmod 755 "$ROOTFS_DIR/etc/warden-lease.sh"
+
     (cd "$ROOTFS_DIR" && find . | cpio -o -H newc 2>/dev/null | gzip -9) \
         > "$OUTPUT_DIR/initramfs.cpio.gz"
     rm -rf "$ROOTFS_DIR"
+    # The link-channel stamp (buildlink.Channel): this init takes the build link
+    # per build, so warden accepts the initramfs.
+    echo "WARDEN_LINK_CHANNEL=1" > "$OUTPUT_DIR/link-channel"
     echo "Initramfs built: $(ls -lh "$OUTPUT_DIR/initramfs.cpio.gz" | awk '{print $5}')"
 }
 

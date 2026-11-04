@@ -9,6 +9,9 @@
 # Run from Git Bash on the Windows host. The source stamp is the last commit to
 # touch the relay's packages (go list -deps ./cmd/relay), go.mod/go.sum or
 # tools/relay-vm; it is written next to the cached disk as relay-boot.source.
+# Beside it goes relay-boot.link-channel, the stamp warden checks before a
+# build: this disk's relay addresses its build interface from the claim. Both
+# move to .prev with the disk.
 # Building needs a WSL distro (WARDEN_WSL_DISTRO, default Ubuntu) with mtools,
 # gdisk, qemu-utils and systemd-boot-efi; the Alpine inputs are fetched on the
 # host by fetch-cache.ps1, since that WSL build runs offline.
@@ -22,6 +25,7 @@ cache="${WARDEN_HYPERV_CACHE_DIR:-$LOCALAPPDATA/warden/hyperv}"
 cache="$(cygpath -u "$cache")"
 disk="$cache/relay-boot.vhdx"
 stampf="$cache/relay-boot.source"
+linkf="$cache/relay-boot.link-channel"
 
 cd "$repo"
 mod="$(go list -m)"
@@ -59,6 +63,9 @@ wsl.exe -d "$distro" sh -c "cd '$wslhere' && sh build.sh && sh build-boot-vhdx.s
 
 mkdir -p "$cache"
 [ -f "$disk" ] && cp -f "$disk" "$disk.prev"
+rm -f "$linkf.prev"
+[ -f "$linkf" ] && cp -f "$linkf" "$linkf.prev"
 cp -f "$here/output/warden-relay-boot.vhdx" "$disk"
+echo "WARDEN_LINK_CHANNEL=1" >"$linkf"
 echo "$src" >"$stampf"
 echo "installed $disk (relay source ${src:0:12}); the previous disk is $disk.prev"
