@@ -392,7 +392,7 @@ gaps:
       Logs and the run script: native/linux-kvm/2026-11-02/lan-resolver/.
   - id: build-link-subnet-qemu-windows
     host: macos-qemu
-    what: A qemu Windows guest build on the new default relay-to-build link 100.127.255.252/30 (warden-run.ps1 from the per-build WARDEN seed passes --gateway=100.127.255.253 --ip=100.127.255.254/30; the rebuilt aarch64 relay initramfs answers there), and again with [vm] build_link set to a non-default /30 such as 100.126.255.252/30 (no rebuild; the relay takes it on its command line).
+    what: A qemu Windows guest build on the new default relay-to-build link 100.127.255.252/30 (warden-run.ps1 from the per-build WARDEN seed passes --gateway=100.127.255.253 --ip=100.127.255.254/30; the relay, which takes the link from the claim and addresses its build interface, answers there), and again with [vm] build_link set to a non-default /30 such as 100.126.255.252/30 (no rebuild; design r3).
     design: docs/design/build-link-subnet.md
     note: >-
       Tracked (TEST-03), not blocking (design question a5): driver/qemu's changes are guest-agnostic

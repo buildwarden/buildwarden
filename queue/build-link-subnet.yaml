@@ -3,10 +3,10 @@ title: Move every VM driver's relay-to-build link off 10.0.0.0/30
 priority: 18
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/build-link-subnet.md
 branch: feat/build-link-subnet
-alters_relationships: false
+alters_relationships: true
 design_review: required
 source: 'firecracker-driver PR #90, CI tier 2 first run (2026-11-02): the runner''s VPC resolver 10.0.0.2 sits inside the relay''s build link 10.0.0.0/30 (relay 10.0.0.1, guest 10.0.0.2) shared by linuxguest (qemu, firecracker), winguest (qemu, hyperv), vz and tools/relay-vm/init, so the relay routes it to the build VM. PR #90 adds a firecracker preflight/doctor refusal; this moves the link for every VM driver so no upstream address can clash. Queued before security-suite at Jeff''s word.'
 steps:
@@ -48,10 +48,26 @@ steps:
   - id: f1-design-r3
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-plan-r3
+    phase: 2
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261104T214530Z-attended
-      expires: 2026-11-04T23:45:30.651469498Z
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review-r3
+    phase: 2
+    affinity: human
+    status: pending
+    needs:
+      - f2-plan-r3
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 5
@@ -159,6 +175,97 @@ questions:
       - the first option, and also refuse when a host network contains the link
     recommended: 'at load and startup: IPv4, exactly /30, network-aligned; not 0/8, loopback, link-local, multicast or class E; disjoint from the container base, Firecracker upstream, Hyper-V default NAT and qemu user-mode ranges. At build start and in doctor: no host interface address inside the link, Firecracker resolvers, Hyper-V NAT prefix at setup. A host network that only contains the link is a doctor warning'
     answer: (a) as designed (Jeff, r2)
+  - id: a11
+    kind: assumed
+    status: open
+    question: 'The claim schema, versioning and compatibility (Decision 3): an optional build_link {prefix, relay, guest} on /v1/claim, validated in relaycfg (IPv4, length 8 to 30, two distinct hosts inside it), refused by a container-mode relay, required by a vm-mode relay whose build interface has no address, --subnet as host mode''s fallback; an old relay refuses the unknown field, which warden maps to a fixable error; the contract document is the relaycfg package doc and architecture.md''s Claim protocol.'
+    options:
+      - as stated
+      - a /v2/claim path with /v1 kept
+      - a version field in the claim
+      - as stated, and start specs/relay-claim/v1.md now
+    recommended: as stated
+  - id: a12
+    kind: assumed
+    status: open
+    question: 'vm mode (Decision 4): the init keeps interface selection, link-up, upstream setup, IPv6 off, ip_forward and every (interface-keyed) iptables rule and passes -build-if; on a valid claim and before replying the relay refuses a link overlapping its other interfaces, flushes the build interface''s IPv4 addresses, adds relay/len through netlink and uses it as its self address; without -build-if it applies the init''s rule, so old qemu and Firecracker relay initramfs need no rebuild.'
+    options:
+      - as stated
+      - the relay execs busybox ip instead of netlink
+      - the relay adds its address without flushing (an old init's 10.0.0.1/30 and its shadow would stay)
+    recommended: as stated
+  - id: a13
+    kind: assumed
+    status: open
+    question: 'host mode (Decision 4): the relay builds its netstack, ARP, DHCP and listeners from the claim''s build_link; the vz driver no longer passes --subnet; --subnet stays as the fallback.'
+    options:
+      - as stated
+      - keep --subnet as host mode's only channel and send no build_link on vz
+      - both, the relay refusing a claim whose link differs from --subnet
+    recommended: as stated
+  - id: a14
+    kind: assumed
+    status: open
+    question: 'The guest side (Decision 5, Bootstrap comparison): seeds rendered per build as today; warden.link_ip / warden.link_gw on the direct-boot kernel command line with no default in the inits; vz warden-boot takes a DHCP lease (infinite) from the host relay''s existing responder; no guest asset bakes an address; BOOT-03''s wording gains a DHCP lease served by the relay.'
+    options:
+      - as stated
+      - vz bakes the resolved link at prepare with a record and a re-prepare per value (r2)
+      - vz bakes only the default and ignores the setting
+      - as stated, plus DHCP for the direct-boot inits from a new vm-mode responder
+    recommended: as stated
+  - id: a15
+    kind: assumed
+    status: open
+    question: 'The launcher stamp (Decision 6): WARDEN_LINK_CHANNEL=1 beside the qemu and Firecracker direct-boot initramfs, the Hyper-V relay boot VHDX and the vz prepared image, compared with buildlink.Channel before any VM boots and in doctor, each refusal naming its one-time rebuild, refresh or re-prepare; none on the qemu and Firecracker relay initramfs.'
+    options:
+      - as stated
+      - no stamp, a documented one-time rebuild
+      - a general source-digest staleness check over every baked asset instead
+    recommended: as stated, with the general check as the follow-up baked-asset-staleness
+  - id: a16
+    kind: assumed
+    status: open
+    question: 'The link block in vm mode too (Decision 7): the relay refuses upstream dials (on the dialed address) and upstream resolvers inside the build link in vm and host modes, whether or not the SSRF filter is on; container mode unchanged.'
+    options:
+      - vm and host modes
+      - host mode only (r2's a8)
+      - every mode, the container driver sending its /29 for the block alone
+    recommended: vm and host modes
+  - id: a17
+    kind: assumed
+    status: open
+    question: 'The container driver stays out (Decision 4): it keeps its per-build /29 allocation and sends no build_link, and a container-mode relay refuses one; the runtime owns the relay''s address, the driver never had the collision, and its relay image has no version pin to warden.'
+    options:
+      - out of scope
+      - send its /29 in the claim for the a16 block only
+    recommended: out of scope
+  - id: a18
+    kind: assumed
+    status: open
+    question: 'Hyper-V''s fixed relay address 192.168.240.2, missing claim token, ignored --nat-prefix and 8.8.8.8 DNS (Decision 9): defer all four, with the durable shared switch, to a follow-up item hyperv-relay-per-build-channel queued at intake after this review; this feature adds only the claim field, the VHDX stamp and the --nat-prefix overlap refusal.'
+    options:
+      - defer to the follow-up
+      - add a claim token now through a per-build channel into the relay VM (seed disk or KVP), also fixing the address and --nat-prefix
+      - defer with no follow-up
+    recommended: defer to the follow-up
+  - id: a19
+    kind: assumed
+    status: open
+    question: 'Seams and relationships (supersedes a7): seams [relay-claim, relay-guest-api (conservatively: the relay''s build-segment address comes from the claim and the host-mode DHCP lease becomes the vz guest''s address), bootstrap-model (BOOT-03 wording)]; executor-initialize unchanged; alters_relationships true (a versioned seam and the bootstrap model change, and the relay takes over its build interface''s addressing from the init); the FLOW-05 slot is free today.'
+    options:
+      - as stated
+      - '[relay-claim] only, if a14 (b) or (c) is chosen'
+      - as stated plus executor-initialize, conservatively
+    recommended: as stated
+  - id: a20
+    kind: assumed
+    status: open
+    question: 'The trimmed command list (Decision 8): --build-link on build, shell and doctor only; image prepare drops it (the vz image bakes no link); setup --driver hyperv checks --nat-prefix against [vm] build_link or the default, with no flag of its own.'
+    options:
+      - as stated
+      - keep it on setup for the overlap check
+      - the key only, no flag anywhere
+    recommended: as stated
 history:
   - at: 2026-11-03T01:30:28Z
     by: human/jeff
@@ -250,3 +357,9 @@ history:
   - at: 2026-11-04T21:45:30Z
     by: cloud/20261104T214530Z-attended
     event: claimed f1-design-r3 until 2026-11-04T23:45:30Z
+  - at: 2026-11-04T22:03:25Z
+    by: cloud/20261104T214530Z-attended
+    event: done f1-design-r3
+  - at: 2026-11-04T22:03:25Z
+    by: cloud/20261104T214530Z-attended
+    event: entered phase 2 (plan)
