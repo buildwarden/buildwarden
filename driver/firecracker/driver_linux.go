@@ -96,10 +96,10 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	r := &run{d: d, req: req, slot: slot, work: workDir}
 	defer r.teardown()
 
-	if err := r.startRelay(ctx, sess, pre, st.relayInitrd, st.env); err != nil {
-		return nil, err
-	}
-	if err := r.startBuild(st.dlv.boot); err != nil {
+	if err := bootInOrder(
+		func() error { return r.startRelay(ctx, sess, pre, st.relayInitrd, st.env) },
+		func() error { return r.startBuild(st.dlv.boot) },
+	); err != nil {
 		return nil, err
 	}
 	d.status("running...")
