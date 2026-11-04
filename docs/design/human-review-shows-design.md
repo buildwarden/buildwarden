@@ -139,6 +139,20 @@ None. No driver or product code changes.
 
 ## Consolidation
 
+- **Landed since the fork:** `native-tick` fetch retry (#94), merged from
+  `main`; it does not touch `workflow-human`.
+- **In flight alongside:** design-approved-rule-changes also edits step 3
+  (asking each rule change on its own). This change keeps to the opening
+  paragraph, 3.1 and 3.4, so the two merge with a small conflict at most.
+- **Terminology:** "assumed question" and "Questions section" as in FLOW-07
+  and `TEMPLATE.md`; "artifact page" as step 3.1 already used it.
+- **Rules:** none changed or proposed (a2). The skill cites FLOW-19 for
+  putting the design in front of Jeff and FLOW-07 for the question form.
+- **Sweep:** 3.1's separate "render it as an artifact page" is folded into the
+  design's page, so the skill names one page, not two. No code, so no dead
+  code or duplication; no component flow changes, so `overview.md` is
+  unchanged (FLOW-15).
+
 ## Rollback notes
 
 ## Archive summary
