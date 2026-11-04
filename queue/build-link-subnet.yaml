@@ -3,7 +3,7 @@ title: Move every VM driver's relay-to-build link off 10.0.0.0/30
 priority: 18
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/build-link-subnet.md
 branch: feat/build-link-subnet
 alters_relationships: false
@@ -34,10 +34,26 @@ steps:
   - id: f1-design-r2
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-plan-r2
+    phase: 2
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261104T105656Z
-      expires: 2026-11-04T13:20:31.321312298Z
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review-r2
+    phase: 2
+    affinity: human
+    status: pending
+    needs:
+      - f2-plan-r2
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 5
@@ -60,34 +76,34 @@ questions:
   - id: a2
     kind: assumed
     status: open
-    question: Where the address is defined (Decision 2).
+    question: Where the default link is defined and how a configured link reaches each consumer (Decision 2).
     options:
-      - one embedded file driver/buildlink/link.env, read by Go via embed and copied into every initramfs for the inits to source, plus a tier-0 stray-literal test
-      - a Go constant plus a drift test over the shell copies
-      - the kernel command line (impossible for Hyper-V's baked UKI)
-    recommended: one embedded file driver/buildlink/link.env, read by Go via embed and copied into every initramfs for the inits to source, plus a tier-0 stray-literal test
+      - 'one embedded driver/buildlink/link.env for the default; per build: warden.link_* kernel command-line keys for the qemu and Firecracker relay and direct-boot inits, the seeds and vz --subnet as today; baked: the Hyper-V relay VHDX (refresh-cache.sh --link) and the vz image (warden image prepare); plus a tier-0 stray-literal test'
+      - bake the link into every initramfs and rebuild per value
+      - deliver the link in the relay claim and let the relay address its build interface (a relay-claim seam change; removes the Hyper-V rebake)
+    recommended: 'one embedded driver/buildlink/link.env for the default; per build: warden.link_* kernel command-line keys for the qemu and Firecracker relay and direct-boot inits, the seeds and vz --subnet as today; baked: the Hyper-V relay VHDX (refresh-cache.sh --link) and the vz image (warden image prepare); plus a tier-0 stray-literal test'
   - id: a3
     kind: assumed
     status: open
-    question: 'Assets baked with the old link: relay and build initramfs, the Hyper-V relay boot VHDX, prepared vz images (Decision 3).'
+    question: Link records on link-carrying boot assets and what they are checked against (Decision 3).
     options:
-      - a link record beside each baked asset; build and doctor refuse a missing or different one with the rebuild/re-prepare fix
+      - 'a record beside every asset, checked before boot and in doctor: present for per-build-channel assets (qemu and Firecracker initramfs), equal to the resolved link for baked assets (Hyper-V VHDX, vz image); each refusal names its rebuild/refresh/re-prepare command with the link'
+      - compare every record with the resolved link (a rebuild per value even where the command line carries it)
       - document the rebuild only
-      - the relay answers on both addresses for a transition
-    recommended: a link record beside each baked asset; build and doctor refuse a missing or different one with the rebuild/re-prepare fix
+    recommended: 'a record beside every asset, checked before boot and in doctor: present for per-build-channel assets (qemu and Firecracker initramfs), equal to the resolved link for baked assets (Hyper-V VHDX, vz image); each refusal names its rebuild/refresh/re-prepare command with the link'
   - id: a4
     kind: assumed
     status: open
-    question: 'PR #90''s firecracker resolver refusal and the CI DNS workaround (Decision 4).'
+    question: 'Guards against the resolved link (Decision 4): PR #90''s Firecracker resolver refusal, the CI DNS workaround, Hyper-V --nat-prefix, host interfaces.'
     options:
-      - keep the exclusion retargeted at the new link; drop the firecracker.yml DNS workaround so CI exercises the VPC-resolver case
-      - remove the exclusion, since the new range is out of common use
-      - keep both the exclusion and the workaround
-    recommended: keep the exclusion retargeted at the new link; drop the firecracker.yml DNS workaround so CI exercises the VPC-resolver case
+      - 'Firecracker resolver exclusion follows the resolved link (fix names both remedies: an off-link resolver or another build_link); drop the firecracker.yml DNS workaround; Hyper-V --nat-prefix overlap refusal; host-interface overlap refusal on every VM driver'
+      - remove the Firecracker exclusion, now that the link can be moved
+      - keep the CI DNS workaround too
+    recommended: 'Firecracker resolver exclusion follows the resolved link (fix names both remedies: an off-link resolver or another build_link); drop the firecracker.yml DNS workaround; Hyper-V --nat-prefix overlap refusal; host-interface overlap refusal on every VM driver'
   - id: a5
     kind: assumed
     status: open
-    question: 'macos-qemu (Windows guest on qemu) as tracked rather than blocking: driver/qemu does not change, its shared pieces are validated on windows-hyperv and qemu-any, and qemu Windows builds already fail on main (backlog qemu-windows-guest-package).'
+    question: 'macos-qemu (Windows guest on qemu) as tracked rather than blocking: driver/qemu''s changes are guest-agnostic (relay command line, asset record check) and validated on qemu-any, driver/winguest on windows-hyperv, and qemu Windows builds already fail on main (backlog qemu-windows-guest-package).'
     options:
       - tracked (backlog build-link-subnet-qemu-windows)
       - 'blocking, criterion: gets no further than on main'
@@ -105,7 +121,7 @@ questions:
   - id: a7
     kind: assumed
     status: open
-    question: 'seams [] and alters_relationships false: initialize --gateway/--ip keeps its contract (EXEC-04), claim/collector/guest API unchanged, no ledger/schema/environment-record format names the address (RELAY-05), no BOOT invariant, mapping row or deviation changes (BOOT-07).'
+    question: 'seams [] and alters_relationships false: initialize --gateway/--ip keeps its contract (EXEC-04); claim, collector and guest API unchanged; the relay VM kernel command line gains warden.link_* keys but is the orchestrator''s boot configuration, not a relay seam (GLOBAL-08); driver.BuildRequest gains an additive BuildLink input like CPUs or Network; no ledger/schema/environment-record format names the address (RELAY-05); no BOOT invariant, mapping row or deviation changes, the vz bake of the configured link being the existing D2 (BOOT-07). drivers declares container conservatively.'
     options:
       - 'as stated: no seam, alters_relationships false'
       - conservatively declare executor-initialize and alters_relationships true
@@ -113,11 +129,30 @@ questions:
   - id: a8
     kind: assumed
     status: open
-    question: The vz host-mode relay blocks upstream dials into its whole --subnet, not only the gateway, since an RFC 6598 guest address is no longer covered by the SSRF filter's RFC 1918 block (a small relay change; Security note).
+    question: The vz host-mode relay blocks upstream dials into its whole --subnet (the resolved link), not only the gateway, since an RFC 6598 guest address is not covered by the SSRF filter's RFC 1918 block. This changes relay/ (a blocked prefix in relay.Config checked by isBlockedIP) as well as cmd/relay/mode_host.go; container and VM modes leave it unset (Security note).
     options:
       - block the subnet
       - leave the relay alone
     recommended: block the subnet
+  - id: a9
+    kind: assumed
+    status: open
+    question: Where the build-link setting lives (Decision 5, a6 reversed in r1).
+    options:
+      - '[vm] build_link in warden.toml / config.toml and --build-link on build, shell, doctor, setup (hyperv) and image prepare (vz); flag over project over user; long form only; no environment variable (UX-07); documented as an advanced option in configuration.md and per command in cli.md'
+      - the key only, no flag
+      - a new [advanced] table
+      - the first option plus a WARDEN_BUILD_LINK environment variable
+    recommended: '[vm] build_link in warden.toml / config.toml and --build-link on build, shell, doctor, setup (hyperv) and image prepare (vz); flag over project over user; long form only; no environment variable (UX-07); documented as an advanced option in configuration.md and per command in cli.md'
+  - id: a10
+    kind: assumed
+    status: open
+    question: Validating the build-link setting (Decision 5).
+    options:
+      - 'at load and startup: IPv4, exactly /30, network-aligned; not 0/8, loopback, link-local, multicast or class E; disjoint from the container base, Firecracker upstream, Hyper-V default NAT and qemu user-mode ranges. At build start and in doctor: no host interface address inside the link, Firecracker resolvers, Hyper-V NAT prefix at setup. A host network that only contains the link is a doctor warning'
+      - syntax and prefix only
+      - the first option, and also refuse when a host network contains the link
+    recommended: 'at load and startup: IPv4, exactly /30, network-aligned; not 0/8, loopback, link-local, multicast or class E; disjoint from the container base, Firecracker upstream, Hyper-V default NAT and qemu user-mode ranges. At build start and in doctor: no host interface address inside the link, Firecracker resolvers, Hyper-V NAT prefix at setup. A host network that only contains the link is a doctor warning'
 history:
   - at: 2026-11-03T01:30:28Z
     by: human/jeff
@@ -161,3 +196,9 @@ history:
   - at: 2026-11-04T11:20:31Z
     by: cloud/20261104T105656Z
     event: claimed f1-design-r2 until 2026-11-04T13:20:31Z
+  - at: 2026-11-04T11:32:26Z
+    by: cloud/20261104T105656Z
+    event: done f1-design-r2
+  - at: 2026-11-04T11:32:26Z
+    by: cloud/20261104T105656Z
+    event: entered phase 2 (plan)
