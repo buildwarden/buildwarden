@@ -4,11 +4,15 @@
 buildwarden/
 ├── cmd/
 │   ├── relay/              # Relay binary (thin mode-based main)
-│   │   ├── main.go            # CLI flags, mode detection, parseSubnet
-│   │   ├── mode_host.go       # Host mode: FD ingress via gvisor netstack
+│   │   ├── main.go            # CLI flags, mode detection, per-mode claim start steps
+│   │   ├── mode_host.go       # Host mode: FD ingress via gvisor netstack, built at the claim
+│   │   ├── vmlink.go          # vm mode: address the build interface from the claim
+│   │   ├── buildif_linux.go   # ...over rtnetlink (stub elsewhere: vm mode needs Linux)
+│   │   ├── dhcp.go            # The stateless DHCP answer both modes share
+│   │   ├── dhcp_vm.go         # vm mode's responder; dhcp_vm_linux.go binds it to the build interface
 │   │   ├── chanlistener.go    # Channel-based net.Listener (for host mode)
 │   │   ├── ingress_fd.go      # gvisor netstack: Ethernet frames → TCP/UDP
-│   │   └── ingress_dhcp.go    # DHCP server for FD ingress mode
+│   │   └── ingress_dhcp.go    # Host mode's DHCP framing around dhcp.go
 │   ├── warden/             # Host binary (CLI + driver dispatch)
 │   │   ├── main.go            # Cobra commands: build, shell
 │   │   ├── config.go          # Config loading (TOML), runtime detection, validation
@@ -51,10 +55,13 @@ buildwarden/
 │   └── paths.go               # Shared artifact/context path safety rules
 ├── relaycfg/               # Claim protocol between orchestrator and relay
 │   ├── relaycfg.go            # Serve/Claim: push config, return relay identity
+│   ├── buildlink.go           # The claim's build_link and its validation
 │   └── tunnel.go              # Host-initiated tunnel carrying the collector (HTTP/2)
 ├── driver/                 # Driver interface + shared host-side build logic
 │   ├── driver.go              # Driver interface, BuildRequest, BuildResult
 │   ├── session.go             # Shared Session: collector, claim, wait, output finalize
+│   ├── hostlink.go            # Build-link checks every VM driver runs: host overlap, launcher stamps
+│   ├── buildlink/             # The VM build link: default, parse, checks, claim and boot-arg renders, stamps
 │   ├── compress.go            # Zstd compression of ledger + CA cert (all drivers)
 │   ├── hostutil.go            # Host-side helpers
 │   ├── subnet.go              # Subnet allocation, utilities
@@ -201,7 +208,7 @@ strictly ordered without locks. The rule is RELAY-01 in
 
 The relay binary detects its mode at startup:
 - **Container mode**: binds :53, :80, :443, :8300 directly (isolation via iptables)
-- **VM mode**: same as container but relay is PID 1 in its own Alpine VM
+- **VM mode**: same as container but the relay runs in its own Alpine VM, and addresses its build interface from the claim and serves the build VM's DHCP lease there
 - **Host mode**: receives connections via gvisor netstack on an inherited FD (no port binding on host); SSRF filtering active
 
 ### Trust and the baseline
@@ -212,7 +219,7 @@ every driver. See [Trust and the Build Baseline](../concepts/baseline.md).
 
 ### Dynamic subnet allocation
 
-Container driver allocates /29 subnets from 100.64.87.0/24 (CGNAT range). VM drivers use fixed 10.0.0.0/30 topology.
+Container driver allocates /29 subnets from 100.64.87.0/24 (CGNAT range). VM drivers use one build link per build segment, `[vm] build_link` (default 100.127.255.252/30), defined once in `driver/buildlink` and delivered per build: the claim for the relay, the seed, kernel command line or the relay's DHCP lease for the guest.
 
 ### Transparent MITM
 

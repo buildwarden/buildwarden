@@ -17,6 +17,8 @@ on:
       - 'relay/**'
       - 'ledger/**'
       - 'collector/**'
+      - 'relaycfg/**'
+      - 'driver/buildlink/**'
       - 'cmd/**'
       - 'test-integration.sh'
       - 'Dockerfile*'

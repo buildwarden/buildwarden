@@ -37,7 +37,7 @@ type vmLink struct {
 
 // start configures the build segment for one claim. With a build link it
 // refuses one that collides with another interface, replaces the build
-// interface's IPv4 addresses with the relay's (an old init's 10.0.0.1/30
+// interface's IPv4 addresses with the relay's (an old init's fixed address
 // included), and starts the DHCP responder there, all before the claim is
 // answered. Without one it keeps the address already on the interface and
 // starts no responder.

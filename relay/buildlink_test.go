@@ -34,7 +34,7 @@ func TestBlockedDialBuildLink(t *testing.T) {
 	}
 	// Container mode: no link, no SSRF, nothing blocked.
 	r := &Relay{cfg: Config{}}
-	for _, ip := range []string{"100.127.255.253", "10.0.0.1", "127.0.0.1"} {
+	for _, ip := range []string{"100.127.255.253", "10.1.2.3", "127.0.0.1"} {
 		if r.blockedDial(net.ParseIP(ip)) {
 			t.Errorf("no link: %s blocked", ip)
 		}
@@ -68,7 +68,7 @@ func TestPickNameserver(t *testing.T) {
 		link       netip.Prefix
 		want       string
 	}{
-		{"first usable", "nameserver 10.0.0.2\nnameserver 1.1.1.1\n", link, "10.0.0.2:53"},
+		{"first usable", "nameserver 10.1.2.3\nnameserver 1.1.1.1\n", link, "10.1.2.3:53"},
 		{"skips link", "nameserver 100.127.255.254\nnameserver 9.9.9.9\n", link,
 			"9.9.9.9:53"},
 		{"skips self and loopback", "nameserver 100.127.255.253\nnameserver 127.0.0.1\n" +

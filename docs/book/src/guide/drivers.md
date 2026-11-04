@@ -217,6 +217,9 @@ warden build --driver vz --script ./build.sh .
 - The host relay process creates a socketpair and attaches one end to the VM
 - gvisor netstack processes raw Ethernet frames on the host side
 - The build VM sees a single network interface whose only path is the relay
+- The image's `warden-boot` takes its address by DHCP from the host relay,
+  which answers from the build link in its claim, so the image bakes no
+  address
 
 ---
 
@@ -441,10 +444,12 @@ in `/etc/resolv.conf`, or systemd-resolved's upstream list when its
 `127.0.0.53` stub fronts them. A loopback resolver or one on the host's own
 address (a local dnsmasq, unbound or libvirt) is left out, since the slot
 rules do not let the relay open connections to the host. So is one inside
-`10.0.0.0/30`, the relay's link to the build VM in every VM driver, such as
-the `10.0.0.2` resolver of an AWS VPC on `10.0.0.0/16`: the relay would send
-its queries to the build VM. With none left the
-build stops before booting and says how to fix it. Under WSL, whose only
+the build link (`[vm] build_link`, default `100.127.255.252/30`), the relay's
+link to the build VM: the relay would send its queries to the build VM. The
+default is a range no VPC or LAN resolver uses, so an AWS VPC's own
+resolver is used as is. With none left the build stops before booting and
+says how to fix it: a resolver outside the link, or another `[vm]
+build_link`. Under WSL, whose only
 resolver is its DNS-tunnelling address `10.255.255.254`, set
 `generateResolvConf=false` under `[network]` in `/etc/wsl.conf` and list the
 Windows host's DNS servers in `/etc/resolv.conf`.
@@ -483,6 +488,31 @@ warden build --driver firecracker --cpus 8 --memory 8192 .
 pids; `warden clean --driver firecracker` stops them. It also kills any VMM
 left by a warden that was killed, and removes stale work dirs; the next
 build on a slot kills such leftovers too.
+
+---
+
+## Upgrading to the configurable build link
+
+The VM drivers' relay-to-build link moved from a fixed RFC 1918 `/30` to the
+configurable `[vm] build_link` (default `100.127.255.252/30`; see
+[Configuration](configuration.md#the-build-link-vm-build_link---build-link)).
+The link now reaches every component per build, so a launcher built before
+the change, which bakes `10.0.0.x`, is replaced once. Each such asset carries
+a link-channel stamp; a build refuses an asset without a current one, naming
+the command, and `warden doctor` reports each stamp's state. After this one
+step, changing `[vm] build_link` needs nothing on any driver.
+
+| Driver | Replace once | With |
+|---|---|---|
+| qemu (direct boot only) | the direct-boot initramfs | `tools/build-vm/build-initramfs.sh` |
+| firecracker | the direct-boot launcher initramfs | `tools/firecracker-vm/build-initramfs.sh` |
+| hyperv | the relay boot VHDX (it bakes the relay binary) | `tools/relay-vm/hyperv/refresh-cache.sh` |
+| vz | the prepared macOS image's `warden-boot` | `sudo warden image prepare --driver vz` (in place, no IPSW restore) |
+
+The qemu and Firecracker relay initramfs need nothing: the relay addresses
+its build interface from the claim and replaces an old init's address. Disk
+image builds on qemu and Firecracker, and Windows guests, take the link from
+their per-build seed and need nothing either.
 
 ---
 

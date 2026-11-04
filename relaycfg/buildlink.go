@@ -12,7 +12,7 @@ import (
 // relay builds its netstack and DHCP lease from it, and every mode that has
 // it refuses upstream dials into Prefix.
 type BuildLink struct {
-	// Prefix is the segment's network, e.g. "100.127.255.252/30".
+	// Prefix is the segment's network, e.g. "192.0.2.0/30".
 	Prefix string `json:"prefix"`
 	// Relay is the relay's own address on the segment.
 	Relay string `json:"relay"`
