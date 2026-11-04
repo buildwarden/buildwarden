@@ -6,17 +6,19 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 )
 
-// TestSeedGolden pins the seed's text files, with qemu's poweroff tail, to the
-// bytes the qemu driver wrote before this code moved here (TEST-04).
+// TestSeedGolden pins the seed's text files, with qemu's poweroff tail and
+// the default build link, to golden bytes (TEST-04).
 func TestSeedGolden(t *testing.T) {
 	dir := t.TempDir()
 	agent := filepath.Join(dir, "agent")
 	if err := os.WriteFile(agent, []byte("io"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	seed, err := writeSeed(filepath.Join(dir, "cidata"), agent, PowerOff)
+	seed, err := writeSeed(filepath.Join(dir, "cidata"), agent, PowerOff, buildlink.Default())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -35,9 +37,31 @@ func TestSeedGolden(t *testing.T) {
 	}
 }
 
+// TestSeedConfiguredLink renders the seed for a configured link: every
+// address follows it and none of the default's remains.
+func TestSeedConfiguredLink(t *testing.T) {
+	link, err := buildlink.Parse("100.126.255.252/30")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nc, ud := networkConfig(link), userData(PowerOff, link)
+	for _, want := range []string{"- 100.126.255.254/30", "gateway4: 100.126.255.253",
+		"        - 100.126.255.253"} {
+		if !strings.Contains(nc, want) {
+			t.Errorf("network-config lacks %q:\n%s", want, nc)
+		}
+	}
+	if !strings.Contains(ud, "initialize --gateway=100.126.255.253\n") {
+		t.Errorf("user-data:\n%s", ud)
+	}
+	if strings.Contains(nc+ud, "100.127.255.") {
+		t.Errorf("the default link leaked into a configured seed:\n%s%s", nc, ud)
+	}
+}
+
 func TestUserDataTail(t *testing.T) {
 	for _, last := range []string{PowerOff, Reboot} {
-		ud := userData(last)
+		ud := userData(last, buildlink.Default())
 		if !strings.HasSuffix(ud, "  - "+last+"\n") {
 			t.Errorf("user-data does not end with %q:\n%s", last, ud)
 		}

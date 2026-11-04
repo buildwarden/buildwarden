@@ -35,7 +35,7 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 			"Windows",
 			"--driver firecracker runs Linux guests only")
 	}
-	pre, err := preflight(realHost{}, hostLocal)
+	pre, err := buildPreflight(req)
 	if err != nil {
 		return nil, err
 	}
@@ -110,6 +110,16 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	return &driver.BuildResult{OutputDir: outputDir}, nil
 }
 
+// buildPreflight is preflight on this host for req's build link, plus the
+// refusal of a link a host interface uses.
+func buildPreflight(req *driver.BuildRequest) (*preflighted, error) {
+	pre, err := preflight(realHost{}, hostLocal, req.Link())
+	if err != nil {
+		return nil, err
+	}
+	return pre, driver.CheckHostLink(req.Link())
+}
+
 // makeOutputDir creates the build's output directory (default warden-output).
 func makeOutputDir(req *driver.BuildRequest) (string, error) {
 	dir := req.OutputDir
@@ -148,8 +158,10 @@ func (d *Driver) stage(req *driver.BuildRequest, pre *preflighted,
 		if err := checkDiskTools(realHost{}); err != nil {
 			return nil, err
 		}
+	} else if err := launcherStamp().Check(); err != nil {
+		return nil, err
 	}
-	dlv, err := deliver(pre.assets, image, workDir, buildID, script)
+	dlv, err := deliver(pre.assets, image, workDir, buildID, script, req.Link())
 	if err != nil {
 		return nil, err
 	}

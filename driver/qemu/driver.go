@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 	"github.com/buildwarden/buildwarden/driver/linuxguest"
 	"github.com/buildwarden/buildwarden/driver/relayvm"
 	"github.com/buildwarden/buildwarden/driver/winguest"
@@ -47,6 +48,9 @@ type Driver struct {
 	QEMUBinary string
 	// Verbose enables kernel/VM console output on stderr.
 	Verbose bool
+
+	// relayStep and buildStep replace runVMs's two boot steps in tests.
+	relayStep, buildStep func() (stopper, error)
 }
 
 // New returns a Driver that auto-detects its QEMU binary and acceleration
@@ -68,6 +72,9 @@ func (d *Driver) StartBuild(
 	ctx context.Context, req *driver.BuildRequest,
 ) (*driver.BuildResult, error) {
 	if err := d.checkPrereqs(); err != nil {
+		return nil, err
+	}
+	if err := driver.CheckHostLink(req.Link()); err != nil {
 		return nil, err
 	}
 	if req.Timeout > 0 {
@@ -138,26 +145,51 @@ func (d *Driver) StartBuild(
 	// Socket for the isolated relay<->build network.
 	socketPath := filepath.Join(workDir, "vlan.sock")
 
-	relayProc, err := d.startAndClaimRelay(
-		ctx, sess, req, env, kernelPath, initrdPath, socketPath)
-	if err != nil {
-		return nil, err
-	}
-	defer relayProc.stop()
-
-	d.status("starting build...")
-	buildProc, err := d.startBuildVM(buildCfg, socketPath)
-	if err != nil {
-		return nil, fmt.Errorf("starting build VM: %w", err)
-	}
-	defer buildProc.stop()
-
-	d.status("running...")
-	if err := sess.Wait(ctx); err != nil {
+	if err := d.runVMs(ctx, sess, req, env, buildCfg,
+		kernelPath, initrdPath, socketPath); err != nil {
 		return nil, err
 	}
 	driver.FinalizeOutput(outputDir, req.Compress)
 	return &driver.BuildResult{OutputDir: outputDir}, nil
+}
+
+// stopper is a started VM.
+type stopper interface{ stop() }
+
+// runVMs boots the relay VM and claims it, and only once the claim has
+// returned (the relay has addressed the build link and is serving its DHCP
+// lease) boots the build VM, then waits for the build. The two steps go
+// through d.relayStep and d.buildStep when set, so a test can pin the order.
+func (d *Driver) runVMs(ctx context.Context, sess *driver.Session, req *driver.BuildRequest,
+	env *relaycfg.Environment, buildCfg *buildVMConfig,
+	kernelPath, initrdPath, socketPath string) error {
+	relayStep := func() (stopper, error) {
+		return d.startAndClaimRelay(ctx, sess, req, env, kernelPath, initrdPath,
+			socketPath)
+	}
+	buildStep := func() (stopper, error) { return d.startBuildVM(buildCfg, socketPath) }
+	if d.relayStep != nil {
+		relayStep = d.relayStep
+	}
+	if d.buildStep != nil {
+		buildStep = d.buildStep
+	}
+
+	relayProc, err := relayStep()
+	if err != nil {
+		return err
+	}
+	defer relayProc.stop()
+
+	d.status("starting build...")
+	buildProc, err := buildStep()
+	if err != nil {
+		return fmt.Errorf("starting build VM: %w", err)
+	}
+	defer buildProc.stop()
+
+	d.status("running...")
+	return sess.Wait(ctx)
 }
 
 // startAndClaimRelay boots the relay VM and claims it over the loopback-
@@ -221,6 +253,7 @@ func (d *Driver) resolveBuildVMConfig(
 			}
 			cfg.Kernel = k
 			cfg.Initrd = i
+			cfg.BootArgs = req.Link().BootArgs()
 			return cfg, nil
 		}
 	}
@@ -244,13 +277,14 @@ func (d *Driver) resolveBuildVMConfig(
 	// Linux guests use a cloud-init NoCloud (CIDATA) seed.
 	if isWindowsGuest(req) {
 		cfg.Windows = true
-		if err := configureWindowsBuildVM(cfg, workDir); err != nil {
+		if err := configureWindowsBuildVM(cfg, workDir, req.Link()); err != nil {
 			return nil, err
 		}
 		return cfg, nil
 	}
 
-	seedDir, err := linuxguest.Seed(workDir, goArchOf(cfg.Arch), linuxguest.PowerOff)
+	seedDir, err := linuxguest.Seed(workDir, goArchOf(cfg.Arch), linuxguest.PowerOff,
+		req.Link())
 	if err != nil {
 		return nil, fmt.Errorf("generating cloud-init: %w", err)
 	}
@@ -327,7 +361,7 @@ func ensureFreshWindowsLayer(l PreparedLayer, ga string, req *driver.BuildReques
 // configureWindowsBuildVM copies the writable UEFI vars and builds the Windows
 // provisioning seed (FAT image) for the build VM, filling cfg.VarsFD and
 // cfg.SeedISO.
-func configureWindowsBuildVM(cfg *buildVMConfig, workDir string) error {
+func configureWindowsBuildVM(cfg *buildVMConfig, workDir string, link buildlink.Link) error {
 	// Writable UEFI vars carrying the Windows Boot Manager entry that
 	// bcdboot wrote during image prep; copied per-build so the base's
 	// vars store is never mutated.
@@ -348,7 +382,7 @@ func configureWindowsBuildVM(cfg *buildVMConfig, workDir string) error {
 	}
 	cfg.VarsFD = dstVars
 	cfg.BaseVarsFD = srcVars
-	seedDir, err := windowsSeedDir(workDir, goArchOf(cfg.Arch))
+	seedDir, err := windowsSeedDir(workDir, goArchOf(cfg.Arch), link)
 	if err != nil {
 		return fmt.Errorf("generating windows seed: %w", err)
 	}
@@ -450,27 +484,34 @@ func targetArch(req *driver.BuildRequest) string {
 	return hostQEMUArch()
 }
 
+// rebuildDirectBoot is the one-time rebuild of the direct-boot initramfs.
+const rebuildDirectBoot = "tools/build-vm/build-initramfs.sh"
+
+// directBootStamp describes the direct-boot initramfs's link-channel stamp,
+// with Path empty when the assets are not found.
+func directBootStamp() driver.LauncherStamp {
+	st := driver.LauncherStamp{What: "qemu direct-boot initramfs", Rebuild: rebuildDirectBoot}
+	if paths, ok := relayvm.Find(relayvm.QEMUBuild); ok {
+		st.Path = relayvm.StampPath(relayvm.QEMUBuild[1], paths[1])
+	}
+	return st
+}
+
+// LauncherStamps lists the qemu launcher assets with a link-channel stamp:
+// the direct-boot initramfs (only builds without a disk image use it).
+func LauncherStamps() []driver.LauncherStamp {
+	return []driver.LauncherStamp{directBootStamp()}
+}
+
+// resolveBuildAssets finds the direct-boot kernel and initramfs, refusing an
+// initramfs whose init predates the per-build link.
 func (d *Driver) resolveBuildAssets() (kernel, initrd string, err error) {
-	if exe, err := os.Executable(); err == nil {
-		dir := filepath.Dir(exe)
-		k := filepath.Join(dir, "build-vm-vmlinuz")
-		i := filepath.Join(dir, "build-vm-initramfs.cpio.gz")
-		if _, err := os.Stat(k); err == nil {
-			if _, err := os.Stat(i); err == nil {
-				return k, i, nil
-			}
+	if paths, ok := relayvm.Find(relayvm.QEMUBuild); ok {
+		if err := directBootStamp().Check(); err != nil {
+			return "", "", err
 		}
+		return paths[0], paths[1], nil
 	}
-
-	root, _ := driver.ModuleRoot()
-	k := filepath.Join(root, "tools", "relay-vm", "output", "vmlinuz")
-	i := filepath.Join(root, "tools", "build-vm", "output", "initramfs.cpio.gz")
-	if _, err := os.Stat(k); err == nil {
-		if _, err := os.Stat(i); err == nil {
-			return k, i, nil
-		}
-	}
-
 	return "", "", driver.Fixable(
 		"build them from the source tree: "+
 			"tools/relay-vm/build-initramfs.sh && "+

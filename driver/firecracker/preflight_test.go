@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 )
 
 func TestParseVersion(t *testing.T) {
@@ -68,7 +69,7 @@ func TestPreflightMessages(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			h := ok()
 			tt.mut(h)
-			_, err := preflight(h, none)
+			_, err := preflight(h, none, buildlink.Default())
 			if fix := fixOf(t, err); !strings.Contains(fix, tt.want) {
 				t.Fatalf("fix %q lacks %q", fix, tt.want)
 			}
@@ -113,7 +114,7 @@ func TestDoctorReport(t *testing.T) {
 		h.files["/proc/sys/"+key] = v + "\n"
 	}
 	var out bytes.Buffer
-	doctor(h, &out, func(net.IP) bool { return false })
+	doctor(h, &out, func(net.IP) bool { return false }, buildlink.Default())
 	s := out.String()
 	for _, want := range []string{
 		"ok    /dev/kvm", "ok    firecracker", "ok    slot sysctls",
@@ -127,7 +128,7 @@ func TestDoctorReport(t *testing.T) {
 	}
 	h.files["/proc/sys/net/ipv4/ip_forward"] = "0\n"
 	out.Reset()
-	if !doctor(h, &out, func(net.IP) bool { return false }) ||
+	if !doctor(h, &out, func(net.IP) bool { return false }, buildlink.Default()) ||
 		!strings.Contains(out.String(), "FAIL  slot sysctls") {
 		t.Fatalf("ip_forward=0 not reported:\n%s", out.String())
 	}
@@ -182,7 +183,7 @@ func TestDoctorUnderSudo(t *testing.T) {
 	h.links["/proc/4242/exe"] = "/usr/local/bin/firecracker"
 	h.noRefl = true
 	var out bytes.Buffer
-	doctor(h, &out, func(net.IP) bool { return false })
+	doctor(h, &out, func(net.IP) bool { return false }, buildlink.Default())
 	s := out.String()
 	for _, want := range []string{
 		"FAIL  /dev/kvm", "sudo usermod -aG kvm jeff",

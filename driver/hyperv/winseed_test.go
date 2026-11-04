@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 	"github.com/buildwarden/buildwarden/driver/winguest"
 )
 
@@ -47,7 +48,7 @@ func TestStageSeedDir(t *testing.T) {
 		t.Errorf("build seed = %s, want warden-io.exe,warden-run.ps1", got)
 	}
 	ps, _ := os.ReadFile(filepath.Join(seedDir, "warden-run.ps1"))
-	if string(ps) != winguest.WardenRunPS1() {
+	if string(ps) != winguest.WardenRunPS1(buildlink.Default()) {
 		t.Error("staged warden-run.ps1 is not the shared winguest bootstrap")
 	}
 }

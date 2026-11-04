@@ -59,6 +59,16 @@ func CheckHostOverlap(link buildlink.Link, host []netip.Prefix) error {
 		link, strings.Join(names, ", "))
 }
 
+// CheckHostLink is CheckHostOverlap against this host's interfaces, the
+// build-start check every VM driver runs before anything boots.
+func CheckHostLink(link buildlink.Link) error {
+	host, err := HostPrefixes()
+	if err != nil {
+		return err
+	}
+	return CheckHostOverlap(link, host)
+}
+
 // CheckLauncherStamp refuses a launcher asset built before its launcher read
 // the build link per build: stamp is the asset's link-channel file, what
 // names the asset, and rebuild the one-time command that replaces it.
@@ -69,4 +79,32 @@ func CheckLauncherStamp(stamp, what, rebuild string) error {
 			what, err)
 	}
 	return nil
+}
+
+// LauncherStamp names one launcher asset's link-channel stamp, for doctor and
+// the build-start check.
+type LauncherStamp struct {
+	// What names the asset, e.g. "qemu direct-boot initramfs".
+	What string
+	// Path is the stamp file; empty when the asset itself was not found.
+	Path string
+	// Rebuild is the one-time command that replaces the asset.
+	Rebuild string
+}
+
+// Check refuses the asset when its stamp is missing or different.
+func (s LauncherStamp) Check() error {
+	return CheckLauncherStamp(s.Path, s.What, s.Rebuild)
+}
+
+// Report is the stamp's doctor line.
+func (s LauncherStamp) Report() string {
+	if s.Path == "" {
+		return s.What + ": not found"
+	}
+	state := buildlink.StampState(s.Path)
+	if state == "current" {
+		return s.What + ": link-channel stamp current"
+	}
+	return s.What + ": link-channel stamp " + state + "; rebuild it once: " + s.Rebuild
 }

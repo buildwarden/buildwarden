@@ -66,6 +66,9 @@ func (d *Driver) StartBuild(
 	if err != nil {
 		return nil, fmt.Errorf("resolving image: %w", err)
 	}
+	if err := checkLink(diskImage, req); err != nil {
+		return nil, err
+	}
 	if req.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, req.Timeout)
@@ -120,38 +123,68 @@ func (d *Driver) StartBuild(
 	// relay (it reads raw Ethernet frames from its end of the socketpair via
 	// gvisor netstack and has native internet access; the build VM can only
 	// reach the network through it), and claim it with the build's config.
-	vnet, relayProc, err := d.setupNetworkAndRelay(ctx, sess, req, env, workDir, outputDir)
-	if err != nil {
-		return nil, err
+	var vnet *VirtualNetwork
+	relayStep := func() (func(), error) {
+		v, relayProc, err := d.setupNetworkAndRelay(ctx, sess, req, env, workDir,
+			outputDir)
+		if err != nil {
+			return nil, err
+		}
+		vnet = v
+		return func() {
+			relayProc.Stop()
+			_ = v.Close()
+		}, nil
 	}
-	defer vnet.Close()
-	defer relayProc.Stop()
-
 	// Boot Build VM: macOS with single network interface (socketpair to relay).
 	// No shared directory — all communication goes through the relay HTTP API.
 	// Platform state files (hardware-model, machine-id, aux-storage) live
 	// alongside the original disk image, not the COW clone.
-	buildVM, err := d.bootBuildVM(
-		buildDisk, buildAux, filepath.Dir(diskImage), vnet,
-		driver.OrDefault(req.CPUs, 4), driver.OrDefault(req.MemoryMB, 8192))
-	if err != nil {
-		// VZErrorDomain code 6: macOS caps running macOS guests at two.
-		if strings.Contains(err.Error(), "VZErrorDomain code=6") {
-			return nil, driver.Fixable(
-				"wait for another vz build, or another macOS VM "+
-					"(UTM, Tart, ...), to finish, then retry",
-				"booting build VM: macOS allows at most two running "+
-					"macOS virtual machines, and two are running")
+	buildStep := func() (func(), error) {
+		buildVM, err := d.bootBuildVM(
+			buildDisk, buildAux, filepath.Dir(diskImage), vnet,
+			driver.OrDefault(req.CPUs, 4), driver.OrDefault(req.MemoryMB, 8192))
+		if err != nil {
+			return nil, bootError(err)
 		}
-		return nil, fmt.Errorf("booting build VM: %w", err)
+		return func() { _ = buildVM.Stop() }, nil
 	}
-	defer func() { _ = buildVM.Stop() }()
-
-	if err := sess.Wait(ctx); err != nil {
+	if err := runVMs(ctx, sess, relayStep, buildStep); err != nil {
 		return nil, err
 	}
 	driver.FinalizeOutput(outputDir, req.Compress)
 	return &driver.BuildResult{OutputDir: outputDir}, nil
+}
+
+// runVMs runs the host relay step (virtual network, relay, claim) and only
+// once it has returned, with the relay serving the build link's DHCP lease,
+// the build VM step, then waits for the build. Each step returns its stop.
+func runVMs(ctx context.Context, sess *driver.Session,
+	relayStep, buildStep func() (func(), error)) error {
+	stopRelay, err := relayStep()
+	if err != nil {
+		return err
+	}
+	defer stopRelay()
+	stopBuild, err := buildStep()
+	if err != nil {
+		return err
+	}
+	defer stopBuild()
+	return sess.Wait(ctx)
+}
+
+// bootError explains a build VM that failed to boot.
+func bootError(err error) error {
+	// VZErrorDomain code 6: macOS caps running macOS guests at two.
+	if strings.Contains(err.Error(), "VZErrorDomain code=6") {
+		return driver.Fixable(
+			"wait for another vz build, or another macOS VM "+
+				"(UTM, Tart, ...), to finish, then retry",
+			"booting build VM: macOS allows at most two running "+
+				"macOS virtual machines, and two are running")
+	}
+	return fmt.Errorf("booting build VM: %w", err)
 }
 
 // cloneBuildDisks makes per-build copy-on-write clones of the base disk and
@@ -180,7 +213,7 @@ func (d *Driver) setupNetworkAndRelay(
 	ctx context.Context, sess *driver.Session, req *driver.BuildRequest,
 	env *relaycfg.Environment, workDir, outputDir string,
 ) (*VirtualNetwork, *RelayProcess, error) {
-	vnet, err := NewVirtualNetwork()
+	vnet, err := NewVirtualNetwork(req.Link())
 	if err != nil {
 		return nil, nil, fmt.Errorf("creating virtual network: %w", err)
 	}
@@ -291,15 +324,11 @@ func (d *Driver) startHostRelay(
 	}
 	_ = exec.Command("codesign", "--force", "--sign", "-", relayBin).Run()
 
-	subnet := fmt.Sprintf("%s/%d",
-		vnet.Subnet.RelayIP.Mask(vnet.Subnet.Netmask),
-		maskBits(vnet.Subnet.Netmask))
-
 	// The relay FD will be passed as fd 3 (first extra FD after stdin/out/err).
+	// It takes the build link from the claim, not --subnet.
 	cmd := exec.Command(relayBin,
 		"--mode=host",
 		"--fd=3",
-		"--subnet="+subnet,
 		"--claim-addr="+net.JoinHostPort("127.0.0.1", fmt.Sprint(claimPort)),
 	)
 	cmd.Env = append(os.Environ(), relaycfg.TokenEnv+"="+claimToken)
@@ -327,11 +356,6 @@ func (d *Driver) startHostRelay(
 	}
 
 	return &RelayProcess{cmd: cmd, log: logFile}, nil
-}
-
-func maskBits(mask net.IPMask) int {
-	ones, _ := mask.Size()
-	return ones
 }
 
 // bootBuildVM creates and starts the build VM (macOS).
@@ -414,6 +438,38 @@ func sudoUser() *user.User {
 
 func defaultCacheDir() string {
 	return DefaultCacheDir()
+}
+
+// checkLink refuses, before anything boots, an image whose warden-boot
+// predates the per-build link and a link a host interface uses.
+func checkLink(diskImage string, req *driver.BuildRequest) error {
+	if err := imageStamp(filepath.Dir(diskImage)).Check(); err != nil {
+		return err
+	}
+	return driver.CheckHostLink(req.Link())
+}
+
+// imageStamp describes a prepared image's link-channel stamp. An image
+// prepared before warden-boot took the build link by DHCP bakes the old
+// address and must be re-prepared once (in place, no IPSW restore).
+func imageStamp(imgDir string) driver.LauncherStamp {
+	return driver.LauncherStamp{What: "vz prepared macOS image (warden-boot)",
+		Path: filepath.Join(imgDir, linkStampName), Rebuild: PrepareCommand}
+}
+
+// LauncherStamps lists the vz assets with a link-channel stamp: the prepared
+// image in the default cache, when there is one.
+func LauncherStamps() []driver.LauncherStamp {
+	cache := &ImageCache{CacheDir: defaultCacheDir()}
+	dir := ""
+	if _, err := os.Stat(cache.CacheDir); err == nil {
+		dir, _ = cache.ImageDir()
+	}
+	if dir == "" {
+		return []driver.LauncherStamp{{What: "vz prepared macOS image (warden-boot)",
+			Rebuild: PrepareCommand}}
+	}
+	return []driver.LauncherStamp{imageStamp(dir)}
 }
 
 // Preflight checks the host can run vz builds (Apple Silicon macOS and a
