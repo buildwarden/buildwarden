@@ -349,7 +349,75 @@ trailer.
 
 ## Consolidation
 
-Filled in at Publish (FLOW-10, FLOW-15).
+Reviewed at Publish against `main` from the fork (`a3e18fb`) to `a0d508c`,
+merged into the branch at `a98f70f`: #88 (Hyper-V relay apk versions from
+APKINDEX), #89 (native-allowlist-scratch, a process item), #90
+(firecracker-driver), #91 (bootstrap-firecracker-row) and #92
+(wf-squash-merged-pr, a process item). None of them touches `relay/`,
+`specs/metadata-http-body/` or `specs/metadata-http-open/`, so the merge had no
+conflict and nothing here needed rework (FLOW-10).
+
+**Terminology.** The design and code use "relay-served input", "build
+script", "bootstrap config" and "context file", the terms of the relay
+pseudocode in `overview.md` and of `recordServed`'s comment; #90 and #91 add
+no competing term for these. Firecracker's `vm-disk-chain` wording ("per-build
+writable disk") is a different record and does not overlap. No change.
+
+**Shared abstractions.** Firecracker fetches the build script, bootstrap
+config and context files from the same relay endpoints as the other drivers
+(its delivery changes only how `warden-io` reaches the guest), so the one
+`recordServed` path covers it; #90 adds no ledger metadata producer of its
+own. `relay/ledger_conformance_test.go` repeats `specs/specs_test.go`'s
+`fs.Glob(os.DirFS(".."), "specs/*/v*.schema.json")` load of `$id`s. Kept as two
+copies on purpose: they are test-only code in different packages (`relay` and
+`specs`), neither can import the other's test file, and each reads different
+keys (`properties` and `additionalProperties` here, `$id` uniqueness and the
+document pairing there). A shared non-test helper package would be new
+exported surface for a few lines of glob. Not a FLOW-15 duplication of one
+job.
+
+**Seams (GLOBAL-08).** Only #90 touched `specs/`: it widened the prose and the
+`driver` description of `environment-vm-disk-chain` v1 to name firecracker,
+with no `$id`, property or `additionalProperties` change. That is the
+environment record's signed payload, not record metadata under the header's
+`schemas` list, so the conformance test's resolution of indexes to `$id`s is
+unaffected; its glob still loads every schema file on `main` (re-run green on
+the merged tree). No other feature changed the `ledger-format` seam, so this
+feature is still the only one changing its producer bytes.
+
+**Rules the rest of the codebase must follow.** None new. #90 added
+`firecracker` to `tools/tier1/rules.yaml` `drivers.all` and
+`driver/linuxguest/` and `driver/relayvm/` to `drivers.shared`; this design
+already declares all five drivers for its `relay/` change (approved at r1 for
+exactly this merge order), so tier 1 passes with no new finding. The spec note
+and the conformance test still fit `main`: v0.6.0 is still the latest tag, so
+"v0.2.0 through v0.6.0" stays correct, and `make lint`'s tier-1 report lists
+only the `schema-doc` finding on `specs/metadata-http-body/v1.md`, suppressed
+by the branch's `Tier1-Allow` trailer. The note needs no edit at the next
+release: it names the releases that carry `path`, and "current relays" stays
+true from then on.
+
+**FLOW-15 sweep.**
+
+- *Dead code.* `make deadcode` (go1.26.3) on linux, darwin and windows. The
+  functions unreachable on all three are `relay.Relay.CAFingerprint`,
+  `relay.Relay.Ledger` and `collector.Collector.BytesWritten` (exported API of
+  library packages orchestrators embed, kept), and `driver/vz`'s image-prep
+  and `NewLinuxVM`/`VM.State`/`VM.IsRunning`/`createLinuxVM` (cgo-only, seen
+  only on a macOS host, kept). All predate the fork. This branch adds no
+  non-test function, and `recordServed` stays reachable from its three
+  callers. Firecracker's `consoleTail`, `Driver.status`, `pidFilePath`,
+  `vmConfig.write` and `afterGrace` show only on windows (Linux-only callers)
+  and are #90's, not this feature's.
+- *Duplication.* None in the change beyond the deliberate schema-loading copy
+  above. Every `http-body` close in `relay/relay.go` (served input, streamed
+  and bodiless upstream responses, request-body checkpoint) now writes v1
+  metadata; no second encoder of it exists.
+- *The overview.* `overview.md`'s relay pseudocode says served inputs are
+  "recorded" and names no metadata, and the flow is unchanged; #90's edits
+  there are to the VM-driver section only. No change needed.
+
+Result: no work beyond this section; the feature does not go back.
 
 ## Rollback notes
 
