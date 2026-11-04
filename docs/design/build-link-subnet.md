@@ -1044,6 +1044,35 @@ docs: 33. `overview.md`: 34.
     non-default link. The `f6-validate` steps return in Plan (Validation
     plan, Queue steps).
 
+- **r2, 2026-11-04: changes requested** (Jeff, workflow-human, FLOW-19).
+  Read at `ef8c014`, with the design published as a review page. Sent back
+  to Design (FLOW-06). Before answering, Jeff paused the review to commission
+  an overview of today's network setup: what is baked and what is
+  configurable on each driver (the Claude Docs page "BuildWarden network
+  configuration: what is baked, what is configurable"). Rebuilds and cache
+  invalidation are the concern.
+  - **a2: answered (c), deliver the link in the relay claim.** The relay
+    configures its own build interface from the claim, so no relay-side
+    asset bakes the link, and Hyper-V's rebake goes away. This changes the
+    `relay-claim` seam.
+  - **a3: link records only where something still bakes the link.** Design
+    re-decides which assets still need a record once the claim carries the
+    link. The candidates are the guest side: vz `warden-boot` and the
+    direct-boot inits.
+  - **a7: superseded by a2.** Re-decide `seams` (`relay-claim` at least) and
+    `alters_relationships`. The claim gains the link and the relay takes over
+    interface setup from the init.
+  - **Confirmed:** a4 (a) as designed; a5 (a) tracked; a8 (a) block the
+    subnet, which Design may apply in every mode now that the relay knows
+    the link; a9 (a) `[vm] build_link` plus `--build-link`, with the command
+    list trimmed to what still needs it; a10 (a) as designed.
+  - **For Design r3:**
+    - Weigh the overview's open questions on per-build channels versus
+      baking, a general staleness stamp, Hyper-V's fixed relay address and
+      missing claim token, and the link allocation model.
+    - Keep the Bootstrap comparison in mind if interface setup moves from
+      the init into the relay (BOOT-07).
+
 ## Consolidation
 
 Filled in at Publish (FLOW-10, FLOW-15).
