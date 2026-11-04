@@ -68,6 +68,46 @@ steps:
     lease:
       claimed_by: ""
       expires: null
+  - id: f6-validate-linux-kvm
+    phase: 6
+    affinity: host:linux-kvm
+    status: pending
+    needs:
+      - f2-design-review-r3
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan (plan r3 task 50): the four cases on the default link and on 100.126.255.252/30 (pre-change assets refused with the one-time command; after it, a default-link build whose ledger verifies, the guest at 100.127.255.254; the configured link reported by doctor and built with no rebuild, refresh or re-prepare; an overlapping --build-link refused at startup). Reaches driver/firecracker (claim carries the link, direct-boot boot_args, launcher stamp, resolver exclusion against the resolved link), the vm-mode relay''s netlink build-interface setup on the x86_64 relay VM, and tools/firecracker-vm/init; plus a direct-boot and a disk build, an old relay initramfs still building with 10.0.0.1 gone from the relay''s build interface, a host resolver inside the configured link excluded with the fix, the guest-sourced canary drop, and a build fetching the link''s relay address refused (TEST-08). Added by f2-plan-r3 needing only f2-design-review-r3; add f3-implement to its needs once Implement is seeded, and f6-open-pr must need this step once phase 6 is seeded.'
+  - id: f6-validate-qemu-any
+    phase: 6
+    affinity: host:qemu-any
+    status: pending
+    needs:
+      - f2-design-review-r3
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan (plan r3 task 50): the four cases on the default link and on 100.126.255.252/30 (pre-change assets refused with the one-time command; after it, a default-link build whose ledger verifies, the guest at 100.127.255.254; the configured link reported by doctor and built with no rebuild, refresh or re-prepare; an overlapping --build-link refused at startup). Reaches driver/qemu (claim carries the link, direct-boot -append, launcher stamp), the vm-mode relay''s netlink build-interface setup on the aarch64 relay VM, tools/build-vm/init and the linuxguest seed; plus a direct-boot and a cloud-image Linux build, and an old relay initramfs still building with 10.0.0.1 gone from the relay''s build interface. Added by f2-plan-r3 needing only f2-design-review-r3; add f3-implement to its needs once Implement is seeded, and f6-open-pr must need this step once phase 6 is seeded.'
+  - id: f6-validate-macos-vz
+    phase: 6
+    affinity: host:macos-vz
+    status: pending
+    needs:
+      - f2-design-review-r3
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan (plan r3 task 50): the four cases on the default link and on 100.126.255.252/30 (pre-change assets refused with the one-time command; after it, a default-link build whose ledger verifies, the guest at 100.127.255.254; the configured link reported by doctor and built with no rebuild, refresh or re-prepare; an overlapping --build-link refused at startup). Reaches driver/vz (claim carries the link, no --subnet, DHCP warden-boot, image stamp) and cmd/relay host mode (netstack built at claim, infinite DHCP lease, link block): an image prepared before the change refused, re-prepared once in place; the lease taken within the boot window (time from boot to initialize against main); a build longer than an hour with no renewal; the link block on the configured link; forged DHCP and ARP from the guest gaining nothing (TEST-08). Added by f2-plan-r3 needing only f2-design-review-r3; add f3-implement to its needs once Implement is seeded, and f6-open-pr must need this step once phase 6 is seeded.'
+  - id: f6-validate-windows-hyperv
+    phase: 6
+    affinity: host:windows-hyperv
+    status: pending
+    needs:
+      - f2-design-review-r3
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan (plan r3 task 50): the four cases on the default link and on 100.126.255.252/30 (pre-change assets refused with the one-time command; after it, a default-link build whose ledger verifies, the guest at 100.127.255.254; the configured link reported by doctor and built with no rebuild, refresh or re-prepare; an overlapping --build-link refused at startup). Reaches driver/hyperv (claim carries the link, relay-boot.link-channel stamp, --nat-prefix overlap refusal at setup), the relay boot VHDX refreshed once with refresh-cache.sh, the vm-mode relay''s build-interface setup on hv_netvsc, and driver/winguest: a Windows guest build; an old VHDX refused by the stamp; with the stamp forged, the claim''s unknown-field refusal mapped to the same fix; the --nat-prefix overlap refusal. Added by f2-plan-r3 needing only f2-design-review-r3; add f3-implement to its needs once Implement is seeded, and f6-open-pr must need this step once phase 6 is seeded.'
 budget:
   estimate:
     runs: 5
@@ -177,7 +217,7 @@ questions:
     answer: (a) as designed (Jeff, r2)
   - id: a11
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The claim schema, versioning and compatibility (Decision 3): an optional build_link {prefix, relay, guest} on /v1/claim, validated in relaycfg (IPv4, length 8 to 30, two distinct hosts inside it), refused by a container-mode relay, required by a vm-mode relay whose build interface has no address, --subnet as host mode''s fallback; an old relay refuses the unknown field, which warden maps to a fixable error; the contract document is the relaycfg package doc and architecture.md''s Claim protocol.'
     options:
       - as stated
@@ -185,27 +225,30 @@ questions:
       - a version field in the claim
       - as stated, and start specs/relay-claim/v1.md now
     recommended: as stated
+    answer: (a) as stated (Jeff, r3)
   - id: a12
     kind: assumed
-    status: open
+    status: confirmed
     question: 'vm mode (Decision 4): the init keeps interface selection, link-up, upstream setup, IPv6 off, ip_forward and every (interface-keyed) iptables rule and passes -build-if; on a valid claim and before replying the relay refuses a link overlapping its other interfaces, flushes the build interface''s IPv4 addresses, adds relay/len through netlink and uses it as its self address; without -build-if it applies the init''s rule, so old qemu and Firecracker relay initramfs need no rebuild.'
     options:
       - as stated
       - the relay execs busybox ip instead of netlink
       - the relay adds its address without flushing (an old init's 10.0.0.1/30 and its shadow would stay)
     recommended: as stated
+    answer: (a) as stated (Jeff, r3)
   - id: a13
     kind: assumed
-    status: open
+    status: confirmed
     question: 'host mode (Decision 4): the relay builds its netstack, ARP, DHCP and listeners from the claim''s build_link; the vz driver no longer passes --subnet; --subnet stays as the fallback.'
     options:
       - as stated
       - keep --subnet as host mode's only channel and send no build_link on vz
       - both, the relay refusing a claim whose link differs from --subnet
     recommended: as stated
+    answer: (a) as stated (Jeff, r3)
   - id: a14
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The guest side (Decision 5, Bootstrap comparison): seeds rendered per build as today; warden.link_ip / warden.link_gw on the direct-boot kernel command line with no default in the inits; vz warden-boot takes a DHCP lease (infinite) from the host relay''s existing responder; no guest asset bakes an address; BOOT-03''s wording gains a DHCP lease served by the relay.'
     options:
       - as stated
@@ -213,59 +256,66 @@ questions:
       - vz bakes only the default and ignores the setting
       - as stated, plus DHCP for the direct-boot inits from a new vm-mode responder
     recommended: as stated
+    answer: (d) as stated, plus DHCP for the direct-boot inits from a new vm-mode responder in the relay (Jeff, r3; amends Decision 5, folded into the plan, not sent back)
   - id: a15
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The launcher stamp (Decision 6): WARDEN_LINK_CHANNEL=1 beside the qemu and Firecracker direct-boot initramfs, the Hyper-V relay boot VHDX and the vz prepared image, compared with buildlink.Channel before any VM boots and in doctor, each refusal naming its one-time rebuild, refresh or re-prepare; none on the qemu and Firecracker relay initramfs.'
     options:
       - as stated
       - no stamp, a documented one-time rebuild
       - a general source-digest staleness check over every baked asset instead
     recommended: as stated, with the general check as the follow-up baked-asset-staleness
+    answer: (a) as stated (Jeff, r3)
   - id: a16
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The link block in vm mode too (Decision 7): the relay refuses upstream dials (on the dialed address) and upstream resolvers inside the build link in vm and host modes, whether or not the SSRF filter is on; container mode unchanged.'
     options:
       - vm and host modes
       - host mode only (r2's a8)
       - every mode, the container driver sending its /29 for the block alone
     recommended: vm and host modes
+    answer: (a) as stated (Jeff, r3)
   - id: a17
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The container driver stays out (Decision 4): it keeps its per-build /29 allocation and sends no build_link, and a container-mode relay refuses one; the runtime owns the relay''s address, the driver never had the collision, and its relay image has no version pin to warden.'
     options:
       - out of scope
       - send its /29 in the claim for the a16 block only
     recommended: out of scope
+    answer: (a) as stated (Jeff, r3)
   - id: a18
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Hyper-V''s fixed relay address 192.168.240.2, missing claim token, ignored --nat-prefix and 8.8.8.8 DNS (Decision 9): defer all four, with the durable shared switch, to a follow-up item hyperv-relay-per-build-channel queued at intake after this review; this feature adds only the claim field, the VHDX stamp and the --nat-prefix overlap refusal.'
     options:
       - defer to the follow-up
       - add a claim token now through a per-build channel into the relay VM (seed disk or KVP), also fixing the address and --nat-prefix
       - defer with no follow-up
     recommended: defer to the follow-up
+    answer: (a) defer to the follow-up hyperv-relay-per-build-channel (Jeff, r3)
   - id: a19
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Seams and relationships (supersedes a7): seams [relay-claim, relay-guest-api (conservatively: the relay''s build-segment address comes from the claim and the host-mode DHCP lease becomes the vz guest''s address), bootstrap-model (BOOT-03 wording)]; executor-initialize unchanged; alters_relationships true (a versioned seam and the bootstrap model change, and the relay takes over its build interface''s addressing from the init); the FLOW-05 slot is free today.'
     options:
       - as stated
       - '[relay-claim] only, if a14 (b) or (c) is chosen'
       - as stated plus executor-initialize, conservatively
     recommended: as stated
+    answer: (a) as stated (Jeff, r3)
   - id: a20
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The trimmed command list (Decision 8): --build-link on build, shell and doctor only; image prepare drops it (the vz image bakes no link); setup --driver hyperv checks --nat-prefix against [vm] build_link or the default, with no flag of its own.'
     options:
       - as stated
       - keep it on setup for the overlap check
       - the key only, no flag anywhere
     recommended: as stated
+    answer: (a) as stated (Jeff, r3)
 history:
   - at: 2026-11-03T01:30:28Z
     by: human/jeff
@@ -366,3 +416,33 @@ history:
   - at: 2026-11-04T22:03:33Z
     by: cloud/20261104T214530Z-attended
     event: claimed f2-plan-r3 until 2026-11-05T00:03:33Z
+  - at: 2026-11-04T22:36:10Z
+    by: human/jeff
+    event: 'assumed question a11 confirmed: (a) as stated (Jeff, r3)'
+  - at: 2026-11-04T22:36:10Z
+    by: human/jeff
+    event: 'assumed question a12 confirmed: (a) as stated (Jeff, r3)'
+  - at: 2026-11-04T22:36:10Z
+    by: human/jeff
+    event: 'assumed question a13 confirmed: (a) as stated (Jeff, r3)'
+  - at: 2026-11-04T22:36:10Z
+    by: human/jeff
+    event: 'assumed question a15 confirmed: (a) as stated (Jeff, r3)'
+  - at: 2026-11-04T22:36:10Z
+    by: human/jeff
+    event: 'assumed question a16 confirmed: (a) as stated (Jeff, r3)'
+  - at: 2026-11-04T22:36:10Z
+    by: human/jeff
+    event: 'assumed question a17 confirmed: (a) as stated (Jeff, r3)'
+  - at: 2026-11-04T22:36:10Z
+    by: human/jeff
+    event: 'assumed question a19 confirmed: (a) as stated (Jeff, r3)'
+  - at: 2026-11-04T22:36:10Z
+    by: human/jeff
+    event: 'assumed question a20 confirmed: (a) as stated (Jeff, r3)'
+  - at: 2026-11-04T22:36:10Z
+    by: human/jeff
+    event: 'assumed question a14 confirmed: (d) as stated, plus DHCP for the direct-boot inits from a new vm-mode responder in the relay (Jeff, r3; amends Decision 5, folded into the plan, not sent back)'
+  - at: 2026-11-04T22:36:10Z
+    by: human/jeff
+    event: 'assumed question a18 confirmed: (a) defer to the follow-up hyperv-relay-per-build-channel (Jeff, r3)'
