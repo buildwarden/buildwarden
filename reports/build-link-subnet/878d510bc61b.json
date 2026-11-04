@@ -1,0 +1,281 @@
+{
+  "feature": "build-link-subnet",
+  "branch": "feat/build-link-subnet",
+  "head": "878d510bc61b",
+  "base": "1ef554703dbf",
+  "round": "feature",
+  "step": "f4-review",
+  "previous_report": null,
+  "scope": "git diff origin/main...feat/build-link-subnet: 103 files, +6837/-536, 21 commits. The merge base is 1ef5547; origin/main is 1f61b0c, four commits on, and merges cleanly. First tier-2 pass for this feature. It covers the whole diff against design r3 (approved at c19e8f0, with the a14 (d) amendment) and plan r3 (56 tasks).",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "rule_index": "85 '### <ID> — <title>' headers extracted from docs/development/*.md (LINT-01). Judged: every agent-judgment rule, and the judgment half of every hybrid rule, the diff reaches.",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass (linux host, go1.26.3, ~/go/bin golangci-lint): 0 issues in the root module, tools/workflow and tools/tier1. Then dist/tier1 -base origin/main (1ef554703dbf...878d510bc61b): 0 MUST, 0 MUST-review, 0 SHOULD, 3 hints, 0 suppressed, exit 0",
+    "make_lint_per_platform": "GOOS=darwin make lint and GOOS=windows make lint: both pass with the same tier-1 result (FLOW-17: driver/vz, driver/hyperv, cmd/warden-io/platform_windows*.go and cmd/relay's _other stubs are touched). GOOS=darwin and GOOS=windows `go test -c` of driver/vz, driver/hyperv and cmd/warden compile.",
+    "make_test": "pass: every package ok in the root module, tools/workflow and tools/tier1. A -count=1 rerun of the root module (no cache) also passes: 22 ok lines, no FAIL.",
+    "custom_static_checks": "dist/tier1 hints: BOOT-07 bootstrap-surface (cmd/warden-io/initialize_test.go; bootstrap.md not in the diff), GLOBAL-04 tests-with-change (driver/container/), GLOBAL-04 tests-with-change (tools/vz-image-prep/). Judged in finding 1 and implement_reported items 1 and 11.",
+    "ci_runs": {
+      "integration 41933782452": "success: workflow_dispatch on 878d510, job tier1 (make integration-test), completed 23:30Z (plan task 51)",
+      "firecracker 41933786130": "success: workflow_dispatch on 878d510, job tier2. The Build boot assets step ran (cache miss: the inits changed). warden setup and doctor, Direct-boot build (udhcpc lease plus the vm-mode relay's netlink address and responder), the Ubuntu 24.04 build with a COPY and an HTTPS fetch, and Teardown leaves nothing behind all passed. The 'Off-host DNS for the relay' workaround is gone, so the hosted runner's own VPC resolver is used, which was the original failure (plan task 52)"
+    },
+    "fixes_made": "none; the linter changed nothing on the code checkout (still clean at 878d510)"
+  },
+  "implement_reported": [
+    {
+      "item": 1,
+      "topic": "Task 49 (BOOT-03 wording) not done",
+      "verdict": "correctly routed to a process item; not a MUST for wf-implement",
+      "finding": 1,
+      "note": "FLOW-14: a change to docs/development/ is a process item the human settles. Task 49 was conditional on the review choosing this diff, and the r3 review did not choose. Open for the human: queue the item, and record that the comparison is accepted as amended (finding 1, MUST-review)."
+    },
+    {
+      "item": 2,
+      "topic": "Stray-literal allowlist admits the new default in *_test.go",
+      "verdict": "accepted",
+      "finding": null,
+      "note": "Eleven test files outside driver/buildlink name the default. relay/ and relaycfg/ tests may not import driver/buildlink (GLOBAL-08: the library packages do not import driver/), so they must spell it, and tests pin rendered output. Non-test code outside buildlink holds no copy of the default. The old link stays limited to three named test files. Record the widening as a plan deviation at Consolidation (FLOW-06: reported, so not silent)."
+    },
+    {
+      "item": 3,
+      "topic": "Doctor exits non-zero only on a host-interface overlap",
+      "verdict": "SHOULD",
+      "finding": 2,
+      "note": "Fine for qemu and firecracker, whose stamped assets serve direct boot only. For hyperv and vz the stamped asset is required by every build, so doctor-as-gate should fail."
+    },
+    {
+      "item": 4,
+      "topic": "DHCP lease script as a heredoc in each build-initramfs.sh",
+      "verdict": "accepted",
+      "finding": null,
+      "note": "The firecracker cache key already hashes tools/firecracker-vm/build-*.sh and both inits, so the changed inits rebuild once with no key change (Decision 7). The two copies are pinned identical by driver/buildlink/scripts_test.go. List them under FLOW-15's duplication sweep at Publish, with the reason they are not one file."
+    },
+    {
+      "item": 5,
+      "topic": "Order-test seams in qemu, vz, firecracker, hyperv",
+      "verdict": "accepted",
+      "finding": null,
+      "note": "These are the smallest seams the plan note named (task 34): function fields or step closures that default to today's methods, with no behaviour change. TestRunVMsOrder (qemu, vz), TestBootInOrder (firecracker) and TestRunBuild_ClaimBeforeBuildVM (hyperv) pin BOOT-01's order."
+    },
+    {
+      "item": 6,
+      "topic": "No tier-0 test that qemu/firecracker/vz claims carry the link",
+      "verdict": "SHOULD",
+      "finding": 5,
+      "note": "Loud on qemu and firecracker if broken; quiet on vz."
+    },
+    {
+      "item": 7,
+      "topic": "A bad [vm] build_link fails every command, container included",
+      "verdict": "accepted behaviour; SHOULD doc fix",
+      "finding": 7,
+      "note": "This is Decision 8's load-time check and UX-08. a17 keeps the container driver out of the claim, not out of config validation."
+    },
+    {
+      "item": 8,
+      "topic": "vz --image custom path: stamp beside the disk, fix names the cache prepare",
+      "verdict": "SHOULD",
+      "finding": 3,
+      "note": "A dead end for a custom image."
+    },
+    {
+      "item": 9,
+      "topic": "No tier-0 tests for buildif_linux.go and dhcp_vm_linux.go",
+      "verdict": "SHOULD",
+      "finding": 4,
+      "note": "The syscalls belong to tier 2 and native validation. The pure parsing and encoding should get tier-0 tests."
+    },
+    {
+      "item": 10,
+      "topic": "pickNameserver brackets IPv6; ErrRefused answered 400 'claim refused: ...'",
+      "verdict": "accepted",
+      "finding": null,
+      "note": "The IPv6 change fixes a latent bug: the old code produced 'fd00::1:53', which is not a valid address. It applies in all three relay modes, container included. The PR body should list it under RELAY-04 with the vm and host modes. ErrRefused/400 is the relay-claim addition the plan note asked the review to accept (task 6). It is documented in relaycfg's package doc and tested by relaycfg/buildlink_test.go, and relaycfg.Claim treats it as a definitive refusal. Name it in the PR body as part of the relay-claim seam change."
+    },
+    {
+      "item": 11,
+      "topic": "tier-1 GLOBAL-04 hints on driver/container and tools/vz-image-prep",
+      "verdict": "dismissed with reason",
+      "finding": null,
+      "note": "driver/container: the only change is the call shape, passing ClaimRelay a nil link and an empty fix. There is no new behaviour, and the nil-link claim path is tested in driver/session_link_test.go and relaycfg/buildlink_test.go. tools/vz-image-prep: these are //go:build ignore programs with no test harness. The change replaces literals with buildlink.Default() and placeholders, and TestNoStrayLinkLiterals guards it. Record both dismissals in the PR body."
+    }
+  ],
+  "findings": [
+    {
+      "id": 1,
+      "rule": "BOOT-07",
+      "related_rules": [
+        "BOOT-03",
+        "FLOW-14",
+        "FLOW-19"
+      ],
+      "severity": "MUST-review",
+      "check": "hybrid",
+      "file": "docs/development/bootstrap.md",
+      "line": 108,
+      "finding": "Implement item 1 (task 49 not done). Correctly routed: FLOW-14 makes a change to docs/development/ a process item that the human settles, so Implement was right not to edit BOOT-03 on the feature branch (the bootstrap-firecracker-row precedent). It is not a MUST for wf-implement; nothing in this diff can fix it. Three things remain open for the human. (a) No process item for the BOOT-03 wording exists in queue/. (b) This branch's launchers now take an address by DHCP: the direct-boot inits run udhcpc (tools/build-vm/init, tools/firecracker-vm/init), and vz warden-boot runs `ipconfig set DHCP` (driver/vz/image.go). BOOT-03 on main still allows only static addressing in the launcher, so main would contradict a MUST rule from the merge until the wording lands. (c) BOOT-07 needs the review to accept the Bootstrap comparison explicitly. The r3 entry (design:1886) confirms a14 (d) and a19 (bootstrap-model) but does not name the comparison. The comparison is also stale for a14 (d): its BOOT-03 row says 'others unchanged' (design:897), and task 56 only updates it at Consolidation. The tier-1 BOOT-07 hint on cmd/warden-io/initialize_test.go is itself benign: that change only swaps literals for 192.0.2.x. The real model change sits in the inits and warden-boot, which are not on the automated surface list.",
+      "suggestion": "For Jeff, at or before merge: queue the BOOT-03 wording as a process item (workflow-intake, like bootstrap-firecracker-row), landing with or right after this PR. Record in the Design review section that the Bootstrap comparison is accepted as amended by a14 (d), meaning DHCP for the direct-boot inits too. Have task 56 fix the BOOT-03 row. Put all three in the PR body. Optionally have the process item add tools/*/init and driver/vz/image.go's warden-boot to the BOOT-07 surface list."
+    },
+    {
+      "id": 2,
+      "rule": "UX-09",
+      "related_rules": [
+        "UX-04"
+      ],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "cmd/warden/host.go",
+      "line": 260,
+      "finding": "Implement item 3. Doctor prints the link, its source, the host overlap and each stamp, and exits non-zero only on a host-interface overlap. That matches Decision 8's list of what doctor prints. But doctor's own contract (host.go help, cli.md) is 'exits non-zero when a required capability is unmet, so it is usable as a CI or agent gate'. On hyperv (relay boot VHDX) and vz (the prepared image), the stamped asset is required by every build, so a missing or stale stamp means every build refuses while doctor exits 0. On qemu and firecracker the stamped initramfs serves only direct boot, so a report is enough there.",
+      "suggestion": "Exit non-zero when a stamp is missing or stale on an asset every build of that driver needs (hyperv, vz). Keep the qemu and firecracker direct-boot stamps as reports. Or record the reason for not doing so in the design at Consolidation."
+    },
+    {
+      "id": 3,
+      "rule": "UX-04",
+      "related_rules": [],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "driver/vz/driver.go",
+      "line": 455,
+      "finding": "Implement item 8. With `--image /path/disk.img`, the stamp is looked up beside that disk, which is the right place. But the refusal's fix is PrepareCommand (`sudo warden image prepare --driver vz`), which re-prepares only the default cache's image (cmd/warden/image.go prepareVZMacos). A user with a custom image follows the fix and is refused again: a dead end on an uncommon path.",
+      "suggestion": "When the disk is outside the cache, name a fix that works for that path: re-prepare that image directory, or omit --image to use the prepared cache image. Or let `image prepare --driver vz` take the image directory, if a one-line ReprepareImage(dir) path is wanted. Add a table case to TestImageStamp."
+    },
+    {
+      "id": 4,
+      "rule": "GLOBAL-04",
+      "related_rules": [
+        "TEST-01",
+        "TEST-02"
+      ],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "cmd/relay/buildif_linux.go",
+      "line": 148,
+      "finding": "Implement item 9. buildif_linux.go (rtnetlink dump parsing, RTM_NEWADDR/DELADDR encoding, ack handling) and dhcp_vm_linux.go (SO_BINDTODEVICE on udp/67) have no tier-0 tests. Their callers are well covered through the buildIface and packetConn fakes (vmlink_test.go, dhcp_test.go incl. FuzzDHCPReply). Opening sockets needs root and a netns, so the syscalls belong to tier 2 and native validation (the firecracker CI run and the linux-kvm and qemu-any hosts), as TEST-01 intends. The parsing and encoding are pure, though, and are where a silent bug would hide: parseRoute's RTA_DST/RTA_OIF handling, the IFA_LOCAL-over-IFA_ADDRESS choice, and the ifaddrmsg layout. A related edge: Flush deletes addresses one by one from a single dump, and on Linux deleting a primary address also deletes its secondaries in the same subnet (promote_secondaries off). The next RTM_DELADDR then fails with EADDRNOTAVAIL and the claim fails with 500. Unlikely with today's inits, which add one address.",
+      "suggestion": "Split the message building and parsing from the socket I/O. Test them at tier 0 with canned netlink bytes: a dump holding a default route, a /30 route on another oif and a multi-address interface, plus addrRequest's encoded bytes. In Flush, treat EADDRNOTAVAIL as already removed."
+    },
+    {
+      "id": 5,
+      "rule": "GLOBAL-04",
+      "related_rules": [
+        "ORCH-01",
+        "TEST-05"
+      ],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "driver/vz/driver.go",
+      "line": 237,
+      "finding": "Implement item 6. Only Hyper-V has an end-to-end tier-0 test that its claim carries the link. qemu (driver.go:221), firecracker (driver_linux.go:218) and vz (driver.go:237) each pass `req.Link().Claim()` in one line, with no test. driver/session_link_test.go covers ClaimRelay sending what it is given. A regression that passes nil fails loudly on qemu and firecracker: the new relay-vm init leaves eth0 unaddressed, so the relay answers 400 'build_link is required'. On vz it is quiet: host mode falls back to its --subnet default 10.100.0.0/30, which the driver no longer passes, and the build still runs on a link that is not the configured one.",
+      "suggestion": "Add one tier-0 assertion per driver that the claim it sends carries the request's link. The order-test seams from item 5 can capture the ClaimRelay arguments, or the shared claim-building call can be factored and tested once with every driver as a caller. At minimum cover vz, the quiet case."
+    },
+    {
+      "id": 6,
+      "rule": "FLOW-15",
+      "related_rules": [
+        "UX-01"
+      ],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "docs/book/src/concepts/overview.md",
+      "line": 163,
+      "finding": "An edit merged two pseudocode lines. The firecracker relay-start step reads 'resolvers for the relay are the host's, minus loopback, host addresses and any inside the build link first take a free network slot made by `warden setup` (a host lock), ...'. The resolver sentence and main's 'first take a free network slot' line ran together.",
+      "suggestion": "Split it back into two steps: the resolver selection, then 'first take a free network slot made by `warden setup` (a host lock), kill VMMs a dead warden left on it, and claim the relay at the slot's upstream address'."
+    },
+    {
+      "id": 7,
+      "rule": "UX-01",
+      "related_rules": [
+        "UX-08"
+      ],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "docs/book/src/guide/configuration.md",
+      "line": 101,
+      "finding": "Implement item 7. A malformed `[vm] build_link` fails every command, container builds included, because it is checked as the file loads (cmd/warden/config.go:128). That behaviour is right: Decision 8 says 'a config value is checked when the file loads', and UX-08 favours failing fast on a bad config whatever the driver. It is not a redesign, since a17 is about the claim, not the key. But the reference doc says only 'The container driver ... ignores the setting', which reads as if a bad value is ignored there too.",
+      "suggestion": "Keep the behaviour. Reword configuration.md:101 to say the container driver ignores a valid value, and that a malformed one is refused at load by every command (as any config error is)."
+    },
+    {
+      "id": 8,
+      "rule": "UX-04",
+      "related_rules": [],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "tools/relay-vm/hyperv/refresh-cache.sh",
+      "line": 42,
+      "finding": "refresh-cache.sh exits 'relay boot VHDX is current' when the disk exists and relay-boot.source matches. It does not check whether relay-boot.link-channel exists. The source stamp excludes the script itself, so a disk whose link stamp is missing but whose relay source matches is never re-stamped. warden refuses it, naming refresh-cache.sh, and refresh-cache.sh says it is current: a loop. It cannot happen on this branch's own history, since the stamp line landed with relay-source changes in 19bbe69 and relay changed again later. It can happen if the stamp file is lost, or a disk is copied without it.",
+      "suggestion": "Require the link stamp for the 'current' short-circuit (`[ -f \"$linkf\" ]`, and `--check` reports it). Or have warden's fix for a missing stamp say `refresh-cache.sh --force`."
+    },
+    {
+      "id": 9,
+      "rule": "TEST-08",
+      "related_rules": [
+        "GLOBAL-06"
+      ],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "docs/design/build-link-subnet.md",
+      "line": 1030,
+      "finding": "The change trips GLOBAL-06 (env-relay). The vm-mode relay changes its own interface from claim data, and a DHCP responder now goes live on the build link in vm mode and in host mode for vz. The design's TEST-08 list (design:1030) is the input for the security suite, but queue/security-suite.yaml does not mention build_link, the vm-mode responder or DHCP/ARP spoofing. Most of the cases have tier-0 coverage (vmlink_test.go, dhcp_test.go with FuzzDHCPReply, relaycfg/buildlink_test.go, relay/buildlink_test.go). The adversarial cases have no recorded home.",
+      "suggestion": "Carry the Security note's TEST-08 list into security-suite's queue item or design inputs. Name it in the PR body's security note for Jeff's sign-off (LINT-03)."
+    }
+  ],
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 1,
+    "SHOULD": 8
+  },
+  "resolved_since_previous": [],
+  "carried_forward": [],
+  "new_since_previous": [
+    1,
+    2,
+    3,
+    4,
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "suppressions": [],
+  "suppressions_note": "No previous report for this feature, and tier 1 applied no Tier1-Allow trailers (0 suppressed), so there are no suppressions to carry over.",
+  "back_to_design": false,
+  "back_to_design_note": "Nothing invalidates a Decision, a confirmed question or a BOOT invariant. Finding 1 is a standards edit that FLOW-14 routes to a process item, and its BOOT-07 acceptance is a record the human makes, not a design change. a14 (d) was folded into the plan at review. Task 56 brings the design text in line at Consolidation.",
+  "routing": {
+    "tier1_red": false,
+    "wf_implement_fix": "none for tier 1: it is green at 878d510",
+    "must_findings_route": "No MUST findings, so nothing must go back to wf-implement. The one MUST-review (finding 1) is for Jeff, not Implement: queue the BOOT-03 process item, record acceptance of the Bootstrap comparison as amended by a14 (d), and list it in the PR body (FLOW-08). Findings 2 to 8 are small in-feature fixes worth taking if the tick sends work back. Otherwise they go in the PR body with finding 9, and the GLOBAL-06 security note needs Jeff's acknowledgement at merge (LINT-03)."
+  },
+  "informational": [
+    {
+      "rule": "BOOT-07",
+      "file": "cmd/warden-io/initialize_test.go",
+      "line": 54,
+      "note": "tier-1 bootstrap-surface hint: literal-only test change, not a model change. The model change is elsewhere (finding 1)."
+    },
+    {
+      "rule": "GLOBAL-06",
+      "file": "docs/design/build-link-subnet.md",
+      "line": 946,
+      "note": "security_boundary env-relay. The PR body carries the Security note. Points to name: the vm-mode relay's netlink step is bounded (one interface, IPv4 only, flush and add, collision refusal before any change). The vm-mode upstream dialer now always goes through safeDialContext when a link is set: sequential per-address dials, no Happy Eyeballs; same as host mode already did. Hyper-V's claim still has no token (Decision 9, deferred). cfg.UpstreamDNS and UPSTREAM_DNS set explicitly are not filtered against the link (Decision 7 asks only for detection to skip it)."
+    },
+    {
+      "rule": "FLOW-10",
+      "file": "queue/",
+      "line": 0,
+      "note": "The follow-ups the design names, hyperv-relay-per-build-channel (Decision 9, a18: 'queued at intake after this review') and baked-asset-staleness (Decision 10), are not in queue/. Queue them with Jeff before Publish."
+    },
+    {
+      "rule": "FLOW-17",
+      "file": "feat/build-link-subnet",
+      "line": 0,
+      "note": "origin/main is 1f61b0c, four commits past the merge base 1ef5547 (incl. 353e8a7 in relay/). `git merge-tree` reports a clean merge. Publish re-runs tier 1 after merging main."
+    },
+    {
+      "rule": "LINT-01",
+      "file": "docs/development/",
+      "line": 0,
+      "note": "The extracted rule index holds 85 header lines, with RELAY-01 twice: README.md:25 has it as the rule-format example. An extractor should skip README.md, or the example should use an ID that is not a real rule. This predates the branch, which does not touch it (LINT-04)."
+    }
+  ]
+}
