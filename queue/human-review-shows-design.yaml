@@ -8,6 +8,9 @@ phase: 2
 design: docs/design/human-review-shows-design.md
 branch: feat/human-review-shows-design
 alters_relationships: null
+pr:
+  number: 95
+  ci: green
 source: 'workflow-human 2026-11-03, build-link-subnet r1 (Jeff): when going over a design, include the document that names the assumptions in the communication instead of assuming Jeff has it locally. Change .claude/skills/workflow-human step 3: publish the design (artifact page or full Questions section inline) and quote each assumption with its options when asking.'
 steps:
   - id: x1-design
