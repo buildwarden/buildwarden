@@ -1,6 +1,6 @@
 ---
 feature: human-review-shows-design
-status: draft
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -156,3 +156,31 @@ None. No driver or product code changes.
 ## Rollback notes
 
 ## Archive summary
+
+Implemented 2026-11-04 by the cloud loop (attended), approved at design
+review r1.
+
+- **Built.** `.claude/skills/workflow-human/SKILL.md` step 3: before the
+  walkthrough the design is put in front of Jeff (FLOW-19). Above 4 assumed
+  questions it is published as a private artifact page with the reviewed
+  commit SHA in its subtitle, and republished if the design changes during
+  the sitting. Otherwise, or when publishing is not available, its Questions
+  section is pasted in full with a short summary of the Decisions they rest
+  on. 3.1's diagram goes on that page. 3.4 asks each assumption as its own
+  AskUserQuestion entry (FLOW-07): the question in full, each option with its
+  consequence, the recommendation first, and the decision it rests on.
+- **Decisions taken:** the threshold is more than 4 assumptions (a1, one
+  AskUserQuestion call's worth); the page is read-only and per sitting, and
+  the review and its record stay in the session, the Design review section
+  and `dist/wf answer`; skill text only, no rule change (a2).
+- **Rejected:** a page for every review; inline only; linking the file on
+  GitHub; adding a reviewer-must-see-it sentence to FLOW-19.
+- **Validated.** `make lint` and `make test` green on the branch. The real
+  check is the next design review held with the new skill (expected
+  build-link-subnet r2): it should publish a page, ask each assumption in
+  full, and record the page link in its Design review entry.
+- **For future designs touching `workflow-human`, `design-review` or
+  `assumptions`:** step 3 now has one page per sitting, shared by the design
+  and any overview diagram; add to it rather than publishing a second.
+  design-approved-rule-changes edits the same step (rule changes asked one
+  by one), so a later change to step 3 should read both.
