@@ -48,9 +48,10 @@ func clearance(t *testing.T, env Env, round string) (string, bool) {
 }
 
 func TestRuleChangeProblems(t *testing.T) {
-	text := strings.Replace(ruled, "  - {rule: TEST-09", "  - {rule: nope, change: edit, paths: []}\n"+
-		"  - {rule: FLOW-14, change: amend, paths: [.claude/agents/wf-plan.md]}\n"+
-		"  - {rule: TEST-09", 1)
+	text := strings.Replace(ruled, "  - {rule: TEST-09",
+		"  - {rule: nope, change: edit, paths: []}\n"+
+			"  - {rule: FLOW-14, change: amend, paths: [.claude/agents/wf-plan.md]}\n"+
+			"  - {rule: TEST-09", 1)
 	d, err := ParseDesign(text, tmpl)
 	if err != nil {
 		t.Fatal(err)
@@ -60,7 +61,8 @@ func TestRuleChangeProblems(t *testing.T) {
 		t.Fatalf("rule_changes = %+v", d.Front.RuleChanges)
 	}
 	got := strings.Join(d.Front.Problems("demo"), "; ")
-	for _, want := range []string{`entry 1: rule "nope"`, `change "edit"`, "entry 1: paths is empty",
+	for _, want := range []string{`entry 1: rule "nope"`, `change "edit"`,
+		"entry 1: paths is empty",
 		"FLOW-14: .claude/agents/wf-plan.md changes only through a process item"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("problems %q lack %q", got, want)
@@ -100,8 +102,8 @@ func TestRuleChangeApprovalIsNotADesignApproval(t *testing.T) {
 	if got := approvals(d); len(got) != 0 {
 		t.Fatalf("approvals = %v, want none", got)
 	}
-	if m := ruleApprovedRe.FindAllStringSubmatch(d.Sections["Design review"], -1); len(m) != 1 ||
-		m[0][1] != "TEST-09" || m[0][2] != "abc1234" {
+	m := ruleApprovedRe.FindAllStringSubmatch(d.Sections["Design review"], -1)
+	if len(m) != 1 || m[0][1] != "TEST-09" || m[0][2] != "abc1234" {
 		t.Fatalf("rule change approvals = %v", m)
 	}
 }
@@ -110,8 +112,8 @@ func TestRuleClearance(t *testing.T) {
 	work := repo(t, ruled)
 	env := Env{Repo: work}
 	sha := commit(t, work, ruled+"\n<!-- as reviewed -->\n")
-	review := "\n## Design review\n\n- r1: approved at `" + sha + "`;\n  rule change TEST-09 " +
-		"approved at `" + sha + "`.\n"
+	review := "\n## Design review\n\n- r1: approved at `" + sha +
+		"`;\n  rule change TEST-09 approved at `" + sha + "`.\n"
 	commit(t, work, ruled+review)
 
 	if got, ran := clearance(t, env, "feature"); !ran || got != "" {
@@ -137,7 +139,7 @@ func TestRuleClearance(t *testing.T) {
 		"docs/development/global.md": "### TEST-10\n"})
 	got, _ := clearance(t, env, "feature")
 	if !strings.Contains(got, "global.md is in no approved rule change") ||
-		!strings.Contains(got, "TEST-10 approved at "+sha+" was not in rule_changes there") {
+		!strings.Contains(got, "TEST-10 approved at "+sha+" was not in rule_changes") {
 		t.Errorf("entry added after the approval: %q", got)
 	}
 	if strings.Contains(got, "testing.md") {
@@ -148,7 +150,8 @@ func TestRuleClearance(t *testing.T) {
 		"tools/workflow/queue/q.go": "package queue\n",
 		".github/workflows/ci.yml":  "run: ./dist/tier1 -base x\n"})
 	got, _ = clearance(t, env, "feature")
-	for _, want := range []string{".claude/agents/wf-plan.md changes only through a process item",
+	for _, want := range []string{
+		".claude/agents/wf-plan.md changes only through a process item",
 		"tools/workflow/queue/q.go changes only through a process item",
 		".github/workflows/ci.yml is in no approved rule change"} {
 		if !strings.Contains(got, want) {
@@ -172,8 +175,8 @@ func TestDrops(t *testing.T) {
 	report := func(rules ...string) []byte {
 		var fs []string
 		for _, r := range rules {
-			fs = append(fs, `{"rule":"`+r+`","severity":"MUST","file":"a.go","line":3,`+
-				`"check":"c","message":"m"}`)
+			fs = append(fs, `{"rule":"`+r+`","severity":"MUST","file":"a.go",`+
+				`"line":3,"check":"c","message":"m"}`)
 		}
 		return []byte(`{"findings":[` + strings.Join(fs, ",") + `]}`)
 	}

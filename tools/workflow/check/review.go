@@ -72,7 +72,8 @@ func (c *checker) reviewed() {
 func (c *checker) skipValid(d *Design) {
 	const name = "design review skip is valid (FLOW-19)"
 	if n := len(d.Front.RuleChanges); n > 0 {
-		c.add(name, false, "the design declares %d rule_changes, each approved in review", n)
+		c.add(name, false, "the design declares %d rule_changes, each approved in review",
+			n)
 		return
 	}
 	for _, q := range c.f.Questions {

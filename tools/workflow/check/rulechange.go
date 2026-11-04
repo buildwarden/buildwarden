@@ -57,20 +57,20 @@ func ruleChangeProblems(rcs []RuleChange) []string {
 		who := rc.Rule
 		if !ruleIDRe.MatchString(rc.Rule) {
 			who = fmt.Sprintf("entry %d", i+1)
-			out = append(out, fmt.Sprintf("rule_changes %s: rule %q is not a rule ID", who,
-				rc.Rule))
+			out = append(out, fmt.Sprintf("rule_changes %s: rule %q is not a rule ID",
+				who, rc.Rule))
 		}
 		if !oneOf(rc.Change, "add", "amend", "retire") {
-			out = append(out, fmt.Sprintf("rule_changes %s: change %q is not add, amend or retire",
-				who, rc.Change))
+			out = append(out, fmt.Sprintf("rule_changes %s: change %q is not "+
+				"add, amend or retire", who, rc.Change))
 		}
 		if len(rc.Paths) == 0 {
 			out = append(out, fmt.Sprintf("rule_changes %s: paths is empty", who))
 		}
 		for _, p := range rc.Paths {
 			if kindOf(p) == machinery {
-				out = append(out, fmt.Sprintf(
-					"rule_changes %s: %s changes only through a process item (FLOW-14)", who, p))
+				out = append(out, fmt.Sprintf("rule_changes %s: %s changes only "+
+					"through a process item (FLOW-14)", who, p))
 			}
 		}
 	}
@@ -96,8 +96,8 @@ func (c *checker) cleared(d *Design) (paths map[string]string, why []string) {
 	for _, m := range ruleApprovedRe.FindAllStringSubmatch(d.Sections["Design review"], -1) {
 		rule, sha := m[1], m[2]
 		if !now[rule] {
-			why = append(why, fmt.Sprintf("%s approved at %s is no longer in rule_changes",
-				rule, sha))
+			why = append(why, fmt.Sprintf(
+				"%s approved at %s is no longer in rule_changes", rule, sha))
 			continue
 		}
 		then, err := c.loadDesign(sha)
@@ -115,8 +115,8 @@ func (c *checker) cleared(d *Design) (paths map[string]string, why []string) {
 			}
 		}
 		if !found {
-			why = append(why, fmt.Sprintf("%s approved at %s was not in rule_changes there",
-				rule, sha))
+			why = append(why, fmt.Sprintf(
+				"%s approved at %s was not in rule_changes there", rule, sha))
 		}
 	}
 	return paths, why
@@ -151,7 +151,7 @@ func (c *checker) ruleChangeFiles(base, branch string) (map[string]pathKind, err
 		case strings.HasPrefix(line, "--- a/") && file == "":
 			file = strings.TrimPrefix(line, "--- a/")
 		case strings.HasPrefix(line, "+++ "), strings.HasPrefix(line, "--- "):
-		case file != "" && (strings.HasPrefix(line, "+") || strings.HasPrefix(line, "-")) &&
+		case file != "" && line != "" && strings.ContainsAny(line[:1], "+-") &&
 			ruleRunningRe.MatchString(line):
 			out[file] = rulePath
 		}

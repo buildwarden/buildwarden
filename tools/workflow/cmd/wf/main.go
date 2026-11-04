@@ -55,7 +55,8 @@ import (
 )
 
 const usage = "usage: wf " +
-	"validate|status|next|claim|release|check|done|answer|back|new|gate|budget|migrate|drops [flags]"
+	"validate|status|next|claim|release|check|done|answer|back|new|gate|budget|migrate|" +
+	"drops [flags]"
 
 // errIdle is gate's "nothing to do", exit status 3.
 var errIdle = errors.New("idle")
@@ -409,7 +410,8 @@ func drops(o opts) error {
 		return err
 	}
 	if !printResults(check.Drops(o.repo, o.base, o.head, was, now)) {
-		return fmt.Errorf("the branch drops main's tier 1 findings without an approved rule change")
+		return fmt.Errorf(
+			"the branch drops main's tier 1 findings without an approved rule change")
 	}
 	return nil
 }
