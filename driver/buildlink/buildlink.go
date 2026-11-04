@@ -55,15 +55,9 @@ type Link struct {
 	Guest netip.Addr
 }
 
-var defaultLink = mustParse(DefaultCIDR)
-
-func mustParse(cidr string) Link {
-	l, err := Parse(cidr)
-	if err != nil {
-		panic("buildlink: invalid default " + cidr + ": " + err.Error())
-	}
-	return l
-}
+// defaultLink is DefaultCIDR parsed once; TestDefault fails if it does not
+// parse.
+var defaultLink, defaultErr = Parse(DefaultCIDR)
 
 // Default returns the default link, DefaultCIDR.
 func Default() Link { return defaultLink }

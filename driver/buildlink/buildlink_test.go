@@ -12,6 +12,9 @@ import (
 )
 
 func TestDefault(t *testing.T) {
+	if defaultErr != nil {
+		t.Fatalf("DefaultCIDR does not parse: %v", defaultErr)
+	}
 	l := Default()
 	if l.Net.String() != DefaultCIDR || l.Relay.String() != "100.127.255.253" ||
 		l.Guest.String() != "100.127.255.254" {

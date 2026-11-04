@@ -23,7 +23,7 @@ func NewVirtualNetwork(link buildlink.Link) (*VirtualNetwork, error) {
 	return &VirtualNetwork{
 		BuildSocketFD: fds[0],
 		RelaySocketFD: fds[1],
-		Subnet: subnetOf(link),
+		Subnet:        subnetOf(link),
 	}, nil
 }
 

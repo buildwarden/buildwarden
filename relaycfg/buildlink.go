@@ -20,7 +20,7 @@ type BuildLink struct {
 	Guest string `json:"guest"`
 }
 
-// ErrRefused, wrapped by a Serve start callback's error, marks a claim the
+// ErrRefused is the error a Serve start callback wraps to mark a claim the
 // relay refuses for what it asks (a build link the relay cannot apply, a field
 // its mode does not take). Serve answers it with 400 and leaves the relay
 // claimable, as it does a malformed claim, instead of consuming the claim.
