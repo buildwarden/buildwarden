@@ -10,7 +10,10 @@
  * by the orchestrator process. vmnet provides the carrier signaling that
  * macOS guests require to bring up their virtio-net interface.
  *
- * Usage: warden-vmnet --fd=N [--subnet=10.0.0.0/30]
+ * Usage: warden-vmnet --fd=N --subnet=A.B.C.D/M
+ *
+ * --subnet is required: the helper bakes no default link (nothing calls it
+ * today; a caller passes the build link it chose).
  *
  * The helper writes "ready\n" to stdout once the vmnet interface is up,
  * then bridges frames until the socketpair is closed or SIGTERM is received.
@@ -38,13 +41,13 @@ static void handle_signal(int sig) {
 }
 
 static void usage(void) {
-    fprintf(stderr, "Usage: warden-vmnet --fd=N [--subnet=A.B.C.D/M]\n");
+    fprintf(stderr, "Usage: warden-vmnet --fd=N --subnet=A.B.C.D/M\n");
     exit(1);
 }
 
 int main(int argc, char **argv) {
     int sock_fd = -1;
-    const char *subnet_str = "10.0.0.0/30";
+    const char *subnet_str = NULL;
 
     for (int i = 1; i < argc; i++) {
         if (strncmp(argv[i], "--fd=", 5) == 0) {
@@ -60,13 +63,17 @@ int main(int argc, char **argv) {
         fprintf(stderr, "error: --fd is required\n");
         usage();
     }
+    if (subnet_str == NULL) {
+        fprintf(stderr, "error: --subnet is required\n");
+        usage();
+    }
 
     /* Parse subnet: extract gateway IP and mask */
     char subnet_copy[64];
     strncpy(subnet_copy, subnet_str, sizeof(subnet_copy) - 1);
     char *slash = strchr(subnet_copy, '/');
     if (!slash) {
-        fprintf(stderr, "error: subnet must be CIDR (e.g., 10.0.0.0/30)\n");
+        fprintf(stderr, "error: subnet must be CIDR (e.g., 192.0.2.0/30)\n");
         return 1;
     }
     *slash = '\0';

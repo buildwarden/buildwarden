@@ -62,9 +62,9 @@ func TestSplitCIDR(t *testing.T) {
 		wantIP     string
 		wantPrefix string
 	}{
-		{"10.0.0.2/30", "10.0.0.2", "30"},
+		{"192.0.2.2/30", "192.0.2.2", "30"},
 		{"192.168.1.5/24", "192.168.1.5", "24"},
-		{"10.0.0.2", "10.0.0.2", "24"}, // bare address defaults to /24
+		{"192.0.2.2", "192.0.2.2", "24"}, // bare address defaults to /24
 	}
 	for _, c := range cases {
 		ip, prefix := splitCIDR(c.in)
