@@ -18,7 +18,9 @@ const (
 	// DefaultSlots is how many `warden setup --driver firecracker` makes.
 	DefaultSlots = 16
 
-	upstreamNet = "100.64.88.0/22"
+	// UpstreamCIDR holds every slot's relay upstream /30.
+	UpstreamCIDR = "100.64.88.0/22"
+	upstreamNet  = UpstreamCIDR
 	// The chains setup owns. It flushes and refills only these, so it never
 	// touches another rule on the host.
 	chainIn   = "WARDEN-FC-IN"

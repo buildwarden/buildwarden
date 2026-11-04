@@ -20,6 +20,10 @@ import (
 	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
+// UserNetCIDR is qemu's built-in user-mode (slirp) network, the relay VM's
+// upstream: qemu's default, which the driver does not override.
+const UserNetCIDR = "10.0.2.0/24"
+
 // Driver implements driver.Driver using QEMU as the virtualization backend.
 // Works on all host platforms (macOS, Linux, Windows) with optional hardware
 // acceleration (HVF on macOS, KVM on Linux, WHPX on Windows).
