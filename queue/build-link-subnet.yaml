@@ -248,3 +248,6 @@ history:
   - at: 2026-11-04T11:38:19Z
     by: cloud/20261104T105656Z
     event: done f2-plan-r2
+  - at: 2026-11-04T16:20:00Z
+    by: human/jeff
+    event: 'design review r2 paused, incomplete (workflow-human): Jeff is concerned about rebuilds and cache invalidation; first an overview of the existing network setup (host, relay, baked vs configurable, per driver). No assumption answered; f2-design-review-r2 stays pending'
