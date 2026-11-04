@@ -17,6 +17,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httputil"
+	"net/netip"
 	"os"
 	"strings"
 	"sync"
@@ -53,9 +54,13 @@ type Config struct {
 	// Required for host-mode relay; container/VM modes rely on iptables/hypervisor.
 	SSRF bool
 
-	// BlockedSelfIP is set to the relay's virtual gateway IP in FD mode.
-	// Prevents the upstream transport from connecting back to ourselves.
-	BlockedSelfIP net.IP
+	// BuildLink, when valid, is the segment the relay serves the build on.
+	// The upstream dialer refuses every address inside it, whether or not
+	// SSRF is on, so the relay never dials back into the build segment (its
+	// own address included) and records the result as an upstream input;
+	// upstream DNS detection skips a nameserver inside it. Container mode
+	// leaves it unset.
+	BuildLink netip.Prefix
 
 	// UpstreamCACerts are additional PEM-encoded CA certificates trusted
 	// when making outbound TLS connections to upstream servers.
@@ -102,9 +107,8 @@ type Relay struct {
 	certCache   map[string]*tls.Certificate
 	certCacheMu sync.RWMutex
 
-	selfIP        net.IP
-	blockedSelfIP net.IP
-	upstreamDNS   string
+	selfIP      net.IP
+	upstreamDNS string
 
 	transport *http.Transport
 
@@ -190,10 +194,6 @@ func Start(cfg Config) (*Relay, error) {
 		if err := r.detectSelfIP(); err != nil {
 			return nil, fmt.Errorf("detecting self IP: %w", err)
 		}
-	}
-
-	if cfg.BlockedSelfIP != nil {
-		r.blockedSelfIP = cfg.BlockedSelfIP
 	}
 
 	// Detect or use provided upstream DNS
@@ -379,17 +379,30 @@ func (r *Relay) detectUpstreamDNS() {
 		r.upstreamDNS = "8.8.8.8:53"
 		return
 	}
-	for _, line := range strings.Split(string(data), "\n") {
+	r.upstreamDNS = pickNameserver(string(data), r.selfIP, r.cfg.BuildLink)
+}
+
+// pickNameserver returns the first resolv.conf nameserver the relay can use
+// upstream, as host:53, or 8.8.8.8:53 when there is none. It skips the
+// relay's own address, 127.0.0.1, and anything inside the build link, which
+// the relay's connected route would send to the build environment.
+func pickNameserver(resolvConf string, self net.IP, link netip.Prefix) string {
+	for _, line := range strings.Split(resolvConf, "\n") {
 		fields := strings.Fields(line)
-		if len(fields) >= 2 && fields[0] == "nameserver" {
-			ns := fields[1]
-			if ns != r.selfIP.String() && ns != "127.0.0.1" {
-				r.upstreamDNS = ns + ":53"
-				return
-			}
+		if len(fields) < 2 || fields[0] != "nameserver" {
+			continue
 		}
+		ns := fields[1]
+		if ns == self.String() || ns == "127.0.0.1" {
+			continue
+		}
+		if a, err := netip.ParseAddr(ns); err == nil && link.IsValid() &&
+			link.Contains(a.Unmap()) {
+			continue
+		}
+		return net.JoinHostPort(ns, "53")
 	}
-	r.upstreamDNS = "8.8.8.8:53"
+	return "8.8.8.8:53"
 }
 
 // environmentLabel returns the header's unsigned environment label: the type
