@@ -34,19 +34,27 @@ Same as `workflow-tick` step 1 (the FLOW-18 check, build `dist/wf`, check out
 3. **Design reviews** (`*-design-review` steps, FLOW-19), highest priority
    first, one feature per sitting. Check out the feature branch and read the
    design, its Implementation plan, and, for a re-review, the design at the
-   last `approved at <sha>` and the finding that sent it back. Then walk Jeff
-   through it, in this order, and let him steer:
+   last `approved at <sha>` and the finding that sent it back. Put the design
+   in front of Jeff before the walkthrough (FLOW-19). If it has more than 4
+   assumed questions, publish it as read as a private artifact page (the
+   Artifact tool), with the commit SHA in its subtitle, give him the link, and
+   republish if he changes the design during the sitting. Otherwise, or if
+   publishing is not available, paste its Questions section in full with a
+   short summary of the Decisions they rest on. Then walk Jeff through it, in
+   this order, and let him steer:
    1. **Overview.** The problem, then what changes and how at component level:
       the components, seams and flows touched, before and after, and the
-      `overview.md` pseudocode change where a flow changes. Render it as an
-      artifact page when a diagram makes it clearer; the review itself stays
-      in this session.
+      `overview.md` pseudocode change where a flow changes. Where a diagram
+      makes it clearer, add it to the design's page (publishing one if there
+      is none); the review itself stays in this session.
    2. **The plan against the design.** The task sequence and what each task
       touches; say plainly where they disagree or leave a gap.
    3. **Risks and what is deferred:** native validation, `tier2_gaps`, rules
       changed, a Bootstrap comparison or Security note to accept.
-   4. **Assumptions**, each confirmed with `dist/wf answer`, or turned into a
-      change.
+   4. **Assumptions**, one per AskUserQuestion entry (FLOW-07): the question
+      in full, each option with its consequence, the recommendation first,
+      and the decision it rests on. Record each answer with `dist/wf answer`,
+      or turn it into a change.
    5. **Outcome.** Approved: add an entry to the design's Design review
       section (date, outcome, decisions, `approved at <sha>` of the design as
       read, and for a re-review what changed), commit and push the branch,
