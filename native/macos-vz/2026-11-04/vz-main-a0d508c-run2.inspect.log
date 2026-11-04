@@ -1,0 +1,20 @@
+════════════════════════════════════════════════════════════════════════════════
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  ✅
+  ENVIRONMENT  vm-disk-chain/v1  payload verified
+    vz macos/arm64
+    disk     disk.img  64.0 GB  sha256:f8f10e9b3dca  local  [ok]
+    nvram    aux-storage  32.0 MB  sha256:591c846e1c02  local  [ok]
+    platform hardware-model  132 B  sha256:976e66740c64  local  [ok]
+    platform machine-id  68 B  sha256:a00e1bdf4ac6  local  [ok]
+    seed     1 per-build files
+════════════════════════════════════════════════════════════════════════════════
+[1;35m✅ ENVIRONMENT  (1148 bytes)[0m
+[1;32m✅ GET /build-script (246 bytes)[0m
+✅ GET https://example.com/ (577 bytes)
+✅ GET http://1.1.1.1:8080/ (167 bytes)
+
+════════════════════════════════════════════════════════════════════════════════
+  SUMMARY: 12 records, 4 requests, 2.8 KB audited
+  SIGNATURES: ✅ All 13 signatures valid
+  COMPLETENESS: ✅ All channels closed
+════════════════════════════════════════════════════════════════════════════════

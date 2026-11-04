@@ -1,0 +1,7 @@
+ProductName:		macOS
+ProductVersion:		27.0.1
+BuildVersion:		26A434
+arm64
+200 577
+Connection to 1.1.1.1 port 8080 [tcp/http-alt] succeeded!
+direct egress CONNECTED

@@ -41,6 +41,10 @@ gaps:
       in to the guest to read C:\warden\warden-run.log. Not checked: grace
       from the prepare and the rearm count (need eval media; this ISO is
       retail), and a refresh without reinstall. Logs: native/macos-qemu/2026-10-31/.
+      2026-11-04 (host:macos-qemu/20261104T124004Z, unattended, main a0d508c): not run. Nothing
+      in driver/qemu or driver/winguest since cc6119e addresses the silent guest or adds a qemu
+      build-VM exit watch (only #73, already tested, and the firecracker refactor), so a rerun
+      would hang to its timeout the same way. Waits on a fix item for the qemu Windows build guest.
     status: open
   - id: qemu-linux-exclusive-trust
     host: macos-qemu
@@ -165,6 +169,9 @@ gaps:
       2026-10-31 attended: a base freshly re-prepared from the ISO (with PR
       #73) fails the same way, so the Windows half waits on a fix to the
       qemu Windows build guest, not just on re-preparing.
+      2026-11-04 (host:qemu-any/20261104T124004Z, unattended, main a0d508c): Linux half re-passed
+      (see firecracker-qemu-linuxguest); Windows half not rerun, for the reason under
+      qemu-windows-guest-package.
     status: open
   - id: hyperv-eval-image-verify-disks
     host: windows-hyperv
@@ -263,7 +270,19 @@ gaps:
     what: A qemu Linux guest build after the firecracker-driver feature moves the cloud-init seed, ISO writer and cloud-image code to driver/linuxguest and the relay asset lookup, relay initrd and cpio append to driver/relayvm, and gives tools/relay-vm/build-initramfs.sh an ARCH parameter (default aarch64, output unchanged).
     design: docs/design/firecracker-driver.md
     note: Tracked (FLOW-09) regression check; test feat/firecracker-driver once it carries the extraction.
-    status: open
+    status: done
+    done: 2026-11-04
+    evidence: >-
+      host:qemu-any/20261104T124004Z, unattended, macbook, main a0d508c (the firecracker-driver
+      merge 1ef5547 plus later docs and tools/workflow only), QEMU 11.1.1 (Homebrew), relay
+      initramfs rebuilt from main with `make relay-vm` (default ARCH, aarch64, 4.7M). `warden build
+      --driver qemu --image alpine_3_21.qcow2` of a build.sh (`apk add --no-cache jq`, jq --version,
+      an HTTPS wget of the main APKINDEX): SUCCEEDED, jq-1.7.1, 488079 bytes. `inspect
+      --verify-disks`: vm-disk-chain/v1 payload verified, qemu linux/arm64, disk sha256:ebaef97d702d
+      `local` [ok], 5 seed files, 27 signatures valid, all channels closed. `go test` of driver/qemu,
+      driver/linuxguest, driver/relayvm and cmd/warden ok on darwin/arm64. No waiting branch
+      touches driver/ or tools/relay-vm (build-link-subnet is design-only; http-body-path-drift
+      changes relay/ only). Logs: native/qemu-any/2026-11-04/.
   - id: firecracker-hyperv-cli-wiring
     host: windows-hyperv
     what: A Hyper-V build after the firecracker-driver feature's cmd/warden driver wiring and new shared driver/ packages (the relay init and Hyper-V boot disk are not touched).
@@ -295,7 +314,22 @@ gaps:
     what: A VZ build after the firecracker-driver feature's cmd/warden driver wiring and new shared driver/ packages.
     design: docs/design/firecracker-driver.md
     note: Tracked (FLOW-09) regression check.
-    status: open
+    status: done
+    done: 2026-11-04
+    evidence: >-
+      host:macos-vz/20261104T124004Z, unattended, macbook, main a0d508c, macOS 27.0.1 (26A434)
+      host and guest, warden ad-hoc signed with the virtualization entitlement (`make build`).
+      `warden build --driver vz` of a build.sh (sw_vers, an HTTPS curl of example.com, an HTTP
+      curl to 1.1.1.1:8080): SUCCEEDED, guest arm64, both 200/301 responses through the relay.
+      `inspect --verify-disks`: vm-disk-chain/v1 payload verified, vz macos/arm64, disk.img 64.0 GB,
+      aux-storage, hardware-model and machine-id all [ok], 1 seed file, 13 signatures valid, all
+      channels closed; the ledger records GET https://example.com/ and GET http://1.1.1.1:8080/.
+      A first run's `nc -z 1.1.1.1 8080` reported "succeeded" with no ledger record: not a bypass.
+      Host mode's netstack completes every guest TCP handshake and hands ports other than 443/8300
+      to the relay's HTTP proxy (cmd/relay/mode_host.go), and nc -z sends no data. So on vz a bare
+      connect test cannot show blocked egress; run 2's recorded request is the evidence. `go test
+      ./driver/vz ./cmd/warden` ok. No waiting branch touches driver/ or cmd/. Logs:
+      native/macos-vz/2026-11-04/.
   - id: firecracker-distro-firewalld
     host: linux-kvm
     what: The firecracker-driver Validation plan's firewalld distro case. On a host running firewalld, `sudo warden setup --driver firecracker` refuses and gives the zone fix; after the fix is applied, setup and a build work.
@@ -365,4 +399,6 @@ gaps:
       and validated by qemu-any, and driver/winguest by windows-hyperv.
       qemu Windows builds already fail on main (qemu-windows-guest-package), so run this once that
       is fixed, on main after build-link-subnet merges or on its branch if still waiting.
+      2026-11-04 (host:macos-qemu/20261104T124004Z, unattended): not run; feat/build-link-subnet
+      is still design-only and qemu Windows builds still fail on main.
     status: open
