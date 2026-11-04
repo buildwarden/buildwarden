@@ -142,7 +142,13 @@ func verifyLedgerLanded(t *testing.T, out string) {
 	}
 }
 
-func TestRelayCollectorEndToEnd(t *testing.T) {
+// runEndToEndScenario drives one build through a relay wired to a real
+// collector: it fetches the build script, bootstrap config, a context file and
+// a listing, misses a context path, posts an artifact, heartbeats and exits,
+// then checks the artifact and ledger landed. It returns the collector output
+// directory, so callers can inspect the landed ledger.
+func runEndToEndScenario(t *testing.T) string {
+	t.Helper()
 	ctxDir := t.TempDir()
 	_ = os.MkdirAll(filepath.Join(ctxDir, "src"), 0o755)
 	_ = os.WriteFile(filepath.Join(ctxDir, "src", "main.c"), []byte("int main(){}"), 0o644)
@@ -175,6 +181,11 @@ func TestRelayCollectorEndToEnd(t *testing.T) {
 	}
 
 	verifyLedgerLanded(t, out)
+	return out
+}
+
+func TestRelayCollectorEndToEnd(t *testing.T) {
+	runEndToEndScenario(t)
 }
 
 func TestRelayCapturesToCollector(t *testing.T) {
