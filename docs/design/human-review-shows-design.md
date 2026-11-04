@@ -40,18 +40,26 @@ asked bare.
 
 ## Decisions
 
-1. **Publish the design for every review.** At the start of each design
-   review, publish the design as it is read (front-matter, Decisions,
-   Questions, Security note, Validation plan, Implementation plan) as a
-   private artifact page, and give Jeff the link before the walkthrough.
-   - **Rejected: inline only.** Pasting the Questions section into the chat
-     works for a short design. It does not scale to build-link-subnet's ten
+1. **Put the design in front of Jeff for every review, by size.** At the
+   start of each design review:
+   - **More than 4 assumed questions:** publish the design as it is read
+     (front-matter, Decisions, Questions, Security note, Validation plan,
+     Implementation plan) as a private artifact page, and give Jeff the link
+     before the walkthrough.
+   - **4 or fewer:** paste the design's Questions section in full into the
+     chat, with a short summary of the Decisions they rest on.
+
+   Four is what one AskUserQuestion call holds with its context inline
+   (Jeff, review r1).
+   - **Rejected: a page for every review.** It costs a publish for small
+     designs that fit in the chat.
+   - **Rejected: inline only.** It does not scale to build-link-subnet's ten
      assumptions and 39 tasks, and it leaves no page to come back to.
    - **Rejected: link to the file on GitHub.** That needs Jeff to be on a
      machine with a browser and repo access, and it shows raw Markdown, not
      the rendered decisions next to their questions.
    - **Fallback:** if publishing is not available, put the full Questions
-     section inline in the chat before asking.
+     section inline in the chat before asking, whatever its size.
 2. **Quote each assumption when asking it.** Each AskUserQuestion for an
    assumption carries:
    - the question in full, not an ID;
@@ -74,12 +82,12 @@ None.
 
 ### Assumed
 
-- **a1:** publish an artifact page for every design review, falling back to
-  the inline Questions section. Options: (a) page for every review
-  (recommended); (b) inline Questions section only; (c) page only when the
-  design has more than N assumptions.
-- **a2:** the change is to `.claude/skills/workflow-human/SKILL.md` step 3
-  only. No rule in `docs/development/` changes. Options: (a) skill only
+- **a1: answered (c), by Jeff in r1.** Publish a page above a threshold of
+  more than 4 assumptions, and inline at or below it. Options were: (a) a
+  page for every review (recommended at the time); (b) the inline Questions
+  section only; (c) a page above a threshold.
+- **a2: confirmed (a), by Jeff in r1.** The change is to
+  `.claude/skills/workflow-human/SKILL.md` step 3 only. No rule in `docs/development/` changes. Options: (a) skill only
   (recommended, since FLOW-19 already requires a real review); (b) also add a
   sentence to FLOW-19 that the reviewer must have the design in front of
   them.
@@ -88,12 +96,13 @@ None.
 
 `.claude/skills/workflow-human/SKILL.md`, step 3 (Design reviews):
 
-- After "read the design, its Implementation plan, and ...", add: "Publish
-  the design as read as a private artifact page (the Artifact tool), with the
-  commit SHA in its subtitle, and give Jeff the link before the walkthrough.
-  Republish it if he changes the design during the sitting. If publishing is
-  not available, paste the design's Questions section in full before asking
-  any."
+- After "read the design, its Implementation plan, and ...", add: "Put the
+  design in front of Jeff before the walkthrough. If it has more than 4
+  assumed questions, publish it as read as a private artifact page (the
+  Artifact tool), with the commit SHA in its subtitle, give him the link, and
+  republish if he changes the design during the sitting. Otherwise, or if
+  publishing is not available, paste its Questions section in full with a
+  short summary of the Decisions they rest on."
 - In 3.1, the existing "render it as an artifact page when a diagram makes it
   clearer" becomes part of that page.
 - Replace 3.4 with: "**Assumptions**, one per AskUserQuestion entry: the
@@ -119,6 +128,14 @@ None. No driver or product code changes.
 2. Archive this design with its summary and open the PR (FLOW-12, FLOW-08).
 
 ## Design review
+
+- **2026-11-04, r1: approved** (workflow-human, Jeff), approved at 87466b4,
+  with one change folded in.
+  - a1 answered (c): a page only above more than 4 assumptions, the inline
+    Questions section otherwise. Decision 1 and Design were updated to match.
+  - a2 confirmed (a): skill only, no FLOW-19 change.
+  - This review was itself held inline: 2 assumptions, below the new
+    threshold.
 
 ## Consolidation
 
