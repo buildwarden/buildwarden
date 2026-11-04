@@ -41,10 +41,10 @@ steps:
   - id: f2-plan-r2
     phase: 2
     affinity: cloud
-    status: pending
+    status: done
     lease:
-      claimed_by: cloud/20261104T105656Z
-      expires: 2026-11-04T13:32:38.885845642Z
+      claimed_by: ""
+      expires: null
   - id: f2-design-review-r2
     phase: 2
     affinity: human
@@ -54,6 +54,46 @@ steps:
     lease:
       claimed_by: ""
       expires: null
+  - id: f6-validate-linux-kvm
+    phase: 6
+    affinity: host:linux-kvm
+    status: pending
+    needs:
+      - f2-design-review-r2
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan (plan task 38): the four cases on the default link and on 100.126.255.252/30 (pre-change assets refused; after the named rebuild a build succeeds and its ledger verifies; a non-default link reported by doctor and built; an overlapping --build-link refused at startup). Reaches driver/firecracker (boot args, resolver exclusion against the resolved link), tools/firecracker-vm/init and the x86_64 relay init; plus a direct-boot and a disk build, a host resolver inside the configured link excluded with the fix, and the guest-sourced canary drop (TEST-08). Added by f2-plan-r2 needing only f2-design-review-r2; add f3-implement to its needs once Implement is seeded, and f6-open-pr must need this step once phase 6 is seeded.'
+  - id: f6-validate-qemu-any
+    phase: 6
+    affinity: host:qemu-any
+    status: pending
+    needs:
+      - f2-design-review-r2
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan (plan task 38): the four cases on the default link and on 100.126.255.252/30 (pre-change assets refused; after the named rebuild a build succeeds and its ledger verifies; a non-default link reported by doctor and built; an overlapping --build-link refused at startup). Reaches driver/qemu (relay and direct-boot command lines, asset record check), tools/build-vm/init, the aarch64 relay init and the linuxguest seed; plus a direct-boot and a cloud-image Linux build. Added by f2-plan-r2 needing only f2-design-review-r2; add f3-implement to its needs once Implement is seeded, and f6-open-pr must need this step once phase 6 is seeded.'
+  - id: f6-validate-macos-vz
+    phase: 6
+    affinity: host:macos-vz
+    status: pending
+    needs:
+      - f2-design-review-r2
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan (plan task 38): the four cases on the default link and on 100.126.255.252/30 (pre-change assets refused; after the named rebuild a build succeeds and its ledger verifies; a non-default link reported by doctor and built; an overlapping --build-link refused at startup). Reaches driver/vz (network, warden-boot baked at prepare, image record check) and the relay/ host-mode subnet block; plus the subnet block on the configured link. Added by f2-plan-r2 needing only f2-design-review-r2; add f3-implement to its needs once Implement is seeded, and f6-open-pr must need this step once phase 6 is seeded.'
+  - id: f6-validate-windows-hyperv
+    phase: 6
+    affinity: host:windows-hyperv
+    status: pending
+    needs:
+      - f2-design-review-r2
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan (plan task 38): the four cases on the default link and on 100.126.255.252/30 (pre-change assets refused; after the named rebuild a build succeeds and its ledger verifies; a non-default link reported by doctor and built; an overlapping --build-link refused at startup). Reaches driver/hyperv (relay-boot VHDX record, NAT-prefix overlap refusal), refresh-cache.sh --link and driver/winguest; plus a Windows guest build and the --nat-prefix overlap refusal. Added by f2-plan-r2 needing only f2-design-review-r2; add f3-implement to its needs once Implement is seeded, and f6-open-pr must need this step once phase 6 is seeded.'
 budget:
   estimate:
     runs: 5
@@ -205,3 +245,6 @@ history:
   - at: 2026-11-04T11:32:38Z
     by: cloud/20261104T105656Z
     event: claimed f2-plan-r2 until 2026-11-04T13:32:38Z
+  - at: 2026-11-04T11:38:19Z
+    by: cloud/20261104T105656Z
+    event: done f2-plan-r2
