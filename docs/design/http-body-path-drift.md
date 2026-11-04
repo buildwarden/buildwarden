@@ -1,6 +1,6 @@
 ---
 feature: http-body-path-drift
-status: draft
+status: archived
 drivers: [container, qemu, vz, hyperv, firecracker]  # relay/ is shared (FLOW-02, TEST-02 caveat); no driver tree changes
 seams: [ledger-format]                  # the metadata bytes the relay writes into ledgers change; the v1 contract does not
 surfaces: []
@@ -425,4 +425,43 @@ None.
 
 ## Archive summary
 
-Filled in at Publish (FLOW-12).
+Built 2026-11-03 by the unattended loop, approved at design review r1
+(2026-11-02), reviewed twice by tier 2 (ad39ceb99938: 1 MUST, fixed;
+05d49e8c30f7: 0 MUST, 2 optional SHOULD), published 2026-11-04.
+
+- **Built.** `relay/relay.go` `recordServed` closes every relay-served input
+  (build script, bootstrap config, build-context file) with `{"status": 200}`
+  under `metadata-http-body/v1` instead of `{"path": ...}`; its three callers
+  drop the argument. Served bytes, the `OPEN` record, hash block, record order
+  and the header's `schemas` list are unchanged. `specs/metadata-http-body/v1.md`
+  gains a "Known producer deviation" note: relays v0.2.0 through v0.6.0 wrote
+  `path` on build-context-file closes, and v0.6.0 also on build-script and
+  bootstrap closes; readers ignore it. `v1.schema.json` is unchanged, so the
+  two prose-only commits (`ad39ceb`, superseded, and `72af1e1`) each carry a
+  `Tier1-Allow: RELAY-05` trailer. `relay/ledger_conformance_test.go` runs the
+  shared end-to-end collector scenario (factored out of
+  `TestRelayCollectorEndToEnd`) and checks every record's top-level metadata
+  keys against its schema's `properties` where `additionalProperties` is
+  `false`, plus exact `{"status": 200}` on the three served-input closes.
+- **Decisions taken:** fix the producer, not the schema (a1); document the
+  old releases' deviation in the schema's own document (a2); a shallow key
+  check with no JSON Schema dependency (a3); `seams: [ledger-format]` with
+  `alters_relationships: false`, since the contract does not change.
+- **Rejected:** `{}` (reserved for request bodies); schema v2 admitting `path`
+  (changes a versioned seam for a redundant field and cannot fix ledgers
+  already written); widening v1 in place (RELAY-05); a note in the ledger spec
+  or release notes only; full JSON Schema validation with a new dependency.
+- **Corrected premise.** a1 and a2 were confirmed believing only v0.6.0 wrote
+  `path`; review ad39ceb99938 found v0.2.0 through v0.6.0 did. The design and
+  note were corrected and the choice stands (see Design review).
+- **Open, optional (SHOULD):** TEST-05, the conformance test covers only the
+  producers the scenario reaches (not the request-body checkpoint, upstream
+  closes, redacted or environment metadata); TEST-07, the end-to-end scenario
+  now runs twice per `make test`.
+- **For future designs touching `ledger`, `metadata-schema`, `http-body`,
+  `relay-served-inputs`, `schema-conformance` or `specs`:** every metadata
+  producer must conform to the schema its header index names, and the
+  conformance test is the guard; extend its scenario when adding a producer.
+  Ledgers from v0.2.0 through v0.6.0 carry the extra `path` key, so a strict
+  validator of old ledgers must tolerate it. A prose-only edit to one half of
+  a schema pair goes in its own commit with a `Tier1-Allow` trailer.
