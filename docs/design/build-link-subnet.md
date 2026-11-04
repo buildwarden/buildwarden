@@ -1883,6 +1883,32 @@ plan takes the reading below; the review confirms it or sends the design back:
   - *FLOW-06:* this is the second return to Design. A third would escalate to
     a `human` step.
 
+- **r3, 2026-11-04: approved at `c19e8f0`** (Jeff, workflow-human, FLOW-19
+  test-drive). Jeff reviewed the design before the plan, as a trial of a
+  FLOW-19 change: review the design first, and hold a second review only if
+  planning afterwards finds the design must change. Plan r3 was written in
+  parallel (`c21ba2a`), then folded in the a14 answer (`c227ad0`) and found
+  no design change, so there is no second review. The design was published
+  as a review page at `c19e8f0`.
+  - **Confirmed as stated (a):** a11 (the claim's `build_link` on `/v1`),
+    a12 (netlink with a flush), a13 (host mode from the claim, `--subnet` as
+    fallback), a15 (the launcher stamp), a16 (the link block in vm and host
+    modes), a17 (container out of scope), a19 (seams `[relay-claim,
+    relay-guest-api, bootstrap-model]`, `alters_relationships: true`; the
+    vm-mode responder falls under `relay-guest-api`), a20 (`--build-link` on
+    `build`, `shell` and `doctor` only).
+  - **a18 (a):** Hyper-V's fixed relay address, missing token, ignored
+    `--nat-prefix` and `8.8.8.8` go to the follow-up
+    `hyperv-relay-per-build-channel`.
+  - **a14 (d), amending Decision 5:** as stated, plus DHCP for the
+    direct-boot inits from a new vm-mode DHCP responder in the relay, bound
+    to its build interface and answering from the claim. Folded into the plan
+    rather than sent back: plan tasks 14 to 16 (the shared DHCP core and the
+    vm responder) and 36 to 38 (the inits). Plan r3 chose DHCP first, with the
+    kernel command-line keys as a cross-check and fallback. Task 56 brings
+    Decision 5 and the other text the answer left out of date in line at
+    Consolidation.
+
 ## Consolidation
 
 Filled in at Publish (FLOW-10, FLOW-15).
