@@ -50,15 +50,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261104T214530Z-attended
+      expires: 2026-11-04T23:45:30.651469498Z
 budget:
   estimate:
     runs: 5
     steps: 60
   spent:
-    runs: 2
-    steps: 5
+    runs: 3
+    steps: 6
 questions:
   - id: a1
     kind: assumed
@@ -247,3 +247,6 @@ history:
   - at: 2026-11-04T17:30:00Z
     by: human/jeff
     event: 'step estimate raised 30 -> 60 (Jeff): the r2 change (link delivered in the relay claim) is driven by his own decisions, and the old estimate no longer fits'
+  - at: 2026-11-04T21:45:30Z
+    by: cloud/20261104T214530Z-attended
+    event: claimed f1-design-r3 until 2026-11-04T23:45:30Z
