@@ -12,8 +12,8 @@
 # Beside it goes relay-boot.link-channel, the stamp warden checks before a
 # build: this disk's relay addresses its build interface from the claim. Both
 # move to .prev with the disk. The disk is current only when both stamps are:
-# a disk whose link stamp is missing or different (lost, or copied without
-# it) is rebuilt, since warden refuses it and names this script.
+# a disk whose link-channel stamp is missing or different (lost, or copied
+# without it) is rebuilt, since warden refuses it and names this script.
 # Building needs a WSL distro (WARDEN_WSL_DISTRO, default Ubuntu) with mtools,
 # gdisk, qemu-utils and systemd-boot-efi; the Alpine inputs are fetched on the
 # host by fetch-cache.ps1, since that WSL build runs offline.
@@ -50,7 +50,7 @@ if [ "$mode" != --force ] && [ -f "$disk" ] && [ "$have" = "$src" ] && [ "${src%
 fi
 if [ "$mode" = --check ]; then
 	echo "relay boot VHDX in $cache is stale: built from '${have:-unknown}', relay source is ${src:0:12}," \
-		"link stamp '${link:-missing}' (want $channel)"
+		"link-channel stamp '${link:-missing}' (want $channel)"
 	echo "  fix: tools/relay-vm/hyperv/refresh-cache.sh"
 	exit 1
 fi

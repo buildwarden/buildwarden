@@ -156,7 +156,8 @@ before anything boots:
     refuse a build link that holds a host interface address
     check the launcher's link-channel stamp: the qemu or firecracker direct-boot
     initramfs, the hyperv relay boot VHDX, the vz prepared image; missing or old
-    -> a fix naming its one-time rebuild
+    -> a fix naming its one-time rebuild (a vz --image disk outside the image
+    cache, which cannot be re-prepared in place: omit --image)
 
 start the relay VM (or, on VZ, a host relay process); claim it with the build link
     firecracker: resolvers for the relay are the host's, minus loopback, host
