@@ -3,7 +3,7 @@ title: Move every VM driver's relay-to-build link off 10.0.0.0/30
 priority: 18
 status: in_progress
 round: feature
-phase: 3
+phase: 4
 design: docs/design/build-link-subnet.md
 branch: feat/build-link-subnet
 alters_relationships: true
@@ -85,10 +85,10 @@ steps:
   - id: f3-implement-r2
     phase: 3
     affinity: cloud
-    status: pending
+    status: done
     lease:
-      claimed_by: cloud/20261104T214530Z-attended
-      expires: 2026-11-05T02:12:12.458249768Z
+      claimed_by: ""
+      expires: null
   - id: f6-validate-linux-kvm
     phase: 6
     affinity: host:linux-kvm
@@ -137,6 +137,13 @@ steps:
       claimed_by: ""
       expires: null
     note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan (plan r3 task 53): the four cases on the default link and on 100.126.255.252/30 (pre-change assets refused with the one-time command; after it, a default-link build whose ledger verifies, the guest at 100.127.255.254; the configured link reported by doctor and built with no rebuild, refresh or re-prepare; an overlapping --build-link refused at startup). Reaches driver/hyperv (claim carries the link, relay-boot.link-channel stamp, --nat-prefix overlap refusal at setup), the relay boot VHDX refreshed once with refresh-cache.sh, the vm-mode relay''s build-interface setup on hv_netvsc, and driver/winguest: a Windows guest build; an old VHDX refused by the stamp; with the stamp forged, the claim''s unknown-field refusal mapped to the same fix; the --nat-prefix overlap refusal. vm-mode DHCP (a14 (d)): the relay''s responder live on hv_netvsc; the Windows guest''s address and route equal the seed''s whether or not it took a lease first (ipconfig /all in the run log); a DHCP DISCOVER from a second VM on the NAT switch gets no offer from the relay (TEST-08). Added by f2-plan-r3 needing only f2-design-review-r3; add f3-implement to its needs once Implement is seeded, and f6-open-pr must need this step once phase 6 is seeded.'
+  - id: f4-review-r2
+    phase: 4
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 12
@@ -514,3 +521,9 @@ history:
   - at: 2026-11-05T00:12:12Z
     by: cloud/20261104T214530Z-attended
     event: claimed f3-implement-r2 until 2026-11-05T02:12:12Z
+  - at: 2026-11-05T00:19:28Z
+    by: cloud/20261104T214530Z-attended
+    event: done f3-implement-r2
+  - at: 2026-11-05T00:19:28Z
+    by: cloud/20261104T214530Z-attended
+    event: entered phase 4 (review)
