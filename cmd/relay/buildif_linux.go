@@ -4,6 +4,7 @@ package main
 
 import (
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -58,6 +59,13 @@ func dumpAddrs() ([]ifAddr, error) {
 	if err != nil {
 		return nil, fmt.Errorf("RTM_GETADDR: %w", err)
 	}
+	return parseAddrs(rib)
+}
+
+// parseAddrs reads the IPv4 addresses from an RTM_GETADDR dump. An address
+// takes IFA_LOCAL when present (a point-to-point peer puts the peer in
+// IFA_ADDRESS), else IFA_ADDRESS.
+func parseAddrs(rib []byte) ([]ifAddr, error) {
 	msgs, err := syscall.ParseNetlinkMessage(rib)
 	if err != nil {
 		return nil, err
@@ -124,23 +132,33 @@ func (n *netlinkIface) Others() (addrs, routes []netip.Prefix, err error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("RTM_GETROUTE: %w", err)
 	}
-	msgs, err := syscall.ParseNetlinkMessage(rib)
-	if err != nil {
+	if routes, err = parseRoutes(rib, n.index); err != nil {
 		return nil, nil, err
 	}
+	return addrs, routes, nil
+}
+
+// parseRoutes reads the IPv4 route destinations from an RTM_GETROUTE dump,
+// leaving out routes whose output interface is index.
+func parseRoutes(rib []byte, index int) ([]netip.Prefix, error) {
+	msgs, err := syscall.ParseNetlinkMessage(rib)
+	if err != nil {
+		return nil, err
+	}
+	var routes []netip.Prefix
 	for _, m := range msgs {
 		if m.Header.Type != unix.RTM_NEWROUTE || len(m.Data) < unix.SizeofRtMsg {
 			continue
 		}
 		dst, oif, err := parseRoute(&m)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
-		if oif != n.index && dst.Addr().Is4() {
+		if oif != index && dst.Addr().Is4() {
 			routes = append(routes, dst)
 		}
 	}
-	return addrs, routes, nil
+	return routes, nil
 }
 
 // parseRoute returns an RTM_NEWROUTE message's destination (0.0.0.0/0 for a
@@ -172,8 +190,17 @@ func (n *netlinkIface) Flush() error {
 	if err != nil {
 		return err
 	}
+	return flushAddrs(addrs, func(a netip.Prefix) error {
+		return n.addrRequest(unix.RTM_DELADDR, 0, a)
+	})
+}
+
+// flushAddrs removes each address with del. Removing a primary address also
+// removes its secondaries in the same subnet, so one that a later del finds
+// gone (EADDRNOTAVAIL) counts as removed.
+func flushAddrs(addrs []netip.Prefix, del func(netip.Prefix) error) error {
 	for _, a := range addrs {
-		if err := n.addrRequest(unix.RTM_DELADDR, 0, a); err != nil {
+		if err := del(a); err != nil && !errors.Is(err, unix.EADDRNOTAVAIL) {
 			return fmt.Errorf("removing %s: %w", a, err)
 		}
 	}
@@ -187,28 +214,7 @@ func (n *netlinkIface) Add(addr netip.Prefix) error {
 // addrRequest sends one RTM_NEWADDR or RTM_DELADDR for addr on the interface
 // and waits for the kernel's acknowledgement.
 func (n *netlinkIface) addrRequest(typ uint16, flags int, addr netip.Prefix) error {
-	ip := addr.Addr().As4()
-	attr := func(t uint16, v []byte) []byte {
-		b := make([]byte, unix.SizeofRtAttr+len(v))
-		binary.NativeEndian.PutUint16(b[0:2], uint16(len(b)))
-		binary.NativeEndian.PutUint16(b[2:4], t)
-		copy(b[unix.SizeofRtAttr:], v)
-		return b
-	}
-	body := make([]byte, unix.SizeofIfAddrmsg, unix.SizeofIfAddrmsg+2*(unix.SizeofRtAttr+4))
-	body[0] = unix.AF_INET
-	body[1] = byte(addr.Bits())
-	binary.NativeEndian.PutUint32(body[4:8], uint32(n.index))
-	body = append(body, attr(unix.IFA_LOCAL, ip[:])...)
-	body = append(body, attr(unix.IFA_ADDRESS, ip[:])...)
-
-	msg := make([]byte, unix.SizeofNlMsghdr, unix.SizeofNlMsghdr+len(body))
-	binary.NativeEndian.PutUint32(msg[0:4], uint32(unix.SizeofNlMsghdr+len(body)))
-	binary.NativeEndian.PutUint16(msg[4:6], typ)
-	binary.NativeEndian.PutUint16(msg[6:8], uint16(unix.NLM_F_REQUEST|unix.NLM_F_ACK|flags))
-	binary.NativeEndian.PutUint32(msg[8:12], 1)
-	msg = append(msg, body...)
-
+	msg := encodeAddrRequest(typ, flags, n.index, addr)
 	fd, err := unix.Socket(unix.AF_NETLINK, unix.SOCK_RAW|unix.SOCK_CLOEXEC,
 		unix.NETLINK_ROUTE)
 	if err != nil {
@@ -227,7 +233,40 @@ func (n *netlinkIface) addrRequest(typ uint16, flags int, addr netip.Prefix) err
 	if err != nil {
 		return err
 	}
-	msgs, err := syscall.ParseNetlinkMessage(buf[:nr])
+	return parseAck(buf[:nr])
+}
+
+// encodeAddrRequest builds one RTM_NEWADDR or RTM_DELADDR request, asking
+// for an acknowledgement, for addr on interface index: an nlmsghdr, an
+// ifaddrmsg and IFA_LOCAL and IFA_ADDRESS both holding the address.
+func encodeAddrRequest(typ uint16, flags, index int, addr netip.Prefix) []byte {
+	ip := addr.Addr().As4()
+	attr := func(t uint16, v []byte) []byte {
+		b := make([]byte, unix.SizeofRtAttr+len(v))
+		binary.NativeEndian.PutUint16(b[0:2], uint16(len(b)))
+		binary.NativeEndian.PutUint16(b[2:4], t)
+		copy(b[unix.SizeofRtAttr:], v)
+		return b
+	}
+	body := make([]byte, unix.SizeofIfAddrmsg, unix.SizeofIfAddrmsg+2*(unix.SizeofRtAttr+4))
+	body[0] = unix.AF_INET
+	body[1] = byte(addr.Bits())
+	binary.NativeEndian.PutUint32(body[4:8], uint32(index))
+	body = append(body, attr(unix.IFA_LOCAL, ip[:])...)
+	body = append(body, attr(unix.IFA_ADDRESS, ip[:])...)
+
+	msg := make([]byte, unix.SizeofNlMsghdr, unix.SizeofNlMsghdr+len(body))
+	binary.NativeEndian.PutUint32(msg[0:4], uint32(unix.SizeofNlMsghdr+len(body)))
+	binary.NativeEndian.PutUint16(msg[4:6], typ)
+	binary.NativeEndian.PutUint16(msg[6:8], uint16(unix.NLM_F_REQUEST|unix.NLM_F_ACK|flags))
+	binary.NativeEndian.PutUint32(msg[8:12], 1)
+	return append(msg, body...)
+}
+
+// parseAck reads the kernel's reply to one request: nil for an
+// acknowledgement, the errno for an NLMSG_ERROR that carries one.
+func parseAck(buf []byte) error {
+	msgs, err := syscall.ParseNetlinkMessage(buf)
 	if err != nil {
 		return err
 	}
