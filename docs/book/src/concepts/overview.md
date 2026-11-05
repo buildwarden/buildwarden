@@ -160,7 +160,8 @@ before anything boots:
 
 start the relay VM (or, on VZ, a host relay process); claim it with the build link
     firecracker: resolvers for the relay are the host's, minus loopback, host
-                 addresses and any inside the build link first take a free network slot made by `warden setup` (a host
+                 addresses and any inside the build link
+    firecracker: first take a free network slot made by `warden setup` (a host
                  lock), kill VMMs a dead warden left on it, and claim the relay
                  at the slot's upstream address
     hyperv setup: refuse a --nat-prefix that overlaps the build link
