@@ -454,7 +454,8 @@ func checkLink(diskImage string, req *driver.BuildRequest) error {
 // address and must be re-prepared once (in place, no IPSW restore).
 func imageStamp(imgDir string) driver.LauncherStamp {
 	return driver.LauncherStamp{What: "vz prepared macOS image (warden-boot)",
-		Path: filepath.Join(imgDir, linkStampName), Rebuild: PrepareCommand}
+		Path: filepath.Join(imgDir, linkStampName), Rebuild: PrepareCommand,
+		Required: true}
 }
 
 // LauncherStamps lists the vz assets with a link-channel stamp: the prepared
@@ -467,7 +468,7 @@ func LauncherStamps() []driver.LauncherStamp {
 	}
 	if dir == "" {
 		return []driver.LauncherStamp{{What: "vz prepared macOS image (warden-boot)",
-			Rebuild: PrepareCommand}}
+			Rebuild: PrepareCommand, Required: true}}
 	}
 	return []driver.LauncherStamp{imageStamp(dir)}
 }

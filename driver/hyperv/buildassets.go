@@ -67,7 +67,8 @@ func relayBootStampPath(vhdx string) string {
 // its init, so a disk built before the relay took its build link from the
 // claim must be refreshed once.
 func relayBootStamp() driver.LauncherStamp {
-	st := driver.LauncherStamp{What: "hyperv relay boot VHDX", Rebuild: RefreshRelayBootFix}
+	st := driver.LauncherStamp{What: "hyperv relay boot VHDX", Rebuild: RefreshRelayBootFix,
+		Required: true}
 	if p, err := resolveRelayBootVHDX(); err == nil {
 		st.Path = relayBootStampPath(p)
 	}

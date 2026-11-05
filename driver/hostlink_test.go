@@ -55,3 +55,40 @@ func TestCheckLauncherStamp(t *testing.T) {
 		t.Fatalf("current stamp: %v", err)
 	}
 }
+
+func TestLauncherStampBlocks(t *testing.T) {
+	dir := t.TempDir()
+	missing := filepath.Join(dir, "missing.link-channel")
+	stale := filepath.Join(dir, "stale.link-channel")
+	current := filepath.Join(dir, "current.link-channel")
+	for p, body := range map[string]string{stale: "WARDEN_LINK_CHANNEL=0\n",
+		current: "WARDEN_LINK_CHANNEL=1\n"} {
+		if err := os.WriteFile(p, []byte(body), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	for _, tc := range []struct {
+		name     string
+		st       LauncherStamp
+		blocks   bool
+		blockTag bool
+	}{
+		{"required missing", LauncherStamp{Path: missing, Required: true}, true, true},
+		{"required stale", LauncherStamp{Path: stale, Required: true}, true, true},
+		{"required current", LauncherStamp{Path: current, Required: true}, false, false},
+		{"required not found", LauncherStamp{Required: true}, false, false},
+		{"direct-boot missing", LauncherStamp{Path: missing}, false, false},
+		{"direct-boot stale", LauncherStamp{Path: stale}, false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			tc.st.What, tc.st.Rebuild = "the asset", "rebuild.sh"
+			if got := tc.st.Blocks(); got != tc.blocks {
+				t.Errorf("Blocks() = %v, want %v", got, tc.blocks)
+			}
+			if got := strings.HasPrefix(tc.st.Report(), "BLOCKED: "); got != tc.blockTag {
+				t.Errorf("Report() = %q, BLOCKED prefix %v, want %v",
+					tc.st.Report(), got, tc.blockTag)
+			}
+		})
+	}
+}

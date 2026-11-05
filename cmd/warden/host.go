@@ -50,6 +50,9 @@ Every VM driver also reports its build link (the relay-to-build /30, from
 --build-link, [vm] build_link or the default) and where it came from, whether
 a host interface overlaps it, and the state of each launcher asset's
 link-channel stamp (current, missing or stale, with the one-time rebuild).
+A missing or stale stamp fails doctor on the hyperv relay boot VHDX and the
+vz prepared image, which every build uses; on the qemu and firecracker
+direct-boot initramfs it is reported only.
 
 Exits non-zero when a required capability is unmet, so it is usable as a CI
 or agent gate.`,
@@ -230,8 +233,8 @@ func init() {
 
 // doctorBuildLink reports a VM driver's build link and where it came from,
 // whether a host interface overlaps it, and each launcher stamp's state.
-// blocked is true when a host interface holds a link address, which every
-// build would refuse.
+// blocked is true when a host interface holds a link address, or an asset
+// every build needs has a missing or stale stamp: either refuses every build.
 func doctorBuildLink(out io.Writer, cfg *Config) (buildlink.Link, bool, error) {
 	link, source, err := resolveBuildLink(cfg)
 	if err != nil {
@@ -259,6 +262,9 @@ func doctorBuildLink(out io.Writer, cfg *Config) (buildlink.Link, bool, error) {
 	}
 	for _, st := range launcherStamps(cfg.Runtime.Driver) {
 		fmt.Fprintln(out, st.Report())
+		if st.Blocks() {
+			blocked = true
+		}
 	}
 	return link, blocked, nil
 }

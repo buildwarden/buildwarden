@@ -90,11 +90,21 @@ type LauncherStamp struct {
 	Path string
 	// Rebuild is the one-time command that replaces the asset.
 	Rebuild string
+	// Required is true when every build of the driver uses the asset, so a
+	// missing or stale stamp refuses every build and doctor fails on it.
+	// Direct-boot assets, which only some builds use, leave it false.
+	Required bool
 }
 
 // Check refuses the asset when its stamp is missing or different.
 func (s LauncherStamp) Check() error {
 	return CheckLauncherStamp(s.Path, s.What, s.Rebuild)
+}
+
+// Blocks reports whether doctor fails on the stamp: the asset is required
+// by every build, was found, and its stamp is missing or stale.
+func (s LauncherStamp) Blocks() bool {
+	return s.Required && s.Path != "" && s.Check() != nil
 }
 
 // Report is the stamp's doctor line.
@@ -106,5 +116,10 @@ func (s LauncherStamp) Report() string {
 	if state == "current" {
 		return s.What + ": link-channel stamp current"
 	}
-	return s.What + ": link-channel stamp " + state + "; rebuild it once: " + s.Rebuild
+	prefix := ""
+	if s.Required {
+		prefix = "BLOCKED: "
+	}
+	return prefix + s.What + ": link-channel stamp " + state +
+		"; rebuild it once: " + s.Rebuild
 }

@@ -236,7 +236,10 @@ link is BLOCKED, since every build would refuse it; a host network that only
 contains it is a warning), and the state of each launcher asset's
 link-channel stamp: `current`, or `missing`/`stale` with the one-time rebuild
 (the qemu and Firecracker direct-boot initramfs, the Hyper-V relay boot VHDX,
-the vz prepared image). `--build-link` checks a value before you configure it;
+the vz prepared image). A missing or stale stamp on the Hyper-V relay boot
+VHDX or the vz prepared image is BLOCKED and fails doctor, since every build
+of that driver uses the asset; on the direct-boot initramfs, which only direct
+boot uses, it is reported only. `--build-link` checks a value before you configure it;
 the container driver refuses it.
 
 Exits non-zero when a required capability is unmet, so it works as a CI or agent gate.
