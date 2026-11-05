@@ -51,3 +51,6 @@ history:
   - at: 2026-11-04T23:47:50Z
     by: cloud/20261104T214530Z-attended
     event: claimed x2-implement until 2026-11-05T01:47:50Z
+  - at: 2026-11-05T00:20:00Z
+    by: human/jeff
+    event: 'x2-implement found Decision 6 refused its own PR (tier1 embeds rules.yaml, so the merge-base build reported the newly mapped FLOW-14 as a LINT-02 drop). Jeff settled it in-session as Design review r2, approved at 2aa1cbf: main''s tier1 code with the branch''s config. Not sent back through wf back; x2-implement continues'
