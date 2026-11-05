@@ -3,6 +3,8 @@ package vz
 import (
 	"context"
 	"errors"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -35,19 +37,41 @@ func TestWardenBootScriptTakesLease(t *testing.T) {
 }
 
 func TestImageStamp(t *testing.T) {
-	dir := t.TempDir()
-	var fe *driver.FixableError
-	if err := imageStamp(dir).Check(); !errors.As(err, &fe) || fe.Fix != PrepareCommand {
-		t.Fatalf("an image prepared before the change: %v", err)
-	}
-	if err := writeLinkStamp(dir); err != nil {
-		t.Fatal(err)
-	}
-	if err := imageStamp(dir).Check(); err != nil {
-		t.Fatalf("a re-prepared image: %v", err)
-	}
-	if n, _ := buildlink.ReadStamp(imageStamp(dir).Path); n != buildlink.Channel {
-		t.Fatalf("stamp channel %d", n)
+	cache := t.TempDir()
+	for _, tc := range []struct {
+		name string
+		dir  string
+		fix  func(string) bool
+	}{
+		{"cache image", filepath.Join(cache, "macos-15"),
+			func(fix string) bool { return fix == PrepareCommand }},
+		{"custom --image", t.TempDir(),
+			func(fix string) bool {
+				return strings.Contains(fix, "omit --image") &&
+					strings.Contains(fix, cache) && strings.Contains(fix, PrepareCommand)
+			}},
+		{"sibling with the cache as prefix", cache + "-other",
+			func(fix string) bool { return strings.Contains(fix, "omit --image") }},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if err := os.MkdirAll(tc.dir, 0o755); err != nil {
+				t.Fatal(err)
+			}
+			var fe *driver.FixableError
+			err := imageStamp(tc.dir, cache).Check()
+			if !errors.As(err, &fe) || !tc.fix(fe.Fix) {
+				t.Fatalf("an image prepared before the change: %#v", err)
+			}
+			if err := writeLinkStamp(tc.dir); err != nil {
+				t.Fatal(err)
+			}
+			if err := imageStamp(tc.dir, cache).Check(); err != nil {
+				t.Fatalf("a re-prepared image: %v", err)
+			}
+			if n, _ := buildlink.ReadStamp(imageStamp(tc.dir, cache).Path); n != buildlink.Channel {
+				t.Fatalf("stamp channel %d", n)
+			}
+		})
 	}
 }
 

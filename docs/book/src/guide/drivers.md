@@ -514,6 +514,11 @@ its build interface from the claim and replaces an old init's address. Disk
 image builds on qemu and Firecracker, and Windows guests, take the link from
 their per-build seed and need nothing either.
 
+On vz, `warden image prepare` refreshes only the image in the cache
+(`~/.cache/warden/images`). A build with `--image` naming a disk outside it
+whose `warden-boot` predates the change is refused with the fix to omit
+`--image` and build from the cache's prepared image.
+
 ---
 
 ## Common Patterns

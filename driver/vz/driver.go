@@ -66,7 +66,7 @@ func (d *Driver) StartBuild(
 	if err != nil {
 		return nil, fmt.Errorf("resolving image: %w", err)
 	}
-	if err := checkLink(diskImage, req); err != nil {
+	if err := checkLink(diskImage, d.Cache.CacheDir, req); err != nil {
 		return nil, err
 	}
 	if req.Timeout > 0 {
@@ -441,9 +441,10 @@ func defaultCacheDir() string {
 }
 
 // checkLink refuses, before anything boots, an image whose warden-boot
-// predates the per-build link and a link a host interface uses.
-func checkLink(diskImage string, req *driver.BuildRequest) error {
-	if err := imageStamp(filepath.Dir(diskImage)).Check(); err != nil {
+// predates the per-build link and a link a host interface uses. cacheDir is
+// the image cache, which decides the fix the refusal names.
+func checkLink(diskImage, cacheDir string, req *driver.BuildRequest) error {
+	if err := imageStamp(filepath.Dir(diskImage), cacheDir).Check(); err != nil {
 		return err
 	}
 	return driver.CheckHostLink(req.Link())
@@ -452,10 +453,31 @@ func checkLink(diskImage string, req *driver.BuildRequest) error {
 // imageStamp describes a prepared image's link-channel stamp. An image
 // prepared before warden-boot took the build link by DHCP bakes the old
 // address and must be re-prepared once (in place, no IPSW restore).
-func imageStamp(imgDir string) driver.LauncherStamp {
+// `warden image prepare` re-prepares only the image in cacheDir, so an
+// --image disk outside it gets a fix that builds from the cache instead.
+func imageStamp(imgDir, cacheDir string) driver.LauncherStamp {
+	rebuild := PrepareCommand
+	if !insideDir(imgDir, cacheDir) {
+		rebuild = customImageFix(cacheDir)
+	}
 	return driver.LauncherStamp{What: "vz prepared macOS image (warden-boot)",
-		Path: filepath.Join(imgDir, linkStampName), Rebuild: PrepareCommand,
+		Path: filepath.Join(imgDir, linkStampName), Rebuild: rebuild,
 		Required: true}
+}
+
+// customImageFix is the remedy for a stale --image disk outside the image
+// cache: build from the cache's image, which PrepareCommand prepares or
+// refreshes in place.
+func customImageFix(cacheDir string) string {
+	return "omit --image to build from the prepared image in " + cacheDir +
+		" (`" + PrepareCommand + "` prepares or refreshes it); " +
+		"an image outside that cache cannot be re-prepared in place"
+}
+
+// insideDir reports whether path is dir or below it.
+func insideDir(path, dir string) bool {
+	rel, err := filepath.Rel(filepath.Clean(dir), filepath.Clean(path))
+	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // LauncherStamps lists the vz assets with a link-channel stamp: the prepared
@@ -470,7 +492,7 @@ func LauncherStamps() []driver.LauncherStamp {
 		return []driver.LauncherStamp{{What: "vz prepared macOS image (warden-boot)",
 			Rebuild: PrepareCommand, Required: true}}
 	}
-	return []driver.LauncherStamp{imageStamp(dir)}
+	return []driver.LauncherStamp{imageStamp(dir, cache.CacheDir)}
 }
 
 // Preflight checks the host can run vz builds (Apple Silicon macOS and a
