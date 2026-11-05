@@ -173,6 +173,10 @@ steps:
     status: pending
     needs:
       - f6-consolidate
+      - f6-validate-linux-kvm
+      - f6-validate-qemu-any
+      - f6-validate-macos-vz
+      - f6-validate-windows-hyperv
     lease:
       claimed_by: ""
       expires: null
