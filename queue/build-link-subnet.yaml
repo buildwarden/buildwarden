@@ -165,8 +165,8 @@ steps:
     needs:
       - f6-merge-main
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261104T214530Z-attended
+      expires: 2026-11-05T02:28:55.03568122Z
   - id: f6-open-pr
     phase: 6
     affinity: cloud
@@ -186,7 +186,7 @@ budget:
     steps: 120
   spent:
     runs: 3
-    steps: 14
+    steps: 15
 questions:
   - id: a1
     kind: assumed
@@ -587,3 +587,6 @@ history:
   - at: 2026-11-05T00:28:54Z
     by: cloud/20261104T214530Z-attended
     event: done f6-merge-main
+  - at: 2026-11-05T00:28:55Z
+    by: cloud/20261104T214530Z-attended
+    event: claimed f6-consolidate until 2026-11-05T02:28:55Z

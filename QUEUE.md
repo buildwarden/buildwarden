@@ -10,7 +10,7 @@ Nothing.
 
 | Pri | Feature | Kind | Phase | Next steps | Steps spent / est. |
 |---|---|---|---|---|---|
-| 18 | build-link-subnet | feature | 6 publish | f6-validate-linux-kvm (host:linux-kvm), f6-validate-qemu-any (host:qemu-any), f6-validate-macos-vz (host:macos-vz), f6-validate-windows-hyperv (host:windows-hyperv), f6-consolidate (cloud) | 14 / 120 |
+| 18 | build-link-subnet | feature | 6 publish | f6-validate-linux-kvm (host:linux-kvm), f6-validate-qemu-any (host:qemu-any), f6-validate-macos-vz (host:macos-vz), f6-validate-windows-hyperv (host:windows-hyperv), f6-consolidate (cloud, leased) | 15 / 120 |
 | 19 | security-suite | feature | 1 design | f1-design (cloud) | 2 / 50 |
 
 ## Waiting on a host
