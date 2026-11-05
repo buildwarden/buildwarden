@@ -349,7 +349,7 @@ is one commit on this branch.
     Design, a7 build-link-subnet's BOOT-03 approved in a review addendum
     once this item merges, with task 49 done before its Publish.
 
-- **r2, 2026-11-05: Decision 6 amended, approved at `{SHA}`** (Jeff,
+- **r2, 2026-11-05: Decision 6 amended, approved at `2aa1cbf`** (Jeff,
   attended, during x2-implement). Implement found Decision 6 refused this
   item's own PR: tier1 embeds `rules.yaml`, so tier1 built from the merge
   base reported the branch's newly mapped FLOW-14 as unmapped (LINT-02),
