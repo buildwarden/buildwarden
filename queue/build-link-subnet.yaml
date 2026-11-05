@@ -122,8 +122,8 @@ steps:
       - f3-implement
       - f3-implement-r2
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: host:macos-vz/20261105T234633Z
+      expires: 2026-11-06T01:46:35.330447Z
     note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan (plan r3 task 53): the four cases on the default link and on 100.126.255.252/30 (pre-change assets refused with the one-time command; after it, a default-link build whose ledger verifies, the guest at 100.127.255.254; the configured link reported by doctor and built with no rebuild, refresh or re-prepare; an overlapping --build-link refused at startup). Reaches driver/vz (claim carries the link, no --subnet, DHCP warden-boot, image stamp) and cmd/relay host mode (netstack built at claim, infinite DHCP lease, link block): an image prepared before the change refused, re-prepared once in place; the lease taken within the boot window (time from boot to initialize against main); a build longer than an hour with no renewal; the link block on the configured link; forged DHCP and ARP from the guest gaining nothing (TEST-08). Added by f2-plan-r3 needing only f2-design-review-r3; add f3-implement to its needs once Implement is seeded, and f6-open-pr must need this step once phase 6 is seeded.'
   - id: f6-validate-windows-hyperv
     phase: 6
@@ -186,7 +186,7 @@ budget:
     steps: 120
   spent:
     runs: 5
-    steps: 19
+    steps: 20
 questions:
   - id: a1
     kind: assumed
@@ -626,3 +626,6 @@ history:
   - at: 2026-11-05T12:58:30Z
     by: host:qemu-any/20261105T124003Z
     event: 'f6-validate-qemu-any evidence (unattended, macbook): feat/build-link-subnet a68ac2c, QEMU 11.1.1 (Homebrew), Go 1.26.5, macOS 27.0.1. Relay initramfs and the direct-boot launcher rebuilt from the branch (make relay-vm, tools/build-vm/build-initramfs.sh, stamp WARDEN_LINK_CHANNEL=1); main 4c8f9dc baselines SUCCEEDED (direct-boot and alpine disk, guest 10.0.0.2). (1) Upgrade: the old unstamped direct-boot initramfs makes doctor report "stamp missing; rebuild it once: tools/build-vm/build-initramfs.sh" (reported only) and refuses a direct-boot build before any VM with that fix; an alpine disk build on main''s OLD relay initramfs with the new binaries SUCCEEDED, the relay replacing 10.0.0.1 with 100.127.255.253/30 from the claim ("build-if eth0 100.127.255.253/30 from the claim; DHCP offers 100.127.255.254"), guest at 100.127.255.254, inspect 35 signatures valid, all channels closed. (2) Default link, new assets: direct-boot and alpine disk builds SUCCEEDED at 100.127.255.254 (direct boot "init: link 100.127.255.254/30 via 100.127.255.253 from dhcp"), ledgers verified (11 and 35 signatures, all channels closed). (3) --build-link 100.126.255.252/30, no rebuild: direct-boot and alpine disk SUCCEEDED at 100.126.255.254 from dhcp, ledgers verified; doctor from a dir with [vm] build_link reports "(warden.toml)", --build-link reports "(--build-link)" (flag wins). (4) Refused at startup (doctor == build): 10.0.2.0/30 (qemu user-mode), 100.64.88.0/30 (firecracker upstream), 100.126.0.1/30 (not network-aligned); 10.0.0.28/30 BLOCKED on the host address 10.0.0.30/8; 10.0.0.0/30 warns the host network contains it. (a14 d) Every direct-boot console shows the link from dhcp equal to the command line on both links and on the old relay initramfs; a hand boot of the new direct-boot initramfs with the keys and no relay prints "init: no DHCP answer; using warden.link_ip" and holds 100.127.255.254; one without keys took the stop path and exited 1 (kernel panic exitcode=0x00000100), the echoed line not flushing before the bare-boot exit. (TEST-08 link block) an in-guest fetch of the relay''s own link address through the proxy is refused (relay "blocked: connection to 100.127.255.253 denied", wget rc 1) on both links, the next fetch succeeding; direct egress blocked. Not run: the in-guest flood-and-forge DHCP case (the unattended session did not write the packet-forging script, as on windows-hyperv and linux-kvm; Consolidation hands it to security-suite). Evidence native/qemu-any/2026-11-05/.'
+  - at: 2026-11-05T23:46:35Z
+    by: host:macos-vz/20261105T234633Z
+    event: claimed f6-validate-macos-vz until 2026-11-06T01:46:35Z
