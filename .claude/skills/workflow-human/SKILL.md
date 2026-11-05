@@ -51,6 +51,10 @@ Same as `workflow-tick` step 1 (the FLOW-18 check, build `dist/wf`, check out
       touches; say plainly where they disagree or leave a gap.
    3. **Risks and what is deferred:** native validation, `tier2_gaps`, rules
       changed, a Bootstrap comparison or Security note to accept.
+      Ask each `rule_changes` entry on its own (FLOW-14), with its current
+      and proposed wording: approve, approve with a change, or reject. Record
+      each approval in the Outcome entry as `rule change <ID> approved at
+      <sha>`; a rejection is a change unless the design drops it.
    4. **Assumptions**, one per AskUserQuestion entry (FLOW-07): the question
       in full, each option with its consequence, the recommendation first,
       and the decision it rests on. Record each answer with `dist/wf answer`,

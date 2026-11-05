@@ -52,11 +52,13 @@ func Phase(env Env, f *queue.Feature) []Result {
 		c.make("lint")
 		c.make("test")
 		c.docsTouched("UX-01 reference docs updated", "docs/")
+		c.ruleClearance()
 	case 4:
 		c.onBranchHead()
 		c.make("lint")
 		c.make("test")
 		c.tier2Report()
+		c.ruleClearance()
 	case 5:
 		c.docsTouched("guides or examples updated", "docs/book/src/guide/",
 			"docs/book/src/getting-started/", "examples/", "README.md")
@@ -68,6 +70,7 @@ func Phase(env Env, f *queue.Feature) []Result {
 		if d, err := c.loadDesign(c.f.Branch); err == nil {
 			c.section(d, "Consolidation")
 		}
+		c.ruleClearance()
 		c.archivedOn(c.f.Branch)
 		c.prGreen()
 	case 7:
@@ -79,8 +82,8 @@ func Phase(env Env, f *queue.Feature) []Result {
 }
 
 // process runs a process item's done-when checks: x1 design written and
-// reviewed, x2 archived on the pushed branch with its PR green, x3 merged by
-// a human, x4 closed.
+// reviewed, x2 archived on the pushed branch with its PR green (the FLOW-14
+// clearance reports it exempt), x3 merged by a human, x4 closed.
 func (c *checker) process() {
 	switch c.f.Phase {
 	case 1:
@@ -92,6 +95,7 @@ func (c *checker) process() {
 			break
 		}
 		c.pushed()
+		c.ruleClearance()
 		c.archivedOn(c.f.Branch)
 		c.prGreen()
 	case 3:
@@ -371,6 +375,9 @@ func (c *checker) design() {
 			c.section(d, "Bootstrap comparison")
 		}
 	}
+	if len(d.Front.RuleChanges) > 0 {
+		c.section(d, "Rule changes")
+	}
 	c.reviewDecision(d)
 	open := c.f.OpenBlocking()
 	c.add("no open blocking question (FLOW-07)", len(open) == 0, "%d open", len(open))
@@ -423,8 +430,11 @@ type Front struct {
 	} `yaml:"native_validation"`
 	Tier2Gaps []any    `yaml:"tier2_gaps"`
 	Rules     []string `yaml:"rules"`
-	Concepts  []string `yaml:"concepts"`
-	present   map[string]bool
+	// RuleChanges is optional: empty or absent means the feature changes no
+	// rule (FLOW-14).
+	RuleChanges []RuleChange `yaml:"rule_changes"`
+	Concepts    []string     `yaml:"concepts"`
+	present     map[string]bool
 }
 
 // Problems lists the ways the front-matter breaks FLOW-02 for the named
@@ -463,7 +473,7 @@ func (fm *Front) Problems(feature string) []string {
 				"native_validation %+v needs host, blocking and reason", nv))
 		}
 	}
-	return out
+	return append(out, ruleChangeProblems(fm.RuleChanges)...)
 }
 
 func (c *checker) loadDesign(rev string) (*Design, error) {

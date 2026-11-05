@@ -21,8 +21,11 @@ feature's cloud steps.
   (FLOW-16, FLOW-17). Opening a PR needs no confirmation (FLOW-08):
   `f6-open-pr` and a process item's `x2-implement` open theirs.
 - Edit `docs/development/`, `.claude/`, or `tools/workflow/` anywhere but on
-  a process item's branch after its design review (FLOW-14). On a feature
-  branch, propose the change in the design for its review instead.
+  a process item's branch after its design review (FLOW-14). The one
+  exception: a rule change a feature's design review approved by name, made
+  on that feature's branch in its approved `paths` (never `.claude/` or
+  `tools/workflow/` outside `check/`). Otherwise, on a feature branch,
+  propose the change in the design for its review.
 - Put secrets in prompts (FLOW-18).
 
 ## 1. Set up

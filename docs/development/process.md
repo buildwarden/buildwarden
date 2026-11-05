@@ -81,6 +81,9 @@ can compare the claim against the diff and the queue can route the work:
   each blocks merge (FLOW-09).
 - `tier2_gaps` — platform validation knowingly deferred (TEST-03).
 - `rules` — the rule IDs the design relies on or changes.
+- `rule_changes` — each rule change the feature makes (FLOW-14), as
+  `{rule, change: add | amend | retire, paths}`, `paths` naming every file it
+  edits, enforcement included. Empty or absent means none.
 - `concepts` — retrieval tags for the archive (FLOW-12).
 
 Declarations are derived conservatively: a change to a shared package (`relay/`,
@@ -105,10 +108,10 @@ branch. The phases are:
 | 0 | Branch setup | Branch exists on the remote. |
 | 1 | Design | Design doc complete per FLOW-02; no unanswered blocking question (FLOW-07); whether it needs a design review decided (FLOW-19). |
 | 2 | Plan | Implementation and testing tasks listed, each citing the rules it must satisfy; rework of existing code is listed as explicit tasks. The design review is recorded as approved, or validly skipped (FLOW-19). |
-| 3 | Implement | Tasks done; `make lint` and `make test` green; reference docs updated in the same change (UX-01). |
-| 4 | Review | Behavioral-linter tier 1 green; tier-2 report produced for the diff (LINT-04). |
+| 3 | Implement | Tasks done; `make lint` and `make test` green; reference docs updated in the same change (UX-01); every edit to the rules or their enforcement cleared by an approved rule change (FLOW-14). |
+| 4 | Review | Behavioral-linter tier 1 green; tier-2 report produced for the diff (LINT-04); the rule-change clearance still passes (FLOW-14). |
 | 5 | Guide | User-facing narrative docs (guides, examples) written or updated. |
-| 6 | Publish | Once the PR slot is free (FLOW-05): current `main` merged; consolidation section filled (FLOW-10, FLOW-15); design archived with its summary on the branch (FLOW-12); PR opened (no confirmation needed, FLOW-08) with CI green (FLOW-11); blocking native validation done (FLOW-09). |
+| 6 | Publish | Once the PR slot is free (FLOW-05): current `main` merged; consolidation section filled (FLOW-10, FLOW-15); the rule-change clearance still passes (FLOW-14); design archived with its summary on the branch (FLOW-12); PR opened (no confirmation needed, FLOW-08) with CI green (FLOW-11); blocking native validation done (FLOW-09). |
 | 7 | Merge | The human merged the PR (FLOW-08). The loop confirms it; there is no step for the human to claim. |
 | 8 | Close | Merged branches and validation leftovers cleaned up (FLOW-16); the design is archived on `main`. |
 
@@ -120,7 +123,9 @@ A **process item** (queue `kind: process`) changes the rules the loops run
 under: `docs/development/`, `.claude/` or `tools/workflow/`. Its design is the
 human's, settled in a design review (FLOW-19); after that the loop works on its
 branch, and nothing it changes reaches the running loop until the human merges
-it (FLOW-14):
+it (FLOW-14). A feature may also change the rules and their enforcement when
+its design review approves each change by name (FLOW-14); `.claude/` and the
+rest of `tools/workflow/` change only through a process item:
 
 | # | Phase | Done when |
 |---|-------|-----------|
@@ -303,7 +308,9 @@ consolidation section:
 - behavior or convention changes the rest of the codebase must now follow.
 
 A convention that emerges from consolidation and should bind future work is
-proposed as a new or amended rule in this directory, in the same PR or as a
+proposed as a new or amended rule in this directory. It lands in the same PR
+only as a rule change the design review approved (FLOW-14); otherwise the
+feature goes back to Design for a review of it (FLOW-06), or the rule becomes a
 follow-up item. Rule changes go through the human's merge like any other change.
 
 When consolidation finds work beyond conflict fixes and wording, the feature goes
@@ -365,15 +372,44 @@ blocking question appears.
 ### FLOW-14 — Agent tooling is a thin layer over this doc set
 
 **Severity:** MUST
-**Check:** agent-judgment
+**Check:** automated + agent-judgment
 
 Agent definitions and skills (for example under `.claude/` or `.kiro/`) carry
 phase instructions and cite rule IDs; they do not restate rules. When a rule and an
 agent definition disagree, the rule wins and the definition is fixed. Agents do not
-change their own definitions or these standards on `main` without the human:
-such a change is a process item (FLOW-03), whose design the human settles in a
-design review (FLOW-19) before the loop implements it on its branch, and which
-reaches the running loop only through the human's merge (FLOW-08).
+change their own definitions or these standards on `main` without the human.
+There are two routes, and both reach the running loop only through the human's
+merge (FLOW-08):
+
+- **A process item** (FLOW-03), whose design the human settles in a design
+  review (FLOW-19) before the loop implements it on its branch. It is the only
+  route for `.claude/` and for `tools/workflow/` outside `check/`, the loop's
+  own machinery, and the route for a rule change no feature needs.
+- **A rule change a feature's design declares.** A *rule change* is an edit to
+  this directory (a rule, its severity or check type, the README index), to
+  the code that enforces the rules (`tools/tier1/`, `tools/workflow/check/`,
+  and the lines of `.github/workflows/` that run tier 1, `golangci-lint` or
+  `tools/workflow`), or to `docs/design/TEMPLATE.md`. The design lists each one
+  in its `rule_changes` front-matter (FLOW-02) and its **Rule changes**
+  section, with the current and proposed wording, severity and check, and what
+  the enforcement change does. The design review approves each change by name
+  (FLOW-19); Plan gives each approved change a task, and Implement makes it on
+  the feature branch. A rule change found after the review is not cleared: the
+  feature goes back to Design (FLOW-06) for a review of that change.
+
+The automated part runs at the Implement, Review and Publish done-when
+(FLOW-03): every file a feature branch changes under the rule-change paths
+above must be in the `paths` of a `rule_changes` entry that the Design review
+section records as `rule change <ID> approved at <sha>`, with that entry in the
+design's front-matter at that commit; a change to `.claude/` or to
+`tools/workflow/` outside `check/` fails outright. A process item's branch is
+exempt. When a branch changes `tools/tier1/` or `tools/workflow/check/`, Review
+and CI also run tier 1 built from the merge base's code with the branch's
+configuration (`tools/tier1/rules.yaml` and `golangci.yml`) against the branch,
+and every finding it reports that the branch's tier 1 no longer reports must be
+on a rule an approved `rule_changes` entry names; Review also runs the merge
+base's `wf check`. A configuration edit is an approved path that Review judges.
+The agent part judges whether each edit matches the approved wording.
 
 ---
 
@@ -501,21 +537,26 @@ over, at a high level:
 - the plan against the design: whether the tasks carry out the design, and where
   they leave gaps or disagree;
 - the risks and what is deferred: native validation, tier-2 gaps, rules changed;
+- each `rule_changes` entry (FLOW-14), shown with its current and proposed
+  wording and asked on its own: approved, approved with a change, or rejected;
 - each assumed question, confirmed or turned into a change (FLOW-07).
 
 It ends approved, or with changes that send the feature back to Design with the
 human's notes as the finding. The design's **Design review** section records each
 review: its date, its outcome, the decisions taken, and for an approval, the
-commit the approved design was read at (`approved at <sha>`).
+commit the approved design was read at (`approved at <sha>`). Each approved
+rule change gets its own line, `rule change <ID> approved at <sha>`. A rejected
+rule change sends the feature back to Design (FLOW-06), unless the review keeps
+the feature and the design drops the change.
 
 Design decides whether the review is needed and records it as
 `design_review: required` or `skip` in the front-matter and the queue. `skip` is
 allowed only when the design declares `alters_relationships: false`, no `seams`,
 `security_boundary: none` and no blocking `native_validation`; raises no assumed
-question; and the branch changes no rule in this directory. Every skipped review
-is listed in the digest, so the human can call one back. An archived design
-need not carry `design_review`: it is past the gate, and designs archived
-before this rule never had the key.
+question; declares no `rule_changes`; and the branch changes no rule in this
+directory. Every skipped review is listed in the digest, so the human can call
+one back. An archived design need not carry `design_review`: it is past the
+gate, and designs archived before this rule never had the key.
 
 When a feature returns to Design (FLOW-06), a fresh review follows the new
 plan. Whether it may be skipped is judged on what changed since the last
@@ -525,8 +566,8 @@ open, and no rule changed since that commit. A minimal change after an approval
 needs no re-approval.
 
 The automated part checks the recorded decision, the skip criteria and that each
-review the queue seeded has an approval; the agent part judges whether the
-session covered the design and the plan.
+review the queue seeded has an approval (a `rule change` line is not one); the
+agent part judges whether the session covered the design and the plan.
 
 ---
 

@@ -14,7 +14,9 @@ intake only frames the item. Rules: FLOW-01, FLOW-05, FLOW-12, FLOW-13.
    say so and stop, or extend that item with Jeff's agreement.
 3. Agree with Jeff on the kind (FLOW-03): `process` when the change is to
    the rules the loops run under (`docs/development/`, `.claude/`,
-   `tools/workflow/`), otherwise a feature. A process item also lists the
+   `tools/workflow/`) and no feature needs it, otherwise a feature; a
+   feature that needs a rule changed declares it in its design (FLOW-14).
+   A process item also lists the
    workers it holds while in progress (`cloud`, `host:*`, `host:<name>`), or
    none when it disrupts no running work (FLOW-05). Then agree on
    a kebab-case slug, a one-line title, the priority (show

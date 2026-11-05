@@ -182,6 +182,11 @@ contains:
 3. What the change gains, and what it costs in security posture and in the
    record of what the build consumed.
 
+The edit to this document is a rule change (FLOW-14): a feature that needs the
+model change declares it in its `rule_changes`, the design review approves it
+by name alongside the comparison, and the feature's Implement makes it; a
+model change no feature needs is a process item.
+
 Changes that bring a driver into line with the model, or that leave it untouched,
 are not model changes. They still name the invariants they rely on in their
 design's `rules`.
