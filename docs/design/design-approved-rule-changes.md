@@ -362,12 +362,15 @@ is one commit on this branch.
 
 Filled in at x2-implement, against `origin/main` at `5e78c26`.
 
-- **Landed since the fork (`1f61b0c`):** human-review-shows-design (#95),
-  which reworded workflow-human step 3 (the design put in front of Jeff,
-  assumptions one per question). This branch adds four lines to step 3's
-  item 3 only; `git merge-tree` with `origin/main` is clean. Its review page
-  shows the design as read, which now includes the **Rule changes** section,
-  so the two compose with no further change.
+- **Landed since the fork (`1f61b0c`):** human-review-shows-design (#95,
+  `5e78c26`), merged into this branch with a merge commit. It reworded
+  workflow-human step 3 (the design put in front of Jeff before the
+  walkthrough, a diagram added to the design's page, assumptions one per
+  question). The one conflict was item 4, next to this branch's lines in
+  item 3; the resolution keeps both: #95's wording throughout and the
+  `rule_changes` lines in item 3. Its review page shows the design as read,
+  which now includes the **Rule changes** section, so the two compose with
+  no further change.
 - **Terminology:** "rule change", "rule-change clearance" and
   `rule change <ID> approved at <sha>` are used the same way in FLOW-14,
   FLOW-19, the template, `wf check` and the agents. FLOW-02 also lists the
@@ -382,15 +385,18 @@ Filled in at x2-implement, against `origin/main` at `5e78c26`.
   ordinary code.
 - **Decision 6 in CI:** runs on PRs only. A push to `main` after a squash
   merge cannot resolve the approval commits, which lived on the branch.
-- **Finding for Design (FLOW-06):** tier1 embeds its `rules.yaml`, so tier1
-  built from the merge base judges the branch with main's rule map. A branch
-  that maps a newly `automated` rule in `rules.yaml` (this one maps FLOW-14)
-  makes main's tier1 report `LINT-02 rule-index ... not mapped`, which the
-  branch's tier1 no longer reports: a drop on LINT-02, which the change does
-  not name. `make enforcement` fails on this branch for that reason, and the
-  CI step will fail on its PR, contradicting the Validation plan's "the check
-  against itself". Every feature whose rule change makes a rule automated
-  hits the same thing.
+- **Finding for Design, settled in review r2 (`2aa1cbf`):** tier1 embeds
+  its `rules.yaml` and `golangci.yml`, so tier1 built wholly from the merge
+  base judged the branch with main's rule map: mapping a newly `automated`
+  rule (this branch maps FLOW-14) made main's tier1 report it unmapped
+  (LINT-02), a drop no change named, and `make enforcement` failed on this
+  branch. Decision 6 now builds main's tier1 from the merge base's code with
+  the branch's configuration: `enforcement-check.sh` copies the branch's two
+  files over the merge base's before building, and says plainly when main's
+  code cannot read them (exit 2, a format change for Review to judge).
+  FLOW-14, wf-review and the Makefile say the same. `make enforcement` now
+  passes on this branch. The script has no automated test; its comparison,
+  `check.Drops`, is tested at tier 0.
 - **Sweep (FLOW-15):** no component flow changed, so `overview.md` is
   untouched; the new Go code is reached from `wf check`, `wf drops` and the
   tests.
