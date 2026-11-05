@@ -1,0 +1,228 @@
+{
+  "feature": "build-link-subnet",
+  "branch": "feat/build-link-subnet",
+  "head": "69fe17c21046",
+  "base": "1cad5b362f87",
+  "round": "feature",
+  "step": "f4-review-r2",
+  "previous_report": "reports/build-link-subnet/878d510bc61b.json",
+  "scope": "git diff origin/main...feat/build-link-subnet: 105 files, +7273/-541 (LINT-04). origin/main 1cad5b3 is merged in (be81daa, a clean merge with an empty remerge-diff), so the merge base is origin/main. Since Review r1 (878d510) the branch commits are 303e713 and c6a9b51 (the design's rule change and its approval), 14e4d91 (task 49), and 9f3e35a, 3defabb, 8ee9eee, 7921c8b, 626a198, 9113822, e00c7bd and 69fe17c (r1 SHOULDs 2, 3, 4, 6, 7, 8). The whole diff was re-judged, with the delta in depth. Judged against design r3 (approved at c19e8f0, with the a14 (d) amendment, and rule change BOOT-03 approved at 303e713) and the rules as the branch changes them.",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "rule_index": "85 '### <ID> — <title>' headers extracted from docs/development/*.md (LINT-01), with RELAY-01 counted twice (README.md:25 is the format example). Judged: every agent-judgment rule, and the judgment half of every hybrid rule, the diff reaches, with BOOT-03 as amended.",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass (linux, go1.26.3, ~/go/bin golangci-lint 2.15.0 built with go1.26): 0 issues in the root module, tools/workflow and tools/tier1. Then dist/tier1 -base origin/main (1cad5b362f87...69fe17c21046): 0 MUST, 0 MUST-review, 0 SHOULD, 2 hints, 0 suppressed, exit 0. (A first run in a shell whose PATH had /usr/local/bin/golangci-lint, built with go1.25, failed to load the config. That is an environment problem, not a branch result. It was rerun with ~/go/bin first.)",
+    "make_lint_per_platform": "GOOS=darwin make lint and GOOS=windows make lint: both pass, with the same tier-1 result (FLOW-17).",
+    "make_test": "pass (exit 0) in the root module, tools/workflow and tools/tier1. A go test -count=1 ./... rerun of the root module (no cache) also passes: 22 ok, no FAIL.",
+    "custom_static_checks": "dist/tier1 hints: GLOBAL-04 tests-with-change on driver/container/ and on tools/vz-image-prep/, both dismissed in Review r1 (item 11) and unchanged since. The BOOT-07 bootstrap-surface hint of r1 no longer fires.",
+    "rule_change_clearance": "dist/wf check -feature build-link-subnet -step f4-review-r2 (built from main 1cad5b3): 'ok rule changes cleared (FLOW-14): cleared: docs/development/bootstrap.md (BOOT-03)'. Its other FAIL lines were make lint and make test skipped without -run (both run separately above, green) and this report not yet written.",
+    "enforcement": "make enforcement: 'enforcement-check: the branch changes no enforcement (FLOW-14)', exit 0. The branch diff touches nothing under tools/tier1/ or tools/workflow/check/ (those changes on the branch are main's, #96), so the merge-base wf check build is not required.",
+    "shellcheck": "shellcheck 0.10.0 (shellcheck-py, scratch venv) on refresh-cache.sh: clean. On the build-initramfs.sh scripts and the inits: only pre-existing SC2012/SC2010 info and warnings, plus one new SC2013 note per direct-boot init. That note is the deliberate `set -f; for kv in $(cat /proc/cmdline)` word split that tools/relay-vm/init on main already uses. No finding.",
+    "gofmt": "Implement's note refuted in part. gofmt -l (go1.26.3) lists ten files, not five, and all ten are equally unformatted on origin/main: the same gofmt -d line counts on main and on the branch. Five are touched by the branch (cmd/warden-io/platform_windows.go, driver/vz/network.go, tools/vz-image-prep/{netfwd,personalize,uv-build-test}.go), and the branch adds no unformatted lines to any of them. It is not version skew: the hunks are plain gofmt rules (field alignment, import sorting, doc-comment list spacing, indentation, blank lines), and /usr/local/go/bin/gofmt gives the same list. .golangci.yml enables no formatter, so tier 1 does not check gofmt. This predates the branch and is out of LINT-04 scope.",
+    "ci_runs": {
+      "integration 41933782452": "success on 878d510 (Review r1). Not rerun on 69fe17c.",
+      "firecracker 41933786130": "success on 878d510 (Review r1). Not rerun on 69fe17c. Since then cmd/relay/buildif_linux.go (the vm-mode relay's netlink path) was refactored, with the same behaviour and new tier-0 tests, so re-dispatch it on the new head before Publish (informational)."
+    },
+    "fixes_made": "none (report-only)"
+  },
+  "rule_change_judgment": [
+    {
+      "rule": "BOOT-03",
+      "change": "amend",
+      "approved_at": "303e713",
+      "landed_at": "14e4d91",
+      "file": "docs/development/bootstrap.md",
+      "line": 109,
+      "verdict": "matches the approved wording",
+      "note": "With whitespace and line wraps normalized, the second paragraph is identical to the design's Proposed wording at 303e713 (design Rule changes, BOOT-03). Severity and check are unchanged (MUST, agent-judgment), as declared, and no other line of bootstrap.md changes. Enforcement: none, as declared. The edit is in the rule_changes paths, and the Design review records 'rule change BOOT-03 approved at 303e713'. The approval also accepts the Bootstrap comparison as amended by a14 (d) (BOOT-07). BOOT-06's optional extension is not taken, and the branch does not take it."
+    }
+  ],
+  "implement_reported": [
+    {
+      "item": 1,
+      "topic": "Doctor now fails on a missing/stale required stamp (hyperv VHDX, vz image), beyond Decision 8's print-only text; task 56 should record it",
+      "verdict": "confirmed; SHOULD",
+      "finding": 10,
+      "note": "Not a silent redesign (FLOW-06): Jeff sent r1 SHOULD 2 to this round, and its suggestion was this behaviour. Task 56's scope as worded excludes it, so it needs widening."
+    },
+    {
+      "item": 2,
+      "topic": "refresh-cache.sh had only bash -n (no shellcheck here)",
+      "verdict": "closed",
+      "finding": null,
+      "note": "shellcheck 0.10.0 run from a scratch venv: refresh-cache.sh clean. See tier1.shellcheck."
+    },
+    {
+      "item": 3,
+      "topic": "gofmt -l lists five untouched files (likely gofmt version skew)",
+      "verdict": "refuted in part: pre-existing, not skew",
+      "finding": null,
+      "note": "Ten files, five touched by the branch. All ten are unformatted on main too, and the branch adds no unformatted lines. See tier1.gofmt. Optional: a separate item could gofmt them and enable golangci's gofmt formatter. That is a rule change to golangci.yml (FLOW-14), so it is not for this branch."
+    }
+  ],
+  "findings": [
+    {
+      "id": 5,
+      "rule": "GLOBAL-04",
+      "related_rules": [
+        "ORCH-01",
+        "TEST-05"
+      ],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "driver/vz/driver.go",
+      "line": 237,
+      "finding": "Still present at 69fe17c, unchanged since Review r1. qemu (driver.go:221), firecracker (driver_linux.go:218) and vz (driver.go:237) each pass `req.Link().Claim()` with no tier-0 test that the claim carries it; only Hyper-V has one. A regression that drops the link is loud on qemu and firecracker (the relay answers 400 'build_link is required') and quiet on vz (host mode falls back to its --subnet default). Jeff chose to leave this for Consolidation.",
+      "suggestion": "Add one tier-0 assertion per driver that the claim it sends carries the request's link. The order-test seams from item 5 can capture the ClaimRelay arguments, or the shared claim-building call can be factored and tested once with every driver as a caller. At minimum cover vz, the quiet case.",
+      "status": "carried forward: left for Consolidation by Jeff (r3 addendum, design:1956)"
+    },
+    {
+      "id": 9,
+      "rule": "TEST-08",
+      "related_rules": [
+        "GLOBAL-06"
+      ],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "file": "docs/design/build-link-subnet.md",
+      "line": 1074,
+      "finding": "Still present at 69fe17c. queue/security-suite.yaml still does not mention build_link, the vm-mode DHCP responder or DHCP/ARP spoofing. Plan task 55 hands the Security note's TEST-08 list to security-suite at Publish, so this has a planned home. Jeff chose to leave it for Consolidation.",
+      "suggestion": "Carry the Security note's TEST-08 list into security-suite's queue item or design inputs. Name it in the PR body's security note for Jeff's sign-off (LINT-03).",
+      "status": "carried forward: left for Consolidation by Jeff (r3 addendum, design:1956)"
+    },
+    {
+      "id": 10,
+      "rule": "FLOW-10",
+      "related_rules": [
+        "FLOW-06",
+        "FLOW-15",
+        "UX-09"
+      ],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "docs/design/build-link-subnet.md",
+      "line": 762,
+      "status": "new",
+      "finding": "Implement's note for this round, confirmed. Resolving r1 SHOULDs 2 and 3 changed shipped behaviour beyond the design text. (a) Doctor now fails on a missing or stale stamp on an asset every build uses: the hyperv relay boot VHDX and the vz prepared image (driver/hostlink.go LauncherStamp.Required/Blocks, cmd/warden/host.go:265). Decision 8 and the design's pseudocode (design:762, 'doctor (each VM driver): ... each stamp's state') still describe a doctor that only prints. (b) A vz --image disk outside the cache now gets a different fix ('omit --image ...', driver/vz/driver.go customImageFix). The change is not silent: Jeff sent SHOULDs 2 and 3 to this Implement round (r3 addendum), and SHOULD 2's suggestion was this behaviour. The user docs are updated (cli.md, drivers.md, host.go help). But plan task 56 (design:1781) only folds in the a14 (d) answer, 'with no change of substance beyond it'. As written, Consolidation would leave the design describing the old doctor.",
+      "suggestion": "At Consolidation, widen task 56 (or add a line to the Consolidation section) so Decision 8 and the design:762 pseudocode record the two behaviours. (a) Doctor is BLOCKED and exits non-zero on a missing or stale stamp on the hyperv relay boot VHDX and the vz prepared image, and only reports one on the qemu and firecracker direct-boot initramfs. (b) A vz --image outside the cache gets the 'omit --image' fix. Cite Review r1 SHOULDs 2 and 3 as the source."
+    }
+  ],
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 0,
+    "SHOULD": 3
+  },
+  "resolved_since_previous": [
+    {
+      "id": 1,
+      "rule": "BOOT-07",
+      "severity": "MUST-review",
+      "status": "resolved",
+      "note": "Rule change BOOT-03 is declared (rule_changes, Rule changes section at 303e713) and approved by Jeff at 303e713 (design:1956), which also accepts the Bootstrap comparison as amended by a14 (d). Task 49 landed at 14e4d91. The bootstrap.md text is identical to the approved Proposed wording once line wraps are normalized. `wf check` clears it (FLOW-14), and `make enforcement` reports no enforcement change. The tier-1 BOOT-07 hint no longer fires."
+    },
+    {
+      "id": 2,
+      "rule": "UX-09",
+      "severity": "SHOULD",
+      "status": "resolved",
+      "note": "9f3e35a: LauncherStamp.Required/Blocks; hyperv relayBootStamp and vz imageStamp/LauncherStamps set Required; doctorBuildLink sets blocked on Blocks(); report lines carry 'BLOCKED: '. Tested by TestLauncherStampBlocks (6 cases incl. 'required not found' not blocking). host.go help and cli.md updated (UX-01). The design text lags: finding 10."
+    },
+    {
+      "id": 3,
+      "rule": "UX-04",
+      "severity": "SHOULD",
+      "status": "resolved",
+      "note": "3defabb: imageStamp(imgDir, cacheDir) names customImageFix for a disk outside the cache ('omit --image to build from the prepared image in <cache> (`sudo warden image prepare --driver vz` prepares or refreshes it)'). insideDir rejects a sibling with the cache as prefix. TestImageStamp has table cases for the cache image, a custom --image and the prefix sibling. drivers.md documents it."
+    },
+    {
+      "id": 4,
+      "rule": "GLOBAL-04",
+      "severity": "SHOULD",
+      "status": "resolved",
+      "note": "8ee9eee: parseAddrs, parseRoutes, encodeAddrRequest, parseAck and flushAddrs split out of the socket I/O, with tier-0 tests in cmd/relay/buildif_linux_test.go (TestParseAddrs, TestParseRoutes, TestEncodeAddrRequest, TestParseAck, TestFlushAddrs). flushAddrs treats EADDRNOTAVAIL as already removed. parseAck returns syscall.Errno, so errors.Is matches unix.EADDRNOTAVAIL (an alias). e00c7bd moved the test addresses to documentation ranges for TestNoStrayLinkLiterals. The syscalls themselves still belong to tier 2 and native, as intended."
+    },
+    {
+      "id": 6,
+      "rule": "FLOW-15",
+      "severity": "SHOULD",
+      "status": "resolved",
+      "note": "626a198: the resolver line and the slot line are separate `firecracker:` steps again (overview.md:163-167)."
+    },
+    {
+      "id": 7,
+      "rule": "UX-01",
+      "severity": "SHOULD",
+      "status": "resolved",
+      "note": "9113822: configuration.md:101 now says the container driver ignores a valid setting and that a malformed one is refused at load by every command and driver."
+    },
+    {
+      "id": 8,
+      "rule": "UX-04",
+      "severity": "SHOULD",
+      "status": "resolved",
+      "note": "69fe17c: refresh-cache.sh is current only when relay-boot.link-channel equals $channel. --check reports the link stamp. The channel string is named once and written from the variable. TestStampScriptsWriteChannel pins the write, the requirement and the single occurrence. shellcheck 0.10.0 (scratch venv) reports nothing on it."
+    }
+  ],
+  "carried_forward": [
+    {
+      "id": 5,
+      "rule": "GLOBAL-04",
+      "severity": "SHOULD",
+      "reason": "left for Consolidation by Jeff (r3 addendum)"
+    },
+    {
+      "id": 9,
+      "rule": "TEST-08",
+      "severity": "SHOULD",
+      "reason": "left for Consolidation by Jeff (r3 addendum); plan task 55 hands the TEST-08 list to security-suite"
+    }
+  ],
+  "new_since_previous": [
+    {
+      "id": 10,
+      "rule": "FLOW-10",
+      "severity": "SHOULD"
+    }
+  ],
+  "suppressions": [],
+  "suppressions_note": "The previous report had no suppressions, and tier 1 applied no Tier1-Allow trailers (0 suppressed). Findings 5 and 9 are not suppressions. They stay open findings that the human chose to defer to Consolidation, so they are counted.",
+  "back_to_design": false,
+  "back_to_design_note": "No. The rule change is approved and lands as worded. The doctor change follows the human's routing of r1 SHOULD 2, so it is a design-text update at Consolidation (finding 10), not a redesign. No Decision, confirmed question or BOOT invariant is invalidated.",
+  "routing": {
+    "tier1_red": false,
+    "wf_implement_fix": "none: tier 1 is green at 69fe17c",
+    "must_findings_route": "No MUST and no MUST-review, so nothing goes back to wf-implement. Findings 5, 9 and 10 are SHOULDs for Consolidation and the PR body (FLOW-08): Jeff deferred 5 and 9, and 10 widens task 56. Jeff acknowledges the GLOBAL-06 security note at merge (LINT-03)."
+  },
+  "informational": [
+    {
+      "rule": "GLOBAL-06",
+      "file": "docs/design/build-link-subnet.md",
+      "line": 990,
+      "note": "Unchanged from r1. security_boundary env-relay. The PR body carries the Security note and its points (bounded netlink step; the vm-mode dialer through safeDialContext; Hyper-V claim without a token, deferred by Decision 9; explicit UpstreamDNS not filtered against the link). New this round: Flush now tolerates EADDRNOTAVAIL, which only skips an address the kernel already removed."
+    },
+    {
+      "rule": "FLOW-10",
+      "file": "queue/",
+      "line": 0,
+      "note": "Carried over from r1. The follow-ups hyperv-relay-per-build-channel (Decision 9, a18) and baked-asset-staleness (Decision 10) are still not in queue/. Queue them with Jeff before Publish."
+    },
+    {
+      "rule": "TEST-01",
+      "file": ".github/workflows/firecracker.yml",
+      "line": 0,
+      "note": "CI tier 2 (firecracker 41933786130) and integration (41933782452) last ran on 878d510. The netlink path was refactored since, so re-dispatch both on 69fe17c before Publish."
+    },
+    {
+      "rule": "BOOT-07",
+      "file": "docs/development/bootstrap.md",
+      "line": 109,
+      "note": "r1's MUST-review 1 is settled. Jeff accepted the Bootstrap comparison as amended by a14 (d) with the BOOT-03 approval (design:1956). The comparison's BOOT-03 row (design:900) already names the direct-boot inits' lease, so the staleness r1 noted there is fixed. The tier-1 BOOT-07 hint no longer fires."
+    },
+    {
+      "rule": "LINT-01",
+      "file": "docs/development/README.md",
+      "line": 25,
+      "note": "Carried over from r1. The rule index still holds RELAY-01 twice (README.md:25 is the format example). This predates the branch and is out of LINT-04 scope."
+    }
+  ]
+}
