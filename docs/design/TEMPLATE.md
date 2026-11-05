@@ -89,8 +89,8 @@ code is listed as explicit tasks (FLOW-06).
 One entry per review (FLOW-19): the date, the outcome (approved, or changes),
 the decisions taken, and for an approval, `approved at <sha>`, the commit the
 approved design was read at, and one `rule change <ID> approved at <sha>` line
-per approved rule change (FLOW-14). A re-review also says what changed since the last
-approval.
+per approved rule change (FLOW-14). A re-review also says what changed since the
+last approval.
 
 ## Consolidation
 

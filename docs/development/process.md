@@ -408,8 +408,8 @@ and CI also run tier 1 built from the merge base's code with the branch's
 configuration (`tools/tier1/rules.yaml` and `golangci.yml`) against the branch,
 and every finding it reports that the branch's tier 1 no longer reports must be
 on a rule an approved `rule_changes` entry names; Review also runs the merge
-base's `wf check`. A configuration edit is an approved path that Review judges. The agent part judges whether each edit matches the approved
-wording.
+base's `wf check`. A configuration edit is an approved path that Review judges.
+The agent part judges whether each edit matches the approved wording.
 
 ---
 
@@ -554,10 +554,9 @@ Design decides whether the review is needed and records it as
 allowed only when the design declares `alters_relationships: false`, no `seams`,
 `security_boundary: none` and no blocking `native_validation`; raises no assumed
 question; declares no `rule_changes`; and the branch changes no rule in this
-directory. Every skipped review
-is listed in the digest, so the human can call one back. An archived design
-need not carry `design_review`: it is past the gate, and designs archived
-before this rule never had the key.
+directory. Every skipped review is listed in the digest, so the human can call
+one back. An archived design need not carry `design_review`: it is past the
+gate, and designs archived before this rule never had the key.
 
 When a feature returns to Design (FLOW-06), a fresh review follows the new
 plan. Whether it may be skipped is judged on what changed since the last
@@ -568,8 +567,7 @@ needs no re-approval.
 
 The automated part checks the recorded decision, the skip criteria and that each
 review the queue seeded has an approval (a `rule change` line is not one); the
-agent part judges whether the
-session covered the design and the plan.
+agent part judges whether the session covered the design and the plan.
 
 ---
 
