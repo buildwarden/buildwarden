@@ -98,7 +98,9 @@ Every VM driver joins the build VM to the relay over one private link, a
 is `100.127.255.252/30` (relay `100.127.255.253`, build VM
 `100.127.255.254`), the last `/30` of RFC 6598 shared address space, which no
 common LAN, VPC or resolver plan uses. The container driver has its own
-per-build network and ignores the setting.
+per-build network and ignores a valid setting. A malformed `[vm] build_link`
+is refused when the config file loads, by every command and with every
+driver (container included), as any config error is.
 
 Inside the relay the link is a connected route, so an upstream address inside
 it (a resolver, a private mirror, a collector) is sent to the build VM
