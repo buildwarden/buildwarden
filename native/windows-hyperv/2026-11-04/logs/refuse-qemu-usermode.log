@@ -1,0 +1,2 @@
+[warden] ERROR: --build-link: 10.0.2.0/30 overlaps qemu's user-mode network (10.0.2.0/24)
+  To fix: pass --build-link a valid /30, e.g. --build-link 100.126.255.252/30

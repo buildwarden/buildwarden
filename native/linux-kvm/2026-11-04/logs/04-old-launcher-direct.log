@@ -1,0 +1,4 @@
+[warden] preparing build environment...
+warden: build FAILED
+[warden] ERROR: firecracker direct-boot launcher initramfs predates the configurable build link and must be rebuilt once (no link-channel stamp at /home/jeff/fcval/bin/firecracker-build-initramfs.cpio.gz.link-channel)
+  To fix: tools/firecracker-vm/build-initramfs.sh

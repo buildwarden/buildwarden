@@ -1,0 +1,17 @@
+build link 100.127.255.252/30 (default)
+build link: no host interface overlaps it
+firecracker direct-boot launcher initramfs: link-channel stamp current
+ok    /dev/kvm
+ok    firecracker
+ok    boot assets
+ok    disk-image builds (qemu-img, genisoimage)
+ok    network slots owned by this user: 2 (wfc0 to wfc1)
+ok    slot sysctls
+ok    firewalld
+skip  rules and FORWARD policy (reading them needs root: sudo warden doctor --driver firecracker)
+FAIL  upstream DNS for the relay: 
+      the relay needs an off-host upstream DNS server, and the host has only resolvers it cannot reach: 100.127.255.253
+      to fix: the relay's link to the build VM is 100.127.255.252/30, so it cannot reach a resolver there: list an off-host DNS server outside it as a nameserver in /etc/resolv.conf (under systemd-resolved, set DNS= in /etc/systemd/resolved.conf), or set [vm] build_link in warden.toml (or --build-link) to a /30 that holds none of the host's resolvers
+warn  reflink copies on the cache filesystem
+      each disk-image build copies its whole rootfs (cp: failed to clone '/home/jeff/.cache/warden/firecracker/work/reflink-probe-781707718.copy' from '/home/jeff/.cache/warden/firecracker/work/reflink-probe-781707718': Operation not supported); a cache on btrfs or XFS (reflink=1) makes it instant
+ok    orphaned VMMs

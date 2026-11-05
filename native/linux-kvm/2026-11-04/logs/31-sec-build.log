@@ -1,0 +1,65 @@
+[warden] preparing build environment...
+[warden] starting relay on slot 0...
+[relay] [    0.011611] Kernel command line: console=ttyS0 reboot=k panic=1 pci=off warden.net=static warden.nat_ip=100.64.88.2 warden.nat_prefix=30 warden.nat_gw=100.64.88.1 warden.dns=8.8.8.8,8.8.4.4 warden.claim_token=510a710476dd7c903b71abf97e9815bb367ab62a47d71fc6f890c158b3507967 pci=off virtio_mmio.device=4K@0xc0001000:5 virtio_mmio.device=4K@0xc0002000:6 virtio_mmio.device=4K@0xc0003000:7
+[relay] [    0.012477] mem auto-init: stack:off, heap alloc:off, heap free:off
+[relay] [    0.014573] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[relay] [    0.366558] nfs4filelayout_init: NFSv4 File Layout Driver Registering...
+[relay] init: build-if=eth0 up; the relay addresses it from the claim
+[relay] init: nat-if=eth1     inet 100.64.88.2/30 scope global eth1 
+[relay] init: dns=nameserver 8.8.8.8
+[relay] init: ready; relay awaiting claim on :8301
+[relay] 2026/11/05 05:30:15 relay: awaiting claim on 0.0.0.0:8301
+[relay] 2026/11/05 05:30:16 relay: bu[warden] collector: environment (1396 bytes)
+[relay] 2026/11/05 05:30:16 relay: environment recorded (1396 bytes)
+[relay] 2026/11/05 05:30:16 relay: listening on :53/udp :80/tcp :44[warden] collector: ready
+[relay] 2026/11/05 05:30[warden] starting build...
+:16 relay: claimed
+[warden] running...
+[build] [    0.073885] mem auto-init: stack:off, heap alloc:off, heap free:off
+[build] [    0.163899] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[build] [    0.420794] nfs4filelayout_init: NFSv4 File Layout Driver Registering...
+[build] [[0;1;31mFAILED[0m] Failed to start [0;1;39mmultipathd.service[0m…Mapper Multipath Device Controller.
+[build]          Starting [0;1;39mcloud-init-local.service[0m …-init: Local Stage (pre-network)...
+[build] [[0;32m  OK  [0m] Finished [0;1;39mcloud-init-local.service[0m …ud-init: Local Stage (pre-network).
+[build]          Starting [0;1;39mcloud-init.service[0m - Cloud-init: Network Stage...
+[build] [[0;32m  OK  [0m] Finished [0;1;39mcloud-init.service[0m - Cloud-init: Network Stage.
+[build]          Starting [0;1;39mcloud-config.service[0m - Cloud-init: Config Stage...
+[build] [[0;32m  OK  [0m] Finished [0;1;39mcloud-config.service[0m - Cloud-init: Config Stage.
+[build]          Starting [0;1;39mcloud-final.service[0m - Cloud-init: Final Stage...
+[build] [    5.709206] cloud-init[1137]: warden-io: configuring network
+[build] [    5.709971] cloud-init[1137]: warden-io: waiting for relay
+[build] [    5.718696] cloud-init[1137]: warden-io: installing CA
+[build] [    5.730001] cloud-init[1137]: warden-io: applying baseline (trust exclusive)
+[build] [    5.731791] cloud-init[1137]: warden-io: fetching build script
+[build] [    5.732626] cloud-init[1137]: warden-io: running build.sh
+[build] [    5.742488] cloud-init[1137]: 1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
+[build] [    5.743854] cloud-init[1137]:1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
+2: eth0    inet 100.127.255.254/30 brd 100.127.255.255 scope global eth0\       valid_lft forever preferred_lft forever
+ 2: eth0    inet 100.127.255.254/30 brd 100.127.255.255 scope global eth0\       valid_lft forever preferred_lft forever
+[build] [    5.748077] cloud-init[1137]: default via 100.127.255.253 dev eth0 proto static
+[build] [    5.751085] cloud-init[1137]default via 100.127.255.253 dev eth0 proto static 
+[build] [    5.753006] cloud-inrelay=100.127.255.253
+it[1137]: relay=100.127.255.253
+[build] build login: [   20.763111] ccurl: (28) Operation timed out after 15002 milliseconds with 21 bytes received
+loud-init[1137]: curl: (28) Operation timed out after 15002 milliseconds with 21 bytes received
+[build] [   20.763865] cloud-init[1137]: code=502
+[build] [   20.765952] cloud-init[1137]: curl exit=28
+code=502
+curl exit=28
+[build] [   20.773655] cloud-init[1137]: curl: (7) Failed to connect to 100.127.255.254 port 80 after 0 ms: Couldn't connect to server
+[build] [curl: (7) Failed to connect to 100.127.255.254 port 80 after 0 ms: Couldn't connect to server
+   20.774112] cloud-init[1137]: code=000
+[build] [   20.776620] cloud-init[1137]: curcode=000
+[build] [   20.777174] cloud-init[1137]: == direct egress (expected blocked)
+curl exit=7
+== direct egress (expected blocked)
+[build] [   25.777420] cloud-init[1137]: egress-blocked-tcp22
+egress-blocked-tcp22
+[build] [   25.779320] cloududp-send-accepted-locally
+-init[1137]: udp-send-accepted-locally
+[relay] 2026/11/05 05:30:45 relay: DHCP OFFER 100.127.255.254 to 76:90:a8:97:dc:39
+[build] [   55.916767] cloud-init[1137]: 1616337 /tmp/six.html
+337 /tmp/six.html
+[warden] collector: ledger (5901 bytes)
+[warden] collector: complete exit=0 msg=""
+warden: build SUCCEEDED (output: out-sec)

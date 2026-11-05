@@ -1,0 +1,4 @@
+firecracker: 2 slot(s) for jeff (uid 1000), uplink eth0 (mtu 1280)
+  interfaces created: 0, verified: 8
+  bridge table warden_fc and the WARDEN-FC chains (re)loaded; net.ipv4.ip_forward=1
+  this is runtime state: re-run setup after a reboot (see the drivers guide)

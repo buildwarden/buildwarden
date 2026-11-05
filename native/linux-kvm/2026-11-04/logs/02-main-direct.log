@@ -1,0 +1,38 @@
+[warden] preparing build environment...
+[warden] hashing firecracker-vmlinux (42.9 MiB, first use or changed)...
+[warden] hashing firecracker-build-initramfs.cpio.gz (629.3 KiB, first use or changed)...
+[warden] starting relay on slot 0...
+[relay] [    0.009094] Kernel command line: console=ttyS0 reboot=k panic=1 pci=off warden.net=static warden.nat_ip=100.64.88.2 warden.nat_prefix=30 warden.nat_gw=100.64.88.1 warden.dns=8.8.8.8,8.8.4.4 warden.claim_token=2a0674e3af5134b9c450c4c2c6a65e96cb5d98787c933e45fcbfd4f2faaa62f6 pci=off virtio_mmio.device=4K@0xc0001000:5 virtio_mmio.device=4K@0xc0002000:6 virtio_mmio.device=4K@0xc0003000:7
+[relay] [    0.009905] mem auto-init: stack:off, heap alloc:off, heap free:off
+[relay] [    0.011435] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[relay] [    0.254048] nfs4filelayout_init: NFSv4 File Layout Driver Registering...
+[relay] init: build-if=eth0 10.0.0.1/30
+[relay] init: nat-if=eth1     inet 100.64.88.2/30 scope global eth1 
+[relay] init: dns=nameserver 8.8.8.8
+[relay] init: ready; relay awaiting claim on :8301
+[relay] 2026/11/05 05:24:42 relay: awaiting claim on 0.0.0.0:8301
+[warden] collector: environment (909 bytes)
+[relay] 2026/11/05 05:24:43 relay: environment recorded (909 bytes)
+[relay] 2026/11/05 05:24:43 relay: listening on :53/udp [warden] collector: ready
+[warden] starting build...
+[relay] 2026/11/05 05:24:43 relay: claime[build] 2026-11-04T21:24:43.286404844 [anonymous-instance:main] Running Firecracker v1.17.0
+[warden] running...
+[build] [    0.074727] mem auto-init: stack:off, heap alloc:off, heap free:off
+[build] [    0.168323] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[build] [    0.405453] nfs4filelayout_init: NFSv4 File Layout Driver Registering...
+[build] init: ready
+[build] warden-io: configuring network
+[build] warden-io: waiting for relay
+[build] warden-io: installing CA
+[build] warden-io: applying baseline (trust exclusive)
+[build] warden-io: fetching build script
+[build] warden-io: running build.sh
+[build] hello-from-direct-boot
+hello-from-direct-boot
+[build] 2: eth0    inet 10.0.0.2/30 sco6.1.191
+[build] default via 10.0.0.1 dev eth0 
+2: eth0    inet 10.0.0.2/30 scope global eth0\       valid_lft forever preferred_lft forever
+default via 10.0.0.1 dev eth0 
+[warden] collector: ledger (3452 bytes)
+[warden] collector: complete exit=0 msg=""
+[build] [    0.614023] Kernel panic - not syncing: Attempted to kill init! exitcwarden: build SUCCEEDED (output: out-main-direct)

@@ -1,0 +1,19 @@
+════════════════════════════════════════════════════════════════════════════════
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  ✅
+  ENVIRONMENT  vm-disk-chain/v1  payload verified
+    firecracker linux/amd64
+    kernel   firecracker-vmlinux  42.9 MB  sha256:169495b7a8e3  local
+    disk     ubuntu_24_04-04e8f2461a16.raw  3.5 GB  sha256:efcae25cf0bc  prepared by warden dev from 1 input(s)
+    seed     6 per-build files
+════════════════════════════════════════════════════════════════════════════════
+[1;35m✅ ENVIRONMENT  (1396 bytes)[0m
+[1;32m✅ GET /bootstrap (42 bytes)[0m
+[1;32m✅ GET /build-script (1012 bytes)[0m
+✅ GET http://100.127.255.253/ (21 bytes)
+✅ GET https://pypi.org/simple/six/ (16337 bytes)
+
+════════════════════════════════════════════════════════════════════════════════
+  SUMMARY: 14 records, 5 requests, 20.2 KB audited
+  SIGNATURES: ✅ All 15 signatures valid
+  COMPLETENESS: ✅ All channels closed
+════════════════════════════════════════════════════════════════════════════════

@@ -1,0 +1,16 @@
+build link 100.126.255.252/30 (warden.toml)
+build link: no host interface overlaps it
+hyperv relay boot VHDX: link-channel stamp current
+Hyper-V hypervisor present ........... yes
+Hyper-V feature enabled .............. yes
+Token read ........................... current process (non-elevated)
+Full Administrator ................... no  (needed for: New-VMSwitch, New-NetNat, New-NetIPAddress)
+Hyper-V Administrators ............... yes (covers: New-VM, Start-VM, Remove-VM, adapters, VHDX)
+Dev switch 'warden-dev' .............. present
+Privileged service ................... reachable
+Image cache .......................... C:\Users\jeff\AppData\Local\warden\hyperv
+Prepared base ........................ windows-server-2025-20261030T175627Z.vhdx, 5.5d old, evaluation grace ends 2026-11-09 17:57Z (4.5d left)
+
+Resolved:
+  VM lifecycle ......... OK (direct, Hyper-V Administrators)
+  Network .............. OK (fresh per-build via privileged service)

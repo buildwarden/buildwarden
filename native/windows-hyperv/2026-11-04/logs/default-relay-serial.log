@@ -1,0 +1,7 @@
+2026/11/04 21:30:30 relay: build-if eth0 100.127.255.253/30 from the claim; DHCP offers 100.127.255.254
+2026/11/04 21:30:30 relay: environment recorded (1779 bytes)
+2026/11/04 21:30:30 relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp
+2026/11/04 21:30:30 relay: claimed
+2026/11/04 21:30:38 relay: DHCP OFFER 100.127.255.254 to 00:15:5d:cc:b1:eb
+2026/11/04 21:30:38 relay: DHCP ACK 100.127.255.254 to 00:15:5d:cc:b1:eb
+2026/11/04 21:30:43 upstream error: blocked: connection to 100.127.255.253 (100.127.255.253) denied

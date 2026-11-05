@@ -1,0 +1,2 @@
+[warden] ERROR: --nat-prefix 100.126.255.0/24 overlaps the build link 100.126.255.252/30
+  To fix: pass another --nat-prefix (default 192.168.240.0/20), or set [vm] build_link in warden.toml to a /30 outside it

@@ -1,0 +1,192 @@
+warden: build VM "warden-build-o4hh3v0p" COM1 -> \\.\pipe\warden-build-o4hh3v0p (attach a serial reader to observe guest boot)
+== guest
+Microsoft Windows NT 10.0.26100.0
+== ipconfig /all
+
+Windows IP Configuration
+
+   Host Name . . . . . . . . . . . . : WIN-M40NENGCMA5
+   Primary Dns Suffix  . . . . . . . : 
+   Node Type . . . . . . . . . . . . : Hybrid
+   IP Routing Enabled. . . . . . . . : No
+   WINS Proxy Enabled. . . . . . . . : No
+
+Ethernet adapter Ethernet:
+
+   Connection-specific DNS Suffix  . : 
+   Description . . . . . . . . . . . : Microsoft Hyper-V Network Adapter
+   Physical Address. . . . . . . . . : 00-15-5D-CC-B1-EB
+   DHCP Enabled. . . . . . . . . . . : Yes
+   Autoconfiguration Enabled . . . . : Yes
+   Link-local IPv6 Address . . . . . : fe80::7060:6bff:82cb:c628%6(Preferred) 
+   IPv4 Address. . . . . . . . . . . : 100.127.255.254(Preferred) 
+   Subnet Mask . . . . . . . . . . . : 255.255.255.252
+   Lease Obtained. . . . . . . . . . : Thursday, November 5, 2026 5:30:38 AM
+   Lease Expires . . . . . . . . . . : Sunday, December 12, 2162 11:58:58 AM
+   Default Gateway . . . . . . . . . : 100.127.255.253
+   DHCP Server . . . . . . . . . . . : 100.127.255.253
+   DHCPv6 IAID . . . . . . . . . . . : 100668765
+   DHCPv6 Client DUID. . . . . . . . : 00-01-00-01-32-7D-CC-D6-00-15-5D-CC-B1-EB
+   DNS Servers . . . . . . . . . . . : 100.127.255.253
+   NetBIOS over Tcpip. . . . . . . . : Enabled
+== route print -4
+===========================================================================
+Interface List
+  6...00 15 5d cc b1 eb ......Microsoft Hyper-V Network Adapter
+  1...........................Software Loopback Interface 1
+===========================================================================
+
+IPv4 Route Table
+===========================================================================
+Active Routes:
+Network Destination        Netmask          Gateway       Interface  Metric
+          0.0.0.0          0.0.0.0  100.127.255.253  100.127.255.254     15
+  100.127.255.252  255.255.255.252         On-link   100.127.255.254    271
+  100.127.255.254  255.255.255.255         On-link   100.127.255.254    271
+  100.127.255.255  255.255.255.255         On-link   100.127.255.254    271
+        127.0.0.0        255.0.0.0         On-link         127.0.0.1    331
+        127.0.0.1  255.255.255.255         On-link         127.0.0.1    331
+  127.255.255.255  255.255.255.255         On-link         127.0.0.1    331
+        224.0.0.0        240.0.0.0         On-link         127.0.0.1    331
+        224.0.0.0        240.0.0.0         On-link   100.127.255.254    271
+  255.255.255.255  255.255.255.255         On-link         127.0.0.1    331
+  255.255.255.255  255.255.255.255         On-link   100.127.255.254    271
+===========================================================================
+Persistent Routes:
+  None
+== Get-NetIPAddress (IPv4)
+
+InterfaceAlias              IPAddress       PrefixLength PrefixOrigin SuffixOrigin AddressState
+--------------              ---------       ------------ ------------ ------------ ------------
+Ethernet                    100.127.255.254           30         Dhcp         Dhcp    Preferred
+Loopback Pseudo-Interface 1 127.0.0.1                  8    WellKnown    WellKnown    Preferred
+
+
+
+== default route
+
+InterfaceAlias NextHop         RouteMetric
+-------------- -------         -----------
+Ethernet       100.127.255.253           0
+
+
+
+== Dhcp-Client admin log (last 10)
+
+
+TimeCreated : 10/30/2026 5:56:43 PM
+Id          : 50041
+Message     : Domain change notification is received from DNS
+
+
+
+
+== warden-run.log
+[warden-run] 2026-11-05T05:30:41.5205921+00:00 start
+[warden-run] 2026-11-05T05:30:41.5357433+00:00 warden-io.exe staged; running initialize --gateway=100.127.255.253 --ip=100.127.255.254/30
+warden-io: configuring network
+warden-io: waiting for relay
+warden-io: installing CA
+warden-io: applying baseline (trust append)
+warden-io: fetching build script
+warden-io: running build.ps1
+== guest
+Microsoft Windows NT 10.0.26100.0
+== ipconfig /all
+
+Windows IP Configuration
+
+   Host Name . . . . . . . . . . . . : WIN-M40NENGCMA5
+   Primary Dns Suffix  . . . . . . . : 
+   Node Type . . . . . . . . . . . . : Hybrid
+   IP Routing Enabled. . . . . . . . : No
+   WINS Proxy Enabled. . . . . . . . : No
+
+Ethernet adapter Ethernet:
+
+   Connection-specific DNS Suffix  . : 
+   Description . . . . . . . . . . . : Microsoft Hyper-V Network Adapter
+   Physical Address. . . . . . . . . : 00-15-5D-CC-B1-EB
+   DHCP Enabled. . . . . . . . . . . : Yes
+   Autoconfiguration Enabled . . . . : Yes
+   Link-local IPv6 Address . . . . . : fe80::7060:6bff:82cb:c628%6(Preferred) 
+   IPv4 Address. . . . . . . . . . . : 100.127.255.254(Preferred) 
+   Subnet Mask . . . . . . . . . . . : 255.255.255.252
+   Lease Obtained. . . . . . . . . . : Thursday, November 5, 2026 5:30:38 AM
+   Lease Expires . . . . . . . . . . : Sunday, December 12, 2162 11:58:58 AM
+   Default Gateway . . . . . . . . . : 100.127.255.253
+   DHCP Server . . . . . . . . . . . : 100.127.255.253
+   DHCPv6 IAID . . . . . . . . . . . : 100668765
+   DHCPv6 Client DUID. . . . . . . . : 00-01-00-01-32-7D-CC-D6-00-15-5D-CC-B1-EB
+   DNS Servers . . . . . . . . . . . : 100.127.255.253
+   NetBIOS over Tcpip. . . . . . . . : Enabled
+== route print -4
+===========================================================================
+Interface List
+  6...00 15 5d cc b1 eb ......Microsoft Hyper-V Network Adapter
+  1...........................Software Loopback Interface 1
+===========================================================================
+
+IPv4 Route Table
+===========================================================================
+Active Routes:
+Network Destination        Netmask          Gateway       Interface  Metric
+          0.0.0.0          0.0.0.0  100.127.255.253  100.127.255.254     15
+  100.127.255.252  255.255.255.252         On-link   100.127.255.254    271
+  100.127.255.254  255.255.255.255         On-link   100.127.255.254    271
+  100.127.255.255  255.255.255.255         On-link   100.127.255.254    271
+        127.0.0.0        255.0.0.0         On-link         127.0.0.1    331
+        127.0.0.1  255.255.255.255         On-link         127.0.0.1    331
+  127.255.255.255  255.255.255.255         On-link         127.0.0.1    331
+        224.0.0.0        240.0.0.0         On-link         127.0.0.1    331
+        224.0.0.0        240.0.0.0         On-link   100.127.255.254    271
+  255.255.255.255  255.255.255.255         On-link         127.0.0.1    331
+  255.255.255.255  255.255.255.255         On-link   100.127.255.254    271
+===========================================================================
+Persistent Routes:
+  None
+== Get-NetIPAddress (IPv4)
+
+InterfaceAlias              IPAddress       PrefixLength PrefixOrigin SuffixOrigin AddressState
+--------------              ---------       ------------ ------------ ------------ ------------
+Ethernet                    100.127.255.254           30         Dhcp         Dhcp    Preferred
+Loopback Pseudo-Interface 1 127.0.0.1                  8    WellKnown    WellKnown    Preferred
+
+
+
+== default route
+
+InterfaceAlias NextHop         RouteMetric
+-------------- -------         -----------
+Ethernet       100.127.255.253           0
+
+
+
+== Dhcp-Client admin log (last 10)
+
+
+TimeCreated : 10/30/2026 5:56:43 PM
+Id          : 50041
+Message     : Domain change notification is received from DNS
+
+
+
+
+== warden-run.log
+gateway=100.127.255.253
+== https via Invoke-WebRequest
+status=200
+== https via curl.exe (no --ssl-no-revoke)
+code=200 bytes=16337
+curl exit=0
+== http to the link's relay address through the proxy (expected refused)
+curl: (28) Operation timed out after 15007 milliseconds with 21 bytes received
+code=502
+curl exit=28
+== direct egress to 1.1.1.1:8080 (expected blocked)
+completed=False connected=False
+== relay CA in root store
+warden roots: 1
+== pause 45 s for the host-side DHCP probe
+done
+warden: build SUCCEEDED (output: .scratch/hv/out-default)

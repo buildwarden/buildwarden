@@ -1,0 +1,2 @@
+[warden] ERROR: --build-link: 192.168.240.0/30 overlaps the hyperv driver's default NAT (192.168.240.0/20)
+  To fix: pass --build-link a valid /30, e.g. --build-link 100.126.255.252/30

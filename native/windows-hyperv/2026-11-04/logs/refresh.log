@@ -1,0 +1,49 @@
+make: Entering directory 'C:/Users/jeff/buildwarden-native/.scratch/hv'
+cd ../build-link-subnet && tools/relay-vm/hyperv/refresh-cache.sh
+rebuilding the relay boot VHDX (relay source e00c7bd068b7, cached '353e8a7d94dc1e3162cad1ec3824741850820f31')
+Assembling rootfs (offline)...
+Extracting kernel + modules...
+  kernel: 6.12.109-0-virt
+  baked relay: /sbin/relay (16M)
+Packing initramfs with: cpio
+
+Hyper-V relay VM artifacts (x86_64, kernel 6.12.109-0-virt):
+  Kernel:    /mnt/c/Users/jeff/buildwarden-native/.scratch/build-link-subnet/tools/relay-vm/hyperv/output/vmlinuz    (12M)
+  Initramfs: /mnt/c/Users/jeff/buildwarden-native/.scratch/build-link-subnet/tools/relay-vm/hyperv/output/initramfs.cpio.gz  (13M)
+  UKI (EFI): /mnt/c/Users/jeff/buildwarden-native/.scratch/build-link-subnet/tools/relay-vm/hyperv/output/warden-relay-boot.efi  (24M)
+
+The UKI is the \EFI\BOOT\BOOTX64.EFI payload for the relay boot VHDX.
+Per-build kernel cmdline (relay config) is layered by the driver, not baked here.
+--- ESP contents ---
+ Volume in drive : is WARDENESP  
+ Volume Serial Number is 11F4-3D96
+Directory for ::/EFI/BOOT
+
+.            <DIR>     2026-11-04  21:29 
+..           <DIR>     2026-11-04  21:29 
+BOOTX64  EFI  24778722 2026-11-04  21:29 
+        3 files          24 778 722 bytes
+                         41 278 976 bytes free
+
+--- GPT layout ---
+Disk /tmp/tmp.fRpLRKJSus/disk.raw: 135168 sectors, 66.0 MiB
+Sector size (logical): 512 bytes
+Disk identifier (GUID): DE71893B-2B06-4575-96D6-301629E047B4
+Partition table holds up to 128 entries
+Main partition table begins at sector 2 and ends at sector 33
+First usable sector is 34, last usable sector is 135134
+Partitions will be aligned on 2048-sector boundaries
+Total free space is 4029 sectors (2.0 MiB)
+
+Number  Start (sector)    End (sector)  Size       Code  Name
+   1            2048          133119   64.0 MiB    EF00  EFI System Partition
+--- VHDX ---
+image: /mnt/c/Users/jeff/buildwarden-native/.scratch/build-link-subnet/tools/relay-vm/hyperv/output/warden-relay-boot.vhdx
+file format: vhdx
+virtual size: 66 MiB (69206016 bytes)
+disk size: 114 MiB
+cluster_size: 8388608
+-rwxrwxrwx 1 jeff jeff 114M Nov  4 21:29 /mnt/c/Users/jeff/buildwarden-native/.scratch/build-link-subnet/tools/relay-vm/hyperv/output/warden-relay-boot.vhdx
+OK: /mnt/c/Users/jeff/buildwarden-native/.scratch/build-link-subnet/tools/relay-vm/hyperv/output/warden-relay-boot.vhdx
+installed /c/Users/jeff/AppData/Local/warden/hyperv/relay-boot.vhdx (relay source e00c7bd068b7); the previous disk is /c/Users/jeff/AppData/Local/warden/hyperv/relay-boot.vhdx.prev
+make: Leaving directory 'C:/Users/jeff/buildwarden-native/.scratch/hv'

@@ -1,0 +1,191 @@
+== setup --slots 2 (idempotent; the distro restarted since phase 1)
+rc=0
+firecracker: 2 slot(s) for jeff (uid 1000), uplink eth0 (mtu 1280)
+  interfaces created: 8, verified: 0
+  bridge table warden_fc and the WARDEN-FC chains (re)loaded; net.ipv4.ip_forward=1
+  this is runtime state: re-run setup after a reboot (see the drivers guide)
+== assets (new) beside the binary
+ca0b66e198e3194786d0f64649a75431f9aeb41f893f1c213dc14183bc2b165b  /home/jeff/fcval/bin/firecracker-build-initramfs.cpio.gz
+51b1fa1bb5db27dc5da5dd060e907b11ad1e6fed72367c3b995eafe260251887  /home/jeff/fcval/bin/firecracker-build-initramfs.cpio.gz.link-channel
+c7cf36e785b7c6e7f5788dd4c300c1d1cc0546b656d89e818c5916e2d87a702a  /home/jeff/fcval/bin/firecracker-relay-initramfs.cpio.gz
+169495b7a8e38be727862e607de44c08e5ff173c3125ce0ac37f041f4b672c23  /home/jeff/fcval/bin/firecracker-vmlinux
+WARDEN_LINK_CHANNEL=1
+== doctor (default link)
+rc=0
+build link 100.127.255.252/30 (default)
+build link: no host interface overlaps it
+firecracker direct-boot launcher initramfs: link-channel stamp current
+ok    /dev/kvm
+ok    firecracker
+ok    boot assets
+ok    disk-image builds (qemu-img, genisoimage)
+ok    network slots owned by this user: 2 (wfc0 to wfc1)
+ok    slot sysctls
+ok    firewalld
+skip  rules and FORWARD policy (reading them needs root: sudo warden doctor --driver firecracker)
+ok    upstream DNS for the relay: 8.8.8.8, 8.8.4.4
+warn  reflink copies on the cache filesystem
+      each disk-image build copies its whole rootfs (cp: failed to clone '/home/jeff/.cache/warden/firecracker/work/reflink-probe-530543566.copy' from '/home/jeff/.cache/warden/firecracker/work/reflink-probe-530543566': Operation not supported); a cache on btrfs or XFS (reflink=1) makes it instant
+ok    orphaned VMMs
+== default link: direct-boot build
+rc=0
+[relay] init: nat-if=eth1     inet 100.64.88.2/30 scope global eth1 
+[relay] init: ready; relay awaiting claim on :8301
+[relay] 2026/11/05 05:29:15 relay: build-if eth0 100.127.255.253/30 from the claim; DHCP offers 100.127.255.254
+[relay] 2026/11/05 05:29:15 relay: claimed
+[relay] 2026/11/05 05:29:16 relay: DHCP OFFER 100.127.255.254 to 42:ed:57:58:d1:d5
+[relay] 2026/11/05 05:29:16 relay: DHCP ACK 100.127.255.254 to 42:ed:57:58:d1:d5
+[build] init: link 100.127.255.254/30 via 100.127.255.253 from dhcp
+[build] init: ready
+[build] hello-from-direct-boot
+hello-from-direct-boot
+[build] 2: eth0    inet 100.127.255.254/30 scope global eth0\       val6.1.191
+[build] default via 100.127.255.253 dev eth0 
+2: eth0    inet 100.127.255.254/30 scope global eth0\       valid_lft forever preferred_lft forever
+default via 100.127.255.253 dev eth0 
+warden: build SUCCEEDED (output: out-def-direct)
+== default link: ubuntu disk build
+rc=0
+[relay] init: nat-if=eth1     inet 100.64.88.2/30 scope global eth1 
+[relay] init: ready; relay awaiting claim on :8301
+[relay] 2026/11/05 05:29:19 relay: build-if eth0 100.127.255.253/30 from the claim; DHCP offers 100.127.255.254
+[build] [[0;1;31mFAILED[0m] Failed to start [0;1;39mmultipathd.service[0m…Mapper Multipath Device Controller.
+[build] [    4.258957] cloud-init[1116]: 1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
+1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
+2: eth0    inet 100.127.255.254/30 brd 100.127.255.255 scope global eth0\       valid_lft forever preferred_lft forever
+[build] [    4.260427] cloud-init[1116]: 2: eth0    inet 100.127.255.254/30 brd 100.127.255.255 scope global etdefault via 100.127.255.253 dev eth0 proto static 
+[build] [    4.262061] cloud-init[1116]: default via 100.127.255.253 dev eth0 proto static
+[build] [    4.315013] cloud-init[1116]: 16337 /tmp/six.html
+16337 /tmp/six.html
+warden: build SUCCEEDED (output: out-def-ubuntu)
+== inspect --verify-disks out-def-direct
+rc=0
+  ENVIRONMENT  vm-disk-chain/v1  payload verified
+[1;35m✅ ENVIRONMENT  (900 bytes)[0m
+  SIGNATURES: ✅ All 11 signatures valid
+  COMPLETENESS: ✅ All channels closed
+== inspect --verify-disks out-def-ubuntu
+rc=0
+  ENVIRONMENT  vm-disk-chain/v1  payload verified
+[1;35m✅ ENVIRONMENT  (1395 bytes)[0m
+  SIGNATURES: ✅ All 11 signatures valid
+  COMPLETENESS: ✅ All channels closed
+== configured link by flag: doctor --build-link 100.126.255.252/30
+rc=0
+build link 100.126.255.252/30 (--build-link)
+build link: no host interface overlaps it
+firecracker direct-boot launcher initramfs: link-channel stamp current
+ok    upstream DNS for the relay: 8.8.8.8, 8.8.4.4
+== configured link: direct-boot build (no rebuild)
+rc=0
+[relay] init: nat-if=eth1     inet 100.64.88.2/30 scope global eth1 
+[relay] init: ready; relay awaiting claim on :8301
+[relay] 2026/11/05 05:29:27 relay: build-if eth0 100.126.255.253/30 from the claim; DHCP offers 100.126.255.254
+relay: claimed
+[relay] 2026/11/05 05:29:28 relay: DHCP OFFER 100.126.255.254 to 76:ee:36:40:c8:9f
+[relay] 2026/11/05 05:29:28 relay: DHCP ACK 100.126.255.254 to 76:ee:36:40:c8:9f
+[build] init: link 100.126.255.254/30 via 100.126.255.253 from dhcp
+[build] init: ready
+[build] hello-from-direct-boot
+hello-from-direct-boot
+[build] 2: eth0    inet 100.126.255.254/30 scope global eth0\     6.1.191
+[build] default via 100.126.255.253 dev eth02: eth0    inet 100.126.255.254/30 scope global eth0\       valid_lft forever preferred_lft forever
+default via 100.126.255.253 dev eth0 
+[build] [    0.71warden: build SUCCEEDED (output: out-alt-direct)
+== configured link: ubuntu disk build
+rc=0
+[relay] init: nat-if=eth1     inet 100.64.88.2/30 scope global eth1 
+[relay] init: ready; relay awaiting claim on :8301
+[relay] 2026/11/05 05:29:31 relay: build-if eth0 100.126.255.253/30 from the claim; DHCP offers 100.126.255.254
+[relay] 2026/11/05 05:29:31 relay: claimed
+[build] [[0;1;31mFAILED[0m] Failed to start [0;1;39mmultipathd.service[0m…Mapper Multipath Device Controller.
+[build] [    4.913189] cloud-init[1138]: 1: lo    inet 127.0.1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
+2: eth0    inet 100.126.255.254/30 brd 100.126.255.255 scope global eth0\       valid_lft forever preferred_lft forever
+[build] [    4.914507] cloud-init[1138]: 2: eth0    inedefault via 100.126.255.253 dev eth0 proto static 
+[build] [    4.916195] cloud-init[1138]: default via 100.126.255.253 dev eth0 proto static
+[build] [    4.972065] cloud-init[1138]: 16337 /tmp/six.h16337 /tmp/six.html
+warden: build SUCCEEDED (output: out-alt-ubuntu)
+== inspect --verify-disks out-alt-direct
+rc=0
+  ENVIRONMENT  vm-disk-chain/v1  payload verified
+[1;35m✅ ENVIRONMENT  (900 bytes)[0m
+  SIGNATURES: ✅ All 11 signatures valid
+  COMPLETENESS: ✅ All channels closed
+== inspect --verify-disks out-alt-ubuntu
+rc=0
+  ENVIRONMENT  vm-disk-chain/v1  payload verified
+[1;35m✅ ENVIRONMENT  (1395 bytes)[0m
+  SIGNATURES: ✅ All 11 signatures valid
+  COMPLETENESS: ✅ All channels closed
+== configured link by [vm] build_link in ./warden.toml
+rc=0
+build link 100.126.255.252/30 (warden.toml)
+build link: no host interface overlaps it
+rc=0
+[relay] init: nat-if=eth1     inet 100.64.88.2/30 scope global eth1 
+[relay] init: ready; relay awaiting claim on :8301
+[relay] 2026/11/05 05:29:40 relay: build-if eth0 100.126.255.253/30 from the claim; DHCP offers 100.126.255.254
+[relay] 2026/11/05 05:29:41 relay: DHCP OFFER 100.126.255.254 to b6:c3:63:00:b7:68
+[relay] 2026/11/05 05:29:41 relay: DHCP ACK 100.126.255.254 to b6:c3:63:00:b7:68
+[build] init: link 100.126.255.254/30 via 100.126.255.253 from dhcp
+[build] init: ready
+[build] hello-from-direct-boot
+hello-from-direct-boot
+[build] 2: eth0    inet 100.126.255.254/30 scope gl6.1.191
+2: eth0    inet 100.126.255.254/30 scope global eth0\       valid_lft forever preferred_lft forever
+[build] default via 100.126.255.253 dev eth0 
+[build] 100.126.255.252/30 dev eth0 scope lidefault via 100.126.255.253 dev eth0 
+[build] [    0.708warden: build SUCCEEDED (output: out-toml-direct)
+== flag over key: --build-link 100.125.255.252/30 with warden.toml present
+build link 100.125.255.252/30 (--build-link)
+build link: no host interface overlaps it
+== a bad [vm] build_link fails at load
+rc=1
+[warden] ERROR: [vm] build_link in warden.toml: 100.126.255.253/30 is not a network address; did you mean 100.126.255.252/30?
+  To fix: set [vm] build_link in warden.toml to a valid /30, e.g. build_link = "100.126.255.252/30", or remove it to use the default
+== overlap refusal: build --build-link 100.64.88.0/30 (expect refused at startup)
+rc=1
+[warden] ERROR: --build-link: 100.64.88.0/30 overlaps the firecracker driver's upstream range (100.64.88.0/22)
+  To fix: pass --build-link a valid /30, e.g. --build-link 100.126.255.252/30
+== host interface overlap: --build-link 172.19.128.44/30 (holds eth0's 172.19.128.47)
+rc=1
+build link 172.19.128.44/30 (--build-link)
+build link: BLOCKED: host interface address 172.19.128.47/20 is inside the link; set [vm] build_link in warden.toml (or pass --build-link) to a /30 no host network uses, e.g. build_link = "100.126.255.252/30"
+rc=1
+warden: build FAILED
+[warden] ERROR: the build link 172.19.128.44/30 holds a host interface address (172.19.128.47/20)
+  To fix: set [vm] build_link in warden.toml (or pass --build-link) to a /30 no host network uses, e.g. build_link = "100.126.255.252/30"
+no firecracker processes
+== host resolv.conf (unchanged throughout)
+nameserver 8.8.8.8
+nameserver 8.8.4.4
+== resolver inside the configured link only: doctor --build-link 100.126.255.252/30
+rc=1
+build link 100.126.255.252/30 (--build-link)
+build link: no host interface overlaps it
+FAIL  upstream DNS for the relay: 
+      the relay needs an off-host upstream DNS server, and the host has only resolvers it cannot reach: 100.126.255.253
+      to fix: the relay's link to the build VM is 100.126.255.252/30, so it cannot reach a resolver there: list an off-host DNS server outside it as a nameserver in /etc/resolv.conf (under systemd-resolved, set DNS= in /etc/systemd/resolved.conf), or set [vm] build_link in warden.toml (or --build-link) to a /30 that holds none of the host's resolvers
+== resolver inside the configured link only: build refuses in preflight
+rc=1
+warden: build FAILED
+[warden] ERROR: the relay needs an off-host upstream DNS server, and the host has only resolvers it cannot reach: 100.126.255.253
+  To fix: the relay's link to the build VM is 100.126.255.252/30, so it cannot reach a resolver there: list an off-host DNS server outside it as a nameserver in /etc/resolv.conf (under systemd-resolved, set DNS= in /etc/systemd/resolved.conf), or set [vm] build_link in warden.toml (or --build-link) to a /30 that holds none of the host's resolvers
+no firecracker processes
+== resolver inside the link plus 8.8.8.8: the in-link one is excluded
+rc=0
+ok    upstream DNS for the relay: 8.8.8.8
+== resolver inside the default link only: doctor
+rc=1
+FAIL  upstream DNS for the relay: 
+      the relay needs an off-host upstream DNS server, and the host has only resolvers it cannot reach: 100.127.255.253
+      to fix: the relay's link to the build VM is 100.127.255.252/30, so it cannot reach a resolver there: list an off-host DNS server outside it as a nameserver in /etc/resolv.conf (under systemd-resolved, set DNS= in /etc/systemd/resolved.conf), or set [vm] build_link in warden.toml (or --build-link) to a /30 that holds none of the host's resolvers
+== resolver 10.0.0.2 (the old link) now passes: doctor
+rc=0
+ok    upstream DNS for the relay: 10.0.0.2
+== host resolv.conf after
+nameserver 8.8.8.8
+nameserver 8.8.4.4
+no resolv.conf bind mount left
+== leftovers
+no firecracker processes

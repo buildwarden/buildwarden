@@ -1,0 +1,25 @@
+# Case 1 (upgrade path), build side: feat/build-link-subnet a68ac2c warden.exe against the
+# cached relay boot VHDX the wrapper had just refreshed from main 353e8a7 (no relay-boot.link-channel).
+# Refused before any VM boots; no warden-* VM or switch appeared (Get-VM / Get-VMSwitch unchanged).
+
+$ .scratch/build-link-subnet/dist/warden.exe build --driver hyperv --guest-os windows --script .scratch/hv/ctx/build.ps1 --timeout 5m -o .scratch/hv/out-old-vhdx .scratch/hv/ctx
+warden: build FAILED
+[warden] ERROR: hyperv build: hyperv relay boot VHDX predates the configurable build link and must be rebuilt once (no link-channel stamp at C:\Users\jeff\AppData\Local\warden\hyperv\relay-boot.link-channel)
+  To fix: build it from the source tree (Git Bash, needs WSL): tools/relay-vm/hyperv/refresh-cache.sh
+exit 1
+
+# Doctor side (same state): doctor-old-vhdx.log
+
+# Forged stamp: the same old VHDX copied to .scratch/hv/old/relay-boot.vhdx beside a hand-written
+# relay-boot.link-channel (WARDEN_LINK_CHANNEL=1), selected with WARDEN_RELAY_BOOT_VHDX. The old relay
+# boots, refuses the claim's build_link as an unknown field, and warden maps it to the same fix.
+
+$ make -C .scratch/hv forged
+cd ../.. && WARDEN_RELAY_BOOT_VHDX=C:/Users/jeff/buildwarden-native/.scratch/hv/old/relay-boot.vhdx \
+	.scratch/build-link-subnet/dist/warden.exe build --driver hyperv --guest-os windows \
+	--script .scratch/hv/ctx/build.ps1 --timeout 5m -o .scratch/hv/out-forged .scratch/hv/ctx
+warden: build FAILED
+[warden] ERROR: runBuild: StartRelay: relay VM "warden-relay-2lgpyyp9": the relay predates the build link in its claim (relaycfg: claim rejected: HTTP 400: invalid claim: json: unknown field "build_link")
+  To fix: build it from the source tree (Git Bash, needs WSL): tools/relay-vm/hyperv/refresh-cache.sh
+exit 1
+# Afterwards Get-VM listed no warden-* VM and Get-VMSwitch no warden-<id> switch (torn down).

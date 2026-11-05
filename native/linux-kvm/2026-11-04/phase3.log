@@ -1,0 +1,110 @@
+== setup --slots 2 (idempotent; the distro may have restarted)
+rc=0
+firecracker: 2 slot(s) for jeff (uid 1000), uplink eth0 (mtu 1280)
+  interfaces created: 0, verified: 8
+  bridge table warden_fc and the WARDEN-FC chains (re)loaded; net.ipv4.ip_forward=1
+  this is runtime state: re-run setup after a reboot (see the drivers guide)
+== host chain counters before
+Chain WARDEN-FC-FWD (1 references)
+    pkts      bytes target     prot opt in     out     source               destination         
+       0        0 TCPMSS     tcp  --  wfc0u  eth0    100.64.88.2          0.0.0.0/0            tcp flags:0x06/0x02 TCPMSS clamp to PMTU
+       0        0 TCPMSS     tcp  --  eth0   wfc0u   0.0.0.0/0            100.64.88.2          tcp flags:0x06/0x02 tcpmss match 1241:65535 TCPMSS set 1240
+       0        0 ACCEPT     all  --  wfc0u  eth0    100.64.88.2          0.0.0.0/0           
+       0        0 ACCEPT     all  --  eth0   wfc0u   0.0.0.0/0            100.64.88.2          ctstate RELATED,ESTABLISHED
+       0        0 DROP       all  --  wfc0u  *       0.0.0.0/0            0.0.0.0/0           
+       0        0 ACCEPT     all  --  wfc0b  wfc0b   0.0.0.0/0            0.0.0.0/0           
+       0        0 TCPMSS     tcp  --  wfc1u  eth0    100.64.88.6          0.0.0.0/0            tcp flags:0x06/0x02 TCPMSS clamp to PMTU
+       0        0 TCPMSS     tcp  --  eth0   wfc1u   0.0.0.0/0            100.64.88.6          tcp flags:0x06/0x02 tcpmss match 1241:65535 TCPMSS set 1240
+       0        0 ACCEPT     all  --  wfc1u  eth0    100.64.88.6          0.0.0.0/0           
+       0        0 ACCEPT     all  --  eth0   wfc1u   0.0.0.0/0            100.64.88.6          ctstate RELATED,ESTABLISHED
+       0        0 DROP       all  --  wfc1u  *       0.0.0.0/0            0.0.0.0/0           
+       0        0 ACCEPT     all  --  wfc1b  wfc1b   0.0.0.0/0            0.0.0.0/0           
+       0        0 DROP       all  --  wfc+   *       0.0.0.0/0            0.0.0.0/0           
+       0        0 DROP       all  --  *      wfc+    0.0.0.0/0            0.0.0.0/0           
+== start the build (background)
+firecracker processes: 2 after 5s; waiting 20 s for the guest to be up
+== DISCOVER from the host on the slot's upstream TAP wfc0u (expect no offer)
+rc=0
+sending DHCPDISCOVER xid=0d83d6e8 chaddr=7e:bd:51:74:23:1e
+sent 342 bytes on wfc0u (src 7e:bd:51:74:23:1e)
+no BOOTREPLY within 8s
+== control: DISCOVER from the host on the relay-side TAP wfc0r (the responder's interface)
+rc=2
+sending DHCPDISCOVER xid=32e1184a chaddr=76:90:a8:97:dc:39
+sent 342 bytes on wfc0r (src 76:90:a8:97:dc:39)
+BOOTREPLY OFFER yiaddr=100.127.255.254 siaddr=100.127.255.253 server-id=100.127.255.253 router=100.127.255.253 mask=255.255.255.252
+== slot interfaces
+wfc0b            UP             02:e5:70:e0:70:4e <BROADCAST,MULTICAST,UP,LOWER_UP> 
+wfc0r            UP             7a:0f:e9:5c:d1:06 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+wfc0g            UP             3e:ea:47:82:19:98 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+wfc0u            UP             8e:d3:3a:94:cd:f1 <BROADCAST,MULTICAST,UP,LOWER_UP> 
+wfc1b            DOWN           7e:46:42:29:40:8b <NO-CARRIER,BROADCAST,MULTICAST,UP> 
+wfc1r            DOWN           4e:21:f1:da:87:b7 <NO-CARRIER,BROADCAST,MULTICAST,UP> 
+wfc1g            DOWN           a6:a2:ad:40:28:d5 <NO-CARRIER,BROADCAST,MULTICAST,UP> 
+wfc1u            DOWN           76:1f:58:a6:7f:7e <NO-CARRIER,BROADCAST,MULTICAST,UP> 
+build rc=0
+[relay] init: nat-if=eth1     inet 100.64.88.2/30 scope global eth1 
+:16 relay: claimed
+[build] [[0;1;31mFAILED[0m] Failed to start [0;1;39mmultipathd.service[0m…Mapper Multipath Device Controller.
+[build] [    5.742488] cloud-init[1137]: 1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
+[build] [    5.743854] cloud-init[1137]:1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
+2: eth0    inet 100.127.255.254/30 brd 100.127.255.255 scope global eth0\       valid_lft forever preferred_lft forever
+ 2: eth0    inet 100.127.255.254/30 brd 100.127.255.255 scope global eth0\       valid_lft forever preferred_lft forever
+[build] [    5.748077] cloud-init[1137]: default via 100.127.255.253 dev eth0 proto static
+[build] [    5.751085] cloud-init[1137]default via 100.127.255.253 dev eth0 proto static 
+[build] [    5.753006] cloud-inrelay=100.127.255.253
+it[1137]: relay=100.127.255.253
+[relay] 2026/11/05 05:30:22 upstream error: blocked: connection to 100.127.255.253 (100.127.255.253) denied
+[build] build login: [   20.763111] ccurl: (28) Operation timed out after 15002 milliseconds with 21 bytes received
+loud-init[1137]: curl: (28) Operation timed out after 15002 milliseconds with 21 bytes received
+[build] [   20.763865] cloud-init[1137]: code=502
+[build] [   20.765952] cloud-init[1137]: curl exit=28
+code=502
+curl exit=28
+[build] [   20.773655] cloud-init[1137]: curl: (7) Failed to connect to 100.127.255.254 port 80 after 0 ms: Couldn't connect to server
+[build] [curl: (7) Failed to connect to 100.127.255.254 port 80 after 0 ms: Couldn't connect to server
+   20.774112] cloud-init[1137]: code=000
+[build] [   20.776620] cloud-init[1137]: curcode=000
+[build] [   20.777174] cloud-init[1137]: == direct egress (expected blocked)
+curl exit=7
+== direct egress (expected blocked)
+[build] [   25.777420] cloud-init[1137]: egress-blocked-tcp22
+egress-blocked-tcp22
+[build] [   25.779320] cloududp-send-accepted-locally
+-init[1137]: udp-send-accepted-locally
+[relay] 2026/11/05 05:30:45 relay: DHCP OFFER 100.127.255.254 to 76:90:a8:97:dc:39
+[build] [   55.916767] cloud-init[1137]: 1616337 /tmp/six.html
+337 /tmp/six.html
+warden: build SUCCEEDED (output: out-sec)
+== host chain counters after
+Chain WARDEN-FC-FWD (1 references)
+    pkts      bytes target     prot opt in     out     source               destination         
+       1       60 TCPMSS     tcp  --  wfc0u  eth0    100.64.88.2          0.0.0.0/0            tcp flags:0x06/0x02 TCPMSS clamp to PMTU
+       1       60 TCPMSS     tcp  --  eth0   wfc0u   0.0.0.0/0            100.64.88.2          tcp flags:0x06/0x02 tcpmss match 1241:65535 TCPMSS set 1240
+      26     3252 ACCEPT     all  --  wfc0u  eth0    100.64.88.2          0.0.0.0/0           
+      28    26917 ACCEPT     all  --  eth0   wfc0u   0.0.0.0/0            100.64.88.2          ctstate RELATED,ESTABLISHED
+       0        0 DROP       all  --  wfc0u  *       0.0.0.0/0            0.0.0.0/0           
+     706    80799 ACCEPT     all  --  wfc0b  wfc0b   0.0.0.0/0            0.0.0.0/0           
+       0        0 TCPMSS     tcp  --  wfc1u  eth0    100.64.88.6          0.0.0.0/0            tcp flags:0x06/0x02 TCPMSS clamp to PMTU
+       0        0 TCPMSS     tcp  --  eth0   wfc1u   0.0.0.0/0            100.64.88.6          tcp flags:0x06/0x02 tcpmss match 1241:65535 TCPMSS set 1240
+       0        0 ACCEPT     all  --  wfc1u  eth0    100.64.88.6          0.0.0.0/0           
+       0        0 ACCEPT     all  --  eth0   wfc1u   0.0.0.0/0            100.64.88.6          ctstate RELATED,ESTABLISHED
+       0        0 DROP       all  --  wfc1u  *       0.0.0.0/0            0.0.0.0/0           
+       0        0 ACCEPT     all  --  wfc1b  wfc1b   0.0.0.0/0            0.0.0.0/0           
+       0        0 DROP       all  --  wfc+   *       0.0.0.0/0            0.0.0.0/0           
+       0        0 DROP       all  --  *      wfc+    0.0.0.0/0            0.0.0.0/0           
+== inspect out-sec
+[1;32m✅ GET /bootstrap (42 bytes)[0m
+[1;32m✅ GET /build-script (1012 bytes)[0m
+✅ GET http://100.127.255.253/ (21 bytes)
+✅ GET https://pypi.org/simple/six/ (16337 bytes)
+  SIGNATURES: ✅ All 15 signatures valid
+  COMPLETENESS: ✅ All channels closed
+== cleanup
+Kept the cache (7760 MB, /home/jeff/.cache/warden); --cache removes it
+Nothing to clean.
+0
+0 wfc interfaces
+-P FORWARD DROP
+no firecracker processes
+/dev/sdd       1007G   12G  944G   2% /

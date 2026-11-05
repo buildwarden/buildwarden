@@ -1,0 +1,39 @@
+== build-initramfs.sh (firecracker launcher)
+busybox-static-1.37.0-r14.apk: OK
+Building initramfs...
+Initramfs built: 631K
+
+Firecracker direct-boot artifacts (x86_64):
+  Initramfs: /home/jeff/bwb/tools/firecracker-vm/output/initramfs.cpio.gz (append warden-io per build)
+  Kernel:    /home/jeff/bwb/tools/firecracker-vm/output/vmlinux (build-kernel.sh)
+== relay initramfs (x86_64, no modules)
+Fetching Alpine minirootfs...
+Downloading iptables-1.8.11-r1.apk...
+Downloading iptables-legacy-1.8.11-r1.apk...
+Downloading libxtables-1.8.11-r1.apk...
+Downloading libip4tc-1.8.11-r1.apk...
+Downloading libip6tc-1.8.11-r1.apk...
+Downloading libmnl-1.0.5-r2.apk...
+Downloading libnftnl-1.2.8-r0.apk...
+Building initramfs...
+Initramfs built: 3.8M
+
+Relay VM artifacts (Firecracker, x86_64, no modules):
+  Initramfs: /home/jeff/bwb/tools/relay-vm/output/x86_64/initramfs.cpio.gz
+  Kernel:    tools/firecracker-vm/build-kernel.sh
+== outputs
+tools/firecracker-vm/output:
+total 644
+drwxr-xr-x 2 jeff jeff   4096 Nov  4 21:23 .
+drwxr-xr-x 4 jeff jeff   4096 Nov  4 21:23 ..
+-rw-r--r-- 1 jeff jeff 645921 Nov  4 21:23 initramfs.cpio.gz
+-rw-r--r-- 1 jeff jeff     22 Nov  4 21:23 link-channel
+
+tools/relay-vm/output/x86_64:
+total 3884
+drwxr-xr-x 2 jeff jeff    4096 Nov  4 21:23 .
+drwxr-xr-x 3 jeff jeff    4096 Nov  4 21:23 ..
+-rw-r--r-- 1 jeff jeff 3965435 Nov  4 21:23 initramfs.cpio.gz
+WARDEN_LINK_CHANNEL=1
+ca0b66e198e3194786d0f64649a75431f9aeb41f893f1c213dc14183bc2b165b  tools/firecracker-vm/output/initramfs.cpio.gz
+c7cf36e785b7c6e7f5788dd4c300c1d1cc0546b656d89e818c5916e2d87a702a  tools/relay-vm/output/x86_64/initramfs.cpio.gz

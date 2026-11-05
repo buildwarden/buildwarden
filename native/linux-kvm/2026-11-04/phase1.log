@@ -1,0 +1,178 @@
+== host
+2026-11-05T05:24:41Z
+6.18.54.1-microsoft-standard-WSL2-warden+
+Firecracker v1.17.0
+nameserver 8.8.8.8
+nameserver 8.8.4.4
+lo               UNKNOWN        127.0.0.1/8 10.255.255.254/32 
+eth0             UP             172.19.128.47/20 
+-P FORWARD DROP
+active
+== assets (old) beside the binaries
+ebaf41770128712e6d5f7df7cff30ad7bbbcf1d33232d2ec927276f98dffb8a7  /home/jeff/fcval/bin/firecracker-build-initramfs.cpio.gz
+b5b657e0a7a36ee53579eb377379e30b6bad05b4fdf059acdef5e829f3af3b67  /home/jeff/fcval/bin/firecracker-relay-initramfs.cpio.gz
+169495b7a8e38be727862e607de44c08e5ff173c3125ce0ac37f041f4b672c23  /home/jeff/fcval/bin/firecracker-vmlinux
+ebaf41770128712e6d5f7df7cff30ad7bbbcf1d33232d2ec927276f98dffb8a7  /home/jeff/fcval-main/bin/firecracker-build-initramfs.cpio.gz
+b5b657e0a7a36ee53579eb377379e30b6bad05b4fdf059acdef5e829f3af3b67  /home/jeff/fcval-main/bin/firecracker-relay-initramfs.cpio.gz
+169495b7a8e38be727862e607de44c08e5ff173c3125ce0ac37f041f4b672c23  /home/jeff/fcval-main/bin/firecracker-vmlinux
+== setup --slots 2 (branch binary)
+rc=0
+firecracker: 2 slot(s) for jeff (uid 1000), uplink eth0 (mtu 1280)
+  interfaces created: 8, verified: 0
+  bridge table warden_fc and the WARDEN-FC chains (re)loaded; net.ipv4.ip_forward=1
+  this is runtime state: re-run setup after a reboot (see the drivers guide)
+== main 4c8f9dc: direct-boot build on the old assets
+rc=0
+[relay] 2026-11-04T21:24:42.248750893 [anonymous-instance:main] Running Firecracker v1.17.0
+[relay] 2026-11-04T21:24:42.270217814 [anonymous-instance:main] Artificially kick devices
+[relay] 2026-11-04T21:24:42.270276240 [anonymous-instance:fc_vcpu 1] Received a VcpuEvent::Resume message with immediate_exit enabled. immediate_exit was disabled before proceeding
+[relay] 2026-11-04T21:24:42.270308626 [anonymous-instance:fc_vcpu 0] Received a VcpuEvent::Resume message with immediate_exit enabled. immediate_exit was disabled before proceeding
+[relay] 2026-11-04T21:24:42.270341783 [anonymous-instance:main] Successfully started microvm that was configured from one single json
+[relay] 2026-11-04T21:24:42.278231993 [anonymous-instance:fc_vcpu 0] vcpu: IO write @ 0xcf8:0x4 failed: Failed to find address range.
+[relay] 2026-11-04T21:24:42.278284478 [anonymous-instance:fc_vcpu 0] vcpu: IO read @ 0xcfc:0x2 failed: Failed to find address range.
+[relay] [    0.000000] Linux version 6.1.191 (jeff@Balrog) (gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, GNU ld (GNU Binutils for Ubuntu) 2.38) #1 SMP PREEMPT_DYNAMIC Mon Nov  2 11:22:10 PST 2026
+[relay] [    0.000000] Command line: console=ttyS0 reboot=k panic=1 pci=off warden.net=static warden.nat_ip=100.64.88.2 warden.nat_prefix=30 warden.nat_gw=100.64.88.1 warden.dns=8.8.8.8,8.8.4.4 warden.claim_token=2a0674e3af5134b9c450c4c2c6a65e96cb5d98787c933e45fcbfd4f2faaa62f6 pci=off virtio_mmio.device=4K@0xc0001000:5 virtio_mmio.device=4K@0xc0002000:6 virtio_mmio.device=4K@0xc0003000:7
+[relay] [    0.000000] BIOS-provided physical RAM map:
+[relay] [    0.000000] BIOS-e820: [mem 0x0000000000000000-0x000000000009fbff] usable
+[relay] [    0.000000] BIOS-e820: [mem 0x000000000009fc00-0x00000000000fffff] reserved
+[relay] [    0.000000] BIOS-e820: [mem 0x0000000000100000-0x000000000fffffff] usable
+[relay] [    0.000000] BIOS-e820: [mem 0x00000000eec00000-0x00000000febfffff] reserved
+[relay] [    0.000000] NX (Execute Disable) protection: active
+[relay] [    0.000000] DMI not present or invalid.
+[relay] [    0.000000] Hypervisor detected: KVM
+[relay] [    0.000000] kvm-clock: Using msrs 4b564d01 and 4b564d00
+[relay] [    0.000001] kvm-clock: using sched offset of 29657525 cycles
+[relay] [    0.000009] clocksource: kvm-clock: mask: 0xffffffffffffffff max_cycles: 0x1cd42e4dffb, max_idle_ns: 881590591483 ns
+[relay] [    0.000031] tsc: Detected 3417.600 MHz processor
+[relay] [    0.000226] last_pfn = 0x10000 max_arch_pfn = 0x400000000
+[relay] [    0.000348] x86/PAT: Configuration [0-7]: WB  WC  UC- UC  WB  WP  UC- WT  
+[relay] [    0.000418] Using GB pages for direct mapping
+[relay] [    0.000428] Incomplete global flushes, disabling PCID
+[relay] [    0.000523] RAMDISK: [mem 0x0f402000-0x0fffffff]
+[relay] [    0.000545] ACPI: Early table checksum verification disabled
+[relay] [    0.000597] ACPI: RSDP 0x00000000000E0000 000024 (v02 FIRECK)
+[relay] [    0.000611] ACPI: XSDT 0x00000000000A0198 00003C (v01 FIRECK FCMVXSDT 00000000 FCAT 20240119)
+[relay] [    0.000627] ACPI: FACP 0x00000000000A0000 000114 (v06 FIRECK FCVMFADT 00000000 FCAT 20240119)
+== branch: doctor on the old assets
+rc=0
+build link 100.127.255.252/30 (default)
+build link: no host interface overlaps it
+firecracker direct-boot launcher initramfs: link-channel stamp missing; rebuild it once: tools/firecracker-vm/build-initramfs.sh
+ok    /dev/kvm
+ok    firecracker
+ok    boot assets
+ok    disk-image builds (qemu-img, genisoimage)
+ok    network slots owned by this user: 2 (wfc0 to wfc1)
+ok    slot sysctls
+ok    firewalld
+skip  rules and FORWARD policy (reading them needs root: sudo warden doctor --driver firecracker)
+ok    upstream DNS for the relay: 8.8.8.8, 8.8.4.4
+warn  reflink copies on the cache filesystem
+      each disk-image build copies its whole rootfs (cp: failed to clone '/home/jeff/.cache/warden/firecracker/work/reflink-probe-812548222.copy' from '/home/jeff/.cache/warden/firecracker/work/reflink-probe-812548222': Operation not supported); a cache on btrfs or XFS (reflink=1) makes it instant
+ok    orphaned VMMs
+== branch: direct-boot build with the old launcher (expect refused before any VM)
+rc=1
+[warden] preparing build environment...
+warden: build FAILED
+[warden] ERROR: firecracker direct-boot launcher initramfs predates the configurable build link and must be rebuilt once (no link-channel stamp at /home/jeff/fcval/bin/firecracker-build-initramfs.cpio.gz.link-channel)
+  To fix: tools/firecracker-vm/build-initramfs.sh
+no firecracker processes
+== branch: ubuntu disk build on the OLD relay initramfs
+rc=0
+[relay] 2026-11-04T21:24:46.295868960 [anonymous-instance:main] Running Firecracker v1.17.0
+[relay] 2026-11-04T21:24:46.323062978 [anonymous-instance:main] Artificially kick devices
+[relay] 2026-11-04T21:24:46.323268418 [anonymous-instance:fc_vcpu 1] Received a VcpuEvent::Resume message with immediate_exit enabled. immediate_exit was disabled before proceeding
+[relay] 2026-11-04T21:24:46.323268340 [anonymous-instance:fc_vcpu 0] Received a VcpuEvent::Resume message with immediate_exit enabled. immediate_exit was disabled before proceeding
+[relay] 2026-11-04T21:24:46.323314115 [anonymous-instance:main] Successfully started microvm that was configured from one single json
+[relay] 2026-11-04T21:24:46.332019138 [anonymous-instance:fc_vcpu 0] vcpu: IO write @ 0xcf8:0x4 failed: Failed to find address range.
+[relay] 2026-11-04T21:24:46.332049194 [anonymous-instance:fc_vcpu 0] vcpu: IO read @ 0xcfc:0x2 failed: Failed to find address range.
+[relay] [    0.000000] Linux version 6.1.191 (jeff@Balrog) (gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, GNU ld (GNU Binutils for Ubuntu) 2.38) #1 SMP PREEMPT_DYNAMIC Mon Nov  2 11:22:10 PST 2026
+[relay] [    0.000000] Command line: console=ttyS0 reboot=k panic=1 pci=off warden.net=static warden.nat_ip=100.64.88.2 warden.nat_prefix=30 warden.nat_gw=100.64.88.1 warden.dns=8.8.8.8,8.8.4.4 warden.claim_token=40e4e7ba175bde2a9c9bb0e0b63bbf9d95d3da21ff6dbbb177188af1c251953a pci=off virtio_mmio.device=4K@0xc0001000:5 virtio_mmio.device=4K@0xc0002000:6 virtio_mmio.device=4K@0xc0003000:7
+[relay] [    0.000000] BIOS-provided physical RAM map:
+[relay] [    0.000000] BIOS-e820: [mem 0x0000000000000000-0x000000000009fbff] usable
+[relay] [    0.000000] BIOS-e820: [mem 0x000000000009fc00-0x00000000000fffff] reserved
+[relay] [    0.000000] BIOS-e820: [mem 0x0000000000100000-0x000000000fffffff] usable
+[relay] [    0.000000] BIOS-e820: [mem 0x00000000eec00000-0x00000000febfffff] reserved
+[relay] [    0.000000] NX (Execute Disable) protection: active
+[relay] [    0.000000] DMI not present or invalid.
+[relay] [    0.000000] Hypervisor detected: KVM
+[relay] [    0.000000] kvm-clock: Using msrs 4b564d01 and 4b564d00
+[relay] [    0.000001] kvm-clock: using sched offset of 36298008 cycles
+[relay] [    0.000010] clocksource: kvm-clock: mask: 0xffffffffffffffff max_cycles: 0x1cd42e4dffb, max_idle_ns: 881590591483 ns
+[relay] [    0.000031] tsc: Detected 3417.600 MHz processor
+[relay] [    0.000225] last_pfn = 0x10000 max_arch_pfn = 0x400000000
+[relay] [    0.000344] x86/PAT: Configuration [0-7]: WB  WC  UC- UC  WB  WP  UC- WT  
+[relay] [    0.000412] Using GB pages for direct mapping
+[relay] [    0.000422] Incomplete global flushes, disabling PCID
+[relay] [    0.000504] RAMDISK: [mem 0x0f3f1000-0x0fffffff]
+[relay] [    0.000528] ACPI: Early table checksum verification disabled
+[relay] [    0.000578] ACPI: RSDP 0x00000000000E0000 000024 (v02 FIRECK)
+[relay] [    0.000592] ACPI: XSDT 0x00000000000A0198 00003C (v01 FIRECK FCMVXSDT 00000000 FCAT 20240119)
+[relay] [    0.000608] ACPI: FACP 0x00000000000A0000 000114 (v06 FIRECK FCVMFADT 00000000 FCAT 20240119)
+[relay] [    0.000618] ACPI: DSDT 0x000000000009FD44 0002BC (v02 FIRECK FCVMDSDT 00000000 FCAT 20240119)
+[relay] [    0.000620] ACPI: APIC 0x00000000000A0114 000048 (v06 FIRECK FCVMMADT 00000000 FCAT 20240119)
+[relay] [    0.000622] ACPI: MCFG 0x00000000000A015C 00003C (v01 FIRECK FCMVMCFG 00000000 FCAT 20240119)
+[relay] [    0.000623] ACPI: Reserving FACP table memory at [mem 0xa0000-0xa0113]
+[relay] [    0.000623] ACPI: Reserving DSDT table memory at [mem 0x9fd44-0x9ffff]
+[relay] [    0.000624] ACPI: Reserving APIC table memory at [mem 0xa0114-0xa015b]
+[relay] [    0.000624] ACPI: Reserving MCFG table memory at [mem 0xa015c-0xa0197]
+[relay] [    0.000755] No NUMA configuration found
+[relay] [    0.000757] Faking a node at [mem 0x0000000000000000-0x000000000fffffff]
+[relay] [    0.000765] NODE_DATA(0) allocated [mem 0x0f3c6000-0x0f3f0fff]
+== install the new launcher (keep the old relay initramfs)
+ca0b66e198e3194786d0f64649a75431f9aeb41f893f1c213dc14183bc2b165b  /home/jeff/fcval/bin/firecracker-build-initramfs.cpio.gz
+WARDEN_LINK_CHANNEL=1
+rc=0
+build link 100.127.255.252/30 (default)
+build link: no host interface overlaps it
+firecracker direct-boot launcher initramfs: link-channel stamp current
+ok    upstream DNS for the relay: 8.8.8.8, 8.8.4.4
+== branch: direct-boot build on the OLD relay initramfs with the new launcher
+rc=0
+[relay] 2026-11-04T21:24:52.469676064 [anonymous-instance:main] Running Firecracker v1.17.0
+[relay] 2026-11-04T21:24:52.491538296 [anonymous-instance:main] Artificially kick devices
+[relay] 2026-11-04T21:24:52.491758695 [anonymous-instance:fc_vcpu 1] Received a VcpuEvent::Resume message with immediate_exit enabled. immediate_exit was disabled before proceeding
+[relay] 2026-11-04T21:24:52.491759256 [anonymous-instance:fc_vcpu 0] Received a VcpuEvent::Resume message with immediate_exit enabled. immediate_exit was disabled before proceeding
+[relay] 2026-11-04T21:24:52.491858976 [anonymous-instance:main] Successfully started microvm that was configured from one single json
+[relay] 2026-11-04T21:24:52.500099588 [anonymous-instance:fc_vcpu 0] vcpu: IO write @ 0xcf8:0x4 failed: Failed to find address range.
+[relay] 2026-11-04T21:24:52.500131258 [anonymous-instance:fc_vcpu 0] vcpu: IO read @ 0xcfc:0x2 failed: Failed to find address range.
+[relay] [    0.000000] Linux version 6.1.191 (jeff@Balrog) (gcc (Ubuntu 11.4.0-1ubuntu1~22.04.3) 11.4.0, GNU ld (GNU Binutils for Ubuntu) 2.38) #1 SMP PREEMPT_DYNAMIC Mon Nov  2 11:22:10 PST 2026
+[relay] [    0.000000] Command line: console=ttyS0 reboot=k panic=1 pci=off warden.net=static warden.nat_ip=100.64.88.2 warden.nat_prefix=30 warden.nat_gw=100.64.88.1 warden.dns=8.8.8.8,8.8.4.4 warden.claim_token=1dc211ee3b67c38d7d0e783139e39d766fd4a7da2348e32532eda5189bb2bcf1 pci=off virtio_mmio.device=4K@0xc0001000:5 virtio_mmio.device=4K@0xc0002000:6 virtio_mmio.device=4K@0xc0003000:7
+[relay] [    0.000000] BIOS-provided physical RAM map:
+[relay] [    0.000000] BIOS-e820: [mem 0x0000000000000000-0x000000000009fbff] usable
+[relay] [    0.000000] BIOS-e820: [mem 0x000000000009fc00-0x00000000000fffff] reserved
+[relay] [    0.000000] BIOS-e820: [mem 0x0000000000100000-0x000000000fffffff] usable
+[relay] [    0.000000] BIOS-e820: [mem 0x00000000eec00000-0x00000000febfffff] reserved
+[relay] [    0.000000] NX (Execute Disable) protection: active
+[relay] [    0.000000] DMI not present or invalid.
+[relay] [    0.000000] Hypervisor detected: KVM
+[relay] [    0.000000] kvm-clock: Using msrs 4b564d01 and 4b564d00
+[relay] [    0.000001] kvm-clock: using sched offset of 30501713 cycles
+[relay] [    0.000008] clocksource: kvm-clock: mask: 0xffffffffffffffff max_cycles: 0x1cd42e4dffb, max_idle_ns: 881590591483 ns
+[relay] [    0.000029] tsc: Detected 3417.600 MHz processor
+[relay] [    0.000221] last_pfn = 0x10000 max_arch_pfn = 0x400000000
+[relay] [    0.000341] x86/PAT: Configuration [0-7]: WB  WC  UC- UC  WB  WP  UC- WT  
+[relay] [    0.000408] Using GB pages for direct mapping
+[relay] [    0.000418] Incomplete global flushes, disabling PCID
+[relay] [    0.000507] RAMDISK: [mem 0x0f3f1000-0x0fffffff]
+[relay] [    0.000529] ACPI: Early table checksum verification disabled
+[relay] [    0.000579] ACPI: RSDP 0x00000000000E0000 000024 (v02 FIRECK)
+[relay] [    0.000592] ACPI: XSDT 0x00000000000A0198 00003C (v01 FIRECK FCMVXSDT 00000000 FCAT 20240119)
+[relay] [    0.000610] ACPI: FACP 0x00000000000A0000 000114 (v06 FIRECK FCVMFADT 00000000 FCAT 20240119)
+[relay] [    0.000619] ACPI: DSDT 0x000000000009FD44 0002BC (v02 FIRECK FCVMDSDT 00000000 FCAT 20240119)
+[relay] [    0.000621] ACPI: APIC 0x00000000000A0114 000048 (v06 FIRECK FCVMMADT 00000000 FCAT 20240119)
+[relay] [    0.000623] ACPI: MCFG 0x00000000000A015C 00003C (v01 FIRECK FCMVMCFG 00000000 FCAT 20240119)
+[relay] [    0.000624] ACPI: Reserving FACP table memory at [mem 0xa0000-0xa0113]
+[relay] [    0.000624] ACPI: Reserving DSDT table memory at [mem 0x9fd44-0x9ffff]
+[relay] [    0.000625] ACPI: Reserving APIC table memory at [mem 0xa0114-0xa015b]
+[relay] [    0.000625] ACPI: Reserving MCFG table memory at [mem 0xa015c-0xa0197]
+[relay] [    0.000755] No NUMA configuration found
+[relay] [    0.000758] Faking a node at [mem 0x0000000000000000-0x000000000fffffff]
+[relay] [    0.000765] NODE_DATA(0) allocated [mem 0x0f3c6000-0x0f3f0fff]
+== install the new relay initramfs
+ca0b66e198e3194786d0f64649a75431f9aeb41f893f1c213dc14183bc2b165b  /home/jeff/fcval/bin/firecracker-build-initramfs.cpio.gz
+51b1fa1bb5db27dc5da5dd060e907b11ad1e6fed72367c3b995eafe260251887  /home/jeff/fcval/bin/firecracker-build-initramfs.cpio.gz.link-channel
+c7cf36e785b7c6e7f5788dd4c300c1d1cc0546b656d89e818c5916e2d87a702a  /home/jeff/fcval/bin/firecracker-relay-initramfs.cpio.gz
+169495b7a8e38be727862e607de44c08e5ff173c3125ce0ac37f041f4b672c23  /home/jeff/fcval/bin/firecracker-vmlinux
+== leftovers
+no firecracker processes

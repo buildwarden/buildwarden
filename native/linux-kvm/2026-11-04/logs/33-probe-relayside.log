@@ -1,0 +1,3 @@
+sending DHCPDISCOVER xid=32e1184a chaddr=76:90:a8:97:dc:39
+sent 342 bytes on wfc0r (src 76:90:a8:97:dc:39)
+BOOTREPLY OFFER yiaddr=100.127.255.254 siaddr=100.127.255.253 server-id=100.127.255.253 router=100.127.255.253 mask=255.255.255.252

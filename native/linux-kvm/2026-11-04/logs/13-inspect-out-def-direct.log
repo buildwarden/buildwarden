@@ -1,0 +1,18 @@
+════════════════════════════════════════════════════════════════════════════════
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  ✅
+  ENVIRONMENT  vm-disk-chain/v1  payload verified
+    firecracker linux/amd64
+    kernel   firecracker-vmlinux  42.9 MB  sha256:169495b7a8e3  local  [ok]
+    initrd   firecracker-build-initramfs.cpio.gz  630.8 KB  sha256:ca0b66e198e3  local  [ok]
+    seed     3 per-build files
+════════════════════════════════════════════════════════════════════════════════
+[1;35m✅ ENVIRONMENT  (900 bytes)[0m
+[1;32m✅ GET /bootstrap (42 bytes)[0m
+[1;32m✅ GET /build-script (134 bytes)[0m
+✅ GET http://example.com/ (577 bytes)
+
+════════════════════════════════════════════════════════════════════════════════
+  SUMMARY: 10 records, 4 requests, 2.0 KB audited
+  SIGNATURES: ✅ All 11 signatures valid
+  COMPLETENESS: ✅ All channels closed
+════════════════════════════════════════════════════════════════════════════════

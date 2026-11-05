@@ -1,0 +1,3 @@
+warden: build FAILED
+[warden] ERROR: the relay needs an off-host upstream DNS server, and the host has only resolvers it cannot reach: 100.126.255.253
+  To fix: the relay's link to the build VM is 100.126.255.252/30, so it cannot reach a resolver there: list an off-host DNS server outside it as a nameserver in /etc/resolv.conf (under systemd-resolved, set DNS= in /etc/systemd/resolved.conf), or set [vm] build_link in warden.toml (or --build-link) to a /30 that holds none of the host's resolvers

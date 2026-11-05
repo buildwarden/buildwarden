@@ -1,0 +1,44 @@
+[warden] preparing build environment...
+[warden] starting relay on slot 0...
+[relay] [    0.008910] Kernel command line: console=ttyS0 reboot=k panic=1 pci=off warden.net=static warden.nat_ip=100.64.88.2 warden.nat_prefix=30 warden.nat_gw=100.64.88.1 warden.dns=8.8.8.8,8.8.4.4 warden.claim_token=d47cc6d360fd42ffcbf6fecb7e3bc859cfa8a6b12889e146af3efaad37b347d1 pci=off virtio_mmio.device=4K@0xc0001000:5 virtio_mmio.device=4K@0xc0002000:6 virtio_mmio.device=4K@0xc0003000:7
+[relay] [    0.009729] mem auto-init: stack:off, heap alloc:off, heap free:off
+[relay] [    0.011306] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[relay] [    0.239397] nfs4filelayout_init: NFSv4 File Layout Driver Registering...
+[relay] init: build-if=eth0 up; the relay addresses it from the claim
+[relay] init: nat-if=eth1     inet 100.64.88.2/30 scope global eth1 
+[relay] init: dns=nameserver 8.8.8.8
+[relay] init: ready; relay awaiting claim on :8301
+[relay] 2026/11/05 05:29:30 relay: awaiting claim on 0.0.0.0:8301
+[relay] 2026/11/05 05:29:31 relay: build-if eth0 100.126.255.253/30 from the claim; DHCP offers 100.126.255.254
+[warden] collector: environment (1395 bytes)
+[relay] 2026/11/05 05:29:31 relay: environment recorded (1395 bytes)
+[relay] 2026/11/05 05:29:31 relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp
+[warden] collector: ready
+[warden] starting build...
+[warden] running...
+[relay] 2026/11/05 05:29:31 relay: claimed
+[build] [    0.070771] mem auto-init: stack:off, heap alloc:off, heap free:off
+[build] [    0.157580] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[build] [    0.389424] nfs4filelayout_init: NFSv4 File Layout Driver Registering...
+[build] [[0;1;31mFAILED[0m] Failed to start [0;1;39mmultipathd.service[0m…Mapper Multipath Device Controller.
+[build]          Starting [0;1;39mcloud-init-local.service[0m …-init: Local Stage (pre-network)...
+[build] [[0;32m  OK  [0m] Finished [0;1;39mcloud-init-local.service[0m …ud-init: Local Stage (pre-network).
+[build]          Starting [0;1;39mcloud-init.service[0m - Cloud-init: Network Stage...
+[build] [[0;32m  OK  [0m] Finished [0;1;39mcloud-init.service[0m - Cloud-init: Network Stage.
+[build]          Starting [0;1;39mcloud-config.service[0m - Cloud-init: Config Stage...
+[build] [[0;32m  OK  [0m] Finished [0;1;39mcloud-config.service[0m - Cloud-init: Config Stage.
+[build]          Starting [0;1;39mcloud-final.service[0m - Cloud-init: Final Stage...
+[build] [    4.903542] cloud-init[1138]: warden-io: configuring network
+[build] [    4.904251] cloud-init[1138]: warden-io: waiting for relay
+[build] [    4.905016] cloud-init[1138]: warden-io: installing CA
+[build] [    4.910505] cloud-init[1138]: warden-io: applying baseline (trust exclusive)
+[build] [    4.911397] cloud-init[1138]: warden-io: fetching build script
+[build] [    4.912231] cloud-init[1138]: warden-io: running build.sh
+[build] [    4.913189] cloud-init[1138]: 1: lo    inet 127.0.1: lo    inet 127.0.0.1/8 scope host lo\       valid_lft forever preferred_lft forever
+2: eth0    inet 100.126.255.254/30 brd 100.126.255.255 scope global eth0\       valid_lft forever preferred_lft forever
+[build] [    4.914507] cloud-init[1138]: 2: eth0    inedefault via 100.126.255.253 dev eth0 proto static 
+[build] [    4.916195] cloud-init[1138]: default via 100.126.255.253 dev eth0 proto static
+[build] [    4.972065] cloud-init[1138]: 16337 /tmp/six.h16337 /tmp/six.html
+[warden] collector: ledger (4751 bytes)
+[warden] collector: complete exit=0 msg=""
+warden: build SUCCEEDED (output: out-alt-ubuntu)

@@ -92,14 +92,14 @@ steps:
   - id: f6-validate-linux-kvm
     phase: 6
     affinity: host:linux-kvm
-    status: pending
+    status: done
     needs:
       - f2-design-review-r3
       - f3-implement
       - f3-implement-r2
     lease:
-      claimed_by: host:linux-kvm/20261105T051002Z
-      expires: 2026-11-05T07:11:34.7113413Z
+      claimed_by: ""
+      expires: null
     note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan (plan r3 task 53): the four cases on the default link and on 100.126.255.252/30 (pre-change assets refused with the one-time command; after it, a default-link build whose ledger verifies, the guest at 100.127.255.254; the configured link reported by doctor and built with no rebuild, refresh or re-prepare; an overlapping --build-link refused at startup). Reaches driver/firecracker (claim carries the link, direct-boot boot_args, launcher stamp, resolver exclusion against the resolved link), the vm-mode relay''s netlink build-interface setup on the x86_64 relay VM, and tools/firecracker-vm/init; plus a direct-boot and a disk build, an old relay initramfs still building with 10.0.0.1 gone from the relay''s build interface, a host resolver inside the configured link excluded with the fix, the guest-sourced canary drop, and a build fetching the link''s relay address refused (TEST-08). vm-mode DHCP (a14 (d)): every direct-boot build''s console shows the link from dhcp, equal to the command line, on both links, and the old-relay-initramfs build takes its lease too; a DHCP DISCOVER sent from the host on the slot''s upstream TAP gets no offer from the relay; a build script flooding DISCOVER and REQUEST with random MACs and sending a forged BOOTREPLY and RELEASE leaves the guest''s address and the relay unchanged, its next fetch succeeding (TEST-08). Added by f2-plan-r3 needing only f2-design-review-r3; add f3-implement to its needs once Implement is seeded, and f6-open-pr must need this step once phase 6 is seeded.'
   - id: f6-validate-qemu-any
     phase: 6
@@ -128,14 +128,14 @@ steps:
   - id: f6-validate-windows-hyperv
     phase: 6
     affinity: host:windows-hyperv
-    status: pending
+    status: done
     needs:
       - f2-design-review-r3
       - f3-implement
       - f3-implement-r2
     lease:
-      claimed_by: host:windows-hyperv/20261105T051002Z
-      expires: 2026-11-05T07:11:29.079865Z
+      claimed_by: ""
+      expires: null
     note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan (plan r3 task 53): the four cases on the default link and on 100.126.255.252/30 (pre-change assets refused with the one-time command; after it, a default-link build whose ledger verifies, the guest at 100.127.255.254; the configured link reported by doctor and built with no rebuild, refresh or re-prepare; an overlapping --build-link refused at startup). Reaches driver/hyperv (claim carries the link, relay-boot.link-channel stamp, --nat-prefix overlap refusal at setup), the relay boot VHDX refreshed once with refresh-cache.sh, the vm-mode relay''s build-interface setup on hv_netvsc, and driver/winguest: a Windows guest build; an old VHDX refused by the stamp; with the stamp forged, the claim''s unknown-field refusal mapped to the same fix; the --nat-prefix overlap refusal. vm-mode DHCP (a14 (d)): the relay''s responder live on hv_netvsc; the Windows guest''s address and route equal the seed''s whether or not it took a lease first (ipconfig /all in the run log); a DHCP DISCOVER from a second VM on the NAT switch gets no offer from the relay (TEST-08). Added by f2-plan-r3 needing only f2-design-review-r3; add f3-implement to its needs once Implement is seeded, and f6-open-pr must need this step once phase 6 is seeded.'
   - id: f4-review-r2
     phase: 4
@@ -599,3 +599,15 @@ history:
   - at: 2026-11-05T05:11:34Z
     by: host:linux-kvm/20261105T051002Z
     event: claimed f6-validate-linux-kvm until 2026-11-05T07:11:34Z
+  - at: 2026-11-05T05:45:00Z
+    by: host:windows-hyperv/20261105T051002Z
+    event: done f6-validate-windows-hyperv
+  - at: 2026-11-05T05:45:02Z
+    by: host:linux-kvm/20261105T051002Z
+    event: done f6-validate-linux-kvm
+  - at: 2026-11-05T05:46:00Z
+    by: host:windows-hyperv/20261105T051002Z
+    event: 'f6-validate-windows-hyperv evidence (unattended): feat/build-link-subnet a68ac2c on Windows 11 Pro 26300, Hyper-V Administrators, prepared base windows-server-2025-20261030T175627Z; main 4c8f9dc baseline SUCCEEDED (guest static 10.0.0.2). (1) The cached relay boot VHDX the wrapper had refreshed from main 353e8a7 (no link-channel stamp): doctor BLOCKED and the build refused before any VM, both naming tools/relay-vm/hyperv/refresh-cache.sh; the same disk under a forged stamp booted the old relay, which refused the claim (unknown field build_link), mapped to the same fix. refresh-cache.sh from the branch tree installed the disk (relay source e00c7bd068b7) and its stamp; doctor current. (2) Default-link Windows guest build SUCCEEDED: relay console on hv_netvsc "build-if eth0 100.127.255.253/30 from the claim; DHCP offers 100.127.255.254", OFFER/ACK to the guest NIC; the guest took the infinite lease first (ipconfig: DHCP Enabled Yes, 100.127.255.254/30 via 100.127.255.253, DHCP server .253, PrefixOrigin Dhcp) and warden-io initialize then set the same address and route; HTTPS 200/200 (curl.exe without --ssl-no-revoke), http://100.127.255.253/ through the proxy refused (relay "blocked: connection to 100.127.255.253 denied", 502), direct egress blocked; inspect --verify-disks vm-disk-chain/v1 verified, both disks [ok], 19 signatures valid, all channels closed. (3) --build-link 100.126.255.252/30: SUCCEEDED the same way at 100.126.255.254 with no refresh, ledger verified; [vm] build_link in warden.toml reported "(warden.toml)", the flag wins over it. (4) --build-link 192.168.240.0/30, 100.64.88.0/30 and 10.0.2.0/30 each refused at startup naming the range; 172.19.128.0/30 BLOCKED on the host address 172.19.128.1; 172.19.140.0/30 warns that the host network contains it; misaligned and container-driver refusals; setup --nat-prefix 100.127.255.0/24 refused against the default and 100.126.255.0/24 against the key. (a14 d) Two DISCOVERs from the host on warden-dev-nat (the relay VM''s upstream switch) during the configured-link build, relay up 76 s: no offer. Findings, not blocking: the branch''s Windows guest ends DHCP-configured (PrefixOrigin Dhcp) where main''s was Manual, address and route equal either way; a main-built VHDX keeps the branch''s stamp until the branch merges. Evidence native/windows-hyperv/2026-11-04/.'
+  - at: 2026-11-05T05:46:00Z
+    by: host:linux-kvm/20261105T051002Z
+    event: 'f6-validate-linux-kvm evidence (unattended): feat/build-link-subnet a68ac2c on windows-desktop WSL2 Ubuntu 22.04 (6.18.54.1-warden+, Firecracker v1.17.0), binaries cross-built on the host, old assets from 2026-11-02 (824abd7), new launcher and x86_64 relay initramfs built in WSL from the branch; main 4c8f9dc direct-boot baseline SUCCEEDED at 10.0.0.2. (1) Old launcher: doctor reports "link-channel stamp missing; rebuild it once: tools/firecracker-vm/build-initramfs.sh" (not blocking) and the direct-boot build is refused before any VM with that fix; a disk build on the OLD relay initramfs SUCCEEDED, the relay replacing the init''s 10.0.0.1/30 with 100.127.255.253/30 from the claim ("build-if eth0 100.127.255.253/30 from the claim; DHCP offers 100.127.255.254"); with the new launcher the direct boot on the old relay initramfs took its lease ("init: link 100.127.255.254/30 via 100.127.255.253 from dhcp", equal to warden.link_ip/link_gw). (2) New assets, default link: direct-boot and ubuntu:24.04 disk builds SUCCEEDED at 100.127.255.254 (direct boot from dhcp), both ledgers verified, 11 signatures each, all channels closed. (3) --build-link 100.126.255.252/30 with no rebuild: doctor reports it, direct-boot and disk builds SUCCEEDED at 100.126.255.254 from dhcp, ledgers verified; [vm] build_link in warden.toml reported "(warden.toml)" and built, the flag wins, a misaligned key fails at load. (4) --build-link 100.64.88.0/30 refused at startup; 172.19.128.44/30 BLOCKED on eth0''s address, build refused before any VM. Resolver cases in a private mount namespace (host resolv.conf unchanged): only 100.126.255.253 -> doctor FAIL and the build refuses in preflight with the fix naming an off-link resolver or another [vm] build_link; plus 8.8.8.8 -> only 8.8.8.8 used; only 100.127.255.253 -> FAIL on the default link; 10.0.0.2 now passes. (a14 d) A DISCOVER from the host on the slot''s upstream TAP wfc0u during a build got no offer; the control on the relay-side TAP wfc0r got the fixed OFFER 100.127.255.254 and the relay logged it to the probe''s MAC. (TEST-08) http://100.127.255.253/ through the proxy: relay "blocked: connection to 100.127.255.253 denied", 502; the guest''s own address refused; the next fetch succeeded; direct egress blocked, the host''s WARDEN-FC-FWD DROP counters for wfc0u stayed 0; 15 signatures valid, all channels closed. Not run: the in-guest flood-and-forge DHCP case (the unattended session could not produce the packet-forging script; attended run or security-suite). Also: WSL stops the idle distro between scripts and the slots vanish, so each phase re-ran setup. Cleanup: clean, slots down, FORWARD DROP, no VMMs. Evidence native/linux-kvm/2026-11-04/.'

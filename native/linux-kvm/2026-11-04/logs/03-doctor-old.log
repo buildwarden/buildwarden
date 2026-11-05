@@ -1,0 +1,15 @@
+build link 100.127.255.252/30 (default)
+build link: no host interface overlaps it
+firecracker direct-boot launcher initramfs: link-channel stamp missing; rebuild it once: tools/firecracker-vm/build-initramfs.sh
+ok    /dev/kvm
+ok    firecracker
+ok    boot assets
+ok    disk-image builds (qemu-img, genisoimage)
+ok    network slots owned by this user: 2 (wfc0 to wfc1)
+ok    slot sysctls
+ok    firewalld
+skip  rules and FORWARD policy (reading them needs root: sudo warden doctor --driver firecracker)
+ok    upstream DNS for the relay: 8.8.8.8, 8.8.4.4
+warn  reflink copies on the cache filesystem
+      each disk-image build copies its whole rootfs (cp: failed to clone '/home/jeff/.cache/warden/firecracker/work/reflink-probe-812548222.copy' from '/home/jeff/.cache/warden/firecracker/work/reflink-probe-812548222': Operation not supported); a cache on btrfs or XFS (reflink=1) makes it instant
+ok    orphaned VMMs

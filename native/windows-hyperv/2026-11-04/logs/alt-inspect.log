@@ -1,0 +1,20 @@
+════════════════════════════════════════════════════════════════════════════════
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  ✅
+  ENVIRONMENT  vm-disk-chain/v1  payload verified
+    hyperv windows/amd64 gen2
+    disk     26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx  10.9 GB  sha256:2d175924c8e6  url https://software-static.download.prss.microsoft.com/dbazure/888969d5-f34g-4e03-ac9d-1f9786c66749/26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx  [ok]
+    disk     windows-server-2025-20261030T175627Z.vhdx  2.2 GB  sha256:6097aa868b1f  prepared by warden dev from 3 input(s)  [ok]
+    seed     3 per-build files
+════════════════════════════════════════════════════════════════════════════════
+[1;35m✅ ENVIRONMENT  (1779 bytes)[0m
+[1;32m✅ GET /bootstrap (39 bytes)[0m
+[1;32m✅ GET /build-script (1994 bytes)[0m
+✅ GET https://example.com/ (577 bytes)
+✅ GET https://pypi.org/simple/six/ (16337 bytes)
+✅ GET http://100.126.255.253/ (21 bytes)
+
+════════════════════════════════════════════════════════════════════════════════
+  SUMMARY: 18 records, 6 requests, 22.6 KB audited
+  SIGNATURES: ✅ All 19 signatures valid
+  COMPLETENESS: ✅ All channels closed
+════════════════════════════════════════════════════════════════════════════════

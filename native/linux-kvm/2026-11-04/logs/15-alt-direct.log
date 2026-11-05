@@ -1,0 +1,41 @@
+[warden] preparing build environment...
+[warden] starting relay on slot 0...
+[relay] [    0.008219] Kernel command line: console=ttyS0 reboot=k panic=1 pci=off warden.net=static warden.nat_ip=100.64.88.2 warden.nat_prefix=30 warden.nat_gw=100.64.88.1 warden.dns=8.8.8.8,8.8.4.4 warden.claim_token=a3f39815edda19b2abae9cc060c80d42e4203321657ae55399f5ea2e94dd043c pci=off virtio_mmio.device=4K@0xc0001000:5 virtio_mmio.device=4K@0xc0002000:6 virtio_mmio.device=4K@0xc0003000:7
+[relay] [    0.008932] mem auto-init: stack:off, heap alloc:off, heap free:off
+[relay] [    0.010375] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[relay] [    0.238190] nfs4filelayout_init: NFSv4 File Layout Driver Registering...
+[relay] init: build-if=eth0 up; the relay addresses it from the claim
+[relay] init: nat-if=eth1     inet 100.64.88.2/30 scope global eth1 
+[relay] init: dns=nameserver 8.8.8.8
+[relay] init: ready; relay awaiting claim on :8301
+[relay] 2026/11/05 05:29:27 relay: awaiting claim on 0.0.0.0:8301
+[relay] 2026/11/05 05:29:27 relay: build-if eth0 100.126.255.253/30 from the claim; DHCP offers 100.126.255.254
+[warden] collector: environment (900 bytes)
+[relay] 2026/11/05 05:29:27 relay: environment recorded (900 bytes)
+[relay] 2026/11/05 05:29:28 relay: listening on :53/ud[warden] collector: ready
+[relay] 2026/11/[warden] starting build...
+[warden] running...
+relay: claimed
+[build] [    0.072596] Kernel command line: console=ttyS0 reboot=k panic=1 pci=off warden.link_ip=100.126.255.254/30 warden.link_gw=100.126.255.253 pci=off virtio_mmio.device=4K@0xc0001000:5
+[build] [    0.080399] mem auto-init: stack:off, heap alloc:off, heap free:off
+[build] [    0.168968] rcu: srcu_init: Setting srcu_struct sizes based on contention.
+[build] [    0.389145] nfs4filelayout_init: NFSv4 File Layout Driver Registering...
+[relay] 2026/11/05 05:29:28 relay: DHCP OFFER 100.126.255.254 to 76:ee:36:40:c8:9f
+[relay] 2026/11/05 05:29:28 relay: DHCP ACK 100.126.255.254 to 76:ee:36:40:c8:9f
+[build] init: link 100.126.255.254/30 via 100.126.255.253 from dhcp
+[build] init: ready
+[build] warden-io: configuring network
+[build] warden-io: waiting for relay
+[build] warden-io: installing CA
+[build] warden-io: applying baseline (trust exclusive)
+[build] warden-io: fetching build script
+[build] warden-io: running build.sh
+[build] hello-from-direct-boot
+hello-from-direct-boot
+[build] 2: eth0    inet 100.126.255.254/30 scope global eth0\     6.1.191
+[build] default via 100.126.255.253 dev eth02: eth0    inet 100.126.255.254/30 scope global eth0\       valid_lft forever preferred_lft forever
+default via 100.126.255.253 dev eth0 
+[warden] collector: ledger (3452 bytes)
+[warden] collector: complete exit=0 msg=""
+[build] [    0.709102] Kernel panic - not syncing: Attempted to kill init! exitcode=0x00000000
+[build] [    0.71warden: build SUCCEEDED (output: out-alt-direct)

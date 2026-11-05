@@ -1,0 +1,16 @@
+Chain WARDEN-FC-FWD (1 references)
+    pkts      bytes target     prot opt in     out     source               destination         
+       0        0 TCPMSS     tcp  --  wfc0u  eth0    100.64.88.2          0.0.0.0/0            tcp flags:0x06/0x02 TCPMSS clamp to PMTU
+       0        0 TCPMSS     tcp  --  eth0   wfc0u   0.0.0.0/0            100.64.88.2          tcp flags:0x06/0x02 tcpmss match 1241:65535 TCPMSS set 1240
+       0        0 ACCEPT     all  --  wfc0u  eth0    100.64.88.2          0.0.0.0/0           
+       0        0 ACCEPT     all  --  eth0   wfc0u   0.0.0.0/0            100.64.88.2          ctstate RELATED,ESTABLISHED
+       0        0 DROP       all  --  wfc0u  *       0.0.0.0/0            0.0.0.0/0           
+       0        0 ACCEPT     all  --  wfc0b  wfc0b   0.0.0.0/0            0.0.0.0/0           
+       0        0 TCPMSS     tcp  --  wfc1u  eth0    100.64.88.6          0.0.0.0/0            tcp flags:0x06/0x02 TCPMSS clamp to PMTU
+       0        0 TCPMSS     tcp  --  eth0   wfc1u   0.0.0.0/0            100.64.88.6          tcp flags:0x06/0x02 tcpmss match 1241:65535 TCPMSS set 1240
+       0        0 ACCEPT     all  --  wfc1u  eth0    100.64.88.6          0.0.0.0/0           
+       0        0 ACCEPT     all  --  eth0   wfc1u   0.0.0.0/0            100.64.88.6          ctstate RELATED,ESTABLISHED
+       0        0 DROP       all  --  wfc1u  *       0.0.0.0/0            0.0.0.0/0           
+       0        0 ACCEPT     all  --  wfc1b  wfc1b   0.0.0.0/0            0.0.0.0/0           
+       0        0 DROP       all  --  wfc+   *       0.0.0.0/0            0.0.0.0/0           
+       0        0 DROP       all  --  *      wfc+    0.0.0.0/0            0.0.0.0/0           
