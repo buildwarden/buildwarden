@@ -98,8 +98,8 @@ steps:
       - f3-implement
       - f3-implement-r2
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: host:linux-kvm/20261105T051002Z
+      expires: 2026-11-05T07:11:34.7113413Z
     note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan (plan r3 task 53): the four cases on the default link and on 100.126.255.252/30 (pre-change assets refused with the one-time command; after it, a default-link build whose ledger verifies, the guest at 100.127.255.254; the configured link reported by doctor and built with no rebuild, refresh or re-prepare; an overlapping --build-link refused at startup). Reaches driver/firecracker (claim carries the link, direct-boot boot_args, launcher stamp, resolver exclusion against the resolved link), the vm-mode relay''s netlink build-interface setup on the x86_64 relay VM, and tools/firecracker-vm/init; plus a direct-boot and a disk build, an old relay initramfs still building with 10.0.0.1 gone from the relay''s build interface, a host resolver inside the configured link excluded with the fix, the guest-sourced canary drop, and a build fetching the link''s relay address refused (TEST-08). vm-mode DHCP (a14 (d)): every direct-boot build''s console shows the link from dhcp, equal to the command line, on both links, and the old-relay-initramfs build takes its lease too; a DHCP DISCOVER sent from the host on the slot''s upstream TAP gets no offer from the relay; a build script flooding DISCOVER and REQUEST with random MACs and sending a forged BOOTREPLY and RELEASE leaves the guest''s address and the relay unchanged, its next fetch succeeding (TEST-08). Added by f2-plan-r3 needing only f2-design-review-r3; add f3-implement to its needs once Implement is seeded, and f6-open-pr must need this step once phase 6 is seeded.'
   - id: f6-validate-qemu-any
     phase: 6
@@ -186,7 +186,7 @@ budget:
     steps: 120
   spent:
     runs: 4
-    steps: 16
+    steps: 17
 questions:
   - id: a1
     kind: assumed
@@ -596,3 +596,6 @@ history:
   - at: 2026-11-05T05:11:29Z
     by: host:windows-hyperv/20261105T051002Z
     event: claimed f6-validate-windows-hyperv until 2026-11-05T07:11:29Z
+  - at: 2026-11-05T05:11:34Z
+    by: host:linux-kvm/20261105T051002Z
+    event: claimed f6-validate-linux-kvm until 2026-11-05T07:11:34Z
