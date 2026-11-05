@@ -46,6 +46,7 @@ step as pseudocode.
 | Driver / guest | (1) Isolation | (2) Executor delivery | (3) Start trigger |
 |---|---|---|---|
 | qemu / Linux | Topology: the only NIC reaches the relay VM | cloud-init `CIDATA` ISO per build | cloud-init `runcmd` |
+| firecracker / Linux | Topology: the build VM's only NIC is a TAP on a per-slot host bridge whose only other port is the relay VM; the bridge has no address and drops every frame bound for the host | cloud-init `CIDATA` ISO per build as a read-only virtio-blk drive (disk path), or `warden-io` appended per build to a launcher-only initramfs (direct boot) | cloud-init `runcmd` (disk path); the launcher's exec of `warden-io initialize` (direct boot) |
 | qemu, hyperv / Windows | Topology | `WARDEN` seed disk per build (`warden-io.exe`, `warden-run.ps1`) | `warden-run` startup task baked at prepare |
 | vz / macOS | Topology: one socketpair NIC to the relay | **Baked into the image at prepare** (D2) | launchd daemon baked at prepare |
 | container | A namespace holder, isolated by a privileged iptables sidecar before the build container exists | Tar stream of `warden-io` (mode 0755) copied into the created, not yet started, build container | Container start; entrypoint `warden-io initialize` |
@@ -181,6 +182,11 @@ contains:
 3. What the change gains, and what it costs in security posture and in the
    record of what the build consumed.
 
+The edit to this document is a rule change (FLOW-14): a feature that needs the
+model change declares it in its `rule_changes`, the design review approves it
+by name alongside the comparison, and the feature's Implement makes it; a
+model change no feature needs is a process item.
+
 Changes that bring a driver into line with the model, or that leave it untouched,
 are not model changes. They still name the invariants they rely on in their
 design's `rules`.
@@ -192,6 +198,8 @@ touching this document, or that changes this document without a design whose
 bootstrap config (`bootstrap/`), the relay's guest-facing endpoints, and each
 driver's isolation, executor delivery and start code
 (`driver/container/container.go`, `driver/container/images*`, `cmd/warden-pause/`,
-`driver/qemu/cloudinit.go`, `driver/winguest/`, `driver/hyperv/winseed*.go`,
-`driver/vz/image.go`). The agent part judges whether a change counts as a model
-change.
+`driver/linuxguest/`, `driver/winguest/`, `driver/hyperv/winseed*.go`,
+`driver/vz/image.go`, and the firecracker isolation, delivery and start files
+(`driver/firecracker/slots*.go`, `setup.go`, `posture.go`, `vm*.go`,
+`deliver_linux.go`) and `tools/firecracker-vm/`). The agent part judges whether a
+change counts as a model change.

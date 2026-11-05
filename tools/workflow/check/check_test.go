@@ -386,3 +386,95 @@ func TestPublishPassesOnAnEarlyMerge(t *testing.T) {
 		t.Errorf("x2 after an early merge: %s", failures(rs))
 	}
 }
+
+// squash squash-merges feat/demo into main as GitHub does, with the PR number
+// in the subject, and pushes main.
+func squash(t *testing.T, work string, pr string) {
+	t.Helper()
+	git(t, work, "checkout", "-q", "main")
+	git(t, work, "merge", "-q", "--squash", "feat/demo")
+	git(t, work, "commit", "-q", "-m", "Demo ("+pr+")")
+	git(t, work, "push", "-q", "origin", "main")
+	git(t, work, "fetch", "-q", "origin")
+}
+
+// TestMergedBySquash: a squash merge never makes the branch head an ancestor
+// of main, so it counts as merged only when main carries a commit naming the
+// PR whose tree is the head's tree (FLOW-08, FLOW-16).
+func TestMergedBySquash(t *testing.T) {
+	work := repo(t, design)
+	env := Env{Repo: work}
+	f := demo(7)
+	f.PR = &queue.PR{Number: 9, CI: "green"}
+	squash(t, work, "#9")
+	if rs := Phase(env, f); !OK(rs) || !strings.Contains(rs[0].Info, "squash-merged") {
+		t.Fatalf("squash with the local and remote refs present: %s", failures(rs))
+	}
+	f.PR.Number = 90
+	if rs := Phase(env, f); OK(rs) {
+		t.Error("PR #90 matched the squash of #9")
+	}
+	f.PR = nil
+	if rs := Phase(env, f); OK(rs) {
+		t.Error("a squashed branch passed with no PR recorded")
+	}
+	f.PR = &queue.PR{Number: 9, CI: "green"}
+	git(t, work, "checkout", "-q", "feat/demo")
+	_ = os.WriteFile(filepath.Join(work, "late.txt"), []byte("late\n"), 0o644)
+	git(t, work, "add", "late.txt")
+	git(t, work, "commit", "-q", "-m", "pushed after the squash")
+	if got := failures(Phase(env, f)); !strings.Contains(got, "refs/heads/feat/demo") ||
+		!strings.Contains(got, "no PR commit has its tree") {
+		t.Errorf("local head past the squash: %q, want it named as unmerged", got)
+	}
+	git(t, work, "push", "-q", "origin", "feat/demo")
+	git(t, work, "fetch", "-q", "origin")
+	git(t, work, "checkout", "-q", "main")
+	git(t, work, "branch", "-q", "-D", "feat/demo")
+	got := failures(Phase(env, f))
+	if !strings.Contains(got, "refs/remotes/origin/feat/demo") {
+		t.Errorf("remote head past the squash: %q, want it named as unmerged", got)
+	}
+}
+
+// TestSquashOfAnOlderHeadFails: main moved under the branch between its last
+// main-merge and the squash, so the squash's tree is not the branch's and the
+// check names both.
+func TestSquashOfAnOlderHeadFails(t *testing.T) {
+	work := repo(t, design)
+	env := Env{Repo: work}
+	git(t, work, "checkout", "-q", "main")
+	_ = os.WriteFile(filepath.Join(work, "other.txt"), []byte("other\n"), 0o644)
+	git(t, work, "add", "other.txt")
+	git(t, work, "commit", "-q", "-m", "another feature")
+	squash(t, work, "#9")
+	p := demo(3)
+	p.Kind, p.Round, p.PR = "process", "process", &queue.PR{Number: 9}
+	got := failures(Phase(env, p))
+	if !strings.Contains(got, "is not contained in origin/main") ||
+		strings.Count(got, "tree ") < 2 {
+		t.Fatalf("x3 on a squash with a different tree: %q, want both trees named", got)
+	}
+}
+
+// TestCloseAfterASquash: once the squashed local branch is deleted (with -D,
+// FLOW-16) and GitHub has deleted the remote one, Close passes on the PR
+// commit alone.
+func TestCloseAfterASquash(t *testing.T) {
+	work := repo(t, design)
+	commit(t, work, archived)
+	env := Env{Repo: work}
+	p := demo(4)
+	p.Kind, p.Round, p.PR = "process", "process", &queue.PR{Number: 9}
+	squash(t, work, "#9")
+	if got := failures(Phase(env, p)); !strings.Contains(got, "branch deleted") ||
+		strings.Contains(got, "merged by a human") {
+		t.Fatalf("x4 before the branches go: %q, want only the deletions failing", got)
+	}
+	git(t, work, "push", "-q", "origin", ":feat/demo")
+	git(t, work, "branch", "-q", "-D", "feat/demo")
+	git(t, work, "fetch", "-q", "--prune", "origin")
+	if rs := Phase(env, p); !OK(rs) {
+		t.Errorf("x4 after a squash: %s", failures(rs))
+	}
+}

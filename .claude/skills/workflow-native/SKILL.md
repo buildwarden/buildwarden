@@ -26,7 +26,9 @@ Arguments:
 
 The `workflow-tick` skill's Never list applies unchanged: no merge, approval or
 auto-merge; no push to `main`, force-push or remote branch delete; no edits to
-`docs/development/`, `.claude/` or `tools/workflow/`; no secrets in prompts.
+`docs/development/`, `.claude/` or `tools/workflow/`, except a rule change the
+feature's design review approved, in its `paths` (FLOW-14); no secrets in
+prompts.
 Also: never take `human` or `cloud` steps, never ask a question and wait (record
 it in the queue and the digest instead), and never change anything on the
 machine outside the checkout, the documented caches, and the VMs, images and
@@ -60,6 +62,7 @@ For each host this session serves:
   each (`dist/wf claim`), pushing the workflow branch after each claim. A
   rejected push lost the claim (FLOW-04): reset to `origin/workflow`, ask again.
 - Backlog: every `open` entry for this host in `backlog/native-gaps.yaml`.
+  A `deferred` entry is not retried: its note says what it waits on.
 
 Unattended, the batch is bounded by the native budget,
 `dist/wf budget -state .dev/workflow -native` (`native_budget` in

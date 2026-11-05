@@ -52,11 +52,13 @@ func Phase(env Env, f *queue.Feature) []Result {
 		c.make("lint")
 		c.make("test")
 		c.docsTouched("UX-01 reference docs updated", "docs/")
+		c.ruleClearance()
 	case 4:
 		c.onBranchHead()
 		c.make("lint")
 		c.make("test")
 		c.tier2Report()
+		c.ruleClearance()
 	case 5:
 		c.docsTouched("guides or examples updated", "docs/book/src/guide/",
 			"docs/book/src/getting-started/", "examples/", "README.md")
@@ -68,6 +70,7 @@ func Phase(env Env, f *queue.Feature) []Result {
 		if d, err := c.loadDesign(c.f.Branch); err == nil {
 			c.section(d, "Consolidation")
 		}
+		c.ruleClearance()
 		c.archivedOn(c.f.Branch)
 		c.prGreen()
 	case 7:
@@ -79,8 +82,8 @@ func Phase(env Env, f *queue.Feature) []Result {
 }
 
 // process runs a process item's done-when checks: x1 design written and
-// reviewed, x2 archived on the pushed branch with its PR green, x3 merged by
-// a human, x4 closed.
+// reviewed, x2 archived on the pushed branch with its PR green (the FLOW-14
+// clearance reports it exempt), x3 merged by a human, x4 closed.
 func (c *checker) process() {
 	switch c.f.Phase {
 	case 1:
@@ -92,6 +95,7 @@ func (c *checker) process() {
 			break
 		}
 		c.pushed()
+		c.ruleClearance()
 		c.archivedOn(c.f.Branch)
 		c.prGreen()
 	case 3:
@@ -229,27 +233,77 @@ func (c *checker) prGreen() {
 	c.add("PR open with CI green (FLOW-11)", ok, "pr %+v", c.f.PR)
 }
 
-// merged confirms the human's merge (FLOW-08): the branch head, local or
-// remote, is contained in origin/main, or, once GitHub has deleted the
-// branch, origin/main carries the PR's merge commit.
+// merged confirms the human's merge (FLOW-08). Each branch head still
+// around, local or remote, must be contained in origin/main, or, for a
+// squash merge, origin/main must carry a commit naming the PR whose tree is
+// the head's tree (FLOW-16). Once GitHub has deleted the branch, the PR's
+// commit on origin/main alone is the proof.
 func (c *checker) merged() {
 	const name = "merged by a human (FLOW-08)"
+	var prCommits []string
+	if pr := c.f.PR; pr != nil && pr.Number > 0 {
+		out, _ := c.git("log", "origin/main", "--format=%h %s", "-E",
+			fmt.Sprintf("--grep=(Merge pull request |\\()#%d([^0-9]|$)", pr.Number))
+		if out != "" {
+			prCommits = strings.Split(out, "\n")
+		}
+	}
+	var infos []string
 	for _, ref := range []string{"refs/heads/" + c.f.Branch,
 		"refs/remotes/origin/" + c.f.Branch} {
 		if _, err := c.git("rev-parse", "--verify", "--quiet", ref); err != nil {
 			continue
 		}
-		_, err := c.git("merge-base", "--is-ancestor", ref, "origin/main")
-		c.add(name, err == nil, "%s is contained in origin/main", ref)
+		info, ok := c.refMerged(ref, prCommits)
+		if !ok {
+			c.add(name, false, "%s", info)
+			return
+		}
+		infos = append(infos, info)
+	}
+	if len(infos) > 0 {
+		c.add(name, true, "%s", strings.Join(infos, "; "))
 		return
 	}
 	if c.f.PR == nil || c.f.PR.Number == 0 {
 		c.add(name, false, "no %s branch and no PR recorded", c.f.Branch)
 		return
 	}
-	out, _ := c.git("log", "origin/main", "--format=%h %s", "-E",
-		fmt.Sprintf("--grep=(Merge pull request |\\()#%d([^0-9]|$)", c.f.PR.Number))
-	c.add(name, out != "", "PR #%d on origin/main: %s", c.f.PR.Number, firstLine(out))
+	c.add(name, len(prCommits) > 0, "PR #%d on origin/main: %s", c.f.PR.Number,
+		firstLine(strings.Join(prCommits, "\n")))
+}
+
+// refMerged reports whether ref is on origin/main: an ancestor of it, or
+// squashed into one of prCommits with an identical tree. The tree comparison
+// is what makes deleting a squashed branch safe: a head pushed past the
+// squash, or a squash of an older head, has a different tree.
+func (c *checker) refMerged(ref string, prCommits []string) (string, bool) {
+	if _, err := c.git("merge-base", "--is-ancestor", ref, "origin/main"); err == nil {
+		return ref + " is contained in origin/main", true
+	}
+	if len(prCommits) == 0 {
+		return ref + " is not contained in origin/main and no PR commit is on it", false
+	}
+	tree, _ := c.git("rev-parse", ref+"^{tree}")
+	var seen []string
+	for _, line := range prCommits {
+		sha := strings.Fields(line)[0]
+		pt, _ := c.git("rev-parse", sha+"^{tree}")
+		if pt != "" && pt == tree {
+			return fmt.Sprintf("%s squash-merged as %s (tree %s)", ref, line,
+				short(tree)), true
+		}
+		seen = append(seen, fmt.Sprintf("%s tree %s", sha, short(pt)))
+	}
+	return fmt.Sprintf("%s (tree %s) is not contained in origin/main, and no PR commit "+
+		"has its tree: %s", ref, short(tree), strings.Join(seen, ", ")), false
+}
+
+func short(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
 }
 
 // mergedEarly handles a PR the human merged before Publish's step was
@@ -321,6 +375,9 @@ func (c *checker) design() {
 			c.section(d, "Bootstrap comparison")
 		}
 	}
+	if len(d.Front.RuleChanges) > 0 {
+		c.section(d, "Rule changes")
+	}
 	c.reviewDecision(d)
 	open := c.f.OpenBlocking()
 	c.add("no open blocking question (FLOW-07)", len(open) == 0, "%d open", len(open))
@@ -373,8 +430,11 @@ type Front struct {
 	} `yaml:"native_validation"`
 	Tier2Gaps []any    `yaml:"tier2_gaps"`
 	Rules     []string `yaml:"rules"`
-	Concepts  []string `yaml:"concepts"`
-	present   map[string]bool
+	// RuleChanges is optional: empty or absent means the feature changes no
+	// rule (FLOW-14).
+	RuleChanges []RuleChange `yaml:"rule_changes"`
+	Concepts    []string     `yaml:"concepts"`
+	present     map[string]bool
 }
 
 // Problems lists the ways the front-matter breaks FLOW-02 for the named
@@ -413,7 +473,7 @@ func (fm *Front) Problems(feature string) []string {
 				"native_validation %+v needs host, blocking and reason", nv))
 		}
 	}
-	return out
+	return append(out, ruleChangeProblems(fm.RuleChanges)...)
 }
 
 func (c *checker) loadDesign(rev string) (*Design, error) {

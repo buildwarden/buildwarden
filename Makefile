@@ -1,4 +1,4 @@
-.PHONY: build test integration-test lint tier1 fmt tidy cover clean sign relay-vm deadcode
+.PHONY: build test integration-test lint tier1 enforcement fmt tidy cover clean sign relay-vm deadcode
 
 UNAME_S := $(shell uname -s)
 UNAME_M := $(shell uname -m)
@@ -70,6 +70,13 @@ tier1:
 	cd tools/tier1 && GOOS=$$(go env GOHOSTOS) GOARCH=$$(go env GOHOSTARCH) \
 		go build -o ../../dist/tier1$(HOSTEXE) ./cmd/tier1
 	./dist/tier1$(HOSTEXE) -base $(TIER1_BASE) $(TIER1_FLAGS)
+
+# FLOW-14: when the branch changes tools/tier1/ or tools/workflow/check/, run
+# tier1 built from the merge base's code with the branch's rules.yaml and
+# golangci.yml against it too, and fail on a finding the
+# branch's tier1 drops without an approved rule change naming its rule.
+enforcement:
+	tools/workflow/enforcement-check.sh $(TIER1_BASE) $(TIER1_FLAGS)
 
 # Code unreachable from any main or test, per platform (FLOW-15). Remove what
 # all three report, or say why it stays.

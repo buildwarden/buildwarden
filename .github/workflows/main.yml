@@ -104,6 +104,16 @@ jobs:
           ./dist/tier1 -base "$BASE" -json $FLAGS > tier1.json || code=$?
           ./dist/tier1 -base "$BASE" $FLAGS || true
           exit "${code:-0}"
+      # FLOW-14: an enforcement change is also checked by tier1 built from the
+      # base; a no-op unless the PR changes tools/tier1/ or tools/workflow/check/.
+      # PRs only: the approvals it reads name commits on the PR's branch, which
+      # a squash merge leaves off main.
+      - name: main's enforcement
+        if: github.event_name == 'pull_request'
+        env:
+          BASE: ${{ github.event.pull_request.base.sha }}
+          FLAGS: ${{ contains(github.event.pull_request.labels.*.name, 'no-design') && '-no-design' || '' }}
+        run: tools/workflow/enforcement-check.sh "$BASE" $FLAGS
       - uses: actions/upload-artifact@v4
         if: always()
         with:

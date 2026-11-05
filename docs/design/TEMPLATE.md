@@ -13,6 +13,9 @@ design_review: required  # required | skip (FLOW-19: skip only when its criteria
 native_validation: []    # - {host: windows-hyperv, blocking: true, reason: "..."}
 tier2_gaps: []           # platform validation knowingly deferred (TEST-03)
 rules: []                # rule IDs relied on or changed, e.g. ORCH-01, UX-01
+rule_changes: []         # FLOW-14: each rule change this feature makes, e.g.
+                         # - {rule: BOOT-03, change: amend, paths: [docs/development/bootstrap.md]}
+                         # change: add | amend | retire; paths: every file it edits
 concepts: []             # archive retrieval tags, e.g. collector, claim, image-prepare
 related: []              # other docs/design/*.md this builds on or supersedes
 ---
@@ -58,6 +61,14 @@ The current and proposed model diagrams, a table with one row per invariant
 (BOOT-01 to BOOT-06: current, proposed, per-driver effect), and what the change
 gains and costs. Sign-off must accept this section explicitly.
 
+## Rule changes
+
+Required when `rule_changes` is not empty (FLOW-14); delete otherwise. For each
+entry: the rule's current wording and the proposed wording (in full for an
+amended paragraph), its severity and check before and after, why the feature
+needs it, and what the enforcement change does. The design review approves each
+one by name (FLOW-19).
+
 ## Security note
 
 Required when `security_boundary` is not `none` (GLOBAL-06): the boundary, how its
@@ -77,8 +88,9 @@ code is listed as explicit tasks (FLOW-06).
 
 One entry per review (FLOW-19): the date, the outcome (approved, or changes),
 the decisions taken, and for an approval, `approved at <sha>`, the commit the
-approved design was read at. A re-review also says what changed since the last
-approval.
+approved design was read at, and one `rule change <ID> approved at <sha>` line
+per approved rule change (FLOW-14). A re-review also says what changed since the
+last approval.
 
 ## Consolidation
 

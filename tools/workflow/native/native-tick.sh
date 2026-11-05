@@ -67,6 +67,18 @@ epoch() {
 		echo 0
 }
 
+# fetch runs git fetch, retrying a network or auth failure with backoff
+# (2s, 4s, 8s): GitHub refuses a valid key now and then for a few seconds.
+fetch() {
+	local delay
+	for delay in 2 4 8 0; do
+		git fetch -q "$@" && return
+		[ "$delay" -eq 0 ] && return 1
+		echo "fetch $* failed; retrying in ${delay}s"
+		sleep "$delay"
+	done
+}
+
 # save_leftover keeps what a session left in the workflow checkout before it
 # is reset: uncommitted changes, untracked files and unpushed commits.
 # shellcheck disable=SC2329 # called from the EXIT trap
@@ -96,7 +108,7 @@ reset_workflow() {
 record_status() {
 	local wt=.dev/workflow f prev_outcome prev_reason prev_since prev_last since attempt
 	cd "$repo" || return
-	git fetch -q origin workflow || { echo "status: cannot fetch workflow"; return; }
+	fetch origin workflow || { echo "status: cannot fetch workflow"; return; }
 	if [ ! -d "$wt" ]; then
 		git worktree add -q -B workflow "$wt" origin/workflow || return
 	fi
@@ -134,7 +146,7 @@ record_status() {
 			return
 		fi
 		echo "status: push rejected (attempt $attempt); refetching"
-		git fetch -q origin workflow
+		fetch origin workflow
 	done
 	echo "status: not pushed after 3 attempts"
 }
@@ -173,7 +185,7 @@ if [ -n "$(git status --porcelain --untracked-files=no)" ]; then
 	stop "the dedicated checkout has local changes"
 fi
 stage="sync"
-git fetch -q --prune origin
+fetch --prune origin
 git switch -q main
 git reset -q --hard origin/main
 git worktree prune

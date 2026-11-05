@@ -21,8 +21,11 @@ feature's cloud steps.
   (FLOW-16, FLOW-17). Opening a PR needs no confirmation (FLOW-08):
   `f6-open-pr` and a process item's `x2-implement` open theirs.
 - Edit `docs/development/`, `.claude/`, or `tools/workflow/` anywhere but on
-  a process item's branch after its design review (FLOW-14). On a feature
-  branch, propose the change in the design for its review instead.
+  a process item's branch after its design review (FLOW-14). The one
+  exception: a rule change a feature's design review approved by name, made
+  on that feature's branch in its approved `paths` (never `.claude/` or
+  `tools/workflow/` outside `check/`). Otherwise, on a feature branch,
+  propose the change in the design for its review.
 - Put secrets in prompts (FLOW-18).
 
 ## 1. Set up
@@ -89,8 +92,9 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
 
    Close (FLOW-16) takes no PR and no human step: confirm the branch head is
    in `origin/main`, remove any worktree on the branch, `git branch -d` it
-   (never `-D`), clear the feature's validation leftovers outside the
-   documented caches, then go to 5. If the remote branch is still there,
+   (a squash-merged branch: `git branch -D`, only once `dist/wf check` has
+   passed on its equal tree; never `-D` otherwise), clear the feature's
+   validation leftovers outside the documented caches, then go to 5. If the remote branch is still there,
    release the step and add a `human` step `f8-escalate-branch` whose note
    gives the exact `git push origin --delete <branch>` command, and make
    `f8-close` need it.

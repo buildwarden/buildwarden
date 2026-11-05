@@ -13,7 +13,10 @@ restate).
    without one). Testing tasks name their tier (TEST-02) and follow TEST-01.
 3. List rework of already-implemented code as explicit tasks (FLOW-06),
    and the reference-doc and `overview.md` updates the change owes (UX-01,
-   FLOW-15).
+   FLOW-15). Each rule change the Design review approved (`rule change <ID>
+   approved at <sha>`) gets its own task citing the rule and naming its
+   `paths` (FLOW-14). A rule change the plan needs that the review did not
+   approve sends the feature back to Design (FLOW-06, FLOW-14).
 4. Check the plan against the design before you finish: every decision and
    every component the design names is carried out by a task, and no task
    does something the design does not say. The design review starts from a

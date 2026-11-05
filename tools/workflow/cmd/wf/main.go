@@ -17,6 +17,7 @@
 //	            [-kind process -holds PATTERN,...]
 //	wf gate     -state DIR -repo DIR -machine M -stamp FILE [-sweep-days N] [-record]
 //	wf budget   -state DIR [-native]
+//	wf drops    -repo DIR -base REV -main FILE -branch FILE [-head REV]
 //
 // DIR is a checkout of the workflow branch; -repo is a checkout of the code
 // with origin fetched. A worker is cloud, human or host:<name>, optionally
@@ -32,6 +33,13 @@
 // budget prints the steps one run may take: run_budget, or with -native the
 // native_budget a scheduled native session spends (FLOW-13), falling back to
 // run_budget.
+//
+// drops reads no queue: it is FLOW-14's check of an enforcement change by
+// main's enforcement, run by tools/workflow/enforcement-check.sh. -main is
+// the tier1 -json report of tier1 built from the merge base, -branch the
+// branch's own, both over the diff from REV to -head (default HEAD). It
+// fails when the branch's report drops a finding on a rule no approved
+// rule_changes entry names.
 package main
 
 import (
@@ -47,7 +55,8 @@ import (
 )
 
 const usage = "usage: wf " +
-	"validate|status|next|claim|release|check|done|answer|back|new|gate|budget|migrate [flags]"
+	"validate|status|next|claim|release|check|done|answer|back|new|gate|budget|migrate|" +
+	"drops [flags]"
 
 // errIdle is gate's "nothing to do", exit status 3.
 var errIdle = errors.New("idle")
@@ -55,6 +64,7 @@ var errIdle = errors.New("idle")
 type opts struct {
 	state, repo, worker, feature, step, why, question, answer string
 	title, source, machine, stamp, kind, holds                string
+	base, head, mainReport, branchReport                      string
 	priority, estSteps, estRuns, sweepDays, to                int
 	newRun, run, record, native, md                           bool
 	now                                                       time.Time
@@ -102,7 +112,14 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.BoolVar(&o.record, "record", false, "gate: write the stamp instead of deciding")
 	fs.BoolVar(&o.native, "native", false, "budget: the native session's budget")
 	fs.BoolVar(&o.md, "md", false, "status: print the QUEUE.md summary instead")
+	fs.StringVar(&o.base, "base", "origin/main", "drops: the diff's base")
+	fs.StringVar(&o.head, "head", "HEAD", "drops: the diff's head")
+	fs.StringVar(&o.mainReport, "main", "", "drops: the merge base's tier1 -json report")
+	fs.StringVar(&o.branchReport, "branch", "", "drops: the branch's tier1 -json report")
 	_ = fs.Parse(args)
+	if cmd == "drops" {
+		return drops(o)
+	}
 
 	s, err := queue.Load(o.state)
 	if err != nil {
@@ -364,7 +381,11 @@ func kindFlags(o opts) (string, []string, error) {
 }
 
 func runChecks(o opts, f *queue.Feature) bool {
-	rs := check.Phase(check.Env{Repo: o.repo, Workflow: o.state, Run: o.run}, f)
+	return printResults(check.Phase(check.Env{Repo: o.repo, Workflow: o.state, Run: o.run}, f))
+}
+
+// printResults prints each check's outcome and reports whether all passed.
+func printResults(rs []check.Result) bool {
 	for _, r := range rs {
 		mark := "ok  "
 		if !r.OK {
@@ -373,6 +394,26 @@ func runChecks(o opts, f *queue.Feature) bool {
 		fmt.Printf("%s %s: %s\n", mark, r.Name, lastLines(r.Info, 6))
 	}
 	return check.OK(rs)
+}
+
+// drops compares main's tier 1 report with the branch's (FLOW-14).
+func drops(o opts) error {
+	if o.mainReport == "" || o.branchReport == "" {
+		return fmt.Errorf("drops needs -main and -branch")
+	}
+	was, err := os.ReadFile(o.mainReport)
+	if err != nil {
+		return err
+	}
+	now, err := os.ReadFile(o.branchReport)
+	if err != nil {
+		return err
+	}
+	if !printResults(check.Drops(o.repo, o.base, o.head, was, now)) {
+		return fmt.Errorf(
+			"the branch drops main's tier 1 findings without an approved rule change")
+	}
+	return nil
 }
 
 func lastLines(s string, n int) string {
