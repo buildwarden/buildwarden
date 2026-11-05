@@ -1953,6 +1953,16 @@ plan takes the reading below; the review confirms it or sends the design back:
     Decision 5 and the other text the answer left out of date in line at
     Consolidation.
 
+- **r3 addendum, 2026-11-05: rule change BOOT-03 approved at `303e713`**
+  (Jeff, attended; FLOW-14 and FLOW-19 as amended by
+  `design-approved-rule-changes`, #96, under its a7). The `rule_changes`
+  entry and the **Rule changes** section were declared at `303e713`.
+  Approved as worded. This also accepts the **Bootstrap comparison** as
+  amended by a14 (d) (Review r1 `878d510bc61b`, MUST-review 1). BOOT-06's
+  optional extension is not taken. Task 49 and Review r1's SHOULDs 2, 3, 4,
+  6, 7 and 8 go to an Implement round (`f3-implement-r2`) before Publish.
+  SHOULDs 5 and 9 are left for Consolidation.
+
 ## Consolidation
 
 Filled in at Publish (FLOW-10, FLOW-15).
