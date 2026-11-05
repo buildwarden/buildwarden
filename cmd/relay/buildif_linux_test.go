@@ -89,7 +89,7 @@ func TestParseAddrs(t *testing.T) {
 		// eth0 with two addresses, the second only IFA_ADDRESS.
 		ifAddrMsg(30, 2, rtAttr(unix.IFA_ADDRESS, ip4("100.127.255.253")),
 			rtAttr(unix.IFA_LOCAL, ip4("100.127.255.253"))),
-		ifAddrMsg(24, 2, rtAttr(unix.IFA_ADDRESS, ip4("10.0.0.1"))),
+		ifAddrMsg(24, 2, rtAttr(unix.IFA_ADDRESS, ip4("198.51.100.1"))),
 		// A point-to-point address: IFA_ADDRESS is the peer, IFA_LOCAL ours.
 		ifAddrMsg(32, 3, rtAttr(unix.IFA_ADDRESS, ip4("192.0.2.9")),
 			rtAttr(unix.IFA_LOCAL, ip4("192.0.2.1"))),
@@ -104,7 +104,7 @@ func TestParseAddrs(t *testing.T) {
 	want := []ifAddr{
 		{1, netip.MustParsePrefix("127.0.0.1/8")},
 		{2, netip.MustParsePrefix("100.127.255.253/30")},
-		{2, netip.MustParsePrefix("10.0.0.1/24")},
+		{2, netip.MustParsePrefix("198.51.100.1/24")},
 		{3, netip.MustParsePrefix("192.0.2.1/32")},
 	}
 	if !reflect.DeepEqual(got, want) {
@@ -183,7 +183,7 @@ func TestParseAck(t *testing.T) {
 func TestFlushAddrs(t *testing.T) {
 	a := netip.MustParsePrefix("100.127.255.253/30")
 	b := netip.MustParsePrefix("100.127.255.254/30")
-	c := netip.MustParsePrefix("10.0.0.1/24")
+	c := netip.MustParsePrefix("198.51.100.1/24")
 	var tried []netip.Prefix
 	del := func(p netip.Prefix) error {
 		tried = append(tried, p)
