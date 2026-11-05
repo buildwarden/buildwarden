@@ -1784,8 +1784,13 @@ plan takes the reading below; the review confirms it or sends the design back:
     reading (the vm responder of tasks 14 and 15, the inits' precedence of
     tasks 36 and 37), and Decision 5's rejected alternative removed with a
     pointer to the r3 review. If the review records that answer in the design
-    first, this task only checks the two agree. (FLOW-14, FLOW-19, FLOW-15,
-    GLOBAL-06; a14)
+    first, this task only checks the two agree. It also records the two
+    behaviours `f3-implement-r2` added at Jeff's choice (Review r1 SHOULDs 2
+    and 3; Review r2 finding 10): doctor fails on a missing or stale stamp
+    on the Hyper-V relay boot VHDX or the vz image, and reports only for the
+    direct-boot initramfs; and a vz `--image` outside the cache gets the
+    "omit --image" fix. Decision 8 and the per-driver pseudocode change to
+    match. (FLOW-14, FLOW-19, FLOW-15, FLOW-10, GLOBAL-06; a14)
 
 ## Design review
 
