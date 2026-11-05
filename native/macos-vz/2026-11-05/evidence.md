@@ -1,0 +1,46 @@
+# build-link-subnet f6-validate-macos-vz — host:macos-vz/20261105T124003Z
+
+Unattended, macOS 27.0.1 (26A434), arm64. Branch feat/build-link-subnet at
+a68ac2c. warden ad-hoc signed with the virtualization entitlement
+(`make -C .scratch/build-link-subnet build`). Cached prepared image
+~/.cache/warden/images/macos-90a1b1f94f64b00a (prepared before this feature; no
+link-channel stamp).
+
+## NOT COMPLETED — needs an attended sudo re-prepare
+
+The vz validation's core cases (a default-link build, a configured-link build,
+the lease taken within the boot window, the link block on a live build) all
+need a prepared image that carries the link-channel stamp and the new
+DHCP `warden-boot`. The stamp and the rewritten warden-boot are written only by
+`sudo warden image prepare --driver vz` (vz.ReprepareImage calls RequireRoot;
+geteuid must be 0). This unattended session has no passwordless sudo
+(`sudo -n true` is denied), so it cannot re-prepare the cached image, and every
+vz build is refused by the required stamp. The step is released, not done.
+
+## What did run (no re-prepare needed)
+
+- `doctor --driver vz` on the un-re-prepared image: "build link
+  100.127.255.252/30 (default)", "no host interface overlaps it", then
+  "BLOCKED: vz prepared macOS image (warden-boot): link-channel stamp missing;
+  rebuild it once: sudo warden image prepare --driver vz" (exit 1).
+- A vz build on that image is refused before any VM boots: "vz prepared macOS
+  image (warden-boot) predates the configurable build link and must be rebuilt
+  once (no link-channel stamp at .../macos-90a1b1f94f64b00a/link-channel) To
+  fix: sudo warden image prepare --driver vz".
+- Config source: doctor from a dir with [vm] build_link = 100.126.255.252/30
+  reports "build link 100.126.255.252/30 (warden.toml)".
+- Overlap / malformed --build-link refused (same resolver as every driver):
+  10.0.2.0/30 (qemu user-mode 10.0.2.0/24), 192.168.240.0/30 (hyperv NAT
+  192.168.240.0/20), 100.64.88.0/30 (firecracker upstream 100.64.88.0/22),
+  100.126.0.1/30 (not a network address; did you mean 100.126.0.0/30).
+
+## To finish (attended)
+
+Run `sudo warden image prepare --driver vz` (re-prepares the cached image in
+place, no IPSW restore; writes warden-boot's DHCP script and the link-channel
+stamp). Then: a default-link build (guest 100.127.255.254, ledger verifies via
+inspect --verify-disks), a --build-link 100.126.255.252/30 build with no
+re-prepare (guest 100.126.255.254), the lease taken within the boot window
+(time from boot to initialize against main), and the link block on the
+configured link. The in-guest forged-DHCP/ARP TEST-08 case stays with
+security-suite, as on the other hosts.
