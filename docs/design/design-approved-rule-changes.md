@@ -1,6 +1,6 @@
 ---
 feature: design-approved-rule-changes
-status: draft
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -409,4 +409,65 @@ merged.
 
 ## Archive summary
 
-Filled in at x2-implement.
+Implemented 2026-11-04 to 2026-11-05 by the cloud loop (attended), approved at
+design review r1 (`9f88987`), Decision 6 amended in r2 (`2aa1cbf`).
+
+- **Built: the second FLOW-14 route.** A feature whose design needs a rule or
+  its enforcement changed declares each change in a `rule_changes`
+  front-matter key (`{rule, change: add | amend | retire, paths}`) and a
+  **Rule changes** section; the design review approves each one by name
+  (`rule change <ID> approved at <sha>`); Plan gives it a task and Implement
+  makes it on the feature branch. The process item stays the only route for
+  `.claude/` and `tools/workflow/` outside `check/`, and the route for a rule
+  change no feature needs.
+- **Rule text** (`docs/development/process.md`): FLOW-14 gains the route and
+  becomes `automated + agent-judgment`; FLOW-19 asks each rule change on its
+  own, records its approval line, and refuses `skip` for a design with
+  `rule_changes`; FLOW-10's "same PR" holds only for an approved change;
+  FLOW-03's phase table names the clearance at Implement, Review and Publish;
+  FLOW-02 lists the key. BOOT-07 (`bootstrap.md`) says a model change a
+  feature needs is made as an approved rule change. `TEMPLATE.md` has the key,
+  the section and the approval line. `rules.yaml` gives FLOW-14 its owner.
+- **`wf check`** (`tools/workflow/check/rulechange.go`): `rule_changes`
+  validation in `Front.Problems` (so tier1's FLOW-02 check covers it); a rule
+  change's approval line does not count as a design approval; Design requires
+  the section; the clearance runs at phases 3, 4 and 6, and a process item's
+  branch is exempt. Every guarded file the branch changes must be in an
+  approved entry's `paths`, with that entry in the front-matter at the
+  approval commit. A `.claude/` or other `tools/workflow/` edit fails
+  outright. Tier-0 tests over git fixtures.
+- **Main's enforcement (Decision 6, as amended in r2).** `wf drops` compares
+  two tier1 `-json` reports and fails on a finding the branch drops on a rule
+  no approved entry names. `tools/workflow/enforcement-check.sh`, run by
+  `make enforcement` and by a new PR-only step in CI's `tier1` job, builds
+  main's tier1 from the merge base's *code* with the branch's `rules.yaml`
+  and `golangci.yml`, runs both, and compares. It is a no-op unless the
+  branch changes `tools/tier1/` or `tools/workflow/check/`. The script has no
+  automated test; `check.Drops` does.
+- **Agents and skills:** wf-design, wf-plan, wf-implement, wf-review and
+  wf-publish carry the route; workflow-tick's and workflow-native's Never
+  lists name the exception; workflow-intake's process-or-feature question
+  does; workflow-human step 3 asks each `rule_changes` entry on its own,
+  merged with #95's rewording of the same step.
+- **Decisions taken:** scope is the rules and their enforcement, not the
+  loop's machinery (a1); key plus section (a2); one approval per change (a3);
+  a mechanical `wf check` (a4); main's enforcement checks an enforcement
+  change (a5), with the branch's configuration (r2); a change found after the
+  review goes back to Design (a6); build-link-subnet's BOOT-03 is the first
+  user, in a review addendum after this merges (a7).
+- **Rejected:** every guarded path open to a feature; rule text only with
+  enforcement still a process item; one design approval covering its rule
+  changes; Review's judgment only; trusting the branch's own tools; main's
+  tier1 with main's configuration (it reports every newly mapped rule as
+  LINT-02, which refused this item's own PR); a dropped finding covered by an
+  approved path, a `Tier1-Allow` waiver, or exempting process items in CI
+  (the other r2 options).
+- **For future designs touching `rule-changes`, `wf-check`, `tier1` or
+  `design-review`:** Decision 6 guards tier1's check code only; a change to
+  `rules.yaml` or `golangci.yml` is judged by Review against the approved
+  wording, and a format change to them makes `enforcement-check.sh` exit 2
+  for Review. The CI step runs on PRs only, because a squash merge leaves the
+  approval commits off `main`. The guarded workflow lines are any that name
+  `tier1`, `golangci-lint` or `tools/workflow`. workflow-human step 3 now
+  carries both this item's and human-review-shows-design's text; a later
+  change to it should read both.
