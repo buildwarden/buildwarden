@@ -1,0 +1,30 @@
+feature: hyperv-relay-per-build-channel
+title: Give the Hyper-V relay VM a per-build channel before the claim
+priority: 24
+status: queued
+round: feature
+phase: 0
+design: docs/design/hyperv-relay-per-build-channel.md
+branch: feat/hyperv-relay-per-build-channel
+alters_relationships: null
+source: 'build-link-subnet Decision 9 (docs/design/build-link-subnet.md), approved by Jeff at design review r3 (a18 (a)), queued at its Consolidation: Hyper-V''s relay VM has no per-build channel before the claim (its UKI command line is fixed), so every relay takes 192.168.240.2, the claim carries no token (a local process or another build''s orchestrator can win the claim: a denial of service), --nat-prefix and --host-ip are accepted at setup but ignored per build (re-check the durable NAT''s prefix against [vm] build_link once honoured), and the relay''s upstream DNS is a fixed 8.8.8.8. Also the durable strategy''s one shared Private switch (warden-dev), so concurrent durable builds share a segment. Design one pre-claim channel (seed disk or KVP) and fix all of them together; consider BOOT-06''s optional extension (no boot asset carries a per-build network value) here.'
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 4
+    steps: 18
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-05T00:33:01Z
+    by: cloud/20261104T214530Z-attended
+    event: queued at priority 24 (intake)

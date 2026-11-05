@@ -1,0 +1,30 @@
+feature: baked-asset-staleness
+title: One staleness check for every baked boot asset
+priority: 25
+status: queued
+round: feature
+phase: 0
+design: docs/design/baked-asset-staleness.md
+branch: feat/baked-asset-staleness
+alters_relationships: null
+source: 'build-link-subnet Decision 10 (docs/design/build-link-subnet.md), approved by Jeff at design review r3 (a15: the general check as the follow-up baked-asset-staleness), queued at its Consolidation: a source digest per baked asset (qemu and Firecracker relay and direct-boot initramfs, the Hyper-V relay boot VHDX, the vz prepared image and its warden-boot), read by build and doctor, so a stale asset is refused with its rebuild command instead of failing later. It absorbs build-link-subnet''s one-time launcher stamp (WARDEN_LINK_CHANNEL, buildlink.Channel) and the Hyper-V relay-boot.source stamp that only refresh-cache.sh reads today (the overview''s second open question).'
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 3
+    steps: 14
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-05T00:33:06Z
+    by: cloud/20261104T214530Z-attended
+    event: queued at priority 25 (intake)
