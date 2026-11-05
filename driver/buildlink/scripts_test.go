@@ -55,6 +55,31 @@ func leaseScript(t *testing.T, s string) string {
 	return m[1]
 }
 
+// linkBlock extracts the part of a direct-boot init that takes the build
+// link: from its stop() helper to the default route. The two inits keep a
+// copy each, since each initramfs is built from its own tools/ directory
+// (and Firecracker's CI cache key hashes tools/firecracker-vm, not
+// tools/build-vm), so this pins the copies against drift.
+func linkBlock(t *testing.T, s string) string {
+	t.Helper()
+	m := regexp.MustCompile(`(?s)\nstop\(\) \{\n.*?\nip route add default via "\$LINK_GW"\n`).
+		FindString(s)
+	if m == "" {
+		t.Fatal("no build-link block")
+	}
+	return m
+}
+
+// TestDirectBootInitLinkBlocks: the two direct-boot inits take the build link
+// the same way.
+func TestDirectBootInitLinkBlocks(t *testing.T) {
+	if linkBlock(t, readTool(t, "tools/build-vm/init")) !=
+		linkBlock(t, readTool(t, "tools/firecracker-vm/init")) {
+		t.Error("the two direct-boot inits take the build link differently; " +
+			"keep their link blocks (stop() to the default route) identical")
+	}
+}
+
 func TestDirectBootInits(t *testing.T) {
 	qemuBuild := readTool(t, "tools/build-vm/build-initramfs.sh")
 	fcBuild := readTool(t, "tools/firecracker-vm/build-initramfs.sh")
