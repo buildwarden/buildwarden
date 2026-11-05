@@ -404,10 +404,11 @@ section records as `rule change <ID> approved at <sha>`, with that entry in the
 design's front-matter at that commit; a change to `.claude/` or to
 `tools/workflow/` outside `check/` fails outright. A process item's branch is
 exempt. When a branch changes `tools/tier1/` or `tools/workflow/check/`, Review
-and CI also run tier 1 built from the merge base against the branch, and every
-finding it reports that the branch's tier 1 no longer reports must be on a rule
-an approved `rule_changes` entry names; Review also runs the merge base's
-`wf check`. The agent part judges whether each edit matches the approved
+and CI also run tier 1 built from the merge base's code with the branch's
+configuration (`tools/tier1/rules.yaml` and `golangci.yml`) against the branch,
+and every finding it reports that the branch's tier 1 no longer reports must be
+on a rule an approved `rule_changes` entry names; Review also runs the merge
+base's `wf check`. A configuration edit is an approved path that Review judges. The agent part judges whether each edit matches the approved
 wording.
 
 ---

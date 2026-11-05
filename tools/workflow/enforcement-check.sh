@@ -6,6 +6,12 @@
 # no approved rule_changes entry names (wf drops). The comparison itself is
 # built from the merge base once main has it.
 #
+# Main's tier1 is the merge base's code with the branch's configuration: the
+# files tier1 embeds (tools/tier1/rules.yaml and golangci.yml) are copied from
+# the branch over the merge base's before it is built, so the comparison
+# guards the check code, and Review judges a config edit against its approved
+# wording (design-approved-rule-changes, Decision 6).
+#
 #   tools/workflow/enforcement-check.sh [BASE [tier1 flags...]]
 #
 # BASE defaults to origin/main. Run by `make enforcement` at Review and by the
@@ -32,16 +38,27 @@ trap cleanup EXIT
 git worktree add --detach -q "$tmp/base" "$base"
 exe="$(go env GOEXE)"
 
+config="rules.yaml golangci.yml"
+for f in $config; do
+	cp "tools/tier1/$f" "$tmp/base/tools/tier1/$f"
+done
 (cd "$tmp/base/tools/tier1" && go build -o "$tmp/tier1-main$exe" ./cmd/tier1)
 (cd tools/tier1 && go build -o "$tmp/tier1-branch$exe" ./cmd/tier1)
 
 # tier1 exits 1 on a MUST finding, which is a report to compare, not an error.
+# Exit 2 from main's tier1 is most likely the branch's configuration in a
+# format the merge base's code cannot read.
 tier1() {
 	local bin="$1" out="$2" code=0
 	shift 2
 	"$bin" -base "$base" -json "$@" >"$out" || code=$?
 	if [ "$code" -gt 1 ]; then
 		echo "enforcement-check: $(basename "$bin") exited $code" >&2
+		if [ "$bin" = "$tmp/tier1-main$exe" ]; then
+			echo "enforcement-check: the merge base's tier1 could not run with the" \
+				"branch's $config; if the branch changed their format, main's code" \
+				"cannot check it, and Review judges the change (FLOW-14)" >&2
+		fi
 		exit 2
 	fi
 }

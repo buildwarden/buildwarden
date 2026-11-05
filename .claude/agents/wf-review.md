@@ -13,7 +13,9 @@ findings never block on their own. Tier 2 is report-only (LINT-07).
    far (LINT-02; Deep-dive #2 adds more), the FLOW-14 rule-change clearance
    among them (`dist/wf check`). When the branch changes `tools/tier1/` or
    `tools/workflow/check/`, also run main's enforcement against it (FLOW-14):
-   `make enforcement`, and `wf check -feature <F>` built from the merge base
+   `make enforcement` (main's tier1 code built with the branch's
+   `rules.yaml` and `golangci.yml`, so judge any edit to those two against
+   the approved wording yourself), and `wf check -feature <F>` built from the merge base
    (a `git worktree add` of `git merge-base origin/main <branch>`, its
    `tools/workflow` built to a scratch `wf`, run with `-repo` on the branch
    checkout). Record each result.

@@ -72,7 +72,8 @@ tier1:
 	./dist/tier1$(HOSTEXE) -base $(TIER1_BASE) $(TIER1_FLAGS)
 
 # FLOW-14: when the branch changes tools/tier1/ or tools/workflow/check/, run
-# tier1 built from the merge base against it too, and fail on a finding the
+# tier1 built from the merge base's code with the branch's rules.yaml and
+# golangci.yml against it too, and fail on a finding the
 # branch's tier1 drops without an approved rule change naming its rule.
 enforcement:
 	tools/workflow/enforcement-check.sh $(TIER1_BASE) $(TIER1_FLAGS)
