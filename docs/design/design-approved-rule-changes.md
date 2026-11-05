@@ -163,6 +163,14 @@ cleared to make them as part of its implementation.
    branch. Every finding from main's tier1 that the branch's own tier1 no
    longer reports must be one the approved change names. Otherwise a
    feature could weaken a check and then pass it.
+
+   Main's tier1 is built from the merge base's *code* with the branch's
+   *configuration* (`tools/tier1/rules.yaml` and `golangci.yml`, which the
+   binary embeds). The comparison then guards the check code only. A config
+   edit is an approved path like any other, and Review judges it against the
+   approved wording (Decision 5). Building main's config in as well
+   misfires on every rule a branch newly maps: main's tier1 reports it as
+   unmapped (LINT-02) and the branch's does not (review r2).
    - **Rejected: trust the branch's tools,** for the reason given.
    - **Rejected: forbid enforcement changes on a feature branch,** which is
      Decision 1's rejected option.
@@ -340,6 +348,15 @@ is one commit on this branch.
     branch that changes it, a6 a change found after the review goes back to
     Design, a7 build-link-subnet's BOOT-03 approved in a review addendum
     once this item merges, with task 49 done before its Publish.
+
+- **r2, 2026-11-05: Decision 6 amended, approved at `{SHA}`** (Jeff,
+  attended, during x2-implement). Implement found Decision 6 refused this
+  item's own PR: tier1 embeds `rules.yaml`, so tier1 built from the merge
+  base reported the branch's newly mapped FLOW-14 as unmapped (LINT-02),
+  and that counted as a dropped finding. Jeff chose to build main's tier1
+  code with the branch's configuration (option (e); the others were a
+  dropped finding covered by an approved path, a `Tier1-Allow` waiver, and
+  exempting process items in CI). The rest of the design is unchanged.
 
 ## Consolidation
 
