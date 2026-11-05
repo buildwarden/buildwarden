@@ -23,16 +23,21 @@ func readTool(t *testing.T, rel string) string {
 
 // TestStampScriptsWriteChannel: each tool that builds a launcher asset writes
 // the stamp warden compares with Channel, so a bump cannot miss one.
+// refresh-cache.sh names it once in a variable, which it both writes and
+// requires of an existing disk's stamp before calling the disk current.
 func TestStampScriptsWriteChannel(t *testing.T) {
 	want := fmt.Sprintf("%s=%d", StampKey, Channel)
-	for _, script := range []string{
-		"tools/build-vm/build-initramfs.sh",
-		"tools/firecracker-vm/build-initramfs.sh",
-		"tools/relay-vm/hyperv/refresh-cache.sh",
+	for script, writes := range map[string][]string{
+		"tools/build-vm/build-initramfs.sh":       {`echo "` + want + `" >`},
+		"tools/firecracker-vm/build-initramfs.sh": {`echo "` + want + `" >`},
+		"tools/relay-vm/hyperv/refresh-cache.sh": {`channel="` + want + `"`,
+			`echo "$channel" >"$linkf"`, `[ "$link" = "$channel" ]`},
 	} {
 		s := readTool(t, script)
-		if !strings.Contains(s, `echo "`+want+`" >`) {
-			t.Errorf("%s does not write %s", script, want)
+		for _, w := range writes {
+			if !strings.Contains(s, w) {
+				t.Errorf("%s lacks %q", script, w)
+			}
 		}
 		if n := strings.Count(s, StampKey+"="); n != 1 {
 			t.Errorf("%s names %s %d times, want once", script, StampKey, n)
