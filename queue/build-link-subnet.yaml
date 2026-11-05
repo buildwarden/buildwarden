@@ -122,8 +122,8 @@ steps:
       - f3-implement
       - f3-implement-r2
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: host:macos-vz/20261105T124003Z
+      expires: 2026-11-05T14:40:48.025083Z
     note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan (plan r3 task 53): the four cases on the default link and on 100.126.255.252/30 (pre-change assets refused with the one-time command; after it, a default-link build whose ledger verifies, the guest at 100.127.255.254; the configured link reported by doctor and built with no rebuild, refresh or re-prepare; an overlapping --build-link refused at startup). Reaches driver/vz (claim carries the link, no --subnet, DHCP warden-boot, image stamp) and cmd/relay host mode (netstack built at claim, infinite DHCP lease, link block): an image prepared before the change refused, re-prepared once in place; the lease taken within the boot window (time from boot to initialize against main); a build longer than an hour with no renewal; the link block on the configured link; forged DHCP and ARP from the guest gaining nothing (TEST-08). Added by f2-plan-r3 needing only f2-design-review-r3; add f3-implement to its needs once Implement is seeded, and f6-open-pr must need this step once phase 6 is seeded.'
   - id: f6-validate-windows-hyperv
     phase: 6
@@ -185,8 +185,8 @@ budget:
     runs: 12
     steps: 120
   spent:
-    runs: 4
-    steps: 17
+    runs: 5
+    steps: 18
 questions:
   - id: a1
     kind: assumed
@@ -611,3 +611,6 @@ history:
   - at: 2026-11-05T05:46:00Z
     by: host:linux-kvm/20261105T051002Z
     event: 'f6-validate-linux-kvm evidence (unattended): feat/build-link-subnet a68ac2c on windows-desktop WSL2 Ubuntu 22.04 (6.18.54.1-warden+, Firecracker v1.17.0), binaries cross-built on the host, old assets from 2026-11-02 (824abd7), new launcher and x86_64 relay initramfs built in WSL from the branch; main 4c8f9dc direct-boot baseline SUCCEEDED at 10.0.0.2. (1) Old launcher: doctor reports "link-channel stamp missing; rebuild it once: tools/firecracker-vm/build-initramfs.sh" (not blocking) and the direct-boot build is refused before any VM with that fix; a disk build on the OLD relay initramfs SUCCEEDED, the relay replacing the init''s 10.0.0.1/30 with 100.127.255.253/30 from the claim ("build-if eth0 100.127.255.253/30 from the claim; DHCP offers 100.127.255.254"); with the new launcher the direct boot on the old relay initramfs took its lease ("init: link 100.127.255.254/30 via 100.127.255.253 from dhcp", equal to warden.link_ip/link_gw). (2) New assets, default link: direct-boot and ubuntu:24.04 disk builds SUCCEEDED at 100.127.255.254 (direct boot from dhcp), both ledgers verified, 11 signatures each, all channels closed. (3) --build-link 100.126.255.252/30 with no rebuild: doctor reports it, direct-boot and disk builds SUCCEEDED at 100.126.255.254 from dhcp, ledgers verified; [vm] build_link in warden.toml reported "(warden.toml)" and built, the flag wins, a misaligned key fails at load. (4) --build-link 100.64.88.0/30 refused at startup; 172.19.128.44/30 BLOCKED on eth0''s address, build refused before any VM. Resolver cases in a private mount namespace (host resolv.conf unchanged): only 100.126.255.253 -> doctor FAIL and the build refuses in preflight with the fix naming an off-link resolver or another [vm] build_link; plus 8.8.8.8 -> only 8.8.8.8 used; only 100.127.255.253 -> FAIL on the default link; 10.0.0.2 now passes. (a14 d) A DISCOVER from the host on the slot''s upstream TAP wfc0u during a build got no offer; the control on the relay-side TAP wfc0r got the fixed OFFER 100.127.255.254 and the relay logged it to the probe''s MAC. (TEST-08) http://100.127.255.253/ through the proxy: relay "blocked: connection to 100.127.255.253 denied", 502; the guest''s own address refused; the next fetch succeeded; direct egress blocked, the host''s WARDEN-FC-FWD DROP counters for wfc0u stayed 0; 15 signatures valid, all channels closed. Not run: the in-guest flood-and-forge DHCP case (the unattended session could not produce the packet-forging script; attended run or security-suite). Also: WSL stops the idle distro between scripts and the slots vanish, so each phase re-ran setup. Cleanup: clean, slots down, FORWARD DROP, no VMMs. Evidence native/linux-kvm/2026-11-04/.'
+  - at: 2026-11-05T12:40:48Z
+    by: host:macos-vz/20261105T124003Z
+    event: claimed f6-validate-macos-vz until 2026-11-05T14:40:48Z
