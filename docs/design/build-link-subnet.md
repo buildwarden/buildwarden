@@ -2,14 +2,14 @@
 feature: build-link-subnet
 status: draft
 drivers: [container, qemu, vz, hyperv, firecracker]  # every VM driver: the claim carries the link (driver/session.go), driver/linuxguest (qemu, firecracker), driver/winguest (qemu, hyperv), driver/vz, driver/firecracker, driver/relayvm, the relay VM init and the direct-boot inits. container is declared conservatively (FLOW-02): relaycfg/, relay/ and cmd/relay change under it, but its driver sends no build_link and its behaviour is unchanged (question a17)
-seams: [relay-claim, relay-guest-api, bootstrap-model]  # relay-claim: the claim gains build_link (question a11); relay-guest-api, conservatively: the relay's address on the build segment now comes from the claim, and the host-mode DHCP lease becomes the vz guest's address (protocol unchanged); bootstrap-model: BOOT-03's launcher-addressing wording gains a DHCP lease served by the relay (Bootstrap comparison, question a14). executor-initialize is unchanged: --gateway/--ip keep their contract, only the values change (question a19)
+seams: [relay-claim, relay-guest-api, bootstrap-model]  # relay-claim: the claim gains build_link (question a11); relay-guest-api, conservatively: the relay's address on the build segment now comes from the claim, and the relay's DHCP lease becomes the guest's address on vz (host mode) and for the qemu and Firecracker direct-boot inits (vm mode, a14 (d)) (protocol unchanged); bootstrap-model: BOOT-03's launcher-addressing wording gains a DHCP lease served by the relay (Bootstrap comparison, question a14). executor-initialize is unchanged: --gateway/--ip keep their contract, only the values change (question a19)
 surfaces: [cli, config, output]  # [vm] build_link and --build-link on build, shell and doctor (advanced, Decision 8); doctor's build-link and stamp lines; fixable stale-launcher, overlap and old-relay refusals; firecracker's resolver refusal names the configured link (UX-01, UX-04, ORCH-03)
 security_boundary: env-relay  # the link is the only path between the build environment and the relay, and the relay now configures it from the claim (Security note)
 alters_relationships: true   # a versioned seam changes (relay-claim), the bootstrap model's BOOT-03 wording changes, and the relay takes over its build interface's addressing from the relay VM init (question a19; FLOW-05 slot)
 design_review: required
 native_validation:
-  - {host: linux-kvm, blocking: true, reason: "reaches driver/firecracker (claim carries the link, direct-boot command line, launcher stamp, resolver exclusion against the resolved link), the vm-mode relay's new build-interface setup on the x86_64 relay VM, and tools/firecracker-vm/init. CI tier 2 (firecracker.yml) covers a fresh hosted runner on the default link without its DNS workaround; the native run covers the upgrade path (an old direct-boot initramfs refused; an old relay initramfs still works) and a non-default link with no rebuild"}
-  - {host: qemu-any, blocking: true, reason: "reaches driver/qemu (claim carries the link, direct-boot command line, launcher stamp), the vm-mode relay's build-interface setup on the aarch64 relay VM, tools/build-vm/init and the driver/linuxguest seed on qemu: a direct-boot and a cloud-image Linux build on the default and a non-default link, an old direct-boot initramfs refused, an old relay initramfs still working"}
+  - {host: linux-kvm, blocking: true, reason: "reaches driver/firecracker (claim carries the link, direct-boot command line, launcher stamp, resolver exclusion against the resolved link), the vm-mode relay's new build-interface setup and DHCP responder on the x86_64 relay VM, and tools/firecracker-vm/init. CI tier 2 (firecracker.yml) covers a fresh hosted runner on the default link without its DNS workaround; the native run covers the upgrade path (an old direct-boot initramfs refused; an old relay initramfs still works) and a non-default link with no rebuild"}
+  - {host: qemu-any, blocking: true, reason: "reaches driver/qemu (claim carries the link, direct-boot command line, launcher stamp), the vm-mode relay's build-interface setup and DHCP responder on the aarch64 relay VM, tools/build-vm/init and the driver/linuxguest seed on qemu: a direct-boot and a cloud-image Linux build on the default and a non-default link, an old direct-boot initramfs refused, an old relay initramfs still working"}
   - {host: macos-vz, blocking: true, reason: "reaches driver/vz (claim carries the link, no --subnet, warden-boot by DHCP from the host relay, the image stamp) and cmd/relay host mode (netstack built at claim, DHCP lease live, subnet block): an image prepared before the change refused, re-prepared once, then builds on the default and a non-default link with no further re-prepare"}
   - {host: windows-hyperv, blocking: true, reason: "reaches driver/hyperv (claim carries the link, relay-boot stamp, NAT-prefix overlap refusal), the relay boot VHDX refreshed once for the new relay binary and init, the vm-mode relay's build-interface setup on hv_netvsc, and driver/winguest on a Windows guest on the default and a non-default link"}
   - {host: macos-qemu, blocking: false, reason: "Windows guest on qemu: driver/qemu's changes are guest-agnostic (the claim and the launcher stamp) and validated by qemu-any, and the Windows-specific piece (driver/winguest) by windows-hyperv. qemu Windows builds already fail on main (backlog qemu-windows-guest-package), so a blocking step could not pass for reasons outside this feature (question a5)"}
@@ -114,7 +114,8 @@ re-prepare.
 - [`vm-driver-release-plan.md`](vm-driver-release-plan.md), "Escape vectors":
   DHCP starvation and spoofing, and ARP spoofing of the relay, are already on
   the TEST-08 list; making the host-mode DHCP lease live makes them current
-  for vz (Security note).
+  for vz, and the vm-mode responder (a14 (d)) for qemu, Firecracker and
+  Hyper-V (Security note).
 - The network overview (r2): the verified per-driver topology, every baked
   asset and its staleness behaviour, and five open questions. Decision 10
   answers or defers each one.
@@ -155,9 +156,10 @@ re-prepare.
    only place it is written. r2's embedded `link.env` and its shell copies
    go: no shell script needs the link any more, because the relay VM init no
    longer addresses the build interface and the direct-boot inits take the
-   link from their command line. A configured value is only the network
-   (`100.126.0.0/30`, say): the relay is always its first host and the build
-   VM its second, so the two can never disagree.
+   link from the relay's DHCP lease or their command line. A configured
+   value is only the network (`100.126.0.0/30`, say): the relay is always
+   its first host and the build VM its second, so the two can never
+   disagree.
 
    | Consumer | Channel, per build | Decision |
    |---|---|---|
@@ -165,7 +167,7 @@ re-prepare.
    | relay, host mode (vz) | the claim's `build_link`; the relay builds its netstack from it | 3, 4 |
    | Linux cloud-init seed (`driver/linuxguest`, qemu and Firecracker disk path) | rendered per build, as today | 5 |
    | Windows `WARDEN` seed (`driver/winguest`, qemu and Hyper-V) | `warden-run.ps1` rendered per build, as today | 5 |
-   | direct-boot inits (qemu `tools/build-vm`, `tools/firecracker-vm`) | two keys on the build VM's kernel command line, which both drivers already write per build | 5 |
+   | direct-boot inits (qemu `tools/build-vm`, `tools/firecracker-vm`) | a DHCP lease from the vm-mode relay, which answers from the claim, checked against two keys on the build VM's kernel command line (which both drivers already write per build) and falling back to them | 5 |
    | vz guest (`warden-boot`) | a DHCP lease from the host relay, which answers from the claim | 5 |
 
    Nothing in the table is baked. What remains baked is the *launcher* that
@@ -270,12 +272,16 @@ re-prepare.
      the claim. What moves to the relay: the build interface's address. The
      init stops running `ip addr add 10.0.0.1/30` and passes
      `-build-if <name>` to `/sbin/relay -mode vm`. On a valid claim, inside
-     the start callback and before replying, the relay refuses a link that
-     overlaps an address or route on any other interface (the upstream NAT,
-     say), flushes the build interface's IPv4 addresses, adds `relay/len`
-     through netlink (`golang.org/x/sys/unix`, already a dependency; a
-     `linux`-tagged file with a stub elsewhere, GLOBAL-07), and starts the
-     relay with that address as its self address. Today vm mode detects its
+     the start callback and before replying, the relay refuses a link when
+     another interface holds an address inside it or has a route whose
+     prefix lies inside or equals it (the upstream NAT, say; a route that
+     merely contains the link, such as the default route, shadows only the
+     link's own four addresses and is not refused, plan r3 note), flushes
+     the build interface's IPv4 addresses, adds `relay/len` through netlink
+     (`golang.org/x/sys/unix`, already a dependency; a `linux`-tagged file
+     with a stub elsewhere, GLOBAL-07), starts the DHCP responder on that
+     interface alone (Decision 5, a14 (d)), and starts the relay with that
+     address as its self address. Today vm mode detects its
      self address as the first non-loopback IPv4 address, which only works
      because the init assigned the build interface first. Without
      `-build-if`, the relay picks the build interface by the init's own rule,
@@ -322,8 +328,9 @@ re-prepare.
    would differ by mode; question a13 option (b)).
 
 5. **Each guest takes the link per build: seeds as today, the direct-boot
-   inits from their kernel command line, and the vz guest by DHCP from the
-   host relay** (question a14; BOOT-03, BOOT-06).
+   inits by DHCP from the vm-mode relay, checked against their kernel command
+   line, and the vz guest by DHCP from the host relay** (question a14,
+   answered (d) at design review r3; BOOT-03, BOOT-06).
 
    - **Seeded guests** (Linux cloud-init on qemu and Firecracker's disk path;
      Windows on qemu and Hyper-V): the seed is rendered per build from the
@@ -331,13 +338,24 @@ re-prepare.
    - **Direct-boot inits** (`tools/build-vm/init`, `tools/firecracker-vm/init`):
      the drivers add `warden.link_ip=<guest>/<len>` and
      `warden.link_gw=<relay>` to the build VM's command line, which both
-     already write per build (qemu `-append`, Firecracker `boot_args`). The
-     inits parse only those keys, accept only dotted quads and a numeric
-     length, and never evaluate the command line, as the relay init does with
-     its keys. They carry no default: with the keys missing or malformed the
-     init says so on the console and stops, so a mistake is a clear console
-     line and not a silent timeout. On Firecracker the command line is already
-     recorded as the seed file `kernel-cmdline`, so the record shows the link.
+     already write per build (qemu `-append`, Firecracker `boot_args`), and
+     the vm-mode relay serves the same address by DHCP on its build interface
+     (a14 (d); Decision 4). The inits parse only those keys, accept only
+     dotted quads and a numeric length, and never evaluate the command line,
+     as the relay init does with its keys; a malformed key stops the init.
+     Then they run busybox `udhcpc` once in the foreground (about five
+     one-second tries) with a script that only records the lease and
+     configures nothing. DHCP comes first and the keys are its cross-check
+     and fallback: a lease and keys that disagree on address, length or
+     router stop the init with both on the console; a lease without keys is
+     used; keys without a lease are used, with a console line saying DHCP did
+     not answer; neither stops the init. So the command line warden records
+     (on Firecracker the seed file `kernel-cmdline`) is the address the guest
+     holds, and since the build VM boots only after the responder is up, the
+     fallback covers a responder fault, not a normal path. The inits carry no
+     default, so a mistake is a clear console line and not a silent timeout.
+     The two inits keep identical copies of this block, as do their build
+     scripts of the lease script; a tier-0 test pins each pair.
    - **vz** (`warden-boot`, baked at prepare, D2): it stops writing the
      address. It runs `ipconfig set <if> DHCP`, waits for the lease (up to the
      60 s it already waits for an interface), reads the address, mask and
@@ -365,9 +383,13 @@ re-prepare.
    dials from the host, but the setting would then mean different things per
    driver, and a8's block would still need the link). A per-build seed disk
    for vz (it would also retire D2, so it is its own feature; Decision 10).
-   DHCP for the direct-boot inits too (the relay VM would need a DHCP
-   responder on its build interface: a new guest-facing listener in vm mode
-   for a value the command line already carries).
+   Keys first, with DHCP only when they are missing (every driver writes the
+   keys, so the responder would serve no build at all; plan r3 note).
+
+   DHCP for the direct-boot inits was rejected in this decision as first
+   written (a new guest-facing listener in vm mode for a value the command
+   line already carries) and taken at design review r3, a14 (d); see
+   **Design review**, r3.
 
 6. **No link records. A one-time launcher stamp where a baked launcher must
    be replaced, checked before boot and in doctor** (questions a3, a15;
@@ -379,7 +401,8 @@ re-prepare.
    that builds it. The driver compares the stamp with
    `buildlink.Channel`. A missing or different stamp is a `driver.Fixable`
    naming the rebuild, raised before any VM boots, and `warden doctor`
-   reports the same per driver. A later change to how a launcher reads the
+   reports the same per driver, failing on it where every build needs the
+   asset (Decision 8). A later change to how a launcher reads the
    link bumps the constant.
 
    | Asset | Driver | Stamp | Rebuilt by (once per upgrade, never per link value) |
@@ -387,7 +410,7 @@ re-prepare.
    | direct-boot build initramfs | qemu (`tools/build-vm`) | `link-channel` in its output directory, or the release file name plus `.link-channel` | `tools/build-vm/build-initramfs.sh` |
    | direct-boot launcher initramfs | firecracker (`tools/firecracker-vm`) | same | `tools/firecracker-vm/build-initramfs.sh` |
    | relay boot VHDX (bakes the relay binary and init) | hyperv | `relay-boot.link-channel` beside `relay-boot.vhdx` (moved to `.prev` with it), or `<name>.link-channel` beside a `WARDEN_RELAY_BOOT_VHDX` override | `tools/relay-vm/hyperv/refresh-cache.sh` |
-   | prepared macOS image (`warden-boot`) | vz | `link-channel` in the prepared image directory, written by both prepare paths | `sudo warden image prepare --driver vz`, which re-prepares an existing image in place (`ReprepareImage`; no IPSW restore) |
+   | prepared macOS image (`warden-boot`) | vz | `link-channel` in the prepared image directory, written by both prepare paths; for `--image <disk>`, beside that disk | `sudo warden image prepare --driver vz`, which re-prepares an existing image in place (`ReprepareImage`; no IPSW restore). A `--image` disk outside the image cache cannot be re-prepared in place, so its fix is to omit `--image` and build from the prepared cache image (Review r1 SHOULD 3) |
    | relay initramfs (aarch64, x86_64) | qemu, firecracker | none | none: an old init's `10.0.0.1` is flushed by the new relay (Decision 4) |
 
    The upgrade cost, per driver: qemu rebuilds its direct-boot initramfs
@@ -482,6 +505,13 @@ re-prepare.
    - **Doctor.** Every VM driver's doctor prints the resolved link and where
      it came from (`default`, `warden.toml`, `config.toml` or `--build-link`),
      the host-overlap result and each launcher stamp's state (Decision 6).
+     It exits non-zero on a host-interface overlap, and on a missing or stale
+     stamp on an asset every build of the driver needs: the Hyper-V relay
+     boot VHDX and the vz prepared image, whose lines read `BLOCKED`. The
+     qemu and Firecracker direct-boot initramfs serve only direct-boot
+     builds, so their stamps are reported and do not fail doctor; the build
+     itself still refuses a stale one (Review r1 SHOULD 2, at Jeff's
+     routing; doctor stays usable as a CI or agent gate, UX-09).
    - **No record of the value in the ledger or environment record**, beyond
      Firecracker's existing record of the direct-boot command line. The link
      is orchestrator topology (GLOBAL-08), and the build's view of it is its
@@ -607,7 +637,8 @@ New in r3, each "proceeding with the recommendation; confirm":
   bakes the resolved link at prepare with a record and a re-prepare per
   value (r2); (c) vz bakes only the default and ignores the setting; (d) (a),
   plus DHCP for the direct-boot inits from a new vm-mode responder.
-  Recommended: (a).
+  Recommended: (a). Answered (d) at design review r3; Decision 5 is amended
+  to match.
 - **a15. The launcher stamp** (Decision 6). Proceeding with
   `WARDEN_LINK_CHANNEL=1` beside the qemu and Firecracker direct-boot
   initramfs, the Hyper-V relay boot VHDX and the vz prepared image, compared
@@ -692,6 +723,8 @@ handleClaim:
     decode (DisallowUnknownFields, as today)
     if cfg.BuildLink != nil and Parse fails: release; 400 "invalid claim: build_link: ..."
     start(cfg, transport)          the mode configures the link here (below)
+        error wrapping ErrRefused: release; 400 "claim refused: ..." (claimable)
+        other error: 500, the claim consumed, as today
     reply Identity                 only now: the segment is configured
 ```
 
@@ -702,9 +735,15 @@ relay -mode vm [-build-if NAME]:
     accept ONE claim on :8301; in its start step:
         if = NAME, else the first non-lo entry of /sys/class/net
         if claim.build_link:
-            refuse if prefix overlaps an address or route on another interface
+            refuse (ErrRefused) if another interface holds an address inside
+                prefix, or a route whose prefix lies inside or equals it
+                (a containing route, the default one say, is not a refusal)
             flush IPv4 on if; add relay/len (netlink)
             self, block := relay, prefix
+            serve DHCP on udp/67 bound to if only (SO_BINDTODEVICE): one fixed
+                offer, guest with prefix's mask, router, DNS and server id
+                relay, infinite lease, replies broadcast to :68; bind failure
+                -> 500; runs for the relay's life (a14 (d))
         else if if has an IPv4 address A/len:  self, block := A, A/len
         else: refuse "build_link is required: the build interface has no address"
         relay.Start(Config{SelfIP: self, BuildLink: block, ...})
@@ -712,8 +751,8 @@ relay -mode vm [-build-if NAME]:
 relay -mode host --fd 3 [--subnet CIDR]:
     accept ONE claim on --claim-addr; in its start step:
         link := claim.build_link, else --subnet (gateway .1, guest .2)
-        netstack, ARP (relay only), DHCP (offer guest, router and DNS relay,
-            infinite lease), listeners and udp/53 on relay
+        netstack, ARP (relay only), DHCP (the same offer as vm mode's, from
+            the shared core), listeners and udp/53 on relay
         relay.Start(Config{SelfIP: relay, BuildLink: prefix, SSRF: true, ...})
 
 relay -mode container:
@@ -752,14 +791,20 @@ every VM driver StartBuild, before any VM boots:
     ... only then boot the build VM, its seed or command line from link
 
 qemu:        direct-boot -append += link.BootArgs(); linuxguest / winguest seeds from link
+direct-boot inits (qemu, firecracker): udhcpc lease from the vm relay; it must
+             equal the keys (else stop); no lease -> the keys; neither -> stop
 firecracker: resolvers minus those in link; none left -> Fixable(both fixes)
              direct-boot boot_args += link.BootArgs(); linuxguest seed from link
 hyperv:      relay-boot.link-channel stamp; winguest seed from link
 hyperv setup: --nat-prefix overlaps the resolved link -> Fixable(another --nat-prefix)
 vz:          no --subnet; <image>/link-channel stamp; the guest takes its lease
+             --image outside the cache, stale -> Fixable(omit --image)
 vz image prepare (both paths): DHCP warden-boot; write <image>/link-channel
 container:   ClaimRelay(..., nil); unchanged
 doctor (each VM driver): "build link <net> (<source>)", overlap result, each stamp's state
+    exit non-zero: an overlap, or a missing/stale stamp on an asset every build
+    needs (hyperv relay boot VHDX, vz image: "BLOCKED"); the qemu and firecracker
+    direct-boot initramfs stamps are reported only
 ```
 
 ### Every site that changes
@@ -771,29 +816,32 @@ doctor (each VM driver): "build link <net> (<source>)", overlap result, each sta
 | `relay/relay.go`, `relay/proxy.go` | SSRF dialer in host mode only; `BlockedSelfIP` | `Config.BuildLink` (a prefix) refused by the upstream dialer in every mode it is set; `BlockedSelfIP` folds into it; `detectUpstreamDNS` skips nameservers inside it |
 | `cmd/relay/main.go` | vm and container modes share `serveClaim(relay.Config{})`; `--subnet` default `10.100.0.0/30` | a per-mode start step that reads the claim's link; `-build-if` (vm); container refuses `build_link`; `--subnet` documented as host mode's fallback, default unchanged |
 | `cmd/relay/buildif_linux.go` (new), `buildif_other.go` | — | netlink flush and add, overlap check against other interfaces; stub elsewhere (GLOBAL-07) |
-| `cmd/relay/mode_host.go`, `ingress_fd.go`, `ingress_dhcp.go` | netstack built at startup from `--subnet`; lease 3600 s | built in the claim step from the link; infinite lease; ARP and DHCP answer the claim's addresses |
-| `tools/relay-vm/init` | `ip addr add 10.0.0.1/30` on the build interface; header comment | link up only; `-build-if "$PRIVATE_IF"`; header says the relay addresses the interface from the claim |
+| `cmd/relay/vmlink.go`, `segment.go` (new) | — | vm mode's start step over an interface stub; the segment from the claim or `--subnet` |
+| `cmd/relay/dhcp.go`, `dhcp_vm.go`, `dhcp_vm_linux.go`, `dhcp_vm_other.go` (new) | — | the BOOTP parse and OFFER/ACK build, untagged and shared by both modes (moved out of `ingress_dhcp.go`); vm mode's responder on udp/67 bound to the build interface, broadcast replies; stub elsewhere (a14 (d)) |
+| `cmd/relay/mode_host.go`, `ingress_fd.go`, `ingress_dhcp.go` | netstack built at startup from `--subnet`; lease 3600 s | built in the claim step from the link; infinite lease from the shared DHCP core; ARP and DHCP answer the claim's addresses |
+| `tools/relay-vm/init` | `ip addr add 10.0.0.1/30` on the build interface; header comment | link up only; `-build-if "$PRIVATE_IF"`; header says the relay addresses the interface from the claim; no rule for udp/67, which the INPUT policy already accepts |
 | `driver/session.go` `ClaimRelay` | builds the claim from the request | takes the build link to send (nil for none) and maps an old relay's unknown-field refusal to a `driver.Fixable` with the caller's fix |
+| `driver/hostlink.go` (new) | — | `HostPrefixes`, the host-overlap refusal, and `LauncherStamp` (with `Required`, which makes doctor fail) shared by every VM driver |
 | `driver/driver.go` `BuildRequest` | — | `BuildLink buildlink.Link` (zero = default) |
 | `cmd/collector/main.go` | — | `-build-link <cidr>` |
 | `driver/qemu` (`driver.go`, `vm.go`) | claim without link; direct-boot `-append` console only | claim carries the link; direct-boot `-append` adds `BootArgs()`; stamp check on the direct-boot initramfs |
 | `driver/firecracker` (`driver_linux.go`, `vm.go`, `posture.go`, preflight, doctor, `slots.go` comment) | `buildLink` constant `10.0.0.0/30`; claim without link | the request's link in resolver selection and fix text; claim carries it; `buildConfig` boot args add `BootArgs()`; stamp check |
 | `driver/relayvm/assets.go` | kernel + initramfs | plus the direct-boot initramfs stamp, from the same location `Find` chose |
-| `tools/build-vm/init` + `build-initramfs.sh` | `10.0.0.2/30`, `via 10.0.0.1`, `nameserver 10.0.0.1`, `--gateway=10.0.0.1` | from `warden.link_ip` / `warden.link_gw`, no default; the script writes the stamp |
-| `tools/firecracker-vm/init` + `build-initramfs.sh` | `10.0.0.2/30`, `via 10.0.0.1`, `--gateway=10.0.0.1` | same |
+| `tools/build-vm/init` + `build-initramfs.sh` | `10.0.0.2/30`, `via 10.0.0.1`, `nameserver 10.0.0.1`, `--gateway=10.0.0.1` | a `udhcpc` lease from the relay, checked against `warden.link_ip` / `warden.link_gw` and falling back to them, no default; the script installs the record-only lease script, `udhcpc` and `af_packet`, and writes the stamp |
+| `tools/firecracker-vm/init` + `build-initramfs.sh` | `10.0.0.2/30`, `via 10.0.0.1`, `--gateway=10.0.0.1` | same (the kernel builds in `CONFIG_PACKET`) |
 | `driver/linuxguest/seed.go` + `testdata/seed/` | literal addresses in network-config v2 and `runcmd` | rendered from the request's link; goldens for the default |
 | `driver/winguest/winguest.go` (`BuildGatewayIP`, `BuildGuestCIDR`), `run.go` | string constants | derived from the request's link (the default kept under the old names for callers) |
 | `driver/hyperv` (`relayhost.go`, `buildassets.go`, `setup.go`, `doctor.go`, `buildhost.go` comment) | claim without link; VHDX existence only | claim carries the link; VHDX stamp; `--nat-prefix` overlap refusal against the key; doctor lines |
 | `tools/relay-vm/hyperv/refresh-cache.sh` (and `build-boot-vhdx*.{sh,ps1}` where they move the output) | installs `relay-boot.vhdx`, keeps `.prev` | also installs `relay-boot.link-channel`, moved to `.prev` with the disk; no `--link` (r2's) |
-| `driver/vz` (`network_unix.go`, `driver.go`, `image.go`, `Preflight`) | literal link; relay `--subnet=10.0.0.0/30`; `warden-boot` with `GW`/`SELF`/`MASK` | link from the request; claim carries it, no `--subnet`; DHCP `warden-boot`; both prepare paths write the stamp; stamp check |
-| `cmd/warden/config.go`, `main.go`, `host.go` | — | `[vm] build_link`; `--build-link` on build, shell, doctor; `resolveBuildLink`; container refusal; hyperv setup reads the key; doctor help text |
+| `driver/vz` (`network_unix.go`, `driver.go`, `image.go`, `Preflight`) | literal link; relay `--subnet=10.0.0.0/30`; `warden-boot` with `GW`/`SELF`/`MASK` | link from the request; claim carries it, no `--subnet`; DHCP `warden-boot`; both prepare paths write the stamp; stamp check, with the "omit --image" fix for a disk outside the cache |
+| `cmd/warden/config.go`, `main.go`, `host.go` | — | `[vm] build_link`; `--build-link` on build, shell, doctor; `resolveBuildLink`; container refusal; hyperv setup reads the key; doctor's link and stamp lines, failing on a blocking stamp; doctor help text |
 | `cmd/warden-vmnet/main.c` | default `--subnet=10.0.0.0/30` | `--subnet` required (no callers) |
 | `tools/vz-image-prep/{personalize,uv-build-test,netfwd}.go` | literals for the prep-time link | `buildlink.Default()`; prep-time networking does not follow the setting (`netfwd` takes `--subnet`) |
 | `cmd/warden-io` tests and `platform_windows.go` comments | `10.0.0.2/30` as parsing examples | other example addresses; behaviour unchanged |
 | `.github/workflows/firecracker.yml` | DNS workaround step; paths | step removed; paths add `driver/buildlink/**` |
 | `.github/workflows/integration.yml` | paths lack `relaycfg/**` | paths add `relaycfg/**` and `driver/buildlink/**`, since the container mode's claim handling changes (TEST-02) |
 | Reference docs (UX-01): `guide/configuration.md` (Full Reference key, Advanced options section), `guide/cli.md` (`--build-link` on build, shell, doctor; doctor's link and stamp lines; `setup --nat-prefix` overlap refusal), `guide/drivers.md` (Upstream DNS; the one-time upgrade step per VM driver), `concepts/architecture.md` (Claim protocol: `build_link`, the ordering rule; the contract document, GLOBAL-08), `concepts/network-isolation.md` (slot table, the link block in vm and host modes), `contributing/structure.md` ("fixed 10.0.0.0/30"; `buildif_linux.go`), `tools/win-image-prep/README.md`, and `cmd/warden/host.go`'s doctor help | old link, fixed | default link, the setting, the claim field, the checks and the upgrade step |
-| `concepts/overview.md` pseudocode (FLOW-15) | — | `ClaimRelay` pushes the build link; the relay block configures its build segment in the claim and blocks dials into it; each VM StartBuild resolves the link, checks stamps and host overlap before booting; vz's guest takes a DHCP lease |
+| `concepts/overview.md` pseudocode (FLOW-15) | — | `ClaimRelay` pushes the build link; the relay block configures its build segment in the claim (vm: netlink, then the DHCP responder on the build interface) and blocks dials into it; each VM StartBuild resolves the link, checks stamps and host overlap before booting; the direct-boot inits and vz's guest take a DHCP lease |
 
 Unchanged, and why: `driver/subnet.go` and the container driver (question
 a17); Firecracker's upstream `100.64.88.0/22`, slots, TAPs and host rules (no
@@ -824,9 +872,10 @@ which the stamps name.
 - **qemu.** The claim carries the link and the relay addresses its build
   interface, so the relay initramfs needs no rebuild (an old one's
   `10.0.0.1/30` is flushed). Linux guests: the per-build cloud-init seed
-  follows the link. Direct-boot builds: the command line carries it, and the
-  direct-boot initramfs is rebuilt once to gain the reading init and its
-  stamp. Windows guests: the per-build `warden-run.ps1` follows the link, and
+  follows the link. Direct-boot builds: the relay's vm-mode responder serves
+  it by DHCP and the command line carries it as the cross-check and
+  fallback, and the direct-boot initramfs is rebuilt once to gain the
+  reading init and its stamp. Windows guests: the per-build `warden-run.ps1` follows the link, and
   the prepared image is unchanged (BOOT-06).
 - **firecracker.** As qemu: the relay initramfs needs no rebuild (CI
   rebuilds it anyway, since its cache key covers the init), the launcher
@@ -838,8 +887,10 @@ which the stamps name.
 - **hyperv.** The relay boot VHDX is refreshed once with
   `refresh-cache.sh`, for the new relay binary and init (the stamp refuses
   an old disk); after that a changed setting needs nothing. The claim
-  carries the link, the relay addresses `hv_netvsc`'s build NIC, and the
-  Windows guest's static address comes from the per-build seed. New: the
+  carries the link, the relay addresses `hv_netvsc`'s build NIC and serves
+  DHCP on it, and the Windows guest's static address comes from the
+  per-build seed (a NIC that takes the lease first ends on the same address
+  and route). New: the
   `--nat-prefix` overlap refusal in setup. Not changed here: the fixed relay
   address, the missing token, the ignored `--nat-prefix` and the fixed DNS
   (Decision 9).
@@ -896,7 +947,7 @@ things change in how steps (1) and (3) are carried out:
 | Invariant | Current | Proposed | Per-driver effect |
 |---|---|---|---|
 | BOOT-01 isolation precedes execution | Topological for VM drivers; the relay VM init addresses the link at boot | Unchanged. The topology is the same; the relay's address on the segment now exists from the claim, and every VM driver already boots the guest only after the claim returns. Isolation does not depend on the address: a guest booted early has the same single NIC to the relay, only nothing to reach | none to isolation; ordering is pinned by tier-0 tests |
-| BOOT-02 the executor is the only out-of-band input | Seeds, `CIDATA`, tar copy, the direct-boot initramfs; vz baked (D2) | Unchanged. The direct-boot command line gains two address keys, which, like a seed's `network-config`, are addressing, not material; the vz lease carries only addresses | qemu and firecracker direct boot: two keys; vz: a lease |
+| BOOT-02 the executor is the only out-of-band input | Seeds, `CIDATA`, tar copy, the direct-boot initramfs; vz baked (D2) | Unchanged. The direct-boot command line gains two address keys, which, like a seed's `network-config`, are addressing, not material; the leases (vz, and the direct-boot inits from the vm-mode relay) carry only addresses | qemu and firecracker direct boot: two keys and a lease; vz: a lease |
 | BOOT-03 one start, then hands off | "Static network addressing applied by the platform's own boot configuration (cloud-init `network-config`, a fixed address on a single NIC) is allowed in the launcher" | Addressing applied by the platform's own boot configuration, static or from a DHCP lease served by the relay, is allowed in the launcher; trust, DNS and every other setup step still belong to `initialize`. The host still performs no step inside the environment | vz: `warden-boot` takes a lease instead of a literal; the qemu and Firecracker direct-boot inits take a lease from the relay's vm-mode responder, cross-checked against their command-line keys (a14 (d)); seeds unchanged |
 | BOOT-04 build inputs come from the relay | CA, script and context fetched by the executor | Unchanged | none |
 | BOOT-05 setup is the executor's domain | Baseline plus `/bootstrap` policy | Unchanged. The lease's DNS option names the relay, as `warden-boot`'s own DNS lines already do; `initialize` still owns DNS | none |
@@ -919,8 +970,9 @@ address from claim data. That is bounded (one interface the init names, IPv4
 addresses only, no routes or rules, refused when it overlaps another
 interface), but it is new relay code on the security boundary (Security
 note). vz now depends on the host-mode DHCP responder, which goes from unused
-to live: its parsing is exposed to the guest, and DHCP and ARP spoofing join
-the vz TEST-08 cases. On macOS, a DHCP lease is a platform behaviour this
+to live, and vm mode gains one (a14 (d)): their shared parser is exposed to
+the guest, and DHCP and ARP spoofing join the TEST-08 cases on every VM
+driver. On macOS, a DHCP lease is a platform behaviour this
 design has not yet observed against this responder (personalize's DHCP phase
 ran against vmnet NAT, not the netstack), so macos-vz validation is blocking.
 The record loses nothing.
@@ -992,8 +1044,9 @@ is not part of this change (left for `hyperv-relay-per-build-channel`).
 **Boundary.** env-relay (GLOBAL-06): the build link is the only path between
 the build environment and the relay, and this is a change to the relay
 itself: it now configures that link from the claim (vm and host modes),
-refuses upstream dials into it (vm and host modes), and serves the vz guest
-a DHCP lease (host mode). RELAY-04: vm and host modes change; container mode
+refuses upstream dials into it (vm and host modes), and serves the guest a
+DHCP lease on it (host mode for vz; vm mode for the direct-boot inits, a14
+(d)). RELAY-04: vm and host modes change; container mode
 changes only in refusing the new field.
 
 **Posture.** Meant to be unchanged or tighter. Isolation stays topological: one
@@ -1022,8 +1075,9 @@ lands:
 Bounds on what a claim can do with `build_link`: `relaycfg` validates it
 (IPv4, length 8 to 30, two distinct hosts inside); the relay changes only the
 build interface the init named, only its IPv4 addresses, and adds no route
-or rule; it refuses a link that overlaps an address or route on any other
-interface, so a claim cannot shadow the relay's upstream or its NAT gateway.
+or rule; it refuses a link that holds an address of any other interface,
+or a route on one inside or equal to it, so a claim cannot shadow the relay's upstream or its NAT
+gateway.
 The orchestrator boots the build VM only after its own claim succeeded, so a
 claim that someone else won leaves the build VM unbooted.
 
@@ -1065,6 +1119,15 @@ also fixes `.2` and `--nat-prefix`. Recommended: defer the token to
   cannot obtain another address or move the relay's; a guest that changes its
   own address afterwards could do so today as root. Malformed packets reach
   its parser, so it gets fuzz tests.
+- *The vm-mode DHCP responder (a14 (d)).* It runs only for a claim that
+  carries `build_link`, after the netlink add and before the claim reply,
+  bound to the build interface alone (`SO_BINDTODEVICE`), so nothing on the
+  relay VM's upstream network gets an offer. It shares host mode's parser
+  and its one fixed offer per build (fuzzed once for both), and replies by
+  broadcast because its one client has no address yet. A guest flooding
+  requests or forging replies gets no other address and cannot move the
+  relay's. Windows guests see it too; a NIC that takes the lease first ends
+  on the address and route the seed sets anyway.
 - *The direct-boot command-line keys.* The inits accept only dotted quads and
   a numeric length and never evaluate the command line, as with the relay
   init's keys. The build cannot read or change the relay VM's command line.
@@ -1080,7 +1143,10 @@ guest address and sent to an off-host canary is dropped (Firecracker's
 anti-spoof case); on vz, a guest sending forged DHCP DISCOVER and REQUEST
 floods and ARP replies claiming the relay's address gets no other address and
 does not disturb the relay (the existing escape-vector list in
-`vm-driver-release-plan.md`); a host resolver inside the link is refused on
+`vm-driver-release-plan.md`); in vm mode, a DHCP DISCOVER from the relay
+VM's upstream network gets no offer, and a build flooding DISCOVER and
+REQUEST with random MACs and sending a forged BOOTREPLY and RELEASE leaves
+the guest's address and the relay unchanged (a14 (d)); a host resolver inside the link is refused on
 Firecracker; a stale launcher and a configured link overlapping a
 BuildWarden range or a host interface are each refused before any VM boots.
 
@@ -1100,9 +1166,12 @@ BuildWarden range or a host interface are each refused before any VM boots.
   message that `ClaimRelay` maps. `cmd/relay`: the per-mode start step (vm
   with and without the field, with an addressed and an unaddressed
   interface, overlap with another interface refused; host from the claim
-  and from `--subnet`; container refusal) over an interface stub, so the
-  netlink file is the only untested part at tier 0; the DHCP reply built from
-  the claim's addresses with an infinite lease; fuzzing of the DHCP parser.
+  and from `--subnet`; container refusal) over an interface stub; the
+  netlink parsing and encoding on canned bytes (Review r1 SHOULD 4), so only
+  the syscalls are untested at tier 0; the shared DHCP reply built from the
+  claim's addresses with an infinite lease; the vm responder over a socket
+  fake (started only for a claim with `build_link`, broadcast replies);
+  fuzzing of the DHCP parser.
   `relay`: the dialer refuses every address in the prefix with SSRF off and on,
   and passes another `100.64.0.0/10` address; `detectUpstreamDNS` skips a
   nameserver in the prefix. `cmd/warden`: `resolveBuildLink` precedence (flag
@@ -1112,13 +1181,19 @@ BuildWarden range or a host interface are each refused before any VM boots.
   Renders for the default and a configured link: seed goldens
   (`driver/linuxguest`), `winguest.WardenRunPS1`, the vz DHCP `warden-boot`
   (no address in it), and the qemu and Firecracker direct-boot command lines.
-  Each driver's claim carries the link (nil for container). Stamp checks for
-  each asset on temporary directories, each refusal a `driver.Fixable` whose
-  fix names the one-time command, and the stamp taken from the same location
-  as its asset. The order test per driver: no build VM boots before
+  Each driver's claim carries the link (nil for container): Hyper-V end to
+  end over its `Provisioner`, qemu, Firecracker and vz on their source
+  (Consolidation). The direct-boot inits and build scripts as text: they read
+  only the two keys, never evaluate the command line, take the lease first,
+  and keep identical copies of the link block and the lease script. Stamp
+  checks for each asset on temporary directories, each refusal a
+  `driver.Fixable` whose fix names the one-time command, the stamp taken
+  from the same location as its asset, and doctor failing only on a
+  required one. The order test per driver: no build VM boots before
   `ClaimRelay` returns. Firecracker resolver selection: a resolver inside the
   resolved link excluded, one at `10.0.0.2` now passing. All free of
-  platform build tags except the netlink file's stub pair (GLOBAL-07).
+  platform build tags except the netlink and responder files' stub pairs
+  (GLOBAL-07) and host mode's tests, which keep `cmd/relay`'s `unix` tag.
 - **Lint.** `make lint` for each platform touched (FLOW-17): linux for
   `cmd/relay/buildif_linux.go` and firecracker, darwin for `driver/vz` and
   `cmd/relay/mode_host.go`, windows for `driver/hyperv`, `cmd/warden-io`,
@@ -1129,7 +1204,8 @@ BuildWarden range or a host interface are each refused before any VM boots.
 - **Tier 2, CI.** `firecracker.yml` without the DNS workaround: the hosted
   runner's VPC resolver `10.0.0.2` is used directly on the default link, the
   rebuilt relay and launcher initramfs boot, and the Ubuntu disk build and the
-  direct-boot build succeed.
+  direct-boot build succeed, the direct-boot console showing the link taken
+  `from dhcp`.
 - **Tier 2, native (FLOW-09).** Blocking: linux-kvm, qemu-any, macos-vz,
   windows-hyperv, each with four cases. (1) Upgrade path: with the pre-change
   assets in place, the build and doctor refuse with the one-time command
@@ -1151,7 +1227,16 @@ BuildWarden range or a host interface are each refused before any VM boots.
   and the link block on the configured link; windows-hyperv a Windows guest
   build, an old VHDX refused by the stamp, and with the stamp forged, the
   claim's "unknown field" refusal mapped to the same fix, plus the
-  `--nat-prefix` overlap refusal. Tracked: macos-qemu (a Windows guest on
+  `--nat-prefix` overlap refusal. The vm-mode DHCP cases (a14 (d)): on
+  linux-kvm and qemu-any every direct-boot build's console shows the link
+  `from dhcp`, equal to the command line, on both links, the
+  old-relay-initramfs build included; on qemu-any a hand boot of the new
+  direct-boot initramfs with the keys and no relay prints the no-answer line
+  and holds the keys' address, and one without keys stops with its console
+  line; on linux-kvm and windows-hyperv a DISCOVER from the relay VM's
+  upstream network gets no offer; on linux-kvm and qemu-any the TEST-08
+  flood-and-forge case; on windows-hyperv the Windows guest's address and
+  route equal the seed's whether or not it took a lease first. Tracked: macos-qemu (a Windows guest on
   qemu, after `qemu-windows-guest-package`), backlog
   `build-link-subnet-qemu-windows`. Not run natively: container-any and
   macos-finch, since the container driver's behaviour is untouched and tier
@@ -1970,7 +2055,194 @@ plan takes the reading below; the review confirms it or sends the design back:
 
 ## Consolidation
 
-Filled in at Publish (FLOW-10, FLOW-15).
+`main` merged at `1cad5b3` (merge commit `be81daa`: a clean merge with an
+empty remerge-diff, so no conflict fixes). The branch forked at `1ef5547`
+(#90, the Firecracker driver, whose resolver refusal Decision 7
+generalizes); #88 (`refresh-cache.sh` resolving apk versions from
+APKINDEX) and #89 were already in that base. Since the fork, six PRs
+landed. The ones this feature meets:
+
+- **#96 design-approved-rule-changes (FLOW-14, FLOW-19).** This feature is
+  the first to use the new route. The BOOT-03 amendment is declared in
+  `rule_changes` and the **Rule changes** section (`303e713`), approved by
+  name at `303e713` (Design review, r3 addendum), and landed as worded in
+  `14e4d91` (plan task 49, which r3's plan had left conditional). `wf check`
+  clears it (`docs/development/bootstrap.md (BOOT-03)`), and `make
+  enforcement` reports that the branch changes no enforcement. The
+  Bootstrap comparison, as amended by a14 (d), was accepted with it
+  (BOOT-07). #96 also gave `wf-publish` the PR-body list of rule changes,
+  which `f6-open-pr` fills.
+- **#91 bootstrap-firecracker-row (BOOT-07).** It added the firecracker
+  mapping row and widened the bootstrap surface (`tools/firecracker-vm/`,
+  the firecracker isolation and start files, `driver/vz/image.go`). The
+  BOOT-03 paragraph this feature amends is untouched by it, and so is the
+  mapping table: no row changes (Bootstrap comparison). The surface does
+  not yet list two launcher sites this feature changes; see Conventions.
+- **#93 http-body-path-drift (RELAY-05).** It changed `relay/relay.go`'s
+  `recordServed` and `specs/metadata-http-body/v1.md`; this feature changes
+  the same file's `Config` (the build-link prefix), upstream dialer and
+  `detectUpstreamDNS`. Different functions and different seams: the merge
+  was clean, and both features' tests pass together. No ledger or schema
+  names the link (Compatibility), so no `specs/` version moves.
+- **#92 wf-squash-merged-pr.** A squash merge of this PR counts as merged
+  at Close. **#94, #95** are native-tick and workflow-human changes, with
+  no overlap.
+
+**Terminology.** The guide, CLI help, doctor output, overview and code use
+the same words: build link, `[vm] build_link` / `--build-link`, relay
+address and guest address, link-channel stamp, one-time rebuild (refresh,
+re-prepare). The design's "launcher stamp" is the concept; the file and
+every user-facing line say "link-channel stamp". `refresh-cache.sh` said
+"link stamp" in its `--check` line and header; both now say
+"link-channel stamp". The relay's mode names (vm, host, container) match
+RELAY-04 and `architecture.md`.
+
+**Shared abstractions.** One definition of the link (`driver/buildlink`:
+`Parse`, `Default`, `Claim`, `BootArgs`, `CheckStamp`), one claim path
+(`driver.Session.ClaimRelay`, with the old-relay mapping), one host-overlap
+and stamp layer for every VM driver (`driver/hostlink.go`:
+`CheckHostLink`, `LauncherStamp`), one DHCP core for both relay modes
+(`cmd/relay/dhcp.go`, plan task 14), and one `segment` type in
+`cmd/relay` that the claim and `--subnet` both resolve to. The container
+driver stays out by design (a17).
+
+**Versioned seams** (GLOBAL-08). `relay-claim`: changed only by this
+feature since the fork (the `build_link` field, and `relaycfg.ErrRefused`
+answered with 400 and the relay left claimable, the plan r3 note Review
+r1 accepted); the `relaycfg` package doc and architecture.md's Claim
+protocol state both. `relay-guest-api`: only this feature (the relay's
+build-segment address from the claim, and the DHCP lease in host mode and,
+a14 (d), vm mode; no endpoint's protocol changes). `bootstrap-model`:
+#91 and #96 also edited `bootstrap.md`, in other paragraphs (the
+firecracker row and surface list; BOOT-07's model-change route); this
+feature's BOOT-03 paragraph is the only one it changes.
+
+**Design text brought in line (plan task 56).** The a14 (d) answer is now
+in the design, not only in the plan notes: the front-matter `seams` comment
+and the linux-kvm and qemu-any reasons; Decision 2's consumer table;
+Decision 4's vm bullet (the responder, and the overlap rule as plan r3's
+note read it: an address inside the link, or a route inside or equal to
+it, refuses; a containing route such as the default does not); Decision 5's
+title, direct-boot bullet (DHCP first, the keys as cross-check and
+fallback, with the four outcomes) and its rejected list (the old "DHCP for
+the direct-boot inits too" removed, pointing at the r3 review; "keys first,
+DHCP only without them" recorded as rejected); a14's answer; the claim and
+relay pseudocode (`ErrRefused`, the vm responder); the site table
+(`vmlink.go`, `segment.go`, `dhcp*.go`, `driver/hostlink.go`, the inits'
+lease, no relay VM init rule for udp/67); Cross-driver impact; the
+Bootstrap comparison's BOOT-02 row and Costs (its BOOT-03 row was already
+current); the Security note's boundary, a "vm-mode DHCP responder" entry
+under What else and the vm-mode TEST-08 cases; and the Validation plan's
+tier-0, CI and native lists. Widened at `5211949` (Review r2 finding 10),
+it also records the two behaviours `f3-implement-r2` added at Jeff's
+routing of Review r1 SHOULDs 2 and 3: doctor exits non-zero on a missing or
+stale stamp on an asset every build needs (the Hyper-V relay boot VHDX and
+the vz image, shown `BLOCKED`) and only reports the qemu and Firecracker
+direct-boot initramfs stamps (Decision 6, Decision 8's Doctor bullet, the
+per-driver pseudocode); and a stale vz `--image` disk outside the image
+cache names "omit --image" rather than a re-prepare that cannot reach it
+(Decision 6's table, the per-driver pseudocode, `overview.md`). No Decision
+changes in substance.
+
+**Review findings left for Consolidation.**
+
+- *Review r1/r2 SHOULD 5 (no tier-0 test that the qemu, Firecracker and vz
+  claims carry the link).* Added:
+  `driver/claimlink_test.go` `TestVMDriversClaimWithRequestLink` parses
+  each driver's non-test sources (any build tag) and requires its one
+  `ClaimRelay` call to pass `<req>.Link().Claim()` for the request it also
+  passes, so a nil or foreign link fails, the quiet vz case included
+  (checked by mutation). It is a check on the source, not on behaviour:
+  each driver's relay-and-claim step boots a real VM, and the order-test
+  seams (plan task 34) replace that whole step, so a behavioural test needs
+  a new seam inside it. That is not worth a code change at Publish; Hyper-V
+  keeps its end-to-end test over its `Provisioner`.
+- *Review r1/r2 SHOULD 9 (TEST-08 cases with no recorded home).* Handed to
+  `security-suite` as a history entry in its queue file (workflow branch
+  `918c5da`), naming the Security note's list: the claim's `build_link`
+  bounds, the vm- and host-mode DHCP responders (no upstream offer;
+  flood, forge and malformed input), the link block, the canary drop and
+  the pre-boot refusals, with the tier-0 tests that already cover each.
+  Not as steps: security-suite is still in Design, and its design decides
+  how the suite takes them.
+
+**Conventions for future work** (FLOW-14: proposed here, not written on this
+branch):
+
+- BOOT-07's bootstrap surface (`bootstrap.md` and `tools/tier1/rules.yaml`
+  `bootstrap.surface`) should list `tools/build-vm/` (qemu's direct-boot
+  launcher, the twin of the listed `tools/firecracker-vm/`) and
+  `cmd/relay/dhcp*.go` (a relay guest-facing endpoint now, beside
+  `relay/controlplane.go`), so a later change to how a launcher takes its
+  address trips the hint (Review r1 finding 1's option). A rule change for
+  a process item or the next feature that edits the surface.
+- BOOT-06's optional extension (no boot asset carries a per-build network
+  value) stays with `hyperv-relay-per-build-channel`, which is the driver it
+  would not yet hold for (Bootstrap comparison, item 2).
+
+**Follow-ups** (plan task 55; FLOW-10).
+
+- Queued (workflow branch `918c5da`, with Jeff's approval at review r3
+  named in each `source`): `hyperv-relay-per-build-channel`, priority 24,
+  18 steps / 4 runs (Decision 9, a18: the fixed `.2`, the missing claim
+  token, `--nat-prefix` and `--host-ip` ignored per build, `8.8.8.8`, and
+  the durable shared switch); `baked-asset-staleness`, priority 25, 14
+  steps / 3 runs (Decision 10, a15: a source digest per baked asset that
+  absorbs the link-channel stamp and the Hyper-V source stamp).
+- Named in Decisions 3, 5 and 10 and task 55, not queued, for Jeff at
+  intake: a `specs/relay-claim/v1.md` contract document for third-party
+  orchestrators, and a vz per-build seed disk that would retire D2.
+- Tracked native gap `build-link-subnet-qemu-windows` (task 54) is already
+  in `backlog/native-gaps.yaml`.
+
+**FLOW-15 sweep.**
+
+- *Dead code.* `make deadcode` on linux, darwin and windows. Unreachable on
+  all three: `collector.Collector.BytesWritten`, `relay.Relay.CAFingerprint`
+  and `Relay.Ledger` (exported API of the embeddable library packages), and
+  the `driver/vz` image-personalization helpers, `NewLinuxVM`, `VM.State`,
+  `VM.IsRunning` and `createLinuxVM` (cgo-only code the cross-platform run
+  cannot see). All predate the branch, which adds none of them: of its 202
+  new functions, only `cmd/relay`'s `subnetLink` is reported, and only on
+  windows, where host mode is a stub. (`make deadcode` must run with the
+  module's toolchain: here the toolchain outside the module was go1.24, so
+  `go install` built a deadcode that could not load go1.26 packages;
+  `GOTOOLCHAIN=go1.26.3` fixed it. An environment issue, not the branch's.)
+- *Duplication.* Reported, with the reason each stays:
+  - The tier-0 stray-literal scan admits the new default in any `*_test.go`
+    (Review r1 item 2), where task 45's allowlist named only
+    `driver/buildlink/`, the reference docs, the seed goldens and the named
+    refusal and parsing tests. Twelve test files outside `driver/buildlink`
+    spell it: `relay/` and `relaycfg/` may not import `driver/` (GLOBAL-08),
+    so their tests must, and the others pin rendered output (claims, seeds,
+    DHCP replies, netlink bytes). No non-test file outside `driver/buildlink`
+    holds the default, and the old link stays in three named test files.
+    A plan deviation, reported here so it is not silent (FLOW-06).
+  - The udhcpc lease script is a heredoc in both
+    `tools/build-vm/build-initramfs.sh` and
+    `tools/firecracker-vm/build-initramfs.sh` (Review r1 item 4), and both
+    direct-boot inits carry the same build-link block (keys, lease, the
+    agreement check, the fallback). Each initramfs is built from its own
+    `tools/` directory, and Firecracker's CI cache key hashes
+    `tools/firecracker-vm` and `tools/relay-vm`, not `tools/build-vm`, so a
+    shared file would have to join both builds and the key. Kept as copies
+    and pinned: `TestDirectBootInits` already required the two lease
+    scripts to be identical, and `TestDirectBootInitLinkBlocks` (added at
+    Consolidation, checked by mutation) now requires the same of the two
+    link blocks. The copies have not drifted.
+  - Three link parsers stay apart on purpose: `buildlink.Parse` (warden's
+    rule: exactly `/30`, network-aligned, disjoint from BuildWarden's
+    ranges), `relaycfg.BuildLink.Parse` (the relay's looser contract for any
+    claimant, Decision 3) and `cmd/relay`'s `--subnet` parse (host mode's
+    fallback, from main). The last two resolve to one `segment` in
+    `cmd/relay`. No translator, CA installer or host-and-executor setup step
+    is duplicated.
+- *The overview.* `overview.md` was updated in Implement (plan task 48:
+  `ClaimRelay` with the link; the relay's per-mode segment setup, the vm
+  responder and the link block; each VM driver's pre-boot checks; the
+  guests' addressing, DHCP first for direct boot) and fixed at Review r1
+  SHOULD 6. Consolidation adds the vz `--image` fix to the stamp step. It
+  matches the code.
 
 ## Rollback notes
 
