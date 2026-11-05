@@ -106,10 +106,10 @@ boot mechanism or entrypoint. After starting the environment the host performs n
 steps inside it (no `exec`, no file copy, no guest-side commands); it only
 observes, through the relay and the environment's lifecycle state.
 
-The launcher locates the executor and starts it. Static network addressing
-applied by the platform's own boot configuration (cloud-init `network-config`, a
-fixed address on a single NIC) is allowed in the launcher; trust, DNS and every
-other setup step belong to `initialize`.
+The launcher locates the executor and starts it. Network addressing applied by
+the platform's own boot configuration (cloud-init `network-config`, a fixed
+address on a single NIC, or a DHCP lease served by the relay) is allowed in the
+launcher; trust, DNS and every other setup step belong to `initialize`.
 
 Interactive debugging (`warden shell`) is not a build and is exempt once
 `initialize` has finished setup.
