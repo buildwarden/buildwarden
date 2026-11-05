@@ -1,0 +1,31 @@
+feature: flow19-design-before-plan
+title: 'FLOW-19: the design review follows Design; a second review only when planning changes the design'
+priority: 26
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/flow19-design-before-plan.md
+branch: feat/flow19-design-before-plan
+alters_relationships: null
+source: 'workflow-human 2026-11-05 (Jeff): make the build-link-subnet r3 test-drive the rule. The design review runs right after Design, before Plan; Plan comes after, and the feature returns for a second review only if planning finds reasons to alter the design.'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 5
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-05T00:48:41Z
+    by: human/jeff
+    event: queued at priority 26 (intake)

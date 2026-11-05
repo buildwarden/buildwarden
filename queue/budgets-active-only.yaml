@@ -1,0 +1,31 @@
+feature: budgets-active-only
+title: 'Budgets gate active work only: done and archived items are left out of runaway checks and digests outside retrospectives'
+priority: 28
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/budgets-active-only.md
+branch: feat/budgets-active-only
+alters_relationships: null
+source: 'workflow-human 2026-11-05 (Jeff): all archived/done features should be set aside and fully ignored except during explicit retrospectives. Over-budget only matters as a gate against rampant loops that would otherwise drastically overrun.'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 5
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-05T00:48:41Z
+    by: human/jeff
+    event: queued at priority 28 (intake)
