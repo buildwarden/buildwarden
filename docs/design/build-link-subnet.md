@@ -16,6 +16,8 @@ native_validation:
 tier2_gaps:
   - {host: macos-qemu, gap: "a qemu Windows guest build on the default and a non-default link (backlog build-link-subnet-qemu-windows), after qemu-windows-guest-package is fixed"}
 rules: [GLOBAL-06, GLOBAL-07, GLOBAL-08, ORCH-01, ORCH-03, BOOT-01, BOOT-02, BOOT-03, BOOT-05, BOOT-06, BOOT-07, EXEC-04, RELAY-04, RELAY-05, UX-01, UX-03, UX-04, UX-05, UX-06, UX-07, UX-08, TEST-01, TEST-02, TEST-03, TEST-08, FLOW-02, FLOW-05, FLOW-06, FLOW-07, FLOW-09, FLOW-12, FLOW-14, FLOW-15, FLOW-19]
+rule_changes:
+  - {rule: BOOT-03, change: amend, paths: [docs/development/bootstrap.md]}
 concepts: [build-link, configurable-build-link, advanced-config, relay-claim, claim-protocol, relay-interface-setup, two-vm-topology, network-isolation, address-plan, rfc6598, upstream-dns, resolver-selection, relay-vm-init, kernel-command-line, dhcp, launcher-stamp, stale-assets, image-prepare, socketpair-topology, config-validation, ssrf-filter]
 related: [firecracker-driver.md, unified-bootstrap.md, hyperv-windows-prepare.md, vm-driver-release-plan.md, windows-driver-plan.md, platform-compatibility.md]
 ---
@@ -895,7 +897,7 @@ things change in how steps (1) and (3) are carried out:
 |---|---|---|---|
 | BOOT-01 isolation precedes execution | Topological for VM drivers; the relay VM init addresses the link at boot | Unchanged. The topology is the same; the relay's address on the segment now exists from the claim, and every VM driver already boots the guest only after the claim returns. Isolation does not depend on the address: a guest booted early has the same single NIC to the relay, only nothing to reach | none to isolation; ordering is pinned by tier-0 tests |
 | BOOT-02 the executor is the only out-of-band input | Seeds, `CIDATA`, tar copy, the direct-boot initramfs; vz baked (D2) | Unchanged. The direct-boot command line gains two address keys, which, like a seed's `network-config`, are addressing, not material; the vz lease carries only addresses | qemu and firecracker direct boot: two keys; vz: a lease |
-| BOOT-03 one start, then hands off | "Static network addressing applied by the platform's own boot configuration (cloud-init `network-config`, a fixed address on a single NIC) is allowed in the launcher" | Addressing applied by the platform's own boot configuration, static or from a DHCP lease served by the relay, is allowed in the launcher; trust, DNS and every other setup step still belong to `initialize`. The host still performs no step inside the environment | vz: `warden-boot` takes a lease instead of a literal; others unchanged |
+| BOOT-03 one start, then hands off | "Static network addressing applied by the platform's own boot configuration (cloud-init `network-config`, a fixed address on a single NIC) is allowed in the launcher" | Addressing applied by the platform's own boot configuration, static or from a DHCP lease served by the relay, is allowed in the launcher; trust, DNS and every other setup step still belong to `initialize`. The host still performs no step inside the environment | vz: `warden-boot` takes a lease instead of a literal; the qemu and Firecracker direct-boot inits take a lease from the relay's vm-mode responder, cross-checked against their command-line keys (a14 (d)); seeds unchanged |
 | BOOT-04 build inputs come from the relay | CA, script and context fetched by the executor | Unchanged | none |
 | BOOT-05 setup is the executor's domain | Baseline plus `/bootstrap` policy | Unchanged. The lease's DNS option names the relay, as `warden-boot`'s own DNS lines already do; `initialize` still owns DNS | none |
 | BOOT-06 images carry hooks, not content | Generic hooks; but the vz image and both direct-boot initramfs carry the link literals, a value the orchestrator chooses | Closer: no image or initramfs carries an address. vz still carries `warden-io` and its launcher (D2) | vz, qemu and firecracker direct boot: no address baked; a one-time rebuild to get there |
@@ -925,9 +927,9 @@ The record loses nothing.
 
 ### Proposed standards change (FLOW-14)
 
-Not edited here. For the design review to accept explicitly, and then to
-land in this feature's diff or as its own process item if the review
-prefers (as `bootstrap-firecracker-row` did for firecracker-driver):
+Item 1 is now a declared rule change (`rule_changes`, FLOW-14 as amended by
+`design-approved-rule-changes`, #96); see **Rule changes**. Item 2 stays
+for the follow-up:
 
 1. `bootstrap.md`, BOOT-03: replace "Static network addressing applied by the
    platform's own boot configuration (cloud-init `network-config`, a fixed
@@ -942,6 +944,48 @@ prefers (as `bootstrap-firecracker-row` did for firecracker-driver):
    feature for the build link, but not yet for Hyper-V's relay VM (Decision
    9), so taking it now would add a deviation-register entry for Hyper-V.
    Recommended: leave it for `hyperv-relay-per-build-channel`.
+
+## Rule changes
+
+### BOOT-03 (amend), `docs/development/bootstrap.md`
+
+**Why:** after this feature, no launcher asset bakes the build link. The vz
+`warden-boot` takes its address from the host relay's DHCP lease (Decision
+5), and the qemu and Firecracker direct-boot inits take a lease from the
+relay's vm-mode responder, cross-checked against their kernel command-line
+keys (a14 (d)). BOOT-03 allows only *static* addressing in the launcher, so
+main would contradict the rule as written the moment this merges (Review r1,
+`878d510bc61b`, MUST-review 1).
+
+**Current wording** (second paragraph):
+
+> The launcher locates the executor and starts it. Static network addressing
+> applied by the platform's own boot configuration (cloud-init
+> `network-config`, a fixed address on a single NIC) is allowed in the
+> launcher; trust, DNS and every other setup step belong to `initialize`.
+
+**Proposed wording:**
+
+> The launcher locates the executor and starts it. Network addressing
+> applied by the platform's own boot configuration (cloud-init
+> `network-config`, a fixed address on a single NIC, or a DHCP lease served
+> by the relay) is allowed in the launcher; trust, DNS and every other setup
+> step belong to `initialize`.
+
+**Severity and check:** unchanged, MUST and agent-judgment.
+
+**Enforcement:** none. BOOT-03 is agent-judgment, so neither `tools/tier1/`
+nor `tools/workflow/check/` changes. The rest of the rule (one start; the
+host performs no step inside the environment) is unchanged: a lease served
+by the relay is a reply to the guest's own platform DHCP client, not a host
+step inside the environment.
+
+**Bootstrap comparison (BOOT-07):** the **Bootstrap comparison** section's
+BOOT-03 row, as amended by a14 (d), is the model change this wording
+carries; the review accepts the two together. BOOT-06's optional extension
+is not part of this change (left for `hyperv-relay-per-build-channel`).
+
+**Lands as:** plan task 49, in an Implement round before Publish.
 
 ## Security note
 
