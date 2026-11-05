@@ -48,7 +48,8 @@ func TestImageStamp(t *testing.T) {
 		{"custom --image", t.TempDir(),
 			func(fix string) bool {
 				return strings.Contains(fix, "omit --image") &&
-					strings.Contains(fix, cache) && strings.Contains(fix, PrepareCommand)
+					strings.Contains(fix, cache) &&
+					strings.Contains(fix, PrepareCommand)
 			}},
 		{"sibling with the cache as prefix", cache + "-other",
 			func(fix string) bool { return strings.Contains(fix, "omit --image") }},
@@ -68,7 +69,8 @@ func TestImageStamp(t *testing.T) {
 			if err := imageStamp(tc.dir, cache).Check(); err != nil {
 				t.Fatalf("a re-prepared image: %v", err)
 			}
-			if n, _ := buildlink.ReadStamp(imageStamp(tc.dir, cache).Path); n != buildlink.Channel {
+			stamp := imageStamp(tc.dir, cache).Path
+			if n, _ := buildlink.ReadStamp(stamp); n != buildlink.Channel {
 				t.Fatalf("stamp channel %d", n)
 			}
 		})

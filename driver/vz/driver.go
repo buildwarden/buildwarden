@@ -477,7 +477,8 @@ func customImageFix(cacheDir string) string {
 // insideDir reports whether path is dir or below it.
 func insideDir(path, dir string) bool {
 	rel, err := filepath.Rel(filepath.Clean(dir), filepath.Clean(path))
-	return err == nil && rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator))
+	return err == nil && rel != ".." &&
+		!strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
 // LauncherStamps lists the vz assets with a link-channel stamp: the prepared

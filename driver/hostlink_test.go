@@ -85,9 +85,10 @@ func TestLauncherStampBlocks(t *testing.T) {
 			if got := tc.st.Blocks(); got != tc.blocks {
 				t.Errorf("Blocks() = %v, want %v", got, tc.blocks)
 			}
-			if got := strings.HasPrefix(tc.st.Report(), "BLOCKED: "); got != tc.blockTag {
+			report := tc.st.Report()
+			if got := strings.HasPrefix(report, "BLOCKED: "); got != tc.blockTag {
 				t.Errorf("Report() = %q, BLOCKED prefix %v, want %v",
-					tc.st.Report(), got, tc.blockTag)
+					report, got, tc.blockTag)
 			}
 		})
 	}
