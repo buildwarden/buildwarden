@@ -12,7 +12,7 @@ import (
 const SummaryFile = "QUEUE.md"
 
 // Summary renders the queue as Markdown: what needs the human first, then
-// what is active, what waits on a host and the backlog. Done items are left
+// what is active, what waits on a host and the backlog, each in FLOW-05 order. Done items are left
 // out (FLOW-13). It reads only the state, never the clock, so the same state
 // always renders the same text.
 func Summary(s *State) string {
@@ -100,7 +100,7 @@ func prRef(f *Feature) string {
 
 func (s *State) needsHuman() []string {
 	var out []string
-	for _, f := range s.Features {
+	for _, f := range s.Ordered() {
 		if f.Status == "done" {
 			continue
 		}
@@ -141,7 +141,7 @@ func humanStep(st *Step) string {
 func (s *State) writeActive(b *strings.Builder) {
 	fmt.Fprintf(b, "\n## Active\n\n")
 	var rows []string
-	for _, f := range s.Features {
+	for _, f := range s.Ordered() {
 		if f.Status != "in_progress" {
 			continue
 		}
@@ -173,7 +173,7 @@ func (s *State) writeActive(b *strings.Builder) {
 // feature has not reached, so it shows before it is offered.
 func (s *State) hostSteps() []string {
 	var out []string
-	for _, f := range s.Features {
+	for _, f := range s.Ordered() {
 		if f.Status == "done" {
 			continue
 		}
@@ -196,7 +196,7 @@ func (s *State) hostSteps() []string {
 func (s *State) writeBacklog(b *strings.Builder) {
 	fmt.Fprintf(b, "\n## Backlog\n\n")
 	var rows []string
-	for _, f := range s.Features {
+	for _, f := range s.Ordered() {
 		if f.Status == "queued" {
 			rows = append(rows, fmt.Sprintf("| %d | %s | %s | %d |",
 				f.Priority, f.Feature, kindLabel(f), f.Budget.Estimate.Steps))
@@ -212,8 +212,13 @@ func (s *State) writeBacklog(b *strings.Builder) {
 	}
 }
 
+// kindLabel is the Kind column: a fix names the item it follows (FLOW-05
+// class 3), and a process item its holds.
 func kindLabel(f *Feature) string {
 	if !f.IsProcess() {
+		if f.Follows != "" {
+			return "fix (follows " + f.Follows + ")"
+		}
 		return "feature"
 	}
 	if len(f.Holds) == 0 {

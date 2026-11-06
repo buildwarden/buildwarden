@@ -13,7 +13,7 @@ var update = flag.Bool("update", false, "rewrite testdata/queue.md")
 
 // summaryState covers every section: a blocking question, a design review,
 // a PR waiting, a runaway, a host step and a human step of a later phase, and
-// the backlog. Its done items, one closed recently, one long ago and one spent
+// the backlog with a fix. Its done items, one closed recently, one long ago and one spent
 // past the runaway factor, must appear in none of them (FLOW-13).
 func summaryState() *State {
 	at := func(d int) time.Time { return now.Add(time.Duration(d) * 24 * time.Hour) }
@@ -46,6 +46,7 @@ func summaryState() *State {
 	merging.History = ev(0)
 
 	queued := feature("queued", 4, "queued")
+	queued.Follows = "recent"
 	proc := process("rules", 5, "queued", "host:*")
 
 	recent := feature("recent", 6, "done")
@@ -101,5 +102,28 @@ func TestSaveWritesSummary(t *testing.T) {
 	got, err := os.ReadFile(filepath.Join(dir, SummaryFile))
 	if err != nil || string(got) != Summary(s) {
 		t.Fatalf("QUEUE.md = %q, %v", got, err)
+	}
+}
+
+// TestSaveWritesClassOrder: a phase change moves an item between classes, and
+// the next Save writes QUEUE.md in the new order without a reload.
+func TestSaveWritesClassOrder(t *testing.T) {
+	s := summaryState()
+	s.Dir = t.TempDir()
+	_ = os.MkdirAll(filepath.Join(s.Dir, "queue"), 0o755)
+	review, _ := s.Find("review")
+	review.Phase = 3
+	if err := s.Save(review); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(s.Dir, SummaryFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, a := strings.Index(string(got), "| 2 | review |"),
+		strings.Index(string(got), "| 1 | asked |")
+	if r < 0 || a < 0 || r > a {
+		t.Fatalf("QUEUE.md lists review at %d, asked at %d; want review (now in "+
+			"Implement) first:\n%s", r, a, got)
 	}
 }
