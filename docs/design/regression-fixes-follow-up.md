@@ -1,6 +1,6 @@
 ---
 feature: regression-fixes-follow-up
-status: draft
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -655,4 +655,63 @@ None yet.
 
 ## Archive summary
 
-Filled in at x2-implement, in the item's PR (FLOW-12).
+Implemented 2026-11-06 by the cloud loop (attended, x2-implement), approved
+at design review r1 (`393f437`, Jeff; a1 to a9 as drafted, option (a)).
+
+- **Rule text** (`docs/development/process.md`): FLOW-05 is "Depth first, in
+  class order": open items go by class (1 in implementation, 2 process items,
+  3 fixes that `follows` an item, 4 new functionality), then in-progress
+  before queued, then priority; holds still apply to every class. FLOW-09
+  splits failures: one the branch causes returns the item (FLOW-06); a
+  regression `main` already has is filed at once as the item's immediate
+  follow-up unless the human says otherwise. The Shape line and FLOW-13's
+  budget sentence say "the first item in FLOW-05's order". Severities and
+  checks unchanged.
+- **Built: class order in `wf`** (`tools/workflow/queue`). `Class()` derives
+  the class from status, kind, phase and the new optional `follows` field;
+  "in implementation" is an in-progress feature in phase 3 to 6 or 8, or an
+  in-progress process item in phase 2 or 4, so an item waiting on the
+  human's merge drops to its own class. `Ordered()` sorts a copy at each read
+  (done items last, by priority); `Next`, `Listed` and QUEUE.md's
+  `writeActive`, `writeBacklog`, `needsHuman` and `hostSteps` walk it.
+  `Next` walks in-progress and queued items together, with `nextQueued`'s
+  start checks folded in, and does not start a queued feature whose `follows`
+  names an open item ("follows <parent>, not yet done (FLOW-05)"). `NextFor`
+  skips that gate. `Next` and `NextFor` share `atLimit`.
+- **Built: `follows` tooling.** `wf validate` fails when `follows` names a
+  missing item or the item itself; `wf new -follows <item>`; QUEUE.md's Kind
+  reads `fix (follows <item>)`; `wf status` prints `follows: <item>`. `Add`
+  writes "priority <a> -> <b> (renumbered by wf new: <slug> queued at <n>)"
+  on every item it moves. `priority` stays unique across the queue.
+- **Agents and skills:** workflow-intake places by class, then priority,
+  sets `-follows` for a fix, and has the follow-up path (top of class 3, a
+  small estimate, the evidence in `-source`, unattended included).
+  workflow-native, wf-implement, wf-review and wf-publish file a regression on
+  `main` as a follow-up at once; wf-publish's PR body, and the tick and
+  native digests, carry **Follow-ups filed** as "<slug> (follows <item>)".
+  workflow-human shows the class order and reorders across classes only by
+  Jeff's word on `follows` or `kind`.
+- **Decisions taken:** a mechanical, derived class read at each call (a1);
+  in implementation from Implement, merge phases excluded (a2); one
+  `follows` field (a3); holds override class (a4); only a regression already
+  on `main` is a follow-up (a5); the finding session files it and reports it
+  (a6); the top of class 3 by priority, several in the order found (a7); a
+  follow-up waits for its parent except in an attended named run (a8);
+  `follows: build-link-subnet` on the four fixes at x4-close, nothing
+  renumbered, q1 left open until then (a9).
+- **Rejected:** priority numbers set by hand with no code change; a stored
+  `class`; re-sorting in every mutator; priority alone within a class;
+  "any in-progress item" or "from Plan" as class 1; merge phases in class 1;
+  `class: fix|feature`; links in `source` only; class 1 ignoring holds; every
+  regression a follow-up whatever its cause; the digest proposing and Jeff
+  filing; no wait for the parent, or a wait at `f3-implement` only; priority
+  unique per class; compact renumbering.
+- **For future designs touching `queue-order`, `priority`, `follow-up`,
+  `intake` or `wf-next`:** class is computed, never stored, so a new status
+  or phase changes it only through `Class()`; priority compares only within
+  a class. A `wf` built before this change drops `follows` when it saves a
+  queue file (non-strict YAML), so every machine and human session must
+  rebuild `dist/wf` from `main` after the merge; x4-close sets the field on
+  the four fixes, updates the workflow branch `README.md`, and posts that
+  rebuild notice in the digest. A regression fix and a deferred follow-up
+  look the same in the queue; nothing reads the difference.
