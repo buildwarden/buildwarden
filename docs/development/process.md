@@ -158,7 +158,10 @@ Every pending step carries an affinity:
   capability. The workflow branch's `hosts.yaml` gives each host name to exactly
   one machine.
 
-A worker takes only steps whose affinity it satisfies. A step is claimed with a
+A worker takes only steps whose affinity it satisfies. A step is offered when
+every step it needs is done and, unless it is `human`, its feature has reached
+the step's phase; no worker may claim or complete a host or cloud step of a
+later phase. A step is claimed with a
 lease (claimant plus expiry) recorded on the `workflow` branch; a push rejected
 because the branch moved means the claim lost and the worker re-reads state. An
 expired lease may be reclaimed.
@@ -213,7 +216,10 @@ code as explicit tasks, and the changed plan goes through a design review again
 (FLOW-19). A feature that returns to Design more than twice escalates to a
 `human` step instead of looping again. When Publish's consolidation finds work
 the approved plan already covers, the feature returns to Implement instead, with
-no new review.
+no new review. A return drops every pending step of the phase it returns to and
+the pending template steps of later phases, which are seeded again on re-entry.
+Other pending steps of later phases stay, and Design reconciles them with the
+new design. A native validation already done in Publish is queued again.
 
 ---
 
@@ -270,7 +276,8 @@ per host in the design:
 
 - **Blocking** when the change is specific to that host's driver or lifecycle: it
   reaches that driver's tree, or alters behavior only that host exercises. Such a
-  feature waits in Publish on a `host:<name>` step.
+  feature waits in Publish on a `host:<name>` step, which runs after
+  consolidation and which the PR's opening needs.
 - **Tracked** otherwise: the gap is recorded in `tier2_gaps` and on the `workflow`
   branch's native-gap backlog, satisfying TEST-03, and the feature may merge.
 
