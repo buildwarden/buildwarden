@@ -8,6 +8,9 @@ phase: 2
 design: docs/design/flow19-design-before-plan.md
 branch: feat/flow19-design-before-plan
 alters_relationships: null
+pr:
+  number: 101
+  ci: green
 source: 'workflow-human 2026-11-05 (Jeff): make the build-link-subnet r3 test-drive the rule. The design review runs right after Design, before Plan; Plan comes after, and the feature returns for a second review only if planning finds reasons to alter the design.'
 steps:
   - id: x1-design
