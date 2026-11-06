@@ -40,8 +40,10 @@ feature names in its `source`.
    design review.
 5. Decide `design_review` (FLOW-19): `skip` only when its criteria hold, judged
    on the delta from the last `approved at <sha>` when the design was approved
-   before; otherwise `required`. Write it in the front-matter and the queue
-   file. Copy `alters_relationships` into the queue file too; if it is `true`,
+   before; otherwise `required`. A `required` review is seeded at the start
+   of phase 2, before Plan, and Plan works from the design it approves.
+   Write it in the front-matter and the queue file. Copy
+   `alters_relationships` into the queue file too; if it is `true`,
    FLOW-05's slot decides whether planning may start (`wf next` enforces it).
 6. Rule changes (FLOW-14): when the feature needs a rule or its enforcement
    changed, declare each change in `rule_changes` (`rule`, `change: add |

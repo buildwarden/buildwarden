@@ -106,7 +106,7 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
 5. Finish the step on the workflow checkout:
    - The agent returned `back-to-design`:
      `dist/wf back -state .dev/workflow -worker $W -feature F -why "<finding>"`.
-     Consolidation returning work the approved plan covers adds `-to 3`
+     Consolidation returning work the plan already covers adds `-to 3`
      (back to Implement, FLOW-10).
    - Otherwise:
      `dist/wf done -state .dev/workflow -repo . -worker $W -feature F -step S -run`.
@@ -135,7 +135,9 @@ If the file exists, append a new `## Run <W>` section. Sections, in order:
   `process item, holds: ...`), and any `held by process item` lines from
   `wf next`. Only queued and in-progress ones; one this run closed goes in
   **Moved**.
-- **Moved**: each step taken, its outcome, and the branch head it left.
+- **Moved**: each step taken, its outcome, and the branch head it left; for an
+  `f2-plan` step, also the plan's task count, so Jeff can call a review back
+  (FLOW-19).
 - **Blocked on Jeff**: open blocking questions (options and recommendation),
   design reviews waiting (`*-design-review` steps, FLOW-19), open PRs waiting
   for his merge (phase 7), `escalate` steps, runaway budgets, priority

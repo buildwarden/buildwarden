@@ -13,7 +13,7 @@ var update = flag.Bool("update", false, "rewrite testdata/queue.md")
 
 // summaryState covers every section: a blocking question, a design review,
 // a PR waiting, a runaway, a host step and a human step of a later phase, and
-// the backlog. Its done items, inside and outside the last 7 days and one spent
+// the backlog. Its done items, one closed recently, one long ago and one spent
 // past the runaway factor, must appear in none of them (FLOW-13).
 func summaryState() *State {
 	at := func(d int) time.Time { return now.Add(time.Duration(d) * 24 * time.Hour) }
@@ -29,9 +29,10 @@ func summaryState() *State {
 
 	review := feature("review", 2, "in_progress")
 	review.Phase = 2
-	review.Steps = []Step{{ID: "f2-plan", Phase: 2, Affinity: "cloud", Status: "done"},
-		{ID: "f2-design-review", Phase: 2, Affinity: "human", Status: "pending",
-			Needs: []string{"f2-plan"}},
+	review.Steps = []Step{{ID: "f2-design-review", Phase: 2, Affinity: "human",
+		Status: "pending"},
+		{ID: "f2-plan", Phase: 2, Affinity: "cloud", Status: "pending",
+			Needs: []string{"f2-design-review"}},
 		{ID: "f6-validate-windows-hyperv", Phase: 6, Affinity: "host:windows-hyperv",
 			Status: "pending"},
 		{ID: "f6-provision-windows-hyperv", Phase: 6, Affinity: "human",

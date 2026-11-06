@@ -47,6 +47,7 @@ func Phase(env Env, f *queue.Feature) []Result {
 	case 2:
 		c.plan()
 		c.reviewed()
+		c.approvalDelta()
 	case 3:
 		c.onBranchHead()
 		c.make("lint")
@@ -78,6 +79,15 @@ func Phase(env Env, f *queue.Feature) []Result {
 	case 8:
 		c.closed()
 	}
+	return c.out
+}
+
+// Review runs the done-when check of a feature's design-review step
+// (FLOW-19): every review seeded so far, this one included, has its approval
+// recorded. The review is not its phase's gate, so Phase does not run it.
+func Review(env Env, f *queue.Feature) []Result {
+	c := &checker{env: env, f: f}
+	c.reviewed()
 	return c.out
 }
 

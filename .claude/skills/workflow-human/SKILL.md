@@ -32,9 +32,11 @@ Same as `workflow-tick` step 1 (the FLOW-18 check, build `dist/wf`, check out
    with `dist/wf answer -worker $W -feature F -question Q -answer "..."`,
    which also completes the matching `-answer-<Q>` step.
 3. **Design reviews** (`*-design-review` steps, FLOW-19), highest priority
-   first, one feature per sitting. Check out the feature branch and read the
-   design, its Implementation plan, and, for a re-review, the design at the
-   last `approved at <sha>` and the finding that sent it back. Put the design
+   first, one feature per sitting. The review comes after Design and before
+   Plan. Check out the feature branch and read the design, and, for a
+   re-review, the design at the last `approved at <sha>` and the finding that
+   sent it back, with the Implementation plan only when a later phase's
+   finding caused the re-review. Put the design
    in front of Jeff before the walkthrough (FLOW-19). If it has more than 4
    assumed questions, publish it as read as a private artifact page (the
    Artifact tool), with the commit SHA in its subtitle, give him the link, and
@@ -47,8 +49,10 @@ Same as `workflow-tick` step 1 (the FLOW-18 check, build `dist/wf`, check out
       `overview.md` pseudocode change where a flow changes. Where a diagram
       makes it clearer, add it to the design's page (publishing one if there
       is none); the review itself stays in this session.
-   2. **The plan against the design.** The task sequence and what each task
-      touches; say plainly where they disagree or leave a gap.
+   2. **The Validation plan and what Plan will work from:** native
+      validation steps (Design adds them; Plan only refines their notes),
+      `tier2_gaps`, and, on a re-review, the finding, the tasks it touches,
+      and how Design reconciled the later-phase steps `wf back` kept.
    3. **Risks and what is deferred:** native validation, `tier2_gaps`, rules
       changed, a Bootstrap comparison or Security note to accept.
       Ask each `rule_changes` entry on its own (FLOW-14), with its current
@@ -59,13 +63,16 @@ Same as `workflow-tick` step 1 (the FLOW-18 check, build `dist/wf`, check out
       in full, each option with its consequence, the recommendation first,
       and the decision it rests on. Record each answer with `dist/wf answer`,
       or turn it into a change.
-   5. **Outcome.** Approved: add an entry to the design's Design review
-      section (date, outcome, decisions, `approved at <sha>` of the design as
-      read, and for a re-review what changed), commit and push the branch,
-      then `dist/wf done` the step. Small changes Jeff makes while approving
-      are folded in and noted in the entry, with no second review. Changes:
-      record his notes in the entry, then
-      `dist/wf back -worker $W -feature F -why "<his notes>"`.
+   5. **Outcome.** Approved: first fold the small changes Jeff makes while
+      approving into the design text and commit them, with no second review;
+      Plan follows the design literally. Then add an entry to the design's
+      Design review section (date, outcome, decisions, `approved at <sha>` of
+      the design as approved, changes folded in, `read at <sha>` of the
+      design as read when it differs, what was folded in, and for a re-review
+      what changed). A rule change "approved with a change" names the same
+      fold-in commit. Commit and push the branch, then `dist/wf done` the
+      step, which checks the approval. Changes: record his notes in the
+      entry, then `dist/wf back -worker $W -feature F -why "<his notes>"`.
 4. **Escalations** (`escalate` steps, a runaway budget on an open item
    (FLOW-13), CI repair exhausted, a branch that did not delete on merge):
    show the decision or the command needed; record the outcome in the queue

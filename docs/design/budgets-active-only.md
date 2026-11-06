@@ -369,8 +369,17 @@ wf-later-phase-host-steps (Prior art, Ordering).
   `summaryState` comment in `queue/summary_test.go`, resolved to name both
   #99's later-phase human step and this item's rule that no done item
   appears in any section. The golden keeps #99's later-phase lines and
-  drops Recently done. flow19-design-before-plan (#101) is still open and
-  merges later; this branch does not take it.
+  drops Recently done. flow19-design-before-plan (#101) was still open then.
+- **Merge of `origin/main` at `6f652ca`:** #101 (flow19-design-before-plan)
+  landed, so this branch took it in a second merge commit. Git merged
+  `process.md`, `cmd/wf/main.go`, `queue.go`, `queue_test.go`,
+  `summary_test.go` and `workflow-intake` on its own. Two conflicts, each
+  resolved to keep both: `workflow-human` step 3.5 and step 4 take #101's
+  fold-in-then-approve outcome wording and this item's "a runaway budget on
+  an open item (FLOW-13)"; `workflow-tick` Digest takes this item's "only
+  queued and in-progress ones" line and #101's `f2-plan` task count in
+  **Moved** (FLOW-19). #101's review-before-plan phase 2, needs-based gate,
+  `stepTemplates` parser, `check.Review` and Plan-gate guard are unchanged.
 - **Terminology:** "open item" (queued or in progress) is used the same way
   in FLOW-13, the `Runaway`, `Budget` and `Listed` comments, and the three
   skills.

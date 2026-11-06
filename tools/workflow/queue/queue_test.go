@@ -202,17 +202,17 @@ func walk(t *testing.T, f *Feature) []string {
 
 func TestCompleteWalksOneRound(t *testing.T) {
 	f := feature("a", 1, "in_progress")
-	want := "f0-branch-setup f1-design f2-plan f2-design-review f3-implement f4-review " +
+	want := "f0-branch-setup f1-design f2-design-review f2-plan f3-implement f4-review " +
 		"f5-guide f6-merge-main f6-consolidate f6-open-pr f7-merge f8-close"
 	if got := strings.Join(walk(t, f), " "); got != want {
 		t.Fatalf("steps:\n got %s\nwant %s", got, want)
 	}
-	gates := map[string]bool{"f1-design": true, "f2-design-review": true,
+	gates := map[string]bool{"f1-design": true, "f2-plan": true,
 		"f6-open-pr": true, "f7-merge": true, "f8-close": true}
 	for i := range f.Steps {
 		st := &f.Steps[i]
 		switch st.ID {
-		case "f2-plan", "f6-merge-main", "f6-consolidate":
+		case "f2-design-review", "f6-merge-main", "f6-consolidate":
 			if IsGate(f, st) {
 				t.Fatalf("%s is not its phase's gate", st.ID)
 			}
@@ -221,8 +221,59 @@ func TestCompleteWalksOneRound(t *testing.T) {
 			t.Fatalf("%s is its phase's gate", st.ID)
 		}
 	}
-	if f.Steps[3].Affinity != "human" || f.Steps[3].Needs[0] != "f2-plan" {
-		t.Fatalf("design review %+v: a human step after Plan", f.Steps[3])
+	if f.Steps[2].Affinity != "human" || len(f.Steps[2].Needs) != 0 ||
+		f.Steps[3].Needs[0] != "f2-design-review" {
+		t.Fatalf("design review %+v, plan %+v: a human step before Plan", f.Steps[2],
+			f.Steps[3])
+	}
+}
+
+func TestIsDesignReview(t *testing.T) {
+	for id, want := range map[string]bool{"f2-design-review": true,
+		"f2-design-review-r3": true, "f2-plan": false, "f3-design-review": false,
+		"x1-design": false} {
+		if got := IsDesignReview(&Step{ID: id}); got != want {
+			t.Errorf("IsDesignReview(%s) = %v", id, got)
+		}
+	}
+}
+
+// TestOldOrderPhaseTwoKeepsTheReviewAsGate: a phase 2 seeded before the
+// review moved ahead of Plan finishes under the order it was seeded with.
+func TestOldOrderPhaseTwoKeepsTheReviewAsGate(t *testing.T) {
+	f := feature("a", 1, "in_progress")
+	f.Phase, f.DesignReview = 2, "required"
+	f.Steps = []Step{{ID: "f2-plan", Phase: 2, Affinity: "cloud", Status: "pending"},
+		{ID: "f2-design-review", Phase: 2, Affinity: "human", Status: "pending",
+			Needs: []string{"f2-plan"}}}
+	if IsGate(f, &f.Steps[0]) || !IsGate(f, &f.Steps[1]) {
+		t.Fatalf("old order: plan gate %v, review gate %v, want the review",
+			IsGate(f, &f.Steps[0]), IsGate(f, &f.Steps[1]))
+	}
+}
+
+// TestReentryAfterADroppedReviewGetsFreshIds: an earlier phase 2 that left
+// f2-plan but no f2-design-review (skipped, or dropped by Back) still makes
+// the re-entry use -r2 for both.
+func TestReentryAfterADroppedReviewGetsFreshIds(t *testing.T) {
+	f := feature("a", 1, "in_progress")
+	f.Phase, f.DesignReview = 2, "required"
+	f.Steps = []Step{{ID: "f2-plan", Phase: 2, Affinity: "cloud", Status: "done"}}
+	Seed(f)
+	var ids []string
+	for _, st := range f.Steps {
+		ids = append(ids, st.ID+"<"+strings.Join(st.Needs, ","))
+	}
+	if got := strings.Join(ids, " "); got !=
+		"f2-plan< f2-design-review-r2< f2-plan-r2<f2-design-review-r2" {
+		t.Fatalf("steps %s", got)
+	}
+	if errs := state(f).Validate(); len(errs) != 0 {
+		t.Fatalf("Validate: %v", errs)
+	}
+	plan, _ := f.Step("f2-plan-r2")
+	if !IsGate(f, plan) {
+		t.Fatal("f2-plan-r2 is the re-entry's gate")
 	}
 }
 
@@ -234,8 +285,9 @@ func TestSkippedDesignReviewIsNotSeeded(t *testing.T) {
 		t.Fatalf("steps %s: a skipped review is not seeded", ids)
 	}
 	plan, _ := f.Step("f2-plan")
-	if !IsGate(f, plan) {
-		t.Fatal("with the review skipped, Plan is the phase's gate")
+	if !IsGate(f, plan) || len(plan.Needs) != 0 {
+		t.Fatalf("with the review skipped, Plan %+v is the phase's gate, needing nothing",
+			plan)
 	}
 }
 
@@ -321,9 +373,15 @@ func TestBackToDesignEscalatesOnTheThirdReturn(t *testing.T) {
 		}
 		if i < 3 {
 			advance(f, 3)
-			if _, err := f.Step(fmt.Sprintf("f2-design-review-r%d", i+1)); err != nil {
+			id := fmt.Sprintf("f2-design-review-r%d", i+1)
+			if _, err := f.Step(id); err != nil {
 				t.Fatalf("return %d: a return to Design reseeds the review: %v",
 					i, err)
+			}
+			plan, err := f.Step(fmt.Sprintf("f2-plan-r%d", i+1))
+			if err != nil || len(plan.Needs) != 1 || plan.Needs[0] != id {
+				t.Fatalf("return %d: plan %+v, want it after %s (%v)", i, plan, id,
+					err)
 			}
 		}
 	}
@@ -608,5 +666,32 @@ func TestValidateRejectsAReaddedStep(t *testing.T) {
 	errs := nativeState(f).Validate()
 	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "repeats") {
 		t.Fatalf("Validate = %v, want the repeated id", errs)
+	}
+}
+
+// The gate is the template step no other template step needs; an added
+// step's needs do not move it, so Publish's host steps needing consolidate
+// leave open-pr the gate, and a phase-2 step needing the review leaves Plan.
+func TestAddedStepsDoNotMoveTheGate(t *testing.T) {
+	f, _ := publishWithValidation(t)
+	for id, want := range map[string]bool{"f6-open-pr": true, "f6-consolidate": false,
+		"f6-validate-macos-vz": false} {
+		if st, _ := f.Step(id); IsGate(f, st) != want {
+			t.Errorf("IsGate(%s) = %v, want %v", id, !want, want)
+		}
+	}
+	g := feature("b", 1, "in_progress")
+	advance(g, 2)
+	g.Steps = append(g.Steps, Step{ID: "f2-answer-q1", Phase: 2, Affinity: "human",
+		Status: "pending", Needs: []string{"f2-design-review"}})
+	for id, want := range map[string]bool{"f2-plan": true, "f2-design-review": false,
+		"f2-answer-q1": false} {
+		if st, _ := g.Step(id); IsGate(g, st) != want {
+			t.Errorf("IsGate(%s) = %v, want %v", id, !want, want)
+		}
+	}
+	if IsDesignReview(&Step{ID: "f6-design-review"}) ||
+		!IsDesignReview(&Step{ID: "f2-design-review-r3"}) {
+		t.Error("IsDesignReview: only phase 2's review, in any -r<n> form")
 	}
 }

@@ -72,8 +72,8 @@ type Feature struct {
 	// AltersRelationships is nil until Design decides it (FLOW-02).
 	AltersRelationships *bool `yaml:"alters_relationships"`
 	// DesignReview is empty until Design decides it: required, or skip when
-	// the design meets the FLOW-19 criteria. It decides whether Plan seeds
-	// a design-review step.
+	// the design meets the FLOW-19 criteria. It decides whether phase 2
+	// seeds a design-review step before Plan.
 	DesignReview string     `yaml:"design_review,omitempty"`
 	Source       string     `yaml:"source,omitempty"`
 	PR           *PR        `yaml:"pr,omitempty"`
