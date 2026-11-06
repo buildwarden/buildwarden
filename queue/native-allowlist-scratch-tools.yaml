@@ -4,9 +4,9 @@ priority: 41
 kind: process
 holds:
   - host:*
-status: in_progress
+status: done
 round: process
-phase: 3
+phase: 4
 design: docs/design/native-allowlist-scratch-tools.md
 branch: feat/native-allowlist-scratch-tools
 alters_relationships: null
@@ -32,7 +32,14 @@ steps:
   - id: x3-merge
     phase: 3
     affinity: cloud
-    status: pending
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
+    affinity: cloud
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -42,7 +49,7 @@ budget:
     steps: 4
   spent:
     runs: 1
-    steps: 2
+    steps: 3
 questions: []
 history:
   - at: 2026-11-06T17:33:20Z
@@ -72,3 +79,18 @@ history:
   - at: 2026-11-06T23:34:26Z
     by: cloud/20261106T231440Z-attended
     event: entered phase 3 (merge)
+  - at: 2026-11-06T23:53:45Z
+    by: cloud/20261106T231440Z-attended
+    event: done x3-merge
+  - at: 2026-11-06T23:53:45Z
+    by: cloud/20261106T231440Z-attended
+    event: entered phase 4 (close)
+  - at: 2026-11-06T23:53:45Z
+    by: cloud/20261106T231440Z-attended
+    event: claimed x4-close until 2026-11-07T01:53:45Z
+  - at: 2026-11-06T23:53:45Z
+    by: cloud/20261106T231440Z-attended
+    event: done x4-close
+  - at: 2026-11-06T23:53:45Z
+    by: cloud/20261106T231440Z-attended
+    event: closed; feature done
