@@ -68,96 +68,74 @@ func TestNativeSettingsRules(t *testing.T) {
 	}
 }
 
+// launcherCase is one run of native-run.sh: its arguments, and the stdout and
+// exit status expected. An empty want means refused with exit 2.
+type launcherCase struct {
+	name string
+	args []string
+	want string
+	code int
+}
+
 // TestNativeRun runs native-run.sh in the repository newLauncherRepo builds.
 func TestNativeRun(t *testing.T) {
-	for _, tool := range []string{"sh", "git"} {
-		if _, err := exec.LookPath(tool); err != nil {
-			t.Skipf("%s not found", tool)
-		}
-	}
-	launcher, err := filepath.Abs("native-run.sh")
-	if err != nil {
-		t.Fatal(err)
-	}
-	repo := newLauncherRepo(t)
-
+	launcher, repo := launcherSetup(t)
 	const (
 		x = ".scratch/t/tools/x.sh"
 		w = ".scratch/t/dist/warden"
+		a = "WARDEN_A=1"
 	)
 	args := func(a ...string) []string { return a }
-	_, goErr := exec.LookPath("go")
-	tests := []struct {
-		name   string
-		args   []string
-		want   string // stdout; empty means refused with exit 2
-		code   int
-		prefix bool // want is a prefix of stdout, which carries a timing
-		needGo bool
-		noWin  bool // Windows file names cannot hold "*"
-	}{
-		{name: "script", args: args("--", x), want: "x WARDEN_A=\n"},
-		{name: "script with variable", args: args("WARDEN_A=a b", "--", x), want: "x WARDEN_A=a b\n"},
-		{name: "warden with variable", args: args("WARDEN_A=1", "--", w), want: "warden WARDEN_A=1\n"},
-		{name: "exit status", args: args("WARDEN_EXIT=7", "--", w), want: "warden WARDEN_A=\n", code: 7},
-		{name: "root dist/warden", args: args("WARDEN_A=1", "--", "dist/warden-linux"), want: "root-dist WARDEN_A=1\n"},
-		{name: "root ./warden", args: args("WARDEN_A=1", "--", "./warden"), want: "root WARDEN_A=1\n"},
-		// The package's test fails unless WARDEN_A reaches it.
-		{name: "go test", args: args("WARDEN_A=1", "--", "go", "test", "./gopkg"), want: "ok", prefix: true, needGo: true},
-		{name: "go -C test", args: args("WARDEN_A=1", "--", "go", "-C", ".scratch/t", "test", "./gopkg"), want: "ok", prefix: true, needGo: true},
-		{name: "go test without variable", args: args("WARDEN_A=", "--", "go", "test", "./gopkg"), want: "--- FAIL", prefix: true, code: 1, needGo: true},
-		{name: "non-WARDEN name", args: args("PATH=/x", "--", w), code: 2},
-		{name: "lower-case name", args: args("WARDEN_a=1", "--", w), code: 2},
-		{name: "secret name", args: args("WARDEN_X_PASSWORD=1", "--", w), code: 2},
-		{name: "token name", args: args("WARDEN_X_TOKEN=1", "--", x), code: 2},
-		{name: "word before --", args: args("WARDEN_A=1", w), code: 2},
-		{name: "assignment only", args: args("WARDEN_A=1"), code: 2},
-		{name: "no command", args: args("WARDEN_A=1", "--"), code: 2},
-		{name: "other command", args: args("WARDEN_A=1", "--", "sh", "-c", "echo bad"), code: 2},
-		{name: "go run", args: args("WARDEN_A=1", "--", "go", "run", "."), code: 2},
-		{name: "go -C not .scratch", args: args("WARDEN_A=1", "--", "go", "-C", "..", "test"), code: 2},
-		{name: "dotdot component", args: args("--", ".scratch/t/tools/../tools/x.sh"), code: 2},
-		{name: "dot component", args: args("--", ".scratch/t/tools/./x.sh"), code: 2},
-		{name: "empty component", args: args("--", ".scratch/t/tools//x.sh"), code: 2},
-		{name: "dotdot name", args: args("--", ".scratch/../tools/x.sh"), code: 2},
-		{name: "dotdot in warden path", args: args("WARDEN_A=1", "--", w+"/../../tools/x.sh"), code: 2},
-		{name: "dotdot after warden", args: args("WARDEN_A=1", "--", w+"/../x"), code: 2},
-		{name: "untracked script", args: args("--", ".scratch/t/tools/y.sh"), code: 2},
-		{name: "branch tools/workflow", args: args("--", ".scratch/t/tools/workflow/z.sh"), code: 2},
-		{name: "workflow, empty", args: args("--", ".scratch/t/tools//workflow/z.sh"), code: 2},
-		// Each of the next three passes every check but one: tools/x.sh is
+	tests := []launcherCase{
+		{"script", args("--", x), "x WARDEN_A=\n", 0},
+		{"script with variable", args("WARDEN_A=a b", "--", x), "x WARDEN_A=a b\n",
+			0},
+		{"warden with variable", args(a, "--", w), "warden WARDEN_A=1\n", 0},
+		{"exit status", args("WARDEN_EXIT=7", "--", w), "warden WARDEN_A=\n", 7},
+		{"root dist/warden", args(a, "--", "dist/warden-x"), "root-dist WARDEN_A=1\n", 0},
+		{"root ./warden", args(a, "--", "./warden"), "root WARDEN_A=1\n", 0},
+		{"non-WARDEN name", args("PATH=/x", "--", w), "", 2},
+		{"lower-case name", args("WARDEN_a=1", "--", w), "", 2},
+		{"secret name", args("WARDEN_X_PASSWORD=1", "--", w), "", 2},
+		{"token name", args("WARDEN_X_TOKEN=1", "--", x), "", 2},
+		{"word before --", args(a, w), "", 2},
+		{"assignment only", args(a), "", 2},
+		{"no command", args(a, "--"), "", 2},
+		{"other command", args(a, "--", "sh", "-c", "echo bad"), "", 2},
+		{"go run", args(a, "--", "go", "run", "."), "", 2},
+		{"go -C not .scratch", args(a, "--", "go", "-C", "..", "test"), "", 2},
+		{"go -C nested", args(a, "--", "go", "-C", ".scratch/a/b", "test"), "", 2},
+		{"dotdot component", args("--", ".scratch/t/tools/../tools/x.sh"), "", 2},
+		{"dot component", args("--", ".scratch/t/tools/./x.sh"), "", 2},
+		{"empty component", args("--", ".scratch/t/tools//x.sh"), "", 2},
+		{"dotdot name", args("--", ".scratch/../tools/x.sh"), "", 2},
+		{"dotdot in warden path", args(a, "--", w+"/../../tools/x.sh"), "", 2},
+		{"dotdot after warden", args(a, "--", w+"/../x"), "", 2},
+		{"untracked script", args("--", ".scratch/t/tools/y.sh"), "", 2},
+		{"branch tools/workflow", args("--", ".scratch/t/tools/workflow/z.sh"), "", 2},
+		{"workflow, empty", args("--", ".scratch/t/tools//workflow/z.sh"), "", 2},
+		// Each of the next two passes every check but one: tools/x.sh is
 		// tracked in each, by the main repository for .scratch/p.
-		{name: "plain directory", args: args("--", ".scratch/p/tools/x.sh"), code: 2},
-		{name: "other repository", args: args("--", ".scratch/o/tools/x.sh"), code: 2},
-		// An untracked file named "x*" matches the tracked x.sh as a glob.
-		{name: "glob name", args: args("--", ".scratch/t/tools/x*"), code: 2, noWin: true},
-		{name: "go -C nested", args: args("WARDEN_A=1", "--", "go", "-C", ".scratch/a/b", "test"), code: 2},
-		{name: "warden without variable", args: args("--", w), code: 2},
-		{name: "script name with space", args: args("--", ".scratch/t/x.sh foo/tools/bar"), code: 2},
+		{"plain directory", args("--", ".scratch/p/tools/x.sh"), "", 2},
+		{"other repository", args("--", ".scratch/o/tools/x.sh"), "", 2},
+		{"warden without variable", args("--", w), "", 2},
+		{"script name with space", args("--", ".scratch/t/x.sh foo/tools/bar"), "", 2},
+	}
+	// An untracked file named "x*" matches the tracked x.sh as a glob.
+	// Windows file names cannot hold "*".
+	if runtime.GOOS != "windows" {
+		glob := launcherCase{"glob name", args("--", ".scratch/t/tools/x*"), "", 2}
+		tests = append(tests, glob)
 	}
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			if tc.needGo && goErr != nil {
-				t.Skip("go not found")
-			}
-			if tc.noWin && runtime.GOOS == "windows" {
-				t.Skip("no such file name on Windows")
-			}
 			stdout, stderr, code := runLauncher(t, launcher, repo, tc.args)
-			got := stdout
-			if tc.prefix && strings.HasPrefix(got, tc.want) {
-				got = tc.want
-			}
-			if code != tc.code || got != tc.want {
+			if code != tc.code || stdout != tc.want {
 				t.Fatalf("exit %d, stdout %q; want exit %d, stdout %q (stderr %q)",
 					code, stdout, tc.code, tc.want, stderr)
 			}
 			if tc.want == "" {
-				t.Log(stderr)
-				oneLine := strings.Count(stderr, "\n") == 1
-				if !strings.HasPrefix(stderr, "native-run.sh: ") || !oneLine {
-					t.Errorf("not one native-run.sh line: %q", stderr)
-				}
+				checkRefusal(t, stderr)
 			}
 		})
 	}
@@ -170,13 +148,65 @@ func TestNativeRun(t *testing.T) {
 	}
 }
 
+// TestNativeRunGo runs the go forms on the package gopkg, whose test fails
+// unless WARDEN_A reaches it. go test's output carries a timing, so only its
+// start is compared.
+func TestNativeRunGo(t *testing.T) {
+	if _, err := exec.LookPath("go"); err != nil {
+		t.Skip("go not found")
+	}
+	launcher, repo := launcherSetup(t)
+	args := func(a ...string) []string { return a }
+	const a, p = "WARDEN_A=1", "./gopkg"
+	tests := []launcherCase{
+		{"go test", args(a, "--", "go", "test", p), "ok", 0},
+		{"go -C test", args(a, "--", "go", "-C", ".scratch/t", "test", p), "ok", 0},
+		{"variable empty", args("WARDEN_A=", "--", "go", "test", p), "--- FAIL", 1},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			stdout, stderr, code := runLauncher(t, launcher, repo, tc.args)
+			if code != tc.code || !strings.HasPrefix(stdout, tc.want) {
+				t.Fatalf("exit %d, stdout %q; want exit %d, stdout from %q (%q)",
+					code, stdout, tc.code, tc.want, stderr)
+			}
+		})
+	}
+}
+
+// launcherSetup skips without sh or git, and returns the launcher's absolute
+// path and a repository from newLauncherRepo.
+func launcherSetup(t *testing.T) (string, string) {
+	t.Helper()
+	for _, tool := range []string{"sh", "git"} {
+		if _, err := exec.LookPath(tool); err != nil {
+			t.Skipf("%s not found", tool)
+		}
+	}
+	launcher, err := filepath.Abs("native-run.sh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	return launcher, newLauncherRepo(t)
+}
+
+// checkRefusal fails unless stderr is one native-run.sh line.
+func checkRefusal(t *testing.T, stderr string) {
+	t.Helper()
+	t.Log(stderr)
+	oneLine := strings.Count(stderr, "\n") == 1
+	if !strings.HasPrefix(stderr, "native-run.sh: ") || !oneLine {
+		t.Errorf("not one native-run.sh line: %q", stderr)
+	}
+}
+
 // newLauncherRepo returns a temporary repository whose worktree .scratch/t
 // holds a tracked tools/x.sh, a tracked tools/workflow/z.sh, a tracked Go
 // package gopkg whose test needs WARDEN_A, an untracked tools/y.sh, an
 // untracked tools/x* (not on Windows) and an untracked stub dist/warden. .scratch/p is a plain
 // directory whose tools/x.sh the main repository tracks; .scratch/o is a
 // separate repository that tracks its tools/x.sh. The root holds untracked
-// stubs dist/warden-linux and warden. Every stub prints its name and
+// stubs dist/warden-x and warden. Every stub prints its name and
 // WARDEN_A, and exits with WARDEN_EXIT.
 func newLauncherRepo(t *testing.T) string {
 	t.Helper()
@@ -229,7 +259,7 @@ func newLauncherRepo(t *testing.T) string {
 		stub("glob", ".scratch", "t", "tools", "x*")
 	}
 	stub("warden", ".scratch", "t", "dist", "warden")
-	stub("root-dist", "dist", "warden-linux")
+	stub("root-dist", "dist", "warden-x")
 	stub("root", "warden")
 	stub("o", ".scratch", "o", "tools", "x.sh")
 	git("-C", filepath.Join(".scratch", "o"), "init", "-q")

@@ -469,9 +469,9 @@ Implemented at x2-implement, 2026-11-06, as the Implementation plan's tasks
   tracks, and `.scratch/o` a separate repository tracking its own, so each
   is refused by the top-level and the common-directory check alone (each
   check, commented out, now fails its case); accepted runs of `dist/warden*`,
-  `./warden*`, `go test` and `go -C .scratch/t test` (the go cases need the
-  variable to pass, and skip without `go`); and `go -C .scratch/a/b test`
-  refused.
+  `./warden*`, `go test` and `go -C .scratch/t test` (in `TestNativeRunGo`:
+  the package's test needs the variable to pass, and the test skips without
+  `go`); and `go -C .scratch/a/b test` refused.
 - **Unchanged, as expected.** `settings.native.json`, and
   `docs/book/src/concepts/overview.md` (FLOW-15: it describes product
   components; it names no part of the loop). No `docs/development/` change.
