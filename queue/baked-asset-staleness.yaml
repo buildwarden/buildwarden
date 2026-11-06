@@ -1,6 +1,6 @@
 feature: baked-asset-staleness
 title: One staleness check for every baked boot asset
-priority: 25
+priority: 34
 status: queued
 round: feature
 phase: 0
@@ -28,3 +28,6 @@ history:
   - at: 2026-11-05T00:33:06Z
     by: cloud/20261104T214530Z-attended
     event: queued at priority 25 (intake)
+  - at: 2026-11-06T17:40:00Z
+    by: human/jeff
+    event: 'priority 25 -> 34 (Jeff; renumbered by wf new): the regression fixes from build-link-subnet''s native runs go first, as immediate follow-ups'

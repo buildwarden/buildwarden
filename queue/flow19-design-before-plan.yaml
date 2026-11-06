@@ -1,6 +1,6 @@
 feature: flow19-design-before-plan
 title: 'FLOW-19: the design review follows Design; a second review only when planning changes the design'
-priority: 26
+priority: 28
 kind: process
 status: in_progress
 round: process

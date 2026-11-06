@@ -1,6 +1,6 @@
 feature: budgets-active-only
 title: 'Budgets gate active work only: done and archived items are left out of runaway checks and digests outside retrospectives'
-priority: 28
+priority: 30
 kind: process
 status: in_progress
 round: process

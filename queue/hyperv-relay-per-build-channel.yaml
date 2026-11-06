@@ -1,6 +1,6 @@
 feature: hyperv-relay-per-build-channel
 title: Give the Hyper-V relay VM a per-build channel before the claim
-priority: 24
+priority: 33
 status: queued
 round: feature
 phase: 0
@@ -28,3 +28,6 @@ history:
   - at: 2026-11-05T00:33:01Z
     by: cloud/20261104T214530Z-attended
     event: queued at priority 24 (intake)
+  - at: 2026-11-06T17:40:00Z
+    by: human/jeff
+    event: 'priority 24 -> 33 (Jeff; renumbered by wf new): the regression fixes from build-link-subnet''s native runs go first, as immediate follow-ups'

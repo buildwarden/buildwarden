@@ -1,6 +1,6 @@
 feature: security-suite
 title: 'Build the TEST-08 security suite and pen-tester agent (Deep-dive #1)'
-priority: 29
+priority: 37
 status: in_progress
 round: feature
 phase: 1
@@ -34,7 +34,7 @@ questions:
   - id: q1
     kind: blocking
     status: open
-    question: 'Scope f1-design. The unattended design agent was halted by a safety classifier on 2026-11-01 while drafting the attack content, so the step is not re-dispatched. Choose how to run it.'
+    question: Scope f1-design. The unattended design agent was halted by a safety classifier on 2026-11-01 while drafting the attack content, so the step is not re-dispatched. Choose how to run it.
     options:
       - run f1-design in an attended session
       - narrow it to the harness structure, front-matter, tiers and process items, with no detailed attack techniques
@@ -79,3 +79,6 @@ history:
   - at: 2026-11-06T17:30:00Z
     by: human/jeff
     event: 'priority 19 -> 29 (Jeff: the queued fixes come first, as active problems); blocking question q1 records the scoping it has waited on since 2026-11-01, so wf next skips it and the fixes can start (FLOW-05, FLOW-07)'
+  - at: 2026-11-06T17:40:00Z
+    by: human/jeff
+    event: 'priority 29 -> 37 (Jeff; renumbered by wf new): the regression fixes from build-link-subnet''s native runs go first, as immediate follow-ups'
