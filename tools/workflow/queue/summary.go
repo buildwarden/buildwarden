@@ -11,13 +11,10 @@ import (
 // SummaryFile is the generated overview at the root of the workflow branch.
 const SummaryFile = "QUEUE.md"
 
-// recentDays is how far back "Recently done" reaches from the updated time.
-const recentDays = 7
-
 // Summary renders the queue as Markdown: what needs the human first, then
-// what is active, what waits on a host, the backlog and what finished
-// recently. It reads only the state, never the clock, so the same state always
-// renders the same text.
+// what is active, what waits on a host and the backlog. Done items are left
+// out (FLOW-13). It reads only the state, never the clock, so the same state
+// always renders the same text.
 func Summary(s *State) string {
 	updated := s.updated()
 	var b strings.Builder
@@ -30,7 +27,6 @@ func Summary(s *State) string {
 		section(&b, "Waiting on a host", hosts, "")
 	}
 	s.writeBacklog(&b)
-	section(&b, "Recently done", s.recentlyDone(updated), "Nothing in the last 7 days.")
 	return b.String()
 }
 
@@ -206,27 +202,6 @@ func (s *State) writeBacklog(b *strings.Builder) {
 	for _, r := range rows {
 		fmt.Fprintf(b, "%s\n", r)
 	}
-}
-
-func (s *State) recentlyDone(updated time.Time) []string {
-	cutoff := updated.Add(-recentDays * 24 * time.Hour)
-	var out []string
-	for _, f := range s.Features {
-		if f.Status != "done" || len(f.History) == 0 {
-			continue
-		}
-		last := f.History[len(f.History)-1].At
-		if last.Before(cutoff) {
-			continue
-		}
-		ref := ""
-		if f.PR != nil && f.PR.Number > 0 {
-			ref = fmt.Sprintf(" #%d,", f.PR.Number)
-		}
-		day := last.UTC().Format("2006-01-02")
-		out = append(out, fmt.Sprintf("%s:%s %s", f.Feature, ref, day))
-	}
-	return out
 }
 
 func kindLabel(f *Feature) string {
