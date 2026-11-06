@@ -249,13 +249,84 @@ func TestDesignReviewRequired(t *testing.T) {
 	if got := failures(Phase(env, f)); !strings.Contains(got, "0 approvals") {
 		t.Fatalf("phase 2 without an approval: %q", got)
 	}
-	commit(t, work, req+"\n## Design review\n\n- r1: approved at `abc1234`.\n")
+	if got := failures(Review(env, f)); !strings.Contains(got, "0 approvals") {
+		t.Fatalf("the review's own check without an approval: %q", got)
+	}
+	approved := commit(t, work, req+"\n<!-- as approved -->\n")
+	commit(t, work, req+"\n## Design review\n\n- r1: approved at `"+approved+"`.\n")
+	if rs := Review(env, f); !OK(rs) {
+		t.Errorf("the review's own check, approved: %s", failures(rs))
+	}
 	if rs := Phase(env, f); !OK(rs) {
 		t.Errorf("phase 2 approved: %s", failures(rs))
 	}
 	f.Steps = append(f.Steps, queue.Step{ID: "f2-design-review-r2", Phase: 2})
 	if rs := Phase(env, f); OK(rs) {
 		t.Error("a second review passed on the first approval")
+	}
+}
+
+// TestPlanGateGuardsTheApprovedDesign: Plan may not change the design's
+// impact fields or rule_changes past its approval; a rule change approved on
+// its own line, at a commit that has it, passes (FLOW-19).
+func TestPlanGateGuardsTheApprovedDesign(t *testing.T) {
+	work := repo(t, ruled)
+	env := Env{Repo: work}
+	f := demo(2)
+	f.DesignReview = "required"
+	f.Steps = []queue.Step{{ID: "f2-design-review", Phase: 2, Status: "done"},
+		{ID: "f2-plan", Phase: 2, Needs: []string{"f2-design-review"}}}
+	approved := commit(t, work, ruled+"\n<!-- as approved -->\n")
+	review := "\n## Design review\n\n- r1: approved at `" + approved + "`.\n"
+	commit(t, work, ruled+review)
+	if rs := Phase(env, f); !OK(rs) {
+		t.Fatalf("plan as approved: %s", failures(rs))
+	}
+	for _, c := range []struct{ from, to, want string }{
+		{"seams: []", "seams: [relay-claim]", "seams [] -> [relay-claim]"},
+		{"alters_relationships: false", "alters_relationships: true",
+			"alters_relationships false -> true"},
+		{"security_boundary: none", "security_boundary: env-relay",
+			"security_boundary none -> env-relay"},
+		{"native_validation: []",
+			"native_validation:\n  - {host: macos-vz, blocking: true, reason: r}",
+			"blocking hosts [] -> [macos-vz]"},
+		{"  - {rule: TEST-09, change: add, paths: [docs/development/testing.md]}",
+			"  - {rule: TEST-09, change: add, paths: [docs/development/global.md]}",
+			"rule_changes TEST-09 added or changed"},
+		{"rule_changes:\n  - {rule: TEST-09, change: add, paths: " +
+			"[docs/development/testing.md]}\n", "", "rule_changes TEST-09 dropped"},
+	} {
+		commit(t, work, strings.Replace(ruled, c.from, c.to, 1)+review)
+		if got := failures(Phase(env, f)); !strings.Contains(got, c.want) {
+			t.Errorf("%s: failures %q lack %q", c.to, got, c.want)
+		}
+	}
+	late := strings.Replace(ruled, "rule_changes:\n", "rule_changes:\n"+
+		"  - {rule: TEST-10, change: add, paths: [docs/development/global.md]}\n", 1)
+	commit(t, work, late+review)
+	if got := failures(Phase(env, f)); !strings.Contains(got,
+		"rule_changes TEST-10 added or changed") {
+		t.Errorf("a rule change added after the approval: %q", got)
+	}
+	commit(t, work, late+review+"- r1 addendum: rule change TEST-10 approved at `"+
+		approved+"`.\n")
+	if got := failures(Phase(env, f)); !strings.Contains(got, "TEST-10") {
+		t.Errorf("an own approval at a commit without the entry passed: %q", got)
+	}
+	added := commit(t, work, late+review)
+	commit(t, work, late+review+"- r1 addendum: rule change TEST-10 approved at `"+
+		added+"`.\n")
+	if rs := Phase(env, f); !OK(rs) {
+		t.Errorf("a rule change with its own approval: %s", failures(rs))
+	}
+	// A re-review approved a changed impact field: the guard compares
+	// against the last approval, not the first.
+	seams := strings.Replace(ruled, "seams: []", "seams: [relay-claim]", 1)
+	second := commit(t, work, seams+review)
+	commit(t, work, seams+review+"- r2: approved at `"+second+"`.\n")
+	if rs := Phase(env, f); !OK(rs) {
+		t.Errorf("a design as its last approval left it: %s", failures(rs))
 	}
 }
 

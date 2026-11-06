@@ -16,8 +16,8 @@ FLOW-08, FLOW-10, FLOW-11, FLOW-12, FLOW-15, FLOW-16, FLOW-17, FLOW-18.
   that landed on `main` since the fork (FLOW-10) and run the FLOW-15 sweep
   (`make deadcode`, duplication, `docs/book/src/concepts/overview.md`). Fix
   wording and terminology here. Work beyond that goes back: `wf back -to 3`
-  when the approved plan already covers it, `wf back -to 1` with the finding
-  when the plan must change (FLOW-06, which seeds a new design review). A
+  when the plan already covers it, `wf back -to 1` with the finding
+  when the design must change (FLOW-06, which seeds a new design review). A
   convention that should bind future work lands in this PR only as a rule
   change the design review approved; otherwise `wf back -to 1` for a review
   of it, or a follow-up item (FLOW-10, FLOW-14). Never write into

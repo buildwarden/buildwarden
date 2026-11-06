@@ -27,9 +27,10 @@ func summaryState() *State {
 
 	review := feature("review", 2, "in_progress")
 	review.Phase = 2
-	review.Steps = []Step{{ID: "f2-plan", Phase: 2, Affinity: "cloud", Status: "done"},
-		{ID: "f2-design-review", Phase: 2, Affinity: "human", Status: "pending",
-			Needs: []string{"f2-plan"}},
+	review.Steps = []Step{{ID: "f2-design-review", Phase: 2, Affinity: "human",
+		Status: "pending"},
+		{ID: "f2-plan", Phase: 2, Affinity: "cloud", Status: "pending",
+			Needs: []string{"f2-design-review"}},
 		{ID: "f6-validate-windows-hyperv", Phase: 6, Affinity: "host:windows-hyperv",
 			Status: "pending"},
 		{ID: "f6-provision-windows-hyperv", Phase: 6, Affinity: "human",

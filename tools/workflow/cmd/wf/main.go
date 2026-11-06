@@ -245,6 +245,12 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 		if err := queue.Early(f, st); err != nil {
 			return err
 		}
+		// The design review precedes Plan, so it is not its phase's gate;
+		// its approval is checked here (FLOW-19).
+		if queue.IsDesignReview(st) && !printResults(check.Review(check.Env{Repo: o.repo,
+			Workflow: o.state, Run: o.run}, f)) {
+			return fmt.Errorf("%s has no recorded approval (FLOW-19)", st.ID)
+		}
 		if queue.IsGate(f, st) && !runChecks(o, f) {
 			return fmt.Errorf("%s done-when not met; phase stays %d (FLOW-03)", st.ID,
 				f.Phase)
