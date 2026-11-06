@@ -39,8 +39,8 @@ var templates = map[string][][]template{
 		{{"branch-setup", "cloud", nil}},
 		{{"design", "cloud", nil}},
 		// The design review is seeded unless Design recorded a valid skip
-		// (FLOW-19); see seeded.
-		{{"plan", "cloud", nil}, {"design-review", "human", []string{"plan"}}},
+		// (FLOW-19); see seeded. Plan waits for its approval.
+		{{"design-review", "human", nil}, {"plan", "cloud", []string{"design-review"}}},
 		{{"implement", "cloud", nil}},
 		{{"review", "cloud", nil}},
 		{{"guide", "cloud", nil}},
@@ -95,8 +95,12 @@ func StepID(round string, phase int, name string) string {
 	return fmt.Sprintf("%s%d-%s", roundLetters[round], phase, name)
 }
 
-// IsGate reports whether the step is its phase's last seeded template step,
-// whose completion the FLOW-03 done-when check must confirm.
+// IsGate reports whether the step is its phase's gate, whose completion the
+// FLOW-03 done-when check must confirm: a template step of the phase that no
+// other template step seeded with it (the same retry suffix) needs. The
+// steps' own needs decide, not the template's order, so a phase seeded under
+// an older template keeps the gate it was seeded with: phase 2 seeded before
+// the design review moved ahead of Plan has the review as its gate.
 func IsGate(f *Feature, st *Step) bool {
 	m := stepIDRe.FindStringSubmatch(st.ID)
 	if m == nil {
@@ -105,40 +109,84 @@ func IsGate(f *Feature, st *Step) bool {
 	round := letterRound(m[1])
 	phase := int(m[2][0] - '0')
 	ts := templates[round]
-	if phase >= len(ts) || len(ts[phase]) == 0 {
+	if phase >= len(ts) {
 		return false
 	}
-	var last string
+	name := retryRe.ReplaceAllString(m[3], "")
+	suffix := m[3][len(name):]
+	found := false
 	for _, t := range ts[phase] {
-		if seeded(f, t) {
-			last = t.name
+		found = found || t.name == name
+	}
+	if !found {
+		return false
+	}
+	for _, t := range ts[phase] {
+		o, err := f.Step(StepID(round, phase, t.name) + suffix)
+		if t.name == name || err != nil {
+			continue
+		}
+		for _, n := range o.Needs {
+			if n == st.ID {
+				return false
+			}
 		}
 	}
-	return last == retryRe.ReplaceAllString(m[3], "")
+	return true
+}
+
+// IsDesignReview reports whether the step is a feature's design review
+// (FLOW-19), seeded in phase 2 from the template.
+func IsDesignReview(st *Step) bool {
+	m := stepIDRe.FindStringSubmatch(st.ID)
+	return m != nil && m[1] == roundLetters["feature"] && m[2] == "2" &&
+		retryRe.ReplaceAllString(m[3], "") == "design-review"
 }
 
 // Seed adds the template steps for the feature's current round and phase.
+// A template step's need on a step not seeded (a skipped design review) is
+// dropped.
 func Seed(f *Feature) {
 	ts := templates[f.Round]
 	if f.Phase >= len(ts) || len(ts[f.Phase]) == 0 {
 		return
 	}
 	// A phase entered again (FLOW-06) gets fresh ids: <id>-r2, <id>-r3, ...
+	// The suffix must be free for every template step, since an earlier
+	// entry may have left only some of them (a skipped review, or one
+	// dropped by Back).
 	suffix := ""
-	for n := 2; f.hasStep(StepID(f.Round, f.Phase, ts[f.Phase][0].name) + suffix); n++ {
+	for n := 2; f.anySeeded(ts[f.Phase], suffix); n++ {
 		suffix = fmt.Sprintf("-r%d", n)
 	}
+	in := map[string]bool{}
 	for _, t := range ts[f.Phase] {
-		if !seeded(f, t) {
+		in[t.name] = seeded(f, t)
+	}
+	for _, t := range ts[f.Phase] {
+		if !in[t.name] {
 			continue
 		}
 		st := Step{ID: StepID(f.Round, f.Phase, t.name) + suffix, Phase: f.Phase,
 			Affinity: t.affinity, Status: "pending"}
 		for _, n := range t.needs {
-			st.Needs = append(st.Needs, StepID(f.Round, f.Phase, n)+suffix)
+			if in[n] {
+				st.Needs = append(st.Needs, StepID(f.Round, f.Phase, n)+suffix)
+			}
 		}
 		f.Steps = append(f.Steps, st)
 	}
+}
+
+// anySeeded reports whether the feature has any of the phase's template
+// steps with the retry suffix.
+func (f *Feature) anySeeded(ts []template, suffix string) bool {
+	for _, t := range ts {
+		if f.hasStep(StepID(f.Round, f.Phase, t.name) + suffix) {
+			return true
+		}
+	}
+	return false
 }
 
 func (f *Feature) hasStep(id string) bool {
@@ -150,7 +198,7 @@ func (f *Feature) hasStep(id string) bool {
 // Design (FLOW-06), or Implement when Publish's consolidation finds work the
 // plan already covers (FLOW-10). Pending steps of later phases are dropped and
 // the phase is seeded again with fresh ids, so a return to Design also seeds
-// a fresh design review after Plan (FLOW-19). After the second return to
+// a fresh design review before Plan (FLOW-19). After the second return to
 // Design the redesign waits on a human step instead of looping again.
 func Back(f *Feature, by string, now time.Time, finding string, to int) {
 	if to != 3 {
