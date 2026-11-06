@@ -1,10 +1,10 @@
 feature: regression-fixes-follow-up
-title: 'Queue order by class (in implementation, process, fixes, new functionality), and regression fixes queued as immediate follow-ups'
+title: Queue order by class (in implementation, process, fixes, new functionality), and regression fixes queued as immediate follow-ups
 priority: 42
 kind: process
-status: queued
+status: in_progress
 round: process
-phase: 1
+phase: 2
 design: docs/design/regression-fixes-follow-up.md
 branch: feat/regression-fixes-follow-up
 alters_relationships: null
@@ -13,17 +13,24 @@ steps:
   - id: x1-design
     phase: 1
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
+  - id: x2-implement
+    phase: 2
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: cloud/20261106T231440Z-attended
+      expires: 2026-11-07T01:14:40.456038052Z
 budget:
   estimate:
     runs: 1
     steps: 4
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 2
 questions: []
 history:
   - at: 2026-11-06T17:33:20Z
@@ -35,3 +42,18 @@ history:
   - at: 2026-11-06T17:50:00Z
     by: human/jeff
     event: 'scope widened (Jeff, verbatim): process updates are also prioritized over code since they''re usually short. So in order of priority: 1. Items already in implementation 2. Workflow/process updates 3. Fixes for implemented items (often may be a result of needing the process changes) 4. New functionality. Applied by hand to the open queue at priorities 38-47; this item makes it the FLOW-05 rule and the intake default'
+  - at: 2026-11-06T23:14:31Z
+    by: human/jeff
+    event: started (FLOW-05)
+  - at: 2026-11-06T23:14:31Z
+    by: human/jeff
+    event: claimed x1-design until 2026-11-07T01:14:31Z
+  - at: 2026-11-06T23:14:31Z
+    by: human/jeff
+    event: done x1-design
+  - at: 2026-11-06T23:14:31Z
+    by: human/jeff
+    event: entered phase 2 (implement)
+  - at: 2026-11-06T23:14:40Z
+    by: cloud/20261106T231440Z-attended
+    event: claimed x2-implement until 2026-11-07T01:14:40Z
