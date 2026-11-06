@@ -340,7 +340,8 @@ wf-later-phase-host-steps (Prior art, Ordering).
   reviewed this design alongside flow19-design-before-plan,
   wf-later-phase-host-steps and budgets-active-only, all on one review page
   (published 2026-11-05 with every assumption first). He agreed with every
-  recommendation: a1 to a4 are confirmed as drafted, option (a).
+  recommendation: a1, a2 and a4 are confirmed as drafted, option (a), and
+  a3 as option (b): steps and runs, with nothing flagged.
 
 ## Consolidation
 
