@@ -81,8 +81,14 @@ enforcement:
 # Code unreachable from any main or test, per platform (FLOW-15). Remove what
 # all three report, or say why it stays.
 DEADCODE := golang.org/x/tools/cmd/deadcode@v0.38.0
+# go install pkg@version runs outside this module and would build with the Go
+# on PATH; pin it to the module's toolchain, which deadcode needs to load the
+# packages, and reinstall when dist/deadcode was built with another.
 deadcode:
-	@GOBIN=$(CURDIR)/dist go install $(DEADCODE)
+	@want=$$(go env GOVERSION); \
+	if [ "$$(go version $(CURDIR)/dist/deadcode 2>/dev/null | cut -d' ' -f2)" != "$$want" ]; then \
+		GOTOOLCHAIN=$$want GOBIN=$(CURDIR)/dist go install $(DEADCODE); \
+	fi
 	@for os in linux darwin windows; do \
 		echo "== $$os"; GOOS=$$os $(CURDIR)/dist/deadcode -test ./... ; \
 	done
