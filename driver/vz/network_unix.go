@@ -4,6 +4,7 @@ package vz
 
 import (
 	"fmt"
+	"os"
 	"syscall"
 
 	"github.com/buildwarden/buildwarden/driver/buildlink"
@@ -25,6 +26,21 @@ func NewVirtualNetwork(link buildlink.Link) (*VirtualNetwork, error) {
 		RelaySocketFD: fds[1],
 		Subnet:        subnetOf(link),
 	}, nil
+}
+
+// RelaySocket returns a duplicate of the relay end of the socket pair, for
+// the relay process to inherit. The caller closes it once the process has
+// started. The pair's own descriptors stay the VirtualNetwork's alone, for
+// Close: wrapping one of them in an *os.File would close it a second time
+// from the File's finalizer, after Close, by when the number may name an
+// unrelated file (an output being written).
+func (vn *VirtualNetwork) RelaySocket() (*os.File, error) {
+	fd, err := syscall.Dup(vn.RelaySocketFD)
+	if err != nil {
+		return nil, fmt.Errorf("duplicating the relay socket: %w", err)
+	}
+	syscall.CloseOnExec(fd)
+	return os.NewFile(uintptr(fd), "relay-socket"), nil
 }
 
 // Close releases the socket pair file descriptors.

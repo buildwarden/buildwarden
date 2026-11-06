@@ -2,7 +2,11 @@
 
 package vz
 
-import "github.com/buildwarden/buildwarden/driver/buildlink"
+import (
+	"os"
+
+	"github.com/buildwarden/buildwarden/driver/buildlink"
+)
 
 // NewVirtualNetwork is unavailable on Windows. The vz driver wraps Apple's
 // Virtualization.framework and only runs on macOS; its isolated link relies on
@@ -13,6 +17,9 @@ import "github.com/buildwarden/buildwarden/driver/buildlink"
 func NewVirtualNetwork(buildlink.Link) (*VirtualNetwork, error) {
 	return nil, checkPlatform()
 }
+
+// RelaySocket is unavailable on Windows (no socket pair was created).
+func (vn *VirtualNetwork) RelaySocket() (*os.File, error) { return nil, checkPlatform() }
 
 // Close is a no-op on Windows (no socket pair was created).
 func (vn *VirtualNetwork) Close() error { return nil }

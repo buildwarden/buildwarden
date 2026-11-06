@@ -346,9 +346,14 @@ func (d *Driver) startHostRelay(
 	cmd.Stderr = logOut
 
 	// Pass the relay socketpair FD as ExtraFiles[0] → becomes fd 3 in child.
-	cmd.ExtraFiles = []*os.File{
-		os.NewFile(uintptr(vnet.RelaySocketFD), "relay-socket"),
+	// The child inherits its own copy at Start, so the parent's is closed here.
+	relaySock, err := vnet.RelaySocket()
+	if err != nil {
+		logFile.Close()
+		return nil, err
 	}
+	defer relaySock.Close()
+	cmd.ExtraFiles = []*os.File{relaySock}
 
 	if err := cmd.Start(); err != nil {
 		logFile.Close()
