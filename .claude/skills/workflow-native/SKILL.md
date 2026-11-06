@@ -90,6 +90,10 @@ finish as in its step 2.5. Push the feature branch at each green checkpoint
   feature with `dist/wf back` (a design gap) or add a fix item with the
   `workflow-intake` skill (an implementation bug; unattended, record the
   proposed item in the digest for Jeff instead).
+- A step `wf done` refuses as a later-phase step (the feature was returned
+  while it ran, FLOW-04, FLOW-06): release it with the evidence as the
+  reason and leave it pending; it is offered again once the feature is back
+  in its phase.
 - Backlog entries: set `status: done` with the date and evidence, or keep them
   open with what was found.
 - `dist/wf validate -state .dev/workflow` must pass before each push.

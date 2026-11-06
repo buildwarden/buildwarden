@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -136,11 +137,12 @@ func TestAltersSlot(t *testing.T) {
 	}
 }
 
-// advance completes the feature's first pending step until it reaches phase.
+// advance completes the feature's first pending step of its current phase
+// until it reaches phase.
 func advance(f *Feature, phase int) {
 	for f.Phase < phase && f.Status != "done" {
 		for i := range f.Steps {
-			if f.Steps[i].Status == "pending" {
+			if f.Steps[i].Status == "pending" && f.Steps[i].Phase == f.Phase {
 				Complete(f, &f.Steps[i], "test", now)
 				break
 			}
@@ -329,5 +331,254 @@ func TestNativeBudget(t *testing.T) {
 	errs := s.Validate()
 	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "native_budget") {
 		t.Fatalf("Validate = %v, want the native_budget problem", errs)
+	}
+}
+
+// laterSteps are steps Design or a native session added for Publish: a host
+// validation and a human provisioning step.
+func laterSteps() []Step {
+	return []Step{
+		{ID: "f6-validate-macos-vz", Phase: 6, Affinity: "host:macos-vz",
+			Status: "pending"},
+		{ID: "f6-provision-macos-vz", Phase: 6, Affinity: "human", Status: "pending"},
+	}
+}
+
+func TestLaterPhaseStepWaitsForItsPhase(t *testing.T) {
+	for phase := 2; phase <= 6; phase++ {
+		f := feature("a", 1, "in_progress")
+		f.Phase = phase
+		f.Steps = append([]Step{{ID: StepID("feature", phase, "x"), Phase: phase,
+			Affinity: "cloud", Status: "pending"}}, laterSteps()...)
+		s := nativeState(f)
+		got := next(t, s, "host:macos-vz")
+		if want := map[bool]string{true: "a f6-validate-macos-vz",
+			false: "none"}[phase == 6]; got != want {
+			t.Fatalf("phase %d: host next = %q, want %q", phase, got, want)
+		}
+		if got := next(t, s, "human"); got != "a f6-provision-macos-vz" {
+			t.Fatalf("phase %d: human next = %q, want the provisioning step",
+				phase, got)
+		}
+		_, blocked := s.Next("host:macos-vz", now)
+		if phase < 6 && strings.Contains(blocked[0].Reason, "f6-validate") {
+			t.Fatalf("phase %d: a later step explains the wait: %v", phase, blocked)
+		}
+	}
+}
+
+func TestEarlyRefusesOnlyLaterHostAndCloudSteps(t *testing.T) {
+	f := feature("a", 1, "in_progress")
+	f.Phase = 3
+	for _, c := range []struct {
+		st    Step
+		early bool
+	}{
+		{Step{ID: "f2-spike-macos-vz", Phase: 2, Affinity: "host:macos-vz"}, false},
+		{Step{ID: "f3-implement", Phase: 3, Affinity: "cloud"}, false},
+		{Step{ID: "f6-provision-macos-vz", Phase: 6, Affinity: "human"}, false},
+		{Step{ID: "f6-validate-macos-vz", Phase: 6, Affinity: "host:macos-vz"}, true},
+		{Step{ID: "f4-extra", Phase: 4, Affinity: "cloud"}, true},
+	} {
+		err := Early(f, &c.st)
+		if (err != nil) != c.early {
+			t.Fatalf("Early(%s) = %v, want refused %v", c.st.ID, err, c.early)
+		}
+		if err != nil && (!strings.Contains(err.Error(), "FLOW-04") ||
+			!strings.Contains(err.Error(), "release it")) {
+			t.Fatalf("Early(%s) = %v, want the FLOW-04 refusal and its way out",
+				c.st.ID, err)
+		}
+	}
+}
+
+func TestHeldWorkerKeepsOnlyAnOfferedLease(t *testing.T) {
+	f := feature("a", 1, "in_progress")
+	f.Phase = 3
+	f.Steps = append([]Step{{ID: "f3-implement", Phase: 3, Affinity: "cloud",
+		Status: "pending"}}, laterSteps()...)
+	s := nativeState(f, process("rules", 0, "in_progress", "host:*"))
+	s.sortFeatures()
+	worker := "host:macos-vz/s"
+	s.Claim(f, &f.Steps[1], worker, now, true)
+	if got := next(t, s, worker); got != "none" {
+		t.Fatalf("next = %q, want no lease on a later-phase step", got)
+	}
+	f.Phase = 6
+	if got := next(t, s, worker); got != "a f6-validate-macos-vz" {
+		t.Fatalf("next = %q, want the leased step once its phase is reached", got)
+	}
+}
+
+// publishWithValidation is a feature in Publish with merge-main done, four
+// validations added in Implement (one leased, each with a note and the hand
+// need of the old workaround), and a human repair step added in Guide.
+func publishWithValidation(t *testing.T) (*Feature, *State) {
+	t.Helper()
+	f := feature("a", 1, "in_progress")
+	advance(f, 3)
+	for _, h := range []string{"macos-vz", "macos-qemu", "windows-hyperv", "qemu-any"} {
+		f.Steps = append(f.Steps, Step{ID: "f6-validate-" + h, Phase: 6,
+			Affinity: "host:" + h, Status: "pending", Note: "cases for " + h,
+			Needs: []string{"f3-implement"}})
+	}
+	advance(f, 5)
+	f.Steps = append(f.Steps, Step{ID: "f6-provision-macos-vz-dns", Phase: 6,
+		Affinity: "human", Status: "pending", Note: "dns"})
+	advance(f, 6)
+	s := nativeState(f)
+	merge, _ := f.Step("f6-merge-main")
+	Complete(f, merge, "test", now)
+	v, _ := f.Step("f6-validate-macos-vz")
+	s.Claim(f, v, "host:macos-vz/s", now, true)
+	if errs := s.Validate(); len(errs) != 0 {
+		t.Fatalf("Validate: %v", errs)
+	}
+	return f, s
+}
+
+func TestBackToImplementKeepsAddedLaterSteps(t *testing.T) {
+	f, s := publishWithValidation(t)
+	open, _ := f.Step("f6-open-pr")
+	if got := strings.Join(open.Needs, ","); got != "f6-consolidate,f6-validate-macos-vz,"+
+		"f6-validate-macos-qemu,f6-validate-windows-hyperv,f6-validate-qemu-any,"+
+		"f6-provision-macos-vz-dns" {
+		t.Fatalf("f6-open-pr needs %s, want consolidate and every added step", got)
+	}
+	Back(f, "test", now, "validation failed on macos-vz", 3)
+	if f.hasStep("f6-open-pr") || f.hasStep("f6-consolidate") {
+		t.Fatal("Back kept a pending template step of a later phase")
+	}
+	for _, st := range f.Steps {
+		if st.Phase != 6 || st.Status != "pending" {
+			continue
+		}
+		if !strings.Contains(st.ID, "validate") && !strings.Contains(st.ID, "provision") {
+			t.Fatalf("kept %s", st.ID)
+		}
+		if st.Note == "" || st.Lease.ClaimedBy != "" ||
+			slices.Contains(st.Needs, "f6-consolidate") {
+			t.Fatalf("kept %+v: want its note, no lease, no dropped need", st)
+		}
+	}
+	if errs := s.Validate(); len(errs) != 0 {
+		t.Fatalf("Validate after Back: %v", errs)
+	}
+}
+
+func TestReenteredPublishWaitsForKeptSteps(t *testing.T) {
+	f, s := publishWithValidation(t)
+	Back(f, "test", now, "validation failed on macos-vz", 3)
+	advance(f, 6)
+	open, _ := f.Step("f6-open-pr-r2")
+	if got := strings.Join(open.Needs, ","); got != "f6-consolidate-r2,"+
+		"f6-validate-macos-vz,f6-validate-macos-qemu,f6-validate-windows-hyperv,"+
+		"f6-validate-qemu-any,f6-provision-macos-vz-dns" {
+		t.Fatalf("f6-open-pr-r2 needs %s", got)
+	}
+	repair, _ := f.Step("f6-provision-macos-vz-dns")
+	if len(repair.Needs) != 0 {
+		t.Fatalf("repair step needs %v, want none so it can be done early", repair.Needs)
+	}
+	// Validation waits for consolidation, then runs before the PR opens.
+	if got := next(t, s, "host:windows-hyperv"); got != "none" {
+		t.Fatalf("host next = %q before consolidation", got)
+	}
+	for _, id := range []string{"f6-merge-main-r2", "f6-consolidate-r2"} {
+		st, _ := f.Step(id)
+		Complete(f, st, "test", now)
+	}
+	if got := next(t, s, "host:windows-hyperv"); got != "a f6-validate-windows-hyperv" {
+		t.Fatalf("host next = %q after consolidation", got)
+	}
+	if got := next(t, s, "cloud"); got != "none" {
+		t.Fatalf("cloud next = %q, want open-pr held by validation", got)
+	}
+	// A step added once Publish is seeded is not linked to the gate.
+	f.Steps = append(f.Steps, Step{ID: "f6-repair-late", Phase: 6, Affinity: "cloud",
+		Status: "pending"})
+	if open, _ := f.Step("f6-open-pr-r2"); slices.Contains(open.Needs, "f6-repair-late") {
+		t.Fatal("a step added after seeding was linked to the gate")
+	}
+	if errs := s.Validate(); len(errs) != 0 {
+		t.Fatalf("Validate: %v", errs)
+	}
+}
+
+func TestBackToDesignKeepsAddedLaterSteps(t *testing.T) {
+	f := feature("a", 1, "in_progress")
+	advance(f, 3)
+	f.Steps = append(f.Steps,
+		Step{ID: "f2-spike-macos-vz", Phase: 2, Affinity: "host:macos-vz",
+			Status: "pending", Needs: []string{"f3-implement"}},
+		laterSteps()[0])
+	Back(f, "test", now, "plan not viable", 1)
+	for _, id := range []string{"f2-spike-macos-vz", "f6-validate-macos-vz"} {
+		st, err := f.Step(id)
+		if err != nil || st.Status != "pending" || len(st.Needs) != 0 {
+			t.Fatalf("%s = %+v, %v: want it kept, pending, without the dropped need",
+				id, st, err)
+		}
+	}
+	if f.hasStep("f3-implement") || !f.hasStep("f1-design-r2") {
+		t.Fatal("Back did not drop and reseed the template steps")
+	}
+	if errs := nativeState(f).Validate(); len(errs) != 0 {
+		t.Fatalf("Validate: %v", errs)
+	}
+	advance(f, 2)
+	review, _ := f.Step("f2-design-review-r2")
+	if slices.Contains(review.Needs, "f2-spike-macos-vz") {
+		t.Fatal("only Publish's gate waits for added steps")
+	}
+}
+
+func TestBackQueuesDoneValidationAgain(t *testing.T) {
+	f := feature("a", 1, "in_progress")
+	advance(f, 6)
+	f.Steps = append(f.Steps,
+		Step{ID: "f2-spike-macos-vz", Phase: 2, Affinity: "host:macos-vz", Status: "done"},
+		Step{ID: "f6-validate-macos-vz", Phase: 6, Affinity: "host:macos-vz",
+			Status: "done", Note: "cases"})
+	ids := func() string {
+		var out []string
+		for _, st := range f.Steps {
+			if strings.Contains(st.ID, "macos-vz") {
+				out = append(out, st.ID+"="+st.Status)
+			}
+		}
+		return strings.Join(out, " ")
+	}
+	Back(f, "test", now, "the other host failed", 3)
+	want := "f2-spike-macos-vz=done f6-validate-macos-vz=done f6-validate-macos-vz-r2=pending"
+	if got := ids(); got != want {
+		t.Fatalf("after one return: %s, want %s", got, want)
+	}
+	if st, _ := f.Step("f6-validate-macos-vz-r2"); st.Note != "cases" {
+		t.Fatalf("copy %+v: want the note", st)
+	}
+	Back(f, "test", now, "again before it ran", 3)
+	if got := ids(); got != want {
+		t.Fatalf("after a second return: %s, want %s", got, want)
+	}
+	st, _ := f.Step("f6-validate-macos-vz-r2")
+	st.Status = "done"
+	Back(f, "test", now, "a third return", 3)
+	want = "f2-spike-macos-vz=done f6-validate-macos-vz=done " +
+		"f6-validate-macos-vz-r2=done f6-validate-macos-vz-r3=pending"
+	if got := ids(); got != want {
+		t.Fatalf("after a third return: %s, want %s", got, want)
+	}
+	if errs := nativeState(f).Validate(); len(errs) != 0 {
+		t.Fatalf("Validate: %v", errs)
+	}
+}
+
+func TestValidateRejectsAReaddedStep(t *testing.T) {
+	f := feature("a", 1, "in_progress")
+	f.Steps = append(f.Steps, laterSteps()[0], laterSteps()[0])
+	errs := nativeState(f).Validate()
+	if len(errs) != 1 || !strings.Contains(errs[0].Error(), "repeats") {
+		t.Fatalf("Validate = %v, want the repeated id", errs)
 	}
 }

@@ -70,7 +70,8 @@ func stamp(t time.Time) string {
 	return t.UTC().Format("2006-01-02 15:04 UTC")
 }
 
-// readySteps returns the feature's pending steps whose needs are all done.
+// readySteps returns the feature's offered pending steps whose needs are all
+// done.
 func readySteps(f *Feature) []*Step {
 	done := map[string]bool{}
 	for _, st := range f.Steps {
@@ -81,7 +82,7 @@ func readySteps(f *Feature) []*Step {
 	var out []*Step
 	for i := range f.Steps {
 		st := &f.Steps[i]
-		if st.Status == "pending" && allDone(st.Needs, done) {
+		if st.Status == "pending" && Offered(f, st) && allDone(st.Needs, done) {
 			out = append(out, st)
 		}
 	}
@@ -172,18 +173,25 @@ func (s *State) writeActive(b *strings.Builder) {
 	}
 }
 
+// hostSteps lists every pending host step, marking one whose phase the
+// feature has not reached, so it shows before it is offered.
 func (s *State) hostSteps() []string {
 	var out []string
 	for _, f := range s.Features {
 		if f.Status == "done" {
 			continue
 		}
-		for _, st := range f.Steps {
-			if st.Status == "pending" && strings.HasPrefix(st.Affinity, "host:") {
-				host := strings.TrimPrefix(st.Affinity, "host:")
-				out = append(out,
-					fmt.Sprintf("**%s**: `%s` on %s", f.Feature, st.ID, host))
+		for i := range f.Steps {
+			st := &f.Steps[i]
+			if st.Status != "pending" || !strings.HasPrefix(st.Affinity, "host:") {
+				continue
 			}
+			l := fmt.Sprintf("**%s**: `%s` on %s", f.Feature, st.ID,
+				strings.TrimPrefix(st.Affinity, "host:"))
+			if !Offered(f, st) {
+				l += fmt.Sprintf(" (from phase %d)", st.Phase)
+			}
+			out = append(out, l)
 		}
 	}
 	return out

@@ -45,12 +45,30 @@ func (s *State) Hold(f *Feature, worker string) string {
 	return ""
 }
 
-// leasedTo returns the feature's pending step the worker already holds a
-// live lease on: a hold never takes away a step already claimed.
+// Offered reports whether the feature has reached the step's phase, so a
+// worker may be offered it (FLOW-04). A human step is offered early, so the
+// human can prepare a later phase ahead of time; it never wakes a machine.
+func Offered(f *Feature, st *Step) bool {
+	return st.Phase <= f.Phase || st.Affinity == "human"
+}
+
+// Early returns the FLOW-04 refusal for claiming or completing a step whose
+// phase the feature has not reached, or nil when the step is Offered.
+func Early(f *Feature, st *Step) error {
+	if Offered(f, st) {
+		return nil
+	}
+	return fmt.Errorf("%s is a phase %d step; %s is in phase %d (FLOW-04); "+
+		"release it with the evidence", st.ID, st.Phase, f.Feature, f.Phase)
+}
+
+// leasedTo returns the feature's offered pending step the worker already
+// holds a live lease on: a hold never takes away a step already claimed.
 func leasedTo(f *Feature, worker string, now time.Time) *Step {
 	for i := range f.Steps {
 		st := &f.Steps[i]
-		if st.Status == "pending" && st.Lease.Held(now) && st.Lease.ClaimedBy == worker {
+		if st.Status == "pending" && Offered(f, st) && st.Lease.Held(now) &&
+			st.Lease.ClaimedBy == worker {
 			return st
 		}
 	}
@@ -113,7 +131,8 @@ func (s *State) nextQueued(worker string, inProgress int, now time.Time) *Pick {
 }
 
 // ready returns the feature's first step the worker can take now, or why
-// there is none.
+// there is none. A step of a later phase is skipped without adding to the
+// reasons: the current phase's steps already say why the feature waits.
 func (s *State) ready(f *Feature, worker string, now time.Time) (*Step, string) {
 	done := map[string]bool{}
 	for _, st := range f.Steps {
@@ -124,7 +143,7 @@ func (s *State) ready(f *Feature, worker string, now time.Time) (*Step, string) 
 	var waits []string
 	for i := range f.Steps {
 		st := &f.Steps[i]
-		if st.Status != "pending" || !allDone(st.Needs, done) {
+		if st.Status != "pending" || !Offered(f, st) || !allDone(st.Needs, done) {
 			continue
 		}
 		if !Satisfies(worker, st.Affinity) {
