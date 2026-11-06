@@ -95,3 +95,24 @@ a newer one is prepared; the branch then refuses it for the missing stamp.
   security-suite, as on the other hosts).
 
 Logs: `attended/` beside this file.
+
+## Root cause and fix (attended, same session)
+
+The "Likely" cause above was wrong. Instrumented: the ledger held 3009 bytes
+when FinalizeOutput ran; the zstd write to `ledger.zst` failed with **bad file
+descriptor**. `startHostRelay` wrapped the socket pair's relay fd in
+`os.NewFile` (whose finalizer closes it) while `VirtualNetwork.Close` also
+`syscall.Close`d it. With runVMs closing the network before FinalizeOutput,
+the freed fd number was reused by `ledger.zst` and the finalizer closed it
+mid-write. The double close is on main too; main's later teardown hid it.
+
+Fixed on feat/build-link-subnet in 4f9a0e3 (the relay inherits a dup via
+`VirtualNetwork.RelaySocket`; unit test `TestRelaySocketIsADuplicate`).
+`make lint` (darwin, windows) clean; `make test` green except
+`TestWriteJKSMatchesKeytool` (no Java runtime on this Mac, unrelated). On the
+27.2 image: default link 2/2 and `--build-link 100.126.255.252/30` 2/2 builds
+SUCCEEDED, guest .254, `ledger.zst` ~2.4 KB, inspect --verify-disks 14
+signatures valid, all channels closed.
+
+f6-validate-macos-vz stays pending: re-run on 4f9a0e3 with the build longer
+than an hour.
