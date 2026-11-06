@@ -116,3 +116,19 @@ signatures valid, all channels closed.
 
 f6-validate-macos-vz stays pending: re-run on 4f9a0e3 with the build longer
 than an hour.
+
+## Build longer than an hour on 4f9a0e3 — PASS (attended, host:macos-vz/20261106T014303Z)
+
+`warden build --driver vz --timeout 2h --image …/macos-a139c218a2010753/disk.img`
+(macOS 27.2 guest), a 65-minute script fetching https://example.com/ every
+5 min. SUCCEEDED after 3902 s: 13/13 fetches 200, the guest at
+100.127.255.254 throughout, `ipconfig getpacket en0` lease_time 0xffffffff at
+start and end. relay.log has DHCP only at boot (OFFER/ACK x2 within 17:43:22–24,
+as on every vz boot here), none in the following 65 min: no renewal.
+`ledger.zst` 7479 bytes; inspect --verify-disks: 61 records, 62 signatures
+valid, all channels closed. Logs: `attended/out-long/`.
+
+f6-validate-macos-vz done: cases (1)–(4), the lease within the boot window,
+the >1 h build and the configured-link block all validated on macos-vz; the
+in-guest forged-DHCP/ARP case stays with security-suite (Consolidation), as on
+the other hosts.

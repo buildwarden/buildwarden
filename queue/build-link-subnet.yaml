@@ -116,14 +116,14 @@ steps:
   - id: f6-validate-macos-vz
     phase: 6
     affinity: host:macos-vz
-    status: pending
+    status: done
     needs:
       - f2-design-review-r3
       - f3-implement
       - f3-implement-r2
     lease:
-      claimed_by: host:macos-vz/20261106T014303Z
-      expires: 2026-11-06T03:43:03.324138Z
+      claimed_by: ""
+      expires: null
     note: 'Blocking native validation (FLOW-09) per docs/design/build-link-subnet.md Validation plan (plan r3 task 53): the four cases on the default link and on 100.126.255.252/30 (pre-change assets refused with the one-time command; after it, a default-link build whose ledger verifies, the guest at 100.127.255.254; the configured link reported by doctor and built with no rebuild, refresh or re-prepare; an overlapping --build-link refused at startup). Reaches driver/vz (claim carries the link, no --subnet, DHCP warden-boot, image stamp) and cmd/relay host mode (netstack built at claim, infinite DHCP lease, link block): an image prepared before the change refused, re-prepared once in place; the lease taken within the boot window (time from boot to initialize against main); a build longer than an hour with no renewal; the link block on the configured link; forged DHCP and ARP from the guest gaining nothing (TEST-08). Added by f2-plan-r3 needing only f2-design-review-r3; add f3-implement to its needs once Implement is seeded, and f6-open-pr must need this step once phase 6 is seeded.'
   - id: f6-validate-windows-hyperv
     phase: 6
@@ -638,3 +638,6 @@ history:
   - at: 2026-11-06T01:43:03Z
     by: host:macos-vz/20261106T014303Z
     event: claimed f6-validate-macos-vz until 2026-11-06T03:43:03Z
+  - at: 2026-11-06T02:49:10Z
+    by: host:macos-vz/20261106T014303Z
+    event: done f6-validate-macos-vz
