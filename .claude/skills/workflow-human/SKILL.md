@@ -26,13 +26,17 @@ Same as `workflow-tick` step 1 (the FLOW-18 check, build `dist/wf`, check out
 1. **Priority order.** If `config.yaml` has `priority_confirmed: false`, show
    `dist/wf status` and the proposed order with its reasons, ask Jeff to
    confirm or reorder, renumber the `priority` fields as he says, and set
-   `priority_confirmed: true`.
-2. **Blocking questions**, highest-priority feature first. Ask each with
+   `priority_confirmed: true`. `wf status` lists FLOW-05's class order: in
+   implementation, process items, fixes (`follows: <item>`), new
+   functionality. `priority` reorders items within a class only; an item
+   moves across classes only by Jeff's word on its `follows` or `kind`,
+   recorded in its history.
+2. **Blocking questions**, in FLOW-05's order (`dist/wf status`). Ask each with
    AskUserQuestion: its options, the recommended one first. Record the answer
    with `dist/wf answer -worker $W -feature F -question Q -answer "..."`,
    which also completes the matching `-answer-<Q>` step.
-3. **Design reviews** (`*-design-review` steps, FLOW-19), highest priority
-   first, one feature per sitting. The review comes after Design and before
+3. **Design reviews** (`*-design-review` steps, FLOW-19), in FLOW-05's
+   order, one feature per sitting. The review comes after Design and before
    Plan. Check out the feature branch and read the design, and, for a
    re-review, the design at the last `approved at <sha>` and the finding that
    sent it back, with the Implementation plan only when a later phase's
