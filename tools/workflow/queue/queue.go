@@ -355,11 +355,7 @@ func (s *State) Validate() []error {
 			bad("priority %d also held by %s", f.Priority, other)
 		}
 		prio[f.Priority] = f.Feature
-		if f.Follows != "" {
-			if _, err := s.Find(f.Follows); err != nil || f.Follows == f.Feature {
-				bad("follows %q, which is not another item in the queue", f.Follows)
-			}
-		}
+		s.validateFollows(f, bad)
 		if f.Status == "in_progress" {
 			inProgress++
 			if f.alters() && f.Phase >= 2 {
@@ -381,6 +377,17 @@ func (s *State) Validate() []error {
 		errs = append(errs, errors.New(e))
 	}
 	return errs
+}
+
+// validateFollows checks that follows, when set, names another item, done or
+// open.
+func (s *State) validateFollows(f *Feature, bad func(string, ...any)) {
+	if f.Follows == "" {
+		return
+	}
+	if _, err := s.Find(f.Follows); err != nil || f.Follows == f.Feature {
+		bad("follows %q, which is not another item in the queue", f.Follows)
+	}
 }
 
 func (f *Feature) validate(bad func(string, ...any)) {

@@ -88,59 +88,65 @@ func leasedTo(f *Feature, worker string, now time.Time) *Step {
 // is blocked, for the digest.
 func (s *State) Next(worker string, now time.Time) (*Pick, []Blocked) {
 	var blocked []Blocked
+	cloud := Kind(worker) == "cloud"
+	mayStart := s.Hold(nil, worker) == "" && (!cloud || !s.atLimit())
+	for _, f := range s.Ordered() {
+		var st *Step
+		why := ""
+		switch {
+		case f.Status == "in_progress":
+			st, why = s.inProgressStep(f, worker, now)
+		case f.Status != "queued" || !mayStart:
+			continue
+		case s.waitsForParent(f):
+			why = "follows " + f.Follows + ", not yet done (FLOW-05)"
+		default:
+			if st, _ = s.ready(f, worker, now); st == nil {
+				continue
+			}
+		}
+		if st != nil {
+			starts := f.Status == "queued" && (cloud || f.IsProcess())
+			return &Pick{Feature: f, Step: st, Starts: starts}, blocked
+		}
+		blocked = append(blocked, Blocked{f.Feature, why})
+	}
+	return nil, blocked
+}
+
+// inProgressStep is the in-progress item's step for the worker, or why there
+// is none: under a hold, only a step the worker already has leased.
+func (s *State) inProgressStep(f *Feature, worker string, now time.Time) (*Step, string) {
+	if h := s.Hold(f, worker); h != "" {
+		if st := leasedTo(f, worker, now); st != nil {
+			return st, ""
+		}
+		return nil, "held by process item " + h
+	}
+	return s.ready(f, worker, now)
+}
+
+// atLimit reports whether the cloud may start no more items (FLOW-05).
+func (s *State) atLimit() bool {
 	inProgress := 0
 	for _, f := range s.Features {
 		if f.Status == "in_progress" {
 			inProgress++
 		}
 	}
-	cloud := Kind(worker) == "cloud"
-	held := s.Hold(nil, worker) != ""
-	atLimit := cloud && s.Config.Limits.InProgress > 0 &&
-		inProgress >= s.Config.Limits.InProgress
-	for _, f := range s.Ordered() {
-		switch f.Status {
-		case "in_progress":
-			if h := s.Hold(f, worker); h != "" {
-				if st := leasedTo(f, worker, now); st != nil {
-					return &Pick{Feature: f, Step: st}, blocked
-				}
-				blocked = append(blocked, Blocked{f.Feature, "held by process item " + h})
-				continue
-			}
-			st, why := s.ready(f, worker, now)
-			if st != nil {
-				return &Pick{Feature: f, Step: st}, blocked
-			}
-			blocked = append(blocked, Blocked{f.Feature, why})
-		case "queued":
-			if held || atLimit {
-				continue
-			}
-			if p := s.parentOpen(f); p != "" {
-				blocked = append(blocked, Blocked{f.Feature,
-					"follows " + p + ", not yet done (FLOW-05)"})
-				continue
-			}
-			if st, _ := s.ready(f, worker, now); st != nil {
-				return &Pick{Feature: f, Step: st, Starts: cloud || f.IsProcess()}, blocked
-			}
-		}
-	}
-	return nil, blocked
+	n := s.Config.Limits.InProgress
+	return n > 0 && inProgress >= n
 }
 
-// parentOpen returns the item a queued fix follows while that item is still
-// open, so the fix is never built on a main that lacks it. A process item's
-// follows is only a record.
-func (s *State) parentOpen(f *Feature) string {
+// waitsForParent reports whether a queued fix follows an item still open, so
+// it is never built on a main that lacks that item. A process item's follows
+// is only a record.
+func (s *State) waitsForParent(f *Feature) bool {
 	if f.Follows == "" || f.IsProcess() {
-		return ""
+		return false
 	}
-	if p, err := s.Find(f.Follows); err == nil && p.Status != "done" {
-		return p.Feature
-	}
-	return ""
+	p, err := s.Find(f.Follows)
+	return err == nil && p.Status != "done"
 }
 
 // ready returns the feature's first step the worker can take now, or why
@@ -251,16 +257,8 @@ func (s *State) NextFor(name, worker string, now time.Time) (*Pick, []Blocked) {
 	if err != nil {
 		return nil, []Blocked{{name, err.Error()}}
 	}
-	if f.Status == "queued" && Kind(worker) == "cloud" {
-		inProgress := 0
-		for _, o := range s.Features {
-			if o.Status == "in_progress" {
-				inProgress++
-			}
-		}
-		if n := s.Config.Limits.InProgress; n > 0 && inProgress >= n {
-			return nil, []Blocked{{name, "the in-progress limit (FLOW-05)"}}
-		}
+	if f.Status == "queued" && Kind(worker) == "cloud" && s.atLimit() {
+		return nil, []Blocked{{name, "the in-progress limit (FLOW-05)"}}
 	}
 	if h := s.Hold(f, worker); h != "" {
 		if st := leasedTo(f, worker, now); st != nil {

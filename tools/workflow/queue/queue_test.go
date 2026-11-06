@@ -104,6 +104,9 @@ func toPhase(name string, prio, phase int) *Feature {
 	return f
 }
 
+// TestNextTakesClassOrder: a queued fix (class 3) starts ahead of an
+// in-progress class-4 feature, the security-suite case, but not at the
+// in-progress limit.
 func TestNextTakesClassOrder(t *testing.T) {
 	parent := feature("parent", 1, "done")
 	sec := feature("sec", 9, "in_progress")
@@ -118,11 +121,21 @@ func TestNextTakesClassOrder(t *testing.T) {
 		t.Fatalf("at the in-progress limit next = %q, want sec's step", got)
 	}
 
-	// A feature in Implement goes ahead of a class-2 process item's merge.
+	// A phase-7 merge check (class 4) comes after the fix's start.
+	merging := toPhase("merging", 2, 7)
+	s = state(parent, merging, fix)
+	if p, _ := s.Next("cloud", now); p == nil || p.Feature != fix || !p.Starts {
+		t.Fatalf("pick = %+v, want the fix before merging's f7-merge", p)
+	}
+}
+
+// TestNextTakesImplementationFirst: a feature in Implement (class 1) goes
+// ahead of a process item's merge check (class 2), but not past a hold.
+func TestNextTakesImplementationFirst(t *testing.T) {
 	proc := process("proc", 1, "in_progress")
 	advance(proc, 3)
 	impl := toPhase("impl", 9, 3)
-	s = state(proc, impl)
+	s := state(proc, impl)
 	if got := next(t, s, "cloud"); got != "impl f3-implement" {
 		t.Fatalf("next = %q, want the class-1 feature before x3-merge", got)
 	}
@@ -140,19 +153,14 @@ func TestNextTakesClassOrder(t *testing.T) {
 		blocked[0].Reason != "held by process item rules" {
 		t.Fatalf("next = %+v, %+v; want impl held by rules", pick, blocked)
 	}
+}
 
-	// A phase-7 merge check comes after a queued fix's start.
-	merging := toPhase("merging", 2, 7)
-	s = state(parent, merging, fix)
-	s.Config.Limits.InProgress = 5
-	if p, _ := s.Next("cloud", now); p == nil || p.Feature != fix || !p.Starts {
-		t.Fatalf("pick = %+v, want the fix before merging's f7-merge", p)
-	}
-
-	// A human gets a queued process item's design before a class-4 human step.
+// TestHumanTakesQueuedProcessFirst: a human gets a queued process item's
+// design (class 2) before an in-progress class-4 feature's human step.
+func TestHumanTakesQueuedProcessFirst(t *testing.T) {
 	a := feature("a", 1, "in_progress")
 	a.Steps[0].Affinity = "human"
-	s = state(a, process("p", 7, "queued"))
+	s := state(a, process("p", 7, "queued"))
 	if p, _ := s.Next("human/jeff", now); p == nil || p.Step.ID != "x1-design" ||
 		!p.Starts {
 		t.Fatalf("human pick = %+v, want p x1-design", p)
