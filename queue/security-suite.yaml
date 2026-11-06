@@ -1,6 +1,6 @@
 feature: security-suite
 title: 'Build the TEST-08 security suite and pen-tester agent (Deep-dive #1)'
-priority: 19
+priority: 29
 status: in_progress
 round: feature
 phase: 1
@@ -30,7 +30,15 @@ budget:
   spent:
     runs: 1
     steps: 2
-questions: []
+questions:
+  - id: q1
+    kind: blocking
+    status: open
+    question: 'Scope f1-design. The unattended design agent was halted by a safety classifier on 2026-11-01 while drafting the attack content, so the step is not re-dispatched. Choose how to run it.'
+    options:
+      - run f1-design in an attended session
+      - narrow it to the harness structure, front-matter, tiers and process items, with no detailed attack techniques
+    recommended: narrow it to the harness structure, front-matter, tiers and process items, with no detailed attack techniques
 history:
   - at: 2026-10-28T23:18:38Z
     by: attended-setup
@@ -68,3 +76,6 @@ history:
   - at: 2026-11-05T00:33:10Z
     by: cloud/20261104T214530Z-attended
     event: 'TEST-08 input handed over by build-link-subnet at its Consolidation (plan task 55; Review r1/r2 SHOULD 9, left there by Jeff): the cases in docs/design/build-link-subnet.md, Security note, "TEST-08 should exercise", for the suite to take into its design. In brief: the claim''s build_link bounds (a link overlapping the relay''s upstream interface, or failing relaycfg validation, refused with 400 and the relay left unclaimed; a second claim refused); the relay''s DHCP responders on the build link, vm mode (qemu, firecracker, hyperv; bound to the build interface, no offer on the upstream side) and host mode (vz), each making one fixed offer per build and surviving malformed, flooded and forged DHCP and ARP from the guest with the guest''s address and the relay unchanged; the link block (a build resolving or dialing a link address is refused by the relay in vm and host modes, default and configured link); the guest-sourced canary drop on firecracker; a stale launcher, an overlapping link and a host resolver inside the link refused before any VM boots. Tier-0 coverage today: relaycfg/buildlink_test.go, relay/buildlink_test.go, cmd/relay vmlink_test.go and dhcp_test.go (FuzzDHCPReply); native coverage: the build-link-subnet f6-validate steps.'
+  - at: 2026-11-06T17:30:00Z
+    by: human/jeff
+    event: 'priority 19 -> 29 (Jeff: the queued fixes come first, as active problems); blocking question q1 records the scoping it has waited on since 2026-11-01, so wf next skips it and the fixes can start (FLOW-05, FLOW-07)'
