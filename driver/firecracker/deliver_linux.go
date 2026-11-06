@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 	"github.com/buildwarden/buildwarden/driver/linuxguest"
 	"github.com/buildwarden/buildwarden/driver/relayvm"
 )
@@ -27,18 +28,21 @@ type delivery struct {
 // the qemu Linux-guest CIDATA seed ending in `reboot -f`; on direct boot,
 // warden-io appended to the launcher-only initramfs. Nothing else crosses;
 // trust, the script and the context come from the relay.
-func deliver(a assets, image, workDir, buildID, script string) (*delivery, error) {
+func deliver(a assets, image, workDir, buildID, script string,
+	link buildlink.Link) (*delivery, error) {
 	d := &delivery{
 		boot:   buildBoot{Kernel: a.Kernel},
 		record: buildRecord{Kernel: a.Kernel, Script: script},
 	}
 	if image != "" {
-		if err := d.diskPath(image, workDir, buildID); err != nil {
+		if err := d.diskPath(image, workDir, buildID, link); err != nil {
 			d.remove()
 			return nil, err
 		}
 	} else if err := d.directBoot(a, workDir); err != nil {
 		return nil, err
+	} else {
+		d.boot.LinkArgs = link.BootArgs()
 	}
 	cmdline := filepath.Join(workDir, seedKernelCmdline)
 	args := buildConfig(0, d.boot, 1, 1).effectiveArgs()
@@ -50,7 +54,7 @@ func deliver(a assets, image, workDir, buildID, script string) (*delivery, error
 	return d, nil
 }
 
-func (d *delivery) diskPath(image, workDir, buildID string) error {
+func (d *delivery) diskPath(image, workDir, buildID string, link buildlink.Link) error {
 	raw, err := EnsureRaw(image)
 	if err != nil {
 		return err
@@ -69,7 +73,7 @@ func (d *delivery) diskPath(image, workDir, buildID string) error {
 		return fmt.Errorf("copying the build rootfs: %s: %w",
 			strings.TrimSpace(string(out)), err)
 	}
-	seedDir, err := linuxguest.Seed(workDir, "amd64", linuxguest.Reboot)
+	seedDir, err := linuxguest.Seed(workDir, "amd64", linuxguest.Reboot, link)
 	if err != nil {
 		return fmt.Errorf("generating cloud-init: %w", err)
 	}

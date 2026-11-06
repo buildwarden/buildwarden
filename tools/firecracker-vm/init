@@ -1,8 +1,11 @@
 #!/bin/sh
 # Firecracker direct-boot launcher (Decision 6 of docs/design/firecracker-driver.md).
 #
-# Mounts the pseudo-filesystems, sets the build link to the relay, and execs
-# warden-io, which the driver appends per build as /bin/warden-io. Trust, the
+# Mounts the pseudo-filesystems, takes the build link to the relay (the
+# relay's DHCP lease, checked against the kernel command line's warden.link_ip
+# and warden.link_gw, which are the fallback), and execs warden-io, which the
+# driver appends per build as /bin/warden-io. build-initramfs.sh writes the
+# link-channel stamp warden checks for this behaviour. Trust, the
 # build script and context come from the relay; DNS is warden-io's (BOOT-03).
 # When warden-io exits, PID 1 is gone, the kernel panics and panic=1 resets
 # the VM, which ends the Firecracker process.
@@ -27,9 +30,83 @@ if [ -z "$IF" ]; then
     exit 1
 fi
 ip link set lo up
+
+# The build link (docs/design/build-link-subnet.md). The relay serves this
+# VM's address by DHCP on the link, answering from the claim, and warden also
+# writes it on the kernel command line as warden.link_ip=<a.b.c.d>/<n> and
+# warden.link_gw=<a.b.c.d>. The lease comes first; the keys are its
+# cross-check, and the fallback should the relay not answer. Only those two
+# keys are read, as dotted quads and a numeric length; the command line is
+# never evaluated, and nothing about the link is baked in here.
+stop() {
+    echo "$1"
+    exit 1
+}
+is_quad() {
+    echo "$1" | grep -q '^[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}$'
+}
+mask_len() {
+    n=0
+    for o in $(echo "$1" | tr '.' ' '); do
+        case "$o" in
+            255) n=$((n + 8)) ;; 254) n=$((n + 7)) ;; 252) n=$((n + 6)) ;;
+            248) n=$((n + 5)) ;; 240) n=$((n + 4)) ;; 224) n=$((n + 3)) ;;
+            192) n=$((n + 2)) ;; 128) n=$((n + 1)) ;; 0) ;;
+            *) echo bad; return ;;
+        esac
+    done
+    echo "$n"
+}
+
+set -f
+KEY_IP="" KEY_LEN="" KEY_GW="" SEEN_IP="" SEEN_GW=""
+for kv in $(cat /proc/cmdline); do
+    case "$kv" in
+        warden.link_ip=*)
+            SEEN_IP="${kv#*=}"
+            KEY_IP="${SEEN_IP%/*}"
+            KEY_LEN="${SEEN_IP##*/}"
+            ;;
+        warden.link_gw=*) SEEN_GW="${kv#*=}"; KEY_GW="$SEEN_GW" ;;
+    esac
+done
+set +f
+if [ -n "$SEEN_IP$SEEN_GW" ]; then
+    case "$KEY_LEN" in
+        [0-9] | [12][0-9] | 3[0-2]) ;;
+        *) KEY_LEN="" ;;
+    esac
+    if ! is_quad "$KEY_IP" || [ -z "$KEY_LEN" ] || ! is_quad "$KEY_GW"; then
+        stop "init: malformed build link on the kernel command line: warden.link_ip=$SEEN_IP warden.link_gw=$SEEN_GW"
+    fi
+fi
+
 ip link set "$IF" up
-ip addr add 10.0.0.2/30 dev "$IF"
-ip route add default via 10.0.0.1
+rm -f /tmp/warden-lease
+udhcpc -i "$IF" -f -q -n -t 5 -T 1 -s /etc/warden-lease.sh >/dev/null 2>&1
+LEASE_IP="" LEASE_LEN="" LEASE_GW=""
+if [ -f /tmp/warden-lease ]; then
+    LEASE_IP=$(sed -n 's/^ip=//p' /tmp/warden-lease)
+    LEASE_LEN=$(mask_len "$(sed -n 's/^mask=//p' /tmp/warden-lease)")
+    LEASE_GW=$(sed -n 's/^router=//p' /tmp/warden-lease)
+    [ "$LEASE_LEN" = bad ] && LEASE_IP=""
+fi
+
+if [ -n "$LEASE_IP" ]; then
+    if [ -n "$KEY_IP" ] && { [ "$LEASE_IP" != "$KEY_IP" ] ||
+        [ "$LEASE_LEN" != "$KEY_LEN" ] || [ "$LEASE_GW" != "$KEY_GW" ]; }; then
+        stop "init: DHCP lease $LEASE_IP/$LEASE_LEN via $LEASE_GW disagrees with warden.link_ip=$KEY_IP/$KEY_LEN warden.link_gw=$KEY_GW"
+    fi
+    LINK_IP=$LEASE_IP LINK_LEN=$LEASE_LEN LINK_GW=$LEASE_GW SOURCE=dhcp
+elif [ -n "$KEY_IP" ]; then
+    echo "init: no DHCP answer; using warden.link_ip"
+    LINK_IP=$KEY_IP LINK_LEN=$KEY_LEN LINK_GW=$KEY_GW SOURCE=cmdline
+else
+    stop "init: no DHCP lease and no warden.link_ip/warden.link_gw on the kernel command line"
+fi
+echo "init: link $LINK_IP/$LINK_LEN via $LINK_GW from $SOURCE"
+ip addr add "$LINK_IP/$LINK_LEN" dev "$IF"
+ip route add default via "$LINK_GW"
 
 echo "init: ready"
-exec /bin/warden-io initialize --gateway=10.0.0.1
+exec /bin/warden-io initialize --gateway="$LINK_GW"

@@ -10,6 +10,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 	"github.com/buildwarden/buildwarden/driver/firecracker"
 	"github.com/buildwarden/buildwarden/driver/hyperv"
 	"github.com/buildwarden/buildwarden/driver/qemu"
@@ -45,6 +46,14 @@ var doctorCmd = &cobra.Command{
              reflink on the cache, orphaned VMMs; run as root it also checks
              the bridge table, WARDEN-FC rules and FORWARD policy
 
+Every VM driver also reports its build link (the relay-to-build /30, from
+--build-link, [vm] build_link or the default) and where it came from, whether
+a host interface overlaps it, and the state of each launcher asset's
+link-channel stamp (current, missing or stale, with the one-time rebuild).
+A missing or stale stamp fails doctor on the hyperv relay boot VHDX and the
+vz prepared image, which every build uses; on the qemu and firecracker
+direct-boot initramfs it is reported only.
+
 Exits non-zero when a required capability is unmet, so it is usable as a CI
 or agent gate.`,
 	Args: cobra.NoArgs,
@@ -54,15 +63,27 @@ or agent gate.`,
 			return err
 		}
 		out := cmd.OutOrStdout()
-		switch drv := cfg.Runtime.Driver; drv {
+		drv := cfg.Runtime.Driver
+		if flagBuildLink != "" && !isVMDriver(drv) {
+			return driver.Fixable("", "--build-link requires a VM driver "+
+				"(--driver qemu, vz, hyperv or firecracker)")
+		}
+		var link buildlink.Link
+		linkBlocked := false
+		if isVMDriver(drv) {
+			if link, linkBlocked, err = doctorBuildLink(out, cfg); err != nil {
+				return err
+			}
+		}
+		switch drv {
 		case "hyperv":
 			detected := hyperv.Detect(hypervNetwork(cfg))
-			if blocked := hyperv.Doctor(out, detected); blocked {
+			if blocked := hyperv.Doctor(out, detected); blocked || linkBlocked {
 				os.Exit(1)
 			}
 			return nil
 		case "firecracker":
-			if blocked := firecracker.Doctor(out); blocked {
+			if blocked := firecracker.Doctor(out, link); blocked || linkBlocked {
 				os.Exit(1)
 			}
 			return nil
@@ -78,6 +99,9 @@ or agent gate.`,
 		}
 		if err != nil {
 			return err
+		}
+		if linkBlocked {
+			os.Exit(1)
 		}
 		fmt.Fprintln(out, "ok")
 		return nil
@@ -123,7 +147,12 @@ Other drivers need no host setup; their base images are prepared with
 				driverName(cfg))
 			return nil
 		}
+		link, _, err := resolveBuildLink(cfg)
+		if err != nil {
+			return err
+		}
 		return hyperv.RunSetup(cmd.Context(), cmd.OutOrStdout(), hyperv.SetupOptions{
+			BuildLink:  link,
 			SwitchName: hypervNetwork(cfg),
 			NATPrefix:  flagSetupNATPrefix,
 			HostIP:     flagSetupHostIP,
@@ -155,6 +184,7 @@ func init() {
 			"hyperv: durable build switch name "+
 				"(default: [vm] network, then warden-dev)")
 	}
+	addBuildLinkFlag(doctorCmd)
 	setupCmd.Flags().StringVar(&flagSetupNATPrefix, "nat-prefix", "",
 		"hyperv: NAT CIDR for relay egress (default 192.168.240.0/20)")
 	setupCmd.Flags().StringVar(&flagSetupHostIP, "host-ip", "",
@@ -199,6 +229,60 @@ func init() {
 	rootCmd.AddCommand(doctorCmd)
 	rootCmd.AddCommand(setupCmd)
 	rootCmd.AddCommand(hypervCmd)
+}
+
+// doctorBuildLink reports a VM driver's build link and where it came from,
+// whether a host interface overlaps it, and each launcher stamp's state.
+// blocked is true when a host interface holds a link address, or an asset
+// every build needs has a missing or stale stamp: either refuses every build.
+func doctorBuildLink(out io.Writer, cfg *Config) (buildlink.Link, bool, error) {
+	link, source, err := resolveBuildLink(cfg)
+	if err != nil {
+		return buildlink.Link{}, false, err
+	}
+	fmt.Fprintf(out, "build link %s (%s)\n", link, source)
+	blocked := false
+	if host, err := driver.HostPrefixes(); err != nil {
+		fmt.Fprintf(out, "build link: cannot list host interfaces: %v\n", err)
+	} else {
+		refuse, warn := link.HostOverlap(host)
+		for _, p := range refuse {
+			fmt.Fprintf(out,
+				"build link: BLOCKED: host interface address %s is inside "+
+					"the link; %s\n", p, driver.LinkFix)
+			blocked = true
+		}
+		for _, p := range warn {
+			fmt.Fprintf(out, "build link: warning: host network %s contains the link "+
+				"(only the link's four addresses are shadowed)\n", p)
+		}
+		if len(refuse)+len(warn) == 0 {
+			fmt.Fprintln(out, "build link: no host interface overlaps it")
+		}
+	}
+	for _, st := range launcherStamps(cfg.Runtime.Driver) {
+		fmt.Fprintln(out, st.Report())
+		if st.Blocks() {
+			blocked = true
+		}
+	}
+	return link, blocked, nil
+}
+
+// launcherStamps lists the driver's launcher assets that carry a
+// link-channel stamp.
+func launcherStamps(drv string) []driver.LauncherStamp {
+	switch drv {
+	case "qemu":
+		return qemu.LauncherStamps()
+	case "firecracker":
+		return firecracker.LauncherStamps()
+	case "hyperv":
+		return hyperv.LauncherStamps()
+	case "vz":
+		return vz.LauncherStamps()
+	}
+	return nil
 }
 
 // hypervNetwork is the durable switch a Hyper-V build reuses: --network, then

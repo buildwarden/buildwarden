@@ -25,6 +25,36 @@
 // not started until the claim has completed and the listener has closed. An
 // optional per-instance claim token, fixed when the relay is created,
 // additionally stops another local process from claiming a warm relay first.
+//
+// # Build link
+//
+// Config.BuildLink (JSON "build_link": {"prefix", "relay", "guest"}) names the
+// private segment between the relay and the build environment. It is optional
+// on the wire and validated the same way for every mode (BuildLink.Parse); a
+// claim that fails validation is refused with 400 and does not consume the
+// relay. What each mode does with it:
+//
+//	mode       with build_link                         without
+//	vm         flushes the build interface's IPv4      keeps the address already on
+//	           addresses, adds relay/len, serves the   the build interface as its
+//	           guest's DHCP lease on that interface,   self address and blocked
+//	           and blocks upstream dials into prefix   prefix; refuses the claim if
+//	                                                   the interface has none
+//	host       builds its netstack, ARP, DHCP and      falls back to --subnet
+//	           listeners on relay/guest/prefix, and
+//	           blocks upstream dials into prefix
+//	container  refuses the claim                       as before
+//
+// A start callback refuses a claim it cannot apply by returning an error that
+// wraps ErrRefused: Serve answers 400 and stays claimable.
+//
+// Ordering: a relay replies to a claim only after its build segment is
+// configured. Serve writes the reply only after the start callback returns,
+// and each mode configures the segment inside that callback, so an
+// orchestrator that boots the build environment after Claim returns finds the
+// relay addressed and serving. A relay that predates build_link refuses a
+// claim carrying it ("unknown field \"build_link\""), since the decoder
+// rejects unknown fields.
 package relaycfg
 
 import (
@@ -74,6 +104,9 @@ type Config struct {
 	UpstreamSystemCA *bool `json:"upstream_system_ca,omitempty"`
 	// Environment, when set, is recorded as the ledger's first entry.
 	Environment *Environment `json:"environment,omitempty"`
+	// BuildLink, when set, is the segment the relay serves the build on
+	// (see the package doc for what each mode does with it).
+	BuildLink *BuildLink `json:"build_link,omitempty"`
 }
 
 // Environment describes the build's base environment. Payload is a typed
@@ -162,11 +195,24 @@ func (s *claimServer) handleClaim(w http.ResponseWriter, req *http.Request) {
 		http.Error(w, "invalid claim: "+err.Error(), http.StatusBadRequest)
 		return
 	}
+	if cfg.BuildLink != nil {
+		if _, _, _, err := cfg.BuildLink.Parse(); err != nil {
+			s.release()
+			http.Error(w, "invalid claim: build_link: "+err.Error(),
+				http.StatusBadRequest)
+			return
+		}
+	}
 	rt, ok := s.resolveTransport(w, cfg, rt)
 	if !ok {
 		return
 	}
 	id, err := s.start(cfg, rt)
+	if errors.Is(err, ErrRefused) {
+		s.release()
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
 	if err != nil {
 		http.Error(w, "relay start failed: "+err.Error(), http.StatusInternalServerError)
 		s.result <- err
@@ -204,8 +250,9 @@ func (s *claimServer) resolveTransport(
 // Config and the collector transport (the tunnel's HTTP/2 client when the
 // claim selects TunnelURL, else nil for a direct CollectorURL), replies with
 // the returned Identity, and then closes ln. Requests with a wrong token are
-// refused and do not consume the claim. If start fails, the error is reported
-// to the claimant and returned.
+// refused and do not consume the claim, as are a claim that fails validation
+// and one whose start returns an error wrapping ErrRefused. If start fails
+// otherwise, the error is reported to the claimant and returned.
 func Serve(
 	ln net.Listener,
 	token string,

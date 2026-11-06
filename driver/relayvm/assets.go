@@ -6,6 +6,7 @@ package relayvm
 import (
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/buildwarden/buildwarden/driver"
 )
@@ -33,6 +34,25 @@ var Firecracker = []Asset{
 		Source: "tools/relay-vm/output/x86_64/initramfs.cpio.gz"},
 	{Release: "firecracker-build-initramfs.cpio.gz",
 		Source: "tools/firecracker-vm/output/initramfs.cpio.gz"},
+}
+
+// QEMUBuild is the qemu direct-boot build VM's kernel (the relay VM's) and
+// launcher initramfs.
+var QEMUBuild = []Asset{
+	{Release: "build-vm-vmlinuz", Source: "tools/relay-vm/output/vmlinuz"},
+	{Release: "build-vm-initramfs.cpio.gz", Source: "tools/build-vm/output/initramfs.cpio.gz"},
+}
+
+// StampPath is where the link-channel stamp of asset a, found at path, lives:
+// in the source tree, link-channel in the asset's output directory (written by
+// its build script); beside the warden binary, the file name plus
+// ".link-channel". So the stamp always comes from the place Find chose the
+// asset from.
+func StampPath(a Asset, path string) string {
+	if strings.HasSuffix(filepath.ToSlash(path), "/"+a.Source) {
+		return filepath.Join(filepath.Dir(path), "link-channel")
+	}
+	return path + ".link-channel"
 }
 
 // Find returns the path of every asset, in order, all from beside the warden

@@ -127,8 +127,8 @@ func StartRelay(ctx context.Context, prov Provisioner, cfg RelayHostConfig) (*Re
 	claimCtx, cancel := context.WithTimeout(ctx, cfg.ReadyTimeout)
 	defer cancel()
 	claimAddr := net.JoinHostPort(cfg.RelayIP, strconv.Itoa(cfg.ClaimPort))
-	if _, err := sess.ClaimRelay(
-		claimCtx, claimAddr, "", cfg.Request, cfg.Environment); err != nil {
+	if _, err := sess.ClaimRelay(claimCtx, claimAddr, "", cfg.Request, cfg.Environment,
+		cfg.Request.Link().Claim(), RefreshRelayBootFix); err != nil {
 		_ = h.Close()
 		return nil, fmt.Errorf("StartRelay: relay VM %q: %w", h.VMName, err)
 	}

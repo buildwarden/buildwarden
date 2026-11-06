@@ -14,6 +14,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
@@ -45,6 +47,9 @@ type buildFake struct {
 	remove        atomic.Int32
 	diffDisks     atomic.Int32
 	relayReadyErr atomic.Value // error, if the simulated ready POST failed
+	// buildVMsAtClaim is 1 + the build VMs created or started when the claim
+	// arrived (0: no claim yet).
+	buildVMsAtClaim atomic.Int32
 }
 
 func (f *buildFake) EnsureNetwork(context.Context, NetworkSpec) (*NetworkResources, error) {
@@ -116,6 +121,7 @@ func (f *buildFake) simulateRelayReady() {
 		) (relaycfg.Identity, error) {
 			f.claimed.Store(c)
 			f.transport.Store(rt)
+			f.buildVMsAtClaim.Store(1 + f.createBuild.Load() + f.startBuild.Load())
 			if err := f.post("/v1/ready", nil); err != nil {
 				f.relayReadyErr.Store(fmt.Errorf("ready POST: %w", err))
 			}
@@ -339,5 +345,29 @@ func TestRunBuild_VMOffWithoutCompletion(t *testing.T) {
 	}
 	if got := fp.remove.Load(); got != 2 {
 		t.Errorf("RemoveVM = %d, want 2 (teardown still runs)", got)
+	}
+}
+
+// TestRunBuild_ClaimBeforeBuildVM pins BOOT-01's order on Hyper-V: no build VM
+// is created or started until StartRelay's claim (which carries the request's
+// build link) has returned.
+func TestRunBuild_ClaimBeforeBuildVM(t *testing.T) {
+	configured, _ := buildlink.Parse("100.126.255.252/30")
+	for _, link := range []buildlink.Link{{}, configured} {
+		dir := t.TempDir()
+		cfg := baseCfg(t, dir)
+		cfg.Request = &driver.BuildRequest{UpstreamSystemCA: true, BuildLink: link}
+		fp := &buildFake{claimAddr: claimAddr(cfg)}
+		if _, err := runBuild(context.Background(), fp, cfg); err != nil {
+			t.Fatalf("runBuild: %v", err)
+		}
+		if got := fp.buildVMsAtClaim.Load(); got != 1 {
+			t.Fatalf("%d build VM operations ran before the claim", got-1)
+		}
+		c, _ := fp.claimed.Load().(relaycfg.Config)
+		want := link.OrDefault().Claim()
+		if c.BuildLink == nil || *c.BuildLink != *want {
+			t.Fatalf("claim build_link = %+v, want %+v", c.BuildLink, want)
+		}
 	}
 }

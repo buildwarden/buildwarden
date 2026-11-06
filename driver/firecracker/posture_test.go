@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 )
 
 // nftDropJSON is `nft -j list chains` on a host running both iptables-nft
@@ -54,7 +55,8 @@ func TestForwardPolicyAccept(t *testing.T) {
 func TestSelectResolvers(t *testing.T) {
 	local := func(ip net.IP) bool { return ip.Equal(net.ParseIP("192.168.1.10")) }
 	use, excluded := selectResolvers(
-		[]string{"127.0.0.53", "192.168.1.10", "192.168.1.1", "8.8.8.8"}, local)
+		[]string{"127.0.0.53", "192.168.1.10", "192.168.1.1", "8.8.8.8"}, local,
+		buildlink.Default())
 	if strings.Join(use, ",") != "192.168.1.1,8.8.8.8" ||
 		strings.Join(excluded, ",") != "127.0.0.53,192.168.1.10" {
 		t.Fatalf("use %v excluded %v", use, excluded)
@@ -71,6 +73,7 @@ func TestParseNameserversIPv4Only(t *testing.T) {
 
 func TestUpstreamResolvers(t *testing.T) {
 	none := func(net.IP) bool { return false }
+	def := buildlink.Default()
 	files := func(m map[string]string) func(string) ([]byte, error) {
 		return func(p string) ([]byte, error) {
 			if s, ok := m[p]; ok {
@@ -83,7 +86,7 @@ func TestUpstreamResolvers(t *testing.T) {
 	got, err := upstreamResolvers(files(map[string]string{
 		resolvConf:       "nameserver 127.0.0.53\noptions edns0\n",
 		resolvedUpstream: "nameserver 10.1.2.3\n",
-	}), none)
+	}), none, def)
 	if err != nil || strings.Join(got, ",") != "10.1.2.3" {
 		t.Fatalf("resolved: %v %v", got, err)
 	}
@@ -92,32 +95,56 @@ func TestUpstreamResolvers(t *testing.T) {
 	wsl := func(ip net.IP) bool { return ip.Equal(net.ParseIP(wslTunnelResolver)) }
 	_, err = upstreamResolvers(files(map[string]string{
 		resolvConf: "nameserver 10.255.255.254\n",
-	}), wsl)
+	}), wsl, def)
 	var fe *driver.FixableError
 	if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "generateResolvConf=false") ||
 		!strings.Contains(err.Error(), "10.255.255.254") {
 		t.Fatalf("wsl: %v", err)
 	}
-	// An AWS VPC resolver at 10.0.0.2 is inside the relay's build link, so the
-	// relay would route it to the build VM: refused, with a fix that says so.
-	_, err = upstreamResolvers(files(map[string]string{
+	// An AWS VPC resolver at 10.0.0.2 (the PR #90 failure) is outside the
+	// default link and now used as is.
+	got, err = upstreamResolvers(files(map[string]string{
 		resolvConf:       "nameserver 127.0.0.53\n",
 		resolvedUpstream: "nameserver 10.0.0.2\n",
-	}), none)
-	if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "10.0.0.0/30") ||
-		!strings.Contains(err.Error(), "10.0.0.2") {
-		t.Fatalf("build link: %v", err)
-	}
-	got, err = upstreamResolvers(files(map[string]string{
-		resolvConf: "nameserver 10.0.0.2\nnameserver 10.0.0.4\n",
-	}), none)
-	if err != nil || strings.Join(got, ",") != "10.0.0.4" {
-		t.Fatalf("build link mixed: %v %v", got, err)
+	}), none, def)
+	if err != nil || strings.Join(got, ",") != "10.0.0.2" {
+		t.Fatalf("VPC resolver: %v %v", got, err)
 	}
 	// A local dnsmasq on a LAN address is refused too.
 	_, err = upstreamResolvers(files(map[string]string{resolvConf: "nameserver 127.0.0.1\n"}),
-		none)
+		none, def)
 	if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "/etc/resolv.conf") {
 		t.Fatalf("loopback: %v", err)
+	}
+}
+
+// TestUpstreamResolversConfiguredLink: a resolver inside a configured link
+// would be routed to the build VM, so it is excluded with a fix naming both
+// remedies.
+func TestUpstreamResolversConfiguredLink(t *testing.T) {
+	none := func(net.IP) bool { return false }
+	files := func(m map[string]string) func(string) ([]byte, error) {
+		return func(p string) ([]byte, error) {
+			if s, ok := m[p]; ok {
+				return []byte(s), nil
+			}
+			return nil, os.ErrNotExist
+		}
+	}
+	var fe *driver.FixableError
+	conf, _ := buildlink.Parse("10.1.2.0/30")
+	_, err := upstreamResolvers(files(map[string]string{
+		resolvConf: "nameserver 10.1.2.2\n",
+	}), none, conf)
+	if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "10.1.2.0/30") ||
+		!strings.Contains(fe.Fix, "[vm] build_link") ||
+		!strings.Contains(err.Error(), "10.1.2.2") {
+		t.Fatalf("build link: %v", err)
+	}
+	got, err := upstreamResolvers(files(map[string]string{
+		resolvConf: "nameserver 10.1.2.2\nnameserver 10.1.2.4\n",
+	}), none, conf)
+	if err != nil || strings.Join(got, ",") != "10.1.2.4" {
+		t.Fatalf("build link mixed: %v %v", got, err)
 	}
 }

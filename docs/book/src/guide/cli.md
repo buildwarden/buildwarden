@@ -27,10 +27,13 @@ rejects only the flags it genuinely cannot use.
 - `--network <name>` — Pre-provisioned network to reuse (hyperv: the durable switch from `warden setup`)
 - `--keep-vms` — Leave VMs, disks and the work dir in place for inspection (VM drivers)
 - `--tmpdir <dir>` — Directory each build's private work dir is created in (default: the OS temp dir, which honours `TMPDIR`)
+- `--build-link <cidr>` — Advanced: the VM drivers' relay-to-build link, a `/30`
+  (default: `[vm] build_link`, then `100.127.255.252/30`; see
+  [Configuration](configuration.md#the-build-link-vm-build_link---build-link))
 - `-q, --quiet` — Do not echo the guest build console (still captured to `build-output.log`)
 
 The container driver refuses the VM-only flags (`--script`, `--image`, `--cpus`,
-`--memory`, `--keep-vms`); `--network` is only used by `--driver hyperv`
+`--memory`, `--keep-vms`, `--build-link`); `--network` is only used by `--driver hyperv`
 (firecracker builds take a network slot made by `warden setup`).
 `--guest-os windows` is supported by `--driver qemu` and `--driver hyperv`;
 `--driver firecracker` runs Linux guests only.
@@ -208,7 +211,7 @@ warden image verify --driver hyperv
 ## warden doctor
 
 ```
-warden doctor --driver <name>
+warden doctor --driver <name> [--build-link <cidr>]
 ```
 
 Read-only preflight for the selected driver. Checks a container runtime
@@ -224,7 +227,22 @@ doctor --driver firecracker`) it also checks the `warden_fc` bridge table, that
 each `WARDEN-FC` jump is first in its chain, and the FORWARD policy, and counts
 the slots, `/dev/kvm` access (kvm group membership) and leftover VMMs of the
 user who ran sudo, skipping the reflink probe so nothing is written into that
-user's cache. Exits non-zero when a required capability is unmet, so it works as a CI or agent gate.
+user's cache.
+
+Every VM driver's doctor also prints its build link and where it came from
+(`build link 100.127.255.252/30 (default)`, or `warden.toml`, `config.toml`,
+`--build-link`), whether a host interface overlaps it (an address inside the
+link is BLOCKED, since every build would refuse it; a host network that only
+contains it is a warning), and the state of each launcher asset's
+link-channel stamp: `current`, or `missing`/`stale` with the one-time rebuild
+(the qemu and Firecracker direct-boot initramfs, the Hyper-V relay boot VHDX,
+the vz prepared image). A missing or stale stamp on the Hyper-V relay boot
+VHDX or the vz prepared image is BLOCKED and fails doctor, since every build
+of that driver uses the asset; on the direct-boot initramfs, which only direct
+boot uses, it is reported only. `--build-link` checks a value before you configure it;
+the container driver refuses it.
+
+Exits non-zero when a required capability is unmet, so it works as a CI or agent gate.
 Replaces the old `warden hyperv doctor`.
 
 ## warden setup
@@ -255,7 +273,10 @@ Other drivers print that no host setup is needed. Replaces the old
 
 **Flags:**
 - `--network <name>` — Durable build switch name (default: `[vm]` network, then `warden-dev`)
-- `--nat-prefix <cidr>` — NAT CIDR for relay egress (default 192.168.240.0/20)
+- `--nat-prefix <cidr>` — NAT CIDR for relay egress (default 192.168.240.0/20).
+  Refused, before anything changes, when it overlaps the build link (`[vm]
+  build_link`, or the default `100.127.255.252/30`); setup has no
+  `--build-link` of its own
 - `--host-ip <ip>` — Host gateway IP on the NAT switch (default 192.168.240.1)
 - `--slots <n>` — Network slots to create, 1 to 256 (firecracker; default 16)
 

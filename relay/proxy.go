@@ -15,6 +15,7 @@ import (
 	"math/big"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"time"
 )
@@ -52,7 +53,7 @@ func (r *Relay) buildTransport() {
 		IdleConnTimeout:     90 * time.Second,
 		DisableCompression:  true,
 	}
-	if r.cfg.SSRF {
+	if r.cfg.SSRF || r.cfg.BuildLink.IsValid() {
 		t.DialContext = r.safeDialContext
 	}
 	r.transport = t
@@ -70,9 +71,9 @@ func (r *Relay) safeDialContext(ctx context.Context, network, addr string) (net.
 	}
 
 	for _, ip := range ips {
-		if r.isBlockedIP(ip.IP) {
+		if r.blockedDial(ip.IP) {
 			return nil, fmt.Errorf(
-			"blocked: connection to %s (%s) denied", host, ip.IP)
+				"blocked: connection to %s (%s) denied", host, ip.IP)
 
 		}
 	}
@@ -88,7 +89,18 @@ func (r *Relay) safeDialContext(ctx context.Context, network, addr string) (net.
 	return nil, fmt.Errorf("all addresses for %s failed", host)
 }
 
-func (r *Relay) isBlockedIP(ip net.IP) bool {
+// blockedDial reports whether the upstream dialer refuses ip: anything inside
+// the build link in every mode that sets it, and isBlockedIP's set when SSRF
+// is on.
+func (r *Relay) blockedDial(ip net.IP) bool {
+	if a, ok := netip.AddrFromSlice(ip); ok && r.cfg.BuildLink.IsValid() &&
+		r.cfg.BuildLink.Contains(a.Unmap()) {
+		return true
+	}
+	return r.cfg.SSRF && isBlockedIP(ip)
+}
+
+func isBlockedIP(ip net.IP) bool {
 	if ip.IsLoopback() {
 		return true
 	}
@@ -105,9 +117,6 @@ func (r *Relay) isBlockedIP(ip net.IP) bool {
 		return true
 	}
 	if ip.Equal(net.ParseIP("100.100.100.200")) {
-		return true
-	}
-	if r.blockedSelfIP != nil && ip.Equal(r.blockedSelfIP) {
 		return true
 	}
 	return false

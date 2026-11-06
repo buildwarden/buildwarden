@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"log"
 	"net"
+	"net/netip"
 	"os"
 	"sync"
 	"time"
@@ -35,8 +36,8 @@ const (
 // FDIngressConfig configures the file-descriptor-based network ingress.
 type FDIngressConfig struct {
 	FD         int    // Inherited socketpair FD carrying raw Ethernet frames
-	GatewayIP  net.IP // Relay's IP inside the virtual subnet (e.g. 10.100.0.1)
-	GuestIP    net.IP // IP assigned to the VM via DHCP (e.g. 10.100.0.2)
+	GatewayIP  net.IP // Relay's IP on the build link
+	GuestIP    net.IP // IP the guest is offered by DHCP
 	SubnetMask net.IPMask
 	GatewayMAC net.HardwareAddr // MAC address for the relay's virtual NIC
 
@@ -50,10 +51,11 @@ type FDIngressConfig struct {
 // socketpair FD. It provides net.Listener (TCP) and net.PacketConn (UDP)
 // interfaces that plug directly into the relay's existing proxy/DNS handlers.
 type FDIngress struct {
-	cfg  FDIngressConfig
-	file *os.File
-	ep   *channel.Endpoint
-	s    *stack.Stack
+	cfg   FDIngressConfig
+	lease dhcpLease
+	file  *os.File
+	ep    *channel.Endpoint
+	s     *stack.Stack
 
 	// guestMAC is learned from the first frame the VM sends (or DHCP discover).
 	guestMAC   net.HardwareAddr
@@ -115,6 +117,8 @@ func NewFDIngress(cfg FDIngressConfig) (*FDIngress, error) {
 
 	gwAddr := tcpip.AddrFrom4([4]byte(cfg.GatewayIP.To4()))
 	prefixLen := maskToPrefixLen(cfg.SubnetMask)
+	gwNetip := netip.AddrFrom4([4]byte(cfg.GatewayIP.To4()))
+	guestNetip := netip.AddrFrom4([4]byte(cfg.GuestIP.To4()))
 	protoAddr := tcpip.ProtocolAddress{
 		Protocol: ipv4.ProtocolNumber,
 		AddressWithPrefix: tcpip.AddressWithPrefix{
@@ -157,6 +161,7 @@ func NewFDIngress(cfg FDIngressConfig) (*FDIngress, error) {
 
 	ing := &FDIngress{
 		cfg:    cfg,
+		lease:  newDHCPLease(netip.PrefixFrom(gwNetip, prefixLen), gwNetip, guestNetip),
 		file:   f,
 		ep:     ep,
 		s:      s,
