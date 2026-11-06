@@ -169,21 +169,23 @@ assignment.
      variable a test needs reopens the gap, and the branch-built binary that
      reads them is the branch's code anyway (Security note).
    - A launcher accepting any command: the same as `env`.
-3. **The skill names the launcher, says how to record a refused case, and
-   says not to write workaround launchers.** `workflow-native` step "Git on
-   the workflow checkout" gains the launcher forms, and says: when a command
-   the procedure needs is still refused, do not write a Makefile, script or
-   `go run` program whose only job is to reach it; record it under **Blocked
-   on Jeff**. **Record** gains the queue handling: a queue step with a case
-   skipped that way is released with the refused command as the reason (not
-   `wf done`) and stays pending until the allowlist is fixed; a backlog entry
-   stays open with the same note. Scratch test inputs (a build script, a
-   probe program, a test context) stay fine.
+3. **The skill names the launcher first, sanctions the scratch Makefile
+   for what the launcher does not cover, and says how to record both** (a4,
+   amended in review r1: Jeff chose to allow the Makefile pattern).
+   `workflow-native` step "Git on the workflow checkout" gains the launcher
+   forms, and says: when a command the procedure needs is outside the
+   launcher's forms and still refused, put it in a scratch Makefile under
+   `.scratch/<name>/` and run it with `make -C .scratch/<name> <target>`
+   (already allowed). The digest names each such target and the exact
+   commands its recipe runs, so the real command stays visible to the reader,
+   and lists it under **Blocked on Jeff** as an allowlist gap to consider.
+   **Record** gains the queue handling for a case neither form can run: the
+   step is released with the refused command as the reason (not `wf done`)
+   and stays pending; a backlog entry stays open with the same note. Scratch
+   test inputs (a build script, a probe program, a test context) stay fine.
    Rejected:
-   - Documenting the scratch Makefile as the way: every session rewrites it,
-     its recipes hide the real command from the digest's reader and from the
-     allowlist, and it normalizes routing round the file instead of fixing
-     it.
+   - Forbidding the scratch Makefile (the draft's choice): Jeff preferred
+     the case to run and the gap to be reported over the step stopping.
    - Skipping the case and finishing the step: a blocking FLOW-09 step would
      be marked done with a case never run.
    - Saying nothing: the next refused command produces the next Makefile.
@@ -262,10 +264,11 @@ None.
   - (c) any command.
 
   Recommended: (a); `go test` covers the `WARDEN_HYPERV_*` live tests.
-- **a4. Refused cases and workaround launchers** (Decision 3). Proceeding
-  with the skill forbidding a Makefile or script written only to reach a
-  refused command, and releasing the step with the refused command as the
-  reason. Options:
+- **a4. Refused cases and workaround launchers** (Decision 3). Drafted as:
+  the skill forbidding a Makefile or script written only to reach a refused
+  command, and releasing the step with the refused command as the reason.
+  **Answered in review r1: the scratch Makefile is allowed** (the draft's
+  option (c)); Decision 3 is amended to match. Options as drafted:
   - (a) as stated;
   - (b) the skill says nothing;
   - (c) the skill documents the scratch Makefile as the fallback.
@@ -317,15 +320,17 @@ line 42 through line 48, becomes:
 > run as `tools/workflow/native/native-run.sh -- .scratch/<name>/tools/<path>
 > ...` (never its `tools/workflow/`), and a command that needs a `WARDEN_*`
 > variable as `tools/workflow/native/native-run.sh WARDEN_X=value -- <command>`,
-> never as `WARDEN_X=value <command>`. When a command the procedure needs is
-> still refused, never write a Makefile, script or program whose only job is
-> to reach it: record it under **Blocked on Jeff** and handle the step as
-> **Record** says. A session that still cannot commit or push leaves its
+> never as `WARDEN_X=value <command>`. A command the procedure needs that is
+> outside those forms and still refused goes in a scratch Makefile under
+> `.scratch/<name>/`, run with `make -C .scratch/<name> <target>`; the digest
+> names the target and the exact commands its recipe runs, and lists it under
+> **Blocked on Jeff** as an allowlist gap. A case neither form can run is
+> handled as **Record** says. A session that still cannot commit or push leaves its
 > changes for the wrapper, which saves them and reports the run as failed.
 
 **Record** (lines 84-99) gains, after the later-phase bullet:
 
-> - A case the allowlist refused: release the step with the refused command
+> - A case the allowlist refused and no scratch Makefile could run: release the step with the refused command
 >   as the reason and leave it pending (never `wf done` with the case
 >   skipped); a backlog entry stays open with the same note.
 
@@ -388,7 +393,7 @@ code changes. The weighing:
 - **Check after merge:** the first windows-desktop run that validates a
   Hyper-V branch runs `refresh-cache.sh --check` and a
   `WARDEN_RELAY_BOOT_VHDX` case through the launcher without a denial or a
-  scratch Makefile, and its digest says so. No native queue step (the session
+  scratch Makefile (the launcher covers both), and its digest says so. No native queue step (the session
   reads `main`'s settings), so no blocking native validation (FLOW-09).
 
 ## Implementation plan
