@@ -4,14 +4,14 @@ priority: 38
 kind: process
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/flow19-design-before-plan.md
 branch: feat/flow19-design-before-plan
 alters_relationships: null
+source: 'workflow-human 2026-11-05 (Jeff): make the build-link-subnet r3 test-drive the rule. The design review runs right after Design, before Plan; Plan comes after, and the feature returns for a second review only if planning finds reasons to alter the design.'
 pr:
   number: 101
   ci: green
-source: 'workflow-human 2026-11-05 (Jeff): make the build-link-subnet r3 test-drive the rule. The design review runs right after Design, before Plan; Plan comes after, and the feature returns for a second review only if planning finds reasons to alter the design.'
 steps:
   - id: x1-design
     phase: 1
@@ -23,10 +23,17 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261106T172405Z-attended
-      expires: 2026-11-06T19:24:05.170621102Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -57,3 +64,9 @@ history:
   - at: 2026-11-06T17:50:00Z
     by: human/jeff
     event: 'priority 28 -> 38 (Jeff, 2026-11-06 order: in implementation, then process, then fixes for implemented items, then new functionality; this item: 1. in implementation)'
+  - at: 2026-11-06T17:57:31Z
+    by: cloud/20261106T172405Z-attended
+    event: done x2-implement
+  - at: 2026-11-06T17:57:31Z
+    by: cloud/20261106T172405Z-attended
+    event: entered phase 3 (merge)
