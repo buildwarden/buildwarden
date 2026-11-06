@@ -404,7 +404,11 @@ one commit each:
 
 ## Design review
 
-Recorded at x1-design (FLOW-19).
+- **r1, 2026-11-06: approved at `e9b8653`** (Jeff, x1-design, FLOW-19). He
+  reviewed this design alongside flow19-design-before-plan,
+  wf-later-phase-host-steps and budgets-active-only, all on one review page
+  (published 2026-11-05 with every assumption first). He agreed with every
+  recommendation: a1 to a5 are confirmed as drafted, option (a).
 
 ## Consolidation
 
