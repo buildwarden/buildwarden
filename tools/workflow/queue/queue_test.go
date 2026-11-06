@@ -143,8 +143,82 @@ func TestListed(t *testing.T) {
 	if got := names(s.Listed(false)); got != "p a q" {
 		t.Fatalf("Listed(false) = %q, want open items in FLOW-05 order", got)
 	}
-	if got := names(s.Listed(true)); got != "p d a q" {
-		t.Fatalf("Listed(true) = %q, want done items added", got)
+	if got := names(s.Listed(true)); got != "p a q d" {
+		t.Fatalf("Listed(true) = %q, want done items added after the open ones", got)
+	}
+}
+
+func TestClass(t *testing.T) {
+	for _, c := range []struct {
+		kind, status, follows string
+		phase, want           int
+	}{
+		{"process", "queued", "", 1, 2},
+		{"process", "in_progress", "", 1, 2},
+		{"process", "in_progress", "", 2, 1},
+		{"process", "in_progress", "", 3, 2},
+		{"process", "in_progress", "", 4, 1},
+		{"process", "in_progress", "a", 3, 2},
+		{"", "queued", "", 0, 4},
+		{"", "queued", "a", 0, 3},
+		{"", "in_progress", "", 2, 4},
+		{"", "in_progress", "a", 2, 3},
+		{"", "in_progress", "", 3, 1},
+		{"", "in_progress", "a", 6, 1},
+		{"", "in_progress", "", 7, 4},
+		{"", "in_progress", "a", 7, 3},
+		{"", "in_progress", "", 8, 1},
+		{"", "done", "", 8, 0},
+		{"process", "done", "", 4, 0},
+	} {
+		f := &Feature{Kind: c.kind, Status: c.status, Follows: c.follows, Phase: c.phase}
+		if got := f.Class(); got != c.want {
+			t.Errorf("Class(%+v) = %d, want %d", c, got, c.want)
+		}
+	}
+}
+
+func TestValidateFollows(t *testing.T) {
+	parent := feature("parent", 1, "done")
+	fix := feature("fix", 2, "queued")
+	fix.Follows = "parent"
+	if errs := state(parent, fix).Validate(); len(errs) != 0 {
+		t.Fatalf("Validate: %v; a done parent is a valid one", errs)
+	}
+	for _, name := range []string{"nobody", "fix"} {
+		fix.Follows = name
+		errs := state(parent, fix).Validate()
+		if len(errs) != 1 || !strings.Contains(errs[0].Error(),
+			`fix: follows "`+name+`"`) {
+			t.Fatalf("follows %s: Validate = %v", name, errs)
+		}
+	}
+}
+
+func TestAddLogsRenumbering(t *testing.T) {
+	a, b, c := feature("a", 1, "in_progress"), feature("b", 2, "queued"),
+		feature("c", 3, "queued")
+	s := state(a, b, c)
+	fix := &Feature{Feature: "fix", Priority: 2, Follows: "a"}
+	changed, err := s.Add(fix, now, "cloud/run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changed) != 3 || len(a.History) != 0 {
+		t.Fatalf("changed %d, a's history %v; want fix, b and c, and a untouched",
+			len(changed), a.History)
+	}
+	for _, f := range []*Feature{b, c} {
+		want := fmt.Sprintf("priority %d -> %d (renumbered by wf new: fix queued at 2)",
+			f.Priority-1, f.Priority)
+		if len(f.History) != 1 || f.History[0].Event != want ||
+			f.History[0].By != "cloud/run" {
+			t.Errorf("%s history %+v, want %q", f.Feature, f.History, want)
+		}
+	}
+	if fix.Class() != 3 || s.Features[0] != fix {
+		t.Fatalf("fix is class %d, first is %s; want class 3, ahead of the class-4 a",
+			fix.Class(), s.Features[0].Feature)
 	}
 }
 
@@ -338,16 +412,19 @@ func TestLoadSaveRoundTrip(t *testing.T) {
 		[]byte("run_budget: {steps: 8}\n"+
 			"limits: {in_progress: 5, alters_relationships: 1}\n"), 0o644)
 	s := &State{Dir: dir}
-	f := feature("x", 1, "queued")
-	if err := s.Save(f); err != nil {
-		t.Fatal(err)
+	f, p := feature("x", 1, "queued"), feature("p", 2, "done")
+	f.Follows = "p"
+	for _, it := range []*Feature{f, p} {
+		if err := s.Save(it); err != nil {
+			t.Fatal(err)
+		}
 	}
 	got, err := Load(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Features) != 1 || got.Features[0].Steps[0].ID != "f0-branch-setup" ||
-		got.Config.RunBudget.Steps != 8 {
+	if len(got.Features) != 2 || got.Features[0].Steps[0].ID != "f0-branch-setup" ||
+		got.Features[0].Follows != "p" || got.Config.RunBudget.Steps != 8 {
 		t.Fatalf("loaded %+v", got)
 	}
 	if errs := got.Validate(); len(errs) != 0 {
