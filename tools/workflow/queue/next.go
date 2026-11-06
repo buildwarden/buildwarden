@@ -15,7 +15,8 @@ type Pick struct {
 	Starts bool
 }
 
-// Blocked says why an in-progress feature has no step for the worker.
+// Blocked says why an in-progress item, or a fix waiting on the item it
+// follows, has no step for the worker.
 type Blocked struct {
 	Feature string
 	Reason  string
@@ -75,59 +76,71 @@ func leasedTo(f *Feature, worker string, now time.Time) *Step {
 	return nil
 }
 
-// Next picks the worker's next step in FLOW-05 order: process items first,
-// then the highest-priority in-progress feature with a ready step; else, for
-// the cloud, a new feature when every in-progress one is blocked and the
-// in-progress limit allows, and for a human or host, a queued feature's step
-// of its affinity. A worker an in-progress process item holds gets only the
-// steps it already has leased. It also returns why each in-progress feature
-// it passed over is blocked, for the digest.
+// Next picks the worker's next step in FLOW-05 order (Ordered): by class,
+// in-progress before queued within a class, then priority. An in-progress
+// item gives its first ready step. A queued item starts only when every item
+// ahead of it is blocked: never under a hold, for the cloud only within the
+// in-progress limit, and for a fix only once the item it follows is done. A
+// human or host may take a queued item's step of its affinity without
+// starting it, unless it is a process item. A worker an in-progress process
+// item holds gets only the steps it already has leased. It also returns why
+// each in-progress item, and each fix waiting on its parent, it passed over
+// is blocked, for the digest.
 func (s *State) Next(worker string, now time.Time) (*Pick, []Blocked) {
 	var blocked []Blocked
 	inProgress := 0
 	for _, f := range s.Features {
-		if f.Status != "in_progress" {
-			continue
+		if f.Status == "in_progress" {
+			inProgress++
 		}
-		inProgress++
-		if h := s.Hold(f, worker); h != "" {
-			if st := leasedTo(f, worker, now); st != nil {
-				return &Pick{Feature: f, Step: st}, blocked
-			}
-			blocked = append(blocked, Blocked{f.Feature, "held by process item " + h})
-			continue
-		}
-		st, why := s.ready(f, worker, now)
-		if st != nil {
-			return &Pick{Feature: f, Step: st}, blocked
-		}
-		blocked = append(blocked, Blocked{f.Feature, why})
-	}
-	return s.nextQueued(worker, inProgress, now), blocked
-}
-
-// nextQueued is Next's fallback once no in-progress feature has a step: a
-// queued feature's step, which only a cloud claim (or any claim on a process
-// item) starts.
-func (s *State) nextQueued(worker string, inProgress int, now time.Time) *Pick {
-	if s.Hold(nil, worker) != "" {
-		return nil
 	}
 	cloud := Kind(worker) == "cloud"
-	if n := s.Config.Limits.InProgress; cloud && n > 0 && inProgress >= n {
-		return nil
-	}
-	// A human or host may also do a queued feature's preparatory step
-	// (pushing a plan, say); that does not start a feature.
-	for _, f := range s.Features {
-		if f.Status != "queued" {
-			continue
+	held := s.Hold(nil, worker) != ""
+	atLimit := cloud && s.Config.Limits.InProgress > 0 &&
+		inProgress >= s.Config.Limits.InProgress
+	for _, f := range s.Ordered() {
+		switch f.Status {
+		case "in_progress":
+			if h := s.Hold(f, worker); h != "" {
+				if st := leasedTo(f, worker, now); st != nil {
+					return &Pick{Feature: f, Step: st}, blocked
+				}
+				blocked = append(blocked, Blocked{f.Feature, "held by process item " + h})
+				continue
+			}
+			st, why := s.ready(f, worker, now)
+			if st != nil {
+				return &Pick{Feature: f, Step: st}, blocked
+			}
+			blocked = append(blocked, Blocked{f.Feature, why})
+		case "queued":
+			if held || atLimit {
+				continue
+			}
+			if p := s.parentOpen(f); p != "" {
+				blocked = append(blocked, Blocked{f.Feature,
+					"follows " + p + ", not yet done (FLOW-05)"})
+				continue
+			}
+			if st, _ := s.ready(f, worker, now); st != nil {
+				return &Pick{Feature: f, Step: st, Starts: cloud || f.IsProcess()}, blocked
+			}
 		}
-		if st, _ := s.ready(f, worker, now); st != nil {
-			return &Pick{Feature: f, Step: st, Starts: cloud || f.IsProcess()}
-		}
 	}
-	return nil
+	return nil, blocked
+}
+
+// parentOpen returns the item a queued fix follows while that item is still
+// open, so the fix is never built on a main that lacks it. A process item's
+// follows is only a record.
+func (s *State) parentOpen(f *Feature) string {
+	if f.Follows == "" || f.IsProcess() {
+		return ""
+	}
+	if p, err := s.Find(f.Follows); err == nil && p.Status != "done" {
+		return p.Feature
+	}
+	return ""
 }
 
 // ready returns the feature's first step the worker can take now, or why
@@ -231,7 +244,8 @@ func (s *State) altersHolder(f *Feature) string {
 }
 
 // NextFor is Next restricted to one feature, for an attended run on it: the
-// in-progress limit still counts every feature.
+// in-progress limit still counts every feature. It does not wait for the item
+// a fix follows: naming the item is the human's explicit word.
 func (s *State) NextFor(name, worker string, now time.Time) (*Pick, []Blocked) {
 	f, err := s.Find(name)
 	if err != nil {
