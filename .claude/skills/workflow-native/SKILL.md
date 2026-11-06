@@ -86,10 +86,14 @@ finish as in its step 2.5. Push the feature branch at each green checkpoint
 - A queue step that passes: `dist/wf done ... -step S` with the evidence
   (commands, versions, short log excerpt) in the queue history.
 - A failure: attach the logs under `native/<host>/<date>/` on the workflow
-  branch, release the step with the failure as the reason, and return the
-  feature with `dist/wf back` (a design gap) or add a fix item with the
-  `workflow-intake` skill (an implementation bug; unattended, record the
-  proposed item in the digest for Jeff instead).
+  branch. If the feature's branch causes it, release the step with the
+  failure as the reason and return the feature with `dist/wf back`, to
+  Design for a design gap or Implement for a bug (FLOW-06, FLOW-09).
+- A regression `main` already has (it fails on `main` too, side findings
+  included): file it at once as the feature's follow-up by the
+  `workflow-intake` skill's follow-up path, attended or not, and name it in
+  the step's evidence as "<slug> (follows <feature>)" (FLOW-09). The step
+  itself passes or fails on the feature's own cases.
 - A step `wf done` refuses as a later-phase step (the feature was returned
   while it ran, FLOW-04, FLOW-06): release it with the evidence as the
   reason and leave it pending; it is offered again once the feature is back
@@ -110,7 +114,9 @@ Unattended: append a `## Run host:<machine>/<timestamp>` section to
 `.dev/workflow/digest/<YYYY-MM-DD>.md` (America/Los_Angeles date), with
 **Moved** (per host and branch: what ran, pass or fail, evidence),
 **Blocked on Jeff** (anything this machine cannot do: a missing tool, a
-failure that needs a decision, a proposed fix item), **Spent** (steps and
+failure that needs a decision), **Follow-ups filed** (each as
+"<slug> (follows <item>)", so Jeff can say otherwise; "none" when none),
+**Spent** (steps and
 backlog entries against the native budget), and **Notes** (FLOW-18 check,
 whether Entire recorded the session, free disk at the end). Commit and push it.
 If a feature was unblocked or returned to Design, or a backlog entry failed,
