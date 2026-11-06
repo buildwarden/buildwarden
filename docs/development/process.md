@@ -18,8 +18,8 @@ The human takes part at three points, and the loop does everything else:
 
 1. **Questions** Design cannot settle alone (FLOW-07).
 2. **The design review**: one interactive session in which the human goes over
-   a non-trivial design and its implementation plan together, before
-   implementation starts, and again when the plan changes (FLOW-19).
+   a non-trivial design, after Design and before Plan, and again only when a
+   later phase finds the design must change (FLOW-19).
 3. **The merge** of the feature's PR, which is the sign-off (FLOW-08). The PR
    carries the archived design (FLOW-12).
 
@@ -107,7 +107,7 @@ branch. The phases are:
 |---|-------|-----------|
 | 0 | Branch setup | Branch exists on the remote. |
 | 1 | Design | Design doc complete per FLOW-02; no unanswered blocking question (FLOW-07); whether it needs a design review decided (FLOW-19). |
-| 2 | Plan | Implementation and testing tasks listed, each citing the rules it must satisfy; rework of existing code is listed as explicit tasks. The design review is recorded as approved, or validly skipped (FLOW-19). |
+| 2 | Plan | The design review recorded as approved, or validly skipped, before planning starts (FLOW-19). Implementation and testing tasks listed, each citing the rules it must satisfy; rework of existing code is listed as explicit tasks. The design's impact fields and `rule_changes` unchanged since its last approval, when there is one (FLOW-19); a skipped review is rechecked by its skip criteria. |
 | 3 | Implement | Tasks done; `make lint` and `make test` green; reference docs updated in the same change (UX-01); every edit to the rules or their enforcement cleared by an approved rule change (FLOW-14). |
 | 4 | Review | Behavioral-linter tier 1 green; tier-2 report produced for the diff (LINT-04); the rule-change clearance still passes (FLOW-14). |
 | 5 | Guide | User-facing narrative docs (guides, examples) written or updated. |
@@ -206,14 +206,15 @@ fixes, so its consolidation stays as small as it can.
 **Severity:** MUST
 **Check:** agent-judgment
 
-When implementation finds that the plan is no longer viable, or uncovers complexity
-the design did not consider, the feature returns to Design with the finding
-recorded. Design then decides; planning adds any alteration of already-implemented
-code as explicit tasks, and the changed plan goes through a design review again
-(FLOW-19). A feature that returns to Design more than twice escalates to a
+When implementation finds that the plan is no longer viable, or implementation
+or planning finds that the design must change or uncovers complexity it did not
+consider, the feature returns to Design with the finding recorded. Design then
+decides; planning adds any alteration of already-implemented code as explicit
+tasks, and the changed design goes through a design review again, judged on its
+delta (FLOW-19). A feature that returns to Design more than twice escalates to a
 `human` step instead of looping again. When Publish's consolidation finds work
-the approved plan already covers, the feature returns to Implement instead, with
-no new review.
+the plan already covers, the feature returns to Implement instead, with no new
+review.
 
 ---
 
@@ -229,7 +230,7 @@ Each question is one of:
   a `human` step; the worker moves on to other work.
 - **Assumed** — the design proceeds on a stated default, recorded in the design as
   "proceeding with X; confirm". Assumptions are confirmed in the design review
-  (FLOW-19), and must all be confirmed before implementation starts.
+  (FLOW-19), and must all be confirmed before planning starts.
 
 Every question states the options considered and a recommended answer. Later
 phases route questions back through Design, which escalates only what the design
@@ -314,8 +315,8 @@ feature goes back to Design for a review of it (FLOW-06), or the rule becomes a
 follow-up item. Rule changes go through the human's merge like any other change.
 
 When consolidation finds work beyond conflict fixes and wording, the feature goes
-back: to Implement for work the approved plan already covers, or to Design
-(FLOW-06) when the plan must change.
+back: to Implement for work the plan already covers, or to Design (FLOW-06)
+when the design must change.
 
 ---
 
@@ -527,15 +528,14 @@ put into its prompts.
 **Severity:** MUST
 **Check:** automated + agent-judgment
 
-Before implementation starts, the human reviews a non-trivial design and its
-implementation plan together, in one interactive session with an agent (the
-`workflow-human` skill), not on a PR or as a list of questions. The session goes
-over, at a high level:
+After Design and before Plan, the human reviews a non-trivial design in one
+interactive session with an agent (the `workflow-human` skill), not on a PR or
+as a list of questions. The session goes over, at a high level:
 
 - what changes and how: the components, seams and flows touched, before and
   after, with the `overview.md` pseudocode change where a flow changes;
-- the plan against the design: whether the tasks carry out the design, and where
-  they leave gaps or disagree;
+- the Validation plan and what Plan will work from: native validation steps,
+  tier-2 gaps, and, on a re-review, the finding and the tasks it touches;
 - the risks and what is deferred: native validation, tier-2 gaps, rules changed;
 - each `rule_changes` entry (FLOW-14), shown with its current and proposed
   wording and asked on its own: approved, approved with a change, or rejected;
@@ -544,10 +544,15 @@ over, at a high level:
 It ends approved, or with changes that send the feature back to Design with the
 human's notes as the finding. The design's **Design review** section records each
 review: its date, its outcome, the decisions taken, and for an approval, the
-commit the approved design was read at (`approved at <sha>`). Each approved
-rule change gets its own line, `rule change <ID> approved at <sha>`. A rejected
-rule change sends the feature back to Design (FLOW-06), unless the review keeps
-the feature and the design drops the change.
+commit of the design as approved, with any changes made in the sitting folded in
+(`approved at <sha>`). Each approved rule change gets its own line, `rule change
+<ID> approved at <sha>`; one "approved with a change" names that same commit. A
+rejected rule change sends the feature back to Design (FLOW-06), unless the
+review keeps the feature and the design drops the change.
+
+Plan works from the approved design. A reason Plan finds to change it is a
+finding for Design (FLOW-06), and the fresh review follows the delta rule below.
+Otherwise there is no second review.
 
 Design decides whether the review is needed and records it as
 `design_review: required` or `skip` in the front-matter and the queue. `skip` is
@@ -559,15 +564,17 @@ one back. An archived design need not carry `design_review`: it is past the
 gate, and designs archived before this rule never had the key.
 
 When a feature returns to Design (FLOW-06), a fresh review follows the new
-plan. Whether it may be skipped is judged on what changed since the last
+design. Whether it may be skipped is judged on what changed since the last
 approval, not on the whole design: `skip` is allowed when the impact fields
 above are unchanged from the design at its approved commit, no question is
 open, and no rule changed since that commit. A minimal change after an approval
 needs no re-approval.
 
 The automated part checks the recorded decision, the skip criteria and that each
-review the queue seeded has an approval (a `rule change` line is not one); the
-agent part judges whether the session covered the design and the plan.
+review the queue seeded has an approval (a `rule change` line is not one): a
+design-review step's completion and the Plan gate check its approval, and the
+Plan gate fails on an impact or `rule_changes` change since it. The agent part
+judges whether the session covered the design.
 
 ---
 
