@@ -433,10 +433,42 @@ branch with `origin/main` at `9787fb4` merged in. One commit per task.
 
 ## Consolidation
 
-Filled in at x2-implement (FLOW-10, FLOW-15). Known overlaps:
+Filled in at x2-implement (FLOW-10, FLOW-15), with `origin/main` at
+`9787fb4` merged into the branch (merge commit, no rebase).
 
-- wf-later-phase-host-steps (queued) also edits `Back` in `phases.go`.
-- budgets-active-only (queued) may edit the queue code.
+- **Landed on `main` since the fork (`1cad5b3`):** build-link-subnet (#98).
+  It touches `docs/development/bootstrap.md` and `overview.md`, none of the
+  lines this item changes, and no `tools/workflow/` or `.claude/` file. The
+  merge had no conflicts. No shared abstraction or term to reconcile.
+- **`overview.md` (FLOW-15):** it describes the product's components, not the
+  feature loop; no pseudocode changes.
+- **wf-later-phase-host-steps (priority 27, in parallel on
+  `feat/wf-later-phase-host-steps`):** it also rewrites `IsGate`, `Seed` and
+  `Back` in `tools/workflow/queue/phases.go` and the `done` case in
+  `cmd/wf/main.go`, and edits `queue_test.go` and `summary_test.go`. This
+  item merges first (priority 26). At its merge-main, keep this item's
+  needs-based `IsGate` (its `gateTemplate`, the last seeded template step,
+  stays for `waitsAdded` and `rerunPublishHostSteps`, where phase 6's last
+  step is still its gate), add its `waitsAdded` field to the new phase-2
+  template entries, keep `Seed`'s every-template suffix and dropped needs
+  beside its added-step linking, keep both `done` checks in `main.go`
+  (`IsDesignReview` and its phase check), and change its `Back` comment's
+  "after Plan" to "before Plan". Its tests that walk phase 2 expect the new
+  order.
+- **budgets-active-only (priority 28):** its branch so far carries only its
+  design; no overlap with this item's files beyond `process.md` and the
+  workflow skills, which it may edit later. Its merge-main reconciles them.
+- **Behaviour the rest of the loop must now follow:** a phase's gate is the
+  template step nothing else of its seed needs, not the last in the
+  template; a design-review step's `wf done` runs its own check; the Plan
+  gate fails on an impact or `rule_changes` change since the approval.
+  Stated in FLOW-19 and the queue code's comments; no further rule change.
+- **Not changed:** `wf-design.md`'s "FLOW-05's slot decides whether planning
+  may start": the slot gates phase 2, which now opens with the review, so
+  the review also waits for the slot, as `next.go` already did for every
+  phase-2 step. The migration's legacy `f3-design-review` (for designs that
+  predate FLOW-19) stays waivable: `IsDesignReview` names only the phase-2
+  template step.
 
 ## Rollback notes
 
