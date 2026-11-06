@@ -6,7 +6,7 @@ holds:
   - host:*
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/native-allowlist-scratch-tools.md
 branch: feat/native-allowlist-scratch-tools
 alters_relationships: null
@@ -25,10 +25,17 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261106T231440Z-attended
-      expires: 2026-11-07T01:14:40.422668522Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -59,3 +66,9 @@ history:
   - at: 2026-11-06T23:14:40Z
     by: cloud/20261106T231440Z-attended
     event: claimed x2-implement until 2026-11-07T01:14:40Z
+  - at: 2026-11-06T23:34:26Z
+    by: cloud/20261106T231440Z-attended
+    event: done x2-implement
+  - at: 2026-11-06T23:34:26Z
+    by: cloud/20261106T231440Z-attended
+    event: entered phase 3 (merge)
