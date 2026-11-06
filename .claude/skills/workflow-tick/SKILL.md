@@ -133,18 +133,23 @@ If the file exists, append a new `## Run <W>` section. Sections, in order:
 - **Process items** first, when any is queued or in progress (FLOW-03,
   FLOW-05): each one's phase and what it holds (`dist/wf status` prints
   `process item, holds: ...`), and any `held by process item` lines from
-  `wf next`.
+  `wf next`. Only queued and in-progress ones; one this run closed goes in
+  **Moved**.
 - **Moved**: each step taken, its outcome, and the branch head it left.
 - **Blocked on Jeff**: open blocking questions (options and recommendation),
   design reviews waiting (`*-design-review` steps, FLOW-19), open PRs waiting
-  for his merge (phase 7), `escalate` steps, runaway budgets (FLOW-13),
-  priority confirmation.
+  for his merge (phase 7), `escalate` steps, runaway budgets, priority
+  confirmation. List a runaway budget only as `QUEUE.md`'s **Needs Jeff**
+  does, one line per open item it names (FLOW-13); do not judge budgets
+  yourself, and never call a run overrun a runaway.
 - **Design reviews skipped** this run (`design_review: skip`), each with the
   reason Design gave, so Jeff can call one back (FLOW-19).
 - **Waiting on a host**: `host:<name>` steps and open native gaps, by
   machine (`hosts.yaml`), and any native run already in today's digest.
-- **Spent**: steps this run against `run_budget.steps`, and each touched
-  feature's spent against estimate, in steps and runs.
+- **Spent**: steps this run against `run_budget.steps`, and each open item
+  the run touched with its steps and runs spent against estimate, nothing
+  flagged as over budget. An item this run closed (`f8-close`, `x4-close`)
+  is in **Moved**, not here (FLOW-13).
 - **Notes**: FLOW-18 check result, whether Entire recorded the session.
 
 Commit and push. End the session with the digest's text as the final message,

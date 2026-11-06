@@ -23,7 +23,8 @@ intake only frames the item. Rules: FLOW-01, FLOW-05, FLOW-12, FLOW-13.
    `dist/wf status`; a new item never jumps the top-priority feature in
    progress without his say, FLOW-05), and an estimate in steps and runs.
    Size guide: small 7 to 9 steps, one run; medium 12 to 18; large 25 or more.
-   The runaway check escalates at twice the step estimate (FLOW-13).
+   The runaway check escalates at `runaway_factor` (2) times the step
+   estimate, while the item is open (FLOW-13).
 4. Write it:
 
    ```bash
