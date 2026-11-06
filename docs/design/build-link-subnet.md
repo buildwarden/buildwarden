@@ -1,6 +1,6 @@
 ---
 feature: build-link-subnet
-status: draft
+status: archived
 drivers: [container, qemu, vz, hyperv, firecracker]  # every VM driver: the claim carries the link (driver/session.go), driver/linuxguest (qemu, firecracker), driver/winguest (qemu, hyperv), driver/vz, driver/firecracker, driver/relayvm, the relay VM init and the direct-boot inits. container is declared conservatively (FLOW-02): relaycfg/, relay/ and cmd/relay change under it, but its driver sends no build_link and its behaviour is unchanged (question a17)
 seams: [relay-claim, relay-guest-api, bootstrap-model]  # relay-claim: the claim gains build_link (question a11); relay-guest-api, conservatively: the relay's address on the build segment now comes from the claim, and the relay's DHCP lease becomes the guest's address on vz (host mode) and for the qemu and Firecracker direct-boot inits (vm mode, a14 (d)) (protocol unchanged); bootstrap-model: BOOT-03's launcher-addressing wording gains a DHCP lease served by the relay (Bootstrap comparison, question a14). executor-initialize is unchanged: --gateway/--ip keep their contract, only the values change (question a19)
 surfaces: [cli, config, output]  # [vm] build_link and --build-link on build, shell and doctor (advanced, Decision 8); doctor's build-link and stamp lines; fixable stale-launcher, overlap and old-relay refusals; firecracker's resolver refusal names the configured link (UX-01, UX-04, ORCH-03)
@@ -2088,6 +2088,22 @@ landed. The ones this feature meets:
   at Close. **#94, #95** are native-tick and workflow-human changes, with
   no overlap.
 
+At Publish, `main` merged again at `4c8f9dc` (#97: `make deadcode` builds
+deadcode with the module's toolchain, the environment issue the FLOW-15
+sweep below worked around), with no conflict. The one branch change since
+the consolidation commit `a68ac2c` is `4f9a0e3`, a post-review fix found by
+native validation (f6-validate-macos-vz, attended): every compressed vz
+ledger came out 0 bytes while the build reported SUCCEEDED. Root cause:
+`startHostRelay` wrapped the socket pair's relay fd in `os.NewFile`, whose
+finalizer closes it, while `VirtualNetwork.Close` also closed it; once
+`runVMs` moved the network's Close ahead of `FinalizeOutput`, the freed fd
+number was reused by `ledger.zst` and the finalizer closed it mid-write
+(bad file descriptor). The double close is on `main` too; main's later
+teardown hid it. The relay now inherits a dup (`VirtualNetwork.RelaySocket`),
+closed by the parent once the child starts, so the pair's fds close once.
+Pinned by `driver/vz/network_unix_test.go` `TestRelaySocketIsADuplicate`
+and verified natively on both links and a build longer than an hour.
+
 **Terminology.** The guide, CLI help, doctor output, overview and code use
 the same words: build link, `[vm] build_link` / `--build-link`, relay
 address and guest address, link-channel stamp, one-time rebuild (refresh,
@@ -2250,4 +2266,69 @@ None yet.
 
 ## Archive summary
 
-Filled in at Publish (FLOW-12).
+Designed 2026-11-03 to 2026-11-05 (three rounds; r1 changed the request to a
+configurable link, r2's per-value bakes were dropped for a per-build
+channel), approved at design review r3 (`c19e8f0`) with rule change BOOT-03
+approved at `303e713`, reviewed twice by tier 2 (`878d510bc61b`: 0 MUST,
+1 MUST-review, 8 SHOULD; `69fe17c21046`: 0 MUST, 3 SHOULD), validated on
+linux-kvm, qemu-any, windows-hyperv and macos-vz, published 2026-11-06.
+
+- **Built.** The relay-to-build link moved off `10.0.0.0/30` (a clash with
+  the AWS VPC resolver `10.0.0.2`) to `100.127.255.252/30` (relay `.253`,
+  guest `.254`), the last `/30` of RFC 6598, configurable as an advanced
+  option (`[vm] build_link`, `--build-link` on `build`, `shell`, `doctor`).
+  `driver/buildlink` is the one definition; the claim carries it as
+  `build_link {prefix, relay, guest}` (`relaycfg`, refused-and-claimable on a
+  bad value). The relay owns its build interface's address: in vm mode it
+  flushes and sets it by netlink from the claim and serves one fixed DHCP
+  offer bound to that interface; in host mode (vz) it builds its netstack at
+  claim and serves an infinite lease. It refuses upstream dials into the
+  link in both modes. Guests take the link per build: seeds as before
+  (linuxguest, winguest), the qemu and Firecracker direct-boot inits by DHCP
+  checked against `warden.link_ip`/`link_gw` on the command line (fallback
+  to the keys), vz's `warden-boot` by DHCP. Launcher-carrying assets get a
+  one-time `link-channel` stamp checked before boot and in doctor (BLOCKED
+  for the Hyper-V relay VHDX and the vz image). Every VM driver refuses a
+  link overlapping a host interface; Firecracker's resolver exclusion and
+  Hyper-V's `--nat-prefix` refusal follow the resolved link. BOOT-03 now
+  names a DHCP lease served by the relay as a launcher-addressing channel.
+- **Decisions taken:** RFC 6598's last `/30` as default (a1); one Go
+  definition and no asset bakes a value (a2 (c)); the claim carries the link
+  on `/v1/claim` (a11); the relay, not the init, addresses its build
+  interface (a12, a13); DHCP from the relay for vz and, at r3, the
+  direct-boot inits, with the command-line keys as cross-check (a14 (d));
+  stamps instead of link records (a3, a15); the link blocked as an upstream
+  in every relay mode (a16); configurable `/30` disjoint from BuildWarden's
+  ranges (a6 reversed, a9); Hyper-V's fixed `.2`, missing token, ignored
+  `--nat-prefix` and fixed DNS deferred (a18).
+- **Rejected:** another RFC 1918 or link-local `/30`, benchmark/TEST-NET/
+  class E, policy-routing the relay's own sockets; r2's per-value bakes
+  (kernel keys in relay inits, a VHDX rebake per value, a vz image per
+  value, link records); keeping the address in the relay init; exec'ing
+  busybox `ip`; `/v2/claim` or a claim `version` field; keys first with DHCP
+  only without them; no stamp; a general baked-asset staleness check here; an
+  `[advanced]` table, key-only, an environment variable, any prefix length.
+- **Found late.** Native validation on macos-vz caught a latent fd double
+  close in `driver/vz` (`os.NewFile` finalizer plus `VirtualNetwork.Close`)
+  that the moved teardown exposed as empty compressed ledgers (`4f9a0e3`,
+  Consolidation). Windows guests now take the relay's lease before
+  `warden-io initialize` sets the same static values, so they end
+  DHCP-configured where main's were Manual; address and route are equal.
+- **Open:** the in-guest DHCP flood-and-forge and vz ARP-forgery TEST-08
+  cases were run on no host and are handed to `security-suite`; Review
+  SHOULD 5 is covered by a source-level test, not a behavioural one.
+  Follow-ups `hyperv-relay-per-build-channel` and `baked-asset-staleness`
+  are queued; a `specs/relay-claim/v1.md` contract and a vz per-build seed
+  disk are named, not queued.
+- **For future designs touching `build-link`, `relay-claim`,
+  `relay-interface-setup`, `dhcp`, `launcher-stamp`, `stale-assets`,
+  `address-plan` or `image-prepare`:** take the link only from
+  `driver/buildlink` and the request (`req.Link()`), never a literal (a
+  tier-0 scan enforces it outside tests); a new guest or launcher gets the
+  link per build through the claim, its DHCP lease or its seed, never baked;
+  a change to how a launcher reads the link bumps `buildlink.Channel`, and
+  each launcher-building tool writes the stamp; a claim field is additive and
+  an old relay's unknown-field refusal must map to a `driver.Fixable`. The
+  two direct-boot inits and their lease scripts are deliberate copies pinned
+  identical by tests. Hyper-V's relay is still at a fixed `192.168.240.2`
+  with no claim token until `hyperv-relay-per-build-channel` lands.
