@@ -8,6 +8,9 @@ phase: 2
 design: docs/design/budgets-active-only.md
 branch: feat/budgets-active-only
 alters_relationships: null
+pr:
+  number: 100
+  ci: green
 source: 'workflow-human 2026-11-05 (Jeff): all archived/done features should be set aside and fully ignored except during explicit retrospectives. Over-budget only matters as a gate against rampant loops that would otherwise drastically overrun.'
 steps:
   - id: x1-design
