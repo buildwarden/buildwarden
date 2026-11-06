@@ -320,6 +320,14 @@ func TestPlanGateGuardsTheApprovedDesign(t *testing.T) {
 	if rs := Phase(env, f); !OK(rs) {
 		t.Errorf("a rule change with its own approval: %s", failures(rs))
 	}
+	// A re-review approved a changed impact field: the guard compares
+	// against the last approval, not the first.
+	seams := strings.Replace(ruled, "seams: []", "seams: [relay-claim]", 1)
+	second := commit(t, work, seams+review)
+	commit(t, work, seams+review+"- r2: approved at `"+second+"`.\n")
+	if rs := Phase(env, f); !OK(rs) {
+		t.Errorf("a design as its last approval left it: %s", failures(rs))
+	}
 }
 
 func TestSkipCriteria(t *testing.T) {

@@ -24,16 +24,17 @@ restate).
    every component the design names is carried out by a task, and no task
    does something the design does not say. The design is approved, so fix a
    gap in the plan, and send a gap in the design back (FLOW-06).
-5. Run `dist/wf check -feature F` before you finish. It fails when the
-   design's impact fields or `rule_changes` differ from the design at its
-   last approval (FLOW-19). That failure, or any other reason to change the
+5. Commit the plan on the feature branch, then run `dist/wf check -state
+   <workflow checkout> -repo . -feature F` from the feature checkout: the
+   check reads the design as committed. It fails when the design's impact
+   fields or `rule_changes` differ from the design at its last approval
+   (FLOW-19). That failure, or any other reason to change the
    design (a decision that cannot work as written, a gap, a rule change
    without its own `rule change <ID> approved at <sha>` line), is a design
    change: do not plan around it or edit the design. Record the finding,
    with the delta the check names, in the queue history and return
    `back-to-design` (FLOW-06).
 
-Commit on the feature branch and return the task count and anything that needs
-Design. When the review is required, `f2-design-review` precedes `f2-plan` and
+Return the task count and anything that needs Design. When the review is required, `f2-design-review` precedes `f2-plan` and
 is done before Plan is dispatched; the tick's `wf done` on `f2-plan` is the
 phase's gate (FLOW-03, FLOW-19).
