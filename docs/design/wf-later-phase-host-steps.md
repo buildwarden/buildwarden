@@ -1,6 +1,6 @@
 ---
 feature: wf-later-phase-host-steps
-status: draft
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -531,8 +531,61 @@ at `9787fb4` into the branch.
 
 ## Rollback notes
 
+Revert the PR. No queue file format changes, so open items stay valid; steps
+then become offered regardless of phase again, and a `wf back` drops pending
+later-phase steps as before, so the hand-added `needs` workaround would
+return.
+
 ## Archive summary
 
-Filled in at Publish, in the feature's PR, and refreshed when the PR changes
-(FLOW-12): what was built, decisions taken and rejected, and what a future design
-touching these `concepts` needs to know.
+Implemented 2026-11-06 by the cloud loop (attended, x2-implement), approved
+at design review r1 (`6824812`, Jeff; a1 to a6 at their recommendation).
+
+- **Built: phase-aware readiness** (`tools/workflow/queue/next.go`).
+  `Offered(f, st)` holds when the step's phase is at or before the feature's,
+  or the step is `human`. `ready()`, `leasedTo()` and QUEUE.md's
+  `readySteps()` use it, so `wf next` and `wf gate` no longer offer, or wake a
+  machine for, a later-phase host or cloud step. `Early(f, st)` is the one
+  FLOW-04 refusal, returned by `wf claim` and `wf done`. QUEUE.md's "Waiting on
+  a host" marks a not-yet-offered step `(from phase <n>)`.
+- **Built: `wf back` keeps added steps** (`phases.go`). A *template step* is
+  one whose id, less any `-r<n>`, is a template name of its phase
+  (`isTemplate`, via `stepTemplates`). Back keeps done steps, steps of earlier
+  phases, and pending non-template steps of later phases; it clears the kept
+  steps' leases, prunes dropped ids from every kept step's `needs`, and logs
+  each. For each phase-6 host step base name with a done step and no pending
+  one it appends a pending `<base>-r<n>` copy with the latest note.
+- **Built: Publish links its added steps.** The feature round's `open-pr`
+  template carries `waitsAdded`; seeding that phase makes the gate need every
+  pending added step of the phase, and each added `host:*` step need the
+  phase's `consolidate` step (`addNeeds` dedups). `Seed` and `Back` find that
+  phase by the flag (`waiter`), not by which template is last.
+- **Rule text** (`docs/development/process.md`): FLOW-04 gains the readiness
+  rule, FLOW-06 what a return does to later-phase steps, FLOW-09 that the
+  Publish host step runs after consolidation and the PR's opening needs it.
+  Severities and checks unchanged.
+- **Agents and skills:** wf-design step 3 adds `f6-validate-<host>` with no
+  `needs` and reconciles kept steps on a return; wf-plan refines notes only;
+  workflow-native releases a step `wf done` refuses as a later-phase step.
+  `wf back`'s usage line names `-to 1|3`.
+- **Decisions taken:** human steps stay offered early (a1); keep pending
+  non-template steps, clear leases, prune `needs` (a2); requeue done Publish
+  validations on a return (a3); `waitsAdded` on `open-pr` only, with host
+  steps after `consolidate` (a4); Design owns these steps, Plan refines notes
+  (a5); no edit to in-flight queue files (a6).
+- **Rejected:** gating every affinity; a gate on a named step; offering host
+  steps from phase 4 or 5; re-pointing `needs` at the new round; reseeding
+  from `native_validation`; an `added_by` field; keeping a lease across a
+  return; leaving or flipping done validations; linking every phase's gate;
+  offering validation from the start of Publish; a done-when check on
+  validations; Plan adding the steps.
+- **Deviation, approved at merge:** `IsGate` keeps its own id parse beside
+  `stepTemplates` until flow19-design-before-plan lands; that merge makes
+  `IsGate` call `stepTemplates` so one parser remains.
+- **For future designs touching `step-readiness`, `wf-back`, `wf-gate` or
+  `native-validation`:** "added step" means non-template step, and the
+  template is the only record of which is which, so renaming a template step
+  changes what Back keeps. Steps added after Publish is seeded (a FLOW-11
+  repair) are not linked to the gate; the session adding one links it. The
+  workflow branch `README.md` paragraph "Design adds the steps it finds" is
+  updated at x3-merge, when the loop first runs this `wf`.
