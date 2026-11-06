@@ -43,9 +43,19 @@ absolute path, and never `cd .dev/workflow && git ...`. A branch under test
 goes in a worktree under `.scratch/` (`git worktree add .scratch/<name> <ref>`),
 driven with `git -C .scratch/<name> ...`, with its binaries run as
 `.scratch/<name>/dist/warden ...` and its targets with
-`make -C .scratch/<name> <target>`. A session that still
-cannot commit or push leaves its changes for the wrapper, which saves them and
-reports the run as failed.
+`make -C .scratch/<name> <target>`, all from the checkout root. Its scripts
+run as
+`tools/workflow/native/native-run.sh -- .scratch/<name>/tools/<path> ...`
+(never its `tools/workflow/`), and a command that needs a `WARDEN_*`
+variable as `tools/workflow/native/native-run.sh WARDEN_X=value -- <command>`,
+never as `WARDEN_X=value <command>`. A command the procedure needs that is
+outside those forms and still refused goes in a scratch Makefile under
+`.scratch/<name>/`, run with `make -C .scratch/<name> <target>`; the digest
+names the target and the exact commands its recipe runs, and lists it under
+**Blocked on Jeff** as an allowlist gap. A case neither form can run is
+handled as **Record** says. A session that still cannot commit or push
+leaves its changes for the wrapper, which saves them and reports the run as
+failed.
 
 ## Set up
 
@@ -98,6 +108,10 @@ finish as in its step 2.5. Push the feature branch at each green checkpoint
   while it ran, FLOW-04, FLOW-06): release it with the evidence as the
   reason and leave it pending; it is offered again once the feature is back
   in its phase.
+- A case the allowlist refused and no scratch Makefile could run: release
+  the step with the refused command as the reason and leave it pending
+  (never `wf done` with the case skipped); a backlog entry stays open with
+  the same note.
 - Backlog entries: set `status: done` with the date and evidence, or keep them
   open with what was found.
 - `dist/wf validate -state .dev/workflow` must pass before each push.
