@@ -342,62 +342,83 @@ change the design's impact or rule changes past what was approved.
 
 ## Implementation plan
 
-Written in full at x2-implement (process item, FLOW-03). The expected tasks,
-one commit each:
+Written at x2-implement, after the review (process item, FLOW-03), on the
+branch with `origin/main` at `9787fb4` merged in. One commit per task.
 
 1. `docs/development/process.md` (FLOW-03, FLOW-06, FLOW-07, FLOW-10,
-   FLOW-19): the wording in Design.
-2. `tools/workflow/queue/phases.go` (FLOW-03, FLOW-19; Decisions 1, 7):
-   - the phase-2 template order and needs, and its comment (`:41-42`);
-   - `IsGate` picks the seeded template step no step of the same seed
-     needs;
-   - `Seed`'s suffix chosen free for every template id, and needs on
-     unseeded steps dropped;
-   - the `Back` comment (`:153`) says "before Plan";
-   - `queue.go`'s `DesignReview` comment (`:74-76`): it decides whether
-     phase 2 seeds a design-review step before Plan.
-3. `tools/workflow/check/review.go` and `check.go` (FLOW-19, FLOW-06;
+   FLOW-19): the wording in Design. Shape item 2; FLOW-03's Plan row;
+   FLOW-06's opening, "the changed design" and "work the plan already
+   covers"; FLOW-07's "before planning starts"; FLOW-10's return paragraph;
+   FLOW-19's opening, the plan bullet replaced by the Validation plan
+   bullet, the new "Plan works from the approved design" paragraph, the
+   record's sha "as approved, with any changes made in the sitting folded
+   in" and the "approved with a change" line, the delta paragraph's "new
+   design", and the automated part.
+2. `tools/workflow/queue` (FLOW-03, FLOW-19, GLOBAL-01; Decisions 1, 7, 8):
+   - `phases.go`: the phase-2 template becomes `design-review` (human),
+     then `plan` (cloud) needing it, with its comment;
+   - `IsGate`: the gate is the seeded template step of the phase that no
+     other step of the same seed (same retry suffix) needs, so an
+     old-order pair keeps the review as its gate;
+   - `Seed`: the retry suffix is the first one free for every template id
+     of the phase; a `needs` entry on a template step not seeded (a skipped
+     review) is dropped;
+   - `IsDesignReview(st)` names a design-review step, for `wf done`;
+   - `Back`'s comment says the fresh review is seeded before Plan;
+   - `queue.go`: `DesignReview`'s comment says it decides whether phase 2
+     seeds a design-review step before Plan.
+3. `tools/workflow/check` (FLOW-19, FLOW-06, FLOW-14, GLOBAL-01;
    Decisions 4, 6):
-   - `check.Review(env, f)` runs `reviewed()`;
-   - the Plan gate adds the approval-delta check. It reuses `impactDelta`
-     and adds a `rule_changes` comparison that accepts an entry with its
-     own approval line, as `cleared` (`rulechange.go`) does;
-   - `reviewed()`'s comment says it is the design-review step's and the
-     Plan gate's check.
+   - `Review(env, f)` runs `reviewed()`, the design-review step's check;
+   - `approvalDelta()`, run at the phase-2 gate after `reviewed()`: on a
+     required review, the impact fields (`impactDelta`) and `rule_changes`
+     at the branch head equal the design at the last `approved at <sha>`;
+     an entry absent or different there passes when one of its own `rule
+     change <ID> approved at <sha>` lines names a commit whose front-matter
+     carries the entry as it is now; an entry dropped since the approval
+     fails; a skip is left to `skipValid`;
+   - `reviewed()`'s comment names both callers.
 4. `tools/workflow/cmd/wf/main.go` (FLOW-03, FLOW-19; Decision 6): `done`
-   on a `*-design-review` step runs `check.Review` (beside `:245`).
-5. Tier-0 tests per the Validation plan (TEST-01, TEST-02).
-6. `.claude/agents/wf-plan.md` (FLOW-06, FLOW-14, FLOW-19):
-   - Plan starts from the approved design;
-   - Plan edits only the Implementation plan;
-   - step 4's reason (`:22-24`, "The design review starts from a consistent
-     pair") becomes: the design is approved, so fix a gap in the plan and
-     send a gap in the design back (FLOW-06);
-   - Plan runs `dist/wf check -feature F` before finishing; a guard
-     failure, or any other reason to change the design, a rule change
-     without its own approval line included, returns `back-to-design` with
-     the delta as the finding;
-   - the closing line (`:30-31`): `f2-design-review` precedes `f2-plan`,
-     and the tick's `wf done` on `f2-plan` is the phase gate.
-7. `.claude/agents/wf-design.md` (FLOW-19): step 5 says a `required` review
-   is seeded before Plan.
+   on a design-review step runs `check.Review` before `Complete`, beside the
+   gate check.
+5. Tier-0 tests (TEST-01, TEST-02), per the Validation plan:
+   - `queue_test.go`: `TestCompleteWalksOneRound` (new order, `f2-plan` the
+     gate, the review a human step before Plan);
+     `TestSkippedDesignReviewIsNotSeeded` (`f2-plan` has no needs);
+     `TestOldOrderPhaseTwoKeepsTheReviewAsGate`;
+     `TestReentryAfterADroppedReviewGetsFreshIds` (with `Validate`);
+     `TestBackToDesignEscalatesOnTheThirdReturn` (review `-rN` before plan
+     `-rN`);
+   - `summary_test.go` and `testdata/queue.md` for the new needs, if they
+     show them;
+   - `check_test.go`: `Review` without and with an approval;
+     `TestDesignReviewRequired` approves a real commit;
+     `TestPlanGateGuardsTheApprovedDesign` (each impact field, a
+     `rule_changes` entry added with and without its own approval line, an
+     entry dropped); the skip and process cases unchanged.
+6. `.claude/agents/wf-plan.md` (FLOW-06, FLOW-14, FLOW-19): Plan starts from
+   the approved design and edits only its Implementation plan; step 4's
+   reason; Plan runs `dist/wf check -feature F` before finishing and
+   returns `back-to-design` with the delta on a guard failure or any other
+   reason to change the design, an unapproved rule change included; the
+   closing line on step order and the gate.
+7. `.claude/agents/wf-design.md` (FLOW-19): a `required` review is seeded
+   before Plan.
 8. `.claude/skills/workflow-human/SKILL.md` step 3 (FLOW-19, FLOW-07;
-   Decisions 3, 5):
-   - read the design, and the plan only on a re-review that a Plan finding
-     caused;
-   - 3.2 becomes the Validation plan and what Plan will work from;
-   - 3.5 folds in-sitting changes into the design before `approved at
-     <sha>`, and "of the design as read" becomes "of the design as
-     approved, changes folded in", with `read at <sha>` when it differs.
+   Decisions 3, 5): read the design, and the plan only on a re-review a
+   Plan finding caused; 3.2 is the Validation plan and what Plan will work
+   from; 3.5 folds in-sitting changes into the design before `approved at
+   <sha>`, names the design as approved, and records `read at <sha>` when
+   it differs.
 9. `.claude/skills/workflow-tick/SKILL.md` and `.claude/agents/wf-publish.md`
-   (FLOW-06, FLOW-10; Decisions 3, 9):
-   - "work the plan already covers" (workflow-tick `:109`, wf-publish
-     `:19`);
-   - "when the design must change" (wf-publish `:20`);
-   - workflow-tick's Moved line (`:137`) gives Plan's task count for an
-     `f2-plan` step.
-10. `overview.md` (FLOW-15): no component flow changes; none expected.
-11. Consolidation, `make lint`, `make test` (FLOW-10, FLOW-17).
+   (FLOW-06, FLOW-10; Decisions 3, 9): "work the plan already covers";
+   "when the design must change"; the Moved line gives Plan's task count
+   for an `f2-plan` step.
+10. `docs/book/src/concepts/overview.md` (FLOW-15): checked; it describes
+    components, not the workflow, so no pseudocode changes.
+11. Consolidation, then the gates (FLOW-10, FLOW-17): `make lint`, `make
+    test`, `make enforcement`, `tools/workflow/flow18-check.sh`, and `wf
+    check` for this item.
 12. At x4-close, on the `workflow` branch (FLOW-03): README's phase-2 row
     (`f2-design-review`, then `f2-plan`) and its return paragraph ("Design
     seeds a fresh review before Plan").
