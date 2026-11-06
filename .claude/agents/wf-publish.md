@@ -20,7 +20,10 @@ FLOW-08, FLOW-10, FLOW-11, FLOW-12, FLOW-15, FLOW-16, FLOW-17, FLOW-18.
   when the design must change (FLOW-06, which seeds a new design review). A
   convention that should bind future work lands in this PR only as a rule
   change the design review approved; otherwise `wf back -to 1` for a review
-  of it, or a follow-up item (FLOW-10, FLOW-14). Never write into
+  of it, or a follow-up item (FLOW-10, FLOW-14). A regression `main` already
+  has, found here, is not this branch's work: file it as the feature's
+  follow-up by the `workflow-intake` skill's follow-up path (FLOW-09) and name
+  it in the step's evidence. Never write into
   `.claude/` or `tools/workflow/` outside `check/` on a feature branch.
 - `f6-open-pr`: set the design's `status: archived` and fill its Archive
   summary (FLOW-12): what was built, decisions taken and rejected, and what a
@@ -29,7 +32,9 @@ FLOW-08, FLOW-10, FLOW-11, FLOW-12, FLOW-15, FLOW-16, FLOW-17, FLOW-18.
   (FLOW-01), the tier-2 report, and lists its MUST findings for the human to
   acknowledge at merge. A design with `rule_changes` gets a **Rule changes**
   section in the body: each rule, its change and paths, and the commit its
-  approval names (FLOW-14). Record `pr.number` in the queue file. Then repair CI:
+  approval names (FLOW-14). A **Follow-ups filed** section lists each queue
+  item that `follows` this one, as "<slug> (follows <feature>)", or says
+  none (FLOW-09). Record `pr.number` in the queue file. Then repair CI:
   at most three attempts per distinct failure, then add a `human` step and
   stop (FLOW-11). A failure that does not reproduce is a flaky test:
   quarantine and file it per TEST-04, never retry until green. Set `pr.ci:
