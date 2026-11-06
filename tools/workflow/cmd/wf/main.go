@@ -4,7 +4,7 @@
 // are mechanical.
 //
 //	wf validate -state DIR
-//	wf status   -state DIR
+//	wf status   -state DIR [-all | -md]
 //	wf next     -state DIR -worker cloud [-feature F]
 //	wf claim    -state DIR -worker W -feature F -step S [-new-run]
 //	wf release  -state DIR -worker W -feature F -step S -why TEXT
@@ -66,7 +66,7 @@ type opts struct {
 	title, source, machine, stamp, kind, holds                string
 	base, head, mainReport, branchReport                      string
 	priority, estSteps, estRuns, sweepDays, to                int
-	newRun, run, record, native, md                           bool
+	newRun, run, record, native, md, all                      bool
 	now                                                       time.Time
 }
 
@@ -112,6 +112,7 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.BoolVar(&o.record, "record", false, "gate: write the stamp instead of deciding")
 	fs.BoolVar(&o.native, "native", false, "budget: the native session's budget")
 	fs.BoolVar(&o.md, "md", false, "status: print the QUEUE.md summary instead")
+	fs.BoolVar(&o.all, "all", false, "status: add done items, for a retrospective (FLOW-13)")
 	fs.StringVar(&o.base, "base", "origin/main", "drops: the diff's base")
 	fs.StringVar(&o.head, "head", "HEAD", "drops: the diff's head")
 	fs.StringVar(&o.mainReport, "main", "", "drops: the merge base's tier1 -json report")
@@ -162,7 +163,7 @@ func status(s *queue.State, o opts) error {
 		fmt.Print(queue.Summary(s))
 		return nil
 	}
-	for _, f := range s.Features {
+	for _, f := range s.Listed(o.all) {
 		b := f.Budget
 		fmt.Printf("%d\t%s\t%s\t%s/%d %s\tsteps %d/%d\truns %d/%d\n",
 			f.Priority, f.Feature, f.Status, f.Round, f.Phase, queue.PhaseName(f),

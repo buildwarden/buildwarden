@@ -111,7 +111,8 @@ func (l Lease) Held(now time.Time) bool {
 	return l.ClaimedBy != "" && l.Expires != nil && now.Before(*l.Expires)
 }
 
-// Budget is the per-feature runaway check (FLOW-13), counted in runs and steps.
+// Budget is the per-feature runaway check (FLOW-13). Runs and steps are both
+// counted; only steps trip the check, and only for an open item.
 type Budget struct {
 	Estimate Count `yaml:"estimate"`
 	Spent    Count `yaml:"spent"`
@@ -184,14 +185,30 @@ func Load(dir string) (*State, error) {
 
 // sortFeatures orders process items ahead of every feature, then by priority
 // (FLOW-05).
-func (s *State) sortFeatures() {
-	sort.SliceStable(s.Features, func(i, j int) bool {
-		a, b := s.Features[i], s.Features[j]
+func (s *State) sortFeatures() { sortFeatures(s.Features) }
+
+func sortFeatures(fs []*Feature) {
+	sort.SliceStable(fs, func(i, j int) bool {
+		a, b := fs[i], fs[j]
 		if a.IsProcess() != b.IsProcess() {
 			return a.IsProcess()
 		}
 		return a.Priority < b.Priority
 	})
+}
+
+// Listed returns the items wf status prints, in FLOW-05 order: the open
+// (queued and in-progress) ones, plus the done ones when all is set, for a
+// retrospective (FLOW-13).
+func (s *State) Listed(all bool) []*Feature {
+	var out []*Feature
+	for _, f := range s.Features {
+		if all || f.Status != "done" {
+			out = append(out, f)
+		}
+	}
+	sortFeatures(out)
+	return out
 }
 
 // IsProcess reports whether the item is a process change (kind: process).
@@ -406,9 +423,12 @@ func (f *Feature) OpenBlocking() []Question {
 	return out
 }
 
-// Runaway reports whether the feature has spent its runaway budget: the
-// runaway factor times its step estimate (FLOW-13).
+// Runaway reports whether an open item has spent its runaway budget: the
+// runaway factor times its step estimate (FLOW-13). A done item never is.
 func (s *State) Runaway(f *Feature) bool {
+	if f.Status == "done" {
+		return false
+	}
 	factor := s.Config.RunawayFactor
 	if factor == 0 {
 		factor = 2

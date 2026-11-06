@@ -4,6 +4,7 @@ import (
 	"flag"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 )
@@ -11,8 +12,9 @@ import (
 var update = flag.Bool("update", false, "rewrite testdata/queue.md")
 
 // summaryState covers every section: a blocking question, a design review,
-// a PR waiting, a runaway, a host step and a human step of a later phase, the
-// backlog, and done items inside and outside the last 7 days.
+// a PR waiting, a runaway, a host step and a human step of a later phase, and
+// the backlog. Its done items, one closed recently, one long ago and one spent
+// past the runaway factor, must appear in none of them (FLOW-13).
 func summaryState() *State {
 	at := func(d int) time.Time { return now.Add(time.Duration(d) * 24 * time.Hour) }
 	ev := func(d int) []Event { return []Event{{At: at(d), By: "test", Event: "e"}} }
@@ -50,8 +52,10 @@ func summaryState() *State {
 	recent.PR, recent.History = &PR{Number: 40}, ev(-2)
 	old := feature("old", 7, "done")
 	old.History = ev(-30)
+	spent := feature("spent", 8, "done")
+	spent.Budget.Spent.Steps, spent.History = 30, ev(-1)
 
-	s := state(asked, review, merging, queued, proc, recent, old)
+	s := state(asked, review, merging, queued, proc, recent, old, spent)
 	s.sortFeatures()
 	return s
 }
@@ -71,6 +75,14 @@ func TestSummaryGolden(t *testing.T) {
 	}
 	if got != string(want) {
 		t.Fatalf("Summary differs from %s (go test -run Golden -update):\n%s", path, got)
+	}
+	if strings.Contains(got, "Recently done") {
+		t.Error("Summary has a Recently done section")
+	}
+	for _, done := range []string{"recent", "old", "spent"} {
+		if strings.Contains(got, "**"+done+"**") || strings.Contains(got, "| "+done+" |") {
+			t.Errorf("Summary lists the done item %q", done)
+		}
 	}
 	if again := Summary(summaryState()); again != got {
 		t.Fatal("Summary is not deterministic")

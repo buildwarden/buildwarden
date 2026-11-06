@@ -73,14 +73,18 @@ Same as `workflow-tick` step 1 (the FLOW-18 check, build `dist/wf`, check out
       fold-in commit. Commit and push the branch, then `dist/wf done` the
       step, which checks the approval. Changes: record his notes in the
       entry, then `dist/wf back -worker $W -feature F -why "<his notes>"`.
-4. **Escalations** (`escalate` steps, a runaway budget, CI repair exhausted, a
-   branch that did not delete on merge): show the decision or the command
-   needed; record the outcome in the queue history; raise an estimate only on
-   Jeff's word.
+4. **Escalations** (`escalate` steps, a runaway budget on an open item
+   (FLOW-13), CI repair exhausted, a branch that did not delete on merge):
+   show the decision or the command needed; record the outcome in the queue
+   history; raise an estimate only on Jeff's word.
 5. **Open PRs**: list the features in phase 7 with their PR and the tier-2
    MUST findings it lists. Jeff merges them himself; you never do (FLOW-08,
    LINT-03), and the next tick sees the merge. A finding he dismisses is
    recorded as a PR comment with his reason.
+6. **Retrospective**, only when Jeff asks for one, by name or by asking how
+   done items went (FLOW-13): run `dist/wf status -all` and read the done
+   items' queue history, digests and archived designs. Otherwise leave done
+   items out.
 
 Commit and push the workflow branch after each decision. Finish with a short
 summary of what was decided and what the next tick will pick up.

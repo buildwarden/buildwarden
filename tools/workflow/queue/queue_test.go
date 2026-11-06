@@ -115,8 +115,36 @@ func TestLeasesAndRunaway(t *testing.T) {
 		t.Fatal("expired lease not reclaimable")
 	}
 	a.Budget.Spent.Steps = 14
+	if !s.Runaway(a) {
+		t.Fatal("in-progress item at twice the estimate is not a runaway")
+	}
 	if got := next(t, s, "cloud/run-1"); got != "none" {
 		t.Fatalf("next = %q, want none at twice the estimate", got)
+	}
+	d := feature("d", 2, "done")
+	d.Budget.Spent.Steps = 30
+	if s.Runaway(d) {
+		t.Fatal("done item past the factor is a runaway")
+	}
+}
+
+func TestListed(t *testing.T) {
+	p := feature("p", 9, "in_progress")
+	p.Kind = "process"
+	s := state(feature("q", 2, "queued"), feature("d", 1, "done"),
+		feature("a", 1, "in_progress"), p)
+	names := func(fs []*Feature) string {
+		var out []string
+		for _, f := range fs {
+			out = append(out, f.Feature)
+		}
+		return strings.Join(out, " ")
+	}
+	if got := names(s.Listed(false)); got != "p a q" {
+		t.Fatalf("Listed(false) = %q, want open items in FLOW-05 order", got)
+	}
+	if got := names(s.Listed(true)); got != "p d a q" {
+		t.Fatalf("Listed(true) = %q, want done items added", got)
 	}
 }
 
