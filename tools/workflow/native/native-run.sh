@@ -114,7 +114,8 @@ case $cmd in
 	[ "$(norm "$wt_top")" = "$(norm "$wt")" ] || refuse "$wt is not a worktree's top level"
 	wt_common=$(cd "$wt" && norm "$(git rev-parse --git-common-dir)") || refuse "$wt is not a git worktree"
 	[ "$wt_common" = "$(norm "$(git rev-parse --git-common-dir)")" ] || refuse "$wt is not a worktree of this repository"
-	git -C "$wt" ls-files --error-unmatch "tools/$path" >/dev/null 2>&1 || refuse "tools/$path is not tracked in $wt"
+	# Literal, so an untracked "x*" does not match a tracked x.sh as a glob.
+	git -C "$wt" --literal-pathspecs ls-files --error-unmatch -- "tools/$path" >/dev/null 2>&1 || refuse "tools/$path is not tracked in $wt"
 	;;
 *)
 	[ "$nassign" -gt 0 ] || refuse "$cmd needs no launcher without a WARDEN_* assignment"

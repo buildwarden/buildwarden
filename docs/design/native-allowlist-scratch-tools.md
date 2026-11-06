@@ -457,10 +457,21 @@ Implemented at x2-implement, 2026-11-06, as the Implementation plan's tasks
   `C:/` spelling and macOS's `/private/tmp` compare equal. Refusals are one
   stderr line, `native-run.sh: <reason>; accepted: <shapes>`, exit 2.
   `tools/workflow/native/native_test.go` (test-only package) holds
-  `TestNativeSettingsRules` and a 26-case table in `TestNativeRun`, which
-  also checks the subdirectory refusal. The skill's paragraph and
+  `TestNativeSettingsRules` and a table in `TestNativeRun`, which also
+  checks the subdirectory refusal. The skill's paragraph and
   **Record** bullet are the Design's wording, reflowed; the structure map
   names the launcher and its test.
+- **Code review fixes.** The tracked-file check now matches its path
+  literally (`--literal-pathspecs`): as a glob pathspec, an untracked file
+  named `tools/x*` passed because the tracked `tools/x.sh` matched it, and
+  ran. New cases: that file refused (skipped on Windows, which cannot name
+  it); `.scratch/p` a plain directory whose `tools/x.sh` the main repository
+  tracks, and `.scratch/o` a separate repository tracking its own, so each
+  is refused by the top-level and the common-directory check alone (each
+  check, commented out, now fails its case); accepted runs of `dist/warden*`,
+  `./warden*`, `go test` and `go -C .scratch/t test` (the go cases need the
+  variable to pass, and skip without `go`); and `go -C .scratch/a/b test`
+  refused.
 - **Unchanged, as expected.** `settings.native.json`, and
   `docs/book/src/concepts/overview.md` (FLOW-15: it describes product
   components; it names no part of the loop). No `docs/development/` change.
