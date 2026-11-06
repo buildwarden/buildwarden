@@ -65,6 +65,27 @@ func TestGateRunsForAReadyHostStep(t *testing.T) {
 	}
 }
 
+// The 2026-11-01 case: a Publish validation written in Design must not wake
+// its machine while the feature is still in Plan.
+func TestGateWaitsForTheStepsPhase(t *testing.T) {
+	repo, _ := gitRepo(t)
+	a := feature("a", 1, "in_progress")
+	a.Branch, a.Phase = "feat/a", 2
+	a.Steps = []Step{{ID: "f2-plan", Phase: 2, Affinity: "cloud", Status: "pending"},
+		{ID: "f6-validate-windows-hyperv", Phase: 6, Affinity: "host:windows-hyperv",
+			Status: "pending"}}
+	s := nativeState(a)
+	win, _ := s.Machine("win")
+	if g, _ := s.Gate(win, repo, nil, 7, now); g.Run {
+		t.Fatalf("gate woke win for a later phase's step: %+v", g)
+	}
+	a.Phase, a.Steps[0].Status = 6, "done"
+	g, err := s.Gate(win, repo, nil, 7, now)
+	if err != nil || !g.Run || !strings.Contains(g.Reasons[0], "f6-validate-windows-hyperv") {
+		t.Fatalf("win gate in Publish = %+v, %v; want the validation", g, err)
+	}
+}
+
 func TestGateSweepsGapsOnlyWhenSomethingMoved(t *testing.T) {
 	repo, moveMain := gitRepo(t)
 	a := feature("a", 1, "in_progress")
