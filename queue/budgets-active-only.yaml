@@ -2,9 +2,9 @@ feature: budgets-active-only
 title: 'Budgets gate active work only: done and archived items are left out of runaway checks and digests outside retrospectives'
 priority: 40
 kind: process
-status: in_progress
+status: done
 round: process
-phase: 3
+phase: 4
 design: docs/design/budgets-active-only.md
 branch: feat/budgets-active-only
 alters_relationships: null
@@ -30,7 +30,14 @@ steps:
   - id: x3-merge
     phase: 3
     affinity: cloud
-    status: pending
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
+    affinity: cloud
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -40,7 +47,7 @@ budget:
     steps: 5
   spent:
     runs: 1
-    steps: 2
+    steps: 3
 questions: []
 history:
   - at: 2026-11-05T00:48:41Z
@@ -70,3 +77,18 @@ history:
   - at: 2026-11-06T17:52:10Z
     by: cloud/20261106T172405Z-attended
     event: entered phase 3 (merge)
+  - at: 2026-11-06T19:10:56Z
+    by: cloud/20261106T172405Z-attended
+    event: done x3-merge
+  - at: 2026-11-06T19:10:56Z
+    by: cloud/20261106T172405Z-attended
+    event: entered phase 4 (close)
+  - at: 2026-11-06T19:11:08Z
+    by: cloud/20261106T172405Z-attended
+    event: claimed x4-close until 2026-11-06T21:11:08Z
+  - at: 2026-11-06T19:11:08Z
+    by: cloud/20261106T172405Z-attended
+    event: done x4-close
+  - at: 2026-11-06T19:11:08Z
+    by: cloud/20261106T172405Z-attended
+    event: closed; feature done
