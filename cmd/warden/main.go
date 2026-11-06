@@ -13,6 +13,7 @@ import (
 	"github.com/spf13/cobra"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 	"github.com/buildwarden/buildwarden/driver/container"
 	"github.com/buildwarden/buildwarden/driver/firecracker"
 	"github.com/buildwarden/buildwarden/driver/hyperv"
@@ -43,6 +44,7 @@ var (
 	flagNetwork    string
 	flagKeepVMs    bool
 	flagTempDir    string
+	flagBuildLink  string
 )
 
 var rootCmd = &cobra.Command{
@@ -126,6 +128,7 @@ func init() {
 		f.StringVar(&flagTempDir, "tmpdir", "",
 			"directory to create each build's private work dir in "+
 				"(default: the OS temp dir)")
+		addBuildLinkFlag(c)
 	}
 	buildCmd.Flags().BoolVarP(&flagQuiet, "quiet", "q", false,
 		"do not echo the guest build console (still captured to build-output.log)")
@@ -279,6 +282,12 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 	}
 
 	isVM := isVMDriver(d)
+	var link buildlink.Link
+	if isVM {
+		if link, _, err = resolveBuildLink(cfg); err != nil {
+			return nil, err
+		}
+	}
 
 	path := ""
 	if len(args) > 0 {
@@ -315,6 +324,7 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 		MemoryMB:          vmFlagOr(flagMemoryMB, cfg.VM.MemoryMB, isVM),
 		Network:           resolveNetwork(cfg, d),
 		KeepVMs:           flagKeepVMs,
+		BuildLink:         link,
 		TempDir:           tempDir,
 		RelayImage:        cfg.Runtime.RelayImage,
 		UpstreamCACerts:   cfg.Relay.UpstreamCACerts,
@@ -394,6 +404,38 @@ func resolveTempDir(cfg *Config) (string, error) {
 		return "", driver.Fixable("", "invalid --tmpdir: %v", err)
 	}
 	return abs, nil
+}
+
+// addBuildLinkFlag registers --build-link on a command (build, shell, doctor).
+func addBuildLinkFlag(c *cobra.Command) {
+	c.Flags().StringVar(&flagBuildLink, "build-link", "",
+		"advanced: the VM drivers' relay-to-build link, a /30 "+
+			"(default: [vm] build_link, then "+buildlink.DefaultCIDR+")")
+}
+
+// resolveBuildLink returns the build link and where it came from: the flag,
+// then [vm] build_link (project over user, already checked at load), then
+// the default. The flag is checked here, before any driver work.
+func resolveBuildLink(cfg *Config) (buildlink.Link, string, error) {
+	if flagBuildLink != "" {
+		link, err := checkBuildLink(flagBuildLink)
+		if err != nil {
+			return buildlink.Link{}, "", driver.Fixable(
+				fmt.Sprintf("pass --build-link a valid /30, e.g. --build-link %s",
+					exampleBuildLink),
+				"--build-link: %v", err)
+		}
+		return link, "--build-link", nil
+	}
+	if cfg.VM.BuildLink != "" {
+		link, err := checkBuildLink(cfg.VM.BuildLink)
+		if err != nil {
+			return buildlink.Link{}, "", driver.Fixable("",
+				"[vm] build_link in %s: %v", cfg.VM.BuildLinkSource, err)
+		}
+		return link, cfg.VM.BuildLinkSource, nil
+	}
+	return buildlink.Default(), "default", nil
 }
 
 // resolveNetwork reuses a pre-provisioned network; only hyperv falls back to

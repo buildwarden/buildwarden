@@ -35,7 +35,7 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 			"Windows",
 			"--driver firecracker runs Linux guests only")
 	}
-	pre, err := preflight(realHost{}, hostLocal)
+	pre, err := buildPreflight(req)
 	if err != nil {
 		return nil, err
 	}
@@ -96,10 +96,10 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	r := &run{d: d, req: req, slot: slot, work: workDir}
 	defer r.teardown()
 
-	if err := r.startRelay(ctx, sess, pre, st.relayInitrd, st.env); err != nil {
-		return nil, err
-	}
-	if err := r.startBuild(st.dlv.boot); err != nil {
+	if err := bootInOrder(
+		func() error { return r.startRelay(ctx, sess, pre, st.relayInitrd, st.env) },
+		func() error { return r.startBuild(st.dlv.boot) },
+	); err != nil {
 		return nil, err
 	}
 	d.status("running...")
@@ -108,6 +108,16 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	}
 	driver.FinalizeOutput(outputDir, req.Compress)
 	return &driver.BuildResult{OutputDir: outputDir}, nil
+}
+
+// buildPreflight is preflight on this host for req's build link, plus the
+// refusal of a link a host interface uses.
+func buildPreflight(req *driver.BuildRequest) (*preflighted, error) {
+	pre, err := preflight(realHost{}, hostLocal, req.Link())
+	if err != nil {
+		return nil, err
+	}
+	return pre, driver.CheckHostLink(req.Link())
 }
 
 // makeOutputDir creates the build's output directory (default warden-output).
@@ -148,8 +158,10 @@ func (d *Driver) stage(req *driver.BuildRequest, pre *preflighted,
 		if err := checkDiskTools(realHost{}); err != nil {
 			return nil, err
 		}
+	} else if err := launcherStamp().Check(); err != nil {
+		return nil, err
 	}
-	dlv, err := deliver(pre.assets, image, workDir, buildID, script)
+	dlv, err := deliver(pre.assets, image, workDir, buildID, script, req.Link())
 	if err != nil {
 		return nil, err
 	}
@@ -202,7 +214,8 @@ func (r *run) startRelay(ctx context.Context, sess *driver.Session, pre *preflig
 		case <-cctx.Done():
 		}
 	}()
-	if _, err := sess.ClaimRelay(cctx, r.slot.ClaimAddr(), token, r.req, env); err != nil {
+	if _, err := sess.ClaimRelay(cctx, r.slot.ClaimAddr(), token, r.req, env,
+		r.req.Link().Claim(), driver.OldRelayFix); err != nil {
 		if r.relay.exited() {
 			return r.vmFailure(errRelayVMExited, r.relay)
 		}

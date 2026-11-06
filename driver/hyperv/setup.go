@@ -5,8 +5,10 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 )
 
 // Default addressing for the durable dev NAT network (relay egress only). The
@@ -23,6 +25,9 @@ type SetupOptions struct {
 	// NATPrefix / HostIP address the relay's Internal NAT switch. Empty -> defaults.
 	NATPrefix string
 	HostIP    string
+	// BuildLink is the build link builds will use ([vm] build_link or the
+	// default); the NAT prefix must not overlap it. Zero is the default.
+	BuildLink buildlink.Link
 	Verbose   bool
 }
 
@@ -47,6 +52,9 @@ func (o *SetupOptions) applyDefaults() {
 // than surfacing a raw PowerShell failure when run without elevation.
 func RunSetup(ctx context.Context, w io.Writer, opts SetupOptions) error {
 	opts.applyDefaults()
+	if err := checkNATPrefix(opts.NATPrefix, opts.BuildLink.OrDefault()); err != nil {
+		return err
+	}
 
 	caps := Detect(opts.SwitchName)
 	if !caps.Supported {
@@ -89,6 +97,24 @@ func RunSetup(ctx context.Context, w io.Writer, opts SetupOptions) error {
 	fmt.Fprintf(w, "  (or set network = \"%s\" under [vm] in warden.toml)\n", opts.SwitchName)
 	fmt.Fprintln(w,
 		"Elevated builds ignore it and stand up a fresh isolated network per build.")
+	return nil
+}
+
+// checkNATPrefix refuses a NAT prefix that overlaps the build link, before
+// setup changes anything: the relay's upstream and its build segment would
+// share addresses.
+func checkNATPrefix(natPrefix string, link buildlink.Link) error {
+	p, err := netip.ParsePrefix(natPrefix)
+	if err != nil {
+		return driver.Fixable("pass --nat-prefix an IPv4 CIDR such as "+DefaultNATPrefix,
+			"invalid NAT prefix %q: %v", natPrefix, err)
+	}
+	if p.Overlaps(link.Net) {
+		return driver.Fixable(
+			"pass another --nat-prefix (default "+DefaultNATPrefix+"), or set "+
+				"[vm] build_link in warden.toml to a /30 outside it",
+			"--nat-prefix %s overlaps the build link %s", natPrefix, link)
+	}
 	return nil
 }
 

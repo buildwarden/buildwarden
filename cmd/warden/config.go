@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -11,6 +12,10 @@ import (
 	"github.com/BurntSushi/toml"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/buildlink"
+	"github.com/buildwarden/buildwarden/driver/firecracker"
+	"github.com/buildwarden/buildwarden/driver/hyperv"
+	"github.com/buildwarden/buildwarden/driver/qemu"
 )
 
 type Config struct {
@@ -36,6 +41,11 @@ type VMConfig struct {
 	// picks up new media at that URL) or "reuse" (keep the current base).
 	WindowsImage       string `toml:"windows_image"`
 	WindowsImageUpdate string `toml:"windows_image_update"`
+	// BuildLink is the relay-to-build link (an advanced option; empty means
+	// buildlink.DefaultCIDR), checked as the file loads. BuildLinkSource
+	// names the file that set it ("warden.toml" or "config.toml").
+	BuildLink       string `toml:"build_link"`
+	BuildLinkSource string `toml:"-"`
 }
 
 type RelayConfig struct {
@@ -111,10 +121,48 @@ func loadTOML(path string, cfg *Config) error {
 	if _, err := os.Stat(path); err != nil {
 		return nil
 	}
-	if _, err := toml.DecodeFile(path, cfg); err != nil {
+	md, err := toml.DecodeFile(path, cfg)
+	if err != nil {
 		return driver.Fixable("fix the TOML syntax in "+path, "parsing %s: %v", path, err)
 	}
+	if md.IsDefined("vm", "build_link") {
+		if _, err := checkBuildLink(cfg.VM.BuildLink); err != nil {
+			return driver.Fixable(
+				fmt.Sprintf("set [vm] build_link in %s to a valid /30, e.g. "+
+					"build_link = %q, or remove it to use the default",
+					path, exampleBuildLink),
+				"[vm] build_link in %s: %v", path, err)
+		}
+		cfg.VM.BuildLinkSource = filepath.Base(path)
+	}
 	return nil
+}
+
+// exampleBuildLink is the valid non-default value fixes suggest.
+const exampleBuildLink = "100.126.255.252/30"
+
+// linkRanges are the ranges BuildWarden itself uses, read from the packages
+// that own them; a build link must be disjoint from all of them.
+func linkRanges() []buildlink.Range {
+	return []buildlink.Range{
+		{Name: "the container driver's network", CIDR: driver.ContainerBaseCIDR},
+		{Name: "the firecracker driver's upstream range", CIDR: firecracker.UpstreamCIDR},
+		{Name: "the hyperv driver's default NAT", CIDR: hyperv.DefaultNATPrefix},
+		{Name: "qemu's user-mode network", CIDR: qemu.UserNetCIDR},
+	}
+}
+
+// checkBuildLink parses a configured build link and checks it against
+// BuildWarden's own ranges.
+func checkBuildLink(s string) (buildlink.Link, error) {
+	link, err := buildlink.Parse(s)
+	if err != nil {
+		return buildlink.Link{}, err
+	}
+	if err := link.Disjoint(linkRanges()); err != nil {
+		return buildlink.Link{}, err
+	}
+	return link, nil
 }
 
 // DetectRuntime probes for a working container runtime.
@@ -339,6 +387,7 @@ func validateFlagsForDriver(d string) error {
 		{flagCPUs != 0, "--cpus"},
 		{flagMemoryMB != 0, "--memory"},
 		{flagKeepVMs, "--keep-vms"},
+		{flagBuildLink != "", "--build-link"},
 	} {
 		if f.set && !isVM {
 			return driver.Fixable("",

@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 	"github.com/buildwarden/buildwarden/driver/winguest"
 )
 
@@ -18,7 +19,7 @@ func isWindowsGuest(req *driver.BuildRequest) bool {
 
 // windowsSeedDir builds the WARDEN seed directory: warden-io.exe plus the
 // first-boot bootstrap the prepared image's startup task runs.
-func windowsSeedDir(workDir, goarch string) (string, error) {
+func windowsSeedDir(workDir, goarch string, link buildlink.Link) (string, error) {
 	seedDir := filepath.Join(workDir, "wardenseed")
 	if err := os.MkdirAll(seedDir, 0755); err != nil {
 		return "", err
@@ -34,7 +35,7 @@ func windowsSeedDir(workDir, goarch string) (string, error) {
 	}
 
 	runPS := filepath.Join(seedDir, "warden-run.ps1")
-	if err := os.WriteFile(runPS, []byte(winguest.WardenRunPS1()), 0644); err != nil {
+	if err := os.WriteFile(runPS, []byte(winguest.WardenRunPS1(link)), 0644); err != nil {
 		return "", err
 	}
 	return seedDir, nil

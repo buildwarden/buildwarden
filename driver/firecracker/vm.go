@@ -88,14 +88,20 @@ type buildBoot struct {
 	Rootfs   string
 	PartUUID string
 	Seed     string
-	// Direct boot.
-	Initrd string
+	// Direct boot. LinkArgs are the build link's kernel command-line keys
+	// the direct-boot init reads.
+	Initrd   string
+	LinkArgs string
 }
 
 // buildConfig is the build VM: its only NIC on the slot's bridge.
 func buildConfig(s Slot, b buildBoot, cpus, memMB int) vmConfig {
+	args := baseArgs
+	if b.LinkArgs != "" {
+		args += " " + b.LinkArgs
+	}
 	c := vmConfig{
-		BootSource: bootSource{Kernel: b.Kernel, Initrd: b.Initrd, BootArgs: baseArgs},
+		BootSource: bootSource{Kernel: b.Kernel, Initrd: b.Initrd, BootArgs: args},
 		Drives:     []drive{},
 		Machine:    machine{VCPUs: cpus, MemoryMB: memMB},
 		NICs:       []nic{{ID: "eth0", HostIf: s.GuestTap()}},

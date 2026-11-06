@@ -144,7 +144,8 @@ orchestrator:
    (the container image manifest, or for VM drivers a `vm-disk-chain/v1`
    descriptor of the boot disks and per-build seed files; see the ledger
    spec's *Environment Record*). The relay signs it as the ledger's first
-   record and lands the payload as `<output>/environment.json`.
+   record and lands the payload as `<output>/environment.json`. The VM
+   drivers also send the build link (below).
 3. Receives the relay identity: the ephemeral MITM CA certificate (written to
    `<output>/ca.cert.pem`) and the ledger's Ed25519 public key.
 
@@ -155,6 +156,40 @@ works, with no host listener or firewall rule, relays can be started warm and
 claimed later, and concurrent relays never race for a fixed config endpoint. An
 optional per-instance claim token (`WARDEN_CLAIM_TOKEN`) stops another local
 process from claiming a warm relay first.
+
+**The build link.** A claim may carry `build_link`, the private segment
+between the relay and the build environment:
+
+```json
+"build_link": {"prefix": "100.127.255.252/30",
+               "relay":  "100.127.255.253",
+               "guest":  "100.127.255.254"}
+```
+
+It is optional on the wire and validated the same way for every mode: IPv4;
+`prefix` is its own network address with a length from 8 to 30; `relay` and
+`guest` are distinct hosts inside it, neither its network nor its broadcast
+address; and none is unspecified, loopback, link-local, multicast or class E.
+(warden itself is stricter: exactly `/30`, disjoint from its own ranges.) A
+claim that fails validation is refused with 400 and does not consume the
+relay. What each mode does with it:
+
+| Mode | With `build_link` | Without |
+|---|---|---|
+| vm | flushes the build interface's IPv4 addresses, adds `relay/len` (netlink), serves the guest's DHCP lease bound to that interface, sets its self address, and blocks upstream dials into `prefix` | keeps the address already on the build interface as self address and blocked prefix; refuses the claim if the interface has none ("build_link is required") |
+| host | builds the netstack, ARP, DHCP and listeners on `relay`/`guest`/`prefix`, and blocks upstream dials into `prefix` | falls back to `--subnet` |
+| container | refuses the claim (the runtime assigns the relay's address) | as before |
+
+A relay refuses a claim it cannot apply (a link another interface already
+uses, a field its mode does not take) with 400 and stays claimable: its start
+step returns an error wrapping `relaycfg.ErrRefused`. A relay that predates
+the field refuses a claim carrying it (`unknown field "build_link"`), which
+warden turns into a fix naming the driver's rebuild.
+
+**Ordering rule.** A relay replies to a claim only after its build segment is
+configured: the reply is written after the mode's start step returns, and the
+step addresses the segment and starts its DHCP responder. Every VM driver
+boots the build guest only after the claim returns.
 
 ### Relay (`relay/` library, `cmd/relay/` binary)
 
@@ -173,8 +208,8 @@ The relay is the network gateway for the build environment. Core services:
 | Mode | Flag | Used by | Behavior |
 |------|------|---------|----------|
 | container | `--mode=container` | Container driver | Binds ports directly on container interface |
-| vm | `--mode=vm` | QEMU, Hyper-V drivers | Binds ports directly inside the relay VM |
-| host | `--mode=host --fd=N` | VZ driver | Reads raw Ethernet from FD via gvisor netstack; SSRF filtering active |
+| vm | `--mode=vm [-build-if NAME]` | QEMU, Firecracker, Hyper-V drivers | Binds ports directly inside the relay VM; addresses the build interface from the claim and serves the build VM's DHCP lease on it |
+| host | `--mode=host --fd=N` | VZ driver | Reads raw Ethernet from FD via gvisor netstack, built from the claim's build link (`--subnet` without one); SSRF filtering active |
 
 ### warden-io (`cmd/warden-io/`)
 

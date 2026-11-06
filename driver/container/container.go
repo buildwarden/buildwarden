@@ -399,7 +399,8 @@ func (b *build) startSessionAndRelay(ctx context.Context, env *relaycfg.Environm
 	if err != nil {
 		return err
 	}
-	_, err = b.sess.ClaimRelay(ctx, claimAddr, claimToken, b.req, env)
+	// The runtime assigns the relay's address, so the claim names no link.
+	_, err = b.sess.ClaimRelay(ctx, claimAddr, claimToken, b.req, env, nil, "")
 	return err
 }
 

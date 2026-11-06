@@ -9,6 +9,11 @@
 # Run from Git Bash on the Windows host. The source stamp is the last commit to
 # touch the relay's packages (go list -deps ./cmd/relay), go.mod/go.sum or
 # tools/relay-vm; it is written next to the cached disk as relay-boot.source.
+# Beside it goes relay-boot.link-channel, the stamp warden checks before a
+# build: this disk's relay addresses its build interface from the claim. Both
+# move to .prev with the disk. The disk is current only when both stamps are:
+# a disk whose link-channel stamp is missing or different (lost, or copied
+# without it) is rebuilt, since warden refuses it and names this script.
 # Building needs a WSL distro (WARDEN_WSL_DISTRO, default Ubuntu) with mtools,
 # gdisk, qemu-utils and systemd-boot-efi; the Alpine inputs are fetched on the
 # host by fetch-cache.ps1, since that WSL build runs offline.
@@ -22,6 +27,8 @@ cache="${WARDEN_HYPERV_CACHE_DIR:-$LOCALAPPDATA/warden/hyperv}"
 cache="$(cygpath -u "$cache")"
 disk="$cache/relay-boot.vhdx"
 stampf="$cache/relay-boot.source"
+linkf="$cache/relay-boot.link-channel"
+channel="WARDEN_LINK_CHANNEL=1"
 
 cd "$repo"
 mod="$(go list -m)"
@@ -34,13 +41,16 @@ src="$(git log -1 --format=%H -- $paths go.mod go.sum tools/relay-vm "$self")"
 # shellcheck disable=SC2086
 [ -z "$(git status --porcelain -- $paths go.mod go.sum tools/relay-vm "$self")" ] || src="$src-dirty"
 have="$(cat "$stampf" 2>/dev/null || true)"
+link="$(cat "$linkf" 2>/dev/null || true)"
 
-if [ "$mode" != --force ] && [ -f "$disk" ] && [ "$have" = "$src" ] && [ "${src%-dirty}" = "$src" ]; then
+if [ "$mode" != --force ] && [ -f "$disk" ] && [ "$have" = "$src" ] && [ "${src%-dirty}" = "$src" ] &&
+	[ "$link" = "$channel" ]; then
 	echo "relay boot VHDX is current (relay source ${src:0:12})"
 	exit 0
 fi
 if [ "$mode" = --check ]; then
-	echo "relay boot VHDX in $cache is stale: built from '${have:-unknown}', relay source is ${src:0:12}"
+	echo "relay boot VHDX in $cache is stale: built from '${have:-unknown}', relay source is ${src:0:12}," \
+		"link-channel stamp '${link:-missing}' (want $channel)"
 	echo "  fix: tools/relay-vm/hyperv/refresh-cache.sh"
 	exit 1
 fi
@@ -59,6 +69,9 @@ wsl.exe -d "$distro" sh -c "cd '$wslhere' && sh build.sh && sh build-boot-vhdx.s
 
 mkdir -p "$cache"
 [ -f "$disk" ] && cp -f "$disk" "$disk.prev"
+rm -f "$linkf.prev"
+[ -f "$linkf" ] && cp -f "$linkf" "$linkf.prev"
 cp -f "$here/output/warden-relay-boot.vhdx" "$disk"
+echo "$channel" >"$linkf"
 echo "$src" >"$stampf"
 echo "installed $disk (relay source ${src:0:12}); the previous disk is $disk.prev"

@@ -19,6 +19,14 @@ import (
 // cmd/relay does, with its guest listeners on loopback.
 func fakeRelay(t *testing.T, claimToken string) (claimAddr, guestHTTP string) {
 	t.Helper()
+	return fakeRelayWith(t, claimToken, nil)
+}
+
+// fakeRelayWith is fakeRelay with check run on each claim before the relay
+// starts, as a relay mode's start step runs; its error refuses the claim.
+func fakeRelayWith(t *testing.T, claimToken string,
+	check func(relaycfg.Config) error) (claimAddr, guestHTTP string) {
+	t.Helper()
 	claimLn, _ := net.Listen("tcp", "127.0.0.1:0")
 	httpLn, _ := net.Listen("tcp", "127.0.0.1:0")
 	httpsLn, _ := net.Listen("tcp", "127.0.0.1:0")
@@ -27,6 +35,11 @@ func fakeRelay(t *testing.T, claimToken string) (claimAddr, guestHTTP string) {
 	go func() {
 		_ = relaycfg.Serve(claimLn, claimToken,
 			func(c relaycfg.Config, rt http.RoundTripper) (relaycfg.Identity, error) {
+				if check != nil {
+					if err := check(c); err != nil {
+						return relaycfg.Identity{}, err
+					}
+				}
 				r, err := relay.Start(relay.Config{
 					CollectorURL:       c.CollectorURL,
 					CollectorToken:     c.CollectorToken,
@@ -69,7 +82,7 @@ func TestSessionClaimAndWait(t *testing.T) {
 
 	claimAddr, guest := fakeRelay(t, "claim-secret")
 	id, err := s.ClaimRelay(context.Background(), claimAddr, "claim-secret",
-		&BuildRequest{UpstreamSystemCA: true}, nil)
+		&BuildRequest{UpstreamSystemCA: true}, nil, nil, "")
 	if err != nil {
 		t.Fatalf("ClaimRelay: %v", err)
 	}

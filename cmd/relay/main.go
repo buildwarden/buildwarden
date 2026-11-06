@@ -23,8 +23,12 @@ func main() {
 // arrives:
 //
 //	host       Ethernet frames on an inherited socketpair fd (vz), SSRF on
-//	vm         the relay is init in its own VM (qemu, hyperv)
+//	vm         the relay is init in its own VM (qemu, firecracker, hyperv)
 //	container  sidecar container on an isolated network (container driver)
+//
+// Each mode has a start step that runs inside the claim, before the relay
+// starts and before the claim is answered, and configures the build segment
+// from the claim's build_link (see relaycfg's package doc).
 func run() int {
 	// Prevent key material from appearing in core dumps (platform-specific).
 	disableCoreDumps()
@@ -34,7 +38,9 @@ func run() int {
 	fdNum := flag.Int("fd", 3,
 		"File descriptor number for host mode fd ingress")
 	subnet := flag.String("subnet", "10.100.0.0/30",
-		"Subnet for host mode (gateway=.1, guest=.2)")
+		"Host mode's segment when the claim carries no build_link (gateway=.1, guest=.2)")
+	buildIf := flag.String("build-if", "",
+		"vm mode: the build interface (default: the first non-lo entry of /sys/class/net)")
 	claimAddr := flag.String("claim-addr", ":"+strconv.Itoa(relaycfg.DefaultPort),
 		"Address to accept the orchestrator's claim on")
 	flag.Parse()
@@ -49,23 +55,54 @@ func run() int {
 	switch *mode {
 	case "host":
 		return runHostMode(*fdNum, *subnet, *claimAddr)
-	case "vm", "container":
+	case "vm":
 		// Binds the standard ports directly. No SSRF filter: isolation comes
-		// from the relay VM's iptables or the container's network namespace.
-		return serveClaim(*claimAddr, relay.Config{}, nil)
+		// from the relay VM's iptables; the build link is still blocked.
+		iface, err := openBuildIface(*buildIf)
+		if err != nil {
+			fmt.Fprintf(os.Stderr, "relay: build interface: %v\n", err)
+			return 1
+		}
+		return serveClaim(*claimAddr, vmLink{iface: iface, serveDHCP: openVMDHCP}.start)
+	case "container":
+		return serveClaim(*claimAddr, containerStart)
 	default:
 		fmt.Fprintf(os.Stderr, "unknown mode: %s\n", *mode)
 		return 1
 	}
 }
 
-// serveClaim waits for the single claim, starts the relay with base merged
-// with the claimed config, and then runs it until it stops. cleanup, if set,
-// runs once the relay has exited.
-func serveClaim(claimAddr string, base relay.Config, cleanup func()) int {
-	if cleanup != nil {
-		defer cleanup()
+// startStep is a mode's part of the claim: it configures the build segment
+// from the claim and returns the relay.Config base the claim is overlaid on,
+// and a cleanup to run once the relay exits (nil for none). It runs before
+// relay.Start and so before the claim is answered. An error wrapping
+// relaycfg.ErrRefused refuses the claim and leaves the relay claimable; a
+// step that fails cleans up after itself.
+type startStep func(relaycfg.Config) (relay.Config, func(), error)
+
+// containerStart is container mode's step. The container runtime assigns the
+// relay's address, which the relay has no capability to change, so a claim
+// that names a build link is refused.
+func containerStart(c relaycfg.Config) (relay.Config, func(), error) {
+	if c.BuildLink != nil {
+		return relay.Config{}, nil, fmt.Errorf(
+			"%w: build_link is not supported in container mode "+
+				"(the container runtime assigns the relay's address)",
+			relaycfg.ErrRefused)
 	}
+	return relay.Config{}, nil, nil
+}
+
+// serveClaim waits for the single claim, runs the mode's step, starts the
+// relay with the step's base merged with the claimed config, and then runs
+// it until it stops.
+func serveClaim(claimAddr string, step startStep) int {
+	var cleanup func()
+	defer func() {
+		if cleanup != nil {
+			cleanup()
+		}
+	}()
 	ln, err := net.Listen("tcp", claimAddr)
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "relay: claim listener: %v\n", err)
@@ -76,13 +113,20 @@ func serveClaim(claimAddr string, base relay.Config, cleanup func()) int {
 	var r *relay.Relay
 	err = relaycfg.Serve(ln, os.Getenv(relaycfg.TokenEnv),
 		func(c relaycfg.Config, transport http.RoundTripper) (relaycfg.Identity, error) {
+			base, done, err := step(c)
+			if err != nil {
+				return relaycfg.Identity{}, err
+			}
 			cfg := applyClaim(base, c)
 			cfg.CollectorTransport = transport
 			started, err := relay.Start(cfg)
 			if err != nil {
+				if done != nil {
+					done()
+				}
 				return relaycfg.Identity{}, err
 			}
-			r = started
+			r, cleanup = started, done
 			return relaycfg.Identity{
 				CACert:          string(r.CACert()),
 				LedgerPublicKey: r.LedgerPublicKeyHex(),

@@ -20,22 +20,28 @@ import (
 	"encoding/binary"
 	"encoding/xml"
 	"unicode/utf16"
+
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 )
 
 const (
 	// SeedLabel is the volume label of the per-build seed the startup task
 	// looks for.
 	SeedLabel = "WARDEN"
-	// BuildGatewayIP is the relay's static address on the build link; it must
-	// match the relay VM's build NIC. There is no DHCP on that link.
-	BuildGatewayIP = "10.0.0.1"
-	// BuildGuestCIDR is the build VM's static address and prefix on the build
-	// link, the other host of BuildGatewayIP's /30.
-	BuildGuestCIDR = "10.0.0.2/30"
 	// FirstLogonCommandLimit is Windows Setup's cap on a FirstLogonCommands
 	// <CommandLine>. An over-long entry fails the oobeSystem pass with
 	// "Windows could not complete the installation" before any command runs.
 	FirstLogonCommandLimit = 1024
+)
+
+// The default build link's addresses, for callers that do not render a
+// per-build seed. A build's own addresses come from its link (WardenRunPS1).
+var (
+	// BuildGatewayIP is the relay's address on the default build link.
+	BuildGatewayIP = buildlink.Default().Relay.String()
+	// BuildGuestCIDR is the build VM's address and prefix on the default
+	// build link.
+	BuildGuestCIDR = buildlink.Default().GuestCIDR()
 )
 
 // XMLText escapes s for use as XML element text. Answer files are rendered

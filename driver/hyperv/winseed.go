@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 	"github.com/buildwarden/buildwarden/driver/winguest"
 )
 
@@ -22,8 +23,17 @@ import (
 //
 // Staging is pure I/O, so it is tested on any platform.
 
+// seedLink is the build link a seed renders: the request's, or the default
+// for a seed staged without one.
+func seedLink(req *driver.BuildRequest) buildlink.Link {
+	if req == nil {
+		return buildlink.Default()
+	}
+	return req.Link()
+}
+
 // stageSeedDir writes the per-build seed into <workDir>/seed.
-func stageSeedDir(workDir, arch string, _ *driver.BuildRequest) (string, error) {
+func stageSeedDir(workDir, arch string, req *driver.BuildRequest) (string, error) {
 	seedDir := filepath.Join(workDir, "seed")
 	if err := os.MkdirAll(seedDir, 0o755); err != nil {
 		return "", fmt.Errorf("seed dir: %w", err)
@@ -36,7 +46,7 @@ func stageSeedDir(workDir, arch string, _ *driver.BuildRequest) (string, error) 
 		return "", fmt.Errorf("stage warden-io.exe: %w", err)
 	}
 	if err := os.WriteFile(filepath.Join(seedDir, "warden-run.ps1"),
-		[]byte(winguest.WardenRunPS1()), 0o644); err != nil {
+		[]byte(winguest.WardenRunPS1(seedLink(req))), 0o644); err != nil {
 		return "", fmt.Errorf("write warden-run.ps1: %w", err)
 	}
 	return seedDir, nil

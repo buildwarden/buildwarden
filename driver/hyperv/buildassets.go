@@ -30,6 +30,11 @@ func hypervCacheDir() string {
 	return filepath.Join(".", ".warden-cache", "hyperv")
 }
 
+// RefreshRelayBootFix rebuilds and installs the relay boot VHDX (its relay
+// binary and init) from the source tree.
+const RefreshRelayBootFix = "build it from the source tree (Git Bash, needs WSL): " +
+	"tools/relay-vm/hyperv/refresh-cache.sh"
+
 // resolveRelayBootVHDX locates the static, read-only relay boot VHDX (the UKI
 // disk). Resolution order: WARDEN_RELAY_BOOT_VHDX, then the pinned path under the
 // hyperv cache. Returns an actionable error when neither is present.
@@ -46,10 +51,34 @@ func resolveRelayBootVHDX() (string, error) {
 	if _, err := os.Stat(pinned); err == nil {
 		return pinned, nil
 	}
-	return "", driver.Fixable(
-		"build it from the source tree (Git Bash, needs WSL): "+
-			"tools/relay-vm/hyperv/refresh-cache.sh",
+	return "", driver.Fixable(RefreshRelayBootFix,
 		"relay boot VHDX not found (looked at $WARDEN_RELAY_BOOT_VHDX and %s)", pinned)
+}
+
+// relayBootStampPath is the link-channel stamp beside a relay boot VHDX:
+// relay-boot.link-channel beside relay-boot.vhdx (refresh-cache.sh moves the
+// two to .prev together), or <name>.link-channel beside an override.
+func relayBootStampPath(vhdx string) string {
+	return strings.TrimSuffix(vhdx, filepath.Ext(vhdx)) + ".link-channel"
+}
+
+// relayBootStamp describes the relay boot VHDX's link-channel stamp, with
+// Path empty when the disk is not found. The VHDX bakes the relay binary and
+// its init, so a disk built before the relay took its build link from the
+// claim must be refreshed once.
+func relayBootStamp() driver.LauncherStamp {
+	st := driver.LauncherStamp{What: "hyperv relay boot VHDX", Rebuild: RefreshRelayBootFix,
+		Required: true}
+	if p, err := resolveRelayBootVHDX(); err == nil {
+		st.Path = relayBootStampPath(p)
+	}
+	return st
+}
+
+// LauncherStamps lists the hyperv assets with a link-channel stamp: the
+// relay boot VHDX.
+func LauncherStamps() []driver.LauncherStamp {
+	return []driver.LauncherStamp{relayBootStamp()}
 }
 
 // resolveBuildBaseVHDX locates the read-only disk chain the build VM's
