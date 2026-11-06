@@ -155,7 +155,7 @@ buildwarden/
 │   │   └── report.schema.json    # The -json output
 │   └── workflow/             # Feature-loop tooling (own Go module; FLOW-03, FLOW-18)
 │       ├── cmd/wf/               # Queue tool: next step, leases, done-when checks, native gate
-│       ├── native/               # Scheduled native sessions: wrapper, installers, permissions
+│       ├── native/               # Scheduled native sessions: wrapper, installers, permissions, the native-run.sh launcher and their test
 │       └── flow18-check.sh       # Sessions stay out of the public repo
 ├── docs/
 │   ├── book/               # mdBook documentation (guide, concepts, contributing)
