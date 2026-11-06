@@ -629,8 +629,10 @@ Filled in at x2-implement (FLOW-10, FLOW-15), against `origin/main` at
 - **Shared code:** `Next` and `NextFor` share `atLimit`; `Listed` and the four
   QUEUE.md writers share `Ordered`, so the order is computed in one place.
   `nextQueued` is gone, folded into `Next`'s walk.
-- **Sweep:** `make lint` (dead-code and duplication analyzers included) is
-  green; the one tier-1 hint, GLOBAL-04 on `cmd/wf`, is expected: that
+- **Sweep:** `make lint` is green, `unused` included for
+  `tools/workflow`; `make deadcode` scans the main module, which this item
+  does not touch, and reports only its existing driver and relay entries.
+  Duplication: none found by reading; the one tier-1 hint, GLOBAL-04 on `cmd/wf`, is expected: that
   command has no tests, and `new -follows` and the `status` line were checked
   by hand on a scratch copy of the live queue. `overview.md` describes
   components, not the workflow, so it has no pseudocode to change (FLOW-15).
