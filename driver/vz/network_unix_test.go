@@ -39,4 +39,3 @@ func TestRelaySocketIsADuplicate(t *testing.T) {
 		t.Fatalf("Close: %v", err)
 	}
 }
-
