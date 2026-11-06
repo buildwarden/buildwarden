@@ -1,0 +1,16 @@
+2026/11/05 16:05:29 relay: awaiting claim on 127.0.0.1:65054
+2026/11/05 16:05:29 relay: host mode, fd 3, link 100.126.255.252/30, relay 100.126.255.253, guest 100.126.255.254
+2026/11/05 16:05:29 relay: environment recorded (2256 bytes)
+2026/11/05 16:05:29 relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp
+2026/11/05 16:05:29 relay: claimed
+2026/11/05 16:05:33 netstack: learned guest MAC 92:b2:07:37:1f:c2
+2026/11/05 16:05:33 netstack: DHCP OFFER 100.126.255.254 to 92:b2:07:37:1f:c2
+2026/11/05 16:05:34 netstack: DHCP ACK 100.126.255.254 to 92:b2:07:37:1f:c2
+2026/11/05 16:05:34 netstack: DHCP OFFER 100.126.255.254 to 92:b2:07:37:1f:c2
+2026/11/05 16:05:35 netstack: DHCP ACK 100.126.255.254 to 92:b2:07:37:1f:c2
+2026/11/05 16:05:37 TLS handshake error: EOF
+2026/11/05 16:05:38 upstream error: blocked: connection to 100.126.255.253 (100.126.255.253) denied
+2026/11/05 16:05:39 TLS handshake error: EOF
+2026/11/05 16:05:39 TLS handshake error: EOF
+2026/11/05 16:05:42 TLS handshake error: EOF
+2026/11/05 16:05:48 TLS handshake error: remote error: tls: unknown certificate

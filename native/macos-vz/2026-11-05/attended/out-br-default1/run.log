@@ -1,0 +1,17 @@
+2026/11/05 16:02:47 relay: awaiting claim on 127.0.0.1:64891
+2026/11/05 16:02:47 relay: host mode, fd 3, link 100.127.255.252/30, relay 100.127.255.253, guest 100.127.255.254
+2026/11/05 16:02:47 relay: environment recorded (2256 bytes)
+2026/11/05 16:02:47 relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp
+2026/11/05 16:02:47 relay: claimed
+2026/11/05 16:02:51 netstack: learned guest MAC 4e:7e:eb:42:8e:15
+2026/11/05 16:02:51 netstack: DHCP OFFER 100.127.255.254 to 4e:7e:eb:42:8e:15
+2026/11/05 16:02:52 netstack: DHCP ACK 100.127.255.254 to 4e:7e:eb:42:8e:15
+2026/11/05 16:02:52 netstack: DHCP OFFER 100.127.255.254 to 4e:7e:eb:42:8e:15
+2026/11/05 16:02:53 netstack: DHCP ACK 100.127.255.254 to 4e:7e:eb:42:8e:15
+2026/11/05 16:02:55 TLS handshake error: EOF
+	inet 127.0.0.1 netmask 0xff000000
+	inet 100.127.255.254 netmask 0xfffffffc broadcast 100.127.255.255
+fetch 200
+2026/11/05 16:02:57 artifact: stored hello (6 bytes, hash:93becc6e9882)
+artifact stored: hello (6 bytes)
+warden: build SUCCEEDED (output: ../out-br-default1)

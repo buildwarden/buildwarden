@@ -1,0 +1,11 @@
+2026/11/05 16:02:27 relay: host mode, fd 3, gateway 10.0.0.1, guest 10.0.0.2
+2026/11/05 16:02:27 relay: awaiting claim on 127.0.0.1:64865
+2026/11/05 16:02:27 relay: environment recorded (2256 bytes)
+2026/11/05 16:02:27 relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp
+2026/11/05 16:02:27 relay: claimed
+2026/11/05 16:02:31 netstack: learned guest MAC de:58:7f:1f:30:c9
+2026/11/05 16:02:31 netstack: DHCP Discover from de:58:7f:1f:30:c9, offering 10.0.0.2
+2026/11/05 16:02:32 netstack: DHCP Discover from de:58:7f:1f:30:c9, offering 10.0.0.2
+2026/11/05 16:02:33 netstack: DHCP Request from de:58:7f:1f:30:c9, ACK 10.0.0.2
+2026/11/05 16:02:35 TLS handshake error: EOF
+2026/11/05 16:02:37 artifact: stored hello (6 bytes, hash:93becc6e9882)

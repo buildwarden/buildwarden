@@ -44,3 +44,54 @@ re-prepare (guest 100.126.255.254), the lease taken within the boot window
 (time from boot to initialize against main), and the link block on the
 configured link. The in-guest forged-DHCP/ARP TEST-08 case stays with
 security-suite, as on the other hosts.
+
+# Attended run — host:macos-vz/20261105T234633Z (Jeff present)
+
+macOS host 27.0.1 (26A434), arm64, Go 1.26.5. Branch feat/build-link-subnet
+a68ac2c, main 4c8f9dc, both `make build sign` in `.scratch/` worktrees.
+
+## Re-prepare
+
+`sudo .scratch/build-link-subnet/dist/warden image prepare --driver vz` (Jeff)
+did not refresh the cached image in place: the default source is the latest
+IPSW, now macOS 27.2 (26B123), so it restored a new image
+`macos-a139c218a2010753` (25.6 GB IPSW, restore and first boot ~13 min), with
+`link-channel` = `WARDEN_LINK_CHANNEL=1`. All runs below pass
+`--image ~/.cache/warden/images/macos-a139c218a2010753/disk.img`.
+
+Side finding (pre-existing, main too): with two prepared images,
+`ImageCache.ImageDir` returns the first valid directory in name order, so a
+build with no `--image` keeps using the old `macos-90a1…` (27.0.1) image after
+a newer one is prepared; the branch then refuses it for the missing stamp.
+
+## Results
+
+- **Main baseline on 27.2:** 2/2 SUCCEEDED, guest 10.0.0.2, lease ACK 5–6 s
+  after the claim (same on the 27.0.1 image); ledger verifies (14 signatures,
+  all channels closed).
+- **(2) Default link:** 2/2 builds SUCCEEDED, guest `100.127.255.254/30`
+  (ifconfig in the guest), DHCP OFFER/ACK 4–6 s after the claim, so the lease
+  is taken within the boot window, no slower than main.
+- **(3) Configured link `--build-link 100.126.255.252/30`, no re-prepare:**
+  2/2 SUCCEEDED, guest `100.126.255.254/30`.
+- **Link block on the configured link:** guest fetch of
+  `http://100.126.255.253/` through the relay refused (relay "blocked:
+  connection to 100.126.255.253 (100.126.255.253) denied"); the next fetch
+  200. Ledger verifies (15 signatures).
+- **FAIL — empty ledger with compression (default).** Every branch vz build
+  above writes a **0-byte `ledger.zst`** while reporting `build SUCCEEDED`;
+  `warden inspect` (main's and the branch's): "not a valid BuildWarden ledger
+  (invalid magic bytes)". The same build with `--no-compress` writes a 4286-byte
+  `ledger` that verifies (14 signatures, all channels closed). Main on the
+  same image writes a valid `ledger.zst`. Cause (reading the diff): the branch
+  moved vz's stops into `runVMs` (driver/vz/driver.go), which stops the build
+  VM and the relay and closes the virtual network *before* `StartBuild` calls
+  `driver.FinalizeOutput`; on main those were deferred in `StartBuild`, so they
+  ran after it. Likely FinalizeOutput now compresses a ledger that is not yet on
+  disk, then removes the source. Not seen on qemu-any, whose ordering did not
+  change.
+- Not run: the build longer than an hour (left until the ledger fix, as it
+  would have to be repeated); the in-guest forged-DHCP/ARP case (TEST-08,
+  security-suite, as on the other hosts).
+
+Logs: `attended/` beside this file.

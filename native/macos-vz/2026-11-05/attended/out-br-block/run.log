@@ -1,0 +1,15 @@
+	inet 100.126.255.254 netmask 0xfffffffc broadcast 100.126.255.255
+curl: (28) Operation timed out after 10076 milliseconds with 21 bytes received
+http://100.126.255.253/ 502
+http://100.126.255.253/ refused rc=28
+curl: (60) SSL certificate problem: unsupported or invalid name syntax
+More details here: https://curl.se/docs/sslcerts.html
+
+curl failed to verify the legitimacy of the server and therefore could not
+establish a secure connection to it. To learn more about this situation and
+how to fix it, please visit the web page mentioned above.
+https://100.126.255.253/ 000
+https://100.126.255.253/ refused rc=60
+http://100.126.255.253:8300/ 404
+next fetch 200
+warden: build SUCCEEDED (output: ../out-br-block)

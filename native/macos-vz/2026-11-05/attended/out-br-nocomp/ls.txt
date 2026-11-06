@@ -1,0 +1,10 @@
+total 56
+drwxr-xr-x@  9 jeff  staff   288 Nov  5 16:04 .
+drwxr-xr-x@ 16 jeff  staff   512 Nov  5 16:05 ..
+drwxr-xr-x@  3 jeff  staff    96 Nov  5 16:04 artifacts
+-rw-r--r--@  1 jeff  staff   145 Nov  5 16:04 build-output.log
+-rw-r--r--@  1 jeff  staff  1168 Nov  5 16:04 ca.cert.pem
+-rw-r--r--@  1 jeff  staff  2256 Nov  5 16:04 environment.json
+-rw-r--r--@  1 jeff  staff  4286 Nov  5 16:04 ledger
+-rw-r--r--@  1 jeff  staff   761 Nov  5 16:04 relay.log
+-rw-r--r--@  1 jeff  staff    51 Nov  5 16:04 run.log

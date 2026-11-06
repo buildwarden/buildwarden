@@ -1,0 +1,11 @@
+2026/11/05 16:04:36 relay: awaiting claim on 127.0.0.1:65006
+2026/11/05 16:04:37 relay: host mode, fd 3, link 100.127.255.252/30, relay 100.127.255.253, guest 100.127.255.254
+2026/11/05 16:04:37 relay: environment recorded (2256 bytes)
+2026/11/05 16:04:37 relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp
+2026/11/05 16:04:37 relay: claimed
+2026/11/05 16:04:41 netstack: learned guest MAC ce:8d:1e:ba:af:7b
+2026/11/05 16:04:41 netstack: DHCP OFFER 100.127.255.254 to ce:8d:1e:ba:af:7b
+2026/11/05 16:04:42 netstack: DHCP OFFER 100.127.255.254 to ce:8d:1e:ba:af:7b
+2026/11/05 16:04:43 netstack: DHCP ACK 100.127.255.254 to ce:8d:1e:ba:af:7b
+2026/11/05 16:04:45 TLS handshake error: EOF
+2026/11/05 16:04:46 artifact: stored hello (6 bytes, hash:93becc6e9882)
