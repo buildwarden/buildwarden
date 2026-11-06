@@ -38,8 +38,9 @@ func (c *checker) reviewDecision(d *Design) {
 	}
 }
 
-// reviewed is Plan's done-when for FLOW-19: every design review seeded so
-// far has an approval recorded, or the skip is still valid against the
+// reviewed is FLOW-19's approval check, run when a design-review step is
+// marked done (Review) and again at the Plan gate: every design review seeded
+// so far has an approval recorded, or the skip is still valid against the
 // design as planned.
 func (c *checker) reviewed() {
 	d, err := c.loadDesign(c.f.Branch)
@@ -63,6 +64,97 @@ func (c *checker) reviewed() {
 	got := len(approvals(d))
 	c.add("design reviewed (FLOW-19)", want > 0 && got >= want,
 		"%d approvals recorded in Design review, %d reviews seeded", got, want)
+}
+
+// approvalDelta is the Plan gate's guard (FLOW-19): planning leaves the
+// design's impact fields and rule_changes as its last approval left them, so
+// Plan cannot widen the design past its review. A rule_changes entry that
+// differs from the approved design passes when its own rule change approval
+// names a commit whose front-matter has the entry as it is now: the human
+// approved it on its own line. A skipped review has no approval to compare;
+// skipValid rechecks it, and reviewed reports a missing approval.
+func (c *checker) approvalDelta() {
+	const name = "design unchanged since its approval (FLOW-19)"
+	if c.f.DesignReview == "skip" {
+		return
+	}
+	d, err := c.loadDesign(c.f.Branch)
+	if err != nil {
+		c.add(name, false, "%v", err)
+		return
+	}
+	a := approvals(d)
+	if len(a) == 0 {
+		return
+	}
+	base := a[len(a)-1]
+	prev, err := c.loadDesign(base)
+	if err != nil {
+		c.add(name, false, "approved design at %s: %v", base, err)
+		return
+	}
+	var diffs []string
+	if diff := impactDelta(&prev.Front, &d.Front); diff != "" {
+		diffs = append(diffs, diff)
+	}
+	diffs = append(diffs, c.ruleChangesDelta(prev, d)...)
+	if len(diffs) > 0 {
+		c.add(name, false, "changed since the approval at %s, a design change for Design "+
+			"(FLOW-06): %s", base, strings.Join(diffs, "; "))
+		return
+	}
+	c.add(name, true, "impact fields and rule_changes as approved at %s", base)
+}
+
+// ruleChangesDelta lists how d's rule_changes differ from the approved
+// design's, leaving out each entry its own approval line covers.
+func (c *checker) ruleChangesDelta(approved, d *Design) []string {
+	then := map[string]RuleChange{}
+	for _, rc := range approved.Front.RuleChanges {
+		then[rc.Rule] = rc
+	}
+	var out []string
+	now := map[string]bool{}
+	for _, rc := range d.Front.RuleChanges {
+		now[rc.Rule] = true
+		if was, ok := then[rc.Rule]; ok && sameRuleChange(was, rc) {
+			continue
+		}
+		if !c.ownApproval(d, rc) {
+			out = append(out, fmt.Sprintf("rule_changes %s added or changed, and no "+
+				"rule change %s approved at a commit that has it", rc.Rule, rc.Rule))
+		}
+	}
+	for _, rc := range approved.Front.RuleChanges {
+		if !now[rc.Rule] {
+			out = append(out, fmt.Sprintf("rule_changes %s dropped", rc.Rule))
+		}
+	}
+	return out
+}
+
+// ownApproval reports whether a `rule change <ID> approved at <sha>` line
+// names a commit whose design has rc as it is now.
+func (c *checker) ownApproval(d *Design, rc RuleChange) bool {
+	for _, m := range ruleApprovedRe.FindAllStringSubmatch(d.Sections["Design review"], -1) {
+		if m[1] != rc.Rule {
+			continue
+		}
+		then, err := c.loadDesign(m[2])
+		if err != nil {
+			continue
+		}
+		for _, was := range then.Front.RuleChanges {
+			if sameRuleChange(was, rc) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func sameRuleChange(a, b RuleChange) bool {
+	return a.Rule == b.Rule && a.Change == b.Change && sameSet(a.Paths, b.Paths)
 }
 
 // skipValid applies the FLOW-19 criteria for skipping a design review. A
