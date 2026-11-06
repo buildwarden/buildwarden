@@ -144,6 +144,10 @@ If the file exists, append a new `## Run <W>` section. Sections, in order:
   confirmation. List a runaway budget only as `QUEUE.md`'s **Needs Jeff**
   does, one line per open item it names (FLOW-13); do not judge budgets
   yourself, and never call a run overrun a runaway.
+- **Follow-ups filed**: each follow-up a step filed this run (FLOW-09), as
+  "<slug> (follows <item>)", so Jeff can say otherwise; "none" when none. A
+  follow-up does not wait on him, so it is not listed under **Blocked on
+  Jeff**.
 - **Design reviews skipped** this run (`design_review: skip`), each with the
   reason Design gave, so Jeff can call one back (FLOW-19).
 - **Waiting on a host**: `host:<name>` steps and open native gaps, by
