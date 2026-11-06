@@ -597,7 +597,11 @@ expected tasks, one commit each:
 
 ## Design review
 
-Recorded at x1-design (FLOW-19).
+- **r1, 2026-11-06: approved at `393f437`** (Jeff, workflow-human,
+  x1-design, FLOW-19). He reviewed it alongside
+  native-allowlist-scratch-tools on one review page, with the assumptions
+  first. **a1 to a9 are confirmed as drafted, option (a).** Per a9, Jeff
+  leaves security-suite's q1 unanswered until this item's x4-close.
 
 ## Consolidation
 
