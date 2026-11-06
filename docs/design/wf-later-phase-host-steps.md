@@ -485,9 +485,42 @@ per task on this branch.
 
 ## Consolidation
 
-Filled in at Publish (FLOW-10, FLOW-15): features landed since the fork,
-terminology aligned, abstractions shared, seams reconciled, rules proposed, and
-the dead-code, duplication and overview sweep.
+Filled at x2-implement (process item, FLOW-10, FLOW-15), after merging `main`
+at `9787fb4` into the branch.
+
+- **Landed since the fork (`1cad5b3`):** #97 (deadcode toolchain) and #98
+  (build-link-subnet). Neither touches `tools/workflow/`, `.claude/` or
+  `process.md`; #98 changed `overview.md` and `bootstrap.md` for its own
+  component flows, which this item does not touch. No conflict.
+- **Siblings in flight:** flow19-design-before-plan (priority 26, merges
+  first) rewrites `IsGate` to "the template step nothing needs" and reorders
+  the phase-2 template. To keep that merge small, this branch leaves
+  `IsGate`'s body as it was on `main` instead of sharing a parse with it (the
+  plan's task 2 said `IsGate` would use the same parse): `isTemplate` has its
+  own small parser, `stepTemplates`, and `Seed` and `Back` find Publish by
+  the `waitsAdded` flag (`waiter`), not by which template is last. Both
+  therefore hold under either gate definition. The one expected conflict is
+  the template literals, which gain the `waitsAdded` field. The phase-2 line
+  conflicts with flow19's reorder; resolve it by taking flow19's order with
+  `false` added. budgets-active-only had no code on its branch when this
+  ran.
+- **Terminology:** "offered" (`Offered`) is the readiness word in FLOW-04,
+  the code and QUEUE.md's `(from phase <n>)`; "added step" means a step that
+  is not a template step, in the code comments and in wf-design and wf-plan.
+- **Abstractions:** `Early` is the only refusal text, shared by `wf claim`
+  and `wf done`. `readySteps`, `ready` and `leasedTo` all use `Offered`.
+- **Overview (FLOW-15):** no component flow changes, so `overview.md` is
+  unchanged (task 11).
+- **Dead code and duplication:** none added. `addNeeds` dedups the needs that
+  `Seed` links, so a step whose hand-added `needs` already hold the
+  consolidate id does not get it twice.
+- **Live state:** at workflow `6dd3c88`, `wf validate` passes with the new
+  `wf`. `wf next` for cloud, human and every host, overall and per in-flight
+  item, and `wf status`, match the binary built from `main`. No open item has
+  a pending host step now that build-link-subnet has merged.
+- **Deferred to x3-merge (task 10):** the workflow branch `README.md`
+  paragraph "Design adds the steps it finds", which is updated once the PR
+  merges, because only then does the loop run this `wf`.
 
 ## Rollback notes
 
