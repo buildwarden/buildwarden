@@ -1,6 +1,6 @@
 ---
 feature: native-allowlist-scratch-tools
-status: draft
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -507,4 +507,50 @@ depends on the launcher.
 
 ## Archive summary
 
-Filled in at Publish (FLOW-12).
+Approved at design review r1 (2026-11-06, `706564f`); the PR to `main`
+carries this design. A process item (FLOW-14): no tier-2 report.
+
+- **Built.** `tools/workflow/native/native-run.sh`, a main-owned POSIX `sh`
+  launcher reached through the existing `Bash(tools/workflow/*)` rule:
+  `native-run.sh [WARDEN_X=value ...] -- <command>`. It runs a branch's
+  tracked `.scratch/<name>/tools/<path>` script (never `tools/workflow/`,
+  never an untracked file, `.scratch/<name>` must be a worktree of this
+  repository), and with `WARDEN_*` assignments it also runs the branch's or
+  `main`'s `warden` and `go test` (in place or `-C .scratch/<name>`).
+  Secret-looking names (`_PASSWORD`, `_TOKEN`, `_SECRET`, `_KEY`) are
+  refused. Refusals are one stderr line, exit 2, before anything runs.
+  `tools/workflow/native/native_test.go` (tier 0) guards
+  `settings.native.json`'s rule shapes and every launcher check.
+  `workflow-native` names the launcher forms, sanctions a scratch Makefile
+  for anything outside them (the digest names its target and commands and
+  lists the gap under **Blocked on Jeff**), and releases a step whose case
+  neither form can run. `settings.native.json` is unchanged.
+- **Decisions taken:** one launcher for scripts and variables instead of
+  new allow rules; `WARDEN_*` by pattern, not a named set; tracked-file check
+  with `--literal-pathspecs` (a glob pathspec let an untracked `tools/x*`
+  through); worktree check on both `--show-toplevel` and `--git-common-dir`;
+  keep the `host:*` hold until merge; the scratch Makefile allowed as the
+  documented fallback (Jeff, r1 a4).
+- **Rejected:** `Bash(.scratch/*/tools/*)` with a `tools/workflow/` deny
+  (the `*` admits any `.scratch/` command containing `/tools/`, and the deny
+  misses `tools/./workflow/`); `Bash(.scratch/*/tools/relay-vm/*)`; allow
+  rules spelling the assignment (undocumented matcher behaviour);
+  `Bash(env *)`; the `powershell -Command` form; a `--relay-boot-vhdx` flag;
+  forbidding the scratch Makefile.
+- **Validated:** tier 0 on Linux; the a5 matcher check with Claude Code
+  2.1.319 allowed both launcher forms and refused `WARDEN_A=1
+  .scratch/t/dist/warden` and `.scratch/t/tools/x.sh`. Open: the first
+  windows-desktop run that validates a Hyper-V branch is the native check
+  (`refresh-cache.sh --check` and a `WARDEN_RELAY_BOOT_VHDX` case through
+  the launcher, recorded in its digest); `TestNativeRun` has not run on
+  Windows (CI is Linux only).
+- **For a future design touching `native-session`, `permissions` or
+  `env-prefix`:** the allow matcher does not match past an assignment of a
+  variable outside Claude Code's built-in safe list, while a deny does; put
+  variables and branch scripts behind a main-owned launcher, not new rules.
+  These rules and the launcher filter command text and are not a boundary:
+  `make:*`, `go:*` and `powershell:*` still run anything, including a
+  branch's `tools/workflow/`; branch protection on `main` and FLOW-08 are
+  the boundary. Out of scope and still open: a session that checks out a
+  feature branch in the main checkout runs that branch's `tools/workflow/`
+  through `Bash(tools/workflow/*)`; the `rm -rf /:*` deny.
