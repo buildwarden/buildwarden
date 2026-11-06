@@ -444,7 +444,47 @@ Concrete at x2-implement (process item, FLOW-03); one commit each:
 
 ## Consolidation
 
-Filled in at x2-implement (FLOW-10, FLOW-15).
+Implemented at x2-implement, 2026-11-06, as the Implementation plan's tasks
+1-6 (`26e8e56`, `3f109f1`, `60cae8f`, `102b21d`, then this section).
+
+- **What landed.** `tools/workflow/native/native-run.sh` (mode 755) with the
+  checks of Decisions 1 and 2 in the Design's order, plus one the Design
+  implied: it refuses to run anywhere but a checkout's top level, because
+  the `.scratch/` paths it checks are relative. The worktree check compares
+  both `--show-toplevel` (a plain directory under `.scratch/` resolves to
+  the main checkout, whose common directory would otherwise match) and
+  `--git-common-dir`, each normalised with `cd && pwd -P` so Git Bash's
+  `C:/` spelling and macOS's `/private/tmp` compare equal. Refusals are one
+  stderr line, `native-run.sh: <reason>; accepted: <shapes>`, exit 2.
+  `tools/workflow/native/native_test.go` (test-only package) holds
+  `TestNativeSettingsRules` and a 26-case table in `TestNativeRun`, which
+  also checks the subdirectory refusal. The skill's paragraph and
+  **Record** bullet are the Design's wording, reflowed; the structure map
+  names the launcher and its test.
+- **Unchanged, as expected.** `settings.native.json`, and
+  `docs/book/src/concepts/overview.md` (FLOW-15: it describes product
+  components; it names no part of the loop). No `docs/development/` change.
+- **Matcher check (a5), run here.** Claude Code 2.1.319, from a stub
+  repository holding a copy of this branch's `native-run.sh` and
+  `settings.native.json` and a worktree `.scratch/t` (tracked
+  `tools/x.sh`, stub `dist/warden`):
+  `claude -p --setting-sources project --settings
+  tools/workflow/native/settings.native.json --permission-mode default
+  --output-format stream-json`, asked to run each command verbatim.
+  Allowed and run: `tools/workflow/native/native-run.sh --
+  .scratch/t/tools/x.sh` (printed `x WARDEN_A=`) and
+  `tools/workflow/native/native-run.sh WARDEN_A=1 -- .scratch/t/dist/warden`
+  (printed `warden WARDEN_A=1`). Refused ("This command requires
+  approval", listed in `permission_denials`): `WARDEN_A=1
+  .scratch/t/dist/warden` and `.scratch/t/tools/x.sh`. Controls: `ls tools`
+  allowed, `curl --version` denied by the deny rule. This is the Linux
+  matcher; the post-merge windows-desktop run remains the native check.
+- **Not run here.** `TestNativeRun` on Windows: it needs `sh` and `git` on
+  `PATH` (Git Bash), otherwise it skips; CI's `make test` is Linux only.
+- **Gates.** `make test`, `make lint` (0 issues; tier1 0 findings),
+  `make enforcement` (no enforcement change), `tools/workflow/flow18-check.sh`,
+  `dist/wf validate` passed; `dist/wf check` fails only on the archive and
+  PR checks, which are Publish's.
 
 ## Rollback notes
 
