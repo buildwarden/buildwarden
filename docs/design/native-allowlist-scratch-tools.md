@@ -421,7 +421,17 @@ one commit each:
 
 ## Design review
 
-Recorded at x1-design (FLOW-19).
+- **r1, 2026-11-06: approved at `706564f`, read at `63c7b3d`** (Jeff,
+  workflow-human, x1-design, FLOW-19). He reviewed it alongside
+  regression-fixes-follow-up on one review page, with the assumptions first.
+  - **a1, a2, a3, a5, a6: confirmed (a).** That covers the launcher for a
+    branch's tracked `tools/` scripts and `WARDEN_*` variables, the
+    validation plan, and keeping the `host:*` hold.
+  - **a4: allow the Makefile pattern.** This is the draft's option (c). A
+    command outside the launcher's forms runs from a scratch Makefile, and
+    the digest names its target, its commands and the allowlist gap. It was
+    folded into Decision 3, the Design text for the skill, and the
+    Validation plan before the approval (`706564f`).
 
 ## Consolidation
 
