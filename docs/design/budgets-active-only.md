@@ -1,6 +1,6 @@
 ---
 feature: budgets-active-only
-status: draft
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -376,4 +376,49 @@ wf-later-phase-host-steps (Prior art, Ordering).
 
 ## Rollback notes
 
+Revert the PR. The queue files need no change: no field is added or removed,
+and the next `wf validate` writes `QUEUE.md` with **Recently done** again.
+
 ## Archive summary
+
+Implemented 2026-11-06 by the cloud loop (attended), as a process item,
+approved at design review r1 (`dada2bd`, a3 recorded at `e3d5a11`) with every
+assumption at its recommendation.
+
+- **Built.** FLOW-13 (`docs/development/process.md`) now says the runaway
+  check is a gate on an *open* (queued or in-progress) item, in steps only:
+  runs are counted but never trip it. Done items are left out of the runaway
+  check, the digest's blocked and spent lines, `wf status` and `QUEUE.md`,
+  and are looked at again only in a retrospective Jeff asks for.
+  `State.Runaway` returns false for a done item; `State.Listed(all)` gives
+  `wf status` its items in FLOW-05 order, with `-all` adding done ones;
+  `QUEUE.md` drops **Recently done** (`recentlyDone`, `recentDays` removed).
+  `workflow-tick`'s Digest takes runaway lines only from **Needs Jeff**, lists
+  open items under **Spent** with nothing flagged, and puts closed items in
+  **Moved**. `workflow-human` step 4 names an open item's runaway budget and
+  gains step 6, a retrospective on request; `workflow-intake` states the
+  factor and that it applies while the item is open.
+- **Decisions taken:** steps-only runaway for open items, enforced in
+  `Runaway` itself (a1 a); remove **Recently done**, reversing queue-summary's
+  Design item 6 (a2 a); **Spent** keeps steps and runs, unflagged (a3 b); a
+  retrospective is one Jeff asks for in an attended session, using
+  `wf status -all` (a4 a).
+- **Rejected:** flagging runs past the factor (runs grow with waits, not
+  loops); dropping the per-feature budget; relying on callers to skip done
+  items; keeping or shortening **Recently done**; a `wf retro` command; a
+  scheduled or weekly retrospective; listing a closed item once more on the
+  next run.
+- **Validated.** Tier 0: `TestLeasesAndRunaway` covers a done item past the
+  factor (not a runaway) and an in-progress one (still skipped by `wf next`);
+  a `Listed` test covers both settings; the `QUEUE.md` golden has no
+  **Recently done** and no done item. `make lint` and `make test` green.
+- **Left for x4-close:** the `workflow` branch `README.md` (QUEUE.md row,
+  budget comment, `wf status [-all]`) and a `wf validate` to regenerate
+  `QUEUE.md` from the new `dist/wf`. The first tick on the new skill should
+  write a digest with no done item under **Blocked on Jeff** or **Spent**.
+- **For future designs touching `workflow`, `budget`, `runaway`, `digest`,
+  `queue-summary`, `wf-status` or `retrospective`:** "open item" means queued
+  or in progress, and is the only kind any gate, digest line or summary
+  counts. A new report of done items belongs behind `wf status -all` or an
+  explicit retrospective, not in an unattended run. `Listed` and
+  `sortFeatures` share the FLOW-05 comparator; keep them on one.
