@@ -131,24 +131,36 @@ func isTemplate(st *Step) bool {
 	return false
 }
 
-// gateTemplate is the phase's last seeded template step.
-func gateTemplate(f *Feature, ts []template) (template, bool) {
-	var last template
-	ok := false
+// waiter is the phase's template step marked waitsAdded: Publish's gate.
+func waiter(ts []template) (template, bool) {
 	for _, t := range ts {
-		if seeded(f, t) {
-			last, ok = t, true
+		if t.waitsAdded {
+			return t, true
 		}
 	}
-	return last, ok
+	return template{}, false
 }
 
 // IsGate reports whether the step is its phase's last seeded template step,
 // whose completion the FLOW-03 done-when check must confirm.
 func IsGate(f *Feature, st *Step) bool {
-	ts, name := stepTemplates(st.ID)
-	gate, ok := gateTemplate(f, ts)
-	return ok && gate.name == name
+	m := stepIDRe.FindStringSubmatch(st.ID)
+	if m == nil {
+		return false
+	}
+	round := letterRound(m[1])
+	phase := int(m[2][0] - '0')
+	ts := templates[round]
+	if phase >= len(ts) || len(ts[phase]) == 0 {
+		return false
+	}
+	var last string
+	for _, t := range ts[phase] {
+		if seeded(f, t) {
+			last = t.name
+		}
+	}
+	return last == retryRe.ReplaceAllString(m[3], "")
 }
 
 // Seed adds the template steps for the feature's current round and phase.
@@ -166,7 +178,7 @@ func Seed(f *Feature) {
 	for n := 2; f.hasStep(StepID(f.Round, f.Phase, ts[f.Phase][0].name) + suffix); n++ {
 		suffix = fmt.Sprintf("-r%d", n)
 	}
-	gate, _ := gateTemplate(f, ts[f.Phase])
+	gate, waits := waiter(ts[f.Phase])
 	var added []string
 	for i := range f.Steps {
 		st := &f.Steps[i]
@@ -175,7 +187,7 @@ func Seed(f *Feature) {
 			continue
 		}
 		added = append(added, st.ID)
-		if gate.waitsAdded && strings.HasPrefix(st.Affinity, "host:") {
+		if waits && strings.HasPrefix(st.Affinity, "host:") {
 			for _, n := range gate.needs {
 				st.Needs = addNeeds(st.Needs, StepID(f.Round, f.Phase, n)+suffix)
 			}
@@ -276,7 +288,7 @@ func Back(f *Feature, by string, now time.Time, finding string, to int) {
 func rerunPublishHostSteps(f *Feature, steps []Step, now time.Time, by string) []Step {
 	publish := -1
 	for phase, ts := range templates[f.Round] {
-		if gate, ok := gateTemplate(f, ts); ok && gate.waitsAdded {
+		if _, ok := waiter(ts); ok {
 			publish = phase
 		}
 	}
