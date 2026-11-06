@@ -9,6 +9,9 @@ branch: feat/build-link-subnet
 alters_relationships: true
 design_review: required
 source: 'firecracker-driver PR #90, CI tier 2 first run (2026-11-02): the runner''s VPC resolver 10.0.0.2 sits inside the relay''s build link 10.0.0.0/30 (relay 10.0.0.1, guest 10.0.0.2) shared by linuxguest (qemu, firecracker), winguest (qemu, hyperv), vz and tools/relay-vm/init, so the relay routes it to the build VM. PR #90 adds a firecracker preflight/doctor refusal; this moves the link for every VM driver so no upstream address can clash. Queued before security-suite at Jeff''s word.'
+pr:
+  number: 98
+  ci: green
 steps:
   - id: f0-branch-setup
     phase: 0
@@ -644,3 +647,6 @@ history:
   - at: 2026-11-06T10:57:21Z
     by: cloud/20261106T105651Z
     event: claimed f6-open-pr until 2026-11-06T12:57:21Z
+  - at: 2026-11-06T11:12:29Z
+    by: cloud/20261106T105651Z
+    event: 'f6-open-pr: merged origin/main 4c8f9dc (#97, clean) at 8c6d41b; gofmt of 4f9a0e3''s test (a trailing blank line, tier-1 GLOBAL-02 SHOULD) at 848469c; design archived with Consolidation line (#97, 4f9a0e3 root cause and test) and Archive summary; head 2bd748f. make lint (linux, GOOS=darwin, GOOS=windows), make test, make enforcement, flow18-check, tier1 -base origin/main (0 MUST/0 SHOULD/2 hints) green. PR #98 opened; CI on 2bd748f all green: ci 42207202054, integration 42207201615, firecracker 42207201601, flow18 42207202039 (all on pull_request, no dispatch needed).'
