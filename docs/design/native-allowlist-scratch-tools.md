@@ -398,24 +398,33 @@ code changes. The weighing:
 
 ## Implementation plan
 
-Written in full at x2-implement (process item, FLOW-03); the expected tasks,
-one commit each:
+Concrete at x2-implement (process item, FLOW-03); one commit each:
 
-1. `tools/workflow/native/native-run.sh` (new, mode 755; FLOW-14,
-   GLOBAL-01): Decisions 1 and 2.
-2. `tools/workflow/native/native_test.go` (new, test-only package; TEST-01,
-   TEST-02): Decision 4.
-3. `.claude/skills/workflow-native/SKILL.md` (FLOW-14): the line 42-48
-   paragraph and the **Record** bullet in Design.
-4. `docs/book/src/contributing/structure.md:158`: "wrapper, installers,
-   permissions" becomes "wrapper, installers, permissions, the `native-run.sh`
-   launcher and their test".
+1. `tools/workflow/native/native-run.sh` (new, POSIX `sh`, mode 755;
+   FLOW-14, FLOW-18, GLOBAL-01): Decisions 1 and 2 in the Design's order.
+   Refuse unless run from a checkout's top level; split at `--`; check each
+   assignment's name (`WARDEN_[A-Z0-9_]+`, no secret suffix); match the
+   command against the shapes; for `.scratch/<name>/tools/<path>`, the
+   component and `workflow/` checks, then `.scratch/<name>` is the top level
+   of a worktree sharing this checkout's git common directory, and
+   `ls-files --error-unmatch` on the target; then `export` and `exec`. Every
+   refusal is one stderr line naming the reason and the accepted shapes,
+   exit 2, before anything runs.
+2. `tools/workflow/native/native_test.go` (new, test-only package
+   `native`; TEST-01, TEST-02, GLOBAL-01, GLOBAL-02): Decision 4's
+   `TestNativeSettingsRules` and table-driven `TestNativeRun`, skipped where
+   `sh` or `git` is missing.
+3. `.claude/skills/workflow-native/SKILL.md` (FLOW-14): the "A branch under
+   test" paragraph and the **Record** bullet, as worded in Design.
+4. `docs/book/src/contributing/structure.md` (UX-01 for contributor docs):
+   the `native/` line names the launcher and its test.
 5. `docs/book/src/concepts/overview.md` (FLOW-15) and
-   `tools/workflow/native/settings.native.json`: checked, no change expected.
-6. The a5 matcher check, recorded in Consolidation; then `make lint`,
-   `make test`, `make enforcement`, `tools/workflow/flow18-check.sh` and
-   `dist/wf check -feature native-allowlist-scratch-tools` (FLOW-10,
-   FLOW-17); archive this design (FLOW-12) and open the PR (FLOW-08).
+   `tools/workflow/native/settings.native.json`: checked, no change.
+6. The a5 matcher check, recorded in Consolidation; `make lint`,
+   `make test`, `make enforcement`, `tools/workflow/flow18-check.sh`,
+   `dist/wf validate` and `dist/wf check -feature
+   native-allowlist-scratch-tools` (FLOW-10, FLOW-17); Consolidation
+   filled. Archive (FLOW-12) and the PR (FLOW-08) are Publish's.
 7. At x4-close, on the `workflow` branch (FLOW-03): nothing beyond the queue
    bookkeeping; the 2026-11-04 Makefile evidence stays as recorded.
 
