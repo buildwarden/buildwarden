@@ -350,12 +350,18 @@ wf-later-phase-host-steps (Prior art, Ordering).
 - **Landed since the fork:** #97 (deadcode with the module's toolchain) and
   #98 (build-link-subnet). Neither touches `docs/development/process.md`,
   `.claude/` or `tools/workflow/`, so nothing here needed reconciling.
-- **Not yet landed, same files:** flow19-design-before-plan (priority 26)
-  and wf-later-phase-host-steps (27) are on their own branches. The plan
-  said this item rebases onto both; it was implemented first instead, with
-  its edits held to the lines Design names, so whichever merges second
-  resolves a small conflict: FLOW-13's paragraph, `workflow-tick` Digest,
-  `workflow-human` steps 4 and 6, and `queue/queue.go` near `Runaway`.
+- **Not yet landed, same files:** flow19-design-before-plan and
+  wf-later-phase-host-steps are on their own branches. The plan said this
+  item rebases onto both; it was implemented first instead, with its edits
+  held to the lines Design names. The merge order is by priority:
+  flow19-design-before-plan, then wf-later-phase-host-steps, then this item,
+  the lowest of the three. This branch merges last, so it takes current
+  `origin/main` (a merge commit, never a rebase of pushed history) after the
+  other two land and before Jeff merges it, and resolves the conflicts
+  there. The conflict set: `docs/development/process.md` FLOW-13 (beside
+  the siblings' FLOW-19 and FLOW-03 edits), `workflow-tick` Digest, `workflow-human` steps 4 to 6,
+  `workflow-intake` line 26, and `queue/queue.go` near `Runaway`, `Budget`
+  and `sortFeatures`. The PR body states this order and conflict set.
 - **Terminology:** "open item" (queued or in progress) is used the same way
   in FLOW-13, the `Runaway`, `Budget` and `Listed` comments, and the three
   skills.
