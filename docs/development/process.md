@@ -361,11 +361,16 @@ long-running conversation. A run spends its budget in FLOW-05 order, so the
 top-priority feature can use all of it. A scheduled native session (FLOW-09)
 spends its own budget, `native_budget`, which falls back to the run's budget when
 unset, so native and integration testing never compete with the cloud loop. Each
-feature also has a work budget, which
-is a runaway check rather than a share of the run: exhausting it escalates to a
-`human` step. The loop posts a periodic digest (what moved, what is blocked on a human,
-what is waiting on a native host, what was spent), and notifies when a new
-blocking question appears.
+feature also has a work budget, which is a runaway check rather than a share of
+the run: an open (queued or in-progress) item that spends `runaway_factor` times
+its estimated steps escalates to a `human` step, and the unattended loop takes no
+more of its steps. Runs are counted but never trip it. The loop posts a periodic
+digest (what moved, what is blocked on a human, what is waiting on a native host,
+what open items spent), and notifies when a new blocking question appears. Done
+items are left out of the runaway check, of the digest's blocked and spent lines,
+of `wf status` and of `QUEUE.md`; their budgets are looked at again only in a
+retrospective the human asks for. Reading archived designs (FLOW-01, FLOW-12) and
+open native gaps from merged designs (FLOW-09) are not affected.
 
 ---
 
