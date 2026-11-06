@@ -50,6 +50,8 @@ gaps:
       deadcode toolchain, process-rule, workflow and relay http-body changes), so a rerun would
       hang the same way, and no Windows arm64 ISO is reachable from the sandbox. Still waits on
       the qemu Windows build-guest fix.
+      2026-11-06 (host:macos-qemu/20261106T124004Z, unattended, main 4c8f9dc): not run. main has
+      not moved since the 2026-11-05 run, and no queue item carries a qemu Windows build-guest fix.
     status: open
   - id: qemu-linux-exclusive-trust
     host: macos-qemu
@@ -180,6 +182,8 @@ gaps:
       2026-11-05 (host:qemu-any/20261105T124003Z, unattended, main 4c8f9dc): Linux half not
       rerun (nothing since a0d508c touches driver/qemu; the firecracker-qemu-linuxguest pass on
       2026-11-04 stands); Windows half still waits on qemu-windows-guest-package.
+      2026-11-06 (host:qemu-any/20261106T124004Z, unattended): not rerun. main is unchanged at
+      4c8f9dc, so both halves stand as on 2026-11-05.
     status: open
   - id: hyperv-eval-image-verify-disks
     host: windows-hyperv
@@ -414,4 +418,7 @@ gaps:
       qemu Windows path is still unexercisable for the same reason. Its guest-agnostic driver/qemu
       changes were validated on qemu-any this run (f6-validate-qemu-any), driver/winguest on
       windows-hyperv (2026-11-04). Run this case once the qemu Windows build guest is fixed.
+      2026-11-06 (host:macos-qemu/20261106T124004Z, unattended): not run, for the same reason.
+      feat/build-link-subnet is now PR #98 at 2bd748f (phase 7, merge), with no driver/qemu or
+      driver/winguest change since a68ac2c.
     status: open
