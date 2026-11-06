@@ -11,8 +11,8 @@ import (
 var update = flag.Bool("update", false, "rewrite testdata/queue.md")
 
 // summaryState covers every section: a blocking question, a design review,
-// a PR waiting, a runaway, a host step and a human step of a later phase, the backlog, and done items inside and
-// outside the last 7 days.
+// a PR waiting, a runaway, a host step and a human step of a later phase, the
+// backlog, and done items inside and outside the last 7 days.
 func summaryState() *State {
 	at := func(d int) time.Time { return now.Add(time.Duration(d) * 24 * time.Hour) }
 	ev := func(d int) []Event { return []Event{{At: at(d), By: "test", Event: "e"}} }

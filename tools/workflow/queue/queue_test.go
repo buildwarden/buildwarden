@@ -357,7 +357,8 @@ func TestLaterPhaseStepWaitsForItsPhase(t *testing.T) {
 			t.Fatalf("phase %d: host next = %q, want %q", phase, got, want)
 		}
 		if got := next(t, s, "human"); got != "a f6-provision-macos-vz" {
-			t.Fatalf("phase %d: human next = %q, want the provisioning step", phase, got)
+			t.Fatalf("phase %d: human next = %q, want the provisioning step",
+				phase, got)
 		}
 		_, blocked := s.Next("host:macos-vz", now)
 		if phase < 6 && strings.Contains(blocked[0].Reason, "f6-validate") {
@@ -463,8 +464,13 @@ func TestBackToImplementKeepsAddedLaterSteps(t *testing.T) {
 	if errs := s.Validate(); len(errs) != 0 {
 		t.Fatalf("Validate after Back: %v", errs)
 	}
+}
+
+func TestReenteredPublishWaitsForKeptSteps(t *testing.T) {
+	f, s := publishWithValidation(t)
+	Back(f, "test", now, "validation failed on macos-vz", 3)
 	advance(f, 6)
-	open, _ = f.Step("f6-open-pr-r2")
+	open, _ := f.Step("f6-open-pr-r2")
 	if got := strings.Join(open.Needs, ","); got != "f6-consolidate-r2,"+
 		"f6-validate-macos-vz,f6-validate-macos-qemu,f6-validate-windows-hyperv,"+
 		"f6-validate-qemu-any,f6-provision-macos-vz-dns" {

@@ -48,7 +48,8 @@ var templates = map[string][][]template{
 		{{"design", "cloud", nil, false}},
 		// The design review is seeded unless Design recorded a valid skip
 		// (FLOW-19); see seeded.
-		{{"plan", "cloud", nil, false}, {"design-review", "human", []string{"plan"}, false}},
+		{{"plan", "cloud", nil, false},
+			{"design-review", "human", []string{"plan"}, false}},
 		{{"implement", "cloud", nil, false}},
 		{{"review", "cloud", nil, false}},
 		{{"guide", "cloud", nil, false}},
@@ -178,21 +179,7 @@ func Seed(f *Feature) {
 	for n := 2; f.hasStep(StepID(f.Round, f.Phase, ts[f.Phase][0].name) + suffix); n++ {
 		suffix = fmt.Sprintf("-r%d", n)
 	}
-	gate, waits := waiter(ts[f.Phase])
-	var added []string
-	for i := range f.Steps {
-		st := &f.Steps[i]
-		if st.Status != "pending" || st.Phase != f.Phase || stepRound(st.ID) != f.Round ||
-			isTemplate(st) {
-			continue
-		}
-		added = append(added, st.ID)
-		if waits && strings.HasPrefix(st.Affinity, "host:") {
-			for _, n := range gate.needs {
-				st.Needs = addNeeds(st.Needs, StepID(f.Round, f.Phase, n)+suffix)
-			}
-		}
-	}
+	added := linkAdded(f, ts[f.Phase], suffix)
 	for _, t := range ts[f.Phase] {
 		if !seeded(f, t) {
 			continue
@@ -207,6 +194,27 @@ func Seed(f *Feature) {
 		}
 		f.Steps = append(f.Steps, st)
 	}
+}
+
+// linkAdded returns the phase's pending added steps and, when the phase has a
+// waitsAdded gate, makes each added host step need what that gate needs.
+func linkAdded(f *Feature, ts []template, suffix string) []string {
+	gate, waits := waiter(ts)
+	var added []string
+	for i := range f.Steps {
+		st := &f.Steps[i]
+		if st.Status != "pending" || st.Phase != f.Phase || stepRound(st.ID) != f.Round ||
+			isTemplate(st) {
+			continue
+		}
+		added = append(added, st.ID)
+		if waits && strings.HasPrefix(st.Affinity, "host:") {
+			for _, n := range gate.needs {
+				st.Needs = addNeeds(st.Needs, StepID(f.Round, f.Phase, n)+suffix)
+			}
+		}
+	}
+	return added
 }
 
 // addNeeds appends the ids needs does not already hold.
