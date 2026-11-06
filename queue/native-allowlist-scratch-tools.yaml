@@ -11,6 +11,9 @@ design: docs/design/native-allowlist-scratch-tools.md
 branch: feat/native-allowlist-scratch-tools
 alters_relationships: null
 source: 'workflow-human 2026-11-06 (Jeff): windows-desktop''s build-link-subnet validation (digest 2026-11-04, host:windows-desktop/20261105T051002Z) could not run the branch''s tools/relay-vm/hyperv/refresh-cache.sh or a WARDEN_RELAY_BOOT_VHDX-prefixed command under tools/workflow/native/settings.native.json, and used a scratch Makefile instead. Allow .scratch/*/tools/* (and the env-prefixed form), or document the Makefile pattern.'
+pr:
+  number: 102
+  ci: green
 steps:
   - id: x1-design
     phase: 1
