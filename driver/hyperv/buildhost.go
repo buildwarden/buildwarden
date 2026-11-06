@@ -15,8 +15,8 @@ import (
 )
 
 // Build VM defaults. The build VM is the untrusted guest: its sole NIC is on the
-// Private build switch, so its only peer is the relay at 10.0.0.1 and it has no
-// route to the host network stack or the internet.
+// Private build switch, so its only peer is the relay on the build link and it
+// has no route to the host network stack or the internet.
 const (
 	defaultBuildMemoryMB = 4096
 	defaultBuildCPUs     = 4

@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 	"github.com/buildwarden/buildwarden/driver/relayvm"
 )
 
@@ -30,6 +31,27 @@ type assets struct {
 	Kernel         string
 	RelayInitramfs string
 	BuildInitramfs string
+}
+
+// rebuildLauncher is the one-time rebuild of the direct-boot launcher
+// initramfs.
+const rebuildLauncher = "tools/firecracker-vm/build-initramfs.sh"
+
+// launcherStamp describes the direct-boot launcher initramfs's link-channel
+// stamp, with Path empty when the assets are not found.
+func launcherStamp() driver.LauncherStamp {
+	st := driver.LauncherStamp{What: "firecracker direct-boot launcher initramfs",
+		Rebuild: rebuildLauncher}
+	if p, ok := relayvm.Find(relayvm.Firecracker); ok {
+		st.Path = relayvm.StampPath(relayvm.Firecracker[2], p[2])
+	}
+	return st
+}
+
+// LauncherStamps lists the firecracker launcher assets with a link-channel
+// stamp: the direct-boot launcher initramfs (disk-image builds do not use it).
+func LauncherStamps() []driver.LauncherStamp {
+	return []driver.LauncherStamp{launcherStamp()}
 }
 
 func findAssets() (assets, error) {
@@ -180,7 +202,7 @@ type preflighted struct {
 // would fix them: the host, KVM, the VMM, the boot assets, a slot, an
 // off-host resolver. The disk path adds checkDiskTools once the build's image
 // is known.
-func preflight(h host, local func(net.IP) bool) (*preflighted, error) {
+func preflight(h host, local func(net.IP) bool, link buildlink.Link) (*preflighted, error) {
 	if err := hostCheck(); err != nil {
 		return nil, err
 	}
@@ -198,7 +220,7 @@ func preflight(h host, local func(net.IP) bool) (*preflighted, error) {
 	if err != nil {
 		return nil, err
 	}
-	dns, err := upstreamResolvers(h.readFile, local)
+	dns, err := upstreamResolvers(h.readFile, local, link)
 	if err != nil {
 		return nil, err
 	}

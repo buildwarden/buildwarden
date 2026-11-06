@@ -1,6 +1,10 @@
 package vz
 
-import "net"
+import (
+	"net"
+
+	"github.com/buildwarden/buildwarden/driver/buildlink"
+)
 
 // VirtualNetwork represents an isolated virtual network connecting the build
 // VM to the host-side relay via VZFileHandleNetworkDeviceAttachment. The
@@ -36,6 +40,17 @@ type NetworkSubnet struct {
 	BuildIP  net.IP
 	Netmask  net.IPMask
 	Gateway  net.IP // = RelayIP (relay is the gateway for build VM)
+}
+
+// subnetOf is the addressing of a build link.
+func subnetOf(link buildlink.Link) NetworkSubnet {
+	relay := net.IP(link.Relay.AsSlice())
+	return NetworkSubnet{
+		RelayIP: relay,
+		BuildIP: net.IP(link.Guest.AsSlice()),
+		Netmask: net.CIDRMask(link.Net.Bits(), 32),
+		Gateway: relay,
+	}
 }
 
 // NewVirtualNetwork and (*VirtualNetwork).Close are implemented per-platform:

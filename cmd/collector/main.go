@@ -11,6 +11,10 @@
 // The relay's claim token, if it was started with one, is read from
 // WARDEN_CLAIM_TOKEN (not a flag, so it does not appear in the process list).
 //
+// -build-link names the segment a vm-mode relay addresses its build interface
+// from (relay the first host, guest the second). Without it the claim carries
+// no build link, and the relay keeps the address already on that interface.
+//
 //	collector --relay 127.0.0.1:8301 --dir out --context . --script build.sh
 package main
 
@@ -18,6 +22,7 @@ import (
 	"context"
 	"flag"
 	"fmt"
+	"net/netip"
 	"os"
 	"os/signal"
 	"strings"
@@ -35,6 +40,9 @@ func main() {
 	upstreamCAs := flag.String("upstream-ca", "",
 		"extra upstream CA files/dirs, comma-separated")
 	quiet := flag.Bool("quiet", false, "do not echo the guest build console")
+	buildLink := flag.String("build-link", "",
+		"segment the relay serves the build on, as a CIDR (relay the first host, "+
+			"guest the second); empty sends none")
 	flag.Parse()
 
 	if *relay == "" || *dir == "" {
@@ -52,13 +60,43 @@ func main() {
 	if *upstreamCAs != "" {
 		req.UpstreamCACerts = strings.Split(*upstreamCAs, ",")
 	}
-	if err := run(*relay, req); err != nil {
+	link, err := parseBuildLink(*buildLink)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "collector: -build-link: %v\n", err)
+		os.Exit(2)
+	}
+	if err := run(*relay, req, link); err != nil {
 		fmt.Fprintf(os.Stderr, "collector: %v\n", err)
 		os.Exit(1)
 	}
 }
 
-func run(relayAddr string, req *driver.BuildRequest) error {
+// parseBuildLink turns -build-link's CIDR into the claim's build link, the
+// relay its first host and the guest its second, validated as the relay
+// validates it. Empty is no link.
+func parseBuildLink(cidr string) (*relaycfg.BuildLink, error) {
+	if cidr == "" {
+		return nil, nil
+	}
+	p, err := netip.ParsePrefix(cidr)
+	if err != nil {
+		return nil, err
+	}
+	relay := p.Masked().Addr().Next()
+	link := &relaycfg.BuildLink{
+		Prefix: p.Masked().String(), Relay: relay.String(), Guest: relay.Next().String(),
+	}
+	if p.Masked() != p {
+		return nil, fmt.Errorf("%s is not a network address (did you mean %s?)", p,
+			p.Masked())
+	}
+	if _, _, _, err := link.Parse(); err != nil {
+		return nil, err
+	}
+	return link, nil
+}
+
+func run(relayAddr string, req *driver.BuildRequest, link *relaycfg.BuildLink) error {
 	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt)
 	defer stop()
 
@@ -73,7 +111,8 @@ func run(relayAddr string, req *driver.BuildRequest) error {
 	}
 	defer sess.Close()
 
-	id, err := sess.ClaimRelay(ctx, relayAddr, os.Getenv(relaycfg.TokenEnv), req, nil)
+	id, err := sess.ClaimRelay(ctx, relayAddr, os.Getenv(relaycfg.TokenEnv), req, nil,
+		link, "upgrade the relay, or run collector without -build-link")
 	if err != nil {
 		return err
 	}

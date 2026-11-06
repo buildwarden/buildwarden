@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"unicode/utf16"
+
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 )
 
 func decodeEncoded(t *testing.T, b64 string) string {
@@ -37,8 +39,20 @@ func TestXMLText(t *testing.T) {
 	}
 }
 
+func TestWardenRunPS1ConfiguredLink(t *testing.T) {
+	link, err := buildlink.Parse("100.126.255.252/30")
+	if err != nil {
+		t.Fatal(err)
+	}
+	ps := WardenRunPS1(link)
+	if !strings.Contains(ps, "initialize --gateway=100.126.255.253 --ip=100.126.255.254/30") ||
+		strings.Contains(ps, BuildGatewayIP) {
+		t.Errorf("warden-run.ps1 does not follow the configured link:\n%s", ps)
+	}
+}
+
 func TestWardenRunPS1(t *testing.T) {
-	ps := WardenRunPS1()
+	ps := WardenRunPS1(buildlink.Default())
 	for _, want := range []string{
 		"warden-io.exe",
 		"initialize --gateway=" + BuildGatewayIP + " --ip=" + BuildGuestCIDR,

@@ -12,7 +12,7 @@
 //   go build -o .dev/vz-netfwd .dev/vz-netfwd.go
 //
 // Usage (called by vz-personalize, not directly):
-//   ./.dev/vz-netfwd --fd=3 --subnet=10.0.0.0/30
+//   ./.dev/vz-netfwd --fd=3 [--subnet=<cidr>, default the default build link]
 
 package main
 
@@ -30,6 +30,8 @@ import (
 	"time"
 
 	"golang.org/x/sys/unix"
+
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 
 	"gvisor.dev/gvisor/pkg/buffer"
 	"gvisor.dev/gvisor/pkg/tcpip"
@@ -51,7 +53,7 @@ const (
 
 func main() {
 	fd := 3
-	subnet := "10.0.0.0/30"
+	subnet := buildlink.DefaultCIDR
 
 	for _, arg := range os.Args[1:] {
 		if strings.HasPrefix(arg, "--fd=") {

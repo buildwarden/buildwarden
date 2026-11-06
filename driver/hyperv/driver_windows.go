@@ -141,6 +141,13 @@ func resolveBuildDisks(req *driver.BuildRequest) (
 	if relayBoot, err = resolveRelayBootVHDX(); err != nil {
 		return "", nil, false, 0, err
 	}
+	st := relayBootStamp()
+	if err = st.Check(); err != nil {
+		return "", nil, false, 0, err
+	}
+	if err = driver.CheckHostLink(req.Link()); err != nil {
+		return "", nil, false, 0, err
+	}
 	if chain, isWindows, generation, err = resolveBuildBaseVHDX(req); err != nil {
 		return "", nil, false, 0, err
 	}

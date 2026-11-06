@@ -8,154 +8,31 @@ import (
 	"net"
 )
 
-// DHCP message types
-const (
-	dhcpDiscover = 1
-	dhcpOffer    = 2
-	dhcpRequest  = 3
-	dhcpAck      = 5
-)
-
-// DHCP option codes
-const (
-	optSubnetMask  = 1
-	optRouter      = 3
-	optDNS         = 6
-	optLeaseTime   = 51
-	optMessageType = 53
-	optServerID    = 54
-	optEnd         = 255
-)
-
-// handleDHCP responds to DHCP discover/request from the guest VM.
-// We always offer the same IP (cfg.GuestIP) since there is exactly one client.
+// handleDHCP answers a DHCP DISCOVER or REQUEST from the guest VM through
+// the shared core (dhcpReply), framing the reply as a UDP broadcast from the
+// gateway.
 func (ing *FDIngress) handleDHCP(frame []byte) {
-	if len(frame) < 14+28+236 { // eth + ip + udp + min BOOTP
+	if len(frame) < 14+28 {
 		return
 	}
-
-	ethHeader := frame[:14]
 	ipHeader := frame[14:]
-	ihl := int(ipHeader[0]&0x0f) * 4
-	udpStart := ihl
-	bootpStart := udpStart + 8
-
-	if len(ipHeader) < bootpStart+236 {
+	bootpStart := int(ipHeader[0]&0x0f)*4 + 8
+	if len(ipHeader) < bootpStart {
 		return
 	}
-
-	bootp := ipHeader[bootpStart:]
-	op := bootp[0]
-	if op != 1 { // BOOTREQUEST
+	rep, ok := dhcpReply(ipHeader[bootpStart:], ing.lease)
+	if !ok {
 		return
 	}
-
-	xid := bootp[4:8]
-	clientMAC := net.HardwareAddr(bootp[28:34])
-
-	// Parse options to find message type
-	msgType := byte(0)
-	options := bootp[236:]
-	if len(options) < 4 || binary.BigEndian.Uint32(options[:4]) != 0x63825363 {
-		return // no magic cookie
-	}
-	options = options[4:]
-	for len(options) > 0 {
-		if options[0] == optEnd {
-			break
-		}
-		if options[0] == 0 { // padding
-			options = options[1:]
-			continue
-		}
-		if len(options) < 2 {
-			break
-		}
-		code := options[0]
-		length := int(options[1])
-		if len(options) < 2+length {
-			break
-		}
-		if code == optMessageType && length >= 1 {
-			msgType = options[2]
-		}
-		options = options[2+length:]
-	}
-
-	var replyType byte
-	switch msgType {
-	case dhcpDiscover:
-		replyType = dhcpOffer
-		log.Printf("netstack: DHCP Discover from %s, offering %s",
-			clientMAC, ing.cfg.GuestIP)
-	case dhcpRequest:
-		replyType = dhcpAck
-		log.Printf("netstack: DHCP Request from %s, ACK %s",
-			clientMAC, ing.cfg.GuestIP)
-	default:
-		return
-	}
-
-	reply := ing.buildDHCPReply(replyType, xid, clientMAC)
-	ing.sendEthernetFrame(clientMAC, ethHeader, reply)
+	log.Printf("netstack: %s", dhcpLogLine(rep))
+	ing.sendEthernetFrame(net.HardwareAddr(rep[28:34]), nil, ing.wrapDHCPReply(rep))
 }
 
-// buildDHCPReply constructs a DHCP Offer or Ack response.
-func (ing *FDIngress) buildDHCPReply(
-	msgType byte, xid []byte, clientMAC net.HardwareAddr,
-) []byte {
+// wrapDHCPReply wraps a BOOTP reply in UDP (67 to 68) and an IPv4 broadcast
+// from the gateway.
+func (ing *FDIngress) wrapDHCPReply(bootp []byte) []byte {
 	gwIP := ing.cfg.GatewayIP.To4()
-	guestIP := ing.cfg.GuestIP.To4()
-	mask := ing.cfg.SubnetMask
 
-	// BOOTP fixed header (236 bytes) + DHCP options + padding to 300.
-	bootp := make([]byte, 300)
-	bootp[0] = 2 // BOOTREPLY
-	bootp[1] = 1 // Ethernet
-	bootp[2] = 6 // HW addr length
-	copy(bootp[4:8], xid)
-	copy(bootp[16:20], guestIP) // yiaddr (your IP)
-	copy(bootp[20:24], gwIP)    // siaddr (server IP)
-	copy(bootp[28:34], clientMAC)
-
-	// DHCP options start at offset 236 (after fixed BOOTP header)
-	opts := bootp[236:]
-	i := 0
-	// Magic cookie
-	copy(opts[i:], []byte{0x63, 0x82, 0x53, 0x63})
-	i += 4
-	// Message type
-	opts[i], opts[i+1], opts[i+2] = optMessageType, 1, msgType
-	i += 3
-	// Server identifier
-	opts[i], opts[i+1] = optServerID, 4
-	i += 2
-	copy(opts[i:], gwIP)
-	i += 4
-	// Lease time (1 hour)
-	opts[i], opts[i+1] = optLeaseTime, 4
-	i += 2
-	opts[i], opts[i+1], opts[i+2], opts[i+3] = 0, 0, 0x0e, 0x10
-	i += 4
-	// Subnet mask
-	opts[i], opts[i+1] = optSubnetMask, 4
-	i += 2
-	copy(opts[i:], mask)
-	i += 4
-	// Router (gateway)
-	opts[i], opts[i+1] = optRouter, 4
-	i += 2
-	copy(opts[i:], gwIP)
-	i += 4
-	// DNS server (point to ourselves)
-	opts[i], opts[i+1] = optDNS, 4
-	i += 2
-	copy(opts[i:], gwIP)
-	i += 4
-	// End
-	opts[i] = optEnd
-
-	// Wrap in UDP (src 67, dst 68)
 	udpLen := 8 + len(bootp)
 	udpHeader := make([]byte, 8)
 	binary.BigEndian.PutUint16(udpHeader[0:2], 67)
@@ -163,7 +40,6 @@ func (ing *FDIngress) buildDHCPReply(
 	udpLenU16 := uint16(udpLen)
 	binary.BigEndian.PutUint16(udpHeader[4:6], udpLenU16)
 
-	// Wrap in IPv4
 	ipLen := 20 + udpLen
 	ipHeader := make([]byte, 20)
 	ipHeader[0] = 0x45 // version + IHL
@@ -172,7 +48,6 @@ func (ing *FDIngress) buildDHCPReply(
 	ipHeader[9] = 17 // UDP
 	copy(ipHeader[12:16], gwIP)
 	copy(ipHeader[16:20], net.IPv4bcast.To4()) // broadcast
-	// Compute IP header checksum
 	binary.BigEndian.PutUint16(ipHeader[10:12], ipChecksum(ipHeader))
 
 	var packet []byte

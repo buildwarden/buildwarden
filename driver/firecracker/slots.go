@@ -18,7 +18,9 @@ const (
 	// DefaultSlots is how many `warden setup --driver firecracker` makes.
 	DefaultSlots = 16
 
-	upstreamNet = "100.64.88.0/22"
+	// UpstreamCIDR holds every slot's relay upstream /30.
+	UpstreamCIDR = "100.64.88.0/22"
+	upstreamNet  = UpstreamCIDR
 	// The chains setup owns. It flushes and refills only these, so it never
 	// touches another rule on the host.
 	chainIn   = "WARDEN-FC-IN"
@@ -254,7 +256,7 @@ func slotSteps(s Slot, p setupParams, uid string) []step {
 			"--dport", strconv.Itoa(relaycfg.DefaultPort),
 			"-m", "conntrack", "--ctstate", "NEW", "-m", "owner", "--uid-owner", uid,
 			"-j", "ACCEPT")...),
-		// Every slot reuses 10.0.0.1/10.0.0.2; a zone per bridge keeps their
+		// Every slot reuses the build link's two addresses; a zone per bridge keeps their
 		// flows apart in conntrack when br_netfilter is loaded.
 		cmd(ipt("-t", "raw", "-A", chainRaw, "-i", b, "-j", "CT", "--zone",
 			strconv.Itoa(int(s)+1))...),

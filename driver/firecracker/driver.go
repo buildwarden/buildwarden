@@ -64,3 +64,13 @@ func PrepareImage(ref string) (string, error) {
 	}
 	return EnsureRaw(src)
 }
+
+// bootInOrder runs the relay step (boot the relay VM and claim it) and only
+// once it has returned, with the relay serving the build link, the build VM
+// step; a failed claim boots no build VM (BOOT-01's order, pinned by a test).
+func bootInOrder(relayStep, buildStep func() error) error {
+	if err := relayStep(); err != nil {
+		return err
+	}
+	return buildStep()
+}

@@ -28,7 +28,19 @@ import (
 	"time"
 
 	"golang.org/x/sys/unix"
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 	"github.com/buildwarden/buildwarden/driver/vz"
+)
+
+// prepLink is the prep-time build link: always the default, whatever
+// [vm] build_link says. Image prep runs its own forwarder on its own link, so
+// it never follows the setting. The scripts name it by placeholder.
+var prepLink = buildlink.Default()
+
+var linkVars = strings.NewReplacer(
+	"__RELAY__", prepLink.Relay.String(),
+	"__GUEST__", prepLink.Guest.String(),
+	"__MASK__", prepLink.Mask(),
 )
 
 func init() {
@@ -372,7 +384,7 @@ func installCLT(imgDir, diskPath string) error {
 
 	// The boot script writes progress to /Volumes/shared/progress.log (virtio-fs)
 	// so the host can tail it in real time.
-	cltScript := `#!/bin/sh
+	cltScript := linkVars.Replace(`#!/bin/sh
 # Write progress to disk log. Virtio-fs is blocked by macOS sandbox for
 # LaunchDaemons, so we use the disk log and the host polls it after boot.
 LOG="/var/log/warden-clt-install.log"
@@ -400,21 +412,21 @@ fi
 log "interface=$IFACE"
 
 # Static IP config (same subnet as netfwd)
-ifconfig "$IFACE" inet 10.0.0.2 netmask 255.255.255.252 up
-route add default 10.0.0.1 2>/dev/null || true
+ifconfig "$IFACE" inet __GUEST__ netmask __MASK__ up
+route add default __RELAY__ 2>/dev/null || true
 
 # DNS — point to gateway AND configure scutil for system resolver
-echo "nameserver 10.0.0.1" > /etc/resolv.conf
+echo "nameserver __RELAY__" > /etc/resolv.conf
 mkdir -p /etc/resolver
-echo "nameserver 10.0.0.1" > /etc/resolver/default
+echo "nameserver __RELAY__" > /etc/resolver/default
 scutil 2>/dev/null <<SCUTIL || true
 d.init
-d.add ServerAddresses * 10.0.0.1
+d.add ServerAddresses * __RELAY__
 set State:/Network/Service/netfwd/DNS
 d.init
-d.add Addresses * 10.0.0.2
-d.add SubnetMasks * 255.255.255.252
-d.add Router 10.0.0.1
+d.add Addresses * __GUEST__
+d.add SubnetMasks * __MASK__
+d.add Router __RELAY__
 d.add InterfaceName $IFACE
 set State:/Network/Service/netfwd/IPv4
 d.init
@@ -435,17 +447,17 @@ log "network configured: $(ifconfig $IFACE | grep inet | head -1)"
 # Test DNS first (separate from HTTP)
 log "testing DNS..."
 i=0
-while ! nslookup captive.apple.com 10.0.0.1 >/dev/null 2>&1; do
+while ! nslookup captive.apple.com __RELAY__ >/dev/null 2>&1; do
     log "DNS not working yet ($i)..."
     sleep 3
     i=$((i + 1))
     if [ $i -gt 10 ]; then
         log "DNS failed after 10 tries, trying direct curl anyway"
-        nslookup captive.apple.com 10.0.0.1 2>&1 >> "$LOG"
+        nslookup captive.apple.com __RELAY__ 2>&1 >> "$LOG"
         break
     fi
 done
-log "DNS result: $(nslookup captive.apple.com 10.0.0.1 2>&1 | grep Address | tail -1)"
+log "DNS result: $(nslookup captive.apple.com __RELAY__ 2>&1 | grep Address | tail -1)"
 
 # Test full HTTP connectivity
 i=0
@@ -493,7 +505,7 @@ else
     log "FAILED (exit=$RC)"
     echo "FAIL" >> "$LOG"
 fi
-`
+`)
 	if err := os.WriteFile(bootPath, []byte(cltScript), 0755); err != nil {
 		exec.Command("hdiutil", "detach", baseDevice, "-force").Run()
 		return fmt.Errorf("writing CLT script: %w", err)
@@ -528,7 +540,7 @@ fi
 	if _, err := os.Stat(netfwdBin); err != nil {
 		return fmt.Errorf("vz-netfwd not found at %s — build it first", netfwdBin)
 	}
-	netfwdCmd := exec.Command(netfwdBin, "--fd=3", "--subnet=10.0.0.0/30")
+	netfwdCmd := exec.Command(netfwdBin, "--fd=3", "--subnet="+prepLink.String())
 	netfwdCmd.Stderr = os.Stderr
 	netfwdCmd.ExtraFiles = []*os.File{os.NewFile(uintptr(fds[1]), "netfwd-socket")}
 	if err := netfwdCmd.Start(); err != nil {

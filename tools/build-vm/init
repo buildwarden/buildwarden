@@ -1,10 +1,15 @@
 #!/bin/sh
-# Build VM init — boots, configures network, runs warden-io initialize.
+# Build VM init (qemu direct boot) — boots, takes the build link, runs
+# warden-io initialize.
 #
 # warden-io initialize handles: wait for relay, install CA, fetch build
 # script from relay context endpoint, run it with heartbeats, report exit.
 #
-# Network: single interface → relay at 10.0.0.1 (sole gateway)
+# Network: single interface to the relay (sole gateway). Its address comes
+# per build from the relay's DHCP lease, checked against (and, should the
+# relay not answer, taken from) the kernel command line's warden.link_ip and
+# warden.link_gw. build-initramfs.sh writes the link-channel stamp warden
+# checks for this behaviour.
 
 mount -t devtmpfs devtmpfs /dev
 mount -t proc proc /proc
@@ -16,7 +21,8 @@ echo 1 > /proc/sys/net/ipv6/conf/all/disable_ipv6
 echo 1 > /proc/sys/net/ipv6/conf/default/disable_ipv6
 
 # Load kernel modules
-for mod in netfs 9pnet 9pnet_virtio 9p failover net_failover virtio_net; do
+# af_packet is udhcpc's raw socket.
+for mod in netfs 9pnet 9pnet_virtio 9p failover net_failover virtio_net af_packet; do
     [ -f "/lib/modules/${mod}.ko" ] && insmod "/lib/modules/${mod}.ko"
 done
 
@@ -29,15 +35,90 @@ while [ $TRIES -lt 50 ]; do
     sleep 0.1
 done
 
-# Configure network: point-to-point to relay
-if [ -n "$IF" ]; then
-    ip link set "$IF" up
-    ip addr add 10.0.0.2/30 dev "$IF"
-    ip route add default via 10.0.0.1
+if [ -z "$IF" ]; then
+    echo "init: no network interface"
+    exit 1
 fi
 
+# The build link (docs/design/build-link-subnet.md). The relay serves this
+# VM's address by DHCP on the link, answering from the claim, and warden also
+# writes it on the kernel command line as warden.link_ip=<a.b.c.d>/<n> and
+# warden.link_gw=<a.b.c.d>. The lease comes first; the keys are its
+# cross-check, and the fallback should the relay not answer. Only those two
+# keys are read, as dotted quads and a numeric length; the command line is
+# never evaluated, and nothing about the link is baked in here.
+stop() {
+    echo "$1"
+    exit 1
+}
+is_quad() {
+    echo "$1" | grep -q '^[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}$'
+}
+mask_len() {
+    n=0
+    for o in $(echo "$1" | tr '.' ' '); do
+        case "$o" in
+            255) n=$((n + 8)) ;; 254) n=$((n + 7)) ;; 252) n=$((n + 6)) ;;
+            248) n=$((n + 5)) ;; 240) n=$((n + 4)) ;; 224) n=$((n + 3)) ;;
+            192) n=$((n + 2)) ;; 128) n=$((n + 1)) ;; 0) ;;
+            *) echo bad; return ;;
+        esac
+    done
+    echo "$n"
+}
+
+set -f
+KEY_IP="" KEY_LEN="" KEY_GW="" SEEN_IP="" SEEN_GW=""
+for kv in $(cat /proc/cmdline); do
+    case "$kv" in
+        warden.link_ip=*)
+            SEEN_IP="${kv#*=}"
+            KEY_IP="${SEEN_IP%/*}"
+            KEY_LEN="${SEEN_IP##*/}"
+            ;;
+        warden.link_gw=*) SEEN_GW="${kv#*=}"; KEY_GW="$SEEN_GW" ;;
+    esac
+done
+set +f
+if [ -n "$SEEN_IP$SEEN_GW" ]; then
+    case "$KEY_LEN" in
+        [0-9] | [12][0-9] | 3[0-2]) ;;
+        *) KEY_LEN="" ;;
+    esac
+    if ! is_quad "$KEY_IP" || [ -z "$KEY_LEN" ] || ! is_quad "$KEY_GW"; then
+        stop "init: malformed build link on the kernel command line: warden.link_ip=$SEEN_IP warden.link_gw=$SEEN_GW"
+    fi
+fi
+
+ip link set "$IF" up
+rm -f /tmp/warden-lease
+udhcpc -i "$IF" -f -q -n -t 5 -T 1 -s /etc/warden-lease.sh >/dev/null 2>&1
+LEASE_IP="" LEASE_LEN="" LEASE_GW=""
+if [ -f /tmp/warden-lease ]; then
+    LEASE_IP=$(sed -n 's/^ip=//p' /tmp/warden-lease)
+    LEASE_LEN=$(mask_len "$(sed -n 's/^mask=//p' /tmp/warden-lease)")
+    LEASE_GW=$(sed -n 's/^router=//p' /tmp/warden-lease)
+    [ "$LEASE_LEN" = bad ] && LEASE_IP=""
+fi
+
+if [ -n "$LEASE_IP" ]; then
+    if [ -n "$KEY_IP" ] && { [ "$LEASE_IP" != "$KEY_IP" ] ||
+        [ "$LEASE_LEN" != "$KEY_LEN" ] || [ "$LEASE_GW" != "$KEY_GW" ]; }; then
+        stop "init: DHCP lease $LEASE_IP/$LEASE_LEN via $LEASE_GW disagrees with warden.link_ip=$KEY_IP/$KEY_LEN warden.link_gw=$KEY_GW"
+    fi
+    LINK_IP=$LEASE_IP LINK_LEN=$LEASE_LEN LINK_GW=$LEASE_GW SOURCE=dhcp
+elif [ -n "$KEY_IP" ]; then
+    echo "init: no DHCP answer; using warden.link_ip"
+    LINK_IP=$KEY_IP LINK_LEN=$KEY_LEN LINK_GW=$KEY_GW SOURCE=cmdline
+else
+    stop "init: no DHCP lease and no warden.link_ip/warden.link_gw on the kernel command line"
+fi
+echo "init: link $LINK_IP/$LINK_LEN via $LINK_GW from $SOURCE"
+ip addr add "$LINK_IP/$LINK_LEN" dev "$IF"
+ip route add default via "$LINK_GW"
+
 # DNS via relay (resolves cwd/artifacts to relay IP)
-echo "nameserver 10.0.0.1" > /etc/resolv.conf
+echo "nameserver $LINK_GW" > /etc/resolv.conf
 
 echo "init: ready"
-exec /bin/warden-io initialize --gateway=10.0.0.1
+exec /bin/warden-io initialize --gateway="$LINK_GW"

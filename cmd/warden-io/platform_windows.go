@@ -28,9 +28,11 @@ func wardenCABundlePath() string {
 }
 
 // configureNetwork points the guest at the relay. Two modes:
-//   - selfIP set (e.g. "10.0.0.2/30"): assign a static IP + default route via
-//     the relay gateway and set DNS. Required by drivers that do not run a
-//     DHCP server on the isolated link (e.g. the qemu two-VM topology).
+//   - selfIP set (e.g. "192.0.2.2/30"): assign a static IP + default route via
+//     the relay gateway and set DNS. The VM drivers pass the build link's
+//     guest address from the per-build seed. A vm-mode relay also serves a
+//     DHCP lease on the link; a NIC that took it first ends with the same
+//     address and router, since the lease and the seed name the same link.
 //   - selfIP empty: rely on relay-provided DHCP for IP, best-effort set DNS.
 // The build VM's sole NIC faces the relay, so operating on all interfaces is
 // safe. Steps are best-effort and non-fatal individually so a partially
@@ -85,7 +87,7 @@ func configureNetwork(gateway, selfIP string) error {
 	return nil
 }
 
-// splitCIDR splits "10.0.0.2/30" into ("10.0.0.2", "30"). A bare address
+// splitCIDR splits "192.0.2.2/30" into ("192.0.2.2", "30"). A bare address
 // without a prefix defaults to /24.
 func splitCIDR(cidr string) (ip, prefix string) {
 	if i := strings.IndexByte(cidr, '/'); i >= 0 {

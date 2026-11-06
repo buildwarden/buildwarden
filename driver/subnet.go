@@ -12,6 +12,10 @@ import (
 // reserved for carrier-grade NAT and unlikely to collide with user networks.
 const WardenBaseNet = "100.64.87"
 
+// ContainerBaseCIDR is WardenBaseNet as a network, the range the container
+// driver allocates its per-build /29s from.
+const ContainerBaseCIDR = WardenBaseNet + ".0/24"
+
 // Subnet holds the allocated network addresses for a build.
 type Subnet struct {
 	CIDR    string

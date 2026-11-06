@@ -4,9 +4,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"net"
+	"net/netip"
 	"strings"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 )
 
 // Host posture: the firewall states setup cannot make safe by itself (a11),
@@ -86,25 +88,27 @@ func parseNameservers(conf string) []string {
 	return out
 }
 
-// buildLink is the relay's private link to the build VM (relay 10.0.0.1, build
-// VM 10.0.0.2), the same in every VM driver. The relay routes an address in it
-// to the build VM, never upstream.
-var buildLink = net.IPNet{IP: net.IPv4(10, 0, 0, 0), Mask: net.CIDRMask(30, 32)}
-
 // selectResolvers splits nameservers into those the relay can use and those
 // it cannot: a loopback address or one assigned to the host is reached from
 // the relay as NEW traffic to the host, which WARDEN-FC drops, and one inside
-// buildLink (an AWS VPC resolver at 10.0.0.2, say) is routed to the build VM.
-func selectResolvers(servers []string, local func(net.IP) bool) (use, excluded []string) {
+// the build link is routed by the relay VM's connected route to the build VM.
+func selectResolvers(servers []string, local func(net.IP) bool,
+	link buildlink.Link) (use, excluded []string) {
 	for _, s := range servers {
 		ip := net.ParseIP(s)
-		if ip == nil || ip.IsLoopback() || local(ip) || buildLink.Contains(ip) {
+		if ip == nil || ip.IsLoopback() || local(ip) || inLink(link, ip) {
 			excluded = append(excluded, s)
 			continue
 		}
 		use = append(use, s)
 	}
 	return use, excluded
+}
+
+// inLink reports whether ip is inside the build link.
+func inLink(link buildlink.Link, ip net.IP) bool {
+	a, ok := netip.AddrFromSlice(ip)
+	return ok && link.Net.Contains(a.Unmap())
 }
 
 const (
@@ -118,8 +122,8 @@ const (
 // /etc/resolv.conf, or of systemd-resolved's upstream list when its stub
 // fronts them, minus loopback and host-local addresses. None left is a
 // fixable error naming what was excluded.
-func upstreamResolvers(readFile func(string) ([]byte, error), local func(net.IP) bool) ([]string,
-	error) {
+func upstreamResolvers(readFile func(string) ([]byte, error), local func(net.IP) bool,
+	link buildlink.Link) ([]string, error) {
 	b, err := readFile(resolvConf)
 	if err != nil {
 		return nil, driver.Fixable("list an off-host DNS server as a nameserver in "+
@@ -132,7 +136,7 @@ func upstreamResolvers(readFile func(string) ([]byte, error), local func(net.IP)
 			servers = parseNameservers(string(up))
 		}
 	}
-	use, excluded := selectResolvers(servers, local)
+	use, excluded := selectResolvers(servers, local, link)
 	if len(use) > 0 {
 		return use, nil
 	}
@@ -140,12 +144,14 @@ func upstreamResolvers(readFile func(string) ([]byte, error), local func(net.IP)
 		"in " + resolvConf + " (under systemd-resolved, set DNS= in " +
 		"/etc/systemd/resolved.conf)"
 	for _, s := range excluded {
-		if buildLink.Contains(net.ParseIP(s)) {
-			fix = "the relay's link to the build VM is " + buildLink.String() +
+		if inLink(link, net.ParseIP(s)) {
+			fix = "the relay's link to the build VM is " + link.String() +
 				", so it cannot reach a resolver there: list an off-host DNS " +
 				"server outside it as a nameserver in " + resolvConf +
 				" (under systemd-resolved, set DNS= in " +
-				"/etc/systemd/resolved.conf)"
+				"/etc/systemd/resolved.conf), or set [vm] build_link in " +
+				"warden.toml (or --build-link) to a /30 that holds none of " +
+				"the host's resolvers"
 		}
 		if s == wslTunnelResolver {
 			fix = "WSL's only resolver is its DNS-tunnelling address " +

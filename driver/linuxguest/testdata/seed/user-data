@@ -3,5 +3,5 @@ runcmd:
   - mkdir -p /opt/warden /mnt/cidata
   - mount LABEL=CIDATA /mnt/cidata || mount /dev/sr0 /mnt/cidata || true
   - cp /mnt/cidata/warden-io /opt/warden/warden-io && chmod +x /opt/warden/warden-io
-  - /opt/warden/warden-io initialize --gateway=10.0.0.1
+  - /opt/warden/warden-io initialize --gateway=100.127.255.253
   - poweroff -f

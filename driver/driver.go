@@ -5,6 +5,8 @@ import (
 	"errors"
 	"io"
 	"time"
+
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 )
 
 // Driver is the interface all orchestration backends implement.
@@ -82,6 +84,10 @@ type BuildRequest struct {
 	UpstreamCACerts []string
 	// UpstreamSystemCA controls whether the system cert pool is included.
 	UpstreamSystemCA bool
+	// BuildLink is the VM drivers' relay-to-build link ([vm] build_link,
+	// --build-link). The zero value is the default (Link resolves it); the
+	// container driver ignores it.
+	BuildLink buildlink.Link
 	// Env is extra environment variables for the build.
 	Env map[string]string
 	// Stdin/Stdout/Stderr for build output.
@@ -89,6 +95,9 @@ type BuildRequest struct {
 	Stdout io.Writer
 	Stderr io.Writer
 }
+
+// Link is the request's build link, the default when none was resolved.
+func (r *BuildRequest) Link() buildlink.Link { return r.BuildLink.OrDefault() }
 
 // BuildResult contains outputs from a completed build.
 type BuildResult struct {

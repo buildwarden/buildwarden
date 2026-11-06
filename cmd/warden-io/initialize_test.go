@@ -51,11 +51,11 @@ func TestDefaultScriptNameForPlatform(t *testing.T) {
 
 func TestParseInitArgs(t *testing.T) {
 	a := parseInitArgs([]string{
-		"--gateway=10.0.0.1", "--ip", "10.0.0.2/30", "--script=b.ps1",
+		"--gateway=192.0.2.1", "--ip", "192.0.2.2/30", "--script=b.ps1",
 		"--workdir", "/work", "--hold", "--unknown=x",
 	})
 	want := initArgs{
-		gateway: "10.0.0.1", selfIP: "10.0.0.2/30", script: "b.ps1",
+		gateway: "192.0.2.1", selfIP: "192.0.2.2/30", script: "b.ps1",
 		workdir: "/work", hold: true,
 	}
 	if a != want {
