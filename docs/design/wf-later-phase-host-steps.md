@@ -504,6 +504,13 @@ at `9787fb4` into the branch.
   conflicts with flow19's reorder; resolve it by taking flow19's order with
   `false` added. budgets-active-only had no code on its branch when this
   ran.
+- **Deviation from plan task 2, for the PR body:** the id-to-templates
+  parse exists twice until flow19 merges (`IsGate`'s inline parse and
+  `stepTemplates`). Behaviour does not depend on it. Owed at the merge of
+  `main` after flow19 lands, in that conflict resolution: `IsGate` calls
+  `stepTemplates` (widened to also return the round, phase and retry suffix
+  flow19's `IsGate` needs), so one parser remains. The PR body states this
+  so Jeff approves the deviation at merge (FLOW-08).
 - **Terminology:** "offered" (`Offered`) is the readiness word in FLOW-04,
   the code and QUEUE.md's `(from phase <n>)`; "added step" means a step that
   is not a template step, in the code comments and in wf-design and wf-plan.
