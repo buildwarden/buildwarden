@@ -178,15 +178,15 @@ steps:
       - f6-validate-macos-vz
       - f6-validate-windows-hyperv
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261106T105651Z
+      expires: 2026-11-06T12:57:21.259764815Z
 budget:
   estimate:
     runs: 12
     steps: 120
   spent:
-    runs: 5
-    steps: 22
+    runs: 6
+    steps: 23
 questions:
   - id: a1
     kind: assumed
@@ -641,3 +641,6 @@ history:
   - at: 2026-11-06T02:49:10Z
     by: host:macos-vz/20261106T014303Z
     event: done f6-validate-macos-vz
+  - at: 2026-11-06T10:57:21Z
+    by: cloud/20261106T105651Z
+    event: claimed f6-open-pr until 2026-11-06T12:57:21Z
