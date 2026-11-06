@@ -518,8 +518,11 @@ human merge as any feature, and the digest lists it for Jeff.
 
 ## Implementation plan
 
-Written at x2-implement, after the review (process item, FLOW-03). The
-expected tasks, one commit each:
+Confirmed at x2-implement, after the review (process item, FLOW-03), as the
+task list, one commit each. Tasks 1 to 5 and 7 to 11 are done; task 6's tests
+landed with the code task they cover (2, 3 and 4), so each commit is green,
+and a last commit split `Next` and `Validate` under the lint's complexity
+limit without changing behavior. Task 14 is x4-close's.
 
 1. `docs/development/process.md` (FLOW-05, FLOW-09, FLOW-13, FLOW-14): the
    Shape line (`:14-15`), FLOW-05's title (`:171`), its order paragraph
@@ -605,7 +608,44 @@ expected tasks, one commit each:
 
 ## Consolidation
 
-Filled in at x2-implement (FLOW-10, FLOW-15).
+Filled in at x2-implement (FLOW-10, FLOW-15), against `origin/main` at
+`ab148f9`, the fork point; nothing has landed since.
+
+- **Landed before the fork:** #99 (later-phase host steps), #100 (budgets on
+  open items only) and #101 (design review before Plan). This item builds on
+  all three: `Offered` and `ready` from #99 are unchanged, `Listed` keeps
+  #100's open-only default and puts done items last under `-all`, and
+  Decision 2's "in implementation" starts at phase 3 because #101 moved Plan
+  after the review.
+- **Not yet landed, same files:** native-allowlist-scratch-tools, on its own
+  branch, edits `.claude/skills/workflow-native/SKILL.md` in other hunks
+  (its setup section and Work). `git merge-tree` of the two heads merges
+  clean. Whichever merges second takes current `origin/main` in a merge
+  commit before Jeff merges it.
+- **Terminology:** "class" and "in implementation" are FLOW-05's words, used
+  the same in `process.md`, `Class()`, the skills and the agents. A fix is a
+  feature with `follows` set; "follow-up" names the relation, in FLOW-09,
+  workflow-intake's section and every **Follow-ups filed** line.
+- **Shared code:** `Next` and `NextFor` share `atLimit`; `Listed` and the four
+  QUEUE.md writers share `Ordered`, so the order is computed in one place.
+  `nextQueued` is gone, folded into `Next`'s walk.
+- **Sweep:** `make lint` (dead-code and duplication analyzers included) is
+  green; the one tier-1 hint, GLOBAL-04 on `cmd/wf`, is expected: that
+  command has no tests, and `new -follows` and the `status` line were checked
+  by hand on a scratch copy of the live queue. `overview.md` describes
+  components, not the workflow, so it has no pseudocode to change (FLOW-15).
+- **Check in use, before migration:** `dist/wf` built from this branch loads
+  the live queue unchanged. `wf status` lists native-allowlist-scratch-tools
+  and this item (class 1, process phase 2) first, then security-suite (class
+  4, in progress, q1 open), then the four fixes (class 4, queued, no
+  `follows` yet). `wf next -worker cloud/...` starts vz-image-prepare-refresh,
+  as today, because q1 blocks security-suite. On a scratch copy with Decision
+  9's `follows: build-link-subnet` on the four fixes, `wf validate` passes,
+  QUEUE.md shows `fix (follows build-link-subnet)`, `wf status` lists the
+  fixes ahead of security-suite, and `wf next` still starts
+  vz-image-prepare-refresh with q1 answered.
+- **Rules proposed:** none beyond this design's own FLOW-05, FLOW-09 and
+  FLOW-13 text.
 
 ## Rollback notes
 
