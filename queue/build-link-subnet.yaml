@@ -1,9 +1,9 @@
 feature: build-link-subnet
 title: Move every VM driver's relay-to-build link off 10.0.0.0/30
 priority: 18
-status: in_progress
+status: done
 round: feature
-phase: 7
+phase: 8
 design: docs/design/build-link-subnet.md
 branch: feat/build-link-subnet
 alters_relationships: true
@@ -186,7 +186,14 @@ steps:
   - id: f7-merge
     phase: 7
     affinity: cloud
-    status: pending
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f8-close
+    phase: 8
+    affinity: cloud
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -196,7 +203,7 @@ budget:
     steps: 120
   spent:
     runs: 6
-    steps: 23
+    steps: 24
 questions:
   - id: a1
     kind: assumed
@@ -663,3 +670,18 @@ history:
   - at: 2026-11-06T11:13:11Z
     by: cloud/20261106T105651Z
     event: entered phase 7 (merge)
+  - at: 2026-11-06T15:44:33Z
+    by: cloud/20261106T105651Z
+    event: done f7-merge
+  - at: 2026-11-06T15:44:33Z
+    by: cloud/20261106T105651Z
+    event: entered phase 8 (close)
+  - at: 2026-11-06T15:44:43Z
+    by: cloud/20261106T105651Z
+    event: claimed f8-close until 2026-11-06T17:44:43Z
+  - at: 2026-11-06T15:44:43Z
+    by: cloud/20261106T105651Z
+    event: done f8-close
+  - at: 2026-11-06T15:44:43Z
+    by: cloud/20261106T105651Z
+    event: closed; feature done
