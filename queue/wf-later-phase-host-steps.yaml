@@ -4,11 +4,14 @@ priority: 39
 kind: process
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/wf-later-phase-host-steps.md
 branch: feat/wf-later-phase-host-steps
 alters_relationships: null
 source: 'workflow-human 2026-11-05 (Jeff): wf back -to 3 on build-link-subnet deleted its four pending f6-validate host steps (restored by hand, workflow ab54c55); and since 2026-11-01 wf next/gate offer a pending later-phase host step whose needs are met (ready() ignores the feature''s phase; windows-desktop digest 2026-11-01), so Design/Plan add needs by hand.'
+pr:
+  number: 99
+  ci: green
 steps:
   - id: x1-design
     phase: 1
@@ -20,10 +23,17 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261106T172405Z-attended
-      expires: 2026-11-06T19:24:05.192412236Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -54,3 +64,12 @@ history:
   - at: 2026-11-06T17:50:00Z
     by: human/jeff
     event: 'priority 29 -> 39 (Jeff, 2026-11-06 order: in implementation, then process, then fixes for implemented items, then new functionality; this item: 1. in implementation)'
+  - at: 2026-11-06T18:10:00Z
+    by: cloud/20261106T172405Z-attended
+    event: 'PR #99 open with CI green at 6107e20 (flow18, ci, PR runs success); recorded by the attended session, the publish agent having stopped before the queue write'
+  - at: 2026-11-06T17:52:09Z
+    by: cloud/20261106T172405Z-attended
+    event: done x2-implement
+  - at: 2026-11-06T17:52:09Z
+    by: cloud/20261106T172405Z-attended
+    event: entered phase 3 (merge)

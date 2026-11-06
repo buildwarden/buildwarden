@@ -4,14 +4,14 @@ priority: 40
 kind: process
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/budgets-active-only.md
 branch: feat/budgets-active-only
 alters_relationships: null
+source: 'workflow-human 2026-11-05 (Jeff): all archived/done features should be set aside and fully ignored except during explicit retrospectives. Over-budget only matters as a gate against rampant loops that would otherwise drastically overrun.'
 pr:
   number: 100
   ci: green
-source: 'workflow-human 2026-11-05 (Jeff): all archived/done features should be set aside and fully ignored except during explicit retrospectives. Over-budget only matters as a gate against rampant loops that would otherwise drastically overrun.'
 steps:
   - id: x1-design
     phase: 1
@@ -23,10 +23,17 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261106T172405Z-attended
-      expires: 2026-11-06T19:24:05.213308339Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -57,3 +64,9 @@ history:
   - at: 2026-11-06T17:50:00Z
     by: human/jeff
     event: 'priority 30 -> 40 (Jeff, 2026-11-06 order: in implementation, then process, then fixes for implemented items, then new functionality; this item: 1. in implementation)'
+  - at: 2026-11-06T17:52:10Z
+    by: cloud/20261106T172405Z-attended
+    event: done x2-implement
+  - at: 2026-11-06T17:52:10Z
+    by: cloud/20261106T172405Z-attended
+    event: entered phase 3 (merge)
