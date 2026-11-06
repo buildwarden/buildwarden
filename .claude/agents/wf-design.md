@@ -24,8 +24,15 @@ feature names in its `source`.
    changes, and keep the Design review section's history.
 3. Decide `native_validation` per host as blocking or tracked (FLOW-09). For
    each blocking host, add a queue step `f6-validate-<host>` with affinity
-   `host:<host>` that `f6-open-pr` needs; append each tracked gap to
-   `backlog/native-gaps.yaml`.
+   `host:<host>`, its cases in the note, and no `needs`: it is not offered
+   before Publish (FLOW-04), and seeding Publish makes `f6-open-pr` need it
+   and it need `f6-consolidate`. Append each tracked gap to
+   `backlog/native-gaps.yaml`. On a return (FLOW-06), `wf back` kept the
+   pending steps added for later phases: reconcile them with the new
+   `native_validation` and design. Keep a step that still applies and update
+   its note, add only the hosts that are missing (a re-added id repeats, which
+   `wf validate` rejects), and remove a step for a host that is now tracked
+   or for work the design no longer needs, such as a spike of phases 2-5.
 4. Questions (FLOW-07): each one with options and a recommended answer, in the
    design's Questions section and in the queue file's `questions`. A blocking
    question also gets a `human` step `f1-answer-<qid>` that `f1-design` needs.

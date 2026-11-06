@@ -50,8 +50,9 @@ Same as `workflow-tick` step 1 (the FLOW-18 check, build `dist/wf`, check out
       makes it clearer, add it to the design's page (publishing one if there
       is none); the review itself stays in this session.
    2. **The Validation plan and what Plan will work from:** native
-      validation steps, `tier2_gaps`, and, on a re-review, the finding and
-      the tasks it touches.
+      validation steps (Design adds them; Plan only refines their notes),
+      `tier2_gaps`, and, on a re-review, the finding, the tasks it touches,
+      and how Design reconciled the later-phase steps `wf back` kept.
    3. **Risks and what is deferred:** native validation, `tier2_gaps`, rules
       changed, a Bootstrap comparison or Security note to accept.
       Ask each `rule_changes` entry on its own (FLOW-14), with its current

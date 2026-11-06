@@ -11,7 +11,7 @@
 //	wf check    -state DIR -repo DIR -feature F [-run]
 //	wf done     -state DIR -repo DIR -worker W -feature F -step S [-run]
 //	wf answer   -state DIR -worker W -feature F -question Q -answer TEXT
-//	wf back     -state DIR -worker W -feature F -why FINDING
+//	wf back     -state DIR -worker W -feature F -why FINDING [-to 1|3]
 //	wf new      -state DIR -worker W -feature F -title T -priority N
 //	            -estimate-steps N -estimate-runs N [-source S]
 //	            [-kind process -holds PATTERN,...]
@@ -242,6 +242,9 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 	case "release":
 		s.Release(f, st, o.worker, o.now, o.why)
 	case "done":
+		if err := queue.Early(f, st); err != nil {
+			return err
+		}
 		// The design review precedes Plan, so it is not its phase's gate;
 		// its approval is checked here (FLOW-19).
 		if queue.IsDesignReview(st) && !printResults(check.Review(check.Env{Repo: o.repo,
@@ -258,11 +261,15 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 }
 
 // claimable says why the worker may not claim the step: it is not pending,
-// someone else holds it, or a process item holds the worker (FLOW-05). A step
-// the worker already holds stays claimable.
+// its feature has not reached its phase (FLOW-04), someone else holds it, or
+// a process item holds the worker (FLOW-05). A step the worker already holds
+// stays claimable.
 func claimable(s *queue.State, f *queue.Feature, st *queue.Step, o opts) error {
 	if st.Status != "pending" {
 		return fmt.Errorf("%s is %s", st.ID, st.Status)
+	}
+	if err := queue.Early(f, st); err != nil {
+		return err
 	}
 	mine := st.Lease.Held(o.now) && st.Lease.ClaimedBy == o.worker
 	if st.Lease.Held(o.now) && !mine {
@@ -303,7 +310,8 @@ func answer(s *queue.State, o opts) error {
 	return fmt.Errorf("%s has no question %q", f.Feature, o.question)
 }
 
-// back returns the feature to Design with the finding (FLOW-06).
+// back returns the feature to Design (-to 1, FLOW-06) or Implement (-to 3,
+// FLOW-10) with the finding.
 func back(s *queue.State, o opts) error {
 	f, err := s.Find(o.feature)
 	if err != nil {

@@ -442,19 +442,40 @@ Filled in at x2-implement (FLOW-10, FLOW-15), with `origin/main` at
   merge had no conflicts. No shared abstraction or term to reconcile.
 - **`overview.md` (FLOW-15):** it describes the product's components, not the
   feature loop; no pseudocode changes.
-- **wf-later-phase-host-steps (#99, in parallel on
-  `feat/wf-later-phase-host-steps`):** it also rewrites `IsGate`, `Seed` and
-  `Back` in `tools/workflow/queue/phases.go` and the `done` case in
-  `cmd/wf/main.go`, and edits `queue_test.go` and `summary_test.go`. This
-  item merges first, then #99, then #100. At its merge-main, keep this item's
-  needs-based `IsGate` (its `gateTemplate`, the last seeded template step,
-  stays for `waitsAdded` and `rerunPublishHostSteps`, where phase 6's last
-  step is still its gate), add its `waitsAdded` field to the new phase-2
-  template entries, keep `Seed`'s every-template suffix and dropped needs
-  beside its added-step linking, keep both `done` checks in `main.go`
-  (`IsDesignReview` and its phase check), and change its `Back` comment's
-  "after Plan" to "before Plan". Its tests that walk phase 2 expect the new
-  order.
+- **wf-later-phase-host-steps (#99):** planned to merge after this item,
+  it merged first (`716c628`), so this item's second merge of `main`
+  carried the reconciliation. Conflicts and their resolution:
+  - `phases.go` templates: this item's order (`f2-design-review`, then
+    `f2-plan` needing it) with #99's `waitsAdded` field, `false` on both.
+  - `IsGate`: this item's needs-based rule. #99's own Consolidation
+    ("Deviation from plan task 2") owed one id parser after this item
+    landed; it is folded in here: `stepTemplates` now returns a `stepRef`
+    (round, phase, name, retry suffix, the phase's templates), and
+    `IsGate`, `IsDesignReview` and `isTemplate` all parse through it. Only
+    template steps' needs count, so Publish's added host steps needing
+    `f6-consolidate` leave `f6-open-pr` the gate (#99's `waiter` marks it
+    for linking; it plays no part in finding the gate).
+  - `Seed`: this item's every-template retry suffix and dropped needs on
+    unseeded steps, then #99's `linkAdded`/`waitsAdded` linking of the
+    phase's pending added steps. They touch disjoint needs.
+  - `Back`: #99's code (keep pending added later-phase steps without their
+    leases or needs on dropped steps; queue a done Publish validation
+    again); the comment says the fresh review comes "before Plan".
+  - `cmd/wf` `done`: #99's `Early` refusal first (a later-phase step is
+    neither completed nor review-checked), then this item's
+    `IsDesignReview` check, then the gate check.
+  - `process.md` FLOW-06: this item's "work the plan already covers" with
+    #99's sentences on what a return drops and keeps. FLOW-04 (`Offered`)
+    and FLOW-09 (validation after consolidation) merged cleanly.
+  - wf-design and wf-plan merged cleanly and agree: Design adds and, after
+    a return, reconciles the later-phase steps; Plan, working from the
+    approved design, only refines their notes and sends a missing blocking
+    host back as a design gap. workflow-human's walkthrough now names
+    both, and shows how Design reconciled the kept steps on a re-review.
+  - No rule of either design conflicts: the review is a phase-2 step, so
+    #99's `Offered` offers it at phase 2 (and early, being `human`), and
+    #99's added steps never sit in phase 2's template set.
+  `TestAddedStepsDoNotMoveTheGate` covers the combination.
 - **budgets-active-only (#100):** its branch so far carries only its
   design; no overlap with this item's files beyond `process.md` and the
   workflow skills, which it may edit later. Its merge-main reconciles them.
@@ -552,6 +573,7 @@ A process item: no tier-2 report.
   needs. The guard compares against the *last* approval, so a re-review
   that changes an impact field resets the baseline. The approval sha is
   the design as approved, not as read. #99 (wf-later-phase-host-steps)
-  rewrites `IsGate`, `Seed` and `Back` too and must keep this item's
-  needs-based gate at its merge of `main` (Consolidation). The `workflow`
+  landed first; this item's merge of `main` kept the needs-based gate
+  beside #99's later-phase steps and folded in #99's owed single parser
+  (`stepTemplates`) (Consolidation). The `workflow`
   branch README's phase-2 row is updated at x4-close.

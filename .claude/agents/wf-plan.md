@@ -19,7 +19,10 @@ restate).
    FLOW-15). Each rule change the Design review approved (`rule change <ID>
    approved at <sha>`) gets its own task citing the rule and naming its
    `paths` (FLOW-14). A rule change the plan needs that the review did not
-   approve sends the feature back to Design (FLOW-06, FLOW-14).
+   approve sends the feature back to Design (FLOW-06, FLOW-14). You may
+   refine the note of a later-phase step Design added (an `f6-validate-<host>`
+   with the cases the plan assigns it), but do not add or remove such steps:
+   a missing blocking host is a design gap (FLOW-06, FLOW-09).
 4. Check the plan against the design before you finish: every decision and
    every component the design names is carried out by a task, and no task
    does something the design does not say. The design is approved, so fix a
