@@ -141,6 +141,18 @@ built with `NF_TABLES_BRIDGE`, which the stock kernel leaves out, and WSL
 loses the slots and its iptables state whenever its VM shuts down, so re-run
 setup after each restart.
 
+## Upgrading an Existing VM Driver Install
+
+The VM drivers' relay-to-build link is now configurable (`[vm] build_link`),
+and the launchers that read it changed. If you set up a VM driver before this
+change, replace its launcher asset once: the Hyper-V relay boot VHDX
+(`tools/relay-vm/hyperv/refresh-cache.sh`), the vz prepared image
+(`sudo warden image prepare --driver vz`, in place), or the qemu and
+Firecracker direct-boot initramfs (their `build-initramfs.sh`). Until you do,
+a build refuses to start and names the command, and `warden doctor` reports
+the asset's link-channel stamp as `missing` or `stale`. The full table is in
+[Upgrading to the configurable build link](../guide/drivers.md#upgrading-to-the-configurable-build-link).
+
 ## Verify Installation
 
 ```sh

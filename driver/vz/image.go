@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 )
 
 // plistHeader is the standard Apple plist XML header.
@@ -140,6 +141,9 @@ func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
 		return "", fmt.Errorf("recording prepared image provenance: %w", err)
 	}
 
+	if err := writeLinkStamp(imgDir); err != nil {
+		return "", fmt.Errorf("writing the link-channel stamp: %w", err)
+	}
 	// Mark the image as fully prepared
 	_ = os.WriteFile(filepath.Join(imgDir, ".prepared"), []byte("ok\n"), 0644)
 
@@ -237,6 +241,9 @@ func ReprepareImage(imgDir string) error {
 	}
 	if err := cache.recordPreparedImage(imgDir, nil); err != nil {
 		return fmt.Errorf("recording prepared image provenance: %w", err)
+	}
+	if err := writeLinkStamp(imgDir); err != nil {
+		return fmt.Errorf("writing the link-channel stamp: %w", err)
 	}
 
 	// Update the .prepared marker
@@ -551,8 +558,21 @@ func installAgentLaunchd(mountPoint string) error {
 	if err := os.MkdirAll(binDir, 0755); err != nil {
 		return err
 	}
-	bootScript := `#!/bin/sh
-# Warden boot: configure network, run warden-io initialize.
+	bootScript := wardenBootScript
+	bootScriptPath := filepath.Join(binDir, "warden-boot")
+	if err := os.WriteFile(bootScriptPath, []byte(bootScript), 0755); err != nil {
+		return err
+	}
+	os.Chown(bootScriptPath, 0, 0) //nolint:errcheck
+	return nil
+}
+
+// wardenBootScript is the prepared image's launcher, run by launchd at boot.
+// It carries no address: it takes the build link from the DHCP lease the host
+// relay serves from the claim (the guest, mask, and the relay as router and
+// DNS), so a change of [vm] build_link needs no re-prepare.
+const wardenBootScript = `#!/bin/sh
+# Warden boot: take the build link's lease, run warden-io initialize.
 # Runs as LaunchDaemon (root, no user session needed).
 # warden-io is baked into the image at /usr/local/bin/warden-io.
 LOG="/var/log/warden-boot.log"
@@ -566,10 +586,9 @@ if [ ! -x "$AGENT" ]; then
     exit 1
 fi
 
-# Configure static network. The relay is always at .1 on the /30 subnet.
-# The FileHandle virtio-net device is en1 (en0 is NAT/USB-NCM when present).
-# Wait for an interface to become active — macOS takes a moment to bring
-# the virtio-net driver online after boot.
+# The FileHandle virtio-net device is the only ethernet interface. Wait for it
+# to become active (macOS takes a moment to bring the driver online), then
+# take the relay's DHCP lease on it, all within 60 seconds.
 echo "$(date): configuring network..."
 IFACE=""
 i=0
@@ -595,12 +614,24 @@ if [ -z "$IFACE" ]; then
     exit 1
 fi
 
-GW="10.0.0.1"
-SELF="10.0.0.2"
-MASK="255.255.255.252"
+ipconfig set "$IFACE" DHCP
+SELF=""
+while [ -z "$SELF" ] && [ $i -lt 30 ]; do
+    SELF=$(ipconfig getifaddr "$IFACE" 2>/dev/null)
+    if [ -z "$SELF" ]; then
+        sleep 2
+        i=$((i + 1))
+    fi
+done
+MASK=$(ipconfig getoption "$IFACE" subnet_mask 2>/dev/null)
+GW=$(ipconfig getoption "$IFACE" router 2>/dev/null)
+if [ -z "$SELF" ] || [ -z "$MASK" ] || [ -z "$GW" ]; then
+    echo "$(date): FATAL no DHCP lease from the relay on $IFACE after 60s"
+    ipconfig getpacket "$IFACE" 2>&1
+    exit 1
+fi
 
-echo "$(date): $IFACE -> $SELF gw $GW"
-ifconfig "$IFACE" inet "$SELF" netmask "$MASK" up
+echo "$(date): $IFACE -> $SELF/$MASK gw $GW (dhcp)"
 route add default "$GW" 2>/dev/null || true
 
 # DNS (multiple mechanisms for macOS compatibility)
@@ -623,12 +654,15 @@ SCUTIL
 echo "$(date): launching warden-io initialize (gateway=$GW)"
 exec "$AGENT" initialize --gateway="$GW" --ip="$SELF"
 `
-	bootScriptPath := filepath.Join(binDir, "warden-boot")
-	if err := os.WriteFile(bootScriptPath, []byte(bootScript), 0755); err != nil {
-		return err
-	}
-	os.Chown(bootScriptPath, 0, 0) //nolint:errcheck
-	return nil
+
+// linkStampName is the prepared image's link-channel stamp, in its directory.
+const linkStampName = "link-channel"
+
+// writeLinkStamp records that the image's warden-boot takes the build link
+// per build (buildlink.Channel), after either prepare path installed it.
+func writeLinkStamp(imgDir string) error {
+	return os.WriteFile(filepath.Join(imgDir, linkStampName),
+		[]byte(fmt.Sprintf("%s=%d\n", buildlink.StampKey, buildlink.Channel)), 0o644)
 }
 
 // diskMount holds the result of mounting a macOS disk image.
@@ -732,8 +766,8 @@ func CloneDisk(src, dst string) error {
 // This validates the full chain: boot → auto-login → launchd → mount → agent.
 func (c *ImageCache) firstBoot(diskPath, platformDir string) error {
 	// First boot validates the boot chain: launchd → warden-boot → warden-io.
-	// warden-io is baked into the image. The boot script configures networking
-	// and runs "warden-io initialize --gateway=10.0.0.1". For validation we
+	// warden-io is baked into the image. The boot script takes the relay's
+	// DHCP lease and runs "warden-io initialize". For validation we
 	// just boot with NAT and verify the VM starts successfully. A full relay
 	// test is done at e2e time rather than during image prep.
 	vm, err := NewMacOSVM(macOSVMConfig{

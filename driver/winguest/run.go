@@ -1,16 +1,23 @@
 package winguest
 
-import "fmt"
+import (
+	"fmt"
+
+	"github.com/buildwarden/buildwarden/driver/buildlink"
+)
 
 // WardenRunPS1 is the bootstrap the warden-run startup task runs off the seed
-// volume. It copies warden-io.exe local, runs `warden-io initialize` against
-// the build link, and powers off so the host sees completion.
+// volume. It copies warden-io.exe local, runs `warden-io initialize` with the
+// build link's relay and guest addresses (link), and powers off so the host
+// sees completion. A vm-mode relay also serves a DHCP lease on the link, which
+// a NIC still in DHCP mode may take first; it names the same address and
+// router, so initialize's static address ends in the same place.
 //
 // Progress and all warden-io output go to C:\warden\warden-run.log and, best
 // effort, to COM1. Hyper-V wires COM1 to a host named pipe, and qemu to its
 // serial chardev, so a failed boot is observable from the host without
 // mounting the guest disk. A missing or busy COM1 never breaks the build.
-func WardenRunPS1() string {
+func WardenRunPS1(link buildlink.Link) string {
 	return fmt.Sprintf(`# warden-run.ps1 - Windows build-guest bootstrap.
 # Run as SYSTEM by the warden-run startup task from the WARDEN seed volume.
 $ErrorActionPreference = 'Continue'
@@ -42,5 +49,5 @@ try {
 Emit 'powering off'
 if ($com) { try { $com.Close() } catch {} }
 Stop-Computer -Force
-`, BuildGatewayIP, BuildGuestCIDR)
+`, link.Relay, link.GuestCIDR())
 }

@@ -4,8 +4,8 @@ ethernets:
     match:
       name: "e*"
     addresses:
-      - 10.0.0.2/30
-    gateway4: 10.0.0.1
+      - 100.127.255.254/30
+    gateway4: 100.127.255.253
     nameservers:
       addresses:
-        - 10.0.0.1
+        - 100.127.255.253

@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 )
 
 // RunSetup is `warden setup --driver firecracker`: as root, once per boot,
@@ -28,8 +29,8 @@ func RunSetup(out io.Writer, opts SetupOptions) error {
 // the slots' sysctls and rules, host posture, reflink support and orphaned
 // VMMs, one line each. It changes nothing and returns true when a build
 // cannot run.
-func Doctor(out io.Writer) (blocked bool) {
-	return doctor(realHost{}, out, hostLocal)
+func Doctor(out io.Writer, link buildlink.Link) (blocked bool) {
+	return doctor(realHost{}, out, hostLocal, link)
 }
 
 // report prints doctor's lines and tracks whether anything blocks a build.
@@ -69,7 +70,7 @@ func (r *report) warn(what string, err error) {
 	r.line("ok", what, nil)
 }
 
-func doctor(h host, out io.Writer, local func(net.IP) bool) bool {
+func doctor(h host, out io.Writer, local func(net.IP) bool, link buildlink.Link) bool {
 	r := &report{w: out}
 	if err := hostCheck(); err != nil {
 		r.check("host", err)
@@ -93,7 +94,7 @@ func doctor(h host, out io.Writer, local func(net.IP) bool) bool {
 		fmt.Fprintln(out, "skip  rules and FORWARD policy (reading them needs root: "+
 			"sudo warden doctor --driver firecracker)")
 	}
-	dns, err := upstreamResolvers(h.readFile, local)
+	dns, err := upstreamResolvers(h.readFile, local, link)
 	r.check("upstream DNS for the relay: "+strings.Join(dns, ", "), err)
 	if name, ok := sudoUser(h); ok {
 		// The probe would write as root into the user's cache.

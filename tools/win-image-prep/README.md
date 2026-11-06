@@ -88,14 +88,17 @@ after a warden upgrade (the vz `ReprepareImage` analog).
 
 Unchanged from chunk 3a: the driver attaches a CD-ROM labelled **`WARDEN`** with
 `warden-io.exe` + `warden-run.ps1`. The prepared image's startup task runs
-`warden-run.ps1`, which runs `warden-io initialize --gateway=10.0.0.1
---ip=10.0.0.2/30` — static network (no DHCP on the isolated link), install the
-per-build CA, fetch `build.ps1` from the relay, run it, report the exit code.
+`warden-run.ps1`, which runs `warden-io initialize --gateway=<relay>
+--ip=<guest>/30` with the build link's addresses, rendered per build — a static
+network, install the per-build CA, fetch `build.ps1` from the relay, run it,
+report the exit code. The relay may also serve a DHCP lease on the link, which
+a NIC still in DHCP mode can take first; it names the same address and router,
+so the static address is the same. The prepared image carries no address.
 
-| Host | Address |
+| Host | Address (default build link, `[vm] build_link`) |
 |------|---------|
-| relay gateway | `10.0.0.1` |
-| build guest   | `10.0.0.2/30` |
+| relay gateway | `100.127.255.253` |
+| build guest   | `100.127.255.254/30` |
 
 ## Future / opt-in (prioritize on explicit request)
 

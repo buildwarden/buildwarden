@@ -12,6 +12,7 @@ on:
       - 'driver/firecracker/**'
       - 'driver/relayvm/**'
       - 'driver/linuxguest/**'
+      - 'driver/buildlink/**'
       - 'driver/*.go'
       - 'tools/firecracker-vm/**'
       - 'tools/relay-vm/build-initramfs.sh'
@@ -99,17 +100,6 @@ jobs:
           tools/firecracker-vm/build-initramfs.sh
 
       - run: make build
-
-      # The runner's VPC resolver can be 10.0.0.2, inside the relay's build link
-      # (10.0.0.0/30), where the relay cannot reach it; the driver refuses it,
-      # so give systemd-resolved public upstreams the relay can use.
-      - name: Off-host DNS for the relay
-        run: |
-          sudo mkdir -p /etc/systemd/resolved.conf.d
-          printf '[Resolve]\nDNS=1.1.1.1 8.8.8.8\n' |
-            sudo tee /etc/systemd/resolved.conf.d/warden.conf
-          sudo systemctl restart systemd-resolved
-          cat /run/systemd/resolve/resolv.conf
 
       # Docker leaves the runner's FORWARD policy at DROP, as setup requires.
       - name: warden setup and doctor

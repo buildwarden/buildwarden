@@ -93,6 +93,14 @@ warden image prepare --driver firecracker    # optional: caches ubuntu:24.04
 warden build --driver firecracker .          # a Dockerfile FROM ubuntu:24.04
 ```
 
+Doctor's output includes the build link and its source, for example
+`build link 100.127.255.252/30 (default)`, then
+`build link: no host interface overlaps it` and
+`firecracker direct-boot launcher initramfs: link-channel stamp current`. A
+`BLOCKED` line names its fix; an initramfs built before the configurable
+build link is `missing` or `stale` until `tools/firecracker-vm/build-initramfs.sh`
+rebuilds it once.
+
 A Dockerfile whose `FROM` is `ubuntu:24.04`, `debian:bookworm` or
 `alpine:3.21` (or a build given `--image <path>`) boots that disk image, and
 the first build converts it once if you skipped `image prepare`. A
@@ -103,10 +111,12 @@ which is faster but has only what your script brings:
 warden build --driver firecracker --script build.sh ./src
 ```
 
-If a build stops before booting with a DNS error, the host has only local
-resolvers (systemd-resolved's stub with no upstream, a local dnsmasq, or
-WSL's `10.255.255.254`); the error says what to change, and
-[Upstream DNS](../guide/drivers.md#upstream-dns) covers it.
+If a build stops before booting with a DNS error, the host has no resolver
+the relay can use: only local ones (systemd-resolved's stub with no upstream,
+a local dnsmasq, or WSL's `10.255.255.254`), or only ones inside the build
+link. The error says what to change, and
+[Upstream DNS](../guide/drivers.md#upstream-dns) covers it; moving the link is
+in [Corporate Networks](../guide/corporate-networks.md#address-collisions-with-the-build-link).
 
 To look at the VMs after a build, add `--keep-vms`: both VMs keep running and
 warden prints their pids. Stop them, and any left by an interrupted build,

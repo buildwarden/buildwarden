@@ -140,12 +140,12 @@ setup --driver firecracker` makes once per boot, so builds need no privilege.
 | Interface | Role | Address |
 |---|---|---|
 | `wfc<i>b` | Bridge joining the two TAPs below; IPv6 off, `rp_filter=1`, `arp_ignore=8` | none |
-| `wfc<i>r` | Relay VM's build NIC (eth0, `10.0.0.1/30` inside) | none |
-| `wfc<i>g` | Build VM's only NIC (eth0, `10.0.0.2/30` inside) | none |
+| `wfc<i>r` | Relay VM's build NIC (eth0, the build link's relay address inside) | none |
+| `wfc<i>g` | Build VM's only NIC (eth0, the build link's guest address inside) | none |
 | `wfc<i>u` | Relay VM's upstream NIC (eth1); IPv6 off, `rp_filter=1` | host `100.64.88.0 + 4i + 1`/30, relay `+ 2` |
 
-Every slot reuses `10.0.0.1`/`10.0.0.2`: each bridge is its own segment with
-no host route. The TAPs belong to the user builds run as.
+Every slot reuses the build link's two addresses (default `100.127.255.253`
+and `100.127.255.254`): each bridge is its own segment with no host route. The TAPs belong to the user builds run as.
 
 ### Bridge table and WARDEN-FC rules
 
@@ -175,6 +175,44 @@ Inside the relay VM the same iptables rules as QEMU's apply. Setup refuses to
 run on a host whose filter FORWARD policy is ACCEPT, or whose firewalld or
 nftables ruleset would drop the relays' traffic, because a DROP in WARDEN-FC
 is final but an ACCEPT there cannot override another table's drop.
+
+## The Build Link
+
+Every VM driver joins the build VM to the relay over one private `/30`, the
+build link: `[vm] build_link`, default `100.127.255.252/30` (relay
+`.253`, build VM `.254`; see
+[Configuration](../guide/configuration.md#the-build-link-vm-build_link---build-link)).
+Each build segment is its own L2 network (a socket netdev, a per-slot
+bridge, a private switch, a socketpair), so the same two addresses repeat
+across builds without clashing, and no host interface holds one. The link
+reaches every component per build:
+
+- the relay, in its claim (`build_link`): in vm mode the relay addresses its
+  build interface over netlink before it answers the claim, refusing a link
+  another of its interfaces already uses; in host mode (vz) it builds its
+  netstack from it;
+- the build VM, from its seed (cloud-init `network-config`, Windows
+  `warden-run.ps1`), or by DHCP from the relay (the direct-boot inits, with
+  the kernel command line's `warden.link_ip` and `warden.link_gw` as the
+  cross-check and fallback; vz's `warden-boot`).
+
+**The relay's DHCP responder.** In vm and host modes the relay answers DHCP
+on the build link only: in vm mode on a UDP socket bound to the build
+interface (`SO_BINDTODEVICE`), so a request on the relay VM's upstream
+network never reaches it; in host mode inside its netstack. It makes one
+fixed offer per build, from the claim: the guest address, the link's mask,
+the relay as router, DNS server and server identifier, and an infinite
+lease. It keeps no per-client state, so a flood of requests exhausts
+nothing, and it never answers a BOOTREPLY, so a forged server message from
+the guest is ignored.
+
+**The link block.** Inside the relay the link is a connected route, so an
+upstream address inside it would be sent to the build VM. In vm and host
+modes the relay's upstream dialer refuses every address inside the link
+(whether or not host mode's SSRF filter is on), and its upstream DNS
+detection skips a nameserver there. warden refuses a link that holds a host
+interface address, Firecracker leaves out host resolvers inside it, and
+Hyper-V setup refuses a `--nat-prefix` that overlaps it.
 
 ## Common DNS Behavior
 

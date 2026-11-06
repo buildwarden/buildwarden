@@ -30,6 +30,9 @@ Three rules hold for every driver (the full model is
 ```
 warden build <context>:
     req := resolve flags and config (driver, runtime, output dir, ...)
+    VM drivers: req.BuildLink := --build-link, else [vm] build_link (checked as
+                the file loads), else 100.127.255.252/30; each checked /30,
+                disjoint from BuildWarden's own ranges, before any driver work
     driver := select(req.driver)            # container | qemu | vz | hyperv | firecracker
     driver.StartBuild(req)                  # below; every driver has this shape
     print the result; exit with the build script's exit code
@@ -43,8 +46,11 @@ StartBuild(req):
     script := translate(req.Containerfile, req.ContextDir)   # see Translator
     if script was translated: keep both under <output>/inputs/  # ORCH-02; not vz
     session := StartSession(output dir, context, script, guest OS)
+    VM drivers: refuse a build link a host interface holds, and a launcher
+                asset whose link-channel stamp is missing or old
     relay := start the relay, unconfigured                 # per driver
-    session.ClaimRelay(relay)                              # tunnel + config
+    session.ClaimRelay(relay, build link)                  # tunnel + config;
+                                                           # container: no link
     isolate the build environment                          # per driver
     deliver warden-io into it                              # per driver
     start it                                               # per driver
@@ -65,11 +71,14 @@ StartSession(cfg):
         build context     -> GET /v1/context/<path>
     )
 
-ClaimRelay(addr, token):
+ClaimRelay(addr, token, link, oldRelayFix):
     tunnel := POST addr/v1/tunnel           # host dials the relay, never the reverse
     serve collector over tunnel (HTTP/2)
     identity := POST addr/v1/claim {collector URL = the tunnel, token, capture mode,
-                                    upstream CAs, environment record}
+                                    upstream CAs, environment record,
+                                    build_link {prefix, relay, guest} when given}
+        a relay that predates build_link refuses it: a fix naming oldRelayFix
+    # the relay answers only once its build segment is configured
     wait for the relay's POST /v1/ready
     write identity.CACert to <output>/ca.cert.pem
 
@@ -143,10 +152,21 @@ held environment.
 ## VM drivers (`driver/qemu`, `driver/hyperv`, `driver/vz`, `driver/firecracker`)
 
 ```
-start the relay VM (or, on VZ, a host relay process); claim it
+before anything boots:
+    refuse a build link that holds a host interface address
+    check the launcher's link-channel stamp: the qemu or firecracker direct-boot
+    initramfs, the hyperv relay boot VHDX, the vz prepared image; missing or old
+    -> a fix naming its one-time rebuild (a vz --image disk outside the image
+    cache, which cannot be re-prepared in place: omit --image)
+
+start the relay VM (or, on VZ, a host relay process); claim it with the build link
+    firecracker: resolvers for the relay are the host's, minus loopback, host
+                 addresses and any inside the build link
     firecracker: first take a free network slot made by `warden setup` (a host
                  lock), kill VMMs a dead warden left on it, and claim the relay
                  at the slot's upstream address
+    hyperv setup: refuse a --nat-prefix that overlaps the build link
+    the build VM boots only after the claim returns
 
 isolate:   the build VM's only network interface leads to the relay
            (QEMU socket pair, Hyper-V private switch, VZ socketpair,
@@ -159,6 +179,15 @@ deliver:   Linux guest   -> cloud-init CIDATA disk carrying warden-io
                              appended to a launcher-only initramfs)
            Windows guest -> WARDEN seed disk carrying warden-io.exe and warden-run.ps1
            macOS (VZ)    -> warden-io baked into the prepared image (a known deviation)
+
+address:   the guest takes the build link per build, nothing baked:
+           seeded guests (cloud-init network-config, Windows warden-run.ps1)
+                      -> rendered from the link
+           direct boot (qemu, firecracker) -> udhcpc takes the relay's lease;
+                      it must agree with warden.link_ip / warden.link_gw on the
+                      kernel command line (else stop); no lease -> the keys;
+                      neither -> stop
+           macOS (VZ) -> warden-boot takes the host relay's DHCP lease
 
 start:     boot the VM. Its launcher runs warden-io initialize:
            Linux   -> cloud-init runcmd (Firecracker: ending in reboot -f), or
@@ -221,8 +250,21 @@ to `http://artifacts/<name>`).
 relay --mode=container|vm|host:
     bind DNS (:53), HTTP (:80), HTTPS (:443), control plane (:8300)
     accept ONE claim on :8301:
-        open the tunnel; take the config; generate the per-build MITM CA and the
-        ledger key; return both; sign the environment record as the first ledger
+        open the tunnel; take the config; invalid build_link -> 400, still
+        claimable
+        configure the build segment (the mode's start step):
+            vm:        build_link -> refuse (400, still claimable) if another
+                                     interface holds an address or route in it;
+                                     flush the build interface's IPv4, add
+                                     relay/len (netlink); serve DHCP bound to
+                                     that interface: one fixed lease (guest,
+                                     mask, relay as router and DNS, infinite)
+                       none       -> keep the interface's address; none there ->
+                                     400 "build_link is required"
+            host:      netstack, ARP, DHCP and listeners from build_link, else
+                       --subnet
+            container: build_link -> 400
+        generate the per-build MITM CA and the ledger key; return both; sign the environment record as the first ledger
         record; POST /v1/ready to the collector
     stop listening for claims
 
@@ -237,7 +279,9 @@ relay --mode=container|vm|host:
             POST /<name> -> stream the artifact to the collector, recorded
         http://cwd/<path> -> the context file from the collector, recorded
         anything else -> proxy upstream (HTTPS through the MITM CA), recorded;
-                         captures streamed to the collector
+                         captures streamed to the collector; a dial into the
+                         build link is refused (vm and host), as are host mode's
+                         SSRF blocks; upstream DNS skips a resolver in the link
 
     the ledger is streamed to the collector as it is written, so even a relay
     that dies mid-build leaves a verifiable (truncated) ledger

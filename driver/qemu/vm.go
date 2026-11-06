@@ -82,9 +82,11 @@ type buildVMConfig struct {
 	Windows bool
 	VarsFD  string
 
-	// Direct kernel boot (lightweight/test path)
-	Kernel string
-	Initrd string
+	// Direct kernel boot (lightweight/test path). BootArgs are the build
+	// link's kernel command-line keys the direct-boot init reads.
+	Kernel   string
+	Initrd   string
+	BootArgs string
 
 	// What the build boots from, for the environment record: the read-only
 	// base under DiskImage's overlay, the cached UEFI vars VarsFD was copied
@@ -163,7 +165,7 @@ func (d *Driver) startBuildVM(
 		args = append(args,
 			"-kernel", cfg.Kernel,
 			"-initrd", cfg.Initrd,
-			"-append", consoleArg(cfg.Arch),
+			"-append", directBootAppend(cfg),
 		)
 	}
 
@@ -218,6 +220,15 @@ func (d *Driver) vmOutput() io.Writer {
 		return os.Stderr
 	}
 	return io.Discard
+}
+
+// directBootAppend is the direct-boot build VM's kernel command line: its
+// console and the build link's keys.
+func directBootAppend(cfg *buildVMConfig) string {
+	if cfg.BootArgs == "" {
+		return consoleArg(cfg.Arch)
+	}
+	return consoleArg(cfg.Arch) + " " + cfg.BootArgs
 }
 
 func consoleArg(arch string) string {

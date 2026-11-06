@@ -7,7 +7,7 @@
 //   Host (this process)
 //   ├── Shared volume: CA output, ledger
 //   ├── Relay (host process, --ingress=fd) — reads frames from socketpair
-//   └── Build VM (macOS) — private link only (10.0.0.2/30)
+//   └── Build VM (macOS) — private link only (the default build link)
 //
 // Run:
 //   go build -o .dev/vz-uv-build .dev/vz-uv-build.go && \
@@ -29,7 +29,19 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 	"github.com/buildwarden/buildwarden/driver/vz"
+)
+
+// prepLink is the prep-time build link: always the default, whatever
+// [vm] build_link says. Image prep runs its own forwarder on its own link, so
+// it never follows the setting. The scripts name it by placeholder.
+var prepLink = buildlink.Default()
+
+var linkVars = strings.NewReplacer(
+	"__RELAY__", prepLink.Relay.String(),
+	"__GUEST__", prepLink.Guest.String(),
+	"__MASK__", prepLink.Mask(),
 )
 
 func init() {
@@ -43,7 +55,7 @@ LOG="/var/log/warden-boot.log"
 exec >>"$LOG" 2>&1
 echo "$(date): warden-boot starting"
 
-# Static network config — relay is at 10.0.0.1, we are 10.0.0.2.
+# Static network config — relay is at __RELAY__, we are __GUEST__.
 echo "$(date): configuring network..."
 IFACE=""
 for iface in $(ifconfig -l); do
@@ -73,8 +85,8 @@ if [ -z "$IFACE" ]; then
 fi
 
 echo "$(date): using $IFACE"
-ifconfig "$IFACE" inet 10.0.0.2 netmask 255.255.255.252 up
-route add default 10.0.0.1 2>/dev/null || true
+ifconfig "$IFACE" inet __GUEST__ netmask __MASK__ up
+route add default __RELAY__ 2>/dev/null || true
 
 # DNS: macOS uses mDNSResponder as the system resolver, not /etc/resolv.conf.
 # In the Installer Progress boot environment, mDNSResponder may not be running
@@ -82,20 +94,20 @@ route add default 10.0.0.1 2>/dev/null || true
 mkdir -p /etc /var/run/mDNSResponder /etc/resolver
 
 # resolv.conf (for tools that read it directly)
-echo "nameserver 10.0.0.1" > /etc/resolv.conf
+echo "nameserver __RELAY__" > /etc/resolv.conf
 
 # /etc/resolver/ directory (macOS libresolv checks this)
-echo "nameserver 10.0.0.1" > /etc/resolver/default
+echo "nameserver __RELAY__" > /etc/resolver/default
 
 # Configure via scutil (pokes configd's DNS state if it's running)
 scutil 2>/dev/null <<SCUTIL || true
 d.init
-d.add ServerAddresses * 10.0.0.1
+d.add ServerAddresses * __RELAY__
 set State:/Network/Service/warden/DNS
 d.init
-d.add Addresses * 10.0.0.2
-d.add SubnetMasks * 255.255.255.252
-d.add Router 10.0.0.1
+d.add Addresses * __GUEST__
+d.add SubnetMasks * __MASK__
+d.add Router __RELAY__
 d.add InterfaceName $IFACE
 set State:/Network/Service/warden/IPv4
 d.init
@@ -114,23 +126,23 @@ fi
 
 # Verify DNS works
 echo "$(date): testing DNS..."
-if nslookup sh.rustup.rs 10.0.0.1 >/dev/null 2>&1; then
+if nslookup sh.rustup.rs __RELAY__ >/dev/null 2>&1; then
     echo "$(date): DNS via relay works (direct query)"
 elif host sh.rustup.rs >/dev/null 2>&1; then
     echo "$(date): DNS via system resolver works"
 else
     echo "$(date): DNS not working, trying dig"
-    dig @10.0.0.1 sh.rustup.rs 2>&1 || true
+    dig @__RELAY__ sh.rustup.rs 2>&1 || true
 fi
 
 echo "$(date): waiting for relay..."
 i=0
-while ! curl -sf "http://10.0.0.1:8300/health" >/dev/null 2>&1 && [ $i -lt 60 ]; do
+while ! curl -sf "http://__RELAY__:8300/health" >/dev/null 2>&1 && [ $i -lt 60 ]; do
     sleep 1
     i=$((i + 1))
 done
 
-if ! curl -sf "http://10.0.0.1:8300/health" >/dev/null 2>&1; then
+if ! curl -sf "http://__RELAY__:8300/health" >/dev/null 2>&1; then
     echo "$(date): relay not reachable"
     exit 1
 fi
@@ -138,7 +150,7 @@ echo "$(date): relay ready"
 
 # Fetch CA certificate and install for curl/pip/cargo
 echo "$(date): fetching CA cert..."
-curl -sf "http://10.0.0.1:8300/ca.pem" -o /tmp/warden-ca.pem
+curl -sf "http://__RELAY__:8300/ca.pem" -o /tmp/warden-ca.pem
 if [ ! -s /tmp/warden-ca.pem ]; then
     echo "$(date): failed to fetch CA"
     exit 1
@@ -216,9 +228,9 @@ EXIT=$?
 
 # Stream the build log to relay for visibility
 curl -sf -X POST --data-binary @/var/log/warden-build.log \
-    "http://10.0.0.1:8300/v1/output" || true
+    "http://__RELAY__:8300/v1/output" || true
 
-curl -sf -X POST "http://10.0.0.1:8300/v1/complete?code=$EXIT" || true
+curl -sf -X POST "http://__RELAY__:8300/v1/complete?code=$EXIT" || true
 echo "$(date): done (exit $EXIT)"
 exit $EXIT
 `
@@ -328,7 +340,7 @@ func main() {
 
 	// Create isolated virtual network (socket pair)
 	logf("Creating virtual network...")
-	vnet, err := vz.NewVirtualNetwork()
+	vnet, err := vz.NewVirtualNetwork(prepLink)
 	if err != nil {
 		logf("ERROR: %v", err)
 		os.Exit(1)
@@ -342,7 +354,7 @@ func main() {
 	relayCmd := exec.Command(relayBin,
 		"--ingress=fd",
 		"--fd=3",
-		"--subnet=10.0.0.0/30",
+		"--subnet="+prepLink.String(),
 	)
 	relayCmd.Env = append(os.Environ(),
 		"LEDGER_DIR="+filepath.Join(sharedDir, "ledger"),
@@ -442,7 +454,7 @@ func installScripts(diskPath string) error {
 
 	// Write boot script
 	bootPath := filepath.Join(data, "usr/local/bin/warden-boot")
-	os.WriteFile(bootPath, []byte(macBootScript), 0755)
+	os.WriteFile(bootPath, []byte(linkVars.Replace(macBootScript)), 0755)
 
 	// Clear old logs
 	os.Remove(filepath.Join(data, "private/var/log/warden-boot.log"))

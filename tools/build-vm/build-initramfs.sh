@@ -2,7 +2,7 @@
 # Builds a minimal initramfs for the build VM (test/integration use).
 # Reuses cached artifacts from tools/relay-vm/.cache/.
 #
-# Output: tools/build-vm/output/initramfs.cpio.gz
+# Output: tools/build-vm/output/initramfs.cpio.gz and its link-channel stamp
 # (Uses the same vmlinuz as relay-vm)
 
 set -eu
@@ -36,7 +36,7 @@ chmod 755 "$ROOTFS_DIR/bin/busybox"
 
 for cmd in sh mount mkdir cat echo ip ln ls sleep date rm set grep \
            awk sed head insmod modprobe wget ping kill wait \
-           hostname env wc tr; do
+           hostname env wc tr udhcpc printf; do
     ln -s busybox "$ROOTFS_DIR/bin/$cmd"
 done
 ln -s ../bin/busybox "$ROOTFS_DIR/sbin/ip"
@@ -55,7 +55,8 @@ for mod in \
     fs/9p/9p.ko.gz \
     net/core/failover.ko.gz \
     drivers/net/net_failover.ko.gz \
-    drivers/net/virtio_net.ko.gz; do
+    drivers/net/virtio_net.ko.gz \
+    net/packet/af_packet.ko.gz; do
     src="$RELAY_CACHE/kernel-extract/lib/modules/$KVER/kernel/$mod"
     if [ -f "$src" ]; then
         dst="$ROOTFS_DIR/lib/modules/$(basename "$mod" .gz)"
@@ -75,9 +76,33 @@ GOOS=linux GOARCH=arm64 CGO_ENABLED=0 \
 cp "$SCRIPT_DIR/init" "$ROOTFS_DIR/init"
 chmod 755 "$ROOTFS_DIR/init"
 
+# udhcpc's script for the init's one DHCP request: it records the lease
+# and configures nothing. Kept identical in tools/build-vm/build-initramfs.sh
+# and tools/firecracker-vm/build-initramfs.sh (a tier-0 test checks).
+cat > "$ROOTFS_DIR/etc/warden-lease.sh" <<'LEASE'
+#!/bin/sh
+# udhcpc script: records the build link's lease for init and configures
+# nothing (no address, route or resolver; init applies them). A value that
+# is not a dotted quad is not recorded.
+case "$1" in
+    bound | renew)
+        gw="${router%% *}"
+        for v in "$ip" "$subnet" "$gw"; do
+            echo "$v" | grep -q '^[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}\.[0-9]\{1,3\}$' || exit 0
+        done
+        printf 'ip=%s\nmask=%s\nrouter=%s\n' "$ip" "$subnet" "$gw" > /tmp/warden-lease
+        ;;
+esac
+exit 0
+LEASE
+chmod 755 "$ROOTFS_DIR/etc/warden-lease.sh"
+
 # Pack
 (cd "$ROOTFS_DIR" && find . | cpio -o -H newc 2>/dev/null | gzip -9) \
     > "$OUTPUT_DIR/initramfs.cpio.gz"
 
 rm -rf "$ROOTFS_DIR"
+# The link-channel stamp (buildlink.Channel): this init takes the build link
+# per build, so warden accepts the initramfs.
+echo "WARDEN_LINK_CHANNEL=1" > "$OUTPUT_DIR/link-channel"
 echo "Build VM initramfs: $(ls -lh "$OUTPUT_DIR/initramfs.cpio.gz" | awk '{print $5}')"
