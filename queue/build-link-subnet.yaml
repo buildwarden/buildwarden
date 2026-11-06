@@ -3,7 +3,7 @@ title: Move every VM driver's relay-to-build link off 10.0.0.0/30
 priority: 18
 status: in_progress
 round: feature
-phase: 6
+phase: 7
 design: docs/design/build-link-subnet.md
 branch: feat/build-link-subnet
 alters_relationships: true
@@ -173,7 +173,7 @@ steps:
   - id: f6-open-pr
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f6-consolidate
       - f6-validate-linux-kvm
@@ -181,8 +181,15 @@ steps:
       - f6-validate-macos-vz
       - f6-validate-windows-hyperv
     lease:
-      claimed_by: cloud/20261106T105651Z
-      expires: 2026-11-06T12:57:21.259764815Z
+      claimed_by: ""
+      expires: null
+  - id: f7-merge
+    phase: 7
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 12
@@ -650,3 +657,9 @@ history:
   - at: 2026-11-06T11:12:29Z
     by: cloud/20261106T105651Z
     event: 'f6-open-pr: merged origin/main 4c8f9dc (#97, clean) at 8c6d41b; gofmt of 4f9a0e3''s test (a trailing blank line, tier-1 GLOBAL-02 SHOULD) at 848469c; design archived with Consolidation line (#97, 4f9a0e3 root cause and test) and Archive summary; head 2bd748f. make lint (linux, GOOS=darwin, GOOS=windows), make test, make enforcement, flow18-check, tier1 -base origin/main (0 MUST/0 SHOULD/2 hints) green. PR #98 opened; CI on 2bd748f all green: ci 42207202054, integration 42207201615, firecracker 42207201601, flow18 42207202039 (all on pull_request, no dispatch needed).'
+  - at: 2026-11-06T11:13:11Z
+    by: cloud/20261106T105651Z
+    event: done f6-open-pr
+  - at: 2026-11-06T11:13:11Z
+    by: cloud/20261106T105651Z
+    event: entered phase 7 (merge)
