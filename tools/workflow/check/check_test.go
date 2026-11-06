@@ -294,8 +294,8 @@ func TestPlanGateGuardsTheApprovedDesign(t *testing.T) {
 		{"  - {rule: TEST-09, change: add, paths: [docs/development/testing.md]}",
 			"  - {rule: TEST-09, change: add, paths: [docs/development/global.md]}",
 			"rule_changes TEST-09 added or changed"},
-		{"rule_changes:\n  - {rule: TEST-09, change: add, paths: [docs/development/testing.md]}\n",
-			"", "rule_changes TEST-09 dropped"},
+		{"rule_changes:\n  - {rule: TEST-09, change: add, paths: " +
+			"[docs/development/testing.md]}\n", "", "rule_changes TEST-09 dropped"},
 	} {
 		commit(t, work, strings.Replace(ruled, c.from, c.to, 1)+review)
 		if got := failures(Phase(env, f)); !strings.Contains(got, c.want) {

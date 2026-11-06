@@ -350,7 +350,8 @@ func TestBackToDesignEscalatesOnTheThirdReturn(t *testing.T) {
 			}
 			plan, err := f.Step(fmt.Sprintf("f2-plan-r%d", i+1))
 			if err != nil || len(plan.Needs) != 1 || plan.Needs[0] != id {
-				t.Fatalf("return %d: plan %+v, want it after %s (%v)", i, plan, id, err)
+				t.Fatalf("return %d: plan %+v, want it after %s (%v)", i, plan, id,
+					err)
 			}
 		}
 	}

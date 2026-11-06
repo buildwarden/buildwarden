@@ -121,8 +121,9 @@ func (c *checker) ruleChangesDelta(approved, d *Design) []string {
 			continue
 		}
 		if !c.ownApproval(d, rc) {
-			out = append(out, fmt.Sprintf("rule_changes %s added or changed, and no "+
-				"rule change %s approved at a commit that has it", rc.Rule, rc.Rule))
+			out = append(out, fmt.Sprintf("rule_changes %[1]s added or changed, and "+
+				"no rule change %[1]s approved at a commit that has it",
+				rc.Rule))
 		}
 	}
 	for _, rc := range approved.Front.RuleChanges {
