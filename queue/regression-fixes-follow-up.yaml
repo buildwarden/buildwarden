@@ -9,6 +9,9 @@ design: docs/design/regression-fixes-follow-up.md
 branch: feat/regression-fixes-follow-up
 alters_relationships: null
 source: 'workflow-human 2026-11-06 (Jeff) (Jeff, verbatim): ''as a general process change, fixes for known regressions when there are larger updates should always be queued as immediate follow-ups to the existing work item unless explicitly said otherwise.'' Context: build-link-subnet''s native runs found vz image-prepare and build-vm busybox regressions, which were queued at the top of the open order (vz-image-prepare-refresh, build-vm-busybox).'
+pr:
+  number: 103
+  ci: green
 steps:
   - id: x1-design
     phase: 1
