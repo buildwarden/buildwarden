@@ -1,6 +1,6 @@
 ---
 feature: flow19-design-before-plan
-status: draft
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -442,11 +442,11 @@ Filled in at x2-implement (FLOW-10, FLOW-15), with `origin/main` at
   merge had no conflicts. No shared abstraction or term to reconcile.
 - **`overview.md` (FLOW-15):** it describes the product's components, not the
   feature loop; no pseudocode changes.
-- **wf-later-phase-host-steps (priority 27, in parallel on
+- **wf-later-phase-host-steps (#99, in parallel on
   `feat/wf-later-phase-host-steps`):** it also rewrites `IsGate`, `Seed` and
   `Back` in `tools/workflow/queue/phases.go` and the `done` case in
   `cmd/wf/main.go`, and edits `queue_test.go` and `summary_test.go`. This
-  item merges first (priority 26). At its merge-main, keep this item's
+  item merges first, then #99, then #100. At its merge-main, keep this item's
   needs-based `IsGate` (its `gateTemplate`, the last seeded template step,
   stays for `waitsAdded` and `rerunPublishHostSteps`, where phase 6's last
   step is still its gate), add its `waitsAdded` field to the new phase-2
@@ -455,7 +455,7 @@ Filled in at x2-implement (FLOW-10, FLOW-15), with `origin/main` at
   (`IsDesignReview` and its phase check), and change its `Back` comment's
   "after Plan" to "before Plan". Its tests that walk phase 2 expect the new
   order.
-- **budgets-active-only (priority 28):** its branch so far carries only its
+- **budgets-active-only (#100):** its branch so far carries only its
   design; no overlap with this item's files beyond `process.md` and the
   workflow skills, which it may edit later. Its merge-main reconciles them.
 - **Behaviour the rest of the loop must now follow:** a phase's gate is the
@@ -469,6 +469,11 @@ Filled in at x2-implement (FLOW-10, FLOW-15), with `origin/main` at
   phase-2 step. The migration's legacy `f3-design-review` (for designs that
   predate FLOW-19) stays waivable: `IsDesignReview` names only the phase-2
   template step.
+- **workflow-human step 3 is broader than task 8:** it reads the
+  Implementation plan on a re-review caused by any later phase's finding,
+  not only a Plan finding. That matches FLOW-19's Validation plan bullet
+  ("on a re-review, the finding and the tasks it touches"): a finding from
+  Implement, Review or Consolidation touches planned tasks too.
 
 ## Rollback notes
 
@@ -490,5 +495,63 @@ Commit and push the queue change with the revert.
 
 ## Archive summary
 
-Filled in at Publish, in the feature's PR, and refreshed when the PR changes
-(FLOW-12).
+Implemented 2026-11-06 by the cloud loop (attended), approved at design
+review r1 (`e9b8653`), with every assumption (a1 to a5) confirmed as drafted.
+A process item: no tier-2 report.
+
+- **Built: the design review follows Design, and Plan follows the
+  approval.** Phase 2 seeds `f2-design-review` (human) first and `f2-plan`
+  (cloud) needing it; with `design_review: skip`, only `f2-plan`, with no
+  needs. A feature returns for a second review only when a later phase
+  finds the design must change (FLOW-06), and that review is judged on its
+  delta (FLOW-19).
+- **Rule text** (`docs/development/process.md`): the Shape list, FLOW-03's
+  Plan row, FLOW-06 ("the changed design", "work the plan already covers"),
+  FLOW-07 ("before planning starts"), FLOW-10's return paragraph ("when the
+  design must change"), and FLOW-19: the opening, the Validation plan
+  bullet in place of "the plan against the design", the new "Plan works
+  from the approved design" paragraph, the approval sha naming the design
+  as approved with the sitting's changes folded in, and the automated part.
+- **Queue** (`tools/workflow/queue/phases.go`): a phase's gate is the
+  seeded template step that no other step of the same seed needs, not the
+  last template step, so a phase 2 seeded in the old order (`f2-plan`, then
+  the review needing it) still finishes with the review as its gate.
+  `Seed` picks a retry suffix free for every template step of the phase,
+  and drops a `needs` entry on a template step it did not seed.
+  `IsDesignReview` names the phase-2 review step.
+- **`wf check`** (`tools/workflow/check/review.go`): `check.Review`, run by
+  `wf done` on a design-review step, requires an approval for every review
+  seeded. At the Plan gate, `approvalDelta` fails when the impact fields or
+  `rule_changes` differ from the design at the last `approved at <sha>`; a
+  `rule_changes` entry passes when its own `rule change <ID> approved at
+  <sha>` line names a commit that carries it as it is now. A skipped review
+  is still rechecked by `skipValid`.
+- **Agents and skills:** wf-plan works from the approved design, edits only
+  its Implementation plan, commits, runs `wf check`, and returns
+  `back-to-design` with the delta on a guard failure; wf-design seeds a
+  required review before Plan; workflow-human step 3 reviews the design
+  (the plan only on a re-review a later phase's finding caused) and folds
+  in-sitting changes in before the approval, recording `read at <sha>` when
+  it differs; workflow-tick and wf-publish say "work the plan already
+  covers" and "when the design must change", and the Moved line gives
+  Plan's task count.
+- **Decisions taken:** the review stays `f2-design-review` at the front of
+  phase 2 (a1); Plan waits for the approval (a2); a mechanical guard on
+  impact fields and `rule_changes` (a3); Jeff sees only Plan's task count
+  (a4); sitting changes fold in before the approval (a5); no queue
+  migration.
+- **Rejected:** a phase-1 review or a phase of its own (seeding and
+  renumbering costs); Plan in parallel with the approval checked at its
+  gate; showing Jeff the plan for information; wf-plan's judgment alone,
+  or failing on any edit outside the Implementation plan; noting sitting
+  changes and fixing the text later; a hold on cloud steps or a one-off
+  `wf migrate` for old-order items.
+- **For future designs touching `workflow`, `design-review`, `plan`,
+  `queue` or `wf-check`:** a gate is found by `needs`, not template order,
+  so a new phase template must keep its gate the one step nothing else
+  needs. The guard compares against the *last* approval, so a re-review
+  that changes an impact field resets the baseline. The approval sha is
+  the design as approved, not as read. #99 (wf-later-phase-host-steps)
+  rewrites `IsGate`, `Seed` and `Back` too and must keep this item's
+  needs-based gate at its merge of `main` (Consolidation). The `workflow`
+  branch README's phase-2 row is updated at x4-close.

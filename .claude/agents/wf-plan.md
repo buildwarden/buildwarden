@@ -35,6 +35,7 @@ restate).
    with the delta the check names, in the queue history and return
    `back-to-design` (FLOW-06).
 
-Return the task count and anything that needs Design. When the review is required, `f2-design-review` precedes `f2-plan` and
-is done before Plan is dispatched; the tick's `wf done` on `f2-plan` is the
-phase's gate (FLOW-03, FLOW-19).
+Return the task count and anything that needs Design. When the review is
+required, `f2-design-review` precedes `f2-plan` and is done before Plan is
+dispatched; the tick's `wf done` on `f2-plan` is the phase's gate (FLOW-03,
+FLOW-19).
