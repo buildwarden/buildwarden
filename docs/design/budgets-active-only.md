@@ -345,6 +345,29 @@ wf-later-phase-host-steps (Prior art, Ordering).
 
 ## Consolidation
 
+`origin/main` at `9787fb4` merged at `4cc23c8` before the edits.
+
+- **Landed since the fork:** #97 (deadcode with the module's toolchain) and
+  #98 (build-link-subnet). Neither touches `docs/development/process.md`,
+  `.claude/` or `tools/workflow/`, so nothing here needed reconciling.
+- **Not yet landed, same files:** flow19-design-before-plan (priority 26)
+  and wf-later-phase-host-steps (27) are on their own branches. The plan
+  said this item rebases onto both; it was implemented first instead, with
+  its edits held to the lines Design names, so whichever merges second
+  resolves a small conflict: FLOW-13's paragraph, `workflow-tick` Digest,
+  `workflow-human` steps 4 and 6, and `queue/queue.go` near `Runaway`.
+- **Terminology:** "open item" (queued or in progress) is used the same way
+  in FLOW-13, the `Runaway`, `Budget` and `Listed` comments, and the three
+  skills.
+- **Shared abstractions:** `Listed` reuses the FLOW-05 comparator, which
+  `sortFeatures` now takes as a slice so both sort the same way.
+- **FLOW-15 sweep:** `recentlyDone` and `recentDays` are removed with their
+  only caller; no other dead code or duplication. `overview.md` is
+  unchanged: no component flow changes.
+- **Left for x4-close (Implementation plan task 7):** the `workflow`
+  branch `README.md` lines and the `wf validate` that regenerates
+  `QUEUE.md`.
+
 ## Rollback notes
 
 ## Archive summary
