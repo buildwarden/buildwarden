@@ -1,6 +1,6 @@
 feature: regression-fixes-follow-up
-title: Regression fixes found during a larger change are queued as its immediate follow-ups
-priority: 32
+title: 'Queue order by class (in implementation, process, fixes, new functionality), and regression fixes queued as immediate follow-ups'
+priority: 42
 kind: process
 status: queued
 round: process
@@ -29,3 +29,9 @@ history:
   - at: 2026-11-06T17:33:20Z
     by: human/jeff
     event: queued at priority 32 (intake)
+  - at: 2026-11-06T17:50:00Z
+    by: human/jeff
+    event: 'priority 32 -> 42 (Jeff, 2026-11-06 order: in implementation, then process, then fixes for implemented items, then new functionality; this item: 2. process)'
+  - at: 2026-11-06T17:50:00Z
+    by: human/jeff
+    event: 'scope widened (Jeff, verbatim): process updates are also prioritized over code since they''re usually short. So in order of priority: 1. Items already in implementation 2. Workflow/process updates 3. Fixes for implemented items (often may be a result of needing the process changes) 4. New functionality. Applied by hand to the open queue at priorities 38-47; this item makes it the FLOW-05 rule and the intake default'

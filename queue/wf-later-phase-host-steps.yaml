@@ -1,6 +1,6 @@
 feature: wf-later-phase-host-steps
 title: 'wf keeps and holds later-phase host steps: wf back preserves them, wf next/gate skip them until their phase'
-priority: 29
+priority: 39
 kind: process
 status: in_progress
 round: process
@@ -51,3 +51,6 @@ history:
   - at: 2026-11-06T17:24:05Z
     by: cloud/20261106T172405Z-attended
     event: claimed x2-implement until 2026-11-06T19:24:05Z
+  - at: 2026-11-06T17:50:00Z
+    by: human/jeff
+    event: 'priority 29 -> 39 (Jeff, 2026-11-06 order: in implementation, then process, then fixes for implemented items, then new functionality; this item: 1. in implementation)'

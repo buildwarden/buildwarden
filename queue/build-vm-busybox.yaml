@@ -1,6 +1,6 @@
 feature: build-vm-busybox
 title: tools/build-vm/build-initramfs.sh fetches its own static busybox
-priority: 25
+priority: 44
 status: queued
 round: feature
 phase: 0
@@ -28,3 +28,6 @@ history:
   - at: 2026-11-06T17:33:20Z
     by: human/jeff
     event: queued at priority 25 (intake)
+  - at: 2026-11-06T17:50:00Z
+    by: human/jeff
+    event: 'priority 25 -> 44 (Jeff, 2026-11-06 order: in implementation, then process, then fixes for implemented items, then new functionality; this item: 3. fix)'

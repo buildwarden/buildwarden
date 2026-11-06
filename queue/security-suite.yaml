@@ -1,6 +1,6 @@
 feature: security-suite
 title: 'Build the TEST-08 security suite and pen-tester agent (Deep-dive #1)'
-priority: 37
+priority: 47
 status: in_progress
 round: feature
 phase: 1
@@ -82,3 +82,6 @@ history:
   - at: 2026-11-06T17:40:00Z
     by: human/jeff
     event: 'priority 29 -> 37 (Jeff; renumbered by wf new): the regression fixes from build-link-subnet''s native runs go first, as immediate follow-ups'
+  - at: 2026-11-06T17:50:00Z
+    by: human/jeff
+    event: 'priority 37 -> 47 (Jeff, 2026-11-06 order: in implementation, then process, then fixes for implemented items, then new functionality; this item: 4. new functionality)'
