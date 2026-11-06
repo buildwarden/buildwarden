@@ -362,6 +362,15 @@ wf-later-phase-host-steps (Prior art, Ordering).
   the siblings' FLOW-19 and FLOW-03 edits), `workflow-tick` Digest, `workflow-human` steps 4 to 6,
   `workflow-intake` line 26, and `queue/queue.go` near `Runaway`, `Budget`
   and `sortFeatures`. The PR body states this order and conflict set.
+- **Merge of `origin/main` at `716c628`:** #99 (wf-later-phase-host-steps)
+  landed first, so this branch took it in a merge commit. Git merged
+  `process.md`, `cmd/wf/main.go`, `summary.go`, `queue_test.go`,
+  `testdata/queue.md` and the skills on its own; the one conflict was the
+  `summaryState` comment in `queue/summary_test.go`, resolved to name both
+  #99's later-phase human step and this item's rule that no done item
+  appears in any section. The golden keeps #99's later-phase lines and
+  drops Recently done. flow19-design-before-plan (#101) is still open and
+  merges later; this branch does not take it.
 - **Terminology:** "open item" (queued or in progress) is used the same way
   in FLOW-13, the `Runaway`, `Budget` and `Listed` comments, and the three
   skills.
