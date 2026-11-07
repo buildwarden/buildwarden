@@ -376,6 +376,17 @@ Filled in at Plan (phase 2), from the approved design.
 
 ## Design review
 
+- **r1, 2026-11-06, Jeff: approved** with changes folded in, approved at
+  f764e9f (read at 2ec271e). Decisions confirmed: the active pointer with the
+  newest-`.prepared` fallback (a3); a prepared cache image as the source is
+  refreshed and made active (a4). Folded in at f764e9f: a no-source refresh
+  stays in place and ends with an out-of-date warning naming the update
+  command (a1); a vz `--update` flag replaces the proposed `latest` source,
+  refused with a source and on other drivers, with cross-driver `--update`
+  queued as its own undesigned item (a2); each prepare deletes its image's
+  cached IPSW while image directories stay (a5, replacing the
+  `vz-image-retention` proposal). Validation cases 2, 3 and 5 updated to match.
+
 ## Consolidation
 
 ## Rollback notes
