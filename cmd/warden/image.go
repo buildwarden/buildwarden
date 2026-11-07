@@ -198,7 +198,8 @@ func runImagePrepare(cmd *cobra.Command, args []string) error {
 // does not support it yet (only vz does).
 func checkImageUpdate(drv string, update bool) error {
 	if update && drv != "vz" {
-		return driver.Fixable("", "--update is not supported for --driver %s yet", drv)
+		return driver.Fixable("drop --update (only --driver vz supports it so far)",
+			"--update is not supported for --driver %s yet", drv)
 	}
 	return nil
 }

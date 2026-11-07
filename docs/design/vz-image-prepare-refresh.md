@@ -314,15 +314,17 @@ None.
 `driver/vz/image.go` gains, on `ImageCache`:
 
 ```
-Images() []Image                    every valid prepared dir: {Dir, Prepared time, Active bool}
+Images() []Image                    every valid prepared dir: {Dir, Prepared time, Active bool, IPSW name}
 ImageDir() (string, error)          active if valid, else newest .prepared (name tie-break), else ""
 SetActive(dir) error                write <cache>/active (atomic rename), owned by the sudo user
-Prepare(source, update, latest func) (dir, error)    the decision below; cmd/warden calls only this
+Prepare(source, update) (dir, error)                 the decision below; cmd/warden calls only this
 OutOfDate(active, u) (warning string, ok bool)       Decision 3's comparison and text; pure
 ```
 
-The lookup is injected (`latestSupportedIPSW` on darwin/arm64), and so is the
-restore step that turns the acquired IPSW into a disk (`restoreIPSW`), so the
+The host steps are seams on `ImageCache`, nil meaning the real one: the
+lookup (`latest`, `latestSupportedIPSW` on darwin/arm64), the download, the
+restore step that turns the acquired IPSW into a disk (`restoreDisk`), the
+in-place refresh and the root check, so the
 decision, the local-file path and the warning are tier-0 testable on every OS
 (GLOBAL-07).
 
@@ -349,7 +351,7 @@ empty-source refresh only: best effort u := latestSupportedIPSW();
   not from u, macos-<shortHash(u)> prepared      -> warning "the active macOS image is <current>; macOS <newer> is already prepared. To use it (no download): sudo warden image prepare --driver vz --update"
   <current>/<newer>: version (build) parsed from the IPSW file name, else the file name;
                      no recorded IPSW -> "macos-<key> (IPSW not recorded)"
---update on any other driver   -> refuse "--update is not supported for --driver <d> yet"
+--update on any other driver   -> refuse "--update is not supported for --driver <d> yet", fix "drop --update (only --driver vz supports it so far)"
 
 restoreOrRefresh(s): s := abs(s) for an ipsw-file; dir := macos-<shortHash(s)>
   valid prepared -> refresh(dir)            (any position in the cache)
@@ -750,6 +752,41 @@ and 18 steps before the runaway check escalates.
   added. a1 to a5 unchanged.
 
 ## Consolidation
+
+The branch was cut at `main` `49e5354`, and `main` has not moved since: no
+merge was needed and nothing landed to reconcile.
+
+- **Seams reconciled:** the interface table under Image cache now matches the
+  code. `Prepare(source, update)` takes no lookup argument; the host steps
+  (`latest`, `download`, `restoreDisk`, `refresh`, the root check) are seams
+  on `ImageCache`, nil meaning the real one, and `Image` carries the recorded
+  IPSW file name that `image list` prints. Wording only; the decisions are
+  unchanged.
+- **Review SHOULD (UX-04), fixed here:** the `--update` refusal on a driver
+  other than vz had an empty fix; it now reads "drop --update (only --driver
+  vz supports it so far)", the pseudocode says so, and `TestCheckImageUpdate`
+  asserts a non-empty fix.
+- **Review hint dismissed (BOOT-07):** the change refactors how the host
+  prepares and restores an image (`prepare.go`, the seams in `image.go`); the
+  in-image bootstrap code (setup assistant skip, warden user, auto-login, the
+  agents baked in) is unchanged, so BOOT-07 is not engaged.
+- **Left as is (Decision 8):** the plan-r2 note on `resolveImage`, which
+  restores an IPSW for `build --image <url>`: Decision 8 keeps it out of
+  scope, and the code leaves it untouched.
+- **Follow-up filed by Review:** vz-ipsw-latest-reuse (follows
+  vz-image-prepare-refresh). `ensureIPSWDownloaded` prefers an existing
+  `ipsw-latest.ipsw` for any URL, so an explicit IPSW URL can restore a
+  different release. It is on `main` already and not this branch's work.
+- **Terminology:** "active image", "refresh in place", "restore" and
+  "out-of-date warning" are used alike in the design, `cli.md`,
+  `drivers.md`, `installation.md`, `overview.md` and the help.
+- **Sweep:** `make deadcode` reports the same set as `main` (the darwin-only
+  callers of the vz bootstrap helpers, unreachable in a linux analysis); no
+  new entry. No duplicated helper: `ipswFileName`, `ipswLabel`, `classify`
+  and the seams each have one home in `driver/vz`. `overview.md` already
+  carries the build's choice of the vz base image (the active image, else the
+  newest prepared) and the stamp refusal's fix per image; `image prepare` has
+  no pseudocode there, so nothing else changes.
 
 ## Rollback notes
 

@@ -1,10 +1,12 @@
 package main
 
 import (
+	"errors"
 	"strings"
 	"testing"
 	"time"
 
+	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/vz"
 )
 
@@ -46,8 +48,9 @@ func TestCheckImageUpdate(t *testing.T) {
 	for _, drv := range []string{"qemu", "hyperv", "firecracker", "container"} {
 		err := checkImageUpdate(drv, true)
 		want := "--update is not supported for --driver " + drv + " yet"
-		if err == nil || err.Error() != want {
-			t.Errorf("--update on %s: %v", drv, err)
+		var fe *driver.FixableError
+		if err == nil || err.Error() != want || !errors.As(err, &fe) || fe.Fix == "" {
+			t.Errorf("--update on %s: %v (want %q with a fix)", drv, err, want)
 		}
 	}
 }
