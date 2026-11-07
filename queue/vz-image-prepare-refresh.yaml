@@ -3,10 +3,11 @@ title: vz image prepare refreshes the cached image in place, and builds pick the
 priority: 43
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/vz-image-prepare-refresh.md
 branch: feat/vz-image-prepare-refresh
-alters_relationships: null
+alters_relationships: false
+design_review: required
 source: 'workflow-human 2026-11-06 (Jeff), immediate follow-up to build-link-subnet (#98): in the macos-vz attended validation, image prepare --driver vz restored a new image from the latest IPSW instead of re-preparing the cached one, and ImageCache.ImageDir then picks the first image by name, so a build without --image keeps using the old image, which the link-channel stamp check now refuses. Also on main before #98. Evidence: workflow native/macos-vz/2026-11-05/, PR #98 ''For Jeff'' item 4.'
 steps:
   - id: f0-branch-setup
@@ -19,10 +20,34 @@ steps:
   - id: f1-design
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-validate-macos-vz
+    phase: 6
+    affinity: host:macos-vz
     status: pending
     lease:
-      claimed_by: cloud/20261107T004006Z-attended
-      expires: 2026-11-07T02:40:46.891756Z
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (FLOW-09) per docs/design/vz-image-prepare-refresh.md Validation plan, on the Apple-silicon Mac whose cache holds macos-90a1b1f94f64b00a (27.0.1, unstamped), macos-a139c218a2010753 (27.2, stamped) and both IPSWs with no active file: (1) a build with no --image uses macos-a139 (newest .prepared), image list marks it active and lists macos-90a1 as older with its IPSW name, doctor --driver vz reports macos-a139''s stamp; (2) sudo warden image prepare --driver vz with no source refreshes macos-a139 in place (no IPSW download or restore), writes active owned by the user, and a build with no --image succeeds with a verifying ledger; (3) prepare with the macos-90a1 directory as source refreshes it in place, stamps it and makes it active, and a build with no --image boots 27.0.1 with a verifying ledger; (4) with macos-90a1 active, --image macos-a139/disk.img after removing its link-channel is refused naming sudo warden image prepare --driver vz <macos-a139 dir>, and running that fixes the build and makes it active; (5) prepare --driver vz latest with 27.2 already prepared refreshes macos-a139 in place with no download; (6) offline, prepare with no source still refreshes the active image and prints no newer-IPSW notice or error. Reaches driver/vz only (image selection, refresh in place, prepare source handling).'
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review
+    phase: 2
+    affinity: human
+    status: pending
+    needs:
+      - f2-plan
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -30,7 +55,52 @@ budget:
   spent:
     runs: 1
     steps: 2
-questions: []
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: The default of image prepare --driver vz with no source (Decision 2).
+    options:
+      - refresh the active image in place with no IPSW lookup; restore the latest only when no image is prepared
+      - as Hyper-V, pick up a newer IPSW at refresh by default, with a config key to keep the current one
+      - refresh the active image and also restore the latest when it differs
+    recommended: refresh the active image in place with no IPSW lookup; restore the latest only when no image is prepared
+  - id: a2
+    kind: assumed
+    status: open
+    question: How the user asks for a newer macOS (Decision 3).
+    options:
+      - the source keyword latest (positional or --source), plus a notice after a refresh when a newer IPSW has no prepared image
+      - --force
+      - a new --update flag
+    recommended: the source keyword latest (positional or --source), plus a notice after a refresh when a newer IPSW has no prepared image
+  - id: a3
+    kind: assumed
+    status: open
+    question: Which image a build without --image uses (Decision 1).
+    options:
+      - an active pointer (<cache>/active) written by every prepare, falling back to the newest .prepared marker (name tie-break)
+      - the newest .prepared marker only
+      - refuse when more than one image is prepared and --image is absent
+    recommended: an active pointer (<cache>/active) written by every prepare, falling back to the newest .prepared marker (name tie-break)
+  - id: a4
+    kind: assumed
+    status: open
+    question: A prepared image named as the prepare source (Decision 4).
+    options:
+      - accepted (a cache image directory or its disk.img), refreshed in place and made active
+      - accepted and refreshed, active image unchanged
+      - not accepted (IPSW sources only)
+    recommended: accepted (a cache image directory or its disk.img), refreshed in place and made active
+  - id: a5
+    kind: assumed
+    status: open
+    question: Older vz images and their IPSWs (Decision 6).
+    options:
+      - kept and listed by image list; retention is a follow-up item (vz-image-retention)
+      - after a successful restore, delete images older than the active one and the one it replaced, with their IPSWs (Hyper-V's rule)
+      - delete only the IPSW once its image is prepared
+    recommended: kept and listed by image list; retention is a follow-up item (vz-image-retention)
 history:
   - at: 2026-11-06T17:33:20Z
     by: human/jeff
@@ -56,3 +126,9 @@ history:
   - at: 2026-11-07T00:40:46Z
     by: cloud/20261107T004006Z-attended
     event: claimed f1-design until 2026-11-07T02:40:46Z
+  - at: 2026-11-07T00:45:45Z
+    by: cloud/20261107T004006Z-attended
+    event: done f1-design
+  - at: 2026-11-07T00:45:45Z
+    by: cloud/20261107T004006Z-attended
+    event: entered phase 2 (plan)
