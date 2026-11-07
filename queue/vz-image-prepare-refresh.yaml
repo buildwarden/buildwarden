@@ -95,12 +95,12 @@ steps:
   - id: f6-consolidate
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f6-merge-main
     lease:
-      claimed_by: cloud/20261107T105651Z
-      expires: 2026-11-07T13:08:24.041501972Z
+      claimed_by: ""
+      expires: null
   - id: f6-open-pr
     phase: 6
     affinity: cloud
@@ -314,3 +314,6 @@ history:
   - at: 2026-11-07T11:08:24Z
     by: cloud/20261107T105651Z
     event: claimed f6-consolidate until 2026-11-07T13:08:24Z
+  - at: 2026-11-07T11:11:33Z
+    by: cloud/20261107T105651Z
+    event: done f6-consolidate
