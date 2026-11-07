@@ -67,15 +67,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261107T012740Z-attended
+      expires: 2026-11-07T05:29:17.612849Z
 budget:
   estimate:
     runs: 5
     steps: 18
   spent:
     runs: 2
-    steps: 8
+    steps: 9
 questions:
   - id: a1
     kind: assumed
@@ -229,4 +229,7 @@ history:
     event: entered phase 3 (implement)
   - at: 2026-11-07T02:20:00Z
     by: human/jeff
-    event: 'estimate 9 steps / 2 runs -> 18 steps / 5 runs (Jeff, attended, after the Plan return and r2 re-review; the plan has 25 tasks)'
+    event: estimate 9 steps / 2 runs -> 18 steps / 5 runs (Jeff, attended, after the Plan return and r2 re-review; the plan has 25 tasks)
+  - at: 2026-11-07T03:29:17Z
+    by: cloud/20261107T012740Z-attended
+    event: claimed f3-implement until 2026-11-07T05:29:17Z
