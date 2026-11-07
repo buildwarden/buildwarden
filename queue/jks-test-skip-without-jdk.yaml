@@ -3,7 +3,7 @@ title: TestWriteJKSMatchesKeytool skips when keytool cannot run (macOS stub with
 priority: 44
 status: in_progress
 round: feature
-phase: 0
+phase: 1
 design: docs/design/jks-test-skip-without-jdk.md
 branch: feat/jks-test-skip-without-jdk
 alters_relationships: null
@@ -12,10 +12,17 @@ steps:
   - id: f0-branch-setup
     phase: 0
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f1-design
+    phase: 1
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261107T012740Z-attended
-      expires: 2026-11-07T05:47:10.413324Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -34,3 +41,9 @@ history:
   - at: 2026-11-07T03:47:10Z
     by: cloud/20261107T012740Z-attended
     event: claimed f0-branch-setup until 2026-11-07T05:47:10Z
+  - at: 2026-11-07T03:47:35Z
+    by: cloud/20261107T012740Z-attended
+    event: done f0-branch-setup
+  - at: 2026-11-07T03:47:35Z
+    by: cloud/20261107T012740Z-attended
+    event: entered phase 1 (design)
