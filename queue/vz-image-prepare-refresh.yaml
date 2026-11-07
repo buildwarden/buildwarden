@@ -1,8 +1,7 @@
 feature: vz-image-prepare-refresh
 title: vz image prepare refreshes the cached image in place, and builds pick the prepared image
 priority: 43
-follows: build-link-subnet
-status: queued
+status: in_progress
 round: feature
 phase: 0
 design: docs/design/vz-image-prepare-refresh.md
@@ -15,15 +14,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261107T004006Z-attended
+      expires: 2026-11-07T02:40:11.470935Z
 budget:
   estimate:
     runs: 2
     steps: 9
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 1
 questions: []
 history:
   - at: 2026-11-06T17:33:20Z
@@ -35,3 +34,9 @@ history:
   - at: 2026-11-07T00:36:00Z
     by: cloud/20261106T231440Z-attended
     event: 'follows: build-link-subnet (regression-fixes-follow-up x4-close, Decision 9, Jeff a9): a fix of class 3, ahead of new functionality; no renumbering'
+  - at: 2026-11-07T00:40:11Z
+    by: cloud/20261107T004006Z-attended
+    event: started (FLOW-05)
+  - at: 2026-11-07T00:40:11Z
+    by: cloud/20261107T004006Z-attended
+    event: claimed f0-branch-setup until 2026-11-07T02:40:11Z
