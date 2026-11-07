@@ -55,9 +55,17 @@ The driver comes from --driver (or warden.toml); --os defaults per driver
 (vz: macos, qemu and firecracker: linux, hyperv: windows). [source] (or --source) is a local
 path or URL:
 
-  --driver vz     --os macos    macOS IPSW (default: latest supported).
-                                An already-restored image has its warden
-                                boot agent refreshed instead.
+  --driver vz     --os macos    macOS IPSW URL, a local .ipsw file (read
+                                in place, kept), or a prepared image
+                                directory. Run under sudo. No source
+                                refreshes the active image (the one builds
+                                use) in place, no download, and warns when
+                                a newer macOS exists; with none prepared it
+                                restores the latest supported IPSW. An IPSW
+                                already prepared is refreshed in place, a
+                                downloaded IPSW is deleted once prepared,
+                                and the result becomes the active image.
+                                --update moves to the latest supported IPSW.
   --driver qemu   --os linux    cloud image reference (alpine:3.21,
                                 ubuntu:24.04, debian:bookworm) or a qcow2.
   --driver firecracker          cloud image reference (default ubuntu:24.04)
@@ -79,8 +87,12 @@ path or URL:
 
 --sha256 verifies the download against an expected digest (optional: the
 digest of what was used is always recorded); --force re-acquires even when a
-valid cached copy exists.`,
-	Example: `  warden image prepare --driver vz
+valid cached copy exists; --update (vz only) restores the newest supported OS
+release, or refreshes it in place when already prepared, and makes it active.`,
+	Example: `  sudo warden image prepare --driver vz
+  sudo warden image prepare --driver vz --update
+  sudo warden image prepare --driver vz ~/Downloads/UniversalMac_27.2_26B123_Restore.ipsw
+  sudo warden image prepare --driver vz ~/.cache/warden/images/macos-<key>
   warden image prepare --driver qemu ubuntu:24.04
   warden image prepare --driver firecracker ubuntu:24.04
   warden image prepare --driver qemu --os windows --source Win11_Arm64.iso
