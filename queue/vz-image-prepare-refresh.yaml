@@ -35,7 +35,7 @@ steps:
   - id: f2-design-review
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -54,53 +54,58 @@ budget:
     steps: 9
   spent:
     runs: 1
-    steps: 3
+    steps: 4
 questions:
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: The default of image prepare --driver vz with no source (Decision 2).
     options:
       - refresh the active image in place with no IPSW lookup; restore the latest only when no image is prepared
       - as Hyper-V, pick up a newer IPSW at refresh by default, with a config key to keep the current one
       - refresh the active image and also restore the latest when it differs
     recommended: refresh the active image in place with no IPSW lookup; restore the latest only when no image is prepared
+    answer: refresh the active image in place, no IPSW lookup; restore the latest only when nothing is prepared; end the refresh with a warning that the image is out of date, naming the update command (Jeff, design review r1)
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: How the user asks for a newer macOS (Decision 3).
     options:
       - the source keyword latest (positional or --source), plus a notice after a refresh when a newer IPSW has no prepared image
       - --force
       - a new --update flag
     recommended: the source keyword latest (positional or --source), plus a notice after a refresh when a newer IPSW has no prepared image
+    answer: a new --update flag, vz only in this feature, refused with a source and on other drivers; cross-driver --update is a separate queued item (Jeff, design review r1)
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: Which image a build without --image uses (Decision 1).
     options:
       - an active pointer (<cache>/active) written by every prepare, falling back to the newest .prepared marker (name tie-break)
       - the newest .prepared marker only
       - refuse when more than one image is prepared and --image is absent
     recommended: an active pointer (<cache>/active) written by every prepare, falling back to the newest .prepared marker (name tie-break)
+    answer: an active pointer (<cache>/active) written by every prepare, falling back to the newest .prepared marker (name tie-break) (Jeff, design review r1)
   - id: a4
     kind: assumed
-    status: open
+    status: confirmed
     question: A prepared image named as the prepare source (Decision 4).
     options:
       - accepted (a cache image directory or its disk.img), refreshed in place and made active
       - accepted and refreshed, active image unchanged
       - not accepted (IPSW sources only)
     recommended: accepted (a cache image directory or its disk.img), refreshed in place and made active
+    answer: accepted (a cache image directory or its disk.img), refreshed in place and made active (Jeff, design review r1)
   - id: a5
     kind: assumed
-    status: open
+    status: confirmed
     question: Older vz images and their IPSWs (Decision 6).
     options:
       - kept and listed by image list; retention is a follow-up item (vz-image-retention)
       - after a successful restore, delete images older than the active one and the one it replaced, with their IPSWs (Hyper-V's rule)
       - delete only the IPSW once its image is prepared
     recommended: kept and listed by image list; retention is a follow-up item (vz-image-retention)
+    answer: delete only the image's IPSW once its image is prepared; image directories stay (Jeff, design review r1)
 history:
   - at: 2026-11-06T17:33:20Z
     by: human/jeff
@@ -141,3 +146,24 @@ history:
   - at: 2026-11-07T00:47:17Z
     by: cloud/20261107T004006Z-attended
     event: 'released f2-plan: design review not yet held (FLOW-19); phase 2 had been seeded in the pre-#101 order by a stale dist/wf (built before fast-forwarding main); reordered to main''s template, design-review first'
+  - at: 2026-11-07T01:23:36Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: refresh the active image in place, no IPSW lookup; restore the latest only when nothing is prepared; end the refresh with a warning that the image is out of date, naming the update command (Jeff, design review r1)'
+  - at: 2026-11-07T01:23:36Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: a new --update flag, vz only in this feature, refused with a source and on other drivers; cross-driver --update is a separate queued item (Jeff, design review r1)'
+  - at: 2026-11-07T01:23:36Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: an active pointer (<cache>/active) written by every prepare, falling back to the newest .prepared marker (name tie-break) (Jeff, design review r1)'
+  - at: 2026-11-07T01:23:36Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: accepted (a cache image directory or its disk.img), refreshed in place and made active (Jeff, design review r1)'
+  - at: 2026-11-07T01:23:36Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: delete only the image''s IPSW once its image is prepared; image directories stay (Jeff, design review r1)'
+  - at: 2026-11-07T01:23:41Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-07T03:23:41Z
+  - at: 2026-11-07T01:23:41Z
+    by: human/jeff
+    event: done f2-design-review
