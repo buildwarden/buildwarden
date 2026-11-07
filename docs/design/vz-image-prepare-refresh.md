@@ -3,7 +3,7 @@ feature: vz-image-prepare-refresh
 status: draft
 drivers: [vz]            # driver/vz (image.go, driver.go) and the vz path of cmd/warden/image.go only; no shared driver/ package changes, so no other driver is reached (FLOW-02)
 seams: []                # no versioned seam: the active-image pointer is the vz image cache's own layout, read only by driver/vz
-surfaces: [cli, output]  # cli: `image prepare --driver vz` with no source refreshes in place, the `latest` source, a prepared image directory as source, `image list` lists every vz image; output: the refresh and newer-IPSW notices, the stamp refusal's fix text (UX-01, UX-04)
+surfaces: [cli, output]  # cli: `image prepare --driver vz` with no source refreshes in place, the vz `--update` flag, a prepared image directory as source, `image list` lists every vz image; output: the refresh and out-of-date warnings, the stamp refusal's fix text (UX-01, UX-04)
 security_boundary: none  # which prepared image a build boots changes; the image's isolation, the relay path and what is baked into it do not
 alters_relationships: false  # inside the vz driver's existing role: how it picks and refreshes its own base image
 design_review: required  # blocking native validation (macos-vz) and assumed questions (FLOW-19)
@@ -12,7 +12,7 @@ native_validation:
 tier2_gaps: []
 rules: [FLOW-01, FLOW-02, FLOW-09, FLOW-12, FLOW-15, FLOW-19, UX-01, UX-03, UX-04, UX-05, UX-07, GLOBAL-04, GLOBAL-05, GLOBAL-07, ORCH-01, TEST-02]
 rule_changes: []
-concepts: [image-prepare, image-refresh, image-cache, active-image, ipsw, vz, launcher-stamp, multi-version-images]
+concepts: [image-prepare, image-refresh, image-update, image-cache, active-image, ipsw, vz, launcher-stamp, multi-version-images]
 related: [build-link-subnet.md, hyperv-windows-prepare.md, vm-driver-release-plan.md, ledger-environment-types.md]
 ---
 
@@ -76,15 +76,16 @@ will name the same command for a stale vz image, so it depends on this too.
 - **vm-driver-release-plan** (`docs/design/vm-driver-release-plan.md`, "Image
   Lifecycle Management"): names updates and multi-version support (macOS 14
   and 15 side by side) as open needs, and sketches `image = "latest"  # or a
-  path, or an IPSW URL`. Reused: the `latest` spelling (Decision 3) and keeping
-  several versions (Decision 6).
+  path, or an IPSW URL`. Reused: keeping several versions (Decision 6); the
+  `latest` spelling was proposed and replaced by `--update` at design review
+  (Decision 3).
 - **ledger-environment-types** (`docs/design/ledger-environment-types.md`):
   `recordPreparedImage` records the IPSW URL and digest as the prepared disk's
   preparation input in the layer-hash cache. Reused unchanged; `image list`
   reads the IPSW name from it (Decision 5).
 - Rules: UX-04 (a refusal names a fix that works), UX-01 (the guide, help text
-  and `overview.md` change with the behavior), UX-03 (additive: `latest` and a
-  directory source are new source forms; nothing is removed), UX-07 (a
+  and `overview.md` change with the behavior), UX-03 (additive: `--update` and
+  a directory source are new; nothing is removed), UX-07 (a
   predictable default), GLOBAL-05 (the build OS does not change silently
   between builds), ORCH-01 (vz only).
 
@@ -120,30 +121,37 @@ All four designs already carry front-matter; none needs a retrofit (FLOW-12).
    refresh that refreshes the active image and also restores the latest when it
    differs (two 25 GB costs the user did not ask for in one command).
 
-3. **A newer macOS only on request: the `latest` source.** `warden image
-   prepare --driver vz latest` (or `--source latest`) resolves the latest
-   supported IPSW and restores it, or refreshes its directory in place when it
-   is already prepared, and makes it active. A refresh with no source makes one
+3. **A newer macOS only on request: `--update`.** `warden image prepare
+   --driver vz --update` resolves the latest supported IPSW and restores it,
+   or refreshes its directory in place when it is already prepared, and makes
+   it active. It takes no source: with a positional or `--source` source it is
+   refused ("--update picks the newest IPSW itself; drop the source, or drop
+   --update to prepare that source"). On any other driver it is refused with
+   "--update is not supported for --driver <d> yet" (cross-driver `--update` is
+   a separate queued item, Design review). A refresh with no source makes one
    best-effort lookup of the latest IPSW after it succeeds; when no prepared
-   directory exists for it, it prints a notice naming the version and `sudo
-   warden image prepare --driver vz latest` (about 25 GB, 15 minutes). A
+   directory exists for it, it ends with a **warning** that the active image is
+   out of date, naming both versions and the command: `warning: the active
+   macOS image is <current>; macOS <newer> is available. To update (about
+   25 GB, 15 minutes): sudo warden image prepare --driver vz --update`. A
    failed lookup (offline, Apple unreachable) prints nothing and never fails
    the refresh.
-   *Rejected:* reusing `--force` ("re-acquire even if a valid cached copy
-   exists": for vz that would mean re-restoring the same IPSW, a different and
-   destructive meaning); a new `--update` flag (a second spelling for what a
-   source already expresses; qemu's `ubuntu:24.04` sources are symbolic the
-   same way); `[vm] macos_image_update = "auto"` mirroring Hyper-V (a new macOS
+   *Rejected:* a `latest` source keyword (proposed by Design; Jeff chose a
+   flag at review: a source names *what* to prepare, `--update` asks to move
+   on, and the flag is the spelling other drivers can share later); reusing
+   `--force` ("re-acquire even if a valid cached copy exists": for vz that
+   would mean re-restoring the same IPSW, a different and destructive
+   meaning); `[vm] macos_image_update = "auto"` mirroring Hyper-V (a new macOS
    is a different build OS, so picking it up at refresh changes builds
    silently, GLOBAL-05; Hyper-V's `auto` exists because re-issued evaluation
    media of the *same* OS is how its licence clock is reset, which vz has no
    counterpart for).
 
 4. **A source that names a prepared image refreshes it in place.** The source
-   is classified in one pure function: empty, `latest`, a URL, a local IPSW
-   file, or a prepared image (a cache directory that `isValidImageDir`
-   accepts, or the `disk.img` inside one). An IPSW (URL or file, or `latest`
-   resolved) whose `macos-<key>` directory is already prepared is refreshed in
+   is classified in one pure function: empty, a URL, a local IPSW file, or a
+   prepared image (a cache directory that `isValidImageDir` accepts, or the
+   `disk.img` inside one). An IPSW (URL or file, or the one `--update`
+   resolves) whose `macos-<key>` directory is already prepared is refreshed in
    place, whichever position it sorts in, which fixes the second half of
    problem (2). A prepared-image source is refreshed in place. Every path ends
    with that image active. A prepared-image source outside the cache is
@@ -166,13 +174,23 @@ All four designs already carry front-matter; none needs a retrofit (FLOW-12).
    *Rejected:* listing only the active image (hides the 25 GB+ images the
    user may want to remove or switch to).
 
-6. **Older images stay; reclaiming disk is a follow-up.** No image or IPSW is
-   deleted by prepare. Keeping several macOS versions is a stated need
-   (vm-driver-release-plan), and an image directory plus its IPSW is the
-   user's only rollback. `image list` makes them visible (Decision 5). A
-   retention policy (Hyper-V deletes layers older than the active one and the
-   one it replaced) is a separate item, proposed as `vz-image-retention`, for
-   Jeff to queue or not.
+6. **Older images stay; an image's IPSW is deleted once it is prepared.**
+   No image directory is deleted by prepare: keeping several macOS versions is
+   a stated need (vm-driver-release-plan), an image is the user's only
+   rollback, and `image list` makes them visible (Decision 5). Each successful
+   prepare of an image (restore or refresh) ends by deleting that image's own
+   `ipsw-<key>.ipsw` (about 25 GB), after the provenance (URL, digest) is
+   recorded, so the IPSW is never needed again: a later prepare of the same
+   source finds the prepared directory and refreshes it in place
+   (Decision 4), and only a restore downloads. A local IPSW file given as the
+   source is the user's and is never deleted; only the cache's
+   `ipsw-<key>.ipsw` copy is. The IPSWs of other images are left until their
+   own image is next prepared. The cost: re-restoring an image from scratch
+   (after deleting its directory) downloads its IPSW again.
+   *Rejected:* keeping every IPSW until a retention item (about 25 GB each for
+   a file nothing reads again); Hyper-V's rule of deleting images older than
+   the active one and the one it replaced (removes rollback images without
+   the user asking).
 
 7. **Out of scope, noted.** `ensureIPSWDownloaded` prefers a pre-existing
    `ipsw-latest.ipsw` over downloading *any* URL, so a stale manual file could
@@ -190,29 +208,33 @@ None.
 ### Assumed
 
 - **a1. The default of `image prepare --driver vz` with no source** (Decision
-  2). Proceeding with (a); confirm. Options: (a) refresh the active image in
-  place, no IPSW lookup; restore the latest only when no image is prepared;
-  (b) as Hyper-V: pick up a newer IPSW at refresh by default, with a config key
-  to keep the current one; (c) refresh the active image and also restore the
-  latest when it differs. Recommended: (a).
-- **a2. How the user asks for a newer macOS** (Decision 3). Proceeding with
-  (a); confirm. Options: (a) the source keyword `latest` (positional or
-  `--source`), plus a notice after a refresh when a newer IPSW has no prepared
-  image; (b) `--force`; (c) a new `--update` flag. Recommended: (a).
-- **a3. Which image a build without `--image` uses** (Decision 1). Proceeding
-  with (a); confirm. Options: (a) an active pointer written by every prepare,
-  falling back to the newest `.prepared` marker; (b) the newest `.prepared`
-  marker only; (c) refuse when more than one image is prepared and `--image` is
-  absent. Recommended: (a).
-- **a4. A prepared image named as the source** (Decision 4). Proceeding with
-  (a); confirm. Options: (a) accepted (directory or its `disk.img`, inside the
-  cache), refreshed in place and made active; (b) accepted, refreshed, active
-  unchanged; (c) not accepted (IPSW sources only). Recommended: (a).
-- **a5. Older images and IPSWs** (Decision 6). Proceeding with (a); confirm.
-  Options: (a) kept and listed; retention is a follow-up item
-  (`vz-image-retention`); (b) after a successful restore, delete images older
-  than the active one and the one it replaced, with their IPSWs (Hyper-V's
-  rule); (c) delete only the IPSW once its image is prepared. Recommended: (a).
+  2). Options: (a) refresh the active image in place, no IPSW lookup; restore
+  the latest only when no image is prepared; (b) as Hyper-V: pick up a newer
+  IPSW at refresh by default, with a config key to keep the current one; (c)
+  refresh the active image and also restore the latest when it differs.
+  Recommended: (a). **Answered at review (Jeff):** (a), and end the refresh
+  with a warning that the image is out of date, giving the command to update
+  it (Decision 3).
+- **a2. How the user asks for a newer macOS** (Decision 3). Options: (a) the
+  source keyword `latest` (positional or `--source`), plus a notice after a
+  refresh when a newer IPSW has no prepared image; (b) `--force`; (c) a new
+  `--update` flag. Recommended: (a). **Answered at review (Jeff):** (c), a new
+  `--update` flag, vz only in this feature; `--update` for the other drivers is
+  a separate queued item.
+- **a3. Which image a build without `--image` uses** (Decision 1). Options:
+  (a) an active pointer written by every prepare, falling back to the newest
+  `.prepared` marker; (b) the newest `.prepared` marker only; (c) refuse when
+  more than one image is prepared and `--image` is absent. Recommended: (a).
+  **Answered at review (Jeff):** (a).
+- **a4. A prepared image named as the source** (Decision 4). Options: (a)
+  accepted (directory or its `disk.img`, inside the cache), refreshed in place
+  and made active; (b) accepted, refreshed, active unchanged; (c) not accepted
+  (IPSW sources only). Recommended: (a). **Answered at review (Jeff):** (a).
+- **a5. Older images and IPSWs** (Decision 6). Options: (a) kept and listed;
+  retention is a follow-up item (`vz-image-retention`); (b) after a successful
+  restore, delete images older than the active one and the one it replaced,
+  with their IPSWs (Hyper-V's rule); (c) delete only the IPSW once its image is
+  prepared. Recommended: (a). **Answered at review (Jeff):** (c).
 
 ## Design
 
@@ -233,28 +255,31 @@ None.
 Images() []Image                    every valid prepared dir: {Dir, Prepared time, Active bool}
 ImageDir() (string, error)          active if valid, else newest .prepared (name tie-break), else ""
 SetActive(dir) error                write <cache>/active (atomic rename), owned by the sudo user
-Prepare(source, latest func) (dir, error)    the decision below; cmd/warden calls only this
+Prepare(source, update, latest func) (dir, error)    the decision below; cmd/warden calls only this
 ```
 
-`latest` is injected (`latestSupportedIPSW` on darwin/arm64), so the decision
+The lookup is injected (`latestSupportedIPSW` on darwin/arm64), so the decision
 is tier-0 testable on every OS (GLOBAL-07).
 
-### `image prepare --driver vz [source]`
+### `image prepare --driver vz [source | --update]`
 
 ```
 preflight; require root                               (unchanged, before anything)
-kind := classify(source)        empty | latest | url | ipsw-file | prepared-dir
+--update with a source         -> refuse (drop one or the other)
+kind := classify(source)        empty | url | ipsw-file | prepared-dir
 switch:
+  --update                      -> u := latestSupportedIPSW(); restoreOrRefresh(u)
   empty, active image A exists  -> refresh(A)
   empty, none prepared          -> restore(latestSupportedIPSW())
-  latest                        -> u := latestSupportedIPSW(); restoreOrRefresh(u)
   url | ipsw-file               -> restoreOrRefresh(source)
   prepared-dir D in cache       -> refresh(D)
   prepared-dir outside cache    -> Fixable(customImageFix)
 SetActive(result)
+delete <cache>/ipsw-<key of result>.ipsw if present  (provenance already recorded; a user's local IPSW is never touched)
 empty-source refresh only: best effort u := latestSupportedIPSW();
-  no prepared macos-<shortHash(u)>  -> notice "macOS <name> is available: sudo warden image prepare --driver vz latest (~25 GB)"
+  no prepared macos-<shortHash(u)>  -> warning "the active macOS image is <current>; macOS <newer> is available. To update (about 25 GB, 15 minutes): sudo warden image prepare --driver vz --update"
   lookup error                      -> nothing
+--update on any other driver   -> refuse "--update is not supported for --driver <d> yet"
 
 restoreOrRefresh(u): dir := macos-<shortHash(u)>
   valid prepared -> refresh(dir)            (any position in the cache)
@@ -278,7 +303,8 @@ image list:  vz  macos  <dir>  active|older  <IPSW file name from provenance>
 ### Docs (UX-01, FLOW-15)
 
 - `docs/book/src/guide/drivers.md`: VZ First-Time Setup (no source refreshes
-  the active image in place; `latest` moves to a new macOS; builds use the
+  the active image in place and warns when a newer macOS exists; `--update`
+  moves to it; an image's IPSW is deleted once it is prepared; builds use the
   image prepared last; `--image` and a directory source pick another), the
   build-link table row and the paragraph after it.
 - `cmd/warden/image.go`: the `image prepare` help (`--driver vz` line,
@@ -297,17 +323,21 @@ image list:  vz  macos  <dir>  active|older  <IPSW file name from provenance>
   `cmd/warden/image.go` (`prepareVZMacos`, `runImageList`).
 - **qemu, firecracker, hyperv, container:** unaffected. No shared package
   changes; `cmd/warden/image.go`'s other branches and `imageSource` are
-  untouched, and `latest` is classified only on the vz path (ORCH-01). Hyper-V
+  untouched; `--update` is accepted only on the vz path and refused on the others
+  with a "not supported yet" error (ORCH-01). Hyper-V
   already has an explicit active base.
 
 ## Validation plan
 
 - **Tier 0 (every OS, `make test`):** `classify` for each source form;
+  `--update` alone, with a source (refused), and on another driver (refused);
+  the IPSW deletion after each prepare path, and a local IPSW source left in
+  place;
   `ImageDir` with a pointer, without one (newest `.prepared`, name tie-break),
   with a pointer to a missing or invalid dir; the prepare decision with a
-  stubbed `latest` (each row of the switch, including an IPSW whose dir sorts
+  stubbed lookup (each row of the switch, including an IPSW whose dir sorts
   second, and that no lookup happens for an empty-source refresh before it
-  succeeds); the notice on and off, and a lookup error staying silent;
+  succeeds); the out-of-date warning on and off, and a lookup error staying silent;
   `imageStamp`'s three fix texts; `image list` formatting from a fake cache
   (GLOBAL-04).
 - **Tier 2, native, blocking: macos-vz** (FLOW-09). Run on Jeff's
@@ -319,22 +349,26 @@ image list:  vz  macos  <dir>  active|older  <IPSW file name from provenance>
      IPSW name; `doctor --driver vz` reports `macos-a139…`'s stamp.
   2. `sudo warden image prepare --driver vz` with no source refreshes
      `macos-a139…` in place: no IPSW download or restore, "Refreshing boot
-     agent", `active` written and owned by the user; then a build with no
-     `--image` succeeds and its ledger verifies.
+     agent", `active` written and owned by the user, `ipsw-a139….ipsw`
+     deleted and `ipsw-90a1….ipsw` kept, no out-of-date warning (27.2 is
+     current); then a build with no `--image` succeeds and its ledger
+     verifies.
   3. `sudo warden image prepare --driver vz ~/.cache/warden/images/macos-90a1…`
-     refreshes the old image in place (no restore), stamps it and makes it
-     active; a build with no `--image` boots 27.0.1 and its ledger verifies.
+     refreshes the old image in place (no restore), stamps it, makes it
+     active and deletes `ipsw-90a1….ipsw`; a build with no `--image` boots
+     27.0.1 and its ledger verifies. A no-source refresh now ends with the
+     out-of-date warning naming 27.0.1, 27.2 and `--update`.
   4. With `macos-90a1…` active, `--image ~/.cache/warden/images/macos-a139…/disk.img`
      after removing that image's `link-channel` is refused naming `sudo warden
      image prepare --driver vz <macos-a139… dir>`; running it fixes the build
      and makes `macos-a139…` active.
-  5. `sudo warden image prepare --driver vz latest` (27.2 already prepared)
-     refreshes `macos-a139…` in place with no download.
+  5. `sudo warden image prepare --driver vz --update` (27.2 already prepared)
+     refreshes `macos-a139…` in place with no download and makes it active;
+     `--update` with a source, and `--driver qemu --update`, are refused.
   6. With the Mac offline, `sudo warden image prepare --driver vz` still
-     refreshes the active image and prints no newer-IPSW notice or error.
-- **Tier-2 gaps:** none. The newer-IPSW notice's positive case (a release
-  newer than every prepared image) cannot be staged on demand; it is covered
-  at tier 0 with the stubbed lookup.
+     refreshes the active image and prints no out-of-date warning or error.
+- **Tier-2 gaps:** none. The out-of-date warning's positive case is staged
+  natively by case 3 (27.0.1 active, 27.2 the latest).
 
 ## Implementation plan
 
