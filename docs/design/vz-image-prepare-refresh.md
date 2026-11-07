@@ -480,7 +480,235 @@ image list:  vz  macos  <dir>  active|older  <IPSW file name from provenance>
 
 ## Implementation plan
 
-Filled in at Plan (phase 2), from the approved design.
+Plan r2 (phase 2, `f2-plan-r2`, 2026-11-07, attended), written for the design
+as approved at `e94a1be` (review r2), after reading `driver/vz/image.go`,
+`driver.go`, `environment.go`, `vz_stub.go` and `cmd/warden/image.go` at
+`5f33783`. The r1 plan round wrote no tasks (it returned the design, return
+r2).
+
+**Order.** At Jeff's direction the tasks are thin vertical slices (A to I),
+each landing its failing tier-0 tests first and then the code that makes them
+pass, so the decisions are exercised before the code settles. Tier 0 is pure
+Go, table-driven, in `t.TempDir()` caches, and needs no root, network, curl,
+`hdiutil` or VM: every host step is reached through the seams of task 6
+(TEST-01, GLOBAL-07). Each task is marked **[native, no sudo]** when it can
+also be checked early on the Apple-silicon Mac by an unprivileged run,
+**[needs Jeff: sudo]** when its behavior shows only under a `sudo warden image
+prepare`, or **[tier 0 only]**. Early native checks are informal previews; the
+record is `f6-validate-macos-vz`, whose cases need the pre-change cache (no
+`active` file), so no early check may run a prepare or write `active` (only
+Jeff's f6 session does).
+
+Tasks 2, 4, 7, 9, 11, 13, 15, 17, 19 and 20 rework code that already exists
+(FLOW-06): `ImageCache.ImageDir`, `RestoreIPSW`, `ensureIPSWDownloaded`'s
+caller, `ipswInput`, `imageStamp`/`checkLink`/`LauncherStamps`,
+`prepareVZMacos`, `runImageList` and the `image prepare` help. Tasks 21 to 23
+are the reference-doc and `overview.md` updates the change owes (UX-01,
+FLOW-15). No rule changes (`rule_changes: []`).
+
+### A. Active image: pointer, `ImageDir`, `Images` (native case 1)
+
+1. **Tests, tier 0** (`driver/vz/image_test.go`): `ImageDir` returns the
+   `active` directory when it is valid; with no pointer, the valid directory
+   with the newest `.prepared` mtime, the name breaking an mtime tie; with a
+   pointer to a missing directory and to an invalid one (no `.prepared`), the
+   same fallback; `""` for an empty cache. `SetActive` writes
+   `macos-<key>\n` by temp file and rename, and `ImageDir` reads it back.
+   `Images()` lists every valid directory once, with `Prepared` time, `Active`
+   set on exactly the `ImageDir` one, and the IPSW file name read from the
+   layer cache's recorded `ipsw` input (empty when not recorded). Rules:
+   GLOBAL-04, GLOBAL-07, TEST-01, TEST-02 (tier 0). [tier 0 only]
+2. **Code** (`driver/vz/image.go`, rework): `ImageDir` per Decision 1;
+   `SetActive(dir)` (atomic rename, then `giveBackToSudoUser` on the file);
+   `Images() []Image` (`Dir`, `Prepared`, `Active`, plus the recorded IPSW
+   name Decision 5 lists); one helper `recordedIPSW(dir)` reading
+   `LayerCache().Source(<dir>/disk.img)` inputs, shared with tasks 14 and 15.
+   Builds, `doctor` and the stamp list pick the new choice up through
+   `ImageDir` unchanged. Rules: UX-07, GLOBAL-05, ORCH-01. [native, no sudo:
+   with no `active` file, `warden build` with no `--image` boots
+   `macos-a139…` (newest `.prepared`) and `warden doctor --driver vz`
+   reports its stamp, as f6 case 1]
+3. **Tests, tier 0** (`cmd/warden/image_vz_test.go`): `image list`'s vz lines
+   from a fake `[]vz.Image`: the active image marked `active`, others `older`,
+   each with its IPSW file name, none for an image with no recorded IPSW, a
+   stable order (active first, then newest prepared). Rules: GLOBAL-04,
+   TEST-02 (tier 0), UX-05. [tier 0 only]
+4. **Code** (`cmd/warden/image.go`, rework of `runImageList`'s vz branch): a
+   pure formatter over `cache.Images()`, printed under `darwin` as today
+   (`vz      macos    <dir>  active|older  <IPSW name>`). Rules: UX-05,
+   ORCH-01. [native, no sudo: `warden image list` marks `macos-a139…` active
+   and lists `macos-90a1…` older with its IPSW name, as f6 case 1]
+
+### B. Source classification and `Prepare` with injected seams (Decisions 2 and 4)
+
+5. **Tests, tier 0**: `classify` for `""` (empty); an `https://` URL and a
+   `file://` URL (url); an absolute and a relative existing regular file
+   (ipsw-file, made absolute; the relative case under `t.Chdir`); a prepared
+   cache directory and its `disk.img` (prepared-dir, the directory); a
+   prepared directory outside the cache (prepared-dir, flagged outside); a
+   missing path and a directory that is not a valid image, each refused with
+   `no IPSW file or prepared image at <path>; give an IPSW URL, a local .ipsw
+   file, or a prepared image directory` (a `driver.Fixable`). Rules: UX-04,
+   GLOBAL-04, TEST-02 (tier 0). [tier 0 only]
+6. **Code** (`driver/vz/image.go`): the pure `classify(source, cacheDir)`;
+   the seams on `ImageCache` the design names (the latest-IPSW lookup and the
+   restore step) as unexported function fields, nil meaning the real one, plus
+   the host steps that would otherwise stop a tier-0 run (the curl download,
+   `RequireRoot`, and `ReprepareImage` as the refresh step); `RestoreIPSW`
+   split (rework) into acquire, the injected restore step (`restoreIPSW`,
+   `PrepareHeadlessImage`, first boot), provenance, stamp and `.prepared`,
+   with behavior for a URL source unchanged and still writing no pointer
+   (Decision 8). Rules: GLOBAL-07, TEST-01, ORCH-01. [tier 0 only]
+7. **Tests, tier 0**: `Prepare` through the seams, one row per switch arm of
+   the design's pseudocode: empty with an active image refreshes it and calls
+   no lookup; empty with none prepared looks up the latest and restores it; a
+   URL whose `macos-<key>` is not prepared restores it; a URL whose directory
+   is prepared and sorts second in the cache refreshes that directory (the
+   `existing == filepath.Dir(path)` defect); a prepared-dir source (directory
+   or `disk.img`) refreshes it; a prepared-dir outside the cache is refused
+   with `customImageFix` and no seam runs; every success ends with that image
+   `active`; a failed refresh or restore leaves `active` as it was. Rules:
+   UX-07, UX-04, GLOBAL-05, GLOBAL-04, TEST-02 (tier 0). [tier 0 only]
+8. **Code**: `Prepare(source, update, latest)` per the pseudocode (refresh
+   prints `Refreshing boot agent on <dir>`, which f6 case 2 looks for), ending
+   in `SetActive`. Rules: UX-07, GLOBAL-05, UX-04. [tier 0 only]
+9. **Code** (`cmd/warden/image.go`, rework of `prepareVZMacos`): `Preflight`,
+   `RequireRoot`, then only `cache.Prepare`; the `existing ==
+   filepath.Dir(path)` test and the direct `RestoreIPSW`/`ReprepareImage`
+   calls go. Rules: ORCH-01, UX-04. [needs Jeff: sudo, f6 cases 2 and 3]
+
+### C. `--update` and its refusals (Decision 3)
+
+10. **Tests, tier 0**: `Prepare` with `update` and no source looks up the
+    latest and restores it, or refreshes its directory when prepared, and
+    makes it active; `update` with a source is refused with `--update picks
+    the newest IPSW itself; drop the source, or drop --update to prepare that
+    source` before any seam runs; a failed lookup under `--update` is an error
+    (only the warning's lookup is silent). In `cmd/warden`, the `--update`
+    check refuses every driver but vz with `--update is not supported for
+    --driver <d> yet` and passes vz. Rules: UX-04, UX-03, ORCH-01, GLOBAL-04,
+    TEST-02 (tier 0). [tier 0 only]
+11. **Code**: the `--update` arm in `Prepare`; `flagImgUpdate` (`--update`)
+    on `image prepare`, checked before the driver switch so another driver is
+    refused before anything runs, and passed to `prepareVZMacos`. Rules:
+    UX-03, UX-05, ORCH-01, UX-04. [native, no sudo: `warden image prepare
+    --driver qemu --update` is refused (f6 case 5's second refusal); the vz
+    refusals sit after the root check: needs Jeff: sudo, f6 case 5]
+
+### D. An image's cached IPSW is deleted once prepared (Decision 6)
+
+12. **Tests, tier 0**: after a URL restore, `ipsw-<key>.ipsw` is gone and the
+    recorded `ipsw` input (URL, digest) was written before it went; after a
+    refresh of an image whose `ipsw-<key>.ipsw` is present, it is gone; other
+    images' `ipsw-*.ipsw` and `ipsw-latest.ipsw` stay; a failed prepare
+    deletes nothing; a local IPSW source file stays (with task 16). Rules:
+    GLOBAL-05, UX-07, GLOBAL-04, TEST-02 (tier 0). [tier 0 only]
+13. **Code**: in `Prepare` after `SetActive`, remove
+    `<cache>/ipsw-<key of result>.ipsw` if present; nothing else. Rules:
+    GLOBAL-05, UX-07. [needs Jeff: sudo, f6 cases 2 and 3]
+
+### E. The out-of-date warning (Decision 3)
+
+14. **Tests, tier 0**: `OutOfDate` off when the active directory is
+    `macos-<shortHash(u)>`; off when the active image's recorded IPSW file
+    name equals `u`'s (a local-file image keyed by its path); on with the
+    exact "is available. To update (about 25 GB, 15 minutes): sudo warden
+    image prepare --driver vz --update" text when `u` has no prepared image;
+    on with the exact "is already prepared. To use it (no download): sudo
+    warden image prepare --driver vz --update" text when it has one; on
+    naming `macos-<key> (IPSW not recorded)` with no provenance; versions as
+    `macOS 27.2 (26B123)` parsed from `UniversalMac_27.2_26B123_Restore.ipsw`
+    and the file name otherwise. Through `Prepare`: an empty-source refresh
+    looks up only after the refresh succeeded, prints the warning to the
+    injected writer, and a lookup error prints nothing and returns success;
+    no lookup or warning after `--update`, a URL, an IPSW file, a prepared-dir
+    source or a first-time restore. Rules: UX-04, GLOBAL-05, GLOBAL-04,
+    TEST-02 (tier 0). [tier 0 only]
+15. **Code**: `OutOfDate(active, u)` and the file-name parse; `Prepare`'s
+    best-effort lookup after an empty-source refresh, writing `warning: ...`
+    to stderr. Rules: UX-04, GLOBAL-05, UX-07. [needs Jeff: sudo, f6 cases
+    2, 3 and 6]
+
+### F. A local IPSW file restored in place (Decision 7)
+
+16. **Tests, tier 0**: an ipsw-file source not yet prepared: the stubbed
+    restore step receives the file's own path; the download seam is not
+    called; no `ipsw-<key>.ipsw` appears; the image is
+    `macos-<shortHash(abs path)>` whether the path was given relative or
+    absolute; the recorded input is `url: file://<abs path>` with the file's
+    SHA-256 and size; the file still exists afterwards; a second prepare of
+    the same path refreshes in place. A `file://` URL source still goes
+    through the download seam with its key unchanged. `image list`'s
+    formatter shows a local-file image's file name. Rules: UX-03, GLOBAL-05,
+    GLOBAL-04, TEST-02 (tier 0). [tier 0 only]
+17. **Code**: `RestoreIPSW`'s acquire step by kind (url: `ensureIPSWDownloaded`
+    unchanged; ipsw-file: the file in place, no curl, no copy, never
+    deleted); `ipswInput` (`driver/vz/environment.go`, rework) records
+    `file://<abs path>` for a local file. `resolveImage` is not touched
+    (Decision 8). Rules: UX-03, GLOBAL-05, ORCH-01. [needs Jeff: sudo, one
+    restore, f6 case 7]
+
+### G. Stamp refusal fix texts (Decision 5)
+
+18. **Tests, tier 0** (`driver/vz/link_test.go`, extending `TestImageStamp`):
+    the active cache image's fix is exactly `PrepareCommand`; the fallback
+    active image (no pointer) counts as active; a cache image that is not
+    active gets `sudo warden image prepare --driver vz <dir>` and "omit
+    --image to build from the active image"; a disk outside the cache keeps
+    `customImageFix`; `LauncherStamps` (doctor) reports the active image.
+    Rules: UX-04, GLOBAL-04, TEST-02 (tier 0). [tier 0 only]
+19. **Code** (`driver/vz/driver.go`, rework of `imageStamp`, `checkLink`,
+    `LauncherStamps`): the three fixes by the image's place (active, cache not
+    active, outside), the active one found through `ImageDir`. Rules: UX-04,
+    ORCH-01. [native, no sudo: with no `active` file, `warden build --image
+    ~/.cache/warden/images/macos-90a1…/disk.img` (unstamped, not active) is
+    refused naming `sudo warden image prepare --driver vz <macos-90a1… dir>`;
+    nothing in the cache changes. Running that fix: needs Jeff: sudo, f6
+    case 4]
+
+### H. Help and reference docs
+
+20. **Code** (`cmd/warden/image.go`, rework of the `image prepare` help): the
+    `--driver vz` line (no source refreshes the active image in place and
+    warns when a newer macOS exists; `--update`; a prepared image directory; a
+    local `.ipsw` read in place), the `--update` flag text, and an Example
+    with a local `.ipsw` path. Rules: UX-01, UX-05, UX-03. [native, no sudo:
+    `warden image prepare --help`]
+21. **Docs** (`docs/book/src/guide/drivers.md`): VZ First-Time Setup and the
+    build-link table row and the paragraph after it, per the design's Docs
+    list. Rules: UX-01. [tier 0 only]
+22. **Docs** (`docs/book/src/guide/cli.md`): `warden image prepare`'s vz
+    source row and examples, and `warden image list`'s example output
+    (replacing the stale `vz/images/macOS-15.4` path). Rules: UX-01, UX-03.
+    [tier 0 only]
+23. **Docs** (`docs/book/src/concepts/overview.md`, VM drivers): the stamp
+    line's vz fix, and one line for the vz base image choice (`--image`, else
+    the cache's active image). Rules: FLOW-15, UX-01. [tier 0 only]
+
+### I. Gate
+
+24. **Gate**: `make test`, and `make lint` for darwin and for one non-darwin
+    GOOS (driver/vz builds everywhere through `vz_stub.go`, which this change
+    leaves unchanged); push the branch at each green slice. Rules: TEST-01,
+    GLOBAL-07, FLOW-17. [native, no sudo]
+25. **Native validation, tier 2, blocking** (`f6-validate-macos-vz`, phase 6,
+    Jeff, sudo): cases 1 to 7 of the Validation plan as the step's note
+    states them; this plan assigns them unchanged (case 1 to slice A, 2 and 3
+    to B, D and E, 4 to G, 5 to C, 6 to E, 7 to F). Rules: FLOW-09, TEST-02
+    (tier 2). [needs Jeff: sudo]
+
+**Plan notes.** The design is workable as written; no finding returns it.
+One statement for Consolidation, which needs no task: Cross-driver impact
+says `build --image <local .ipsw>` "also stops failing in curl", but
+`resolveImage` returns any existing path as the disk before it reaches
+`RestoreIPSW`, so a local `.ipsw` there was never handed to curl, and
+Decision 8 leaves `resolveImage` untouched; the plan follows Decision 8.
+
+**Budget** (FLOW-13). 25 tasks in one `f3-implement` step. The estimate (2
+runs, 9 steps) is spent with this step (2 runs, 9 steps). The rest is about 9
+steps (implement, review, guide, merge-main, consolidate, open-pr, the native
+step, close, one re-run) over about 3 runs: raise the estimate to about 5 runs
+and 18 steps before the runaway check escalates.
 
 ## Design review
 
