@@ -2,7 +2,7 @@ feature: build-vm-busybox
 title: tools/build-vm/build-initramfs.sh fetches its own static busybox
 priority: 46
 follows: build-link-subnet
-status: queued
+status: in_progress
 round: feature
 phase: 0
 design: docs/design/build-vm-busybox.md
@@ -15,15 +15,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261107T105651Z
+      expires: 2026-11-07T13:11:45.24544742Z
 budget:
   estimate:
     runs: 1
     steps: 7
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 1
 questions: []
 history:
   - at: 2026-11-06T17:33:20Z
@@ -41,3 +41,9 @@ history:
   - at: 2026-11-07T11:04:31Z
     by: cloud/20261107T105651Z
     event: 'priority 45 -> 46 (renumbered by wf new: vz-ipsw-latest-reuse queued at 45)'
+  - at: 2026-11-07T11:11:45Z
+    by: cloud/20261107T105651Z
+    event: started (FLOW-05)
+  - at: 2026-11-07T11:11:45Z
+    by: cloud/20261107T105651Z
+    event: claimed f0-branch-setup until 2026-11-07T13:11:45Z
