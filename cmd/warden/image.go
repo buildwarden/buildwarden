@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -329,8 +330,8 @@ func runImageList(_ *cobra.Command, _ []string) error {
 	found := false
 	if runtime.GOOS == "darwin" {
 		cache := &vz.ImageCache{CacheDir: vz.DefaultCacheDir()}
-		if dir, err := cache.ImageDir(); err == nil && dir != "" {
-			fmt.Printf("vz      macos    %s\n", dir)
+		for _, line := range formatVZImages(cache.Images()) {
+			fmt.Println(line)
 			found = true
 		}
 	}
@@ -364,4 +365,31 @@ func runImageList(_ *cobra.Command, _ []string) error {
 		fmt.Println("No prepared images. Run 'warden image prepare --driver <driver>'.")
 	}
 	return nil
+}
+
+// formatVZImages renders image list's vz lines: the active image first, then
+// the others newest prepared first, each with the IPSW it was restored from
+// when that was recorded.
+func formatVZImages(imgs []vz.Image) []string {
+	sorted := append([]vz.Image(nil), imgs...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		a, b := sorted[i], sorted[j]
+		if a.Active != b.Active {
+			return a.Active
+		}
+		if !a.Prepared.Equal(b.Prepared) {
+			return a.Prepared.After(b.Prepared)
+		}
+		return a.Dir < b.Dir
+	})
+	lines := make([]string, 0, len(sorted))
+	for _, img := range sorted {
+		state := "older"
+		if img.Active {
+			state = "active"
+		}
+		line := fmt.Sprintf("vz      macos    %s  %-6s  %s", img.Dir, state, img.IPSW)
+		lines = append(lines, strings.TrimRight(line, " "))
+	}
+	return lines
 }

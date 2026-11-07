@@ -5,8 +5,10 @@ import (
 	"encoding/hex"
 	"fmt"
 	"io/fs"
+	"net/url"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -27,25 +29,144 @@ type ImageCache struct {
 	CacheDir string
 }
 
-// ImageDir returns the directory containing the full set of files for a
-// prepared macOS VM image (disk, aux-storage, hardware-model, machine-id).
-// Returns empty string if no prepared image exists.
-func (c *ImageCache) ImageDir() (string, error) {
-	if err := os.MkdirAll(c.CacheDir, 0755); err != nil {
-		return "", fmt.Errorf("creating cache dir: %w", err)
-	}
+// activeFile names, in the cache, the file holding the active image's
+// directory name: the image every successful prepare ends on.
+const activeFile = "active"
 
+// Image is one prepared macOS image in the cache.
+type Image struct {
+	// Dir is the image directory (macos-<key>).
+	Dir string
+	// Prepared is when its .prepared marker was last written.
+	Prepared time.Time
+	// Active reports that builds without --image use it (ImageDir).
+	Active bool
+	// IPSW is the file name of the IPSW it was restored from, from its
+	// recorded provenance; empty when none was recorded.
+	IPSW string
+}
+
+// ImageDir returns the directory of the prepared macOS image builds use
+// without --image: the active image when it is valid, else the valid image
+// whose .prepared marker is newest (the name breaking ties), so a cache
+// prepared before the active pointer existed still picks the image prepared
+// last. Returns "" if no prepared image exists.
+func (c *ImageCache) ImageDir() (string, error) {
+	if b, err := os.ReadFile(filepath.Join(c.CacheDir, activeFile)); err == nil {
+		if dir := c.imageNamed(strings.TrimSpace(string(b))); dir != "" {
+			return dir, nil
+		}
+	}
+	best, bestTime := "", time.Time{}
+	for _, img := range c.validImages() {
+		if best == "" || img.Prepared.After(bestTime) {
+			best, bestTime = img.Dir, img.Prepared
+		}
+	}
+	return best, nil
+}
+
+// imageNamed returns the valid image directory called name in the cache, or
+// "" when name is not a plain directory name or not a valid image.
+func (c *ImageCache) imageNamed(name string) string {
+	if name == "" || name == "." || name == ".." || filepath.Base(name) != name {
+		return ""
+	}
+	dir := filepath.Join(c.CacheDir, name)
+	if !isValidImageDir(dir) {
+		return ""
+	}
+	return dir
+}
+
+// validImages lists the cache's valid image directories in name order, with
+// their .prepared times.
+func (c *ImageCache) validImages() []Image {
 	entries, _ := os.ReadDir(c.CacheDir)
+	var imgs []Image
 	for _, e := range entries {
 		if !e.IsDir() {
 			continue
 		}
 		dir := filepath.Join(c.CacheDir, e.Name())
-		if isValidImageDir(dir) {
-			return dir, nil
+		if !isValidImageDir(dir) {
+			continue
+		}
+		fi, err := os.Stat(filepath.Join(dir, ".prepared"))
+		if err != nil {
+			continue
+		}
+		imgs = append(imgs, Image{Dir: dir, Prepared: fi.ModTime()})
+	}
+	return imgs
+}
+
+// Images lists every valid prepared image in the cache, in name order, the
+// one ImageDir returns marked active, each with its recorded IPSW file name.
+func (c *ImageCache) Images() []Image {
+	active, _ := c.ImageDir()
+	imgs := c.validImages()
+	for i := range imgs {
+		imgs[i].Active = imgs[i].Dir == active
+		imgs[i].IPSW = ipswFileName(c.recordedIPSW(imgs[i].Dir))
+	}
+	return imgs
+}
+
+// SetActive makes dir, an image directory in the cache, the one builds use
+// without --image. The pointer is replaced atomically and handed back to the
+// sudo user like the rest of the cache.
+func (c *ImageCache) SetActive(dir string) error {
+	if filepath.Clean(filepath.Dir(dir)) != filepath.Clean(c.CacheDir) {
+		return fmt.Errorf("%s is not an image directory in %s", dir, c.CacheDir)
+	}
+	tmp, err := os.CreateTemp(c.CacheDir, activeFile+".*")
+	if err != nil {
+		return fmt.Errorf("writing the active image: %w", err)
+	}
+	_, werr := tmp.WriteString(filepath.Base(dir) + "\n")
+	cerr := tmp.Close()
+	if werr == nil {
+		werr = cerr
+	}
+	if werr == nil {
+		werr = os.Chmod(tmp.Name(), 0o644)
+	}
+	if werr == nil {
+		werr = os.Rename(tmp.Name(), filepath.Join(c.CacheDir, activeFile))
+	}
+	if werr != nil {
+		_ = os.Remove(tmp.Name())
+		return fmt.Errorf("writing the active image: %w", werr)
+	}
+	giveBackToSudoUser(filepath.Join(c.CacheDir, activeFile))
+	return nil
+}
+
+// recordedIPSW returns the URL of the IPSW dir's disk was recorded as
+// prepared from (file://<path> for a local file), or "" when none was.
+func (c *ImageCache) recordedIPSW(dir string) string {
+	src, ok := c.LayerCache().Source(filepath.Join(dir, "disk.img"))
+	if !ok {
+		return ""
+	}
+	for _, in := range src.Inputs {
+		if in.Name == "ipsw" {
+			return in.URL
 		}
 	}
-	return "", nil
+	return ""
+}
+
+// ipswFileName is the last path element of an IPSW URL, "" for none.
+func ipswFileName(ipswURL string) string {
+	if ipswURL == "" {
+		return ""
+	}
+	if u, err := url.Parse(ipswURL); err == nil && u.Path != "" {
+		return path.Base(u.Path)
+	}
+	return path.Base(ipswURL)
 }
 
 func isValidImageDir(dir string) bool {
