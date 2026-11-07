@@ -68,6 +68,32 @@ func TestProcessSortsFirstAndStartsOnAnyClaim(t *testing.T) {
 	}
 }
 
+func TestImplementingFeatureSortsBeforeProcess(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(dir, "queue"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "config.yaml"), []byte("run_budget: {steps: 8}\n"),
+		0o644)
+	s := &State{Dir: dir}
+	a := feature("a", 9, "in_progress")
+	advance(a, 3)
+	for _, f := range []*Feature{a, process("p", 1, "in_progress")} {
+		if err := s.Save(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	s, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if s.Features[0].Feature != "a" {
+		t.Fatalf("first = %s; want the feature in Implement (class 1)",
+			s.Features[0].Feature)
+	}
+	if got := next(t, s, "cloud"); got != "a f3-implement" {
+		t.Fatalf("cloud next = %q", got)
+	}
+}
+
 func TestHoldsBlockMatchingWorkersUntilDone(t *testing.T) {
 	a := feature("a", 1, "in_progress")
 	a.Steps = append(a.Steps, Step{ID: "f0-on-mac", Affinity: "host:macos-vz",

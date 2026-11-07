@@ -12,7 +12,8 @@ See [`README.md`](./README.md) for the rule format.
 
 Features move through a work queue. Each feature passes through the development
 phases **once**, on its own feature branch. Work goes depth first on the
-top-priority feature; others advance only while it is blocked (FLOW-05).
+first item in FLOW-05's order; others advance only while it is blocked
+(FLOW-05).
 
 The human takes part at three points, and the loop does everything else:
 
@@ -168,27 +169,38 @@ expired lease may be reclaimed.
 
 ---
 
-### FLOW-05 — Depth first on the top-priority feature
+### FLOW-05 — Depth first, in class order
 
 **Severity:** SHOULD
 **Check:** automated
 
-Work goes deep, not wide. Process items (FLOW-03) come before every feature,
-whatever their priority. While one is in progress, a worker matching one of
-its `holds` (affinity patterns such as `cloud` or `host:*`) takes no new step,
-so disruptive work waits for the rules to settle; a step it already claimed
-stays claimed, and finishing the process item releases the hold. Otherwise a
-worker takes the next ready step of the
-highest-priority feature in progress, and keeps taking that feature's steps until
-it blocks: on a `human` or `host:<name>` step, an exhausted budget, or the PR
-slot. Only then does it take steps from the next feature down, and it returns to
-the higher-priority feature as soon as that one has a ready step again.
+Work goes deep, not wide. Open items are taken in class order, and within a
+class in-progress items come before queued ones, then the higher priority:
+
+1. **In implementation**: an in-progress feature in Implement (phase 3)
+   through Close, or an in-progress process item in Implement (phase 2) or
+   Close, except while it waits for the human's merge.
+2. **Process items** (FLOW-03), which are usually short and change the rules
+   the rest of the queue runs under.
+3. **Fixes**: a feature that `follows` an item, fixing or finishing it. It
+   starts only once that item is done.
+4. **New functionality**: every other feature.
+
+While a process item is in progress, a worker matching one of its `holds`
+(affinity patterns such as `cloud` or `host:*`) takes no new step, whatever
+the class of the item the step belongs to, so disruptive work waits for the
+rules to settle; a step it already claimed stays claimed, and finishing the
+process item releases the hold. Otherwise a worker takes the next ready step
+of the first item in that order, and keeps taking that item's steps until it
+blocks: on a `human` or `host:<name>` step, an exhausted budget, or the PR
+slot. Only then does it take steps from the next item down, and it returns to
+the earlier item as soon as that one has a ready step again.
 
 While interfaces are still stabilizing, a feature developed in parallel is likely
 to need an involved rebase and consolidation once the features ahead of it land.
 Parallel features are therefore the fallback that keeps work moving while the
-human is away, not a goal. A new feature starts Design only when every feature in
-progress is blocked.
+human is away, not a goal. A queued item starts only when every item ahead of
+it is blocked.
 
 At most 5 features are in progress at once, and at most 1 of them declares
 `alters_relationships: true` (FLOW-02), because two such features reshape the same
@@ -291,8 +303,12 @@ its last sweep of open backlog entries; it is bound by the unattended loop's lim
 one that stops before an agent starts, also records the machine's outcome and a
 one-line reason in `native/status/<machine>.yaml` on the `workflow` branch, so a
 silent failure is still visible. A failure
-found there returns the feature (or a new fix item) to Design or Implement with the
-logs attached. The full matrix before a release (TEST-02) is the backstop for every
+the feature's branch causes returns the feature to Design or Implement with the
+logs attached (FLOW-06). A regression `main` already has, found while the
+feature is built, validated or consolidated, is queued at once as the feature's
+immediate follow-up unless the human explicitly says otherwise: the session that
+found it files a fix item that `follows` the feature, at the top of the fixes,
+and the feature neither waits for it nor absorbs it. The full matrix before a release (TEST-02) is the backstop for every
 tracked gap.
 
 Work whose design or implementation itself needs the native host (for example a
@@ -366,7 +382,7 @@ state, claim, work, write state) until no `cloud` step is ready or the run's
 budget is spent, and writes state after every step so an interrupted run loses at
 most the step in progress. All state it needs lives in the repository, never in a
 long-running conversation. A run spends its budget in FLOW-05 order, so the
-top-priority feature can use all of it. A scheduled native session (FLOW-09)
+first item in FLOW-05's order can use all of it. A scheduled native session (FLOW-09)
 spends its own budget, `native_budget`, which falls back to the run's budget when
 unset, so native and integration testing never compete with the cloud loop. Each
 feature also has a work budget, which is a runaway check rather than a share of

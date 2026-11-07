@@ -97,6 +97,127 @@ func TestNextForOneFeature(t *testing.T) {
 	}
 }
 
+// toPhase is a feature in progress at phase, its earlier steps done.
+func toPhase(name string, prio, phase int) *Feature {
+	f := feature(name, prio, "in_progress")
+	advance(f, phase)
+	return f
+}
+
+// TestNextTakesClassOrder: a queued fix (class 3) starts ahead of an
+// in-progress class-4 feature, the security-suite case, but not at the
+// in-progress limit.
+func TestNextTakesClassOrder(t *testing.T) {
+	parent := feature("parent", 1, "done")
+	sec := feature("sec", 9, "in_progress")
+	fix := feature("fix", 5, "queued")
+	fix.Follows = "parent"
+	s := state(parent, sec, fix)
+	if p, _ := s.Next("cloud", now); p == nil || p.Feature != fix || !p.Starts {
+		t.Fatalf("pick = %+v, want the queued fix started ahead of class-4 sec", p)
+	}
+	s.Config.Limits.InProgress = 1
+	if got := next(t, s, "cloud"); got != "sec f0-branch-setup" {
+		t.Fatalf("at the in-progress limit next = %q, want sec's step", got)
+	}
+
+	// A phase-7 merge check (class 4) comes after the fix's start.
+	merging := toPhase("merging", 2, 7)
+	s = state(parent, merging, fix)
+	if p, _ := s.Next("cloud", now); p == nil || p.Feature != fix || !p.Starts {
+		t.Fatalf("pick = %+v, want the fix before merging's f7-merge", p)
+	}
+}
+
+// TestNextTakesImplementationFirst: a feature in Implement (class 1) goes
+// ahead of a process item's merge check (class 2), but not past a hold.
+func TestNextTakesImplementationFirst(t *testing.T) {
+	proc := process("proc", 1, "in_progress")
+	advance(proc, 3)
+	impl := toPhase("impl", 9, 3)
+	s := state(proc, impl)
+	if got := next(t, s, "cloud"); got != "impl f3-implement" {
+		t.Fatalf("next = %q, want the class-1 feature before x3-merge", got)
+	}
+	impl.Steps[len(impl.Steps)-1].Affinity = "human"
+	if got := next(t, s, "cloud"); got != "proc x3-merge" {
+		t.Fatalf("next = %q, want the merge check once impl blocks", got)
+	}
+	impl.Steps[len(impl.Steps)-1].Affinity = "cloud"
+
+	// A hold still stops a class-1 feature's cloud step.
+	rules := process("rules", 2, "in_progress", "cloud")
+	s = state(rules, impl)
+	pick, blocked := s.Next("cloud", now)
+	if pick != nil || len(blocked) != 2 || blocked[0].Feature != "impl" ||
+		blocked[0].Reason != "held by process item rules" {
+		t.Fatalf("next = %+v, %+v; want impl held by rules", pick, blocked)
+	}
+}
+
+// TestHumanTakesQueuedProcessFirst: a human gets a queued process item's
+// design (class 2) before an in-progress class-4 feature's human step.
+func TestHumanTakesQueuedProcessFirst(t *testing.T) {
+	a := feature("a", 1, "in_progress")
+	a.Steps[0].Affinity = "human"
+	s := state(a, process("p", 7, "queued"))
+	if p, _ := s.Next("human/jeff", now); p == nil || p.Step.ID != "x1-design" ||
+		!p.Starts {
+		t.Fatalf("human pick = %+v, want p x1-design", p)
+	}
+}
+
+func TestFollowUpWaitsForParent(t *testing.T) {
+	parent := toPhase("parent", 1, 3)
+	parent.Steps[len(parent.Steps)-1].Affinity = "host:macos-vz"
+	fix := feature("fix", 2, "queued")
+	fix.Follows = "parent"
+	proc := process("proc", 3, "queued")
+	proc.Follows = "parent"
+	s := state(parent, fix, proc)
+	pick, blocked := s.Next("cloud", now)
+	if pick != nil || len(blocked) != 2 || blocked[1].Feature != "fix" ||
+		blocked[1].Reason != "follows parent, not yet done (FLOW-05)" {
+		t.Fatalf("cloud next = %+v, %+v; want fix waiting on parent", pick, blocked)
+	}
+	if got := next(t, s, "human"); got != "proc x1-design" {
+		t.Fatalf("human next = %q; follows on a process item is only a record", got)
+	}
+	if p, _ := s.NextFor("fix", "cloud", now); p == nil || p.Feature != fix || !p.Starts {
+		t.Fatalf("NextFor = %+v; naming the fix skips the gate", p)
+	}
+	parent.Status = "done"
+	if p, _ := s.Next("cloud", now); p == nil || p.Feature != fix || !p.Starts {
+		t.Fatalf("pick = %+v, want fix started once parent is done", p)
+	}
+}
+
+func TestOrderFollowsPhaseChanges(t *testing.T) {
+	names := func(s *State) string {
+		var out []string
+		for _, f := range s.Ordered() {
+			out = append(out, f.Feature)
+		}
+		return strings.Join(out, " ")
+	}
+	a := toPhase("a", 2, 2)
+	z := feature("z", 9, "in_progress")
+	q := feature("q", 3, "queued")
+	s := state(process("p", 1, "in_progress"), a, z, q)
+	if got := names(s); got != "p a z q" {
+		t.Fatalf("Ordered = %q", got)
+	}
+	s.Claim(q, &q.Steps[0], "cloud/run", now, true)
+	if got := names(s); got != "p a q z" {
+		t.Fatalf("after q's claim Ordered = %q, want q among the in-progress items",
+			got)
+	}
+	advance(a, 3)
+	if got := names(s); got != "a p q z" {
+		t.Fatalf("after a reaches Implement Ordered = %q, want a first", got)
+	}
+}
+
 func TestLeasesAndRunaway(t *testing.T) {
 	a := feature("a", 1, "in_progress")
 	s := state(a)
@@ -143,8 +264,82 @@ func TestListed(t *testing.T) {
 	if got := names(s.Listed(false)); got != "p a q" {
 		t.Fatalf("Listed(false) = %q, want open items in FLOW-05 order", got)
 	}
-	if got := names(s.Listed(true)); got != "p d a q" {
-		t.Fatalf("Listed(true) = %q, want done items added", got)
+	if got := names(s.Listed(true)); got != "p a q d" {
+		t.Fatalf("Listed(true) = %q, want done items added after the open ones", got)
+	}
+}
+
+func TestClass(t *testing.T) {
+	for _, c := range []struct {
+		kind, status, follows string
+		phase, want           int
+	}{
+		{"process", "queued", "", 1, 2},
+		{"process", "in_progress", "", 1, 2},
+		{"process", "in_progress", "", 2, 1},
+		{"process", "in_progress", "", 3, 2},
+		{"process", "in_progress", "", 4, 1},
+		{"process", "in_progress", "a", 3, 2},
+		{"", "queued", "", 0, 4},
+		{"", "queued", "a", 0, 3},
+		{"", "in_progress", "", 2, 4},
+		{"", "in_progress", "a", 2, 3},
+		{"", "in_progress", "", 3, 1},
+		{"", "in_progress", "a", 6, 1},
+		{"", "in_progress", "", 7, 4},
+		{"", "in_progress", "a", 7, 3},
+		{"", "in_progress", "", 8, 1},
+		{"", "done", "", 8, 0},
+		{"process", "done", "", 4, 0},
+	} {
+		f := &Feature{Kind: c.kind, Status: c.status, Follows: c.follows, Phase: c.phase}
+		if got := f.Class(); got != c.want {
+			t.Errorf("Class(%+v) = %d, want %d", c, got, c.want)
+		}
+	}
+}
+
+func TestValidateFollows(t *testing.T) {
+	parent := feature("parent", 1, "done")
+	fix := feature("fix", 2, "queued")
+	fix.Follows = "parent"
+	if errs := state(parent, fix).Validate(); len(errs) != 0 {
+		t.Fatalf("Validate: %v; a done parent is a valid one", errs)
+	}
+	for _, name := range []string{"nobody", "fix"} {
+		fix.Follows = name
+		errs := state(parent, fix).Validate()
+		if len(errs) != 1 || !strings.Contains(errs[0].Error(),
+			`fix: follows "`+name+`"`) {
+			t.Fatalf("follows %s: Validate = %v", name, errs)
+		}
+	}
+}
+
+func TestAddLogsRenumbering(t *testing.T) {
+	a, b, c := feature("a", 1, "in_progress"), feature("b", 2, "queued"),
+		feature("c", 3, "queued")
+	s := state(a, b, c)
+	fix := &Feature{Feature: "fix", Priority: 2, Follows: "a"}
+	changed, err := s.Add(fix, now, "cloud/run")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(changed) != 3 || len(a.History) != 0 {
+		t.Fatalf("changed %d, a's history %v; want fix, b and c, and a untouched",
+			len(changed), a.History)
+	}
+	for _, f := range []*Feature{b, c} {
+		want := fmt.Sprintf("priority %d -> %d (renumbered by wf new: fix queued at 2)",
+			f.Priority-1, f.Priority)
+		if len(f.History) != 1 || f.History[0].Event != want ||
+			f.History[0].By != "cloud/run" {
+			t.Errorf("%s history %+v, want %q", f.Feature, f.History, want)
+		}
+	}
+	if fix.Class() != 3 || s.Features[0] != fix {
+		t.Fatalf("fix is class %d, first is %s; want class 3, ahead of the class-4 a",
+			fix.Class(), s.Features[0].Feature)
 	}
 }
 
@@ -338,16 +533,19 @@ func TestLoadSaveRoundTrip(t *testing.T) {
 		[]byte("run_budget: {steps: 8}\n"+
 			"limits: {in_progress: 5, alters_relationships: 1}\n"), 0o644)
 	s := &State{Dir: dir}
-	f := feature("x", 1, "queued")
-	if err := s.Save(f); err != nil {
-		t.Fatal(err)
+	f, p := feature("x", 1, "queued"), feature("p", 2, "done")
+	f.Follows = "p"
+	for _, it := range []*Feature{f, p} {
+		if err := s.Save(it); err != nil {
+			t.Fatal(err)
+		}
 	}
 	got, err := Load(dir)
 	if err != nil {
 		t.Fatal(err)
 	}
-	if len(got.Features) != 1 || got.Features[0].Steps[0].ID != "f0-branch-setup" ||
-		got.Config.RunBudget.Steps != 8 {
+	if len(got.Features) != 2 || got.Features[0].Steps[0].ID != "f0-branch-setup" ||
+		got.Features[0].Follows != "p" || got.Config.RunBudget.Steps != 8 {
 		t.Fatalf("loaded %+v", got)
 	}
 	if errs := got.Validate(); len(errs) != 0 {

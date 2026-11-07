@@ -13,11 +13,14 @@
 //	wf answer   -state DIR -worker W -feature F -question Q -answer TEXT
 //	wf back     -state DIR -worker W -feature F -why FINDING [-to 1|3]
 //	wf new      -state DIR -worker W -feature F -title T -priority N
-//	            -estimate-steps N -estimate-runs N [-source S]
+//	            -estimate-steps N -estimate-runs N [-source S] [-follows ITEM]
 //	            [-kind process -holds PATTERN,...]
 //	wf gate     -state DIR -repo DIR -machine M -stamp FILE [-sweep-days N] [-record]
 //	wf budget   -state DIR [-native]
 //	wf drops    -repo DIR -base REV -main FILE -branch FILE [-head REV]
+//
+// new -follows ITEM queues a fix or follow-up of ITEM: FLOW-05 classes it
+// with the fixes, and wf next starts it only once ITEM is done.
 //
 // DIR is a checkout of the workflow branch; -repo is a checkout of the code
 // with origin fetched. A worker is cloud, human or host:<name>, optionally
@@ -63,7 +66,7 @@ var errIdle = errors.New("idle")
 
 type opts struct {
 	state, repo, worker, feature, step, why, question, answer string
-	title, source, machine, stamp, kind, holds                string
+	title, source, machine, stamp, kind, holds, follows       string
 	base, head, mainReport, branchReport                      string
 	priority, estSteps, estRuns, sweepDays, to                int
 	newRun, run, record, native, md, all                      bool
@@ -101,6 +104,7 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.StringVar(&o.title, "title", "", "new: the feature's title")
 	fs.StringVar(&o.source, "source", "", "new: where the item came from")
 	fs.StringVar(&o.kind, "kind", "", "new: feature (default) or process")
+	fs.StringVar(&o.follows, "follows", "", "new: the item this one fixes or finishes")
 	fs.StringVar(&o.holds, "holds", "",
 		"new: process only, comma-separated affinity patterns it holds")
 	fs.IntVar(&o.priority, "priority", 0, "new: priority, 1 highest")
@@ -170,6 +174,9 @@ func status(s *queue.State, o opts) error {
 			b.Spent.Steps, b.Estimate.Steps, b.Spent.Runs, b.Estimate.Runs)
 		if f.IsProcess() {
 			fmt.Printf("\t  process item, holds: %s\n", holdList(f.Holds))
+		}
+		if f.Follows != "" {
+			fmt.Printf("\t  follows: %s\n", f.Follows)
 		}
 		for _, q := range f.Questions {
 			if q.Status == "open" {
@@ -328,7 +335,6 @@ func back(s *queue.State, o opts) error {
 	return s.Save(f)
 }
 
-// newFeature queues a feature (the workflow-intake entry point).
 // migrate moves every unfinished item onto the single feature round and the
 // new process phases, once, after workflow-streamline merges.
 func migrate(s *queue.State, o opts) error {
@@ -349,6 +355,7 @@ func migrate(s *queue.State, o opts) error {
 	return nil
 }
 
+// newFeature queues a feature (the workflow-intake entry point).
 func newFeature(s *queue.State, o opts) error {
 	if o.feature == "" || o.title == "" || o.priority < 1 || o.estSteps < 1 {
 		return fmt.Errorf("new needs -feature, -title, -priority and -estimate-steps")
@@ -359,9 +366,14 @@ func newFeature(s *queue.State, o opts) error {
 	}
 	f := &queue.Feature{
 		Feature: o.feature, Title: o.title, Priority: o.priority, Source: o.source,
-		Kind: kind, Holds: holds,
+		Kind: kind, Holds: holds, Follows: o.follows,
 		Design: "docs/design/" + o.feature + ".md", Branch: "feat/" + o.feature,
 		Budget: queue.Budget{Estimate: queue.Count{Runs: o.estRuns, Steps: o.estSteps}},
+	}
+	if o.follows != "" {
+		if _, err := s.Find(o.follows); err != nil {
+			return fmt.Errorf("-follows: %w", err)
+		}
 	}
 	changed, err := s.Add(f, o.now, o.worker)
 	if err != nil {

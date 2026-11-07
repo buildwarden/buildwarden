@@ -13,7 +13,7 @@ var update = flag.Bool("update", false, "rewrite testdata/queue.md")
 
 // summaryState covers every section: a blocking question, a design review,
 // a PR waiting, a runaway, a host step and a human step of a later phase, and
-// the backlog. Its done items, one closed recently, one long ago and one spent
+// the backlog with a fix. Its done items, one closed recently, one long ago and one spent
 // past the runaway factor, must appear in none of them (FLOW-13).
 func summaryState() *State {
 	at := func(d int) time.Time { return now.Add(time.Duration(d) * 24 * time.Hour) }
@@ -46,6 +46,7 @@ func summaryState() *State {
 	merging.History = ev(0)
 
 	queued := feature("queued", 4, "queued")
+	queued.Follows = "recent"
 	proc := process("rules", 5, "queued", "host:*")
 
 	recent := feature("recent", 6, "done")
@@ -102,4 +103,85 @@ func TestSaveWritesSummary(t *testing.T) {
 	if err != nil || string(got) != Summary(s) {
 		t.Fatalf("QUEUE.md = %q, %v", got, err)
 	}
+}
+
+// TestSaveWritesClassOrder: a phase change moves an item between classes, and
+// the next Save writes QUEUE.md in the new order without a reload.
+func TestSaveWritesClassOrder(t *testing.T) {
+	s := summaryState()
+	s.Dir = t.TempDir()
+	_ = os.MkdirAll(filepath.Join(s.Dir, "queue"), 0o755)
+	review, _ := s.Find("review")
+	review.Phase = 3
+	if err := s.Save(review); err != nil {
+		t.Fatal(err)
+	}
+	got, err := os.ReadFile(filepath.Join(s.Dir, SummaryFile))
+	if err != nil {
+		t.Fatal(err)
+	}
+	r, a := strings.Index(string(got), "| 2 | review |"),
+		strings.Index(string(got), "| 1 | asked |")
+	if r < 0 || a < 0 || r > a {
+		t.Fatalf("QUEUE.md lists review at %d, asked at %d; want review (now in "+
+			"Implement) first:\n%s", r, a, got)
+	}
+}
+
+// TestSaveWritesClassOrderInEverySection: a change inside a command moves
+// items between classes, and the next Save lists them in the new order in
+// Needs Jeff, Waiting on a host and Backlog, not only in Active.
+func TestSaveWritesClassOrderInEverySection(t *testing.T) {
+	waiting := func(name string, prio int) *Feature {
+		f := feature(name, prio, "in_progress")
+		f.Phase = 2
+		f.Steps = []Step{
+			{ID: "f2-design-review", Phase: 2, Affinity: "human", Status: "pending"},
+			{ID: "f6-validate-qemu-any", Phase: 6, Affinity: "host:qemu-any",
+				Status: "pending"}}
+		return f
+	}
+	first, second := waiting("first", 1), waiting("second", 2)
+	plain, fix := feature("plain", 3, "queued"), feature("fix", 4, "queued")
+	parent := feature("parent", 5, "done")
+	s := state(first, second, plain, fix, parent)
+	s.Dir = t.TempDir()
+	_ = os.MkdirAll(filepath.Join(s.Dir, "queue"), 0o755)
+
+	check := func(title, before, after string) {
+		t.Helper()
+		got, err := os.ReadFile(filepath.Join(s.Dir, SummaryFile))
+		if err != nil {
+			t.Fatal(err)
+		}
+		sec := string(got)
+		if i := strings.Index(sec, "\n## "+title+"\n"); i >= 0 {
+			sec = sec[i+len(title)+5:]
+		} else {
+			t.Fatalf("QUEUE.md has no %s section:\n%s", title, got)
+		}
+		if j := strings.Index(sec, "\n## "); j >= 0 {
+			sec = sec[:j]
+		}
+		b, a := strings.Index(sec, " "+before+" "), strings.Index(sec, " "+after+" ")
+		if b < 0 || a < 0 || b > a {
+			t.Errorf("%s lists %s at %d, %s at %d; want %s first:\n%s", title,
+				before, b, after, a, before, sec)
+		}
+	}
+	if err := s.Save(first); err != nil {
+		t.Fatal(err)
+	}
+	check("Needs Jeff", "**first**:", "**second**:")
+	check("Waiting on a host", "**first**:", "**second**:")
+	check("Backlog", "plain", "fix")
+
+	// second enters Implement (class 1) and fix gains follows (class 3).
+	second.Phase, fix.Follows = 3, "parent"
+	if err := s.Save(fix); err != nil {
+		t.Fatal(err)
+	}
+	check("Needs Jeff", "**second**:", "**first**:")
+	check("Waiting on a host", "**second**:", "**first**:")
+	check("Backlog", "fix", "plain")
 }

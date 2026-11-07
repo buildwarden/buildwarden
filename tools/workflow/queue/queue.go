@@ -11,6 +11,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strings"
 	"time"
@@ -54,11 +55,17 @@ func (c Config) Budget(native bool) int {
 type Feature struct {
 	Feature string `yaml:"feature"`
 	Title   string `yaml:"title"`
-	// Priority orders features; 1 is the highest. Unique across the queue.
+	// Priority orders items within a FLOW-05 class; 1 is the highest. Unique
+	// across the queue.
 	Priority int `yaml:"priority"`
 	// Kind is feature (the default, empty) or process: a change to the rules
-	// the loops run under, which sorts ahead of every feature (FLOW-05).
+	// the loops run under, which FLOW-05 classes ahead of every feature not
+	// in implementation.
 	Kind string `yaml:"kind,omitempty"`
+	// Follows names the item this one fixes or finishes. A feature that
+	// follows an item is a fix (FLOW-05 class 3) and starts only once that
+	// item is done; on a process item it is only a record.
+	Follows string `yaml:"follows,omitempty"`
 	// Holds lists the affinity patterns (cloud, host:*, host:macos-vz) whose
 	// workers take no new step while this process item is in progress.
 	Holds  []string `yaml:"holds,omitempty"`
@@ -183,39 +190,83 @@ func Load(dir string) (*State, error) {
 	return s, nil
 }
 
-// sortFeatures orders process items ahead of every feature, then by priority
-// (FLOW-05).
+// sortFeatures puts s.Features in FLOW-05 order, a stable starting order for
+// code that walks them; readers that need the current order use Ordered.
 func (s *State) sortFeatures() { sortFeatures(s.Features) }
 
+// sortFeatures sorts by class, then in-progress before queued, then priority;
+// done items have class 0 and go last, by priority.
 func sortFeatures(fs []*Feature) {
 	sort.SliceStable(fs, func(i, j int) bool {
 		a, b := fs[i], fs[j]
-		if a.IsProcess() != b.IsProcess() {
-			return a.IsProcess()
+		if ca, cb := a.Class(), b.Class(); ca != cb {
+			return cb == 0 || (ca != 0 && ca < cb)
+		}
+		if ia, ib := a.Status == "in_progress", b.Status == "in_progress"; ia != ib {
+			return ia
 		}
 		return a.Priority < b.Priority
 	})
 }
 
+// Ordered returns every item in FLOW-05 order. Class changes with status and
+// phase, which a command changes as it runs, so the order is computed at each
+// call rather than stored.
+func (s *State) Ordered() []*Feature {
+	out := slices.Clone(s.Features)
+	sortFeatures(out)
+	return out
+}
+
 // Listed returns the items wf status prints, in FLOW-05 order: the open
-// (queued and in-progress) ones, plus the done ones when all is set, for a
-// retrospective (FLOW-13).
+// (queued and in-progress) ones, plus the done ones after them when all is
+// set, for a retrospective (FLOW-13).
 func (s *State) Listed(all bool) []*Feature {
 	var out []*Feature
-	for _, f := range s.Features {
+	for _, f := range s.Ordered() {
 		if all || f.Status != "done" {
 			out = append(out, f)
 		}
 	}
-	sortFeatures(out)
 	return out
 }
 
 // IsProcess reports whether the item is a process change (kind: process).
 func (f *Feature) IsProcess() bool { return f.Kind == "process" }
 
+// Class returns the item's FLOW-05 class: 1 in implementation, 2 a process
+// item, 3 a fix (a feature that follows another item), 4 new functionality.
+// A done item has no class, 0.
+func (f *Feature) Class() int {
+	switch {
+	case f.Status == "done":
+		return 0
+	case f.inImplementation():
+		return 1
+	case f.IsProcess():
+		return 2
+	case f.Follows != "":
+		return 3
+	}
+	return 4
+}
+
+// inImplementation reports whether the item is in progress past Plan and not
+// waiting for the human's merge: a merge check must not go ahead of process
+// and fix work, and the merge is confirmed before wf next anyway.
+func (f *Feature) inImplementation() bool {
+	if f.Status != "in_progress" {
+		return false
+	}
+	if f.IsProcess() {
+		return f.Phase == 2 || f.Phase == 4
+	}
+	return f.Phase >= 3 && f.Phase != 7
+}
+
 // Add creates a queued feature at the given priority, moving the features at
-// or below it down one, and returns every feature it changed.
+// or below it down one with a history line each, and returns every feature it
+// changed.
 func (s *State) Add(f *Feature, now time.Time, by string) ([]*Feature, error) {
 	if _, err := s.Find(f.Feature); err == nil {
 		return nil, fmt.Errorf("feature %q already queued", f.Feature)
@@ -224,6 +275,8 @@ func (s *State) Add(f *Feature, now time.Time, by string) ([]*Feature, error) {
 	for _, o := range s.Features {
 		if o.Priority >= f.Priority {
 			o.Priority++
+			o.Log(now, by, "priority %d -> %d (renumbered by wf new: %s queued at %d)",
+				o.Priority-1, o.Priority, f.Feature, f.Priority)
 			changed = append(changed, o)
 		}
 	}
@@ -302,6 +355,7 @@ func (s *State) Validate() []error {
 			bad("priority %d also held by %s", f.Priority, other)
 		}
 		prio[f.Priority] = f.Feature
+		s.validateFollows(f, bad)
 		if f.Status == "in_progress" {
 			inProgress++
 			if f.alters() && f.Phase >= 2 {
@@ -323,6 +377,17 @@ func (s *State) Validate() []error {
 		errs = append(errs, errors.New(e))
 	}
 	return errs
+}
+
+// validateFollows checks that follows, when set, names another item, done or
+// open.
+func (s *State) validateFollows(f *Feature, bad func(string, ...any)) {
+	if f.Follows == "" {
+		return
+	}
+	if _, err := s.Find(f.Follows); err != nil || f.Follows == f.Feature {
+		bad("follows %q, which is not another item in the queue", f.Follows)
+	}
 }
 
 func (f *Feature) validate(bad func(string, ...any)) {

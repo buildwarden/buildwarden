@@ -12,7 +12,11 @@ writing code, plus GLOBAL-01 (comments), GLOBAL-02 and TEST-01 (tests).
    a component-flow change updates its pseudocode in
    `docs/book/src/concepts/overview.md` (FLOW-15).
 3. Run `make lint` (for each platform whose build-tagged files you touched,
-   e.g. `GOOS=windows golangci-lint run`) and `make test` (FLOW-17).
+   e.g. `GOOS=windows golangci-lint run`) and `make test` (FLOW-17). A
+   failure outside the change that `main` also has is a regression, not this
+   task: do not fix it in place; file it as the feature's follow-up by the
+   `workflow-intake` skill's follow-up path and name it in the step's evidence
+   (FLOW-09).
 4. Rule changes (FLOW-14): on a feature branch you may edit
    `docs/development/`, `tools/tier1/`, `tools/workflow/check/`, the CI lines
    that run them and `docs/design/TEMPLATE.md` only in the `paths` of a

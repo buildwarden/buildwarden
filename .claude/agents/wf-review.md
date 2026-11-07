@@ -25,7 +25,10 @@ findings never block on their own. Tier 2 is report-only (LINT-07).
    diff, against the rules as the branch changes them. For each approved rule
    change, judge whether the edit matches the wording the Design review
    approved at its sha (FLOW-14). Each finding: rule ID, severity, `file:line`, what is wrong, a
-   suggested fix.
+   suggested fix. A tier-1 or tier-2 finding on behavior `main` already has,
+   which the diff does not cause, is not a MUST on this feature: file it as
+   the feature's follow-up by the `workflow-intake` skill's follow-up path,
+   and list it in the report as "<slug> (follows <feature>)" (FLOW-09).
 4. Write `reports/<feature>/<sha12>.json` and `.md` on the workflow checkout,
    `<sha12>` the branch head's 12-character short hash (LINT-05: stable,
    diffable, counts by severity, suppressions with reasons carried over from
