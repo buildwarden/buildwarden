@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/buildlink"
@@ -37,43 +38,87 @@ func TestWardenBootScriptTakesLease(t *testing.T) {
 }
 
 func TestImageStamp(t *testing.T) {
-	cache := t.TempDir()
 	for _, tc := range []struct {
 		name string
-		dir  string
-		fix  func(string) bool
+		// setup lays out the cache and returns the image directory to check.
+		setup func(t *testing.T, cache string) string
+		fix   func(fix, cache, dir string) bool
 	}{
-		{"cache image", filepath.Join(cache, "macos-15"),
-			func(fix string) bool { return fix == PrepareCommand }},
-		{"custom --image", t.TempDir(),
-			func(fix string) bool {
-				return strings.Contains(fix, "omit --image") &&
-					strings.Contains(fix, cache) &&
-					strings.Contains(fix, PrepareCommand)
+		{name: "the active image",
+			setup: func(t *testing.T, cache string) string {
+				dir := makeImage(t, cache, "macos-a", t0)
+				makeImage(t, cache, "macos-b", t0.Add(time.Hour))
+				if err := (&ImageCache{CacheDir: cache}).SetActive(dir); err != nil {
+					t.Fatal(err)
+				}
+				return dir
+			},
+			fix: func(fix, _, _ string) bool { return fix == PrepareCommand }},
+		{name: "the fallback active image (no pointer)",
+			setup: func(t *testing.T, cache string) string {
+				makeImage(t, cache, "macos-a", t0)
+				return makeImage(t, cache, "macos-b", t0.Add(time.Hour))
+			},
+			fix: func(fix, _, _ string) bool { return fix == PrepareCommand }},
+		{name: "a cache image that is not active",
+			setup: func(t *testing.T, cache string) string {
+				makeImage(t, cache, "macos-b", t0.Add(time.Hour))
+				return makeImage(t, cache, "macos-a", t0)
+			},
+			fix: func(fix, _, dir string) bool {
+				return strings.Contains(fix, PrepareCommand+" "+dir) &&
+					strings.Contains(fix, "omit --image to build from the active image")
 			}},
-		{"sibling with the cache as prefix", cache + "-other",
-			func(fix string) bool { return strings.Contains(fix, "omit --image") }},
+		{name: "custom --image",
+			setup: func(t *testing.T, _ string) string { return makeImage(t, t.TempDir(), "x", t0) },
+			fix: func(fix, cache, _ string) bool { return fix == customImageFix(cache) }},
+		{name: "sibling with the cache as prefix",
+			setup: func(t *testing.T, cache string) string {
+				return makeImage(t, filepath.Dir(cache), filepath.Base(cache)+"-other", t0)
+			},
+			fix: func(fix, cache, _ string) bool { return fix == customImageFix(cache) }},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			if err := os.MkdirAll(tc.dir, 0o755); err != nil {
+			cache := filepath.Join(t.TempDir(), "images")
+			if err := os.MkdirAll(cache, 0o755); err != nil {
 				t.Fatal(err)
 			}
+			c := &ImageCache{CacheDir: cache}
+			dir := tc.setup(t, cache)
 			var fe *driver.FixableError
-			err := imageStamp(tc.dir, cache).Check()
-			if !errors.As(err, &fe) || !tc.fix(fe.Fix) {
+			err := imageStamp(dir, c).Check()
+			if !errors.As(err, &fe) || !tc.fix(fe.Fix, cache, dir) {
 				t.Fatalf("an image prepared before the change: %#v", err)
 			}
-			if err := writeLinkStamp(tc.dir); err != nil {
+			if err := writeLinkStamp(dir); err != nil {
 				t.Fatal(err)
 			}
-			if err := imageStamp(tc.dir, cache).Check(); err != nil {
+			if err := imageStamp(dir, c).Check(); err != nil {
 				t.Fatalf("a re-prepared image: %v", err)
 			}
-			stamp := imageStamp(tc.dir, cache).Path
+			stamp := imageStamp(dir, c).Path
 			if n, _ := buildlink.ReadStamp(stamp); n != buildlink.Channel {
 				t.Fatalf("stamp channel %d", n)
 			}
 		})
+	}
+}
+
+// TestLauncherStamps checks doctor reports the active image's stamp.
+func TestLauncherStamps(t *testing.T) {
+	cache := t.TempDir()
+	c := &ImageCache{CacheDir: cache}
+	if s := launcherStamps(c); len(s) != 1 || s[0].Path != "" || s[0].Rebuild != PrepareCommand {
+		t.Fatalf("no image: %+v", s)
+	}
+	a := makeImage(t, cache, "macos-a", t0)
+	makeImage(t, cache, "macos-b", t0.Add(time.Hour))
+	if err := c.SetActive(a); err != nil {
+		t.Fatal(err)
+	}
+	s := launcherStamps(c)
+	if len(s) != 1 || s[0].Path != filepath.Join(a, linkStampName) || s[0].Rebuild != PrepareCommand {
+		t.Fatalf("stamps %+v, want the active image's", s)
 	}
 }
 
