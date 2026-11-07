@@ -3,7 +3,7 @@ title: vz image prepare refreshes the cached image in place, and builds pick the
 priority: 43
 status: in_progress
 round: feature
-phase: 2
+phase: 3
 design: docs/design/vz-image-prepare-refresh.md
 branch: feat/vz-image-prepare-refresh
 alters_relationships: false
@@ -56,12 +56,19 @@ steps:
   - id: f2-plan-r2
     phase: 2
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f2-design-review-r2
     lease:
-      claimed_by: cloud/20261107T012740Z-attended
-      expires: 2026-11-07T03:40:05.977883Z
+      claimed_by: ""
+      expires: null
+  - id: f3-implement
+    phase: 3
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -211,3 +218,12 @@ history:
   - at: 2026-11-07T01:40:05Z
     by: cloud/20261107T012740Z-attended
     event: claimed f2-plan-r2 until 2026-11-07T03:40:05Z
+  - at: 2026-11-07T01:43:12Z
+    by: cloud/20261107T012740Z-attended
+    event: 'f2-plan-r2: plan committed at 771871a on feat/vz-image-prepare-refresh (25 tasks, test-first vertical slices A-I per Jeff; each marked native-no-sudo, needs-Jeff-sudo, or tier-0 only); wf check ok (impact fields and rule_changes as approved at e94a1be). No back-to-design. Note for Consolidation: Cross-driver impact says build --image <local .ipsw> stops failing in curl, but resolveImage returns any existing path as the disk first; plan follows Decision 8 (resolveImage untouched). Budget: estimate (2 runs, 9 steps) is spent with this step; about 3 runs and 9 steps remain, recommend raising to 5 runs, 18 steps.'
+  - at: 2026-11-07T01:43:31Z
+    by: cloud/20261107T012740Z-attended
+    event: done f2-plan-r2
+  - at: 2026-11-07T01:43:31Z
+    by: cloud/20261107T012740Z-attended
+    event: entered phase 3 (implement)
