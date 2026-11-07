@@ -148,7 +148,29 @@ failure. On CI
 
 ## Implementation plan
 
-Filled in at Plan (FLOW-03).
+1. `cmd/warden-io/jks_test.go` `TestWriteJKSMatchesKeytool`: add a
+   `skipOrFail` helper in the test file that calls `t.Fatal` when
+   `GITHUB_ACTIONS == "true"` and `t.Skip` otherwise; route the existing
+   not-on-PATH skip through it; after the lookup, run `keytool -help` and on a
+   non-zero exit call `skipOrFail` with the path, the error and the probe's
+   output. The `-importcert` / byte compare / `-list` steps stay unchanged
+   (Decisions 1-3; TEST-01, TEST-04, ORCH-01).
+2. Rewrite the comment above the test: it runs where a working keytool is
+   installed, skips elsewhere, and fails rather than skips on GitHub Actions,
+   whose `ubuntu-latest` image ships a JDK (replacing "CI installs a JDK")
+   (Decision 2; TEST-01).
+3. Tier 0 checks (TEST-02, TEST-01): in the cloud container (working JDK),
+   `go test ./cmd/warden-io -run TestWriteJKSMatchesKeytool -v` passes; with a
+   stub `keytool` that exits non-zero first on PATH, it skips with the stub's
+   output, still skips with only `CI=1`, and fails with `GITHUB_ACTIONS=true`;
+   `make test` and `make lint` are green (FLOW-17). The macbook SKIP and the
+   PR `test` job's PASS are confirmed where the Validation plan places them
+   (Implement on the macbook, the PR's CI); no `f6-validate-<host>` step is
+   added (native_validation is empty).
+
+No rework of other implemented code, no rule changes, no reference-doc
+(UX-01) or `overview.md` (FLOW-15) update: the change is test-only and alters
+no user-facing behavior or component flow.
 
 ## Design review
 
