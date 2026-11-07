@@ -1,0 +1,99 @@
+{
+  "feature": "vz-image-prepare-refresh",
+  "branch": "feat/vz-image-prepare-refresh",
+  "head": "967c35237998",
+  "base": "49e5354b3bbf",
+  "round": "feature",
+  "step": "f4-review",
+  "previous_report": null,
+  "scope": "git diff origin/main...feat/vz-image-prepare-refresh: 13 files, +2408/-152, 15 commits (5 design/plan, 10 implementation). The merge base is 49e5354, which is origin/main. First tier-2 pass for this feature. Judged against design r2 (approved at e94a1be) and plan r2 (771871a, 25 tasks).",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "rule_index": "85 '### <ID> — <title>' headers extracted from docs/development/*.md (LINT-01). The branch changes no rule. Judged: every agent-judgment rule and the judgment half of every hybrid rule the diff reaches (BOOT-06, BOOT-07, GLOBAL-04, GLOBAL-05, GLOBAL-06, GLOBAL-07, ORCH-01, UX-02, UX-03, UX-04, UX-05, TEST-04, FLOW-06, FLOW-15).",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass (linux, go1.26, ~/go/bin golangci-lint): 0 issues in the root module, tools/workflow and tools/tier1. Then dist/tier1 -base origin/main (49e5354b3bbf...967c35237998): 0 MUST, 0 MUST-review, 0 SHOULD, 1 hint, 0 suppressed, exit 0",
+    "make_lint_per_platform": "GOOS=darwin make lint: pass, same tier-1 result (FLOW-17: driver/vz is touched). GOOS=darwin GOARCH=amd64 go test -c of driver/vz and cmd/warden compiles. darwin/arm64 needs cgo and has no darwin C toolchain here; the branch does not touch vz_darwin_arm64.go, and Implement's attended macbook session built it.",
+    "make_test": "pass: 33 ok lines across the root module, tools/workflow and tools/tier1, no FAIL (exit 0)",
+    "custom_static_checks": "dist/tier1 hint: BOOT-07 bootstrap-surface on driver/vz/image.go (bootstrap.md not in the diff). Judged in implement item 1: not a model change.",
+    "enforcement": "not run: the branch changes neither tools/tier1/ nor tools/workflow/check/ (FLOW-14)",
+    "wf_check": "dist/wf check -feature vz-image-prepare-refresh: clean branch head ok; rule changes cleared (FLOW-14): the branch changes no rule or its enforcement. make lint and make test were reported as skipped (no -run), and run above instead; the tier-2 report lines were missing before this report.",
+    "fixes_made": "none; the code checkout is still clean at 967c352"
+  },
+  "implement_reported": [
+    {
+      "item": 1,
+      "topic": "tier-1 BOOT-07 hint on driver/vz/image.go",
+      "verdict": "dismissed with reason: not a model change",
+      "finding": null,
+      "note": "The image.go hunks split RestoreIPSW into restore (acquire, record, stamp, .prepared) and restoreDiskReal (restore, PrepareHeadlessImage, first boot) in the same order as before, add a local-file acquisition and the tier-0 seams, and add the active pointer, Images and SetActive. PrepareHeadlessImage, warden-boot, the LaunchDaemon, firstBoot and ReprepareImage are unchanged, so what the image carries and how the executor is delivered and started (BOOT-02, BOOT-03, BOOT-06) stay as they are; only which prepared image a build boots changes. The design needs no Bootstrap comparison. Record the dismissal in the PR body."
+    },
+    {
+      "item": 2,
+      "topic": "Prepare(source, update) with a latest seam on ImageCache instead of a third parameter",
+      "verdict": "accepted; Consolidation updates the design text",
+      "finding": null,
+      "note": "Same testability (GLOBAL-07): latest, download, restoreDisk, refresh, requireRoot and log are unexported ImageCache fields, nil meaning the real step, so a zero-value ImageCache{CacheDir} behaves as before. Reported, so not silent (FLOW-06). The design's interface table (Design, Image cache) still says Prepare(source, update, latest func), and Images() gained an IPSW field; Consolidation brings the text in line (FLOW-10)."
+    },
+    {
+      "item": 3,
+      "topic": "classify refusal: the guidance is the Fixable's fix text",
+      "verdict": "accepted",
+      "finding": null,
+      "note": "Prints 'ERROR: no IPSW file or prepared image at <path>' and 'To fix: give an IPSW URL, a local .ipsw file, or a prepared image directory': Decision 4's wording split the way UX-04 wants."
+    },
+    {
+      "item": 4,
+      "topic": "--update on other drivers is a Fixable with an empty fix",
+      "verdict": "SHOULD",
+      "finding": 1,
+      "note": "Matches Decision 3's message and is checked before anything runs, but UX-04 names a bad flag as a clear cause whose fix is stated."
+    },
+    {
+      "item": 5,
+      "topic": "ensureIPSWDownloaded reuses ipsw-latest.ipsw for any URL (pre-existing)",
+      "verdict": "pre-existing on main; filed as a follow-up",
+      "finding": null,
+      "note": "Same code on main 49e5354 (RestoreIPSW); Decision 8 put it out of scope and the diff does not cause it, though --update now reaches it too, and removeCachedIPSW never deletes ipsw-latest.ipsw. Not a MUST on this feature (FLOW-09): filed as vz-ipsw-latest-reuse (follows vz-image-prepare-refresh), priority 45, 8 steps / 1 run."
+    }
+  ],
+  "findings": [
+    {
+      "id": 1,
+      "rule": "UX-04",
+      "related_rules": [
+        "UX-05"
+      ],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "cmd/warden/image.go",
+      "line": 201,
+      "finding": "checkImageUpdate returns driver.Fixable(\"\", \"--update is not supported for --driver %s yet\", drv): warden prints the error with no 'To fix:' line. UX-04 item 1 lists a bad flag as a failure with a clear cause whose Fix is the exact change that resolves it. The message implies the remedy but does not state it, and FixableError allows an empty Fix only when Msg already says what to do. The check itself is right: it runs before anything is downloaded, and it is tested (TestCheckImageUpdate). The design's approved message is kept either way.",
+      "suggestion": "Give it a fix, e.g. driver.Fixable(\"drop --update (only --driver vz supports it so far)\", \"--update is not supported for --driver %s yet\", drv), and extend TestCheckImageUpdate to assert the fix is non-empty."
+    }
+  ],
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 0,
+    "SHOULD": 1
+  },
+  "resolved_since_previous": [],
+  "carried_forward": [],
+  "new_since_previous": [
+    1
+  ],
+  "suppressions": [],
+  "suppressions_note": "None: no previous report, no Tier1-Allow trailers on the branch.",
+  "back_to_design": false,
+  "back_to_design_note": "No. The implementation follows Decisions 1 to 8 and the prepare pseudocode: the --update refusal precedes classify, SetActive precedes the IPSW deletion and the warning, the warning fires only after a no-source refresh of an existing active image, and a failed lookup prints nothing. Both departures are reported and need only a text update at Consolidation.",
+  "routing": "Verdict pass. No MUST goes back to wf-implement. Finding 1 (SHOULD) and the dismissals of implement items 1 and 5 go in the PR body for the human to acknowledge at merge (FLOW-08). Follow-up filed: vz-ipsw-latest-reuse (follows vz-image-prepare-refresh).",
+  "follow_ups_filed": [
+    "vz-ipsw-latest-reuse (follows vz-image-prepare-refresh)"
+  ],
+  "informational": [
+    "UX-02: image list has no machine-readable form on main either; this diff extends its text lines (state and IPSW columns, documented in cli.md). Not a regression, so not filed; worth a note when a --json pass over the CLI is queued.",
+    "The active pointer is <cache>/active in ~/.cache/warden/images, a directory the qemu linux images and their layers.json share (as the vz images already did). Nothing on main globs a bare 'active', but a more specific name (vz-active) would avoid any later collision. Not a rule finding.",
+    "Tests: TestClassify, TestPrepare (table), the --update, IPSW-deletion, out-of-date (pure and cache-reading), local-IPSW and file:// cases in prepare_test.go; TestImageDir, TestSetActive, TestImages; TestImageStamp's four placements and TestLauncherStamps; TestFormatVZImages and TestCheckImageUpdate. They are deterministic (marker times set with fixed timestamps; lookups, downloads, restores and refreshes are injected; no network) (GLOBAL-04, TEST-04).",
+    "FLOW-15: overview.md's VM-driver block gains the vz base-image choice and the stamp fixes; overview has no image-prepare pseudocode on main, so none is due.",
+    "Native validation f6-validate-macos-vz (blocking) remains pending: the IPSW restore, the in-place refresh, root ownership of active and the offline lookup run only there."
+  ]
+}

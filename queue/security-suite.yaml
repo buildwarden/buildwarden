@@ -1,6 +1,6 @@
 feature: security-suite
 title: 'Build the TEST-08 security suite and pen-tester agent (Deep-dive #1)'
-priority: 49
+priority: 50
 status: in_progress
 round: feature
 phase: 1
@@ -91,3 +91,6 @@ history:
   - at: 2026-11-07T03:47:01Z
     by: human/jeff
     event: 'priority 48 -> 49 (renumbered by wf new: jks-test-skip-without-jdk queued at 44)'
+  - at: 2026-11-07T11:04:31Z
+    by: cloud/20261107T105651Z
+    event: 'priority 49 -> 50 (renumbered by wf new: vz-ipsw-latest-reuse queued at 45)'

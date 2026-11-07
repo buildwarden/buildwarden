@@ -1,6 +1,6 @@
 feature: baked-asset-staleness
 title: One staleness check for every baked boot asset
-priority: 47
+priority: 48
 follows: build-link-subnet
 status: queued
 round: feature
@@ -41,3 +41,6 @@ history:
   - at: 2026-11-07T03:47:01Z
     by: human/jeff
     event: 'priority 46 -> 47 (renumbered by wf new: jks-test-skip-without-jdk queued at 44)'
+  - at: 2026-11-07T11:04:31Z
+    by: cloud/20261107T105651Z
+    event: 'priority 47 -> 48 (renumbered by wf new: vz-ipsw-latest-reuse queued at 45)'
