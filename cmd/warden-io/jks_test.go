@@ -82,9 +82,11 @@ func TestWriteJKSReadable(t *testing.T) {
 }
 
 // TestWriteJKSMatchesKeytool compares the bytes with what the JDK's keytool
-// writes for the same certificate. It runs wherever keytool is on PATH (CI
-// installs a JDK). keytool stamps the entry with the current time, so ours is
-// written with keytool's timestamp; every other byte must match.
+// writes for the same certificate. It runs where a working keytool is installed
+// and skips elsewhere, except on GitHub Actions, whose ubuntu-latest image ships
+// a JDK: there it fails rather than skips. keytool stamps the entry with the
+// current time, so ours is written with keytool's timestamp; every other byte
+// must match.
 func TestWriteJKSMatchesKeytool(t *testing.T) {
 	keytool, err := exec.LookPath("keytool")
 	if err != nil {
