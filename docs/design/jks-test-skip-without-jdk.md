@@ -238,20 +238,66 @@ truststore it writes do not change.
 
 ## Implementation plan
 
-Plan rewrites this section after the return. The return's rework (FLOW-06),
-against what was implemented at e74e98c:
+Rework of what was implemented at a5ea356 and e74e98c (FLOW-06). The probe,
+the not-on-PATH lookup and the import, byte-compare and `-list` steps stay as
+they are; only the switch, the comments, CI and one contributor sentence
+change.
 
-1. **Change the helper in `cmd/warden-io/jks_test.go`.** Replace `skipOrFail`'s
-   `GITHUB_ACTIONS == "true"` check with `WARDEN_REQUIRE_KEYTOOL == "1"`, and add
-   the variable's name to the failure message. The probe and the not-on-PATH
-   path stay as implemented (Decisions 1 and 3).
-2. **Rewrite the test's comment** to match the new behavior (see Design).
-3. **Add the `keytool` job to `.github/workflows/main.yml`** and add it to
-   `ci-ok`'s `needs` (Decisions 2 and 5).
-4. **Add the `CONTRIBUTING.md` sentence** (see Design).
-5. **Validate** as the Validation plan says.
+1. **Tier 0 check of the require path first (TEST-02 tier 0; TEST-01,
+   TEST-04).** Before editing, with a stub `keytool` that exits non-zero first
+   on PATH, confirm `WARDEN_REQUIRE_KEYTOOL=1 go test ./cmd/warden-io -run
+   Keytool -v` skips under the current code (the red case: the variable is not
+   yet honored). Task 2 turns it into a failure.
+2. **Rework the helper in `cmd/warden-io/jks_test.go` (Decisions 1 and 3;
+   TEST-01, TEST-04).** Rename `skipOrFail` to `unavailable`, as in Design.
+   Replace its `GITHUB_ACTIONS == "true"` check with
+   `os.Getenv("WARDEN_REQUIRE_KEYTOOL") == "1"`, and on that path call
+   `t.Fatal(msg + " (WARDEN_REQUIRE_KEYTOOL=1)")`; otherwise `t.Skip(msg)`.
+   Move the lookup and the `-help` probe into `requireKeytool(t) string`, as
+   Design sketches, and have the test call it first. Nothing checks `CI` or
+   `GITHUB_ACTIONS`.
+3. **Rewrite the comments (Design, "Test"; TEST-01).** The comment above
+   `TestWriteJKSMatchesKeytool` says the test skips where no keytool runs, that
+   `WARDEN_REQUIRE_KEYTOOL=1` makes that a failure, and that the `keytool` CI
+   job sets the variable and runs it on Linux, macOS and Windows; it keeps the
+   timestamp sentence. The helper's comment drops the GitHub Actions wording.
+   The test keeps `Keytool` in its name so `-run Keytool` selects it.
+4. **Add the `keytool` job to `.github/workflows/main.yml` (Decisions 2 and 5;
+   TEST-02, GLOBAL-07, FLOW-11).** As in Design: `needs: changes`, the
+   `gotests` gate, the `tier1-test` matrix (`ubuntu-latest`, `macos-latest`,
+   `windows-latest`), checkout, `setup-go` (`go-version: stable`),
+   `actions/setup-java@v4` with `distribution: temurin`, `java-version: '21'`,
+   then `go test ./cmd/warden-io -run Keytool -count=1 -v` with
+   `WARDEN_REQUIRE_KEYTOOL: '1'`, under the two-line comment Design gives. Add
+   `keytool` to `ci-ok`'s `needs`. The `test` job is unchanged (Decision 4).
+5. **Add the `CONTRIBUTING.md` sentence (Design, "Contributor docs"; TEST-01).**
+   In the paragraph after the command list (the one ending with the
+   `testing.md` link), one sentence: the keytool comparison skips without a JDK,
+   and CI's `keytool` job runs it with Java on every platform. No reference-doc
+   (UX-01) or `overview.md` (FLOW-15) update: no user-facing behavior or
+   component flow changes.
+6. **Tier 0 validation (TEST-02 tier 0; TEST-01, TEST-04, FLOW-17).** On the
+   machine Implement runs on, and with the stub `keytool` from task 1 where the
+   machine has a JDK:
+   - `go test ./cmd/warden-io -run Keytool -v` reports SKIP with the probe's
+     output (on the macbook, the stub's "Unable to locate a Java Runtime");
+   - `WARDEN_REQUIRE_KEYTOOL=1` with the same command FAILS with the same
+     message plus `(WARDEN_REQUIRE_KEYTOOL=1)`;
+   - `CI=1` or `GITHUB_ACTIONS=true` alone still SKIPs;
+   - with a working JDK (if present), the test PASSes with and without the
+     variable;
+   - `make test` and `make lint` are green, then push.
+7. **CI validation on the PR (Validation plan; TEST-02, GLOBAL-07, FLOW-11).**
+   All three `keytool` legs log `--- PASS: TestWriteJKSMatchesKeytool`, not
+   SKIP; `ci-ok` needs `keytool` and is green; `test` still passes. A
+   platform difference a leg finds (line endings, paths, a byte mismatch) is
+   fixed in the test or the writer under FLOW-11's bounded repair, not by
+   dropping the leg. This runs when the PR opens at Publish; no
+   `f6-validate-<host>` step exists or is added (`native_validation` is
+   empty).
 
-The superseded plan (f2-plan at 1d51299) is in this file's history.
+No rule changes (`rule_changes` is empty, Decision 6). The superseded plan
+(f2-plan at 1d51299) is in this file's history.
 
 ## Design review
 
