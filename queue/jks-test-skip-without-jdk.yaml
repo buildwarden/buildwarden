@@ -3,7 +3,7 @@ title: TestWriteJKSMatchesKeytool skips when keytool cannot run (macOS stub with
 priority: 44
 status: in_progress
 round: feature
-phase: 4
+phase: 1
 design: docs/design/jks-test-skip-without-jdk.md
 branch: feat/jks-test-skip-without-jdk
 alters_relationships: false
@@ -38,8 +38,8 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: f4-review
-    phase: 4
+  - id: f1-design-r2
+    phase: 1
     affinity: cloud
     status: pending
     lease:
@@ -99,3 +99,6 @@ history:
   - at: 2026-11-07T11:36:04Z
     by: cloud/20261107T105651Z
     event: entered phase 4 (review)
+  - at: 2026-11-07T14:07:11Z
+    by: cloud/20261107T140700Z-attended
+    event: 'back to design: Jeff (attended, 2026-11-07), on the CI fail-instead-of-skip guard: ''For the keytool functionality, I''d like to separate its tests as a separate CI job which installs Java on the platform as a part of test setup.'' Replaces the GITHUB_ACTIONS guard (d8d8a03, implemented at a5ea356/e74e98c): skip wherever keytool cannot run; WARDEN_REQUIRE_KEYTOOL=1 turns the skip into a failure; a new main.yml keytool job on the tier1-test matrix installs Java (setup-java temurin 21) and runs the keytool tests with it set.'
