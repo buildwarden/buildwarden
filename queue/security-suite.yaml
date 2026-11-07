@@ -33,12 +33,13 @@ budget:
 questions:
   - id: q1
     kind: blocking
-    status: open
+    status: answered
     question: Scope f1-design. The unattended design agent was halted by a safety classifier on 2026-11-01 while drafting the attack content, so the step is not re-dispatched. Choose how to run it.
     options:
       - run f1-design in an attended session
       - narrow it to the harness structure, front-matter, tiers and process items, with no detailed attack techniques
     recommended: narrow it to the harness structure, front-matter, tiers and process items, with no detailed attack techniques
+    answer: narrow it to the harness structure, front-matter, tiers and process items, with no detailed attack techniques (Jeff, 2026-11-07)
 history:
   - at: 2026-10-28T23:18:38Z
     by: attended-setup
@@ -94,3 +95,6 @@ history:
   - at: 2026-11-07T11:04:31Z
     by: cloud/20261107T105651Z
     event: 'priority 49 -> 50 (renumbered by wf new: vz-ipsw-latest-reuse queued at 45)'
+  - at: 2026-11-07T20:46:12Z
+    by: human/jeff
+    event: 'blocking question q1 answered: narrow it to the harness structure, front-matter, tiers and process items, with no detailed attack techniques (Jeff, 2026-11-07)'
