@@ -88,15 +88,7 @@ func TestWriteJKSReadable(t *testing.T) {
 // current time, so ours is written with keytool's timestamp; every other byte
 // must match.
 func TestWriteJKSMatchesKeytool(t *testing.T) {
-	keytool, err := exec.LookPath("keytool")
-	if err != nil {
-		skipOrFail(t, "keytool not on PATH")
-	}
-	// macOS ships a /usr/bin/keytool stub that exits non-zero without a JDK.
-	if out, err := exec.Command(keytool, "-help").CombinedOutput(); err != nil {
-		skipOrFail(t, fmt.Sprintf("keytool at %s cannot run (no Java runtime?): %v\n%s",
-			keytool, err, out))
-	}
+	keytool := requireKeytool(t)
 	cert := testCA(t)
 	dir := t.TempDir()
 	pemPath := filepath.Join(dir, "ca.pem")
@@ -138,12 +130,28 @@ func TestWriteJKSMatchesKeytool(t *testing.T) {
 	}
 }
 
-// skipOrFail skips the test, except on GitHub Actions, where the runner image
-// ships a JDK and a skip would hide the only real comparison against keytool.
-func skipOrFail(t *testing.T, msg string) {
+// requireKeytool returns the path of a keytool that runs, or stops the test
+// through unavailable. The lookup alone is not enough: macOS's /usr/bin/keytool
+// is a stub that exits non-zero without a JDK.
+func requireKeytool(t *testing.T) string {
 	t.Helper()
-	if os.Getenv("GITHUB_ACTIONS") == "true" {
-		t.Fatal(msg)
+	keytool, err := exec.LookPath("keytool")
+	if err != nil {
+		unavailable(t, "keytool not on PATH")
+	}
+	if out, err := exec.Command(keytool, "-help").CombinedOutput(); err != nil {
+		unavailable(t, fmt.Sprintf("keytool at %s cannot run (no Java runtime?): %v\n%s",
+			keytool, err, out))
+	}
+	return keytool
+}
+
+// unavailable skips the test, or fails it when WARDEN_REQUIRE_KEYTOOL=1 so a
+// job that set up a JDK cannot pass by skipping.
+func unavailable(t *testing.T, msg string) {
+	t.Helper()
+	if os.Getenv("WARDEN_REQUIRE_KEYTOOL") == "1" {
+		t.Fatal(msg + " (WARDEN_REQUIRE_KEYTOOL=1)")
 	}
 	t.Skip(msg)
 }
