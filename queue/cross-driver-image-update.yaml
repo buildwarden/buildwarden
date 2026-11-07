@@ -1,6 +1,6 @@
 feature: cross-driver-image-update
 title: warden image prepare --update moves every VM driver's base image to its newest source
-priority: 47
+priority: 48
 status: queued
 round: feature
 phase: 0
@@ -28,3 +28,6 @@ history:
   - at: 2026-11-07T01:25:23Z
     by: human/jeff
     event: queued at priority 47 (intake)
+  - at: 2026-11-07T03:47:01Z
+    by: human/jeff
+    event: 'priority 47 -> 48 (renumbered by wf new: jks-test-skip-without-jdk queued at 44)'

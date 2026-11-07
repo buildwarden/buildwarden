@@ -1,6 +1,6 @@
 feature: security-suite
 title: 'Build the TEST-08 security suite and pen-tester agent (Deep-dive #1)'
-priority: 48
+priority: 49
 status: in_progress
 round: feature
 phase: 1
@@ -88,3 +88,6 @@ history:
   - at: 2026-11-07T01:25:23Z
     by: human/jeff
     event: 'priority 47 -> 48 (renumbered by wf new: cross-driver-image-update queued at 47)'
+  - at: 2026-11-07T03:47:01Z
+    by: human/jeff
+    event: 'priority 48 -> 49 (renumbered by wf new: jks-test-skip-without-jdk queued at 44)'

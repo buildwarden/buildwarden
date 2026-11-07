@@ -1,0 +1,30 @@
+feature: jks-test-skip-without-jdk
+title: TestWriteJKSMatchesKeytool skips when keytool cannot run (macOS stub without a JDK)
+priority: 44
+status: queued
+round: feature
+phase: 0
+design: docs/design/jks-test-skip-without-jdk.md
+branch: feat/jks-test-skip-without-jdk
+alters_relationships: null
+source: 'Jeff, attended 2026-11-06: vz-image-prepare-refresh f3-implement''s done-when (make test) fails on the macbook only on cmd/warden-io TestWriteJKSMatchesKeytool: /usr/bin/keytool is Apple''s stub (''Unable to locate a Java Runtime''), and the test skips only when keytool is not on PATH. Also fails on main (noted in native-loop-followups, never filed). Jeff chose a skip over installing a JDK; run first here to unblock vz-image-prepare-refresh.'
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 7
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-07T03:47:01Z
+    by: human/jeff
+    event: queued at priority 44 (intake)

@@ -1,6 +1,6 @@
 feature: hyperv-relay-per-build-channel
 title: Give the Hyper-V relay VM a per-build channel before the claim
-priority: 45
+priority: 46
 follows: build-link-subnet
 status: queued
 round: feature
@@ -38,3 +38,6 @@ history:
   - at: 2026-11-07T00:36:00Z
     by: cloud/20261106T231440Z-attended
     event: 'follows: build-link-subnet (regression-fixes-follow-up x4-close, Decision 9, Jeff a9): a fix of class 3, ahead of new functionality; no renumbering'
+  - at: 2026-11-07T03:47:01Z
+    by: human/jeff
+    event: 'priority 45 -> 46 (renumbered by wf new: jks-test-skip-without-jdk queued at 44)'
