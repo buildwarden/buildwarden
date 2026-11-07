@@ -1,6 +1,6 @@
 feature: security-suite
 title: 'Build the TEST-08 security suite and pen-tester agent (Deep-dive #1)'
-priority: 47
+priority: 48
 status: in_progress
 round: feature
 phase: 1
@@ -85,3 +85,6 @@ history:
   - at: 2026-11-06T17:50:00Z
     by: human/jeff
     event: 'priority 37 -> 47 (Jeff, 2026-11-06 order: in implementation, then process, then fixes for implemented items, then new functionality; this item: 4. new functionality)'
+  - at: 2026-11-07T01:25:23Z
+    by: human/jeff
+    event: 'priority 47 -> 48 (renumbered by wf new: cross-driver-image-update queued at 47)'
