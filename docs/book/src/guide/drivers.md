@@ -210,6 +210,18 @@ image, and a build without `--image` uses it; `--image <dir>/disk.img` picks
 another. A cache prepared before the active image was recorded uses the image
 whose preparation finished last.
 
+`warden image list` shows the active image first, then the older ones, each
+with the IPSW it was restored from when that was recorded:
+
+```
+$ warden image list
+vz      macos    /Users/me/.cache/warden/images/macos-a139c218a2010753  active  UniversalMac_27.2_26B123_Restore.ipsw
+vz      macos    /Users/me/.cache/warden/images/macos-90a1b1f94f64b00a  older   UniversalMac_27.0.1_26A100_Restore.ipsw
+```
+
+To switch builds back to an older image, prepare it by its directory (see
+*Other sources* below); it is refreshed in place and becomes active.
+
 **Refreshing.** Re-running `sudo warden image prepare --driver vz` with no
 source refreshes the active image's warden boot agent in place: no IPSW
 download and no restore. When Apple has since published a newer macOS, it
@@ -247,6 +259,25 @@ want. An IPSW downloaded into the cache (`ipsw-<key>.ipsw`, about 25 GB) is
 deleted once its image is prepared, since a later prepare of the same IPSW
 refreshes the image in place. Restoring that image from scratch (after
 deleting its directory) downloads the IPSW again.
+
+**When a build refuses the image.** A build refuses a prepared image whose
+warden boot agent is out of date (its link-channel stamp is `missing` or
+`stale`) and names the command that fixes it; `warden doctor --driver vz`
+reports the same as `BLOCKED`. Run the command it names:
+
+- building from the active image (no `--image`):
+  `sudo warden image prepare --driver vz`, which refreshes it in place in a
+  few minutes, with no download;
+- building with `--image` naming another image in the cache: either prepare
+  that directory (`sudo warden image prepare --driver vz <dir>`, which
+  refreshes it and makes it active) or drop `--image` to build from the
+  active image;
+- building with `--image` naming a disk outside the cache: drop `--image` and
+  build from the cache's image, since prepare re-prepares only images it owns.
+
+The [build-link upgrade notes](#upgrading-to-the-configurable-build-link)
+explain why existing images need this once, and the
+[CLI reference](cli.md#warden-image-prepare) lists every source and flag.
 
 ### Examples
 
