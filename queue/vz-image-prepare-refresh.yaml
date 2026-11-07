@@ -3,7 +3,7 @@ title: vz image prepare refreshes the cached image in place, and builds pick the
 priority: 43
 status: in_progress
 round: feature
-phase: 3
+phase: 4
 design: docs/design/vz-image-prepare-refresh.md
 branch: feat/vz-image-prepare-refresh
 alters_relationships: false
@@ -65,10 +65,17 @@ steps:
   - id: f3-implement
     phase: 3
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f4-review
+    phase: 4
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261107T105651Z
-      expires: 2026-11-07T12:57:24.893999186Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 5
@@ -239,3 +246,9 @@ history:
   - at: 2026-11-07T10:57:24Z
     by: cloud/20261107T105651Z
     event: claimed f3-implement until 2026-11-07T12:57:24Z
+  - at: 2026-11-07T11:00:54Z
+    by: cloud/20261107T105651Z
+    event: done f3-implement
+  - at: 2026-11-07T11:00:54Z
+    by: cloud/20261107T105651Z
+    event: entered phase 4 (review)
