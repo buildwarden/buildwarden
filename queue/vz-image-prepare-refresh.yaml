@@ -67,15 +67,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261107T105651Z
+      expires: 2026-11-07T12:57:24.893999186Z
 budget:
   estimate:
     runs: 5
     steps: 18
   spent:
-    runs: 2
-    steps: 9
+    runs: 3
+    steps: 10
 questions:
   - id: a1
     kind: assumed
@@ -236,3 +236,6 @@ history:
   - at: 2026-11-07T03:47:02Z
     by: cloud/20261107T012740Z-attended
     event: 'released f3-implement: implementation complete at 967c352 (25 tasks, native checks A and G pass); done-when blocked only by make test''s TestWriteJKSMatchesKeytool on the macbook (no JDK); waits on jks-test-skip-without-jdk'
+  - at: 2026-11-07T10:57:24Z
+    by: cloud/20261107T105651Z
+    event: claimed f3-implement until 2026-11-07T12:57:24Z
