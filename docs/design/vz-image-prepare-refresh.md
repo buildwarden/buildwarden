@@ -1,18 +1,18 @@
 ---
 feature: vz-image-prepare-refresh
 status: draft
-drivers: [vz]            # driver/vz (image.go, driver.go) and the vz path of cmd/warden/image.go only; no shared driver/ package changes, so no other driver is reached (FLOW-02)
+drivers: [vz]            # driver/vz (image.go, driver.go, environment.go) and the vz path of cmd/warden/image.go only; no shared driver/ package changes, so no other driver is reached (FLOW-02)
 seams: []                # no versioned seam: the active-image pointer is the vz image cache's own layout, read only by driver/vz
-surfaces: [cli, output]  # cli: `image prepare --driver vz` with no source refreshes in place, the vz `--update` flag, a prepared image directory as source, `image list` lists every vz image; output: the refresh and out-of-date warnings, the stamp refusal's fix text (UX-01, UX-04)
+surfaces: [cli, output]  # cli: `image prepare --driver vz` with no source refreshes in place, the vz `--update` flag, a prepared image directory as source, `image list` lists every vz image, a local IPSW path is restored from in place; output: the refresh and out-of-date warnings, the stamp refusal's fix text (UX-01, UX-04)
 security_boundary: none  # which prepared image a build boots changes; the image's isolation, the relay path and what is baked into it do not
 alters_relationships: false  # inside the vz driver's existing role: how it picks and refreshes its own base image
-design_review: required  # blocking native validation (macos-vz) and assumed questions (FLOW-19)
+design_review: required  # blocking native validation (macos-vz), and the delta since approved at f764e9f changes decisions (return r2: warning condition, local IPSW restore) (FLOW-19)
 native_validation:
   - {host: macos-vz, blocking: true, reason: "reaches driver/vz only (image selection, refresh in place, prepare's source handling) and alters behavior only the vz host exercises: the IPSW restore, the in-place re-prepare and the build's choice among prepared images cannot run in CI"}
 tier2_gaps: []
 rules: [FLOW-01, FLOW-02, FLOW-09, FLOW-12, FLOW-15, FLOW-19, UX-01, UX-03, UX-04, UX-05, UX-07, GLOBAL-04, GLOBAL-05, GLOBAL-07, ORCH-01, TEST-02]
 rule_changes: []
-concepts: [image-prepare, image-refresh, image-update, image-cache, active-image, ipsw, vz, launcher-stamp, multi-version-images]
+concepts: [image-prepare, image-refresh, image-update, image-cache, active-image, ipsw, local-ipsw-source, vz, launcher-stamp, multi-version-images]
 related: [build-link-subnet.md, hyperv-windows-prepare.md, vm-driver-release-plan.md, ledger-environment-types.md]
 ---
 
@@ -51,6 +51,13 @@ item 4):
 
 `doctor --driver vz` and `image list` inherit (2): they report the
 first-by-name image, not the one the user last prepared.
+
+3. **A local IPSW path as the source fails.** The `image prepare` help
+   ("local path or URL") and `docs/book/src/guide/cli.md` promise a local
+   path, but `RestoreIPSW` hands every source to curl (`ensureIPSWDownloaded`),
+   which rejects a plain path with "URL rejected: No host part"; only a
+   `file://` URL works, and it is copied into the cache. Found by Plan (return
+   r2, Design review).
 
 Why now: it is an immediate follow-up of build-link-subnet (FLOW-09), whose
 stamp refusal names a fix that does not work on any machine that has seen a
@@ -129,14 +136,45 @@ All four designs already carry front-matter; none needs a retrofit (FLOW-12).
    --update to prepare that source"). On any other driver it is refused with
    "--update is not supported for --driver <d> yet" (cross-driver `--update` is
    a separate queued item, Design review). A refresh with no source makes one
-   best-effort lookup of the latest IPSW after it succeeds; when no prepared
-   directory exists for it, it ends with a **warning** that the active image is
-   out of date, naming both versions and the command: `warning: the active
-   macOS image is <current>; macOS <newer> is available. To update (about
-   25 GB, 15 minutes): sudo warden image prepare --driver vz --update`. A
-   failed lookup (offline, Apple unreachable) prints nothing and never fails
+   best-effort lookup of the latest supported IPSW `u` after it succeeds, and
+   ends with a **warning** whenever the active image was not restored from `u`,
+   **whether or not `u` already has a prepared image** (Jeff, return r2). The
+   warning names both versions and `--update`, which restores `u` or, when its
+   image is already prepared, refreshes that image in place and makes it
+   active with no download:
+   - `u` not prepared: `warning: the active macOS image is <current>; macOS
+     <newer> is available. To update (about 25 GB, 15 minutes): sudo warden
+     image prepare --driver vz --update`
+   - `u` prepared (`macos-<shortHash(u)>` valid): `warning: the active macOS
+     image is <current>; macOS <newer> is already prepared. To use it (no
+     download): sudo warden image prepare --driver vz --update`
+
+   A failed lookup (offline, Apple unreachable) prints nothing and never fails
    the refresh.
-   *Rejected:* a `latest` source keyword (proposed by Design; Jeff chose a
+
+   **The active image's IPSW identity.** The comparison is well defined from
+   what the cache already holds. An image restored from IPSW source `s` is the
+   directory `macos-<shortHash(s)>` (the key), and its prepared disk's recorded
+   provenance (`layers.json`, ledger-environment-types) carries the input
+   `{name: ipsw, url, sha256, size}`. The active image *is* from `u` when
+   either (a) its directory is `macos-<shortHash(u)>`, or (b) the file name of
+   its recorded IPSW `url` (the last path element) equals the file name of `u`.
+   (b) is what makes an image prepared from a local file comparable: its key
+   hashes the path, never `u`, but Apple's file name
+   (`UniversalMac_<version>_<build>_Restore.ipsw`) survives a download kept
+   under its own name. A local copy that was renamed does not match and gets
+   the warning; `--update` then restores `u` from Apple, which is what the
+   warning says it does. `<current>` and `<newer>` are the version and build
+   parsed from those file names (`macOS 27.2 (26B123)`), else the file name;
+   an active image with no recorded IPSW (prepared before provenance was
+   recorded) and a key that is not `u`'s is named by its directory
+   (`macos-<key> (IPSW not recorded)`) and gets the warning. The digest is not
+   compared: knowing `u`'s digest needs the 25 GB download the warning is
+   there to offer.
+   *Rejected:* warning only when `u` has no prepared image (the r1 text; it
+   contradicted native case 3, and an older active image is out of date
+   whether or not the newer one is on disk, Jeff at return r2); a `latest`
+   source keyword (proposed by Design; Jeff chose a
    flag at review: a source names *what* to prepare, `--update` asks to move
    on, and the flag is the spelling other drivers can share later); reusing
    `--force` ("re-acquire even if a valid cached copy exists": for vz that
@@ -148,9 +186,13 @@ All four designs already carry front-matter; none needs a retrofit (FLOW-12).
    counterpart for).
 
 4. **A source that names a prepared image refreshes it in place.** The source
-   is classified in one pure function: empty, a URL, a local IPSW file, or a
-   prepared image (a cache directory that `isValidImageDir` accepts, or the
-   `disk.img` inside one). An IPSW (URL or file, or the one `--update`
+   is classified in one pure function: empty, a URL (has a scheme, `file://`
+   included), a local IPSW file (an existing regular file given as a plain
+   path, Decision 7), or a prepared image (a cache directory that
+   `isValidImageDir` accepts, or the `disk.img` inside one); a plain path that
+   names none of these is refused naming the path ("no IPSW file or prepared
+   image at <path>; give an IPSW URL, a local .ipsw file, or a prepared image
+   directory", UX-04). An IPSW (URL or file, or the one `--update`
    resolves) whose `macos-<key>` directory is already prepared is refreshed in
    place, whichever position it sorts in, which fixes the second half of
    problem (2). A prepared-image source is refreshed in place. Every path ends
@@ -192,11 +234,29 @@ All four designs already carry front-matter; none needs a retrofit (FLOW-12).
    the active one and the one it replaced (removes rollback images without
    the user asking).
 
-7. **Out of scope, noted.** `ensureIPSWDownloaded` prefers a pre-existing
+7. **A local IPSW file is restored from in place** (Jeff, return r2; fixes
+   problem 3). For a plain-path source, `RestoreIPSW` reads the file where it
+   is: no curl, no copy into the cache, no `ipsw-<key>.ipsw` written, and the
+   file is never deleted (Decision 6). The image is keyed by its path as for
+   any source, `macos-<shortHash(path)>`, with a relative path made absolute
+   first so the same file keys the same from any directory. Its provenance
+   records the file's digest and size, and `url: file://<absolute path>` so
+   that the input stays a URL and its file name is known for `image list` and
+   the out-of-date comparison (Decision 3). A `file://` URL source is
+   unchanged (a URL: curl copies it into the cache, and that copy is deleted
+   once prepared, Decision 6), so its key does not change for an existing
+   image. A second prepare of the same path finds the prepared directory and
+   refreshes it in place (Decision 4).
+   *Rejected:* refuse a plain path and require `file://` (breaks what the help
+   and `cli.md` already promise, UX-03); copy the file into the cache like a
+   download (25 GB of copying and disk for a file the user already has).
+
+8. **Out of scope, noted.** `ensureIPSWDownloaded` prefers a pre-existing
    `ipsw-latest.ipsw` over downloading *any* URL, so a stale manual file could
    be restored into a directory keyed by a newer URL (the recorded digest stays
-   honest). `resolveImage` restores an IPSW for `build --image <url>`, which
-   its own comment says builds never do. Neither is touched here; a build
+   honest); a local-file source bypasses it (Decision 7). `resolveImage`
+   restores an IPSW for `build --image <url>`, which its own comment says
+   builds never do. Neither is touched here; a build
    restore does not write the pointer.
 
 ## Questions
@@ -243,10 +303,12 @@ None.
 ```
 <cache> = ~/.cache/warden/images  (the sudo user's under sudo)
   active                      "macos-<key>\n"          new (Decision 1)
-  ipsw-<key>.ipsw             <key> = shortHash(IPSW URL or local path)
-  macos-<key>/                disk.img aux-storage hardware-model machine-id
+  ipsw-<key>.ipsw             downloaded IPSW (URL sources only); deleted once prepared (Decision 6)
+  macos-<key>/                <key> = shortHash(IPSW URL, or a local file's absolute path)
+                              disk.img aux-storage hardware-model machine-id
                               .prepared link-channel
-  layers.json                 provenance (IPSW URL, digest) per prepared disk
+  layers.json                 provenance per prepared disk: input {name: ipsw, url, sha256, size};
+                              url is the IPSW URL, or file://<absolute path> for a local file
 ```
 
 `driver/vz/image.go` gains, on `ImageCache`:
@@ -256,17 +318,20 @@ Images() []Image                    every valid prepared dir: {Dir, Prepared tim
 ImageDir() (string, error)          active if valid, else newest .prepared (name tie-break), else ""
 SetActive(dir) error                write <cache>/active (atomic rename), owned by the sudo user
 Prepare(source, update, latest func) (dir, error)    the decision below; cmd/warden calls only this
+OutOfDate(active, u) (warning string, ok bool)       Decision 3's comparison and text; pure
 ```
 
-The lookup is injected (`latestSupportedIPSW` on darwin/arm64), so the decision
-is tier-0 testable on every OS (GLOBAL-07).
+The lookup is injected (`latestSupportedIPSW` on darwin/arm64), and so is the
+restore step that turns the acquired IPSW into a disk (`restoreIPSW`), so the
+decision, the local-file path and the warning are tier-0 testable on every OS
+(GLOBAL-07).
 
 ### `image prepare --driver vz [source | --update]`
 
 ```
 preflight; require root                               (unchanged, before anything)
 --update with a source         -> refuse (drop one or the other)
-kind := classify(source)        empty | url | ipsw-file | prepared-dir
+kind := classify(source)        empty | url | ipsw-file | prepared-dir | none-of-these -> refuse naming the path
 switch:
   --update                      -> u := latestSupportedIPSW(); restoreOrRefresh(u)
   empty, active image A exists  -> refresh(A)
@@ -277,13 +342,21 @@ switch:
 SetActive(result)
 delete <cache>/ipsw-<key of result>.ipsw if present  (provenance already recorded; a user's local IPSW is never touched)
 empty-source refresh only: best effort u := latestSupportedIPSW();
-  no prepared macos-<shortHash(u)>  -> warning "the active macOS image is <current>; macOS <newer> is available. To update (about 25 GB, 15 minutes): sudo warden image prepare --driver vz --update"
-  lookup error                      -> nothing
+  lookup error                                   -> nothing
+  active is from u                               -> nothing
+      (dir == macos-<shortHash(u)>, or base(recorded ipsw url) == base(u))
+  not from u, macos-<shortHash(u)> not prepared  -> warning "the active macOS image is <current>; macOS <newer> is available. To update (about 25 GB, 15 minutes): sudo warden image prepare --driver vz --update"
+  not from u, macos-<shortHash(u)> prepared      -> warning "the active macOS image is <current>; macOS <newer> is already prepared. To use it (no download): sudo warden image prepare --driver vz --update"
+  <current>/<newer>: version (build) parsed from the IPSW file name, else the file name;
+                     no recorded IPSW -> "macos-<key> (IPSW not recorded)"
 --update on any other driver   -> refuse "--update is not supported for --driver <d> yet"
 
-restoreOrRefresh(u): dir := macos-<shortHash(u)>
+restoreOrRefresh(s): s := abs(s) for an ipsw-file; dir := macos-<shortHash(s)>
   valid prepared -> refresh(dir)            (any position in the cache)
-  else           -> RestoreIPSW(u)          (unchanged: download, restore, headless, first boot, provenance, stamp)
+  else           -> RestoreIPSW(s)          (restore, headless, first boot, provenance, stamp: unchanged)
+RestoreIPSW(s) acquires the IPSW by kind:
+  url        -> ensureIPSWDownloaded (curl into <cache>/ipsw-<key>.ipsw, unchanged); provenance url = s
+  ipsw-file  -> s itself, read in place: no curl, no copy, never deleted; provenance url = file://s
 refresh(dir) = ReprepareImage(dir)          (unchanged)
 ```
 
@@ -308,19 +381,24 @@ image list:  vz  macos  <dir>  active|older  <IPSW file name from provenance>
   image prepared last; `--image` and a directory source pick another), the
   build-link table row and the paragraph after it.
 - `cmd/warden/image.go`: the `image prepare` help (`--driver vz` line,
-  Example).
+  `--update`, Example with a local `.ipsw` path).
 - `docs/book/src/concepts/overview.md`, VM drivers: the stamp line's vz fix,
   and one line for the vz base image choice (`--image`, else the cache's
   active image).
 - `docs/book/src/guide/cli.md`: `warden image prepare` (the vz row of the
-  source table, the examples) and `warden image list` (the example output,
+  source table: a local `.ipsw` path is read in place and kept, a URL is
+  downloaded and its copy deleted once prepared; the examples) and `warden image list` (the example output,
   which also shows a stale `vz/images/macOS-15.4` path today).
 
 ## Cross-driver impact
 
 - **vz:** everything above; `driver/vz/image.go`, `driver/vz/driver.go`
   (`resolveImage`, `imageStamp`, `LauncherStamps`) and the vz branches of
-  `cmd/warden/image.go` (`prepareVZMacos`, `runImageList`).
+  `cmd/warden/image.go` (`prepareVZMacos`, `runImageList`);
+  `driver/vz/environment.go` (`ipswInput` records `file://<path>` for a local
+  file). `resolveImage` reaches `RestoreIPSW` too, so `build --image
+  <local .ipsw>` also stops failing in curl; its restore still writes no
+  pointer (Decision 8).
 - **qemu, firecracker, hyperv, container:** unaffected. No shared package
   changes; `cmd/warden/image.go`'s other branches and `imageSource` are
   untouched; `--update` is accepted only on the vz path and refused on the others
@@ -329,21 +407,39 @@ image list:  vz  macos  <dir>  active|older  <IPSW file name from provenance>
 
 ## Validation plan
 
-- **Tier 0 (every OS, `make test`):** `classify` for each source form;
+- **Tier 0 (every OS, `make test`):** `classify` for each source form (URL,
+  `file://` URL, absolute and relative local IPSW path, prepared directory and
+  its `disk.img`, a path that is none of these, refused naming it);
   `--update` alone, with a source (refused), and on another driver (refused);
   the IPSW deletion after each prepare path, and a local IPSW source left in
   place;
+  a local IPSW restore with a stubbed `restoreIPSW`: it receives the file's own
+  path, no download runs (curl not invoked), no `ipsw-<key>.ipsw` is written,
+  the image is `macos-<shortHash(abs path)>` whether the path was given
+  relative or absolute, the recorded input is `file://<abs path>` with the
+  file's digest, and the file still exists afterwards; a second prepare of the
+  same path refreshes in place;
   `ImageDir` with a pointer, without one (newest `.prepared`, name tie-break),
   with a pointer to a missing or invalid dir; the prepare decision with a
   stubbed lookup (each row of the switch, including an IPSW whose dir sorts
   second, and that no lookup happens for an empty-source refresh before it
-  succeeds); the out-of-date warning on and off, and a lookup error staying silent;
-  `imageStamp`'s three fix texts; `image list` formatting from a fake cache
-  (GLOBAL-04).
+  succeeds); the out-of-date warning (`OutOfDate`): off when the active
+  directory is `u`'s key, off when the active image's recorded IPSW file name
+  equals `u`'s (a local-file image), on with the "about 25 GB" text when `u`
+  has no prepared image, on with the "already prepared, no download" text when
+  it has one, on naming `macos-<key> (IPSW not recorded)` when no provenance
+  is recorded, versions parsed from Apple file names and the file name used
+  otherwise, and a lookup error staying silent;
+  `imageStamp`'s three fix texts; `image list` formatting from a fake cache,
+  including a local-file image's IPSW name (GLOBAL-04).
 - **Tier 2, native, blocking: macos-vz** (FLOW-09). Run on Jeff's
   Apple-silicon Mac, whose cache still holds `macos-90a1b1f94f64b00a`
   (27.0.1, unstamped), `macos-a139c218a2010753` (27.2, stamped) and both
-  IPSWs, with no `active` file, so the pre-change cache is the starting point:
+  IPSWs, with no `active` file, so the pre-change cache is the starting point.
+  Before case 2, stage case 7 for free: hard-link the cache's real 27.2 IPSW
+  under Apple's name outside the cache (`ln ~/.cache/warden/images/ipsw-a139c218a2010753.ipsw
+  ~/UniversalMac_27.2_26B123_Restore.ipsw`, same volume, no copy), so the
+  file survives case 2's deletion of the cache name.
   1. A build with no `--image` uses `macos-a139…` (newest `.prepared`);
      `image list` marks it active and lists `macos-90a1…` as older with its
      IPSW name; `doctor --driver vz` reports `macos-a139…`'s stamp.
@@ -357,7 +453,8 @@ image list:  vz  macos  <dir>  active|older  <IPSW file name from provenance>
      refreshes the old image in place (no restore), stamps it, makes it
      active and deletes `ipsw-90a1….ipsw`; a build with no `--image` boots
      27.0.1 and its ledger verifies. A no-source refresh now ends with the
-     out-of-date warning naming 27.0.1, 27.2 and `--update`.
+     out-of-date warning naming 27.0.1, 27.2 and `--update` (the "already
+     prepared, no download" form, since `macos-a139…` is prepared).
   4. With `macos-90a1…` active, `--image ~/.cache/warden/images/macos-a139…/disk.img`
      after removing that image's `link-channel` is refused naming `sudo warden
      image prepare --driver vz <macos-a139… dir>`; running it fixes the build
@@ -367,8 +464,19 @@ image list:  vz  macos  <dir>  active|older  <IPSW file name from provenance>
      `--update` with a source, and `--driver qemu --update`, are refused.
   6. With the Mac offline, `sudo warden image prepare --driver vz` still
      refreshes the active image and prints no out-of-date warning or error.
+  7. `sudo warden image prepare --driver vz ~/UniversalMac_27.2_26B123_Restore.ipsw`
+     (a plain path; refused by curl before this change) restores from the
+     file in place: no "Downloading IPSW", no new `ipsw-*.ipsw` in the cache,
+     the file still present afterwards, a new `macos-<key>` made active, and
+     `image list` showing it with that file name; a build with no `--image`
+     succeeds and its ledger verifies; back online, a no-source refresh prints no
+     out-of-date warning (the file name matches the latest IPSW's), and
+     re-running the step 7 command refreshes in place. This is one restore
+     (about 15 minutes); afterwards make `macos-a139…` active again (`prepare
+     <macos-a139… dir>`) and remove the new image directory and the hard link.
 - **Tier-2 gaps:** none. The out-of-date warning's positive case is staged
-  natively by case 3 (27.0.1 active, 27.2 the latest).
+  natively by case 3 (27.0.1 active, 27.2 the latest), the local-file restore
+  by case 7.
 
 ## Implementation plan
 
@@ -386,6 +494,23 @@ Filled in at Plan (phase 2), from the approved design.
   queued as its own undesigned item (a2); each prepare deletes its image's
   cached IPSW while image directories stay (a5, replacing the
   `vz-image-retention` proposal). Validation cases 2, 3 and 5 updated to match.
+- **Return r2, 2026-11-07 (Plan, FLOW-06; not a review).** Findings: (1) the
+  out-of-date warning's condition (only when the latest IPSW had no prepared
+  image) contradicted native case 3, which expects it with `macos-a139…`
+  (27.2) prepared; (2) a plain local IPSW path cannot be restored (curl:
+  "URL rejected: No host part"), although `classify`, Decision 6, the help and
+  `cli.md` assume it can. Jeff decided both in the attended sitting. Changes
+  since approved at f764e9f: Decision 3 warns whenever the active image is not
+  from the latest supported IPSW, with a "no download" text when that image is
+  already prepared, and defines the active image's IPSW identity (key, else
+  the recorded IPSW file name); new Decision 7 restores a local IPSW file in
+  place (no curl, no copy, never deleted, keyed by its absolute path,
+  provenance `file://<path>`), with problem 3 and a refusal for a path that is
+  no source (Decision 4); the out-of-scope note becomes Decision 8; the
+  pseudocode, cache layout, tier-0 tests and native case 3 wording follow, and
+  native case 7 (staged by a hard link before case 2) covers the local file.
+  The f6-validate-macos-vz note was brought in line. Re-review pending
+  (FLOW-19, `design_review: required`).
 
 ## Consolidation
 
