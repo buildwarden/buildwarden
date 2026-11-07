@@ -3,7 +3,7 @@ title: vz image prepare refreshes the cached image in place, and builds pick the
 priority: 43
 status: in_progress
 round: feature
-phase: 2
+phase: 1
 design: docs/design/vz-image-prepare-refresh.md
 branch: feat/vz-image-prepare-refresh
 alters_relationships: false
@@ -39,15 +39,13 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: f2-plan
-    phase: 2
+  - id: f1-design-r2
+    phase: 1
     affinity: cloud
     status: pending
-    needs:
-      - f2-design-review
     lease:
-      claimed_by: cloud/20261107T012740Z-attended
-      expires: 2026-11-07T03:27:40.866447Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -170,3 +168,12 @@ history:
   - at: 2026-11-07T01:27:40Z
     by: cloud/20261107T012740Z-attended
     event: claimed f2-plan until 2026-11-07T03:27:40Z
+  - at: 2026-11-07T01:29:39Z
+    by: cloud/20261107T012740Z-attended
+    event: 'f2-plan finding (back-to-design, FLOW-06), design as approved at f764e9f (branch 75f2243, impact fields and rule_changes unchanged; no plan committed): (1) the out-of-date warning''s condition contradicts the Validation plan. Decision 3 and the prepare pseudocode warn only when no prepared macos-<shortHash(latest)> exists; native case 3 expects the warning naming 27.0.1, 27.2 and --update with macos-90a1 active while macos-a139 (27.2) is prepared, and Tier-2 gaps (none) rests on case 3 staging the positive case. Design picks one: warn whenever the active image is not the latest IPSW''s (case 3 stands; a1''s answer reads this way), or only when the latest has no prepared image (case 3 drops its warning line and the positive case becomes a tier-2 gap or a staged case, e.g. after moving macos-a139 aside). Planning cannot pick: the tier-0 warning tests and the f6 case follow it. (2) A bare local IPSW path cannot be restored: classify has an ipsw-file kind and Decision 6 says a local IPSW source is never deleted, but RestoreIPSW, which the design keeps unchanged, hands the source to curl (ensureIPSWDownloaded), which refuses a path with "URL rejected: No host part"; only file:// works, and the help text and cli.md already promise "a local path". Design says whether restore uses a local IPSW in place (a change to RestoreIPSW) or a bare path refreshes only an already-prepared key and is otherwise refused with a fix (file:// or a URL). Also for Design: the f6-validate-macos-vz note predates the r1 fold-in (case 5 says "prepare --driver vz latest"; no IPSW deletion, out-of-date warning or --update refusals); bring it in line with the Validation plan.'
+  - at: 2026-11-07T01:34:43Z
+    by: cloud/20261107T012740Z-attended
+    event: kept f6-validate-macos-vz pending for phase 6
+  - at: 2026-11-07T01:34:43Z
+    by: cloud/20261107T012740Z-attended
+    event: 'back to design: Plan found two gaps (f2-plan, 2026-11-07); Jeff decided both in the attended sitting: (1) the out-of-date warning fires whenever the active image''s IPSW is not the latest supported one, even when the latest is already prepared (its fix still names --update, which then switches without a download), so Validation case 3 stands; Decision 3, the prepare pseudocode and the tier-0 warning tests change to match. (2) a plain local IPSW path as the source is restored from in place: RestoreIPSW reads the local file directly (no curl, no copy into the cache, never deleted), keyed by its path; today curl rejects it (''URL rejected: No host part'') though the help and cli.md promise a local path. Also bring the queue''s f6-validate-macos-vz note in line with the Validation plan (--update, IPSW deletion, the warning, the refusals).'
