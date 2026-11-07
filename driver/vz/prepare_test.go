@@ -350,3 +350,66 @@ func TestPrepareUpdate(t *testing.T) {
 		}
 	})
 }
+
+// writeIPSW writes a cached IPSW file named name into the cache.
+func writeIPSW(t *testing.T, c *ImageCache, name string) string {
+	t.Helper()
+	p := filepath.Join(c.CacheDir, name)
+	if err := os.WriteFile(p, []byte(name), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	return p
+}
+
+func exists(p string) bool {
+	_, err := os.Stat(p)
+	return err == nil
+}
+
+func TestPrepareDeletesTheImagesIPSW(t *testing.T) {
+	t.Run("after a URL restore, once recorded", func(t *testing.T) {
+		h := &fakeHost{}
+		c := h.cache(t)
+		other := writeIPSW(t, c, "ipsw-"+shortHash(ipsw27_0)+".ipsw")
+		dir, err := c.Prepare(ipsw27_2, false)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if exists(filepath.Join(c.CacheDir, "ipsw-"+shortHash(ipsw27_2)+".ipsw")) {
+			t.Fatal("the restored image's IPSW is still cached")
+		}
+		if !exists(other) {
+			t.Fatal("another image's IPSW was deleted")
+		}
+		src, _ := c.LayerCache().Source(filepath.Join(dir, "disk.img"))
+		if len(src.Inputs) != 1 || src.Inputs[0].URL != ipsw27_2 || src.Inputs[0].SHA256 == "" {
+			t.Fatalf("recorded inputs %+v, want the hashed IPSW", src.Inputs)
+		}
+	})
+	t.Run("after a refresh", func(t *testing.T) {
+		h := &fakeHost{}
+		c := h.cache(t)
+		makeImage(t, c.CacheDir, keyDir(ipsw27_2), t0)
+		own := writeIPSW(t, c, "ipsw-"+shortHash(ipsw27_2)+".ipsw")
+		other := writeIPSW(t, c, "ipsw-"+shortHash(ipsw27_0)+".ipsw")
+		latest := writeIPSW(t, c, "ipsw-latest.ipsw")
+		if _, err := c.Prepare("", false); err != nil {
+			t.Fatal(err)
+		}
+		if exists(own) || !exists(other) || !exists(latest) {
+			t.Fatalf("own %v other %v latest %v", exists(own), exists(other), exists(latest))
+		}
+	})
+	t.Run("a failed prepare deletes nothing", func(t *testing.T) {
+		h := &fakeHost{failWith: errors.New("hdiutil failed")}
+		c := h.cache(t)
+		makeImage(t, c.CacheDir, keyDir(ipsw27_2), t0)
+		own := writeIPSW(t, c, "ipsw-"+shortHash(ipsw27_2)+".ipsw")
+		if _, err := c.Prepare("", false); err == nil {
+			t.Fatal("Prepare succeeded")
+		}
+		if !exists(own) {
+			t.Fatal("the IPSW was deleted after a failed prepare")
+		}
+	})
+}

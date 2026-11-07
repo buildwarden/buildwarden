@@ -1,6 +1,7 @@
 package vz
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -134,6 +135,15 @@ func (c *ImageCache) Prepare(source string, update bool) (string, error) {
 	}
 	if err := c.SetActive(dir); err != nil {
 		return "", err
+	}
+	// The image's provenance (IPSW URL, digest) is recorded, and a later
+	// prepare of the same source refreshes this image in place, so its
+	// downloaded IPSW (about 25 GB) is never read again. A local IPSW file
+	// is the user's and is never in the cache under this name.
+	key := strings.TrimPrefix(filepath.Base(dir), "macos-")
+	if err := os.Remove(filepath.Join(c.CacheDir, "ipsw-"+key+".ipsw")); err != nil &&
+		!errors.Is(err, os.ErrNotExist) {
+		fmt.Fprintf(c.out(), "warning: could not delete the image's cached IPSW: %v\n", err)
 	}
 	return dir, nil
 }
