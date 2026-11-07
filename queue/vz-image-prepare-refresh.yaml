@@ -71,8 +71,8 @@ steps:
       expires: null
 budget:
   estimate:
-    runs: 2
-    steps: 9
+    runs: 5
+    steps: 18
   spent:
     runs: 2
     steps: 8
@@ -227,3 +227,6 @@ history:
   - at: 2026-11-07T01:43:31Z
     by: cloud/20261107T012740Z-attended
     event: entered phase 3 (implement)
+  - at: 2026-11-07T02:20:00Z
+    by: human/jeff
+    event: 'estimate 9 steps / 2 runs -> 18 steps / 5 runs (Jeff, attended, after the Plan return and r2 re-review; the plan has 25 tasks)'
