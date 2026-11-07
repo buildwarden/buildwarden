@@ -148,7 +148,7 @@ func runImagePrepare(cmd *cobra.Command, args []string) error {
 	var path string
 	switch drv + "/" + osName {
 	case "vz/macos":
-		path, err = prepareVZMacos(source)
+		path, err = prepareVZMacos(source, false)
 	case "qemu/linux":
 		path, err = linuxguest.PrepareImage(source)
 	case "firecracker/linux":
@@ -188,8 +188,9 @@ func imageSource(args []string) (string, error) {
 	return source, nil
 }
 
-// prepareVZMacos restores (or refreshes) the macOS base image for the vz driver.
-func prepareVZMacos(source string) (string, error) {
+// prepareVZMacos restores or refreshes a macOS base image for the vz driver
+// and makes it the active image (vz.ImageCache.Prepare).
+func prepareVZMacos(source string, update bool) (string, error) {
 	// Every vz prepare path writes root-owned files into the image, and
 	// restoring needs the virtualization entitlement: check both before
 	// anything is downloaded.
@@ -200,14 +201,7 @@ func prepareVZMacos(source string) (string, error) {
 		return "", err
 	}
 	cache := &vz.ImageCache{CacheDir: vz.DefaultCacheDir()}
-	existing, _ := cache.ImageDir()
-	path, err := cache.RestoreIPSW(source)
-	if err == nil && existing != "" && filepath.Dir(path) == existing {
-		// Already restored: refresh the warden boot agent to this build.
-		fmt.Fprintf(os.Stderr, "Refreshing boot agent on %s\n", existing)
-		err = vz.ReprepareImage(existing)
-	}
-	return path, err
+	return cache.Prepare(source, update)
 }
 
 // prepareQemuWindows readies the qemu Windows image in its two stages: the

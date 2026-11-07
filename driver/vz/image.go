@@ -4,6 +4,7 @@ import (
 	"crypto/sha512"
 	"encoding/hex"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/url"
 	"os"
@@ -27,6 +28,15 @@ const plistHeader = "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n" +
 // ImageCache manages cached VM base images.
 type ImageCache struct {
 	CacheDir string
+
+	// The host steps preparing an image runs, nil meaning the real one, so
+	// the prepare decisions are tier-0 testable on every OS (GLOBAL-07).
+	latest      func() (string, error)          // latest supported IPSW URL
+	download    func(url, dst string) error     // fetch an IPSW to dst
+	restoreDisk func(ipsw, imgDir string) error // IPSW to a booted, headless disk
+	refresh     func(imgDir string) error       // re-prepare in place
+	requireRoot func() error
+	log         io.Writer // progress and warnings; nil is stderr
 }
 
 // activeFile names, in the cache, the file holding the active image's
@@ -182,94 +192,93 @@ func isValidImageDir(dir string) bool {
 	return true
 }
 
-// RestoreIPSW downloads an IPSW file from the given URL, restores it to a
-// bootable disk image, and prepares it for headless use (suppresses Setup
-// Assistant, creates the warden user). Readying the image needs root, so
-// that is checked before the download rather than after it.
-func (c *ImageCache) RestoreIPSW(ipswURL string) (string, error) {
-	if err := os.MkdirAll(c.CacheDir, 0755); err != nil {
-		return "", fmt.Errorf("creating cache dir: %w", err)
-	}
-
-	// If URL is empty, fetch the latest from Apple
-	if ipswURL == "" {
-		var err error
-		ipswURL, err = latestSupportedIPSW()
+// RestoreIPSW restores the IPSW at source (a URL, or "" for the latest
+// supported one) to a bootable disk image and prepares it for headless use,
+// returning the disk. An image already restored from source is returned as
+// is. It writes no active pointer: only Prepare does.
+func (c *ImageCache) RestoreIPSW(source string) (string, error) {
+	if source == "" {
+		u, err := c.latestIPSW()
 		if err != nil {
 			return "", fmt.Errorf("fetching latest IPSW URL: %w", err)
 		}
-		fmt.Fprintf(os.Stderr, "Latest macOS IPSW: %s\n", ipswURL)
+		fmt.Fprintf(c.out(), "Latest macOS IPSW: %s\n", u)
+		source = u
 	}
+	dir, err := c.restore(source)
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, "disk.img"), nil
+}
 
-	// Create a directory for this image
-	urlHash := shortHash(ipswURL)
-	imgDir := filepath.Join(c.CacheDir, "macos-"+urlHash)
+// restore acquires the IPSW at source into the image directory it keys to,
+// macos-<shortHash(source)>, runs the restore step on it, and records the
+// image's provenance, stamp and .prepared marker. Readying the image needs
+// root, so that is checked before the download rather than after it.
+func (c *ImageCache) restore(source string) (string, error) {
+	if err := os.MkdirAll(c.CacheDir, 0755); err != nil {
+		return "", fmt.Errorf("creating cache dir: %w", err)
+	}
+	key := shortHash(source)
+	imgDir := filepath.Join(c.CacheDir, "macos-"+key)
 	if err := os.MkdirAll(imgDir, 0755); err != nil {
 		return "", fmt.Errorf("creating image dir: %w", err)
 	}
-
-	diskPath := filepath.Join(imgDir, "disk.img")
-	auxPath := filepath.Join(imgDir, "aux-storage")
-	hwModelPath := filepath.Join(imgDir, "hardware-model")
-	machineIDPath := filepath.Join(imgDir, "machine-id")
-
-	// If already restored, return immediately
 	if isValidImageDir(imgDir) {
-		return diskPath, nil
+		return imgDir, nil
 	}
-	if err := RequireRoot(); err != nil {
+	if err := c.checkRoot(); err != nil {
 		return "", err
 	}
 	defer giveBackToSudoUser(filepath.Dir(c.CacheDir))
 
-	// Download IPSW if not already cached. The download lands in a .part
-	// file renamed on success, so an interrupted one is never mistaken for
-	// a complete IPSW.
-	ipswLocal, err := c.ensureIPSWDownloaded(ipswURL, urlHash)
+	ipswLocal, err := c.ensureIPSWDownloaded(source, key)
 	if err != nil {
 		return "", err
 	}
-
-	// Restore IPSW to disk image (64GB disk).
-	// Skip if disk already has content (restore succeeded but prep failed).
-	diskInfo, _ := os.Stat(diskPath)
-	if diskInfo == nil || diskInfo.Size() == 0 {
-		fmt.Fprintf(os.Stderr, "Restoring macOS from IPSW (this takes 10-20 minutes)...\n")
-		if err := restoreIPSW(ipswLocal, diskPath, 64,
-			auxPath, hwModelPath, machineIDPath); err != nil {
-			return "", fmt.Errorf("restoring IPSW: %w", err)
-		}
-	} else {
-		fmt.Fprintf(os.Stderr, "Disk image exists, skipping restore...\n")
+	if err := c.restoreDiskStep(ipswLocal, imgDir); err != nil {
+		return "", err
 	}
-
-	// Suppress Setup Assistant and create the warden user
-	if err := PrepareHeadlessImage(diskPath); err != nil {
-		return "", fmt.Errorf("headless setup: %w", err)
-	}
-
-	// Brief pause to ensure disk is fully released after hdiutil detach
-	time.Sleep(2 * time.Second)
-
-	// First boot: boot the VM once so macOS completes initial setup.
-	// This validates: auto-login → launchd → virtio-fs mount → agent execution.
-	fmt.Fprintf(os.Stderr, "Running first boot (macOS initial setup)...\n")
-	if err := c.firstBoot(diskPath, imgDir); err != nil {
-		return "", fmt.Errorf("first boot: %w", err)
-	}
-
-	if err := c.recordPreparedImage(imgDir, ipswInput(ipswURL, ipswLocal)); err != nil {
+	if err := c.recordPreparedImage(imgDir, ipswInput(source, ipswLocal)); err != nil {
 		return "", fmt.Errorf("recording prepared image provenance: %w", err)
 	}
-
 	if err := writeLinkStamp(imgDir); err != nil {
 		return "", fmt.Errorf("writing the link-channel stamp: %w", err)
 	}
-	// Mark the image as fully prepared
 	_ = os.WriteFile(filepath.Join(imgDir, ".prepared"), []byte("ok\n"), 0644)
 
-	fmt.Fprintf(os.Stderr, "macOS image ready at %s\n", imgDir)
-	return diskPath, nil
+	fmt.Fprintf(c.out(), "macOS image ready at %s\n", imgDir)
+	return imgDir, nil
+}
+
+// restoreDiskReal turns an IPSW into imgDir's disk and platform files (64 GB
+// disk), installs the warden agent, and boots it once so macOS completes its
+// initial setup. A disk that already has content (restore succeeded but a
+// later step failed) is not restored again.
+func (c *ImageCache) restoreDiskReal(ipswLocal, imgDir string) error {
+	diskPath := filepath.Join(imgDir, "disk.img")
+	diskInfo, _ := os.Stat(diskPath)
+	if diskInfo == nil || diskInfo.Size() == 0 {
+		fmt.Fprintf(c.out(), "Restoring macOS from IPSW (this takes 10-20 minutes)...\n")
+		if err := restoreIPSW(ipswLocal, diskPath, 64,
+			filepath.Join(imgDir, "aux-storage"), filepath.Join(imgDir, "hardware-model"),
+			filepath.Join(imgDir, "machine-id")); err != nil {
+			return fmt.Errorf("restoring IPSW: %w", err)
+		}
+	} else {
+		fmt.Fprintf(c.out(), "Disk image exists, skipping restore...\n")
+	}
+	if err := PrepareHeadlessImage(diskPath); err != nil {
+		return fmt.Errorf("headless setup: %w", err)
+	}
+	// Give hdiutil detach time to release the disk before the VM opens it.
+	time.Sleep(2 * time.Second)
+	fmt.Fprintf(c.out(), "Running first boot (macOS initial setup)...\n")
+	if err := c.firstBoot(diskPath, imgDir); err != nil {
+		return fmt.Errorf("first boot: %w", err)
+	}
+	return nil
 }
 
 // ensureIPSWDownloaded makes sure the IPSW identified by urlHash is present
@@ -282,24 +291,69 @@ func (c *ImageCache) ensureIPSWDownloaded(ipswURL, urlHash string) (string, erro
 	if _, err := os.Stat(ipswLocal); err == nil {
 		return ipswLocal, nil
 	}
-	// Check for a pre-existing ipsw-latest.ipsw (manual or previous download)
 	latestPath := filepath.Join(c.CacheDir, "ipsw-latest.ipsw")
 	if info, errLat := os.Stat(latestPath); errLat == nil && info.Size() > 0 {
 		return latestPath, nil
 	}
-	fmt.Fprintf(os.Stderr, "Downloading IPSW...\n")
+	fmt.Fprintf(c.out(), "Downloading IPSW...\n")
 	part := ipswLocal + ".part"
-	cmd := exec.Command("curl", "-fL", "-C", "-", "-o", part,
-		"--progress-bar", ipswURL)
-	cmd.Stdout = os.Stderr
-	cmd.Stderr = os.Stderr
-	if err := cmd.Run(); err != nil {
+	if err := c.downloadFile(ipswURL, part); err != nil {
 		return "", fmt.Errorf("downloading IPSW (rerun to resume): %w", err)
 	}
 	if err := os.Rename(part, ipswLocal); err != nil {
 		return "", err
 	}
 	return ipswLocal, nil
+}
+
+// curlDownload fetches url to dst with curl, resuming a partial dst.
+func curlDownload(url, dst string) error {
+	cmd := exec.Command("curl", "-fL", "-C", "-", "-o", dst, "--progress-bar", url)
+	cmd.Stdout = os.Stderr
+	cmd.Stderr = os.Stderr
+	return cmd.Run()
+}
+
+func (c *ImageCache) out() io.Writer {
+	if c.log != nil {
+		return c.log
+	}
+	return os.Stderr
+}
+
+func (c *ImageCache) latestIPSW() (string, error) {
+	if c.latest != nil {
+		return c.latest()
+	}
+	return latestSupportedIPSW()
+}
+
+func (c *ImageCache) downloadFile(url, dst string) error {
+	if c.download != nil {
+		return c.download(url, dst)
+	}
+	return curlDownload(url, dst)
+}
+
+func (c *ImageCache) restoreDiskStep(ipswLocal, imgDir string) error {
+	if c.restoreDisk != nil {
+		return c.restoreDisk(ipswLocal, imgDir)
+	}
+	return c.restoreDiskReal(ipswLocal, imgDir)
+}
+
+func (c *ImageCache) refreshStep(imgDir string) error {
+	if c.refresh != nil {
+		return c.refresh(imgDir)
+	}
+	return ReprepareImage(imgDir)
+}
+
+func (c *ImageCache) checkRoot() error {
+	if c.requireRoot != nil {
+		return c.requireRoot()
+	}
+	return RequireRoot()
 }
 
 // PrepareHeadlessImage installs the warden build agent into a macOS disk image.
