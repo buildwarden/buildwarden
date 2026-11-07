@@ -3,7 +3,7 @@ title: vz image prepare refreshes the cached image in place, and builds pick the
 priority: 43
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/vz-image-prepare-refresh.md
 branch: feat/vz-image-prepare-refresh
 alters_relationships: false
@@ -31,7 +31,7 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-    note: 'Blocking native validation (FLOW-09) per docs/design/vz-image-prepare-refresh.md Validation plan, on the Apple-silicon Mac whose cache holds macos-90a1b1f94f64b00a (27.0.1, unstamped), macos-a139c218a2010753 (27.2, stamped) and both IPSWs with no active file: (1) a build with no --image uses macos-a139 (newest .prepared), image list marks it active and lists macos-90a1 as older with its IPSW name, doctor --driver vz reports macos-a139''s stamp; (2) sudo warden image prepare --driver vz with no source refreshes macos-a139 in place (no IPSW download or restore), writes active owned by the user, and a build with no --image succeeds with a verifying ledger; (3) prepare with the macos-90a1 directory as source refreshes it in place, stamps it and makes it active, and a build with no --image boots 27.0.1 with a verifying ledger; (4) with macos-90a1 active, --image macos-a139/disk.img after removing its link-channel is refused naming sudo warden image prepare --driver vz <macos-a139 dir>, and running that fixes the build and makes it active; (5) prepare --driver vz latest with 27.2 already prepared refreshes macos-a139 in place with no download; (6) offline, prepare with no source still refreshes the active image and prints no newer-IPSW notice or error. Reaches driver/vz only (image selection, refresh in place, prepare source handling).'
+    note: 'Blocking native validation (FLOW-09) per docs/design/vz-image-prepare-refresh.md Validation plan (return r2), on the Apple-silicon Mac whose cache holds macos-90a1b1f94f64b00a (27.0.1, unstamped), macos-a139c218a2010753 (27.2, stamped) and both IPSWs with no active file. Staging before case 2: ln ~/.cache/warden/images/ipsw-a139c218a2010753.ipsw ~/UniversalMac_27.2_26B123_Restore.ipsw (hard link, same volume) so case 7 has a real local 27.2 IPSW after case 2 deletes the cache name. (1) a build with no --image uses macos-a139 (newest .prepared); image list marks it active and lists macos-90a1 as older with its IPSW name; doctor --driver vz reports macos-a139''s stamp. (2) sudo warden image prepare --driver vz with no source refreshes macos-a139 in place (no IPSW download or restore, Refreshing boot agent), writes active owned by the user, deletes ipsw-a139....ipsw and keeps ipsw-90a1....ipsw, prints no out-of-date warning; a build with no --image succeeds with a verifying ledger. (3) prepare with the macos-90a1 directory as source refreshes it in place (no restore), stamps it, makes it active and deletes ipsw-90a1....ipsw; a build with no --image boots 27.0.1 with a verifying ledger; a no-source refresh then ends with the out-of-date warning naming 27.0.1, 27.2 and --update (the already-prepared, no-download form). (4) with macos-90a1 active, --image macos-a139/disk.img after removing its link-channel is refused naming sudo warden image prepare --driver vz <macos-a139 dir>; running that fixes the build and makes macos-a139 active. (5) sudo warden image prepare --driver vz --update with 27.2 already prepared refreshes macos-a139 in place with no download and makes it active; --update with a source, and --driver qemu --update, are refused. (6) offline, prepare with no source still refreshes the active image and prints no out-of-date warning or error. (7) sudo warden image prepare --driver vz ~/UniversalMac_27.2_26B123_Restore.ipsw (plain path; curl rejected it before) restores from the file in place: no Downloading IPSW, no new ipsw-*.ipsw in the cache, the file still present, a new macos-<key> made active and listed with that file name; a build with no --image verifies; back online, a no-source refresh prints no out-of-date warning (file name matches the latest IPSW), and re-running the case 7 command refreshes in place. One restore (~15 min); afterwards make macos-a139 active again (prepare <macos-a139 dir>) and remove the new image directory and the hard link. Reaches driver/vz only (image selection, refresh in place, prepare source handling, local IPSW restore).'
   - id: f2-design-review
     phase: 2
     affinity: human
@@ -42,10 +42,26 @@ steps:
   - id: f1-design-r2
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review-r2
+    phase: 2
+    affinity: human
     status: pending
     lease:
-      claimed_by: cloud/20261107T012740Z-attended
-      expires: 2026-11-07T03:34:48.751867Z
+      claimed_by: ""
+      expires: null
+  - id: f2-plan-r2
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - f2-design-review-r2
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -180,3 +196,9 @@ history:
   - at: 2026-11-07T01:34:48Z
     by: cloud/20261107T012740Z-attended
     event: claimed f1-design-r2 until 2026-11-07T03:34:48Z
+  - at: 2026-11-07T01:38:50Z
+    by: cloud/20261107T012740Z-attended
+    event: done f1-design-r2
+  - at: 2026-11-07T01:38:50Z
+    by: cloud/20261107T012740Z-attended
+    event: entered phase 2 (plan)
