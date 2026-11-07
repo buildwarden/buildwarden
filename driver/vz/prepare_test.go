@@ -558,3 +558,70 @@ func TestPrepareOutOfDateWarning(t *testing.T) {
 		}
 	})
 }
+
+func TestPrepareLocalIPSW(t *testing.T) {
+	const name = "UniversalMac_27.2_26B123_Restore.ipsw"
+	for _, relative := range []bool{false, true} {
+		t.Run(fmt.Sprintf("relative=%v", relative), func(t *testing.T) {
+			h := &fakeHost{}
+			c := h.cache(t)
+			work := t.TempDir()
+			file := filepath.Join(work, name)
+			if err := os.WriteFile(file, []byte("a local ipsw"), 0o644); err != nil {
+				t.Fatal(err)
+			}
+			source := file
+			if relative {
+				t.Chdir(work)
+				source = name
+			}
+			dir, err := c.Prepare(source, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			want := "root,restore " + file + " -> " + keyDir(file)
+			if got := strings.Join(h.calls, ","); got != want {
+				t.Fatalf("calls %q, want %q (no download, the file read in place)", got, want)
+			}
+			if filepath.Base(dir) != keyDir(file) || activeName(t, c) != keyDir(file) {
+				t.Fatalf("dir %q active %q, want %s", dir, activeName(t, c), keyDir(file))
+			}
+			if m, _ := filepath.Glob(filepath.Join(c.CacheDir, "ipsw-*")); len(m) != 0 {
+				t.Fatalf("IPSW copied into the cache: %v", m)
+			}
+			if !exists(file) {
+				t.Fatal("the local IPSW was deleted")
+			}
+			src, _ := c.LayerCache().Source(filepath.Join(dir, "disk.img"))
+			sum, _ := driver.HashFileSHA256(file)
+			if len(src.Inputs) != 1 || src.Inputs[0].URL != "file://"+file ||
+				src.Inputs[0].SHA256 != sum || src.Inputs[0].Size != int64(len("a local ipsw")) {
+				t.Fatalf("recorded inputs %+v", src.Inputs)
+			}
+			if imgs := c.Images(); len(imgs) != 1 || imgs[0].IPSW != name {
+				t.Fatalf("Images = %+v", imgs)
+			}
+
+			h.calls = nil
+			if _, err := c.Prepare(source, false); err != nil {
+				t.Fatal(err)
+			}
+			if got := strings.Join(h.calls, ","); got != "refresh "+keyDir(file) {
+				t.Fatalf("second prepare: calls %q, want a refresh in place", got)
+			}
+		})
+	}
+}
+
+func TestPrepareFileURLIsDownloaded(t *testing.T) {
+	h := &fakeHost{}
+	c := h.cache(t)
+	const u = "file:///Volumes/x/UniversalMac_27.2_26B123_Restore.ipsw"
+	dir, err := c.Prepare(u, false)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if filepath.Base(dir) != keyDir(u) || len(h.calls) < 2 || h.calls[1] != "download "+u {
+		t.Fatalf("dir %q calls %q", dir, h.calls)
+	}
+}

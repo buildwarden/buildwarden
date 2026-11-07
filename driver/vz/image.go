@@ -192,8 +192,8 @@ func isValidImageDir(dir string) bool {
 	return true
 }
 
-// RestoreIPSW restores the IPSW at source (a URL, or "" for the latest
-// supported one) to a bootable disk image and prepares it for headless use,
+// RestoreIPSW restores the IPSW at source (a URL, a local IPSW file, or ""
+// for the latest supported one) to a bootable disk image and prepares it for headless use,
 // returning the disk. An image already restored from source is returned as
 // is. It writes no active pointer: only Prepare does.
 func (c *ImageCache) RestoreIPSW(source string) (string, error) {
@@ -205,6 +205,13 @@ func (c *ImageCache) RestoreIPSW(source string) (string, error) {
 		fmt.Fprintf(c.out(), "Latest macOS IPSW: %s\n", u)
 		source = u
 	}
+	if !isIPSWURL(source) {
+		abs, err := filepath.Abs(source)
+		if err != nil {
+			return "", err
+		}
+		source = abs
+	}
 	dir, err := c.restore(source)
 	if err != nil {
 		return "", err
@@ -212,8 +219,8 @@ func (c *ImageCache) RestoreIPSW(source string) (string, error) {
 	return filepath.Join(dir, "disk.img"), nil
 }
 
-// restore acquires the IPSW at source into the image directory it keys to,
-// macos-<shortHash(source)>, runs the restore step on it, and records the
+// restore acquires the IPSW at source (a URL, or a local file's absolute
+// path) for the image directory it keys to, macos-<shortHash(source)>, runs the restore step on it, and records the
 // image's provenance, stamp and .prepared marker. Readying the image needs
 // root, so that is checked before the download rather than after it.
 func (c *ImageCache) restore(source string) (string, error) {
@@ -233,9 +240,14 @@ func (c *ImageCache) restore(source string) (string, error) {
 	}
 	defer giveBackToSudoUser(filepath.Dir(c.CacheDir))
 
-	ipswLocal, err := c.ensureIPSWDownloaded(source, key)
-	if err != nil {
-		return "", err
+	// A local IPSW file is read where it is: no download, no copy into the
+	// cache, and never deleted (it is the user's).
+	ipswLocal := source
+	if isIPSWURL(source) {
+		var err error
+		if ipswLocal, err = c.ensureIPSWDownloaded(source, key); err != nil {
+			return "", err
+		}
 	}
 	if err := c.restoreDiskStep(ipswLocal, imgDir); err != nil {
 		return "", err
@@ -305,6 +317,10 @@ func (c *ImageCache) ensureIPSWDownloaded(ipswURL, urlHash string) (string, erro
 	}
 	return ipswLocal, nil
 }
+
+// isIPSWURL reports whether an IPSW source is a URL (it has a scheme,
+// file:// included) rather than a local file path.
+func isIPSWURL(source string) bool { return strings.Contains(source, "://") }
 
 // curlDownload fetches url to dst with curl, resuming a partial dst.
 func curlDownload(url, dst string) error {

@@ -37,7 +37,7 @@ func classify(source, cacheDir string) (prepSource, error) {
 	if source == "" {
 		return prepSource{kind: srcEmpty}, nil
 	}
-	if strings.Contains(source, "://") {
+	if isIPSWURL(source) {
 		return prepSource{kind: srcURL, path: source}, nil
 	}
 	refuse := driver.Fixable(

@@ -89,9 +89,15 @@ func (c *ImageCache) recordPreparedImage(imgDir string, inputs []ledger.Preparat
 	return nil
 }
 
-// ipswInput describes the IPSW an image was restored from.
-func ipswInput(ipswURL, ipswLocal string) []ledger.PreparationInput {
-	in := ledger.PreparationInput{Name: "ipsw", URL: ipswURL}
+// ipswInput describes the IPSW an image was restored from: source is its URL,
+// or the absolute path of a local IPSW file, recorded as file://<path> so the
+// input stays a URL and its file name is known; ipswLocal is the file hashed.
+func ipswInput(source, ipswLocal string) []ledger.PreparationInput {
+	u := source
+	if !isIPSWURL(source) {
+		u = "file://" + filepath.ToSlash(source)
+	}
+	in := ledger.PreparationInput{Name: "ipsw", URL: u}
 	if fi, err := os.Stat(ipswLocal); err == nil {
 		fmt.Fprintf(os.Stderr, "Hashing %s...\n", filepath.Base(ipswLocal))
 		if sum, err := driver.HashFileSHA256(ipswLocal); err == nil {
