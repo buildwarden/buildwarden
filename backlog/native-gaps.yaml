@@ -422,3 +422,21 @@ gaps:
       feat/build-link-subnet is now PR #98 at 2bd748f (phase 7, merge), with no driver/qemu or
       driver/winguest change since a68ac2c.
     status: open
+  - id: hyperv-relay-per-build-channel-qemu-relay
+    host: qemu-any
+    what: A qemu Linux build (direct boot and a cloud image) on an aarch64 relay initramfs rebuilt from the branch's tools/relay-vm/init, which loses its 192.168.240.x static fallback and its 8.8.8.8 resolver fallback and gains one key reader for the command line and the Hyper-V relay seed. The relay's console shows its upstream from DHCP and its resolver from the lease, as on main.
+    design: docs/design/hyperv-relay-per-build-channel.md
+    note: >-
+      Tracked (TEST-03), not blocking: the init is shared, but a qemu relay (warden.net=dhcp from
+      user-mode NAT) never took the removed fallbacks, and driver/qemu does not change. Run on the
+      branch while it waits, or on main after it merges.
+    status: open
+  - id: hyperv-relay-per-build-channel-qemu-windows
+    host: macos-qemu
+    what: A qemu Windows guest build whose NIC ends DHCP Enabled No, PrefixOrigin Manual, at the seed's static address (warden-io initialize --ip now disables DHCP on the interface before setting the address), and whose warden-run.log carries initialize's final-state line.
+    design: docs/design/hyperv-relay-per-build-channel.md
+    note: >-
+      Tracked (TEST-03), not blocking: windows-hyperv validates the same cmd/warden-io step.
+      qemu Windows builds already fail on main (qemu-windows-guest-package), so run this once that
+      is fixed, on main after hyperv-relay-per-build-channel merges or on its branch if still waiting.
+    status: open
