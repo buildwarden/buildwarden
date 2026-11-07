@@ -1,6 +1,7 @@
 feature: vz-image-prepare-refresh
 title: vz image prepare refreshes the cached image in place, and builds pick the prepared image
 priority: 43
+follows: build-link-subnet
 status: queued
 round: feature
 phase: 0
@@ -31,3 +32,6 @@ history:
   - at: 2026-11-06T17:50:00Z
     by: human/jeff
     event: 'priority 24 -> 43 (Jeff, 2026-11-06 order: in implementation, then process, then fixes for implemented items, then new functionality; this item: 3. fix)'
+  - at: 2026-11-07T00:36:00Z
+    by: cloud/20261106T231440Z-attended
+    event: 'follows: build-link-subnet (regression-fixes-follow-up x4-close, Decision 9, Jeff a9): a fix of class 3, ahead of new functionality; no renumbering'

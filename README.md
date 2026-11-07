@@ -48,6 +48,7 @@ title: Record container inputs under inputs/ (ORCH-02)
 priority: 2                      # 1 is highest; unique
 kind: feature                    # feature (default, omitted) | process (FLOW-03)
 holds: []                        # process only: affinity patterns held while in progress
+follows: build-link-subnet       # optional (FLOW-05, FLOW-09): the item this one fixes; a fix (class 3), offered once that item is done
 status: in_progress              # queued | in_progress | done
 round: feature                   # feature | process (FLOW-03); parallel and merge only
                                  #   on items finished before workflow-streamline
@@ -105,7 +106,9 @@ round, `process`: `x1-design` (human: the design on the branch, approved in its
 design review), `x2-implement` (cloud: implemented, archived and its PR green),
 `x3-merge` (merged into `main`) and `x4-close` (branch gone, design archived on
 `main`).
-Process items sort ahead of every feature. While one is in progress, `wf next`
+`wf next` orders open items by class (FLOW-05): in implementation, then process
+items, then fixes (`follows`), then new functionality; within a class in
+progress before queued, then priority. While a process item is in progress, `wf next`
 gives a worker matching its `holds` (`cloud`, `host:*`, `host:macos-vz`) no
 new step and reports `held by process item <name>`; `wf claim` refuses it and
 `wf gate` starts no sweep for a held host. A step already claimed stays
@@ -142,9 +145,10 @@ fetch, reset this checkout to `origin/workflow`, and ask `wf next` again. An
 expired lease may be reclaimed. State is written after every step, so an
 interrupted run loses at most the step in progress (FLOW-13).
 
-`wf next` follows FLOW-05: the highest-priority in-progress feature's first
-ready step; a new feature only when every in-progress one is blocked and fewer
-than five are in progress; the cloud skips a feature with an open blocking
+`wf next` follows FLOW-05: the first ready step in class order (in
+implementation, process, fixes, new functionality; in progress before queued,
+then priority); a fix only once the item it `follows` is done, unless an
+attended run names it; at most five features in progress; the cloud skips a feature with an open blocking
 question, a spent runaway budget, or a need for the `alters_relationships`
 slot another feature holds. Its `blocked` lines feed the digest.
 
