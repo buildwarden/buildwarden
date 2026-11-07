@@ -32,19 +32,19 @@ steps:
       claimed_by: ""
       expires: null
     note: 'Blocking native validation (FLOW-09) per docs/design/vz-image-prepare-refresh.md Validation plan, on the Apple-silicon Mac whose cache holds macos-90a1b1f94f64b00a (27.0.1, unstamped), macos-a139c218a2010753 (27.2, stamped) and both IPSWs with no active file: (1) a build with no --image uses macos-a139 (newest .prepared), image list marks it active and lists macos-90a1 as older with its IPSW name, doctor --driver vz reports macos-a139''s stamp; (2) sudo warden image prepare --driver vz with no source refreshes macos-a139 in place (no IPSW download or restore), writes active owned by the user, and a build with no --image succeeds with a verifying ledger; (3) prepare with the macos-90a1 directory as source refreshes it in place, stamps it and makes it active, and a build with no --image boots 27.0.1 with a verifying ledger; (4) with macos-90a1 active, --image macos-a139/disk.img after removing its link-channel is refused naming sudo warden image prepare --driver vz <macos-a139 dir>, and running that fixes the build and makes it active; (5) prepare --driver vz latest with 27.2 already prepared refreshes macos-a139 in place with no download; (6) offline, prepare with no source still refreshes the active image and prints no newer-IPSW notice or error. Reaches driver/vz only (image selection, refresh in place, prepare source handling).'
-  - id: f2-plan
-    phase: 2
-    affinity: cloud
-    status: pending
-    lease:
-      claimed_by: cloud/20261107T004006Z-attended
-      expires: 2026-11-07T02:45:56.652675Z
   - id: f2-design-review
     phase: 2
     affinity: human
     status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: pending
     needs:
-      - f2-plan
+      - f2-design-review
     lease:
       claimed_by: ""
       expires: null
@@ -135,3 +135,9 @@ history:
   - at: 2026-11-07T00:45:56Z
     by: cloud/20261107T004006Z-attended
     event: claimed f2-plan until 2026-11-07T02:45:56Z
+  - at: 2026-11-07T00:52:00Z
+    by: cloud/20261107T004006Z-attended
+    event: 'f2-plan not started: design_review is required and no approval is recorded (wf check: 0 approvals, 1 review seeded; assumed a1-a5 open), so planning cannot start (FLOW-03 phase 2, FLOW-07, FLOW-19). Phase 2 was seeded in the pre-#101 order (f2-design-review needs f2-plan), likely by a stale wf; reordered to main''s template: f2-plan needs f2-design-review. f6-validate-macos-vz left without needs: a phase-6 step is not offered before phase 6 (queue.Offered), so it cannot be taken before Implement.'
+  - at: 2026-11-07T00:47:17Z
+    by: cloud/20261107T004006Z-attended
+    event: 'released f2-plan: design review not yet held (FLOW-19); phase 2 had been seeded in the pre-#101 order by a stale dist/wf (built before fast-forwarding main); reordered to main''s template, design-review first'
