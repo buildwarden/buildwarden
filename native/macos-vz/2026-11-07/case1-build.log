@@ -1,0 +1,6 @@
+ProductName:		macOS
+ProductVersion:		27.2
+BuildVersion:		26B123
+arm64
+example.com 200
+warden: build SUCCEEDED (output: .scratch/vzcase1/out)

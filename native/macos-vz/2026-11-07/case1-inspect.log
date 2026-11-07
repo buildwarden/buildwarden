@@ -1,0 +1,20 @@
+════════════════════════════════════════════════════════════════════════════════
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  ✅
+  ENVIRONMENT  vm-disk-chain/v1  payload verified
+    vz macos/arm64
+    disk     disk.img  64.0 GB  sha256:247d0e90acd8  prepared by warden dev from 1 input(s)  [ok]
+    nvram    aux-storage  32.0 MB  sha256:3045fe2f7b3e  prepared by warden dev from 1 input(s)  [ok]
+    platform hardware-model  132 B  sha256:976e66740c64  prepared by warden dev from 1 input(s)  [ok]
+    platform machine-id  60 B  sha256:0ad434e6b649  prepared by warden dev from 1 input(s)  [ok]
+    seed     1 per-build files
+════════════════════════════════════════════════════════════════════════════════
+[1;35m✅ ENVIRONMENT  (2256 bytes)[0m
+[1;32m✅ GET /bootstrap (39 bytes)[0m
+[1;32m✅ GET /build-script (109 bytes)[0m
+✅ GET https://example.com/ (577 bytes)
+
+════════════════════════════════════════════════════════════════════════════════
+  SUMMARY: 10 records, 4 requests, 3.3 KB audited
+  SIGNATURES: ✅ All 11 signatures valid
+  COMPLETENESS: ✅ All channels closed
+════════════════════════════════════════════════════════════════════════════════

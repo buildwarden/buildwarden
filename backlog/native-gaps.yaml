@@ -52,6 +52,9 @@ gaps:
       the qemu Windows build-guest fix.
       2026-11-06 (host:macos-qemu/20261106T124004Z, unattended, main 4c8f9dc): not run. main has
       not moved since the 2026-11-05 run, and no queue item carries a qemu Windows build-guest fix.
+      2026-11-07 (host:macos-qemu/20261107T124005Z, unattended, main 49e5354): not run. Since
+      4c8f9dc only build-link-subnet (#98) touched driver/qemu (the link subnet); nothing addresses
+      the silent guest or adds a qemu build-VM exit watch, and still no Windows arm64 ISO is reachable.
     status: open
   - id: qemu-linux-exclusive-trust
     host: macos-qemu
@@ -184,6 +187,15 @@ gaps:
       2026-11-04 stands); Windows half still waits on qemu-windows-guest-package.
       2026-11-06 (host:qemu-any/20261106T124004Z, unattended): not rerun. main is unchanged at
       4c8f9dc, so both halves stand as on 2026-11-05.
+      2026-11-07 (host:qemu-any/20261107T124005Z, unattended, main 49e5354, which carries
+      build-link-subnet #98 in driver/qemu, QEMU 11.1.1, relay initramfs rebuilt from main with
+      `make relay-vm`): Linux half re-passed. `warden build --driver qemu --image
+      ~/Library/Caches/warden/images/alpine_3_21.qcow2` of a build.sh (apk add jq, an HTTPS wget of
+      the main APKINDEX): SUCCEEDED, jq-1.7.1, 488082 bytes; `inspect --verify-disks` vm-disk-chain/v1
+      payload verified, qemu linux/arm64, disk sha256:ebaef97d702d `local` [ok], 5 seed files, 27
+      signatures valid, all channels closed. (A bare `--image alpine_3_21.qcow2` is taken as a path
+      and fails stat; the full cache path works.) Windows half still waits on qemu-windows-guest-package.
+      Logs: native/qemu-any/2026-11-07/.
     status: open
   - id: hyperv-eval-image-verify-disks
     host: windows-hyperv
@@ -421,6 +433,10 @@ gaps:
       2026-11-06 (host:macos-qemu/20261106T124004Z, unattended): not run, for the same reason.
       feat/build-link-subnet is now PR #98 at 2bd748f (phase 7, merge), with no driver/qemu or
       driver/winguest change since a68ac2c.
+      2026-11-07 (host:macos-qemu/20261107T124005Z, unattended, main 49e5354): not run.
+      build-link-subnet has merged (#98), so this now runs on main, but qemu Windows builds still
+      fail there (qemu-windows-guest-package); the Linux qemu path on the new link re-passed this run
+      (qemu-environment-descriptors).
     status: open
   - id: hyperv-relay-per-build-channel-qemu-relay
     host: qemu-any
@@ -430,6 +446,9 @@ gaps:
       Tracked (TEST-03), not blocking: the init is shared, but a qemu relay (warden.net=dhcp from
       user-mode NAT) never took the removed fallbacks, and driver/qemu does not change. Run on the
       branch while it waits, or on main after it merges.
+      2026-11-07 (host:qemu-any/20261107T124005Z, unattended): not run. The branch (0df0a64) is
+      design-only (docs/design/hyperv-relay-per-build-channel.md) and waits on its design review;
+      tools/relay-vm/init is unchanged against main.
     status: open
   - id: hyperv-relay-per-build-channel-qemu-windows
     host: macos-qemu
@@ -439,4 +458,6 @@ gaps:
       Tracked (TEST-03), not blocking: windows-hyperv validates the same cmd/warden-io step.
       qemu Windows builds already fail on main (qemu-windows-guest-package), so run this once that
       is fixed, on main after hyperv-relay-per-build-channel merges or on its branch if still waiting.
+      2026-11-07 (host:macos-qemu/20261107T124005Z, unattended): not run. The branch is design-only
+      and qemu Windows builds still fail on main.
     status: open
