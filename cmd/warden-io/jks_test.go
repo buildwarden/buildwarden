@@ -82,11 +82,11 @@ func TestWriteJKSReadable(t *testing.T) {
 }
 
 // TestWriteJKSMatchesKeytool compares the bytes with what the JDK's keytool
-// writes for the same certificate. It runs where a working keytool is installed
-// and skips elsewhere, except on GitHub Actions, whose ubuntu-latest image ships
-// a JDK: there it fails rather than skips. keytool stamps the entry with the
-// current time, so ours is written with keytool's timestamp; every other byte
-// must match.
+// writes for the same certificate. It skips where no keytool runs;
+// WARDEN_REQUIRE_KEYTOOL=1 makes that a failure. The keytool CI job sets the
+// variable and runs this test with a JDK on Linux, macOS and Windows. keytool
+// stamps the entry with the current time, so ours is written with keytool's
+// timestamp; every other byte must match.
 func TestWriteJKSMatchesKeytool(t *testing.T) {
 	keytool := requireKeytool(t)
 	cert := testCA(t)
