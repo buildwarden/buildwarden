@@ -37,6 +37,7 @@ var (
 	flagImgVirtio  string
 	flagImgArch    string
 	flagImgKeepVMs bool
+	flagImgUpdate  bool
 )
 
 var imageCmd = &cobra.Command{
@@ -104,6 +105,8 @@ func init() {
 		"image source: local path or URL (same as [source])")
 	f.StringVar(&flagImgSHA256, "sha256", "", "expected SHA256; verified and pinned")
 	f.BoolVar(&flagImgForce, "force", false, "re-acquire even if a valid cached copy exists")
+	f.BoolVar(&flagImgUpdate, "update", false,
+		"move to the newest supported OS release: restore it, or refresh it when already prepared (vz)")
 	f.StringVar(&flagImgName, "name", "",
 		"registry name of the image (hyperv; default windows-server-2025)")
 	f.StringVar(&flagImgEdition, "edition", "",
@@ -144,11 +147,14 @@ func runImagePrepare(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := checkImageUpdate(drv, flagImgUpdate); err != nil {
+		return err
+	}
 
 	var path string
 	switch drv + "/" + osName {
 	case "vz/macos":
-		path, err = prepareVZMacos(source, false)
+		path, err = prepareVZMacos(source, flagImgUpdate)
 	case "qemu/linux":
 		path, err = linuxguest.PrepareImage(source)
 	case "firecracker/linux":
@@ -171,6 +177,15 @@ func runImagePrepare(cmd *cobra.Command, args []string) error {
 	// printed its own message, so there is nothing more to report.
 	if path != "" {
 		fmt.Fprintf(os.Stderr, "Base image ready: %s\n", path)
+	}
+	return nil
+}
+
+// checkImageUpdate refuses --update, before anything runs, on a driver that
+// does not support it yet (only vz does).
+func checkImageUpdate(drv string, update bool) error {
+	if update && drv != "vz" {
+		return driver.Fixable("", "--update is not supported for --driver %s yet", drv)
 	}
 	return nil
 }

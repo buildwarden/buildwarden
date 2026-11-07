@@ -287,3 +287,66 @@ func TestPrepareRestoreRecordsAndStamps(t *testing.T) {
 		t.Fatalf("stderr: %s", h.stderr.String())
 	}
 }
+
+func TestPrepareUpdate(t *testing.T) {
+	t.Run("restores the latest when it is not prepared", func(t *testing.T) {
+		h := &fakeHost{latest: ipsw27_2}
+		c := h.cache(t)
+		makeImage(t, c.CacheDir, "macos-old", t0)
+		dir, err := c.Prepare("", true)
+		if err != nil {
+			t.Fatal(err)
+		}
+		want := []string{"latest", "root", "download " + ipsw27_2,
+			"restore " + filepath.Join(c.CacheDir, "ipsw-"+shortHash(ipsw27_2)+".ipsw") +
+				" -> " + keyDir(ipsw27_2)}
+		if strings.Join(h.calls, "\n") != strings.Join(want, "\n") {
+			t.Fatalf("calls %q", h.calls)
+		}
+		if filepath.Base(dir) != keyDir(ipsw27_2) || activeName(t, c) != keyDir(ipsw27_2) {
+			t.Fatalf("dir %q, active %q", dir, activeName(t, c))
+		}
+	})
+	t.Run("refreshes the latest in place when it is prepared", func(t *testing.T) {
+		h := &fakeHost{latest: ipsw27_2}
+		c := h.cache(t)
+		old := makeImage(t, c.CacheDir, "macos-old", t0.Add(time.Hour))
+		makeImage(t, c.CacheDir, keyDir(ipsw27_2), t0)
+		if err := c.SetActive(old); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := c.Prepare("", true); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Join(h.calls, ",") != "latest,refresh "+keyDir(ipsw27_2) {
+			t.Fatalf("calls %q", h.calls)
+		}
+		if activeName(t, c) != keyDir(ipsw27_2) {
+			t.Fatalf("active %q", activeName(t, c))
+		}
+	})
+	t.Run("with a source is refused before anything runs", func(t *testing.T) {
+		h := &fakeHost{latest: ipsw27_2}
+		c := h.cache(t)
+		_, err := c.Prepare(ipsw27_0, true)
+		var fe *driver.FixableError
+		if !errors.As(err, &fe) || fe.Msg != "--update picks the newest IPSW itself" ||
+			fe.Fix != "drop the source, or drop --update to prepare that source" {
+			t.Fatalf("Prepare(source, update) = %v", err)
+		}
+		if len(h.calls) != 0 {
+			t.Fatalf("calls %q", h.calls)
+		}
+	})
+	t.Run("a failed lookup is an error", func(t *testing.T) {
+		h := &fakeHost{latestErr: errors.New("offline")}
+		c := h.cache(t)
+		makeImage(t, c.CacheDir, "macos-old", t0)
+		if _, err := c.Prepare("", true); err == nil || !strings.Contains(err.Error(), "offline") {
+			t.Fatalf("Prepare(update) offline = %v", err)
+		}
+		if activeName(t, c) != "" {
+			t.Fatalf("active %q", activeName(t, c))
+		}
+	})
+}

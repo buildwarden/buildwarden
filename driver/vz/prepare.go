@@ -87,15 +87,28 @@ func sameDir(a, b string) bool {
 //     supported IPSW when no image is prepared;
 //   - an IPSW URL or file: refresh its image in place when it is prepared,
 //     else restore it;
-//   - a prepared image in the cache: refresh it in place.
+//   - a prepared image in the cache: refresh it in place;
+//   - update (no source): restore the latest supported IPSW, or refresh its
+//     image in place when it is prepared.
 func (c *ImageCache) Prepare(source string, update bool) (string, error) {
+	if update && source != "" {
+		return "", driver.Fixable("drop the source, or drop --update to prepare that source",
+			"--update picks the newest IPSW itself")
+	}
 	src, err := classify(source, c.CacheDir)
 	if err != nil {
 		return "", err
 	}
 	var dir string
-	switch src.kind {
-	case srcEmpty:
+	switch {
+	case update:
+		u, lerr := c.latestIPSW()
+		if lerr != nil {
+			return "", fmt.Errorf("fetching latest IPSW URL: %w", lerr)
+		}
+		fmt.Fprintf(c.out(), "Latest macOS IPSW: %s\n", u)
+		dir, err = c.restoreOrRefresh(u)
+	case src.kind == srcEmpty:
 		active, _ := c.ImageDir()
 		if active != "" {
 			dir, err = active, c.refreshImage(active)
@@ -107,9 +120,9 @@ func (c *ImageCache) Prepare(source string, update bool) (string, error) {
 		}
 		fmt.Fprintf(c.out(), "Latest macOS IPSW: %s\n", u)
 		dir, err = c.restoreOrRefresh(u)
-	case srcURL, srcFile:
+	case src.kind == srcURL, src.kind == srcFile:
 		dir, err = c.restoreOrRefresh(src.path)
-	case srcImage:
+	case src.kind == srcImage:
 		if src.outside {
 			return "", driver.Fixable(customImageFix(c.CacheDir),
 				"%s is a prepared image outside the image cache %s", src.path, c.CacheDir)

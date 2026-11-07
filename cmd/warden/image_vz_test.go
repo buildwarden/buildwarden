@@ -33,3 +33,20 @@ func TestFormatVZImages(t *testing.T) {
 		t.Fatalf("no images: %q", got)
 	}
 }
+
+func TestCheckImageUpdate(t *testing.T) {
+	for _, drv := range []string{"", "vz"} {
+		if err := checkImageUpdate(drv, false); err != nil {
+			t.Errorf("no --update, driver %q: %v", drv, err)
+		}
+	}
+	if err := checkImageUpdate("vz", true); err != nil {
+		t.Errorf("--update on vz: %v", err)
+	}
+	for _, drv := range []string{"qemu", "hyperv", "firecracker", "container"} {
+		err := checkImageUpdate(drv, true)
+		if err == nil || err.Error() != "--update is not supported for --driver "+drv+" yet" {
+			t.Errorf("--update on %s: %v", drv, err)
+		}
+	}
+}
