@@ -220,8 +220,9 @@ func (c *ImageCache) RestoreIPSW(source string) (string, error) {
 }
 
 // restore acquires the IPSW at source (a URL, or a local file's absolute
-// path) for the image directory it keys to, macos-<shortHash(source)>, runs the restore step on it, and records the
-// image's provenance, stamp and .prepared marker. Readying the image needs
+// path) for the image directory it keys to, macos-<shortHash(source)>, runs
+// the restore step on it, and records the image's provenance, stamp and
+// .prepared marker. Readying the image needs
 // root, so that is checked before the download rather than after it.
 func (c *ImageCache) restore(source string) (string, error) {
 	if err := os.MkdirAll(c.CacheDir, 0755); err != nil {
@@ -273,9 +274,11 @@ func (c *ImageCache) restoreDiskReal(ipswLocal, imgDir string) error {
 	diskInfo, _ := os.Stat(diskPath)
 	if diskInfo == nil || diskInfo.Size() == 0 {
 		fmt.Fprintf(c.out(), "Restoring macOS from IPSW (this takes 10-20 minutes)...\n")
-		if err := restoreIPSW(ipswLocal, diskPath, 64,
-			filepath.Join(imgDir, "aux-storage"), filepath.Join(imgDir, "hardware-model"),
-			filepath.Join(imgDir, "machine-id")); err != nil {
+		err := restoreIPSW(ipswLocal, diskPath, 64,
+			filepath.Join(imgDir, "aux-storage"),
+			filepath.Join(imgDir, "hardware-model"),
+			filepath.Join(imgDir, "machine-id"))
+		if err != nil {
 			return fmt.Errorf("restoring IPSW: %w", err)
 		}
 	} else {

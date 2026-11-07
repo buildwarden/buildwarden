@@ -47,8 +47,9 @@ func (h *fakeHost) wire(c *ImageCache) *ImageCache {
 		if h.failWith != nil {
 			return h.failWith
 		}
-		for _, f := range []string{"disk.img", "aux-storage", "hardware-model", "machine-id"} {
-			if err := os.WriteFile(filepath.Join(imgDir, f), []byte(f), 0o644); err != nil {
+		for _, f := range vzImageFiles {
+			p := filepath.Join(imgDir, f)
+			if err := os.WriteFile(p, []byte(f), 0o644); err != nil {
 				return err
 			}
 		}
@@ -65,6 +66,30 @@ func (h *fakeHost) wire(c *ImageCache) *ImageCache {
 	c.log = &h.stderr
 	return c
 }
+
+// trace is the recorded calls, comma-separated.
+func (h *fakeHost) trace() string { return strings.Join(h.calls, ",") }
+
+// warned reports whether anything was printed as a warning.
+func (h *fakeHost) warned() bool { return strings.Contains(h.stderr.String(), "warning:") }
+
+// restoreCall is the restore step's call for a URL source downloaded into c.
+func restoreCall(c *ImageCache, url string) string {
+	ipsw := filepath.Join(c.CacheDir, "ipsw-"+shortHash(url)+".ipsw")
+	return "restore " + ipsw + " -> " + keyDir(url)
+}
+
+func mustPrepare(t *testing.T, c *ImageCache, source string, update bool) string {
+	t.Helper()
+	dir, err := c.Prepare(source, update)
+	if err != nil {
+		t.Fatalf("Prepare(%q, %v) = %v", source, update, err)
+	}
+	return dir
+}
+
+// vzImageFiles are the files the restore step writes into an image directory.
+var vzImageFiles = []string{"disk.img", "aux-storage", "hardware-model", "machine-id"}
 
 // keyDir is the image directory name an IPSW source keys to.
 func keyDir(source string) string { return "macos-" + shortHash(source) }
@@ -96,19 +121,25 @@ func TestClassify(t *testing.T) {
 	}
 	t.Chdir(work)
 
+	const (
+		fileURL   = "file:///x/y.ipsw"
+		sourceFix = "give an IPSW URL, a local .ipsw file, or a prepared image directory"
+	)
 	for _, tc := range []struct {
 		name, source string
 		want         prepSource
 		refused      bool
 	}{
 		{name: "empty", source: "", want: prepSource{kind: srcEmpty}},
-		{name: "https URL", source: ipsw27_2, want: prepSource{kind: srcURL, path: ipsw27_2}},
-		{name: "file URL", source: "file:///x/y.ipsw",
-			want: prepSource{kind: srcURL, path: "file:///x/y.ipsw"}},
-		{name: "absolute IPSW file", source: ipsw, want: prepSource{kind: srcFile, path: ipsw}},
+		{name: "https URL", source: ipsw27_2,
+			want: prepSource{kind: srcURL, path: ipsw27_2}},
+		{name: "file URL", source: fileURL, want: prepSource{kind: srcURL, path: fileURL}},
+		{name: "absolute IPSW file", source: ipsw,
+			want: prepSource{kind: srcFile, path: ipsw}},
 		{name: "relative IPSW file", source: filepath.Base(ipsw),
 			want: prepSource{kind: srcFile, path: ipsw}},
-		{name: "prepared directory", source: img, want: prepSource{kind: srcImage, path: img}},
+		{name: "prepared directory", source: img,
+			want: prepSource{kind: srcImage, path: img}},
 		{name: "its disk.img", source: filepath.Join(img, "disk.img"),
 			want: prepSource{kind: srcImage, path: img}},
 		{name: "prepared directory outside the cache", source: outside,
@@ -119,12 +150,8 @@ func TestClassify(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			got, err := classify(tc.source, cache)
 			if tc.refused {
-				var fe *driver.FixableError
-				if !errors.As(err, &fe) ||
-					fe.Msg != "no IPSW file or prepared image at "+tc.source ||
-					fe.Fix != "give an IPSW URL, a local .ipsw file, or a prepared image directory" {
-					t.Fatalf("classify(%q) = %+v, %v; want the refusal", tc.source, got, err)
-				}
+				msg := "no IPSW file or prepared image at " + tc.source
+				checkRefusal(t, err, msg, sourceFix)
 				return
 			}
 			if err != nil {
@@ -139,6 +166,15 @@ func TestClassify(t *testing.T) {
 	}
 }
 
+// checkRefusal fails unless err is a FixableError with exactly msg and fix.
+func checkRefusal(t *testing.T, err error, msg, fix string) {
+	t.Helper()
+	var fe *driver.FixableError
+	if !errors.As(err, &fe) || fe.Msg != msg || fe.Fix != fix {
+		t.Fatalf("got %#v, want the refusal %q / %q", err, msg, fix)
+	}
+}
+
 func samePath(a, b string) bool {
 	if a == b {
 		return true
@@ -148,6 +184,16 @@ func samePath(a, b string) bool {
 	return err1 == nil && err2 == nil && ra == rb
 }
 
+// activeNew lays out macos-new as the active image and macos-old beside it.
+func activeNew(t *testing.T, c *ImageCache) (old string) {
+	t.Helper()
+	newer := makeImage(t, c.CacheDir, "macos-new", t0.Add(time.Hour))
+	if err := c.SetActive(newer); err != nil {
+		t.Fatal(err)
+	}
+	return makeImage(t, c.CacheDir, "macos-old", t0)
+}
+
 func TestPrepare(t *testing.T) {
 	for _, tc := range []struct {
 		name string
@@ -155,7 +201,7 @@ func TestPrepare(t *testing.T) {
 		setup      func(t *testing.T, c *ImageCache) string
 		latest     string
 		failWith   error
-		wantCalls  []string // with <cache> standing for the cache dir
+		wantCalls  func(c *ImageCache) []string
 		wantActive string
 		wantErr    bool
 	}{
@@ -165,62 +211,71 @@ func TestPrepare(t *testing.T) {
 				makeImage(t, c.CacheDir, "macos-new", t0.Add(time.Hour))
 				return ""
 			},
-			latest:    ipsw27_2,
-			wantCalls: []string{"refresh macos-new", "latest"}, wantActive: "macos-new"},
+			latest: ipsw27_2,
+			wantCalls: func(*ImageCache) []string {
+				return []string{"refresh macos-new", "latest"}
+			},
+			wantActive: "macos-new"},
 		{name: "no source and no image restores the latest",
 			setup:  func(*testing.T, *ImageCache) string { return "" },
 			latest: ipsw27_2,
-			wantCalls: []string{"latest", "root", "download " + ipsw27_2,
-				"restore <cache>/ipsw-" + shortHash(ipsw27_2) + ".ipsw -> " + keyDir(ipsw27_2)},
+			wantCalls: func(c *ImageCache) []string {
+				return []string{"latest", "root", "download " + ipsw27_2,
+					restoreCall(c, ipsw27_2)}
+			},
 			wantActive: keyDir(ipsw27_2)},
 		{name: "a URL not yet prepared is restored",
 			setup: func(t *testing.T, c *ImageCache) string {
 				makeImage(t, c.CacheDir, "macos-old", t0)
 				return ipsw27_2
 			},
-			wantCalls: []string{"root", "download " + ipsw27_2,
-				"restore <cache>/ipsw-" + shortHash(ipsw27_2) + ".ipsw -> " + keyDir(ipsw27_2)},
+			wantCalls: func(c *ImageCache) []string {
+				return []string{"root", "download " + ipsw27_2,
+					restoreCall(c, ipsw27_2)}
+			},
 			wantActive: keyDir(ipsw27_2)},
 		{name: "a URL whose image sorts second is refreshed in place",
 			setup: func(t *testing.T, c *ImageCache) string {
-				makeImage(t, c.CacheDir, "macos-0000000000000000", t0.Add(time.Hour))
+				first := "macos-0000000000000000"
+				makeImage(t, c.CacheDir, first, t0.Add(time.Hour))
 				makeImage(t, c.CacheDir, keyDir(ipsw27_2), t0)
 				return ipsw27_2
 			},
-			wantCalls: []string{"refresh " + keyDir(ipsw27_2)}, wantActive: keyDir(ipsw27_2)},
-		{name: "a prepared directory is refreshed and made active",
-			setup: func(t *testing.T, c *ImageCache) string {
-				makeImage(t, c.CacheDir, "macos-new", t0.Add(time.Hour))
-				return makeImage(t, c.CacheDir, "macos-old", t0)
+			wantCalls: func(*ImageCache) []string {
+				return []string{"refresh " + keyDir(ipsw27_2)}
 			},
-			wantCalls: []string{"refresh macos-old"}, wantActive: "macos-old"},
+			wantActive: keyDir(ipsw27_2)},
+		{name: "a prepared directory is refreshed and made active",
+			setup: activeNew,
+			wantCalls: func(*ImageCache) []string {
+				return []string{"refresh macos-old"}
+			},
+			wantActive: "macos-old"},
 		{name: "a prepared disk.img is refreshed and made active",
 			setup: func(t *testing.T, c *ImageCache) string {
-				makeImage(t, c.CacheDir, "macos-new", t0.Add(time.Hour))
-				return filepath.Join(makeImage(t, c.CacheDir, "macos-old", t0), "disk.img")
+				return filepath.Join(activeNew(t, c), "disk.img")
 			},
-			wantCalls: []string{"refresh macos-old"}, wantActive: "macos-old"},
+			wantCalls: func(*ImageCache) []string {
+				return []string{"refresh macos-old"}
+			},
+			wantActive: "macos-old"},
 		{name: "a failed refresh leaves the active image",
-			setup: func(t *testing.T, c *ImageCache) string {
-				makeImage(t, c.CacheDir, "macos-new", t0.Add(time.Hour))
-				if err := c.SetActive(filepath.Join(c.CacheDir, "macos-new")); err != nil {
-					t.Fatal(err)
-				}
-				return makeImage(t, c.CacheDir, "macos-old", t0)
+			setup:    activeNew,
+			failWith: errors.New("hdiutil failed"),
+			wantCalls: func(*ImageCache) []string {
+				return []string{"refresh macos-old"}
 			},
-			failWith:  errors.New("hdiutil failed"),
-			wantCalls: []string{"refresh macos-old"}, wantActive: "macos-new", wantErr: true},
+			wantActive: "macos-new", wantErr: true},
 		{name: "a failed restore leaves the active image",
 			setup: func(t *testing.T, c *ImageCache) string {
-				makeImage(t, c.CacheDir, "macos-new", t0.Add(time.Hour))
-				if err := c.SetActive(filepath.Join(c.CacheDir, "macos-new")); err != nil {
-					t.Fatal(err)
-				}
+				activeNew(t, c)
 				return ipsw27_2
 			},
 			failWith: errors.New("restore failed"),
-			wantCalls: []string{"root", "download " + ipsw27_2,
-				"restore <cache>/ipsw-" + shortHash(ipsw27_2) + ".ipsw -> " + keyDir(ipsw27_2)},
+			wantCalls: func(c *ImageCache) []string {
+				return []string{"root", "download " + ipsw27_2,
+					restoreCall(c, ipsw27_2)}
+			},
 			wantActive: "macos-new", wantErr: true},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
@@ -231,10 +286,8 @@ func TestPrepare(t *testing.T) {
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("Prepare(%q) = %q, %v", source, dir, err)
 			}
-			want := strings.Join(tc.wantCalls, "\n")
-			want = strings.ReplaceAll(want, "<cache>", c.CacheDir)
-			if got := strings.Join(h.calls, "\n"); got != want {
-				t.Fatalf("calls:\n%s\nwant:\n%s", got, want)
+			if want := strings.Join(tc.wantCalls(c), ","); h.trace() != want {
+				t.Fatalf("calls:\n%s\nwant:\n%s", h.trace(), want)
 			}
 			if got := activeName(t, c); got != tc.wantActive {
 				t.Fatalf("active = %q, want %q", got, tc.wantActive)
@@ -242,14 +295,21 @@ func TestPrepare(t *testing.T) {
 			if !tc.wantErr && dir != filepath.Join(c.CacheDir, tc.wantActive) {
 				t.Fatalf("Prepare returned %q", dir)
 			}
-			for _, call := range h.calls {
-				if img, ok := strings.CutPrefix(call, "refresh "); ok &&
-					!strings.Contains(h.stderr.String(), "Refreshing boot agent on "+
-						filepath.Join(c.CacheDir, img)) {
-					t.Fatalf("no refresh message: %s", h.stderr.String())
-				}
-			}
+			checkRefreshMessages(t, h, c)
 		})
+	}
+}
+
+// checkRefreshMessages fails unless each refresh printed the message f6
+// case 2 looks for.
+func checkRefreshMessages(t *testing.T, h *fakeHost, c *ImageCache) {
+	t.Helper()
+	for _, call := range h.calls {
+		img, ok := strings.CutPrefix(call, "refresh ")
+		msg := "Refreshing boot agent on " + filepath.Join(c.CacheDir, img)
+		if ok && !strings.Contains(h.stderr.String(), msg) {
+			t.Fatalf("no %q: %s", msg, h.stderr.String())
+		}
 	}
 }
 
@@ -270,10 +330,7 @@ func TestPrepareOutsideTheCacheIsRefused(t *testing.T) {
 func TestPrepareRestoreRecordsAndStamps(t *testing.T) {
 	h := &fakeHost{}
 	c := h.cache(t)
-	dir, err := c.Prepare(ipsw27_2, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	dir := mustPrepare(t, c, ipsw27_2, false)
 	if !isValidImageDir(dir) {
 		t.Fatalf("%s is not a prepared image", dir)
 	}
@@ -283,72 +340,64 @@ func TestPrepareRestoreRecordsAndStamps(t *testing.T) {
 	if got := c.recordedIPSW(dir); got != ipsw27_2 {
 		t.Fatalf("recorded IPSW %q", got)
 	}
-	if !strings.Contains(h.stderr.String(), fmt.Sprintf("macOS image ready at %s", dir)) {
+	if !strings.Contains(h.stderr.String(), "macOS image ready at "+dir) {
 		t.Fatalf("stderr: %s", h.stderr.String())
 	}
 }
 
-func TestPrepareUpdate(t *testing.T) {
-	t.Run("restores the latest when it is not prepared", func(t *testing.T) {
-		h := &fakeHost{latest: ipsw27_2}
-		c := h.cache(t)
-		makeImage(t, c.CacheDir, "macos-old", t0)
-		dir, err := c.Prepare("", true)
-		if err != nil {
-			t.Fatal(err)
-		}
-		want := []string{"latest", "root", "download " + ipsw27_2,
-			"restore " + filepath.Join(c.CacheDir, "ipsw-"+shortHash(ipsw27_2)+".ipsw") +
-				" -> " + keyDir(ipsw27_2)}
-		if strings.Join(h.calls, "\n") != strings.Join(want, "\n") {
-			t.Fatalf("calls %q", h.calls)
-		}
-		if filepath.Base(dir) != keyDir(ipsw27_2) || activeName(t, c) != keyDir(ipsw27_2) {
-			t.Fatalf("dir %q, active %q", dir, activeName(t, c))
-		}
-	})
-	t.Run("refreshes the latest in place when it is prepared", func(t *testing.T) {
-		h := &fakeHost{latest: ipsw27_2}
-		c := h.cache(t)
-		old := makeImage(t, c.CacheDir, "macos-old", t0.Add(time.Hour))
-		makeImage(t, c.CacheDir, keyDir(ipsw27_2), t0)
-		if err := c.SetActive(old); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := c.Prepare("", true); err != nil {
-			t.Fatal(err)
-		}
-		if strings.Join(h.calls, ",") != "latest,refresh "+keyDir(ipsw27_2) {
-			t.Fatalf("calls %q", h.calls)
-		}
-		if activeName(t, c) != keyDir(ipsw27_2) {
-			t.Fatalf("active %q", activeName(t, c))
-		}
-	})
-	t.Run("with a source is refused before anything runs", func(t *testing.T) {
-		h := &fakeHost{latest: ipsw27_2}
-		c := h.cache(t)
-		_, err := c.Prepare(ipsw27_0, true)
-		var fe *driver.FixableError
-		if !errors.As(err, &fe) || fe.Msg != "--update picks the newest IPSW itself" ||
-			fe.Fix != "drop the source, or drop --update to prepare that source" {
-			t.Fatalf("Prepare(source, update) = %v", err)
-		}
-		if len(h.calls) != 0 {
-			t.Fatalf("calls %q", h.calls)
-		}
-	})
-	t.Run("a failed lookup is an error", func(t *testing.T) {
-		h := &fakeHost{latestErr: errors.New("offline")}
-		c := h.cache(t)
-		makeImage(t, c.CacheDir, "macos-old", t0)
-		if _, err := c.Prepare("", true); err == nil || !strings.Contains(err.Error(), "offline") {
-			t.Fatalf("Prepare(update) offline = %v", err)
-		}
-		if activeName(t, c) != "" {
-			t.Fatalf("active %q", activeName(t, c))
-		}
-	})
+func TestPrepareUpdateRestoresTheLatest(t *testing.T) {
+	h := &fakeHost{latest: ipsw27_2}
+	c := h.cache(t)
+	makeImage(t, c.CacheDir, "macos-old", t0)
+	dir := mustPrepare(t, c, "", true)
+	want := "latest,root,download " + ipsw27_2 + "," + restoreCall(c, ipsw27_2)
+	if h.trace() != want {
+		t.Fatalf("calls %q", h.calls)
+	}
+	if filepath.Base(dir) != keyDir(ipsw27_2) || activeName(t, c) != keyDir(ipsw27_2) {
+		t.Fatalf("dir %q, active %q", dir, activeName(t, c))
+	}
+}
+
+func TestPrepareUpdateRefreshesAPreparedLatest(t *testing.T) {
+	h := &fakeHost{latest: ipsw27_2}
+	c := h.cache(t)
+	old := makeImage(t, c.CacheDir, "macos-old", t0.Add(time.Hour))
+	makeImage(t, c.CacheDir, keyDir(ipsw27_2), t0)
+	if err := c.SetActive(old); err != nil {
+		t.Fatal(err)
+	}
+	mustPrepare(t, c, "", true)
+	if h.trace() != "latest,refresh "+keyDir(ipsw27_2) {
+		t.Fatalf("calls %q", h.calls)
+	}
+	if activeName(t, c) != keyDir(ipsw27_2) {
+		t.Fatalf("active %q", activeName(t, c))
+	}
+}
+
+func TestPrepareUpdateWithASourceIsRefused(t *testing.T) {
+	h := &fakeHost{latest: ipsw27_2}
+	c := h.cache(t)
+	_, err := c.Prepare(ipsw27_0, true)
+	checkRefusal(t, err, "--update picks the newest IPSW itself",
+		"drop the source, or drop --update to prepare that source")
+	if len(h.calls) != 0 {
+		t.Fatalf("calls %q", h.calls)
+	}
+}
+
+func TestPrepareUpdateFailedLookupIsAnError(t *testing.T) {
+	h := &fakeHost{latestErr: errors.New("offline")}
+	c := h.cache(t)
+	makeImage(t, c.CacheDir, "macos-old", t0)
+	_, err := c.Prepare("", true)
+	if err == nil || !strings.Contains(err.Error(), "offline") {
+		t.Fatalf("Prepare(update) offline = %v", err)
+	}
+	if activeName(t, c) != "" {
+		t.Fatalf("active %q", activeName(t, c))
+	}
 }
 
 // writeIPSW writes a cached IPSW file named name into the cache.
@@ -366,45 +415,46 @@ func exists(p string) bool {
 	return err == nil
 }
 
+func cachedIPSW(c *ImageCache, url string) string {
+	return filepath.Join(c.CacheDir, "ipsw-"+shortHash(url)+".ipsw")
+}
+
 func TestPrepareDeletesTheImagesIPSW(t *testing.T) {
 	t.Run("after a URL restore, once recorded", func(t *testing.T) {
 		h := &fakeHost{}
 		c := h.cache(t)
-		other := writeIPSW(t, c, "ipsw-"+shortHash(ipsw27_0)+".ipsw")
-		dir, err := c.Prepare(ipsw27_2, false)
-		if err != nil {
-			t.Fatal(err)
-		}
-		if exists(filepath.Join(c.CacheDir, "ipsw-"+shortHash(ipsw27_2)+".ipsw")) {
+		other := writeIPSW(t, c, filepath.Base(cachedIPSW(c, ipsw27_0)))
+		dir := mustPrepare(t, c, ipsw27_2, false)
+		if exists(cachedIPSW(c, ipsw27_2)) {
 			t.Fatal("the restored image's IPSW is still cached")
 		}
 		if !exists(other) {
 			t.Fatal("another image's IPSW was deleted")
 		}
 		src, _ := c.LayerCache().Source(filepath.Join(dir, "disk.img"))
-		if len(src.Inputs) != 1 || src.Inputs[0].URL != ipsw27_2 || src.Inputs[0].SHA256 == "" {
-			t.Fatalf("recorded inputs %+v, want the hashed IPSW", src.Inputs)
+		in := src.Inputs
+		if len(in) != 1 || in[0].URL != ipsw27_2 || in[0].SHA256 == "" {
+			t.Fatalf("recorded inputs %+v, want the hashed IPSW", in)
 		}
 	})
 	t.Run("after a refresh", func(t *testing.T) {
 		h := &fakeHost{}
 		c := h.cache(t)
 		makeImage(t, c.CacheDir, keyDir(ipsw27_2), t0)
-		own := writeIPSW(t, c, "ipsw-"+shortHash(ipsw27_2)+".ipsw")
-		other := writeIPSW(t, c, "ipsw-"+shortHash(ipsw27_0)+".ipsw")
+		own := writeIPSW(t, c, filepath.Base(cachedIPSW(c, ipsw27_2)))
+		other := writeIPSW(t, c, filepath.Base(cachedIPSW(c, ipsw27_0)))
 		latest := writeIPSW(t, c, "ipsw-latest.ipsw")
-		if _, err := c.Prepare("", false); err != nil {
-			t.Fatal(err)
-		}
+		mustPrepare(t, c, "", false)
 		if exists(own) || !exists(other) || !exists(latest) {
-			t.Fatalf("own %v other %v latest %v", exists(own), exists(other), exists(latest))
+			t.Fatalf("own %v other %v latest %v",
+				exists(own), exists(other), exists(latest))
 		}
 	})
 	t.Run("a failed prepare deletes nothing", func(t *testing.T) {
 		h := &fakeHost{failWith: errors.New("hdiutil failed")}
 		c := h.cache(t)
 		makeImage(t, c.CacheDir, keyDir(ipsw27_2), t0)
-		own := writeIPSW(t, c, "ipsw-"+shortHash(ipsw27_2)+".ipsw")
+		own := writeIPSW(t, c, filepath.Base(cachedIPSW(c, ipsw27_2)))
 		if _, err := c.Prepare("", false); err == nil {
 			t.Fatal("Prepare succeeded")
 		}
@@ -420,20 +470,21 @@ func TestOutOfDate(t *testing.T) {
 		update  = "sudo warden image prepare --driver vz --update"
 		avail   = " is available. To update (about 25 GB, 15 minutes): " + update
 		already = " is already prepared. To use it (no download): " + update
+		from27  = "the active macOS image is macOS 27.0.1 (26A100); macOS 27.2 (26B123)"
 	)
 	for _, tc := range []struct {
 		name, active, recorded, u string
 		uPrepared                 bool
 		want                      string // "" for no warning
 	}{
-		{name: "the active image is u's key", active: "/c/" + keyDir(ipsw27_2), u: ipsw27_2},
+		{name: "the active image is u's key",
+			active: "/c/" + keyDir(ipsw27_2), u: ipsw27_2},
 		{name: "the recorded IPSW file name is u's (a local file)",
 			active: "/c/macos-1111", recorded: local, u: ipsw27_2},
 		{name: "u not prepared", active: "/c/macos-90a1", recorded: ipsw27_0, u: ipsw27_2,
-			want: "the active macOS image is macOS 27.0.1 (26A100); macOS 27.2 (26B123)" + avail},
-		{name: "u already prepared", active: "/c/macos-90a1", recorded: ipsw27_0, u: ipsw27_2,
-			uPrepared: true,
-			want:      "the active macOS image is macOS 27.0.1 (26A100); macOS 27.2 (26B123)" + already},
+			want: from27 + avail},
+		{name: "u already prepared", active: "/c/macos-90a1", recorded: ipsw27_0,
+			u: ipsw27_2, uPrepared: true, want: from27 + already},
 		{name: "no recorded IPSW", active: "/c/macos-90a1", u: ipsw27_2, uPrepared: true,
 			want: "the active macOS image is macos-90a1 (IPSW not recorded); " +
 				"macOS 27.2 (26B123)" + already},
@@ -454,162 +505,160 @@ func TestOutOfDateReadsTheCache(t *testing.T) {
 	c := &ImageCache{CacheDir: t.TempDir()}
 	old := makeImage(t, c.CacheDir, "macos-90a1", t0)
 	recordIPSW(t, c, old, ipsw27_0)
-	if msg, ok := c.OutOfDate(old, ipsw27_2); !ok || !strings.Contains(msg, "is available") {
+	msg, ok := c.OutOfDate(old, ipsw27_2)
+	if !ok || !strings.Contains(msg, "is available") {
 		t.Fatalf("u not prepared: %q %v", msg, ok)
 	}
 	makeImage(t, c.CacheDir, keyDir(ipsw27_2), t0)
-	if msg, ok := c.OutOfDate(old, ipsw27_2); !ok || !strings.Contains(msg, "already prepared") {
+	msg, ok = c.OutOfDate(old, ipsw27_2)
+	if !ok || !strings.Contains(msg, "already prepared") {
 		t.Fatalf("u prepared: %q %v", msg, ok)
 	}
 }
 
-func TestPrepareOutOfDateWarning(t *testing.T) {
-	setupOld := func(t *testing.T, c *ImageCache) {
-		old := makeImage(t, c.CacheDir, "macos-90a1", t0)
-		recordIPSW(t, c, old, ipsw27_0)
+// oldActive is a cache whose only image, macos-90a1, was restored from 27.0.1.
+func oldActive(t *testing.T, h *fakeHost) *ImageCache {
+	t.Helper()
+	c := h.cache(t)
+	recordIPSW(t, c, makeImage(t, c.CacheDir, "macos-90a1", t0), ipsw27_0)
+	return c
+}
+
+func TestPrepareWarnsAfterARefresh(t *testing.T) {
+	h := &fakeHost{latest: ipsw27_2}
+	mustPrepare(t, oldActive(t, h), "", false)
+	if h.trace() != "refresh macos-90a1,latest" {
+		t.Fatalf("calls %q", h.calls)
 	}
-	t.Run("a no-source refresh warns after it succeeded", func(t *testing.T) {
-		h := &fakeHost{latest: ipsw27_2}
-		c := h.cache(t)
-		setupOld(t, c)
-		if _, err := c.Prepare("", false); err != nil {
-			t.Fatal(err)
-		}
-		if strings.Join(h.calls, ",") != "refresh macos-90a1,latest" {
-			t.Fatalf("calls %q", h.calls)
-		}
-		want := "warning: the active macOS image is macOS 27.0.1 (26A100); macOS 27.2 (26B123) is available."
-		if !strings.Contains(h.stderr.String(), want) {
-			t.Fatalf("stderr: %s", h.stderr.String())
-		}
-	})
-	t.Run("a failed refresh does not look up", func(t *testing.T) {
-		h := &fakeHost{latest: ipsw27_2, failWith: errors.New("hdiutil failed")}
-		c := h.cache(t)
-		setupOld(t, c)
-		if _, err := c.Prepare("", false); err == nil {
-			t.Fatal("Prepare succeeded")
-		}
-		if strings.Join(h.calls, ",") != "refresh macos-90a1" {
-			t.Fatalf("calls %q", h.calls)
-		}
-	})
-	t.Run("a failed lookup is silent", func(t *testing.T) {
-		h := &fakeHost{latestErr: errors.New("offline")}
-		c := h.cache(t)
-		setupOld(t, c)
-		if _, err := c.Prepare("", false); err != nil {
-			t.Fatalf("Prepare offline = %v", err)
-		}
-		if strings.Contains(h.stderr.String(), "warning:") || strings.Contains(h.stderr.String(), "offline") {
-			t.Fatalf("stderr: %s", h.stderr.String())
-		}
-	})
+	want := "warning: the active macOS image is macOS 27.0.1 (26A100); " +
+		"macOS 27.2 (26B123) is available."
+	if !strings.Contains(h.stderr.String(), want) {
+		t.Fatalf("stderr: %s", h.stderr.String())
+	}
+}
+
+func TestPrepareFailedRefreshDoesNotLookUp(t *testing.T) {
+	h := &fakeHost{latest: ipsw27_2, failWith: errors.New("hdiutil failed")}
+	if _, err := oldActive(t, h).Prepare("", false); err == nil {
+		t.Fatal("Prepare succeeded")
+	}
+	if h.trace() != "refresh macos-90a1" {
+		t.Fatalf("calls %q", h.calls)
+	}
+}
+
+func TestPrepareFailedLookupIsSilent(t *testing.T) {
+	h := &fakeHost{latestErr: errors.New("offline")}
+	mustPrepare(t, oldActive(t, h), "", false)
+	if h.warned() || strings.Contains(h.stderr.String(), "offline") {
+		t.Fatalf("stderr: %s", h.stderr.String())
+	}
+}
+
+func TestPrepareNoWarningWithASource(t *testing.T) {
 	for _, tc := range []struct {
 		name   string
 		source func(c *ImageCache) string
 		update bool
 		calls  string
 	}{
-		{name: "--update", update: true, calls: "latest,root,download " + ipsw27_2 + ",restore"},
+		{name: "--update", update: true,
+			calls: "latest,root,download " + ipsw27_2 + ",restore"},
 		{name: "a URL", source: func(*ImageCache) string { return ipsw27_0 },
 			calls: "root,download " + ipsw27_0 + ",restore"},
 		{name: "a prepared directory",
-			source: func(c *ImageCache) string { return filepath.Join(c.CacheDir, "macos-90a1") },
-			calls:  "refresh macos-90a1"},
+			source: func(c *ImageCache) string {
+				return filepath.Join(c.CacheDir, "macos-90a1")
+			},
+			calls: "refresh macos-90a1"},
 	} {
-		t.Run("no lookup or warning after "+tc.name, func(t *testing.T) {
+		t.Run(tc.name, func(t *testing.T) {
 			h := &fakeHost{latest: ipsw27_2}
-			c := h.cache(t)
-			setupOld(t, c)
+			c := oldActive(t, h)
 			src := ""
 			if tc.source != nil {
 				src = tc.source(c)
 			}
-			if _, err := c.Prepare(src, tc.update); err != nil {
-				t.Fatal(err)
-			}
-			var short []string
+			mustPrepare(t, c, src, tc.update)
+			short := make([]string, 0, len(h.calls))
 			for _, call := range h.calls {
 				if strings.HasPrefix(call, "restore ") {
 					call = "restore"
 				}
 				short = append(short, call)
 			}
-			if got := strings.Join(short, ","); got != tc.calls {
-				t.Fatalf("calls %q, want %q", got, tc.calls)
-			}
-			if strings.Contains(h.stderr.String(), "warning:") {
-				t.Fatalf("stderr: %s", h.stderr.String())
+			if got := strings.Join(short, ","); got != tc.calls || h.warned() {
+				t.Fatalf("calls %q (want %q), stderr: %s",
+					got, tc.calls, h.stderr.String())
 			}
 		})
 	}
-	t.Run("no second lookup or warning after a first-time restore", func(t *testing.T) {
-		h := &fakeHost{latest: ipsw27_2}
-		c := h.cache(t)
-		if _, err := c.Prepare("", false); err != nil {
-			t.Fatal(err)
-		}
-		if n := strings.Count(strings.Join(h.calls, ","), "latest"); n != 1 {
-			t.Fatalf("calls %q", h.calls)
-		}
-		if strings.Contains(h.stderr.String(), "warning:") {
-			t.Fatalf("stderr: %s", h.stderr.String())
-		}
-	})
+}
+
+func TestPrepareFirstRestoreLooksUpOnce(t *testing.T) {
+	h := &fakeHost{latest: ipsw27_2}
+	mustPrepare(t, h.cache(t), "", false)
+	if strings.Count(h.trace(), "latest") != 1 || h.warned() {
+		t.Fatalf("calls %q, stderr: %s", h.calls, h.stderr.String())
+	}
 }
 
 func TestPrepareLocalIPSW(t *testing.T) {
-	const name = "UniversalMac_27.2_26B123_Restore.ipsw"
 	for _, relative := range []bool{false, true} {
 		t.Run(fmt.Sprintf("relative=%v", relative), func(t *testing.T) {
-			h := &fakeHost{}
-			c := h.cache(t)
-			work := t.TempDir()
-			file := filepath.Join(work, name)
-			if err := os.WriteFile(file, []byte("a local ipsw"), 0o644); err != nil {
-				t.Fatal(err)
-			}
-			source := file
-			if relative {
-				t.Chdir(work)
-				source = name
-			}
-			dir, err := c.Prepare(source, false)
-			if err != nil {
-				t.Fatal(err)
-			}
-			want := "root,restore " + file + " -> " + keyDir(file)
-			if got := strings.Join(h.calls, ","); got != want {
-				t.Fatalf("calls %q, want %q (no download, the file read in place)", got, want)
-			}
-			if filepath.Base(dir) != keyDir(file) || activeName(t, c) != keyDir(file) {
-				t.Fatalf("dir %q active %q, want %s", dir, activeName(t, c), keyDir(file))
-			}
-			if m, _ := filepath.Glob(filepath.Join(c.CacheDir, "ipsw-*")); len(m) != 0 {
-				t.Fatalf("IPSW copied into the cache: %v", m)
-			}
-			if !exists(file) {
-				t.Fatal("the local IPSW was deleted")
-			}
-			src, _ := c.LayerCache().Source(filepath.Join(dir, "disk.img"))
-			sum, _ := driver.HashFileSHA256(file)
-			if len(src.Inputs) != 1 || src.Inputs[0].URL != "file://"+file ||
-				src.Inputs[0].SHA256 != sum || src.Inputs[0].Size != int64(len("a local ipsw")) {
-				t.Fatalf("recorded inputs %+v", src.Inputs)
-			}
-			if imgs := c.Images(); len(imgs) != 1 || imgs[0].IPSW != name {
-				t.Fatalf("Images = %+v", imgs)
-			}
-
-			h.calls = nil
-			if _, err := c.Prepare(source, false); err != nil {
-				t.Fatal(err)
-			}
-			if got := strings.Join(h.calls, ","); got != "refresh "+keyDir(file) {
-				t.Fatalf("second prepare: calls %q, want a refresh in place", got)
-			}
+			checkLocalIPSW(t, relative)
 		})
+	}
+}
+
+// checkLocalIPSW prepares a local IPSW file given by its absolute or
+// relative path, then prepares it again.
+func checkLocalIPSW(t *testing.T, relative bool) {
+	const (
+		name    = "UniversalMac_27.2_26B123_Restore.ipsw"
+		content = "a local ipsw"
+	)
+	h := &fakeHost{}
+	c := h.cache(t)
+	work := t.TempDir()
+	file := filepath.Join(work, name)
+	if err := os.WriteFile(file, []byte(content), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	source := file
+	if relative {
+		t.Chdir(work)
+		source = name
+	}
+	dir := mustPrepare(t, c, source, false)
+	if want := "root,restore " + file + " -> " + keyDir(file); h.trace() != want {
+		t.Fatalf("calls %q, want %q (no download, the file read in place)",
+			h.trace(), want)
+	}
+	if filepath.Base(dir) != keyDir(file) || activeName(t, c) != keyDir(file) {
+		t.Fatalf("dir %q active %q, want %s", dir, activeName(t, c), keyDir(file))
+	}
+	if m, _ := filepath.Glob(filepath.Join(c.CacheDir, "ipsw-*")); len(m) != 0 {
+		t.Fatalf("IPSW copied into the cache: %v", m)
+	}
+	if !exists(file) {
+		t.Fatal("the local IPSW was deleted")
+	}
+	src, _ := c.LayerCache().Source(filepath.Join(dir, "disk.img"))
+	sum, _ := driver.HashFileSHA256(file)
+	in := src.Inputs
+	if len(in) != 1 || in[0].URL != "file://"+file || in[0].SHA256 != sum ||
+		in[0].Size != int64(len(content)) {
+		t.Fatalf("recorded inputs %+v", in)
+	}
+	if imgs := c.Images(); len(imgs) != 1 || imgs[0].IPSW != name {
+		t.Fatalf("Images = %+v", imgs)
+	}
+
+	h.calls = nil
+	mustPrepare(t, c, source, false)
+	if h.trace() != "refresh "+keyDir(file) {
+		t.Fatalf("second prepare: calls %q, want a refresh in place", h.trace())
 	}
 }
 
@@ -617,10 +666,7 @@ func TestPrepareFileURLIsDownloaded(t *testing.T) {
 	h := &fakeHost{}
 	c := h.cache(t)
 	const u = "file:///Volumes/x/UniversalMac_27.2_26B123_Restore.ipsw"
-	dir, err := c.Prepare(u, false)
-	if err != nil {
-		t.Fatal(err)
-	}
+	dir := mustPrepare(t, c, u, false)
 	if filepath.Base(dir) != keyDir(u) || len(h.calls) < 2 || h.calls[1] != "download "+u {
 		t.Fatalf("dir %q calls %q", dir, h.calls)
 	}

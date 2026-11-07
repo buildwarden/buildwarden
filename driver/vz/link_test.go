@@ -48,7 +48,8 @@ func TestImageStamp(t *testing.T) {
 			setup: func(t *testing.T, cache string) string {
 				dir := makeImage(t, cache, "macos-a", t0)
 				makeImage(t, cache, "macos-b", t0.Add(time.Hour))
-				if err := (&ImageCache{CacheDir: cache}).SetActive(dir); err != nil {
+				c := &ImageCache{CacheDir: cache}
+				if err := c.SetActive(dir); err != nil {
 					t.Fatal(err)
 				}
 				return dir
@@ -66,17 +67,21 @@ func TestImageStamp(t *testing.T) {
 				return makeImage(t, cache, "macos-a", t0)
 			},
 			fix: func(fix, _, dir string) bool {
+				const omit = "omit --image to build from the active image"
 				return strings.Contains(fix, PrepareCommand+" "+dir) &&
-					strings.Contains(fix, "omit --image to build from the active image")
+					strings.Contains(fix, omit)
 			}},
 		{name: "custom --image",
-			setup: func(t *testing.T, _ string) string { return makeImage(t, t.TempDir(), "x", t0) },
-			fix: func(fix, cache, _ string) bool { return fix == customImageFix(cache) }},
+			setup: func(t *testing.T, _ string) string {
+				return makeImage(t, t.TempDir(), "x", t0)
+			},
+			fix: isCustomImageFix},
 		{name: "sibling with the cache as prefix",
 			setup: func(t *testing.T, cache string) string {
-				return makeImage(t, filepath.Dir(cache), filepath.Base(cache)+"-other", t0)
+				sibling := filepath.Base(cache) + "-other"
+				return makeImage(t, filepath.Dir(cache), sibling, t0)
 			},
-			fix: func(fix, cache, _ string) bool { return fix == customImageFix(cache) }},
+			fix: isCustomImageFix},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			cache := filepath.Join(t.TempDir(), "images")
@@ -104,11 +109,14 @@ func TestImageStamp(t *testing.T) {
 	}
 }
 
+func isCustomImageFix(fix, cache, _ string) bool { return fix == customImageFix(cache) }
+
 // TestLauncherStamps checks doctor reports the active image's stamp.
 func TestLauncherStamps(t *testing.T) {
 	cache := t.TempDir()
 	c := &ImageCache{CacheDir: cache}
-	if s := launcherStamps(c); len(s) != 1 || s[0].Path != "" || s[0].Rebuild != PrepareCommand {
+	s := launcherStamps(c)
+	if len(s) != 1 || s[0].Path != "" || s[0].Rebuild != PrepareCommand {
 		t.Fatalf("no image: %+v", s)
 	}
 	a := makeImage(t, cache, "macos-a", t0)
@@ -116,8 +124,9 @@ func TestLauncherStamps(t *testing.T) {
 	if err := c.SetActive(a); err != nil {
 		t.Fatal(err)
 	}
-	s := launcherStamps(c)
-	if len(s) != 1 || s[0].Path != filepath.Join(a, linkStampName) || s[0].Rebuild != PrepareCommand {
+	s = launcherStamps(c)
+	if len(s) != 1 || s[0].Path != filepath.Join(a, linkStampName) ||
+		s[0].Rebuild != PrepareCommand {
 		t.Fatalf("stamps %+v, want the active image's", s)
 	}
 }

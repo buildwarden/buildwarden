@@ -45,7 +45,8 @@ func TestCheckImageUpdate(t *testing.T) {
 	}
 	for _, drv := range []string{"qemu", "hyperv", "firecracker", "container"} {
 		err := checkImageUpdate(drv, true)
-		if err == nil || err.Error() != "--update is not supported for --driver "+drv+" yet" {
+		want := "--update is not supported for --driver " + drv + " yet"
+		if err == nil || err.Error() != want {
 			t.Errorf("--update on %s: %v", drv, err)
 		}
 	}

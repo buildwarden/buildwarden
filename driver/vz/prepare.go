@@ -65,7 +65,8 @@ func classify(source, cacheDir string) (prepSource, error) {
 		return prepSource{}, refuse
 	}
 	if sameDir(filepath.Dir(dir), cacheDir) {
-		return prepSource{kind: srcImage, path: filepath.Join(cacheDir, filepath.Base(dir))}, nil
+		inCache := filepath.Join(cacheDir, filepath.Base(dir))
+		return prepSource{kind: srcImage, path: inCache}, nil
 	}
 	return prepSource{kind: srcImage, path: dir, outside: true}, nil
 }
@@ -94,44 +95,32 @@ func sameDir(a, b string) bool {
 //     image in place when it is prepared.
 func (c *ImageCache) Prepare(source string, update bool) (string, error) {
 	if update && source != "" {
-		return "", driver.Fixable("drop the source, or drop --update to prepare that source",
+		return "", driver.Fixable(
+			"drop the source, or drop --update to prepare that source",
 			"--update picks the newest IPSW itself")
 	}
 	src, err := classify(source, c.CacheDir)
 	if err != nil {
 		return "", err
 	}
+	if src.kind == srcImage && src.outside {
+		return "", driver.Fixable(customImageFix(c.CacheDir),
+			"%s is a prepared image outside the image cache %s", src.path, c.CacheDir)
+	}
+	active := ""
+	if src.kind == srcEmpty && !update {
+		active, _ = c.ImageDir()
+	}
 	var dir string
-	refreshedActive := false
 	switch {
-	case update:
-		u, lerr := c.latestIPSW()
-		if lerr != nil {
-			return "", fmt.Errorf("fetching latest IPSW URL: %w", lerr)
-		}
-		fmt.Fprintf(c.out(), "Latest macOS IPSW: %s\n", u)
-		dir, err = c.restoreOrRefresh(u)
-	case src.kind == srcEmpty:
-		active, _ := c.ImageDir()
-		if active != "" {
-			dir, err = active, c.refreshImage(active)
-			refreshedActive = true
-			break
-		}
-		u, lerr := c.latestIPSW()
-		if lerr != nil {
-			return "", fmt.Errorf("fetching latest IPSW URL: %w", lerr)
-		}
-		fmt.Fprintf(c.out(), "Latest macOS IPSW: %s\n", u)
-		dir, err = c.restoreOrRefresh(u)
-	case src.kind == srcURL, src.kind == srcFile:
-		dir, err = c.restoreOrRefresh(src.path)
+	case active != "":
+		dir, err = active, c.refreshImage(active)
+	case update, src.kind == srcEmpty:
+		dir, err = c.restoreOrRefreshLatest()
 	case src.kind == srcImage:
-		if src.outside {
-			return "", driver.Fixable(customImageFix(c.CacheDir),
-				"%s is a prepared image outside the image cache %s", src.path, c.CacheDir)
-		}
 		dir, err = src.path, c.refreshImage(src.path)
+	default: // an IPSW URL or file
+		dir, err = c.restoreOrRefresh(src.path)
 	}
 	if err != nil {
 		return "", err
@@ -139,19 +128,35 @@ func (c *ImageCache) Prepare(source string, update bool) (string, error) {
 	if err := c.SetActive(dir); err != nil {
 		return "", err
 	}
-	// The image's provenance (IPSW URL, digest) is recorded, and a later
-	// prepare of the same source refreshes this image in place, so its
-	// downloaded IPSW (about 25 GB) is never read again. A local IPSW file
-	// is the user's and is never in the cache under this name.
-	key := strings.TrimPrefix(filepath.Base(dir), "macos-")
-	if err := os.Remove(filepath.Join(c.CacheDir, "ipsw-"+key+".ipsw")); err != nil &&
-		!errors.Is(err, os.ErrNotExist) {
-		fmt.Fprintf(c.out(), "warning: could not delete the image's cached IPSW: %v\n", err)
-	}
-	if refreshedActive {
+	c.removeCachedIPSW(dir)
+	if active != "" {
 		c.warnIfOutOfDate(dir)
 	}
 	return dir, nil
+}
+
+// restoreOrRefreshLatest prepares the latest supported IPSW.
+func (c *ImageCache) restoreOrRefreshLatest() (string, error) {
+	u, err := c.latestIPSW()
+	if err != nil {
+		return "", fmt.Errorf("fetching latest IPSW URL: %w", err)
+	}
+	fmt.Fprintf(c.out(), "Latest macOS IPSW: %s\n", u)
+	return c.restoreOrRefresh(u)
+}
+
+// removeCachedIPSW deletes the IPSW downloaded for the prepared image dir.
+// Its provenance (URL, digest) is recorded, and a later prepare of the same
+// source refreshes this image in place, so the file (about 25 GB) is never
+// read again. A local IPSW file is the user's and is never in the cache
+// under this name.
+func (c *ImageCache) removeCachedIPSW(dir string) {
+	key := strings.TrimPrefix(filepath.Base(dir), "macos-")
+	err := os.Remove(filepath.Join(c.CacheDir, "ipsw-"+key+".ipsw"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		fmt.Fprintf(c.out(),
+			"warning: could not delete the image's cached IPSW: %v\n", err)
+	}
 }
 
 // warnIfOutOfDate warns, after a no-source refresh, when the active image was

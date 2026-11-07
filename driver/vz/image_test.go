@@ -18,7 +18,9 @@ func makeImage(t *testing.T, cacheDir, name string, prepared time.Time) string {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		t.Fatal(err)
 	}
-	for _, f := range []string{"disk.img", "aux-storage", "hardware-model", "machine-id", ".prepared"} {
+	for _, f := range []string{
+		"disk.img", "aux-storage", "hardware-model", "machine-id", ".prepared",
+	} {
 		if err := os.WriteFile(filepath.Join(dir, f), []byte(f), 0o644); err != nil {
 			t.Fatal(err)
 		}
@@ -88,7 +90,8 @@ func TestImageDir(t *testing.T) {
 			cache := t.TempDir()
 			tc.setup(t, cache)
 			if tc.active != "" {
-				if err := os.WriteFile(filepath.Join(cache, activeFile), []byte(tc.active), 0o644); err != nil {
+				p := filepath.Join(cache, activeFile)
+				if err := os.WriteFile(p, []byte(tc.active), 0o644); err != nil {
 					t.Fatal(err)
 				}
 			}
@@ -139,7 +142,7 @@ func TestImages(t *testing.T) {
 	if err := os.MkdirAll(filepath.Join(cache, "macos-partial"), 0o755); err != nil {
 		t.Fatal(err)
 	}
-	recordIPSW(t, c, a, "https://updates.cdn-apple.com/x/UniversalMac_27.0.1_26A100_Restore.ipsw")
+	recordIPSW(t, c, a, ipsw27_0)
 
 	imgs := c.Images()
 	if len(imgs) != 2 {

@@ -118,7 +118,8 @@ func init() {
 	f.StringVar(&flagImgSHA256, "sha256", "", "expected SHA256; verified and pinned")
 	f.BoolVar(&flagImgForce, "force", false, "re-acquire even if a valid cached copy exists")
 	f.BoolVar(&flagImgUpdate, "update", false,
-		"move to the newest supported OS release: restore it, or refresh it when already prepared (vz)")
+		"move to the newest supported OS release: restore it, or refresh it "+
+			"when already prepared (vz)")
 	f.StringVar(&flagImgName, "name", "",
 		"registry name of the image (hyperv; default windows-server-2025)")
 	f.StringVar(&flagImgEdition, "edition", "",
