@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 
 	"github.com/buildwarden/buildwarden/driver"
@@ -101,6 +102,7 @@ func (c *ImageCache) Prepare(source string, update bool) (string, error) {
 		return "", err
 	}
 	var dir string
+	refreshedActive := false
 	switch {
 	case update:
 		u, lerr := c.latestIPSW()
@@ -113,6 +115,7 @@ func (c *ImageCache) Prepare(source string, update bool) (string, error) {
 		active, _ := c.ImageDir()
 		if active != "" {
 			dir, err = active, c.refreshImage(active)
+			refreshedActive = true
 			break
 		}
 		u, lerr := c.latestIPSW()
@@ -145,7 +148,65 @@ func (c *ImageCache) Prepare(source string, update bool) (string, error) {
 		!errors.Is(err, os.ErrNotExist) {
 		fmt.Fprintf(c.out(), "warning: could not delete the image's cached IPSW: %v\n", err)
 	}
+	if refreshedActive {
+		c.warnIfOutOfDate(dir)
+	}
 	return dir, nil
+}
+
+// warnIfOutOfDate warns, after a no-source refresh, when the active image was
+// not restored from the latest supported IPSW. The lookup is best effort: a
+// failure (offline, Apple unreachable) prints nothing.
+func (c *ImageCache) warnIfOutOfDate(active string) {
+	u, err := c.latestIPSW()
+	if err != nil {
+		return
+	}
+	if msg, ok := c.OutOfDate(active, u); ok {
+		fmt.Fprintf(c.out(), "warning: %s\n", msg)
+	}
+}
+
+// OutOfDate reports whether the active image directory was restored from
+// some IPSW other than u, the latest supported one, and the warning that
+// says so and names --update.
+func (c *ImageCache) OutOfDate(active, u string) (string, bool) {
+	uPrepared := isValidImageDir(filepath.Join(c.CacheDir, "macos-"+shortHash(u)))
+	return outOfDate(active, c.recordedIPSW(active), u, uPrepared)
+}
+
+// outOfDate is OutOfDate over what the cache holds: the active image is from
+// u when its directory is u's key, or when the file name of the IPSW it
+// recorded is u's (an image restored from a local copy of u is keyed by its
+// path). The digests are not compared: knowing u's needs the download.
+func outOfDate(active, recorded, u string, uPrepared bool) (string, bool) {
+	if filepath.Base(active) == "macos-"+shortHash(u) ||
+		(recorded != "" && ipswFileName(recorded) == ipswFileName(u)) {
+		return "", false
+	}
+	current := filepath.Base(active) + " (IPSW not recorded)"
+	if recorded != "" {
+		current = ipswLabel(recorded)
+	}
+	next := " is available. To update (about 25 GB, 15 minutes): "
+	if uPrepared {
+		next = " is already prepared. To use it (no download): "
+	}
+	return "the active macOS image is " + current + "; " + ipswLabel(u) + next +
+		PrepareCommand + " --update", true
+}
+
+// appleIPSW matches Apple's IPSW file names, UniversalMac_<version>_<build>_Restore.ipsw.
+var appleIPSW = regexp.MustCompile(`^UniversalMac_([0-9][0-9.]*)_([0-9A-Za-z]+)_Restore\.ipsw$`)
+
+// ipswLabel names the macOS an IPSW holds, "macOS 27.2 (26B123)", parsed from
+// Apple's file name, else the file name.
+func ipswLabel(ipswURL string) string {
+	name := ipswFileName(ipswURL)
+	if m := appleIPSW.FindStringSubmatch(name); m != nil {
+		return "macOS " + m[1] + " (" + m[2] + ")"
+	}
+	return name
 }
 
 // restoreOrRefresh refreshes in place the image an IPSW source keys to when

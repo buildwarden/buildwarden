@@ -159,14 +159,14 @@ func TestPrepare(t *testing.T) {
 		wantActive string
 		wantErr    bool
 	}{
-		{name: "no source refreshes the active image, no lookup",
+		{name: "no source refreshes the active image, looking up only after",
 			setup: func(t *testing.T, c *ImageCache) string {
 				makeImage(t, c.CacheDir, "macos-old", t0)
 				makeImage(t, c.CacheDir, "macos-new", t0.Add(time.Hour))
 				return ""
 			},
 			latest:    ipsw27_2,
-			wantCalls: []string{"refresh macos-new"}, wantActive: "macos-new"},
+			wantCalls: []string{"refresh macos-new", "latest"}, wantActive: "macos-new"},
 		{name: "no source and no image restores the latest",
 			setup:  func(*testing.T, *ImageCache) string { return "" },
 			latest: ipsw27_2,
@@ -410,6 +410,151 @@ func TestPrepareDeletesTheImagesIPSW(t *testing.T) {
 		}
 		if !exists(own) {
 			t.Fatal("the IPSW was deleted after a failed prepare")
+		}
+	})
+}
+
+func TestOutOfDate(t *testing.T) {
+	const (
+		local   = "file:///Users/j/UniversalMac_27.2_26B123_Restore.ipsw"
+		update  = "sudo warden image prepare --driver vz --update"
+		avail   = " is available. To update (about 25 GB, 15 minutes): " + update
+		already = " is already prepared. To use it (no download): " + update
+	)
+	for _, tc := range []struct {
+		name, active, recorded, u string
+		uPrepared                 bool
+		want                      string // "" for no warning
+	}{
+		{name: "the active image is u's key", active: "/c/" + keyDir(ipsw27_2), u: ipsw27_2},
+		{name: "the recorded IPSW file name is u's (a local file)",
+			active: "/c/macos-1111", recorded: local, u: ipsw27_2},
+		{name: "u not prepared", active: "/c/macos-90a1", recorded: ipsw27_0, u: ipsw27_2,
+			want: "the active macOS image is macOS 27.0.1 (26A100); macOS 27.2 (26B123)" + avail},
+		{name: "u already prepared", active: "/c/macos-90a1", recorded: ipsw27_0, u: ipsw27_2,
+			uPrepared: true,
+			want:      "the active macOS image is macOS 27.0.1 (26A100); macOS 27.2 (26B123)" + already},
+		{name: "no recorded IPSW", active: "/c/macos-90a1", u: ipsw27_2, uPrepared: true,
+			want: "the active macOS image is macos-90a1 (IPSW not recorded); " +
+				"macOS 27.2 (26B123)" + already},
+		{name: "names that are not Apple's", active: "/c/macos-90a1",
+			recorded: "https://mirror/old.ipsw", u: "https://mirror/new.ipsw",
+			want: "the active macOS image is old.ipsw; new.ipsw" + avail},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			got, ok := outOfDate(tc.active, tc.recorded, tc.u, tc.uPrepared)
+			if ok != (tc.want != "") || got != tc.want {
+				t.Fatalf("outOfDate = %q, %v\nwant %q", got, ok, tc.want)
+			}
+		})
+	}
+}
+
+func TestOutOfDateReadsTheCache(t *testing.T) {
+	c := &ImageCache{CacheDir: t.TempDir()}
+	old := makeImage(t, c.CacheDir, "macos-90a1", t0)
+	recordIPSW(t, c, old, ipsw27_0)
+	if msg, ok := c.OutOfDate(old, ipsw27_2); !ok || !strings.Contains(msg, "is available") {
+		t.Fatalf("u not prepared: %q %v", msg, ok)
+	}
+	makeImage(t, c.CacheDir, keyDir(ipsw27_2), t0)
+	if msg, ok := c.OutOfDate(old, ipsw27_2); !ok || !strings.Contains(msg, "already prepared") {
+		t.Fatalf("u prepared: %q %v", msg, ok)
+	}
+}
+
+func TestPrepareOutOfDateWarning(t *testing.T) {
+	setupOld := func(t *testing.T, c *ImageCache) {
+		old := makeImage(t, c.CacheDir, "macos-90a1", t0)
+		recordIPSW(t, c, old, ipsw27_0)
+	}
+	t.Run("a no-source refresh warns after it succeeded", func(t *testing.T) {
+		h := &fakeHost{latest: ipsw27_2}
+		c := h.cache(t)
+		setupOld(t, c)
+		if _, err := c.Prepare("", false); err != nil {
+			t.Fatal(err)
+		}
+		if strings.Join(h.calls, ",") != "refresh macos-90a1,latest" {
+			t.Fatalf("calls %q", h.calls)
+		}
+		want := "warning: the active macOS image is macOS 27.0.1 (26A100); macOS 27.2 (26B123) is available."
+		if !strings.Contains(h.stderr.String(), want) {
+			t.Fatalf("stderr: %s", h.stderr.String())
+		}
+	})
+	t.Run("a failed refresh does not look up", func(t *testing.T) {
+		h := &fakeHost{latest: ipsw27_2, failWith: errors.New("hdiutil failed")}
+		c := h.cache(t)
+		setupOld(t, c)
+		if _, err := c.Prepare("", false); err == nil {
+			t.Fatal("Prepare succeeded")
+		}
+		if strings.Join(h.calls, ",") != "refresh macos-90a1" {
+			t.Fatalf("calls %q", h.calls)
+		}
+	})
+	t.Run("a failed lookup is silent", func(t *testing.T) {
+		h := &fakeHost{latestErr: errors.New("offline")}
+		c := h.cache(t)
+		setupOld(t, c)
+		if _, err := c.Prepare("", false); err != nil {
+			t.Fatalf("Prepare offline = %v", err)
+		}
+		if strings.Contains(h.stderr.String(), "warning:") || strings.Contains(h.stderr.String(), "offline") {
+			t.Fatalf("stderr: %s", h.stderr.String())
+		}
+	})
+	for _, tc := range []struct {
+		name   string
+		source func(c *ImageCache) string
+		update bool
+		calls  string
+	}{
+		{name: "--update", update: true, calls: "latest,root,download " + ipsw27_2 + ",restore"},
+		{name: "a URL", source: func(*ImageCache) string { return ipsw27_0 },
+			calls: "root,download " + ipsw27_0 + ",restore"},
+		{name: "a prepared directory",
+			source: func(c *ImageCache) string { return filepath.Join(c.CacheDir, "macos-90a1") },
+			calls:  "refresh macos-90a1"},
+	} {
+		t.Run("no lookup or warning after "+tc.name, func(t *testing.T) {
+			h := &fakeHost{latest: ipsw27_2}
+			c := h.cache(t)
+			setupOld(t, c)
+			src := ""
+			if tc.source != nil {
+				src = tc.source(c)
+			}
+			if _, err := c.Prepare(src, tc.update); err != nil {
+				t.Fatal(err)
+			}
+			var short []string
+			for _, call := range h.calls {
+				if strings.HasPrefix(call, "restore ") {
+					call = "restore"
+				}
+				short = append(short, call)
+			}
+			if got := strings.Join(short, ","); got != tc.calls {
+				t.Fatalf("calls %q, want %q", got, tc.calls)
+			}
+			if strings.Contains(h.stderr.String(), "warning:") {
+				t.Fatalf("stderr: %s", h.stderr.String())
+			}
+		})
+	}
+	t.Run("no second lookup or warning after a first-time restore", func(t *testing.T) {
+		h := &fakeHost{latest: ipsw27_2}
+		c := h.cache(t)
+		if _, err := c.Prepare("", false); err != nil {
+			t.Fatal(err)
+		}
+		if n := strings.Count(strings.Join(h.calls, ","), "latest"); n != 1 {
+			t.Fatalf("calls %q", h.calls)
+		}
+		if strings.Contains(h.stderr.String(), "warning:") {
+			t.Fatalf("stderr: %s", h.stderr.String())
 		}
 	})
 }
