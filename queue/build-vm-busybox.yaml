@@ -4,10 +4,11 @@ priority: 46
 follows: build-link-subnet
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/build-vm-busybox.md
 branch: feat/build-vm-busybox
-alters_relationships: null
+alters_relationships: false
+design_review: required
 source: 'workflow-human 2026-11-06 (Jeff), immediate follow-up to build-link-subnet (#98): the qemu direct-boot launcher build needs tools/relay-vm/.cache/busybox, which tools/relay-vm/build-initramfs.sh no longer produces since the relay moved to the Alpine minirootfs, so a fresh cache cannot build it (macbook native run 2026-11-05, digest 2026-11-05). tools/firecracker-vm/build-initramfs.sh already fetches Alpine''s static busybox for its own cache.'
 steps:
   - id: f0-branch-setup
@@ -20,10 +21,34 @@ steps:
   - id: f1-design
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-validate-qemu-any
+    phase: 6
+    affinity: host:qemu-any
     status: pending
     lease:
-      claimed_by: cloud/20261107T105651Z
-      expires: 2026-11-07T13:12:24.141023042Z
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (FLOW-09) per docs/design/build-vm-busybox.md Validation plan: on a scratch copy so the machine''s working assets are kept, (1) from a fresh cache (tools/build-vm/.cache, tools/relay-vm/.cache and both output dirs removed) tools/relay-vm/build-initramfs.sh then tools/build-vm/build-initramfs.sh succeed with no busybox placed by hand, and a second run reuses the cached busybox-static apk; (2) a cached apk with one byte changed stops the script on the sha256 check with no initramfs produced; (3) without tools/relay-vm/.cache/linux-virt.apk the script stops with the run-tools/relay-vm/build-initramfs.sh-first error; (4) warden doctor --driver qemu accepts the new initramfs''s link-channel stamp and a direct-boot Linux build on it succeeds with a ledger that verifies. Exercises the macOS path: shasum fallback, bsdtar on the .apk, the explicit applet list.'
+  - id: f2-design-review
+    phase: 2
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - f2-design-review
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -31,7 +56,25 @@ budget:
   spent:
     runs: 1
     steps: 2
-questions: []
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: Where the build-vm script's busybox fetch lives (Decision 1).
+    options:
+      - a self-contained pinned fetch in tools/build-vm/build-initramfs.sh, its ALPINE_VERSION and BUSYBOX_VERSION tied to tools/firecracker-vm/build-initramfs.sh's by a tier-0 test
+      - a shared helper under tools/, added to firecracker.yml's asset cache key and path filter
+      - tools/relay-vm/build-initramfs.sh fetches busybox into its cache again
+    recommended: a self-contained pinned fetch in tools/build-vm/build-initramfs.sh, its ALPINE_VERSION and BUSYBOX_VERSION tied to tools/firecracker-vm/build-initramfs.sh's by a tier-0 test
+  - id: a2
+    kind: assumed
+    status: open
+    question: How Implement obtains the sha256 of Alpine 3.21's aarch64 busybox-static-1.37.0-r14.apk; the design session's sandbox could not reach dl-cdn.alpinelinux.org (proxy refusal).
+    options:
+      - Implement downloads and pins it, proposing dl-cdn.alpinelinux.org through the environment tools if the sandbox blocks it, else stops with a finding naming the host
+      - Jeff supplies the checksum in the design review and Implement pins it
+      - re-pin both direct-boot scripts to the branch's current busybox-static (only if r14 has left Alpine 3.21; re-keys Firecracker's CI asset cache once)
+    recommended: Implement downloads and pins it, proposing dl-cdn.alpinelinux.org through the environment tools if the sandbox blocks it, else stops with a finding naming the host (Jeff's checksum as the fallback; re-pin both only if r14 is gone)
 history:
   - at: 2026-11-06T17:33:20Z
     by: human/jeff
@@ -63,3 +106,9 @@ history:
   - at: 2026-11-07T11:12:24Z
     by: cloud/20261107T105651Z
     event: claimed f1-design until 2026-11-07T13:12:24Z
+  - at: 2026-11-07T11:16:35Z
+    by: cloud/20261107T105651Z
+    event: done f1-design
+  - at: 2026-11-07T11:16:35Z
+    by: cloud/20261107T105651Z
+    event: entered phase 2 (plan)
