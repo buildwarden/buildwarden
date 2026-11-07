@@ -512,6 +512,15 @@ Filled in at Plan (phase 2), from the approved design.
   The f6-validate-macos-vz note was brought in line. Re-review pending
   (FLOW-19, `design_review: required`).
 
+- **r2, 2026-11-06, Jeff: approved** as read, approved at e94a1be (re-review
+  after the Plan return r2; previous approval f764e9f). Changes since r1, all
+  from Jeff's answers at that return: the out-of-date warning fires whenever
+  the active image is not the latest IPSW's, with an "already prepared, no
+  download" form (Decision 3, the IPSW identity by key or recorded file
+  name); a plain local IPSW path is restored from in place (Decision 7,
+  fixing the curl "No host part" failure); native case 3 reworded and case 7
+  added. a1 to a5 unchanged.
+
 ## Consolidation
 
 ## Rollback notes
