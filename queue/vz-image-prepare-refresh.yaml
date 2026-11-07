@@ -44,15 +44,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261107T012740Z-attended
+      expires: 2026-11-07T03:34:48.751867Z
 budget:
   estimate:
     runs: 2
     steps: 9
   spent:
     runs: 2
-    steps: 5
+    steps: 6
 questions:
   - id: a1
     kind: assumed
@@ -177,3 +177,6 @@ history:
   - at: 2026-11-07T01:34:43Z
     by: cloud/20261107T012740Z-attended
     event: 'back to design: Plan found two gaps (f2-plan, 2026-11-07); Jeff decided both in the attended sitting: (1) the out-of-date warning fires whenever the active image''s IPSW is not the latest supported one, even when the latest is already prepared (its fix still names --update, which then switches without a download), so Validation case 3 stands; Decision 3, the prepare pseudocode and the tier-0 warning tests change to match. (2) a plain local IPSW path as the source is restored from in place: RestoreIPSW reads the local file directly (no curl, no copy into the cache, never deleted), keyed by its path; today curl rejects it (''URL rejected: No host part'') though the help and cli.md promise a local path. Also bring the queue''s f6-validate-macos-vz note in line with the Validation plan (--update, IPSW deletion, the warning, the refusals).'
+  - at: 2026-11-07T01:34:48Z
+    by: cloud/20261107T012740Z-attended
+    event: claimed f1-design-r2 until 2026-11-07T03:34:48Z
