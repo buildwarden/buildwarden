@@ -9,6 +9,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/binary"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"os"
 	"os/exec"
@@ -87,7 +88,12 @@ func TestWriteJKSReadable(t *testing.T) {
 func TestWriteJKSMatchesKeytool(t *testing.T) {
 	keytool, err := exec.LookPath("keytool")
 	if err != nil {
-		t.Skip("keytool not on PATH")
+		skipOrFail(t, "keytool not on PATH")
+	}
+	// macOS ships a /usr/bin/keytool stub that exits non-zero without a JDK.
+	if out, err := exec.Command(keytool, "-help").CombinedOutput(); err != nil {
+		skipOrFail(t, fmt.Sprintf("keytool at %s cannot run (no Java runtime?): %v\n%s",
+			keytool, err, out))
 	}
 	cert := testCA(t)
 	dir := t.TempDir()
@@ -128,4 +134,14 @@ func TestWriteJKSMatchesKeytool(t *testing.T) {
 		"-keystore", ours, "-storepass", jksPassword).CombinedOutput(); err != nil {
 		t.Fatalf("keytool -list rejects ours: %v\n%s", err, out)
 	}
+}
+
+// skipOrFail skips the test, except on GitHub Actions, where the runner image
+// ships a JDK and a skip would hide the only real comparison against keytool.
+func skipOrFail(t *testing.T, msg string) {
+	t.Helper()
+	if os.Getenv("GITHUB_ACTIONS") == "true" {
+		t.Fatal(msg)
+	}
+	t.Skip(msg)
 }
