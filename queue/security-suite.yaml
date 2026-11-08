@@ -3,10 +3,11 @@ title: 'Build the TEST-08 security suite and pen-tester agent (Deep-dive #1)'
 priority: 50
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/security-suite.md
 branch: feat/security-suite
-alters_relationships: null
+alters_relationships: false
+design_review: required
 source: 'docs/development/README.md: Deep-dive #1; design in docs/development/security-suite.md'
 steps:
   - id: f0-branch-setup
@@ -19,10 +20,26 @@ steps:
   - id: f1-design
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review
+    phase: 2
+    affinity: human
     status: pending
     lease:
-      claimed_by: cloud/20261108T105702Z
-      expires: 2026-11-08T12:57:43.930947645Z
+      claimed_by: ""
+      expires: null
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - f2-design-review
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 10
@@ -40,6 +57,98 @@ questions:
       - narrow it to the harness structure, front-matter, tiers and process items, with no detailed attack techniques
     recommended: narrow it to the harness structure, front-matter, tiers and process items, with no detailed attack techniques
     answer: narrow it to the harness structure, front-matter, tiers and process items, with no detailed attack techniques (Jeff, 2026-11-07)
+  - id: a1
+    kind: assumed
+    status: open
+    question: 'One catalogue file: security/cases.yaml lists every case (Decision 1).'
+    options:
+      - one file security/cases.yaml
+      - a file per case with its own front-matter
+      - case metadata as Go struct literals in each test
+    recommended: one file security/cases.yaml
+  - id: a2
+    kind: assumed
+    status: open
+    question: Tier-0 cases stay beside the code they test; the catalogue references them (<dir>:<TestName>) and a tier-0 check resolves each reference (Decision 2).
+    options:
+      - reference tests in place
+      - move security-relevant unit tests under security/
+    recommended: reference tests in place
+  - id: a3
+    kind: assumed
+    status: open
+    question: 'Findings stay private until fixed: Arm-B findings as draft GitHub security advisories, failing tier-2 logs in the private sessions record; public catalogue and reports carry ids and outcomes only (Decision 8).'
+    options:
+      - draft GitHub security advisories
+      - a private repository for findings
+      - findings in the public catalogue marked open
+    recommended: draft GitHub security advisories
+  - id: a4
+    kind: assumed
+    status: open
+    question: 'Native validation is tracked on every host (macos-vz, qemu-any, windows-hyperv): the suite changes no driver (FLOW-09); Firecracker tier 2 runs in CI.'
+    options:
+      - tracked everywhere
+      - block on one native host (qemu-any) to prove the harness off CI
+    recommended: tracked everywhere
+  - id: a5
+    kind: assumed
+    status: open
+    question: 'Release gate: release.yml gains a security job for tiers 0 and 1; tier-2 results and Arm B''s sign-off are confirmed by the human from the coverage report (Decision 11).'
+    options:
+      - human confirmation of tier 2 and Arm B
+      - the release job reads the workflow branch's tier-2 reports for the tagged commit and fails when a host has none
+    recommended: human confirmation of tier 2 and Arm B
+  - id: a6
+    kind: assumed
+    status: open
+    question: Attacker position (build-env, relay, local-user, operator, image) is case metadata mapped to SEC-01's cells; SEC-01's wording does not change (Decision 3).
+    options:
+      - metadata only
+      - amend SEC-01 to name the positions (a further rule change)
+    recommended: metadata only
+  - id: a7
+    kind: assumed
+    status: open
+    question: Container cases are blocking where they hold today and tracked with a reason where the shared kernel makes them best-effort (Decision 6, SEC-01).
+    options:
+      - as stated
+      - all container cases tracked
+    recommended: as stated
+  - id: a8
+    kind: assumed
+    status: open
+    question: The draft remote-execution design's TEST-08 cases enter the catalogue as status planned, with no test until that feature exists.
+    options:
+      - record them now as planned
+      - leave them in that design
+    recommended: record them now as planned
+  - id: a9
+    kind: assumed
+    status: open
+    question: Implement writes the tier-1/2 cases' in-build halves as benign probes against the harness's own canary (SEC-04, SEC-05); if an unattended Implement step is halted as f1-design was, it is released for an attended session.
+    options:
+      - as stated
+      - plan the in-build halves attended from the start
+    recommended: as stated
+  - id: a10
+    kind: assumed
+    status: open
+    question: The four process items (P1 pen-tester agent, P2 Arm-B cadence and sign-off, P3 tier-2 security runs in native sessions, P4 Arm B's isolated runner) are filed with workflow-intake after this review; this feature does not wait for them.
+    options:
+      - file after the review
+      - file now
+      - fold them into this feature (not allowed, FLOW-14)
+    recommended: file after the review
+  - id: a11
+    kind: assumed
+    status: open
+    question: 'Rule changes: TEST-08 (security-suite.md Remaining build work, README Deep-dive #1, rules.yaml owner), SEC-02, SEC-06, SEC-08 (rules.yaml owners name the concrete enforcement). Each approved by name.'
+    options:
+      - approve each as written
+      - approve with changes
+      - reject (the standards keep describing built work as missing)
+    recommended: approve each as written
 history:
   - at: 2026-10-28T23:18:38Z
     by: attended-setup
@@ -101,3 +210,9 @@ history:
   - at: 2026-11-08T10:57:43Z
     by: cloud/20261108T105702Z
     event: claimed f1-design until 2026-11-08T12:57:43Z
+  - at: 2026-11-08T11:05:37Z
+    by: cloud/20261108T105702Z
+    event: done f1-design
+  - at: 2026-11-08T11:05:37Z
+    by: cloud/20261108T105702Z
+    event: entered phase 2 (plan)

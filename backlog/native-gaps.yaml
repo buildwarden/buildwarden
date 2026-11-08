@@ -461,3 +461,30 @@ gaps:
       2026-11-07 (host:macos-qemu/20261107T124005Z, unattended): not run. The branch is design-only
       and qemu Windows builds still fail on main.
     status: open
+  - id: security-suite-tier2-macos-vz
+    host: macos-vz
+    what: The first tier-2 run of the security suite's vz cases (make security-test DRIVER=vz) on the branch or main, with the oracle control case passing and the run's report written under reports/security/macos-vz/ (ids and outcomes only).
+    design: docs/design/security-suite.md
+    note: >-
+      Tracked (TEST-03, FLOW-09), not blocking: the suite changes no driver code (assumed question
+      a4). Runnable once the harness lands in Implement; routine runs wait for the native-session
+      process item (P3). A failing case's logs stay out of the workflow branch and go to the private
+      sessions record (Decision 8).
+    status: open
+  - id: security-suite-tier2-qemu-any
+    host: qemu-any
+    what: The first tier-2 run of the security suite's qemu cases, Linux and Windows guests (make security-test DRIVER=qemu), with the oracle control case passing and the run's report written under reports/security/qemu-any/ (ids and outcomes only).
+    design: docs/design/security-suite.md
+    note: >-
+      Tracked (TEST-03, FLOW-09), not blocking: the suite changes no driver code (assumed question
+      a4). Windows-guest cases wait while qemu Windows builds fail on main (qemu-windows-guest-package).
+      A failing case's logs stay out of the workflow branch (Decision 8).
+    status: open
+  - id: security-suite-tier2-windows-hyperv
+    host: windows-hyperv
+    what: The first tier-2 run of the security suite's Hyper-V cases (make security-test DRIVER=hyperv), with the oracle control case passing and the run's report written under reports/security/windows-hyperv/ (ids and outcomes only).
+    design: docs/design/security-suite.md
+    note: >-
+      Tracked (TEST-03, FLOW-09), not blocking: the suite changes no driver code (assumed question
+      a4). A failing case's logs stay out of the workflow branch (Decision 8).
+    status: open
