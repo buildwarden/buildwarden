@@ -36,7 +36,7 @@ steps:
   - id: f2-design-review
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -55,26 +55,28 @@ budget:
     steps: 7
   spent:
     runs: 1
-    steps: 2
+    steps: 3
 questions:
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: Where the build-vm script's busybox fetch lives (Decision 1).
     options:
       - a self-contained pinned fetch in tools/build-vm/build-initramfs.sh, its ALPINE_VERSION and BUSYBOX_VERSION tied to tools/firecracker-vm/build-initramfs.sh's by a tier-0 test
       - a shared helper under tools/, added to firecracker.yml's asset cache key and path filter
       - tools/relay-vm/build-initramfs.sh fetches busybox into its cache again
     recommended: a self-contained pinned fetch in tools/build-vm/build-initramfs.sh, its ALPINE_VERSION and BUSYBOX_VERSION tied to tools/firecracker-vm/build-initramfs.sh's by a tier-0 test
+    answer: (A) self-contained fetch in tools/build-vm (Jeff, r1)
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: How Implement obtains the sha256 of Alpine 3.21's aarch64 busybox-static-1.37.0-r14.apk; the design session's sandbox could not reach dl-cdn.alpinelinux.org (proxy refusal).
     options:
       - Implement downloads and pins it, proposing dl-cdn.alpinelinux.org through the environment tools if the sandbox blocks it, else stops with a finding naming the host
       - Jeff supplies the checksum in the design review and Implement pins it
       - re-pin both direct-boot scripts to the branch's current busybox-static (only if r14 has left Alpine 3.21; re-keys Firecracker's CI asset cache once)
     recommended: Implement downloads and pins it, proposing dl-cdn.alpinelinux.org through the environment tools if the sandbox blocks it, else stops with a finding naming the host (Jeff's checksum as the fallback; re-pin both only if r14 is gone)
+    answer: (C) re-pin both scripts to Alpine 3.21's current busybox-static now (Jeff, r1); folded into the design
 history:
   - at: 2026-11-06T17:33:20Z
     by: human/jeff
@@ -112,3 +114,15 @@ history:
   - at: 2026-11-07T11:16:35Z
     by: cloud/20261107T105651Z
     event: entered phase 2 (plan)
+  - at: 2026-11-08T19:05:17Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: (A) self-contained fetch in tools/build-vm (Jeff, r1)'
+  - at: 2026-11-08T19:05:17Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: (C) re-pin both scripts to Alpine 3.21''s current busybox-static now (Jeff, r1); folded into the design'
+  - at: 2026-11-08T19:05:17Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-08T21:05:17Z
+  - at: 2026-11-08T19:05:17Z
+    by: human/jeff
+    event: done f2-design-review
