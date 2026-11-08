@@ -487,4 +487,7 @@ gaps:
     note: >-
       Tracked (TEST-03, FLOW-09), not blocking: the suite changes no driver code (assumed question
       a4). A failing case's logs stay out of the workflow branch (Decision 8).
+      2026-11-08 (host:windows-hyperv/20261108T111002Z, unattended, main 49e5354): not run. No
+      harness exists yet: feat/security-suite (e05df23) is design-only (docs/design/security-suite.md)
+      and waits on its design review, and neither it nor main has a security-test make target.
     status: open
