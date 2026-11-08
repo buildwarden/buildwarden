@@ -7,7 +7,7 @@ phase: 3
 design: docs/design/jks-test-skip-without-jdk.md
 branch: feat/jks-test-skip-without-jdk
 alters_relationships: false
-design_review: required
+design_review: skip
 source: 'Jeff, attended 2026-11-06: vz-image-prepare-refresh f3-implement''s done-when (make test) fails on the macbook only on cmd/warden-io TestWriteJKSMatchesKeytool: /usr/bin/keytool is Apple''s stub (''Unable to locate a Java Runtime''), and the test skips only when keytool is not on PATH. Also fails on main (noted in native-loop-followups, never filed). Jeff chose a skip over installing a JDK; run first here to unblock vz-image-prepare-refresh.'
 steps:
   - id: f0-branch-setup
@@ -137,3 +137,6 @@ history:
   - at: 2026-11-07T14:09:10Z
     by: cloud/20261107T140700Z-attended
     event: claimed f3-implement-r2 until 2026-11-07T16:09:10Z
+  - at: 2026-11-08T19:03:16Z
+    by: human/jeff
+    event: 'design_review back to skip (Jeff, workflow-human): no TEST-02 rule change was meant; 9106126 recorded one that the design never declared. The design (rule_changes: [], Decision 6) stands; f3-implement-r2 resumes as planned'
