@@ -1,7 +1,7 @@
 ---
 feature: build-vm-busybox
 status: draft
-drivers: [qemu]          # tools/build-vm builds only the qemu direct-boot initramfs (driver/qemu's rebuildDirectBoot); driver code unchanged
+drivers: [qemu, firecracker]  # tools/build-vm builds the qemu direct-boot initramfs; review r1 a2 (C) also re-pins tools/firecracker-vm's busybox to the same version; driver code unchanged
 seams: []                # the init, the link-channel stamp and the relay's assets are unchanged
 surfaces: []             # the documented setup commands (installation.md, drivers.md) and driver/qemu's fixable message stay correct; only the script's own error text changes
 security_boundary: none  # busybox runs inside the build VM, outside the relay boundary; the change adds a pinned checksum where there was none
@@ -65,6 +65,13 @@ The build-vm script fetches `busybox-static-<version>.apk` for **aarch64**
 from Alpine 3.21's `main` repository into a new `tools/build-vm/.cache/`,
 checks its sha256, and extracts `bin/busybox.static`, as the Firecracker
 script does for x86_64.
+
+**Version (review r1, a2 (C)):** both scripts move together to Alpine
+3.21's current `busybox-static` now, rather than pinning the build-vm script
+to Firecracker's `1.37.0-r14`. Implement reads the current version from the
+3.21 `main` index, downloads the aarch64 and x86_64 packages, and pins both
+sha256 values. `tools/firecracker-vm/build-initramfs.sh` changes, so
+Firecracker's CI asset cache re-keys once and rebuilds on the PR.
 
 Alternatives:
 
@@ -161,7 +168,7 @@ None.
 
 1. Constants, mirroring the Firecracker script: `ALPINE_VERSION="3.21"`,
    `ALPINE_MIRROR=.../v${ALPINE_VERSION}/main/aarch64`,
-   `BUSYBOX_VERSION="1.37.0-r14"`, `BUSYBOX_SHA256=<aarch64 sha256>`,
+   `BUSYBOX_VERSION=<Alpine 3.21's current busybox-static>`, `BUSYBOX_SHA256=<aarch64 sha256>`,
    `BUSYBOX_APK`, `CACHE_DIR="$SCRIPT_DIR/.cache"`, with the same re-pin
    comment.
 2. Precondition: `$RELAY_CACHE/linux-virt.apk` present, else "run
@@ -197,10 +204,11 @@ No change to `driver/qemu`, the init, the relay script, the reference docs
 - **qemu**: its direct-boot initramfs builds from a fresh cache. The
   produced initramfs differs only in the busybox binary; the init's applets
   and the stamp are unchanged. Cloud-image (`--image`) builds do not use it.
-- **firecracker**: unaffected. Its script is not edited; the new test only
-  reads it. Its CI asset cache key hashes `tools/firecracker-vm/build-*.sh`,
-  `*.config`, `init`, `tools/relay-vm/build-initramfs.sh` and
-  `tools/relay-vm/init`, none of which change, so the cache still hits.
+- **firecracker**: its script's `BUSYBOX_VERSION` and x86_64
+  `BUSYBOX_SHA256` move to the same current version (review r1, a2 (C)).
+  Its CI asset cache key hashes `tools/firecracker-vm/build-*.sh`, so the
+  cache misses once and `firecracker.yml` rebuilds and runs its builds on
+  the PR; that run is its validation.
 - **container, vz, hyperv**: unaffected; none uses `tools/build-vm`.
 
 ## Validation plan
@@ -210,8 +218,8 @@ No change to `driver/qemu`, the init, the relay script, the reference docs
 - **Tier 1**: `make lint` and `make test`. CI: no workflow builds
   `tools/build-vm`. The `driver/buildlink` test change triggers
   `firecracker.yml` and `integration.yml` by their path filters;
-  Firecracker's asset cache key is unchanged (above), so it restores its
-  cached assets rather than rebuilding, and `integration.yml` builds no
+  Firecracker's asset cache key changes with its script (a2 (C)), so it
+  rebuilds its assets and runs its builds on the new busybox, and `integration.yml` builds no
   initramfs and has no asset cache.
 - **Tier 2, native, blocking — `qemu-any`** (step `f6-validate-qemu-any`):
   1. From a fresh cache (`tools/build-vm/.cache`, `tools/relay-vm/.cache`
@@ -229,7 +237,11 @@ No change to `driver/qemu`, the init, the relay script, the reference docs
 
 ## Implementation plan
 
-1. Pin the aarch64 checksum (question a2). (FLOW-07)
+1. Read Alpine 3.21's current `busybox-static` version, download the aarch64
+   and x86_64 packages, and pin both checksums; set both scripts to that
+   version (review r1 a2 (C)). If the sandbox blocks `dl-cdn.alpinelinux.org`,
+   ask to allow it through the environment tools, and failing that stop with
+   a finding naming the host. (FLOW-07)
 2. Rework `tools/build-vm/build-initramfs.sh` per Design steps 1-6.
    (ORCH-01: qemu only; UX-01: the script's error and header text)
 3. Add `tools/build-vm/.gitignore`.
