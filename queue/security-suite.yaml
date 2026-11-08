@@ -1,7 +1,7 @@
 feature: security-suite
 title: 'Build the TEST-08 security suite and pen-tester agent (Deep-dive #1)'
 priority: 50
-status: in_progress
+status: queued
 round: feature
 phase: 2
 design: docs/design/security-suite.md
@@ -149,6 +149,13 @@ questions:
       - approve with changes
       - reject (the standards keep describing built work as missing)
     recommended: approve each as written
+  - id: q2
+    kind: blocking
+    status: open
+    question: 'On hold (Jeff, 2026-11-08): a large project, taken up only when Jeff explicitly makes it a priority. Answer this question only to resume it; while it stays open the item is on hold. On resuming, the f2-design-review of the narrowed design (read at e05df23, a1-a11 and four rule changes, page https://claude.ai/artifact/4yi4kM3MKmnkruTRDmhPbe) is next.'
+    options:
+      - resume it now
+    recommended: resume it now, only when Jeff makes it a priority
 history:
   - at: 2026-10-28T23:18:38Z
     by: attended-setup
@@ -216,3 +223,6 @@ history:
   - at: 2026-11-08T11:05:37Z
     by: cloud/20261108T105702Z
     event: entered phase 2 (plan)
+  - at: 2026-11-08T22:10:40Z
+    by: human/jeff
+    event: 'on hold (Jeff): backburnered as a large project, taken up only when Jeff makes it a priority; status set back to queued so it holds no FLOW-05 in-progress slot, and blocking question q2 stops the loop starting it. Design r1 (e05df23) and its branch are kept; the design review resumes when q2 is answered'
