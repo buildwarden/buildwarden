@@ -4,7 +4,7 @@ priority: 47
 follows: build-link-subnet
 status: in_progress
 round: feature
-phase: 2
+phase: 1
 design: docs/design/hyperv-relay-per-build-channel.md
 branch: feat/hyperv-relay-per-build-channel
 alters_relationships: true
@@ -33,19 +33,10 @@ steps:
       claimed_by: ""
       expires: null
     note: 'Blocking native validation (design Validation plan, FLOW-09), on the branch after consolidation: (1) upgrade: main''s relay VHDX (stamp 1) BLOCKED in doctor and refused before any VM, both naming tools/relay-vm/hyperv/refresh-cache.sh; after it, stamp 2 and doctor current. (2) elevated default Windows guest build succeeds, ledger verifies; relay console shows the seed''s allocated NAT address, gateway and the host''s resolvers, and no token value; the guest NIC ends DHCP Enabled: No, PrefixOrigin Manual at the seed''s address. (3) while a relay waits, a claim and a tunnel from the host with no token and a wrong token get 401; the build then succeeds. (4) two concurrent ephemeral builds succeed with different relay addresses (VM Notes, consoles). (5) warden setup --driver hyperv --nat-prefix 192.168.250.0/24 --host-ip 192.168.250.1 (default NAT removed): a non-elevated Hyper-V Administrators build uses that prefix and succeeds, doctor prints prefix and host IP, an elevated build reuses the same NAT. (6) two concurrent durable builds on warden-dev succeed with different access VLANs; from build VM A, ARP/ping to relay B''s and build VM B''s link addresses and a DHCP DISCOVER get no answer from B. (7) refusals: [vm] build_link inside the durable NAT prefix refused at build start and in doctor; host default-route interface with only 127.0.0.1 as DNS refused naming it; a relay VM booted by hand with no seed prints the no-seed line and starts no relay. (8) with the host DNS on an internal resolver, a build resolves a name only it answers. Evidence under native/windows-hyperv/<date>/.'
-  - id: f2-design-review
-    phase: 2
-    affinity: human
-    status: pending
-    lease:
-      claimed_by: ""
-      expires: null
-  - id: f2-plan
-    phase: 2
+  - id: f1-design-r2
+    phase: 1
     affinity: cloud
     status: pending
-    needs:
-      - f2-design-review
     lease:
       claimed_by: ""
       expires: null
@@ -55,11 +46,11 @@ budget:
     steps: 18
   spent:
     runs: 1
-    steps: 2
+    steps: 3
 questions:
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: The pre-claim channel into the Hyper-V relay VM and the claim token (Decisions 1, 3).
     options:
       - a per-build seed ISO (IMAPI2, label WARDENRELAY) on a DVD attached before boot, read once by the init, holding the NAT address, prefix, gateway, resolvers and a fresh 32-byte claim token StartRelay then sends
@@ -67,18 +58,20 @@ questions:
       - SMBIOS strings set through WMI
       - a claim over hvsock instead of the NAT
     recommended: the per-build seed ISO, with SMBIOS strings as the fallback if the DVD path fails native validation
+    answer: (a) seed ISO; SMBIOS fallback (Jeff, r1)
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: How each relay gets its own NAT address (Decision 4).
     options:
       - lowest free host of the NAT prefix under a host lock, in-use set read from the Notes of existing warden-relay-* VMs, the address written to the new VM's Notes before the lock is released
       - lease files in the lock directory
       - a per-address file lock held for the build
     recommended: lowest free host under a host lock, recorded in the relay VM's Notes
+    answer: (a) VM Notes under a host lock (Jeff, r1)
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: The relay's upstream DNS (Decision 6).
     options:
       - the host's resolvers from its default-route interface, filtered by Firecracker's rule moved to a shared driver/resolvers, and a fixable refusal when none qualifies
@@ -86,58 +79,65 @@ questions:
       - keep 8.8.8.8
       - a new [vm] dns key
     recommended: the host's resolvers with Firecracker's filter and a fixable refusal; a [vm] dns key only as a follow-up if the refusal proves common
+    answer: 'CHANGE (Jeff, r1): host resolvers by default; an optional [vm] dns key that, when set, is used explicitly with no fallback to the host''s; refuse if none'
   - id: a4
     kind: assumed
-    status: open
+    status: confirmed
     question: The durable strategy's shared Private switch (Decision 7).
     options:
       - a per-build access VLAN on the durable switch, set on the relay's build NIC and the build VM's NIC before they start
       - one durable build at a time (a host lock held for the build)
       - a per-build Private switch (needs full Administrator)
     recommended: a per-build access VLAN, with one-at-a-time as the fallback if native validation finds VLAN filtering does not hold
+    answer: 'CHANGE (Jeff, r1): (c) a per-build Private switch for durable builds (needs elevation)'
   - id: a5
     kind: assumed
-    status: open
+    status: confirmed
     question: Honouring --nat-prefix and --host-ip per build (Decision 5).
     options:
       - every build reads the NAT it uses back from the host (Get-NetNat prefix, the NAT switch's host vNIC address), ephemeral builds reuse the dev switch's NAT when it exists, and a NAT prefix overlapping the build link is refused at build start and in doctor
       - persist setup's flags and read them per build
       - honour them on durable builds only
     recommended: read the NAT back from the host, reuse the dev switch's NAT for ephemeral builds, refuse an overlap at build start and in doctor
+    answer: (a) read the NAT back from the host (Jeff, r1)
   - id: a6
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The Windows guest''s NIC after build-link-subnet (Decision 8; windows-desktop finding: PrefixOrigin Dhcp where main''s was Manual).'
     options:
       - warden-io initialize --ip on Windows turns DHCP off on the interface and sets the static address, route and DNS, logging the final state, so the guest ends Manual whether or not it took the lease first
       - leave it DHCP-configured, as after build-link-subnet
       - drop --ip from warden-run.ps1 and rely on the lease alone
     recommended: make it static in initialize
+    answer: 'CHANGE (Jeff, r1): (c) drop --ip on Windows and rely on the relay''s lease alone'
   - id: a7
     kind: assumed
-    status: open
+    status: confirmed
     question: BOOT-06's per-build network-value extension (Decision 10; rule change BOOT-06).
     options:
       - take the amendment now that it holds on every driver, and remove the relay init's baked network defaults
       - remove the defaults but leave BOOT-06 as it is (alters_relationships and the bootstrap-model seam drop out; the review is still required)
       - neither
     recommended: take it, and remove the defaults
+    answer: (a) take BOOT-06's extension (rule change BOOT-06 approved as worded, Jeff, r1)
   - id: a8
     kind: assumed
-    status: open
+    status: confirmed
     question: BOOT-07's bootstrap surface list (Decision 10; rule change BOOT-07).
     options:
       - add tools/relay-vm/, tools/build-vm/, cmd/relay/dhcp*.go and driver/hyperv/relayseed*.go to the surface in bootstrap.md and tools/tier1/rules.yaml here
       - leave it to a process item
     recommended: take it here
+    answer: (a) take BOOT-07's surface list (rule change BOOT-07 approved as worded, Jeff, r1)
   - id: a9
     kind: assumed
-    status: open
+    status: confirmed
     question: Seams, relationships and validation (front-matter).
     options:
       - seams [bootstrap-model], alters_relationships true, security_boundary env-relay, windows-hyperv blocking, qemu-any and macos-qemu tracked
       - the same plus relay-claim, conservatively, although the wire is unchanged
     recommended: seams [bootstrap-model], alters_relationships true, env-relay, windows-hyperv blocking, qemu-any and macos-qemu tracked
+    answer: (a) as drafted (Jeff, r1)
 history:
   - at: 2026-11-05T00:33:01Z
     by: cloud/20261104T214530Z-attended
@@ -178,3 +178,39 @@ history:
   - at: 2026-11-07T11:31:18Z
     by: cloud/20261107T105651Z
     event: entered phase 2 (plan)
+  - at: 2026-11-08T22:02:35Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: (a) seed ISO; SMBIOS fallback (Jeff, r1)'
+  - at: 2026-11-08T22:02:36Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: (a) VM Notes under a host lock (Jeff, r1)'
+  - at: 2026-11-08T22:02:36Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: CHANGE (Jeff, r1): host resolvers by default; an optional [vm] dns key that, when set, is used explicitly with no fallback to the host''s; refuse if none'
+  - at: 2026-11-08T22:02:36Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: CHANGE (Jeff, r1): (c) a per-build Private switch for durable builds (needs elevation)'
+  - at: 2026-11-08T22:02:36Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: (a) read the NAT back from the host (Jeff, r1)'
+  - at: 2026-11-08T22:02:36Z
+    by: human/jeff
+    event: 'assumed question a6 confirmed: CHANGE (Jeff, r1): (c) drop --ip on Windows and rely on the relay''s lease alone'
+  - at: 2026-11-08T22:02:36Z
+    by: human/jeff
+    event: 'assumed question a7 confirmed: (a) take BOOT-06''s extension (rule change BOOT-06 approved as worded, Jeff, r1)'
+  - at: 2026-11-08T22:02:36Z
+    by: human/jeff
+    event: 'assumed question a8 confirmed: (a) take BOOT-07''s surface list (rule change BOOT-07 approved as worded, Jeff, r1)'
+  - at: 2026-11-08T22:02:36Z
+    by: human/jeff
+    event: 'assumed question a9 confirmed: (a) as drafted (Jeff, r1)'
+  - at: 2026-11-08T22:03:00Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-09T00:03:00Z
+  - at: 2026-11-08T22:03:00Z
+    by: human/jeff
+    event: kept f6-validate-windows-hyperv pending for phase 6
+  - at: 2026-11-08T22:03:00Z
+    by: human/jeff
+    event: 'back to design: design review r1 (Jeff): a3 host resolvers by default plus an optional [vm] dns key used explicitly with no host fallback, refuse if none; a4 (c) per-build Private switch for durable builds (elevation); a6 (c) drop --ip on Windows and rely on the relay''s lease. BOOT-06 and BOOT-07 approved at 0df0a64; a1, a2, a5, a7-a9 confirmed'
