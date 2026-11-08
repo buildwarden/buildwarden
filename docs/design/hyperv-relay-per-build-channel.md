@@ -907,6 +907,33 @@ None yet. Required (FLOW-19): `alters_relationships: true`, the
 `bootstrap-model` seam, `security_boundary: env-relay`, blocking windows-hyperv
 validation, assumed questions a1 to a9, and rule changes BOOT-06 and BOOT-07.
 
+- **r1, 2026-11-08: changes requested** (Jeff, workflow-human, FLOW-19).
+  Read at `0df0a64`, from a review page with the assumptions and rule
+  changes first. Sent back to Design (FLOW-06).
+  - **Rule changes approved as worded** (FLOW-14):
+    - rule change BOOT-06 approved at 0df0a64 (with the Bootstrap
+      comparison's BOOT-06 row);
+    - rule change BOOT-07 approved at 0df0a64.
+  - **Confirmed (a):** a1 (seed ISO, SMBIOS as the fallback), a2 (VM Notes
+    under a host lock), a5 (NAT read back from the host), a7, a8, a9.
+  - **Changes for Design r2:**
+    - **a3, DNS:** the host's resolvers by default, plus an optional
+      `[vm] dns` key. When the key is set, its value is used explicitly,
+      with no fallback to the host's resolvers. When neither yields a
+      resolver, the build is refused. This adds a config surface (UX-01,
+      the reference docs).
+    - **a4, the durable switch: (c)**, a per-build Private switch for each
+      durable build instead of a shared switch with per-build VLANs. It
+      needs elevation; Design weighs where that elevation happens (setup
+      or build) and its privilege tier.
+    - **a6, the Windows NIC: (c)**, drop `--ip` on Windows and rely on the
+      relay's lease alone. Design checks the `executor-initialize` seam and
+      the winguest seed, and what replaces the static fallback when no
+      lease arrives.
+  - **Re-review:** covers only what r2 changes since `0df0a64` (FLOW-19's
+    delta rule). The BOOT-06 and BOOT-07 approvals stand unless r2 changes
+    those entries.
+
 ## Consolidation
 
 Filled in at Publish (FLOW-10, FLOW-15).
