@@ -490,4 +490,7 @@ gaps:
       2026-11-08 (host:windows-hyperv/20261108T111002Z, unattended, main 49e5354): not run. No
       harness exists yet: feat/security-suite (e05df23) is design-only (docs/design/security-suite.md)
       and waits on its design review, and neither it nor main has a security-test make target.
+      2026-11-08 (host:windows-hyperv/20261108T231002Z, unattended, main 49e5354): not run, nothing
+      changed. feat/security-suite is still e05df23 (design only), main has no security-test target,
+      and the item is on hold since 2026-11-08T22:10Z (Jeff, blocking question q2).
     status: open
