@@ -253,6 +253,19 @@ No change to `driver/qemu`, the init, the relay script, the reference docs
 
 <!-- One entry per review (FLOW-19). -->
 
+- **r1, 2026-11-08: approved at `d196ac9`, read at `9891089`** (Jeff,
+  workflow-human, FLOW-19). The design was presented in the chat, with both
+  questions in full.
+  - **a1: (A)**, a self-contained fetch in `tools/build-vm`, as drafted.
+  - **a2: (C)**, re-pin both scripts to Alpine 3.21's current
+    `busybox-static` now. This was folded in before the approval (`d196ac9`):
+    the Decision 1 version note, Design step 1, the Firecracker
+    Cross-driver line, the Validation plan's CI line, and Implementation
+    plan task 1.
+    - Firecracker's CI asset cache re-keys once.
+    - `drivers` adds `firecracker`.
+    - Implement downloads both packages to pin their checksums.
+
 ## Consolidation
 
 <!-- Filled in at Publish (FLOW-10, FLOW-15). -->
