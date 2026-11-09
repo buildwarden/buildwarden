@@ -995,7 +995,20 @@ commit each.
 
 ## Design review
 
-Recorded at x1-design (FLOW-19).
+- **r1, 2026-11-09: approved at `d7f3467`** (Jeff; read at `e76cb36`, page
+  https://claude.ai/artifact/BTfCd65SvfmtCth7JQBFvp). Assumptions a1 to a10
+  confirmed as drafted, (a) each: GLOBAL-09 to GLOBAL-11 in `global.md`
+  (SHOULD, MUST, MUST, agent-judgment); the **Defaults and overrides**
+  section checked filled by `wf check`; named fallbacks allowed, bounded
+  retries unnamed; whole-repository scope; no audit; one sentence in UX-07
+  and one FLOW-19 topic; Windows `--ip` left to hyperv-relay-per-build-channel;
+  RELAY-08 in `relay.md`, MUST, agent-judgment; the boot channel and launch
+  wiring as in a10. Folded in at `d7f3467`, by Jeff's word in the sitting:
+  Decision 9, process items not counted toward FLOW-05's in-progress limit
+  (rule-running-line-match's start pushed `wf validate` to 6 of 5), with the
+  interim raise of `limits.in_progress` to 7 until the rebuilt `dist/wf` runs
+  everywhere. The fold-in's citations and tests were checked against the code
+  before the commit. No `rule_changes` (process item, FLOW-14).
 
 ## Consolidation
 
