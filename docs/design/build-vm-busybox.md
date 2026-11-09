@@ -237,17 +237,48 @@ No change to `driver/qemu`, the init, the relay script, the reference docs
 
 ## Implementation plan
 
-1. Read Alpine 3.21's current `busybox-static` version, download the aarch64
-   and x86_64 packages, and pin both checksums; set both scripts to that
-   version (review r1 a2 (C)). If the sandbox blocks `dl-cdn.alpinelinux.org`,
-   ask to allow it through the environment tools, and failing that stop with
-   a finding naming the host. (FLOW-07)
-2. Rework `tools/build-vm/build-initramfs.sh` per Design steps 1-6.
-   (ORCH-01: qemu only; UX-01: the script's error and header text)
-3. Add `tools/build-vm/.gitignore`.
-4. Add the tier-0 assertions to `driver/buildlink/scripts_test.go`. (TEST-01,
-   TEST-02)
-5. `make lint`, `make test`. (FLOW-17)
+1. Pin the version (Decision 1, review r1 a2 (C)): read Alpine 3.21's
+   current `busybox-static` version from the `v3.21/main` APKINDEX for
+   aarch64 and x86_64, download both `.apk` files and record their sha256.
+   If the sandbox blocks `dl-cdn.alpinelinux.org`, propose allowing it
+   through the environment tools, and failing that stop with a finding
+   naming the host. If the two architectures carry different versions, stop
+   with a finding: Decision 1's one shared `BUSYBOX_VERSION` would not hold
+   (back to Design). (FLOW-07, ORCH-01)
+2. Rework `tools/firecracker-vm/build-initramfs.sh`: set `BUSYBOX_VERSION`
+   and the x86_64 `BUSYBOX_SHA256` from task 1; nothing else in the script
+   changes (Cross-driver impact, firecracker). (FLOW-06, ORCH-01)
+3. Rework `tools/build-vm/build-initramfs.sh` per Design steps 1-6:
+   the pinned constants and `CACHE_DIR` with the re-pin comment (aarch64
+   sha256 from task 1); the precondition naming only
+   `$RELAY_CACHE/linux-virt.apk`; `fetch_busybox` with the `.part` download,
+   the re-pin message and the `sha256sum`/`shasum -a 256` check (Decision 3);
+   extraction to a scratch directory under `.cache/` with the
+   `bin/busybox.static` existence check, replacing the copy from
+   `$RELAY_CACHE/busybox`; the explicit applet list and everything after it
+   unchanged, with no stamp change (Decision 4); the header's dependencies
+   and cache line. (FLOW-06, ORCH-01, UX-01: the script's own error and
+   header text)
+4. Add `tools/build-vm/.gitignore` with `.cache/` and `.rootfs/`, as
+   `tools/firecracker-vm/.gitignore` has. (ORCH-01)
+5. Tier 0 (TEST-02): in `driver/buildlink/scripts_test.go`, a pure-Go test
+   that reads both direct-boot build scripts and asserts the same
+   `ALPINE_VERSION` and `BUSYBOX_VERSION`, a 64-hex `BUSYBOX_SHA256` in each
+   that the script checks, and no read of `$RELAY_CACHE/busybox` in the
+   build-vm script. The existing stamp, lease-script and applet-list tests
+   pass unchanged. (TEST-01, TEST-02)
+6. Reference docs and `overview.md`: none owed, per Design. Confirm that
+   `installation.md` and `drivers.md` still name the two commands in order
+   and `driver/qemu`'s rebuild message still names the build-vm script, and
+   change nothing. (UX-01, FLOW-15)
+7. Tier 1 gate: `make lint` and `make test` green (no build-tagged files are
+   touched, so one platform), then push the branch. On the PR,
+   `firecracker.yml` re-keys its asset cache once, rebuilds with the new
+   busybox and runs its builds: that is firecracker's validation, checked at
+   Publish. (TEST-01, TEST-02, FLOW-17, ORCH-01)
+8. Tier 2, native, blocking (TEST-02, FLOW-09): step `f6-validate-qemu-any`
+   runs the Validation plan's four `qemu-any` cases on the pushed branch;
+   Implement does not run them.
 
 ## Design review
 
