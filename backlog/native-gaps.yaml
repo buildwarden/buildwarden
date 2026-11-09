@@ -496,3 +496,13 @@ gaps:
       2026-11-09 (host:windows-hyperv/20261109T111002Z, unattended, main 49e5354): not run, nothing
       changed. feat/security-suite is still e05df23 (design only), and q2 (on hold) is still open.
     status: open
+  - id: baked-asset-staleness-qemu-windows
+    host: macos-qemu
+    what: A qemu Windows guest build refused before any VM on an unstamped (or stale) qemu relay kernel and initramfs, naming tools/relay-vm/build-initramfs.sh, and succeeding after the rebuild writes their .source stamps.
+    design: docs/design/baked-asset-staleness.md
+    note: >-
+      Tracked (TEST-03), not blocking: the relay check is guest-agnostic and validated by
+      qemu-any, and qemu Windows builds already fail on main (qemu-windows-guest-package).
+      Run once that is fixed, on main after baked-asset-staleness merges or on its branch if
+      still waiting.
+    status: open
