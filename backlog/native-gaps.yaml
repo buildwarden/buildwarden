@@ -495,6 +495,8 @@ gaps:
       and the item is on hold since 2026-11-08T22:10Z (Jeff, blocking question q2).
       2026-11-09 (host:windows-hyperv/20261109T111002Z, unattended, main 49e5354): not run, nothing
       changed. feat/security-suite is still e05df23 (design only), and q2 (on hold) is still open.
+      2026-11-09 (host:windows-hyperv/20261109T171002Z, unattended, main 49e5354): not run, nothing
+      changed. feat/security-suite is still e05df23 (design only), and q2 (on hold) is still open.
     status: open
   - id: baked-asset-staleness-qemu-windows
     host: macos-qemu
