@@ -15,7 +15,9 @@ native_budget:
   steps: 8
 
 limits:
-  in_progress: 5           # features in progress at once (FLOW-05)
+  in_progress: 7           # features in progress at once (FLOW-05). TEMPORARY: 5 + 2 open process items
+                           # (design-principles Decision 9, Jeff 2026-11-09) until dist/wf counts process
+                           # items out; rule-running-line-match's x4-close lowers to 6, design-principles' restores 5
   alters_relationships: 1  # of those, past Design with alters_relationships: true
 
 lease_minutes: 120         # a claimed step's lease; an expired lease may be reclaimed (FLOW-04)
