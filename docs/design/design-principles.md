@@ -9,7 +9,7 @@ alters_relationships: false
 design_review: required
 native_validation: []
 tier2_gaps: []
-rules: [GLOBAL-01, GLOBAL-06, GLOBAL-08, GLOBAL-09, GLOBAL-10, GLOBAL-11,
+rules: [FLOW-05, GLOBAL-01, GLOBAL-06, GLOBAL-08, GLOBAL-09, GLOBAL-10, GLOBAL-11,
   RELAY-04, RELAY-08, BOOT-06, UX-01, UX-03,
   UX-04, UX-07, UX-08, ORCH-03, FLOW-01, FLOW-02, FLOW-03, FLOW-06, FLOW-07,
   FLOW-08, FLOW-09, FLOW-10, FLOW-12, FLOW-14, FLOW-15, FLOW-17, FLOW-19, LINT-01, LINT-02,
@@ -17,7 +17,8 @@ rules: [GLOBAL-01, GLOBAL-06, GLOBAL-08, GLOBAL-09, GLOBAL-10, GLOBAL-11,
 rule_changes: []
 concepts: [design-principles, defaults, overrides, fallback, least-surprise,
   explicit-over-implicit, minimal-magic, design-review, process-item,
-  relay-claim, claim-protocol, relay-configuration, boot-channel]
+  relay-claim, claim-protocol, relay-configuration, boot-channel,
+  in-progress-limit]
 related: [hyperv-relay-per-build-channel.md, flow19-design-before-plan.md,
   regression-fixes-follow-up.md, design-approved-rule-changes.md,
   build-link-subnet.md]
@@ -114,6 +115,19 @@ the build link into the claim, but nothing tells the next design that adds a
 relay setting where it goes, or tier 2 that a new flag or command-line key
 is a finding; and the relay still takes some per-build configuration from
 outside the claim (Design, **Relay configuration found outside the claim**).
+
+In the same sitting, recording the approved design of rule-running-line-match
+failed. Claiming its `x1-design` started the item (`Claim`,
+`tools/workflow/queue/next.go:297-300`, starts a queued process item on any
+worker's claim), and `dist/wf validate` then rejected the state with "6
+features in progress, limit 5 (FLOW-05)"; `dist/wf claim` and `dist/wf done`
+do not check the count. FLOW-05's limit (`process.md:205`, "At most 5
+features are in progress at once") is enforced by `validate`
+(`tools/workflow/queue/queue.go:359-370`) and by `atLimit` (`next.go:129-139`),
+and both count every item with `status: in_progress`, process items included.
+With five features open, starting a process item breaks `validate` for every
+session, though FLOW-05 ranks process items ahead of fixes and features. Jeff
+decided that process items do not count toward the limit (Decision 9).
 
 ## Prior art
 
@@ -354,8 +368,8 @@ outside the claim (Design, **Relay configuration found outside the claim**).
      the code, which FLOW-01 already routes.
    - **Rejected: a tracked list (a backlog file).** A second list drifts; the
      design archive is searchable by `concepts: [fallback]`.
-7. **Out of scope.** No principle beyond Jeff's three and his relay rule
-   (Decision 8). No product code
+7. **Out of scope.** No principle beyond Jeff's three, his relay rule
+   (Decision 8) and the limit exemption (Decision 9). No product code
    changes: hyperv-relay-per-build-channel a12 (b), making `--ip` on Windows
    strict for every caller of `warden-io initialize`, is an
    `executor-initialize` seam change and belongs to a feature design, not this
@@ -421,6 +435,32 @@ outside the claim (Design, **Relay configuration found outside the claim**).
      under hyperv-relay-per-build-channel r3; and today's entries outside the
      claim would have to be allowlisted, a standing suppression Decision 6
      rejects.
+9. **Process items do not count toward FLOW-05's in-progress limit** (Jeff,
+   2026-11-09, in this item's design review). The limit bounds how many
+   features build in parallel, because each costs a later rebase and
+   consolidation (FLOW-05); a process item is short and already ranked ahead
+   of fixes and features (one that would disrupt running work pauses it
+   through `holds`), so counting it only stops the rules from changing while
+   five features wait. The limit's value (`limits.in_progress: 5`) is
+   unchanged, and so is the `alters_relationships` limit, which still counts
+   every in-progress item that declares it, process items included. Two
+   counts change, each to skip `f.IsProcess()`: `validate`'s, which a started
+   process item pushed over the limit, and `atLimit`'s, so an in-progress
+   process item takes no cloud slot from a queued feature. The start check
+   needs no change: the limit binds only cloud workers (`mayStart`,
+   `NextFor`), and a queued process item's first step, `x1-design`, is human
+   (`phases.go`), so a human already starts one at any count (`Claim`).
+   - **Rejected: raise the limit to 7.** It keeps process items competing for
+     feature slots, and the number would drift with the queue's mix. It is
+     used only as the interim until every session's `dist/wf` counts process
+     items out (Design).
+   - **Rejected: keep the count and wait for a slot.** An approved process
+     item would sit unrecorded behind work it is meant to unblock, as
+     rule-running-line-match did behind jks-test-skip-without-jdk.
+   - **Rejected: a separate limit for process items.** Process items are
+     short and ranked first, so few are open at once (two when this was
+     decided: this item and rule-running-line-match); a second number adds
+     config without a case for it.
 
 ## Questions
 
@@ -744,6 +784,43 @@ all the same; `wf-design`'s new sentence tells its drafter so.
   finding; its fix is to move it into the claim, or `back-to-design`
   (FLOW-06) when that needs a claim field the design did not plan."
 
+### The in-progress limit (Decision 9)
+
+- `docs/development/process.md` FLOW-05 (`:205-208`): the paragraph's first
+  sentence becomes "At most 5 features are in progress at once, not counting
+  process items (FLOW-03), and at most 1 of those features declares
+  `alters_relationships: true` (FLOW-02), because two such features reshape
+  the same structure and make each other's consolidation costly." A new
+  sentence follows it: "Process items are not counted because they are short
+  and already ranked ahead of fixes and features; one that would disrupt
+  running work declares `holds`." The rest of the paragraph is unchanged.
+- `tools/workflow/queue/queue.go` `validate` (`:359-364`): only the
+  `inProgress++` at `:360` skips process items (`if !f.IsProcess() {
+  inProgress++ }`); the outer `if f.Status == "in_progress"`, the alters count
+  at `:361-363` and the error text (`:367-370`) are unchanged.
+- `tools/workflow/queue/next.go`:
+  - `atLimit` (`:129-139`) skips process items in its count;
+  - `Next` (`:79-115`) and `NextFor` (`:252-262`): no behavior change (the
+    limit binds only the cloud, which never takes a queued process item's
+    human first step). Their doc comments say the limit counts no process
+    items: `NextFor`'s "the in-progress limit still counts every feature"
+    becomes "the in-progress limit counts every feature but process items".
+- The `workflow` branch, at x4-close: `config.yaml`'s comment on
+  `limits.in_progress` and `README.md`'s (`:37`, `:151`) say process items are
+  not counted.
+
+**Interim.** Until every session's `dist/wf` is rebuilt from the merged
+`main` (Implementation plan step 9), `dist/wf validate`, which
+`workflow-tick`, `workflow-native` and `workflow-intake` pass before they push,
+still counts process items. So, before a process item is started with the
+features at the limit, `human/jeff` raises `limits.in_progress` in the
+`workflow` branch's `config.yaml` by the number of open process items started
+that way (5 to 7 on 2026-11-09: this item and rule-running-line-match), in one
+commit whose message and config comment cite this decision and say it is
+temporary. Each such item's x4-close lowers it by one, and this item's
+x4-close restores 5, in the same commit as its rebuild digest entry. No
+skill's `validate` gate changes, and the cloud loop never raises it.
+
 ### Fallbacks found while drafting (not audited; Decision 6)
 
 Listed for the next design that touches each. None is judged here.
@@ -850,6 +927,22 @@ plus the four pre-claim values; it changes no relay code here.
     none fails `section filled: Defaults and overrides` (the branch-order
     case in Design).
   - `rulechange_test.go` passes unchanged with the updated `design` constant.
+- **Tier 0, `tools/workflow/queue` (Decision 9):**
+  - `queue_test.go`: a state at `limits.in_progress: 1` with one feature and
+    one process item in progress validates; with two features in progress it
+    still fails `features in progress, limit 1 (FLOW-05)`; a process item
+    with `alters_relationships: true` past Design still counts toward the
+    alters limit.
+  - Beside `TestNextStartsFeatureOnlyWhenAllBlocked` (`queue_test.go:68-86`,
+    its limit assertion at `:82-85`): at `limits.in_progress: 1` with one
+    in-progress process item and one queued feature, `Next("cloud")` starts
+    the queued feature; with one in-progress feature instead, it starts none.
+  - At `limits.in_progress: 1` with one feature in progress, `human/jeff`
+    takes and claims a queued process item's `x1-design`; the item becomes
+    `in_progress` and `Validate()` returns no error.
+  - `TestNextForOneFeature` (`:88-98`): `NextFor("q", "cloud")` on a queued
+    feature is not refused when the only other in-progress item is a process
+    item at `limits.in_progress: 1`.
 - **Tier 1:** `make lint` runs the rule index (`rules.go`): the four new
   headers (GLOBAL-09 to GLOBAL-11, RELAY-08) parse with valid Severity and
   Check lines, and as agent-judgment rules they need no `rules.yaml` entry. `make enforcement`, because the
@@ -881,19 +974,24 @@ commit each.
 4. `tools/workflow/check/check.go` and `check_test.go` (FLOW-03, TEST-01,
    TEST-02, GLOBAL-01): the section in `design()`'s list, and the tests in
    the Validation plan.
-5. `.claude/agents/wf-design.md`, `wf-review.md`, `wf-implement.md` and
+5. `docs/development/process.md` FLOW-05 and `tools/workflow/queue/queue.go`,
+   `next.go` and `queue_test.go` (FLOW-05, FLOW-14, TEST-01, TEST-02): the
+   limit exemption and its tests, as in Design (Decision 9).
+6. `.claude/agents/wf-design.md`, `wf-review.md`, `wf-implement.md` and
    `.claude/skills/workflow-human/SKILL.md` steps 0 and 3.3 (FLOW-14,
    FLOW-07, FLOW-06, FLOW-19, RELAY-08): the sentences in Design, citing rule
    IDs, restating no rule; `wf-design.md` step 2 and `wf-review.md` step 3
    also take the RELAY-08 sentences.
-6. `docs/book/src/concepts/overview.md` (FLOW-15): checked; no component flow
+7. `docs/book/src/concepts/overview.md` (FLOW-15): checked; no component flow
    changes, so no pseudocode change is expected.
-7. Consolidation, then the gates (FLOW-10, FLOW-17): `make lint`, `make
+8. Consolidation, then the gates (FLOW-10, FLOW-17): `make lint`, `make
    test`, `make enforcement`, `tools/workflow/flow18-check.sh`, and `wf
    check` for this item.
-8. At x4-close, on the `workflow` branch (FLOW-03): the digest entry asking
+9. At x4-close, on the `workflow` branch (FLOW-03): the digest entry asking
    every machine and human session to rebuild `dist/wf` from the merged
-   `main`, so the section check runs everywhere.
+   `main`, so the section check and the limit exemption run everywhere;
+   `config.yaml`'s and `README.md`'s limit comments; and `limits.in_progress`
+   lowered back to 5 from the interim raise (Decision 9).
 
 ## Design review
 
