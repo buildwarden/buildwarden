@@ -1209,6 +1209,36 @@ BOOT-06 and BOOT-07.
     (native cases 2, 5 to 9), the `f6-validate-windows-hyperv` step's note,
     the macos-qemu backlog entry, Rollback notes.
 
+- **r2 re-review, 2026-11-09: changes requested** (Jeff, workflow-human,
+  FLOW-19). Read at `7be917d`; it covers the delta since `0df0a64`. Sent
+  back to Design (FLOW-06).
+  - **a10, `[vm] dns`: changed.** Jeff asked what the key configures. It
+    sets the relay's upstream resolvers; the build VM keeps using the relay
+    as its DNS. That value is not needed before the claim, so:
+    - **It is delivered in the claim.** The claim gains an upstream-DNS
+      field, so the `relay-claim` seam joins `seams`.
+    - The relay sets its resolver from the claim. The seed and Firecracker's
+      command line stop carrying `warden.dns`.
+    - **Every VM driver honours it, qemu and vz included.** Nothing refuses
+      `[vm] dns` any more.
+    - What r2 decided about the value itself stands: `[vm] dns` is used
+      exclusively when set; otherwise the host's resolvers, selected by
+      Firecracker's rule; refused when neither yields one.
+  - **The new rule (Jeff):** "from here onwards, any configuration of the
+    relay should happen in the claim interface explicitly." Only what the
+    relay needs to receive a claim (its own address, prefix, gateway and the
+    claim token) comes from the boot channel, the seed or the kernel command
+    line.
+    - **Design r3 rewords the proposed BOOT-06 paragraph to say this.** It
+      currently reads "the relay gets those from its claim, its kernel
+      command line or a per-build relay seed". So BOOT-06 is re-approved at
+      the r3 review; its approval at 0df0a64 no longer covers the wording.
+    - The same rule is also written into the design-principles item.
+    - BOOT-07's entry is unaffected, and its approval at 0df0a64 stands.
+  - **Confirmed (a):** a11 (setup-made per-build Private switches,
+    `--slots` default 4), a12 (the Windows guest keeps the relay's lease)
+    and a13 (no runtime fallbacks; SMBIOS a named contingency).
+
 ## Consolidation
 
 Filled in at Publish (FLOW-10, FLOW-15).
