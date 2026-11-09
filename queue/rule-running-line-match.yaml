@@ -1,0 +1,32 @@
+feature: rule-running-line-match
+title: 'wf check''s rule-running CI line match ignores job names (needs: lists)'
+priority: 52
+kind: process
+follows: design-approved-rule-changes
+status: queued
+round: process
+phase: 1
+design: docs/design/rule-running-line-match.md
+branch: feat/rule-running-line-match
+alters_relationships: null
+source: 'Regression on main found by cloud/20261109T105708Z (FLOW-09), in jks-test-skip-without-jdk f3-implement-r2: tools/workflow/check/rulechange.go''s ruleRunningRe (tier1|golangci-lint|tools/workflow) treats any changed .github/workflows line that names one as a rule-running line, so adding a job to ci-ok''s ''needs: [changes, lint, tier1, tier1-test, ...]'' list fails the FLOW-14 clearance though no rule or its enforcement changes. The attended 2026-11-07 session hit the same check and recorded a TEST-02 approval Jeff later said was not meant. Fix: match lines that run a rule (a run: or uses: step invoking tier1, golangci-lint or tools/workflow), not job names in needs lists; tier-0 test with the ci-ok needs edit. Blocks jks-test-skip-without-jdk''s f3-implement-r2 done-when.'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 4
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-09T11:10:55Z
+    by: cloud/20261109T105708Z
+    event: queued at priority 52 (intake)

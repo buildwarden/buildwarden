@@ -452,11 +452,11 @@ gaps:
     status: open
   - id: hyperv-relay-per-build-channel-qemu-windows
     host: macos-qemu
-    what: A qemu Windows guest build whose NIC ends DHCP Enabled No, PrefixOrigin Manual, at the seed's static address (warden-io initialize --ip now disables DHCP on the interface before setting the address), and whose warden-run.log carries initialize's final-state line.
+    what: A qemu Windows guest build whose warden-run.log shows initialize --gateway=<relay> with no --ip (warden-run.ps1 no longer passes it, design r2 Decision 8) and whose NIC ends on the relay's lease (DHCP Enabled Yes, PrefixOrigin Dhcp, the link's guest address).
     design: docs/design/hyperv-relay-per-build-channel.md
     note: >-
-      Tracked (TEST-03), not blocking: windows-hyperv validates the same cmd/warden-io step.
-      qemu Windows builds already fail on main (qemu-windows-guest-package), so run this once that
+      Tracked (TEST-03), not blocking: windows-hyperv validates the same warden-run.ps1 and lease
+      (reworded at design r2, 2026-11-09: a6 (c), no --ip on Windows). qemu Windows builds already fail on main (qemu-windows-guest-package), so run this once that
       is fixed, on main after hyperv-relay-per-build-channel merges or on its branch if still waiting.
       2026-11-07 (host:macos-qemu/20261107T124005Z, unattended): not run. The branch is design-only
       and qemu Windows builds still fail on main.

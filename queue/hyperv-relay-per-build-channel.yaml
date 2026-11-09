@@ -4,7 +4,7 @@ priority: 47
 follows: build-link-subnet
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/hyperv-relay-per-build-channel.md
 branch: feat/hyperv-relay-per-build-channel
 alters_relationships: true
@@ -32,14 +32,30 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-    note: 'Blocking native validation (design Validation plan, FLOW-09), on the branch after consolidation: (1) upgrade: main''s relay VHDX (stamp 1) BLOCKED in doctor and refused before any VM, both naming tools/relay-vm/hyperv/refresh-cache.sh; after it, stamp 2 and doctor current. (2) elevated default Windows guest build succeeds, ledger verifies; relay console shows the seed''s allocated NAT address, gateway and the host''s resolvers, and no token value; the guest NIC ends DHCP Enabled: No, PrefixOrigin Manual at the seed''s address. (3) while a relay waits, a claim and a tunnel from the host with no token and a wrong token get 401; the build then succeeds. (4) two concurrent ephemeral builds succeed with different relay addresses (VM Notes, consoles). (5) warden setup --driver hyperv --nat-prefix 192.168.250.0/24 --host-ip 192.168.250.1 (default NAT removed): a non-elevated Hyper-V Administrators build uses that prefix and succeeds, doctor prints prefix and host IP, an elevated build reuses the same NAT. (6) two concurrent durable builds on warden-dev succeed with different access VLANs; from build VM A, ARP/ping to relay B''s and build VM B''s link addresses and a DHCP DISCOVER get no answer from B. (7) refusals: [vm] build_link inside the durable NAT prefix refused at build start and in doctor; host default-route interface with only 127.0.0.1 as DNS refused naming it; a relay VM booted by hand with no seed prints the no-seed line and starts no relay. (8) with the host DNS on an internal resolver, a build resolves a name only it answers. Evidence under native/windows-hyperv/<date>/.'
+    note: 'Blocking native validation (design Validation plan, FLOW-09; r2 cases), on the branch after consolidation: (1) upgrade: main''s relay VHDX (stamp 1) BLOCKED in doctor and refused before any VM, both naming tools/relay-vm/hyperv/refresh-cache.sh; after it, stamp 2 and doctor current. (2) elevated default Windows guest build succeeds, ledger verifies; relay console shows the seed''s allocated NAT address, gateway and the host''s resolvers, and no token value; warden-run.log shows initialize --gateway=<relay> with no --ip, and the guest NIC ends DHCP Enabled: Yes, PrefixOrigin Dhcp at the link''s guest address. (3) while a relay waits, a claim and a tunnel from the host with no token and a wrong token get 401; the build then succeeds. (4) two concurrent ephemeral builds succeed with different relay addresses (VM Notes, consoles). (5) on a host set up by main, a durable build is refused naming warden setup; then warden setup --driver hyperv --nat-prefix 192.168.250.0/24 --host-ip 192.168.250.1 --slots 2 (default NAT removed) retires the old warden-dev switch; doctor prints prefix, host IP and two free slots; a non-elevated Hyper-V Administrators build uses that prefix and slot warden-dev-0 (relay VM Notes) and succeeds; an elevated build reuses the same NAT on its own ephemeral switch. (6) two concurrent durable builds take warden-dev-0 and warden-dev-1 and succeed; from build VM A, ARP/ping to relay B''s and build VM B''s link addresses and a DHCP DISCOVER get no answer from B; a third concurrent durable build is refused before any VM naming both holders and --slots; a --keep-vms build''s slot stays busy (doctor names it) until its VMs are removed. (7) refusals: [vm] build_link inside the durable NAT prefix refused at build start and in doctor; host default-route interface with only 127.0.0.1 as DNS and no [vm] dns refused naming it and both fixes; [vm] dns = [<host NAT IP>] refused naming the entry; a relay VM booted by hand with no seed prints the no-seed line and starts no relay. (8) resolvers: with the host DNS on an internal resolver, a build resolves a name only it answers; with the host DNS public and [vm] dns set to that resolver, the build resolves it and console and doctor list only the key''s resolver; with [vm] dns set to an address with no DNS server, lookups fail (no fallback to the host''s). (9) no lease: a --keep-vms build VM moved to an empty Private switch and restarted logs a failed relay wait naming the NIC address and origin (169.254 WellKnown reads no DHCP lease), applies no static address, and powers off. Evidence under native/windows-hyperv/<date>/.'
   - id: f1-design-r2
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review
+    phase: 2
+    affinity: human
     status: pending
     lease:
-      claimed_by: cloud/20261109T105708Z
-      expires: 2026-11-09T12:57:27.976932304Z
+      claimed_by: ""
+      expires: null
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - f2-design-review
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 4
@@ -138,6 +154,44 @@ questions:
       - the same plus relay-claim, conservatively, although the wire is unchanged
     recommended: seams [bootstrap-model], alters_relationships true, env-relay, windows-hyperv blocking, qemu-any and macos-qemu tracked
     answer: (a) as drafted (Jeff, r1)
+  - id: a10
+    kind: assumed
+    status: open
+    question: '[vm] dns: shape, validation and which drivers read it (Decision 6, r2).'
+    options:
+      - an optional list of IPv4 addresses, no flag or env var; when set used exclusively (never merged with or followed by the host's); syntax and class checked at config load, reachability (host-local, NAT prefix, build link) at build start and in doctor, an unusable entry refusing the build rather than being dropped; read by hyperv and firecracker; a qemu or vz build with it set refused at startup; container ignores [vm]
+      - hyperv only, other VM drivers refusing it
+      - every VM driver honours it (qemu via warden.dns on its relay command line, vz via a new host-mode relay resolver option)
+      - the first option plus a --dns flag on build, shell and doctor
+    recommended: the first option; honouring it on qemu and vz as a follow-up if wanted
+  - id: a11
+    kind: assumed
+    status: open
+    question: 'The durable strategy''s per-build Private switches (Decision 7, r2): where the elevation happens, the per-build privilege tier, and what a durable build holds.'
+    options:
+      - 'elevation at setup: warden setup --driver hyperv --slots N (1-64, default 4) makes Private switches <network>-0..N-1 and retires the old shared <network> switch when unattached; builds stay at Hyper-V Administrators, take the lowest unattached slot under the hyperv-network host lock, and hold it only by the relay VM''s attached NIC (no lock for the build''s life; freed when the VM is removed, kept by --keep-vms); all busy or no slots is a fixable refusal'
+      - the same with Firecracker's default of 16 slots
+      - create a Private switch per durable build, after a native spike shows Hyper-V Administrators may
+      - the first option, but keep the old <network> switch instead of removing it
+    recommended: the first option (setup-made slots, default 4)
+  - id: a12
+    kind: assumed
+    status: open
+    question: 'The Windows guest on the relay''s lease (Decision 8, r2): warden-run.ps1 passes --gateway only (Hyper-V and qemu); executor-initialize unchanged; no lease is a failed build with a warden-io line naming the NIC address and origin, no static fallback.'
+    options:
+      - as stated, warden-io's Windows --ip branch left as it is for other orchestrators
+      - as stated, and make --ip on Windows strict for whoever passes it (disable DHCP, set it, fail if it does not stick)
+      - as stated, and remove --ip on Windows from the initialize contract (seam change with deprecation, UX-03)
+    recommended: as stated; a strict --ip belongs with the design-principles item if wanted
+  - id: a13
+    kind: assumed
+    status: open
+    question: 'No runtime fallbacks; contingencies named (Decision 11, r2): a1''s SMBIOS is a contingency chosen by a return to Design if the DVD path fails native validation, never a second channel a build tries; r1''s one-at-a-time contingency goes with the VLANs; the NAT choice (a5) is a fixed order over what the host has, not a fallback.'
+    options:
+      - as stated
+      - keep SMBIOS as an automatic second channel when the DVD is missing
+      - drop the SMBIOS contingency altogether
+    recommended: as stated
 history:
   - at: 2026-11-05T00:33:01Z
     by: cloud/20261104T214530Z-attended
@@ -217,3 +271,9 @@ history:
   - at: 2026-11-09T10:57:27Z
     by: cloud/20261109T105708Z
     event: claimed f1-design-r2 until 2026-11-09T12:57:27Z
+  - at: 2026-11-09T11:10:23Z
+    by: cloud/20261109T105708Z
+    event: done f1-design-r2
+  - at: 2026-11-09T11:10:23Z
+    by: cloud/20261109T105708Z
+    event: entered phase 2 (plan)
