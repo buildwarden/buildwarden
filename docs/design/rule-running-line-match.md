@@ -434,7 +434,9 @@ Concrete at x2-implement (process item, FLOW-03); one commit each:
 
 ## Design review
 
-Recorded at x1-design (FLOW-19).
+- **r1, 2026-11-09: approved at `647457a`** (Jeff, workflow-human,
+  x1-design, FLOW-19). The design was presented on a review page with the
+  assumptions first. **a1 to a5 are confirmed as drafted, option (a).**
 
 ## Consolidation
 
