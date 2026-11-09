@@ -1,6 +1,6 @@
 # Written by native-tick.sh; see the workflow README. One line of reason, no logs (FLOW-18).
 machine: macbook
-last_run: 2026-11-08T12:40:01Z
-outcome: skipped
-reason: "skip: on battery"
-since: 2026-11-08T12:40:01Z
+last_run: 2026-11-09T12:43:54Z
+outcome: failed
+reason: "claude exited 1"
+since: 2026-11-09T12:43:54Z
