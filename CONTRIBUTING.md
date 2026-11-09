@@ -63,6 +63,8 @@ linux/arm64; on macOS/arm64 it also builds `warden-io` for darwin/arm64 and sign
 the host binary. Platform-specific code has build-tagged stubs, so `make test`
 passes everywhere. The test tiers and what each one needs are in
 [`testing.md`](https://github.com/buildwarden/buildwarden/blob/main/docs/development/testing.md).
+The `warden-io` keytool comparison skips where no JDK's `keytool` runs; CI's
+`keytool` job installs Java and runs it on Linux, macOS and Windows.
 
 ### Tier-1 checks
 
