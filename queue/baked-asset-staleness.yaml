@@ -2,7 +2,7 @@ feature: baked-asset-staleness
 title: One staleness check for every baked boot asset
 priority: 48
 follows: build-link-subnet
-status: queued
+status: in_progress
 round: feature
 phase: 0
 design: docs/design/baked-asset-staleness.md
@@ -15,15 +15,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261109T105708Z
+      expires: 2026-11-09T13:11:36.026616407Z
 budget:
   estimate:
     runs: 3
     steps: 14
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 1
 questions: []
 history:
   - at: 2026-11-05T00:33:06Z
@@ -44,3 +44,9 @@ history:
   - at: 2026-11-07T11:04:31Z
     by: cloud/20261107T105651Z
     event: 'priority 47 -> 48 (renumbered by wf new: vz-ipsw-latest-reuse queued at 45)'
+  - at: 2026-11-09T11:11:36Z
+    by: cloud/20261109T105708Z
+    event: started (FLOW-05)
+  - at: 2026-11-09T11:11:36Z
+    by: cloud/20261109T105708Z
+    event: claimed f0-branch-setup until 2026-11-09T13:11:36Z
