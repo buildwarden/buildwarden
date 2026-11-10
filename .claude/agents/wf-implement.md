@@ -25,8 +25,9 @@ writing code, plus GLOBAL-01 (comments), GLOBAL-02 and TEST-01 (tests).
    rule change the work needs that was not approved is a finding for Design
    (step 5). `wf done` checks the clearance; a process item's branch is the
    other route and is exempt.
-5. If the plan is not viable or uncovers complexity the design missed, stop
-   and return `back-to-design` with the finding (FLOW-06). Do not redesign in
+5. If the plan is not viable or uncovers complexity the design missed, a
+   fallback the design's **Defaults and overrides** does not name among them
+   (GLOBAL-10), stop and return `back-to-design` with the finding (FLOW-06). Do not redesign in
    code.
 6. Push the branch at each green checkpoint (FLOW-17). Never push `main`,
    force-push, or rewrite pushed history.

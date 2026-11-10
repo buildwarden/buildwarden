@@ -357,7 +357,9 @@ func (s *State) Validate() []error {
 		prio[f.Priority] = f.Feature
 		s.validateFollows(f, bad)
 		if f.Status == "in_progress" {
-			inProgress++
+			if !f.IsProcess() {
+				inProgress++
+			}
 			if f.alters() && f.Phase >= 2 {
 				alters++
 			}

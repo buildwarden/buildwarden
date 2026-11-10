@@ -95,6 +95,80 @@ func TestNextForOneFeature(t *testing.T) {
 	if p, _ := s.NextFor("q", "cloud", now); p != nil {
 		t.Fatal("NextFor ignored the in-progress limit")
 	}
+	s.Features[0] = process("a", 1, "in_progress")
+	if p, _ := s.NextFor("q", "cloud", now); p == nil || p.Feature != q {
+		t.Fatalf("NextFor = %+v, want q not refused beside a process item", p)
+	}
+}
+
+// TestLimitSkipsProcessItems: process items do not count toward the
+// in-progress limit (FLOW-05), in Validate, in Next and in NextFor; the
+// alters_relationships limit still counts them.
+func TestLimitSkipsProcessItems(t *testing.T) {
+	a, x := feature("a", 1, "in_progress"), process("x", 2, "in_progress")
+	s := state(a, x)
+	s.Config.Limits.InProgress = 1
+	if errs := s.Validate(); len(errs) != 0 {
+		t.Fatalf("Validate = %v, want a process item not counted", errs)
+	}
+	b := feature("b", 3, "in_progress")
+	s.Features = append(s.Features, b)
+	if got := fmt.Sprint(s.Validate()); !strings.Contains(got,
+		"features in progress, limit 1 (FLOW-05)") {
+		t.Fatalf("Validate = %s, want two features over the limit", got)
+	}
+
+	yes := true
+	f, p := toPhase("f", 1, 2), process("p", 2, "in_progress")
+	f.AltersRelationships, p.AltersRelationships = &yes, &yes
+	p.Phase = 2
+	s = state(f, p)
+	if got := fmt.Sprint(s.Validate()); !strings.Contains(got,
+		"past Design alter relationships, limit 1") {
+		t.Fatalf("Validate = %s, want the process item counted toward alters", got)
+	}
+}
+
+// TestNextStartsFeatureBesideProcessItem: at limit 1, an in-progress process
+// item takes no cloud slot from a queued feature; an in-progress feature does.
+func TestNextStartsFeatureBesideProcessItem(t *testing.T) {
+	x, q := process("x", 1, "in_progress"), feature("q", 2, "queued")
+	x.Steps[0].Affinity = "human"
+	s := state(x, q)
+	s.Config.Limits.InProgress = 1
+	if p, _ := s.Next("cloud", now); p == nil || p.Feature != q || !p.Starts {
+		t.Fatalf("pick = %+v, want q started beside the process item", p)
+	}
+	if p, _ := s.NextFor("q", "cloud", now); p == nil || p.Feature != q {
+		t.Fatalf("NextFor = %+v, want q not refused at the limit", p)
+	}
+	a := feature("a", 1, "in_progress")
+	a.Steps[0].Affinity = "human"
+	s = state(a, q)
+	s.Config.Limits.InProgress = 1
+	if got := next(t, s, "cloud"); got != "none" {
+		t.Fatalf("next = %q, want none with a feature at the limit", got)
+	}
+}
+
+// TestHumanStartsProcessItemAtLimit: with the features at the limit, a human
+// claim starts a queued process item and the state still validates.
+func TestHumanStartsProcessItemAtLimit(t *testing.T) {
+	a, x := feature("a", 1, "in_progress"), process("x", 2, "queued")
+	a.Steps[0].Affinity = "human"
+	s := state(a, x)
+	s.Config.Limits.InProgress = 1
+	p, _ := s.Next("human/jeff", now)
+	if p == nil || p.Feature != x || p.Step.ID != "x1-design" {
+		t.Fatalf("human pick = %+v, want x x1-design", p)
+	}
+	s.Claim(p.Feature, p.Step, "human/jeff", now, true)
+	if x.Status != "in_progress" {
+		t.Fatalf("status = %s, want the claim to start x", x.Status)
+	}
+	if errs := s.Validate(); len(errs) != 0 {
+		t.Fatalf("Validate = %v, want a started process item not counted", errs)
+	}
 }
 
 // toPhase is a feature in progress at phase, its earlier steps done.

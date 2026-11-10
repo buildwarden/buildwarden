@@ -3,8 +3,10 @@
 Standards for the relay: the `relay/` library and the `cmd/relay/` binary. The
 relay is the MITM proxy, DNS resolver, ledger writer, control plane, and fairness
 scheduler, and it streams everything it records to the host-side collector
-(RELAY-07). It is the most security- and correctness-sensitive component, and it
-sits on the path of every byte of build traffic.
+(RELAY-07). RELAY-08 also applies wherever the relay is configured: its claim
+interface (`relaycfg/`), the relay VM init, the drivers and any other claimant.
+It is the most security- and correctness-sensitive component, and it sits on the
+path of every byte of build traffic.
 
 See [`README.md`](./README.md) for the rule format. GLOBAL-06 fires on any change
 to the relay.
@@ -172,3 +174,36 @@ relay's versioned public interface (GLOBAL-08).
 
 The automated part flags filesystem writes in `relay/` outside test code; the agent
 part judges new output and input paths.
+
+---
+
+### RELAY-08 — The relay is configured through its claim
+
+**Severity:** MUST
+**Check:** agent-judgment
+
+Any configuration of the relay happens in the claim interface explicitly: a
+field of `relaycfg.Config`, pushed on `/v1/claim`. Only what the relay needs in
+order to receive a claim at all may reach it another way, on its boot channel:
+its own address (the address it accepts the claim on included), prefix and
+gateway, and the claim token. The boot channel is a per-build seed or the kernel
+command line in vm mode, and the flags and environment its launcher passes in
+host and container mode (RELAY-04). Everything else that configures the relay for
+a build (its upstream resolvers, the build link, the collector, capture, upstream
+TLS) is a claim field, in every mode and for every claimant.
+
+- A new relay setting is a new claim field, added as a change to the relay's
+  versioned interface (GLOBAL-08), never a new flag, environment variable, seed
+  entry or kernel command-line key.
+- A setting travels on one channel. It is not given on both the boot channel and
+  the claim, and a boot-channel value never stands in for an absent claim field;
+  what the relay does when an optional field is absent is a default named under
+  GLOBAL-09 and GLOBAL-10 in `relaycfg`'s package doc.
+- Launch wiring that is the same for every build of a driver and picks the
+  relay's mode and build-side endpoint (`-mode`, `-fd`, `-build-if`) is how the
+  relay is started, not configuration for a build.
+
+BOOT-06 states the other half: no boot asset or image carries the boot-channel
+values; they come per build. A relay setting the diff delivers outside the claim
+is a finding under this rule; its fix is to move it into the claim, or, where
+that needs a claim field the design did not plan, a return to Design (FLOW-06).
