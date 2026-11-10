@@ -9,6 +9,9 @@ design: docs/design/design-principles.md
 branch: feat/design-principles
 alters_relationships: null
 source: 'Jeff, workflow-human 2026-11-08, after hyperv-relay-per-build-channel review r1 (a3: an optional [vm] dns key used explicitly with no host fallback; a6: no static fallback). Verbatim: ''a set of design principles going forwards are: * Principle of least surprise: The default option should be a sane and ideally obvious choice * Explicit is better than implicit: when a value is provided, it is to be used exclusively instead of the default, not as a fallback unless explicitly named as such. * Minimal Magic: Predictability of behavior is more important than resiliency against failures. Good and reasonably-obvious defaults combined with predictable simple behaviors when they are overridden make stronger design considerations'''
+pr:
+  number: 104
+  ci: green
 steps:
   - id: x1-design
     phase: 1
