@@ -417,8 +417,9 @@ merge (FLOW-08):
 - **A rule change a feature's design declares.** A *rule change* is an edit to
   this directory (a rule, its severity or check type, the README index), to
   the code that enforces the rules (`tools/tier1/`, `tools/workflow/check/`,
-  and the lines of `.github/workflows/` that run tier 1, `golangci-lint` or
-  `tools/workflow`), or to `docs/design/TEMPLATE.md`. The design lists each one
+  and the jobs of `.github/workflows/` that run tier 1, `golangci-lint` or
+  `tools/workflow`, and the `needs:` entries that name them), or to
+  `docs/design/TEMPLATE.md`. The design lists each one
   in its `rule_changes` front-matter (FLOW-02) and its **Rule changes**
   section, with the current and proposed wording, severity and check, and what
   the enforcement change does. The design review approves each change by name
