@@ -99,70 +99,69 @@ func edit(t *testing.T, text string, pairs ...string) string {
 	return text
 }
 
+// TestWorkflowGuardChanged: each case edits a fixture on the branch side,
+// by old/new pairs, and says whether the edit changes the rule enforcement.
 func TestWorkflowGuardChanged(t *testing.T) {
+	const needs = "[changes, lint, tier1, tier1-test]"
 	keytool := "  keytool:\n    runs-on: ubuntu-latest\n    steps:\n" +
 		"      - run: go test ./cmd/warden-io -run Keytool\n  ci-ok:\n"
+	block := "\n      - changes\n      - lint\n      - tier1\n      - tier1-test"
+	action := "  lint2:\n    runs-on: ubuntu-latest\n    steps:\n" +
+		"      - uses: golangci/golangci-lint-action@v8\n  ci-ok:\n"
+	report := "  report:\n    needs: tier1\n    runs-on: ubuntu-latest\n" +
+		"    steps:\n      - run: echo done\n  ci-ok:\n"
+	comment := "          # tier1 and golangci-lint read this output.\n" +
+		"          echo code=true"
+	aliased := "x: &v 1\njobs:\n  lint:\n    timeout-minutes: *v\n" +
+		"    steps:\n      - run: golangci-lint run\n"
 	cases := []struct {
-		name          string
-		before, after *string
-		want          bool
+		name   string
+		before string
+		edits  []string
+		want   bool
 	}{
-		{"the incident: keytool added to ci-ok's needs", side(mainYML), side(edit(t, mainYML,
+		{"the incident: keytool added to ci-ok's needs", mainYML, []string{
 			"  ci-ok:\n", keytool,
-			"[changes, lint, tier1, tier1-test]", "[changes, lint, tier1, tier1-test, keytool]")),
-			false},
-		{"ci-ok's needs as a block list", side(mainYML), side(edit(t, mainYML,
-			"[changes, lint, tier1, tier1-test]",
-			"\n      - changes\n      - lint\n      - tier1\n      - tier1-test")), false},
-		{"a comment edit on lint's setup-go line", side(mainYML), side(edit(t, mainYML,
-			"go-version-file: go.mod  # golangci-lint", "go-version-file: go.mod  # lint")),
-			false},
-		{"tier1 renamed with ci-ok's needs updated", side(mainYML), side(edit(t, mainYML,
+			needs, "[changes, lint, tier1, tier1-test, keytool]"}, false},
+		{"ci-ok's needs as a block list", mainYML, []string{needs, block}, false},
+		{"a comment edit on lint's setup-go line", mainYML, []string{
+			"go.mod  # golangci-lint", "go.mod  # lint"}, false},
+		{"tier1 renamed with ci-ok's needs updated", mainYML, []string{
 			"  tier1:\n", "  tier1-static:\n",
-			"lint, tier1, tier1-test]", "lint, tier1-static, tier1-test]")), false},
-		{"a tier1 step in an ordinary job", side(mainYML), side(edit(t, mainYML,
-			"      - run: go test ./...\n", "      - run: ./dist/tier1 -base x\n"+
-				"      - run: go test ./...\n")), true},
-		{"a new job using the golangci-lint action", side(mainYML), side(edit(t, mainYML,
-			"  ci-ok:\n", "  lint2:\n    runs-on: ubuntu-latest\n    steps:\n"+
-				"      - uses: golangci/golangci-lint-action@v8\n  ci-ok:\n")), true},
-		{"golangci-lint's version changed in lint", side(mainYML), side(edit(t, mainYML,
-			"golangci-lint@v2.6.2", "golangci-lint@v2.7.0")), true},
-		{"tier1's fetch-depth changed", side(mainYML), side(edit(t, mainYML,
-			"fetch-depth: 0", "fetch-depth: 1")), true},
-		{"tier1 dropped from ci-ok's needs", side(mainYML), side(edit(t, mainYML,
-			"lint, tier1, tier1-test]", "lint, tier1-test]")), true},
-		{"tier1 dropped from release's needs", side(releaseYML), side(edit(t, releaseYML,
-			"[support-images, tier1]", "[support-images]")), true},
-		{"support-images dropped from release's needs", side(releaseYML),
-			side(edit(t, releaseYML, "[support-images, tier1]", "[tier1]")), false},
-		{"a new job that needs tier1", side(mainYML), side(edit(t, mainYML,
-			"  ci-ok:\n", "  report:\n    needs: tier1\n    runs-on: ubuntu-latest\n"+
-				"    steps:\n      - run: echo done\n  ci-ok:\n")), false},
-		{"a whole-line comment naming tier1 in an ordinary script", side(mainYML),
-			side(edit(t, mainYML, "          echo code=true",
-				"          # tier1 and golangci-lint read this output.\n          echo code=true")),
-			false},
-		{"changes' script and the triggers changed", side(mainYML), side(edit(t, mainYML,
+			"lint, tier1, tier1-test]", "lint, tier1-static, tier1-test]"}, false},
+		{"a tier1 step in an ordinary job", mainYML, []string{
+			"      - run: go test ./...\n",
+			"      - run: ./dist/tier1 -base x\n      - run: go test ./...\n"}, true},
+		{"a new job using the golangci-lint action", mainYML, []string{
+			"  ci-ok:\n", action}, true},
+		{"golangci-lint's version changed in lint", mainYML, []string{
+			"golangci-lint@v2.6.2", "golangci-lint@v2.7.0"}, true},
+		{"tier1's fetch-depth changed", mainYML, []string{
+			"fetch-depth: 0", "fetch-depth: 1"}, true},
+		{"tier1 dropped from ci-ok's needs", mainYML, []string{
+			"lint, tier1, tier1-test]", "lint, tier1-test]"}, true},
+		{"tier1 dropped from release's needs", releaseYML, []string{
+			"[support-images, tier1]", "[support-images]"}, true},
+		{"support-images dropped from release's needs", releaseYML, []string{
+			"[support-images, tier1]", "[tier1]"}, false},
+		{"a new job that needs tier1", mainYML, []string{"  ci-ok:\n", report}, false},
+		{"a whole-line comment naming tier1 in an ordinary script", mainYML, []string{
+			"          echo code=true", comment}, false},
+		{"changes' script and the triggers changed", mainYML, []string{
 			"echo code=true", "echo code=false",
-			"[opened, synchronize]", "[opened, synchronize, labeled]")), false},
-		{"make lint edited in auto-tidy", side(tidyYML), side(edit(t, tidyYML,
-			"run: make lint", "run: make lint || true")), true},
-		{"integration's job keyed tier1 and its paths edited", side(integrationYML),
-			side(edit(t, integrationYML, "make integration-test", "make integration-test V=1",
-				"'relay/**'", "'relay/**', 'drivers/**'")), false},
-		{"a workflow with a rule-running job added", nil, side(mainYML), true},
-		{"a workflow with a rule-running job deleted", side(releaseYML), nil, true},
-		{"a workflow with no rule-running job added", nil, side(integrationYML), false},
-		{"a workflow with no rule-running job deleted", side(integrationYML), nil, false},
-		{"an anchor's alias changed in a rule-running job", side("x: &v 1\njobs:\n" +
-			"  lint:\n    timeout-minutes: *v\n    steps:\n      - run: golangci-lint run\n"),
-			side("x: &v 2\njobs:\n  lint:\n    timeout-minutes: *v\n    steps:\n" +
-				"      - run: golangci-lint run\n"), true},
+			"[opened, synchronize]", "[opened, synchronize, labeled]"}, false},
+		{"make lint edited in auto-tidy", tidyYML, []string{
+			"run: make lint", "run: make lint || true"}, true},
+		{"integration's job keyed tier1 and its paths edited", integrationYML, []string{
+			"make integration-test", "make integration-test V=1",
+			"'relay/**'", "'relay/**', 'drivers/**'"}, false},
+		{"an anchor's alias changed in a rule-running job", aliased, []string{
+			"&v 1", "&v 2"}, true},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
-			got, err := workflowGuardChanged(text(tc.before), text(tc.after))
+			after := edit(t, tc.before, tc.edits...)
+			got, err := workflowGuardChanged([]byte(tc.before), []byte(after))
 			if err != nil {
 				t.Fatal(err)
 			}
@@ -170,6 +169,25 @@ func TestWorkflowGuardChanged(t *testing.T) {
 				t.Errorf("changed = %v, want %v", got, tc.want)
 			}
 		})
+	}
+}
+
+// TestWorkflowGuardAddedDeleted: a missing side has no jobs.
+func TestWorkflowGuardAddedDeleted(t *testing.T) {
+	for _, tc := range []struct {
+		name          string
+		before, after []byte
+		want          bool
+	}{
+		{"a workflow with a rule-running job added", nil, []byte(mainYML), true},
+		{"a workflow with a rule-running job deleted", []byte(releaseYML), nil, true},
+		{"a workflow with none added", nil, []byte(integrationYML), false},
+		{"a workflow with none deleted", []byte(integrationYML), nil, false},
+	} {
+		got, err := workflowGuardChanged(tc.before, tc.after)
+		if err != nil || got != tc.want {
+			t.Errorf("%s: changed = %v, %v; want %v", tc.name, got, err, tc.want)
+		}
 	}
 }
 
@@ -190,13 +208,4 @@ func TestWorkflowGuardUnparseable(t *testing.T) {
 			t.Errorf("%s: err = %v, want it to name %q", tc.name, err, tc.where)
 		}
 	}
-}
-
-func side(s string) *string { return &s }
-
-func text(s *string) []byte {
-	if s == nil {
-		return nil
-	}
-	return []byte(*s)
 }

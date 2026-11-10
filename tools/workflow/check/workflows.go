@@ -123,8 +123,9 @@ func runsRules(job map[string]any) bool {
 	steps, _ := job["steps"].([]any)
 	for _, s := range steps {
 		step, _ := s.(map[string]any)
+		run := shellCommentRe.ReplaceAllString(scalar(step["run"]), "")
 		if workflowRunsRe.MatchString(scalar(step["uses"])) ||
-			workflowRunsRe.MatchString(shellCommentRe.ReplaceAllString(scalar(step["run"]), "")) {
+			workflowRunsRe.MatchString(run) {
 			return true
 		}
 	}

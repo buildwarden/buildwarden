@@ -149,7 +149,8 @@ func TestRuleClearance(t *testing.T) {
 
 	put(t, work, map[string]string{".claude/agents/wf-plan.md": "x\n",
 		"tools/workflow/queue/q.go": "package queue\n",
-		".github/workflows/ci.yml":  "jobs: {build: {steps: [{run: ./dist/tier1 -base x}]}}\n"})
+		".github/workflows/ci.yml": "jobs: {build: {steps: " +
+			"[{run: ./dist/tier1 -base x}]}}\n"})
 	got, _ = clearance(t, env, "feature")
 	for _, want := range []string{
 		".claude/agents/wf-plan.md changes only through a process item",
@@ -186,7 +187,8 @@ func TestRuleClearanceWorkflowJobs(t *testing.T) {
 
 	incident := edit(t, mainYML, "  ci-ok:\n", "  keytool:\n    runs-on: ubuntu-latest\n"+
 		"    steps:\n      - run: go test ./cmd/warden-io -run Keytool\n  ci-ok:\n",
-		"[changes, lint, tier1, tier1-test]", "[changes, lint, tier1, tier1-test, keytool]")
+		"[changes, lint, tier1, tier1-test]",
+		"[changes, lint, tier1, tier1-test, keytool]")
 	put(t, work, map[string]string{".github/workflows/main.yml": incident})
 	if got, ran := clearance(t, env, "feature"); !ran || got != "" {
 		t.Errorf("the incident: ran %v, %q", ran, got)
