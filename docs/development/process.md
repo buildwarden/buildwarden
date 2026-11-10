@@ -565,6 +565,8 @@ as a list of questions. The session goes over, at a high level:
 - the Validation plan and what Plan will work from: native validation steps,
   tier-2 gaps, and, on a re-review, the finding and the tasks it touches;
 - the risks and what is deferred: native validation, tier-2 gaps, rules changed;
+- the defaults, overrides and named fallbacks the design adds or changes
+  (GLOBAL-09 to GLOBAL-11);
 - each `rule_changes` entry (FLOW-14), shown with its current and proposed
   wording and asked on its own: approved, approved with a change, or rejected;
 - each assumed question, confirmed or turned into a change (FLOW-07).
