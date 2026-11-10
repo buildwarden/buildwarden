@@ -20,8 +20,15 @@ feature names in its `source`.
 2. Write `docs/design/<feature>.md` from the template, front-matter derived
    conservatively (FLOW-02). A change to `bootstrap-model` fills the Bootstrap
    comparison (BOOT-07); a `security_boundary` other than `none` fills the
-   Security note (GLOBAL-06). On a return, record the finding and what it
-   changes, and keep the Design review section's history.
+   Security note (GLOBAL-06). Fill **Defaults and overrides** (GLOBAL-09 to
+   GLOBAL-11). Each default, override or named fallback there that the item's
+   `source` or an existing rule does not settle is an assumed question (step
+   4), and a fallback the design drops is a rejected alternative in its
+   decision. Fill it even when the branch's `TEMPLATE.md` predates it. A relay
+   setting the design adds or moves names the claim field that carries it
+   (RELAY-08), or says which of the relay's pre-claim values it is. On a
+   return, record the finding and what it changes, and keep the Design review
+   section's history.
 3. Decide `native_validation` per host as blocking or tracked (FLOW-09). For
    each blocking host, add a queue step `f6-validate-<host>` with affinity
    `host:<host>`, its cases in the note, and no `needs`: it is not offered
