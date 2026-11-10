@@ -499,6 +499,8 @@ gaps:
       changed. feat/security-suite is still e05df23 (design only), and q2 (on hold) is still open.
       2026-11-09 (host:windows-hyperv/20261109T231001Z, unattended, main 49e5354): not run, nothing
       changed. feat/security-suite is still e05df23 (design only), and q2 (on hold) is still open.
+      2026-11-10 (host:windows-hyperv/20261110T111002Z, unattended, main 49e5354): not run, nothing
+      changed. feat/security-suite is still e05df23 with no security-test target, and q2 (on hold) is still open.
     status: open
   - id: baked-asset-staleness-qemu-windows
     host: macos-qemu
