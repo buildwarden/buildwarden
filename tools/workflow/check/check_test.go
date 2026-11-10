@@ -24,6 +24,14 @@ What is wrong or missing, for whom, and why now.
 
 The behavior and structure of the change.
 
+## Defaults and overrides
+
+Each default this design adds or changes, why it is the obvious choice
+(GLOBAL-09), and what overrides it, used exclusively (GLOBAL-10). Each merge or
+fallback, named, with what triggers it and how the user sees it (GLOBAL-10,
+GLOBAL-11). "None" when the design adds or changes no default, override, merge
+or fallback.
+
 ## Implementation plan
 
 Ordered tasks, each citing the rules it must satisfy.
@@ -65,6 +73,10 @@ None.
 ## Design
 
 Write inputs/.
+
+## Defaults and overrides
+
+None.
 
 ## Cross-driver impact
 
@@ -123,13 +135,20 @@ Built inputs/.
 // pushed to a bare origin.
 func repo(t *testing.T, designText string) string {
 	t.Helper()
+	return repoWith(t, tmpl, designText)
+}
+
+// repoWith is repo with the given TEMPLATE.md in place of tmpl.
+func repoWith(t *testing.T, template, designText string) string {
+	t.Helper()
 	root := t.TempDir()
 	origin, work := filepath.Join(root, "origin.git"), filepath.Join(root, "work")
 	git(t, root, "init", "-q", "--bare", "-b", "main", origin)
 	git(t, root, "clone", "-q", origin, work)
 	git(t, work, "checkout", "-q", "-b", "main")
 	_ = os.MkdirAll(filepath.Join(work, "docs", "design"), 0o755)
-	_ = os.WriteFile(filepath.Join(work, "docs", "design", "TEMPLATE.md"), []byte(tmpl), 0o644)
+	_ = os.WriteFile(filepath.Join(work, "docs", "design", "TEMPLATE.md"), []byte(template),
+		0o644)
 	git(t, work, "add", ".")
 	git(t, work, "commit", "-q", "-m", "template")
 	git(t, work, "push", "-q", "origin", "main")
@@ -172,6 +191,8 @@ func TestDesignAndPlanPass(t *testing.T) {
 func TestDesignFailures(t *testing.T) {
 	bad := strings.Replace(design, "Write inputs/.",
 		"The behavior and structure of the change.", 1)
+	bad = strings.Replace(bad, "## Defaults and overrides\n\nNone.",
+		"## Defaults and overrides\n\n"+tmplDefaults, 1)
 	bad = strings.Replace(bad, "security_boundary: none", "security_boundary: env-beyond", 1)
 	bad = strings.Replace(bad, "concepts: [inputs]\n", "", 1)
 	bad = strings.Replace(bad, "   (UX-01).", "   and the getting-started page.", 1)
@@ -180,13 +201,38 @@ func TestDesignFailures(t *testing.T) {
 	f.Questions = []queue.Question{{ID: "q1", Kind: "blocking", Status: "open"}}
 	got := failures(Phase(env, f))
 	for _, want := range []string{"section filled: Design", "section filled: Security note",
-		"missing concepts", "1 open"} {
+		"section filled: Defaults and overrides", "missing concepts", "1 open"} {
 		if !strings.Contains(got, want) {
 			t.Errorf("phase 1 failures %q lack %q", got, want)
 		}
 	}
 	if got := failures(Phase(env, demo(2))); !strings.Contains(got, "task 2") {
 		t.Errorf("phase 2 failures %q, want task 2 citing no rule", got)
+	}
+}
+
+// tmplDefaults is tmpl's Defaults and overrides text.
+var tmplDefaults = strings.TrimSpace(strings.SplitN(strings.SplitN(tmpl,
+	"## Defaults and overrides\n", 2)[1], "\n## ", 2)[0])
+
+// withoutDefaults is text with its Defaults and overrides section removed.
+func withoutDefaults(t *testing.T, text string) string {
+	t.Helper()
+	start := strings.Index(text, "## Defaults and overrides\n")
+	if start < 0 {
+		t.Fatal("no Defaults and overrides section")
+	}
+	end := strings.Index(text[start+3:], "\n## ") + start + 4
+	return text[:start] + text[end:]
+}
+
+// TestDefaultsSectionOnOlderTemplate: a feature branch cut before the
+// template had Defaults and overrides still needs the section at phase 1.
+func TestDefaultsSectionOnOlderTemplate(t *testing.T) {
+	env := Env{Repo: repoWith(t, withoutDefaults(t, tmpl), withoutDefaults(t, design))}
+	got := failures(Phase(env, demo(1)))
+	if !strings.Contains(got, "section filled: Defaults and overrides") {
+		t.Errorf("phase 1 failures %q lack the Defaults and overrides section", got)
 	}
 }
 
@@ -392,7 +438,12 @@ func TestProcessChecks(t *testing.T) {
 	if rs := Phase(env, f); OK(rs) || !strings.Contains(failures(rs), "merged") {
 		t.Errorf("x3 before merge: %s, want the merge check failing", failures(rs))
 	}
-	f.Phase, f.Design = 1, "docs/design/missing.md"
+	commit(t, work, withoutDefaults(t, design)+"\n## Design review\n\n- r1: approved at `abc1234`.\n")
+	f.Phase, f.PR = 1, nil
+	if rs := Phase(env, f); !OK(rs) {
+		t.Errorf("x1 without Defaults and overrides: %s", failures(rs))
+	}
+	f.Design = "docs/design/missing.md"
 	if rs := Phase(env, f); OK(rs) {
 		t.Error("x1 passed without a design file")
 	}

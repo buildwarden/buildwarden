@@ -374,7 +374,7 @@ func (c *checker) design() {
 			ptr(d.Front.Alters), ptr(c.f.AltersRelationships))
 	}
 	for _, s := range []string{"Problem", "Prior art", "Decisions", "Design",
-		"Cross-driver impact", "Validation plan"} {
+		"Defaults and overrides", "Cross-driver impact", "Validation plan"} {
 		c.section(d, s)
 	}
 	if d.Front.SecurityBoundary != "none" {
