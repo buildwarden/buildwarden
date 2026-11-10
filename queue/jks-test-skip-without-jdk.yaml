@@ -52,10 +52,18 @@ steps:
     lease:
       claimed_by: ""
       expires: null
+  - id: f3-answer-q1
+    phase: 3
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
   - id: f3-implement-r2
     phase: 3
     affinity: cloud
     status: pending
+    needs: [f3-answer-q1]
     lease:
       claimed_by: ""
       expires: null
@@ -66,7 +74,15 @@ budget:
   spent:
     runs: 5
     steps: 10
-questions: []
+questions:
+  - id: q1
+    kind: blocking
+    status: open
+    question: "f3-implement-r2's work is done (tasks 2-6, branch head 216ce36), but its done-when fails 'rule changes cleared (FLOW-14)': the ci-ok job's needs line in .github/workflows/main.yml names tier1, which the clearance's line match reads as a rule-running line. rule-running-line-match (approved 2026-11-09) fixes the match, but jks ranks ahead of it (class 1 vs process items), so wf next kept handing the cloud this step and never reached the fix (tick cloud/20261110T105938Z). How should jks proceed?"
+    options:
+      - wait for rule-running-line-match to merge, then resume f3-implement-r2 (answer this to let the cloud retry)
+      - approve the main.yml needs edit as a named rule change in jks's design review now, so it clears today
+    recommended: wait for rule-running-line-match to merge, then resume f3-implement-r2 (answer this to let the cloud retry)
 history:
   - at: 2026-11-07T03:47:01Z
     by: human/jeff
@@ -152,3 +168,4 @@ history:
   - at: 2026-11-10T11:00:55Z
     by: cloud/20261110T105938Z
     event: 'released f3-implement-r2: done-when: rule changes cleared (FLOW-14) false positive on main.yml ci-ok needs line; waits for rule-running-line-match to merge'
+  - {at: 2026-11-10T11:05:00Z, by: cloud/20261110T105938Z, event: "raised blocking q1 (f3-answer-q1, needed by f3-implement-r2): FLOW-05 order kept the cloud on this step, whose FLOW-14 clearance waits on rule-running-line-match"}
