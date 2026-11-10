@@ -440,7 +440,56 @@ Concrete at x2-implement (process item, FLOW-03); one commit each:
 
 ## Consolidation
 
-Filled in at x2-implement (FLOW-10, FLOW-15).
+x2-implement, 2026-11-10 (FLOW-10, FLOW-15).
+
+- **What landed.** `tools/workflow/check/workflows.go` (new):
+  `workflowRunsRe`, `guardedParts`, `runsRules` and `workflowGuardChanged`
+  as in Design. `rulechange.go`: `ruleChangeFiles` reads each changed
+  `.yml`/`.yaml` under `.github/workflows/` at the merge base and on the
+  branch (`git diff --name-status -z`, `git show`) and passes both to
+  `workflowGuardChanged`; `ruleRunningRe` is gone; the `workflowsDir` and
+  `kindOf` comments name the new guard. An unparseable side fails the
+  clearance as `<path>: merge base: <parser message>` (or `branch:`).
+  `process.md` FLOW-14 carries Decision 5's wording, severity and check
+  unchanged.
+- **One departure, within the design.** The `-z` form of `--name-status` is
+  used so no path is quoted; the Design names `--name-status` without it.
+  A lint pass (`lll`) added a fifth commit wrapping lines in the new files.
+- **Tests.** `workflows_test.go`: every Validation plan case over
+  `main.yml`-, `release.yml`-, `auto-tidy.yml`- and `integration.yml`-shaped
+  fixtures, plus an anchor/alias case; added and deleted files have their own
+  test, unparseable sides theirs. `rulechange_test.go`: the
+  `TestRuleClearance` workflow fixtures are workflow-shaped with the same
+  expectations; `TestRuleClearanceWorkflowJobs` commits a baseline
+  `main.yml` on `main`, replays the incident (passes with no
+  `rule_changes`), adds a `tier1` step (fails, "is in no approved rule
+  change") and an unparseable file (fails, naming it).
+- **Today's workflows.** Run over `.github/workflows/` at `49e5354`, the
+  guard selects exactly the five jobs of Prior art: `main.yml` `lint` and
+  `tier1` (two `needs:` pairs, from `ci-ok`), `release.yml` `tier1` (one,
+  from `release`), `flow18.yml` `sessions-private`, `auto-tidy.yml`
+  `auto-tidy`. `changes` (its `# TestRealIndex (tools/tier1/rules)`
+  comment), `tier1-test`, `tidy` and `integration.yml`'s `tier1` are not.
+- **Replay.** `wf check -feature jks-test-skip-without-jdk` against
+  `feat/jks-test-skip-without-jdk` at `216ce36`: with `wf` built from this
+  branch, "ok rule changes cleared (FLOW-14): the branch changes no rule or
+  its enforcement"; with `wf` built from `origin/main` (`49e5354`), "FAIL
+  ... `.github/workflows/main.yml` is in no approved rule change". The
+  other phase-3 results there (checkout not on that branch, `make` skipped
+  without `-run`) are the replay's setup, not the item's.
+- **Gates.** `make lint` (golangci-lint 2.15, go1.26; 0 issues, tier 1 0
+  findings), `make test`, `make enforcement` ("main's tier 1 findings kept":
+  0 dropped), `tools/workflow/flow18-check.sh`, `(cd tools/workflow && go
+  test ./...)` and `wf validate` pass.
+- **Docs (FLOW-15, UX-01).** `docs/book/src/concepts/overview.md` and
+  `docs/book/src/contributing/structure.md` checked: neither describes
+  `wf check`'s files or the clearance, so no change. No other doc,
+  agent definition or skill restates the old "lines" reading outside
+  archived designs, which stay as written (Decision 5).
+- **Overlap.** PR #104 (`feat/design-principles`) edits `process.md`'s
+  FLOW-05 and FLOW-19 and `check.go`'s `design()` section list; this branch
+  edits only FLOW-14's parenthesis and does not touch `check.go`, so either
+  can merge first.
 
 ## Rollback notes
 
