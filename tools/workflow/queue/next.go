@@ -80,12 +80,12 @@ func leasedTo(f *Feature, worker string, now time.Time) *Step {
 // in-progress before queued within a class, then priority. An in-progress
 // item gives its first ready step. A queued item starts only when every item
 // ahead of it is blocked: never under a hold, for the cloud only within the
-// in-progress limit (which counts no process items), and for a fix only once the item it follows is done. A
-// human or host may take a queued item's step of its affinity without
-// starting it, unless it is a process item. A worker an in-progress process
-// item holds gets only the steps it already has leased. It also returns why
-// each in-progress item, and each fix waiting on its parent, it passed over
-// is blocked, for the digest.
+// in-progress limit (which counts no process items), and for a fix only once
+// the item it follows is done. A human or host may take a queued item's step
+// of its affinity without starting it, unless it is a process item. A worker
+// an in-progress process item holds gets only the steps it already has
+// leased. It also returns why each in-progress item, and each fix waiting on
+// its parent, it passed over is blocked, for the digest.
 func (s *State) Next(worker string, now time.Time) (*Pick, []Blocked) {
 	var blocked []Blocked
 	cloud := Kind(worker) == "cloud"

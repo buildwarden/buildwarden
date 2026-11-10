@@ -438,7 +438,8 @@ func TestProcessChecks(t *testing.T) {
 	if rs := Phase(env, f); OK(rs) || !strings.Contains(failures(rs), "merged") {
 		t.Errorf("x3 before merge: %s, want the merge check failing", failures(rs))
 	}
-	commit(t, work, withoutDefaults(t, design)+"\n## Design review\n\n- r1: approved at `abc1234`.\n")
+	commit(t, work, withoutDefaults(t, design)+
+		"\n## Design review\n\n- r1: approved at `abc1234`.\n")
 	f.Phase, f.PR = 1, nil
 	if rs := Phase(env, f); !OK(rs) {
 		t.Errorf("x1 without Defaults and overrides: %s", failures(rs))
