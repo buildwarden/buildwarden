@@ -1,7 +1,9 @@
 # Global Standards
 
-Cross-cutting principles that apply to all three applications. See
-[`README.md`](./README.md) for the rule format and severity/check-type meanings.
+Cross-cutting principles that apply to all three applications; GLOBAL-09 to
+GLOBAL-11 apply to all work in this repository, the workflow tooling (`tools/`,
+`.claude/`) included. See [`README.md`](./README.md) for the rule format and
+severity/check-type meanings.
 
 ---
 
@@ -149,6 +151,64 @@ expected components.
 
 The automated part requires a change touching a versioned seam to also change that
 seam's contract document.
+
+---
+
+### GLOBAL-09 — Least surprise: the default is the obvious choice
+
+**Severity:** SHOULD
+**Check:** agent-judgment
+
+The default option is a sane and ideally obvious choice. A default is what
+happens when nobody names a value: a flag or config key left unset, an argument
+a caller omits, a choice the code makes on its own. It serves the common case and
+is what a user who has not read the code would expect. A design lists each
+default it adds or changes, why it is the obvious one and what overrides it, in
+its **Defaults and overrides** section (`docs/design/TEMPLATE.md`); a default in
+the diff that the section does not list is a finding under this rule. UX-07 and
+ORCH-03 apply this to configuration.
+
+---
+
+### GLOBAL-10 — Explicit over implicit: a provided value is used exclusively
+
+**Severity:** MUST
+**Check:** agent-judgment
+
+When a value is provided (a flag, a config key at any level, an environment
+variable, an argument or field a caller sets), it is used exclusively instead of
+the default:
+
+- it is not merged with the default or a lower level's value, or appended to it;
+- the default is not tried when the provided value fails. A provided value
+  that cannot be used is an error that names it and its fix (UX-04, UX-08).
+
+A merge or a fallback is allowed only when it is explicitly named as one: in the
+surface's reference docs (UX-01) and in the design's **Defaults and overrides**
+section, with what triggers it. A merge or fallback in the diff that the section
+does not name is a finding under this rule. Layered precedence (UX-07, ORCH-03)
+is this rule across levels: the highest level that sets a value is the value.
+ORCH-03's "changes are additive" is about changes to the config surface, not
+about how an override resolves. A documented deprecated alias (UX-03) is a
+second name for the same value, not a fallback.
+
+---
+
+### GLOBAL-11 — Minimal magic: predictable over resilient
+
+**Severity:** MUST
+**Check:** agent-judgment
+
+Predictability of behavior is more important than resiliency against failures.
+Good, reasonably obvious defaults (GLOBAL-09) with predictable, simple behavior
+when they are overridden (GLOBAL-10) make the stronger design. By default, when
+an operation fails, it stops and says what failed and how to fix it (UX-04). A
+path, source or value that runs only on failure is allowed only when it is named
+as a fallback under GLOBAL-10; one the design's **Defaults and overrides**
+section does not name is a finding under this rule. A bounded retry of the same
+operation with the same inputs, reported as it happens, is not another path. A
+contingency for a failure found in validation that is not named as a run-time
+fallback is chosen by a return to Design (FLOW-06).
 
 ---
 
