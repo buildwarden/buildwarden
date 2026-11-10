@@ -1012,7 +1012,44 @@ commit each.
 
 ## Consolidation
 
-Filled in at x2-implement (FLOW-10, FLOW-15).
+Filled in at x2-implement (FLOW-10, FLOW-15), with the branch on `main` at
+`49e5354` (its merge base; `main` has not moved since the branch was cut).
+
+- **Landed as designed.** GLOBAL-09 to GLOBAL-11 and the preamble's scope
+  (`global.md`); RELAY-08 and its preamble clause (`relay.md`); UX-07's
+  sentence, FLOW-19's topic bullet, FLOW-05's limit sentences and the
+  README's `global.md` and `relay.md` descriptions; the template's **Defaults
+  and overrides** section; `"Defaults and overrides"` in `design()`'s section
+  list (`check.go`); `validate` and `atLimit` counting no process items toward
+  the in-progress limit, the alters count unchanged, and the `Next` and
+  `NextFor` doc comments; the agent and skill sentences. The tests are the
+  Validation plan's: in `check_test.go`, the template and design constants,
+  the failing section in `TestDesignFailures`, the older-template case
+  (`TestDefaultsSectionOnOlderTemplate`, via a `repoWith` helper) and a
+  process item's phase 1 without the section in `TestProcessChecks`; in
+  `queue_test.go`, `TestLimitSkipsProcessItems` (validate, both limits),
+  `TestNextStartsFeatureBesideProcessItem`, `TestHumanStartsProcessItemAtLimit`
+  and the process-item case in `TestNextForOneFeature`. The new check and
+  queue tests fail with `check.go`, `queue.go` and `next.go` reverted.
+- **Not changed, as planned.** `tools/tier1/rules.yaml` (the four rules are
+  agent-judgment; tier 1 parses their headers with no finding),
+  `bootstrap.md`, `wf-plan`, `wf-publish`, `wf-guide`, `workflow-tick`,
+  `workflow-intake`, `workflow-native`, `AGENTS.md`.
+- **`overview.md` (FLOW-15, step 7).** Checked: no component flow changes,
+  and the page does not describe the queue's limits or the design sections,
+  so its pseudocode is unchanged.
+- **Overlap with open branches.** None of `feat/*` changes
+  `docs/development/`, `docs/design/TEMPLATE.md`, `tools/workflow/` or
+  `.claude/` against `main`; each carries only its design. Two designs refer
+  to this item: hyperv-relay-per-build-channel r3 is to reword its proposed
+  BOOT-06 paragraph to cite RELAY-08 (RELAY-08 holds against BOOT-06 as it
+  reads on `main`), and rule-running-line-match is the other process item the
+  interim `limits.in_progress` raise counts. Features whose branch predates
+  the template change fill the section from `wf-design`'s sentence; no design
+  is retrofitted.
+- **Left for x4-close (step 9, the `workflow` branch):** the rebuild digest
+  entry, `config.yaml`'s and `README.md`'s limit comments, and
+  `limits.in_progress` back to 5.
 
 ## Rollback notes
 
