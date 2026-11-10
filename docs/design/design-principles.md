@@ -1,6 +1,6 @@
 ---
 feature: design-principles
-status: draft
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -1057,4 +1057,73 @@ None yet.
 
 ## Archive summary
 
-Filled in at x2-implement, in the item's PR (FLOW-12).
+Implemented 2026-11-10 by the cloud loop (x2-implement), approved at design
+review r1 (`d7f3467`, Jeff; a1 to a10 as drafted, option (a) each, with
+Decision 9 folded in during the sitting).
+
+- **Rules** (`docs/development/global.md`): GLOBAL-09 "Least surprise: the
+  default is the obvious choice" (SHOULD), GLOBAL-10 "Explicit over
+  implicit: a provided value is used exclusively" (MUST) and GLOBAL-11
+  "Minimal magic: predictable over resilient" (MUST), all agent-judgment,
+  each opening with Jeff's wording. `global.md`'s preamble now scopes them to
+  every design and change in the repository, workflow tooling included.
+  RELAY-08 "The relay is configured through its claim" (MUST,
+  agent-judgment, `docs/development/relay.md`): only the relay's own
+  address, prefix, gateway and claim token ride the boot channel (seed or
+  kernel command line in vm mode; launcher flags and environment in host and
+  container mode); every other setting for a build is a `relaycfg.Config`
+  field; launch wiring (`-mode`, `-fd`, `-build-if`) is not configuration.
+  `relay.md`'s preamble extends RELAY-08 to every claimant.
+- **Cross-references:** one sentence in UX-07 (a value set at any level
+  replaces the default and lower levels), one FLOW-19 topic bullet (the
+  defaults, overrides and named fallbacks), the README descriptions of
+  `global.md` and `relay.md`. UX-03, UX-04, UX-08, ORCH-03 and BOOT-06
+  unchanged; `tools/tier1/rules.yaml` unchanged (LINT-02).
+- **Built: the Defaults and overrides section.** `docs/design/TEMPLATE.md`
+  has a required `## Defaults and overrides` section after **Design**;
+  `wf check` (`tools/workflow/check/check.go`, `design()`) requires it filled
+  at a feature's Design done-when ("None" passes), as template enforcement
+  under FLOW-03. A design on an older template, or a process item's phase 1,
+  is not failed for lacking it.
+- **Built: process items out of the in-progress limit** (Decision 9).
+  FLOW-05 says so; `validate` (`queue.go`) and `atLimit` (`next.go`) skip
+  `IsProcess()` items in the in-progress count. The `alters_relationships`
+  count still includes them. `Next` and `NextFor` behave as before; their
+  doc comments say the limit counts no process items.
+- **Agents and skills:** `wf-design`, `wf-review`, `wf-implement` and
+  `workflow-human` (steps 0 and 3.3) cite GLOBAL-09 to GLOBAL-11, and
+  `wf-design` and `wf-review` RELAY-08, without restating the rules.
+- **Decisions taken:** three GLOBAL rules rather than UX rules or a new
+  prefix (a1); SHOULD, MUST, MUST (a2); one cheap automated part, the
+  section check (a3); a run-time fallback only when named, a bounded retry of
+  the same operation not another path (a4); whole-repository scope (a5); no
+  audit of existing fallbacks or relay configuration, both listed in
+  **Design** (a6, Decision 8); cross-references, not rewrites (a7); Windows
+  `--ip` left to hyperv-relay-per-build-channel (a8); RELAY-08 in `relay.md`,
+  MUST (a9); the boot channel and launch wiring as in a10.
+- **Rejected:** UX-10 to UX-12; a `principles.md` with a `DESIGN-` prefix;
+  one rule in three parts; all three MUST, all three SHOULD, MUST-review;
+  GLOBAL-10 as `automated + agent-judgment` with a `rules.yaml` entry; a
+  `defaults:` front-matter field; a static grep for fallbacks; the section
+  unchecked; a question per default; no edit to any existing rule; folding
+  UX-07's and ORCH-03's "sane defaults" into GLOBAL-09; a `wf-review`
+  exception, an audit now, or a tracked backlog for listed fallbacks;
+  GLOBAL-12 for the relay rule; BOOT-06 alone; a tier-1 allowlist of relay
+  flags and keys; raising the limit to 7 as the fix, waiting for a slot, or
+  a separate process-item limit.
+- **For future designs touching `defaults`, `overrides`, `fallback`,
+  `relay-claim`, `relay-configuration`, `boot-channel` or
+  `in-progress-limit`:** fill **Defaults and overrides** with each default
+  added or changed, why it is obvious and what overrides it, and name every
+  merge or fallback there and in the surface's reference docs; an unnamed one
+  in the diff is a tier-2 finding. A new relay setting is a new claim field
+  (GLOBAL-08), never a flag, environment variable, seed entry or kernel key.
+  **Design** lists existing fallbacks and relay configuration outside the
+  claim (`WARDEN_UPSTREAM_CA_CERTS`'s append, `UPSTREAM_DNS`, host mode's
+  `--subnet` without `build_link`, `warden.dns`, and others); the next design
+  touching each judges it. hyperv-relay-per-build-channel r3 is to cite
+  RELAY-08 from its BOOT-06 paragraph. Until every session rebuilds
+  `dist/wf` from the merged `main`, an older `wf validate` still counts
+  process items, hence the interim `limits.in_progress: 7`; x4-close posts
+  the rebuild notice, updates the `workflow` branch's `config.yaml` and
+  `README.md` limit comments, and restores 5.
