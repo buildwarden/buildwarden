@@ -1,6 +1,6 @@
 ---
 feature: rule-running-line-match
-status: draft
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -497,4 +497,65 @@ None yet.
 
 ## Archive summary
 
-Filled in at Publish (FLOW-12).
+Implemented 2026-11-10 by the cloud loop (x2-implement), approved at design
+review r1 (`647457a`, Jeff; a1 to a5 as drafted, option (a) each). A process
+item that follows design-approved-rule-changes; this summary supersedes that
+design's reading of FLOW-14's workflow scope ("any added or removed workflow
+line that names `tier1`, `golangci-lint` or `tools/workflow`").
+
+- **Rule** (`docs/development/process.md`, FLOW-14, process route,
+  `rule_changes: []`): the guarded scope is "the jobs of
+  `.github/workflows/` that run tier 1, `golangci-lint` or `tools/workflow`,
+  and the `needs:` entries that name them", no longer "the lines". Severity
+  and check type unchanged.
+- **Built** (`tools/workflow/check/workflows.go`, new): a workflow is read as
+  YAML. A job is rule-running when its `uses:`, a step's `uses:`, or a
+  step's `run:` with whole-line `#` comments removed matches
+  `tier1|golangci-lint|tools/workflow|\bmake\s+(lint|enforcement)\b`.
+  `workflowGuardChanged` reports a change when the multiset of rule-running
+  job bodies (canonical JSON, anchors resolved, job key excluded) differs
+  between the merge base and the branch, or when a (downstream job key,
+  needed rule-running body) `needs:` pair on the merge base is gone on the
+  branch. A missing side has no jobs; an unparseable `.yml`/`.yaml` side
+  fails the clearance as `<path>: merge base:|branch: <parser message>`.
+  `rulechange.go`'s `ruleChangeFiles` feeds it from `git diff
+  --name-status -z --no-renames` and `git show`; `ruleRunningRe` is gone.
+  `kindOf`, `cleared`, `Drops` and `enforcement-check.sh` are unchanged.
+- **Tests:** `workflows_test.go` covers every Validation plan case over
+  `main.yml`-, `release.yml`-, `auto-tidy.yml`- and `integration.yml`-shaped
+  fixtures plus an anchor/alias case; `rulechange_test.go`'s
+  `TestRuleClearanceWorkflowJobs` replays the incident end to end.
+- **Effect:** on today's workflows the guard selects `main.yml` `lint` and
+  `tier1`, `release.yml` `tier1`, `flow18.yml` `sessions-private` and
+  `auto-tidy.yml` `auto-tidy`, with `ci-ok`'s pairs on `lint`/`tier1` and
+  `release`'s on `tier1` (LINT-03). jks-test-skip-without-jdk at `216ce36`
+  (a `keytool` job added to `ci-ok`'s `needs:`) clears FLOW-14 with this
+  `wf` and fails with `main`'s.
+- **Decisions taken:** match `run:`/`uses:` values, not names (a1); guard a
+  rule-running job's whole body, keyed by body not name, so a rename alone
+  passes (a2); downstream jobs may add but not drop a `needs:` pair on a
+  rule-running job (a3); no wider scope (a4); amend FLOW-14's wording here
+  (a5); added/deleted files count as empty, unparseable ones fail closed
+  with the cause (Decision 4).
+- **Rejected:** keeping the line match minus `needs:` lines and job keys;
+  matching `run:`/`uses:` lines textually; searching `run:` with comments
+  left in; stripping trailing shell comments (needs a shell parser; the
+  residual false positive fails closed); searching `working-directory:`
+  (would guard `tier1-test` and `tidy`); guarding only the matching steps;
+  keying bodies by job name; leaving downstream jobs ordinary or guarding
+  them whole; one multiset of needed bodies without the downstream key;
+  reporting an unparseable file as "in no approved rule change"; keeping
+  "lines" in FLOW-14.
+- **For future designs touching `rule-changes`, `enforcement`, `wf-check` or
+  `ci-workflows`:** what is guarded in `.github/workflows/` is a
+  rule-running job's whole decoded body (every step, `with:`, `env:`,
+  `fetch-depth`, `if:`, `needs:`, `runs-on:`) and the downstream `needs:`
+  pairs on it; job keys, `name:`, YAML comments, whole-line script comments
+  and other jobs are ordinary code. A trailing `# tier1` comment on a `run:`
+  line still makes a job rule-running; move such a comment to its own line.
+  Known gaps (a4, left open): the `changes` classifier whose outputs gate
+  `lint`, workflow-level keys (`on:`, `paths:`, `permissions:`,
+  `concurrency:`) and `ci-ok`'s `jq` step are not guarded; closing them is
+  its own process item (a4 (b)). A new job that runs `make lint`,
+  `make enforcement`, tier 1, `golangci-lint` or `tools/workflow` needs an
+  approved rule change on a feature branch.
