@@ -49,10 +49,18 @@ steps:
     lease:
       claimed_by: ""
       expires: null
+  - id: f3-answer-q1
+    phase: 3
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
   - id: f3-implement
     phase: 3
     affinity: cloud
     status: pending
+    needs: [f3-answer-q1]
     lease:
       claimed_by: ""
       expires: null
@@ -64,6 +72,15 @@ budget:
     runs: 2
     steps: 4
 questions:
+  - id: q1
+    kind: blocking
+    status: open
+    question: "f3-implement re-pins tools/build-vm and tools/firecracker-vm to Alpine 3.21's current busybox-static (a2 (C)), which needs dl-cdn.alpinelinux.org. The cloud environment's network policy refuses that host (proxy connect_rejected, 2026-11-09 and again 2026-11-10), so the step cannot fetch the package or its digest; FLOW-05 order kept the cloud on it (tick cloud/20261110T105938Z). How should it proceed?"
+    options:
+      - allow dl-cdn.alpinelinux.org in the cloud environment's network settings, then answer this so the cloud retries
+      - give the busybox-static version and its sha256 here, and the cloud pins them without fetching (verified on a native machine later)
+      - run f3-implement in an attended or native session that can reach the host
+    recommended: allow dl-cdn.alpinelinux.org in the cloud environment's network settings, then answer this so the cloud retries
   - id: a1
     kind: assumed
     status: confirmed
@@ -142,3 +159,4 @@ history:
   - at: 2026-11-09T11:10:23Z
     by: cloud/20261109T105708Z
     event: entered phase 3 (implement)
+  - {at: 2026-11-10T11:07:00Z, by: cloud/20261110T105938Z, event: "raised blocking q1 (f3-answer-q1, needed by f3-implement): dl-cdn.alpinelinux.org refused by the network policy"}
