@@ -49,6 +49,14 @@ recommended answer.
 
 The behavior and structure of the change.
 
+## Defaults and overrides
+
+Each default this design adds or changes, why it is the obvious choice
+(GLOBAL-09), and what overrides it, used exclusively (GLOBAL-10). Each merge or
+fallback, named, with what triggers it and how the user sees it (GLOBAL-10,
+GLOBAL-11). "None" when the design adds or changes no default, override, merge
+or fallback.
+
 ## Cross-driver impact
 
 For each driver named in `drivers`, what changes; for the others, why they are
