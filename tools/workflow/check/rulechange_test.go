@@ -120,7 +120,8 @@ func TestRuleClearance(t *testing.T) {
 		t.Fatalf("no guarded edit: ran %v, %q", ran, got)
 	}
 	put(t, work, map[string]string{"docs/development/testing.md": "### TEST-09\n",
-		".github/workflows/ci.yml": "run: make build\n", "relay/x.go": "package relay\n"})
+		".github/workflows/ci.yml": "jobs: {build: {steps: [{run: make build}]}}\n",
+		"relay/x.go":               "package relay\n"})
 	if got, _ := clearance(t, env, "feature"); got != "" {
 		t.Errorf("approved edit: %q", got)
 	}
@@ -148,7 +149,7 @@ func TestRuleClearance(t *testing.T) {
 
 	put(t, work, map[string]string{".claude/agents/wf-plan.md": "x\n",
 		"tools/workflow/queue/q.go": "package queue\n",
-		".github/workflows/ci.yml":  "run: ./dist/tier1 -base x\n"})
+		".github/workflows/ci.yml":  "jobs: {build: {steps: [{run: ./dist/tier1 -base x}]}}\n"})
 	got, _ = clearance(t, env, "feature")
 	for _, want := range []string{
 		".claude/agents/wf-plan.md changes only through a process item",
@@ -161,6 +162,48 @@ func TestRuleClearance(t *testing.T) {
 
 	if got, ran := clearance(t, env, "process"); !ran || got != "" {
 		t.Errorf("process item's branch: ran %v, %q", ran, got)
+	}
+}
+
+// TestRuleClearanceWorkflowJobs: a workflow edit is a rule change only when
+// it changes a rule-running job or drops a needs: on one
+// (rule-running-line-match). The incident, a job added to ci-ok's needs:,
+// clears with no rule_changes.
+func TestRuleClearanceWorkflowJobs(t *testing.T) {
+	work := repo(t, design)
+	env := Env{Repo: work}
+	git(t, work, "checkout", "-q", "main")
+	_ = os.MkdirAll(filepath.Join(work, ".github", "workflows"), 0o755)
+	if err := os.WriteFile(filepath.Join(work, ".github", "workflows", "main.yml"),
+		[]byte(mainYML), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, work, "add", ".")
+	git(t, work, "commit", "-q", "-m", "ci")
+	git(t, work, "push", "-q", "origin", "main")
+	git(t, work, "checkout", "-q", "feat/demo")
+	git(t, work, "merge", "-q", "--no-edit", "main")
+
+	incident := edit(t, mainYML, "  ci-ok:\n", "  keytool:\n    runs-on: ubuntu-latest\n"+
+		"    steps:\n      - run: go test ./cmd/warden-io -run Keytool\n  ci-ok:\n",
+		"[changes, lint, tier1, tier1-test]", "[changes, lint, tier1, tier1-test, keytool]")
+	put(t, work, map[string]string{".github/workflows/main.yml": incident})
+	if got, ran := clearance(t, env, "feature"); !ran || got != "" {
+		t.Errorf("the incident: ran %v, %q", ran, got)
+	}
+
+	put(t, work, map[string]string{".github/workflows/main.yml": edit(t, incident,
+		"      - run: go test ./cmd/warden-io", "      - run: ./dist/tier1 -base x\n"+
+			"      - run: go test ./cmd/warden-io")})
+	if got, _ := clearance(t, env, "feature"); !strings.Contains(got,
+		".github/workflows/main.yml is in no approved rule change") {
+		t.Errorf("a tier1 step added: %q", got)
+	}
+
+	put(t, work, map[string]string{".github/workflows/main.yml": "jobs: [\n"})
+	if got, _ := clearance(t, env, "feature"); !strings.Contains(got,
+		".github/workflows/main.yml: branch: ") {
+		t.Errorf("an unparseable workflow: %q", got)
 	}
 }
 
