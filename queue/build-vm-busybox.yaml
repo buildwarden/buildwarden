@@ -86,8 +86,8 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261111T182144Z
+      expires: 2026-11-12T00:01:46.60604186Z
   - id: f6-consolidate
     phase: 6
     affinity: cloud
@@ -112,8 +112,8 @@ budget:
     runs: 1
     steps: 7
   spent:
-    runs: 3
-    steps: 7
+    runs: 4
+    steps: 8
 questions:
   - id: q1
     kind: blocking
@@ -245,3 +245,6 @@ history:
   - at: 2026-11-11T20:32:22Z
     by: cloud/20261111T182144Z
     event: 'priority 47 -> 48 (renumbered by wf new: relay-init-dhcp-mask-default queued at 46)'
+  - at: 2026-11-11T22:01:46Z
+    by: cloud/20261111T182144Z
+    event: claimed f6-merge-main until 2026-11-12T00:01:46Z
