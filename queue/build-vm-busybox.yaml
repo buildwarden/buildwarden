@@ -2,9 +2,9 @@ feature: build-vm-busybox
 title: tools/build-vm/build-initramfs.sh fetches its own static busybox
 priority: 48
 follows: build-link-subnet
-status: in_progress
+status: done
 round: feature
-phase: 6
+phase: 8
 design: docs/design/build-vm-busybox.md
 branch: feat/build-vm-busybox
 alters_relationships: false
@@ -28,16 +28,6 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: f6-validate-qemu-any
-    phase: 6
-    affinity: host:qemu-any
-    status: pending
-    needs:
-      - f6-consolidate
-    lease:
-      claimed_by: ""
-      expires: null
-    note: 'Blocking native validation (FLOW-09) per docs/design/build-vm-busybox.md Validation plan: on a scratch copy so the machine''s working assets are kept, (1) from a fresh cache (tools/build-vm/.cache, tools/relay-vm/.cache and both output dirs removed) tools/relay-vm/build-initramfs.sh then tools/build-vm/build-initramfs.sh succeed with no busybox placed by hand, and a second run reuses the cached busybox-static apk; (2) a cached apk with one byte changed stops the script on the sha256 check with no initramfs produced; (3) without tools/relay-vm/.cache/linux-virt.apk the script stops with the run-tools/relay-vm/build-initramfs.sh-first error; (4) warden doctor --driver qemu accepts the new initramfs''s link-channel stamp and a direct-boot Linux build on it succeeds with a ledger that verifies. Exercises the macOS path: shasum fallback, bsdtar on the .apk, the explicit applet list.'
   - id: f2-design-review
     phase: 2
     affinity: human
@@ -103,10 +93,23 @@ steps:
   - id: f6-open-pr
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f6-consolidate
-      - f6-validate-qemu-any
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f7-merge
+    phase: 7
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f8-close
+    phase: 8
+    affinity: cloud
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -116,7 +119,7 @@ budget:
     steps: 7
   spent:
     runs: 4
-    steps: 10
+    steps: 12
 questions:
   - id: q1
     kind: blocking
@@ -266,3 +269,30 @@ history:
   - at: 2026-11-11T22:16:46Z
     by: cloud/20261111T182144Z
     event: 'released f6-open-pr: PR #110 merged (1173c5f) before its blocking f6-validate-qemu-any; open-pr waits on that native step'
+  - at: 2026-11-11T22:30:00Z
+    by: human/jeff
+    event: 'f6-validate-qemu-any moved to the native-gap backlog (build-vm-busybox-qemu-direct-boot) by Jeff: PR #110 merged as 1173c5f before it ran; the check runs against main'
+  - at: 2026-11-11T22:28:53Z
+    by: cloud/20261111T182144Z
+    event: claimed f6-open-pr until 2026-11-12T00:28:53Z
+  - at: 2026-11-11T22:28:53Z
+    by: cloud/20261111T182144Z
+    event: done f6-open-pr
+  - at: 2026-11-11T22:28:53Z
+    by: cloud/20261111T182144Z
+    event: entered phase 7 (merge)
+  - at: 2026-11-11T22:28:53Z
+    by: cloud/20261111T182144Z
+    event: done f7-merge
+  - at: 2026-11-11T22:28:53Z
+    by: cloud/20261111T182144Z
+    event: entered phase 8 (close)
+  - at: 2026-11-11T22:29:00Z
+    by: cloud/20261111T182144Z
+    event: claimed f8-close until 2026-11-12T00:29:00Z
+  - at: 2026-11-11T22:29:01Z
+    by: cloud/20261111T182144Z
+    event: done f8-close
+  - at: 2026-11-11T22:29:01Z
+    by: cloud/20261111T182144Z
+    event: closed; feature done
