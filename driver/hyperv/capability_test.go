@@ -161,7 +161,8 @@ func TestDoctorReport(t *testing.T) {
 
 	// Unsupported platform is blocked and says so.
 	buf.Reset()
-	if blocked := Doctor(&buf, Capabilities{Supported: false, Platform: "linux"}, buildlink.Link{}, nil); !blocked {
+	unsupported := Capabilities{Supported: false, Platform: "linux"}
+	if blocked := Doctor(&buf, unsupported, buildlink.Link{}, nil); !blocked {
 		t.Fatal("expected blocked on unsupported platform")
 	}
 	if !strings.Contains(buf.String(), "unavailable on linux") {

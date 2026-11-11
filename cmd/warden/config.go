@@ -154,9 +154,9 @@ func loadTOML(path string, cfg *Config) error {
 		addrs, err := relaycfg.ParseUpstreamDNS(cfg.VM.DNS, nil)
 		if err != nil {
 			return driver.Fixable(
-				fmt.Sprintf("set [vm] dns in %s to IPv4 addresses of DNS servers, "+
-					"e.g. dns = [%q], or remove [vm] dns to use the host's "+
-					"resolvers", path, exampleDNS),
+				fmt.Sprintf("set [vm] dns in %s to IPv4 addresses of DNS "+
+					"servers, e.g. dns = [%q], or remove [vm] dns to use the "+
+					"host's resolvers", path, exampleDNS),
 				"[vm] dns in %s: %v", path, err)
 		}
 		cfg.VM.DNSAddrs = addrs

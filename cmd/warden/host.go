@@ -95,12 +95,14 @@ or agent gate.`,
 			}
 			return nil
 		case "qemu":
-			if err = qemu.Preflight(); err == nil {
-				blocked = doctorResolvers(out, qemu.Resolvers, link, vmDNS) || blocked
+			if err = qemu.Preflight(); err == nil &&
+				doctorResolvers(out, qemu.Resolvers, link, vmDNS) {
+				blocked = true
 			}
 		case "vz":
-			if err = vz.Preflight(); err == nil {
-				blocked = doctorResolvers(out, vz.Resolvers, link, vmDNS) || blocked
+			if err = vz.Preflight(); err == nil &&
+				doctorResolvers(out, vz.Resolvers, link, vmDNS) {
+				blocked = true
 			}
 		default:
 			var rt string
