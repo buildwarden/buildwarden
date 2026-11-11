@@ -1,6 +1,6 @@
 ---
 feature: next-skips-merge-wait
-status: draft
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -445,4 +445,50 @@ Filled in at x2-implement (FLOW-10, FLOW-15), against `origin/main` at
 
 ## Rollback notes
 
+None yet. Reverting the PR restores today's behavior: `wf next` offers a
+merge step again, and sessions step past it by judgment.
+
 ## Archive summary
+
+Implemented 2026-11-11 by the cloud loop (x2-implement), approved at design
+review r1 (`40a582b`, Jeff; a1 to a6 as drafted, option (a) each).
+
+- **Built** (`tools/workflow/queue`): `IsMerge` (`phases.go`) names a
+  round's merge step, `f7-merge` (feature phase 7) or `x3-merge` (process
+  phase 3) in any `-r<n>` form, through `stepTemplates`' parse. `ready()`
+  (`next.go`) skips a merge step for every worker, before the affinity
+  test, and adds `the human's merge of PR #<n> (FLOW-08)`, or `the human's
+  merge (no PR recorded, FLOW-08)` with no PR, to the item's wait reasons.
+  `Next` reports the item blocked and walks on; `NextFor` returns no pick and
+  the reason. `Next`'s and `ready`'s doc comments say so.
+- **Rule and skill text:** FLOW-05's blocking list (`process.md`) adds "or
+  the human's merge (FLOW-08)"; workflow-tick's step 2 says `wf next` never
+  offers these steps, so step 2 is where they complete. Severities and
+  checks unchanged; `rule_changes: []` (process route, FLOW-14).
+- **Tests:** `TestIsMerge`; `TestNextSkipsMergeWait` (the incident's shape
+  for cloud, host and human workers and `NextFor`; `f7-merge` and
+  `f7-merge-r2` yielding to in-progress and queued class-4 items; the exact
+  no-PR reason for a nil PR and PR 0); `TestNextTakesImplementationFirst`
+  and `TestPRSlotIsSerial` now expect no pick and the full `blocked`
+  strings. The incident replays: on the workflow branch at `9649de9` the
+  branch's `wf next -worker cloud/x` returns hyperv-relay-per-build-channel
+  `f1-design-r3`; at `f177cdd` build-link-subnet `f1-design-r2`; at
+  `cb67d90` security-suite `f1-design`.
+- **Decisions taken:** never offer a merge step, so `wf next` stays a pure,
+  git-free function of the queue (a1); the same reason for every worker
+  (a2); `wf claim` unchanged (a3); an attended `-feature` run gets `none`
+  and the reason (a4); FLOW-05 names the human's merge as a blocking point
+  (a5); QUEUE.md's "Next steps" column unchanged (a6).
+- **Rejected:** running the merged check inside `wf next`; a `-merges` mode
+  or `wf merges` listing; making the merge step `human`; a new class for
+  merge-waiting items; recording "checked, not merged" in the queue file;
+  `wf claim` refusing a merge step.
+- **For future designs touching `wf-next`, `queue-order`, `merge-wait` or
+  `pr-slot`:** a merge step completes only by `wf done` in the tick's step 2,
+  with no claim; no worker is ever offered one, so a new merge phase or
+  round needs `IsMerge` to name it, and must stay in step with
+  `waitsOnMerge` (`summary.go`), which tests the item where `IsMerge` tests
+  the step. Until this merges, this item's own `x3-merge` hits the old
+  behavior; x4-close updates the workflow branch `README.md` (line 100 and
+  the `wf next` paragraph) and posts the digest note to rebuild `dist/wf`
+  from the merged `main`.
