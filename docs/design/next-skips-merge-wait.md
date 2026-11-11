@@ -400,6 +400,49 @@ one commit each, each green:
 
 ## Consolidation
 
+Filled in at x2-implement (FLOW-10, FLOW-15), against `origin/main` at
+`beb51ba`, the fork point; nothing has landed since.
+
+- **Landed as designed.** Tasks 1 to 4: `IsMerge` beside `IsDesignReview`
+  (`phases.go`), sharing `stepTemplates`' parse; `ready()` skips a merge step
+  for every worker before the affinity test, with `mergeWait`'s reason built
+  inline as Decision 1 gives it, and the `ready` and `Next` doc comments say
+  so (`next.go`); FLOW-05's blocking list (`process.md`); and the clause in
+  workflow-tick's step 2. `Next`, `NextFor`, `cloudHold`, `wf claim`, `wf
+  done`, the summary and `cmd/wf` are unchanged (a3, a6).
+- **Tests.** `TestIsMerge`; `TestNextSkipsMergeWait`, in three subtests so
+  `gocyclo` stays under 15: the incident's shape with the host and human
+  workers and `NextFor`, `f7-merge` and `f7-merge-r2` yielding to an
+  in-progress and to a queued class-4 feature, and the exact no-PR reason
+  for a nil PR and a PR 0. `TestNextTakesImplementationFirst` and both
+  merge assertions of `TestPRSlotIsSerial` now expect no pick and the full
+  `blocked` strings (`TestPRSlotIsSerial` in both `s.Features` orders, as a
+  set). With the skip in `ready()` disabled, all three fail.
+- **Check in use.** The branch's `wf next -worker cloud/x` on `git archive`
+  copies of the workflow branch gives the picks in Design: `9649de9` blocks
+  design-principles and rule-running-line-match on `the human's merge of PR
+  #104/#105 (FLOW-08)` and returns hyperv-relay-per-build-channel
+  `f1-design-r3`; `f177cdd` blocks http-body-path-drift on PR #93 and returns
+  build-link-subnet `f1-design-r2`; `cb67d90` blocks build-link-subnet on PR
+  #98 and returns security-suite `f1-design`.
+- **Terminology.** "the human's merge" is FLOW-05's and FLOW-08's phrase,
+  used the same in the rule, the wait reason, the doc comments and the
+  skill. `IsMerge` tests the step where `waitsOnMerge` (`summary.go`) tests
+  the item; both name the same two phases, and neither replaces the other.
+- **Overlap with open branches.** Only feat/wf-squash-after-base-moved
+  touches `tools/workflow/` (`check/`, which this item does not);
+  `git merge-tree` of the two heads merges clean. Its planned FLOW-16 and
+  workflow-tick Close edits are other hunks than FLOW-05 and step 2.
+  Whichever merges second takes current `origin/main` first.
+- **`overview.md` (FLOW-15).** It describes components, not the workflow
+  queue, so it has no pseudocode to change. `docs/book/src/guide/` does not
+  document `wf` (UX-01 does not apply).
+- **Rules proposed:** none beyond Decision 3's FLOW-05 text.
+- **Left for x4-close (the `workflow` branch):** `README.md:100`'s "never
+  offered by `wf next`", the `wf next` paragraph's "skips an item waiting on
+  the human's merge" (`:148-152`), and the digest note to rebuild `dist/wf`
+  from the merged `main`.
+
 ## Rollback notes
 
 ## Archive summary
