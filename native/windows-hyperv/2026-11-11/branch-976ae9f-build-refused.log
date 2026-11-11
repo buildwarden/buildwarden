@@ -1,0 +1,3 @@
+warden: build FAILED
+[warden] ERROR: hyperv build: the durable network has no build switches: run `warden setup --driver hyperv` (elevated) to create the build switches
+  To fix: see `warden doctor --driver hyperv` for each capability and its fix

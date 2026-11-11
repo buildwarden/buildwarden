@@ -4,7 +4,7 @@ priority: 49
 follows: build-link-subnet
 status: in_progress
 round: feature
-phase: 6
+phase: 3
 design: docs/design/hyperv-relay-per-build-channel.md
 branch: feat/hyperv-relay-per-build-channel
 alters_relationships: true
@@ -32,8 +32,8 @@ steps:
     needs:
       - f6-consolidate-r2
     lease:
-      claimed_by: host:windows-hyperv/20261111T231002Z
-      expires: 2026-11-12T01:10:47.9794435Z
+      claimed_by: ""
+      expires: null
     note: 'Blocking native validation (design Validation plan, FLOW-09; r2 cases), on the branch after consolidation: (1) upgrade: main''s relay VHDX (stamp 1) BLOCKED in doctor and refused before any VM, both naming tools/relay-vm/hyperv/refresh-cache.sh; after it, stamp 2 and doctor current. (2) elevated default Windows guest build succeeds, ledger verifies; relay console shows the seed''s allocated NAT address and gateway, its resolvers with source claim (the host''s), and no token value, and the seed ISO holds no resolver; warden-run.log shows initialize --gateway=<relay> with no --ip, and the guest NIC ends DHCP Enabled: Yes, PrefixOrigin Dhcp at the link''s guest address. (3) while a relay waits, a claim and a tunnel from the host with no token and a wrong token get 401; the build then succeeds. (4) two concurrent ephemeral builds succeed with different relay addresses (VM Notes, consoles). (5) on a host set up by main, a durable build is refused naming warden setup; then warden setup --driver hyperv --nat-prefix 192.168.250.0/24 --host-ip 192.168.250.1 --slots 2 (default NAT removed) retires the old warden-dev switch; doctor prints prefix, host IP and two free slots; a non-elevated Hyper-V Administrators build uses that prefix and slot warden-dev-0 (relay VM Notes) and succeeds; an elevated build reuses the same NAT on its own ephemeral switch. (6) two concurrent durable builds take warden-dev-0 and warden-dev-1 and succeed; from build VM A, ARP/ping to relay B''s and build VM B''s link addresses and a DHCP DISCOVER get no answer from B; a third concurrent durable build is refused before any VM naming both holders and --slots; a --keep-vms build''s slot stays busy (doctor names it) until its VMs are removed. (7) refusals: [vm] build_link inside the durable NAT prefix refused at build start and in doctor; host default-route interface with only 127.0.0.1 as DNS and no [vm] dns refused naming it and both fixes; [vm] dns = [<host NAT IP>] refused naming the entry; a relay VM booted by hand with no seed prints the no-seed line and starts no relay. (8) resolvers (sent in the claim, design r3): with the host DNS on an internal resolver, a build resolves a name only it answers; with the host DNS public and [vm] dns set to that resolver, the build resolves it and console and doctor list only the key''s resolver; with [vm] dns set to an address with no DNS server, lookups fail (no fallback to the host''s). (9) no lease: a --keep-vms build VM moved to an empty Private switch and restarted logs a failed relay wait naming the NIC address and origin (169.254 WellKnown reads no DHCP lease), applies no static address, and powers off. Evidence under native/windows-hyperv/<date>/.'
   - id: f6-validate-qemu-any
     phase: 6
@@ -150,15 +150,10 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: f6-open-pr-r2
-    phase: 6
+  - id: f3-implement-r3
+    phase: 3
     affinity: cloud
     status: pending
-    needs:
-      - f6-consolidate-r2
-      - f6-validate-windows-hyperv
-      - f6-validate-qemu-any
-      - f6-validate-macos-vz
     lease:
       claimed_by: ""
       expires: null
@@ -564,3 +559,18 @@ history:
   - at: 2026-11-11T23:10:47Z
     by: host:windows-hyperv/20261111T231002Z
     event: claimed f6-validate-windows-hyperv until 2026-11-12T01:10:47Z
+  - at: 2026-11-11T23:13:49Z
+    by: host:windows-hyperv/20261111T231002Z
+    event: 'released f6-validate-windows-hyperv: native/windows-hyperv/2026-11-11 (976ae9f, unattended, not elevated): case 1 doctor BLOCKED naming refresh-cache.sh as planned, but the build is refused on the network instead; the installed protocol-1 privileged service reads ''not installed'' (serviceReachable swallows the version mismatch), so warden hyperv service install is never named. Cases 2-9 not run: expired base image, every build path needs elevation (service reinstall, setup --slots), and cases 7-8 change host DNS'
+  - at: 2026-11-11T23:13:49Z
+    by: host:windows-hyperv/20261111T231002Z
+    event: kept f6-validate-windows-hyperv pending for phase 6
+  - at: 2026-11-11T23:13:49Z
+    by: host:windows-hyperv/20261111T231002Z
+    event: kept f6-validate-qemu-any pending for phase 6
+  - at: 2026-11-11T23:13:49Z
+    by: host:windows-hyperv/20261111T231002Z
+    event: kept f6-validate-macos-vz pending for phase 6
+  - at: 2026-11-11T23:13:49Z
+    by: host:windows-hyperv/20261111T231002Z
+    event: 'back to implement: f6-validate-windows-hyperv (976ae9f, native/windows-hyperv/2026-11-11): the protocol bump to 2 is not surfaced: serviceReachable (driver/hyperv/service_windows.go) returns false on the ping''s version-mismatch error, so with main''s protocol-1 service installed doctor prints ''Privileged service ... not installed'' and a build is refused with the durable-switch message; the plan''s mismatch refusal naming ''warden hyperv service install'' never reaches the user, and Compatibility''s ''service builds unaffected'' does not hold. Report a stale service and name the reinstall in doctor and the strategy refusal, with tier-0 coverage (FLOW-09)'
