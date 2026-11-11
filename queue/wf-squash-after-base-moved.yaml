@@ -5,7 +5,7 @@ kind: process
 follows: wf-squash-merged-pr
 status: in_progress
 round: process
-phase: 3
+phase: 4
 design: docs/design/wf-squash-after-base-moved.md
 branch: feat/wf-squash-after-base-moved
 alters_relationships: null
@@ -31,7 +31,23 @@ steps:
   - id: x3-merge
     phase: 3
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-escalate-branch
+    phase: 4
+    affinity: human
     status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: "the remote branch was re-created by a push 13s after the merge (82cc0ef, a 3-line design note Jeff chose to drop); delete it with: git push origin --delete feat/wf-squash-after-base-moved"
+  - id: x4-close
+    phase: 4
+    affinity: cloud
+    status: pending
+    needs: [x4-escalate-branch]
     lease:
       claimed_by: ""
       expires: null
@@ -68,3 +84,5 @@ history:
   - at: 2026-11-11T18:21:54Z
     by: cloud/20261111T173920Z
     event: entered phase 3 (merge)
+  - {at: 2026-11-11T18:30:00Z, by: human/jeff, event: "x3-merge done by hand: #107 squash-merged as 97a13f7, whose tree equals the PR head at merge (e2bef85); 82cc0ef, pushed after the merge, adds only a 3-line Consolidation note, dropped by Jeff"}
+  - {at: 2026-11-11T18:30:01Z, by: human/jeff, event: entered phase 4 (close)}
