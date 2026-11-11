@@ -83,7 +83,7 @@ or agent gate.`,
 			}
 			return nil
 		case "firecracker":
-			if blocked := firecracker.Doctor(out, link); blocked || linkBlocked {
+			if blocked := firecracker.Doctor(out, link, nil); blocked || linkBlocked {
 				os.Exit(1)
 			}
 			return nil

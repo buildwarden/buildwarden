@@ -110,13 +110,15 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	return &driver.BuildResult{OutputDir: outputDir}, nil
 }
 
-// buildPreflight is preflight on this host for req's build link, plus the
-// refusal of a link a host interface uses.
+// buildPreflight is preflight on this host for req's build link and [vm] dns,
+// plus the refusal of a link a host interface uses. It replaces req.DNS with
+// the resolvers it chose, which the claim carries as upstream_dns.
 func buildPreflight(req *driver.BuildRequest) (*preflighted, error) {
-	pre, err := preflight(realHost{}, hostLocal, req.Link())
+	pre, err := preflight(realHost{}, hostLocal, req.Link(), req.DNS)
 	if err != nil {
 		return nil, err
 	}
+	req.DNS = pre.resolvers
 	return pre, driver.CheckHostLink(req.Link())
 }
 
@@ -197,8 +199,7 @@ func (r *run) startRelay(ctx context.Context, sess *driver.Session, pre *preflig
 		return err
 	}
 	r.d.status(fmt.Sprintf("starting relay on slot %d...", r.slot))
-	cfg := relayConfig(r.slot, pre.assets.Kernel, initrd, relayArgs(r.slot, pre.resolvers,
-		token))
+	cfg := relayConfig(r.slot, pre.assets.Kernel, initrd, relayArgs(r.slot, token))
 	if r.relay, err = startVMM(r.work, "relay", cfg, r.d.Verbose, r.req.KeepVMs); err != nil {
 		return err
 	}

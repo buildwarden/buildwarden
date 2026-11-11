@@ -21,7 +21,7 @@ func configJSON(t *testing.T, c vmConfig) []byte {
 func TestVMConfigGolden(t *testing.T) {
 	s := Slot(3)
 	relay := relayConfig(s, "/a/vmlinux", "/w/relay-initrd",
-		relayArgs(s, []string{"8.8.8.8", "8.8.4.4"}, "TOKEN"))
+		relayArgs(s, "TOKEN"))
 	golden(t, "relay.json", configJSON(t, relay))
 
 	disk := buildConfig(s, buildBoot{Kernel: "/a/vmlinux", Rootfs: "/c/work/id/rootfs.raw",
@@ -34,10 +34,10 @@ func TestVMConfigGolden(t *testing.T) {
 }
 
 func TestKernelCommandLines(t *testing.T) {
-	got := relayArgs(Slot(64), []string{"1.1.1.1", "9.9.9.9"}, "tok")
+	got := relayArgs(Slot(64), "tok")
 	want := "console=ttyS0 reboot=k panic=1 pci=off warden.net=static " +
 		"warden.nat_ip=100.64.89.2 " +
-		"warden.nat_prefix=30 warden.nat_gw=100.64.89.1 warden.dns=1.1.1.1,9.9.9.9 " +
+		"warden.nat_prefix=30 warden.nat_gw=100.64.89.1 " +
 		"warden.claim_token=tok"
 	if got != want {
 		t.Fatalf("relay args:\n got %s\nwant %s", got, want)
