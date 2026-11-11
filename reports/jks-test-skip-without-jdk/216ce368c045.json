@@ -1,0 +1,64 @@
+{
+  "feature": "jks-test-skip-without-jdk",
+  "branch": "feat/jks-test-skip-without-jdk",
+  "head": "216ce368c045",
+  "base": "49e5354b3bbf",
+  "round": "feature",
+  "step": "f4-review",
+  "previous_report": null,
+  "scope": "git diff origin/main...feat/jks-test-skip-without-jdk: 4 files, +395/-8, 11 commits. The merge base is 49e5354; origin/main is now beb51ba and the branch merges with it cleanly (git merge-tree). First tier-2 pass for this feature. Judged against design r2 (FLOW-19 review skipped, r1 return recorded 2026-11-07; rule_changes: []).",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "rule_index": "89 '### <ID> — <title>' headers extracted from docs/development/*.md on origin/main beb51ba (LINT-01), including GLOBAL-09 to GLOBAL-11 and RELAY-08. The branch changes no rule. Judged: every agent-judgment rule and the judgment half of every hybrid rule the diff reaches (TEST-01, TEST-02, TEST-04, GLOBAL-05, GLOBAL-06, GLOBAL-09, GLOBAL-10, GLOBAL-11, RELAY-08, UX-04, FLOW-06, FLOW-17). GLOBAL-09 to GLOBAL-11 are judged by the design's Decisions: it predates the Defaults and overrides section.",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass (linux, go1.26.10, ~/go/bin golangci-lint 2.15.0): 0 issues in the root module, tools/workflow and tools/tier1. Then dist/tier1 -base origin/main (49e5354b3bbf...216ce368c045): 0 MUST, 0 MUST-review, 0 SHOULD, 0 hints, 0 suppressed, exit 0",
+    "make_lint_per_platform": "not needed (FLOW-17): the diff touches no build-tagged file. GOOS=darwin and GOOS=windows go test -c of ./cmd/warden-io compile, so the keytool job's macOS and Windows legs build.",
+    "make_test": "pass (exit 0): root module, tools/workflow and tools/tier1, no FAIL",
+    "custom_static_checks": "none reported by dist/tier1",
+    "keytool_paths": "Checked here: with the container's JDK, TestWriteJKSMatchesKeytool PASSes with and without WARDEN_REQUIRE_KEYTOOL=1; with a stub keytool that exits 1 first on PATH it SKIPs with the probe's message, FAILs with WARDEN_REQUIRE_KEYTOOL=1, and still SKIPs with CI=1 GITHUB_ACTIONS=true alone (design task 6).",
+    "enforcement": "not run: the branch changes neither tools/tier1/ nor tools/workflow/check/ (FLOW-14)",
+    "wf_check": "dist/wf check -state .dev/workflow -repo . -feature jks-test-skip-without-jdk, and the same with wf built from origin/main beb51ba (which carries the rule-running-line-match fix f861315): both report clean branch head ok and 'rule changes cleared (FLOW-14): the branch changes no rule or its enforcement'. make lint and make test were reported as skipped (no -run) and were run above instead; the tier-2 report lines were missing before this report.",
+    "fixes_made": "none; the code checkout is still clean at 216ce36"
+  },
+  "implement_reported": [
+    {
+      "item": 1,
+      "topic": "FLOW-14 clearance false positive on ci-ok's needs line (q1)",
+      "verdict": "resolved",
+      "finding": null,
+      "note": "The ci-ok needs edit adds keytool to a list that names tier1. With f861315 merged, the clearance guards the jobs that run the rules, not lines naming them, and both the branch's and main's wf clear the branch. The edit is an ordinary job addition (Decision 5), not a rule change."
+    }
+  ],
+  "findings": [],
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 0,
+    "SHOULD": 0
+  },
+  "resolved_since_previous": [],
+  "carried_forward": [],
+  "new_since_previous": [],
+  "suppressions": [],
+  "suppressions_note": "None: no previous report, no Tier1-Allow trailers on the branch.",
+  "considered": [
+    "GLOBAL-09: the default is 'skip where keytool cannot run' (Decision 1), the obvious choice for make test under TEST-01; its override is WARDEN_REQUIRE_KEYTOOL=1 (Decision 3). Both are named. No finding.",
+    "GLOBAL-10: WARDEN_REQUIRE_KEYTOOL is used exclusively when set to 1 (fails, no fallback to skip). Any other value means 'may skip', which Decision 3 names and which matches main's WARDEN_HYPERV_LIVE != \"1\" gates; the only setter is the keytool job, with '1'. The variable is documented in the test comment, not in CONTRIBUTING.md; it is a test knob, not a user surface (UX-01). No finding.",
+    "GLOBAL-11: the skip path runs only when the lookup or the 'keytool -help' probe fails; Decisions 1 and 3 name it, and the require flag turns it into a stop that says what failed. No retry and no alternate keytool is tried. No finding.",
+    "RELAY-08: the diff delivers no relay setting. Not applicable.",
+    "TEST-01 / TEST-02 (judgment halves): make test keeps no external dependency (the test skips without a JDK); the keytool job is in the ci workflow under the changes job's gotests gate and is in ci-ok's needs (Decisions 5, 6). No finding.",
+    "TEST-04: the probe and comparison are deterministic given a JDK; keytool's wall-clock timestamp is copied into ours, as on main. No finding.",
+    "UX-04: test messages name the path, the probe's error and output, and the '(no Java runtime?)' hint; not user-facing. No finding.",
+    "FLOW-06: the code, the job, the comments and the CONTRIBUTING.md sentence match Design and tasks 2 to 5 line for line. No finding.",
+    "FLOW-17: origin/feat/jks-test-skip-without-jdk is at 216ce36, the head reviewed. No finding.",
+    "GLOBAL-05 / GLOBAL-06: setup-go 'stable' copies every other main.yml job (main's convention, not caused by the diff); no security boundary is touched (security_boundary: none)."
+  ],
+  "back_to_design": false,
+  "back_to_design_note": "No. The implementation follows Decisions 1 to 6 and the Design sketch as written.",
+  "routing": "Verdict pass. No MUST goes back to wf-implement; no SHOULD to record. The PR body notes the clean tier-2 pass and the CI validation still due at Publish (task 7: all three keytool legs PASS, not SKIP).",
+  "follow_ups_filed": [],
+  "informational": [
+    "Design Decision 2 calls Java 21 'the current LTS'. Temurin 25 has been the newest LTS since September 2025; 21 is still a supported LTS, so the pin is fine, but Consolidation may want the wording to say 'an LTS'. Not a rule finding.",
+    "Prior art says the tier1-test job is main.yml's go test ./... matrix; it runs go test ./... in tools/tier1 only. The keytool job's macOS and Windows legs are therefore the first CI run of cmd/warden-io tests on those platforms. Both compile here; Validation plan already allows for a platform difference found there.",
+    "Task 7 (CI validation on the PR) remains: the three keytool legs must log --- PASS: TestWriteJKSMatchesKeytool, not SKIP."
+  ]
+}
