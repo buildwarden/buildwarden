@@ -62,7 +62,8 @@ First, confirm merges, which spend no budget and need no claim: for each
 feature in phase 7 (`f7-merge`) and each process item in phase 3 (`x3-merge`),
 run `dist/wf done -state .dev/workflow -repo . -worker $W -feature F -step S`.
 It passes once the human has merged the PR (FLOW-08) and moves the item to
-Close; otherwise leave it pending. Commit and push any that moved.
+Close; otherwise leave it pending. `wf next` never offers these steps
+(FLOW-05); this is where they complete. Commit and push any that moved.
 
 Then repeat while this run has taken fewer than `run_budget.steps` steps:
 
