@@ -45,15 +45,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261111T105701Z
+      expires: 2026-11-11T12:58:24.940946392Z
 budget:
   estimate:
     runs: 4
     steps: 18
   spent:
-    runs: 2
-    steps: 4
+    runs: 3
+    steps: 5
 questions:
   - id: a1
     kind: assumed
@@ -290,3 +290,6 @@ history:
   - at: 2026-11-09T19:26:35Z
     by: human/jeff
     event: 'back to design: re-review r2 (Jeff): a10 changed: the relay''s upstream DNS goes in the claim for every VM driver (relay-claim seam), not the seed/command line; rule: any relay configuration happens in the claim interface explicitly, only claim-reachability values (address, prefix, gateway, token) via the boot channel; BOOT-06''s proposed wording to be reworded to say so and re-approved; a11-a13 confirmed (a)'
+  - at: 2026-11-11T10:58:24Z
+    by: cloud/20261111T105701Z
+    event: claimed f1-design-r3 until 2026-11-11T12:58:24Z
