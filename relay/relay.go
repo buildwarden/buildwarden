@@ -96,10 +96,6 @@ const (
 	SourceResolvConf = "resolv.conf"
 )
 
-// upstreamDNSPort is the port every upstream resolver is asked on; a variable
-// only so tests can point the list at loopback servers.
-var upstreamDNSPort uint16 = 53
-
 // Relay is the core proxy that intercepts network traffic and writes a ledger.
 type Relay struct {
 	cfg Config
@@ -186,7 +182,7 @@ func Start(cfg Config) (*Relay, error) {
 	}
 	for _, a := range cfg.UpstreamDNS {
 		r.upstreamDNS = append(r.upstreamDNS,
-			netip.AddrPortFrom(a, upstreamDNSPort).String())
+			netip.AddrPortFrom(a, 53).String())
 	}
 	log.Print(upstreamLogLine(cfg.UpstreamDNS, cfg.UpstreamDNSSource))
 	collectorTransport := cfg.CollectorTransport
