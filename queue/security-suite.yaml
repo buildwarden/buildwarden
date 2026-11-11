@@ -1,6 +1,6 @@
 feature: security-suite
 title: 'Build the TEST-08 security suite and pen-tester agent (Deep-dive #1)'
-priority: 50
+priority: 52
 status: queued
 round: feature
 phase: 2
@@ -226,3 +226,9 @@ history:
   - at: 2026-11-08T22:10:40Z
     by: human/jeff
     event: 'on hold (Jeff): backburnered as a large project, taken up only when Jeff makes it a priority; status set back to queued so it holds no FLOW-05 in-progress slot, and blocking question q2 stops the loop starting it. Design r1 (e05df23) and its branch are kept; the design review resumes when q2 is answered'
+  - at: 2026-11-11T20:32:21Z
+    by: cloud/20261111T182144Z
+    event: 'priority 50 -> 51 (renumbered by wf new: relay-host-subnet-claim-only queued at 45)'
+  - at: 2026-11-11T20:32:22Z
+    by: cloud/20261111T182144Z
+    event: 'priority 51 -> 52 (renumbered by wf new: relay-init-dhcp-mask-default queued at 46)'

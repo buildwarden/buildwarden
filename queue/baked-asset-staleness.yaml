@@ -1,6 +1,6 @@
 feature: baked-asset-staleness
 title: One staleness check for every baked boot asset
-priority: 48
+priority: 50
 follows: build-link-subnet
 status: in_progress
 round: feature
@@ -68,7 +68,8 @@ steps:
     phase: 2
     affinity: human
     status: pending
-    needs: [f2-answer-q1]
+    needs:
+      - f2-answer-q1
     lease:
       claimed_by: ""
       expires: null
@@ -92,7 +93,7 @@ questions:
   - id: q1
     kind: blocking
     status: open
-    question: "On hold (Jeff, 2026-11-11): the queue is paused behind a major refactor Jeff will take as the priority once the in-flight implementations finish. Answer this question only to resume the item; while it stays open the item is on hold."
+    question: 'On hold (Jeff, 2026-11-11): the queue is paused behind a major refactor Jeff will take as the priority once the in-flight implementations finish. Answer this question only to resume the item; while it stays open the item is on hold.'
     options:
       - resume it, once Jeff makes it a priority again
     recommended: resume it, once Jeff makes it a priority again
@@ -197,4 +198,12 @@ history:
   - at: 2026-11-09T11:24:33Z
     by: cloud/20261109T105708Z
     event: entered phase 2 (plan)
-  - {at: 2026-11-11T13:00:00Z, by: human/jeff, event: "on hold (q1, f2-answer-q1 needed by f2-design-review): queue paused behind Jeff's refactor"}
+  - at: 2026-11-11T13:00:00Z
+    by: human/jeff
+    event: 'on hold (q1, f2-answer-q1 needed by f2-design-review): queue paused behind Jeff''s refactor'
+  - at: 2026-11-11T20:32:21Z
+    by: cloud/20261111T182144Z
+    event: 'priority 48 -> 49 (renumbered by wf new: relay-host-subnet-claim-only queued at 45)'
+  - at: 2026-11-11T20:32:22Z
+    by: cloud/20261111T182144Z
+    event: 'priority 49 -> 50 (renumbered by wf new: relay-init-dhcp-mask-default queued at 46)'

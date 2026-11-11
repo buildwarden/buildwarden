@@ -1,6 +1,6 @@
 feature: next-skips-merge-wait
 title: wf next hands the cloud a merge step that waits on the human, starving lower classes
-priority: 53
+priority: 55
 kind: process
 follows: regression-fixes-follow-up
 status: done
@@ -90,3 +90,9 @@ history:
   - at: 2026-11-11T18:10:34Z
     by: cloud/20261111T173920Z
     event: closed; feature done
+  - at: 2026-11-11T20:32:21Z
+    by: cloud/20261111T182144Z
+    event: 'priority 53 -> 54 (renumbered by wf new: relay-host-subnet-claim-only queued at 45)'
+  - at: 2026-11-11T20:32:22Z
+    by: cloud/20261111T182144Z
+    event: 'priority 54 -> 55 (renumbered by wf new: relay-init-dhcp-mask-default queued at 46)'

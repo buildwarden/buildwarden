@@ -1,6 +1,6 @@
 feature: design-principles
 title: 'Design principles: least surprise, explicit over implicit, minimal magic'
-priority: 51
+priority: 53
 kind: process
 status: done
 round: process
@@ -119,3 +119,9 @@ history:
   - at: 2026-11-11T17:56:28Z
     by: cloud/20261111T173920Z
     event: closed; feature done
+  - at: 2026-11-11T20:32:21Z
+    by: cloud/20261111T182144Z
+    event: 'priority 51 -> 52 (renumbered by wf new: relay-host-subnet-claim-only queued at 45)'
+  - at: 2026-11-11T20:32:22Z
+    by: cloud/20261111T182144Z
+    event: 'priority 52 -> 53 (renumbered by wf new: relay-init-dhcp-mask-default queued at 46)'

@@ -1,6 +1,6 @@
 feature: hyperv-relay-per-build-channel
 title: Give the Hyper-V relay VM a per-build channel before the claim
-priority: 47
+priority: 49
 follows: build-link-subnet
 status: in_progress
 round: feature
@@ -411,3 +411,9 @@ history:
   - at: 2026-11-11T20:24:17Z
     by: cloud/20261111T182144Z
     event: claimed f4-review until 2026-11-11T22:24:17Z
+  - at: 2026-11-11T20:32:21Z
+    by: cloud/20261111T182144Z
+    event: 'priority 47 -> 48 (renumbered by wf new: relay-host-subnet-claim-only queued at 45)'
+  - at: 2026-11-11T20:32:22Z
+    by: cloud/20261111T182144Z
+    event: 'priority 48 -> 49 (renumbered by wf new: relay-init-dhcp-mask-default queued at 46)'
