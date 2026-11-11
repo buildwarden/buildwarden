@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -560,23 +561,222 @@ func TestMergedBySquash(t *testing.T) {
 	}
 }
 
-// TestSquashOfAnOlderHeadFails: main moved under the branch between its last
-// main-merge and the squash, so the squash's tree is not the branch's and the
-// check names both.
-func TestSquashOfAnOlderHeadFails(t *testing.T) {
+// commitEdit rewrites the file at path in work with fn and commits it as msg.
+func commitEdit(t *testing.T, work, path, msg string, fn func(string) string) {
+	t.Helper()
+	p := filepath.Join(work, path)
+	b, _ := os.ReadFile(p)
+	_ = os.WriteFile(p, []byte(fn(string(b))), 0o644)
+	git(t, work, "add", path)
+	git(t, work, "commit", "-q", "-m", msg)
+}
+
+const shared = "docs/design/TEMPLATE.md"
+
+// mainMoved builds design-principles' #104 up to its squash: feat/demo also
+// edits the end of a file, and main then adds a line at that file's top and
+// a file of its own, so the branch's hunk sits at a different offset on main
+// and its tree lacks main's commit. It leaves main checked out.
+func mainMoved(t *testing.T) string {
+	t.Helper()
 	work := repo(t, design)
-	env := Env{Repo: work}
+	commitEdit(t, work, shared, "feature edits the end", func(s string) string {
+		return s + "Feature line.\n"
+	})
+	git(t, work, "push", "-q", "origin", "feat/demo")
 	git(t, work, "checkout", "-q", "main")
+	commitEdit(t, work, shared, "another feature", func(s string) string {
+		return "Another feature's line.\n" + s
+	})
 	_ = os.WriteFile(filepath.Join(work, "other.txt"), []byte("other\n"), 0o644)
 	git(t, work, "add", "other.txt")
-	git(t, work, "commit", "-q", "-m", "another feature")
-	squash(t, work, "#9")
+	git(t, work, "commit", "-q", "-m", "another feature's file")
+	git(t, work, "push", "-q", "origin", "main")
+	git(t, work, "fetch", "-q", "origin")
+	return work
+}
+
+func x3(pr int) *queue.Feature {
 	p := demo(3)
-	p.Kind, p.Round, p.PR = "process", "process", &queue.PR{Number: 9}
-	got := failures(Phase(env, p))
-	if !strings.Contains(got, "is not contained in origin/main") ||
-		strings.Count(got, "tree ") < 2 {
-		t.Fatalf("x3 on a squash with a different tree: %q, want both trees named", got)
+	p.Kind, p.Round, p.PR = "process", "process", &queue.PR{Number: pr}
+	return p
+}
+
+// pid is the patch-id the check computes for the change from a to b.
+func pid(work, a, b string) string {
+	return (&checker{env: Env{Repo: work}}).patchID(a, b)
+}
+
+// TestSquashAfterMainMoved: main moved under the branch before the squash,
+// as with design-principles' #104, so the squash's tree is not the branch's.
+// The squash still made exactly the branch's change, so both refs count as
+// merged by the patch-id proof, and the info says so (FLOW-08, GLOBAL-11).
+func TestSquashAfterMainMoved(t *testing.T) {
+	work := mainMoved(t)
+	squash(t, work, "#9")
+	rs := Phase(Env{Repo: work}, x3(9))
+	if !OK(rs) {
+		t.Fatalf("x3 on a squash made after main moved: %s", failures(rs))
+	}
+	for _, ref := range []string{"refs/heads/feat/demo", "refs/remotes/origin/feat/demo"} {
+		re := regexp.MustCompile(regexp.QuoteMeta(ref) +
+			` squash-merged as [0-9a-f]+ after main moved \(change [0-9a-f]{40}, base [0-9a-f]{7}\)`)
+		if !re.MatchString(rs[0].Info) {
+			t.Errorf("info %q, want %s named with its patch-id proof", rs[0].Info, ref)
+		}
+	}
+}
+
+// TestSquashWithADifferentChangeFails: a human resolved a conflict, or edited
+// the change, while squashing. The check fails, names both patch-ids and the
+// commands to compare them, and prints the deletion commands for the human;
+// the remote-tracking one only once GitHub has deleted the branch.
+func TestSquashWithADifferentChangeFails(t *testing.T) {
+	work := mainMoved(t)
+	git(t, work, "merge", "-q", "--squash", "feat/demo")
+	_ = os.WriteFile(filepath.Join(work, "resolved.txt"), []byte("resolved\n"), 0o644)
+	git(t, work, "add", "resolved.txt")
+	git(t, work, "commit", "-q", "-m", "Demo (#9)")
+	git(t, work, "push", "-q", "origin", "main")
+	git(t, work, "fetch", "-q", "origin")
+	got := failures(Phase(Env{Repo: work}, x3(9)))
+	ids := regexp.MustCompile(`change ([0-9a-f]{40})`).FindAllStringSubmatch(got, -1)
+	if len(ids) != 2 || ids[0][1] == ids[1][1] {
+		t.Errorf("detail %q, want two different patch-ids", got)
+	}
+	for _, want := range []string{
+		"no PR commit has its tree or its change",
+		"compare: git diff ",
+		" refs/heads/feat/demo; git diff ",
+		"after comparing, a human may delete: git branch -D feat/demo",
+	} {
+		if !strings.Contains(got, want) {
+			t.Errorf("detail %q, want %q", got, want)
+		}
+	}
+	const drop = "git update-ref -d refs/remotes/origin/feat/demo"
+	if strings.Contains(got, drop) {
+		t.Errorf("detail %q names %q while the remote branch exists", got, drop)
+	}
+	git(t, work, "push", "-q", "origin", ":feat/demo")
+	if got := failures(Phase(Env{Repo: work}, x3(9))); !strings.Contains(got, drop) {
+		t.Errorf("detail %q, want %q once the remote branch is gone", got, drop)
+	}
+}
+
+// TestPushedPastASquashAfterMainMovedFails: a head pushed past a squash made
+// after main moved has a change the squash lacks, so it is not merged.
+func TestPushedPastASquashAfterMainMovedFails(t *testing.T) {
+	work := mainMoved(t)
+	squash(t, work, "#9")
+	git(t, work, "checkout", "-q", "feat/demo")
+	commitEdit(t, work, "late.txt", "pushed after the squash", func(string) string {
+		return "late\n"
+	})
+	got := failures(Phase(Env{Repo: work}, x3(9)))
+	if !strings.Contains(got, "refs/heads/feat/demo (tree ") ||
+		!strings.Contains(got, "no PR commit has its tree or its change") {
+		t.Errorf("head past the squash: %q, want it named as unmerged", got)
+	}
+}
+
+// TestTwoParentPRCommitNotCompared: a merge commit naming the PR is not a
+// squash, so its first-parent change is not compared even when it equals
+// the branch's.
+func TestTwoParentPRCommitNotCompared(t *testing.T) {
+	work := mainMoved(t)
+	git(t, work, "checkout", "-q", "-b", "side")
+	git(t, work, "merge", "-q", "--squash", "feat/demo")
+	git(t, work, "commit", "-q", "-m", "side")
+	git(t, work, "checkout", "-q", "main")
+	git(t, work, "merge", "-q", "--no-ff", "-m", "Merge pull request #9 from o/side", "side")
+	git(t, work, "push", "-q", "origin", "main")
+	git(t, work, "fetch", "-q", "origin")
+	base, err := exec.Command("git", "-C", work, "merge-base", "feat/demo", "main^1").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	if a, b := pid(work, "main^1", "main"), pid(work, strings.TrimSpace(string(base)),
+		"feat/demo"); a == "" || a != b {
+		t.Fatalf("first-parent patch-id %q, branch's %q: the case needs them equal", a, b)
+	}
+	got := failures(Phase(Env{Repo: work}, x3(9)))
+	if !strings.Contains(got, "(2 parents, not compared)") {
+		t.Errorf("x3 on a two-parent PR commit: %q, want it not compared", got)
+	}
+}
+
+// TestWhitespaceOnlyDifferenceFails: the patch-id is whitespace-exact, so a
+// squash that changed only a line's whitespace is a different change.
+func TestWhitespaceOnlyDifferenceFails(t *testing.T) {
+	work := mainMoved(t)
+	git(t, work, "merge", "-q", "--squash", "feat/demo")
+	p := filepath.Join(work, shared)
+	b, _ := os.ReadFile(p)
+	_ = os.WriteFile(p, []byte(strings.Replace(string(b), "Feature line.\n",
+		"Feature  line.\n", 1)), 0o644)
+	git(t, work, "commit", "-q", "-am", "Demo (#9)")
+	git(t, work, "push", "-q", "origin", "main")
+	git(t, work, "fetch", "-q", "origin")
+	if got := failures(Phase(Env{Repo: work}, x3(9))); !strings.Contains(got,
+		"no PR commit has its tree or its change") {
+		t.Errorf("x3 on a whitespace-only difference: %q, want it unmerged", got)
+	}
+}
+
+// TestCrissCrossMergeBasesFail: with two merge bases between the ref and the
+// squash's parent, the check does not choose one; it fails and names both.
+func TestCrissCrossMergeBasesFail(t *testing.T) {
+	work := repo(t, design)
+	d := head(t, work)
+	git(t, work, "checkout", "-q", "main")
+	commitEdit(t, work, "other.txt", "another feature", func(string) string { return "other\n" })
+	m := head(t, work)
+	git(t, work, "merge", "-q", "--no-ff", "-m", "main merges the feature", d)
+	git(t, work, "checkout", "-q", "feat/demo")
+	git(t, work, "merge", "-q", "--no-ff", "-m", "feature merges main", m)
+	commitEdit(t, work, "more.txt", "more feature", func(string) string { return "more\n" })
+	git(t, work, "push", "-q", "origin", "feat/demo")
+	git(t, work, "checkout", "-q", "main")
+	commitEdit(t, work, "third.txt", "a third feature", func(string) string { return "third\n" })
+	git(t, work, "push", "-q", "origin", "main")
+	squash(t, work, "#9")
+	got := failures(Phase(Env{Repo: work}, x3(9)))
+	if !strings.Contains(got, "merge bases ") || !strings.Contains(got, d) ||
+		!strings.Contains(got, m) {
+		t.Errorf("x3 on a criss-cross history: %q, want merge bases %s and %s named",
+			got, d, m)
+	}
+}
+
+func head(t *testing.T, work string) string {
+	t.Helper()
+	out, err := exec.Command("git", "-C", work, "rev-parse", "--short=7", "HEAD").Output()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// TestSquashAfterMainMovedIgnoresDiffConfig: the diffs pin every option that
+// shapes them, so repository configuration, and running from a subdirectory,
+// change neither the verdict nor the patch-ids.
+func TestSquashAfterMainMovedIgnoresDiffConfig(t *testing.T) {
+	work := mainMoved(t)
+	squash(t, work, "#9")
+	plain := Phase(Env{Repo: work}, x3(9))
+	if !OK(plain) {
+		t.Fatalf("x3 with no config: %s", failures(plain))
+	}
+	git(t, work, "config", "diff.algorithm", "histogram")
+	git(t, work, "config", "diff.relative", "true")
+	git(t, work, "config", "diff.indentHeuristic", "false")
+	for _, dir := range []string{work, filepath.Join(work, "docs")} {
+		rs := Phase(Env{Repo: dir}, x3(9))
+		if !OK(rs) || rs[0].Info != plain[0].Info {
+			t.Errorf("x3 from %s with diff config: %q (ok %v), want %q", dir, rs[0].Info,
+				OK(rs), plain[0].Info)
+		}
 	}
 }
 
