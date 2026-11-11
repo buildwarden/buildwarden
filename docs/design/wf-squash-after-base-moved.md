@@ -374,6 +374,8 @@ relay or collector code is touched.
 
 ## Design review
 
+- **r1, 2026-11-11: approved at `7a92434`** (Jeff; page https://claude.ai/artifact/4DhsqjBxKuFh8LhTbkZMkb). Assumptions a1 to a6 confirmed as drafted, (a) each. No changes folded in. No `rule_changes` (process item, FLOW-14).
+
 ## Consolidation
 
 ## Rollback notes
