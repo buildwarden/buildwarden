@@ -5,7 +5,7 @@ kind: process
 follows: regression-fixes-follow-up
 status: in_progress
 round: process
-phase: 2
+phase: 4
 design: docs/design/next-skips-merge-wait.md
 branch: feat/next-skips-merge-wait
 alters_relationships: null
@@ -24,10 +24,24 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261111T173920Z
-      expires: 2026-11-11T19:56:40.393479923Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -55,3 +69,15 @@ history:
   - at: 2026-11-11T17:56:40Z
     by: cloud/20261111T173920Z
     event: claimed x2-implement until 2026-11-11T19:56:40Z
+  - at: 2026-11-11T18:10:13Z
+    by: cloud/20261111T173920Z
+    event: done x2-implement
+  - at: 2026-11-11T18:10:13Z
+    by: cloud/20261111T173920Z
+    event: entered phase 3 (merge)
+  - at: 2026-11-11T18:10:13Z
+    by: cloud/20261111T173920Z
+    event: done x3-merge
+  - at: 2026-11-11T18:10:13Z
+    by: cloud/20261111T173920Z
+    event: entered phase 4 (close)
