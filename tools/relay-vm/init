@@ -21,7 +21,8 @@
 # Boot keys: the relay's pre-claim values only (RELAY-08). Everything else,
 # the build link, the collector and the upstream resolvers (upstream_dns),
 # comes in the claim. Each key is a warden.<key>=<value> word, read by
-# read_keys from /proc/cmdline and, on Hyper-V, from the relay seed. Only these
+# read_keys from /proc/cmdline or, on Hyper-V, from the relay seed alone (a
+# warden.* word on the Hyper-V command line stops the init). Only these
 # keys are read, the words are never evaluated, and a malformed value stops
 # the init with a console line (no relay starts, so the claim times out with
 # this log as the evidence):
@@ -161,8 +162,15 @@ NAT_PREFIX=""
 NAT_GW=""
 CLAIM_TOKEN=""
 SEED_VERSION=""
-read_keys /proc/cmdline < /proc/cmdline
 if [ "$HYPERV" = 1 ]; then
+    # The seed alone carries the keys here: a warden.* word on the command
+    # line would be a second channel for the same key, so it stops the init.
+    for kv in $(cat /proc/cmdline); do
+        case "$kv" in warden.*)
+            stop "${kv%%=*} on the kernel command line: on Hyper-V the relay" \
+                "seed (WARDENRELAY) alone carries the boot keys" ;;
+        esac
+    done
     for mod in scsi_common scsi_mod scsi_transport_fc hv_storvsc cdrom sr_mod isofs; do
         [ -f "/lib/modules/${mod}.ko" ] && insmod "/lib/modules/${mod}.ko" 2>/dev/null
     done
@@ -170,6 +178,8 @@ if [ "$HYPERV" = 1 ]; then
     SEED_VERSION=""
     read_keys "the relay seed" < /tmp/warden-relay.conf
     [ "$SEED_VERSION" = 1 ] || stop "no relay seed (WARDENRELAY): no warden.seed=1"
+else
+    read_keys /proc/cmdline < /proc/cmdline
 fi
 if [ "$NET_MODE" = static ] &&
     { [ -z "$NAT_IP" ] || [ -z "$NAT_PREFIX" ] || [ -z "$NAT_GW" ]; }; then

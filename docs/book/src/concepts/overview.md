@@ -359,8 +359,9 @@ read_keys(words):            # one reader for both sources; never evaluated
     warden.net=dhcp|static, warden.nat_ip=<quad>, warden.nat_prefix=1..30,
     warden.nat_gw=<quad>, warden.claim_token=<64 hex>, warden.seed=1
     a malformed value, or warden.dns (retired for upstream_dns) -> stop
-read_keys(/proc/cmdline)
-Hyper-V: load the storage, CD-ROM and ISO 9660 modules; wait <= 10 s for the
+qemu, Firecracker: read_keys(/proc/cmdline)
+Hyper-V: the seed alone: any warden.* word on /proc/cmdline -> stop, naming it
+         load the storage, CD-ROM and ISO 9660 modules; wait <= 10 s for the
          WARDENRELAY CD; copy warden-relay.conf; unmount; read_keys(it)
          no CD, no file or no warden.seed=1 -> stop
 bring the build link's interface up (the relay addresses it from the claim)

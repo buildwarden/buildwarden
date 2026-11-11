@@ -48,8 +48,10 @@ func TestRelayInitKeyReader(t *testing.T) {
 			t.Errorf("the init lacks %q", call)
 		}
 	}
-	if n := strings.Count(s, "/proc/cmdline"); n != 2 {
-		t.Errorf("the init reads /proc/cmdline outside read_keys (%d mentions)", n)
+	// read_keys over the command line, and the Hyper-V refusal's scan.
+	if n := strings.Count(s, "/proc/cmdline"); n != 3 {
+		t.Errorf("the init reads /proc/cmdline outside read_keys and the Hyper-V "+
+			"refusal (%d mentions)", n)
 	}
 	for _, banned := range []string{"eval ", ". /", "source ", "UPSTREAM_DNS",
 		"NAT_IP=1", "NAT_IP=2", "NAT_IP=9"} {
@@ -100,6 +102,26 @@ func TestRelayInitSeedOnlyOnHyperV(t *testing.T) {
 	}
 	if seed == "" {
 		t.Fatal("no HYPERV block reads the seed")
+	}
+	// On Hyper-V the seed alone supplies the keys (the design's Defaults and
+	// overrides): the command line is read only in the other branch, and a
+	// warden.* word on it stops the init, naming the key, before the seed.
+	branches := regexp.MustCompile(`(?s)\nif \[ "\$HYPERV" = 1 \]; then\n(.*?)\nelse\n(.*?)\nfi\n`).
+		FindStringSubmatch(s)
+	if branches == nil || strings.Contains(branches[1], "\nfi\n") ||
+		!strings.Contains(branches[1], "\n    read_seed\n") {
+		t.Fatal("the seed-reading HYPERV block has no else branch")
+	}
+	if strings.Contains(branches[1], "read_keys /proc/cmdline") ||
+		strings.TrimSpace(branches[2]) != "read_keys /proc/cmdline < /proc/cmdline" {
+		t.Error("the command line's keys are read on Hyper-V, or not only off it")
+	}
+	refuse := regexp.MustCompile(`(?s)for kv in \$\(cat /proc/cmdline\); do\s*` +
+		`case "\$kv" in warden\.\*\)\s*stop "\$\{kv%%=\*\} on the kernel command line`)
+	if loc := refuse.FindStringIndex(branches[1]); loc == nil ||
+		loc[0] > strings.Index(branches[1], "read_seed") {
+		t.Error("a warden.* word on the Hyper-V command line does not stop the init, " +
+			"naming the key, before the seed is read")
 	}
 	if n := strings.Count(s, "\n    read_seed\n"); n != 1 ||
 		!strings.Contains(seed, "\n    read_seed\n") {

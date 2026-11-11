@@ -58,6 +58,10 @@ runs `udhcpc` on the upstream interface and stops when it gets no lease.
   relay's own address on the NAT and a fresh token. Hyper-V's NAT gives no
   DHCP lease, so a seed names a static upstream.
 
+  On Hyper-V the seed is the only source: the init does not read keys from
+  the kernel command line there, and a `warden.*` word on it stops the init,
+  naming the key, so the two channels never both supply one.
+
 ## The relay's resolvers
 
 `warden.dns` is retired. An init that finds it stops, naming `upstream_dns`
