@@ -51,6 +51,33 @@ func TestWardenRunPS1ConfiguredLink(t *testing.T) {
 	}
 }
 
+// TestWardenRunPS1NoIP checks the launcher passes initialize only the relay
+// as its gateway, never --ip, so the guest keeps the relay's lease.
+func TestWardenRunPS1NoIP(t *testing.T) {
+	configured, err := buildlink.Parse("100.126.255.252/30")
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, tc := range []struct {
+		name string
+		link buildlink.Link
+	}{
+		{"default", buildlink.Default()},
+		{"configured", configured},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			ps := WardenRunPS1(tc.link)
+			if strings.Contains(ps, "--ip") || strings.Contains(ps, tc.link.GuestCIDR()) {
+				t.Errorf("warden-run.ps1 passes a static address:\n%s", ps)
+			}
+			want := "initialize --gateway=" + tc.link.Relay.String()
+			if n := strings.Count(ps, want); n != 2 {
+				t.Errorf("%q appears %d times, want 2 (the run and its Emit line)", want, n)
+			}
+		})
+	}
+}
+
 func TestWardenRunPS1(t *testing.T) {
 	ps := WardenRunPS1(buildlink.Default())
 	for _, want := range []string{
