@@ -18,13 +18,10 @@ type RuleChange struct {
 	Paths  []string `yaml:"paths"`
 }
 
-// workflowsDir holds the CI workflows. Only their lines that run the rule
-// enforcement are a rule change; the rest is ordinary code.
+// workflowsDir holds the CI workflows. Only their jobs that run the rule
+// enforcement, and the needs: entries that name those jobs, are a rule
+// change; the rest is ordinary code (workflowGuardChanged).
 const workflowsDir = ".github/workflows/"
-
-// ruleRunningRe matches a workflow line that runs the rule enforcement:
-// tier 1, golangci-lint or the workflow tools (FLOW-14).
-var ruleRunningRe = regexp.MustCompile(`tier1|golangci-lint|tools/workflow`)
 
 // pathKind says what FLOW-14 makes of a changed path.
 type pathKind int
@@ -35,8 +32,8 @@ const (
 	machinery          // the loop's own machinery: process items only
 )
 
-// kindOf classifies a path. A workflow file is ordinary here; its changed
-// lines decide (ruleRunningRe).
+// kindOf classifies a path. A workflow file is ordinary here; whether its
+// change touches a rule-running job decides (workflowGuardChanged).
 func kindOf(p string) pathKind {
 	switch {
 	case strings.HasPrefix(p, "docs/development/"), strings.HasPrefix(p, "tools/tier1/"),
@@ -124,8 +121,9 @@ func (c *checker) cleared(d *Design) (paths map[string]string, why []string) {
 
 // ruleChangeFiles returns the files the branch changes since its merge base
 // with base that FLOW-14 guards, with their kind: every rule-change and
-// machinery path, and each workflow file whose changed lines run the rule
-// enforcement.
+// machinery path, and each workflow file whose change touches a rule-running
+// job (workflowGuardChanged). A workflow that does not parse on either side
+// is an error naming the file.
 func (c *checker) ruleChangeFiles(base, branch string) (map[string]pathKind, error) {
 	names, err := c.git("diff", "--name-only", "--no-renames", base+"..."+branch)
 	if err != nil {
@@ -137,23 +135,43 @@ func (c *checker) ruleChangeFiles(base, branch string) (map[string]pathKind, err
 			out[p] = k
 		}
 	}
-	patch, err := c.git("diff", "-U0", "--no-renames", base+"..."+branch, "--", workflowsDir)
+	mb, err := c.git("merge-base", base, branch)
 	if err != nil {
 		return nil, err
 	}
-	var file string
-	for _, line := range strings.Split(patch, "\n") {
-		switch {
-		case strings.HasPrefix(line, "diff --git "):
-			file = ""
-		case strings.HasPrefix(line, "+++ b/"):
-			file = strings.TrimPrefix(line, "+++ b/")
-		case strings.HasPrefix(line, "--- a/") && file == "":
-			file = strings.TrimPrefix(line, "--- a/")
-		case strings.HasPrefix(line, "+++ "), strings.HasPrefix(line, "--- "):
-		case file != "" && line != "" && strings.ContainsAny(line[:1], "+-") &&
-			ruleRunningRe.MatchString(line):
-			out[file] = rulePath
+	status, err := c.git("diff", "--name-status", "-z", "--no-renames", base+"..."+branch,
+		"--", workflowsDir)
+	if err != nil {
+		return nil, err
+	}
+	// -z: status and path alternate, each NUL-terminated, so no path is quoted.
+	fields := strings.Split(strings.TrimSuffix(status, "\x00"), "\x00")
+	for i := 0; i+1 < len(fields); i += 2 {
+		st, p := fields[i], fields[i+1]
+		if !strings.HasSuffix(p, ".yml") && !strings.HasSuffix(p, ".yaml") {
+			continue
+		}
+		var before, after []byte
+		if st != "A" {
+			text, err := c.git("show", mb+":"+p)
+			if err != nil {
+				return nil, err
+			}
+			before = []byte(text)
+		}
+		if st != "D" {
+			text, err := c.git("show", branch+":"+p)
+			if err != nil {
+				return nil, err
+			}
+			after = []byte(text)
+		}
+		changed, err := workflowGuardChanged(before, after)
+		if err != nil {
+			return nil, fmt.Errorf("%s: %w", p, err)
+		}
+		if changed {
+			out[p] = rulePath
 		}
 	}
 	return out, nil

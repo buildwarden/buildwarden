@@ -1,0 +1,230 @@
+package vz
+
+import (
+	"errors"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+
+	"github.com/buildwarden/buildwarden/driver"
+)
+
+// srcKind is what an `image prepare --driver vz` source names.
+type srcKind int
+
+const (
+	srcEmpty srcKind = iota // no source
+	srcURL                  // an IPSW URL (file:// included)
+	srcFile                 // a local IPSW file, given as a plain path
+	srcImage                // a prepared image directory, or its disk.img
+)
+
+// prepSource is a classified source. path is the URL, the absolute IPSW
+// path, or the image directory (inside the cache: CacheDir/<name>).
+type prepSource struct {
+	kind    srcKind
+	path    string
+	outside bool // a prepared image that is not a directory of the cache
+}
+
+// classify decides what source names: nothing, a URL (it has a scheme), a
+// prepared image (a valid image directory or the disk.img inside one) or a
+// local IPSW file (any other regular file). A plain path that names none of
+// these is refused naming the path.
+func classify(source, cacheDir string) (prepSource, error) {
+	if source == "" {
+		return prepSource{kind: srcEmpty}, nil
+	}
+	if isIPSWURL(source) {
+		return prepSource{kind: srcURL, path: source}, nil
+	}
+	refuse := driver.Fixable(
+		"give an IPSW URL, a local .ipsw file, or a prepared image directory",
+		"no IPSW file or prepared image at %s", source)
+	abs, err := filepath.Abs(source)
+	if err != nil {
+		return prepSource{}, refuse
+	}
+	fi, err := os.Stat(abs)
+	if err != nil {
+		return prepSource{}, refuse
+	}
+	dir := abs
+	if !fi.IsDir() {
+		if filepath.Base(abs) != "disk.img" || !isValidImageDir(filepath.Dir(abs)) {
+			if !fi.Mode().IsRegular() {
+				return prepSource{}, refuse
+			}
+			return prepSource{kind: srcFile, path: abs}, nil
+		}
+		dir = filepath.Dir(abs)
+	}
+	if !isValidImageDir(dir) {
+		return prepSource{}, refuse
+	}
+	if sameDir(filepath.Dir(dir), cacheDir) {
+		inCache := filepath.Join(cacheDir, filepath.Base(dir))
+		return prepSource{kind: srcImage, path: inCache}, nil
+	}
+	return prepSource{kind: srcImage, path: dir, outside: true}, nil
+}
+
+// sameDir reports whether a and b name the same directory, through symlinks
+// (a cache under /var is /private/var on macOS).
+func sameDir(a, b string) bool {
+	if filepath.Clean(a) == filepath.Clean(b) {
+		return true
+	}
+	ia, err1 := os.Stat(a)
+	ib, err2 := os.Stat(b)
+	return err1 == nil && err2 == nil && os.SameFile(ia, ib)
+}
+
+// Prepare is `warden image prepare --driver vz [source | --update]`, after
+// the platform and root checks: it restores or refreshes one image, makes it
+// the active image and returns its directory.
+//
+//   - no source: refresh the active image in place, or restore the latest
+//     supported IPSW when no image is prepared;
+//   - an IPSW URL or file: refresh its image in place when it is prepared,
+//     else restore it;
+//   - a prepared image in the cache: refresh it in place;
+//   - update (no source): restore the latest supported IPSW, or refresh its
+//     image in place when it is prepared.
+func (c *ImageCache) Prepare(source string, update bool) (string, error) {
+	if update && source != "" {
+		return "", driver.Fixable(
+			"drop the source, or drop --update to prepare that source",
+			"--update picks the newest IPSW itself")
+	}
+	src, err := classify(source, c.CacheDir)
+	if err != nil {
+		return "", err
+	}
+	if src.kind == srcImage && src.outside {
+		return "", driver.Fixable(customImageFix(c.CacheDir),
+			"%s is a prepared image outside the image cache %s", src.path, c.CacheDir)
+	}
+	active := ""
+	if src.kind == srcEmpty && !update {
+		active, _ = c.ImageDir()
+	}
+	var dir string
+	switch {
+	case active != "":
+		dir, err = active, c.refreshImage(active)
+	case update, src.kind == srcEmpty:
+		dir, err = c.restoreOrRefreshLatest()
+	case src.kind == srcImage:
+		dir, err = src.path, c.refreshImage(src.path)
+	default: // an IPSW URL or file
+		dir, err = c.restoreOrRefresh(src.path)
+	}
+	if err != nil {
+		return "", err
+	}
+	if err := c.SetActive(dir); err != nil {
+		return "", err
+	}
+	c.removeCachedIPSW(dir)
+	if active != "" {
+		c.warnIfOutOfDate(dir)
+	}
+	return dir, nil
+}
+
+// restoreOrRefreshLatest prepares the latest supported IPSW.
+func (c *ImageCache) restoreOrRefreshLatest() (string, error) {
+	u, err := c.latestIPSW()
+	if err != nil {
+		return "", fmt.Errorf("fetching latest IPSW URL: %w", err)
+	}
+	fmt.Fprintf(c.out(), "Latest macOS IPSW: %s\n", u)
+	return c.restoreOrRefresh(u)
+}
+
+// removeCachedIPSW deletes the IPSW downloaded for the prepared image dir.
+// Its provenance (URL, digest) is recorded, and a later prepare of the same
+// source refreshes this image in place, so the file (about 25 GB) is never
+// read again. A local IPSW file is the user's and is never in the cache
+// under this name.
+func (c *ImageCache) removeCachedIPSW(dir string) {
+	key := strings.TrimPrefix(filepath.Base(dir), "macos-")
+	err := os.Remove(filepath.Join(c.CacheDir, "ipsw-"+key+".ipsw"))
+	if err != nil && !errors.Is(err, os.ErrNotExist) {
+		fmt.Fprintf(c.out(),
+			"warning: could not delete the image's cached IPSW: %v\n", err)
+	}
+}
+
+// warnIfOutOfDate warns, after a no-source refresh, when the active image was
+// not restored from the latest supported IPSW. The lookup is best effort: a
+// failure (offline, Apple unreachable) prints nothing.
+func (c *ImageCache) warnIfOutOfDate(active string) {
+	u, err := c.latestIPSW()
+	if err != nil {
+		return
+	}
+	if msg, ok := c.OutOfDate(active, u); ok {
+		fmt.Fprintf(c.out(), "warning: %s\n", msg)
+	}
+}
+
+// OutOfDate reports whether the active image directory was restored from
+// some IPSW other than u, the latest supported one, and the warning that
+// says so and names --update.
+func (c *ImageCache) OutOfDate(active, u string) (string, bool) {
+	uPrepared := isValidImageDir(filepath.Join(c.CacheDir, "macos-"+shortHash(u)))
+	return outOfDate(active, c.recordedIPSW(active), u, uPrepared)
+}
+
+// outOfDate is OutOfDate over what the cache holds: the active image is from
+// u when its directory is u's key, or when the file name of the IPSW it
+// recorded is u's (an image restored from a local copy of u is keyed by its
+// path). The digests are not compared: knowing u's needs the download.
+func outOfDate(active, recorded, u string, uPrepared bool) (string, bool) {
+	if filepath.Base(active) == "macos-"+shortHash(u) ||
+		(recorded != "" && ipswFileName(recorded) == ipswFileName(u)) {
+		return "", false
+	}
+	current := filepath.Base(active) + " (IPSW not recorded)"
+	if recorded != "" {
+		current = ipswLabel(recorded)
+	}
+	next := " is available. To update (about 25 GB, 15 minutes): "
+	if uPrepared {
+		next = " is already prepared. To use it (no download): "
+	}
+	return "the active macOS image is " + current + "; " + ipswLabel(u) + next +
+		PrepareCommand + " --update", true
+}
+
+// appleIPSW matches Apple's IPSW file names, UniversalMac_<version>_<build>_Restore.ipsw.
+var appleIPSW = regexp.MustCompile(`^UniversalMac_([0-9][0-9.]*)_([0-9A-Za-z]+)_Restore\.ipsw$`)
+
+// ipswLabel names the macOS an IPSW holds, "macOS 27.2 (26B123)", parsed from
+// Apple's file name, else the file name.
+func ipswLabel(ipswURL string) string {
+	name := ipswFileName(ipswURL)
+	if m := appleIPSW.FindStringSubmatch(name); m != nil {
+		return "macOS " + m[1] + " (" + m[2] + ")"
+	}
+	return name
+}
+
+// restoreOrRefresh refreshes in place the image an IPSW source keys to when
+// it is prepared, wherever it sorts in the cache, and restores it otherwise.
+func (c *ImageCache) restoreOrRefresh(source string) (string, error) {
+	dir := filepath.Join(c.CacheDir, "macos-"+shortHash(source))
+	if isValidImageDir(dir) {
+		return dir, c.refreshImage(dir)
+	}
+	return c.restore(source)
+}
+
+func (c *ImageCache) refreshImage(dir string) error {
+	fmt.Fprintf(c.out(), "Refreshing boot agent on %s\n", dir)
+	return c.refreshStep(dir)
+}
