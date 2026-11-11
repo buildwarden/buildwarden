@@ -3,15 +3,15 @@ title: vz image prepare refreshes the cached image in place, and builds pick the
 priority: 43
 status: in_progress
 round: feature
-phase: 6
+phase: 8
 design: docs/design/vz-image-prepare-refresh.md
 branch: feat/vz-image-prepare-refresh
-pr:
-  number: 108
-  ci: green
 alters_relationships: false
 design_review: required
 source: 'workflow-human 2026-11-06 (Jeff), immediate follow-up to build-link-subnet (#98): in the macos-vz attended validation, image prepare --driver vz restored a new image from the latest IPSW instead of re-preparing the cached one, and ImageCache.ImageDir then picks the first image by name, so a build without --image keeps using the old image, which the link-channel stamp check now refuses. Also on main before #98. Evidence: workflow native/macos-vz/2026-11-05/, PR #98 ''For Jeff'' item 4.'
+pr:
+  number: 108
+  ci: green
 steps:
   - id: f0-branch-setup
     phase: 0
@@ -107,13 +107,27 @@ steps:
   - id: f6-open-pr
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f6-consolidate
       - f6-validate-macos-vz
     lease:
-      claimed_by: cloud/20261111T182144Z
-      expires: 2026-11-11T21:34:57.12992835Z
+      claimed_by: ""
+      expires: null
+  - id: f7-merge
+    phase: 7
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f8-close
+    phase: 8
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 5
@@ -344,3 +358,15 @@ history:
   - at: 2026-11-11T19:34:57Z
     by: cloud/20261111T182144Z
     event: claimed f6-open-pr until 2026-11-11T21:34:57Z
+  - at: 2026-11-11T19:50:21Z
+    by: cloud/20261111T182144Z
+    event: done f6-open-pr
+  - at: 2026-11-11T19:50:21Z
+    by: cloud/20261111T182144Z
+    event: entered phase 7 (merge)
+  - at: 2026-11-11T19:50:21Z
+    by: cloud/20261111T182144Z
+    event: done f7-merge
+  - at: 2026-11-11T19:50:21Z
+    by: cloud/20261111T182144Z
+    event: entered phase 8 (close)
