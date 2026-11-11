@@ -1,0 +1,121 @@
+{
+  "feature": "build-vm-busybox",
+  "branch": "feat/build-vm-busybox",
+  "head": "ef964c074f0d",
+  "base": "beb51ba44ad8",
+  "round": "feature",
+  "step": "f4-review",
+  "previous_report": null,
+  "scope": "git diff origin/main...feat/build-vm-busybox: 4 files, +412/-7 (docs/design/build-vm-busybox.md, driver/buildlink/scripts_test.go, tools/build-vm/.gitignore, tools/build-vm/build-initramfs.sh). The branch has merged origin/main beb51ba, so the merge base is origin/main. First tier-2 pass. Judged against the design as approved at d196ac9 (r1).",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "rule_index": "'### <ID> — <title>' headers with their Severity and Check lines, extracted from origin/main's docs/development/*.md (LINT-01), including GLOBAL-09 to GLOBAL-11 and RELAY-08. Judged: every agent-judgment rule, and the judgment half of every hybrid rule, the diff reaches. The branch changes no rule.",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass (linux host, ~/go/bin golangci-lint 2.15.0 built with go1.26.10): 0 issues in the root module, tools/workflow and tools/tier1. Then dist/tier1 -base origin/main (beb51ba44ad8...ef964c074f0d): 0 MUST, 0 MUST-review, 0 SHOULD, 0 hints, 0 suppressed",
+    "make_lint_per_platform": "not needed (FLOW-17): the diff touches no build-tagged file",
+    "make_test": "pass: 33 ok lines, no FAIL. TestDirectBootBusyboxPins passes in a -count=1 -v run of driver/buildlink",
+    "wf_check": "dist/wf check -feature build-vm-busybox -state .dev/workflow -repo .: checkout is the clean branch head (ok); rule changes cleared (FLOW-14): the branch changes no rule or its enforcement (ok). make lint/make test reported as skipped (no -run; run separately above, green) and the two tier-2 report files missing (this report writes them)",
+    "enforcement": "not run: the branch changes neither tools/tier1/ nor tools/workflow/check/ (FLOW-14)",
+    "pin_check": "The linter fetched Alpine v3.21/main busybox-static-1.37.0-r14.apk for aarch64 and x86_64: sha256 6fd7ea97...988c69 (aarch64) matches tools/build-vm, feef45f0...2405bd (x86_64) matches tools/firecracker-vm. Both APKINDEXes list busybox-static V:1.37.0-r14 as current. The aarch64 apk extracts bin/busybox.static, an aarch64 static ELF",
+    "ci_runs": "none on ef964c0 yet; no workflow builds tools/build-vm, and firecracker.yml's asset cache key is unchanged (tools/firecracker-vm untouched)",
+    "fixes_made": "none; the code checkout is still clean at ef964c0"
+  },
+  "implement_reported": [
+    {
+      "item": 1,
+      "topic": "busybox-static is still 1.37.0-r14 in Alpine 3.21, so tools/firecracker-vm is unchanged",
+      "verdict": "accepted; design text stale, for Publish",
+      "finding": null,
+      "note": "Confirmed against both APKINDEXes. See informational FLOW-06."
+    }
+  ],
+  "findings": [
+    {
+      "id": 1,
+      "rule": "UX-04",
+      "related_rules": [
+        "GLOBAL-11"
+      ],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "tools/build-vm/build-initramfs.sh",
+      "line": 50,
+      "cause": "diff",
+      "finding": "On a checksum mismatch the script stops (set -e) with only sha256sum's or shasum's own output ('busybox-static-1.37.0-r14.apk: FAILED', 'WARNING: 1 computed checksum did NOT match'). It does not say which file to remove or that the pin may need changing. The bad apk stays in tools/build-vm/.cache/, so every rerun fails the same way. Validation plan case 2 (a corrupted cached apk) exercises exactly this path. tools/firecracker-vm has the same gap on main; it is out of this diff's scope (LINT-04) and not filed separately.",
+      "suggestion": "Wrap the check: on failure print 'Error: $CACHE_DIR/$BUSYBOX_APK does not match BUSYBOX_SHA256; delete it and rerun, or re-pin both direct-boot scripts if Alpine republished it' and exit 1. Align the Firecracker copy at its next re-pin, when its cache key changes anyway."
+    },
+    {
+      "id": 2,
+      "rule": "UX-04",
+      "related_rules": [
+        "GLOBAL-11"
+      ],
+      "severity": "SHOULD",
+      "check": "agent-judgment",
+      "file": "tools/build-vm/build-initramfs.sh",
+      "line": 42,
+      "cause": "diff",
+      "finding": "Any curl failure (offline host, DNS, a proxy refusal, a 5xx) is reported as 'Alpine 3.21 no longer has busybox-static-1.37.0-r14.apk; set BUSYBOX_VERSION and BUSYBOX_SHA256 ... to the current busybox-static'. That names a cause that may be wrong and a fix that does not help. This feature's own q1 is the case: the cloud proxy refused dl-cdn.alpinelinux.org, and this message would have told the user to re-pin. The fix also names only $0, while TestDirectBootBusyboxPins requires both direct-boot scripts to move together. The text is copied from tools/firecracker-vm (main).",
+      "suggestion": "State what failed and branch the fix: 'Error: could not download ${ALPINE_MIRROR}/${BUSYBOX_APK} (curl's error above). Check network access to dl-cdn.alpinelinux.org; if v3.21's APKINDEX no longer lists it, re-pin BUSYBOX_VERSION and the per-arch BUSYBOX_SHA256 in tools/build-vm and tools/firecracker-vm'. Optionally, curl -o /dev/null -w '%{http_code}' could tell a 404 from a network failure."
+    }
+  ],
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 0,
+    "SHOULD": 2
+  },
+  "resolved_since_previous": [],
+  "carried_forward": [],
+  "new_since_previous": [
+    1,
+    2
+  ],
+  "suppressions": [],
+  "suppressions_note": "No previous report for this feature, and tier 1 applied no Tier1-Allow trailers (0 suppressed), so there are no suppressions to carry over.",
+  "follow_ups_filed": [],
+  "back_to_design": false,
+  "back_to_design_note": "Nothing invalidates a Decision or a confirmed question. a2 (C) resolved to no Firecracker change because the current version is the pinned one; the design text catches up at Publish.",
+  "routing": {
+    "tier1_red": false,
+    "wf_implement_fix": "none for tier 1: it is green at ef964c0",
+    "must_findings_route": "No MUST findings, so nothing must go back to wf-implement. Findings 1 and 2 are small error-text fixes in tools/build-vm/build-initramfs.sh, worth taking if work goes back; otherwise they go in the PR body (FLOW-08)."
+  },
+  "informational": [
+    {
+      "rule": "GLOBAL-10",
+      "file": "tools/build-vm/build-initramfs.sh",
+      "line": 50,
+      "note": "sha256sum when present, else shasum -a 256: a named tool selection (Decision 3), not a fallback on failure. Reusing a cached apk is named in Design step 3. tar || true and the extraction check are named in Decision 3. No unnamed default, merge or fallback in the diff (GLOBAL-09 to GLOBAL-11, judged by the Decisions; the design predates the Defaults and overrides section)."
+    },
+    {
+      "rule": "RELAY-08",
+      "file": "-",
+      "line": 0,
+      "note": "Not reached: the diff delivers no relay setting."
+    },
+    {
+      "rule": "FLOW-06",
+      "file": "docs/design/build-vm-busybox.md",
+      "line": 74,
+      "note": "Implement found that Alpine 3.21's current busybox-static is still 1.37.0-r14 (the linter confirmed both APKINDEXes), so a2 (C) leaves tools/firecracker-vm unchanged. This is consistent with the approved decision and was reported, so it is not a silent redesign. Stale text for Publish to correct (FLOW-10): Decision 1's version note ('tools/firecracker-vm/build-initramfs.sh changes, so ... re-keys once'), the Cross-driver firecracker line (line 207), the Validation plan's CI line (line 221), Implementation task 2 (line 248) and task 7's firecracker sentence, and front matter drivers: [qemu, firecracker], and the r1 note at line 296. Firecracker has no CI validation owed: its cache key is unchanged."
+    },
+    {
+      "rule": "UX-01",
+      "file": "docs/book/src/guide/drivers.md",
+      "line": 122,
+      "note": "No reference doc owed. drivers.md still lists relay-vm then build-vm, and driver/qemu's rebuild message (driver.go:518) still names the build-vm script. The changed text is the script's own header and errors, in the diff."
+    },
+    {
+      "rule": "FLOW-09",
+      "file": "docs/design/build-vm-busybox.md",
+      "line": 11,
+      "note": "f6-validate-qemu-any (blocking) remains the macOS proof: shasum -a 256 -c - on stdin, bsdtar on the apk, the four Validation cases. The linter checked the pins and extraction on linux only."
+    },
+    {
+      "rule": "GLOBAL-04",
+      "file": "driver/buildlink/scripts_test.go",
+      "line": 136,
+      "note": "TestDirectBootBusyboxPins covers the design's tier-0 list: shared ALPINE_VERSION and BUSYBOX_VERSION, a 64-hex BUSYBOX_SHA256 in each script that the script checks, no $RELAY_CACHE/busybox, and the shasum branch in tools/build-vm. It is deterministic and pure-Go (TEST-04)."
+    }
+  ]
+}
