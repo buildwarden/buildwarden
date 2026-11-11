@@ -55,6 +55,9 @@ gaps:
       2026-11-07 (host:macos-qemu/20261107T124005Z, unattended, main 49e5354): not run. Since
       4c8f9dc only build-link-subnet (#98) touched driver/qemu (the link subnet); nothing addresses
       the silent guest or adds a qemu build-VM exit watch, and still no Windows arm64 ISO is reachable.
+      2026-11-11 (host:macos-qemu/20261111T124004Z, unattended, main beb51ba): not run. Since
+      49e5354 main changed only docs and tools/workflow (#100-#105), no queue item carries a qemu
+      Windows build-guest fix, and no ISO is reachable.
     status: open
   - id: qemu-linux-exclusive-trust
     host: macos-qemu
@@ -196,6 +199,9 @@ gaps:
       signatures valid, all channels closed. (A bare `--image alpine_3_21.qcow2` is taken as a path
       and fails stat; the full cache path works.) Windows half still waits on qemu-windows-guest-package.
       Logs: native/qemu-any/2026-11-07/.
+      2026-11-11 (host:qemu-any/20261111T124004Z, unattended, main beb51ba): not rerun. Since
+      49e5354 main changed only docs and tools/workflow, so the 2026-11-07 Linux pass stands;
+      Windows half still waits on qemu-windows-guest-package.
     status: open
   - id: hyperv-eval-image-verify-disks
     host: windows-hyperv
@@ -437,6 +443,8 @@ gaps:
       build-link-subnet has merged (#98), so this now runs on main, but qemu Windows builds still
       fail there (qemu-windows-guest-package); the Linux qemu path on the new link re-passed this run
       (qemu-environment-descriptors).
+      2026-11-11 (host:macos-qemu/20261111T124004Z, unattended, main beb51ba): not run. qemu
+      Windows builds still fail on main (no code change since 49e5354).
     status: open
   - id: hyperv-relay-per-build-channel-qemu-windows
     host: macos-qemu
@@ -448,6 +456,8 @@ gaps:
       is fixed, on main after hyperv-relay-per-build-channel merges or on its branch if still waiting.
       2026-11-07 (host:macos-qemu/20261107T124005Z, unattended): not run. The branch is design-only
       and qemu Windows builds still fail on main.
+      2026-11-11 (host:macos-qemu/20261111T124004Z, unattended, main beb51ba): not run. The branch
+      is still design-only (r3 at cbb2cda), and qemu Windows builds still fail on main.
     status: open
   - id: security-suite-tier2-macos-vz
     host: macos-vz
@@ -458,6 +468,9 @@ gaps:
       a4). Runnable once the harness lands in Implement; routine runs wait for the native-session
       process item (P3). A failing case's logs stay out of the workflow branch and go to the private
       sessions record (Decision 8).
+      2026-11-11 (host:macos-vz/20261111T124004Z, unattended, main beb51ba): not run. No harness:
+      feat/security-suite is still e05df23 (design only), and neither it nor main has a
+      security-test target.
     status: open
   - id: security-suite-tier2-qemu-any
     host: qemu-any
@@ -467,6 +480,9 @@ gaps:
       Tracked (TEST-03, FLOW-09), not blocking: the suite changes no driver code (assumed question
       a4). Windows-guest cases wait while qemu Windows builds fail on main (qemu-windows-guest-package).
       A failing case's logs stay out of the workflow branch (Decision 8).
+      2026-11-11 (host:qemu-any/20261111T124004Z, unattended, main beb51ba): not run. No harness:
+      feat/security-suite is still e05df23 (design only), and neither it nor main has a
+      security-test target.
     status: open
   - id: security-suite-tier2-windows-hyperv
     host: windows-hyperv
@@ -506,4 +522,6 @@ gaps:
       qemu-any, and qemu Windows builds already fail on main (qemu-windows-guest-package).
       Run once that is fixed, on main after baked-asset-staleness merges or on its branch if
       still waiting.
+      2026-11-11 (host:macos-qemu/20261111T124004Z, unattended, main beb51ba): not run. The branch
+      is design-only (f68a8b1), and qemu Windows builds still fail on main.
     status: open
