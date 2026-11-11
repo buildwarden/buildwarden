@@ -103,3 +103,4 @@ history:
     event: done x3-answer-q1
   - {at: 2026-11-11T12:00:00Z, by: human/jeff, event: "x3-merge done by hand (q1): #104 squash-merged as beb51ba after #105; wf check fails only on tree equality; patch-ids match (fdc1cfd3); the check fix is wf-squash-after-base-moved"}
   - {at: 2026-11-11T12:00:01Z, by: human/jeff, event: entered phase 4 (close)}
+  - {at: 2026-11-11T12:40:00Z, by: human/jeff, event: "refs cleared by hand (q1 answer): local feat/design-principles (42d95f0, its change in main as beb51ba, patch-id match) deleted with -D; stale origin tracking ref pruned (GitHub had deleted the branch)"}
