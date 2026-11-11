@@ -138,43 +138,46 @@ func TestDirectBootInits(t *testing.T) {
 // keeps its own fetch (Firecracker's CI cache key hashes only
 // tools/firecracker-vm), so this makes a re-pin touch both.
 func TestDirectBootBusyboxPins(t *testing.T) {
-	assign := func(t *testing.T, script, s, name string) string {
-		t.Helper()
-		m := regexp.MustCompile(`(?m)^`+name+`="([^"]*)"$`).FindAllStringSubmatch(s, -1)
-		if len(m) != 1 {
-			t.Fatalf("%s sets %s %d times, want once", script, name, len(m))
-		}
-		return m[0][1]
-	}
+	const (
+		qemuBuild = "tools/build-vm/build-initramfs.sh"
+		fcBuild   = "tools/firecracker-vm/build-initramfs.sh"
+		check     = `echo "$BUSYBOX_SHA256  $BUSYBOX_APK" | `
+	)
+	sha := regexp.MustCompile(`^[0-9a-f]{64}$`)
 	pins := map[string]map[string]string{}
-	for _, script := range []string{
-		"tools/build-vm/build-initramfs.sh",
-		"tools/firecracker-vm/build-initramfs.sh",
-	} {
+	for _, script := range []string{qemuBuild, fcBuild} {
 		s := readTool(t, script)
 		pins[script] = map[string]string{}
-		for _, name := range []string{"ALPINE_VERSION", "BUSYBOX_VERSION", "BUSYBOX_SHA256"} {
-			pins[script][name] = assign(t, script, s, name)
+		for _, name := range []string{
+			"ALPINE_VERSION", "BUSYBOX_VERSION", "BUSYBOX_SHA256",
+		} {
+			m := regexp.MustCompile(`(?m)^`+name+`="([^"]*)"$`).
+				FindAllStringSubmatch(s, -1)
+			if len(m) != 1 {
+				t.Fatalf("%s sets %s %d times, want once", script, name, len(m))
+			}
+			pins[script][name] = m[0][1]
 		}
-		if !regexp.MustCompile(`^[0-9a-f]{64}$`).MatchString(pins[script]["BUSYBOX_SHA256"]) {
-			t.Errorf("%s: BUSYBOX_SHA256 %q is not a sha256", script, pins[script]["BUSYBOX_SHA256"])
+		if !sha.MatchString(pins[script]["BUSYBOX_SHA256"]) {
+			t.Errorf("%s: BUSYBOX_SHA256 %q is not a sha256",
+				script, pins[script]["BUSYBOX_SHA256"])
 		}
-		if !strings.Contains(s, `echo "$BUSYBOX_SHA256  $BUSYBOX_APK" | sha256sum -c -`) {
+		if !strings.Contains(s, check+"sha256sum -c -") {
 			t.Errorf("%s does not check BUSYBOX_SHA256", script)
 		}
 	}
-	qemu, fc := pins["tools/build-vm/build-initramfs.sh"], pins["tools/firecracker-vm/build-initramfs.sh"]
 	for _, name := range []string{"ALPINE_VERSION", "BUSYBOX_VERSION"} {
-		if qemu[name] != fc[name] {
-			t.Errorf("%s differs: tools/build-vm %q, tools/firecracker-vm %q; re-pin both",
-				name, qemu[name], fc[name])
+		if q, f := pins[qemuBuild][name], pins[fcBuild][name]; q != f {
+			t.Errorf("%s differs: tools/build-vm %q, "+
+				"tools/firecracker-vm %q; re-pin both", name, q, f)
 		}
 	}
-	qemuBuild := readTool(t, "tools/build-vm/build-initramfs.sh")
-	if strings.Contains(qemuBuild, "$RELAY_CACHE/busybox") {
-		t.Error("tools/build-vm reads busybox from the relay cache, which no longer has it")
+	s := readTool(t, qemuBuild)
+	if strings.Contains(s, "$RELAY_CACHE/busybox") {
+		t.Error("tools/build-vm reads busybox from the relay cache, " +
+			"which no longer has it")
 	}
-	if !strings.Contains(qemuBuild, `| shasum -a 256 -c -`) {
-		t.Error("tools/build-vm cannot check its busybox on a host without sha256sum (macOS)")
+	if !strings.Contains(s, check+"shasum -a 256 -c -") {
+		t.Error("tools/build-vm cannot check its busybox without sha256sum (macOS)")
 	}
 }
