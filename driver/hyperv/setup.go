@@ -28,7 +28,26 @@ type SetupOptions struct {
 	// BuildLink is the build link builds will use ([vm] build_link or the
 	// default); the NAT prefix must not overlap it. Zero is the default.
 	BuildLink buildlink.Link
-	Verbose   bool
+	// Slots is how many durable build switches setup makes, 1 to MaxSlots.
+	// Zero is DefaultSlots.
+	Slots   int
+	Verbose bool
+}
+
+const (
+	// MaxSlots is the most durable build switches setup makes.
+	MaxSlots = 64
+	// DefaultSlots is how many `warden setup --driver hyperv` makes.
+	DefaultSlots = 4
+)
+
+// ValidateSlotCount checks a --slots value.
+func ValidateSlotCount(n int) error {
+	if n < 1 || n > MaxSlots {
+		return driver.Fixable(fmt.Sprintf("pass --slots between 1 and %d", MaxSlots),
+			"--slots %d is out of range (1-%d)", n, MaxSlots)
+	}
+	return nil
 }
 
 func (o *SetupOptions) applyDefaults() {
@@ -41,6 +60,9 @@ func (o *SetupOptions) applyDefaults() {
 	if o.HostIP == "" {
 		o.HostIP = DefaultHostIP
 	}
+	if o.Slots == 0 {
+		o.Slots = DefaultSlots
+	}
 }
 
 // RunSetup idempotently creates the durable dev network (a Private build switch
@@ -52,6 +74,9 @@ func (o *SetupOptions) applyDefaults() {
 // than surfacing a raw PowerShell failure when run without elevation.
 func RunSetup(ctx context.Context, w io.Writer, opts SetupOptions) error {
 	opts.applyDefaults()
+	if err := ValidateSlotCount(opts.Slots); err != nil {
+		return err
+	}
 	if err := checkNATPrefix(opts.NATPrefix, opts.BuildLink.OrDefault()); err != nil {
 		return err
 	}

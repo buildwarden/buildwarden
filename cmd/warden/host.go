@@ -124,11 +124,17 @@ var setupCmd = &cobra.Command{
 	Short: "Prepare the host for the selected driver (one time, idempotent)",
 	Long: `One-time, idempotent host preparation for the selected driver.
 
-  hyperv   create the durable network builds reuse (a Private build switch,
-           named by --network, plus an Internal NAT switch, host IP and NAT
-           rule for relay egress). Run from an elevated terminal; afterwards
-           builds run as a Hyper-V Administrators member with no elevation.
-           Existing resources are verified, not recreated.
+  hyperv   create the durable network builds reuse: --slots Private build
+           switches (default 4, at most 64) named <network>-0 to
+           <network>-<N-1> (--network, default warden-dev), one per
+           concurrent build, plus an Internal NAT switch, host IP and NAT
+           rule for relay egress, which every build uses. Slot switches
+           above N with nothing attached are removed; the single <network>
+           Private switch of earlier setups is retired when nothing is
+           attached to it. Either refuses, naming the VMs, when one is in
+           use. Run from an elevated terminal; afterwards builds run as a
+           Hyper-V Administrators member with no elevation. Existing
+           resources are verified, not recreated.
   firecracker  as root (sudo), create --slots network slots (default 16, at
            most 256) owned by the invoking user: a bridge and three TAPs
            each, their sysctls, the warden_fc bridge table and the WARDEN-FC
@@ -148,10 +154,11 @@ Other drivers need no host setup; their base images are prepared with
 			return firecracker.RunSetup(cmd.OutOrStdout(),
 				firecracker.SetupOptions{Slots: flagSetupSlots})
 		}
-		if flagSetupSlots != 0 {
-			return driver.Fixable("", "--slots is only used by --driver firecracker")
-		}
 		if cfg.Runtime.Driver != "hyperv" {
+			if flagSetupSlots != 0 {
+				return driver.Fixable("", "--slots is only used by --driver "+
+					"hyperv and firecracker")
+			}
 			fmt.Fprintf(cmd.OutOrStdout(),
 				"--driver %s needs no host setup; "+
 					"prepare a base image with 'warden image prepare'\n",
@@ -167,6 +174,7 @@ Other drivers need no host setup; their base images are prepared with
 			SwitchName: hypervNetwork(cfg),
 			NATPrefix:  flagSetupNATPrefix,
 			HostIP:     flagSetupHostIP,
+			Slots:      flagSetupSlots,
 			Verbose:    cfg.Output.Verbose,
 		})
 	},
@@ -197,11 +205,16 @@ func init() {
 	}
 	addBuildLinkFlag(doctorCmd)
 	setupCmd.Flags().StringVar(&flagSetupNATPrefix, "nat-prefix", "",
-		"hyperv: NAT CIDR for relay egress (default 192.168.240.0/20)")
+		"hyperv: NAT CIDR for relay egress, used by every build "+
+			"(default "+hyperv.DefaultNATPrefix+")")
 	setupCmd.Flags().StringVar(&flagSetupHostIP, "host-ip", "",
-		"hyperv: host gateway IP on the NAT switch (default 192.168.240.1)")
+		"hyperv: host gateway IP on the NAT switch, used by every build "+
+			"(default "+hyperv.DefaultHostIP+")")
 	setupCmd.Flags().IntVar(&flagSetupSlots, "slots", 0,
-		"firecracker: network slots to create, 1-256 (default 16)")
+		fmt.Sprintf("hyperv: build switches to create, 1-%d (default %d); "+
+			"firecracker: network slots to create, 1-%d (default %d)",
+			hyperv.MaxSlots, hyperv.DefaultSlots,
+			firecracker.MaxSlots, firecracker.DefaultSlots))
 
 	hypervServiceCmd.AddCommand(&cobra.Command{
 		Use:   "install",
