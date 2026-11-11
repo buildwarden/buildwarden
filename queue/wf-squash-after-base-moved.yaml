@@ -10,6 +10,9 @@ design: docs/design/wf-squash-after-base-moved.md
 branch: feat/wf-squash-after-base-moved
 alters_relationships: null
 source: 'Filed 2026-11-11 by tick cloud/20261111T105701Z under FLOW-09 as a follow-up of wf-squash-merged-pr: design-principles'' PR #104 was squash-merged as beb51ba after #105 (f861315) changed main. beb51ba carries exactly the branch''s change (diff f861315..beb51ba equals 49e5354..42d95f0 but for a hunk offset in process.md), yet x3-merge''s ''merged by a human (FLOW-08)'' check requires a squash tree equal to the branch tree (''no PR commit has its tree''), so it fails. Fix: also accept the merged PR''s squash commit whose change (patch-id of its diff to its parent) equals the branch''s change from its merge base; the PR number is in the queue''s pr field.'
+pr:
+  number: 107
+  ci: green
 steps:
   - id: x1-design
     phase: 1
