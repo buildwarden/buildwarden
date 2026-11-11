@@ -145,7 +145,7 @@ defaults per driver (vz: macos, qemu and firecracker: linux, hyperv: windows). `
 
 | Driver / OS | Source | Behavior |
 |---|---|---|
-| `vz` / macos | IPSW (default: latest supported) | Restores the IPSW, or refreshes the warden boot agent of an already-restored image |
+| `vz` / macos | IPSW URL, a local `.ipsw` file, or a prepared image directory in `~/.cache/warden/images` (or its `disk.img`). No source: the active image | Run under `sudo`. With no source, refreshes the active image (the one builds use without `--image`) in place, with no IPSW download, and warns when a newer macOS is available; with no image prepared yet, restores the latest supported IPSW. An IPSW whose image is already prepared, and a prepared image directory, are refreshed in place; another IPSW is restored. A local `.ipsw` is read in place and kept; a downloaded IPSW is deleted from the cache once its image is prepared. The result becomes the active image. `--update` moves to the latest supported IPSW |
 | `qemu` / linux | cloud image ref (`alpine:3.21`, `ubuntu:24.04`, `debian:bookworm`) or qcow2 | Downloads and verifies the cloud image |
 | `firecracker` / linux | cloud image ref (default `ubuntu:24.04`), or a local qcow2 or raw image | Downloads the cloud image if needed (as qemu does), checks it with `qemu-img info` (a backing file, an external data file or another format is refused), and converts it once to the raw image builds copy, in `~/.cache/warden/firecracker/images` |
 | `qemu` / windows | Windows install ISO (required the first time) | Unattended install ending in `sysprep /generalize` (skipped if already installed unless `--force`), then prepares the layer builds boot from. With no source, re-prepares |
@@ -162,9 +162,15 @@ defaults per driver (vz: macos, qemu and firecracker: linux, hyperv: windows). `
 - `--virtio <v>` — virtio-win driver ISO path or URL (qemu windows)
 - `--arch <a>` — Guest arch: arm64 or amd64 (default host arch)
 - `--keep-vms` — Leave the prepare VM and its disk for inspection (hyperv)
+- `--update` — Move to the newest supported OS release: restore it, or refresh
+  its image in place when it is already prepared, and make it active (vz only;
+  takes no source; refused on other drivers)
 
 ```sh
-warden image prepare --driver vz
+sudo warden image prepare --driver vz
+sudo warden image prepare --driver vz --update
+sudo warden image prepare --driver vz ~/Downloads/UniversalMac_27.2_26B123_Restore.ipsw
+sudo warden image prepare --driver vz ~/.cache/warden/images/macos-90a1b1f94f64b00a
 warden image prepare --driver qemu ubuntu:24.04
 warden image prepare --driver firecracker ubuntu:24.04
 warden image prepare --driver qemu --os windows --source Win11_Arm64.iso
@@ -177,11 +183,15 @@ warden image prepare --driver hyperv --source https://.../server2025.vhd
 warden image list
 ```
 
-List prepared base images for every driver.
+List prepared base images for every driver. Every prepared vz image is
+listed, the active one (used by builds without `--image`) first and marked
+`active`, the others `older`, each with the IPSW it was restored from when
+that was recorded.
 
 ```sh
 warden image list
-# vz      macos    /Users/me/.cache/warden/vz/images/macOS-15.4
+# vz      macos    /Users/me/.cache/warden/images/macos-a139c218a2010753  active  UniversalMac_27.2_26B123_Restore.ipsw
+# vz      macos    /Users/me/.cache/warden/images/macos-90a1b1f94f64b00a  older   UniversalMac_27.0.1_26A100_Restore.ipsw
 # qemu    linux    /Users/me/.cache/warden/images/alpine.qcow2
 # firecracker linux /home/me/.cache/warden/firecracker/images/ubuntu_24_04-1a2b3c4d5e6f.raw
 # hyperv  windows  base     C:\...\server2025.vhdx (pinned)
