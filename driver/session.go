@@ -10,6 +10,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -105,9 +106,10 @@ func StartSession(cfg SessionConfig) (*Session, error) {
 //
 // link is the build link the relay configures its build segment from (nil
 // sends none: the container driver, and a claimant whose relay is already
-// addressed). A relay too old to know the field refuses the claim; that
-// refusal is returned as a FixableError with oldRelayFix, before the caller
-// boots any build guest.
+// addressed). req.DNS, when set, is sent as upstream_dns, in order. A relay
+// too old to know a claim field refuses the claim naming it; that refusal is
+// returned as a FixableError with oldRelayFix, before the caller boots any
+// build guest.
 func (s *Session) ClaimRelay(ctx context.Context, addr, claimToken string,
 	req *BuildRequest, env *relaycfg.Environment,
 	link *relaycfg.BuildLink, oldRelayFix string) (relaycfg.Identity, error) {
@@ -121,6 +123,9 @@ func (s *Session) ClaimRelay(ctx context.Context, addr, claimToken string,
 		CaptureMode:    req.CaptureMode,
 		Environment:    env,
 		BuildLink:      link,
+	}
+	for _, a := range req.DNS {
+		cfg.UpstreamDNS = append(cfg.UpstreamDNS, a.String())
 	}
 	if len(cas) > 0 {
 		cfg.UpstreamCACerts = []string{string(cas)}
@@ -139,10 +144,9 @@ func (s *Session) ClaimRelay(ctx context.Context, addr, claimToken string,
 	s.tunnel, s.tunnelEnd = conn, end
 	id, err := relaycfg.Claim(ctx, addr, claimToken, cfg)
 	if err != nil {
-		if errors.Is(err, relaycfg.ErrRejected) &&
-			strings.Contains(err.Error(), `unknown field "build_link"`) {
+		if field := unknownClaimField(err); field != "" {
 			return relaycfg.Identity{}, Fixable(oldRelayFix,
-				"the relay predates the build link in its claim (%v)", err)
+				"the relay predates the claim field %s (%v)", field, err)
 		}
 		return relaycfg.Identity{}, fmt.Errorf("claiming relay: %w", err)
 	}
@@ -320,9 +324,25 @@ func RandomToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
+// unknownFieldRE matches the decoder's refusal of a claim field the relay
+// does not know.
+var unknownFieldRE = regexp.MustCompile(`unknown field "([^"]+)"`)
+
+// unknownClaimField returns the claim field a relay refused as unknown, or ""
+// when err is not such a refusal.
+func unknownClaimField(err error) string {
+	if !errors.Is(err, relaycfg.ErrRejected) {
+		return ""
+	}
+	if m := unknownFieldRE.FindStringSubmatch(err.Error()); m != nil {
+		return m[1]
+	}
+	return ""
+}
+
 // OldRelayFix is the old-relay fix for drivers that append warden's own relay
 // binary to the relay per build (qemu, Firecracker, vz): a relay that predates
-// the build link means a mismatched install.
+// a claim field (build_link, upstream_dns) means a mismatched install.
 const OldRelayFix = "reinstall warden so its relay binary matches it " +
 	"(in a source tree: make build)"
 

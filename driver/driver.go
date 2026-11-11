@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"io"
+	"net/netip"
 	"time"
 
 	"github.com/buildwarden/buildwarden/driver/buildlink"
@@ -88,6 +89,12 @@ type BuildRequest struct {
 	// --build-link). The zero value is the default (Link resolves it); the
 	// container driver ignores it.
 	BuildLink buildlink.Link
+	// DNS is the relay's upstream resolvers, in order. cmd/warden sets it
+	// from [vm] dns for the VM drivers; each VM driver replaces it with the
+	// list it resolved ([vm] dns after its check, or the host's after its
+	// selection) before claiming the relay, which takes it as upstream_dns.
+	// Empty sends no field (the container driver and cmd/collector).
+	DNS []netip.Addr
 	// Env is extra environment variables for the build.
 	Env map[string]string
 	// Stdin/Stdout/Stderr for build output.
