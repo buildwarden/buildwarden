@@ -1,6 +1,6 @@
 ---
 feature: vz-image-prepare-refresh
-status: draft
+status: archived
 drivers: [vz]            # driver/vz (image.go, driver.go, environment.go) and the vz path of cmd/warden/image.go only; no shared driver/ package changes, so no other driver is reached (FLOW-02)
 seams: []                # no versioned seam: the active-image pointer is the vz image cache's own layout, read only by driver/vz
 surfaces: [cli, output]  # cli: `image prepare --driver vz` with no source refreshes in place, the vz `--update` flag, a prepared image directory as source, `image list` lists every vz image, a local IPSW path is restored from in place; output: the refresh and out-of-date warnings, the stamp refusal's fix text (UX-01, UX-04)
@@ -392,6 +392,41 @@ image list:  vz  macos  <dir>  active|older  <IPSW file name from provenance>
   downloaded and its copy deleted once prepared; the examples) and `warden image list` (the example output,
   which also shows a stale `vz/images/macOS-15.4` path today).
 
+## Defaults and overrides
+
+Recorded at Publish from the approved Decisions, after `main` added this
+section to the template (GLOBAL-09 to GLOBAL-11, #104); no decision changes.
+
+- **Default: no source refreshes the active image in place** (Decision 2).
+  The obvious meaning of "prepare again" is "re-prepare what I build with",
+  which the guide already promised; it makes no IPSW lookup before the
+  refresh. With no prepared image at all it restores the latest supported
+  IPSW, as first-time setup always has.
+- **Default: a build without `--image` uses the active image** (Decision 1),
+  the one prepared last.
+- **Overrides, each used exclusively (GLOBAL-10):** a source (an IPSW URL, a
+  local `.ipsw`, or a prepared image directory) prepares exactly that and
+  makes it active (Decisions 4, 7); `--update` restores, or refreshes, the
+  latest supported IPSW and makes it active (Decision 3); `--update` with a
+  source is refused, and on any driver but vz it is refused before anything
+  runs. `--image` on a build uses that disk, whatever is active.
+- **Fallback 1: the newest `.prepared` image when there is no valid active
+  pointer** (Decision 1).
+  - *Trigger:* `<cache>/active` is absent (every cache prepared before this
+    change) or names a missing or invalid image directory.
+  - *How it is seen:* `image list` marks the image builds will use as active,
+    and `doctor --driver vz` reports that image's stamp; the next prepare
+    writes the pointer.
+  - *What it never does:* pick an image that is not a valid prepared
+    directory; ties break by name, so the choice is deterministic.
+- **Fallback 2: the out-of-date lookup is best effort** (Decision 3).
+  - *Trigger:* after a successful no-source refresh, the lookup of the latest
+    supported IPSW fails (offline, Apple unreachable).
+  - *How it is seen:* no out-of-date warning is printed; the refresh itself
+    has succeeded and reports so. Native case 6 covers it.
+  - *What it never does:* fail the refresh, download anything, or change the
+    active image.
+
 ## Cross-driver impact
 
 - **vz:** everything above; `driver/vz/image.go`, `driver/vz/driver.go`
@@ -742,7 +777,7 @@ and 18 steps before the runaway check escalates.
   The f6-validate-macos-vz note was brought in line. Re-review pending
   (FLOW-19, `design_review: required`).
 
-- **r2, 2026-11-06, Jeff: approved** as read, approved at e94a1be (re-review
+- **r2, 2026-11-07, Jeff: approved** as read, approved at e94a1be (re-review
   after the Plan return r2; previous approval f764e9f). Changes since r1, all
   from Jeff's answers at that return: the out-of-date warning fires whenever
   the active image is not the latest IPSW's, with an "already prepared, no
@@ -753,8 +788,13 @@ and 18 steps before the runaway check escalates.
 
 ## Consolidation
 
-The branch was cut at `main` `49e5354`, and `main` has not moved since: no
-merge was needed and nothing landed to reconcile.
+The branch was cut at `main` `49e5354`. At f6-consolidate `main` had not
+moved. Before the PR, `main` `97a13f7` was merged in (#104 to #107): process
+rules, `.claude/` and `tools/workflow/` only, no code this design touches.
+#104 added GLOBAL-09 to GLOBAL-11 and the template's **Defaults and
+overrides** section; it is filled above from Decisions 1 to 3, naming the two
+fallbacks (no valid active pointer, a failed out-of-date lookup). No decision
+changes.
 
 - **Seams reconciled:** the interface table under Image cache now matches the
   code. `Prepare(source, update)` takes no lookup argument; the host steps
@@ -791,3 +831,43 @@ merge was needed and nothing landed to reconcile.
 ## Rollback notes
 
 ## Archive summary
+
+Designed 2026-11-07 (one return to Design, r2), approved at design review r1
+(`f764e9f`) and r2 (`e94a1be`), reviewed by tier 2 at `967c35237998` (0 MUST,
+0 MUST-review, 1 SHOULD, fixed at Consolidation), validated on macos-vz
+(cases 1 to 7, 2026-11-11), published 2026-11-11.
+
+- **Built.** The vz image cache records an active image, `<cache>/active`,
+  written by every successful `image prepare --driver vz` and handed back to
+  the sudo user. Builds without `--image`, `doctor` and the stamp list use it,
+  falling back to the newest `.prepared` image (name tie-break). With no
+  source, prepare refreshes the active image in place (boot agent, provenance,
+  stamp) with no IPSW lookup, and then warns when the active image is not the
+  latest supported IPSW's, in a "download" or an "already prepared, no
+  download" form naming `--update`. `--update` (vz only) moves to the latest
+  IPSW. A prepared image directory, or its `disk.img`, is a source that is
+  refreshed in place and made active. A plain local `.ipsw` path is restored
+  from where it is (no curl, no copy, never deleted; provenance
+  `file://<path>`). Each prepare deletes its own cached `ipsw-<key>.ipsw`;
+  image directories stay. `image list` prints every vz image, the active one
+  marked, with its IPSW file name. The stamp refusal names the right fix per
+  image.
+- **Taken.** An active pointer over newest-marker or refusing (a3); refresh
+  in place by default, the update only on request (a1); a flag, `--update`,
+  over a `latest` source keyword, `--force` or a Hyper-V-style `auto` key
+  (a2); the warning whenever the active image is not the latest's, even when
+  the latest is prepared (return r2); a local IPSW restored in place
+  (return r2); delete the IPSW, keep the images (a5).
+- **Rejected.** Picking up a new macOS at refresh (a different build OS,
+  changed silently); deleting older images (they are the user's rollback);
+  refusing a plain local path; copying a local IPSW into the cache.
+- **For a future design touching these concepts.** The active image's IPSW
+  identity is its key `macos-<shortHash(source)>` or, failing that, the file
+  name of its recorded IPSW URL; the digest is never compared. `active` lives
+  in `~/.cache/warden/images`, shared with the qemu images; a more specific
+  name would avoid any later collision. Cross-driver `--update` is queued as
+  `cross-driver-image-update`; `ensureIPSWDownloaded` preferring
+  `ipsw-latest.ipsw` for any URL is `vz-ipsw-latest-reuse`; `resolveImage`'s
+  IPSW restore for `build --image <url>` writes no pointer (Decision 8). Apple
+  released 27.2.1 during validation: the warning and `--update` behaved as
+  designed against a newer IPSW than the plan assumed.
