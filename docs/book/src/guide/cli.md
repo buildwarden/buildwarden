@@ -293,7 +293,10 @@ Other drivers print that no host setup is needed. Replaces the old
   address in this prefix, so a non-default value takes effect on every build.
   Refused, before anything changes, when it overlaps the build link (`[vm]
   build_link`, or the default `100.127.255.252/30`); setup has no
-  `--build-link` of its own, and a build refuses an overlapping NAT too
+  `--build-link` of its own, and a build refuses an overlapping NAT too.
+  Durable builds use only the NAT `<network>-nat`, so setup refuses, naming it
+  and how to remove it, when another NAT already owns this prefix, and when
+  `<network>-nat` exists on another prefix
 - `--host-ip <ip>` — Host gateway IP on the NAT switch (default 192.168.240.1),
   the relay's upstream gateway on every build
 - `--slots <n>` — hyperv: build switches to create, 1 to 64 (default 4), the

@@ -106,21 +106,9 @@ func RunSetup(ctx context.Context, w io.Writer, opts SetupOptions) error {
 				"process is not elevated")
 	}
 
-	p := newLocalProvisioner(opts.Verbose)
-	res, err := p.EnsureNetwork(ctx, NetworkSpec{
-		NATName:   opts.SwitchName + "-nat",
-		NATPrefix: opts.NATPrefix,
-		HostIP:    opts.HostIP,
-	})
+	res, err := ensureSetupNAT(ctx, newLocalProvisioner(opts.Verbose), opts)
 	if err != nil {
 		return err
-	}
-	if want := netip.MustParsePrefix(opts.NATPrefix).Masked(); res.NATPrefix != want {
-		return driver.Fixable(
-			"remove it from an elevated shell (Remove-NetNat -Name "+res.NATName+
-				"), then re-run setup to make it on "+want.String(),
-			"the NAT %s already exists on %s, not --nat-prefix %s",
-			res.NATName, res.NATPrefix, want)
 	}
 	slots, err := runSetupSlots(opts.SwitchName, opts.Slots)
 	if err != nil {
@@ -149,6 +137,43 @@ func RunSetup(ctx context.Context, w io.Writer, opts SetupOptions) error {
 	fmt.Fprintln(w,
 		"Elevated builds stand up a fresh build switch per build and use this NAT.")
 	return nil
+}
+
+// ensureSetupNAT makes or adopts the durable network's NAT through p and
+// refuses one durable builds would not accept: VerifyNetwork reads only
+// <network>-nat, so setup must not report ready on a NAT of another name that
+// already owns the prefix (another build's per-build NAT, or one warden did
+// not make), nor on <network>-nat on another prefix. opts has its defaults.
+func ensureSetupNAT(ctx context.Context, p Provisioner, opts SetupOptions) (
+	*NetworkResources, error,
+) {
+	natName := opts.SwitchName + "-nat"
+	res, err := p.EnsureNetwork(ctx, NetworkSpec{
+		NATName:   natName,
+		NATPrefix: opts.NATPrefix,
+		HostIP:    opts.HostIP,
+	})
+	if err != nil {
+		return nil, err
+	}
+	want := netip.MustParsePrefix(opts.NATPrefix).Masked()
+	if res.NATName != natName {
+		return nil, driver.Fixable(
+			"once nothing uses it, remove it from an elevated shell (Remove-NetNat "+
+				"-Name "+res.NATName+"; Remove-VMSwitch -Name "+res.NATName+
+				"), or pass another --nat-prefix, then re-run setup",
+			"the NAT %s already owns --nat-prefix %s, and durable builds on "+
+				"--network %s use only the NAT %s",
+			res.NATName, want, opts.SwitchName, natName)
+	}
+	if res.NATPrefix != want {
+		return nil, driver.Fixable(
+			"remove it from an elevated shell (Remove-NetNat -Name "+res.NATName+
+				"), then re-run setup to make it on "+want.String(),
+			"the NAT %s already exists on %s, not --nat-prefix %s",
+			res.NATName, res.NATPrefix, want)
+	}
+	return res, nil
 }
 
 // checkNATPrefix refuses a NAT prefix that overlaps the build link, before

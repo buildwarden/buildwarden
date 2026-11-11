@@ -186,7 +186,9 @@ link and the resolvers
     firecracker: first take a free network slot made by `warden setup` (a host
                  lock), kill VMMs a dead warden left on it, and claim the relay
                  at the slot's upstream address
-    hyperv setup: refuse a --nat-prefix that overlaps the build link; make the
+    hyperv setup: refuse a --nat-prefix that overlaps the build link; make or
+                 adopt <network>-nat on --nat-prefix, refusing another NAT that
+                 owns the prefix or <network>-nat on another; make the
                  durable strategy's slot switches <network>-0..N-1 (--slots,
                  default 4), trim unattached extras, retire an unattached old
                  <network> switch
