@@ -192,9 +192,10 @@ the class of the item the step belongs to, so disruptive work waits for the
 rules to settle; a step it already claimed stays claimed, and finishing the
 process item releases the hold. Otherwise a worker takes the next ready step
 of the first item in that order, and keeps taking that item's steps until it
-blocks: on a `human` or `host:<name>` step, an exhausted budget, or the PR
-slot. Only then does it take steps from the next item down, and it returns to
-the earlier item as soon as that one has a ready step again.
+blocks: on a `human` or `host:<name>` step, an exhausted budget, the PR
+slot, or the human's merge (FLOW-08). Only then does it take steps from the
+next item down, and it returns to the earlier item as soon as that one has a
+ready step again.
 
 While interfaces are still stabilizing, a feature developed in parallel is likely
 to need an involved rebase and consolidation once the features ahead of it land.
