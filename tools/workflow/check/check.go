@@ -246,8 +246,9 @@ func (c *checker) prGreen() {
 // merged confirms the human's merge (FLOW-08). Each branch head still
 // around, local or remote, must be contained in origin/main, or, for a
 // squash merge, origin/main must carry a commit naming the PR whose tree is
-// the head's tree (FLOW-16). Once GitHub has deleted the branch, the PR's
-// commit on origin/main alone is the proof.
+// the head's tree, or whose change is the head's change (FLOW-16; see
+// refMerged). Once GitHub has deleted the branch, the PR's commit on
+// origin/main alone is the proof.
 func (c *checker) merged() {
 	const name = "merged by a human (FLOW-08)"
 	var prCommits []string
@@ -283,10 +284,15 @@ func (c *checker) merged() {
 		firstLine(strings.Join(prCommits, "\n")))
 }
 
-// refMerged reports whether ref is on origin/main: an ancestor of it, or
-// squashed into one of prCommits with an identical tree. The tree comparison
-// is what makes deleting a squashed branch safe: a head pushed past the
-// squash, or a squash of an older head, has a different tree.
+// refMerged reports whether ref is on origin/main, by the first of three
+// proofs that holds: ref is an ancestor of it; a commit in prCommits has
+// ref's tree; or a one-parent commit C in prCommits made the change ref
+// made, its change C^..C having the patch-id of B..ref, where B is ref's
+// single merge base with C^. The last proof covers a squash made after main
+// moved, whose tree also holds main's new commits (the GLOBAL-11 fallback
+// named in docs/design/wf-squash-after-base-moved.md). Each proof is what
+// makes deleting a squashed branch safe: a head pushed past the squash, or a
+// squash of an older head, has a different tree and a different change.
 func (c *checker) refMerged(ref string, prCommits []string) (string, bool) {
 	if _, err := c.git("merge-base", "--is-ancestor", ref, "origin/main"); err == nil {
 		return ref + " is contained in origin/main", true
@@ -295,7 +301,6 @@ func (c *checker) refMerged(ref string, prCommits []string) (string, bool) {
 		return ref + " is not contained in origin/main and no PR commit is on it", false
 	}
 	tree, _ := c.git("rev-parse", ref+"^{tree}")
-	var seen []string
 	for _, line := range prCommits {
 		sha := strings.Fields(line)[0]
 		pt, _ := c.git("rev-parse", sha+"^{tree}")
@@ -303,10 +308,91 @@ func (c *checker) refMerged(ref string, prCommits []string) (string, bool) {
 			return fmt.Sprintf("%s squash-merged as %s (tree %s)", ref, line,
 				short(tree)), true
 		}
-		seen = append(seen, fmt.Sprintf("%s tree %s", sha, short(pt)))
+	}
+	var seen []string
+	for _, line := range prCommits {
+		sha := strings.Fields(line)[0]
+		info, ok := c.sameChange(ref, sha)
+		if ok {
+			return fmt.Sprintf("%s squash-merged as %s after main moved (%s)", ref, sha,
+				info), true
+		}
+		seen = append(seen, info)
+	}
+	drop := "git branch -D " + c.f.Branch
+	if c.remoteHead(c.f.Branch) == "" {
+		drop += "; git update-ref -d refs/remotes/origin/" + c.f.Branch
 	}
 	return fmt.Sprintf("%s (tree %s) is not contained in origin/main, and no PR commit "+
-		"has its tree: %s", ref, short(tree), strings.Join(seen, ", ")), false
+		"has its tree or its change: %s; after comparing, a human may delete: %s",
+		ref, short(tree), strings.Join(seen, ", "), drop), false
+}
+
+// sameChange reports whether PR commit sha has one parent and makes ref's
+// change since ref's merge base with that parent. Its text names every
+// value compared, or why sha was not compared, so that a human can repeat
+// the comparison at the escalation.
+func (c *checker) sameChange(ref, sha string) (string, bool) {
+	pt, _ := c.git("rev-parse", sha+"^{tree}")
+	desc := fmt.Sprintf("%s tree %s", sha, short(pt))
+	parents, _ := c.git("rev-list", "--parents", "-n", "1", sha)
+	if n := len(strings.Fields(parents)) - 1; n != 1 {
+		return fmt.Sprintf("%s (%d parents, not compared)", desc, n), false
+	}
+	bases, _ := c.git("merge-base", "--all", ref, sha+"^")
+	switch b := strings.Fields(bases); len(b) {
+	case 0:
+		return desc + ", no merge base with " + sha + "^", false
+	case 1:
+	default:
+		for i := range b {
+			b[i] = short(b[i])
+		}
+		return fmt.Sprintf("%s, merge bases %s", desc, strings.Join(b, ", ")), false
+	}
+	full := strings.TrimSpace(bases)
+	base := short(full)
+	want, got := c.patchID(sha+"^", sha), c.patchID(full, ref)
+	if want != "" && want == got {
+		return fmt.Sprintf("change %s, base %s", want, base), true
+	}
+	return fmt.Sprintf("%s, change %s, base %s, %s change %s "+
+		"(compare: git diff %s %s; git diff %s^ %s)", desc, orNone(want), base, ref,
+		orNone(got), base, ref, sha, sha), false
+}
+
+// patchID returns the whitespace-exact patch-id of the change from a to b,
+// or "" for no change. Every option that shapes the diff is pinned, so no
+// user or repository configuration changes the id, and an id in a detail
+// reproduces with the same command elsewhere.
+func (c *checker) patchID(a, b string) string {
+	diff := exec.Command("git", "diff", "--no-color", "--no-ext-diff", "--no-textconv",
+		"--no-renames", "--no-relative", "-U3", "--diff-algorithm=myers",
+		"--indent-heuristic", "--inter-hunk-context=0", "--src-prefix=a/",
+		"--dst-prefix=b/", a, b)
+	diff.Dir = c.env.Repo
+	out, err := diff.Output()
+	if err != nil || len(out) == 0 {
+		return ""
+	}
+	pid := exec.Command("git", "patch-id", "--verbatim")
+	pid.Dir = c.env.Repo
+	pid.Stdin = bytes.NewReader(out)
+	id, err := pid.Output()
+	if err != nil {
+		return ""
+	}
+	if f := strings.Fields(string(id)); len(f) > 0 {
+		return f[0]
+	}
+	return ""
+}
+
+func orNone(id string) string {
+	if id == "" {
+		return "none"
+	}
+	return id
 }
 
 func short(sha string) string {
