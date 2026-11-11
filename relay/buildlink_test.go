@@ -53,11 +53,20 @@ func TestSafeDialRefusesBuildLink(t *testing.T) {
 	if err == nil || !strings.Contains(err.Error(), "blocked") {
 		t.Fatalf("dial into the link: err = %v, want blocked", err)
 	}
+	// Container mode: the dialer resolves through the list but filters
+	// nothing, so a loopback address is dialed.
+	ln, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer ln.Close()
 	none := &Relay{cfg: Config{}}
 	none.buildTransport()
-	if none.transport.DialContext != nil {
-		t.Fatal("container mode gained a filtering dialer")
+	conn, err := none.transport.DialContext(context.Background(), "tcp", ln.Addr().String())
+	if err != nil {
+		t.Fatalf("container mode dial to loopback: %v, want no filter", err)
 	}
+	conn.Close()
 }
 
 func TestResolvConfServers(t *testing.T) {

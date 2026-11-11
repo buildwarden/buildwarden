@@ -1,6 +1,7 @@
 package relay
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -40,8 +41,13 @@ func (r *Relay) runDNS() error {
 // answer a query before it asks the next one in its list.
 var dnsQueryTimeout = 5 * time.Second
 
+// dnsClient is the client every upstream query uses, guest's and relay's own.
+func (r *Relay) dnsClient() *dns.Client {
+	return &dns.Client{Timeout: dnsQueryTimeout}
+}
+
 func (r *Relay) newDNSHandler() dns.HandlerFunc {
-	dnsClient := &dns.Client{Timeout: dnsQueryTimeout}
+	dnsClient := r.dnsClient()
 
 	return func(w dns.ResponseWriter, req *dns.Msg) {
 		m := new(dns.Msg)
@@ -68,7 +74,7 @@ func (r *Relay) newDNSHandler() dns.HandlerFunc {
 			}
 		}
 
-		resp := r.forwardDNS(dnsClient, req)
+		resp := r.forwardDNS(context.Background(), dnsClient, req)
 		if resp == nil {
 			m.Rcode = dns.RcodeServerFailure
 			w.WriteMsg(m) //nolint:errcheck
@@ -86,15 +92,18 @@ func (r *Relay) newDNSHandler() dns.HandlerFunc {
 // answer within the per-query timeout is logged and the next one is asked:
 // the list's own order is the one named fallback (relaycfg's package doc), and
 // it never leaves the list.
-func (r *Relay) forwardDNS(client *dns.Client, req *dns.Msg) *dns.Msg {
+func (r *Relay) forwardDNS(ctx context.Context, client *dns.Client, req *dns.Msg) *dns.Msg {
 	q := "(no question)"
 	if len(req.Question) > 0 {
 		q = fmt.Sprintf("qtype=%d name=%s", req.Question[0].Qtype, req.Question[0].Name)
 	}
 	for _, server := range r.upstreamDNS {
-		resp, _, err := client.Exchange(req, server)
+		resp, _, err := client.ExchangeContext(ctx, req, server)
 		if err == nil {
 			return resp
+		}
+		if ctx.Err() != nil {
+			return nil
 		}
 		log.Printf("relay: upstream resolver %s did not answer: %v (%s)", server, err, q)
 	}

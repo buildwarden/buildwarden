@@ -16,8 +16,11 @@ import (
 	"net"
 	"net/http"
 	"net/netip"
+	"slices"
 	"strings"
 	"time"
+
+	"github.com/miekg/dns"
 )
 
 func (r *Relay) buildTransport() {
@@ -55,8 +58,115 @@ func (r *Relay) buildTransport() {
 	}
 	if r.cfg.SSRF || r.cfg.BuildLink.IsValid() {
 		t.DialContext = r.safeDialContext
+	} else {
+		t.DialContext = r.upstreamDialContext
 	}
 	r.transport = t
+}
+
+// upstreamDialContext dials addr with its host resolved through the relay's
+// resolver list, with no filter: the plain transport's dialer and a direct
+// CollectorURL's.
+func (r *Relay) upstreamDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
+	host, port, err := net.SplitHostPort(addr)
+	if err != nil {
+		return nil, err
+	}
+	ips, err := r.lookupIPAddr(ctx, host)
+	if err != nil {
+		return nil, err
+	}
+	return dialFirst(ctx, network, host, port, ips)
+}
+
+// dialFirst dials each of ips on port in turn and returns the first
+// connection.
+func dialFirst(
+	ctx context.Context, network, host, port string, ips []net.IPAddr,
+) (net.Conn, error) {
+	var dialer net.Dialer
+	for _, ip := range ips {
+		address := net.JoinHostPort(ip.IP.String(), port)
+		conn, err := dialer.DialContext(ctx, network, address)
+		if err == nil {
+			return conn, nil
+		}
+	}
+	return nil, fmt.Errorf("all addresses for %s failed", host)
+}
+
+// lookupIPAddr resolves host through the relay's resolver list only, the same
+// forwarding path the guest's DNS queries take (forwardDNS: the list in
+// order, the next entry on a per-query timeout). An IP literal is returned as
+// is. It is not a net.Resolver with a custom Dial because Go's resolver
+// retries across the host's own resolv.conf servers and attempts on its own
+// deadline, which would ask the list again from the top instead of in order.
+func (r *Relay) lookupIPAddr(ctx context.Context, host string) ([]net.IPAddr, error) {
+	if ip := net.ParseIP(host); ip != nil {
+		return []net.IPAddr{{IP: ip}}, nil
+	}
+	type result struct {
+		ips []net.IPAddr
+		err error
+	}
+	qtypes := []uint16{dns.TypeA, dns.TypeAAAA}
+	results := make(chan result, len(qtypes))
+	for _, qt := range qtypes {
+		go func() {
+			ips, err := r.lookupType(ctx, host, qt)
+			results <- result{ips, err}
+		}()
+	}
+	var ips []net.IPAddr
+	var firstErr error
+	for range qtypes {
+		res := <-results
+		ips = append(ips, res.ips...)
+		if res.err != nil && firstErr == nil {
+			firstErr = res.err
+		}
+	}
+	if len(ips) == 0 {
+		if firstErr == nil {
+			firstErr = fmt.Errorf("lookup %s: no such host", host)
+		}
+		return nil, firstErr
+	}
+	// IPv4 first, so a v4-only upstream path dials what it can reach first.
+	slices.SortStableFunc(ips, func(a, b net.IPAddr) int {
+		return boolInt(a.IP.To4() == nil) - boolInt(b.IP.To4() == nil)
+	})
+	return ips, nil
+}
+
+// lookupType asks the resolver list for host's records of type qt.
+func (r *Relay) lookupType(ctx context.Context, host string, qt uint16) ([]net.IPAddr, error) {
+	req := new(dns.Msg)
+	req.SetQuestion(dns.Fqdn(host), qt)
+	resp := r.forwardDNS(ctx, r.dnsClient(), req)
+	if resp == nil {
+		return nil, fmt.Errorf("lookup %s: no upstream resolver answered", host)
+	}
+	if resp.Rcode != dns.RcodeSuccess {
+		return nil, fmt.Errorf("lookup %s: %s", host, dns.RcodeToString[resp.Rcode])
+	}
+	var ips []net.IPAddr
+	for _, rr := range resp.Answer {
+		switch rec := rr.(type) {
+		case *dns.A:
+			ips = append(ips, net.IPAddr{IP: rec.A})
+		case *dns.AAAA:
+			ips = append(ips, net.IPAddr{IP: rec.AAAA})
+		}
+	}
+	return ips, nil
+}
+
+func boolInt(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
 
 func (r *Relay) safeDialContext(ctx context.Context, network, addr string) (net.Conn, error) {
@@ -65,7 +175,7 @@ func (r *Relay) safeDialContext(ctx context.Context, network, addr string) (net.
 		return nil, err
 	}
 
-	ips, err := net.DefaultResolver.LookupIPAddr(ctx, host)
+	ips, err := r.lookupIPAddr(ctx, host)
 	if err != nil {
 		return nil, err
 	}
@@ -78,15 +188,7 @@ func (r *Relay) safeDialContext(ctx context.Context, network, addr string) (net.
 		}
 	}
 
-	var dialer net.Dialer
-	for _, ip := range ips {
-		address := net.JoinHostPort(ip.IP.String(), port)
-		conn, err := dialer.DialContext(ctx, network, address)
-		if err == nil {
-			return conn, nil
-		}
-	}
-	return nil, fmt.Errorf("all addresses for %s failed", host)
+	return dialFirst(ctx, network, host, port, ips)
 }
 
 // blockedDial reports whether the upstream dialer refuses ip: anything inside

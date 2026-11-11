@@ -178,9 +178,7 @@ func Start(cfg Config) (*Relay, error) {
 	}
 
 	r := &Relay{
-		cfg: cfg,
-		sink: newCollectorClient(
-			cfg.CollectorURL, cfg.CollectorToken, cfg.CollectorTransport),
+		cfg:          cfg,
 		reqSigs:      make(map[*http.Request][]byte),
 		reqBaseNames: make(map[*http.Request]string),
 		certCache:    make(map[string]*tls.Certificate),
@@ -191,6 +189,19 @@ func Start(cfg Config) (*Relay, error) {
 			netip.AddrPortFrom(a, upstreamDNSPort).String())
 	}
 	log.Print(upstreamLogLine(cfg.UpstreamDNS, cfg.UpstreamDNSSource))
+	collectorTransport := cfg.CollectorTransport
+	if collectorTransport == nil {
+		// A direct CollectorURL that names a host resolves through the list
+		// too; the clone keeps the default transport's proxy and timeouts.
+		base, ok := http.DefaultTransport.(*http.Transport)
+		if !ok {
+			return nil, fmt.Errorf("relay: http.DefaultTransport is not an *http.Transport")
+		}
+		t := base.Clone()
+		t.DialContext = r.upstreamDialContext
+		collectorTransport = t
+	}
+	r.sink = newCollectorClient(cfg.CollectorURL, cfg.CollectorToken, collectorTransport)
 
 	headerEnv, err := environmentLabel(cfg.Environment)
 	if err != nil {
