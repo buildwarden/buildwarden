@@ -4,7 +4,7 @@ priority: 46
 follows: build-link-subnet
 status: in_progress
 round: feature
-phase: 3
+phase: 4
 design: docs/design/build-vm-busybox.md
 branch: feat/build-vm-busybox
 alters_relationships: false
@@ -59,12 +59,19 @@ steps:
   - id: f3-implement
     phase: 3
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f3-answer-q1
     lease:
-      claimed_by: cloud/20261111T173920Z
-      expires: 2026-11-11T19:45:12.891185057Z
+      claimed_by: ""
+      expires: null
+  - id: f4-review
+    phase: 4
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -173,3 +180,9 @@ history:
   - at: 2026-11-11T17:45:12Z
     by: cloud/20261111T173920Z
     event: claimed f3-implement until 2026-11-11T19:45:12Z
+  - at: 2026-11-11T17:51:20Z
+    by: cloud/20261111T173920Z
+    event: done f3-implement
+  - at: 2026-11-11T17:51:20Z
+    by: cloud/20261111T173920Z
+    event: entered phase 4 (review)
