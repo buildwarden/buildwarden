@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"runtime"
+	"sort"
 	"strings"
 	"time"
 
@@ -36,6 +37,7 @@ var (
 	flagImgVirtio  string
 	flagImgArch    string
 	flagImgKeepVMs bool
+	flagImgUpdate  bool
 )
 
 var imageCmd = &cobra.Command{
@@ -53,9 +55,17 @@ The driver comes from --driver (or warden.toml); --os defaults per driver
 (vz: macos, qemu and firecracker: linux, hyperv: windows). [source] (or --source) is a local
 path or URL:
 
-  --driver vz     --os macos    macOS IPSW (default: latest supported).
-                                An already-restored image has its warden
-                                boot agent refreshed instead.
+  --driver vz     --os macos    macOS IPSW URL, a local .ipsw file (read
+                                in place, kept), or a prepared image
+                                directory. Run under sudo. No source
+                                refreshes the active image (the one builds
+                                use) in place, no download, and warns when
+                                a newer macOS exists; with none prepared it
+                                restores the latest supported IPSW. An IPSW
+                                already prepared is refreshed in place, a
+                                downloaded IPSW is deleted once prepared,
+                                and the result becomes the active image.
+                                --update moves to the latest supported IPSW.
   --driver qemu   --os linux    cloud image reference (alpine:3.21,
                                 ubuntu:24.04, debian:bookworm) or a qcow2.
   --driver firecracker          cloud image reference (default ubuntu:24.04)
@@ -77,8 +87,12 @@ path or URL:
 
 --sha256 verifies the download against an expected digest (optional: the
 digest of what was used is always recorded); --force re-acquires even when a
-valid cached copy exists.`,
-	Example: `  warden image prepare --driver vz
+valid cached copy exists; --update (vz only) restores the newest supported OS
+release, or refreshes it in place when already prepared, and makes it active.`,
+	Example: `  sudo warden image prepare --driver vz
+  sudo warden image prepare --driver vz --update
+  sudo warden image prepare --driver vz ~/Downloads/UniversalMac_27.2_26B123_Restore.ipsw
+  sudo warden image prepare --driver vz ~/.cache/warden/images/macos-<key>
   warden image prepare --driver qemu ubuntu:24.04
   warden image prepare --driver firecracker ubuntu:24.04
   warden image prepare --driver qemu --os windows --source Win11_Arm64.iso
@@ -103,6 +117,9 @@ func init() {
 		"image source: local path or URL (same as [source])")
 	f.StringVar(&flagImgSHA256, "sha256", "", "expected SHA256; verified and pinned")
 	f.BoolVar(&flagImgForce, "force", false, "re-acquire even if a valid cached copy exists")
+	f.BoolVar(&flagImgUpdate, "update", false,
+		"move to the newest supported OS release: restore it, or refresh it "+
+			"when already prepared (vz)")
 	f.StringVar(&flagImgName, "name", "",
 		"registry name of the image (hyperv; default windows-server-2025)")
 	f.StringVar(&flagImgEdition, "edition", "",
@@ -143,11 +160,14 @@ func runImagePrepare(cmd *cobra.Command, args []string) error {
 	if err != nil {
 		return err
 	}
+	if err := checkImageUpdate(drv, flagImgUpdate); err != nil {
+		return err
+	}
 
 	var path string
 	switch drv + "/" + osName {
 	case "vz/macos":
-		path, err = prepareVZMacos(source)
+		path, err = prepareVZMacos(source, flagImgUpdate)
 	case "qemu/linux":
 		path, err = linuxguest.PrepareImage(source)
 	case "firecracker/linux":
@@ -174,6 +194,16 @@ func runImagePrepare(cmd *cobra.Command, args []string) error {
 	return nil
 }
 
+// checkImageUpdate refuses --update, before anything runs, on a driver that
+// does not support it yet (only vz does).
+func checkImageUpdate(drv string, update bool) error {
+	if update && drv != "vz" {
+		return driver.Fixable("drop --update (only --driver vz supports it so far)",
+			"--update is not supported for --driver %s yet", drv)
+	}
+	return nil
+}
+
 // imageSource resolves the image source from --source and the positional [source]
 // argument, rejecting a conflicting pair.
 func imageSource(args []string) (string, error) {
@@ -187,8 +217,9 @@ func imageSource(args []string) (string, error) {
 	return source, nil
 }
 
-// prepareVZMacos restores (or refreshes) the macOS base image for the vz driver.
-func prepareVZMacos(source string) (string, error) {
+// prepareVZMacos restores or refreshes a macOS base image for the vz driver
+// and makes it the active image (vz.ImageCache.Prepare).
+func prepareVZMacos(source string, update bool) (string, error) {
 	// Every vz prepare path writes root-owned files into the image, and
 	// restoring needs the virtualization entitlement: check both before
 	// anything is downloaded.
@@ -199,14 +230,7 @@ func prepareVZMacos(source string) (string, error) {
 		return "", err
 	}
 	cache := &vz.ImageCache{CacheDir: vz.DefaultCacheDir()}
-	existing, _ := cache.ImageDir()
-	path, err := cache.RestoreIPSW(source)
-	if err == nil && existing != "" && filepath.Dir(path) == existing {
-		// Already restored: refresh the warden boot agent to this build.
-		fmt.Fprintf(os.Stderr, "Refreshing boot agent on %s\n", existing)
-		err = vz.ReprepareImage(existing)
-	}
-	return path, err
+	return cache.Prepare(source, update)
 }
 
 // prepareQemuWindows readies the qemu Windows image in its two stages: the
@@ -329,8 +353,8 @@ func runImageList(_ *cobra.Command, _ []string) error {
 	found := false
 	if runtime.GOOS == "darwin" {
 		cache := &vz.ImageCache{CacheDir: vz.DefaultCacheDir()}
-		if dir, err := cache.ImageDir(); err == nil && dir != "" {
-			fmt.Printf("vz      macos    %s\n", dir)
+		for _, line := range formatVZImages(cache.Images()) {
+			fmt.Println(line)
 			found = true
 		}
 	}
@@ -364,4 +388,31 @@ func runImageList(_ *cobra.Command, _ []string) error {
 		fmt.Println("No prepared images. Run 'warden image prepare --driver <driver>'.")
 	}
 	return nil
+}
+
+// formatVZImages renders image list's vz lines: the active image first, then
+// the others newest prepared first, each with the IPSW it was restored from
+// when that was recorded.
+func formatVZImages(imgs []vz.Image) []string {
+	sorted := append([]vz.Image(nil), imgs...)
+	sort.SliceStable(sorted, func(i, j int) bool {
+		a, b := sorted[i], sorted[j]
+		if a.Active != b.Active {
+			return a.Active
+		}
+		if !a.Prepared.Equal(b.Prepared) {
+			return a.Prepared.After(b.Prepared)
+		}
+		return a.Dir < b.Dir
+	})
+	lines := make([]string, 0, len(sorted))
+	for _, img := range sorted {
+		state := "older"
+		if img.Active {
+			state = "active"
+		}
+		line := fmt.Sprintf("vz      macos    %s  %-6s  %s", img.Dir, state, img.IPSW)
+		lines = append(lines, strings.TrimRight(line, " "))
+	}
+	return lines
 }

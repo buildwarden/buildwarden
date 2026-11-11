@@ -66,7 +66,7 @@ func (d *Driver) StartBuild(
 	if err != nil {
 		return nil, fmt.Errorf("resolving image: %w", err)
 	}
-	if err := checkRequest(diskImage, d.Cache.CacheDir, req); err != nil {
+	if err := checkRequest(diskImage, d.Cache, req); err != nil {
 		return nil, err
 	}
 	if req.Timeout > 0 {
@@ -446,10 +446,10 @@ func defaultCacheDir() string {
 }
 
 // checkLink refuses, before anything boots, an image whose warden-boot
-// predates the per-build link and a link a host interface uses. cacheDir is
-// the image cache, which decides the fix the refusal names.
-func checkLink(diskImage, cacheDir string, req *driver.BuildRequest) error {
-	if err := imageStamp(filepath.Dir(diskImage), cacheDir).Check(); err != nil {
+// predates the per-build link and a link a host interface uses. cache is the
+// image cache, which decides the fix the refusal names.
+func checkLink(diskImage string, cache *ImageCache, req *driver.BuildRequest) error {
+	if err := imageStamp(filepath.Dir(diskImage), cache).Check(); err != nil {
 		return err
 	}
 	return driver.CheckHostLink(req.Link())
@@ -457,8 +457,8 @@ func checkLink(diskImage, cacheDir string, req *driver.BuildRequest) error {
 
 // checkRequest is checkLink, then the relay's resolvers ([vm] dns, or the
 // Mac's), which replace req.DNS for the claim (upstream_dns).
-func checkRequest(diskImage, cacheDir string, req *driver.BuildRequest) error {
-	if err := checkLink(diskImage, cacheDir, req); err != nil {
+func checkRequest(diskImage string, cache *ImageCache, req *driver.BuildRequest) error {
+	if err := checkLink(diskImage, cache, req); err != nil {
 		return err
 	}
 	return setRelayDNS(req, os.ReadFile)
@@ -466,13 +466,20 @@ func checkRequest(diskImage, cacheDir string, req *driver.BuildRequest) error {
 
 // imageStamp describes a prepared image's link-channel stamp. An image
 // prepared before warden-boot took the build link by DHCP bakes the old
-// address and must be re-prepared once (in place, no IPSW restore).
-// `warden image prepare` re-prepares only the image in cacheDir, so an
-// --image disk outside it gets a fix that builds from the cache instead.
-func imageStamp(imgDir, cacheDir string) driver.LauncherStamp {
+// address and must be re-prepared once (in place, no IPSW restore). The fix
+// depends on where the image is: `warden image prepare` with no source
+// refreshes the active image, with the directory as its source refreshes
+// another cache image (and makes it active), and cannot re-prepare an
+// --image disk outside the cache.
+func imageStamp(imgDir string, cache *ImageCache) driver.LauncherStamp {
 	rebuild := PrepareCommand
-	if !insideDir(imgDir, cacheDir) {
-		rebuild = customImageFix(cacheDir)
+	switch active, _ := cache.ImageDir(); {
+	case !insideDir(imgDir, cache.CacheDir):
+		rebuild = customImageFix(cache.CacheDir)
+	case !sameDir(imgDir, active):
+		rebuild = PrepareCommand + " " + imgDir +
+			" (refreshes it and makes it active), " +
+			"or omit --image to build from the active image"
 	}
 	return driver.LauncherStamp{What: "vz prepared macOS image (warden-boot)",
 		Path: filepath.Join(imgDir, linkStampName), Rebuild: rebuild,
@@ -495,19 +502,19 @@ func insideDir(path, dir string) bool {
 		!strings.HasPrefix(rel, ".."+string(filepath.Separator))
 }
 
-// LauncherStamps lists the vz assets with a link-channel stamp: the prepared
-// image in the default cache, when there is one.
+// LauncherStamps lists the vz assets with a link-channel stamp: the active
+// prepared image in the default cache, when there is one.
 func LauncherStamps() []driver.LauncherStamp {
-	cache := &ImageCache{CacheDir: defaultCacheDir()}
-	dir := ""
-	if _, err := os.Stat(cache.CacheDir); err == nil {
-		dir, _ = cache.ImageDir()
-	}
+	return launcherStamps(&ImageCache{CacheDir: defaultCacheDir()})
+}
+
+func launcherStamps(cache *ImageCache) []driver.LauncherStamp {
+	dir, _ := cache.ImageDir()
 	if dir == "" {
 		return []driver.LauncherStamp{{What: "vz prepared macOS image (warden-boot)",
 			Rebuild: PrepareCommand, Required: true}}
 	}
-	return []driver.LauncherStamp{imageStamp(dir, cache.CacheDir)}
+	return []driver.LauncherStamp{imageStamp(dir, cache)}
 }
 
 // Preflight checks the host can run vz builds (Apple Silicon macOS and a

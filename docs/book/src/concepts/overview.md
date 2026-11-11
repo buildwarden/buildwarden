@@ -158,11 +158,15 @@ held environment.
 
 ```
 before anything boots:
+    vz base image: --image, else the image cache's active image (the one
+    `image prepare` made active last; with no pointer, the newest prepared)
     refuse a build link that holds a host interface address
     check the launcher's link-channel stamp: the qemu or firecracker direct-boot
     initramfs, the hyperv relay boot VHDX, the vz prepared image; missing or old
-    -> a fix naming its one-time rebuild (a vz --image disk outside the image
-    cache, which cannot be re-prepared in place: omit --image)
+    -> a fix naming its one-time rebuild (vz: the active image -> `image
+    prepare` with no source; another cache image -> `image prepare <dir>`, or
+    omit --image; an --image disk outside the image cache, which cannot be
+    re-prepared in place -> omit --image)
 
 the relay's resolvers (driver/resolvers), before any VM:
     [vm] dns set -> Check: every entry passes the driver's rule, in order,

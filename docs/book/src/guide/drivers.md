@@ -200,17 +200,92 @@ relay — no vmnet entitlement is needed.
 
 ### First-Time Setup
 
-On first use, prepare the macOS build image. This downloads an IPSW from Apple,
-restores a macOS VM image, and installs `warden-io` and the LaunchDaemon into
-it:
+On first use, prepare the macOS build image. This downloads the latest
+supported IPSW from Apple, restores a macOS VM image, and installs `warden-io`
+and the LaunchDaemon into it. It writes root-owned files into the image, so it
+runs under `sudo`:
 
 ```sh
-warden image prepare --driver vz
+sudo warden image prepare --driver vz
 ```
 
-Re-running `warden image prepare --driver vz` on an already-restored image
-refreshes its warden boot agent instead of restoring again. Subsequent builds
-clone the prepared image (copy-on-write) for each build, so startup is fast.
+Builds clone the prepared image (copy-on-write) for each build, so startup is
+fast. The images live in `~/.cache/warden/images`, one `macos-<key>`
+directory per IPSW, and `warden image list` lists them all.
+
+**Which image builds use.** The image you prepared last is the *active*
+image, and a build without `--image` uses it; `--image <dir>/disk.img` picks
+another. A cache prepared before the active image was recorded uses the image
+whose preparation finished last.
+
+`warden image list` shows the active image first, then the older ones, each
+with the IPSW it was restored from when that was recorded:
+
+```
+$ warden image list
+vz      macos    /Users/me/.cache/warden/images/macos-a139c218a2010753  active  UniversalMac_27.2_26B123_Restore.ipsw
+vz      macos    /Users/me/.cache/warden/images/macos-90a1b1f94f64b00a  older   UniversalMac_27.0.1_26A100_Restore.ipsw
+```
+
+To switch builds back to an older image, prepare it by its directory (see
+*Other sources* below); it is refreshed in place and becomes active.
+
+**Refreshing.** Re-running `sudo warden image prepare --driver vz` with no
+source refreshes the active image's warden boot agent in place: no IPSW
+download and no restore. When Apple has since published a newer macOS, it
+ends with a warning naming both versions and the command to move to it:
+
+```
+warning: the active macOS image is macOS 27.0.1 (26A100); macOS 27.2 (26B123) is available. To update (about 25 GB, 15 minutes): sudo warden image prepare --driver vz --update
+```
+
+When the newer image is already prepared, the warning says so instead ("is
+already prepared. To use it (no download)"). The check is best effort: offline,
+the refresh completes and prints nothing.
+
+**Moving to a newer macOS.** `sudo warden image prepare --driver vz --update`
+restores the latest supported IPSW, or refreshes its image in place when it is
+already prepared, and makes it active. A newer macOS is a different build OS,
+so a refresh never moves to one by itself.
+
+**Other sources.** A source names what to prepare, and the result becomes the
+active image:
+
+```sh
+sudo warden image prepare --driver vz ~/.cache/warden/images/macos-90a1b1f94f64b00a   # refresh that image in place
+sudo warden image prepare --driver vz ~/Downloads/UniversalMac_27.2_26B123_Restore.ipsw  # restore from a local IPSW
+sudo warden image prepare --driver vz https://updates.cdn-apple.com/.../UniversalMac_27.2_26B123_Restore.ipsw
+```
+
+A local `.ipsw` file is read where it is: it is not copied into the cache and
+never deleted. An IPSW whose image is already prepared is refreshed in place,
+not restored again.
+
+**Disk use.** Each image is about 25 GB on disk and older images are kept
+(they are your rollback); delete a `macos-<key>` directory you no longer
+want. An IPSW downloaded into the cache (`ipsw-<key>.ipsw`, about 25 GB) is
+deleted once its image is prepared, since a later prepare of the same IPSW
+refreshes the image in place. Restoring that image from scratch (after
+deleting its directory) downloads the IPSW again.
+
+**When a build refuses the image.** A build refuses a prepared image whose
+warden boot agent is out of date (its link-channel stamp is `missing` or
+`stale`) and names the command that fixes it; `warden doctor --driver vz`
+reports the same as `BLOCKED`. Run the command it names:
+
+- building from the active image (no `--image`):
+  `sudo warden image prepare --driver vz`, which refreshes it in place in a
+  few minutes, with no download;
+- building with `--image` naming another image in the cache: either prepare
+  that directory (`sudo warden image prepare --driver vz <dir>`, which
+  refreshes it and makes it active) or drop `--image` to build from the
+  active image;
+- building with `--image` naming a disk outside the cache: drop `--image` and
+  build from the cache's image, since prepare re-prepares only images it owns.
+
+The [build-link upgrade notes](#upgrading-to-the-configurable-build-link)
+explain why existing images need this once, and the
+[CLI reference](cli.md#warden-image-prepare) lists every source and flag.
 
 ### Examples
 
@@ -544,7 +619,7 @@ step, changing `[vm] build_link` needs nothing on any driver.
 | qemu (direct boot only) | the direct-boot initramfs | `tools/build-vm/build-initramfs.sh` |
 | firecracker | the direct-boot launcher initramfs | `tools/firecracker-vm/build-initramfs.sh` |
 | hyperv | the relay boot VHDX (it bakes the relay binary) | `tools/relay-vm/hyperv/refresh-cache.sh` |
-| vz | the prepared macOS image's `warden-boot` | `sudo warden image prepare --driver vz` (in place, no IPSW restore) |
+| vz | the prepared macOS image's `warden-boot` | `sudo warden image prepare --driver vz` (refreshes the active image in place, no IPSW restore) |
 
 The qemu and Firecracker relay initramfs need nothing: the relay addresses
 its build interface from the claim and replaces an old init's address. Disk
@@ -556,10 +631,14 @@ a disk stamped before it (channel 1) is refused by a build and BLOCKED in
 doctor, naming `tools/relay-vm/hyperv/refresh-cache.sh`, the same one
 rebuild; and an older warden refuses the new disk the same way.
 
-On vz, `warden image prepare` refreshes only the image in the cache
-(`~/.cache/warden/images`). A build with `--image` naming a disk outside it
-whose `warden-boot` predates the change is refused with the fix to omit
-`--image` and build from the cache's prepared image.
+On vz, `warden image prepare` refreshes only images in the cache
+(`~/.cache/warden/images`), and with no source only the active image. A build
+with `--image` naming another cache image whose `warden-boot` predates the
+change is refused with the fix `sudo warden image prepare --driver vz <dir>`
+(which refreshes that image and makes it active) or to omit `--image` and
+build from the active image. A build with `--image` naming a disk outside the
+cache is refused with the fix to omit `--image` and build from the cache's
+prepared image.
 
 ---
 

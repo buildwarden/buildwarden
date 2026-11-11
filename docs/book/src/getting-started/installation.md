@@ -98,11 +98,30 @@ The build produces the following binaries in `dist/`:
 After building from source on macOS Apple Silicon:
 
 ```sh
-make build                           # Builds + codesigns with virtualization entitlement
-warden image prepare --driver vz     # Downloads macOS IPSW, restores VM, installs warden-io
+make build                                # Builds + codesigns with virtualization entitlement
+sudo warden image prepare --driver vz     # Downloads macOS IPSW, restores VM, installs warden-io
 ```
 
-The `image prepare` step downloads a macOS restore image, creates a VM disk, boots it, and installs the warden-io agent. This only needs to be done once (or when upgrading); re-running it on a prepared image refreshes the warden boot agent.
+The first `image prepare` downloads the latest supported macOS restore image
+(about 25 GB), creates a VM disk, boots it, and installs the warden-io agent;
+it runs under `sudo` because it writes root-owned files into the image. The
+image it prepares becomes the *active* image, which builds use.
+
+Later, the same command refreshes the active image's warden boot agent in
+place, with no download, and warns when Apple has published a newer macOS.
+Moving to that macOS is a separate step you choose:
+
+```sh
+sudo warden image prepare --driver vz            # refresh the active image in place
+sudo warden image prepare --driver vz --update   # restore the latest supported macOS and make it active
+warden image list                                # every prepared image, the active one first
+```
+
+You can also prepare from a `.ipsw` file you already have; it is read where it
+is and not copied. The [drivers guide](../guide/drivers.md#first-time-setup)
+covers sources, disk use and what to do when a build refuses an out-of-date
+image, and the [CLI reference](../guide/cli.md#warden-image-prepare) lists
+every option.
 
 ## First-time QEMU Setup
 
