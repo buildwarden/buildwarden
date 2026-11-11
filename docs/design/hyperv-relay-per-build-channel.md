@@ -1,7 +1,7 @@
 ---
 feature: hyperv-relay-per-build-channel
 status: draft
-drivers: [qemu, firecracker, hyperv, vz]  # hyperv: the relay seed (pre-claim values only), the claim token, the per-build relay address, the NAT read back from the host, the relay's resolvers ([vm] dns or the host's) sent in the claim, the durable strategy's per-build switches made by setup, the Windows guest on the relay's lease, the relay-boot stamp. qemu: tools/relay-vm/init is shared by every vm-mode relay and loses its baked network defaults and its resolver keys (Decision 2), the qemu driver now sends the relay's resolvers in the claim ([vm] dns or the macOS host's, Decision 6), and its Windows guests run the same warden-run.ps1 and also drop --ip (Decision 8). firecracker: the shared init (as qemu), its resolver selection moves to a shared package, and the resolvers leave its relay's kernel command line (warden.dns) for the claim (Decision 6). vz: driver/vz sends the host-mode relay's resolvers in the claim ([vm] dns or the Mac's), where the relay used the Mac's system resolver (Decision 6). container is unaffected: it ignores [vm] as it does today, sends no resolvers, and its relay keeps its platform resolver (the absent-field default, Defaults and overrides); its relay never boots tools/relay-vm/init
+drivers: [qemu, firecracker, hyperv, vz, container]  # hyperv: the relay seed (pre-claim values only), the claim token, the per-build relay address, the NAT read back from the host, the relay's resolvers ([vm] dns or the host's) sent in the claim, the durable strategy's per-build switches made by setup, the Windows guest on the relay's lease, the relay-boot stamp. qemu: tools/relay-vm/init is shared by every vm-mode relay and loses its baked network defaults and its resolver keys (Decision 2), the qemu driver now sends the relay's resolvers in the claim ([vm] dns or the macOS host's, Decision 6), and its Windows guests run the same warden-run.ps1 and also drop --ip (Decision 8). firecracker: the shared init (as qemu), its resolver selection moves to a shared package, and the resolvers leave its relay's kernel command line (warden.dns) for the claim (Decision 6). vz: driver/vz sends the host-mode relay's resolvers in the claim ([vm] dns or the Mac's), where the relay used the Mac's system resolver (Decision 6). container: driver.BuildRequest (shared by every driver) gains DNS, which the container driver leaves empty, so it sends no upstream_dns and ignores [vm] as today; its relay takes the absent-field default, every usable nameserver of its own resolv.conf in order, where it used the system resolver first and 8.8.8.8 when none (Decision 6, RELAY-04: container, vm and host all change); its relay never boots tools/relay-vm/init
 seams: [bootstrap-model, relay-claim]  # bootstrap-model: BOOT-06 gains the boot-asset and boot-channel invariant, and BOOT-07's surface list grows (Rule changes; Bootstrap comparison). relay-claim (r3, a10): relaycfg.Config gains upstream_dns, the relay's upstream resolvers, used in every mode (RELAY-08, GLOBAL-08); the claim token was already part of the protocol (Bearer on /v1/claim and the tunnel), Hyper-V only starts sending one. executor-initialize is unchanged: --gateway and the optional --ip keep their contract (overview.md: initialize --gateway=<relay> [--ip=<static>]); on Windows warden stops passing the optional --ip (Decision 8), a mode the contract already defines. relay-guest-api is unchanged: the relay's DHCP responder already serves the lease the Windows guest now keeps, and the guest's DNS is still the relay
 surfaces: [cli, config, output]  # cli: `warden setup --driver hyperv` gains --slots (the durable strategy's per-build switches) and --nat-prefix/--host-ip now take effect on every build (UX-01); config: a new optional [vm] dns key, read by every VM driver (Decision 6, UX-01, UX-07, UX-08); output: doctor's NAT, relay-resolver and durable-slot lines on hyperv and its relay-resolver line on the other VM drivers, the new fixable refusals (UX-04)
 security_boundary: env-relay  # the relay VM gains a per-build input (the seed), its claim gains a token on Hyper-V and the upstream resolvers on every VM driver, durable builds stop sharing one build segment (a build VM could reach another build's relay), and the relay's upstream resolvers become the user's choice or the host's. Also the host's claim path to the relay (the token); Security note
@@ -350,8 +350,9 @@ confirmed at r1 and r2, stand unchanged.
      `upstream_dns` when the claim carries it, used exclusively. Its DNS
      handler forwards every guest query to that list, and its own upstream
      dials (the SSRF-filtered dialer and the plain transport, and a collector
-     URL that names a host) resolve through a `net.Resolver` that dials only
-     that list. The list is asked in order: the next entry is asked when one
+     URL that names a host) resolve only through that list, by the same
+     in-order forwarder (not Go's `net.Resolver`, whose retries restart at
+     the first server; `/etc/hosts` and search domains do not apply). The list is asked in order: the next entry is asked when one
      does not answer within the per-query timeout, as `resolv.conf`'s
      `nameserver` lines are; that is a fallback inside the value the user
      gave, named in **Defaults and overrides**. Gone: the `UPSTREAM_DNS`
@@ -687,8 +688,8 @@ a13 is in the queue file's `questions` and the **Design review** history.
   dns` is the override.
 - **a15. How the relay uses the list** (Decision 6; RELAY-04, GLOBAL-11).
   Proceeding with: one list per relay, fixed at the claim, for both the
-  guest's DNS queries (forwarded) and the relay's own upstream dials (a
-  `net.Resolver` that dials only that list), in all three modes; the entries
+  guest's DNS queries (forwarded) and the relay's own upstream dials
+  (resolved only through that list, in order), in all three modes; the entries
   asked in order, the next when one does not answer within the per-query
   timeout (the named fallback inside the user's list); `UPSTREAM_DNS`, the
   `8.8.8.8:53` default and the system-resolver-then-forward split removed;
@@ -783,9 +784,8 @@ claim(cfg):
     servers := usable nameservers of /etc/resolv.conf        source "resolv.conf"
                (not self, not 127.0.0.1, not in the link)    none -> 400 naming upstream_dns
   log "upstream resolvers: <servers> (<source>)"
-  resolver := net.Resolver{PreferGo, Dial: servers in order, next on timeout}
   DNS handler: forward each query to servers in order        (no system-first split)
-  transport and safeDialContext: resolver.LookupIPAddr       (not net.DefaultResolver)
+  transport and safeDialContext: A/AAAA through that forwarder (not net.DefaultResolver)
 ```
 
 ### Every site that changes
@@ -1507,8 +1507,9 @@ against the design:
    per-query timeout and logging one line per timed-out server;
    `resolveViaSystem` and the system-first split go. (RELAY-04, GLOBAL-11,
    GLOBAL-10; a15)
-5. `relay/proxy.go` (rework): one `net.Resolver` (`PreferGo`, a `Dial` that
-   walks the list in order) built at `Start`, used by `safeDialContext`, the
+5. `relay/proxy.go` (rework): one lookup (A and AAAA through the DNS
+   handler's in-order forwarder; Go's `net.Resolver` retries from the first
+   server, which breaks the order rule) used by `safeDialContext`, the
    plain transport's dialer and a direct `CollectorURL` that names a host;
    `net.DefaultResolver` leaves `relay/`. The build-link refusal on every
    resolved address stays. (RELAY-04, GLOBAL-06; a15)
