@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"net"
 	"net/http"
+	"net/netip"
+	"slices"
 	"strings"
 	"testing"
 	"time"
@@ -26,10 +28,24 @@ type oldRelayConfig struct {
 	Environment      *relaycfg.Environment `json:"environment,omitempty"`
 }
 
+// preDNSRelayConfig is relaycfg.Config as a relay that knows build_link but
+// predates upstream_dns decodes it.
+type preDNSRelayConfig struct {
+	oldRelayConfig
+	BuildLink *relaycfg.BuildLink `json:"build_link,omitempty"`
+}
+
 // oldRelay serves the claim protocol the way a relay built before build_link
 // does: it accepts the tunnel and decodes the claim strictly into the old
 // Config.
 func oldRelay(t *testing.T) string {
+	t.Helper()
+	return oldRelayDecoding(t, func() any { return &oldRelayConfig{} })
+}
+
+// oldRelayDecoding is oldRelay decoding the claim strictly into the value
+// newConfig returns.
+func oldRelayDecoding(t *testing.T, newConfig func() any) string {
 	t.Helper()
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
 	if err != nil {
@@ -51,10 +67,9 @@ func oldRelay(t *testing.T) string {
 		t.Cleanup(func() { _ = conn.Close() })
 	})
 	mux.HandleFunc("/v1/claim", func(w http.ResponseWriter, r *http.Request) {
-		var c oldRelayConfig
 		dec := json.NewDecoder(r.Body)
 		dec.DisallowUnknownFields()
-		if err := dec.Decode(&c); err != nil {
+		if err := dec.Decode(newConfig()); err != nil {
 			http.Error(w, "invalid claim: "+err.Error(), http.StatusBadRequest)
 			return
 		}
@@ -76,18 +91,70 @@ func newSession(t *testing.T) *Session {
 	return s
 }
 
-// TestClaimRelayOldRelay is the old relay, new warden row: the refusal is a
-// FixableError carrying the caller's fix.
+// TestClaimRelayOldRelay is the old relay, new warden row: a refusal of any
+// unknown claim field (build_link from a relay before it, upstream_dns from
+// one before that) is a FixableError carrying the caller's fix.
 func TestClaimRelayOldRelay(t *testing.T) {
-	s := newSession(t)
-	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
-	defer cancel()
-	_, err := s.ClaimRelay(ctx, oldRelay(t), "", &BuildRequest{}, nil,
-		buildlink.Default().Claim(), "refresh the relay")
-	var fe *FixableError
-	if !errors.As(err, &fe) || fe.Fix != "refresh the relay" ||
-		!strings.Contains(fe.Msg, `unknown field "build_link"`) {
-		t.Fatalf("err = %#v, want a FixableError with the caller's fix", err)
+	tests := []struct {
+		name  string
+		relay func(*testing.T) string
+		field string
+	}{
+		{"build_link", oldRelay, "build_link"},
+		{"upstream_dns", func(t *testing.T) string {
+			return oldRelayDecoding(t, func() any { return &preDNSRelayConfig{} })
+		}, "upstream_dns"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			s := newSession(t)
+			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+			defer cancel()
+			req := &BuildRequest{DNS: []netip.Addr{netip.MustParseAddr("10.20.0.53")}}
+			_, err := s.ClaimRelay(ctx, tt.relay(t), "", req, nil,
+				buildlink.Default().Claim(), "refresh the relay")
+			var fe *FixableError
+			if !errors.As(err, &fe) || fe.Fix != "refresh the relay" ||
+				!strings.Contains(fe.Msg, "predates the claim field "+tt.field) ||
+				!strings.Contains(fe.Msg, `unknown field "`+tt.field+`"`) {
+				t.Fatalf("err = %#v, want a FixableError naming %s with the caller's fix",
+					err, tt.field)
+			}
+		})
+	}
+}
+
+// TestClaimRelayUpstreamDNS checks req.DNS reaches the claim in order, and
+// that an empty one sends no upstream_dns (the container driver's and
+// cmd/collector's path).
+func TestClaimRelayUpstreamDNS(t *testing.T) {
+	tests := []struct {
+		name string
+		dns  []netip.Addr
+		want []string
+	}{
+		{"ordered", []netip.Addr{
+			netip.MustParseAddr("10.20.0.54"), netip.MustParseAddr("10.20.0.53"),
+		}, []string{"10.20.0.54", "10.20.0.53"}},
+		{"none", nil, nil},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := make(chan []string, 1)
+			addr, _ := fakeRelayWith(t, "", func(c relaycfg.Config) error {
+				got <- c.UpstreamDNS
+				return nil
+			})
+			s := newSession(t)
+			if _, err := s.ClaimRelay(context.Background(), addr, "",
+				&BuildRequest{UpstreamSystemCA: true, DNS: tt.dns}, nil,
+				buildlink.Default().Claim(), "fix"); err != nil {
+				t.Fatalf("ClaimRelay: %v", err)
+			}
+			if g := <-got; !slices.Equal(g, tt.want) || (tt.want == nil && g != nil) {
+				t.Fatalf("relay received upstream_dns %#v, want %#v", g, tt.want)
+			}
+		})
 	}
 }
 
