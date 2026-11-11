@@ -112,7 +112,8 @@ any of them is easy to override at three levels with clear precedence,
 invocation > project > user (`flag > warden.toml > ~/.config/warden`, the same order
 as ORCH-03). A first-time user should get a sensible run with little or no config.
 Driver and build knobs are flags and config keys, not ad-hoc environment variables,
-so they take part in that precedence and appear in the reference docs.
+so they take part in that precedence and appear in the reference docs. A value set
+at any level replaces the default and the lower levels' value (GLOBAL-10).
 
 The automated part checks that defaults resolve with no config file present.
 

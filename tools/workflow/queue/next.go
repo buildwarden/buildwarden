@@ -80,12 +80,12 @@ func leasedTo(f *Feature, worker string, now time.Time) *Step {
 // in-progress before queued within a class, then priority. An in-progress
 // item gives its first ready step. A queued item starts only when every item
 // ahead of it is blocked: never under a hold, for the cloud only within the
-// in-progress limit, and for a fix only once the item it follows is done. A
-// human or host may take a queued item's step of its affinity without
-// starting it, unless it is a process item. A worker an in-progress process
-// item holds gets only the steps it already has leased. It also returns why
-// each in-progress item, and each fix waiting on its parent, it passed over
-// is blocked, for the digest.
+// in-progress limit (which counts no process items), and for a fix only once
+// the item it follows is done. A human or host may take a queued item's step
+// of its affinity without starting it, unless it is a process item. A worker
+// an in-progress process item holds gets only the steps it already has
+// leased. It also returns why each in-progress item, and each fix waiting on
+// its parent, it passed over is blocked, for the digest.
 func (s *State) Next(worker string, now time.Time) (*Pick, []Blocked) {
 	var blocked []Blocked
 	cloud := Kind(worker) == "cloud"
@@ -127,10 +127,11 @@ func (s *State) inProgressStep(f *Feature, worker string, now time.Time) (*Step,
 }
 
 // atLimit reports whether the cloud may start no more items (FLOW-05).
+// Process items do not count toward the limit.
 func (s *State) atLimit() bool {
 	inProgress := 0
 	for _, f := range s.Features {
-		if f.Status == "in_progress" {
+		if f.Status == "in_progress" && !f.IsProcess() {
 			inProgress++
 		}
 	}
@@ -250,7 +251,7 @@ func (s *State) altersHolder(f *Feature) string {
 }
 
 // NextFor is Next restricted to one feature, for an attended run on it: the
-// in-progress limit still counts every feature. It does not wait for the item
+// in-progress limit counts every feature but process items. It does not wait for the item
 // a fix follows: naming the item is the human's explicit word.
 func (s *State) NextFor(name, worker string, now time.Time) (*Pick, []Blocked) {
 	f, err := s.Find(name)
