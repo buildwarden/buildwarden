@@ -41,6 +41,10 @@ func (r *Relay) runDNS() error {
 // answer a query before it asks the next one in its list.
 var dnsQueryTimeout = 5 * time.Second
 
+// upstreamDNSPort is the port the relay asks its upstream resolvers on; a
+// variable so a test can point the list at a loopback fake resolver.
+var upstreamDNSPort uint16 = 53
+
 // dnsClient is the client every upstream query uses, guest's and relay's own.
 func (r *Relay) dnsClient() *dns.Client {
 	return &dns.Client{Timeout: dnsQueryTimeout}

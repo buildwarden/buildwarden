@@ -8,6 +8,7 @@ import (
 	"net/netip"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -318,5 +319,39 @@ func TestStartLogsUpstreamResolvers(t *testing.T) {
 				t.Fatalf("log lacks %q:\n%s", want, logs.String())
 			}
 		})
+	}
+}
+
+// TestDirectCollectorURLResolvesThroughList checks a direct CollectorURL that
+// names a host, with no CollectorTransport, is dialed through the relay's
+// resolver list: collector.example resolves only through the fake resolver
+// the list names, and the collector receives the relay's ledger and ready.
+func TestDirectCollectorURLResolvesThroughList(t *testing.T) {
+	if os.Getenv("HTTP_PROXY") != "" || os.Getenv("http_proxy") != "" {
+		// The cloned default transport would send the request to the proxy.
+		t.Skip("HTTP_PROXY is set; the collector request would go to the proxy")
+	}
+	res := startFakeResolver(t, "127.0.0.1", false)
+	_, port, err := net.SplitHostPort(res.addr)
+	if err != nil {
+		t.Fatal(err)
+	}
+	p, err := strconv.ParseUint(port, 10, 16)
+	if err != nil {
+		t.Fatal(err)
+	}
+	old := upstreamDNSPort
+	upstreamDNSPort = uint16(p)
+	t.Cleanup(func() { upstreamDNSPort = old })
+
+	r, _, _, _ := startTestRelay(t, collector.Config{}, "", func(c *Config) {
+		c.CollectorURL = strings.Replace(c.CollectorURL, "127.0.0.1", "collector.example", 1)
+		c.CollectorTransport = nil
+	})
+	if !strings.HasPrefix(r.cfg.CollectorURL, "http://collector.example:") {
+		t.Fatalf("CollectorURL = %s, want a host name", r.cfg.CollectorURL)
+	}
+	if res.hits.Load() == 0 {
+		t.Fatal("the collector reached the relay without asking the resolver list")
 	}
 }

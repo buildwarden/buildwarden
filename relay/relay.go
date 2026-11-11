@@ -182,7 +182,7 @@ func Start(cfg Config) (*Relay, error) {
 	}
 	for _, a := range cfg.UpstreamDNS {
 		r.upstreamDNS = append(r.upstreamDNS,
-			netip.AddrPortFrom(a, 53).String())
+			netip.AddrPortFrom(a, upstreamDNSPort).String())
 	}
 	log.Print(upstreamLogLine(cfg.UpstreamDNS, cfg.UpstreamDNSSource))
 	collectorTransport := cfg.CollectorTransport
