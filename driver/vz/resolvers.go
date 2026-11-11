@@ -58,6 +58,17 @@ func relayResolvers(read resolvers.ReadFile, link buildlink.Link,
 		resolvers.JoinExcluded(excluded))
 }
 
+// setRelayDNS replaces req.DNS ([vm] dns) with the relay's resolvers, which
+// the claim carries as upstream_dns.
+func setRelayDNS(req *driver.BuildRequest, read resolvers.ReadFile) error {
+	dns, _, err := relayResolvers(read, req.Link(), req.DNS)
+	if err != nil {
+		return err
+	}
+	req.DNS = dns
+	return nil
+}
+
 // Resolvers is the relay's upstream resolvers on this Mac and their source
 // ([vm] dns, or /etc/resolv.conf), or the refusal a build would get: what
 // `warden doctor --driver vz` prints. vmDNS is [vm] dns.

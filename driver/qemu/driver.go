@@ -77,13 +77,9 @@ func (d *Driver) StartBuild(
 	if err := driver.CheckHostLink(req.Link()); err != nil {
 		return nil, err
 	}
-	// The relay's resolvers go in its claim (upstream_dns): [vm] dns, or the
-	// host's.
-	dns, _, err := Resolvers(req.Link(), req.DNS)
-	if err != nil {
+	if err := setRelayDNS(req, runtime.GOOS, os.ReadFile); err != nil {
 		return nil, err
 	}
-	req.DNS = dns
 	if req.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, req.Timeout)

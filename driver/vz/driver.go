@@ -461,12 +461,7 @@ func checkRequest(diskImage, cacheDir string, req *driver.BuildRequest) error {
 	if err := checkLink(diskImage, cacheDir, req); err != nil {
 		return err
 	}
-	dns, _, err := Resolvers(req.Link(), req.DNS)
-	if err != nil {
-		return err
-	}
-	req.DNS = dns
-	return nil
+	return setRelayDNS(req, os.ReadFile)
 }
 
 // imageStamp describes a prepared image's link-channel stamp. An image

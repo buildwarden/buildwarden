@@ -98,6 +98,17 @@ func vmDNSRefusal(err error, link buildlink.Link) error {
 	return driver.Fixable(fix, "%v", err)
 }
 
+// setRelayDNS replaces req.DNS ([vm] dns) with the relay's resolvers on a
+// goos host, which the claim carries as upstream_dns.
+func setRelayDNS(req *driver.BuildRequest, goos string, read resolvers.ReadFile) error {
+	dns, _, err := relayResolvers(goos, read, req.Link(), req.DNS)
+	if err != nil {
+		return err
+	}
+	req.DNS = dns
+	return nil
+}
+
 // Resolvers is the relay's upstream resolvers on this host and their source
 // ([vm] dns, or the host file they came from), or the refusal a build would
 // get: what `warden doctor --driver qemu` prints. vmDNS is [vm] dns.
