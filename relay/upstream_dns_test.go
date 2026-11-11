@@ -1,18 +1,58 @@
 package relay
 
 import (
+	"bytes"
 	"context"
+	"log"
 	"net"
 	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/miekg/dns"
+
+	"github.com/buildwarden/buildwarden/collector"
 )
+
+// lockedBuffer is a bytes.Buffer safe for the logger's writes and the test's
+// reads from different goroutines.
+type lockedBuffer struct {
+	mu  sync.Mutex
+	buf bytes.Buffer
+}
+
+func (b *lockedBuffer) Write(p []byte) (int, error) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.Write(p)
+}
+
+func (b *lockedBuffer) String() string {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+	return b.buf.String()
+}
+
+// captureLog sends the standard logger to a buffer until the test ends. The
+// logger is global, so a test that calls it must not run in parallel. Call it
+// before starting anything that logs, so its cleanup runs last.
+func captureLog(t *testing.T) *lockedBuffer {
+	t.Helper()
+	buf := &lockedBuffer{}
+	flags := log.Flags()
+	log.SetOutput(buf)
+	log.SetFlags(0)
+	t.Cleanup(func() {
+		log.SetOutput(os.Stderr)
+		log.SetFlags(flags)
+	})
+	return buf
+}
 
 // fakeResolver is a loopback UDP DNS server that answers every A query with
 // answer, or never answers when silent. It counts the queries it receives.
@@ -74,6 +114,7 @@ func shortQueryTimeout(t *testing.T) {
 // list only: the first entry is asked, and the second answers when the first
 // does not. A server named by UPSTREAM_DNS is never asked.
 func TestDNSHandlerForwardsToListInOrder(t *testing.T) {
+	logs := captureLog(t)
 	shortQueryTimeout(t)
 	silent := startFakeResolver(t, "", true)
 	second := startFakeResolver(t, "192.0.2.10", false)
@@ -106,6 +147,19 @@ func TestDNSHandlerForwardsToListInOrder(t *testing.T) {
 	}
 	if env.hits.Load() != 0 {
 		t.Fatalf("the UPSTREAM_DNS server was asked %d times", env.hits.Load())
+	}
+	var timeouts int
+	for _, line := range strings.Split(logs.String(), "\n") {
+		if strings.Contains(line, "upstream resolver "+silent.addr+" did not answer") {
+			timeouts++
+		}
+		if strings.Contains(line, second.addr) {
+			t.Errorf("a log line names the answering resolver: %q", line)
+		}
+	}
+	if timeouts != 1 {
+		t.Fatalf("logged %d timeouts for the silent resolver, want 1:\n%s",
+			timeouts, logs.String())
 	}
 }
 
@@ -246,5 +300,23 @@ func TestNoBuiltInResolver(t *testing.T) {
 				}
 			}
 		}
+	}
+}
+
+// TestStartLogsUpstreamResolvers checks a started relay logs its resolver
+// list and where the list came from.
+func TestStartLogsUpstreamResolvers(t *testing.T) {
+	for _, src := range []string{SourceClaim, SourceResolvConf} {
+		t.Run(src, func(t *testing.T) {
+			logs := captureLog(t)
+			startTestRelay(t, collector.Config{}, "", func(c *Config) {
+				c.UpstreamDNS = []netip.Addr{netip.MustParseAddr("127.0.0.1")}
+				c.UpstreamDNSSource = src
+			})
+			want := "relay: upstream resolvers: 127.0.0.1 (" + src + ")"
+			if !strings.Contains(logs.String(), want) {
+				t.Fatalf("log lacks %q:\n%s", want, logs.String())
+			}
+		})
 	}
 }
