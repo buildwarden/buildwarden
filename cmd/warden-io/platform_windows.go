@@ -217,9 +217,11 @@ type nicAddr struct {
 // relayWaitDiagnostic names the guest's IPv4 addresses and their origin, so
 // a failed relay wait on a NIC that got no lease from the relay says so.
 func relayWaitDiagnostic() string {
+	const query = "Get-NetIPAddress -AddressFamily IPv4 | ForEach-Object { " +
+		"'{0}{3}{1}{3}{2}' -f $_.InterfaceAlias, $_.IPAddress, $_.PrefixOrigin, " +
+		"[char]9 }"
 	out, err := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive",
-		"-Command", "Get-NetIPAddress -AddressFamily IPv4 | ForEach-Object { "+
-			"'{0}{3}{1}{3}{2}' -f $_.InterfaceAlias, $_.IPAddress, $_.PrefixOrigin, [char]9 }").Output()
+		"-Command", query).Output()
 	if err != nil {
 		return fmt.Sprintf("IPv4 addresses unavailable: %s", err)
 	}
@@ -252,7 +254,8 @@ func renderNICAddrs(addrs []nicAddr) string {
 		if origin == "WellKnown" && strings.HasPrefix(a.ip, "169.254.") {
 			origin += ", no DHCP lease from the relay"
 		}
-		parts = append(parts, fmt.Sprintf("%s has %s (%s)", a.alias, a.ip, origin))
+		parts = append(parts,
+			fmt.Sprintf("%s has %s (%s)", a.alias, a.ip, origin))
 	}
 	return strings.Join(parts, "; ")
 }

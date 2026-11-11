@@ -67,12 +67,14 @@ func TestWardenRunPS1NoIP(t *testing.T) {
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			ps := WardenRunPS1(tc.link)
-			if strings.Contains(ps, "--ip") || strings.Contains(ps, tc.link.GuestCIDR()) {
+			if strings.Contains(ps, "--ip") ||
+				strings.Contains(ps, tc.link.GuestCIDR()) {
 				t.Errorf("warden-run.ps1 passes a static address:\n%s", ps)
 			}
 			want := "initialize --gateway=" + tc.link.Relay.String()
 			if n := strings.Count(ps, want); n != 2 {
-				t.Errorf("%q appears %d times, want 2 (the run and its Emit line)", want, n)
+				t.Errorf("%q appears %d times, want 2 (the run and its Emit line)",
+					want, n)
 			}
 		})
 	}
