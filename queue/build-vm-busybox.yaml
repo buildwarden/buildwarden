@@ -4,7 +4,7 @@ priority: 46
 follows: build-link-subnet
 status: in_progress
 round: feature
-phase: 5
+phase: 6
 design: docs/design/build-vm-busybox.md
 branch: feat/build-vm-busybox
 alters_relationships: false
@@ -29,6 +29,8 @@ steps:
     phase: 6
     affinity: host:qemu-any
     status: pending
+    needs:
+      - f6-consolidate
     lease:
       claimed_by: ""
       expires: null
@@ -75,10 +77,36 @@ steps:
   - id: f5-guide
     phase: 5
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main
+    phase: 6
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261111T173920Z
-      expires: 2026-11-11T19:55:57.593747025Z
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-merge-main
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-consolidate
+      - f6-validate-qemu-any
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -205,3 +233,9 @@ history:
   - at: 2026-11-11T17:55:57Z
     by: cloud/20261111T173920Z
     event: claimed f5-guide until 2026-11-11T19:55:57Z
+  - at: 2026-11-11T17:55:59Z
+    by: cloud/20261111T173920Z
+    event: done f5-guide
+  - at: 2026-11-11T17:55:59Z
+    by: cloud/20261111T173920Z
+    event: entered phase 6 (publish)
