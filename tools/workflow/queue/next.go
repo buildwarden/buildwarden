@@ -80,12 +80,14 @@ func leasedTo(f *Feature, worker string, now time.Time) *Step {
 // in-progress before queued within a class, then priority. An in-progress
 // item gives its first ready step. A queued item starts only when every item
 // ahead of it is blocked: never under a hold, for the cloud only within the
-// in-progress limit, and for a fix only once the item it follows is done. A
-// human or host may take a queued item's step of its affinity without
-// starting it, unless it is a process item. A worker an in-progress process
-// item holds gets only the steps it already has leased. It also returns why
-// each in-progress item, and each fix waiting on its parent, it passed over
-// is blocked, for the digest.
+// in-progress limit (which counts no process items), and for a fix only once
+// the item it follows is done. A human or host may take a queued item's step
+// of its affinity without starting it, unless it is a process item. A worker
+// an in-progress process item holds gets only the steps it already has
+// leased. No worker is offered a merge step (IsMerge): an item waiting on the
+// human's merge is blocked like one waiting on a human step, and the walk
+// goes on (FLOW-05, FLOW-08). It also returns why each in-progress item, and
+// each fix waiting on its parent, it passed over is blocked, for the digest.
 func (s *State) Next(worker string, now time.Time) (*Pick, []Blocked) {
 	var blocked []Blocked
 	cloud := Kind(worker) == "cloud"
@@ -127,10 +129,11 @@ func (s *State) inProgressStep(f *Feature, worker string, now time.Time) (*Step,
 }
 
 // atLimit reports whether the cloud may start no more items (FLOW-05).
+// Process items do not count toward the limit.
 func (s *State) atLimit() bool {
 	inProgress := 0
 	for _, f := range s.Features {
-		if f.Status == "in_progress" {
+		if f.Status == "in_progress" && !f.IsProcess() {
 			inProgress++
 		}
 	}
@@ -151,7 +154,9 @@ func (s *State) waitsForParent(f *Feature) bool {
 
 // ready returns the feature's first step the worker can take now, or why
 // there is none. A step of a later phase is skipped without adding to the
-// reasons: the current phase's steps already say why the feature waits.
+// reasons: the current phase's steps already say why the feature waits. A
+// merge step is skipped for every worker, whatever its affinity: only wf done
+// in the tick's merge confirmation completes it (FLOW-08).
 func (s *State) ready(f *Feature, worker string, now time.Time) (*Step, string) {
 	done := map[string]bool{}
 	for _, st := range f.Steps {
@@ -163,6 +168,10 @@ func (s *State) ready(f *Feature, worker string, now time.Time) (*Step, string) 
 	for i := range f.Steps {
 		st := &f.Steps[i]
 		if st.Status != "pending" || !Offered(f, st) || !allDone(st.Needs, done) {
+			continue
+		}
+		if IsMerge(st) {
+			waits = append(waits, mergeWait(f))
 			continue
 		}
 		if !Satisfies(worker, st.Affinity) {
@@ -186,6 +195,14 @@ func (s *State) ready(f *Feature, worker string, now time.Time) (*Step, string) 
 		return nil, "no pending step (phase done-when not yet advanced?)"
 	}
 	return nil, "waiting on " + strings.Join(waits, ", ")
+}
+
+// mergeWait is the reason an item at its merge step waits.
+func mergeWait(f *Feature) string {
+	if f.PR != nil && f.PR.Number > 0 {
+		return fmt.Sprintf("the human's merge of PR #%d (FLOW-08)", f.PR.Number)
+	}
+	return "the human's merge (no PR recorded, FLOW-08)"
 }
 
 // cloudHold returns why the unattended loop must not take the step yet.
@@ -250,7 +267,7 @@ func (s *State) altersHolder(f *Feature) string {
 }
 
 // NextFor is Next restricted to one feature, for an attended run on it: the
-// in-progress limit still counts every feature. It does not wait for the item
+// in-progress limit counts every feature but process items. It does not wait for the item
 // a fix follows: naming the item is the human's explicit word.
 func (s *State) NextFor(name, worker string, now time.Time) (*Pick, []Blocked) {
 	f, err := s.Find(name)

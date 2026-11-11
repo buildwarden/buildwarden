@@ -192,9 +192,10 @@ the class of the item the step belongs to, so disruptive work waits for the
 rules to settle; a step it already claimed stays claimed, and finishing the
 process item releases the hold. Otherwise a worker takes the next ready step
 of the first item in that order, and keeps taking that item's steps until it
-blocks: on a `human` or `host:<name>` step, an exhausted budget, or the PR
-slot. Only then does it take steps from the next item down, and it returns to
-the earlier item as soon as that one has a ready step again.
+blocks: on a `human` or `host:<name>` step, an exhausted budget, the PR
+slot, or the human's merge (FLOW-08). Only then does it take steps from the
+next item down, and it returns to the earlier item as soon as that one has a
+ready step again.
 
 While interfaces are still stabilizing, a feature developed in parallel is likely
 to need an involved rebase and consolidation once the features ahead of it land.
@@ -202,11 +203,13 @@ Parallel features are therefore the fallback that keeps work moving while the
 human is away, not a goal. A queued item starts only when every item ahead of
 it is blocked.
 
-At most 5 features are in progress at once, and at most 1 of them declares
-`alters_relationships: true` (FLOW-02), because two such features reshape the same
-structure and make each other's consolidation costly. A feature whose design
-discovers it alters relationships waits at the end of Design until that slot is
-free.
+At most 5 features are in progress at once, not counting process items
+(FLOW-03), and at most 1 of those features declares `alters_relationships: true`
+(FLOW-02), because two such features reshape the same structure and make each
+other's consolidation costly. Process items are not counted because they are
+short and already ranked ahead of fixes and features; one that would disrupt
+running work declares `holds`. A feature whose design discovers it alters
+relationships waits at the end of Design until that slot is free.
 
 At most 1 feature holds the **PR slot**: from merging `main` at the start of
 Publish until its PR merges. A feature finished through Guide waits for the slot,
@@ -417,8 +420,9 @@ merge (FLOW-08):
 - **A rule change a feature's design declares.** A *rule change* is an edit to
   this directory (a rule, its severity or check type, the README index), to
   the code that enforces the rules (`tools/tier1/`, `tools/workflow/check/`,
-  and the lines of `.github/workflows/` that run tier 1, `golangci-lint` or
-  `tools/workflow`), or to `docs/design/TEMPLATE.md`. The design lists each one
+  and the jobs of `.github/workflows/` that run tier 1, `golangci-lint` or
+  `tools/workflow`, and the `needs:` entries that name them), or to
+  `docs/design/TEMPLATE.md`. The design lists each one
   in its `rule_changes` front-matter (FLOW-02) and its **Rule changes**
   section, with the current and proposed wording, severity and check, and what
   the enforcement change does. The design review approves each change by name
@@ -495,10 +499,14 @@ reason to keep a branch; it starts from trunk on a new one.
 Deleting a branch loses any commit not on trunk, so a branch is deleted only
 after it is shown to be contained in trunk (`git branch --merged`, the PR's
 merge commit, or, for a squash merge, a commit on trunk naming the PR whose
-tree equals the branch head's tree), with git's safe forms (`git branch -d`)
-and never by force-pushing. `git branch -d` refuses a squash-merged branch, so
-that case alone deletes the local branch with `git branch -D`, and only after
-`wf check` has shown the equal tree. Caches a later build reuses (prepared images, support images)
+tree equals the branch head's tree, or a one-parent such commit whose change
+from its parent has the same `git patch-id --verbatim` as the branch head's
+change from its merge base with that parent), with git's safe forms
+(`git branch -d`) and never by force-pushing. `git branch -d` refuses a
+squash-merged branch, so that case alone deletes the local branch with
+`git branch -D`, and only after `wf check` has shown the equal tree or change;
+otherwise the escalation gives the human these commands, and an agent never
+runs them. Caches a later build reuses (prepared images, support images)
 stay. An agent without permission to delete lists the exact commands for the
 human instead of skipping the step.
 
@@ -565,6 +573,8 @@ as a list of questions. The session goes over, at a high level:
 - the Validation plan and what Plan will work from: native validation steps,
   tier-2 gaps, and, on a re-review, the finding and the tasks it touches;
 - the risks and what is deferred: native validation, tier-2 gaps, rules changed;
+- the defaults, overrides and named fallbacks the design adds or changes
+  (GLOBAL-09 to GLOBAL-11);
 - each `rule_changes` entry (FLOW-14), shown with its current and proposed
   wording and asked on its own: approved, approved with a change, or rejected;
 - each assumed question, confirmed or turned into a change (FLOW-07).

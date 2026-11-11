@@ -87,8 +87,10 @@ one monolith (see GLOBAL-08):
 
 1. [`global.md`](./global.md) — cross-cutting principles (comments, errors,
    tests, reproducibility, security boundaries, cross-platform, component
-   independence).
-2. [`relay.md`](./relay.md)
+   independence, defaults and overrides); GLOBAL-09 to GLOBAL-11 cover the
+   whole repository.
+2. [`relay.md`](./relay.md) — the relay: ledger, serving, keys, modes, specs, the
+   collector, and configuration through its claim (RELAY-08).
 3. [`orchestrator.md`](./orchestrator.md)
 4. [`in-vm-executor.md`](./in-vm-executor.md)
    - [`bootstrap.md`](./bootstrap.md) — the bootstrap model every driver shares:
