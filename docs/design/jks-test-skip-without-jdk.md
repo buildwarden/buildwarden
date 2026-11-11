@@ -1,6 +1,6 @@
 ---
 feature: jks-test-skip-without-jdk
-status: draft
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -394,4 +394,45 @@ None.
 
 ## Archive summary
 
-Filled in at Publish.
+Designed 2026-11-07, reworked the same day on Jeff's attended direction (r1);
+design review skipped both times (FLOW-19). Implemented by the cloud loop,
+published 2026-11-11. Unblocked `make test` on the macbook for
+`vz-image-prepare-refresh`.
+
+- **Built.**
+  - `cmd/warden-io/jks_test.go`: `requireKeytool` looks `keytool` up and runs
+    `keytool -help`; `unavailable` skips with a message naming the path, the
+    error and the probe's output, or fails with that message when
+    `WARDEN_REQUIRE_KEYTOOL=1`. `TestWriteJKSMatchesKeytool` calls it first;
+    its import, byte-compare and `-list` steps are unchanged.
+  - `.github/workflows/main.yml`: a `keytool` job on the `ubuntu-latest`,
+    `macos-latest`, `windows-latest` matrix under the `gotests` gate, with
+    `actions/setup-java@v4` (Temurin 21), running
+    `go test ./cmd/warden-io -run Keytool -count=1 -v` with
+    `WARDEN_REQUIRE_KEYTOOL: '1'`; `ci-ok` needs it. The `test` job is
+    unchanged and still runs the comparison where the runner has a JDK.
+  - `CONTRIBUTING.md`: one sentence on the skip and the job.
+- **Decisions taken:** probe that the found keytool runs, not just that it
+  is on PATH (1); a dedicated CI job installs a pinned JDK on all three
+  platforms (2, Jeff); `WARDEN_REQUIRE_KEYTOOL=1` turns the skip into a
+  failure so that job cannot pass by skipping (3); `make test` and the `test`
+  job are unchanged (4); the job uses the `gotests` gate and joins `ci-ok`
+  (5); no rule change (6).
+- **Rejected:** matching the macOS stub's message; `/usr/libexec/java_home`;
+  probing `java` or `JAVA_HOME` instead of `keytool`; a `keytool` build tag;
+  installing a JDK on the Mac (Jeff); failing instead of skipping when `CI`
+  (4fa31a1) or `GITHUB_ACTIONS=true` (d8d8a03, implemented at a5ea356) is
+  set; excluding the keytool test from CI's `make test`; a
+  `cmd/warden-io`-only `changes` filter.
+- **For a future design touching `testing`, `jks`, `keytool`, `truststore`,
+  `ci`, `github-actions` or `java`:**
+  - A test that needs an external tool skips where the tool cannot *run*
+    (probe it), and a CI job that installs the tool sets a `WARDEN_REQUIRE_*=1`
+    variable so it fails instead. `WARDEN_REQUIRE_KEYTOOL` covers any keytool
+    test whose name matches `-run Keytool`.
+  - The `keytool` job is the only CI run of `cmd/warden-io` tests on macOS and
+    Windows; `tier1-test` runs only `tools/tier1`.
+  - The reference keytool is Temurin 21; moving the pin (say to 25) is a
+    change to the byte comparison's reference, so check all three legs.
+  - Under FLOW-14 since #105, adding an ordinary job to `ci-ok`'s `needs:`
+    is not a rule change.
