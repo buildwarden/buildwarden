@@ -3,6 +3,7 @@ package firecracker
 import (
 	"errors"
 	"net"
+	"net/netip"
 	"os"
 	"strings"
 	"testing"
@@ -80,6 +81,7 @@ func TestRelayResolvers(t *testing.T) {
 	}), wsl, def, nil)
 	var fe *driver.FixableError
 	if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "generateResolvConf=false") ||
+		!strings.Contains(fe.Fix, "set [vm] dns") ||
 		!strings.Contains(err.Error(), "10.255.255.254") {
 		t.Fatalf("wsl: %v", err)
 	}
@@ -96,7 +98,8 @@ func TestRelayResolvers(t *testing.T) {
 	_, _, err = relayResolvers(files(map[string]string{
 		resolvers.ResolvConf: "nameserver 127.0.0.1\n",
 	}), none, def, nil)
-	if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "/etc/resolv.conf") {
+	if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "/etc/resolv.conf") ||
+		!strings.Contains(fe.Fix, "set [vm] dns") {
 		t.Fatalf("loopback: %v", err)
 	}
 }
@@ -121,6 +124,7 @@ func TestRelayResolversConfiguredLink(t *testing.T) {
 	}), none, conf, nil)
 	if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "10.1.2.0/30") ||
 		!strings.Contains(fe.Fix, "[vm] build_link") ||
+		!strings.Contains(fe.Fix, "set [vm] dns") ||
 		!strings.Contains(err.Error(), "10.1.2.2") {
 		t.Fatalf("build link: %v", err)
 	}
@@ -130,4 +134,74 @@ func TestRelayResolversConfiguredLink(t *testing.T) {
 	if err != nil || resolvers.Join(got) != "10.1.2.4" {
 		t.Fatalf("build link mixed: %v %v", got, err)
 	}
+}
+
+// TestRelayResolversVMDNS: a set [vm] dns is the list, in order, with no
+// host file read; an entry the rule refuses refuses the build (it is never
+// dropped), and the fix names [vm] dns.
+func TestRelayResolversVMDNS(t *testing.T) {
+	noRead := func(p string) ([]byte, error) {
+		t.Fatalf("read %s with [vm] dns set", p)
+		return nil, nil
+	}
+	local := func(ip net.IP) bool { return ip.Equal(net.ParseIP("192.168.1.10")) }
+	conf, _ := buildlink.Parse("10.1.2.0/30")
+	got, source, err := relayResolvers(noRead, local, conf,
+		addrs("10.20.0.54", "10.20.0.53"))
+	if err != nil || resolvers.Join(got) != "10.20.0.54, 10.20.0.53" ||
+		source != resolvers.VMDNS {
+		t.Fatalf("[vm] dns: %v %q %v", got, source, err)
+	}
+	for _, tt := range []struct{ bad, why, fix string }{
+		{"127.0.0.1", "loopback", "[vm] dns"},
+		{"192.168.1.10", "assigned to this host", "[vm] dns"},
+		{"169.254.169.254", "link-local", "[vm] dns"},
+		{"10.1.2.2", "inside the build link 10.1.2.0/30", "[vm] build_link"},
+	} {
+		got, _, err := relayResolvers(noRead, local, conf, addrs("10.20.0.53", tt.bad))
+		var fe *driver.FixableError
+		if got != nil || !errors.As(err, &fe) ||
+			!strings.Contains(err.Error(), tt.bad) ||
+			!strings.Contains(err.Error(), tt.why) ||
+			!strings.Contains(fe.Fix, tt.fix) {
+			t.Errorf("[vm] dns with %s: %v %v", tt.bad, got, err)
+		}
+	}
+}
+
+// TestRelayResolversLinkLocal: a link-local host resolver (a cloud metadata
+// resolver) is not reachable from behind the slot's NAT, so it is excluded;
+// with nothing else left the refusal names it and [vm] dns.
+func TestRelayResolversLinkLocal(t *testing.T) {
+	none := func(net.IP) bool { return false }
+	files := func(conf string) resolvers.ReadFile {
+		return func(p string) ([]byte, error) {
+			if p == resolvers.ResolvConf {
+				return []byte(conf), nil
+			}
+			return nil, os.ErrNotExist
+		}
+	}
+	got, source, err := relayResolvers(
+		files("nameserver 169.254.169.254\nnameserver 10.0.0.2\n"), none,
+		buildlink.Default(), nil)
+	if err != nil || resolvers.Join(got) != "10.0.0.2" || source != resolvers.ResolvConf {
+		t.Fatalf("mixed: %v %q %v", got, source, err)
+	}
+	_, _, err = relayResolvers(files("nameserver 169.254.169.254\n"), none,
+		buildlink.Default(), nil)
+	var fe *driver.FixableError
+	if !errors.As(err, &fe) ||
+		!strings.Contains(err.Error(), "169.254.169.254 (link-local)") ||
+		!strings.Contains(fe.Fix, "set [vm] dns") {
+		t.Fatalf("link-local only: %v", err)
+	}
+}
+
+func addrs(ss ...string) []netip.Addr {
+	out := make([]netip.Addr, len(ss))
+	for i, s := range ss {
+		out[i] = netip.MustParseAddr(s)
+	}
+	return out
 }

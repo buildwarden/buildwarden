@@ -110,15 +110,13 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	return &driver.BuildResult{OutputDir: outputDir}, nil
 }
 
-// buildPreflight is preflight on this host for req's build link and [vm] dns,
-// plus the refusal of a link a host interface uses. It replaces req.DNS with
-// the resolvers it chose, which the claim carries as upstream_dns.
+// buildPreflight is requestPreflight on this host, plus the refusal of a link
+// a host interface uses.
 func buildPreflight(req *driver.BuildRequest) (*preflighted, error) {
-	pre, err := preflight(realHost{}, hostLocal, req.Link(), req.DNS)
+	pre, err := requestPreflight(realHost{}, hostLocal, req)
 	if err != nil {
 		return nil, err
 	}
-	req.DNS = pre.resolvers
 	return pre, driver.CheckHostLink(req.Link())
 }
 

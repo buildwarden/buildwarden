@@ -85,6 +85,32 @@ func TestPreflightMessages(t *testing.T) {
 	}
 }
 
+// TestRequestPreflightDNS: the resolvers preflight chooses replace req.DNS,
+// which ClaimRelay sends as upstream_dns: the host's when [vm] dns is unset,
+// and [vm] dns itself, with no host resolv.conf to read, when it is set.
+func TestRequestPreflightDNS(t *testing.T) {
+	supportedHost(t)
+	prev := assetsCheck
+	assetsCheck = func() (assets, error) { return assets{}, nil }
+	t.Cleanup(func() { assetsCheck = prev })
+	h := newFakeHost().withSlots(1, 1000)
+	h.files["/dev/kvm"] = ""
+	h.outputs["firecracker --version"] = "Firecracker v1.17.0\n"
+	h.files[resolvers.ResolvConf] = "nameserver 10.0.0.2\nnameserver 127.0.0.53\n"
+	none := func(net.IP) bool { return false }
+	req := &driver.BuildRequest{}
+	if _, err := requestPreflight(h, none, req); err != nil ||
+		resolvers.Join(req.DNS) != "10.0.0.2" {
+		t.Fatalf("host selection: %v %v", req.DNS, err)
+	}
+	delete(h.files, resolvers.ResolvConf)
+	req = &driver.BuildRequest{DNS: addrs("10.20.0.53", "10.20.0.54")}
+	if _, err := requestPreflight(h, none, req); err != nil ||
+		resolvers.Join(req.DNS) != "10.20.0.53, 10.20.0.54" {
+		t.Fatalf("[vm] dns: %v %v", req.DNS, err)
+	}
+}
+
 func TestOwnedSlots(t *testing.T) {
 	h := newFakeHost().withSlots(3, 1000)
 	h.files["/sys/class/net/wfc1g/owner"] = "1001\n"
@@ -126,6 +152,13 @@ func TestDoctorReport(t *testing.T) {
 		if !strings.Contains(s, want) {
 			t.Errorf("doctor output lacks %q:\n%s", want, s)
 		}
+	}
+	out.Reset()
+	doctor(h, &out, func(net.IP) bool { return false }, buildlink.Default(),
+		addrs("10.20.0.53"))
+	want := "ok    upstream DNS for the relay (from [vm] dns): 10.20.0.53"
+	if !strings.Contains(out.String(), want) {
+		t.Errorf("doctor output lacks %q:\n%s", want, out.String())
 	}
 	h.files["/proc/sys/net/ipv4/ip_forward"] = "0\n"
 	out.Reset()

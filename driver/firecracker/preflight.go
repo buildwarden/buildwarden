@@ -214,7 +214,7 @@ func preflight(h host, local func(net.IP) bool, link buildlink.Link,
 	if err := checkFirecracker(h); err != nil {
 		return nil, err
 	}
-	a, err := findAssets()
+	a, err := assetsCheck()
 	if err != nil {
 		return nil, err
 	}
@@ -229,9 +229,26 @@ func preflight(h host, local func(net.IP) bool, link buildlink.Link,
 	return &preflighted{assets: a, slots: slots, resolvers: dns}, nil
 }
 
+// requestPreflight is preflight for req's build link and [vm] dns (req.DNS).
+// It replaces req.DNS with the resolvers it chose, which the claim carries as
+// upstream_dns.
+func requestPreflight(h host, local func(net.IP) bool,
+	req *driver.BuildRequest) (*preflighted, error) {
+	pre, err := preflight(h, local, req.Link(), req.DNS)
+	if err != nil {
+		return nil, err
+	}
+	req.DNS = pre.resolvers
+	return pre, nil
+}
+
 // hostCheck is hostSupported, replaced in tests so the host-independent
 // checks run on every platform.
 var hostCheck = hostSupported
+
+// assetsCheck is findAssets, replaced in tests so the checks after it run
+// without built boot assets.
+var assetsCheck = findAssets
 
 // unsupportedHost is the error a non-Linux or non-x86_64 host gets.
 func unsupportedHost(goos, goarch string) error {

@@ -42,6 +42,9 @@ func TestKernelCommandLines(t *testing.T) {
 	if got != want {
 		t.Fatalf("relay args:\n got %s\nwant %s", got, want)
 	}
+	if strings.Contains(got, "warden.dns") {
+		t.Fatal("the relay's resolvers are on its command line, not in its claim")
+	}
 	disk := buildConfig(0, buildBoot{Kernel: "k", Rootfs: "r", PartUUID: "abc", Seed: "s"}, 1,
 		1)
 	if got := disk.effectiveArgs(); got != baseArgs+" root=PARTUUID=abc rw" {
