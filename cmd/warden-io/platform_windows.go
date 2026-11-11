@@ -29,11 +29,11 @@ func wardenCABundlePath() string {
 
 // configureNetwork points the guest at the relay. Two modes:
 //   - selfIP set (e.g. "192.0.2.2/30"): assign a static IP + default route via
-//     the relay gateway and set DNS. The VM drivers pass the build link's
-//     guest address from the per-build seed. A vm-mode relay also serves a
-//     DHCP lease on the link; a NIC that took it first ends with the same
-//     address and router, since the lease and the seed name the same link.
+//     the relay gateway and set DNS. This is for an orchestrator that passes
+//     --ip; warden's own launcher (warden-run.ps1) does not.
 //   - selfIP empty: rely on relay-provided DHCP for IP, best-effort set DNS.
+//     The NIC keeps the lease the vm-mode relay serves on the build link.
+//
 // The build VM's sole NIC faces the relay, so operating on all interfaces is
 // safe. Steps are best-effort and non-fatal individually so a partially
 // pre-configured image still proceeds.
@@ -207,3 +207,52 @@ func scriptCommand(path string) *exec.Cmd {
 // defaultScriptName is the build script fetched from the relay when the caller
 // does not specify one. Windows guests default to a PowerShell script.
 func defaultScriptName() string { return "build.ps1" }
+
+// nicAddr is one IPv4 address on a guest interface and how Windows got it
+// (Get-NetIPAddress's PrefixOrigin: Dhcp, Manual, WellKnown, ...).
+type nicAddr struct {
+	alias, ip, origin string
+}
+
+// relayWaitDiagnostic names the guest's IPv4 addresses and their origin, so
+// a failed relay wait on a NIC that got no lease from the relay says so.
+func relayWaitDiagnostic() string {
+	out, err := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive",
+		"-Command", "Get-NetIPAddress -AddressFamily IPv4 | ForEach-Object { "+
+			"'{0}{3}{1}{3}{2}' -f $_.InterfaceAlias, $_.IPAddress, $_.PrefixOrigin, [char]9 }").Output()
+	if err != nil {
+		return fmt.Sprintf("IPv4 addresses unavailable: %s", err)
+	}
+	return renderNICAddrs(parseNICAddrs(string(out)))
+}
+
+// parseNICAddrs reads relayWaitDiagnostic's tab-separated query output,
+// skipping loopback addresses and malformed lines.
+func parseNICAddrs(out string) []nicAddr {
+	var addrs []nicAddr
+	for _, line := range strings.Split(out, "\n") {
+		f := strings.Split(strings.TrimRight(line, "\r"), "\t")
+		if len(f) != 3 || strings.HasPrefix(f[1], "127.") {
+			continue
+		}
+		addrs = append(addrs, nicAddr{alias: f[0], ip: f[1], origin: f[2]})
+	}
+	return addrs
+}
+
+// renderNICAddrs renders the addresses for a failed relay wait. A WellKnown
+// 169.254 address is Windows' self-assigned one: the NIC got no lease.
+func renderNICAddrs(addrs []nicAddr) string {
+	if len(addrs) == 0 {
+		return "no IPv4 address on any interface"
+	}
+	parts := make([]string, 0, len(addrs))
+	for _, a := range addrs {
+		origin := a.origin
+		if origin == "WellKnown" && strings.HasPrefix(a.ip, "169.254.") {
+			origin += ", no DHCP lease from the relay"
+		}
+		parts = append(parts, fmt.Sprintf("%s has %s (%s)", a.alias, a.ip, origin))
+	}
+	return strings.Join(parts, "; ")
+}
