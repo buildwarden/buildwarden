@@ -3,7 +3,7 @@ title: wf next hands the cloud a merge step that waits on the human, starving lo
 priority: 53
 kind: process
 follows: regression-fixes-follow-up
-status: in_progress
+status: done
 round: process
 phase: 4
 design: docs/design/next-skips-merge-wait.md
@@ -38,10 +38,10 @@ steps:
   - id: x4-close
     phase: 4
     affinity: cloud
-    status: pending
+    status: done
     lease:
-      claimed_by: cloud/20261111T173920Z
-      expires: 2026-11-11T20:10:24.353808488Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -84,3 +84,9 @@ history:
   - at: 2026-11-11T18:10:24Z
     by: cloud/20261111T173920Z
     event: claimed x4-close until 2026-11-11T20:10:24Z
+  - at: 2026-11-11T18:10:34Z
+    by: cloud/20261111T173920Z
+    event: done x4-close
+  - at: 2026-11-11T18:10:34Z
+    by: cloud/20261111T173920Z
+    event: closed; feature done
