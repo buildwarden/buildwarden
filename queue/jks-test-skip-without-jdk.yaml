@@ -169,3 +169,4 @@ history:
     by: cloud/20261110T105938Z
     event: 'released f3-implement-r2: done-when: rule changes cleared (FLOW-14) false positive on main.yml ci-ok needs line; waits for rule-running-line-match to merge'
   - {at: 2026-11-10T11:05:00Z, by: cloud/20261110T105938Z, event: "raised blocking q1 (f3-answer-q1, needed by f3-implement-r2): FLOW-05 order kept the cloud on this step, whose FLOW-14 clearance waits on rule-running-line-match"}
+  - {at: 2026-11-11T11:00:00Z, by: cloud/20261111T105701Z, event: "rule-running-line-match merged as f861315 (#105): the FLOW-14 clearance now guards rule-running jobs, so f3-implement-r2 done-when should pass unchanged once q1 is answered"}
