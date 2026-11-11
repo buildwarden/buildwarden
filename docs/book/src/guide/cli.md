@@ -242,6 +242,15 @@ of that driver uses the asset; on the direct-boot initramfs, which only direct
 boot uses, it is reported only. `--build-link` checks a value before you configure it;
 the container driver refuses it.
 
+Every VM driver's doctor also prints the relay's upstream resolvers and their
+source (`[vm] dns`, or the host source it read them from), or the refusal a
+build would get, which is BLOCKED and fails doctor. The hyperv doctor adds a
+`Build network` block: the NAT's name, prefix and host IP as read back from
+the host (or the NAT a build would make), a NAT prefix that overlaps the build
+link (BLOCKED), and for the durable strategy each slot switch, `free` or `in
+use by` the VMs attached to it, or a missing-slots line naming `warden setup
+--driver hyperv`.
+
 Exits non-zero when a required capability is unmet, so it works as a CI or agent gate.
 Replaces the old `warden hyperv doctor`.
 
@@ -253,10 +262,16 @@ warden setup --driver <name> [flags]
 
 Idempotent host preparation. Hyper-V and Firecracker need it.
 
-- `--driver hyperv` creates the durable network builds reuse (a Private build
-  switch named by `--network`, plus an Internal NAT switch, host IP and NAT rule
-  for relay egress). Run once from an elevated terminal; afterwards builds run
-  without elevation.
+- `--driver hyperv` creates the durable network builds reuse: `--slots`
+  Private build switches (default 4) named `<network>-0` to `<network>-<N-1>`
+  (`--network`, default `warden-dev`), one per concurrent build, plus an
+  Internal NAT switch, host IP and NAT rule for relay egress. Slot switches
+  above `--slots` with nothing attached are removed, and the single
+  `<network>` Private switch of earlier setups is retired when nothing is
+  attached to it; either refuses, naming the VMs, while one is in use. Re-run
+  it after upgrading from a warden whose setup made that single switch:
+  durable builds refuse to start until the slots exist. Run once from an
+  elevated terminal; afterwards builds run without elevation.
 - `--driver firecracker` (as root, with `sudo`) creates `--slots` network slots
   owned by the user who ran sudo: per slot a bridge and three TAPs with their
   sysctls, plus the `warden_fc` bridge table and the `WARDEN-FC` iptables and
@@ -274,11 +289,16 @@ Other drivers print that no host setup is needed. Replaces the old
 **Flags:**
 - `--network <name>` — Durable build switch name (default: `[vm]` network, then `warden-dev`)
 - `--nat-prefix <cidr>` — NAT CIDR for relay egress (default 192.168.240.0/20).
+  Every build reads the NAT back from the host and gives its relay its own
+  address in this prefix, so a non-default value takes effect on every build.
   Refused, before anything changes, when it overlaps the build link (`[vm]
   build_link`, or the default `100.127.255.252/30`); setup has no
-  `--build-link` of its own
-- `--host-ip <ip>` — Host gateway IP on the NAT switch (default 192.168.240.1)
-- `--slots <n>` — Network slots to create, 1 to 256 (firecracker; default 16)
+  `--build-link` of its own, and a build refuses an overlapping NAT too
+- `--host-ip <ip>` — Host gateway IP on the NAT switch (default 192.168.240.1),
+  the relay's upstream gateway on every build
+- `--slots <n>` — hyperv: build switches to create, 1 to 64 (default 4), the
+  number of durable builds that can run at once; firecracker: network slots
+  to create, 1 to 256 (default 16). Refused for other drivers
 
 ## warden hyperv service
 
