@@ -4,7 +4,7 @@ priority: 51
 kind: process
 status: in_progress
 round: process
-phase: 3
+phase: 4
 design: docs/design/design-principles.md
 branch: feat/design-principles
 alters_relationships: null
@@ -30,15 +30,23 @@ steps:
   - id: x3-answer-q1
     phase: 3
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
   - id: x3-merge
     phase: 3
     affinity: cloud
+    status: done
+    needs:
+      - x3-answer-q1
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
+    affinity: cloud
     status: pending
-    needs: [x3-answer-q1]
     lease:
       claimed_by: ""
       expires: null
@@ -52,12 +60,13 @@ budget:
 questions:
   - id: q1
     kind: blocking
-    status: open
-    question: "PR #104 was squash-merged as beb51ba after #105 (f861315) had already changed main. beb51ba applies exactly the branch's change (the diff from f861315 to beb51ba matches the diff from 49e5354 to 42d95f0, apart from one hunk's line offset in process.md), but x3-merge's 'merged by a human (FLOW-08)' check accepts only a squash whose tree equals the branch's tree, so it fails and the step cannot pass. Filed wf-squash-after-base-moved to fix the check. How should design-principles proceed?"
+    status: answered
+    question: 'PR #104 was squash-merged as beb51ba after #105 (f861315) had already changed main. beb51ba applies exactly the branch''s change (the diff from f861315 to beb51ba matches the diff from 49e5354 to 42d95f0, apart from one hunk''s line offset in process.md), but x3-merge''s ''merged by a human (FLOW-08)'' check accepts only a squash whose tree equals the branch''s tree, so it fails and the step cannot pass. Filed wf-squash-after-base-moved to fix the check. How should design-principles proceed?'
     options:
       - keep it at x3-merge until wf-squash-after-base-moved lands, then answer so the cloud confirms the merge and closes it
       - record x3-merge done by hand now (attended, human/jeff, citing beb51ba and this question), so x4-close (rebuild notice, limit back to 5) runs on the next tick
     recommended: record x3-merge done by hand now (attended, human/jeff, citing beb51ba and this question), so x4-close (rebuild notice, limit back to 5) runs on the next tick
+    answer: 'record x3-merge done by hand now (Jeff, 2026-11-11): #104 squash-merged as beb51ba; patch-id of f861315..beb51ba equals 49e5354..42d95f0 (fdc1cfd3)'
 history:
   - at: 2026-11-08T22:08:49Z
     by: human/jeff
@@ -83,4 +92,14 @@ history:
   - at: 2026-11-10T11:15:51Z
     by: cloud/20261110T105938Z
     event: entered phase 3 (merge)
-  - {at: 2026-11-11T11:05:00Z, by: cloud/20261111T105701Z, event: "x3-merge failed: squash beb51ba made after main moved (f861315), tree differs from the branch; raised blocking q1 (x3-answer-q1, needed by x3-merge)"}
+  - at: 2026-11-11T11:05:00Z
+    by: cloud/20261111T105701Z
+    event: 'x3-merge failed: squash beb51ba made after main moved (f861315), tree differs from the branch; raised blocking q1 (x3-answer-q1, needed by x3-merge)'
+  - at: 2026-11-11T17:14:09Z
+    by: human/jeff
+    event: 'blocking question q1 answered: record x3-merge done by hand now (Jeff, 2026-11-11): #104 squash-merged as beb51ba; patch-id of f861315..beb51ba equals 49e5354..42d95f0 (fdc1cfd3)'
+  - at: 2026-11-11T17:14:09Z
+    by: human/jeff
+    event: done x3-answer-q1
+  - {at: 2026-11-11T12:00:00Z, by: human/jeff, event: "x3-merge done by hand (q1): #104 squash-merged as beb51ba after #105; wf check fails only on tree equality; patch-ids match (fdc1cfd3); the check fix is wf-squash-after-base-moved"}
+  - {at: 2026-11-11T12:00:01Z, by: human/jeff, event: entered phase 4 (close)}
