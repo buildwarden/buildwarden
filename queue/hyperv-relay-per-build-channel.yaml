@@ -66,7 +66,7 @@ steps:
   - id: f2-design-review
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -85,7 +85,7 @@ budget:
     steps: 18
   spent:
     runs: 3
-    steps: 5
+    steps: 6
 questions:
   - id: a1
     kind: assumed
@@ -221,31 +221,34 @@ questions:
     answer: (a) no runtime fallbacks; SMBIOS a named contingency via a return to Design (Jeff, r2)
   - id: a14
     kind: assumed
-    status: open
+    status: confirmed
     question: What each VM driver sends when [vm] dns is unset, and the relay's default when upstream_dns is absent (Decision 6, r3).
     options:
       - 'every VM driver always sends upstream_dns: [vm] dns when set, else the host''s resolvers by the shared selection with the driver''s own source and reachability rule (qemu and vz read the Mac''s /etc/resolv.conf; vz keeps loopback; loopback and link-local move from the load-time check to these rules); a claim without the field (container driver, third parties) uses the relay''s own resolv.conf exclusively, refused when none is usable, named in relaycfg''s package doc'
       - qemu and vz send the field only when [vm] dns is set, otherwise keeping the resolver their platform gives the relay (user-mode NAT's lease, the Mac's system resolver with its scoped/split-DNS resolvers)
       - the first option, and the container driver also sends the host's resolvers
     recommended: 'the first option (a10: the relay''s upstream DNS, [vm] dns or the host''s, is delivered in the claim for every VM driver); its cost is split DNS on vz, which [vm] dns overrides'
+    answer: (a) as drafted (Jeff, 2026-11-11, re-review r3)
   - id: a15
     kind: assumed
-    status: open
+    status: confirmed
     question: How the relay uses the resolver list (Decision 6, r3; RELAY-04, GLOBAL-11).
     options:
       - one list per relay fixed at the claim, for both the guest's DNS queries (forwarded) and the relay's own upstream dials, in all three modes; entries asked in order, the next when one does not answer (the one named fallback); UPSTREAM_DNS, 8.8.8.8 and the system-resolver-first split removed; validated at the claim (IPv4, not unspecified/multicast/broadcast, not in the build link) with a 400 that leaves the relay claimable
       - the same, but only the first entry is used and a second is refused
       - the first option, and keep UPSTREAM_DNS for cmd/relay run by hand outside warden
     recommended: the first option
+    answer: (a) as drafted (Jeff, 2026-11-11, re-review r3)
   - id: a16
     kind: assumed
-    status: open
+    status: confirmed
     question: Native validation after the claim field (front-matter, r3; FLOW-09).
     options:
       - qemu-any and macos-vz become blocking (steps f6-validate-qemu-any, f6-validate-macos-vz), since r3 reaches driver/qemu and driver/vz and changes how the vz host-mode relay resolves; the qemu-any backlog entry folds into its step; windows-hyperv stays blocking, macos-qemu (Windows guest) tracked
       - qemu-any and macos-vz tracked, relying on tier 0
       - the first option, plus a linux-kvm step for Firecracker instead of CI tier 2
     recommended: the first option
+    answer: (a) as drafted (Jeff, 2026-11-11, re-review r3)
 history:
   - at: 2026-11-05T00:33:01Z
     by: cloud/20261104T214530Z-attended
@@ -358,3 +361,18 @@ history:
   - at: 2026-11-11T11:08:37Z
     by: cloud/20261111T105701Z
     event: entered phase 2 (plan)
+  - at: 2026-11-11T17:36:47Z
+    by: human/jeff
+    event: 'assumed question a14 confirmed: (a) as drafted (Jeff, 2026-11-11, re-review r3)'
+  - at: 2026-11-11T17:36:47Z
+    by: human/jeff
+    event: 'assumed question a15 confirmed: (a) as drafted (Jeff, 2026-11-11, re-review r3)'
+  - at: 2026-11-11T17:36:47Z
+    by: human/jeff
+    event: 'assumed question a16 confirmed: (a) as drafted (Jeff, 2026-11-11, re-review r3)'
+  - at: 2026-11-11T17:37:05Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-11T19:37:05Z
+  - at: 2026-11-11T17:37:05Z
+    by: human/jeff
+    event: done f2-design-review
