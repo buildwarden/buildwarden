@@ -30,6 +30,13 @@ func hypervCacheDir() string {
 	return filepath.Join(".", ".warden-cache", "hyperv")
 }
 
+// relayBootChannel is the link-channel stamp refresh-cache.sh writes beside
+// the relay boot VHDX: 2 is a disk whose init reads the per-build relay seed
+// and whose relay takes upstream_dns in the claim. It moves apart from
+// buildlink.Channel, which the qemu and Firecracker initramfs and the vz
+// image keep, so a change to this disk alone rebuilds only it.
+const relayBootChannel = 2
+
 // RefreshRelayBootFix rebuilds and installs the relay boot VHDX (its relay
 // binary and init) from the source tree.
 const RefreshRelayBootFix = "build it from the source tree (Git Bash, needs WSL): " +

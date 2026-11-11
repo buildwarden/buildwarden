@@ -21,17 +21,15 @@ func readTool(t *testing.T, rel string) string {
 	return string(b)
 }
 
-// TestStampScriptsWriteChannel: each tool that builds a launcher asset writes
-// the stamp warden compares with Channel, so a bump cannot miss one.
-// refresh-cache.sh names it once in a variable, which it both writes and
-// requires of an existing disk's stamp before calling the disk current.
+// TestStampScriptsWriteChannel: each tool that builds a launcher asset
+// compared with Channel writes that stamp, so a bump cannot miss one. The
+// Hyper-V relay boot VHDX's refresh-cache.sh writes driver/hyperv's own
+// relayBootChannel instead, checked there.
 func TestStampScriptsWriteChannel(t *testing.T) {
 	want := fmt.Sprintf("%s=%d", StampKey, Channel)
 	for script, writes := range map[string][]string{
 		"tools/build-vm/build-initramfs.sh":       {`echo "` + want + `" >`},
 		"tools/firecracker-vm/build-initramfs.sh": {`echo "` + want + `" >`},
-		"tools/relay-vm/hyperv/refresh-cache.sh": {`channel="` + want + `"`,
-			`echo "$channel" >"$linkf"`, `[ "$link" = "$channel" ]`},
 	} {
 		s := readTool(t, script)
 		for _, w := range writes {
