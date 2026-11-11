@@ -71,7 +71,7 @@ func (r *Relay) newDNSHandler() dns.HandlerFunc {
 			// path to the upstream (container/VM mode). In host mode,
 			// the netstack can't route to external DNS servers.
 			var err error
-			resp, _, err = dnsClient.Exchange(req, r.upstreamDNS)
+			resp, _, err = dnsClient.Exchange(req, r.upstreamDNS[0])
 			if err != nil {
 				log.Printf("DNS forward error (%s): %v (qtype=%d name=%s)",
 					r.upstreamDNS, err, req.Question[0].Qtype,

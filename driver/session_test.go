@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -46,7 +47,8 @@ func fakeRelayWith(t *testing.T, claimToken string,
 					CollectorTransport: rt,
 					CaptureMode:        c.CaptureMode,
 					SelfIP:             net.ParseIP("127.0.0.1"),
-					UpstreamDNS:        "127.0.0.1:1",
+					UpstreamDNS:        []netip.Addr{netip.MustParseAddr("127.0.0.1")},
+					UpstreamDNSSource:  relay.SourceClaim,
 					DNSPacketConn:      dns,
 					HTTPListener:       httpLn,
 					HTTPSListener:      httpsLn,

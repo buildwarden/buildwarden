@@ -60,7 +60,7 @@ func TestSafeDialRefusesBuildLink(t *testing.T) {
 	}
 }
 
-func TestPickNameserver(t *testing.T) {
+func TestResolvConfServers(t *testing.T) {
 	link := netip.MustParsePrefix("100.127.255.252/30")
 	self := net.ParseIP("100.127.255.253")
 	tests := []struct {
@@ -68,20 +68,26 @@ func TestPickNameserver(t *testing.T) {
 		link       netip.Prefix
 		want       string
 	}{
-		{"first usable", "nameserver 10.1.2.3\nnameserver 1.1.1.1\n", link, "10.1.2.3:53"},
+		{"every usable, in order", "nameserver 10.1.2.3\nnameserver 1.1.1.1\n", link,
+			"10.1.2.3 1.1.1.1"},
 		{"skips link", "nameserver 100.127.255.254\nnameserver 9.9.9.9\n", link,
-			"9.9.9.9:53"},
+			"9.9.9.9"},
 		{"skips self and loopback", "nameserver 100.127.255.253\nnameserver 127.0.0.1\n" +
-			"nameserver 8.8.4.4\n", link, "8.8.4.4:53"},
+			"nameserver 8.8.4.4\n", link, "8.8.4.4"},
+		{"keeps docker embedded", "nameserver 127.0.0.11\n", link, "127.0.0.11"},
 		{"no link set", "nameserver 100.127.255.254\n", netip.Prefix{},
-			"100.127.255.254:53"},
-		{"none left", "search example\nnameserver 100.127.255.252\n", link, "8.8.8.8:53"},
-		{"ipv6", "nameserver fd00::1\n", link, "[fd00::1]:53"},
+			"100.127.255.254"},
+		{"none left", "search example\nnameserver 100.127.255.252\n", link, ""},
+		{"ipv6", "nameserver fd00::1\n", link, "fd00::1"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if got := pickNameserver(tt.conf, self, tt.link); got != tt.want {
-				t.Errorf("pickNameserver = %q, want %q", got, tt.want)
+			var got []string
+			for _, a := range ResolvConfServers(tt.conf, self, tt.link) {
+				got = append(got, a.String())
+			}
+			if s := strings.Join(got, " "); s != tt.want {
+				t.Errorf("ResolvConfServers = %q, want %q", s, tt.want)
 			}
 		})
 	}
