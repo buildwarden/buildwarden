@@ -178,4 +178,5 @@ echo "  Initramfs: $OUTPUT_DIR/initramfs.cpio.gz  ($(ls -lh "$OUTPUT_DIR/initram
 echo "  UKI (EFI): $OUTPUT_DIR/warden-relay-boot.efi  ($(ls -lh "$OUTPUT_DIR/warden-relay-boot.efi" | awk '{print $5}'))"
 echo ""
 echo "The UKI is the \\EFI\\BOOT\\BOOTX64.EFI payload for the relay boot VHDX."
-echo "Per-build kernel cmdline (relay config) is layered by the driver, not baked here."
+echo "The command line carries no per-build value: the driver gives each relay its pre-claim"
+echo "values on the relay seed (WARDENRELAY) and the rest of its configuration in the claim."

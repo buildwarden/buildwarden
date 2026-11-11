@@ -2017,7 +2017,135 @@ rule changes BOOT-06 (reworded at r3, to re-approve) and BOOT-07.
 
 ## Consolidation
 
-Filled in at Publish (FLOW-10, FLOW-15).
+`main` merged at `1173c5f` (merge commit `5ad9308`). The branch forked at
+`beb51ba` (#104 design-principles: GLOBAL-09 to GLOBAL-11 and RELAY-08,
+which this design's Defaults and overrides and its claim-only relay
+configuration answer); #105 (FLOW-14 guards the CI jobs that run the rules)
+was already in that base. Since the fork, five PRs landed:
+
+- **#108 vz-image-prepare-refresh.** The one conflict, in
+  `driver/vz/driver.go` `StartBuild`: #108 passes the image cache to
+  `checkLink` so the stale-image fix names the active image, and this branch
+  wraps `checkLink` in `checkRequest` to set the relay's resolvers (task 14).
+  Resolved keeping both: `checkRequest` takes the `*ImageCache` and passes it
+  on, then runs `setRelayDNS`. `overview.md`, `cli.md`, `drivers.md` and
+  `installation.md` merged clean; the vz pre-boot pseudocode now has #108's
+  active-image line and stamp fixes followed by this branch's resolver step,
+  which is the order `checkRequest` runs. #108 does not touch the host-mode
+  relay or its claim, so the macos-vz step's cases are unchanged; its native
+  run builds from the active image.
+- **#110 build-vm-busybox.** `tools/build-vm/build-initramfs.sh` fetches its
+  own pinned busybox (and `TestDirectBootBusyboxPins`). The file is on the
+  bootstrap surface this branch adds (BOOT-07, `tools/build-vm/`); it changes
+  where the qemu direct-boot initramfs gets busybox, not any network value,
+  so BOOT-06 as amended holds. The relay initramfs the qemu-any step rebuilds
+  comes from `tools/relay-vm/`, untouched by #110.
+- **#109 jks-test-skip-without-jdk**, **#106 next-skips-merge-wait** and
+  **#107 wf-squash-after-base-moved**: test, CI and workflow changes with no
+  overlap.
+
+**Fold-in after review r3.** Jeff's fold-in at `71df1d1` (recorded at
+`4f54198`, Design review): `drivers:` adds `container`, and the relay's own
+lookups go through the DNS handler's in-order forwarder rather than a
+`net.Resolver`. Both are in the code (`driver.BuildRequest.DNS`, which the
+container driver leaves empty; `relay/proxy.go`'s upstream dial), and
+Review S4 below is about how tightly the second is pinned.
+
+**Versioned seams** (GLOBAL-08). `relay-claim`: changed only by this feature
+since the fork (`upstream_dns`, its 400 refusals, the absent-field default in
+`relaycfg`'s package doc). `bootstrap-model`: only this feature's BOOT-06 and
+BOOT-07 paragraphs, landed as approved (`cbb2cda`, `0df0a64`); `wf check`
+clears both and `make enforcement` keeps main's findings. `executor-initialize`
+and `relay-guest-api`: unchanged.
+
+**Terminology.** Code, guides, `overview.md` and doctor say "relay seed
+(`WARDENRELAY`)" for the relay VM's pre-claim channel, "seed DVD" for the
+drive it is on, "`WARDEN` seed disk" for the Windows guest's, "claim token",
+"`[vm] dns`", "`upstream_dns`", "slot switch" for the durable strategy's
+per-build switches, and "link-channel stamp". One fix here (Review S3):
+`tools/relay-vm/hyperv/build.sh`'s closing line said a per-build kernel
+command line is layered by the driver; it now says the command line carries
+no per-build value, the pre-claim values come on the relay seed and the rest
+in the claim.
+
+**Review findings for the PR body** (report
+`reports/hyperv-relay-per-build-channel/c828e3a562e4.md`, 0 MUST; M1 to M3
+fixed in Implement). Six SHOULDs, for the human to acknowledge at merge
+(FLOW-08); S3 is fixed above, the other five are open:
+
+- *S1 (GLOBAL-09), open.* `tools/relay-vm/init` keeps `warden.net=dhcp` when
+  the key is absent; no warden driver reaches it (each sends `warden.net`),
+  and Defaults and overrides does not list it. Fix: require the key, or list
+  it through Design.
+- *S2 (GLOBAL-09), open.* `ensureSetupNAT`'s prefix-mismatch refusal compares
+  the defaulted `--nat-prefix`, so re-running setup without the flag on a host
+  set up on another prefix is refused naming a flag the user did not pass;
+  `--host-ip` is not compared. Fix: compare only flags the user gave.
+- *S3 (GLOBAL-01), fixed at Consolidation.* `build.sh`'s closing line (above).
+- *S4 (TEST-06), open.* The in-order forwarder for the relay's own lookups
+  is not pinned against a resolver that restarts at the first server.
+- *S5 (TEST-06), open.* `serveClaim`'s refusal path (the mode step's cleanup,
+  the relay left claimable) has no test through the vm- and host-mode wiring.
+- *S6 (TEST-06), open.* Nothing fails if the qemu or vz `StartBuild` stops
+  calling `setRelayDNS`; the qemu-any and macos-vz native steps cover it.
+
+**Follow-ups filed** (FLOW-09, at review `525e36a6c04c`), both `follows:
+hyperv-relay-per-build-channel` and on hold behind Jeff's refactor (q1):
+`relay-host-subnet-claim-only` (priority 45: host mode's `--subnet` stands
+in for an absent `build_link`, RELAY-08) and `relay-init-dhcp-mask-default`
+(priority 46: the relay init's `${mask:-24}` for a lease without a mask,
+GLOBAL-11). Both are pre-existing on `main`. Consolidation found no further
+regression on `main` and files none.
+
+**Validation and plan tasks 46 to 50.**
+
+- *Task 50 (TEST-08), done here.* The Security note's "TEST-08 should
+  exercise" list is handed to `security-suite` as a history entry in its
+  queue file (workflow branch `450820d`), as build-link-subnet's was, with
+  the tier-0 regression seeds: `driver/hyperv` `TestStartRelay_WrongTokenRefused`,
+  `TestAllocRelayIP`, `TestAllocSlot`, `TestAllocateRelay`,
+  `TestRunBuild_DurableSlot`, `TestRunBuild_SlotForeignAdapter`,
+  `TestCheckSlotAdapters`, `TestRelaySeedValidate`, `TestCheckNATOverlap`,
+  `TestVMDNSUsedExclusively`; `driver/relayvm` `TestRelayInitHyperVSeedAlone`;
+  `driver/qemu` and `driver/vz` `TestVMDNS`; `relaycfg`
+  `TestClaimUpstreamDNSRefusalsLeaveRelayClaimable`; `relay`
+  `TestDNSHandlerForwardsToListInOrder`, `TestUpstreamDialResolvesThroughList`,
+  `TestNoBuiltInResolver`; `cmd/relay`
+  `TestAbsentUpstreamDNSRefusalLeavesRelayClaimable`.
+- *Task 49 (TEST-03).* The tracked gap's backlog entry
+  `hyperv-relay-per-build-channel-qemu-windows` (macos-qemu) stands; no new
+  entry.
+- *Task 48 (FLOW-09).* The three blocking native steps run on the branch
+  after this commit, by their notes, which the merge does not change.
+- *Tasks 46 and 47.* The `integration` workflow (the container relay's
+  absent-field default) and `firecracker.yml` (relay initramfs rebuilt from
+  the changed init, resolvers in the claim) run on the PR, at Publish.
+
+**FLOW-15 sweep.**
+
+- *Dead code.* `make deadcode` on linux, darwin and windows, compared with
+  `main`: one entry leaves the list (`driver/hyperv` `cidrPrefixLen`, which
+  `ensurenet.go` now calls) and two join it on linux and darwin only,
+  `parseRelayNotes` and `parseSwitchAdapters` in
+  `driver/hyperv/provision.go`: untagged parsers of the PowerShell output
+  whose only caller is the Windows `Provisioner`, so reachable on windows.
+  No test calls them on any platform: plan task 36 puts the `Provisioner`'s
+  parsers under tier-0 parse tests, and these two have none, so it is
+  reported to the tick as work the plan covers (`wf back -to 3`), not done
+  here. Everything else reported predates the branch.
+- *Duplication.* The four drivers' `relayResolvers` share one shape (`[vm]
+  dns` through `resolvers.Check`, else the host source through
+  `resolvers.Select`, else a fix) and `vmDNSRefusal` is the same in
+  firecracker, hyperv and qemu (vz inlines its own, since its rule is the
+  build link only). Kept: plan task 10 puts selection in `driver/resolvers`
+  and has "each driver keep its own rule and fix text", and the refusals
+  differ in what they name (the NAT, user-mode NAT, the Mac). The seed
+  parsing and the claim path have one definition each (`relayseed.go`,
+  `driver.Session.ClaimRelay`).
+- *The overview.* `overview.md` matches the code after the merge: the VM
+  drivers' pre-boot steps (#108's active image, then the resolver step), the
+  Hyper-V setup and StartBuild flow (NAT read back, allocator, slots, seed),
+  the relay's claim handling of `upstream_dns` and the relay VM init.
 
 ## Rollback notes
 
