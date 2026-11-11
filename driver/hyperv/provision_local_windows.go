@@ -167,23 +167,36 @@ Remove-VMSwitch -Name '%[1]s' -Force -ErrorAction SilentlyContinue
 func (p *localProvisioner) VerifyNetwork(
 	ctx context.Context, network string,
 ) (*NetworkResources, error) {
-	out, err := runPS(fmt.Sprintf(`
-$natName = '%[1]s-nat'
-$n = Get-NetNat -Name $natName -ErrorAction SilentlyContinue
-if ($n) {
+	out, err := runPS(netProbeScript(network, ""))
+	if err != nil {
+		return nil, fmt.Errorf("VerifyNetwork: %w", err)
+	}
+	return parseNetReadback(out).durableResources(network)
+}
+
+// netProbeScript reads, without changing anything, the NAT a build on the
+// durable network named network uses (<network>-nat, or with otherPrefix set
+// a warden NAT owning that prefix when there is none, as EnsureNetwork
+// chooses) and network's slot switches, as parseNetReadback lines.
+func netProbeScript(network, otherPrefix string) string {
+	return fmt.Sprintf(`
+$natName = $null
+if (Get-NetNat -Name '%[1]s-nat' -ErrorAction SilentlyContinue) { $natName = '%[1]s-nat' }
+elseif ('%[2]s') {
+    $e = Get-NetNat -ErrorAction SilentlyContinue |
+        Where-Object { $_.InternalIPInterfaceAddressPrefix -eq '%[2]s' } | Select-Object -First 1
+    if ($e) { $natName = $e.Name }
+}
+if ($natName) {
     "NAT=$natName"
-    "PREFIX=$($n.InternalIPInterfaceAddressPrefix)"
+    "PREFIX=$((Get-NetNat -Name $natName).InternalIPInterfaceAddressPrefix)"
     if (-not (Get-VMSwitch -Name $natName -ErrorAction SilentlyContinue)) { 'NATSWITCH=missing' }
     Get-NetIPAddress -InterfaceAlias "vEthernet ($natName)" -AddressFamily IPv4 -ErrorAction SilentlyContinue |
         ForEach-Object { "HOSTIP=$($_.IPAddress)" }
 }
 Get-VMSwitch -Name '%[1]s-*' -ErrorAction SilentlyContinue |
     ForEach-Object { "SLOT=$($_.Name)`+"`t"+`$($_.SwitchType)" }
-`, psEscapeSingle(network)))
-	if err != nil {
-		return nil, fmt.Errorf("VerifyNetwork: %w", err)
-	}
-	return parseNetReadback(out).durableResources(network)
+`, psEscapeSingle(network), psEscapeSingle(otherPrefix))
 }
 
 // --- VM lifecycle (Hyper-V Administrators tier) -----------------------------

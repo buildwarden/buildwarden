@@ -132,27 +132,34 @@ func (r netReadback) durableResources(network string) (*NetworkResources, error)
 	if err != nil {
 		return nil, err
 	}
-	var slots []string
-	for name, typ := range r.Slots {
-		if slotIndex(network, name) < 0 {
-			continue
-		}
-		if typ != "Private" {
+	slots := r.slotNames(network)
+	for _, name := range slots {
+		if typ := r.Slots[name]; typ != "Private" {
 			return nil, driver.Fixable(
 				"remove it (Remove-VMSwitch -Name '"+name+"'), then "+setupFix,
 				"build switch %q is %s, expected Private (isolation compromised)",
 				name, typ)
 		}
-		slots = append(slots, name)
 	}
 	if len(slots) == 0 {
 		return nil, driver.Fixable(setupFix+" to create the build switches",
 			"the durable network %q has no build switches (%s-0 and up)", network,
 			network)
 	}
+	return &NetworkResources{NATName: r.NAT, Reused: true, NATPrefix: prefix,
+		HostIP: hostIP, Slots: slots}, nil
+}
+
+// slotNames is the read-back's slot switches of network, in index order.
+func (r netReadback) slotNames(network string) []string {
+	var slots []string
+	for name := range r.Slots {
+		if slotIndex(network, name) >= 0 {
+			slots = append(slots, name)
+		}
+	}
 	sort.Slice(slots, func(i, j int) bool {
 		return slotIndex(network, slots[i]) < slotIndex(network, slots[j])
 	})
-	return &NetworkResources{NATName: r.NAT, Reused: true, NATPrefix: prefix,
-		HostIP: hostIP, Slots: slots}, nil
+	return slots
 }

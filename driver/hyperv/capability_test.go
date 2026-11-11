@@ -2,6 +2,7 @@ package hyperv
 
 import (
 	"bytes"
+	"net/netip"
 	"strings"
 	"testing"
 
@@ -115,8 +116,32 @@ func TestNetworkStrategy(t *testing.T) {
 	}
 }
 
+// healthyNet is a host whose durable network setup made: the NAT on the
+// default prefix with the host at .1, four free slots, and one off-host DNS
+// server on the default route's interface.
+func healthyNet(Capabilities) doctorNet {
+	return doctorNet{
+		ReadBack: parseNetReadback("NAT=warden-dev-nat\nPREFIX=192.168.240.0/20\n" +
+			"HOSTIP=192.168.240.1\nSLOT=warden-dev-0\tPrivate\nSLOT=warden-dev-1\tPrivate\n" +
+			"SLOT=warden-dev-nat\tInternal\n"),
+		DNS: func() ([]netip.Addr, string, error) {
+			return []netip.Addr{netip.MustParseAddr("10.9.0.53")}, "interface Ethernet", nil
+		},
+		Host: []netip.Addr{netip.MustParseAddr("10.9.0.7")},
+	}
+}
+
+// stubDoctorNet replaces Doctor's network probe for the test.
+func stubDoctorNet(t *testing.T, probe func(Capabilities) doctorNet) {
+	t.Helper()
+	old := doctorNetProbe
+	doctorNetProbe = probe
+	t.Cleanup(func() { doctorNetProbe = old })
+}
+
 func TestDoctorReport(t *testing.T) {
 	t.Setenv("WARDEN_HYPERV_CACHE_DIR", t.TempDir())
+	stubDoctorNet(t, healthyNet)
 	// Non-elevated Hyper-V Admins member reusing a durable switch: ready.
 	caps := Capabilities{
 		Supported:         true,

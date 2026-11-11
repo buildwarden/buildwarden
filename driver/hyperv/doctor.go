@@ -9,6 +9,9 @@ import (
 	"github.com/buildwarden/buildwarden/driver/buildlink"
 )
 
+// doctorNetProbe reads the host's build network for Doctor; tests replace it.
+var doctorNetProbe = probeDoctorNet
+
 // dotted returns "label " padded with dots to a fixed width, for aligned rows.
 func dotted(label string) string {
 	const width = 38
@@ -30,7 +33,10 @@ func yesNo(b bool) string {
 // driver is blocked (a required capability for running builds is unmet). A
 // blocked result is meant to drive a non-zero exit so `warden doctor --driver hyperv`
 // works as a CI/agent gate. link is the build link and vmDNS is [vm] dns, the
-// inputs a build's NAT-overlap and relay-resolver checks take.
+// inputs a build's NAT-overlap and relay-resolver checks take; the Build
+// network section runs those checks against the NAT read back from the host,
+// and lists each durable build switch free or its holders. The relay boot
+// VHDX's stamp is reported with the other drivers' (LauncherStamps).
 func Doctor(w io.Writer, c Capabilities, link buildlink.Link,
 	vmDNS []netip.Addr) (blocked bool) {
 	if !c.Supported {
@@ -81,6 +87,7 @@ func Doctor(w io.Writer, c Capabilities, link buildlink.Link,
 	fmt.Fprintln(w, "\nResolved:")
 	writeVMLifecycle(w, c)
 	writeNetworkStrategy(w, c)
+	netBlocked := writeBuildNetwork(w, c, doctorNetProbe(c), link, vmDNS)
 
 	if len(c.Errors) > 0 {
 		fmt.Fprintln(w, "\nProbe notes:")
@@ -95,6 +102,9 @@ func Doctor(w io.Writer, c Capabilities, link buildlink.Link,
 	}
 	if cacheBlocked && ready {
 		ready, reason = false, "Hyper-V cannot see the image cache (see above)"
+	}
+	if netBlocked && ready {
+		ready, reason = false, "a build's network checks fail (see Build network above)"
 	}
 	if !ready {
 		fmt.Fprintf(w, "\nNot ready: %s\n", reason)
