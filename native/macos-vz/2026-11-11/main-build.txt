@@ -1,0 +1,3 @@
+warden: build FAILED
+[warden] ERROR: vz prepared macOS image (warden-boot) predates the configurable build link and must be rebuilt once (no link-channel stamp at /Users/jeff/.cache/warden/images/macos-90a1b1f94f64b00a/link-channel)
+  To fix: sudo warden image prepare --driver vz

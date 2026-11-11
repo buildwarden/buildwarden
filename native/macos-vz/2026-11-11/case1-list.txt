@@ -1,0 +1,2 @@
+vz      macos    /Users/jeff/.cache/warden/images/macos-a139c218a2010753  active  UniversalMac_27.2_26B123_Restore.ipsw
+vz      macos    /Users/jeff/.cache/warden/images/macos-90a1b1f94f64b00a  older

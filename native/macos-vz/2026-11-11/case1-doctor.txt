@@ -1,0 +1,1 @@
+vz prepared macOS image (warden-boot): link-channel stamp current
