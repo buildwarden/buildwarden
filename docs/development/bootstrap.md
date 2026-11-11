@@ -214,11 +214,14 @@ The automated part flags a diff that touches the bootstrap surface without
 touching this document, or that changes this document without a design whose
 `rules` cites BOOT-07. The bootstrap surface is the executor's setup
 (`cmd/warden-io/initialize*.go`, `baseline.go`, `trust_*.go`, `jks.go`), the
-bootstrap config (`bootstrap/`), the relay's guest-facing endpoints, and each
-driver's isolation, executor delivery and start code
-(`driver/container/container.go`, `driver/container/images*`, `cmd/warden-pause/`,
-`driver/linuxguest/`, `driver/winguest/`, `driver/hyperv/winseed*.go`,
-`driver/vz/image.go`, and the firecracker isolation, delivery and start files
+bootstrap config (`bootstrap/`), the relay's guest-facing endpoints
+(`relay/controlplane.go`, `cmd/relay/dhcp*.go`), the relay VM's init and
+build tools (`tools/relay-vm/`), and each driver's isolation, executor
+delivery and start code (`driver/container/container.go`,
+`driver/container/images*`, `cmd/warden-pause/`, `driver/linuxguest/`,
+`driver/winguest/`, `driver/hyperv/winseed*.go`,
+`driver/hyperv/relayseed*.go`, `driver/vz/image.go`, `tools/build-vm/`, and
+the firecracker isolation, delivery and start files
 (`driver/firecracker/slots*.go`, `setup.go`, `posture.go`, `vm*.go`,
 `deliver_linux.go`) and `tools/firecracker-vm/`). The agent part judges whether a
 change counts as a model change.
