@@ -48,15 +48,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261111T173920Z
+      expires: 2026-11-11T19:56:13.045657313Z
 budget:
   estimate:
     runs: 1
     steps: 5
   spent:
-    runs: 1
-    steps: 2
+    runs: 2
+    steps: 3
 questions:
   - id: q1
     kind: blocking
@@ -101,6 +101,15 @@ history:
   - at: 2026-11-11T17:14:09Z
     by: human/jeff
     event: done x3-answer-q1
-  - {at: 2026-11-11T12:00:00Z, by: human/jeff, event: "x3-merge done by hand (q1): #104 squash-merged as beb51ba after #105; wf check fails only on tree equality; patch-ids match (fdc1cfd3); the check fix is wf-squash-after-base-moved"}
-  - {at: 2026-11-11T12:00:01Z, by: human/jeff, event: entered phase 4 (close)}
-  - {at: 2026-11-11T12:40:00Z, by: human/jeff, event: "refs cleared by hand (q1 answer): local feat/design-principles (42d95f0, its change in main as beb51ba, patch-id match) deleted with -D; stale origin tracking ref pruned (GitHub had deleted the branch)"}
+  - at: 2026-11-11T12:00:00Z
+    by: human/jeff
+    event: 'x3-merge done by hand (q1): #104 squash-merged as beb51ba after #105; wf check fails only on tree equality; patch-ids match (fdc1cfd3); the check fix is wf-squash-after-base-moved'
+  - at: 2026-11-11T12:00:01Z
+    by: human/jeff
+    event: entered phase 4 (close)
+  - at: 2026-11-11T12:40:00Z
+    by: human/jeff
+    event: 'refs cleared by hand (q1 answer): local feat/design-principles (42d95f0, its change in main as beb51ba, patch-id match) deleted with -D; stale origin tracking ref pruned (GitHub had deleted the branch)'
+  - at: 2026-11-11T17:56:13Z
+    by: cloud/20261111T173920Z
+    event: claimed x4-close until 2026-11-11T19:56:13Z
