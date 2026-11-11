@@ -1,6 +1,6 @@
 ---
 feature: wf-squash-after-base-moved
-status: draft
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -422,3 +422,43 @@ overlapping lines.
 ## Rollback notes
 
 ## Archive summary
+
+Approved at design review r1 (2026-11-11, Jeff); implemented and published
+the same day as a process item. The PR to `main` carries this design.
+
+- **Built.** `refMerged()` gains a third proof, tried after ancestry and tree
+  equality: for a one-parent commit `C` on `origin/main` naming the PR, with a
+  single merge base `B` of the ref and `C^`, the ref is merged when
+  `pid(C^, C) == pid(B, ref)`. `patchID()` runs a fully pinned `git diff`
+  piped to `git patch-id --verbatim`, so user or repository diff settings
+  cannot change it; `sameChange()` does one commit's comparison and its
+  detail. A failure keeps the old prefix and adds, per PR commit, its tree,
+  both patch-ids and the base (or its merge bases, or "N parents, not
+  compared"), the two compare commands, and the deletion commands a human may
+  run (the remote-tracking one only once the remote branch is gone). FLOW-16
+  names the patch-id proof; the `workflow-tick` Close step allows `-D` only
+  once `wf check` has passed. Tests: `TestSquashAfterMainMoved` (was
+  `TestSquashOfAnOlderHeadFails`), plus different-change, pushed-past,
+  two-parent, whitespace-only, criss-cross and configuration cases.
+- **Decisions taken:** a squash counts as merged when its change equals the
+  branch's change from its merge base (a1, a2); the patch-id is
+  whitespace-exact with every output-affecting diff option pinned (a3); a
+  conflict the human resolved, or any edited change, still fails and
+  escalates with the commands to compare (a4); FLOW-16 changes on the branch,
+  with no `rule_changes`, as a process item (a5).
+- **Rejected:** re-running a three-way merge (`git merge-tree`) and comparing
+  trees; accepting any commit after the base with the same patch-id whatever
+  its message; trusting the PR-number commit alone; `--stable` patch-ids
+  (whitespace-blind) and zero-context diffs; a `merged_as` queue override.
+- **Verified live:** in a scratch clone, the branch's `wf check` accepts
+  design-principles' #104 squash `beb51ba` (change `43f1a18b…`, base
+  `49e5354`), main's refuses it, and a squash with one extra line fails with
+  a different patch-id.
+- **For a future design touching `merge-detection`, `squash-merge`,
+  `patch-id` or `branch-cleanup`:** the proofs run in order (ancestor, equal
+  tree, equal change) and the info names which passed. The patch-id proof
+  compares whole changes, so any edit at merge time, a GitHub conflict
+  resolution included, escalates by design. Two-parent PR commits and
+  criss-cross histories are never compared. A stale older-head
+  remote-tracking ref still fails the check (out of scope here). Any new diff
+  call in the check must pin its options as `patchID()` does.
