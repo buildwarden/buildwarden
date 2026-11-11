@@ -10,6 +10,9 @@ design: docs/design/next-skips-merge-wait.md
 branch: feat/next-skips-merge-wait
 alters_relationships: null
 source: 'Filed 2026-11-10 by tick cloud/20261110T105938Z under FLOW-09 as a follow-up of regression-fixes-follow-up (#103, class order): with design-principles (#104) and rule-running-line-match (#105) in x3-merge, wf next kept returning design-principles x3-merge to the cloud (its done-when fails until Jeff merges), so hyperv-relay-per-build-channel''s ready f1-design-r3 (class 3) was never offered. FLOW-05 drops an item in implementation from its class while it waits for the human''s merge; next.go''s ready() offers x3-merge/f7-merge like any cloud step. Fix: a merge step whose PR is not merged blocks only its item (reported as waiting on the human''s merge), so next moves to the next item.'
+pr:
+  number: 106
+  ci: green
 steps:
   - id: x1-design
     phase: 1
