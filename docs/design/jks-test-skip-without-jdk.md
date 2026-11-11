@@ -47,9 +47,11 @@ setup."
 - **`ci-path-filters`** gave `main.yml` its `changes` job, the `gotests` gate and
   the single required `ci-ok` aggregator. The new job reuses that gate and joins
   `ci-ok`'s `needs`, the pattern that design set for every job.
-- **The `tier1-test` job** is `main.yml`'s existing `go test ./...` matrix over
-  `ubuntu-latest`, `macos-latest` and `windows-latest` (GLOBAL-07). The new job
-  uses the same matrix.
+- **The `tier1-test` job** is `main.yml`'s existing matrix over
+  `ubuntu-latest`, `macos-latest` and `windows-latest` (GLOBAL-07). It runs
+  `go test ./...` in `tools/tier1` only, so it runs no `cmd/warden-io` test.
+  The new job uses the same matrix, and its macOS and Windows legs are the
+  first CI run of `cmd/warden-io` tests on those platforms.
 - **Opt-in test gates already exist** in the form `WARDEN_<AREA>=1`, for example
   `WARDEN_HYPERV_LIVE` and `WARDEN_HYPERV_LIVE_FETCH`. Those gates turn a test on.
   The new variable turns a skip into a failure, but it follows the same style.
@@ -86,7 +88,7 @@ setup."
    The job lives in `main.yml`, runs on the `tier1-test` matrix (`ubuntu-latest`,
    `macos-latest`, `windows-latest`) and installs a JDK with
    `actions/setup-java@v4`, using `distribution: temurin` and `java-version: '21'`
-   (the current LTS). Pinning the distribution and major version keeps the
+   (an LTS release; Java 25 is newer, and 21 is still supported). Pinning the distribution and major version keeps the
    reference `keytool` stable across runner image changes. On `macos-latest`,
    setup-java puts the real JDK's `bin` ahead of `/usr/bin` on PATH, so the stub
    is never reached. The job runs only the keytool tests:
@@ -204,6 +206,26 @@ byte-compare and `-list` steps are unchanged. The test name keeps `Keytool`, so
 **Contributor docs.** In `CONTRIBUTING.md`, the paragraph after the command list
 gains one sentence: the keytool comparison skips without a JDK, and CI's
 `keytool` job runs it on every platform. No user-facing surface changes (UX-01).
+
+## Defaults and overrides
+
+Added at Publish, after #104 made this section required; it restates
+Decisions 1 and 3 and changes neither.
+
+- **Default: skip where keytool cannot run (Decision 1).** With no variable
+  set, `TestWriteJKSMatchesKeytool` skips when `keytool` is not on PATH or its
+  `keytool -help` probe exits non-zero, and the skip message names the path,
+  the error and the probe's output. It is the obvious choice under TEST-01:
+  `make test` keeps no external dependency, and a developer with a working JDK
+  still gets the comparison with no flag or tag (GLOBAL-09).
+- **Override: `WARDEN_REQUIRE_KEYTOOL=1` (Decision 3).** When set to exactly
+  `1`, the same two conditions fail the test with the skip's message plus
+  `(WARDEN_REQUIRE_KEYTOOL=1)`. It is used exclusively: it never falls back to
+  a skip (GLOBAL-10). Any other value, or none, means the default. CI's
+  `keytool` job is its only setter.
+- **Merges and fallbacks: none.** No other keytool is tried, there is no
+  retry, and neither `CI` nor `GITHUB_ACTIONS` changes the behavior
+  (GLOBAL-11).
 
 ## Cross-driver impact
 
@@ -326,7 +348,45 @@ No rule changes (`rule_changes` is empty, Decision 6). The superseded plan
 
 ## Consolidation
 
-Filled in at Publish.
+Publish, 2026-11-11 (FLOW-10, FLOW-15). Forked from `main` at `49e5354`;
+`origin/main` at `26c0ac3` merged at `88bb9bc` with no conflict.
+
+- **What landed on `main` since the fork.**
+  - `rule-running-line-match` (#105, `f861315`): FLOW-14's clearance guards the
+    jobs that run the rules, not lines naming them. This branch's `keytool`
+    job and its `ci-ok` `needs:` entry are ordinary jobs under it, which is
+    what unblocked `f3-implement-r2` (q1). Its tests replay this branch's
+    edit as "the incident".
+  - `design-principles` (#104, `beb51ba`): GLOBAL-09 to GLOBAL-11 and a
+    required **Defaults and overrides** section. The section is added above
+    from Decisions 1 and 3; no decision changes. The tier-2 report judged
+    GLOBAL-09 to GLOBAL-11 against those decisions and found nothing.
+  - `next-skips-merge-wait` (#106), `wf-squash-after-base-moved` (#107):
+    `tools/workflow` only; nothing here to reconcile.
+  - `vz-image-prepare-refresh` (#108): `driver/vz` and `overview.md`'s VZ
+    pseudocode. It is the feature this one unblocked on the macbook; no file
+    overlaps.
+  - None of them touches `.github/workflows/main.yml`, `cmd/warden-io` or
+    `CONTRIBUTING.md`'s test paragraph.
+- **Terminology and wording.** Decision 2 said Java 21 is "the current LTS";
+  25 is newer, so it now says "an LTS release" (the pin is unchanged). Prior
+  art said `tier1-test` runs `go test ./...` over the matrix; it runs it in
+  `tools/tier1` only, so the text now says so and notes that the `keytool`
+  job's macOS and Windows legs are the first CI run of `cmd/warden-io` tests
+  there. Both came from the tier-2 report's notes.
+- **FLOW-15 sweep.**
+  - `make deadcode`: the 15 unreachable functions it lists are all in
+    `driver/firecracker`, `driver/hyperv`, `driver/vz` and `relay`, none
+    touched here; this branch adds only test helpers, both called.
+  - Duplication: `requireKeytool` and `unavailable` are the only keytool
+    lookup in Go code; the `WARDEN_*=1` gates elsewhere turn a test on, this
+    one turns a skip into a failure, so there is nothing to share.
+  - `docs/book/src/concepts/overview.md` lists the JKS truststore
+    (`/etc/warden/certs.jks`), whose writer does not change; no component flow
+    changes, so it is unchanged.
+- **Rules proposed:** none. **Follow-ups filed:** none.
+- **Gates at `88bb9bc`:** `make lint` (0 issues; tier 1 0 findings against
+  `origin/main`) and `make test` pass.
 
 ## Rollback notes
 
