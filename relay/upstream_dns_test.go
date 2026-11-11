@@ -91,7 +91,8 @@ func TestDNSHandlerForwardsToListInOrder(t *testing.T) {
 
 	q := new(dns.Msg)
 	q.SetQuestion("pkg.example.", dns.TypeA)
-	resp, _, err := (&dns.Client{Timeout: 5 * time.Second}).Exchange(q, pc.LocalAddr().String())
+	client := &dns.Client{Timeout: 5 * time.Second}
+	resp, _, err := client.Exchange(q, pc.LocalAddr().String())
 	if err != nil {
 		t.Fatalf("query through the relay: %v", err)
 	}
@@ -123,7 +124,8 @@ func TestDNSHandlerNoAnswerIsServfail(t *testing.T) {
 	defer func() { _ = srv.Shutdown() }()
 	q := new(dns.Msg)
 	q.SetQuestion("pkg.example.", dns.TypeA)
-	resp, _, err := (&dns.Client{Timeout: 5 * time.Second}).Exchange(q, pc.LocalAddr().String())
+	client := &dns.Client{Timeout: 5 * time.Second}
+	resp, _, err := client.Exchange(q, pc.LocalAddr().String())
 	if err != nil {
 		t.Fatalf("query through the relay: %v", err)
 	}
@@ -182,7 +184,8 @@ func TestUpstreamDialResolvesThroughList(t *testing.T) {
 					silent.hits.Load(), second.hits.Load())
 			}
 			if env.hits.Load() != 0 {
-				t.Fatalf("the UPSTREAM_DNS server was asked %d times", env.hits.Load())
+				t.Fatalf("the UPSTREAM_DNS server was asked %d times",
+					env.hits.Load())
 			}
 		})
 	}
@@ -212,7 +215,8 @@ func TestStartRequiresUpstreamDNS(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			if _, err := Start(tt.cfg); err == nil || !strings.Contains(err.Error(), tt.want) {
+			_, err := Start(tt.cfg)
+			if err == nil || !strings.Contains(err.Error(), tt.want) {
 				t.Fatalf("Start err = %v, want %q", err, tt.want)
 			}
 		})

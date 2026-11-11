@@ -73,7 +73,8 @@ func TestParseUpstreamDNS(t *testing.T) {
 					strs = append(strs, a.String())
 				}
 				if !slices.Equal(strs, tt.list) {
-					t.Fatalf("ParseUpstreamDNS = %v, want %v in order", strs, tt.list)
+					t.Fatalf("ParseUpstreamDNS = %v, want %v in order",
+						strs, tt.list)
 				}
 				return
 			}
@@ -102,12 +103,15 @@ func TestClaimUpstreamDNSRefusalsLeaveRelayClaimable(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			addr, served := serveOnce(t, func(Config, http.RoundTripper) (Identity, error) {
-				return Identity{CACert: "PEM"}, nil
-			})
+			addr, served := serveOnce(t,
+				func(Config, http.RoundTripper) (Identity, error) {
+					return Identity{CACert: "PEM"}, nil
+				})
 			ctx := claimCtx(t)
 			link := defaultLink
-			cfg := Config{CollectorURL: "http://x", BuildLink: &link, UpstreamDNS: tt.list}
+			cfg := Config{
+				CollectorURL: "http://x", BuildLink: &link, UpstreamDNS: tt.list,
+			}
 			_, err := claimRaw(t, addr, cfg)
 			if !errors.Is(err, ErrRejected) ||
 				!strings.Contains(err.Error(), "HTTP 400") ||

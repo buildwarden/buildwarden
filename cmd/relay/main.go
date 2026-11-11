@@ -110,7 +110,8 @@ func upstreamResolvers(
 	if c.UpstreamDNS != nil {
 		list, err := relaycfg.ParseUpstreamDNS(c.UpstreamDNS, c.BuildLink)
 		if err != nil {
-			return nil, "", fmt.Errorf("%w: upstream_dns: %w", relaycfg.ErrRefused, err)
+			return nil, "", fmt.Errorf("%w: upstream_dns: %w",
+				relaycfg.ErrRefused, err)
 		}
 		return list, relay.SourceClaim, nil
 	}
@@ -124,8 +125,9 @@ func upstreamResolvers(
 	if len(list) == 0 {
 		return nil, "", fmt.Errorf(
 			"%w: upstream_dns is absent and %s names no usable nameserver "+
-				"(the relay's own address, 127.0.0.1 and the build link are excluded); "+
-				"send upstream_dns in the claim", relaycfg.ErrRefused, resolvConfPath)
+				"(the relay's own address, 127.0.0.1 and the build link "+
+				"are excluded); send upstream_dns in the claim",
+			relaycfg.ErrRefused, resolvConfPath)
 	}
 	return list, relay.SourceResolvConf, nil
 }
@@ -161,7 +163,8 @@ func serveClaim(claimAddr string, step startStep) int {
 				// Container mode: the runtime's address, which the
 				// resolv.conf default excludes and Start would detect anyway.
 				if base.SelfIP, err = relay.DetectSelfIP(); err != nil {
-					return relaycfg.Identity{}, fmt.Errorf("detecting self IP: %w", err)
+					return relaycfg.Identity{},
+						fmt.Errorf("detecting self IP: %w", err)
 				}
 			}
 			servers, source, err := upstreamResolvers(c, base, readResolvConf)

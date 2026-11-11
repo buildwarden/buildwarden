@@ -191,7 +191,8 @@ func Start(cfg Config) (*Relay, error) {
 		// too; the clone keeps the default transport's proxy and timeouts.
 		base, ok := http.DefaultTransport.(*http.Transport)
 		if !ok {
-			return nil, fmt.Errorf("relay: http.DefaultTransport is not an *http.Transport")
+			return nil, fmt.Errorf(
+				"relay: http.DefaultTransport is not an *http.Transport")
 		}
 		t := base.Clone()
 		t.DialContext = r.upstreamDialContext

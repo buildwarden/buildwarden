@@ -117,8 +117,8 @@ func TestClaimRelayOldRelay(t *testing.T) {
 			if !errors.As(err, &fe) || fe.Fix != "refresh the relay" ||
 				!strings.Contains(fe.Msg, "predates the claim field "+tt.field) ||
 				!strings.Contains(fe.Msg, `unknown field "`+tt.field+`"`) {
-				t.Fatalf("err = %#v, want a FixableError naming %s with the caller's fix",
-					err, tt.field)
+				t.Fatalf("err = %#v, want a FixableError naming %s "+
+					"with the caller's fix", err, tt.field)
 			}
 		})
 	}

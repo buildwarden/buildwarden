@@ -47,12 +47,14 @@ func fakeRelayWith(t *testing.T, claimToken string,
 					CollectorTransport: rt,
 					CaptureMode:        c.CaptureMode,
 					SelfIP:             net.ParseIP("127.0.0.1"),
-					UpstreamDNS:        []netip.Addr{netip.MustParseAddr("127.0.0.1")},
-					UpstreamDNSSource:  relay.SourceClaim,
-					DNSPacketConn:      dns,
-					HTTPListener:       httpLn,
-					HTTPSListener:      httpsLn,
-					ControlListener:    ctrlLn,
+					UpstreamDNS: []netip.Addr{
+						netip.MustParseAddr("127.0.0.1"),
+					},
+					UpstreamDNSSource: relay.SourceClaim,
+					DNSPacketConn:     dns,
+					HTTPListener:      httpLn,
+					HTTPSListener:     httpsLn,
+					ControlListener:   ctrlLn,
 				})
 				if err != nil {
 					return relaycfg.Identity{}, err

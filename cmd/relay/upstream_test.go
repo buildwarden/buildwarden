@@ -35,17 +35,20 @@ func TestUpstreamResolvers(t *testing.T) {
 		wantErr    string
 	}{
 		{"claim list used exclusively",
-			relaycfg.Config{BuildLink: link, UpstreamDNS: []string{"10.20.0.53", "10.20.0.54"}},
+			relaycfg.Config{
+				BuildLink: link, UpstreamDNS: []string{"10.20.0.53", "10.20.0.54"},
+			},
 			confReader("nameserver 9.9.9.9\n", nil),
 			"10.20.0.53 10.20.0.54", relay.SourceClaim, ""},
 		{"absent: resolv.conf",
 			relaycfg.Config{BuildLink: link},
-			confReader("nameserver 100.127.255.254\nnameserver 127.0.0.11\nnameserver 10.30.0.2\n", nil),
+			confReader("nameserver 100.127.255.254\nnameserver 127.0.0.11\n"+
+				"nameserver 10.30.0.2\n", nil),
 			"127.0.0.11 10.30.0.2", relay.SourceResolvConf, ""},
 		{"absent: nothing usable",
 			relaycfg.Config{BuildLink: link},
 			confReader("nameserver 127.0.0.1\nnameserver 100.127.255.253\n", nil),
-			"", "", "upstream_dns is absent and /etc/resolv.conf names no usable nameserver"},
+			"", "", "upstream_dns is absent and /etc/resolv.conf names no usable"},
 		{"absent: no file",
 			relaycfg.Config{BuildLink: link},
 			confReader("", errors.New("no such file")),
@@ -55,8 +58,10 @@ func TestUpstreamResolvers(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			list, source, err := upstreamResolvers(tt.claim, base, tt.conf)
 			if tt.wantErr != "" {
-				if !errors.Is(err, relaycfg.ErrRefused) || !strings.Contains(err.Error(), tt.wantErr) {
-					t.Fatalf("err = %v, want ErrRefused containing %q", err, tt.wantErr)
+				if !errors.Is(err, relaycfg.ErrRefused) ||
+					!strings.Contains(err.Error(), tt.wantErr) {
+					t.Fatalf("err = %v, want ErrRefused containing %q",
+						err, tt.wantErr)
 				}
 				return
 			}
@@ -68,7 +73,8 @@ func TestUpstreamResolvers(t *testing.T) {
 				got = append(got, a.String())
 			}
 			if strings.Join(got, " ") != tt.want || source != tt.wantSource {
-				t.Fatalf("got %v (%s), want %s (%s)", got, source, tt.want, tt.wantSource)
+				t.Fatalf("got %v (%s), want %s (%s)",
+					got, source, tt.want, tt.wantSource)
 			}
 		})
 	}
