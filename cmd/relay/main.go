@@ -6,6 +6,7 @@ import (
 	"log"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"strconv"
 
@@ -93,9 +94,48 @@ func containerStart(c relaycfg.Config) (relay.Config, func(), error) {
 	return relay.Config{}, nil, nil
 }
 
-// serveClaim waits for the single claim, runs the mode's step, starts the
-// relay with the step's base merged with the claimed config, and then runs
-// it until it stops.
+// resolvConfPath is the relay's platform resolver configuration, the source
+// of the absent-field default.
+const resolvConfPath = "/etc/resolv.conf"
+
+// upstreamResolvers returns the relay's resolver list and its source for
+// claim c on the mode's base: the claim's upstream_dns when it carries one
+// (validated by relaycfg.Serve), used exclusively; otherwise the usable
+// nameservers of the relay's own resolv.conf, read by readConf. No usable
+// server is an error wrapping relaycfg.ErrRefused that names upstream_dns, so
+// the claim is refused and the relay stays claimable.
+func upstreamResolvers(
+	c relaycfg.Config, base relay.Config, readConf func() ([]byte, error),
+) ([]netip.Addr, string, error) {
+	if c.UpstreamDNS != nil {
+		list, err := relaycfg.ParseUpstreamDNS(c.UpstreamDNS, c.BuildLink)
+		if err != nil {
+			return nil, "", fmt.Errorf("%w: upstream_dns: %w", relaycfg.ErrRefused, err)
+		}
+		return list, relay.SourceClaim, nil
+	}
+	conf, err := readConf()
+	if err != nil {
+		return nil, "", fmt.Errorf(
+			"%w: upstream_dns is absent and the relay's default cannot be read: %w; "+
+				"send upstream_dns in the claim", relaycfg.ErrRefused, err)
+	}
+	list := relay.ResolvConfServers(string(conf), base.SelfIP, base.BuildLink)
+	if len(list) == 0 {
+		return nil, "", fmt.Errorf(
+			"%w: upstream_dns is absent and %s names no usable nameserver "+
+				"(the relay's own address, 127.0.0.1 and the build link are excluded); "+
+				"send upstream_dns in the claim", relaycfg.ErrRefused, resolvConfPath)
+	}
+	return list, relay.SourceResolvConf, nil
+}
+
+func readResolvConf() ([]byte, error) { return os.ReadFile(resolvConfPath) }
+
+// serveClaim waits for the single claim, runs the mode's step, resolves the
+// relay's upstream resolvers (upstreamResolvers), starts the relay with the
+// step's base merged with the claimed config, and then runs it until it
+// stops.
 func serveClaim(claimAddr string, step startStep) int {
 	var cleanup func()
 	defer func() {
@@ -117,7 +157,22 @@ func serveClaim(claimAddr string, step startStep) int {
 			if err != nil {
 				return relaycfg.Identity{}, err
 			}
+			if base.SelfIP == nil {
+				// Container mode: the runtime's address, which the
+				// resolv.conf default excludes and Start would detect anyway.
+				if base.SelfIP, err = relay.DetectSelfIP(); err != nil {
+					return relaycfg.Identity{}, fmt.Errorf("detecting self IP: %w", err)
+				}
+			}
+			servers, source, err := upstreamResolvers(c, base, readResolvConf)
+			if err != nil {
+				if done != nil {
+					done()
+				}
+				return relaycfg.Identity{}, err
+			}
 			cfg := applyClaim(base, c)
+			cfg.UpstreamDNS, cfg.UpstreamDNSSource = servers, source
 			cfg.CollectorTransport = transport
 			started, err := relay.Start(cfg)
 			if err != nil {
