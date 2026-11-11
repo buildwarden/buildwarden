@@ -6,6 +6,9 @@ round: feature
 phase: 6
 design: docs/design/vz-image-prepare-refresh.md
 branch: feat/vz-image-prepare-refresh
+pr:
+  number: 108
+  ci: green
 alters_relationships: false
 design_review: required
 source: 'workflow-human 2026-11-06 (Jeff), immediate follow-up to build-link-subnet (#98): in the macos-vz attended validation, image prepare --driver vz restored a new image from the latest IPSW instead of re-preparing the cached one, and ImageCache.ImageDir then picks the first image by name, so a build without --image keeps using the old image, which the link-channel stamp check now refuses. Also on main before #98. Evidence: workflow native/macos-vz/2026-11-05/, PR #98 ''For Jeff'' item 4.'
