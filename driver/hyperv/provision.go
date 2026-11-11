@@ -98,8 +98,8 @@ func parseSwitchAdapters(out string) map[string][]string {
 type NetworkSpec struct {
 	// ID is the per-build identifier used to name ephemeral resources.
 	ID string
-	// SwitchName is the vSwitch to use. When it names a pre-created durable/dev
-	// switch, the network is reused rather than created (no full-admin standup).
+	// SwitchName is the per-build Private switch EnsureNetwork creates; empty
+	// creates none (setup, whose build switches are the slots).
 	SwitchName string
 	// SwitchType is "Private" (VM-to-VM only) or "Internal". Private is
 	// stronger: the build VM cannot reach the host network stack at all.
@@ -109,6 +109,9 @@ type NetworkSpec struct {
 	NATPrefix string
 	// HostIP is the host-side gateway address on the NAT switch.
 	HostIP string
+	// NATName names the NAT (and its Internal switch) EnsureNetwork creates
+	// when none qualifies; empty is <SwitchName>-nat.
+	NATName string
 	// DevNAT, when set, names the dev switch's NAT (<dev switch>-nat), which a
 	// build uses whenever it exists, whatever prefix setup gave it; only when
 	// it does not is a warden NAT owning NATPrefix reused or a new one made.

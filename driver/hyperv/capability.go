@@ -83,9 +83,13 @@ type Capabilities struct {
 	// token until the parent is restarted in a session that has the group.
 	HyperVAdminByAccount bool
 
-	// DevSwitch is the durable/dev switch name that was probed ("" if none).
+	// DevSwitch names the durable network that was probed ("" if none).
+	// DevSwitchPresent is true when its build switches (<DevSwitch>-<i>)
+	// exist; DevSwitchLegacy when only the single shared <DevSwitch> switch
+	// of an older setup does, which durable builds no longer use.
 	DevSwitch        string
 	DevSwitchPresent bool
+	DevSwitchLegacy  bool
 
 	// ServiceReachable is true when the privileged service pipe answers.
 	ServiceReachable bool
@@ -150,7 +154,7 @@ func (s NetworkStrategy) String() string {
 	case NetDelegateService:
 		return "delegate to service"
 	case NetReuseDurable:
-		return "reuse durable switch"
+		return "durable build switches"
 	default:
 		return "blocked"
 	}
@@ -186,6 +190,9 @@ func (c Capabilities) Ready() (ready bool, reason string) {
 	case c.Resolve(OpVMLifecycle) == OutcomeBlocked:
 		return false, "VM lifecycle blocked: join Hyper-V Administrators, " +
 			"launch elevated, or install the service"
+	case c.NetworkStrategy() == NetBlocked && c.HyperVAdmin && c.DevSwitchLegacy:
+		return false, "the durable network has no build switches: run `warden setup " +
+			"--driver hyperv` (elevated) to create the build switches"
 	case c.NetworkStrategy() == NetBlocked:
 		return false, "no network path: run `warden setup --driver hyperv` " +
 			"(elevated) for a reusable switch, or run this build from an " +

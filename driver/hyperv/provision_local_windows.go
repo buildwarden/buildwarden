@@ -35,19 +35,23 @@ func newLocalProvisioner(verbose bool) Provisioner {
 // supports one NAT per host in practice, so the NAT is chosen from what the
 // host has, in a fixed order (Decision 5): the dev switch's NAT
 // (spec.DevNAT) when setup made one, whatever its prefix; else a warden NAT
-// that owns spec.NATPrefix (a concurrent build's); else a new one named
-// <SwitchName>-nat on spec.NATPrefix with spec.HostIP. A reused NAT is never
-// re-addressed: its prefix and the host vNIC's address in it are read back
-// and returned, and a host vNIC with no address in its prefix is refused. It
-// is safe to call repeatedly: existing resources are verified rather than
-// recreated.
+// that owns spec.NATPrefix (a concurrent build's); else the NAT named
+// spec.NATName (default <SwitchName>-nat) if it exists, on whatever prefix;
+// else a new one by that name on spec.NATPrefix with spec.HostIP. A reused
+// NAT is never re-addressed: its prefix and the host vNIC's address in it are
+// read back and returned, and a host vNIC with no address in its prefix is
+// refused. It is safe to call repeatedly: existing resources are verified
+// rather than recreated.
 func (p *localProvisioner) EnsureNetwork(
 	ctx context.Context, spec NetworkSpec,
 ) (*NetworkResources, error) {
-	if spec.SwitchName == "" {
-		return nil, fmt.Errorf("EnsureNetwork: empty switch name")
+	natName := spec.NATName
+	if natName == "" {
+		natName = spec.SwitchName + "-nat"
 	}
-	natName := spec.SwitchName + "-nat"
+	if spec.SwitchName == "" && spec.NATName == "" {
+		return nil, fmt.Errorf("EnsureNetwork: no switch and no NAT name")
+	}
 	prefixLen, err := cidrPrefixLen(spec.NATPrefix)
 	if err != nil {
 		return nil, err
@@ -65,12 +69,15 @@ func (p *localProvisioner) EnsureNetwork(
 $ErrorActionPreference = 'Stop'
 
 # Build (Private) switch: relay <-> build only, no host path. ALWAYS per-build:
-# this is the isolation boundary, so it is never shared between builds.
-$build = Get-VMSwitch -Name '%[1]s' -ErrorAction SilentlyContinue
-if (-not $build) {
-    New-VMSwitch -Name '%[1]s' -SwitchType Private | Out-Null
-} elseif ($build.SwitchType -ne 'Private') {
-    throw "switch '%[1]s' exists but is $($build.SwitchType); expected Private"
+# this is the isolation boundary, so it is never shared between builds. Setup
+# names none: its build switches are the slots.
+if ('%[1]s') {
+    $build = Get-VMSwitch -Name '%[1]s' -ErrorAction SilentlyContinue
+    if (-not $build) {
+        New-VMSwitch -Name '%[1]s' -SwitchType Private | Out-Null
+    } elseif ($build.SwitchType -ne 'Private') {
+        throw "switch '%[1]s' exists but is $($build.SwitchType); expected Private"
+    }
 }
 
 # NAT egress: the relay's controlled upstream, chosen from what the host has.
@@ -83,6 +90,7 @@ if ('%[6]s' -and (Get-NetNat -Name '%[6]s' -ErrorAction SilentlyContinue)) {
         Where-Object { $_.InternalIPInterfaceAddressPrefix -eq '%[5]s' } |
         Select-Object -First 1
     if ($existingNat) { $natName = $existingNat.Name }
+    elseif (Get-NetNat -Name '%[2]s' -ErrorAction SilentlyContinue) { $natName = '%[2]s' }
 }
 if ($natName) {
     if (-not (Get-VMSwitch -Name $natName -ErrorAction SilentlyContinue)) {

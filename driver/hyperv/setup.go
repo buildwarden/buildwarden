@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"strings"
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/buildlink"
@@ -20,7 +21,8 @@ const (
 
 // SetupOptions configures `warden setup --driver hyperv`.
 type SetupOptions struct {
-	// SwitchName is the durable build (Private) switch name. Empty -> warden-dev.
+	// SwitchName names the durable network: its NAT is <SwitchName>-nat and
+	// its build switches <SwitchName>-0 and up. Empty -> warden-dev.
 	SwitchName string
 	// NATPrefix / HostIP address the relay's Internal NAT switch. Empty -> defaults.
 	NATPrefix string
@@ -65,10 +67,13 @@ func (o *SetupOptions) applyDefaults() {
 	}
 }
 
-// RunSetup idempotently creates the durable dev network (a Private build switch
-// plus an Internal NAT switch + host IP + NAT rule for relay egress) and prints
-// how to reuse it. It is the one-time, elevated step that lets the non-elevated
-// gateway then iterate on builds against the reused switch.
+// RunSetup idempotently creates the durable dev network: an Internal NAT
+// switch + host IP + NAT rule for relay egress, and the Private build
+// switches <network>-0 to <network>-<Slots-1>, one per concurrent durable
+// build. It trims unattached slots above Slots and retires the single shared
+// <network> switch earlier setups made, and refuses to touch an attached one.
+// It is the one-time, elevated step that lets non-elevated builds then run
+// against the durable network.
 //
 // It preflights privilege itself and returns a clear, actionable error rather
 // than surfacing a raw PowerShell failure when run without elevation.
@@ -103,25 +108,45 @@ func RunSetup(ctx context.Context, w io.Writer, opts SetupOptions) error {
 
 	p := newLocalProvisioner(opts.Verbose)
 	res, err := p.EnsureNetwork(ctx, NetworkSpec{
-		SwitchName: opts.SwitchName,
-		SwitchType: "Private",
-		NATPrefix:  opts.NATPrefix,
-		HostIP:     opts.HostIP,
+		NATName:   opts.SwitchName + "-nat",
+		NATPrefix: opts.NATPrefix,
+		HostIP:    opts.HostIP,
 	})
+	if err != nil {
+		return err
+	}
+	if want := netip.MustParsePrefix(opts.NATPrefix).Masked(); res.NATPrefix != want {
+		return driver.Fixable(
+			"remove it from an elevated shell (Remove-NetNat -Name "+res.NATName+
+				"), then re-run setup to make it on "+want.String(),
+			"the NAT %s already exists on %s, not --nat-prefix %s",
+			res.NATName, res.NATPrefix, want)
+	}
+	slots, err := runSetupSlots(opts.SwitchName, opts.Slots)
 	if err != nil {
 		return err
 	}
 
 	fmt.Fprintln(w, "Durable dev network ready.")
-	fmt.Fprintf(w, "  build switch (Private) ... %s\n", res.BuildSwitch)
 	fmt.Fprintf(w, "  NAT switch (Internal) .... %s  (%s, host %s)\n",
-		res.NATName, opts.NATPrefix, opts.HostIP)
-	fmt.Fprintln(w,
-		"\nThis durable network is for NON-elevated builds (Hyper-V Administrators):")
+		res.NATName, res.NATPrefix, res.HostIP)
+	fmt.Fprintf(w, "  build switches (Private)  %s\n", strings.Join(slots.Slots, ", "))
+	for _, sw := range slots.Removed {
+		fmt.Fprintf(w, "  removed %s (above --slots %d, nothing attached)\n", sw, opts.Slots)
+	}
+	if slots.Retired != "" {
+		fmt.Fprintf(w, "  retired %s (the shared build switch earlier setups made; "+
+			"each durable build now takes a switch of its own)\n", slots.Retired)
+	}
+	if err := slots.err(); err != nil {
+		return err
+	}
+	fmt.Fprintf(w, "\nThis durable network is for NON-elevated builds (Hyper-V "+
+		"Administrators), up to %d at a time:\n", opts.Slots)
 	fmt.Fprintf(w, "  warden build --driver hyperv --network %s\n", opts.SwitchName)
 	fmt.Fprintf(w, "  (or set network = \"%s\" under [vm] in warden.toml)\n", opts.SwitchName)
 	fmt.Fprintln(w,
-		"Elevated builds ignore it and stand up a fresh isolated network per build.")
+		"Elevated builds stand up a fresh build switch per build and use this NAT.")
 	return nil
 }
 

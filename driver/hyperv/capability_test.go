@@ -134,7 +134,7 @@ func TestDoctorReport(t *testing.T) {
 	}
 	out := buf.String()
 	for _, want := range []string{
-		"VM lifecycle ......... OK", "reuse durable switch", "warden-dev",
+		"VM lifecycle ......... OK", "durable network 'warden-dev'", "warden-dev",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("report missing %q; got:\n%s", want, out)

@@ -77,12 +77,19 @@ try {
 		c.Errors = append(c.Errors, "hyper-v feature probe: "+err.Error())
 	}
 
-	// Durable/dev switch present (read-only).
+	// The durable network's build switches, and the old shared switch
+	// (read-only).
 	if c.DevSwitch != "" {
-		script := "if (Get-VMSwitch -Name '" + psEscapeSingle(c.DevSwitch) +
-			"' -ErrorAction SilentlyContinue) { 'yes' } else { 'no' }"
+		sw := psEscapeSingle(c.DevSwitch)
+		script := "$re = '^' + [regex]::Escape('" + sw + "') + '-[0-9]+$'\n" +
+			"$slots = @(Get-VMSwitch -ErrorAction SilentlyContinue | " +
+			"Where-Object { $_.Name -match $re }).Count\n" +
+			"$old = if (Get-VMSwitch -Name '" + sw + "' -ErrorAction SilentlyContinue) " +
+			"{ 1 } else { 0 }\n\"SLOTS=$slots OLD=$old\""
 		if out, err := runPS(script); err == nil {
-			c.DevSwitchPresent = strings.EqualFold(strings.TrimSpace(out), "yes")
+			slots, old := devSwitchProbe(out)
+			c.DevSwitchPresent = slots > 0
+			c.DevSwitchLegacy = slots == 0 && old
 		} else {
 			c.Errors = append(c.Errors, "dev switch probe: "+err.Error())
 		}

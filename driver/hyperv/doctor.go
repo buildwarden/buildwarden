@@ -54,13 +54,18 @@ func Doctor(w io.Writer, c Capabilities, link buildlink.Link,
 	fmt.Fprintf(w, "%s%-4s%s\n",
 		dotted("Hyper-V Administrators"), yesNo(c.HyperVAdmin), hvaNote)
 
-	switchLabel := "Dev switch"
+	switchLabel := "Durable build switches"
 	if c.DevSwitch != "" {
-		switchLabel = fmt.Sprintf("Dev switch '%s'", c.DevSwitch)
+		switchLabel = fmt.Sprintf("Durable build switches '%s-<i>'", c.DevSwitch)
 	}
 	switchState := "not found"
-	if c.DevSwitchPresent {
+	switch {
+	case c.DevSwitchPresent:
 		switchState = "present"
+	case c.DevSwitchLegacy:
+		switchState = "not found (only the old shared '" + c.DevSwitch +
+			"' switch; run `warden setup --driver hyperv` (elevated) to create " +
+			"the build switches)"
 	}
 	fmt.Fprintf(w, "%s%s\n", dotted(switchLabel), switchState)
 
@@ -148,19 +153,19 @@ func writeNetworkStrategy(w io.Writer, c Capabilities) {
 		fmt.Fprintln(w, "  Network .............. OK (fresh per-build "+
 			"network, elevated - cleanest isolation)")
 		if c.DevSwitchPresent {
-			fmt.Fprintf(w, "                         (durable switch '%s' "+
+			fmt.Fprintf(w, "                         (durable build switches '%s-<i>' "+
 				"present; used only for lower-privilege runs)\n", c.DevSwitch)
 		}
 	case NetDelegateService:
 		fmt.Fprintln(w,
 			"  Network .............. OK (fresh per-build via privileged service)")
 	case NetReuseDurable:
-		fmt.Fprintf(w, "  Network .............. OK (reuse durable switch "+
-			"'%s', lower-privilege path)\n", c.DevSwitch)
+		fmt.Fprintf(w, "  Network .............. OK (durable network '%s': a "+
+			"build switch of its own per build, lower-privilege path)\n", c.DevSwitch)
 	default:
 		fmt.Fprintln(w, "  Network .............. BLOCKED")
 		fmt.Fprintln(w, "    -> run `warden setup --driver hyperv` once from "+
-			"an elevated shell (reusable switch), or")
+			"an elevated shell (durable build switches), or")
 		fmt.Fprintln(w, "    -> run this build from an Administrator terminal "+
 			"(fresh per-build network), or")
 		fmt.Fprintln(w, "    -> install the network service (one-time, elevated)")
