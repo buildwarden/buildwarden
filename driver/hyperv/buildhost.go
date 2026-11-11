@@ -74,7 +74,7 @@ type buildConfig struct {
 
 	MemoryMB int           // build VM; default 4096
 	CPUs     int           // build VM; default 4
-	KeepVMs  bool          // leave the build VM and overlay for inspection
+	KeepVMs  bool          // leave both VMs and their overlays for inspection
 	Timeout  time.Duration // whole-build ceiling; zero means no limit
 
 	// OutputTee, if set, receives a live copy of the guest build console
@@ -199,6 +199,7 @@ func runBuild(
 		ContextDir:      cfg.ContextDir,
 		Request:         cfg.Request,
 		Environment:     cfg.Environment,
+		KeepVM:          cfg.KeepVMs,
 		ClaimPort:       cfg.claimPort,
 		ReadyTimeout:    cfg.readyTimeout,
 		OutputTee:       cfg.OutputTee,
@@ -206,7 +207,8 @@ func runBuild(
 	if err != nil {
 		return nil, fmt.Errorf("runBuild: %w", err)
 	}
-	// rh.Close removes the relay VM + relay overlay and stops the host servers.
+	// rh.Close removes the relay VM + relay overlay (unless --keep-vms) and
+	// stops the host servers.
 	defer func() { _ = rh.Close() }()
 
 	// 2. Per-build differencing overlay off the read-only build-guest base.
@@ -231,8 +233,8 @@ func runBuild(
 		_ = os.Remove(cfg.BuildOverlay)
 	}()
 
-	// 3. Create + start the build VM on the Private build switch (its SOLE NIC;
-	//    no NAT route). Generation follows the base image: a Gen1 (.vhd) guest
+	// 3. Create + start the build VM on the relay's Private build switch (its
+	//    SOLE NIC; no NAT route). Generation follows the base image: a Gen1 (.vhd) guest
 	//    such as the Windows Server eval image has no Secure Boot; a Gen2 (.vhdx)
 	//    guest keeps Secure Boot on via the per-family template CreateVM selects.
 	//    Either way the build guest is isolated on the Private switch.
@@ -254,7 +256,7 @@ func runBuild(
 		Generation:  cfg.Generation,
 		MemoryMB:    cfg.MemoryMB,
 		CPUs:        cfg.CPUs,
-		SwitchName:  cfg.BuildSwitch,
+		SwitchName:  rh.BuildSwitch,
 		VHDXPath:    cfg.BuildOverlay,
 		SeedISO:     cfg.SeedISO,
 		SeedVHDX:    cfg.SeedVHDX,
@@ -262,6 +264,19 @@ func runBuild(
 		COMPipePath: comPipe,
 	}); err != nil {
 		return nil, fmt.Errorf("runBuild: create build VM: %w", err)
+	}
+	if len(cfg.Slots) > 0 {
+		// A durable slot is shared host infrastructure: before the build VM
+		// runs, its segment must hold this build's two VMs and nothing else
+		// (BOOT-01: the relay is the build VM's sole peer).
+		attached, err := prov.SwitchAdapters(ctx, []string{rh.BuildSwitch})
+		if err != nil {
+			return nil, fmt.Errorf("runBuild: %w", err)
+		}
+		if err := checkSlotAdapters(rh.BuildSwitch, attached[rh.BuildSwitch],
+			rh.VMName, buildVM); err != nil {
+			return nil, fmt.Errorf("runBuild: %w", err)
+		}
 	}
 	if err := prov.StartVM(ctx, buildVM); err != nil {
 		return nil, fmt.Errorf("runBuild: start build VM: %w", err)
@@ -298,6 +313,43 @@ func runBuild(
 		return nil, fmt.Errorf("runBuild: %w", err)
 	}
 	return &driver.BuildResult{OutputDir: cfg.OutputDir}, nil
+}
+
+// checkSlotAdapters refuses a durable build switch whose attached adapters
+// are not exactly the relay VM's build NIC and the build VM's NIC.
+func checkSlotAdapters(sw string, attached []string, relayVM, buildVM string) error {
+	want := map[string]int{relayVM: 1, buildVM: 1}
+	var foreign []string
+	for _, vm := range attached {
+		if want[vm] > 0 {
+			want[vm]--
+			continue
+		}
+		foreign = append(foreign, vm)
+	}
+	var missing []string
+	for _, vm := range []string{relayVM, buildVM} {
+		if want[vm] > 0 {
+			missing = append(missing, vm)
+		}
+	}
+	if len(foreign) == 0 && len(missing) == 0 {
+		return nil
+	}
+	return driver.Fixable(
+		"disconnect the other adapters from "+sw+" (Get-VMNetworkAdapter -All | "+
+			"Where-Object SwitchName -eq '"+sw+"'), then re-run the build",
+		"durable build switch %s must hold only this build's VMs (%s, %s); "+
+			"also attached: %s; missing: %s", sw, relayVM, buildVM,
+		joinOrNone(foreign), joinOrNone(missing))
+}
+
+// joinOrNone is names comma-joined, or "none".
+func joinOrNone(names []string) string {
+	if len(names) == 0 {
+		return "none"
+	}
+	return strings.Join(names, ", ")
 }
 
 var errBuildVMOff = errors.New("build VM powered off")

@@ -61,6 +61,11 @@ type RelayHostConfig struct {
 	// GuestOS picks the bootstrap config ("windows" or "linux").
 	GuestOS string
 
+	// KeepVM leaves the relay VM and its overlay for inspection (--keep-vms);
+	// the VM's Notes and adapter keep holding its address and switch until
+	// it is removed.
+	KeepVM bool
+
 	ClaimPort    int // default relaycfg.DefaultPort
 	ReadyTimeout time.Duration
 	OutputTee    io.Writer
@@ -78,6 +83,7 @@ type RelayHost struct {
 
 	prov    Provisioner
 	overlay string
+	keep    bool
 }
 
 // validateRelayHostConfig rejects a RelayHostConfig missing a required field.
@@ -143,6 +149,7 @@ func StartRelay(ctx context.Context, prov Provisioner, cfg RelayHostConfig) (*Re
 		Session: sess,
 		prov:    prov,
 		overlay: cfg.OverlayVHDX,
+		keep:    cfg.KeepVM,
 	}
 	if err := h.create(ctx, cfg, token); err != nil {
 		_ = h.Close()
@@ -204,9 +211,16 @@ func (h *RelayHost) create(ctx context.Context, cfg RelayHostConfig, token strin
 	return nil
 }
 
-// Close stops the collector, removes the relay VM and deletes its overlay.
+// Close stops the collector, removes the relay VM and deletes its overlay,
+// or with KeepVM leaves both.
 func (h *RelayHost) Close() error {
 	h.Session.Close()
+	if h.keep {
+		fmt.Fprintf(os.Stderr, "warden: --keep-vms: leaving relay VM %q (overlay %q, "+
+			"holding %s on %s) for inspection\n", h.VMName, h.overlay, h.RelayIP,
+			h.BuildSwitch)
+		return nil
+	}
 	if h.prov != nil && h.VMName != "" {
 		_ = h.prov.RemoveVM(context.Background(), h.VMName)
 	}
