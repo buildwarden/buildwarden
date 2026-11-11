@@ -1,6 +1,6 @@
 ---
 feature: build-vm-busybox
-status: draft
+status: archived
 drivers: [qemu, firecracker]  # tools/build-vm builds the qemu direct-boot initramfs; tools/firecracker-vm is unchanged (its pin was already current, see Consolidation), but driver/buildlink's TestDirectBootBusyboxPins now ties its busybox pin to tools/build-vm's, so its next re-pin must touch both; driver code unchanged
 seams: []                # the init, the link-channel stamp and the relay's assets are unchanged
 surfaces: []             # the documented setup commands (installation.md, drivers.md) and driver/qemu's fixable message stay correct; only the script's own error text changes
@@ -396,4 +396,44 @@ are unchanged, so no reference doc is owed (UX-01).
 
 ## Archive summary
 
-<!-- Filled in at Publish (FLOW-12). -->
+**What was built.** `tools/build-vm/build-initramfs.sh`, which builds the
+qemu direct-boot launcher initramfs (aarch64), no longer copies busybox from
+`tools/relay-vm/.cache/busybox`, a file the relay script stopped producing when
+the relay moved to the Alpine minirootfs. It fetches Alpine 3.21's
+`busybox-static-1.37.0-r14.apk` for aarch64 into a new `tools/build-vm/.cache/`
+(downloaded to `.part`, renamed on success, reused when cached), checks the
+pinned sha256 with `sha256sum` or, where that is absent (macOS), `shasum -a
+256`, and extracts `bin/busybox.static` with an existence check. The
+precondition names only the relay cache's `linux-virt.apk`, which still
+supplies the kernel modules. `tools/build-vm/.gitignore` ignores `.cache/` and
+`.rootfs/`. `driver/buildlink`'s `TestDirectBootBusyboxPins` requires both
+direct-boot scripts to set the same `ALPINE_VERSION` and `BUSYBOX_VERSION`, a
+64-hex `BUSYBOX_SHA256` each that the script checks, no read of
+`$RELAY_CACHE/busybox`, and the `shasum` branch in the build-vm script. No
+stamp bump; driver code, the init, the relay script and the reference docs
+are unchanged.
+
+**Decisions taken.** A self-contained pinned fetch per `tools/` directory, tied
+by a tier-0 test (a1 (A)); the relay cache keeps supplying the kernel and
+modules; a macOS-safe fetch (sha256 tool chosen by presence, the explicit applet
+list instead of `busybox --list-full`, a checked extraction); both scripts on
+Alpine 3.21's current `busybox-static` (a2 (C)), which turned out to be the
+`1.37.0-r14` Firecracker already pinned, so `tools/firecracker-vm` did not
+change and its CI asset cache did not re-key.
+
+**Rejected.** A shared helper under `tools/` (Firecracker's cache key and path
+filter would have to grow, for about ten shared lines); restoring busybox to
+the relay cache (the relay no longer needs it, and its script is in
+Firecracker's cache key); the minirootfs busybox (dynamically linked, and the
+launcher initramfs has no libc); fetching the kernel in the build-vm script
+too (it could diverge from the relay's `vmlinuz`).
+
+**For a future design touching these concepts.** The two direct-boot busybox
+fetches are deliberate copies: a re-pin (Alpine keeps only a branch's current
+package, so the download fails when it moves) changes both scripts in one
+change, with each architecture's checksum, and Firecracker's asset cache then
+re-keys. The build-vm script runs only on the qemu driver's aarch64 host, in
+practice macOS, and no CI workflow builds it, so a change to it is validated
+natively (`qemu-any`). The two error texts it shares with the Firecracker copy
+(a checksum mismatch reports only the tool's output; any download failure
+reads as "re-pin") were tier-2 SHOULD findings left open at merge.
