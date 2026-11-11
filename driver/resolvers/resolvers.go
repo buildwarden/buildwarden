@@ -121,7 +121,7 @@ func Check(vmDNS []netip.Addr, rule Rule) ([]netip.Addr, error) {
 }
 
 // Join is the list as doctor and the refusals print it, e.g.
-// "10.0.0.2, 10.0.0.3".
+// "10.9.0.2, 10.9.0.3".
 func Join(list []netip.Addr) string {
 	s := make([]string, len(list))
 	for i, a := range list {

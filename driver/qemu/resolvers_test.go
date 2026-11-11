@@ -91,8 +91,8 @@ func TestVMDNS(t *testing.T) {
 // resolvers become req.DNS.
 func TestHostResolversPlacedInRequest(t *testing.T) {
 	req := &driver.BuildRequest{}
-	if err := setRelayDNS(req, "linux", resolvConf("nameserver 10.0.0.2\n")); err != nil ||
-		resolvers.Join(req.DNS) != "10.0.0.2" {
+	if err := setRelayDNS(req, "linux", resolvConf("nameserver 10.9.0.2\n")); err != nil ||
+		resolvers.Join(req.DNS) != "10.9.0.2" {
 		t.Fatalf("%v %v", req.DNS, err)
 	}
 	var fe *driver.FixableError

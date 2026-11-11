@@ -96,11 +96,11 @@ func TestRequestPreflightDNS(t *testing.T) {
 	h := newFakeHost().withSlots(1, 1000)
 	h.files["/dev/kvm"] = ""
 	h.outputs["firecracker --version"] = "Firecracker v1.17.0\n"
-	h.files[resolvers.ResolvConf] = "nameserver 10.0.0.2\nnameserver 127.0.0.53\n"
+	h.files[resolvers.ResolvConf] = "nameserver 10.9.0.2\nnameserver 127.0.0.53\n"
 	none := func(net.IP) bool { return false }
 	req := &driver.BuildRequest{}
 	if _, err := requestPreflight(h, none, req); err != nil ||
-		resolvers.Join(req.DNS) != "10.0.0.2" {
+		resolvers.Join(req.DNS) != "10.9.0.2" {
 		t.Fatalf("host selection: %v %v", req.DNS, err)
 	}
 	delete(h.files, resolvers.ResolvConf)

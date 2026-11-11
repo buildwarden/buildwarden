@@ -94,14 +94,14 @@ func TestLinux(t *testing.T) {
 		want, source string
 	}{
 		"plain": {map[string]string{
-			ResolvConf: "nameserver 10.0.0.2\nnameserver 10.0.0.3\n"},
-			"10.0.0.2, 10.0.0.3", ResolvConf},
+			ResolvConf: "nameserver 10.9.0.2\nnameserver 10.9.0.3\n"},
+			"10.9.0.2, 10.9.0.3", ResolvConf},
 		"stub": {map[string]string{ResolvConf: "nameserver 127.0.0.53\noptions edns0\n",
 			ResolvedUpstream: "nameserver 10.1.2.3\n"}, "10.1.2.3", ResolvedUpstream},
 		"stub beside another": {map[string]string{
-			ResolvConf:       "nameserver 127.0.0.53\nnameserver 10.0.0.2\n",
+			ResolvConf:       "nameserver 127.0.0.53\nnameserver 10.9.0.2\n",
 			ResolvedUpstream: "nameserver 10.1.2.3\n"},
-			"127.0.0.53, 10.0.0.2", ResolvConf},
+			"127.0.0.53, 10.9.0.2", ResolvConf},
 	} {
 		got, source, err := Linux(files(tt.files))
 		if err != nil || Join(got) != tt.want || source != tt.source {
