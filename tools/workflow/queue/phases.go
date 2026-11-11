@@ -115,7 +115,7 @@ type stepRef struct {
 }
 
 // stepTemplates parses a step id against the templates, the one parse that
-// IsGate, IsDesignReview and isTemplate share. ok is false for an id that is
+// IsGate, IsDesignReview, IsMerge and isTemplate share. ok is false for an id that is
 // not a step id or names a phase its round does not have.
 func stepTemplates(id string) (stepRef, bool) {
 	m := stepIDRe.FindStringSubmatch(id)
@@ -190,6 +190,15 @@ func IsGate(f *Feature, st *Step) bool {
 func IsDesignReview(st *Step) bool {
 	r, ok := stepTemplates(st.ID)
 	return ok && r.round == "feature" && r.phase == 2 && r.name == "design-review"
+}
+
+// IsMerge reports whether the step is its round's merge step, in any of its
+// -r<n> forms: f7-merge or x3-merge, which completes only once the human has
+// merged the PR (FLOW-08). wf next never offers it (FLOW-05).
+func IsMerge(st *Step) bool {
+	r, ok := stepTemplates(st.ID)
+	return ok && r.name == "merge" &&
+		((r.round == "feature" && r.phase == 7) || (r.round == "process" && r.phase == 3))
 }
 
 // Seed adds the template steps for the feature's current round and phase.

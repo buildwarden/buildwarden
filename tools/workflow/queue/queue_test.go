@@ -507,6 +507,16 @@ func TestIsDesignReview(t *testing.T) {
 	}
 }
 
+func TestIsMerge(t *testing.T) {
+	for id, want := range map[string]bool{"f7-merge": true, "f7-merge-r2": true,
+		"x3-merge": true, "f6-merge-main": false, "x2-implement": false,
+		"f7-other": false, "m6-merge-round": false} {
+		if got := IsMerge(&Step{ID: id}); got != want {
+			t.Errorf("IsMerge(%s) = %v", id, got)
+		}
+	}
+}
+
 // TestOldOrderPhaseTwoKeepsTheReviewAsGate: a phase 2 seeded before the
 // review moved ahead of Plan finishes under the order it was seeded with.
 func TestOldOrderPhaseTwoKeepsTheReviewAsGate(t *testing.T) {
