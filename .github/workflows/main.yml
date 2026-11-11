@@ -136,6 +136,28 @@ jobs:
       - run: go test ./...
         working-directory: tools/tier1
 
+  # The keytool byte comparison, with a JDK on every platform (design
+  # jks-test-skip-without-jdk). make test skips it where keytool cannot run.
+  keytool:
+    needs: changes
+    if: needs.changes.outputs.gotests == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version: stable
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+      - run: go test ./cmd/warden-io -run Keytool -count=1 -v
+        env:
+          WARDEN_REQUIRE_KEYTOOL: '1'
+
   test:
     needs: changes
     if: needs.changes.outputs.gotests == 'true'
@@ -202,7 +224,7 @@ jobs:
   # track the filters or matrix names. It lists changes because a job skipped
   # after a failed need reports skipped, which would otherwise hide the failure.
   ci-ok:
-    needs: [changes, lint, tier1, tier1-test, test, tidy, build, book]
+    needs: [changes, lint, tier1, tier1-test, keytool, test, tidy, build, book]
     if: always()
     runs-on: ubuntu-latest
     steps:
