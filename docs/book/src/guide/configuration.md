@@ -49,6 +49,8 @@ windows_image = ""         # hyperv: base image URL or local path (default: Micr
 windows_image_update = "auto" # hyperv: "auto" picks up new media at refresh; "reuse" keeps it
 build_link = "100.127.255.252/30" # advanced: the relay-to-build link, a /30 (every VM
                            #   driver; see Advanced options; --build-link wins)
+dns = ["10.20.0.53"]       # the relay's upstream DNS servers, in order, used exclusively
+                           #   (every VM driver; unset: the host's; see Advanced options)
 
 [output]
 color = "auto"             # Color mode: auto, always, never
@@ -132,6 +134,45 @@ The link reaches the relay in its claim and the build VM in its seed, its
 kernel command line or the relay's DHCP lease, per build: changing it needs
 no rebuild, refresh or re-prepare. The one-time upgrade to this scheme is in
 [Drivers](drivers.md#upgrading-to-the-configurable-build-link).
+
+### The relay's resolvers (`[vm] dns`)
+
+The relay answers the build's DNS and resolves its own upstream connections
+through one list of upstream DNS servers, fixed when the build starts and
+sent to the relay in its claim. Every VM driver sends one:
+
+- **Unset (the default): the host's resolvers.** Each driver reads the
+  host's DNS servers and keeps those its relay can reach: hyperv the IPv4
+  servers of the default route's interface, firecracker `/etc/resolv.conf`
+  (or systemd-resolved's upstreams), qemu the host's `/etc/resolv.conf`, vz
+  the Mac's `/etc/resolv.conf`. A loopback or link-local server, one inside
+  the build link and, per driver, one on the host itself or inside its NAT
+  are left out; when none is left the build is refused, naming each server
+  and why, with the fix (an off-host DNS server on the host, or `[vm] dns`).
+  No public resolver stands in.
+- **Set: used exclusively.** The listed servers, in order, are the relay's
+  only resolvers: the host's are not read, added or tried when the listed
+  ones fail.
+
+  ```toml
+  [vm]
+  dns = ["10.20.0.53", "10.20.0.54"]
+  ```
+
+  The relay asks the first server and the next when one does not answer in
+  time, as `resolv.conf`'s `nameserver` lines are asked; that is the one
+  fallback, and it stays inside your list.
+
+The key has no flag or environment variable; `./warden.toml` wins over
+`~/.config/warden/config.toml`. Each entry must be an IPv4 address, not
+unspecified, multicast or broadcast, and the list must not be empty
+(`dns = []` is refused: remove the key to use the host's resolvers); this is
+checked when the file loads, by every command. At build start and in
+`warden doctor`, the driver refuses an entry its relay cannot reach (a
+loopback server for the VM drivers whose relay is a VM, one inside the build
+link, and so on), naming it, rather than drop it. The container driver
+ignores `[vm]` and its relay uses its container's resolvers. `warden doctor`
+prints the resolvers and where they came from.
 
 ## Runtime Autodetection
 
