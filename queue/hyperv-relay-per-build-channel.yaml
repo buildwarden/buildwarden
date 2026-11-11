@@ -4,7 +4,7 @@ priority: 49
 follows: build-link-subnet
 status: in_progress
 round: feature
-phase: 4
+phase: 6
 design: docs/design/hyperv-relay-per-build-channel.md
 branch: feat/hyperv-relay-per-build-channel
 alters_relationships: true
@@ -29,6 +29,8 @@ steps:
     phase: 6
     affinity: host:windows-hyperv
     status: pending
+    needs:
+      - f6-consolidate-r2
     lease:
       claimed_by: ""
       expires: null
@@ -37,6 +39,8 @@ steps:
     phase: 6
     affinity: host:qemu-any
     status: pending
+    needs:
+      - f6-consolidate-r2
     lease:
       claimed_by: ""
       expires: null
@@ -45,6 +49,8 @@ steps:
     phase: 6
     affinity: host:macos-vz
     status: pending
+    needs:
+      - f6-consolidate-r2
     lease:
       claimed_by: ""
       expires: null
@@ -117,17 +123,52 @@ steps:
   - id: f4-review-r2
     phase: 4
     affinity: cloud
-    status: pending
+    status: done
     lease:
-      claimed_by: cloud/20261111T182144Z
-      expires: 2026-11-12T00:41:23.946648038Z
+      claimed_by: ""
+      expires: null
+  - id: f5-guide-r2
+    phase: 5
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main-r2
+    phase: 6
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate-r2
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-merge-main-r2
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr-r2
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-consolidate-r2
+      - f6-validate-windows-hyperv
+      - f6-validate-qemu-any
+      - f6-validate-macos-vz
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 4
     steps: 18
   spent:
     runs: 6
-    steps: 14
+    steps: 16
 questions:
   - id: a1
     kind: assumed
@@ -493,3 +534,24 @@ history:
   - at: 2026-11-11T22:41:23Z
     by: cloud/20261111T182144Z
     event: claimed f4-review-r2 until 2026-11-12T00:41:23Z
+  - at: 2026-11-11T22:45:00Z
+    by: cloud/20261111T182144Z
+    event: done f4-review-r2
+  - at: 2026-11-11T22:45:00Z
+    by: cloud/20261111T182144Z
+    event: entered phase 5 (guide)
+  - at: 2026-11-11T22:45:04Z
+    by: cloud/20261111T182144Z
+    event: claimed f5-guide-r2 until 2026-11-12T00:45:04Z
+  - at: 2026-11-11T22:45:04Z
+    by: cloud/20261111T182144Z
+    event: done f5-guide-r2
+  - at: 2026-11-11T22:45:04Z
+    by: cloud/20261111T182144Z
+    event: entered phase 6 (publish)
+  - at: 2026-11-11T22:45:04Z
+    by: cloud/20261111T182144Z
+    event: claimed f6-merge-main-r2 until 2026-11-12T00:45:04Z
+  - at: 2026-11-11T22:45:04Z
+    by: cloud/20261111T182144Z
+    event: done f6-merge-main-r2
