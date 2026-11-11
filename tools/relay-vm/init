@@ -3,7 +3,8 @@
 # hyperv: x86_64 VMBus). The trust boundary: this script and everything it
 # invokes is outside the build VM's influence.
 #
-# The relay VM has no data disk and mounts nothing. The relay binary lives in
+# The relay VM has no data disk. It mounts nothing but, on Hyper-V, the relay
+# seed's CD, read-only, long enough to copy one file. The relay binary lives in
 # the initramfs at /sbin/relay (baked by the Hyper-V boot-disk build, appended
 # as an extra cpio by the qemu driver). It boots UNCONFIGURED and waits for the
 # orchestrator's claim on :8301 (see relaycfg); every output streams to the
@@ -17,14 +18,33 @@
 #   iptables: PREROUTING REDIRECT 80/443/53 on eth0; POSTROUTING MASQUERADE
 #             eth1; FORWARD DROP (no un-proxied egress from the build VM).
 #
-# Kernel command line (all optional):
-#   warden.net=dhcp|static   upstream addressing; default dhcp, except static
-#                            on Hyper-V (New-NetNat has no DHCP server)
-#   warden.nat_ip= warden.nat_prefix= warden.nat_gw=
-#                            static upstream address (default 192.168.240.2/20
-#                            via 192.168.240.1)
-#   warden.dns=              upstream resolver(s), comma-separated
-#   warden.claim_token=      per-instance claim token (WARDEN_CLAIM_TOKEN)
+# Boot keys: the relay's pre-claim values only (RELAY-08). Everything else,
+# the build link, the collector and the upstream resolvers (upstream_dns),
+# comes in the claim. Each key is a warden.<key>=<value> word, read by
+# read_keys from /proc/cmdline and, on Hyper-V, from the relay seed. Only these
+# keys are read, the words are never evaluated, and a malformed value stops
+# the init with a console line (no relay starts, so the claim times out with
+# this log as the evidence):
+#   warden.net=dhcp|static   upstream addressing (default dhcp)
+#   warden.nat_ip=           static upstream address, a dotted quad
+#   warden.nat_prefix=       its prefix length, 1 to 30
+#   warden.nat_gw=           its gateway, a dotted quad
+#                            (static needs all three; there are no defaults)
+#   warden.claim_token=      per-instance claim token, 64 lowercase hex digits
+#                            (WARDEN_CLAIM_TOKEN; never printed)
+#   warden.seed=1            the relay seed's format version
+# warden.dns is retired: an init that finds it stops, naming upstream_dns in
+# the claim, rather than ignore a value someone set.
+#
+# The relay seed (Hyper-V only, where nothing per build reaches the kernel
+# command line): an ISO 9660 CD, volume label WARDENRELAY, attached to the
+# relay VM per build, holding warden-relay.conf, one warden.<key>=<value> per
+# line, among them warden.seed=1. The init waits up to 10 s for the CD,
+# mounts it read-only, copies the file to /tmp and unmounts it. No seed, or a
+# warden.seed other than 1, stops the init.
+
+# Words from the command line and the seed are split, never glob-expanded.
+set -f
 
 mount -t devtmpfs devtmpfs /dev
 mount -t proc proc /proc
@@ -56,24 +76,105 @@ for mod in \
     [ -f "/lib/modules/${mod}.ko" ] && insmod "/lib/modules/${mod}.ko" 2>/dev/null
 done
 
-# Parse only known warden.* keys; the command line is never evaluated.
+# stop ends the boot with a console line: no relay starts, so the
+# orchestrator's claim times out with this log as the evidence. PID 1 must
+# never exit (the kernel would panic), so it idles for host teardown.
+stop() {
+    say "stopped: $*"
+    while true; do sleep 3600; done
+}
+
+is_quad() {
+    case "$1" in ''|*[!0-9.]*|.*|*.|*..*) return 1 ;; esac
+    old_ifs=$IFS; IFS=.
+    # shellcheck disable=SC2086 # split on the dots
+    set -- $1
+    IFS=$old_ifs
+    [ $# -eq 4 ] || return 1
+    for octet in "$@"; do
+        case "$octet" in 0?*|????*) return 1 ;; esac
+        [ "$octet" -le 255 ] || return 1
+    done
+}
+
+# read_keys SOURCE: reads warden.<key>=<value> words from stdin (SOURCE names
+# it in console lines). Only the known keys are taken and each value is
+# checked; other words are skipped.
+read_keys() {
+    keys=""
+    for kv in $(cat); do
+        v="${kv#*=}"
+        case "$kv" in
+            warden.net=*)
+                case "$v" in dhcp|static) ;; *)
+                    stop "warden.net=$v from $1: want dhcp or static" ;; esac
+                NET_MODE="$v" ;;
+            warden.nat_ip=*)
+                is_quad "$v" || stop "warden.nat_ip=$v from $1 is not a dotted quad"
+                NAT_IP="$v" ;;
+            warden.nat_prefix=*)
+                case "$v" in [1-9]|[12][0-9]|30) ;; *)
+                    stop "warden.nat_prefix=$v from $1: want 1 to 30" ;; esac
+                NAT_PREFIX="$v" ;;
+            warden.nat_gw=*)
+                is_quad "$v" || stop "warden.nat_gw=$v from $1 is not a dotted quad"
+                NAT_GW="$v" ;;
+            warden.claim_token=*)
+                case "$v" in *[!0-9a-f]*) v="" ;; esac
+                [ "${#v}" -eq 64 ] ||
+                    stop "warden.claim_token from $1 is not 64 lowercase hex digits"
+                CLAIM_TOKEN="$v" ;;
+            warden.seed=*)
+                [ "$v" = 1 ] ||
+                    stop "no relay seed (WARDENRELAY): warden.seed=$v from $1, want 1"
+                SEED_VERSION="$v" ;;
+            warden.dns=*)
+                stop "warden.dns from $1 is retired: send the relay's resolvers" \
+                    "as upstream_dns in the claim" ;;
+            *) continue ;;
+        esac
+        keys="$keys ${kv%%=*}"
+    done
+    say "keys from $1:${keys:- none}"
+}
+
+# read_seed copies the relay seed's warden-relay.conf from its CD to /tmp,
+# or stops when there is none.
+read_seed() {
+    TRIES=0
+    while [ ! -b /dev/sr0 ] && [ $TRIES -lt 100 ]; do
+        TRIES=$((TRIES + 1)); sleep 0.1
+    done
+    [ -b /dev/sr0 ] || stop "no relay seed (WARDENRELAY): no CD after 10 s"
+    mkdir -p /run/seed
+    mount -t iso9660 -o ro /dev/sr0 /run/seed ||
+        stop "no relay seed (WARDENRELAY): the CD does not mount"
+    cp /run/seed/warden-relay.conf /tmp/warden-relay.conf 2>/dev/null
+    umount /run/seed
+    [ -f /tmp/warden-relay.conf ] ||
+        stop "no relay seed (WARDENRELAY): the CD holds no warden-relay.conf"
+}
+
 NET_MODE=dhcp
-[ "$HYPERV" = 1 ] && NET_MODE=static
-NAT_IP=192.168.240.2
-NAT_PREFIX=20
-NAT_GW=192.168.240.1
-UPSTREAM_DNS=""
+NAT_IP=""
+NAT_PREFIX=""
+NAT_GW=""
 CLAIM_TOKEN=""
-for kv in $(cat /proc/cmdline); do
-    case "$kv" in
-        warden.net=*)         NET_MODE="${kv#*=}" ;;
-        warden.nat_ip=*)      NAT_IP="${kv#*=}" ;;
-        warden.nat_prefix=*)  NAT_PREFIX="${kv#*=}" ;;
-        warden.nat_gw=*)      NAT_GW="${kv#*=}" ;;
-        warden.dns=*)         UPSTREAM_DNS="$(echo "${kv#*=}" | tr ',' ' ')" ;;
-        warden.claim_token=*) CLAIM_TOKEN="${kv#*=}" ;;
-    esac
-done
+SEED_VERSION=""
+read_keys /proc/cmdline < /proc/cmdline
+if [ "$HYPERV" = 1 ]; then
+    for mod in scsi_common scsi_mod scsi_transport_fc hv_storvsc cdrom sr_mod isofs; do
+        [ -f "/lib/modules/${mod}.ko" ] && insmod "/lib/modules/${mod}.ko" 2>/dev/null
+    done
+    read_seed
+    SEED_VERSION=""
+    read_keys "the relay seed" < /tmp/warden-relay.conf
+    [ "$SEED_VERSION" = 1 ] || stop "no relay seed (WARDENRELAY): no warden.seed=1"
+fi
+if [ "$NET_MODE" = static ] &&
+    { [ -z "$NAT_IP" ] || [ -z "$NAT_PREFIX" ] || [ -z "$NAT_GW" ]; }; then
+    stop "warden.net=static needs warden.nat_ip, warden.nat_prefix and warden.nat_gw"
+fi
 
 # Wait for NICs.
 TRIES=0
@@ -117,10 +218,8 @@ case "$1" in
 esac
 DHCP
         chmod 755 /usr/share/udhcpc/default.script
-        udhcpc -i "$NAT_IF" -q -t 10 -T 2 -A 3 -n >/dev/null 2>&1 || {
-            say "dhcp failed on $NAT_IF; using static $NAT_IP/$NAT_PREFIX"
-            static_upstream
-        }
+        udhcpc -i "$NAT_IF" -q -t 10 -T 2 -A 3 -n >/dev/null 2>&1 ||
+            stop "no DHCP lease on $NAT_IF (warden.net=dhcp)"
     else
         static_upstream
     fi
@@ -151,13 +250,6 @@ fi
 if [ -n "$NAT_IF" ]; then
     iptables -t nat -A POSTROUTING -o "$NAT_IF" -j MASQUERADE
 fi
-
-# DNS for the relay's own upstream resolution (build-VM DNS is redirected here).
-if [ -n "$UPSTREAM_DNS" ] || [ ! -s /etc/resolv.conf ]; then
-    : > /etc/resolv.conf
-    for d in ${UPSTREAM_DNS:-8.8.8.8}; do echo "nameserver $d" >> /etc/resolv.conf; done
-fi
-say "dns=$(grep nameserver /etc/resolv.conf 2>/dev/null | head -1)"
 
 # Launch the relay. PID 1 must never exit (the kernel would panic), so init
 # supervises: when the relay returns, or is absent in a bare boot test, it idles
