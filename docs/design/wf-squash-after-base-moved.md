@@ -378,6 +378,47 @@ relay or collector code is touched.
 
 ## Consolidation
 
+Branched from `origin/main` at `beb51ba` (#104, the PR this design was checked
+against), still `main` when Implement finished: nothing landed to reconcile.
+`next-skips-merge-wait`, implemented alongside, edits FLOW-05's blocking list
+in `process.md`, the `workflow-tick` step-2 clause and
+`tools/workflow/queue/next.go`; this change touches FLOW-16 and the Close
+paragraph of the same two files, so whichever lands second merges without
+overlapping lines.
+
+- **FLOW-15 sweep:** the proof lives in `refMerged()`, as the tree proof does,
+  with two helpers beside it: `sameChange()` (one PR commit's comparison and
+  its detail) and `patchID()` (the pinned diff piped to
+  `git patch-id --verbatim`). `merged()`, `mergedEarly()` and `closed()` reach
+  it unchanged. `overview.md` describes the product components, not
+  `tools/workflow`, and is unchanged.
+- **Tests:** `TestSquashOfAnOlderHeadFails` is now `TestSquashAfterMainMoved`;
+  its setup (`mainMoved`) also gives the branch's hunk a different offset on
+  `main`, as in #104. Added: different change, pushed past, two-parent (with
+  the first-parent patch-id guard), whitespace-only, criss-cross and
+  configuration cases. Mutating `patchID()` to drop `--no-relative`, or to use
+  `--stable`, fails the configuration and whitespace tests respectively.
+- **Tier 1:** `make enforcement`: "main's tier 1 findings kept", 0 findings
+  either side, none dropped. The merge base's `wf check` (built from `beb51ba`)
+  and the branch's give the same results on this item at x2: pushed and
+  cleared pass; archive, Archive summary and PR fail, as expected before
+  Publish.
+- **Live, read-only:** in a blobless scratch clone of origin, with
+  `feat/design-principles` and `refs/remotes/origin/feat/design-principles`
+  set to `42d95f0` (fetched from origin by full sha) and a copy of
+  design-principles' queue item set back to x3-merge pending with PR 104, the
+  branch's `wf check` passes: both refs "squash-merged as beb51ba after main
+  moved (change 43f1a18b6c7d3088c2b82789e368e887c30ff827, base 49e5354)". The
+  merge base's `wf check` fails as in the Problem ("no PR commit has its
+  tree: beb51ba tree bd79a84"). With the refs absent, the branch's check
+  passes on the PR commit alone. With the scratch clone's `origin/main` set to
+  a commit on `f861315` naming #104 whose tree is `beb51ba`'s plus one added
+  line, it fails with change `04f6ae53…` against the branch's `43f1a18b…`, the
+  compare commands and both deletion commands. The real workflow checkout
+  and queue were not touched.
+- **Found outside the design:** none beyond the stale older-head tracking ref
+  already named in Prior art, which stays out of scope.
+
 ## Rollback notes
 
 ## Archive summary
