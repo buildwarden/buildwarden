@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net/netip"
 	"os"
 	"os/signal"
 
@@ -14,6 +16,7 @@ import (
 	"github.com/buildwarden/buildwarden/driver/firecracker"
 	"github.com/buildwarden/buildwarden/driver/hyperv"
 	"github.com/buildwarden/buildwarden/driver/qemu"
+	"github.com/buildwarden/buildwarden/driver/resolvers"
 	"github.com/buildwarden/buildwarden/driver/vz"
 )
 
@@ -52,7 +55,9 @@ a host interface overlaps it, and the state of each launcher asset's
 link-channel stamp (current, missing or stale, with the one-time rebuild).
 A missing or stale stamp fails doctor on the hyperv relay boot VHDX and the
 vz prepared image, which every build uses; on the qemu and firecracker
-direct-boot initramfs it is reported only.
+direct-boot initramfs it is reported only. Each VM driver also prints the
+relay's upstream resolvers and their source ([vm] dns, or the host's), or
+the refusal a build would get, which fails doctor.
 
 Exits non-zero when a required capability is unmet, so it is usable as a CI
 or agent gate.`,
@@ -69,28 +74,34 @@ or agent gate.`,
 				"(--driver qemu, vz, hyperv or firecracker)")
 		}
 		var link buildlink.Link
-		linkBlocked := false
+		var vmDNS []netip.Addr
+		blocked := false
 		if isVMDriver(drv) {
-			if link, linkBlocked, err = doctorBuildLink(out, cfg); err != nil {
+			if link, blocked, err = doctorBuildLink(out, cfg); err != nil {
 				return err
 			}
+			vmDNS = cfg.VM.DNSAddrs
 		}
 		switch drv {
 		case "hyperv":
 			detected := hyperv.Detect(hypervNetwork(cfg))
-			if blocked := hyperv.Doctor(out, detected); blocked || linkBlocked {
+			if hyperv.Doctor(out, detected, link, vmDNS) || blocked {
 				os.Exit(1)
 			}
 			return nil
 		case "firecracker":
-			if blocked := firecracker.Doctor(out, link, nil); blocked || linkBlocked {
+			if firecracker.Doctor(out, link, vmDNS) || blocked {
 				os.Exit(1)
 			}
 			return nil
 		case "qemu":
-			err = qemu.Preflight()
+			if err = qemu.Preflight(); err == nil {
+				blocked = doctorResolvers(out, qemu.Resolvers, link, vmDNS) || blocked
+			}
 		case "vz":
-			err = vz.Preflight()
+			if err = vz.Preflight(); err == nil {
+				blocked = doctorResolvers(out, vz.Resolvers, link, vmDNS) || blocked
+			}
 		default:
 			var rt string
 			if rt, err = resolveRuntime(cfg); err == nil {
@@ -100,7 +111,7 @@ or agent gate.`,
 		if err != nil {
 			return err
 		}
-		if linkBlocked {
+		if blocked {
 			os.Exit(1)
 		}
 		fmt.Fprintln(out, "ok")
@@ -267,6 +278,29 @@ func doctorBuildLink(out io.Writer, cfg *Config) (buildlink.Link, bool, error) {
 		}
 	}
 	return link, blocked, nil
+}
+
+// doctorResolvers prints the relay's upstream resolvers and their source, as
+// resolve (a driver's Resolvers) chooses them from link and vmDNS ([vm] dns),
+// or the refusal a build would get, and reports whether it refused.
+func doctorResolvers(out io.Writer,
+	resolve func(buildlink.Link, []netip.Addr) ([]netip.Addr, string, error),
+	link buildlink.Link, vmDNS []netip.Addr) (blocked bool) {
+	list, source, err := resolve(link, vmDNS)
+	if err == nil {
+		fmt.Fprintf(out, "relay resolvers: %s (from %s)\n", resolvers.Join(list), source)
+		return false
+	}
+	from := ""
+	if source != "" {
+		from = " (from " + source + ")"
+	}
+	fmt.Fprintf(out, "relay resolvers%s: BLOCKED: %v\n", from, err)
+	var fe *driver.FixableError
+	if errors.As(err, &fe) && fe.Fix != "" {
+		fmt.Fprintf(out, "relay resolvers: to fix: %s\n", fe.Fix)
+	}
+	return true
 }
 
 // launcherStamps lists the driver's launcher assets that carry a

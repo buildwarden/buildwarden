@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"strings"
 	"testing"
+
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 )
 
 func TestResolvePerOperation(t *testing.T) {
@@ -127,7 +129,7 @@ func TestDoctorReport(t *testing.T) {
 		DevSwitchPresent:  true,
 	}
 	var buf bytes.Buffer
-	if blocked := Doctor(&buf, caps); blocked {
+	if blocked := Doctor(&buf, caps, buildlink.Link{}, nil); blocked {
 		t.Fatalf("expected not blocked; report:\n%s", buf.String())
 	}
 	out := buf.String()
@@ -147,7 +149,7 @@ func TestDoctorReport(t *testing.T) {
 		HypervisorPresent: true, HyperVFeature: true, Elevated: true,
 		DevSwitch: "warden-dev", DevSwitchPresent: true,
 	}
-	if blocked := Doctor(&buf, elevated); blocked {
+	if blocked := Doctor(&buf, elevated, buildlink.Link{}, nil); blocked {
 		t.Fatalf("expected not blocked when elevated; report:\n%s", buf.String())
 	}
 	out = buf.String()
@@ -159,7 +161,7 @@ func TestDoctorReport(t *testing.T) {
 
 	// Unsupported platform is blocked and says so.
 	buf.Reset()
-	if blocked := Doctor(&buf, Capabilities{Supported: false, Platform: "linux"}); !blocked {
+	if blocked := Doctor(&buf, Capabilities{Supported: false, Platform: "linux"}, buildlink.Link{}, nil); !blocked {
 		t.Fatal("expected blocked on unsupported platform")
 	}
 	if !strings.Contains(buf.String(), "unavailable on linux") {
@@ -174,7 +176,7 @@ func TestDoctorReport(t *testing.T) {
 		HypervisorPresent: true, HyperVFeature: true,
 		HyperVAdmin: false, HyperVAdminByAccount: true,
 	}
-	if blocked := Doctor(&buf, stale); !blocked {
+	if blocked := Doctor(&buf, stale, buildlink.Link{}, nil); !blocked {
 		t.Fatal("expected blocked with a stale token")
 	}
 	if !strings.Contains(buf.String(), "token predates") {

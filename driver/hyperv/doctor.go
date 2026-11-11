@@ -3,7 +3,10 @@ package hyperv
 import (
 	"fmt"
 	"io"
+	"net/netip"
 	"time"
+
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 )
 
 // dotted returns "label " padded with dots to a fixed width, for aligned rows.
@@ -26,8 +29,10 @@ func yesNo(b bool) string {
 // Doctor writes the capability preflight report to w and reports whether the
 // driver is blocked (a required capability for running builds is unmet). A
 // blocked result is meant to drive a non-zero exit so `warden doctor --driver hyperv`
-// works as a CI/agent gate.
-func Doctor(w io.Writer, c Capabilities) (blocked bool) {
+// works as a CI/agent gate. link is the build link and vmDNS is [vm] dns, the
+// inputs a build's NAT-overlap and relay-resolver checks take.
+func Doctor(w io.Writer, c Capabilities, link buildlink.Link,
+	vmDNS []netip.Addr) (blocked bool) {
 	if !c.Supported {
 		fmt.Fprintf(w,
 			"Hyper-V driver ....................... unavailable on %s "+
