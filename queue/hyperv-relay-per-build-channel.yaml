@@ -4,7 +4,7 @@ priority: 47
 follows: build-link-subnet
 status: in_progress
 round: feature
-phase: 3
+phase: 4
 design: docs/design/hyperv-relay-per-build-channel.md
 branch: feat/hyperv-relay-per-build-channel
 alters_relationships: true
@@ -82,10 +82,17 @@ steps:
   - id: f3-implement
     phase: 3
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f4-review
+    phase: 4
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261111T182144Z
-      expires: 2026-11-11T20:23:29.790309697Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 4
@@ -395,3 +402,9 @@ history:
   - at: 2026-11-11T18:23:29Z
     by: cloud/20261111T182144Z
     event: claimed f3-implement until 2026-11-11T20:23:29Z
+  - at: 2026-11-11T20:24:05Z
+    by: cloud/20261111T182144Z
+    event: done f3-implement
+  - at: 2026-11-11T20:24:05Z
+    by: cloud/20261111T182144Z
+    event: entered phase 4 (review)
