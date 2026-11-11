@@ -34,15 +34,10 @@ const (
 	FirstLogonCommandLimit = 1024
 )
 
-// The default build link's addresses, for callers that do not render a
-// per-build seed. A build's own addresses come from its link (WardenRunPS1).
-var (
-	// BuildGatewayIP is the relay's address on the default build link.
-	BuildGatewayIP = buildlink.Default().Relay.String()
-	// BuildGuestCIDR is the build VM's address and prefix on the default
-	// build link.
-	BuildGuestCIDR = buildlink.Default().GuestCIDR()
-)
+// BuildGatewayIP is the relay's address on the default build link, for
+// callers that do not render a per-build seed. A build's own relay address
+// comes from its link (WardenRunPS1).
+var BuildGatewayIP = buildlink.Default().Relay.String()
 
 // XMLText escapes s for use as XML element text. Answer files are rendered
 // without auto-escaping, and a raw '&', '<' or quote in a password or command

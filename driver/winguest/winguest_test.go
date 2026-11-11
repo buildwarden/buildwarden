@@ -45,7 +45,7 @@ func TestWardenRunPS1ConfiguredLink(t *testing.T) {
 		t.Fatal(err)
 	}
 	ps := WardenRunPS1(link)
-	if !strings.Contains(ps, "initialize --gateway=100.126.255.253 --ip=100.126.255.254/30") ||
+	if !strings.Contains(ps, "initialize --gateway=100.126.255.253 2>&1") ||
 		strings.Contains(ps, BuildGatewayIP) {
 		t.Errorf("warden-run.ps1 does not follow the configured link:\n%s", ps)
 	}
@@ -55,7 +55,7 @@ func TestWardenRunPS1(t *testing.T) {
 	ps := WardenRunPS1(buildlink.Default())
 	for _, want := range []string{
 		"warden-io.exe",
-		"initialize --gateway=" + BuildGatewayIP + " --ip=" + BuildGuestCIDR,
+		"initialize --gateway=" + BuildGatewayIP + " 2>&1",
 		"Stop-Computer -Force",
 		"SerialPort 'COM1'",
 		`C:\warden\warden-run.log`,
