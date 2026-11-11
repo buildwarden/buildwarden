@@ -1556,6 +1556,17 @@ rule changes BOOT-06 (reworded at r3, to re-approve) and BOOT-07.
     note.
   - Unchanged and still approved or confirmed: Decisions 1, 3 to 5, 7 and 8,
     a1 to a9 and a11 to a13.
+- **Re-review r3, 2026-11-11: approved at `cbb2cda`** (Jeff, workflow-human,
+  FLOW-19; page https://claude.ai/artifact/VnT6LdGvg8wBUmVHhG3ZkS). Rule change
+  BOOT-06 approved at `cbb2cda` (the r3 paragraph citing RELAY-08); rule change
+  BOOT-07's approval at `0df0a64` stands. Assumptions a14 (every VM driver
+  always sends `upstream_dns`; an absent field means the relay's own
+  `resolv.conf`), a15 (one ordered list fixed at the claim, all modes) and a16
+  (qemu-any and macos-vz blocking) confirmed as drafted, (a) each. Accepted
+  with them: container mode loses its `8.8.8.8` fallback, and vz no longer
+  follows macOS split DNS unless `[vm] dns` names those resolvers. What
+  changed since r2: Decisions 2 and 6, the BOOT-06 paragraph, Defaults and
+  overrides, the blocking hosts. No changes folded in.
 
 ## Consolidation
 
