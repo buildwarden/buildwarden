@@ -5,7 +5,7 @@ kind: process
 follows: design-approved-rule-changes
 status: in_progress
 round: process
-phase: 3
+phase: 4
 design: docs/design/rule-running-line-match.md
 branch: feat/rule-running-line-match
 alters_relationships: null
@@ -30,6 +30,13 @@ steps:
       expires: null
   - id: x3-merge
     phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
     affinity: cloud
     status: pending
     lease:
@@ -68,3 +75,9 @@ history:
   - at: 2026-11-10T11:28:37Z
     by: cloud/20261110T105938Z
     event: entered phase 3 (merge)
+  - at: 2026-11-11T10:57:06Z
+    by: cloud/20261111T105701Z
+    event: done x3-merge
+  - at: 2026-11-11T10:57:06Z
+    by: cloud/20261111T105701Z
+    event: entered phase 4 (close)
