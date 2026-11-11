@@ -96,20 +96,28 @@ func Doctor(w io.Writer, c Capabilities, link buildlink.Link,
 		}
 	}
 
-	ready, reason := c.Ready()
-	if imageBlocked && ready {
-		ready, reason = false, "the prepared base image cannot start builds (see above)"
-	}
-	if cacheBlocked && ready {
-		ready, reason = false, "Hyper-V cannot see the image cache (see above)"
-	}
-	if netBlocked && ready {
-		ready, reason = false, "a build's network checks fail (see Build network above)"
-	}
+	ready, reason := doctorVerdict(c, imageBlocked, cacheBlocked, netBlocked)
 	if !ready {
 		fmt.Fprintf(w, "\nNot ready: %s\n", reason)
 	}
 	return !ready
+}
+
+// doctorVerdict is whether builds can run, and if not the first reason: the
+// capabilities, then the image, the cache and the build network.
+func doctorVerdict(c Capabilities, imageBlocked, cacheBlocked,
+	netBlocked bool) (ready bool, reason string) {
+	ready, reason = c.Ready()
+	switch {
+	case !ready:
+	case imageBlocked:
+		return false, "the prepared base image cannot start builds (see above)"
+	case cacheBlocked:
+		return false, "Hyper-V cannot see the image cache (see above)"
+	case netBlocked:
+		return false, "a build's network checks fail (see Build network above)"
+	}
+	return ready, reason
 }
 
 // writeCacheVisibility reports whether files warden creates in the image cache
@@ -163,8 +171,9 @@ func writeNetworkStrategy(w io.Writer, c Capabilities) {
 		fmt.Fprintln(w, "  Network .............. OK (fresh per-build "+
 			"network, elevated - cleanest isolation)")
 		if c.DevSwitchPresent {
-			fmt.Fprintf(w, "                         (durable build switches '%s-<i>' "+
-				"present; used only for lower-privilege runs)\n", c.DevSwitch)
+			fmt.Fprintf(w, "                         (durable build switches "+
+				"'%s-<i>' present; used only for lower-privilege runs)\n",
+				c.DevSwitch)
 		}
 	case NetDelegateService:
 		fmt.Fprintln(w,

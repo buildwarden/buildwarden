@@ -84,14 +84,14 @@ func parseSetupSlots(out string) setupSlots {
 		case "REMOVED":
 			r.Removed = append(r.Removed, name)
 		case "BUSY":
-			r.Refusals = append(r.Refusals,
-				fmt.Sprintf("%s is above --slots but has VMs attached (%s)", name, detail))
+			r.Refusals = append(r.Refusals, fmt.Sprintf(
+				"%s is above --slots but has VMs attached (%s)", name, detail))
 		case "RETIRED":
 			r.Retired = name
 		case "OLDBUSY":
-			r.Refusals = append(r.Refusals, fmt.Sprintf(
-				"the old shared build switch %s is no longer used but has VMs attached (%s)",
-				name, detail))
+			r.Refusals = append(r.Refusals, fmt.Sprintf("the old shared build "+
+				"switch %s is no longer used but has VMs attached (%s)", name,
+				detail))
 		}
 	}
 	return r

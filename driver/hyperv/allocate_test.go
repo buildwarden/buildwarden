@@ -34,14 +34,14 @@ func TestAllocRelayIP(t *testing.T) {
 	}{
 		{"empty host", nil, "192.168.240.2"},
 		{"recorded skipped", map[string]string{
-			"warden-relay-a": relayNotes(netip.MustParseAddr("192.168.240.2"), "warden-a"),
-			"warden-relay-b": relayNotes(netip.MustParseAddr("192.168.240.3"), "warden-b"),
+			"warden-relay-a": relayNotes(netip.MustParseAddr("192.168.240.2"), "w-a"),
+			"warden-relay-b": relayNotes(netip.MustParseAddr("192.168.240.3"), "w-b"),
 		}, "192.168.240.4"},
 		{"a gap is reused", map[string]string{
-			"warden-relay-b": relayNotes(netip.MustParseAddr("192.168.240.3"), "warden-b"),
+			"warden-relay-b": relayNotes(netip.MustParseAddr("192.168.240.3"), "w-b"),
 		}, "192.168.240.2"},
 		{"outside the prefix ignored", map[string]string{
-			"warden-relay-x": relayNotes(netip.MustParseAddr("10.0.0.2"), "warden-x"),
+			"warden-relay-x": relayNotes(netip.MustParseAddr("172.31.0.2"), "w-x"),
 		}, "192.168.240.2"},
 	}
 	for _, tt := range tests {
@@ -72,7 +72,8 @@ func TestAllocRelayIPFull(t *testing.T) {
 	_, err = allocRelayIP(pfx, host, notes)
 	var fe *driver.FixableError
 	if !errors.As(err, &fe) || !strings.Contains(fe.Msg, "warden-relay-held (10.200.0.2)") ||
-		!strings.Contains(fe.Fix, "--keep-vms") || !strings.Contains(fe.Fix, "--nat-prefix") {
+		!strings.Contains(fe.Fix, "--keep-vms") ||
+		!strings.Contains(fe.Fix, "--nat-prefix") {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -100,7 +101,8 @@ func TestAllocSlot(t *testing.T) {
 	if !errors.As(err, &fe) ||
 		!strings.Contains(fe.Msg, "warden-dev-0 (warden-relay-a, warden-build-a)") ||
 		!strings.Contains(fe.Msg, "warden-dev-1 (warden-build-kept)") ||
-		!strings.Contains(fe.Fix, "--slots <more>") || !strings.Contains(fe.Fix, "elevated") {
+		!strings.Contains(fe.Fix, "--slots <more>") ||
+		!strings.Contains(fe.Fix, "elevated") {
 		t.Fatalf("err = %v", err)
 	}
 }
@@ -109,7 +111,8 @@ func TestAllocSlot(t *testing.T) {
 // keep their own switch and read none.
 func TestAllocateRelay(t *testing.T) {
 	ctx := context.Background()
-	pfx, host := netip.MustParsePrefix("192.168.240.0/20"), netip.MustParseAddr("192.168.240.1")
+	pfx := netip.MustParsePrefix("192.168.240.0/20")
+	host := netip.MustParseAddr("192.168.240.1")
 	fp := &buildFake{attached: map[string][]string{"warden-dev-0": {"warden-relay-z"}},
 		notes: map[string]string{"warden-relay-z": relayNotes(
 			netip.MustParseAddr("192.168.240.2"), "warden-dev-0")}}

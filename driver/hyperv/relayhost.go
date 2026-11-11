@@ -166,7 +166,8 @@ func StartRelay(ctx context.Context, prov Provisioner, cfg RelayHostConfig) (*Re
 	if _, err := sess.ClaimRelay(claimCtx, claimAddr, token, cfg.Request, cfg.Environment,
 		cfg.Request.Link().Claim(), RefreshRelayBootFix); err != nil {
 		_ = h.Close()
-		return nil, fmt.Errorf("StartRelay: relay VM %q at %s: %w", h.VMName, h.RelayIP, err)
+		return nil, fmt.Errorf("StartRelay: relay VM %q at %s: %w", h.VMName, h.RelayIP,
+			err)
 	}
 	return h, nil
 }

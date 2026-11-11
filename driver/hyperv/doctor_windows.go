@@ -18,7 +18,8 @@ func probeDoctorNet(c Capabilities) doctorNet {
 	dn.ReadBack = parseNetReadback(out)
 	p := &localProvisioner{}
 	ctx := context.Background()
-	if dn.Attached, err = p.SwitchAdapters(ctx, dn.ReadBack.slotNames(c.DevSwitch)); err != nil {
+	slots := dn.ReadBack.slotNames(c.DevSwitch)
+	if dn.Attached, err = p.SwitchAdapters(ctx, slots); err != nil {
 		dn.Err = err
 		return dn
 	}

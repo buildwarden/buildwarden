@@ -118,7 +118,8 @@ func TestLauncherStampWant(t *testing.T) {
 		}
 		if st.Blocks() != (tc.state != "current") ||
 			!strings.Contains(st.Report(), tc.state) {
-			t.Errorf("%s: Blocks = %v, Report = %q", tc.state, st.Blocks(), st.Report())
+			t.Errorf("%s: Blocks = %v, Report = %q", tc.state, st.Blocks(),
+				st.Report())
 		}
 	}
 }

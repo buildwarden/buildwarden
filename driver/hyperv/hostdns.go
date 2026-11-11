@@ -36,7 +36,8 @@ func parseDefaultRouteDNS(out string) (list []netip.Addr, source string, err err
 	}
 	if noRoute || alias == "" {
 		return nil, "", driver.Fixable("give the host an IPv4 default route, "+vmDNSFix,
-			"the host has no IPv4 default route, so it has no resolvers to give the relay")
+			"the host has no IPv4 default route, so it has no resolvers to give "+
+				"the relay")
 	}
 	source = "interface " + alias + " (the IPv4 default route's)"
 	if len(list) == 0 {

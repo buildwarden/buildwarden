@@ -243,10 +243,7 @@ func runBuild(
 	//    observable from the host without mounting the guest disk. The default
 	//    pipe name is derived from the build VM name; WARDEN_HYPERV_BUILD_COM_PIPE
 	//    overrides it for a deterministic path a reader can attach to in advance.
-	comPipe := os.Getenv("WARDEN_HYPERV_BUILD_COM_PIPE")
-	if comPipe == "" {
-		comPipe = `\\.\pipe\` + buildVM
-	}
+	comPipe := buildCOMPipe(buildVM)
 	fmt.Fprintf(os.Stderr,
 		"warden: build VM %q COM1 -> %s "+
 			"(attach a serial reader to observe guest boot)\n",
@@ -265,18 +262,8 @@ func runBuild(
 	}); err != nil {
 		return nil, fmt.Errorf("runBuild: create build VM: %w", err)
 	}
-	if len(cfg.Slots) > 0 {
-		// A durable slot is shared host infrastructure: before the build VM
-		// runs, its segment must hold this build's two VMs and nothing else
-		// (BOOT-01: the relay is the build VM's sole peer).
-		attached, err := prov.SwitchAdapters(ctx, []string{rh.BuildSwitch})
-		if err != nil {
-			return nil, fmt.Errorf("runBuild: %w", err)
-		}
-		if err := checkSlotAdapters(rh.BuildSwitch, attached[rh.BuildSwitch],
-			rh.VMName, buildVM); err != nil {
-			return nil, fmt.Errorf("runBuild: %w", err)
-		}
+	if err := verifySlot(ctx, prov, cfg, rh, buildVM); err != nil {
+		return nil, fmt.Errorf("runBuild: %w", err)
 	}
 	if err := prov.StartVM(ctx, buildVM); err != nil {
 		return nil, fmt.Errorf("runBuild: start build VM: %w", err)
@@ -313,6 +300,31 @@ func runBuild(
 		return nil, fmt.Errorf("runBuild: %w", err)
 	}
 	return &driver.BuildResult{OutputDir: cfg.OutputDir}, nil
+}
+
+// buildCOMPipe is the build VM's COM1 pipe: WARDEN_HYPERV_BUILD_COM_PIPE, or
+// one named after the VM.
+func buildCOMPipe(buildVM string) string {
+	if p := os.Getenv("WARDEN_HYPERV_BUILD_COM_PIPE"); p != "" {
+		return p
+	}
+	return `\\.\pipe\` + buildVM
+}
+
+// verifySlot re-reads a durable build's slot before its build VM runs: the
+// slot is shared host infrastructure, so its segment must hold this build's
+// two VMs and nothing else (BOOT-01: the relay is the build VM's sole peer).
+// An ephemeral build's switch is its own and is not re-read.
+func verifySlot(ctx context.Context, prov Provisioner, cfg buildConfig, rh *RelayHost,
+	buildVM string) error {
+	if len(cfg.Slots) == 0 {
+		return nil
+	}
+	attached, err := prov.SwitchAdapters(ctx, []string{rh.BuildSwitch})
+	if err != nil {
+		return err
+	}
+	return checkSlotAdapters(rh.BuildSwitch, attached[rh.BuildSwitch], rh.VMName, buildVM)
 }
 
 // checkSlotAdapters refuses a durable build switch whose attached adapters

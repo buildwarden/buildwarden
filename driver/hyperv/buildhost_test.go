@@ -42,10 +42,10 @@ type buildFake struct {
 	notes    map[string]string   // relay VM -> Notes
 	// intruder, when set, is attached to the relay's build switch as the relay
 	// VM is created: a foreign VM on the build's segment.
-	intruder     string
+	intruder string
 	// serveToken, when set, is the token the simulated relay requires in
 	// place of its seed's.
-	serveToken string
+	serveToken   string
 	adapterCalls atomic.Int32
 	seed         atomic.Value // string: the relay seed the relay VM was created with
 	lastRelay    atomic.Value // RelayVMSpec
@@ -137,6 +137,7 @@ func (f *buildFake) StartVM(_ context.Context, name string) error {
 }
 
 func (f *buildFake) StopVM(context.Context, string) error { return nil }
+
 // RemoveVM forgets the VM's Notes and adapters, as Hyper-V frees its address
 // and slot.
 func (f *buildFake) RemoveVM(_ context.Context, name string) error {
@@ -599,7 +600,8 @@ func TestCheckSlotAdapters(t *testing.T) {
 		{[]string{r, b, "warden-relay-y"}, false},
 	}
 	for _, tt := range tests {
-		if err := checkSlotAdapters("warden-dev-0", tt.attached, r, b); (err == nil) != tt.ok {
+		err := checkSlotAdapters("warden-dev-0", tt.attached, r, b)
+		if (err == nil) != tt.ok {
 			t.Errorf("%v: err = %v", tt.attached, err)
 		}
 	}

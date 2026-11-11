@@ -55,6 +55,8 @@ func (unsupportedProvisioner) ListVMs(context.Context, string) ([]string, error)
 func (unsupportedProvisioner) RelayNotes(context.Context) (map[string]string, error) {
 	return nil, errUnsupported()
 }
-func (unsupportedProvisioner) SwitchAdapters(context.Context, []string) (map[string][]string, error) {
+func (unsupportedProvisioner) SwitchAdapters(
+	context.Context, []string,
+) (map[string][]string, error) {
 	return nil, errUnsupported()
 }

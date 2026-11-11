@@ -84,8 +84,9 @@ try {
 		script := "$re = '^' + [regex]::Escape('" + sw + "') + '-[0-9]+$'\n" +
 			"$slots = @(Get-VMSwitch -ErrorAction SilentlyContinue | " +
 			"Where-Object { $_.Name -match $re }).Count\n" +
-			"$old = if (Get-VMSwitch -Name '" + sw + "' -ErrorAction SilentlyContinue) " +
-			"{ 1 } else { 0 }\n\"SLOTS=$slots OLD=$old\""
+			"$old = if (Get-VMSwitch -Name '" + sw +
+			"' -ErrorAction SilentlyContinue) { 1 } else { 0 }\n" +
+			"\"SLOTS=$slots OLD=$old\""
 		if out, err := runPS(script); err == nil {
 			slots, old := devSwitchProbe(out)
 			c.DevSwitchPresent = slots > 0

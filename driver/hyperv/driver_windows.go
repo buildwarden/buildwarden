@@ -227,8 +227,8 @@ func (d *Driver) provisionBuildNetwork(
 		bp := prov
 		cleanup = func() {
 			if req.KeepVMs {
-				fmt.Fprintf(os.Stderr,
-					"warden: --keep-vms: leaving ephemeral network %q\n", buildSwitch)
+				fmt.Fprintf(os.Stderr, "warden: --keep-vms: leaving ephemeral "+
+					"network %q\n", buildSwitch)
 				return
 			}
 			// Background ctx so teardown runs even when ctx is already cancelled.

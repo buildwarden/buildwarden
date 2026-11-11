@@ -69,8 +69,8 @@ if ($natName) {
         throw "switch '$natName' exists but is $($natSw.SwitchType); expected Internal"
     }
     $alias = "vEthernet ($natName)"
-    $hasIP = Get-NetIPAddress -InterfaceAlias $alias -IPAddress '%[3]s' -ErrorAction SilentlyContinue
-    if (-not $hasIP) {
+    $ip = Get-NetIPAddress -InterfaceAlias $alias -IPAddress '%[3]s' -ErrorAction SilentlyContinue
+    if (-not $ip) {
         New-NetIPAddress -IPAddress '%[3]s' -PrefixLength %[4]d -InterfaceAlias $alias | Out-Null
     }
     if (-not (Get-NetNat -Name $natName -ErrorAction SilentlyContinue)) {
@@ -83,7 +83,8 @@ if ($natName) {
 "NAT=$natName"
 "REUSED=$reused"
 "PREFIX=$((Get-NetNat -Name $natName).InternalIPInterfaceAddressPrefix)"
-Get-NetIPAddress -InterfaceAlias "vEthernet ($natName)" -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+$alias = "vEthernet ($natName)"
+Get-NetIPAddress -InterfaceAlias $alias -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     ForEach-Object { "HOSTIP=$($_.IPAddress)" }
 `, name, nat, hostIP, prefixLen, prefix, devNAT), nil
 }

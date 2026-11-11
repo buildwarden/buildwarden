@@ -117,7 +117,8 @@ func writeSlots(w io.Writer, network string, dn doctorNet) {
 				holders[i] += " (" + ip.String() + ")"
 			}
 		}
-		fmt.Fprintf(w, "  %sin use by %s\n", dotted("Slot "+sw), strings.Join(holders, ", "))
+		fmt.Fprintf(w, "  %sin use by %s\n", dotted("Slot "+sw),
+			strings.Join(holders, ", "))
 	}
 }
 

@@ -132,7 +132,8 @@ func RunSetup(ctx context.Context, w io.Writer, opts SetupOptions) error {
 		res.NATName, res.NATPrefix, res.HostIP)
 	fmt.Fprintf(w, "  build switches (Private)  %s\n", strings.Join(slots.Slots, ", "))
 	for _, sw := range slots.Removed {
-		fmt.Fprintf(w, "  removed %s (above --slots %d, nothing attached)\n", sw, opts.Slots)
+		fmt.Fprintf(w, "  removed %s (above --slots %d, nothing attached)\n", sw,
+			opts.Slots)
 	}
 	if slots.Retired != "" {
 		fmt.Fprintf(w, "  retired %s (the shared build switch earlier setups made; "+

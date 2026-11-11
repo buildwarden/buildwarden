@@ -36,8 +36,11 @@ func TestLiveRelayHostEndToEnd(t *testing.T) {
 	// Clear any leftover VM from a prior run before starting.
 	_ = prov.RemoveVM(context.Background(), "warden-relay-livee2e")
 
-	res, err := prov.(*localProvisioner).VerifyNetwork(context.Background(),
-		DefaultDevSwitch)
+	lp, ok := prov.(*localProvisioner)
+	if !ok {
+		t.Fatalf("provisioner %T is not the local one", prov)
+	}
+	res, err := lp.VerifyNetwork(context.Background(), DefaultDevSwitch)
 	if err != nil {
 		t.Fatalf("VerifyNetwork: %v", err)
 	}

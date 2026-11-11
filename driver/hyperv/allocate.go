@@ -123,7 +123,8 @@ func allocateRelay(ctx context.Context, prov Provisioner, prefix netip.Prefix,
 			prefix)
 	}
 	if len(slots) == 0 && buildSwitch == "" {
-		return relayAllocation{}, fmt.Errorf("relay allocation: no build switch and no slots")
+		return relayAllocation{}, fmt.Errorf(
+			"relay allocation: no build switch and no slots")
 	}
 	notes, err := prov.RelayNotes(ctx)
 	if err != nil {

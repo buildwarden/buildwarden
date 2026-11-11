@@ -37,7 +37,7 @@ func (f *fakeProv) VMState(context.Context, string) (string, error)      { retur
 func (f *fakeProv) GuestKVP(context.Context, string) (map[string]string, error) {
 	return nil, nil
 }
-func (f *fakeProv) DisksInUse(context.Context) ([]string, error) { return nil, nil }
+func (f *fakeProv) DisksInUse(context.Context) ([]string, error)      { return nil, nil }
 func (f *fakeProv) ListVMs(context.Context, string) ([]string, error) { return nil, nil }
 func (f *fakeProv) RelayNotes(context.Context) (map[string]string, error) {
 	return nil, nil

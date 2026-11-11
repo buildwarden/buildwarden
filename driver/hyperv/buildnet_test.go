@@ -26,7 +26,8 @@ func TestCheckNATOverlap(t *testing.T) {
 	err := checkNATOverlap(nat, buildlink.Default())
 	var fe *driver.FixableError
 	if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "[vm] build_link") ||
-		!strings.Contains(fe.Fix, "--nat-prefix") || !strings.Contains(fe.Msg, "100.127.0.0/16") {
+		!strings.Contains(fe.Fix, "--nat-prefix") ||
+		!strings.Contains(fe.Msg, "100.127.0.0/16") {
 		t.Fatalf("err = %v", err)
 	}
 	if err := checkNATOverlap(netip.MustParsePrefix(DefaultNATPrefix),
@@ -60,7 +61,8 @@ func TestResolverRule(t *testing.T) {
 	var fe *driver.FixableError
 	if !errors.As(err, &fe) || !strings.Contains(fe.Msg, "127.0.0.1 (loopback)") ||
 		!strings.Contains(fe.Msg, "10.9.0.7 (assigned to this host)") ||
-		!strings.Contains(fe.Fix, "[vm] dns") || !strings.Contains(fe.Fix, "[vm] build_link") ||
+		!strings.Contains(fe.Fix, "[vm] dns") ||
+		!strings.Contains(fe.Fix, "[vm] build_link") ||
 		!strings.Contains(fe.Fix, "Ethernet") {
 		t.Fatalf("none usable: %v", err)
 	}

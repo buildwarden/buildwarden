@@ -36,7 +36,8 @@ func TestParseSetupSlots(t *testing.T) {
 		t.Errorf("clean setup: %+v", r)
 	}
 	r = parseSetupSlots("SLOT=warden-dev-0\tpresent\nBUSY=warden-dev-5\twarden-build-k\n" +
-		"WRONGTYPE=warden-dev-1\tInternal\nOLDBUSY=warden-dev\twarden-relay-a, warden-build-a\n")
+		"WRONGTYPE=warden-dev-1\tInternal\n" +
+		"OLDBUSY=warden-dev\twarden-relay-a, warden-build-a\n")
 	var fe *driver.FixableError
 	err := r.err()
 	if !errors.As(err, &fe) || r.Retired != "" {

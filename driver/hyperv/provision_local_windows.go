@@ -115,7 +115,8 @@ if ($natName) {
     "NAT=$natName"
     "PREFIX=$((Get-NetNat -Name $natName).InternalIPInterfaceAddressPrefix)"
     if (-not (Get-VMSwitch -Name $natName -ErrorAction SilentlyContinue)) { 'NATSWITCH=missing' }
-    Get-NetIPAddress -InterfaceAlias "vEthernet ($natName)" -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    $alias = "vEthernet ($natName)"
+Get-NetIPAddress -InterfaceAlias $alias -AddressFamily IPv4 -ErrorAction SilentlyContinue |
         ForEach-Object { "HOSTIP=$($_.IPAddress)" }
 }
 Get-VMSwitch -Name '%[1]s-*' -ErrorAction SilentlyContinue |
@@ -358,7 +359,8 @@ func (p *localProvisioner) SwitchAdapters(
 	}
 	out, err := runPS(fmt.Sprintf("$sw = @(%s)\n"+
 		"Get-VMNetworkAdapter -All | Where-Object { $sw -contains $_.SwitchName } | "+
-		"ForEach-Object { $_.SwitchName + \"`t\" + $_.VMName }", strings.Join(quoted, ",")))
+		"ForEach-Object { $_.SwitchName + \"`t\" + $_.VMName }",
+		strings.Join(quoted, ",")))
 	if err != nil {
 		return nil, fmt.Errorf("SwitchAdapters: %w", err)
 	}

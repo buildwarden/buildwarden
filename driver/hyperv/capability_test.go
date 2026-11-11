@@ -122,10 +122,12 @@ func TestNetworkStrategy(t *testing.T) {
 func healthyNet(Capabilities) doctorNet {
 	return doctorNet{
 		ReadBack: parseNetReadback("NAT=warden-dev-nat\nPREFIX=192.168.240.0/20\n" +
-			"HOSTIP=192.168.240.1\nSLOT=warden-dev-0\tPrivate\nSLOT=warden-dev-1\tPrivate\n" +
+			"HOSTIP=192.168.240.1\nSLOT=warden-dev-0\tPrivate\n" +
+			"SLOT=warden-dev-1\tPrivate\n" +
 			"SLOT=warden-dev-nat\tInternal\n"),
 		DNS: func() ([]netip.Addr, string, error) {
-			return []netip.Addr{netip.MustParseAddr("10.9.0.53")}, "interface Ethernet", nil
+			dns := []netip.Addr{netip.MustParseAddr("10.9.0.53")}
+			return dns, "interface Ethernet", nil
 		},
 		Host: []netip.Addr{netip.MustParseAddr("10.9.0.7")},
 	}

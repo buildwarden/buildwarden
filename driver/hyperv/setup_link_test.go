@@ -58,6 +58,30 @@ func TestRelayBootStamp(t *testing.T) {
 	if err := st.Check(); !errors.As(err, &fe) || fe.Fix != RefreshRelayBootFix {
 		t.Fatalf("an unstamped disk: %v", err)
 	}
+	override := filepath.Join(t.TempDir(), "my-relay.vhdx")
+	if err := os.WriteFile(override, []byte("vhdx"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("WARDEN_RELAY_BOOT_VHDX", override)
+	if got := relayBootStamp().Path; got != strings.TrimSuffix(override, ".vhdx")+
+		".link-channel" {
+		t.Fatalf("override stamp path = %s", got)
+	}
+}
+
+// TestRelayBootStampChannel: the relay boot VHDX's stamp must hold
+// relayBootChannel: unstamped and 1 are refused and BLOCKED in doctor, each
+// naming refresh-cache.sh, and 2 is current.
+func TestRelayBootStampChannel(t *testing.T) {
+	dir := t.TempDir()
+	t.Setenv("WARDEN_HYPERV_CACHE_DIR", dir)
+	t.Setenv("WARDEN_RELAY_BOOT_VHDX", "")
+	if err := os.WriteFile(filepath.Join(dir, "relay-boot.vhdx"), []byte("vhdx"),
+		0o644); err != nil {
+		t.Fatal(err)
+	}
+	st := relayBootStamp()
+	var fe *driver.FixableError
 	if !st.Blocks() || !strings.Contains(st.Report(), "BLOCKED") ||
 		!strings.Contains(st.Report(), "missing") {
 		t.Errorf("an unstamped disk's doctor line: %s", st.Report())
@@ -79,14 +103,5 @@ func TestRelayBootStamp(t *testing.T) {
 	}
 	if err := st.Check(); err != nil || st.Blocks() {
 		t.Fatalf("a disk stamped 2: %v", err)
-	}
-	override := filepath.Join(t.TempDir(), "my-relay.vhdx")
-	if err := os.WriteFile(override, []byte("vhdx"), 0o644); err != nil {
-		t.Fatal(err)
-	}
-	t.Setenv("WARDEN_RELAY_BOOT_VHDX", override)
-	if got := relayBootStamp().Path; got != strings.TrimSuffix(override, ".vhdx")+
-		".link-channel" {
-		t.Fatalf("override stamp path = %s", got)
 	}
 }

@@ -21,7 +21,8 @@ func TestParseEnsureNetworkReadback(t *testing.T) {
 		wantHost   string
 	}{
 		{"fresh per-build nat",
-			"NAT=warden-abc123-nat\nREUSED=0\nPREFIX=192.168.240.0/20\nHOSTIP=192.168.240.1\n",
+			"NAT=warden-abc123-nat\nREUSED=0\nPREFIX=192.168.240.0/20\n" +
+				"HOSTIP=192.168.240.1\n",
 			"warden-abc123-nat", false, "192.168.240.0/20", "192.168.240.1"},
 		{"reused dev nat on the user's prefix",
 			"noise\r\nNAT=warden-dev-nat\r\nREUSED=1\r\nPREFIX=10.200.0.0/24\r\n" +
@@ -67,22 +68,27 @@ func TestDurableResources(t *testing.T) {
 	const base = "NAT=warden-dev-nat\nPREFIX=10.200.0.0/24\nHOSTIP=10.200.0.1\n"
 	res, err := parseNetReadback(base + "SLOT=warden-dev-10\tPrivate\n" +
 		"SLOT=warden-dev-2\tPrivate\nSLOT=warden-dev-nat\tInternal\n" +
-		"SLOT=warden-dev-x\tPrivate\nSLOT=warden-dev-0\tPrivate\n").durableResources("warden-dev")
+		"SLOT=warden-dev-x\tPrivate\nSLOT=warden-dev-0\tPrivate\n").
+		durableResources("warden-dev")
 	if err != nil {
 		t.Fatal(err)
 	}
 	if strings.Join(res.Slots, ",") != "warden-dev-0,warden-dev-2,warden-dev-10" ||
 		res.NATPrefix != netip.MustParsePrefix("10.200.0.0/24") ||
-		res.HostIP != netip.MustParseAddr("10.200.0.1") || res.NATName != "warden-dev-nat" {
+		res.HostIP != netip.MustParseAddr("10.200.0.1") ||
+		res.NATName != "warden-dev-nat" {
 		t.Errorf("got %+v", res)
 	}
 	for name, tt := range map[string]struct{ out, want string }{
-		"no NAT":         {"SLOT=warden-dev-0\tPrivate\n", "NAT \"warden-dev-nat\" is missing"},
-		"no NAT switch":  {base + "NATSWITCH=missing\nSLOT=warden-dev-0\tPrivate\n", "no vSwitch"},
-		"no slots":       {base + "SLOT=warden-dev-nat\tInternal\n", "has no build switches"},
-		"internal slot":  {base + "SLOT=warden-dev-0\tInternal\n", "isolation compromised"},
-		"no host in pfx": {"NAT=warden-dev-nat\nPREFIX=10.200.0.0/24\nSLOT=warden-dev-0\tPrivate\n",
-			"no address in its prefix"},
+		"no NAT": {"SLOT=warden-dev-0\tPrivate\n",
+			"NAT \"warden-dev-nat\" is missing"},
+		"no NAT switch": {base + "NATSWITCH=missing\nSLOT=warden-dev-0\tPrivate\n",
+			"no vSwitch"},
+		"no slots": {base + "SLOT=warden-dev-nat\tInternal\n",
+			"has no build switches"},
+		"internal slot": {base + "SLOT=warden-dev-0\tInternal\n", "isolation compromised"},
+		"no host in pfx": {"NAT=warden-dev-nat\nPREFIX=10.200.0.0/24\n" +
+			"SLOT=warden-dev-0\tPrivate\n", "no address in its prefix"},
 	} {
 		_, err := parseNetReadback(tt.out).durableResources("warden-dev")
 		var fe *driver.FixableError
@@ -99,8 +105,8 @@ func TestDurableResources(t *testing.T) {
 // made; a reused NAT is never re-addressed; setup's spec makes no Private
 // switch.
 func TestEnsureNetworkScriptNATOrder(t *testing.T) {
-	s, err := ensureNetworkScript(NetworkSpec{SwitchName: "warden-abc", NATPrefix: DefaultNATPrefix,
-		HostIP: DefaultHostIP, DevNAT: "warden-dev-nat"})
+	s, err := ensureNetworkScript(NetworkSpec{SwitchName: "warden-abc",
+		NATPrefix: DefaultNATPrefix, HostIP: DefaultHostIP, DevNAT: "warden-dev-nat"})
 	if err != nil {
 		t.Fatal(err)
 	}

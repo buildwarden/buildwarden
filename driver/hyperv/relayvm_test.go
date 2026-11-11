@@ -133,7 +133,7 @@ func TestBuildRelayVMScript_EscapesQuotes(t *testing.T) {
 func TestBuildRelayVMScript_SeedAndNotes(t *testing.T) {
 	spec := validRelaySpec()
 	spec.SeedISO = `C:\it's\relay-seed.iso`
-	spec.Notes = "warden-relay-ip=10.0.0.2 warden-relay-switch=it's-0"
+	spec.Notes = "warden-relay-ip=172.31.0.2 warden-relay-switch=it's-0"
 	spec.BuildSwitch = "warden-dev-3"
 	script, err := buildRelayVMScript(spec)
 	if err != nil {
@@ -141,7 +141,7 @@ func TestBuildRelayVMScript_SeedAndNotes(t *testing.T) {
 	}
 	for _, want := range []string{
 		`Add-VMDvdDrive -VMName 'warden-relay-abc' -Path 'C:\it''s\relay-seed.iso'`,
-		`Set-VM -Name 'warden-relay-abc' -Notes 'warden-relay-ip=10.0.0.2 ` +
+		`Set-VM -Name 'warden-relay-abc' -Notes 'warden-relay-ip=172.31.0.2 ` +
 			`warden-relay-switch=it''s-0'`,
 		`-SwitchName 'warden-dev-3' | Out-Null`,
 	} {

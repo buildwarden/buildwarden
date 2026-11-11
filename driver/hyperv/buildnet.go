@@ -88,10 +88,10 @@ func relayResolvers(hostDNS hostDNSSource, host []netip.Addr, nat netip.Prefix,
 	fix := "give the host an off-host DNS server (on " + source + "), " + vmDNSFix
 	for _, e := range excluded {
 		if resolvers.InLink(link, e.Addr) {
-			fix = "give the host an off-host DNS server outside the build link " +
-				link.String() + " (on " + source + "), or set [vm] build_link in " +
-				"warden.toml (or --build-link) to a /30 that holds none of the " +
-				"host's resolvers, " + vmDNSFix
+			fix = "give the host an off-host DNS server outside the build " +
+				"link " + link.String() + " (on " + source + "), or set [vm] " +
+				"build_link in warden.toml (or --build-link) to a /30 that " +
+				"holds none of the host's resolvers, " + vmDNSFix
 		}
 	}
 	what := "none on " + source
