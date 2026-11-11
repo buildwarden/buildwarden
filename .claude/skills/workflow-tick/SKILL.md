@@ -94,7 +94,7 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
    Close (FLOW-16) takes no PR and no human step: confirm the branch head is
    in `origin/main`, remove any worktree on the branch, `git branch -d` it
    (a squash-merged branch: `git branch -D`, only once `dist/wf check` has
-   passed on its equal tree; never `-D` otherwise), clear the feature's
+   passed on it; never `-D` otherwise), clear the feature's
    validation leftovers outside the documented caches, then go to 5. If the remote branch is still there,
    release the step and add a `human` step `f8-escalate-branch` whose note
    gives the exact `git push origin --delete <branch>` command, and make
