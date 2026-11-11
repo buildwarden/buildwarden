@@ -9,8 +9,9 @@ alters_relationships: false
 design_review: required
 native_validation: []
 tier2_gaps: []
-rules: [FLOW-03, FLOW-04, FLOW-05, FLOW-08, FLOW-09, FLOW-13, FLOW-14, FLOW-17,
-  FLOW-19, GLOBAL-01, GLOBAL-09, GLOBAL-10, GLOBAL-11, TEST-01, TEST-02]
+rules: [FLOW-03, FLOW-04, FLOW-05, FLOW-08, FLOW-09, FLOW-12, FLOW-13, FLOW-14,
+  FLOW-15, FLOW-17, FLOW-19, GLOBAL-01, GLOBAL-09, GLOBAL-10, GLOBAL-11,
+  TEST-01, TEST-02, UX-01]
 rule_changes: []
 concepts: [workflow, queue, queue-order, wf-next, merge-wait, process-item,
   pr-slot, follow-up]
@@ -37,8 +38,8 @@ puts an in-progress process item in class 1 "except while it waits for the
 human's merge". FLOW-03's phase-7 row (`process.md:116`) says "The loop
 confirms it; there is no step for the human to claim". The workflow branch's
 `README.md:100` says `f7-merge` "takes no claim or budget". The code gets
-part of this right. `Class()` drops a merge-waiting item out of class 1
-(`queue.go:254-266`). But it lands in its own class, where `Next` still
+part of this right. `Class()` (`queue.go:240-252`) drops a merge-waiting item out of class 1
+through `inImplementation()` (`queue.go:254-265`). But it lands in its own class, where `Next` still
 offers its merge step like any other cloud step:
 
 - `Next` walks `Ordered()` and returns the first in-progress item with a ready
@@ -86,7 +87,8 @@ Before #103, `Next` did the same: it returned the first in-progress item with
 a ready step, in priority order (`49e5354^:tools/workflow/queue/next.go:85-106`).
 The tests lock the behavior in. `TestNextTakesImplementationFirst` expects
 `proc x3-merge` once the class-1 feature blocks (`queue_test.go:217-219`).
-`TestPRSlotIsSerial` expects `a f7-merge` (`queue_test.go:570-572`). Until
+`TestPRSlotIsSerial` expects `a f7-merge` twice (`queue_test.go:570-572` and
+`:580-584`). Until
 11-10, unmerged merge steps were rare, short-lived, and usually alone, so
 judgment covered them. With two process PRs waiting and a ready fix behind
 them, judgment did not cover them.
@@ -123,8 +125,11 @@ them, judgment did not cover them.
    and `x3-merge` (process phase 3), parsed by `stepTemplates`
    (`phases.go:120-134`). `ready()` (`next.go:156-190`) skips such a step for
    every worker, before the affinity test. It adds
-   `the human's merge of PR #<n> (FLOW-08)` to the item's wait reasons, using
-   `prRef` (`summary.go:94-99`), or `no PR recorded` when there is no PR.
+   `the human's merge of PR #<n> (FLOW-08)` to the item's wait reasons when
+   `f.PR.Number > 0` (`<n>` formatted as `prRef` does, `summary.go:94-99`),
+   and exactly `the human's merge (no PR recorded, FLOW-08)` when `f.PR` is
+   nil or its `Number` is 0. It is built inline, not from `prRef`'s output:
+   `if f.PR != nil && f.PR.Number > 0 { fmt.Sprintf("the human's merge of PR #%d (FLOW-08)", n) } else { "the human's merge (no PR recorded, FLOW-08)" }`.
    `Next` then records the item as `blocked` and walks on (`next.go:111-112`),
    exactly as for a human step. `NextFor` goes through `ready()` too
    (`next.go:270-273`), so an attended `-feature` run on a merge-waiting item
@@ -255,9 +260,12 @@ Queue (`tools/workflow/queue`):
 ```text
 IsMerge(st):  stepTemplates(st.ID) ok, a template step, name "merge",
               and (feature, phase 7) or (process, phase 3); any -r<n>
+mergeWait(f): f.PR nil or f.PR.Number == 0
+                -> "the human's merge (no PR recorded, FLOW-08)"
+              else "the human's merge of PR #<n> (FLOW-08)"
 ready(f, worker):
   for each pending, Offered, needs-done step st:
-    IsMerge(st)            -> wait "the human's merge of <prRef(f)> (FLOW-08)"
+    IsMerge(st)            -> wait mergeWait(f)
     affinity mismatch      -> wait "<affinity> step <id>"   (as today)
     leased to another      -> wait                           (as today)
     cloud and cloudHold    -> wait                           (as today)
@@ -279,8 +287,9 @@ change and `IsMerge`. Replaying the workflow branch:
 - `f177cdd`: `next build-link-subnet f1-design-r2`. This is what the
   2026-11-04 tick did by hand.
 - `cb67d90`: `next security-suite f1-design`.
-- `go test ./queue/` fails only the two assertions named in the Problem
-  section.
+- `go test ./queue/` fails `TestNextTakesImplementationFirst` (`:217-219`)
+  and `TestPRSlotIsSerial` (`:570-572`, and `:580-584` once the first is
+  reworked).
 
 Skill and docs:
 
@@ -335,7 +344,12 @@ new input. The change only removes steps from what `wf next` offers.
     - An `-r2` merge step (`f7-merge-r2`) is skipped too.
     - A host worker and a human worker get the merge reason, not
       `cloud step x3-merge`.
-    - With no PR recorded, the reason says `no PR recorded`.
+    - With no PR recorded (`f.PR` nil, and separately `f.PR.Number == 0`),
+      the wait reason equals exactly
+      `the human's merge (no PR recorded, FLOW-08)`, and `blocked` reads
+      `waiting on the human's merge (no PR recorded, FLOW-08)`. The test
+      asserts these whole strings, not a substring; `TestPRSlotIsSerial`'s
+      feature a (no PR) asserts the full `blocked` string the same way.
     - `NextFor` on the merge-waiting item returns no pick and the reason.
   - New `TestIsMerge`: `f7-merge`, `f7-merge-r2` and `x3-merge` are merge
     steps. `f6-merge-main`, `x2-implement`, an added `f7-other` and
@@ -343,9 +357,11 @@ new input. The change only removes steps from what `wf next` offers.
   - Rework `TestNextTakesImplementationFirst` (`queue_test.go:217-219`):
     once the class-1 feature blocks, `Next` returns no pick, and `blocked`
     holds the merge reason.
-  - Rework `TestPRSlotIsSerial` (`queue_test.go:570-572`): with a at
-    `f7-merge` holding the slot, b reports the PR-slot reason and a the
-    merge reason, and there is no pick. The rest of the test is unchanged.
+  - Rework `TestPRSlotIsSerial` at both merge assertions,
+    `queue_test.go:570-572` and `:580-584`. With a at `f7-merge` holding the
+    slot, there is no pick, and `blocked` holds b with the PR-slot reason and
+    a with the merge reason, in either `s.Features` order. The middle
+    assertion (`:575-577`, `b f6-merge-main` once a is done) is unchanged.
   - `queue_test.go:198-203` (a fix starts ahead of a phase-7 merge check)
     and the hosts tests pass unchanged.
 - **`tools/workflow/cmd/wf`** has no `_test.go`. Its `next` printing is
@@ -367,8 +383,8 @@ one commit each, each green:
    skips a merge step for every worker with the merge-wait reason. The doc
    comments on `ready` and `Next` (`:79-88`) say so. Tests:
    `TestNextSkipsMergeWait`, and the rework of
-   `TestNextTakesImplementationFirst` and `TestPRSlotIsSerial` (TEST-01,
-   TEST-02).
+   `TestNextTakesImplementationFirst` (`queue_test.go:217-219`) and
+   `TestPRSlotIsSerial` (`:570-572` and `:580-584`) (TEST-01, TEST-02).
 3. `docs/development/process.md` (FLOW-05; Decision 3): the blocking-list
    sentence.
 4. `.claude/skills/workflow-tick/SKILL.md` (FLOW-14; Decision 2): step 2's
