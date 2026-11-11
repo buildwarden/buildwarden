@@ -113,8 +113,9 @@ type VMHandle struct {
 // template is set; it boots a per-build differencing overlay off the static,
 // read-only boot VHDX so the shared base is never written and concurrent relay
 // VMs never collide; it has two NICs (NIC1/eth0 = the Private build link,
-// NIC2/eth1 = the NAT upstream); and COM1 is wired to a host named pipe that
-// carries init's readiness echo and the relay's stdout.
+// NIC2/eth1 = the NAT upstream); COM1 is wired to a host named pipe that
+// carries init's readiness echo and the relay's stdout; and the per-build
+// relay seed is attached as a DVD, the relay's boot channel.
 type RelayVMSpec struct {
 	Name        string
 	MemoryMB    int    // default 512
@@ -124,4 +125,10 @@ type RelayVMSpec struct {
 	BuildSwitch string // Private switch; NIC1 = build link (eth0)
 	NATSwitch   string // Internal NAT switch; NIC2 = upstream (eth1)
 	COMPipePath string // e.g. \\.\pipe\<name>, wired to COM1
+	// SeedISO is the relay seed (RelaySeedLabel), attached as a DVD.
+	SeedISO string
+	// Notes is written to the VM's Notes before it is started: the relay's
+	// address and build switch, which the allocator of every warden process
+	// reads back (relayNotes).
+	Notes string
 }

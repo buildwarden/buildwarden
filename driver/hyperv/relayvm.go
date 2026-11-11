@@ -23,6 +23,10 @@ import (
 //     uses.
 //   - COM1 is wired to a host named pipe: init echoes readiness there and the
 //     relay's stdout/stderr are routed to it for host-visible diagnostics.
+//   - The relay seed ISO is attached as a DVD and the VM's Notes record its
+//     address and build switch, both while the VM is off: the init reads the
+//     seed before it configures anything, and the Notes are what concurrent
+//     builds' allocators see as taken (allocate.go).
 //
 // The whole thing is one $ErrorActionPreference='Stop' script so a partial
 // failure surfaces as a single error rather than a half-created VM without
@@ -41,6 +45,10 @@ func buildRelayVMScript(spec RelayVMSpec) (string, error) {
 		return "", fmt.Errorf("relay VM: empty NAT switch")
 	case spec.COMPipePath == "":
 		return "", fmt.Errorf("relay VM: empty COM1 pipe path")
+	case spec.SeedISO == "":
+		return "", fmt.Errorf("relay VM: empty relay seed ISO path")
+	case spec.Notes == "":
+		return "", fmt.Errorf("relay VM: empty Notes")
 	}
 
 	mem := spec.MemoryMB
@@ -75,6 +83,9 @@ func buildRelayVMScript(spec RelayVMSpec) (string, error) {
 	// COM1 -> host named pipe: readiness echo + relay stdout.
 	fmt.Fprintf(&b, "Set-VMComPort -VMName '%s' -Number 1 -Path '%s'\n",
 		name, psEscapeSingle(spec.COMPipePath))
+	fmt.Fprintf(&b, "Add-VMDvdDrive -VMName '%s' -Path '%s'\n",
+		name, psEscapeSingle(spec.SeedISO))
+	fmt.Fprintf(&b, "Set-VM -Name '%s' -Notes '%s'\n", name, psEscapeSingle(spec.Notes))
 	b.WriteString("'OK'\n")
 	return b.String(), nil
 }

@@ -13,6 +13,8 @@ func validRelaySpec() RelayVMSpec {
 		BuildSwitch: "warden-dev",
 		NATSwitch:   "warden-dev-nat",
 		COMPipePath: `\\.\pipe\warden-relay-abc`,
+		SeedISO:     `C:\warden\builds\abc\relay-seed.iso`,
+		Notes:       "warden-relay-ip=192.168.240.2 warden-relay-switch=warden-dev-0",
 	}
 }
 
@@ -101,6 +103,8 @@ func TestBuildRelayVMScript_Validation(t *testing.T) {
 		"build":   func(s *RelayVMSpec) { s.BuildSwitch = "" },
 		"nat":     func(s *RelayVMSpec) { s.NATSwitch = "" },
 		"com":     func(s *RelayVMSpec) { s.COMPipePath = "" },
+		"seed":    func(s *RelayVMSpec) { s.SeedISO = "" },
+		"notes":   func(s *RelayVMSpec) { s.Notes = "" },
 	}
 	for name, mutate := range cases {
 		spec := validRelaySpec()
