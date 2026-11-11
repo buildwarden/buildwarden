@@ -17,9 +17,9 @@ import (
 // returns once the relay reports ready over the tunnel). This is the first point
 // the boot image, claim, tunnel, collector and CreateRelayVM all run together.
 //
-// Gated on WARDEN_HYPERV_LIVE=1. Needs the warden-dev / warden-dev-nat switches
-// with the host gateway 192.168.240.1 assigned, and a built boot VHDX
-// (WARDEN_RELAY_BOOT_VHDX). Never runs in normal CI.
+// Gated on WARDEN_HYPERV_LIVE=1. Needs the durable network from `warden setup
+// --driver hyperv` (warden-dev-nat and the warden-dev-<i> slot switches) and a
+// built boot VHDX (WARDEN_RELAY_BOOT_VHDX). Never runs in normal CI.
 func TestLiveRelayHostEndToEnd(t *testing.T) {
 	if os.Getenv("WARDEN_HYPERV_LIVE") != "1" {
 		t.Skip("set WARDEN_HYPERV_LIVE=1 to run the live relay-host end-to-end test")
@@ -36,13 +36,21 @@ func TestLiveRelayHostEndToEnd(t *testing.T) {
 	// Clear any leftover VM from a prior run before starting.
 	_ = prov.RemoveVM(context.Background(), "warden-relay-livee2e")
 
+	res, err := prov.(*localProvisioner).VerifyNetwork(context.Background(),
+		DefaultDevSwitch)
+	if err != nil {
+		t.Fatalf("VerifyNetwork: %v", err)
+	}
 	h, err := StartRelay(context.Background(), prov, RelayHostConfig{
 		BuildID:      "livee2e",
 		OutputDir:    dir,
 		BootVHDX:     boot,
 		OverlayVHDX:  overlay,
-		BuildSwitch:  "warden-dev",
-		NATSwitch:    "warden-dev-nat",
+		Slots:        res.Slots,
+		NATSwitch:    res.NATName,
+		NATPrefix:    res.NATPrefix,
+		HostIP:       res.HostIP,
+		SeedDir:      filepath.Join(dir, "relay-seed"),
 		ReadyTimeout: 120 * time.Second,
 	})
 	if err != nil {

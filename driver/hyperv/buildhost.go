@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,11 +58,19 @@ type buildConfig struct {
 	// base disk or the VM won't boot. Zero defaults to 2.
 	Generation int
 
-	// Network. Both VMs share the Private build switch (relay <-> build only);
-	// the relay additionally attaches the NAT switch for controlled egress. The
-	// build VM never attaches to the NAT switch.
+	// Network. Both VMs share a Private build switch (relay <-> build only):
+	// the ephemeral strategy's BuildSwitch, or the lowest free of the durable
+	// strategy's Slots, which StartRelay allocates. The relay additionally
+	// attaches the NAT switch for controlled egress, at an address it
+	// allocates in NATPrefix with HostIP as its gateway. The build VM never
+	// attaches to the NAT switch.
 	BuildSwitch string
+	Slots       []string
 	NATSwitch   string
+	NATPrefix   netip.Prefix
+	HostIP      netip.Addr
+	// RelaySeedDir is where the relay seed is staged (under the work dir).
+	RelaySeedDir string
 
 	MemoryMB int           // build VM; default 4096
 	CPUs     int           // build VM; default 4
@@ -80,9 +89,10 @@ type buildConfig struct {
 	// boots from); nil records none.
 	Environment *relaycfg.Environment
 
-	// Test hooks: host/relay addresses and ports (zero = production defaults).
-	relayIP      string
+	// Test hooks (zero = production defaults): the claim port, the relay
+	// seed ISO builder, and timings.
 	claimPort    int
+	makeSeedISO  func(seedDir, iso string) error
 	readyTimeout time.Duration
 	vmPoll       time.Duration // build VM state poll (zero = 3 s)
 }
@@ -107,10 +117,14 @@ func validateBuildConfig(cfg buildConfig) error {
 		return fmt.Errorf(
 			"runBuild: no seed media " +
 				"(need SeedISO for Linux or SeedVHDX for Windows)")
-	case cfg.BuildSwitch == "":
-		return fmt.Errorf("runBuild: empty build switch")
+	case (cfg.BuildSwitch == "") == (len(cfg.Slots) == 0):
+		return fmt.Errorf("runBuild: want exactly one of a build switch and slots")
 	case cfg.NATSwitch == "":
 		return fmt.Errorf("runBuild: empty NAT switch")
+	case !cfg.NATPrefix.IsValid() || !cfg.HostIP.IsValid():
+		return fmt.Errorf("runBuild: no NAT prefix and host IP")
+	case cfg.RelaySeedDir == "":
+		return fmt.Errorf("runBuild: empty relay seed dir")
 	}
 	// A differencing child must share its parent's on-disk format, so the build
 	// overlay's extension must match the base image's (.vhd child off a .vhd
@@ -173,14 +187,18 @@ func runBuild(
 		OutputDir:       cfg.OutputDir,
 		BootVHDX:        cfg.RelayBootVHDX,
 		OverlayVHDX:     cfg.RelayOverlay,
-		BuildSwitch:     cfg.BuildSwitch,
 		NATSwitch:       cfg.NATSwitch,
+		NATPrefix:       cfg.NATPrefix,
+		HostIP:          cfg.HostIP,
+		BuildSwitch:     cfg.BuildSwitch,
+		Slots:           cfg.Slots,
+		SeedDir:         cfg.RelaySeedDir,
+		MakeSeedISO:     cfg.makeSeedISO,
 		BuildScriptPath: cfg.BuildScriptPath,
 		GuestOS:         guestOS(cfg.IsWindows),
 		ContextDir:      cfg.ContextDir,
 		Request:         cfg.Request,
 		Environment:     cfg.Environment,
-		RelayIP:         cfg.relayIP,
 		ClaimPort:       cfg.claimPort,
 		ReadyTimeout:    cfg.readyTimeout,
 		OutputTee:       cfg.OutputTee,

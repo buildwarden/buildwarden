@@ -65,7 +65,10 @@ func TestStartRelay_TimeoutTearsDown(t *testing.T) {
 		OverlayVHDX:  overlay,
 		BuildSwitch:  "warden-dev",
 		NATSwitch:    "warden-dev-nat",
-		RelayIP:      "127.0.0.1", // nothing listens on the claim port
+		NATPrefix:    testNATPrefix, // the relay at 127.0.0.1, where nothing listens
+		HostIP:       testHostIP,
+		SeedDir:      filepath.Join(dir, "relay-seed"),
+		MakeSeedISO:  copySeedISO,
 		ClaimPort:    48301,
 		ReadyTimeout: 400 * time.Millisecond,
 	})

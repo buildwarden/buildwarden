@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -181,7 +182,10 @@ func baseCfg(t *testing.T, dir string) buildConfig {
 		SeedISO:       filepath.Join(dir, "seed.iso"),
 		BuildSwitch:   "warden-dev",
 		NATSwitch:     "warden-dev-nat",
-		relayIP:       "127.0.0.1",
+		NATPrefix:     testNATPrefix,
+		HostIP:        testHostIP,
+		RelaySeedDir:  filepath.Join(dir, "relay-seed"),
+		makeSeedISO:   copySeedISO,
 		claimPort:     freePort(t),
 		readyTimeout:  5 * time.Second,
 		Timeout:       5 * time.Second,
@@ -199,9 +203,27 @@ func freePort(t *testing.T) int {
 	return ln.Addr().(*net.TCPAddr).Port //nolint:forcetypeassert // a tcp listener
 }
 
+// The tests' NAT is 127.0.0.0/30 with the host at .2, so the allocator's
+// lowest free address, where the fake relay listens, is 127.0.0.1: loopback
+// on every platform.
+var (
+	testNATPrefix = netip.MustParsePrefix("127.0.0.0/30")
+	testHostIP    = netip.MustParseAddr("127.0.0.2")
+)
+
+// copySeedISO stands in for IMAPI2: the "ISO" is a copy of the staged seed
+// file, so a fake relay can read the token from it.
+func copySeedISO(seedDir, iso string) error {
+	b, err := os.ReadFile(filepath.Join(seedDir, RelaySeedFile))
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(iso, b, 0o600)
+}
+
 // claimAddr is where the fake relay listens for cfg's claim.
 func claimAddr(cfg buildConfig) string {
-	return net.JoinHostPort(cfg.relayIP, strconv.Itoa(cfg.claimPort))
+	return net.JoinHostPort("127.0.0.1", strconv.Itoa(cfg.claimPort))
 }
 
 func TestRunBuild_HappyPath(t *testing.T) {
