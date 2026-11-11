@@ -2,6 +2,7 @@ package hyperv
 
 import (
 	"context"
+	"net/netip"
 	"strings"
 )
 
@@ -108,6 +109,10 @@ type NetworkSpec struct {
 	NATPrefix string
 	// HostIP is the host-side gateway address on the NAT switch.
 	HostIP string
+	// DevNAT, when set, names the dev switch's NAT (<dev switch>-nat), which a
+	// build uses whenever it exists, whatever prefix setup gave it; only when
+	// it does not is a warden NAT owning NATPrefix reused or a new one made.
+	DevNAT string
 }
 
 // NetworkResources identifies the network resources backing a build.
@@ -117,6 +122,13 @@ type NetworkResources struct {
 	// Reused is true when an existing durable/dev switch was reused rather than
 	// created for this build.
 	Reused bool
+	// NATPrefix and HostIP are read back from the NAT: its internal prefix
+	// and the host vNIC's address in it, the relay's prefix and gateway.
+	NATPrefix netip.Prefix
+	HostIP    netip.Addr
+	// Slots are the durable network's build switches, in index order
+	// (VerifyNetwork only).
+	Slots []string
 }
 
 // VMSpec describes a VM to create.

@@ -29,7 +29,10 @@ const (
 	// serviceProtocolVersion is bumped on any wire-incompatible change. Both
 	// ends check it on every request, so a stale service running against a newer
 	// warden fails fast with a reinstall message instead of misbehaving.
-	serviceProtocolVersion = 1
+	//
+	// 2: NetworkResources carries the NAT's prefix and host IP read back, and
+	// NetworkSpec the dev switch's NAT; a version-1 service would send neither.
+	serviceProtocolVersion = 2
 )
 
 // svcOp is the typed operation set the pipe accepts. Only network standup is

@@ -31,14 +31,16 @@ func newLocalProvisioner(verbose bool) Provisioner {
 //     VM's controlled upstream egress ONLY. The build VM is never attached to
 //     it, so it never gets a direct route to the internet.
 //
-// The NAT egress is shared plumbing, not the isolation boundary, so when a
-// warden NAT already owns spec.NATPrefix (e.g. a durable `warden setup --driver hyperv`
-// switch, or a concurrent build), EnsureNetwork REUSES it rather than colliding
-// on the host gateway IP. Only when no NAT owns the prefix does it stand one up
-// per build (named <SwitchName>-nat). The actual NAT switch chosen is returned
-// in NetworkResources.NATName (Reused reflects which path was taken), and the
-// caller attaches the relay's upstream NIC to that name. It is safe to call
-// repeatedly: existing resources are verified rather than recreated.
+// The NAT egress is shared plumbing, not the isolation boundary, and WinNAT
+// supports one NAT per host in practice, so the NAT is chosen from what the
+// host has, in a fixed order (Decision 5): the dev switch's NAT
+// (spec.DevNAT) when setup made one, whatever its prefix; else a warden NAT
+// that owns spec.NATPrefix (a concurrent build's); else a new one named
+// <SwitchName>-nat on spec.NATPrefix with spec.HostIP. A reused NAT is never
+// re-addressed: its prefix and the host vNIC's address in it are read back
+// and returned, and a host vNIC with no address in its prefix is refused. It
+// is safe to call repeatedly: existing resources are verified rather than
+// recreated.
 func (p *localProvisioner) EnsureNetwork(
 	ctx context.Context, spec NetworkSpec,
 ) (*NetworkResources, error) {
@@ -55,6 +57,7 @@ func (p *localProvisioner) EnsureNetwork(
 	nat := psEscapeSingle(natName)
 	prefix := psEscapeSingle(spec.NATPrefix)
 	hostIP := psEscapeSingle(spec.HostIP)
+	devNAT := psEscapeSingle(spec.DevNAT)
 
 	// One script so the whole standup is atomic-ish and reports a single error.
 	// $ErrorActionPreference=Stop turns cmdlet failures into catchable errors.
@@ -70,24 +73,25 @@ if (-not $build) {
     throw "switch '%[1]s' exists but is $($build.SwitchType); expected Private"
 }
 
-# NAT egress: the relay's controlled upstream. Reuse an existing warden NAT that
-# already owns this prefix (a durable 'warden setup --driver hyperv' switch, or a
-# concurrent build) rather than colliding on the host gateway IP; the NAT subnet
-# is shared egress plumbing, not the isolation boundary (that is the Private
-# switch above). Only stand up a per-build NAT when none owns the prefix.
-$reused = 0
-$existingNat = Get-NetNat -ErrorAction SilentlyContinue |
-    Where-Object { $_.InternalIPInterfaceAddressPrefix -eq '%[5]s' }
-if ($existingNat) {
-    $natName = $existingNat.Name
-    $reused = 1
-    $natSw = Get-VMSwitch -Name $natName -ErrorAction SilentlyContinue
-    if (-not $natSw) {
-        throw "a NAT '$natName' owns %[5]s but its vSwitch is missing; " +
+# NAT egress: the relay's controlled upstream, chosen from what the host has.
+$reused = 1
+$natName = $null
+if ('%[6]s' -and (Get-NetNat -Name '%[6]s' -ErrorAction SilentlyContinue)) {
+    $natName = '%[6]s'
+} else {
+    $existingNat = Get-NetNat -ErrorAction SilentlyContinue |
+        Where-Object { $_.InternalIPInterfaceAddressPrefix -eq '%[5]s' } |
+        Select-Object -First 1
+    if ($existingNat) { $natName = $existingNat.Name }
+}
+if ($natName) {
+    if (-not (Get-VMSwitch -Name $natName -ErrorAction SilentlyContinue)) {
+        throw "a NAT '$natName' exists but its vSwitch is missing; " +
             "remove the stale NAT (elevated: Remove-NetNat -Name $natName) " +
             "or re-run 'warden setup --driver hyperv'"
     }
 } else {
+    $reused = 0
     $natName = '%[2]s'
     $natSw = Get-VMSwitch -Name $natName -ErrorAction SilentlyContinue
     if (-not $natSw) {
@@ -95,59 +99,34 @@ if ($existingNat) {
     } elseif ($natSw.SwitchType -ne 'Internal') {
         throw "switch '$natName' exists but is $($natSw.SwitchType); expected Internal"
     }
-}
-
-# Host gateway IP on the NAT switch's host vNIC (idempotent; scoped to the alias
-# so a reused NAT that already has it is left untouched).
-$alias = "vEthernet ($natName)"
-$hasIP = Get-NetIPAddress -InterfaceAlias $alias -IPAddress '%[3]s' -ErrorAction SilentlyContinue
-if (-not $hasIP) {
-    New-NetIPAddress -IPAddress '%[3]s' -PrefixLength %[4]d -InterfaceAlias $alias | Out-Null
-}
-
-# NAT rule for the relay's egress (only when we created the NAT; a reused one
-# already has it).
-if ($reused -eq 0 -and -not (Get-NetNat -Name $natName -ErrorAction SilentlyContinue)) {
-    New-NetNat -Name $natName -InternalIPInterfaceAddressPrefix '%[5]s' | Out-Null
+    $alias = "vEthernet ($natName)"
+    $hasIP = Get-NetIPAddress -InterfaceAlias $alias -IPAddress '%[3]s' -ErrorAction SilentlyContinue
+    if (-not $hasIP) {
+        New-NetIPAddress -IPAddress '%[3]s' -PrefixLength %[4]d -InterfaceAlias $alias | Out-Null
+    }
+    if (-not (Get-NetNat -Name $natName -ErrorAction SilentlyContinue)) {
+        New-NetNat -Name $natName -InternalIPInterfaceAddressPrefix '%[5]s' | Out-Null
+    }
 }
 
 # No inbound firewall rule: the host claims the relay and serves its collector
 # over that same host-initiated connection, so nothing listens on the host.
-"NAT=$natName REUSED=$reused"
-`, name, nat, hostIP, prefixLen, prefix)
+"NAT=$natName"
+"REUSED=$reused"
+"PREFIX=$((Get-NetNat -Name $natName).InternalIPInterfaceAddressPrefix)"
+Get-NetIPAddress -InterfaceAlias "vEthernet ($natName)" -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+    ForEach-Object { "HOSTIP=$($_.IPAddress)" }
+`, name, nat, hostIP, prefixLen, prefix, devNAT)
 
 	out, err := runPS(script)
 	if err != nil {
 		return nil, fmt.Errorf("EnsureNetwork: %w", err)
 	}
-	chosenNAT, reused := parseEnsureNetworkOutput(out)
-	if chosenNAT == "" {
-		return nil, fmt.Errorf(
-			"EnsureNetwork: could not parse NAT switch from output: %q",
-			strings.TrimSpace(out))
+	res, err := parseNetReadback(out).ensureResources(spec.SwitchName)
+	if err != nil {
+		return nil, fmt.Errorf("EnsureNetwork: %w", err)
 	}
-	return &NetworkResources{
-		BuildSwitch: spec.SwitchName, NATName: chosenNAT, Reused: reused}, nil
-}
-
-// parseEnsureNetworkOutput extracts the chosen NAT switch name and reuse flag
-// from the EnsureNetwork script's trailing "NAT=<name> REUSED=<0|1>" line.
-func parseEnsureNetworkOutput(out string) (nat string, reused bool) {
-	for _, line := range strings.Split(out, "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "NAT=") {
-			continue
-		}
-		for _, tok := range strings.Fields(line) {
-			switch {
-			case strings.HasPrefix(tok, "NAT="):
-				nat = strings.TrimPrefix(tok, "NAT=")
-			case tok == "REUSED=1":
-				reused = true
-			}
-		}
-	}
-	return nat, reused
+	return res, nil
 }
 
 // TeardownNetwork removes the NAT rule and both switches for the given base
@@ -170,31 +149,33 @@ Remove-VMSwitch -Name '%[1]s' -Force -ErrorAction SilentlyContinue
 	return nil
 }
 
-// VerifyNetwork re-asserts that the durable network is still safe to reuse:
-// the build switch is still Private (isolation intact) and it exists. Callers
-// run this before every build rather than trusting that persistence equals
-// correctness (a crash or manual edit can silently weaken isolation).
-func (p *localProvisioner) VerifyNetwork(ctx context.Context, switchName string) error {
-	name := psEscapeSingle(switchName)
+// VerifyNetwork re-asserts that the durable network named network is still
+// safe to use, before every build rather than trusting that persistence
+// equals correctness (a crash or manual edit can silently weaken isolation):
+// its NAT (<network>-nat) and that NAT's vSwitch exist, the host vNIC holds
+// an address in the NAT's prefix, and its slot switches (<network>-<i>)
+// exist and are Private. It returns the NAT's prefix and host IP read back,
+// and the slots in index order.
+func (p *localProvisioner) VerifyNetwork(
+	ctx context.Context, network string,
+) (*NetworkResources, error) {
 	out, err := runPS(fmt.Sprintf(`
-$s = Get-VMSwitch -Name '%[1]s' -ErrorAction SilentlyContinue
-if (-not $s) { 'missing' } else { $s.SwitchType }
-`, name))
+$natName = '%[1]s-nat'
+$n = Get-NetNat -Name $natName -ErrorAction SilentlyContinue
+if ($n) {
+    "NAT=$natName"
+    "PREFIX=$($n.InternalIPInterfaceAddressPrefix)"
+    if (-not (Get-VMSwitch -Name $natName -ErrorAction SilentlyContinue)) { 'NATSWITCH=missing' }
+    Get-NetIPAddress -InterfaceAlias "vEthernet ($natName)" -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        ForEach-Object { "HOSTIP=$($_.IPAddress)" }
+}
+Get-VMSwitch -Name '%[1]s-*' -ErrorAction SilentlyContinue |
+    ForEach-Object { "SLOT=$($_.Name)`+"`t"+`$($_.SwitchType)" }
+`, psEscapeSingle(network)))
 	if err != nil {
-		return fmt.Errorf("VerifyNetwork: %w", err)
+		return nil, fmt.Errorf("VerifyNetwork: %w", err)
 	}
-	switch strings.TrimSpace(out) {
-	case "Private":
-		return nil
-	case "missing":
-		return fmt.Errorf(
-			"build switch %q is missing; run `warden setup --driver hyperv`",
-			switchName)
-	default:
-		return fmt.Errorf(
-			"build switch %q is %s, expected Private (isolation compromised)",
-			switchName, strings.TrimSpace(out))
-	}
+	return parseNetReadback(out).durableResources(network)
 }
 
 // --- VM lifecycle (Hyper-V Administrators tier) -----------------------------

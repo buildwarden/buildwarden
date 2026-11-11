@@ -174,12 +174,15 @@ func (d *Driver) provisionBuildNetwork(
 		// Non-elevated Hyper-V Administrators: reuse the durable switch from
 		// `warden setup --driver hyperv`. Re-assert isolation every build rather
 		// than trusting persistence (a crash or manual edit can weaken it).
-		if v, ok := prov.(interface {
-			VerifyNetwork(context.Context, string) error
-		}); ok {
-			if verr := v.VerifyNetwork(ctx, sw); verr != nil {
-				return nil, "", "", nil, fmt.Errorf("hyperv build: %w", verr)
-			}
+		v, ok := prov.(interface {
+			VerifyNetwork(context.Context, string) (*NetworkResources, error)
+		})
+		if !ok {
+			return nil, "", "", nil, fmt.Errorf(
+				"hyperv build: the provisioner cannot verify the durable network")
+		}
+		if _, verr := v.VerifyNetwork(ctx, sw); verr != nil {
+			return nil, "", "", nil, fmt.Errorf("hyperv build: %w", verr)
 		}
 		buildSwitch = sw
 		natSwitch = sw + "-nat"
