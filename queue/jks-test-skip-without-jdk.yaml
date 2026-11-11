@@ -10,7 +10,7 @@ alters_relationships: false
 design_review: skip
 pr:
   number: 109
-  ci: pending
+  ci: green
 source: 'Jeff, attended 2026-11-06: vz-image-prepare-refresh f3-implement''s done-when (make test) fails on the macbook only on cmd/warden-io TestWriteJKSMatchesKeytool: /usr/bin/keytool is Apple''s stub (''Unable to locate a Java Runtime''), and the test skips only when keytool is not on PATH. Also fails on main (noted in native-loop-followups, never filed). Jeff chose a skip over installing a JDK; run first here to unblock vz-image-prepare-refresh.'
 steps:
   - id: f0-branch-setup
