@@ -1404,11 +1404,11 @@ finding needs Design. Where its text names a file that does not exist or is
 silent on a mechanism, the plan takes the reading below, which Review checks
 against the design:
 
-- *File names.* The site table's `cmd/warden/build.go` is
+- *File names (FLOW-15).* The site table's `cmd/warden/build.go` is
   `cmd/warden/main.go` (`buildRequest`, `resolveBuildLink`), and
   `cmd/relay/mode_*.go` is `cmd/relay/main.go` (container mode's step and the
   shared `serveClaim`/`applyClaim`), `mode_host.go` and `vmlink.go`.
-- *Where the chosen list travels (Decision 6: "the chosen list goes into
+- *Where the chosen list travels (RELAY-08, ORCH-01; Decision 6: "the chosen list goes into
   `BuildRequest.DNS` and on to `Session.ClaimRelay`").* `cmd/warden` fills
   `BuildRequest.DNS` from `[vm] dns` for VM drivers only, as it does
   `BuildLink`, so the container driver and `cmd/collector` send no field.
@@ -1416,38 +1416,38 @@ against the design:
   list after `Check`, or the host's after `Select`) before it claims, and
   `ClaimRelay` copies `req.DNS` into `upstream_dns`. No `ClaimRelay`
   signature changes (tasks 8, 11, 13, 14, 29).
-- *Where the absent-field default runs (Decision 6; a14).* Its refusal must
+- *Where the absent-field default runs (RELAY-08, RELAY-04, UX-04; Decision 6, a14).* Its refusal must
   be a 400 that leaves the relay claimable, which only a start step can
   return (`relaycfg.ErrRefused`). So `cmd/relay`'s shared `serveClaim` path
   resolves the list for every mode, through a pure `relay` helper that
   replaces `pickNameserver`, and hands `relay.Start` a non-empty list; the
   relay package no longer reads `resolv.conf` or the environment itself
   (tasks 3, 6).
-- *The init's `resolv.conf` (Decision 2: "the init's `resolv.conf` writing"
+- *The init's `resolv.conf` (BOOT-06, RELAY-08; Decision 2: "the init's `resolv.conf` writing"
   goes; the pseudocode: "not written by the init (static leaves it empty;
   DHCP's script writes the lease's)").* The init's own block (the
   `warden.dns`/`8.8.8.8` writer) goes; the `udhcpc` lease script keeps
   writing the lease's servers, which is the platform resolver the
   absent-field default reads on a DHCP upstream. The tier-0 text test
   checks for no `resolv.conf` write outside that heredoc (tasks 20, 23).
-- *The stamp value per asset (Decision 9).* `driver.LauncherStamp` compares
+- *The stamp value per asset (UX-04, ORCH-01; Decision 9).* `driver.LauncherStamp` compares
   with `buildlink.Channel` today; it gains a `Want` value (zero keeps
   `buildlink.Channel`) so Hyper-V's stamp compares with `relayBootChannel`
   while qemu's and Firecracker's keep 1. `driver/buildlink/scripts_test.go`
   stops listing `refresh-cache.sh`, and a `driver/hyperv` test asserts it
   writes `relayBootChannel` instead (tasks 22, 23, 34).
-- *The privileged service and the read-back NAT (Decision 5).*
+- *The privileged service and the read-back NAT (UX-04, GLOBAL-11; Decision 5).*
   `NetworkResources` gains the NAT's prefix and host IP, which a service
   installed by an older warden would not send. The plan bumps
   `serviceProtocolVersion` (1 to 2), so the existing mismatch refusal names
   `warden hyperv service install`: a refusal both ways, as Decision 9 and
   Decision 11's skew row ask, with no new mechanism (task 28).
-- *What the allocator reads (Decisions 4, 7).* Two new `Provisioner`
+- *What the allocator reads (ORCH-01, GLOBAL-06; Decisions 4, 7).* Two new `Provisioner`
   methods at the Hyper-V Administrators tier: the Notes of `warden-relay-*`
   VMs and the VM adapters attached to each named switch. They run in
   process (the service still delegates only network standup), and the
   existing fakes gain them (task 26).
-- *The slot's "nothing attached but this build's VMs" check (Decision 7,
+- *The slot's "nothing attached but this build's VMs" check (BOOT-01, GLOBAL-06; Decision 7,
   Security note).* The allocator only takes a slot with nothing attached;
   `VerifyNetwork` at build start checks the NAT and that the slot switches
   exist and are Private; and before the build VM starts, the driver re-reads
@@ -1458,17 +1458,17 @@ against the design:
   ISO builder as a `RelayHostConfig` field defaulting to the platform's
   `makeSeedISO` (IMAPI2 on Windows, an error elsewhere), so the end-to-end
   test runs on the fake `Provisioner` on every platform (task 31).
-- *The Hyper-V doctor's inputs.* `hyperv.Doctor`, `firecracker.Doctor` and
+- *The Hyper-V doctor's inputs (ORCH-01, UX-04).* `hyperv.Doctor`, `firecracker.Doctor` and
   the new qemu and vz resolver reports are package functions, so passing them
   the link and `[vm] dns` changes no `Driver` method (tasks 17, 35).
-- *The qemu host source.* The qemu driver is not supported on a Windows host
+- *The qemu host source (GLOBAL-07; Decision 6).* The qemu driver is not supported on a Windows host
   (`driver/qemu/vm_windows.go`), so its source is the macOS `/etc/resolv.conf`
   on darwin and the Linux source on linux, as Decision 6's table says.
-- *Backlog.* The one tracked gap's entry
+- *Backlog (TEST-03, FLOW-09).* The one tracked gap's entry
   (`hyperv-relay-per-build-channel-qemu-windows`, macos-qemu) already exists
   with Decision 8's wording, and the qemu-any entry is folded into its step,
   so task 49 adds none.
-- *Native step notes.* The three `f6-validate-*` notes already carry the
+- *Native step notes (FLOW-09).* The three `f6-validate-*` notes already carry the
   Validation plan's cases; the plan leaves them unchanged (task 48).
 
 ### The claim field (`relaycfg`)
