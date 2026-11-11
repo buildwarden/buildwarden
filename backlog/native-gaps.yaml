@@ -438,18 +438,6 @@ gaps:
       fail there (qemu-windows-guest-package); the Linux qemu path on the new link re-passed this run
       (qemu-environment-descriptors).
     status: open
-  - id: hyperv-relay-per-build-channel-qemu-relay
-    host: qemu-any
-    what: A qemu Linux build (direct boot and a cloud image) on an aarch64 relay initramfs rebuilt from the branch's tools/relay-vm/init, which loses its 192.168.240.x static fallback and its 8.8.8.8 resolver fallback and gains one key reader for the command line and the Hyper-V relay seed. The relay's console shows its upstream from DHCP and its resolver from the lease, as on main.
-    design: docs/design/hyperv-relay-per-build-channel.md
-    note: >-
-      Tracked (TEST-03), not blocking: the init is shared, but a qemu relay (warden.net=dhcp from
-      user-mode NAT) never took the removed fallbacks, and driver/qemu does not change. Run on the
-      branch while it waits, or on main after it merges.
-      2026-11-07 (host:qemu-any/20261107T124005Z, unattended): not run. The branch (0df0a64) is
-      design-only (docs/design/hyperv-relay-per-build-channel.md) and waits on its design review;
-      tools/relay-vm/init is unchanged against main.
-    status: open
   - id: hyperv-relay-per-build-channel-qemu-windows
     host: macos-qemu
     what: A qemu Windows guest build whose warden-run.log shows initialize --gateway=<relay> with no --ip (warden-run.ps1 no longer passes it, design r2 Decision 8) and whose NIC ends on the relay's lease (DHCP Enabled Yes, PrefixOrigin Dhcp, the link's guest address).
