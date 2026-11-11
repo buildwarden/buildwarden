@@ -71,11 +71,12 @@ func relayBootStampPath(vhdx string) string {
 
 // relayBootStamp describes the relay boot VHDX's link-channel stamp, with
 // Path empty when the disk is not found. The VHDX bakes the relay binary and
-// its init, so a disk built before the relay took its build link from the
-// claim must be refreshed once.
+// its init, so a disk built before its init read the relay seed and its relay
+// took upstream_dns (relayBootChannel) must be refreshed once; a disk stamped
+// 1 or unstamped is refused before any VM and BLOCKED in doctor.
 func relayBootStamp() driver.LauncherStamp {
 	st := driver.LauncherStamp{What: "hyperv relay boot VHDX", Rebuild: RefreshRelayBootFix,
-		Required: true}
+		Required: true, Want: relayBootChannel}
 	if p, err := resolveRelayBootVHDX(); err == nil {
 		st.Path = relayBootStampPath(p)
 	}
