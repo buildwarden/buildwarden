@@ -34,7 +34,7 @@ run_budget: {steps: 8}      # steps one run may take; calibrate against /usage
 native_budget: {steps: 8}   # steps one scheduled native session may take (FLOW-13);
                             # unset falls back to run_budget; `wf budget -native`
 limits:
-  in_progress: 5            # FLOW-05
+  in_progress: 5            # FLOW-05: features in progress; process items not counted
   alters_relationships: 1   # FLOW-05: of those, past Design with alters_relationships: true
 lease_minutes: 120          # FLOW-04
 runaway_factor: 2           # FLOW-13: escalate at this multiple of the step estimate
@@ -148,7 +148,7 @@ interrupted run loses at most the step in progress (FLOW-13).
 `wf next` follows FLOW-05: the first ready step in class order (in
 implementation, process, fixes, new functionality; in progress before queued,
 then priority); a fix only once the item it `follows` is done, unless an
-attended run names it; at most five features in progress; the cloud skips a feature with an open blocking
+attended run names it; at most five features in progress, process items not counted; the cloud skips a feature with an open blocking
 question, a spent runaway budget, or a need for the `alters_relationships`
 slot another feature holds. Its `blocked` lines feed the digest.
 
