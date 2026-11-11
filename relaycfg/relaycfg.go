@@ -55,6 +55,37 @@
 // relay addressed and serving. A relay that predates build_link refuses a
 // claim carrying it ("unknown field \"build_link\""), since the decoder
 // rejects unknown fields.
+//
+// # Upstream resolvers
+//
+// Config.UpstreamDNS (JSON "upstream_dns") is the list of resolvers the relay
+// uses for everything it resolves: the guest's DNS queries it forwards and its
+// own upstream dials (the SSRF-filtered dialer, the plain transport, and a
+// direct CollectorURL that names a host). It is optional on the wire and
+// validated the same way for every mode (ParseUpstreamDNS): present means a
+// non-empty list of IPv4 addresses (port 53 implied), none unspecified,
+// multicast or broadcast, and none inside the claim's build link. A claim
+// that fails validation is refused with 400 and does not consume the relay.
+//
+//	field      the relay's resolvers
+//	present    exactly the listed servers, nothing else (source "claim")
+//	absent     the usable nameserver lines of the relay's own
+//	           /etc/resolv.conf, used exclusively (source "resolv.conf"):
+//	           not the relay's own address, not 127.0.0.1, not inside the
+//	           build link (Docker's embedded 127.0.0.11 is usable). None
+//	           usable refuses the claim with 400 naming upstream_dns.
+//
+// That absent-field default is the relay's platform resolver, which is what a
+// relay given no instruction is expected to use (the container driver and
+// third-party claimants send no list). No boot-channel value, environment
+// variable or public resolver stands in for the field.
+//
+// Order: the relay asks the list's entries in order and asks the next entry
+// when one does not answer within the per-query timeout, as resolv.conf's
+// nameserver lines are; it logs one line per server that timed out. That is
+// the only fallback, and it never leaves the list. The relay logs the list it
+// took and its source when it is claimed. A relay that predates upstream_dns
+// refuses a claim carrying it ("unknown field \"upstream_dns\"").
 package relaycfg
 
 import (
@@ -67,6 +98,7 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"strings"
 	"sync"
 	"time"
@@ -107,6 +139,51 @@ type Config struct {
 	// BuildLink, when set, is the segment the relay serves the build on
 	// (see the package doc for what each mode does with it).
 	BuildLink *BuildLink `json:"build_link,omitempty"`
+	// UpstreamDNS, when set, is the relay's resolver list, IPv4 addresses in
+	// the order the relay asks them (see the package doc for its validation
+	// and the default when it is absent).
+	UpstreamDNS []string `json:"upstream_dns,omitempty"`
+}
+
+// ParseUpstreamDNS validates a claim's upstream_dns list and returns its
+// addresses in order. The list must be non-empty; each entry is an IPv4
+// address that is not unspecified, multicast or the broadcast address, and
+// not inside link's prefix when link is set. link is assumed already valid
+// (BuildLink.Parse); an unparsable link is an error.
+func ParseUpstreamDNS(list []string, link *BuildLink) ([]netip.Addr, error) {
+	if len(list) == 0 {
+		return nil, errors.New("empty list (omit the field for the relay's default)")
+	}
+	var prefix netip.Prefix
+	if link != nil {
+		p, _, _, err := link.Parse()
+		if err != nil {
+			return nil, fmt.Errorf("build_link: %w", err)
+		}
+		prefix = p
+	}
+	out := make([]netip.Addr, 0, len(list))
+	for i, s := range list {
+		a, err := netip.ParseAddr(s)
+		if err != nil {
+			return nil, fmt.Errorf("entry %d %q is not an IP address", i, s)
+		}
+		switch {
+		case !a.Is4():
+			return nil, fmt.Errorf("entry %d %s is not IPv4", i, s)
+		case a.IsUnspecified():
+			return nil, fmt.Errorf("entry %d %s is unspecified", i, s)
+		case a.IsMulticast():
+			return nil, fmt.Errorf("entry %d %s is a multicast address", i, s)
+		case a == netip.AddrFrom4([4]byte{255, 255, 255, 255}):
+			return nil, fmt.Errorf("entry %d %s is the broadcast address", i, s)
+		case prefix.IsValid() && prefix.Contains(a):
+			return nil, fmt.Errorf("entry %d %s is inside the build link %s",
+				i, s, prefix)
+		}
+		out = append(out, a)
+	}
+	return out, nil
 }
 
 // Environment describes the build's base environment. Payload is a typed
@@ -199,6 +276,14 @@ func (s *claimServer) handleClaim(w http.ResponseWriter, req *http.Request) {
 		if _, _, _, err := cfg.BuildLink.Parse(); err != nil {
 			s.release()
 			http.Error(w, "invalid claim: build_link: "+err.Error(),
+				http.StatusBadRequest)
+			return
+		}
+	}
+	if cfg.UpstreamDNS != nil {
+		if _, err := ParseUpstreamDNS(cfg.UpstreamDNS, cfg.BuildLink); err != nil {
+			s.release()
+			http.Error(w, "invalid claim: upstream_dns: "+err.Error(),
 				http.StatusBadRequest)
 			return
 		}
