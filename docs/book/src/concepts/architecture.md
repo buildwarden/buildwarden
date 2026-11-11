@@ -196,7 +196,7 @@ boots the build guest only after the claim returns.
 The relay is the network gateway for the build environment. Core services:
 
 - **MITM HTTPS proxy** — intercepts TLS using an ephemeral CA
-- **DNS server** — resolves `cwd` and `artifacts` to itself, forwards all else upstream
+- **DNS server** — resolves `cwd` and `artifacts` to itself, forwards all else to its upstream resolvers in order: the claim's `upstream_dns` (every VM driver sends `[vm] dns` or the host's), else the relay's own `resolv.conf`
 - **Build-input serving** — serves the build script and context to the guest, pulling them from the collector
 - **Artifact store** — accepts uploads via `http://artifacts/<name>`, streamed to the collector
 - **Ledger writer** — records requests with chained Ed25519 signatures, streamed to the collector
@@ -319,12 +319,17 @@ Image preparation (`warden image prepare --driver vz`) is a separate step:
 
 ```
 warden build --driver hyperv .
+  |-- Preflight: the relay boot VHDX's stamp, the NAT read back from the host
+  |     (prefix, host IP; one overlapping the build link refused), the relay's
+  |     resolvers ([vm] dns, or the host's default route interface's)
   |-- Start a collector serving the build script + context
+  |-- Under a host lock: allocate the relay's NAT address (and, durable, a free
+  |     slot switch); write its seed ISO (address, prefix, gateway, claim token)
   |-- Boot relay VM (its /sbin/relay is baked into a UKI boot disk), unconfigured
-  |     '-- Reachable on its static host-only NAT IP 192.168.240.2:8301
-  |-- Claim the relay (tunnel + build config); write ca.cert.pem
-  |-- Boot build VM (sole network path is the relay VM)
-  |-- warden-io initialize runs on first boot
+  |     '-- Reachable on its per-build NAT address, port 8301, with the token
+  |-- Claim the relay (tunnel + build config + resolvers); write ca.cert.pem
+  |-- Boot build VM on the relay's switch (sole network path is the relay VM)
+  |-- warden-io initialize runs on first boot, on the relay's DHCP lease
   |-- Wait for exit
   '-- Teardown VMs
 ```
@@ -332,9 +337,12 @@ warden build --driver hyperv .
 Network isolation is topological, like QEMU. The relay VM and build VM sit on
 a Private build switch; the relay reaches upstream through an Internal NAT
 switch. The claim endpoint is only on the host-only NAT switch, so the build
-VM cannot reach it. One-time host setup (`warden setup --driver hyperv`) creates
-the durable switches; the relay VM's `/sbin/relay` is baked into its UKI boot
-disk by `tools/relay-vm/hyperv/build.sh`.
+VM cannot reach it, and it takes only the per-build token. One-time host
+setup (`warden setup --driver hyperv`) creates the durable NAT switch and its
+slot switches (`--slots`, default 4), so durable builds run concurrently, one
+per slot; the relay VM's `/sbin/relay` is baked into its UKI boot disk by
+`tools/relay-vm/hyperv/build.sh`, and its per-build values arrive on a
+`WARDENRELAY` seed ISO (see `tools/relay-vm/README.md`).
 
 ### Firecracker driver
 
