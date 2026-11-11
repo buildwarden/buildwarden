@@ -39,16 +39,25 @@ func TestSetupRefusesNATDurableBuildsReject(t *testing.T) {
 		res  NetworkResources
 		want []string // in the message and the fix; none: accepted
 	}{
-		{"the dev NAT", NetworkResources{NATName: "warden-dev-nat", NATPrefix: prefix,
-			HostIP: host}, nil},
-		{"another NAT owns the prefix", NetworkResources{NATName: "warden-b1-nat",
-			NATPrefix: prefix, HostIP: host, Reused: true},
-			[]string{"the NAT warden-b1-nat already owns --nat-prefix 192.168.240.0/20",
-				"use only the NAT warden-dev-nat", "Remove-NetNat -Name warden-b1-nat",
+		{"the dev NAT",
+			NetworkResources{NATName: "warden-dev-nat", NATPrefix: prefix,
+				HostIP: host},
+			nil},
+		{"another NAT owns the prefix",
+			NetworkResources{NATName: "warden-b1-nat", NATPrefix: prefix, HostIP: host,
+				Reused: true},
+			[]string{
+				"the NAT warden-b1-nat already owns --nat-prefix " +
+					"192.168.240.0/20",
+				"use only the NAT warden-dev-nat",
+				"Remove-NetNat -Name warden-b1-nat",
 				"pass another --nat-prefix"}},
-		{"the dev NAT on another prefix", NetworkResources{NATName: "warden-dev-nat",
-			NATPrefix: netip.MustParsePrefix("10.200.0.0/24"), Reused: true},
-			[]string{"already exists on 10.200.0.0/24, not --nat-prefix 192.168.240.0/20",
+		{"the dev NAT on another prefix",
+			NetworkResources{NATName: "warden-dev-nat",
+				NATPrefix: netip.MustParsePrefix("10.200.0.0/24"), Reused: true},
+			[]string{
+				"already exists on 10.200.0.0/24, not --nat-prefix " +
+					"192.168.240.0/20",
 				"Remove-NetNat -Name warden-dev-nat"}},
 	}
 	for _, tt := range tests {
@@ -60,13 +69,15 @@ func TestSetupRefusesNATDurableBuildsReject(t *testing.T) {
 		}
 		if tt.want == nil {
 			if err != nil || res == nil || res.NATName != "warden-dev-nat" {
-				t.Errorf("%s: res %+v, err %v; want the dev NAT", tt.name, res, err)
+				t.Errorf("%s: res %+v, err %v; want the dev NAT",
+					tt.name, res, err)
 			}
 			continue
 		}
 		var fe *driver.FixableError
 		if !errors.As(err, &fe) || res != nil {
-			t.Errorf("%s: res %+v, err %v; want a refusal with a fix", tt.name, res, err)
+			t.Errorf("%s: res %+v, err %v; want a refusal with a fix",
+				tt.name, res, err)
 			continue
 		}
 		for _, w := range tt.want {

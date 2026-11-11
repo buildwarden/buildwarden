@@ -345,7 +345,8 @@ func TestDirectCollectorURLResolvesThroughList(t *testing.T) {
 	t.Cleanup(func() { upstreamDNSPort = old })
 
 	r, _, _, _ := startTestRelay(t, collector.Config{}, "", func(c *Config) {
-		c.CollectorURL = strings.Replace(c.CollectorURL, "127.0.0.1", "collector.example", 1)
+		c.CollectorURL = strings.Replace(c.CollectorURL, "127.0.0.1",
+			"collector.example", 1)
 		c.CollectorTransport = nil
 	})
 	if !strings.HasPrefix(r.cfg.CollectorURL, "http://collector.example:") {

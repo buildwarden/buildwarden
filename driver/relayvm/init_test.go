@@ -103,10 +103,32 @@ func TestRelayInitSeedOnlyOnHyperV(t *testing.T) {
 	if seed == "" {
 		t.Fatal("no HYPERV block reads the seed")
 	}
-	// On Hyper-V the seed alone supplies the keys (the design's Defaults and
-	// overrides): the command line is read only in the other branch, and a
-	// warden.* word on it stops the init, naming the key, before the seed.
-	branches := regexp.MustCompile(`(?s)\nif \[ "\$HYPERV" = 1 \]; then\n(.*?)\nelse\n(.*?)\nfi\n`).
+	if n := strings.Count(s, "\n    read_seed\n"); n != 1 ||
+		!strings.Contains(seed, "\n    read_seed\n") {
+		t.Errorf("read_seed is called %d times, or outside the HYPERV block", n)
+	}
+	for _, m := range seedModules {
+		if !strings.Contains(seed, m) {
+			t.Errorf("the HYPERV block does not load %s before reading the seed", m)
+		}
+	}
+	for _, want := range []string{"-lt 100", "mount -t iso9660 -o ro /dev/sr0",
+		"cp /run/seed/warden-relay.conf /tmp/warden-relay.conf", "umount /run/seed"} {
+		if !strings.Contains(s, want) {
+			t.Errorf("read_seed lacks %q", want)
+		}
+	}
+}
+
+// TestRelayInitHyperVSeedAlone: on Hyper-V the seed and the command line never
+// both supply a key.
+func TestRelayInitHyperVSeedAlone(t *testing.T) {
+	s := code(readTool(t, "tools/relay-vm/init"))
+	// The seed alone supplies the keys (the design's Defaults and overrides):
+	// the command line is read only in the other branch, and a warden.* word
+	// on it stops the init, naming the key, before the seed is read.
+	branches := regexp.MustCompile(
+		`(?s)\nif \[ "\$HYPERV" = 1 \]; then\n(.*?)\nelse\n(.*?)\nfi\n`).
 		FindStringSubmatch(s)
 	if branches == nil || strings.Contains(branches[1], "\nfi\n") ||
 		!strings.Contains(branches[1], "\n    read_seed\n") {
@@ -122,21 +144,6 @@ func TestRelayInitSeedOnlyOnHyperV(t *testing.T) {
 		loc[0] > strings.Index(branches[1], "read_seed") {
 		t.Error("a warden.* word on the Hyper-V command line does not stop the init, " +
 			"naming the key, before the seed is read")
-	}
-	if n := strings.Count(s, "\n    read_seed\n"); n != 1 ||
-		!strings.Contains(seed, "\n    read_seed\n") {
-		t.Errorf("read_seed is called %d times, or outside the HYPERV block", n)
-	}
-	for _, m := range seedModules {
-		if !strings.Contains(seed, m) {
-			t.Errorf("the HYPERV block does not load %s before reading the seed", m)
-		}
-	}
-	for _, want := range []string{"-lt 100", "mount -t iso9660 -o ro /dev/sr0",
-		"cp /run/seed/warden-relay.conf /tmp/warden-relay.conf", "umount /run/seed"} {
-		if !strings.Contains(s, want) {
-			t.Errorf("read_seed lacks %q", want)
-		}
 	}
 }
 
