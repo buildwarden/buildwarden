@@ -77,7 +77,8 @@ func TestParseSwitchAdapters(t *testing.T) {
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
 			if got := parseSwitchAdapters(tt.out); !reflect.DeepEqual(got, tt.want) {
-				t.Errorf("parseSwitchAdapters(%q) = %q, want %q", tt.out, got, tt.want)
+				t.Errorf("parseSwitchAdapters(%q) = %q, want %q",
+					tt.out, got, tt.want)
 			}
 		})
 	}
