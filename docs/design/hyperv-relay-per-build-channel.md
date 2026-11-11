@@ -2129,10 +2129,10 @@ regression on `main` and files none.
   `parseRelayNotes` and `parseSwitchAdapters` in
   `driver/hyperv/provision.go`: untagged parsers of the PowerShell output
   whose only caller is the Windows `Provisioner`, so reachable on windows.
-  No test calls them on any platform: plan task 36 puts the `Provisioner`'s
-  parsers under tier-0 parse tests, and these two have none, so it is
-  reported to the tick as work the plan covers (`wf back -to 3`), not done
-  here. Everything else reported predates the branch.
+  Plan task 36 puts the `Provisioner`'s parsers under tier-0 parse tests,
+  and these two had none, so Implement added them at r2
+  (`driver/hyperv/provision_test.go`), which runs on every platform.
+  Everything else reported predates the branch.
 - *Duplication.* The four drivers' `relayResolvers` share one shape (`[vm]
   dns` through `resolvers.Check`, else the host source through
   `resolvers.Select`, else a fix) and `vmDNSRefusal` is the same in
