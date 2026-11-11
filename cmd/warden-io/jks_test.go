@@ -9,6 +9,7 @@ import (
 	"crypto/x509/pkix"
 	"encoding/binary"
 	"encoding/pem"
+	"fmt"
 	"math/big"
 	"os"
 	"os/exec"
@@ -81,14 +82,13 @@ func TestWriteJKSReadable(t *testing.T) {
 }
 
 // TestWriteJKSMatchesKeytool compares the bytes with what the JDK's keytool
-// writes for the same certificate. It runs wherever keytool is on PATH (CI
-// installs a JDK). keytool stamps the entry with the current time, so ours is
-// written with keytool's timestamp; every other byte must match.
+// writes for the same certificate. It skips where no keytool runs;
+// WARDEN_REQUIRE_KEYTOOL=1 makes that a failure. The keytool CI job sets the
+// variable and runs this test with a JDK on Linux, macOS and Windows. keytool
+// stamps the entry with the current time, so ours is written with keytool's
+// timestamp; every other byte must match.
 func TestWriteJKSMatchesKeytool(t *testing.T) {
-	keytool, err := exec.LookPath("keytool")
-	if err != nil {
-		t.Skip("keytool not on PATH")
-	}
+	keytool := requireKeytool(t)
 	cert := testCA(t)
 	dir := t.TempDir()
 	pemPath := filepath.Join(dir, "ca.pem")
@@ -128,4 +128,30 @@ func TestWriteJKSMatchesKeytool(t *testing.T) {
 		"-keystore", ours, "-storepass", jksPassword).CombinedOutput(); err != nil {
 		t.Fatalf("keytool -list rejects ours: %v\n%s", err, out)
 	}
+}
+
+// requireKeytool returns the path of a keytool that runs, or stops the test
+// through unavailable. The lookup alone is not enough: macOS's /usr/bin/keytool
+// is a stub that exits non-zero without a JDK.
+func requireKeytool(t *testing.T) string {
+	t.Helper()
+	keytool, err := exec.LookPath("keytool")
+	if err != nil {
+		unavailable(t, "keytool not on PATH")
+	}
+	if out, err := exec.Command(keytool, "-help").CombinedOutput(); err != nil {
+		unavailable(t, fmt.Sprintf("keytool at %s cannot run (no Java runtime?): %v\n%s",
+			keytool, err, out))
+	}
+	return keytool
+}
+
+// unavailable skips the test, or fails it when WARDEN_REQUIRE_KEYTOOL=1 so a
+// job that set up a JDK cannot pass by skipping.
+func unavailable(t *testing.T, msg string) {
+	t.Helper()
+	if os.Getenv("WARDEN_REQUIRE_KEYTOOL") == "1" {
+		t.Fatal(msg + " (WARDEN_REQUIRE_KEYTOOL=1)")
+	}
+	t.Skip(msg)
 }

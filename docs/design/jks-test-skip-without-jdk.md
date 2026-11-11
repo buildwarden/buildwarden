@@ -1,0 +1,438 @@
+---
+feature: jks-test-skip-without-jdk
+status: archived
+drivers: []
+seams: []
+surfaces: []
+security_boundary: none
+alters_relationships: false
+design_review: skip
+native_validation: []
+tier2_gaps: []
+rules: [TEST-01, TEST-02, TEST-04, GLOBAL-07, FLOW-11, FLOW-19]
+rule_changes: []
+concepts: [testing, jks, keytool, truststore, warden-io, ci, github-actions, java]
+related: [unified-bootstrap.md, native-loop-followups.md, ci-path-filters.md]
+---
+
+# Keytool tests skip when keytool cannot run, and a CI job runs them with Java
+
+## Problem
+
+`cmd/warden-io/jks_test.go` `TestWriteJKSMatchesKeytool` compares the JKS
+truststore that `writeJKS` produces with the one the JDK's `keytool` writes. It
+skips only when `exec.LookPath("keytool")` fails. macOS always ships
+`/usr/bin/keytool`, a stub that exits non-zero with "Unable to locate a Java
+Runtime" when no JDK is installed. On such a Mac the lookup succeeds, `keytool
+-importcert` fails, and the test fails instead of skipping.
+
+So `make test` fails on the macbook, on `main` as well as on every branch, and
+so does every done-when that runs it (Implement, FLOW-03). This now blocks
+`vz-image-prepare-refresh`'s `f3-implement`. `native-loop-followups` recorded it
+as environmental and did not file it. Jeff chose to skip the test rather than
+install a JDK on the Mac.
+
+A skip alone has a cost. The comparison runs on CI only because `ubuntu-latest`
+happens to ship a JDK. Nothing guarantees that, and nothing runs it on macOS or
+Windows. Jeff's direction (attended, 2026-11-07): "separate [the keytool tests]
+as a separate CI job which installs Java on the platform as a part of test
+setup."
+
+## Prior art
+
+- **`unified-bootstrap`** (Decision 6) introduced the pure-Go JKS writer and this
+  byte comparison against `keytool`. This design keeps the comparison as it is.
+- **`native-loop-followups`** noted the local failure (Validation notes,
+  "Locally"). This design is the fix for that note.
+- **`ci-path-filters`** gave `main.yml` its `changes` job, the `gotests` gate and
+  the single required `ci-ok` aggregator. The new job reuses that gate and joins
+  `ci-ok`'s `needs`, the pattern that design set for every job.
+- **The `tier1-test` job** is `main.yml`'s existing matrix over
+  `ubuntu-latest`, `macos-latest` and `windows-latest` (GLOBAL-07). It runs
+  `go test ./...` in `tools/tier1` only, so it runs no `cmd/warden-io` test.
+  The new job uses the same matrix, and its macOS and Windows legs are the
+  first CI run of `cmd/warden-io` tests on those platforms.
+- **Opt-in test gates already exist** in the form `WARDEN_<AREA>=1`, for example
+  `WARDEN_HYPERV_LIVE` and `WARDEN_HYPERV_LIVE_FETCH`. Those gates turn a test on.
+  The new variable turns a skip into a failure, but it follows the same style.
+- **TEST-01**: `make test` has no external dependencies and passes everywhere. A
+  test that needs a JDK skips where there is none.
+- **TEST-04**: a failure must be real signal.
+- **TEST-02**: places tier 0 in the `ci` workflow, gated by the `changes` job's
+  docs-only set. The new job is in that workflow, under that gate (see
+  Decision 6).
+
+## Decisions
+
+1. **Probe whether keytool can run, and skip if it cannot.** After the lookup,
+   the test runs `keytool -help`. If that exits non-zero, the test skips. The
+   skip message names the path and includes the probe's output, which on the Mac
+   is the stub's "Unable to locate a Java Runtime". There is no special case for
+   `CI`.
+   - *Alternative: match the macOS stub's message.* This is narrower and breaks
+     if Apple rewords it. It also misses a keytool that is on PATH with no usable
+     JVM, such as a broken Linux `alternatives` link. Rejected.
+   - *Alternative: check `/usr/libexec/java_home` on darwin.* This only works on
+     macOS and proves a JDK exists, not that this keytool runs. Rejected.
+   - *Alternative: check `java -version` or `JAVA_HOME` instead of keytool.*
+     This tests a different binary than the one the test runs. A machine can
+     have a working `java` and a broken or mismatched `keytool` on PATH.
+     Rejected.
+   - *Alternative: a build tag (`//go:build keytool`).* A developer with a JDK
+     would lose the check in `make test` unless they knew to pass the tag.
+     Rejected. The dedicated job (Decision 2) gets CI coverage without the tag.
+   - *Alternative: install a JDK on the Mac.* Jeff declined.
+   - `keytool -help` exits 0 on JDK 9 and later (the cloud container's JDK was
+     checked at d8d8a03) and writes no file, so the probe has no side effect.
+2. **A dedicated `keytool` CI job does the real comparison (Jeff, 2026-11-07).**
+   The job lives in `main.yml`, runs on the `tier1-test` matrix (`ubuntu-latest`,
+   `macos-latest`, `windows-latest`) and installs a JDK with
+   `actions/setup-java@v4`, using `distribution: temurin` and `java-version: '21'`
+   (an LTS release; Java 25 is newer, and 21 is still supported). Pinning the distribution and major version keeps the
+   reference `keytool` stable across runner image changes. On `macos-latest`,
+   setup-java puts the real JDK's `bin` ahead of `/usr/bin` on PATH, so the stub
+   is never reached. The job runs only the keytool tests:
+   `go test ./cmd/warden-io -run Keytool -count=1 -v`, with
+   `WARDEN_REQUIRE_KEYTOOL=1` set.
+   - *Rejected: the earlier drafts' environment guards.* The first draft
+     (4fa31a1) failed the test instead of skipping whenever `CI` was set. The
+     revision at d8d8a03, implemented at a5ea356, keyed the same behavior on
+     `GITHUB_ACTIONS=true`. Both kept the comparison only on the runner image
+     that happened to have Java, and covered no platform beyond that. Jeff
+     replaced them with the dedicated job.
+3. **`WARDEN_REQUIRE_KEYTOOL=1` turns a skip into a failure.** When it is set, a
+   keytool that is missing from PATH, or whose probe fails, fails the test with
+   the same message the skip would show. So the dedicated job either compares the
+   bytes or goes red; it can never pass by skipping. Why this name:
+   - The `WARDEN_` prefix is the one the repo's test gates use.
+   - `REQUIRE` says what it does: a requirement, not an opt-in to extra tests the
+     way `*_LIVE` is.
+   - `KEYTOOL` names the tool rather than a single test, so a future keytool test
+     is covered by the same variable.
+   - Generic `CI`, as Decision 2 shows, says nothing about whether a JDK was set
+     up.
+   The value `1` matches the other gates. Any other value, or no value, means
+   "may skip".
+4. **The existing `test` job keeps running the keytool test unchanged.** On
+   `ubuntu-latest` it finds the runner's JDK and runs the comparison. Without
+   one it skips.
+   - *Alternative: exclude the keytool tests from `make test` in CI.* This would
+     need a `-skip` pattern or a second variable in the Makefile or the job, so
+     CI's `make test` would no longer be the command contributors run locally.
+     The duplicate run on Ubuntu costs about a second. Rejected.
+   - The guarantee comes from the dedicated job. The `test` job's run is a bonus
+     that may silently become a skip if the image drops Java, and that is
+     acceptable.
+5. **The new job uses the `gotests` gate and joins `ci-ok`.** It runs under
+   `if: needs.changes.outputs.gotests == 'true'`, the same gate as `test` and
+   `tier1-test`. A narrower `cmd/warden-io`-only filter would add a new `changes`
+   output for a job that takes under a minute plus JDK setup. It is listed in
+   `ci-ok`'s `needs`, so it gates merges with no change to branch protection
+   (FLOW-11).
+6. **No rule changes.** I checked `docs/development/` for what adding a job must
+   update:
+   - **TEST-02** says tier 0 runs in "the `ci` workflow", on the triggers and
+     docs-only set that `main.yml`'s `changes` job implements. It names the
+     workflow and its gate, not its jobs. The new job is in that workflow under
+     that gate, so the wording holds as written.
+   - **TEST-01** still holds: `make test` keeps no external dependency, because
+     without a JDK the test skips.
+   - Nothing in `docs/development/` lists `main.yml`'s jobs, and no tier-1 or
+     `tools/workflow` check reads them.
+   `rule_changes` is therefore empty.
+
+## Questions
+
+### Blocking
+
+None.
+
+### Assumed
+
+None. Jeff answered the CI approach directly (Decision 2), and the rest follows
+from it.
+
+## Design
+
+**Test (`cmd/warden-io/jks_test.go`).** A helper finds a keytool that can run, or
+decides the test cannot:
+
+```
+func requireKeytool(t) string:
+    path, err := LookPath("keytool")
+    if err: unavailable(t, "keytool not on PATH")
+    out, err := run(path, "-help")
+    if err: unavailable(t, "keytool at <path> cannot run (no Java runtime?): <err>\n<out>")
+    return path
+
+func unavailable(t, msg):
+    if Getenv("WARDEN_REQUIRE_KEYTOOL") == "1": Fatal(msg + " (WARDEN_REQUIRE_KEYTOOL=1)")
+    Skip(msg)
+```
+
+`TestWriteJKSMatchesKeytool` calls `requireKeytool` first. Its import,
+byte-compare and `-list` steps are unchanged. The test name keeps `Keytool`, so
+`-run Keytool` selects it. The comment above the test is updated to say:
+
+- the test skips where no keytool runs;
+- `WARDEN_REQUIRE_KEYTOOL=1` makes that a failure;
+- the `keytool` CI job sets the variable and runs the test on all three
+  platforms.
+
+**CI (`.github/workflows/main.yml`).**
+
+```
+  # The keytool byte comparison, with a JDK on every platform (design
+  # jks-test-skip-without-jdk). make test skips it where keytool cannot run.
+  keytool:
+    needs: changes
+    if: needs.changes.outputs.gotests == 'true'
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macos-latest, windows-latest]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with: { go-version: stable }
+      - uses: actions/setup-java@v4
+        with: { distribution: temurin, java-version: '21' }
+      - run: go test ./cmd/warden-io -run Keytool -count=1 -v
+        env: { WARDEN_REQUIRE_KEYTOOL: '1' }
+```
+
+`ci-ok`'s `needs` gains `keytool`.
+
+**Contributor docs.** In `CONTRIBUTING.md`, the paragraph after the command list
+gains one sentence: the keytool comparison skips without a JDK, and CI's
+`keytool` job runs it on every platform. No user-facing surface changes (UX-01).
+
+## Defaults and overrides
+
+Added at Publish, after #104 made this section required; it restates
+Decisions 1 and 3 and changes neither.
+
+- **Default: skip where keytool cannot run (Decision 1).** With no variable
+  set, `TestWriteJKSMatchesKeytool` skips when `keytool` is not on PATH or its
+  `keytool -help` probe exits non-zero, and the skip message names the path,
+  the error and the probe's output. It is the obvious choice under TEST-01:
+  `make test` keeps no external dependency, and a developer with a working JDK
+  still gets the comparison with no flag or tag (GLOBAL-09).
+- **Override: `WARDEN_REQUIRE_KEYTOOL=1` (Decision 3).** When set to exactly
+  `1`, the same two conditions fail the test with the skip's message plus
+  `(WARDEN_REQUIRE_KEYTOOL=1)`. It is used exclusively: it never falls back to
+  a skip (GLOBAL-10). Any other value, or none, means the default. CI's
+  `keytool` job is its only setter.
+- **Merges and fallbacks: none.** No other keytool is tried, there is no
+  retry, and neither `CI` nor `GITHUB_ACTIONS` changes the behavior
+  (GLOBAL-11).
+
+## Cross-driver impact
+
+None. The change touches one test in `cmd/warden-io`, the `ci` workflow and
+`CONTRIBUTING.md`. It does not touch any driver tree, the `driver.Driver` /
+`driver.Session` contract, or any shared package (ORCH-01). `writeJKS` and the
+truststore it writes do not change.
+
+## Validation plan
+
+- **Tier 0, locally (macbook, stub keytool, no JDK).**
+  - `go test ./cmd/warden-io -run Keytool -v` reports SKIP with the stub's
+    message, and `make test` is green.
+  - `WARDEN_REQUIRE_KEYTOOL=1 go test ./cmd/warden-io -run Keytool -v` FAILS
+    with the same message. This is the job's fail-when-it-cannot-compare path,
+    shown without a CI run.
+- **CI on the PR.**
+  - All three `keytool` matrix legs show
+    `--- PASS: TestWriteJKSMatchesKeytool`, not SKIP, in their `-v` logs. That
+    is the byte comparison against Temurin 21's keytool on Linux, macOS and
+    Windows.
+  - `ci-ok` lists `keytool` among its needs and is green.
+  - The `test` job still passes on `ubuntu-latest`.
+- **A first run on Windows or macOS may find a real platform difference**, for
+  example a line-ending or path issue in the test, or a byte mismatch against
+  that platform's keytool. That is a finding to fix in Implement, not a reason
+  to drop the leg.
+- **Tier 1 / 2.** Not affected.
+- **Native validation.** None. The change is test and CI only and touches no
+  driver. Implement runs `make test` on the macbook, the environment the skip is
+  for.
+
+## Implementation plan
+
+Rework of what was implemented at a5ea356 and e74e98c (FLOW-06). The probe,
+the not-on-PATH lookup and the import, byte-compare and `-list` steps stay as
+they are; only the switch, the comments, CI and one contributor sentence
+change.
+
+1. **Tier 0 check of the require path first (TEST-02 tier 0; TEST-01,
+   TEST-04).** Before editing, with a stub `keytool` that exits non-zero first
+   on PATH, confirm `WARDEN_REQUIRE_KEYTOOL=1 go test ./cmd/warden-io -run
+   Keytool -v` skips under the current code (the red case: the variable is not
+   yet honored). Task 2 turns it into a failure.
+2. **Rework the helper in `cmd/warden-io/jks_test.go` (Decisions 1 and 3;
+   TEST-01, TEST-04).** Rename `skipOrFail` to `unavailable`, as in Design.
+   Replace its `GITHUB_ACTIONS == "true"` check with
+   `os.Getenv("WARDEN_REQUIRE_KEYTOOL") == "1"`, and on that path call
+   `t.Fatal(msg + " (WARDEN_REQUIRE_KEYTOOL=1)")`; otherwise `t.Skip(msg)`.
+   Move the lookup and the `-help` probe into `requireKeytool(t) string`, as
+   Design sketches, and have the test call it first. Nothing checks `CI` or
+   `GITHUB_ACTIONS`.
+3. **Rewrite the comments (Design, "Test"; TEST-01).** The comment above
+   `TestWriteJKSMatchesKeytool` says the test skips where no keytool runs, that
+   `WARDEN_REQUIRE_KEYTOOL=1` makes that a failure, and that the `keytool` CI
+   job sets the variable and runs it on Linux, macOS and Windows; it keeps the
+   timestamp sentence. The helper's comment drops the GitHub Actions wording.
+   The test keeps `Keytool` in its name so `-run Keytool` selects it.
+4. **Add the `keytool` job to `.github/workflows/main.yml` (Decisions 2 and 5;
+   TEST-02, GLOBAL-07, FLOW-11).** As in Design: `needs: changes`, the
+   `gotests` gate, the `tier1-test` matrix (`ubuntu-latest`, `macos-latest`,
+   `windows-latest`), checkout, `setup-go` (`go-version: stable`),
+   `actions/setup-java@v4` with `distribution: temurin`, `java-version: '21'`,
+   then `go test ./cmd/warden-io -run Keytool -count=1 -v` with
+   `WARDEN_REQUIRE_KEYTOOL: '1'`, under the two-line comment Design gives. Add
+   `keytool` to `ci-ok`'s `needs`. The `test` job is unchanged (Decision 4).
+5. **Add the `CONTRIBUTING.md` sentence (Design, "Contributor docs"; TEST-01).**
+   In the paragraph after the command list (the one ending with the
+   `testing.md` link), one sentence: the keytool comparison skips without a JDK,
+   and CI's `keytool` job runs it with Java on every platform. No reference-doc
+   (UX-01) or `overview.md` (FLOW-15) update: no user-facing behavior or
+   component flow changes.
+6. **Tier 0 validation (TEST-02 tier 0; TEST-01, TEST-04, FLOW-17).** On the
+   machine Implement runs on, and with the stub `keytool` from task 1 where the
+   machine has a JDK:
+   - `go test ./cmd/warden-io -run Keytool -v` reports SKIP with the probe's
+     output (on the macbook, the stub's "Unable to locate a Java Runtime");
+   - `WARDEN_REQUIRE_KEYTOOL=1` with the same command FAILS with the same
+     message plus `(WARDEN_REQUIRE_KEYTOOL=1)`;
+   - `CI=1` or `GITHUB_ACTIONS=true` alone still SKIPs;
+   - with a working JDK (if present), the test PASSes with and without the
+     variable;
+   - `make test` and `make lint` are green, then push.
+7. **CI validation on the PR (Validation plan; TEST-02, GLOBAL-07, FLOW-11).**
+   All three `keytool` legs log `--- PASS: TestWriteJKSMatchesKeytool`, not
+   SKIP; `ci-ok` needs `keytool` and is green; `test` still passes. A
+   platform difference a leg finds (line endings, paths, a byte mismatch) is
+   fixed in the test or the writer under FLOW-11's bounded repair, not by
+   dropping the leg. This runs when the PR opens at Publish; no
+   `f6-validate-<host>` step exists or is added (`native_validation` is
+   empty).
+
+No rule changes (`rule_changes` is empty, Decision 6). The superseded plan
+(f2-plan at 1d51299) is in this file's history.
+
+## Design review
+
+- **2026-11-07, at Design (d8d8a03): skipped (FLOW-19).** Every skip criterion
+  held.
+- **2026-11-07, return r1 (Jeff's attended answer): skipped (FLOW-19).**
+  - *Finding:* Jeff replaced the environment-variable guard, which made the test
+    fail instead of skip on CI, with a dedicated CI job that installs Java on
+    each platform: "separate [the keytool tests] as a separate CI job which
+    installs Java on the platform as a part of test setup."
+  - *What it changes:*
+    - Decisions 2 to 6 are new or rewritten.
+    - The test's fail-instead-of-skip switch becomes `WARDEN_REQUIRE_KEYTOOL=1`.
+    - `main.yml` gains the `keytool` job.
+    - `CONTRIBUTING.md` gains a sentence.
+    - The Implementation plan's rework is listed above.
+  - *Why the skip still holds:* the impact fields are unchanged:
+    - `alters_relationships: false`;
+    - no `seams`;
+    - `security_boundary: none`;
+    - no `native_validation`.
+
+    In addition, no question is open, `rule_changes` is empty, and no rule in
+    `docs/development/` changes (Decision 6). The CI approach is Jeff's own
+    decision.
+
+## Consolidation
+
+Publish, 2026-11-11 (FLOW-10, FLOW-15). Forked from `main` at `49e5354`;
+`origin/main` at `26c0ac3` merged at `88bb9bc` with no conflict.
+
+- **What landed on `main` since the fork.**
+  - `rule-running-line-match` (#105, `f861315`): FLOW-14's clearance guards the
+    jobs that run the rules, not lines naming them. This branch's `keytool`
+    job and its `ci-ok` `needs:` entry are ordinary jobs under it, which is
+    what unblocked `f3-implement-r2` (q1). Its tests replay this branch's
+    edit as "the incident".
+  - `design-principles` (#104, `beb51ba`): GLOBAL-09 to GLOBAL-11 and a
+    required **Defaults and overrides** section. The section is added above
+    from Decisions 1 and 3; no decision changes. The tier-2 report judged
+    GLOBAL-09 to GLOBAL-11 against those decisions and found nothing.
+  - `next-skips-merge-wait` (#106), `wf-squash-after-base-moved` (#107):
+    `tools/workflow` only; nothing here to reconcile.
+  - `vz-image-prepare-refresh` (#108): `driver/vz` and `overview.md`'s VZ
+    pseudocode. It is the feature this one unblocked on the macbook; no file
+    overlaps.
+  - None of them touches `.github/workflows/main.yml`, `cmd/warden-io` or
+    `CONTRIBUTING.md`'s test paragraph.
+- **Terminology and wording.** Decision 2 said Java 21 is "the current LTS";
+  25 is newer, so it now says "an LTS release" (the pin is unchanged). Prior
+  art said `tier1-test` runs `go test ./...` over the matrix; it runs it in
+  `tools/tier1` only, so the text now says so and notes that the `keytool`
+  job's macOS and Windows legs are the first CI run of `cmd/warden-io` tests
+  there. Both came from the tier-2 report's notes.
+- **FLOW-15 sweep.**
+  - `make deadcode`: the 15 unreachable functions it lists are all in
+    `driver/firecracker`, `driver/hyperv`, `driver/vz` and `relay`, none
+    touched here; this branch adds only test helpers, both called.
+  - Duplication: `requireKeytool` and `unavailable` are the only keytool
+    lookup in Go code; the `WARDEN_*=1` gates elsewhere turn a test on, this
+    one turns a skip into a failure, so there is nothing to share.
+  - `docs/book/src/concepts/overview.md` lists the JKS truststore
+    (`/etc/warden/certs.jks`), whose writer does not change; no component flow
+    changes, so it is unchanged.
+- **Rules proposed:** none. **Follow-ups filed:** none.
+- **Gates at `88bb9bc`:** `make lint` (0 issues; tier 1 0 findings against
+  `origin/main`) and `make test` pass.
+
+## Rollback notes
+
+None.
+
+## Archive summary
+
+Designed 2026-11-07, reworked the same day on Jeff's attended direction (r1);
+design review skipped both times (FLOW-19). Implemented by the cloud loop,
+published 2026-11-11. Unblocked `make test` on the macbook for
+`vz-image-prepare-refresh`.
+
+- **Built.**
+  - `cmd/warden-io/jks_test.go`: `requireKeytool` looks `keytool` up and runs
+    `keytool -help`; `unavailable` skips with a message naming the path, the
+    error and the probe's output, or fails with that message when
+    `WARDEN_REQUIRE_KEYTOOL=1`. `TestWriteJKSMatchesKeytool` calls it first;
+    its import, byte-compare and `-list` steps are unchanged.
+  - `.github/workflows/main.yml`: a `keytool` job on the `ubuntu-latest`,
+    `macos-latest`, `windows-latest` matrix under the `gotests` gate, with
+    `actions/setup-java@v4` (Temurin 21), running
+    `go test ./cmd/warden-io -run Keytool -count=1 -v` with
+    `WARDEN_REQUIRE_KEYTOOL: '1'`; `ci-ok` needs it. The `test` job is
+    unchanged and still runs the comparison where the runner has a JDK.
+  - `CONTRIBUTING.md`: one sentence on the skip and the job.
+- **Decisions taken:** probe that the found keytool runs, not just that it
+  is on PATH (1); a dedicated CI job installs a pinned JDK on all three
+  platforms (2, Jeff); `WARDEN_REQUIRE_KEYTOOL=1` turns the skip into a
+  failure so that job cannot pass by skipping (3); `make test` and the `test`
+  job are unchanged (4); the job uses the `gotests` gate and joins `ci-ok`
+  (5); no rule change (6).
+- **Rejected:** matching the macOS stub's message; `/usr/libexec/java_home`;
+  probing `java` or `JAVA_HOME` instead of `keytool`; a `keytool` build tag;
+  installing a JDK on the Mac (Jeff); failing instead of skipping when `CI`
+  (4fa31a1) or `GITHUB_ACTIONS=true` (d8d8a03, implemented at a5ea356) is
+  set; excluding the keytool test from CI's `make test`; a
+  `cmd/warden-io`-only `changes` filter.
+- **For a future design touching `testing`, `jks`, `keytool`, `truststore`,
+  `ci`, `github-actions` or `java`:**
+  - A test that needs an external tool skips where the tool cannot *run*
+    (probe it), and a CI job that installs the tool sets a `WARDEN_REQUIRE_*=1`
+    variable so it fails instead. `WARDEN_REQUIRE_KEYTOOL` covers any keytool
+    test whose name matches `-run Keytool`.
+  - The `keytool` job is the only CI run of `cmd/warden-io` tests on macOS and
+    Windows; `tier1-test` runs only `tools/tier1`.
+  - The reference keytool is Temurin 21; moving the pin (say to 25) is a
+    change to the byte comparison's reference, so check all three legs.
+  - Under FLOW-14 since #105, adding an ordinary job to `ci-ok`'s `needs:`
+    is not a rule change.
