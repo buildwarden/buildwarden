@@ -100,7 +100,7 @@ func StartRelay(ctx context.Context, prov Provisioner, cfg RelayHostConfig) (*Re
 	}
 
 	h := &RelayHost{
-		VMName:  "warden-relay-" + cfg.BuildID,
+		VMName:  relayVMPrefix + cfg.BuildID,
 		Session: sess,
 		prov:    prov,
 		overlay: cfg.OverlayVHDX,

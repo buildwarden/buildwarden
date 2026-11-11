@@ -50,6 +50,12 @@ func (f *netFake) DisksInUse(context.Context) ([]string, error) { panic("not ove
 func (f *netFake) ListVMs(context.Context, string) ([]string, error) {
 	panic("not over pipe")
 }
+func (f *netFake) RelayNotes(context.Context) (map[string]string, error) {
+	panic("not over pipe")
+}
+func (f *netFake) SwitchAdapters(context.Context, []string) (map[string][]string, error) {
+	panic("not over pipe")
+}
 
 // roundTripOverPipe runs serveConn on one end of a net.Pipe and clientRoundTrip
 // on the other, returning the client's result.

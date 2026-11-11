@@ -106,6 +106,12 @@ func (f *buildFake) DisksInUse(context.Context) ([]string, error) { return nil, 
 func (f *buildFake) ListVMs(context.Context, string) ([]string, error) {
 	return nil, nil
 }
+func (f *buildFake) RelayNotes(context.Context) (map[string]string, error) {
+	return nil, nil
+}
+func (f *buildFake) SwitchAdapters(context.Context, []string) (map[string][]string, error) {
+	return nil, nil
+}
 
 // simulateRelayReady mirrors the relay: accept the tunnel and the claim, then
 // POST /v1/ready to the collector over the tunnel.

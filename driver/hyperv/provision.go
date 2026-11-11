@@ -1,6 +1,13 @@
 package hyperv
 
-import "context"
+import (
+	"context"
+	"strings"
+)
+
+// relayVMPrefix names every relay VM; StartRelay appends the build ID. The
+// allocator reads the Notes of every VM with this prefix.
+const relayVMPrefix = "warden-relay-"
 
 // Provisioner is the single boundary through which every privileged Hyper-V
 // operation flows. It is the code-reuse spine of the driver: the same logic
@@ -52,6 +59,38 @@ type Provisioner interface {
 	DisksInUse(ctx context.Context) ([]string, error)
 	// ListVMs names the host's VMs whose names start with prefix.
 	ListVMs(ctx context.Context, prefix string) ([]string, error)
+	// RelayNotes maps each relay VM on the host (relayVMPrefix) to its Notes,
+	// whichever process created it and whatever its state.
+	RelayNotes(ctx context.Context) (map[string]string, error)
+	// SwitchAdapters maps each of switches that has an adapter attached to
+	// the VMs those adapters belong to, a VM once per adapter.
+	SwitchAdapters(ctx context.Context, switches []string) (map[string][]string, error)
+}
+
+// parseRelayNotes reads RelayNotes' script output: one "<vm>\t<notes>" line
+// per relay VM.
+func parseRelayNotes(out string) map[string]string {
+	notes := map[string]string{}
+	for _, line := range strings.Split(out, "\n") {
+		name, n, _ := strings.Cut(strings.TrimRight(line, "\r"), "\t")
+		if name = strings.TrimSpace(name); name != "" {
+			notes[name] = strings.TrimSpace(n)
+		}
+	}
+	return notes
+}
+
+// parseSwitchAdapters reads SwitchAdapters' script output: one
+// "<switch>\t<vm>" line per attached adapter.
+func parseSwitchAdapters(out string) map[string][]string {
+	attached := map[string][]string{}
+	for _, line := range strings.Split(out, "\n") {
+		sw, vm, ok := strings.Cut(strings.TrimRight(line, "\r"), "\t")
+		if sw = strings.TrimSpace(sw); ok && sw != "" {
+			attached[sw] = append(attached[sw], strings.TrimSpace(vm))
+		}
+	}
+	return attached
 }
 
 // NetworkSpec describes the isolated build network to stand up (or reuse).

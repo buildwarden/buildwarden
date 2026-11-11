@@ -406,6 +406,39 @@ func (p *localProvisioner) ListVMs(ctx context.Context, prefix string) ([]string
 	return nonEmptyLines(out), nil
 }
 
+// RelayNotes reads the Notes of every relay VM, one line each (Notes the
+// user edited across lines are joined, so a line is always one VM).
+func (p *localProvisioner) RelayNotes(ctx context.Context) (map[string]string, error) {
+	out, err := runPS(fmt.Sprintf("Get-VM -Name '%s*' -ErrorAction SilentlyContinue | "+
+		"ForEach-Object { $_.Name + \"`t\" + ($_.Notes -replace '[\\r\\n]+', ' ') }",
+		psEscapeSingle(relayVMPrefix)))
+	if err != nil {
+		return nil, fmt.Errorf("RelayNotes: %w", err)
+	}
+	return parseRelayNotes(out), nil
+}
+
+// SwitchAdapters lists every VM adapter on the host (Get-VMNetworkAdapter
+// -All) attached to one of switches.
+func (p *localProvisioner) SwitchAdapters(
+	ctx context.Context, switches []string,
+) (map[string][]string, error) {
+	if len(switches) == 0 {
+		return map[string][]string{}, nil
+	}
+	quoted := make([]string, len(switches))
+	for i, sw := range switches {
+		quoted[i] = "'" + psEscapeSingle(sw) + "'"
+	}
+	out, err := runPS(fmt.Sprintf("$sw = @(%s)\n"+
+		"Get-VMNetworkAdapter -All | Where-Object { $sw -contains $_.SwitchName } | "+
+		"ForEach-Object { $_.SwitchName + \"`t\" + $_.VMName }", strings.Join(quoted, ",")))
+	if err != nil {
+		return nil, fmt.Errorf("SwitchAdapters: %w", err)
+	}
+	return parseSwitchAdapters(out), nil
+}
+
 func nonEmptyLines(s string) []string {
 	var lines []string
 	for _, line := range strings.Split(s, "\n") {
