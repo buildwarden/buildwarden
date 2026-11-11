@@ -624,6 +624,14 @@ func mergeWaiting(f *Feature, pr int) *Feature {
 // TestNextSkipsMergeWait: no worker is offered a merge step; the item is
 // reported as waiting on the human's merge and the walk goes on (FLOW-05).
 func TestNextSkipsMergeWait(t *testing.T) {
+	t.Run("process", mergeWaitProcess)
+	t.Run("feature", mergeWaitFeature)
+	t.Run("no PR", mergeWaitNoPR)
+}
+
+// mergeWaitProcess is the 2026-11-10 incident's shape: a process item at
+// x3-merge ahead of an in-progress fix with a ready cloud step.
+func mergeWaitProcess(t *testing.T) {
 	parent := feature("parent", 1, "done")
 	merging := mergeWaiting(process("merging", 53, "in_progress"), 104)
 	fix := feature("fix", 60, "in_progress")
@@ -646,8 +654,17 @@ func TestNextSkipsMergeWait(t *testing.T) {
 		}
 	}
 
-	// A feature at f7-merge, its -r2 form too, yields within class 4: to an
-	// in-progress feature behind it, or to a queued one, which starts.
+	// An attended run on the item gets no pick and the reason.
+	if p, blocked := state(merging).NextFor("merging", "cloud", now); p != nil ||
+		!slices.Equal(blocked, want) {
+		t.Fatalf("NextFor = %+v, %+v; want merging on its merge", p, blocked)
+	}
+}
+
+// mergeWaitFeature: a feature at f7-merge, its -r2 form too, yields within
+// class 4: to an in-progress feature behind it, or to a queued one, which
+// starts.
+func mergeWaitFeature(t *testing.T) {
 	for _, id := range []string{"f7-merge", "f7-merge-r2"} {
 		a := mergeWaiting(feature("a", 1, "in_progress"), 7)
 		a.Steps[len(a.Steps)-1].ID = id
@@ -662,8 +679,11 @@ func TestNextSkipsMergeWait(t *testing.T) {
 			t.Errorf("%s: pick = %+v, want q started past a's merge", id, p)
 		}
 	}
+}
 
-	// With no PR recorded the reason is exact, for a nil PR and a PR 0.
+// mergeWaitNoPR: with no PR recorded the reason is exact, for a nil PR and a
+// PR 0.
+func mergeWaitNoPR(t *testing.T) {
 	for _, pr := range []*PR{nil, {}} {
 		f := mergeWaiting(process("x", 1, "in_progress"), 0)
 		f.PR = pr
@@ -675,12 +695,6 @@ func TestNextSkipsMergeWait(t *testing.T) {
 		if !slices.Equal(blocked, []Blocked{{"x", "waiting on " + why}}) {
 			t.Errorf("PR %+v: blocked %+v", pr, blocked)
 		}
-	}
-
-	// An attended run on the item gets no pick and the reason.
-	if p, blocked := state(merging).NextFor("merging", "cloud", now); p != nil ||
-		!slices.Equal(blocked, want) {
-		t.Fatalf("NextFor = %+v, %+v; want merging on its merge", p, blocked)
 	}
 }
 
