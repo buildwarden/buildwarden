@@ -34,7 +34,7 @@ run_budget: {steps: 8}      # steps one run may take; calibrate against /usage
 native_budget: {steps: 8}   # steps one scheduled native session may take (FLOW-13);
                             # unset falls back to run_budget; `wf budget -native`
 limits:
-  in_progress: 5            # FLOW-05
+  in_progress: 5            # FLOW-05: features in progress; process items not counted
   alters_relationships: 1   # FLOW-05: of those, past Design with alters_relationships: true
 lease_minutes: 120          # FLOW-04
 runaway_factor: 2           # FLOW-13: escalate at this multiple of the step estimate
@@ -97,7 +97,7 @@ the transition happens only if the check passes.
 | 4 | `f4-review` |
 | 5 | `f5-guide` |
 | 6 | `f6-merge-main` (waits for the PR slot, FLOW-05), `f6-consolidate`, `f6-open-pr` (archives the design on the branch and opens the PR; no confirmation, FLOW-08) |
-| 7 | `f7-merge` (cloud; passes once the human has merged, takes no claim or budget) |
+| 7 | `f7-merge` (cloud; passes once the human has merged, takes no claim or budget; never offered by `wf next`, the tick confirms it) |
 | 8 | `f8-close` (cloud, inline in the tick; no PR, FLOW-16) |
 
 A **process item** (`kind: process`, FLOW-03) changes the rules the loops run
@@ -148,9 +148,10 @@ interrupted run loses at most the step in progress (FLOW-13).
 `wf next` follows FLOW-05: the first ready step in class order (in
 implementation, process, fixes, new functionality; in progress before queued,
 then priority); a fix only once the item it `follows` is done, unless an
-attended run names it; at most five features in progress; the cloud skips a feature with an open blocking
+attended run names it; at most five features in progress, process items not counted; the cloud skips a feature with an open blocking
 question, a spent runaway budget, or a need for the `alters_relationships`
-slot another feature holds. Its `blocked` lines feed the digest.
+slot another feature holds, and skips an item waiting on the human's merge
+(its `f7-merge` or `x3-merge`). Its `blocked` lines feed the digest.
 
 Other commands: `wf validate`, `wf status [-all]` (open items; `-all` adds done ones), `wf check` (done-when without
 moving), `wf release`, `wf back` (FLOW-06), `wf answer` (human only, FLOW-07),

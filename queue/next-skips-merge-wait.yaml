@@ -3,13 +3,16 @@ title: wf next hands the cloud a merge step that waits on the human, starving lo
 priority: 53
 kind: process
 follows: regression-fixes-follow-up
-status: in_progress
+status: done
 round: process
-phase: 2
+phase: 4
 design: docs/design/next-skips-merge-wait.md
 branch: feat/next-skips-merge-wait
 alters_relationships: null
 source: 'Filed 2026-11-10 by tick cloud/20261110T105938Z under FLOW-09 as a follow-up of regression-fixes-follow-up (#103, class order): with design-principles (#104) and rule-running-line-match (#105) in x3-merge, wf next kept returning design-principles x3-merge to the cloud (its done-when fails until Jeff merges), so hyperv-relay-per-build-channel''s ready f1-design-r3 (class 3) was never offered. FLOW-05 drops an item in implementation from its class while it waits for the human''s merge; next.go''s ready() offers x3-merge/f7-merge like any cloud step. Fix: a merge step whose PR is not merged blocks only its item (reported as waiting on the human''s merge), so next moves to the next item.'
+pr:
+  number: 106
+  ci: green
 steps:
   - id: x1-design
     phase: 1
@@ -21,7 +24,21 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
-    status: pending
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
+    affinity: cloud
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -30,8 +47,8 @@ budget:
     runs: 1
     steps: 4
   spent:
-    runs: 0
-    steps: 1
+    runs: 2
+    steps: 3
 questions: []
 history:
   - at: 2026-11-10T11:29:50Z
@@ -49,3 +66,27 @@ history:
   - at: 2026-11-11T17:34:07Z
     by: human/jeff
     event: entered phase 2 (implement)
+  - at: 2026-11-11T17:56:40Z
+    by: cloud/20261111T173920Z
+    event: claimed x2-implement until 2026-11-11T19:56:40Z
+  - at: 2026-11-11T18:10:13Z
+    by: cloud/20261111T173920Z
+    event: done x2-implement
+  - at: 2026-11-11T18:10:13Z
+    by: cloud/20261111T173920Z
+    event: entered phase 3 (merge)
+  - at: 2026-11-11T18:10:13Z
+    by: cloud/20261111T173920Z
+    event: done x3-merge
+  - at: 2026-11-11T18:10:13Z
+    by: cloud/20261111T173920Z
+    event: entered phase 4 (close)
+  - at: 2026-11-11T18:10:24Z
+    by: cloud/20261111T173920Z
+    event: claimed x4-close until 2026-11-11T20:10:24Z
+  - at: 2026-11-11T18:10:34Z
+    by: cloud/20261111T173920Z
+    event: done x4-close
+  - at: 2026-11-11T18:10:34Z
+    by: cloud/20261111T173920Z
+    event: closed; feature done
