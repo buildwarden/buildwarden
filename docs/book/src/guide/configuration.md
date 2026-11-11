@@ -41,7 +41,7 @@ system_ca_bundle = true    # Include host system CA bundle in relay trust store
 cpus = 0                   # Build VM vCPUs (0 = per-driver default; vz, qemu,
                            #   hyperv and firecracker)
 memory_mb = 0              # Build VM memory in MiB (0 = per-driver default)
-network = ""               # hyperv: durable build switch name
+network = ""               # hyperv: durable network name (switches <name>-0.., NAT <name>-nat)
 image_refresh_after = "7d" # hyperv: re-prepare the base in the background at this age
 image_min_grace = "1d"     # hyperv: refuse builds with less evaluation grace left
 windows_image = ""         # hyperv: base image URL or local path (default: Microsoft's

@@ -114,9 +114,10 @@ warden build --driver firecracker --script build.sh ./src
 If a build stops before booting with a DNS error, the host has no resolver
 the relay can use: only local ones (systemd-resolved's stub with no upstream,
 a local dnsmasq, or WSL's `10.255.255.254`), or only ones inside the build
-link. The error says what to change, and
-[Upstream DNS](../guide/drivers.md#upstream-dns) covers it; moving the link is
-in [Corporate Networks](../guide/corporate-networks.md#address-collisions-with-the-build-link).
+link. The error says what to change: an off-host resolver on the host, or
+`[vm] dns` naming one. [Upstream DNS](../guide/drivers.md#upstream-dns)
+covers it; moving the link is in
+[Corporate Networks](../guide/corporate-networks.md#address-collisions-with-the-build-link).
 
 To look at the VMs after a build, add `--keep-vms`: both VMs keep running and
 warden prints their pids. Stop them, and any left by an interrupted build,
@@ -125,6 +126,29 @@ with:
 ```sh
 warden clean --driver firecracker
 ```
+
+## A first Hyper-V build
+
+On Windows, after the
+[Hyper-V setup](./installation.md#first-time-hyper-v-setup), from a terminal
+in Hyper-V Administrators (no elevation needed):
+
+```sh
+warden doctor --driver hyperv                         # every check should pass
+warden build --driver hyperv --guest-os windows ./win-project
+```
+
+Each build gets its own relay address on the NAT, its own claim token and one
+of the build switches `warden setup` made, so you can start several builds at
+once, up to the `--slots` you set up (4 by default). One more is refused
+before any VM boots, naming the VMs on each switch and `--slots`. A
+`--keep-vms` build keeps its switch until you remove its VMs; doctor lists
+the switch as `in use by` them.
+
+The Windows build VM takes its address from the relay's DHCP lease. A guest
+that gets no lease waits for the relay, fails, and powers off; its
+`warden-run.log` and COM1 console record the address its NIC ended on and
+where it came from (`WellKnown, no DHCP lease from the relay`).
 
 ## Interactive debugging (container driver)
 

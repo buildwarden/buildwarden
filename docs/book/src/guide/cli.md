@@ -24,7 +24,7 @@ rejects only the flags it genuinely cannot use.
 - `--guest-os <os>` — Guest OS for VM drivers: `linux` (default) or `windows`
 - `--cpus <n>` — Build VM vCPUs (VM drivers; default per driver)
 - `--memory <MiB>` — Build VM memory in MiB (VM drivers; default per driver)
-- `--network <name>` — Pre-provisioned network to reuse (hyperv: the durable switch from `warden setup`)
+- `--network <name>` — Pre-provisioned network to reuse (hyperv: the durable network from `warden setup`, whose build switches are `<name>-0` and up)
 - `--keep-vms` — Leave VMs, disks and the work dir in place for inspection (VM drivers)
 - `--tmpdir <dir>` — Directory each build's private work dir is created in (default: the OS temp dir, which honours `TMPDIR`)
 - `--build-link <cidr>` — Advanced: the VM drivers' relay-to-build link, a `/30`
@@ -287,7 +287,7 @@ Other drivers print that no host setup is needed. Replaces the old
 `warden hyperv setup`.
 
 **Flags:**
-- `--network <name>` — Durable build switch name (default: `[vm]` network, then `warden-dev`)
+- `--network <name>` — Durable network name, the prefix of its build switches `<name>-0` to `<name>-<N-1>` and of its NAT `<name>-nat` (default: `[vm]` network, then `warden-dev`)
 - `--nat-prefix <cidr>` — NAT CIDR for relay egress (default 192.168.240.0/20).
   Every build reads the NAT back from the host and gives its relay its own
   address in this prefix, so a non-default value takes effect on every build.
