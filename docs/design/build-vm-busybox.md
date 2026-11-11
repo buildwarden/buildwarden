@@ -1,7 +1,7 @@
 ---
 feature: build-vm-busybox
 status: draft
-drivers: [qemu, firecracker]  # tools/build-vm builds the qemu direct-boot initramfs; review r1 a2 (C) also re-pins tools/firecracker-vm's busybox to the same version; driver code unchanged
+drivers: [qemu, firecracker]  # tools/build-vm builds the qemu direct-boot initramfs; tools/firecracker-vm is unchanged (its pin was already current, see Consolidation), but driver/buildlink's TestDirectBootBusyboxPins now ties its busybox pin to tools/build-vm's, so its next re-pin must touch both; driver code unchanged
 seams: []                # the init, the link-channel stamp and the relay's assets are unchanged
 surfaces: []             # the documented setup commands (installation.md, drivers.md) and driver/qemu's fixable message stay correct; only the script's own error text changes
 security_boundary: none  # busybox runs inside the build VM, outside the relay boundary; the change adds a pinned checksum where there was none
@@ -70,8 +70,11 @@ script does for x86_64.
 3.21's current `busybox-static` now, rather than pinning the build-vm script
 to Firecracker's `1.37.0-r14`. Implement reads the current version from the
 3.21 `main` index, downloads the aarch64 and x86_64 packages, and pins both
-sha256 values. `tools/firecracker-vm/build-initramfs.sh` changes, so
-Firecracker's CI asset cache re-keys once and rebuilds on the PR.
+sha256 values. Implement found that the current version is still
+`1.37.0-r14` for both architectures (the tier-2 review confirmed both
+APKINDEXes and checksums), so the build-vm script pins `1.37.0-r14` and
+`tools/firecracker-vm/build-initramfs.sh` keeps its pin unchanged; Firecracker's
+CI asset cache does not re-key (corrected at Publish, FLOW-10).
 
 Alternatives:
 
@@ -168,7 +171,8 @@ None.
 
 1. Constants, mirroring the Firecracker script: `ALPINE_VERSION="3.21"`,
    `ALPINE_MIRROR=.../v${ALPINE_VERSION}/main/aarch64`,
-   `BUSYBOX_VERSION=<Alpine 3.21's current busybox-static>`, `BUSYBOX_SHA256=<aarch64 sha256>`,
+   `BUSYBOX_VERSION=<Alpine 3.21's current busybox-static>` (`1.37.0-r14`),
+   `BUSYBOX_SHA256=<aarch64 sha256>`,
    `BUSYBOX_APK`, `CACHE_DIR="$SCRIPT_DIR/.cache"`, with the same re-pin
    comment.
 2. Precondition: `$RELAY_CACHE/linux-virt.apk` present, else "run
@@ -199,16 +203,51 @@ No change to `driver/qemu`, the init, the relay script, the reference docs
 (the two documented commands are still the two to run, in that order) or
 `overview.md` (it has no pseudocode for asset building).
 
+## Defaults and overrides
+
+Added at Publish, after #104 made this section required; it restates
+Decisions 1-3 and Design step 3 and changes none of them.
+
+- **Default: the pinned package (Decision 1).** The script always fetches
+  `busybox-static-1.37.0-r14.apk` for aarch64 from Alpine 3.21's `main`
+  repository and checks it against the pinned `BUSYBOX_SHA256`. There is no
+  variable, flag or mirror override: the pin is the reproducible choice and
+  the one the tier-0 test keeps equal to Firecracker's. Changing it is a
+  re-pin of both scripts, not a run-time setting.
+- **Selection: `sha256sum`, else `shasum -a 256` (Decision 3).** The script
+  checks with `sha256sum -c` when `command -v sha256sum` finds it, and with
+  `shasum -a 256 -c` otherwise (macOS, the qemu driver's usual host). It is a
+  choice by which tool is present, made before the check runs, not a fallback
+  after a failed check: a checksum mismatch under either tool stops the
+  script, and the other tool is never tried (GLOBAL-10, GLOBAL-11).
+- **Reuse: the cached package (Design step 3).** When
+  `tools/build-vm/.cache/busybox-static-<version>.apk` exists, the script
+  reuses it instead of downloading, and checks its sha256 on every run, so a
+  changed or corrupted cached file stops the script rather than being used.
+  An interrupted download is never cached (it is written to `.part` and
+  renamed on success). To force a fresh download, delete the cached file.
+- **Unchanged source: the relay cache's `linux-virt.apk` (Decision 2).** The
+  kernel modules still come only from `tools/relay-vm/.cache/`; when the file
+  is missing the script stops and names `tools/relay-vm/build-initramfs.sh`.
+  Busybox is never taken from the relay cache any more, even where an old
+  cache still holds one.
+- **Merges and fallbacks: none else.** No other mirror or Alpine branch is
+  tried and a failed download is not retried. `tar -xzf ... || true` is not
+  a fallback: it tolerates tar's exit after the apk's data segment, and the
+  `bin/busybox.static` check after it stops the script when extraction
+  failed (Decision 3).
+
 ## Cross-driver impact
 
 - **qemu**: its direct-boot initramfs builds from a fresh cache. The
   produced initramfs differs only in the busybox binary; the init's applets
   and the stamp are unchanged. Cloud-image (`--image`) builds do not use it.
-- **firecracker**: its script's `BUSYBOX_VERSION` and x86_64
-  `BUSYBOX_SHA256` move to the same current version (review r1, a2 (C)).
-  Its CI asset cache key hashes `tools/firecracker-vm/build-*.sh`, so the
-  cache misses once and `firecracker.yml` rebuilds and runs its builds on
-  the PR; that run is its validation.
+- **firecracker**: unchanged. Its script already pins Alpine 3.21's current
+  `busybox-static` (`1.37.0-r14`), so a2 (C)'s re-pin leaves it as it is,
+  and its CI asset cache key (which hashes `tools/firecracker-vm/build-*.sh`)
+  does not change. The new tier-0 test reads its script, so its next re-pin
+  must also re-pin `tools/build-vm`. `firecracker.yml` still runs on the PR
+  through its `driver/buildlink/**` path filter, on its cached assets.
 - **container, vz, hyperv**: unaffected; none uses `tools/build-vm`.
 
 ## Validation plan
@@ -217,10 +256,11 @@ No change to `driver/qemu`, the init, the relay script, the reference docs
   to the existing direct-boot parity tests.
 - **Tier 1**: `make lint` and `make test`. CI: no workflow builds
   `tools/build-vm`. The `driver/buildlink` test change triggers
-  `firecracker.yml` and `integration.yml` by their path filters;
-  Firecracker's asset cache key changes with its script (a2 (C)), so it
-  rebuilds its assets and runs its builds on the new busybox, and `integration.yml` builds no
-  initramfs and has no asset cache.
+  `firecracker.yml` and `integration.yml` by their path filters; Firecracker's
+  script is unchanged (its pin is already current), so its asset cache key is
+  the same and it runs its builds on the cached assets, and `integration.yml`
+  builds no initramfs and has no asset cache. No CI run validates the
+  build-vm script; the native step does.
 - **Tier 2, native, blocking — `qemu-any`** (step `f6-validate-qemu-any`):
   1. From a fresh cache (`tools/build-vm/.cache`, `tools/relay-vm/.cache`
      and both `output/` directories removed, on a scratch copy so the
@@ -247,7 +287,9 @@ No change to `driver/qemu`, the init, the relay script, the reference docs
    (back to Design). (FLOW-07, ORCH-01)
 2. Rework `tools/firecracker-vm/build-initramfs.sh`: set `BUSYBOX_VERSION`
    and the x86_64 `BUSYBOX_SHA256` from task 1; nothing else in the script
-   changes (Cross-driver impact, firecracker). (FLOW-06, ORCH-01)
+   changes (Cross-driver impact, firecracker). (FLOW-06, ORCH-01) Done as a
+   no-op: task 1 found `1.37.0-r14`, the version and x86_64 checksum the
+   script already pins.
 3. Rework `tools/build-vm/build-initramfs.sh` per Design steps 1-6:
    the pinned constants and `CACHE_DIR` with the re-pin comment (aarch64
    sha256 from task 1); the precondition naming only
@@ -273,9 +315,9 @@ No change to `driver/qemu`, the init, the relay script, the reference docs
    change nothing. (UX-01, FLOW-15)
 7. Tier 1 gate: `make lint` and `make test` green (no build-tagged files are
    touched, so one platform), then push the branch. On the PR,
-   `firecracker.yml` re-keys its asset cache once, rebuilds with the new
-   busybox and runs its builds: that is firecracker's validation, checked at
-   Publish. (TEST-01, TEST-02, FLOW-17, ORCH-01)
+   `firecracker.yml` runs through its `driver/buildlink/**` filter on its
+   unchanged asset cache; Firecracker owes no new validation, since its script
+   did not change. (TEST-01, TEST-02, FLOW-17, ORCH-01)
 8. Tier 2, native, blocking (TEST-02, FLOW-09): step `f6-validate-qemu-any`
    runs the Validation plan's four `qemu-any` cases on the pushed branch;
    Implement does not run them.
@@ -299,7 +341,56 @@ No change to `driver/qemu`, the init, the relay script, the reference docs
 
 ## Consolidation
 
-<!-- Filled in at Publish (FLOW-10, FLOW-15). -->
+Done at Publish after merging `origin/main` at `4aaeca9` (merge
+`3f97023`). The branch forked at `49e5354` (#103).
+
+**Landed on `main` since the fork** (FLOW-10): #104 design-principles
+(GLOBAL-09 to GLOBAL-11, RELAY-08, the required **Defaults and overrides**
+section), #105 rule-running-line-match, #106 next-skips-merge-wait, #107
+wf-squash-after-base-moved, #108 vz-image-prepare-refresh, #109
+jks-test-skip-without-jdk. None touches `tools/build-vm`,
+`tools/firecracker-vm`, `tools/relay-vm`, `driver/buildlink` or
+`driver/qemu`; the merge had no conflicts. #108 changed `drivers.md`,
+`installation.md` and `overview.md` around the vz prepared image; the qemu
+direct-boot rows and the two documented commands (relay-vm, then build-vm)
+are unchanged, so no reference doc is owed (UX-01).
+
+- **Terminology:** aligned. The design and script use the canonical terms
+  (direct boot, the launcher, the link-channel stamp, the relay cache).
+- **#104's principles:** the **Defaults and overrides** section above is
+  added from the approved Decisions without changing one. The tier-2 review
+  judged the diff against GLOBAL-09 to GLOBAL-11 and found no unnamed default,
+  merge or fallback; RELAY-08 is not reached (no relay setting is delivered).
+- **Shared abstractions:** the busybox fetch stays as two copies, one per
+  `tools/` directory, by Decision 1 (Firecracker's CI cache key and path
+  filter cover only `tools/firecracker-vm`); `TestDirectBootBusyboxPins`
+  pins them together.
+- **Versioned seams:** none changed (no stamp bump, Decision 4).
+- **Convention for future work:** none new. The re-pin rule ("re-pin both
+  direct-boot scripts together") is enforced by the tier-0 test, not a rule.
+- **Stale design text corrected** (wording only, no decision changed): a2 (C)
+  anticipated a version move that did not happen, because Alpine 3.21's
+  current `busybox-static` is still `1.37.0-r14`, the version
+  `tools/firecracker-vm` already pinned. Corrected: Decision 1's version note,
+  Design step 1, the Cross-driver firecracker line, the Validation plan's CI
+  line, and Implementation plan tasks 2 and 7. The r1 review record is left
+  as written; its "Firecracker's CI asset cache re-keys once" is superseded by
+  these corrections. Front matter `drivers` keeps `firecracker`: its script
+  is unchanged, but `driver/buildlink`'s `TestDirectBootBusyboxPins` reads it
+  and binds its `ALPINE_VERSION` and `BUSYBOX_VERSION` to `tools/build-vm`'s,
+  so a future Firecracker re-pin is constrained by this feature.
+
+**FLOW-15 sweep:**
+
+- **Dead code:** `make deadcode` at `3f97023` lists 20 unreachable
+  functions, all in Go files this branch does not touch (its only Go change
+  is a test); none is introduced here, so none is removed here.
+- **Duplication:** the two `fetch_busybox` copies are deliberate (Decision 1,
+  above). The tier-2 review noted that Firecracker's copy shares the two
+  error-text gaps reported as SHOULD findings; aligning it is left for its
+  next re-pin, when its cache key changes anyway.
+- **Overview:** `overview.md` has no pseudocode for asset building, and the
+  launcher's flow (udhcpc, the stamp check) is unchanged; nothing to update.
 
 ## Rollback notes
 
