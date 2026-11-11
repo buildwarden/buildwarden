@@ -57,10 +57,18 @@ steps:
       claimed_by: ""
       expires: null
     note: 'Blocking native validation (FLOW-09) per docs/design/baked-asset-staleness.md Validation plan, on the branch after consolidation, evidence under native/macos-vz/<date>/: (1) with the active image prepared by main (link-channel only), warden doctor --driver vz is BLOCKED naming sudo warden image prepare --driver vz and a build is refused before the VM boots. (2) the refresh in place (no IPSW restore) writes disk.img.source; doctor current; a build succeeds and its ledger verifies; warden-boot.log shows the same lines as a run before the change (the guest files moved to driver/vz/guest/ are byte-identical). (3) --image at a disk outside the image cache with no .source is refused naming omit --image. (4) a comment edit in cmd/warden-io, make generate, make build: the image is reported stale and a build refused; a refresh in place makes it current; revert and refresh again.'
+  - id: f2-answer-q1
+    phase: 2
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
   - id: f2-design-review
     phase: 2
     affinity: human
     status: pending
+    needs: [f2-answer-q1]
     lease:
       claimed_by: ""
       expires: null
@@ -81,6 +89,13 @@ budget:
     runs: 1
     steps: 2
 questions:
+  - id: q1
+    kind: blocking
+    status: open
+    question: "On hold (Jeff, 2026-11-11): the queue is paused behind a major refactor Jeff will take as the priority once the in-flight implementations finish. Answer this question only to resume the item; while it stays open the item is on hold."
+    options:
+      - resume it, once Jeff makes it a priority again
+    recommended: resume it, once Jeff makes it a priority again
   - id: a1
     kind: assumed
     status: open
@@ -182,3 +197,4 @@ history:
   - at: 2026-11-09T11:24:33Z
     by: cloud/20261109T105708Z
     event: entered phase 2 (plan)
+  - {at: 2026-11-11T13:00:00Z, by: human/jeff, event: "on hold (q1, f2-answer-q1 needed by f2-design-review): queue paused behind Jeff's refactor"}

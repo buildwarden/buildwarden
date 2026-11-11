@@ -10,10 +10,18 @@ branch: feat/vz-ipsw-latest-reuse
 alters_relationships: null
 source: 'behavioral linter f4-review of vz-image-prepare-refresh @ 967c35237998 (reports/vz-image-prepare-refresh/967c35237998.md, informational item): driver/vz/image.go ensureIPSWDownloaded returns <cache>/ipsw-latest.ipsw whenever it exists, for any URL, so a stale manual file is restored into macos-<shortHash(newer URL)> with the newer URL recorded as its ipsw input (digest honest, name not), and the out-of-date warning and image list then name the newer macOS. Also on main 49e5354 (same code in RestoreIPSW); vz-image-prepare-refresh Decision 8 left it out of scope; --update now reaches it too.'
 steps:
+  - id: f0-answer-q1
+    phase: 0
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
   - id: f0-branch-setup
     phase: 0
     affinity: cloud
     status: pending
+    needs: [f0-answer-q1]
     lease:
       claimed_by: ""
       expires: null
@@ -24,8 +32,16 @@ budget:
   spent:
     runs: 0
     steps: 0
-questions: []
+questions:
+  - id: q1
+    kind: blocking
+    status: open
+    question: "On hold (Jeff, 2026-11-11): the queue is paused behind a major refactor Jeff will take as the priority once the in-flight implementations finish. Answer this question only to resume the item; while it stays open the item is on hold."
+    options:
+      - resume it, once Jeff makes it a priority again
+    recommended: resume it, once Jeff makes it a priority again
 history:
   - at: 2026-11-07T11:04:31Z
     by: cloud/20261107T105651Z
     event: queued at priority 45 (intake)
+  - {at: 2026-11-11T13:00:00Z, by: human/jeff, event: "on hold (q1, f0-answer-q1 needed by f0-branch-setup): queue paused behind Jeff's refactor"}

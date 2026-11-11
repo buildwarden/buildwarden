@@ -9,10 +9,18 @@ branch: feat/cross-driver-image-update
 alters_relationships: null
 source: 'Jeff at the vz-image-prepare-refresh design review r1, 2026-11-06: --update is vz-only there (a2); extend it to the other drivers (qemu cloud images, Firecracker, Hyper-V media) as its own undesigned item. Overlaps hyperv-windows-prepare''s [vm] windows_image_update. Placed in class 4 ahead of security-suite by Jeff''s word.'
 steps:
+  - id: f0-answer-q1
+    phase: 0
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
   - id: f0-branch-setup
     phase: 0
     affinity: cloud
     status: pending
+    needs: [f0-answer-q1]
     lease:
       claimed_by: ""
       expires: null
@@ -23,7 +31,14 @@ budget:
   spent:
     runs: 0
     steps: 0
-questions: []
+questions:
+  - id: q1
+    kind: blocking
+    status: open
+    question: "On hold (Jeff, 2026-11-11): the queue is paused behind a major refactor Jeff will take as the priority once the in-flight implementations finish. Answer this question only to resume the item; while it stays open the item is on hold."
+    options:
+      - resume it, once Jeff makes it a priority again
+    recommended: resume it, once Jeff makes it a priority again
 history:
   - at: 2026-11-07T01:25:23Z
     by: human/jeff
@@ -34,3 +49,4 @@ history:
   - at: 2026-11-07T11:04:31Z
     by: cloud/20261107T105651Z
     event: 'priority 48 -> 49 (renumbered by wf new: vz-ipsw-latest-reuse queued at 45)'
+  - {at: 2026-11-11T13:00:00Z, by: human/jeff, event: "on hold (q1, f0-answer-q1 needed by f0-branch-setup): queue paused behind Jeff's refactor"}
