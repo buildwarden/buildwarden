@@ -22,7 +22,9 @@ Same as `workflow-tick` step 1 (the FLOW-18 check, build `dist/wf`, check out
    queue names, and record the design step with `dist/wf claim` and
    `dist/wf done` as `human/jeff`. After that the loop implements the item on
    its branch; while one is in progress it holds the workers its `holds` name
-   (FLOW-05). Show each with its phase, holds and branch.
+   (FLOW-05). A process design fills **Defaults and overrides** like a
+   feature's (GLOBAL-09 to GLOBAL-11); `wf check` does not check it. Show each
+   with its phase, holds and branch.
 1. **Priority order.** If `config.yaml` has `priority_confirmed: false`, show
    `dist/wf status` and the proposed order with its reasons, ask Jeff to
    confirm or reorder, renumber the `priority` fields as he says, and set
@@ -58,7 +60,9 @@ Same as `workflow-tick` step 1 (the FLOW-18 check, build `dist/wf`, check out
       `tier2_gaps`, and, on a re-review, the finding, the tasks it touches,
       and how Design reconciled the later-phase steps `wf back` kept.
    3. **Risks and what is deferred:** native validation, `tier2_gaps`, rules
-      changed, a Bootstrap comparison or Security note to accept.
+      changed, a Bootstrap comparison or Security note to accept, and the
+      **Defaults and overrides** section, each named fallback in particular
+      (GLOBAL-09 to GLOBAL-11).
       Ask each `rule_changes` entry on its own (FLOW-14), with its current
       and proposed wording: approve, approve with a change, or reject. Record
       each approval in the Outcome entry as `rule change <ID> approved at
