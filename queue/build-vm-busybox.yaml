@@ -10,6 +10,9 @@ branch: feat/build-vm-busybox
 alters_relationships: false
 design_review: required
 source: 'workflow-human 2026-11-06 (Jeff), immediate follow-up to build-link-subnet (#98): the qemu direct-boot launcher build needs tools/relay-vm/.cache/busybox, which tools/relay-vm/build-initramfs.sh no longer produces since the relay moved to the Alpine minirootfs, so a fresh cache cannot build it (macbook native run 2026-11-05, digest 2026-11-05). tools/firecracker-vm/build-initramfs.sh already fetches Alpine''s static busybox for its own cache.'
+pr:
+  number: 110
+  ci: pending
 steps:
   - id: f0-branch-setup
     phase: 0
