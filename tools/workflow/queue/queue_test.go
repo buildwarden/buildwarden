@@ -2,6 +2,7 @@ package queue
 
 import (
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -204,7 +205,8 @@ func TestNextTakesClassOrder(t *testing.T) {
 }
 
 // TestNextTakesImplementationFirst: a feature in Implement (class 1) goes
-// ahead of a process item's merge check (class 2), but not past a hold.
+// ahead of a process item waiting on its merge (class 2), which is never
+// offered, and nothing goes past a hold.
 func TestNextTakesImplementationFirst(t *testing.T) {
 	proc := process("proc", 1, "in_progress")
 	advance(proc, 3)
@@ -214,15 +216,19 @@ func TestNextTakesImplementationFirst(t *testing.T) {
 		t.Fatalf("next = %q, want the class-1 feature before x3-merge", got)
 	}
 	impl.Steps[len(impl.Steps)-1].Affinity = "human"
-	if got := next(t, s, "cloud"); got != "proc x3-merge" {
-		t.Fatalf("next = %q, want the merge check once impl blocks", got)
+	pick, blocked := s.Next("cloud", now)
+	want := []Blocked{{"impl", "waiting on human step f3-implement"},
+		{"proc", "waiting on the human's merge (no PR recorded, FLOW-08)"}}
+	if pick != nil || !slices.Equal(blocked, want) {
+		t.Fatalf("next = %+v, %+v; want no pick once impl blocks, proc on its merge",
+			pick, blocked)
 	}
 	impl.Steps[len(impl.Steps)-1].Affinity = "cloud"
 
 	// A hold still stops a class-1 feature's cloud step.
 	rules := process("rules", 2, "in_progress", "cloud")
 	s = state(rules, impl)
-	pick, blocked := s.Next("cloud", now)
+	pick, blocked = s.Next("cloud", now)
 	if pick != nil || len(blocked) != 2 || blocked[0].Feature != "impl" ||
 		blocked[0].Reason != "held by process item rules" {
 		t.Fatalf("next = %+v, %+v; want impl held by rules", pick, blocked)
@@ -577,9 +583,23 @@ func TestPRSlotIsSerial(t *testing.T) {
 	b.Phase, b.Steps = 6, nil
 	Seed(b)
 	s := state(a, b)
-	if got := next(t, s, "cloud"); got != "a f7-merge" {
-		t.Fatalf("next = %q, want a's merge check first", got)
+	// a holds the slot at its merge step, which is never offered: no pick.
+	slotHeld := func() {
+		t.Helper()
+		pick, blocked := s.Next("cloud", now)
+		got := map[string]string{}
+		for _, b := range blocked {
+			got[b.Feature] = b.Reason
+		}
+		want := map[string]string{
+			"a": "waiting on the human's merge (no PR recorded, FLOW-08)",
+			"b": "waiting on the PR slot, held by a (FLOW-05)"}
+		if pick != nil || len(blocked) != 2 || !maps.Equal(got, want) {
+			t.Fatalf("next = %+v, blocked %+v; want b on the slot, a on its merge",
+				pick, blocked)
+		}
 	}
+	slotHeld()
 	a.Steps[0].Status = "done"
 	a.Phase, a.Status = 8, "done"
 	if got := next(t, s, "cloud"); got != "b f6-merge-main" {
@@ -588,10 +608,79 @@ func TestPRSlotIsSerial(t *testing.T) {
 	a.Status, a.Phase = "in_progress", 7
 	a.Steps[0].Status = "pending"
 	s.Features = []*Feature{b, a}
-	_, blocked := s.Next("cloud", now)
-	if got := next(t, s, "cloud"); got != "a f7-merge" || !strings.Contains(blocked[0].Reason,
-		"PR slot") {
-		t.Fatalf("next = %q, blocked %+v", got, blocked)
+	slotHeld()
+}
+
+// mergeWaiting is an in-progress item at its round's merge step, with PR
+// number pr (0 for none recorded).
+func mergeWaiting(f *Feature, pr int) *Feature {
+	advance(f, map[string]int{"feature": 7, "process": 3}[f.Round])
+	if pr > 0 {
+		f.PR = &PR{Number: pr}
+	}
+	return f
+}
+
+// TestNextSkipsMergeWait: no worker is offered a merge step; the item is
+// reported as waiting on the human's merge and the walk goes on (FLOW-05).
+func TestNextSkipsMergeWait(t *testing.T) {
+	parent := feature("parent", 1, "done")
+	merging := mergeWaiting(process("merging", 53, "in_progress"), 104)
+	fix := feature("fix", 60, "in_progress")
+	fix.Follows, fix.Phase = "parent", 1
+	fix.Steps = []Step{{ID: "f1-design-r3", Phase: 1, Affinity: "cloud",
+		Status: "pending"}}
+	s := state(parent, merging, fix)
+	pick, blocked := s.Next("cloud", now)
+	want := []Blocked{{"merging", "waiting on the human's merge of PR #104 (FLOW-08)"}}
+	if pick == nil || pick.Feature != fix || pick.Step.ID != "f1-design-r3" ||
+		!slices.Equal(blocked, want) {
+		t.Fatalf("next = %+v, %+v; want the fix past merging's x3-merge", pick, blocked)
+	}
+
+	// Every worker gets the merge reason, not the step's affinity.
+	for _, w := range []string{"host:macos-vz", "human/jeff"} {
+		s := state(merging)
+		if p, blocked := s.Next(w, now); p != nil || !slices.Equal(blocked, want) {
+			t.Errorf("%s: next = %+v, %+v; want merging on its merge", w, p, blocked)
+		}
+	}
+
+	// A feature at f7-merge, its -r2 form too, yields within class 4: to an
+	// in-progress feature behind it, or to a queued one, which starts.
+	for _, id := range []string{"f7-merge", "f7-merge-r2"} {
+		a := mergeWaiting(feature("a", 1, "in_progress"), 7)
+		a.Steps[len(a.Steps)-1].ID = id
+		b := feature("b", 2, "in_progress")
+		if got := next(t, state(a, b), "cloud"); got != "b f0-branch-setup" {
+			t.Errorf("%s: next = %q, want b past a's merge", id, got)
+		}
+		q := feature("q", 2, "queued")
+		s := state(a, q)
+		s.Config.Limits.InProgress = 2
+		if p, _ := s.Next("cloud", now); p == nil || p.Feature != q || !p.Starts {
+			t.Errorf("%s: pick = %+v, want q started past a's merge", id, p)
+		}
+	}
+
+	// With no PR recorded the reason is exact, for a nil PR and a PR 0.
+	for _, pr := range []*PR{nil, {}} {
+		f := mergeWaiting(process("x", 1, "in_progress"), 0)
+		f.PR = pr
+		const why = "the human's merge (no PR recorded, FLOW-08)"
+		if got := mergeWait(f); got != why {
+			t.Errorf("PR %+v: mergeWait = %q", pr, got)
+		}
+		_, blocked := state(f).Next("cloud", now)
+		if !slices.Equal(blocked, []Blocked{{"x", "waiting on " + why}}) {
+			t.Errorf("PR %+v: blocked %+v", pr, blocked)
+		}
+	}
+
+	// An attended run on the item gets no pick and the reason.
+	if p, blocked := state(merging).NextFor("merging", "cloud", now); p != nil ||
+		!slices.Equal(blocked, want) {
+		t.Fatalf("NextFor = %+v, %+v; want merging on its merge", p, blocked)
 	}
 }
 
