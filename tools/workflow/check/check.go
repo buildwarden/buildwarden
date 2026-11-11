@@ -314,8 +314,8 @@ func (c *checker) refMerged(ref string, prCommits []string) (string, bool) {
 		sha := strings.Fields(line)[0]
 		info, ok := c.sameChange(ref, sha)
 		if ok {
-			return fmt.Sprintf("%s squash-merged as %s after main moved (%s)", ref, sha,
-				info), true
+			return fmt.Sprintf("%s squash-merged as %s after main moved (%s)",
+				ref, sha, info), true
 		}
 		seen = append(seen, info)
 	}

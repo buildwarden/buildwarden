@@ -619,8 +619,8 @@ func TestSquashAfterMainMoved(t *testing.T) {
 		t.Fatalf("x3 on a squash made after main moved: %s", failures(rs))
 	}
 	for _, ref := range []string{"refs/heads/feat/demo", "refs/remotes/origin/feat/demo"} {
-		re := regexp.MustCompile(regexp.QuoteMeta(ref) +
-			` squash-merged as [0-9a-f]+ after main moved \(change [0-9a-f]{40}, base [0-9a-f]{7}\)`)
+		re := regexp.MustCompile(regexp.QuoteMeta(ref) + ` squash-merged as [0-9a-f]+ ` +
+			`after main moved \(change [0-9a-f]{40}, base [0-9a-f]{7}\)`)
 		if !re.MatchString(rs[0].Info) {
 			t.Errorf("info %q, want %s named with its patch-id proof", rs[0].Info, ref)
 		}
@@ -730,7 +730,9 @@ func TestCrissCrossMergeBasesFail(t *testing.T) {
 	work := repo(t, design)
 	d := head(t, work)
 	git(t, work, "checkout", "-q", "main")
-	commitEdit(t, work, "other.txt", "another feature", func(string) string { return "other\n" })
+	commitEdit(t, work, "other.txt", "another feature", func(string) string {
+		return "other\n"
+	})
 	m := head(t, work)
 	git(t, work, "merge", "-q", "--no-ff", "-m", "main merges the feature", d)
 	git(t, work, "checkout", "-q", "feat/demo")
@@ -738,7 +740,9 @@ func TestCrissCrossMergeBasesFail(t *testing.T) {
 	commitEdit(t, work, "more.txt", "more feature", func(string) string { return "more\n" })
 	git(t, work, "push", "-q", "origin", "feat/demo")
 	git(t, work, "checkout", "-q", "main")
-	commitEdit(t, work, "third.txt", "a third feature", func(string) string { return "third\n" })
+	commitEdit(t, work, "third.txt", "a third feature", func(string) string {
+		return "third\n"
+	})
 	git(t, work, "push", "-q", "origin", "main")
 	squash(t, work, "#9")
 	got := failures(Phase(Env{Repo: work}, x3(9)))
@@ -774,8 +778,8 @@ func TestSquashAfterMainMovedIgnoresDiffConfig(t *testing.T) {
 	for _, dir := range []string{work, filepath.Join(work, "docs")} {
 		rs := Phase(Env{Repo: dir}, x3(9))
 		if !OK(rs) || rs[0].Info != plain[0].Info {
-			t.Errorf("x3 from %s with diff config: %q (ok %v), want %q", dir, rs[0].Info,
-				OK(rs), plain[0].Info)
+			t.Errorf("x3 from %s with diff config: %q (ok %v), want %q", dir,
+				rs[0].Info, OK(rs), plain[0].Info)
 		}
 	}
 }
