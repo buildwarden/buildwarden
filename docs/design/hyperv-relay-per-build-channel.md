@@ -2005,6 +2005,15 @@ rule changes BOOT-06 (reworded at r3, to re-approve) and BOOT-07.
   follows macOS split DNS unless `[vm] dns` names those resolvers. What
   changed since r2: Decisions 2 and 6, the BOOT-06 paragraph, Defaults and
   overrides, the blocking hosts. No changes folded in.
+- **2026-11-11, during f3-implement: approved at `71df1d1`** (Jeff, attended,
+  FLOW-19 fold-in, no second review). Two changes folded in at `71df1d1`:
+  `drivers:` adds `container` (task 8's shared `driver.BuildRequest.DNS` and
+  the container relay's new resolver default, per Decision 6 and RELAY-04;
+  tier 1's ORCH-01 drivers claim), and the relay's own lookups resolve
+  through the DNS handler's in-order forwarder rather than a `net.Resolver`,
+  whose retries restart at the first server (Decision 6, its pseudocode and
+  plan task 5). Rule change approvals are unchanged: BOOT-06 at `cbb2cda`,
+  BOOT-07 at `0df0a64`.
 
 ## Consolidation
 
