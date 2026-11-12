@@ -18,7 +18,10 @@ func gitRepo(t *testing.T) (string, func()) {
 		t.Helper()
 		cmd := exec.Command("git", append([]string{"-C", dir}, args...)...)
 		cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
-			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+			"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t",
+			// Fixtures hold the bytes written whatever the machine's core.autocrlf.
+			"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=core.autocrlf",
+			"GIT_CONFIG_VALUE_0=false")
 		if out, err := cmd.CombinedOutput(); err != nil {
 			t.Fatalf("git %v: %v\n%s", args, err, out)
 		}
