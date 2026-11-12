@@ -13,5 +13,8 @@ tools/workflow/**/testdata/** text eol=lf
 # kernel config fragments are read by Kconfig on Linux.
 tools/firecracker-vm/init     text eol=lf
 tools/firecracker-vm/*.config text eol=lf
+# The qemu direct-boot launcher is PID 1 too, and driver/buildlink's tests
+# compare its build-link block with the Firecracker one line for line.
+tools/build-vm/init           text eol=lf
 # Driver golden fixtures are byte-exact (TEST-04): never convert them.
 driver/**/testdata/**         -text

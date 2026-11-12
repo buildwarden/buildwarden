@@ -647,7 +647,7 @@ func checkLocalIPSW(t *testing.T, relative bool) {
 	src, _ := c.LayerCache().Source(filepath.Join(dir, "disk.img"))
 	sum, _ := driver.HashFileSHA256(file)
 	in := src.Inputs
-	if len(in) != 1 || in[0].URL != "file://"+file || in[0].SHA256 != sum ||
+	if len(in) != 1 || in[0].URL != "file://"+filepath.ToSlash(file) || in[0].SHA256 != sum ||
 		in[0].Size != int64(len(content)) {
 		t.Fatalf("recorded inputs %+v", in)
 	}
