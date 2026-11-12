@@ -6,7 +6,8 @@ description: Adds a feature to the workflow queue - checks archived designs for 
 # Feature intake
 
 Adds one queue item (FLOW-03). Its Design phase happens later, in the loop;
-intake only frames the item. Rules: FLOW-01, FLOW-05, FLOW-12, FLOW-13.
+intake only frames the item. Rules: FLOW-01, FLOW-05, FLOW-12, FLOW-13,
+FLOW-20.
 
 1. Set up as in `workflow-tick` step 1.
 2. Search `docs/design/` front-matter (`concepts`, `drivers`, `seams`) and the
@@ -18,7 +19,9 @@ intake only frames the item. Rules: FLOW-01, FLOW-05, FLOW-12, FLOW-13.
    feature that needs a rule changed declares it in its design (FLOW-14).
    A process item also lists the
    workers it holds while in progress (`cloud`, `host:*`, `host:<name>`), or
-   none when it disrupts no running work (FLOW-05). Then agree on
+   none when it disrupts no running work (FLOW-05). While FLOW-20 stands,
+   agree too whether the item is a program item; one that is not is filed as
+   FLOW-20's freeze says, unless it is exempt there. Then agree on
    a kebab-case slug, a one-line title, the priority (show
    `dist/wf status`, which lists FLOW-05's order: the class order decides
    where an item can go, priority places it within its class, and a new item
