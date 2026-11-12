@@ -1,0 +1,6 @@
+warden: build VM "warden-build-1w5qejwr" COM1 -> \\.\pipe\warden-build-1w5qejwr (attach a serial reader to observe guest boot)
+warden: --keep-vms: leaving build VM "warden-build-1w5qejwr" (overlay "C:\\Users\\jeff\\AppData\\Local\\Temp\\warden-hyperv-1w5qejwr-4276098302\\build.vhdx") for inspection
+warden: --keep-vms: leaving relay VM "warden-relay-1w5qejwr" (overlay "C:\\Users\\jeff\\AppData\\Local\\Temp\\warden-hyperv-1w5qejwr-4276098302\\relay.vhdx", holding 192.168.250.2 on warden-1w5qejwr) for inspection
+warden: --keep-vms: leaving ephemeral network "warden-1w5qejwr"
+[warden] --keep-vms: leaving work dir C:\Users\jeff\AppData\Local\Temp\warden-hyperv-1w5qejwr-4276098302
+warden: build SUCCEEDED (output: ../ev/cl-eph)

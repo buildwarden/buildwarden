@@ -1,0 +1,8 @@
+warden.exe : warden: build VM "warden-build-f8quoaow" COM1 -> \\.\pipe\warden-build-f8quoaow (attach a serial reader to observe guest boot)
+At line:7 char:1
++ & $w build --driver hyperv --guest-os windows -q -o ..\ev\c2e . *> .. ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (warden: build V...rve guest boot):String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+warden: build SUCCEEDED (output: ..\ev\c2e)

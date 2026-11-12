@@ -1,0 +1,2 @@
+[warden] ERROR: hyperv build: [vm] dns lists 192.168.250.1, which the relay cannot use (assigned to this host)
+  To fix: change or remove that entry in [vm] dns

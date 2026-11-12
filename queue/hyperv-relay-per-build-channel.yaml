@@ -4,7 +4,7 @@ priority: 51
 follows: build-link-subnet
 status: in_progress
 round: feature
-phase: 6
+phase: 3
 design: docs/design/hyperv-relay-per-build-channel.md
 branch: feat/hyperv-relay-per-build-channel
 alters_relationships: true
@@ -34,8 +34,8 @@ steps:
       - f6-consolidate-r3
       - f6-consolidate-r4
     lease:
-      claimed_by: host:windows-hyperv/20261112T213545Z
-      expires: 2026-11-12T23:35:45.7775325Z
+      claimed_by: ""
+      expires: null
     note: 'Blocking native validation (design Validation plan, FLOW-09; r2 cases), on the branch after consolidation: (0) stale service (r3, review S7): with main''s protocol-1 privileged service still installed, non-elevated doctor prints the service stale (protocol 1, this warden 2), Network BLOCKED and a Not ready verdict, each naming warden hyperv service uninstall then install, and never ''not installed''; a non-elevated build is refused before any VM with that fix; after the elevated reinstall doctor shows the service reachable. (1) upgrade: main''s relay VHDX (stamp 1) BLOCKED in doctor and refused before any VM, both naming tools/relay-vm/hyperv/refresh-cache.sh; after it, stamp 2 and doctor current. (2) elevated default Windows guest build succeeds, ledger verifies; relay console shows the seed''s allocated NAT address and gateway, its resolvers with source claim (the host''s), and no token value, and the seed ISO holds no resolver; warden-run.log shows initialize --gateway=<relay> with no --ip, and the guest NIC ends DHCP Enabled: Yes, PrefixOrigin Dhcp at the link''s guest address. (3) while a relay waits, a claim and a tunnel from the host with no token and a wrong token get 401; the build then succeeds. (4) two concurrent ephemeral builds succeed with different relay addresses (VM Notes, consoles). (5) on a host set up by main, a durable build is refused naming warden setup; then warden setup --driver hyperv --nat-prefix 192.168.250.0/24 --host-ip 192.168.250.1 --slots 2 (default NAT removed) retires the old warden-dev switch; doctor prints prefix, host IP and two free slots; a non-elevated Hyper-V Administrators build uses that prefix and slot warden-dev-0 (relay VM Notes) and succeeds; an elevated build reuses the same NAT on its own ephemeral switch. (6) two concurrent durable builds take warden-dev-0 and warden-dev-1 and succeed; from build VM A, ARP/ping to relay B''s and build VM B''s link addresses and a DHCP DISCOVER get no answer from B; a third concurrent durable build is refused before any VM naming both holders and --slots; a --keep-vms build''s slot stays busy (doctor names it) until its VMs are removed. (7) refusals: [vm] build_link inside the durable NAT prefix refused at build start and in doctor; [vm] dns = [<host NAT IP>] refused naming the entry; a relay VM booted by hand with no seed prints the no-seed line and starts no relay. (8) resolvers (sent in the claim, design r3): with the host DNS public and [vm] dns set to that resolver, the build resolves it and console and doctor list only the key''s resolver; with [vm] dns set to an address with no DNS server, lookups fail (no fallback to the host''s). (9) no lease: a --keep-vms build VM moved to an empty Private switch and restarted logs a failed relay wait naming the NIC address and origin (169.254 WellKnown reads no DHCP lease), applies no static address, and powers off. Jeff, attended 2026-11-12: the two host-DNS halves (case 7''s 127.0.0.1-only refusal, case 8''s host DNS on an internal resolver) are dropped from native validation, since changing the host''s DNS can cut the native session off; their tier-0 coverage (default-route DNS parser on canned output, resolvers.Check) stands in. Evidence under native/windows-hyperv/<date>/.'
   - id: f6-validate-qemu-any
     phase: 6
@@ -249,15 +249,26 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: f6-open-pr-r4
+  - id: f6-validate-qemu-any-r3
     phase: 6
+    affinity: host:qemu-any
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (design r3, a16; FLOW-09), on the branch after consolidation, on a relay initramfs rebuilt from the branch''s tools/relay-vm/init (replaces backlog hyperv-relay-per-build-channel-qemu-relay): (1) a qemu Linux build (direct boot and a cloud image) succeeds and its ledger verifies; the relay console names its upstream from DHCP and its resolvers with source claim, the Mac''s from /etc/resolv.conf, and doctor prints the same list. (2) with [vm] dns set to a public resolver other than the Mac''s, the build resolves names and the relay lists only that resolver; set to an address with no DNS server, lookups fail (no fallback). (3) [vm] dns = ["127.0.0.1"] is refused before any VM naming the entry. Evidence under native/qemu-any/<date>/.'
+  - id: f6-validate-macos-vz-r3
+    phase: 6
+    affinity: host:macos-vz
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (design r3, a16; FLOW-09), on the branch after consolidation: (1) a vz macOS build succeeds and its ledger verifies; the host-mode relay''s log lists its resolvers with source claim, the Mac''s from /etc/resolv.conf, and doctor prints the same list. (2) with [vm] dns set to a public resolver other than the Mac''s, the build resolves names through it only (relay log); set to an address with no DNS server, lookups fail (no fallback to the Mac''s). (3) with [vm] dns naming a resolver on 127.0.0.1 (a local forwarder), the build resolves through it. Evidence under native/macos-vz/<date>/.'
+  - id: f3-implement-r5
+    phase: 3
     affinity: cloud
     status: pending
-    needs:
-      - f6-consolidate-r4
-      - f6-validate-windows-hyperv
-      - f6-validate-qemu-any-r2
-      - f6-validate-macos-vz-r2
     lease:
       claimed_by: ""
       expires: null
@@ -825,3 +836,18 @@ history:
   - at: 2026-11-12T21:44:51Z
     by: host:qemu-any/20261112T214209Z
     event: done f6-validate-qemu-any-r2
+  - at: 2026-11-12T22:10:28Z
+    by: host:windows-hyperv/20261112T213545Z
+    event: 'released f6-validate-windows-hyperv: Attended at 5ac5532 (native/windows-hyperv/2026-11-12/attended-r4/): F2, F5 and cases 2, 4, 5, 6, 7 PASS, and hyperv-clean on the real host; cases 1, 3, 8, 9 stand (their code is unchanged since 59d7440). FAIL F6: every warden setup after the old shared switch is retired exits 1 (build switches: powershell: exit status 1).'
+  - at: 2026-11-12T22:10:28Z
+    by: host:windows-hyperv/20261112T213545Z
+    event: kept f6-validate-windows-hyperv pending for phase 6
+  - at: 2026-11-12T22:10:28Z
+    by: host:windows-hyperv/20261112T213545Z
+    event: 'queued f6-validate-qemu-any-r3: f6-validate-qemu-any-r2 validated the branch before the return'
+  - at: 2026-11-12T22:10:28Z
+    by: host:windows-hyperv/20261112T213545Z
+    event: 'queued f6-validate-macos-vz-r3: f6-validate-macos-vz-r2 validated the branch before the return'
+  - at: 2026-11-12T22:10:28Z
+    by: host:windows-hyperv/20261112T213545Z
+    event: 'back to implement: f6-validate-windows-hyperv (5ac5532, native/windows-hyperv/2026-11-12/attended-r4/README.md): F6. setupSlotsScript (driver/hyperv/setupslots.go) ends with a suppressed Get-VMSwitch for the retired shared switch, so $? is false and powershell -Command exits 1 with empty stderr: every warden setup after the first fails with ''build switches: powershell: exit status 1''. End the script with an explicit success marker or exit 0, and make runPS fall back to stdout''s tail when stderr is empty; tier-0 for both. Native rerun after: warden setup twice in a row, then a smoke build'

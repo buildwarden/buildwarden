@@ -1,0 +1,7 @@
+Cannot convert value "warden-dev" to type "System.Int32". Error: "Input string was not in a correct format."
+At line:9 char:2
++  $name = $net-$i
++  ~~~~~~~~~~~~~~~
+    + CategoryInfo          : InvalidArgument: (:) [], ParentContainsErrorRecordException
+    + FullyQualifiedErrorId : InvalidCastFromStringToInteger
+ 

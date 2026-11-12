@@ -1,0 +1,2 @@
+warden: build VM "warden-build-ve9u0g33" COM1 -> \\.\pipe\warden-build-ve9u0g33 (attach a serial reader to observe guest boot)
+warden: build SUCCEEDED (output: ../ev/cl-run)

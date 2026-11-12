@@ -555,7 +555,7 @@ gaps:
       to free the PR slot. Run against main.
   - id: hyperv-clean-real-host
     host: windows-hyperv
-    status: open
+    status: done
     what: >-
       warden clean --driver hyperv on a real host: after a --keep-vms build it removes that build's
       warden-build-/warden-relay-<id> VMs, its warden-<id> switch and its work dir; run during a
@@ -566,3 +566,4 @@ gaps:
       logic, and dummy VMs and a work dir were removed on windows-desktop before the merge. Needs a main
       build that runs here: main's relay does not take the stamp-2 relay disk this host now has, so run
       it once hyperv-relay-per-build-channel merges, or on that branch merged with main.
+      2026-11-12 (attended, feat/hyperv-relay-per-build-channel 5ac5532, which contains main d55f963): done. During a running build clean printed "Nothing to clean" and left its VMs running; after a durable --keep-vms build it removed both VMs and the work dir and the slot read free; after an ephemeral --keep-vms build it also removed the warden-<id> switch. Evidence: native/windows-hyperv/2026-11-12/attended-r4/ (clean-*).

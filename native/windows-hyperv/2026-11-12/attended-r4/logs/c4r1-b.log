@@ -1,0 +1,2 @@
+warden: build VM "warden-build-fnhrn7ld" COM1 -> \\.\pipe\warden-build-fnhrn7ld (attach a serial reader to observe guest boot)
+warden: build SUCCEEDED (output: ../ev/c4r1-b)

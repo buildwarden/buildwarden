@@ -1,0 +1,3 @@
+warden: build FAILED
+[warden] ERROR: the Hyper-V NAT "warden-dev-nat" on this host (192.168.250.0/24) overlaps the build link 192.168.250.4/30
+  To fix: set [vm] build_link in warden.toml (or pass --build-link) to a /30 outside 192.168.250.0/24, or move the NAT with `warden setup --driver hyperv --nat-prefix <prefix>` from an elevated shell

@@ -1,0 +1,2 @@
+  Slot warden-dev-0 .................... in use by warden-build-zxc31qtl, warden-relay-zxc31qtl (192.168.250.2)
+  Slot warden-dev-1 .................... free

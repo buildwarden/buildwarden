@@ -1,0 +1,2 @@
+warden: build VM "warden-build-ankubl13" COM1 -> \\.\pipe\warden-build-ankubl13 (attach a serial reader to observe guest boot)
+warden: build SUCCEEDED (output: ../ev/c4r2-a)

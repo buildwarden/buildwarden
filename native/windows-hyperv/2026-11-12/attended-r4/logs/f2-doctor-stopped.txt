@@ -1,0 +1,25 @@
+build link 100.127.255.252/30 (default)
+build link: no host interface overlaps it
+hyperv relay boot VHDX: link-channel stamp current
+Hyper-V hypervisor present ........... yes
+Hyper-V feature enabled .............. yes
+Token read ........................... current process (non-elevated)
+Full Administrator ................... no  (needed for: New-VMSwitch, New-NetNat, New-NetIPAddress)
+Hyper-V Administrators ............... yes (covers: New-VM, Start-VM, Remove-VM, adapters, VHDX)
+Durable build switches 'warden-dev-<i>'  present
+Privileged service ................... installed, but stopped
+    -> from an elevated shell, run `Start-Service WardenHyperV` (or `sc start WardenHyperV`)
+Image cache .......................... C:\Users\jeff\AppData\Local\warden\hyperv
+Prepared base ........................ windows-server-2025-20261112T183421Z.vhdx, 3h11m old, evaluation grace ends 2026-11-22 18:35Z (9.9d left)
+
+Resolved:
+  VM lifecycle ......... OK (direct, Hyper-V Administrators)
+  Network .............. OK (durable network 'warden-dev': a build switch of its own per build, lower-privilege path)
+
+Build network:
+  NAT .................................. warden-dev-nat (192.168.250.0/24, host 192.168.250.1)
+  Other NAT vNIC IPs ................... 192.168.240.1 (warning: the host still routes their networks to the NAT's switch)
+    -> from an elevated shell, run `Remove-NetIPAddress -InterfaceAlias 'vEthernet (warden-dev-nat)' -IPAddress 192.168.240.1 -Confirm:$false`
+  Relay resolvers ...................... 8.8.8.8, 8.8.4.4 (from interface Ethernet (the IPv4 default route's))
+  Slot warden-dev-0 .................... free
+  Slot warden-dev-1 .................... free

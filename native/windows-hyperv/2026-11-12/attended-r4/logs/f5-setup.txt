@@ -1,0 +1,12 @@
+warden.exe : [warden] ERROR: build switches: powershell: exit status 1
+At line:3 char:1
++ & $w setup --driver hyperv --nat-prefix 192.168.250.0/24 --host-ip 19 ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([warden] ERROR:...: exit status 1:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+
+  If this is unexpected, please file a bug:
+  https://github.com/buildwarden/buildwarden/issues/new?title=Bug%3A+build+switches%3A+powershell%3A+exit+status+1&body=%23%23+Environment%0A-+OS%3A+windows%2Famd64%0A-+V
+ersion%3A+dev%0A%0A%23%23+Error%0A%60%60%60%0Abuild+switches%3A+powershell%3A+exit+status+1%0A%60%60%60%0A%0A%23%23+Steps+to+reproduce%0A1.+%0A
+

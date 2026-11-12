@@ -1,0 +1,2 @@
+warden: build VM "warden-build-mz72aqa9" COM1 -> \\.\pipe\warden-build-mz72aqa9 (attach a serial reader to observe guest boot)
+warden: build SUCCEEDED (output: ../ev/c4r2-b)

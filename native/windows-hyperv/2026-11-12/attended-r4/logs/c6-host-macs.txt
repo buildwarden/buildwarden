@@ -1,0 +1,5 @@
+warden-relay-n204s03u warden-dev-0 00155DCCB152 warden-relay-ip=192.168.250.2 warden-relay-switch=warden-dev-0
+warden-relay-n204s03u warden-dev-nat 00155DCCB153 warden-relay-ip=192.168.250.2 warden-relay-switch=warden-dev-0
+warden-relay-rql942ox warden-dev-1 00155DCCB154 warden-relay-ip=192.168.250.3 warden-relay-switch=warden-dev-1
+warden-relay-rql942ox warden-dev-nat 00155DCCB155 warden-relay-ip=192.168.250.3 warden-relay-switch=warden-dev-1
+warden-build-n204s03u warden-dev-0 00155DCCB156 

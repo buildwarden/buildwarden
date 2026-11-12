@@ -1,0 +1,17 @@
+warden: build VM "warden-build-rql942ox" COM1 -> \\.\pipe\warden-build-rql942ox (attach a serial reader to observe guest boot)
+ISO me=100.127.255.254 mac=00-15-5D-CC-B1-57 gw=100.127.255.253
+ISO ping:
+
+Request timed out.
+Request timed out.
+ISO neighbors:
+ISO neigh 100.127.255.253 00-15-5D-CC-B1-54 Reachable
+ISO dhcp probe:
+ISO sending DHCPDISCOVER xid=9335d024 chaddr=96:23:8a:6e:53:ac
+ISO sent 300 bytes from 100.127.255.254:68 to 255.255.255.255:67
+ISO reply from 100.127.255.253:67
+ISO BOOTREPLY OFFER yiaddr=100.127.255.254 siaddr=100.127.255.253 server-id=100.127.255.253 router=100.127.255.253 mask=255.255.255.252
+ISO done
+
+
+warden: build SUCCEEDED (output: ../ev/c6b)

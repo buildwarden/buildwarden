@@ -1,0 +1,2 @@
+Kept the cache (17308 MB, C:\Users\jeff\AppData\Local\warden); --cache removes it
+Nothing to clean.
