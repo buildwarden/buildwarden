@@ -38,7 +38,7 @@ steps:
   - id: x4-escalate-branch
     phase: 4
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -58,7 +58,7 @@ budget:
     steps: 4
   spent:
     runs: 1
-    steps: 2
+    steps: 3
 questions: []
 history:
   - at: 2026-11-11T10:58:11Z
@@ -103,3 +103,9 @@ history:
   - at: 2026-11-12T18:58:10Z
     by: human/jeff
     event: 'priority 57 -> 58 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'
+  - at: 2026-11-12T20:21:21Z
+    by: human/jeff
+    event: claimed x4-escalate-branch until 2026-11-12T22:21:21Z
+  - at: 2026-11-12T20:21:21Z
+    by: human/jeff
+    event: done x4-escalate-branch

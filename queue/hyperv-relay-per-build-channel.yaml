@@ -215,8 +215,8 @@ steps:
       expires: null
 budget:
   estimate:
-    runs: 4
-    steps: 18
+    runs: 12
+    steps: 40
   spent:
     runs: 7
     steps: 29
@@ -720,3 +720,4 @@ history:
   - at: 2026-11-12T20:17:56Z
     by: host:windows-hyperv/20261112T183259Z
     event: 'back to implement: f6-validate-windows-hyperv (59d7440, native/windows-hyperv/2026-11-12/attended/README.md): F1 concurrent builds race on seed ISO creation (driver/hyperv/winseed_windows.go, IMAPI2FS.MsftFileSystemImage fails 0xC0AAB138 in 2 of 3 simultaneous pairs; each build now makes two ISOs), so case 4''s two concurrent ephemeral builds do not both succeed: serialize ISO creation across processes or retry that HRESULT, with tier-0 coverage. F2 doctor prints an installed but stopped WardenHyperV as ''not installed''. F3 the [vm] build_link overlap refusal names the default NAT (192.168.240.0/20) instead of the host''s NAT read back (192.168.250.0/24). Back to Implement (FLOW-10); rerun cases 4 and 7 (durable build_link) natively after'
+  - {at: 2026-11-12T20:00:00Z, by: human/jeff, event: "estimate raised to 40 steps / 12 runs (Jeff, FLOW-13 runaway at 29/18 steps, 7/4 runs)"}
