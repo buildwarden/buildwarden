@@ -4,7 +4,7 @@ priority: 24
 kind: process
 status: in_progress
 round: process
-phase: 1
+phase: 2
 design: docs/design/componentization.md
 branch: feat/componentization
 alters_relationships: true
@@ -14,10 +14,17 @@ steps:
   - id: x1-design
     phase: 1
     affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x2-implement
+    phase: 2
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: human/jeff
-      expires: 2026-11-12T21:10:07.2087291Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -28,103 +35,115 @@ budget:
 questions:
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The collector specification is written in two parts: the outputs a collector stores, and the inputs and signals it serves (seam 2).'
     options:
       - two parts, so a different collector can take over the outputs later
       - one undivided protocol
     recommended: two parts
+    answer: 'Confirmed: two parts (design review r1, 2026-11-12).'
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: The collector gets a storage boundary in K1, with disk as its only implementation.
     options:
       - add the boundary in K1
       - leave the collector as it is until an alternative collector is designed
     recommended: add the boundary in K1
+    answer: 'Changed: leave until needed. No storage boundary in this program; it is designed with the first alternative collector. Folded in at 530beda.'
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: Host mode in the Rust relay is built for Linux first, then macOS; Windows only once a frame transport for it is designed (the Go relay refuses host mode on Windows).
     options:
       - Linux, then macOS, Windows later
       - Windows host mode is required in M3
     recommended: Linux, then macOS, Windows later
+    answer: 'Confirmed: Linux, then macOS, Windows once a frame transport is designed.'
   - id: a4
     kind: assumed
-    status: open
+    status: confirmed
     question: The freeze exempts a fix for a regression on main and a fix for a security problem, and Jeff ends it no earlier than the pilot driver's release (wave 4).
     options:
       - as stated
       - no exemptions
       - a different end point
     recommended: as stated
+    answer: 'Confirmed as stated: regression and security fixes exempt; Jeff ends the freeze no earlier than wave 4.'
   - id: a5
     kind: assumed
-    status: open
+    status: confirmed
     question: FLOW-05's alters_relationships limit is raised from 1 to 3 in config.yaml while the program runs; the limit of 5 features in progress is unchanged.
     options:
       - raise it to 3
       - keep it at 1, so program items past Design run one at a time
       - another value
     recommended: raise it to 3
+    answer: 'Confirmed: raise it to 3.'
   - id: a6
     kind: assumed
-    status: open
+    status: confirmed
     question: FLOW-15's overview sweep is deferred, within a phase, to the phase's last item.
     options:
       - defer to the phase's last item
       - sweep at every item's Publish
     recommended: defer to the phase's last item
+    answer: 'Confirmed: defer to the phase''s last item.'
   - id: a7
     kind: assumed
-    status: open
+    status: confirmed
     question: The signed environment record names the build-link class a build ran under (a ledger metadata change, made in S3).
     options:
       - record the class
       - leave the class out of the record
     recommended: record the class
+    answer: 'Changed: leave it out. Jeff: drivers may change from one model to the other based on environment features or implementation, which may change over time; as long as the core image is in the same format, the ledger metadata should not require a change. Folded in at 530beda.'
   - id: a8
     kind: assumed
-    status: open
+    status: confirmed
     question: Held queue items stay as they are, on hold, until P1 moves the queue; P1 does not carry them over and records their names and branches for re-intake.
     options:
       - leave them on hold until P1
       - close them now
     recommended: leave them on hold until P1
+    answer: 'Changed: close them now, security-suite included (asked separately, with its stale pointers named). Folded in at 530beda.'
   - id: a9
     kind: assumed
-    status: open
+    status: confirmed
     question: '''Verified fully working and performant'' (Decision 15, contact with hermit-os) means at least one driver has adopted the unikernel relay (M6) with its throughput measured.'
     options:
       - after the first M6 adoption with throughput measured
       - after M3 passes the suites
       - after every driver has adopted it
     recommended: after the first M6 adoption with throughput measured
+    answer: 'Changed: after every driver adopts it, that is, the end of M6. Folded in at 530beda.'
   - id: a10
     kind: assumed
-    status: open
+    status: confirmed
     question: The specs repository is named buildwarden/buildwarden-specs.
     options:
       - buildwarden-specs
       - another name
     recommended: buildwarden-specs
+    answer: 'Confirmed: buildwarden-specs.'
   - id: a11
     kind: assumed
-    status: open
+    status: confirmed
     question: Jeff creates the new repositories (loop, specs, one per driver) and makes buildwarden-relay public; agents do not create repositories or change their visibility.
     options:
       - Jeff creates them
       - an attended agent session creates them on his word
     recommended: Jeff creates them
+    answer: 'Changed: an attended session may, on Jeff''s word in that session. Folded in at 530beda.'
   - id: a12
     kind: assumed
-    status: open
+    status: confirmed
     question: This review's acceptance of the Bootstrap comparison covers the program's three model changes (BOOT-01's build-link classes, BOOT-02's executor version, BOOT-05's truststore), each then declared and made by the item the comparison names.
     options:
       - accept the comparison for all three
       - accept it per item instead, in each item's own review
     recommended: accept the comparison for all three
+    answer: 'Confirmed: the Bootstrap comparison accepted for all three model changes.'
 history:
   - at: 2026-11-12T18:43:30Z
     by: human/jeff
@@ -135,3 +154,45 @@ history:
   - at: 2026-11-12T19:10:07Z
     by: human/jeff
     event: claimed x1-design until 2026-11-12T21:10:07Z
+  - at: 2026-11-12T20:03:26Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: Confirmed: two parts (design review r1, 2026-11-12).'
+  - at: 2026-11-12T20:03:26Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: Changed: leave until needed. No storage boundary in this program; it is designed with the first alternative collector. Folded in at 530beda.'
+  - at: 2026-11-12T20:03:26Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: Confirmed: Linux, then macOS, Windows once a frame transport is designed.'
+  - at: 2026-11-12T20:03:26Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: Confirmed as stated: regression and security fixes exempt; Jeff ends the freeze no earlier than wave 4.'
+  - at: 2026-11-12T20:03:26Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: Confirmed: raise it to 3.'
+  - at: 2026-11-12T20:03:26Z
+    by: human/jeff
+    event: 'assumed question a6 confirmed: Confirmed: defer to the phase''s last item.'
+  - at: 2026-11-12T20:03:26Z
+    by: human/jeff
+    event: 'assumed question a7 confirmed: Changed: leave it out. Jeff: drivers may change from one model to the other based on environment features or implementation, which may change over time; as long as the core image is in the same format, the ledger metadata should not require a change. Folded in at 530beda.'
+  - at: 2026-11-12T20:03:26Z
+    by: human/jeff
+    event: 'assumed question a8 confirmed: Changed: close them now, security-suite included (asked separately, with its stale pointers named). Folded in at 530beda.'
+  - at: 2026-11-12T20:03:26Z
+    by: human/jeff
+    event: 'assumed question a9 confirmed: Changed: after every driver adopts it, that is, the end of M6. Folded in at 530beda.'
+  - at: 2026-11-12T20:03:26Z
+    by: human/jeff
+    event: 'assumed question a10 confirmed: Confirmed: buildwarden-specs.'
+  - at: 2026-11-12T20:03:26Z
+    by: human/jeff
+    event: 'assumed question a11 confirmed: Changed: an attended session may, on Jeff''s word in that session. Folded in at 530beda.'
+  - at: 2026-11-12T20:03:26Z
+    by: human/jeff
+    event: 'assumed question a12 confirmed: Confirmed: the Bootstrap comparison accepted for all three model changes.'
+  - at: 2026-11-12T20:03:26Z
+    by: human/jeff
+    event: done x1-design
+  - at: 2026-11-12T20:03:26Z
+    by: human/jeff
+    event: entered phase 2 (implement)
