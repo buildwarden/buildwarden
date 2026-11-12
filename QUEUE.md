@@ -8,9 +8,7 @@ Nothing.
 
 ## Active
 
-| Pri | Feature | Kind | Phase | Next steps | Steps spent / est. |
-|---|---|---|---|---|---|
-| 24 | componentization | process | 4 close | x4-close (cloud, leased) | 3 / 8 |
+Nothing in progress.
 
 ## Backlog
 
