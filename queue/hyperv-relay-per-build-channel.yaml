@@ -1,6 +1,6 @@
 feature: hyperv-relay-per-build-channel
 title: Give the Hyper-V relay VM a per-build channel before the claim
-priority: 49
+priority: 50
 follows: build-link-subnet
 status: in_progress
 round: feature
@@ -676,6 +676,9 @@ history:
   - at: 2026-11-12T18:40:26Z
     by: host:qemu-any/20261112T184026Z
     event: claimed f6-validate-qemu-any until 2026-11-12T20:40:26Z
+  - at: 2026-11-12T18:43:30Z
+    by: human/jeff
+    event: 'priority 49 -> 50 (renumbered by wf new: componentization queued at 24)'
   - at: 2026-11-12T18:45:42Z
     by: host:qemu-any/20261112T184026Z
     event: done f6-validate-qemu-any

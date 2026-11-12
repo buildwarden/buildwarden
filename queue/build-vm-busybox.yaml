@@ -1,6 +1,6 @@
 feature: build-vm-busybox
 title: tools/build-vm/build-initramfs.sh fetches its own static busybox
-priority: 48
+priority: 49
 follows: build-link-subnet
 status: done
 round: feature
@@ -296,3 +296,6 @@ history:
   - at: 2026-11-11T22:29:01Z
     by: cloud/20261111T182144Z
     event: closed; feature done
+  - at: 2026-11-12T18:43:30Z
+    by: human/jeff
+    event: 'priority 48 -> 49 (renumbered by wf new: componentization queued at 24)'

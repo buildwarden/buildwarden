@@ -1,6 +1,6 @@
 feature: cross-driver-image-update
 title: warden image prepare --update moves every VM driver's base image to its newest source
-priority: 51
+priority: 52
 status: queued
 round: feature
 phase: 0
@@ -59,3 +59,6 @@ history:
   - at: 2026-11-11T20:32:22Z
     by: cloud/20261111T182144Z
     event: 'priority 50 -> 51 (renumbered by wf new: relay-init-dhcp-mask-default queued at 46)'
+  - at: 2026-11-12T18:43:30Z
+    by: human/jeff
+    event: 'priority 51 -> 52 (renumbered by wf new: componentization queued at 24)'

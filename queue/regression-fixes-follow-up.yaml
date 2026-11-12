@@ -1,6 +1,6 @@
 feature: regression-fixes-follow-up
 title: Queue order by class (in implementation, process, fixes, new functionality), and regression fixes queued as immediate follow-ups
-priority: 42
+priority: 43
 kind: process
 status: done
 round: process
@@ -95,3 +95,6 @@ history:
   - at: 2026-11-07T00:36:32Z
     by: cloud/20261106T231440Z-attended
     event: closed; feature done
+  - at: 2026-11-12T18:43:30Z
+    by: human/jeff
+    event: 'priority 42 -> 43 (renumbered by wf new: componentization queued at 24)'

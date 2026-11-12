@@ -1,6 +1,6 @@
 feature: wf-later-phase-host-steps
 title: 'wf keeps and holds later-phase host steps: wf back preserves them, wf next/gate skip them until their phase'
-priority: 39
+priority: 40
 kind: process
 status: done
 round: process
@@ -95,3 +95,6 @@ history:
   - at: 2026-11-06T18:53:27Z
     by: cloud/20261106T172405Z-attended
     event: closed; feature done
+  - at: 2026-11-12T18:43:30Z
+    by: human/jeff
+    event: 'priority 39 -> 40 (renumbered by wf new: componentization queued at 24)'
