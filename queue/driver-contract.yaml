@@ -1,7 +1,7 @@
 feature: driver-contract
 title: 'Complete the driver contract in-tree, including the relay source: cmd/warden stops naming drivers and drivertest exists (componentization K1)'
 priority: 62
-status: queued
+status: in_progress
 round: feature
 phase: 0
 design: docs/design/driver-contract.md
@@ -14,17 +14,23 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261112T230554Z
+      expires: 2026-11-13T01:23:36.759758511Z
 budget:
   estimate:
     runs: 5
     steps: 30
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 1
 questions: []
 history:
   - at: 2026-11-12T23:22:53Z
     by: human/jeff
     event: queued at priority 62 (intake)
+  - at: 2026-11-12T23:23:36Z
+    by: cloud/20261112T230554Z
+    event: started (FLOW-05)
+  - at: 2026-11-12T23:23:36Z
+    by: cloud/20261112T230554Z
+    event: claimed f0-branch-setup until 2026-11-13T01:23:36Z
