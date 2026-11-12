@@ -270,15 +270,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261112T204543Z
+      expires: 2026-11-13T00:10:49.1100832Z
 budget:
   estimate:
     runs: 12
     steps: 40
   spent:
     runs: 8
-    steps: 37
+    steps: 38
 questions:
   - id: a1
     kind: assumed
@@ -851,3 +851,6 @@ history:
   - at: 2026-11-12T22:10:28Z
     by: host:windows-hyperv/20261112T213545Z
     event: 'back to implement: f6-validate-windows-hyperv (5ac5532, native/windows-hyperv/2026-11-12/attended-r4/README.md): F6. setupSlotsScript (driver/hyperv/setupslots.go) ends with a suppressed Get-VMSwitch for the retired shared switch, so $? is false and powershell -Command exits 1 with empty stderr: every warden setup after the first fails with ''build switches: powershell: exit status 1''. End the script with an explicit success marker or exit 0, and make runPS fall back to stdout''s tail when stderr is empty; tier-0 for both. Native rerun after: warden setup twice in a row, then a smoke build'
+  - at: 2026-11-12T22:10:49Z
+    by: cloud/20261112T204543Z
+    event: claimed f3-implement-r5 until 2026-11-13T00:10:49Z
