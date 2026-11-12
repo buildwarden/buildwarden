@@ -1,7 +1,7 @@
 ---
 feature: guest-binary-cache-per-tree
 status: active
-drivers: [qemu, vz, hyperv, firecracker]
+drivers: [interface]
 seams: []
 surfaces: []
 security_boundary: none
@@ -83,7 +83,8 @@ None. The cache location is internal and has no override.
 
 ## Cross-driver impact
 
-Every driver that stages a guest binary from a dev build (qemu and vz: relay and
+`GuestBinary` is shared driver code (`driver/hostutil.go`), hence
+`drivers: [interface]`. Every driver that stages a guest binary from a dev build (qemu and vz: relay and
 `warden-io`; hyperv: `warden-io` and, through `driver/relayvm`, the relay;
 firecracker: `warden-io`) gets its own per-tree cache. The container driver
 builds images, not guest binaries, and is unaffected.
