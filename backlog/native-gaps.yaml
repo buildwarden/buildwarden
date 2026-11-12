@@ -480,7 +480,10 @@ gaps:
       security-test target.
       2026-11-12 (host:macos-vz/20261112T205200Z, attended, main 6b2ab14): not run. No harness: feat/security-suite is
       still e05df23 (design only), and neither it nor main has a security-test target.
-    status: open
+      2026-11-12 (human/jeff, attended session): closed without a run, on Jeff's word. The security-suite
+      queue item was closed for re-intake at the componentization freeze (a8); its re-intake adds
+      fresh entries from the new design.
+    status: done
   - id: security-suite-tier2-qemu-any
     host: qemu-any
     what: The first tier-2 run of the security suite's qemu cases, Linux and Windows guests (make security-test DRIVER=qemu), with the oracle control case passing and the run's report written under reports/security/qemu-any/ (ids and outcomes only).
@@ -494,7 +497,10 @@ gaps:
       security-test target.
       2026-11-12 (host:qemu-any/20261112T184026Z, attended, main 1173c5f): not run. No harness: feat/security-suite is
       still e05df23 (design only), and neither it nor main has a security-test target.
-    status: open
+      2026-11-12 (human/jeff, attended session): closed without a run, on Jeff's word. The security-suite
+      queue item was closed for re-intake at the componentization freeze (a8); its re-intake adds
+      fresh entries from the new design.
+    status: done
   - id: security-suite-tier2-windows-hyperv
     host: windows-hyperv
     what: The first tier-2 run of the security suite's Hyper-V cases (make security-test DRIVER=hyperv), with the oracle control case passing and the run's report written under reports/security/windows-hyperv/ (ids and outcomes only).
@@ -533,7 +539,10 @@ gaps:
       security-test target and feat/security-suite is still e05df23 (design only). The security-suite
       queue item was closed for re-intake after the componentization freeze (9f0b347, a8), so this entry
       has no item to wait on; Jeff can defer or close it so native sessions stop retrying it.
-    status: open
+      2026-11-12 (human/jeff, attended session): closed without a run, on Jeff's word. The security-suite
+      queue item was closed for re-intake at the componentization freeze (a8); its re-intake adds
+      fresh entries from the new design.
+    status: done
   - id: baked-asset-staleness-qemu-windows
     host: macos-qemu
     what: A qemu Windows guest build refused before any VM on an unstamped (or stale) qemu relay kernel and initramfs, naming tools/relay-vm/build-initramfs.sh, and succeeding after the rebuild writes their .source stamps.
