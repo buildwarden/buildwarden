@@ -3,7 +3,7 @@ title: 'Specs repository and conformance suites: write seams 1, 2, 3, 5 and 6, b
 priority: 61
 status: in_progress
 round: feature
-phase: 0
+phase: 1
 design: docs/design/seam-specs.md
 branch: feat/seam-specs
 alters_relationships: null
@@ -12,17 +12,24 @@ steps:
   - id: f0-branch-setup
     phase: 0
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f1-design
+    phase: 1
+    affinity: cloud
     status: pending
     lease:
       claimed_by: cloud/20261112T230554Z
-      expires: 2026-11-13T01:23:21.186830574Z
+      expires: 2026-11-13T01:23:34.596998401Z
 budget:
   estimate:
     runs: 5
     steps: 30
   spent:
     runs: 1
-    steps: 1
+    steps: 2
 questions: []
 history:
   - at: 2026-11-12T23:22:53Z
@@ -34,3 +41,12 @@ history:
   - at: 2026-11-12T23:23:21Z
     by: cloud/20261112T230554Z
     event: claimed f0-branch-setup until 2026-11-13T01:23:21Z
+  - at: 2026-11-12T23:23:34Z
+    by: cloud/20261112T230554Z
+    event: done f0-branch-setup
+  - at: 2026-11-12T23:23:34Z
+    by: cloud/20261112T230554Z
+    event: entered phase 1 (design)
+  - at: 2026-11-12T23:23:34Z
+    by: cloud/20261112T230554Z
+    event: claimed f1-design until 2026-11-13T01:23:34Z
