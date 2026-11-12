@@ -1942,6 +1942,34 @@ attended native session on windows-hyperv found F5 in setup's NAT standup
     so. Tier 0: the rendered script's removal, scoped to that alias, and
     two HOSTIP lines read back. (GLOBAL-11, UX-04, UX-01)
 
+### Rework from native validation r5 (FLOW-06)
+
+The attended native session on windows-hyperv after `5ac5532`
+(`native/windows-hyperv/2026-11-12/attended-r4/README.md`) found F6: every
+`warden setup --driver hyperv` after the first fails `build switches:
+powershell: exit status 1`. `powershell -Command` exits with the success of
+the script's last statement, and task 33's slot script ends with a
+`-ErrorAction SilentlyContinue` lookup of the retired shared switch that
+finds nothing, so the script exits 1 with an empty stderr. None changes a
+decision.
+
+61. F6, scripts that end on a suppressed lookup (`setupslots*.go`,
+    `ensurenet.go`, `provision_local_windows.go`): the slot script and
+    EnsureNetwork's script (whose last statement, the vNIC's addresses read
+    back, fails the same way when the vNIC holds none) print a final `DONE`
+    line, so they exit 0 when they ran to the end. Their output is refused
+    without it, naming the tail of what was printed. The other `runPS`
+    scripts end on a statement that cannot fail that way (checked on the
+    host). Tier 0: both rendered scripts end with the marker; the slot
+    output read with and without it. (GLOBAL-11, TEST-01)
+62. F6, `runPS`'s error (`powershell.go`): a failure with an empty stderr
+    carries the last lines of stdout (at most 10), never only the exit
+    status, through a pure helper taking stdout, stderr and the error.
+    Tier 0: the helper's message with stderr, with only stdout, and with
+    neither; a Windows-only test runs a script ending on a suppressed
+    failed lookup and finds the stdout tail in runPS's error. (UX-04,
+    TEST-01)
+
 ## Design review
 
 Required (FLOW-19): `alters_relationships: true`, the `bootstrap-model`
