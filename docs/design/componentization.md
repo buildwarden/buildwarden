@@ -637,7 +637,21 @@ and file P1, S1 and K1 through intake.
 
 ## Design review
 
-None yet.
+- **r1, 2026-11-12: approved at `530beda`** (Jeff; read at `612b837`, page
+  https://claude.ai/artifact/DPiTkfmfoMxKmsggAGeJSd). The Bootstrap
+  comparison accepted for all three model changes (BOOT-07), and the Security
+  note acknowledged (GLOBAL-06). Assumptions a1, a3, a4, a5, a6 and a10
+  confirmed as drafted; a12 confirmed with the comparison. Folded in at
+  `530beda`, by Jeff's word in the sitting: a2, no storage boundary for the
+  collector in this program; a7, the build-link class is not recorded in the
+  ledger, because a driver may change class as its environment or
+  implementation changes; a8, the held queue items are closed now, with
+  `security-suite` included on a separate question that named its stale
+  pointers; a9, contact with `hermit-os` waits for the end of M6; a11, an
+  attended session may create repositories or change visibility on Jeff's
+  word in that session.
+- **rule change FLOW-20 approved at `530beda`**, as worded under **Rule
+  changes**.
 
 ## Consolidation
 
