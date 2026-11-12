@@ -4,9 +4,10 @@
 # queue/*.yaml (set by the workflow-human skill).
 priority_confirmed: true
 
-# Steps one daily run may take. Starts small; calibrate against /usage.
+# Steps one daily run may take; calibrate against /usage. Doubled from 12 on
+# 2026-11-12 (Jeff): weekly usage was very low.
 run_budget:
-  steps: 12
+  steps: 24
 
 # Steps one scheduled native session may take (FLOW-13), so native and
 # integration testing never compete with the cloud loop. Unset falls back to
