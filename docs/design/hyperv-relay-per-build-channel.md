@@ -1851,6 +1851,54 @@ against the design:
     Consolidation, with the tier-0 cases above named as its regression
     seeds. (TEST-08, GLOBAL-06)
 
+### Rework from native validation r4 (FLOW-06, FLOW-10)
+
+Native validation on windows-hyperv at `59d7440`
+(`native/windows-hyperv/2026-11-12/attended/README.md`) sent the feature
+back to Implement with F1 to F3, and the attended merge check against #112
+and #114 found F4. Each reworks code tasks 24, 28, 29, 31 and 35 (or, for
+F4, main's Firecracker setup) already wrote; none changes a decision.
+
+51. F1, the seed ISOs (`winseed.go`, `winseed_windows.go`): every IMAPI2
+    image (the build seed, the relay seed of task 24, the prepare seed) is
+    made under `driver.HostLock("hyperv-iso")`, held only around the
+    PowerShell call, since two builds starting together make four images and
+    `IMAPI2FS.MsftFileSystemImage` fails to instantiate (`c0aab138`) when
+    two processes create one at once. The lock is the whole fix, so there is
+    no retry (GLOBAL-11). Tier 0: the lock's name, the image made while it
+    is held and released after, a lock error returned with no image.
+    (GLOBAL-06, GLOBAL-11, TEST-01; Decision 4)
+52. F2, an installed but stopped privileged service (`capability.go`,
+    `service*.go`, `doctor.go`): when the pipe does not open, the SCM is read
+    with query rights only (no elevation), and `Capabilities` records
+    whether the service is installed and its state. Doctor prints
+    "installed, but <state>" with the fix `Start-Service WardenHyperV` (or
+    `sc start WardenHyperV`) from an elevated shell, never "not installed";
+    the VM lifecycle and network remedies, and `Ready`'s reason, name
+    starting it instead of installing it. The network strategy is unchanged:
+    a stopped service serves nothing, as before. Tier 0: doctor's service
+    row and remedies for not installed, stopped, running with no pipe,
+    reachable and stale. (UX-04, GLOBAL-11, TEST-01)
+53. F3, the build link against the NAT (`cmd/warden/config.go`,
+    `buildnet.go`, `doctornet.go`): the load-time ranges drop "the hyperv
+    driver's default NAT", a constant that refused a link before the build's
+    read-back check (Decision 5: the NAT is read back, never a constant)
+    could name the host's NAT. The Hyper-V check at build start and in doctor
+    is the one check: it names the NAT read back (its name and prefix), or,
+    with no NAT on the host yet, says it used the default prefix a build
+    would make one on. Tier 0: a link in `192.168.240.0/20` loads; the
+    refusal names a read-back NAT, and the default prefix when there is
+    none. (UX-04, UX-08, GLOBAL-11; Decision 5)
+54. F4, `warden setup --driver firecracker --slots` (`driver/firecracker`):
+    `RunSetup` checks a given `--slots` before the host, so a bad flag is
+    refused the same on every host and `TestSetupSlots` holds on a Windows
+    host. (UX-04, TEST-01)
+55. Docs for 51 to 53 (UX-01, FLOW-15): `cli.md` and `drivers.md` for the
+    stopped service; `configuration.md` drops the default NAT from the
+    load-time ranges and says the Hyper-V build and doctor check the link
+    against the NAT read back; `overview.md`'s Hyper-V build flow gains the
+    ISO lock and the stopped-service report.
+
 ## Design review
 
 Required (FLOW-19): `alters_relationships: true`, the `bootstrap-model`
