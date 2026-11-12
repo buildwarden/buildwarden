@@ -210,6 +210,7 @@ steps:
     phase: 3
     affinity: cloud
     status: pending
+    note: 'With the back-to-Implement findings (F1-F3, history), also: cmd/warden TestSetupSlots fails on a Windows host (vmdns_test.go:160): for --driver firecracker --slots 257 the platform refusal (needs an x86_64 Linux host with /dev/kvm) comes before the 1-256 range check, so the test wants the range message and gets the platform one. CI (Linux) passes. Make the case independent of the host OS (found attended 2026-11-12, merge check against PRs 112 and 114).'
     lease:
       claimed_by: ""
       expires: null

@@ -11,14 +11,31 @@ Nothing.
 | Pri | Feature | Kind | Phase | Next steps | Steps spent / est. |
 |---|---|---|---|---|---|
 | 24 | componentization | process | 2 implement | x2-implement (cloud) | 1 / 8 |
-| 51 | hyperv-relay-per-build-channel | fix (follows build-link-subnet) | 3 implement | f3-implement-r4 (cloud) | 29 / 40 |
+| 51 | hyperv-relay-per-build-channel | feature | 3 implement | f6-validate-windows-hyperv (host:windows-hyperv), f6-validate-qemu-any-r2 (host:qemu-any), f6-validate-macos-vz-r2 (host:macos-vz), f3-implement-r4 (cloud) | 29 / 40 |
 
 ## Waiting on a host
 
-- **hyperv-relay-per-build-channel**: `f6-validate-windows-hyperv` on windows-hyperv (from phase 6)
-- **hyperv-relay-per-build-channel**: `f6-validate-qemu-any-r2` on qemu-any (from phase 6)
-- **hyperv-relay-per-build-channel**: `f6-validate-macos-vz-r2` on macos-vz (from phase 6)
+- **hyperv-relay-per-build-channel**: `f6-validate-windows-hyperv` on windows-hyperv
+- **hyperv-relay-per-build-channel**: `f6-validate-qemu-any-r2` on qemu-any
+- **hyperv-relay-per-build-channel**: `f6-validate-macos-vz-r2` on macos-vz
 
 ## Backlog
 
 Empty.
+
+## Recently done
+
+- wf-check-test-windows-eol: #113, 2026-11-12
+- flow19-design-before-plan: #101, 2026-11-12
+- wf-later-phase-host-steps: #99, 2026-11-12
+- budgets-active-only: #100, 2026-11-12
+- native-allowlist-scratch-tools: #102, 2026-11-12
+- regression-fixes-follow-up: #103, 2026-11-12
+- design-principles: #104, 2026-11-12
+- rule-running-line-match: #105, 2026-11-12
+- next-skips-merge-wait: #106, 2026-11-12
+- wf-squash-after-base-moved: #107, 2026-11-12
+- build-link-subnet: #98, 2026-11-06
+- vz-image-prepare-refresh: #108, 2026-11-12
+- jks-test-skip-without-jdk: #109, 2026-11-12
+- build-vm-busybox: #110, 2026-11-12
