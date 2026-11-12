@@ -35,13 +35,14 @@ func TestSetupSlotsScript(t *testing.T) {
 func TestParseSetupSlots(t *testing.T) {
 	r, err := parseSetupSlots("SLOT=warden-dev-0\tcreated\r\nSLOT=warden-dev-1\tpresent\n" +
 		"REMOVED=warden-dev-7\nRETIRED=warden-dev\nDONE\r\n")
-	if err != nil || strings.Join(r.Slots, ",") != "warden-dev-0 (created),warden-dev-1 (present)" ||
+	if err != nil ||
+		strings.Join(r.Slots, ",") != "warden-dev-0 (created),warden-dev-1 (present)" ||
 		strings.Join(r.Removed, ",") != "warden-dev-7" || r.Retired != "warden-dev" ||
 		r.err() != nil {
 		t.Errorf("clean setup: %+v", r)
 	}
-	r, err = parseSetupSlots("SLOT=warden-dev-0\tpresent\nBUSY=warden-dev-5\twarden-build-k\n" +
-		"WRONGTYPE=warden-dev-1\tInternal\n" +
+	r, err = parseSetupSlots("SLOT=warden-dev-0\tpresent\n" +
+		"BUSY=warden-dev-5\twarden-build-k\nWRONGTYPE=warden-dev-1\tInternal\n" +
 		"OLDBUSY=warden-dev\twarden-relay-a, warden-build-a\nDONE\n")
 	if err != nil {
 		t.Fatal(err)

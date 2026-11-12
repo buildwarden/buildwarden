@@ -1,6 +1,7 @@
 package hyperv
 
 import (
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -33,5 +34,29 @@ func TestPSDoneCheck(t *testing.T) {
 		if err := psDoneCheck(out); err == nil {
 			t.Errorf("%q passed", out)
 		}
+	}
+}
+
+// TestPSError: stderr is the message when there is any; with none, the exit
+// error carries stdout's tail (native F6), or says there was no output.
+func TestPSError(t *testing.T) {
+	exit := errors.New("exit status 1")
+	for _, tt := range []struct {
+		stdout, stderr, want string
+	}{
+		{"A=1\n", "  Access is denied.\r\n", "powershell: Access is denied."},
+		{"SLOT=warden-dev-0\tpresent\r\nSLOT=warden-dev-1\tpresent\r\n", "",
+			"powershell: exit status 1, with no stderr; stdout ended: " +
+				"SLOT=warden-dev-0\tpresent; SLOT=warden-dev-1\tpresent"},
+		{"\r\n", " ", "powershell: exit status 1, with no output"},
+	} {
+		err := psError(tt.stdout, tt.stderr, exit)
+		if err.Error() != tt.want {
+			t.Errorf("psError(%q, %q) = %q, want %q", tt.stdout, tt.stderr, err,
+				tt.want)
+		}
+	}
+	if !errors.Is(psError("x", "", exit), exit) {
+		t.Error("the exit error is not wrapped")
 	}
 }

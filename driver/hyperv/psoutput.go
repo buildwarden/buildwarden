@@ -30,6 +30,19 @@ func psTail(out string) string {
 	return strings.Join(lines, "; ")
 }
 
+// psError is runPS's error for a failed run: stderr when there is any, else
+// the exit error with the tail of stdout, so a failure is never only an exit
+// status.
+func psError(stdout, stderr string, err error) error {
+	if msg := strings.TrimSpace(stderr); msg != "" {
+		return fmt.Errorf("powershell: %s", msg)
+	}
+	if tail := psTail(stdout); tail != "" {
+		return fmt.Errorf("powershell: %w, with no stderr; stdout ended: %s", err, tail)
+	}
+	return fmt.Errorf("powershell: %w, with no output", err)
+}
+
 // psDoneCheck refuses the output of a script that did not print psDone as
 // its last line, naming what it did print.
 func psDoneCheck(out string) error {
