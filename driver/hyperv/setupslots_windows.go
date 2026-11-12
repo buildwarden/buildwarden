@@ -10,5 +10,9 @@ func runSetupSlots(network string, n int) (setupSlots, error) {
 	if err != nil {
 		return setupSlots{}, fmt.Errorf("build switches: %w", err)
 	}
-	return parseSetupSlots(out), nil
+	slots, err := parseSetupSlots(out)
+	if err != nil {
+		return setupSlots{}, fmt.Errorf("build switches: %w", err)
+	}
+	return slots, nil
 }

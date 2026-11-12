@@ -51,6 +51,9 @@ func (p *localProvisioner) EnsureNetwork(
 	}
 
 	out, err := runPS(script)
+	if err == nil {
+		err = psDoneCheck(out)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("EnsureNetwork: %w", err)
 	}

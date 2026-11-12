@@ -91,5 +91,6 @@ if ($natName) {
 $alias = "vEthernet ($natName)"
 Get-NetIPAddress -InterfaceAlias $alias -AddressFamily IPv4 -ErrorAction SilentlyContinue |
     ForEach-Object { "HOSTIP=$($_.IPAddress)" }
-`, name, nat, hostIP, prefixLen, prefix, devNAT), nil
+'%[7]s'
+`, name, nat, hostIP, prefixLen, prefix, devNAT, psDone), nil
 }

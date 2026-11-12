@@ -18,7 +18,7 @@ import (
 // setupSlotsScript renders the PowerShell that makes network's n slot
 // switches, trims the unattached ones above n and retires the old shared
 // switch. It changes nothing attached; it reports each switch on a line
-// parseSetupSlots reads.
+// parseSetupSlots reads, then psDone.
 func setupSlotsScript(network string, n int) string {
 	return fmt.Sprintf(`
 $ErrorActionPreference = 'Stop'
@@ -54,7 +54,8 @@ if ($old -and $old.SwitchType -eq 'Private') {
     if ($vms) { "OLDBUSY=$net`+"`t"+`$vms" }
     else { Remove-VMSwitch -Name $net -Force; "RETIRED=$net" }
 }
-`, psEscapeSingle(network), n)
+'%[3]s'
+`, psEscapeSingle(network), n, psDone)
 }
 
 // setupSlots is what setupSlotsScript reported.
@@ -66,9 +67,13 @@ type setupSlots struct {
 	Refusals []string
 }
 
-// parseSetupSlots reads setupSlotsScript's lines.
-func parseSetupSlots(out string) setupSlots {
+// parseSetupSlots reads setupSlotsScript's lines, refusing output that does
+// not end with psDone.
+func parseSetupSlots(out string) (setupSlots, error) {
 	var r setupSlots
+	if err := psDoneCheck(out); err != nil {
+		return r, err
+	}
 	for _, line := range strings.Split(out, "\n") {
 		k, v, ok := strings.Cut(strings.TrimSpace(line), "=")
 		if !ok {
@@ -94,7 +99,7 @@ func parseSetupSlots(out string) setupSlots {
 				detail))
 		}
 	}
-	return r
+	return r, nil
 }
 
 // err is the refusal for any switch setup would not touch.

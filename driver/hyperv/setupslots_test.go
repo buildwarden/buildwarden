@@ -25,21 +25,29 @@ func TestSetupSlotsScript(t *testing.T) {
 			t.Errorf("script lacks %q:\n%s", want, s)
 		}
 	}
+	// Native F6: the old switch's lookup finds nothing once it is retired,
+	// so the script must not end on it.
+	if !strings.HasSuffix(strings.TrimSpace(s), "\n'DONE'") {
+		t.Errorf("script does not end with its DONE line:\n%s", s)
+	}
 }
 
 func TestParseSetupSlots(t *testing.T) {
-	r := parseSetupSlots("SLOT=warden-dev-0\tcreated\r\nSLOT=warden-dev-1\tpresent\n" +
-		"REMOVED=warden-dev-7\nRETIRED=warden-dev\n")
-	if strings.Join(r.Slots, ",") != "warden-dev-0 (created),warden-dev-1 (present)" ||
+	r, err := parseSetupSlots("SLOT=warden-dev-0\tcreated\r\nSLOT=warden-dev-1\tpresent\n" +
+		"REMOVED=warden-dev-7\nRETIRED=warden-dev\nDONE\r\n")
+	if err != nil || strings.Join(r.Slots, ",") != "warden-dev-0 (created),warden-dev-1 (present)" ||
 		strings.Join(r.Removed, ",") != "warden-dev-7" || r.Retired != "warden-dev" ||
 		r.err() != nil {
 		t.Errorf("clean setup: %+v", r)
 	}
-	r = parseSetupSlots("SLOT=warden-dev-0\tpresent\nBUSY=warden-dev-5\twarden-build-k\n" +
+	r, err = parseSetupSlots("SLOT=warden-dev-0\tpresent\nBUSY=warden-dev-5\twarden-build-k\n" +
 		"WRONGTYPE=warden-dev-1\tInternal\n" +
-		"OLDBUSY=warden-dev\twarden-relay-a, warden-build-a\n")
+		"OLDBUSY=warden-dev\twarden-relay-a, warden-build-a\nDONE\n")
+	if err != nil {
+		t.Fatal(err)
+	}
 	var fe *driver.FixableError
-	err := r.err()
+	err = r.err()
 	if !errors.As(err, &fe) || r.Retired != "" {
 		t.Fatalf("refusals: %+v, %v", r, err)
 	}
@@ -49,6 +57,20 @@ func TestParseSetupSlots(t *testing.T) {
 		if !strings.Contains(fe.Msg, want) {
 			t.Errorf("refusal lacks %q: %s", want, fe.Msg)
 		}
+	}
+}
+
+// TestParseSetupSlotsNoDone (native F6): output without the DONE line is
+// refused, naming what the script printed, even when every slot is there.
+func TestParseSetupSlotsNoDone(t *testing.T) {
+	_, err := parseSetupSlots("SLOT=warden-dev-0\tpresent\r\nSLOT=warden-dev-1\tpresent\r\n")
+	if err == nil || !strings.Contains(err.Error(), "stopped before its end") ||
+		!strings.Contains(err.Error(), "SLOT=warden-dev-1\tpresent") {
+		t.Errorf("no DONE line: %v", err)
+	}
+	if _, err := parseSetupSlots(""); err == nil ||
+		!strings.Contains(err.Error(), "printing nothing") {
+		t.Errorf("no output: %v", err)
 	}
 }
 

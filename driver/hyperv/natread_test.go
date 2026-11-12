@@ -184,3 +184,17 @@ func TestEnsureNetworkScriptRemovesOldAddresses(t *testing.T) {
 		t.Errorf("addresses are removed outside the create branch:\n%s", s)
 	}
 }
+
+// TestEnsureNetworkScriptEndsDone (native F6): the vNIC's addresses, read
+// back last, fail like any suppressed lookup when the vNIC holds none, so
+// the script ends with its DONE line.
+func TestEnsureNetworkScriptEndsDone(t *testing.T) {
+	s, err := ensureNetworkScript(NetworkSpec{NATName: "warden-dev-nat",
+		NATPrefix: "192.168.250.0/24", HostIP: "192.168.250.1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if !strings.HasSuffix(strings.TrimSpace(s), "\n'DONE'") {
+		t.Errorf("script does not end with its DONE line:\n%s", s)
+	}
+}
