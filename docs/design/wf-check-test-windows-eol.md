@@ -136,7 +136,7 @@ Confirmed at x2-implement (process item, FLOW-03), one commit each.
 
 ## Design review
 
-Recorded at x1-design (FLOW-19).
+- **r1, 2026-11-12: approved at `d9c8e99`** (Jeff, workflow-human). Assumptions a1 (all three test git helpers) and a2 (no CI change) confirmed as drafted, (a) each. No changes folded in. No `rule_changes` (process item, FLOW-14).
 
 ## Consolidation
 
