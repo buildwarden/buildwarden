@@ -529,6 +529,10 @@ gaps:
       changed. feat/security-suite is still e05df23 with no security-test target, and q2 (on hold) is still open.
       2026-11-12 (host:windows-hyperv/20261112T171002Z, unattended, main 1173c5f): not run, nothing
       changed. feat/security-suite is still e05df23 with no security-test target, and q2 (on hold) is still open.
+      2026-11-12 (host:windows-hyperv/20261112T231002Z, unattended, main 8d07f27): not run. main has no
+      security-test target and feat/security-suite is still e05df23 (design only). The security-suite
+      queue item was closed for re-intake after the componentization freeze (9f0b347, a8), so this entry
+      has no item to wait on; Jeff can defer or close it so native sessions stop retrying it.
     status: open
   - id: baked-asset-staleness-qemu-windows
     host: macos-qemu
