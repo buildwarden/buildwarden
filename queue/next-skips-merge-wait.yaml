@@ -1,6 +1,6 @@
 feature: next-skips-merge-wait
 title: wf next hands the cloud a merge step that waits on the human, starving lower classes
-priority: 56
+priority: 57
 kind: process
 follows: regression-fixes-follow-up
 status: done
@@ -99,3 +99,6 @@ history:
   - at: 2026-11-12T18:43:30Z
     by: human/jeff
     event: 'priority 55 -> 56 (renumbered by wf new: componentization queued at 24)'
+  - at: 2026-11-12T18:58:10Z
+    by: human/jeff
+    event: 'priority 56 -> 57 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'

@@ -1,6 +1,6 @@
 feature: vz-image-prepare-refresh
 title: vz image prepare refreshes the cached image in place, and builds pick the prepared image
-priority: 44
+priority: 45
 status: done
 round: feature
 phase: 8
@@ -382,3 +382,6 @@ history:
   - at: 2026-11-12T18:43:30Z
     by: human/jeff
     event: 'priority 43 -> 44 (renumbered by wf new: componentization queued at 24)'
+  - at: 2026-11-12T18:58:10Z
+    by: human/jeff
+    event: 'priority 44 -> 45 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'

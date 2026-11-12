@@ -1,6 +1,6 @@
 feature: hyperv-relay-per-build-channel
 title: Give the Hyper-V relay VM a per-build channel before the claim
-priority: 50
+priority: 51
 follows: build-link-subnet
 status: in_progress
 round: feature
@@ -685,3 +685,6 @@ history:
   - at: 2026-11-12T18:48:19Z
     by: host:macos-vz/20261112T184819Z
     event: claimed f6-validate-macos-vz until 2026-11-12T20:48:19Z
+  - at: 2026-11-12T18:58:10Z
+    by: human/jeff
+    event: 'priority 50 -> 51 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'

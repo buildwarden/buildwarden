@@ -1,6 +1,6 @@
 feature: rule-running-line-match
 title: 'wf check''s rule-running CI line match ignores job names (needs: lists)'
-priority: 55
+priority: 56
 kind: process
 follows: design-approved-rule-changes
 status: done
@@ -99,3 +99,6 @@ history:
   - at: 2026-11-12T18:43:30Z
     by: human/jeff
     event: 'priority 54 -> 55 (renumbered by wf new: componentization queued at 24)'
+  - at: 2026-11-12T18:58:10Z
+    by: human/jeff
+    event: 'priority 55 -> 56 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'

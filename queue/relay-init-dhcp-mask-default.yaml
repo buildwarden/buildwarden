@@ -1,6 +1,6 @@
 feature: relay-init-dhcp-mask-default
 title: 'Relay VM init: no /24 default for a DHCP lease without a subnet mask (GLOBAL-11)'
-priority: 47
+priority: 48
 follows: hyperv-relay-per-build-channel
 status: queued
 round: feature
@@ -51,3 +51,6 @@ history:
   - at: 2026-11-12T18:43:30Z
     by: human/jeff
     event: 'priority 46 -> 47 (renumbered by wf new: componentization queued at 24)'
+  - at: 2026-11-12T18:58:10Z
+    by: human/jeff
+    event: 'priority 47 -> 48 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'

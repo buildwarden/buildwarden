@@ -1,0 +1,32 @@
+feature: wf-check-test-windows-eol
+title: 'tools/workflow/check: TestWhitespaceOnlyDifferenceFails fails on a Windows checkout'
+priority: 26
+kind: process
+follows: wf-squash-after-base-moved
+status: queued
+round: process
+phase: 1
+design: docs/design/wf-check-test-windows-eol.md
+branch: feat/wf-check-test-windows-eol
+alters_relationships: null
+source: 'Regression on main (1173c5f), found 2026-11-12 on windows-desktop while running make test for componentization''s design branch. ''cd tools/workflow && go test ./check/ -run TestWhitespaceOnlyDifferenceFails'' fails with ''x3 on a whitespace-only difference: "", want it unmerged''. Cause: the test''s temporary repository is checked out with CRLF under the machine''s core.autocrlf=true, so its strings.Replace of "Feature line.\n" matches nothing and the squash it builds has no whitespace difference. Likely fix: have the test replace "Feature line." without the newline, or set core.autocrlf=false in the test repository. CI does not catch it: main.yml runs make test on ubuntu-latest only. The two other Windows-only failures found in the same run are fixed in PR #111 (no-design).'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 5
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-12T18:58:10Z
+    by: human/jeff
+    event: queued at priority 26 (intake)

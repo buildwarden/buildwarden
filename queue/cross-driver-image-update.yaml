@@ -1,6 +1,6 @@
 feature: cross-driver-image-update
 title: warden image prepare --update moves every VM driver's base image to its newest source
-priority: 52
+priority: 53
 status: queued
 round: feature
 phase: 0
@@ -62,3 +62,6 @@ history:
   - at: 2026-11-12T18:43:30Z
     by: human/jeff
     event: 'priority 51 -> 52 (renumbered by wf new: componentization queued at 24)'
+  - at: 2026-11-12T18:58:10Z
+    by: human/jeff
+    event: 'priority 52 -> 53 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'

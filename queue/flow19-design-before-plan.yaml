@@ -1,6 +1,6 @@
 feature: flow19-design-before-plan
 title: 'FLOW-19: the design review follows Design; a second review only when planning changes the design'
-priority: 39
+priority: 40
 kind: process
 status: done
 round: process
@@ -95,3 +95,6 @@ history:
   - at: 2026-11-12T18:43:30Z
     by: human/jeff
     event: 'priority 38 -> 39 (renumbered by wf new: componentization queued at 24)'
+  - at: 2026-11-12T18:58:10Z
+    by: human/jeff
+    event: 'priority 39 -> 40 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'

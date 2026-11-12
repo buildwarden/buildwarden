@@ -1,6 +1,6 @@
 feature: wf-later-phase-host-steps
 title: 'wf keeps and holds later-phase host steps: wf back preserves them, wf next/gate skip them until their phase'
-priority: 40
+priority: 41
 kind: process
 status: done
 round: process
@@ -98,3 +98,6 @@ history:
   - at: 2026-11-12T18:43:30Z
     by: human/jeff
     event: 'priority 39 -> 40 (renumbered by wf new: componentization queued at 24)'
+  - at: 2026-11-12T18:58:10Z
+    by: human/jeff
+    event: 'priority 40 -> 41 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'

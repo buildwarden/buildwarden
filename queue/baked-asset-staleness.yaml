@@ -1,6 +1,6 @@
 feature: baked-asset-staleness
 title: One staleness check for every baked boot asset
-priority: 51
+priority: 52
 follows: build-link-subnet
 status: in_progress
 round: feature
@@ -210,3 +210,6 @@ history:
   - at: 2026-11-12T18:43:30Z
     by: human/jeff
     event: 'priority 50 -> 51 (renumbered by wf new: componentization queued at 24)'
+  - at: 2026-11-12T18:58:10Z
+    by: human/jeff
+    event: 'priority 51 -> 52 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'

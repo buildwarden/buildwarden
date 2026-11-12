@@ -1,6 +1,6 @@
 feature: vz-ipsw-latest-reuse
 title: vz restore reuses a stale ipsw-latest.ipsw for any IPSW URL
-priority: 48
+priority: 49
 follows: vz-image-prepare-refresh
 status: queued
 round: feature
@@ -57,3 +57,6 @@ history:
   - at: 2026-11-12T18:43:30Z
     by: human/jeff
     event: 'priority 47 -> 48 (renumbered by wf new: componentization queued at 24)'
+  - at: 2026-11-12T18:58:10Z
+    by: human/jeff
+    event: 'priority 48 -> 49 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'
