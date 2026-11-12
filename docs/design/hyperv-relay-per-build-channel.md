@@ -1,6 +1,6 @@
 ---
 feature: hyperv-relay-per-build-channel
-status: draft
+status: archived
 drivers: [qemu, firecracker, hyperv, vz, container]  # hyperv: the relay seed (pre-claim values only), the claim token, the per-build relay address, the NAT read back from the host, the relay's resolvers ([vm] dns or the host's) sent in the claim, the durable strategy's per-build switches made by setup, the Windows guest on the relay's lease, the relay-boot stamp. qemu: tools/relay-vm/init is shared by every vm-mode relay and loses its baked network defaults and its resolver keys (Decision 2), the qemu driver now sends the relay's resolvers in the claim ([vm] dns or the macOS host's, Decision 6), and its Windows guests run the same warden-run.ps1 and also drop --ip (Decision 8). firecracker: the shared init (as qemu), its resolver selection moves to a shared package, and the resolvers leave its relay's kernel command line (warden.dns) for the claim (Decision 6). vz: driver/vz sends the host-mode relay's resolvers in the claim ([vm] dns or the Mac's), where the relay used the Mac's system resolver (Decision 6). container: driver.BuildRequest (shared by every driver) gains DNS, which the container driver leaves empty, so it sends no upstream_dns and ignores [vm] as today; its relay takes the absent-field default, every usable nameserver of its own resolv.conf in order, where it used the system resolver first and 8.8.8.8 when none (Decision 6, RELAY-04: container, vm and host all change); its relay never boots tools/relay-vm/init
 seams: [bootstrap-model, relay-claim]  # bootstrap-model: BOOT-06 gains the boot-asset and boot-channel invariant, and BOOT-07's surface list grows (Rule changes; Bootstrap comparison). relay-claim (r3, a10): relaycfg.Config gains upstream_dns, the relay's upstream resolvers, used in every mode (RELAY-08, GLOBAL-08); the claim token was already part of the protocol (Bearer on /v1/claim and the tunnel), Hyper-V only starts sending one. executor-initialize is unchanged: --gateway and the optional --ip keep their contract (overview.md: initialize --gateway=<relay> [--ip=<static>]); on Windows warden stops passing the optional --ip (Decision 8), a mode the contract already defines. relay-guest-api is unchanged: the relay's DHCP responder already serves the lease the Windows guest now keeps, and the guest's DNS is still the relay
 surfaces: [cli, config, output]  # cli: `warden setup --driver hyperv` gains --slots (the durable strategy's per-build switches) and --nat-prefix/--host-ip now take effect on every build (UX-01); config: a new optional [vm] dns key, read by every VM driver (Decision 6, UX-01, UX-07, UX-08); output: doctor's NAT, relay-resolver and durable-slot lines on hyperv and its relay-resolver line on the other VM drivers, the new fixable refusals (UX-04)
@@ -2348,7 +2348,9 @@ everywhere, from `parseSetupSlots`); the hyperv entries are r4's. `psTail`
 has no twin (`driver/firecracker` `consoleTail` reads a file); no
 duplication.
 
-None yet. One named contingency, never a runtime fallback (Decision 11): if
+## Rollback notes
+
+Nothing was validated, found wanting and reverted: the relay seed's DVD path held on windows-hyperv (cases 2, 3 and 7), so the SMBIOS contingency was never taken. Native F1 to F6 were fixed forward (tasks 51 to 62), none reverted. One named contingency, never a runtime fallback (Decision 11): if
 native validation finds the relay seed's DVD path does not hold on Hyper-V,
 the feature returns to Design (FLOW-06), which replaces it with SMBIOS
 strings (Decision 1) for the review to approve. Rolling back the feature on
@@ -2358,4 +2360,80 @@ disk (Compatibility).
 
 ## Archive summary
 
-Filled in at Publish (FLOW-12).
+Designed 2026-11-07 to 2026-11-09 (three rounds: r1 changed a3, a4 and a6;
+r2's re-review moved the relay's resolvers into the claim), approved at
+re-review r3 (`cbb2cda`) with rule changes BOOT-06 (`cbb2cda`) and BOOT-07
+(`0df0a64`) and Jeff's fold-in at `71df1d1`. Implemented in five rounds,
+the last four reworking native and review findings; tier 2 last at
+`61bd4478e0f0` (0 MUST, 5 SHOULD open). Validated on windows-hyperv
+(attended, three passes), qemu-any and macos-vz; published 2026-11-12.
+
+- **Built.** Every Hyper-V relay VM gets a per-build relay seed: an ISO
+  labelled `WARDENRELAY` on a DVD, holding only its pre-claim values
+  (`warden.net`, `nat_ip`, `nat_prefix`, `nat_gw`, `claim_token`,
+  `seed=1`). `tools/relay-vm/init` reads it on Hyper-V alone (a `warden.*`
+  word on that command line stops it), lost every baked network default,
+  and stops with a console line on a missing or bad value. Each build
+  claims its relay with a fresh 32-byte token (401 without it), and its
+  relay takes the lowest free NAT address under the `hyperv-network` host
+  lock, recorded in the relay VM's Notes. The NAT is read back from the
+  host, so `--nat-prefix` and `--host-ip` take effect, and a build link
+  inside it is refused at build start and in doctor. The relay's upstream
+  resolvers are a claim field, `upstream_dns`, sent by every VM driver:
+  `[vm] dns` exclusively when set, else the host's (`driver/resolvers`),
+  else a fixable refusal; the container driver sends none and its relay
+  uses its own `resolv.conf`. Durable builds each take a slot switch
+  (`<network>-0..N-1`, `warden setup --driver hyperv --slots`, default 4)
+  instead of one shared Private switch. Windows guests drop `--ip` and keep
+  the relay's lease. The relay boot VHDX's link-channel stamp went to 2 and
+  the privileged service's protocol to 2; each refuses the other side's
+  old version before any VM, naming the fix.
+- **Decisions taken:** seed ISO over KVP, SMBIOS or an hvsock claim (a1);
+  VM Notes under a host lock for the address (a2); host resolvers with an
+  exclusive `[vm] dns`, no public fallback (a3 changed); a per-build
+  Private switch for durable builds, not VLANs or one build at a time (a4
+  changed); the NAT read back from the host (a5); the lease alone on
+  Windows (a6 changed); BOOT-06's per-build network-value invariant and the
+  init's defaults removed (a7); resolvers in the claim, not the seed or a
+  kernel command line (r3, RELAY-08); refusals both ways on version skew;
+  no runtime fallback anywhere (Decision 11).
+- **Rejected:** KVP, SMBIOS strings as a second channel, an hvsock claim;
+  lease files or per-address locks; keeping `8.8.8.8` or a public fallback;
+  access VLANs on one durable switch; a static `--ip` set by `initialize`;
+  persisting setup's flags; resolvers in the seed; a compatibility mode for
+  old relays or services.
+- **Found late** (native windows-hyperv, fixed forward, tasks 51 to 62):
+  concurrent seed ISO creation raced in IMAPI2 (F1, now under the
+  `hyperv-iso` lock); a stopped service read as not installed (F2), and an
+  unreadable service state the same way (review M4); the build-link refusal
+  named the default NAT prefix, not the host's (F3); `warden setup --driver
+  firecracker --slots` checked the platform before the range (F4); setup
+  left the old host IP on the NAT vNIC (F5); every setup after the first
+  exited 1 because PowerShell scripts ended on a suppressed lookup (F6: now
+  a checked `DONE` line, and `runPS` names stdout's tail when stderr is
+  empty). Jeff dropped the host-DNS halves of validation cases 7 and 8
+  (changing the host's DNS can cut the session off); tier 0 covers them.
+- **Open:** review SHOULDs S1 and S2 (GLOBAL-09: the init's `warden.net`
+  default; setup comparing a defaulted `--nat-prefix`) and S4 to S6
+  (TEST-06: the in-order resolver walk, `serveClaim`'s refusal wiring, the
+  qemu and vz `setRelayDNS` call), for Jeff at merge. Follow-ups
+  `relay-host-subnet-claim-only` and `relay-init-dhcp-mask-default` are
+  queued; TEST-08 cases are handed to `security-suite`; the qemu Windows
+  lease check waits on `qemu-windows-guest-package` (backlog
+  `hyperv-relay-per-build-channel-qemu-windows`). Moving the older `'OK'`
+  script endings to `psDoneCheck` is a small later cleanup.
+- **For future designs touching `relay-seed`, `claim-token`,
+  `relay-claim`, `upstream-dns`, `resolver-selection`, `vm-dns-config`,
+  `nat-prefix`, `durable-switch`, `network-slots`, `host-setup`,
+  `launcher-stamp` or `windows-guest-network`:** the seed carries only
+  RELAY-08's boot-channel values, everything else goes in the claim; never
+  add a default or a fallback to the relay init or to resolver selection
+  (GLOBAL-09 to GLOBAL-11); any change to the relay boot VHDX's network
+  contract bumps its link-channel stamp, and any change to the service's
+  pipe protocol bumps `serviceProtocolVersion` (both refuse skew before any
+  VM, and the host must reinstall the service or refresh the VHDX); take
+  every Hyper-V host lock through `driver.HostLock` as `hyperv-<what>`;
+  every PowerShell script that `runPS` runs ends with a `DONE` line
+  checked by `psDoneCheck`; a durable build's hold on its slot is its VMs'
+  adapters, so `warden clean --driver hyperv` is the remedy for a busy
+  slot.
