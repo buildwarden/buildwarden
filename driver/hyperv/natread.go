@@ -85,7 +85,8 @@ func (r netReadback) natAddressing() (netip.Prefix, netip.Addr, error) {
 			"keep only the host IP setup gave it: "+
 				removeAddrsFix(r.NAT, []string{"<each other address>"}),
 			"the host vNIC of NAT %q has more than one address in its prefix %s "+
-				"(%s), so the host IP is ambiguous", r.NAT, prefix, strings.Join(in, ", "))
+				"(%s), so the host IP is ambiguous", r.NAT, prefix,
+			strings.Join(in, ", "))
 	}
 	held := "none"
 	if len(r.HostIPs) > 0 {

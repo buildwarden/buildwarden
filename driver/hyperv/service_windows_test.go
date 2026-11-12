@@ -39,8 +39,8 @@ func TestSCMServiceState(t *testing.T) {
 			installed, state, err := scmServiceState(c.openErr, c.queryErr, c.current)
 			if installed != c.wantInstalled || state != c.wantState ||
 				!errors.Is(err, c.wantErr) || (err == nil) != (c.wantErr == nil) {
-				t.Errorf("got (%v, %q, %v), want (%v, %q, %v)", installed, state, err,
-					c.wantInstalled, c.wantState, c.wantErr)
+				t.Errorf("got (%v, %q, %v), want (%v, %q, %v)", installed, state,
+					err, c.wantInstalled, c.wantState, c.wantErr)
 			}
 		})
 	}

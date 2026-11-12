@@ -45,7 +45,8 @@ func TestServiceRowStates(t *testing.T) {
 		{"access denied",
 			Capabilities{ServiceInstalled: true, ServiceUnread: denied},
 			serviceRow + "installed, but its state could not be read (" + denied +
-				")\n    -> " + serviceCheckInstalledFix + "\n", check(serviceCheckInstalledFix)},
+				")\n    -> " + serviceCheckInstalledFix + "\n",
+			check(serviceCheckInstalledFix)},
 		{"read failed", Capabilities{ServiceUnread: failed},
 			serviceRow + "state could not be read (" + failed + ")\n    -> " +
 				serviceCheckFix + "\n", check(serviceCheckFix)},
