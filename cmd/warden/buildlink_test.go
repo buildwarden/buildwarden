@@ -104,10 +104,10 @@ func TestBuildLinkFlagChecked(t *testing.T) {
 		t.Fatal(err)
 	}
 	for flag, want := range map[string]string{
-		"100.64.87.8/30":     "the container driver's network",
-		"100.64.90.0/30":     "the firecracker driver's upstream range",
-		"10.0.2.0/30":        "qemu's user-mode network",
-		"100.126.0.2/30":     "did you mean 100.126.0.0/30",
+		"100.64.87.8/30": "the container driver's network",
+		"100.64.90.0/30": "the firecracker driver's upstream range",
+		"10.0.2.0/30":    "qemu's user-mode network",
+		"100.126.0.2/30": "did you mean 100.126.0.0/30",
 	} {
 		flagBuildLink = flag
 		_, _, err := resolveBuildLink(cfg)
