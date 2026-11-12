@@ -12,6 +12,7 @@ import (
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/firecracker"
+	"github.com/buildwarden/buildwarden/driver/hyperv"
 )
 
 var cleanCmd = &cobra.Command{
@@ -24,7 +25,9 @@ associated with a currently running warden process.
 With --driver firecracker it needs no container runtime: it kills VMMs left
 on a network slot by a warden that did not exit cleanly (or by --keep-vms)
 and removes the work dirs and per-build rootfs copies of builds that are no
-longer running.
+longer running. With --driver hyperv it likewise needs no container runtime:
+it removes the build and relay VMs, ephemeral build switch and work dir of
+each build that is no longer running (including VMs kept with --keep-vms).
 
 Nothing that a later build would reuse is removed: prepared and downloaded
 VM images, the relay boot disk and the support images stay. --cache also
@@ -53,6 +56,15 @@ func runClean(cmd *cobra.Command, args []string) error {
 			return err
 		}
 		removed += firecracker.Clean(os.Stderr, tempDir)
+		finishClean(removed)
+		return nil
+	}
+	if cfg.Runtime.Driver == "hyperv" {
+		tempDir, err := resolveTempDir(cfg)
+		if err != nil {
+			return err
+		}
+		removed += hyperv.Clean(os.Stderr, tempDir)
 		finishClean(removed)
 		return nil
 	}
