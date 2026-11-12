@@ -99,9 +99,38 @@ func git(t *testing.T, dir string, args ...string) {
 	cmd := exec.Command("git", args...)
 	cmd.Dir = dir
 	cmd.Env = append(os.Environ(), "GIT_AUTHOR_NAME=t", "GIT_AUTHOR_EMAIL=t@t",
-		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t")
+		"GIT_COMMITTER_NAME=t", "GIT_COMMITTER_EMAIL=t@t",
+		// Tests edit checked-out files by their text, so the repositories must
+		// hold the bytes written whatever the machine's core.autocrlf says.
+		"GIT_CONFIG_COUNT=1", "GIT_CONFIG_KEY_0=core.autocrlf", "GIT_CONFIG_VALUE_0=false")
 	if out, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("git %v: %v\n%s", args, err, out)
+	}
+}
+
+// TestGitHelperIgnoresAutoCRLF: with core.autocrlf=true in the global config
+// (the Windows default), a file the helper's repository checks out again keeps
+// its LF line endings.
+func TestGitHelperIgnoresAutoCRLF(t *testing.T) {
+	global := filepath.Join(t.TempDir(), "gitconfig")
+	if err := os.WriteFile(global, []byte("[core]\n\tautocrlf = true\n"), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	t.Setenv("GIT_CONFIG_GLOBAL", global)
+	dir := t.TempDir()
+	git(t, dir, "init", "-q")
+	p, want := filepath.Join(dir, "f.txt"), "one\ntwo\n"
+	if err := os.WriteFile(p, []byte(want), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "add", "f.txt")
+	git(t, dir, "commit", "-q", "-m", "f")
+	if err := os.Remove(p); err != nil {
+		t.Fatal(err)
+	}
+	git(t, dir, "checkout", "--", "f.txt")
+	if got, _ := os.ReadFile(p); string(got) != want {
+		t.Errorf("checked-out bytes %q, want %q", got, want)
 	}
 }
 
