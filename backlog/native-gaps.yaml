@@ -551,3 +551,16 @@ gaps:
     note: >-
       Declared blocking in the design but merged unrun (PR #110, 1173c5f, 2026-11-11); Jeff moved it here
       to free the PR slot. Run against main.
+  - id: hyperv-clean-real-host
+    host: windows-hyperv
+    status: open
+    what: >-
+      warden clean --driver hyperv on a real host: after a --keep-vms build it removes that build's
+      warden-build-/warden-relay-<id> VMs, its warden-<id> switch and its work dir; run during a
+      second, running build it leaves that build untouched (its hyperv-build-<id> lock is held).
+    design: docs/design/hyperv-clean.md
+    note: >-
+      The design's tier2_gaps entry, not blocking (PR #114, d55f963, 2026-11-12). Tier 0 covers the
+      logic, and dummy VMs and a work dir were removed on windows-desktop before the merge. Needs a main
+      build that runs here: main's relay does not take the stamp-2 relay disk this host now has, so run
+      it once hyperv-relay-per-build-channel merges, or on that branch merged with main.
