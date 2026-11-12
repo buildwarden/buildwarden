@@ -1,6 +1,6 @@
 ---
 feature: componentization
-status: draft
+status: archived
 drivers: [interface]     # the program's reach: every driver. This item's own PR changes no driver.
 seams: [relay-claim, collector, relay-guest-api, executor-initialize, ledger-format, bootstrap-model]
                          # the program's reach, for retrieval. This item's own PR changes none;
@@ -655,7 +655,74 @@ and file P1, S1 and K1 through intake.
 
 ## Consolidation
 
-To be filled in when the PR is prepared.
+Reviewed on 2026-11-12 against `main` at `8d07f27`. The branch forked from
+`1173c5f`, and six changes have landed since (#111 to #116). `main` is not
+merged into the branch: a process item's Implement phase does not ask for it
+(FLOW-03), none of the six touches a file this branch changes, and a trial
+merge is clean.
+
+### Across features (FLOW-10)
+
+- **Terminology.** FLOW-20 uses the terms the rules already have (process
+  item, hold, blocking question, follow-up, the `Tier1-Allow` trailer) and
+  renames nothing. `hyperv-relay-per-build-channel` (#115) brought the *relay
+  seed*, the *boot channel*, *pre-claim values* and Hyper-V's *slots* into
+  `main`. This design says "slots" only of firecracker's. Nothing here
+  conflicts with those terms, and program items use them as `main` does.
+- **Shared abstractions.** This PR adds no code. #115 added `driver/resolvers`
+  (one resolver selection for every VM driver) and a `DNS` field on
+  `driver.BuildRequest`. K1's driver contract starts from both.
+- **Versioned seams (GLOBAL-08).** This PR changes none. #115 changed two
+  that the program reaches:
+  - `relay-claim`: the claim gained `upstream_dns`, and Hyper-V now sends a
+    claim token. The seam is still unwritten (`seams: []` in
+    `tools/tier1/rules.yaml`), so S1 writes the claim protocol as it stands on
+    `main` when S1 runs, with both.
+  - `bootstrap-model`: BOOT-06 gained an invariant (no boot asset or image,
+    the relay VM's included, carries a network value chosen per build; the
+    relay's pre-claim values come on its boot channel and the rest in the
+    claim, RELAY-08), and BOOT-07's surface list grew. The relay release
+    forms (seam 8) and the Rust relay's images (M2, M3) are bound by the new
+    invariant. The Bootstrap comparison's BOOT-06 row stands: the program
+    does not change BOOT-06. The lines the comparison quotes from the diagram
+    and from BOOT-01, BOOT-02 and BOOT-05 are word for word on `main` at
+    `8d07f27`. #115 changed steps (1) and (3) of the diagram, which the
+    comparison does not quote.
+- **Hyper-V's build-link class.** Decision 10 and the Cross-driver table give
+  Hyper-V "a private switch per build", by construction. That describes the
+  default strategy. On the durable strategy a build takes a slot switch that
+  `warden setup --driver hyperv` made once and later builds reuse, and the
+  driver refuses a slot that holds any adapter but the relay's and the
+  build's own (#115; at the fork, durable builds shared one switch). That is
+  a host-made device checked before each build, which is how Decision 10
+  describes the by-configuration class. Decision 10's guarantee and its two
+  classes do not change, and the text above is left as it was reviewed. S3,
+  where each driver declares its class, settles the durable strategy's.
+- **Conventions.** FLOW-20 is the only one, and it lands as the rule change
+  approved at `530beda`. Consolidation proposes no other.
+- **Pointers to the closed items.** #115's archive summary names
+  `relay-host-subnet-claim-only` and `relay-init-dhcp-mask-default` as queued
+  follow-ups and hands its TEST-08 cases to `security-suite`. All three are
+  in **Items closed for re-intake**, so those pointers are stale until
+  re-intake too. The native-gap backlog holds three `security-suite` entries
+  (macos-vz, qemu-any, windows-hyperv), where that section says two.
+
+### Inside the codebase (FLOW-15)
+
+- **Dead code.** `make deadcode` on the branch reports 13 functions
+  unreachable on Linux, macOS and Windows alike. All are kept for the
+  reasons FLOW-15 names: exported API of `relay/` (`Relay.CAFingerprint`,
+  `Relay.Ledger`) and `collector/` (`Collector.BytesWritten`), and ten
+  cgo-only functions in `driver/vz`. The branch changes no Go file, so the
+  result is the fork point's.
+- **Duplication.** FLOW-20 is stated once, in `process.md`. The intake skill
+  cites it and does not restate it (FLOW-14), and the `AGENTS.md` row points
+  here. The wording under **Rule changes** above is the record of what the
+  review approved; the rule is the one in `process.md`, and the two match.
+- **The overview.** No component's flow changes, so
+  `docs/book/src/concepts/overview.md` is unchanged.
+
+Nothing found here goes back to Design, and no follow-up item is filed.
 
 ## Rollback notes
 
@@ -663,4 +730,88 @@ None.
 
 ## Archive summary
 
-To be filled in when the PR is prepared.
+Drafted and approved on 2026-11-12 (design review r1 at `530beda`, with rule
+change FLOW-20), from decisions Jeff took between 2026-11-07 and 2026-11-12.
+Implemented and published the same day as a process item (FLOW-03).
+
+- **Built by this PR.** Rules and documentation only. FLOW-20 is added to
+  `docs/development/process.md`, word for word as approved: the freeze, the
+  `alters_relationships` limit read from `config.yaml`, the declared
+  move-only change, and the overview sweep left to a phase's last item.
+  `.claude/skills/workflow-intake/SKILL.md` step 3 cites it, and `AGENTS.md`
+  points to this design. No code, driver, seam or user-facing surface
+  changes. None of the program itself is built here: each phase (P1, S1 to
+  S4, K1 to K5, and M1 to M6 in the relay's queue) is its own queue item
+  with its own design.
+- **What the merge does.** Merging this PR is P0's gate and starts the
+  feature freeze. Afterwards, in an attended session and outside the PR:
+  `limits.alters_relationships` goes to 3 in the workflow branch's
+  `config.yaml`, and P1, S1 and K1 are filed through intake. The six held
+  items are already out of the queue (**Items closed for re-intake**).
+- **Decisions taken.** One program under one umbrella design (1). A
+  repository and a queue per component, coupled through written seams and
+  tagged releases (2). Seams as specifications with black-box conformance
+  suites in `buildwarden/buildwarden-specs` (3, a10). Drivers as separate
+  binaries on a public Go kit, then modules, then repositories, with Hyper-V
+  as the pilot (4), behind a `warden` dispatcher that works like git's (5).
+  The guest families and the executor stay with the kit for now (6, 7). The
+  collector is specified in two parts and gets no storage boundary in this
+  program (8, a1, a2). Truststore generation moves into the relay, JKS and
+  PKCS12 (9). The build-link contract has one guarantee and two classes, and
+  the class is not recorded in the ledger (10, a7). The relay ships native
+  binaries usable at host level as well as unikernel images, with host mode
+  built for Linux first, then macOS (11, a3), and its Linux appliance uses
+  the kernel network path (12). The loop gets its
+  own public repository (13). A feature freeze, with regression and security
+  fixes exempt, ended by Jeff no earlier than wave 4 (14, a4). Carried Hermit
+  forks, with nothing raised upstream before the end of M6 (15, a9).
+  `buildwarden-relay` public at M1 (16). A driver index last (17). A rule
+  changes in the item that makes it true (18). No waiver of the per-item
+  design (19). The Bootstrap comparison is accepted for three model changes,
+  BOOT-01 (S3), BOOT-02 (K2) and BOOT-05 (S2), each made later by the item
+  named (a12).
+- **Rejected.** The relay split first and the drivers after, or the reverse.
+  Go contract tests in this repository as the seams' check. Completing only
+  the in-tree driver contract; drivers as RPC plugins; users calling driver
+  binaries directly. A copy of the guest families in each driver, or their
+  own module now. Naming firecracker an exception to the build-link
+  contract, or loosening its wording until firecracker passes. The relay's
+  own network stack on the appliance. The loop in the private sessions
+  repository. Changing every rule now. A waiver of the design for move-only
+  changes. In the review: a storage boundary for the collector in K1 (a2),
+  the build-link class in the signed environment record (a7), leaving the
+  held items on hold until P1 (a8), contact with `hermit-os` after the first
+  driver's adoption (a9), and repositories created by Jeff alone (a11).
+- **For future designs touching `componentization`,
+  `component-independence`, `driver-contract`, `driver-binaries`, `kit`,
+  `seams`, `specs-repo`, `conformance`, `relay-split`,
+  `relay-release-forms`, `host-mode`, `truststore`, `build-link-contract`,
+  `collector`, `loop-contract`, `feature-freeze` or `program`:**
+  - A design is a program item only when it lists this document in
+    `related`. While FLOW-20 stands, intake files anything else on hold,
+    unless it fixes a regression on `main` or a security problem.
+  - This design approves one rule change, FLOW-20. The table **Rule changes
+    the program will make** is direction only: each change is declared in
+    `rule_changes` and approved by name in the design of the item that makes
+    it true (Decision 18, FLOW-14). That includes the three `bootstrap.md`
+    edits, whose comparison is already accepted here (BOOT-07).
+  - FLOW-20 relaxes four things and nothing else. FLOW-19 still decides, for
+    each item, whether its review can be skipped.
+  - A phase that touches a seam changes the seam's specification first, then
+    the code. Until S1 lands the seams are unwritten and the Go code on
+    `main` is the specification; S1 writes them as `main` has them at that
+    point (see **Consolidation** for what #115 added to the claim).
+  - A driver's build-link class is documented with the driver and never
+    recorded in the ledger. S3 settles the classes, including Hyper-V's
+    durable slots (**Consolidation**), how the contract's wording covers the
+    container driver, and what firecracker's unprivileged preflight can
+    check.
+  - Until P1 lands, program items run in this repository's queue under the
+    rules as they are, plus FLOW-20. The relay's milestones run in the relay
+    repository's queue.
+  - New repositories are created, and `buildwarden-relay` is made public, by
+    Jeff, or by an attended session on his word in that session (a11).
+  - The six closed items' queue files are on the `workflow` branch at
+    `1a2252f`. Pointers to `security-suite` and to #115's two follow-ups are
+    stale until those items are re-intaken.
+  - Jeff ends the program with a process item that retires FLOW-20 whole.
