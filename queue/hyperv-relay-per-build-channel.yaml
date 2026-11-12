@@ -194,12 +194,12 @@ steps:
   - id: f6-validate-qemu-any-r2
     phase: 6
     affinity: host:qemu-any
-    status: pending
+    status: done
     needs:
       - f6-consolidate-r4
     lease:
-      claimed_by: host:qemu-any/20261112T214209Z
-      expires: 2026-11-12T23:42:09.280417Z
+      claimed_by: ""
+      expires: null
     note: 'Blocking native validation (design r3, a16; FLOW-09), on the branch after consolidation, on a relay initramfs rebuilt from the branch''s tools/relay-vm/init (replaces backlog hyperv-relay-per-build-channel-qemu-relay): (1) a qemu Linux build (direct boot and a cloud image) succeeds and its ledger verifies; the relay console names its upstream from DHCP and its resolvers with source claim, the Mac''s from /etc/resolv.conf, and doctor prints the same list. (2) with [vm] dns set to a public resolver other than the Mac''s, the build resolves names and the relay lists only that resolver; set to an address with no DNS server, lookups fail (no fallback). (3) [vm] dns = ["127.0.0.1"] is refused before any VM naming the entry. Evidence under native/qemu-any/<date>/.'
   - id: f6-validate-macos-vz-r2
     phase: 6
@@ -822,3 +822,6 @@ history:
   - at: 2026-11-12T21:42:09Z
     by: host:qemu-any/20261112T214209Z
     event: claimed f6-validate-qemu-any-r2 until 2026-11-12T23:42:09Z
+  - at: 2026-11-12T21:44:51Z
+    by: host:qemu-any/20261112T214209Z
+    event: done f6-validate-qemu-any-r2
