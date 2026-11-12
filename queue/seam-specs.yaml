@@ -1,7 +1,7 @@
 feature: seam-specs
 title: 'Specs repository and conformance suites: write seams 1, 2, 3, 5 and 6, build the harness against any relay and any collector, link the book and the specs, fill tier 1''s seams list (componentization S1)'
 priority: 61
-status: queued
+status: in_progress
 round: feature
 phase: 0
 design: docs/design/seam-specs.md
@@ -14,17 +14,23 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261112T230554Z
+      expires: 2026-11-13T01:23:21.186830574Z
 budget:
   estimate:
     runs: 5
     steps: 30
   spent:
-    runs: 0
-    steps: 0
+    runs: 1
+    steps: 1
 questions: []
 history:
   - at: 2026-11-12T23:22:53Z
     by: human/jeff
     event: queued at priority 61 (intake)
+  - at: 2026-11-12T23:23:21Z
+    by: cloud/20261112T230554Z
+    event: started (FLOW-05)
+  - at: 2026-11-12T23:23:21Z
+    by: cloud/20261112T230554Z
+    event: claimed f0-branch-setup until 2026-11-13T01:23:21Z
