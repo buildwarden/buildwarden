@@ -4,7 +4,7 @@ priority: 24
 kind: process
 status: in_progress
 round: process
-phase: 3
+phase: 4
 design: docs/design/componentization.md
 branch: feat/componentization
 alters_relationships: null
@@ -30,6 +30,13 @@ steps:
       expires: null
   - id: x3-merge
     phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
     affinity: cloud
     status: pending
     lease:
@@ -215,3 +222,9 @@ history:
   - at: 2026-11-12T23:21:15Z
     by: cloud/20261112T230554Z
     event: entered phase 3 (merge)
+  - at: 2026-11-12T23:21:23Z
+    by: cloud/20261112T230554Z
+    event: done x3-merge
+  - at: 2026-11-12T23:21:23Z
+    by: cloud/20261112T230554Z
+    event: entered phase 4 (close)
