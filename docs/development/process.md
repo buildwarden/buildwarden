@@ -616,6 +616,44 @@ judges whether the session covered the design.
 
 ---
 
+### FLOW-20 — The componentization program has the queue to itself
+
+**Severity:** MUST
+**Check:** agent-judgment
+
+The componentization program is the work set out in
+[`componentization`](../design/componentization.md): the relay, the
+drivers, the kit, the specs and the loop become separate components coupled
+through written seams. A *program item* is a queue item whose design lists
+that design in `related`. While this rule stands:
+
+- **Freeze.** Intake files a new item that is not a program item on hold,
+  with a blocking question only the human answers, so the loop takes none
+  of its steps. Two kinds of item are exempt: a fix for a regression on
+  `main` (FLOW-09) and a fix for a security problem.
+- **Limit.** FLOW-05's limit on features past Design that declare
+  `alters_relationships: true` is the value the human sets in the workflow
+  branch's `config.yaml`, which may be above 1. The limit of 5 features in
+  progress stands.
+- **Moves.** A program item whose change only moves code between packages,
+  modules or repositories, with no change in behaviour, says so in its
+  design. Where the move trips a path-coupling check, it carries a
+  `Tier1-Allow` trailer whose reason names this rule (LINT-05). Review
+  judges that the change is only a move.
+- **Overview.** A program item may leave FLOW-15's overview sweep to the
+  last item of its phase, which the phase's designs name.
+
+Nothing else is relaxed. GLOBAL-06, the BOOT rules, the relay's ledger and
+key rules (RELAY-01 to RELAY-03), FLOW-08, FLOW-14, FLOW-18 and FLOW-19
+apply to program items as written.
+
+The human ends the program with a process item that retires this rule.
+
+The agent part: intake and the design review judge whether an item is a
+program item or exempt.
+
+---
+
 ## Bootstrap order
 
 Done so far: the windows-driver integration line and this doc set landed on
