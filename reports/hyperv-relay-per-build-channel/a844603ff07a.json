@@ -1,0 +1,228 @@
+{
+  "feature": "hyperv-relay-per-build-channel",
+  "branch": "feat/hyperv-relay-per-build-channel",
+  "head": "a844603ff07a",
+  "base": "1173c5f336db",
+  "origin_main": "1173c5f336db",
+  "round": "feature",
+  "step": "f4-review-r3",
+  "previous_report": "reports/hyperv-relay-per-build-channel/976ae9faaf7e.json",
+  "scope": "git diff origin/main...feat/hyperv-relay-per-build-channel: 117 files, +9119/-868 (LINT-04), re-judged in full. Merge base 1173c5f336db = origin/main (up to date). Re-review after 976ae9f: ff17b4e (pingService/probeService, Capabilities.ServiceStale, NetworkStrategy, Ready, buildRefusal, the doctor lines, tests), ae9f8e0 (docs), 2dc2cfa (the design's Compatibility rows), a844603 (lint), fixing the native finding that a protocol-1 privileged service read as 'not installed'. Judged against design r3 as approved at 71df1d1, rule changes BOOT-06 at cbb2cda and BOOT-07 at 0df0a64, and origin/main's rule index.",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "rule_index": "89 '### <ID> — <title>' headers extracted from origin/main docs/development/*.md (LINT-01), RELAY-01 counted twice (README.md format example). Every agent-judgment rule and the judgment half of every hybrid rule were judged where the diff reaches them; GLOBAL-09 to GLOBAL-11 and RELAY-08 were judged against the design's Defaults and overrides.",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass (linux, PATH=$HOME/go/bin first): 0 issues in the root module, tools/workflow and tools/tier1; dist/tier1 -base origin/main: 0 MUST, 0 MUST-review, 0 SHOULD, 0 hints, 0 suppressed",
+    "make_lint_per_platform": "GOOS=darwin make lint and GOOS=windows make lint: each 0 issues in all three modules, dist/tier1 0 MUST, 0 MUST-review, 0 SHOULD, 0 hints, 0 suppressed; GOOS=windows go vet ./driver/hyperv: clean; GOOS=darwin and GOOS=windows go vet over driver/, cmd/ and relay/: clean",
+    "make_test": "pass (exit 0) in the root module, tools/workflow and tools/tier1; driver/hyperv ok (TestPingService, TestStaleServiceEndToEnd, TestNetworkStrategy's two new cases)",
+    "rule_change_clearance": "wf check -repo <branch> -feature hyperv-relay-per-build-channel (branch build, run from the workflow checkout): 'ok checkout is the clean branch head' (a844603ff07a) and 'ok rule changes cleared (FLOW-14): cleared: docs/development/bootstrap.md (BOOT-06), tools/tier1/rules.yaml (BOOT-07)'. Its FAIL lines are this report, not yet written, and make lint/test skipped without -run (run directly above)",
+    "make_enforcement": "'ok main's tier 1 findings kept (FLOW-14): the branch's tier 1 reports every finding main's does (0)', exit 0",
+    "wf_check_merge_base": "wf built from a worktree of the merge base 1173c5f, run with -repo on the branch checkout: the same result as the branch build, rule changes cleared (BOOT-06, BOOT-07)",
+    "shellcheck": "not needed: no shell file changed since 976ae9f"
+  },
+  "rule_changes": [
+    {
+      "rule": "BOOT-06",
+      "approved": "cbb2cda",
+      "paths": [
+        "docs/development/bootstrap.md"
+      ],
+      "verdict": "matches: the added paragraph is word for word the Proposed wording at cbb2cda; the first paragraph, severity and check are unchanged. The diagram step (1)/(3) and the qemu/hyperv Windows mapping-row edits are the Proposed model the same review accepted (Bootstrap comparison). No other path changed. Unchanged since 976ae9f: git diff 976ae9f a844603 over docs/development/ and tools/tier1/ is empty."
+    },
+    {
+      "rule": "BOOT-07",
+      "approved": "0df0a64",
+      "paths": [
+        "docs/development/bootstrap.md",
+        "tools/tier1/rules.yaml"
+      ],
+      "verdict": "matches: the surface sentence is word for word the Proposed wording at 0df0a64; rules.yaml bootstrap.surface gains exactly cmd/relay/dhcp*.go, tools/relay-vm/, driver/hyperv/relayseed*.go and tools/build-vm/, adding hints and removing none; make enforcement confirms. No other path changed. Unchanged since 976ae9f: git diff 976ae9f a844603 over docs/development/ and tools/tier1/ is empty."
+    }
+  ],
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 0,
+    "SHOULD": 6
+  },
+  "suppressions": [],
+  "findings": [
+    {
+      "id": "M1",
+      "rule": "GLOBAL-10",
+      "severity": "MUST",
+      "location": "tools/relay-vm/init:164-172",
+      "cause": "diff",
+      "finding": "On Hyper-V the init runs read_keys over /proc/cmdline and then over the relay seed into the same variables, so a seed key silently overrides the same command-line key and a command-line key the seed omits is kept: a per-key merge of two boot channels. The design's Defaults and overrides says 'the seed and the command line never both supply a key (Hyper-V reads the seed's values)' and names no merge. Today it has no effect (the UKI command line is 'console=ttyS0 console=tty0' and warden's seed writes every key), but the code lets a seed with no claim_token run with one from the command line.",
+      "fix": "On Hyper-V take the keys from the seed only: stop with a console line when /proc/cmdline carries a warden.* key (naming it), or skip the command-line read_keys when HYPERV=1. Add a driver/relayvm/init_test.go case.",
+      "status": "fixed",
+      "resolution": "Fixed in e53b12e: on Hyper-V the init no longer reads /proc/cmdline's keys (read_keys over it runs only in the else branch), and a warden.* word on the Hyper-V command line stops the init before the seed is read, naming the key ('stopped: warden.<key> on the kernel command line: on Hyper-V the relay seed (WARDENRELAY) alone carries the boot keys'). TestRelayInitHyperVSeedAlone pins the branch shape and the refusal's order; README and overview.md pseudocode updated (FLOW-15). The refusal is not a default or merge, so nothing new to list in Defaults and overrides.",
+      "fixed_since": "525e36a6c04c"
+    },
+    {
+      "id": "M2",
+      "rule": "UX-04",
+      "severity": "MUST",
+      "location": "driver/hyperv/setup.go:110-117; driver/hyperv/ensurenet.go:47-55; driver/hyperv/provision_local_windows.go:91-99",
+      "cause": "diff",
+      "finding": "Setup passes no DevNAT, so EnsureNetwork takes any NAT that owns the --nat-prefix, whatever its name (another build's per-build NAT, or a non-warden NAT). Setup then prints 'Durable dev network ready' naming it. VerifyNetwork reads only <network>-nat (netProbeScript with no otherPrefix), so every durable build is refused with 'the durable network's NAT \"warden-dev-nat\" is missing', and its fix ('run warden setup') succeeds again without changing anything. The user loops. On main, VerifyNetwork checked only the Private switch. Decision 5 says the durable strategy uses <switch>-nat. (Pre-review candidate 7, confirmed.)",
+      "fix": "In RunSetup, refuse (driver.Fixable) when res.NATName is not <network>-nat, naming the NAT that owns the prefix and how to remove it or choose another --nat-prefix, so that setup succeeds only on a NAT durable builds accept. Pin it with a pure test of the setup decision.",
+      "status": "fixed",
+      "resolution": "Fixed in aff6ffd: RunSetup goes through ensureSetupNAT, which refuses (driver.Fixable) a NAT whose name is not <network>-nat that owns the prefix, naming it, the NAT durable builds use, and the fix (remove it once nothing uses it, or pass another --nat-prefix). EnsureNetwork only adopts in that case, so the refusal comes before setup changes anything. TestSetupRefusesNATDurableBuildsReject pins the three cases with a fake Provisioner; cli.md and overview.md updated (UX-01, FLOW-15).",
+      "fixed_since": "525e36a6c04c"
+    },
+    {
+      "id": "M3",
+      "rule": "GLOBAL-04",
+      "severity": "MUST",
+      "location": "relay/relay.go:188-200",
+      "cause": "diff",
+      "finding": "New behavior: when CollectorTransport is nil, a direct CollectorURL that names a host dials through the relay's resolver list (a cloned default transport with upstreamDialContext). No test covers it: every relay test sets CollectorTransport or uses an IP or placeholder URL. warden's drivers use the tunnel, so only third-party claimants reach this path, but it is the relay's only output path (RELAY-07). (Pre-review candidate 8b, confirmed.)",
+      "fix": "Add a relay test: CollectorURL http://collector.example:<port> with no CollectorTransport, a fake resolver from upstream_dns_test.go that answers 127.0.0.1, and a check that the collector receives the sink's request and the resolver was asked.",
+      "status": "fixed",
+      "resolution": "Fixed in efe73b8: TestDirectCollectorURLResolvesThroughList starts the relay with CollectorURL http://collector.example:<port>, no CollectorTransport, and the resolver list on a loopback fake resolver (through the new upstreamDNSPort seam); startTestRelay waits for the collector's ready, and the test asserts the fake resolver was asked. A mutation that drops the DialContext override makes it fail at Start.",
+      "fixed_since": "525e36a6c04c"
+    },
+    {
+      "id": "S1",
+      "rule": "GLOBAL-09",
+      "severity": "SHOULD",
+      "location": "tools/relay-vm/init:29,159",
+      "cause": "diff",
+      "finding": "The init keeps warden.net=dhcp as its default when the key is absent. The diff changes Hyper-V's default from static to dhcp, and the design's Defaults and overrides does not list the default. Every warden driver now sends warden.net (qemu vm.go:35 dhcp; firecracker vm.go:62 static; the Hyper-V seed static), so no driver reaches the default. (Pre-review candidate 2, confirmed.) Unchanged by the fix commits.",
+      "fix": "Require warden.net: stop naming it when absent, as warden.seed is required (this removes a default, in keeping with Decision 2). Or go back-to-design (FLOW-06) to list it.",
+      "status": "open",
+      "carried_from": "976ae9faaf7e",
+      "note": "Open, carried over from 976ae9faaf7e. Its files are unchanged since 976ae9f (git diff 976ae9f a844603 over relay/, cmd/relay/, tools/relay-vm/, driver/hyperv/setup.go, driver/qemu/ and driver/vz/ is empty)."
+    },
+    {
+      "id": "S2",
+      "rule": "GLOBAL-09",
+      "severity": "SHOULD",
+      "location": "driver/hyperv/setup.go:169-175 (ensureSetupNAT)",
+      "cause": "diff",
+      "finding": "The prefix-mismatch refusal moved into ensureSetupNAT unchanged: it still compares against opts.NATPrefix after applyDefaults, so it fires when --nat-prefix was never passed. Re-running 'warden setup --driver hyperv --slots 8' on a host set up with --nat-prefix 10.200.0.0/24 is refused 'not --nat-prefix 192.168.240.0/20', naming a flag the user did not pass and telling them to delete their NAT. The design does not name this refusal, and Decision 5 has builds use the dev NAT 'whatever prefix setup gave it'. --host-ip is still not compared, so an explicit --host-ip that differs from an existing NAT's is silently not used. The new M2 refusal has the same wording shape ('already owns --nat-prefix <default>') but is correct either way, since another NAT on the prefix does break durable builds.",
+      "fix": "Compare only flags the user gave: refuse an explicit --nat-prefix or --host-ip that differs from the existing <network>-nat, and without them adopt the existing NAT and print what was read back.",
+      "status": "open",
+      "carried_from": "976ae9faaf7e",
+      "note": "Open, carried over from 976ae9faaf7e. Its files are unchanged since 976ae9f (git diff 976ae9f a844603 over relay/, cmd/relay/, tools/relay-vm/, driver/hyperv/setup.go, driver/qemu/ and driver/vz/ is empty)."
+    },
+    {
+      "id": "S3",
+      "rule": "GLOBAL-01",
+      "severity": "SHOULD",
+      "location": "tools/relay-vm/hyperv/build.sh:181-182",
+      "cause": "pre-existing line; misdescribes this diff's channel",
+      "finding": "The build's last echo still says 'Per-build kernel cmdline (relay config) is layered by the driver, not baked here.' Hyper-V has no per-build command line: the relay seed carries the pre-claim values, and the claim carries the configuration (RELAY-08). The line was already wrong on main, but the diff edits this file and adds the channel the line misdescribes. (Pre-review candidate 4, confirmed.) Unchanged by the fix commits.",
+      "fix": "Change it to say the relay's pre-claim values come per build on the relay seed (WARDENRELAY) and everything else in the claim. One line, in a file the branch already edits, so no follow-up was filed.",
+      "status": "fixed",
+      "resolution": "Fixed in 547acdd: build.sh's closing lines now say the command line carries no per-build value, the driver gives each relay its pre-claim values on the relay seed (WARDENRELAY) and the rest of its configuration in the claim. Matches RELAY-08 and the overview."
+    },
+    {
+      "id": "S4",
+      "rule": "TEST-06",
+      "severity": "SHOULD",
+      "location": "relay/upstream_dns_test.go:195-246; relay/proxy.go:98-150",
+      "cause": "diff",
+      "finding": "The 71df1d1 fold-in (the relay's own lookups go through the DNS handler's in-order forwarder, not a net.Resolver whose retries restart at the first server) is only partly pinned. TestUpstreamDialResolvesThroughList asserts that both servers were asked and UPSTREAM_DNS was not. A net.Resolver with a list-walking Dial would pass it too. (Pre-review candidate 8a, confirmed as a gap.) Unchanged by the fix commits.",
+      "fix": "Pin the property: per query, the silent first server is asked once and then the second, with one 'did not answer' log line per timed-out server, and no restart at the first server within a lookup.",
+      "status": "open",
+      "carried_from": "976ae9faaf7e",
+      "note": "Open, carried over from 976ae9faaf7e. Its files are unchanged since 976ae9f (git diff 976ae9f a844603 over relay/, cmd/relay/, tools/relay-vm/, driver/hyperv/setup.go, driver/qemu/ and driver/vz/ is empty)."
+    },
+    {
+      "id": "S5",
+      "rule": "TEST-06",
+      "severity": "SHOULD",
+      "location": "cmd/relay/main.go:141-180; cmd/relay/upstream_test.go:86-120",
+      "cause": "diff",
+      "finding": "serveClaim's new wiring has no test: the refusal path's done() cleanup of the mode step, container mode's DetectSelfIP, and cfg.UpstreamDNS/UpstreamDNSSource set from upstreamResolvers. TestAbsentUpstreamDNSRefusalLeavesRelayClaimable copies the callback rather than driving serveClaim, so 'a refused claim leaves the relay claimable' is not tested in the vm-mode and host-mode wiring, where the step builds the netstack or addresses the link. (Pre-review candidate 8c, confirmed.) Unchanged by the fix commits.",
+      "fix": "Factor the claim callback out of serveClaim (it takes the step and readConf) and drive it with a fake step that records its cleanup: a refused claim runs done() and a second claim succeeds.",
+      "status": "open",
+      "carried_from": "976ae9faaf7e",
+      "note": "Open, carried over from 976ae9faaf7e. Its files are unchanged since 976ae9f (git diff 976ae9f a844603 over relay/, cmd/relay/, tools/relay-vm/, driver/hyperv/setup.go, driver/qemu/ and driver/vz/ is empty)."
+    },
+    {
+      "id": "S6",
+      "rule": "TEST-06",
+      "severity": "SHOULD",
+      "location": "driver/qemu/driver.go:80; driver/vz/driver.go:69,460-465",
+      "cause": "diff",
+      "finding": "setRelayDNS is table-tested in both drivers, but nothing fails if Build stops calling it. The claim would then carry the raw [vm] dns or no upstream_dns, and the relay would fall back to its own resolv.conf. The f6 qemu-any and macos-vz steps would catch this natively. (Pre-review candidate 8d, confirmed.) Unchanged by the fix commits.",
+      "fix": "Assert that a qemu and a vz build request reach the claim with upstream_dns set, for example through the session's claim fake, or accept native validation as the cover and dismiss.",
+      "status": "open",
+      "carried_from": "976ae9faaf7e",
+      "note": "Open, carried over from 976ae9faaf7e. Its files are unchanged since 976ae9f (git diff 976ae9f a844603 over relay/, cmd/relay/, tools/relay-vm/, driver/hyperv/setup.go, driver/qemu/ and driver/vz/ is empty)."
+    },
+    {
+      "id": "S7",
+      "rule": "TEST-06",
+      "severity": "SHOULD",
+      "location": "driver/hyperv/service_windows.go:42-50 (probeService)",
+      "cause": "diff",
+      "status": "open",
+      "finding": "The tests pin every portable half of the stale path: mutating pingService to read a protocol-1 reply as usable fails TestPingService and TestStaleServiceEndToEnd; dropping NetworkStrategy's ServiceStale case, Ready's serviceBlocks case, or serviceBlocks itself each fails the tests (mutations run here). The one link they do not reach is the windows-only probeService, which turns pingService's reason into (reachable, stale). That is where the native finding regressed: `return stale == \"\", \"\"` (or main's `return err == nil`) would bring back 'not installed' and the durable path, and no unit test fails. No *_windows_test.go covers it, and the design's f6-validate-windows-hyperv cases do not list a stale service.",
+      "fix": "Split probeService into the windows-only dial and a portable probeConn(rw) (reachable bool, stale string) driven by pingOver(protocol1Service) and the usable fake, so the mapping runs on every platform; or add the protocol-1 service case to the f6-validate-windows-hyperv list and accept native validation as the cover."
+    }
+  ],
+  "follow_ups": [
+    {
+      "slug": "relay-host-subnet-claim-only",
+      "follows": "hyperv-relay-per-build-channel",
+      "rule": "RELAY-08 (also GLOBAL-10)",
+      "location": "cmd/relay/main.go:41-42; cmd/relay/mode_host.go:22-30,51-58",
+      "finding": "Host mode's --subnet (default 10.100.0.0/30) stands in for an absent build_link: a boot-channel value standing in for an absent claim field. design-principles (on main) found it and left it to the next design that touches it. This design does not judge it. Pre-existing; the diff does not cause it. (Pre-review candidate 5, confirmed.)",
+      "status": "filed at 525e36a6c04c; carried over"
+    },
+    {
+      "slug": "relay-init-dhcp-mask-default",
+      "follows": "hyperv-relay-per-build-channel",
+      "rule": "GLOBAL-11 (also BOOT-06)",
+      "location": "tools/relay-vm/init:221",
+      "finding": "The relay init's udhcpc script addresses the upstream with ${mask:-24}: a lease with no subnet-mask option silently gets /24, a value that runs only when the lease omits it, named nowhere. Unchanged by the diff and present on main. (Pre-review candidate 3, confirmed.)",
+      "status": "filed at 525e36a6c04c; carried over"
+    }
+  ],
+  "pre_review_candidates": {
+    "1": "confirmed: M1 (GLOBAL-10, MUST)",
+    "2": "confirmed: S1 (GLOBAL-09, SHOULD)",
+    "3": "confirmed, pre-existing: follow-up relay-init-dhcp-mask-default",
+    "4": "confirmed: S3 (SHOULD)",
+    "5": "confirmed, pre-existing: follow-up relay-host-subnet-claim-only",
+    "6": "confirmed: S2 (GLOBAL-09, SHOULD)",
+    "7": "confirmed: M2 (UX-04, MUST)",
+    "8": "8b confirmed as M3 (GLOBAL-04, MUST); 8a, 8c, 8d confirmed as S4, S5, S6 (TEST-06, SHOULD)"
+  },
+  "also_judged_clean": [
+    "RELAY-08: the seed carries only the pre-claim values (relayseed.go:72-81); warden.dns has left Firecracker's command line; upstream_dns is a claim field in every mode; the absent-field default is named in relaycfg's package doc",
+    "GLOBAL-10: [vm] dns is used exclusively, never merged with the host's resolvers (resolvers.Check, relayResolvers in hyperv/qemu/vz/firecracker); an unusable entry refuses the build",
+    "GLOBAL-11: the init's static defaults, the DHCP-failed static fallback, 8.8.8.8, UPSTREAM_DNS and the system-resolver-first split are removed; forwardDNS's in-order walk is the one named fallback",
+    "BOOT-06: no IPv4 literal is left in the init; the seed is per build; the Windows guest takes the lease alone (winguest run.go)",
+    "UX-01/FLOW-15: cli.md, configuration.md, drivers.md, architecture.md, network-isolation.md and overview.md are updated with the surfaces",
+    "UX-04 (the init's new refusal, e53b12e): names the key, the channel it came on and the one channel Hyper-V reads; the console stop is the init's only error path (no relay starts, so the claim times out with this line as the evidence), the same shape as its other stop lines. Note: $(cat /proc/cmdline) is unquoted, so a word with a glob character could expand against the init's cwd; harmless for the case match (Informational).",
+    "UX-04 (the new Fixable, aff6ffd): states what is wrong (the NAT that owns the prefix and the only NAT durable builds on --network use) and how to fix it (Remove-NetNat and Remove-VMSwitch on that name once nothing uses it, which matches provision.go's NAT-and-Internal-switch naming, or another --nat-prefix, then re-run setup). Informational: for a NAT warden did not make there may be no switch of that name, so Remove-VMSwitch can error harmlessly.",
+    "GLOBAL-09/GLOBAL-11 (upstreamDNSPort, efe73b8): a test seam, not an unnamed default. 53 is the DNS protocol port the relay always used (the literal it replaces in Start); no flag, environment variable, claim field or fallback sets it, and only a test assigns it, restoring it in t.Cleanup, the same pattern as dnsQueryTimeout. No relay test runs t.Parallel, so the package variable is not raced.",
+    "Pre-existing, no finding: the cloned http.DefaultTransport keeps ProxyFromEnvironment for a direct CollectorURL; on main a nil CollectorTransport used http.DefaultTransport too, so the diff does not add an environment-delivered relay setting (RELAY-08).",
+    "UX-01/GLOBAL-01 (b82e35b guide docs): each claim checked against the code: --slots 1 to 64 (setup.go MaxSlots), doctor's 'Build network:' block, its NAT line '<name> (<prefix>, host <ip>)', '(from interface Ethernet)', 'free'/'in use by' and 'BLOCKED' rows (doctornet.go), the Windows guest's 'WellKnown, no DHCP lease from the relay' (warden-io platform_windows.go:255), setup's refusal of a NAT that owns the prefix (M2's fix), and the anchors #first-time-hyper-v-setup, #address-collisions-with-the-hyper-v-nat and #the-relays-resolvers-vm-dns resolve. corporate-networks.md's DNS section replaces the container-only note and states [vm] dns as exclusive with no public fallback, matching GLOBAL-10/11 and the design.",
+    "TEST-06/TEST-03 (1b2b67d, 976ae9f): TestParseRelayNotes and TestParseSwitchAdapters are untagged table tests of provision.go's parsers (CRLF, blank, no-tab, padded, empty-name cases), replacing the deleted windows-only provision_parse_windows_test.go so they run on every platform; they match the implementation (an adapter with no VM name is kept for the slot check to refuse).",
+    "FLOW-10/FLOW-15 (547acdd, cd5371a Consolidation): it touches only the design's Consolidation section (Decisions and Defaults and overrides unchanged, so the GLOBAL-09 to -11 baseline is the approved one). Its merge account matches the code; its S1-S6 statuses match this report; every tier-0 regression seed it hands to security-suite exists under that name.",
+    "UX-01/FLOW-15 (ae9f8e0): cli.md, drivers.md and overview.md's StartBuild pseudocode describe the stale service, its refusal and the reinstall (uninstall, then install, elevated) as the code does.",
+    "GLOBAL-01 (ff17b4e): the new doc comments (ServiceStale, serviceReinstallFix, pingService, probeService, serviceBlocks, buildRefusal) say why, not what; provisionBuildNetwork's 'NetBlocked, which Ready never passes' is accurate (Ready refuses before StartBuild reaches it).",
+    "Informational, design: the plan note at docs/design/hyperv-relay-per-build-channel.md:1440-1445 still says the existing mismatch refusal names `warden hyperv service install`, 'with no new mechanism'. The code and the new Compatibility row now name uninstall then install, through ServiceStale. Amending the note to point at the row would keep the design self-consistent; not a decision change.",
+    "Informational, pre-existing: a registered service whose pipe does not open (stopped, ACL-denied, or not answering the 750 ms dial) still reads as 'not installed', as on main (serviceReachable's dial is unchanged). That is not a stale service as the design defines it, the pipe server handles connections concurrently so a busy service does not time out, and the durable path it takes is the design's no-service strategy; no follow-up filed.",
+    "Informational, pre-existing: UninstallService stops the service best-effort without waiting, so an install run at once can meet a service the SCM has only marked for deletion; in practice the gap between the two commands covers it.",
+    "Informational: a service that opens but hangs past the 2 s deadline is reported stale with 'its ping fails: ... i/o timeout' and the reinstall fix; a restart would also do, and reinstall is a correct, if heavier, fix."
+  ],
+  "verdict": "0 MUST. 6 SHOULD (S1, S2, S4, S5, S6 carried over, open; S7 new, TEST-06) for the PR body, acknowledged by the human at merge (FLOW-08). The native finding is fixed: a protocol-1 service is reported stale and refuses non-elevated builds with the uninstall-then-install fix, never read as absent. 2 follow-ups filed at 525e36a6c04c carried over; none new. Back to Design: no.",
+  "counts_note": "Open findings only. Fixed: M1, M2, M3 (since 525e36a6c04c), S3 (since c828e3a562e4, in 547acdd). New: S7.",
+  "merge_resolution": {
+    "commit": "5ad9308",
+    "conflict": "driver/vz/driver.go",
+    "verdict": "correct, both sides intact. git diff origin/main HEAD -- driver/vz/driver.go is only this branch's change: StartBuild:69 calls checkRequest(diskImage, d.Cache, req) instead of checkLink, and the new checkRequest (460-465) takes the *ImageCache, calls main's checkLink(diskImage, cache, req) unchanged, then setRelayDNS(req, os.ReadFile). checkLink and imageStamp are #108's versions byte for byte, so the stale-stamp fix still names the active image ('image prepare' with no source), another cache image ('image prepare <dir>' or omit --image) or an --image disk outside the cache; the resolver step runs after the link checks and before any VM, as before. overview.md (merged clean) has #108's active-image and stamp-fix lines followed by the branch's resolver step, in checkRequest's order; drivers.md and cli.md keep #108's active-image text and the branch's changes do not touch it. driver/vz builds and its tests pass on linux, and vet clean for darwin."
+  },
+  "new_code_judgment": {
+    "GLOBAL-11": "No: a stale service is never treated as absent. probeService returns absent only when the pipe does not open; once it opens, every failed ping (another protocol version, no version, a decode failure or the 2 s deadline) is stale with its reason, and ServiceReachable and ServiceStale are exclusive. A non-elevated process with a stale service gets NetBlocked (capability.go:181) before the durable case, Ready refuses it first (203), and doctor prints 'stale: it <reason>' with the fix, never 'not installed' or 'has no build switches'. Elevated ignores it (serviceBlocks, 223), the only path that never uses the service. No new default, merge or fallback: the strategy order loses the durable fallback for this case, which is the GLOBAL-11 direction.",
+    "UX-04": "Right. serviceReinstallFix (service.go:40) names 'from an elevated shell, run `warden hyperv service uninstall`, then `warden hyperv service install`', matching InstallService's refusal while the service is registered (service_windows.go:156-161) and the cobra commands (cmd/warden/host.go). buildRefusal returns a driver.Fixable with that fix and the reason as its message; doctor prints it under the service line and the Network line; the new service's own mismatch reply names it too (service.go:77-81). pingService does not surface the protocol-1 service's own 'install'-only text.",
+    "TEST-06": "Mostly: see S7 for the windows-only link. The protocol1Service fake matches main's version-1 handleServiceRequest (Version 1 in the reply, Err set before the op is read).",
+    "design_compatibility": "Consistent with task 28, no new decision. Task 28 and the plan note bump serviceProtocolVersion 1 to 2 and ask for 'a refusal both ways' (Decisions 9, 11); the new row records that refusal and that an old service is never read as absent (GLOBAL-11), and the edit to the older-setup row drops 'service builds unaffected', which the bump made untrue. Decisions and Defaults and overrides are unchanged. See the informational note on the plan note's wording."
+  }
+}
