@@ -1,0 +1,3 @@
+warden: build FAILED
+[warden] ERROR: hyperv build: the privileged service speaks protocol 1, this warden 2
+  To fix: from an elevated shell, run `warden hyperv service uninstall`, then `warden hyperv service install`
