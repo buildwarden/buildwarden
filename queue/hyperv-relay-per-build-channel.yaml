@@ -2,7 +2,7 @@ feature: hyperv-relay-per-build-channel
 title: Give the Hyper-V relay VM a per-build channel before the claim
 priority: 51
 follows: build-link-subnet
-status: in_progress
+status: done
 round: feature
 phase: 8
 design: docs/design/hyperv-relay-per-build-channel.md
@@ -332,7 +332,7 @@ steps:
   - id: f8-close
     phase: 8
     affinity: cloud
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -342,7 +342,7 @@ budget:
     steps: 40
   spent:
     runs: 8
-    steps: 46
+    steps: 47
 questions:
   - id: a1
     kind: assumed
@@ -987,3 +987,12 @@ history:
   - at: 2026-11-12T22:50:21Z
     by: cloud/20261112T225019Z
     event: entered phase 8 (close)
+  - at: 2026-11-12T22:50:33Z
+    by: cloud/20261112T225019Z
+    event: claimed f8-close until 2026-11-13T00:50:33Z
+  - at: 2026-11-12T22:50:34Z
+    by: cloud/20261112T225019Z
+    event: done f8-close
+  - at: 2026-11-12T22:50:34Z
+    by: cloud/20261112T225019Z
+    event: closed; feature done
