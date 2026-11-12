@@ -1,6 +1,6 @@
 feature: wf-squash-after-base-moved
 title: wf's merged check misses a squash made after main moved
-priority: 56
+priority: 57
 kind: process
 follows: wf-squash-merged-pr
 status: in_progress
@@ -97,3 +97,6 @@ history:
   - at: 2026-11-11T20:32:22Z
     by: cloud/20261111T182144Z
     event: 'priority 55 -> 56 (renumbered by wf new: relay-init-dhcp-mask-default queued at 46)'
+  - at: 2026-11-12T18:43:30Z
+    by: human/jeff
+    event: 'priority 56 -> 57 (renumbered by wf new: componentization queued at 24)'

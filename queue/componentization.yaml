@@ -1,0 +1,31 @@
+feature: componentization
+title: 'Componentization: relay, drivers, kit, specs and loop become separate components (umbrella design)'
+priority: 24
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/componentization.md
+branch: feat/componentization
+alters_relationships: null
+source: 'Jeff, attended session 2026-11-09 to 2026-11-12: drivers as separate binaries and repositories, folded with the relay fork (buildwarden-relay, decisions of 2026-11-07), the Loop Contract and the VZ spike reports into one program. Plan with all thirteen owner decisions settled 2026-11-12; Jeff asked for it to be queued and drafted the same day.'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 2
+    steps: 8
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-12T18:43:30Z
+    by: human/jeff
+    event: queued at priority 24 (intake)

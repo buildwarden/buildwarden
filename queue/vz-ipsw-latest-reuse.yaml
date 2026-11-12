@@ -1,6 +1,6 @@
 feature: vz-ipsw-latest-reuse
 title: vz restore reuses a stale ipsw-latest.ipsw for any IPSW URL
-priority: 47
+priority: 48
 follows: vz-image-prepare-refresh
 status: queued
 round: feature
@@ -54,3 +54,6 @@ history:
   - at: 2026-11-11T20:32:22Z
     by: cloud/20261111T182144Z
     event: 'priority 46 -> 47 (renumbered by wf new: relay-init-dhcp-mask-default queued at 46)'
+  - at: 2026-11-12T18:43:30Z
+    by: human/jeff
+    event: 'priority 47 -> 48 (renumbered by wf new: componentization queued at 24)'

@@ -1,6 +1,6 @@
 feature: rule-running-line-match
 title: 'wf check''s rule-running CI line match ignores job names (needs: lists)'
-priority: 54
+priority: 55
 kind: process
 follows: design-approved-rule-changes
 status: done
@@ -96,3 +96,6 @@ history:
   - at: 2026-11-11T20:32:22Z
     by: cloud/20261111T182144Z
     event: 'priority 53 -> 54 (renumbered by wf new: relay-init-dhcp-mask-default queued at 46)'
+  - at: 2026-11-12T18:43:30Z
+    by: human/jeff
+    event: 'priority 54 -> 55 (renumbered by wf new: componentization queued at 24)'

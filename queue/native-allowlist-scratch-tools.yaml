@@ -1,6 +1,6 @@
 feature: native-allowlist-scratch-tools
 title: Native allowlist covers a branch's .scratch/*/tools/* scripts and env-prefixed commands
-priority: 41
+priority: 42
 kind: process
 holds:
   - host:*
@@ -94,3 +94,6 @@ history:
   - at: 2026-11-06T23:53:45Z
     by: cloud/20261106T231440Z-attended
     event: closed; feature done
+  - at: 2026-11-12T18:43:30Z
+    by: human/jeff
+    event: 'priority 41 -> 42 (renumbered by wf new: componentization queued at 24)'

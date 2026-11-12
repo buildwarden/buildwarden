@@ -1,6 +1,6 @@
 feature: jks-test-skip-without-jdk
 title: TestWriteJKSMatchesKeytool skips when keytool cannot run (macOS stub without a JDK)
-priority: 44
+priority: 45
 status: done
 round: feature
 phase: 8
@@ -301,3 +301,6 @@ history:
   - at: 2026-11-11T22:01:32Z
     by: cloud/20261111T182144Z
     event: closed; feature done
+  - at: 2026-11-12T18:43:30Z
+    by: human/jeff
+    event: 'priority 44 -> 45 (renumbered by wf new: componentization queued at 24)'
