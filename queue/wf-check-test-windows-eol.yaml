@@ -3,16 +3,16 @@ title: 'tools/workflow/check: TestWhitespaceOnlyDifferenceFails fails on a Windo
 priority: 26
 kind: process
 follows: wf-squash-after-base-moved
-status: in_progress
+status: done
 round: process
-phase: 2
+phase: 4
 design: docs/design/wf-check-test-windows-eol.md
 branch: feat/wf-check-test-windows-eol
 alters_relationships: null
+source: 'Regression on main (1173c5f), found 2026-11-12 on windows-desktop while running make test for componentization''s design branch. ''cd tools/workflow && go test ./check/ -run TestWhitespaceOnlyDifferenceFails'' fails with ''x3 on a whitespace-only difference: "", want it unmerged''. Cause: the test''s temporary repository is checked out with CRLF under the machine''s core.autocrlf=true, so its strings.Replace of "Feature line.\n" matches nothing and the squash it builds has no whitespace difference. Likely fix: have the test replace "Feature line." without the newline, or set core.autocrlf=false in the test repository. CI does not catch it: main.yml runs make test on ubuntu-latest only. The two other Windows-only failures found in the same run are fixed in PR #111 (no-design).'
 pr:
   number: 113
-  ci: pending
-source: 'Regression on main (1173c5f), found 2026-11-12 on windows-desktop while running make test for componentization''s design branch. ''cd tools/workflow && go test ./check/ -run TestWhitespaceOnlyDifferenceFails'' fails with ''x3 on a whitespace-only difference: "", want it unmerged''. Cause: the test''s temporary repository is checked out with CRLF under the machine''s core.autocrlf=true, so its strings.Replace of "Feature line.\n" matches nothing and the squash it builds has no whitespace difference. Likely fix: have the test replace "Feature line." without the newline, or set core.autocrlf=false in the test repository. CI does not catch it: main.yml runs make test on ubuntu-latest only. The two other Windows-only failures found in the same run are fixed in PR #111 (no-design).'
+  ci: green
 steps:
   - id: x1-design
     phase: 1
@@ -24,17 +24,31 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
-    status: pending
+    status: done
     lease:
       claimed_by: cloud/20261112T202355Z
       expires: 2026-11-12T22:24:07.13092676Z
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
     steps: 5
   spent:
     runs: 1
-    steps: 2
+    steps: 3
 questions: []
 history:
   - at: 2026-11-12T18:58:10Z
@@ -55,3 +69,24 @@ history:
   - at: 2026-11-12T20:24:07Z
     by: cloud/20261112T202355Z
     event: claimed x2-implement until 2026-11-12T22:24:07Z
+  - at: 2026-11-12T20:40:00Z
+    by: human/jeff
+    event: 'x2-implement done by hand (Jeff): PR #113 merged as f901510 two minutes after opening, with 18 of 19 checks green and tier1-test (macos-latest) still queued; GitHub deleted the branch, so the done-when could not pass'
+  - at: 2026-11-12T20:40:01Z
+    by: human/jeff
+    event: entered phase 3 (merge)
+  - at: 2026-11-12T20:38:08Z
+    by: cloud/20261112T202355Z
+    event: done x3-merge
+  - at: 2026-11-12T20:38:08Z
+    by: cloud/20261112T202355Z
+    event: entered phase 4 (close)
+  - at: 2026-11-12T20:38:14Z
+    by: cloud/20261112T202355Z
+    event: claimed x4-close until 2026-11-12T22:38:14Z
+  - at: 2026-11-12T20:38:14Z
+    by: cloud/20261112T202355Z
+    event: done x4-close
+  - at: 2026-11-12T20:38:14Z
+    by: cloud/20261112T202355Z
+    event: closed; feature done
