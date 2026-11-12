@@ -201,12 +201,16 @@ link and the resolvers
             privileged service at this protocol -> a per-build network through
             it; a service at another protocol (or failing its ping) -> a fix
             naming its reinstall, never the durable network; else durable
+            (doctor reads the service manager when the pipe does not open:
+            installed but stopped -> Start-Service WardenHyperV, never
+            "not installed")
         the relay boot VHDX's stamp must be 2, else a fix naming refresh-cache.sh
         the NAT read back from the host: name, prefix, host IP
             durable:   <network>-nat and its slot switches; none -> warden setup
             ephemeral: a per-build Private switch; the dev switch's NAT if
                        present, else the one owning the default prefix, else new
-        a NAT prefix that overlaps the build link -> a fix
+        a NAT prefix that overlaps the build link -> a fix naming that NAT
+            (config load checks no Hyper-V range; this is the one check)
         the resolvers, as above; token := a fresh random claim token
         under a host lock ("hyperv-network"):
             relay address := the lowest free host in the NAT prefix (not the
@@ -221,6 +225,8 @@ link and the resolvers
                      Notes "warden-relay-ip=<ip> warden-relay-switch=<switch>"
         start the relay VM; claim it at <relay address>:8301 with the token
         (Bearer on the claim and the tunnel)
+        every seed ISO (the build's, the relay's, a prepare's) is made under
+        a host lock ("hyperv-iso"), held only around IMAPI2
         the build VM joins the relay's switch; before it starts, the slot's
         adapters must be exactly the relay's build NIC and the build VM's,
         else refuse; removing the relay VM frees its address and slot

@@ -390,7 +390,8 @@ warden hyperv service install     # run once, elevated
 A service installed by an older warden speaks an older protocol: doctor
 reports it as stale, and a non-elevated build is refused until it is
 reinstalled (elevated: `warden hyperv service uninstall`, then `warden
-hyperv service install`).
+hyperv service install`). One that is installed but stopped is reported as
+stopped, with `Start-Service WardenHyperV` (elevated) as the fix.
 
 ### How It Works
 

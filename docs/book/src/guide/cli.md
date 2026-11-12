@@ -257,7 +257,8 @@ source (`[vm] dns`, or the host source it read them from), or the refusal a
 build would get, which is BLOCKED and fails doctor. The hyperv doctor adds a
 `Build network` block: the NAT's name, prefix and host IP as read back from
 the host (or the NAT a build would make), a NAT prefix that overlaps the build
-link (BLOCKED), and for the durable strategy each slot switch, `free` or `in
+link (BLOCKED, naming that NAT, or the default prefix when the host has none
+yet), and for the durable strategy each slot switch, `free` or `in
 use by` the VMs attached to it, or a missing-slots line naming `warden setup
 --driver hyperv`.
 
@@ -331,6 +332,12 @@ stale: `warden doctor --driver hyperv` reports it, and a non-elevated build
 is refused, naming the reinstall (`uninstall`, then `install`, elevated). A
 stale service is never treated as absent, so the build does not fall back
 to the durable network.
+
+A service that is installed but not running (stopped, say) is reported as
+such, not as not installed, with the fix: from an elevated shell, `Start-Service
+WardenHyperV` (or `sc start WardenHyperV`); one that runs but whose pipe does
+not answer, `Restart-Service WardenHyperV`. Doctor's blocked remedies then name
+starting it rather than installing it.
 
 - `install` — Install and start the service (run once, elevated)
 - `uninstall` — Stop and remove the service (elevated)
