@@ -135,11 +135,12 @@ func TestVMDNSUsedExclusively(t *testing.T) {
 // resolvers land in req.DNS for the claim.
 func TestPrepareBuildNetwork(t *testing.T) {
 	req := &driver.BuildRequest{}
-	if err := prepareBuildNetwork(req, "warden-dev-nat", netip.MustParsePrefix("100.127.0.0/16"),
+	const nat = "warden-dev-nat"
+	if err := prepareBuildNetwork(req, nat, netip.MustParsePrefix("100.127.0.0/16"),
 		hostDNS("10.9.0.53")); err == nil || !strings.Contains(err.Error(), "overlaps") {
 		t.Errorf("overlap: %v", err)
 	}
-	if err := prepareBuildNetwork(req, "warden-dev-nat", netip.MustParsePrefix(DefaultNATPrefix),
+	if err := prepareBuildNetwork(req, nat, netip.MustParsePrefix(DefaultNATPrefix),
 		hostDNS("203.0.113.53")); err != nil || resolvers.Join(req.DNS) != "203.0.113.53" {
 		t.Errorf("host's: %v, DNS %v", err, req.DNS)
 	}

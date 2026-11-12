@@ -6,73 +6,93 @@ import (
 	"testing"
 )
 
+const (
+	serviceRow    = "Privileged service ................... "
+	installRemedy = "install the network service (one-time, elevated)"
+)
+
 // TestServiceRowStates renders doctor's privileged-service row, and the
-// remedies of a blocked VM lifecycle and network, for each service state.
+// remedies of a blocked VM lifecycle and network, for each state of a service
+// whose pipe does not open.
 func TestServiceRowStates(t *testing.T) {
-	const row = "Privileged service ................... "
-	const install = "install the network service (one-time, elevated)"
 	start := "start the installed privileged service: " + serviceStartFix
 	restart := "start the installed privileged service: " + serviceRestartFix
+	stoppedRow := func(state string) string {
+		return serviceRow + "installed, but " + state + "\n    -> " +
+			serviceStartFix + "\n"
+	}
 	for _, c := range []struct {
 		name   string
 		caps   Capabilities
 		row    string
 		remedy string
 	}{
-		{"not installed", Capabilities{}, row + "not installed\n", install},
+		{"not installed", Capabilities{}, serviceRow + "not installed\n",
+			installRemedy},
 		{"stopped", Capabilities{ServiceInstalled: true, ServiceState: serviceStopped},
-			row + "installed, but stopped\n    -> " + serviceStartFix + "\n", start},
+			stoppedRow("stopped"), start},
 		{"starting", Capabilities{ServiceInstalled: true, ServiceState: "starting"},
-			row + "installed, but starting\n    -> " + serviceStartFix + "\n", start},
+			stoppedRow("starting"), start},
 		{"state unread", Capabilities{ServiceInstalled: true},
-			row + "installed, but in an unknown state\n    -> " + serviceStartFix + "\n",
-			start},
+			stoppedRow("in an unknown state"), start},
 		{"running, no pipe",
 			Capabilities{ServiceInstalled: true, ServiceState: serviceRunning},
-			row + "installed and running, but its pipe does not answer\n    -> " +
-				serviceRestartFix + "\n", restart},
+			serviceRow + "installed and running, but its pipe does not answer\n" +
+				"    -> " + serviceRestartFix + "\n", restart},
 	} {
 		t.Run(c.name, func(t *testing.T) {
-			var buf bytes.Buffer
-			writeServiceRow(&buf, c.caps)
-			if got := buf.String(); got != c.row {
-				t.Errorf("row = %q, want %q", got, c.row)
-			}
-
-			// Non-elevated, not a Hyper-V Administrator, no durable switches:
-			// both paths are blocked, and each names the service remedy.
-			caps := c.caps
-			caps.Supported, caps.HypervisorPresent, caps.HyperVFeature = true, true, true
-			buf.Reset()
-			writeVMLifecycle(&buf, caps)
-			writeNetworkStrategy(&buf, caps)
-			if n := strings.Count(buf.String(), "    -> "+c.remedy+"\n"); n != 2 {
-				t.Errorf("remedy %q named %d times, want 2:\n%s", c.remedy, n,
-					buf.String())
-			}
-			if ready, reason := caps.Ready(); ready || !strings.HasSuffix(reason, c.remedy) {
-				t.Errorf("Ready = %v, %q; want blocked naming %q", ready, reason, c.remedy)
-			}
-			if c.caps.ServiceInstalled && strings.Contains(buf.String(), install) {
-				t.Errorf("an installed service is told to install:\n%s", buf.String())
-			}
+			checkServiceRemedies(t, c.caps, c.row, c.remedy)
 		})
 	}
+}
 
-	// Reachable and stale services are reported as before, whatever the SCM
-	// fields say.
-	for caps, want := range map[*Capabilities]string{
-		{ServiceReachable: true}: row + "reachable\n",
-		{ServiceStale: "speaks protocol 1, this warden 2"}: row +
-			"stale: it speaks protocol 1, this warden 2\n    -> " + serviceReinstallFix + "\n",
+// checkServiceRemedies checks doctor's service row for caps, and that a
+// non-elevated host that is not a Hyper-V Administrator and has no durable
+// switches, where both paths are blocked, names remedy for each and in Ready.
+func checkServiceRemedies(t *testing.T, caps Capabilities, row, remedy string) {
+	t.Helper()
+	var buf bytes.Buffer
+	writeServiceRow(&buf, caps)
+	if got := buf.String(); got != row {
+		t.Errorf("row = %q, want %q", got, row)
+	}
+	caps.Supported, caps.HypervisorPresent = true, true
+	caps.HyperVFeature = true
+	buf.Reset()
+	writeVMLifecycle(&buf, caps)
+	writeNetworkStrategy(&buf, caps)
+	out := buf.String()
+	if n := strings.Count(out, "    -> "+remedy+"\n"); n != 2 {
+		t.Errorf("remedy %q named %d times, want 2:\n%s", remedy, n, out)
+	}
+	ready, reason := caps.Ready()
+	if ready || !strings.HasSuffix(reason, remedy) {
+		t.Errorf("Ready = %v, %q; want blocked naming %q", ready, reason, remedy)
+	}
+	if caps.ServiceInstalled && strings.Contains(out, installRemedy) {
+		t.Errorf("an installed service is told to install:\n%s", out)
+	}
+}
+
+// TestServiceRowAnswering: a reachable or stale service is reported as
+// before, and is never told to start.
+func TestServiceRowAnswering(t *testing.T) {
+	const why = "speaks protocol 1, this warden 2"
+	for _, c := range []struct {
+		caps Capabilities
+		want string
+	}{
+		{Capabilities{ServiceReachable: true}, serviceRow + "reachable\n"},
+		{Capabilities{ServiceStale: why}, serviceRow + "stale: it " + why +
+			"\n    -> " + serviceReinstallFix + "\n"},
 	} {
 		var buf bytes.Buffer
-		writeServiceRow(&buf, *caps)
-		if buf.String() != want {
-			t.Errorf("row = %q, want %q", buf.String(), want)
+		writeServiceRow(&buf, c.caps)
+		if buf.String() != c.want {
+			t.Errorf("row = %q, want %q", buf.String(), c.want)
 		}
-		if caps.serviceDown() != "" {
-			t.Errorf("serviceDown = %q for %+v", caps.serviceDown(), *caps)
+		if fix := c.caps.serviceDown(); fix != "" {
+			t.Errorf("serviceDown = %q for %+v", fix, c.caps)
 		}
 	}
 }
