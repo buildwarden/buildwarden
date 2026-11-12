@@ -39,10 +39,8 @@ func (d *Driver) StartBuild(
 	// elevation is the most common blocker, and it costs nothing to check
 	// before any disk or seed work. Detect reflects THIS process's token.
 	caps := Detect(sw)
-	if ready, reason := caps.Ready(); !ready {
-		return nil, driver.Fixable(
-			"see `warden doctor --driver hyperv` for each capability and its fix",
-			"hyperv build: %s", reason)
+	if err := caps.buildRefusal(); err != nil {
+		return nil, err
 	}
 
 	buildID := driver.RandAlphaNum(8)
@@ -238,9 +236,8 @@ func (d *Driver) provisionBuildNetwork(
 			_ = bp.TeardownNetwork(context.Background(), buildSwitch)
 		}
 
-	default: // NetBlocked
-		_, reason := caps.Ready()
-		return nil, buildNetwork{}, nil, fmt.Errorf("hyperv build: %s", reason)
+	default: // NetBlocked, which Ready never passes
+		return nil, buildNetwork{}, nil, caps.buildRefusal()
 	}
 	return prov, bnet, cleanup, nil
 }

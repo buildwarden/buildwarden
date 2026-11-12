@@ -35,17 +35,19 @@ func dialServicePipe(timeout time.Duration) (net.Conn, error) {
 	return winio.DialPipe(ServicePipeName, &timeout)
 }
 
-// serviceReachable pings the pipe (short timeout). Used by capability detection
-// to set ServiceReachable without side effects.
-func serviceReachable() bool {
+// probeService pings the pipe (short timeout), without side effects, for
+// capability detection. A pipe that does not open is no service (not
+// installed, or not running); one that opens is reachable, or stale with the
+// reason pingService gives.
+func probeService() (reachable bool, stale string) {
 	conn, err := dialServicePipe(750 * time.Millisecond)
 	if err != nil {
-		return false
+		return false, ""
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
-	_, err = clientRoundTrip(conn, svcRequest{Op: opPing})
-	return err == nil
+	stale = pingService(conn)
+	return stale == "", stale
 }
 
 // runPipeServer listens on the ACL'd pipe and serves each connection until ctx

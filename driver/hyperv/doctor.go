@@ -75,11 +75,15 @@ func Doctor(w io.Writer, c Capabilities, link buildlink.Link,
 	}
 	fmt.Fprintf(w, "%s%s\n", dotted(switchLabel), switchState)
 
-	svc := "not installed"
-	if c.ServiceReachable {
-		svc = "reachable"
+	switch {
+	case c.ServiceReachable:
+		fmt.Fprintf(w, "%sreachable\n", dotted("Privileged service"))
+	case c.ServiceStale != "":
+		fmt.Fprintf(w, "%sstale: it %s\n    -> %s\n", dotted("Privileged service"),
+			c.ServiceStale, serviceReinstallFix)
+	default:
+		fmt.Fprintf(w, "%snot installed\n", dotted("Privileged service"))
 	}
-	fmt.Fprintf(w, "%s%s\n", dotted("Privileged service"), svc)
 	cacheBlocked := writeCacheVisibility(w)
 	imageBlocked := writeImageStatus(w, Status(), time.Now())
 
@@ -182,6 +186,11 @@ func writeNetworkStrategy(w io.Writer, c Capabilities) {
 		fmt.Fprintf(w, "  Network .............. OK (durable network '%s': a "+
 			"build switch of its own per build, lower-privilege path)\n", c.DevSwitch)
 	default:
+		if c.ServiceStale != "" {
+			fmt.Fprintf(w, "  Network .............. BLOCKED (the privileged "+
+				"service %s)\n    -> %s\n", c.ServiceStale, serviceReinstallFix)
+			return
+		}
 		fmt.Fprintln(w, "  Network .............. BLOCKED")
 		fmt.Fprintln(w, "    -> run `warden setup --driver hyperv` once from "+
 			"an elevated shell (durable build switches), or")

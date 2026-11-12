@@ -96,6 +96,7 @@ try {
 		}
 	}
 
-	// Privileged service: reachable when its ACL'd pipe answers a ping.
-	c.ServiceReachable = serviceReachable()
+	// Privileged service: reachable when its ACL'd pipe answers a ping at
+	// this warden's protocol version, stale when it answers otherwise.
+	c.ServiceReachable, c.ServiceStale = probeService()
 }

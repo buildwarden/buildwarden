@@ -33,6 +33,12 @@ const (
 	// 2: NetworkResources carries the NAT's prefix and host IP read back, and
 	// NetworkSpec the dev switch's NAT; a version-1 service would send neither.
 	serviceProtocolVersion = 2
+
+	// serviceReinstallFix is the fix for a service that answers but cannot
+	// serve this warden. install refuses while the old service is registered,
+	// so the reinstall is both commands.
+	serviceReinstallFix = "from an elevated shell, run `warden hyperv service " +
+		"uninstall`, then `warden hyperv service install`"
 )
 
 // svcOp is the typed operation set the pipe accepts. Only network standup is
@@ -70,8 +76,8 @@ func handleServiceRequest(ctx context.Context, prov Provisioner, req svcRequest)
 	if req.Version != serviceProtocolVersion {
 		resp.Err = fmt.Sprintf(
 			"protocol version mismatch: service speaks %d, client sent %d; "+
-				"reinstall the service (warden hyperv service install)",
-			serviceProtocolVersion, req.Version)
+				"reinstall the service: %s",
+			serviceProtocolVersion, req.Version, serviceReinstallFix)
 		return resp
 	}
 	switch req.Op {
@@ -132,4 +138,24 @@ func clientRoundTrip(rw io.ReadWriter, req svcRequest) (svcResponse, error) {
 		return resp, fmt.Errorf("service: %s", resp.Err)
 	}
 	return resp, nil
+}
+
+// pingService pings the service at the other end of rw and reports why it
+// cannot serve this warden, or "" when it can. A service that speaks another
+// protocol version (one an older or newer warden installed) says which;
+// any other failed ping says how it failed. Either way the service is there,
+// so the caller reports it as stale, never as absent (GLOBAL-11).
+func pingService(rw io.ReadWriter) (stale string) {
+	resp, err := clientRoundTrip(rw, svcRequest{Op: opPing})
+	switch {
+	case err == nil && resp.Version == serviceProtocolVersion:
+		return ""
+	case resp.Version != 0 && resp.Version != serviceProtocolVersion:
+		return fmt.Sprintf("speaks protocol %d, this warden %d",
+			resp.Version, serviceProtocolVersion)
+	case err == nil:
+		return "answers a ping with no protocol version"
+	default:
+		return fmt.Sprintf("answers, but its ping fails: %v", err)
+	}
 }

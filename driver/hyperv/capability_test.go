@@ -2,10 +2,12 @@ package hyperv
 
 import (
 	"bytes"
+	"errors"
 	"net/netip"
 	"strings"
 	"testing"
 
+	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/buildlink"
 )
 
@@ -105,6 +107,15 @@ func TestNetworkStrategy(t *testing.T) {
 				ServiceReachable: true, HyperVAdmin: true, DevSwitchPresent: true,
 			},
 			NetDelegateService},
+		{"a stale service blocks durable reuse",
+			Capabilities{
+				ServiceStale: "speaks protocol 1, this warden 2",
+				HyperVAdmin:  true, DevSwitchPresent: true,
+			},
+			NetBlocked},
+		{"elevated ignores a stale service",
+			Capabilities{Elevated: true, ServiceStale: "speaks protocol 1, this warden 2"},
+			NetEphemeralPerBuild},
 		{"nothing available is blocked", Capabilities{}, NetBlocked},
 	}
 	for _, tt := range tests {
@@ -209,5 +220,74 @@ func TestDoctorReport(t *testing.T) {
 	}
 	if !strings.Contains(buf.String(), "token predates") {
 		t.Errorf("expected stale-token diagnosis; got:\n%s", buf.String())
+	}
+}
+
+// TestStaleServiceEndToEnd pings a protocol-1 service, as on a host where an
+// older warden installed it, and follows the result through doctor and a
+// build's refusal: both name the reinstall, and neither reads the service as
+// absent nor sends the build to the durable network.
+func TestStaleServiceEndToEnd(t *testing.T) {
+	t.Setenv("WARDEN_HYPERV_CACHE_DIR", t.TempDir())
+	stubDoctorNet(t, healthyNet)
+	stale := pingOver(t, protocol1Service)
+	if stale == "" {
+		t.Fatal("a protocol-1 service pinged as usable")
+	}
+	for _, sw := range []struct {
+		name            string
+		present, legacy bool
+	}{
+		{"build switches present", true, false},
+		{"only the old shared switch", false, true},
+	} {
+		t.Run(sw.name, func(t *testing.T) {
+			caps := Capabilities{
+				Supported: true, Platform: "windows",
+				TokenScope:        "current process (non-elevated)",
+				HypervisorPresent: true, HyperVFeature: true, HyperVAdmin: true,
+				DevSwitch: "warden-dev", DevSwitchPresent: sw.present,
+				DevSwitchLegacy: sw.legacy, ServiceStale: stale,
+			}
+			var buf bytes.Buffer
+			if !Doctor(&buf, caps, buildlink.Link{}, nil) {
+				t.Fatalf("doctor not blocked by a stale service:\n%s", buf.String())
+			}
+			out := buf.String()
+			for _, want := range []string{
+				"Privileged service ................... stale: it speaks " +
+					"protocol 1, this warden 2\n    -> " + serviceReinstallFix,
+				"Network .............. BLOCKED (the privileged service speaks protocol 1",
+				"Not ready: the privileged service speaks protocol 1, this warden 2; " +
+					"reinstall it: " + serviceReinstallFix,
+			} {
+				if !strings.Contains(out, want) {
+					t.Errorf("doctor missing %q; got:\n%s", want, out)
+				}
+			}
+			for _, bad := range []string{"not installed", "durable network has no build switches"} {
+				if strings.Contains(out, bad) {
+					t.Errorf("doctor says %q of a stale service:\n%s", bad, out)
+				}
+			}
+
+			var fe *driver.FixableError
+			if err := caps.buildRefusal(); !errors.As(err, &fe) {
+				t.Fatalf("buildRefusal = %v, want a FixableError", err)
+			}
+			if fe.Fix != serviceReinstallFix ||
+				fe.Msg != "hyperv build: the privileged service speaks protocol 1, this warden 2" {
+				t.Errorf("refusal = %q, fix %q; want the stale service and its reinstall",
+					fe.Msg, fe.Fix)
+			}
+		})
+	}
+
+	// Elevated, the build stands up its own network and never uses the
+	// service, so a stale one does not refuse it.
+	elevated := Capabilities{Supported: true, HypervisorPresent: true,
+		HyperVFeature: true, Elevated: true, ServiceStale: stale}
+	if err := elevated.buildRefusal(); err != nil {
+		t.Errorf("elevated build refused over a stale service: %v", err)
 	}
 }

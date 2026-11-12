@@ -18,8 +18,8 @@ func InstallService() error { return errUnsupported() }
 // UninstallService is unsupported off Windows.
 func UninstallService() error { return errUnsupported() }
 
-// serviceReachable is always false off Windows.
-func serviceReachable() bool { return false }
+// probeService finds no service off Windows.
+func probeService() (reachable bool, stale string) { return false, "" }
 
 // newClientProvisioner returns the unsupported provisioner off Windows.
 func newClientProvisioner(bool) Provisioner { return unsupportedProvisioner{} }
