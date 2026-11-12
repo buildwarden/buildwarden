@@ -4,12 +4,15 @@ priority: 24
 kind: process
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/componentization.md
 branch: feat/componentization
 alters_relationships: null
 design_review: required
 source: 'Jeff, attended session 2026-11-09 to 2026-11-12: drivers as separate binaries and repositories, folded with the relay fork (buildwarden-relay, decisions of 2026-11-07), the Loop Contract and the VZ spike reports into one program. Plan with all thirteen owner decisions settled 2026-11-12; Jeff asked for it to be queued and drafted the same day.'
+pr:
+  number: 117
+  ci: green
 steps:
   - id: x1-design
     phase: 1
@@ -21,10 +24,17 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261112T230554Z
-      expires: 2026-11-13T01:06:03.630678297Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -199,3 +209,9 @@ history:
   - at: 2026-11-12T23:06:03Z
     by: cloud/20261112T230554Z
     event: claimed x2-implement until 2026-11-13T01:06:03Z
+  - at: 2026-11-12T23:21:15Z
+    by: cloud/20261112T230554Z
+    event: done x2-implement
+  - at: 2026-11-12T23:21:15Z
+    by: cloud/20261112T230554Z
+    event: entered phase 3 (merge)
