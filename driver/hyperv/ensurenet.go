@@ -69,6 +69,11 @@ if ($natName) {
         throw "switch '$natName' exists but is $($natSw.SwitchType); expected Internal"
     }
     $alias = "vEthernet ($natName)"
+    # Only the host IP stays on this NAT's own vNIC: an address an earlier
+    # setup left (on another prefix) would still route its network here.
+    Get-NetIPAddress -InterfaceAlias $alias -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        Where-Object { $_.IPAddress -ne '%[3]s' } |
+        Remove-NetIPAddress -Confirm:$false
     $ip = Get-NetIPAddress -InterfaceAlias $alias -IPAddress '%[3]s' -ErrorAction SilentlyContinue
     if (-not $ip) {
         New-NetIPAddress -IPAddress '%[3]s' -PrefixLength %[4]d -InterfaceAlias $alias | Out-Null

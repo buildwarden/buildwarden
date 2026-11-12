@@ -135,3 +135,52 @@ func TestEnsureNetworkScriptNATOrder(t *testing.T) {
 		t.Error("a spec with no switch and no NAT name rendered")
 	}
 }
+
+// TestNATAddressingTwoHostIPs (native F5): two host addresses in the NAT
+// prefix are refused as ambiguous, never one picked; one in it beside an old
+// address outside it is the host IP, and the old one is named as stray.
+func TestNATAddressingTwoHostIPs(t *testing.T) {
+	_, err := parseNetReadback("NAT=warden-dev-nat\nPREFIX=192.168.250.0/24\n" +
+		"HOSTIP=192.168.250.1\nHOSTIP=192.168.250.7\n").ensureResources("warden-x")
+	var fe *driver.FixableError
+	if !errors.As(err, &fe) || !strings.Contains(fe.Msg, "192.168.250.1, 192.168.250.7") ||
+		!strings.Contains(fe.Msg, "ambiguous") ||
+		!strings.Contains(fe.Fix, "Remove-NetIPAddress -InterfaceAlias "+
+			"'vEthernet (warden-dev-nat)'") {
+		t.Fatalf("err = %v", err)
+	}
+
+	r := parseNetReadback("NAT=warden-dev-nat\nPREFIX=192.168.250.0/24\n" +
+		"HOSTIP=192.168.240.1\nHOSTIP=192.168.250.1\n")
+	res, err := r.ensureResources("warden-x")
+	if err != nil || res.HostIP != netip.MustParseAddr("192.168.250.1") {
+		t.Fatalf("res = %+v, err = %v", res, err)
+	}
+	if got := r.strayHostIPs(res.HostIP); len(got) != 1 || got[0] != "192.168.240.1" {
+		t.Errorf("strayHostIPs = %v", got)
+	}
+}
+
+// TestEnsureNetworkScriptRemovesOldAddresses (native F5): when the standup
+// makes the NAT, every other IPv4 address on its own vNIC is removed before
+// the host IP is added, and no other interface is named.
+func TestEnsureNetworkScriptRemovesOldAddresses(t *testing.T) {
+	s, err := ensureNetworkScript(NetworkSpec{NATName: "warden-dev-nat",
+		NATPrefix: "192.168.250.0/24", HostIP: "192.168.250.1"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	create := s[strings.Index(s, "$reused = 0"):]
+	remove := "Get-NetIPAddress -InterfaceAlias $alias -AddressFamily IPv4 " +
+		"-ErrorAction SilentlyContinue |\n        Where-Object { $_.IPAddress -ne " +
+		"'192.168.250.1' } |\n        Remove-NetIPAddress -Confirm:$false"
+	i := strings.Index(create, remove)
+	if i < 0 || i > strings.Index(create, "New-NetIPAddress") ||
+		i < strings.Index(create, `$alias = "vEthernet ($natName)"`) {
+		t.Fatalf("the create branch does not remove the other addresses first:\n%s", s)
+	}
+	if strings.Count(s, "Remove-NetIPAddress") != 1 ||
+		strings.Count(create, "Remove-NetIPAddress") != 1 {
+		t.Errorf("addresses are removed outside the create branch:\n%s", s)
+	}
+}

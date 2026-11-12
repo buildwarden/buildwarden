@@ -258,7 +258,9 @@ build would get, which is BLOCKED and fails doctor. The hyperv doctor adds a
 `Build network` block: the NAT's name, prefix and host IP as read back from
 the host (or the NAT a build would make), a NAT prefix that overlaps the build
 link (BLOCKED, naming that NAT, or the default prefix when the host has none
-yet), and for the durable strategy each slot switch, `free` or `in
+yet), any other address on the NAT's vNIC (a warning naming the
+`Remove-NetIPAddress` that removes it; two in the NAT prefix leave the host IP
+ambiguous, which is BLOCKED), and for the durable strategy each slot switch, `free` or `in
 use by` the VMs attached to it, or a missing-slots line naming `warden setup
 --driver hyperv`.
 
@@ -309,7 +311,11 @@ Other drivers print that no host setup is needed. Replaces the old
   and how to remove it, when another NAT already owns this prefix, and when
   `<network>-nat` exists on another prefix
 - `--host-ip <ip>` — Host gateway IP on the NAT switch (default 192.168.240.1),
-  the relay's upstream gateway on every build
+  the relay's upstream gateway on every build. When setup makes the NAT, the
+  host IP is the only IPv4 address left on its vNIC, `vEthernet
+  (<network>-nat)`: an address an earlier setup left there (on the old
+  prefix, after that NAT was removed) is removed, and no other interface is
+  touched
 - `--slots <n>` — hyperv: build switches to create, 1 to 64 (default 4), the
   number of durable builds that can run at once; firecracker: network slots
   to create, 1 to 256 (default 16). Refused for other drivers

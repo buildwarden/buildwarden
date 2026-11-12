@@ -81,6 +81,11 @@ func writeNAT(w io.Writer, c Capabilities, r netReadback,
 			prefix, hostIP)
 	default:
 		fmt.Fprintf(w, "  %s%s (%s, host %s)\n", dotted("NAT"), name, prefix, hostIP)
+		if stray := r.strayHostIPs(hostIP); len(stray) > 0 {
+			fmt.Fprintf(w, "  %s%s (warning: the host still routes their "+
+				"networks to the NAT's switch)\n    -> %s\n", dotted("Other NAT vNIC IPs"),
+				strings.Join(stray, ", "), removeAddrsFix(name, stray))
+		}
 	}
 	return name, prefix, true
 }

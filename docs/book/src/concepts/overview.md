@@ -192,7 +192,9 @@ link and the resolvers
                  at the slot's upstream address
     hyperv setup: refuse a --nat-prefix that overlaps the build link; make or
                  adopt <network>-nat on --nat-prefix, refusing another NAT that
-                 owns the prefix or <network>-nat on another; make the
+                 owns the prefix or <network>-nat on another (making it leaves
+                 --host-ip the only IPv4 address on vEthernet (<network>-nat));
+                 make the
                  durable strategy's slot switches <network>-0..N-1 (--slots,
                  default 4), trim unattached extras, retire an unattached old
                  <network> switch
@@ -207,7 +209,8 @@ link and the resolvers
             be read", naming Get-Service WardenHyperV; only "does not exist"
             is not installed)
         the relay boot VHDX's stamp must be 2, else a fix naming refresh-cache.sh
-        the NAT read back from the host: name, prefix, host IP
+        the NAT read back from the host: name, prefix, host IP (two host
+            addresses in the prefix -> refused as ambiguous)
             durable:   <network>-nat and its slot switches; none -> warden setup
             ephemeral: a per-build Private switch; the dev switch's NAT if
                        present, else the one owning the default prefix, else new

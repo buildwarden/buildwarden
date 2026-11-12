@@ -61,7 +61,8 @@ func parseNetReadback(out string) netReadback {
 
 // natAddressing is the NAT's prefix and the host's address in it, from the
 // read-back. A NAT whose host vNIC holds no address in its prefix is a
-// fixable error naming setup.
+// fixable error naming setup, and one holding more than one is refused as
+// ambiguous rather than one being picked.
 func (r netReadback) natAddressing() (netip.Prefix, netip.Addr, error) {
 	prefix, err := netip.ParsePrefix(r.Prefix)
 	if err != nil || !prefix.Addr().Is4() {
@@ -69,10 +70,22 @@ func (r netReadback) natAddressing() (netip.Prefix, netip.Addr, error) {
 			"the NAT %q has no IPv4 internal prefix (read %q)", r.NAT, r.Prefix)
 	}
 	prefix = prefix.Masked()
+	var in []string
+	var host netip.Addr
 	for _, s := range r.HostIPs {
 		if ip, err := netip.ParseAddr(s); err == nil && prefix.Contains(ip) {
-			return prefix, ip, nil
+			in, host = append(in, s), ip
 		}
+	}
+	switch {
+	case len(in) == 1:
+		return prefix, host, nil
+	case len(in) > 1:
+		return netip.Prefix{}, netip.Addr{}, driver.Fixable(
+			"keep only the host IP setup gave it: "+
+				removeAddrsFix(r.NAT, []string{"<each other address>"}),
+			"the host vNIC of NAT %q has more than one address in its prefix %s "+
+				"(%s), so the host IP is ambiguous", r.NAT, prefix, strings.Join(in, ", "))
 	}
 	held := "none"
 	if len(r.HostIPs) > 0 {
@@ -81,6 +94,30 @@ func (r netReadback) natAddressing() (netip.Prefix, netip.Addr, error) {
 	return netip.Prefix{}, netip.Addr{}, driver.Fixable(setupFix,
 		"the host vNIC of NAT %q has no address in its prefix %s (it has: %s)",
 		r.NAT, prefix, held)
+}
+
+// strayHostIPs is the NAT vNIC's IPv4 addresses other than hostIP. One an
+// earlier setup left on another prefix still routes its network to the
+// NAT's switch.
+func (r netReadback) strayHostIPs(hostIP netip.Addr) []string {
+	var out []string
+	for _, s := range r.HostIPs {
+		if ip, err := netip.ParseAddr(s); err != nil || ip != hostIP {
+			out = append(out, s)
+		}
+	}
+	return out
+}
+
+// removeAddrsFix is the elevated command that removes ips from NAT nat's
+// own vNIC, vEthernet (<nat>).
+func removeAddrsFix(nat string, ips []string) string {
+	cmds := make([]string, len(ips))
+	for i, ip := range ips {
+		cmds[i] = "Remove-NetIPAddress -InterfaceAlias 'vEthernet (" + nat +
+			")' -IPAddress " + ip + " -Confirm:$false"
+	}
+	return "from an elevated shell, run `" + strings.Join(cmds, "; ") + "`"
 }
 
 // ensureResources turns EnsureNetwork's read-back into its result.

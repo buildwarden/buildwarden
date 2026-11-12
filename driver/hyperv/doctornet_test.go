@@ -112,3 +112,25 @@ func TestCheckLinkAhead(t *testing.T) {
 		}
 	}
 }
+
+// TestWriteBuildNetworkStrayHostIP (native F5): an address an earlier setup
+// left on the NAT's vNIC is named, with the command that removes it.
+func TestWriteBuildNetworkStrayHostIP(t *testing.T) {
+	elevated := durableCaps
+	elevated.Elevated = true
+	dn := doctorNet{ReadBack: parseNetReadback("NAT=warden-dev-nat\n" +
+		"PREFIX=192.168.250.0/24\nHOSTIP=192.168.240.1\nHOSTIP=192.168.250.1\n"),
+		DNS: healthyNet(elevated).DNS, Host: []netip.Addr{}}
+	var buf bytes.Buffer
+	if writeBuildNetwork(&buf, elevated, dn, buildlink.Link{}, nil) {
+		t.Fatalf("blocked:\n%s", buf.String())
+	}
+	for _, want := range []string{"warden-dev-nat (192.168.250.0/24, host 192.168.250.1)",
+		"Other NAT vNIC IPs", "192.168.240.1 (warning",
+		"Remove-NetIPAddress -InterfaceAlias 'vEthernet (warden-dev-nat)' " +
+			"-IPAddress 192.168.240.1 -Confirm:$false"} {
+		if !strings.Contains(buf.String(), want) {
+			t.Errorf("report lacks %q:\n%s", want, buf.String())
+		}
+	}
+}
