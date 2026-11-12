@@ -1,6 +1,8 @@
 package driver
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"os"
@@ -25,9 +27,15 @@ func CacheDir() string {
 //
 //  1. a prebuilt release binary next to the warden executable, named as
 //     `make build` names it (warden-relay-linux-arm64, warden-io-windows-amd64.exe, ...);
-//  2. a cached cross-build under CacheDir()/bin that is newer than both the
-//     module's go.sum and the warden executable;
+//  2. a cached cross-build of this source tree, under CacheDir()/bin/<tree>
+//     (guestCachePath), that is newer than both the module's go.sum and the
+//     warden executable;
 //  3. a fresh `go build` into that cache (needs the source tree).
+//
+// The cache is keyed by the source tree because every checkout on a host
+// shares CacheDir(): one flat cache let a newer warden from another checkout
+// rebuild a guest binary from its own source, which this checkout's builds
+// then staged.
 func GuestBinary(pkg, goos, goarch string) (string, error) {
 	name := pkg + "-" + goos + "-" + goarch
 	if pkg == "relay" {
@@ -44,16 +52,15 @@ func GuestBinary(pkg, goos, goarch string) (string, error) {
 		}
 	}
 
-	cached := filepath.Join(CacheDir(), "bin", name)
 	root, rootErr := ModuleRoot()
-	if !isStale(cached, root) {
-		return cached, nil
-	}
 	if rootErr != nil {
 		return "", fmt.Errorf(
-			"%s not found next to warden or in %s, and no source tree "+
-				"to build it from: %w",
-			name, filepath.Dir(cached), rootErr)
+			"%s not found next to warden, and no source tree to build it "+
+				"from: %w", name, rootErr)
+	}
+	cached := guestCachePath(CacheDir(), root, name)
+	if !isStale(cached, root) {
+		return cached, nil
 	}
 	if err := os.MkdirAll(filepath.Dir(cached), 0o755); err != nil {
 		return "", err
@@ -66,6 +73,17 @@ func GuestBinary(pkg, goos, goarch string) (string, error) {
 		return "", fmt.Errorf("building %s: %w", name, err)
 	}
 	return cached, nil
+}
+
+// guestCachePath is where GuestBinary caches name built from the source tree
+// at root: a directory per tree, named by a hash of its absolute path, so two
+// checkouts never stage each other's builds.
+func guestCachePath(cacheDir, root, name string) string {
+	if abs, err := filepath.Abs(root); err == nil {
+		root = abs
+	}
+	sum := sha256.Sum256([]byte(filepath.Clean(root)))
+	return filepath.Join(cacheDir, "bin", hex.EncodeToString(sum[:6]), name)
 }
 
 // isStale reports whether cached is missing or older than the module's go.sum
