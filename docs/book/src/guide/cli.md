@@ -326,6 +326,12 @@ installed, `warden build --driver hyperv` runs entirely without elevation and
 stands up a fresh isolated network per build. VM lifecycle always runs
 in-process; only network standup is delegated.
 
+A service installed by a warden that speaks another protocol version is
+stale: `warden doctor --driver hyperv` reports it, and a non-elevated build
+is refused, naming the reinstall (`uninstall`, then `install`, elevated). A
+stale service is never treated as absent, so the build does not fall back
+to the durable network.
+
 - `install` — Install and start the service (run once, elevated)
 - `uninstall` — Stop and remove the service (elevated)
 - `run` — Run the helper (invoked by the SCM; or in a console to smoke-test)

@@ -387,6 +387,11 @@ elevation and stand up a fresh isolated network per build:
 warden hyperv service install     # run once, elevated
 ```
 
+A service installed by an older warden speaks an older protocol: doctor
+reports it as stale, and a non-elevated build is refused until it is
+reinstalled (elevated: `warden hyperv service uninstall`, then `warden
+hyperv service install`).
+
 ### How It Works
 
 - The relay VM boots from a UKI boot disk with `/sbin/relay` baked in. From a

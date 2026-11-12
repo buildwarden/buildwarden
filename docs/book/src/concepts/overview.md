@@ -197,6 +197,10 @@ link and the resolvers
                  default 4), trim unattached extras, retire an unattached old
                  <network> switch
     hyperv build (StartBuild):
+        the network strategy: elevated -> a per-build network; else the
+            privileged service at this protocol -> a per-build network through
+            it; a service at another protocol (or failing its ping) -> a fix
+            naming its reinstall, never the durable network; else durable
         the relay boot VHDX's stamp must be 2, else a fix naming refresh-cache.sh
         the NAT read back from the host: name, prefix, host IP
             durable:   <network>-nat and its slot switches; none -> warden setup
