@@ -71,29 +71,55 @@ func writeBuildNetwork(w io.Writer, c Capabilities, dn doctorNet, link buildlink
 // when a durable build would be refused on it.
 func writeNAT(w io.Writer, c Capabilities, r netReadback,
 	durable bool) (string, netip.Prefix, bool) {
-	if durable {
-		res, err := r.durableResources(c.DevSwitch)
-		if err != nil {
-			writeBlocked(w, "NAT", err)
-			return "", netip.Prefix{}, false
-		}
-		fmt.Fprintf(w, "  %s%s (%s, host %s)\n", dotted("NAT"), res.NATName, res.NATPrefix,
-			res.HostIP)
-		return res.NATName, res.NATPrefix, true
-	}
-	if r.NAT == "" {
-		prefix := netip.MustParsePrefix(DefaultNATPrefix)
-		fmt.Fprintf(w, "  %snone yet (a build makes one on %s, host %s)\n", dotted("NAT"),
-			prefix, DefaultHostIP)
-		return "", prefix, true
-	}
-	prefix, hostIP, err := r.natAddressing()
-	if err != nil {
+	name, prefix, hostIP, err := r.natAhead(c.DevSwitch, durable)
+	switch {
+	case err != nil:
 		writeBlocked(w, "NAT", err)
 		return "", netip.Prefix{}, false
+	case name == "":
+		fmt.Fprintf(w, "  %snone yet (a build makes one on %s, host %s)\n", dotted("NAT"),
+			prefix, hostIP)
+	default:
+		fmt.Fprintf(w, "  %s%s (%s, host %s)\n", dotted("NAT"), name, prefix, hostIP)
 	}
-	fmt.Fprintf(w, "  %s%s (%s, host %s)\n", dotted("NAT"), r.NAT, prefix, hostIP)
-	return r.NAT, prefix, true
+	return name, prefix, true
+}
+
+// natAhead is the NAT a build on network would use, from a read-back taken
+// before anything is stood up: the durable network's NAT (with its slot
+// switches checked), the NAT EnsureNetwork would take, or, when the host has
+// none, no name and the default prefix and host IP a build would make one on.
+func (r netReadback) natAhead(network string, durable bool) (
+	name string, prefix netip.Prefix, hostIP netip.Addr, err error,
+) {
+	if durable {
+		res, err := r.durableResources(network)
+		if err != nil {
+			return "", netip.Prefix{}, netip.Addr{}, err
+		}
+		return res.NATName, res.NATPrefix, res.HostIP, nil
+	}
+	if r.NAT == "" {
+		return "", netip.MustParsePrefix(DefaultNATPrefix),
+			netip.MustParseAddr(DefaultHostIP), nil
+	}
+	prefix, hostIP, err = r.natAddressing()
+	if err != nil {
+		return "", netip.Prefix{}, netip.Addr{}, err
+	}
+	return r.NAT, prefix, hostIP, nil
+}
+
+// checkLinkAhead refuses a build link that overlaps the NAT the build would
+// use, from a read-back taken before the seed ISO and the network standup
+// (UX-04); prepareBuildNetwork checks it again against the NAT taken.
+func checkLinkAhead(r netReadback, network string, durable bool,
+	link buildlink.Link) error {
+	name, prefix, _, err := r.natAhead(network, durable)
+	if err != nil {
+		return err
+	}
+	return checkNATOverlap(name, prefix, link)
 }
 
 // writeSlots reports each durable build switch free or the VMs holding it,

@@ -45,7 +45,7 @@ func (d *Driver) StartBuild(
 	// elevation is the most common blocker, and it costs nothing to check
 	// before any disk or seed work. Detect reflects THIS process's token.
 	caps := Detect(sw)
-	if err := caps.buildRefusal(); err != nil {
+	if err := preflightBuild(caps, sw, req); err != nil {
 		return nil, err
 	}
 
@@ -143,6 +143,25 @@ func (d *Driver) StartBuild(
 	}
 	driver.FinalizeOutput(req.OutputDir, req.Compress)
 	return res, nil
+}
+
+// preflightBuild refuses, before any per-build work, a build these
+// capabilities cannot run, and one whose build link overlaps the NAT it would
+// use, read back from the host as doctor reads it.
+func preflightBuild(caps Capabilities, sw string, req *driver.BuildRequest) error {
+	if err := caps.buildRefusal(); err != nil {
+		return err
+	}
+	durable := caps.NetworkStrategy() == NetReuseDurable
+	other := DefaultNATPrefix
+	if durable {
+		other = "" // VerifyNetwork reads only <network>-nat
+	}
+	out, err := runPS(netProbeScript(sw, other))
+	if err != nil {
+		return fmt.Errorf("hyperv build: reading the host's NAT: %w", err)
+	}
+	return checkLinkAhead(parseNetReadback(out), sw, durable, req.Link())
 }
 
 // resolveBuildDisks resolves the relay boot disk and the build guest's disk

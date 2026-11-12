@@ -79,3 +79,36 @@ func TestWriteBuildNetworkEphemeral(t *testing.T) {
 		t.Errorf("report:\n%s", buf.String())
 	}
 }
+
+// TestCheckLinkAhead: before any per-build work, the link is checked against
+// the NAT the build would use: the durable network's, the one EnsureNetwork
+// would take, or the default prefix, named, when the host has none.
+func TestCheckLinkAhead(t *testing.T) {
+	const host = "NAT=warden-dev-nat\nPREFIX=10.200.0.0/24\nHOSTIP=10.200.0.1\n"
+	inDefault := mustLink(t, "192.168.240.4/30")
+	inHost := mustLink(t, "10.200.0.4/30")
+	for name, tc := range map[string]struct {
+		out     string
+		durable bool
+		link    buildlink.Link
+		want    string // "" accepts
+	}{
+		"ephemeral, no NAT, link in the default": {"", false, inDefault,
+			"the Hyper-V default NAT prefix " + DefaultNATPrefix},
+		"ephemeral, no NAT, link elsewhere": {"", false, inHost, ""},
+		"ephemeral, host NAT, link in it": {host, false, inHost,
+			`NAT "warden-dev-nat" on this host (10.200.0.0/24)`},
+		"ephemeral, host NAT, link in the default": {host, false, inDefault, ""},
+		"durable, link in its NAT": {host + "SLOT=warden-dev-0\tPrivate\n", true,
+			inHost, `NAT "warden-dev-nat" on this host`},
+		"durable, no slots": {host, true, inDefault, "has no build switches"},
+	} {
+		err := checkLinkAhead(parseNetReadback(tc.out), "warden-dev", tc.durable, tc.link)
+		switch {
+		case tc.want == "" && err != nil:
+			t.Errorf("%s: refused: %v", name, err)
+		case tc.want != "" && (err == nil || !strings.Contains(err.Error(), tc.want)):
+			t.Errorf("%s: err = %v, want %q", name, err, tc.want)
+		}
+	}
+}

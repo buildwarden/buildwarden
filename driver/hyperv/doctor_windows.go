@@ -10,7 +10,11 @@ import "context"
 // source.
 func probeDoctorNet(c Capabilities) doctorNet {
 	dn := doctorNet{DNS: defaultRouteDNS}
-	out, err := runPS(netProbeScript(c.DevSwitch, DefaultNATPrefix))
+	other := DefaultNATPrefix
+	if c.NetworkStrategy() == NetReuseDurable {
+		other = "" // a durable build reads only <network>-nat
+	}
+	out, err := runPS(netProbeScript(c.DevSwitch, other))
 	if err != nil {
 		dn.Err = err
 		return dn

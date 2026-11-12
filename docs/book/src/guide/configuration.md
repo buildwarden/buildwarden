@@ -126,8 +126,8 @@ the ranges BuildWarden uses itself: the container driver's `100.64.87.0/24`,
 Firecracker's upstream `100.64.88.0/22` and qemu's user-mode `10.0.2.0/24`. A
 key is checked when the file loads and the flag when it is read, before any
 work. Hyper-V's NAT is not a fixed range: it is read back from the host, so
-the hyperv driver checks the link against the host's NAT at build start and in
-doctor, naming it (or the default `192.168.240.0/20` when the host has no NAT
+the hyperv driver checks the link against the host's NAT at build start,
+before the seed ISO or any per-build network, and in doctor, naming it (or the default `192.168.240.0/20` when the host has no NAT
 yet, which is where a build would make one). Every VM build
 also refuses a link that holds an address of one of the host's interfaces;
 a host network that merely contains the link (a `/10` CGNAT WAN, say) is

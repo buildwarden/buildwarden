@@ -212,7 +212,10 @@ link and the resolvers
             ephemeral: a per-build Private switch; the dev switch's NAT if
                        present, else the one owning the default prefix, else new
         a NAT prefix that overlaps the build link -> a fix naming that NAT
-            (config load checks no Hyper-V range; this is the one check)
+            (config load checks no Hyper-V range; this is the one check),
+            run first on the NAT read back before the seed ISO and any
+            standup (none yet -> the default prefix, named), then on the NAT
+            the build took
         the resolvers, as above; token := a fresh random claim token
         under a host lock ("hyperv-network"):
             relay address := the lowest free host in the NAT prefix (not the
