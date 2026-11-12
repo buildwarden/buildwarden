@@ -3,7 +3,7 @@ title: wf's merged check misses a squash made after main moved
 priority: 58
 kind: process
 follows: wf-squash-merged-pr
-status: in_progress
+status: done
 round: process
 phase: 4
 design: docs/design/wf-squash-after-base-moved.md
@@ -46,7 +46,7 @@ steps:
   - id: x4-close
     phase: 4
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - x4-escalate-branch
     lease:
@@ -57,8 +57,8 @@ budget:
     runs: 1
     steps: 4
   spent:
-    runs: 1
-    steps: 3
+    runs: 2
+    steps: 4
 questions: []
 history:
   - at: 2026-11-11T10:58:11Z
@@ -109,3 +109,12 @@ history:
   - at: 2026-11-12T20:21:21Z
     by: human/jeff
     event: done x4-escalate-branch
+  - at: 2026-11-12T20:23:56Z
+    by: cloud/20261112T202355Z
+    event: claimed x4-close until 2026-11-12T22:23:56Z
+  - at: 2026-11-12T20:23:56Z
+    by: cloud/20261112T202355Z
+    event: done x4-close
+  - at: 2026-11-12T20:23:56Z
+    by: cloud/20261112T202355Z
+    event: closed; feature done
