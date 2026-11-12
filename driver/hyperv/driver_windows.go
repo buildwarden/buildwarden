@@ -11,6 +11,15 @@ import (
 	"github.com/buildwarden/buildwarden/driver"
 )
 
+// requestedNetwork is the durable network a build names (--network, or
+// [vm] network), else DefaultDevSwitch.
+func requestedNetwork(req *driver.BuildRequest) string {
+	if req.Network == "" {
+		return DefaultDevSwitch
+	}
+	return req.Network
+}
+
 // StartBuild runs a build on Hyper-V: it verifies the isolated network, brings
 // up the relay host (collector + claimed relay VM) and the build VM,
 // waits for completion, and tears everything down. It composes the resolved
@@ -30,10 +39,7 @@ func (d *Driver) StartBuild(
 		defer cancel()
 	}
 
-	sw := req.Network
-	if sw == "" {
-		sw = DefaultDevSwitch
-	}
+	sw := requestedNetwork(req)
 
 	// Privilege and network readiness first: a missing group membership or
 	// elevation is the most common blocker, and it costs nothing to check
