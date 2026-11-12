@@ -204,12 +204,12 @@ steps:
   - id: f6-validate-macos-vz-r2
     phase: 6
     affinity: host:macos-vz
-    status: pending
+    status: done
     needs:
       - f6-consolidate-r4
     lease:
-      claimed_by: host:macos-vz/20261112T213545Z
-      expires: 2026-11-12T23:35:55.350582Z
+      claimed_by: ""
+      expires: null
     note: 'Blocking native validation (design r3, a16; FLOW-09), on the branch after consolidation: (1) a vz macOS build succeeds and its ledger verifies; the host-mode relay''s log lists its resolvers with source claim, the Mac''s from /etc/resolv.conf, and doctor prints the same list. (2) with [vm] dns set to a public resolver other than the Mac''s, the build resolves names through it only (relay log); set to an address with no DNS server, lookups fail (no fallback to the Mac''s). (3) with [vm] dns naming a resolver on 127.0.0.1 (a local forwarder), the build resolves through it. Evidence under native/macos-vz/<date>/.'
   - id: f3-implement-r4
     phase: 3
@@ -816,3 +816,6 @@ history:
   - at: 2026-11-12T21:35:55Z
     by: host:macos-vz/20261112T213545Z
     event: claimed f6-validate-macos-vz-r2 until 2026-11-12T23:35:55Z
+  - at: 2026-11-12T21:40:35Z
+    by: host:macos-vz/20261112T213545Z
+    event: done f6-validate-macos-vz-r2
