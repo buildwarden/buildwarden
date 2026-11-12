@@ -15,7 +15,6 @@ import (
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/buildlink"
 	"github.com/buildwarden/buildwarden/driver/firecracker"
-	"github.com/buildwarden/buildwarden/driver/hyperv"
 	"github.com/buildwarden/buildwarden/driver/qemu"
 	"github.com/buildwarden/buildwarden/relaycfg"
 )
@@ -171,13 +170,14 @@ const exampleDNS = "10.20.0.53"
 // exampleBuildLink is the valid non-default value fixes suggest.
 const exampleBuildLink = "100.126.255.252/30"
 
-// linkRanges are the ranges BuildWarden itself uses, read from the packages
-// that own them; a build link must be disjoint from all of them.
+// linkRanges are the fixed ranges BuildWarden itself uses, read from the
+// packages that own them; a build link must be disjoint from all of them. The
+// Hyper-V NAT is not one: it is read back from the host, and the hyperv
+// driver checks the link against it at build start and in doctor.
 func linkRanges() []buildlink.Range {
 	return []buildlink.Range{
 		{Name: "the container driver's network", CIDR: driver.ContainerBaseCIDR},
 		{Name: "the firecracker driver's upstream range", CIDR: firecracker.UpstreamCIDR},
-		{Name: "the hyperv driver's default NAT", CIDR: hyperv.DefaultNATPrefix},
 		{Name: "qemu's user-mode network", CIDR: qemu.UserNetCIDR},
 	}
 }

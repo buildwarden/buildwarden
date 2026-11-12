@@ -2,6 +2,7 @@ package hyperv
 
 import (
 	"errors"
+	"fmt"
 	"net/netip"
 
 	"github.com/buildwarden/buildwarden/driver"
@@ -27,16 +28,23 @@ type buildNetwork struct {
 
 // checkNATOverlap refuses a build whose NAT prefix overlaps the build link,
 // before any VM boots: the relay's upstream and its build segment would
-// share addresses.
-func checkNATOverlap(nat netip.Prefix, link buildlink.Link) error {
+// share addresses. natName is the NAT read back from the host, "" when the
+// host has none yet and nat is the default prefix a build would make one on;
+// the refusal says which it checked.
+func checkNATOverlap(natName string, nat netip.Prefix, link buildlink.Link) error {
 	if !nat.Overlaps(link.Net) {
 		return nil
+	}
+	which := fmt.Sprintf("the Hyper-V NAT %q on this host (%s)", natName, nat)
+	if natName == "" {
+		which = fmt.Sprintf("the Hyper-V default NAT prefix %s (this host has no "+
+			"NAT for warden yet; a build would make one there)", nat)
 	}
 	return driver.Fixable(
 		"set [vm] build_link in warden.toml (or pass --build-link) to a /30 outside "+
 			nat.String()+", or move the NAT with `warden setup --driver hyperv "+
 			"--nat-prefix <prefix>` from an elevated shell",
-		"the Hyper-V NAT prefix %s overlaps the build link %s", nat, link)
+		"%s overlaps the build link %s", which, link)
 }
 
 // vmDNSFix is the remedy every host-resolver refusal also names.
@@ -131,11 +139,12 @@ func hostAddrs() ([]netip.Addr, error) {
 
 // prepareBuildNetwork runs the checks a build's network takes before any VM:
 // the NAT prefix against the build link, and the relay's resolvers, which it
-// sets into req.DNS for the claim's upstream_dns.
-func prepareBuildNetwork(req *driver.BuildRequest, nat netip.Prefix,
+// sets into req.DNS for the claim's upstream_dns. natName and nat are the NAT
+// the build got, read back from the host.
+func prepareBuildNetwork(req *driver.BuildRequest, natName string, nat netip.Prefix,
 	hostDNS hostDNSSource) error {
 	link := req.Link()
-	if err := checkNATOverlap(nat, link); err != nil {
+	if err := checkNATOverlap(natName, nat, link); err != nil {
 		return err
 	}
 	host, err := hostAddrs()

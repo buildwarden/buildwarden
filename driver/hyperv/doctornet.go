@@ -38,10 +38,10 @@ func writeBuildNetwork(w io.Writer, c Capabilities, dn doctorNet, link buildlink
 		return true
 	}
 	durable := c.NetworkStrategy() == NetReuseDurable
-	prefix, ok := writeNAT(w, c, dn.ReadBack, durable)
+	natName, prefix, ok := writeNAT(w, c, dn.ReadBack, durable)
 	blocked = !ok
 	if prefix.IsValid() {
-		if err := checkNATOverlap(prefix, link); err != nil {
+		if err := checkNATOverlap(natName, prefix, link); err != nil {
 			writeBlocked(w, "NAT and build link", err)
 			blocked = true
 		}
@@ -66,33 +66,34 @@ func writeBuildNetwork(w io.Writer, c Capabilities, dn doctorNet, link buildlink
 	return blocked
 }
 
-// writeNAT reports the NAT a build would use and returns its prefix (the
-// default prefix when a build would make one), and false when a durable build
-// would be refused on it.
-func writeNAT(w io.Writer, c Capabilities, r netReadback, durable bool) (netip.Prefix, bool) {
+// writeNAT reports the NAT a build would use and returns its name and prefix
+// (no name and the default prefix when a build would make one), and false
+// when a durable build would be refused on it.
+func writeNAT(w io.Writer, c Capabilities, r netReadback,
+	durable bool) (string, netip.Prefix, bool) {
 	if durable {
 		res, err := r.durableResources(c.DevSwitch)
 		if err != nil {
 			writeBlocked(w, "NAT", err)
-			return netip.Prefix{}, false
+			return "", netip.Prefix{}, false
 		}
 		fmt.Fprintf(w, "  %s%s (%s, host %s)\n", dotted("NAT"), res.NATName, res.NATPrefix,
 			res.HostIP)
-		return res.NATPrefix, true
+		return res.NATName, res.NATPrefix, true
 	}
 	if r.NAT == "" {
 		prefix := netip.MustParsePrefix(DefaultNATPrefix)
 		fmt.Fprintf(w, "  %snone yet (a build makes one on %s, host %s)\n", dotted("NAT"),
 			prefix, DefaultHostIP)
-		return prefix, true
+		return "", prefix, true
 	}
 	prefix, hostIP, err := r.natAddressing()
 	if err != nil {
 		writeBlocked(w, "NAT", err)
-		return netip.Prefix{}, false
+		return "", netip.Prefix{}, false
 	}
 	fmt.Fprintf(w, "  %s%s (%s, host %s)\n", dotted("NAT"), r.NAT, prefix, hostIP)
-	return prefix, true
+	return r.NAT, prefix, true
 }
 
 // writeSlots reports each durable build switch free or the VMs holding it,

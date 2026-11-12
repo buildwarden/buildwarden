@@ -82,6 +82,20 @@ func TestBadBuildLinkFailsAtLoad(t *testing.T) {
 	}
 }
 
+// TestBuildLinkInHyperVNATLoads: the Hyper-V NAT is read back from the host
+// and checked by the hyperv driver, so config load does not refuse a link
+// in its default prefix (native F3: that refusal named the default while the
+// host's NAT was elsewhere).
+func TestBuildLinkInHyperVNATLoads(t *testing.T) {
+	for _, link := range []string{"192.168.250.4/30", "192.168.240.252/30"} {
+		inConfigDirs(t, "", link)
+		cfg, err := LoadConfig()
+		if err != nil || cfg.VM.BuildLink != link {
+			t.Errorf("%s: cfg %+v, err = %v", link, cfg.VM, err)
+		}
+	}
+}
+
 func TestBuildLinkFlagChecked(t *testing.T) {
 	defer func() { flagBuildLink = "" }()
 	inConfigDirs(t, "", "")
@@ -92,7 +106,6 @@ func TestBuildLinkFlagChecked(t *testing.T) {
 	for flag, want := range map[string]string{
 		"100.64.87.8/30":     "the container driver's network",
 		"100.64.90.0/30":     "the firecracker driver's upstream range",
-		"192.168.240.252/30": "the hyperv driver's default NAT",
 		"10.0.2.0/30":        "qemu's user-mode network",
 		"100.126.0.2/30":     "did you mean 100.126.0.0/30",
 	} {

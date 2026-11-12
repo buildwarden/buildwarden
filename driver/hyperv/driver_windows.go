@@ -93,7 +93,7 @@ func (d *Driver) StartBuild(
 		return nil, err
 	}
 	defer cleanupNet()
-	if err := prepareBuildNetwork(req, bnet.NATPrefix, defaultRouteDNS); err != nil {
+	if err := prepareBuildNetwork(req, bnet.NAT, bnet.NATPrefix, defaultRouteDNS); err != nil {
 		return nil, fmt.Errorf("hyperv build: %w", err)
 	}
 

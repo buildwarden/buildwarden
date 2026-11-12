@@ -20,20 +20,52 @@ func addrs(ss ...string) []netip.Addr {
 }
 
 // TestCheckNATOverlap: a NAT prefix overlapping the build link is refused
-// before any VM, naming both fixes.
+// before any VM, naming both fixes and the NAT it checked: the one read back
+// from the host, or the default prefix when the host has none yet.
 func TestCheckNATOverlap(t *testing.T) {
 	nat := netip.MustParsePrefix("100.127.0.0/16")
-	err := checkNATOverlap(nat, buildlink.Default())
+	err := checkNATOverlap("warden-dev-nat", nat, buildlink.Default())
 	var fe *driver.FixableError
 	if !errors.As(err, &fe) || !strings.Contains(fe.Fix, "[vm] build_link") ||
 		!strings.Contains(fe.Fix, "--nat-prefix") ||
-		!strings.Contains(fe.Msg, "100.127.0.0/16") {
+		fe.Msg != `the Hyper-V NAT "warden-dev-nat" on this host (100.127.0.0/16) `+
+			"overlaps the build link 100.127.255.252/30" {
 		t.Fatalf("err = %v", err)
 	}
-	if err := checkNATOverlap(netip.MustParsePrefix(DefaultNATPrefix),
+	if err := checkNATOverlap("", netip.MustParsePrefix(DefaultNATPrefix),
 		buildlink.Default()); err != nil {
 		t.Errorf("the defaults overlap: %v", err)
 	}
+
+	// native F3: a host NAT on 192.168.250.0/24 is named, not the default.
+	link, err := buildlink.Parse("192.168.250.4/30")
+	if err != nil {
+		t.Fatal(err)
+	}
+	err = checkNATOverlap("warden-dev-nat", netip.MustParsePrefix("192.168.250.0/24"), link)
+	if err == nil || !strings.Contains(err.Error(),
+		`NAT "warden-dev-nat" on this host (192.168.250.0/24)`) ||
+		strings.Contains(err.Error(), DefaultNATPrefix) {
+		t.Errorf("read-back NAT: err = %v", err)
+	}
+	if err := checkNATOverlap("", netip.MustParsePrefix("192.168.250.0/24"),
+		mustLink(t, "192.168.240.4/30")); err != nil {
+		t.Errorf("a link in the default prefix, outside the host's NAT: %v", err)
+	}
+	err = checkNATOverlap("", netip.MustParsePrefix(DefaultNATPrefix), link)
+	if err == nil || !strings.Contains(err.Error(), "the Hyper-V default NAT prefix "+
+		DefaultNATPrefix+" (this host has no NAT for warden yet") {
+		t.Errorf("no NAT yet: err = %v", err)
+	}
+}
+
+func mustLink(t *testing.T, s string) buildlink.Link {
+	t.Helper()
+	link, err := buildlink.Parse(s)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return link
 }
 
 // hostDNS is a host source returning list from "interface Ethernet".
@@ -93,7 +125,7 @@ func TestVMDNSUsedExclusively(t *testing.T) {
 		}
 	}
 	req := &driver.BuildRequest{DNS: addrs("10.20.0.53")}
-	if err := prepareBuildNetwork(req, nat, never); err != nil ||
+	if err := prepareBuildNetwork(req, "warden-dev-nat", nat, never); err != nil ||
 		resolvers.Join(req.DNS) != "10.20.0.53" {
 		t.Errorf("prepareBuildNetwork: %v, DNS %v", err, req.DNS)
 	}
@@ -103,11 +135,11 @@ func TestVMDNSUsedExclusively(t *testing.T) {
 // resolvers land in req.DNS for the claim.
 func TestPrepareBuildNetwork(t *testing.T) {
 	req := &driver.BuildRequest{}
-	if err := prepareBuildNetwork(req, netip.MustParsePrefix("100.127.0.0/16"),
+	if err := prepareBuildNetwork(req, "warden-dev-nat", netip.MustParsePrefix("100.127.0.0/16"),
 		hostDNS("10.9.0.53")); err == nil || !strings.Contains(err.Error(), "overlaps") {
 		t.Errorf("overlap: %v", err)
 	}
-	if err := prepareBuildNetwork(req, netip.MustParsePrefix(DefaultNATPrefix),
+	if err := prepareBuildNetwork(req, "warden-dev-nat", netip.MustParsePrefix(DefaultNATPrefix),
 		hostDNS("203.0.113.53")); err != nil || resolvers.Join(req.DNS) != "203.0.113.53" {
 		t.Errorf("host's: %v, DNS %v", err, req.DNS)
 	}
