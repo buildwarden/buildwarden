@@ -1,0 +1,34 @@
+feature: loop-repository
+title: 'Loop repository: move the queue, wf, the skills and the agents to their own repository and make wf work across repositories, with holds per component (componentization P1, second part)'
+priority: 60
+kind: process
+holds:
+  - cloud
+  - host:*
+status: queued
+round: process
+phase: 1
+design: docs/design/loop-repository.md
+branch: feat/loop-repository
+alters_relationships: null
+source: 'componentization (docs/design/componentization.md, merged as b903f65, PR #117): phase P1, wave 1, after loop-contract. Holds cloud and host:* while in progress: the design''s risk ''P1 pauses the loop while the queue moves''. The repository''s name (provisional: buildwarden-ai-workflow) is confirmed with Jeff right before it is created (a11). Jeff, attended session 2026-11-12: go ahead.'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 3
+    steps: 10
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-12T23:22:53Z
+    by: human/jeff
+    event: queued at priority 60 (intake)

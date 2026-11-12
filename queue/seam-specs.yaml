@@ -1,0 +1,30 @@
+feature: seam-specs
+title: 'Specs repository and conformance suites: write seams 1, 2, 3, 5 and 6, build the harness against any relay and any collector, link the book and the specs, fill tier 1''s seams list (componentization S1)'
+priority: 61
+status: queued
+round: feature
+phase: 0
+design: docs/design/seam-specs.md
+branch: feat/seam-specs
+alters_relationships: null
+source: 'componentization (docs/design/componentization.md, merged as b903f65, PR #117): phase S1, wave 1. Done when the suites pass against the Go relay and the disk collector. The repository buildwarden/buildwarden-specs (a10) is confirmed with Jeff right before it is created (a11). Jeff, attended session 2026-11-12: go ahead.'
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 5
+    steps: 30
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-12T23:22:53Z
+    by: human/jeff
+    event: queued at priority 61 (intake)

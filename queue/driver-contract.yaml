@@ -1,0 +1,30 @@
+feature: driver-contract
+title: 'Complete the driver contract in-tree, including the relay source: cmd/warden stops naming drivers and drivertest exists (componentization K1)'
+priority: 62
+status: queued
+round: feature
+phase: 0
+design: docs/design/driver-contract.md
+branch: feat/driver-contract
+alters_relationships: null
+source: 'componentization (docs/design/componentization.md, merged as b903f65, PR #117): phase K1 (wave 2 by the order table; the design says it does not depend on the relay and can start as soon as P0 merges). Done when adding a driver touches only its own directory. Jeff, attended session 2026-11-12: go ahead.'
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 5
+    steps: 30
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-12T23:22:53Z
+    by: human/jeff
+    event: queued at priority 62 (intake)

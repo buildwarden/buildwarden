@@ -1,0 +1,31 @@
+feature: loop-contract
+title: 'Loop Contract: finish it against the running loop (spec-first and design-first work) and split docs/development/ into project invariants and loop rules (componentization P1, first part)'
+priority: 59
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/loop-contract.md
+branch: feat/loop-contract
+alters_relationships: null
+source: 'componentization (docs/design/componentization.md, merged as b903f65, PR #117): phase P1, wave 1. P1 is filed as two items so the contract''s design does not hold the cloud worker while S1 and K1 run; this one holds nothing. Jeff, attended session 2026-11-12: go ahead.'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 2
+    steps: 8
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-12T23:22:53Z
+    by: human/jeff
+    event: queued at priority 59 (intake)
