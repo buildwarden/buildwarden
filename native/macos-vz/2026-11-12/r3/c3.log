@@ -1,0 +1,13 @@
+warden: build SUCCEEDED (output: ../out-vz-c3)
+--- relay.log
+2026/11/12 14:33:09 relay: awaiting claim on 127.0.0.1:53143
+2026/11/12 14:33:09 relay: host mode, fd 3, link 100.127.255.252/30, relay 100.127.255.253, guest 100.127.255.254
+2026/11/12 14:33:09 relay: upstream resolvers: 127.0.0.1 (claim)
+2026/11/12 14:33:09 relay: environment recorded (2264 bytes)
+2026/11/12 14:33:09 relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp
+2026/11/12 14:33:09 relay: claimed
+2026/11/12 14:33:13 netstack: learned guest MAC 5a:11:bd:75:1b:62
+2026/11/12 14:33:13 netstack: DHCP OFFER 100.127.255.254 to 5a:11:bd:75:1b:62
+2026/11/12 14:33:14 netstack: DHCP ACK 100.127.255.254 to 5a:11:bd:75:1b:62
+2026/11/12 14:33:14 netstack: DHCP OFFER 100.127.255.254 to 5a:11:bd:75:1b:62
+2026/11/12 14:33:15 netstack: DHCP ACK 100.127.255.254 to 5a:11:bd:75:1b:62
