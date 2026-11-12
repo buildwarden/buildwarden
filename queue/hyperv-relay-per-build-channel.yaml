@@ -4,7 +4,7 @@ priority: 51
 follows: build-link-subnet
 status: in_progress
 round: feature
-phase: 5
+phase: 6
 design: docs/design/hyperv-relay-per-build-channel.md
 branch: feat/hyperv-relay-per-build-channel
 alters_relationships: true
@@ -33,6 +33,7 @@ steps:
       - f6-consolidate-r2
       - f6-consolidate-r3
       - f6-consolidate-r4
+      - f6-consolidate-r5
     lease:
       claimed_by: ""
       expires: null
@@ -253,6 +254,8 @@ steps:
     phase: 6
     affinity: host:qemu-any
     status: pending
+    needs:
+      - f6-consolidate-r5
     lease:
       claimed_by: ""
       expires: null
@@ -261,6 +264,8 @@ steps:
     phase: 6
     affinity: host:macos-vz
     status: pending
+    needs:
+      - f6-consolidate-r5
     lease:
       claimed_by: ""
       expires: null
@@ -282,7 +287,35 @@ steps:
   - id: f5-guide-r5
     phase: 5
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main-r5
+    phase: 6
+    affinity: cloud
     status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate-r5
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-merge-main-r5
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr-r5
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-consolidate-r5
+      - f6-validate-windows-hyperv
+      - f6-validate-qemu-any-r3
+      - f6-validate-macos-vz-r3
     lease:
       claimed_by: ""
       expires: null
@@ -292,7 +325,7 @@ budget:
     steps: 40
   spent:
     runs: 8
-    steps: 39
+    steps: 40
 questions:
   - id: a1
     kind: assumed
@@ -883,3 +916,12 @@ history:
   - at: 2026-11-12T22:20:49Z
     by: cloud/20261112T204543Z
     event: entered phase 5 (guide)
+  - at: 2026-11-12T22:21:27Z
+    by: cloud/20261112T204543Z
+    event: claimed f5-guide-r5 until 2026-11-13T00:21:27Z
+  - at: 2026-11-12T22:21:27Z
+    by: cloud/20261112T204543Z
+    event: done f5-guide-r5
+  - at: 2026-11-12T22:21:27Z
+    by: cloud/20261112T204543Z
+    event: entered phase 6 (publish)
