@@ -10,7 +10,7 @@ Nothing.
 
 | Pri | Feature | Kind | Phase | Next steps | Steps spent / est. |
 |---|---|---|---|---|---|
-| 24 | componentization | process | 4 close | x4-close (cloud) | 2 / 8 |
+| 24 | componentization | process | 4 close | x4-close (cloud, leased) | 3 / 8 |
 
 ## Backlog
 
