@@ -63,7 +63,7 @@ func clean(ctx context.Context, out io.Writer, prov cleaner, tempDir string,
 			ids = append(ids, id)
 		}
 	}
-	for _, prefix := range []string{"warden-build-", "warden-relay-"} {
+	for _, prefix := range []string{"warden-build-", relayVMPrefix} {
 		names, err := prov.ListVMs(ctx, prefix)
 		if err != nil {
 			fmt.Fprintf(out, "Not checking Hyper-V VMs: %v\n", err)

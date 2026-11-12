@@ -78,9 +78,10 @@ func allocRelayIP(prefix netip.Prefix, hostIP netip.Addr,
 		held = strings.Join(holders, ", ")
 	}
 	return netip.Addr{}, driver.Fixable(
-		"wait for a running build to finish, remove a relay VM kept with "+
-			"--keep-vms (Remove-VM -Name <name>), or run `warden setup --driver "+
-			"hyperv --nat-prefix <a larger prefix>` from an elevated shell",
+		"wait for a running build to finish, remove VMs kept with --keep-vms "+
+			"or left by a killed warden with `warden clean --driver hyperv`, or "+
+			"run `warden setup --driver hyperv --nat-prefix <a larger prefix>` "+
+			"from an elevated shell",
 		"the NAT prefix %s has no free address for this build's relay "+
 			"(host %s; relay VMs holding addresses: %s)", prefix, hostIP, held)
 }
@@ -98,9 +99,10 @@ func allocSlot(slots []string, attached map[string][]string) (string, error) {
 		busy = append(busy, sw+" ("+strings.Join(vms, ", ")+")")
 	}
 	return "", driver.Fixable(
-		"wait for a running build to finish, remove a VM kept with --keep-vms "+
-			"(Remove-VM -Name <name>), or run `warden setup --driver hyperv "+
-			"--slots <more>` from an elevated shell",
+		"wait for a running build to finish, remove VMs kept with --keep-vms "+
+			"or left by a killed warden with `warden clean --driver hyperv`, or "+
+			"run `warden setup --driver hyperv --slots <more>` from an elevated "+
+			"shell",
 		"all %d durable build switches are in use: %s", len(slots),
 		strings.Join(busy, "; "))
 }

@@ -339,7 +339,8 @@ warden setup --driver hyperv --slots 8
 It makes one Private build switch per concurrent build (`--slots`, default 4),
 the Internal NAT switch and its NAT rule. A durable build takes the lowest
 switch with nothing attached; with all in use it is refused, naming the VMs on
-each and `--slots`. Upgrading from a warden whose setup made one build switch
+each, `warden clean --driver hyperv` (for VMs a `--keep-vms` build or a
+killed warden left) and `--slots`. Upgrading from a warden whose setup made one build switch
 needs this one elevated run again: it makes the slots and retires the old
 switch.
 

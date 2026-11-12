@@ -142,8 +142,9 @@ Each build gets its own relay address on the NAT, its own claim token and one
 of the build switches `warden setup` made, so you can start several builds at
 once, up to the `--slots` you set up (4 by default). One more is refused
 before any VM boots, naming the VMs on each switch and `--slots`. A
-`--keep-vms` build keeps its switch until you remove its VMs; doctor lists
-the switch as `in use by` them.
+`--keep-vms` build keeps its switch until you remove its VMs with
+`warden clean --driver hyperv`; until then doctor lists the switch as
+`in use by` them. Clean never removes the build switches themselves.
 
 The Windows build VM takes its address from the relay's DHCP lease. A guest
 that gets no lease waits for the relay, fails, and powers off; its

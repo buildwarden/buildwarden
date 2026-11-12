@@ -468,13 +468,16 @@ confirmed at r1 and r2, stand unchanged.
      -SwitchName`), the VM-lifecycle tier. Elevated and service-delegated
      builds keep their ephemeral per-build switch (`warden-<buildID>`), as
      today; nothing changes for them.
-   - **What a durable build holds.** No lock for its lifetime. Under
+   - **What a durable build holds.** No slot lock for its lifetime (the
+     `hyperv-build-<id>` lock hyperv-clean added is held for the run, but
+     only keeps `warden clean` off a live build; it does not hold a slot). Under
      `driver.HostLock("hyperv-network")`, the allocator of Decision 4 also
      picks the lowest slot switch that no VM adapter is attached to, and
      `CreateRelayVM` attaches the relay's build NIC to it before the lock is
      released. The attachment is the hold, read from Hyper-V like the
      relay's Notes: it survives a crash and a `--keep-vms` run, and is freed
-     when the relay VM is removed (teardown, `warden` reaping, or the user).
+     when the relay VM is removed (teardown, `warden clean --driver hyperv`,
+     or the user).
      The relay VM's Notes also carry `warden-relay-switch=<name>`, so doctor
      can name which build holds which slot. The build VM attaches to the
      same switch later; an attached build VM alone also marks a slot busy.
@@ -1313,7 +1316,7 @@ These go to `security-suite` at Consolidation, as build-link-subnet's did.
      addresses and a DHCP DISCOVER get no answer from B. A third concurrent
      durable build is refused before any VM, naming both slots' holders and
      `--slots`. With `--keep-vms`, the kept build's slot stays busy (doctor
-     names it) until its VMs are removed.
+     names it) until its VMs are removed (`warden clean --driver hyperv`).
   7. *Refusals.* A `[vm] build_link` inside the durable NAT's prefix is
      refused at build start and in doctor; with the host's default-route
      interface given only `127.0.0.1` as DNS server and no `[vm] dns`, the
@@ -2244,6 +2247,53 @@ reports a stale service in doctor and refuses a non-elevated build with
 absent (GLOBAL-11), within plan task 28; Compatibility gained the protocol-1 row
 (2dc2cfa). Review r3 (a844603): 0 MUST; SHOULD S7 (the Windows-only `probeService`
 mapping is untested) is carried by native case 0 of `f6-validate-windows-hyperv`.
+
+**r4 (2026-11-12).** Native r4 on windows-hyperv found F1 to F5 and review r4
+M4, S8, S9 and S10; tasks 51 to 60 fixed them and the guide pass followed
+(`70b3e4d`). Review r4 (`1a41618`): 0 MUST, S1, S2, S4, S5 and S6 still open
+for the PR body as listed above. `main` merged at `6b2ab14` (merge commit
+`d1b2000`), bringing four PRs:
+
+- **#114 hyperv-clean.** `driver/hyperv/clean.go`, `warden clean --driver
+  hyperv`, and `StartBuild` holding `hyperv-build-<id>` for the whole run.
+  Seams checked: clean matches only 8-character build IDs under
+  `warden-build-` and `warden-relay-`, so the slot switches
+  (`<network>-<i>`), `<network>-nat` and prepare VMs are never its; its
+  `TeardownNetwork("warden-<id>")` removes an elevated or service build's
+  ephemeral switch and is a no-op for a durable build, whose hold on a slot
+  is its VMs' adapters (Decision 7). Removing a kept build's VMs is what frees
+  its slot and relay address, so clean is now the remedy: the
+  all-slots-busy and NAT-prefix-full refusals (`allocSlot`, `allocRelayIP`)
+  name `warden clean --driver hyperv` in place of `Remove-VM -Name <name>`,
+  and `TestAllocSlot`/`TestAllocRelayIPFull` pin it; the drivers guide's
+  Setup, first-build's Hyper-V section and validation case 6 say the same.
+  Decision 7's "No lock for its lifetime" now reads "no slot lock", since
+  `hyperv-build-<id>` is held for the run but only keeps clean off a live
+  build. `clean.go` lists relay VMs by this branch's `relayVMPrefix`.
+- **Host locks, one scheme and one place.** All Hyper-V host locks are
+  `hyperv-<what>` through `driver.HostLock`/`TryHostLock`: `hyperv-build-<id>`
+  (#114), `hyperv-network` (Decision 4), `hyperv-iso` (task 51) and
+  `hyperv-prepare` (hyperv-windows-prepare). `overview.md` now lists them
+  under the Hyper-V driver, with the clean flow beside StartBuild's.
+- **#112 guest-binary-cache-per-tree.** `driver.GuestBinary` keyed by
+  source tree. The one seam is `winseed.go` staging `warden-io.exe` into the
+  build seed, which copies from the path `GuestBinary` returns and never
+  assumed the flat cache layout; no change.
+- **#111** (Windows test fixes) and **#113** (wf check test line endings):
+  no overlap.
+
+`relay-claim`, `bootstrap-model`, `executor-initialize` and
+`relay-guest-api`: unchanged since r3. No new follow-up.
+
+*FLOW-15 sweep.* `make deadcode` (linux, darwin, windows) against `main`
+(`6b2ab14`): `cidrPrefixLen` leaves the list, and `service_other.go`'s
+non-Windows stub is listed as `probeService` where `main` has
+`serviceReachable` (the rename of task 28's probe, reachable on windows);
+nothing else differs. Duplication: the relay VM name prefix had a second
+literal in #114's `clean.go`, now `relayVMPrefix`; the rest as at r1.
+`overview.md` matches the code after the merge (the per-build lock, clean,
+the host locks, the NAT check before any per-build work, the stopped and
+unread service states).
 
 ## Rollback notes
 

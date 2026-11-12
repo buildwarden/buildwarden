@@ -199,6 +199,8 @@ link and the resolvers
                  default 4), trim unattached extras, retire an unattached old
                  <network> switch
     hyperv build (StartBuild):
+        hold the host lock "hyperv-build-<id>" from the build ID's creation
+            to StartBuild's return
         the network strategy: elevated -> a per-build network; else the
             privileged service at this protocol -> a per-build network through
             it; a service at another protocol (or failing its ping) -> a fix
@@ -238,6 +240,19 @@ link and the resolvers
         the build VM joins the relay's switch; before it starts, the slot's
         adapters must be exactly the relay's build NIC and the build VM's,
         else refuse; removing the relay VM frees its address and slot
+    hyperv clean (`warden clean --driver hyperv`): for each 8-character build
+        ID among warden-build-*, warden-relay-* VMs and warden-hyperv-* work
+        dirs whose "hyperv-build-<id>" lock it gets (not running): remove its
+        VMs, then its ephemeral warden-<id> switch, then its work dirs; the
+        NAT, the slot switches (<network>-<i>) and prepare VMs stay, so this
+        frees a slot a --keep-vms build or a killed warden held
+    hyperv host locks (driver.HostLock / TryHostLock, all "hyperv-<what>"):
+        "hyperv-build-<id>"  one build's whole run; clean skips a held one
+        "hyperv-network"     relay address and slot, through the relay VM's
+                             creation
+        "hyperv-iso"         IMAPI2 seed ISO creation
+        "hyperv-prepare"     image prepare; a build tries it to see whether a
+                             background refresh is already running
     the build VM boots only after the claim returns
 
 isolate:   the build VM's only network interface leads to the relay

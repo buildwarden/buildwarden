@@ -59,8 +59,8 @@ func TestAllocRelayIP(t *testing.T) {
 }
 
 // TestAllocRelayIPFull: a /30 holds two hosts, the host IP and one relay; a
-// second relay is refused naming the first's VM, and the broadcast address is
-// never handed out.
+// second relay is refused naming the first's VM and `warden clean`, and the
+// broadcast address is never handed out.
 func TestAllocRelayIPFull(t *testing.T) {
 	pfx := netip.MustParsePrefix("10.200.0.0/30")
 	host := netip.MustParseAddr("10.200.0.1")
@@ -72,15 +72,15 @@ func TestAllocRelayIPFull(t *testing.T) {
 	_, err = allocRelayIP(pfx, host, notes)
 	var fe *driver.FixableError
 	if !errors.As(err, &fe) || !strings.Contains(fe.Msg, "warden-relay-held (10.200.0.2)") ||
-		!strings.Contains(fe.Fix, "--keep-vms") ||
+		!strings.Contains(fe.Fix, "warden clean --driver hyperv") ||
 		!strings.Contains(fe.Fix, "--nat-prefix") {
 		t.Fatalf("err = %v", err)
 	}
 }
 
 // TestAllocSlot: the lowest slot with no adapter attached; a build VM alone
-// marks a slot busy; all busy is refused naming each slot's holders and
-// --slots.
+// marks a slot busy; all busy is refused naming each slot's holders,
+// `warden clean` and --slots.
 func TestAllocSlot(t *testing.T) {
 	slots := []string{"warden-dev-0", "warden-dev-1", "warden-dev-2"}
 	got, err := allocSlot(slots, map[string][]string{
@@ -102,6 +102,7 @@ func TestAllocSlot(t *testing.T) {
 		!strings.Contains(fe.Msg, "warden-dev-0 (warden-relay-a, warden-build-a)") ||
 		!strings.Contains(fe.Msg, "warden-dev-1 (warden-build-kept)") ||
 		!strings.Contains(fe.Fix, "--slots <more>") ||
+		!strings.Contains(fe.Fix, "warden clean --driver hyperv") ||
 		!strings.Contains(fe.Fix, "elevated") {
 		t.Fatalf("err = %v", err)
 	}
