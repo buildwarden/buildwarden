@@ -1,0 +1,2 @@
+warden: build VM "warden-build-ehp4yzis" COM1 -> \\.\pipe\warden-build-ehp4yzis (attach a serial reader to observe guest boot)
+warden: build SUCCEEDED (output: ../ev/r5-b)

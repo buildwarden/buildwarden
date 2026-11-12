@@ -11,11 +11,10 @@ Nothing.
 | Pri | Feature | Kind | Phase | Next steps | Steps spent / est. |
 |---|---|---|---|---|---|
 | 24 | componentization | process | 2 implement | x2-implement (cloud) | 1 / 8 |
-| 51 | hyperv-relay-per-build-channel | fix (follows build-link-subnet) | 6 publish | f6-validate-windows-hyperv (host:windows-hyperv), f6-validate-qemu-any-r3 (host:qemu-any), f6-validate-macos-vz-r3 (host:macos-vz) | 42 / 40 |
+| 51 | hyperv-relay-per-build-channel | fix (follows build-link-subnet) | 6 publish | f6-validate-qemu-any-r3 (host:qemu-any), f6-validate-macos-vz-r3 (host:macos-vz) | 43 / 40 |
 
 ## Waiting on a host
 
-- **hyperv-relay-per-build-channel**: `f6-validate-windows-hyperv` on windows-hyperv
 - **hyperv-relay-per-build-channel**: `f6-validate-qemu-any-r3` on qemu-any
 - **hyperv-relay-per-build-channel**: `f6-validate-macos-vz-r3` on macos-vz
 
