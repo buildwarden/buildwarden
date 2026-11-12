@@ -214,7 +214,7 @@ func newLauncherRepo(t *testing.T) string {
 	git := func(args ...string) {
 		t.Helper()
 		cfg := []string{"-c", "user.name=t", "-c", "user.email=t@t",
-			"-c", "commit.gpgsign=false"}
+			"-c", "commit.gpgsign=false", "-c", "core.autocrlf=false"}
 		cmd := exec.Command("git", append(cfg, args...)...)
 		cmd.Dir = repo
 		if out, err := cmd.CombinedOutput(); err != nil {

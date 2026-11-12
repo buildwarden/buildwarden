@@ -424,6 +424,10 @@ warden build --driver hyperv --guest-os windows ./win-project
 `--image <disk>` overrides the prepared base with a disk that already carries
 the `warden-run` startup task; a stock, unprepared image would wait at OOBE.
 
+`--keep-vms` leaves the build and relay VMs, the build's ephemeral switch and
+its work dir in place. `warden clean --driver hyperv` removes them, and what a
+killed warden left behind, for every build that is no longer running.
+
 ### Where the image cache lives
 
 Prepared images and the relay boot disk are cached in

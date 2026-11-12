@@ -43,7 +43,13 @@ func (d *Driver) StartBuild(
 		return nil, err
 	}
 
-	buildID := driver.RandAlphaNum(8)
+	buildID := driver.RandAlphaNum(buildIDLen)
+	// Held for the whole build, so `warden clean` leaves this build alone.
+	unlockBuild, err := driver.HostLock(buildLockName(buildID))
+	if err != nil {
+		return nil, fmt.Errorf("hyperv build: %w", err)
+	}
+	defer unlockBuild()
 
 	relayBoot, chain, isWindows, generation, err := resolveBuildDisks(req)
 	if err != nil {

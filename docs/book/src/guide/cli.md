@@ -360,6 +360,15 @@ killed, or by `--keep-vms`), and removes the work dirs and per-build rootfs
 copies of builds that are no longer running and the partial raw images
 (`*.raw.tmp`) of image conversions that were killed.
 
+With `--driver hyperv` it needs no container runtime either: for each build
+that is no longer running (left by a warden that was killed, or by
+`--keep-vms`), it removes its `warden-build-<id>` and `warden-relay-<id>` VMs,
+then its ephemeral `warden-<id>` switch, then its `warden-hyperv-<id>-*` work
+dir (in `[build] tmpdir` when set, else the OS temp dir). A running build holds a lock
+that keeps clean away from it. The durable switches and NAT from `warden
+setup`, and prepare VMs (the next `warden image prepare` reaps those), stay.
+Run it as a Hyper-V Administrator.
+
 | Flag | Description |
 |------|-------------|
 | `--cache` | Also remove warden's whole cache directory. The next VM build downloads and prepares its images again. |
