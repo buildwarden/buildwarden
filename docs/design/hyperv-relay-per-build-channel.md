@@ -2148,6 +2148,15 @@ regression on `main` and files none.
   Hyper-V setup and StartBuild flow (NAT read back, allocator, slots, seed),
   the relay's claim handling of `upstream_dns` and the relay VM init.
 
+**r3 (2026-11-12).** Native validation on windows-hyperv (976ae9f) found that a
+privileged service installed by main (protocol 1) read as "not installed", so the
+plan's reinstall refusal never reached the user. f3-implement-r3 (ff17b4e..a844603)
+reports a stale service in doctor and refuses a non-elevated build with
+`warden hyperv service uninstall` then `install` (UX-04), never treating it as
+absent (GLOBAL-11), within plan task 28; Compatibility gained the protocol-1 row
+(2dc2cfa). Review r3 (a844603): 0 MUST; SHOULD S7 (the Windows-only `probeService`
+mapping is untested) is carried by native case 0 of `f6-validate-windows-hyperv`.
+
 ## Rollback notes
 
 None yet. One named contingency, never a runtime fallback (Decision 11): if
