@@ -20,7 +20,7 @@ concepts: [componentization, component-independence, driver-contract, driver-bin
            seams, specs-repo, conformance, relay-split, relay-release-forms, host-mode,
            truststore, build-link-contract, collector, loop-contract, feature-freeze, program]
 related: [unified-bootstrap.md, tier1-static-checks.md, specs-migration.md,
-          build-link-subnet.md, firecracker-driver.md, ledger-environment-types.md,
+          build-link-subnet.md, firecracker-driver.md,
           design-approved-rule-changes.md, workflow-streamline.md, native-host-loop.md]
 ---
 
@@ -82,8 +82,6 @@ work until most of it has landed (2026-11-12).
 - [`firecracker-driver`](firecracker-driver.md), Decision 4: durable network
   slots made by `warden setup`. That is the case the second class of
   build-link conformance exists for.
-- [`ledger-environment-types`](ledger-environment-types.md): the signed
-  environment record. Decision 10 proposes one more fact in it.
 - [`design-approved-rule-changes`](design-approved-rule-changes.md): a
   feature's design review may approve a rule change by name. Program items
   use that route for the rule changes listed under **Design**.
@@ -150,7 +148,10 @@ alternatives are the ones weighed in those sessions.
     slots are a host bridge and TAPs). Alternatives: name firecracker as an
     exception (does not work for an integrator's driver); loosen the wording
     until firecracker passes (the by-construction property is then stated
-    nowhere).
+    nowhere). The class is documented with each driver and is not recorded in
+    the ledger: a driver may move from one class to the other as its
+    environment's features or its implementation change, and the ledger's
+    metadata should not have to change when it does.
 11. **The relay ships native binaries usable at host level on every supported
     operating system and architecture, as well as unikernel images.** More
     release forms, such as cloud images, may follow. Host mode is built during
@@ -167,12 +168,14 @@ alternatives are the ones weighed in those sessions.
     both spec-first and design-first, depending on what is being implemented.
 14. **Feature freeze.** Once this design is approved, all other feature
     development stops until the large majority of the program has landed.
-    Queue items now on hold are not carried forward; each goes through intake
-    again afterwards.
+    Queue items now on hold are not carried forward: they are closed now, and
+    each goes through intake again afterwards (see **Items closed for
+    re-intake**).
 15. **BuildWarden carries forks of Hermit** (`hermit-kernel`, `hermit-loader`,
     `hermit-rs`). Nothing is raised with `hermit-os` until BuildWarden is
     verified fully working and performant, so there is a working example to
-    point to.
+    point to. That point is the end of M6: every driver has adopted the Rust
+    relay and the Go relay is retired.
 16. **`buildwarden-relay` goes public at M1.**
 17. **An index of known drivers** lets a driver be updated on its own
     schedule. It is the program's last phase and needs its own design.
@@ -199,43 +202,41 @@ None.
 
 ### Assumed
 
-- **a1.** Proceeding with a collector specification in two parts, the outputs
-  a collector stores and the inputs and signals it serves, so a different
-  collector can take over the outputs later; confirm. Option: one undivided
-  protocol.
-- **a2.** Proceeding with a storage boundary inside the collector in K1, with
-  disk as its only implementation; confirm. Option: leave the collector as it
-  is until an alternative collector is designed.
-- **a3.** Proceeding with host mode built for Linux first, then macOS, and
-  Windows only once a frame transport for it is designed; confirm. The Go
-  relay refuses host mode on Windows, and nothing on Windows hands frames to
-  a host process today. Option: Windows host mode is required in M3.
-- **a4.** Proceeding with two exemptions from the freeze, a fix for a
-  regression on `main` and a fix for a security problem, and with Jeff ending
-  the freeze no earlier than the pilot driver's release (wave 4); confirm.
-- **a5.** Proceeding with FLOW-05's `alters_relationships` limit raised from
-  1 to 3 in `config.yaml` while the program runs, and the limit of 5 features
-  in progress unchanged; confirm. Nearly every program item alters
-  relationships, and at 1 each would wait for the one ahead to merge.
-- **a6.** Proceeding with FLOW-15's overview sweep deferred, within a phase,
-  to the phase's last item; confirm. Option: sweep at every item's Publish.
-- **a7.** Proceeding with the signed environment record naming the build-link
-  class a build ran under, so a verifier can require by-construction;
-  confirm. It is a ledger metadata change, made in S3.
-- **a8.** Proceeding with the held queue items left as they are, on hold,
-  until P1 moves the queue; P1 does not carry them over and records their
-  names and branches for re-intake; confirm. Option: close them now.
-- **a9.** Proceeding with "verified fully working and performant" (Decision
-  15) meaning that at least one driver has adopted the unikernel relay (M6)
-  with its throughput measured; confirm.
-- **a10.** Proceeding with `buildwarden/buildwarden-specs` as the specs
-  repository's name; confirm.
-- **a11.** Proceeding with Jeff creating the new repositories (loop, specs,
-  one per driver) and making `buildwarden-relay` public; agents do not create
-  repositories or change their visibility; confirm.
-- **a12.** Proceeding with this review's acceptance of the Bootstrap
-  comparison below covering the program's three model changes, each then
-  declared and made by the item named there; confirm.
+All twelve were settled in the design review of 2026-11-12. Each entry says
+what was drafted and what was decided.
+
+- **a1.** Confirmed. The collector specification is written in two parts, the
+  outputs a collector stores and the inputs and signals it serves, so a
+  different collector can take over the outputs later.
+- **a2.** Changed. Drafted as a storage boundary inside the collector in K1.
+  Decided: the collector gets no storage boundary in this program; it is
+  designed with the first alternative collector.
+- **a3.** Confirmed. Host mode is built for Linux first, then macOS, and for
+  Windows only once a frame transport for it is designed. The Go relay
+  refuses host mode on Windows, and nothing on Windows hands frames to a host
+  process today.
+- **a4.** Confirmed. The freeze exempts a fix for a regression on `main` and a
+  fix for a security problem, and Jeff ends it no earlier than the pilot
+  driver's release (wave 4).
+- **a5.** Confirmed. FLOW-05's `alters_relationships` limit is raised from 1
+  to 3 in `config.yaml` while the program runs; the limit of 5 features in
+  progress is unchanged.
+- **a6.** Confirmed. FLOW-15's overview sweep is deferred, within a phase, to
+  the phase's last item.
+- **a7.** Changed. Drafted as the signed environment record naming the
+  build-link class. Decided: the class is not recorded in the ledger
+  (Decision 10 gives the reason).
+- **a8.** Changed. Drafted as leaving the held queue items on hold until P1.
+  Decided: they are closed now (see **Items closed for re-intake**).
+- **a9.** Changed. Drafted as "verified fully working and performant" meaning
+  the first driver's adoption of the unikernel relay. Decided: it means the
+  end of M6 (Decision 15).
+- **a10.** Confirmed. The specs repository is `buildwarden/buildwarden-specs`.
+- **a11.** Changed. Drafted as Jeff alone creating repositories and changing
+  their visibility. Decided: Jeff does, or an attended session does on his
+  word in that session.
+- **a12.** Confirmed with the acceptance of the Bootstrap comparison, which
+  covers the program's three model changes.
 
 ## Design
 
@@ -248,7 +249,7 @@ None.
 | Loop | `buildwarden/buildwarden-ai-workflow` (name provisional) | n/a | The Loop Contract, the queue, run reports, `wf`, skills and agents |
 | Specs and conformance | `buildwarden/buildwarden-specs` (a10) | Language-neutral, plus a test harness | One specification and one black-box suite per seam |
 | Kit | `buildwarden/buildwarden` | Go | Session, claim client, ledger reader, script translator, the driver contract, `drivertest`, the `warden` dispatcher, the book |
-| Collector | With the kit for now | Go | The disk collector, behind its specification and a storage boundary |
+| Collector | With the kit for now | Go | The disk collector, behind its specification |
 | Executor and guest-side pieces | With the kit for now | Go | `warden-io`; `linuxguest`, `winguest` |
 | Drivers | One repository each: container, qemu, vz, hyperv, firecracker | Go | One driver, as its own binary built on the kit |
 | Driver index | To be designed (K5) | n/a | Known drivers and their current releases |
@@ -300,7 +301,7 @@ no M4.
 
 | Phase | Work | Done when |
 |---|---|---|
-| K1 | Complete the driver contract in-tree, including the relay source. `cmd/warden` stops naming drivers. `drivertest` exists. The collector gets its storage boundary (a2). | Adding a driver touches only its own directory. |
+| K1 | Complete the driver contract in-tree, including the relay source. `cmd/warden` stops naming drivers. `drivertest` exists. | Adding a driver touches only its own directory. |
 | K2 | Each driver becomes its own Go module and binary in-tree. `warden` becomes the dispatcher. A tier-1 check limits each driver to the kit's public packages. | The check passes for all five, and `warden` runs each driver as a separate binary. |
 | K3 | Extract the Hyper-V driver as the pilot. | It releases from its own repository and passes native validation there. |
 | K4 | Extract the remaining drivers. | This repository holds the kit, the collector, the executor, the dispatcher and the book. |
@@ -335,7 +336,8 @@ needs a loop that spans repositories. K1 does not depend on the relay and can
 start as soon as P0 merges. M6 needs K1's relay source, not driver extraction.
 
 **Later, not scheduled.** The program's job is to leave each of these easy:
-alternative collectors and a collector repository (seam 2, a2); the executor
+alternative collectors and a collector repository (seam 2; the collector's
+storage boundary is designed with the first of them); the executor
 and guest families in their own repository (seams 3, 5 and 6); more relay
 release forms such as cloud images (seam 8); upstreaming to `hermit-os`
 (Decision 15).
@@ -352,6 +354,32 @@ be skipped.
 Until P1 lands, program items run in this repository's queue under the rules
 as they are, plus FLOW-20. The relay's milestones run in the relay
 repository's queue.
+
+New repositories (the loop, the specs, one per driver) are created, and
+`buildwarden-relay` is made public, by Jeff, or by an attended session on his
+word in that session (a11).
+
+### Items closed for re-intake
+
+Six queue items were on hold when this design was reviewed. They are removed
+from the queue now and go through intake again after the freeze (Decision
+14). Their queue files, with each item's source text, questions and history,
+are on the `workflow` branch at `1a2252f` (`git show 1a2252f:queue/<item>.yaml`).
+No remote branch is deleted.
+
+| Item | Phase when closed | Branch on the remote | Design |
+|---|---|---|---|
+| `baked-asset-staleness` | 2, Plan | `feat/baked-asset-staleness` (`f68a8b1`) | On the branch, with assumptions a1 to a7 unreviewed |
+| `relay-host-subnet-claim-only` | 0, not started | none | none |
+| `relay-init-dhcp-mask-default` | 0, not started | none | none |
+| `vz-ipsw-latest-reuse` | 0, not started | none | none |
+| `cross-driver-image-update` | 0, not started | none | none |
+| `security-suite` | 2, Plan | `feat/security-suite` (`e05df23`) | On the branch, narrowed, awaiting its design review |
+
+`security-suite` is still named by `docs/development/README.md` (deep-dive
+#1), by the SEC-02, SEC-06 and SEC-08 owners in `tools/tier1/rules.yaml`,
+and by two entries in the native-gap backlog. Those pointers are stale until
+it is re-intaken; they are left as they are.
 
 ### Rule changes the program will make
 
@@ -478,7 +506,7 @@ The vz row's wording does not change when its relay moves into a VM at M6:
 - The relay can be released on its own schedule without the executor having
   to match it build for build.
 - Isolation that rests on configuration is named as such, per driver, where a
-  reviewer and a verifier can see it.
+  reviewer can see it.
 
 ### Costs
 
@@ -603,7 +631,8 @@ For this item's PR (process phase 2):
    PR.
 
 After the merge, in an attended session and outside the PR: set
-`limits.alters_relationships` in the workflow branch's `config.yaml` (a5),
+`limits.alters_relationships` to 3 in the workflow branch's `config.yaml`
+(a5),
 and file P1, S1 and K1 through intake.
 
 ## Design review
