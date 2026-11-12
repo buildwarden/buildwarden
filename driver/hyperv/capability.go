@@ -104,6 +104,12 @@ type Capabilities struct {
 	// service is refused, naming the reinstall, and never takes the durable
 	// path as if no service were installed (GLOBAL-11).
 	ServiceStale string
+	// ServiceInstalled is true when the service control manager has the
+	// privileged service although its pipe does not open, and ServiceState
+	// is its state then ("stopped", "running", ...), so doctor names starting
+	// it rather than installing it.
+	ServiceInstalled bool
+	ServiceState     string
 
 	// Errors collects non-fatal probe failures, surfaced by Doctor.
 	Errors []string
@@ -205,17 +211,39 @@ func (c Capabilities) Ready() (ready bool, reason string) {
 			"; reinstall it: " + serviceReinstallFix
 	case c.Resolve(OpVMLifecycle) == OutcomeBlocked:
 		return false, "VM lifecycle blocked: join Hyper-V Administrators, " +
-			"launch elevated, or install the service"
+			"launch elevated, or " + c.serviceRemedy()
 	case c.NetworkStrategy() == NetBlocked && c.HyperVAdmin && c.DevSwitchLegacy:
 		return false, "the durable network has no build switches: run `warden setup " +
 			"--driver hyperv` (elevated) to create the build switches"
 	case c.NetworkStrategy() == NetBlocked:
 		return false, "no network path: run `warden setup --driver hyperv` " +
-			"(elevated) for a reusable switch, or run this build from an " +
-			"elevated shell for a fresh per-build network"
+			"(elevated) for a reusable switch, run this build from an " +
+			"elevated shell for a fresh per-build network, or " + c.serviceRemedy()
 	default:
 		return true, ""
 	}
+}
+
+// serviceDown is the fix for an installed service whose pipe does not open,
+// "" when none is installed or it answers.
+func (c Capabilities) serviceDown() string {
+	switch {
+	case !c.ServiceInstalled || c.ServiceReachable || c.ServiceStale != "":
+		return ""
+	case c.ServiceState == serviceRunning:
+		return serviceRestartFix
+	default:
+		return serviceStartFix
+	}
+}
+
+// serviceRemedy is the service remedy a blocked path names: start (or
+// restart) the installed service, else install it.
+func (c Capabilities) serviceRemedy() string {
+	if fix := c.serviceDown(); fix != "" {
+		return "start the installed privileged service: " + fix
+	}
+	return "install the network service (one-time, elevated)"
 }
 
 // serviceBlocks reports whether a stale privileged service blocks builds: it

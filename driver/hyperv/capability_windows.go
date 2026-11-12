@@ -99,4 +99,11 @@ try {
 	// Privileged service: reachable when its ACL'd pipe answers a ping at
 	// this warden's protocol version, stale when it answers otherwise.
 	c.ServiceReachable, c.ServiceStale = probeService()
+	if !c.ServiceReachable && c.ServiceStale == "" {
+		var err error
+		c.ServiceInstalled, c.ServiceState, err = queryService()
+		if err != nil {
+			c.Errors = append(c.Errors, "privileged service state: "+err.Error())
+		}
+	}
 }

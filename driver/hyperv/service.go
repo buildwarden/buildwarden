@@ -26,6 +26,10 @@ const (
 	// detection dials it (ping) to probe reachability.
 	ServicePipeName = `\\.\pipe\warden-hyperv-svc`
 
+	// serviceName is the privileged service's name in the service control
+	// manager.
+	serviceName = "WardenHyperV"
+
 	// serviceProtocolVersion is bumped on any wire-incompatible change. Both
 	// ends check it on every request, so a stale service running against a newer
 	// warden fails fast with a reinstall message instead of misbehaving.
@@ -39,6 +43,18 @@ const (
 	// so the reinstall is both commands.
 	serviceReinstallFix = "from an elevated shell, run `warden hyperv service " +
 		"uninstall`, then `warden hyperv service install`"
+
+	// serviceStartFix starts an installed service that is not running, and
+	// serviceRestartFix one that runs but whose pipe does not answer.
+	serviceStartFix = "from an elevated shell, run `Start-Service " + serviceName +
+		"` (or `sc start " + serviceName + "`)"
+	serviceRestartFix = "from an elevated shell, run `Restart-Service " +
+		serviceName + "`"
+
+	// serviceStopped and serviceRunning are the SCM states serviceDown tells
+	// apart (serviceStateName names the others).
+	serviceStopped = "stopped"
+	serviceRunning = "running"
 )
 
 // svcOp is the typed operation set the pipe accepts. Only network standup is

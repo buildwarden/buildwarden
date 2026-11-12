@@ -4,18 +4,19 @@ package hyperv
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"time"
 
 	"github.com/Microsoft/go-winio"
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
 const (
-	serviceName        = "WardenHyperV"
 	serviceDisplayName = "BuildWarden Hyper-V privileged helper"
 	serviceDescription = "Performs Hyper-V host network standup " +
 		"(New-VMSwitch/New-NetNat/New-NetIPAddress) on behalf of " +
@@ -48,6 +49,54 @@ func probeService() (reachable bool, stale string) {
 	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
 	stale = pingService(conn)
 	return stale == "", stale
+}
+
+// queryService reads the privileged service's state from the service control
+// manager, with connect and query-status rights only, which a non-elevated
+// process holds. installed is false when the SCM has no such service.
+func queryService() (installed bool, state string, err error) {
+	scm, err := windows.OpenSCManager(nil, nil, windows.SC_MANAGER_CONNECT)
+	if err != nil {
+		return false, "", fmt.Errorf("open the service control manager: %w", err)
+	}
+	defer func() { _ = windows.CloseServiceHandle(scm) }()
+	name, err := windows.UTF16PtrFromString(serviceName)
+	if err != nil {
+		return false, "", err
+	}
+	s, err := windows.OpenService(scm, name, windows.SERVICE_QUERY_STATUS)
+	if errors.Is(err, windows.ERROR_SERVICE_DOES_NOT_EXIST) {
+		return false, "", nil
+	}
+	if err != nil {
+		return false, "", fmt.Errorf("open service %s: %w", serviceName, err)
+	}
+	defer func() { _ = windows.CloseServiceHandle(s) }()
+	var st windows.SERVICE_STATUS
+	if err := windows.QueryServiceStatus(s, &st); err != nil {
+		return true, "", fmt.Errorf("query service %s: %w", serviceName, err)
+	}
+	return true, serviceStateName(st.CurrentState), nil
+}
+
+// serviceStateName names an SCM service state as doctor prints it.
+func serviceStateName(state uint32) string {
+	switch state {
+	case windows.SERVICE_STOPPED:
+		return serviceStopped
+	case windows.SERVICE_START_PENDING:
+		return "starting"
+	case windows.SERVICE_STOP_PENDING:
+		return "stopping"
+	case windows.SERVICE_RUNNING:
+		return serviceRunning
+	case windows.SERVICE_PAUSED, windows.SERVICE_PAUSE_PENDING:
+		return "paused"
+	case windows.SERVICE_CONTINUE_PENDING:
+		return "resuming"
+	default:
+		return fmt.Sprintf("in state %d", state)
+	}
 }
 
 // runPipeServer listens on the ACL'd pipe and serves each connection until ctx

@@ -75,15 +75,7 @@ func Doctor(w io.Writer, c Capabilities, link buildlink.Link,
 	}
 	fmt.Fprintf(w, "%s%s\n", dotted(switchLabel), switchState)
 
-	switch {
-	case c.ServiceReachable:
-		fmt.Fprintf(w, "%sreachable\n", dotted("Privileged service"))
-	case c.ServiceStale != "":
-		fmt.Fprintf(w, "%sstale: it %s\n    -> %s\n", dotted("Privileged service"),
-			c.ServiceStale, serviceReinstallFix)
-	default:
-		fmt.Fprintf(w, "%snot installed\n", dotted("Privileged service"))
-	}
+	writeServiceRow(w, c)
 	cacheBlocked := writeCacheVisibility(w)
 	imageBlocked := writeImageStatus(w, Status(), time.Now())
 
@@ -105,6 +97,30 @@ func Doctor(w io.Writer, c Capabilities, link buildlink.Link,
 		fmt.Fprintf(w, "\nNot ready: %s\n", reason)
 	}
 	return !ready
+}
+
+// writeServiceRow reports the privileged service: reachable, stale, installed
+// but not answering (its state and the fix), or not installed.
+func writeServiceRow(w io.Writer, c Capabilities) {
+	row := dotted("Privileged service")
+	switch {
+	case c.ServiceReachable:
+		fmt.Fprintf(w, "%sreachable\n", row)
+	case c.ServiceStale != "":
+		fmt.Fprintf(w, "%sstale: it %s\n    -> %s\n", row, c.ServiceStale,
+			serviceReinstallFix)
+	case c.ServiceInstalled && c.ServiceState == serviceRunning:
+		fmt.Fprintf(w, "%sinstalled and running, but its pipe does not answer\n"+
+			"    -> %s\n", row, c.serviceDown())
+	case c.ServiceInstalled:
+		state := c.ServiceState
+		if state == "" {
+			state = "in an unknown state"
+		}
+		fmt.Fprintf(w, "%sinstalled, but %s\n    -> %s\n", row, state, c.serviceDown())
+	default:
+		fmt.Fprintf(w, "%snot installed\n", row)
+	}
 }
 
 // doctorVerdict is whether builds can run, and if not the first reason: the
@@ -162,7 +178,7 @@ func writeVMLifecycle(w io.Writer, c Capabilities) {
 			fmt.Fprintln(w, "    -> join the local Hyper-V Administrators "+
 				"group (then re-login), or")
 			fmt.Fprintln(w, "    -> launch warden from an Administrator terminal, or")
-			fmt.Fprintln(w, "    -> install the network service (one-time, elevated)")
+			fmt.Fprintln(w, "    -> "+c.serviceRemedy())
 		}
 	}
 }
@@ -196,6 +212,6 @@ func writeNetworkStrategy(w io.Writer, c Capabilities) {
 			"an elevated shell (durable build switches), or")
 		fmt.Fprintln(w, "    -> run this build from an Administrator terminal "+
 			"(fresh per-build network), or")
-		fmt.Fprintln(w, "    -> install the network service (one-time, elevated)")
+		fmt.Fprintln(w, "    -> "+c.serviceRemedy())
 	}
 }
