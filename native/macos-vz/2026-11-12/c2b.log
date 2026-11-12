@@ -1,0 +1,56 @@
+warden: build FAILED (exit code 6)
+--- relay.log
+2026/11/12 10:51:08 relay: awaiting claim on 127.0.0.1:50178
+2026/11/12 10:51:08 relay: host mode, fd 3, link 100.127.255.252/30, relay 100.127.255.253, guest 100.127.255.254
+2026/11/12 10:51:08 relay: upstream resolvers: 192.0.2.53 (claim)
+2026/11/12 10:51:08 relay: environment recorded (2264 bytes)
+2026/11/12 10:51:08 relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp
+2026/11/12 10:51:08 relay: claimed
+2026/11/12 10:51:12 netstack: learned guest MAC 6a:ce:d3:04:cf:ae
+2026/11/12 10:51:12 netstack: DHCP OFFER 100.127.255.254 to 6a:ce:d3:04:cf:ae
+2026/11/12 10:51:13 netstack: DHCP ACK 100.127.255.254 to 6a:ce:d3:04:cf:ae
+2026/11/12 10:51:13 netstack: DHCP OFFER 100.127.255.254 to 6a:ce:d3:04:cf:ae
+2026/11/12 10:51:14 netstack: DHCP ACK 100.127.255.254 to 6a:ce:d3:04:cf:ae
+2026/11/12 10:51:21 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:64824->192.0.2.53:53: i/o timeout (qtype=12 name=254.255.127.100.in-addr.arpa.)
+2026/11/12 10:51:21 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:58888->192.0.2.53:53: i/o timeout (qtype=64 name=_dns.resolver.arpa.)
+2026/11/12 10:51:21 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:51005->192.0.2.53:53: i/o timeout (qtype=1 name=time.apple.com.)
+2026/11/12 10:51:21 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:52505->192.0.2.53:53: i/o timeout (qtype=1 name=api.apple-cloudkit.com.)
+2026/11/12 10:51:21 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:60309->192.0.2.53:53: i/o timeout (qtype=1 name=1-courier.push.apple.com.)
+2026/11/12 10:51:21 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:61101->192.0.2.53:53: i/o timeout (qtype=1 name=1-courier.sandbox.push.apple.com.)
+2026/11/12 10:51:21 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:59806->192.0.2.53:53: i/o timeout (qtype=65 name=init.push.apple.com.)
+2026/11/12 10:51:21 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:49454->192.0.2.53:53: i/o timeout (qtype=1 name=init.push.apple.com.)
+2026/11/12 10:51:21 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:51629->192.0.2.53:53: i/o timeout (qtype=1 name=gspe35-ssl.ls.apple.com.)
+2026/11/12 10:51:21 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:60239->192.0.2.53:53: i/o timeout (qtype=65 name=gspe35-ssl.ls.apple.com.)
+2026/11/12 10:51:22 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:57373->192.0.2.53:53: i/o timeout (qtype=12 name=254.255.127.100.in-addr.arpa.)
+2026/11/12 10:51:22 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:63860->192.0.2.53:53: i/o timeout (qtype=64 name=_dns.resolver.arpa.)
+2026/11/12 10:51:22 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:52395->192.0.2.53:53: i/o timeout (qtype=1 name=time.apple.com.)
+2026/11/12 10:51:22 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:57870->192.0.2.53:53: i/o timeout (qtype=1 name=api.apple-cloudkit.com.)
+2026/11/12 10:51:22 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:64818->192.0.2.53:53: i/o timeout (qtype=1 name=gspe35-ssl.ls.apple.com.)
+2026/11/12 10:51:22 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:61514->192.0.2.53:53: i/o timeout (qtype=65 name=init.push.apple.com.)
+2026/11/12 10:51:22 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:50909->192.0.2.53:53: i/o timeout (qtype=1 name=1-courier.sandbox.push.apple.com.)
+2026/11/12 10:51:22 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:53809->192.0.2.53:53: i/o timeout (qtype=1 name=init.push.apple.com.)
+2026/11/12 10:51:22 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:60891->192.0.2.53:53: i/o timeout (qtype=1 name=1-courier.push.apple.com.)
+2026/11/12 10:51:22 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:55717->192.0.2.53:53: i/o timeout (qtype=65 name=gspe35-ssl.ls.apple.com.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:49398->192.0.2.53:53: i/o timeout (qtype=1 name=1-courier.sandbox.push.apple.com.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:65366->192.0.2.53:53: i/o timeout (qtype=1 name=gspe35-ssl.ls.apple.com.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:51978->192.0.2.53:53: i/o timeout (qtype=1 name=api.apple-cloudkit.com.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:64470->192.0.2.53:53: i/o timeout (qtype=1 name=time.apple.com.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:64750->192.0.2.53:53: i/o timeout (qtype=65 name=gspe35-ssl.ls.apple.com.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:59560->192.0.2.53:53: i/o timeout (qtype=12 name=254.255.127.100.in-addr.arpa.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:60289->192.0.2.53:53: i/o timeout (qtype=1 name=1-courier.push.apple.com.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:64534->192.0.2.53:53: i/o timeout (qtype=65 name=init.push.apple.com.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:51906->192.0.2.53:53: i/o timeout (qtype=1 name=init.push.apple.com.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:56159->192.0.2.53:53: i/o timeout (qtype=64 name=_dns.resolver.arpa.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:57626->192.0.2.53:53: i/o timeout (qtype=1 name=api.apple-cloudkit.com.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:61362->192.0.2.53:53: i/o timeout (qtype=64 name=_dns.resolver.arpa.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:50983->192.0.2.53:53: i/o timeout (qtype=1 name=time.apple.com.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:55448->192.0.2.53:53: i/o timeout (qtype=1 name=init.push.apple.com.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:54705->192.0.2.53:53: i/o timeout (qtype=65 name=init.push.apple.com.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:49718->192.0.2.53:53: i/o timeout (qtype=1 name=1-courier.sandbox.push.apple.com.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:61593->192.0.2.53:53: i/o timeout (qtype=12 name=254.255.127.100.in-addr.arpa.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:53492->192.0.2.53:53: i/o timeout (qtype=65 name=gspe35-ssl.ls.apple.com.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:55844->192.0.2.53:53: i/o timeout (qtype=1 name=1-courier.push.apple.com.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:51683->192.0.2.53:53: i/o timeout (qtype=1 name=gspe35-ssl.ls.apple.com.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:62739->192.0.2.53:53: i/o timeout (qtype=1 name=gateway.icloud.com.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:60670->192.0.2.53:53: i/o timeout (qtype=65 name=gateway.icloud.com.)
+2026/11/12 10:51:23 relay: upstream resolver 192.0.2.53:53 did not answer: read udp 10.0.0.30:49184->192.0.2.53:53: i/o timeout (qtype=1 name=example.com.)
