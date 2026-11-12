@@ -4,7 +4,7 @@ priority: 51
 follows: build-link-subnet
 status: in_progress
 round: feature
-phase: 5
+phase: 6
 design: docs/design/hyperv-relay-per-build-channel.md
 branch: feat/hyperv-relay-per-build-channel
 alters_relationships: true
@@ -32,6 +32,7 @@ steps:
     needs:
       - f6-consolidate-r2
       - f6-consolidate-r3
+      - f6-consolidate-r4
     lease:
       claimed_by: ""
       expires: null
@@ -194,6 +195,8 @@ steps:
     phase: 6
     affinity: host:qemu-any
     status: pending
+    needs:
+      - f6-consolidate-r4
     lease:
       claimed_by: ""
       expires: null
@@ -202,6 +205,8 @@ steps:
     phase: 6
     affinity: host:macos-vz
     status: pending
+    needs:
+      - f6-consolidate-r4
     lease:
       claimed_by: ""
       expires: null
@@ -224,10 +229,38 @@ steps:
   - id: f5-guide-r4
     phase: 5
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main-r4
+    phase: 6
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261112T204543Z
-      expires: 2026-11-12T23:28:04.5869993Z
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate-r4
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-merge-main-r4
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr-r4
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-consolidate-r4
+      - f6-validate-windows-hyperv
+      - f6-validate-qemu-any-r2
+      - f6-validate-macos-vz-r2
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 12
@@ -759,3 +792,9 @@ history:
   - at: 2026-11-12T21:28:04Z
     by: cloud/20261112T204543Z
     event: claimed f5-guide-r4 until 2026-11-12T23:28:04Z
+  - at: 2026-11-12T21:29:20Z
+    by: cloud/20261112T204543Z
+    event: done f5-guide-r4
+  - at: 2026-11-12T21:29:20Z
+    by: cloud/20261112T204543Z
+    event: entered phase 6 (publish)
