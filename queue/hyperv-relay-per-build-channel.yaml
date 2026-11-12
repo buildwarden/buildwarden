@@ -210,17 +210,17 @@ steps:
     phase: 3
     affinity: cloud
     status: pending
-    note: 'With the back-to-Implement findings (F1-F3, history), also: cmd/warden TestSetupSlots fails on a Windows host (vmdns_test.go:160): for --driver firecracker --slots 257 the platform refusal (needs an x86_64 Linux host with /dev/kvm) comes before the 1-256 range check, so the test wants the range message and gets the platform one. CI (Linux) passes. Make the case independent of the host OS (found attended 2026-11-12, merge check against PRs 112 and 114).'
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261112T204543Z
+      expires: 2026-11-12T22:45:59.3648192Z
+    note: 'With the back-to-Implement findings (F1-F3, history), also: cmd/warden TestSetupSlots fails on a Windows host (vmdns_test.go:160): for --driver firecracker --slots 257 the platform refusal (needs an x86_64 Linux host with /dev/kvm) comes before the 1-256 range check, so the test wants the range message and gets the platform one. CI (Linux) passes. Make the case independent of the host OS (found attended 2026-11-12, merge check against PRs 112 and 114).'
 budget:
   estimate:
     runs: 12
     steps: 40
   spent:
-    runs: 7
-    steps: 29
+    runs: 8
+    steps: 30
 questions:
   - id: a1
     kind: assumed
@@ -721,4 +721,9 @@ history:
   - at: 2026-11-12T20:17:56Z
     by: host:windows-hyperv/20261112T183259Z
     event: 'back to implement: f6-validate-windows-hyperv (59d7440, native/windows-hyperv/2026-11-12/attended/README.md): F1 concurrent builds race on seed ISO creation (driver/hyperv/winseed_windows.go, IMAPI2FS.MsftFileSystemImage fails 0xC0AAB138 in 2 of 3 simultaneous pairs; each build now makes two ISOs), so case 4''s two concurrent ephemeral builds do not both succeed: serialize ISO creation across processes or retry that HRESULT, with tier-0 coverage. F2 doctor prints an installed but stopped WardenHyperV as ''not installed''. F3 the [vm] build_link overlap refusal names the default NAT (192.168.240.0/20) instead of the host''s NAT read back (192.168.250.0/24). Back to Implement (FLOW-10); rerun cases 4 and 7 (durable build_link) natively after'
-  - {at: 2026-11-12T20:00:00Z, by: human/jeff, event: "estimate raised to 40 steps / 12 runs (Jeff, FLOW-13 runaway at 29/18 steps, 7/4 runs)"}
+  - at: 2026-11-12T20:00:00Z
+    by: human/jeff
+    event: estimate raised to 40 steps / 12 runs (Jeff, FLOW-13 runaway at 29/18 steps, 7/4 runs)
+  - at: 2026-11-12T20:45:59Z
+    by: cloud/20261112T204543Z
+    event: claimed f3-implement-r4 until 2026-11-12T22:45:59Z
