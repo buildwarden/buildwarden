@@ -7,7 +7,7 @@ round: process
 phase: 2
 design: docs/design/componentization.md
 branch: feat/componentization
-alters_relationships: true
+alters_relationships: null
 design_review: required
 source: 'Jeff, attended session 2026-11-09 to 2026-11-12: drivers as separate binaries and repositories, folded with the relay fork (buildwarden-relay, decisions of 2026-11-07), the Loop Contract and the VZ spike reports into one program. Plan with all thirteen owner decisions settled 2026-11-12; Jeff asked for it to be queued and drafted the same day.'
 steps:
