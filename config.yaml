@@ -17,7 +17,7 @@ native_budget:
 
 limits:
   in_progress: 5           # features in progress at once, process items not counted (FLOW-05)
-  alters_relationships: 1  # of those, past Design with alters_relationships: true
+  alters_relationships: 3  # of those, past Design with alters_relationships: true; raised from 1 for the componentization program (FLOW-20, a5), 2026-11-12
 
 lease_minutes: 120         # a claimed step's lease; an expired lease may be reclaimed (FLOW-04)
 runaway_factor: 2          # a feature escalates to the human at this multiple of its step estimate (FLOW-13)
