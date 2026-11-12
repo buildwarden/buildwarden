@@ -99,8 +99,9 @@ func Doctor(w io.Writer, c Capabilities, link buildlink.Link,
 	return !ready
 }
 
-// writeServiceRow reports the privileged service: reachable, stale, installed
-// but not answering (its state and the fix), or not installed.
+// writeServiceRow reports the privileged service: reachable, stale, its
+// state unread (and whether the SCM found it), installed but not answering
+// (its state and the fix), or not installed.
 func writeServiceRow(w io.Writer, c Capabilities) {
 	row := dotted("Privileged service")
 	switch {
@@ -109,6 +110,12 @@ func writeServiceRow(w io.Writer, c Capabilities) {
 	case c.ServiceStale != "":
 		fmt.Fprintf(w, "%sstale: it %s\n    -> %s\n", row, c.ServiceStale,
 			serviceReinstallFix)
+	case c.ServiceUnread != "" && c.ServiceInstalled:
+		fmt.Fprintf(w, "%sinstalled, but its state could not be read (%s)\n"+
+			"    -> %s\n", row, c.ServiceUnread, c.serviceDown())
+	case c.ServiceUnread != "":
+		fmt.Fprintf(w, "%sstate could not be read (%s)\n    -> %s\n", row,
+			c.ServiceUnread, c.serviceDown())
 	case c.ServiceInstalled && c.ServiceState == serviceRunning:
 		fmt.Fprintf(w, "%sinstalled and running, but its pipe does not answer\n"+
 			"    -> %s\n", row, c.serviceDown())

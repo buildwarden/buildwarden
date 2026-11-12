@@ -51,6 +51,16 @@ const (
 	serviceRestartFix = "from an elevated shell, run `Restart-Service " +
 		serviceName + "`"
 
+	// serviceCheckInstalledFix and serviceCheckFix are for a service whose
+	// state the SCM would not give this process: installed (access denied),
+	// or not known to be.
+	serviceCheckInstalledFix = "from an elevated shell, run `Get-Service " +
+		serviceName + "`, and start it if it is stopped (`Start-Service " +
+		serviceName + "`)"
+	serviceCheckFix = "from an elevated shell, run `Get-Service " + serviceName +
+		"`: start it if it is stopped (`Start-Service " + serviceName +
+		"`), install it if it is absent (`warden hyperv service install`)"
+
 	// serviceStopped and serviceRunning are the SCM states serviceDown tells
 	// apart (serviceStateName names the others).
 	serviceStopped = "stopped"

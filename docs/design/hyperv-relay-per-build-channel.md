@@ -1899,6 +1899,46 @@ F4, main's Firecracker setup) already wrote; none changes a decision.
     against the NAT read back; `overview.md`'s Hyper-V build flow gains the
     ISO lock and the stopped-service report.
 
+### Rework from review r4 and native F5 (FLOW-06)
+
+Review `29a57eaea52f` found M4, S8 to S10 in tasks 52 and 53, and the
+attended native session on windows-hyperv found F5 in setup's NAT standup
+(task 28's script). None changes a decision.
+
+56. M4, a service state the SCM would not give (`service_windows.go`,
+    `capability*.go`, `doctor.go`): an OpenService error other than
+    "does not exist" is never "not installed". Access denied means the SCM
+    found the name (it reports "does not exist" first), so the service is
+    installed with its state unread; any other error leaves both unread.
+    `Capabilities` records the unread state with its error; doctor prints
+    it, and the row, the VM lifecycle and network remedies and `Ready`'s
+    reason name checking it from an elevated shell (`Get-Service
+    WardenHyperV`), never installing a registered service. `cli.md`,
+    `drivers.md` and `overview.md` say so. Tier 0: the unread rows in
+    `TestServiceRowStates`. (GLOBAL-11, UX-04, UX-01, FLOW-15)
+57. S9, the SCM mapping under test (`service_windows.go`): the mapping from
+    OpenService's and QueryServiceStatus's results to installed, state and
+    error is a pure function; a Windows-only tier-0 table test feeds it each
+    state code and the does-not-exist, access-denied and other errors, with
+    no SCM. (TEST-06, TEST-01)
+58. S8, the link against the NAT before any per-build work
+    (`driver_windows.go`, `buildnet.go`): `StartBuild` reads the NAT back as
+    doctor does (the durable network's, the dev switch's NAT, the one owning
+    the default prefix, or none, which checks the default prefix and names
+    it) and refuses an overlapping link before the seed ISO and the network
+    standup; the check after the standup stays, against the NAT taken.
+    Tier 0: the pre-check's choice of NAT from a read-back. (UX-04)
+59. S10, `gofmt` on `cmd/warden/buildlink_test.go`. (GLOBAL-02)
+60. F5, setup leaves an old address on the NAT's vNIC (`ensurenet.go`,
+    `natread.go`, `doctornet.go`): when the standup makes the NAT, it
+    removes every IPv4 address on `vEthernet (<nat>)`, warden's own NAT
+    vNIC, other than the host IP, touching no other interface. The
+    read-back never silently picks one: two host addresses in the NAT
+    prefix are refused as ambiguous, and doctor names any other address on
+    the vNIC with the `Remove-NetIPAddress` that removes it. `cli.md` says
+    so. Tier 0: the rendered script's removal, scoped to that alias, and
+    two HOSTIP lines read back. (GLOBAL-11, UX-04, UX-01)
+
 ## Design review
 
 Required (FLOW-19): `alters_relationships: true`, the `bootstrap-model`

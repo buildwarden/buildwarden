@@ -391,7 +391,10 @@ A service installed by an older warden speaks an older protocol: doctor
 reports it as stale, and a non-elevated build is refused until it is
 reinstalled (elevated: `warden hyperv service uninstall`, then `warden
 hyperv service install`). One that is installed but stopped is reported as
-stopped, with `Start-Service WardenHyperV` (elevated) as the fix.
+stopped, with `Start-Service WardenHyperV` (elevated) as the fix. When warden
+cannot read the service's state (access denied, say, in an SSH or scheduled
+session), doctor says so rather than "not installed", and names `Get-Service
+WardenHyperV` (elevated) to check it.
 
 ### How It Works
 

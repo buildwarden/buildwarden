@@ -53,7 +53,7 @@ func probeService() (reachable bool, stale string) {
 
 // queryService reads the privileged service's state from the service control
 // manager, with connect and query-status rights only, which a non-elevated
-// process holds. installed is false when the SCM has no such service.
+// process may hold; scmServiceState maps the answer.
 func queryService() (installed bool, state string, err error) {
 	scm, err := windows.OpenSCManager(nil, nil, windows.SC_MANAGER_CONNECT)
 	if err != nil {
@@ -64,19 +64,36 @@ func queryService() (installed bool, state string, err error) {
 	if err != nil {
 		return false, "", err
 	}
-	s, err := windows.OpenService(scm, name, windows.SERVICE_QUERY_STATUS)
-	if errors.Is(err, windows.ERROR_SERVICE_DOES_NOT_EXIST) {
-		return false, "", nil
-	}
-	if err != nil {
-		return false, "", fmt.Errorf("open service %s: %w", serviceName, err)
+	s, openErr := windows.OpenService(scm, name, windows.SERVICE_QUERY_STATUS)
+	if openErr != nil {
+		return scmServiceState(openErr, nil, 0)
 	}
 	defer func() { _ = windows.CloseServiceHandle(s) }()
 	var st windows.SERVICE_STATUS
-	if err := windows.QueryServiceStatus(s, &st); err != nil {
-		return true, "", fmt.Errorf("query service %s: %w", serviceName, err)
+	queryErr := windows.QueryServiceStatus(s, &st)
+	return scmServiceState(nil, queryErr, st.CurrentState)
+}
+
+// scmServiceState maps the SCM's answer for the privileged service, the
+// OpenService error and then QueryServiceStatus's error and state, to
+// whether it is installed and its state. Only "does not exist" is not
+// installed. Access denied is installed with its state unread, since the SCM
+// resolves the name before it checks access; any other error leaves both
+// unread, so the error is returned with installed false.
+func scmServiceState(openErr, queryErr error, current uint32) (
+	installed bool, state string, err error,
+) {
+	switch {
+	case errors.Is(openErr, windows.ERROR_SERVICE_DOES_NOT_EXIST):
+		return false, "", nil
+	case errors.Is(openErr, windows.ERROR_ACCESS_DENIED):
+		return true, "", fmt.Errorf("open service %s: %w", serviceName, openErr)
+	case openErr != nil:
+		return false, "", fmt.Errorf("open service %s: %w", serviceName, openErr)
+	case queryErr != nil:
+		return true, "", fmt.Errorf("query service %s: %w", serviceName, queryErr)
 	}
-	return true, serviceStateName(st.CurrentState), nil
+	return true, serviceStateName(current), nil
 }
 
 // serviceStateName names an SCM service state as doctor prints it.

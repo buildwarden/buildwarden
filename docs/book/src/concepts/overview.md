@@ -203,7 +203,9 @@ link and the resolvers
             naming its reinstall, never the durable network; else durable
             (doctor reads the service manager when the pipe does not open:
             installed but stopped -> Start-Service WardenHyperV, never
-            "not installed")
+            "not installed"; a read refused or failed -> "state could not
+            be read", naming Get-Service WardenHyperV; only "does not exist"
+            is not installed)
         the relay boot VHDX's stamp must be 2, else a fix naming refresh-cache.sh
         the NAT read back from the host: name, prefix, host IP
             durable:   <network>-nat and its slot switches; none -> warden setup

@@ -110,6 +110,11 @@ type Capabilities struct {
 	// it rather than installing it.
 	ServiceInstalled bool
 	ServiceState     string
+	// ServiceUnread is why the service control manager's answer could not be
+	// read, "" when it was. ServiceInstalled is then true only when the SCM
+	// found the name (it denied access), and neither installing nor starting
+	// is named as certain: a failed read is never "not installed".
+	ServiceUnread string
 
 	// Errors collects non-fatal probe failures, surfaced by Doctor.
 	Errors []string
@@ -224,11 +229,18 @@ func (c Capabilities) Ready() (ready bool, reason string) {
 	}
 }
 
-// serviceDown is the fix for an installed service whose pipe does not open,
-// "" when none is installed or it answers.
+// serviceDown is the fix for a service whose pipe does not open but which
+// the SCM has, or may have: start (or restart) an installed one, check one
+// whose state could not be read. "" when none is installed or it answers.
 func (c Capabilities) serviceDown() string {
 	switch {
-	case !c.ServiceInstalled || c.ServiceReachable || c.ServiceStale != "":
+	case c.ServiceReachable || c.ServiceStale != "":
+		return ""
+	case c.ServiceUnread != "" && c.ServiceInstalled:
+		return serviceCheckInstalledFix
+	case c.ServiceUnread != "":
+		return serviceCheckFix
+	case !c.ServiceInstalled:
 		return ""
 	case c.ServiceState == serviceRunning:
 		return serviceRestartFix
@@ -237,13 +249,19 @@ func (c Capabilities) serviceDown() string {
 	}
 }
 
-// serviceRemedy is the service remedy a blocked path names: start (or
-// restart) the installed service, else install it.
+// serviceRemedy is the service remedy a blocked path names: check a service
+// whose state could not be read, start (or restart) the installed service,
+// else install it.
 func (c Capabilities) serviceRemedy() string {
-	if fix := c.serviceDown(); fix != "" {
+	fix := c.serviceDown()
+	switch {
+	case fix == "":
+		return "install the network service (one-time, elevated)"
+	case c.ServiceUnread != "":
+		return "check the privileged service, whose state could not be read: " + fix
+	default:
 		return "start the installed privileged service: " + fix
 	}
-	return "install the network service (one-time, elevated)"
 }
 
 // serviceBlocks reports whether a stale privileged service blocks builds: it

@@ -103,7 +103,7 @@ try {
 		var err error
 		c.ServiceInstalled, c.ServiceState, err = queryService()
 		if err != nil {
-			c.Errors = append(c.Errors, "privileged service state: "+err.Error())
+			c.ServiceUnread = err.Error()
 		}
 	}
 }

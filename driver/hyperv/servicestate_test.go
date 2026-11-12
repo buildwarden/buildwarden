@@ -13,10 +13,17 @@ const (
 
 // TestServiceRowStates renders doctor's privileged-service row, and the
 // remedies of a blocked VM lifecycle and network, for each state of a service
-// whose pipe does not open.
+// whose pipe does not open, including one whose state the SCM would not give.
 func TestServiceRowStates(t *testing.T) {
 	start := "start the installed privileged service: " + serviceStartFix
 	restart := "start the installed privileged service: " + serviceRestartFix
+	check := func(fix string) string {
+		return "check the privileged service, whose state could not be read: " + fix
+	}
+	const (
+		denied = "open service WardenHyperV: Access is denied."
+		failed = "open service WardenHyperV: The RPC server is unavailable."
+	)
 	stoppedRow := func(state string) string {
 		return serviceRow + "installed, but " + state + "\n    -> " +
 			serviceStartFix + "\n"
@@ -35,6 +42,13 @@ func TestServiceRowStates(t *testing.T) {
 			stoppedRow("starting"), start},
 		{"state unread", Capabilities{ServiceInstalled: true},
 			stoppedRow("in an unknown state"), start},
+		{"access denied",
+			Capabilities{ServiceInstalled: true, ServiceUnread: denied},
+			serviceRow + "installed, but its state could not be read (" + denied +
+				")\n    -> " + serviceCheckInstalledFix + "\n", check(serviceCheckInstalledFix)},
+		{"read failed", Capabilities{ServiceUnread: failed},
+			serviceRow + "state could not be read (" + failed + ")\n    -> " +
+				serviceCheckFix + "\n", check(serviceCheckFix)},
 		{"running, no pipe",
 			Capabilities{ServiceInstalled: true, ServiceState: serviceRunning},
 			serviceRow + "installed and running, but its pipe does not answer\n" +
@@ -69,8 +83,9 @@ func checkServiceRemedies(t *testing.T, caps Capabilities, row, remedy string) {
 	if ready || !strings.HasSuffix(reason, remedy) {
 		t.Errorf("Ready = %v, %q; want blocked naming %q", ready, reason, remedy)
 	}
-	if caps.ServiceInstalled && strings.Contains(out, installRemedy) {
-		t.Errorf("an installed service is told to install:\n%s", out)
+	if (caps.ServiceInstalled || caps.ServiceUnread != "") &&
+		strings.Contains(out+reason, installRemedy) {
+		t.Errorf("an installed or unread service is told to install:\n%s", out)
 	}
 }
 

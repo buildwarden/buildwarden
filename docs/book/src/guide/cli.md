@@ -337,7 +337,12 @@ A service that is installed but not running (stopped, say) is reported as
 such, not as not installed, with the fix: from an elevated shell, `Start-Service
 WardenHyperV` (or `sc start WardenHyperV`); one that runs but whose pipe does
 not answer, `Restart-Service WardenHyperV`. Doctor's blocked remedies then name
-starting it rather than installing it.
+starting it rather than installing it. When the service manager will not give
+this process the service's state, a failed read is never reported as not
+installed: doctor says the state could not be read and why (`installed, but
+its state could not be read` when access is denied, since the service manager
+found the name), and names checking it from an elevated shell with
+`Get-Service WardenHyperV`, starting it if it is stopped.
 
 - `install` — Install and start the service (run once, elevated)
 - `uninstall` — Stop and remove the service (elevated)
