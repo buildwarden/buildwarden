@@ -197,7 +197,10 @@ naming the interface and both fixes.
 read back (`warden-dev-nat (192.168.240.0/20, host 192.168.240.1)`), the
 relay's resolvers and where they came from (`10.9.0.53 (from interface
 Ethernet)`), and each build switch `free` or `in use by` the VMs on it. A
-`BLOCKED` line there names its fix.
+`BLOCKED` line there names its fix. An address other than the host IP on the
+NAT's vNIC, `vEthernet (warden-dev-nat)`, is a warning naming the
+`Remove-NetIPAddress` that clears it; setup leaves only the host IP there when
+it makes the NAT.
 
 ## Upgrading an Existing VM Driver Install
 

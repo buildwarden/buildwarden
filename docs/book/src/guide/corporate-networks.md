@@ -120,10 +120,15 @@ warden setup --driver hyperv --nat-prefix 192.168.250.0/24 --host-ip 192.168.250
 Every build then reads the NAT back from the host and addresses its relay
 inside it; nothing else needs changing. Setup refuses a prefix that overlaps
 the build link, and one another NAT on the host already owns, naming that
-NAT and how to remove it. Elevated and
+NAT and how to remove it. A build checks the build link against the NAT it
+reads back too, by name, before any per-build work. Elevated and
 service builds use the same NAT once setup has made it.
-`warden doctor --driver hyperv` prints the NAT a build would use under
-`Build network`.
+
+When setup makes the NAT, the host IP is the only IPv4 address it leaves on
+the NAT's vNIC, `vEthernet (warden-dev-nat)`: an address from the old prefix
+is removed, and no other interface is touched. `warden doctor --driver hyperv`
+prints the NAT a build would use under `Build network`, and warns about any
+other address on that vNIC, naming the `Remove-NetIPAddress` that removes it.
 
 ## Certificate Trust
 
