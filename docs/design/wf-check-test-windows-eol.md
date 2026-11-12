@@ -140,7 +140,27 @@ Confirmed at x2-implement (process item, FLOW-03), one commit each.
 
 ## Consolidation
 
-Filled in at x2-implement (FLOW-10, FLOW-15).
+Branched from `origin/main` at `b8fb3c4` (#111), still `main` when Implement
+finished: nothing landed to reconcile.
+
+- **FLOW-15 sweep:** test helpers only. `overview.md` describes the product
+  components, not `tools/workflow`, and is unchanged. No user-facing change, so
+  no reference docs (UX-01).
+- **Pins:** `check_test.go`'s `git` and `queue/hosts_test.go`'s `gitRepo` set
+  `GIT_CONFIG_COUNT=1`, `GIT_CONFIG_KEY_0=core.autocrlf`,
+  `GIT_CONFIG_VALUE_0=false` beside their other variables;
+  `native_test.go`'s `newLauncherRepo` adds `-c core.autocrlf=false` to its
+  `cfg` list, matching that helper's style (Decision 2). The reads that call
+  `exec.Command("git", ...)` directly are unchanged.
+- **Tests:** `TestGitHelperIgnoresAutoCRLF` added. With the pin removed it
+  fails (`checked-out bytes "one\r\ntwo\r\n", want "one\ntwo\n"`).
+  `GIT_CONFIG_GLOBAL` set to a file with `core.autocrlf = true`, `go test
+  ./...` in `tools/workflow` fails at the base `98fffd8`
+  (`TestWhitespaceOnlyDifferenceFails` in `check`, and `TestNativeRun` in
+  `native`, a second case the same setting broke) and passes on the branch.
+- **Gates:** `make lint` (0 findings), `make test`, `make enforcement` ("main's
+  tier 1 findings kept", 0 either side) and `tools/workflow/flow18-check.sh`
+  pass.
 
 ## Rollback notes
 
