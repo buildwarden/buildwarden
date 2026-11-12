@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"net/netip"
 	"os"
 	"os/signal"
 	"path/filepath"
@@ -283,10 +284,12 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 
 	isVM := isVMDriver(d)
 	var link buildlink.Link
+	var dns []netip.Addr
 	if isVM {
 		if link, _, err = resolveBuildLink(cfg); err != nil {
 			return nil, err
 		}
+		dns = cfg.VM.DNSAddrs
 	}
 
 	path := ""
@@ -325,6 +328,7 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 		Network:           resolveNetwork(cfg, d),
 		KeepVMs:           flagKeepVMs,
 		BuildLink:         link,
+		DNS:               dns,
 		TempDir:           tempDir,
 		RelayImage:        cfg.Runtime.RelayImage,
 		UpstreamCACerts:   cfg.Relay.UpstreamCACerts,

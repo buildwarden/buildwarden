@@ -6,6 +6,7 @@ import (
 	"io"
 	"net"
 	"net/netip"
+	"strings"
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/buildlink"
@@ -20,7 +21,8 @@ const (
 
 // SetupOptions configures `warden setup --driver hyperv`.
 type SetupOptions struct {
-	// SwitchName is the durable build (Private) switch name. Empty -> warden-dev.
+	// SwitchName names the durable network: its NAT is <SwitchName>-nat and
+	// its build switches <SwitchName>-0 and up. Empty -> warden-dev.
 	SwitchName string
 	// NATPrefix / HostIP address the relay's Internal NAT switch. Empty -> defaults.
 	NATPrefix string
@@ -28,7 +30,26 @@ type SetupOptions struct {
 	// BuildLink is the build link builds will use ([vm] build_link or the
 	// default); the NAT prefix must not overlap it. Zero is the default.
 	BuildLink buildlink.Link
-	Verbose   bool
+	// Slots is how many durable build switches setup makes, 1 to MaxSlots.
+	// Zero is DefaultSlots.
+	Slots   int
+	Verbose bool
+}
+
+const (
+	// MaxSlots is the most durable build switches setup makes.
+	MaxSlots = 64
+	// DefaultSlots is how many `warden setup --driver hyperv` makes.
+	DefaultSlots = 4
+)
+
+// ValidateSlotCount checks a --slots value.
+func ValidateSlotCount(n int) error {
+	if n < 1 || n > MaxSlots {
+		return driver.Fixable(fmt.Sprintf("pass --slots between 1 and %d", MaxSlots),
+			"--slots %d is out of range (1-%d)", n, MaxSlots)
+	}
+	return nil
 }
 
 func (o *SetupOptions) applyDefaults() {
@@ -41,17 +62,26 @@ func (o *SetupOptions) applyDefaults() {
 	if o.HostIP == "" {
 		o.HostIP = DefaultHostIP
 	}
+	if o.Slots == 0 {
+		o.Slots = DefaultSlots
+	}
 }
 
-// RunSetup idempotently creates the durable dev network (a Private build switch
-// plus an Internal NAT switch + host IP + NAT rule for relay egress) and prints
-// how to reuse it. It is the one-time, elevated step that lets the non-elevated
-// gateway then iterate on builds against the reused switch.
+// RunSetup idempotently creates the durable dev network: an Internal NAT
+// switch + host IP + NAT rule for relay egress, and the Private build
+// switches <network>-0 to <network>-<Slots-1>, one per concurrent durable
+// build. It trims unattached slots above Slots and retires the single shared
+// <network> switch earlier setups made, and refuses to touch an attached one.
+// It is the one-time, elevated step that lets non-elevated builds then run
+// against the durable network.
 //
 // It preflights privilege itself and returns a clear, actionable error rather
 // than surfacing a raw PowerShell failure when run without elevation.
 func RunSetup(ctx context.Context, w io.Writer, opts SetupOptions) error {
 	opts.applyDefaults()
+	if err := ValidateSlotCount(opts.Slots); err != nil {
+		return err
+	}
 	if err := checkNATPrefix(opts.NATPrefix, opts.BuildLink.OrDefault()); err != nil {
 		return err
 	}
@@ -76,28 +106,74 @@ func RunSetup(ctx context.Context, w io.Writer, opts SetupOptions) error {
 				"process is not elevated")
 	}
 
-	p := newLocalProvisioner(opts.Verbose)
-	res, err := p.EnsureNetwork(ctx, NetworkSpec{
-		SwitchName: opts.SwitchName,
-		SwitchType: "Private",
-		NATPrefix:  opts.NATPrefix,
-		HostIP:     opts.HostIP,
-	})
+	res, err := ensureSetupNAT(ctx, newLocalProvisioner(opts.Verbose), opts)
+	if err != nil {
+		return err
+	}
+	slots, err := runSetupSlots(opts.SwitchName, opts.Slots)
 	if err != nil {
 		return err
 	}
 
 	fmt.Fprintln(w, "Durable dev network ready.")
-	fmt.Fprintf(w, "  build switch (Private) ... %s\n", res.BuildSwitch)
 	fmt.Fprintf(w, "  NAT switch (Internal) .... %s  (%s, host %s)\n",
-		res.NATName, opts.NATPrefix, opts.HostIP)
-	fmt.Fprintln(w,
-		"\nThis durable network is for NON-elevated builds (Hyper-V Administrators):")
+		res.NATName, res.NATPrefix, res.HostIP)
+	fmt.Fprintf(w, "  build switches (Private)  %s\n", strings.Join(slots.Slots, ", "))
+	for _, sw := range slots.Removed {
+		fmt.Fprintf(w, "  removed %s (above --slots %d, nothing attached)\n", sw,
+			opts.Slots)
+	}
+	if slots.Retired != "" {
+		fmt.Fprintf(w, "  retired %s (the shared build switch earlier setups made; "+
+			"each durable build now takes a switch of its own)\n", slots.Retired)
+	}
+	if err := slots.err(); err != nil {
+		return err
+	}
+	fmt.Fprintf(w, "\nThis durable network is for NON-elevated builds (Hyper-V "+
+		"Administrators), up to %d at a time:\n", opts.Slots)
 	fmt.Fprintf(w, "  warden build --driver hyperv --network %s\n", opts.SwitchName)
 	fmt.Fprintf(w, "  (or set network = \"%s\" under [vm] in warden.toml)\n", opts.SwitchName)
 	fmt.Fprintln(w,
-		"Elevated builds ignore it and stand up a fresh isolated network per build.")
+		"Elevated builds stand up a fresh build switch per build and use this NAT.")
 	return nil
+}
+
+// ensureSetupNAT makes or adopts the durable network's NAT through p and
+// refuses one durable builds would not accept: VerifyNetwork reads only
+// <network>-nat, so setup must not report ready on a NAT of another name that
+// already owns the prefix (another build's per-build NAT, or one warden did
+// not make), nor on <network>-nat on another prefix. opts has its defaults.
+func ensureSetupNAT(ctx context.Context, p Provisioner, opts SetupOptions) (
+	*NetworkResources, error,
+) {
+	natName := opts.SwitchName + "-nat"
+	res, err := p.EnsureNetwork(ctx, NetworkSpec{
+		NATName:   natName,
+		NATPrefix: opts.NATPrefix,
+		HostIP:    opts.HostIP,
+	})
+	if err != nil {
+		return nil, err
+	}
+	want := netip.MustParsePrefix(opts.NATPrefix).Masked()
+	if res.NATName != natName {
+		return nil, driver.Fixable(
+			"once nothing uses it, remove it from an elevated shell (Remove-NetNat "+
+				"-Name "+res.NATName+"; Remove-VMSwitch -Name "+res.NATName+
+				"), or pass another --nat-prefix, then re-run setup",
+			"the NAT %s already owns --nat-prefix %s, and durable builds on "+
+				"--network %s use only the NAT %s",
+			res.NATName, want, opts.SwitchName, natName)
+	}
+	if res.NATPrefix != want {
+		return nil, driver.Fixable(
+			"remove it from an elevated shell (Remove-NetNat -Name "+res.NATName+
+				"), then re-run setup to make it on "+want.String(),
+			"the NAT %s already exists on %s, not --nat-prefix %s",
+			res.NATName, res.NATPrefix, want)
+	}
+	return res, nil
 }
 
 // checkNATPrefix refuses a NAT prefix that overlaps the build link, before

@@ -42,7 +42,7 @@ func TestVMLifecycleSmoke(t *testing.T) {
 		Generation: 2,
 		MemoryMB:   512,
 		CPUs:       1,
-		SwitchName: DefaultDevSwitch,
+		SwitchName: DefaultDevSwitch + "-0",
 	})
 	if err != nil {
 		t.Fatalf("CreateVM: %v", err)

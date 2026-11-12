@@ -13,15 +13,24 @@ See [`README.md`](./README.md) for the rule format.
   ==========================                   ==================================
 
   (1) isolate ------------------------------>  sole network path: the relay
-                                               (exists before any guest code runs)
+      Hyper-V: write the relay seed (its       (exists before any guest code runs)
+      NAT address, prefix, gateway and the     (relay VM reads its seed, sets its
+      claim token: pre-claim values only),     upstream, starts the relay with the
+      boot the relay VM, claim it with the     token; durable builds take their own
+      token, the build link and the            Private switch from setup's slots)
+      resolvers; only then boot the guest
+                                               every VM driver: the relay's
+                                               resolvers in the claim, RELAY-08
 
   (2) deliver the executor ----------------->  warden-io + a launcher
       per build, version-matched               (seed disk, cloud-init ISO,
                                                copied-in file, ...)
 
-  (3) start -------------------------------->  launcher runs `warden-io initialize`
-      then hands off; no further host            |
-      steps inside the environment               |   all of it over the relay:
+  (3) start -------------------------------->  launcher: address from the seed,
+      then hands off; no further host          command line or relay's lease (on
+      steps inside the environment             Windows, the lease alone); then
+                                               `warden-io initialize --gateway`
+                                                 |   all of it over the relay:
                                                  |-- GET  /health
                                                  |-- GET  /ca.pem         trust
                                                  |-- GET  /bootstrap      trust policy
@@ -47,7 +56,7 @@ step as pseudocode.
 |---|---|---|---|
 | qemu / Linux | Topology: the only NIC reaches the relay VM | cloud-init `CIDATA` ISO per build | cloud-init `runcmd` |
 | firecracker / Linux | Topology: the build VM's only NIC is a TAP on a per-slot host bridge whose only other port is the relay VM; the bridge has no address and drops every frame bound for the host | cloud-init `CIDATA` ISO per build as a read-only virtio-blk drive (disk path), or `warden-io` appended per build to a launcher-only initramfs (direct boot) | cloud-init `runcmd` (disk path); the launcher's exec of `warden-io initialize` (direct boot) |
-| qemu, hyperv / Windows | Topology | `WARDEN` seed disk per build (`warden-io.exe`, `warden-run.ps1`) | `warden-run` startup task baked at prepare |
+| qemu, hyperv / Windows | Topology. hyperv: the relay VM gets its pre-claim values on a per-build relay seed (`WARDENRELAY`) and is claimed with its token; the build VM shares a Private switch only with its own relay (on the durable strategy, one of setup's slots) | `WARDEN` seed disk per build (`warden-io.exe`, `warden-run.ps1`) | `warden-run` startup task baked at prepare; the address from the relay's DHCP lease alone, then `warden-io initialize --gateway` |
 | vz / macOS | Topology: one socketpair NIC to the relay | **Baked into the image at prepare** (D2) | launchd daemon baked at prepare |
 | container | A namespace holder, isolated by a privileged iptables sidecar before the build container exists | Tar stream of `warden-io` (mode 0755) copied into the created, not yet started, build container | Container start; entrypoint `warden-io initialize` |
 
@@ -161,6 +170,16 @@ per-build executor (the Windows `warden-run` task, cloud-init itself). It carrie
 nothing per-build and nothing tied to a warden version, so a warden upgrade never
 needs an image re-prepare to take effect.
 
+No boot asset or image, the relay VM's included, carries a network value
+the orchestrator chooses per build: an address or prefix, a gateway, a
+resolver or a claim token. The relay is configured through its claim
+(RELAY-08); only its pre-claim values, its own address, prefix and gateway
+and the claim token, come on its boot channel, a per-build relay seed or
+its kernel command line. The build environment gets its network values
+from its seed, its kernel command line or the relay's DHCP lease. A boot
+asset may carry the launcher that reads such a channel, but no default
+that stands in for it.
+
 ---
 
 ### BOOT-07 — The model changes only by a signed comparison
@@ -195,11 +214,14 @@ The automated part flags a diff that touches the bootstrap surface without
 touching this document, or that changes this document without a design whose
 `rules` cites BOOT-07. The bootstrap surface is the executor's setup
 (`cmd/warden-io/initialize*.go`, `baseline.go`, `trust_*.go`, `jks.go`), the
-bootstrap config (`bootstrap/`), the relay's guest-facing endpoints, and each
-driver's isolation, executor delivery and start code
-(`driver/container/container.go`, `driver/container/images*`, `cmd/warden-pause/`,
-`driver/linuxguest/`, `driver/winguest/`, `driver/hyperv/winseed*.go`,
-`driver/vz/image.go`, and the firecracker isolation, delivery and start files
+bootstrap config (`bootstrap/`), the relay's guest-facing endpoints
+(`relay/controlplane.go`, `cmd/relay/dhcp*.go`), the relay VM's init and
+build tools (`tools/relay-vm/`), and each driver's isolation, executor
+delivery and start code (`driver/container/container.go`,
+`driver/container/images*`, `cmd/warden-pause/`, `driver/linuxguest/`,
+`driver/winguest/`, `driver/hyperv/winseed*.go`,
+`driver/hyperv/relayseed*.go`, `driver/vz/image.go`, `tools/build-vm/`, and
+the firecracker isolation, delivery and start files
 (`driver/firecracker/slots*.go`, `setup.go`, `posture.go`, `vm*.go`,
 `deliver_linux.go`) and `tools/firecracker-vm/`). The agent part judges whether a
 change counts as a model change.

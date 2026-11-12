@@ -57,8 +57,16 @@ func buildPrepareSeed(workDir string) (seedISO, seedDir string, err error) {
 // uppercases/8.3-mangles names and can surface with no drive letter.
 //
 // The result image's IStream is marshalled to disk with a tiny Add-Type helper
-// (the documented way to persist an IMAPI2 image from PowerShell).
+// (the documented way to persist an IMAPI2 image from PowerShell). The image
+// is made under isoLock.
 func makeSeedISOWindows(seedDir, outISO, label string) error {
+	return withISOLock(driver.HostLock, func() error {
+		return runIMAPI2(seedDir, outISO, label)
+	})
+}
+
+// runIMAPI2 is makeSeedISOWindows's PowerShell call.
+func runIMAPI2(seedDir, outISO, label string) error {
 	script := fmt.Sprintf(`
 $ErrorActionPreference = 'Stop'
 Add-Type -TypeDefinition @"

@@ -11,6 +11,15 @@ import (
 	"github.com/buildwarden/buildwarden/driver"
 )
 
+// requestedNetwork is the durable network a build names (--network, or
+// [vm] network), else DefaultDevSwitch.
+func requestedNetwork(req *driver.BuildRequest) string {
+	if req.Network == "" {
+		return DefaultDevSwitch
+	}
+	return req.Network
+}
+
 // StartBuild runs a build on Hyper-V: it verifies the isolated network, brings
 // up the relay host (collector + claimed relay VM) and the build VM,
 // waits for completion, and tears everything down. It composes the resolved
@@ -30,19 +39,14 @@ func (d *Driver) StartBuild(
 		defer cancel()
 	}
 
-	sw := req.Network
-	if sw == "" {
-		sw = DefaultDevSwitch
-	}
+	sw := requestedNetwork(req)
 
 	// Privilege and network readiness first: a missing group membership or
 	// elevation is the most common blocker, and it costs nothing to check
 	// before any disk or seed work. Detect reflects THIS process's token.
 	caps := Detect(sw)
-	if ready, reason := caps.Ready(); !ready {
-		return nil, driver.Fixable(
-			"see `warden doctor --driver hyperv` for each capability and its fix",
-			"hyperv build: %s", reason)
+	if err := preflightBuild(caps, sw, req); err != nil {
+		return nil, err
 	}
 
 	buildID := driver.RandAlphaNum(buildIDLen)
@@ -96,12 +100,14 @@ func (d *Driver) StartBuild(
 	// using the capabilities detected above: the gateway's non-elevated
 	// warden lands on reuse-durable or delegate-to-service; an elevated
 	// shell lands on ephemeral-per-build.
-	p, buildSwitch, natSwitch, cleanupNet, err := d.provisionBuildNetwork(
-		ctx, p, caps, sw, buildID, req)
+	p, bnet, cleanupNet, err := d.provisionBuildNetwork(ctx, p, caps, sw, buildID, req)
 	if err != nil {
 		return nil, err
 	}
 	defer cleanupNet()
+	if err := prepareBuildNetwork(req, bnet.NAT, bnet.NATPrefix, defaultRouteDNS); err != nil {
+		return nil, fmt.Errorf("hyperv build: %w", err)
+	}
 
 	res, err := runBuild(ctx, p, buildConfig{
 		BuildID:       buildID,
@@ -117,8 +123,12 @@ func (d *Driver) StartBuild(
 		IsWindows:       isWindows,
 		Generation:      generation,
 		BuildScriptPath: buildScript,
-		BuildSwitch:     buildSwitch,
-		NATSwitch:       natSwitch,
+		BuildSwitch:     bnet.BuildSwitch,
+		Slots:           bnet.Slots,
+		NATSwitch:       bnet.NAT,
+		NATPrefix:       bnet.NATPrefix,
+		HostIP:          bnet.HostIP,
+		RelaySeedDir:    filepath.Join(workDir, "relay-seed"),
 		Timeout:         req.Timeout,
 		MemoryMB:        req.MemoryMB,
 		CPUs:            req.CPUs,
@@ -135,10 +145,25 @@ func (d *Driver) StartBuild(
 	return res, nil
 }
 
-// provisionBuildNetwork resolves the build and NAT switches per the capability
-// model, standing up a fresh isolated network when the privilege allows it. It
-// returns the (possibly updated) provisioner, the chosen switch names, and a
-// cleanup to run on build teardown.
+// preflightBuild refuses, before any per-build work, a build these
+// capabilities cannot run, and one whose build link overlaps the NAT it would
+// use, read back from the host as doctor reads it.
+func preflightBuild(caps Capabilities, sw string, req *driver.BuildRequest) error {
+	if err := caps.buildRefusal(); err != nil {
+		return err
+	}
+	durable := caps.NetworkStrategy() == NetReuseDurable
+	other := DefaultNATPrefix
+	if durable {
+		other = "" // VerifyNetwork reads only <network>-nat
+	}
+	out, err := runPS(netProbeScript(sw, other))
+	if err != nil {
+		return fmt.Errorf("hyperv build: reading the host's NAT: %w", err)
+	}
+	return checkLinkAhead(parseNetReadback(out), sw, durable, req.Link())
+}
+
 // resolveBuildDisks resolves the relay boot disk and the build guest's disk
 // chain, checks Hyper-V can see them, and keeps an active prepared base fresh.
 func resolveBuildDisks(req *driver.BuildRequest) (
@@ -169,26 +194,37 @@ func resolveBuildDisks(req *driver.BuildRequest) (
 	return relayBoot, chain, isWindows, generation, nil
 }
 
+// provisionBuildNetwork resolves the build's network per the capability
+// model: the durable strategy verifies the network setup made and reads its
+// NAT and slot switches back, naming no build switch (the allocator picks a
+// slot); the ephemeral strategies stand up a per-build Private switch and take
+// the NAT EnsureNetwork chose, the dev switch's when setup made one. It
+// returns the (possibly updated) provisioner, the network, and a cleanup to
+// run on build teardown.
 func (d *Driver) provisionBuildNetwork(
 	ctx context.Context, p Provisioner, caps Capabilities,
 	sw, buildID string, req *driver.BuildRequest,
-) (prov Provisioner, buildSwitch, natSwitch string, cleanup func(), err error) {
+) (prov Provisioner, bnet buildNetwork, cleanup func(), err error) {
 	prov = p
 	cleanup = func() {}
 	switch strat := caps.NetworkStrategy(); strat {
 	case NetReuseDurable:
-		// Non-elevated Hyper-V Administrators: reuse the durable switch from
+		// Non-elevated Hyper-V Administrators: the durable network from
 		// `warden setup --driver hyperv`. Re-assert isolation every build rather
 		// than trusting persistence (a crash or manual edit can weaken it).
-		if v, ok := prov.(interface {
-			VerifyNetwork(context.Context, string) error
-		}); ok {
-			if verr := v.VerifyNetwork(ctx, sw); verr != nil {
-				return nil, "", "", nil, fmt.Errorf("hyperv build: %w", verr)
-			}
+		v, ok := prov.(interface {
+			VerifyNetwork(context.Context, string) (*NetworkResources, error)
+		})
+		if !ok {
+			return nil, buildNetwork{}, nil, fmt.Errorf(
+				"hyperv build: the provisioner cannot verify the durable network")
 		}
-		buildSwitch = sw
-		natSwitch = sw + "-nat"
+		res, verr := v.VerifyNetwork(ctx, sw)
+		if verr != nil {
+			return nil, buildNetwork{}, nil, fmt.Errorf("hyperv build: %w", verr)
+		}
+		bnet = buildNetwork{NAT: res.NATName, NATPrefix: res.NATPrefix,
+			HostIP: res.HostIP, Slots: res.Slots}
 
 	case NetEphemeralPerBuild, NetDelegateService:
 		// Stand up a FRESH isolated network for this build and tear it down
@@ -198,44 +234,43 @@ func (d *Driver) provisionBuildNetwork(
 		if strat == NetDelegateService {
 			prov = newClientProvisioner(d.Verbose)
 		}
-		buildSwitch = "warden-" + buildID
+		buildSwitch := "warden-" + buildID
 		res, nerr := prov.EnsureNetwork(ctx, NetworkSpec{
 			ID:         buildID,
 			SwitchName: buildSwitch,
 			SwitchType: "Private",
 			NATPrefix:  DefaultNATPrefix,
 			HostIP:     DefaultHostIP,
+			DevNAT:     sw + "-nat",
 		})
 		if nerr != nil {
 			// A standup that failed partway can leave the Private build switch
 			// (created first) behind; best-effort clean it so a retry is not
 			// blocked by orphaned switches.
 			_ = prov.TeardownNetwork(context.Background(), buildSwitch)
-			return nil, "", "", nil, fmt.Errorf(
+			return nil, buildNetwork{}, nil, fmt.Errorf(
 				"hyperv build: network standup: %w", nerr)
 		}
-		// The relay's upstream NIC attaches to whichever NAT switch EnsureNetwork
-		// chose: a reused durable/concurrent NAT, or a per-build one it created.
-		natSwitch = res.NATName
-		bs, bp := buildSwitch, prov
+		bnet = buildNetwork{NAT: res.NATName, NATPrefix: res.NATPrefix,
+			HostIP: res.HostIP, BuildSwitch: buildSwitch}
+		bp := prov
 		cleanup = func() {
 			if req.KeepVMs {
-				fmt.Fprintf(os.Stderr,
-					"warden: --keep-vms: leaving ephemeral network %q\n", bs)
+				fmt.Fprintf(os.Stderr, "warden: --keep-vms: leaving ephemeral "+
+					"network %q\n", buildSwitch)
 				return
 			}
 			// Background ctx so teardown runs even when ctx is already cancelled.
 			// Teardown is by per-build name convention, so a reused NAT (a
 			// different name) is never removed - only the per-build build switch
 			// and, when created, the per-build NAT.
-			_ = bp.TeardownNetwork(context.Background(), bs)
+			_ = bp.TeardownNetwork(context.Background(), buildSwitch)
 		}
 
-	default: // NetBlocked
-		_, reason := caps.Ready()
-		return nil, "", "", nil, fmt.Errorf("hyperv build: %s", reason)
+	default: // NetBlocked, which Ready never passes
+		return nil, buildNetwork{}, nil, caps.buildRefusal()
 	}
-	return prov, buildSwitch, natSwitch, cleanup, nil
+	return prov, bnet, cleanup, nil
 }
 
 // Exec is not supported by the Hyper-V driver.

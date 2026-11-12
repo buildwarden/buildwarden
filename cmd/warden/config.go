@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -14,8 +15,8 @@ import (
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/buildlink"
 	"github.com/buildwarden/buildwarden/driver/firecracker"
-	"github.com/buildwarden/buildwarden/driver/hyperv"
 	"github.com/buildwarden/buildwarden/driver/qemu"
+	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
 type Config struct {
@@ -46,6 +47,12 @@ type VMConfig struct {
 	// names the file that set it ("warden.toml" or "config.toml").
 	BuildLink       string `toml:"build_link"`
 	BuildLinkSource string `toml:"-"`
+	// DNS is [vm] dns, the relay's upstream resolvers for every VM driver, in
+	// order and used exclusively; unset means the host's. It is checked as
+	// the file loads into DNSAddrs, and DNSSource names the file that set it.
+	DNS       []string     `toml:"dns"`
+	DNSAddrs  []netip.Addr `toml:"-"`
+	DNSSource string       `toml:"-"`
 }
 
 type RelayConfig struct {
@@ -135,19 +142,42 @@ func loadTOML(path string, cfg *Config) error {
 		}
 		cfg.VM.BuildLinkSource = filepath.Base(path)
 	}
+	if md.IsDefined("vm", "dns") {
+		if len(cfg.VM.DNS) == 0 {
+			return driver.Fixable("remove [vm] dns from "+path+" to use the host's "+
+				"resolvers", "[vm] dns in %s is empty", path)
+		}
+		// The claim's own check of upstream_dns. The build link and each
+		// driver's reachability rule wait for the driver, at build start and
+		// in doctor: a loopback resolver is usable by vz's host-side relay.
+		addrs, err := relaycfg.ParseUpstreamDNS(cfg.VM.DNS, nil)
+		if err != nil {
+			return driver.Fixable(
+				fmt.Sprintf("set [vm] dns in %s to IPv4 addresses of DNS "+
+					"servers, e.g. dns = [%q], or remove [vm] dns to use the "+
+					"host's resolvers", path, exampleDNS),
+				"[vm] dns in %s: %v", path, err)
+		}
+		cfg.VM.DNSAddrs = addrs
+		cfg.VM.DNSSource = filepath.Base(path)
+	}
 	return nil
 }
+
+// exampleDNS is the resolver address [vm] dns fixes suggest.
+const exampleDNS = "10.20.0.53"
 
 // exampleBuildLink is the valid non-default value fixes suggest.
 const exampleBuildLink = "100.126.255.252/30"
 
-// linkRanges are the ranges BuildWarden itself uses, read from the packages
-// that own them; a build link must be disjoint from all of them.
+// linkRanges are the fixed ranges BuildWarden itself uses, read from the
+// packages that own them; a build link must be disjoint from all of them. The
+// Hyper-V NAT is not one: it is read back from the host, and the hyperv
+// driver checks the link against it at build start and in doctor.
 func linkRanges() []buildlink.Range {
 	return []buildlink.Range{
 		{Name: "the container driver's network", CIDR: driver.ContainerBaseCIDR},
 		{Name: "the firecracker driver's upstream range", CIDR: firecracker.UpstreamCIDR},
-		{Name: "the hyperv driver's default NAT", CIDR: hyperv.DefaultNATPrefix},
 		{Name: "qemu's user-mode network", CIDR: qemu.UserNetCIDR},
 	}
 }

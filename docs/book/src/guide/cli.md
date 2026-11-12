@@ -24,7 +24,7 @@ rejects only the flags it genuinely cannot use.
 - `--guest-os <os>` — Guest OS for VM drivers: `linux` (default) or `windows`
 - `--cpus <n>` — Build VM vCPUs (VM drivers; default per driver)
 - `--memory <MiB>` — Build VM memory in MiB (VM drivers; default per driver)
-- `--network <name>` — Pre-provisioned network to reuse (hyperv: the durable switch from `warden setup`)
+- `--network <name>` — Pre-provisioned network to reuse (hyperv: the durable network from `warden setup`, whose build switches are `<name>-0` and up)
 - `--keep-vms` — Leave VMs, disks and the work dir in place for inspection (VM drivers)
 - `--tmpdir <dir>` — Directory each build's private work dir is created in (default: the OS temp dir, which honours `TMPDIR`)
 - `--build-link <cidr>` — Advanced: the VM drivers' relay-to-build link, a `/30`
@@ -252,6 +252,18 @@ of that driver uses the asset; on the direct-boot initramfs, which only direct
 boot uses, it is reported only. `--build-link` checks a value before you configure it;
 the container driver refuses it.
 
+Every VM driver's doctor also prints the relay's upstream resolvers and their
+source (`[vm] dns`, or the host source it read them from), or the refusal a
+build would get, which is BLOCKED and fails doctor. The hyperv doctor adds a
+`Build network` block: the NAT's name, prefix and host IP as read back from
+the host (or the NAT a build would make), a NAT prefix that overlaps the build
+link (BLOCKED, naming that NAT, or the default prefix when the host has none
+yet), any other address on the NAT's vNIC (a warning naming the
+`Remove-NetIPAddress` that removes it; two in the NAT prefix leave the host IP
+ambiguous, which is BLOCKED), and for the durable strategy each slot switch, `free` or `in
+use by` the VMs attached to it, or a missing-slots line naming `warden setup
+--driver hyperv`.
+
 Exits non-zero when a required capability is unmet, so it works as a CI or agent gate.
 Replaces the old `warden hyperv doctor`.
 
@@ -263,10 +275,16 @@ warden setup --driver <name> [flags]
 
 Idempotent host preparation. Hyper-V and Firecracker need it.
 
-- `--driver hyperv` creates the durable network builds reuse (a Private build
-  switch named by `--network`, plus an Internal NAT switch, host IP and NAT rule
-  for relay egress). Run once from an elevated terminal; afterwards builds run
-  without elevation.
+- `--driver hyperv` creates the durable network builds reuse: `--slots`
+  Private build switches (default 4) named `<network>-0` to `<network>-<N-1>`
+  (`--network`, default `warden-dev`), one per concurrent build, plus an
+  Internal NAT switch, host IP and NAT rule for relay egress. Slot switches
+  above `--slots` with nothing attached are removed, and the single
+  `<network>` Private switch of earlier setups is retired when nothing is
+  attached to it; either refuses, naming the VMs, while one is in use. Re-run
+  it after upgrading from a warden whose setup made that single switch:
+  durable builds refuse to start until the slots exist. Run once from an
+  elevated terminal; afterwards builds run without elevation.
 - `--driver firecracker` (as root, with `sudo`) creates `--slots` network slots
   owned by the user who ran sudo: per slot a bridge and three TAPs with their
   sysctls, plus the `warden_fc` bridge table and the `WARDEN-FC` iptables and
@@ -282,13 +300,25 @@ Other drivers print that no host setup is needed. Replaces the old
 `warden hyperv setup`.
 
 **Flags:**
-- `--network <name>` — Durable build switch name (default: `[vm]` network, then `warden-dev`)
+- `--network <name>` — Durable network name, the prefix of its build switches `<name>-0` to `<name>-<N-1>` and of its NAT `<name>-nat` (default: `[vm]` network, then `warden-dev`)
 - `--nat-prefix <cidr>` — NAT CIDR for relay egress (default 192.168.240.0/20).
+  Every build reads the NAT back from the host and gives its relay its own
+  address in this prefix, so a non-default value takes effect on every build.
   Refused, before anything changes, when it overlaps the build link (`[vm]
   build_link`, or the default `100.127.255.252/30`); setup has no
-  `--build-link` of its own
-- `--host-ip <ip>` — Host gateway IP on the NAT switch (default 192.168.240.1)
-- `--slots <n>` — Network slots to create, 1 to 256 (firecracker; default 16)
+  `--build-link` of its own, and a build refuses an overlapping NAT too.
+  Durable builds use only the NAT `<network>-nat`, so setup refuses, naming it
+  and how to remove it, when another NAT already owns this prefix, and when
+  `<network>-nat` exists on another prefix
+- `--host-ip <ip>` — Host gateway IP on the NAT switch (default 192.168.240.1),
+  the relay's upstream gateway on every build. When setup makes the NAT, the
+  host IP is the only IPv4 address left on its vNIC, `vEthernet
+  (<network>-nat)`: an address an earlier setup left there (on the old
+  prefix, after that NAT was removed) is removed, and no other interface is
+  touched
+- `--slots <n>` — hyperv: build switches to create, 1 to 64 (default 4), the
+  number of durable builds that can run at once; firecracker: network slots
+  to create, 1 to 256 (default 16). Refused for other drivers
 
 ## warden hyperv service
 
@@ -302,6 +332,23 @@ a named pipe ACL'd to Administrators and Hyper-V Administrators). With it
 installed, `warden build --driver hyperv` runs entirely without elevation and
 stands up a fresh isolated network per build. VM lifecycle always runs
 in-process; only network standup is delegated.
+
+A service installed by a warden that speaks another protocol version is
+stale: `warden doctor --driver hyperv` reports it, and a non-elevated build
+is refused, naming the reinstall (`uninstall`, then `install`, elevated). A
+stale service is never treated as absent, so the build does not fall back
+to the durable network.
+
+A service that is installed but not running (stopped, say) is reported as
+such, not as not installed, with the fix: from an elevated shell, `Start-Service
+WardenHyperV` (or `sc start WardenHyperV`); one that runs but whose pipe does
+not answer, `Restart-Service WardenHyperV`. Doctor's blocked remedies then name
+starting it rather than installing it. When the service manager will not give
+this process the service's state, a failed read is never reported as not
+installed: doctor says the state could not be read and why (`installed, but
+its state could not be read` when access is denied, since the service manager
+found the name), and names checking it from an elevated shell with
+`Get-Service WardenHyperV`, starting it if it is stopped.
 
 - `install` — Install and start the service (run once, elevated)
 - `uninstall` — Stop and remove the service (elevated)

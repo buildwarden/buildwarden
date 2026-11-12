@@ -124,3 +124,7 @@ func installCA(pem []byte, _ *x509.Certificate, mode string) error {
 	os.Remove(tmpFile)
 	return nil
 }
+
+// relayWaitDiagnostic adds nothing to a failed relay wait here: the launcher
+// set the address before initialize ran.
+func relayWaitDiagnostic() string { return "" }

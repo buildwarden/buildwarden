@@ -59,13 +59,19 @@ KVER=$(ls "$KX/lib/modules/" | head -1)
 echo "  kernel: $KVER"
 mkdir -p "$ROOTFS_DIR/lib/modules"
 
-# FAT/netfilter modules. hv_vmbus/hv_netvsc are built-in (=y), so they are
-# intentionally NOT listed. No data-disk modules (hv_storvsc/fat/vfat): the
-# relay VM has no block device -- outputs stream to the host collector over
-# HTTP. crc32c_generic is copied before libcrc32c so init can load them in that
-# order (libcrc32c's init allocates the crc32c shash). Missing modules are
-# skipped, not fatal.
+# Netfilter and relay-seed modules. hv_vmbus/hv_netvsc are built-in (=y), so
+# they are intentionally NOT listed. The relay VM has no data disk (outputs
+# stream to the host collector over HTTP); its one block device is the
+# per-build relay seed, a read-only ISO 9660 CD on Hyper-V's SCSI controller,
+# so the storage (hv_storvsc), SCSI CD-ROM (sr_mod) and ISO 9660 (isofs)
+# modules ship, dependencies first, in the order init loads them. Missing
+# modules (built in to this kernel, or absent) are skipped, not fatal.
+# crc32c_generic is copied before libcrc32c so init can load them in that
+# order (libcrc32c's init allocates the crc32c shash).
 for mod in \
+    drivers/scsi/scsi_common.ko.gz drivers/scsi/scsi_mod.ko.gz \
+    drivers/scsi/scsi_transport_fc.ko.gz drivers/scsi/hv_storvsc.ko.gz \
+    drivers/cdrom/cdrom.ko.gz drivers/scsi/sr_mod.ko.gz fs/isofs/isofs.ko.gz \
     net/packet/af_packet.ko.gz \
     crypto/crc32c_generic.ko.gz lib/libcrc32c.ko.gz \
     net/ipv4/netfilter/nf_defrag_ipv4.ko.gz \
@@ -172,4 +178,5 @@ echo "  Initramfs: $OUTPUT_DIR/initramfs.cpio.gz  ($(ls -lh "$OUTPUT_DIR/initram
 echo "  UKI (EFI): $OUTPUT_DIR/warden-relay-boot.efi  ($(ls -lh "$OUTPUT_DIR/warden-relay-boot.efi" | awk '{print $5}'))"
 echo ""
 echo "The UKI is the \\EFI\\BOOT\\BOOTX64.EFI payload for the relay boot VHDX."
-echo "Per-build kernel cmdline (relay config) is layered by the driver, not baked here."
+echo "The command line carries no per-build value: the driver gives each relay its pre-claim"
+echo "values on the relay seed (WARDENRELAY) and the rest of its configuration in the claim."

@@ -10,8 +10,10 @@
 # touch the relay's packages (go list -deps ./cmd/relay), go.mod/go.sum or
 # tools/relay-vm; it is written next to the cached disk as relay-boot.source.
 # Beside it goes relay-boot.link-channel, the stamp warden checks before a
-# build: this disk's relay addresses its build interface from the claim. Both
-# move to .prev with the disk. The disk is current only when both stamps are:
+# build (driver/hyperv's relayBootChannel): channel 2 is a disk whose init
+# reads the per-build relay seed and whose relay takes upstream_dns in the
+# claim, so a disk stamped 1 is rebuilt. Both move to .prev with the disk.
+# The disk is current only when both stamps are:
 # a disk whose link-channel stamp is missing or different (lost, or copied
 # without it) is rebuilt, since warden refuses it and names this script.
 # Building needs a WSL distro (WARDEN_WSL_DISTRO, default Ubuntu) with mtools,
@@ -28,7 +30,7 @@ cache="$(cygpath -u "$cache")"
 disk="$cache/relay-boot.vhdx"
 stampf="$cache/relay-boot.source"
 linkf="$cache/relay-boot.link-channel"
-channel="WARDEN_LINK_CHANNEL=1"
+channel="WARDEN_LINK_CHANNEL=2"
 
 cd "$repo"
 mod="$(go list -m)"

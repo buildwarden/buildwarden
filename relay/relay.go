@@ -18,7 +18,6 @@ import (
 	"net/http"
 	"net/http/httputil"
 	"net/netip"
-	"os"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -45,7 +44,14 @@ type Config struct {
 
 	CaptureMode string
 	SelfIP      net.IP
-	UpstreamDNS string
+
+	// UpstreamDNS is the relay's resolver list, fixed for its life and asked
+	// in order on port 53: the guest's forwarded queries and the relay's own
+	// upstream dials resolve through it and nothing else. Required.
+	UpstreamDNS []netip.Addr
+	// UpstreamDNSSource names where UpstreamDNS came from (SourceClaim or
+	// SourceResolvConf); the relay logs it beside the list. Required.
+	UpstreamDNSSource string
 
 	// Environment, when set, is recorded as the ledger's first entry.
 	Environment *relaycfg.Environment
@@ -57,9 +63,8 @@ type Config struct {
 	// BuildLink, when valid, is the segment the relay serves the build on.
 	// The upstream dialer refuses every address inside it, whether or not
 	// SSRF is on, so the relay never dials back into the build segment (its
-	// own address included) and records the result as an upstream input;
-	// upstream DNS detection skips a nameserver inside it. Container mode
-	// leaves it unset.
+	// own address included) and records the result as an upstream input.
+	// Container mode leaves it unset.
 	BuildLink netip.Prefix
 
 	// UpstreamCACerts are additional PEM-encoded CA certificates trusted
@@ -81,6 +86,15 @@ type Config struct {
 	// plane is served through the netstack.
 	ControlListener net.Listener
 }
+
+// The sources of Config.UpstreamDNS (see relaycfg's package doc).
+const (
+	// SourceClaim is a list the claim's upstream_dns carried.
+	SourceClaim = "claim"
+	// SourceResolvConf is the absent-field default: the usable nameservers
+	// of the relay's own /etc/resolv.conf.
+	SourceResolvConf = "resolv.conf"
+)
 
 // Relay is the core proxy that intercepts network traffic and writes a ledger.
 type Relay struct {
@@ -107,8 +121,9 @@ type Relay struct {
 	certCache   map[string]*tls.Certificate
 	certCacheMu sync.RWMutex
 
-	selfIP      net.IP
-	upstreamDNS string
+	selfIP net.IP
+	// upstreamDNS is cfg.UpstreamDNS as host:port, in order.
+	upstreamDNS []string
 
 	transport *http.Transport
 
@@ -151,16 +166,39 @@ func Start(cfg Config) (*Relay, error) {
 	if cfg.CollectorURL == "" {
 		return nil, fmt.Errorf("relay: CollectorURL is required")
 	}
+	if len(cfg.UpstreamDNS) == 0 {
+		return nil, fmt.Errorf("relay: UpstreamDNS is required")
+	}
+	if cfg.UpstreamDNSSource == "" {
+		return nil, fmt.Errorf("relay: UpstreamDNSSource is required")
+	}
 
 	r := &Relay{
-		cfg: cfg,
-		sink: newCollectorClient(
-			cfg.CollectorURL, cfg.CollectorToken, cfg.CollectorTransport),
+		cfg:          cfg,
 		reqSigs:      make(map[*http.Request][]byte),
 		reqBaseNames: make(map[*http.Request]string),
 		certCache:    make(map[string]*tls.Certificate),
 		errs:         make(chan error, 4),
 	}
+	for _, a := range cfg.UpstreamDNS {
+		r.upstreamDNS = append(r.upstreamDNS,
+			netip.AddrPortFrom(a, upstreamDNSPort).String())
+	}
+	log.Print(upstreamLogLine(cfg.UpstreamDNS, cfg.UpstreamDNSSource))
+	collectorTransport := cfg.CollectorTransport
+	if collectorTransport == nil {
+		// A direct CollectorURL that names a host resolves through the list
+		// too; the clone keeps the default transport's proxy and timeouts.
+		base, ok := http.DefaultTransport.(*http.Transport)
+		if !ok {
+			return nil, fmt.Errorf(
+				"relay: http.DefaultTransport is not an *http.Transport")
+		}
+		t := base.Clone()
+		t.DialContext = r.upstreamDialContext
+		collectorTransport = t
+	}
+	r.sink = newCollectorClient(cfg.CollectorURL, cfg.CollectorToken, collectorTransport)
 
 	headerEnv, err := environmentLabel(cfg.Environment)
 	if err != nil {
@@ -191,16 +229,11 @@ func Start(cfg Config) (*Relay, error) {
 	if cfg.SelfIP != nil {
 		r.selfIP = cfg.SelfIP
 	} else {
-		if err := r.detectSelfIP(); err != nil {
+		ip, err := DetectSelfIP()
+		if err != nil {
 			return nil, fmt.Errorf("detecting self IP: %w", err)
 		}
-	}
-
-	// Detect or use provided upstream DNS
-	if cfg.UpstreamDNS != "" {
-		r.upstreamDNS = cfg.UpstreamDNS
-	} else {
-		r.detectUpstreamDNS()
+		r.selfIP = ip
 	}
 
 	// Generate ephemeral CA
@@ -346,10 +379,12 @@ func (r *Relay) generateCA() error {
 	return nil
 }
 
-func (r *Relay) detectSelfIP() error {
+// DetectSelfIP returns the first non-loopback IPv4 address of the host's
+// interfaces, the relay's own address when its launcher names none.
+func DetectSelfIP() (net.IP, error) {
 	addrs, err := net.InterfaceAddrs()
 	if err != nil {
-		return fmt.Errorf("cannot enumerate interfaces: %w", err)
+		return nil, fmt.Errorf("cannot enumerate interfaces: %w", err)
 	}
 	for _, addr := range addrs {
 		ipNet, ok := addr.(*net.IPNet)
@@ -358,51 +393,50 @@ func (r *Relay) detectSelfIP() error {
 		}
 		ip := ipNet.IP.To4()
 		if ip != nil && !ip.IsLoopback() {
-			r.selfIP = ip
-			return nil
+			return ip, nil
 		}
 	}
-	return fmt.Errorf("no non-loopback IPv4 address found")
+	return nil, fmt.Errorf("no non-loopback IPv4 address found")
 }
 
-func (r *Relay) detectUpstreamDNS() {
-	if env := os.Getenv("UPSTREAM_DNS"); env != "" {
-		if !strings.Contains(env, ":") {
-			env += ":53"
-		}
-		r.upstreamDNS = env
-		return
-	}
-
-	data, err := os.ReadFile("/etc/resolv.conf")
-	if err != nil {
-		r.upstreamDNS = "8.8.8.8:53"
-		return
-	}
-	r.upstreamDNS = pickNameserver(string(data), r.selfIP, r.cfg.BuildLink)
-}
-
-// pickNameserver returns the first resolv.conf nameserver the relay can use
-// upstream, as host:53, or 8.8.8.8:53 when there is none. It skips the
-// relay's own address, 127.0.0.1, and anything inside the build link, which
-// the relay's connected route would send to the build environment.
-func pickNameserver(resolvConf string, self net.IP, link netip.Prefix) string {
+// ResolvConfServers returns every nameserver in resolvConf the relay can use
+// upstream, in file order: all but the relay's own address, 127.0.0.1, and
+// anything inside the build link, which the relay's connected route would
+// send to the build environment. Docker's embedded 127.0.0.11 is kept. An
+// empty result means the file names no usable server; there is no default.
+func ResolvConfServers(resolvConf string, self net.IP, link netip.Prefix) []netip.Addr {
+	selfAddr, _ := netip.AddrFromSlice(self)
+	selfAddr = selfAddr.Unmap()
+	loopback := netip.AddrFrom4([4]byte{127, 0, 0, 1})
+	var out []netip.Addr
 	for _, line := range strings.Split(resolvConf, "\n") {
 		fields := strings.Fields(line)
 		if len(fields) < 2 || fields[0] != "nameserver" {
 			continue
 		}
-		ns := fields[1]
-		if ns == self.String() || ns == "127.0.0.1" {
+		a, err := netip.ParseAddr(fields[1])
+		if err != nil {
 			continue
 		}
-		if a, err := netip.ParseAddr(ns); err == nil && link.IsValid() &&
-			link.Contains(a.Unmap()) {
+		a = a.Unmap()
+		if a == loopback || (selfAddr.IsValid() && a == selfAddr) ||
+			(link.IsValid() && link.Contains(a)) {
 			continue
 		}
-		return net.JoinHostPort(ns, "53")
+		out = append(out, a)
 	}
-	return "8.8.8.8:53"
+	return out
+}
+
+// upstreamLogLine is the line the relay logs for its resolver list. It names
+// only addresses and their source, never claim secrets.
+func upstreamLogLine(list []netip.Addr, source string) string {
+	strs := make([]string, len(list))
+	for i, a := range list {
+		strs[i] = a.String()
+	}
+	return fmt.Sprintf("relay: upstream resolvers: %s (%s)",
+		strings.Join(strs, ", "), source)
 }
 
 // environmentLabel returns the header's unsigned environment label: the type

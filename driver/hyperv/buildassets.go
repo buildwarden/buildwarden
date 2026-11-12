@@ -30,6 +30,13 @@ func hypervCacheDir() string {
 	return filepath.Join(".", ".warden-cache", "hyperv")
 }
 
+// relayBootChannel is the link-channel stamp refresh-cache.sh writes beside
+// the relay boot VHDX: 2 is a disk whose init reads the per-build relay seed
+// and whose relay takes upstream_dns in the claim. It moves apart from
+// buildlink.Channel, which the qemu and Firecracker initramfs and the vz
+// image keep, so a change to this disk alone rebuilds only it.
+const relayBootChannel = 2
+
 // RefreshRelayBootFix rebuilds and installs the relay boot VHDX (its relay
 // binary and init) from the source tree.
 const RefreshRelayBootFix = "build it from the source tree (Git Bash, needs WSL): " +
@@ -64,11 +71,12 @@ func relayBootStampPath(vhdx string) string {
 
 // relayBootStamp describes the relay boot VHDX's link-channel stamp, with
 // Path empty when the disk is not found. The VHDX bakes the relay binary and
-// its init, so a disk built before the relay took its build link from the
-// claim must be refreshed once.
+// its init, so a disk built before its init read the relay seed and its relay
+// took upstream_dns (relayBootChannel) must be refreshed once; a disk stamped
+// 1 or unstamped is refused before any VM and BLOCKED in doctor.
 func relayBootStamp() driver.LauncherStamp {
 	st := driver.LauncherStamp{What: "hyperv relay boot VHDX", Rebuild: RefreshRelayBootFix,
-		Required: true}
+		Required: true, Want: relayBootChannel}
 	if p, err := resolveRelayBootVHDX(); err == nil {
 		st.Path = relayBootStampPath(p)
 	}

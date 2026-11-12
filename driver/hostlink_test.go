@@ -93,3 +93,33 @@ func TestLauncherStampBlocks(t *testing.T) {
 		})
 	}
 }
+
+// TestLauncherStampWant: a stamp with Want compares against it, not
+// buildlink.Channel, in Check, Blocks and Report alike.
+func TestLauncherStampWant(t *testing.T) {
+	dir := t.TempDir()
+	st := LauncherStamp{What: "the disk", Rebuild: "refresh.sh", Required: true, Want: 2,
+		Path: filepath.Join(dir, "disk.link-channel")}
+	for _, tc := range []struct {
+		body  string // "" leaves no stamp
+		state string
+	}{{"", "missing"}, {"WARDEN_LINK_CHANNEL=1\n", "stale"},
+		{"WARDEN_LINK_CHANNEL=2\n", "current"}} {
+		if tc.body != "" {
+			if err := os.WriteFile(st.Path, []byte(tc.body), 0o644); err != nil {
+				t.Fatal(err)
+			}
+		}
+		err := st.Check()
+		var fe *FixableError
+		if (tc.state == "current") != (err == nil) ||
+			(err != nil && (!errors.As(err, &fe) || fe.Fix != "refresh.sh")) {
+			t.Errorf("%s: Check = %v", tc.state, err)
+		}
+		if st.Blocks() != (tc.state != "current") ||
+			!strings.Contains(st.Report(), tc.state) {
+			t.Errorf("%s: Blocks = %v, Report = %q", tc.state, st.Blocks(),
+				st.Report())
+		}
+	}
+}

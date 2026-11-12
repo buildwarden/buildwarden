@@ -116,16 +116,22 @@ the relay process. No amount of privilege inside the VM can change this.
 ## Hyper-V Driver — Topological Isolation
 
 Like QEMU, the Hyper-V driver uses two VMs and the hypervisor enforces the
-topology. The relay VM and build VM share a Private build switch; the relay
-reaches upstream through an Internal NAT switch with a static host-only address
-(`192.168.240.2/20`, created by `warden setup --driver hyperv`). The build VM
-has one interface, on the Private switch, so its only path is the relay.
+topology. The relay VM and build VM share a Private build switch (one per
+build: a slot switch `warden setup --driver hyperv` made for the durable
+strategy, or a per-build switch); the relay reaches upstream through an
+Internal NAT switch. Each relay takes its own address in the NAT prefix, read
+back from the host and allocated per build under a host lock, and gets it,
+with the gateway and a fresh claim token, from a per-build `WARDENRELAY` seed
+ISO. The build VM has one interface, on the relay's Private switch, so its
+only path is the relay; before it starts, the driver refuses a slot that holds
+any adapter but the relay's build NIC and its own.
 
 The same relay-VM iptables rules apply (the init script is shared with QEMU):
 `PREROUTING` redirect, `FORWARD DROP`, `POSTROUTING MASQUERADE`, and an `INPUT`
 rule that lets the build VM reach the control plane but drops it from the claim
 port. The claim endpoint lives only on the host-only NAT switch, so the build
-VM cannot reach it even before iptables.
+VM cannot reach it even before iptables, and it accepts only the build's
+token.
 
 ## Firecracker Driver — Topological Isolation
 
@@ -191,10 +197,11 @@ reaches every component per build:
   build interface over netlink before it answers the claim, refusing a link
   another of its interfaces already uses; in host mode (vz) it builds its
   netstack from it;
-- the build VM, from its seed (cloud-init `network-config`, Windows
-  `warden-run.ps1`), or by DHCP from the relay (the direct-boot inits, with
-  the kernel command line's `warden.link_ip` and `warden.link_gw` as the
-  cross-check and fallback; vz's `warden-boot`).
+- the build VM, from its seed (cloud-init `network-config`), or by DHCP from
+  the relay (Windows guests, whose `warden-run.ps1` passes `initialize` no
+  `--ip`; the direct-boot inits, with the kernel command line's
+  `warden.link_ip` and `warden.link_gw` as the cross-check and fallback;
+  vz's `warden-boot`).
 
 **The relay's DHCP responder.** In vm and host modes the relay answers DHCP
 on the build link only: in vm mode on a UDP socket bound to the build
@@ -209,10 +216,12 @@ the guest is ignored.
 **The link block.** Inside the relay the link is a connected route, so an
 upstream address inside it would be sent to the build VM. In vm and host
 modes the relay's upstream dialer refuses every address inside the link
-(whether or not host mode's SSRF filter is on), and its upstream DNS
-detection skips a nameserver there. warden refuses a link that holds a host
-interface address, Firecracker leaves out host resolvers inside it, and
-Hyper-V setup refuses a `--nat-prefix` that overlaps it.
+(whether or not host mode's SSRF filter is on), it refuses a claim whose
+`upstream_dns` names a resolver there, and its `resolv.conf` default skips a
+nameserver there. warden refuses a link that holds a host interface address,
+every VM driver leaves out host resolvers inside it (and refuses a `[vm] dns`
+entry there), and Hyper-V refuses a NAT prefix that overlaps it, at setup and
+at every build.
 
 ## Common DNS Behavior
 
@@ -220,7 +229,13 @@ All drivers configure the build environment to use the relay as its DNS server:
 
 - `artifacts` and `cwd` resolve to the relay itself (reserved hostnames for
   context transfer and artifact upload)
-- All other queries are forwarded upstream and logged in the ledger
+- All other queries are forwarded to the relay's upstream resolvers, asked in
+  order, and logged in the ledger. The list is fixed at the claim: its
+  `upstream_dns`, which every VM driver sends (`[vm] dns` when set, used
+  exclusively, else the host's resolvers the driver can reach), or, when the
+  claim has none (the container driver), the usable nameservers of the
+  relay's own `resolv.conf`. No public resolver stands in, and the relay's
+  own upstream lookups use the same list.
 - IPv6 is disabled in VM drivers to prevent bypass via link-local addresses
 
 ## What Isolation Prevents

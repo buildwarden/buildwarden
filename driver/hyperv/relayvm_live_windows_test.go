@@ -4,6 +4,7 @@ package hyperv
 
 import (
 	"context"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -39,6 +40,16 @@ func TestLiveCreateRelayVM(t *testing.T) {
 		_ = os.Remove(overlay)
 	})
 
+	seedDir := filepath.Join(t.TempDir(), "relay-seed")
+	seed := RelaySeed{IP: netip.MustParseAddr("192.168.240.2"), PrefixLen: 20,
+		Gateway: netip.MustParseAddr("192.168.240.1"), Token: strings.Repeat("ab", 32)}
+	if err := seed.Stage(seedDir); err != nil {
+		t.Fatal(err)
+	}
+	if err := makeRelaySeedISO(seedDir, seedDir+".iso"); err != nil {
+		t.Fatal(err)
+	}
+
 	spec := RelayVMSpec{
 		Name:        name,
 		BootVHDX:    boot,
@@ -46,6 +57,8 @@ func TestLiveCreateRelayVM(t *testing.T) {
 		BuildSwitch: "warden-dev",
 		NATSwitch:   "warden-dev-nat",
 		COMPipePath: `\\.\pipe\` + name,
+		SeedISO:     seedDir + ".iso",
+		Notes:       "warden-relay-ip=192.168.240.2 warden-relay-switch=warden-dev",
 	}
 	if _, err := p.CreateRelayVM(ctx, spec); err != nil {
 		t.Fatalf("CreateRelayVM: %v", err)

@@ -6,6 +6,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -42,15 +43,16 @@ func startTestRelay(
 	dnsConn, _ := net.ListenPacket("udp", "127.0.0.1:0")
 
 	rcfg := Config{
-		CollectorURL:    srv.URL,
-		CollectorToken:  "tok",
-		CaptureMode:     capture,
-		SelfIP:          net.ParseIP("127.0.0.1"),
-		UpstreamDNS:     "127.0.0.1:1",
-		DNSPacketConn:   dnsConn,
-		HTTPListener:    httpLn,
-		HTTPSListener:   httpsLn,
-		ControlListener: ctrlLn,
+		CollectorURL:      srv.URL,
+		CollectorToken:    "tok",
+		CaptureMode:       capture,
+		SelfIP:            net.ParseIP("127.0.0.1"),
+		UpstreamDNS:       []netip.Addr{netip.MustParseAddr("127.0.0.1")},
+		UpstreamDNSSource: SourceClaim,
+		DNSPacketConn:     dnsConn,
+		HTTPListener:      httpLn,
+		HTTPSListener:     httpsLn,
+		ControlListener:   ctrlLn,
 	}
 	for _, o := range opts {
 		o(&rcfg)

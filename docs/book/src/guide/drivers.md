@@ -122,6 +122,14 @@ Build the build VM assets (for direct-boot mode):
 tools/build-vm/build-initramfs.sh
 ```
 
+The relay's DNS resolvers go in its claim: `[vm] dns` when set, else the
+host's `/etc/resolv.conf` (the primary resolvers macOS writes there, or a
+Linux host's), leaving out loopback and link-local servers (they would be the
+relay VM's own), QEMU user-mode NAT's `10.0.2.0/24` and the build link. With
+none left the build is refused before any VM boots, naming each server, with
+the fix (an off-host DNS server, or `[vm] dns`). The relay initramfs needs no
+rebuild for this.
+
 ### Cloud Images
 
 The QEMU driver uses QCOW2 cloud images as the build environment. Supported
@@ -295,6 +303,11 @@ warden build --driver vz --script ./build.sh .
 - The image's `warden-boot` takes its address by DHCP from the host relay,
   which answers from the build link in its claim, so the image bakes no
   address
+- The relay's DNS resolvers go in its claim: `[vm] dns` when set, else the
+  Mac's `/etc/resolv.conf`, leaving out only servers inside the build link
+  (the relay runs on the Mac, so a loopback resolver is reachable). That file
+  lists only the primary resolvers, not macOS's scoped or split-DNS ones
+  (a VPN's per-domain resolvers): a build that needs those sets `[vm] dns`
 
 ---
 
@@ -319,8 +332,17 @@ switch with no other path.
 Create the durable network builds reuse (one time, from an elevated terminal):
 
 ```sh
-warden setup --driver hyperv
+warden setup --driver hyperv              # 4 build switches: 4 builds at once
+warden setup --driver hyperv --slots 8
 ```
+
+It makes one Private build switch per concurrent build (`--slots`, default 4),
+the Internal NAT switch and its NAT rule. A durable build takes the lowest
+switch with nothing attached; with all in use it is refused, naming the VMs on
+each, `warden clean --driver hyperv` (for VMs a `--keep-vms` build or a
+killed warden left) and `--slots`. Upgrading from a warden whose setup made one build switch
+needs this one elevated run again: it makes the slots and retires the old
+switch.
 
 Prepare a Windows Server base image. By default warden downloads Microsoft's
 current Windows Server 2025 evaluation VHDX (about 11 GB) from the Evaluation
@@ -366,14 +388,35 @@ elevation and stand up a fresh isolated network per build:
 warden hyperv service install     # run once, elevated
 ```
 
+A service installed by an older warden speaks an older protocol: doctor
+reports it as stale, and a non-elevated build is refused until it is
+reinstalled (elevated: `warden hyperv service uninstall`, then `warden
+hyperv service install`). One that is installed but stopped is reported as
+stopped, with `Start-Service WardenHyperV` (elevated) as the fix. When warden
+cannot read the service's state (access denied, say, in an SSH or scheduled
+session), doctor says so rather than "not installed", and names `Get-Service
+WardenHyperV` (elevated) to check it.
+
 ### How It Works
 
 - The relay VM boots from a UKI boot disk with `/sbin/relay` baked in. From a
   source tree, `tools/relay-vm/hyperv/refresh-cache.sh` (Git Bash, needs WSL)
   builds it into the cache below, and rebuilds it only when the relay source
   has changed since; `--check` reports whether it is current
-- It is reachable on a static host-only NAT IP (`192.168.240.2:8301`) for the
-  claim; the build VM cannot reach the claim port
+- Each build's relay gets its own address on the NAT, the lowest free one in
+  the NAT prefix read back from the host (`--nat-prefix`, `--host-ip`), so
+  builds run concurrently. Its address, prefix, gateway and a fresh claim
+  token reach it on a small per-build seed ISO (`WARDENRELAY`); nothing per
+  build is baked into the boot disk. The claim needs that token, and the build
+  VM cannot reach the claim port
+- The relay's DNS resolvers go in the claim: `[vm] dns` when set, else the
+  IPv4 DNS servers of the host's default route interface, leaving out
+  loopback, link-local, the host's own addresses, the NAT prefix and the build
+  link. With none left the build is refused, naming the interface, with the
+  fixes (an off-host DNS server, or `[vm] dns`)
+- The Windows build VM joins its relay's switch and takes its address from
+  the relay's DHCP lease; a guest that got none logs, in `warden-run.log` and
+  on COM1, its address and origin (`WellKnown, no DHCP lease from the relay`)
 - Network isolation is topological, enforced by the switch layout
 
 ### Examples
@@ -518,16 +561,20 @@ without sudo for it.
 
 ### Upstream DNS
 
-The relay resolves names for the build through the host's resolvers: those
-in `/etc/resolv.conf`, or systemd-resolved's upstream list when its
-`127.0.0.53` stub fronts them. A loopback resolver or one on the host's own
-address (a local dnsmasq, unbound or libvirt) is left out, since the slot
+The relay resolves names for the build through `[vm] dns` when it is set
+(used exclusively; see
+[Configuration](configuration.md#the-relays-resolvers-vm-dns)), and
+otherwise through the host's resolvers: those in `/etc/resolv.conf`, or
+systemd-resolved's upstream list when its `127.0.0.53` stub fronts them. They
+reach the relay in its claim, not on its kernel command line. A loopback or
+link-local resolver, or one on the host's own address (a local dnsmasq,
+unbound or libvirt) is left out, since the slot
 rules do not let the relay open connections to the host. So is one inside
 the build link (`[vm] build_link`, default `100.127.255.252/30`), the relay's
 link to the build VM: the relay would send its queries to the build VM. The
 default is a range no VPC or LAN resolver uses, so an AWS VPC's own
 resolver is used as is. With none left the build stops before booting and
-says how to fix it: a resolver outside the link, or another `[vm]
+says how to fix it: a resolver outside the link, `[vm] dns`, or another `[vm]
 build_link`. Under WSL, whose only
 resolver is its DNS-tunnelling address `10.255.255.254`, set
 `generateResolvConf=false` under `[network]` in `/etc/wsl.conf` and list the
@@ -590,8 +637,13 @@ step, changing `[vm] build_link` needs nothing on any driver.
 
 The qemu and Firecracker relay initramfs need nothing: the relay addresses
 its build interface from the claim and replaces an old init's address. Disk
-image builds on qemu and Firecracker, and Windows guests, take the link from
-their per-build seed and need nothing either.
+image builds on qemu and Firecracker take the link from their per-build seed,
+and Windows guests from the relay's DHCP lease, and need nothing either.
+
+Hyper-V's relay boot VHDX is stamped once more by the per-build relay seed:
+a disk stamped before it (channel 1) is refused by a build and BLOCKED in
+doctor, naming `tools/relay-vm/hyperv/refresh-cache.sh`, the same one
+rebuild; and an older warden refuses the new disk the same way.
 
 On vz, `warden image prepare` refreshes only images in the cache
 (`~/.cache/warden/images`), and with no source only the active image. A build

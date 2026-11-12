@@ -2,6 +2,7 @@ package firecracker
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -9,10 +10,11 @@ import (
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/buildlink"
+	"github.com/buildwarden/buildwarden/driver/resolvers"
 )
 
 // Host posture: the firewall states setup cannot make safe by itself (a11),
-// and the upstream resolver the relay is given (Decision 5).
+// and the upstream resolvers the relay is given in its claim (upstream_dns).
 
 const firewalldFix = "put the upstream TAPs in firewalld's trusted zone: " +
 	"firewall-cmd --permanent --zone=trusted --add-interface=wfc+u && firewall-cmd --reload"
@@ -74,99 +76,92 @@ func nftDropFix(drops []nftChain) string {
 		strings.Join(cmds, " && ")
 }
 
-// parseNameservers returns the IPv4 nameservers of a resolv.conf.
-func parseNameservers(conf string) []string {
-	var out []string
-	for _, line := range strings.Split(conf, "\n") {
-		f := strings.Fields(line)
-		if len(f) >= 2 && f[0] == "nameserver" {
-			if ip := net.ParseIP(f[1]); ip != nil && ip.To4() != nil {
-				out = append(out, ip.String())
+// wslTunnelResolver is WSL's DNS-tunnelling resolver, an address on the host
+// itself.
+const wslTunnelResolver = "10.255.255.254"
+
+// vmDNSFix is the remedy every host-resolver refusal also names.
+const vmDNSFix = "or set [vm] dns in warden.toml to DNS servers the relay can reach"
+
+// resolverRule is Firecracker's reachability rule: a loopback address or one
+// assigned to the host is reached from the relay as NEW traffic to the host,
+// which WARDEN-FC drops; a link-local one is not reachable from behind the
+// slot's NAT; and one inside the build link is routed by the relay VM's
+// connected route to the build VM.
+func resolverRule(local func(net.IP) bool, link buildlink.Link) resolvers.Rule {
+	return resolvers.Rules(resolvers.Loopback,
+		func(a netip.Addr) string {
+			if local(net.IP(a.AsSlice())) {
+				return "assigned to this host"
 			}
+			return ""
+		},
+		resolvers.LinkLocal, resolvers.BuildLink(link))
+}
+
+// relayResolvers is the relay's upstream resolvers and where they came from:
+// [vm] dns when set, each entry checked by the rule and no host file read;
+// otherwise the host's (resolvers.Linux), minus those the rule excludes. An
+// unusable [vm] dns entry, or no usable host resolver, is a fixable error.
+func relayResolvers(read resolvers.ReadFile, local func(net.IP) bool,
+	link buildlink.Link, vmDNS []netip.Addr) (list []netip.Addr, source string, err error) {
+	rule := resolverRule(local, link)
+	if len(vmDNS) > 0 {
+		list, err := resolvers.Check(vmDNS, rule)
+		if err != nil {
+			return nil, resolvers.VMDNS, vmDNSRefusal(err, link)
 		}
+		return list, resolvers.VMDNS, nil
 	}
-	return out
-}
-
-// selectResolvers splits nameservers into those the relay can use and those
-// it cannot: a loopback address or one assigned to the host is reached from
-// the relay as NEW traffic to the host, which WARDEN-FC drops, and one inside
-// the build link is routed by the relay VM's connected route to the build VM.
-func selectResolvers(servers []string, local func(net.IP) bool,
-	link buildlink.Link) (use, excluded []string) {
-	for _, s := range servers {
-		ip := net.ParseIP(s)
-		if ip == nil || ip.IsLoopback() || local(ip) || inLink(link, ip) {
-			excluded = append(excluded, s)
-			continue
-		}
-		use = append(use, s)
-	}
-	return use, excluded
-}
-
-// inLink reports whether ip is inside the build link.
-func inLink(link buildlink.Link, ip net.IP) bool {
-	a, ok := netip.AddrFromSlice(ip)
-	return ok && link.Net.Contains(a.Unmap())
-}
-
-const (
-	resolvConf         = "/etc/resolv.conf"
-	resolvedUpstream   = "/run/systemd/resolve/resolv.conf"
-	resolvedStubServer = "127.0.0.53"
-	wslTunnelResolver  = "10.255.255.254"
-)
-
-// upstreamResolvers is the host's off-host resolvers for the relay: those of
-// /etc/resolv.conf, or of systemd-resolved's upstream list when its stub
-// fronts them, minus loopback and host-local addresses. None left is a
-// fixable error naming what was excluded.
-func upstreamResolvers(readFile func(string) ([]byte, error), local func(net.IP) bool,
-	link buildlink.Link) ([]string, error) {
-	b, err := readFile(resolvConf)
+	host, source, err := resolvers.Linux(read)
 	if err != nil {
-		return nil, driver.Fixable("list an off-host DNS server as a nameserver in "+
-			""+resolvConf,
-			"reading %s: %v", resolvConf, err)
+		return nil, source, driver.Fixable("list an off-host DNS server as a nameserver "+
+			"in "+resolvers.ResolvConf+", "+vmDNSFix, "%v", err)
 	}
-	servers := parseNameservers(string(b))
-	if len(servers) == 1 && servers[0] == resolvedStubServer {
-		if up, err := readFile(resolvedUpstream); err == nil {
-			servers = parseNameservers(string(up))
-		}
-	}
-	use, excluded := selectResolvers(servers, local, link)
+	use, excluded := resolvers.Select(host, rule)
 	if len(use) > 0 {
-		return use, nil
+		return use, source, nil
 	}
 	fix := "point the host's resolver at an off-host DNS server: list one as a nameserver " +
-		"in " + resolvConf + " (under systemd-resolved, set DNS= in " +
-		"/etc/systemd/resolved.conf)"
-	for _, s := range excluded {
-		if inLink(link, net.ParseIP(s)) {
+		"in " + resolvers.ResolvConf + " (under systemd-resolved, set DNS= in " +
+		"/etc/systemd/resolved.conf), " + vmDNSFix
+	for _, e := range excluded {
+		if resolvers.InLink(link, e.Addr) {
 			fix = "the relay's link to the build VM is " + link.String() +
 				", so it cannot reach a resolver there: list an off-host DNS " +
-				"server outside it as a nameserver in " + resolvConf +
+				"server outside it as a nameserver in " + resolvers.ResolvConf +
 				" (under systemd-resolved, set DNS= in " +
 				"/etc/systemd/resolved.conf), or set [vm] build_link in " +
 				"warden.toml (or --build-link) to a /30 that holds none of " +
-				"the host's resolvers"
+				"the host's resolvers, " + vmDNSFix
 		}
-		if s == wslTunnelResolver {
+		if e.Addr.String() == wslTunnelResolver {
 			fix = "WSL's only resolver is its DNS-tunnelling address " +
 				wslTunnelResolver +
 				" on the host itself: set generateResolvConf=false under " +
 				"[network] in " +
 				"/etc/wsl.conf and list the Windows host's DNS servers as " +
 				"nameservers in " +
-				resolvConf + " (or set dnsTunneling=false in .wslconfig)"
+				resolvers.ResolvConf +
+				" (or set dnsTunneling=false in .wslconfig), " + vmDNSFix
 		}
 	}
-	what := "none listed"
+	what := "none listed in " + source
 	if len(excluded) > 0 {
-		what = "only resolvers it cannot reach: " + strings.Join(excluded, ", ")
+		what = "only resolvers it cannot reach in " + source + ": " +
+			resolvers.JoinExcluded(excluded)
 	}
-	return nil, driver.Fixable(fix,
+	return nil, source, driver.Fixable(fix,
 		"the relay needs an off-host upstream DNS server, and the host has %s", what)
+}
+
+// vmDNSRefusal is the fixable form of resolvers.Check's refusal.
+func vmDNSRefusal(err error, link buildlink.Link) error {
+	fix := "change or remove that entry in [vm] dns"
+	var ue *resolvers.UnusableError
+	if errors.As(err, &ue) && resolvers.InLink(link, ue.Addr) {
+		fix += ", or set [vm] build_link in warden.toml (or --build-link) to a /30 " +
+			"that holds none of [vm] dns"
+	}
+	return driver.Fixable(fix, "%v", err)
 }

@@ -4,18 +4,19 @@ package hyperv
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"os"
 	"time"
 
 	"github.com/Microsoft/go-winio"
+	"golang.org/x/sys/windows"
 	"golang.org/x/sys/windows/svc"
 	"golang.org/x/sys/windows/svc/mgr"
 )
 
 const (
-	serviceName        = "WardenHyperV"
 	serviceDisplayName = "BuildWarden Hyper-V privileged helper"
 	serviceDescription = "Performs Hyper-V host network standup " +
 		"(New-VMSwitch/New-NetNat/New-NetIPAddress) on behalf of " +
@@ -35,17 +36,84 @@ func dialServicePipe(timeout time.Duration) (net.Conn, error) {
 	return winio.DialPipe(ServicePipeName, &timeout)
 }
 
-// serviceReachable pings the pipe (short timeout). Used by capability detection
-// to set ServiceReachable without side effects.
-func serviceReachable() bool {
+// probeService pings the pipe (short timeout), without side effects, for
+// capability detection. A pipe that does not open is no service (not
+// installed, or not running); one that opens is reachable, or stale with the
+// reason pingService gives.
+func probeService() (reachable bool, stale string) {
 	conn, err := dialServicePipe(750 * time.Millisecond)
 	if err != nil {
-		return false
+		return false, ""
 	}
 	defer conn.Close()
 	_ = conn.SetDeadline(time.Now().Add(2 * time.Second))
-	_, err = clientRoundTrip(conn, svcRequest{Op: opPing})
-	return err == nil
+	stale = pingService(conn)
+	return stale == "", stale
+}
+
+// queryService reads the privileged service's state from the service control
+// manager, with connect and query-status rights only, which a non-elevated
+// process may hold; scmServiceState maps the answer.
+func queryService() (installed bool, state string, err error) {
+	scm, err := windows.OpenSCManager(nil, nil, windows.SC_MANAGER_CONNECT)
+	if err != nil {
+		return false, "", fmt.Errorf("open the service control manager: %w", err)
+	}
+	defer func() { _ = windows.CloseServiceHandle(scm) }()
+	name, err := windows.UTF16PtrFromString(serviceName)
+	if err != nil {
+		return false, "", err
+	}
+	s, openErr := windows.OpenService(scm, name, windows.SERVICE_QUERY_STATUS)
+	if openErr != nil {
+		return scmServiceState(openErr, nil, 0)
+	}
+	defer func() { _ = windows.CloseServiceHandle(s) }()
+	var st windows.SERVICE_STATUS
+	queryErr := windows.QueryServiceStatus(s, &st)
+	return scmServiceState(nil, queryErr, st.CurrentState)
+}
+
+// scmServiceState maps the SCM's answer for the privileged service, the
+// OpenService error and then QueryServiceStatus's error and state, to
+// whether it is installed and its state. Only "does not exist" is not
+// installed. Access denied is installed with its state unread, since the SCM
+// resolves the name before it checks access; any other error leaves both
+// unread, so the error is returned with installed false.
+func scmServiceState(openErr, queryErr error, current uint32) (
+	installed bool, state string, err error,
+) {
+	switch {
+	case errors.Is(openErr, windows.ERROR_SERVICE_DOES_NOT_EXIST):
+		return false, "", nil
+	case errors.Is(openErr, windows.ERROR_ACCESS_DENIED):
+		return true, "", fmt.Errorf("open service %s: %w", serviceName, openErr)
+	case openErr != nil:
+		return false, "", fmt.Errorf("open service %s: %w", serviceName, openErr)
+	case queryErr != nil:
+		return true, "", fmt.Errorf("query service %s: %w", serviceName, queryErr)
+	}
+	return true, serviceStateName(current), nil
+}
+
+// serviceStateName names an SCM service state as doctor prints it.
+func serviceStateName(state uint32) string {
+	switch state {
+	case windows.SERVICE_STOPPED:
+		return serviceStopped
+	case windows.SERVICE_START_PENDING:
+		return "starting"
+	case windows.SERVICE_STOP_PENDING:
+		return "stopping"
+	case windows.SERVICE_RUNNING:
+		return serviceRunning
+	case windows.SERVICE_PAUSED, windows.SERVICE_PAUSE_PENDING:
+		return "paused"
+	case windows.SERVICE_CONTINUE_PENDING:
+		return "resuming"
+	default:
+		return fmt.Sprintf("in state %d", state)
+	}
 }
 
 // runPipeServer listens on the ACL'd pipe and serves each connection until ctx

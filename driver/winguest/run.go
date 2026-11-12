@@ -8,10 +8,10 @@ import (
 
 // WardenRunPS1 is the bootstrap the warden-run startup task runs off the seed
 // volume. It copies warden-io.exe local, runs `warden-io initialize` with the
-// build link's relay and guest addresses (link), and powers off so the host
-// sees completion. A vm-mode relay also serves a DHCP lease on the link, which
-// a NIC still in DHCP mode may take first; it names the same address and
-// router, so initialize's static address ends in the same place.
+// build link's relay address (link) as its gateway, and powers off so the host
+// sees completion. It passes no --ip: the guest's NIC keeps the DHCP lease the
+// vm-mode relay serves on the link, the one source of its address, so no
+// static address races the lease.
 //
 // Progress and all warden-io output go to C:\warden\warden-run.log and, best
 // effort, to COM1. Hyper-V wires COM1 to a host named pipe, and qemu to its
@@ -39,8 +39,8 @@ function Emit($m) { Out-Line "[warden-run] $(Get-Date -Format o) $m" }
 Emit 'start'
 try {
   Copy-Item -Force (Join-Path $seed 'warden-io.exe') 'C:\warden\warden-io.exe'
-  Emit 'warden-io.exe staged; running initialize --gateway=%[1]s --ip=%[2]s'
-  & 'C:\warden\warden-io.exe' initialize --gateway=%[1]s --ip=%[2]s 2>&1 |
+  Emit 'warden-io.exe staged; running initialize --gateway=%[1]s'
+  & 'C:\warden\warden-io.exe' initialize --gateway=%[1]s 2>&1 |
     ForEach-Object { Out-Line ([string]$_) }
   Emit "warden-io exit=$LASTEXITCODE"
 } catch {
@@ -49,5 +49,5 @@ try {
 Emit 'powering off'
 if ($com) { try { $com.Close() } catch {} }
 Stop-Computer -Force
-`, link.Relay, link.GuestCIDR())
+`, link.Relay)
 }

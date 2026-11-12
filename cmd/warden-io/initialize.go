@@ -138,9 +138,15 @@ func holdForShell(env map[string]string, workdir string) int {
 // shellEnvPath is where --hold writes the environment a shell sources.
 func shellEnvPath() string { return filepath.Join(wardenDataDir(), "shell.env") }
 
+// waitForRelay polls the relay's health endpoint for 60s. On failure the
+// error carries relayWaitDiagnostic, so a guest that never got its address
+// (a Windows NIC with no lease from the relay) reads as that, not as a relay
+// that did not answer.
 func waitForRelay(gateway string) error {
+	relay := "artifacts"
 	healthURL := "http://artifacts/health"
 	if gateway != "" {
+		relay = gateway
 		healthURL = fmt.Sprintf("http://%s:8300/health", gateway)
 	}
 
@@ -157,7 +163,11 @@ func waitForRelay(gateway string) error {
 		}
 		time.Sleep(500 * time.Millisecond)
 	}
-	return fmt.Errorf("relay did not become healthy within 60s")
+	err := fmt.Errorf("relay at %s not reachable within 60s", relay)
+	if diag := relayWaitDiagnostic(); diag != "" {
+		err = fmt.Errorf("%w: %s", err, diag)
+	}
+	return err
 }
 
 // fetchBuildScript downloads the build script from the relay's canonical

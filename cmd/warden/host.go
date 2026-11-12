@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"net/netip"
 	"os"
 	"os/signal"
 
@@ -14,6 +16,7 @@ import (
 	"github.com/buildwarden/buildwarden/driver/firecracker"
 	"github.com/buildwarden/buildwarden/driver/hyperv"
 	"github.com/buildwarden/buildwarden/driver/qemu"
+	"github.com/buildwarden/buildwarden/driver/resolvers"
 	"github.com/buildwarden/buildwarden/driver/vz"
 )
 
@@ -52,7 +55,9 @@ a host interface overlaps it, and the state of each launcher asset's
 link-channel stamp (current, missing or stale, with the one-time rebuild).
 A missing or stale stamp fails doctor on the hyperv relay boot VHDX and the
 vz prepared image, which every build uses; on the qemu and firecracker
-direct-boot initramfs it is reported only.
+direct-boot initramfs it is reported only. Each VM driver also prints the
+relay's upstream resolvers and their source ([vm] dns, or the host's), or
+the refusal a build would get, which fails doctor.
 
 Exits non-zero when a required capability is unmet, so it is usable as a CI
 or agent gate.`,
@@ -69,28 +74,36 @@ or agent gate.`,
 				"(--driver qemu, vz, hyperv or firecracker)")
 		}
 		var link buildlink.Link
-		linkBlocked := false
+		var vmDNS []netip.Addr
+		blocked := false
 		if isVMDriver(drv) {
-			if link, linkBlocked, err = doctorBuildLink(out, cfg); err != nil {
+			if link, blocked, err = doctorBuildLink(out, cfg); err != nil {
 				return err
 			}
+			vmDNS = cfg.VM.DNSAddrs
 		}
 		switch drv {
 		case "hyperv":
 			detected := hyperv.Detect(hypervNetwork(cfg))
-			if blocked := hyperv.Doctor(out, detected); blocked || linkBlocked {
+			if hyperv.Doctor(out, detected, link, vmDNS) || blocked {
 				os.Exit(1)
 			}
 			return nil
 		case "firecracker":
-			if blocked := firecracker.Doctor(out, link); blocked || linkBlocked {
+			if firecracker.Doctor(out, link, vmDNS) || blocked {
 				os.Exit(1)
 			}
 			return nil
 		case "qemu":
-			err = qemu.Preflight()
+			if err = qemu.Preflight(); err == nil &&
+				doctorResolvers(out, qemu.Resolvers, link, vmDNS) {
+				blocked = true
+			}
 		case "vz":
-			err = vz.Preflight()
+			if err = vz.Preflight(); err == nil &&
+				doctorResolvers(out, vz.Resolvers, link, vmDNS) {
+				blocked = true
+			}
 		default:
 			var rt string
 			if rt, err = resolveRuntime(cfg); err == nil {
@@ -100,7 +113,7 @@ or agent gate.`,
 		if err != nil {
 			return err
 		}
-		if linkBlocked {
+		if blocked {
 			os.Exit(1)
 		}
 		fmt.Fprintln(out, "ok")
@@ -113,11 +126,17 @@ var setupCmd = &cobra.Command{
 	Short: "Prepare the host for the selected driver (one time, idempotent)",
 	Long: `One-time, idempotent host preparation for the selected driver.
 
-  hyperv   create the durable network builds reuse (a Private build switch,
-           named by --network, plus an Internal NAT switch, host IP and NAT
-           rule for relay egress). Run from an elevated terminal; afterwards
-           builds run as a Hyper-V Administrators member with no elevation.
-           Existing resources are verified, not recreated.
+  hyperv   create the durable network builds reuse: --slots Private build
+           switches (default 4, at most 64) named <network>-0 to
+           <network>-<N-1> (--network, default warden-dev), one per
+           concurrent build, plus an Internal NAT switch, host IP and NAT
+           rule for relay egress, which every build uses. Slot switches
+           above N with nothing attached are removed; the single <network>
+           Private switch of earlier setups is retired when nothing is
+           attached to it. Either refuses, naming the VMs, when one is in
+           use. Run from an elevated terminal; afterwards builds run as a
+           Hyper-V Administrators member with no elevation. Existing
+           resources are verified, not recreated.
   firecracker  as root (sudo), create --slots network slots (default 16, at
            most 256) owned by the invoking user: a bridge and three TAPs
            each, their sysctls, the warden_fc bridge table and the WARDEN-FC
@@ -137,10 +156,11 @@ Other drivers need no host setup; their base images are prepared with
 			return firecracker.RunSetup(cmd.OutOrStdout(),
 				firecracker.SetupOptions{Slots: flagSetupSlots})
 		}
-		if flagSetupSlots != 0 {
-			return driver.Fixable("", "--slots is only used by --driver firecracker")
-		}
 		if cfg.Runtime.Driver != "hyperv" {
+			if flagSetupSlots != 0 {
+				return driver.Fixable("", "--slots is only used by --driver "+
+					"hyperv and firecracker")
+			}
 			fmt.Fprintf(cmd.OutOrStdout(),
 				"--driver %s needs no host setup; "+
 					"prepare a base image with 'warden image prepare'\n",
@@ -156,6 +176,7 @@ Other drivers need no host setup; their base images are prepared with
 			SwitchName: hypervNetwork(cfg),
 			NATPrefix:  flagSetupNATPrefix,
 			HostIP:     flagSetupHostIP,
+			Slots:      flagSetupSlots,
 			Verbose:    cfg.Output.Verbose,
 		})
 	},
@@ -186,11 +207,16 @@ func init() {
 	}
 	addBuildLinkFlag(doctorCmd)
 	setupCmd.Flags().StringVar(&flagSetupNATPrefix, "nat-prefix", "",
-		"hyperv: NAT CIDR for relay egress (default 192.168.240.0/20)")
+		"hyperv: NAT CIDR for relay egress, used by every build "+
+			"(default "+hyperv.DefaultNATPrefix+")")
 	setupCmd.Flags().StringVar(&flagSetupHostIP, "host-ip", "",
-		"hyperv: host gateway IP on the NAT switch (default 192.168.240.1)")
+		"hyperv: host gateway IP on the NAT switch, used by every build "+
+			"(default "+hyperv.DefaultHostIP+")")
 	setupCmd.Flags().IntVar(&flagSetupSlots, "slots", 0,
-		"firecracker: network slots to create, 1-256 (default 16)")
+		fmt.Sprintf("hyperv: build switches to create, 1-%d (default %d); "+
+			"firecracker: network slots to create, 1-%d (default %d)",
+			hyperv.MaxSlots, hyperv.DefaultSlots,
+			firecracker.MaxSlots, firecracker.DefaultSlots))
 
 	hypervServiceCmd.AddCommand(&cobra.Command{
 		Use:   "install",
@@ -267,6 +293,29 @@ func doctorBuildLink(out io.Writer, cfg *Config) (buildlink.Link, bool, error) {
 		}
 	}
 	return link, blocked, nil
+}
+
+// doctorResolvers prints the relay's upstream resolvers and their source, as
+// resolve (a driver's Resolvers) chooses them from link and vmDNS ([vm] dns),
+// or the refusal a build would get, and reports whether it refused.
+func doctorResolvers(out io.Writer,
+	resolve func(buildlink.Link, []netip.Addr) ([]netip.Addr, string, error),
+	link buildlink.Link, vmDNS []netip.Addr) (blocked bool) {
+	list, source, err := resolve(link, vmDNS)
+	if err == nil {
+		fmt.Fprintf(out, "relay resolvers: %s (from %s)\n", resolvers.Join(list), source)
+		return false
+	}
+	from := ""
+	if source != "" {
+		from = " (from " + source + ")"
+	}
+	fmt.Fprintf(out, "relay resolvers%s: BLOCKED: %v\n", from, err)
+	var fe *driver.FixableError
+	if errors.As(err, &fe) && fe.Fix != "" {
+		fmt.Fprintf(out, "relay resolvers: to fix: %s\n", fe.Fix)
+	}
+	return true
 }
 
 // launcherStamps lists the driver's launcher assets that carry a

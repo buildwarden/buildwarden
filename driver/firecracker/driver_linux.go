@@ -110,10 +110,10 @@ func (d *Driver) StartBuild(ctx context.Context, req *driver.BuildRequest) (*dri
 	return &driver.BuildResult{OutputDir: outputDir}, nil
 }
 
-// buildPreflight is preflight on this host for req's build link, plus the
-// refusal of a link a host interface uses.
+// buildPreflight is requestPreflight on this host, plus the refusal of a link
+// a host interface uses.
 func buildPreflight(req *driver.BuildRequest) (*preflighted, error) {
-	pre, err := preflight(realHost{}, hostLocal, req.Link())
+	pre, err := requestPreflight(realHost{}, hostLocal, req)
 	if err != nil {
 		return nil, err
 	}
@@ -197,8 +197,7 @@ func (r *run) startRelay(ctx context.Context, sess *driver.Session, pre *preflig
 		return err
 	}
 	r.d.status(fmt.Sprintf("starting relay on slot %d...", r.slot))
-	cfg := relayConfig(r.slot, pre.assets.Kernel, initrd, relayArgs(r.slot, pre.resolvers,
-		token))
+	cfg := relayConfig(r.slot, pre.assets.Kernel, initrd, relayArgs(r.slot, token))
 	if r.relay, err = startVMM(r.work, "relay", cfg, r.d.Verbose, r.req.KeepVMs); err != nil {
 		return err
 	}

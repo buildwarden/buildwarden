@@ -106,3 +106,7 @@ func installCA(pem []byte, cert *x509.Certificate, mode string) error {
 
 	return fmt.Errorf("no writable CA bundle found")
 }
+
+// relayWaitDiagnostic adds nothing to a failed relay wait here: the launcher
+// set the address before initialize ran.
+func relayWaitDiagnostic() string { return "" }

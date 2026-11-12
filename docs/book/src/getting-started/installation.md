@@ -42,6 +42,12 @@ sudo install -m 0755 release-$v-x86_64/firecracker-$v-x86_64 /usr/local/bin/fire
 sudo apt install iproute2 nftables iptables qemu-utils genisoimage
 ```
 
+### Hyper-V driver
+
+Requires Windows with Hyper-V and its management stack enabled, and
+membership in Hyper-V Administrators (or an elevated terminal). Building the
+relay boot disk from a source tree also needs Git Bash and WSL.
+
 ### VZ driver
 
 Requires macOS on Apple Silicon. No extra installation is needed — Virtualization.framework is built into macOS.
@@ -152,13 +158,49 @@ dist/warden image prepare --driver firecracker   # ubuntu:24.04
 
 The relay needs a DNS server that is not on the host itself. A host whose only
 resolver is local (a resolver-less systemd-resolved stub, a local dnsmasq, or
-WSL's `10.255.255.254`) gets an error that says how to fix it; see
+WSL's `10.255.255.254`) gets an error that says how to fix it: give the host
+an off-host resolver, or name one in `[vm] dns`; see
 [Upstream DNS](../guide/drivers.md#upstream-dns).
 
 WSL2 is experimental: it needs nested virtualization and a custom WSL kernel
 built with `NF_TABLES_BRIDGE`, which the stock kernel leaves out, and WSL
 loses the slots and its iptables state whenever its VM shuts down, so re-run
 setup after each restart.
+
+## First-time Hyper-V Setup
+
+From a source tree, in Git Bash, then an elevated terminal for `setup`:
+
+```sh
+tools/relay-vm/hyperv/refresh-cache.sh   # relay boot disk (needs WSL)
+warden setup --driver hyperv             # elevated, once: NAT and 4 build switches
+warden image prepare --driver hyperv     # Windows Server base image (about 11 GB)
+warden doctor --driver hyperv
+```
+
+`warden setup --driver hyperv` makes the durable network that builds run on
+without elevation: an Internal NAT switch with its host IP and NAT rule, and
+one Private build switch per build that can run at once, `warden-dev-0` to
+`warden-dev-3` by default. Pass `--slots N` (1 to 64) for more or fewer
+concurrent builds; re-running setup with a smaller number removes the
+switches above it that nothing is attached to. When the default NAT prefix, `192.168.240.0/20`, is
+already used on your network, pick another with `--nat-prefix` and
+`--host-ip`; every build then gives its relay an address in that prefix (see
+[Corporate Networks](../guide/corporate-networks.md#address-collisions-with-the-hyper-v-nat)).
+
+Each build's relay resolves names through the IPv4 DNS servers of the host's
+default-route interface, or only through `[vm] dns` when you set it. A host
+whose only resolver is on the host itself is refused before any VM boots,
+naming the interface and both fixes.
+
+`warden doctor --driver hyperv` ends with a `Build network` block: the NAT it
+read back (`warden-dev-nat (192.168.240.0/20, host 192.168.240.1)`), the
+relay's resolvers and where they came from (`10.9.0.53 (from interface
+Ethernet)`), and each build switch `free` or `in use by` the VMs on it. A
+`BLOCKED` line there names its fix. An address other than the host IP on the
+NAT's vNIC, `vEthernet (warden-dev-nat)`, is a warning naming the
+`Remove-NetIPAddress` that clears it; setup leaves only the host IP there when
+it makes the NAT.
 
 ## Upgrading an Existing VM Driver Install
 
@@ -171,6 +213,16 @@ Firecracker direct-boot initramfs (their `build-initramfs.sh`). Until you do,
 a build refuses to start and names the command, and `warden doctor` reports
 the asset's link-channel stamp as `missing` or `stale`. The full table is in
 [Upgrading to the configurable build link](../guide/drivers.md#upgrading-to-the-configurable-build-link).
+
+Hyper-V's per-build relay channel changed the relay boot disk and the durable
+network once more. On a host set up before it, run two commands once:
+`tools/relay-vm/hyperv/refresh-cache.sh`, since a build refuses a relay boot
+disk from before the change and names that command; and, elevated,
+`warden setup --driver hyperv`, which makes the per-build switches and retires
+the single `warden-dev` build switch of earlier setups. Until you do, durable
+(non-elevated) builds refuse to start and name `warden setup`; elevated and
+service builds make their own switch and need only the relay disk. The qemu
+and Firecracker relay initramfs need no rebuild.
 
 ## Verify Installation
 

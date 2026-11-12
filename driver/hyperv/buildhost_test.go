@@ -2,14 +2,17 @@ package hyperv
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"net"
 	"net/http"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -28,9 +31,25 @@ import (
 //     /v1/ready, which is what StartRelay blocks on.
 //   - When the build VM "starts", it POSTs /v1/complete with a configurable exit
 //     code, which is what runBuild blocks on.
+//   - Like Hyper-V, it keeps each VM's Notes and the VMs attached to each
+//     switch, which RelayNotes and SwitchAdapters read back; the relay VM's
+//     seed "ISO" (copySeedISO) gives the simulated relay its claim token.
 //
 // CreateDiffDisk creates a stub overlay file so overlay cleanup is observable.
 type buildFake struct {
+	mu       sync.Mutex
+	attached map[string][]string // switch -> attached VMs (preset, then created)
+	notes    map[string]string   // relay VM -> Notes
+	// intruder, when set, is attached to the relay's build switch as the relay
+	// VM is created: a foreign VM on the build's segment.
+	intruder string
+	// serveToken, when set, is the token the simulated relay requires in
+	// place of its seed's.
+	serveToken   string
+	adapterCalls atomic.Int32
+	seed         atomic.Value // string: the relay seed the relay VM was created with
+	lastRelay    atomic.Value // RelayVMSpec
+
 	claimAddr string
 	buildExit int // exit code the simulated build reports on /v1/complete
 	// powersOffSilently simulates a guest that powers off without ever
@@ -60,11 +79,47 @@ func (f *buildFake) TeardownNetwork(context.Context, string) error { return nil 
 func (f *buildFake) CreateVM(_ context.Context, spec VMSpec) (*VMHandle, error) {
 	f.createBuild.Add(1)
 	f.lastBuildSpec.Store(spec)
+	f.attach(spec.SwitchName, spec.Name)
 	return &VMHandle{Name: spec.Name}, nil
 }
-func (f *buildFake) CreateRelayVM(context.Context, RelayVMSpec) (*VMHandle, error) {
+func (f *buildFake) CreateRelayVM(_ context.Context, spec RelayVMSpec) (*VMHandle, error) {
 	f.createRelay.Add(1)
-	return &VMHandle{Name: "relay"}, nil
+	f.lastRelay.Store(spec)
+	if b, err := os.ReadFile(spec.SeedISO); err == nil {
+		f.seed.Store(string(b))
+	}
+	f.mu.Lock()
+	if f.notes == nil {
+		f.notes = map[string]string{}
+	}
+	f.notes[spec.Name] = spec.Notes
+	f.mu.Unlock()
+	f.attach(spec.BuildSwitch, spec.Name)
+	if f.intruder != "" {
+		f.attach(spec.BuildSwitch, f.intruder)
+	}
+	return &VMHandle{Name: spec.Name}, nil
+}
+
+// attach records vm's adapter on sw.
+func (f *buildFake) attach(sw, vm string) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	if f.attached == nil {
+		f.attached = map[string][]string{}
+	}
+	f.attached[sw] = append(f.attached[sw], vm)
+}
+
+// seedKey is key's value in the relay seed the relay VM was created with.
+func (f *buildFake) seedKey(key string) string {
+	seed, _ := f.seed.Load().(string)
+	for _, line := range strings.Split(seed, "\n") {
+		if v, ok := strings.CutPrefix(line, "warden."+key+"="); ok {
+			return v
+		}
+	}
+	return ""
 }
 
 func (f *buildFake) StartVM(_ context.Context, name string) error {
@@ -82,8 +137,23 @@ func (f *buildFake) StartVM(_ context.Context, name string) error {
 }
 
 func (f *buildFake) StopVM(context.Context, string) error { return nil }
-func (f *buildFake) RemoveVM(context.Context, string) error {
+
+// RemoveVM forgets the VM's Notes and adapters, as Hyper-V frees its address
+// and slot.
+func (f *buildFake) RemoveVM(_ context.Context, name string) error {
 	f.remove.Add(1)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	delete(f.notes, name)
+	for sw, vms := range f.attached {
+		var keep []string
+		for _, vm := range vms {
+			if vm != name {
+				keep = append(keep, vm)
+			}
+		}
+		f.attached[sw] = keep
+	}
 	return nil
 }
 
@@ -106,6 +176,29 @@ func (f *buildFake) DisksInUse(context.Context) ([]string, error) { return nil, 
 func (f *buildFake) ListVMs(context.Context, string) ([]string, error) {
 	return nil, nil
 }
+func (f *buildFake) RelayNotes(context.Context) (map[string]string, error) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[string]string{}
+	for vm, n := range f.notes {
+		out[vm] = n
+	}
+	return out, nil
+}
+func (f *buildFake) SwitchAdapters(
+	_ context.Context, switches []string,
+) (map[string][]string, error) {
+	f.adapterCalls.Add(1)
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	out := map[string][]string{}
+	for _, sw := range switches {
+		if vms := f.attached[sw]; len(vms) > 0 {
+			out[sw] = append([]string(nil), vms...)
+		}
+	}
+	return out, nil
+}
 
 // simulateRelayReady mirrors the relay: accept the tunnel and the claim, then
 // POST /v1/ready to the collector over the tunnel.
@@ -116,7 +209,11 @@ func (f *buildFake) simulateRelayReady() {
 		return
 	}
 	go func() {
-		_ = relaycfg.Serve(ln, "", func(
+		token := f.seedKey("claim_token")
+		if f.serveToken != "" {
+			token = f.serveToken
+		}
+		_ = relaycfg.Serve(ln, token, func(
 			c relaycfg.Config, rt http.RoundTripper,
 		) (relaycfg.Identity, error) {
 			f.claimed.Store(c)
@@ -175,7 +272,10 @@ func baseCfg(t *testing.T, dir string) buildConfig {
 		SeedISO:       filepath.Join(dir, "seed.iso"),
 		BuildSwitch:   "warden-dev",
 		NATSwitch:     "warden-dev-nat",
-		relayIP:       "127.0.0.1",
+		NATPrefix:     testNATPrefix,
+		HostIP:        testHostIP,
+		RelaySeedDir:  filepath.Join(dir, "relay-seed"),
+		makeSeedISO:   copySeedISO,
 		claimPort:     freePort(t),
 		readyTimeout:  5 * time.Second,
 		Timeout:       5 * time.Second,
@@ -193,9 +293,27 @@ func freePort(t *testing.T) int {
 	return ln.Addr().(*net.TCPAddr).Port //nolint:forcetypeassert // a tcp listener
 }
 
+// The tests' NAT is 127.0.0.0/30 with the host at .2, so the allocator's
+// lowest free address, where the fake relay listens, is 127.0.0.1: loopback
+// on every platform.
+var (
+	testNATPrefix = netip.MustParsePrefix("127.0.0.0/30")
+	testHostIP    = netip.MustParseAddr("127.0.0.2")
+)
+
+// copySeedISO stands in for IMAPI2: the "ISO" is a copy of the staged seed
+// file, so a fake relay can read the token from it.
+func copySeedISO(seedDir, iso string) error {
+	b, err := os.ReadFile(filepath.Join(seedDir, RelaySeedFile))
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(iso, b, 0o600)
+}
+
 // claimAddr is where the fake relay listens for cfg's claim.
 func claimAddr(cfg buildConfig) string {
-	return net.JoinHostPort(cfg.relayIP, strconv.Itoa(cfg.claimPort))
+	return net.JoinHostPort("127.0.0.1", strconv.Itoa(cfg.claimPort))
 }
 
 func TestRunBuild_HappyPath(t *testing.T) {
@@ -369,5 +487,140 @@ func TestRunBuild_ClaimBeforeBuildVM(t *testing.T) {
 		if c.BuildLink == nil || *c.BuildLink != *want {
 			t.Fatalf("claim build_link = %+v, want %+v", c.BuildLink, want)
 		}
+	}
+}
+
+// TestStartRelay_SeedAndClaim pins Decisions 2 to 4 end to end on the fake:
+// the relay is claimed at the address allocated in the NAT prefix, with the
+// token its seed carries as the claim's Bearer; the seed holds only the
+// pre-claim values; req.DNS is exactly the claim's upstream_dns; the Notes
+// record the allocation; and teardown frees the address and the switch.
+func TestStartRelay_SeedAndClaim(t *testing.T) {
+	dir := t.TempDir()
+	cfg := baseCfg(t, dir)
+	dns := []netip.Addr{netip.MustParseAddr("10.20.0.53"), netip.MustParseAddr("10.20.0.54")}
+	cfg.Request = &driver.BuildRequest{UpstreamSystemCA: true, DNS: dns}
+	fp := &buildFake{claimAddr: claimAddr(cfg)}
+	if _, err := runBuild(context.Background(), fp, cfg); err != nil {
+		t.Fatalf("runBuild: %v", err)
+	}
+	if tok := fp.seedKey("claim_token"); !isClaimToken(tok) {
+		t.Errorf("seed claim_token = %q, want 64 lowercase hex digits", tok)
+	}
+	for key, want := range map[string]string{"seed": "1", "net": "static",
+		"nat_ip": "127.0.0.1", "nat_prefix": "30", "nat_gw": "127.0.0.2"} {
+		if got := fp.seedKey(key); got != want {
+			t.Errorf("seed %s = %q, want %q", key, got, want)
+		}
+	}
+	if seed, _ := fp.seed.Load().(string); strings.Contains(seed, "dns") ||
+		strings.Contains(seed, "10.20.0.53") {
+		t.Errorf("the seed carries a resolver:\n%s", seed)
+	}
+	c, _ := fp.claimed.Load().(relaycfg.Config)
+	if strings.Join(c.UpstreamDNS, " ") != "10.20.0.53 10.20.0.54" {
+		t.Errorf("claim upstream_dns = %v, want [vm] dns in order", c.UpstreamDNS)
+	}
+	spec, _ := fp.lastRelay.Load().(RelayVMSpec)
+	if spec.Notes != "warden-relay-ip=127.0.0.1 warden-relay-switch=warden-dev" ||
+		spec.BuildSwitch != "warden-dev" || spec.SeedISO != cfg.RelaySeedDir+".iso" {
+		t.Errorf("relay VM spec = %+v", spec)
+	}
+	notes, _ := fp.RelayNotes(context.Background())
+	attached, _ := fp.SwitchAdapters(context.Background(), []string{"warden-dev"})
+	if len(notes) != 0 || len(attached) != 0 {
+		t.Errorf("after teardown: notes %v, adapters %v", notes, attached)
+	}
+}
+
+// TestStartRelay_WrongTokenRefused: a relay that requires another token
+// refuses the claim, and StartRelay fails and tears the relay down.
+func TestStartRelay_WrongTokenRefused(t *testing.T) {
+	dir := t.TempDir()
+	cfg := baseCfg(t, dir)
+	cfg.readyTimeout = time.Second
+	fp := &buildFake{claimAddr: claimAddr(cfg), serveToken: strings.Repeat("ee", 32)}
+	if _, err := runBuild(context.Background(), fp, cfg); err == nil {
+		t.Fatal("the claim with the seed's token was accepted by a relay wanting another")
+	}
+	if fp.createBuild.Load() != 0 || fp.remove.Load() != 1 {
+		t.Errorf("build VMs created %d, VMs removed %d; want 0 and 1",
+			fp.createBuild.Load(), fp.remove.Load())
+	}
+}
+
+// TestRunBuild_DurableSlot: a durable build's relay takes the lowest free
+// slot (one with a kept build VM is busy) and the build VM joins it.
+func TestRunBuild_DurableSlot(t *testing.T) {
+	dir := t.TempDir()
+	cfg := baseCfg(t, dir)
+	cfg.BuildSwitch = ""
+	cfg.Slots = []string{"warden-dev-0", "warden-dev-1"}
+	fp := &buildFake{claimAddr: claimAddr(cfg),
+		attached: map[string][]string{"warden-dev-0": {"warden-build-kept"}}}
+	if _, err := runBuild(context.Background(), fp, cfg); err != nil {
+		t.Fatalf("runBuild: %v", err)
+	}
+	relay, _ := fp.lastRelay.Load().(RelayVMSpec)
+	build, _ := fp.lastBuildSpec.Load().(VMSpec)
+	if relay.BuildSwitch != "warden-dev-1" || build.SwitchName != "warden-dev-1" {
+		t.Errorf("relay on %q, build VM on %q; want both on warden-dev-1",
+			relay.BuildSwitch, build.SwitchName)
+	}
+}
+
+// TestRunBuild_SlotForeignAdapter: a VM other than this build's two on the
+// slot refuses the build before the build VM starts (BOOT-01).
+func TestRunBuild_SlotForeignAdapter(t *testing.T) {
+	dir := t.TempDir()
+	cfg := baseCfg(t, dir)
+	cfg.BuildSwitch = ""
+	cfg.Slots = []string{"warden-dev-0"}
+	fp := &buildFake{claimAddr: claimAddr(cfg), intruder: "warden-build-other"}
+	_, err := runBuild(context.Background(), fp, cfg)
+	var fe *driver.FixableError
+	if !errors.As(err, &fe) || !strings.Contains(fe.Msg, "also attached: warden-build-other") {
+		t.Fatalf("err = %v", err)
+	}
+	if fp.startBuild.Load() != 0 {
+		t.Error("the build VM started on a segment with a foreign VM")
+	}
+}
+
+func TestCheckSlotAdapters(t *testing.T) {
+	const r, b = "warden-relay-x", "warden-build-x"
+	tests := []struct {
+		attached []string
+		ok       bool
+	}{
+		{[]string{r, b}, true},
+		{[]string{b, r}, true},
+		{[]string{r}, false},
+		{[]string{r, b, b}, false},
+		{[]string{r, b, "warden-relay-y"}, false},
+	}
+	for _, tt := range tests {
+		err := checkSlotAdapters("warden-dev-0", tt.attached, r, b)
+		if (err == nil) != tt.ok {
+			t.Errorf("%v: err = %v", tt.attached, err)
+		}
+	}
+}
+
+// TestRunBuild_KeepVMsKeepsRelay: --keep-vms keeps both VMs, so the relay's
+// Notes and adapter keep holding its address and slot.
+func TestRunBuild_KeepVMsKeepsRelay(t *testing.T) {
+	dir := t.TempDir()
+	cfg := baseCfg(t, dir)
+	cfg.KeepVMs = true
+	fp := &buildFake{claimAddr: claimAddr(cfg)}
+	if _, err := runBuild(context.Background(), fp, cfg); err != nil {
+		t.Fatalf("runBuild: %v", err)
+	}
+	if fp.remove.Load() != 0 {
+		t.Errorf("RemoveVM = %d, want 0 with --keep-vms", fp.remove.Load())
+	}
+	if notes, _ := fp.RelayNotes(context.Background()); len(notes) != 1 {
+		t.Errorf("relay Notes after a kept build: %v", notes)
 	}
 }

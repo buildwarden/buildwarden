@@ -2,6 +2,7 @@ package hyperv
 
 import (
 	"encoding/xml"
+	"errors"
 	"io"
 	"os"
 	"path/filepath"
@@ -53,6 +54,31 @@ func TestStageSeedDir(t *testing.T) {
 	}
 }
 
+// TestStageSeedDirConfiguredLink checks the seed carries the shared launcher
+// for the build's own link, which passes initialize no --ip.
+func TestStageSeedDirConfiguredLink(t *testing.T) {
+	link, err := buildlink.Parse("100.126.255.252/30")
+	if err != nil {
+		t.Fatal(err)
+	}
+	seedDir, err := stageSeedDir(t.TempDir(), "amd64",
+		&driver.BuildRequest{GuestOS: "windows", BuildLink: link})
+	if err != nil {
+		t.Fatalf("stageSeedDir: %v", err)
+	}
+	ps, err := os.ReadFile(filepath.Join(seedDir, "warden-run.ps1"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if string(ps) != winguest.WardenRunPS1(link) {
+		t.Error("staged warden-run.ps1 is not the shared bootstrap for the build's link")
+	}
+	if !strings.Contains(string(ps), "initialize --gateway=100.126.255.253 ") ||
+		strings.Contains(string(ps), "--ip") {
+		t.Errorf("staged warden-run.ps1 does not run initialize --gateway alone:\n%s", ps)
+	}
+}
+
 func TestStagePrepareSeedDir(t *testing.T) {
 	dir := filepath.Join(t.TempDir(), "prepare-seed")
 	if err := winguest.StagePrepareSeed(dir, "amd64"); err != nil {
@@ -74,5 +100,41 @@ func TestStagePrepareSeedDir(t *testing.T) {
 	}
 	if string(ps) != winguest.PrepareScript() {
 		t.Error("staged prepare script is not winguest.PrepareScript")
+	}
+}
+
+func TestWithISOLock(t *testing.T) {
+	var events []string
+	lock := func(name string) (func(), error) {
+		events = append(events, "lock "+name)
+		return func() { events = append(events, "unlock") }, nil
+	}
+	err := withISOLock(lock, func() error {
+		events = append(events, "image")
+		return nil
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := strings.Join(events, ", "); got != "lock hyperv-iso, image, unlock" {
+		t.Errorf("events = %s, want the image made under hyperv-iso", got)
+	}
+
+	// An image that fails still releases the lock, and returns its error.
+	events = nil
+	err = withISOLock(lock, func() error { return errors.New("c0aab138") })
+	if err == nil || err.Error() != "c0aab138" ||
+		strings.Join(events, ", ") != "lock hyperv-iso, unlock" {
+		t.Errorf("failed image: err = %v, events = %v", err, events)
+	}
+
+	// No lock, no image.
+	made := false
+	err = withISOLock(func(string) (func(), error) {
+		return nil, errors.New("lock dir unwritable")
+	}, func() error { made = true; return nil })
+	if err == nil || !strings.Contains(err.Error(), "ISO lock: lock dir unwritable") ||
+		made {
+		t.Errorf("lock error: err = %v, image made = %v", err, made)
 	}
 }

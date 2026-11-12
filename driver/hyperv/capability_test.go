@@ -2,8 +2,13 @@ package hyperv
 
 import (
 	"bytes"
+	"errors"
+	"net/netip"
 	"strings"
 	"testing"
+
+	"github.com/buildwarden/buildwarden/driver"
+	"github.com/buildwarden/buildwarden/driver/buildlink"
 )
 
 func TestResolvePerOperation(t *testing.T) {
@@ -102,6 +107,15 @@ func TestNetworkStrategy(t *testing.T) {
 				ServiceReachable: true, HyperVAdmin: true, DevSwitchPresent: true,
 			},
 			NetDelegateService},
+		{"a stale service blocks durable reuse",
+			Capabilities{
+				ServiceStale: "speaks protocol 1, this warden 2",
+				HyperVAdmin:  true, DevSwitchPresent: true,
+			},
+			NetBlocked},
+		{"elevated ignores a stale service",
+			Capabilities{Elevated: true, ServiceStale: "speaks protocol 1"},
+			NetEphemeralPerBuild},
 		{"nothing available is blocked", Capabilities{}, NetBlocked},
 	}
 	for _, tt := range tests {
@@ -113,8 +127,34 @@ func TestNetworkStrategy(t *testing.T) {
 	}
 }
 
+// healthyNet is a host whose durable network setup made: the NAT on the
+// default prefix with the host at .1, four free slots, and one off-host DNS
+// server on the default route's interface.
+func healthyNet(Capabilities) doctorNet {
+	return doctorNet{
+		ReadBack: parseNetReadback("NAT=warden-dev-nat\nPREFIX=192.168.240.0/20\n" +
+			"HOSTIP=192.168.240.1\nSLOT=warden-dev-0\tPrivate\n" +
+			"SLOT=warden-dev-1\tPrivate\n" +
+			"SLOT=warden-dev-nat\tInternal\n"),
+		DNS: func() ([]netip.Addr, string, error) {
+			dns := []netip.Addr{netip.MustParseAddr("10.9.0.53")}
+			return dns, "interface Ethernet", nil
+		},
+		Host: []netip.Addr{netip.MustParseAddr("10.9.0.7")},
+	}
+}
+
+// stubDoctorNet replaces Doctor's network probe for the test.
+func stubDoctorNet(t *testing.T, probe func(Capabilities) doctorNet) {
+	t.Helper()
+	old := doctorNetProbe
+	doctorNetProbe = probe
+	t.Cleanup(func() { doctorNetProbe = old })
+}
+
 func TestDoctorReport(t *testing.T) {
 	t.Setenv("WARDEN_HYPERV_CACHE_DIR", t.TempDir())
+	stubDoctorNet(t, healthyNet)
 	// Non-elevated Hyper-V Admins member reusing a durable switch: ready.
 	caps := Capabilities{
 		Supported:         true,
@@ -127,12 +167,12 @@ func TestDoctorReport(t *testing.T) {
 		DevSwitchPresent:  true,
 	}
 	var buf bytes.Buffer
-	if blocked := Doctor(&buf, caps); blocked {
+	if blocked := Doctor(&buf, caps, buildlink.Link{}, nil); blocked {
 		t.Fatalf("expected not blocked; report:\n%s", buf.String())
 	}
 	out := buf.String()
 	for _, want := range []string{
-		"VM lifecycle ......... OK", "reuse durable switch", "warden-dev",
+		"VM lifecycle ......... OK", "durable network 'warden-dev'", "warden-dev",
 	} {
 		if !strings.Contains(out, want) {
 			t.Errorf("report missing %q; got:\n%s", want, out)
@@ -147,7 +187,7 @@ func TestDoctorReport(t *testing.T) {
 		HypervisorPresent: true, HyperVFeature: true, Elevated: true,
 		DevSwitch: "warden-dev", DevSwitchPresent: true,
 	}
-	if blocked := Doctor(&buf, elevated); blocked {
+	if blocked := Doctor(&buf, elevated, buildlink.Link{}, nil); blocked {
 		t.Fatalf("expected not blocked when elevated; report:\n%s", buf.String())
 	}
 	out = buf.String()
@@ -159,7 +199,8 @@ func TestDoctorReport(t *testing.T) {
 
 	// Unsupported platform is blocked and says so.
 	buf.Reset()
-	if blocked := Doctor(&buf, Capabilities{Supported: false, Platform: "linux"}); !blocked {
+	unsupported := Capabilities{Supported: false, Platform: "linux"}
+	if blocked := Doctor(&buf, unsupported, buildlink.Link{}, nil); !blocked {
 		t.Fatal("expected blocked on unsupported platform")
 	}
 	if !strings.Contains(buf.String(), "unavailable on linux") {
@@ -174,10 +215,85 @@ func TestDoctorReport(t *testing.T) {
 		HypervisorPresent: true, HyperVFeature: true,
 		HyperVAdmin: false, HyperVAdminByAccount: true,
 	}
-	if blocked := Doctor(&buf, stale); !blocked {
+	if blocked := Doctor(&buf, stale, buildlink.Link{}, nil); !blocked {
 		t.Fatal("expected blocked with a stale token")
 	}
 	if !strings.Contains(buf.String(), "token predates") {
 		t.Errorf("expected stale-token diagnosis; got:\n%s", buf.String())
+	}
+}
+
+// TestStaleServiceEndToEnd pings a protocol-1 service, as on a host where an
+// older warden installed it, and follows the result through doctor and a
+// build's refusal: both name the reinstall, and neither reads the service as
+// absent nor sends the build to the durable network.
+func TestStaleServiceEndToEnd(t *testing.T) {
+	t.Setenv("WARDEN_HYPERV_CACHE_DIR", t.TempDir())
+	stubDoctorNet(t, healthyNet)
+	stale := pingOver(t, protocol1Service)
+	if stale == "" {
+		t.Fatal("a protocol-1 service pinged as usable")
+	}
+	caps := Capabilities{
+		Supported: true, Platform: "windows",
+		TokenScope:        "current process (non-elevated)",
+		HypervisorPresent: true, HyperVFeature: true, HyperVAdmin: true,
+		DevSwitch: "warden-dev", ServiceStale: stale,
+	}
+	t.Run("build switches present", func(t *testing.T) {
+		c := caps
+		c.DevSwitchPresent = true
+		assertStaleRefused(t, c)
+	})
+	t.Run("only the old shared switch", func(t *testing.T) {
+		c := caps
+		c.DevSwitchLegacy = true
+		assertStaleRefused(t, c)
+	})
+
+	// Elevated, the build stands up its own network and never uses the
+	// service, so a stale one does not refuse it.
+	elevated := Capabilities{Supported: true, HypervisorPresent: true,
+		HyperVFeature: true, Elevated: true, ServiceStale: stale}
+	if err := elevated.buildRefusal(); err != nil {
+		t.Errorf("elevated build refused over a stale service: %v", err)
+	}
+}
+
+// assertStaleRefused checks that doctor and the build refusal for caps, whose
+// service speaks protocol 1, report it stale and name the reinstall.
+func assertStaleRefused(t *testing.T, caps Capabilities) {
+	t.Helper()
+	var buf bytes.Buffer
+	if !Doctor(&buf, caps, buildlink.Link{}, nil) {
+		t.Fatalf("doctor not blocked by a stale service:\n%s", buf.String())
+	}
+	out := buf.String()
+	const why = "speaks protocol 1, this warden 2"
+	for _, want := range []string{
+		"Privileged service ................... stale: it " + why +
+			"\n    -> " + serviceReinstallFix,
+		"Network .............. BLOCKED (the privileged service " + why + ")",
+		"Not ready: the privileged service " + why + "; reinstall it: " +
+			serviceReinstallFix,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("doctor missing %q; got:\n%s", want, out)
+		}
+	}
+	for _, bad := range []string{"not installed", "has no build switches"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("doctor says %q of a stale service:\n%s", bad, out)
+		}
+	}
+
+	var fe *driver.FixableError
+	if err := caps.buildRefusal(); !errors.As(err, &fe) {
+		t.Fatalf("buildRefusal = %v, want a FixableError", err)
+	}
+	wantMsg := "hyperv build: the privileged service " + why
+	if fe.Msg != wantMsg || fe.Fix != serviceReinstallFix {
+		t.Errorf("refusal %q, fix %q; want %q, fix %q",
+			fe.Msg, fe.Fix, wantMsg, serviceReinstallFix)
 	}
 }

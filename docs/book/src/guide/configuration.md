@@ -41,7 +41,7 @@ system_ca_bundle = true    # Include host system CA bundle in relay trust store
 cpus = 0                   # Build VM vCPUs (0 = per-driver default; vz, qemu,
                            #   hyperv and firecracker)
 memory_mb = 0              # Build VM memory in MiB (0 = per-driver default)
-network = ""               # hyperv: durable build switch name
+network = ""               # hyperv: durable network name (switches <name>-0.., NAT <name>-nat)
 image_refresh_after = "7d" # hyperv: re-prepare the base in the background at this age
 image_min_grace = "1d"     # hyperv: refuse builds with less evaluation grace left
 windows_image = ""         # hyperv: base image URL or local path (default: Microsoft's
@@ -49,6 +49,8 @@ windows_image = ""         # hyperv: base image URL or local path (default: Micr
 windows_image_update = "auto" # hyperv: "auto" picks up new media at refresh; "reuse" keeps it
 build_link = "100.127.255.252/30" # advanced: the relay-to-build link, a /30 (every VM
                            #   driver; see Advanced options; --build-link wins)
+dns = ["10.20.0.53"]       # the relay's upstream DNS servers, in order, used exclusively
+                           #   (every VM driver; unset: the host's; see Advanced options)
 
 [output]
 color = "auto"             # Color mode: auto, always, never
@@ -121,9 +123,12 @@ The value must be an IPv4 network address with prefix exactly `/30`
 (`100.126.0.1/30` is refused with "did you mean 100.126.0.0/30"), outside
 `0.0.0.0/8`, loopback, link-local, multicast and class E, and disjoint from
 the ranges BuildWarden uses itself: the container driver's `100.64.87.0/24`,
-Firecracker's upstream `100.64.88.0/22`, Hyper-V's default NAT
-`192.168.240.0/20` and qemu's user-mode `10.0.2.0/24`. A key is checked when
-the file loads and the flag when it is read, before any work. Every VM build
+Firecracker's upstream `100.64.88.0/22` and qemu's user-mode `10.0.2.0/24`. A
+key is checked when the file loads and the flag when it is read, before any
+work. Hyper-V's NAT is not a fixed range: it is read back from the host, so
+the hyperv driver checks the link against the host's NAT at build start,
+before the seed ISO or any per-build network, and in doctor, naming it (or the default `192.168.240.0/20` when the host has no NAT
+yet, which is where a build would make one). Every VM build
 also refuses a link that holds an address of one of the host's interfaces;
 a host network that merely contains the link (a `/10` CGNAT WAN, say) is
 only a doctor warning.
@@ -132,6 +137,45 @@ The link reaches the relay in its claim and the build VM in its seed, its
 kernel command line or the relay's DHCP lease, per build: changing it needs
 no rebuild, refresh or re-prepare. The one-time upgrade to this scheme is in
 [Drivers](drivers.md#upgrading-to-the-configurable-build-link).
+
+### The relay's resolvers (`[vm] dns`)
+
+The relay answers the build's DNS and resolves its own upstream connections
+through one list of upstream DNS servers, fixed when the build starts and
+sent to the relay in its claim. Every VM driver sends one:
+
+- **Unset (the default): the host's resolvers.** Each driver reads the
+  host's DNS servers and keeps those its relay can reach: hyperv the IPv4
+  servers of the default route's interface, firecracker `/etc/resolv.conf`
+  (or systemd-resolved's upstreams), qemu the host's `/etc/resolv.conf`, vz
+  the Mac's `/etc/resolv.conf`. A loopback or link-local server, one inside
+  the build link and, per driver, one on the host itself or inside its NAT
+  are left out; when none is left the build is refused, naming each server
+  and why, with the fix (an off-host DNS server on the host, or `[vm] dns`).
+  No public resolver stands in.
+- **Set: used exclusively.** The listed servers, in order, are the relay's
+  only resolvers: the host's are not read, added or tried when the listed
+  ones fail.
+
+  ```toml
+  [vm]
+  dns = ["10.20.0.53", "10.20.0.54"]
+  ```
+
+  The relay asks the first server and the next when one does not answer in
+  time, as `resolv.conf`'s `nameserver` lines are asked; that is the one
+  fallback, and it stays inside your list.
+
+The key has no flag or environment variable; `./warden.toml` wins over
+`~/.config/warden/config.toml`. Each entry must be an IPv4 address, not
+unspecified, multicast or broadcast, and the list must not be empty
+(`dns = []` is refused: remove the key to use the host's resolvers); this is
+checked when the file loads, by every command. At build start and in
+`warden doctor`, the driver refuses an entry its relay cannot reach (a
+loopback server for the VM drivers whose relay is a VM, one inside the build
+link, and so on), naming it, rather than drop it. The container driver
+ignores `[vm]` and its relay uses its container's resolvers. `warden doctor`
+prints the resolvers and where they came from.
 
 ## Runtime Autodetection
 

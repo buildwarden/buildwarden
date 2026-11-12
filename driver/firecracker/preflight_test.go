@@ -10,6 +10,7 @@ import (
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/buildlink"
+	"github.com/buildwarden/buildwarden/driver/resolvers"
 )
 
 func TestParseVersion(t *testing.T) {
@@ -50,7 +51,7 @@ func TestPreflightMessages(t *testing.T) {
 		h := newFakeHost().withSlots(2, 1000)
 		h.files["/dev/kvm"] = ""
 		h.outputs["firecracker --version"] = "Firecracker v1.17.0\n"
-		h.files[resolvConf] = "nameserver 8.8.8.8\n"
+		h.files[resolvers.ResolvConf] = "nameserver 8.8.8.8\n"
 		return h
 	}
 	none := func(net.IP) bool { return false }
@@ -69,7 +70,7 @@ func TestPreflightMessages(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			h := ok()
 			tt.mut(h)
-			_, err := preflight(h, none, buildlink.Default())
+			_, err := preflight(h, none, buildlink.Default(), nil)
 			if fix := fixOf(t, err); !strings.Contains(fix, tt.want) {
 				t.Fatalf("fix %q lacks %q", fix, tt.want)
 			}
@@ -81,6 +82,32 @@ func TestPreflightMessages(t *testing.T) {
 		return h
 	}()); !strings.Contains(fixOf(t, err), "genisoimage") {
 		t.Fatal("missing ISO tool not named")
+	}
+}
+
+// TestRequestPreflightDNS: the resolvers preflight chooses replace req.DNS,
+// which ClaimRelay sends as upstream_dns: the host's when [vm] dns is unset,
+// and [vm] dns itself, with no host resolv.conf to read, when it is set.
+func TestRequestPreflightDNS(t *testing.T) {
+	supportedHost(t)
+	prev := assetsCheck
+	assetsCheck = func() (assets, error) { return assets{}, nil }
+	t.Cleanup(func() { assetsCheck = prev })
+	h := newFakeHost().withSlots(1, 1000)
+	h.files["/dev/kvm"] = ""
+	h.outputs["firecracker --version"] = "Firecracker v1.17.0\n"
+	h.files[resolvers.ResolvConf] = "nameserver 10.9.0.2\nnameserver 127.0.0.53\n"
+	none := func(net.IP) bool { return false }
+	req := &driver.BuildRequest{}
+	if _, err := requestPreflight(h, none, req); err != nil ||
+		resolvers.Join(req.DNS) != "10.9.0.2" {
+		t.Fatalf("host selection: %v %v", req.DNS, err)
+	}
+	delete(h.files, resolvers.ResolvConf)
+	req = &driver.BuildRequest{DNS: addrs("10.20.0.53", "10.20.0.54")}
+	if _, err := requestPreflight(h, none, req); err != nil ||
+		resolvers.Join(req.DNS) != "10.20.0.53, 10.20.0.54" {
+		t.Fatalf("[vm] dns: %v %v", req.DNS, err)
 	}
 }
 
@@ -107,28 +134,35 @@ func TestDoctorReport(t *testing.T) {
 	h := newFakeHost().withSlots(1, 1000)
 	h.files["/dev/kvm"] = ""
 	h.outputs["firecracker --version"] = "Firecracker v1.17.0\n"
-	h.files[resolvConf] = "nameserver 8.8.8.8\n"
+	h.files[resolvers.ResolvConf] = "nameserver 8.8.8.8\n"
 	h.fail["systemctl is-active -q firewalld"] = true
 	h.noRefl = true
 	for key, v := range sysctlWants([]Slot{0}) {
 		h.files["/proc/sys/"+key] = v + "\n"
 	}
 	var out bytes.Buffer
-	doctor(h, &out, func(net.IP) bool { return false }, buildlink.Default())
+	doctor(h, &out, func(net.IP) bool { return false }, buildlink.Default(), nil)
 	s := out.String()
 	for _, want := range []string{
 		"ok    /dev/kvm", "ok    firecracker", "ok    slot sysctls",
 		"ok    network slots owned by this user: 1 (wfc0 to wfc0)",
 		"skip  rules and FORWARD policy", "warn  reflink", "ok    upstream DNS for the " +
-			"relay: 8.8.8.8",
+			"relay (from /etc/resolv.conf): 8.8.8.8",
 	} {
 		if !strings.Contains(s, want) {
 			t.Errorf("doctor output lacks %q:\n%s", want, s)
 		}
 	}
+	out.Reset()
+	doctor(h, &out, func(net.IP) bool { return false }, buildlink.Default(),
+		addrs("10.20.0.53"))
+	want := "ok    upstream DNS for the relay (from [vm] dns): 10.20.0.53"
+	if !strings.Contains(out.String(), want) {
+		t.Errorf("doctor output lacks %q:\n%s", want, out.String())
+	}
 	h.files["/proc/sys/net/ipv4/ip_forward"] = "0\n"
 	out.Reset()
-	if !doctor(h, &out, func(net.IP) bool { return false }, buildlink.Default()) ||
+	if !doctor(h, &out, func(net.IP) bool { return false }, buildlink.Default(), nil) ||
 		!strings.Contains(out.String(), "FAIL  slot sysctls") {
 		t.Fatalf("ip_forward=0 not reported:\n%s", out.String())
 	}
@@ -171,7 +205,7 @@ func TestDoctorUnderSudo(t *testing.T) {
 	h := postureHost().withSlots(2, 1000)
 	h.inKVM = false
 	h.outputs["firecracker --version"] = "Firecracker v1.17.0\n"
-	h.files[resolvConf] = "nameserver 8.8.8.8\n"
+	h.files[resolvers.ResolvConf] = "nameserver 8.8.8.8\n"
 	// Slot 0's VMM outlived its warden; slot 1's build is still running.
 	for _, s := range []Slot{0, 1} {
 		h.files[slotLockPath(s)] = ""
@@ -183,7 +217,7 @@ func TestDoctorUnderSudo(t *testing.T) {
 	h.links["/proc/4242/exe"] = "/usr/local/bin/firecracker"
 	h.noRefl = true
 	var out bytes.Buffer
-	doctor(h, &out, func(net.IP) bool { return false }, buildlink.Default())
+	doctor(h, &out, func(net.IP) bool { return false }, buildlink.Default(), nil)
 	s := out.String()
 	for _, want := range []string{
 		"FAIL  /dev/kvm", "sudo usermod -aG kvm jeff",

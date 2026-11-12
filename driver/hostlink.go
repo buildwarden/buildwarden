@@ -1,6 +1,7 @@
 package driver
 
 import (
+	"errors"
 	"fmt"
 	"net"
 	"net/netip"
@@ -94,11 +95,50 @@ type LauncherStamp struct {
 	// missing or stale stamp refuses every build and doctor fails on it.
 	// Direct-boot assets, which only some builds use, leave it false.
 	Required bool
+	// Want is the channel the stamp must hold; zero is buildlink.Channel. An
+	// asset whose launcher changed alone (Hyper-V's relay boot VHDX) moves
+	// apart, so only its users rebuild.
+	Want int
 }
 
 // Check refuses the asset when its stamp is missing or different.
 func (s LauncherStamp) Check() error {
-	return CheckLauncherStamp(s.Path, s.What, s.Rebuild)
+	if s.Want == 0 {
+		return CheckLauncherStamp(s.Path, s.What, s.Rebuild)
+	}
+	if err := s.compare(); err != nil {
+		return Fixable(s.Rebuild, "%s was built for an older warden and must be "+
+			"rebuilt once (%v)", s.What, err)
+	}
+	return nil
+}
+
+// compare is buildlink.CheckStamp against Want.
+func (s LauncherStamp) compare() error {
+	n, err := buildlink.ReadStamp(s.Path)
+	if err != nil {
+		return err
+	}
+	if n != s.Want {
+		return fmt.Errorf("%s holds link channel %d; this warden needs %d", s.Path, n,
+			s.Want)
+	}
+	return nil
+}
+
+// state is the stamp as one doctor word: "current", "missing" or "stale".
+func (s LauncherStamp) state() string {
+	if s.Want == 0 {
+		return buildlink.StampState(s.Path)
+	}
+	err := s.compare()
+	switch {
+	case err == nil:
+		return "current"
+	case errors.Is(err, buildlink.ErrNoStamp):
+		return "missing"
+	}
+	return "stale"
 }
 
 // Blocks reports whether doctor fails on the stamp: the asset is required
@@ -112,7 +152,7 @@ func (s LauncherStamp) Report() string {
 	if s.Path == "" {
 		return s.What + ": not found"
 	}
-	state := buildlink.StampState(s.Path)
+	state := s.state()
 	if state == "current" {
 		return s.What + ": link-channel stamp current"
 	}

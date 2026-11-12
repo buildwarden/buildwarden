@@ -2,7 +2,7 @@
   "boot-source": {
     "kernel_image_path": "/a/vmlinux",
     "initrd_path": "/w/relay-initrd",
-    "boot_args": "console=ttyS0 reboot=k panic=1 pci=off warden.net=static warden.nat_ip=100.64.88.14 warden.nat_prefix=30 warden.nat_gw=100.64.88.13 warden.dns=8.8.8.8,8.8.4.4 warden.claim_token=TOKEN"
+    "boot_args": "console=ttyS0 reboot=k panic=1 pci=off warden.net=static warden.nat_ip=100.64.88.14 warden.nat_prefix=30 warden.nat_gw=100.64.88.13 warden.claim_token=TOKEN"
   },
   "drives": [],
   "machine-config": {

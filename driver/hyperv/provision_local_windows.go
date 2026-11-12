@@ -31,123 +31,37 @@ func newLocalProvisioner(verbose bool) Provisioner {
 //     VM's controlled upstream egress ONLY. The build VM is never attached to
 //     it, so it never gets a direct route to the internet.
 //
-// The NAT egress is shared plumbing, not the isolation boundary, so when a
-// warden NAT already owns spec.NATPrefix (e.g. a durable `warden setup --driver hyperv`
-// switch, or a concurrent build), EnsureNetwork REUSES it rather than colliding
-// on the host gateway IP. Only when no NAT owns the prefix does it stand one up
-// per build (named <SwitchName>-nat). The actual NAT switch chosen is returned
-// in NetworkResources.NATName (Reused reflects which path was taken), and the
-// caller attaches the relay's upstream NIC to that name. It is safe to call
-// repeatedly: existing resources are verified rather than recreated.
+// The NAT egress is shared plumbing, not the isolation boundary, and WinNAT
+// supports one NAT per host in practice, so the NAT is chosen from what the
+// host has, in a fixed order (Decision 5): the dev switch's NAT
+// (spec.DevNAT) when setup made one, whatever its prefix; else a warden NAT
+// that owns spec.NATPrefix (a concurrent build's); else the NAT named
+// spec.NATName (default <SwitchName>-nat) if it exists, on whatever prefix;
+// else a new one by that name on spec.NATPrefix with spec.HostIP. A reused
+// NAT is never re-addressed: its prefix and the host vNIC's address in it are
+// read back and returned, and a host vNIC with no address in its prefix is
+// refused. It is safe to call repeatedly: existing resources are verified
+// rather than recreated.
 func (p *localProvisioner) EnsureNetwork(
 	ctx context.Context, spec NetworkSpec,
 ) (*NetworkResources, error) {
-	if spec.SwitchName == "" {
-		return nil, fmt.Errorf("EnsureNetwork: empty switch name")
-	}
-	natName := spec.SwitchName + "-nat"
-	prefixLen, err := cidrPrefixLen(spec.NATPrefix)
+	script, err := ensureNetworkScript(spec)
 	if err != nil {
 		return nil, err
 	}
 
-	name := psEscapeSingle(spec.SwitchName)
-	nat := psEscapeSingle(natName)
-	prefix := psEscapeSingle(spec.NATPrefix)
-	hostIP := psEscapeSingle(spec.HostIP)
-
-	// One script so the whole standup is atomic-ish and reports a single error.
-	// $ErrorActionPreference=Stop turns cmdlet failures into catchable errors.
-	script := fmt.Sprintf(`
-$ErrorActionPreference = 'Stop'
-
-# Build (Private) switch: relay <-> build only, no host path. ALWAYS per-build:
-# this is the isolation boundary, so it is never shared between builds.
-$build = Get-VMSwitch -Name '%[1]s' -ErrorAction SilentlyContinue
-if (-not $build) {
-    New-VMSwitch -Name '%[1]s' -SwitchType Private | Out-Null
-} elseif ($build.SwitchType -ne 'Private') {
-    throw "switch '%[1]s' exists but is $($build.SwitchType); expected Private"
-}
-
-# NAT egress: the relay's controlled upstream. Reuse an existing warden NAT that
-# already owns this prefix (a durable 'warden setup --driver hyperv' switch, or a
-# concurrent build) rather than colliding on the host gateway IP; the NAT subnet
-# is shared egress plumbing, not the isolation boundary (that is the Private
-# switch above). Only stand up a per-build NAT when none owns the prefix.
-$reused = 0
-$existingNat = Get-NetNat -ErrorAction SilentlyContinue |
-    Where-Object { $_.InternalIPInterfaceAddressPrefix -eq '%[5]s' }
-if ($existingNat) {
-    $natName = $existingNat.Name
-    $reused = 1
-    $natSw = Get-VMSwitch -Name $natName -ErrorAction SilentlyContinue
-    if (-not $natSw) {
-        throw "a NAT '$natName' owns %[5]s but its vSwitch is missing; " +
-            "remove the stale NAT (elevated: Remove-NetNat -Name $natName) " +
-            "or re-run 'warden setup --driver hyperv'"
-    }
-} else {
-    $natName = '%[2]s'
-    $natSw = Get-VMSwitch -Name $natName -ErrorAction SilentlyContinue
-    if (-not $natSw) {
-        New-VMSwitch -Name $natName -SwitchType Internal | Out-Null
-    } elseif ($natSw.SwitchType -ne 'Internal') {
-        throw "switch '$natName' exists but is $($natSw.SwitchType); expected Internal"
-    }
-}
-
-# Host gateway IP on the NAT switch's host vNIC (idempotent; scoped to the alias
-# so a reused NAT that already has it is left untouched).
-$alias = "vEthernet ($natName)"
-$hasIP = Get-NetIPAddress -InterfaceAlias $alias -IPAddress '%[3]s' -ErrorAction SilentlyContinue
-if (-not $hasIP) {
-    New-NetIPAddress -IPAddress '%[3]s' -PrefixLength %[4]d -InterfaceAlias $alias | Out-Null
-}
-
-# NAT rule for the relay's egress (only when we created the NAT; a reused one
-# already has it).
-if ($reused -eq 0 -and -not (Get-NetNat -Name $natName -ErrorAction SilentlyContinue)) {
-    New-NetNat -Name $natName -InternalIPInterfaceAddressPrefix '%[5]s' | Out-Null
-}
-
-# No inbound firewall rule: the host claims the relay and serves its collector
-# over that same host-initiated connection, so nothing listens on the host.
-"NAT=$natName REUSED=$reused"
-`, name, nat, hostIP, prefixLen, prefix)
-
 	out, err := runPS(script)
+	if err == nil {
+		err = psDoneCheck(out)
+	}
 	if err != nil {
 		return nil, fmt.Errorf("EnsureNetwork: %w", err)
 	}
-	chosenNAT, reused := parseEnsureNetworkOutput(out)
-	if chosenNAT == "" {
-		return nil, fmt.Errorf(
-			"EnsureNetwork: could not parse NAT switch from output: %q",
-			strings.TrimSpace(out))
+	res, err := parseNetReadback(out).ensureResources(spec.SwitchName)
+	if err != nil {
+		return nil, fmt.Errorf("EnsureNetwork: %w", err)
 	}
-	return &NetworkResources{
-		BuildSwitch: spec.SwitchName, NATName: chosenNAT, Reused: reused}, nil
-}
-
-// parseEnsureNetworkOutput extracts the chosen NAT switch name and reuse flag
-// from the EnsureNetwork script's trailing "NAT=<name> REUSED=<0|1>" line.
-func parseEnsureNetworkOutput(out string) (nat string, reused bool) {
-	for _, line := range strings.Split(out, "\n") {
-		line = strings.TrimSpace(line)
-		if !strings.HasPrefix(line, "NAT=") {
-			continue
-		}
-		for _, tok := range strings.Fields(line) {
-			switch {
-			case strings.HasPrefix(tok, "NAT="):
-				nat = strings.TrimPrefix(tok, "NAT=")
-			case tok == "REUSED=1":
-				reused = true
-			}
-		}
-	}
-	return nat, reused
+	return res, nil
 }
 
 // TeardownNetwork removes the NAT rule and both switches for the given base
@@ -170,31 +84,47 @@ Remove-VMSwitch -Name '%[1]s' -Force -ErrorAction SilentlyContinue
 	return nil
 }
 
-// VerifyNetwork re-asserts that the durable network is still safe to reuse:
-// the build switch is still Private (isolation intact) and it exists. Callers
-// run this before every build rather than trusting that persistence equals
-// correctness (a crash or manual edit can silently weaken isolation).
-func (p *localProvisioner) VerifyNetwork(ctx context.Context, switchName string) error {
-	name := psEscapeSingle(switchName)
-	out, err := runPS(fmt.Sprintf(`
-$s = Get-VMSwitch -Name '%[1]s' -ErrorAction SilentlyContinue
-if (-not $s) { 'missing' } else { $s.SwitchType }
-`, name))
+// VerifyNetwork re-asserts that the durable network named network is still
+// safe to use, before every build rather than trusting that persistence
+// equals correctness (a crash or manual edit can silently weaken isolation):
+// its NAT (<network>-nat) and that NAT's vSwitch exist, the host vNIC holds
+// an address in the NAT's prefix, and its slot switches (<network>-<i>)
+// exist and are Private. It returns the NAT's prefix and host IP read back,
+// and the slots in index order.
+func (p *localProvisioner) VerifyNetwork(
+	ctx context.Context, network string,
+) (*NetworkResources, error) {
+	out, err := runPS(netProbeScript(network, ""))
 	if err != nil {
-		return fmt.Errorf("VerifyNetwork: %w", err)
+		return nil, fmt.Errorf("VerifyNetwork: %w", err)
 	}
-	switch strings.TrimSpace(out) {
-	case "Private":
-		return nil
-	case "missing":
-		return fmt.Errorf(
-			"build switch %q is missing; run `warden setup --driver hyperv`",
-			switchName)
-	default:
-		return fmt.Errorf(
-			"build switch %q is %s, expected Private (isolation compromised)",
-			switchName, strings.TrimSpace(out))
-	}
+	return parseNetReadback(out).durableResources(network)
+}
+
+// netProbeScript reads, without changing anything, the NAT a build on the
+// durable network named network uses (<network>-nat, or with otherPrefix set
+// a warden NAT owning that prefix when there is none, as EnsureNetwork
+// chooses) and network's slot switches, as parseNetReadback lines.
+func netProbeScript(network, otherPrefix string) string {
+	return fmt.Sprintf(`
+$natName = $null
+if (Get-NetNat -Name '%[1]s-nat' -ErrorAction SilentlyContinue) { $natName = '%[1]s-nat' }
+elseif ('%[2]s') {
+    $e = Get-NetNat -ErrorAction SilentlyContinue |
+        Where-Object { $_.InternalIPInterfaceAddressPrefix -eq '%[2]s' } | Select-Object -First 1
+    if ($e) { $natName = $e.Name }
+}
+if ($natName) {
+    "NAT=$natName"
+    "PREFIX=$((Get-NetNat -Name $natName).InternalIPInterfaceAddressPrefix)"
+    if (-not (Get-VMSwitch -Name $natName -ErrorAction SilentlyContinue)) { 'NATSWITCH=missing' }
+    $alias = "vEthernet ($natName)"
+Get-NetIPAddress -InterfaceAlias $alias -AddressFamily IPv4 -ErrorAction SilentlyContinue |
+        ForEach-Object { "HOSTIP=$($_.IPAddress)" }
+}
+Get-VMSwitch -Name '%[1]s-*' -ErrorAction SilentlyContinue |
+    ForEach-Object { "SLOT=$($_.Name)`+"`t"+`$($_.SwitchType)" }
+`, psEscapeSingle(network), psEscapeSingle(otherPrefix))
 }
 
 // --- VM lifecycle (Hyper-V Administrators tier) -----------------------------
@@ -404,6 +334,40 @@ func (p *localProvisioner) ListVMs(ctx context.Context, prefix string) ([]string
 		return nil, fmt.Errorf("ListVMs: %w", err)
 	}
 	return nonEmptyLines(out), nil
+}
+
+// RelayNotes reads the Notes of every relay VM, one line each (Notes the
+// user edited across lines are joined, so a line is always one VM).
+func (p *localProvisioner) RelayNotes(ctx context.Context) (map[string]string, error) {
+	out, err := runPS(fmt.Sprintf("Get-VM -Name '%s*' -ErrorAction SilentlyContinue | "+
+		"ForEach-Object { $_.Name + \"`t\" + ($_.Notes -replace '[\\r\\n]+', ' ') }",
+		psEscapeSingle(relayVMPrefix)))
+	if err != nil {
+		return nil, fmt.Errorf("RelayNotes: %w", err)
+	}
+	return parseRelayNotes(out), nil
+}
+
+// SwitchAdapters lists every VM adapter on the host (Get-VMNetworkAdapter
+// -All) attached to one of switches.
+func (p *localProvisioner) SwitchAdapters(
+	ctx context.Context, switches []string,
+) (map[string][]string, error) {
+	if len(switches) == 0 {
+		return map[string][]string{}, nil
+	}
+	quoted := make([]string, len(switches))
+	for i, sw := range switches {
+		quoted[i] = "'" + psEscapeSingle(sw) + "'"
+	}
+	out, err := runPS(fmt.Sprintf("$sw = @(%s)\n"+
+		"Get-VMNetworkAdapter -All | Where-Object { $sw -contains $_.SwitchName } | "+
+		"ForEach-Object { $_.SwitchName + \"`t\" + $_.VMName }",
+		strings.Join(quoted, ",")))
+	if err != nil {
+		return nil, fmt.Errorf("SwitchAdapters: %w", err)
+	}
+	return parseSwitchAdapters(out), nil
 }
 
 func nonEmptyLines(s string) []string {

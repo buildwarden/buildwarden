@@ -66,7 +66,7 @@ func (d *Driver) StartBuild(
 	if err != nil {
 		return nil, fmt.Errorf("resolving image: %w", err)
 	}
-	if err := checkLink(diskImage, d.Cache, req); err != nil {
+	if err := checkRequest(diskImage, d.Cache, req); err != nil {
 		return nil, err
 	}
 	if req.Timeout > 0 {
@@ -453,6 +453,15 @@ func checkLink(diskImage string, cache *ImageCache, req *driver.BuildRequest) er
 		return err
 	}
 	return driver.CheckHostLink(req.Link())
+}
+
+// checkRequest is checkLink, then the relay's resolvers ([vm] dns, or the
+// Mac's), which replace req.DNS for the claim (upstream_dns).
+func checkRequest(diskImage string, cache *ImageCache, req *driver.BuildRequest) error {
+	if err := checkLink(diskImage, cache, req); err != nil {
+		return err
+	}
+	return setRelayDNS(req, os.ReadFile)
 }
 
 // imageStamp describes a prepared image's link-channel stamp. An image

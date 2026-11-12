@@ -98,13 +98,17 @@ bootstrap:
     - cmd/warden-io/jks.go
     - bootstrap/
     - relay/controlplane.go
+    - "cmd/relay/dhcp*.go"
+    - tools/relay-vm/
     - driver/container/container.go
     - "driver/container/images*"
     - cmd/warden-pause/
     - driver/linuxguest/
     - driver/winguest/
     - "driver/hyperv/winseed*.go"
+    - "driver/hyperv/relayseed*.go"
     - driver/vz/image.go
+    - tools/build-vm/
     - "driver/firecracker/slots*.go"
     - driver/firecracker/deliver_linux.go
     - "driver/firecracker/vm*.go"

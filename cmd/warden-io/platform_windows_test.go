@@ -74,3 +74,41 @@ func TestSplitCIDR(t *testing.T) {
 		}
 	}
 }
+
+// TestRenderNICAddrs covers the failed relay wait's diagnostic: a leased
+// address, Windows' self-assigned WellKnown one (no lease), and none at all.
+func TestRenderNICAddrs(t *testing.T) {
+	const noLease = "WellKnown, no DHCP lease from the relay"
+	for _, tc := range []struct {
+		name, out, want string
+	}{
+		{
+			name: "leased",
+			out: "Ethernet\t100.64.0.2\tDhcp\r\n" +
+				"Loopback Pseudo-Interface 1\t127.0.0.1\tWellKnown\r\n",
+			want: "Ethernet has 100.64.0.2 (Dhcp)",
+		},
+		{
+			name: "wellknown",
+			out:  "Ethernet\t169.254.12.34\tWellKnown\r\n",
+			want: "Ethernet has 169.254.12.34 (" + noLease + ")",
+		},
+		{
+			name: "missing",
+			out:  "Loopback Pseudo-Interface 1\t127.0.0.1\tWellKnown\r\n",
+			want: "no IPv4 address on any interface",
+		},
+		{
+			name: "two",
+			out:  "Ethernet\t169.254.1.2\tWellKnown\nEthernet 2\t192.0.2.5\tManual\n",
+			want: "Ethernet has 169.254.1.2 (" + noLease + "); " +
+				"Ethernet 2 has 192.0.2.5 (Manual)",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := renderNICAddrs(parseNICAddrs(tc.out)); got != tc.want {
+				t.Errorf("got %q, want %q", got, tc.want)
+			}
+		})
+	}
+}

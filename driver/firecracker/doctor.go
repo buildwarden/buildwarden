@@ -5,11 +5,13 @@ import (
 	"fmt"
 	"io"
 	"net"
+	"net/netip"
 	"path/filepath"
 	"strings"
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/buildlink"
+	"github.com/buildwarden/buildwarden/driver/resolvers"
 )
 
 // RunSetup is `warden setup --driver firecracker`: as root, once per boot,
@@ -19,6 +21,12 @@ import (
 // It refuses to run while any slot is in use, since the reload would leave
 // that slot's VMs unfiltered.
 func RunSetup(out io.Writer, opts SetupOptions) error {
+	// A bad flag is refused the same on every host, before the host check.
+	if opts.Slots != 0 {
+		if err := ValidateSlotCount(opts.Slots); err != nil {
+			return err
+		}
+	}
 	if err := hostSupported(); err != nil {
 		return err
 	}
@@ -27,10 +35,11 @@ func RunSetup(out io.Writer, opts SetupOptions) error {
 
 // Doctor is `warden doctor --driver firecracker`: every preflight item plus
 // the slots' sysctls and rules, host posture, reflink support and orphaned
-// VMMs, one line each. It changes nothing and returns true when a build
+// VMMs, one line each, and the relay's resolvers with their source (vmDNS,
+// [vm] dns, when set). It changes nothing and returns true when a build
 // cannot run.
-func Doctor(out io.Writer, link buildlink.Link) (blocked bool) {
-	return doctor(realHost{}, out, hostLocal, link)
+func Doctor(out io.Writer, link buildlink.Link, vmDNS []netip.Addr) (blocked bool) {
+	return doctor(realHost{}, out, hostLocal, link, vmDNS)
 }
 
 // report prints doctor's lines and tracks whether anything blocks a build.
@@ -70,7 +79,8 @@ func (r *report) warn(what string, err error) {
 	r.line("ok", what, nil)
 }
 
-func doctor(h host, out io.Writer, local func(net.IP) bool, link buildlink.Link) bool {
+func doctor(h host, out io.Writer, local func(net.IP) bool, link buildlink.Link,
+	vmDNS []netip.Addr) bool {
 	r := &report{w: out}
 	if err := hostCheck(); err != nil {
 		r.check("host", err)
@@ -94,8 +104,12 @@ func doctor(h host, out io.Writer, local func(net.IP) bool, link buildlink.Link)
 		fmt.Fprintln(out, "skip  rules and FORWARD policy (reading them needs root: "+
 			"sudo warden doctor --driver firecracker)")
 	}
-	dns, err := upstreamResolvers(h.readFile, local, link)
-	r.check("upstream DNS for the relay: "+strings.Join(dns, ", "), err)
+	dns, source, err := relayResolvers(h.readFile, local, link, vmDNS)
+	what := "upstream DNS for the relay (from " + source + ")"
+	if err == nil {
+		what += ": " + resolvers.Join(dns)
+	}
+	r.check(what, err)
 	if name, ok := sudoUser(h); ok {
 		// The probe would write as root into the user's cache.
 		fmt.Fprintf(out, "skip  reflink copies on the cache filesystem (probing them "+

@@ -13,6 +13,8 @@ func validRelaySpec() RelayVMSpec {
 		BuildSwitch: "warden-dev",
 		NATSwitch:   "warden-dev-nat",
 		COMPipePath: `\\.\pipe\warden-relay-abc`,
+		SeedISO:     `C:\warden\builds\abc\relay-seed.iso`,
+		Notes:       "warden-relay-ip=192.168.240.2 warden-relay-switch=warden-dev-0",
 	}
 }
 
@@ -101,6 +103,8 @@ func TestBuildRelayVMScript_Validation(t *testing.T) {
 		"build":   func(s *RelayVMSpec) { s.BuildSwitch = "" },
 		"nat":     func(s *RelayVMSpec) { s.NATSwitch = "" },
 		"com":     func(s *RelayVMSpec) { s.COMPipePath = "" },
+		"seed":    func(s *RelayVMSpec) { s.SeedISO = "" },
+		"notes":   func(s *RelayVMSpec) { s.Notes = "" },
 	}
 	for name, mutate := range cases {
 		spec := validRelaySpec()
@@ -120,5 +124,32 @@ func TestBuildRelayVMScript_EscapesQuotes(t *testing.T) {
 	}
 	if !strings.Contains(script, "warden''relay") {
 		t.Error("single quotes in the name must be doubled for PowerShell")
+	}
+}
+
+// TestBuildRelayVMScript_SeedAndNotes: the seed DVD and the Notes are set
+// while the VM is off (before any Start-VM, which the script never runs),
+// escaped, and the build NIC is on the given switch.
+func TestBuildRelayVMScript_SeedAndNotes(t *testing.T) {
+	spec := validRelaySpec()
+	spec.SeedISO = `C:\it's\relay-seed.iso`
+	spec.Notes = "warden-relay-ip=172.31.0.2 warden-relay-switch=it's-0"
+	spec.BuildSwitch = "warden-dev-3"
+	script, err := buildRelayVMScript(spec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, want := range []string{
+		`Add-VMDvdDrive -VMName 'warden-relay-abc' -Path 'C:\it''s\relay-seed.iso'`,
+		`Set-VM -Name 'warden-relay-abc' -Notes 'warden-relay-ip=172.31.0.2 ` +
+			`warden-relay-switch=it''s-0'`,
+		`-SwitchName 'warden-dev-3' | Out-Null`,
+	} {
+		if !strings.Contains(script, want) {
+			t.Errorf("script lacks %q:\n%s", want, script)
+		}
+	}
+	if strings.Contains(script, "Start-VM") {
+		t.Error("the relay VM script starts the VM")
 	}
 }

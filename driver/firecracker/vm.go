@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"strings"
 )
 
 // Each VM is one `firecracker --no-api --config-file <json>` process (Decision
@@ -57,11 +56,12 @@ type nic struct {
 const baseArgs = "console=ttyS0 reboot=k panic=1 pci=off"
 
 // relayArgs is the relay VM's command line (Decision 5): a static upstream on
-// the slot's /30, the host's resolvers and the per-build claim token.
-func relayArgs(s Slot, dns []string, token string) string {
+// the slot's /30 and the per-build claim token. Its resolvers are not a boot
+// value: the claim carries them (upstream_dns, RELAY-08).
+func relayArgs(s Slot, token string) string {
 	return baseArgs + " warden.net=static warden.nat_ip=" + s.RelayAddr() +
 		" warden.nat_prefix=30 warden.nat_gw=" + s.HostAddr() +
-		" warden.dns=" + strings.Join(dns, ",") + " warden.claim_token=" + token
+		" warden.claim_token=" + token
 }
 
 // relayConfig is the relay VM: diskless, eth0 on the slot's bridge, eth1 its

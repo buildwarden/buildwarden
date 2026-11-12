@@ -33,6 +33,9 @@ warden build <context>:
     VM drivers: req.BuildLink := --build-link, else [vm] build_link (checked as
                 the file loads), else 100.127.255.252/30; each checked /30,
                 disjoint from BuildWarden's own ranges, before any driver work
+                req.DNS := [vm] dns (checked as the file loads: IPv4, not
+                unspecified, multicast or broadcast, not empty), else none;
+                the container driver gets neither
     driver := select(req.driver)            # container | qemu | vz | hyperv | firecracker
     driver.StartBuild(req)                  # below; every driver has this shape
     print the result; exit with the build script's exit code
@@ -49,8 +52,8 @@ StartBuild(req):
     VM drivers: refuse a build link a host interface holds, and a launcher
                 asset whose link-channel stamp is missing or old
     relay := start the relay, unconfigured                 # per driver
-    session.ClaimRelay(relay, build link)                  # tunnel + config;
-                                                           # container: no link
+    session.ClaimRelay(relay, build link, req.DNS)         # tunnel + config;
+                                                           # container: neither
     isolate the build environment                          # per driver
     deliver warden-io into it                              # per driver
     start it                                               # per driver
@@ -76,8 +79,10 @@ ClaimRelay(addr, token, link, oldRelayFix):
     serve collector over tunnel (HTTP/2)
     identity := POST addr/v1/claim {collector URL = the tunnel, token, capture mode,
                                     upstream CAs, environment record,
-                                    build_link {prefix, relay, guest} when given}
-        a relay that predates build_link refuses it: a fix naming oldRelayFix
+                                    build_link {prefix, relay, guest} when given,
+                                    upstream_dns = req.DNS when given}
+        a relay that refuses any field as unknown (it predates build_link or
+        upstream_dns): a fix naming oldRelayFix
     # the relay answers only once its build segment is configured
     wait for the relay's POST /v1/ready
     write identity.CACert to <output>/ca.cert.pem
@@ -163,13 +168,97 @@ before anything boots:
     omit --image; an --image disk outside the image cache, which cannot be
     re-prepared in place -> omit --image)
 
-start the relay VM (or, on VZ, a host relay process); claim it with the build link
-    firecracker: resolvers for the relay are the host's, minus loopback, host
-                 addresses and any inside the build link
+the relay's resolvers (driver/resolvers), before any VM:
+    [vm] dns set -> Check: every entry passes the driver's rule, in order,
+                    used exclusively; the first that fails refuses the build
+    unset        -> Select(the host's list, the driver's rule): the ones that
+                    pass, in order; none -> a fix naming each excluded server,
+                    an off-host DNS server and [vm] dns
+    req.DNS := that list; the claim carries it as upstream_dns
+        driver       host source                     excluded
+        hyperv       the IPv4 DNS servers of the     loopback, link-local, host
+                     lowest-metric default route's   addresses, the NAT prefix,
+                     interface                       the build link
+        firecracker  /etc/resolv.conf, or resolved's loopback, link-local, host
+                     upstreams behind its stub       addresses, the build link
+        qemu         /etc/resolv.conf (macOS or      loopback, link-local,
+                     Linux)                          10.0.2.0/24, the build link
+        vz           the Mac's /etc/resolv.conf      the build link
+
+start the relay VM (or, on VZ, a host relay process); claim it with the build
+link and the resolvers
     firecracker: first take a free network slot made by `warden setup` (a host
                  lock), kill VMMs a dead warden left on it, and claim the relay
                  at the slot's upstream address
-    hyperv setup: refuse a --nat-prefix that overlaps the build link
+    hyperv setup: refuse a --nat-prefix that overlaps the build link; make or
+                 adopt <network>-nat on --nat-prefix, refusing another NAT that
+                 owns the prefix or <network>-nat on another (making it leaves
+                 --host-ip the only IPv4 address on vEthernet (<network>-nat));
+                 make the
+                 durable strategy's slot switches <network>-0..N-1 (--slots,
+                 default 4), trim unattached extras, retire an unattached old
+                 <network> switch
+    hyperv build (StartBuild):
+        hold the host lock "hyperv-build-<id>" from the build ID's creation
+            to StartBuild's return
+        the network strategy: elevated -> a per-build network; else the
+            privileged service at this protocol -> a per-build network through
+            it; a service at another protocol (or failing its ping) -> a fix
+            naming its reinstall, never the durable network; else durable
+            (doctor reads the service manager when the pipe does not open:
+            installed but stopped -> Start-Service WardenHyperV, never
+            "not installed"; a read refused or failed -> "state could not
+            be read", naming Get-Service WardenHyperV; only "does not exist"
+            is not installed)
+        the relay boot VHDX's stamp must be 2, else a fix naming refresh-cache.sh
+        the NAT read back from the host: name, prefix, host IP (two host
+            addresses in the prefix -> refused as ambiguous)
+            durable:   <network>-nat and its slot switches; none -> warden setup
+            ephemeral: a per-build Private switch; the dev switch's NAT if
+                       present, else the one owning the default prefix, else new
+        a NAT prefix that overlaps the build link -> a fix naming that NAT
+            (config load checks no Hyper-V range; this is the one check),
+            run first on the NAT read back before the seed ISO and any
+            standup (none yet -> the default prefix, named), then on the NAT
+            the build took
+        the resolvers, as above; token := a fresh random claim token
+        under a host lock ("hyperv-network"):
+            relay address := the lowest free host in the NAT prefix (not the
+                             network, broadcast or host IP, nor any warden-relay-*
+                             VM's Notes); none free -> a fix naming the holders
+            durable: the lowest slot switch with no VM adapter attached;
+                     none -> a fix naming the holders and --slots
+            seed ISO (WARDENRELAY) := warden-relay.conf with warden.seed=1,
+                     warden.net=static, warden.nat_ip, warden.nat_prefix,
+                     warden.nat_gw, warden.claim_token  (pre-claim values only)
+            create the relay VM, off: the seed DVD, the build NIC on the slot,
+                     Notes "warden-relay-ip=<ip> warden-relay-switch=<switch>"
+        start the relay VM; claim it at <relay address>:8301 with the token
+        (Bearer on the claim and the tunnel)
+        every seed ISO (the build's, the relay's, a prepare's) is made under
+        a host lock ("hyperv-iso"), held only around IMAPI2
+        the build VM joins the relay's switch; before it starts, the slot's
+        adapters must be exactly the relay's build NIC and the build VM's,
+        else refuse; removing the relay VM frees its address and slot
+    hyperv clean (`warden clean --driver hyperv`): for each 8-character build
+        ID among warden-build-*, warden-relay-* VMs and warden-hyperv-* work
+        dirs whose "hyperv-build-<id>" lock it gets (not running): remove its
+        VMs, then its ephemeral warden-<id> switch, then its work dirs; the
+        NAT, the slot switches (<network>-<i>) and prepare VMs stay, so this
+        frees a slot a --keep-vms build or a killed warden held
+    hyperv host locks (driver.HostLock / TryHostLock, all "hyperv-<what>"):
+        "hyperv-build-<id>"  one build's whole run; clean skips a held one
+        "hyperv-network"     relay address and slot, through the relay VM's
+                             creation
+        "hyperv-iso"         IMAPI2 seed ISO creation
+        "hyperv-prepare"     image prepare; a build tries it to see whether a
+                             background refresh is already running
+    hyperv PowerShell (runPS): a failed script's error is its stderr, else
+        the exit status with the last 10 lines of stdout (psError); the
+        slot script (setup) and EnsureNetwork's script print DONE last and
+        their output without it is refused, naming that tail (psDoneCheck),
+        since powershell -Command exits with the success of the last
+        statement, which a suppressed lookup that finds nothing fails
     the build VM boots only after the claim returns
 
 isolate:   the build VM's only network interface leads to the relay
@@ -185,8 +274,11 @@ deliver:   Linux guest   -> cloud-init CIDATA disk carrying warden-io
            macOS (VZ)    -> warden-io baked into the prepared image (a known deviation)
 
 address:   the guest takes the build link per build, nothing baked:
-           seeded guests (cloud-init network-config, Windows warden-run.ps1)
+           Linux seeded guests (cloud-init network-config)
                       -> rendered from the link
+           Windows    -> the relay's DHCP lease alone: warden-run.ps1 runs
+                      initialize --gateway=<relay> with no --ip; no lease ->
+                      the relay wait fails naming the NIC's address and origin
            direct boot (qemu, firecracker) -> udhcpc takes the relay's lease;
                       it must agree with warden.link_ip / warden.link_gw on the
                       kernel command line (else stop); no lease -> the keys;
@@ -268,12 +360,21 @@ relay --mode=container|vm|host:
             host:      netstack, ARP, DHCP and listeners from build_link, else
                        --subnet
             container: build_link -> 400
+        resolvers (every mode), fixed for the build:
+            upstream_dns in the claim -> checked (non-empty IPv4, not
+                unspecified, multicast or broadcast, not in build_link; else
+                400, still claimable) and used exclusively
+            absent -> the usable nameservers of its own /etc/resolv.conf (not
+                its own address, 127.0.0.1 or the build link); none -> 400
+                naming upstream_dns
+            log "upstream resolvers: <list> (claim | resolv.conf)"
         generate the per-build MITM CA and the ledger key; return both; sign the environment record as the first ledger
         record; POST /v1/ready to the collector
     stop listening for claims
 
     for each guest request:
-        DNS: artifacts, cwd -> the relay itself; anything else -> upstream, recorded
+        DNS: artifacts, cwd -> the relay itself; anything else -> the resolvers,
+             asked in order (the next when one does not answer), recorded
         http://artifacts/
             /ca.pem, /bootstrap, /build-script -> serve (pulled from the collector;
                                                   bootstrap and script recorded)
@@ -285,10 +386,38 @@ relay --mode=container|vm|host:
         anything else -> proxy upstream (HTTPS through the MITM CA), recorded;
                          captures streamed to the collector; a dial into the
                          build link is refused (vm and host), as are host mode's
-                         SSRF blocks; upstream DNS skips a resolver in the link
+                         SSRF blocks; its own lookups (upstream dials, a collector
+                         host name) go through the same in-order forwarder
 
     the ledger is streamed to the collector as it is written, so even a relay
     that dies mid-build leaves a verifiable (truncated) ledger
+```
+
+## Relay VM init (`tools/relay-vm/init`)
+
+The init of every vm-mode relay VM (qemu, Hyper-V, Firecracker). It carries
+only the relay's pre-claim values; the build link and the resolvers come in
+the claim.
+
+```
+read_keys(words):            # one reader for both sources; never evaluated
+    warden.net=dhcp|static, warden.nat_ip=<quad>, warden.nat_prefix=1..30,
+    warden.nat_gw=<quad>, warden.claim_token=<64 hex>, warden.seed=1
+    a malformed value, or warden.dns (retired for upstream_dns) -> stop
+qemu, Firecracker: read_keys(/proc/cmdline)
+Hyper-V: the seed alone: any warden.* word on /proc/cmdline -> stop, naming it
+         load the storage, CD-ROM and ISO 9660 modules; wait <= 10 s for the
+         WARDENRELAY CD; copy warden-relay.conf; unmount; read_keys(it)
+         no CD, no file or no warden.seed=1 -> stop
+bring the build link's interface up (the relay addresses it from the claim)
+upstream: static -> nat_ip/nat_prefix via nat_gw, all three required, else stop
+          dhcp   -> udhcpc (its script writes the lease's resolv.conf); no
+                    lease -> stop
+iptables: redirect 80/443/53 from the build link; masquerade upstream; drop
+          forwarding
+resolv.conf: not written by the init itself
+WARDEN_CLAIM_TOKEN=<token> relay --mode=vm --build-if=<build link interface>
+stop: a console line (COM1 on Hyper-V), no relay; the claim times out
 ```
 
 ## Namespace holder (`cmd/warden-pause`)

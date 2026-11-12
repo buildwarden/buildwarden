@@ -2,7 +2,10 @@ package hyperv
 
 import (
 	"context"
+	"encoding/json"
+	"fmt"
 	"net"
+	"strings"
 	"testing"
 	"time"
 )
@@ -48,6 +51,12 @@ func (f *netFake) GuestKVP(context.Context, string) (map[string]string, error) {
 }
 func (f *netFake) DisksInUse(context.Context) ([]string, error) { panic("not over pipe") }
 func (f *netFake) ListVMs(context.Context, string) ([]string, error) {
+	panic("not over pipe")
+}
+func (f *netFake) RelayNotes(context.Context) (map[string]string, error) {
+	panic("not over pipe")
+}
+func (f *netFake) SwitchAdapters(context.Context, []string) (map[string][]string, error) {
 	panic("not over pipe")
 }
 
@@ -140,5 +149,62 @@ func TestService_EnsureNetworkNilSpec(t *testing.T) {
 	)
 	if resp.Err == "" {
 		t.Fatal("expected an error for a nil spec")
+	}
+}
+
+// protocol1Service answers one request on conn as a service installed by a
+// warden at protocol 1 does: the version check fails before the op is read.
+func protocol1Service(conn net.Conn) {
+	defer conn.Close()
+	var req svcRequest
+	if err := json.NewDecoder(conn).Decode(&req); err != nil {
+		return
+	}
+	_ = json.NewEncoder(conn).Encode(svcResponse{
+		Version: 1,
+		Err: fmt.Sprintf("protocol version mismatch: service speaks 1, "+
+			"client sent %d; reinstall the service (warden hyperv service install)",
+			req.Version),
+	})
+}
+
+// pingOver runs serve on one end of a net.Pipe and pingService on the other.
+func pingOver(t *testing.T, serve func(net.Conn)) string {
+	t.Helper()
+	srv, cli := net.Pipe()
+	go serve(srv)
+	defer cli.Close()
+	_ = cli.SetDeadline(time.Now().Add(5 * time.Second))
+	return pingService(cli)
+}
+
+func TestPingService(t *testing.T) {
+	tests := []struct {
+		name  string
+		serve func(net.Conn)
+		want  string // substring of the stale reason; "" for a usable service
+	}{
+		{"this protocol is usable", func(c net.Conn) {
+			defer c.Close()
+			_ = serveConn(context.Background(), c, &netFake{})
+		}, ""},
+		{"a protocol-1 service is stale, naming both versions",
+			protocol1Service, "speaks protocol 1, this warden 2"},
+		{"an unreadable reply is stale, not absent", func(c net.Conn) {
+			defer c.Close()
+			_ = json.NewDecoder(c).Decode(&svcRequest{})
+			_, _ = c.Write([]byte("not json\n"))
+		}, "its ping fails: decode response"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := pingOver(t, tt.serve)
+			switch {
+			case tt.want == "" && got != "":
+				t.Fatalf("pingService = %q, want usable", got)
+			case !strings.Contains(got, tt.want):
+				t.Fatalf("pingService = %q, want it to contain %q", got, tt.want)
+			}
+		})
 	}
 }

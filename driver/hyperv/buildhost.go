@@ -5,6 +5,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net/netip"
 	"os"
 	"path/filepath"
 	"strings"
@@ -57,15 +58,23 @@ type buildConfig struct {
 	// base disk or the VM won't boot. Zero defaults to 2.
 	Generation int
 
-	// Network. Both VMs share the Private build switch (relay <-> build only);
-	// the relay additionally attaches the NAT switch for controlled egress. The
-	// build VM never attaches to the NAT switch.
+	// Network. Both VMs share a Private build switch (relay <-> build only):
+	// the ephemeral strategy's BuildSwitch, or the lowest free of the durable
+	// strategy's Slots, which StartRelay allocates. The relay additionally
+	// attaches the NAT switch for controlled egress, at an address it
+	// allocates in NATPrefix with HostIP as its gateway. The build VM never
+	// attaches to the NAT switch.
 	BuildSwitch string
+	Slots       []string
 	NATSwitch   string
+	NATPrefix   netip.Prefix
+	HostIP      netip.Addr
+	// RelaySeedDir is where the relay seed is staged (under the work dir).
+	RelaySeedDir string
 
 	MemoryMB int           // build VM; default 4096
 	CPUs     int           // build VM; default 4
-	KeepVMs  bool          // leave the build VM and overlay for inspection
+	KeepVMs  bool          // leave both VMs and their overlays for inspection
 	Timeout  time.Duration // whole-build ceiling; zero means no limit
 
 	// OutputTee, if set, receives a live copy of the guest build console
@@ -80,9 +89,10 @@ type buildConfig struct {
 	// boots from); nil records none.
 	Environment *relaycfg.Environment
 
-	// Test hooks: host/relay addresses and ports (zero = production defaults).
-	relayIP      string
+	// Test hooks (zero = production defaults): the claim port, the relay
+	// seed ISO builder, and timings.
 	claimPort    int
+	makeSeedISO  func(seedDir, iso string) error
 	readyTimeout time.Duration
 	vmPoll       time.Duration // build VM state poll (zero = 3 s)
 }
@@ -107,10 +117,14 @@ func validateBuildConfig(cfg buildConfig) error {
 		return fmt.Errorf(
 			"runBuild: no seed media " +
 				"(need SeedISO for Linux or SeedVHDX for Windows)")
-	case cfg.BuildSwitch == "":
-		return fmt.Errorf("runBuild: empty build switch")
+	case (cfg.BuildSwitch == "") == (len(cfg.Slots) == 0):
+		return fmt.Errorf("runBuild: want exactly one of a build switch and slots")
 	case cfg.NATSwitch == "":
 		return fmt.Errorf("runBuild: empty NAT switch")
+	case !cfg.NATPrefix.IsValid() || !cfg.HostIP.IsValid():
+		return fmt.Errorf("runBuild: no NAT prefix and host IP")
+	case cfg.RelaySeedDir == "":
+		return fmt.Errorf("runBuild: empty relay seed dir")
 	}
 	// A differencing child must share its parent's on-disk format, so the build
 	// overlay's extension must match the base image's (.vhd child off a .vhd
@@ -173,14 +187,19 @@ func runBuild(
 		OutputDir:       cfg.OutputDir,
 		BootVHDX:        cfg.RelayBootVHDX,
 		OverlayVHDX:     cfg.RelayOverlay,
-		BuildSwitch:     cfg.BuildSwitch,
 		NATSwitch:       cfg.NATSwitch,
+		NATPrefix:       cfg.NATPrefix,
+		HostIP:          cfg.HostIP,
+		BuildSwitch:     cfg.BuildSwitch,
+		Slots:           cfg.Slots,
+		SeedDir:         cfg.RelaySeedDir,
+		MakeSeedISO:     cfg.makeSeedISO,
 		BuildScriptPath: cfg.BuildScriptPath,
 		GuestOS:         guestOS(cfg.IsWindows),
 		ContextDir:      cfg.ContextDir,
 		Request:         cfg.Request,
 		Environment:     cfg.Environment,
-		RelayIP:         cfg.relayIP,
+		KeepVM:          cfg.KeepVMs,
 		ClaimPort:       cfg.claimPort,
 		ReadyTimeout:    cfg.readyTimeout,
 		OutputTee:       cfg.OutputTee,
@@ -188,7 +207,8 @@ func runBuild(
 	if err != nil {
 		return nil, fmt.Errorf("runBuild: %w", err)
 	}
-	// rh.Close removes the relay VM + relay overlay and stops the host servers.
+	// rh.Close removes the relay VM + relay overlay (unless --keep-vms) and
+	// stops the host servers.
 	defer func() { _ = rh.Close() }()
 
 	// 2. Per-build differencing overlay off the read-only build-guest base.
@@ -213,8 +233,8 @@ func runBuild(
 		_ = os.Remove(cfg.BuildOverlay)
 	}()
 
-	// 3. Create + start the build VM on the Private build switch (its SOLE NIC;
-	//    no NAT route). Generation follows the base image: a Gen1 (.vhd) guest
+	// 3. Create + start the build VM on the relay's Private build switch (its
+	//    SOLE NIC; no NAT route). Generation follows the base image: a Gen1 (.vhd) guest
 	//    such as the Windows Server eval image has no Secure Boot; a Gen2 (.vhdx)
 	//    guest keeps Secure Boot on via the per-family template CreateVM selects.
 	//    Either way the build guest is isolated on the Private switch.
@@ -223,10 +243,7 @@ func runBuild(
 	//    observable from the host without mounting the guest disk. The default
 	//    pipe name is derived from the build VM name; WARDEN_HYPERV_BUILD_COM_PIPE
 	//    overrides it for a deterministic path a reader can attach to in advance.
-	comPipe := os.Getenv("WARDEN_HYPERV_BUILD_COM_PIPE")
-	if comPipe == "" {
-		comPipe = `\\.\pipe\` + buildVM
-	}
+	comPipe := buildCOMPipe(buildVM)
 	fmt.Fprintf(os.Stderr,
 		"warden: build VM %q COM1 -> %s "+
 			"(attach a serial reader to observe guest boot)\n",
@@ -236,7 +253,7 @@ func runBuild(
 		Generation:  cfg.Generation,
 		MemoryMB:    cfg.MemoryMB,
 		CPUs:        cfg.CPUs,
-		SwitchName:  cfg.BuildSwitch,
+		SwitchName:  rh.BuildSwitch,
 		VHDXPath:    cfg.BuildOverlay,
 		SeedISO:     cfg.SeedISO,
 		SeedVHDX:    cfg.SeedVHDX,
@@ -244,6 +261,9 @@ func runBuild(
 		COMPipePath: comPipe,
 	}); err != nil {
 		return nil, fmt.Errorf("runBuild: create build VM: %w", err)
+	}
+	if err := verifySlot(ctx, prov, cfg, rh, buildVM); err != nil {
+		return nil, fmt.Errorf("runBuild: %w", err)
 	}
 	if err := prov.StartVM(ctx, buildVM); err != nil {
 		return nil, fmt.Errorf("runBuild: start build VM: %w", err)
@@ -280,6 +300,68 @@ func runBuild(
 		return nil, fmt.Errorf("runBuild: %w", err)
 	}
 	return &driver.BuildResult{OutputDir: cfg.OutputDir}, nil
+}
+
+// buildCOMPipe is the build VM's COM1 pipe: WARDEN_HYPERV_BUILD_COM_PIPE, or
+// one named after the VM.
+func buildCOMPipe(buildVM string) string {
+	if p := os.Getenv("WARDEN_HYPERV_BUILD_COM_PIPE"); p != "" {
+		return p
+	}
+	return `\\.\pipe\` + buildVM
+}
+
+// verifySlot re-reads a durable build's slot before its build VM runs: the
+// slot is shared host infrastructure, so its segment must hold this build's
+// two VMs and nothing else (BOOT-01: the relay is the build VM's sole peer).
+// An ephemeral build's switch is its own and is not re-read.
+func verifySlot(ctx context.Context, prov Provisioner, cfg buildConfig, rh *RelayHost,
+	buildVM string) error {
+	if len(cfg.Slots) == 0 {
+		return nil
+	}
+	attached, err := prov.SwitchAdapters(ctx, []string{rh.BuildSwitch})
+	if err != nil {
+		return err
+	}
+	return checkSlotAdapters(rh.BuildSwitch, attached[rh.BuildSwitch], rh.VMName, buildVM)
+}
+
+// checkSlotAdapters refuses a durable build switch whose attached adapters
+// are not exactly the relay VM's build NIC and the build VM's NIC.
+func checkSlotAdapters(sw string, attached []string, relayVM, buildVM string) error {
+	want := map[string]int{relayVM: 1, buildVM: 1}
+	var foreign []string
+	for _, vm := range attached {
+		if want[vm] > 0 {
+			want[vm]--
+			continue
+		}
+		foreign = append(foreign, vm)
+	}
+	var missing []string
+	for _, vm := range []string{relayVM, buildVM} {
+		if want[vm] > 0 {
+			missing = append(missing, vm)
+		}
+	}
+	if len(foreign) == 0 && len(missing) == 0 {
+		return nil
+	}
+	return driver.Fixable(
+		"disconnect the other adapters from "+sw+" (Get-VMNetworkAdapter -All | "+
+			"Where-Object SwitchName -eq '"+sw+"'), then re-run the build",
+		"durable build switch %s must hold only this build's VMs (%s, %s); "+
+			"also attached: %s; missing: %s", sw, relayVM, buildVM,
+		joinOrNone(foreign), joinOrNone(missing))
+}
+
+// joinOrNone is names comma-joined, or "none".
+func joinOrNone(names []string) string {
+	if len(names) == 0 {
+		return "none"
+	}
+	return strings.Join(names, ", ")
 }
 
 var errBuildVMOff = errors.New("build VM powered off")

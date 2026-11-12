@@ -77,6 +77,9 @@ func (d *Driver) StartBuild(
 	if err := driver.CheckHostLink(req.Link()); err != nil {
 		return nil, err
 	}
+	if err := setRelayDNS(req, runtime.GOOS, os.ReadFile); err != nil {
+		return nil, err
+	}
 	if req.Timeout > 0 {
 		var cancel context.CancelFunc
 		ctx, cancel = context.WithTimeout(ctx, req.Timeout)

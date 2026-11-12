@@ -3,6 +3,7 @@ package firecracker
 import (
 	"fmt"
 	"net"
+	"net/netip"
 	"strconv"
 	"strings"
 
@@ -195,14 +196,15 @@ func hostLocal(ip net.IP) bool {
 type preflighted struct {
 	assets    assets
 	slots     []Slot
-	resolvers []string
+	resolvers []netip.Addr
 }
 
 // preflight is the build's cheap up-front checks (UX-04), in the order a user
 // would fix them: the host, KVM, the VMM, the boot assets, a slot, an
-// off-host resolver. The disk path adds checkDiskTools once the build's image
-// is known.
-func preflight(h host, local func(net.IP) bool, link buildlink.Link) (*preflighted, error) {
+// off-host resolver (vmDNS, [vm] dns, when set). The disk path adds
+// checkDiskTools once the build's image is known.
+func preflight(h host, local func(net.IP) bool, link buildlink.Link,
+	vmDNS []netip.Addr) (*preflighted, error) {
 	if err := hostCheck(); err != nil {
 		return nil, err
 	}
@@ -212,7 +214,7 @@ func preflight(h host, local func(net.IP) bool, link buildlink.Link) (*preflight
 	if err := checkFirecracker(h); err != nil {
 		return nil, err
 	}
-	a, err := findAssets()
+	a, err := assetsCheck()
 	if err != nil {
 		return nil, err
 	}
@@ -220,16 +222,33 @@ func preflight(h host, local func(net.IP) bool, link buildlink.Link) (*preflight
 	if err != nil {
 		return nil, err
 	}
-	dns, err := upstreamResolvers(h.readFile, local, link)
+	dns, _, err := relayResolvers(h.readFile, local, link, vmDNS)
 	if err != nil {
 		return nil, err
 	}
 	return &preflighted{assets: a, slots: slots, resolvers: dns}, nil
 }
 
+// requestPreflight is preflight for req's build link and [vm] dns (req.DNS).
+// It replaces req.DNS with the resolvers it chose, which the claim carries as
+// upstream_dns.
+func requestPreflight(h host, local func(net.IP) bool,
+	req *driver.BuildRequest) (*preflighted, error) {
+	pre, err := preflight(h, local, req.Link(), req.DNS)
+	if err != nil {
+		return nil, err
+	}
+	req.DNS = pre.resolvers
+	return pre, nil
+}
+
 // hostCheck is hostSupported, replaced in tests so the host-independent
 // checks run on every platform.
 var hostCheck = hostSupported
+
+// assetsCheck is findAssets, replaced in tests so the checks after it run
+// without built boot assets.
+var assetsCheck = findAssets
 
 // unsupportedHost is the error a non-Linux or non-x86_64 host gets.
 func unsupportedHost(goos, goarch string) error {

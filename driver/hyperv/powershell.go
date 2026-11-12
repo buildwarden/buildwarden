@@ -5,25 +5,20 @@ package hyperv
 import (
 	"bytes"
 	"encoding/json"
-	"fmt"
 	"os/exec"
 	"strings"
 )
 
 // runPS runs a PowerShell command and returns its stdout. On failure the error
-// carries stderr (or the raw exec error) so callers surface a real message
-// instead of a bare exit code.
+// carries stderr, or with none the tail of stdout (psError), so callers
+// surface a real message instead of a bare exit code.
 func runPS(script string) (string, error) {
 	cmd := exec.Command("powershell.exe", "-NoProfile", "-NonInteractive", "-Command", script)
 	var out, errb bytes.Buffer
 	cmd.Stdout = &out
 	cmd.Stderr = &errb
 	if err := cmd.Run(); err != nil {
-		msg := strings.TrimSpace(errb.String())
-		if msg == "" {
-			msg = err.Error()
-		}
-		return out.String(), fmt.Errorf("powershell: %s", msg)
+		return out.String(), psError(out.String(), errb.String(), err)
 	}
 	return out.String(), nil
 }
