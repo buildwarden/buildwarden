@@ -2323,7 +2323,30 @@ literal in #114's `clean.go`, now `relayVMPrefix`; the rest as at r1.
 the host locks, the NAT check before any per-build work, the stopped and
 unread service states).
 
-## Rollback notes
+**r5 (2026-11-12).** Native validation found F6: a second `warden setup
+--driver hyperv` exited 1 with only `powershell: exit status 1`. Plan tasks
+61 and 62 (`e044b6f`) fixed it: the slot script and EnsureNetwork's script
+print a final `DONE`, checked by `psDoneCheck` (`729f06c`), and `runPS`'s
+error comes from the pure `psError`, which repeats stdout's tail when stderr
+is empty (`61bd447`, `driver/hyperv/psoutput.go`). Review r5 (`61bd447`):
+0 MUST, the same five SHOULDs open. The native recheck passed (setup twice
+in a row, builds through the r5 service). `main` re-merged with no new PRs
+since r4.
+
+*Terminology.* The `DONE` convention and `runPS`'s error are stated once in
+`overview.md`, under the Hyper-V driver beside the host locks, and in task
+61. Three older scripts (`TeardownNetwork` and `RemoveVM` in
+`provision_local_windows.go`, and the seed ISO's in `winseed_windows.go`)
+end with `'OK'`, which also makes them exit 0 at their end; only the seed
+ISO's is checked (`strings.Contains(out, "OK")`). They predate this feature
+and task 61 judged them safe, so they stay; moving them to `psDone` and
+`psDoneCheck` is a small cleanup for a later change, not this branch.
+
+*FLOW-15 sweep.* `make deadcode` lists none of `psoutput.go`'s helpers on
+any platform (`psDoneCheck` is reached from the Windows provisioner and,
+everywhere, from `parseSetupSlots`); the hyperv entries are r4's. `psTail`
+has no twin (`driver/firecracker` `consoleTail` reads a file); no
+duplication.
 
 None yet. One named contingency, never a runtime fallback (Decision 11): if
 native validation finds the relay seed's DVD path does not hold on Hyper-V,

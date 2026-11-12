@@ -253,6 +253,12 @@ link and the resolvers
         "hyperv-iso"         IMAPI2 seed ISO creation
         "hyperv-prepare"     image prepare; a build tries it to see whether a
                              background refresh is already running
+    hyperv PowerShell (runPS): a failed script's error is its stderr, else
+        the exit status with the last 10 lines of stdout (psError); the
+        slot script (setup) and EnsureNetwork's script print DONE last and
+        their output without it is refused, naming that tail (psDoneCheck),
+        since powershell -Command exits with the success of the last
+        statement, which a suppressed lookup that finds nothing fails
     the build VM boots only after the claim returns
 
 isolate:   the build VM's only network interface leads to the relay
