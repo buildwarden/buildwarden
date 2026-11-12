@@ -1,6 +1,6 @@
 ---
 feature: wf-check-test-windows-eol
-status: draft
+status: archived
 drivers: []
 seams: []
 surfaces: []
@@ -155,7 +155,7 @@ finished: nothing landed to reconcile.
 - **Tests:** `TestGitHelperIgnoresAutoCRLF` added. With the pin removed it
   fails (`checked-out bytes "one\r\ntwo\r\n", want "one\ntwo\n"`).
   `GIT_CONFIG_GLOBAL` set to a file with `core.autocrlf = true`, `go test
-  ./...` in `tools/workflow` fails at the base `98fffd8`
+  ./...` in `tools/workflow` fails at `98fffd8` (before task 1)
   (`TestWhitespaceOnlyDifferenceFails` in `check`, and `TestNativeRun` in
   `native`, a second case the same setting broke) and passes on the branch.
 - **Gates:** `make lint` (0 findings), `make test`, `make enforcement` ("main's
@@ -168,4 +168,29 @@ None yet.
 
 ## Archive summary
 
-Filled in at x2-implement, in the item's PR (FLOW-12).
+Approved at design review r1 (2026-11-12, Jeff); implemented and published
+the same day as a process item. The PR to `main` carries this design.
+
+- **Built.** The three test git helpers in `tools/workflow` pin
+  `core.autocrlf=false`: `check_test.go`'s `git` and `queue/hosts_test.go`'s
+  `gitRepo` through `GIT_CONFIG_COUNT`/`GIT_CONFIG_KEY_0`/`GIT_CONFIG_VALUE_0`
+  in the environment, `native_test.go`'s `newLauncherRepo` with
+  `-c core.autocrlf=false` in its `cfg` list. `TestGitHelperIgnoresAutoCRLF`
+  sets `core.autocrlf=true` in a temporary global config and asserts a
+  checked-out LF file keeps its bytes. With `core.autocrlf=true` globally,
+  `TestWhitespaceOnlyDifferenceFails` and `TestNativeRun` fail before the
+  change and pass after it. No production code changes.
+- **Decisions taken:** pin the setting in each helper's every `git` call,
+  so fixtures hold exactly the bytes the tests write (Decision 1); all three
+  helpers, not only `check`'s (a1); no CI change (a2).
+- **Rejected:** editing only the failing test's replacement string; `git
+  config core.autocrlf false` inside `repoWith` (misses calls before it); a
+  `.gitattributes` in each fixture repository (an extra commit that changes
+  compared trees); running `tools/workflow`'s tests on windows-latest in CI
+  (left for its own item if wanted).
+- **For a future design touching `wf-check`, `tests`, `line-endings` or
+  `autocrlf`:** a new test git helper in `tools/workflow` must pin
+  `core.autocrlf=false` the same way, or its fixtures depend on the machine.
+  Read-only `exec.Command("git", ...)` calls need no pin. CI still runs these
+  tests on linux only, so a Windows-only fixture break shows up first on
+  windows-desktop's `make test`.
