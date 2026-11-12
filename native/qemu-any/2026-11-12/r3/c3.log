@@ -1,0 +1,3 @@
+warden: build FAILED
+[warden] ERROR: [vm] dns lists 127.0.0.1, which the relay cannot use (loopback)
+  To fix: change or remove that entry in [vm] dns
