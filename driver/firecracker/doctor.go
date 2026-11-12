@@ -21,6 +21,12 @@ import (
 // It refuses to run while any slot is in use, since the reload would leave
 // that slot's VMs unfiltered.
 func RunSetup(out io.Writer, opts SetupOptions) error {
+	// A bad flag is refused the same on every host, before the host check.
+	if opts.Slots != 0 {
+		if err := ValidateSlotCount(opts.Slots); err != nil {
+			return err
+		}
+	}
 	if err := hostSupported(); err != nil {
 		return err
 	}
