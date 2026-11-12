@@ -825,7 +825,8 @@ claim(cfg):
 | third-party orchestrator | new, booted with no seed | the init stops with a console line; no relay starts. A third party passes the same keys in a `WARDENRELAY` ISO (documented in `tools/relay-vm/README`) |
 | third-party orchestrator | any new relay, claimed without `upstream_dns` | the relay uses its own `resolv.conf` (the named default); on Hyper-V and Firecracker's static upstream it has none, so the claim is refused with 400 naming `upstream_dns` |
 | new | an old relay (any mode that receives `upstream_dns`) | the claim is refused `unknown field "upstream_dns"`; the driver's old-relay `Fixable` (Decision 9) |
-| new | durable network from an older setup (one `<network>` switch, no slots) | durable builds refused before any VM: run `warden setup --driver hyperv` (elevated), which makes the slots and retires the old switch; elevated and service builds unaffected |
+| new | durable network from an older setup (one `<network>` switch, no slots) | durable builds refused before any VM: run `warden setup --driver hyperv` (elevated), which makes the slots and retires the old switch; elevated builds unaffected |
+| new | privileged service installed by an older warden (protocol 1) | non-elevated builds refused before any VM, and doctor reports the service stale: reinstall it once, elevated (`warden hyperv service uninstall`, then `install`), as task 28 bumps the protocol; never treated as absent |
 | old | durable network from a new setup (slots, no `<network>` switch) | the old warden's durable strategy finds no switch and is refused with its own "run `warden setup`" message; its setup recreates `<network>`, which the new warden's setup later retires again |
 
 qemu and Firecracker relay initramfs are not stamped and need no rebuild:
