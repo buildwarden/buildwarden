@@ -155,15 +155,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261112T105657Z
+      expires: 2026-11-12T12:57:17.532479342Z
 budget:
   estimate:
     runs: 4
     steps: 18
   spent:
-    runs: 6
-    steps: 18
+    runs: 7
+    steps: 19
 questions:
   - id: a1
     kind: assumed
@@ -574,3 +574,6 @@ history:
   - at: 2026-11-11T23:13:49Z
     by: host:windows-hyperv/20261111T231002Z
     event: 'back to implement: f6-validate-windows-hyperv (976ae9f, native/windows-hyperv/2026-11-11): the protocol bump to 2 is not surfaced: serviceReachable (driver/hyperv/service_windows.go) returns false on the ping''s version-mismatch error, so with main''s protocol-1 service installed doctor prints ''Privileged service ... not installed'' and a build is refused with the durable-switch message; the plan''s mismatch refusal naming ''warden hyperv service install'' never reaches the user, and Compatibility''s ''service builds unaffected'' does not hold. Report a stale service and name the reinstall in doctor and the strategy refusal, with tier-0 coverage (FLOW-09)'
+  - at: 2026-11-12T10:57:17Z
+    by: cloud/20261112T105657Z
+    event: claimed f3-implement-r3 until 2026-11-12T12:57:17Z
