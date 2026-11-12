@@ -114,7 +114,7 @@ func TestNetworkStrategy(t *testing.T) {
 			},
 			NetBlocked},
 		{"elevated ignores a stale service",
-			Capabilities{Elevated: true, ServiceStale: "speaks protocol 1, this warden 2"},
+			Capabilities{Elevated: true, ServiceStale: "speaks protocol 1"},
 			NetEphemeralPerBuild},
 		{"nothing available is blocked", Capabilities{}, NetBlocked},
 	}
@@ -234,54 +234,22 @@ func TestStaleServiceEndToEnd(t *testing.T) {
 	if stale == "" {
 		t.Fatal("a protocol-1 service pinged as usable")
 	}
-	for _, sw := range []struct {
-		name            string
-		present, legacy bool
-	}{
-		{"build switches present", true, false},
-		{"only the old shared switch", false, true},
-	} {
-		t.Run(sw.name, func(t *testing.T) {
-			caps := Capabilities{
-				Supported: true, Platform: "windows",
-				TokenScope:        "current process (non-elevated)",
-				HypervisorPresent: true, HyperVFeature: true, HyperVAdmin: true,
-				DevSwitch: "warden-dev", DevSwitchPresent: sw.present,
-				DevSwitchLegacy: sw.legacy, ServiceStale: stale,
-			}
-			var buf bytes.Buffer
-			if !Doctor(&buf, caps, buildlink.Link{}, nil) {
-				t.Fatalf("doctor not blocked by a stale service:\n%s", buf.String())
-			}
-			out := buf.String()
-			for _, want := range []string{
-				"Privileged service ................... stale: it speaks " +
-					"protocol 1, this warden 2\n    -> " + serviceReinstallFix,
-				"Network .............. BLOCKED (the privileged service speaks protocol 1",
-				"Not ready: the privileged service speaks protocol 1, this warden 2; " +
-					"reinstall it: " + serviceReinstallFix,
-			} {
-				if !strings.Contains(out, want) {
-					t.Errorf("doctor missing %q; got:\n%s", want, out)
-				}
-			}
-			for _, bad := range []string{"not installed", "durable network has no build switches"} {
-				if strings.Contains(out, bad) {
-					t.Errorf("doctor says %q of a stale service:\n%s", bad, out)
-				}
-			}
-
-			var fe *driver.FixableError
-			if err := caps.buildRefusal(); !errors.As(err, &fe) {
-				t.Fatalf("buildRefusal = %v, want a FixableError", err)
-			}
-			if fe.Fix != serviceReinstallFix ||
-				fe.Msg != "hyperv build: the privileged service speaks protocol 1, this warden 2" {
-				t.Errorf("refusal = %q, fix %q; want the stale service and its reinstall",
-					fe.Msg, fe.Fix)
-			}
-		})
+	caps := Capabilities{
+		Supported: true, Platform: "windows",
+		TokenScope:        "current process (non-elevated)",
+		HypervisorPresent: true, HyperVFeature: true, HyperVAdmin: true,
+		DevSwitch: "warden-dev", ServiceStale: stale,
 	}
+	t.Run("build switches present", func(t *testing.T) {
+		c := caps
+		c.DevSwitchPresent = true
+		assertStaleRefused(t, c)
+	})
+	t.Run("only the old shared switch", func(t *testing.T) {
+		c := caps
+		c.DevSwitchLegacy = true
+		assertStaleRefused(t, c)
+	})
 
 	// Elevated, the build stands up its own network and never uses the
 	// service, so a stale one does not refuse it.
@@ -289,5 +257,43 @@ func TestStaleServiceEndToEnd(t *testing.T) {
 		HyperVFeature: true, Elevated: true, ServiceStale: stale}
 	if err := elevated.buildRefusal(); err != nil {
 		t.Errorf("elevated build refused over a stale service: %v", err)
+	}
+}
+
+// assertStaleRefused checks that doctor and the build refusal for caps, whose
+// service speaks protocol 1, report it stale and name the reinstall.
+func assertStaleRefused(t *testing.T, caps Capabilities) {
+	t.Helper()
+	var buf bytes.Buffer
+	if !Doctor(&buf, caps, buildlink.Link{}, nil) {
+		t.Fatalf("doctor not blocked by a stale service:\n%s", buf.String())
+	}
+	out := buf.String()
+	const why = "speaks protocol 1, this warden 2"
+	for _, want := range []string{
+		"Privileged service ................... stale: it " + why +
+			"\n    -> " + serviceReinstallFix,
+		"Network .............. BLOCKED (the privileged service " + why + ")",
+		"Not ready: the privileged service " + why + "; reinstall it: " +
+			serviceReinstallFix,
+	} {
+		if !strings.Contains(out, want) {
+			t.Errorf("doctor missing %q; got:\n%s", want, out)
+		}
+	}
+	for _, bad := range []string{"not installed", "has no build switches"} {
+		if strings.Contains(out, bad) {
+			t.Errorf("doctor says %q of a stale service:\n%s", bad, out)
+		}
+	}
+
+	var fe *driver.FixableError
+	if err := caps.buildRefusal(); !errors.As(err, &fe) {
+		t.Fatalf("buildRefusal = %v, want a FixableError", err)
+	}
+	wantMsg := "hyperv build: the privileged service " + why
+	if fe.Msg != wantMsg || fe.Fix != serviceReinstallFix {
+		t.Errorf("refusal %q, fix %q; want %q, fix %q",
+			fe.Msg, fe.Fix, wantMsg, serviceReinstallFix)
 	}
 }
