@@ -1,6 +1,6 @@
 feature: relay-host-subnet-claim-only
 title: Relay host mode takes its build segment from the claim only; --subnet no longer stands in for build_link (RELAY-08)
-priority: 46
+priority: 47
 follows: hyperv-relay-per-build-channel
 status: queued
 round: feature
@@ -51,3 +51,6 @@ history:
   - at: 2026-11-12T18:43:30Z
     by: human/jeff
     event: 'priority 45 -> 46 (renumbered by wf new: componentization queued at 24)'
+  - at: 2026-11-12T18:58:10Z
+    by: human/jeff
+    event: 'priority 46 -> 47 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'

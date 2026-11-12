@@ -7,7 +7,8 @@ round: process
 phase: 1
 design: docs/design/componentization.md
 branch: feat/componentization
-alters_relationships: null
+alters_relationships: true
+design_review: required
 source: 'Jeff, attended session 2026-11-09 to 2026-11-12: drivers as separate binaries and repositories, folded with the relay fork (buildwarden-relay, decisions of 2026-11-07), the Loop Contract and the VZ spike reports into one program. Plan with all thirteen owner decisions settled 2026-11-12; Jeff asked for it to be queued and drafted the same day.'
 steps:
   - id: x1-design
@@ -24,7 +25,106 @@ budget:
   spent:
     runs: 0
     steps: 0
-questions: []
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: "The collector specification is written in two parts: the outputs a collector stores, and the inputs and signals it serves (seam 2)."
+    options:
+      - "two parts, so a different collector can take over the outputs later"
+      - "one undivided protocol"
+    recommended: "two parts"
+  - id: a2
+    kind: assumed
+    status: open
+    question: "The collector gets a storage boundary in K1, with disk as its only implementation."
+    options:
+      - "add the boundary in K1"
+      - "leave the collector as it is until an alternative collector is designed"
+    recommended: "add the boundary in K1"
+  - id: a3
+    kind: assumed
+    status: open
+    question: "Host mode in the Rust relay is built for Linux first, then macOS; Windows only once a frame transport for it is designed (the Go relay refuses host mode on Windows)."
+    options:
+      - "Linux, then macOS, Windows later"
+      - "Windows host mode is required in M3"
+    recommended: "Linux, then macOS, Windows later"
+  - id: a4
+    kind: assumed
+    status: open
+    question: "The freeze exempts a fix for a regression on main and a fix for a security problem, and Jeff ends it no earlier than the pilot driver's release (wave 4)."
+    options:
+      - "as stated"
+      - "no exemptions"
+      - "a different end point"
+    recommended: "as stated"
+  - id: a5
+    kind: assumed
+    status: open
+    question: "FLOW-05's alters_relationships limit is raised from 1 to 3 in config.yaml while the program runs; the limit of 5 features in progress is unchanged."
+    options:
+      - "raise it to 3"
+      - "keep it at 1, so program items past Design run one at a time"
+      - "another value"
+    recommended: "raise it to 3"
+  - id: a6
+    kind: assumed
+    status: open
+    question: "FLOW-15's overview sweep is deferred, within a phase, to the phase's last item."
+    options:
+      - "defer to the phase's last item"
+      - "sweep at every item's Publish"
+    recommended: "defer to the phase's last item"
+  - id: a7
+    kind: assumed
+    status: open
+    question: "The signed environment record names the build-link class a build ran under (a ledger metadata change, made in S3)."
+    options:
+      - "record the class"
+      - "leave the class out of the record"
+    recommended: "record the class"
+  - id: a8
+    kind: assumed
+    status: open
+    question: "Held queue items stay as they are, on hold, until P1 moves the queue; P1 does not carry them over and records their names and branches for re-intake."
+    options:
+      - "leave them on hold until P1"
+      - "close them now"
+    recommended: "leave them on hold until P1"
+  - id: a9
+    kind: assumed
+    status: open
+    question: "'Verified fully working and performant' (Decision 15, contact with hermit-os) means at least one driver has adopted the unikernel relay (M6) with its throughput measured."
+    options:
+      - "after the first M6 adoption with throughput measured"
+      - "after M3 passes the suites"
+      - "after every driver has adopted it"
+    recommended: "after the first M6 adoption with throughput measured"
+  - id: a10
+    kind: assumed
+    status: open
+    question: "The specs repository is named buildwarden/buildwarden-specs."
+    options:
+      - "buildwarden-specs"
+      - "another name"
+    recommended: "buildwarden-specs"
+  - id: a11
+    kind: assumed
+    status: open
+    question: "Jeff creates the new repositories (loop, specs, one per driver) and makes buildwarden-relay public; agents do not create repositories or change their visibility."
+    options:
+      - "Jeff creates them"
+      - "an attended agent session creates them on his word"
+    recommended: "Jeff creates them"
+  - id: a12
+    kind: assumed
+    status: open
+    question: "This review's acceptance of the Bootstrap comparison covers the program's three model changes (BOOT-01's build-link classes, BOOT-02's executor version, BOOT-05's truststore), each then declared and made by the item the comparison names."
+    options:
+      - "accept the comparison for all three"
+      - "accept it per item instead, in each item's own review"
+    recommended: "accept the comparison for all three"
 history:
   - at: 2026-11-12T18:43:30Z
     by: human/jeff

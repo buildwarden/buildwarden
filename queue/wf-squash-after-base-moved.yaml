@@ -1,6 +1,6 @@
 feature: wf-squash-after-base-moved
 title: wf's merged check misses a squash made after main moved
-priority: 57
+priority: 58
 kind: process
 follows: wf-squash-merged-pr
 status: in_progress
@@ -100,3 +100,6 @@ history:
   - at: 2026-11-12T18:43:30Z
     by: human/jeff
     event: 'priority 56 -> 57 (renumbered by wf new: componentization queued at 24)'
+  - at: 2026-11-12T18:58:10Z
+    by: human/jeff
+    event: 'priority 57 -> 58 (renumbered by wf new: wf-check-test-windows-eol queued at 26)'
