@@ -4,7 +4,7 @@ priority: 51
 follows: build-link-subnet
 status: in_progress
 round: feature
-phase: 3
+phase: 4
 design: docs/design/hyperv-relay-per-build-channel.md
 branch: feat/hyperv-relay-per-build-channel
 alters_relationships: true
@@ -209,11 +209,18 @@ steps:
   - id: f3-implement-r4
     phase: 3
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'With the back-to-Implement findings (F1-F3, history), also: cmd/warden TestSetupSlots fails on a Windows host (vmdns_test.go:160): for --driver firecracker --slots 257 the platform refusal (needs an x86_64 Linux host with /dev/kvm) comes before the 1-256 range check, so the test wants the range message and gets the platform one. CI (Linux) passes. Make the case independent of the host OS (found attended 2026-11-12, merge check against PRs 112 and 114).'
+  - id: f4-review-r4
+    phase: 4
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261112T204543Z
-      expires: 2026-11-12T22:45:59.3648192Z
-    note: 'With the back-to-Implement findings (F1-F3, history), also: cmd/warden TestSetupSlots fails on a Windows host (vmdns_test.go:160): for --driver firecracker --slots 257 the platform refusal (needs an x86_64 Linux host with /dev/kvm) comes before the 1-256 range check, so the test wants the range message and gets the platform one. CI (Linux) passes. Make the case independent of the host OS (found attended 2026-11-12, merge check against PRs 112 and 114).'
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 12
@@ -727,3 +734,9 @@ history:
   - at: 2026-11-12T20:45:59Z
     by: cloud/20261112T204543Z
     event: claimed f3-implement-r4 until 2026-11-12T22:45:59Z
+  - at: 2026-11-12T21:04:42Z
+    by: cloud/20261112T204543Z
+    event: done f3-implement-r4
+  - at: 2026-11-12T21:04:42Z
+    by: cloud/20261112T204543Z
+    event: entered phase 4 (review)
