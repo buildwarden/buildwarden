@@ -27,3 +27,23 @@ func TestRunPSTrailingSuppressedLookup(t *testing.T) {
 		t.Errorf("with DONE: %q, %v", out, err)
 	}
 }
+
+// TestRunPSDone: a script that exits 0 without printing psDone last is an
+// error naming what it printed; with psDone it succeeds. The early-return
+// shape RemoveVM uses ('gone'; DONE; return) passes too.
+func TestRunPSDone(t *testing.T) {
+	if _, err := exec.LookPath("powershell.exe"); err != nil {
+		t.Skip("no powershell.exe")
+	}
+	if _, err := runPSDone("'step one'\n"); err == nil ||
+		!strings.Contains(err.Error(), "step one") {
+		t.Errorf("no DONE: %v", err)
+	}
+	if _, err := runPSDone("'step one'\n'" + psDone + "'\n"); err != nil {
+		t.Errorf("with DONE: %v", err)
+	}
+	early := "if ($true) { 'gone'; '" + psDone + "'; return }\n'unreached'\n"
+	if _, err := runPSDone(early); err != nil {
+		t.Errorf("early return with DONE: %v", err)
+	}
+}

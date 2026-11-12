@@ -86,6 +86,6 @@ func buildRelayVMScript(spec RelayVMSpec) (string, error) {
 	fmt.Fprintf(&b, "Add-VMDvdDrive -VMName '%s' -Path '%s'\n",
 		name, psEscapeSingle(spec.SeedISO))
 	fmt.Fprintf(&b, "Set-VM -Name '%s' -Notes '%s'\n", name, psEscapeSingle(spec.Notes))
-	b.WriteString("'OK'\n")
+	fmt.Fprintf(&b, "'%s'\n", psDone)
 	return b.String(), nil
 }

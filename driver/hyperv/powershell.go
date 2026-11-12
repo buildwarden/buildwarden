@@ -23,6 +23,16 @@ func runPS(script string) (string, error) {
 	return out.String(), nil
 }
 
+// runPSDone is runPS for a script that prints psDone last: a run that exits 0
+// without it stopped early (psDoneCheck), and that is an error too.
+func runPSDone(script string) (string, error) {
+	out, err := runPS(script)
+	if err != nil {
+		return out, err
+	}
+	return out, psDoneCheck(out)
+}
+
 // runPSJSON runs a PowerShell command, appends `| ConvertTo-Json -Compress`,
 // and unmarshals the result into out.
 func runPSJSON(script string, out any) error {

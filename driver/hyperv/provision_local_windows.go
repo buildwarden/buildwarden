@@ -76,9 +76,9 @@ func (p *localProvisioner) TeardownNetwork(ctx context.Context, id string) error
 Remove-NetNat -Name '%[2]s' -Confirm:$false -ErrorAction SilentlyContinue
 Remove-VMSwitch -Name '%[2]s' -Force -ErrorAction SilentlyContinue
 Remove-VMSwitch -Name '%[1]s' -Force -ErrorAction SilentlyContinue
-'OK'
-`, name, nat)
-	if _, err := runPS(script); err != nil {
+'%[3]s'
+`, name, nat, psDone)
+	if _, err := runPSDone(script); err != nil {
 		return fmt.Errorf("TeardownNetwork: %w", err)
 	}
 	return nil
@@ -199,9 +199,9 @@ func (p *localProvisioner) CreateVM(ctx context.Context, spec VMSpec) (*VMHandle
 		fmt.Fprintf(&b, "Set-VMFirmware -VMName '%s' -SecureBootTemplate '%s'\n",
 			name, tmpl)
 	}
-	b.WriteString("'OK'\n")
+	fmt.Fprintf(&b, "'%s'\n", psDone)
 
-	if _, err := runPS(b.String()); err != nil {
+	if _, err := runPSDone(b.String()); err != nil {
 		return nil, fmt.Errorf("CreateVM %q: %w", spec.Name, err)
 	}
 	return &VMHandle{Name: spec.Name, Generation: gen}, nil
@@ -220,7 +220,7 @@ func (p *localProvisioner) CreateRelayVM(
 	if err != nil {
 		return nil, err
 	}
-	if _, err := runPS(script); err != nil {
+	if _, err := runPSDone(script); err != nil {
 		return nil, fmt.Errorf("CreateRelayVM %q: %w", spec.Name, err)
 	}
 	return &VMHandle{Name: spec.Name, Generation: 2}, nil
@@ -248,12 +248,12 @@ func (p *localProvisioner) RemoveVM(ctx context.Context, name string) error {
 	n := psEscapeSingle(name)
 	script := fmt.Sprintf(`
 $vm = Get-VM -Name '%[1]s' -ErrorAction SilentlyContinue
-if (-not $vm) { 'gone'; return }
+if (-not $vm) { 'gone'; '%[2]s'; return }
 Stop-VM -Name '%[1]s' -Force -TurnOff -ErrorAction SilentlyContinue
 Remove-VM -Name '%[1]s' -Force
-'OK'
-`, n)
-	if _, err := runPS(script); err != nil {
+'%[2]s'
+`, n, psDone)
+	if _, err := runPSDone(script); err != nil {
 		return fmt.Errorf("RemoveVM %q: %w", name, err)
 	}
 	return nil
@@ -263,9 +263,9 @@ Remove-VM -Name '%[1]s' -Force
 // overlay), so the read-only base image is preserved and each build writes to
 // its own thin overlay.
 func (p *localProvisioner) CreateDiffDisk(ctx context.Context, overlay, base string) error {
-	script := fmt.Sprintf("New-VHD -Path '%s' -ParentPath '%s' -Differencing | Out-Null; 'OK'",
-		psEscapeSingle(overlay), psEscapeSingle(base))
-	if _, err := runPS(script); err != nil {
+	script := fmt.Sprintf("New-VHD -Path '%s' -ParentPath '%s' -Differencing | Out-Null; '%s'",
+		psEscapeSingle(overlay), psEscapeSingle(base), psDone)
+	if _, err := runPSDone(script); err != nil {
 		return fmt.Errorf("CreateDiffDisk %q: %w", overlay, err)
 	}
 	return nil

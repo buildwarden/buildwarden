@@ -254,11 +254,13 @@ link and the resolvers
         "hyperv-prepare"     image prepare; a build tries it to see whether a
                              background refresh is already running
     hyperv PowerShell (runPS): a failed script's error is its stderr, else
-        the exit status with the last 10 lines of stdout (psError); the
-        slot script (setup) and EnsureNetwork's script print DONE last and
-        their output without it is refused, naming that tail (psDoneCheck),
-        since powershell -Command exits with the success of the last
-        statement, which a suppressed lookup that finds nothing fails
+        the exit status with the last 10 lines of stdout (psError); every
+        script that changes the host (setup's slots, EnsureNetwork,
+        TeardownNetwork, CreateVM, CreateRelayVM, RemoveVM, CreateDiffDisk,
+        the seed ISO) prints DONE last and runs through runPSDone, which
+        refuses output without it, naming that tail (psDoneCheck), since
+        powershell -Command exits with the success of the last statement,
+        which a suppressed lookup that finds nothing fails
     the build VM boots only after the claim returns
 
 isolate:   the build VM's only network interface leads to the relay

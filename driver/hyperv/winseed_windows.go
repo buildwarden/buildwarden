@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"path/filepath"
 	"runtime"
-	"strings"
 
 	"github.com/buildwarden/buildwarden/driver"
 	"github.com/buildwarden/buildwarden/driver/winguest"
@@ -92,16 +91,11 @@ $fsi.VolumeName = '%[1]s'
 $fsi.Root.AddTree('%[2]s', $false)
 $result = $fsi.CreateResultImage()
 [WardenIso]::Save($result.ImageStream, '%[3]s')
-'OK'
-`, psEscapeSingle(label), psEscapeSingle(seedDir), psEscapeSingle(outISO))
+'%[4]s'
+`, psEscapeSingle(label), psEscapeSingle(seedDir), psEscapeSingle(outISO), psDone)
 
-	out, err := runPS(script)
-	if err != nil {
+	if _, err := runPSDone(script); err != nil {
 		return fmt.Errorf("IMAPI2 ISO build: %w", err)
-	}
-	if !strings.Contains(out, "OK") {
-		return fmt.Errorf(
-			"IMAPI2 ISO build: unexpected output: %q", strings.TrimSpace(out))
 	}
 	return nil
 }

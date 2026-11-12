@@ -153,3 +153,16 @@ func TestBuildRelayVMScript_SeedAndNotes(t *testing.T) {
 		t.Error("the relay VM script starts the VM")
 	}
 }
+
+// TestBuildRelayVMScript_EndsDone: the script's last line is psDone, which
+// runPSDone checks.
+func TestBuildRelayVMScript_EndsDone(t *testing.T) {
+	script, err := buildRelayVMScript(validRelaySpec())
+	if err != nil {
+		t.Fatalf("buildRelayVMScript: %v", err)
+	}
+	lines := strings.Split(strings.TrimSpace(script), "\n")
+	if last := strings.TrimSpace(lines[len(lines)-1]); last != "'"+psDone+"'" {
+		t.Errorf("relay VM script ends with %q, want '%s'", last, psDone)
+	}
+}
