@@ -1,0 +1,6 @@
+## build_link inside NAT
+[warden] ERROR: [vm] build_link in warden.toml: 192.168.241.0/30 overlaps the hyperv driver's default NAT (192.168.240.0/20)
+  To fix: set [vm] build_link in warden.toml to a valid /30, e.g. build_link = "100.126.255.252/30", or remove it to use the default
+exit=1
+## doctor
+[warden] ERROR: [vm] build_link in warden.toml: 192.168.241.0/30 overlaps the hyperv driver's default NAT (192.168.240.0/20)

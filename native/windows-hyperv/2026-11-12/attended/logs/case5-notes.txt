@@ -1,0 +1,9 @@
+warden-relay-1r629jxa 
+warden-relay-1r629jxa warden-relay-ip=192.168.250.2 warden-relay-switch=warden-dev-0
+warden-relay-1r629jxa warden-relay-ip=192.168.250.2 warden-relay-switch=warden-dev-0
+warden-relay-1r629jxa warden-relay-ip=192.168.250.2 warden-relay-switch=warden-dev-0
+warden-relay-1r629jxa warden-relay-ip=192.168.250.2 warden-relay-switch=warden-dev-0
+warden-relay-1r629jxa warden-relay-ip=192.168.250.2 warden-relay-switch=warden-dev-0
+warden-relay-1r629jxa warden-relay-ip=192.168.250.2 warden-relay-switch=warden-dev-0
+warden-relay-1r629jxa warden-relay-ip=192.168.250.2 warden-relay-switch=warden-dev-0
+warden-relay-1r629jxa warden-relay-ip=192.168.250.2 warden-relay-switch=warden-dev-0

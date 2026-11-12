@@ -1,0 +1,25 @@
+11:06:51 warden-relay-h7ggus5q Running warden-relay-ip=192.168.240.2 warden-relay-switch=warden-h7ggus5q
+11:06:54 warden-relay-h7ggus5q Running warden-relay-ip=192.168.240.2 warden-relay-switch=warden-h7ggus5q
+11:06:56 warden-relay-h7ggus5q Running warden-relay-ip=192.168.240.2 warden-relay-switch=warden-h7ggus5q
+11:06:59 warden-relay-h7ggus5q Running warden-relay-ip=192.168.240.2 warden-relay-switch=warden-h7ggus5q
+11:06:59 warden-relay-bllx1a9c Off 
+11:07:02 warden-relay-h7ggus5q Running warden-relay-ip=192.168.240.2 warden-relay-switch=warden-h7ggus5q
+11:07:02 warden-relay-bllx1a9c Running warden-relay-ip=192.168.240.3 warden-relay-switch=warden-bllx1a9c
+11:07:04 warden-relay-h7ggus5q Running warden-relay-ip=192.168.240.2 warden-relay-switch=warden-h7ggus5q
+11:07:04 warden-relay-bllx1a9c Running warden-relay-ip=192.168.240.3 warden-relay-switch=warden-bllx1a9c
+11:07:07 warden-relay-h7ggus5q Running warden-relay-ip=192.168.240.2 warden-relay-switch=warden-h7ggus5q
+11:07:07 warden-relay-bllx1a9c Running warden-relay-ip=192.168.240.3 warden-relay-switch=warden-bllx1a9c
+11:07:09 warden-relay-h7ggus5q Running warden-relay-ip=192.168.240.2 warden-relay-switch=warden-h7ggus5q
+11:07:09 warden-relay-bllx1a9c Running warden-relay-ip=192.168.240.3 warden-relay-switch=warden-bllx1a9c
+11:07:12 warden-relay-h7ggus5q Running warden-relay-ip=192.168.240.2 warden-relay-switch=warden-h7ggus5q
+11:07:12 warden-relay-bllx1a9c Running warden-relay-ip=192.168.240.3 warden-relay-switch=warden-bllx1a9c
+11:07:14 warden-relay-h7ggus5q Running warden-relay-ip=192.168.240.2 warden-relay-switch=warden-h7ggus5q
+11:07:14 warden-relay-bllx1a9c Running warden-relay-ip=192.168.240.3 warden-relay-switch=warden-bllx1a9c
+11:07:17 warden-relay-h7ggus5q Running warden-relay-ip=192.168.240.2 warden-relay-switch=warden-h7ggus5q
+11:07:17 warden-relay-bllx1a9c Running warden-relay-ip=192.168.240.3 warden-relay-switch=warden-bllx1a9c
+11:07:20 warden-relay-h7ggus5q Running warden-relay-ip=192.168.240.2 warden-relay-switch=warden-h7ggus5q
+11:07:20 warden-relay-bllx1a9c Running warden-relay-ip=192.168.240.3 warden-relay-switch=warden-bllx1a9c
+11:07:22 warden-relay-h7ggus5q Running warden-relay-ip=192.168.240.2 warden-relay-switch=warden-h7ggus5q
+11:07:22 warden-relay-bllx1a9c Running warden-relay-ip=192.168.240.3 warden-relay-switch=warden-bllx1a9c
+11:07:25 warden-relay-h7ggus5q Running warden-relay-ip=192.168.240.2 warden-relay-switch=warden-h7ggus5q
+11:07:25 warden-relay-bllx1a9c Running warden-relay-ip=192.168.240.3 warden-relay-switch=warden-bllx1a9c

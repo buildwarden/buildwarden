@@ -1,0 +1,69 @@
+warden: build VM "warden-build-2k6muwl6" COM1 -> \\.\pipe\warden-build-2k6muwl6 (attach a serial reader to observe guest boot)
+
+Name                                           Type   TTL   Section    IPAddress                                
+----                                           ----   ---   -------    ---------                                
+example.com                                    AAAA   30    Answer     2606:4700:10::ac42:93f3                  
+
+
+
+200
+
+
+InterfaceAlias       : Ethernet
+InterfaceIndex       : 6
+InterfaceDescription : Microsoft Hyper-V Network Adapter
+NetProfile.Name      : Network
+IPv4Address          : 100.127.255.254
+IPv6DefaultGateway   : 
+IPv4DefaultGateway   : 100.127.255.253
+DNSServer            : 100.127.255.253
+
+
+
+
+
+IPAddress       PrefixOrigin InterfaceAlias             
+---------       ------------ --------------             
+100.127.255.254         Dhcp Ethernet                   
+127.0.0.1          WellKnown Loopback Pseudo-Interface 1
+
+
+
+--- warden-run.log
+[warden-run] 2026-11-12T19:11:16.3169554+00:00 start
+[warden-run] 2026-11-12T19:11:16.3337398+00:00 warden-io.exe staged; running initialize --gateway=100.127.255.253
+warden-io: configuring network
+warden-io: waiting for relay
+warden-io: installing CA
+warden-io: applying baseline (trust append)
+warden-io: fetching build script
+warden-io: running build.ps1
+
+Name                                           Type   TTL   Section    IPAddress                                
+----                                           ----   ---   -------    ---------                                
+example.com                                    AAAA   30    Answer     2606:4700:10::ac42:93f3                  
+
+
+
+200
+
+
+InterfaceAlias       : Ethernet
+InterfaceIndex       : 6
+InterfaceDescription : Microsoft Hyper-V Network Adapter
+NetProfile.Name      : Network
+IPv4Address          : 100.127.255.254
+IPv6DefaultGateway   : 
+IPv4DefaultGateway   : 100.127.255.253
+DNSServer            : 100.127.255.253
+
+
+
+
+
+IPAddress       PrefixOrigin InterfaceAlias             
+---------       ------------ --------------             
+100.127.255.254         Dhcp Ethernet                   
+127.0.0.1          WellKnown Loopback Pseudo-Interface 1
+
+warden: build SUCCEEDED (output: ../out/case4r2-b)

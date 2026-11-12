@@ -1,0 +1,9 @@
+Durable dev network ready.
+  NAT switch (Internal) .... warden-dev-nat  (192.168.250.0/24, host 192.168.250.1)
+  build switches (Private)  warden-dev-0 (created), warden-dev-1 (created)
+  retired warden-dev (the shared build switch earlier setups made; each durable build now takes a switch of its own)
+
+This durable network is for NON-elevated builds (Hyper-V Administrators), up to 2 at a time:
+  warden build --driver hyperv --network warden-dev
+  (or set network = "warden-dev" under [vm] in warden.toml)
+Elevated builds stand up a fresh build switch per build and use this NAT.

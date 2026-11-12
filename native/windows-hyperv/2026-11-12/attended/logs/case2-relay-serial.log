@@ -1,0 +1,9 @@
+2026/11/12 10:49:34 relay: build-if eth0 100.127.255.253/30 from the claim; DHCP offers 100.127.255.254
+2026/11/12 10:49:34 relay: upstream resolvers: 8.8.8.8, 8.8.4.4 (claim)
+2026/11/12 10:49:34 relay: environment recorded (1778 bytes)
+2026/11/12 10:49:34 relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp
+2026/11/12 10:49:34 relay: claimed
+2026/11/12 10:49:43 relay: DHCP OFFER 100.127.255.254 to 00:15:5d:cc:b1:f4
+2026/11/12 10:49:43 relay: DHCP ACK 100.127.255.254 to 00:15:5d:cc:b1:f4
+2026/11/12 10:49:52 relay: heartbeat: Post "http://collector.tunnel/v1/heartbeat": http2: client conn not usable
+2026/11/12 10:49:54 relay: heartbeat: Post "http://collector.tunnel/v1/heartbeat": http2: client conn not usable

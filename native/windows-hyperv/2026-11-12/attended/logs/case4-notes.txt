@@ -1,0 +1,7 @@
+
+
+Name  : warden-relay-h7ggus5q
+Notes : warden-relay-ip=192.168.240.2 warden-relay-switch=warden-h7ggus5q
+
+
+

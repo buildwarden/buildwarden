@@ -1,0 +1,4 @@
+warden: build VM "warden-build-66jexz24" COM1 -> \\.\pipe\warden-build-66jexz24 (attach a serial reader to observe guest boot)
+DNS myip.opendns.com -> <host public IP>
+DNS example.com -> 172.66.147.243
+warden: build SUCCEEDED (output: ../out/case8a)

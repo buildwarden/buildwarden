@@ -1,0 +1,3 @@
+warden: build FAILED
+[warden] ERROR: hyperv build: hyperv relay boot VHDX was built for an older warden and must be rebuilt once (C:\Users\jeff\AppData\Local\warden\hyperv\relay-boot.link-channel holds link channel 1; this warden needs 2)
+  To fix: build it from the source tree (Git Bash, needs WSL): tools/relay-vm/hyperv/refresh-cache.sh

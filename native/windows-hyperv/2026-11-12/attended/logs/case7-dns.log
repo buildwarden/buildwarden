@@ -1,0 +1,9 @@
+## dns = NAT host IP
+warden: build FAILED
+[warden] ERROR: hyperv build: [vm] dns lists 192.168.240.1, which the relay cannot use (assigned to this host)
+  To fix: change or remove that entry in [vm] dns
+exit=1
+## doctor
+  Relay resolvers ...................... BLOCKED: [vm] dns lists 192.168.240.1, which the relay cannot use (assigned to this host)
+    -> change or remove that entry in [vm] dns
+Not ready: a build's network checks fail (see Build network above)

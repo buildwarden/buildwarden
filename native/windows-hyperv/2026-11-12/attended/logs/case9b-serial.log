@@ -1,0 +1,3 @@
+warden-io: relay not ready: relay at 100.127.255.253 not reachable within 60s: Ethernet has 169.254.45.180 (WellKnown, no DHCP lease from the relay)
+[warden-run] 2026-11-12T19:37:03.5287652+00:00 warden-io exit=1
+[warden-run] 2026-11-12T19:37:03.5305110+00:00 powering off

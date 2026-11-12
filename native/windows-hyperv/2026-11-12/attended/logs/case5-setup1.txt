@@ -1,0 +1,10 @@
+warden.exe : [warden] ERROR: the NAT warden-dev-nat already exists on 192.168.240.0/20, not --nat-prefix 
+192.168.250.0/24
+At line:2 char:1
++ & $w setup --driver hyperv --nat-prefix 192.168.250.0/24 --host-ip 19 ...
++ ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: ([warden] ERROR:...92.168.250.0/24:String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  To fix: remove it from an elevated shell (Remove-NetNat -Name warden-dev-nat), then re-run setup to make it on 
+192.168.250.0/24

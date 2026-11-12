@@ -1,0 +1,62 @@
+rebuilding the relay boot VHDX (relay source 547acdd5fa51, cached '9787fb4d6e6431ec9acbbf9a737736d3ba4ff894')
+alpine-minirootfs.tar.gz    3,508,174 bytes  alpine-minirootfs-3.21.7-x86_64.tar.gz
+linux-virt.apk             40,456,417 bytes  linux-virt-6.12.117-r0.apk
+iptables.apk                  320,312 bytes  iptables-1.8.11-r1.apk
+iptables-legacy.apk            31,877 bytes  iptables-legacy-1.8.11-r1.apk
+libxtables.apk                 24,754 bytes  libxtables-1.8.11-r1.apk
+libip4tc.apk                   12,876 bytes  libip4tc-1.8.11-r1.apk
+libip6tc.apk                   13,027 bytes  libip6tc-1.8.11-r1.apk
+libmnl.apk                      8,915 bytes  libmnl-1.0.5-r2.apk
+libnftnl.apk                   65,546 bytes  libnftnl-1.2.8-r0.apk
+
+Cache ready: C:\Users\jeff\buildwarden\.claude\worktrees\elastic-bardeen-1e917c\.scratch\hrpbc\tools\relay-vm\hyperv\.cache
+Next: wsl -d Ubuntu bash -lc 'cd tools/relay-vm/hyperv && sh build.sh'
+Assembling rootfs (offline)...
+Extracting kernel + modules...
+  kernel: 6.12.117-0-virt
+  (skip missing drivers/scsi/scsi_common.ko.gz)
+  (skip missing drivers/scsi/scsi_mod.ko.gz)
+  baked relay: /sbin/relay (16M)
+Packing initramfs with: cpio
+
+Hyper-V relay VM artifacts (x86_64, kernel 6.12.117-0-virt):
+  Kernel:    /mnt/c/Users/jeff/buildwarden/.claude/worktrees/elastic-bardeen-1e917c/.scratch/hrpbc/tools/relay-vm/hyperv/output/vmlinuz    (12M)
+  Initramfs: /mnt/c/Users/jeff/buildwarden/.claude/worktrees/elastic-bardeen-1e917c/.scratch/hrpbc/tools/relay-vm/hyperv/output/initramfs.cpio.gz  (13M)
+  UKI (EFI): /mnt/c/Users/jeff/buildwarden/.claude/worktrees/elastic-bardeen-1e917c/.scratch/hrpbc/tools/relay-vm/hyperv/output/warden-relay-boot.efi  (24M)
+
+The UKI is the \EFI\BOOT\BOOTX64.EFI payload for the relay boot VHDX.
+The command line carries no per-build value: the driver gives each relay its pre-claim
+values on the relay seed (WARDENRELAY) and the rest of its configuration in the claim.
+--- ESP contents ---
+ Volume in drive : is WARDENESP  
+ Volume Serial Number is 21DE-BBFF
+Directory for ::/EFI/BOOT
+
+.            <DIR>     2026-11-12  10:46 
+..           <DIR>     2026-11-12  10:46 
+BOOTX64  EFI  24993250 2026-11-12  10:46 
+        3 files          24 993 250 bytes
+                         41 064 448 bytes free
+
+--- GPT layout ---
+Disk /tmp/tmp.KWRNJL39mY/disk.raw: 135168 sectors, 66.0 MiB
+Sector size (logical): 512 bytes
+Disk identifier (GUID): 8FAD93E1-83A4-42FB-B2C7-8B2CD6B00B7B
+Partition table holds up to 128 entries
+Main partition table begins at sector 2 and ends at sector 33
+First usable sector is 34, last usable sector is 135134
+Partitions will be aligned on 2048-sector boundaries
+Total free space is 4029 sectors (2.0 MiB)
+
+Number  Start (sector)    End (sector)  Size       Code  Name
+   1            2048          133119   64.0 MiB    EF00  EFI System Partition
+--- VHDX ---
+image: /mnt/c/Users/jeff/buildwarden/.claude/worktrees/elastic-bardeen-1e917c/.scratch/hrpbc/tools/relay-vm/hyperv/output/warden-relay-boot.vhdx
+file format: vhdx
+virtual size: 66 MiB (69206016 bytes)
+disk size: 114 MiB
+cluster_size: 8388608
+-rwxrwxrwx 1 jeff jeff 114M Nov 12 10:46 /mnt/c/Users/jeff/buildwarden/.claude/worktrees/elastic-bardeen-1e917c/.scratch/hrpbc/tools/relay-vm/hyperv/output/warden-relay-boot.vhdx
+OK: /mnt/c/Users/jeff/buildwarden/.claude/worktrees/elastic-bardeen-1e917c/.scratch/hrpbc/tools/relay-vm/hyperv/output/warden-relay-boot.vhdx
+installed /c/Users/jeff/AppData/Local/warden/hyperv/relay-boot.vhdx (relay source 547acdd5fa51); the previous disk is /c/Users/jeff/AppData/Local/warden/hyperv/relay-boot.vhdx.prev
+exit=0

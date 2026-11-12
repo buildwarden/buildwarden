@@ -1,0 +1,10 @@
+claim no token: unauthorized
+ 401
+claim wrong token: unauthorized
+ 401
+tunnel no token: unauthorized
+ 401
+tunnel wrong token: unauthorized
+ 401
+claim right token, empty body: invalid claim: collector_url is required
+ 400

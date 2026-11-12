@@ -1,0 +1,73 @@
+warden: build VM "warden-build-dy9v5svg" COM1 -> \\.\pipe\warden-build-dy9v5svg (attach a serial reader to observe guest boot)
+
+Name                                           Type   TTL   Section    IPAddress                                
+----                                           ----   ---   -------    ---------                                
+example.com                                    AAAA   30    Answer     2606:4700:10::6814:179a                  
+
+
+
+200
+
+
+InterfaceAlias       : Ethernet
+InterfaceIndex       : 6
+InterfaceDescription : Microsoft Hyper-V Network Adapter
+NetProfile.Name      : Network
+IPv4Address          : 100.127.255.254
+IPv6DefaultGateway   : 
+IPv4DefaultGateway   : 100.127.255.253
+DNSServer            : 100.127.255.253
+
+
+
+
+
+IPAddress       PrefixOrigin InterfaceAlias             
+---------       ------------ --------------             
+100.127.255.254         Dhcp Ethernet                   
+127.0.0.1          WellKnown Loopback Pseudo-Interface 1
+
+
+
+--- warden-run.log
+[warden-run] 2026-11-12T19:31:44.0461668+00:00 start
+[warden-run] 2026-11-12T19:31:44.0634105+00:00 warden-io.exe staged; running initialize --gateway=100.127.255.253
+warden-io: configuring network
+warden-io: waiting for relay
+warden-io: installing CA
+warden-io: applying baseline (trust append)
+warden-io: fetching build script
+warden-io: running build.ps1
+
+Name                                           Type   TTL   Section    IPAddress                                
+----                                           ----   ---   -------    ---------                                
+example.com                                    AAAA   30    Answer     2606:4700:10::6814:179a                  
+
+
+
+200
+
+
+InterfaceAlias       : Ethernet
+InterfaceIndex       : 6
+InterfaceDescription : Microsoft Hyper-V Network Adapter
+NetProfile.Name      : Network
+IPv4Address          : 100.127.255.254
+IPv6DefaultGateway   : 
+IPv4DefaultGateway   : 100.127.255.253
+DNSServer            : 100.127.255.253
+
+
+
+
+
+IPAddress       PrefixOrigin InterfaceAlias             
+---------       ------------ --------------             
+100.127.255.254         Dhcp Ethernet                   
+127.0.0.1          WellKnown Loopback Pseudo-Interface 1
+
+warden: --keep-vms: leaving build VM "warden-build-dy9v5svg" (overlay "C:\\Users\\jeff\\AppData\\Local\\Temp\\warden-hyperv-dy9v5svg-6315918\\build.vhdx") for inspection
+warden: --keep-vms: leaving relay VM "warden-relay-dy9v5svg" (overlay "C:\\Users\\jeff\\AppData\\Local\\Temp\\warden-hyperv-dy9v5svg-6315918\\relay.vhdx", holding 192.168.240.2 on warden-dy9v5svg) for inspection
+warden: --keep-vms: leaving ephemeral network "warden-dy9v5svg"
+[warden] --keep-vms: leaving work dir C:\Users\jeff\AppData\Local\Temp\warden-hyperv-dy9v5svg-6315918
+warden: build SUCCEEDED (output: ../out/case9)

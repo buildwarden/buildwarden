@@ -1,0 +1,7 @@
+2026/11/12 12:13:57 relay: build-if eth0 100.127.255.253/30 from the claim; DHCP offers 100.127.255.254
+2026/11/12 12:13:57 relay: upstream resolvers: 8.8.8.8, 8.8.4.4 (claim)
+2026/11/12 12:13:57 relay: environment recorded (1778 bytes)
+2026/11/12 12:13:57 relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp
+2026/11/12 12:13:57 relay: claimed
+2026/11/12 12:14:05 relay: DHCP OFFER 100.127.255.254 to 00:15:5d:cc:b1:36
+2026/11/12 12:14:05 relay: DHCP ACK 100.127.255.254 to 00:15:5d:cc:b1:36

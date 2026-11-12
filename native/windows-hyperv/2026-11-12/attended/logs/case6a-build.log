@@ -1,0 +1,17 @@
+warden: build VM "warden-build-zoytq0f7" COM1 -> \\.\pipe\warden-build-zoytq0f7 (attach a serial reader to observe guest boot)
+ISO me=100.127.255.254 mac=00-15-5D-CC-B1-30 gw=100.127.255.253
+ISO ping:
+
+Request timed out.
+Request timed out.
+ISO neighbors:
+ISO neigh 100.127.255.253 00-15-5D-CC-B1-2B Reachable
+ISO dhcp probe:
+ISO sending DHCPDISCOVER xid=7086f893 chaddr=ea:25:c7:a7:80:96
+ISO sent 300 bytes from 100.127.255.254:68 to 255.255.255.255:67
+ISO reply from 100.127.255.253:67
+ISO BOOTREPLY OFFER yiaddr=100.127.255.254 siaddr=100.127.255.253 server-id=100.127.255.253 router=100.127.255.253 mask=255.255.255.252
+ISO done
+
+
+warden: build SUCCEEDED (output: ../out/case6a)

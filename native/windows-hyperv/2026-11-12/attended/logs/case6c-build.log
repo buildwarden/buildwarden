@@ -1,0 +1,3 @@
+warden: build FAILED
+[warden] ERROR: runBuild: StartRelay: all 2 durable build switches are in use: warden-dev-0 (warden-build-zoytq0f7, warden-relay-zoytq0f7); warden-dev-1 (warden-build-kue4ms6w, warden-relay-kue4ms6w)
+  To fix: wait for a running build to finish, remove a VM kept with --keep-vms (Remove-VM -Name <name>), or run `warden setup --driver hyperv --slots <more>` from an elevated shell

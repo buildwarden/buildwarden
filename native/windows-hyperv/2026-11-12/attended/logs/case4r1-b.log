@@ -1,0 +1,12 @@
+warden: build FAILED
+[warden] ERROR: hyperv build: buildSeed: IMAPI2 ISO build: powershell: New-Object : Creating an instance of the COM component with CLSID {2C941FC5-975B-59BE-A960-9A2A262853A5} from the 
+IClassFactory failed due to the following error: c0aab138 Exception from HRESULT: 0xC0AAB138.
+At line:20 char:8
++ $fsi = New-Object -ComObject IMAPI2FS.MsftFileSystemImage
++        ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : ResourceUnavailable: (:) [New-Object], COMException
+    + FullyQualifiedErrorId : NoCOMClassIdentified,Microsoft.PowerShell.Commands.NewObjectCommand
+
+  If this is unexpected, please file a bug:
+  https://github.com/buildwarden/buildwarden/issues/new?title=Bug%3A+hyperv+build%3A+buildSeed%3A+IMAPI2+ISO+build%3A+powershell%3A+New-Object+%3A+Creating+an+instance+of+the+COM+component+with+CLSID+%7B2C941FC5-975B-59BE-A960-9A2A262853A5%7D+from+the+%0D%0AIClassFactory+failed+due+to+the+following+error%3A+c0aab138+Exception+from+HRESULT%3A+0xC0AAB138.%0D%0AAt+line%3A20+char%3A8%0D%0A%2B+%24fsi+%3D+New-Object+-ComObject+IMAPI2FS.MsftFileSystemImage%0D%0A%2B++++++++~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~%0D%0A++++%2B+CategoryInfo++++++++++%3A+ResourceUnavailable%3A+%28%3A%29+%5BNew-Object%5D%2C+COMException%0D%0A++++%2B+FullyQualifiedErrorId+%3A+NoCOMClassIdentified%2CMicrosoft.PowerShell.Commands.NewObjectCommand&body=%23%23+Environment%0A-+OS%3A+windows%2Famd64%0A-+Version%3A+dev%0A%0A%23%23+Error%0A%60%60%60%0Ahyperv+build%3A+buildSeed%3A+IMAPI2+ISO+build%3A+powershell%3A+New-Object+%3A+Creating+an+instance+of+the+COM+component+with+CLSID+%7B2C941FC5-975B-59BE-A960-9A2A262853A5%7D+from+the+%0D%0AIClassFactory+failed+due+to+the+following+error%3A+c0aab138+Exception+from+HRESULT%3A+0xC0AAB138.%0D%0AAt+line%3A20+char%3A8%0D%0A%2B+%24fsi+%3D+New-Object+-ComObject+IMAPI2FS.MsftFileSystemImage%0D%0A%2B++++++++~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~%0D%0A++++%2B+CategoryInfo++++++++++%3A+ResourceUnavailable%3A+%28%3A%29+%5BNew-Object%5D%2C+COMException%0D%0A++++%2B+FullyQualifiedErrorId+%3A+NoCOMClassIdentified%2CMicrosoft.PowerShell.Commands.NewObjectCommand%0A%60%60%60%0A%0A%23%23+Steps+to+reproduce%0A1.+%0A
+

@@ -1,0 +1,4 @@
+warden: build VM "warden-build-27ickd14" COM1 -> \\.\pipe\warden-build-27ickd14 (attach a serial reader to observe guest boot)
+DNS myip.opendns.com FAILED: myip.opendns.com : DNS server failure
+DNS example.com FAILED: example.com : DNS server failure
+warden: build SUCCEEDED (output: ../out/case8b)
