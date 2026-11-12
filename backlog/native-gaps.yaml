@@ -490,6 +490,8 @@ gaps:
       2026-11-11 (host:qemu-any/20261111T124004Z, unattended, main beb51ba): not run. No harness:
       feat/security-suite is still e05df23 (design only), and neither it nor main has a
       security-test target.
+      2026-11-12 (host:qemu-any/20261112T184026Z, attended, main 1173c5f): not run. No harness: feat/security-suite is
+      still e05df23 (design only), and neither it nor main has a security-test target.
     status: open
   - id: security-suite-tier2-windows-hyperv
     host: windows-hyperv
