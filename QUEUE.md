@@ -11,7 +11,7 @@ Nothing.
 | Pri | Feature | Kind | Phase | Next steps | Steps spent / est. |
 |---|---|---|---|---|---|
 | 24 | componentization | process | 2 implement | x2-implement (cloud) | 1 / 8 |
-| 51 | hyperv-relay-per-build-channel | fix (follows build-link-subnet) | 6 publish | f6-merge-main-r4 (cloud) | 32 / 40 |
+| 51 | hyperv-relay-per-build-channel | fix (follows build-link-subnet) | 6 publish | f6-merge-main-r4 (cloud, leased) | 33 / 40 |
 
 ## Waiting on a host
 
