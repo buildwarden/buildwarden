@@ -149,13 +149,15 @@ Outside this repository, read for this design and not changed by it:
 - **`buildwarden/buildwarden-relay`**, read on 2026-11-13 from a local clone:
   `main` at `e9b23d5` holds the M0 spike (`spike/`, with its Cargo manifests
   and a Makefile), a licence and a placeholder README. The branch
-  `feat/m1-foundation` at `9dc0ff5` adds only `docs/design/m1-foundation.md`,
-  a complete draft, not yet reviewed. It has no rule files, queue or agent
-  definitions. Its sections **The Loop Contract adopted** and **Rules
-  mirrored** plan the adoption in two parts: M1a, which waits for nothing,
-  and M1b, which waits for this item and for `loop-repository`. Where that
-  plan and this design differ is listed under **What a second component
-  needs in order to adopt**.
+  `feat/m1-foundation` at `13ce286` adds only
+  `docs/design/m1-foundation.md`, a complete draft, not yet reviewed and
+  still being revised (it was at `9dc0ff5` an hour earlier). It has no rule
+  files, queue or agent definitions. Its sections **The Loop Contract
+  adopted** and **Rules mirrored** plan the adoption in two parts: M1a,
+  which waits for nothing, and M1b, which waits for this item and for
+  `loop-repository`. It is written against this design as it stood at
+  `2c7ff0e`. Where its plan and this design now differ is listed under
+  **What a second component needs in order to adopt**.
 
 ## Decisions
 
@@ -529,8 +531,8 @@ seventeen are in the queue file.
      prefix, and the move of RELAY at M6, then needs a loop process item.
   3. A component may keep its invariants as a table of each invariant and
      the check that enforces it, with no rule IDs of its own (what the
-     relay's M1 design plans as `docs/invariants.md`). The judgment tier
-     would have no rule index to read there.
+     relay's M1 design keeps as `docs/invariants.md` until its M1b). The
+     judgment tier would have no rule index to read there.
 - **a17. Repositories that have not adopted the contract, and where a loop
   process item is queued.**
   1. *(recommended)* A repository is a component once it has done LOOP-08's
@@ -1080,28 +1082,27 @@ Steps 1 to 5 need nothing from `loop-repository`. Step 6 is P1's done-when:
 "this repository's loop and the relay's loop each complete one item from the
 loop repository".
 
-**Against the relay's M1 design** (`feat/m1-foundation` at `9dc0ff5`,
-unreviewed). It splits adoption the same way. Its M1a does what waits for
-nothing: the invariants as CI jobs, a table of them in `docs/invariants.md`,
-the FLOW-18 guard, branch protection once the repository is public, and the
-stub pre-release that is its first consumable. Its M1b waits for this item
-(task 10: the link, the local column, and the declarations "in the form the
-contract asks for") and for `loop-repository` (task 11: the queue and the
-relay's first item). So step 5 and the content of step 3 are M1a; steps 1,
-2 and 4, and the form of step 3, are M1b's task 10; step 6 is its task 11.
-It differs
-from this design in two places. Both are for its M1b to take up, which its
-task 10 already expects:
+**Against the relay's M1 design** (`feat/m1-foundation` at `13ce286`,
+unreviewed, written against this design at `2c7ff0e`). It splits adoption
+the same way. Its M1a does what waits for nothing: the invariants as CI
+jobs, a plain table of them in `docs/invariants.md`, the FLOW-18 guard,
+branch protection once the repository is public, and the stub pre-release
+that is its first consumable. Its M1b waits for this item to merge (task
+10: the link, the profile, the invariants rewritten as rules in LINT-01's
+format, the design template) and for the loop repository (task 11: the
+queue and the relay's first item). So step 5 and the content of step 3 are
+M1a; steps 1, 2 and 4, and the form of step 3, are its task 10; step 6 is
+its task 11. It differs from this design in two places, both for its task
+10 to take up:
 
 - *Routing.* It takes the relay's routing from the draft's section 5
   (Hyper-V, Windows and Linux-host work to the Windows desktop). Under
   LOOP-05 a profile names host names and the host table gives each to a
   machine; `hosts.yaml` has `qemu-any` on the MacBook (a15, c).
-- *The form of the invariants.* It applies this repository's rules "by ID"
-  and keeps `docs/invariants.md`, a table of each invariant and the CI job
-  that enforces it. LOOP-08 asks for the relay's own invariants as rules in
-  LINT-01's format under its own prefix, with this repository's rules cited
-  by ID beside them (a16).
+- *Registering a prefix.* It expects a prefix table in the contract, and a
+  change through this repository's process to register the relay's. This
+  design no longer has that table: the relay names its prefix in its own
+  profile, and nothing in the contract changes (Decision 9, a16).
 
 **What the contract must not assume about a component.** LOOP-08 lists
 these in the rule itself:
