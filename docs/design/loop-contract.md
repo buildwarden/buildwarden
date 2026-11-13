@@ -399,15 +399,15 @@ text is under **Rule changes**.
 
 | Rule | Title | Draft section | Detail it cites |
 |---|---|---|---|
-| LOOP-01 | Shared rules, a local profile | 1, and 8 steps 1 and 2 | FLOW-14, LINT-01 |
+| LOOP-01 | Shared rules, a local profile | 1, and 8 steps 1 and 2 | Every FLOW and LINT rule a profile term serves; the term table names them |
 | LOOP-02 | Design-first always, spec-first at a seam | 2 | FLOW-01, FLOW-02, FLOW-06, FLOW-07, FLOW-19 |
-| LOOP-03 | Checks: four classes, two tiers, run at the gates | 3 | LINT-01 to LINT-08, FLOW-03, FLOW-09 |
-| LOOP-04 | One queue per component, one order | 4 | FLOW-03, FLOW-04, FLOW-05, FLOW-06, FLOW-07 |
+| LOOP-03 | Checks: four classes, two tiers, run at the gates | 3 | LINT-01 to LINT-04, LINT-06, FLOW-03, FLOW-08, FLOW-09 |
+| LOOP-04 | One queue per component, one order | 4 | FLOW-03, FLOW-04, FLOW-05, FLOW-07 |
 | LOOP-05 | Workers are scheduled, routed and identified | 5 | FLOW-04, FLOW-09, FLOW-13, FLOW-18 |
-| LOOP-06 | Every run reports in one place per component | 6 | FLOW-13, LINT-05, FLOW-08 |
-| LOOP-07 | Components couple only through releases | 7 | FLOW-08, FLOW-10, LOOP-02 |
-| LOOP-08 | Adopting the contract | 8 | FLOW-08, FLOW-16, FLOW-18, LINT-01 |
-| LOOP-09 | The contract changes only through its owner | Open questions (the two decided points) | FLOW-03, FLOW-05, FLOW-14, FLOW-19 |
+| LOOP-06 | Every run reports in one place per component | 6 | FLOW-05, FLOW-08, FLOW-13, LINT-04, LINT-05 |
+| LOOP-07 | Components couple only through releases | 7 | LOOP-01, LOOP-02 |
+| LOOP-08 | Adopting the contract | 8, and the decided point on where the contract lives | FLOW-02, FLOW-08, FLOW-12, FLOW-16, FLOW-18, FLOW-19, LINT-01 |
+| LOOP-09 | The contract changes only through its owner | The decided point on who gates a change | FLOW-03, FLOW-05, FLOW-08, FLOW-14, FLOW-19 |
 
 The contract and its detail are the *loop rules*: LOOP-\*, FLOW-\*, LINT-\*.
 Everything else in `docs/development/` is a *project invariant* of
@@ -428,7 +428,7 @@ lists.
 | 3, research task | The main loop's current checks, one per line | The list under **The checks the loop runs today**. |
 | 4, research task | The queue's location and format | The orphan branch `workflow` of `buildwarden/buildwarden`: `queue/<item>.yaml` (state, steps with affinity and lease, budget, questions, history), `config.yaml` (budgets, limits, lease length, runaway factor), `hosts.yaml`, `backlog/native-gaps.yaml`, generated `QUEUE.md`. The schema is that branch's `README.md`; `wf` (`tools/workflow/cmd/wf`) is the only writer where a command exists (FLOW-03, FLOW-04). |
 | 5, "fill in" | Schedule cadence | The cloud loop runs once a day (FLOW-13; 02:55 Pacific, per `install-macos.sh`) and takes up to `run_budget.steps` steps, 24 today. Each native machine has a scheduled session that starts an agent only when `wf gate` finds work (FLOW-09): `macbook` daily at 04:40 local (launchd, which runs a missed slot on wake), `windows-desktop` at 04:10 and every 6 hours (Task Scheduler). Each spends `native_budget.steps`, 8 today. |
-| 5, "fill in" | Taker identity or credential model | A worker is `cloud`, `human` or `host:<name>`, with a `/<session>` suffix (`cloud/<UTC timestamp>`, `human/jeff`, `host:macos-vz/<timestamp>`). The identity is in every lease and history line (FLOW-04). A claim is a lease pushed to the `workflow` branch; a rejected push loses the claim; an expired lease (120 minutes) may be reclaimed. Credentials are the session's or the machine's own git access, set up outside the repository. A scheduled native session is a headless agent under a fixed allowlist (`tools/workflow/native/settings.native.json`), run as the logged-on user and not elevated. No secret goes into a prompt (FLOW-18). |
+| 5, "fill in" | Taker identity or credential model | A worker is `cloud`, `human` or `host:<name>`, with a `/<session>` suffix (`cloud/<UTC timestamp>`, `human/jeff`, `host:macos-vz/<timestamp>`). The identity is in every lease and history line (FLOW-04). A claim is a lease pushed to the `workflow` branch; a rejected push loses the claim; an expired lease (120 minutes) may be reclaimed. Credentials are the session's or the machine's own git access, set up outside the repository. A scheduled native session is a headless agent under a fixed allowlist (`tools/workflow/native/settings.native.json`), run as the logged-on user (a launchd agent on macOS; on Windows a task that is not elevated). No secret goes into a prompt (FLOW-18). |
 | 6, decided | Where iterations report | Today: `digest/<YYYY-MM-DD>.md` on the `workflow` branch, one section per run; the tier-2 report per branch head in `reports/<item>/<sha12>.{md,json}`; each machine's last scheduled run in `native/status/<machine>.yaml`. All of it moves with the queue (`loop-repository`). |
 
 #### The checks the loop runs today
@@ -468,7 +468,7 @@ report-only today (LINT-07).
 - Tier 1's analyzers: `exported-doc` (GLOBAL-01), `gofmt-touched`
   (GLOBAL-02), `error-wrap` (GLOBAL-03), `executor-no-cgo` (EXEC-01),
   `large-literal` (EXEC-05), `ledger-single-writer` (RELAY-01),
-  `relay-diskless` (RELAY-07), `drivers-claim` (ORCH-01). T1.
+  `relay-diskless` (RELAY-07). T1.
 - `make test` (TEST-01): the root module, `tools/workflow` and
   `tools/tier1`, on Ubuntu (CI `test`); `tools/tier1`'s tests also on macOS
   and Windows (CI `tier1-test`). T1.
@@ -487,8 +487,9 @@ report-only today (LINT-07).
 
 - `rule-index`: every rule has a severity and a check, and every
   `automated` rule is mapped in `rules.yaml` (LINT-01, LINT-02). T1.
-- `design-front-matter`, and "code changed with no design in the diff"
-  (FLOW-01, FLOW-02, FLOW-12). T1.
+- `design-front-matter`, "code changed with no design in the diff", and
+  `drivers-claim`, which compares a design's `drivers` with the trees the
+  diff reaches (FLOW-01, FLOW-02, FLOW-12, ORCH-01). T1.
 - `suppression`: a `Tier1-Allow` trailer carries a reason (LINT-05). T1.
 - `wf`'s done-when checks at each phase gate (FLOW-03): sections filled,
   the design review's approval and its delta (FLOW-19), the rule-change
@@ -524,6 +525,7 @@ GLOBAL-06, the security suite (TEST-08, SEC-01 to SEC-08, not yet built).
 | 12 | Routing for the relay: Firecracker and QEMU work to the Windows desktop. | `hosts.yaml`: `qemu-any` is on `macbook` (the qemu driver runs only on aarch64 hosts); `linux-kvm` on `windows-desktop` is experimental. | Routing is `hosts.yaml`, not contract text. The relay's profile names host names, not machines. | none |
 | 13 | "Each taker ... records which repo and which queue item it took." | The lease and history record the worker and the item. There is one repository, so none is recorded. | LOOP-05 requires the component once there is more than one; the field is `loop-repository`'s. | a1 |
 | 14 | A change to the contract is gated on Jeff only. | Both of FLOW-14's routes end in Jeff's design review and merge, but the second lets a feature's design carry a rule change. | Loop rules: process items only (LOOP-09). | a10 |
+| 15 | Section 7 names the relay's consumable by "the provisioning protocol, the connector protocol". | The decisions table's rows 9 and 11, the same day: no new protocol; the existing claim and collector protocols (GLOBAL-08). | The contract names no protocol. A consumable lists the specifications it implements (LOOP-07). | none (decided) |
 
 Where the draft and the loop agree, the contract cites the rule: the final
 scheduler setup on each machine is the owner's, by hand
@@ -735,7 +737,7 @@ loop rules; `global.md`'s "Deployment modes and the ledger's role" stays.
 | `docs/development/README.md` | The two parts, the `LOOP-` row and the Owner column | `rule_changes`, LOOP-01 |
 | `docs/development/process.md` | FLOW-01 and FLOW-14, one paragraph each | `rule_changes`, FLOW-01, FLOW-14 |
 | `docs/design/TEMPLATE.md` | A **Specification changes** section | `rule_changes`, LOOP-02 |
-| `.claude/skills/workflow-tick/SKILL.md` | The digest's three additions; LOOP-06 cited | Machinery, a process item's to change (FLOW-14) |
+| `.claude/skills/workflow-tick/SKILL.md`, `.claude/skills/workflow-native/SKILL.md` | The digest's three additions; LOOP-06 cited | Machinery, a process item's to change (FLOW-14) |
 | `.claude/agents/wf-publish.md` | The PR body's **Specification changes** section | Machinery |
 | `.claude/agents/wf-design.md` | Fill **Specification changes** when `seams` is not empty (LOOP-02); a feature's design declares no loop-rule change (LOOP-09) | Machinery |
 | `.claude/skills/workflow-intake/SKILL.md` | `wf new -hold` in steps 3 and 4 (a11) | Machinery |
@@ -862,7 +864,7 @@ hard-coding.** Where each term is fixed in the tools today:
 | Profile term | Hard-coded in |
 |---|---|
 | Gates | `check.go` (`make lint`, `make test`); `wf-implement`, `wf-review`, `wf-publish` |
-| Trunk | `check.go` and `review.go` (`origin/main`); `enforcement-check.sh`; `native-tick.sh` |
+| Trunk | `check.go`, `review.go` and `rulechange.go` (`origin/main`); `enforcement-check.sh`; `native-tick.sh` |
 | Designs and template | `cmd/wf/main.go` (`docs/design/<item>.md`, `feat/<item>`); `check.go` (`docs/design/TEMPLATE.md`) |
 | Impact vocabulary | `check.go`, `Front.Problems`: the required keys and the four `security_boundary` values |
 | Reference docs and guides | `check.go`: `docs/`, `docs/book/src/guide/`, `docs/book/src/getting-started/`, `examples/`, `README.md` |
