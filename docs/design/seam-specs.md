@@ -184,8 +184,8 @@ socket, and its claim will arrive over vsock on VZ.
    `github.com/buildwarden/buildwarden-specs`. It implements the test side of
    each protocol from the specification: a claimant and collector to test a
    relay, a relay to test a collector, a build environment, an upstream
-   resolver and origin servers, and a ledger verifier written from
-   `build-ledger/v1.md`. The module must not require
+   resolver and origin servers, and a ledger verifier written from this
+   repository's `specs/build-ledger/v1.md`. The module must not require
    `github.com/buildwarden/buildwarden`; its CI checks `go.mod` for it.
    Sharing `relaycfg`, `collector` or `ledger` with the Go relay would make
    the suite agree with that relay's bugs. Each release publishes the module
@@ -256,7 +256,8 @@ socket, and its claim will arrive over vsock on VZ.
     and collector suites. A suite that runs `warden-io initialize` itself is
     left to S2's item, which changes what `initialize` does.
 
-11. **No Go package outside `tools/` changes.** The package comments of
+11. **No package of the relay, the collector, the executor or a driver
+    changes.** The package comments of
     `relaycfg` and `collector` keep their protocol text for now. Pointing them
     at the specifications is a comment-only edit to shared packages that
     would declare every driver (FLOW-02); it is left to the next item that
@@ -266,8 +267,8 @@ socket, and its claim will arrive over vsock on VZ.
 
 ### Blocking
 
-None. The repository's creation is Jeff's (umbrella a11); it is needed when Implement
-starts, not for this design, and a2 says how it is asked for.
+None. The repository's creation is Jeff's (umbrella a11); it is needed
+when Implement starts, not for this design, and a2 says how it is asked for.
 
 ### Assumed
 
@@ -282,16 +283,16 @@ queue file.
   book's `specs/` mirror and its redirects, `specs/specs_test.go` and the
   `$id` policy for new schemas, each of which a third party can see. It is a
   move with no change in behaviour (FLOW-20), better reviewed alone, and it
-  can use the pin and the embedded documents this item proves. Until then the
+  can use the pin and the release steps this item proves. Until then the
   specs repository's README links to `specs/` here, and the harness's ledger
   verifier is written from `specs/build-ledger/v1.md`. Consequence: RELAY-05
   is not changed here, although the umbrella's table lists it beside TEST-05
-  for S1 (Decision 18: it changes in the item that makes the new wording
-  true).
+  for S1 (the umbrella's Decision 18: a rule changes in the item that makes
+  the new wording true).
 - **a2. When the repository is created, by whom, and what has to exist.**
   Options: (A) in or right after the design review, by Jeff or by that
-  attended session on his word (umbrella a11); (B) now, before the review; (C) at
-  Publish, after incubating on this branch (Decision 8's rejected
+  attended session on his word (umbrella a11); (B) now, before the review;
+  (C) at Publish, after incubating on this branch (Decision 8's rejected
   alternative). *Proceeding with A; confirm.* What has to exist before
   `f3-implement` starts is listed under **What Jeff creates**. If it does not
   exist then, Implement stops and the tick records a blocking question for
