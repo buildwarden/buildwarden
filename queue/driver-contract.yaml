@@ -3,10 +3,11 @@ title: 'Complete the driver contract in-tree, including the relay source: cmd/wa
 priority: 62
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/driver-contract.md
 branch: feat/driver-contract
-alters_relationships: null
+alters_relationships: true
+design_review: required
 source: 'componentization (docs/design/componentization.md, merged as b903f65, PR #117): phase K1 (wave 2 by the order table; the design says it does not depend on the relay and can start as soon as P0 merges). Done when adding a driver touches only its own directory. Jeff, attended session 2026-11-12: go ahead.'
 steps:
   - id: f0-branch-setup
@@ -19,10 +20,58 @@ steps:
   - id: f1-design
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-validate-macos-vz
+    phase: 6
+    affinity: host:macos-vz
     status: pending
     lease:
-      claimed_by: cloud/20261112T230554Z
-      expires: 2026-11-13T01:23:48.735984495Z
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (design Validation plan, a7; FLOW-09), on the branch after consolidation, with warden doctor output captured on main first: (1) warden doctor --driver vz prints what main prints and exits the same. (2) sudo warden image prepare --driver vz refreshes the active image; image list shows the vz lines after qemu''s; image verify --driver vz passes. (3) a vz build succeeds, its ledger verifies, relay.log is written (the host-mode relay resolved through the relay source). (4) make drivertest DRIVER=vz (drivertest.Lifecycle) passes. (5) --runtime docker and --network x with --driver vz are refused with the generated message; warden clean --driver vz reports nothing to clean and needs no container runtime; warden setup --driver vz prints the no-setup line. Evidence under native/macos-vz/<date>/.'
+  - id: f6-validate-windows-hyperv
+    phase: 6
+    affinity: host:windows-hyperv
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (design Validation plan, a7; FLOW-09), on the branch after consolidation, with warden doctor output captured on main first: (1) warden doctor --driver hyperv, elevated and not, prints what main prints; --network is honoured. (2) elevated warden setup --driver hyperv --slots 2 is idempotent and honours --nat-prefix and --host-ip. (3) warden image prepare --driver hyperv with no source refreshes; image list and image verify --driver hyperv pass. (4) a non-elevated durable build and an elevated ephemeral build succeed and verify; [vm] network is honoured and --network overrides it; with [vm] image_refresh_after set low, the detached image prepare --driver hyperv starts and logs. (5) WARDEN_RELAY_BOOT_VHDX naming a copy of the boot disk is used; naming a missing file is refused with no fallback to the cache. (6) warden hyperv service install, a service-delegated build, uninstall. (7) warden clean --driver hyperv removes a --keep-vms build''s leftovers and leaves a running build''s. (8) make drivertest DRIVER=hyperv (drivertest.Lifecycle) passes. Evidence under native/windows-hyperv/<date>/.'
+  - id: f6-validate-qemu-any
+    phase: 6
+    affinity: host:qemu-any
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (design Validation plan, a7; FLOW-09), on the branch after consolidation, with warden doctor output captured on main first: (1) warden doctor --driver qemu prints what main prints. (2) warden image prepare --driver qemu alpine:3.21; image list; image verify --driver qemu. (3) a direct-boot build and a cloud-image build succeed and verify, with the relay VM''s assets resolved from the source tree; then again with tools/relay-vm/output/vmlinuz and initramfs.cpio.gz copied beside dist/warden as relay-vm-vmlinuz and relay-vm-initramfs.cpio.gz (make build puts only the relay binary there), which resolves them from beside the binary. (4) make drivertest DRIVER=qemu (drivertest.Lifecycle) passes. (5) warden clean --driver qemu reports nothing to clean with no container runtime running. Evidence under native/qemu-any/<date>/.'
+  - id: f6-validate-macos-finch
+    phase: 6
+    affinity: host:macos-finch
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (design Validation plan, a7; FLOW-09), on the branch after consolidation: (1) warden doctor prints container runtime: finch and ok. (2) a default build and a warden shell session work; the shell''s exit code is passed through. (3) [runtime] relay_image = "dev" builds the relay from source; WARDEN_IMAGE=<ref> pulls that image; an unpullable reference fails without trying the default. (4) warden clean removes the containers and network of a killed build and leaves a running build''s. (5) WARDEN_CTR_CLI and --runtime select the runtime; a missing one gives the fixable error. (6) make drivertest DRIVER=container (drivertest.Lifecycle) passes on finch. Evidence under native/macos-finch/<date>/.'
+  - id: f2-design-review
+    phase: 2
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - f2-design-review
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 5
@@ -30,7 +79,108 @@ budget:
   spent:
     runs: 1
     steps: 2
-questions: []
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: What "adding a driver touches only its own directory" means (K1's done-when).
+    options:
+      - no Go file outside driver/<name>/ changes except one line in cmd/warden/drivers.go, the explicit list of in-tree drivers, which K2 removes; docs, tier-1 config, bootstrap.md's mapping, CI and release packaging are still edited for a new in-tree driver
+      - a generated import file
+      - a global registry (driver.Register in each driver's init) linked by blank imports
+      - one binary per driver now (K2's work pulled forward)
+    recommended: the explicit list
+  - id: a2
+    kind: assumed
+    status: open
+    question: The boundary between K1 and S4 (the claim connection), whose order the umbrella leaves open.
+    options:
+      - K1 leaves driver.Session's claim API alone (ClaimRelay keeps its address and token); S4 designs the connection, changes ClaimRelay and every driver's claim call, and adds the claim connection to GLOBAL-08's seam list; neither waits, and whichever publishes second reconciles each driver's relay-start function in Consolidation
+      - K1 waits for S4
+      - S4 waits for K1
+      - K1 designs the connection too and S4 is folded into it
+    recommended: independent, as in the first option
+  - id: a3
+    kind: assumed
+    status: open
+    question: The relay source's scope in K1.
+    options:
+      - K1 ships the types (driver.Relay, RelayForm, RelaySource) and the bundled, source-tree, local-path and image sources that wrap today's lookups, routes the two existing overrides ([runtime] relay_image / WARDEN_IMAGE, WARDEN_RELAY_BOOT_VHDX) through them, and adds no flag or key; a later user override is one kit option (--relay, [driver.<name>] relay); a pinned-download source waits for seam 8's manifest and hash format
+      - also add --relay and [driver.<name>] relay for the four VM drivers now
+      - also build the pinned-download source now, unused until M6
+    recommended: the first option
+  - id: a4
+    kind: assumed
+    status: open
+    question: Where a driver's own configuration lives.
+    options:
+      - the seven existing driver-owned keys keep their tables and names; a key a driver adds from now on lives in [driver.<name>], and drivertest.Contract refuses any other table (no such key exists in K1)
+      - move the existing keys to [driver.<name>] now, with deprecated aliases (UX-03)
+      - let a driver declare any table
+    recommended: the first option
+  - id: a5
+    kind: assumed
+    status: open
+    question: 'The behaviour K1 changes (design, Behaviour): (1) a flag the selected driver does not take is refused, where eleven were silently ignored (--runtime; --network on doctor and setup; --nat-prefix, --host-ip; image prepare''s --sha256, --name, --edition, --virtio, --arch, --force, --keep-vms); (2) the existing refusals take one generated form; (3) warden clean --driver qemu|vz no longer runs the container cleanup; (4) image list prints drivers in list order; (5) two messages list drivers in list order; (6) the long help of image prepare and clean is assembled per driver, and image prepare''s default --os list reads in list order; (7) a malformed [vm] image_refresh_after or image_min_grace is refused on every command that loads the configuration, whichever driver is selected, where it was refused on build and shell only. Three help passages (doctor''s launcher-stamp sentence, image prepare''s closing flag paragraph, clean''s short and lead text) keep naming drivers in prose as frame text until K2.'
+    options:
+      - accept all seven
+      - reproduce today's behaviour exactly (a per-option ignored-elsewhere bit, a container fallback in clean, fixed orders in the frame, the age check on build and shell only)
+      - accept some, named in the review
+    recommended: accept all seven
+  - id: a6
+    kind: assumed
+    status: open
+    question: One queue item or several.
+    options:
+      - one item and one PR, with ordered commits so each driver is converted on its own and every commit is green
+      - the contract, frame and container driver first, then one item per VM driver, then an item that removes the adapter and makes the rule changes
+    recommended: one item
+  - id: a7
+    kind: assumed
+    status: open
+    question: Native validation (FLOW-09).
+    options:
+      - 'macos-vz, windows-hyperv, qemu-any and macos-finch blocking (steps f6-validate-<host>); macos-qemu tracked (backlog driver-contract-qemu-windows); linux-kvm left out: firecracker is validated by the firecracker CI workflow (hosted KVM; its eight most recent runs passed, to 2026-11-12), which is not a required check, so Publish confirms its run on the PR''s head passed; container-any left out: the container driver is covered by the integration workflow and macos-finch, and its cleanup on a Windows host is covered by neither today'
+      - macos-qemu blocking too
+      - macos-finch tracked, relying on the integration workflow's Docker run
+      - add a blocking linux-kvm step for firecracker
+      - add a container-any step
+    recommended: the first option
+  - id: a8
+    kind: assumed
+    status: open
+    question: Rule changes beyond the umbrella's table for K1 (GLOBAL-08, ORCH-01).
+    options:
+      - 'also an enforcement-only change to UX-01, UX-03 and ORCH-03, the three rules tier 1''s surface check enforces: its extraction reads driver-declared options (driver.Option literals in driver/ and each directory under it) as well as cmd/warden, so moved flags and keys stay checked; rules.yaml''s format does not change, so main''s tier 1 still runs against the branch (FLOW-14)'
+      - 'no enforcement change: a Tier1-Allow trailer on the move, and the moved flags are no longer checked against the docs'
+      - keep every flag literal in cmd/warden
+    recommended: the first option; each rule change is approved by name in the review
+  - id: a9
+    kind: assumed
+    status: open
+    question: The capability model for the shared VM request fields.
+    options:
+      - one switch, Info.VM, for the group (--script, --image, --cpus, --memory, --keep-vms, --build-link, [vm] cpus, memory_mb, build_link, dns)
+      - one capability per field
+    recommended: Info.VM
+  - id: a10
+    kind: assumed
+    status: open
+    question: 'How far K1''s GLOBAL-08 wording goes. After K1 the contract is documented and has a conformance suite, but a driver is still linked by a line in cmd/warden/drivers.go and there is no kit module to version (umbrella Decision 18: a rule changes in the item that makes it true).'
+    options:
+      - K1's wording says the driver contract is a supported seam, unstable before 1.0, with its contract document and drivertest; the sentences "a driver the project did not write is a supported consumer" and "its version is the kit module's" are left for K2's amendment
+      - add both sentences now, ahead of the code
+    recommended: the first option
+  - id: a11
+    kind: assumed
+    status: open
+    question: 'Seam 8 (relay release forms) has no phase that writes it: the umbrella gives S1 seams 1, 2, 3, 5 and 6, S3 seam 7, and moves seam 4, yet says M6 needs K1''s relay source. K1 needs seam 8''s vocabulary now (form names, file roles) and would need its manifest and hash format for a pinned source. A gap in the umbrella, raised here and not settled by K1.'
+    options:
+      - K1 defines the four form names and four file roles as Go constants of the unstable contract, marked provisional; it writes no seam 8 text, records no form in the ledger and builds no pinned source; seam 8 is filed as its own S-track item, to exist before M6 adopts a release
+      - the same for K1, with seam 8's writing added to S1's item
+      - K1 writes a first seam 8 text for the names it uses
+      - the same for K1, with M6's first item writing seam 8
+    recommended: the first option
 history:
   - at: 2026-11-12T23:22:53Z
     by: human/jeff
@@ -50,3 +200,9 @@ history:
   - at: 2026-11-12T23:23:48Z
     by: cloud/20261112T230554Z
     event: claimed f1-design until 2026-11-13T01:23:48Z
+  - at: 2026-11-13T02:11:31Z
+    by: cloud/20261112T230554Z
+    event: done f1-design
+  - at: 2026-11-13T02:11:31Z
+    by: cloud/20261112T230554Z
+    event: entered phase 2 (plan)

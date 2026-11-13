@@ -3,10 +3,11 @@ title: 'Specs repository and conformance suites: write seams 1, 2, 3, 5 and 6, b
 priority: 61
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/seam-specs.md
 branch: feat/seam-specs
-alters_relationships: null
+alters_relationships: true
+design_review: required
 source: 'componentization (docs/design/componentization.md, merged as b903f65, PR #117): phase S1, wave 1. Done when the suites pass against the Go relay and the disk collector. The repository buildwarden/buildwarden-specs (a10) is confirmed with Jeff right before it is created (a11). Jeff, attended session 2026-11-12: go ahead.'
 steps:
   - id: f0-branch-setup
@@ -19,10 +20,34 @@ steps:
   - id: f1-design
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-release-specs
+    phase: 6
+    affinity: human
     status: pending
     lease:
-      claimed_by: cloud/20261112T230554Z
-      expires: 2026-11-13T01:23:34.596998401Z
+      claimed_by: ""
+      expires: null
+    note: 'Not before Review (phase 4) is done, although wf lists this step from the day it was added (design: Decision 12, How the loop treats the second repository; a15, a4, a8). First read the tier-2 report''s MUST findings and check that the conformance workflow''s run for this branch''s head is green. Then, in buildwarden/buildwarden-specs: merge the pull request from feat/seam-specs into main (FLOW-08), preferably as a merge commit, and push the tag v0.1.0 (the release this branch pins). Then, on this branch: make pin-specs REF=v0.1.0, make test, make lint, commit, push. An attended session may push the tag and move the pin on your word. If the specs pull request changed after Review, record the difference between the reviewed commit and the tag in this step''s evidence. The PR''s pin job fails a pin that is not a release tag, so f6-open-pr cannot go green without this step.'
+  - id: f2-design-review
+    phase: 2
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - f2-design-review
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 5
@@ -30,7 +55,146 @@ budget:
   spent:
     runs: 1
     steps: 2
-questions: []
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: Whether seam 4 (the ledger format and schemas, today in specs/) moves to the specs repository in this item. The umbrella says it moves and names no phase.
+    options:
+      - a later item of phase S1, filed once this item's release and pin have run once; RELAY-05 is not changed here
+      - in this item (rewrites RELAY-05, tier 1's schema-doc root, the book's specs mirror and redirects, specs/specs_test.go and the $id policy)
+      - at M6, with RELAY-01 to RELAY-08
+    recommended: a later item of phase S1, filed once this item's release and pin have run once; RELAY-05 is not changed here
+  - id: a2
+    kind: assumed
+    status: open
+    question: 'When buildwarden/buildwarden-specs is created and by whom (umbrella a11), and what has to exist before f3-implement starts (design: What Jeff creates).'
+    options:
+      - in or right after the design review, by Jeff or by that attended session on his word; Implement stops with a blocking question if it is missing
+      - now, before the review
+      - at Publish, after incubating the content on this repository's branch
+    recommended: in or right after the design review, by Jeff or by that attended session on his word; Implement stops with a blocking question if it is missing
+  - id: a3
+    kind: assumed
+    status: open
+    question: The specs repository's visibility.
+    options:
+      - public from creation (the Go module proxy and checksum database serve only public modules; the book links to it)
+      - private until buildwarden-relay goes public at M1 (needs credentials in both repositories' CI)
+    recommended: public from creation (the Go module proxy and checksum database serve only public modules; the book links to it)
+  - id: a4
+    kind: assumed
+    status: open
+    question: Which loop rules bind work in the specs repository before P1 lands.
+    options:
+      - queue file, design and reviews stay in this repository; in the specs repository agents work only on feat/seam-specs and never push main, force-push or delete a branch (FLOW-16, FLOW-17); Jeff merges its PR and pushes the release tag, or an attended session does on his word (FLOW-08); sessions are recorded privately and no entire/ refs reach it (FLOW-18); the harness follows GLOBAL-01 to 04, 07, 09 to 11, TEST-04 and TEST-07
+      - no rules there until P1 writes them
+    recommended: queue file, design and reviews stay in this repository; in the specs repository agents work only on feat/seam-specs and never push main, force-push or delete a branch (FLOW-16, FLOW-17); Jeff merges its PR and pushes the release tag, or an attended session does on his word (FLOW-08); sessions are recorded privately and no entire/ refs reach it (FLOW-18); the harness follows GLOBAL-01 to 04, 07, 09 to 11, TEST-04 and TEST-07
+  - id: a5
+    kind: assumed
+    status: open
+    question: The conformance harness's language, home and form (Decision 5).
+    options:
+      - Go, in the specs repository under conformance/, importing nothing from the kit, released as a module tag plus static bw-conformance binaries with checksums
+      - Rust
+      - a separate harness repository
+      - Go tests in this repository that import the kit (rejected by the umbrella's Decision 3)
+    recommended: Go, in the specs repository under conformance/, importing nothing from the kit, released as a module tag plus static bw-conformance binaries with checksums
+  - id: a6
+    kind: assumed
+    status: open
+    question: Which launchers the harness gets in this item (how a relay under test is supplied).
+    options:
+      - exec (a binary), oci (an image) and external (already running) now; the VM-image launcher is specified by the same attachment points and built by the first item with a VM image to test (the relay's M2 or M3, or seam 8's)
+      - also build a qemu launcher here and validate it on qemu-any
+    recommended: exec (a binary), oci (an image) and external (already running) now; the VM-image launcher is specified by the same attachment points and built by the first item with a VM image to test (the relay's M2 or M3, or seam 8's)
+  - id: a7
+    kind: assumed
+    status: open
+    question: How this repository pins a specs release (Decision 7).
+    options:
+      - tools/conformance/go.mod, a nested module requiring the specs module at one version; a release tag on a pull request and on main, a pseudo-version only on a branch while work is in progress; this file is tier 1's contract path for the five seams
+      - a git submodule
+      - a vendored copy of the documents
+      - a lock file and a download script
+    recommended: tools/conformance/go.mod, a nested module requiring the specs module at one version; a release tag on a pull request and on main, a pseudo-version only on a branch while work is in progress; this file is tier 1's contract path for the five seams
+  - id: a8
+    kind: assumed
+    status: open
+    question: The specs repository's versioning and release scheme (Decision 4).
+    options:
+      - 'a major version per document (v<N>.md, edited in place before 1.0) and semver tags v0.x.y for the repository as a whole; minor may break a passing implementation, patch may not; first release v0.1.0 (who cuts it: a15)'
+      - a tag per specification
+      - the harness versioned apart from the documents
+    recommended: 'a major version per document (v<N>.md, edited in place before 1.0) and semver tags v0.x.y for the repository as a whole; minor may break a passing implementation, patch may not; first release v0.1.0 (who cuts it: a15)'
+  - id: a9
+    kind: assumed
+    status: open
+    question: The specification document format (Decision 3).
+    options:
+      - Markdown prose with RFC 2119 words and a stable identifier per requirement that suite cases cite, plus JSON Schema 2020-12 for JSON bodies; CI fails on a requirement with no case and no stated reason
+      - OpenAPI for the HTTP seams
+      - prose without requirement identifiers
+    recommended: Markdown prose with RFC 2119 words and a stable identifier per requirement that suite cases cite, plus JSON Schema 2020-12 for JSON bodies; CI fails on a requirement with no case and no stated reason
+  - id: a10
+    kind: assumed
+    status: open
+    question: How the collector specification's two parts (umbrella a1) are laid out.
+    options:
+      - one document, collector/v1.md, with Part A (outputs stored) and Part B (inputs and signals served), each with its own requirement prefix and suite
+      - two documents, collector-outputs/ and collector-inputs/
+    recommended: one document, collector/v1.md, with Part A (outputs stored) and Part B (inputs and signals served), each with its own requirement prefix and suite
+  - id: a11
+    kind: assumed
+    status: open
+    question: Whether this item builds a suite that runs warden-io initialize itself (the executor's side of seams 3, 5 and 6).
+    options:
+      - defer it to S2's item, which changes what initialize does; seams 5 and 6 get specifications here and EXEC-04's conformance stays the tests in cmd/warden-io until then. Seam 5 then has no suite when S1 is done, and S2's intake has to carry it (the umbrella's S2 row does not name it)
+      - build it here for Linux guests in a container, with Windows and macOS guests as tracked gaps
+    recommended: defer it to S2's item, which changes what initialize does; seams 5 and 6 get specifications here and EXEC-04's conformance stays the tests in cmd/warden-io until then. Seam 5 then has no suite when S1 is done, and S2's intake has to carry it (the umbrella's S2 row does not name it)
+  - id: a12
+    kind: assumed
+    status: open
+    question: 'What to do with the nineteen places where the code differs from a rule, its own comment or the rest of the protocol (design: Divergences found, D1 to D19; D5 and D14 are against GLOBAL-10 and D13 against EXEC-02; the design proposes which later item carries each).'
+    options:
+      - record each in its specification as the code behaves and list it under Known divergences; fix none here; the review may turn any into a follow-up item and says what kind of item it is under FLOW-20
+      - fix them in this item (puts relay/, collector/ and cmd/warden-io/ in the diff, with GLOBAL-06 and every driver's native validation)
+    recommended: record each in its specification as the code behaves and list it under Known divergences; fix none here; the review may turn any into a follow-up item and says what kind of item it is under FLOW-20
+  - id: a13
+    kind: assumed
+    status: open
+    question: Seam 6's name. The umbrella's seam table gives it none and its front-matter lists bootstrap-model, which is the BOOT-07 model.
+    options:
+      - bootstrap-config, added to GLOBAL-08's executor bullet and to tier 1's seam list
+      - bootstrap-model
+    recommended: bootstrap-config, added to GLOBAL-08's executor bullet and to tier 1's seam list
+  - id: a14
+    kind: assumed
+    status: open
+    question: Native validation (FLOW-09).
+    options:
+      - 'nothing blocking; two tracked gaps: macos-vz, open (the relay suite against the host-mode relay on macOS) and qemu-any, deferred until a VM launcher exists (the relay suite against the Go relay VM image)'
+      - block on macos-vz
+      - no gaps recorded
+    recommended: 'nothing blocking; two tracked gaps: macos-vz, open (the relay suite against the host-mode relay on macOS) and qemu-any, deferred until a VM launcher exists (the relay suite against the Go relay VM image)'
+  - id: a15
+    kind: assumed
+    status: open
+    question: The release step, and who moves the pin to the release (Decision 12). FLOW-04's list of what a human step is for does not include a release in a second repository, and f6-open-pr's definition has no pin move.
+    options:
+      - 'a human queue step f6-release-specs in phase 6: Jeff reads the tier-2 report and merges the specs pull request; the tag is pushed and the pin moved on this branch (make pin-specs, make test, make lint, push) by him or by the attended session on his word; listed for Jeff from the day it is added and not to be done before Review is done; the PR''s pin job is the backstop'
+      - 'no queue step: f6-open-pr opens the PR on the pseudo-version, the pin job fails, and FLOW-11''s escalation asks Jeff for the release'
+      - f6-open-pr's session moves the pin as its first act, on the design's word
+      - a process item first, to teach the loop about a release in a second repository (P1's subject; holds S1 behind it)
+    recommended: 'a human queue step f6-release-specs in phase 6: Jeff reads the tier-2 report and merges the specs pull request; the tag is pushed and the pin moved on this branch (make pin-specs, make test, make lint, push) by him or by the attended session on his word; listed for Jeff from the day it is added and not to be done before Review is done; the PR''s pin job is the backstop'
+  - id: a16
+    kind: assumed
+    status: open
+    question: What Part A of the collector specification is normative for (Decision 13). The umbrella's review (its a2) left the collector's storage boundary to the first alternative collector.
+    options:
+      - 'the wire only: the requests a collector accepts, its replies and their order; the disk layout is specified as the disk collector''s, and reading stored bytes back is something a target file may give the harness, not a requirement on a collector'
+      - 'an object model for any collector: each output is an object a reader can fetch by its name with the bytes sent'
+    recommended: 'the wire only: the requests a collector accepts, its replies and their order; the disk layout is specified as the disk collector''s, and reading stored bytes back is something a target file may give the harness, not a requirement on a collector'
 history:
   - at: 2026-11-12T23:22:53Z
     by: human/jeff
@@ -50,3 +214,9 @@ history:
   - at: 2026-11-12T23:23:34Z
     by: cloud/20261112T230554Z
     event: claimed f1-design until 2026-11-13T01:23:34Z
+  - at: 2026-11-13T02:11:21Z
+    by: cloud/20261112T230554Z
+    event: done f1-design
+  - at: 2026-11-13T02:11:21Z
+    by: cloud/20261112T230554Z
+    event: entered phase 2 (plan)

@@ -580,3 +580,40 @@ gaps:
       build that runs here: main's relay does not take the stamp-2 relay disk this host now has, so run
       it once hyperv-relay-per-build-channel merges, or on that branch merged with main.
       2026-11-12 (attended, feat/hyperv-relay-per-build-channel 5ac5532, which contains main d55f963): done. During a running build clean printed "Nothing to clean" and left its VMs running; after a durable --keep-vms build it removed both VMs and the work dir and the slot read free; after an ephemeral --keep-vms build it also removed the warden-<id> switch. Evidence: native/windows-hyperv/2026-11-12/attended-r4/ (clean-*).
+  - id: seam-specs-relay-suite-macos-host-mode
+    host: macos-vz
+    status: open
+    what: >-
+      The specs repository's relay conformance suite (bw-conformance, the release pinned in
+      tools/conformance/go.mod) against the host-mode Go relay on macOS, where vz runs it: dist/relay
+      -mode host on an inherited socketpair, with the harness as claimant, collector, build
+      environment and upstream.
+    design: docs/design/seam-specs.md
+    note: >-
+      Tracked, not blocking (design Validation plan, a14). The harness's upstream needs loopback
+      aliases in the documentation ranges and ports 53, 80 and 443, so the session needs root; if it
+      cannot have it, record the entry blocked with that reason. Run once seam-specs has merged.
+  - id: seam-specs-relay-suite-relay-vm
+    host: qemu-any
+    status: deferred
+    what: >-
+      The relay conformance suite against the Go relay VM image (tools/relay-vm) booted under qemu,
+      the harness on its build NIC.
+    design: docs/design/seam-specs.md
+    note: >-
+      Tracked, not blocking (design a6, a14). Deferred: it waits on the harness's VM-image launcher,
+      which seam-specs specifies and leaves to the first item with a VM image to test; that item
+      reopens this entry.
+  - id: driver-contract-qemu-windows
+    host: macos-qemu
+    status: open
+    what: >-
+      warden image prepare --driver qemu --os windows (install from ISO, then the prepared layer),
+      then a Windows build, on a warden where the qemu Windows prepare runs through the driver
+      contract's PrepareImage (moved from cmd/warden into driver/qemu) and the freshness ages come
+      from the driver's options.
+    design: docs/design/driver-contract.md
+    note: >-
+      Tracked, not blocking (design Validation plan, a7). Tier 0 covers the moved logic. Needs an
+      install ISO and an attended run; see qemu-windows-guest-package for the state of Windows
+      builds on this host. Run once driver-contract has merged.
