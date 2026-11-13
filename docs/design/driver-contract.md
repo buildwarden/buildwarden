@@ -80,7 +80,7 @@ Outside `cmd/warden`, shared packages name drivers as well:
   the container driver's; `ImageRefreshAfter` and `ImageMinGrace` are read by
   qemu (`ensureFreshWindowsLayer`) and hyperv (`ensureFreshBase`) only;
   `Image`, `GuestOS`, `CPUs`, `MemoryMB`, `KeepVMs`, `Script`, `BuildLink`
-  and `DNS` are set for the four VM drivers only.
+  and `DNS` mean something to the four VM drivers only.
 - `driver/relayvm/assets.go` holds `QEMURelay`, `Firecracker` and
   `QEMUBuild`, each driver's boot asset list.
 - `driver/subnet.go` holds `ContainerBaseCIDR` and `AllocateNetwork`, which
@@ -574,7 +574,7 @@ How the frame handles options:
    that name it becomes that command's flags. Two drivers may declare the
    same flag on the same command (`--slots` on `setup`, `--force` and
    `--keep-vms` on `image prepare`) when the kinds agree; the frame joins
-   their usage strings with `"; "`. A clash of kinds, or with a frame flag,
+   their usage strings with `"; "`, printing identical ones once. A clash of kinds, or with a frame flag,
    is a start-up panic that `drivertest` catches first. Help output is
    therefore still the whole set, whichever driver is selected, as today.
 2. **Select the driver** from `--driver`, `WARDEN_DRIVER`, `[runtime]
@@ -950,8 +950,10 @@ One branch, one PR, each commit green on `make test` and `make lint` for
 the platforms it touches (FLOW-17).
 
 1. Characterization tests. No production code changes.
-2. The contract types, `driver/relaysource`, `driver/drivertest` with the
-   recorder, and the tier-1 surface change. Nothing uses them yet.
+2. The contract document, then the contract types, `driver/relaysource`,
+   `driver/drivertest` with the recorder, and the tier-1 surface change.
+   Nothing uses them yet. The document comes first because the umbrella has
+   a seam's specification change before its code.
 3. The frame. `cmd/warden` is rewritten over `[]driver.Driver`. A temporary
    `cmd/warden/legacy.go` adapts each of the five packages to the contract
    by wrapping the exported functions `cmd/warden` calls today, so no driver
@@ -1373,8 +1375,11 @@ Plan refines these into tasks; the order is **Order of the refactor**.
 1. Add the characterization tests to `cmd/warden` on unchanged production
    code: help goldens, the refusal table, request tables per driver, `image
    list` and `image verify` fixtures (GLOBAL-04, UX-09, TEST-01, TEST-04).
-2. Add `driver/contract.go`, `driver/options.go` and `driver/relay.go` with
-   doc comments on every exported identifier (GLOBAL-01, GLOBAL-08).
+2. Write `docs/book/src/contributing/driver-contract.md` (the contract in
+   prose, the relay source, `drivertest`, what it does not guarantee), then
+   add `driver/contract.go`, `driver/options.go` and `driver/relay.go` to
+   match it, with doc comments on every exported identifier (GLOBAL-01,
+   GLOBAL-08).
 3. Add `driver/relaysource` (`Bundled`, `Path`, `Image`) over the existing
    lookups, with `Relay.Verify`, wrapped errors and fixable refusals
    (GLOBAL-03, GLOBAL-10, GLOBAL-11, UX-04, RELAY-08).
@@ -1416,9 +1421,8 @@ Plan refines these into tasks; the order is **Order of the refactor**.
 15. Make the approved rule edits: GLOBAL-08 in `global.md`, ORCH-01 in
     `orchestrator.md`, and `seams` and `drivers.shared` in `rules.yaml`
     (FLOW-14, GLOBAL-08, ORCH-01).
-16. Write `docs/book/src/contributing/driver-contract.md` (the contract in
-    prose, the relay source, `drivertest`, what it does not guarantee) and
-    link it from `SUMMARY.md` and `structure.md` (GLOBAL-08, UX-01).
+16. Bring the contract document up to date with what was built and link it
+    from `SUMMARY.md` and `structure.md` (GLOBAL-08, UX-01).
 17. Update `guide/cli.md` and `guide/configuration.md` for the six
     differences and the `[driver.<name>]` convention, and
     `concepts/overview.md` and `contributing/structure.md` for the new
