@@ -215,8 +215,8 @@ review confirms each on its own.
    GLOBAL, RELAY, ORCH, EXEC, BOOT, UX, TEST and SEC to
    `buildwarden/buildwarden`. A citation by ID therefore stays valid across
    repositories. *Rejected:* a component prefix on every ID
-   (`bw:GLOBAL-06`). It would rewrite every citation in 53 archived designs
-   and in the code comments.
+   (`bw:GLOBAL-06`). It would rewrite the citations in every design under
+   `docs/design/` and in the code comments.
 10. **Loop rules change only through a process item** (a10). A feature's
     design may declare a change to its own component's invariants and
     profile (FLOW-14's second route), not to LOOP, FLOW or LINT rules.
@@ -438,12 +438,13 @@ report-only today (LINT-07).
 
 **Build**
 
-- `make build` on macOS and Ubuntu, then `dist/warden --help` (CI `build`). T1.
+- `make build` on macOS and Ubuntu, then `dist/warden --help` (CI `build`).
+  It cross-builds the relay and the executor for linux/amd64 and
+  linux/arm64. `rules.yaml` gives "the CI matrix" as the owner of
+  GLOBAL-07's and ORCH-05's automated parts. T1.
 - `go mod tidy` leaves `go.mod` and `go.sum` unchanged, in the root module
-  and in `tools/` (CI `tidy`). T1.
+  and in `tools/tier1` (CI `tidy`). T1.
 - `mdbook build docs/book` (CI `book`). T1.
-- Each component builds for its supported targets (GLOBAL-07, ORCH-05: the
-  CI matrix). T1.
 
 **Specification**
 
@@ -468,8 +469,9 @@ report-only today (LINT-07).
   (GLOBAL-02), `error-wrap` (GLOBAL-03), `executor-no-cgo` (EXEC-01),
   `large-literal` (EXEC-05), `ledger-single-writer` (RELAY-01),
   `relay-diskless` (RELAY-07), `drivers-claim` (ORCH-01). T1.
-- `make test` (TEST-01): on Ubuntu for every module (CI `test`), and
-  `go test ./...` on Ubuntu, macOS and Windows (CI `tier1-test`). T1.
+- `make test` (TEST-01): the root module, `tools/workflow` and
+  `tools/tier1`, on Ubuntu (CI `test`); `tools/tier1`'s tests also on macOS
+  and Windows (CI `tier1-test`). T1.
 - `tests-with-change` (GLOBAL-04). T1.
 - `make integration-test` on PRs that reach the container driver or a
   shared package, weekly on `main`, and on demand (TEST-02, tier 1 of the
@@ -530,5 +532,376 @@ scheduler setup on each machine is the owner's, by hand
 agents do not reorder it (FLOW-05, and `priority_confirmed` in
 `config.yaml`); a blocked item names what blocks it (`wf next`'s `blocked`
 lines, FLOW-07).
+
+### Design-first and spec-first: which applies when
+
+A *seam* is a boundary between components that has a written specification,
+or that the program is to give one (the umbrella's seams 1 to 8). A
+*specification* is the document a second implementation is tested against.
+
+| The item changes | Order | Rules |
+|---|---|---|
+| Behaviour a specification defines: a message, field, ordering, error, limit or format at a seam | Design, design review, then in Implement the specification change first and the code second, the code tested against the changed specification | FLOW-01, FLOW-02 (`seams`), FLOW-19, LOOP-02 |
+| An implementation of behaviour already specified (the Rust relay's milestones; a second collector) | Design, citing the requirements it implements. No specification change. The code is tested by the seam's conformance suite. | FLOW-01, LOOP-02 |
+| Behaviour inside one component, with no seam (a driver's lifecycle, the CLI, a tool) | Design, then code. The component's reference documents change in the same change. | FLOW-01; here UX-01, FLOW-15 |
+| Nothing that carries a design decision (a dependency bump, a typo, a CI-only change) | Exempt, labelled `no-design` | FLOW-01 |
+| The loop's rules or machinery (a process item) | The human's design and its review, then the implementation | FLOW-03, FLOW-14, LOOP-09 |
+
+Design always comes first because the design review is where a seam change
+is decided (FLOW-19 goes over "the components, seams and flows touched").
+The specification change is how that decision is written down for every
+implementation, so it is made before any code relies on it. Where the
+specification is in another repository, the order across the two is the
+component's to state in its profile; `seam-specs` proposes this
+repository's (a specifications PR, a pin to its commit while the work is in
+progress, the release, then a pin to the tag).
+
+A design that declares `seams` fills a new template section,
+**Specification changes**: each document and requirement it changes, and
+where the change is made. A run that changes a specification reports it
+apart from the code (LOOP-06), and the PR body lists it. That is what the
+draft's "spec diffs are first-class review artifacts" becomes.
+
+### The component profile
+
+LOOP-01 lists the terms the detail uses that a component defines. This
+repository's profile, `docs/development/loop-profile.md`, fills each one;
+its full proposed text is under **Rule changes**. It is a document that
+agents and reviewers read. `wf` does not read it yet: making `wf` read a
+profile is `loop-repository`'s (see the hand-off table for where each term
+is hard-coded today).
+
+The profile sits in `docs/development/`, so a change to it is a rule change
+(FLOW-14). That is deliberate: the gate commands and the list of checks are
+what the loop enforces here.
+
+A term a component does not have is filled as `none`, and a rule read
+through a `none` term does not apply there (a component with no user-facing
+surface owes no reference docs). A term left unfilled is a finding; the
+reader does not fall back to `buildwarden/buildwarden`'s entry.
+
+### The split, rule by rule
+
+**Project invariant** rules stay in `buildwarden/buildwarden`. **Loop**
+rules move to the loop repository with `loop-repository`. 61 existing rules
+are project invariants; 28 existing rules and the 9 new ones are loop rules.
+
+| Rule | Title | Side | Why, where it is not obvious |
+|---|---|---|---|
+| GLOBAL-01 | Comments | Project | |
+| GLOBAL-02 | Formatting: gofmt on touched lines | Project | |
+| GLOBAL-03 | Errors | Project | |
+| GLOBAL-04 | Tests land with the change | Project | |
+| GLOBAL-05 | Reproducibility | Project | |
+| GLOBAL-06 | Security-boundary changes are high-severity | Project | FLOW-02, FLOW-08 and FLOW-20 cite it, but the boundaries are this product's. The profile names it as this component's boundary rule. |
+| GLOBAL-07 | Cross-platform by default | Project | |
+| GLOBAL-08 | Component independence | Project | It is about the product's components. The contract's "component" is a repository with a queue, defined in LOOP-01. |
+| GLOBAL-09 | Least surprise | Project | They bind `tools/` and `.claude/` too, and the design template's **Defaults and overrides** section serves them. They are still design principles of this codebase (Decision 11). The loop repository cites them by ID if Jeff wants them to bind `wf` there. |
+| GLOBAL-10 | Explicit over implicit | Project | As GLOBAL-09. |
+| GLOBAL-11 | Minimal magic | Project | As GLOBAL-09. It cites FLOW-06, by ID. |
+| RELAY-01 | Single-writer ledger | Project | The umbrella moves RELAY-01 to RELAY-08 to the relay or specs repository at M6. Until then they are this repository's. |
+| RELAY-02 | Bytes sent match the ledger | Project | |
+| RELAY-03 | Keys are memory-only | Project | |
+| RELAY-04 | Three-mode parity | Project | |
+| RELAY-05 | Versioned spec and schema docs | Project | This is the nearest thing to the draft's specification handling, but it states the ledger's layout. LOOP-02 is the shared rule; RELAY-05 is this component's detail of it. |
+| RELAY-06 | Hot-path performance | Project | |
+| RELAY-07 | Diskless relay | Project | |
+| RELAY-08 | Configured through its claim | Project | |
+| ORCH-01 | Driver parity | Project | |
+| ORCH-02 | Inputs are read-only | Project | |
+| ORCH-03 | Config-surface discipline | Project | |
+| ORCH-04 | Transient resources are torn down | Project | |
+| ORCH-05 | Windows host | Project | |
+| EXEC-01 | Pure Go, no cgo | Project | |
+| EXEC-02 | Minimal-environment robustness | Project | |
+| EXEC-03 | Trust-install parity | Project | |
+| EXEC-04 | Versioned public contract | Project | |
+| EXEC-05 | Embed large assets | Project | |
+| BOOT-01 | Isolation precedes execution | Project | |
+| BOOT-02 | The executor is the only out-of-band input | Project | |
+| BOOT-03 | One start, then hands off | Project | |
+| BOOT-04 | Build inputs come from the relay | Project | |
+| BOOT-05 | Setup is the executor's domain | Project | |
+| BOOT-06 | Images carry hooks, not content | Project | |
+| BOOT-07 | The model changes only by a signed comparison | Project | It reads like process and cites FLOW-14 and FLOW-19, but what it protects is this product's bootstrap model. The template's **Bootstrap comparison** section stays with it. |
+| UX-01 | Docs-coupling | Project | The loop's phase 3 done-when cites it. The profile names it as this component's reference-docs rule. |
+| UX-02 | Machine-readable output | Project | |
+| UX-03 | Backward-compatible surfaces | Project | |
+| UX-04 | Fail early, say what to do | Project | |
+| UX-05 | Consistent CLI shape | Project | |
+| UX-06 | Short flags | Project | |
+| UX-07 | Minimal config, layered overrides | Project | |
+| UX-08 | Fail fast on config | Project | |
+| UX-09 | Exit codes | Project | |
+| TEST-01 | Fast, universal gate | Project | It defines this component's fast gate (`make test`). The loop's rule is that a component has one (LOOP-03). |
+| TEST-02 | Tiered tests | Project | It names the `workflow` branch's `hosts.yaml` and FLOW-09. The tiers and which CI workflow runs each are this component's; FLOW-09 is the loop's half. |
+| TEST-03 | Not gated on owning every platform | Project | It names `tier2_gaps` and the native-gap backlog, both loop state, to say when this component's platform path counts as done. |
+| TEST-04 | Flaky tests are defects | Project | FLOW-11 cites it. The profile names it as this component's flaky-test rule. |
+| TEST-05 | Contract tests for the seams | Project | S1 amends it. |
+| TEST-06 | Coverage is signal | Project | |
+| TEST-07 | Parallelize | Project | |
+| TEST-08 | Security suite on boundary-tripping releases | Project | |
+| SEC-01 | Threat model | Project | |
+| SEC-02 | Two arms | Project | |
+| SEC-03 | Findings crystallize into the corpus | Project | |
+| SEC-04 | Proof standard | Project | |
+| SEC-05 | Synthetic surface | Project | |
+| SEC-06 | Gate policy | Project | It cites LINT-03, by ID. |
+| SEC-07 | Harness blast-radius | Project | |
+| SEC-08 | Trigger and cadence | Project | A cadence, but of this product's security suite. |
+| LINT-01 | Every rule is machine-consumable | Loop | The rule format is what lets one tier-2 agent read any component's rules. The README's **Rule format** section goes with it. |
+| LINT-02 | Two tiers | Loop | Its examples (`golangci-lint`, `go test`, GLOBAL-01, EXEC-01) are this component's; read through the profile. `tools/tier1/` itself stays here. |
+| LINT-03 | Release-gate policy | Loop | Its wiring (GoReleaser on a tag push) is this component's release entry. |
+| LINT-04 | Scoped to the change | Loop | |
+| LINT-05 | Reproducible, auditable output | Loop | It cites UX-02 for the report's shape, by ID. |
+| LINT-06 | Invocation | Loop | |
+| LINT-07 | Report-only bootstrap | Loop | |
+| LINT-08 | The linter is the doc set's drift check | Loop | |
+| FLOW-01 | Design before implementation | Loop | Amended here to point to LOOP-02. |
+| FLOW-02 | Designs declare their impact | Loop | The keys `drivers`, `surfaces` and `security_boundary`, their values, and the "shared package" derivation are this component's impact vocabulary (profile). |
+| FLOW-03 | Phases and definitions of done | Loop | `make lint`, `make test` and the docs paths are profile terms. |
+| FLOW-04 | Steps declare who may take them | Loop | |
+| FLOW-05 | Depth first, in class order | Loop | |
+| FLOW-06 | No silent redesign | Loop | |
+| FLOW-07 | Questions, in two kinds | Loop | |
+| FLOW-08 | Only a human merges | Loop | |
+| FLOW-09 | Native validation | Loop | Host names are in the shared host table; which hosts a design may block on is the component's. |
+| FLOW-10 | Publish consolidates | Loop | |
+| FLOW-11 | CI repair is bounded | Loop | |
+| FLOW-12 | Designs are archived | Loop | The archive stays in each component (`docs/design/`), and so does its `TEMPLATE.md`. |
+| FLOW-13 | Unattended steps are bounded and visible | Loop | |
+| FLOW-14 | Tooling is a thin layer over the rules | Loop | Amended here (LOOP-09). Its list of rule-change paths is this component's. |
+| FLOW-15 | Publish sweeps duplication, dead code and the overview | Loop | Every specific in it is this component's: `make deadcode`, the kept-exported packages, `driver/vz`, `overview.md`. The loop's rule is that Publish sweeps; the profile says with what. |
+| FLOW-16 | Merged branches are cleaned up | Loop | |
+| FLOW-17 | Branches are pushed at checkpoints | Loop | |
+| FLOW-18 | Sessions are recorded privately | Loop | One private repository serves every component. `.entire/settings.json` and the CI job stay in each component. |
+| FLOW-19 | Design review | Loop | |
+| FLOW-20 | The componentization program | Loop | It is temporary and names this repository's design by a relative link. It moves with the rest and is retired whole by Jeff's process item. |
+| LOOP-01 to LOOP-09 | The Loop Contract | Loop | New. |
+
+Unnumbered text follows its file. `behavioral-linter.md`'s "How the full
+release gate composes" and `process.md`'s "Bootstrap order" move with the
+loop rules; `global.md`'s "Deployment modes and the ledger's role" stays.
+"Bootstrap order" is history by now; `loop-repository` may drop it.
+
+### Rule IDs, cross-references, `rules.yaml` and tier 1
+
+- **Rule IDs.** None changes, and none is reused. LOOP is a new prefix. The
+  contract's prefix table (in LOOP-08) gives each prefix one owning
+  component, so an ID names one rule wherever it is cited.
+- **Cross-references by ID** stay as they are. The project files cite six
+  loop rules (FLOW-02, FLOW-06, FLOW-09, FLOW-14, FLOW-19, LINT-03), and
+  the two loop files cite 22 project rules by ID. After the move those
+  citations cross repositories and are still exact.
+- **Cross-references by link.** This PR moves no file, so no link breaks.
+  At the move, `loop-repository` rewrites the relative links to
+  `process.md` and `behavioral-linter.md` as absolute links: in
+  `docs/development/README.md` and `testing.md`, `AGENTS.md`,
+  `CONTRIBUTING.md`, `docs/book/src/concepts/overview.md`,
+  `docs/design/TEMPLATE.md`, 12 archived designs, and the `workflow`
+  branch's `README.md`.
+- **`tools/tier1/rules.yaml`** does not change here. Its self-check asks
+  for an entry only for a rule tagged `automated`, and the nine LOOP rules
+  are `agent-judgment`: what is mechanical about them is already a check of
+  the FLOW rule they cite (`wf`), or of a component rule (`seam-contract`,
+  `schema-doc`). At the move, `rules.yaml`'s LINT and FLOW entries have no
+  rule file here to match; `loop-repository` decides whether tier 1 reads
+  the loop's rule files from the loop repository or the loop carries its
+  own map.
+- **Tier 1's rule index** (`tools/tier1/rules`, `Dir = "docs/development"`,
+  a non-recursive glob that skips `README.md`) parses the new
+  `loop-contract.md` like any rule file: nine headers, each with its
+  severity and check. `loop-profile.md` has no rule header and adds
+  nothing to the index.
+- **The README index** is restructured, not rewritten: the ID scheme table
+  gains the `LOOP-` row and an Owner column; the documents list is split
+  into "Project invariants" and "Loop rules (the Loop Contract and its
+  detail)"; the **Rule format**, **Severity** and **Check-type** sections
+  sit under the loop part, since they are LINT-01's.
+- **`wf`'s checks** read `docs/development/` as a prefix
+  (`tools/workflow/check/rulechange.go`, `review.go`), and CI's `changes`
+  job matches `docs/development/*`. Both cover the two new files with no
+  change.
+
+### What this item's PR changes
+
+| Path | Change | Declared as |
+|---|---|---|
+| `docs/development/loop-contract.md` | New: the contract, LOOP-01 to LOOP-09 | `rule_changes`, LOOP-01 to LOOP-09 |
+| `docs/development/loop-profile.md` | New: this repository's profile | `rule_changes`, LOOP-01 |
+| `docs/development/README.md` | The two parts, the `LOOP-` row and the Owner column | `rule_changes`, LOOP-01 |
+| `docs/development/process.md` | FLOW-01 and FLOW-14, one paragraph each | `rule_changes`, FLOW-01, FLOW-14 |
+| `docs/design/TEMPLATE.md` | A **Specification changes** section | `rule_changes`, LOOP-02 |
+| `.claude/skills/workflow-tick/SKILL.md` | The digest's three additions; LOOP-06 cited | Machinery, a process item's to change (FLOW-14) |
+| `.claude/agents/wf-publish.md` | The PR body's **Specification changes** section | Machinery |
+| `.claude/agents/wf-design.md` | Fill **Specification changes** when `seams` is not empty (LOOP-02); a feature's design declares no loop-rule change (LOOP-09) | Machinery |
+| `.claude/skills/workflow-intake/SKILL.md` | `wf new -hold` in steps 3 and 4 (a11) | Machinery |
+| `tools/workflow/cmd/wf/main.go`, `queue/queue.go`, their tests | `wf new -hold` (a11) | Machinery |
+| `tools/workflow/queue/next.go`, `queue.go`, their tests | `wf next` honours `limits.alters_relationships` (a13) | Machinery |
+| `.claude/settings.json`, `.entire/settings.json` | As in `ac8b41a` (a12) | Machinery |
+| `AGENTS.md` | Two rows: the contract and the profile | Ordinary |
+| The `workflow` branch's `README.md` | `wf new -hold`; the limit `wf next` reads | Not in the PR; edited on that branch by the session that implements |
+
+Nothing else. No rule file other than `process.md` is edited, `tools/tier1/`
+and `tools/workflow/check/` are untouched, and no file moves.
+
+### The three machinery changes (a11, a12, a13)
+
+Each is a proposal the review can drop without touching the rest.
+
+**`wf new -hold "<why>"` (a11).** Today `wf new` seeds a queued item whose
+first step the loop may take at once. FLOW-20's freeze needs the opposite,
+and the hand-edit that produced it on 2026-11-11 added, to each queue file:
+a question `q1` (`kind: blocking`, `status: open`, one option "resume it"),
+a human step `f0-answer-q1`, and a `needs: [f0-answer-q1]` on
+`f0-branch-setup`. With `-hold`, `wf new` writes the same three things and a
+history line `on hold (q1): <why>`. For a process item the step is
+`x1-answer-q1` and `x1-design` needs it. Nothing else in `wf` changes:
+`wf next` already skips a step whose need is not done and gives the cloud
+"blocking question q1" as the reason, and `wf answer -question q1` already
+marks the question answered and completes the step. An item on hold shows
+under **Needs Jeff** in `QUEUE.md` as any blocking question does; that is
+how the six items showed before they were closed.
+
+**The Entire hook configuration (a12).** `ac8b41a` changes one hook command
+in `.claude/settings.json` (session start also reports an `entire` on PATH
+that fails to run) and reorders two keys in `.entire/settings.json`.
+`flow18-check.sh` reads `.strategy_options.checkpoint_remote`, which the
+reorder does not touch. The PR takes the two files as that commit has them.
+
+**The `alters_relationships` limit (a13).** `altersHolder` (`next.go`)
+becomes a count of the other in-progress features past Design that alter
+relationships, and the cloud is held only when that count has reached the
+limit. The limit is `limits.alters_relationships`, or 1 when `config.yaml`
+does not set it, read through one function that `Validate` uses too. A test
+covers a limit of 3 with two holders. See **Defaults and overrides**.
+
+### What a second component needs in order to adopt
+
+LOOP-08 is the rule. For the relay repository, concretely:
+
+1. **A link, not a copy.** Its README and its agent context file link to
+   the contract. Until `loop-repository` lands, the link is to
+   `docs/development/loop-contract.md` on this repository's `main`;
+   afterwards to the loop repository. The link follows the contract's trunk
+   and is not pinned, so a change reaches every component at once.
+2. **A profile**, every term filled or `none`. For the relay: Rust; gates
+   that build its three crates for two architectures, lint and test; its
+   designs under `docs/design/`; the seams it implements (claim, collector,
+   relay guest API, ledger format) at a pinned specifications release;
+   host names from the shared table for its VM work; consumables, the
+   relay's release forms (the umbrella's seam 8).
+3. **Its own invariants as rules** in LINT-01's format, with prefixes
+   registered in the contract's table, and its safety invariants among
+   them: `forbid(unsafe_code)` in the relay crates, a dependency audit, the
+   no-filesystem and no-process lints (the kickoff's design constraints).
+   `RELAY-` is `buildwarden/buildwarden`'s until M6 moves those rules.
+4. **A design template** with the contract's core front-matter and
+   sections, plus its own. Its `m1-foundation.md` has three keys today.
+5. **The repository set up as FLOW-08, FLOW-16 and FLOW-18 need:** trunk
+   protected so only a human merges, head branches deleted on merge,
+   sessions recorded only to the private sessions repository and the
+   FLOW-18 check run on it.
+6. **A queue and workers**, which need `loop-repository`: a queue for the
+   component beside this one's, `wf` reading its profile, and the workers'
+   access to it.
+
+Steps 1 to 5 need nothing from `loop-repository` and can be the relay's M1.
+Step 6 is P1's done-when: "this repository's loop and the relay's loop each
+complete one item from the loop repository".
+
+**What the contract must not assume about a component.** LOOP-08 lists
+these in the rule itself:
+
+- its language, build tool, test framework or linter (no `make`, `go`,
+  `cargo` or `golangci-lint` in a LOOP rule);
+- its directory layout, beyond a place for designs and a place for rules
+  that its profile names;
+- that it has drivers, user-facing surfaces, a book, an overview or
+  security boundaries (each is a profile term that may be `none`);
+- which agent tool runs it (FLOW-14 already names `.claude/` and `.kiro/`
+  as examples);
+- which CI system it uses, only that a deterministic check can block a PR;
+- that it is public;
+- that its specifications are in its own repository.
+
+What it does assume: git, a trunk and feature branches, pull requests that
+a human merges, Markdown rule files in LINT-01's format, designs with
+front-matter, and one owner.
+
+### What this item hands to `loop-repository`
+
+**The line.** This item changes what the rules say, in place. That item
+changes where things live and what the tools read. After this item merges,
+nothing has moved and `wf` behaves as before except for a11 and a13.
+
+**1. The finished contract text**: `docs/development/loop-contract.md` as
+merged, whose "Where things are" table has a column for today and one for
+after the move. Editing that table is the only change to the contract's
+text the move needs.
+
+**2. The split.** Three files that are wholly loop-side
+(`loop-contract.md`, `process.md`, `behavioral-linter.md`) and the README's
+loop part. Moving them is a move in FLOW-20's sense.
+
+**3. The list of what moves and what stays.**
+
+| Moves to the loop repository | Stays in `buildwarden/buildwarden` |
+|---|---|
+| `docs/development/loop-contract.md`, `process.md`, `behavioral-linter.md`; the README's loop part | The other eight rule files; the README's project part; `loop-profile.md` |
+| `tools/workflow/` whole: `cmd/wf`, `queue/`, `check/`, `native/`, `flow18-check.sh`, `enforcement-check.sh` | `tools/tier1/` (it imports `tools/workflow/check` through a `replace`, which the move has to resolve) |
+| `.claude/skills/workflow-{tick,human,native,intake}`, `.claude/agents/wf-{design,plan,implement,review,guide,publish}.md` | `.claude/settings.json`, `.entire/settings.json`, `AGENTS.md`, `CLAUDE.md` |
+| The `workflow` branch's content: `queue/`, `config.yaml`, `hosts.yaml`, `backlog/`, `digest/`, `reports/`, `native/`, `QUEUE.md`, `README.md` | `docs/design/` and its `TEMPLATE.md`; `.github/workflows/` |
+
+**4. The profile's term list as the specification of what `wf` must stop
+hard-coding.** Where each term is fixed in the tools today:
+
+| Profile term | Hard-coded in |
+|---|---|
+| Gates | `check.go` (`make lint`, `make test`); `wf-implement`, `wf-review`, `wf-publish` |
+| Trunk | `check.go` and `review.go` (`origin/main`); `enforcement-check.sh`; `native-tick.sh` |
+| Designs and template | `cmd/wf/main.go` (`docs/design/<item>.md`, `feat/<item>`); `check.go` (`docs/design/TEMPLATE.md`) |
+| Impact vocabulary | `check.go`, `Front.Problems`: the required keys and the four `security_boundary` values |
+| Reference docs and guides | `check.go`: `docs/`, `docs/book/src/guide/`, `docs/book/src/getting-started/`, `examples/`, `README.md` |
+| Rule and machinery paths | `rulechange.go`, `kindOf`; `review.go` |
+| Sweep | `wf-publish` (`make deadcode`, `overview.md`) |
+| Sessions | `flow18-check.sh` (`buildwarden/buildwarden-sessions`) |
+| Loop state | The four skills (`.dev/workflow`, the `workflow` branch) |
+| Native assets | `native-tick.sh` runs `tools/relay-vm/hyperv/refresh-cache.sh`, a product script inside loop machinery |
+
+**5. What the contract requires and only that item can build:**
+
+- `holds` scoped per component (LOOP-04, LOOP-09; the umbrella's P1);
+- the component recorded on every queue item and claim (LOOP-05);
+- one host table and one digest for all components, each run's section
+  naming its component (LOOP-05, LOOP-06);
+- how a component's checkout gets the skills, the agents and `wf` once
+  they are in another repository, and how CI here runs `flow18-check.sh`,
+  `enforcement-check.sh` and tier 1's use of `check`;
+- where tier 1's generic checks (`rule-index`, `design-front-matter`,
+  `suppression`) live, since the relay needs them and cannot use the Go
+  analyzers;
+- the links listed under **Rule IDs, cross-references, `rules.yaml` and
+  tier 1**.
+
+**6. Follow-ups this item names and does not do:** the neutral rewording of
+FLOW and LINT (a9), as the loop repository's first process item; and a11,
+a12 or a13 if the review moves any of them there.
+
+### What this item does not declare
+
+- **`alters_relationships: false`.** FLOW-02 lists what alters
+  relationships: a versioned seam, the bootstrap model, which product
+  component owns a responsibility, the driver contract. This item changes
+  none. It changes how component *loops* relate, and the umbrella already
+  declared that for the program. The practical side: `wf` counts every
+  in-progress item that declares `true` and is past Design toward FLOW-05's
+  slot, process items included, so `true` here would hold the slot against
+  `seam-specs` and `driver-contract` while this item is implemented.
+- **`seams: []`.** The umbrella numbers the Loop Contract as seam 10 and
+  calls it "a document". FLOW-02's `seams` are GLOBAL-08's versioned seams.
+- **No `holds`.** The PR changes two rule paragraphs, adds documents, and
+  makes three small machinery changes; a run that starts before the merge
+  and one that starts after both work.
 
 <!-- more sections follow -->
