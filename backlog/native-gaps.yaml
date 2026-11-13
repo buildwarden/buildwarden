@@ -58,6 +58,17 @@ gaps:
       2026-11-11 (host:macos-qemu/20261111T124004Z, unattended, main beb51ba): not run. Since
       49e5354 main changed only docs and tools/workflow (#100-#105), no queue item carries a qemu
       Windows build-guest fix, and no ISO is reachable.
+      2026-11-13 (host:macos-qemu/20261113T125117Z, unattended, main b903f65, QEMU 11.1.1): build half
+      rerun once, because #115 changed the Windows guest's network path (warden-run.ps1 now runs
+      `initialize --gateway=<relay>` with no --ip and keeps the relay's DHCP lease) and the relay VM's init.
+      `warden build --driver qemu --guest-os windows --image
+      ~/Library/Caches/warden/images/windows-arm64.qcow2 --timeout 25m` (the 2026-10-31 build.ps1): FAILED,
+      "timed out after 25m0s (--timeout)". The ledger again holds only the ENVIRONMENT record (qemu
+      windows/arm64, disk sha256:bc917e5249d4 and nvram `prepared` from 3 inputs, 3 seed files, 3 signatures
+      valid, all channels closed): the guest never fetched /bootstrap. One change: the build VM stayed up
+      until the timeout, where on 2026-10-31 it powered off within ~2 min, so the guest no longer gives up
+      at once. The session cannot see the guest's screen or C:\warden\warden-run.log. The install stage
+      was not run (no ISO reachable). Logs: native/macos-qemu/2026-11-13/.
     status: open
   - id: qemu-linux-exclusive-trust
     host: macos-qemu
@@ -209,6 +220,13 @@ gaps:
       verified, qemu linux/arm64, disk alpine_3_21.qcow2 sha256:ebaef97d702d `local` [ok], 5 seed
       files, 11 signatures valid, all channels closed. Windows half still waits on
       qemu-windows-guest-package. Logs: native/qemu-any/2026-11-12/main-disk.log.
+      2026-11-13 (host:qemu-any/20261113T125117Z, unattended, main b903f65, which adds #115's relay DNS and
+      DHCP changes to driver/qemu, relay/ and tools/relay-vm/init; QEMU 11.1.1, relay and build-vm initramfs
+      rebuilt from main in a .scratch worktree): Linux half re-passed. `warden build --driver qemu --image
+      ~/Library/Caches/warden/images/alpine_3_21.qcow2` (HTTP fetch of the main APKINDEX, 488085 bytes)
+      SUCCEEDED; `inspect --verify-disks`: ENVIRONMENT vm-disk-chain/v1 payload verified, qemu linux/arm64,
+      disk alpine_3_21.qcow2 sha256:ebaef97d702d `local` [ok], 5 seed files, 11 signatures valid, all
+      channels closed. Windows half: see qemu-windows-guest-package. Logs: native/qemu-any/2026-11-13/.
     status: open
   - id: hyperv-eval-image-verify-disks
     host: windows-hyperv
@@ -452,6 +470,8 @@ gaps:
       (qemu-environment-descriptors).
       2026-11-11 (host:macos-qemu/20261111T124004Z, unattended, main beb51ba): not run. qemu
       Windows builds still fail on main (no code change since 49e5354).
+      2026-11-13 (host:macos-qemu/20261113T125117Z, unattended, main b903f65): not run. A qemu Windows
+      build on main (default link) still times out with no relay traffic (qemu-windows-guest-package).
     status: open
   - id: hyperv-relay-per-build-channel-qemu-windows
     host: macos-qemu
@@ -465,6 +485,10 @@ gaps:
       and qemu Windows builds still fail on main.
       2026-11-11 (host:macos-qemu/20261111T124004Z, unattended, main beb51ba): not run. The branch
       is still design-only (r3 at cbb2cda), and qemu Windows builds still fail on main.
+      2026-11-13 (host:macos-qemu/20261113T125117Z, unattended, main b903f65): not met.
+      hyperv-relay-per-build-channel has merged (#115), so this now runs on main. The qemu Windows
+      build run on main for qemu-windows-guest-package timed out without reaching the relay. The
+      session could not read warden-run.log, so neither the no---ip initialize nor the lease was seen.
     status: open
   - id: security-suite-tier2-macos-vz
     host: macos-vz
@@ -554,10 +578,29 @@ gaps:
       still waiting.
       2026-11-11 (host:macos-qemu/20261111T124004Z, unattended, main beb51ba): not run. The branch
       is design-only (f68a8b1), and qemu Windows builds still fail on main.
+      2026-11-13 (host:macos-qemu/20261113T125117Z, unattended, main b903f65): not run. The branch has
+      not merged, and qemu Windows builds still time out on main (qemu-windows-guest-package).
     status: open
   - id: build-vm-busybox-qemu-direct-boot
     host: qemu-any
-    status: open
+    status: done
+    done: 2026-11-13
+    evidence: >-
+      host:qemu-any/20261113T125117Z, unattended, macbook, main b903f65, macOS 27.2.1, QEMU 11.1.1, in a
+      fresh .scratch worktree (no tools/build-vm/.cache): `make build sign`, then
+      tools/relay-vm/build-initramfs.sh and tools/build-vm/build-initramfs.sh. The script fetched
+      busybox-static-1.37.0-r14.apk, the checksum passed ("busybox-static-1.37.0-r14.apk: OK"), tar (bsdtar)
+      extracted it, and the initramfs came out at 3.2M. A qemu direct-boot Linux build on it (`warden build
+      --driver qemu`, HTTP fetch of the main APKINDEX, 488085 bytes) SUCCEEDED; `inspect --verify-disks`:
+      ENVIRONMENT vm-disk-chain/v1 payload verified, kernel vmlinuz and initrd initramfs.cpio.gz
+      sha256:e185554c15eb `local` [ok], 11 signatures valid, all channels closed. With a byte appended to the
+      cached apk the script stopped on the checksum ("FAILED", exit 1) before building. macOS 27 ships
+      /sbin/sha256sum, so the script takes its sha256sum branch here, not shasum; the shasum branch's exact
+      command (`shasum -a 256 -c -`) was run on its own: OK on the cached apk, FAILED (exit 1) on a corrupted
+      copy. Side note: the script's `go build "$MODULE_ROOT/cmd/warden-io"` fails when the working directory
+      is another Go module ("main module ... does not contain package"), so it was run from its own tree via
+      a scratch Makefile; run from the repository root, as documented, it works. Logs and the Makefile:
+      native/qemu-any/2026-11-13/.
     what: >-
       tools/build-vm/build-initramfs.sh from a fresh cache on macOS (its pinned aarch64 busybox-static
       1.37.0-r14 fetch, the shasum -a 256 check and the bsdtar extraction), then a qemu direct-boot

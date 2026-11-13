@@ -1,0 +1,18 @@
+APK = ../main/tools/build-vm/.cache/busybox-static-1.37.0-r14.apk
+
+build-vm:
+	cd ../main && ./tools/build-vm/build-initramfs.sh
+
+SUM = 6fd7ea97062beb51fa785ba858f823e1dfe4daf6bfa91ff4d5359b1061988c69
+
+shasum:
+	cd ../main/tools/build-vm/.cache && echo "$(SUM)  busybox-static-1.37.0-r14.apk" | shasum -a 256 -c -
+	cp $(APK) bad.apk && printf X >> bad.apk
+	-echo "$(SUM)  bad.apk" | shasum -a 256 -c -; echo "shasum exit=$$?"
+	rm -f bad.apk
+
+corrupt:
+	cp $(APK) apk.bak
+	printf X >> $(APK)
+	-cd ../main && ./tools/build-vm/build-initramfs.sh; echo "script exit=$$?"
+	cp apk.bak $(APK)

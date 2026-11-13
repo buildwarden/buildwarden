@@ -1,0 +1,17 @@
+════════════════════════════════════════════════════════════════════════════════
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  ✅
+  ENVIRONMENT  vm-disk-chain/v1  payload verified
+    qemu linux/arm64
+    disk     alpine_3_21.qcow2  197.5 MB  sha256:ebaef97d702d  local  [ok]
+    seed     5 per-build files
+════════════════════════════════════════════════════════════════════════════════
+[1;35m✅ ENVIRONMENT  (895 bytes)[0m
+[1;32m✅ GET /bootstrap (42 bytes)[0m
+[1;32m✅ GET /build-script (191 bytes)[0m
+✅ GET http://dl-cdn.alpinelinux.org/alpine/v3.21/main/aarch64/APKINDEX.tar.gz (488085 bytes)
+
+════════════════════════════════════════════════════════════════════════════════
+  SUMMARY: 10 records, 4 requests, 478.5 KB audited
+  SIGNATURES: ✅ All 11 signatures valid
+  COMPLETENESS: ✅ All channels closed
+════════════════════════════════════════════════════════════════════════════════

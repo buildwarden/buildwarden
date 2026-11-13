@@ -1,0 +1,18 @@
+════════════════════════════════════════════════════════════════════════════════
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  ✅
+  ENVIRONMENT  vm-disk-chain/v1  payload verified
+    qemu linux/arm64
+    kernel   vmlinuz  9.2 MB  sha256:cc58fb2ec441  local  [ok]
+    initrd   initramfs.cpio.gz  3.2 MB  sha256:e185554c15eb  local  [ok]
+    seed     1 per-build files
+════════════════════════════════════════════════════════════════════════════════
+[1;35m✅ ENVIRONMENT  (708 bytes)[0m
+[1;32m✅ GET /bootstrap (42 bytes)[0m
+[1;32m✅ GET /build-script (191 bytes)[0m
+✅ GET http://dl-cdn.alpinelinux.org/alpine/v3.21/main/aarch64/APKINDEX.tar.gz (488085 bytes)
+
+════════════════════════════════════════════════════════════════════════════════
+  SUMMARY: 10 records, 4 requests, 478.4 KB audited
+  SIGNATURES: ✅ All 11 signatures valid
+  COMPLETENESS: ✅ All channels closed
+════════════════════════════════════════════════════════════════════════════════

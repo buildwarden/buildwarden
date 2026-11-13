@@ -1,0 +1,15 @@
+════════════════════════════════════════════════════════════════════════════════
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  ✅
+  ENVIRONMENT  vm-disk-chain/v1  payload verified
+    qemu windows/arm64
+    disk     windows-arm64.qcow2  11.9 GB  sha256:bc917e5249d4  prepared by warden dev from 3 input(s)
+    nvram    windows-arm64-vars.fd  64.0 MB  sha256:7a8a7e7ea63f  prepared by warden dev from 3 input(s)
+    seed     3 per-build files
+════════════════════════════════════════════════════════════════════════════════
+[1;35m✅ ENVIRONMENT  (1638 bytes)[0m
+
+════════════════════════════════════════════════════════════════════════════════
+  SUMMARY: 2 records, 1 requests, 1.6 KB audited
+  SIGNATURES: ✅ All 3 signatures valid
+  COMPLETENESS: ✅ All channels closed
+════════════════════════════════════════════════════════════════════════════════
