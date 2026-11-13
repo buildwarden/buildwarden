@@ -394,7 +394,8 @@ Roles: the *relay* serves one claim; the *claimant* (a driver's session, or
   connection carries HTTP/2 with prior knowledge and no TLS, with the roles
   reversed: the relay is the HTTP/2 client and the claimant serves the
   collector protocol on it. One tunnel per relay: a second request, or one
-  after a claim was accepted, is 409 `tunnel already open`. The tunnel
+  made while a claim is being processed or after one succeeded, is 409
+  `tunnel already open`. The tunnel
   outlives a refused claim.
 - **`POST /v1/claim`.** A JSON body of at most 16 MiB; an unknown field is
   refused. Fields:
@@ -437,7 +438,8 @@ Roles: the *relay* serves one claim; the *claimant* (a driver's session, or
   relay refuses a claim that carries one. `upstream_dns` absent: the usable
   nameservers of the relay's own `/etc/resolv.conf`, excluding its own
   address, 127.0.0.1 and the build link; none usable refuses the claim.
-  Every mode refuses upstream dials into the build link.
+  A relay that has a build link (vm and host mode, with or without the
+  field) refuses upstream dials into it.
 - **The claimant's side.** It opens the tunnel before the claim when it
   selects the tunnel, retries connection failures (the kit retries every
   250 ms inside a 90 s limit; the numbers are the kit's), treats any reply
@@ -486,9 +488,9 @@ the one `warden inspect` reads.
 | `GET /healthz` | 200 `ok` |
 
 **The relay's side**, which the relay suite checks: `PUT /v1/ledger` is
-opened before any other output and ends before `POST /v1/complete`, whose
-reply the relay does not wait on to finish the ledger; `PUT /v1/environment`
-precedes the environment record; `ready` follows the listeners; a heartbeat
+opened before any other output; at completion the relay ends that request
+and waits for its reply before it sends `POST /v1/complete`;
+`PUT /v1/environment` precedes the environment record; `ready` follows the listeners; a heartbeat
 is forwarded every 2 s while the build showed activity (its own
 `/heartbeat`, or any proxied request) in the last 5 s; an input that is not
 200 becomes a 404 to the build; signals accept 200 or 204 and never block
@@ -536,8 +538,8 @@ build's own tools) is the client. Everything here is on the build link.
   and naming `http://artifacts/ca.crl` as its CRL distribution point, then
   proxies the HTTP inside. The response reaches the build as the upstream
   sent it (RELAY-02). An upstream the relay cannot reach, or one it refuses
-  to dial (the build link in every mode; loopback, private, link-local and
-  metadata addresses in host mode), is 502 `upstream unreachable`. How the
+  to dial (the build link in vm and host mode; loopback, private, link-local
+  and metadata addresses as well in host mode), is 502 `upstream unreachable`. How the
   build's connections arrive at these ports is the driver's (seam 7).
 - **Versioning.** The API carries no version today beyond `/v1/` on two
   control-plane paths. The umbrella's proposed BOOT-02 has the executor and
@@ -870,3 +872,316 @@ word in that session (umbrella a11):
 At Publish: the merge of its pull request and the tag `v0.1.0` (a8).
 
 Not needed: packages, Pages, secrets, or any change to `buildwarden-relay`.
+
+## Defaults and overrides
+
+This item adds no default, override or fallback to the relay, the collector,
+the executor, `warden` or any driver, and no relay setting: the claim gains
+and loses no field (RELAY-08).
+
+It adds these to the tooling:
+
+| Default | Why it is the obvious one | Override, used exclusively |
+|---|---|---|
+| `make conformance` runs every target in `tools/conformance/targets/` | A developer who names nothing wants the whole check CI runs | `TARGETS="relay-host collector-disk"` runs exactly those |
+| The harness comes from the module version in `tools/conformance/go.mod` | It is the release this repository claims to implement | `SPECS_DIR=<checkout>` runs the harness from a local checkout of the specs repository instead, and prints that the run is not the pin. CI never sets it |
+| The harness runs every suite the target's role has | A target is conformant only if all of them pass | `-suite <name>`, repeatable, runs exactly those |
+
+No fallback is added, and three that might be expected are rejected:
+
+- A target that cannot run on the host (the relay targets off Linux, or
+  without root or user namespaces; `relay-oci` without a container runtime)
+  is an error that names what is missing. It is not skipped, and `exec` is
+  not tried in place of `oci` (GLOBAL-11).
+- A failed case is not retried (TEST-04).
+- A pin that cannot be fetched fails the run. There is no cached or bundled
+  copy of an older release.
+
+The specifications record defaults and named fallbacks that already exist and
+that earlier designs settled; none changes: the absent `upstream_dns` default
+and the resolver list's in-order failover (`hyperv-relay-per-build-channel`),
+what each mode does with an absent `build_link`, host mode's `--subnet`
+included (`build-link-subnet`), the empty bootstrap config and its `append`
+trust mode (`unified-bootstrap`), and the disk collector's copy where it
+cannot create a capture symlink.
+
+## Cross-driver impact
+
+No driver is named in `drivers`, and none is affected. No file under
+`driver/` changes, and no shared package (`relay/`, `relaycfg/`,
+`collector/`, `ledger/`, `bootstrap/`) changes either (Decision 11), so no
+driver's build path differs after this item. Every driver's later seam
+changes are affected the same way: a change to a listed seam file must move
+the pin.
+
+## Rule changes
+
+Four amendments. Each is made in Implement, after the review approves it by
+name (FLOW-14). RELAY-05 is not among them (a1).
+
+### TEST-05 (amend), `docs/development/testing.md`, `tools/tier1/rules.yaml`
+
+**Why:** after this item the contract tests for the relay's and the
+collector's seams are the specs repository's suites, run black-box. The rule
+as written describes Go tests inside this repository.
+
+**Current wording:**
+
+> ### TEST-05 — Contract tests for the seams
+>
+> **Severity:** MUST
+> **Check:** automated + agent-judgment
+>
+> The relay and executor public contracts (the GLOBAL-08 versioned seams) carry
+> conformance / round-trip tests, so a third-party substitute has something to verify
+> against:
+>
+> - RELAY-02 byte-exact round-trip (sent equals recorded),
+> - RELAY-05 signature round-trip plus reader backward-compatibility,
+> - EXEC-04 protocol conformance.
+
+**Proposed wording:**
+
+> ### TEST-05 — Conformance suites for the seams
+>
+> **Severity:** MUST
+> **Check:** automated + agent-judgment
+>
+> The GLOBAL-08 versioned seams are specified in the specs repository,
+> `buildwarden/buildwarden-specs`, and each specification has a black-box
+> conformance suite there, so a substitute written in any language has
+> something to verify against. This repository pins one tagged release of the
+> specs repository in `tools/conformance/go.mod` and runs that release's
+> suites against the components it holds, in the `conformance` workflow
+> (TEST-02):
+>
+> - the relay suite against the Go relay in each of its modes (RELAY-04) and
+>   as its OCI image: the claim protocol, the relay's side of the collector
+>   protocol, the relay guest API, and the RELAY-02 byte-exact round-trip
+>   (sent equals recorded);
+> - the collector suites against the disk collector (`cmd/collector`): both
+>   parts of the collector protocol, and the claimant's side of the claim
+>   protocol.
+>
+> A seam's contract tests are added to its suite in the specs repository,
+> not to this repository. Two contracts stay as tests here until a suite
+> covers them: RELAY-05's signature round-trip and reader
+> backward-compatibility (`relay/`, `ledger/`), and EXEC-04's protocol
+> conformance (`cmd/warden-io/`).
+>
+> The automated part is the `conformance` workflow and `make test`; the
+> agent part judges whether a seam change added its cases to the suite.
+
+**Severity and check:** MUST and `automated + agent-judgment`, before and
+after.
+
+**Enforcement change:** in `tools/tier1/rules.yaml` the TEST-05 entry's owner
+changes from `"make test (the round-trip tests exist as tests)"` to
+`"the conformance workflow (the specs repository's suites at the pinned
+release) and make test (the ledger round-trip tests)"`. No check code
+changes.
+
+### TEST-02 (amend), `docs/development/testing.md`
+
+**Why:** TEST-02 lists where each tier runs today. The `conformance`
+workflow is a new tier-1 run and the list would be incomplete without it.
+
+**Current wording** (the tier-1 bullet of "Where each tier runs today"):
+
+> - Tier 1: the `integration` workflow (`make integration-test` on a hosted
+>   Ubuntu runner with Docker). It runs on PRs that reach `driver/container/`,
+>   the `driver/` root, a shared package (`relay/`, `ledger/`, `collector/`),
+>   `cmd/`, `test-integration.sh`, a `Dockerfile` or `go.mod`; weekly on
+>   `main`; and on demand for a branch that has the workflow
+>   (`gh workflow run integration.yml --ref <branch>`).
+
+**Proposed wording** (the same bullet, with one sentence added at its end):
+
+> - Tier 1: the `integration` workflow (`make integration-test` on a hosted
+>   Ubuntu runner with Docker). It runs on PRs that reach `driver/container/`,
+>   the `driver/` root, a shared package (`relay/`, `ledger/`, `collector/`),
+>   `cmd/`, `test-integration.sh`, a `Dockerfile` or `go.mod`; weekly on
+>   `main`; and on demand for a branch that has the workflow
+>   (`gh workflow run integration.yml --ref <branch>`). The `conformance`
+>   workflow (TEST-05) is tier 1 too: it runs the seams' suites on hosted
+>   runners, on PRs that reach a seam's code, the relay, the collector,
+>   `Dockerfile.relay` or `tools/conformance/`; weekly on `main`; and on
+>   demand.
+
+**Severity and check:** unchanged (MUST; automated + agent-judgment). No
+enforcement change: the workflow is new and is none of the jobs FLOW-14
+names.
+
+### GLOBAL-08 (amend), `docs/development/global.md`, `tools/tier1/rules.yaml`
+
+**Why:** the seams' contract documents now exist, in another repository,
+and the bootstrap config becomes a written seam. The rule's automated part
+says "contract document", which this repository no longer holds for these
+seams.
+
+**Current wording** (the executor bullet of "Versioned seams", and the
+rule's last paragraph):
+
+> - Executor public interface: the `initialize` invocation contract plus its
+>   side of the relay protocol.
+
+> The automated part requires a change touching a versioned seam to also change that
+> seam's contract document.
+
+**Proposed wording:**
+
+> - Executor public interface: the `initialize` invocation contract, the
+>   bootstrap config it reads (`bootstrap/`), plus its side of the relay
+>   protocol.
+
+> The claim protocol, the collector protocol, the relay guest API, the
+> `initialize` contract and the bootstrap config are written as
+> specifications in the specs repository, `buildwarden/buildwarden-specs`
+> (TEST-05); the ledger format is written in `specs/` (RELAY-05). A change
+> to one of these seams changes its specification first: the specification
+> is released, and the change here moves the pin
+> (`tools/conformance/go.mod`) to that release.
+>
+> The automated part requires a change touching a versioned seam's code, as
+> `tools/tier1/rules.yaml` lists it, to also move the pin.
+
+**Severity and check:** unchanged (MUST; automated + agent-judgment).
+
+**Enforcement change:** `tools/tier1/rules.yaml` gets the `seams` entries
+under **Tier 1's seam list**, in place of `seams: []`. The `seam-contract`
+check's code does not change; it starts reporting a change to a listed file
+that does not also change `tools/conformance/go.mod`. Because this edits
+`tools/tier1/`, Review also runs the merge base's tier 1 with the branch's
+configuration (FLOW-14); it should report nothing new on this branch, which
+touches none of the listed files.
+
+### EXEC-04 (amend), `docs/development/in-vm-executor.md`
+
+**Why:** the same change, for the executor's rule.
+
+**Current wording** (the rule's last paragraph):
+
+> Changes follow the pre/post-1.0 seam posture and update the contract document. The
+> automated part requires a change to the contract surface to also change its contract
+> doc.
+
+**Proposed wording:**
+
+> Changes follow the pre/post-1.0 seam posture and change the specification
+> first (GLOBAL-08): `executor-initialize`, `bootstrap-config` and
+> `relay-guest-api` in the specs repository. The automated part requires a
+> change to the contract surface, as `tools/tier1/rules.yaml` lists it, to
+> also move the specs pin (`tools/conformance/go.mod`).
+
+**Severity and check:** unchanged (MUST; automated + agent-judgment). No
+enforcement change beyond GLOBAL-08's.
+
+## Security note
+
+Not required: `security_boundary` is `none`. No code on the host, environment
+or relay boundary changes, and no relay code changes at all (GLOBAL-06).
+
+What the review should still know: the specifications state today's posture
+on the environment-to-relay boundary, and the relay suite is the check the
+umbrella's Security note relies on when the Rust relay replaces the Go one.
+Its cases therefore include the refusals, not only the happy paths: a claim
+without or with the wrong token, a claim that would put a resolver or an
+upstream dial inside the build link, the host-mode dial filter, unsafe
+artifact and context names, and the RELAY-02 round trip. D9 and D13 are the
+divergences with a security or measurement angle (a build can end itself
+with a `GET`; a failed setup reports nothing), and both are today's
+behaviour.
+
+The harness's network sandbox runs as root on CI runners and creates
+namespaces, virtual links and container networks there. It runs only the
+relay binary or image named in the target file.
+
+## Validation plan
+
+- **Tier 0** (`make test`, `make lint`): the book-link test (links to the
+  specs repository name the pinned ref); tier 1's rule index parses the
+  amended rules, and `rules.yaml` parses with the new `seams` entries;
+  `tier1 designs` accepts this design. In the specs repository: its `ci`
+  workflow, including the suites' self-test.
+- **Tier 1** (the `conformance` workflow): the `relay` suite against
+  `dist/relay` in host, vm and container mode and against the image built
+  from `Dockerfile.relay`, on `ubuntu-latest`; the two collector suites
+  against `dist/collector` on `ubuntu-latest`, `macos-latest` and
+  `windows-latest`. This is S1's done-when: the suites pass against the Go
+  relay and the disk collector. The existing `integration` workflow does not
+  run for this branch's paths and is not affected.
+- **Tier 2, native:** nothing blocks. The change reaches no driver's tree
+  and alters no behaviour a native host exercises (FLOW-09). Two gaps are
+  tracked, in `tier2_gaps` and on the native-gap backlog:
+  - `macos-vz`: the `relay` suite against the host-mode relay on macOS,
+    where vz runs it. The frame link is the same code as on Linux; what
+    differs is the platform (the link kickstart, socketpair behaviour). The
+    harness's upstream needs loopback aliases in the documentation ranges and
+    ports 53, 80 and 443, so the session needs root; if it cannot have it,
+    it records the entry as blocked with that reason.
+  - `qemu-any`: the `relay` suite against the Go relay VM image
+    (`tools/relay-vm`). It waits for the VM launcher (a6) and is recorded so
+    that item finds it.
+  The Hyper-V relay VM is the same relay binary in vm mode behind a
+  different boot channel, which is seam 8's; no entry is added for it.
+
+## Implementation plan
+
+Tasks name their repository: **S** is `buildwarden/buildwarden-specs`, on
+its branch `feat/seam-specs`; **K** is this repository, on this branch.
+
+0. (Human, umbrella a11, before this phase) The repository exists as **What
+   Jeff creates** says. Implement checks it first and stops with a blocking
+   question if it does not (a2).
+1. **S** Layout, `README.md`, `CHANGELOG.md`, `go.mod`, `.entire/settings.json`
+   naming the private sessions repository, and the `ci` and `flow18`
+   workflows (FLOW-17, FLOW-18, a4).
+2. **S** `relay-claim/v1.md` with its two schemas (GLOBAL-08, RELAY-08,
+   RELAY-04).
+3. **S** `collector/v1.md`, parts A and B, with the completion schema
+   (RELAY-07, umbrella a1).
+4. **S** `relay-guest-api/v1.md` (BOOT-04, RELAY-02).
+5. **S** `executor-initialize/v1.md` and `bootstrap-config/v1.md` with its
+   schema (EXEC-04, BOOT-05).
+6. **S** The harness core: target files, the `exec`, `oci` and `external`
+   launchers, the Linux network sandbox, the frame link, the claimant,
+   collector, relay, resolver and origin roles, and the ledger verifier
+   (GLOBAL-03, GLOBAL-07, GLOBAL-09 to GLOBAL-11).
+7. **S** The `relay` suite, then the `collector-outputs` and
+   `collector-inputs` suites, each case naming its requirements; the
+   self-test; the requirement-coverage check (TEST-04, TEST-05, TEST-07).
+8. **K** `tools/conformance/` (the module and the five target files),
+   `make conformance`, and the `conformance` workflow (TEST-02, TEST-05,
+   GLOBAL-09 to GLOBAL-11). The suites pass against the Go relay and the
+   disk collector; a case that fails because the specification misread the
+   code is fixed in **S**, and one that fails because the code misbehaves
+   goes back to Design (FLOW-06, Decision 1).
+9. **K** The rule changes, each as approved: TEST-05, TEST-02, GLOBAL-08,
+   EXEC-04, and `tools/tier1/rules.yaml` (FLOW-14, LINT-02).
+10. **K** The book page, the links in `concepts/architecture.md` and
+    `specs/README.md`, the link test, `AGENTS.md`, `CONTRIBUTING.md`
+    (UX-01, FLOW-15).
+11. **S** The `release` and `implementations` workflows; open the pull
+    request (FLOW-08).
+12. (Human, Publish) Jeff merges the specs pull request and pushes
+    `v0.1.0`. **K** `f6-open-pr` moves the pin to the tag.
+
+After the merge, filed through intake as program items: seam 4's move (a1);
+and, if the review wants them ahead of the items that would otherwise carry
+them, any divergence it picks from **Divergences found**.
+
+## Design review
+
+None yet.
+
+## Consolidation
+
+Filled in at Publish.
+
+## Rollback notes
+
+None.
+
+## Archive summary
+
+Filled in at Publish.
