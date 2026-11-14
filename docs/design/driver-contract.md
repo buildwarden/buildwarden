@@ -1134,7 +1134,12 @@ existing driver-owned keys).
   UX-03 asks for a notice and a window when a surface is renamed, so
   this needs your word that it is an addition and not a rename; (e) as
   (a), with another window, named in the review. Recommended: (a).
-  Confirm.
+  Confirm. Two things the design decides with a4's answer are yours to
+  confirm or change in the same breath, since your sentence leaves them
+  open as well: that version 1's common keys are the two ages and no
+  others, and that in one file the driver's own table is read before
+  `[driver]` while the order of the files stays ORCH-03's (rejected:
+  the more specific table winning across files).
 
 ### Retired
 
@@ -2427,11 +2432,11 @@ to each.
 | C11 | Read a key under an old name only where the specification lists that name for the driver's own name, as the same key written in the same file; refuse a file that sets a key under both names, with a `fixable` error that names the file and both; and say on stderr, once per file and old name, that the name is deprecated and what the new one is. A driver whose name has no old names reads none | Static tier: the old names in `describe.keys` are the specification's for that name (C4), and a wrong type under an old name is refused (C6). That a value under an old name is used, and that a file with both is refused, is **not checkable against an arbitrary binary**, since the suite cannot make a value a driver accepts; held by the kit's tests, for each of the seven |
 
 A driver that takes no flag and reads no key lists none and has nothing
-to do here but C2's refusal. C11 binds only a driver that carries one
-of the five bundled names, since no other name has an old key. One that reads keys needs a parser for
+to do here but C2's refusal. One that reads keys needs a parser for
 TOML v1.1.0 in its own language, since it must read every file `warden`
 reads; a parser that stops at TOML 1.0 is not enough. That is part of
-what a21's answer costs.
+what a21's answer costs. C11 binds only a driver that carries one of
+the five bundled names: no other name has an old key.
 
 **Where a driver's configuration lives** (Decision 9; a4, answered; the
 old names are a25, open). The review's answer to a4, in Jeff's words: "A
@@ -5312,8 +5317,8 @@ each task leaves `make test` and `make lint` green (FLOW-17).
     UX-02, UX-04, UX-09, ORCH-04, ORCH-05).
 18. Move every driver-owned flag and key into its driver's `Setting`
     declaration, the seven keys under their new names in `[driver]` and
-    `[driver.<name>]` with their old names as `Aliases`; `warden` finds the driver before parsing flags (the
-    `ext` form, the command, then the scan for `--driver`), registers
+    `[driver.<name>]` with their old names as `Aliases`; `warden` finds
+    the driver before parsing flags (the `ext` form, the command, then the scan for `--driver`), registers
     the flags the selected driver declares, refuses one nobody declares
     and a line whose parsed `--driver` is not the scanned one, and
     passes the driver's on in `args` with `config_files`; `warden clean`
@@ -5605,6 +5610,70 @@ seventeen items), a18 (the umbrella's wording, sentence by sentence), a8
 a9 (both derived again after a21's answer), and a24, which a21's answer
 raised (how `warden` tells a driver's flags from its own); then the
 outcome.
+
+### 2026-11-14, second sitting, continued: a24, a9 and a4 answered; a4 folded in
+
+Read at `6d73ac2`. The sitting is still not finished and has no outcome.
+Jeff answered three more of the assumed questions, which makes seventeen
+of twenty answered; this fold-in adds a twenty-first. No rule change and
+no amendment to the umbrella has been put to him yet.
+
+Two answers confirm the recommendation and change no text but their own
+status:
+
+- a24 (a): `describe` declares each flag's name, arity, commands and
+  usage, for parsing and help only; `warden` refuses a flag nobody
+  declares (Decision 22).
+- a9 (a): the shared VM settings are `warden`'s for K1, sent in
+  `start.vm`; considered again in K2 (Decision 8).
+
+One answer departs from the redraft and is folded in:
+
+- **a4, where a driver's configuration lives: changed.** The redraft
+  recommended `[driver.<name>]` in any shape, with the seven existing
+  keys left where they are. Jeff: "A small subset of common keys under
+  driver with overrides and custom options under driver.<name>".
+  *Folded in:* Decision 9 and **Configuration**, *Where a driver's
+  configuration lives*, are rewritten. `[driver]` holds the common
+  keys, which the contract's specification names with their type and
+  meaning, and a driver lists in `describe` the ones it honours.
+  Version 1 names two, `image_refresh_after` and `image_min_grace`,
+  the only keys two bundled drivers read today with one meaning; the
+  candidates left off, and why, are in a table. `[driver.<name>]`
+  holds that driver's overrides of the common keys and its own keys.
+  The shared VM settings stay `warden`'s in `[vm]` (a9), and the
+  section says how `[driver]` would relate to them if K2 answers a9
+  otherwise. *Decided here, and to be confirmed with the rest:* in one
+  file the driver's own table is read before `[driver]`, and the order
+  of the files is ORCH-03's, unchanged; the other order, the more
+  specific table across files, is rejected because the user's file
+  would then outrank the project's for one setting. Two worked
+  examples with both files show the difference. *Asked, because his
+  sentence does not settle it:* what becomes of the seven existing
+  keys (a25, new). The design is written on its recommended answer:
+  all seven take their places in the two tables and their old names
+  are read as deprecated aliases, with a warning, a refusal of a file
+  that sets both names, and a window of at least two releases. Also
+  changed: `describe`'s `keys`, the kit's `Setting` (`Common`,
+  `Aliases`), `Resolve` and `Settings`, the settings table, the
+  requirements C4, C6 and C8 and a new C11, the errors table, the
+  suite's static tier and the fake, Behaviour 13 and a new 18, Defaults
+  and overrides, ORCH-03's proposed wording (its last sentence
+  followed a4) and what the surface check can see of a rename, the
+  Security note, Risks, the validation and implementation plans, the
+  overview, the front matter, and a5 and a8 where they list what
+  changed.
+
+Also recorded: the `[runtime] cli` finding (a project's file can name a
+program to run) was filed on Jeff's word as its own security fix, queue
+item `runtime-cli-project-path`. K1 does not carry it; K1 renames the
+key it is about, so the design says that whichever change merges second
+applies the refusal under both names.
+
+Still to come in this sitting: a5 (the behaviour that changes, now
+eighteen items), a18 (the umbrella's wording, sentence by sentence), a8
+(the rule changes, each by name, and the Bootstrap comparison) and a25
+(the seven existing keys); then the outcome.
 
 ## Consolidation
 
