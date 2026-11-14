@@ -748,10 +748,11 @@ protocol. Who starts a collector, and where it runs, is outside it: on
 `main` the session starts one in the claimant's process for each build, and
 the redrafted driver contract proposes that `warden` does (its a12).
 
-Common to both parts: HTTP, over the tunnel or to a `collector_url`. When the
-collector has a token, every `/v1/` endpoint except `/v1/status` requires it
-in the `Authorization` header and answers 401 `unauthorized` without it;
-`/healthz` and `/v1/status` never do. The relay sends
+Common to both parts: HTTP, over the tunnel or to a `collector_url`. Where
+a session has a token, every `/v1/` endpoint except `/v1/status` requires
+it in the `Authorization` header, and the collector answers 401
+`unauthorized` to a request without a token it knows; `/healthz` and
+`/v1/status` never require one. The relay sends
 `Authorization: Bearer <token>`; the collector also takes the token with no
 scheme (D8). Names: an artifact name is a relative
 slash path of at most 255 bytes whose segments use `[A-Za-z0-9._-]` and start
