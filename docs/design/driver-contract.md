@@ -10,7 +10,8 @@ seams: [driver-contract, relay-claim, collector, bootstrap-model]
                          # for every driver. bootstrap-model: BOOT-02's wording (BOOT-07).
 surfaces: [cli, config, output]  # cli: `warden driver list`, a path in --driver, a driver's
                          # flags declared in describe and shown in help; config:
-                         # [driver.<name>], read by the driver; [build] teardown_timeout;
+                         # [driver] (the common keys) and [driver.<name>], read by the
+                         # driver, with seven keys renamed into them; [build] teardown_timeout;
                          # output: <output>/driver.json
 security_boundary: host-env  # the code that builds the isolation is chosen at run time by a
                          # lookup. Also env-relay: the driver starts the relay warden claims.
@@ -48,7 +49,8 @@ rule_changes:
       tools/tier1/surface/surface.go, tools/tier1/surface/surface_test.go,
       tools/tier1/surface/testdata/driver.go.txt]}
 concepts: [driver-contract, driver-binaries, driver-commands, driver-discovery, driver-conformance,
-           driver-options, driver-owned-config, driver-config-reading, teardown-timeout,
+           driver-options, driver-owned-config, driver-common-keys, driver-config-reading,
+           config-key-aliases, teardown-timeout,
            kit, drivercmd, build-sequence, session, claim,
            collector, collector-handoff, relay-source, relay-release-forms, reap, build-record,
            build-lock, doctor,
@@ -729,7 +731,7 @@ existing driver-owned keys).
 
 **The rest**
 
-- **a5. The behaviour that changes.** Proceeding with the seventeen
+- **a5. The behaviour that changes.** Proceeding with the eighteen
   differences listed under **Behaviour**. In short: (1) flags and help
   follow the selected driver, and the driver's part of help comes from
   its `describe`; (2) a flag that neither `warden` nor the selected
@@ -764,11 +766,19 @@ existing driver-owned keys).
   driver binary; (16) a `warden-driver-<name>` earlier on `PATH` than the
   bundled copy runs in place of the bundled driver of that name; (17)
   `[build] teardown_timeout` is
-  new. Re-derived on 2026-11-14 after the answers to a16, a20 and a21:
+  new; (18) a driver's keys live in `[driver]` (the common keys) and
+  `[driver.<name>]`, the seven existing driver-owned keys are renamed
+  into them, each old name is still read and prints one warning line
+  per command, a file that sets a key under both names is refused, and
+  one driver can be given its own value of a common key.
+  Re-derived on 2026-11-14 after the answers to a16, a20 and a21, and
+  again after the answer to a4:
   none of the redraft's fifteen goes; 1, 3, 4, 8, 10, 12 and 13 change
   (3 loses the hint that names the driver a flag belongs to, and 13
-  loses the type check of the seven keys under every driver); 16 and 17
-  are new. Options: (a) accept all seventeen; (b) refuse nothing new:
+  loses the type check of the seven keys under every driver); 16, 17
+  and 18 are new. What 18 does with the old names is asked on its own
+  (a25); if a25 is answered otherwise, 18 is rewritten to that answer.
+  Options: (a) accept all eighteen; (b) refuse nothing new:
   `warden` also asks the other four bundled drivers what flags they
   declare and accepts and ignores those, as today (2 goes, and 3 keeps
   its hint), at the cost of running or calling every bundled driver's
@@ -867,13 +877,23 @@ existing driver-owned keys).
   one paragraph (a driver reads its own flags and keys, from the files
   `warden` names to it, with the same precedence and before any work,
   through the kit or as the contract requires; a driver run as a
-  separate binary does so in its own process) and a clause on its last
+  separate binary does so in its own process; the keys the contract
+  names as common live in `[driver]`, and a driver's overrides of those
+  and its own keys in `[driver.<name>]`; within one file the driver's
+  own table is read before `[driver]`, and the order of the files does
+  not change) and a clause on its last
   sentence saying where the automated part looks. GLOBAL-08's sentence on a driver
   from outside was asked on its own and confirmed (a23). Re-derived on
   2026-11-14 after the answer to a21: the list has the same ten entries;
   what differs is that ORCH-03 is now reworded and no longer
   enforcement-only, and that the surface check reads `drivercmd.Setting`
-  literals. a16 changes no rule, but it reaches the Bootstrap comparison
+  literals. Derived once more after the answer to a4: still ten
+  entries; ORCH-03's paragraph ends with the two tables and their
+  order, where it said that the existing driver-owned keys keep their
+  tables; UX-03's wording does not change, and the design now takes its
+  route for the first time, a rename with deprecated aliases, which the
+  automated part cannot see because it knows a key by the last element
+  of its path (**Rule changes**; a25). a16 changes no rule, but it reaches the Bootstrap comparison
   this question accepts: BOOT-02's per-driver effect and its security
   cost now say what a file that takes a bundled name changes. UX-07 and UX-08 are kept by the design and quoted under
   **Configuration**; neither needs new words. Options: (a) as stated;
@@ -3026,7 +3046,7 @@ write a JSON line, exit with the right code. It needs no Dockerfile
 translator, no collector and no claim client. It does need to read its
 own configuration: to declare its flags, take them from `args`, and, if
 it has keys, parse the TOML files it is named and apply the precedence
-itself (requirements C1 to C10 under **Configuration**). A driver with no
+itself (requirements C1 to C11 under **Configuration**). A driver with no
 flag and no key has only C2's refusal to write. The reference fake (**The
 conformance suite**) is written without the kit and has one of each, to
 show what it takes.
@@ -3390,12 +3410,12 @@ new `driver-contract` job (**Validation plan**).
 | Check | Rule |
 |---|---|
 | `describe` exits 0 within 10 s, prints one JSON object that matches the schema and nothing else, and prints the same on a second call | GLOBAL-08 |
-| The name matches the file name; `run` and `reap` are listed; every flag has a name of the allowed form that `warden` does not use on the same command, a `value`, a usage text and only commands the driver lists (C1); every key is under `driver.<name>.` or is one of the seven existing keys listed for that name, and has a type of the allowed set and only commands the driver lists (C4) | UX-01, a4, a24 |
+| The name matches the file name; `run` and `reap` are listed; every flag has a name of the allowed form that `warden` does not use on the same command, a `value`, a usage text and only commands the driver lists (C1); every key is a common key of the contract version, listed as `driver.<key>` with that key's type, or is under `driver.<name>.` without a common key's name; every old name is one the specification lists for that driver name; and each key has a type of the allowed set and only commands the driver lists (C4, C11) | UX-01, a4, a24, a25 |
 | `capabilities` are consistent: `attach` is listed exactly when `shell`; `ext` exactly when the `ext` list is not empty; `image_os` exactly when `image-prepare` is | |
 | A probe of each listed command with an element in `args` that the driver did not declare exits 1 with a `fixable` error that names the element, and creates nothing (C2) | UX-04, UX-08 |
 | With an invalid `warden.toml` in the driver's working directory and an invalid config under its `HOME`, and `config_files` empty, a probe ends as it does with neither present: the driver reads only the files it is named (C3) | ORCH-03 |
 | With a config file that holds `warden`'s tables, another driver's table and an unknown table, one of them written with syntax only TOML v1.1.0 has, a probe ends as it does with no file (C5) | ORCH-03 |
-| For each key the driver lists: a file in `config_files` that is not TOML makes a probe of a command the key names exit 1 with a `fixable` error naming the file; and, for a key whose type is not `any`, a file that gives the key a value of another TOML type makes it exit 1 naming the file and the key. Each creates nothing (C6, C7). The container driver's `runtime.cli` is checked this way, with `[runtime] cli = 5` | UX-08 |
+| For each key the driver lists: a file in `config_files` that is not TOML makes a probe of a command the key names exit 1 with a `fixable` error naming the file; and, for a key whose type is not `any`, a file that gives the key a value of another TOML type makes it exit 1 naming the file and the key. Each creates nothing (C6, C7). The wrong type is given at each place the key may be written: a common key in `[driver]` and in the driver's own table, and a key with an old name under that name too. The container driver's `cli` is checked this way, with `[driver.container] cli = 5` and with `[runtime] cli = 5` | UX-08 |
 | `reap` of an ID that never existed, sent a `config_files` entry whose file does not exist, ends as it does with no file listed (C10) | ORCH-04 |
 | Each listed command answers a probe within 30 s: exit 0, or exit 1 with a `fixable` error on a host that lacks what the driver needs. Either way it creates nothing in the temporary directory the suite gave it | UX-08 |
 | Each command of the contract that is not listed exits 3 | |
@@ -3450,10 +3470,13 @@ before it starts the environment, and by the build-link suite.
 **The reference fake**, `warden-driver-fake` (`conformance/driver/fake`),
 is a Go program that uses none of the kit: the standard library and a
 TOML parser. It declares one flag with a value (`--greeting`), one
-switch and one key (`driver.fake.greeting`), reads them by hand with the
-precedence the specification states, and echoes the greeting and the
-level it came from on stderr in a probe, which is how the suite's
-self-test holds it to C8.
+switch and one key of its own (`driver.fake.greeting`), and it honours
+one common key, `image_refresh_after`, which it does nothing with but
+echo. It reads them by hand with the precedence the specification
+states, and in a probe echoes each value on stderr with the file and
+the table it came from, which is how the suite's self-test holds it to
+C8: the two worked examples under **Configuration** are two of its
+cases. It has no old name, since `fake` is not a bundled name.
 Its "relay" is `stubrelay` (`conformance/driver/stubrelay`), a separate
 test program built on `relaycfg`: it accepts the claim, reports ready, and
 plays the guest by reading directives from the build script the collector
@@ -3477,7 +3500,9 @@ command, and it has one `ext` subcommand (`echo`). It has three jobs:
   stderr, a wrong exit code, an undeclared command answered, a `reap`
   that reports success without looking, an undeclared argument accepted,
   a `warden.toml` read from the working directory, a table it does not
-  own refused, the user's file read before the project's, a wrong type
+  own refused, the user's file read before the project's, `[driver]`
+  read before its own table in one file, its own table in the user's
+  file taken over `[driver]` in the project's, a wrong type
   in its key accepted, a `reap` that fails when a recorded config file
   is gone), and the
   suite's self-test checks that each of its checks fails under the
@@ -3510,10 +3535,11 @@ role (a17).
 
 ### Behaviour
 
-Seventeen things change for a user (a5, open). Everything else is meant
+Eighteen things change for a user (a5, open). Everything else is meant
 to be identical. The list was re-derived after the review's answers of
-2026-11-14 to a16, a20 and a21. Of the redraft's fifteen, none goes;
-1, 3, 4, 8, 10, 12 and 13 change, and 16 and 17 are new. Each says so.
+2026-11-14 to a16, a20 and a21, and again after its answer to a4. Of
+the redraft's fifteen, none goes; 1, 3, 4, 8, 10, 12 and 13 change, and
+16, 17 and 18 are new. Each says so.
 
 1. **Flags and help follow the selected driver.** `warden build --help`
    lists `warden`'s flags and, in a section of its own, the flags the
@@ -3636,7 +3662,9 @@ to be identical. The list was re-derived after the review's answers of
     `warden`'s own checks, and still before anything is created.
     *Changed by a21:* the redraft kept the load-time type check of the
     seven under every driver; with the driver as their one reader it
-    goes.
+    goes. After a4 the same holds for a key under its new name: a
+    common key in `[driver]` is checked only by a driver that honours
+    it, and a key in `[driver.<name>]` only when `<name>` is selected.
 14. **`--timeout` counts from the moment `warden` starts the driver, on
     every driver.** Each driver started its own clock, at slightly
     different points of its preflight. *Stands.*
@@ -3657,6 +3685,22 @@ to be identical. The list was re-derived after the review's answers of
     for that `reap`, 60 s unless
     set. Additive; nothing waited or killed this way before. *New, from
     a20.*
+18. **A driver's keys live in `[driver]` and `[driver.<name>]`, and the
+    seven existing ones are renamed into them.** `[driver]` holds the
+    two common keys, `image_refresh_after` and `image_min_grace`;
+    `[driver.container]` holds `cli` and `relay_image`;
+    `[driver.hyperv]` holds `network`, `windows_image` and
+    `windows_image_update`. Three things are new for a user. The seven
+    old names (`[runtime] cli` and `relay_image`, and the five in
+    `[vm]`) are still read and mean what they meant, and each one a
+    file sets now prints one warning line per command that names the
+    new key. A file that sets a key under both names is refused. And
+    one driver can be given its own value of a common key
+    (`[driver.qemu] image_refresh_after`), which today's one pair in
+    `[vm]` cannot express. A config that is not edited resolves to the
+    same values as today. Help that names a key names the new one
+    (`--network`'s usage line). *New, from a4;* what happens to the old
+    names is a25.
 
 What does not change, although the code behind it moves:
 
@@ -3669,7 +3713,8 @@ What does not change, although the code behind it moves:
   now come from the driver's stderr.
 - Every driver flag keeps its name, its two spellings (`--runtime docker`
   and `--runtime=docker`) and the commands it is accepted on, and every
-  driver key keeps its table, name and meaning. The precedence between
+  driver key keeps its name and meaning and is still read in the table
+  it has today (18). The precedence between
   a flag, `WARDEN_CTR_CLI` or `WARDEN_IMAGE`, the project's file and the
   user's is the same; the kit applies it where `cmd/warden` did.
 - The environment variables the drivers read for themselves (**Defaults
@@ -3681,8 +3726,10 @@ What does not change, although the code behind it moves:
 
 `docs/book/src/guide/cli.md`, `configuration.md`, `output.md` and
 `drivers.md` are updated for each in the same change (UX-01). No existing
-flag, subcommand, config key or environment variable is renamed or
-removed. Eleven flag-and-driver combinations that were accepted and
+flag, subcommand or environment variable is renamed, and nothing is
+removed. Seven config keys are renamed, each with its old name kept as
+a deprecated alias for a stated window, which is UX-03's route (18,
+a25). Eleven flag-and-driver combinations that were accepted and
 ignored are refused (2), which GLOBAL-10 asks for and for which UX-03
 would give a window (a5).
 
@@ -3700,7 +3747,7 @@ would give a window (a5).
   Dockerfile and is built with `--script` (the choice is made inside the
   driver today, in `linuxguest.ContainerfileImage`, so a request table
   alone would not see it). The later commits may change a golden only
-  for the seventeen differences above, so each shows up as a reviewed
+  for the eighteen differences above, so each shows up as a reviewed
   golden diff.
 - **The request tables become two tables, over the same rows.** Today one
   table of flags, environment and files is asserted against the
@@ -3710,7 +3757,9 @@ would give a window (a5).
   `Resolve` returns for that row, per driver. A setting lost on either
   side of the hand-over fails a test, and so does a precedence that
   differs from today's between a flag, a variable, the project's file
-  and the user's.
+  and the user's. The rows keep the seven keys under their old names,
+  which shows that a config nobody edits resolves as it does today;
+  each row is asserted again with the new names (Behaviour 18).
 - **The surface check.** Tier 1's extraction (Rule changes) must find the
   same set of flags and keys on the branch as on `main`. A flag or key
   lost in the move fails `surface-removed`.
@@ -3890,9 +3939,22 @@ tests there (GLOBAL-07, ORCH-05).
   not by itself deliver "a cloned repository cannot make `warden` run a
   binary it ships" for the default driver. After K1 the reader of that
   key is the container driver, which is why `config_files` carries each
-  file's level: the follow-up can refuse a path in `runtime.cli` from
-  the project's file inside the driver, with no change to the contract.
-  Each is to be filed as a follow-up item.
+  file's level: the follow-up can refuse a path in the container
+  driver's `cli` from the project's file inside the driver, with no
+  change to the contract. That one is filed, as the security fix
+  `runtime-cli-project-path`; K1 renames the key it is about, so
+  whichever of the two merges second applies the refusal under both
+  names (**Configuration**, the seven existing keys). The others are to
+  be filed as follow-up items.
+- **What a4's answer costs.** A driver written without the kit has two
+  places to read for a common key in each file, and the easy mistake is
+  the rejected order, the driver's own table across both files first;
+  the suite cannot see which place won (C8), so only the fake's
+  self-test and the specification's two examples hold it. The list of
+  common keys is short because today's inventory gives it two entries,
+  both about prepared Windows images; a key added later needs a new
+  contract version. And the rename prints a warning for every existing
+  config that sets one of the seven (Behaviour 18, a25).
 
 ### The overview (FLOW-15)
 
@@ -3947,7 +4009,8 @@ Each driver's skeleton replaces `StartBuild`:
 run (one process per build, or a linked driver's Run):
     <- start
     read its own configuration: its flags from start, the two existing
-        variables, its keys from the config files start names, with
+        variables, its keys from the config files start names (in each
+        file its own table, then [driver] for a common key), with
         warden's precedence                                    # the kit
     write the state file, if reap will need more than the ID   # per driver
     resolve the relay and the environment's image              # per driver
@@ -3999,16 +4062,18 @@ not listed is unchanged and `warden`'s.
 | `warden clean` runs `reap` for every build of the selected driver whose lock nobody holds, and removes the lock only when `reap` succeeds | **New** (a20) | No `warden` holds the lock, so the build is dead for this user. `reap` must be safe beside a driver that is still tearing down by itself | Nothing; a held lock's build is never touched |
 | What `clean` treats as live: the held locks (`keep_ids`) and, for the container driver, its process scan as today | **Changed**: the locks are added | Either sign is enough to keep a build | Nothing |
 | `--timeout` counts from the start of `run` | **Changed** slightly (Behaviour 14) | One clock for every driver | `--timeout` |
-| A driver setting nobody set | Unchanged per setting: the driver applies its own default (`network`: `warden-dev`; `slots`: 4 for hyperv, 16 for firecracker; `nat-prefix`: `192.168.240.0/20`; `host-ip`: `192.168.240.1`; `name`: `windows-server-2025`; `arch`: the host's; the two ages: `winguest`'s; `runtime`: the first of finch, docker, podman that answers `info`, found once per build and kept in its state file). **Changed reader** (a21): the driver resolves it, through the kit, where `cmd/warden` did | These are the values `cmd/warden` and the drivers apply today | The flag, else the setting's environment variable (the two that exist), else the project's `warden.toml`, else the user's config: today's order, applied by the kit to the `args` and `config_files` `warden` passes on. The first level that sets it is the value; it is not merged with a lower level, and a value that does not parse or cannot be used is an error naming where it came from, reported by the driver in its probe (UX-08) |
+| A driver setting nobody set | Unchanged per setting: the driver applies its own default (`network`: `warden-dev`; `slots`: 4 for hyperv, 16 for firecracker; `nat-prefix`: `192.168.240.0/20`; `host-ip`: `192.168.240.1`; `name`: `windows-server-2025`; `arch`: the host's; the two ages: `winguest`'s; `runtime`: the first of finch, docker, podman that answers `info`, found once per build and kept in its state file). **Changed reader** (a21): the driver resolves it, through the kit, where `cmd/warden` did | These are the values `cmd/warden` and the drivers apply today | The flag, else the setting's environment variable (the two that exist), else the project's `warden.toml`, else the user's config: today's order, applied by the kit to the `args` and `config_files` `warden` passes on. In each file a common key is read in the driver's own table and then in `[driver]` (the next row). The first place that sets it is the value; it is not merged with a lower one, and a value that does not parse or cannot be used is an error naming where it came from, reported by the driver in its probe (UX-08) |
 | Which config files a driver reads: those `warden` names in `config_files`, in that order, each with its level, and no other | **New** (a21) | `warden` and the driver must read the same files, and a driver that searched by itself could find others | Nothing. A driver started with no request, such as a service, reads none and uses its defaults |
 | A driver's flag given with an empty value, or a driver's variable that is set but empty: not set, and the next level is read | Unchanged in effect, **changed reader** (a21): `cmd/warden` tests for the empty string today; the contract now states it for every driver (C8) | It is today's behaviour for every such flag and both variables | Nothing; give a value |
 | A driver's switch: on when present | Unchanged in effect: `--force=false` and a repeated switch are settled by `warden`, the last occurrence winning, as the command line does today | A driver reads one form | Nothing |
 | A flag that neither `warden` nor the selected driver declares | **Changed** (Behaviour 2): refused by `warden` as it parses. Eleven flags were ignored | A provided value that cannot be used is an error (GLOBAL-10), and `warden` cannot place a flag whose arity it does not know (a24) | Nothing: drop the flag or select the driver that takes it |
 | A driver's key whose value has the wrong type or cannot be used | **Changed** (Behaviour 13): refused by the driver that owns the key, in its probe, when that driver is selected. Under another driver it is not read; today a wrong TOML type in the seven existing keys fails the load for every driver | Each key has one reader, and one `warden.toml` serves several drivers | Nothing: fix the value |
-| Where a driver's keys live: `[driver.<name>]`, in any shape | **New rule** of the contract (a4, open) | It cannot collide with `warden`'s tables or another driver's, and says whose it is | The seven existing keys keep their tables, each read by the driver the specification names for it |
+| Where a driver's keys live: the common keys in `[driver]`; a driver's overrides of them and its own keys, in any shape, in `[driver.<name>]` | **New rule** of the contract (a4, answered) | A key says whose it is by its table; it cannot collide with `warden`'s tables or another driver's; and a value that several drivers mean the same thing by is written once | Nothing: a driver reads no other table, apart from the seven old names two rows below |
+| A common key, for one driver: the value in `[driver]`, when the driver's own table in that file does not set the key | **New** (a4). The two that exist were one pair in `[vm]` for qemu and hyperv alike | What is set for every driver holds for each driver that honours the key, until something says otherwise for that one | `[driver.<name>].<key>` in the same file, or either table in a higher file: the driver's own table wins within a file and the order of the files is unchanged. Absent means the key is not in that table of that file. An empty string is a value, not absence: it hides the lower places and, for the two ages, means the driver's default. A value in the driver's own table that cannot be used is an error; `[driver]`'s is not used in its place |
+| The seven existing driver-owned keys: each is read under its new name and, for a stated window, under its old one | **Changed** (Behaviour 18; a25, open). They were read only in `[runtime]` and `[vm]` | An old name is the same key written in the same file, so a config nobody edits resolves as today | Nothing overrides an alias: it is a second name, not a lower level (GLOBAL-10). A file that sets a key under both names is refused; the new name is not preferred. Each old name a file sets prints one warning per command |
 | `<output>/driver.json` | **New** (a19) | Which driver ran belongs with the build's output | Nothing; always written |
 | `--keep-vms` leaves what `capabilities.keep` says | Unchanged per driver | Each driver keeps what it keeps today | Nothing |
-| Where the container driver's relay comes from | Unchanged lookups, now behind the relay source | It runs the relay that ships with, or is built from, the same tree | `[runtime] relay_image` or `WARDEN_IMAGE`: used as given; an image that cannot be pulled is an error, and the default is not tried (a3) |
+| Where the container driver's relay comes from | Unchanged lookups, now behind the relay source | It runs the relay that ships with, or is built from, the same tree | `[driver.container] relay_image` (old name `[runtime] relay_image`) or `WARDEN_IMAGE`: used as given; an image that cannot be pulled is an error, and the default is not tried (a3) |
 | A relay file's published hash | **New**, inert in K1: `Relay.Verify` checks a file that carries one. No K1 source sets one | Nothing publishes relay hashes yet | When a source supplies a hash, a mismatch refuses the build; no other source is tried |
 
 Named lookups and fallbacks (GLOBAL-10, GLOBAL-11):
@@ -4055,6 +4120,13 @@ Named lookups and fallbacks (GLOBAL-10, GLOBAL-11):
   driver that has no `clean`** (Decision 16). It was never named as a
   fallback, and it made `warden clean --driver qemu` fail for want of a
   container runtime.
+- **Not a fallback: `[driver]` beneath `[driver.<name>]`, and an old
+  name beside its new one.** The two tables are two places in the order
+  of precedence, read on absence and never on failure: a value in the
+  driver's own table that cannot be used is an error, and the value in
+  `[driver]` is not tried. An old name is a second name for one key
+  (GLOBAL-10's "a second name for the same value, not a fallback"), and
+  a file that uses both is refused.
 - **None added.** A named driver that is not found is never replaced by
   the default or by another driver. A driver binary that fails is never
   retried through a linked one. An overridden relay never falls back to
@@ -4577,7 +4649,10 @@ declares them as `drivercmd.Setting` literals in its own package, and
 reads them there (the seven driver-owned `toml` fields leave `Config`).
 Unchanged, the check would report every moved flag and all seven keys as
 removed (UX-03) and would stop comparing the drivers' flags and keys with
-the reference docs (UX-01, ORCH-03). One file, `surface.go`, enforces all
+the reference docs (UX-01, ORCH-03). After a4 the seven keys are also
+renamed into `[driver]` and `[driver.<name>]`, with their old names kept
+as deprecated aliases; that is UX-03's own route and changes no word of
+it. One file, `surface.go`, enforces all
 three rules, so the edit is a change to each (FLOW-14) and each has an
 entry.
 
@@ -4613,9 +4688,11 @@ any real work begins".
 > files `warden` names to it, with the same precedence and before it does any
 > work (UX-08): through the kit (`driver/drivercmd`), or as the driver contract
 > requires of a driver written without it (GLOBAL-08). A driver run as a
-> separate binary does so in its own process. A driver's keys live in
-> `[driver.<name>]`; the driver-owned keys that existed before the driver
-> contract keep their tables.
+> separate binary does so in its own process. The keys the driver contract
+> names as common to drivers live in `[driver]`; a driver's overrides of
+> those, and its own keys, live in `[driver.<name>]`. Within one file the
+> driver's own table is read before `[driver]`; the order of the files does
+> not change.
 >
 > The automated part is a config-key diff against a docs diff, over `cmd/warden`
 > and the drivers this repository builds.
@@ -4627,9 +4704,12 @@ looks. The paragraph does not say "in its own process" of every driver,
 because four are linked into `warden` when K1 merges and read their
 configuration through the kit in `warden`'s process. "Before it does
 any work" is about the commands that do work; in `reap` and `attach` a
-driver works from its state file (C10). The paragraph's last sentence
-states a4's recommended answer; if a4 is answered otherwise, it is
-reworded to that answer before it is approved.
+driver works from its state file (C10). The paragraph's last two
+sentences state a4's answer and the order decided under
+**Configuration**: the more specific table within a file, the files in
+the rule's own order. They say nothing of the seven old names, which
+are UX-03's matter and a25's; whichever way a25 is answered, these
+words stand.
 
 **Severity and check:** MUST, `automated + agent-judgment`, before and after,
 for all three.
@@ -4649,10 +4729,12 @@ for all three.
   constant in `surface.go`). In them `Extract` reads composite literals
   of `drivercmd.Setting` (`Setting` inside package `drivercmd`),
   including the elements of a `[]drivercmd.Setting` literal, whose type
-  is elided: a literal with a non-empty `Flag` yields that flag, and one
-  with `Key: "table.key"` or `Key: "driver.name.key"` yields key `key`,
-  the last element of the path, which is the identity a `toml` tag gives
-  today. Nothing else is read from the driver directories. The check runs
+  is elided: a literal with a non-empty `Flag` yields that flag; one
+  with `Key: "driver.name.key"` yields key `key`, the last element of
+  the path, which is the identity a `toml` tag gives today; one with
+  `Common: "key"` yields key `key`; and each string in `Aliases` yields
+  the last element of its path. Nothing else is read from the driver
+  directories. The check runs
   when the diff touches `surface.dir` or `driver/`. Tests and a fixture
   (`tools/tier1/surface/testdata/driver.go.txt`) cover the new form.
 - What it can and cannot check after K1. For a bundled driver, a flag or
@@ -4666,7 +4748,13 @@ for all three.
   and keys at the base (all in `cmd/warden`) and at HEAD (split between
   `cmd/warden` and the drivers' `Setting` literals), plus `driver list`'s
   `--json` and `teardown_timeout`, so it reports nothing but the
-  additions, which the docs in the diff cover. `main`'s tier 1 reads the
+  additions, which the docs in the diff cover. The seven renamed keys
+  are in neither list: a key's identity is the last element of its
+  path, which the rename keeps (`runtime.cli` and `driver.container.cli`
+  are both `cli`), so the automated part sees no change in them and
+  cannot tell a kept old name from a dropped one. The aliases, their
+  warning and the window are held by the kit's tests and by review, the
+  agent-judgment half of UX-03. `main`'s tier 1 reads the
   branch's `rules.yaml`, which it can parse, and sees `cmd/warden` only.
   It reports `surface-removed` (UX-03) for each moved flag and each of
   the seven moved keys whose name no longer appears as a string literal
@@ -4850,10 +4938,14 @@ privileges (root's, under `sudo warden setup` or `image prepare`).
   process is named the project's `warden.toml` and the user's config
   file and parses them. That gives it nothing new: it runs as the user
   and could read both. What changes is who interprets a value. A key
-  under `[driver.<name>]`, and each of the seven existing driver-owned
-  keys, is read and acted on by the driver with no check by `warden`,
-  the project's file included; `[runtime] cli`, which names a program to
-  run, is such a key today and stays one (**Risks**). Each file is named
+  under `[driver]` or `[driver.<name>]`, and each of the seven existing
+  driver-owned keys under its old name, is read and acted on by the
+  driver with no check by `warden`, the project's file included. A
+  common key in a project's `[driver]` reaches every driver that
+  honours it; version 1's two are ages and name no program or path.
+  The container driver's `cli`, which names a program to run, is such
+  a key today and stays one under both its names; the fix for it is
+  filed as `runtime-cli-project-path` and is not K1's (**Risks**). Each file is named
   to the driver with its level, project or user, so that a driver can
   hold a key that names a program to the user's file alone; no bundled
   driver does in K1. A driver's flags
@@ -5026,8 +5118,9 @@ differs per platform, so it adds one job (Decision 20):
   selects no driver, and on `setup` under the container driver;
   `config_files` in precedence order, each with its level, and without
   a missing file; `image list` run beside a `warden.toml` that is not
-  TOML; a `describe` with a key outside the driver's table
-  refused; `--help` for a driver that cannot be described, with a
+  TOML; a `describe` with a key outside the driver's two tables, with
+  a `driver.<key>` the contract does not name, or with an old name not
+  listed for that driver, refused; `--help` for a driver that cannot be described, with a
   config file that does not load and with a path in the project's file,
   each printing `warden`'s part and exiting 0; `warden clean` probing
   the driver's `clean` before it reaps; and that
@@ -5035,11 +5128,23 @@ differs per platform, so it adds one job (Decision 20):
   its record.
 - Configuration, the kit's side (`drivercmd.Resolve`), per bundled
   driver: precedence (flag, variable, project file, user file) over the
-  rows of today's request tables; a value of the wrong type refused with
+  rows of today's request tables, written once with the old names and
+  once with the new, to the same result; the seven steps for a common
+  key, with the two worked examples as cases, a value in the driver's
+  own table that cannot be used refused without `[driver]`'s being
+  tried, and an empty string in the driver's own table hiding
+  `[driver]`'s value; `[driver]` not read by a driver that lists no
+  common key; for each of the seven keys, the old name read as the new
+  one in the same file, one warning for each old name a file sets and
+  none in `reap` or `attach`, and a file with both names refused with
+  both named; a declaration with a `Key` outside the driver's table,
+  with a common key's name, or with an alias the specification does
+  not list, refused; a value of the wrong type refused with
   the file and key named; an undeclared argument refused; another
   driver's table and `warden`'s tables ignored; no file read that was
-  not named; a `Raw` key decoded whole from one file; an empty flag
-  value and an empty variable falling through to the next level; in
+  not named; a `Raw` key decoded whole from one table of one file; an
+  empty flag value and an empty variable falling through to the next
+  level; in
   `reap` and `attach`, no file opened until a setting is read, and a
   listed file that does not exist read as not listed; and the same
   result through `Main`, through `Call` and through `Resolve` called
@@ -5089,10 +5194,10 @@ is, and the workflow file is the list.
 
 | Host | Cases |
 |---|---|
-| macos-finch | (1) `warden driver list` shows `container` at the built `warden-driver-container`, found beside `warden` and marked as selected, and the four linked drivers; `warden doctor` prints `container runtime: finch` and `ok`. (2) A default build succeeds and its ledger verifies; `driver.json` names the driver binary and its digest; `inputs/` holds `Containerfile` and `build.sh`. (3) `warden shell` opens a shell and passes its exit code through. (4) `[runtime] relay_image = "dev"` builds the relay from source; `WARDEN_IMAGE=<ref>` pulls that image; an unpullable reference fails without trying the default. (5) Ctrl-C mid-build tears down and leaves nothing; SIGTERM mid-build does the same and exits 1; with the driver killed mid-build `warden` fails the build and reaps; with `warden` killed (SIGKILL) mid-build the driver tears down by itself and no container of the build is left. (6) With `warden` and the driver both killed, the build's containers are still running; `warden clean`, run with another `--tmpdir` than the build's and after the build's `warden.toml` was deleted, removes that build's containers, network, work directory, stage directory, lock and record, and leaves a running build's; a running build started with another `HOME`, whose lock is elsewhere, is left alone too. (7) `WARDEN_CTR_CLI` and `--runtime` select the runtime; a missing one gives the fixable error and leaves no output directory; `--network x` is refused by `warden` as an unknown flag for the container driver; `[runtime] cli = 5` in `warden.toml` is refused by the driver, naming the file, and leaves no output directory. (8) With nothing customized, a build's `driver.json` has `found: beside-warden` and nothing shadowed. A copy of `warden-driver-container` placed in a directory that comes before `warden`'s on `PATH` runs in place of the one beside `warden`: `warden driver list` shows it and the copy it shadows, and the build's `driver.json` has `found: PATH`, its digest and the bundled copy under `shadowed`; the same copy in a directory after `warden`'s on `PATH` does not run and is listed as shadowed; `[runtime] driver = "./x"` in the project's `warden.toml` is refused. (9) `make driver-conformance DRIVER=dist/warden-driver-container` passes both tiers on finch |
+| macos-finch | (1) `warden driver list` shows `container` at the built `warden-driver-container`, found beside `warden` and marked as selected, and the four linked drivers; `warden doctor` prints `container runtime: finch` and `ok`. (2) A default build succeeds and its ledger verifies; `driver.json` names the driver binary and its digest; `inputs/` holds `Containerfile` and `build.sh`. (3) `warden shell` opens a shell and passes its exit code through. (4) `[driver.container] relay_image = "dev"` builds the relay from source, and so does the old name `[runtime] relay_image = "dev"`, with one warning line that names the new key; a `warden.toml` that sets both is refused before anything is created; `WARDEN_IMAGE=<ref>` pulls that image; an unpullable reference fails without trying the default. (5) Ctrl-C mid-build tears down and leaves nothing; SIGTERM mid-build does the same and exits 1; with the driver killed mid-build `warden` fails the build and reaps; with `warden` killed (SIGKILL) mid-build the driver tears down by itself and no container of the build is left. (6) With `warden` and the driver both killed, the build's containers are still running; `warden clean`, run with another `--tmpdir` than the build's and after the build's `warden.toml` was deleted, removes that build's containers, network, work directory, stage directory, lock and record, and leaves a running build's; a running build started with another `HOME`, whose lock is elsewhere, is left alone too. (7) `WARDEN_CTR_CLI` and `--runtime` select the runtime; a missing one gives the fixable error and leaves no output directory; `--network x` is refused by `warden` as an unknown flag for the container driver; `[runtime] cli = 5` in `warden.toml` is refused by the driver, naming the file, and leaves no output directory, and so is `[driver.container] cli = 5`. (8) With nothing customized, a build's `driver.json` has `found: beside-warden` and nothing shadowed. A copy of `warden-driver-container` placed in a directory that comes before `warden`'s on `PATH` runs in place of the one beside `warden`: `warden driver list` shows it and the copy it shadows, and the build's `driver.json` has `found: PATH`, its digest and the bundled copy under `shadowed`; the same copy in a directory after `warden`'s on `PATH` does not run and is listed as shadowed; `[runtime] driver = "./x"` in the project's `warden.toml` is refused. (9) `make driver-conformance DRIVER=dist/warden-driver-container` passes both tiers on finch |
 | container-any | On the Windows host, with its container runtime: (1) `warden driver list` shows `warden-driver-container.exe`; `warden doctor` reports the runtime and `ok`. (2) A default build succeeds, its ledger verifies, `driver.json` is written. (3) Ctrl-C mid-build tears down; with the driver killed `warden` reaps; with `warden` killed the driver tears down on the end of its input. (4) `warden clean` leaves a running build and removes a build whose `warden` and driver were both killed, from its record. (5) A `warden-driver-container.bat` beside `warden` or on `PATH` is not taken for the driver; a `warden-driver-container.exe` in a `PATH` directory ahead of `warden`'s replaces the one beside `warden`. (6) Both tiers of the suite pass against `warden-driver-container.exe` |
 | macos-vz | (1) `warden doctor --driver vz` and `warden image list` print what `main` prints. (2) A vz build succeeds, its ledger verifies, `relay.log` is written, `driver.json` says `linked`; with a Containerfile in the context, it is ignored and `inputs/` is absent, as on `main`. (3) A script that exits 3 makes `warden` exit 3; `--timeout 30s` on a sleeping script exits 124. (4) Ctrl-C mid-build leaves no relay process and no work directory; SIGTERM mid-build does the same and exits 1, where on `main` it kills `warden`. (5) `--runtime docker` and `--network x` with `--driver vz` are each refused as an unknown flag for driver `vz`; `[runtime] cli = 5` in `warden.toml` does not stop a vz build (Behaviour 13); `warden clean --driver vz` reports nothing to clean and needs no container runtime |
-| windows-hyperv | (1) `warden doctor --driver hyperv`, elevated and not, prints what `main` prints; `--network` is honoured. (2) Elevated `warden setup --driver hyperv --slots 2` is idempotent. (3) A non-elevated durable build and an elevated ephemeral build succeed and verify; `[vm] network` is honoured and `--network` overrides it; with `[vm] image_refresh_after` set low, the detached `image prepare --driver hyperv` starts and logs. (4) With the service installed, a service-delegated build succeeds. (5) A build whose script powers the VM off without completing fails with the build-VM-off error about 10 s after the VM stops. (6) Ctrl-C mid-build removes both VMs and the switch; the time from Ctrl-C to exit is recorded, to judge the 60 s default of the teardown wait against a real teardown before K2 applies it to Hyper-V (a20). (7) `--keep-vms` leaves both VMs; `warden clean --driver hyperv` then removes them and leaves a running build's |
+| windows-hyperv | (1) `warden doctor --driver hyperv`, elevated and not, prints what `main` prints; `--network` is honoured. (2) Elevated `warden setup --driver hyperv --slots 2` is idempotent. (3) A non-elevated durable build and an elevated ephemeral build succeed and verify; `[driver.hyperv] network` is honoured and `--network` overrides it; the old name `[vm] network` is honoured too, with one warning line that names the new key; with `[driver] image_refresh_after` set low, the detached `image prepare --driver hyperv` starts and logs, and with `[driver.hyperv] image_refresh_after = "30d"` beside it in the same file, it does not. (4) With the service installed, a service-delegated build succeeds. (5) A build whose script powers the VM off without completing fails with the build-VM-off error about 10 s after the VM stops. (6) Ctrl-C mid-build removes both VMs and the switch; the time from Ctrl-C to exit is recorded, to judge the 60 s default of the teardown wait against a real teardown before K2 applies it to Hyper-V (a20). (7) `--keep-vms` leaves both VMs; `warden clean --driver hyperv` then removes them and leaves a running build's |
 | qemu-any | (1) `warden doctor --driver qemu` prints what `main` prints. (2) A direct-boot build and a cloud-image build succeed and verify; a Dockerfile whose `FROM` names a prepared image boots that image, as on `main`, and still does when the build is given `--script`, as on `main`; `inputs/` holds `Containerfile` and `build.sh`. (3) Ctrl-C mid-build leaves no `qemu-system` process and no work directory; SIGTERM mid-build does the same; `--keep-vms` leaves the work directory only. (4) `--timeout 30s` on a sleeping script exits 124. (5) `warden clean --driver qemu` reports nothing to clean with no container runtime running. (6) A second Ctrl-C during teardown ends `warden`; what it leaves is recorded (Behaviour 8) |
 
 Evidence goes under `native/<host>/<date>/` on the `workflow` branch.
@@ -5160,11 +5265,13 @@ each task leaves `make test` and `make lint` green (FLOW-17).
     pages. It includes the build-lock convention, the failure table, the
     probe form of `start`, commands not started by `warden`, UTF-8 paths,
     teardown with closed output, the configuration requirements C1 to
-    C10 (`config_files` with each file's level, the TOML version of the
+    C11 (`config_files` with each file's level, the TOML version of the
     files, `args` and the form of a switch, `describe`'s `flags` and
-    `keys` with their types and commands, the precedence, the place of
-    a driver's keys and the seven existing ones, and the state file's
-    authority in `reap` and `attach`), how `warden` finds the driver
+    `keys` with their types and commands, the two tables, the common
+    keys of version 1 with their type and meaning, the precedence with
+    its seven steps and the two worked examples, the seven old names by
+    driver name, and the state file's authority in `reap` and
+    `attach`), how `warden` finds the driver
     before it parses, `warden`'s reserved flag names, and an introduction that says
     what a
     driver needs besides this contract (GLOBAL-08, RELAY-05's
@@ -5173,11 +5280,15 @@ each task leaves `make test` and `make lint` green (FLOW-17).
     on every exported identifier: dispatch through `Main` and `Call`,
     `Preflight` for a probe, `Setting`, `Resolve` and `driver.Settings`
     (the flags from `args`, the two existing variables, the keys from
-    `config_files`, with `warden`'s precedence), the state file helpers,
+    `config_files`, with `warden`'s precedence; a common key read in the
+    driver's own table and then in `[driver]`; an old name read as its
+    key, with its warning and the refusal of a file that sets both),
+    the state file helpers,
     and `run` ignoring SIGPIPE (GLOBAL-01, GLOBAL-03, GLOBAL-08,
     GLOBAL-10, ORCH-03, ORCH-04, UX-08).
 14. Add `conformance/driver/`: `warden-driver-fake` with all eleven
-    commands and a flag and a key read by hand, `stubrelay`, the suite's
+    commands and a flag, a key of its own and a common key read by
+    hand, `stubrelay`, the suite's
     static tier with the configuration checks, its self-test with the
     fault switches, and the imports test; run the static tier under `make
     test` (TEST-01, TEST-05, GLOBAL-07).
@@ -5187,7 +5298,8 @@ each task leaves `make test` and `make lint` green (FLOW-17).
     first and fix or build-tag what fails there (TEST-01, GLOBAL-07,
     FLOW-14).
 16. Change tier 1's surface extraction as approved, to read
-    `drivercmd.Setting` literals, with its tests; leave `rules.yaml`'s
+    `drivercmd.Setting` literals (`Flag`, `Key`, `Common`, `Aliases`),
+    with its tests; leave `rules.yaml`'s
     `surface` keys as they are (UX-01, UX-03, ORCH-03, FLOW-14, LINT-05).
 17. Add the lookup (`driverlookup.go`: a path, `PATH`, `warden`'s
     directory, a linked driver) with the project-file rule, the exec
@@ -5199,7 +5311,8 @@ each task leaves `make test` and `make lint` green (FLOW-17).
     teardown_timeout` (GLOBAL-06, GLOBAL-07, GLOBAL-10, GLOBAL-11,
     UX-02, UX-04, UX-09, ORCH-04, ORCH-05).
 18. Move every driver-owned flag and key into its driver's `Setting`
-    declaration; `warden` finds the driver before parsing flags (the
+    declaration, the seven keys under their new names in `[driver]` and
+    `[driver.<name>]` with their old names as `Aliases`; `warden` finds the driver before parsing flags (the
     `ext` form, the command, then the scan for `--driver`), registers
     the flags the selected driver declares, refuses one nobody declares
     and a line whose parsed `--driver` is not the scanned one, and
@@ -5209,7 +5322,7 @@ each task leaves `make test` and `make lint` green (FLOW-17).
     through `Call` in `warden`'s process for `run`, and the VM drivers' doctor,
     setup, image and clean code through `Resolve`; the seven driver-owned
     fields and the two variables leave `Config` and `LoadConfig`. Update
-    the goldens for the seventeen differences only (ORCH-03, UX-03,
+    the goldens for the eighteen differences only (ORCH-03, UX-03,
     UX-07, UX-08, GLOBAL-10).
 19. Add `warden`'s end-to-end tests against the fake, for every command,
     run on three platforms by the `driver-contract` job (TEST-01, TEST-04,
@@ -5240,9 +5353,11 @@ each task leaves `make test` and `make lint` green (FLOW-17).
 25. Make the approved amendments to `docs/design/componentization.md`
     (FLOW-12, FLOW-20).
 26. Update `guide/cli.md`, `guide/configuration.md`, `guide/output.md` and
-    `guide/drivers.md` for the seventeen differences, the lookup, what a
-    file on `PATH` replaces, `[driver.<name>]` and `[build]
-    teardown_timeout`; `concepts/overview.md` and
+    `guide/drivers.md` for the eighteen differences, the lookup, what a
+    file on `PATH` replaces, `[driver]` with its common keys,
+    `[driver.<name>]`, the order between the two tables and the two
+    files, the table of the seven renamed keys with the window, and
+    `[build] teardown_timeout`; `concepts/overview.md` and
     `contributing/structure.md` for the new shape; `CONTRIBUTING.md` for
     `make driver-conformance`; `getting-started/installation.md` for the
     second binary (UX-01, FLOW-15).
