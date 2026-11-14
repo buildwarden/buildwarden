@@ -127,6 +127,10 @@ Outside this repository: `buildwarden-relay` `main` at `e9b23d5`
 test must provide**: the Rust relay's build link is raw Ethernet frames on a
 socket, and its claim will arrive over vsock on VZ.
 
+2026-11-14: the collector's lifetime is written per session token, on Jeff's
+word in the driver-contract design review (the collector is to be
+pluggable).
+
 ## Decisions
 
 1. **The specifications say what `main` does, and this item changes no
@@ -621,15 +625,22 @@ kit's session writes the relay's CA there as `ca.cert.pem`.
 | `GET /v1/status` | The first completion plus `received_at`, or `{"state":"running"}`. A relay never calls it; it can be reached only where a collector listens, which the disk collector does not |
 | `GET /healthz` | 200 `ok`. As `/v1/status`: not used by a relay |
 
-**A collector's lifetime.** One collector serves one build. It may give up
-on a relay whose `ready` does not arrive (the kit's session waits 90 s from
-the start of the claim) and, once a first heartbeat has arrived, on a build
-whose heartbeats stop (the kit: 30 s). Both limits are the collector's own.
-Completion is terminal: after `POST /v1/complete` the collector owes the
-relay nothing more and may close the connection at once. A relay therefore
-delivers the ledger and every other output before it sends the completion,
-and does not depend on the reply. What a collector does next is its own:
-`cmd/collector` exits, with status 0 for `exit_code` 0 and 1 otherwise.
+**A collector's lifetime.** The protocol's unit is the build *session*: one
+build's requests, identified by the collector token they carry (a collector
+with no token has one session). The rules here hold per session. A collector
+may give up on a session whose `ready` does not arrive (the kit's session
+waits 90 s from the start of the claim) and, once a first heartbeat has
+arrived, on one whose heartbeats stop (the kit: 30 s). Both limits are the
+collector's own. Completion is terminal for the session: after
+`POST /v1/complete` the collector owes the relay nothing more and may close
+the connection at once. A relay therefore delivers the ledger and every
+other output before it sends the completion, and does not depend on the
+reply. How many sessions an instance serves is the collector's own, declared
+in its target file: the reference disk collector (`cmd/collector`) serves
+exactly one and exits, with status 0 for `exit_code` 0 and 1 otherwise. A
+collector that serves several sessions, and any client-facing side (opening
+a session, supplying inputs, watching console and status, fetching outputs),
+is out of scope for this item and not specified here (the umbrella's a2).
 
 **The relay's side**, which the relay suite checks: `PUT /v1/ledger` is
 opened before any other output; at completion the relay ends that request
@@ -895,7 +906,8 @@ does not ask for one; a11 puts the deferral to the review.
 **Instances.** A case that ends an instance gets a fresh one: every
 accepted claim, every 500, the host-mode refusal of D17, and every
 completion (a relay after `/exit`, D18; a collector after
-`POST /v1/complete`, D16). The completion is the last request such a case
+`POST /v1/complete`, which ends its session and, for the disk collector, the
+instance, D16). The completion is the last request such a case
 sends. Cases that leave an instance usable (401s, the other refused claims,
 validation) share one (TEST-07). After a claim returns, the harness polls
 the relay's `/health` on port 8300, every 100 ms for at most 10 s, before
@@ -958,14 +970,16 @@ on.
    placeholders for the claim address, the output location, the context
    directory, the build script and the capture mode. For the disk collector:
    `collector --relay {claim} --dir {out} --context {context} --script {script} --capture {capture}`,
-   with `WARDEN_CLAIM_TOKEN` in its environment. One instance serves one
-   build, so the harness starts one for each case that sends a completion.
+   with `WARDEN_CLAIM_TOKEN` in its environment. Each start gives the
+   harness one session, so it starts one for each case that sends a
+   completion.
 2. *What it can be started as.* The file says whether the collector can run
    with no build script, no context, no bootstrap config and no token, and
    whether it keeps serving after a completion. `cmd/collector` can run
    without a script or a context. It always serves a bootstrap config
    (`{"version":1,"trust":{"mode":"exclusive"}}`, the kit's choice for a
-   Linux guest), always sets a collector token, and exits at the first
+   Linux guest), always sets a collector token, serves exactly one session
+   and exits at the first
    completion. For this target the cases for a 404 from `GET /v1/bootstrap`,
    a collector with no token, `GET /v1/status` after a completion and "the
    first completion wins" are therefore reported not applicable. They run
