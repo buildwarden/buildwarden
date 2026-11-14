@@ -2127,6 +2127,33 @@ What it asks of this design, as read by the session that held the sitting:
 
 The design below is still the text as read at `2889919`.
 
+### 2026-11-14, same day: the direction settled
+
+A change proposal was put to Jeff: one queue (the existing one) in which an
+item names the repositories it works in, the areas it changes and who leads
+it; three relations between two items (disjoint, near, colliding) that decide
+which of FLOW-05's limits count; a machine able to lead an item from its
+first step through consolidation; and a migration in steps (the
+`alters_relationships` limit fixed first as its own process item,
+`alters-slot`; then the parallel rules; then native-led items; then
+`loop-repository`, retitled, for work in a second repository). It named what
+needs his word in the umbrella (Decision 2 loses the queue per component;
+the loop repository of Decision 13 is deferred; P1 and `loop-repository` are
+reworded), and recommended: read "limited AI capacity" as what the cloud
+cannot do; keep the freeze until the parallel rules have run on program
+items; the order parallel rules, native leads, second repository; defer the
+loop repository.
+
+Jeff, on that summary: "Yes, these all read as the direction I'm looking
+for".
+
+What follows for this design: LOOP-04 is rewritten for one queue; the
+preamble, LOOP-01 and LOOP-05 to LOOP-09 are reworded from a component's
+queue to an item; a13 leaves this item for `alters-slot`; the amendments to
+the umbrella's wording are listed for approval at the next sitting. The
+collision rule itself (FLOW-05) is the later item's, not this one's. The
+revision is put to him as a delta against `2889919`.
+
 ## Consolidation
 
 A process item has no Publish phase and no consolidation pass (FLOW-03).
