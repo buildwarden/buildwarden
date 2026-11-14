@@ -888,6 +888,12 @@ func TestAltersSlotSkipsProcessItems(t *testing.T) {
 	wantValidate(t, s)
 	s.Release(f, plan(t, f), "cloud/f", now, "done-when failed")
 	wantOffer(t, s, "g", "f2-plan")
+	// Nor does a done Plan step left on it, as when a planned feature's kind
+	// is changed by hand, make it a holder.
+	p.Steps = append(p.Steps, Step{ID: "f2-plan", Phase: 2, Affinity: "cloud",
+		Status: "done"})
+	wantOffer(t, s, "g", "f2-plan")
+	wantValidate(t, s)
 }
 
 func TestIsPlan(t *testing.T) {
