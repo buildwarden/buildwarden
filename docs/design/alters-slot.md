@@ -267,7 +267,8 @@ waits the same way.
 ### In the code
 
 - `queue.go`: `Limits.AltersRelationships` becomes `*int` (as `NativeBudget`
-  is a pointer), so an absent key and a written 0 differ. `altersLimit()`
+  is a pointer, and with `omitempty` as it has; the configuration is only
+  read), so an absent key and a written 0 differ. `altersLimit()`
   returns the value, or 1 when absent. `Validate` reports
   `config: limits.alters_relationships N is below 1` for a written value
   below 1 and then compares no holders against it. Otherwise it reports
@@ -276,7 +277,8 @@ waits the same way.
   change.
 - `next.go`: `altersHolder` is replaced by `holdsAltersSlot()` on a feature
   and `altersHolders()` on the state, the list both callers use. `cloudHold`
-  withholds only a Plan step, as defined above.
+  withholds only a Plan step, as defined above; `altersWait()` on the state
+  gives it the reason, or none while a slot is free.
 - `phases.go`: `IsPlan(st)`, beside `IsDesignReview` and `IsMerge`, parsed by
   `stepTemplates`.
 - `cmd/wf/main.go`, `summary.go`, `hosts.go`, `check/`: unchanged.
@@ -445,22 +447,27 @@ None: no driver, seam or user-facing surface changes.
 - **Tier 0**, `tools/workflow/queue` (`make test`, TEST-01, TEST-02). The
   tests build each state with `Seed`, `Complete`, `Claim`, `Release` and
   `Back`, never by setting `Phase` by hand, and assert `Next` and `Validate`
-  together:
+  together. One state no command produces is written by hand: a done
+  `f2-plan` step on a process item (`TestAltersSlotSkipsProcessItems`),
+  without which the definition's "is not a process item" is not pinned.
   - `TestAltersSlotHeldFromPlanClaim`: finished Design holds nothing; the
     claim holds; `Release` gives it back, and a higher-ranked waiting feature
     is then offered its Plan step first; Plan done holds; the item done frees
-    it (cases 2, 7).
+    it (cases 2, 7). No step but a Plan step waits: an altering feature's
+    branch setup and its Design are offered while every slot is held.
   - `TestAltersSlotNoMutualHold`: cases 4, 5 and 6, and a holder is never
     refused.
   - `TestAltersSlotLimit`: absent, 1 and 3, with holders from none to one
     over the limit (case 8 and "More holders than the limit"); a written 0
     and -2 give the one config error, no holder count, and a `Next` reason
-    that names the value (case 14).
-  - `TestAltersSlotAcrossReturns`: cases 9, 10 and 12, and the flip: a
-    feature with a done Plan step whose value becomes `true` while every slot
-    is held is a holder over the limit, `Validate` names every holder, each
-    holder's next step is still offered, and no other altering feature's Plan
-    step is.
+    that names the value (case 14); and the limit as `Load` reads it from a
+    `config.yaml`: no `limits`, no key, a written 3 and a written 0.
+  - `TestAltersSlotAcrossReturns`: cases 9, 10 (the returned feature's
+    Design is offered while the slot is held, and it waits at its next Plan
+    step) and 12, and the flip: a feature with a done Plan step whose value
+    becomes `true` while every slot is held is a holder over the limit,
+    `Validate` names every holder, each holder's next step is still offered,
+    and no other altering feature's Plan step is.
   - `TestAltersSlotCloudOnly`: human and host steps are offered while every
     slot is held: a design review, and a Plan step whose affinity was set to
     a host, which is offered to that host and, once claimed, fails `Validate`
@@ -468,6 +475,8 @@ None: no driver, seam or user-facing surface changes.
   - `TestAltersSlotExpiredClaim`: case 11.
   - `TestAltersSlotSkipsProcessItems`: case 13; it replaces the last block of
     `TestLimitSkipsProcessItems`, which asserts the opposite today.
+  - `TestIsPlan`: `f2-plan` in any `-r<n>` form is a Plan step, and no
+    other step id is.
   - `TestAltersSlot` goes: it asserts the mutual hold and the failing
     `Validate`.
 - **The live queue.** With `main`'s `dist/wf` and with the branch's `wf`
