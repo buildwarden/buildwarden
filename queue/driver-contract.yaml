@@ -97,7 +97,7 @@ budget:
 questions:
   - id: a16
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Lookup and trust: how warden finds a driver binary. Jeff''s note: found "in the same way git finds its individual subcommands (i.e. existing on PATH)".'
     options:
       - a path in --driver or WARDEN_DRIVER (used exclusively); else a linked driver; else warden's own directory; else each absolute PATH entry; the five bundled names never from PATH; a project's warden.toml may select only a bundled driver, and no config file a path; no batch files on Windows; no auto-detection of the driver. On Unix the file found must be owned by root, the user or the owner of the warden executable and not be writable by group or others; a file in warden's own directory is held to warden's own owner and mode instead; for a PATH hit the directory must not be writable by group or others either
@@ -105,9 +105,10 @@ questions:
       - as the first option, and PATH is not searched at all when warden runs as root
       - 'as the first option, without the rule on the project file: a warden.toml in the working directory can then make warden run any warden-driver-<x> on PATH, on --help too'
     recommended: the first option
+    answer: 'Changed, in Jeff''s words: ''This is overcontrolled. The nicety of this is for UX functionality and given this is never outside of the user''s control (i.e. never a part of the build environment), I''d say let''s allow for the first option with way less guarding around its official drivers, allowing for both customized implementations of existing drivers and new ones, either by absolute or PATH search''. So: the first option''s lookup with far fewer guards; a driver with a bundled driver''s name may be a customized one, found by absolute path or on PATH. Which guards remain and which wins when a name is both bundled and on PATH are asked as follow-ups. Jeff, design review of the redraft, 2026-11-14.'
   - id: a15
     kind: assumed
-    status: open
+    status: confirmed
     question: 'K1''s scope and done-when, against K2, K3 and S4. Jeff''s note: "each driver effectively being its own independent binary"; in K1 only the container driver is one.'
     options:
       - 'K1 delivers the specification, the suite, the kit, a fake, warden''s calling side for every command and the container driver as a binary; all five drivers move onto warden''s build sequence and the four VM drivers stay linked until K2. Done when an unmodified warden runs every command of the contract through a driver binary it was not built with (the fake, in CI on three platforms), the suite passes against the fake and warden-driver-container, cmd/warden names the VM drivers only in linked.go and their existing doctor, setup, image and clean code, and native validation passes on each blocking host. Not proved in K1: a VM driver as a separate process (teardown on end of input, reap, kill and process groups, the vz entitlement, the Hyper-V service), so contract version 1 may still change in K2. K2: each VM driver becomes a binary, linked.go goes, the specification and suite move to the specs repository, then modules. K3 keeps its row. S4 is absorbed, except the claim specification''s transport section and a claim endpoint that is not TCP. One item and one PR'
@@ -116,22 +117,25 @@ questions:
       - as the first option, split into two items at the point the fake passes
       - 'as the first option, but the VM drivers'' flags and keys stay in cmd/warden until each becomes a binary: their doctor, setup, image and clean code is not touched twice, at the cost of two option paths in cmd/warden until K2, and Behaviour 1 to 3 and 13 arrive per driver in K2'
     recommended: the first option; the second is the fallback if K1 proves too large
+    answer: '(a) Decision 14: only the container driver is a binary in K1; all five on warden''s one build sequence; the four VM drivers stay linked until K2. Jeff, design review of the redraft, 2026-11-14.'
   - id: a21
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Who reads the configuration? Jeff''s note: "a shared library (either inside the top-level warden or otherwise) that helps mediate pieces like configuration-parsing/reading".'
     options:
       - 'warden reads the files, the environment and the flags; a driver declares its options in describe and receives resolved values; the kit gives a Go driver the Option declaration and typed access to the values, and reads no file. Consequences: an option has one of seven scalar types, a driver has no configuration of a shape of its own, and warden runs describe before it parses flags'
       - 'the kit reads the configuration inside the driver''s process, and warden passes through the flags it does not know and the paths of the config files: a driver may then have configuration of any shape, but warden cannot draw help, refuse an unknown flag or check a value before slow work, tier 1 cannot read the surface, and a driver written without the kit re-implements the precedence'
     recommended: warden reads it
+    answer: (b) The kit reads the configuration inside the driver's process; warden passes through the flags it does not know and the paths of the config files. This departs from the recommendation; Decision 7, Configuration, describe's options, the Behaviour list and the surface enforcement change are redrafted and put to Jeff again. Jeff, design review of the redraft, 2026-11-14.
   - id: a14
     kind: assumed
-    status: open
+    status: confirmed
     question: One run process per build, or run-and-exit verbs? Jeff's note spoke of "commands"; ten of the eleven run once and exit.
     options:
       - one process per build that exchanges JSON messages with warden; its lifetime is the environment's, and the end of its input means tear down
       - 'create, start, state, stop verbs, each run once: nearer "commands", but vz needs a holder daemon (its VM lives inside the process that made it) and a killed warden leaves VMs running'
     recommended: one process per build
+    answer: (a) One run process per build; the other commands run once and exit. Jeff, design review of the redraft, 2026-11-14.
   - id: a12
     kind: assumed
     status: open
@@ -340,3 +344,15 @@ history:
   - at: 2026-11-14T21:00:57Z
     by: human/jeff
     event: claimed f2-design-review until 2026-11-14T23:00:57Z
+  - at: 2026-11-14T21:07:41Z
+    by: human/jeff
+    event: 'assumed question a15 confirmed: (a) Decision 14: only the container driver is a binary in K1; all five on warden''s one build sequence; the four VM drivers stay linked until K2. Jeff, design review of the redraft, 2026-11-14.'
+  - at: 2026-11-14T21:07:41Z
+    by: human/jeff
+    event: 'assumed question a14 confirmed: (a) One run process per build; the other commands run once and exit. Jeff, design review of the redraft, 2026-11-14.'
+  - at: 2026-11-14T21:07:41Z
+    by: human/jeff
+    event: 'assumed question a21 confirmed: (b) The kit reads the configuration inside the driver''s process; warden passes through the flags it does not know and the paths of the config files. This departs from the recommendation; Decision 7, Configuration, describe''s options, the Behaviour list and the surface enforcement change are redrafted and put to Jeff again. Jeff, design review of the redraft, 2026-11-14.'
+  - at: 2026-11-14T21:07:41Z
+    by: human/jeff
+    event: 'assumed question a16 confirmed: Changed, in Jeff''s words: ''This is overcontrolled. The nicety of this is for UX functionality and given this is never outside of the user''s control (i.e. never a part of the build environment), I''d say let''s allow for the first option with way less guarding around its official drivers, allowing for both customized implementations of existing drivers and new ones, either by absolute or PATH search''. So: the first option''s lookup with far fewer guards; a driver with a bundled driver''s name may be a customized one, found by absolute path or on PATH. Which guards remain and which wins when a name is both bundled and on PATH are asked as follow-ups. Jeff, design review of the redraft, 2026-11-14.'
