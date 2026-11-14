@@ -81,13 +81,16 @@ four points, as recorded:
 4. "The conformance suite runs against a driver binary and checks its
    required and optional commands."
 
-**Where this draft is narrower than the basis or than Jeff's own words.**
-Each row but the fourth is asked under **Questions**, and those questions
-come first there.
+**Where the redraft was narrower than the basis or than Jeff's own words.**
+Each row but the fourth was asked under **Questions**, and those questions
+come first there. The middle column is what the redraft put to Jeff at
+`0c29fc3`; the last says where he answered otherwise in the review's
+second sitting on 2026-11-14, and the design below is written to those
+answers.
 
-| Jeff said, or the basis says | This draft | Asked as |
+| Jeff said, or the basis says | The redraft, as put to Jeff | Asked as |
 |---|---|---|
-| A driver is found "in the same way git finds its individual subcommands (i.e. existing on PATH)" | `warden`'s own directory is searched before `PATH`, the five bundled names never come from `PATH`, and a project's `warden.toml` may select only a bundled driver | a16 |
+| A driver is found "in the same way git finds its individual subcommands (i.e. existing on PATH)" | `warden`'s own directory is searched before `PATH`, the five bundled names never come from `PATH`, and a project's `warden.toml` may select only a bundled driver | a16. **Answered otherwise:** "overcontrolled". `PATH` is searched before what `warden` bundles, so a file on `PATH` may replace a bundled driver; nothing checks owner or mode; one rule is kept, that a project's `warden.toml` names a driver and not a file |
 | "each driver effectively being its own independent binary" | Only the container driver is a binary in K1. The four VM drivers move onto `warden`'s build sequence and stay linked into `warden` until K2 | a15 |
 | "a shared library [...] that helps mediate pieces like configuration-parsing/reading" | `warden` reads all configuration and hands a driver resolved values. The kit's part is the option declaration and typed access to the values; it reads no file | a21 |
 | A suite "that checks that both required and optional commands are all specified correctly" | As asked: a program run against a binary, in two tiers. `warden`'s calling side for every command is exercised in K1 through the reference fake | none |
@@ -265,7 +268,7 @@ plugin binaries. What each contributed:
 
 | From | Taken |
 |---|---|
-| git subcommands | The name convention, and its own directory searched before `PATH`, which is what keeps a planted `git-commit` from replacing a core command |
+| git subcommands | The name convention and the search on `PATH`. Not taken, by the review's answer to a16: git searches its own exec path before `PATH`, which keeps a planted `git-commit` from replacing a core command. Here `PATH` comes first, so that a bundled driver can be replaced by a customized one without a flag |
 | kubectl plugins | A `list` that shows the resolved path and every shadowed copy |
 | Docker CLI plugins | One mandatory metadata command; end of input on a host-held channel as the cancel and host-death signal. Not taken: running every candidate's metadata command to draw help |
 | CNI | A supported-versions list the host picks from; an error object with reserved codes; teardown that succeeds when nothing exists and may be repeated; a garbage-collection verb given the live set |
@@ -277,10 +280,14 @@ Every design relied on already has front-matter (FLOW-12).
 
 ## Decisions
 
-Four terms used from here on. A **bundled** driver is one of the five
+Five terms used from here on. A **bundled** driver is one of the five
 in-tree names (`container`, `qemu`, `vz`, `hyperv`, `firecracker`). A
 **linked** driver is a bundled driver compiled into `warden`: the four VM
-drivers in K1, none after K2. The **exec transport** is `warden` running a
+drivers in K1, none after K2. The **bundled copy** of a name is what
+`warden` carries for it: a file `warden-driver-<name>` in the directory
+of `warden`'s own executable (in K1 the container driver's binary, built
+and installed with `warden`), or the linked driver; a file of the same
+name anywhere else is the user's. The **exec transport** is `warden` running a
 driver binary as a child process and speaking the contract to it; the
 **linked transport** is the same sequence made as Go calls into a linked
 driver. The **build dialogue** is the exchange of messages between `warden`
@@ -320,13 +327,25 @@ and a driver's `run` during one build.
    the relay can reach it, which `driver/session.go` rules out on purpose,
    or the driver would have to bridge the tunnel for the whole build)
    (a13). The second stays addable: `start` reserves a `collector` field.
-5. **Lookup: an explicit path, then a linked driver, then `warden`'s own
-   directory, then `PATH`; the five bundled names never come from `PATH`,
-   and a project's `warden.toml` may select only a bundled driver.**
-   Alternative: `PATH` only, as Jeff's note described (a file named
-   `warden-driver-container` in any earlier `PATH` directory would replace
-   the bundled driver, and `sudo warden` would not find a driver installed
-   beside it) (a16).
+5. **Lookup: an explicit path, then `PATH`, then what `warden` bundles; a
+   project's `warden.toml` may name a driver but not a file.** A path
+   comes from `--driver`, `WARDEN_DRIVER` or the user's own config file,
+   and is used exclusively. Otherwise `warden-driver-<name>` is searched
+   on `PATH`, and only when `PATH` has none does `warden` take the copy it
+   bundles: a file of that name in its own directory, else a driver linked
+   into it. So a `warden-driver-container` on `PATH` replaces the bundled
+   one, and customizing an official driver needs no flag. Nothing checks
+   who owns a driver file or who may write it. The one rule kept is that
+   the project's `warden.toml` cannot name a path, so a cloned repository
+   cannot make `warden` run a binary it ships. Alternatives: the
+   redraft's guarded lookup (`warden`'s own directory before `PATH`, the
+   five bundled names never from `PATH`, a project file limited to bundled
+   drivers, owner and mode checks on Unix), which the review rejected as
+   "overcontrolled": the lookup is a convenience for the user, and it "is
+   never outside of the user's control (i.e. never a part of the build
+   environment)"; and what `warden` bundles before `PATH` (a customized
+   bundled driver would then need `--driver <path>` on every command;
+   asked as a follow-up and answered "PATH wins") (a16).
 6. **No auto-detection of the driver.** None exists today and K1 adds
    none. Selection is unchanged: `--driver`, `WARDEN_DRIVER`, `[runtime]
    driver`, else `container`. A named driver that is not found is an
@@ -429,8 +448,8 @@ and a driver's `run` during one build.
 20. **A three-platform CI job runs K1's tests.** The `test` job of
     `main.yml` runs on Linux only, and no workflow builds `warden` for
     Windows. K1 adds code that differs per platform (process groups,
-    kill, the `.exe` lookup, file ownership checks, the pseudo-terminal
-    of `attach`), so it adds one job that runs those packages' tests on
+    kill, the `.exe` lookup, the pseudo-terminal of `attach`), so it adds
+    one job that runs those packages' tests on
     Linux, macOS and Windows runners. Alternative: Linux in CI and the
     other two platforms only in native validation (a7).
 
@@ -469,6 +488,25 @@ the basis, then the rest.
   (a), without the rule on the project file: a `warden.toml` in the
   working directory can then make `warden` run any `warden-driver-<x>` on
   `PATH`, on `--help` too. Recommended: (a). Confirm.
+
+  **Answered 2026-11-14: changed.** None of the four as written; nearest
+  is (a)'s lookup with almost every guard removed. Jeff's words: "This is
+  overcontrolled. The nicety of this is for UX functionality and given
+  this is never outside of the user's control (i.e. never a part of the
+  build environment), I'd say let's allow for the first option with way
+  less guarding around its official drivers, allowing for both customized
+  implementations of existing drivers and new ones, either by absolute or
+  PATH search". Two follow-ups, each asked on its own. When a name is
+  both bundled and on `PATH`, which runs: **"PATH wins"**, so a
+  `warden-driver-container` on `PATH` replaces the bundled one and
+  customizing an official driver needs no flag; `warden driver list` and
+  the build's `driver.json` show which file ran. Which guards stay:
+  **"Only: no path in a project file"**, so there is no owner or mode
+  check and no bundled-only rule, and a project's `warden.toml` may name
+  a driver but not a file; a path comes from `--driver`, `WARDEN_DRIVER`
+  or the user's own config. Folded in as Decision 5 and **Discovery and
+  trust**: a path, then `PATH`, then the bundled copy (a file beside
+  `warden`, then a linked driver).
 - **a15. K1's scope and done-when, against K2, K3 and S4.** Your note:
   "each driver effectively being its own independent binary". Proceeding
   with Decision 14: only the container driver is a binary in K1. K1 is
@@ -562,8 +600,8 @@ the basis, then the rest.
   declare is refused, where eleven were silently ignored, and so is
   `--runtime` on a command that selects no driver; (3) refusals take one
   generated form; (4) "unknown driver" becomes "driver not found", with
-  what was searched, and a project file that names a driver that is not
-  bundled is refused; (5) `warden clean --driver qemu|vz` no longer
+  what was searched, and a project file whose `[runtime] driver` is a
+  path is refused; (5) `warden clean --driver qemu|vz` no longer
   cleans containers; (6) `warden clean` first cleans up after dead builds
   of the selected driver; (7) the build-exit grace is 10 s on every
   driver (it was 5 s on container and Hyper-V); (8) a second Ctrl-C kills
@@ -572,7 +610,8 @@ the basis, then the rest.
   tears the build down on every driver, where it killed `warden` on
   three; (10) the output directory gains `driver.json`, written with
   `inputs/` before the driver starts; (11) `warden driver list` is new;
-  (12) a path is accepted in `--driver` and `WARDEN_DRIVER`; (13) a
+  (12) a path is accepted in `--driver`, `WARDEN_DRIVER` and the user's
+  config; (13) a
   malformed `[vm] image_refresh_after` or `image_min_grace` is refused
   only when qemu or hyperv is selected, and then on every command; (14)
   `--timeout` counts from the moment `warden` starts the driver; (15) a
@@ -806,35 +845,53 @@ become modules. `warden`'s side of the contract lives in `cmd/warden`, and
 the suite has its own implementation of that side, so the two are checked
 against the specification and not against each other.
 
-The terms bundled, linked, exec transport and build dialogue are defined
-at the top of **Decisions**. `warden` reaches a linked driver through the
+The terms bundled, linked, bundled copy, exec transport and build
+dialogue are defined at the top of **Decisions**. `warden` reaches a linked driver through the
 same sequence and the same messages, as Go calls and not over a pipe.
 
 ### Discovery and trust
+
+The lookup is a convenience for the person running `warden`, and it is
+theirs to arrange: in the review's words it "is never outside of the
+user's control (i.e. never a part of the build environment)" (a16). So it
+searches where the user puts programs, lets a file there replace a driver
+`warden` ships, and checks nothing about who owns a file. It keeps one
+rule, on the one input that may not be the user's own.
 
 **Name.** A driver binary is `warden-driver-<name>`. `<name>` matches
 `[a-z][a-z0-9]{0,31}` and is not the name of a `warden` command. It has no
 hyphen or other punctuation because it is used as a TOML table
 (`[driver.<name>]`), inside lock and record file names
 (`build-<name>-<id>`) and as the `warden` subcommand that reaches the
-driver's own commands. On Windows the only candidate is
-`warden-driver-<name>.exe`: `PATHEXT` is not consulted, so no `.bat` or
-`.cmd` file is ever run.
+driver's own commands. On Windows the file is `warden-driver-<name>.exe`
+(below).
 
-**Selection** is unchanged: `--driver`, else `WARDEN_DRIVER`, else
-`[runtime] driver`, else `container` (`resolveConfig`,
+
+
+**Selection** is unchanged in order: `--driver`, else `WARDEN_DRIVER`,
+else `[runtime] driver`, else `container` (`resolveConfig`,
 `cmd/warden/main.go`). There is no auto-detection. `image verify` keeps
-reading the flag only. Two limits are new, both on config files:
+reading the flag only. What is new is that the value may be a path. A
+value is a path when it contains a path separator (`/`, and `\` on
+Windows); anything else is a name.
 
-- No config file may name a path: a `[runtime] driver` value that contains
-  a path separator is refused.
-- The project's `warden.toml` (read from the working directory) may select
-  only a bundled driver. That file may come with a build context someone
-  else wrote, and the selected driver is run for `--help`, `doctor` and
-  `clean` as well as for a build, so it must not be able to choose which
-  program on `PATH` runs. A driver that is not bundled is selected by
-  `--driver`, by `WARDEN_DRIVER` or in the user's own config file. The
-  refusal names the file and gives those three as the fix.
+| Where the value is | A name | A path |
+|---|---|---|
+| `--driver` | yes | yes; a relative one is relative to the working directory, like any path argument |
+| `WARDEN_DRIVER` | yes | yes, likewise |
+| `[runtime] driver` in the user's config (`~/.config/warden/config.toml`) | yes | yes, absolute only |
+| `[runtime] driver` in the project's `warden.toml` | yes, any driver | **no** |
+
+- **The one rule kept: a project's `warden.toml` may name a driver, not a
+  file.** That file is read from the working directory and may come with
+  a build context someone else wrote. It may select any driver by name,
+  which is then looked up like any other name; a value that is a path is
+  refused, so a cloned repository cannot make `warden` run a binary it
+  ships. The refusal names the file and gives the three places a path
+  may come from as the fix.
+- A relative path in the user's config file is refused too. This is
+  correctness, not trust: that file is read from every working
+  directory, and a relative path would name a different file in each.
 
 `[runtime] cli` is already run as given from a project's `warden.toml`.
 K1 does not change that; it is filed as a follow-up (**Risks**).
@@ -842,103 +899,147 @@ K1 does not change that; it is filed as a follow-up (**Risks**).
 **Lookup**, first match wins, resolved once per `warden` invocation to an
 absolute path, which every later command of that invocation runs:
 
-1. A `--driver` or `WARDEN_DRIVER` value that contains a path separator is
-   a file. It is used as given and nothing else is searched (GLOBAL-10).
-   The driver's name is what its `describe` reports, which must match the
-   file's base name (`warden-driver-<name>`, with `.exe` on Windows).
-2. A linked driver, when the name is one (K1: `qemu`, `vz`, `hyperv`,
-   `firecracker`).
-3. The directory of `warden`'s own executable (`os.Executable()`, symlinks
-   resolved). Bundled drivers ship here, so `sudo warden` still finds them
-   with sudo's reset `PATH`. K1 adds no separate driver directory
-   (`libexec`); whether packagers need one is K2's question.
-4. Each absolute entry of `PATH`, in order. Relative entries and the
-   current directory are skipped.
+1. **A path.** The file is used as given and nothing else is searched
+   (GLOBAL-10). The driver's name is what its `describe` reports, which
+   must match the file's base name (`warden-driver-<name>`, with `.exe`
+   on Windows).
+2. **`PATH`.** Each absolute entry, in order, is searched for
+   `warden-driver-<name>`.
+3. **The directory of `warden`'s own executable** (`os.Executable()`,
+   symlinks resolved). The container driver's binary ships here, so
+   `sudo warden` still finds it under sudo's reset `PATH`; a driver the
+   project did not write may be installed here too. K1 adds no separate
+   driver directory (`libexec`); whether packagers need one is K2's
+   question.
+4. **A driver linked into `warden`**, when the name is one (K1: `qemu`,
+   `vz`, `hyperv`, `firecracker`).
 
-A bundled name resolves at step 1, 2 or 3 only, never from `PATH`. A name
-that is not found is an error that lists what was searched; it is never
-replaced by the default driver. For a name that is not bundled:
+Steps 3 and 4 are the bundled copy. `PATH` comes before it, so a
+`warden-driver-container` on `PATH` runs in place of the one beside
+`warden`, and nothing has to be passed to make it so: that is how an
+official driver is customized. `warden driver list` and the build's
+`driver.json` show which file ran (below).
+
+**Where a linked driver sits.** Last. A file found at step 1, 2 or 3
+beats code compiled into `warden`, so in K1 a `warden-driver-qemu` on
+`PATH`, or beside `warden`, runs through the exec transport in place of
+the linked qemu driver. Every command for that name then goes to that
+binary; a command it does not list is not implemented for that name, and
+the linked driver's code is not used to fill the gap (GLOBAL-11). Two
+reasons for this place in the order: it gives the four VM drivers the
+same rule as the container driver ("a file on `PATH` wins"), and K2
+changes nothing in it, since each VM driver then becomes a file at step
+3 and step 4 goes.
+
+A name that is not found is an error that says where `warden` looked. It
+is never replaced by the default driver:
 
 ```
-[warden] ERROR: driver "nomad" not found
-  To fix: install warden-driver-nomad beside warden (/usr/local/bin) or on
-          PATH, or name its file: --driver /path/to/warden-driver-nomad.
+[warden] ERROR: driver "nomad" not found (searched PATH, then
+                /usr/local/bin, where warden is installed)
+  To fix: put warden-driver-nomad on PATH or beside warden, or name its
+          file: --driver /path/to/warden-driver-nomad.
           `warden driver list` shows the drivers warden can find.
 ```
 
-For a bundled name, which is the likely case after an upgrade that
-installed only `warden`:
+The message is the same for a bundled name, which is the likely case
+after an upgrade that installed only `warden`.
+
+**What is still checked, and why.** Each of these is about whether the
+file can be run at all, or run correctly. None is about who put it
+there, and nothing compares owners, modes or directory permissions on
+any platform.
+
+- *A file named by path* must exist and, after symbolic links are
+  resolved, be a regular file the user may execute. Without the check
+  the user would get the operating system's bare error from the first
+  command; with it the error names the file and what is wrong with it
+  (UX-04).
+- *On `PATH` and in `warden`'s directory*, a directory or a file without
+  execute permission is not a candidate, and the search goes on. This is
+  what a shell and Go's `exec.LookPath` do.
+- *A relative or empty `PATH` entry*, which means the current directory,
+  is skipped. Go's `os/exec` refuses to run a program it resolved through
+  such an entry (`exec.ErrDot`, since Go 1.19), and `warden` keeps the
+  standard library's rule instead of adding code to defeat it. On Windows
+  it likewise does not search the current directory first, which
+  `cmd.exe` does and `os/exec` refuses.
+- *On Windows the file is `warden-driver-<name>.exe`*, on `PATH`, beside
+  `warden` and for a path alike; `PATHEXT` is not consulted, so a `.bat`
+  or `.cmd` of that name is not a candidate. Two reasons, both
+  correctness. A batch file runs under `cmd.exe`, whose quoting differs
+  from every other program's, and Go's `os/exec` does not quote for it,
+  so the arguments of `ext` could not be passed unchanged. And `warden`
+  stops a driver by ending the process it started (**The build**), which
+  for a batch file is `cmd.exe` and not the driver. A wrapper on Windows
+  is therefore a small program, not a script.
+- *The name `describe` reports* must be the name that was looked up. It
+  names the build's lock and record and the driver's config table, so a
+  driver answering to another name would share them with a different
+  driver.
+
+**`warden driver list`** (new) prints one entry per name it can find:
+the five bundled names, and every `warden-driver-*` on `PATH` or beside
+`warden`. Each entry gives the file that would run and where it was
+found, and beneath it every copy the lookup passes over, in lookup
+order, the bundled copy among them:
 
 ```
-[warden] ERROR: driver "container" not found
-  To fix: install warden-driver-container beside warden (/usr/local/bin);
-          a bundled driver is not taken from PATH. Or name its file:
-          --driver /path/to/warden-driver-container.
+NAME         RUNS                                         FOUND
+container    /home/ana/bin/warden-driver-container        PATH
+               shadows /usr/local/bin/warden-driver-container (beside warden)
+qemu         (linked into warden)                         linked
+vz           (linked into warden)                         linked
+hyperv       (linked into warden)                         linked
+firecracker  (linked into warden)                         linked
+nomad        /opt/nomad/bin/warden-driver-nomad           PATH
 ```
 
-**Checks on the file found** (steps 1, 3 and 4), before it is run.
-Symbolic links are resolved first and the checks apply to the file they
-lead to, so a driver linked into a `bin` directory (Homebrew, Nix, stow)
-is judged by its real file.
+So a bundled driver that a file on `PATH` has replaced is the first
+thing the list shows about it. The command reads directories only and
+runs no driver. With `--json` it prints one object,
+`{"drivers":[{"name","path","found","shadowed":[{"path","found"}]}]}`,
+where `found` is `PATH`, `beside-warden` or `linked` (UX-02).
 
-- It is a regular file, executable by the user.
-- On Unix, a file named by path (step 1) or found on `PATH` (step 4) is
-  owned by root, by the current user, or by the owner of the `warden`
-  executable, and is not writable by group or others. The owner rule
-  applies to every user, not only to root: a file another user owns can
-  be rewritten by that user whatever its mode.
-- On Unix, a file found on `PATH` (step 4) is also refused when the
-  directory it was found in is writable by group or others, since the
-  file could then be replaced whatever its own mode. Naming the file by
-  path is the way around it: the user has then vouched for that file.
-- On Unix, a file in `warden`'s own directory (step 3) is compared with
-  the `warden` executable instead: it is owned by `warden`'s owner or by
-  root, and it has no write permission that `warden` itself lacks.
-  Whoever can write `warden` can already replace what runs, so a tighter
-  rule would add nothing; and an absolute rule would refuse a driver
-  built by `go build` under umask 002 (mode 0775), the default for
-  ordinary users on Fedora and Debian-family systems. A file planted
-  beside `warden` by another user, where the directory allows it (a
-  shared tools directory, a CI cache, `/tmp`), has another owner and is
-  refused.
-- A refusal names the file, the mode or owner found, and the fix.
-- On Windows nothing checks who may write the file in K1 (**Risks**).
-
-**`warden driver list`** (new) prints, for each name it can find, the path
-that would run, `linked` for a linked driver, and any shadowed copies later
-in the search order. It reads directories only and runs no driver. With
-`--json` it prints one object, `{"drivers":[{"name","path","linked",
-"shadowed":[...]}]}` (UX-02).
-
-**What `warden` runs without being asked.** Only the selected driver, and
-for a project file's selection only a bundled one. The commands that
-select no driver cover the bundled ones: `image list`, and `image verify`
-with no `--driver`, ask each linked driver and each bundled driver binary
-in `warden`'s own directory. A driver found on `PATH` is run only when the
-user named it: by `--driver`, by `WARDEN_DRIVER`, in the user's config
-file, or as `warden <name> ...` (**The commands**, `ext`).
+**What `warden` runs without being asked.** Only the selected driver.
+The commands that select no driver cover the five bundled names: `image
+list`, and `image verify` with no `--driver`, ask each of the five,
+resolved by the lookup above, so a copy on `PATH` answers for its name
+there as it would in a build. A driver of any other name is run only
+when the user selects it or runs `warden <name> ...` (**The commands**,
+`ext`).
 
 **Recorded.** Before the build starts, `warden` writes
 `<output>/driver.json`:
 
 ```json
 {"name": "container", "version": "0.9.0", "contract": 1,
- "path": "/usr/local/bin/warden-driver-container",
- "sha256": "9f2c...", "linked": false}
+ "path": "/home/ana/bin/warden-driver-container",
+ "sha256": "9f2c...", "linked": false, "found": "PATH",
+ "shadowed": ["/usr/local/bin/warden-driver-container"]}
 ```
 
-For a linked driver `path` and `sha256` are `warden`'s own. The file is
-unsigned and is not part of the ledger. The environment record is not
-touched: `specs/metadata-environment/v1.schema.json` already defines
-`driver` as a string, set by the driver's own environment description.
+`found` is `path` (the file was named), `PATH`, `beside-warden` or
+`linked`, and `shadowed` lists the copies the lookup passed over, so a
+build's output says when a bundled driver was replaced and by which
+file. For a linked driver `path` and `sha256` are `warden`'s own. The
+file is unsigned and is not part of the ledger. The environment record
+is not touched: `specs/metadata-environment/v1.schema.json` already
+defines `driver` as a string, set by the driver's own environment
+description.
 
-**What a planted binary can and cannot do.** It cannot take a bundled
-name, come from the current directory or a relative `PATH` entry, be
-selected by a project file, be named as a path by any config file, be
-owned by a third user, or be a batch file. A name that is not bundled is
-not protected against a directory earlier in `PATH` that the user or root
-owns and that someone managed to write to: `driver list` and
-`driver.json` show which file ran; they do not prevent it (a16, a19).
+**What a planted binary can and cannot do.** A file named
+`warden-driver-<name>` in any absolute `PATH` directory runs in place of
+the bundled driver of that name, for every command including `--help`,
+`doctor` and `clean`, with the user's privileges. It then decides how
+the build is isolated, which relay and executor run, and it is given
+the claim token. `warden` does not prevent that; it shows it (`driver
+list`) and records it (`driver.json`, a19). What a planted file cannot
+do: be reached through the current directory or a relative `PATH`
+entry, or be named as a file by a project's `warden.toml`. A repository
+can therefore choose a driver by name, but can supply the binary only
+if the user has put one of the repository's directories on `PATH` as an
+absolute entry (**Security note**).
 
 ### The commands
 
@@ -1275,10 +1376,11 @@ what a killed `warden` leaves today. Nothing sweeps before a build (a20).
 
 1. For every `build-<driver>-*.lock` nobody holds, it reads the build's
    record. For a driver binary it runs `reap <id>` on the binary the
-   record names, after the checks under **Discovery and trust**, with the
+   record names, after the check that it is a file that can be run
+   (**Discovery and trust**), with the
    record's `tmpdir`, `options` and state file. A binary that has changed
    since the build (an upgrade) is run, with a line that says so; one
-   that is gone or fails the checks is an error for that build, with the
+   that is gone or cannot be run is an error for that build, with the
    fix (`warden clean --driver <path>` reaps with the file named). It
    then removes the build's stage directory, which is `warden`'s own. When
    `reap` exited 0, it removes the state file, the record and the lock
@@ -1401,8 +1503,8 @@ How `warden` handles options:
 
 1. **Find the driver before the flags are parsed.** `warden` reads
    `--driver` from the raw arguments, else `WARDEN_DRIVER`, else `[runtime]
-   driver` from the config files (from the project's file, a bundled name
-   only), else `container`, and looks the driver up. Commands that select
+   driver` from the config files (from the project's file, a name and
+   never a path), else `container`, and looks the driver up. Commands that select
    no driver (`inspect`, `driver list`, `image list`, and `image verify`
    without `--driver`) skip this, so no driver's flag is registered on
    them. `--runtime` is a persistent flag today, accepted and ignored on
@@ -1902,8 +2004,7 @@ the relay source. What K2 inherits from K1 and must settle:
 - qemu's VMs after a second signal or a killed `warden`: they have no
   parent-death signal, so only its `reap` finds them.
 - A Windows release target, and on Windows a job object so a killed
-  driver's children die with it, and a check of who may write a driver
-  file.
+  driver's children die with it.
 - Who carries the bundled drivers' reserved ranges, whether `image list`
   runs drivers found on `PATH`, and whether packagers need a driver
   directory apart from `warden`'s own.
@@ -2088,11 +2189,11 @@ identical.
    keep their text.
 4. **"Unknown driver" becomes "driver not found".** `unknown driver "x"
    (valid: container, qemu, vz, hyperv, firecracker)` is replaced by the
-   messages under **Discovery and trust**, since the set is no longer
+   message under **Discovery and trust**, since the set is no longer
    fixed. The `--driver` help names the five bundled drivers and says a
-   name or a path of another is accepted. A project `warden.toml` that
-   names a driver that is not bundled is refused with its own message; it
-   was "unknown driver" before.
+   name or a path of another is accepted. A project `warden.toml` may
+   name any driver; one whose `[runtime] driver` is a path is refused
+   with its own message, where it was "unknown driver" before.
 5. **`warden clean --driver qemu` and `--driver vz` no longer run the
    container runtime's cleanup** (Decision 16). They clean up after dead
    builds as in 6, report nothing else to clean, and handle the cache as
@@ -2130,7 +2231,9 @@ identical.
     driver makes today before it creates anything are in its probe, and
     still leave nothing.
 11. **`warden driver list` is new**, with `--json`.
-12. **`--driver` and `WARDEN_DRIVER` accept a path** to a driver binary.
+12. **`--driver`, `WARDEN_DRIVER` and `[runtime] driver` in the user's
+    config accept a path** to a driver binary (in the user's config, an
+    absolute one).
 13. **A malformed `[vm] image_refresh_after` or `image_min_grace` is
     refused when its driver is selected, on every command.** Today
     `newRequest` parses the two ages for every driver, so a bad value is
@@ -2276,10 +2379,16 @@ tests there (GLOBAL-07, ORCH-05).
 - **A killed pair leaves the runtime's containers running** until `warden
   clean`, as a killed `warden` does today (a20's option (b) is the
   sweep).
+- **A file on `PATH` replaces a bundled driver without a word at build
+  time.** That is the review's answer to a16, and the cost is stated
+  here: a `warden-driver-container` that reached a `PATH` directory by
+  accident (a stale build, another checkout's `bin`) or by design runs in
+  place of the shipped one. `warden driver list` shows it and every
+  build's `driver.json` records it; nothing warns.
 - **Windows.** K1 kills the driver process, not its process tree (that
-  needs a job object), and checks nothing about who may write a driver
-  file. The container driver's resources are held by the runtime and found
-  by `reap`, so K1 does not depend on either; K2 does, for Hyper-V.
+  needs a job object). The container driver's resources are held by the
+  runtime and found by `reap`, so K1 does not depend on it; K2 does, for
+  Hyper-V.
 - **A driver written without the kit may omit `exited`.** A dead
   environment is then noticed only by the loss of the tunnel or by the
   30 s heartbeat timeout, which starts after a first heartbeat.
@@ -2309,9 +2418,9 @@ tests there (GLOBAL-07, ORCH-05).
   `warden-relay`, which are not the names `driver.GuestBinary` looks for.
   And `[runtime] cli` in a project's `warden.toml` is run as given
   (`cmd/warden/config.go`, `driver/container/container.go`), so a build
-  context can already choose a program `warden` runs; K1 closes that
-  door for the driver and leaves this one as it is. Each is to be filed
-  as a follow-up item.
+  context can already choose a program `warden` runs; K1 keeps a project
+  file from naming a driver's file and leaves this one as it is. Each is
+  to be filed as a follow-up item.
 
 ### The overview (FLOW-15)
 
@@ -2321,9 +2430,9 @@ orchestrator's pseudocode in `concepts/overview.md` changes to:
 ```
 warden build <context>:
     driver := the driver named by --driver, WARDEN_DRIVER or [runtime] driver
-              (a project file: a bundled one only), else container: a path
-              as given, else a linked driver, else warden-driver-<name>
-              beside warden, else on PATH; not found is an error
+              (a project file: a name, never a path), else container: a
+              path as given, else warden-driver-<name> on PATH, else beside
+              warden, else a linked driver; not found is an error
     d := driver.describe                    # what it is and what it takes
     load the configuration; refuse a value of the wrong type for a key the
         driver declares, and a flag it does not declare
@@ -2393,10 +2502,9 @@ not listed is unchanged and `warden`'s.
 | Default, override or fallback | Status | Why it is the obvious choice (GLOBAL-09) | What overrides it, exclusively (GLOBAL-10) |
 |---|---|---|---|
 | The driver when none is named: `container` | Unchanged | It is today's default and needs no host setup | `--driver`, else `WARDEN_DRIVER`, else `[runtime] driver` (today's order). A named driver that is not found is an error; the default is not tried |
-| Where a driver is found: linked, else `warden`'s own directory, else `PATH` | **New** (a16) | A driver installed with `warden` is the one meant; `PATH` is how git and kubectl find an added one | A path in `--driver` or `WARDEN_DRIVER`: that file and nothing else. A config file cannot name a path |
-| A bundled name is never taken from `PATH` | **New** restriction (a16) | A file on `PATH` should not be able to replace a driver `warden` ships | A path in `--driver` or `WARDEN_DRIVER` |
-| A project `warden.toml` selects only a bundled driver | **New** restriction (a16) | That file may come with someone else's build context, and the selected driver runs for `--help` too | `--driver`, `WARDEN_DRIVER` or the user's config file select any driver |
-| A driver file is refused when another user could have written it: on Unix, an owner other than root, the user or `warden`'s owner, or write permission for group or others (in `warden`'s own directory: an owner or a write permission `warden` itself does not have); for a `PATH` hit, a directory writable by group or others | **New** (a16) | It could have been replaced by another user | Nothing for the file: fix its mode or owner. For the directory: name the file by path |
+| Which file runs for a driver name: the first `warden-driver-<name>` on `PATH`; when `PATH` has none, the bundled copy (a file beside `warden`, else a driver linked into it) | **New** (a16) | `PATH` is where a user puts a program they mean to run, and how git and kubectl find a command; the bundled copy is what runs when the user has put nothing there, which is every install that has not been customized | A path in `--driver`, `WARDEN_DRIVER` or the user's config file: that file and nothing else, and if it cannot be run that is the error. The order falls through only on absence, from `PATH` to the bundled copy when no file of the name is on `PATH`. It never falls through on failure: a file found on `PATH` that cannot be run, or whose `describe` fails, fails the command, and the bundled copy is not tried (GLOBAL-10, GLOBAL-11) |
+| A project `warden.toml` names a driver, never a file | **New** rule, the one guard kept (a16) | That file may come with someone else's build context; a name can only select a program the user already has | A path comes from `--driver`, `WARDEN_DRIVER` or the user's config file |
+| A relative path in the user's config file is refused; relative and empty `PATH` entries are skipped; on Windows only `warden-driver-<name>.exe` is a candidate | **New**, each for correctness and none for trust (**Discovery and trust**) | A relative path in a file read from every directory names a different file in each; the other two are what Go's `os/exec` and a process `warden` can stop require | An absolute path; an absolute `PATH` entry or a path to the file; nothing for `.exe` |
 | A context, output or temporary path that is not valid UTF-8, for a driver binary | **New** refusal (Behaviour 15) | It cannot be sent to another process as JSON unchanged, and altering it silently would build something else | Nothing: use a path that is UTF-8 |
 | The collector: in `warden`'s process, one per build, reached over the tunnel | Unchanged in effect; now `warden`'s for every driver (a12) | It is today's, and it opens no listener | Nothing in K1; no flag or key is added (**The collector**) |
 | Who sends the claim: `warden` | **Changed owner** (a13); the claim is unchanged | The collector's owner must hold the tunnel | Nothing in K1 |
@@ -2420,10 +2528,13 @@ not listed is unchanged and `warden`'s.
 
 Named lookups and fallbacks (GLOBAL-10, GLOBAL-11):
 
-- **New, named: the driver lookup** (the second row). It is a search
-  order, not a retry: the first match is used and its failure is the
-  build's failure. `warden driver list` shows the order's result, and
-  `driver.json` what ran. A path from the user ends the search.
+- **New, named: the driver lookup** (the second row): `PATH`, then the
+  directory of `warden`, then a linked driver. It is a search order, not
+  a retry. A later place is used only when the earlier ones hold no file
+  of that name; the first file found is the driver, and its failure is
+  the command's failure. `warden driver list` shows the order's result
+  and what it passed over, and `driver.json` what ran. A path from the
+  user ends the search before it starts.
 - **Kept, existing: "beside the binary, else the source tree".** The relay
   VM's kernel and initramfs come all from beside the executable or all
   from the source tree's tool output (`relayvm.Find`), and
@@ -3089,41 +3200,65 @@ privileges (root's, under `sudo warden setup` or `image prepare`).
 
 **How the posture changes.**
 
-- **Which code builds the boundary is decided by a lookup.** A file that
-  `warden` takes for the selected driver controls the isolation, the
-  relay and the executor of that build. What the lookup does about it:
-  the five bundled names resolve only from a linked driver or from
-  `warden`'s own directory, so nothing on `PATH` can replace a driver the
-  project ships; the current directory and relative `PATH` entries are
-  never searched; no config file can name a path, and the project's
-  `warden.toml`, which may come with a build context, can select only a
-  bundled driver, so a build context cannot choose which program on
-  `PATH` runs, on `--help`, `doctor` and `clean` included; on Windows
-  only a `.exe` is run, never a batch file through `cmd.exe`; on Unix,
-  for every user and not only root, the file (after symbolic links are
-  resolved) must be owned by root, the user or the owner of the `warden`
-  executable and not be writable by group or others, a `PATH` hit's
-  directory must not be writable by group or others, and a file beside
-  `warden` must have `warden`'s owner (or root) and no write permission
-  `warden` lacks, so a file another user planted beside `warden` is
-  refused; within one invocation the driver is resolved once and that
-  path is run for every command, `reap` included; `warden clean` reaps a
-  dead build with the binary its record names, after the same checks,
-  and says so when that file has changed since. What it does not do:
-  protect a name that is not bundled against a directory earlier in
-  `PATH` that passes the checks and that an attacker could still write
-  to as the user. That is detected (`warden driver list` shows shadowed
-  copies, `driver.json` records the path and digest), not prevented
-  (a16, a19).
-- **Root.** `sudo warden` runs the driver as root. The bundled drivers are
-  found beside `warden`, which root already trusts by running it. A driver
-  on `PATH` under root must pass the ownership and directory checks.
-  a16's option (c) would not search `PATH` at all under root.
+- **Which code builds the boundary is decided by a lookup, and the
+  lookup trusts `PATH`.** A file that `warden` takes for the selected
+  driver controls the isolation, the relay and the executor of that
+  build. The redraft guarded the lookup (bundled names never from
+  `PATH`, a project file limited to bundled drivers, owner and mode
+  checks). The review removed those guards. The reasoning is Jeff's and
+  is recorded in his words: "This is overcontrolled. The nicety of this
+  is for UX functionality and given this is never outside of the user's
+  control (i.e. never a part of the build environment), I'd say let's
+  allow for the first option with way less guarding around its official
+  drivers, allowing for both customized implementations of existing
+  drivers and new ones, either by absolute or PATH search". Asked which
+  wins when a name is both bundled and on `PATH`, he chose "PATH wins";
+  asked which guards stay, "Only: no path in a project file". The
+  posture that follows:
+  - *The lookup is part of the host, not of the build.* Nothing inside
+    the build environment can reach `PATH`, `warden`'s directory, the
+    user's config or `warden`'s command line. Whoever can write a
+    directory on the user's `PATH` can already replace `git`, the
+    container runtime or `warden` itself, and so can already do
+    whatever a driver could. The driver lookup adds no new way in for
+    such a writer; it adds one more program they could replace.
+  - *What a planted binary can now do.* A `warden-driver-<name>` in any
+    absolute `PATH` directory runs in place of the bundled driver of
+    that name, on every command, `--help`, `doctor` and `clean`
+    included, and as root under `sudo warden` if it is on root's
+    `PATH`. It chooses the isolation, the relay and the executor, and
+    it receives the claim token. It can therefore run a build with no
+    isolation, or with a relay of its own that signs a ledger of its
+    choosing. `warden` cannot tell (a19).
+  - *What a build context can and cannot do.* A project's `warden.toml`
+    can select a driver by name. It cannot name a file, and the current
+    directory and relative `PATH` entries are not searched, so a cloned
+    repository cannot supply the binary by itself. It can where the
+    user's `PATH` holds an absolute entry inside the repository, which
+    some setups create (a per-project `bin` added by an environment
+    hook): then the repository ships the file and its own `warden.toml`,
+    or merely the default driver's name, selects it. This is the
+    exposure the old "bundled names never from `PATH`" rule closed for
+    the five bundled names, and it is now open by decision. A user in
+    that position passes `--driver <path>` or keeps such directories
+    off `PATH`; the reference docs say so (UX-01).
+  - *What shows it.* `warden driver list` shows which file runs for
+    each name and every copy it shadows; every build's `driver.json`
+    records the path, the file's digest, where it was found and what it
+    shadowed (a19). Both are for the person who ran the build. Neither
+    is signed, and neither prevents anything.
+  - *What stays fixed.* Within one invocation the driver is resolved
+    once and that path is run for every command, `reap` included.
+    `warden clean` reaps a dead build with the binary its record names,
+    and says so when that file has changed since.
+- **Root.** `sudo warden` runs the driver as root. Under sudo's reset
+  `PATH` the search covers root's `PATH`, then `warden`'s directory,
+  where the bundled copy is. No ownership check is made for root either;
+  the review's answer does not distinguish it.
 - **The build record and state file** live in the user's lock directory
   (mode 0700), carry no secret, and are read back by `warden clean`,
   which runs the binary a record names. Whoever can write that directory
-  is the user. The record's path still goes through the file checks
-  before it is run.
+  is the user.
 - **`warden` cannot vouch for a driver it did not ship.** A conforming
   driver isolates the environment, starts BuildWarden's relay and delivers
   BuildWarden's executor. `warden` cannot check any of the three, and the
@@ -3177,16 +3312,16 @@ privileges (root's, under `sudo warden setup` or `image prepare`).
 
 **What the TEST-08 suite should exercise.**
 
-- Lookup: a `warden-driver-container` placed earlier on `PATH`, in the
-  current directory, and in a relative `PATH` entry is not run; a
-  group-writable driver file on `PATH` is refused, and so is one in a
-  group-writable directory; as an ordinary user, a `warden-driver-container`
-  owned by another user and placed beside `warden` is refused; a driver
-  beside `warden` built under umask 002 is accepted; a symbolic link is
-  judged by its target; `[runtime] driver = "./x"` in a `warden.toml` is
-  refused as a path, and `[runtime] driver = "x"` in the project's file
-  is refused as not bundled, before any `describe` runs, for `--help`
-  too; on Windows a `warden-driver-x.bat` is not run.
+- Lookup: a `warden-driver-container` in the current directory, or in a
+  relative or empty `PATH` entry, is not run; one in an absolute `PATH`
+  entry is run in place of the bundled copy, and `warden driver list`
+  and `driver.json` name it and the copy it shadows; `[runtime] driver
+  = "./x"` or an absolute path in the project's `warden.toml` is refused
+  before any driver runs, for `--help` too, and the same value in the
+  user's config file is accepted when absolute; `[runtime] driver = "x"`
+  in the project's file selects `warden-driver-x` by lookup; on Windows
+  a `warden-driver-x.bat` is not taken for the driver. No case asserts
+  an owner or a mode: those checks are gone (a16).
 - The claim token appears in the argv or environment of no driver process
   that `warden` starts (`run` and every other command), and in no build
   record.
@@ -3248,10 +3383,13 @@ differs per platform, so it adds one job (Decision 20):
   secret; `reap` and `attach` get the record's values and not the
   invocation's; a failed `reap` keeps the lock and record; `warden clean`
   removes a dead build's stage directory, for a linked driver too.
-- The exec transport and the lookup: each lookup rule and each file check
-  (with a table of directories, modes, owners and symbolic links, a case
-  under umask 002, and a file owned by another user where the test can
-  make one), the project-file rule, the result and request files, every
+- The exec transport and the lookup: the order (a path, `PATH`,
+  `warden`'s directory, a linked driver) over a table of directories,
+  with a bundled name shadowed from `PATH` and a linked name replaced by
+  a file; a directory, a file with no execute bit and a relative `PATH`
+  entry passed over; a symbolic link followed; the project-file rule and
+  the relative path in the user's config; `driver list` and its
+  `shadowed` entries; the result and request files, every
   exit code, a line that is not JSON, a driver that exits early, a path
   that is not UTF-8, the 60 s limit and the 10 s and 30 s limits with a
   fake clock.
@@ -3313,8 +3451,8 @@ is, and the workflow file is the list.
 
 | Host | Cases |
 |---|---|
-| macos-finch | (1) `warden driver list` shows `container` at the built `warden-driver-container` and the four linked drivers; `warden doctor` prints `container runtime: finch` and `ok`. (2) A default build succeeds and its ledger verifies; `driver.json` names the driver binary and its digest; `inputs/` holds `Containerfile` and `build.sh`. (3) `warden shell` opens a shell and passes its exit code through. (4) `[runtime] relay_image = "dev"` builds the relay from source; `WARDEN_IMAGE=<ref>` pulls that image; an unpullable reference fails without trying the default. (5) Ctrl-C mid-build tears down and leaves nothing; SIGTERM mid-build does the same and exits 1; with the driver killed mid-build `warden` fails the build and reaps; with `warden` killed (SIGKILL) mid-build the driver tears down by itself and no container of the build is left. (6) With `warden` and the driver both killed, the build's containers are still running; `warden clean`, run with another `--tmpdir` than the build's, removes that build's containers, network, work directory, stage directory, lock and record, and leaves a running build's; a running build started with another `HOME`, whose lock is elsewhere, is left alone too. (7) `WARDEN_CTR_CLI` and `--runtime` select the runtime; a missing one gives the fixable error and leaves no output directory; `--network x` is refused with the generated message. (8) A `warden-driver-container` earlier on `PATH` is not run; `[runtime] driver = "x"` in the project's `warden.toml` is refused. (9) `make driver-conformance DRIVER=dist/warden-driver-container` passes both tiers on finch |
-| container-any | On the Windows host, with its container runtime: (1) `warden driver list` shows `warden-driver-container.exe`; `warden doctor` reports the runtime and `ok`. (2) A default build succeeds, its ledger verifies, `driver.json` is written. (3) Ctrl-C mid-build tears down; with the driver killed `warden` reaps; with `warden` killed the driver tears down on the end of its input. (4) `warden clean` leaves a running build and removes a build whose `warden` and driver were both killed, from its record. (5) A `warden-driver-container.bat` beside `warden` or on `PATH` is not run. (6) Both tiers of the suite pass against `warden-driver-container.exe` |
+| macos-finch | (1) `warden driver list` shows `container` at the built `warden-driver-container` and the four linked drivers; `warden doctor` prints `container runtime: finch` and `ok`. (2) A default build succeeds and its ledger verifies; `driver.json` names the driver binary and its digest; `inputs/` holds `Containerfile` and `build.sh`. (3) `warden shell` opens a shell and passes its exit code through. (4) `[runtime] relay_image = "dev"` builds the relay from source; `WARDEN_IMAGE=<ref>` pulls that image; an unpullable reference fails without trying the default. (5) Ctrl-C mid-build tears down and leaves nothing; SIGTERM mid-build does the same and exits 1; with the driver killed mid-build `warden` fails the build and reaps; with `warden` killed (SIGKILL) mid-build the driver tears down by itself and no container of the build is left. (6) With `warden` and the driver both killed, the build's containers are still running; `warden clean`, run with another `--tmpdir` than the build's, removes that build's containers, network, work directory, stage directory, lock and record, and leaves a running build's; a running build started with another `HOME`, whose lock is elsewhere, is left alone too. (7) `WARDEN_CTR_CLI` and `--runtime` select the runtime; a missing one gives the fixable error and leaves no output directory; `--network x` is refused with the generated message. (8) A copy of `warden-driver-container` placed in a directory on `PATH` runs in place of the one beside `warden`: `warden driver list` shows it and the copy it shadows, and the build's `driver.json` has `found: PATH` and its digest; `[runtime] driver = "./x"` in the project's `warden.toml` is refused. (9) `make driver-conformance DRIVER=dist/warden-driver-container` passes both tiers on finch |
+| container-any | On the Windows host, with its container runtime: (1) `warden driver list` shows `warden-driver-container.exe`; `warden doctor` reports the runtime and `ok`. (2) A default build succeeds, its ledger verifies, `driver.json` is written. (3) Ctrl-C mid-build tears down; with the driver killed `warden` reaps; with `warden` killed the driver tears down on the end of its input. (4) `warden clean` leaves a running build and removes a build whose `warden` and driver were both killed, from its record. (5) A `warden-driver-container.bat` beside `warden` or on `PATH` is not taken for the driver; a `warden-driver-container.exe` on `PATH` replaces the one beside `warden`. (6) Both tiers of the suite pass against `warden-driver-container.exe` |
 | macos-vz | (1) `warden doctor --driver vz` and `warden image list` print what `main` prints. (2) A vz build succeeds, its ledger verifies, `relay.log` is written, `driver.json` says `linked`; with a Containerfile in the context, it is ignored and `inputs/` is absent, as on `main`. (3) A script that exits 3 makes `warden` exit 3; `--timeout 30s` on a sleeping script exits 124. (4) Ctrl-C mid-build leaves no relay process and no work directory; SIGTERM mid-build does the same and exits 1, where on `main` it kills `warden`. (5) `--runtime docker` and `--network x` with `--driver vz` are refused with the generated message; `warden clean --driver vz` reports nothing to clean and needs no container runtime |
 | windows-hyperv | (1) `warden doctor --driver hyperv`, elevated and not, prints what `main` prints; `--network` is honoured. (2) Elevated `warden setup --driver hyperv --slots 2` is idempotent. (3) A non-elevated durable build and an elevated ephemeral build succeed and verify; `[vm] network` is honoured and `--network` overrides it; with `[vm] image_refresh_after` set low, the detached `image prepare --driver hyperv` starts and logs. (4) With the service installed, a service-delegated build succeeds. (5) A build whose script powers the VM off without completing fails with the build-VM-off error about 10 s after the VM stops. (6) Ctrl-C mid-build removes both VMs and the switch; the time from Ctrl-C to exit is recorded, to judge the 60 s limit against a real teardown before K2 applies it to Hyper-V (a20). (7) `--keep-vms` leaves both VMs; `warden clean --driver hyperv` then removes them and leaves a running build's |
 | qemu-any | (1) `warden doctor --driver qemu` prints what `main` prints. (2) A direct-boot build and a cloud-image build succeed and verify; a Dockerfile whose `FROM` names a prepared image boots that image, as on `main`, and still does when the build is given `--script`, as on `main`; `inputs/` holds `Containerfile` and `build.sh`. (3) Ctrl-C mid-build leaves no `qemu-system` process and no work directory; SIGTERM mid-build does the same; `--keep-vms` leaves the work directory only. (4) `--timeout 30s` on a sleeping script exits 124. (5) `warden clean --driver qemu` reports nothing to clean with no container runtime running. (6) A second Ctrl-C during teardown ends `warden`; what it leaves is recorded (Behaviour 8) |
@@ -3402,8 +3540,9 @@ each task leaves `make test` and `make lint` green (FLOW-17).
 16. Change tier 1's surface extraction as approved, with its tests; leave
     `rules.yaml`'s `surface` keys as they are (UX-01, UX-03, ORCH-03,
     FLOW-14, LINT-05).
-17. Add the lookup (`driverlookup.go`) with its file checks and the
-    project-file rule, the exec transport (`drivercall.go`) for every
+17. Add the lookup (`driverlookup.go`: a path, `PATH`, `warden`'s
+    directory, a linked driver) with the project-file rule, the exec
+    transport (`drivercall.go`) for every
     command of the contract (`run` and its probe, `reap`, `doctor`,
     `setup`, the image commands, `clean`, `attach`, and `ext` as `warden
     <name> ...`), the refusal of a path that is not UTF-8, `warden driver
