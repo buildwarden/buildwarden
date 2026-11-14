@@ -2360,7 +2360,8 @@ definition that `alters-slot` built and FLOW-20's Limit bullet carried.
 > the areas it reaches. Two items cannot both change an *exclusive* area;
 > any number may change an *ordered* area, and the later to merge is put in
 > order by its refresh (FLOW-10). Area A *reaches* area B when code in A
-> depends on code in B. A repository with no map is one exclusive area, and
+> depends on code in B, or when A holds checks that run over B. A
+> repository with no map is one exclusive area, and
 > an item that declares no areas is taken to change the whole of each
 > repository it names. Two features are:
 >
