@@ -1706,7 +1706,72 @@ Plan refines these into tasks; the order is **Order of the refactor**.
 
 ## Design review
 
-None yet.
+### 2026-11-14, first sitting: changes requested
+
+Read at `48acda9`. Outcome: **changes**, back to Design (FLOW-06). No rule
+change was approved and no assumed question was answered. Jeff read the
+contract and said it is not the shape he was looking for. His notes, in full
+and in order:
+
+> Okay, so the driver interface is interesting, but I think not quite what
+> I'd initially been looking for. I think what I'm actually looking for is
+> closer to each driver effectively being its own independent binary which
+> warden finds in the same way git finds its individual subcommands (i.e.
+> existing on PATH). The drivers would have a shared library (either inside
+> the top-level warden or otherwise) that helps mediate pieces like
+> configuration-parsing/reading and an interface-testing suite that checks
+> that both required and optional commands are all specified correctly in the
+> way the top-level orchestrator CLI can call into, but strictly speaking are
+> allowed to be fully independent. This would allow for extensibility that an
+> existing orchestrator can use without recompiling the orchestrator itself.
+
+Asked how much a driver binary does (the whole build, or primitives that
+`warden` calls while it keeps the session, the collector and the reporting):
+
+> So I think it likely was more-similar to the primitives-only approach
+> because I was thinking the collector would be effectively equally pluggable
+> but the default option is that a driver instantiates an on-host endpoint
+> that it wires in, but equally it could be a pre-existing local or remote
+> endpoint that abides by the same rules, using session tokens to separate
+> builds and allowing for listening to the console output and status via
+> websockets or similar.
+
+The session holding the sitting answered with the basis below, and Jeff
+replied: "Yes, redraft K1 on that basis and show me the delta if it's small
+enough, otherwise I'll re-review from scratch".
+
+The basis for the redraft:
+
+1. **The contract is the set of commands `warden` calls on a driver binary**,
+   not a Go API. A driver is its own binary, found the way git finds a
+   subcommand, so an existing `warden` runs a new driver without being
+   rebuilt. The kit's library is a convenience a driver may ignore.
+2. **Primitives only.** A driver creates the isolated environment, starts the
+   relay, and wires the relay to a collector it was given. `warden` keeps the
+   session, the collector and the reporting.
+3. **The collector is pluggable.** By default it is an on-host endpoint for
+   one build; it may equally be an existing local or remote endpoint that
+   follows the same protocol, with a session token per build. The session's
+   adjustment, which "on that basis" accepts and the redraft puts to Jeff as
+   a question because his own words had the driver instantiate it: `warden`
+   chooses or starts the collector and hands the driver an endpoint and a
+   token; the driver only wires it in.
+4. **The conformance suite runs against a driver binary** and checks its
+   required and optional commands.
+5. **Scope.** This program builds only the default collector (on-host, one
+   build). The remote, multi-build collector and its client-facing side
+   (open a session, supply inputs, watch console and status, fetch outputs)
+   are a later phase. Left open for the redraft: whether the driver sends the
+   claim or hands `warden` the claim connection.
+6. **What it reaches outside this design:** the umbrella's Decisions 4 and 5
+   and its seam 9 are reworded (it is merged, so the redraft asks for Jeff's
+   word on the wording); most of S4 (the claim connection) is absorbed here;
+   `seam-specs` writes the collector's lifetime as one build per session
+   token, not one build per instance.
+
+Most of the first draft's inventory stands (what `cmd/warden` and the shared
+packages do per driver, the options, the relay source). The contract, the
+conformance suite, the rule changes and the plan are redrafted.
 
 ## Consolidation
 
