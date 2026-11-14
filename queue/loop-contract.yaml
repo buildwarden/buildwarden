@@ -28,73 +28,81 @@ budget:
 questions:
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: Where the line between loop-contract and P1's later items (loop-parallel, loop-native-lead, loop-repository) falls. Reworded on 2026-11-14 for one queue.
     options:
       - 'this item: the contract text (LOOP-01 to LOOP-09), worded for one queue and true of the loop as it runs today, this repository''s profile (PROFILE-01), the split made in place, the FLOW-01, FLOW-03 and FLOW-14 amendments, the template''s Specification changes section, the skill and agent edits that make the contract true here, and the amendments to the umbrella''s wording (a20); the later items get what the design''s hand-off table gives each: loop-parallel, FLOW-05 and the rules that go with it (the change proposal lists FLOW-02, -03, -05, -10, -15, -19 and -20) and the queue''s record of the repositories an item names; loop-native-lead, the rules for an item a native machine leads (the proposal lists FLOW-04, -09, -13, -16 and -18); loop-repository, wf''s gates and checks in a second repository and wf reading a profile; each item''s design settles its own list; the move to a loop repository is deferred (a19)'
       - this item also rewords FLOW and LINT to neutral terms (see a9)
       - this item waits for loop-parallel and lands with the FLOW-05 change (the relay's M1 would have nothing to cite meanwhile, and this review would wait for an item not yet filed)
     recommended: 'this item: the contract text (LOOP-01 to LOOP-09), worded for one queue and true of the loop as it runs today, this repository''s profile (PROFILE-01), the split made in place, the FLOW-01, FLOW-03 and FLOW-14 amendments, the template''s Specification changes section, the skill and agent edits that make the contract true here, and the amendments to the umbrella''s wording (a20); the later items get what the design''s hand-off table gives each: loop-parallel, FLOW-05 and the rules that go with it (the change proposal lists FLOW-02, -03, -05, -10, -15, -19 and -20) and the queue''s record of the repositories an item names; loop-native-lead, the rules for an item a native machine leads (the proposal lists FLOW-04, -09, -13, -16 and -18); loop-repository, wf''s gates and checks in a second repository and wf reading a profile; each item''s design settles its own list; the move to a loop repository is deferred (a19)'
+    answer: (1) This item changes what the rules say (contract, PROFILE-01, the split in place, FLOW-01/03/14, the template, skill and agent edits, the umbrella amendments); P1's later items change wf and the FLOW rules one queue changes. Jeff, design review second sitting, 2026-11-14.
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: The form of the split of docs/development/ in this PR.
     options:
       - 'in place and by file, no file moved: the loop side is loop-contract.md, process.md and behavioral-linter.md; the README gains two parts and an Owner column'
       - move the three files to docs/development/loop/ now (needs a change to tier 1's rule loader and breaks links twice)
       - a Scope marker on every rule (a third metadata line tier 1 would have to parse)
     recommended: 'in place and by file, no file moved: the loop side is loop-contract.md, process.md and behavioral-linter.md; the README gains two parts and an Owner column'
+    answer: (1) In place, by file; no file moves. Jeff, design review second sitting, 2026-11-14.
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: How the contract's statements are identified.
     options:
       - a new prefix LOOP-, nine rules, in docs/development/loop-contract.md
       - FLOW-21 to FLOW-29 in process.md
       - unnumbered prose, with the FLOW and LINT rules as the only IDs
     recommended: a new prefix LOOP-, nine rules, in docs/development/loop-contract.md
+    answer: (1) A new prefix LOOP-, nine rules, in docs/development/loop-contract.md. Jeff, design review second sitting, 2026-11-14.
   - id: a4
     kind: assumed
-    status: open
+    status: confirmed
     question: Classes of work. The draft has two classes, with process work at the top of the queue and outside the feature queue; FLOW-05 has four.
     options:
       - FLOW-05's four classes stand; feature and process are the two kinds of item in the one queue; a process item ranks second and stops other work only through the holds it declares
       - 'the draft''s two classes: every process item ahead of everything, items in implementation included (FLOW-05 amended)'
     recommended: FLOW-05's four classes stand; feature and process are the two kinds of item in the one queue; a process item ranks second and stops other work only through the holds it declares
+    answer: (1) FLOW-05's four classes stand; feature and process are the two kinds of item in the one queue. Jeff, design review second sitting, 2026-11-14.
   - id: a5
     kind: assumed
-    status: open
+    status: confirmed
     question: The kind of a reconciliation item (adopt consumable X at version Y). The draft files it as process work.
     options:
       - a feature item in the queue that names the consumer's repository, at the priority Jeff gives it at intake; it changes code, so it gets Plan, Review, Guide, consolidation and its design review
       - a process item, as the draft says (no tier-2 report or consolidation; FLOW-03's definition of a process item would have to cover code)
       - a feature item that FLOW-05 ranks with the fixes, class 3 (needs a FLOW-05 amendment)
     recommended: a feature item in the queue that names the consumer's repository, at the priority Jeff gives it at intake; it changes code, so it gets Plan, Review, Guide, consolidation and its design review
+    answer: (3) A feature item that FLOW-05 ranks with the fixes. This departs from the recommendation and needs a FLOW-05 amendment, declared in this item and put to Jeff by name. Jeff, design review second sitting, 2026-11-14.
   - id: a6
     kind: assumed
-    status: open
+    status: confirmed
     question: 'What a failed check does. The draft: invariants run on every loop iteration and block merge on failure.'
     options:
       - the draft's four classes (build, specification, safety, process) name what a component declares; each check is tier 1 or tier 2 (LINT-02); a tier-1 check blocks unless the component declares it a hint or a report (here tests-with-change and make deadcode); tier 2 informs the human, who signs off by merging (LINT-03, FLOW-08); checks run at the phase gates and in CI on the diff (LINT-04); host-bound validation blocks or is tracked per design (FLOW-09)
       - every class blocks, the judgment tier included (reverses LINT's load-bearing decision and ends report-only mode, LINT-07)
     recommended: the draft's four classes (build, specification, safety, process) name what a component declares; each check is tier 1 or tier 2 (LINT-02); a tier-1 check blocks unless the component declares it a hint or a report (here tests-with-change and make deadcode); tier 2 informs the human, who signs off by merging (LINT-03, FLOW-08); checks run at the phase gates and in CI on the diff (LINT-04); host-bound validation blocks or is tracked per design (FLOW-09)
+    answer: (1) Four classes, two tiers; a deterministic check blocks unless declared a hint or report; the judgment tier informs. Jeff, design review second sitting, 2026-11-14.
   - id: a7
     kind: assumed
-    status: open
+    status: confirmed
     question: The report of a run. The draft lists five things every iteration reports.
     options:
       - 'the digest section of each run is the report (FLOW-13), with three additions: each Moved line names the item''s kind and FLOW-05 class; a step that changed a specification gets a Specification changes line apart from the code; a review step''s line gives the check results by tier; and the PR body gains a Specification changes section'
       - a separate report file per step with the draft's five headings (a second record of what the digest, the queue history and the tier-2 report hold)
     recommended: 'the digest section of each run is the report (FLOW-13), with three additions: each Moved line names the item''s kind and FLOW-05 class; a step that changed a specification gets a Specification changes line apart from the code; a review step''s line gives the check results by tier; and the PR body gains a Specification changes section'
+    answer: (1) The digest section of each run is the report, with the three additions and the PR body's Specification changes section. Jeff, design review second sitting, 2026-11-14.
   - id: a8
     kind: assumed
-    status: open
+    status: confirmed
     question: When work is spec-first, and what happens to a specification that cannot be met.
     options:
       - spec-first applies to behaviour that a seam's written specification defines; a declared seam without one (the bootstrap model, whose contract document is bootstrap.md) is design-first and its design says what defines it, and the rule reads the same whether or not the driver contract gets a specification (driver-contract's redraft says); the item still has a design, which lists the specification changes; in Implement the specification changes before the code; an item that implements already-specified behaviour cites the requirements and changes none; a specification that cannot be met returns the item to Design (FLOW-06) with a question in the queue (FLOW-07)
       - 'the draft as written: all behaviour is specified, and an unmet section is marked as an open question inside the specification'
       - a specification-only item needs no design
     recommended: spec-first applies to behaviour that a seam's written specification defines; a declared seam without one (the bootstrap model, whose contract document is bootstrap.md) is design-first and its design says what defines it, and the rule reads the same whether or not the driver contract gets a specification (driver-contract's redraft says); the item still has a design, which lists the specification changes; in Implement the specification changes before the code; an item that implements already-specified behaviour cites the requirements and changes none; a specification that cannot be met returns the item to Design (FLOW-06) with a question in the queue (FLOW-07)
+    answer: (1) Design-first always; spec-first where a seam's written specification defines the behaviour; an unmet specification returns the item to Design with a question in the queue. Jeff, design review second sitting, 2026-11-14.
   - id: a9
     kind: assumed
     status: open
@@ -246,3 +254,27 @@ history:
   - at: 2026-11-14T19:49:19Z
     by: human/jeff
     event: 'assumed question a21 confirmed: (1) Step 6 asks for trunk protection where the host offers it; Jeff protects main before this PR merges; the relay may adopt while private and protects its trunk once public. Jeff, design review second sitting, 2026-11-14.'
+  - at: 2026-11-14T19:55:01Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: (1) This item changes what the rules say (contract, PROFILE-01, the split in place, FLOW-01/03/14, the template, skill and agent edits, the umbrella amendments); P1''s later items change wf and the FLOW rules one queue changes. Jeff, design review second sitting, 2026-11-14.'
+  - at: 2026-11-14T19:55:01Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: (1) In place, by file; no file moves. Jeff, design review second sitting, 2026-11-14.'
+  - at: 2026-11-14T19:55:01Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: (1) A new prefix LOOP-, nine rules, in docs/development/loop-contract.md. Jeff, design review second sitting, 2026-11-14.'
+  - at: 2026-11-14T19:55:01Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: (1) FLOW-05''s four classes stand; feature and process are the two kinds of item in the one queue. Jeff, design review second sitting, 2026-11-14.'
+  - at: 2026-11-14T19:55:01Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: (3) A feature item that FLOW-05 ranks with the fixes. This departs from the recommendation and needs a FLOW-05 amendment, declared in this item and put to Jeff by name. Jeff, design review second sitting, 2026-11-14.'
+  - at: 2026-11-14T19:55:01Z
+    by: human/jeff
+    event: 'assumed question a6 confirmed: (1) Four classes, two tiers; a deterministic check blocks unless declared a hint or report; the judgment tier informs. Jeff, design review second sitting, 2026-11-14.'
+  - at: 2026-11-14T19:55:01Z
+    by: human/jeff
+    event: 'assumed question a7 confirmed: (1) The digest section of each run is the report, with the three additions and the PR body''s Specification changes section. Jeff, design review second sitting, 2026-11-14.'
+  - at: 2026-11-14T19:55:01Z
+    by: human/jeff
+    event: 'assumed question a8 confirmed: (1) Design-first always; spec-first where a seam''s written specification defines the behaviour; an unmet specification returns the item to Design with a question in the queue. Jeff, design review second sitting, 2026-11-14.'
