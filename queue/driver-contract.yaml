@@ -105,7 +105,7 @@ questions:
       - as the first option, and PATH is not searched at all when warden runs as root
       - 'as the first option, without the rule on the project file: a warden.toml in the working directory can then make warden run any warden-driver-<x> on PATH, on --help too'
     recommended: the first option
-    answer: 'Changed, in Jeff''s words: ''This is overcontrolled. The nicety of this is for UX functionality and given this is never outside of the user''s control (i.e. never a part of the build environment), I''d say let''s allow for the first option with way less guarding around its official drivers, allowing for both customized implementations of existing drivers and new ones, either by absolute or PATH search''. So: the first option''s lookup with far fewer guards; a driver with a bundled driver''s name may be a customized one, found by absolute path or on PATH. Which guards remain and which wins when a name is both bundled and on PATH are asked as follow-ups. Jeff, design review of the redraft, 2026-11-14.'
+    answer: 'Changed, in Jeff''s words: ''This is overcontrolled. The nicety of this is for UX functionality and given this is never outside of the user''s control (i.e. never a part of the build environment), I''d say let''s allow for the first option with way less guarding around its official drivers, allowing for both customized implementations of existing drivers and new ones, either by absolute or PATH search''. Follow-ups, asked on their own: (1) when a name is both bundled and on PATH, PATH wins: a warden-driver-<name> earlier on PATH replaces the bundled one; warden driver list and driver.json show which file ran. (2) One guard stays: a project''s warden.toml may name a driver, never a file path; a path comes from --driver, WARDEN_DRIVER or the user''s own config. No ownership or mode check, no bundled-only rule. Jeff, design review of the redraft, 2026-11-14.'
   - id: a15
     kind: assumed
     status: confirmed
@@ -138,29 +138,32 @@ questions:
     answer: (a) One run process per build; the other commands run once and exit. Jeff, design review of the redraft, 2026-11-14.
   - id: a12
     kind: assumed
-    status: open
+    status: confirmed
     question: Who starts the default collector? Jeff's note had the driver "instantiate an on-host endpoint that it wires in"; the basis adjusted that, and this asks for his word on the adjustment.
     options:
       - warden starts today's in-process collector, one per build with a fresh token; the driver starts none
       - 'the driver starts the collector: every driver, in any language, embeds or ships a collector, and warden needs a protocol to it for console output, status and the output directory'
     recommended: warden starts it
+    answer: (a) warden starts the default collector, one per build with a fresh token; the driver starts none. Jeff, design review of the redraft, 2026-11-14.
   - id: a13
     kind: assumed
-    status: open
+    status: confirmed
     question: Who sends the claim? The basis left it open, and said warden "hands the driver an endpoint and a token".
     options:
       - warden dials the claim endpoint the driver reports and sends the claim (today's code, no listener on the host); the driver is handed nothing about the collector, which is narrower than the basis; start reserves a collector field and claim.network is an enumeration, so a driver-sent claim stays addable
       - 'the driver sends the claim, given the collector''s endpoint and token: the default collector must then listen where the relay can reach it, which driver/session.go rules out on purpose (and firecracker''s relay cannot open a connection to the host), or the driver bridges the tunnel for the whole build'
     recommended: warden sends it
+    answer: (a) warden dials the claim endpoint the driver reports and sends the claim; start keeps the reserved collector field. Jeff, design review of the redraft, 2026-11-14.
   - id: a22
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Where the pluggable collector is written down. Jeff''s second note describes a collector that may be "a pre-existing local or remote endpoint that abides by the same rules, using session tokens to separate builds and allowing for listening to the console output and status via websockets or similar". The basis puts it in "a later phase", but the umbrella has none: its Decision 8 keeps alternative collectors out of this program and "Later, not scheduled" names only "alternative collectors and a collector repository".'
     options:
       - K1 builds none of it and leaves it possible (design, The collector), and one clause is added to the umbrella's "Later, not scheduled" naming what Jeff described (design, Amendments, section C)
       - the same, and a queue item is filed for it now, on hold behind the freeze
       - record nothing outside this design
     recommended: the first option
+    answer: (a) One clause added to the umbrella's 'Later, not scheduled'; nothing queued. Jeff, design review of the redraft, 2026-11-14.
   - id: a5
     kind: assumed
     status: open
@@ -173,30 +176,33 @@ questions:
     recommended: accept all fifteen; GLOBAL-10 asks for 2 and UX-03 would give it a window, and the third option is the answer if the window matters more
   - id: a20
     kind: assumed
-    status: open
+    status: confirmed
     question: The contract's time limits and cleanup points.
     options:
       - describe answers within 10 s and a probe within 30 s (a probe of run makes the driver's preflight); after stop, warden waits 60 s for a driver binary to tear down, then kills it and runs reap; a build may still complete for 10 s after the driver reports its environment exited; warden runs reap after a driver that ended without stopped or failed; warden clean runs it for every build of the selected driver whose lock nobody holds, on the binary and with the values in that build's record, and removes the lock only when reap succeeds; no sweep before each build; none is configurable. When both warden and the driver are killed, what the runtime or hypervisor holds keeps running until warden clean, as after a killed warden today. Whether 60 s covers a Hyper-V teardown is measured in native validation; the limit applies only to a driver binary, so K1 does not enforce it on Hyper-V
       - 'also sweep before every build: one listing of the lock directory per build, and a reap only when a dead build exists; a killed pair is cleaned up at the next build without being asked, but a build removes another build''s leftovers, and a reap that fails warns at a build it has nothing to do with'
       - make the 60 s a key
     recommended: the first option
+    answer: (c) As stated, with the 60 s teardown wait made a configuration key. Departs from the recommendation; the design is revised. Jeff, design review of the redraft, 2026-11-14.
   - id: a19
     kind: assumed
-    status: open
+    status: confirmed
     question: A driver from outside. warden cannot check that a driver it did not ship isolates the build, or that it runs the project's relay and executor.
     options:
       - accept that, say so in GLOBAL-08 and the contract, and record the driver's name, version, path and file digest in <output>/driver.json, unsigned
       - also require an opt-in key ([runtime] allow_path_drivers = true) before a driver found on PATH runs
       - also record it in the ledger, at the cost of a schema version
     recommended: the first option
+    answer: (a) Accept that warden cannot vet an outside driver; say so in GLOBAL-08 and the contract; record name, version, path and file digest in driver.json, unsigned. Jeff, design review of the redraft, 2026-11-14.
   - id: a23
     kind: assumed
-    status: open
+    status: confirmed
     question: 'How far GLOBAL-08''s wording goes in K1 (the first draft''s a10, asked again for the command contract). An unmodified warden runs a driver it was not built with, but a real driver from outside also needs what this contract does not state: how to launch the project''s relay and what goes on its boot channel, how to deliver and start the executor, the environment record, and the build-link guarantee (seams 1, 5, 7 and 8; S1 and S3 are not merged, and seam 8 has no owner, a11).'
     options:
       - GLOBAL-08 says "A driver the project did not write is a supported consumer of this contract", followed by a sentence that what such a driver must do to the relay and the executor is their seams' to state and not this contract's; the design and the specification list what a driver needs besides the contract
       - 'hold the sentence back: K1''s wording says only that warden runs a driver through a written contract, and "supported consumer" is added by the item that writes the last of seams 1, 5, 7 and 8'
     recommended: the first option
+    answer: (a) 'supported consumer of this contract' plus the sentence that the relay's and executor's requirements are their seams', in K1. Jeff, design review of the redraft, 2026-11-14.
   - id: a18
     kind: assumed
     status: open
@@ -356,3 +362,27 @@ history:
   - at: 2026-11-14T21:07:41Z
     by: human/jeff
     event: 'assumed question a16 confirmed: Changed, in Jeff''s words: ''This is overcontrolled. The nicety of this is for UX functionality and given this is never outside of the user''s control (i.e. never a part of the build environment), I''d say let''s allow for the first option with way less guarding around its official drivers, allowing for both customized implementations of existing drivers and new ones, either by absolute or PATH search''. So: the first option''s lookup with far fewer guards; a driver with a bundled driver''s name may be a customized one, found by absolute path or on PATH. Which guards remain and which wins when a name is both bundled and on PATH are asked as follow-ups. Jeff, design review of the redraft, 2026-11-14.'
+  - at: 2026-11-14T21:11:35Z
+    by: human/jeff
+    event: 'assumed question a12 confirmed: (a) warden starts the default collector, one per build with a fresh token; the driver starts none. Jeff, design review of the redraft, 2026-11-14.'
+  - at: 2026-11-14T21:11:35Z
+    by: human/jeff
+    event: 'assumed question a13 confirmed: (a) warden dials the claim endpoint the driver reports and sends the claim; start keeps the reserved collector field. Jeff, design review of the redraft, 2026-11-14.'
+  - at: 2026-11-14T21:11:35Z
+    by: human/jeff
+    event: 'assumed question a16 confirmed: Follow-ups: (1) when a name is both bundled and on PATH, PATH wins: a warden-driver-<name> earlier on PATH replaces the bundled one; warden driver list and driver.json show which file ran. (2) One guard stays: a project''s warden.toml may name a driver, never a file path; a path comes from --driver, WARDEN_DRIVER or the user''s own config. No ownership or mode check, no bundled-only rule. Jeff, design review of the redraft, 2026-11-14.'
+  - at: 2026-11-14T21:16:53Z
+    by: human/jeff
+    event: 'assumed question a16 confirmed: Changed, in Jeff''s words: ''This is overcontrolled. The nicety of this is for UX functionality and given this is never outside of the user''s control (i.e. never a part of the build environment), I''d say let''s allow for the first option with way less guarding around its official drivers, allowing for both customized implementations of existing drivers and new ones, either by absolute or PATH search''. Follow-ups, asked on their own: (1) when a name is both bundled and on PATH, PATH wins: a warden-driver-<name> earlier on PATH replaces the bundled one; warden driver list and driver.json show which file ran. (2) One guard stays: a project''s warden.toml may name a driver, never a file path; a path comes from --driver, WARDEN_DRIVER or the user''s own config. No ownership or mode check, no bundled-only rule. Jeff, design review of the redraft, 2026-11-14.'
+  - at: 2026-11-14T21:16:53Z
+    by: human/jeff
+    event: 'assumed question a22 confirmed: (a) One clause added to the umbrella''s ''Later, not scheduled''; nothing queued. Jeff, design review of the redraft, 2026-11-14.'
+  - at: 2026-11-14T21:16:53Z
+    by: human/jeff
+    event: 'assumed question a20 confirmed: (c) As stated, with the 60 s teardown wait made a configuration key. Departs from the recommendation; the design is revised. Jeff, design review of the redraft, 2026-11-14.'
+  - at: 2026-11-14T21:16:53Z
+    by: human/jeff
+    event: 'assumed question a19 confirmed: (a) Accept that warden cannot vet an outside driver; say so in GLOBAL-08 and the contract; record name, version, path and file digest in driver.json, unsigned. Jeff, design review of the redraft, 2026-11-14.'
+  - at: 2026-11-14T21:16:53Z
+    by: human/jeff
+    event: 'assumed question a23 confirmed: (a) ''supported consumer of this contract'' plus the sentence that the relay''s and executor''s requirements are their seams'', in K1. Jeff, design review of the redraft, 2026-11-14.'
