@@ -4,7 +4,7 @@ priority: 60
 kind: process
 status: in_progress
 round: process
-phase: 1
+phase: 2
 design: docs/design/loop-contract.md
 branch: feat/loop-contract
 alters_relationships: false
@@ -14,17 +14,24 @@ steps:
   - id: x1-design
     phase: 1
     affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x2-implement
+    phase: 2
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: human/jeff
-      expires: 2026-11-13T01:34:08.737863562Z
+      claimed_by: cloud/20261112T230554Z
+      expires: 2026-11-14T22:56:03.695670917Z
 budget:
   estimate:
     runs: 2
     steps: 8
   spent:
     runs: 1
-    steps: 1
+    steps: 2
 questions:
   - id: a1
     kind: assumed
@@ -345,3 +352,12 @@ history:
   - at: 2026-11-14T20:43:48Z
     by: human/jeff
     event: 'assumed question a24 confirmed: (1) loop-native-lead amends FLOW-04, the host table and the lease; the rule (a15 b) is recorded as decided. Jeff, design review second sitting, 2026-11-14.'
+  - at: 2026-11-14T20:55:55Z
+    by: human/jeff
+    event: done x1-design
+  - at: 2026-11-14T20:55:55Z
+    by: human/jeff
+    event: entered phase 2 (implement)
+  - at: 2026-11-14T20:56:03Z
+    by: cloud/20261112T230554Z
+    event: claimed x2-implement until 2026-11-14T22:56:03Z
