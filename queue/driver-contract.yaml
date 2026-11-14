@@ -3,7 +3,7 @@ title: 'The driver command contract, its suite and the kit: warden runs a driver
 priority: 63
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/driver-contract.md
 branch: feat/driver-contract
 alters_relationships: true
@@ -31,7 +31,7 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-    note: 'Blocking native validation (design Validation plan, a7; FLOW-09), on the branch after consolidation; where a case says "as main", capture main''s output first. vz stays linked; its build now runs through warden''s build sequence, which owns the signals. (1) warden doctor --driver vz and warden image list print what main prints. (2) a vz build succeeds, its ledger verifies, relay.log is written, driver.json says linked; with a Containerfile in the context it is ignored and inputs/ is absent, as on main. (3) a script that exits 3 makes warden exit 3; --timeout 30s on a sleeping script exits 124. (4) Ctrl-C mid-build leaves no relay process and no work directory; SIGTERM mid-build does the same and exits 1, where on main it kills warden. (5) --runtime docker and --network x with --driver vz are refused with the generated message; warden clean --driver vz reports nothing to clean and needs no container runtime. Evidence under native/macos-vz/<date>/.'
+    note: Blocking native validation (design Validation plan, a7; FLOW-09), on the branch after consolidation; where a case says "as main", capture main's output first. vz stays linked; its build now runs through warden's build sequence, which owns the signals. (1) warden doctor --driver vz and warden image list print what main prints. (2) a vz build succeeds, its ledger verifies, relay.log is written, driver.json says linked; with a Containerfile in the context it is ignored and inputs/ is absent, as on main. (3) a script that exits 3 makes warden exit 3; --timeout 30s on a sleeping script exits 124. (4) Ctrl-C mid-build leaves no relay process and no work directory; SIGTERM mid-build does the same and exits 1, where on main it kills warden. (5) --runtime docker and --network x with --driver vz are refused with the generated message; warden clean --driver vz reports nothing to clean and needs no container runtime. Evidence under native/macos-vz/<date>/.
   - id: f6-validate-windows-hyperv
     phase: 6
     affinity: host:windows-hyperv
@@ -39,7 +39,7 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-    note: 'Blocking native validation (design Validation plan, a7, a20; FLOW-09), on the branch after consolidation; where a case says "as main", capture main''s output first. hyperv stays linked; StartRelay hands its session and claim to warden. (1) warden doctor --driver hyperv, elevated and not, prints what main prints; --network is honoured. (2) elevated warden setup --driver hyperv --slots 2 is idempotent. (3) a non-elevated durable build and an elevated ephemeral build succeed and verify; [vm] network is honoured and --network overrides it; with [vm] image_refresh_after set low, the detached image prepare --driver hyperv starts and logs. (4) with the service installed, a service-delegated build succeeds. (5) a build whose script powers the VM off without completing fails with the build-VM-off error about 10 s after the VM stops (the grace was 5 s). (6) Ctrl-C mid-build removes both VMs and the switch; record the time from Ctrl-C to exit, to judge the 60 s teardown limit against a real teardown before K2 applies it to Hyper-V. (7) --keep-vms leaves both VMs; warden clean --driver hyperv then removes them and leaves a running build''s. Evidence under native/windows-hyperv/<date>/.'
+    note: Blocking native validation (design Validation plan, a7, a20; FLOW-09), on the branch after consolidation; where a case says "as main", capture main's output first. hyperv stays linked; StartRelay hands its session and claim to warden. (1) warden doctor --driver hyperv, elevated and not, prints what main prints; --network is honoured. (2) elevated warden setup --driver hyperv --slots 2 is idempotent. (3) a non-elevated durable build and an elevated ephemeral build succeed and verify; [vm] network is honoured and --network overrides it; with [vm] image_refresh_after set low, the detached image prepare --driver hyperv starts and logs. (4) with the service installed, a service-delegated build succeeds. (5) a build whose script powers the VM off without completing fails with the build-VM-off error about 10 s after the VM stops (the grace was 5 s). (6) Ctrl-C mid-build removes both VMs and the switch; record the time from Ctrl-C to exit, to judge the 60 s teardown limit against a real teardown before K2 applies it to Hyper-V. (7) --keep-vms leaves both VMs; warden clean --driver hyperv then removes them and leaves a running build's. Evidence under native/windows-hyperv/<date>/.
   - id: f6-validate-qemu-any
     phase: 6
     affinity: host:qemu-any
@@ -47,7 +47,7 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-    note: 'Blocking native validation (design Validation plan, a7; FLOW-09), on the branch after consolidation; where a case says "as main", capture main''s output first. qemu stays linked; its build now runs through warden''s build sequence, and its own SIGINT and SIGTERM handler is gone. (1) warden doctor --driver qemu prints what main prints. (2) a direct-boot build and a cloud-image build succeed and verify; a Dockerfile whose FROM names a prepared image boots that image, as on main, and still does when the build is given --script, as on main; inputs/ holds Containerfile and build.sh. (3) Ctrl-C mid-build leaves no qemu-system process and no work directory; SIGTERM mid-build does the same; --keep-vms leaves the work directory only. (4) --timeout 30s on a sleeping script exits 124. (5) warden clean --driver qemu reports nothing to clean with no container runtime running. (6) a second Ctrl-C during teardown ends warden; record what it leaves (design Behaviour 8). Evidence under native/qemu-any/<date>/.'
+    note: Blocking native validation (design Validation plan, a7; FLOW-09), on the branch after consolidation; where a case says "as main", capture main's output first. qemu stays linked; its build now runs through warden's build sequence, and its own SIGINT and SIGTERM handler is gone. (1) warden doctor --driver qemu prints what main prints. (2) a direct-boot build and a cloud-image build succeed and verify; a Dockerfile whose FROM names a prepared image boots that image, as on main, and still does when the build is given --script, as on main; inputs/ holds Containerfile and build.sh. (3) Ctrl-C mid-build leaves no qemu-system process and no work directory; SIGTERM mid-build does the same; --keep-vms leaves the work directory only. (4) --timeout 30s on a sleeping script exits 124. (5) warden clean --driver qemu reports nothing to clean with no container runtime running. (6) a second Ctrl-C during teardown ends warden; record what it leaves (design Behaviour 8). Evidence under native/qemu-any/<date>/.
   - id: f6-validate-macos-finch
     phase: 6
     affinity: host:macos-finch
@@ -67,10 +67,26 @@ steps:
   - id: f1-design-r2
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review
+    phase: 2
+    affinity: human
     status: pending
     lease:
-      claimed_by: cloud/20261112T230554Z
-      expires: 2026-11-14T19:45:41.332149318Z
+      claimed_by: ""
+      expires: null
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - f2-design-review
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 5
@@ -84,11 +100,11 @@ questions:
     status: open
     question: 'Lookup and trust: how warden finds a driver binary. Jeff''s note: found "in the same way git finds its individual subcommands (i.e. existing on PATH)".'
     options:
-      - 'a path in --driver or WARDEN_DRIVER (used exclusively); else a linked driver; else warden''s own directory; else each absolute PATH entry; the five bundled names never from PATH; a project''s warden.toml may select only a bundled driver, and no config file a path; no batch files on Windows; no auto-detection of the driver. On Unix the file found must be owned by root, the user or the owner of the warden executable and not be writable by group or others; a file in warden''s own directory is held to warden''s own owner and mode instead; for a PATH hit the directory must not be writable by group or others either'
+      - a path in --driver or WARDEN_DRIVER (used exclusively); else a linked driver; else warden's own directory; else each absolute PATH entry; the five bundled names never from PATH; a project's warden.toml may select only a bundled driver, and no config file a path; no batch files on Windows; no auto-detection of the driver. On Unix the file found must be owned by root, the user or the owner of the warden executable and not be writable by group or others; a file in warden's own directory is held to warden's own owner and mode instead; for a PATH hit the directory must not be writable by group or others either
       - 'PATH only, as Jeff''s note described: a planted bundled name wins, and sudo warden does not find a driver installed beside it'
-      - 'as the first option, and PATH is not searched at all when warden runs as root'
+      - as the first option, and PATH is not searched at all when warden runs as root
       - 'as the first option, without the rule on the project file: a warden.toml in the working directory can then make warden run any warden-driver-<x> on PATH, on --help too'
-    recommended: 'the first option'
+    recommended: the first option
   - id: a15
     kind: assumed
     status: open
@@ -97,9 +113,9 @@ questions:
       - 'K1 delivers the specification, the suite, the kit, a fake, warden''s calling side for every command and the container driver as a binary; all five drivers move onto warden''s build sequence and the four VM drivers stay linked until K2. Done when an unmodified warden runs every command of the contract through a driver binary it was not built with (the fake, in CI on three platforms), the suite passes against the fake and warden-driver-container, cmd/warden names the VM drivers only in linked.go and their existing doctor, setup, image and clean code, and native validation passes on each blocking host. Not proved in K1: a VM driver as a separate process (teardown on end of input, reap, kill and process groups, the vz entitlement, the Hyper-V service), so contract version 1 may still change in K2. K2: each VM driver becomes a binary, linked.go goes, the specification and suite move to the specs repository, then modules. K3 keeps its row. S4 is absorbed, except the claim specification''s transport section and a claim endpoint that is not TCP. One item and one PR'
       - 'container only, the VM drivers untouched: macos-finch and container-any blocking and the three VM hosts not needed, but two build sequences in warden until K2 and no evidence that the sequence fits vz and Hyper-V'
       - 'all five as binaries now, with a Windows release target and the vz signing move: five native validations of new process boundaries in one PR'
-      - 'as the first option, split into two items at the point the fake passes'
+      - as the first option, split into two items at the point the fake passes
       - 'as the first option, but the VM drivers'' flags and keys stay in cmd/warden until each becomes a binary: their doctor, setup, image and clean code is not touched twice, at the cost of two option paths in cmd/warden until K2, and Behaviour 1 to 3 and 13 arrive per driver in K2'
-    recommended: 'the first option; the second is the fallback if K1 proves too large'
+    recommended: the first option; the second is the fallback if K1 proves too large
   - id: a21
     kind: assumed
     status: open
@@ -107,153 +123,153 @@ questions:
     options:
       - 'warden reads the files, the environment and the flags; a driver declares its options in describe and receives resolved values; the kit gives a Go driver the Option declaration and typed access to the values, and reads no file. Consequences: an option has one of seven scalar types, a driver has no configuration of a shape of its own, and warden runs describe before it parses flags'
       - 'the kit reads the configuration inside the driver''s process, and warden passes through the flags it does not know and the paths of the config files: a driver may then have configuration of any shape, but warden cannot draw help, refuse an unknown flag or check a value before slow work, tier 1 cannot read the surface, and a driver written without the kit re-implements the precedence'
-    recommended: 'warden reads it'
+    recommended: warden reads it
   - id: a14
     kind: assumed
     status: open
-    question: 'One run process per build, or run-and-exit verbs? Jeff''s note spoke of "commands"; ten of the eleven run once and exit.'
+    question: One run process per build, or run-and-exit verbs? Jeff's note spoke of "commands"; ten of the eleven run once and exit.
     options:
-      - 'one process per build that exchanges JSON messages with warden; its lifetime is the environment''s, and the end of its input means tear down'
+      - one process per build that exchanges JSON messages with warden; its lifetime is the environment's, and the end of its input means tear down
       - 'create, start, state, stop verbs, each run once: nearer "commands", but vz needs a holder daemon (its VM lives inside the process that made it) and a killed warden leaves VMs running'
-    recommended: 'one process per build'
+    recommended: one process per build
   - id: a12
     kind: assumed
     status: open
-    question: 'Who starts the default collector? Jeff''s note had the driver "instantiate an on-host endpoint that it wires in"; the basis adjusted that, and this asks for his word on the adjustment.'
+    question: Who starts the default collector? Jeff's note had the driver "instantiate an on-host endpoint that it wires in"; the basis adjusted that, and this asks for his word on the adjustment.
     options:
-      - 'warden starts today''s in-process collector, one per build with a fresh token; the driver starts none'
+      - warden starts today's in-process collector, one per build with a fresh token; the driver starts none
       - 'the driver starts the collector: every driver, in any language, embeds or ships a collector, and warden needs a protocol to it for console output, status and the output directory'
-    recommended: 'warden starts it'
+    recommended: warden starts it
   - id: a13
     kind: assumed
     status: open
-    question: 'Who sends the claim? The basis left it open, and said warden "hands the driver an endpoint and a token".'
+    question: Who sends the claim? The basis left it open, and said warden "hands the driver an endpoint and a token".
     options:
-      - 'warden dials the claim endpoint the driver reports and sends the claim (today''s code, no listener on the host); the driver is handed nothing about the collector, which is narrower than the basis; start reserves a collector field and claim.network is an enumeration, so a driver-sent claim stays addable'
+      - warden dials the claim endpoint the driver reports and sends the claim (today's code, no listener on the host); the driver is handed nothing about the collector, which is narrower than the basis; start reserves a collector field and claim.network is an enumeration, so a driver-sent claim stays addable
       - 'the driver sends the claim, given the collector''s endpoint and token: the default collector must then listen where the relay can reach it, which driver/session.go rules out on purpose (and firecracker''s relay cannot open a connection to the host), or the driver bridges the tunnel for the whole build'
-    recommended: 'warden sends it'
+    recommended: warden sends it
   - id: a22
     kind: assumed
     status: open
     question: 'Where the pluggable collector is written down. Jeff''s second note describes a collector that may be "a pre-existing local or remote endpoint that abides by the same rules, using session tokens to separate builds and allowing for listening to the console output and status via websockets or similar". The basis puts it in "a later phase", but the umbrella has none: its Decision 8 keeps alternative collectors out of this program and "Later, not scheduled" names only "alternative collectors and a collector repository".'
     options:
-      - 'K1 builds none of it and leaves it possible (design, The collector), and one clause is added to the umbrella''s "Later, not scheduled" naming what Jeff described (design, Amendments, section C)'
-      - 'the same, and a queue item is filed for it now, on hold behind the freeze'
-      - 'record nothing outside this design'
-    recommended: 'the first option'
+      - K1 builds none of it and leaves it possible (design, The collector), and one clause is added to the umbrella's "Later, not scheduled" naming what Jeff described (design, Amendments, section C)
+      - the same, and a queue item is filed for it now, on hold behind the freeze
+      - record nothing outside this design
+    recommended: the first option
   - id: a5
     kind: assumed
     status: open
     question: 'The behaviour K1 changes (design, Behaviour): (1) flags and help follow the selected driver; (2) a flag the selected driver does not declare is refused, where eleven were silently ignored, and so is --runtime on a command that selects no driver; (3) the existing refusals take one generated form; (4) "unknown driver" becomes "driver not found", with what was searched, and a project file naming a driver that is not bundled is refused; (5) warden clean --driver qemu|vz no longer runs the container cleanup; (6) warden clean first cleans up after dead builds of the selected driver (reap from the build''s record, the stage directory, the lock); (7) a build may complete up to 10 s after its environment exits on every driver (5 s on container and Hyper-V today); (8) a second Ctrl-C kills a driver binary and reaps, where it killed warden, and on linked qemu and firecracker it now ends warden, where it was ignored (qemu''s VMs can then be left running until K2); (9) SIGTERM tears the build down on every driver and exits 1, where it killed warden on container, vz and hyperv; (10) the output directory gains driver.json, written with inputs/ before the driver starts; (11) warden driver list is new; (12) --driver and WARDEN_DRIVER accept a path; (13) a malformed [vm] image_refresh_after or image_min_grace is refused only when qemu or hyperv is selected, and then on every command; (14) --timeout counts from the moment warden starts the driver; (15) a context, output or temporary path that is not valid UTF-8 is refused for a driver binary.'
     options:
-      - 'accept all fifteen'
-      - 'keep every command''s flags and help as the union of the five bundled drivers'', as today, and refuse nothing new (1 to 3 go)'
+      - accept all fifteen
+      - keep every command's flags and help as the union of the five bundled drivers', as today, and refuse nothing new (1 to 3 go)
       - 'for 2 and 5, UX-03''s own route: for one release warden warns that the flag is ignored for this driver, or that clean --driver qemu no longer cleans containers, and the refusal follows in the next'
-      - 'accept some, named in the review'
-    recommended: 'accept all fifteen; GLOBAL-10 asks for 2 and UX-03 would give it a window, and the third option is the answer if the window matters more'
+      - accept some, named in the review
+    recommended: accept all fifteen; GLOBAL-10 asks for 2 and UX-03 would give it a window, and the third option is the answer if the window matters more
   - id: a20
     kind: assumed
     status: open
-    question: 'The contract''s time limits and cleanup points.'
+    question: The contract's time limits and cleanup points.
     options:
-      - 'describe answers within 10 s and a probe within 30 s (a probe of run makes the driver''s preflight); after stop, warden waits 60 s for a driver binary to tear down, then kills it and runs reap; a build may still complete for 10 s after the driver reports its environment exited; warden runs reap after a driver that ended without stopped or failed; warden clean runs it for every build of the selected driver whose lock nobody holds, on the binary and with the values in that build''s record, and removes the lock only when reap succeeds; no sweep before each build; none is configurable. When both warden and the driver are killed, what the runtime or hypervisor holds keeps running until warden clean, as after a killed warden today. Whether 60 s covers a Hyper-V teardown is measured in native validation; the limit applies only to a driver binary, so K1 does not enforce it on Hyper-V'
+      - describe answers within 10 s and a probe within 30 s (a probe of run makes the driver's preflight); after stop, warden waits 60 s for a driver binary to tear down, then kills it and runs reap; a build may still complete for 10 s after the driver reports its environment exited; warden runs reap after a driver that ended without stopped or failed; warden clean runs it for every build of the selected driver whose lock nobody holds, on the binary and with the values in that build's record, and removes the lock only when reap succeeds; no sweep before each build; none is configurable. When both warden and the driver are killed, what the runtime or hypervisor holds keeps running until warden clean, as after a killed warden today. Whether 60 s covers a Hyper-V teardown is measured in native validation; the limit applies only to a driver binary, so K1 does not enforce it on Hyper-V
       - 'also sweep before every build: one listing of the lock directory per build, and a reap only when a dead build exists; a killed pair is cleaned up at the next build without being asked, but a build removes another build''s leftovers, and a reap that fails warns at a build it has nothing to do with'
-      - 'make the 60 s a key'
-    recommended: 'the first option'
+      - make the 60 s a key
+    recommended: the first option
   - id: a19
     kind: assumed
     status: open
-    question: 'A driver from outside. warden cannot check that a driver it did not ship isolates the build, or that it runs the project''s relay and executor.'
+    question: A driver from outside. warden cannot check that a driver it did not ship isolates the build, or that it runs the project's relay and executor.
     options:
-      - 'accept that, say so in GLOBAL-08 and the contract, and record the driver''s name, version, path and file digest in <output>/driver.json, unsigned'
-      - 'also require an opt-in key ([runtime] allow_path_drivers = true) before a driver found on PATH runs'
-      - 'also record it in the ledger, at the cost of a schema version'
-    recommended: 'the first option'
+      - accept that, say so in GLOBAL-08 and the contract, and record the driver's name, version, path and file digest in <output>/driver.json, unsigned
+      - also require an opt-in key ([runtime] allow_path_drivers = true) before a driver found on PATH runs
+      - also record it in the ledger, at the cost of a schema version
+    recommended: the first option
   - id: a23
     kind: assumed
     status: open
     question: 'How far GLOBAL-08''s wording goes in K1 (the first draft''s a10, asked again for the command contract). An unmodified warden runs a driver it was not built with, but a real driver from outside also needs what this contract does not state: how to launch the project''s relay and what goes on its boot channel, how to deliver and start the executor, the environment record, and the build-link guarantee (seams 1, 5, 7 and 8; S1 and S3 are not merged, and seam 8 has no owner, a11).'
     options:
-      - 'GLOBAL-08 says "A driver the project did not write is a supported consumer of this contract", followed by a sentence that what such a driver must do to the relay and the executor is their seams'' to state and not this contract''s; the design and the specification list what a driver needs besides the contract'
+      - GLOBAL-08 says "A driver the project did not write is a supported consumer of this contract", followed by a sentence that what such a driver must do to the relay and the executor is their seams' to state and not this contract's; the design and the specification list what a driver needs besides the contract
       - 'hold the sentence back: K1''s wording says only that warden runs a driver through a written contract, and "supported consumer" is added by the item that writes the last of seams 1, 5, 7 and 8'
-    recommended: 'the first option'
+    recommended: the first option
   - id: a18
     kind: assumed
     status: open
     question: 'The umbrella''s wording. The basis changes sentences of the merged, archived componentization design: Decisions 4 and 5, seams 1, 6 and 9, the S4, K1, K2, K4 and K5 rows, the order, what M6 needs, "Later, not scheduled" (a22), and the tables and summary that follow from them; the design lists each with its current and proposed wording under "Amendments to the umbrella design". Jeff''s word is needed on each sentence. Nothing is proposed to seam-specs: its design already writes the collector''s lifetime per session token (618ae78).'
     options:
-      - 'as proposed, made in K1''s PR'
-      - 'as proposed, in a process item of its own, with K1 waiting'
-      - 'changed in the review, sentence by sentence'
-    recommended: 'as proposed, in K1''s PR'
+      - as proposed, made in K1's PR
+      - as proposed, in a process item of its own, with K1 waiting
+      - changed in the review, sentence by sentence
+    recommended: as proposed, in K1's PR
   - id: a8
     kind: assumed
     status: open
-    question: 'The rule changes. The umbrella''s table gives K1 GLOBAL-08 and ORCH-01 "for direction", worded for a Go API.'
+    question: The rule changes. The umbrella's table gives K1 GLOBAL-08 and ORCH-01 "for direction", worded for a Go API.
     options:
-      - 'GLOBAL-08 and ORCH-01 reworded for a command contract, plus ORCH-02 (staging moves to warden), ORCH-04 (teardown on end of input, and reap from the build''s record), TEST-05 (the driver suite), BOOT-02 (the executor''s version is the driver''s; with a Bootstrap comparison the review accepts explicitly, BOOT-07), FLOW-02 (it names driver.Driver, which K1 removes), and an enforcement-only change to UX-01, UX-03 and ORCH-03 (tier 1''s surface check also reads the bundled drivers'' declared options). GLOBAL-08''s sentence on a driver from outside is asked on its own (a23)'
-      - 'the same, with BOOT-02 left to K2 (the sentence "matches the orchestrator''s version" is then false for the container driver from K1''s merge until K2''s)'
+      - GLOBAL-08 and ORCH-01 reworded for a command contract, plus ORCH-02 (staging moves to warden), ORCH-04 (teardown on end of input, and reap from the build's record), TEST-05 (the driver suite), BOOT-02 (the executor's version is the driver's; with a Bootstrap comparison the review accepts explicitly, BOOT-07), FLOW-02 (it names driver.Driver, which K1 removes), and an enforcement-only change to UX-01, UX-03 and ORCH-03 (tier 1's surface check also reads the bundled drivers' declared options). GLOBAL-08's sentence on a driver from outside is asked on its own (a23)
+      - the same, with BOOT-02 left to K2 (the sentence "matches the orchestrator's version" is then false for the container driver from K1's merge until K2's)
       - 'the same, with no enforcement change: a Tier1-Allow trailer on the move, and the moved flags no longer checked against the docs'
-    recommended: 'the first option; each rule change is approved by name in the review'
+    recommended: the first option; each rule change is approved by name in the review
   - id: a7
     kind: assumed
     status: open
-    question: 'Native validation (FLOW-09) and the CI job. Today make test runs in CI on Linux only, and no workflow builds warden for Windows.'
+    question: Native validation (FLOW-09) and the CI job. Today make test runs in CI on Linux only, and no workflow builds warden for Windows.
     options:
       - 'macos-finch, container-any, macos-vz, windows-hyperv and qemu-any blocking (steps f6-validate-<host>); macos-qemu tracked (backlog driver-contract-qemu-windows); linux-kvm left out: firecracker is validated by the firecracker CI workflow (hosted KVM), which is not a required check, so Publish confirms its run on the PR''s head passed. container-any is new: on a Windows host the exec transport (a .exe lookup, pipes, kill, reap) and the container driver''s clean are exercised with a real runtime only there. In CI, a new driver-contract job in main.yml runs K1''s tests on Linux, macOS and Windows runners and joins ci-ok; it is not a FLOW-14 rule change (it runs none of tier 1, golangci-lint or tools/workflow)'
-      - 'container-any tracked, relying on the new job''s run of the fake and of the static tier on a Windows runner, which exercises the exec transport there but no container runtime'
-      - 'macos-qemu blocking too'
-      - 'add a blocking linux-kvm step for firecracker'
+      - container-any tracked, relying on the new job's run of the fake and of the static tier on a Windows runner, which exercises the exec transport there but no container runtime
+      - macos-qemu blocking too
+      - add a blocking linux-kvm step for firecracker
       - 'the three VM hosts tracked, since those drivers stay linked (not recommended: their build path changes on every host)'
       - 'no new CI job: tier 0 runs on Linux in CI, and the macOS and Windows code is tested only on macos-finch and container-any'
-    recommended: 'the first option'
+    recommended: the first option
   - id: a3
     kind: assumed
     status: open
     question: 'The relay source''s scope in K1. It is a kit library (driver/relaysource), not part of the command contract: a driver from outside finds the project''s relay however it likes.'
     options:
-      - 'K1 ships the types and the bundled, source-tree, local-path and image sources that wrap today''s lookups, routes the container driver''s override ([runtime] relay_image / WARDEN_IMAGE) through them, and adds no flag or key; the container driver uses it in K1; the four VM drivers adopt it in K2 with their binaries, and hyperv''s WARDEN_RELAY_BOOT_VHDX moves then; a pinned-download source waits for seam 8 (a11)'
-      - 'also route the four linked VM drivers through it in K1'
-      - 'also add --relay and [driver.<name>] relay now'
-      - 'also build the pinned-download source now, unused until M6'
+      - K1 ships the types and the bundled, source-tree, local-path and image sources that wrap today's lookups, routes the container driver's override ([runtime] relay_image / WARDEN_IMAGE) through them, and adds no flag or key; the container driver uses it in K1; the four VM drivers adopt it in K2 with their binaries, and hyperv's WARDEN_RELAY_BOOT_VHDX moves then; a pinned-download source waits for seam 8 (a11)
+      - also route the four linked VM drivers through it in K1
+      - also add --relay and [driver.<name>] relay now
+      - also build the pinned-download source now, unused until M6
       - 'no relay source in K1: the container driver keeps resolveRelayImage, and the library arrives with the first VM binary in K2, where more than one driver uses it (the umbrella''s K1 row then loses "including the relay source", and M6 for the container driver waits for K2)'
-    recommended: 'the first option'
+    recommended: the first option
   - id: a4
     kind: assumed
     status: open
-    question: 'Where a driver''s own configuration lives.'
+    question: Where a driver's own configuration lives.
     options:
-      - 'the seven existing driver-owned keys keep their tables and names; a key a bundled driver adds from now on, and every key of a driver from outside, lives in [driver.<name>]; warden refuses a describe that declares any other table for a name that is not bundled, and the suite''s static tier checks it'
-      - 'move the existing keys to [driver.<name>] now, with deprecated aliases (UX-03)'
-      - 'let a driver declare any table'
-    recommended: 'the first option'
+      - the seven existing driver-owned keys keep their tables and names; a key a bundled driver adds from now on, and every key of a driver from outside, lives in [driver.<name>]; warden refuses a describe that declares any other table for a name that is not bundled, and the suite's static tier checks it
+      - move the existing keys to [driver.<name>] now, with deprecated aliases (UX-03)
+      - let a driver declare any table
+    recommended: the first option
   - id: a9
     kind: assumed
     status: open
-    question: 'The capability model for the shared VM settings (--script, --image, --cpus, --memory, --keep-vms, --build-link, [vm] cpus, memory_mb, build_link, dns).'
+    question: The capability model for the shared VM settings (--script, --image, --cpus, --memory, --keep-vms, --build-link, [vm] cpus, memory_mb, build_link, dns).
     options:
       - 'one switch, capabilities.vm: they stay warden''s flags and keys and reach a driver that declares vm in start.vm'
       - 'one capability per setting: a driver could take --cpus without --build-link, at the cost of six capability names and six refusal messages where one exists; no bundled driver needs it'
       - 'each VM driver declares them as its own options: a driver from outside could not take [vm] cpus (a4), and every refusal message would change'
-    recommended: 'capabilities.vm'
+    recommended: capabilities.vm
   - id: a11
     kind: assumed
     status: open
     question: 'Seam 8 (relay release forms) has no phase that writes it: the umbrella gives S1 seams 1, 2, 3, 5 and 6, S3 seam 7, and moves seam 4, yet says M6 needs K1''s relay source. The relay source needs seam 8''s vocabulary now (form names, file roles) and would need its manifest and hash format for a pinned source. A gap in the umbrella, raised here and not settled by K1.'
     options:
-      - 'K1 defines the four form names and four file roles as Go constants of the kit library, marked provisional and outside the command contract; it writes no seam 8 text, records no form in the ledger and builds no pinned source; seam 8 is filed as its own S-track item, to exist before M6 adopts a release'
-      - 'the same for K1, with seam 8''s writing added to S1''s item'
-      - 'K1 writes a first seam 8 text for the names it uses'
-      - 'the same for K1, with M6''s first item writing seam 8'
-    recommended: 'the first option'
+      - K1 defines the four form names and four file roles as Go constants of the kit library, marked provisional and outside the command contract; it writes no seam 8 text, records no form in the ledger and builds no pinned source; seam 8 is filed as its own S-track item, to exist before M6 adopts a release
+      - the same for K1, with seam 8's writing added to S1's item
+      - K1 writes a first seam 8 text for the names it uses
+      - the same for K1, with M6's first item writing seam 8
+    recommended: the first option
   - id: a17
     kind: assumed
     status: open
-    question: 'Where the contract''s specification and suite live. The specs repository does not exist yet (S1 creates it).'
+    question: Where the contract's specification and suite live. The specs repository does not exist yet (S1 creates it).
     options:
-      - 'specs/driver-contract/v1.md with its schema, and conformance/driver/, in this repository; moved to buildwarden/buildwarden-specs in K2, after S1 has created it (the amended K2 row says so)'
-      - 'in the specs repository from the start, with K1 waiting for S1 and for Jeff to create the repository'
-    recommended: 'this repository, moved in K2'
+      - specs/driver-contract/v1.md with its schema, and conformance/driver/, in this repository; moved to buildwarden/buildwarden-specs in K2, after S1 has created it (the amended K2 row says so)
+      - in the specs repository from the start, with K1 waiting for S1 and for Jeff to create the repository
+    recommended: this repository, moved in K2
 history:
   - at: 2026-11-12T23:22:53Z
     by: human/jeff
@@ -309,3 +325,9 @@ history:
   - at: 2026-11-14T20:06:45Z
     by: cloud/20261112T230554Z
     event: 'f1-design-r2 (redraft revised after three independent reviews of it): questions a3, a5, a7, a8, a15, a16, a17, a18, a20 and a9''s options reworded; a21 (who reads the configuration), a22 (where the pluggable collector is written down) and a23 (how far GLOBAL-08''s wording goes; the retired a10 asked again) added; the questions that depart from Jeff''s notes are listed first. Steps: the five f6-validate notes updated for the build record, the signals (SIGTERM, a second Ctrl-C), the script-plus-Dockerfile case and the per-user lock; no step added or removed. design_review required and alters_relationships true, unchanged.'
+  - at: 2026-11-14T20:11:24Z
+    by: cloud/20261112T230554Z
+    event: done f1-design-r2
+  - at: 2026-11-14T20:11:24Z
+    by: cloud/20261112T230554Z
+    event: entered phase 2 (plan)
