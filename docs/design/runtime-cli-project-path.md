@@ -404,11 +404,11 @@ from the code, not reproduced:
 - **F3. A project's file chooses host directories.** `output_dir` is created
   and filled with the build's output, which includes files the build posts;
   `tmpdir` is created and holds each build's work dir, and `warden clean`
-  with `--driver firecracker` or `hyperv` removes `warden-<driver>-*`
-  directories it finds there. Top-level names are fixed, and nothing here is
-  run, so the severity is lower. `tmpdir = "."` puts the work dir inside the
-  build context, which the collector serves to the build; what that exposes
-  was not checked.
+  with `--driver firecracker` or `hyperv` removes the `warden-<driver>-*`
+  directories it finds there whose build is no longer running. Top-level
+  names are fixed, and nothing here is run, so the severity is lower.
+  `tmpdir = "."` puts the work dir inside the build context, which the
+  collector serves to the build; what that exposes was not checked.
 - **F4. A project's file chooses the Hyper-V base image.** `windows_image`
   from `./warden.toml` is what `warden image prepare --driver hyperv`
   downloads or registers into the user's cache, where later builds of every
@@ -421,7 +421,8 @@ from the code, not reproduced:
   runs `<name> info` (UX-04).
 - **F7. On Windows, a `docker.exe` in the working directory makes the lookup
   of `docker` fail.** Go's `LookPath` returns `ErrDot` when a name is found
-  in the working directory and the `PATH` match is a different file, and
+  in the working directory and `PATH` has a different file of that name or
+  none, and
   `DetectRuntime` treats any lookup error as "not installed", so a
   repository can make detection skip a runtime or report that none is
   installed. It cannot make the file run. Read in Go 1.26.3's
@@ -499,8 +500,8 @@ would return to Design (FLOW-06).
 No merge and no fallback is added. A refused project value is an error where
 it is the value in effect: the user's file and detection are not tried in its
 place (GLOBAL-10, GLOBAL-11). A project value that a flag or the variable
-replaces is not read at all, which is precedence, not a fallback. No relay
-setting is added or moved (RELAY-08 does not apply).
+replaces is not used and not checked, which is precedence, not a fallback.
+No relay setting is added or moved (RELAY-08 does not apply).
 
 ## Cross-driver impact
 
