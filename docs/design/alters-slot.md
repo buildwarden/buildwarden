@@ -531,7 +531,16 @@ After the merge, at `x4-close`, on the `workflow` branch (outside the PR):
 
 ## Design review
 
-None yet.
+- **r1, 2026-11-14: approved at `ed99489`** (Jeff; read at `ed99489`, page
+  https://claude.ai/artifact/GAWaRsbvXriZqs1XWt3rSh). Nothing was folded in.
+  All four assumptions confirmed as drafted, each asked on its own: a1 (a), a
+  feature holds a slot from the claim of its Plan step until it is done, so
+  FLOW-20's "features past Design" is read as the features whose Plan step is
+  claimed or done; a2 (a), this PR carries the Entire hook configuration of
+  `ac8b41a` in a commit of its own; a3 (a), a process item neither holds a
+  slot nor waits for one; a4 (a), a holder keeps its slot through a return to
+  Design, with the one sentence added to `wf-design` step 5. No rule text
+  changes (`rule_changes: []`), so no rule change was put for approval.
 
 ## Consolidation
 
