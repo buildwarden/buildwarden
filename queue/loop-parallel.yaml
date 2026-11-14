@@ -1,0 +1,37 @@
+feature: loop-parallel
+title: 'Items that do not collide run side by side: an item''s repositories and areas, the relations between items and the three limits, the claim guard, the refresh step and QUEUE.md (componentization P1, third item)'
+priority: 61
+kind: process
+status: in_progress
+round: process
+phase: 1
+design: docs/design/loop-parallel.md
+branch: feat/loop-parallel
+alters_relationships: null
+source: 'Jeff approved the loop change proposal''s direction on 2026-11-14 and the loop-contract design at 7af50ff, whose hand-off names this item and its order in P1 (loop-contract, alters-slot, loop-parallel, loop-native-lead, loop-repository, then the move). A program item (FLOW-20): its design lists componentization.md in related. Scope, from the proposal''s step 3 and loop-contract''s hand-off: repos and tracked items; areas, relations (disjoint, near, colliding) and FLOW-05''s limits; one guard for wf next and wf claim, and wf commit; the checks; the f6-refresh step; QUEUE.md and per-run digests; FLOW-02, -03, -05, -10, -15, -19, -20. Decided already and not to be reopened: a reconciliation item is a feature that FLOW-05 ranks with the fixes (loop-contract a5, a23). Whether it holds any worker is its design''s to say.'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: human/jeff
+      expires: 2026-11-14T22:58:10.653512627Z
+budget:
+  estimate:
+    runs: 3
+    steps: 12
+  spent:
+    runs: 0
+    steps: 1
+questions: []
+history:
+  - at: 2026-11-14T20:57:45Z
+    by: human/jeff
+    event: queued at priority 61 (intake)
+  - at: 2026-11-14T20:58:10Z
+    by: human/jeff
+    event: started (FLOW-05)
+  - at: 2026-11-14T20:58:10Z
+    by: human/jeff
+    event: claimed x1-design until 2026-11-14T22:58:10Z

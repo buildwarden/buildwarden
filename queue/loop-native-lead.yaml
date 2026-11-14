@@ -1,0 +1,31 @@
+feature: loop-native-lead
+title: 'A native machine may lead an item from its first step: the lead, general host names, any-capability work under a refreshable 20-hour lease, the wrapper and the push script (componentization P1, fourth item)'
+priority: 62
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/loop-native-lead.md
+branch: feat/loop-native-lead
+alters_relationships: null
+source: 'Jeff approved the loop change proposal''s direction on 2026-11-14 and the loop-contract design at 7af50ff, whose hand-off names this item and its order in P1 (loop-contract, alters-slot, loop-parallel, loop-native-lead, loop-repository, then the move). A program item (FLOW-20): its design lists componentization.md in related. Scope, from the proposal''s step 4 and loop-contract''s hand-off: lead, host names, Seed, the wrapper, a main-owned push script and denies; FLOW-04, -09, -13, -16, -18. Decided already and not to be reopened: work any machine with a capability can do goes to ''whichever loop supports it and next can pick it up, placing a refreshable 20-hour lease while actively working on it'' (Jeff, loop-contract a15 b, a24). Waits for main to be protected and for loop-parallel. Whether it holds any worker is its design''s to say.'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 3
+    steps: 12
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-14T20:57:45Z
+    by: human/jeff
+    event: queued at priority 62 (intake)

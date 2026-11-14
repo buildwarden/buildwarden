@@ -1,6 +1,6 @@
 feature: loop-repository
 title: 'Work in a second repository from the one queue: wf''s gates and checks, branches and PRs per repository, and the native side (componentization P1, last part). The move to a loop repository follows as P1''s last item.'
-priority: 61
+priority: 63
 kind: process
 status: queued
 round: process
@@ -38,3 +38,9 @@ history:
   - at: 2026-11-14T20:40:00Z
     by: human/jeff
     event: 'title corrected: the move to a loop repository is not deferred. Jeff, loop-contract design review (a19, second sitting, 2026-11-14): it stays in P1 as its last item, after this one.'
+  - at: 2026-11-14T20:57:45Z
+    by: human/jeff
+    event: 'priority 61 -> 62 (renumbered by wf new: loop-parallel queued at 61)'
+  - at: 2026-11-14T20:57:45Z
+    by: human/jeff
+    event: 'priority 62 -> 63 (renumbered by wf new: loop-native-lead queued at 62)'
