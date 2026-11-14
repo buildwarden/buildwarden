@@ -105,25 +105,27 @@ questions:
     answer: (1) Design-first always; spec-first where a seam's written specification defines the behaviour; an unmet specification returns the item to Design with a question in the queue. Jeff, design review second sitting, 2026-11-14.
   - id: a9
     kind: assumed
-    status: open
+    status: confirmed
     question: How a second component reads FLOW and LINT rules written for this repository (make lint, docs/design/, overview.md, GLOBAL-06).
     options:
       - through its profile and LOOP-01's reading rule, as of this PR; the rewording of FLOW and LINT to neutral terms is a process item of its own, filed after P1
       - reword the 28 rules in this PR
       - reword them in one of P1's later items, which amend FLOW rules anyway (the rewording is then reviewed together with a change in what the rules require)
     recommended: through its profile and LOOP-01's reading rule, as of this PR; the rewording of FLOW and LINT to neutral terms is a process item of its own, filed after P1
+    answer: (1) Through its profile and LOOP-01's reading rule; the neutral rewording of FLOW and LINT is a process item after P1. Jeff, design review second sitting, 2026-11-14.
   - id: a10
     kind: assumed
-    status: open
+    status: confirmed
     question: Who may change a loop rule (LOOP, FLOW, LINT). FLOW-14's second route lets a feature's design carry a change to any rule.
     options:
       - 'only a process item (LOOP-09); FLOW-14 is amended by two sentences and FLOW-03 by one: a feature''s design may not declare a change to a LOOP, FLOW or LINT rule or to a check that enforces one; the guard is the design review, which refuses such a rule_changes entry; no enforcement code changes; if the loop files move to a loop repository the rule text and tools/workflow/ are then out of a feature''s reach, and tier 1''s checks of FLOW and LINT rules stay in tools/tier1/ guarded by the review alone until loop-repository decides where tier 1''s generic checks live'
       - leave FLOW-14 as it is until the files move
       - 'also make wf refuse, in a feature''s design, a rule_changes entry that names a LOOP, FLOW or LINT rule (tools/workflow/check/rulechange.go): a mechanical guard now, at the cost of an enforcement change in this PR'
     recommended: 'only a process item (LOOP-09); FLOW-14 is amended by two sentences and FLOW-03 by one: a feature''s design may not declare a change to a LOOP, FLOW or LINT rule or to a check that enforces one; the guard is the design review, which refuses such a rule_changes entry; no enforcement code changes; if the loop files move to a loop repository the rule text and tools/workflow/ are then out of a feature''s reach, and tier 1''s checks of FLOW and LINT rules stay in tools/tier1/ guarded by the review alone until loop-repository decides where tier 1''s generic checks live'
+    answer: (1) Only a process item; FLOW-14 gains two sentences and FLOW-03 one; the guard is the design review; no enforcement code changes. Jeff, design review second sitting, 2026-11-14.
   - id: a11
     kind: assumed
-    status: open
+    status: confirmed
     question: How intake files an item on hold (FLOW-20's freeze). wf new has no way; the six items closed on 2026-11-12 had been held by hand-editing a blocking question into each queue file, and for five of them an answer step.
     options:
       - 'wf new gains -hold "<why>" in this PR: it writes what the hand-edit wrote for a queued item: question q1 (blocking, open) and a human step <f0|x1>-answer-q1 that the item''s first step needs; the intake skill uses the flag'
@@ -131,6 +133,7 @@ questions:
       - 'no tool change: the intake skill spells out the YAML to add by hand'
       - a hold field that wf next skips, with no question (FLOW-20's wording would need amending)
     recommended: 'wf new gains -hold "<why>" in this PR: it writes what the hand-edit wrote for a queued item: question q1 (blocking, open) and a human step <f0|x1>-answer-q1 that the item''s first step needs; the intake skill uses the flag'
+    answer: (1) wf new -hold in this PR. Jeff, design review second sitting, 2026-11-14.
   - id: a12
     kind: assumed
     status: confirmed
@@ -144,13 +147,14 @@ questions:
     answer: '(3) alters-slot carries the two files and they are dropped from this PR: Jeff''s answer to alters-slot a2 in its design review, 2026-11-14.'
   - id: a14
     kind: assumed
-    status: open
+    status: confirmed
     question: The draft's specification invariant ("every behaviour in the spec has a test; every test maps to a spec section"). The loop has no such mapping today.
     options:
       - 'it is LOOP-03''s class 2 for a specification that has a conformance suite: each requirement is covered by a case that names it, or is listed with the reason it is not machine-checked, and each case names the requirements it checks; how requirements are identified is the specification''s own format (seam-specs, unreviewed, proposes identifiers and a coverage check); a specification without a suite (the ledger format under specs/ until it moves) is held by the coupling checks and contract tests it has'
       - the draft as written, for every specification (specs/ would fail it on merge until its sections are tagged to tests)
       - leave it out of the contract; each specifications repository decides
     recommended: 'it is LOOP-03''s class 2 for a specification that has a conformance suite: each requirement is covered by a case that names it, or is listed with the reason it is not machine-checked, and each case names the requirements it checks; how requirements are identified is the specification''s own format (seam-specs, unreviewed, proposes identifiers and a coverage check); a specification without a suite (the ledger format under specs/ until it moves) is held by the coupling checks and contract tests it has'
+    answer: (1) LOOP-03's class 2 for a specification that has a conformance suite; a specification without one is held by the checks it has. Jeff, design review second sitting, 2026-11-14.
   - id: a15
     kind: assumed
     status: open
@@ -278,3 +282,15 @@ history:
   - at: 2026-11-14T19:55:01Z
     by: human/jeff
     event: 'assumed question a8 confirmed: (1) Design-first always; spec-first where a seam''s written specification defines the behaviour; an unmet specification returns the item to Design with a question in the queue. Jeff, design review second sitting, 2026-11-14.'
+  - at: 2026-11-14T19:58:13Z
+    by: human/jeff
+    event: 'assumed question a9 confirmed: (1) Through its profile and LOOP-01''s reading rule; the neutral rewording of FLOW and LINT is a process item after P1. Jeff, design review second sitting, 2026-11-14.'
+  - at: 2026-11-14T19:58:13Z
+    by: human/jeff
+    event: 'assumed question a10 confirmed: (1) Only a process item; FLOW-14 gains two sentences and FLOW-03 one; the guard is the design review; no enforcement code changes. Jeff, design review second sitting, 2026-11-14.'
+  - at: 2026-11-14T19:58:14Z
+    by: human/jeff
+    event: 'assumed question a11 confirmed: (1) wf new -hold in this PR. Jeff, design review second sitting, 2026-11-14.'
+  - at: 2026-11-14T19:58:14Z
+    by: human/jeff
+    event: 'assumed question a14 confirmed: (1) LOOP-03''s class 2 for a specification that has a conformance suite; a specification without one is held by the checks it has. Jeff, design review second sitting, 2026-11-14.'
