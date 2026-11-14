@@ -4,7 +4,7 @@ priority: 59
 kind: process
 status: in_progress
 round: process
-phase: 1
+phase: 2
 design: docs/design/alters-slot.md
 branch: feat/alters-slot
 alters_relationships: false
@@ -14,54 +14,65 @@ steps:
   - id: x1-design
     phase: 1
     affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x2-implement
+    phase: 2
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: human/jeff
-      expires: 2026-11-14T20:35:24.914349832Z
+      claimed_by: cloud/20261112T230554Z
+      expires: 2026-11-14T21:40:31.293068366Z
 budget:
   estimate:
     runs: 1
     steps: 6
   spent:
     runs: 0
-    steps: 1
+    steps: 2
 questions:
   - id: a1
     kind: assumed
-    status: open
-    question: 'What holds an alters_relationships slot. Today an item holds it from the moment it finishes Design (phase 2), so two such items hold each other and wf validate fails when one more finishes Design than the limit allows.'
+    status: confirmed
+    question: What holds an alters_relationships slot. Today an item holds it from the moment it finishes Design (phase 2), so two such items hold each other and wf validate fails when one more finishes Design than the limit allows.
     options:
       - 'from the claim of the item''s Plan step until the item is done; an item that has only finished Design holds nothing. FLOW-20''s features past Design is then read as the features whose Plan step is claimed or done: a feature in phase 2 that waits for its review or for a slot is not counted, so more such features than the limit is a valid state'
-      - 'from the end of Design, as today, with only the limit read from config.yaml (loop-contract a13 as drafted)'
-      - 'from Implement (Plan done)'
+      - from the end of Design, as today, with only the limit read from config.yaml (loop-contract a13 as drafted)
+      - from Implement (Plan done)
     recommended: 'from the claim of the item''s Plan step until the item is done; an item that has only finished Design holds nothing. FLOW-20''s features past Design is then read as the features whose Plan step is claimed or done: a feature in phase 2 that waits for its review or for a slot is not counted, so more such features than the limit is a valid state'
+    answer: (a) From the claim of the item's Plan step until the item is done; FLOW-20's 'features past Design' is read as features whose Plan step is claimed or done. Jeff, design review 2026-11-14.
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The refreshed Entire hook configuration parked as commit ac8b41a on claude/intelligent-ride-54y60a (.claude/settings.json: the session-start hook also reports an entire on PATH that fails to run; .entire/settings.json: key order only). .claude/ reaches main only through a process item (FLOW-14) and this is the next one to merge; loop-contract''s a12 asks the same and drops it if this carries it. It adds to the item''s scope: the approved first step and the item''s title name only the counting change; to keep the item to its title, answer that loop-contract carries it.'
     options:
-      - 'this PR carries the two files as that commit has them, in a commit of its own'
-      - 'loop-contract carries it, as its a12 has it'
-      - 'its own process item'
-      - 'drop it'
-    recommended: 'this PR carries the two files as that commit has them, in a commit of its own'
+      - this PR carries the two files as that commit has them, in a commit of its own
+      - loop-contract carries it, as its a12 has it
+      - its own process item
+      - drop it
+    recommended: this PR carries the two files as that commit has them, in a commit of its own
+    answer: (a) This PR carries the two files as commit ac8b41a has them, in a commit of its own; loop-contract's a12 drops it. Jeff, design review 2026-11-14.
   - id: a3
     kind: assumed
-    status: open
-    question: 'Whether a process item that declares alters_relationships true counts. Today it holds the slot once it is in Implement and its x2-implement waits for the slot (design-principles Decision 9 said so in passing); FLOW-05 and FLOW-20 say features. No open process item declares true.'
+    status: confirmed
+    question: Whether a process item that declares alters_relationships true counts. Today it holds the slot once it is in Implement and its x2-implement waits for the slot (design-principles Decision 9 said so in passing); FLOW-05 and FLOW-20 say features. No open process item declares true.
     options:
-      - 'it neither holds a slot nor waits for one; holds is how a process item stops other work (the code is made to match FLOW-05 and FLOW-20)'
+      - it neither holds a slot nor waits for one; holds is how a process item stops other work (the code is made to match FLOW-05 and FLOW-20)
       - 'it counts as today: it holds from the claim of x2-implement and waits at it; FLOW-05''s sentence is then reworded, a rule change'
-      - 'it holds a slot but never waits'
-    recommended: 'it neither holds a slot nor waits for one; holds is how a process item stops other work (the code is made to match FLOW-05 and FLOW-20)'
+      - it holds a slot but never waits
+    recommended: it neither holds a slot nor waits for one; holds is how a process item stops other work (the code is made to match FLOW-05 and FLOW-20)
+    answer: (a) A process item neither holds a slot nor waits for one; holds is how a process item stops other work. Jeff, design review 2026-11-14.
   - id: a4
     kind: assumed
-    status: open
-    question: 'Whether a holder keeps its slot when it returns to Design (FLOW-06). Today it gives it up at once.'
+    status: confirmed
+    question: Whether a holder keeps its slot when it returns to Design (FLOW-06). Today it gives it up at once.
     options:
       - 'it keeps it while it has a finished plan (a return from Implement or later); a return from Plan itself drops the unfinished Plan step and the slot with it. FLOW-20''s features past Design then includes a holder that is back in Design. Cost: an item with a plan whose redesign changes false to true while every slot is held would go over the limit; one sentence added to .claude/agents/wf-design.md step 5 has Design put the queue''s value back, raise a blocking question naming the holders and stay unfinished until Jeff raises the limit or a holder is done'
-      - 'every return gives the slot up and the item waits for one again at its next Plan step; a waiting item of lower priority can then take it during the returned item''s review. No edge and no agent text'
+      - every return gives the slot up and the item waits for one again at its next Plan step; a waiting item of lower priority can then take it during the returned item's review. No edge and no agent text
     recommended: 'it keeps it while it has a finished plan (a return from Implement or later); a return from Plan itself drops the unfinished Plan step and the slot with it. FLOW-20''s features past Design then includes a holder that is back in Design. Cost: an item with a plan whose redesign changes false to true while every slot is held would go over the limit; one sentence added to .claude/agents/wf-design.md step 5 has Design put the queue''s value back, raise a blocking question naming the holders and stay unfinished until Jeff raises the limit or a holder is done'
+    answer: (a) A holder keeps its slot through a return to Design while it has a finished plan; the one sentence is added to wf-design step 5. Jeff, design review 2026-11-14.
 history:
   - at: 2026-11-14T18:34:56Z
     by: human/jeff
@@ -72,3 +83,24 @@ history:
   - at: 2026-11-14T18:35:24Z
     by: human/jeff
     event: claimed x1-design until 2026-11-14T20:35:24Z
+  - at: 2026-11-14T19:35:31Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: (a) From the claim of the item''s Plan step until the item is done; FLOW-20''s ''features past Design'' is read as features whose Plan step is claimed or done. Jeff, design review 2026-11-14.'
+  - at: 2026-11-14T19:35:31Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: (a) This PR carries the two files as commit ac8b41a has them, in a commit of its own; loop-contract''s a12 drops it. Jeff, design review 2026-11-14.'
+  - at: 2026-11-14T19:35:31Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: (a) A process item neither holds a slot nor waits for one; holds is how a process item stops other work. Jeff, design review 2026-11-14.'
+  - at: 2026-11-14T19:35:31Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: (a) A holder keeps its slot through a return to Design while it has a finished plan; the one sentence is added to wf-design step 5. Jeff, design review 2026-11-14.'
+  - at: 2026-11-14T19:40:22Z
+    by: human/jeff
+    event: done x1-design
+  - at: 2026-11-14T19:40:22Z
+    by: human/jeff
+    event: entered phase 2 (implement)
+  - at: 2026-11-14T19:40:31Z
+    by: cloud/20261112T230554Z
+    event: claimed x2-implement until 2026-11-14T21:40:31Z
