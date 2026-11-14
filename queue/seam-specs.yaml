@@ -1,6 +1,6 @@
 feature: seam-specs
 title: 'Specs repository and conformance suites: write seams 1, 2, 3, 5 and 6, build the harness against any relay and any collector, link the book and the specs, fill tier 1''s seams list (componentization S1)'
-priority: 62
+priority: 64
 status: in_progress
 round: feature
 phase: 2
@@ -28,10 +28,12 @@ steps:
     phase: 6
     affinity: human
     status: pending
+    needs:
+      - f2-design-review
     lease:
       claimed_by: ""
       expires: null
-    note: 'Not before Review (phase 4) is done, although wf lists this step from the day it was added (design: Decision 12, How the loop treats the second repository; a15, a4, a8). First read the tier-2 report''s MUST findings and check that the conformance workflow''s run for this branch''s head is green. Then, in buildwarden/buildwarden-specs: merge the pull request from feat/seam-specs into main (FLOW-08), preferably as a merge commit, and push the tag v0.1.0 (the release this branch pins). Then, on this branch: make pin-specs REF=v0.1.0, make test, make lint, commit, push. An attended session may push the tag and move the pin on your word. If the specs pull request changed after Review, record the difference between the reviewed commit and the tag in this step''s evidence. The PR''s pin job fails a pin that is not a release tag, so f6-open-pr cannot go green without this step.'
+    note: 'Not before Review (phase 4) is done: wf offers this step once the design review is done, and cannot hold a human step back until its phase (design: Decision 12, How the loop treats the second repository; a15, a4, a8). It exists as an exception to FLOW-04''s list and to FLOW-08''s "no sign-off step in the queue" that the design review grants by confirming a15; if the review does not, Design removes it. It signs nothing off: the merge does (FLOW-08), and this step records it where wf cannot see it. First list the tier-2 report''s MUST findings that are in the specs repository in the specs pull request''s body, read them, and check that the latest conformance run on this branch is green and that the pin is the specs pull request''s head. Then, in buildwarden/buildwarden-specs: Jeff merges the pull request from feat/seam-specs into main (FLOW-08; no session merges it), preferably as a merge commit. The tag v0.1.0 (the release this branch pins) is then pushed, and on this branch: make pin-specs REF=v0.1.0, make test, make lint, commit, push. An attended session may push the tag and move the pin on Jeff''s word. Confirm that the specs branch was deleted on merge (FLOW-16) and name the specs pull request and the tag in this step''s evidence. If the specs pull request changed after Review, record the difference between the reviewed commit and the tag there too. The PR''s pin job fails a pin that is not a release tag, so f6-open-pr cannot go green without this step.'
   - id: f2-design-review
     phase: 2
     affinity: human
@@ -85,11 +87,12 @@ questions:
   - id: a4
     kind: assumed
     status: open
-    question: Which loop rules bind work in the specs repository before P1 lands.
+    question: 'Which invariants apply to work in the specs repository, which has not adopted the Loop Contract (reworded 2026-11-14 for one queue, and again after the independent review: only the list is asked). That the worker is bound there by FLOW-08, FLOW-16, FLOW-17 and FLOW-18, and that the design lists the invariants that apply by rule ID, is settled by Jeff''s answer to loop-contract a17 (2026-11-14), which also declined "the specs repository adopts first and S1 waits". The item names buildwarden/buildwarden-specs as a repository it works in, in its design (loop-contract a18).'
     options:
-      - queue file, design and reviews stay in this repository; in the specs repository agents work only on feat/seam-specs and never push main, force-push or delete a branch (FLOW-16, FLOW-17); Jeff merges its PR and pushes the release tag, or an attended session does on his word (FLOW-08); sessions are recorded privately and no entire/ refs reach it (FLOW-18); the harness follows GLOBAL-01 to 04, 07, 09 to 11, TEST-04 and TEST-07
-      - no rules there until P1 writes them
-    recommended: queue file, design and reviews stay in this repository; in the specs repository agents work only on feat/seam-specs and never push main, force-push or delete a branch (FLOW-16, FLOW-17); Jeff merges its PR and pushes the release tag, or an attended session does on his word (FLOW-08); sessions are recorded privately and no entire/ refs reach it (FLOW-18); the harness follows GLOBAL-01 to 04, 07, 09 to 11, TEST-04 and TEST-07
+      - 'GLOBAL-01 to GLOBAL-04, GLOBAL-07, GLOBAL-09 to GLOBAL-11, TEST-04 and TEST-07 for the harness''s Go code, and RELAY-05''s schema-identity rule for the schemas: the rules a reader can judge from the code and the schemas alone; Review''s tier-2 report judges the first group and the specs repository''s ci holds the second'
+      - 'a wider list: the first option, and also GLOBAL-05 for the harness and its release binaries, a GLOBAL-06 note for the sandbox (it runs as root and creates namespaces), and UX-02, UX-04, UX-05 and UX-09 for the bw-conformance command line and its report; tier 2 then reads more where no tier 1 runs, and each added rule is applied to something it was not written for'
+      - only what the specs repository's own CI can enforce (the layout and $id check, go vet, go test, the check that the module does not require the kit); Review then reads nothing there and the harness's code is held to no rule of this project
+    recommended: 'GLOBAL-01 to GLOBAL-04, GLOBAL-07, GLOBAL-09 to GLOBAL-11, TEST-04 and TEST-07 for the harness''s Go code, and RELAY-05''s schema-identity rule for the schemas: the rules a reader can judge from the code and the schemas alone; Review''s tier-2 report judges the first group and the specs repository''s ci holds the second'
   - id: a5
     kind: assumed
     status: open
@@ -105,9 +108,9 @@ questions:
     status: open
     question: Which launchers the harness gets in this item (how a relay under test is supplied).
     options:
-      - exec (a binary), oci (an image) and external (already running) now; the VM-image launcher is specified by the same attachment points and built by the first item with a VM image to test (the relay's M2 or M3, or seam 8's)
+      - 'exec (a binary), oci (an image) and external (already running) now; the VM-image launcher is specified by the same attachment points and built by the first item with a VM image to test (the relay''s M2 or M3, or seam 8''s, which no phase writes yet). Narrower than the umbrella''s S1 row ("any relay binary or image"): no suite runs the Go relay VM image or the Hyper-V relay VM when S1 is done'
       - also build a qemu launcher here and validate it on qemu-any
-    recommended: exec (a binary), oci (an image) and external (already running) now; the VM-image launcher is specified by the same attachment points and built by the first item with a VM image to test (the relay's M2 or M3, or seam 8's)
+    recommended: 'exec (a binary), oci (an image) and external (already running) now; the VM-image launcher is specified by the same attachment points and built by the first item with a VM image to test (the relay''s M2 or M3, or seam 8''s, which no phase writes yet). Narrower than the umbrella''s S1 row ("any relay binary or image"): no suite runs the Go relay VM image or the Hyper-V relay VM when S1 is done'
   - id: a7
     kind: assumed
     status: open
@@ -171,22 +174,23 @@ questions:
   - id: a14
     kind: assumed
     status: open
-    question: Native validation (FLOW-09).
+    question: 'Native validation (FLOW-09). Reworded 2026-11-14: nothing this item builds can run the relay suite on macOS (the relay targets and their sandbox are Linux only), so the macos-vz gap is deferred, not open.'
     options:
-      - 'nothing blocking; two tracked gaps: macos-vz, open (the relay suite against the host-mode relay on macOS) and qemu-any, deferred until a VM launcher exists (the relay suite against the Go relay VM image)'
-      - block on macos-vz
+      - 'nothing blocking; two tracked gaps, both deferred: macos-vz until the exec launcher has a macOS form (the relay suite against the host-mode relay on macOS) and qemu-any until a VM launcher exists (the relay suite against the Go relay VM image)'
+      - build the macOS form of the launcher in this item and keep the macos-vz gap open, to be run once the item has merged
+      - block on macos-vz (needs the macOS launcher built here)
       - no gaps recorded
-    recommended: 'nothing blocking; two tracked gaps: macos-vz, open (the relay suite against the host-mode relay on macOS) and qemu-any, deferred until a VM launcher exists (the relay suite against the Go relay VM image)'
+    recommended: 'nothing blocking; two tracked gaps, both deferred: macos-vz until the exec launcher has a macOS form (the relay suite against the host-mode relay on macOS) and qemu-any until a VM launcher exists (the relay suite against the Go relay VM image)'
   - id: a15
     kind: assumed
     status: open
-    question: The release step, and who moves the pin to the release (Decision 12). FLOW-04's list of what a human step is for does not include a release in a second repository, and f6-open-pr's definition has no pin move.
+    question: 'The release step, and what it rests on (Decision 12; reworded 2026-11-14). After Review, Jeff merges the specs pull request (FLOW-08), a release is tagged and the pin moves to it. wf records one branch and one PR per item, in this repository, so it cannot see that merge. Two sentences of the rules as they stand do not provide for a queue step that waits for it: FLOW-04''s list of what a human step is for (blocking questions, the design review, escalations), and FLOW-08''s "There is no sign-off step in the queue: the loop sees the merge". The merge remains the sign-off; the step is only the queue''s record of a merge wf cannot see. A feature''s design may not declare a change to a loop rule (Jeff''s answer to loop-contract a10; FLOW-14 on main does not yet say it), so neither is declared. loop-repository (P1) makes the step unnecessary: wf then records the specs PR and confirms its merge. If Jeff wants the rules to provide for such a step meanwhile, the FLOW-04 and FLOW-08 clauses are a process item''s: the design proposes loop-parallel (tracked items), loop-native-lead being the item that is to amend FLOW-04; holding a human step back until its phase is a wf and FLOW-04 change for the same item. Reworded again after the independent review.'
     options:
-      - 'a human queue step f6-release-specs in phase 6: Jeff reads the tier-2 report and merges the specs pull request; the tag is pushed and the pin moved on this branch (make pin-specs, make test, make lint, push) by him or by the attended session on his word; listed for Jeff from the day it is added and not to be done before Review is done; the PR''s pin job is the backstop'
-      - 'no queue step: f6-open-pr opens the PR on the pseudo-version, the pin job fails, and FLOW-11''s escalation asks Jeff for the release'
-      - f6-open-pr's session moves the pin as its first act, on the design's word
-      - a process item first, to teach the loop about a release in a second repository (P1's subject; holds S1 behind it)
-    recommended: 'a human queue step f6-release-specs in phase 6: Jeff reads the tier-2 report and merges the specs pull request; the tag is pushed and the pin moved on this branch (make pin-specs, make test, make lint, push) by him or by the attended session on his word; listed for Jeff from the day it is added and not to be done before Review is done; the PR''s pin job is the backstop'
+      - 'a human queue step f6-release-specs in phase 6, as an exception to those two sentences (FLOW-04''s list and FLOW-08''s "no sign-off step in the queue") that this review grants for this item only: Jeff merges the specs pull request (FLOW-08, his alone); the tag is then pushed and the pin moved on this branch (make pin-specs, make test, make lint, push) by him or by the attended session on his word; the step needs f2-design-review, is not to be done before Review is done (wf cannot hold a human step back until its phase), and the PR''s pin job is the backstop'
+      - 'no step now: the Publish step that finds the pin on a pseudo-version stops and raises a blocking question asking for the release, with its answer step (inside FLOW-04''s list, and not a sign-off step); nothing shows in the queue until Publish, and the PR slot is held while Jeff releases'
+      - 'no step: f6-open-pr opens the PR on the pseudo-version, the pin job fails, and FLOW-11''s escalation asks Jeff for the release'
+      - S1 waits for loop-repository
+    recommended: 'a human queue step f6-release-specs in phase 6, as an exception to those two sentences (FLOW-04''s list and FLOW-08''s "no sign-off step in the queue") that this review grants for this item only: Jeff merges the specs pull request (FLOW-08, his alone); the tag is then pushed and the pin moved on this branch (make pin-specs, make test, make lint, push) by him or by the attended session on his word; the step needs f2-design-review, is not to be done before Review is done (wf cannot hold a human step back until its phase), and the PR''s pin job is the backstop'
   - id: a16
     kind: assumed
     status: open
@@ -195,6 +199,22 @@ questions:
       - 'the wire only: the requests a collector accepts, its replies and their order; the disk layout is specified as the disk collector''s, and reading stored bytes back is something a target file may give the harness, not a requirement on a collector'
       - 'an object model for any collector: each output is an object a reader can fetch by its name with the bytes sent'
     recommended: 'the wire only: the requests a collector accepts, its replies and their order; the disk layout is specified as the disk collector''s, and reading stored bytes back is something a target file may give the harness, not a requirement on a collector'
+  - id: a17
+    kind: assumed
+    status: open
+    question: 'Which relay files tier 1''s seam list names (design: Tier 1''s seam list; new 2026-11-14). relay/relay.go, relay/proxy.go and cmd/relay/ (all but dhcp.go) hold part of seams 1 and 3 together with most of the rest of the relay. Under either option the check asks only that the pin moved, to any release.'
+    options:
+      - 'leave them off: a change there needs no pin move; the pinned suite fails a change in behaviour a case tests, and an addition no case tests is caught only by Review''s judgment of GLOBAL-08'
+      - list them; every change to the relay's core then needs a pin move or a Tier1-Allow trailer saying why it is not a seam change
+    recommended: 'leave them off: a change there needs no pin move; the pinned suite fails a change in behaviour a case tests, and an addition no case tests is caught only by Review''s judgment of GLOBAL-08'
+  - id: a18
+    kind: assumed
+    status: open
+    question: 'What make conformance runs when no target is named (design: Defaults and overrides; new 2026-11-14). The relay targets run only on Linux; the disk collector''s runs on Linux, macOS and Windows.'
+    options:
+      - every target whose file declares the host's OS, printing each target left out and why; a target named in TARGETS that cannot run on the host is an error, and each CI job names its targets
+      - every target in the directory; the default then fails on macOS and Windows, where a developer has to name collector-disk
+    recommended: every target whose file declares the host's OS, printing each target left out and why; a target named in TARGETS that cannot run on the host is an error, and each CI job names its targets
 history:
   - at: 2026-11-12T23:22:53Z
     by: human/jeff
@@ -223,3 +243,15 @@ history:
   - at: 2026-11-14T18:34:56Z
     by: human/jeff
     event: 'priority 61 -> 62 (renumbered by wf new: alters-slot queued at 59)'
+  - at: 2026-11-14T20:31:00Z
+    by: cloud/attended-20261114
+    event: 'design revised before its review (not a return to Design; f2-design-review not held): folds in one queue (loop-contract a17, a18) and the redrafted driver contract, and acts on an independent reader''s concerns. Questions: a4, a6, a14 and a15 reworded; a17 (which relay files tier 1''s seam list names) and a18 (what make conformance runs by default) added; none retired. Steps: f6-release-specs now needs f2-design-review and its note is rewritten; no step added or removed. Backlog: seam-specs-relay-suite-macos-host-mode set deferred. design_review required and alters_relationships true, unchanged.'
+  - at: 2026-11-14T20:56:00Z
+    by: cloud/attended-20261114
+    event: 'design revised again before its review, to d04b6ef, on an independent review of the revision (not a return to Design): alters-slot stated as merged (897a4a8); the claimant and per-session wording brought into line with the redrafted driver contract; a15 and the f6-release-specs note name FLOW-08''s "no sign-off step in the queue" beside FLOW-04''s list; a4 asks only the list of invariants (the four loop rules are settled by loop-contract a17); the PROFILE-01 note rewritten for the approved order. Questions: a4 and a15 reworded; none added or retired. Steps: f6-release-specs''s note extended; no step added or removed. design_review required and alters_relationships true, unchanged.'
+  - at: 2026-11-14T20:57:45Z
+    by: human/jeff
+    event: 'priority 62 -> 63 (renumbered by wf new: loop-parallel queued at 61)'
+  - at: 2026-11-14T20:57:45Z
+    by: human/jeff
+    event: 'priority 63 -> 64 (renumbered by wf new: loop-native-lead queued at 62)'

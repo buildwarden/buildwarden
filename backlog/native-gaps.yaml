@@ -625,17 +625,20 @@ gaps:
       2026-11-12 (attended, feat/hyperv-relay-per-build-channel 5ac5532, which contains main d55f963): done. During a running build clean printed "Nothing to clean" and left its VMs running; after a durable --keep-vms build it removed both VMs and the work dir and the slot read free; after an ephemeral --keep-vms build it also removed the warden-<id> switch. Evidence: native/windows-hyperv/2026-11-12/attended-r4/ (clean-*).
   - id: seam-specs-relay-suite-macos-host-mode
     host: macos-vz
-    status: open
+    status: deferred
     what: >-
       The specs repository's relay conformance suite (bw-conformance, the release pinned in
-      tools/conformance/go.mod) against the host-mode Go relay on macOS, where vz runs it: dist/relay
-      -mode host on an inherited socketpair, with the harness as claimant, collector, build
-      environment and upstream.
+      tools/conformance/go.mod) against the host-mode Go relay on macOS, where vz runs it:
+      dist/conformance/relay -mode host on an inherited socketpair, with the harness as claimant,
+      collector, build environment and upstream.
     design: docs/design/seam-specs.md
     note: >-
-      Tracked, not blocking (design Validation plan, a14). The harness's upstream needs loopback
-      aliases in the documentation ranges and ports 53, 80 and 443, so the session needs root; if it
-      cannot have it, record the entry blocked with that reason. Run once seam-specs has merged.
+      Tracked, not blocking (design Validation plan, a14). Deferred: it waits on a macOS form of the
+      harness's exec launcher. seam-specs builds the relay targets for Linux only (their sandbox is
+      Linux namespaces), so nothing it merges can start this run. The macOS form puts the harness's
+      upstream on loopback aliases in the documentation ranges with ports 53, 80 and 443, which
+      needs root. The first item that needs the relay suite on macOS builds it (expected: the Rust
+      relay's host mode on VZ, the umbrella's M3) and reopens this entry.
   - id: seam-specs-relay-suite-relay-vm
     host: qemu-any
     status: deferred
