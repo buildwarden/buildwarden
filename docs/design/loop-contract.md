@@ -348,15 +348,14 @@ points are `loop-native-lead`'s (hand-off, point 7).
     not share a comment or error-wrapping rule.
 12. **The table of host names is shared loop state; schedules and
     credentials are each machine's; who takes a step is FLOW-04's to say**
-    (a15). The draft puts "which machines" in the
-    local column. The same two machines serve every component, and a
-    machine runs one native session at a time (`native-tick.sh` takes a
-    lock). A table per component could not hold that. One `hosts.yaml`
-    beside the queue says which host names each machine serves, for work
-    in every repository. A component's profile lists the host names its
-    work uses.
-    The contract does not say which worker takes a step: LOOP-05 cites
-    FLOW-04 for that. Today FLOW-04 and `hosts.yaml` give every host name,
+    (a15). The draft puts "which machines" in the local column. The same
+    two machines serve every component, and a machine runs one native
+    session at a time (`native-tick.sh` takes a lock). A table per
+    component could not hold that. One `hosts.yaml` beside the queue says
+    which host names each machine serves, for work in every repository. A
+    component's profile lists the host names its work uses. The contract
+    does not say which worker takes a step: LOOP-05 cites FLOW-04 for
+    that. Today FLOW-04 and `hosts.yaml` give every host name,
     `<capability>-any` included, to exactly one machine. Jeff decided on
     2026-11-14 (a15, part b) that work any machine with a capability can
     do goes to "whichever loop supports it and next can pick it up, placing
@@ -494,7 +493,16 @@ and a23, which the answers to a19 and a5 raised: each is "proceeding with
 the recommended option; confirm". The same twenty-two are in the queue
 file. a13 is retired (see **Retired** below).
 
-Against the text read at `2889919`:
+Against the text read at `04cc9bb`, after the second sitting:
+
+| | Questions |
+|---|---|
+| Unchanged but for the answer line | a2, a3, a4, a6, a7, a8, a9, a11, a12, a14, a16, a17, a18, a21 |
+| Rewritten for the answer Jeff gave | a5 (option 3), a15 (part b), a19 (option 2) |
+| One clause changed, following a19 | a1 (the move is P1's last item, where it read "deferred"); a10 ("once" the files leave, where it read "if"); a20 (its lead sentence, and the count of amendments in its answer) |
+| New, open | a22 (what the wave-1 gate waits for); a23 (which item makes a reconciliation item's rank true) |
+
+Against the text read at `2889919`, as the questions stood at `04cc9bb`:
 
 | | Questions |
 |---|---|
@@ -526,6 +534,8 @@ Against the text read at `2889919`:
   3. This item waits for `loop-parallel` and lands with the FLOW-05 change.
      The relay's M1 would have nothing to cite meanwhile, and this review
      would wait for an item not yet filed.
+
+  **Answered 2026-11-14, second sitting: option 1, as recommended.**
 - **a2. The form of the split in this PR.**
   1. *(recommended)* In place and by file, no file moved: the loop side is
      `loop-contract.md`, `process.md` and `behavioral-linter.md`; the README
@@ -534,11 +544,15 @@ Against the text read at `2889919`:
      tier 1's rule loader and breaks links twice.
   3. A marker on every rule (`**Scope:** loop`). A third metadata line that
      tier 1 would have to parse, for information the file already gives.
+
+  **Answered 2026-11-14, second sitting: option 1, as recommended.**
 - **a3. How the contract's statements are identified.**
   1. *(recommended)* A new prefix, `LOOP-`, nine rules, in
      `docs/development/loop-contract.md`.
   2. FLOW-21 to FLOW-29 in `process.md`.
   3. Unnumbered prose with the FLOW and LINT rules as the only IDs.
+
+  **Answered 2026-11-14, second sitting: option 1, as recommended.**
 - **a4. Classes of work.** *(reworded)* The draft has two classes, with
   process work at the top of the queue and outside the feature queue.
   1. *(recommended)* FLOW-05's four classes stand (in implementation,
@@ -548,6 +562,8 @@ Against the text read at `2889919`:
   2. The draft's two classes: every process item ahead of everything,
      including items in implementation. FLOW-05 is amended, and an
      in-flight implementation is interrupted by every process item.
+
+  **Answered 2026-11-14, second sitting: option 1, as recommended.**
 - **a5. The kind of a reconciliation item** ("adopt consumable X at
   version Y"). *(reworded)*
   1. *(recommended at `04cc9bb`)* A feature item in the queue that names the consumer's
@@ -581,6 +597,8 @@ Against the text read at `2889919`:
      Host-bound validation blocks or is tracked per design (FLOW-09).
   2. Every class blocks, the judgment tier included. Reverses LINT's
      load-bearing decision and ends report-only mode (LINT-07).
+
+  **Answered 2026-11-14, second sitting: option 1, as recommended.**
 - **a7. The report of a run.** The draft lists five things every iteration
   reports.
   1. *(recommended)* The digest section of each run is the report
@@ -592,6 +610,8 @@ Against the text read at `2889919`:
   2. A separate report file per step, with the draft's five headings.
      A second record of what the digest, the queue history and the tier-2
      report already hold.
+
+  **Answered 2026-11-14, second sitting: option 1, as recommended.**
 - **a8. When work is spec-first, and what happens to a specification that
   cannot be met.** *(reworded: the example)*
   1. *(recommended)* Spec-first applies to behaviour that a seam's written
@@ -611,6 +631,8 @@ Against the text read at `2889919`:
      repository would need a specification of every driver and of the CLI
      first, and questions would live in two places.
   3. A specification-only item needs no design.
+
+  **Answered 2026-11-14, second sitting: option 1, as recommended.**
 - **a9. How a second component reads FLOW and LINT rules written for this
   one.** *(reworded)*
   1. *(recommended)* Through its profile and LOOP-01's reading rule, as of
@@ -622,6 +644,8 @@ Against the text read at `2889919`:
   3. Reword in one of P1's later items, which amend FLOW rules anyway. The
      rewording would then be reviewed together with a change in what the
      rules require. *(reworded: `loop-repository` is no longer a move)*
+
+  **Answered 2026-11-14, second sitting: option 1, as recommended.**
 - **a10. Who may change a loop rule.**
   1. *(recommended)* Only a process item (LOOP-09). FLOW-14 is amended by
      two sentences and FLOW-03 by one: a feature's design may not declare a
@@ -640,6 +664,8 @@ Against the text read at `2889919`:
      that names a LOOP, FLOW or LINT rule
      (`tools/workflow/check/rulechange.go`). A mechanical guard now, at the
      cost of an enforcement change in this PR.
+
+  **Answered 2026-11-14, second sitting: option 1, as recommended.**
 - **a11. How intake files an item on hold** (FLOW-20's freeze). `wf new` has
   no way; the six items closed on 2026-11-12 had been held by hand-editing a
   blocking question into each queue file, and for five of them an answer
@@ -655,6 +681,8 @@ Against the text read at `2889919`:
   4. A `hold:` field that `wf next` skips, with no question. Cleaner, but
      FLOW-20 says "with a blocking question only the human answers" and
      would need amending.
+
+  **Answered 2026-11-14, second sitting: option 1, as recommended.**
 - **a12. The refreshed Entire hook configuration** (commit `ac8b41a` on
   `claude/intelligent-ride-54y60a`: `.claude/settings.json` and
   `.entire/settings.json`). *(reworded)*
@@ -674,6 +702,10 @@ Against the text read at `2889919`:
      option named `loop-repository`, "since that item reworks `.claude/`",
      which it no longer does)*
   4. Drop it.
+
+  **Answered 2026-11-14: option 3, as recommended**, by Jeff's answer to
+  `alters-slot`'s a2 in that item's design review. `alters-slot` carries
+  the two files, and they are dropped from this PR.
 - **a14. The draft's specification invariant**: "every behaviour in the spec
   has a test; every test maps to a spec section". The loop has no such
   mapping today.
@@ -689,6 +721,8 @@ Against the text read at `2889919`:
   2. The draft as written, for every specification. `specs/` would fail it
      on merge until its sections are tagged to tests.
   3. Leave it out of the contract; each specifications repository decides.
+
+  **Answered 2026-11-14, second sitting: option 1, as recommended.**
 - **a15. The smaller departures from the draft, confirmed together.** Each
   is "the contract says this where the draft says that".
   1. *(recommended)* All seven as proposed:
@@ -757,6 +791,8 @@ Against the text read at `2889919`:
      the check that enforces it, with no rule IDs of its own (what the
      relay's M1 design keeps as `docs/invariants.md` until its M1b). The
      judgment tier would have no rule index to read there.
+
+  **Answered 2026-11-14, second sitting: option 1, as recommended.**
 - **a17. Repositories that have not adopted the contract.** *(reworded:
   the second half, "where a loop process item is queued", falls away with
   the queue per component; every item is in the one queue)*
@@ -771,6 +807,8 @@ Against the text read at `2889919`:
      and its invariants) before any work in it. S1 would wait for P1.
   3. The contract says nothing; each such item states its own rules, as
      `seam-specs` a4 does now.
+
+  **Answered 2026-11-14, second sitting: option 1, as recommended.**
 - **a18. One queue.** *(new)* The draft has a queue per component ("nothing
   in one component's queue blocks another component's queue"), the
   umbrella's Decision 2 approved that, and the text read at `2889919`
@@ -805,6 +843,8 @@ Against the text read at `2889919`:
   3. Hold this item until `loop-parallel` has landed, and write LOOP-04
      against the new FLOW-05.
   4. A queue per component, as read at `2889919`.
+
+  **Answered 2026-11-14, second sitting: option 1, as recommended.**
 - **a19. The move to the loop repository.** *(new at `04cc9bb`, where its
   title was "The loop repository is deferred")* Two of the draft's
   three decided points put the contract, the queue and the reports in a
@@ -902,6 +942,8 @@ Against the text read at `2889919`:
   4. Leave the rule as read and the settings as they are, and record the
      gap: the contract asks for it, neither repository has it, and
      `loop-native-lead` closes it for `main`.
+
+  **Answered 2026-11-14, second sitting: option 1, as recommended.**
 - **a22. What the wave-1 gate waits for.** *(new on 2026-11-14, raised by
   a19's answer; open)* The umbrella's order table gives wave 1 (P1, S1,
   M1) the gate "Loop repository live; suites pass on the Go relay" (line
@@ -1457,7 +1499,16 @@ drop it.
 | The `workflow` branch's `README.md` | `wf new -hold` | Not in the PR. Edited on that branch after the merge, in the attended session in which Jeff merges; the PR body lists it under "After the merge" |
 
 Nothing else. No rule file other than `process.md` is edited, `tools/tier1/`
-and `tools/workflow/check/` are untouched, and no file moves. Against the
+and `tools/workflow/check/` are untouched, and no file moves. Jeff's three
+departing answers at the second sitting add no row and remove none. The
+move is `loop-move`'s (a19). FLOW-05 and `wf`'s class for a reconciliation
+item are `loop-parallel`'s under a23's recommended option; its second
+option would add FLOW-05 to the `process.md` row and the class change to
+the `tools/workflow/` row. FLOW-04, the host table and the lease are
+`loop-native-lead`'s (a15, part b). Within the rows, the contract's text
+changes in three places (the "Where things are" table, LOOP-05's bullet on
+routing and LOOP-07's point 2), the README's new paragraph in one clause,
+and fewer of the umbrella's sentences are amended. Against the
 table read at `2889919`: the row for `tools/workflow/queue/next.go` is gone
 with a13; the rows for `docs/design/componentization.md` and `README.md`
 are new; the two settings files are carried only if `alters-slot` does not
@@ -2001,6 +2052,14 @@ existing rule changes, and no enforcement code changes for any of them:
 `tools/tier1/` and `tools/workflow/check/` are untouched. Tier 1's
 `rule-index` check parses the ten new rules as it parses every rule, and
 they need no `rules.yaml` entry because none is tagged `automated`.
+
+Jeff's answers at the second sitting add no entry and change no severity
+or check. They change the proposed wording in four places, each marked in
+the fourth entry of **Design review**: the contract's "Where things are"
+table and the sentence under it (a19), LOOP-05's bullet on routing (a15,
+part b), LOOP-07's point 2 (a5), and one clause of the README's new
+paragraph (a19). FLOW-04 and FLOW-05 are not amended by this item; a23
+asks that of FLOW-05.
 
 ### LOOP-01 to LOOP-09 (add), `docs/development/loop-contract.md`
 
@@ -3164,6 +3223,159 @@ private repository's reports and the per-repository branch head for
 section, which are records (the two notes above stand in for the edits),
 and committing the queue file, which the review session writes with its
 own state.
+
+### 2026-11-14, second sitting: all questions answered; three answers folded in
+
+Read at `04cc9bb`. Jeff answered all twenty questions. The rule changes
+and the outcome are still to come. Two questions that his answers raised
+are open (a22, a23), and the six reworded amendments to the umbrella are
+to be shown to him again. The three entries above are kept as written.
+
+**The answers**, one line each:
+
+- a1: option 1, as recommended. The line between this item and P1's later
+  items.
+- a2: option 1, as recommended. The split in place, by file; no file moves
+  in this PR.
+- a3: option 1, as recommended. The prefix `LOOP-`, nine rules.
+- a4: option 1, as recommended. FLOW-05's four classes stand; feature and
+  process are the two kinds.
+- a5: **option 3, not the recommended option 1.** A reconciliation item is
+  a feature that FLOW-05 ranks with the fixes. Folded in.
+- a6: option 1, as recommended. Four classes, two tiers; only a
+  deterministic check blocks.
+- a7: option 1, as recommended. The digest section is the report, with
+  three additions.
+- a8: option 1, as recommended. Design-first always, spec-first where a
+  seam has a written specification.
+- a9: option 1, as recommended. A second component reads FLOW and LINT
+  through its profile; the neutral rewording is a process item after P1.
+- a10: option 1, as recommended. Loop rules change only through a process
+  item.
+- a11: option 1, as recommended. `wf new -hold`, in this PR.
+- a12: option 3, as recommended, settled by his answer to `alters-slot`'s
+  a2: `alters-slot` carries the Entire hook configuration and it is
+  dropped from this PR. Task 10 and the two settings rows of the PR's
+  table are written as "only if `alters-slot` does not carry them", so
+  they are not done; their text is left as he read it.
+- a14: option 1, as recommended. The specification invariant, for a
+  specification that has a conformance suite.
+- a15: **all but (b).** (a), (c), (d), (e), (f) and (g) as proposed. On
+  (b): "B should be changed to whichever loop supports it and next can
+  pick it up, placing a refreshable 20-hour lease while actively working
+  on it". Folded in.
+- a16: option 1, as recommended. Invariants as rules in LINT-01's format,
+  under prefixes the component names in its profile.
+- a17: option 1, as recommended. A repository is a component once it has
+  done LOOP-08's steps; an item may work in one that has not.
+- a18: option 1, as recommended. One queue, and LOOP-04 cites FLOW-05.
+- a19: **option 2, not the recommended option 1.** The move to the loop
+  repository stays in P1, as its last item after `loop-repository`. Folded
+  in.
+- a20: option 1, as recommended: the amendments are made in this PR, in
+  place. Those worded for a deferred loop repository are re-derived for
+  a19 and shown to him again.
+- a21: option 1, as recommended. Trunk protection where the host offers
+  it; Jeff protects `main` before this PR merges.
+
+**What a19 changed.** The move is not deferred, and P1 is not done until
+the loop has moved. The move's item is not yet filed; this design calls it
+`loop-move`, a provisional name, and the repository's name is confirmed
+with Jeff right before it is created.
+
+- The opening paragraph, the Problem (the 2026-11-14 direction, and point
+  2) and the Prior art line on the umbrella.
+- The Decisions preamble, and Decisions 8, 10 and 13 in a clause each.
+  Decision 19 is rewritten.
+- a19 itself; one clause each of a1, a10 and a20; a22 is new.
+- The last row of the blanks table and row 8 of the table of
+  disagreements.
+- **The split, rule by rule**: its lead paragraph and the GLOBAL-09 row.
+- **Rule IDs, cross-references, `rules.yaml` and tier 1**: four bullets,
+  from "what a move would have to change" to "what the move has to
+  change".
+- **What a second component needs**: the link in step 1, the paragraph on
+  P1's done-when, and the third difference from the relay's M1 design.
+- **The hand-off**: six items where there were five and a deferred move;
+  the `loop-move` row; points 1 to 3, where the table of what moves and
+  what stays is the one read at `2889919`; point 5, which gains what the
+  move's design settles; and the `loop-repository` row's last clause.
+- **Amendments to the umbrella design**: re-derived. Nine stand as read
+  (U1, U3, U5, U7, U10, U11, U12, U17, U18), six are reworded (U8, U9,
+  U13, U15, U20, U21) and seven are withdrawn because the umbrella's
+  sentence is right again (U2, U4, U6, U14, U16, U19, U22). The notes on
+  what was read and left as written, and on what the amendments do not
+  settle, follow.
+- The contract's proposed text: the second column of "Where things are"
+  is headed "Once the loop repository exists", as at `2889919`, and the
+  sentence under the table says what that repository is.
+- The README's new paragraph ("kept here until the loop repository
+  exists, and move to it then"), the heading of the README section table,
+  and the paragraph under the FLOW-14 amendment.
+- The validation plan's line on the amendments, task 12, and the note to
+  the relay's M1 after the merge.
+
+**What a5 changed.** A reconciliation item is still a feature item. It
+ranks in FLOW-05's class 3, with the fixes, and not at the priority intake
+gives it among new functionality.
+
+- Decision 7 is rewritten; the Decisions preamble names it.
+- a5 itself; a23 is new.
+- Row 9 of the table of disagreements, and the LOOP-07 row of the table
+  under **The contract's structure**.
+- LOOP-07's point 2: "It is a feature item (LOOP-04), filed through
+  intake, and FLOW-05 gives its place in the order", where it read "filed
+  through intake at the priority the human gives it".
+- **Defaults and overrides**: a row for the class of a reconciliation
+  item.
+- **What is true on merge**: the sentences on LOOP-07's point 2.
+- **The hand-off**: the `loop-parallel` row and the first decision of
+  point 7.
+
+The queue's record of this answer says the FLOW-05 amendment is "declared
+in this item and put to Jeff by name". Where it is declared is put to him
+as a23, which recommends `loop-parallel`. If he chooses a23's second
+option, this design gains a FLOW-05 entry in `rule_changes`, its current
+and proposed wording, and the `wf` change.
+
+**What a15 (b) changed.** Work that any machine with a capability can do
+is not one machine's.
+
+- Decision 12 is rewritten; the Decisions preamble names it.
+- a15: part (b) and the answer under the question.
+- Row 17 of the table of disagreements.
+- LOOP-05's bullet on routing: "Work that needs native hardware carries a
+  host name. One table, kept beside the queue, says which host names each
+  machine serves, for work in every repository. Work that any machine
+  with a capability can do carries `<capability>-any`. FLOW-04 says which
+  worker may take a step." It read that the table "gives each host name
+  to exactly one machine (FLOW-04)" and that it gives a
+  `<capability>-any` name "to one machine".
+- **What a second component needs**: one clause on routing.
+- **What is true on merge**: a paragraph on LOOP-05's bullet.
+- **The hand-off**: the `loop-native-lead` row and the second decision of
+  point 7, with the six points that item settles.
+- **Defaults and overrides**: a note that `lease_minutes` stays 120.
+
+It adds no question here. What his rule leaves open (which claims get the
+20-hour lease, what a refresh is, what becomes of a lease that is not
+refreshed) is `loop-native-lead`'s, and nothing in this item's text
+depends on the answers.
+
+**What did not change.** The nine-rule structure and every rule's severity
+and check. LOOP-01 to LOOP-04, LOOP-06, LOOP-08 and LOOP-09, word for
+word; LOOP-05 but for the one bullet; LOOP-07 but for point 2. PROFILE-01
+and its tables. The FLOW-01, FLOW-03 and FLOW-14 amendments and the
+template's two additions. The thirteen `rule_changes` entries and the rest
+of the front matter. The rows of the table of what the PR changes, and the
+tasks other than task 12. `design_review: required`, `alters_relationships: false`, no
+`holds`.
+
+**Open after this entry.** a22 (what the wave-1 gate waits for:
+recommended, the queue working across repositories and not the move) and
+a23 (which item makes a reconciliation item's rank true: recommended,
+`loop-parallel`). The six reworded amendments, by number. The approval of
+the rule changes by name, and the outcome.
 
 ## Consolidation
 
