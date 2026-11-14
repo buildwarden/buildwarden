@@ -2059,7 +2059,7 @@ key. What it does, in order:
      `--verbose`, `-v`); the first argument after them that is not a
      flag names the command. A command that selects no driver
      (`inspect`, `driver list`, `image list`, and `image verify` without
-     `--driver`) stops here: no driver is looked up and no driver's flag
+     `--driver`) stops here: no driver is selected and no driver's flag
      is registered, so these work when the default driver is missing. If
      a flag `warden` does not know stands before the command's name, it
      can only be a driver's (step 3), and the command is found after
