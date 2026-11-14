@@ -76,8 +76,8 @@ steps:
     affinity: human
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: human/jeff
+      expires: 2026-11-14T23:00:57.355995851Z
   - id: f2-plan
     phase: 2
     affinity: cloud
@@ -93,7 +93,7 @@ budget:
     steps: 30
   spent:
     runs: 1
-    steps: 4
+    steps: 5
 questions:
   - id: a16
     kind: assumed
@@ -337,3 +337,6 @@ history:
   - at: 2026-11-14T20:57:45Z
     by: human/jeff
     event: 'priority 64 -> 65 (renumbered by wf new: loop-native-lead queued at 62)'
+  - at: 2026-11-14T21:00:57Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-14T23:00:57Z
