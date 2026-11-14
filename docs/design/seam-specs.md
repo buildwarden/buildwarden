@@ -42,7 +42,8 @@ build a conformance harness that runs black-box against any relay binary or
 image and against any collector, link the book and the specs both ways, and
 fill `seams` in `tools/tier1/rules.yaml`. It is done when the suites pass
 against the Go relay and the disk collector. This design works inside those
-decisions and does not reopen them.
+decisions and does not reopen them. Where it does less than those words,
+**Where this design is narrower than the umbrella** lists it.
 
 ## Problem
 
@@ -556,8 +557,8 @@ reworded a4, a6, a14 and a15 and added a17 and a18. None is retired.
     confirmed. It cannot be held back until Review: `wf` offers a `human`
     step whatever its phase, and a step can only need one that already
     exists. Its note says not before Review is done, there is no specs pull
-    request to merge before Implement ends, and the PR's `pin` job stops a
-    pin that is not a release tag.
+    request to merge until Implement's task 11, and the PR's `pin` job
+    stops a pin that is not a release tag.
   - (B) No step now. The Publish step that finds the pin on a
     pseudo-version stops and raises a blocking question that asks for the
     release, with its answer step, as Implement does for a missing
@@ -599,9 +600,11 @@ reworded a4, a6, a14 and a15 and added a17 and a18. None is retired.
   `artifacts` path, a new step in one mode's claim) is caught only by
   Review's judgment of GLOBAL-08. (B) List them. Every change to the relay's
   core then needs a pin move, or a `Tier1-Allow` trailer that says why it
-  is not a seam change. *Proceeding with A; confirm.* The Go relay is
-  retired at M6 and the freeze (FLOW-20) leaves it few changes until then.
-  Under either option the check asks only that the pin moved, to any
+  is not a seam change. *Proceeding with A; confirm.* The changes the
+  program still makes to the Go relay's seams are items that change the
+  specification first by their own designs (S2's truststore endpoints),
+  the freeze (FLOW-20) keeps other changes few, and the Go relay is retired
+  at M6. Under either option the check asks only that the pin moved, to any
   release; whether that release changed the right specification is Review's
   to judge.
 - **a18. What `make conformance` runs when no target is named**
@@ -1287,8 +1290,9 @@ This design keeps its names and proposes none to K1.
 **Specs repository** (`.github/workflows/` there):
 
 - `ci`, on pull requests and `main`: the layout check (every
-  `v<N>.<part>.schema.json` beside its `v<N>.md`; schemas valid 2020-12;
-  the documents' JSON examples validate against them); requirement
+  `v<N>.schema.json` or `v<N>.<part>.schema.json` beside its `v<N>.md`;
+  each schema's `$id` as Decision 2 has it; schemas valid 2020-12; the
+  documents' JSON examples validate against them); requirement
   identifiers unique, and each covered by a case or listed as not
   machine-checked; `go vet` and `go test ./...`, which includes a
   self-test that runs each suite against the harness's own counterpart role
@@ -1885,7 +1889,7 @@ them, this section is read again against what was approved.
 | GLOBAL-08, from "Versioned seams" | The executor bullet, which gains the bootstrap config. One new paragraph, placed directly before the rule's last paragraph | A third bullet, the driver contract. The paragraph that begins "Pre-1.0 these seams may still move", rewritten | The relay bullet. The last paragraph ("The automated part requires ...") |
 | TEST-05 | The title, and the whole body as it is on `main` | One new paragraph at the rule's end | |
 | `rules.yaml`, `seams` | Five entries, and the comment above the list | One entry, `driver-contract` | |
-| `rules.yaml`, TEST-05's owner | The string, as under **TEST-05** | The same string, with "the driver suite's static tier runs there" added to its `make test` half | |
+| `rules.yaml`, TEST-05's owner | The string, as under **TEST-05** | The string on `main`, with "the driver suite's static tier runs there" added inside its parentheses | |
 | TEST-02, EXEC-04 | All of each amendment | Nothing | |
 
 The result reads the same whichever merges first. GLOBAL-08: the relay
@@ -1947,9 +1951,9 @@ item changes (its **What `seam-specs` and `driver-contract` owe the
 profile**). As proposed, *Specifications* says that no specifications
 release is pinned; after this item it names the specs repository and the
 pin. *Consumables* says this repository consumes nothing; after this item
-it consumes the
-specifications release at the version in `tools/conformance/go.mod`. Its
-Checks entry would also gain the `conformance` workflow.
+it consumes the specifications release at the version in
+`tools/conformance/go.mod`. Its Checks entry would also gain the
+`conformance` workflow.
 
 The rule is not on `main` and its wording is not final, so this design
 does not declare it: `rule_changes` names rules that exist. What is owed
