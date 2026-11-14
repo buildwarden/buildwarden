@@ -765,6 +765,10 @@ names the limit and the holders, and says "back to Design (FLOW-06)". It
 logs what changed in the item's history (`declared at 4c1d9e2: areas
 +driver/hyperv (within drivers: hyperv)`).
 
+A process item is outside the relations, so none of its done-when checks
+asks for a declaration. `wf declare` on one records its `repos`, which
+`QUEUE.md` shows, and nothing requires it.
+
 **`wf relate -state DIR -worker human/<name> -feature A -with B [-clear]`**
 writes or clears `collides_with` on A. Only a `human` worker may run it, and
 it is refused, like `wf declare`, when the result would put a limit over.
