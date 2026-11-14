@@ -534,12 +534,12 @@ func overLimit(limit int, holders ...string) string {
 // (FLOW-05; cases 2 and 7 of the alters-slot design).
 func TestAltersSlotHeldFromPlanClaim(t *testing.T) {
 	a, b, c := approved("a", 2), approved("b", 3), approved("c", 4)
-	d, e := altering("d", 1), toPhase("e", 5, 1)
+	d, e := altering("d", 1), feature("e", 5, "in_progress")
 	declare(e, true)
 	s := limited(state(a, b, c, d, e), 3)
 
 	// Finished Design, reviewed or not, holds nothing: four such features at
-	// limit 3 are valid, and each Plan is offered beside e, still in Design.
+	// limit 3 are valid, and each Plan is offered beside e, not yet designed.
 	wantValidate(t, s)
 	for _, f := range []*Feature{a, b, c} {
 		wantNext(t, s, "cloud/run", f.Feature+" f2-plan")
@@ -550,6 +550,12 @@ func TestAltersSlotHeldFromPlanClaim(t *testing.T) {
 	approve(d)
 	wantOffer(t, s, "d", slotWait(3, "a", "b", "c"))
 	wantValidate(t, s)
+
+	// Only a Plan step waits: e's branch setup and its Design are offered
+	// while every slot is held.
+	wantOffer(t, s, "e", "f0-branch-setup")
+	advance(e, 1)
+	wantOffer(t, s, "e", "f1-design")
 
 	// Release gives the slot back, and d, ranked ahead of c, is offered it.
 	s.Release(c, plan(t, c), "cloud/c", now, "done-when failed")
@@ -781,7 +787,8 @@ func returnKeepsSlot(t *testing.T) {
 }
 
 // returnFromPlanFreesSlot is case 10: Back drops the unfinished Plan step and
-// the slot with it, and the returned feature waits in its turn.
+// the slot with it, and the returned feature waits in its turn: at its next
+// Plan step, not in the Design it returned to.
 func returnFromPlanFreesSlot(t *testing.T) {
 	a, b := approved("a", 1), approved("b", 2)
 	s := state(a, b)
@@ -791,6 +798,7 @@ func returnFromPlanFreesSlot(t *testing.T) {
 	wantOffer(t, s, "b", "f2-plan")
 	wantValidate(t, s)
 	claimPlan(t, s, b)
+	wantOffer(t, s, "a", "f1-design-r2")
 	advance(a, 2)
 	approve(a)
 	wantOffer(t, s, "a", slotWait(1, "b"))
