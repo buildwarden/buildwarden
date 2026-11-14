@@ -1,6 +1,6 @@
 feature: driver-contract
 title: 'The driver command contract, its suite and the kit: warden runs a driver binary, the container driver is one, and every build runs through warden''s build sequence (componentization K1)'
-priority: 63
+priority: 65
 status: in_progress
 round: feature
 phase: 2
@@ -331,3 +331,9 @@ history:
   - at: 2026-11-14T20:11:24Z
     by: cloud/20261112T230554Z
     event: entered phase 2 (plan)
+  - at: 2026-11-14T20:57:45Z
+    by: human/jeff
+    event: 'priority 63 -> 64 (renumbered by wf new: loop-parallel queued at 61)'
+  - at: 2026-11-14T20:57:45Z
+    by: human/jeff
+    event: 'priority 64 -> 65 (renumbered by wf new: loop-native-lead queued at 62)'
