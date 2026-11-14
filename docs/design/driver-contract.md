@@ -401,7 +401,8 @@ and a driver's `run` during one build.
    or link, but `[vm]` would become a table several drivers read, the
    link would be checked in each driver's probe and no longer as the
    files load, and the refusal of a VM flag on the container driver would
-   become the unknown-flag refusal. Open (a9).
+   become the unknown-flag refusal. Answered (a) for K1, and considered
+   again in K2 (a9).
 9. **Driver-owned configuration: a driver's keys live in
    `[driver.<name>]`, where they may take any shape; the seven existing
    keys stay where they are, each read by the driver that owns it.**
@@ -517,7 +518,8 @@ and a driver's `run` during one build.
     before the driver's flags (every driver flag in use today would move
     behind it); a rule that a driver's flag is written `--name=value`
     (`--runtime docker` would stop working); passing an unknown flag on
-    with a guessed arity (builds the wrong thing silently). Open (a24).
+    with a guessed arity (builds the wrong thing silently). Answered (a),
+    as recommended (a24).
 
 ## Questions
 
@@ -974,7 +976,12 @@ necessary to derive again, and a24, which that answer raised.
   capability names and six refusal messages where one exists, and no
   bundled driver needs it. Recommended: (a) for K1, and (b) considered
   again in K2, when each VM driver becomes a binary and its flags move
-  in any case. Open.
+  in any case. Confirm.
+
+  **Answered 2026-11-14: (a), confirmed as recommended.** The shared VM
+  settings are `warden`'s for K1, sent in `start.vm` to a driver that
+  declares the `vm` capability; considered again in K2.
+
 - **a11. Seam 8 (relay release forms) has no phase that writes it.** The
   umbrella lists seam 8 among the seams that get a specification, and says
   M6 needs K1's relay source; but S1 writes seams 1, 2, 3, 5 and 6, S3
@@ -1030,7 +1037,11 @@ necessary to derive again, and a24, which that answer raised.
   passed to the driver instead of refused by `warden`; (d) as (a), and
   `--` as well, for arguments a driver cannot declare: two syntaxes,
   the second addable later without breaking anything. Recommended: (a).
-  Open.
+  Confirm.
+
+  **Answered 2026-11-14: (a), confirmed as recommended.** `describe`
+  declares each flag's name, arity, commands and usage, for parsing and
+  help only; `warden` refuses a flag nobody declares.
 
 ### Retired
 
@@ -2315,12 +2326,12 @@ What stops two claimants of one key:
 A copy of a bundled driver that replaces it from `PATH` (a16) has that
 driver's name, and so reads that driver's keys.
 
-**The shared VM settings** (Decision 8, a9, open) stay `warden`'s under
-this design: `warden` reads `--image`, `--cpus`, `--memory`,
+**The shared VM settings** (Decision 8; a9, answered (a)) stay
+`warden`'s for K1: `warden` reads `--image`, `--cpus`, `--memory`,
 `--build-link`, `[vm] cpus`, `memory_mb`, `build_link` and `dns`, checks
 the link and the resolvers as the files load, and sends them in
-`start.vm`. a9 puts the other reading of a21's answer, that each VM
-driver reads them itself, as an option.
+`start.vm`. The other reading of a21's answer, that each VM driver reads
+them itself, is considered again in K2.
 
 **Help.**
 
