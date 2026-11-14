@@ -35,7 +35,7 @@ native_budget: {steps: 8}   # steps one scheduled native session may take (FLOW-
                             # unset falls back to run_budget; `wf budget -native`
 limits:
   in_progress: 5            # FLOW-05: features in progress; process items not counted
-  alters_relationships: 1   # FLOW-05: of those, past Design with alters_relationships: true
+  alters_relationships: 1   # FLOW-05: features holding an alters_relationships slot; 1 when unset
 lease_minutes: 120          # FLOW-04
 runaway_factor: 2           # FLOW-13: escalate at this multiple of the step estimate
 ```
@@ -149,9 +149,17 @@ interrupted run loses at most the step in progress (FLOW-13).
 implementation, process, fixes, new functionality; in progress before queued,
 then priority); a fix only once the item it `follows` is done, unless an
 attended run names it; at most five features in progress, process items not counted; the cloud skips a feature with an open blocking
-question, a spent runaway budget, or a need for the `alters_relationships`
-slot another feature holds, and skips an item waiting on the human's merge
-(its `f7-merge` or `x3-merge`). Its `blocked` lines feed the digest.
+question, a spent runaway budget, or a Plan step that needs an
+`alters_relationships` slot when the limit's worth of features hold one, and
+skips an item waiting on the human's merge (its `f7-merge` or `x3-merge`).
+Its `blocked` lines feed the digest.
+
+A feature that declares `alters_relationships: true` holds a slot from the
+claim of its Plan step until it is done: while one of its Plan steps is done
+or carries a claim, expired or not. `wf release` on an unfinished Plan step
+gives it back. `wf next` and `wf validate` count the same holders against
+`limits.alters_relationships`. Process items neither hold a slot nor wait for
+one.
 
 Other commands: `wf validate`, `wf status [-all]` (open items; `-all` adds done ones), `wf check` (done-when without
 moving), `wf release`, `wf back` (FLOW-06), `wf answer` (human only, FLOW-07),
