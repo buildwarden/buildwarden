@@ -1,5 +1,5 @@
 feature: loop-repository
-title: 'Work in a second repository from the one queue: wf''s gates and checks, branches and PRs per repository, and the native side (componentization P1, last part). The move to a loop repository is deferred.'
+title: 'Work in a second repository from the one queue: wf''s gates and checks, branches and PRs per repository, and the native side (componentization P1, last part). The move to a loop repository follows as P1''s last item.'
 priority: 61
 kind: process
 status: queued
@@ -35,3 +35,6 @@ history:
   - at: 2026-11-14T18:55:00Z
     by: human/jeff
     event: 'retitled and holds removed (was: cloud, host:*), on Jeff''s word in the attended session of 2026-11-14: one queue for every repository in place of a queue per component, and the loop repository of the umbrella''s Decision 13 deferred. As queued, a claim of x1-design would have stopped every worker. The item''s scope is step 5 of the loop change proposal; its design decides whether it holds anything. The slug stays.'
+  - at: 2026-11-14T20:40:00Z
+    by: human/jeff
+    event: 'title corrected: the move to a loop repository is not deferred. Jeff, loop-contract design review (a19, second sitting, 2026-11-14): it stays in P1 as its last item, after this one.'
