@@ -17,11 +17,16 @@ FLOW-20.
    the rules the loops run under (`docs/development/`, `.claude/`,
    `tools/workflow/`) and no feature needs it, otherwise a feature; a
    feature that needs a rule changed declares it in its design (FLOW-14).
+   A change to a loop rule (LOOP-\*, FLOW-\*, LINT-\*) or to its enforcement
+   is a process item, never a feature's rule change (LOOP-09). Agree which
+   repositories the item works in, and put any other than this one in
+   `-source`, for Design to name (LOOP-04).
    A process item also lists the
    workers it holds while in progress (`cloud`, `host:*`, `host:<name>`), or
    none when it disrupts no running work (FLOW-05). While FLOW-20 stands,
    agree too whether the item is a program item; one that is not is filed as
-   FLOW-20's freeze says, unless it is exempt there. Then agree on
+   FLOW-20's freeze says, with `-hold "<why>"`, unless it is exempt there.
+   Then agree on
    a kebab-case slug, a one-line title, the priority (show
    `dist/wf status`, which lists FLOW-05's order: the class order decides
    where an item can go, priority places it within its class, and a new item
@@ -38,9 +43,12 @@ FLOW-20.
    dist/wf new -state .dev/workflow -worker human/jeff -feature <slug> \
      -title "<title>" -priority <n> -estimate-steps <n> -estimate-runs <n> \
      -source "<where it came from>" [-follows <item>] \
-     [-kind process -holds cloud,host:*]
+     [-kind process -holds cloud,host:*] [-hold "<why it is held>"]
    dist/wf validate -state .dev/workflow
    ```
+
+   `-hold` files the item with an open blocking question `q1` that only Jeff
+   answers (FLOW-20, FLOW-07); `dist/wf answer -question q1` resumes it.
 
    Steps that need a native host for design or implementation get their
    affinity changed to `host:<name>` in the new file (FLOW-09).
