@@ -1,6 +1,6 @@
 ---
 feature: loop-contract
-status: draft
+status: archived
 drivers: []              # rules and documents; no driver tree is reached
 seams: []                # the Loop Contract is seam 10 of the componentization design, a
                          # document between the loop and the repositories it works in.
@@ -3527,11 +3527,181 @@ A process item has no Publish phase and no consolidation pass (FLOW-03).
 The implement step merges current `main` before it opens the PR and records
 here what it reconciled, the profile's entries in particular (task 14).
 
+**Recorded at task 14, 2026-11-14.** `main` moved once after the fork
+(`b903f65`): to `897a4a8`, the merge of `alters-slot` (#118). It was merged
+into the branch as `a90ae4c`, before task 1, with no conflict, and `main`
+had not moved again when the PR was opened. What was reconciled:
+
+- **`.claude/agents/wf-design.md`.** `alters-slot` added one sentence at
+  the end of step 5. This item's edits are to the "Read first" paragraph
+  and to steps 2 and 6. Both are kept.
+- **`tools/workflow/queue/queue.go` and `queue_test.go`.** `alters-slot`
+  changed the limit and the holders; this item adds `PutOnHold` and its
+  three tests. `next.go` and `phases.go` are as `main` has them.
+- **`.claude/settings.json` and `.entire/settings.json`.** `main` has them
+  as `ac8b41a` does, so task 10 was not done (a12).
+- **The profile, entry by entry.** Neither `seam-specs` nor
+  `driver-contract` has merged, so Specifications ("No specifications
+  release is pinned today"), Consumables ("Consumes: nothing") and the
+  Checks table stand as approved. The file is the approved text word for
+  word. Each path, job, workflow and `make` target it names exists in the
+  merged tree, and `.entire/settings.json`, which `alters-slot` replaced,
+  still gives `buildwarden/buildwarden-sessions` as `checkpoint_remote`.
+  No entry is stale.
+
 ## Rollback notes
 
 None.
 
 ## Archive summary
 
-Filled in by the implement step when it archives the design on the branch
-(FLOW-03, process phase 2; FLOW-12).
+Implemented on 2026-11-14 as a process item (`x2-implement`), after design
+review r1 approved the design at `7af50ff` the same day (Jeff, in two
+sittings: all 23 questions answered and thirteen rule changes approved by
+name). It is the first item of phase P1 of the componentization program,
+and the one in which Jeff chose one queue for work in every repository in
+place of a queue per component. `main` moved once after the fork, to
+`897a4a8` (`alters-slot`, #118), and was merged in as `a90ae4c` (see
+**Consolidation**).
+
+- **Built: the contract** (`docs/development/loop-contract.md`). Nine
+  rules, each MUST and `agent-judgment`, with FLOW-\* and LINT-\* as their
+  detail: LOOP-01 shared rules and a local profile; LOOP-02 design-first
+  always, spec-first at a seam; LOOP-03 checks in four classes and two
+  tiers; LOOP-04 one queue, one order; LOOP-05 workers are scheduled,
+  routed and identified; LOOP-06 every run reports in one place; LOOP-07
+  components couple only through releases; LOOP-08 adopting the contract,
+  in six steps; LOOP-09 the contract changes only through its owner. Its
+  "Where things are" table has a column for today and one for once the
+  loop repository exists.
+- **Built: this repository's profile** (`docs/development/loop-profile.md`,
+  PROFILE-01): one row per term of LOOP-01 and the Checks table by class.
+  An entry names the file that holds a fact and does not restate it.
+- **Built: the split, in place and by file.** No file moved. The loop
+  rules are `loop-contract.md`, `process.md` and `behavioral-linter.md`;
+  the other rule files and `loop-profile.md` are project invariants.
+  `docs/development/README.md` says so: the two-part paragraph, an Owner
+  column and the `LOOP-` and `PROFILE-` rows in the ID scheme table, two
+  document lists, and the sentence that the rule format is LINT-01's.
+- **Built: three amendments in `process.md`.** FLOW-01 gains the
+  paragraph on spec-first. FLOW-03 and FLOW-14 say that a feature may
+  change the rules of a component it works in and never a loop rule.
+- **Built: the design template.** A **Specification changes** section,
+  required when `seams` is not empty; the comment line on `seams`; and
+  the sentence under **Design** that names an item's other repositories.
+- **Built: the skills and agents.** `workflow-tick` and `workflow-native`:
+  the digest's three additions, citing LOOP-06 (each moved item's kind
+  and FLOW-05 class, a **Specification changes** line, and a review step's
+  tier-1 result and tier-2 counts with the report's path); their Never
+  lists exclude loop rules from the exception for an approved rule change.
+  `workflow-human`: the design review confirms the repositories a design
+  names, goes over **Specification changes**, and refuses a feature's
+  `rule_changes` entry that names a LOOP, FLOW or LINT rule.
+  `workflow-intake`: agrees an item's repositories, files a loop-rule
+  change as a process item, and files a held item with `-hold`, checking
+  that the hold was written before it commits. `wf-design` and
+  `wf-publish`: the repositories and **Specification changes** in the
+  design and in the PR body; a feature's design declares no loop-rule
+  change.
+- **Built: `wf new -hold "<why>"`** (a11). `Feature.PutOnHold`
+  (`tools/workflow/queue/queue.go`) writes an open blocking question
+  `q1`, the human step `f0-answer-q1` (`x1-answer-q1` for a process item)
+  that the item's first step needs, and the history line
+  `on hold (q1): <why>`. An empty reason, an item that is not newly
+  queued and one that already has a question are refused. Tested by
+  `TestPutOnHoldWrites`, `TestHeldItemWaitsForItsAnswer` and
+  `TestPutOnHoldRefusals` (`queue_test.go`). Nothing else in `wf` changed.
+- **Built: the pointers.** Two rows in `AGENTS.md`; one sentence in
+  `README.md` linking to the contract (LOOP-08, step 1).
+- **Amended: the umbrella** (`docs/design/componentization.md`), in place:
+  U1, U3, U5, U7 to U13, U15, U17, U18 and U20, and its new **Amendments**
+  section (U21). U2, U4, U6, U14, U16, U19 and U22 are withdrawn, so
+  those sentences are as approved on 2026-11-12. Its front matter is
+  unchanged.
+- **Not changed.** No file under `tools/tier1/` or `tools/workflow/check/`;
+  no rule file but `process.md` and the two new ones; no FLOW-04, FLOW-05
+  or FLOW-20 text; `.claude/settings.json` and `.entire/settings.json`
+  (`alters-slot` carried them, a12); no driver, seam or user-facing
+  surface.
+- **Decisions taken.** Nine rules in one document, with FLOW and LINT as
+  the detail (1, a3). A profile fills the local column and the detail is
+  read through it (2, a9). Spec-first is added to design-first and scoped
+  to seams with a written specification (3, a8). FLOW-05's four classes
+  stand; feature and process are the two kinds (4, a4). Four classes of
+  check and two tiers; only a deterministic check blocks (5, a6). The run
+  is the unit of reporting and the digest is the report (6, a7). A
+  reconciliation item is a feature that FLOW-05 ranks with the fixes (7,
+  a5). The split is in place, by file (8, a2). Rule IDs never change and
+  each prefix has one owner (9, a16). Loop rules change only through a
+  process item; the rule ID on a `rule_changes` entry decides, not the
+  path (10, a10). The contract shares no project invariant (11). The host
+  table is shared loop state, and FLOW-04 says who takes a step (12,
+  a15). The profile is one project-owned rule, PROFILE-01 (14). A
+  repository is a component once it has done LOOP-08's steps, and an item
+  may work in one that has not (15, a17). The specification invariant is
+  kept where a specification has a conformance suite (16, a14). One
+  queue, one order and one place of reporting; an item names its
+  repositories (17, a18). LOOP-04 cites FLOW-05 and states no relation
+  and no limit (18). The move to the loop repository stays in P1, as its
+  last item (19, a19). The umbrella is amended in this PR, sentence by
+  sentence (20, a20). Trunk protection is asked where the host offers it
+  (LOOP-08 step 6, a21).
+- **Rejected.** Numbering the contract FLOW-21 onward, or prose with no
+  IDs; restating FLOW in neutral words inside the contract, and rewording
+  all 28 FLOW and LINT rules in this PR; spec-first for all behaviour; a
+  reconciliation item as a process item, or at intake's priority (the
+  option this design recommended); moving the loop files to
+  `docs/development/loop/` now; a component prefix on every rule ID; a
+  feature's design changing a loop rule; a shared subset of project
+  invariants in the contract; a host table per component; a queue per
+  component (the umbrella's Decision 2 as approved), and one queue with a
+  digest per component; the relations and limits of one queue written into
+  LOOP-04 now; deferring the move with no date (recommended at `04cc9bb`);
+  amending FLOW-04, FLOW-05 or `wf`'s class and lease in this PR;
+  protection required outright in LOOP-08's step 6.
+- **Decided here, made true by a later item.** Each is recorded as taken
+  (hand-off, point 7), and the later item's design takes it as given and
+  does not ask it again. A reconciliation item ranks in FLOW-05's class
+  3: `loop-parallel` amends FLOW-05 and `wf` (a5, a23). Work any machine
+  with a capability can do goes to whichever worker has the capability
+  and next takes steps, under a refreshable 20-hour lease:
+  `loop-native-lead` amends FLOW-04, the host table and the lease (a15
+  part b, a24). The contract, the queue, the reports, `wf`, the skills and
+  the agents move to the loop repository in P1's last item, not yet filed
+  and called `loop-move` here (a19). Wave 2 waits for the one queue
+  working across repositories, not for the move (a22). Until each lands,
+  FLOW-05 ranks a reconciliation item as any feature, `hosts.yaml` gives
+  each host name to one machine, a lease is 120 minutes, and everything is
+  where the "Today" column says.
+- **Before and after the merge.** Jeff protects `main` before this PR
+  merges; which protection is his to choose (a21). After it, outside the
+  PR: the `workflow` branch's `README.md` documents `wf new -hold`; the
+  relay's M1 design is told the contract's text is final and where it is;
+  and `seam-specs`, which this merges ahead of, needs a PROFILE-01 entry
+  in its `rule_changes`.
+- **For future designs touching `loop-contract`, `component-profile`,
+  `loop-rules`, `project-invariants`, `spec-first`, `design-first`,
+  `reconciliation`, `consumables`, `run-report`, `contract-adoption`,
+  `intake-hold` or `one-queue`:** the contract says only what is true of
+  the loop as it runs, and cites FLOW and LINT for the detail, so an item
+  that changes a FLOW rule changes the contract only where a clause would
+  stop holding, as a rule change of its own (LOOP-09). A change to a
+  LOOP, FLOW or LINT rule, or to a check that enforces one, is a process
+  item's; a feature may declare a change to PROFILE-01 and to the project
+  invariants, and a change that makes a profile entry stale changes the
+  entry. A design whose `seams` is not empty fills **Specification
+  changes**, and a design names each repository it works in other than
+  this one, since the queue has no field for them yet. The hand-off
+  section lists what the contract requires that the tools do not yet do
+  and the item that builds each: the repositories an item names recorded
+  in the queue (`loop-parallel`); `wf` reading a profile, and its gates,
+  branches and pull requests in a second repository (`loop-repository`);
+  the files and links the move changes (`loop-move`). The contract's
+  "Where things are" table is the only part of its text the move edits.
+  The neutral rewording of FLOW and LINT (a9) is a process item after P1.
+  The skill and agent edits have no automated check: the first cloud
+  digest and the first scheduled native digest on each machine after the
+  merge are read against LOOP-06, and a miss is a follow-up process item.
+  Not verified by this design: how the scheduled cloud task obtains its
+  checkout, and whether a phase agent's definition is read at session
+  start or from the tree after the tick switches branches.
