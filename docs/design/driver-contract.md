@@ -403,18 +403,33 @@ and a driver's `run` during one build.
    files load, and the refusal of a VM flag on the container driver would
    become the unknown-flag refusal. Answered (a) for K1, and considered
    again in K2 (a9).
-9. **Driver-owned configuration: a driver's keys live in
-   `[driver.<name>]`, where they may take any shape; the seven existing
-   keys stay where they are, each read by the driver that owns it.**
-   UX-03 forbids moving the seven without aliases, and K1 changes no
-   key. Now that a driver reads the files itself, nothing physical stops
-   it reading any table, so the place is a rule of the contract: a
-   driver lists its keys in `describe`, and `warden`, the suite and the
-   kit each refuse a listed key outside the driver's own table.
-   Alternatives: move the seven now with deprecated aliases (a
-   user-facing change in a freeze); let a driver read any table
-   (collisions with `warden`'s tables and between drivers, and nothing
-   left to check). Open (a4).
+9. **Driver-owned configuration: a small set of common keys in
+   `[driver]`; a driver's overrides of those, and its own keys, in
+   `[driver.<name>]`.** This is a4's answer, in Jeff's words: "A small
+   subset of common keys under driver with overrides and custom options
+   under driver.<name>". The contract's specification names the common
+   keys, each with its type and meaning, so that a driver from outside
+   reads them as the bundled drivers do. Version 1 names two,
+   `image_refresh_after` and `image_min_grace`: the only keys that more
+   than one bundled driver reads today and means the same thing by. A
+   driver lists in `describe` the common keys it honours and the keys
+   of its own; under its own table it may have any shape. In one file
+   the driver's own table is read before `[driver]`, and the order of
+   the files is ORCH-03's, unchanged: the project's file before the
+   user's, for both tables. Now that a driver reads the files itself,
+   nothing physical stops it reading any table, so the place is a rule
+   of the contract, which `warden`, the suite and the kit each hold a
+   `describe` to. The seven existing driver-owned keys take their places
+   in the two tables, and their old names are still read as deprecated
+   aliases (UX-03); that part his sentence does not settle, and it is
+   asked (a25). Alternatives: `[driver.<name>]` alone, with the seven
+   keys left where they are, which the redraft recommended and the
+   review did not take; the more specific table winning across files
+   (the user's file would then beat the project's for one setting,
+   against ORCH-03, UX-07 and GLOBAL-10); the shared VM settings as
+   common keys now (they are `warden`'s for K1, a9); a driver reading
+   any table (collisions with `warden`'s tables and between drivers,
+   and nothing left to check) (a4).
 10. **The kit is a Go library a driver may ignore.** `driver/drivercmd`
     dispatches the commands, builds `describe`, reads the driver's
     configuration, and offers the build dialogue as `driver.Host`. The
@@ -532,20 +547,21 @@ a recommended answer the design is complete under.
 
 The first draft's a1 to a11 were never answered. Four are retired because
 the redraft makes them moot (**Retired**, below); seven survive, reworded
-where the new contract requires it; a12 to a24 are new. They are in two
+where the new contract requires it; a12 to a25 are new. They are in two
 groups: first the seven where the draft departs from Jeff's notes or from
 the basis, then the rest.
 
-**State after the review's second sitting, 2026-11-14.** Fourteen are
+**State after the review's second sitting, 2026-11-14.** Seventeen are
 answered, and each carries its answer below, with the option chosen:
-a16, a15, a21, a14, a12, a13, a22, a20, a19, a23, a7, a3, a11 and a17.
-Eleven were confirmed as recommended. Three were answered otherwise and
-are folded into the design: a16 (lookup and trust), a21 (who reads the
-configuration) and a20 (the teardown wait). Each question's text and
-options are kept as they were put, so "Proceeding with" in an answered
-question describes what was asked, not always what the design now does.
-Six are open: a5, a18 and a8, and a4 and a9, which a21's answer made it
-necessary to derive again, and a24, which that answer raised.
+a16, a15, a21, a14, a12, a13, a22, a20, a19, a23, a7, a3, a11, a17, a24,
+a9 and a4. Thirteen were confirmed as recommended. Four were answered
+otherwise and are folded into the design: a16 (lookup and trust), a21
+(who reads the configuration), a20 (the teardown wait) and a4 (where a
+driver's configuration lives). Each question's text and options are kept
+as they were put, so "Proceeding with" in an answered question describes
+what was asked, not always what the design now does. Four are open: a5,
+a18 and a8, and a25, which a4's answer raised (what becomes of the seven
+existing driver-owned keys).
 
 **Where the draft departs from your notes or the basis**
 
@@ -943,7 +959,20 @@ necessary to derive again, and a24, which that answer raised.
   installed driver reads; (d) a file of its own per driver, beside each
   of the two config files: no shared table at all, but a second file for
   a user to find, and the seven existing keys cannot move there without
-  aliases either. Recommended: (a). Open.
+  aliases either. Recommended: (a). Confirm.
+
+  **Answered 2026-11-14: changed.** None of the four as written. Jeff's
+  words: "A small subset of common keys under driver with overrides and
+  custom options under driver.<name>". Folded in as Decision 9 and
+  under **Configuration**, *Where a driver's configuration lives*:
+  `[driver]` holds the common keys, which the contract's specification
+  names (two in version 1, `image_refresh_after` and
+  `image_min_grace`); `[driver.<name>]` holds that driver's overrides
+  of them and its own keys, in any shape; in one file the driver's own
+  table is read before `[driver]`, and the order of the files is
+  unchanged. The sentence does not say what becomes of the seven keys
+  that exist, so that is asked on its own, as a25.
+
 - **a9. The shared VM settings: `warden`'s, passed in `start.vm`, or the
   driver's own.** Re-derived on 2026-11-14 after the answer to a21,
   which makes "the driver's own" the reading that follows the answer
@@ -1042,6 +1071,50 @@ necessary to derive again, and a24, which that answer raised.
   **Answered 2026-11-14: (a), confirmed as recommended.** `describe`
   declares each flag's name, arity, commands and usage, for parsing and
   help only; `warden` refuses a flag nobody declares.
+
+- **a25. What becomes of the seven existing driver-owned keys.** New on
+  2026-11-14, raised by the answer to a4, which says where a driver's
+  keys live and not what happens to the seven that exist: `[runtime]
+  cli` and `relay_image` (container), `[vm] network`, `windows_image`
+  and `windows_image_update` (hyperv), and `[vm] image_refresh_after`
+  and `image_min_grace` (qemu and hyperv). UX-03 lets none of them stop
+  working without an alias, a notice and a documented window.
+  Proceeding with: all seven take their place in the two tables, and
+  each old name is still read, as a deprecated alias. The two ages are
+  the common keys `[driver] image_refresh_after` and `image_min_grace`.
+  The other five become `[driver.container] cli` and `relay_image`, and
+  `[driver.hyperv] network`, `windows_image` and
+  `windows_image_update`. An old name counts as its new name written in
+  the same file; a file that sets one key under both names is refused;
+  each old name a file sets gets one warning line per command, which
+  names the new one; the old names are read for at least two releases
+  after the first that has the new ones, and taking them out is a
+  change of its own. No flag and no environment variable changes.
+  Consequences: every driver key follows one placement rule, and the
+  specification's list of keys outside the two tables is seven
+  deprecated names with an end. Against that: every existing config
+  that sets one of the seven prints a warning until it is edited, in a
+  release that already changes seventeen other things; this is the project's
+  first deprecation, so the form of the notice and the length of the
+  window are new conventions; and `[runtime] cli` is also the subject
+  of the security fix `runtime-cli-project-path`, so whichever of the
+  two merges second applies that fix's refusal under both names.
+  Options: (a) as stated; (b) only the two ages move, to `[driver]`,
+  with their `[vm]` names as deprecated aliases, and the five keys that
+  one driver reads stay in `[runtime]` and `[vm]` for good, listed by
+  driver name in the specification: five warnings fewer, but the custom
+  options that exist are then not under `driver.<name>`, which holds
+  only keys added from now on; (c) nothing moves: the specification
+  defines `[driver]` and names no common key in version 1, both tables
+  hold only keys added later, and the two ages stay one shared pair in
+  `[vm]` with no override per driver: no user-facing change, and the
+  shape you described has nothing in it until a key is added; (d) as
+  (a) with no warning and no end: both names are read for good and
+  nothing is printed, but every one of the seven has two names, and
+  UX-03 asks for a notice and a window when a surface is renamed, so
+  this needs your word that it is an addition and not a rename; (e) as
+  (a), with another window, named in the review. Recommended: (a).
+  Confirm.
 
 ### Retired
 
@@ -1522,8 +1595,8 @@ message, `stopped` or `failed`.
    "usage": "Windows edition / install.wim image name (qemu windows)"},
   {"name": "force", "value": false, "commands": ["image-prepare"],
    "usage": "re-acquire even if a valid cached copy exists"}],
- "keys": [{"key": "vm.image_refresh_after", "type": "string",
-   "commands": ["run"],
+ "keys": [{"key": "driver.image_refresh_after", "type": "string",
+   "aliases": ["vm.image_refresh_after"], "commands": ["run"],
    "usage": "age after which a prepared Windows layer is refreshed"}],
  "ext": [],
  "help": {"doctor": "...", "image-prepare": "..."}}
@@ -1544,7 +1617,7 @@ message, `stopped` or `failed`.
 | `capabilities.image_os`, `default_image_os` | The `--os` values `image-prepare` takes |
 | `capabilities.reserved_ranges` | Fixed address ranges it uses on the host; a build link must not overlap them |
 | `flags` | The flags it takes, each with its name, whether it takes a value, the commands that take it and a usage line. `warden` uses them to parse the command line and to print help, and reads no value (**Configuration**) |
-| `keys` | The config keys it reads, as dotted paths: each under `driver.<name>.`, or one of the seven existing keys listed for that name. Each has a `type` (the TOML type of its value: `string`, `integer`, `float`, `boolean`, `array`, `table`, or `any` for a key whose shape the driver does not state), the `commands` that read it, and a usage line. `warden` reads none of them and no value: the list is what the placement rule is checked against, and `type` and `commands` are what let the suite give a key a wrong value and know which command must refuse it (**Configuration**, C6) |
+| `keys` | The config keys it reads, as dotted paths: a common key it honours as `driver.<key>`, which also stands for its override `driver.<name>.<key>`, and a key of its own under `driver.<name>.`. An entry may carry `aliases`, the key's deprecated old names, each one the specification lists for that driver name. Each has a `type` (the TOML type of its value: `string`, `integer`, `float`, `boolean`, `array`, `table`, or `any` for a key whose shape the driver does not state), the `commands` that read it, and a usage line. `warden` reads none of them and no value: the list is what the placement rule is checked against, and `type` and `commands` are what let the suite give a key a wrong value and know which command must refuse it (**Configuration**, C6) |
 | `ext` | Its own subcommands: `[{"path": ["service", "install"], "usage": "..."}]` |
 | `help` | Its paragraph in a command's long help, keyed by command |
 
@@ -1975,7 +2048,10 @@ in the kit. K2 decides who carries the ranges once no driver is linked.
 K1, its driver. The redraft kept the fields so that a wrong TOML type in
 one of them still failed the load under every driver; keeping them now
 would make `warden` a second reader of keys it does not own. What that
-changes for a user is Behaviour 13.
+changes for a user is Behaviour 13. `warden` reads nothing in `[driver]`
+or `[driver.<name>]` either, and defines no key there: the first is the
+contract's and the second each driver's (**Where a driver's
+configuration lives**, below).
 
 **What `warden` hands a driver.** Every request, `start` included,
 carries `config_files`; every request for a command that takes flags
@@ -2041,7 +2117,7 @@ help and for nothing more (Decision 22, a24):
 ```json
 "flags": [
   {"name": "network", "value": true, "commands": ["run", "doctor", "setup"],
-   "usage": "durable build switch name (default: [vm] network, then warden-dev)"},
+   "usage": "durable build switch name (default: [driver.hyperv] network, then warden-dev)"},
   {"name": "force", "value": false, "commands": ["image-prepare"],
    "usage": "re-acquire even if a valid cached copy exists"}]
 ```
@@ -2184,17 +2260,34 @@ Rejected, and asked as a24:
 setting once, as a Go literal:
 
 ```go
+// driver/container
 var settings = []drivercmd.Setting{
 	{Name: "runtime", Type: drivercmd.String,
-		Flag: "runtime", Key: "runtime.cli", Env: "WARDEN_CTR_CLI",
+		Flag: "runtime", Key: "driver.container.cli",
+		Aliases: []string{"runtime.cli"}, Env: "WARDEN_CTR_CLI",
 		Commands: drivercmd.EveryCommand,
 		Usage:    "container runtime (finch, docker, podman)"},
 	{Name: "relay-image", Type: drivercmd.String,
-		Key: "runtime.relay_image", Env: "WARDEN_IMAGE",
+		Key:     "driver.container.relay_image",
+		Aliases: []string{"runtime.relay_image"}, Env: "WARDEN_IMAGE",
 		Commands: []string{"run"},
 		Usage:    "relay image reference, or dev to build it from source"},
 }
+
+// driver/qemu: a common key it honours. The kit reads it in
+// [driver.qemu] and then in [driver].
+var settings = []drivercmd.Setting{
+	{Name: "image-refresh-after", Type: drivercmd.Age,
+		Common:   "image_refresh_after",
+		Aliases:  []string{"vm.image_refresh_after"},
+		Commands: []string{"run"},
+		Usage:    "age at which a prepared Windows layer is refreshed"},
+}
 ```
+
+A setting has a `Key` of the driver's own, under `driver.<name>.`, or
+names a `Common` key, never both. `Aliases` are the key's old names,
+where it has one (a25).
 
 From that the kit does the rest:
 
@@ -2211,23 +2304,30 @@ From that the kit does the rest:
   project's `warden.toml` before the user's config; else absent, and the
   driver applies its default. That is ORCH-03's and UX-07's order, with
   the two existing variables where `LoadConfig` has them today, between
-  the flag and the files. The level that sets a value is the value: it
-  is not merged with a lower level's, and for a key that holds a table
-  or a list the whole of it comes from one file (GLOBAL-10).
+  the flag and the files. Within one file a common key has two places,
+  and the driver's own table is read before `[driver]`; a file is never
+  passed over for a table in a lower file (**Where a driver's
+  configuration lives**, below, with two worked examples). The place
+  that sets a value is the value: it is not merged with a lower one,
+  and for a key that holds a table or a list the whole of it comes from
+  one table in one file (GLOBAL-10).
 - **Empty values, as today.** A flag given with an empty value
   (`--runtime=`) and a variable that is set but empty are not set, and
   the next level is read: `cmd/warden` tests `flagRuntime != ""` and
   `cli != ""` today. An empty string in a file is that file's value for
   the key, so it hides a lower file's, and each of the seven existing
-  keys takes it to mean its default, as today. The contract states the
-  first two for every driver (C8); what an empty string in a file means
-  is the driver's.
+  keys takes it to mean its default, as today, under its new name and
+  its old one. The same holds between the two tables: `image_refresh_after
+  = ""` in `[driver.hyperv]` is hyperv's value for that file, so it
+  hides the file's `[driver]` value and gives hyperv its default. The
+  contract states the first two for every driver (C8); what an empty
+  string in a file means is the driver's.
 - **Typed access.** `String`, `Int`, `Bool`, `Age` (`7d`, `36h`), `CIDR`,
   `IPList` and `Path`, read as `cfg.String("runtime")`; and `Raw`, a key
   of any shape, which the driver decodes into its own Go type with
   `cfg.Decode`. `cfg.Source(name)` is the label to print for a value:
-  `--runtime`, `WARDEN_CTR_CLI`, or the file's name, as `warden` labels
-  its own.
+  `--runtime`, `WARDEN_CTR_CLI`, or the file's name with the table and
+  key as written there (`warden.toml [driver.hyperv] network`).
 - **Validation, before any work.** The kit resolves and type-checks every
   setting that applies to a command when the request arrives: in the
   probe of `run`, and in every other command before the driver's
@@ -2245,31 +2345,47 @@ From that the kit does the rest:
   `driver.FixableError` that names where it came from, which the kit
   sends as a `fixable` error object and `warden` prints as it prints its
   own (UX-04). For the existing keys the text is today's, with the file
-  the value was read from where today's always says `warden.toml`:
+  the value was read from where today's always says `warden.toml`, and
+  the table and key as the file has them, so a value under an old name
+  is reported under that name:
 
   ```
   [warden] ERROR: warden.toml [vm] image_refresh_after: invalid age "soon"
     To fix: set it to an age such as "7d" or "36h"
   ```
 
+- **Old names** (a25). A setting's `Aliases` are read as the key itself,
+  written in the same file. The kit refuses a file that sets a key
+  under its new name and an old one, and returns with the settings one
+  warning for each old name a file sets (`Settings.Warnings`). Whoever
+  called `Resolve` prints them on stderr: `Main` and `Call`, and in K1
+  `cmd/warden` for a linked driver's other commands (**Where a driver's
+  configuration lives**).
+
 - It refuses an `args` element the driver did not declare, and a
-  declaration whose key is outside the driver's place in the files.
+  declaration that breaks the placement rule: a `Key` outside
+  `driver.<name>.` or with a common key's name, a `Common` that the
+  contract does not name, or an alias the specification does not list
+  for the driver's name.
 
-What the five bundled drivers declare is exactly what `cmd/warden` holds
-for them today. No name, table or variable changes.
+What the five bundled drivers declare is what `cmd/warden` holds for
+them today. Every flag and both variables keep their names and
+meanings. The seven keys keep their names and meanings and take the
+tables a4's answer gives them; each is still read under its old name
+(a25).
 
-| Driver | Setting | Flag on | Config key | Env |
-|---|---|---|---|---|
-| container | `runtime` | every command it lists | `runtime.cli` | `WARDEN_CTR_CLI` |
-| container | `relay-image` | none | `runtime.relay_image` | `WARDEN_IMAGE` |
-| qemu | `force`, `edition`, `virtio`, `arch`, `keep-vms` | `image-prepare` | none | |
-| qemu, hyperv | `image-refresh-after`, `image-min-grace` (ages) | none | `vm.image_refresh_after`, `vm.image_min_grace` | |
-| vz | `update` | `image-prepare` | none | |
-| hyperv | `network` | `run`, `doctor`, `setup` | `vm.network` | |
-| hyperv | `nat-prefix`, `host-ip`, `slots` | `setup` | none | |
-| hyperv | `sha256`, `force`, `name`, `keep-vms` | `image-prepare` | none | |
-| hyperv | `windows-image`, `windows-image-update` | none | `vm.windows_image`, `vm.windows_image_update` | |
-| firecracker | `slots` | `setup` | none | |
+| Driver | Setting | Flag on | Config key | Old name, still read | Env |
+|---|---|---|---|---|---|
+| container | `runtime` | every command it lists | `driver.container.cli` | `runtime.cli` | `WARDEN_CTR_CLI` |
+| container | `relay-image` | none | `driver.container.relay_image` | `runtime.relay_image` | `WARDEN_IMAGE` |
+| qemu | `force`, `edition`, `virtio`, `arch`, `keep-vms` | `image-prepare` | none | | |
+| qemu, hyperv | `image-refresh-after`, `image-min-grace` (ages) | none | The common keys `driver.image_refresh_after` and `driver.image_min_grace`, each with its override in `driver.qemu.` and `driver.hyperv.` | `vm.image_refresh_after`, `vm.image_min_grace` | |
+| vz | `update` | `image-prepare` | none | | |
+| hyperv | `network` | `run`, `doctor`, `setup` | `driver.hyperv.network` | `vm.network` | |
+| hyperv | `nat-prefix`, `host-ip`, `slots` | `setup` | none | | |
+| hyperv | `sha256`, `force`, `name`, `keep-vms` | `image-prepare` | none | | |
+| hyperv | `windows-image`, `windows-image-update` | none | `driver.hyperv.windows_image`, `driver.hyperv.windows_image_update` | `vm.windows_image`, `vm.windows_image_update` | |
+| firecracker | `slots` | `setup` | none | | |
 
 **What a driver written without the kit must do itself.** These are the
 contract's requirements on configuration, numbered as the specification
@@ -2281,50 +2397,259 @@ to each.
 | C1 | Declare every flag it takes in `describe.flags`, with its arity and its commands, and use no name `warden` uses on the same command (the specification lists them) | Static tier: the schema, the name form, the reserved names, and that each flag names only commands the driver lists |
 | C2 | Take each declared flag from `args`: a flag with a value as `--name=value` (for a flag that holds one value, the last occurrence wins), a switch as `--name`, on when present and off when absent; and refuse an element it did not declare with a `fixable` error that names it | Static tier: a probe of each listed command with an undeclared element exits 1 with a `fixable` error naming it, and creates nothing |
 | C3 | Read configuration only from the files in `config_files`. It never looks for `warden.toml` or a user config by itself; started with no request (a service), it reads none and uses its defaults | Static tier: with an invalid `warden.toml` in its working directory and an invalid config under its `HOME`, and `config_files` empty, a probe ends as it does with neither file present |
-| C4 | List the keys it reads in `describe.keys`, each in its own place in the files (below), with the TOML type of its value (or `any`) and the commands that read it | Static tier: every listed key is under `driver.<name>.`, or is one of the seven existing keys listed for that name; each has a type of the allowed set and names only commands the driver lists. A key read but not listed cannot be seen from outside |
+| C4 | List the keys it reads in `describe.keys`, each in its place in the files (below) and with the commands that read it: a common key it honours as `driver.<key>`, with the type the specification gives it; a key of its own under `driver.<name>.`, with the TOML type of its value (or `any`) and a name that is no common key's. Listing a common key is also listing its override, `driver.<name>.<key>`. It reads nothing in `[driver]` that it did not list | Static tier: every listed key is `driver.<key>` for a common key of the contract version, with that key's type, or is under `driver.<name>.` and does not have a common key's name; every old name listed with a key is one the specification lists for that driver name (C11); each has a type of the allowed set and names only commands the driver lists. A key read but not listed cannot be seen from outside |
 | C5 | Ignore every table and key it does not own, and read every file `warden` reads: the files are TOML v1.1.0 | Static tier: with a config file that holds `warden`'s tables, another driver's table and an unknown one, a probe ends as it does with no file. One of those tables is written with syntax that TOML 1.0 does not have (an inline table over several lines with a trailing comma), so a driver whose parser stops at 1.0 fails here, in the suite, and not on a user's file that `warden` accepted |
-| C6 | When it lists a key: refuse a file in `config_files` that it cannot parse, and a key of its own whose value has the wrong type, with a `fixable` error that names the file, and the key where there is one (not in `reap` and `attach`: C10) | Static tier, for each listed key: a file that is not TOML makes a probe of a command the key names exit 1 with a `fixable` error naming the file; and, for a key whose type is not `any`, a file that gives that key a value of another TOML type makes it exit 1 naming the file and the key. Both create nothing. The check works from the key's declared `type` and `commands`, so it holds the seven existing keys as it holds one under `driver.<name>` |
+| C6 | When it lists a key: refuse a file in `config_files` that it cannot parse, and a key of its own whose value has the wrong type, with a `fixable` error that names the file, and the key where there is one (not in `reap` and `attach`: C10) | Static tier, for each listed key: a file that is not TOML makes a probe of a command the key names exit 1 with a `fixable` error naming the file; and, for a key whose type is not `any`, a file that gives that key a value of another TOML type makes it exit 1 naming the file and the key. Both create nothing. The check works from the key's declared `type` and `commands`, and is made at each place the key may be written: for a common key in `[driver]` and in the driver's own table, and for a key with an old name under that name too |
 | C7 | Read and check all of it before any work: in the probe of `run`, and first in every other command but `reap` and `attach` (C10) | Static tier, through C2 and C6: the refusals come from a probe, which must create nothing |
-| C8 | Apply the precedence: a flag, else the first file in `config_files` that sets the key, else its default; a flag given with an empty value is not set; the level that sets a value is the value, not merged with a lower one, and an unusable value is an error, never replaced by the default | **Not checkable against an arbitrary binary**: the suite does not know what a value means to a driver, so it cannot see which level won. Held by the kit's own tests for a driver built on it, and by the suite's self-test for the fake, whose one key is echoed back in its probe |
+| C8 | Apply the precedence: a flag, else the first file in `config_files` that sets the key, else its default. In one file a common key is read from the driver's own table, and from `[driver]` only when that table does not set it; a file is never passed over for a table in a later file. A flag given with an empty value is not set; the place that sets a value is the value, not merged with another, and an unusable value is an error, never replaced by a lower place's value or by the default | **Not checkable against an arbitrary binary**: the suite does not know what a value means to a driver, so it cannot see which place won. Held by the kit's own tests for a driver built on it, and by the suite's self-test for the fake, whose own key and one common key are echoed back in its probe, each with the file and the table it came from |
 | C9 | Take its settings as flags and keys, not as environment variables of its own (UX-07). The two that exist, `WARDEN_CTR_CLI` and `WARDEN_IMAGE`, stay the container driver's | Not checkable: a process may read any variable |
 | C10 | In `reap` and `attach`: take from the state file what it holds; read a file in `config_files` that no longer exists as not listed, saying so on stderr; and, when a state file exists, not fail because a recorded file cannot be parsed or holds a value it would refuse | Static tier: `reap` of an ID that never existed, sent a `config_files` entry whose file does not exist, ends as it does with none listed. Lifecycle tier, Kill: before `reap`, the config file the build was started with is deleted in one run and overwritten with text that is not TOML in another, and `reap` still removes what the build left |
+| C11 | Read a key under an old name only where the specification lists that name for the driver's own name, as the same key written in the same file; refuse a file that sets a key under both names, with a `fixable` error that names the file and both; and say on stderr, once per file and old name, that the name is deprecated and what the new one is. A driver whose name has no old names reads none | Static tier: the old names in `describe.keys` are the specification's for that name (C4), and a wrong type under an old name is refused (C6). That a value under an old name is used, and that a file with both is refused, is **not checkable against an arbitrary binary**, since the suite cannot make a value a driver accepts; held by the kit's tests, for each of the seven |
 
 A driver that takes no flag and reads no key lists none and has nothing
-to do here but C2's refusal. One that reads keys needs a parser for
+to do here but C2's refusal. C11 binds only a driver that carries one
+of the five bundled names, since no other name has an old key. One that reads keys needs a parser for
 TOML v1.1.0 in its own language, since it must read every file `warden`
 reads; a parser that stops at TOML 1.0 is not enough. That is part of
 what a21's answer costs.
 
-**Where a driver's configuration lives** (Decision 9, a4, open). A
-driver's keys live in its own table, `[driver.<name>]`, in the same two
-files, and under that table it may have any shape it likes: nested
-tables, lists, lists of tables. The seven keys that exist today stay
-where they are, each read only by the bundled driver that owns it, and
-the specification lists them by driver name:
+**Where a driver's configuration lives** (Decision 9; a4, answered; the
+old names are a25, open). The review's answer to a4, in Jeff's words: "A
+small subset of common keys under driver with overrides and custom
+options under driver.<name>". So a driver's keys have two tables, in
+the same two files:
 
-| Key | Read by the driver named |
+| Table | Holds | Who says what a key means |
+|---|---|---|
+| `[driver]` | The **common keys**: a short list of keys that more than one driver reads and means the same thing by | The contract's specification, which gives each its name, type and meaning |
+| `[driver.<name>]` | That driver's **overrides** of the common keys it honours, each under the common key's own name; and the driver's **own keys**, in any shape it likes: nested tables, lists, lists of tables | The specification for an override; the driver for its own |
+
+`warden` reads neither table. `[runtime] driver` still selects the
+driver and stays `warden`'s; `[driver]` configures drivers and selects
+nothing.
+
+**The common keys of contract version 1** are two:
+
+| Key | Type | Meaning | Honoured by |
+|---|---|---|---|
+| `image_refresh_after` | A string holding an age, such as `"7d"` or `"36h"` | The age at which a prepared base image is prepared again in the background; the build goes on with the image it has | qemu, hyperv |
+| `image_min_grace` | A string holding an age | The least evaluation grace a prepared image must still have; a build on an image with less is refused | qemu, hyperv |
+
+They are on the list because more than one driver reads them and means
+the same thing by them: qemu and hyperv both pass the two values to one
+function, `winguest.CheckFreshness`, and both take its defaults (`7d`
+and `1d`) when nothing is set. No other key in today's inventory
+(**Problem**, and the settings table above) is read by two drivers. The
+specification gives a common key its name, its type and its meaning. The
+value a driver uses when nobody sets the key is the driver's to state,
+as for any setting.
+
+What was considered and left off:
+
+| Candidate | Why it is not a common key in K1 |
 |---|---|
-| `runtime.cli`, `runtime.relay_image` | `container` |
-| `vm.network`, `vm.windows_image`, `vm.windows_image_update` | `hyperv` |
-| `vm.image_refresh_after`, `vm.image_min_grace` | `qemu` and `hyperv`, with one meaning |
+| `cpus`, `memory_mb`, `build_link`, `dns` | Every VM driver means the same thing by them, but no driver reads them: they are `warden`'s keys in `[vm]`, sent in `start.vm` (a9) |
+| The relay override, `relay_image` | One driver reads it, and its value (an image reference, or `dev`) means something to the container driver only. K1 adds no relay key (a3); the VM drivers get the relay source in K2 |
+| `network` | hyperv's alone: no other driver has a durable switch to name |
+| `windows_image`, `windows_image_update` | hyperv's alone: qemu is given its Windows media as the source of `image prepare` |
+| `cli` | The container driver's alone |
+| `slots` | hyperv and firecracker both take it, but as a flag of `setup` with no key, and with defaults of 4 and 16. A key for it would be a new surface that nobody asked for |
+| `tmpdir`, `keep`, `verbose`, `guest_os`, the teardown wait | `warden`'s: sent in the requests, or kept by `warden` (Decision 21) |
+
+**`[driver]` and `[vm]`.** In K1 the two do not overlap. `[vm]` keeps
+the four shared VM settings, which are `warden`'s (a9), and the five
+driver-owned keys it held take their places in the two tables above. K2
+considers a9 again. If the VM drivers then read `cpus`, `memory_mb`,
+`build_link` and `dns` themselves, `[driver]` is where those four would
+go, as common keys with their `[vm]` names as old names, and
+`[driver.<name>] cpus` would give one driver a value of its own, which
+`[vm]` cannot do. K1 decides none of that and builds nothing for it.
+
+**Who defines a common key, and who honours it.** The list belongs to
+the contract version: version 1 names these two, and another key
+becomes common only in a later version, so a driver and a `warden` that
+agree on a version agree on the list. A driver honours the common keys
+it lists, and no others. It lists one in `describe.keys` as
+`driver.<key>`, with the type the specification gives it and the
+commands that read it. Listing it is also listing its override,
+`driver.<name>.<key>`, which has no entry of its own. A driver that
+lists no common key reads nothing in `[driver]`; the container driver,
+vz and firecracker list none in K1. A key of the driver's own may not
+take a common key's name, whether the driver honours that key or not:
+in `[driver.<name>]` that name is the override and nothing else.
+
+One name cannot be both a common key and a driver. A driver's name is
+`[a-z][a-z0-9]{0,31}` and a common key's is `[a-z][a-z0-9_]*`, so
+`[driver] cpus` and a driver called `cpus` would claim one place in the
+file. Version 1's two names hold an underscore, which no driver's name
+can. A later version that names a common key without one must also
+refuse that name for a driver.
+
+**The precedence, with two tables.** For one setting of the driver
+`<name>`, the first of these that sets it is the value:
+
+1. its flag, in `args`;
+2. its environment variable (the two that exist);
+3. the project's `warden.toml`: `[driver.<name>]`;
+4. the project's `warden.toml`: `[driver]`, for a common key;
+5. the user's config: `[driver.<name>]`;
+6. the user's config: `[driver]`, for a common key;
+7. nothing: the driver's default.
+
+A key of the driver's own has no place in `[driver]`, so for it steps 4
+and 6 do not exist and the order is what it was. The rule in words:
+**the more specific table wins within a file, and the order of the
+files is unchanged.** Each file is resolved by itself, to one value or
+none for the driver, and then the files are taken in ORCH-03's order.
+Nothing is merged, and no step is a fallback: a value found at one step
+that the driver cannot use is an error that names the file, the table
+and the key, and the next step is not tried (GLOBAL-10, GLOBAL-11).
+
+*Rejected: the more specific table wins across files* (the order 3, 5,
+4, 6). A user's `[driver.hyperv]` value would then beat a project's
+`[driver]` value for the same setting. That is the user's file
+outranking the project's, which ORCH-03 ("`flag > warden.toml >
+~/.config/warden`"), UX-07 ("A value set at any level replaces the
+default and the lower levels' value") and GLOBAL-10 ("the highest
+level that sets a value is the value") each rule out, so all three
+would need new words. It would also change what happens today, where a
+project's `[vm] image_refresh_after` beats the user's for qemu and
+hyperv alike. And a file could no longer be read by itself: what the
+project's file means for a driver would depend on what the user's file
+says. What it had for it: a user who sets a value for one driver on
+their own machine would keep it against a project's general value.
+Under the order chosen that user has no level above the project's file
+for the two ages, which have no flag; that is so today as well.
+
+Two examples, both with qemu and hyperv, whose defaults for the two
+keys are `7d` and `1d`.
+
+*Example 1: both tables in one file.*
+
+```toml
+# warden.toml (the project's)
+[driver]
+image_refresh_after = "3d"
+
+[driver.hyperv]
+image_refresh_after = "12h"
+```
+
+```toml
+# ~/.config/warden/config.toml (the user's)
+[driver]
+image_refresh_after = "10d"
+image_min_grace = "2d"
+```
+
+| Driver | `image_refresh_after` | `image_min_grace` |
+|---|---|---|
+| hyperv | `12h`: the project's file, hyperv's own table (step 3) | `2d`: the project's file does not set it, and the user's `[driver]` does (step 6) |
+| qemu | `3d`: the project's file, `[driver]` (step 4). The user's `10d` is not reached | `2d`, as for hyperv |
+| container | Not read: it lists neither key | Not read |
+
+*Example 2: the more specific table is in the lower file.*
+
+```toml
+# warden.toml (the project's)
+[driver]
+image_refresh_after = "3d"
+```
+
+```toml
+# ~/.config/warden/config.toml (the user's)
+[driver.hyperv]
+image_refresh_after = "14d"
+
+[driver.qemu]
+image_min_grace = "6h"
+```
+
+| Driver | `image_refresh_after` | `image_min_grace` |
+|---|---|---|
+| hyperv | `3d`: the project's file sets it, in `[driver]` (step 4), so the user's file is not read for it. Under the rejected order it would be `14d` | `1d`: nobody sets it for hyperv, so its default |
+| qemu | `3d`, at the same step | `6h`: the user's file, qemu's own table (step 5); nothing above it sets the key |
+
+**The seven existing keys** (a25, open; UX-03). Each takes its place in
+the two tables, and its old name is still read:
+
+| Old name | New name | What the old name is |
+|---|---|---|
+| `[vm] image_refresh_after` | `[driver] image_refresh_after` | A second name for the common key, read by qemu and by hyperv, as today |
+| `[vm] image_min_grace` | `[driver] image_min_grace` | The same |
+| `[runtime] cli` | `[driver.container] cli` | A second name for the container driver's own key |
+| `[runtime] relay_image` | `[driver.container] relay_image` | The same |
+| `[vm] network` | `[driver.hyperv] network` | A second name for hyperv's own key |
+| `[vm] windows_image` | `[driver.hyperv] windows_image` | The same |
+| `[vm] windows_image_update` | `[driver.hyperv] windows_image_update` | The same |
+
+An old name is a deprecated alias in UX-03's sense, which GLOBAL-10
+calls "a second name for the same value, not a fallback". What that
+means here:
+
+- *It stands where its new name stands, in the same file.* `[vm]
+  image_refresh_after` in the user's config is the user's `[driver]
+  image_refresh_after`: step 6 above, below everything in the project's
+  file and below the user's own `[driver.qemu]` or `[driver.hyperv]`.
+  `[runtime] cli` in the project's file is the project's
+  `[driver.container] cli`. A config that uses only old names therefore
+  resolves as it does today.
+- *One key, one name per file.* A file that sets a key under its new
+  name and its old one is refused, with a `fixable` error that names
+  the file and both names and says to remove the old one. The new name
+  does not silently win: the file gives two values for one setting at
+  one level, and only its author knows which was meant (GLOBAL-11). Two
+  files may differ: the project's may use the new name and the user's
+  the old, and the order of the files decides.
+- *A warning, once per command for each old name a file sets.* The
+  driver that reads the key prints it on stderr where it checks its
+  settings (the probe of `run`, and first in any other command), and
+  not in `reap` or `attach`:
+
+  ```
+  [warden] warning: warden.toml: [vm] network is deprecated; use [driver.hyperv] network
+  ```
+
+- *The window.* The old names are read for at least two releases after
+  the first that has the new ones, and the configuration reference says
+  so beside each. Taking them out is a change of its own, with its own
+  design.
+- *Nothing else is renamed.* `--runtime`, `--network` and every other
+  flag, `WARDEN_CTR_CLI` and `WARDEN_IMAGE` keep their names and their
+  places in the order.
+
+The specification lists the seven old names by driver name, marked
+deprecated. It has to: a file that replaces a bundled driver from
+`PATH` (a16) carries that driver's name, so it reads that driver's
+keys, the old names among them. No other driver has an old name, and a
+driver from outside reads nothing outside the two tables.
+
+The security fix filed for `[runtime] cli` (queue item
+`runtime-cli-project-path`: a project's file may name a runtime, not a
+path to run) is about the key and not its spelling. An old name stands
+where its new name stands, so whichever of the two changes merges
+second applies that refusal to `[driver.container] cli` and to
+`[runtime] cli` alike. K1 does not carry the fix.
 
 What stops two claimants of one key:
 
 - *Two drivers.* Each owns exactly `[driver.<its own name>]`, and a name
-  resolves to one binary (**Discovery and trust**). The one shared pair,
-  the two ages, is shared on purpose and listed.
-- *A driver and `warden`.* `warden` defines no key under `[driver]` and
-  never will; a driver reads none outside its table but the listed
-  seven.
+  resolves to one binary (**Discovery and trust**). `[driver]` is shared
+  on purpose, and only for the keys the specification names, with the
+  meaning it gives them.
+- *A driver and `warden`.* `warden` defines no key in `[driver]` or
+  beneath it and never will; a driver reads nothing outside the two
+  tables but the old names listed for it.
 - *What holds it.* `warden` refuses a `describe` whose `keys` break the
-  rule, before it uses the driver; the suite's static tier checks the
-  same (C4); the kit refuses such a declaration; and for the bundled
-  drivers tier 1 reads the declarations from source. What nothing can
-  hold is a driver written without the kit that reads a key it did not
-  list: the specification forbids it, and no check can see it.
-
-A copy of a bundled driver that replaces it from `PATH` (a16) has that
-driver's name, and so reads that driver's keys.
+  rule, before it uses the driver: a `driver.<key>` that is not a common
+  key of a contract version `warden` speaks, a key in another driver's
+  table, a key of the driver's own with a common key's name, or an old
+  name the specification does not list for that driver. The suite's
+  static tier checks the same (C4); the kit refuses such a declaration;
+  and for the bundled drivers tier 1 reads the declarations from
+  source. What nothing can hold is a driver written without the kit
+  that reads a key it did not list: the specification forbids it, and
+  no check can see it.
 
 **The shared VM settings** (Decision 8; a9, answered (a)) stay
 `warden`'s for K1: `warden` reads `--image`, `--cpus`, `--memory`,
@@ -2372,7 +2697,9 @@ code (UX-04, UX-08, UX-09):
 | A line whose parsed `--driver` is not the one `warden` selected by its scan (`--driver` read as another flag's value) | `warden` | At parse | A `FixableError` naming the flag that took `--driver` as its value | 1 |
 | A driver's flag with a value it cannot use (`--slots many`) | The driver | For `build` and `shell`, in the probe of `run`: before `warden` takes the lock, creates the output directory or stages anything. For `warden clean`, in a probe of `clean`, before any dead build is reaped. For any other command, first in that command, before it changes or downloads anything | A `fixable` error object that names the flag as typed and gives the fix; `warden` prints `[warden] ERROR:` and `To fix:` with no bug link | 1 |
 | A driver's key of the wrong type, or with a value it cannot use | The driver | The same points | `fixable`, naming the file and the key | 1 |
-| A driver's key, while another driver is selected | Nobody | | It is not read (Behaviour 13) | |
+| A file that sets one of a driver's keys under its new name and its old one | The driver | The same points | `fixable`, naming the file and both names; the fix is to remove the old one | 1 |
+| A file that sets a driver's key under its old name only | Nobody fails. The driver warns | The same points; not in `reap` or `attach` | One `[warden] warning:` line on stderr for each old name the file sets, naming the new one; the value is used | |
+| A driver's key, while another driver is selected | Nobody | | It is not read (Behaviour 13). So a common key in `[driver]` is checked only by a driver that honours it, and an override in `[driver.<name>]` only when `<name>` is selected | |
 | A key nobody declares: a mistyped key | Nobody, as today | | Ignored, as unknown keys are today | |
 | An `args` element the driver did not declare | The driver | In the probe | `fixable`. `warden` never sends one, so it means a driver whose `describe` and parser disagree, or another caller's mistake | 1 |
 | In `reap` and `attach`: a recorded config file that has gone | Nobody fails. The driver says so on stderr | | Read as not listed (C10) | |
@@ -2435,18 +2762,46 @@ the contract:
 K2 ends all three: each VM driver's `Driver` value gains its functions,
 its binary's `Main` calls them, and `linked.go` goes.
 
-**The reference docs and tier 1.** For the bundled drivers nothing
-changes in what is documented or where: `guide/cli.md` and
-`guide/configuration.md` list their flags and keys (UX-01, ORCH-03).
-Their declarations are Go literals with constant strings in their own
-packages, so tier 1's surface check reads them from source (**Rule
-changes**).
+**The reference docs and tier 1.** The bundled drivers' flags and keys
+stay documented where they are, in `guide/cli.md` and
+`guide/configuration.md` (UX-01, ORCH-03). What `configuration.md`
+gains, in the same change:
 
-- *What it can still check, for a bundled driver:* every `Flag` and
-  `Key` in a `drivercmd.Setting` literal, at the base and at the head. A
-  flag or key added or changed without a reference doc in the diff is a
-  finding (UX-01, ORCH-03), and one removed with no alias is a finding
-  (UX-03), exactly as for a flag call or a `toml` tag in `cmd/warden`.
+- `[driver]` in the full reference, with the two common keys, their
+  type and meaning, and which bundled drivers honour each;
+- `[driver.container]` and `[driver.hyperv]` with their own keys, and
+  `[driver.qemu]` and `[driver.hyperv]` as the place to override a
+  common key for one driver; `[vm]` is left with `warden`'s four keys;
+- the order of the seven steps, in words, with the two examples above;
+- a table of the seven renamed keys, old name beside new, with the
+  warning's text, the rule that one file may not set both, and the
+  window;
+- the environment-variable table's key column, which names
+  `driver.container.cli` and `driver.container.relay_image`.
+
+`guide/drivers.md` names the new keys in each driver's section, and a
+flag's help that names a key names the new one (`--network`). A driver
+from outside documents its own keys; what the project documents for it
+is the specification's list of common keys.
+
+The bundled drivers' declarations are Go literals with constant strings
+in their own packages, so tier 1's surface check reads them from source
+(**Rule changes**).
+
+- *What it can still check, for a bundled driver:* every `Flag`, `Key`,
+  `Common` and `Aliases` string in a `drivercmd.Setting` literal, at the
+  base and at the head. A flag or key added or changed without a
+  reference doc in the diff is a finding (UX-01, ORCH-03), and one
+  removed with no alias is a finding (UX-03), exactly as for a flag call
+  or a `toml` tag in `cmd/warden`.
+- *What it does not see: the move of the seven keys.* The check knows a
+  key by the last element of its path, which is what a `toml` tag gives
+  it today. `runtime.cli` and `driver.container.cli` are both `cli` to
+  it, so the seven keys are the same set before and after, and neither
+  the new tables nor the old names are something the automated part can
+  report on. That the old names are still read, warn and are in the
+  docs is held by the kit's tests and by review, the agent-judgment
+  half of UX-03 and UX-01.
 - *What it cannot check:* a driver from outside, which is not in this
   repository, documents its own surface and is seen by nothing here;
   whether a declaration is the whole truth, since a driver that reads a
@@ -2546,8 +2901,13 @@ type Setting struct {
 	Name     string   // what the driver reads it by: cfg.String("runtime")
 	Type     Type     // String, Int, Bool, Age, CIDR, IPList, Path or Raw
 	Flag     string   // "runtime" for --runtime; "" for no flag
-	Key      string   // "driver.nomad.region", or one of the seven existing
-	                  // keys ("runtime.cli"); "" for no key
+	Key      string   // a key of the driver's own, under its table:
+	                  // "driver.nomad.region"; "" for none
+	Common   string   // a common key the driver honours, by the name the
+	                  // contract gives it: "image_refresh_after". Read in
+	                  // [driver.<name>], then in [driver]. Not with Key
+	Aliases  []string // the key's deprecated old names, each one the
+	                  // contract lists for this driver: "runtime.cli"
 	Env      string   // WARDEN_CTR_CLI or WARDEN_IMAGE only (UX-07)
 	Commands []string // the commands that take it; EveryCommand is every
 	                  // command the driver lists
@@ -2562,11 +2922,13 @@ type ConfigFile struct {
 
 // Resolve reads the settings that apply to command: the flag in args, else
 // the setting's environment variable, else the first of configFiles that
-// sets its key (ORCH-03). It refuses an element of args that settings does
-// not declare, and a value of the wrong type, with a FixableError that names
-// where the value came from. For reap and attach it reads no file until a
-// setting is asked for, and reads a file that no longer exists as not
-// listed (C10).
+// sets its key (ORCH-03). In one file a common key is read in the driver's
+// own table and then in [driver], and an old name counts as the key itself.
+// It refuses an element of args that settings does not declare, a value of
+// the wrong type and a file that sets a key under two names, with a
+// FixableError that names where the value came from. For reap and attach it
+// reads no file until a setting is asked for, and reads a file that no
+// longer exists as not listed (C10).
 func Resolve(settings []Setting, command string, args []string,
 	configFiles []ConfigFile, environ []string) (driver.Settings, error)
 
@@ -2593,10 +2955,13 @@ type Settings interface {
 	// Decode reads a Raw setting, a key of any shape, into v.
 	Decode(name string, v any) (ok bool, err error)
 	// Source is the label to print for a value: --runtime, WARDEN_CTR_CLI,
-	// or the name of the file it was read from.
+	// or the file it was read from with the table and key as written there.
 	Source(name string) string
 	// Level is "flag", "env", "project" or "user": where the value was set.
 	Level(name string) string
+	// Warnings are the lines to print on stderr: one for each deprecated
+	// old name a config file sets.
+	Warnings() []string
 }
 
 // Host is warden's side of one build.
@@ -2692,7 +3057,7 @@ sequence in K1.
 
 | Command | From | Notes |
 |---|---|---|
-| `describe` | `newDriver`'s container arm; `isVMDriver` | `vm: false`, `shell: true`, `keep: none`, `containerfile: translate`, `guest_os: ["linux"]`; the flag `runtime`; the keys `runtime.cli` and `runtime.relay_image`; `reserved_ranges` its base range |
+| `describe` | `newDriver`'s container arm; `isVMDriver` | `vm: false`, `shell: true`, `keep: none`, `containerfile: translate`, `guest_os: ["linux"]`; the flag `runtime`; the keys `driver.container.cli` and `driver.container.relay_image`, with their old names `runtime.cli` and `runtime.relay_image`; no common key; `reserved_ranges` its base range |
 | `run` | `StartBuild` and `Exec`'s setup | Its probe reads its settings and resolves the runtime (the `runtime` setting, else detection) and refuses a missing or stopped one, as `newDriver` does today before any work. The build resolves it once more and writes it to the state file, then starts the relay container, then on `claimed` the holder, the iptables sidecar, the build container, the executor copy and the start. `mode: shell` starts it held and waits for `/etc/warden/shell.env`, as `waitHeld` does. Its isolation, delivery and start code stays in `driver/container/container.go`, so BOOT-07's surface list does not change |
 | `attach` | The second half of `Exec` | `<runtime> container exec -i -t <build> sh -c ...` on the inherited terminal; the exit code from `/.warden/shell-exit`. The runtime is the one in the build's state file |
 | `reap` | New; `teardown`'s removals by name | Containers, network, dev relay image and work directory of one build ID, in the runtime the state file names and under the record's `tmpdir`. With a state file it reads no config file, so a deleted checkout does not stop it. With no state file it uses the `runtime` setting as it resolves now from the record's flags and the recorded files that still exist, else detection. A runtime that does not answer is exit 1 with the fixable error, never "nothing to remove" |
