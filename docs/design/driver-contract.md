@@ -499,9 +499,12 @@ and a driver's `run` during one build.
     stuck cannot be asked to time itself. Alternatives: every limit
     fixed, which the redraft recommended and the review did not take; a
     key of each driver (the wait would then be read by the process it is
-    meant to bound); a flag as well (not added: the wait is a property
-    of a host and its drivers, set once, and a flag can be added later
-    without breaking anything) (a20).
+    meant to bound); a flag as well (not added: the answer asked for a
+    key, nothing about one invocation changes how long a teardown
+    takes, and a flag can be added later without breaking anything; the
+    key therefore has two of UX-07's three levels, as `[vm] dns` has)
+    (a20). The `reap` that `warden` runs at the end of a build takes the
+    same wait, so the key bounds the whole of a stop.
 22. **`describe` declares a driver's flags and whether each takes a
     value, and `warden` refuses a flag that nobody declares.** `warden`
     cannot parse a command line without knowing, for each flag, whether
@@ -1685,7 +1688,11 @@ qemu's and firecracker's own handlers go.
   signal reaches `warden` only. `warden` waits for `stopped` for the
   teardown wait, 60 s unless set (below). A second signal, or the wait
   passing, kills the driver's process group (on Windows, the driver
-  process) and runs `reap <build_id>`.
+  process) and runs `reap <build_id>`. That `reap` has the teardown wait
+  in its turn: when it passes, or on a further signal, `warden` kills
+  the `reap` process, says that the build's leftovers remain for `warden
+  clean`, keeps the record and the lock, and exits. So the time from the
+  first signal to `warden`'s exit is at most twice the wait.
 - *A linked driver* shares `warden`'s process, so there is nothing to kill
   and no limit: the teardown wait applies to the exec transport only. A second
   signal ends `warden` at once, as it does today on vz and hyperv. That
@@ -1697,7 +1704,8 @@ A driver treats `stop` and the end of its input the same way: tear down,
 then exit.
 
 **The teardown wait** is how long `warden` waits for a driver binary to
-answer `stop` with `stopped` before it kills it and runs `reap`. It is
+answer `stop` with `stopped` before it kills it and runs `reap`, and
+then how long it waits for that `reap`. It is
 the one time limit of the contract that can be set (Decision 21, a20):
 
 | | |
@@ -1707,7 +1715,7 @@ the one time limit of the contract that can be set (Decision 21, a20):
 | Default | `"60s"` |
 | Bounds | `1s` to `1h`, inclusive |
 | Read by | `warden`, as the config files load |
-| Applies to | A driver binary, on every `stop`: a completed, failed, interrupted or timed-out build, and `warden shell`. A linked driver has nothing to kill, so in K1 the key is read and checked for it and then has nothing to act on |
+| Applies to | A driver binary, on every `stop`: a completed, failed, interrupted or timed-out build, and `warden shell`; and the `reap` that `warden` runs at the end of a build, after a kill or a driver that died. Not a `reap` run by `warden clean`, which the user started and can interrupt. A linked driver has nothing to kill, so in K1 the key is read and checked for it and then has nothing to act on |
 | Flag, variable | None |
 
 It is `warden`'s key and not the driver's, although a driver now reads
@@ -1716,17 +1724,27 @@ setting of the thing being waited for. `warden` applies it to every
 driver alike, one written without the kit included, and the driver it
 is meant to bound is by definition one that has stopped answering. It
 sits in `[build]` with the other per-build settings `warden` owns
-(`tmpdir`, `output_dir`). It has no flag: how long a teardown takes is a
-property of a host and its drivers, set once and not per invocation, as
-`[vm] dns` and `[relay] upstream_ca_certs` are keys without flags today;
-a flag can be added later without breaking anything (UX-03). The value
-is not sent to the driver in version 1.
+(`tmpdir`, `output_dir`). The value is not sent to the driver in
+version 1.
+
+It has no flag, so it has two of the three levels UX-07 names
+("invocation > project > user"): the project's file, then the user's.
+`[vm] dns` and `[relay] upstream_ca_certs` are keys without a flag
+today, and this follows them; the answer asked for a key. Nothing about
+one invocation changes how long a teardown takes, and a second Ctrl-C
+already ends the wait at once. `--teardown-timeout` on `build` and
+`shell` can be added later without breaking anything (UX-03), and is
+one line if the review wants the third level now.
 
 The bounds: below `1s` every `stop` would end in a kill and a `reap`
 instead of a teardown, and above `1h` the wait bounds nothing; a second
 Ctrl-C is the way to stop waiting sooner. A value that does not parse or
 is out of range is refused as the file loads, before any driver runs
-(UX-08), and the default is not used in its place (GLOBAL-10):
+(UX-08), and the default is not used in its place (GLOBAL-10). So is a
+value of another TOML type, such as the bare number `90`: `warden`
+decodes this key apart from the typed fields of `Config`, where any
+type mismatch gets the one message "fix the TOML syntax" today, so that
+it gets the message below with `90 is not a duration`:
 
 ```
 [warden] ERROR: [build] teardown_timeout in warden.toml: "0s" is below
@@ -1738,7 +1756,9 @@ is out of range is refused as the file loads, before any driver runs
 Every other limit stays fixed: `describe` within 10 s, a probe within
 30 s, the relay's `ready` within 90 s of the start of the claim, 30 s
 without a heartbeat, and 10 s for a completion after the environment
-exits.
+exits. No new limit is added for the `reap` at the end of a build: it
+takes the teardown wait, since both bound the same thing, how long
+`warden` waits for a driver to clean up before it gives up.
 
 **What fails, and what follows.**
 
@@ -1749,7 +1769,7 @@ exits.
 | The relay exits | Any time after `relay-started` | The driver sends `exited`, `which: relay` | Cancels a claim in progress, or fails the build at once; then `stop` with `reason: failed` |
 | The environment cannot be started | After `claimed` | The driver tears down, sends `failed`, exits 1 | Closes the session and prints the error. No `reap` |
 | The environment exits before the build completes | After `environment-started` | The driver sends `exited`, `which: build` | Waits 10 s for a completion, then fails the build; `stop` with `reason: failed` |
-| The driver's process ends with neither `stopped` nor `failed`, writes a stdout line that is not a JSON object, or does not stop within the teardown wait | Any time | Nothing | Kills the driver's process group, shows the tail of its stderr as a driver defect, and runs `reap <build_id>` with the record's values. If the collector already holds the build's completion, the build's result stands and the defect is reported beside it; otherwise the build fails. If `reap` fails, the record and lock stay for `warden clean` |
+| The driver's process ends with neither `stopped` nor `failed`, writes a stdout line that is not a JSON object, or does not stop within the teardown wait | Any time | Nothing | Kills the driver's process group, shows the tail of its stderr as a driver defect, and runs `reap <build_id>` with the record's values. If the collector already holds the build's completion, the build's result stands and the defect is reported beside it; otherwise the build fails. If `reap` fails, does not finish within the teardown wait, or is cut short by a further signal (it is then killed), the record and lock stay for `warden clean` |
 
 `failed` and `stopped` both promise that the driver has torn down, so
 `warden` runs `reap` only when it got neither.
@@ -2979,7 +2999,9 @@ to be identical. The list was re-derived after the review's answers of
    ignored on qemu and firecracker, which hold their own handler. After
    K1, for a driver binary (container) it kills the driver and runs its
    `reap`; so does a teardown that takes longer than the teardown wait
-   (60 s unless set). For a linked driver it ends `warden` at once: as
+   (60 s unless set). A third, or a `reap` that outlasts the same wait,
+   ends that `reap` and leaves the rest to `warden clean`. For a linked
+   driver a second Ctrl-C ends `warden` at once: as
    today on vz and hyperv, and new on qemu and firecracker. On qemu that
    leaves its VMs running, which a second Ctrl-C could not do before;
    K2's `reap` is what finds them. *Changed by a20:* the wait can be
@@ -3034,7 +3056,8 @@ to be identical. The list was re-derived after the review's answers of
     it. A file of that name reached through a relative `PATH` entry is
     an error that names the entry, not a driver. *New, from a16.*
 17. **`[build] teardown_timeout` is new**: how long `warden` waits for a
-    driver binary to tear down before it kills it and reaps, 60 s unless
+    driver binary to tear down before it kills it and reaps, and then
+    for that `reap`, 60 s unless
     set. Additive; nothing waited or killed this way before. *New, from
     a20.*
 
@@ -3347,7 +3370,7 @@ not listed is unchanged and `warden`'s.
 | Who sends the claim: `warden` | **Changed owner** (a13); the claim is unchanged | The collector's owner must hold the tunnel | Nothing in K1 |
 | The contract version: the highest both sides speak | **New** | The newest common behaviour | Nothing; none in common is an error naming both |
 | A build may complete for 10 s after its environment exits | **Changed** for container and Hyper-V, from 5 s (Behaviour 7, a20) | One rule in `warden` for every driver; 10 s is the longest any driver uses today | Nothing |
-| After `stop`, a driver binary has the teardown wait to tear down, 60 s when `[build] teardown_timeout` is not set; then it is killed and `reap` runs. A linked driver has no limit | **New**, and a key by the review's answer (a20, Decision 21) | 60 s is long enough for the slowest teardown known and short enough that Ctrl-C ends | `[build] teardown_timeout`, from `1s` to `1h`: the project's file, else the user's, and the value set is the wait, not a floor or a ceiling on the default. A value that does not parse or is out of range is an error at load; 60 s is not used in its place. A second Ctrl-C or SIGTERM ends the wait at once |
+| After `stop`, a driver binary has the teardown wait to tear down, 60 s when `[build] teardown_timeout` is not set; then it is killed and `reap` runs, with the same wait; a `reap` that outlasts it is killed and the build's record and lock stay for `warden clean`. A linked driver has no limit | **New**, and a key by the review's answer (a20, Decision 21) | 60 s is long enough for the slowest teardown known and short enough that Ctrl-C ends | `[build] teardown_timeout`, from `1s` to `1h`: the project's file, else the user's (no flag: two of UX-07's three levels), and the value set is the wait, not a floor or a ceiling on the default. A value that does not parse, is out of range or is not a string is an error at load; 60 s is not used in its place. A second Ctrl-C or SIGTERM ends the wait at once, and a third ends the `reap` |
 | SIGTERM stops a build as Ctrl-C does, on every driver | **Changed** for container, vz and hyperv, where it killed `warden` (Behaviour 9) | A cancelled CI job should not leave containers or VMs | Nothing |
 | `describe` answers within 10 s, a probe within 30 s | **New** (a20) | `describe` does no host work; a probe makes the driver's preflight, and the slowest today is the container runtime detection (three runtimes at 3 s each) | Nothing; a slower driver is reported as a defect |
 | `reap`, `attach` and `warden clean` use the values in the build's record and state file, not the current invocation's | **New** (Decision 18, a20) | They must look where the build put things | Nothing. `warden clean --driver <path>` chooses the binary that reaps, when the recorded one is gone |
@@ -4325,9 +4348,11 @@ differs per platform, so it adds one job (Decision 20):
   config; the result and request files, every
   exit code, a line that is not JSON, a driver that exits early, a path
   that is not UTF-8, the teardown wait (its default, a value from the
-  project's file over the user's, a value that does not parse and one
-  out of range, each refused at load) and the 10 s and 30 s limits with
-  a fake clock.
+  project's file over the user's, a value that does not parse, one out
+  of range and one that is a bare number, each refused at load with the
+  key's own message; the same wait applied to the `reap` after a kill,
+  and a `reap` killed when it passes or on a third signal, with the
+  record and lock kept) and the 10 s and 30 s limits with a fake clock.
 - `warden`'s end-to-end tests through `warden-driver-fake` and
   `stubrelay`: build (success, failure, timeout, Ctrl-C, second Ctrl-C,
   SIGTERM, killed driver, noisy driver, a `warden` killed with its pipes
