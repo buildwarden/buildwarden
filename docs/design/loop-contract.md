@@ -74,8 +74,8 @@ and moved the loop to its own public repository (Decision 13). On 2026-11-14
 Jeff chose one queue for work in every repository and deferred the loop
 repository (**Design review**; the umbrella's sentences this changes are
 listed under **Amendments to the umbrella design**). The relay repository
-already exists, is written in
-Rust, and has "the Loop Contract adopted" in its first milestone (M1). What it
+already exists, is written in Rust, and has "the Loop Contract adopted" in
+its first milestone (M1). What it
 would adopt today is Jeff's draft of 2026-11-07, a document outside any
 repository: eight sections with "fill in" markers and research tasks that ask
 what the running loop actually does, and several statements that the running
@@ -147,7 +147,7 @@ next merge `main`, and from then on work under what this item merged (see
 - [`specs-migration`](specs-migration.md): the layout of `specs/` and
   RELAY-05, which is what the running loop has today in place of the draft's
   specification handling.
-- `seam-specs` (S1, in Design on `feat/seam-specs`, not yet reviewed)
+- `seam-specs` (S1, on `feat/seam-specs`, awaiting its design review)
   proposes how a seam change is ordered across two repositories and how this
   repository pins a specifications release. The contract states the order
   and leaves the pin to the component (LOOP-02), so it does not depend on how
@@ -358,8 +358,8 @@ together in a15. Decisions 17 to 20 are new since `2889919`.
     track". One set of workers serves every repository in either case, so
     separate queues would have added a rule for dividing a run between
     them and saved nothing. *Rejected:* one queue with a digest per
-    component. The reports would be split again, which is what he asked
-    not to have.
+    component. The reports would be split again, which works against the
+    tracking he asked for.
 18. **LOOP-04 says there is one queue and cites FLOW-05 for the order and
     for what may run side by side; it states no relation between items and
     no limit** (a18). FLOW-05 as it stands is then the contract's detail on
@@ -377,11 +377,11 @@ together in a15. Decisions 17 to 20 are new since `2889919`.
     design said "moves to the loop repository" it now says "would move if
     the loop repository is created". *Rejected:* keeping the move as P1's
     last part, as read at `2889919`. It pauses every worker while the queue
-    moves, and one queue already gives the single place to track that the
-    move was to give. *Rejected:* dropping the umbrella's Decision 13. Its
-    reason stands (rules that bind several repositories kept in one of
-    them), and keeping it open costs only the file split this PR makes
-    anyway.
+    moves, for no gain in tracking: the queue is already one, and public,
+    where it is. *Rejected:* dropping the umbrella's Decision 13. The case
+    for a separate home stands once a second repository has adopted (the
+    rules that bind several repositories are kept in one of them), and
+    keeping it open costs only the file split this PR makes anyway.
 20. **The umbrella's wording is amended in this item's PR, sentence by
     sentence, each approved by name** (a20). The sentences are listed
     under **Amendments to the umbrella design**. *Rejected:* leaving the
@@ -1357,9 +1357,10 @@ does not write their changes.
 | The move to a loop repository | Deferred (a19); no item | The split, the list of what would move and what would stay, and the links a move would have to change (points 2 and 3, and **Rule IDs, cross-references, `rules.yaml` and tier 1**). |
 
 **1. The finished contract text**: `docs/development/loop-contract.md` as
-merged. A later item that changes a FLOW rule the contract cites changes no
-word of the contract, unless its own design wants the contract to say more;
-that is then a rule change it declares (LOOP-09). The contract's "Where
+merged. It is worded so that a later item can change a FLOW rule it cites
+without changing the contract. Where such an item's design finds a clause
+that would no longer hold, or wants the contract to say more, that is a
+rule change it declares (LOOP-09). The contract's "Where
 things are" table has a column for today and one for a loop repository, if
 one is created. Editing that table is the only change to the contract's
 text a move would need.
@@ -1815,10 +1816,9 @@ running loop already has the rule, they cite it.
 > has the phases of its kind (FLOW-03), and every step says who may take it
 > (FLOW-04).
 >
-> - There is one order. FLOW-05 gives it: the classes of item and, within
->   a class, the priority. FLOW-05 also says which items may be in progress
->   side by side and which wait for another. This rule adds no order and no
->   limit of its own.
+> - There is one order, and FLOW-05 gives it. FLOW-05 also says which
+>   items may be in progress side by side and which wait for another. This
+>   rule adds no order and no limit of its own.
 > - A process item ranks ahead of every item not already in implementation
 >   (FLOW-05). It stops other work only through the `holds` it declares,
 >   which name the workers it stops and, where the hold is for some
