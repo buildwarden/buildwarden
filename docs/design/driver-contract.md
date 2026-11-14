@@ -359,8 +359,8 @@ a recommended answer the design is complete under.
 ### Assumed
 
 The first draft's a1 to a11 were never answered. Four are retired because
-the redraft makes them moot (listed last); seven survive, reworded where
-the new contract requires it; a12 to a20 are new. No retired ID is reused.
+the redraft makes them moot (**Retired**, below); seven survive, reworded
+where the new contract requires it; a12 to a20 are new.
 
 - **a3. The relay source's scope in K1.** Proceeding with: the relay source
   is a kit library and not part of the contract (Decision 11). K1 ships its
@@ -530,8 +530,11 @@ the new contract requires it; a12 to a20 are new. No retired ID is reused.
   is checked in native validation, since Hyper-V stays linked in K1.
   Confirm.
 
-Retired by this redraft. Each is kept in the queue file, reworded as
-retired, so the review confirms the retirement and no ID is reused:
+### Retired
+
+Retired by this redraft, unanswered. The queue file has no retired state
+for a question, so these four are removed there and kept here; no ID is
+reused.
 
 - **a1** (what "adding a driver touches only its own directory" means): the
   done-when it explains is replaced. Asked now as a15.
