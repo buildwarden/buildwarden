@@ -115,8 +115,8 @@ type stepRef struct {
 }
 
 // stepTemplates parses a step id against the templates, the one parse that
-// IsGate, IsDesignReview, IsMerge and isTemplate share. ok is false for an id that is
-// not a step id or names a phase its round does not have.
+// IsGate, IsDesignReview, IsPlan, IsMerge and isTemplate share. ok is false
+// for an id that is not a step id or names a phase its round does not have.
 func stepTemplates(id string) (stepRef, bool) {
 	m := stepIDRe.FindStringSubmatch(id)
 	if m == nil {
@@ -190,6 +190,14 @@ func IsGate(f *Feature, st *Step) bool {
 func IsDesignReview(st *Step) bool {
 	r, ok := stepTemplates(st.ID)
 	return ok && r.round == "feature" && r.phase == 2 && r.name == "design-review"
+}
+
+// IsPlan reports whether the step is a feature's Plan step, in any of its
+// -r<n> forms: f2-plan, whose claim takes an alters_relationships slot
+// (FLOW-05). A process item has none.
+func IsPlan(st *Step) bool {
+	r, ok := stepTemplates(st.ID)
+	return ok && r.round == "feature" && r.phase == 2 && r.name == "plan"
 }
 
 // IsMerge reports whether the step is its round's merge step, in any of its
