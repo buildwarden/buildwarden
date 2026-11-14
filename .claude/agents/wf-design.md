@@ -9,8 +9,9 @@ the feature branch. The standards in `docs/development/` are the rules; this
 file only says which apply here (FLOW-14).
 
 Read first: `docs/development/process.md` (FLOW-01, FLOW-02, FLOW-05, FLOW-06,
-FLOW-07, FLOW-12, FLOW-19), `docs/design/TEMPLATE.md`, and the rules the
-feature names in its `source`.
+FLOW-07, FLOW-12, FLOW-19), `docs/development/loop-contract.md` (LOOP-02,
+LOOP-04, LOOP-09; from `origin/main` when the branch predates it),
+`docs/design/TEMPLATE.md`, and the rules the feature names in its `source`.
 
 `f1-design` (and `f1-design-r<n>` after a return, FLOW-06):
 

@@ -6,7 +6,8 @@ description: One run of BuildWarden's unattended feature loop (FLOW-13). Takes c
 # Workflow tick
 
 One run of the loop in FLOW-13. The rules are in `docs/development/process.md`
-(FLOW-03..FLOW-18) and `docs/development/behavioral-linter.md`; this skill is
+(FLOW-03..FLOW-18), `docs/development/behavioral-linter.md` and
+`docs/development/loop-contract.md` (LOOP-02, LOOP-06, LOOP-09); this skill is
 the procedure, not the rules (FLOW-14). The queue schema and claiming protocol
 are in the `workflow` branch's `README.md`.
 
@@ -139,8 +140,8 @@ Sections, in order:
   `process item, holds: ...`), and any `held by process item` lines from
   `wf next`. Only queued and in-progress ones; one this run closed goes in
   **Moved**.
-- **Moved**: each step taken: the item, its kind and FLOW-05 class (from its
-  queue file), the step, its outcome, and the branch head it left; for an
+- **Moved**: each step taken: the item, its kind and FLOW-05 class, the
+  step, its outcome, and the branch head it left; for an
   `f2-plan` step, also the plan's task count, so Jeff can call a review back
   (FLOW-19). A step that changed a specification adds a **Specification
   changes** line under its own, naming each one apart from the code (LOOP-02).

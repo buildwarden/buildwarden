@@ -128,8 +128,8 @@ Unattended: append a `## Run host:<machine>/<timestamp>` section to
 `.dev/workflow/digest/<YYYY-MM-DD>.md` (America/Los_Angeles date), checked
 against LOOP-06's list before the commit, with
 **Moved** (per host and branch: what ran, pass or fail, evidence; for each
-queue step, the item with its kind and FLOW-05 class, from its queue file, and
-the branch head it left; a **Specification changes** line under a step that
+queue step, the item with its kind and FLOW-05 class, and the branch head it
+left; a **Specification changes** line under a step that
 changed a specification, LOOP-02; on a review step's line, tier 1's result and
 the tier-2 findings counted by severity, with the report's path, LINT-05),
 **Blocked on Jeff** (anything this machine cannot do: a missing tool, a
