@@ -1450,7 +1450,11 @@ FLOW-10 already says what it does with real work: to Implement
 (`wf back -to 3`) for work the plan covers, such as a lint failure a merged
 check now reports on this branch's code, or to Design (`wf back -to 1`).
 A path outside the areas goes through `wf declare`, as above. The refresh
-never re-enters Publish, so the item keeps its PR slot.
+never re-enters Publish, so the item keeps its PR slot. A process item has
+no plan, Review or Publish to go back to (`wf back -to 3` is a feature's):
+its refresh does the work its gates need on the branch, as its Implement
+would, or returns it to Design with `wf back` when its design must
+change.
 
 **An item that goes back with its PR open keeps the PR slot**, since the
 slot is held while a PR is recorded. Three things keep that PR from being
@@ -3027,7 +3031,9 @@ No review by Jeff yet. This draft is put to him as the design step,
     session cannot confirm merges.* True. The refresh checks before its
     push; `wf stale` checks for a merge first.
   - *A PR merged behind `main` can fail the merge check.* True
-    (`patchID`, `-U3`). a14 takes `-U0`.
+    (`patchID`, `-U3`), and reproduced: A edits line 5, B line 8, B is
+    squashed after A; B's change and the squash's differ with three
+    context lines and are equal with none. a14 takes `-U0`.
   - *Dropping "the checks reach every area" was a decision, and its
     reason does not hold under a1 (a).* True. Now a15, proceeding as the
     proposal has it for `tier1` and `tier1-config`.
@@ -3046,6 +3052,10 @@ No review by Jeff yet. This draft is put to him as the design step,
     `wf commit` stages only named paths; a map change that puts holders
     over a limit; the `rules` list; a9 and a11 withdrawn as decisions;
     the Close-time state edits get an owner (`x4-state`).
+  - *Not taken:* running the gates on each trial merge's tree, offered
+    with the finding on the checks' areas. It is a worktree, lint and the
+    tests for every pair of open disjoint branches at every Review; a15
+    (b) and the reading of `main`'s CI cover the case it was offered for.
   - *Not taken:* a stand-in area for an item that adds a new tree (a
     nit). It needs part of the branch's map copied into the queue file
     and an overlay in the relation, for two of the 52 merges; the item
