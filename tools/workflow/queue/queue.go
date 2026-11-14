@@ -294,6 +294,31 @@ func (s *State) Add(f *Feature, now time.Time, by string) ([]*Feature, error) {
 	return changed, nil
 }
 
+// PutOnHold files a queued item on hold (FLOW-20's freeze): an open blocking
+// question q1 whose text is why, and a human step <f0|x1>-answer-q1 that the
+// item's first step needs, so no worker is offered the item's work until the
+// human answers q1 (FLOW-07). wf answer completes that step. It is for an
+// item Add has just queued: holding one already in progress stays a
+// hand-edit, and one that already has a question is refused, never merged.
+func (f *Feature) PutOnHold(why string, now time.Time, by string) error {
+	if strings.TrimSpace(why) == "" {
+		return fmt.Errorf("a hold needs its reason: it is the blocking question's text (FLOW-07)")
+	}
+	if f.Status != "queued" || len(f.Steps) == 0 || len(f.Questions) > 0 {
+		return fmt.Errorf("%s: only a newly queued item with no question is put on hold",
+			f.Feature)
+	}
+	const resume = "resume it"
+	f.Questions = append(f.Questions, Question{ID: "q1", Kind: "blocking", Status: "open",
+		Question: why, Options: []string{resume}, Recommended: resume})
+	answer := Step{ID: StepID(f.Round, f.Phase, "answer-q1"), Phase: f.Phase,
+		Affinity: "human", Status: "pending"}
+	f.Steps[0].Needs = addNeeds(f.Steps[0].Needs, answer.ID)
+	f.Steps = append([]Step{answer}, f.Steps...)
+	f.Log(now, by, "on hold (q1): %s", why)
+	return nil
+}
+
 // Find returns the named feature.
 func (s *State) Find(name string) (*Feature, error) {
 	for _, f := range s.Features {

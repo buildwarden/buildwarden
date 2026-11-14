@@ -417,6 +417,103 @@ func TestAddLogsRenumbering(t *testing.T) {
 	}
 }
 
+// TestPutOnHold: wf new -hold files an item that no worker but the human is
+// offered until q1 is answered (FLOW-20, FLOW-07): the file it writes
+// validates, the cloud gets no step of it and no blocked line while it is
+// queued, and answering q1 leaves the item queued with its first step ready.
+func TestPutOnHold(t *testing.T) {
+	const why = "frozen while the componentization program runs"
+	for _, tc := range []struct {
+		kind, answer, first, firstWorker string
+	}{
+		{"", "f0-answer-q1", "f0-branch-setup", "cloud/run"},
+		{"process", "x1-answer-q1", "x1-design", "human/jeff"},
+	} {
+		t.Run("kind="+tc.kind, func(t *testing.T) {
+			dir := t.TempDir()
+			_ = os.MkdirAll(filepath.Join(dir, "queue"), 0o755)
+			s := state()
+			s.Dir = dir
+			f := &Feature{Feature: "held", Priority: 1, Kind: tc.kind,
+				Budget: Budget{Estimate: Count{Runs: 1, Steps: 7}}}
+			if _, err := s.Add(f, now, "human/jeff"); err != nil {
+				t.Fatal(err)
+			}
+			if err := f.PutOnHold(why, now, "human/jeff"); err != nil {
+				t.Fatal(err)
+			}
+			q := f.OpenBlocking()
+			if len(q) != 1 || q[0].ID != "q1" || q[0].Question != why {
+				t.Fatalf("open blocking questions %+v, want q1 with the reason as given", q)
+			}
+			if len(f.Steps) != 2 || f.Steps[0].ID != tc.answer ||
+				f.Steps[0].Affinity != "human" || f.Steps[1].ID != tc.first ||
+				!slices.Equal(f.Steps[1].Needs, []string{tc.answer}) {
+				t.Fatalf("steps %+v, want %s then %s needing it", f.Steps, tc.answer, tc.first)
+			}
+			if last := f.History[len(f.History)-1].Event; last != "on hold (q1): "+why {
+				t.Fatalf("last history line %q", last)
+			}
+			if err := s.Save(f); err != nil {
+				t.Fatal(err)
+			}
+			if errs := s.Validate(); len(errs) != 0 {
+				t.Fatalf("Validate: %v", errs)
+			}
+			if p, blocked := s.Next("cloud/run", now); p != nil || len(blocked) != 0 {
+				t.Fatalf("cloud pick %+v, blocked %v; want neither for a queued held item",
+					p, blocked)
+			}
+			if got := next(t, s, "human/jeff"); got != "held "+tc.answer {
+				t.Fatalf("human pick = %s, want only the answer step %s", got, tc.answer)
+			}
+			if md := Summary(s); !strings.Contains(md, "blocking question q1: "+why) {
+				t.Fatalf("QUEUE.md does not list the hold under Needs Jeff:\n%s", md)
+			}
+
+			// What wf answer does: the question answered, its step complete.
+			f.Questions[0].Status = "answered"
+			Complete(f, &f.Steps[0], "human/jeff", now)
+			if f.Status != "queued" || len(f.OpenBlocking()) != 0 {
+				t.Fatalf("status %s, open %v; want queued and nothing open", f.Status,
+					f.OpenBlocking())
+			}
+			if got := next(t, s, tc.firstWorker); got != "held "+tc.first {
+				t.Fatalf("%s pick = %s, want held %s", tc.firstWorker, got, tc.first)
+			}
+			if errs := s.Validate(); len(errs) != 0 {
+				t.Fatalf("Validate after the answer: %v", errs)
+			}
+		})
+	}
+}
+
+// TestPutOnHoldRefusals: a hold is explicit and never merged into an item
+// that is not newly queued (GLOBAL-10).
+func TestPutOnHoldRefusals(t *testing.T) {
+	asked := feature("asked", 3, "queued")
+	asked.Questions = []Question{{ID: "q1", Kind: "blocking", Status: "open",
+		Question: "?", Options: []string{"a"}, Recommended: "a"}}
+	for name, tc := range map[string]struct {
+		f   *Feature
+		why string
+	}{
+		"no reason":        {feature("a", 1, "queued"), " "},
+		"in progress":      {feature("b", 2, "in_progress"), "why"},
+		"has a question":   {asked, "why"},
+		"no step to gate":  {&Feature{Feature: "c", Status: "queued", Round: "feature"}, "why"},
+		"already finished": {feature("d", 4, "done"), "why"},
+	} {
+		before := len(tc.f.Steps)
+		if err := tc.f.PutOnHold(tc.why, now, "human/jeff"); err == nil {
+			t.Errorf("%s: PutOnHold succeeded", name)
+		}
+		if len(tc.f.Steps) != before || len(tc.f.History) != 0 {
+			t.Errorf("%s: a refused hold changed the item: %+v", name, tc.f)
+		}
+	}
+}
+
 // altering is an in-progress feature that declares alters_relationships: true
 // and has finished Design: its review and its Plan step are pending.
 func altering(name string, prio int) *Feature {
