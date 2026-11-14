@@ -10,9 +10,9 @@ alters_relationships: false  # no product component's role or interaction change
 design_review: required  # a process item's design always gets its review (FLOW-03, FLOW-19)
 native_validation: []    # pure functions of the queue state, the same on every host
 tier2_gaps: []
-rules: [FLOW-02, FLOW-03, FLOW-04, FLOW-05, FLOW-06, FLOW-07, FLOW-12, FLOW-14, FLOW-18,
-        FLOW-19, FLOW-20, GLOBAL-09, GLOBAL-10, GLOBAL-11, TEST-01, TEST-02]
-rule_changes: []         # the code is made to match FLOW-05 and FLOW-20 as written
+rules: [FLOW-02, FLOW-03, FLOW-04, FLOW-05, FLOW-06, FLOW-07, FLOW-09, FLOW-12, FLOW-14,
+        FLOW-18, FLOW-19, FLOW-20, GLOBAL-09, GLOBAL-10, GLOBAL-11, TEST-01, TEST-02]
+rule_changes: []         # the code is made to match FLOW-05 and FLOW-20 as read in a1 and a4
 concepts: [workflow, queue, wf-next, wf-validate, alters-relationships, alters-slot,
            flow-05-limits, process-item, one-queue, entire-hooks]
 related: [componentization.md, design-principles.md, next-skips-merge-wait.md,
@@ -42,7 +42,8 @@ neither (`tools/workflow/queue/`, at `b903f65`):
   before its review and before any Plan step is taken. From then on it counts
   as the holder for every other item, and every other such item counts as the
   holder for it. `cloudHold` applies the test to every cloud step of phase 2
-  or later, so an item already in Implement stops too.
+  or later until the feature reaches Publish, so an item already in Implement
+  stops too.
 - **`wf validate` counts differently.** `Validate` (`queue.go`) counts every
   in-progress item in phase 2 or later that declares `true`, fails when the
   count is above the limit, and reads an unset limit as no limit. So it fails
@@ -58,7 +59,7 @@ and on four seeded items (row 3). Nothing was written:
 | State | `wf next -worker cloud` today | `wf validate` today |
 |---|---|---|
 | Both reviews approved, neither planned | seam-specs "held by driver-contract", driver-contract "held by seam-specs": `none`, for good | ok |
-| seam-specs in Implement; driver-contract finishes Design, reviewed or not | seam-specs `f3-implement` "held by driver-contract"; driver-contract's Plan "held by seam-specs" | ok |
+| seam-specs in Implement; driver-contract finishes Design, reviewed or not | seam-specs `f3-implement` "held by driver-contract"; driver-contract waits on its review, and once approved its Plan is "held by seam-specs" | ok |
 | Four such items past Design, limit 3 | each "held by" another: `none` | fails: "4 features past Design alter relationships, limit 3" |
 | Two such items past Design, limit 1 | each held by the other | fails: "2 features ... limit 1" |
 | The same, limit unset | each held by the other | ok (no limit read) |
@@ -74,13 +75,14 @@ driver-contract, until someone edits the queue by hand.
 
 ## Prior art
 
-- **`loop-contract` a13** (`feat/loop-contract`, "The three machinery
-  changes", unreviewed) proposed counting the *other* items past Design
-  against the limit. That fixes the two live items at limit 3 and nothing
+- **`loop-contract` a13** (as read at `2889919`, "The three machinery
+  changes", unreviewed; retired on `feat/loop-contract` as of `cf44244`,
+  which hands it to this item) proposed counting the *other* items past
+  Design against the limit. That fixes the two live items at limit 3 and nothing
   else: four items past Design still hold each other, two still do at limit
   1, and `Validate` still fails on the state. This design keeps a13's limit
   (the config value, 1 when unset) and its dropped fallback, and changes what
-  is counted. a13 retires from `loop-contract` at its next revision.
+  is counted.
 - **`design-principles`** (#104), Decision 9, took process items out of the
   in-progress limit and said the `alters_relationships` limit "still counts
   every in-progress item that declares it, process items included". The rule
@@ -91,9 +93,14 @@ driver-contract, until someone edits the queue by hand.
   clock. Kept: what holds a slot is read from the item's own steps, with no
   clock and no git.
 - **`componentization`** (#117): FLOW-20's Limit bullet and the value 3 (its
-  a5). The loop change proposal of 2026-11-14 (section 3, "The three limits")
-  gave the principle used here: a limit counts only items that already hold
-  something, so no two items hold each other.
+  a5).
+- **The loop change proposal of 2026-11-14**, a document of the attended
+  session that is not kept in the repository, gave the principle used here.
+  Of its three limits it says: "Each counts only items already holding
+  something, so no two items hold each other." Where it and the code
+  disagree the code is followed: seam-specs' Plan is offered today while
+  driver-contract is in Design (case 2), and the two stop each other only
+  once driver-contract is past Design again.
 - **`workflow-bootstrap`** introduced the slot as "the one
   `alters_relationships` slot another feature holds"; **`regression-fixes-follow-up`**
   (#103) left it unchanged when it added the class order.
@@ -133,20 +140,35 @@ driver-contract, until someone edits the queue by hand.
      order, and FLOW-05's sentence would need rewording.
 5. **A holder keeps its slot through a return to Design** (a4). Its plan and
    code are still in flight; it finishes before a waiting item starts
-   (FLOW-05, depth first).
+   (FLOW-05, depth first). One state can then go over the limit: a feature
+   that already has a plan returns to Design and its redesign changes `false`
+   to `true` while every slot is held. One sentence added to `wf-design`'s
+   step 5 stops that feature in Design with a blocking question (see "More
+   holders than the limit").
    - *Rejected: the slot is given up on a return, as today.* A waiting item of
      lower priority takes it during the returned item's review, and the
      half-built item then waits until some holder is merged and closed.
+   - *Rejected: let that feature wait at its next Plan step and leave it out
+     of the count, with no agent text.* Whether one such feature counts would
+     then depend on whether another does, which needs an ordering this item
+     does not add.
 6. **The wait stays where it is: for the cloud, in `cloudHold`.** `wf claim`
-   is not changed. Every claim the skills make follows `wf next`. A Plan
-   claim made by hand past the limit fails the next `wf validate`, which
+   is not changed. Every claim the skills make follows `wf next`, and every
+   Plan step has cloud affinity (the template, `phases.go`). A Plan claim
+   made past the limit, by hand or by a host session on a Plan step whose
+   affinity was edited to `host:<name>`, fails the next `wf validate`, which
    names the holders.
    - *Rejected: a guard in `wf claim` now.* `loop-parallel` adds one guard for
-     `wf next` and `wf claim` covering all three limits.
-7. **No rule text changes.** The code is made to match FLOW-05 and FLOW-20
-   (see "The rule text stays").
+     `wf next` and `wf claim` covering all three limits and every worker.
+7. **No rule text changes.** The code is made to match FLOW-05 and FLOW-20,
+   with FLOW-20's "features past Design" read as the features that hold a
+   slot (a1, a4; see "The rule text stays").
+   - *Rejected: amending FLOW-20's Limit bullet in this PR.* `loop-parallel`
+     removes the bullet. The wording is given below in case the review
+     prefers the words changed now.
 8. **The PR also carries the refreshed Entire hook configuration** (a2), as
-   its own commit, so the review can drop it without touching the rest.
+   its own commit, so the review can drop it without touching the rest. It is
+   outside the counting change the item is named for.
 
 ## Questions
 
@@ -158,6 +180,10 @@ None.
 
 - **a1. What holds a slot.** Proceeding with (a); confirm.
   - (a) From the claim of the item's Plan step until the item is done.
+    FLOW-20's "features past Design" is then read as the features whose Plan
+    step is claimed or done: a feature in phase 2 that waits for its review
+    or for a slot is not counted, so more such features than the limit is a
+    valid state (case 6).
   - (b) From the end of Design, as today, with only the limit fixed.
   - (c) From Implement (Plan done).
 
@@ -169,8 +195,10 @@ None.
   session-start hook also reports an `entire` on PATH that fails to run) and
   `.entire/settings.json` (key order only). `.claude/` reaches `main` only
   through a process item (FLOW-14), and this is the next one to merge.
-  `loop-contract`'s a12 asks the same and drops it if this carries it.
-  Proceeding with (a); confirm.
+  `loop-contract`'s a12 asks the same and drops it if this carries it. It
+  adds to the item's scope: the approved first step names only the counting
+  change, and so does the item's title. To keep the item to its title, answer
+  (b). Proceeding with (a); confirm.
   - (a) This PR carries the two files as that commit has them, in a commit
     of its own.
   - (b) `loop-contract` carries it, as its a12 has it.
@@ -195,11 +223,13 @@ None.
   - (a) It keeps it while it has a finished plan: a return from Implement or
     later. A return from Plan itself drops the unfinished Plan step
     (`Back`), and the slot with it, since there is no plan and no code.
+    FLOW-20's "features past Design" then includes a holder that is back in
+    Design. One sentence is added to `.claude/agents/wf-design.md` for the
+    edge set out under "More holders than the limit".
   - (b) Every return gives the slot up; the item waits for one again at its
-    next Plan step.
+    next Plan step. No edge and no agent text.
 
-  Recommended: (a). Its cost is one edge, set out under "More holders than
-  the limit".
+  Recommended: (a). Its cost is that edge and that sentence.
 
 ## Design
 
@@ -209,20 +239,30 @@ None.
   `config.yaml`, or 1 when the key is absent.
 - **A feature holds a slot** when it is in progress, is not a process item,
   its queue file says `alters_relationships: true`, and one of its Plan steps
-  (`f2-plan`, in any `-r<n>` form) is done or carries a claim. A claim is a
-  lease with a claimant, expired or not: an abandoned claim keeps the slot
-  for its item until that Plan step is taken up again or released
-  (`wf release`).
+  (`f2-plan`, in any `-r<n>` form) is done or carries a claim (FLOW-04). A
+  claim is a lease with a claimant, expired or not: an abandoned claim keeps
+  the slot for its item until that Plan step is taken up again or released
+  (`wf release`). The tick also releases a Plan step whose done-when fails
+  (`workflow-tick` step 5), so a failed plan check gives the slot back. The
+  same run's next `wf next` follows FLOW-05 order: the item takes its Plan
+  step up again, unless a higher-ranked altering feature is waiting for a
+  slot, which then takes it and leaves the first with a part-written plan on
+  its branch. A run that dies keeps the slot instead (the expired claim).
 - **A Plan step waits for a slot** when its feature declares `true`, holds no
   slot, and the features holding one number the limit or more. `wf next`
   then does not offer it to the cloud and reports
-  `an alters_relationships slot (limit 3), held by a, b, c (FLOW-05)`.
+  `an alters_relationships slot (limit 3), held by a, b, c (FLOW-05)`. With
+  a written limit below 1 the reason names the value and no holders:
+  `limits.alters_relationships 0 is below 1 (FLOW-05)`.
 
 Nothing else waits. A feature past Plan holds a slot by definition, so the
 old tests on later steps (`st.Phase >= 2 && f.Phase < 6`) go. Human and host
 steps never waited for the slot and still do not: a design review is offered
-while every slot is held. `NextFor` (an attended run on a named item) goes
-through the same path and waits the same way.
+while every slot is held. So a Plan step whose affinity was changed from the
+template's `cloud` to a host by hand (intake allows it for a step that needs
+a native host) is not gated until `loop-parallel`'s guard; none is today.
+`NextFor` (an attended run on a named item) goes through the same path and
+waits the same way.
 
 ### In the code
 
@@ -230,9 +270,10 @@ through the same path and waits the same way.
   is a pointer), so an absent key and a written 0 differ. `altersLimit()`
   returns the value, or 1 when absent. `Validate` reports
   `config: limits.alters_relationships N is below 1` for a written value
-  below 1, and `N features hold an alters_relationships slot, limit L
-  (FLOW-05): <names>` when the holders number more than the limit. Its
-  signature does not change.
+  below 1 and then compares no holders against it. Otherwise it reports
+  `N features hold an alters_relationships slot, limit L (FLOW-05): <names>`
+  when the holders number more than the limit. Its signature does not
+  change.
 - `next.go`: `altersHolder` is replaced by `holdsAltersSlot()` on a feature
   and `altersHolders()` on the state, the list both callers use. `cloudHold`
   withholds only a Plan step, as defined above.
@@ -259,32 +300,48 @@ Limit 3 unless said. "Holders" is after this change.
 | 11 | Plan claimed, lease expired, not released | Holds (phase 2) | Holds; any cloud run may take that Plan step up again |
 | 12 | A redesign changes `true` to `false` | Slot freed | Slot freed |
 | 13 | A process item declares `true`, in Implement | Holds the slot; its `x2-implement` waits for it | Neither (a3) |
-| 14 | A written limit below 1 | `next` uses 1; `validate` reads no limit | `validate` fails on the value; `next` offers no Plan step to an altering feature |
+| 14 | A written limit below 1 | `next` uses 1; `validate` reads no limit | `validate` fails on the value alone, with no holder count; `next` offers no Plan step to an altering feature that holds no slot, and its reason names the value |
 | 15 | loop-contract, alters-slot (process, `false`) | No effect | No effect |
 
 ### More holders than the limit
 
 `wf next` then keeps every holder moving and gives no other altering feature
 its Plan step; `wf validate` fails and names the holders. Three things
-produce it, none of them `wf next`:
+produce it. A step `wf next` offers the cloud never does:
 
 - Jeff lowers the limit under the holders. As today, lower it once the
   holders number the new value or fewer.
-- A Plan step is claimed by hand with `wf claim`, which checks no limit until
-  `loop-parallel`. The skills claim only what `wf next` offers, so this takes
-  a command typed outside them; the next `wf validate` fails, and the claim
-  is released.
+- A Plan step is claimed outside the cloud's `wf next`: by hand with
+  `wf claim`, which checks no limit until `loop-parallel`, or by a host
+  session on a Plan step whose affinity was edited to that host (Decision
+  6). The next `wf validate` fails, and the claim is released.
 - A feature that already has a plan returns to Design, and the redesign
   changes `alters_relationships` from `false` to `true` while every slot is
-  held. Writing `true` makes it a holder over the limit. FLOW-05 says a
-  feature that finds it alters relationships waits for a slot, but this one
-  is already built, so which item pauses is Jeff's call. Design leaves the
-  queue's value as it was and raises a blocking question naming the holders
-  (FLOW-07); Jeff raises the limit (FLOW-20) or the item waits in Design
-  until a holder is done. No agent text is added for this case: a session
-  that writes `true` anyway is stopped by `wf validate` before its push, with
-  the holders named. It is the cost of a4 (a); under a4 (b) it cannot
-  happen.
+  held. Copying `true` into the queue file makes it a holder over the limit.
+  FLOW-05 says a feature that finds it alters relationships waits for a
+  slot, but this one has code in flight, so which item pauses is Jeff's
+  call. Nothing carries that out today. `wf-design`'s step 5 says to copy
+  the value; Design's done-when fails while queue and design differ
+  (`check/check.go`); and on a failing `wf validate` the tick is told to
+  "fix what the agent wrote into the queue file" (`workflow-tick` step 5),
+  where the one edit that passes is writing `false` back, after which
+  nothing compares the queue with the design again. So this PR adds one
+  sentence to `.claude/agents/wf-design.md`, at the end of step 5:
+
+  > On a return (FLOW-06), when the feature has a done Plan step and the
+  > value changes from `false` to `true`, run `wf validate` after copying
+  > it; if it reports more features holding a slot than the limit, put the
+  > queue's value back, raise a blocking question that names the holders
+  > (FLOW-07), and leave Design unfinished: the human answers it once the
+  > limit is raised (FLOW-20) or a holder is done.
+
+  That run's `wf done` then fails on the open question, the step is
+  released, `wf validate` passes, and the tick notifies Jeff (its step 6).
+  Once he has answered, the next Design run copies `true` and finishes. This
+  is the cost of a4 (a); under a4 (b) the state cannot arise and the sentence
+  is not added. One hole stays: a session that writes `false` back instead
+  passes every later gate. Closing it means comparing queue and design after
+  Design in `tools/workflow/check/`, which this item does not change.
 
 ### The rule text stays
 
@@ -310,14 +367,38 @@ The code is being made to match the rule on three points: the limit is the
 config value; the counted items are features; and a feature waiting at the
 end of Design is waiting *for* a slot, so it cannot be the one holding it.
 The rule does not say when a slot is given back; "until the item is done" is
-what the code already does, and a4 settles the return to Design. Under a4 (a)
-a holder that has returned to Design is counted while it is in Design again,
-which reads FLOW-20's "features past Design" as past their first Design; that
-reading is confirmed with a4. `loop-parallel`
-rewrites FLOW-05's limits and removes FLOW-20's Limit bullet, and writes this
-definition into the rule then. `rule_changes` is empty. If the review picks
-a3 (b), FLOW-05's first sentence needs rewording and this design returns
-with that entry.
+what the code already does, and a4 settles the return to Design.
+
+FLOW-20's bullet matches only as read, and the reading is this design's.
+"Features past Design", taken by phase, is every feature whose `f1-design`
+is done (FLOW-03 puts it in phase 2 then, its review pending or not). That
+is what the code counts today and what makes items hold each other. This
+design reads the words, in both directions, as the features whose Plan step
+is claimed or done:
+
+- A feature in phase 2 that waits for its review or for a slot is not
+  counted. More such features than the limit is then a valid state: case 6
+  has four past Design at limit 3 and `wf validate` passes. FLOW-05's last
+  sentence needs this (the feature that waits cannot be the one counted), and
+  FLOW-02 calls the counted features those "in flight".
+- A holder that has returned to Design is counted while it is in Design
+  again (a4 (a)).
+
+The reading is written into a1 (a) and a4 (a), so the review confirms it or
+not. The heavier alternative is a `rule_changes` entry that amends the bullet
+(`docs/development/process.md`) to:
+
+> **Limit.** FLOW-05's limit counts the features that hold an
+> `alters_relationships` slot, each from the claim of its Plan step until it
+> is done, and is the value the human sets in the workflow branch's
+> `config.yaml`, which may be above 1. The limit of 5 features in progress
+> stands.
+
+It is not proposed, because `loop-parallel` rewrites FLOW-05's limits and
+removes this bullet, and writes the definition into the rule then.
+`rule_changes` is empty. If the review wants the words changed now, or picks
+a3 (b), which needs FLOW-05's first sentence reworded, the entry is declared
+in the review's sitting and approved by name there (FLOW-14, FLOW-19).
 
 ### What `loop-parallel` changes later
 
@@ -341,7 +422,9 @@ Three things change around it:
   slot.
 - No `wf new -hold` (`loop-contract` a11).
 - No native push hardening (it goes with `loop-native-lead`).
-- No change to a rule, a skill or an agent definition.
+- No change to a rule or a skill. One agent definition gains one sentence
+  (a4), and nothing new compares the queue's `alters_relationships` with the
+  design after Design's done-when.
 
 ## Defaults and overrides
 
@@ -364,13 +447,24 @@ None: no driver, seam or user-facing surface changes.
   `Back`, never by setting `Phase` by hand, and assert `Next` and `Validate`
   together:
   - `TestAltersSlotHeldFromPlanClaim`: finished Design holds nothing; the
-    claim holds; `Release` gives it back; Plan done holds; the item done
-    frees it (cases 2, 7).
+    claim holds; `Release` gives it back, and a higher-ranked waiting feature
+    is then offered its Plan step first; Plan done holds; the item done frees
+    it (cases 2, 7).
   - `TestAltersSlotNoMutualHold`: cases 4, 5 and 6, and a holder is never
     refused.
   - `TestAltersSlotLimit`: absent, 1 and 3, with holders from none to one
-    over the limit (cases 8, 14, and "More holders than the limit").
-  - `TestAltersSlotAcrossReturns`: cases 9, 10 and 12.
+    over the limit (case 8 and "More holders than the limit"); a written 0
+    and -2 give the one config error, no holder count, and a `Next` reason
+    that names the value (case 14).
+  - `TestAltersSlotAcrossReturns`: cases 9, 10 and 12, and the flip: a
+    feature with a done Plan step whose value becomes `true` while every slot
+    is held is a holder over the limit, `Validate` names every holder, each
+    holder's next step is still offered, and no other altering feature's Plan
+    step is.
+  - `TestAltersSlotCloudOnly`: human and host steps are offered while every
+    slot is held: a design review, and a Plan step whose affinity was set to
+    a host, which is offered to that host and, once claimed, fails `Validate`
+    (the gap in Decision 6).
   - `TestAltersSlotExpiredClaim`: case 11.
   - `TestAltersSlotSkipsProcessItems`: case 13; it replaces the last block of
     `TestLimitSkipsProcessItems`, which asserts the opposite today.
@@ -383,6 +477,8 @@ None: no driver, seam or user-facing surface changes.
   in the PR description.
 - **a2:** `tools/workflow/flow18-check.sh` passes; both files parse as JSON;
   `git diff ac8b41a -- .claude/settings.json .entire/settings.json` is empty.
+- **a4:** the sentence in `wf-design.md` is the one approved above, word for
+  word (the PR's diff).
 - **`make lint`**, and `make enforcement` (a no-op: neither `tools/tier1/`
   nor `tools/workflow/check/` changes).
 - **Native validation:** none, and no tracked gap (FLOW-09). Nothing here
@@ -399,15 +495,18 @@ A process item has no Plan phase; this is the work of `x2-implement`.
 3. `phases.go`, `next.go`: `IsPlan`, `holdsAltersSlot`, `altersHolders`, the
    new test in `cloudHold`; remove `altersHolder`; bring `Next`'s comment up
    to date (FLOW-05).
-4. If a2 stands: a separate commit that takes `.claude/settings.json` and
+4. If a4 (a) stands: the sentence at the end of step 5 of
+   `.claude/agents/wf-design.md`, as approved (FLOW-06, FLOW-07, FLOW-14).
+5. If a2 stands: a separate commit that takes `.claude/settings.json` and
    `.entire/settings.json` as `ac8b41a` has them (FLOW-14, FLOW-18).
-5. `make test`, `make lint`, `flow18-check.sh`, and the live-queue comparison.
-6. Archive this design with its summary and open the PR (FLOW-12).
+6. `make test`, `make lint`, `flow18-check.sh`, and the live-queue comparison.
+7. Archive this design with its summary and open the PR (FLOW-12).
 
 Files the PR changes: `tools/workflow/queue/queue.go`, `next.go`, `phases.go`
-and `queue_test.go`; `docs/design/alters-slot.md`; and, with a2,
-`.claude/settings.json` and `.entire/settings.json`. Nothing under
-`docs/development/`, `tools/workflow/cmd/` or `tools/workflow/check/`.
+and `queue_test.go`; `docs/design/alters-slot.md`; with a4 (a),
+`.claude/agents/wf-design.md`; and, with a2, `.claude/settings.json` and
+`.entire/settings.json`. Nothing under `docs/development/`,
+`tools/workflow/cmd/` or `tools/workflow/check/`.
 
 After the merge, at `x4-close`, on the `workflow` branch (outside the PR):
 
@@ -428,7 +527,7 @@ After the merge, at `x4-close`, on the `workflow` branch (outside the PR):
 - `dist/wf`: each cloud run and each scheduled native session rebuilds it
   from `main` as it starts; an attended session rebuilds it before its next
   `wf` command. Until then an older `wf` differs only in the states of cases
-  4 to 8.
+  4 to 9, 13 and 14.
 
 ## Design review
 
