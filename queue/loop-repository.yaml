@@ -1,10 +1,7 @@
 feature: loop-repository
-title: 'Loop repository: move the queue, wf, the skills and the agents to their own repository and make wf work across repositories, with holds per component (componentization P1, second part)'
-priority: 60
+title: 'Work in a second repository from the one queue: wf''s gates and checks, branches and PRs per repository, and the native side (componentization P1, last part). The move to a loop repository is deferred.'
+priority: 61
 kind: process
-holds:
-  - cloud
-  - host:*
 status: queued
 round: process
 phase: 1
@@ -32,3 +29,9 @@ history:
   - at: 2026-11-12T23:22:53Z
     by: human/jeff
     event: queued at priority 60 (intake)
+  - at: 2026-11-14T18:34:56Z
+    by: human/jeff
+    event: 'priority 60 -> 61 (renumbered by wf new: alters-slot queued at 59)'
+  - at: 2026-11-14T18:55:00Z
+    by: human/jeff
+    event: 'retitled and holds removed (was: cloud, host:*), on Jeff''s word in the attended session of 2026-11-14: one queue for every repository in place of a queue per component, and the loop repository of the umbrella''s Decision 13 deferred. As queued, a claim of x1-design would have stopped every worker. The item''s scope is step 5 of the loop change proposal; its design decides whether it holds anything. The slug stays.'

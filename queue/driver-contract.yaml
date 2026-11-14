@@ -1,6 +1,6 @@
 feature: driver-contract
 title: 'Complete the driver contract in-tree, including the relay source: cmd/warden stops naming drivers and drivertest exists (componentization K1)'
-priority: 62
+priority: 63
 status: in_progress
 round: feature
 phase: 1
@@ -218,3 +218,6 @@ history:
   - at: 2026-11-14T17:45:41Z
     by: cloud/20261112T230554Z
     event: claimed f1-design-r2 until 2026-11-14T19:45:41Z
+  - at: 2026-11-14T18:34:56Z
+    by: human/jeff
+    event: 'priority 62 -> 63 (renumbered by wf new: alters-slot queued at 59)'

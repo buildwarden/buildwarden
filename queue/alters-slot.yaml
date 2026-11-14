@@ -1,0 +1,37 @@
+feature: alters-slot
+title: wf next and wf validate count the items that alter relationships against limits.alters_relationships (the first step of the one-queue loop; lifted from loop-contract a13)
+priority: 59
+kind: process
+status: in_progress
+round: process
+phase: 1
+design: docs/design/alters-slot.md
+branch: feat/alters-slot
+alters_relationships: null
+source: 'The loop change proposal of 2026-11-14, step 1 (one queue, parallel where items do not collide, native-led items), which Jeff approved as the direction in the attended session (''Yes, these all read as the direction I''m looking for''). Lifted out of loop-contract''s a13. wf next''s altersHolder allows one feature past Design with alters_relationships true whatever config.yaml''s limit says (3 since FLOW-20), so seam-specs and driver-contract stop each other; wf validate reads the limit differently. A program item (FLOW-20): its design lists componentization.md in related. Holds nothing.'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: human/jeff
+      expires: 2026-11-14T20:35:24.914349832Z
+budget:
+  estimate:
+    runs: 1
+    steps: 6
+  spent:
+    runs: 0
+    steps: 1
+questions: []
+history:
+  - at: 2026-11-14T18:34:56Z
+    by: human/jeff
+    event: queued at priority 59 (intake)
+  - at: 2026-11-14T18:35:24Z
+    by: human/jeff
+    event: started (FLOW-05)
+  - at: 2026-11-14T18:35:24Z
+    by: human/jeff
+    event: claimed x1-design until 2026-11-14T20:35:24Z
