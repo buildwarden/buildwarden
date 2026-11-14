@@ -1767,8 +1767,8 @@ the pin.
 Four amendments. Each is made in Implement, after the review approves it by
 name (FLOW-14). All four are this project's rules. None is a loop rule: a
 feature's design may not declare a change to a LOOP, FLOW or LINT rule
-(`loop-contract` a10), so what this item would want of FLOW-04 it asks as
-a question (a15) and does not declare. `driver-contract` amends two of the
+(`loop-contract` a10), so what this item would want of FLOW-04 and
+FLOW-08 it asks as a question (a15) and does not declare. `driver-contract` amends two of the
 same rules; **With `driver-contract`**, at the end of this section, says
 which sentences each design owns.
 
@@ -2233,10 +2233,11 @@ its branch `feat/seam-specs`; **K** is this repository, on this branch.
     repository is the one the pull request would merge, and the head
     Review reads here has a green run. A later commit to the specs branch
     in Implement repeats this task.
-13. (Human, `f6-release-specs`, after Review) Jeff merges the specs pull
-    request. The tag `v0.1.0` is then pushed and the pin moved here with
-    `make pin-specs REF=v0.1.0`, by him or by the attended session on his
-    word (a15).
+13. (Human, `f6-release-specs`, after Review) The tier-2 MUST findings
+    that are in the specs repository are listed in the specs pull
+    request's body, and Jeff merges it (FLOW-08). The tag `v0.1.0` is then
+    pushed and the pin moved here with `make pin-specs REF=v0.1.0`, by him
+    or by the attended session on his word (a15).
 
 After the merge, filed through intake as a program item: seam 4's move
 (a1).
