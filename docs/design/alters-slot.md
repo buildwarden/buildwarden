@@ -86,9 +86,10 @@ driver-contract, until someone edits the queue by hand.
   every in-progress item that declares it, process items included". The rule
   text the same PR wrote says "of those features". This design follows the
   rule text (Decision 4, question a3).
-- **`next-skips-merge-wait`** (#106): `Next` and `Validate` are pure functions
-  of the queue state; `Summary` reads no clock. Kept: what holds a slot is
-  read from the item's own steps, with no clock and no git.
+- **`next-skips-merge-wait`** (#106) kept `wf next` free of git: it reads the
+  queue state, and the clock only for leases. `Validate` and `Summary` read no
+  clock. Kept: what holds a slot is read from the item's own steps, with no
+  clock and no git.
 - **`componentization`** (#117): FLOW-20's Limit bullet and the value 3 (its
   a5). The loop change proposal of 2026-11-14 (section 3, "The three limits")
   gave the principle used here: a limit counts only items that already hold
@@ -106,8 +107,8 @@ driver-contract, until someone edits the queue by hand.
      config* (a13 as drafted). Items that finish Design together hold each
      other as soon as there are more of them than the limit.
    - *Rejected: from Implement.* Any number of items could plan at once, and
-     the ones over the limit would then wait with a plan going stale. The
-     wait would also move from a claim to a phase transition.
+     the ones over the limit would then wait with a finished plan going
+     stale.
    - *Rejected: a `slot` field `wf claim` writes.* New schema for what the
      steps already say, and `loop-parallel` reworks this function next.
    - *Rejected: only a live lease holds.* `Validate` would need a clock, and
@@ -137,8 +138,9 @@ driver-contract, until someone edits the queue by hand.
      lower priority takes it during the returned item's review, and the
      half-built item then waits until some holder is merged and closed.
 6. **The wait stays where it is: for the cloud, in `cloudHold`.** `wf claim`
-   is not changed. A Plan claim made by hand past the limit is caught by
-   `wf validate` before the push.
+   is not changed. Every claim the skills make follows `wf next`. A Plan
+   claim made by hand past the limit fails the next `wf validate`, which
+   names the holders.
    - *Rejected: a guard in `wf claim` now.* `loop-parallel` adds one guard for
      `wf next` and `wf claim` covering all three limits.
 7. **No rule text changes.** The code is made to match FLOW-05 and FLOW-20
@@ -159,8 +161,9 @@ None.
   - (b) From the end of Design, as today, with only the limit fixed.
   - (c) From Implement (Plan done).
 
-  Recommended: (a). It is the only one in which no state has two items
-  holding each other (Decision 1).
+  Recommended: (a). Under (b) items still hold each other once more of them
+  finish Design than the limit. Under (c) nothing bounds how many plan at
+  once, and the ones over the limit wait with a finished plan (Decision 1).
 - **a2. The refreshed Entire hook configuration** parked as commit `ac8b41a`
   on `claude/intelligent-ride-54y60a`: `.claude/settings.json` (the
   session-start hook also reports an `entire` on PATH that fails to run) and
@@ -268,16 +271,20 @@ produce it, none of them `wf next`:
 - Jeff lowers the limit under the holders. As today, lower it once the
   holders number the new value or fewer.
 - A Plan step is claimed by hand with `wf claim`, which checks no limit until
-  `loop-parallel`. `wf validate` fails before the push and the claim is
-  released.
+  `loop-parallel`. The skills claim only what `wf next` offers, so this takes
+  a command typed outside them; the next `wf validate` fails, and the claim
+  is released.
 - A feature that already has a plan returns to Design, and the redesign
   changes `alters_relationships` from `false` to `true` while every slot is
-  held. Writing `true` makes it a holder over the limit. FLOW-05 says such a
-  feature waits, and this one cannot wait with its code already built, so it
-  is Jeff's call: Design leaves the queue's value as it was and raises a
-  blocking question naming the holders (FLOW-07); Jeff raises the limit
-  (FLOW-20) or the item waits in Design. No agent text is added for this
-  case. It is the cost of a4 (a); under a4 (b) it cannot happen.
+  held. Writing `true` makes it a holder over the limit. FLOW-05 says a
+  feature that finds it alters relationships waits for a slot, but this one
+  is already built, so which item pauses is Jeff's call. Design leaves the
+  queue's value as it was and raises a blocking question naming the holders
+  (FLOW-07); Jeff raises the limit (FLOW-20) or the item waits in Design
+  until a holder is done. No agent text is added for this case: a session
+  that writes `true` anyway is stopped by `wf validate` before its push, with
+  the holders named. It is the cost of a4 (a); under a4 (b) it cannot
+  happen.
 
 ### The rule text stays
 
@@ -303,7 +310,10 @@ The code is being made to match the rule on three points: the limit is the
 config value; the counted items are features; and a feature waiting at the
 end of Design is waiting *for* a slot, so it cannot be the one holding it.
 The rule does not say when a slot is given back; "until the item is done" is
-what the code already does, and a4 settles the return to Design. `loop-parallel`
+what the code already does, and a4 settles the return to Design. Under a4 (a)
+a holder that has returned to Design is counted while it is in Design again,
+which reads FLOW-20's "features past Design" as past their first Design; that
+reading is confirmed with a4. `loop-parallel`
 rewrites FLOW-05's limits and removes FLOW-20's Limit bullet, and writes this
 definition into the rule then. `rule_changes` is empty. If the review picks
 a3 (b), FLOW-05's first sentence needs rewording and this design returns
@@ -415,6 +425,10 @@ After the merge, at `x4-close`, on the `workflow` branch (outside the PR):
   `limits.alters_relationships`. Process items neither hold a slot nor wait
   for one."
 - `config.yaml`: the same comment change. The value stays 3.
+- `dist/wf`: each cloud run and each scheduled native session rebuilds it
+  from `main` as it starts; an attended session rebuilds it before its next
+  `wf` command. Until then an older `wf` differs only in the states of cases
+  4 to 8.
 
 ## Design review
 
