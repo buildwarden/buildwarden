@@ -269,7 +269,7 @@ plugin binaries. What each contributed:
 | kubectl plugins | A `list` that shows the resolved path and every shadowed copy |
 | Docker CLI plugins | One mandatory metadata command; end of input on a host-held channel as the cancel and host-death signal. Not taken: running every candidate's metadata command to draw help |
 | CNI | A supported-versions list the host picks from; an error object with reserved codes; teardown that succeeds when nothing exists and may be repeated; a garbage-collection verb given the live set |
-| containerd shim v2 | A separate cleanup command, given only the ID, that the host runs when it cannot reach the process that held the environment |
+| containerd shim v2 | A separate cleanup command that the host runs when it cannot reach the process that held the environment. Not taken: that it is given only the ID (**The build record**) |
 | csi-sanity, OCI runtime-tools | A suite run against a binary, whose skips come from what the binary declares, so "declared but broken" and "implemented but undeclared" both fail |
 | go-plugin, Terraform | Not taken: gRPC (it ends "any language, no library"). Its known failure, a stray line on stdout breaking the handshake, is a suite check here |
 
@@ -1156,6 +1156,12 @@ lock and after the same comparison. The convention (the directory, the
 name, who holds the lock, and that `keep_ids` is the IDs of the held
 locks) is part of the specification, so that the suite and any other
 orchestrator follow it.
+
+The lock is `warden`'s alone. Handing the locked descriptor to the `run`
+child, so that the lock stayed held until both processes were gone, was
+considered and not taken: Windows has no equivalent, so a `reap` has to
+be safe beside a driver that is still tearing the same build down in any
+case, and the contract requires that of it.
 
 **The sequence.** The actor is named at each step.
 
