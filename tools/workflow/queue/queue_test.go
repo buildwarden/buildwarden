@@ -456,7 +456,8 @@ func TestPutOnHoldWrites(t *testing.T) {
 			t.Errorf("%q: open blocking %+v, want q1 with the reason", kind, q)
 		}
 		if len(f.Steps) != 2 || f.Steps[0].ID != ids[0] ||
-			f.Steps[0].Affinity != "human" || f.Steps[1].ID != ids[1] ||
+			f.Steps[0].Affinity != "human" || f.Steps[0].Phase != f.Phase ||
+			f.Steps[1].ID != ids[1] ||
 			!slices.Equal(f.Steps[1].Needs, ids[:1]) {
 			t.Errorf("%q: steps %+v, want %v", kind, f.Steps, ids)
 		}
@@ -486,6 +487,14 @@ func TestHeldItemWaitsForItsAnswer(t *testing.T) {
 		if got := next(t, s, "human/jeff"); got != "held "+f.Steps[0].ID {
 			t.Errorf("%q: human pick = %s, want only the answer step", kind, got)
 		}
+		// With the answer step leased to someone else, only the needs link
+		// keeps a human from the process item's own first step.
+		exp := now.Add(time.Hour)
+		f.Steps[0].Lease = Lease{ClaimedBy: "human/other", Expires: &exp}
+		if got := next(t, s, "human/jeff"); got != "none" {
+			t.Errorf("%q: human pick = %s past a leased answer step", kind, got)
+		}
+		f.Steps[0].Lease = Lease{}
 
 		// What wf answer does: the question answered, its step complete.
 		f.Questions[0].Status = "answered"
