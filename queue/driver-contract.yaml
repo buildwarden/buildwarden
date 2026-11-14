@@ -3,7 +3,7 @@ title: 'Complete the driver contract in-tree, including the relay source: cmd/wa
 priority: 62
 status: in_progress
 round: feature
-phase: 2
+phase: 1
 design: docs/design/driver-contract.md
 branch: feat/driver-contract
 alters_relationships: true
@@ -56,29 +56,20 @@ steps:
       claimed_by: ""
       expires: null
     note: 'Blocking native validation (design Validation plan, a7; FLOW-09), on the branch after consolidation: (1) warden doctor prints container runtime: finch and ok. (2) a default build and a warden shell session work; the shell''s exit code is passed through. (3) [runtime] relay_image = "dev" builds the relay from source; WARDEN_IMAGE=<ref> pulls that image; an unpullable reference fails without trying the default. (4) warden clean removes the containers and network of a killed build and leaves a running build''s. (5) WARDEN_CTR_CLI and --runtime select the runtime; a missing one gives the fixable error. (6) make drivertest DRIVER=container (drivertest.Lifecycle) passes on finch. Evidence under native/macos-finch/<date>/.'
-  - id: f2-design-review
-    phase: 2
-    affinity: human
-    status: pending
-    lease:
-      claimed_by: ""
-      expires: null
-  - id: f2-plan
-    phase: 2
+  - id: f1-design-r2
+    phase: 1
     affinity: cloud
     status: pending
-    needs:
-      - f2-design-review
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261112T230554Z
+      expires: 2026-11-14T19:45:41.332149318Z
 budget:
   estimate:
     runs: 5
     steps: 30
   spent:
     runs: 1
-    steps: 2
+    steps: 4
 questions:
   - id: a1
     kind: assumed
@@ -206,3 +197,24 @@ history:
   - at: 2026-11-13T02:11:31Z
     by: cloud/20261112T230554Z
     event: entered phase 2 (plan)
+  - at: 2026-11-14T17:45:27Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-14T19:45:27Z
+  - at: 2026-11-14T17:45:27Z
+    by: human/jeff
+    event: kept f6-validate-macos-vz pending for phase 6
+  - at: 2026-11-14T17:45:27Z
+    by: human/jeff
+    event: kept f6-validate-windows-hyperv pending for phase 6
+  - at: 2026-11-14T17:45:27Z
+    by: human/jeff
+    event: kept f6-validate-qemu-any pending for phase 6
+  - at: 2026-11-14T17:45:27Z
+    by: human/jeff
+    event: kept f6-validate-macos-finch pending for phase 6
+  - at: 2026-11-14T17:45:27Z
+    by: human/jeff
+    event: 'back to design: Design review 2026-11-14 (read at 48acda9): changes. Jeff wants each driver to be its own binary that warden finds as git finds a subcommand; the contract is the commands warden calls on it (primitives only: the driver creates the environment, starts the relay and wires in a collector it is given), with a conformance suite run against the binary and the kit''s library optional; the collector is pluggable (on-host by default; an existing local or remote endpoint later). Redraft on that basis; notes in the design''s Design review section.'
+  - at: 2026-11-14T17:45:41Z
+    by: cloud/20261112T230554Z
+    event: claimed f1-design-r2 until 2026-11-14T19:45:41Z
