@@ -49,6 +49,12 @@ FLOW-20.
 
    `-hold` files the item with an open blocking question `q1` that only Jeff
    answers (FLOW-20, FLOW-07); `dist/wf answer -question q1` resumes it.
+   After a `-hold`, `dist/wf status` must show the item's
+   `blocking question q1`: `wf` stops reading flags at the first word that
+   is not one, such as the second word of an unquoted value, and says
+   nothing, so a hold after it is dropped. If the line is missing, do not
+   commit (step 5), since the loop would be offered the item at once:
+   discard the uncommitted queue change and write the item again.
 
    Steps that need a native host for design or implementation get their
    affinity changed to `host:<name>` in the new file (FLOW-09).
