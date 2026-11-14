@@ -2088,7 +2088,44 @@ entry.
 
 ## Design review
 
-No review yet.
+### 2026-11-14, first sitting: changes requested before the walkthrough
+
+Read at `2889919`. Outcome: **changes**. Jeff stopped the review at its first
+question (the order of the walkthrough). No rule change was approved and no
+assumed question was answered; he gave no preference on a11, a12 or a13.
+
+His note, in full:
+
+> So I think I want to potentially redo part of the loop contract design.
+> Overall since I only have a limited amount of AI capacity under specific
+> areas, instead of trying to split the queues apart which will make it harder
+> to track, instead I think I want a single queue but which allows for more
+> parallelization for any features that are nearly or completely non-colliding,
+> i.e. Hyper-V driver feature versus adding a new supported release target to
+> the relay. I'd like that to potentially allow for native loops to then be
+> able to take features that will be reliant on local research/testing to be
+> able to do so all the way from the initial phases. That may require a
+> redesign of the process, so I'd definitely want to see how this changes
+> before going further along these lines.
+
+What it asks of this design, as read by the session that held the sitting:
+
+1. **One queue, not one per component.** This departs from the umbrella's
+   Decision 2 ("a repository and a queue per component") and from P1's "holds
+   per component", and reaches LOOP-04 to LOOP-09 here, a1, a4, a5, a15, a17,
+   and the hand-off to `loop-repository`.
+2. **More items in parallel where they do not collide**, in place of
+   FLOW-05's fixed limits (five in progress, one item that alters
+   relationships past Design, one open feature PR). His example: a Hyper-V
+   driver feature beside a new release target for the relay.
+3. **A native loop may take an item from its first phase** when the work
+   rests on local research or testing. Today a host worker takes only
+   `f6-validate-<host>` steps and native gaps (FLOW-04, FLOW-09).
+4. **He sees how the process changes before the design goes further.** The
+   next revision is put to him as a change proposal first, and the design
+   text follows what he settles.
+
+The design below is still the text as read at `2889919`.
 
 ## Consolidation
 
