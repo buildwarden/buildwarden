@@ -220,9 +220,11 @@ loop there (Decision 19, a19). Until then the contract is in
 one that departs from the draft, or from the text Jeff read at `2889919`, is
 also a question, so the review confirms it: the larger departures each have
 their own (a4 to a8, a10, a14, a16 to a21), and the smaller ones are asked
-together in a15. Decisions 17 to 20 are new since `2889919`. Decisions 7
-and 19 are rewritten for Jeff's answers to a5 and a19 at the second
-sitting; what those answers leave open is a23 and a22.
+together in a15. Decisions 17 to 20 are new since `2889919`. Decisions 7,
+12 and 19 are rewritten for Jeff's answers to a5, a15 (part b) and a19 at
+the second sitting. What the answers to a5 and a19 leave open is a23 and
+a22. The answer to a15 (b) raises no question of this item's: its open
+points are `loop-native-lead`'s (hand-off, point 7).
 
 1. **The finished contract is nine rules, LOOP-01 to LOOP-09, in one
    document, with FLOW-\* and LINT-\* as its detail** (a3). The nine follow
@@ -345,12 +347,28 @@ sitting; what those answers leave open is a23 and a22.
     draft keeps concrete invariants local, and a Rust relay and a Go kit do
     not share a comment or error-wrapping rule.
 12. **The table of host names is shared loop state; schedules and
-    credentials are each machine's** (a15). The draft puts "which machines" in the
-    local column. The same two machines serve every component, a host name
-    belongs to exactly one machine (FLOW-04), and a machine runs one native
-    session at a time (`native-tick.sh` takes a lock). One `hosts.yaml`
-    beside the queue is the only way those stay true. A component's
-    profile lists the host names its work uses.
+    credentials are each machine's; who takes a step is FLOW-04's to say**
+    (a15). The draft puts "which machines" in the
+    local column. The same two machines serve every component, and a
+    machine runs one native session at a time (`native-tick.sh` takes a
+    lock). A table per component could not hold that. One `hosts.yaml`
+    beside the queue says which host names each machine serves, for work
+    in every repository. A component's profile lists the host names its
+    work uses.
+    The contract does not say which worker takes a step: LOOP-05 cites
+    FLOW-04 for that. Today FLOW-04 and `hosts.yaml` give every host name,
+    `<capability>-any` included, to exactly one machine. Jeff decided on
+    2026-11-14 (a15, part b) that work any machine with a capability can
+    do goes to "whichever loop supports it and next can pick it up, placing
+    a refreshable 20-hour lease while actively working on it". That
+    changes FLOW-04, the host table and the lease, and `loop-native-lead`
+    makes the change (hand-off, point 7). *Rejected:* the one-machine rule
+    for `<capability>-any` stated in LOOP-05, as read at `04cc9bb`. It is
+    the rule Jeff changed. *Rejected:* his rule stated in LOOP-05 now.
+    `wf validate` rejects a host name that two machines serve and a lease
+    is 120 minutes, so `main` would contradict the contract on merge (the
+    umbrella's Decision 18), and FLOW-04 would be stated in two places
+    (FLOW-14).
 13. **The line between this item and P1's later items** (a1): this item
     changes what the rules say, and says only what is true of the loop as
     it runs today. `loop-parallel`, `loop-native-lead` and
@@ -679,8 +697,11 @@ Against the text read at `2889919`:
        every repository; a component's profile lists the host names its
        work uses (Decision 12). *(reworded: "shared by every component")*
      - (b) *Any-OS work.* Draft: it "goes to whichever taker is free".
-       Contract: a `<capability>-any` host name belongs to one machine, as
-       `hosts.yaml` gives it today (FLOW-04).
+       Contract, as read at `04cc9bb`: a `<capability>-any` host name
+       belongs to one machine, as `hosts.yaml` gives it today (FLOW-04).
+       *(Changed by Jeff's answer, below. The contract now says that such
+       work carries `<capability>-any` and cites FLOW-04 for who takes
+       it.)*
      - (c) *Relay routing.* Draft, section 5: a routing list for the relay
        fork. Contract: no routing in the rule text; routing is the host
        table. The draft sends QEMU work to the Windows desktop, and
@@ -704,6 +725,24 @@ Against the text read at `2889919`:
        copying". Contract: the reference is to the contract's trunk and
        cannot be pinned to a version.
   2. The draft's wording for the ones Jeff names.
+
+  **Answered 2026-11-14, second sitting: all but (b).** (a), (c), (d),
+  (e), (f) and (g) stand as proposed. On (b), Jeff: "All except 'b' are
+  good. B should be changed to whichever loop supports it and next can
+  pick it up, placing a refreshable 20-hour lease while actively working
+  on it". So work that any machine with a capability can do goes to
+  whichever worker has the capability and next takes steps, and that
+  worker holds it under a 20-hour lease that it can refresh while it is
+  actively working. It does not belong to one machine. Today FLOW-04,
+  `hosts.yaml` and `wf validate` give each host name to exactly one
+  machine, and a lease is 120 minutes for every claim, so his rule needs
+  FLOW-04, the host table and the lease to change. Under a1 those are a
+  later item's, and `loop-native-lead` is the one that changes FLOW-04,
+  the host names and the wrapper. Folded in: LOOP-05 no longer states the
+  one-machine rule and cites FLOW-04 for who takes a step; Decision 12;
+  row 17 of the table of disagreements; and the hand-off, which records
+  his rule as decided with the points that item settles (point 7). FLOW-04
+  stands as it is until that item lands.
 - **a16. How a component's invariants are written, and where prefixes are
   registered.**
   1. *(recommended)* As rules in LINT-01's format, under prefixes the
@@ -1122,7 +1161,7 @@ report over the release diff.
 | 14 | A change to the contract is gated on Jeff only. | Both of FLOW-14's routes end in Jeff's design review and merge, but the second lets a feature's design carry a rule change. | Loop rules: process items only (LOOP-09). | a10 |
 | 15 | Section 7 names the relay's consumable by "the provisioning protocol, the connector protocol". | The decisions table's rows 9 and 11, the same day: no new protocol; the existing claim and collector protocols (GLOBAL-08). | The contract names no protocol. A consumable lists the specifications it implements (LOOP-07). | none (decided) |
 | 16 | Section 3, class 2: "every behaviour in the spec has a test; every test maps to a spec section". | No mapping of specification sections to tests (the blanks table, first row). `seam-specs` proposes one for the specs repository. | Kept as class 2 for a specification that has a conformance suite; not required of one without (Decision 16, LOOP-03). | a14 |
-| 17 | Section 5: "any-OS work goes to whichever taker is free". | A `<capability>-any` host name belongs to exactly one machine (`hosts.yaml`, FLOW-04): `qemu-any` to `macbook`, `container-any` to `windows-desktop`. | FLOW-04 stands (LOOP-05). | a15 (b) |
+| 17 | Section 5: "any-OS work goes to whichever taker is free". | A `<capability>-any` host name belongs to exactly one machine (`hosts.yaml`, FLOW-04): `qemu-any` to `macbook`, `container-any` to `windows-desktop`. `wf validate` rejects a name that two machines serve. A lease is 120 minutes for every claim (`config.yaml`), and nothing refreshes one short of claiming the step again. | Jeff, 2026-11-14: it goes to "whichever loop supports it and next can pick it up, placing a refreshable 20-hour lease while actively working on it". That is the draft's sentence, with a lease. LOOP-05 says such work carries `<capability>-any` and cites FLOW-04 for who takes a step; it states no one-machine rule. FLOW-04, the host table and the lease change in `loop-native-lead` (hand-off, point 7), and FLOW-04 stands as it is until then. | a15 (b) |
 | 18 | Section 1, local column: change reporting, "where it is posted"; reconciliation, "the dates and owners". | Reports are on the `workflow` branch with the queue, which is also the draft's own decided point. A reconciliation has no date; an item has a priority. | Nothing about reporting is local; for reconciliation the local part is what the component releases and consumes (LOOP-01). | a15 (d) |
 | 19 | Section 8, steps 1 and 2: link from "the component's README and loop configuration"; fill the local column "in the component's own loop configuration". | No file is called the loop configuration. Agents start from `AGENTS.md`; `config.yaml` holds budgets and limits for the whole loop. | The README and the agent context file link to the contract; the profile is the component's loop configuration (LOOP-08). | a15 (f) |
 | 20 | "A component adopts the contract by reference, never by copying." | Nothing yet adopts. | By reference to the contract's trunk, which cannot be pinned (LOOP-08). | a15 (g) |
@@ -1537,8 +1576,9 @@ for its task 10 to take up, and the third for its task 11 and its a17:
 
 - *Routing.* It takes the relay's routing from the draft's section 5
   (Hyper-V, Windows and Linux-host work to the Windows desktop). Under
-  LOOP-05 a profile names host names and the host table gives each to a
-  machine; `hosts.yaml` has `qemu-any` on the MacBook (a15, c).
+  LOOP-05 a profile names host names, and the host table, not the
+  profile, says which machine serves a name; `hosts.yaml` has `qemu-any`
+  on the MacBook (a15, c).
 - *Registering a prefix.* It expects a prefix table in the contract, and a
   change through this repository's process to register the relay's. This
   design no longer has that table: the relay names its prefix in its own
@@ -1592,7 +1632,7 @@ FLOW rules the later items change and does not write their changes.
 |---|---|---|
 | `alters-slot` | Filed, in Design, holds nothing; its design is on `feat/alters-slot` at `ed99489`, not yet reviewed; meant to merge first | a13 as read at `2889919`: the finding, its options, the task, the tests and the row of **Defaults and overrides**. a12's two files, which its design proposes to carry (its Decision 8 and a2). Nothing in the contract depends on it. |
 | `loop-parallel` | Not yet filed | LOOP-04 as the frame its FLOW-05 change fits: the contract says that FLOW-05 orders the queue, says what may run side by side and says what a hold names, and nothing more. LOOP-04's and LOOP-05's requirement that an item names its repositories, which the queue file does not yet record. LOOP-06's one digest. FLOW-20's text and the umbrella's a5, as far as its design changes what they say. The FLOW rules the change proposal lists for it are FLOW-02, -03, -05, -10, -15, -19 and -20; its design settles its own list. Jeff's decision that a reconciliation item ranks with the fixes, for its FLOW-05 change to state (point 7; a23). Point 5 below. |
-| `loop-native-lead` | Not yet filed; after `main` is protected | LOOP-05 as the frame for its changes: a worker is scheduled and bounded, routed by the one host table, identified on every claim, and set up by the owner. The FLOW rules the change proposal lists for it are FLOW-04, -09, -13, -16 and -18; its design settles its own list. The two open points of point 5 that concern an unattended worker's start. |
+| `loop-native-lead` | Not yet filed; after `main` is protected | LOOP-05 as the frame for its changes: a worker is scheduled and bounded, routed by the one host table, identified on every claim, and set up by the owner. The FLOW rules the change proposal lists for it are FLOW-04, -09, -13, -16 and -18; its design settles its own list. Jeff's decision on `<capability>-any` work, for its FLOW-04 change to state: whichever worker has the capability and next takes steps, under a refreshable 20-hour lease (point 7). The two open points of point 5 that concern an unattended worker's start. |
 | `loop-repository` | Queued; retitled and its `holds` removed on 2026-11-14 | The profile's term list as the specification of what `wf` stops hard-coding (point 4). LOOP-08's six steps as what the relay does to adopt, and the relay's first item through `wf`'s gates as the test that the queue works across repositories: the wave-1 gate under a22's recommended option (U12), and what P1's done-when asks for again after the move (U9). A branch and a pull request for an item in each repository it works in, and LOOP-06's branch head per repository. The native side: a second checkout and its toolchain on the native machines. What of a private repository's work is written to the public queue, digest and reports. Point 5 below. |
 | `loop-move` (a provisional name) | Not yet filed; P1's last item, after `loop-repository` (a19) | The split (point 2). The table of what moves and what stays (point 3). The links and paths the move changes (**Rule IDs, cross-references, `rules.yaml` and tier 1**). The contract's "Where things are" table, which is the only part of the contract's text the move edits (point 1). What its design settles is under point 5. The repository's own name is confirmed with Jeff right before it is created (the umbrella's a11). P1 is done when this item is (U9); whether wave 2 waits for it is a22. |
 
@@ -1741,6 +1781,45 @@ own questions, and does not ask the decision again.
   Until that item lands, FLOW-05 ranks a reconciliation item as it ranks
   any feature. None can exist before a second component releases
   something that another adopts.
+
+- **Work that any machine with a capability can do is not one machine's**
+  (a15, part b). Jeff's words: "B should be changed to whichever loop
+  supports it and next can pick it up, placing a refreshable 20-hour lease
+  while actively working on it". A step with a `<capability>-any` host
+  name goes to whichever worker has the capability and next takes steps,
+  and that worker holds it under a 20-hour lease that it can refresh
+  while it is actively working. `loop-native-lead` amends FLOW-04 to say
+  so and changes the host table and the lease to match. What is true
+  today: FLOW-04 says `hosts.yaml` "gives each host name to exactly one
+  machine"; `wf validate` rejects a name that two machines serve
+  (`validateNative`, `tools/workflow/queue/hosts.go`); `hosts.yaml` has
+  `qemu-any` on `macbook` and `container-any` on `windows-desktop`; a
+  lease is `lease_minutes`, 120, for every claim (`config.yaml`; `Claim`,
+  `queue/next.go`); an expired lease may be reclaimed (FLOW-04); and
+  there is no refresh. The holder of a live lease may claim the step
+  again, which sets a new expiry and counts one more step against the
+  item's budget. Its design settles:
+  - whether the 20-hour refreshable lease is for `<capability>-any` work
+    only, or for every claim;
+  - what "actively working" means for a refresh: what a worker does to
+    refresh, how often, and whether a refresh counts against the item's
+    budget;
+  - what happens to a lease that is not refreshed. Today a lease is
+    reclaimed only at its expiry, and at 20 hours a session that died
+    would hold its step for most of a day unless a missed refresh frees
+    it sooner;
+  - how the host table lets several machines serve one
+    `<capability>-any` name, and what `wf validate` and `wf gate` then
+    check;
+  - which workers have a capability: the machines the host table lists,
+    or the cloud worker too where it can do the work. His word is
+    "whichever loop";
+  - whether a claim then names the machine. A worker claims as
+    `host:<name>/<session>`, so two machines serving one name are told
+    apart only by the session (LOOP-05, "Identified").
+
+  LOOP-05 cites FLOW-04 for who takes a step and states no one-machine
+  rule, so it holds before that item and after it.
 
 ### Amendments to the umbrella design
 
@@ -1897,6 +1976,10 @@ review confirms it under.
 
 The row for an unset `limits.alters_relationships`, here at `2889919`,
 has left with a13 for `alters-slot`.
+
+The 20-hour lease of Jeff's answer to a15 (b) is not a default of this
+item. `lease_minutes` stays 120, for every claim, until
+`loop-native-lead` changes it (hand-off, point 7).
 
 **Fallbacks.** None is added and none is dropped. The reading this design
 dropped at `2889919`, `wf validate` treating an unset
@@ -2174,11 +2257,11 @@ running loop already has the rule, they cite it.
 > - **Scheduled and bounded.** An unattended worker runs on a schedule and
 >   within a budget (FLOW-13). A native machine's scheduled session starts
 >   an agent only when the machine has work (FLOW-09).
-> - **Routed by affinity.** Work that needs a particular machine carries a
->   host name. One table, kept beside the queue, gives each host name to
->   exactly one machine (FLOW-04), for work in every repository. Work that
->   any machine with a capability can do carries `<capability>-any`, which
->   the table also gives to one machine.
+> - **Routed by affinity.** Work that needs native hardware carries a
+>   host name. One table, kept beside the queue, says which host names
+>   each machine serves, for work in every repository. Work that any
+>   machine with a capability can do carries `<capability>-any`. FLOW-04
+>   says which worker may take a step.
 > - **Identified.** Every claim records the worker (its kind, its host
 >   name and its session) and the item, and through the item the
 >   repositories the work is in (LOOP-04).
@@ -2389,6 +2472,13 @@ open items, `seam-specs` names a second repository in its design and the
 others name none. A claim records the item, and the item's design gives
 the repositories; every branch head a step leaves is in this repository
 until `loop-repository` gives an item a branch in another.
+
+LOOP-05's bullet on routing holds with FLOW-04 as it stands. `hosts.yaml`
+lists the host names each machine serves, and FLOW-04 says who may take a
+step: today it gives every host name, `<capability>-any` included, to
+exactly one machine. The bullet stays true when `loop-native-lead` changes
+FLOW-04 for Jeff's answer to a15 (b), because LOOP-05 does not repeat
+FLOW-04's answer.
 
 One piece of work is outside the queue on the day this merges: the relay's
 M1a, which its design plans to work by hand, in attended or directly
