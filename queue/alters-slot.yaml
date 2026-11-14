@@ -4,12 +4,15 @@ priority: 59
 kind: process
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/alters-slot.md
 branch: feat/alters-slot
 alters_relationships: false
 design_review: required
 source: 'The loop change proposal of 2026-11-14, step 1 (one queue, parallel where items do not collide, native-led items), which Jeff approved as the direction in the attended session (''Yes, these all read as the direction I''m looking for''). Lifted out of loop-contract''s a13. wf next''s altersHolder allows one feature past Design with alters_relationships true whatever config.yaml''s limit says (3 since FLOW-20), so seam-specs and driver-contract stop each other; wf validate reads the limit differently. A program item (FLOW-20): its design lists componentization.md in related. Holds nothing.'
+pr:
+  number: 118
+  ci: green
 steps:
   - id: x1-design
     phase: 1
@@ -21,10 +24,17 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261112T230554Z
-      expires: 2026-11-14T21:40:31.293068366Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -104,3 +114,9 @@ history:
   - at: 2026-11-14T19:40:31Z
     by: cloud/20261112T230554Z
     event: claimed x2-implement until 2026-11-14T21:40:31Z
+  - at: 2026-11-14T20:33:40Z
+    by: cloud/20261112T230554Z
+    event: done x2-implement
+  - at: 2026-11-14T20:33:40Z
+    by: cloud/20261112T230554Z
+    event: entered phase 3 (merge)
