@@ -24,8 +24,9 @@ feature's cloud steps.
   a process item's branch after its design review (FLOW-14). The one
   exception: a rule change a feature's design review approved by name, made
   on that feature's branch in its approved `paths` (never `.claude/` or
-  `tools/workflow/` outside `check/`). Otherwise, on a feature branch,
-  propose the change in the design for its review.
+  `tools/workflow/` outside `check/`, and never a loop rule or its
+  enforcement, LOOP-09). Otherwise, on a feature branch, propose the change
+  in the design for its review.
 - Put secrets in prompts (FLOW-18).
 
 ## 1. Set up
@@ -129,16 +130,22 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
 ## 4. Digest
 
 Write `.dev/workflow/digest/<YYYY-MM-DD>.md`, the date in America/Los_Angeles.
-If the file exists, append a new `## Run <W>` section. Sections, in order:
+If the file exists, append a new `## Run <W>` section. The section is the
+run's report (LOOP-06): check it against that rule's list before the commit.
+Sections, in order:
 
 - **Process items** first, when any is queued or in progress (FLOW-03,
   FLOW-05): each one's phase and what it holds (`dist/wf status` prints
   `process item, holds: ...`), and any `held by process item` lines from
   `wf next`. Only queued and in-progress ones; one this run closed goes in
   **Moved**.
-- **Moved**: each step taken, its outcome, and the branch head it left; for an
+- **Moved**: each step taken: the item, its kind and FLOW-05 class (from its
+  queue file), the step, its outcome, and the branch head it left; for an
   `f2-plan` step, also the plan's task count, so Jeff can call a review back
-  (FLOW-19).
+  (FLOW-19). A step that changed a specification adds a **Specification
+  changes** line under its own, naming each one apart from the code (LOOP-02).
+  A review step's line gives tier 1's result and the tier-2 findings counted
+  by severity, with the report's path (LINT-05).
 - **Blocked on Jeff**: open blocking questions (options and recommendation),
   design reviews waiting (`*-design-review` steps, FLOW-19), open PRs waiting
   for his merge (phase 7), `escalate` steps, runaway budgets, priority
