@@ -222,9 +222,9 @@ also a question, so the review confirms it: the larger departures each have
 their own (a4 to a8, a10, a14, a16 to a21), and the smaller ones are asked
 together in a15. Decisions 17 to 20 are new since `2889919`. Decisions 7,
 12 and 19 are rewritten for Jeff's answers to a5, a15 (part b) and a19 at
-the second sitting. What the answers to a5 and a19 leave open is a23 and
-a22. The answer to a15 (b) raises no question of this item's: its open
-points are `loop-native-lead`'s (hand-off, point 7).
+the second sitting. What the answers to a5, a19 and a15 (b) leave open
+for this item is a23, a22 and a24. The open points of the rule Jeff gave
+for a15 (b) are for the item that makes it true (hand-off, point 7).
 
 1. **The finished contract is nine rules, LOOP-01 to LOOP-09, in one
    document, with FLOW-\* and LINT-\* as its detail** (a3). The nine follow
@@ -361,13 +361,17 @@ points are `loop-native-lead`'s (hand-off, point 7).
     do goes to "whichever loop supports it and next can pick it up, placing
     a refreshable 20-hour lease while actively working on it". That
     changes FLOW-04, the host table and the lease, and `loop-native-lead`
-    makes the change (hand-off, point 7). *Rejected:* the one-machine rule
+    makes the change (hand-off, point 7; a24). *Rejected:* the one-machine rule
     for `<capability>-any` stated in LOOP-05, as read at `04cc9bb`. It is
     the rule Jeff changed. *Rejected:* his rule stated in LOOP-05 now.
     `wf validate` rejects a host name that two machines serve and a lease
     is 120 minutes, so `main` would contradict the contract on merge (the
     umbrella's Decision 18), and FLOW-04 would be stated in two places
-    (FLOW-14).
+    (FLOW-14). *Rejected:* amending FLOW-04, the host table and the lease
+    in this PR (a24's second option). a1 keeps this PR to what the rules
+    say, the change reaches the native machinery under running sessions,
+    and `loop-native-lead` changes FLOW-04, the host names and the wrapper
+    next.
 13. **The line between this item and P1's later items** (a1): this item
     changes what the rules say, and says only what is true of the loop as
     it runs today. `loop-parallel`, `loop-native-lead` and
@@ -488,10 +492,11 @@ assumption below is asked.
 Jeff answered twenty at the second sitting on 2026-11-14: a1 to a12 and
 a14 to a21, on the text at `04cc9bb`. Three answers departed from the
 recommended option (a5, a15 part b, a19) and are folded in; each of those
-three shows the option he chose and what it changed. Two are open, a22
-and a23, which the answers to a19 and a5 raised: each is "proceeding with
-the recommended option; confirm". The same twenty-two are in the queue
-file. a13 is retired (see **Retired** below).
+three shows the option he chose and what it changed. Three are open,
+a22, a23 and a24, which the answers to a19, a5 and a15 (part b) raised:
+each is "proceeding with the recommended option; confirm". The same
+twenty-three are in the queue file. a13 is retired (see **Retired**
+below).
 
 Against the text read at `04cc9bb`, after the second sitting:
 
@@ -500,7 +505,7 @@ Against the text read at `04cc9bb`, after the second sitting:
 | Unchanged but for the answer line | a2, a3, a4, a6, a7, a8, a9, a11, a12, a14, a16, a17, a18, a21 |
 | Rewritten for the answer Jeff gave | a5 (option 3), a15 (part b), a19 (option 2) |
 | One clause changed, following a19 | a1 (the move is P1's last item, where it read "deferred"); a10 ("once" the files leave, where it read "if"); a20 (its lead sentence, and the count of amendments in its answer) |
-| New, open | a22 (what the wave-1 gate waits for); a23 (which item makes a reconciliation item's rank true) |
+| New, open | a22 (what the wave-1 gate waits for); a23 (which item makes a reconciliation item's rank true); a24 (which item makes the rule for `<capability>-any` work true) |
 
 Against the text read at `2889919`, as the questions stood at `04cc9bb`:
 
@@ -776,7 +781,8 @@ Against the text read at `2889919`, as the questions stood at `04cc9bb`:
   one-machine rule and cites FLOW-04 for who takes a step; Decision 12;
   row 17 of the table of disagreements; and the hand-off, which records
   his rule as decided with the points that item settles (point 7). FLOW-04
-  stands as it is until that item lands.
+  stands as it is until that item lands. Which item makes his rule true
+  is a24.
 - **a16. How a component's invariants are written, and where prefixes are
   registered.**
   1. *(recommended)* As rules in LINT-01's format, under prefixes the
@@ -1018,6 +1024,50 @@ Against the text read at `2889919`, as the questions stood at `04cc9bb`:
      the queue, such as the stub pre-release the relay's M1a plans by
      hand, has nothing to follow, and FLOW-05 would promise a class that
      `wf` cannot always give.
+- **a24. Which item makes the rule for `<capability>-any` work true.**
+  *(new on 2026-11-14, raised by a15's answer on part b; open)* Jeff's
+  answer changes who takes such a step and how long a claim is held. It
+  needs four things the loop does not have. FLOW-04 says `hosts.yaml`
+  "gives each host name to exactly one machine". `wf validate` rejects a
+  host name that two machines serve (`validateNative`,
+  `tools/workflow/queue/hosts.go`). A lease is `lease_minutes`, 120, for
+  every claim (`config.yaml`; `Claim`, `queue/next.go`). And `wf` has no
+  refresh. So his rule is true only once FLOW-04's text and those tools
+  change together (the umbrella's Decision 18). The queue's record of his
+  answer says "the design is revised and the change put to Jeff by name".
+  LOOP-05 is revised here. This question asks which item's review puts
+  FLOW-04's new wording to him.
+  1. *(recommended)* `loop-native-lead` makes it true. LOOP-05 says that
+     such work carries `<capability>-any` and cites FLOW-04 for who takes
+     a step, which holds on merge with FLOW-04 as it stands.
+     `loop-native-lead` amends FLOW-04 and changes the host table,
+     `wf validate`, `wf gate` and the lease. The hand-off records Jeff's
+     rule as decided, in his words (point 7), so that item's design
+     settles how and does not ask whether, and he approves FLOW-04's new
+     wording by name at its review. That item changes FLOW-04, the host
+     names and the wrapper anyway, and a1 leaves `wf` and the FLOW rules
+     to the later items. Until it lands nothing changes for such work: a
+     `qemu-any` step waits for the MacBook and a `container-any` step for
+     the Windows desktop, under a 120-minute lease. It is P1's fourth
+     item and is not yet filed.
+  2. This item's PR makes it true. `rule_changes` gains FLOW-04 (amend,
+     `docs/development/process.md`), and LOOP-05 can state the rule. The
+     machinery it needs: `validateNative` (`queue/hosts.go`) accepting a
+     `<capability>-any` name on several machines, and what `wf gate`
+     then checks; a 20-hour lease in `Claim` (`queue/next.go`) and a
+     refresh, which is a new `wf` command (`cmd/wf/main.go`); the native
+     session refreshing while it works (`workflow-native`,
+     `native-tick.sh`); tests; and, on the `workflow` branch after the
+     merge, `hosts.yaml`, `config.yaml` and `README.md`. The six open
+     points of the hand-off's point 7 would be settled in this review. It
+     changes the native machinery under running sessions, so this item
+     would declare `holds` on the host workers, where it holds nothing
+     today, and a1 would stand with an exception.
+  3. An item of its own, filed now and run ahead of `loop-parallel`, as
+     `alters-slot` was for a13. The rule is true sooner than under option
+     1, and this PR stays as it is. It is one more design and one more
+     review, and `loop-native-lead` then changes the same rule, the same
+     table and the same wrapper.
 
 ### Retired
 
@@ -1203,7 +1253,7 @@ report over the release diff.
 | 14 | A change to the contract is gated on Jeff only. | Both of FLOW-14's routes end in Jeff's design review and merge, but the second lets a feature's design carry a rule change. | Loop rules: process items only (LOOP-09). | a10 |
 | 15 | Section 7 names the relay's consumable by "the provisioning protocol, the connector protocol". | The decisions table's rows 9 and 11, the same day: no new protocol; the existing claim and collector protocols (GLOBAL-08). | The contract names no protocol. A consumable lists the specifications it implements (LOOP-07). | none (decided) |
 | 16 | Section 3, class 2: "every behaviour in the spec has a test; every test maps to a spec section". | No mapping of specification sections to tests (the blanks table, first row). `seam-specs` proposes one for the specs repository. | Kept as class 2 for a specification that has a conformance suite; not required of one without (Decision 16, LOOP-03). | a14 |
-| 17 | Section 5: "any-OS work goes to whichever taker is free". | A `<capability>-any` host name belongs to exactly one machine (`hosts.yaml`, FLOW-04): `qemu-any` to `macbook`, `container-any` to `windows-desktop`. `wf validate` rejects a name that two machines serve. A lease is 120 minutes for every claim (`config.yaml`), and nothing refreshes one short of claiming the step again. | Jeff, 2026-11-14: it goes to "whichever loop supports it and next can pick it up, placing a refreshable 20-hour lease while actively working on it". That is the draft's sentence, with a lease. LOOP-05 says such work carries `<capability>-any` and cites FLOW-04 for who takes a step; it states no one-machine rule. FLOW-04, the host table and the lease change in `loop-native-lead` (hand-off, point 7), and FLOW-04 stands as it is until then. | a15 (b) |
+| 17 | Section 5: "any-OS work goes to whichever taker is free". | A `<capability>-any` host name belongs to exactly one machine (`hosts.yaml`, FLOW-04): `qemu-any` to `macbook`, `container-any` to `windows-desktop`. `wf validate` rejects a name that two machines serve. A lease is 120 minutes for every claim (`config.yaml`), and nothing refreshes one short of claiming the step again. | Jeff, 2026-11-14: it goes to "whichever loop supports it and next can pick it up, placing a refreshable 20-hour lease while actively working on it". That is the draft's sentence, with a lease. LOOP-05 says such work carries `<capability>-any` and cites FLOW-04 for who takes a step; it states no one-machine rule. FLOW-04, the host table and the lease change in `loop-native-lead` (hand-off, point 7), and FLOW-04 stands as it is until then. | a15 (b), a24 |
 | 18 | Section 1, local column: change reporting, "where it is posted"; reconciliation, "the dates and owners". | Reports are on the `workflow` branch with the queue, which is also the draft's own decided point. A reconciliation has no date; an item has a priority. | Nothing about reporting is local; for reconciliation the local part is what the component releases and consumes (LOOP-01). | a15 (d) |
 | 19 | Section 8, steps 1 and 2: link from "the component's README and loop configuration"; fill the local column "in the component's own loop configuration". | No file is called the loop configuration. Agents start from `AGENTS.md`; `config.yaml` holds budgets and limits for the whole loop. | The README and the agent context file link to the contract; the profile is the component's loop configuration (LOOP-08). | a15 (f) |
 | 20 | "A component adopts the contract by reference, never by copying." | Nothing yet adopts. | By reference to the contract's trunk, which cannot be pinned (LOOP-08). | a15 (g) |
@@ -1505,7 +1555,10 @@ move is `loop-move`'s (a19). FLOW-05 and `wf`'s class for a reconciliation
 item are `loop-parallel`'s under a23's recommended option; its second
 option would add FLOW-05 to the `process.md` row and the class change to
 the `tools/workflow/` row. FLOW-04, the host table and the lease are
-`loop-native-lead`'s (a15, part b). Within the rows, the contract's text
+`loop-native-lead`'s under a24's recommended option (a15, part b); its
+second option would add FLOW-04 to the `process.md` row, the host and
+lease changes to the `tools/workflow/` row, and a row for the native
+skill. Within the rows, the contract's text
 changes in three places (the "Where things are" table, LOOP-05's bullet on
 routing and LOOP-07's point 2), the README's new paragraph in one clause,
 and fewer of the umbrella's sentences are amended. Against the
@@ -1683,7 +1736,7 @@ FLOW rules the later items change and does not write their changes.
 |---|---|---|
 | `alters-slot` | Filed, in Design, holds nothing; its design is on `feat/alters-slot` at `ed99489`, not yet reviewed; meant to merge first | a13 as read at `2889919`: the finding, its options, the task, the tests and the row of **Defaults and overrides**. a12's two files, which its design proposes to carry (its Decision 8 and a2). Nothing in the contract depends on it. |
 | `loop-parallel` | Not yet filed | LOOP-04 as the frame its FLOW-05 change fits: the contract says that FLOW-05 orders the queue, says what may run side by side and says what a hold names, and nothing more. LOOP-04's and LOOP-05's requirement that an item names its repositories, which the queue file does not yet record. LOOP-06's one digest. FLOW-20's text and the umbrella's a5, as far as its design changes what they say. The FLOW rules the change proposal lists for it are FLOW-02, -03, -05, -10, -15, -19 and -20; its design settles its own list. Jeff's decision that a reconciliation item ranks with the fixes, for its FLOW-05 change to state (point 7; a23). Point 5 below. |
-| `loop-native-lead` | Not yet filed; after `main` is protected | LOOP-05 as the frame for its changes: a worker is scheduled and bounded, routed by the one host table, identified on every claim, and set up by the owner. The FLOW rules the change proposal lists for it are FLOW-04, -09, -13, -16 and -18; its design settles its own list. Jeff's decision on `<capability>-any` work, for its FLOW-04 change to state: whichever worker has the capability and next takes steps, under a refreshable 20-hour lease (point 7). The two open points of point 5 that concern an unattended worker's start. |
+| `loop-native-lead` | Not yet filed; after `main` is protected | LOOP-05 as the frame for its changes: a worker is scheduled and bounded, routed by the one host table, identified on every claim, and set up by the owner. The FLOW rules the change proposal lists for it are FLOW-04, -09, -13, -16 and -18; its design settles its own list. Jeff's decision on `<capability>-any` work, for its FLOW-04 change to state: whichever worker has the capability and next takes steps, under a refreshable 20-hour lease (point 7; a24). The two open points of point 5 that concern an unattended worker's start. |
 | `loop-repository` | Queued; retitled and its `holds` removed on 2026-11-14 | The profile's term list as the specification of what `wf` stops hard-coding (point 4). LOOP-08's six steps as what the relay does to adopt, and the relay's first item through `wf`'s gates as the test that the queue works across repositories: the wave-1 gate under a22's recommended option (U12), and what P1's done-when asks for again after the move (U9). A branch and a pull request for an item in each repository it works in, and LOOP-06's branch head per repository. The native side: a second checkout and its toolchain on the native machines. What of a private repository's work is written to the public queue, digest and reports. Point 5 below. |
 | `loop-move` (a provisional name) | Not yet filed; P1's last item, after `loop-repository` (a19) | The split (point 2). The table of what moves and what stays (point 3). The links and paths the move changes (**Rule IDs, cross-references, `rules.yaml` and tier 1**). The contract's "Where things are" table, which is the only part of the contract's text the move edits (point 1). What its design settles is under point 5. The repository's own name is confirmed with Jeff right before it is created (the umbrella's a11). P1 is done when this item is (U9); whether wave 2 waits for it is a22. |
 
@@ -1840,7 +1893,7 @@ own questions, and does not ask the decision again.
   name goes to whichever worker has the capability and next takes steps,
   and that worker holds it under a 20-hour lease that it can refresh
   while it is actively working. `loop-native-lead` amends FLOW-04 to say
-  so and changes the host table and the lease to match. What is true
+  so and changes the host table and the lease to match (a24). What is true
   today: FLOW-04 says `hosts.yaml` "gives each host name to exactly one
   machine"; `wf validate` rejects a name that two machines serve
   (`validateNative`, `tools/workflow/queue/hosts.go`); `hosts.yaml` has
@@ -2033,7 +2086,7 @@ has left with a13 for `alters-slot`.
 
 The 20-hour lease of Jeff's answer to a15 (b) is not a default of this
 item. `lease_minutes` stays 120, for every claim, until
-`loop-native-lead` changes it (hand-off, point 7).
+`loop-native-lead` changes it (hand-off, point 7; a24).
 
 **Fallbacks.** None is added and none is dropped. The reading this design
 dropped at `2889919`, `wf validate` treating an unset
@@ -2062,7 +2115,7 @@ the fourth entry of **Design review**: the contract's "Where things are"
 table and the sentence under it (a19), LOOP-05's bullet on routing (a15,
 part b), LOOP-07's point 2 (a5), and one clause of the README's new
 paragraph (a19). FLOW-04 and FLOW-05 are not amended by this item; a23
-asks that of FLOW-05.
+asks that of FLOW-05, and a24 of FLOW-04.
 
 ### LOOP-01 to LOOP-09 (add), `docs/development/loop-contract.md`
 
@@ -2540,7 +2593,7 @@ lists the host names each machine serves, and FLOW-04 says who may take a
 step: today it gives every host name, `<capability>-any` included, to
 exactly one machine. The bullet stays true when `loop-native-lead` changes
 FLOW-04 for Jeff's answer to a15 (b), because LOOP-05 does not repeat
-FLOW-04's answer.
+FLOW-04's answer (a24).
 
 One piece of work is outside the queue on the day this merges: the relay's
 M1a, which its design plans to work by hand, in attended or directly
@@ -3230,9 +3283,9 @@ own state.
 ### 2026-11-14, second sitting: all questions answered; three answers folded in
 
 Read at `04cc9bb`. Jeff answered all twenty questions. The rule changes
-and the outcome are still to come. Two questions that his answers raised
-are open (a22, a23), and the six reworded amendments to the umbrella are
-to be shown to him again. The three entries above are kept as written.
+and the outcome are still to come. Three questions that his answers
+raised are open (a22, a23, a24), and the six reworded amendments to the
+umbrella are to be shown to him again. The three entries above are kept as written.
 
 **The answers**, one line each:
 
@@ -3345,7 +3398,7 @@ and proposed wording, and the `wf` change.
 is not one machine's.
 
 - Decision 12 is rewritten; the Decisions preamble names it.
-- a15: part (b) and the answer under the question.
+- a15: part (b) and the answer under the question; a24 is new.
 - Row 17 of the table of disagreements.
 - LOOP-05's bullet on routing: "Work that needs native hardware carries a
   host name. One table, kept beside the queue, says which host names each
@@ -3360,10 +3413,18 @@ is not one machine's.
   point 7, with the six points that item settles.
 - **Defaults and overrides**: a note that `lease_minutes` stays 120.
 
-It adds no question here. What his rule leaves open (which claims get the
-20-hour lease, what a refresh is, what becomes of a lease that is not
-refreshed) is `loop-native-lead`'s, and nothing in this item's text
-depends on the answers.
+The queue's record of this answer says "the design is revised and the
+change put to Jeff by name". The design is revised: LOOP-05 no longer
+states the one-machine rule. FLOW-04's new wording is not in this item,
+and FLOW-04 says "exactly one machine" until a later item lands. Which
+item's review puts that wording to him is a24, which recommends
+`loop-native-lead`. If he chooses a24's second option, this design gains
+a FLOW-04 entry in `rule_changes`, its current and proposed wording, the
+`wf` and native-session changes, and `holds`. What his rule leaves open
+(which claims get the 20-hour lease, what a refresh is, what becomes of a
+lease that is not refreshed) is settled by the item that makes it true.
+Under a24's recommended option nothing in this item's text depends on
+those answers.
 
 **What did not change.** The nine-rule structure and every rule's severity
 and check. LOOP-01 to LOOP-04, LOOP-06, LOOP-08 and LOOP-09, word for
@@ -3390,12 +3451,20 @@ pass changed:
 - *U21.* It named "the first paragraph of **How program items run**" as
   amended. U13's sentences are that section's second paragraph (the
   umbrella's lines 354-356); the first is not amended.
+- *a24 is new.* The fold-in left FLOW-04's change to `loop-native-lead`
+  and said the answer to a15 (b) raised no question here. Jeff's words
+  were "B should be changed", and the queue's record says the change is
+  put to him by name, so which item makes it true is his to confirm, as
+  a23 is for a5. The text is written on a24's recommended option and
+  does not change otherwise.
 
 **Open after this entry.** a22 (what the wave-1 gate waits for:
-recommended, the queue working across repositories and not the move) and
+recommended, the queue working across repositories and not the move),
 a23 (which item makes a reconciliation item's rank true: recommended,
-`loop-parallel`). The six reworded amendments, by number. The approval of
-the rule changes by name, and the outcome.
+`loop-parallel`) and a24 (which item makes the rule for
+`<capability>-any` work true: recommended, `loop-native-lead`). The six
+reworded amendments, by number. The approval of the rule changes by name,
+and the outcome.
 
 ## Consolidation
 
