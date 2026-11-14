@@ -108,7 +108,8 @@ Three things are missing:
 
 The PR also carries one small change to the loop's machinery, `wf new
 -hold` (a11). A second, the refreshed Entire hook configuration (a12), is
-carried only if `alters-slot`'s review does not take it. Neither the
+carried only if `alters-slot`'s review does not take it. That review took
+it on 2026-11-14, so this PR does not carry it. Neither the
 umbrella's P1 scope nor this item's `source` names them. They are here
 because each needs a process item to reach `main` (FLOW-14) and this one
 holds nothing. Each is its own question, so the review can move either out
@@ -163,13 +164,14 @@ next merge `main`, and from then on work under what this item merged (see
   repository pins a specifications release. The contract states the order
   and leaves the pin to the component (LOOP-02), so it does not depend on how
   that review ends.
-- `alters-slot` (a process item, in Design; its design is on
-  `feat/alters-slot` at `ed99489`, not yet reviewed) takes over a13:
+- `alters-slot` (a process item; its design was read on
+  `feat/alters-slot` at `ed99489`, before its review) takes over a13:
   `wf next` and `wf validate` count the items that alter relationships
   against `limits.alters_relationships`. Its Decision 8 and its a2 propose
   that its PR also carries the two Entire files of a12 here, in a commit of
   their own. It is meant to merge first, so a12 now recommends that it
-  does.
+  does. Its design was approved on 2026-11-14 with its a2 confirmed. It
+  is in Implement, and its branch carries the two files (`cea35d2`).
 - `driver-contract` (K1) was sent back to Design on 2026-11-14 to become a
   contract of commands that `warden` calls on a driver binary. Whether that
   contract gets a written specification is for its redraft to say. This
@@ -1734,7 +1736,7 @@ FLOW rules the later items change and does not write their changes.
 
 | Item | State on 2026-11-14 | What it gets from this item |
 |---|---|---|
-| `alters-slot` | Filed, in Design, holds nothing; its design is on `feat/alters-slot` at `ed99489`, not yet reviewed; meant to merge first | a13 as read at `2889919`: the finding, its options, the task, the tests and the row of **Defaults and overrides**. a12's two files, which its design proposes to carry (its Decision 8 and a2). Nothing in the contract depends on it. |
+| `alters-slot` | Design approved on 2026-11-14; in Implement; holds nothing; meant to merge first. (At `04cc9bb` this read: in Design, its design on `feat/alters-slot` at `ed99489`, not yet reviewed.) | a13 as read at `2889919`: the finding, its options, the task, the tests and the row of **Defaults and overrides**. a12's two files, which it carries (its Decision 8 and a2, confirmed at its review; `cea35d2` on its branch). Nothing in the contract depends on it. |
 | `loop-parallel` | Not yet filed | LOOP-04 as the frame its FLOW-05 change fits: the contract says that FLOW-05 orders the queue, says what may run side by side and says what a hold names, and nothing more. LOOP-04's and LOOP-05's requirement that an item names its repositories, which the queue file does not yet record. LOOP-06's one digest. FLOW-20's text and the umbrella's a5, as far as its design changes what they say. The FLOW rules the change proposal lists for it are FLOW-02, -03, -05, -10, -15, -19 and -20; its design settles its own list. Jeff's decision that a reconciliation item ranks with the fixes, for its FLOW-05 change to state (point 7; a23). Point 5 below. |
 | `loop-native-lead` | Not yet filed; after `main` is protected | LOOP-05 as the frame for its changes: a worker is scheduled and bounded, routed by the one host table, identified on every claim, and set up by the owner. The FLOW rules the change proposal lists for it are FLOW-04, -09, -13, -16 and -18; its design settles its own list. Jeff's decision on `<capability>-any` work, for its FLOW-04 change to state: whichever worker has the capability and next takes steps, under a refreshable 20-hour lease (point 7; a24). The two open points of point 5 that concern an unattended worker's start. |
 | `loop-repository` | Queued; retitled and its `holds` removed on 2026-11-14 | The profile's term list as the specification of what `wf` stops hard-coding (point 4). LOOP-08's six steps as what the relay does to adopt, and the relay's first item through `wf`'s gates as the test that the queue works across repositories: the wave-1 gate under a22's recommended option (U12), and what P1's done-when asks for again after the move (U9). A branch and a pull request for an item in each repository it works in, and LOOP-06's branch head per repository. The native side: a second checkout and its toolchain on the native machines. What of a private repository's work is written to the public queue, digest and reports. Point 5 below. |
@@ -3313,7 +3315,12 @@ umbrella are to be shown to him again. The three entries above are kept as writt
   a2: `alters-slot` carries the Entire hook configuration and it is
   dropped from this PR. Task 10 and the two settings rows of the PR's
   table are written as "only if `alters-slot` does not carry them", so
-  they are not done; their text is left as he read it.
+  they are not done; their text is left as he read it. So is every other
+  place that speaks of a12 conditionally ("if a12 stays here"): a12's own
+  text, **The machinery changes**, point 6 of the hand-off, **What this
+  item does not declare** and the validation plan. Three places stated
+  `alters-slot`'s state as a fact and now give it as it is: the Problem,
+  the Prior art line on `alters-slot`, and its row in the hand-off.
 - a14: option 1, as recommended. The specification invariant, for a
   specification that has a conformance suite.
 - a15: **all but (b).** (a), (c), (d), (e), (f) and (g) as proposed. On
@@ -3457,6 +3464,11 @@ pass changed:
   put to him by name, so which item makes it true is his to confirm, as
   a23 is for a5. The text is written on a24's recommended option and
   does not change otherwise.
+- *`alters-slot`'s state.* The Problem, the Prior art line and the
+  hand-off row still said its design was not yet reviewed and that a12
+  was conditional on that review. Its design was approved on 2026-11-14
+  with its a2 confirmed, it is in Implement, and `cea35d2` on its branch
+  carries the two files. The three places say so (the a12 line above).
 
 **Open after this entry.** a22 (what the wave-1 gate waits for:
 recommended, the queue working across repositories and not the move),
