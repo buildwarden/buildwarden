@@ -7,7 +7,8 @@ round: process
 phase: 1
 design: docs/design/loop-parallel.md
 branch: feat/loop-parallel
-alters_relationships: null
+alters_relationships: false
+design_review: required
 source: 'Jeff approved the loop change proposal''s direction on 2026-11-14 and the loop-contract design at 7af50ff, whose hand-off names this item and its order in P1 (loop-contract, alters-slot, loop-parallel, loop-native-lead, loop-repository, then the move). A program item (FLOW-20): its design lists componentization.md in related. Scope, from the proposal''s step 3 and loop-contract''s hand-off: repos and tracked items; areas, relations (disjoint, near, colliding) and FLOW-05''s limits; one guard for wf next and wf claim, and wf commit; the checks; the f6-refresh step; QUEUE.md and per-run digests; FLOW-02, -03, -05, -10, -15, -19, -20. Decided already and not to be reopened: a reconciliation item is a feature that FLOW-05 ranks with the fixes (loop-contract a5, a23). Whether it holds any worker is its design''s to say.'
 steps:
   - id: x1-design
@@ -17,6 +18,14 @@ steps:
     lease:
       claimed_by: human/jeff
       expires: 2026-11-14T22:58:10.653512627Z
+  - id: x4-state
+    phase: 4
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'After this item''s PR has merged, and once no live lease was claimed before the merge commit''s time; not before. In an attended session with Jeff, on the workflow branch (design: Implementation plan, "After the merge"): config.yaml gains repository: buildwarden/buildwarden and the limits.in_progress comment becomes "5 when unset"; dist/wf areas -sync and dist/wf main; README.md (layout table, the queue file''s new fields, the tracked round, wf next''s paragraph, wf commit in the commands); a human dist/wf declare on seam-specs and on driver-contract; seam-specs'' repos on Jeff''s word.'
 budget:
   estimate:
     runs: 3
@@ -24,7 +33,131 @@ budget:
   spent:
     runs: 0
     steps: 1
-questions: []
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: "Disjoint PRs in one repository: in what order may they merge? (The proposal's question 3.) CI does not run again when a PR's base moves."
+    options:
+      - "(a) Any order. main's protection requires a pull request and green checks, not an up-to-date branch. What stands in for an up-to-date branch: QUEUE.md marks an open PR \"behind main\" (as current as the last wf stale: the daily tick, or the attended session, which runs it before it lists the PRs and after each merge made in it; a PR merged on GitHub between sessions shows its last green run and no mark); the tick and the attended session read CI on main, a red main opens Needs Jeff and its fix is filed as the follow-up of the item whose merge it was (FLOW-09, a16); and a PR merged while behind is still confirmed as merged (a14)."
+      - "(b) An up-to-date branch is required: each merge blocks the rest until their refresh, about one merge per cloud run."
+      - "(c) One open PR per repository."
+    recommended: "(a): disjoint PRs share no exclusive area, and GitHub refuses a merge that conflicts in a shared file; what it accepts is a break between two disjoint items that neither branch shows alone, which lands on main and is fixed there (design: Safety)"
+  - id: a2
+    kind: assumed
+    status: open
+    question: "What sharing only ordered areas costs (the book, build files, rule files, other items' designs). This departs from the proposal, whose section 1 put lightly shared files with \"one PR at a time\"."
+    options:
+      - "(a) Nothing but the refresh: the two items are disjoint and both PRs may be open; the later one merges main at its refresh, where a conflict in the shared file is resolved."
+      - "(b) They are near and take turns at the PR, as the proposal has it."
+    recommended: "(a): measured on the 23 merges in history that were not loop work and changed fewer than 100 files (253 pairs), (a) gives 187 disjoint, 43 near, 23 colliding and (b) gives 151, 79, 23, so (b) makes 36 pairs (14%) take turns, Jeff's own example among them when each item touches a book page. It changes nothing for the most recent work: among the last six product merges no pair is disjoint under either (8 colliding, 7 near), because each changed cmd/warden/ or a package every driver imports. The risk under (a) is a shared file that merges cleanly and wrongly; 14 of the 187 disjoint pairs changed a common file. The difference is one row of the relation table"
+  - id: a3
+    kind: assumed
+    status: open
+    question: "A cap on work waiting for Jeff. (The proposal's question 5.)"
+    options:
+      - "(a) None. QUEUE.md opens Needs Jeff with the count of items waiting on him, by kind."
+      - "(b) No queued item starts while 8 or more wait on him."
+    recommended: "(a): a cap would stop the loop on the one resource it cannot add to"
+  - id: a4
+    kind: assumed
+    status: open
+    question: "Who declares areas, and where the map lives. (The proposal's question 6, with its letters.)"
+    options:
+      - "(a) Areas are proposed at intake with Jeff and confirmed by Design; a design that narrows what intake recorded cannot skip its review. A follow-up filed with nobody there (FLOW-09) takes the repositories and areas of the item it follows; its Design may add to them, and removing one needs the review."
+      - "(b) Areas are declared by Design only. A follow-up is then undeclared until its design: it collides with every feature and may open its PR only when no other feature has one open, which makes the fix for a red main the slowest item in the queue."
+      - "(c) The map is on the workflow branch, changed in an attended session on Jeff's word."
+      - "(d) The map is on main at tools/tier1/areas.yaml, as the profile's Areas entry (PROFILE-01): a feature changes it only as a rule change its design review approves by name, and tier 1 checks it against the tree. wf computes from a generated copy in the queue state."
+    recommended: "(a) and (d)"
+  - id: a5
+    kind: assumed
+    status: open
+    question: "The map itself (design: The area map): 16 exclusive areas and 5 ordered ones. driver-core is one area, and holds the relay VM's init and initramfs script (tools/relay-vm/), which driver code tests, writes for and copies; relay, relaycfg, ledger, collector and executor are five; cli (cmd/warden/) is exclusive; the book, docs/development/, the build files, other items' designs and tier 1's configuration are ordered."
+    options:
+      - "(a) As written."
+      - "(b) Finer: the guest families (linuxguest, winguest) apart from driver-core, so more items are near and fewer collide."
+      - "(c) Coarser: rules.yaml's shared list (relay, ledger, collector, relaycfg, bootstrap, driver/*.go) as one area."
+      - "(d) cli ordered, so two driver items that each edit cmd/warden/ do not collide (five of the 52 merges changed it)."
+    recommended: "(a)"
+  - id: a6
+    kind: assumed
+    status: open
+    question: "Steps in a second repository. (The proposal's question 11.)"
+    options:
+      - "(a) Allowed for a repository with no loop of its own, as seam-specs does: the item lists it in repos, its design says which invariants apply there (LOOP-08), and a human step records a merge there that wf cannot see. FLOW-04 and FLOW-08 gain the sentence seam-specs' a15 asked for as an exception."
+      - "(b) Only through a release (LOOP-07)."
+    recommended: "(a)"
+  - id: a7
+    kind: assumed
+    status: open
+    question: "Whether a tracked item (one homed in another repository, with two human steps and no gate) counts in the limits."
+    options:
+      - "(a) It is shown with its relations and neither holds nor waits; nothing is enforced for it until loop-repository gives its work steps and gates."
+      - "(b) It counts like any feature, on the state the human enters."
+    recommended: "(a): what wf counted would rest on state entered by hand, and a stale entry would hold real work"
+  - id: a8
+    kind: assumed
+    status: open
+    question: "A reconciliation item's mark, its wait and its place. That it is a feature in FLOW-05's class 3 is decided (loop-contract a5)."
+    options:
+      - "(a) Marked by adopts: {consumable, version}. Filed on hold with a blocking question that names the release when the release does not exist yet (LOOP-04), answered by Jeff or an attended session when it does. Intake places it below the open fixes; a regression's fix still goes to the top."
+      - "(b) As (a), placed at the top of the fixes."
+      - "(c) As (a), with no default place: Jeff says each time."
+    recommended: "(a): a regression means main is broken now; an adoption is planned work"
+  - id: a10
+    kind: assumed
+    status: open
+    question: "The refresh step: its trigger, its budget, and native validation."
+    options:
+      - "(a) Seeded for every item waiting on Jeff's merge whenever main is no longer contained in its branch, whatever moved main."
+      - "(b) Seeded only when a related item's PR merged."
+      - "(c) Each refresh is a claim and counts one step against the item's budget; intake's size guide adds two steps for it."
+      - "(d) A refresh spends no budget, like the merge confirmation."
+      - "(e) A refresh does not queue a blocking native validation again: the validation stands for the branch as it was consolidated."
+      - "(f) A refresh queues each done blocking host step again when the commits it merged changed a file outside the ordered areas: one more native session per such merge, with the open PR shown as waiting on a host."
+    recommended: "(a), (c) and (e). With five PRs open and merged one a day, (a) and (c) cost 4 + 3 + 2 + 1 = 10 refreshes, up to four on the last item, against the two the size guide adds; merged in one sitting they cost none and four of the five merge behind main. An item that waits through many merges trips its runaway check and shows under Needs Jeff. Under (e) a break between two disjoint items that only a native host shows is found by the matrix before a release (TEST-02): CI runs neither Hyper-V nor VZ, and the native sweep covers only a machine's open backlog gaps"
+  - id: a12
+    kind: assumed
+    status: open
+    question: "Who gets a free PR slot when related items wait."
+    options:
+      - "(a) The higher priority, whether or not it could take the slot at that moment: an item is refused while a related item of higher priority waits (the proposal's rule). A lower-priority item can then wait for a holder it is disjoint from, because the item ahead of it does."
+      - "(b) The higher priority only when it could take the slot itself (the first draft). More PRs are open at once, and a high-priority item related to two streams that are disjoint from each other can wait without end: a driver-core item behind alternating Hyper-V and VZ items."
+      - "(c) The first to ask."
+    recommended: "(a): it matters once a second worker exists (an attended run on a named item today, a machine's led item after loop-native-lead)"
+  - id: a13
+    kind: assumed
+    status: open
+    question: "Whether this item holds a worker while it is implemented, merged and closed."
+    options:
+      - "(a) None. Two things are handled without a hold: a session whose dist/wf predates the merge drops a new field when it saves a queue file that carries one, so the first new field is written only after no lease predates the merge, and every scheduled session rebuilds wf as it starts; and seam-specs and driver-contract, which finished Design before the queue could record what they declare, are not compared with their designs at any gate until a human wf declare records them (the attended step x4-state)."
+      - "(b) holds: [cloud, host:*], set by hand for the day of the merge and Close and removed after."
+    recommended: "(a): a hold lasts while the item is in progress, days during which S1 and K1 would stop"
+  - id: a14
+    kind: assumed
+    status: open
+    question: "The merge check when a PR merged behind main. wf confirms a squash merge, for each ref of the branch that still exists, by ancestry, an equal tree, or an equal patch-id computed with three lines of context (wf-squash-after-base-moved, whose a3 said to change this \"if adjacent-edit escalations show up in practice\"). The third fails when the PR merged next to a line the earlier merge edited, which a1 (a) makes ordinary."
+    options:
+      - "(a) Zero context (-U0), that design's option (b): the proof becomes \"the same lines added and removed in each file, in order\". A squash GitHub made cannot move a hunk. It is the proof Close relies on before a squashed local branch is deleted (FLOW-16)."
+      - "(b) Keep three lines: each such merge fails its confirmation wherever the branch's ref still exists; the item stays at its merge step, keeps the PR slot, and waits for Jeff to compare the two changes by hand."
+    recommended: "(a)"
+  - id: a15
+    kind: assumed
+    status: open
+    question: "Whether the areas that hold the checks reach every area. The proposal has \"tier1, rules and tier1-config reach every area: a tightened check meets all code\". The first draft dropped it for the import graph alone, on the ground that make lint finds the failure at f6-merge-main or at the refresh; that does not hold under a1 (a), where a PR may merge before its refresh."
+    options:
+      - "(a) The import graph alone: an item that tightens a check and an item whose code the check newly fails are disjoint, both PRs may be open and merge in either order, and the failure first shows on main."
+      - "(b) tier1 (the checks' code) and tier1-config (rules.yaml, golangci.yml, the area map) reach every area: an item that changes either is near every item in the repository and takes turns at the PR with it. rules (docs/development/) does not: wording checks nothing mechanically, and 22 of the 52 merges changed it."
+      - "(c) As the proposal, rules too: nearly half of all items would take turns at the PR with every other item."
+    recommended: "(b): on history one of the 23 merges changed either area and 17 of the 253 pairs become near. It does not cover a whole-tree check that lives in a test of a code area (driver/buildlink/stray_test.go, specs/specs_test.go) or the root .golangci.yml; those are part of what a1 (a) accepts"
+  - id: a16
+    kind: assumed
+    status: open
+    question: "A regression that CI reports on main. FLOW-09 has a session file a regression main already has when it finds one \"while the feature is built, validated or consolidated\"; nothing files one that CI reports on main itself, and nothing in the loop reads that result today."
+    options:
+      - "(a) The run that sees main red files the fix, unattended as FLOW-09 already allows, as the follow-up of the item whose pull request that merge was, at the top of the fixes; when the red commit is no item's, it files nothing and Needs Jeff says main is red. FLOW-09 gains two sentences."
+      - "(b) It only reports: Needs Jeff opens with the red main, and the fix is filed when a later step's gates meet the failure, as that step's item's follow-up (FLOW-09 as written), or by Jeff."
+    recommended: "(a): under a1 (a) a red main is the designed outcome of a missed collision, and every open PR's refresh fails on it until a fix is filed"
 history:
   - at: 2026-11-14T20:57:45Z
     by: human/jeff
