@@ -1648,7 +1648,9 @@ message, `stopped` or `failed`.
 
 `warden` ignores fields it does not know, and so does a driver. Adding a
 field, a command, a capability or a message type does not change the
-contract version; removing or changing the meaning of one does.
+contract version; removing or changing the meaning of one does, and so
+does adding a common key (**Configuration**): a driver and a `warden`
+that agree on a version must agree on what `[driver]` holds.
 
 ### The build
 
@@ -2743,9 +2745,10 @@ function that reads a driver's configuration, and both transports and
 every command of a linked driver go through it:
 
 ```go
-// Resolve reads the settings that apply to command from args, the
-// environment and the config files, with warden's precedence.
-func Resolve(settings []Setting, command string, args []string,
+// Resolve reads the settings of the driver called name that apply to
+// command, from args, the environment and the config files, with warden's
+// precedence.
+func Resolve(name string, settings []Setting, command string, args []string,
 	configFiles []ConfigFile, environ []string) (driver.Settings, error)
 
 // Call runs one command of d with req, as Main does in a driver process:
@@ -2770,7 +2773,7 @@ the contract:
 - *The other commands.* A linked driver's doctor, setup, image and clean
   code stays in `cmd/warden` until K2 (a15), so those commands are not
   dispatched through `Call`. That code calls `Resolve` first, with the
-  driver's settings, the command, this invocation's `args` and
+  driver's name and settings, the command, this invocation's `args` and
   `config_files`, where it reads flag variables and `Config` fields
   today. The reading and the checks are therefore the same function on
   every path; the dispatch is `Call` for `run` and `cmd/warden`'s
@@ -2945,16 +2948,17 @@ type ConfigFile struct {
 	Level string // "project" or "user"
 }
 
-// Resolve reads the settings that apply to command: the flag in args, else
-// the setting's environment variable, else the first of configFiles that
-// sets its key (ORCH-03). In one file a common key is read in the driver's
-// own table and then in [driver], and an old name counts as the key itself.
+// Resolve reads the settings of the driver called name that apply to
+// command: the flag in args, else the setting's environment variable, else
+// the first of configFiles that sets its key (ORCH-03). In one file a common
+// key is read in [driver.<name>] and then in [driver], and an old name
+// counts as the key itself.
 // It refuses an element of args that settings does not declare, a value of
 // the wrong type and a file that sets a key under two names, with a
 // FixableError that names where the value came from. For reap and attach it
 // reads no file until a setting is asked for, and reads a file that no
 // longer exists as not listed (C10).
-func Resolve(settings []Setting, command string, args []string,
+func Resolve(name string, settings []Setting, command string, args []string,
 	configFiles []ConfigFile, environ []string) (driver.Settings, error)
 
 // SaveState writes v as the build's state file, atomically; LoadState reads
@@ -4950,10 +4954,10 @@ privileges (root's, under `sudo warden setup` or `image prepare`).
   honours it; version 1's two are ages and name no program or path.
   The container driver's `cli`, which names a program to run, is such
   a key today and stays one under both its names; the fix for it is
-  filed as `runtime-cli-project-path` and is not K1's (**Risks**). Each file is named
-  to the driver with its level, project or user, so that a driver can
-  hold a key that names a program to the user's file alone; no bundled
-  driver does in K1. A driver's flags
+  filed as `runtime-cli-project-path` and is not K1's (**Risks**). Each
+  file is named to the driver with its level, project or user, so that
+  a driver can hold a key that names a program to the user's file
+  alone; no bundled driver does in K1. A driver's flags
   travel in the request, not in its argv, and are kept in the build's
   record, so the contract tells a driver to take no secret as a flag.
 - **Secrets across the process boundary.** One secret goes to the driver:
