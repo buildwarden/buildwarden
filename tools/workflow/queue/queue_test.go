@@ -24,7 +24,12 @@ func state(fs ...*Feature) *State {
 	s := &State{Features: fs}
 	s.Config.RunBudget.Steps = 12
 	s.Config.Limits.InProgress = 5
-	s.Config.Limits.AltersRelationships = 1
+	return limited(s, 1)
+}
+
+// limited sets limits.alters_relationships as config.yaml would write it.
+func limited(s *State, n int) *State {
+	s.Config.Limits.AltersRelationships = &n
 	return s
 }
 
@@ -103,8 +108,7 @@ func TestNextForOneFeature(t *testing.T) {
 }
 
 // TestLimitSkipsProcessItems: process items do not count toward the
-// in-progress limit (FLOW-05), in Validate, in Next and in NextFor; the
-// alters_relationships limit still counts them.
+// in-progress limit (FLOW-05), in Validate, in Next and in NextFor.
 func TestLimitSkipsProcessItems(t *testing.T) {
 	a, x := feature("a", 1, "in_progress"), process("x", 2, "in_progress")
 	s := state(a, x)
@@ -117,16 +121,6 @@ func TestLimitSkipsProcessItems(t *testing.T) {
 	if got := fmt.Sprint(s.Validate()); !strings.Contains(got,
 		"features in progress, limit 1 (FLOW-05)") {
 		t.Fatalf("Validate = %s, want two features over the limit", got)
-	}
-
-	yes := true
-	f, p := toPhase("f", 1, 2), process("p", 2, "in_progress")
-	f.AltersRelationships, p.AltersRelationships = &yes, &yes
-	p.Phase = 2
-	s = state(f, p)
-	if got := fmt.Sprint(s.Validate()); !strings.Contains(got,
-		"past Design alter relationships, limit 1") {
-		t.Fatalf("Validate = %s, want the process item counted toward alters", got)
 	}
 }
 
@@ -423,20 +417,486 @@ func TestAddLogsRenumbering(t *testing.T) {
 	}
 }
 
-func TestAltersSlot(t *testing.T) {
-	yes := true
-	a, b := feature("a", 1, "in_progress"), feature("b", 2, "in_progress")
-	a.AltersRelationships, b.AltersRelationships = &yes, &yes
-	a.Phase, a.Steps = 3, []Step{{ID: "f3-implement", Phase: 3, Affinity: "human",
-		Status: "pending"}}
-	b.Phase, b.Steps = 2, []Step{{ID: "f2-plan", Phase: 2, Affinity: "cloud",
-		Status: "pending"}}
-	s := state(a, b)
-	if got := next(t, s, "cloud"); got != "none" {
-		t.Fatalf("next = %q, want b held at the end of Design", got)
+// altering is an in-progress feature that declares alters_relationships: true
+// and has finished Design: its review and its Plan step are pending.
+func altering(name string, prio int) *Feature {
+	f := toPhase(name, prio, 2)
+	declare(f, true)
+	return f
+}
+
+// approved is altering with its design review done, so that only a slot can
+// keep its Plan step from the cloud.
+func approved(name string, prio int) *Feature {
+	f := altering(name, prio)
+	approve(f)
+	return f
+}
+
+// declare writes alters_relationships into the queue file, as Design does.
+func declare(f *Feature, alters bool) { f.AltersRelationships = &alters }
+
+// approve completes the feature's pending design review.
+func approve(f *Feature) {
+	for i := range f.Steps {
+		if st := &f.Steps[i]; IsDesignReview(st) && st.Status == "pending" {
+			Complete(f, st, "human/jeff", now)
+			return
+		}
 	}
-	if errs := s.Validate(); len(errs) == 0 {
-		t.Fatal("Validate accepted two alters_relationships features past Design")
+}
+
+// plan is the feature's pending Plan step.
+func plan(t *testing.T, f *Feature) *Step {
+	t.Helper()
+	for i := range f.Steps {
+		if st := &f.Steps[i]; IsPlan(st) && st.Status == "pending" {
+			return st
+		}
+	}
+	t.Fatalf("%s has no pending Plan step", f.Feature)
+	return nil
+}
+
+// claimPlan claims the feature's Plan step for a cloud run of its own,
+// cloud/<feature>, so that another run's Next passes over the lease.
+func claimPlan(t *testing.T, s *State, f *Feature) {
+	t.Helper()
+	s.Claim(f, plan(t, f), "cloud/"+f.Feature, now, true)
+}
+
+// finishPlan claims and completes the feature's Plan step, which puts it in
+// Implement.
+func finishPlan(t *testing.T, s *State, f *Feature) {
+	t.Helper()
+	claimPlan(t, s, f)
+	Complete(f, plan(t, f), "cloud/"+f.Feature, now)
+}
+
+// offerAt is NextFor's answer for the feature: the step's id, or why the
+// worker gets none.
+func offerAt(s *State, name, worker string, at time.Time) string {
+	p, blocked := s.NextFor(name, worker, at)
+	if p != nil {
+		return p.Step.ID
+	}
+	return blocked[0].Reason
+}
+
+// wantOfferTo asserts what the worker is offered of the feature.
+func wantOfferTo(t *testing.T, s *State, name, worker, want string) {
+	t.Helper()
+	if got := offerAt(s, name, worker, now); got != want {
+		t.Fatalf("%s: %s is offered %q, want %q", name, worker, got, want)
+	}
+}
+
+// wantOffer asserts what a cloud run that holds no lease is offered of the
+// feature.
+func wantOffer(t *testing.T, s *State, name, want string) {
+	t.Helper()
+	wantOfferTo(t, s, name, "cloud/run", want)
+}
+
+func wantNext(t *testing.T, s *State, worker, want string) {
+	t.Helper()
+	if got := next(t, s, worker); got != want {
+		t.Fatalf("%s next = %q, want %q", worker, got, want)
+	}
+}
+
+// wantValidate asserts Validate's findings: none for a valid state.
+func wantValidate(t *testing.T, s *State, want ...string) {
+	t.Helper()
+	var got []string
+	for _, err := range s.Validate() {
+		got = append(got, err.Error())
+	}
+	if !slices.Equal(got, want) {
+		t.Fatalf("Validate = %q, want %q", got, want)
+	}
+}
+
+// slotWait is why a Plan step waits for a slot the holders have.
+func slotWait(limit int, holders ...string) string {
+	return fmt.Sprintf("waiting on an alters_relationships slot (limit %d), held by %s "+
+		"(FLOW-05)", limit, strings.Join(holders, ", "))
+}
+
+// overLimit is Validate's finding for more holders than the limit.
+func overLimit(limit int, holders ...string) string {
+	return fmt.Sprintf("%d features hold an alters_relationships slot, limit %d "+
+		"(FLOW-05): %s", len(holders), limit, strings.Join(holders, ", "))
+}
+
+// TestAltersSlotHeldFromPlanClaim: a feature holds an alters_relationships
+// slot from the claim of its Plan step until it is done, and at no other time
+// (FLOW-05; cases 2 and 7 of the alters-slot design).
+func TestAltersSlotHeldFromPlanClaim(t *testing.T) {
+	a, b, c := approved("a", 2), approved("b", 3), approved("c", 4)
+	d, e := altering("d", 1), toPhase("e", 5, 1)
+	declare(e, true)
+	s := limited(state(a, b, c, d, e), 3)
+
+	// Finished Design, reviewed or not, holds nothing: four such features at
+	// limit 3 are valid, and each Plan is offered beside e, still in Design.
+	wantValidate(t, s)
+	for _, f := range []*Feature{a, b, c} {
+		wantNext(t, s, "cloud/run", f.Feature+" f2-plan")
+		claimPlan(t, s, f)
+	}
+
+	// The claim holds: d, approved now, waits for the three.
+	approve(d)
+	wantOffer(t, s, "d", slotWait(3, "a", "b", "c"))
+	wantValidate(t, s)
+
+	// Release gives the slot back, and d, ranked ahead of c, is offered it.
+	s.Release(c, plan(t, c), "cloud/c", now, "done-when failed")
+	wantNext(t, s, "cloud/run", "d f2-plan")
+	claimPlan(t, s, d)
+	wantOffer(t, s, "c", slotWait(3, "d", "a", "b"))
+
+	// Plan done holds.
+	Complete(d, plan(t, d), "cloud/d", now)
+	wantNext(t, s, "cloud/run", "d f3-implement")
+	wantOffer(t, s, "c", slotWait(3, "d", "a", "b"))
+	wantValidate(t, s)
+
+	// The item done frees it: three held, the fourth waited.
+	advance(d, 9)
+	wantNext(t, s, "cloud/run", "c f2-plan")
+	wantValidate(t, s)
+}
+
+// TestAltersSlotNoMutualHold: features that finish Design together do not
+// hold each other, and a holder is never refused its own steps (cases 4, 5
+// and 6).
+func TestAltersSlotNoMutualHold(t *testing.T) {
+	t.Run("both approved, neither planned", noMutualHoldBothApproved)
+	t.Run("one in Implement, one finishes Design", noMutualHoldInImplement)
+	t.Run("four finish Design", noMutualHoldFour)
+}
+
+// noMutualHoldBothApproved is case 4: the higher-ranked feature plans, and
+// the other plans beside it at limit 3 or waits for it at limit 1.
+func noMutualHoldBothApproved(t *testing.T) {
+	for limit, second := range map[int]string{3: "f2-plan", 1: slotWait(1, "seam-specs")} {
+		ss, dc := approved("seam-specs", 62), approved("driver-contract", 63)
+		s := limited(state(ss, dc), limit)
+		wantValidate(t, s)
+		wantNext(t, s, "cloud/run", "seam-specs f2-plan")
+		claimPlan(t, s, ss)
+		wantOffer(t, s, "driver-contract", second)
+		wantOfferTo(t, s, "seam-specs", "cloud/seam-specs", "f2-plan")
+		wantValidate(t, s)
+	}
+}
+
+// noMutualHoldInImplement is case 5: a feature in Implement goes on when
+// another finishes Design, and that one plans once approved.
+func noMutualHoldInImplement(t *testing.T) {
+	ss, dc := approved("seam-specs", 62), toPhase("driver-contract", 63, 1)
+	declare(dc, true)
+	s := limited(state(ss, dc), 3)
+	finishPlan(t, s, ss)
+	advance(dc, 2)
+	wantNext(t, s, "cloud/run", "seam-specs f3-implement")
+	wantValidate(t, s)
+	approve(dc)
+	wantNext(t, s, "cloud/run", "seam-specs f3-implement")
+	wantOffer(t, s, "driver-contract", "f2-plan")
+	claimPlan(t, s, dc)
+	wantOffer(t, s, "seam-specs", "f3-implement")
+	wantValidate(t, s)
+}
+
+// noMutualHoldFour is case 6: Plan goes to the first three in FLOW-05 order
+// and the fourth waits, naming them.
+func noMutualHoldFour(t *testing.T) {
+	fs := []*Feature{approved("a", 1), approved("b", 2), approved("c", 3),
+		approved("d", 4)}
+	s := limited(state(fs...), 3)
+	wantValidate(t, s)
+	for _, f := range fs[:3] {
+		wantNext(t, s, "cloud/run", f.Feature+" f2-plan")
+		claimPlan(t, s, f)
+	}
+	wantNext(t, s, "cloud/run", "none")
+	wantOffer(t, s, "d", slotWait(3, "a", "b", "c"))
+	wantValidate(t, s)
+	for _, f := range fs[:3] {
+		wantOfferTo(t, s, f.Feature, "cloud/"+f.Feature, "f2-plan")
+		Complete(f, plan(t, f), "cloud/"+f.Feature, now)
+		wantOffer(t, s, f.Feature, "f3-implement")
+	}
+	wantOffer(t, s, "d", slotWait(3, "a", "b", "c"))
+	wantValidate(t, s)
+}
+
+// TestAltersSlotLimit: the limit is limits.alters_relationships, 1 when
+// config.yaml does not set it, and a written value below 1 is an error
+// (FLOW-05, FLOW-20, GLOBAL-10; cases 8 and 14, and "More holders than the
+// limit").
+func TestAltersSlotLimit(t *testing.T) {
+	one, three := 1, 3
+	for _, c := range []struct {
+		name    string
+		written *int
+		limit   int
+	}{{"absent", nil, 1}, {"1", &one, 1}, {"3", &three, 3}} {
+		t.Run(c.name, func(t *testing.T) { altersLimitHolders(t, c.written, c.limit) })
+		t.Run(c.name+", one in Implement", func(t *testing.T) {
+			altersLimitInImplement(t, c.written, c.limit)
+		})
+	}
+	t.Run("below 1", altersLimitBelowOne)
+	t.Run("config.yaml", altersLimitLoaded)
+}
+
+// altersLimitHolders takes the holders from none to one over the limit. A
+// Plan step is offered below the limit and waits from it on; only the claim
+// past the limit, which wf next never offers, fails Validate, and it stops
+// no holder.
+func altersLimitHolders(t *testing.T, written *int, limit int) {
+	var hs []*Feature
+	for i := 0; i <= limit; i++ {
+		hs = append(hs, approved(fmt.Sprintf("h%d", i), i+1))
+	}
+	s := state(append(slices.Clone(hs), approved("w", 9))...)
+	s.Config.Limits.AltersRelationships = written
+	var held []string
+	for _, h := range hs {
+		wantValidate(t, s)
+		want := "f2-plan"
+		if len(held) >= limit {
+			want = slotWait(limit, held...)
+		}
+		wantOffer(t, s, "w", want)
+		wantOffer(t, s, h.Feature, want)
+		claimPlan(t, s, h)
+		held = append(held, h.Feature)
+	}
+	wantValidate(t, s, overLimit(limit, held...))
+	wantOffer(t, s, "w", slotWait(limit, held...))
+	for _, h := range hs {
+		wantOfferTo(t, s, h.Feature, "cloud/"+h.Feature, "f2-plan")
+	}
+}
+
+// altersLimitInImplement is case 8 at limit 1, written or not: A in Implement
+// goes on and B, approved, waits for A. At limit 3 B plans beside it.
+func altersLimitInImplement(t *testing.T, written *int, limit int) {
+	a, b := approved("a", 1), approved("b", 2)
+	s := state(a, b)
+	s.Config.Limits.AltersRelationships = written
+	finishPlan(t, s, a)
+	wantNext(t, s, "cloud/run", "a f3-implement")
+	want := "f2-plan"
+	if limit == 1 {
+		want = slotWait(1, "a")
+	}
+	wantOffer(t, s, "b", want)
+	wantValidate(t, s)
+}
+
+// altersLimitBelowOne is case 14: a written 0 or -2 is the one finding, with
+// no count of holders beside it, and the reason a Plan step waits names the
+// value. A holder still goes on.
+func altersLimitBelowOne(t *testing.T) {
+	for _, n := range []int{0, -2} {
+		a, b, w := approved("a", 1), approved("b", 2), approved("w", 3)
+		s := limited(state(a, b, w), n)
+		finding := fmt.Sprintf("config: limits.alters_relationships %d is below 1", n)
+		wait := fmt.Sprintf("waiting on limits.alters_relationships %d is below 1 "+
+			"(FLOW-05)", n)
+		wantValidate(t, s, finding)
+		wantOffer(t, s, "w", wait)
+		finishPlan(t, s, a)
+		claimPlan(t, s, b)
+		wantValidate(t, s, finding)
+		wantOffer(t, s, "w", wait)
+		wantOffer(t, s, "a", "f3-implement")
+	}
+}
+
+// altersLimitLoaded: config.yaml's absent key reads as 1, and differs from a
+// written 0.
+func altersLimitLoaded(t *testing.T) {
+	dir := t.TempDir()
+	for _, c := range []struct {
+		limits, offered string
+		findings        []string
+	}{
+		{"", slotWait(1, "a"), nil},
+		{"limits: {in_progress: 5}\n", slotWait(1, "a"), nil},
+		{"limits: {alters_relationships: 3}\n", "f2-plan", nil},
+		{"limits: {alters_relationships: 0}\n",
+			"waiting on limits.alters_relationships 0 is below 1 (FLOW-05)",
+			[]string{"config: limits.alters_relationships 0 is below 1"}},
+	} {
+		_ = os.WriteFile(filepath.Join(dir, "config.yaml"),
+			[]byte("run_budget: {steps: 8}\n"+c.limits), 0o644)
+		s, err := Load(dir)
+		if err != nil {
+			t.Fatal(err)
+		}
+		a, b := approved("a", 1), approved("b", 2)
+		s.Features = []*Feature{a, b}
+		finishPlan(t, s, a)
+		wantOffer(t, s, "b", c.offered)
+		wantValidate(t, s, c.findings...)
+	}
+}
+
+// TestAltersSlotAcrossReturns: a holder keeps its slot through a return to
+// Design while it has a finished plan, and the queue's value decides the rest
+// (FLOW-06; cases 9, 10 and 12, and the flip of "More holders than the
+// limit").
+func TestAltersSlotAcrossReturns(t *testing.T) {
+	t.Run("from Implement or later", returnKeepsSlot)
+	t.Run("from Plan", returnFromPlanFreesSlot)
+	t.Run("true to false", returnToFalseFreesSlot)
+	t.Run("false to true", returnToTrueOverLimit)
+}
+
+// returnKeepsSlot is case 9: the done Plan step survives Back, and the
+// holder's second plan needs no second slot.
+func returnKeepsSlot(t *testing.T) {
+	for _, phase := range []int{3, 4, 6} {
+		a, b := approved("a", 1), approved("b", 2)
+		s := state(a, b)
+		finishPlan(t, s, a)
+		advance(a, phase)
+		Back(a, "cloud/a", now, "plan not viable", 1)
+		wantOffer(t, s, "a", "f1-design-r2")
+		wantOffer(t, s, "b", slotWait(1, "a"))
+		wantValidate(t, s)
+		advance(a, 2)
+		approve(a)
+		wantOffer(t, s, "a", "f2-plan-r2")
+		wantOffer(t, s, "b", slotWait(1, "a"))
+		wantValidate(t, s)
+	}
+}
+
+// returnFromPlanFreesSlot is case 10: Back drops the unfinished Plan step and
+// the slot with it, and the returned feature waits in its turn.
+func returnFromPlanFreesSlot(t *testing.T) {
+	a, b := approved("a", 1), approved("b", 2)
+	s := state(a, b)
+	claimPlan(t, s, a)
+	wantOffer(t, s, "b", slotWait(1, "a"))
+	Back(a, "cloud/a", now, "the design cannot be planned", 1)
+	wantOffer(t, s, "b", "f2-plan")
+	wantValidate(t, s)
+	claimPlan(t, s, b)
+	advance(a, 2)
+	approve(a)
+	wantOffer(t, s, "a", slotWait(1, "b"))
+	wantValidate(t, s)
+}
+
+// returnToFalseFreesSlot is case 12: a redesign that changes true to false
+// frees the slot, and the feature then plans beside the next holder.
+func returnToFalseFreesSlot(t *testing.T) {
+	a, b := approved("a", 1), approved("b", 2)
+	s := state(a, b)
+	finishPlan(t, s, a)
+	Back(a, "cloud/a", now, "the seam stays as it is", 1)
+	wantOffer(t, s, "b", slotWait(1, "a"))
+	declare(a, false)
+	wantOffer(t, s, "b", "f2-plan")
+	claimPlan(t, s, b)
+	advance(a, 2)
+	approve(a)
+	wantOffer(t, s, "a", "f2-plan-r2")
+	wantValidate(t, s)
+}
+
+// returnToTrueOverLimit is the flip: a feature with a done Plan step whose
+// value becomes true while every slot is held is a holder over the limit.
+// Validate names every holder, each holder's next step is still offered, and
+// no other altering feature's Plan step is. Putting the value back, as
+// wf-design's step 5 says, makes the state valid again.
+func returnToTrueOverLimit(t *testing.T) {
+	a, f, c := approved("a", 1), toPhase("f", 2, 3), approved("c", 3)
+	declare(f, false)
+	s := state(a, f, c)
+	finishPlan(t, s, a)
+	Back(f, "cloud/f", now, "the change reaches the relay's role", 1)
+	wantValidate(t, s)
+	declare(f, true)
+	wantValidate(t, s, overLimit(1, "a", "f"))
+	wantOffer(t, s, "a", "f3-implement")
+	wantOffer(t, s, "f", "f1-design-r2")
+	wantOffer(t, s, "c", slotWait(1, "a", "f"))
+	declare(f, false)
+	wantValidate(t, s)
+	wantOffer(t, s, "c", slotWait(1, "a"))
+}
+
+// TestAltersSlotCloudOnly: only the cloud's Plan step waits for a slot. While
+// every slot is held a design review is offered, and so is a Plan step whose
+// affinity was set to a host; that host's claim then fails Validate, since wf
+// claim checks no limit.
+func TestAltersSlotCloudOnly(t *testing.T) {
+	a, b, c := approved("a", 1), altering("b", 2), approved("c", 3)
+	s := nativeState(a, b, c)
+	finishPlan(t, s, a)
+	plan(t, c).Affinity = "host:macos-vz"
+	wantNext(t, s, "human/jeff", "b f2-design-review")
+	wantNext(t, s, "host:macos-vz/s", "c f2-plan")
+	wantOffer(t, s, "c", "waiting on host:macos-vz step f2-plan")
+	wantValidate(t, s)
+	s.Claim(c, plan(t, c), "host:macos-vz/s", now, true)
+	wantValidate(t, s, overLimit(1, "a", "c"))
+}
+
+// TestAltersSlotExpiredClaim is case 11: an abandoned claim keeps the slot,
+// with no clock read, until its Plan step is taken up again or released.
+func TestAltersSlotExpiredClaim(t *testing.T) {
+	a, b := approved("a", 1), approved("b", 2)
+	s := state(a, b)
+	claimPlan(t, s, a)
+	later := now.Add(3 * time.Hour)
+	if got := offerAt(s, "b", "cloud/run", later); got != slotWait(1, "a") {
+		t.Fatalf("b past a's expiry: offered %q, want the wait for a's slot", got)
+	}
+	if got := offerAt(s, "a", "cloud/run", later); got != "f2-plan" {
+		t.Fatalf("a past its expiry: offered %q, want any run to take up f2-plan", got)
+	}
+	wantValidate(t, s)
+	s.Release(a, plan(t, a), "cloud/run", later, "abandoned")
+	if got := offerAt(s, "b", "cloud/run", later); got != "f2-plan" {
+		t.Fatalf("b after the release: offered %q, want f2-plan", got)
+	}
+}
+
+// TestAltersSlotSkipsProcessItems is case 13: a process item that declares
+// alters_relationships: true neither holds a slot nor waits for one (FLOW-05
+// counts features; holds is how a process item stops other work).
+func TestAltersSlotSkipsProcessItems(t *testing.T) {
+	p, f, g := process("p", 1, "in_progress"), approved("f", 2), approved("g", 3)
+	declare(p, true)
+	advance(p, 2)
+	s := state(p, f, g)
+	claimPlan(t, s, f)
+	wantNext(t, s, "cloud/run", "p x2-implement")
+	s.Claim(p, &p.Steps[len(p.Steps)-1], "cloud/p", now, true)
+	wantOffer(t, s, "g", slotWait(1, "f"))
+	wantValidate(t, s)
+	s.Release(f, plan(t, f), "cloud/f", now, "done-when failed")
+	wantOffer(t, s, "g", "f2-plan")
+}
+
+func TestIsPlan(t *testing.T) {
+	for id, want := range map[string]bool{"f2-plan": true, "f2-plan-r3": true,
+		"f2-design-review": false, "f2-plan-macos-vz": false, "f3-plan": false,
+		"x2-implement": false, "p2-plan": false} {
+		if got := IsPlan(&Step{ID: id}); got != want {
+			t.Errorf("IsPlan(%s) = %v", id, got)
+		}
 	}
 }
 
