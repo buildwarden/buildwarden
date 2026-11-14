@@ -9,7 +9,8 @@ seams: [driver-contract, relay-claim, collector, bootstrap-model]
                          # changes, but the claimant and the collector's owner become warden
                          # for every driver. bootstrap-model: BOOT-02's wording (BOOT-07).
 surfaces: [cli, config, output]  # cli: `warden driver list`, a path in --driver, per-driver flags
-                         # and help; config: [driver.<name>]; output: <output>/driver.json
+                         # and help; config: [driver.<name>], [build] teardown_timeout;
+                         # output: <output>/driver.json
 security_boundary: host-env  # the code that builds the isolation is chosen at run time by a
                          # lookup. Also env-relay: the driver starts the relay warden claims.
 alters_relationships: true
@@ -452,6 +453,17 @@ and a driver's `run` during one build.
     one job that runs those packages' tests on
     Linux, macOS and Windows runners. Alternative: Linux in CI and the
     other two platforms only in native validation (a7).
+21. **The contract's time limits are fixed, except the teardown wait,
+    which is `warden`'s key `[build] teardown_timeout`** (60 s unless
+    set, from 1 s to 1 h). It is `warden`'s and not the driver's: it is
+    how long the caller waits before it kills, it is the same for every
+    driver, one written without the kit included, and a driver that is
+    stuck cannot be asked to time itself. Alternatives: every limit
+    fixed, which the redraft recommended and the review did not take; a
+    key of each driver (the wait would then be read by the process it is
+    meant to bound); a flag as well (not added: the wait is a property
+    of a host and its drivers, set once, and a flag can be added later
+    without breaking anything) (a20).
 
 ## Questions
 
@@ -594,7 +606,7 @@ the basis, then the rest.
 
 **The rest**
 
-- **a5. The behaviour that changes.** Proceeding with the fifteen
+- **a5. The behaviour that changes.** Proceeding with the sixteen
   differences listed under **Behaviour**. In short: (1) flags and help
   follow the selected driver; (2) a flag the selected driver does not
   declare is refused, where eleven were silently ignored, and so is
@@ -616,7 +628,8 @@ the basis, then the rest.
   only when qemu or hyperv is selected, and then on every command; (14)
   `--timeout` counts from the moment `warden` starts the driver; (15) a
   context or temporary path that is not valid UTF-8 is refused for a
-  driver binary. Options: (a) accept all fifteen; (b) keep every
+  driver binary; (16) `[build] teardown_timeout` is new. Options: (a)
+  accept all sixteen; (b) keep every
   command's flags and help as the union of the five bundled drivers', as
   today, and refuse nothing new (1 to 3 go); (c) for 2 and 5, UX-03's
   own route: for one release `warden` warns that the flag is ignored for
@@ -646,6 +659,13 @@ the basis, then the rest.
   the 60 s a key. Recommended: (a). Whether 60 s covers a Hyper-V
   teardown is measured in native validation; the limit itself applies
   only to a driver binary, so K1 does not enforce it on Hyper-V. Confirm.
+
+  **Answered 2026-11-14: (c),** the limits and cleanup points as stated,
+  with the 60 s teardown wait made a configuration key. This departs
+  from the recommendation. Folded in as Decision 21 and under **The
+  build**, signals: the wait is `warden`'s key `[build]
+  teardown_timeout`, a duration from `1s` to `1h`, `60s` when unset.
+  Every other limit stays fixed.
 - **a19. A driver from outside.** `warden` cannot check that a driver it
   did not ship isolates the build, or that it runs the project's relay and
   executor. Proceeding with Decision 15: accept that, say so in GLOBAL-08
@@ -1326,11 +1346,12 @@ which is what qemu and firecracker do today (UX-09 names only Ctrl-C).
 qemu's and firecracker's own handlers go.
 
 - *A driver binary* runs in its own process group, so the terminal's
-  signal reaches `warden` only. `warden` waits up to 60 s for `stopped`.
-  A second signal, or the 60 s passing, kills the driver's process group
-  (on Windows, the driver process) and runs `reap <build_id>`.
+  signal reaches `warden` only. `warden` waits for `stopped` for the
+  teardown wait, 60 s unless set (below). A second signal, or the wait
+  passing, kills the driver's process group (on Windows, the driver
+  process) and runs `reap <build_id>`.
 - *A linked driver* shares `warden`'s process, so there is nothing to kill
-  and no limit: the 60 s applies to the exec transport only. A second
+  and no limit: the teardown wait applies to the exec transport only. A second
   signal ends `warden` at once, as it does today on vz and hyperv. That
   is new on qemu and firecracker, where a second Ctrl-C is ignored today:
   firecracker's VMMs die with `warden` (`Pdeathsig`); qemu's VMs do not,
@@ -1338,6 +1359,50 @@ qemu's and firecracker's own handlers go.
 
 A driver treats `stop` and the end of its input the same way: tear down,
 then exit.
+
+**The teardown wait** is how long `warden` waits for a driver binary to
+answer `stop` with `stopped` before it kills it and runs `reap`. It is
+the one time limit of the contract that can be set (Decision 21, a20):
+
+| | |
+|---|---|
+| Key | `teardown_timeout` in `[build]`, in `warden.toml` or the user's config file; the project's file wins over the user's (ORCH-03) |
+| Type | A string holding a Go duration, the form `--timeout` takes: `"90s"`, `"5m"` |
+| Default | `"60s"` |
+| Bounds | `1s` to `1h`, inclusive |
+| Read by | `warden`, as the config files load |
+| Applies to | A driver binary, on every `stop`: a completed, failed, interrupted or timed-out build, and `warden shell`. A linked driver has nothing to kill, so in K1 the key is read and checked for it and then has nothing to act on |
+| Flag, variable | None |
+
+It is `warden`'s key and not the driver's, although a driver now reads
+its own configuration (a21): the wait is the caller's patience, not a
+setting of the thing being waited for. `warden` applies it to every
+driver alike, one written without the kit included, and the driver it
+is meant to bound is by definition one that has stopped answering. It
+sits in `[build]` with the other per-build settings `warden` owns
+(`tmpdir`, `output_dir`). It has no flag: how long a teardown takes is a
+property of a host and its drivers, set once and not per invocation, as
+`[vm] dns` and `[relay] upstream_ca_certs` are keys without flags today;
+a flag can be added later without breaking anything (UX-03). The value
+is not sent to the driver in version 1.
+
+The bounds: below `1s` every `stop` would end in a kill and a `reap`
+instead of a teardown, and above `1h` the wait bounds nothing; a second
+Ctrl-C is the way to stop waiting sooner. A value that does not parse or
+is out of range is refused as the file loads, before any driver runs
+(UX-08), and the default is not used in its place (GLOBAL-10):
+
+```
+[warden] ERROR: [build] teardown_timeout in warden.toml: "0s" is below
+                the minimum of 1s
+  To fix: set it to a duration from 1s to 1h, such as "90s", or remove
+          it to wait the default 60s
+```
+
+Every other limit stays fixed: `describe` within 10 s, a probe within
+30 s, the relay's `ready` within 90 s of the start of the claim, 30 s
+without a heartbeat, and 10 s for a completion after the environment
+exits.
 
 **What fails, and what follows.**
 
@@ -1348,7 +1413,7 @@ then exit.
 | The relay exits | Any time after `relay-started` | The driver sends `exited`, `which: relay` | Cancels a claim in progress, or fails the build at once; then `stop` with `reason: failed` |
 | The environment cannot be started | After `claimed` | The driver tears down, sends `failed`, exits 1 | Closes the session and prints the error. No `reap` |
 | The environment exits before the build completes | After `environment-started` | The driver sends `exited`, `which: build` | Waits 10 s for a completion, then fails the build; `stop` with `reason: failed` |
-| The driver's process ends with neither `stopped` nor `failed`, writes a stdout line that is not a JSON object, or does not stop within 60 s | Any time | Nothing | Kills the driver's process group, shows the tail of its stderr as a driver defect, and runs `reap <build_id>` with the record's values. If the collector already holds the build's completion, the build's result stands and the defect is reported beside it; otherwise the build fails. If `reap` fails, the record and lock stay for `warden clean` |
+| The driver's process ends with neither `stopped` nor `failed`, writes a stdout line that is not a JSON object, or does not stop within the teardown wait | Any time | Nothing | Kills the driver's process group, shows the tail of its stderr as a driver defect, and runs `reap <build_id>` with the record's values. If the collector already holds the build's completion, the build's result stands and the defect is reported beside it; otherwise the build fails. If `reap` fails, the record and lock stay for `warden clean` |
 
 `failed` and `stopped` both promise that the driver has torn down, so
 `warden` runs `reap` only when it got neither.
@@ -2157,7 +2222,7 @@ role (a17).
 
 ### Behaviour
 
-Fifteen things change for a user (a5). Everything else is meant to be
+Sixteen things change for a user (a5). Everything else is meant to be
 identical.
 
 1. **Flags and help follow the selected driver.** `warden build --help`
@@ -2215,7 +2280,8 @@ identical.
    hyperv and leaves whatever the driver had not yet torn down, and is
    ignored on qemu and firecracker, which hold their own handler. After
    K1, for a driver binary (container) it kills the driver and runs its
-   `reap`; so does a teardown that takes more than 60 s. For a linked
+   `reap`; so does a teardown that takes longer than the teardown wait
+   (60 s unless set). For a linked
    driver it ends `warden` at once: as today on vz and hyperv, and new on
    qemu and firecracker. On qemu that leaves its VMs running, which a
    second Ctrl-C could not do before; K2's `reap` is what finds them.
@@ -2251,6 +2317,9 @@ identical.
     build context, output directory or `--tmpdir` whose name is not UTF-8
     cannot be sent to a driver process unchanged. In K1 that is the
     container driver; the linked drivers take it as today.
+16. **`[build] teardown_timeout` is new**: how long `warden` waits for a
+    driver binary to tear down before it kills it and reaps, 60 s unless
+    set (a20). Additive; nothing waited or killed this way before.
 
 What does not change, although the code behind it moves:
 
@@ -2289,7 +2358,7 @@ would give a window (a5).
   Dockerfile and is built with `--script` (the choice is made inside the
   driver today, in `linuxguest.ContainerfileImage`, so a request table
   alone would not see it). The later commits may change a golden only
-  for the fifteen differences above, so each shows up as a reviewed
+  for the sixteen differences above, so each shows up as a reviewed
   golden diff.
 - **The request tables become `start` tables.** The same table of flags,
   environment and files is asserted against the `start` message and its
@@ -2510,7 +2579,7 @@ not listed is unchanged and `warden`'s.
 | Who sends the claim: `warden` | **Changed owner** (a13); the claim is unchanged | The collector's owner must hold the tunnel | Nothing in K1 |
 | The contract version: the highest both sides speak | **New** | The newest common behaviour | Nothing; none in common is an error naming both |
 | A build may complete for 10 s after its environment exits | **Changed** for container and Hyper-V, from 5 s (Behaviour 7, a20) | One rule in `warden` for every driver; 10 s is the longest any driver uses today | Nothing |
-| After `stop`, a driver binary has 60 s to tear down; then it is killed and `reap` runs. A linked driver has no limit | **New** (a20) | Long enough for the slowest teardown known; short enough that Ctrl-C ends | A second Ctrl-C or SIGTERM does it at once |
+| After `stop`, a driver binary has the teardown wait to tear down, 60 s when `[build] teardown_timeout` is not set; then it is killed and `reap` runs. A linked driver has no limit | **New**, and a key by the review's answer (a20, Decision 21) | 60 s is long enough for the slowest teardown known and short enough that Ctrl-C ends | `[build] teardown_timeout`, from `1s` to `1h`: the project's file, else the user's, and the value set is the wait, not a floor or a ceiling on the default. A value that does not parse or is out of range is an error at load; 60 s is not used in its place. A second Ctrl-C or SIGTERM ends the wait at once |
 | SIGTERM stops a build as Ctrl-C does, on every driver | **Changed** for container, vz and hyperv, where it killed `warden` (Behaviour 9) | A cancelled CI job should not leave containers or VMs | Nothing |
 | `describe` answers within 10 s, a probe within 30 s | **New** (a20) | `describe` does no host work; a probe makes the driver's preflight, and the slowest today is the container runtime detection (three runtimes at 3 s each) | Nothing; a slower driver is reported as a defect |
 | `reap`, `attach` and `warden clean` use the values in the build's record and state file, not the current invocation's | **New** (Decision 18, a20) | They must look where the build put things | Nothing. `warden clean --driver <path>` chooses the binary that reaps, when the recorded one is gone |
@@ -2870,7 +2939,7 @@ every VM driver already depends on and the list omits today; and
 `cmd/warden/buildseq.go`, `cmd/warden/buildrecord.go`,
 `cmd/warden/linked.go` and `cmd/warden/drivercall.go`. The last four
 follow the lifecycle to where the rule now says it lives: the claim
-order, the 10 s grace and the 60 s limit are in `driver/session.go` and
+order, the 10 s grace and the teardown wait are in `driver/session.go` and
 the drivers today, where a change is caught, and after K1 they are in
 `cmd/warden`, where without these entries a change declared for one
 driver would pass. A design that changes any of them must then declare
@@ -3391,8 +3460,10 @@ differs per platform, so it adds one job (Decision 20):
   the relative path in the user's config; `driver list` and its
   `shadowed` entries; the result and request files, every
   exit code, a line that is not JSON, a driver that exits early, a path
-  that is not UTF-8, the 60 s limit and the 10 s and 30 s limits with a
-  fake clock.
+  that is not UTF-8, the teardown wait (its default, a value from the
+  project's file over the user's, a value that does not parse and one
+  out of range, each refused at load) and the 10 s and 30 s limits with
+  a fake clock.
 - `warden`'s end-to-end tests through `warden-driver-fake` and
   `stubrelay`: build (success, failure, timeout, Ctrl-C, second Ctrl-C,
   SIGTERM, killed driver, noisy driver, a `warden` killed with its pipes
@@ -3454,7 +3525,7 @@ is, and the workflow file is the list.
 | macos-finch | (1) `warden driver list` shows `container` at the built `warden-driver-container` and the four linked drivers; `warden doctor` prints `container runtime: finch` and `ok`. (2) A default build succeeds and its ledger verifies; `driver.json` names the driver binary and its digest; `inputs/` holds `Containerfile` and `build.sh`. (3) `warden shell` opens a shell and passes its exit code through. (4) `[runtime] relay_image = "dev"` builds the relay from source; `WARDEN_IMAGE=<ref>` pulls that image; an unpullable reference fails without trying the default. (5) Ctrl-C mid-build tears down and leaves nothing; SIGTERM mid-build does the same and exits 1; with the driver killed mid-build `warden` fails the build and reaps; with `warden` killed (SIGKILL) mid-build the driver tears down by itself and no container of the build is left. (6) With `warden` and the driver both killed, the build's containers are still running; `warden clean`, run with another `--tmpdir` than the build's, removes that build's containers, network, work directory, stage directory, lock and record, and leaves a running build's; a running build started with another `HOME`, whose lock is elsewhere, is left alone too. (7) `WARDEN_CTR_CLI` and `--runtime` select the runtime; a missing one gives the fixable error and leaves no output directory; `--network x` is refused with the generated message. (8) A copy of `warden-driver-container` placed in a directory on `PATH` runs in place of the one beside `warden`: `warden driver list` shows it and the copy it shadows, and the build's `driver.json` has `found: PATH` and its digest; `[runtime] driver = "./x"` in the project's `warden.toml` is refused. (9) `make driver-conformance DRIVER=dist/warden-driver-container` passes both tiers on finch |
 | container-any | On the Windows host, with its container runtime: (1) `warden driver list` shows `warden-driver-container.exe`; `warden doctor` reports the runtime and `ok`. (2) A default build succeeds, its ledger verifies, `driver.json` is written. (3) Ctrl-C mid-build tears down; with the driver killed `warden` reaps; with `warden` killed the driver tears down on the end of its input. (4) `warden clean` leaves a running build and removes a build whose `warden` and driver were both killed, from its record. (5) A `warden-driver-container.bat` beside `warden` or on `PATH` is not taken for the driver; a `warden-driver-container.exe` on `PATH` replaces the one beside `warden`. (6) Both tiers of the suite pass against `warden-driver-container.exe` |
 | macos-vz | (1) `warden doctor --driver vz` and `warden image list` print what `main` prints. (2) A vz build succeeds, its ledger verifies, `relay.log` is written, `driver.json` says `linked`; with a Containerfile in the context, it is ignored and `inputs/` is absent, as on `main`. (3) A script that exits 3 makes `warden` exit 3; `--timeout 30s` on a sleeping script exits 124. (4) Ctrl-C mid-build leaves no relay process and no work directory; SIGTERM mid-build does the same and exits 1, where on `main` it kills `warden`. (5) `--runtime docker` and `--network x` with `--driver vz` are refused with the generated message; `warden clean --driver vz` reports nothing to clean and needs no container runtime |
-| windows-hyperv | (1) `warden doctor --driver hyperv`, elevated and not, prints what `main` prints; `--network` is honoured. (2) Elevated `warden setup --driver hyperv --slots 2` is idempotent. (3) A non-elevated durable build and an elevated ephemeral build succeed and verify; `[vm] network` is honoured and `--network` overrides it; with `[vm] image_refresh_after` set low, the detached `image prepare --driver hyperv` starts and logs. (4) With the service installed, a service-delegated build succeeds. (5) A build whose script powers the VM off without completing fails with the build-VM-off error about 10 s after the VM stops. (6) Ctrl-C mid-build removes both VMs and the switch; the time from Ctrl-C to exit is recorded, to judge the 60 s limit against a real teardown before K2 applies it to Hyper-V (a20). (7) `--keep-vms` leaves both VMs; `warden clean --driver hyperv` then removes them and leaves a running build's |
+| windows-hyperv | (1) `warden doctor --driver hyperv`, elevated and not, prints what `main` prints; `--network` is honoured. (2) Elevated `warden setup --driver hyperv --slots 2` is idempotent. (3) A non-elevated durable build and an elevated ephemeral build succeed and verify; `[vm] network` is honoured and `--network` overrides it; with `[vm] image_refresh_after` set low, the detached `image prepare --driver hyperv` starts and logs. (4) With the service installed, a service-delegated build succeeds. (5) A build whose script powers the VM off without completing fails with the build-VM-off error about 10 s after the VM stops. (6) Ctrl-C mid-build removes both VMs and the switch; the time from Ctrl-C to exit is recorded, to judge the 60 s default of the teardown wait against a real teardown before K2 applies it to Hyper-V (a20). (7) `--keep-vms` leaves both VMs; `warden clean --driver hyperv` then removes them and leaves a running build's |
 | qemu-any | (1) `warden doctor --driver qemu` prints what `main` prints. (2) A direct-boot build and a cloud-image build succeed and verify; a Dockerfile whose `FROM` names a prepared image boots that image, as on `main`, and still does when the build is given `--script`, as on `main`; `inputs/` holds `Containerfile` and `build.sh`. (3) Ctrl-C mid-build leaves no `qemu-system` process and no work directory; SIGTERM mid-build does the same; `--keep-vms` leaves the work directory only. (4) `--timeout 30s` on a sleeping script exits 124. (5) `warden clean --driver qemu` reports nothing to clean with no container runtime running. (6) A second Ctrl-C during teardown ends `warden`; what it leaves is recorded (Behaviour 8) |
 
 Evidence goes under `native/<host>/<date>/` on the `workflow` branch.
@@ -3546,14 +3617,15 @@ each task leaves `make test` and `make lint` green (FLOW-17).
     command of the contract (`run` and its probe, `reap`, `doctor`,
     `setup`, the image commands, `clean`, `attach`, and `ext` as `warden
     <name> ...`), the refusal of a path that is not UTF-8, `warden driver
-    list` and `driver.json` (GLOBAL-06, GLOBAL-07, GLOBAL-10, GLOBAL-11,
+    list`, `driver.json` and the teardown wait read from `[build]
+    teardown_timeout` (GLOBAL-06, GLOBAL-07, GLOBAL-10, GLOBAL-11,
     UX-02, UX-04, UX-09, ORCH-04, ORCH-05).
 18. Move every driver-owned flag and key into its driver's option
     declaration; `warden` finds the driver before parsing flags, registers
     the selected driver's, checks and resolves them; the VM drivers'
     doctor, setup, image and clean code reads resolved values; the seven
     existing fields stay in `Config` as the typed decode only. Update the
-    goldens for the fifteen differences only (ORCH-03, UX-03, UX-07,
+    goldens for the sixteen differences only (ORCH-03, UX-03, UX-07,
     UX-08, GLOBAL-10).
 19. Add `warden`'s end-to-end tests against the fake, for every command,
     run on three platforms by the `driver-contract` job (TEST-01, TEST-04,
@@ -3583,7 +3655,7 @@ each task leaves `make test` and `make lint` green (FLOW-17).
 25. Make the approved amendments to `docs/design/componentization.md`
     (FLOW-12, FLOW-20).
 26. Update `guide/cli.md`, `guide/configuration.md`, `guide/output.md` and
-    `guide/drivers.md` for the fifteen differences, the lookup and
+    `guide/drivers.md` for the sixteen differences, the lookup and
     `[driver.<name>]`; `concepts/overview.md` and
     `contributing/structure.md` for the new shape; `CONTRIBUTING.md` for
     `make driver-conformance`; `getting-started/installation.md` for the
