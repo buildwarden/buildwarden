@@ -195,7 +195,8 @@ say.
    computes from a generated copy in the queue state** (a4). The map is
    `tools/tier1/areas.yaml`, named by the profile (PROFILE-01). `wf areas
    -sync` copies `origin/main`'s map to `areas.yaml` on the `workflow`
-   branch at the start of every session.
+   branch at the start of every session. The map as written for today's
+   tree is a5.
    - *Rejected: the map only on the `workflow` branch.* It could not be
      checked against the tree in the pull request that changes the tree.
    - *Rejected: `wf` reads `origin/main` on every command.* `wf next`,
@@ -311,12 +312,19 @@ say.
     `loop-repository`.
 19. **Thirteen rule changes, in this item's PR.** FLOW-02, -03, -05, -10,
     -15, -19 and -20, as the proposal lists; FLOW-04, -06 and -08, which
-    `wf commit`, the refresh step and tracked items make untrue as written;
+    `wf commit`, the refresh step, tracked items and a merge recorded in a
+    second repository (a6) make untrue as written;
     LOOP-01, LOOP-04 and PROFILE-01, for the Areas term and the queue's new
     field. The last three need `loop-contract` on `main`, so `x2-implement`
     starts after its merge (Implementation plan, task 1).
 20. **The freeze stays.** FLOW-20 loses only its Limit bullet. This is the
     proposal's question 2, option (a), part of the approved direction.
+21. **Disjoint PRs in one repository merge in any order** (a1). Nothing
+    makes the second wait for its refresh; `QUEUE.md` says when a PR is
+    behind `main`, and CI on the push to `main` is the gate.
+    - *Rejected: requiring an up-to-date branch.* Each merge would block the
+      rest for a cloud run.
+    - *Rejected: one open PR per repository.* That is today's rule again.
 
 ## Questions
 
@@ -545,6 +553,10 @@ must pass `wf validate`: `wf declare` applies the change in memory, runs
 names the limit and the holders, and says "back to Design (FLOW-06)". It
 logs what changed in the item's history (`declared: areas +driver/hyperv
 (within drivers: hyperv)`).
+
+**`wf relate -state DIR -worker human/<name> -feature A -with B [-clear]`**
+writes or clears `collides_with` on A. Only a `human` worker may run it, and
+it is refused, like `wf declare`, when the result would put a limit over.
 
 This replaces the sentence `alters-slot` added to `wf-design`'s step 5 (its
 a4): a redesign that flips `alters_relationships` to `true` past the limit is
@@ -1247,7 +1259,10 @@ file names the item's repositories when it has more than this one.
 
 `tools/workflow/queue/`:
 
-- `queue.go`: the six fields on `Feature`; `Config.Repository`;
+- `queue.go`: the six fields on `Feature`, with `areas` a pointer to a
+  list so that an absent key and an empty list stay apart through a load
+  and a save (checked with the YAML library the module uses);
+  `Config.Repository`;
   `Limits.InProgress` as `*int` with `inProgressLimit()`; `Validate`'s
   checks of the new fields, and its limit checks replaced by a walk of the
   limits table; `Class` returns 3 for `adopts`; `inImplementation` is true
@@ -1776,8 +1791,8 @@ definition that `alters-slot` built and FLOW-20's Limit bullet carried.
 > any number may change an *ordered* area, and the later to merge is put in
 > order by its refresh (FLOW-10). Area A *reaches* area B when code in A
 > depends on code in B. A repository with no map is one exclusive area, and
-> an item that declares no areas changes all of its repositories. Two
-> features are:
+> an item that declares no areas is taken to change the whole of each
+> repository it names. Two features are:
 >
 > - **colliding** when they share an exclusive area; when they have a
 >   repository in common and either declares no areas; when both change a
@@ -2216,7 +2231,8 @@ A process item has no Plan phase; this is the work of `x2-implement`.
 1. Merge `origin/main`. If `docs/development/loop-contract.md` is not on
    it, release the step with that reason: tasks 14 and 15 amend files
    `loop-contract` adds (FLOW-14, LOOP-09).
-2. Tests first, for tasks 3 to 8, failing on the current code (TEST-01,
+2. Tests first: each of tasks 3 to 12 starts with the tests the
+   Validation plan names for it, failing on the current code (TEST-01,
    TEST-02).
 3. `queue/areas.go`, `tools/tier1/areas.yaml` and tier 1's `area-map`
    check with its `rules.yaml` entry (PROFILE-01, LOOP-08, LINT-02).
