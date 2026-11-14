@@ -1811,8 +1811,8 @@ stays the command; a driver should take no secret as a flag, because the
 build's `args` are kept in its record (**The build record**).
 
 For `run` the two fields are also written to the build's record, and
-`attach`, `reap` and `warden clean` send the record's, not those of the
-invocation that runs them. They name the build's files and flags, not
+`attach` and `reap` are sent the record's, whoever runs them, `warden
+clean` included, and not those of the invocation that runs them. They name the build's files and flags, not
 their content at the time, so what `reap` and `attach` must know about
 how the build was configured the driver writes to its state file during
 `run`, as the container driver does with the runtime it chose.
@@ -1820,10 +1820,11 @@ how the build was configured the driver writes to its state file during
 **How `warden` tells a driver's flags from its own.** `warden` is not
 built with a driver's flags, and it cannot parse a command line without
 two facts about each: that the flag exists, and whether the next
-argument is its value. `warden build --force ./ctx` and `warden build
---network ./ctx` differ in nothing else. So `describe` declares the
-driver's flags, for parsing and for help and for nothing more
-(Decision 22, a24):
+argument is its value. In `warden build --force ./ctx` the build path is
+`./ctx`; in `warden build --network ./ctx` it is the value of
+`--network` and there is no path; nothing on the command line says
+which. So `describe` declares the driver's flags, for parsing and for
+help and for nothing more (Decision 22, a24):
 
 ```json
 "flags": [
