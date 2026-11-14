@@ -223,7 +223,7 @@ questions:
     recommended: the first option; each rule change is approved by name in the review
   - id: a7
     kind: assumed
-    status: open
+    status: confirmed
     question: Native validation (FLOW-09) and the CI job. Today make test runs in CI on Linux only, and no workflow builds warden for Windows.
     options:
       - 'macos-finch, container-any, macos-vz, windows-hyperv and qemu-any blocking (steps f6-validate-<host>); macos-qemu tracked (backlog driver-contract-qemu-windows); linux-kvm left out: firecracker is validated by the firecracker CI workflow (hosted KVM), which is not a required check, so Publish confirms its run on the PR''s head passed. container-any is new: on a Windows host the exec transport (a .exe lookup, pipes, kill, reap) and the container driver''s clean are exercised with a real runtime only there. In CI, a new driver-contract job in main.yml runs K1''s tests on Linux, macOS and Windows runners and joins ci-ok; it is not a FLOW-14 rule change (it runs none of tier 1, golangci-lint or tools/workflow)'
@@ -233,9 +233,10 @@ questions:
       - 'the three VM hosts tracked, since those drivers stay linked (not recommended: their build path changes on every host)'
       - 'no new CI job: tier 0 runs on Linux in CI, and the macOS and Windows code is tested only on macos-finch and container-any'
     recommended: the first option
+    answer: (a) macos-finch, container-any, macos-vz, windows-hyperv and qemu-any blocking; macos-qemu tracked; linux-kvm left to the firecracker workflow; the new three-platform CI job. Jeff, design review of the redraft, 2026-11-14.
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The relay source''s scope in K1. It is a kit library (driver/relaysource), not part of the command contract: a driver from outside finds the project''s relay however it likes.'
     options:
       - K1 ships the types and the bundled, source-tree, local-path and image sources that wrap today's lookups, routes the container driver's override ([runtime] relay_image / WARDEN_IMAGE) through them, and adds no flag or key; the container driver uses it in K1; the four VM drivers adopt it in K2 with their binaries, and hyperv's WARDEN_RELAY_BOOT_VHDX moves then; a pinned-download source waits for seam 8 (a11)
@@ -244,6 +245,7 @@ questions:
       - also build the pinned-download source now, unused until M6
       - 'no relay source in K1: the container driver keeps resolveRelayImage, and the library arrives with the first VM binary in K2, where more than one driver uses it (the umbrella''s K1 row then loses "including the relay source", and M6 for the container driver waits for K2)'
     recommended: the first option
+    answer: (a) The relay source is a kit library outside the contract; K1 ships its types and sources and routes the container driver's override through them; the VM drivers adopt it in K2. Jeff, design review of the redraft, 2026-11-14.
   - id: a4
     kind: assumed
     status: open
@@ -264,7 +266,7 @@ questions:
     recommended: capabilities.vm
   - id: a11
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Seam 8 (relay release forms) has no phase that writes it: the umbrella gives S1 seams 1, 2, 3, 5 and 6, S3 seam 7, and moves seam 4, yet says M6 needs K1''s relay source. The relay source needs seam 8''s vocabulary now (form names, file roles) and would need its manifest and hash format for a pinned source. A gap in the umbrella, raised here and not settled by K1.'
     options:
       - K1 defines the four form names and four file roles as Go constants of the kit library, marked provisional and outside the command contract; it writes no seam 8 text, records no form in the ledger and builds no pinned source; seam 8 is filed as its own S-track item, to exist before M6 adopts a release
@@ -272,14 +274,16 @@ questions:
       - K1 writes a first seam 8 text for the names it uses
       - the same for K1, with M6's first item writing seam 8
     recommended: the first option
+    answer: (a) Provisional Go constants in K1; seam 8 filed as its own S-track item, to exist before M6 adopts a release. Jeff, design review of the redraft, 2026-11-14.
   - id: a17
     kind: assumed
-    status: open
+    status: confirmed
     question: Where the contract's specification and suite live. The specs repository does not exist yet (S1 creates it).
     options:
       - specs/driver-contract/v1.md with its schema, and conformance/driver/, in this repository; moved to buildwarden/buildwarden-specs in K2, after S1 has created it (the amended K2 row says so)
       - in the specs repository from the start, with K1 waiting for S1 and for Jeff to create the repository
     recommended: this repository, moved in K2
+    answer: (a) specs/driver-contract/v1.md and conformance/driver/ in this repository, moved to buildwarden-specs in K2. Jeff, design review of the redraft, 2026-11-14.
 history:
   - at: 2026-11-12T23:22:53Z
     by: human/jeff
@@ -386,3 +390,15 @@ history:
   - at: 2026-11-14T21:16:53Z
     by: human/jeff
     event: 'assumed question a23 confirmed: (a) ''supported consumer of this contract'' plus the sentence that the relay''s and executor''s requirements are their seams'', in K1. Jeff, design review of the redraft, 2026-11-14.'
+  - at: 2026-11-14T21:20:39Z
+    by: human/jeff
+    event: 'assumed question a7 confirmed: (a) macos-finch, container-any, macos-vz, windows-hyperv and qemu-any blocking; macos-qemu tracked; linux-kvm left to the firecracker workflow; the new three-platform CI job. Jeff, design review of the redraft, 2026-11-14.'
+  - at: 2026-11-14T21:20:39Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: (a) The relay source is a kit library outside the contract; K1 ships its types and sources and routes the container driver''s override through them; the VM drivers adopt it in K2. Jeff, design review of the redraft, 2026-11-14.'
+  - at: 2026-11-14T21:20:39Z
+    by: human/jeff
+    event: 'assumed question a11 confirmed: (a) Provisional Go constants in K1; seam 8 filed as its own S-track item, to exist before M6 adopts a release. Jeff, design review of the redraft, 2026-11-14.'
+  - at: 2026-11-14T21:20:39Z
+    by: human/jeff
+    event: 'assumed question a17 confirmed: (a) specs/driver-contract/v1.md and conformance/driver/ in this repository, moved to buildwarden-specs in K2. Jeff, design review of the redraft, 2026-11-14.'
