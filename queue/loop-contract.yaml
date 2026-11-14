@@ -171,7 +171,7 @@ questions:
     recommended: a repository is a component once it has done LOOP-08's six steps; before that an item may work in it, the worker bound there by FLOW-08, FLOW-16, FLOW-17 and FLOW-18 and the item's design saying which invariants apply there, by rule ID (as seam-specs a4 does); once it adopts, it and the other components couple only through releases (LOOP-07); the specs repository and the Hermit forks adopt when Jeff files the item that does it
   - id: a18
     kind: assumed
-    status: open
+    status: confirmed
     question: 'One queue (new on 2026-11-14). The draft has a queue per component, the umbrella''s Decision 2 approved that and the text read at 2889919 carried it; Jeff''s note of 2026-11-14 asks for a single queue. How the contract says it. One thing is outside the queue on the day this merges: the relay''s M1a, which its design plans to work by hand (its a17); LOOP-04 binds the work the loop does, and the loop does not work in the relay repository until P1''s later items let it.'
     options:
       - one queue, one order and one place of reporting, for work in every repository; an item names the repositories it works in (in its design until the queue has a field, loop-parallel), and one that names none works only in the repository that holds its design; the design template, the intake skill, the design review and wf-design each gain a line so that this is asked and written; a component is a repository that has adopted the contract and has no queue of its own; LOOP-04 cites FLOW-05 for the order and for what may run side by side and states no relation between items and no limit, so it is true with FLOW-05 as it stands and stays true when loop-parallel changes FLOW-05; a hold names workers, as in FLOW-05, and whether one may also name repositories is loop-parallel's; the preamble, LOOP-01 and LOOP-05 to LOOP-09 are reworded from a component's queue to items and repositories, and the FLOW-03 and FLOW-14 amendments from "its own component's" rules to those "of a component it works in"; LOOP-04 keeps the sentence on an item that waits for another component's release; LOOP-08 has six steps (adoption no longer includes having a queue)
@@ -179,18 +179,20 @@ questions:
       - hold this item until loop-parallel has landed, and write LOOP-04 against the new FLOW-05
       - a queue per component, as read at 2889919
     recommended: one queue, one order and one place of reporting, for work in every repository; an item names the repositories it works in (in its design until the queue has a field, loop-parallel), and one that names none works only in the repository that holds its design; the design template, the intake skill, the design review and wf-design each gain a line so that this is asked and written; a component is a repository that has adopted the contract and has no queue of its own; LOOP-04 cites FLOW-05 for the order and for what may run side by side and states no relation between items and no limit, so it is true with FLOW-05 as it stands and stays true when loop-parallel changes FLOW-05; a hold names workers, as in FLOW-05, and whether one may also name repositories is loop-parallel's; the preamble, LOOP-01 and LOOP-05 to LOOP-09 are reworded from a component's queue to items and repositories, and the FLOW-03 and FLOW-14 amendments from "its own component's" rules to those "of a component it works in"; LOOP-04 keeps the sentence on an item that waits for another component's release; LOOP-08 has six steps (adoption no longer includes having a queue)
+    answer: (1) One queue, one order, one place of reporting; an item names its repositories; LOOP-04 cites FLOW-05 and states no relation or limit. Jeff, design review second sitting, 2026-11-14.
   - id: a19
     kind: assumed
-    status: open
+    status: confirmed
     question: The loop repository is deferred (new on 2026-11-14). Two of the draft's three decided points put the contract, the queue and the reports in a repository of their own, the umbrella's Decision 13 names it, and the text read at 2889919 made the move P1's second item.
     options:
       - 'deferred, with no date: the contract and its detail stay in docs/development/, the queue and reports on the workflow branch, and wf, the skills and the agents where they are; the split by file is made as designed so that a move stays a move; the contract''s Where things are table has a column "If a loop repository is created"; taking the move up again is a process item Jeff files'
       - keep the move in P1, as its last item after loop-repository's new scope
       - 'drop it: the loop''s rules and tools stay in buildwarden/buildwarden for good and the umbrella''s Decision 13 is withdrawn'
     recommended: 'deferred, with no date: the contract and its detail stay in docs/development/, the queue and reports on the workflow branch, and wf, the skills and the agents where they are; the split by file is made as designed so that a move stays a move; the contract''s Where things are table has a column "If a loop repository is created"; taking the move up again is a process item Jeff files'
+    answer: '(2) Keep the move to a loop repository in P1, as its last item after loop-repository''s new scope; NOT deferred. This departs from the recommendation: Decision 19, the ''Where things are'' table, the split''s wording and the umbrella amendments that speak of deferral are reworded and put to Jeff again. Jeff, design review second sitting, 2026-11-14.'
   - id: a20
     kind: assumed
-    status: open
+    status: confirmed
     question: The amendments to the umbrella design (new on 2026-11-14). One queue and the deferred loop repository change sentences of docs/design/componentization.md, an archived design whose Decisions 1 to 17 are Jeff's. The design lists them as U1 to U22, each with its line, current wording and proposed wording (Amendments to the umbrella design).
     options:
       - all twenty-two as listed, made in this item's PR, in place, with a new Amendments section in the umbrella recording the date, this item and which sentences changed (the wording each had stays in this design); Decision 2, Decision 13 and a5 keep their approved sentence and gain the amendment after it; FLOW-20's text is not touched (loop-parallel declares that change)
@@ -198,9 +200,10 @@ questions:
       - the umbrella's text is left as approved and only the Amendments section is added, saying which sentences no longer hold
       - no change to the umbrella in this PR; a process item of its own carries them
     recommended: all twenty-two as listed, made in this item's PR, in place, with a new Amendments section in the umbrella recording the date, this item and which sentences changed (the wording each had stays in this design); Decision 2, Decision 13 and a5 keep their approved sentence and gain the amendment after it; FLOW-20's text is not touched (loop-parallel declares that change)
+    answer: (1) All amendments made in this PR, in place, with a new Amendments section; the ones worded for a deferred loop repository are reworded for a19 (2) and shown to Jeff again before approval. Jeff, design review second sitting, 2026-11-14.
   - id: a21
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Trunk protection: main has none, and the relay cannot have it while it is private (new on 2026-11-14; a finding of the revision, not part of the direction). LOOP-08''s step 6, as read at 2889919, asks a component to protect its trunk so that only a human merges (FLOW-08), and the same rule says no loop rule may require a public repository. Read with gh api on 2026-11-14: buildwarden/buildwarden is public, deletes head branches on merge, and has no branch protection and no ruleset on main (listed as not verified at 2889919); buildwarden/buildwarden-relay is private, keeps head branches on merge, and its protection endpoint answers 403 (upgrade the plan or make the repository public); its M1a plans branch protection once the repository is public.'
     options:
       - step 6 asks for protection where the host offers it ("seeing that only a human merges to its trunk (FLOW-08), and protecting the trunk where its host offers that"); Jeff protects main before this item's PR merges (which protection is his to choose; the PR body lists it under Before the merge); the relay may adopt while private, protects its trunk from the day it is public as its M1a plans, and until then FLOW-08 is held there as it is here today, by the rule and the workers' settings with no repository setting behind it; the relay also turns on the deletion of head branches at adoption (FLOW-16)
@@ -208,6 +211,7 @@ questions:
       - step 6 says only a human merges to its trunk (FLOW-08) and does not ask for protection anywhere; FLOW-08 then rests on the agents' deny rules in every repository, this one included
       - 'leave the rule as read and the settings as they are, and record the gap: the contract asks for it, neither repository has it, and loop-native-lead closes it for main'
     recommended: step 6 asks for protection where the host offers it ("seeing that only a human merges to its trunk (FLOW-08), and protecting the trunk where its host offers that"); Jeff protects main before this item's PR merges (which protection is his to choose; the PR body lists it under Before the merge); the relay may adopt while private, protects its trunk from the day it is public as its M1a plans, and until then FLOW-08 is held there as it is here today, by the rule and the workers' settings with no repository setting behind it; the relay also turns on the deletion of head branches at adoption (FLOW-16)
+    answer: (1) Step 6 asks for trunk protection where the host offers it; Jeff protects main before this PR merges; the relay may adopt while private and protects its trunk once public. Jeff, design review second sitting, 2026-11-14.
 history:
   - at: 2026-11-12T23:22:53Z
     by: human/jeff
@@ -230,3 +234,15 @@ history:
   - at: 2026-11-14T19:42:01Z
     by: human/jeff
     event: 'assumed question a12 confirmed: (3) alters-slot carries the two files and they are dropped from this PR: Jeff''s answer to alters-slot a2 in its design review, 2026-11-14.'
+  - at: 2026-11-14T19:49:19Z
+    by: human/jeff
+    event: 'assumed question a18 confirmed: (1) One queue, one order, one place of reporting; an item names its repositories; LOOP-04 cites FLOW-05 and states no relation or limit. Jeff, design review second sitting, 2026-11-14.'
+  - at: 2026-11-14T19:49:19Z
+    by: human/jeff
+    event: 'assumed question a19 confirmed: (2) Keep the move to a loop repository in P1, as its last item after loop-repository''s new scope; NOT deferred. This departs from the recommendation: Decision 19, the ''Where things are'' table, the split''s wording and the umbrella amendments that speak of deferral are reworded and put to Jeff again. Jeff, design review second sitting, 2026-11-14.'
+  - at: 2026-11-14T19:49:19Z
+    by: human/jeff
+    event: 'assumed question a20 confirmed: (1) All amendments made in this PR, in place, with a new Amendments section; the ones worded for a deferred loop repository are reworded for a19 (2) and shown to Jeff again before approval. Jeff, design review second sitting, 2026-11-14.'
+  - at: 2026-11-14T19:49:19Z
+    by: human/jeff
+    event: 'assumed question a21 confirmed: (1) Step 6 asks for trunk protection where the host offers it; Jeff protects main before this PR merges; the relay may adopt while private and protects its trunk once public. Jeff, design review second sitting, 2026-11-14.'
