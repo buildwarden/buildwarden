@@ -4,12 +4,15 @@ priority: 60
 kind: process
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/loop-contract.md
 branch: feat/loop-contract
 alters_relationships: false
 design_review: required
 source: 'componentization (docs/design/componentization.md, merged as b903f65, PR #117): phase P1, wave 1. P1 is filed as two items so the contract''s design does not hold the cloud worker while S1 and K1 run; this one holds nothing. Jeff, attended session 2026-11-12: go ahead.'
+pr:
+  number: 119
+  ci: green
 steps:
   - id: x1-design
     phase: 1
@@ -21,10 +24,17 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261112T230554Z
-      expires: 2026-11-14T22:56:03.695670917Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -361,3 +371,9 @@ history:
   - at: 2026-11-14T20:56:03Z
     by: cloud/20261112T230554Z
     event: claimed x2-implement until 2026-11-14T22:56:03Z
+  - at: 2026-11-14T21:34:50Z
+    by: cloud/20261112T230554Z
+    event: done x2-implement
+  - at: 2026-11-14T21:34:50Z
+    by: cloud/20261112T230554Z
+    event: entered phase 3 (merge)
