@@ -52,6 +52,12 @@ feature names in its `source`.
    Write it in the front-matter and the queue file. Copy
    `alters_relationships` into the queue file too; if it is `true`,
    FLOW-05's slot decides whether planning may start (`wf next` enforces it).
+   On a return (FLOW-06), when the feature has a done Plan step and the value
+   changes from `false` to `true`, run `wf validate` after copying it; if it
+   reports more features holding a slot than the limit, put the queue's value
+   back, raise a blocking question that names the holders (FLOW-07), and leave
+   Design unfinished: the human answers it once the limit is raised (FLOW-20)
+   or a holder is done.
 6. Rule changes (FLOW-14): when the feature needs a rule or its enforcement
    changed, declare each change in `rule_changes` (`rule`, `change: add |
    amend | retire`, and every path it edits, enforcement included) and fill
