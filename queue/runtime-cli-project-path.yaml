@@ -1,0 +1,30 @@
+feature: runtime-cli-project-path
+title: 'A project''s warden.toml may name the container runtime, not a path to run: [runtime] cli from a build context no longer executes a file the repository ships (security fix)'
+priority: 64
+status: queued
+round: feature
+phase: 0
+design: docs/design/runtime-cli-project-path.md
+branch: feat/runtime-cli-project-path
+alters_relationships: null
+source: 'Found by the reviewers of driver-contract''s redraft, 2026-11-14: on main, [runtime] cli in a project''s warden.toml is used as given (cmd/warden/main.go:207-208) and run with exec.Command (driver/container/container.go), so a cloned repository can make ''warden build'' or ''warden doctor'' run a binary it ships, on the host, outside any isolation. Jeff, attended session 2026-11-14: ''File it as a security fix''. Not a program item; FLOW-20''s freeze exempts a security fix. Scope: a project file may name a runtime (finch, docker, podman, or another name looked up on PATH) but not a path; a path comes from --runtime, WARDEN_CTR_CLI or the user''s own config, as driver-contract decides for a driver''s path (its a16: ''a project''s warden.toml may name a driver, never a file path''). A user-facing change (UX-01, UX-03): the refusal says what to do (UX-04). GLOBAL-06: host-env boundary. It touches cmd/warden''s configuration, which driver-contract also changes: its design says how the two fit and which merges first.'
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 9
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-14T22:51:20Z
+    by: human/jeff
+    event: queued at priority 64 (intake)
