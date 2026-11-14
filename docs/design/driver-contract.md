@@ -420,10 +420,10 @@ and a driver's `run` during one build.
    and the keys of its own; under its own table it may have any shape.
    In one file the driver's own table is read before `[driver]`, and
    the order of the files is ORCH-03's, unchanged: the project's file
-   before the user's, for both tables. Now that a driver reads the files itself,
-   nothing physical stops it reading any table, so the place is a rule
-   of the contract, which `warden`, the suite and the kit each hold a
-   `describe` to. The seven existing driver-owned keys take their places
+   before the user's, for both tables. Now that a driver reads the
+   files itself, nothing physical stops it reading any table, so the
+   place is a rule of the contract, which `warden`, the suite and the
+   kit each hold a `describe` to. The seven existing driver-owned keys take their places
    in the two tables, and their old names are still read as deprecated
    aliases (UX-03); that part his sentence does not settle, and it is
    asked (a25). Alternatives: `[driver.<name>]` alone, with the seven
