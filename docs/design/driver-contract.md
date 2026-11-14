@@ -892,6 +892,13 @@ is left is found later: `warden clean` runs the driver's `reap` for every
 the driver's `clean` with the IDs of the locks that are held as
 `keep_ids`. No sweep runs before a build (a20).
 
+**A linked driver** has no `reap` in K1. It shares `warden`'s process, so
+it cannot die alone, and its `Run` returning without a result is a bug in
+`warden`'s own binary. What a killed `warden` leaves behind for a linked
+driver is found as it is today: `warden clean --driver hyperv` and
+`--driver firecracker` by their own code, and nothing for qemu and vz
+until K2 writes their `reap`.
+
 **`--keep-vms`.** `keep: running` (hyperv, firecracker) leaves the
 machines and their work directory; `stopped` (qemu, vz) leaves the work
 directory only, which is what those two do today; `none` (container)
