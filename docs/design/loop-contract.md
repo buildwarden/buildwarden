@@ -3478,6 +3478,49 @@ a23 (which item makes a reconciliation item's rank true: recommended,
 reworded amendments, by number. The approval of the rule changes by name,
 and the outcome.
 
+### 2026-11-14, second sitting, outcome: approved
+
+- **r1, 2026-11-14: approved at `7af50ff`** (Jeff; read at `04cc9bb` and,
+  after the fold-in of his answers, at `7af50ff`; page
+  https://claude.ai/artifact/GYfP3zDm9GZTupwznL3HVL). Nothing was folded in
+  after `7af50ff`. The answers are listed in the entry above. The three new
+  questions that the fold-in raised were each asked on their own and
+  confirmed as recommended: a22 (1), wave 2 waits for the one queue working
+  across repositories and not for the move, so U12 stands as worded; a23
+  (1), `loop-parallel` amends FLOW-05's class 3 and `wf`, with a5 recorded
+  as decided; a24 (1), `loop-native-lead` amends FLOW-04, the host table and
+  the lease, with a15 (b) recorded as decided. a20 was asked again on the
+  amendments as re-derived for a19 and approved as listed: U1, U3, U5, U7,
+  U10, U11, U12, U17 and U18 as first read; U8, U9, U13, U15, U20 and U21 as
+  reworded; U2, U4, U6, U14, U16, U19 and U22 withdrawn. Before this item's
+  PR merges, Jeff protects `main` (a21).
+- **rule change LOOP-01 approved at `7af50ff`**, as worded under **Rule
+  changes**.
+- **rule change LOOP-02 approved at `7af50ff`**, as worded under **Rule
+  changes**.
+- **rule change LOOP-03 approved at `7af50ff`**, as worded under **Rule
+  changes**.
+- **rule change LOOP-04 approved at `7af50ff`**, as worded under **Rule
+  changes**.
+- **rule change LOOP-05 approved at `7af50ff`**, as worded under **Rule
+  changes**.
+- **rule change LOOP-06 approved at `7af50ff`**, as worded under **Rule
+  changes**.
+- **rule change LOOP-07 approved at `7af50ff`**, as worded under **Rule
+  changes**.
+- **rule change LOOP-08 approved at `7af50ff`**, as worded under **Rule
+  changes**.
+- **rule change LOOP-09 approved at `7af50ff`**, as worded under **Rule
+  changes**.
+- **rule change PROFILE-01 approved at `7af50ff`**, as worded under **Rule
+  changes**.
+- **rule change FLOW-01 approved at `7af50ff`**, as worded under **Rule
+  changes**.
+- **rule change FLOW-03 approved at `7af50ff`**, as worded under **Rule
+  changes**.
+- **rule change FLOW-14 approved at `7af50ff`**, as worded under **Rule
+  changes**.
+
 ## Consolidation
 
 A process item has no Publish phase and no consolidation pass (FLOW-03).
