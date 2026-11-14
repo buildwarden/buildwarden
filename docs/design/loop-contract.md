@@ -220,9 +220,9 @@ loop there (Decision 19, a19). Until then the contract is in
 one that departs from the draft, or from the text Jeff read at `2889919`, is
 also a question, so the review confirms it: the larger departures each have
 their own (a4 to a8, a10, a14, a16 to a21), and the smaller ones are asked
-together in a15. Decisions 17 to 20 are new since `2889919`. Decision 19 is
-rewritten for Jeff's answer to a19 at the second sitting; what that answer
-leaves open is a22.
+together in a15. Decisions 17 to 20 are new since `2889919`. Decisions 7
+and 19 are rewritten for Jeff's answers to a5 and a19 at the second
+sitting; what those answers leave open is a23 and a22.
 
 1. **The finished contract is nine rules, LOOP-01 to LOOP-09, in one
    document, with FLOW-\* and LINT-\* as its detail** (a3). The nine follow
@@ -278,10 +278,30 @@ leaves open is a22.
 6. **The run is the unit of reporting, and the digest is the report** (a7).
    The draft's five items map onto the digest's sections; three small
    additions close the gaps.
-7. **A reconciliation item is a feature item** (a5). The draft files
+7. **A reconciliation item is a feature item, and FLOW-05 ranks it with
+   the fixes** (a5; Jeff's answer of 2026-11-14, which chose the third
+   option over the one this design recommended). The draft files
    "adopt consumable X at version Y" as process work. In the running loop a
    process item changes rules and has no Plan, Review, Guide or
-   consolidation; an adoption changes code and needs all four.
+   consolidation; an adoption changes code and needs all four. So it is a
+   feature. Jeff ranks it in FLOW-05's class 3, ahead of new
+   functionality: "A feature that FLOW-05 orders ahead of new work,
+   alongside regression fixes. Needs a FLOW-05 amendment." LOOP-07 says
+   that it is a feature and that FLOW-05 gives its place in the order.
+   The class itself is FLOW-05's to state, and `loop-parallel` amends
+   FLOW-05 and `wf` to state it, with his decision recorded in the
+   hand-off (point 7) so that item does not reopen it (a23). *Rejected:*
+   the priority intake gives it among new functionality, which this design
+   recommended at `04cc9bb`. Jeff chose otherwise. *Rejected:* a process
+   item, as the draft has it. *Rejected:* "ranked with the fixes" written
+   into LOOP-07. FLOW-05 defines class 3 as a feature that `follows` an
+   item, and `wf` computes the class from that field alone, so `main`
+   would contradict the contract on merge (the umbrella's Decision 18),
+   and the order would be stated in two rules (FLOW-14). *Rejected:*
+   amending FLOW-05 and `wf` in this PR (a23's second option). a1 keeps
+   this PR to what the rules say, `loop-parallel` amends FLOW-05 and the
+   queue's schema next, and no reconciliation item can exist before a
+   second component releases something.
 8. **The split is made in place, by file, and no file moves in this PR**
    (a2). After it, three files are wholly loop-side
    (`loop-contract.md`, `process.md`, `behavioral-linter.md`), the others
@@ -451,10 +471,10 @@ assumption below is asked.
 Jeff answered twenty at the second sitting on 2026-11-14: a1 to a12 and
 a14 to a21, on the text at `04cc9bb`. Three answers departed from the
 recommended option (a5, a15 part b, a19) and are folded in; each of those
-three shows the option he chose and what it changed. One is open, a22,
-which a19's answer raised: it is "proceeding with the recommended option;
-confirm". The same twenty-one are in the queue file. a13 is retired (see
-**Retired** below).
+three shows the option he chose and what it changed. Two are open, a22
+and a23, which the answers to a19 and a5 raised: each is "proceeding with
+the recommended option; confirm". The same twenty-two are in the queue
+file. a13 is retired (see **Retired** below).
 
 Against the text read at `2889919`:
 
@@ -512,15 +532,26 @@ Against the text read at `2889919`:
      in-flight implementation is interrupted by every process item.
 - **a5. The kind of a reconciliation item** ("adopt consumable X at
   version Y"). *(reworded)*
-  1. *(recommended)* A feature item in the queue that names the consumer's
+  1. *(recommended at `04cc9bb`)* A feature item in the queue that names the consumer's
      repository, at the priority Jeff gives it at intake. It changes code,
      so it gets Plan, Review, Guide and consolidation, and its design
      review.
   2. A process item, as the draft says. It would skip the tier-2 report and
      the consolidation pass, and FLOW-03's definition of a process item
      would have to grow to cover code.
-  3. A feature item that FLOW-05 ranks with the fixes (class 3). Needs a
-     FLOW-05 amendment.
+  3. *(chosen)* A feature item that FLOW-05 ranks with the fixes (class
+     3). Needs a FLOW-05 amendment.
+
+  **Answered 2026-11-14, second sitting: option 3.** As put to him: "A
+  feature that FLOW-05 orders ahead of new work, alongside regression
+  fixes. Needs a FLOW-05 amendment." A reconciliation item is a feature
+  item in the queue that names the consumer's repository, with Plan,
+  Review, Guide, consolidation and its design review as in option 1, and
+  it ranks in FLOW-05's class 3, not at the priority intake gives it among
+  new functionality. Folded in: Decision 7; LOOP-07's point 2; row 9 of
+  the table of disagreements; the row of **Defaults and overrides**; the
+  hand-off (the `loop-parallel` row and point 7). Which item amends
+  FLOW-05 and `wf` is a23.
 - **a6. What a failed check does.** The draft: invariants "run on every loop
   iteration and block merge on failure".
   1. *(recommended)* The draft's four classes name what a component
@@ -866,6 +897,46 @@ Against the text read at `2889919`:
      behind the driver extractions, each of which adds a repository whose
      links to the contract the move has to change. U22 would come back if
      it slipped past K4.
+- **a23. Which item makes a reconciliation item's rank true.** *(new on
+  2026-11-14, raised by a5's answer; open)* Jeff's answer to a5 needs a
+  FLOW-05 amendment. FLOW-05's class 3 is "a feature that `follows` an
+  item, fixing or finishing it. It starts only once that item is done",
+  and `wf` computes the class from the `follows` field alone (`Class`, in
+  `tools/workflow/queue/queue.go`). So the rank is true only once
+  FLOW-05's text and that code change together (the umbrella's
+  Decision 18). No reconciliation item exists today, and none can before a
+  second component releases something that another adopts; the first the
+  umbrella plans are M6's.
+  1. *(recommended)* `loop-parallel` makes it true. LOOP-07 says a
+     reconciliation item is a feature item and that FLOW-05 gives its
+     place in the order, which holds on merge with FLOW-05 as it stands.
+     `loop-parallel` amends FLOW-05's class 3 and gives `wf` the means to
+     compute it. The hand-off records Jeff's decision as taken (point 7),
+     so that item's design settles how and does not ask whether.
+     `loop-parallel` amends FLOW-05 and the queue's schema anyway, and a1
+     leaves `wf` and the FLOW rules to the later items. Until it lands,
+     FLOW-05 ranks a reconciliation item as it ranks any feature: with new
+     functionality, or with the fixes if intake files it with `follows`.
+  2. This item's PR makes it true. `rule_changes` gains FLOW-05 (amend,
+     `docs/development/process.md`): class 3 becomes fixes and
+     reconciliation items, and LOOP-07 can then say "ranked with the
+     fixes". The machinery it needs: a field in the queue file that marks
+     a reconciliation item, read by `Class` in
+     `tools/workflow/queue/queue.go`; a flag on `wf new`
+     (`cmd/wf/main.go`); the Kind column of `QUEUE.md`
+     (`queue/summary.go`, `kindLabel`); tests in `queue/queue_test.go`;
+     the intake skill; and the `workflow` branch's `README.md` after the
+     merge. It is a second `wf` change in a PR that a1 keeps to the rules,
+     FLOW-05 is then amended by two items in a row, and the field is
+     designed before the queue records an item's repositories, which is
+     `loop-parallel`'s.
+  3. This item's PR amends FLOW-05's text only, with no field: intake
+     files a reconciliation item with `follows`, naming the item that
+     produced the release. It needs no code. But `wf validate` rejects a
+     `follows` that names no item in the queue, so a release cut outside
+     the queue, such as the stub pre-release the relay's M1a plans by
+     hand, has nothing to follow, and FLOW-05 would promise a class that
+     `wf` cannot always give.
 
 ### Retired
 
@@ -905,7 +976,7 @@ proposed text is under **Rule changes**.
 | LOOP-04 | One queue, one order | 4 | FLOW-03, FLOW-04, FLOW-05, FLOW-07, FLOW-09 |
 | LOOP-05 | Workers are scheduled, routed and identified | 5 | FLOW-04, FLOW-09, FLOW-13, FLOW-18 |
 | LOOP-06 | Every run reports in one place | 6 | FLOW-05, FLOW-08, FLOW-13, LINT-04, LINT-05 |
-| LOOP-07 | Components couple only through releases | 7 | LOOP-01, LOOP-02 |
+| LOOP-07 | Components couple only through releases | 7 | LOOP-01, LOOP-02, LOOP-04, FLOW-05 |
 | LOOP-08 | Adopting the contract | 8, and the decided point on where the contract lives | FLOW-02, FLOW-08, FLOW-12, FLOW-16, FLOW-17, FLOW-18, FLOW-19, LINT-01 |
 | LOOP-09 | The contract changes only through its owner | The decided point on who gates a change | FLOW-03, FLOW-05, FLOW-08, FLOW-14, FLOW-19 |
 
@@ -1043,7 +1114,7 @@ report over the release diff.
 | 6 | "A spec section an agent cannot satisfy is marked as an open question in the spec." | A finding returns the item to Design (FLOW-06). Questions live in the queue and the digest (FLOW-07). | The queue holds the question; the answer may be a specification change. | a8 |
 | 7 | "Specs live in the main BuildWarden project's specification directory" for now. | The umbrella's Decision 3 and a10, five days later: `buildwarden/buildwarden-specs`, created by S1. `specs/` here holds the ledger format until it moves. | The umbrella. The contract leaves the location to each component's profile. | none (decided) |
 | 8 | The contract lives in its own repository, "likely" the sessions repository. | The umbrella's Decision 13: its own public repository; the sessions repository is private. On 2026-11-14 Jeff kept that, with the move as P1's last item. | The contract is in `docs/development/` here, split by file so that the move is only a move, until P1's last item moves it (Decision 19). | a19 |
-| 9 | A reconciliation item is "process work" at the top of the consumer's queue. | A process item changes rules or machinery and has four phases with no Review (FLOW-03). The umbrella's M6: 'one "adopt relay version X" item per driver in that driver's queue' (amended here for one queue). | A feature item in the queue that names the consumer's repository, at the priority intake agrees. | a5 |
+| 9 | A reconciliation item is "process work" at the top of the consumer's queue. | A process item changes rules or machinery and has four phases with no Review (FLOW-03). The umbrella's M6: 'one "adopt relay version X" item per driver in that driver's queue' (amended here for one queue). FLOW-05's class 3, the fixes, is a feature that `follows` an item, and `wf` computes the class from that field alone (`queue.go`, `Class`). | A feature item in the queue that names the consumer's repository, which FLOW-05 ranks with the fixes, ahead of new functionality (Jeff, 2026-11-14). LOOP-07 says it is a feature and cites FLOW-05 for its place. FLOW-05 and `wf` gain the class in `loop-parallel` (a23). | a5, a23 |
 | 10 | "Nothing in one component's queue blocks another component's queue." | One queue on the `workflow` branch and one set of workers: one cloud run budget, two machines, one session per machine. The umbrella as approved gave each component a queue (Decision 2) and asked P1 for "holds per component". | The draft's sentence was written for separate queues. Jeff has since chosen one queue for work in every repository (2026-11-14, **Design review**), so it has no counterpart in the contract: FLOW-05 says which items wait for which and which may run side by side (LOOP-04). What the sentence was after, that work in one repository does not stop unrelated work in another, is for `loop-parallel` to give FLOW-05. The contract does not state it. | a18 |
 | 11 | Task takers: "which machines" is local to each component. | `hosts.yaml` gives each host name to exactly one machine, for the whole loop (FLOW-04). | The host table is shared; schedules and credentials are each machine's (Decision 12, LOOP-05). | a15 (a) |
 | 12 | Routing for the relay: Firecracker and QEMU work to the Windows desktop. | `hosts.yaml`: `qemu-any` is on `macbook` (the qemu driver runs only on aarch64 hosts); `linux-kvm` on `windows-desktop` is experimental. | Routing is `hosts.yaml`, not contract text. The relay's profile names host names, not machines. | a15 (c) |
@@ -1520,7 +1591,7 @@ FLOW rules the later items change and does not write their changes.
 | Item | State on 2026-11-14 | What it gets from this item |
 |---|---|---|
 | `alters-slot` | Filed, in Design, holds nothing; its design is on `feat/alters-slot` at `ed99489`, not yet reviewed; meant to merge first | a13 as read at `2889919`: the finding, its options, the task, the tests and the row of **Defaults and overrides**. a12's two files, which its design proposes to carry (its Decision 8 and a2). Nothing in the contract depends on it. |
-| `loop-parallel` | Not yet filed | LOOP-04 as the frame its FLOW-05 change fits: the contract says that FLOW-05 orders the queue, says what may run side by side and says what a hold names, and nothing more. LOOP-04's and LOOP-05's requirement that an item names its repositories, which the queue file does not yet record. LOOP-06's one digest. FLOW-20's text and the umbrella's a5, as far as its design changes what they say. The FLOW rules the change proposal lists for it are FLOW-02, -03, -05, -10, -15, -19 and -20; its design settles its own list. Point 5 below. |
+| `loop-parallel` | Not yet filed | LOOP-04 as the frame its FLOW-05 change fits: the contract says that FLOW-05 orders the queue, says what may run side by side and says what a hold names, and nothing more. LOOP-04's and LOOP-05's requirement that an item names its repositories, which the queue file does not yet record. LOOP-06's one digest. FLOW-20's text and the umbrella's a5, as far as its design changes what they say. The FLOW rules the change proposal lists for it are FLOW-02, -03, -05, -10, -15, -19 and -20; its design settles its own list. Jeff's decision that a reconciliation item ranks with the fixes, for its FLOW-05 change to state (point 7; a23). Point 5 below. |
 | `loop-native-lead` | Not yet filed; after `main` is protected | LOOP-05 as the frame for its changes: a worker is scheduled and bounded, routed by the one host table, identified on every claim, and set up by the owner. The FLOW rules the change proposal lists for it are FLOW-04, -09, -13, -16 and -18; its design settles its own list. The two open points of point 5 that concern an unattended worker's start. |
 | `loop-repository` | Queued; retitled and its `holds` removed on 2026-11-14 | The profile's term list as the specification of what `wf` stops hard-coding (point 4). LOOP-08's six steps as what the relay does to adopt, and the relay's first item through `wf`'s gates as the test that the queue works across repositories: the wave-1 gate under a22's recommended option (U12), and what P1's done-when asks for again after the move (U9). A branch and a pull request for an item in each repository it works in, and LOOP-06's branch head per repository. The native side: a second checkout and its toolchain on the native machines. What of a private repository's work is written to the public queue, digest and reports. Point 5 below. |
 | `loop-move` (a provisional name) | Not yet filed; P1's last item, after `loop-repository` (a19) | The split (point 2). The table of what moves and what stays (point 3). The links and paths the move changes (**Rule IDs, cross-references, `rules.yaml` and tier 1**). The contract's "Where things are" table, which is the only part of the contract's text the move edits (point 1). What its design settles is under point 5. The repository's own name is confirmed with Jeff right before it is created (the umbrella's a11). P1 is done when this item is (U9); whether wave 2 waits for it is a22. |
@@ -1640,6 +1711,36 @@ queue.
 **6. Follow-ups this item names and does not do:** the neutral rewording of
 FLOW and LINT (a9), a process item filed after P1; and a11 or a12 if the
 review moves either out.
+
+**7. Decided at this item's review, and made true by a later item.** Jeff
+decided what follows at the second sitting, on 2026-11-14. The rule that
+states it changes in the item named, because a rule changes in the item
+that makes it true (the umbrella's Decision 18). That item's design takes
+the decision as given. It settles the open points listed with it, as its
+own questions, and does not ask the decision again.
+
+- **A reconciliation item ranks with the fixes** (a5). As put to Jeff and
+  chosen: "A feature that FLOW-05 orders ahead of new work, alongside
+  regression fixes. Needs a FLOW-05 amendment." `loop-parallel` amends
+  FLOW-05's class 3 to take in a reconciliation item (LOOP-07) and gives
+  `wf` the means to compute the class (a23). What is true today: class 3
+  is a feature that `follows` an item; `Class` reads that field alone
+  (`tools/workflow/queue/queue.go`); `wf validate` requires `follows` to
+  name an item in the queue; and a queued fix is not started until the
+  item it follows is done (`waitsForParent`, `queue/next.go`). Its design
+  settles:
+  - how the queue marks a reconciliation item: a field of its own, or
+    `follows` naming the item that produced the release, which has
+    nothing to name when a release was cut outside the queue;
+  - what such an item waits for. LOOP-04 has it wait for a release, held
+    by a blocking question, and class 3's "starts only once that item is
+    done" is written for a fix;
+  - its place among the fixes, where FLOW-09 files a regression fix "at
+    the top of the fixes".
+
+  Until that item lands, FLOW-05 ranks a reconciliation item as it ranks
+  any feature. None can exist before a second component releases
+  something that another adopts.
 
 ### Amendments to the umbrella design
 
@@ -1789,6 +1890,7 @@ review confirms it under.
 | A profile term filled as `none` | The rules read through it do not apply in that component. | Explicit, written by the component, and reviewed with the profile. | a9 |
 | The contract a component follows | The contract's trunk. | "A rule changed here changes everywhere at once" (the draft). There is no override: a component cannot pin an older contract (LOOP-08). | a15 (g) |
 | The kind of a reconciliation item | Feature. | It changes code. No override. | a5 |
+| The class of a reconciliation item | What FLOW-05 gives it (LOOP-07). Decided: with the fixes, class 3. Until `loop-parallel` amends FLOW-05, that is what FLOW-05 gives any feature: new functionality, or the fixes when the item `follows` another. | The contract names no class of its own, so the order is stated once, in FLOW-05 (FLOW-14). Within a class the human's priority orders the items (LOOP-04). There is no implied rank: a reconciliation item is in class 3 only once FLOW-05 says so and `wf` computes it. | a5, a23 |
 | The tier of a new check | None. | A check without a tier is a finding (LOOP-03), as a rule without a check type is (LINT-01). | a6 |
 | What a failed deterministic check does | It blocks. | A hint or a report is declared by name in the profile, and host-bound validation is blocking or tracked in the design (FLOW-09). Nothing is non-blocking by omission. | a6 |
 | The severity of a cited detail | The cited rule's own. | A LOOP rule that cites FLOW-05, FLOW-13 or LINT-06 does not raise them from SHOULD. Raising one is a rule change of its own. | none: it changes nothing |
@@ -2136,8 +2238,8 @@ running loop already has the rule, they cite it.
 >    and its artifact forms.
 > 2. A consumer adopts a release through a **reconciliation item**: an
 >    item in the queue that names the consumer's repository,
->    `adopt <consumable> at <version>`. It is a feature item, filed through
->    intake at the priority the human gives it.
+>    `adopt <consumable> at <version>`. It is a feature item (LOOP-04),
+>    filed through intake, and FLOW-05 gives its place in the order.
 > 3. The item moves the consumer's pin and, where a seam changes, its
 >    specification first (LOOP-02), then its code, and then retires any
 >    in-tree equivalent.
@@ -2296,7 +2398,11 @@ does, and the loop does not work in the relay repository until
 gates there (U13, U20). Whether M1a is filed before then, as an item with
 human steps only, is for that design's review.
 
-LOOP-07 and LOOP-08 bind from the first adoption. Two clauses of LOOP-08
+LOOP-07 and LOOP-08 bind from the first adoption. LOOP-07's point 2 says
+that FLOW-05 gives a reconciliation item its place in the order, and
+FLOW-05 does that for every feature today. No reconciliation item exists,
+and Jeff's ranking of one with the fixes (a5) becomes FLOW-05's text in
+`loop-parallel` (a23). Two clauses of LOOP-08
 are not met by this repository today, and each is closed before or by the
 merge. Step 1 asks for a link to the contract from the README:
 `README.md` links to `docs/development/` and not to the contract, and task
