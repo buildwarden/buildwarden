@@ -1,6 +1,6 @@
 ---
 feature: alters-slot
-status: draft
+status: archived
 drivers: []              # the loop's queue code; no driver tree is reached
 seams: []
 surfaces: []             # `wf` is the loop's tool, not a user-facing surface of the product
@@ -562,4 +562,84 @@ None.
 
 ## Archive summary
 
-Filled in when the PR is opened (FLOW-12).
+Implemented on 2026-11-14 as a process item (`x2-implement`), after design
+review r1 approved the design at `ed99489` the same day (Jeff; a1 to a4 as
+drafted, option (a) each). It is the first step of the one-queue direction
+Jeff approved on 2026-11-14. `main` was still at the fork point (`b903f65`)
+when the PR was opened, so there was nothing to merge.
+
+- **Built: the slot is held by a plan** (`tools/workflow/queue/`).
+  `holdsAltersSlot()` (`next.go`): a feature holds an `alters_relationships`
+  slot when it is in progress, is not a process item, declares `true`, and
+  one of its Plan steps (`IsPlan`, `phases.go`: `f2-plan` in any `-r<n>`
+  form) is done or carries a claim, expired or not. `altersHolders()` lists
+  the holders in FLOW-05 order and `altersLimit()` (`queue.go`) gives the
+  limit; `wf next` and `wf validate` both use the two. `cloudHold` withholds
+  only the Plan step of an altering feature that holds no slot, with the
+  reason `altersWait()` gives:
+  `an alters_relationships slot (limit N), held by a, b, c (FLOW-05)`.
+  `Validate` reports
+  `N features hold an alters_relationships slot, limit L (FLOW-05): <names>`
+  when the holders number more than the limit. `altersHolder` and the tests
+  on later steps (`st.Phase >= 2 && f.Phase < 6`) are gone.
+- **Built: the limit.** `Limits.AltersRelationships` is a `*int`: the value
+  `config.yaml` writes, 1 when the key is absent. A written value below 1 is
+  the one error `config: limits.alters_relationships N is below 1` from
+  `wf validate`, with no holder count, and `wf next` then offers no Plan step
+  to an altering feature without a slot and names the value.
+- **Built: the tests** (`queue_test.go`).
+  `TestAltersSlotHeldFromPlanClaim`, `TestAltersSlotNoMutualHold`,
+  `TestAltersSlotLimit`, `TestAltersSlotAcrossReturns`,
+  `TestAltersSlotCloudOnly`, `TestAltersSlotExpiredClaim`,
+  `TestAltersSlotSkipsProcessItems` and `TestIsPlan` cover the fifteen cases
+  and "More holders than the limit", asserting `Next` and `Validate`
+  together on states built with the queue's own commands. `TestAltersSlot`,
+  which asserted the mutual hold, is removed.
+- **Agent text.** One sentence at the end of step 5 of
+  `.claude/agents/wf-design.md`, word for word as approved (a4): on a return
+  with a done Plan step, a redesign that flips `false` to `true` past the
+  limit puts the queue's value back and raises a blocking question naming
+  the holders.
+- **Entire hook configuration** (a2), in a commit of its own (`cea35d2`):
+  `.claude/settings.json` (the session-start hook also reports an `entire`
+  on PATH that fails to run) and `.entire/settings.json` (key order only),
+  both as `ac8b41a` has them. `loop-contract`'s a12 drops it.
+- **Not changed.** No rule text (`rule_changes: []`), no skill,
+  `tools/workflow/cmd/`, `tools/workflow/check/`, `summary.go` or
+  `hosts.go`, and no driver, seam or user-facing surface.
+- **Decisions taken.** A slot is held from the claim of the Plan step until
+  the item is done (1, a1). One list of holders and one limit for `wf next`
+  and `wf validate`; a holder is never refused, so no two items wait for
+  each other (2). The limit is the config value, 1 when unset, an error
+  below 1 (3). Process items neither hold a slot nor wait for one (4, a3).
+  A holder keeps its slot through a return to Design while it has a done
+  Plan step (5, a4). The wait stays in `cloudHold`; `wf claim` checks no
+  limit (6). FLOW-05 and FLOW-20 are read, not reworded (7). The PR carries
+  the Entire hook configuration (8, a2).
+- **Rejected.** Holding from the end of Design with only the limit fixed
+  (`loop-contract` a13 as drafted); holding from Implement; a `slot` field
+  written by `wf claim`; only a live lease holding; 0 meaning no limit;
+  counting process items; giving the slot up on every return; leaving the
+  flipped feature out of the count with no agent text; a guard in `wf claim`
+  now; amending FLOW-20's Limit bullet in this PR.
+- **For future designs touching `alters-slot`, `alters-relationships`,
+  `flow-05-limits`, `wf-next`, `wf-validate` or `one-queue`:** FLOW-20's
+  "features past Design" is read as the features whose Plan step is claimed
+  or done, a holder that is back in Design included; more altering features
+  past Design than the limit is a valid state. Known gaps, left to
+  `loop-parallel`: `wf claim` checks no limit, so a Plan step claimed by
+  hand, or by a host on a Plan step whose affinity was edited to
+  `host:<name>`, goes over the limit and only the next `wf validate` says
+  so; and nothing compares the queue's `alters_relationships` with the
+  design after Design's done-when, so a session that writes `false` back
+  passes every later gate. An abandoned Plan claim keeps its slot until the
+  step is taken up again or released (`wf release`). `loop-parallel` keeps
+  the holder test, makes `altersHolders()` take the asking item and return
+  only the holders that collide with it, moves the test into the one guard
+  `wf next` and `wf claim` share, and writes the definition into FLOW-05
+  when it removes FLOW-20's Limit bullet.
+- **After the merge**, at `x4-close`, on the `workflow` branch and outside
+  the PR: the `README.md` and `config.yaml` comment changes listed at the
+  end of the Implementation plan. The value stays 3. Until a session
+  rebuilds `dist/wf` from the merged `main`, its older `wf` differs only in
+  the states of cases 4 to 9, 13 and 14.
