@@ -10,11 +10,11 @@ alters_relationships: false  # no product component's role or interaction change
 design_review: required  # a process item's design always gets its review (FLOW-03, FLOW-19)
 native_validation: []    # pure functions of the queue state, and git commands every host has
 tier2_gaps: []
-rules: [FLOW-01, FLOW-02, FLOW-03, FLOW-04, FLOW-05, FLOW-06, FLOW-07, FLOW-08, FLOW-09,
+rules: [FLOW-02, FLOW-03, FLOW-04, FLOW-05, FLOW-06, FLOW-07, FLOW-08, FLOW-09,
         FLOW-10, FLOW-11, FLOW-12, FLOW-13, FLOW-14, FLOW-15, FLOW-16, FLOW-17, FLOW-18,
-        FLOW-19, FLOW-20, LOOP-01, LOOP-04, LOOP-05, LOOP-06, LOOP-07, LOOP-08, LOOP-09,
-        PROFILE-01, LINT-01, LINT-02, LINT-03, LINT-04, GLOBAL-09, GLOBAL-10, GLOBAL-11,
-        ORCH-01, TEST-01, TEST-02]
+        FLOW-19, FLOW-20, LOOP-01, LOOP-02, LOOP-03, LOOP-04, LOOP-05, LOOP-06, LOOP-07,
+        LOOP-08, LOOP-09, PROFILE-01, LINT-02, LINT-03, GLOBAL-08, GLOBAL-09, GLOBAL-10,
+        GLOBAL-11, ORCH-01, RELAY-05, TEST-01, TEST-02, TEST-04, TEST-05]
 rule_changes:
   - {rule: FLOW-02, change: amend, paths: [docs/development/process.md,
       docs/design/TEMPLATE.md, tools/workflow/check/check.go,
@@ -26,6 +26,7 @@ rule_changes:
   - {rule: FLOW-05, change: amend, paths: [docs/development/process.md]}
   - {rule: FLOW-06, change: amend, paths: [docs/development/process.md]}
   - {rule: FLOW-08, change: amend, paths: [docs/development/process.md]}
+  - {rule: FLOW-09, change: amend, paths: [docs/development/process.md]}
   - {rule: FLOW-10, change: amend, paths: [docs/development/process.md,
       tools/workflow/check/check.go, tools/workflow/check/check_test.go]}
   - {rule: FLOW-15, change: amend, paths: [docs/development/process.md]}
@@ -36,17 +37,17 @@ rule_changes:
   - {rule: LOOP-04, change: amend, paths: [docs/development/loop-contract.md,
       docs/design/TEMPLATE.md]}
   - {rule: PROFILE-01, change: amend, paths: [docs/development/loop-profile.md,
-      tools/tier1/areas.yaml, tools/tier1/rules.yaml, tools/tier1/tier1.go,
-      tools/tier1/rules/rules.go, tools/tier1/coupling/checks.go,
+      tools/tier1/areas.yaml, tools/tier1/rules.yaml, tools/tier1/rules/rules.go, tools/tier1/coupling/checks.go,
       tools/tier1/coupling/areamap.go, tools/tier1/coupling/areamap_test.go]}
 concepts: [workflow, queue, one-queue, parallel-items, areas, area-map, relations, collision,
            flow-05-limits, alters-slot, pr-slot, claim-guard, wf-commit, wf-next, wf-claim,
            wf-validate, refresh, consolidation, tracked-items, reconciliation,
-           queue-summary, digest, componentization, program]
+           queue-summary, digest, merge-confirmation, main-ci, componentization, program]
 related: [componentization.md, alters-slot.md, next-skips-merge-wait.md, queue-summary.md,
           regression-fixes-follow-up.md, design-approved-rule-changes.md,
           tier1-static-checks.md, wf-later-phase-host-steps.md, workflow-bootstrap.md,
-          workflow-streamline.md, native-host-loop.md, design-principles.md]
+          workflow-streamline.md, native-host-loop.md, design-principles.md,
+          wf-squash-after-base-moved.md]
 ---
 
 # Items that do not collide run side by side: repositories, areas, relations, the limits, the claim guard, the refresh step and `QUEUE.md`
@@ -55,8 +56,9 @@ A process item, and a program item under FLOW-20: P1's third item, and step 3
 of the loop change Jeff approved in direction on 2026-11-14 (one queue,
 parallel where items do not collide, native-led items). It follows
 `alters-slot` (#118, merged) and `loop-contract` (approved at `7af50ff`,
-being implemented), and comes before `loop-native-lead`, `loop-repository`
-and the move to the loop repository. It holds no worker (Decision 17).
+implemented; its PR #119 waits for Jeff's merge), and comes before
+`loop-native-lead`, `loop-repository` and the move to the loop repository.
+It holds no worker (Decision 17).
 
 Words used throughout. An **item** is a queue item. A **feature** is an item
 that is not a process item. **This repository** is `buildwarden/buildwarden`,
@@ -87,13 +89,15 @@ reasons. Paths are under `tools/workflow/` at `897a4a8`.
 3. **The pairs Jeff means do exist, and the code shows them.** No driver
    tree imports `relay/`, and `relay/` imports no driver package
    (`go list -deps -test` on Linux, macOS and Windows; the table is under
-   **The area map**). Of the last 53 first-parent commits on `main`, eight
-   changed `driver/hyperv/` and six changed `relay/`; `hyperv-ps-done`
-   (#116: `driver/hyperv/` and one book page) and `relay-leaf-crl` (#70:
-   `relay/` and one book page) share no path but the book.
+   **The area map**). Of the 52 first-parent merges on `main` whose change
+   this clone holds (it is shallow, and the 53rd commit is its boundary),
+   seven changed `driver/hyperv/` and five changed `relay/`;
+   `hyperv-ps-done` (#116: `driver/hyperv/` and one book page) and
+   `relay-leaf-crl` (#70: `relay/` and one book page) share no path but the
+   book. How often such pairs occur is measured under a2.
 4. **`wf claim` checks no limit.** The three limits are tests inside
-   `wf next`, two of them for the cloud alone (`atLimit`, `cloudHold` in
-   `queue/next.go`). A step claimed by hand, or by a host on a step whose
+   `wf next`, all three for the cloud alone (`atLimit` behind `cloud` in
+   `Next` and `NextFor`; the slot tests in `cloudHold`, `queue/next.go`). A step claimed by hand, or by a host on a step whose
    affinity was edited, goes over a limit and only a later `wf validate` may
    say so (`alters-slot`'s Decision 6 left this to this item). `wf validate`
    does not check the PR slot at all.
@@ -105,7 +109,10 @@ reasons. Paths are under `tools/workflow/` at `897a4a8`.
    nothing had to. CI runs on a pull request when it is opened or pushed to,
    not when its base moves (`.github/workflows/main.yml`, `on:`), and
    `allow_update_branch` is off. With several PRs open, each merge leaves the
-   others built and checked against a `main` that no longer exists.
+   others built and checked against a `main` that no longer exists. Nothing
+   in the loop reads CI's result on `main` either: no skill, agent or `wf`
+   command looks at it, so a red `main` is noticed only when a later
+   branch's gates fail on it or Jeff sees it.
 7. **State pushes do not survive a second worker.** A rejected push of a
    claim means the claim is lost; a rejected push of a finished step is
    re-applied by hand (`workflow-tick` step 5); and every run appends to one
@@ -139,7 +146,8 @@ say.
   gaps (a Plan step claimed past the limit; the queue's
   `alters_relationships` never compared again) are closed.
 - **`loop-contract`** (approved at `7af50ff` on `feat/loop-contract`; its
-  rule files are read from that branch at `9fbc8e9`). Decisions 17 to 20,
+  rule files are read from that branch at `31028a5`, the head of PR #119).
+  Decisions 17 to 20,
   the hand-off's `loop-parallel` row and points 5 and 7, and LOOP-04,
   LOOP-06 and LOOP-07 bind this design: one queue; an item names its
   repositories, in its design until the queue has a field; LOOP-04 cites
@@ -168,6 +176,11 @@ say.
 - **`regression-fixes-follow-up`** (#103): the class order, and a
   regression's fix filed at the top of the fixes. Class 3 gains
   reconciliation items below them.
+- **`wf-squash-after-base-moved`**: how `wf` proves a squash-merged branch
+  is on `main` (ancestor, equal tree, or equal patch-id). Its a3 kept three
+  lines of context in the patch-id and held zero context in reserve, "if
+  adjacent-edit escalations show up in practice". Merging a PR that is
+  behind `main` makes them routine (a14).
 - **`workflow-bootstrap`** and **`workflow-streamline`**: the PR slot and
   the single round. **`native-host-loop`**: what a native session may do,
   for the boundary with `loop-native-lead`.
@@ -183,14 +196,21 @@ say.
      area.* Decision 4 makes them disjoint.
 2. **The queue records what the relation needs, copied from the design by
    `wf`.** New fields: `repos`, `areas`, `seams`, `rules_changed`,
-   `adopts` and `collides_with`. `wf declare` copies the design's front
-   matter into the queue file, and every later gate compares the two.
+   `adopts`, `collides_with` and `declared`. `wf declare` copies the
+   design's front matter into the queue file and records the commit it read
+   in `declared`; every later gate of an item that has `declared` compares
+   the two. An item that finished Design before `wf declare` existed has no
+   `declared`: nothing is compared for it, and it is undeclared.
    - *Rejected: `wf next` reads each design from git.* It reads no git today
      (`next-skips-merge-wait`), and two workers with different fetches would
      compute different relations.
    - *Rejected: the agent copies the fields by hand*, as `wf-design` copies
      `alters_relationships` today. Six fields, and nothing compared them
      afterwards.
+   - *Rejected: comparing the queue with the design for every item from the
+     merge on.* `seam-specs` and `driver-contract` finished Design with no
+     such fields in their queue files, and their designs list seams and rule
+     changes; their Plan gate would fail on the day of the merge.
 3. **The area map is the repository's, on `main`, under FLOW-14; `wf`
    computes from a generated copy in the queue state** (a4). The map is
    `tools/tier1/areas.yaml`, named by the profile (PROFILE-01). `wf areas
@@ -210,74 +230,121 @@ say.
    or a rule file are disjoint; the refresh step puts the later one in
    order.
    - *Rejected: the proposal's reading, where a shared ordered area makes
-     two items near and they take turns at the PR.* Four of the last six
-     product merges changed the book, so most pairs would still open one PR
-     at a time, Jeff's own example among them.
-5. **`reaches` is the import graph, exactly.** Area A reaches area B when a
-   package in A, or its tests, imports a package in B, directly or not, on
-   Linux, macOS or Windows. Tier 1's new `area-map` check fails when the map
-   and the graph differ.
-   - *Rejected: links written by hand for couplings the graph cannot see*
-     (a relay VM image that a driver boots). A hand-written link can be
-     neither checked nor kept current. Such a coupling is a seam, and the
-     relation reads seams.
-   - *Rejected: the proposal's "`tier1`, `rules` and `tier1-config` reach
-     every area".* Every item with a rule change would then take turns at
-     the PR with every other item. What that guards against, a tightened
-     check failing another branch, is found by the same `make lint` either
-     way: at `f6-merge-main`, or at the refresh.
+     two items near and they take turns at the PR.* Jeff's own example
+     would then open one PR at a time, since a Hyper-V item and a relay item
+     each touch a book page. Measured on history, 36 of 253 pairs change
+     from disjoint to near under that reading (a2).
+5. **`reaches` is the import graph, with one declared exception: the two
+   areas that hold the checks reach every area** (a15). Area A reaches
+   area B when a package in A, or its tests, imports a package in B,
+   directly or not, on Linux, macOS or Windows. Tier 1's new `area-map`
+   check fails when the map and the graph differ. `tier1` and
+   `tier1-config` carry `reaches_all: true`, as the proposal has it: a
+   check that an item tightens runs over every other item's code.
+   - *Rejected: links written by hand for couplings the graph cannot see.*
+     A hand-written link can be neither checked nor kept current. A file
+     one area's code reads or copies by path is placed in the area of the
+     code that names and tests it: the relay VM's `init` and initramfs
+     script are in `driver-core`, beside `driver/relayvm`, which tests
+     them, and not in `relay` (a5). Any other such coupling is a seam, and
+     the relation reads seams.
+   - *Rejected: the import graph alone* (the first draft). A tightened
+     check and the code it newly fails would be disjoint, and under a1 (a)
+     the two may merge before either is refreshed, so the failure would
+     first show on `main`.
+   - *Rejected: `rules` (`docs/development/`) reaching every area too*, as
+     the proposal also has it. 22 of the 52 merges changed it, so nearly
+     half of all items would take turns at the PR with every other item. A
+     rule's wording checks nothing mechanically; its enforcement is in the
+     two areas above, and two items that change the same rule are near by
+     its ID.
 6. **Near items work side by side and take turns at the PR.** Two items are
    near when an area of one reaches an area of the other, when both change
    the same rule, or when both change a seam that has a specification. This
    is "nearly non-colliding".
-7. **The three limits count only the holders related to the item that
-   asks, and one table drives the guard and `wf validate`.** The table is
-   under **The limits**. `Guard` is called by `wf next` (and `wf next
-   -feature`) and by `wf claim`, for every worker; `Validate` walks the same
-   table over the holders.
+7. **Each limit is one predicate over the holders, and the guard and
+   `wf validate` both evaluate it.** No holder may have more than the limit
+   of holders in its *set*: itself and the holders related to it. `Guard`
+   applies the claim in memory and evaluates the predicate for the item
+   that asks and for every holder related to it; `Validate` evaluates it
+   for every holder. A state `Guard` allows therefore never fails
+   `Validate`. `Guard` is called by `wf next` (and `wf next -feature`) and
+   by `wf claim`, for every worker. The table is under **The limits**.
    - *Rejected: the limits left in `wf next` for the cloud*, as today.
      `loop-native-lead` lets a machine take an item's first step.
-   - *Rejected: a separate implementation in `Validate`.* That is how the
-     two disagreed before `alters-slot`.
-8. **`limits.in_progress` is 5 when unset and an error below 1** (a11), as
-   `alters-slot` did for the other limit. *Dropped fallback:* absent or 0
-   read as no limit.
+   - *Rejected: the guard counting only the holders related to the item
+     that asks* (the first draft). The relations are not transitive, so a
+     claim whose own count is low can put a holder it relates to over the
+     limit; `wf claim` would then admit a state `wf validate` rejects, and
+     every later `wf validate` and replay would fail on it.
+8. **`limits.in_progress` is 5 when unset and an error below 1**, as
+   `alters-slot` did for the other limit. FLOW-05 writes the 5, and the
+   live `config.yaml` sets it, so nothing changes for this queue. *Dropped
+   fallback:* absent or 0 read as no limit.
 9. **The PR slot is held from the claim of `f6-merge-main` until the PR
-   merges, and priority breaks a tie** (a12). A claim holds it, expired or
-   not, as a Plan claim holds an `alters_relationships` slot. An item in
-   Close holds nothing. A waiting item is refused while a related item of
-   higher priority is ready to take the slot.
+   merges, a return included, and priority breaks a tie** (a12). A claim
+   holds it, expired or not, as a Plan claim holds an
+   `alters_relationships` slot. An item with a PR recorded holds it in
+   whatever phase it is, so a refresh that sends an item back to Implement
+   or Design does not free the slot while its PR is open; the PR is made a
+   draft until the item is published again. An item in Close holds
+   nothing. A waiting item is refused while a related item of higher
+   priority waits for the slot, as the proposal has it.
    - *Rejected: first to ask.* With more than one worker, a low-priority
      item could take the slot the moment Jeff's merge frees it.
+   - *Rejected: the higher priority goes first only when it could take the
+     slot itself* (the first draft). An item related to two streams that
+     are disjoint from each other could then wait without end: while one
+     stream holds, the other stream's next item takes the slot (a12).
+   - *Rejected: a return gives the slot up while the PR stays open* (the
+     first draft, and what `prSlotHolder` does today for a return from
+     Publish). A related item could then open its PR beside it, and the
+     open PR would no longer be listed among the merges.
    - *Rejected: a tie-break at the other two limits.* `wf next` walks
      FLOW-05's order, and those slots are freed by a worker's own step, not
      by a merge between runs.
 10. **`wf commit` pushes queue state, and replays it when the push is
-    rejected.** A replayed claim stands only if the step is still free and
-    the limits still hold on the new state; otherwise it is dropped.
+    rejected.** A finished or released step is replayed as a change. A
+    claim is not replayed: it is asked again on the new state, through
+    everything `wf next` and `wf claim` check, and dropped with that
+    refusal when one applies.
     - *Rejected: today's rule, a rejected push loses the claim.* Every
       unrelated push (a machine's status file, another item's step) would
       cost a claim.
     - *Rejected: `git rebase` by each skill.* `QUEUE.md` conflicts on almost
       every replay, and the skills would each resolve it by hand.
+    - *Rejected: replaying a claim as a change and running `Validate`* (the
+      first draft). `Validate` sees only holders: it does not see the
+      tie-break, a hold a process item started in the push that won, or a
+      blocking question the human opened in it.
 11. **Collision is decided at intake, confirmed by Design and checked
-    against the diff.** Intake records `repos` and `areas` with Jeff (a4).
-    Design's done-when compares them with what the front matter implies.
+    against the diff.** Intake records `repos` and `areas` with Jeff (a4);
+    a follow-up filed with nobody there takes those of the item it
+    follows. Design's done-when compares them with what the front matter
+    implies.
     Implement, Review, Publish and the refresh fail on a changed path
     outside the areas. Review and consolidation add a trial merge against
     each disjoint in-progress branch, as a report.
 12. **An agent may widen an item's areas only inside its approved design,
     and only while the queue stays valid; anything else returns to Design;
-    narrowing is the human's.** `wf declare` enforces all three.
+    narrowing is the human's.** `wf declare` enforces all three, and reads
+    "its approved design" at the commit the last approval names, not on the
+    branch the agent is editing.
     - *Rejected: any widening returns to Design.* A design that declares
       `drivers: [hyperv]` and whose diff reaches `driver/hyperv/` has said
       so already.
+    - *Rejected: every driver in `drivers` is inside the design.* A change
+      to a shared package lists every driver (FLOW-02, tier 1's
+      `drivers-claim`) and edits none of their trees. A driver's area is
+      inside the design only when the design declares no shared area.
     - *Rejected: an agent may narrow.* Narrowing claims more parallelism
       than the human agreed to.
 13. **The refresh is one step, `f6-refresh`, taken by the cloud, seeded
     whenever `main` has moved past an open PR** (a10). It merges `main`,
     runs the gates, and carries the consolidation pass and the sweep over
-    what landed.
+    what landed. It pushes only while the PR is still open and the remote
+    branch is where it found it. It does not queue a native validation
+    again.
     - *Rejected: a refresh that re-queues `f6-consolidate`.* Returning to
       Publish seeds `f6-merge-main` again, so the item would give up the PR
       slot while its PR is open.
@@ -302,18 +369,21 @@ say.
     own digest file and `wf` builds the day's page** (a3).
 17. **This item holds no worker** (a13). Nothing it changes reaches a
     running session before its merge; after it, an absent field means
-    today's behaviour, and the first new field is written at Close.
+    today's behaviour, an item with no `declared` passes every gate it
+    passes today, and the first new field is written at Close.
     - *Rejected: `holds: [cloud, host:*]`.* A hold lasts while the item is
       in progress, from its design to its close: days during which S1 and K1
       would stop.
-18. **A hold still names workers and covers work in every repository**
-    (a9). *Rejected for now:* a hold that names repositories. No step of a
-    second repository is taken by a worker a hold could stop until
-    `loop-repository`.
-19. **Thirteen rule changes, in this item's PR.** FLOW-02, -03, -05, -10,
+18. **A hold still names workers and covers work in every repository.**
+    *Rejected for now:* a hold that names repositories (`loop-contract`'s
+    hand-off leaves it to this item). No step of a second repository is
+    taken by a worker a hold could stop until `loop-repository`, which
+    adds it with the first such step.
+19. **Fourteen rule changes, in this item's PR.** FLOW-02, -03, -05, -10,
     -15, -19 and -20, as the proposal lists; FLOW-04, -06 and -08, which
     `wf commit`, the refresh step, tracked items and a merge recorded in a
-    second repository (a6) make untrue as written;
+    second repository (a6) make untrue as written; FLOW-09, for a red
+    `main` the loop itself sees (Decision 22);
     LOOP-01, LOOP-04 and PROFILE-01, for the Areas term and the queue's new
     field. The last three need `loop-contract` on `main`, so `x2-implement`
     starts after its merge (Implementation plan, task 1).
@@ -325,6 +395,21 @@ say.
     - *Rejected: requiring an up-to-date branch.* Each merge would block the
       rest for a cloud run.
     - *Rejected: one open PR per repository.* That is today's rule again.
+22. **The loop reads CI on `main`** (a16). Each tick, and the attended session
+    before it lists the PRs, records the result of `main`'s head in the
+    queue state. A red `main` opens **Needs Jeff**, and the tick files its
+    fix as the follow-up of the item whose merge it was (FLOW-09, amended).
+    Decision 21 rests on this: without a reader, "CI on `main` is the
+    gate" gates nothing.
+23. **The merge check compares changes with no context lines** (a14).
+    `wf`'s proof that a squashed branch is on `main` takes
+    `wf-squash-after-base-moved`'s reserve option, `-U0`. A PR merged
+    while behind `main`, next to a line the earlier merge edited, is the
+    normal case under Decision 21 and fails the three-line comparison
+    wherever the branch's ref still exists.
+    - *Rejected: keeping three lines and escalating each such merge.* The
+      item would stay at its merge step, holding the PR slot, until Jeff
+      compared the two changes by hand.
 
 ## Questions
 
@@ -334,26 +419,37 @@ None.
 
 ### Assumed
 
-Each is put to Jeff in the design review. The first, the third, the fourth
-and the sixth are the proposal's questions 3, 5, 6 and 11, whose recommended
-answers he approved as the direction; they are asked again here because this
-is where they take effect.
+Each is put to Jeff in the design review. a1, a3, a4 and a6 are the
+proposal's questions 3, 5, 6 and 11, whose recommended answers he approved
+as the direction; they are asked again here because this is where they take
+effect. a9 and a11 of the first draft are withdrawn: neither was a fork
+(Decisions 18 and 8). a14 to a16 are new after the independent review.
 
 - **a1. Disjoint PRs in one repository: in what order may they merge?**
   (The proposal's question 3.) CI does not run again when a PR's base moves.
   Proceeding with (a); confirm.
-  - (a) Any order. After a merge, `QUEUE.md` marks each other open PR
-    "behind `main`" until its refresh is done. A PR merged while behind
-    relies on CI on the push to `main`; a failure there is fixed by an item
-    that `follows` the one that broke it (FLOW-09). `main`'s protection
-    then requires a pull request and green checks, and does not require the
-    branch to be up to date.
+  - (a) Any order. `main`'s protection then requires a pull request and
+    green checks, and does not require the branch to be up to date. What
+    stands in for an up-to-date branch, and how far each reaches:
+    - *"Behind `main`" in `QUEUE.md`.* It is as current as the last session
+      that ran `wf stale`: the daily tick, or the attended session, which
+      runs it before it lists the PRs and again after each merge Jeff makes
+      in it. A PR he merges on GitHub between sessions shows its last green
+      run and no mark. Merging from the attended listing closes that gap.
+    - *CI on the push to `main`.* The tick and the attended session read it
+      (Decision 22). A red `main` opens **Needs Jeff**, and its fix is
+      filed as the follow-up of the item whose merge it was, with that
+      item's areas (FLOW-09, a4).
+    - *The merge check.* A PR merged while behind `main` is still confirmed
+      as merged (a14).
   - (b) An up-to-date branch is required. Each merge blocks the rest until
     their refresh, about one merge per cloud run.
   - (c) One open PR per repository: today's rule, per repository.
 
   Recommended: (a). Disjoint PRs share no exclusive area, and GitHub refuses
-  a merge that conflicts in a shared file.
+  a merge that conflicts in a shared file. What (a) accepts is under
+  **Safety**: a break between two disjoint items that neither branch shows
+  alone lands on `main` and is fixed there.
 - **a2. What sharing only ordered areas costs** (the book, build files,
   rule files, other items' designs). Proceeding with (a); confirm. This
   departs from the proposal, whose section 1 put "lightly shared files"
@@ -363,13 +459,20 @@ is where they take effect.
     conflict in the shared file is resolved.
   - (b) They are near and take turns at the PR, as the proposal has it.
 
-  Recommended: (a). Under (b), a Hyper-V item and a Go relay item that each
-  touch one book page open their PRs one after the other, each waiting for
-  Jeff's merge of the one before; that is most pairs of product features.
-  Under (a) the risk is a PR merged while behind `main` whose shared file
-  merges cleanly and wrongly (two edits to `go.mod`, for example); CI on
-  `main` is the net, as in a1. The change between the two options is one
-  row of the relation table.
+  Recommended: (a). Measured on history, with the map below and the areas
+  each merge really changed: of the 23 merges that were not loop work and
+  changed fewer than 100 files, 253 pairs, (a) gives 187 disjoint, 43 near
+  and 23 colliding, and (b) gives 151, 79 and 23. So (b) makes 36 pairs
+  (14%) take turns that (a) lets open side by side, Jeff's own example
+  among them when each item touches a book page. It changes nothing for
+  the most recent work: among the last six product merges
+  no pair is disjoint under either option, 8 colliding and 7 near, because
+  each changed `cmd/warden/` or a package every driver imports. Under (a)
+  the risk is a PR merged while behind `main` whose shared file merges
+  cleanly and wrongly (two edits to `go.mod`, for example); 14 of the 187
+  disjoint pairs changed a common file, most often
+  `docs/development/README.md`. CI on `main` is the net, as in a1. The
+  change between the two options is one row of the relation table.
 - **a3. A cap on work waiting for Jeff.** (The proposal's question 5.)
   Proceeding with (a); confirm.
   - (a) None. `QUEUE.md` opens **Needs Jeff** with the count of items
@@ -379,32 +482,42 @@ is where they take effect.
   Recommended: (a). A cap would stop the loop on the one resource it cannot
   add to, and the count makes the backlog visible.
 - **a4. Who declares areas, and where the map lives.** (The proposal's
-  question 6.) Proceeding with (a) and (c); confirm.
+  question 6, with its letters.) Proceeding with (a) and (d); confirm.
   - (a) Areas are proposed at intake with Jeff and confirmed by Design; a
-    design that narrows what intake recorded cannot skip its review.
-  - (b) Areas are declared by Design only.
-  - (c) The map is on `main`, at `tools/tier1/areas.yaml`, as the profile's
+    design that narrows what intake recorded cannot skip its review. A
+    follow-up filed with nobody there (FLOW-09) takes the repositories and
+    areas of the item it follows, which Jeff agreed for that item; its
+    Design may add to them, and removing one needs the review.
+  - (b) Areas are declared by Design only. A follow-up is then undeclared
+    until its design: it collides with every feature, cannot start while
+    five are in progress, and may open its PR only when no other feature
+    has one open, which makes the fix for a red `main` the slowest item in
+    the queue.
+  - (c) The map is on the `workflow` branch, changed in an attended session
+    on Jeff's word.
+  - (d) The map is on `main`, at `tools/tier1/areas.yaml`, as the profile's
     Areas entry: a feature changes it only as a rule change its design
     review approves by name (FLOW-14), and tier 1 checks it against the
     tree.
-  - (d) The map is on the `workflow` branch, changed in an attended session
-    on Jeff's word.
 
-  Recommended: (a) and (c).
+  Recommended: (a) and (d).
 - **a5. The map itself**, written out under **The area map**: 16 exclusive
   areas and 5 ordered ones. `driver-core` is one area (`driver/*.go`,
-  `buildlink`, `resolvers`, `relayvm`, `script`, `linuxguest`, `winguest`).
-  `relay`, `relaycfg`, `ledger`, `collector` and `executor` are five areas.
-  `cli` (`cmd/warden/`) is exclusive. The book, `docs/development/`, the
-  build files, other items' designs and tier 1's configuration are
-  ordered. Proceeding with (a); confirm, or change an area.
+  `buildlink`, `resolvers`, `relayvm`, `script`, `linuxguest`, `winguest`,
+  and the relay VM's `init` and initramfs script, which `driver/relayvm`
+  tests and the Hyper-V boot-disk script copies). `relay`, `relaycfg`,
+  `ledger`, `collector` and `executor` are five areas. `cli`
+  (`cmd/warden/`) is exclusive. The book, `docs/development/`, the build
+  files, other items' designs and tier 1's configuration are ordered.
+  Proceeding with (a); confirm, or change an area.
   - (a) As written.
   - (b) Finer: the guest families apart from `driver-core`, so more items
     are near and fewer collide.
   - (c) Coarser: `rules.yaml`'s shared list (`relay/`, `ledger/`,
     `collector/`, `relaycfg/`, `bootstrap/`, `driver/*.go`) as one area.
   - (d) `cli` ordered, so two driver items that each edit `cmd/warden/` do
-    not collide. They collide today until K1 moves the driver flags out.
+    not collide. They collide today until K1 moves the driver flags out:
+    five of the 52 merges changed it.
 
   Recommended: (a).
 - **a6. Steps in a second repository.** (The proposal's question 11.)
@@ -439,56 +552,135 @@ is where they take effect.
 
   Recommended: (a). A regression means `main` is broken now; an adoption is
   planned work.
-- **a9. Whether a hold may name repositories.** (`loop-contract`'s hand-off
-  leaves it to this item.) Proceeding with (a); confirm.
-  - (a) Not yet: a hold names workers and covers work in every repository.
-  - (b) Now: `holds` entries may carry a repository.
-
-  Recommended: (a). `loop-repository` adds it with the first worker step in
-  a second repository.
-- **a10. The refresh: its trigger and its budget.** Proceeding with (a)
-  and (c); confirm.
+- **a10. The refresh: its trigger, its budget, and native validation.**
+  Proceeding with (a), (c) and (e); confirm.
   - (a) Seeded for every item waiting on Jeff's merge whenever `main` is no
     longer contained in its branch, whatever moved `main`.
   - (b) Seeded only when a related item's PR merged.
   - (c) Each refresh is a claim and counts one step against the item's
     budget; intake's size guide adds two steps for it.
   - (d) A refresh spends no budget, like the merge confirmation.
+  - (e) A refresh does not queue a blocking native validation again. The
+    validation stands for the branch as it was consolidated; what merged
+    since came from items disjoint from this one.
+  - (f) A refresh queues each done blocking host step again when the
+    commits it merged changed a file outside the ordered areas: one more
+    native session per such merge, with the open PR shown as waiting on a
+    host.
 
-  Recommended: (a) and (c). Under (c), an item that waits through many
-  merges trips its runaway check and shows under **Needs Jeff**, which is
-  the right place for a PR that has waited that long.
-- **a11. `limits.in_progress` when `config.yaml` does not set it.**
-  Proceeding with (a); confirm.
-  - (a) 5, FLOW-05's written value; a written value below 1 is an error.
-  - (b) As today: absent or 0 means no limit.
-
-  Recommended: (a). The live `config.yaml` writes 5, so nothing changes for
-  this queue.
-- **a12. Who gets a free PR slot when two related items wait.**
-  Proceeding with (a); confirm.
-  - (a) The higher priority, when it is ready to take the slot itself. The
-    other is refused and its reason names the one ahead.
-  - (b) The first to ask.
+  Recommended: (a), (c) and (e). The cost of (a) and (c) with five PRs
+  open: merged one a day, they take 4 + 3 + 2 + 1 = 10 refreshes, up to
+  four on the last item, against the two the size guide adds; each is a
+  merge, lint, test, deadcode, a consolidation pass and a CI wait, taken
+  in class 1 ahead of new work. Merged in one sitting they take none, and
+  four of the five merge behind `main` (a1). An item that waits through
+  many merges trips its runaway check and shows under **Needs Jeff**,
+  which is the right place for a PR that has waited that long. Under (e),
+  a break between two disjoint items that only a native host shows is
+  found by the matrix before a release (TEST-02): CI runs neither Hyper-V
+  nor VZ, and the scheduled native session sweeps only a machine's open
+  backlog gaps.
+- **a12. Who gets a free PR slot when related items wait.** Proceeding
+  with (a); confirm.
+  - (a) The higher priority, whether or not it could take the slot at that
+    moment: an item is refused while a related item of higher priority
+    waits. This is the proposal's rule. A lower-priority item can then
+    wait for a holder it is disjoint from, because the item ahead of it
+    does.
+  - (b) The higher priority only when it could take the slot itself (the
+    first draft). More PRs are open at once, and a high-priority item
+    related to two streams that are disjoint from each other can wait
+    without end. Example: an item in `driver-core` (priority 1) is near
+    every driver item. While a Hyper-V item holds, a VZ item (priority 3)
+    takes the slot; Jeff merges the Hyper-V PR, the `driver-core` item is
+    still refused (the VZ item holds), and the next Hyper-V item
+    (priority 4) takes it; and so on while driver items keep arriving.
+  - (c) The first to ask.
 
   Recommended: (a). It only matters once a second worker exists: an attended
   run on a named item today, a machine's led item after `loop-native-lead`.
 - **a13. Whether this item holds a worker.** Proceeding with (a); confirm.
-  - (a) None. The cost is one narrow case: a session whose `dist/wf` was
-    built before the merge saves a queue file that already carries a new
-    field, and drops the field. Close writes the first new field only after
-    no lease predates the merge, and every scheduled session rebuilds `wf`
-    as it starts.
+  - (a) None. Two things are then handled without a hold. A session whose
+    `dist/wf` was built before the merge drops a new field when it saves a
+    queue file that carries one: Close writes the first new field only
+    after no lease predates the merge, and every scheduled session rebuilds
+    `wf` as it starts. And `seam-specs` and `driver-contract` finished
+    Design before the queue could record what they declare: no gate
+    compares their queue files with their designs until a human
+    `wf declare` records them, which the attended step `x4-state` does.
   - (b) `holds: [cloud, host:*]`, set by hand for the day of the merge and
     Close and removed after.
 
   Recommended: (a).
+- **a14. The merge check when a PR merged behind `main`.** `wf` confirms a
+  squash merge by one of three proofs for each ref of the branch that
+  still exists: the ref is an ancestor of `main`, a PR commit has its
+  tree, or a PR commit makes the same change by patch-id
+  (`wf-squash-after-base-moved`). The third is computed with three lines
+  of context, so it fails when the PR merged behind `main` next to a line
+  the earlier merge edited. That design's a3 chose three lines and said to
+  change "if adjacent-edit escalations show up in practice". Proceeding
+  with (a); confirm.
+  - (a) Zero context (`-U0`), that design's option (b). The proof becomes
+    "the same lines added and removed in each file, in order", without the
+    lines around them. A squash GitHub made cannot move a hunk. It is the
+    proof Close relies on before a squashed local branch is deleted
+    (FLOW-16).
+  - (b) Keep three lines. Each such merge fails its confirmation wherever
+    the branch's ref still exists (an attended checkout with a worktree, a
+    run that worked on the branch): the item stays at its merge step,
+    keeps the PR slot, and waits for Jeff to compare the two changes by
+    hand.
+
+  Recommended: (a). Under a1 (a) the case is ordinary: any two PRs that
+  each add an entry to the rule index, `rules.yaml` or a book table.
+- **a15. Whether the areas that hold the checks reach every area.** The
+  proposal has "`tier1`, `rules` and `tier1-config` reach every area: a
+  tightened check meets all code". The first draft dropped it for the
+  import graph alone, on the ground that the same `make lint` finds the
+  failure at `f6-merge-main` or at the refresh. That ground does not hold
+  under a1 (a), where a PR may merge before its refresh. Proceeding with
+  (b); confirm.
+  - (a) The import graph alone. An item that tightens a check and an item
+    whose code the check newly fails are disjoint: both PRs may be open
+    and merge in either order, and the failure first shows on `main`.
+  - (b) `tier1` (the checks' code) and `tier1-config` (`rules.yaml`,
+    `golangci.yml`, the area map) reach every area: an item that changes
+    either is near every item in the repository and takes turns at the PR
+    with it, so the later of the two merges `main` and meets the check
+    before its PR opens. `rules` (`docs/development/`) does not: wording
+    checks nothing mechanically, and 22 of the 52 merges changed it.
+  - (c) As the proposal: `rules` too. Nearly half of all items would then
+    take turns at the PR with every other item.
+
+  Recommended: (b). On history it costs little: one of the 23 merges
+  changed either area, and 17 of the 253 pairs become near. It does not
+  cover a check that lives in a test of a code area and walks the whole
+  tree (`driver/buildlink/stray_test.go` reads every file;
+  `specs/specs_test.go` reads the book's `SUMMARY.md`), nor the root
+  `.golangci.yml`; those are part of what a1 (a) accepts.
+- **a16. A regression that CI reports on `main`.** FLOW-09 has a session
+  file a regression `main` already has when it finds one "while the
+  feature is built, validated or consolidated". Nothing files one that CI
+  reports on `main` itself. Proceeding with (a); confirm.
+  - (a) The run that sees `main` red files the fix, unattended as FLOW-09
+    already allows, as the follow-up of the item whose pull request that
+    merge was, at the top of the fixes. When the red commit is no item's
+    (a hand merge, the weekly tidy), it files nothing and **Needs Jeff**
+    says `main` is red.
+  - (b) It only reports: **Needs Jeff** opens with the red `main`, and the
+    fix is filed when a later step's gates meet the failure, as the
+    follow-up of that step's item (FLOW-09 as written), or by Jeff.
+
+  Recommended: (a). Under a1 (a) a red `main` is the designed outcome of a
+  missed collision, and each open PR's refresh would otherwise fail on it,
+  run after run, until some item's session filed the fix.
 
 ## Design
 
 ### What an item declares
 
-**In the queue file.** Six fields, all optional. A queue file without them
+**In the queue file.** Seven fields, all optional. A queue file without them
 behaves as it does today.
 
 ```yaml
@@ -496,16 +688,18 @@ repos: [buildwarden/buildwarden, buildwarden/buildwarden-specs]
 areas: [driver/hyperv, book]
 seams: [relay-claim]
 rules_changed: [GLOBAL-08, TEST-05]
+declared: 4c1d9e2
 adopts: {consumable: buildwarden-relay, version: v0.3.0}
 collides_with: [some-other-item]
 ```
 
 | Field | What it is | Absent means | Written by |
 |---|---|---|---|
-| `repos` | The repositories the item works in, as `owner/name`, its home first. The home holds its design, its branch and its PR | Only the queue's own repository, `config.yaml`'s `repository` | `wf new -repos`; `wf declare` |
-| `areas` | Names from the home repository's area map: the areas whose files the item changes. Its own design file needs no area | *Undeclared*: the item collides with every item it shares a repository with. `areas: []` is different: declared, and it changes nothing but its own design | `wf new -areas`; `wf declare` |
-| `seams` | The design's `seams` (FLOW-02): the seams the item changes | None | `wf declare` |
+| `repos` | The repositories the item works in, as `owner/name`, its home first. The home holds its design, its branch and its PR | Only the queue's own repository, `config.yaml`'s `repository` | `wf new -repos`, or copied from the item it `-follows`; `wf declare` |
+| `areas` | Names from the home repository's area map: the areas whose files the item changes. Its own design file needs no area | *Undeclared*: the item collides with every item it shares a repository with. `areas: []` is different: declared, and it changes nothing but its own design | `wf new -areas`, or copied from the item it `-follows`; `wf declare` |
+| `seams` | The design's `seams` (FLOW-02): the seams the item changes | None | `wf declare`; `wf new -seams` for a tracked item, whose design `wf` cannot read |
 | `rules_changed` | The rule IDs of the design's `rule_changes` (FLOW-14) | None | `wf declare` |
+| `declared` | The commit of the item's branch whose design `wf declare` last copied | The item has never been declared: it finished Design before `wf declare` existed, or has not finished it. No gate compares its queue file with its design | `wf declare` |
 | `adopts` | Marks a reconciliation item (LOOP-07): the consumable and the version it adopts | Not a reconciliation item | `wf new -adopts <consumable>@<version>` |
 | `collides_with` | Items the human has said this one collides with, whatever the areas say | None | `wf relate`, a human worker only |
 
@@ -536,7 +730,8 @@ lacking them. `seams`, `rule_changes`, `alters_relationships` and
 
 **`wf declare -state DIR -repo DIR -worker W -feature F`** copies the design
 on the item's branch into the queue file: `repos`, `areas`, `seams`, the
-rule IDs of `rule_changes`, `alters_relationships` and `design_review`. It
+rule IDs of `rule_changes`, `alters_relationships` and `design_review`, and
+writes the branch's commit to `declared`. It
 replaces the hand copy in `wf-design`'s step 5. What it accepts depends on
 where the item is and who asks:
 
@@ -544,19 +739,41 @@ where the item is and who asks:
 |---|---|---|
 | Design not finished (a feature in phase 0 or 1; a process item in phase 1) | Any worker | Any value. One exception: with `design_review: skip`, a change that *narrows* is refused, with "narrowing needs the design review (FLOW-19)". Narrowing is removing a repository or an area the queue has, or declaring areas where the queue has none |
 | In Plan | A `cloud` or `host:` worker | Nothing: the Plan gate compares the design with its approval (FLOW-19) |
-| From Implement on | A `cloud` or `host:` worker | Only added areas, each *within the design*: the area the map gives a driver in the design's `drivers` or a surface in its `surfaces` (`implies`, below), or an area that holds a path of one of its `rule_changes`. Every other difference is refused, with "a design change: back to Design (FLOW-06)" |
-| After Design | A `human` worker | Any value. This is how the review narrows, and how an item already past Design is given areas. A change made in the review is part of the design the approval names |
+| From Implement on | A `cloud` or `host:` worker | Only added areas, each *within the approved design* (below). Every other difference is refused, with "a design change: back to Design (FLOW-06)" |
+| After Design | A `human` worker | Any value. This is how the review narrows, and how an item that finished Design before this change is declared, with or without areas. A change made in the review is part of the design the approval names |
 
-In every case the names must exist in the branch's area map, and the result
-must pass `wf validate`: `wf declare` applies the change in memory, runs
-`Validate`, and writes nothing when a limit would be exceeded. Its error
+**Within the approved design.** `wf declare` reads `drivers`, `surfaces`
+and `rule_changes` from the design at the commit its last `approved at
+<sha>` names (`approvals`, `check/review.go`), not from the branch, which
+the same agent is editing. Only a design whose review was skipped is read
+on the branch: it has no approved commit, and the skip criteria leave it no
+seam and no rule change. An added area is within the design when it is:
+
+- an area that holds a path of one of the design's `rule_changes`;
+- an area the map gives one of its `surfaces` (`implies.surfaces`);
+- the area of a driver in its `drivers` (`implies.drivers`), when the
+  design declares no *shared* area (`implies.shared`). A design that
+  declares a shared area lists every driver because tier 1's
+  `drivers-claim` requires it, not because it edits their trees, so for it
+  a driver's tree is a design change.
+
+In every case the names must exist in the branch's area map, and the change
+must not put a limit over: `wf declare` applies the change in memory, runs
+the limits' predicate (**The limits**), and writes nothing when the change
+adds a limit error. Its error
 names the limit and the holders, and says "back to Design (FLOW-06)". It
-logs what changed in the item's history (`declared: areas +driver/hyperv
-(within drivers: hyperv)`).
+logs what changed in the item's history (`declared at 4c1d9e2: areas
++driver/hyperv (within drivers: hyperv)`).
 
 **`wf relate -state DIR -worker human/<name> -feature A -with B [-clear]`**
 writes or clears `collides_with` on A. Only a `human` worker may run it, and
 it is refused, like `wf declare`, when the result would put a limit over.
+
+**`wf new`** gains `-repos`, `-areas`, `-seams` and `-adopts`. With
+`-follows X` and no `-areas`, it copies X's `repos` and `areas` and logs
+`repos and areas taken from X`; when X has none, the new item has none.
+`-seams` is refused for an item homed in this repository, whose seams
+`wf declare` copies.
 
 This replaces the sentence `alters-slot` added to `wf-design`'s step 5 (its
 a4): a redesign that flips `alters_relationships` to `true` past the limit is
@@ -571,6 +788,8 @@ before. The new sentence is under **Machinery edits**.
   an error: the item is then treated as undeclared until `main` has the
   area, and `QUEUE.md` marks the name with `*` (a design may add an area in
   its own rule change, and `main` gets it at the merge).
+- `declared`: a commit id, and set whenever `seams` or `rules_changed` is,
+  on an item homed in this repository.
 - `adopts`: `consumable` and `version` are both set, and the item is a
   feature.
 - `collides_with`: each entry names another item in the queue.
@@ -591,7 +810,11 @@ repository whose profile has no Areas entry is one exclusive area.
 `origin/main`'s map to `areas.yaml` in the queue state, with a header that
 names the repository and the commit, and the list of written seams (below).
 Every session runs it in its set-up, after the fetch; the changed file goes
-out with the session's first state push. `queue.Load` reads the copy as it
+out with the session's first state push. `main`'s map is the truth, so the
+copy is written even when the new map relates two items that both already
+hold a limit; `wf areas -sync` then prints the limit and the holders, and
+`QUEUE.md` lists them under **Needs Jeff** (see **More holders than a
+limit**). `queue.Load` reads the copy as it
 reads `hosts.yaml`: an optional file. Every `wf` command then computes the
 same relations from the same pushed state, on every machine, with no git.
 `wf areas -check` fails when the copy differs from `origin/main`'s map;
@@ -610,8 +833,10 @@ areas:
     mode: exclusive | ordered
     paths: [<pattern>, ...]
     reaches: [<area>, ...]
+    reaches_all: true          # in place of reaches, where declared
 implies:
   drivers: {<driver>: <area>, ...}
+  shared: [<area>, ...]
   surfaces: {<surface>: [<area>, ...], ...}
 written_seams: [<seam>, ...]
 ```
@@ -626,10 +851,18 @@ written_seams: [<seam>, ...]
 - **`mode`** is required. *Exclusive*: two items that both change the area
   collide. *Ordered*: any number of items may change it side by side, and
   the later one to merge is put in order by its refresh (Decision 4).
-- **`reaches`** lists the areas this one depends on (Decision 5). Unknown
-  keys are rejected, as in `rules.yaml`.
+- **`reaches`** lists the areas this one depends on, which is the import
+  graph (Decision 5). Unknown keys are rejected, as in `rules.yaml`.
+- **`reaches_all: true`** says the area reaches every area of the map,
+  itself included, and takes the place of `reaches`. It is for the areas
+  whose files check all the others (a15), and it is the one relation the
+  map states that the import graph does not give.
 - **`implies`** says which area a value in a design's front matter stands
   for, so `wf` holds none of this repository's vocabulary (LOOP-08).
+  `drivers` gives each driver's own area. `shared` lists the areas that
+  hold a path every driver depends on (`rules.yaml`'s `drivers.shared`): a
+  design that changes one of them lists every driver and edits no driver's
+  tree. `surfaces` gives each surface's areas.
 - **`written_seams`** lists seams that have a specification and that
   `rules.yaml`'s `seams` list does not carry. `wf areas -sync` adds the
   names in `rules.yaml`'s `seams` list, which S1 fills, so a seam becomes
@@ -637,8 +870,8 @@ written_seams: [<seam>, ...]
   no second edit.
 
 **The map for `main` at `897a4a8`**, in full. It was run against
-`git ls-files`: every tracked file falls in a named area, and `core` is
-empty today.
+`git ls-files`: each of the 627 tracked files falls in one named area, with
+no tie, and `core` is empty today.
 
 ```yaml
 version: 1
@@ -667,7 +900,7 @@ areas:
     reaches: [collector, driver-core, executor, ledger, relaycfg]
   driver-core:
     mode: exclusive
-    paths: [driver/, tools/build-vm/, tools/win-image-prep/]
+    paths: [driver/, tools/build-vm/, tools/relay-vm/, tools/win-image-prep/]
     reaches: [collector, driver/firecracker, driver/hyperv, driver/qemu, executor, ledger,
               relay, relaycfg]
   relaycfg:
@@ -675,7 +908,7 @@ areas:
     paths: [relaycfg/]
   relay:
     mode: exclusive
-    paths: [relay/, cmd/relay/, tools/relay-vm/, Dockerfile.relay]
+    paths: [relay/, cmd/relay/, Dockerfile.relay]
     reaches: [collector, ledger, relaycfg]
   ledger:
     mode: exclusive
@@ -699,7 +932,7 @@ areas:
   tier1:
     mode: exclusive
     paths: [tools/tier1/]
-    reaches: [loop]
+    reaches_all: true
   loop:
     mode: exclusive
     paths: [tools/workflow/, .claude/, .entire/]
@@ -723,6 +956,7 @@ areas:
   tier1-config:
     mode: ordered
     paths: [tools/tier1/rules.yaml, tools/tier1/golangci.yml, tools/tier1/areas.yaml]
+    reaches_all: true
 implies:
   drivers:
     container: driver/container
@@ -730,7 +964,7 @@ implies:
     vz: driver/vz
     hyperv: driver/hyperv
     firecracker: driver/firecracker
-    interface: driver-core
+  shared: [collector, driver-core, executor, ledger, relay, relaycfg]
   surfaces:
     cli: [cli, book]
     config: [cli, book]
@@ -743,26 +977,29 @@ Why each area is what it is:
 | Area | Mode | Holds | Why |
 |---|---|---|---|
 | `driver/<name>` (five) | exclusive | A driver's tree (`rules.yaml`, `drivers.dirs`) and the assets only it uses: the pause binary (container), the vmnet helper, the image-prep tools and the signing entitlements (vz), the Hyper-V relay boot-disk scripts, the firecracker kernel and slot scripts | One driver, one area. No driver tree imports another |
-| `driver-core` | exclusive | `driver/*.go` and the packages drivers share: `buildlink`, `resolvers`, `relayvm`, `script`, `linuxguest`, `winguest`; the build VM and Windows image tools the guest families use. `driver/` is the pattern, so a new shared package lands here | `rules.yaml`'s `drivers.shared` lists the first five and omits `buildlink` and `resolvers`, which four driver trees and `cmd/warden` import |
+| `driver-core` | exclusive | `driver/*.go` and the packages drivers share: `buildlink`, `resolvers`, `relayvm`, `script`, `linuxguest`, `winguest`; the build VM and Windows image tools the guest families use; the relay VM's `init` and `build-initramfs.sh` (`tools/relay-vm/`). `driver/` is the pattern, so a new shared package lands here | `rules.yaml`'s `drivers.shared` lists the first five and omits `buildlink` and `resolvers`, which four driver trees and `cmd/warden` import. The relay VM's `init` is here and not in `relay` because the code that depends on it is here: `driver/relayvm/init_test.go` reads it by path, `driver/hyperv/relayseed.go` writes the file it parses, and `tools/relay-vm/hyperv/build.sh` copies it. No import shows that, so the file is placed with the code that names it; a change to it is then near every driver item |
 | `relaycfg` | exclusive | The claim's per-build configuration | Seam 1's package. Every driver, the relay, the collector and the CLI reach it |
-| `relay` | exclusive | `relay/`, `cmd/relay/`, the relay VM image tools, `Dockerfile.relay` | The Go relay, which stays here until M6 |
+| `relay` | exclusive | `relay/`, `cmd/relay/`, `Dockerfile.relay` | The Go relay, which stays here until M6. A new release target for it changes these and the build files, and no driver's |
 | `ledger` | exclusive | `ledger/` | The format's reader and writer |
 | `collector` | exclusive | `collector/`, `cmd/collector/` | The collector and its reference consumer |
 | `executor` | exclusive | `bootstrap/`, `cmd/warden-io/` | The in-environment pieces and the bootstrap configuration they read |
 | `cli` | exclusive | `cmd/warden/` | The orchestrator's entry point. Three of the last six product merges changed it, two of them by a file or two beside one driver's tree; such items collide until K1 moves the per-driver flags out |
 | `specs` | exclusive | `specs/` and its mirror pages in the book | The ledger wire format and schemas (RELAY-05) |
-| `tier1` | exclusive | Tier 1's code | A check's code is changed by few items, each by an approved rule change |
-| `loop` | exclusive | `tools/workflow/`, `.claude/`, `.entire/` | The loop's machinery. Process items change it and are outside the relations; a feature reaches it only through `tools/workflow/check/` (FLOW-14) |
+| `tier1` | exclusive | Tier 1's code | A check's code is changed by few items (3 of the 52 merges), each by an approved rule change. `reaches_all`: a changed check runs over every area (a15) |
+| `loop` | exclusive | `tools/workflow/`, `.claude/`, `.entire/` | The loop's machinery. Process items change it and are outside the relations. A feature may not: `loop-contract`'s FLOW-14 lets a feature's design declare no change to a loop rule or its enforcement |
 | `core` | exclusive | Every path no pattern matches. Empty today | A new top-level tree collides with any other until the design that adds it gives it an area |
-| `book` | ordered | The book, `examples/`, and the root documents | Changed by 13 of the last 53 merges, a page or two each |
-| `rules` | ordered | `docs/development/` | Changed by 23 of 53. Two items that change the *same rule* are near by its ID, whatever the file |
+| `book` | ordered | The book, `examples/`, and the root documents | Changed by 16 of the 52 merges, a page or two each |
+| `rules` | ordered | `docs/development/` | Changed by 22 of the 52. Two items that change the *same rule* are near by its ID, whatever the file |
 | `designs` | ordered | `docs/design/`: other items' designs and the template | An item's own design needs no area. This is for a retrofit or an amendment to an archived design |
 | `build` | ordered | CI workflows, `Makefile`, `go.mod`, `go.sum`, lint and release configuration, the root `Dockerfile` and its ledger, the install and integration scripts | Changed a line at a time by many items |
-| `tier1-config` | ordered | `rules.yaml`, `golangci.yml`, `areas.yaml` | Each item adds its own entry |
+| `tier1-config` | ordered | `rules.yaml`, `golangci.yml`, `areas.yaml` | Each item adds its own entry, so two may change it side by side (5 of the 52 merges changed it). `reaches_all`: an entry turns a check on for every area (a15) |
 
-**`reaches`, as computed.** From `go list -deps -test` in each of the three
-modules, for Linux, macOS and Windows, on amd64 and arm64, with cgo on (so
-`driver/vz` is seen), mapping each package's directory to its area:
+**`reaches`, as computed.** From `go list -deps -test ./...` in each of the
+three modules, for Linux, macOS and Windows on amd64 and arm64: 18 runs,
+about 2 s in all. `CGO_ENABLED` is 1 for macOS on arm64, so that
+`driver/vz`'s cgo files are seen, and 0 for the other five: with cgo on,
+macOS on amd64 fails on `driver/vz` (its Objective-C file has no cgo file
+beside it there). Each package's directory is mapped to its area:
 
 | Area | Reaches |
 |---|---|
@@ -772,28 +1009,45 @@ modules, for Linux, macOS and Windows, on amd64 and arm64, with cgo on (so
 | each `driver/<name>` | `collector`, `driver-core`, `executor`, `ledger`, `relaycfg` |
 | `relay` | `collector`, `ledger`, `relaycfg` |
 | `specs` | `collector`, `ledger`, `relay`, `relaycfg` (its tests) |
-| `tier1` | `loop` (`tools/tier1` imports `tools/workflow/check`) |
-| `relaycfg`, `ledger`, `executor`, `loop`, `core`, every ordered area | nothing |
+| `tier1` | `loop` by import (`tools/tier1` imports `tools/workflow/check`); the map says `reaches_all` |
+| `relaycfg`, `ledger`, `executor`, `loop`, `core`, `book`, `rules`, `designs`, `build` | nothing |
+| `tier1-config` | nothing by import; the map says `reaches_all` |
 
 `relay` is reached by `driver-core`'s and `cmd/warden`'s tests and by no
 driver tree, and it reaches no driver package. That is why a Hyper-V item
-and a Go relay item are disjoint.
+and an item in `relay/` or `cmd/relay/` are disjoint.
 
 **The check that the map and the graph agree** is a tier-1 check,
 `area-map`, mapped to PROFILE-01 in `rules.yaml`. It is tier 1's, not
 `wf`'s, because it needs the Go toolchain and the loop's tool may assume
-none (LOOP-08). It runs when the diff touches `areas.yaml`, a `.go` file or
-a `go.mod`, and fails when:
+none (LOOP-08). It reads `tools/tier1/areas.yaml` from the checkout it
+checks, not from a copy embedded in the binary as `rules.yaml` is: the map
+describes one tree, and `main`'s tier 1 judging a branch (FLOW-14's
+comparison, `enforcement-check.sh`) must read the branch's map, which it
+then does with no change to that script or to FLOW-14's list of
+configuration files. A checkout with no map gets no finding. It runs when
+the diff touches `areas.yaml`, `rules.yaml`, a `.go` file or a `go.mod`,
+over the 18 `go list` runs above, and fails when:
 
 - the map does not parse, an area has no `mode`, `catch_all` does not name
-  an exclusive area with no paths, or a `reaches` or `implies` entry names
-  an area the map does not have;
+  an exclusive area with no paths, an area has both `reaches` and
+  `reaches_all`, or a `reaches` or `implies` entry names an area the map
+  does not have;
 - a tracked file matches two areas equally;
+- a `go list` run fails. The finding is its error;
 - the import graph has an edge between two areas that `reaches` lacks, or
   `reaches` lists an edge the graph does not have. The finding names a file
-  and the import that makes the edge;
-- a driver in `rules.yaml`'s `drivers.all`, or `interface`, has no entry in
-  `implies.drivers`.
+  and the import that makes the edge. An area with `reaches_all` is not
+  compared;
+- a driver in `rules.yaml`'s `drivers.all` has no entry in
+  `implies.drivers`, or `implies.shared` is not exactly the areas that hold
+  a path of `rules.yaml`'s `drivers.shared`.
+
+What the check cannot see is a dependency that is not an import: a script
+that copies another area's file, or a test that reads one by path. The one
+known today is placed by hand (`tools/relay-vm/`, above). Two more are
+tests that walk the whole tree (`driver/buildlink/stray_test.go`) or read
+the book (`specs/specs_test.go`); they are named under **Safety**.
 
 A new edge between areas therefore cannot land without a map change, which
 a feature can make only if its design review approved it. A feature that
@@ -806,7 +1060,8 @@ dependency between two areas changes which items its work is near.
 and nothing else. The first row that applies decides. "Has a repository in
 common" compares the effective `repos` (an absent list is the queue's own
 repository). "Undeclared" is an absent `areas`, or one that names an area
-the copy of the map lacks.
+the copy of the map lacks. An area with `reaches_all` reaches every area
+of its map.
 
 | # | When | Relation | The reason `wf` prints |
 |---|---|---|---|
@@ -853,10 +1108,12 @@ Every combination, with examples from this repository:
 | Two items that amend GLOBAL-08, in different areas (S2 and K1) | near | 8 |
 | Two items that change `ledger-format`, in different areas | near | 7 |
 | Two items that change `relay-claim`, which has no specification until S1 lands | colliding | 3 |
-| An undeclared item and any feature here (`seam-specs` and `driver-contract` today) | colliding | 5 |
+| An undeclared item and any feature here (`seam-specs` and `driver-contract` today, neither yet declared) | colliding | 5 |
+| `seam-specs` and `driver-contract` once a human `wf declare` has recorded their seams: both list `relay-claim` and `collector` | colliding, whatever areas they are given, until S1 lists those seams' contract documents | 3 |
+| An item that changes a tier-1 check (`tier1`) or adds a `rules.yaml` entry (`tier1-config`) and any item that declares an area | near | 9 |
 | An item whose design adds the area it declares, before its merge | colliding with every feature here | 5 |
 | An item here and an item homed in the relay repository, no seam or rule in common | disjoint | 10 |
-| K1 here and the relay's M1 (tracked), both on seam 8, which is not written | colliding, shown and not enforced | 3 |
+| K1 here and the relay's M1 (tracked, its seams recorded at intake with `wf new -seams`), both on seam 8, which is not written | colliding, shown and not enforced | 3 |
 | Two items in a repository with no map (`buildwarden-specs`) | colliding | 4 |
 | Any item and a process item (`loop-contract` and `seam-specs`) | outside | 1 |
 | Two reconciliation items for two drivers (`driver/qemu`; `driver/vz`) | disjoint | 10 |
@@ -866,24 +1123,28 @@ Every combination, with examples from this repository:
 ### The limits
 
 Three limits. A *counted* item is a feature that is not tracked. Each limit
-is taken by one kind of claim, held by a state the item's own steps show,
-and counts the holders that relate to the item that asks. Only an item that
-does not hold is asked, and only holders are counted, so no two items wait
-for each other.
+is taken by one kind of claim and held by a state the item's own steps
+show. An item's *set* for a limit is the item and the holders of that limit
+that relate to it. **The predicate**, one for all three: no holder's set
+numbers more than the limit.
 
-| Limit | Taken by | Held while | Counts | At most |
+| Limit | Taken by | Held while | A holder's set | At most |
 |---|---|---|---|---|
-| In progress | The claim that starts a queued feature (a cloud claim today) | The feature is in progress | In-progress features that *collide* with the asker | `limits.in_progress`; 5 when unset |
-| `alters_relationships` slot | The claim of a Plan step, by a feature that declares `true` | A Plan step of it is done or carries a claim, expired or not (as `alters-slot` built it) | Holders that *collide* with the asker | `limits.alters_relationships`; 1 when unset |
-| PR slot | The claim of `f6-merge-main` | The feature is in Publish and its newest `f6-merge-main` step is done or carries a claim, expired or not; or it waits for the human's merge (phase 7) | Holders that *collide with or are near* the asker | 1 |
+| In progress | The claim that starts a queued feature (a cloud claim today) | The feature is in progress | It and the in-progress features that *collide* with it | `limits.in_progress`; 5 when unset |
+| `alters_relationships` slot | The claim of a Plan step, by a feature that declares `true` | A Plan step of it is done or carries a claim, expired or not (as `alters-slot` built it) | It and the holders that *collide* with it | `limits.alters_relationships`; 1 when unset |
+| PR slot | The claim of `f6-merge-main` | The feature is in Publish and its newest `f6-merge-main` step is done or carries a claim, expired or not; or it has a PR recorded and has not reached Close, whatever its phase | It and the holders that *collide with it or are near it* | 1 |
 
 Changes from today, beyond counting by relation:
 
 - A claimed `f6-merge-main` holds the slot. Today only a done one does.
 - An item in Close holds nothing. Today it holds until Close is done.
-- An item that returned from Publish and has entered it again holds the
-  slot from the claim of its new `f6-merge-main`, not from re-entry.
-- `limits.in_progress`: 5 when unset, an error below 1 (a11).
+- An item that returned from Publish *before* its PR was opened gives the
+  slot up, as today, and holds it again from the claim of its new
+  `f6-merge-main`, not from re-entry.
+- An item that goes back to Implement or Design *with its PR open* keeps
+  the slot until that PR merges (see **The refresh step**). Today it gives
+  the slot up, and a related item may open a PR beside it.
+- `limits.in_progress`: 5 when unset, an error below 1 (Decision 8).
 
 **The guard.** One function, in a new `queue/limits.go`:
 
@@ -893,19 +1154,31 @@ func (s *State) Guard(f *Feature, st *Step, worker string) string
 ```
 
 It walks one table of the three limits, which is the only place a limit
-is written. For each: if this claim would take
-the limit and the item does not already hold it, it lists the holders that
-relate to the item (`Relation`), and refuses when they number the limit or
-more. Its reasons:
+is written. For each limit this claim would take, where the item does not
+already hold it, it adds the item to the holders in memory and evaluates
+the predicate for the item and for each holder related to it. It refuses
+when any of those sets would number more than the limit, and names the
+item whose set is full. Only an item that does not hold is asked, and only
+holders are counted, so no two items wait for each other. Its reasons:
 
-- `the in-progress limit (limit 5): a, b, c, d, e collide with it (FLOW-05)`
+- `the in-progress limit (limit 5): it collides with a, b, c, d, e (FLOW-05)`,
+  and, when the full set is a holder's,
+  `the in-progress limit (limit 5): h, which collides with it, is already with a, b, c, d (FLOW-05)`;
 - `an alters_relationships slot (limit 3), held by a, b, c (FLOW-05)`, the
-  text `alters-slot` gave it, and
-  `limits.alters_relationships 0 is below 1 (FLOW-05)` as before;
+  text `alters-slot` gave it;
+  `an alters_relationships slot (limit 3): h, which collides with it, is already with a, b (FLOW-05)`;
+  and `limits.alters_relationships 0 is below 1 (FLOW-05)` as before;
 - `the PR slot, held by a (colliding: area cli) (FLOW-05)`, or
   `(near: rule GLOBAL-08)`;
-- `the PR slot: a (priority 12) is ahead and ready (FLOW-05)`, the
-  tie-break below.
+- `the PR slot: a (priority 12) is ahead (FLOW-05)`, the tie-break below.
+
+Why the holders' sets are evaluated as well as the asker's: the relations
+are not transitive. H declares `driver-core`, `relay` and `collector`; P1
+declares `relay`, P2 `collector` and X `driver-core`; all four alter
+relationships, and the limit is 3. H collides with each of the others, and
+the others are near one another. With H, P1 and P2 holding, X's own set is
+X and H, which is 2. But H's set would be H, P1, P2 and X, which is 4. The
+guard refuses X (case 19).
 
 Who calls it:
 
@@ -916,120 +1189,179 @@ Who calls it:
   go.
 - `wf claim`, in `claimable`, for every worker. A step the worker already
   holds stays claimable.
-- `wf commit`, after a replay (below).
+- `wf commit`, when it asks a claim again after a rejected push (below).
 
 A human claim takes none of the three today: a human step starts no
 feature, and Plan and `f6-merge-main` are cloud steps. A host claim is now
 bounded: a Plan step whose affinity was edited to a host is refused past
 the limit, which closes `alters-slot`'s known gap.
 
-**`wf validate`** walks the same table over the holders: for each limit and
-each item that holds it, the holders that relate to it, plus itself, may not
-number more than the limit. Its errors name the limit, the item and the
-others, for example
-`seam-specs holds the PR slot with driver-contract (colliding: driver-contract declares no areas), limit 1 (FLOW-05)`.
-For a queue with no declared areas this is today's count: `alters-slot`'s
-error text is kept for the `alters_relationships` limit.
+**`wf validate`** evaluates the same predicate, from the same table, for
+every holder of each limit. Its errors name the limit, the item and the
+others in its set, for example
+`limit: seam-specs holds the PR slot with driver-contract (colliding: driver-contract declares no areas), limit 1 (FLOW-05)`.
+Each begins with `limit:`. For a queue with no declared areas this is
+today's count, and `alters-slot`'s error text is kept, after that prefix,
+for the `alters_relationships` limit. Because the guard evaluates the predicate on
+the state the claim would produce, a claim it allows leaves `wf validate`
+clean, which is the property `alters-slot` stated for `Next` and
+`Validate`.
 
 **The tie-break at the PR slot** (a12). An item *waits for the slot* when
 it is a counted feature in Publish whose newest `f6-merge-main` is pending
-with no claim, and it has no open blocking question and no spent runaway
-budget. It is *ready* when, in addition, no item that collides with it or
-is near it holds the slot. The guard refuses an item the slot while a
-related item of higher priority is ready. Priority decides because both
-are in Publish, so both are in FLOW-05's class 1. The order is strict, so
-the highest-priority ready item is never refused and the slot is always
-taken by someone.
+with no claim, it has no PR recorded, and it has no open blocking question
+and no spent runaway budget. The guard refuses an item the slot while an
+item that collides with it or is near it, and has a higher priority, waits
+for the slot. Priority decides because both are in Publish, so both are in
+FLOW-05's class 1. Priority is strict, so the waits form no cycle: the
+highest-priority waiting item of any group is refused only by a holder,
+and a holder waits only for Jeff's merge. The cost is that an item can
+wait for a holder it is disjoint from, when the item ahead of it is
+related to that holder (case 21).
 
 **More holders than a limit.** The causes `alters-slot` listed remain
-(Jeff lowers a limit; a hand edit). Three new ones are closed at the
-source: `wf declare` and `wf relate` refuse a change that would put a limit
-over, and a map change is shown against the open queue in its design review
-(`wf validate -areas`). A new `reaches` edge can only make two items near,
-which the first two limits do not count.
+(Jeff lowers a limit; a hand edit). Two new ones are closed at the source:
+`wf declare` and `wf relate` refuse a change that adds a limit error. A
+third is not: a change to the map can relate two items that both already
+hold. Its design review shows it against the open queue
+(`wf validate -areas`), which is a view of that day's queue; when the
+merged map is synced, `wf areas -sync` writes it, prints the limit and the
+holders, and `QUEUE.md`'s **Needs Jeff** lists
+`over a limit: a and b both hold the PR slot (near: tier1 reaches relay)`
+until one of them merges. As with a lowered limit, no holder is stopped
+(an item that holds is never refused), no related item is given the limit
+meanwhile, and `wf validate` reports the `limit:` line on every run. The
+tick does not stop on it: a `limit:` error that `wf validate` already
+printed at the run's set-up is not the step's doing, and the run lists it
+under what waits on Jeff and carries on (`workflow-tick`, step 5). A new
+`reaches` edge can only make two items near, which the first two limits do
+not count.
 
 **The cases.** `limits.in_progress` 5 and `limits.alters_relationships` 3,
 as in `config.yaml` today. "Today" is `wf` at `897a4a8`.
 
 | # | State | Today | After |
 |---|---|---|---|
-| 1 | Live now: `loop-contract` in Implement and `loop-parallel` in Design (process); `seam-specs` and `driver-contract` past Design, reviews pending, undeclared | `wf next -worker cloud`: nothing for the cloud. `wf validate`: ok | The same lines. One relation: the two features collide (`driver-contract declares no areas`) |
-| 2 | Both features approved, undeclared | `seam-specs` plans, then `driver-contract`: 2 of 3 slots | The same |
+| 1 | Live now (queue state at `0d5e755`): `loop-contract` at its merge with PR #119 open, and `loop-parallel` in Design (both process); `seam-specs` and `driver-contract` past Design, reviews pending, never declared | `wf next -worker cloud`: `blocked loop-contract waiting on the human's merge of PR #119`, and nothing for the cloud. `wf validate`: ok | The same lines. One relation: the two features collide (`driver-contract declares no areas`). `loop-contract` is a process item and holds no slot |
+| 2 | Both features approved, never declared | `seam-specs` plans, then `driver-contract`: 2 of 3 slots | The same. Their Plan gates pass as today: with no `declared`, nothing is compared (case 24) |
 | 3 | `seam-specs` has claimed `f6-merge-main`; `driver-contract` reaches its own | Offered: only a done `f6-merge-main` holds | Refused: `the PR slot, held by seam-specs` |
 | 4 | `seam-specs` merged and in Close; `driver-contract` at `f6-merge-main` | Refused until Close is done | Offered |
 | 5 | A host claims a Plan step past the limit (affinity edited) | The claim stands; the next `wf validate` fails | `wf claim` refuses it |
-| 6 | Wave 2: S3, S4 and K1 declare `driver-core`; S2 declares `relay`, `executor`, `rules`, `book`; all four amend GLOBAL-08 | Four altering features, three slots: the fourth waits at Plan. One PR at a time | S3, S4 and K1 collide and hold the three slots. S2 is near each (row 8) and is not counted with them: it plans too. All four take turns at the PR |
+| 6 | Wave 2: S3, S4 and K1 declare `driver-core`; S2 declares `relay`, `executor`, `rules`, `book`; all four amend GLOBAL-08 | Four altering features, three slots: the fourth waits at Plan. One PR at a time | S3, S4 and K1 collide and hold the three slots. S2 is near each (row 8) and is in none of their sets: it plans too. All four take turns at the PR |
 | 7 | Wave 4: K3 (`driver/hyperv`, `build`, `book`) and an item in the Go relay (`relay`, `book`) | One PR at a time | Disjoint: both PRs open; either merges first; the other is refreshed |
-| 8 | Wave 5: five reconciliation items, one per driver (`driver/<name>`, `book`) | Five features in progress, the limit; one PR at a time; ranked as new functionality | Class 3. Pairwise disjoint: none counts against another, and five PRs may be open |
+| 8 | Wave 5: five reconciliation items, one per driver (`driver/<name>`, `book`) | Five features in progress, the limit; one PR at a time; ranked as new functionality | Class 3. Pairwise disjoint: none is in another's set, and five PRs may be open |
 | 9 | Five undeclared features in progress; a sixth queued | Not started | Not started: all five collide with it |
 | 10 | Five declared features in progress, each disjoint from a sixth | Not started | Started |
-| 11 | Two workers claim Plan for two colliding items at the last slot | The second push is rejected and its claim lost | The second push is rejected; its replay fails `Validate`; the claim is dropped and the reason names the holders |
-| 12 | Two workers claim unrelated steps at the same moment | The second loses its claim and asks again | The second's claim is replayed and stands |
-| 13 | Two near items wait at `f6-merge-main`; an attended run names the lower priority | It takes the slot | Refused: the other `is ahead and ready` |
-| 14 | An item in Review widens to `cli`, inside its design, while a `cli` item holds the PR slot | n/a | `wf declare` accepts: the item holds no PR slot yet, and it will wait for one |
-| 15 | An item with an open PR finds, at its refresh, a path in `cli`; another open PR declares `cli` | n/a | `wf declare` refuses: two colliding items would hold the PR slot. Back to Design |
+| 11 | Two workers claim Plan for two colliding items at the last slot | The second push is rejected and its claim lost | The second push is rejected; `wf commit` asks the claim again on the new state; the guard refuses it and the reason names the holders |
+| 12 | Two workers claim unrelated steps at the same moment | The second loses its claim and asks again | The second's claim is asked again on the new state and stands |
+| 13 | Two near items wait at `f6-merge-main`; an attended run names the lower priority | It takes the slot | Refused: the other `is ahead` |
+| 14 | An item in Review widens to `cli`, inside its approved design, while a `cli` item holds the PR slot | n/a | `wf declare` accepts: the item holds no PR slot yet, and it will wait for one |
+| 15 | An item with an open PR finds, at its refresh, a path in `cli`; another open PR declares `cli` | n/a | `wf declare` refuses: two colliding items would hold the PR slot. Back to Design, keeping the slot; its PR becomes a draft (case 20) |
 | 16 | `limits.in_progress` is not set | No limit | 5 |
 | 17 | A process item in any state | Outside the limits | Outside |
-| 18 | Three disjoint PRs open; Jeff merges one | Cannot arise | `wf stale` seeds a refresh on the other two; both show "behind `main`" |
+| 18 | Three disjoint PRs open; Jeff merges one | Cannot arise | The next `wf stale` seeds a refresh on the other two; both then show "behind `main`" |
+| 19 | H (`driver-core`, `relay`, `collector`), P1 (`relay`) and P2 (`collector`) hold the three slots; X (`driver-core`) reaches Plan | Refused: three holders | Refused: `h, which collides with it, is already with p1, p2`. X's own set is 2; H's would be 4 |
+| 20 | An item with an open PR is sent back to Implement by its refresh; a near item reaches `f6-merge-main` | Offered: an item before Publish holds nothing | Refused: the returned item still has its PR recorded, so it holds the slot. Its PR is a draft and **Needs Jeff** says not to merge it |
+| 21 | An item in `driver-core` (priority 1) and a VZ item (priority 3) wait while a Hyper-V item holds the slot | One PR at a time | The `driver-core` item is refused by the holder (near). The VZ item, disjoint from the holder, is refused too: `the PR slot: <driver-core item> (priority 1) is ahead`. When Jeff merges the Hyper-V PR the `driver-core` item goes next |
+| 22 | Jeff merges a PR that is behind `main`; the earlier merge edited a line next to one of its hunks; the branch's ref still exists in the checkout | Cannot arise with one PR open | Confirmed: the changes are equal without context lines (a14). With three lines the confirmation fails and the item keeps the slot |
+| 23 | A regression's fix is filed with nobody there, following an item that declared `driver/hyperv`, `book` | No areas exist: one PR at a time for every feature | It takes `driver/hyperv`, `book`, and waits only for items related to those. Filed with no areas it would collide with every feature and open its PR only when no other feature has one open (a4 (b)) |
+| 24 | After this item's merge, `seam-specs` (never declared; its design lists five seams and four rule changes the queue file lacks) reaches its Plan gate | Passes on the approval | Passes on the approval: no `declared`, so the queue is not compared with the design, and the check prints `not declared: finished Design before wf declare` |
 
 ### `wf commit`: pushing queue state
 
-`wf commit -state DIR -m MESSAGE [-claimed FEATURE/STEP -worker W]` replaces
-the `git commit` and `git push origin workflow` in the four skills.
+`wf commit -state DIR -m MESSAGE [-claimed FEATURE/STEP -worker W [-new-run]] [PATH...]`
+replaces the `git commit` and `git push origin workflow` in the four
+skills.
 
-1. It regenerates `QUEUE.md` and the digest pages (below), stages
-   everything in the state checkout, and commits. With nothing to commit it
-   exits 0.
+1. It regenerates `QUEUE.md` and the digest pages (below), stages the
+   paths it was given and the generated files, and commits. It stages
+   nothing else: a second session may have work of its own in the same
+   checkout. With nothing to commit it exits 0.
 2. It pushes to `origin workflow`. On success it exits 0.
-3. On a rejected push it fetches `origin/workflow`, resets the checkout to
-   it, and replays its commit on top with `git cherry-pick --no-commit`. A
-   conflict in a *generated* file (`QUEUE.md`, `digest/<date>.md`,
-   `areas.yaml`) is settled by taking the remote's copy, since step 5
-   writes it again.
-4. It reloads the state and runs `Validate`. With `-claimed`, the named
-   step must still be pending and leased to `W`.
-5. It regenerates the generated files, commits with the same message, and
+3. On a rejected push it fetches `origin/workflow`. If the checkout has
+   uncommitted changes other than its own commit's, it stops with exit 5
+   and names the files: a reset would discard them. Otherwise it resets
+   the checkout to `origin/workflow` and brings its change onto the new
+   state:
+   - *Without `-claimed`* (a finished or released step, an answer, a
+     digest, a status file): it replays its commit with
+     `git cherry-pick --no-commit`, reloads the state and runs `Validate`.
+   - *With `-claimed`*: it replays nothing. It asks the claim again on the
+     new state, through what `wf claim` checks (`claimable`: the step is
+     pending, its phase is reached, no one else holds it, no process item
+     holds the worker, and `Guard`), and, for a cloud worker, the two
+     refusals `wf next` adds (`cloudHold`: an open blocking question, a
+     spent runaway budget). If none refuses, it claims the step again with
+     `Claim`, which counts the step once, since the first claim's commit is
+     gone.
+
+   A conflict in a *generated* file (`QUEUE.md`, `digest/<date>.md`,
+   `areas.yaml`, `main.yaml`) is settled by taking the remote's copy,
+   since step 4 writes it again.
+4. It regenerates the generated files, commits with the same message, and
    pushes again. It tries three times.
 
 What ends it early:
 
 | Outcome | Exit | With `-claimed` | Without |
 |---|---|---|---|
-| The replay conflicts in a queue file or any other file that is not generated | 4 or 5 | The checkout is left at `origin/workflow`, the claim is gone, and the message is `claim lost: <file> changed under it (FLOW-04)`. Exit 4: the worker asks `wf next` again | The session's commit is restored, and the message names the files. Exit 5: the session re-applies its change by hand, as today |
-| `Validate` fails on the replayed state | 4 or 5 | The claim is dropped the same way, and the message is `Validate`'s line, which names the limit and the holders | Exit 5, with the lines |
+| The claim is refused on the new state | 4 | The checkout is left at `origin/workflow`, and the message is the refusal: the guard's reason, the tie-break's, `held by process item <x>`, `blocking question <id>`, or `leased to <worker>`. The worker asks `wf next` again | |
+| The replay conflicts in a queue file or any other file that is not generated | 5 | | The session's commit is restored, and the message names the files. The session re-applies its change by hand, as today |
+| `Validate` fails on the replayed state with an error the remote's state did not have | 5 | | The session's commit is restored, with the lines |
 | Three rejections | 5 | The claim is dropped | The commit is kept locally |
 
 A claim is dropped, and never the other worker's: the state on the remote
-was valid, and the replayed claim is the only change. `wf commit` rewrites
-only its own unpushed commit and never force-pushes. It pushes only the
-`workflow` branch.
+is the one the claim is asked against, and the claim is the only change.
+`wf commit` rewrites only its own unpushed commit and never force-pushes.
+It pushes only the `workflow` branch.
 
 ### When collision is decided, and checked again
 
 | When | What is checked | By | On failure |
 |---|---|---|---|
-| Intake | Jeff agrees the repositories and areas. `wf new` records them and `wf relations -feature F` shows what the new item is near or collides with | `workflow-intake`, with Jeff. A follow-up filed with nobody there (FLOW-09) records none and is undeclared | Nothing fails: the areas are a proposal until Design |
-| Design's done-when | (1) The queue's `repos`, `areas`, `seams`, `rules_changed`, `alters_relationships` and `design_review` equal the design's (`wf declare` made them so). (2) Each area exists in the branch's map. (3) *Implied areas*: for each driver in `drivers`, its area is declared, or an area it reaches is (a change to a shared package declares every dependent driver, FLOW-02); for each surface in `surfaces`, its areas are declared; each path of a `rule_changes` entry lies in a declared area. An undeclared design skips 2 and 3 | `wf done f1-design` (`check/declared.go`) | The step is released and Design fixes the design |
+| Intake | Jeff agrees the repositories and areas. `wf new` records them and `wf relations -feature F` shows what the new item is near or collides with | `workflow-intake`, with Jeff. A follow-up filed with nobody there (FLOW-09) takes the repositories and areas of the item it follows (`wf new -follows`) | Nothing fails: the areas are a proposal until Design |
+| Design's done-when | (1) The queue has `declared`, and its `repos`, `areas`, `seams`, `rules_changed`, `alters_relationships` and `design_review` equal the design's (`wf declare` made them so). (2) Each area exists in the branch's map. (3) *Implied areas*, below. An undeclared design skips 2 and 3 | `wf done f1-design` (`check/declared.go`) | The step is released and Design fixes the design |
 | The design review | Jeff sees the repositories, the areas and the relations with every open item, and may narrow, widen or name a collision | `workflow-human`; FLOW-19 | Changes, as for any review |
-| Plan's done-when | The queue still equals the design (closing the gap `alters-slot` named). `repos` and `areas` are impact fields: a design whose areas changed since its approval fails the Plan gate | `check.go`, `review.go` | Back to Design (FLOW-06) |
-| Implement, Review, Publish and the refresh, at each done-when | The queue still equals the design. *The diff stays inside the areas*: every path of `git diff --name-only --no-renames origin/main...<branch>` belongs, by the branch's map, to a declared area, or is the item's own design. An undeclared item passes | `check/areas.go` | See below |
+| Plan's done-when | For an item with `declared`: the queue still equals the design (closing the gap `alters-slot` named). `repos` and `areas` are impact fields: a design whose areas changed since its approval fails the Plan gate. An item with no `declared` is not compared, and the check says so | `check.go`, `review.go` | Back to Design (FLOW-06) |
+| Implement, Review, Publish and the refresh, at each done-when | For an item with `declared`: the queue still equals the design. *The diff stays inside the areas*: every path of `git diff --name-only --no-renames origin/main...<branch>` belongs, by the branch's map, to a declared area, or is the item's own design. An undeclared item passes | `check/areas.go` | See below |
 | Review and `f6-consolidate` | *A trial merge*: `git merge-tree --write-tree` of the branch with the remote branch of each in-progress feature that is disjoint from it. It is a report: clean; or conflicts in ordered files, which the later of the two settles at its refresh; or a conflict in an exclusive area, which means one of the two is outside its areas | `check/areas.go`; the lines go into the tier-2 report and the consolidation section | It does not fail the step: an item outside its areas fails its own diff check. The run's digest lists a conflict in an exclusive area under what is blocked (LOOP-06) |
+
+**Implied areas** (Design's done-when, part 3). `areas` name what the
+change edits (FLOW-02), so the check asks only that each other declaration
+has somewhere to land:
+
+- for each driver in `drivers`: its own area is declared, or a shared area
+  is (`implies.shared`). A change to a shared package declares every
+  driver and no driver's area (FLOW-02; ORCH-01's `drivers-claim` check),
+  so
+  `relay-leaf-crl`'s front matter, `drivers: [container, qemu, vz,
+  hyperv]` with `relay/` alone changed, passes with `areas: [relay, book]`.
+  The first draft asked for the driver's area or an area it reaches; no
+  driver reaches `relay`, so that design, the relay half of Jeff's own
+  example, failed it;
+- for `interface` in `drivers`: a shared area is declared, or every
+  driver's area is;
+- for each surface in `surfaces`: its areas are declared;
+- each path of a `rule_changes` entry lies in a declared area.
 
 **When the diff leaves the areas**, the agent that finds it does one of two
 things, and `wf declare` decides which is allowed:
 
-1. *Widen inside the design.* The missing area is one the approved design
-   already implies (its `drivers`, its `surfaces`, a `rule_changes` path).
-   The agent adds it to the design's `areas` on the branch and runs
-   `wf declare`. Accepted, the item goes on; its relations may have
-   changed, and `QUEUE.md` and the digest show them.
+1. *Widen inside the approved design.* The missing area is one the design,
+   as approved, already implies (**Within the approved design**, under
+   `wf declare`). The agent adds it to the design's `areas` on the branch
+   and runs `wf declare`. Accepted, the item goes on; its relations may
+   have changed, and `QUEUE.md` and the digest show them.
 2. *Back to Design* (FLOW-06), when `wf declare` refuses: the area is
-   outside the design, or the widening would put a limit over. The finding
-   is the path and the area. The redesign's areas differ from the approved
-   ones, so its review cannot be skipped (FLOW-19).
+   outside the approved design, or the widening would put a limit over.
+   The finding is the path and the area. The redesign's areas differ from
+   the approved ones, so its review cannot be skipped (FLOW-19).
 
 Narrowing is never an agent's: only a `human` worker's `wf declare` removes
 an area or a repository after Design.
+
+**What a missed area costs when nothing above catches it** is under
+**Safety**.
 
 ### The refresh step
 
@@ -1038,15 +1370,35 @@ a feature that waits for Jeff's merge, and `x2-refresh` on a process item
 that does. Affinity `cloud`; the agent is `wf-publish`. It is not a
 template step: nothing seeds it at a phase's start.
 
-**When it is seeded.** `wf stale -state DIR -repo DIR` looks at every open
-item homed in this repository that waits for the human's merge and has a PR
-recorded. If `origin/main` is not contained in `origin/<branch>` and the
-item has no pending refresh step, it adds one, sets `pr.ci` to `pending`,
-and writes what moved in the step's note: `main` at `<sha>`, the number of
-commits, and the files those commits and this branch both change. The tick
-runs it right after confirming merges, every run; `workflow-human` runs it
-before it lists the open PRs. It is seeded whatever moved `main`: another
-item's merge, a PR merged by hand, the weekly tidy.
+**When it is seeded.** `wf stale -state DIR -repo DIR -worker W` looks at
+every open item homed in this repository that has a PR recorded. For each
+it first runs the merge check `wf done` runs on a merge step
+(`check.merged`), because Jeff may have merged since the last
+confirmation, and GitHub deletes the branch when he does:
+
+- *Merged, and the item is at its merge step.* It seeds nothing and prints
+  `merged: <item>`. The tick has confirmed merges just before, so this
+  arises in an attended session, whose worker is `human` and cannot
+  complete a `cloud` step (`wf done` refuses it); the next tick confirms
+  the merge and moves the item to Close.
+- *Merged, and the item is before its merge step* (it was sent back with
+  its PR open, and Jeff merged the draft all the same). The merge is the
+  sign-off and supersedes the phases (FLOW-08): `wf stale` drops the
+  item's pending steps before Close, moves it to Close, and adds a `human`
+  step `f8-escalate-returned` whose note is the finding that sent it back,
+  for Jeff to file as a follow-up or drop.
+- *Not merged, and the remote branch is gone* (the PR was closed). It
+  seeds nothing and prints that.
+- *Not merged, `origin/main` is not contained in `origin/<branch>`, the
+  item waits for the merge, and it has no pending refresh step.* It adds
+  one, sets `pr.ci` to `pending`, and writes what moved in the step's
+  note: `main` at `<sha>`, the number of commits, and the files those
+  commits and this branch both change.
+
+The tick runs it right after confirming merges, every run;
+`workflow-human` runs it before it lists the open PRs, and again after
+each merge Jeff makes in that session. It is seeded whatever moved
+`main`: another item's merge, a PR merged by hand, the weekly tidy.
 
 **Where it ranks.** An item with a pending refresh step is in
 implementation (FLOW-05's class 1), so a run refreshes open PRs before it
@@ -1061,26 +1413,60 @@ starts anything new.
    `main`* (FLOW-10), and the sweep (FLOW-15), written as a dated entry in
    the design's Consolidation section that names the `main` commit merged.
    The step's note says which files overlap; with none, the entry says what
-   landed and that nothing overlaps.
+   landed and that nothing overlaps. A failure of step 2 that `main` has
+   too is not this branch's work: it is filed as the item's follow-up
+   (FLOW-09), unless a fix for the red `main` is already filed
+   (`main.yaml`), and the step is released.
 4. Refresh the Archive summary if the PR's content changed (FLOW-12); run
-   `flow18-check.sh`; push; wait for CI on the new head and set `pr.ci`.
+   `flow18-check.sh`.
+5. *Before the push*, fetch and check that the PR is still open and
+   unmerged (`gh api repos/<repo>/pulls/<n>`) and that `origin/<branch>`
+   is still the commit the merge in step 1 was made on. If the PR merged
+   or the branch is gone, Jeff merged while the refresh ran: the agent
+   discards its local merge, pushes nothing, and returns
+   `merged meanwhile`; the tick's merge confirmation then moves the item
+   on and drops the step. A push here would bring a deleted branch back,
+   with commits `main` does not have, and Close would escalate it
+   (FLOW-16).
+6. Push; wait for CI on the new head and set `pr.ci`.
 
-**Its done-when** is Publish's, run again: current `main` merged; the
-branch pushed; the Consolidation section names the merged `main` commit;
-the rule-change clearance; the design archived on the branch; the PR's CI
-green; the diff inside the areas; the queue equal to the design. For a
-process item: `main` merged, the branch pushed, the design archived, CI
-green. If `main` moved again meanwhile, the check fails, the step is
-released, and the next run takes it again.
+**Its done-when.** Current `main` merged (`origin/main` is an ancestor of
+the branch); the branch pushed, which is new for a feature (the local
+head equals `origin/<branch>`, the check a process item's Implement has
+today; Publish's own done-when reads only the local branch); the
+Consolidation section names the merged `main` commit; the rule-change
+clearance; the design archived on the branch; the PR's CI green; the diff
+inside the areas; the queue equal to the design. For a process item:
+`main` merged, the branch pushed, the design archived, CI green. If `main`
+moved again meanwhile, the check fails, the step is released, and the next
+run takes it again.
 
 **What sends the item back.** The pass in step 3 is consolidation, and
 FLOW-10 already says what it does with real work: to Implement
 (`wf back -to 3`) for work the plan covers, such as a lint failure a merged
 check now reports on this branch's code, or to Design (`wf back -to 1`).
 A path outside the areas goes through `wf declare`, as above. The refresh
-never re-enters Publish, so the item keeps its PR slot; an item that goes
-back to Implement or Design gives the slot up, as a return from Publish
-does today, and its PR stays open until it is published again.
+never re-enters Publish, so the item keeps its PR slot.
+
+**An item that goes back with its PR open keeps the PR slot**, since the
+slot is held while a PR is recorded. Three things keep that PR from being
+mistaken for one that is ready:
+
+- the agent that returns the item converts the PR to a draft before it
+  returns (in a cloud session through the session's `convert_to_draft`
+  route for the pull request, elsewhere `gh pr ready --undo`). Neither
+  merges, approves or closes anything (FLOW-08);
+- `QUEUE.md` moves it from **Merges, in order** to the escalations, as
+  `open PR #<n>, returned to Implement: do not merge`;
+- when the item is published again, `f6-open-pr` finds the PR recorded,
+  pushes to it and marks it ready, and opens no second one.
+
+If Jeff closes the PR instead, an attended session removes `pr` from the
+queue file on his word, and the item then holds nothing.
+
+**Native validation.** A refresh does not queue a done `f6-validate-<host>`
+step again (a10 (e)). The validation stands for the branch as it was
+consolidated.
 
 **When the step goes away.** `wf done` on the merge step drops a pending
 refresh step (the PR merged first), and so does `wf back` (Publish merges
@@ -1089,6 +1475,35 @@ refresh step (the PR merged first), and so does `wf back` (Publish merges
 **Budget.** A refresh is a claim like any other and counts one step
 against the item's budget (a10). Intake's size guide adds two steps.
 
+### `main`'s CI
+
+Nothing reads it today. Under Decision 21 it is the gate for a PR merged
+behind `main`, so the loop reads it (Decision 22).
+
+- **What is recorded.** `wf main -state DIR -sha SHA -ci green|red|pending [-run URL] [-followup SLUG]`
+  writes `main.yaml` in the queue state: the head of `main` the session
+  saw, the result of its check runs, a failing run's URL, `red_since` (the
+  first red commit after the last green one, kept while `main` stays
+  red), and the follow-up filed for it. `wf` reads no CI itself: the
+  session passes what `gh api repos/<repo>/commits/<sha>/check-runs`
+  returned, as `wf-publish` passes `pr.ci`. `green` is recorded only when
+  every check run on the head succeeded.
+- **Who records it.** The tick, right after confirming merges and before
+  `wf stale`. `workflow-human`, before it lists the open PRs.
+- **What a red `main` does.** `QUEUE.md` opens **Needs Jeff** with
+  `main is red at <sha> since <red_since>: <run>`, and names the follow-up
+  once one is filed. The tick files the fix once, when `main.yaml` has no
+  `followup`: by the intake skill's follow-up path, as the follow-up of
+  the item whose pull request the `red_since` commit merged (its subject
+  carries the PR number, which a queue file records), at the top of the
+  fixes, with that item's repositories and areas (a16, FLOW-09). When the
+  commit is no item's, it files nothing. A failure that does not
+  reproduce is a flaky test and goes the way TEST-04 says, in the fix's
+  Design.
+- **What it does not do.** It blocks no claim and no merge. A red `main`
+  fails each open PR's refresh at its gates; those steps are released, and
+  taken again once `main` is green.
+
 ### Tracked items
 
 An item whose home is another repository, such as a task of the relay's M1,
@@ -1096,9 +1511,10 @@ cannot be gated: `wf` sees no branch, design or PR there until
 `loop-repository`. It is filed so that it shows in the one queue.
 
 - `wf new -repos buildwarden/buildwarden-relay ...` seeds the `tracked`
-  round, step letter `t`: `t1-work` (human: the design, the work and the
-  review, by Jeff or an attended session, until its PR is open) and
-  `t2-merge` (human: Jeff merged it). `wf done` runs no check for either
+  round, step letter `t`, whose two phases are Work and Merge, one step
+  each: `t1-work` (human: the design, the work and the review, by Jeff or
+  an attended session, until its PR is open) and `t2-merge` (human: Jeff
+  merged it). `wf done` runs no check for either
   and prints `tracked: wf runs no gate in <repository> (FLOW-03)`. After
   `t2-merge` the item is done.
 - `branch` and `pr` mean the home repository's. `QUEUE.md` prints the PR as
@@ -1110,7 +1526,9 @@ cannot be gated: `wf` sees no branch, design or PR there until
 - It is a feature for FLOW-05's order: class 3 with `follows` or `adopts`,
   otherwise class 4. It is never "in implementation".
 - It neither holds nor waits for a limit (a7). Its relations are computed
-  and shown.
+  and shown. `wf` cannot read its design, so `wf declare` does not apply to
+  it: its `areas` mean nothing (its repository has no map here), and its
+  `seams` are what intake records with `wf new -seams`.
 
 An item homed here that also works in a second repository (`seam-specs`:
 this repository and `buildwarden-specs`) is not tracked. Its gates run here
@@ -1142,21 +1560,22 @@ feature with the feature phases (LOOP-07); `Class` returns 3 for it.
 ### What Jeff sees
 
 **`QUEUE.md`** stays a function of the queue state, with no clock and no
-git. For today's queue, with `config.yaml`'s `repository` set and no item
-yet declaring areas, it renders as:
+git. For the queue as it is at `0d5e755` on the `workflow` branch
+(2026-11-14 21:34 UTC), with `config.yaml`'s `repository` set, the map
+synced, `main`'s CI recorded and no item yet declared, it renders as:
 
     # Queue
 
-    Generated by `wf` from `queue/*.yaml` and `areas.yaml`; do not edit. Updated 2026-11-14 20:58 UTC.
-    Areas: `buildwarden/buildwarden` at `897a4a8`.
+    Generated by `wf` from `queue/*.yaml`, `areas.yaml` and `main.yaml`; do not edit. Updated 2026-11-14 21:34 UTC.
+    Areas: `buildwarden/buildwarden` at `897a4a8`. `main`: CI green at `897a4a8`.
 
     ## Needs Jeff
 
-    5 items wait on you: 5 design reviews. No merge, question or escalation.
+    6 items wait on you: 1 merge, 5 design reviews. No question or escalation.
 
     ### Merges, in order
 
-    Nothing to merge.
+    - **loop-contract**: [PR #119](https://github.com/buildwarden/buildwarden/pull/119), CI green
 
     ### Reviews, questions and escalations
 
@@ -1170,10 +1589,10 @@ yet declaring areas, it renders as:
 
     | Pri | Item | Kind | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
     |---|---|---|---|---|---|---|---|---|---|
-    | 60 | loop-contract | process | buildwarden/buildwarden | - | 2 implement | x2-implement (cloud, leased to cloud/20261112T230554Z) | - | - | 2 / 8 |
+    | 60 | loop-contract | process | buildwarden/buildwarden | - | 3 merge | x3-merge (cloud) | your merge | [#119](https://github.com/buildwarden/buildwarden/pull/119) | 2 / 8 |
     | 61 | loop-parallel | process | buildwarden/buildwarden | - | 1 design | x1-design (human, leased to human/jeff) | - | - | 1 / 12 |
     | 64 | seam-specs | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-design-review (human) | - | - | 2 / 30 |
-    | 65 | driver-contract | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-design-review (human) | - | - | 4 / 30 |
+    | 65 | driver-contract | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-design-review (human, leased to human/jeff) | - | - | 5 / 30 |
 
     ## Relations
 
@@ -1194,6 +1613,11 @@ yet declaring areas, it renders as:
     |---|---|---|---|---|---|
     | 62 | loop-native-lead | process | buildwarden/buildwarden | - | 12 |
     | 63 | loop-repository | process | buildwarden/buildwarden | - | 10 |
+
+`loop-contract`'s branch contains `origin/main`, so it is not behind.
+Today's `QUEUE.md` for the same state has one **Needs Jeff** list of six
+lines, and Active and Backlog tables with the columns Pri, Feature, Kind,
+Phase, Next steps and "Steps spent / est.".
 
 And for a later state, to show the parts that are empty today: case 7
 after the Hyper-V pilot's PR has merged, with a relay task tracked:
@@ -1222,25 +1646,33 @@ after the Hyper-V pilot's PR has merged, with a relay task tracked:
 
 What is new, by section:
 
+- The header names the files it is built from, the commit of the map's
+  copy, and `main`'s CI as last recorded.
 - **Needs Jeff** opens with the count of items waiting on him, by kind
-  (a3). It lists the merges first, in FLOW-05's order, each with its PR
-  link, `pr.ci`, and "behind `main`" while a refresh step is pending, with
-  the overlapping files from that step's note. Reviews, questions and
+  (a3). Before the count it says `main is red at <sha> since <sha>`, with
+  the run and the follow-up, when `main.yaml` says so, and lists any
+  holders over a limit. It lists the merges first, in FLOW-05's order,
+  each with its PR link, `pr.ci`, and "behind `main`" while a refresh
+  step is pending, with the overlapping files from that step's note. The
+  mark is as current as the last `wf stale` (a1). Reviews, questions and
   escalations follow, each review of an item in progress with a link to
-  the design on its branch.
+  the design on its branch; an item sent back with its PR open is here,
+  as `open PR #<n>, returned to Implement: do not merge`.
 - **Active** gains Repositories, Areas (`undeclared`, or the names, `*`
   after one `main` lacks), the lease holder in Next steps, Waits for (the
   guard's reason for the item's next step, or "your merge"), and PR. Kind
   reads `adoption (<consumable> <version>)` for a reconciliation item and
-  `tracked` for a tracked one.
+  `tracked` for a tracked one. Two headers are renamed, in Active and in
+  Backlog: "Feature" becomes "Item", since process items are listed too,
+  and "Steps spent / est." becomes "Steps".
 - **Relations** is new: every pair of open features that is near or
   colliding, with the reason. Disjoint pairs are not listed.
 - **Backlog** gains Repositories and Areas.
 - A **Workers** section (each machine's last run and its led items) is
   `loop-native-lead`'s.
 
-`wf status` prints `repos:`, `areas:` and `adopts:` lines under an item
-that has them. `wf relations [-feature F]` prints the relation rows.
+`wf status` prints `repos:`, `areas:`, `declared:` and `adopts:` lines
+under an item that has them. `wf relations [-feature F]` prints the relation rows.
 
 **Digests.** Each run writes its own file,
 `digest/<date>/<UTC start>-<worker>.md` (`20261114T105653Z-cloud.md`,
@@ -1259,73 +1691,96 @@ file names the item's repositories when it has more than this one.
 
 `tools/workflow/queue/`:
 
-- `queue.go`: the six fields on `Feature`, with `areas` a pointer to a
+- `queue.go`: the seven fields on `Feature`, with `areas` a pointer to a
   list so that an absent key and an empty list stay apart through a load
   and a save (checked with the YAML library the module uses);
-  `Config.Repository`;
+  `Config.Repository`; `State.Main`, loaded from `main.yaml` as an optional
+  file;
   `Limits.InProgress` as `*int` with `inProgressLimit()`; `Validate`'s
-  checks of the new fields, and its limit checks replaced by a walk of the
-  limits table; `Class` returns 3 for `adopts`; `inImplementation` is true
-  for an item with a pending refresh step.
+  checks of the new fields, and its limit checks replaced by the
+  predicate over the limits table, its errors prefixed `limit:`; `Class`
+  returns 3 for `adopts`; `inImplementation` is true for an item with a
+  pending refresh step.
 - `areas.go` (new): the map's type, its parser (unknown keys rejected), the
   path match, and the copy's loader in `Load`.
 - `relation.go` (new): `Relation(a, b)` and its reason.
-- `limits.go` (new): the table, `Guard`, the `Validate` walk, the PR-slot
+- `limits.go` (new): the table, the predicate, `Guard`, the PR-slot
   holder and tie-break; `holdsAltersSlot`, `altersHolders` and `altersWait`
   move here from `next.go`.
 - `next.go`: `Next`, `NextFor` and `ready` call `Guard` for every worker;
   `atLimit` and `prSlotHolder` go; `Claim` starts a tracked item.
 - `phases.go`: the `tracked` round and the letter `t`; `IsRefresh`;
   `SeedRefresh`; `Complete` drops a pending refresh on a merge step; `Back`
-  drops one.
+  drops one; `Landed`, which moves an item whose PR merged while it was
+  sent back to Close with its escalation step.
 - `declare.go` (new): the rules of `wf declare` and `wf relate`.
 - `commit.go` (new): `wf commit`, with git run on the state checkout as
-  `hosts.go` already runs it on the code checkout.
+  `hosts.go` already runs it on the code checkout; `MayClaim`, the checks
+  `wf claim` and a claim asked again share.
 - `digest.go` (new): the day's page.
 - `summary.go`: the columns and sections above.
 
 `tools/workflow/check/`:
 
-- `declared.go` (new): reads a design's declarations; the comparison with
-  the queue; the implied areas.
+- `declared.go` (new): reads a design's declarations, on the branch and at
+  its approved commit; the comparison with the queue, for an item with
+  `declared`; the implied areas.
 - `areas.go` (new): the diff inside the areas; the trial merge.
 - `check.go`: `Front` gains `Repos` and `Areas`; Design's done-when calls
   the declared checks; the later phases call the comparison and the diff
-  check; `Refresh`; a tracked item's result.
+  check; `Refresh`; `Merged`, exported for `wf stale`; a tracked item's
+  result; `patchID` passes `-U0` in place of `-U3` (a14).
 - `review.go`: `impactDelta` includes `repos` and `areas`; a skip is
   invalid when Design narrowed.
 
 `tools/workflow/cmd/wf/main.go`: `areas`, `declare`, `relate`, `relations`,
-`stale`, `commit` and `digest`; `new -repos -areas -adopts`;
-`validate -areas`; `claimable` calls `Guard`; `done` runs `check.Refresh`
-for a refresh step; `status` prints the new lines.
+`stale`, `main`, `commit` and `digest`; `new -repos -areas -seams -adopts`,
+and `-follows` copying `repos` and `areas`; `validate -areas`; `claimable`
+calls `Guard`; `done` runs `check.Refresh` for a refresh step; `status`
+prints the new lines.
 
-`tools/tier1/`: `areas.yaml`; `tier1.go` embeds it; `rules/rules.go` lists
-`area-map`; `rules.yaml` maps PROFILE-01 to it; `coupling/areamap.go` is
-the check, and uses the parser in `tools/workflow/queue`, which tier 1
-already depends on through `tools/workflow/check`.
+`tools/tier1/`: `areas.yaml`, read from the checkout and not embedded;
+`rules/rules.go` lists `area-map`; `rules.yaml` maps PROFILE-01 to it;
+`coupling/areamap.go` is the check, and uses the parser in
+`tools/workflow/queue`, which tier 1 already depends on through
+`tools/workflow/check`.
 
 ### Machinery edits
 
 By file. Each cites the rule and does not restate it (FLOW-14).
 
 - `.claude/skills/workflow-tick/SKILL.md`. Step 1: `dist/wf areas -sync`
-  after the fetch. Step 2: after confirming merges, `dist/wf stale`; claim
-  and state pushes through `dist/wf commit` (exit 4: ask `wf next` again;
-  exit 5: re-apply by hand); the dispatch table gains `f6-refresh` and
-  `x2-refresh` for `wf-publish`; a `wf done` that finds its refresh step
-  dropped by a merge carries on. Step 4: the run's own digest file, then
-  `dist/wf digest`.
+  after the fetch, and `dist/wf validate`, keeping any `limit:` lines.
+  Step 2: after confirming merges, read `main`'s check runs and record
+  them with `dist/wf main`; on a red `main` with no follow-up recorded,
+  file one by the intake skill's follow-up path (FLOW-09) and record it;
+  then `dist/wf stale`. Claim and state pushes go through
+  `dist/wf commit` (exit 4: ask `wf next` again; exit 5: re-apply by
+  hand); the dispatch table gains `f6-refresh` and `x2-refresh` for
+  `wf-publish`; an agent that returns `merged meanwhile` ends its step
+  with the merge confirmation, not `wf done`. Step 5: a `limit:` line that
+  step 1 already printed does not fail the step; it goes under **Blocked
+  on Jeff**. Step 4: the run's own digest file, then `dist/wf digest`; a
+  red `main` and an item sent back with its PR open are listed under
+  **Blocked on Jeff**.
 - `.claude/skills/workflow-intake/SKILL.md`. Step 3: agree the
   repositories and areas with Jeff (`dist/wf areas -list`), show
   `dist/wf relations -feature <slug>` after `wf new`; `-adopts` and its
-  place; a tracked item; two steps on the size guide for refreshes. The
-  follow-up path: no areas, so undeclared.
-- `.claude/skills/workflow-human/SKILL.md`. The review's overview gains the
-  repositories, the areas and the relations with open items, and
-  `dist/wf validate -areas` for a map change; narrowing and `wf relate` on
-  Jeff's word; **Open PRs** confirms merges, runs `dist/wf stale`, and
-  lists the merges in order with "behind `main`"; a tracked item's steps.
+  place; a tracked item, with `-seams`; two steps on the size guide for
+  refreshes. The follow-up path: no `-areas`, so `wf new -follows` takes
+  the followed item's repositories and areas; a fix for a red `main`
+  follows the item whose merge it was.
+- `.claude/skills/workflow-human/SKILL.md`. Its worker stays
+  `human/<name>`, which cannot complete a `cloud` merge step, so it does
+  not confirm merges. The review's overview gains the repositories, the
+  areas and the relations with open items, and `dist/wf validate -areas`
+  for a map change; narrowing and `wf relate` on Jeff's word. **Open
+  PRs** records `main`'s CI (`dist/wf main`), runs `dist/wf stale`, which
+  skips a PR Jeff has already merged, and lists the merges in order with
+  "behind `main`"; it runs both again after each merge he makes in the
+  session, and tells him the next tick confirms it. **Escalations** gains
+  `f8-escalate-returned`, a red `main`, and holders over a limit. A
+  tracked item's steps.
 - `.claude/skills/workflow-native/SKILL.md`. State pushes through
   `dist/wf commit`; the run's own digest file.
 - `.claude/agents/wf-design.md`. Step 2: declare `repos` and `areas` in the
@@ -1340,7 +1795,9 @@ By file. Each cites the rule and does not restate it (FLOW-14).
   `back-to-design` (FLOW-06). Review records the trial merge's lines in its
   report.
 - `.claude/agents/wf-publish.md`. `f6-consolidate` records the trial
-  merge; `f6-refresh` and `x2-refresh` as above.
+  merge; `f6-refresh` and `x2-refresh` as above, with the check before the
+  push and the draft on a return; `f6-open-pr` on an item that has a PR
+  recorded pushes to it and marks it ready.
 
 `wf-plan` and `wf-guide` do not change.
 
@@ -1359,30 +1816,51 @@ This item declares no `holds` (Decision 17, a13).
   unchanged (Validation plan: the live queue through both). An old `wf`
   reads a queue file with new fields and ignores them. The one loss is an
   old `wf` *saving* such a file, which drops the fields. So the first new
-  field is written at Close (`x4-close`), after the step has checked that
-  no live lease was claimed before the merge commit's time, and attended
+  field is written at Close (the attended step `x4-state`), once no live
+  lease was claimed before the merge commit's time, and attended
   sessions rebuild `dist/wf` before their next command, as after
   `alters-slot`.
+- **Items already past Design.** `seam-specs` and `driver-contract`
+  finished Design before the queue could record a declaration. Their
+  queue files have no `seams`, no `rules_changed` and no `declared`, and
+  their designs list five and four seams and four and ten rule changes.
+  The new gates compare the queue with the design only for an item that
+  has `declared`, so both pass their Plan, Implement, Review and Publish
+  gates exactly as they do today, and the relation treats both as
+  undeclared (row 5). A human `wf declare` at `x4-state` records what
+  their designs declare; from then on their gates compare. Their designs
+  have no `repos` or `areas` key. If a design gains one before its review
+  approves it, the approval covers it. If it gains one after, that is a
+  change to an impact field since the approval, and the Plan gate asks
+  for a new `approved at <sha>` entry, which the attended session records
+  on Jeff's word; once Plan is done nothing compares it, and a human
+  `wf declare` accepts it.
 - **An old skill beside a new one.** A session that started before the
   merge appends to `digest/<date>.md` by hand; the first `wf digest` moves
   that page into the day's directory and builds the page from it. A
   `tracked` step id fails an old `wf validate` loudly; none exists before
   Close.
 - **`loop-contract` first.** This item amends files that `loop-contract`
-  adds. `x2-implement` starts by merging `origin/main` and releases the
-  step, naming the reason, if `docs/development/loop-contract.md` is not
-  there. Both PRs edit `process.md`, `TEMPLATE.md`, `workflow-intake` and
-  `cmd/wf/main.go`; the second to merge is brought up to date by its own
-  refresh step once this item has landed, and by a hand merge of `main`
-  before then.
+  adds, and thirteen of the files its PR changes are files PR #119 changes
+  too (`process.md`, `TEMPLATE.md`, the four skills, `wf-design.md`,
+  `wf-publish.md`, `queue/queue.go` and its test, `cmd/wf/main.go`, and
+  the two rule files it adds). `x2-implement` starts by merging
+  `origin/main` and releases the step, naming the reason, if
+  `docs/development/loop-contract.md` is not there. So the two PRs are
+  never open against each other: this item's work starts from a `main`
+  that has `loop-contract`.
 
 ### Safety
 
-- **FLOW-08.** Nothing here merges, approves or enables auto-merge. More
+- **FLOW-08.** Nothing here merges, approves or enables auto-merge
+  (LINT-03). More
   PRs are open at once and each is still Jeff's to merge. "Merges, in
-  order" is the order FLOW-05 gives; he may merge in another.
+  order" is the order FLOW-05 gives; he may merge in another. Making a
+  returned item's PR a draft, and ready again when it is republished, is
+  neither a merge nor an approval, and Jeff can undo either.
 - **FLOW-16.** Close is per item and unchanged. A refresh adds commits to a
-  branch that is still open and deletes nothing.
+  branch that is still open, checks that it is still open before it
+  pushes, and deletes nothing.
 - **FLOW-17.** A refresh pushes a merge commit to the item's own branch:
   never a rebase, never a force-push, never `main`. `wf commit` pushes only
   `workflow`, rewrites only a commit it has not pushed, and never forces.
@@ -1406,23 +1884,47 @@ This item declares no `holds` (Decision 17, a13).
      Design and a fresh review.
   3. The trial merge at Review and consolidation, which names the other
      item early.
-  4. `make lint`, `make test` and `make deadcode` at `f6-merge-main` and at
-     each refresh, on the branch with `main` merged.
+  4. `make lint` and `make test` at `f6-merge-main`, `make deadcode` at
+     `f6-consolidate`, and all three at each refresh, on the branch with
+     `main` merged. This net holds only for a PR that is refreshed before
+     it merges; under a1 (a) Jeff may merge first.
   5. GitHub, which refuses a merge that conflicts.
-  6. CI on the push to `main`. A failure there is a regression on `main`:
-     its fix is filed as the follow-up of the item that merged last
-     (FLOW-09) and goes to the top of the fixes.
-  7. The native sweep, which `wf gate` starts when `main` has moved, and
-     the full matrix before a release (TEST-02). CI runs neither Hyper-V
-     nor VZ, so a break between two disjoint items that only a native host
-     shows is found here.
+  6. CI on the push to `main`, which the tick and the attended session now
+     read (Decision 22). A failure there is a regression on `main`: it
+     opens **Needs Jeff**, and its fix is filed as the follow-up of the
+     item whose merge it was and goes to the top of the fixes (FLOW-09 as
+     amended, a16). Before this item nothing in the loop read that result.
+  7. The full matrix before a release (TEST-02). CI runs neither Hyper-V
+     nor VZ. The scheduled native session is not a net for them today:
+     `wf gate` starts a session on a moved `main` only for a machine with
+     an open backlog gap, and sweeps only those gaps
+     (`queue/hosts.go`); no gap is open for `windows-hyperv` or
+     `macos-vz`. And a refresh does not run an item's blocking native
+     validation again (a10 (e)). So a break between two disjoint items
+     that only a native host shows is found before a release, not before.
 
-  What reaches 6 or 7 is a semantic break between two items whose
-  declarations were true: no shared file and no import between them. That
-  is the risk the direction accepted; the map cannot remove it.
-- **Merge order.** Related PRs are never open together, so order matters
-  only among disjoint ones, where any order is safe by construction and a
-  PR that is behind `main` says so.
+  What reaches 6 or 7 is a break between two items whose declarations
+  were true: no shared exclusive area and no import between them. Three
+  kinds are known. A semantic break at run time, such as a relay change
+  and a driver that boots the relay. A whole-tree test in a code area:
+  `driver/buildlink/stray_test.go` walks every file, so a literal one
+  item forbids and another item adds are green apart and red together;
+  `specs/specs_test.go` reads the book's `SUMMARY.md`. And lint
+  configuration outside `tier1-config`: the root `.golangci.yml` is in
+  `build`. That is the risk the direction accepted; the map cannot remove
+  it, and a1 (b) is the option that does.
+- **Merge order.** A related item cannot open a PR while another's is
+  recorded and unmerged, a returned item's included, so related PRs are
+  never open together and order matters only among disjoint ones. There
+  any order merges cleanly or is refused by GitHub, a PR that is behind
+  `main` says so as of the last `wf stale`, and what a clean merge can
+  still break is the list above.
+- **The merge check.** A PR merged while behind `main` is confirmed by
+  the same three proofs as today, the third without context lines (a14).
+  An item whose merge cannot be confirmed stays at its merge step and
+  keeps the PR slot until a human compares, as today. `wf stale` never
+  seeds a refresh on a PR that has merged, and the refresh never pushes
+  to one, so a deleted branch is not brought back (FLOW-16).
 
 ### What this item hands on
 
@@ -1434,12 +1936,15 @@ This item declares no `holds` (Decision 17, a13).
   steps a machine takes; `f6-refresh` is seeded `cloud` here and its design
   may leave it so.
 - The PR-slot tie-break means a led item of lower priority waits for a
-  cloud-led one that is ready. Its design says whether that is wanted.
+  cloud-led one that waits for the slot. Its design says whether that is
+  wanted.
 - `wf commit`, for a machine's state pushes, and a digest file per run, so
   a machine and the cloud no longer write one file.
-- FLOW-04 is amended here in two sentences only (the replayed claim; the
-  human step for a repository with no gate). Its host-name and lease
-  clauses are untouched.
+- FLOW-04 is amended here in three clauses only: every claim is checked
+  against FLOW-05's limits, whoever the worker is, which is the clause a
+  machine's led claims rest on; a claim whose push is rejected is asked
+  again on the new state; and the human step for a repository with no
+  gate. Its host-name and lease clauses are untouched.
 - `QUEUE.md`'s Workers section and a Lead column; a hold that stops led
   work.
 - Not done here: `wf renew`. Renewing a lease is part of the 20-hour lease
@@ -1454,10 +1959,12 @@ This item declares no `holds` (Decision 17, a13).
   and then counts in the limits (a7).
 - One map per repository: the copy in the queue state becomes one file per
   repository, an item's `areas` gain a repository prefix, and
-  `wf areas -sync` and `wf stale` run per repository. `tools/tier1/areas.yaml`
-  is one more path `wf` hard-codes that the profile should supply (its
-  hand-off point 4).
-- A hold that names repositories (a9), and a `human` merge-recording step
+  `wf areas -sync`, `wf stale` and `wf main` run per repository.
+  `wf areas -sync` hard-codes two paths of this repository that the
+  profile should supply (its hand-off point 4): `tools/tier1/areas.yaml`,
+  and `tools/tier1/rules.yaml`, of which it reads the `name` of each entry
+  under `seams`.
+- A hold that names repositories (Decision 18), and a `human` merge-recording step
   that is not offered before its phase (`seam-specs`' a15 asks; a `human`
   step is still offered early).
 - What a tracked item of a private repository may show in the public
@@ -1469,22 +1976,27 @@ Where this design does not do what the proposal's sections 3 to 8 say.
 
 | The proposal | This design | Why |
 |---|---|---|
-| Sharing only ordered areas makes two items near: one PR at a time | They are disjoint; the refresh orders them (a2) | Most pairs of product features share a book page |
-| "`tier1`, `rules` and `tier1-config` reach every area" | `reaches` is the import graph, exactly | Decision 5 |
+| Sharing only ordered areas makes two items near: one PR at a time | They are disjoint; the refresh orders them (a2) | 36 of 253 historical pairs, Jeff's example among them, would take turns over a book page or a build file |
+| "`tier1`, `rules` and `tier1-config` reach every area" | `tier1` and `tier1-config` do; `rules` does not (a15) | 22 of the 52 merges changed `docs/development/`; wording checks nothing mechanically, and the same rule is near by its ID |
+| The exclusive areas include `relay`, with the relay VM image tools | `tools/relay-vm/` is in `driver-core` | Its `init` is read, written for and copied by driver code, which no import shows |
 | A form for the Go relay "(`relay`, which reaches every driver) would be near" a Hyper-V item | Disjoint | The code: no driver tree imports `relay/`, and it imports none |
 | `wf areas -check` compares the map with `go list` | Tier 1's `area-map` does; `wf areas -check` compares the copy with `main` | The loop's tool assumes no language (LOOP-08) |
 | The map "on `main` under FLOW-14" | On `main`, with a generated copy in the queue state | `wf next` reads no git |
 | A refresh that finds overlap "queues `f6-consolidate` again" | The refresh carries the pass itself | Re-entering Publish would give up the PR slot |
 | A refresh "when a PR merges" | Whenever `main` is not contained in the branch | `main` also moves from outside the queue |
+| A returned item's PR and the slot are not mentioned | An item keeps the PR slot while its PR is recorded, and a returned item's PR is a draft | Otherwise a related PR opens beside a stale one |
+| The guard counts the holders that relate to the asker | No holder's set may exceed the limit, the asker's and each related holder's | The relations are not transitive; the guard and `wf validate` must agree |
+| Nothing reads CI on `main`; nothing about the merge check | The tick records `main`'s CI and files a red `main`'s fix (FLOW-09); the patch-id proof drops its context lines (a14, a16) | Merging behind `main` relies on the first and trips the second |
+| A follow-up is undeclared until its design | It takes the areas of the item it follows (a4) | Undeclared, the fix for a red `main` waits for every open PR |
 | `wf check` fails when areas do not cover what `seams` imply | Seams are not mapped to areas; the relation reads them | A design may list a seam it does not edit the code of (`driver-contract` lists two "conservatively") |
-| An agent may widen within the design's `drivers` and `seams` | Within its `drivers`, `surfaces` and `rule_changes` paths, and only while `wf validate` passes | The same reason; and a widening can put a limit over |
+| An agent may widen within the design's `drivers` and `seams` | Within the approved design's `surfaces` and `rule_changes` paths, and its `drivers` when it declares no shared area; only while no limit goes over | The same reason; a shared-package design lists every driver; and a widening can put a limit over |
 | The trial merge fails the step | It is a report | The item at fault fails its own diff check |
 | Seams count across repositories | They do, in the relation; a tracked item is shown and not counted (a7) | `wf` sees nothing of a tracked item |
-| "A hold may name repositories" | Not yet (a9) | No worker step exists there to hold |
+| "A hold may name repositories" | Not yet (Decision 18) | No worker step exists there to hold |
 | `wf renew` | Left to `loop-native-lead` | It belongs with the lease change |
 | FLOW-17: "a `feat/<item>` branch in each" repository | Not here | `loop-repository` |
 | The exclusive areas include `conformance` | Not in the map | `tools/conformance/` is not on `main`; `seam-specs` adds it |
-| FLOW-02, -03, -05, -10, -15, -19, -20 | Also FLOW-04, -06, -08, LOOP-01, LOOP-04, PROFILE-01 | Decision 19 |
+| FLOW-02, -03, -05, -10, -15, -19, -20 | Also FLOW-04, -06, -08, -09, LOOP-01, LOOP-04, PROFILE-01 | Decision 19 |
 
 ### What this item does not do
 
@@ -1495,10 +2007,44 @@ Where this design does not do what the proposal's sections 3 to 8 say.
 - No second cloud run a day (the proposal's question 4), and no change to
   FLOW-13.
 - No change to the freeze.
-- No area for a tree that is not on `main`. `seam-specs` and
-  `driver-contract` stay undeclared, and so collide, until Jeff gives them
-  areas in an attended session or their designs declare them.
+- No area for a tree that is not on `main`, and no stand-in for one: an
+  item whose design adds the area it declares is undeclared, and collides
+  with every feature here, until its merge puts the area on `main`. Two
+  of the 52 merges added a tree. Relating such an item by where its new
+  paths fall on `main`'s map would need a copy of part of the branch's
+  map in the queue file; it is left out.
+- No gain for the two features in the queue now. See below.
 - No automatic answer to a reconciliation item's question.
+- No re-run of native validation at a refresh (a10 (e)), and no map entry
+  for a dependency that is not an import, beyond `tools/relay-vm/`.
+
+### What changes for the queue as it stands
+
+Nothing, at first, and Jeff should expect that.
+
+- `seam-specs` and `driver-contract` collide today because neither is
+  declared (row 5). Giving them areas does not change it: both designs
+  list the seams `relay-claim` and `collector`, which have no
+  specification until `seam-specs` itself merges and lists their contract
+  documents in `rules.yaml` (row 3). `wf relations` then prints
+  `seam-specs, driver-contract: colliding (seam collector, which has no specification)`.
+- After S1 merges, the program's wave-2 items all amend GLOBAL-08, so
+  they are near one another (row 8): they are built side by side, three
+  of them holding the `alters_relationships` slots, and still open one PR
+  at a time (case 6).
+- The freeze stays, so only program items run. The first pair that may
+  have PRs open together is in wave 4: a driver pilot beside an item in
+  the Go relay (case 7). Wave 5's per-driver adoptions are the first
+  large gain (case 8).
+- The one lever for earlier gain is row 8's grain: "the same rule" could
+  be read as the same bullet of GLOBAL-08, not the same rule ID. `wf` has
+  no way to tell bullets apart, and two edits to one rule are what
+  consolidation most often has to reconcile, so the row stays as it is.
+
+What does change at once: the guard for every worker and for `wf claim`,
+`wf commit`, the digest files, `QUEUE.md`'s new sections, `main`'s CI
+being read, and the refresh for any process item's PR that waits while
+`main` moves.
 
 ## Defaults and overrides
 
@@ -1510,7 +2056,14 @@ Where this design does not do what the proposal's sections 3 to 8 say.
 | *Named fallback: "undeclared until merged".* `areas` names an area `main`'s map lacks | The item is treated as undeclared | Its design adds the area and `main` has it only after the merge. `QUEUE.md` marks the name with `*` (GLOBAL-11) |
 | *Named fallback: "no map".* The queue state has no `areas.yaml`, or a repository has none | The repository is one exclusive area: every two items in it collide | Today's behaviour (GLOBAL-09). `QUEUE.md`'s Relations gives it as the reason (GLOBAL-11) |
 | `seams`, `rules_changed`, `collides_with`, `adopts` absent | None; not a reconciliation item | The obvious reading |
-| `limits.in_progress` absent | 5; a written value below 1 is an error | FLOW-05's written limit (a11). *Changed:* absent or 0 was "no limit" |
+| `declared` absent | The item was never declared: no gate compares its queue file with its design, and the check prints that | An item that finished Design before `wf declare` existed must pass the gates it passes today (GLOBAL-09). Design's done-when requires it from this merge on, and a human `wf declare` sets it for an older item |
+| `wf new -follows X` without `-areas` | The new item takes X's `repos` and `areas`; none when X has none | A fix or finish of X is in X's areas to a first approximation, and Jeff agreed those for X (a4). `-repos` and `-areas` override it, and the history line says which was used (GLOBAL-10, GLOBAL-11) |
+| *Named fallback: "the design on the branch".* `wf declare` judging a widening when the design has no `approved at` entry (its review was skipped) | It reads `drivers`, `surfaces` and `rule_changes` from the branch | A skipped review has no approved commit, and the skip criteria allow no seam and no rule change. The history line says `(design on the branch: review skipped)` (GLOBAL-11) |
+| `main.yaml` absent | `main`'s CI is not known: `QUEUE.md` says `main: CI not recorded`, and nothing is filed | No session has recorded it yet. Unknown is not read as green (GLOBAL-10) |
+| A map area's `reaches_all` absent | False | Only the areas that hold the checks declare it |
+| The map's `implies.shared` absent | No area is shared: every driver in a design's `drivers` needs its own area declared | The obvious reading; the `area-map` check requires it to match `rules.yaml` in this repository |
+| The merge check's context lines | 0, fixed. *Changed:* 3 | a14 |
+| `limits.in_progress` absent | 5; a written value below 1 is an error | FLOW-05's written limit (Decision 8). *Changed:* absent or 0 was "no limit" |
 | `limits.alters_relationships` absent | 1; below 1 an error | Unchanged (`alters-slot`) |
 | The PR slot | 1, not configurable | FLOW-05 |
 | A map area's `mode` | Required; no default | Exclusive by default would hide a missing line; ordered by default would be unsafe |
@@ -1518,11 +2071,15 @@ Where this design does not do what the proposal's sections 3 to 8 say.
 | A design's `repos` empty or absent | Only the repository that holds the design | LOOP-04 |
 | `wf new` without `-repos`, `-areas`, `-adopts` | Home repository; undeclared; not a reconciliation item | As the fields |
 | `wf commit`'s tries | 3, fixed | Enough for a busy minute; then the session decides |
+| `wf commit` with no paths | It stages only the generated files | Another session's uncommitted work in the same checkout is never swept in |
 | A reconciliation item's place | Just below the open fixes; Jeff's word overrides | a8 |
 | *Named fallback: "earlier page".* A hand-written `digest/<date>.md` when the day's directory first appears | Moved into the directory as its first file, once | So `wf digest` never overwrites a page it did not build (GLOBAL-11: the page's first section shows it) |
 
 **Dropped fallbacks.** `limits.in_progress` read as no limit when absent or
-0; a claim lost on every rejected push; the PR slot held through Close.
+0; a claim lost on every rejected push; the PR slot held through Close; the
+PR slot given up by an item that goes back with its PR open; `interface`
+as an entry of `implies.drivers` (the first draft), which let a
+shared-package design pass only when it was spelled that way.
 
 **Merges.** `wf areas -sync` unions `areas.yaml`'s `written_seams` with the
 names in `rules.yaml`'s `seams` list. Neither overrides the other: a seam
@@ -1535,12 +2092,12 @@ each driver's tree; it describes them and changes nothing in them.
 
 ## Rule changes
 
-Thirteen, each for the design review to approve by name (FLOW-14, FLOW-19).
+Fourteen, each for the design review to approve by name (FLOW-14, FLOW-19).
 "Current wording" is `docs/development/process.md` on `main` at `897a4a8`
 for the FLOW rules. For LOOP-01, LOOP-04 and PROFILE-01 it is the text
 approved at `7af50ff` in `loop-contract`'s review, read from
-`feat/loop-contract` at `9fbc8e9`; those files reach `main` with that
-item's merge, which this item's Implement waits for. Where a rule has
+`feat/loop-contract` at `31028a5` (PR #119); those files reach `main` with
+that item's merge, which this item's Implement waits for. Where a rule has
 several paragraphs, only the amended ones are quoted, each in full; the
 rest of the rule is unchanged. No severity changes. One check type changes
 (PROFILE-01).
@@ -1638,23 +2195,28 @@ it; the paragraph after it; and row 3 of the process table:
 and one paragraph is added before "Queue state lives on the `workflow`
 orphan branch":
 
-> An item whose home is a repository in which the loop's gates do not run
-> is **tracked**. The queue records it, its repository and its pull
-> request; its two steps, the work and then the merge, are the human's
-> (FLOW-04); and no done-when check runs for it. FLOW-05's limits neither
-> count it nor hold it.
+> A feature whose home is a repository in which the loop's gates do not
+> run is **tracked**. The queue records it, its repository and its pull
+> request. Its phases are two, Work and then Merge, each one `human` step
+> (FLOW-04), and no done-when check runs for them. FLOW-05's limits
+> neither count it nor hold it.
 
 **Severity and check:** MUST, `automated`, before and after.
 **Enforcement:** `tools/workflow/check/check.go`, `declared.go` and
-`areas.go` (new): the comparison at phases 2 to 6, the diff check at phases
-3, 4 and 6, the refresh's done-when, and a tracked item's one-line result.
+`areas.go` (new): the comparison at phases 2 to 6 for an item the queue
+records a declaration for, the diff check at phases 3, 4 and 6, the
+refresh's done-when, and a tracked item's one-line result. Phase 7's
+check, the merge confirmation, compares a squashed branch's change with
+the PR commit's without context lines (`patchID`, `-U0` in place of `-U3`;
+a14), so a PR merged behind `main` is still confirmed.
 
 ### FLOW-04 (amend), `docs/development/process.md`
 
 **Why:** a tracked item's steps, and the step that records a merge in a
 second repository (`seam-specs`' a15), are `human` steps that the list does
-not name. `wf commit` replays a rejected claim, so "means the claim lost"
-is no longer always true; and the limits now bind every claim.
+not name. `wf commit` asks a rejected claim again, so "means the claim
+lost" is no longer always true; and the limits now bind every claim. Three
+clauses change.
 
 **Current wording**, the `human` bullet and the paragraph after the list:
 
@@ -1685,10 +2247,10 @@ is no longer always true; and the limits now bind every claim.
 > later phase. A step is claimed with a
 > lease (claimant plus expiry) recorded on the `workflow` branch, and only
 > when FLOW-05's limits allow the claim, whoever the worker is. When the
-> push of a claim is rejected because the branch moved, the claim is
-> replayed on the new state: it stands if the step is still free and the
-> limits still allow it, and otherwise it is lost and the worker re-reads
-> state. An expired lease may be reclaimed.
+> push of a claim is rejected because the branch moved, the claim is asked
+> again on the new state: it stands if the step may still be claimed
+> there, and otherwise it is lost and the worker re-reads state. An
+> expired lease may be reclaimed.
 
 **Severity and check:** MUST, `automated`, before and after. No enforcement
 path under the rule-change paths: the guard and `wf commit` are in
@@ -1807,30 +2369,36 @@ definition that `alters-slot` built and FLOW-20's Limit bullet carried.
 > through `holds`. A tracked item (FLOW-03) is shown with its relations and
 > neither holds nor waits.
 >
-> **The limits.** Each counts only what other items already hold, and an
-> item that holds is never refused, so no two items wait for each other.
+> **The limits.** A feature *holds* a limit from the claim that takes it.
+> A holder's *set* is the holder and the other holders it collides with;
+> for the PR slot, collides with or is near. No holder's set may number
+> more than the limit: a claim that takes a limit is allowed only while
+> the claimant's set, and the set of every holder it relates to, would
+> stay within it. Only holders are counted and an item that holds is
+> never refused, so no two items wait for each other.
 > Process items are not counted because they are short and already ranked
 > ahead of fixes and features; one that would disrupt running work declares
 > `holds`.
 >
-> - **In progress.** A queued feature starts only while the in-progress
->   features that collide with it number fewer than the limit.
+> - **In progress.** A feature takes it when it starts and holds it while
+>   it is in progress.
 > - **`alters_relationships`.** A feature that declares
->   `alters_relationships: true` (FLOW-02) holds a slot from the claim of
->   its Plan step until it is done, a return to Design included. It takes
->   its Plan step only while the features that hold a slot and collide with
->   it number fewer than the limit, because two such features reshape the
->   same structure and make each other's consolidation costly. A feature
->   whose design discovers it alters relationships waits at the end of
->   Design until a slot is free.
-> - **The PR slot.** A feature holds the PR slot from the claim of the step
->   that merges `main` at the start of Publish until its PR merges. It
->   takes that step only while no feature that collides with it or is near
->   it holds the slot; when two such features wait, the higher priority
->   goes first. A feature finished through Guide waits for the slot, so its
->   consolidation runs against a `main` that the items related to it leave
->   alone until its PR merges. A disjoint item may merge meanwhile, and the
->   refresh (FLOW-10) then brings the open PR up to date.
+>   `alters_relationships: true` (FLOW-02) takes a slot with the claim of
+>   its Plan step and holds it until it is done, a return to Design
+>   included, because two such features reshape the same structure and
+>   make each other's consolidation costly. A feature whose design
+>   discovers it alters relationships waits at the end of Design until a
+>   slot is free.
+> - **The PR slot.** A feature takes the PR slot with the claim of the
+>   step that merges `main` at the start of Publish and holds it until its
+>   PR merges, a return to Implement or Design after the PR is open
+>   included. Its limit is 1, so no two features that collide or are near
+>   have pull requests open together. When related features wait for the
+>   slot, the higher priority goes first. A feature finished through Guide
+>   waits for the slot, so its consolidation runs against a `main` that
+>   the items related to it leave alone until its PR merges. A disjoint
+>   item may merge meanwhile, and the refresh (FLOW-10) then brings the
+>   open PR up to date.
 >
 > The first two limits are the values the human sets in the workflow
 > branch's `config.yaml`: 5 features in progress and 1
@@ -1885,6 +2453,38 @@ asked for an exception for one item; this makes it the rule (a6).
 **Severity and check:** MUST, `automated`, before and after. No enforcement
 change.
 
+### FLOW-09 (amend), `docs/development/process.md`
+
+**Why:** under Decision 21 a PR may merge behind `main`, and CI on the push
+to `main` is then the gate. The rule has a session file a regression it
+finds "while the feature is built, validated or consolidated"; nothing
+files one that CI reports on `main` itself, and a fix filed with nobody
+there has no areas, so it would collide with every feature (a4, a16).
+
+**Current wording**, the sentence on a regression `main` already has:
+
+> A regression `main` already has, found while the
+> feature is built, validated or consolidated, is queued at once as the feature's
+> immediate follow-up unless the human explicitly says otherwise: the session that
+> found it files a fix item that `follows` the feature, at the top of the fixes,
+> and the feature neither waits for it nor absorbs it.
+
+**Proposed wording.** That sentence is unchanged, and two follow it:
+
+> A failure that CI reports on `main` after a merge is such a regression:
+> the run that sees it files the fix the same way, as the follow-up of the
+> item whose pull request that merge was, and files nothing when the
+> merge was no item's. A follow-up filed with no human present takes the
+> repositories and areas of the item it follows (FLOW-02), for its design
+> to confirm.
+
+**Severity and check:** MUST, `automated + agent-judgment`, before and
+after. No enforcement path: the tick records `main`'s result with
+`wf main` and files through the intake skill's follow-up path, and
+`wf new -follows` copies the fields (`tools/workflow/cmd/wf/`).
+`rules.yaml`'s entry for the rule (a follow-up for `tier2_gaps`
+consistency) does not change.
+
 ### FLOW-10 (amend), `docs/development/process.md`
 
 **Why:** with several PRs open, a PR's consolidation goes stale each time
@@ -1902,9 +2502,12 @@ another merges.
 > has moved past its branch, a **refresh** step merges `main` into the
 > branch again, runs the gates, and repeats this review, and FLOW-15's
 > sweep, over what landed since the branch last merged `main`, as a dated
-> entry in the consolidation section. A refresh that finds work beyond
-> conflict fixes and wording sends the feature back as above. A process
-> item's open PR is refreshed the same way, without the review.
+> entry in the consolidation section. It pushes only while the pull
+> request is still open. A refresh that finds work beyond conflict fixes
+> and wording sends the feature back as above; its pull request is then a
+> draft until the feature is published again, and it keeps the PR slot
+> (FLOW-05). A process item's open PR is refreshed the same way, without
+> the review.
 
 **Severity and check:** MUST, `agent-judgment`, before and after.
 **Enforcement:** the refresh's done-when, in `tools/workflow/check/check.go`
@@ -2097,12 +2700,15 @@ Areas row):
 
 and the profile's table gains a row, after **Rule and machinery paths**:
 
-> | Areas | `tools/tier1/areas.yaml`: the areas, their paths and modes, which area reaches which, the area each `drivers` and `surfaces` value stands for, and the seams that have a specification beyond the `seams` list of `tools/tier1/rules.yaml`. |
+> | Areas | `tools/tier1/areas.yaml`: the areas, their paths and modes, which area reaches which, the area each `drivers` and `surfaces` value stands for, the areas every driver shares, and the seams that have a specification beyond the `seams` list of `tools/tier1/rules.yaml`. |
 
 **Severity and check:** MUST before and after; the check changes from
 `agent-judgment` to `automated + agent-judgment`. **Enforcement:** the new
-file `tools/tier1/areas.yaml` (the map above); `tools/tier1/tier1.go`
-embeds it; `tools/tier1/rules.yaml` gains `PROFILE-01: {check: [area-map]}`;
+file `tools/tier1/areas.yaml` (the map above), which tier 1 reads from the
+checkout it checks and does not embed, so `tools/tier1/tier1.go`,
+`tools/workflow/enforcement-check.sh` and FLOW-14's list of the
+configuration files `main`'s tier 1 takes from the branch all stay as
+they are; `tools/tier1/rules.yaml` gains `PROFILE-01: {check: [area-map]}`;
 `tools/tier1/rules/rules.go` lists the check; `tools/tier1/coupling/`
 holds it, with what it fails on under **The area map**. From this merge on,
 a feature changes the map by declaring `{rule: PROFILE-01, change: amend,
@@ -2117,18 +2723,19 @@ whether it is still true with the proposed wording.
 |---|---|
 | LOOP-04: "There is one order, and FLOW-05 gives it. FLOW-05 also says which items may be in progress side by side and which wait for another. This rule adds no order and no limit of its own." | Yes. The classes are the order; the relations and limits say the rest |
 | LOOP-04: "A process item ranks ahead of every item not already in implementation (FLOW-05). It stops other work only through the `holds` it declares (FLOW-05, LOOP-09)." | Yes. Class 2 is unchanged, and FLOW-05 now says outright that a process item is outside the relations |
-| LOOP-04: a regression's fix is filed "at the top of the fixes (FLOW-09)" | Yes. Class 3 keeps the fixes; adoptions go below them |
+| LOOP-04: "Every item has the phases of its kind (FLOW-03), and every step says who may take it (FLOW-04)." | Yes. FLOW-03 now gives a tracked feature its two phases, and FLOW-04 names their steps as the human's |
+| LOOP-04: "the session that finds a regression trunk already has files its fix at the top of the fixes (FLOW-09), and the human may move it" | Yes. Class 3 keeps the fixes; adoptions go below them. FLOW-09's new sentence has the run that sees a red `main` file the fix the same way, at the same place |
 | LOOP-04: "An item that waits on another component waits for a release (LOOP-07): it is held with a blocking question that names the release (FLOW-07), and resumes when the release exists." | Yes. Class 3 cites it for when a reconciliation item starts |
 | LOOP-04: "Until the queue records them, it names them in its design" | Amended above |
 | LOOP-05: "Every claim records the worker ... and the item, and through the item the repositories the work is in (LOOP-04)." | Yes, and now through a queue field |
-| LOOP-05: "FLOW-04 says which worker may take a step." | Yes. The two amended sentences change what a claim is checked against and what a rejected push does, not who may take a step |
+| LOOP-05: "FLOW-04 says which worker may take a step." | Yes. The amended clauses change what a claim is checked against and what a rejected push does, and name two more `human` steps; a worker still takes only steps of its affinity |
 | LOOP-06: "Each unattended run appends one section to the day's digest (FLOW-13). There is one digest, for work in every repository." | Yes. A run's file is its section; `wf digest` builds the one page |
 | LOOP-06, item 1: each step's "kind and FLOW-05 class" | Yes. Class 3 is now named "Fixes and adoptions" |
-| LOOP-06, item 5: "everything blocked or parked, and why" | Yes. The guard's reasons are `wf next`'s `blocked` lines |
+| LOOP-06, item 5: "everything blocked or parked, and why" | Yes. The guard's reasons are `wf next`'s `blocked` lines; a red `main`, holders over a limit and an item sent back with its PR open are listed with them |
 | LOOP-07, point 2: a reconciliation item "is a feature item (LOOP-04), filed through intake, and FLOW-05 gives its place in the order." | Yes. This is the amendment its Decision 7 left to this item |
 | LOOP-08: "No loop rule may require a language, a build tool, ... a directory layout beyond what the profile names" | Yes. The map is a profile term; the import-graph check is the component's (tier 1); `wf` reads a copy of the map |
 | LOOP-09: a branch "follows the old text until it merges trunk, which FLOW-05 has it do while it waits and Publish does at its start" | Yes. FLOW-05 keeps that sentence; the refresh adds a third occasion |
-| LOOP-09: a process item "declares the workers it holds (FLOW-05)" | Yes. A hold still names workers (a9) |
+| LOOP-09: a process item "declares the workers it holds (FLOW-05)" | Yes. A hold still names workers (Decision 18) |
 | LOOP-03, class 4: "the phase done-when checks (FLOW-03) and the queue's validity" | Yes. The new checks are done-when checks and `wf validate` |
 
 ## Validation plan
@@ -2152,66 +2759,122 @@ whether it is still true with the proposed wording.
   - `TestAreasAbsentAndEmpty`: an absent `areas` and `areas: []` survive a
     save and a load as two different things.
   - `TestGuardInProgressPerSet` (cases 9, 10, 16), `TestGuardAltersSlot`
-    (cases 2, 6; `alters-slot`'s tests keep passing on undeclared items),
-    `TestGuardPRSlot` (cases 3, 4, 7, 8: a claimed step holds; near and
-    colliding block; disjoint does not; Close holds nothing; re-entry holds
-    from the new claim), `TestGuardPRSlotTieBreak` (case 13, and that the
-    highest-priority ready item is never refused).
+    (cases 2, 6, and the star of case 19: X is refused because H's set
+    would be 4; `alters-slot`'s tests keep passing on undeclared items),
+    `TestGuardPRSlot` (cases 3, 4, 7, 8, 20: a claimed step holds; near and
+    colliding block; disjoint does not; Close holds nothing; a return
+    before the PR opened gives the slot up and re-entry holds from the new
+    claim; a return with a PR recorded keeps it, in phase 3 and in phase
+    1, and the returned item's own next `f6-merge-main` is not refused),
+    `TestGuardPRSlotTieBreak` (cases 13 and 21: a lower-priority item is
+    refused while a related higher-priority one waits, ready or not; the
+    highest-priority waiting item is refused only by a holder; over
+    generated arrivals no waiting item is passed over without end).
   - `TestGuardEveryWorker` (case 5): it replaces the host half of
     `TestAltersSlotCloudOnly`, which asserts today that the host's claim
     stands.
   - `TestGuardNoMutualHold`: over generated queues, a holder is never
-    refused and some waiting item is always offered a free slot.
+    refused and the waits form no cycle.
+  - `TestGuardThenValidate`: over generated queues and maps, starting from
+    a valid state, `Validate` reports no `limit:` error after any claim
+    `Guard` allows, for each of the three limits; and the star of case 19
+    by name.
   - `TestValidateLimitsPerSet`: each limit, at and over, names the item and
-    the others; `TestInProgressLimitDefault` (absent, 5, 0, -1, as `Load`
-    reads them).
+    the others, with the `limit:` prefix; the star, where no single
+    asker-centred count is over; `TestInProgressLimitDefault` (absent, 5,
+    0, -1, as `Load` reads them).
   - `TestNextUnchangedOnUndeclaredQueue`: a fixture of today's queue files
     gives the `next`, `blocked` and `validate` lines `wf` at `897a4a8`
     gives.
   - `TestClassAdopts` and `TestAdoptsValidate`; `TestTrackedRound` (seeded
     steps, any claim starts it, done without a check, outside every limit,
-    never class 1).
+    never class 1; `-seams` recorded, and refused for an item homed here).
+  - `TestNewFollowsCopiesAreas`: `-follows X` with no `-areas` copies X's
+    `repos` and `areas` and logs it; `-areas` overrides; an undeclared X
+    gives an undeclared item (case 23).
   - `TestRefreshStep`: seeded once; class 1 while pending; dropped by the
     merge step's completion and by `Back`; its completion leaves the phase
-    alone.
+    alone. `TestStale`, on temporary git repositories: `main` moved, a
+    refresh is seeded; PR merged and branch gone, none is seeded and
+    `merged:` is printed; PR closed and branch gone, none; an item sent
+    back whose PR then merged is moved to Close with
+    `f8-escalate-returned`; run twice, nothing is added twice.
+  - `TestMainCI`: `wf main` writes and reads `main.yaml`; `red_since` is
+    kept across red commits and cleared by a green one; `-followup` is
+    recorded once; absent, `QUEUE.md` says `CI not recorded`.
   - `TestDeclare`: each row of the `wf declare` table; a widening that
     would put a limit over is refused and changes nothing (cases 14, 15);
+    a widening is judged on the design at its approved commit, so an
+    agent that adds a driver to `drivers` on the branch and then asks for
+    that driver's area is refused; a design that declares `relay` and
+    lists every driver may not widen into `driver/hyperv`; one that
+    declares only `driver/hyperv` may widen into `cli` through `surfaces`;
+    a skipped review is read on the branch; `declared` is written.
     `TestRelate` (human only; refused over a limit).
   - `TestCommitReplay`, on temporary git repositories: a rejected push of a
-    done step is replayed and pushed; a replayed claim that fails
-    `Validate` is dropped (case 11) and one that passes stands (case 12); a
-    conflict in a queue file gives exit 4 with `-claimed` and 5 without; a
-    conflict in `QUEUE.md` is regenerated; nothing is force-pushed.
+    done step is replayed and pushed; a claim is asked again on the new
+    state and stands when nothing refuses it, counted once (case 12); it
+    is dropped with the guard's reason when the push that won took the
+    last slot (case 11), with the tie-break's when a higher-priority
+    related item finished Guide in it, with `held by process item` when a
+    hold started in it, and with `blocking question` when the human opened
+    one in it; a conflict in a queue file gives exit 5 without `-claimed`;
+    a conflict in `QUEUE.md` is regenerated; only the paths given and the
+    generated files are staged; another session's uncommitted file is
+    neither committed nor reset away (exit 5 names it); nothing is
+    force-pushed.
   - `TestSummary`: `QUEUE.md` for the two states shown under **What Jeff
     sees**, as golden files; `TestDigestPage` (file order, the earlier
     page, the same input giving the same page).
 
   `tools/workflow/check`:
-  - `TestDeclaredAtDesign` (queue against design; each implied-areas rule;
-    an undeclared design), `TestQueueMatchesDesignLater` (a queue whose
-    `alters_relationships` was written back fails Plan, Implement, Review
-    and Publish), `TestInsideAreas` (inside; outside; the item's own
-    design; a deleted and a renamed path; undeclared), `TestTrialMerge`
-    (clean; ordered; exclusive; a branch that is not on the remote),
-    `TestRefreshDoneWhen`, `TestImpactDeltaAreas`, `TestSkipNarrowing`,
-    `TestTrackedCheck`.
+  - `TestDeclaredAtDesign` (queue against design; `declared` required;
+    each implied-areas rule; an undeclared design; and two fixtures from
+    merged designs: `relay-leaf-crl`'s front matter with
+    `areas: [relay, book]` and `http-body-path-drift`'s, which lists all
+    five drivers, with `areas: [relay, specs]`, both of which pass, and
+    `drivers: [hyperv]` with `areas: [book]`, which fails),
+    `TestQueueMatchesDesignLater` (a queue whose `alters_relationships`
+    was written back fails Plan, Implement, Review and Publish; a queue
+    file with no `declared`, built from `seam-specs`' and
+    `driver-contract`'s as they are today against their designs, passes
+    each of those gates with the `not declared` line, and fails them once
+    `declared` is set and a field differs), `TestInsideAreas` (inside;
+    outside; the item's own design; a deleted and a renamed path;
+    undeclared), `TestTrialMerge` (clean; ordered; exclusive; a branch
+    that is not on the remote), `TestRefreshDoneWhen` (each check; the
+    local head ahead of the remote fails "pushed"), `TestImpactDeltaAreas`,
+    `TestSkipNarrowing`, `TestTrackedCheck`, and `TestSquashBesideEdit`:
+    in a scratch repository, A edits line 5 and B line 8 of one file, B is
+    squash-merged after A, and B's branch is confirmed as merged; the
+    existing `wf-squash-after-base-moved` tests keep passing, including
+    the ones that refuse a head pushed past the squash.
 
   `tools/tier1`:
   - `TestAreaMapCheck` on fixtures (a missing edge, a stale edge, a tie, a
-    driver with no `implies` entry) and `TestRealAreaMap`, which runs the
-    check on the repository's own map and tree, as `TestRealIndex` does for
-    the rule index.
+    driver with no `implies` entry, an `implies.shared` that lacks `relay`,
+    an area with both `reaches` and `reaches_all`, a `go list` error, a
+    checkout with no map) and `TestRealAreaMap`, which runs the check on
+    the repository's own map and tree with the 18 runs the design names,
+    as `TestRealIndex` does for the rule index.
 - **The live queue.** With `main`'s `dist/wf` and the branch's `wf` built
   to a scratch path, on a copy of the `workflow` checkout: `wf validate`
   prints `ok` both times; `wf next -worker cloud/check` and
   `wf next -worker host:macos-vz/check` print the same lines; the copy's
-  `QUEUE.md` differs only by the new columns and sections. Then, on the
-  copy, with `repository` set and `wf areas -sync` run: `seam-specs` given
-  areas by a human `wf declare`, and the relations printed. The outputs go
-  in the PR description.
+  `QUEUE.md` differs by the header, the split of **Needs Jeff**, the new
+  columns and sections, and the two renamed headers, and by nothing else.
+  `wf check -feature seam-specs` and `wf check -feature driver-contract`,
+  run with both, give the same results, the new one adding the
+  `not declared` line. Then, on the copy, with `repository` set,
+  `wf areas -sync` and `wf main` run: a human `wf declare` on both
+  features, after which `wf relations` prints
+  `seam-specs, driver-contract: colliding (seam collector, which has no specification)`
+  and `wf check` for each still passes. The outputs go in the PR
+  description.
 - **The map.** `make lint` runs `area-map` on the branch. The script that
-  produced the tables above is re-run and its output compared with the
-  shipped `reaches`.
+  produced the tables above is re-run, with the matrix the design names,
+  and its output compared with the shipped `reaches`: the draft's run
+  gave no missing and no stale edge for any of the 21 areas.
 - **`make lint`** for the three modules, `make enforcement` (this PR
   changes `tools/tier1/` and `tools/workflow/check/`; a process item's
   branch is exempt from the clearance, and the comparison of findings still
@@ -2228,6 +2891,19 @@ whether it is still true with the proposed wording.
 
 A process item has no Plan phase; this is the work of `x2-implement`.
 
+**Size.** Large, and larger than the queue's estimate (12 steps, 3 runs)
+allows for. `alters-slot` changed 6 files under `tools/` and `.claude/`
+(+606, -55) and `loop-contract` 14 (+763, -45). This item adds nine Go
+source files and their tests, eight `wf` commands, rewrites `next.go` and
+`summary.go`, names about forty tests, amends fourteen rules and edits
+eight skill and agent files. It is one step, so it carries over runs the
+way a long Implement does: each run claims `x2-implement` again (one
+budget step), works the tasks in order, pushes the branch at each task's
+green checkpoint (FLOW-17), and releases the step naming the task it
+reached. Four to six runs are likely. The estimate is Jeff's to raise at
+the review (FLOW-13); the runaway check would otherwise escalate at 24
+steps.
+
 1. Merge `origin/main`. If `docs/development/loop-contract.md` is not on
    it, release the step with that reason: tasks 14 and 15 amend files
    `loop-contract` adds (FLOW-14, LOOP-09).
@@ -2239,24 +2915,27 @@ A process item has no Plan phase; this is the work of `x2-implement`.
 4. The queue's fields, `Config.Repository`, and `Validate`'s schema checks
    (FLOW-02, FLOW-03, GLOBAL-10).
 5. `queue/relation.go` (FLOW-05).
-6. `queue/limits.go`: the table, `Guard`, the `Validate` walk, the
-   in-progress default; `next.go` and `cmd/wf` call it; `alters-slot`'s
-   functions move (FLOW-04, FLOW-05, GLOBAL-09, GLOBAL-10).
-7. `Class` for `adopts`, `wf new -repos -areas -adopts`, and the `tracked`
-   round (FLOW-03, FLOW-05, LOOP-07).
-8. The refresh: `IsRefresh`, `SeedRefresh`, `wf stale`, the drops in
-   `Complete` and `Back`, class 1 while pending, `check.Refresh` (FLOW-03,
-   FLOW-06, FLOW-10, FLOW-15).
+6. `queue/limits.go`: the table, the predicate, `Guard`, the PR-slot
+   holder with a recorded PR, the tie-break, the in-progress default;
+   `next.go` and `cmd/wf` call it; `alters-slot`'s functions move
+   (FLOW-04, FLOW-05, GLOBAL-09, GLOBAL-10).
+7. `Class` for `adopts`, `wf new -repos -areas -seams -adopts` and the
+   copy on `-follows`, and the `tracked` round (FLOW-03, FLOW-05, FLOW-09,
+   LOOP-07).
+8. The refresh: `IsRefresh`, `SeedRefresh`, `wf stale` with the merge
+   check first and `Landed`, the drops in `Complete` and `Back`, class 1
+   while pending, `check.Refresh`; `patchID` without context lines
+   (FLOW-03, FLOW-06, FLOW-08, FLOW-10, FLOW-15, FLOW-16).
 9. `check/declared.go`, `check/areas.go`, `review.go`, and `wf declare`,
    `wf relate`, `wf relations` (FLOW-02, FLOW-03, FLOW-06, FLOW-19).
 10. `queue/commit.go` and `wf commit` (FLOW-04, FLOW-13, FLOW-17,
     FLOW-18).
-11. `summary.go`, `queue/digest.go`, `wf digest`, `wf status` (FLOW-13,
-    LOOP-06).
+11. `summary.go`, `queue/digest.go`, `wf digest`, `wf status`, and
+    `wf main` with `main.yaml` (FLOW-09, FLOW-13, LOOP-06).
 12. `wf areas -sync | -check | -list` and `wf validate -areas` (FLOW-05,
     PROFILE-01).
-13. `docs/development/process.md`: the ten FLOW amendments, word for word
-    as approved (FLOW-14, FLOW-19).
+13. `docs/development/process.md`: the eleven FLOW amendments, word for
+    word as approved (FLOW-14, FLOW-19).
 14. `docs/development/loop-contract.md` and `loop-profile.md`: LOOP-01,
     LOOP-04 and PROFILE-01 as approved (FLOW-14, LOOP-09).
 15. `docs/design/TEMPLATE.md`: the two front-matter lines and the sentence
@@ -2274,30 +2953,100 @@ A process item has no Plan phase; this is the work of `x2-implement`.
 tests. `tools/workflow/check/`: `check.go`, `review.go` and their tests,
 and the new `declared.go` and `areas.go` with tests.
 `tools/workflow/cmd/wf/main.go`. `tools/tier1/`: `areas.yaml` (new),
-`rules.yaml`, `tier1.go`, `rules/rules.go`, `coupling/checks.go`, and the
+`rules.yaml`, `rules/rules.go`, `coupling/checks.go`, and the
 new `coupling/areamap.go` with its test. `docs/development/process.md`,
 `loop-contract.md`, `loop-profile.md`. `docs/design/TEMPLATE.md` and this
 design. `.claude/skills/workflow-{tick,intake,human,native}/SKILL.md` and
 `.claude/agents/wf-{design,implement,review,publish}.md`. Nothing in the
 product: no driver, `relay/`, `cmd/`, the book or `specs/`.
 
-**After the merge, at `x4-close`, on the `workflow` branch** (outside the
-PR), once no live lease was claimed before the merge commit's time:
+**After the merge, on the `workflow` branch** (outside the PR). These are
+edits to the queue state, which the tick's inline Close does not make and
+`closed()` does not check, so they have an owner: a `human` step,
+`x4-state`, in this item's queue file, done in an attended session with
+Jeff once the PR has merged and no live lease was claimed before the merge
+commit's time. The item is not done until it is.
 
 - `config.yaml`: `repository: buildwarden/buildwarden`; the comment on
   `limits.in_progress` becomes "5 when unset". The values do not change.
-- `wf areas -sync`, which adds `areas.yaml`.
-- `README.md`: the layout table (`areas.yaml`; `digest/<date>/`); the
-  queue file's new fields; the `tracked` round; `wf next`'s paragraph (the
-  guard, for every worker, and the three limits by relation); the commands
-  (`wf commit` in place of the `git` lines).
-- `seam-specs`' `repos`, on Jeff's word in an attended session, since its
-  design already names `buildwarden/buildwarden-specs`. Areas for
-  `seam-specs` and `driver-contract` are his to give then or leave.
+- `wf areas -sync`, which adds `areas.yaml`, and `wf main`, which adds
+  `main.yaml`.
+- `README.md`: the layout table (`areas.yaml`; `main.yaml`;
+  `digest/<date>/`); the queue file's new fields; the `tracked` round;
+  `wf next`'s paragraph (the guard, for every worker, and the three
+  limits by relation); the commands (`wf commit` in place of the `git`
+  lines).
+- A human `wf declare` on `seam-specs` and on `driver-contract`, which
+  records their seams and rule changes and sets `declared`. Both stay
+  undeclared for areas, and collide (**What changes for the queue as it
+  stands**).
+- `seam-specs`' `repos`, on Jeff's word: its design names
+  `buildwarden/buildwarden-specs` in its text, so the design's front
+  matter gains `repos` first, and the review entry records it if the
+  design is already approved (**Holds**). Areas for the two features are
+  his to give then or leave.
 
 ## Design review
 
-No review yet. This draft is put to Jeff as the design step, `x1-design`.
+No review by Jeff yet. This draft is put to him as the design step,
+`x1-design`.
+
+- **2026-11-14: independent review of the first draft (`0cd4e7c`), before
+  Jeff's review.** Two reviewers read it, one against the code and the
+  queue, one for soundness. Each finding was checked against the source
+  before it was acted on. What changed:
+  - *The implied-areas rule failed a relay item that lists every driver*
+    (both reviewers; must). True: `relay/` is in `rules.yaml`'s
+    `drivers.shared`, and no driver area reaches `relay`. The map gains
+    `implies.shared`; a driver is satisfied by its own area or a shared
+    one; an agent may widen into a driver's area only when the approved
+    design declares no shared area.
+  - *The merge stops the two live features at their next gate* (must).
+    True: their queue files lack what their designs declare. The queue
+    gains `declared`; gates compare only an item that has it; a human
+    `wf declare` at `x4-state` records the two.
+  - *`Guard` and `Validate` were different predicates* (must). True for
+    any limit above 1. One predicate now: no holder's set over the limit,
+    evaluated by both.
+  - *A refresh could send an item back with its PR open and free the PR
+    slot* (must). True. The slot is held while a PR is recorded; the PR
+    becomes a draft; `wf stale` handles a draft merged all the same.
+  - *A replayed claim could land what `wf claim` refuses.* True. A claim
+    is asked again, not replayed.
+  - *The tie-break could starve a high-priority item.* True. The
+    proposal's rule is restored (a12).
+  - *A follow-up was the slowest item; nothing read CI on `main`; the
+    "behind `main`" mark had a window.* True. A follow-up takes the
+    followed item's areas; `wf main`, `main.yaml` and FLOW-09's new
+    sentences (a16); the window is stated in a1.
+  - *A refresh could push to a branch GitHub had deleted; an attended
+    session cannot confirm merges.* True. The refresh checks before its
+    push; `wf stale` checks for a merge first.
+  - *A PR merged behind `main` can fail the merge check.* True
+    (`patchID`, `-U3`). a14 takes `-U0`.
+  - *Dropping "the checks reach every area" was a decision, and its
+    reason does not hold under a1 (a).* True. Now a15, proceeding as the
+    proposal has it for `tier1` and `tier1-config`.
+  - *`tools/relay-vm/init` couples `relay` and `driver/hyperv` by file.*
+    True. `tools/relay-vm/` moves to `driver-core`.
+  - *Widening was judged on the branch's design.* True. It is judged at
+    the approved commit.
+  - *Nets 6 and 7 did not exist as described; the a2 evidence did not
+    show what it was cited for; four counts were one too high; the
+    rendering was out of date; the two live features stay colliding
+    whatever areas they get; the `go list` matrix failed on one
+    platform.* All true, and corrected in place.
+  - Nits taken: `areas.yaml` is read from the checkout and not embedded,
+    so FLOW-14 and `enforcement-check.sh` stay as they are; the size of
+    `x2-implement`; FLOW-04's three clauses; the seven small statements;
+    `wf commit` stages only named paths; a map change that puts holders
+    over a limit; the `rules` list; a9 and a11 withdrawn as decisions;
+    the Close-time state edits get an owner (`x4-state`).
+  - *Not taken:* a stand-in area for an item that adds a new tree (a
+    nit). It needs part of the branch's map copied into the queue file
+    and an overlay in the relation, for two of the 52 merges; the item
+    stays undeclared until it merges, which is the safe side. It is
+    listed under **What this item does not do**.
 
 ## Consolidation
 
