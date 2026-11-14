@@ -651,12 +651,15 @@ gaps:
     host: macos-qemu
     status: open
     what: >-
-      warden image prepare --driver qemu --os windows (install from ISO, then the prepared layer),
-      then a Windows build, on a warden where the qemu Windows prepare runs through the driver
-      contract's PrepareImage (moved from cmd/warden into driver/qemu) and the freshness ages come
-      from the driver's options.
+      A qemu Windows build (warden build --driver qemu --guest-os windows) on a warden whose build
+      runs through warden's own build sequence: warden stages build.ps1, starts the collector with
+      the Windows bootstrap and claims the relay the qemu driver started; the freshness ages
+      ([vm] image_refresh_after, image_min_grace) reach the driver as its declared options.
     design: docs/design/driver-contract.md
     note: >-
-      Tracked, not blocking (design Validation plan, a7). Tier 0 covers the moved logic. Needs an
-      install ISO and an attended run; see qemu-windows-guest-package for the state of Windows
-      builds on this host. Run once driver-contract has merged.
+      Tracked, not blocking (design Validation plan, a7). Reworded 2026-11-14 for the design's
+      redraft (r2): the qemu Windows prepare no longer moves in this item (it stays in cmd/warden
+      until K2), so the gap is the Windows build path only. Tier 0 covers the staging and the
+      start message. Needs a prepared Windows image and an attended run; see
+      qemu-windows-guest-package for the state of Windows builds on this host. Run once
+      driver-contract has merged.
