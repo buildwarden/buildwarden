@@ -1,0 +1,30 @@
+feature: prebuilt-artifacts
+title: 'warden compiles nothing: it finds its executor, relay and relay VM artifacts on PATH, then in its own directory, at or above a minimum version (security fix, F9)'
+priority: 66
+status: queued
+round: feature
+phase: 0
+design: docs/design/prebuilt-artifacts.md
+branch: feat/prebuilt-artifacts
+alters_relationships: null
+source: 'Jeff, 2026-11-15, in project-config-trust''s design review (a6): "So warden shouldn''t need its own source directory for anything after componentization. It should instead fully be based on pre-compiled existing binaries/artifacts which are managed and installed and it may have development tooling for helping with that, but it does not manage any compilation. Those are purely development processes"; and, asked what to do now: "Remove compilation now. warden looks for necessary artifacts to be on PATH and searches its own directory if they''re not found or not on or above a minimum version". Filed on his word as its own security item, started now (exempt from the FLOW-20 freeze as a security fix; finding F9 of runtime-cli-project-path''s design). project-config-trust keeps the interim fix (driver.ModuleRoot walks up from the executable only); this item removes ModuleRoot''s use by warden and every go build warden runs: GuestBinary (driver/hostutil.go: warden-io and the relay cross-built for a guest), the container driver''s goBuildLinux and relay_image = dev (driver/container/images.go), relayvm.Find''s tree lookup (driver/relayvm/assets.go). Development tooling (the Makefile) builds and places the artifacts. See project-config-trust''s design, ''F9: the source tree'', for who reaches the tree today and what no release yet ships.'
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 4
+    steps: 25
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-15T21:57:17Z
+    by: human/jeff
+    event: queued at priority 66 (intake)

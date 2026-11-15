@@ -1,0 +1,30 @@
+feature: workdir-in-context
+title: A work directory inside the build context is served to the build; a Dockerfile FROM value reaches the container runtime's command line unchecked (security fix)
+priority: 67
+status: queued
+round: feature
+phase: 0
+design: docs/design/workdir-in-context.md
+branch: feat/workdir-in-context
+alters_relationships: null
+source: 'Filed on Jeff''s word, 2026-11-15, in project-config-trust''s design review (a11 (a)); neither is a regression, both are security findings exempt from the FLOW-20 freeze. (1) --tmpdir or [build] tmpdir can place a build''s work directory under the context directory (tmpdir = "."), and the collector serves the whole context root to the build (/v1/context/); what each driver keeps in its work directory that a build should not read was not traced (a relay VM''s seed carries the claim token, tools/relay-vm/README.md). (2) The translator takes the first field after FROM as the image (parseFrom, driver/script/translate.go) and the container driver passes it to <runtime> pull, image inspect and container create (driver/container/container.go, environment.go), so ''FROM --platform=linux/amd64 ubuntu'' puts an option on the host runtime''s command line; read, not run: pull with an option and no image appears to fail first, which the item establishes. Same defect class as the relay image''s (F1), which project-config-trust fixes for the relay image only. See project-config-trust''s design, ''What this item does not do''.'
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 2
+    steps: 14
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-15T21:57:17Z
+    by: human/jeff
+    event: queued at priority 67 (intake)

@@ -1,13 +1,13 @@
 feature: configuration-bugfixes
 title: 'Configuration bugfixes: two documented keys that are never read, doctor reporting ok for a runtime it never ran, a file in the working directory hiding an installed runtime, and load-time checks skipped for a key in another letter case'
-priority: 70
+priority: 72
 status: queued
 round: feature
 phase: 0
 design: docs/design/configuration-bugfixes.md
 branch: feat/configuration-bugfixes
 alters_relationships: null
-source: 'Found by the design of runtime-cli-project-path (findings F5 to F8, branch feat/runtime-cli-project-path at b8f692f), 2026-11-14. Jeff, design review 2026-11-15: ''the defects as a configuration bugfixes single feature''. F5: [build] dockerfile and context are declared and documented and never read. F6: warden doctor prints ok for a configured container runtime it never ran. F7: a file named docker in the working directory makes LookPath return ErrDot, which detection reads as not installed (Windows, and Unix with a relative or empty PATH entry). F8: load-time checks gated on md.IsDefined are skipped when the key is written in another case ([vm] DNS is silently not used; [vm] Build_Link is checked only at build start; one key in two spellings resolves to either value from run to run). Not a program item, not a regression and not a security fix, so FLOW-20''s freeze holds it.'
+source: 'Found by the design of runtime-cli-project-path (findings F5 to F8, branch feat/runtime-cli-project-path at b8f692f), 2026-11-14. Jeff, design review 2026-11-15: ''the defects as a configuration bugfixes single feature''. F5: [build] dockerfile and context are declared and documented and never read. F6: warden doctor prints ok for a configured container runtime it never ran. F7: a file named docker in the working directory makes LookPath return ErrDot, which detection reads as not installed (Windows, and Unix with a relative or empty PATH entry). F8: load-time checks gated on md.IsDefined are skipped when the key is written in another case ([vm] DNS is silently not used; [vm] Build_Link is checked only at build start; one key in two spellings resolves to either value from run to run). Not a program item, not a regression and not a security fix, so FLOW-20''s freeze holds it. Added 2026-11-15 from project-config-trust''s design (its hand-offs; Jeff, a11 (a), ''Filed now''): (1) [relay] system_ca_bundle = false with no CA path does nothing, silently (GLOBAL-10); (2) --no-compress and -v cannot undo the file (--no-compress=false, --verbose=false), and WARDEN_VERBOSE=0 turns verbose on; (3) a mistyped local [vm] windows_image is sent to the HTTP client, whose error does not say the path was not found (UX-04); (4) the hyperv and qemu drivers read variables that are in no reference (WARDEN_HYPERV_BUILD_IMAGE, WARDEN_RELAY_BOOT_VHDX, WARDEN_QEMU_VNC and others), which UX-07 calls ad hoc.'
 steps:
   - id: f0-answer-q1
     phase: 0
@@ -47,3 +47,9 @@ history:
   - at: 2026-11-15T20:14:52Z
     by: human/jeff
     event: 'on hold (q1): FLOW-20 freeze: not a program item and not exempt. Resume when Jeff says, or when the freeze ends.'
+  - at: 2026-11-15T21:57:17Z
+    by: human/jeff
+    event: 'priority 70 -> 71 (renumbered by wf new: prebuilt-artifacts queued at 66)'
+  - at: 2026-11-15T21:57:17Z
+    by: human/jeff
+    event: 'priority 71 -> 72 (renumbered by wf new: workdir-in-context queued at 67)'

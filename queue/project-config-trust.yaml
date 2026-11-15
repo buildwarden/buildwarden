@@ -29,8 +29,8 @@ steps:
     affinity: human
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: human/jeff
+      expires: 2026-11-15T23:39:59.496526603Z
   - id: f2-plan
     phase: 2
     affinity: cloud
@@ -46,11 +46,11 @@ budget:
     steps: 14
   spent:
     runs: 0
-    steps: 2
+    steps: 3
 questions:
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: A relative path in the config file ([build] output_dir, tmpdir, [relay] upstream_ca_certs, a local [vm] windows_image) is relative to what, now that --config or WARDEN_CONFIG can name a file outside the working directory? Today the file is always in the working directory, so the question never arose.
     options:
       - '(a) the working directory, always: as today and as -o, --tmpdir and WARDEN_UPSTREAM_CA_CERTS are; one rule for a path however it is given, and no existing file changes meaning; cost: the same file means different absolute paths from different directories, and a relative CA path in a file kept outside the project is looked up inside whatever directory warden runs in, a repository included, so the reference says to write absolute paths in such a file'
@@ -58,18 +58,20 @@ questions:
       - '(c) by key: where a run writes (output_dir, tmpdir) is relative to the working directory, what the file points at (CA files, a local base image) is relative to the file; each key does the natural thing, at the cost of two rules'
       - (d) a relative path is refused in a file that --config or WARDEN_CONFIG names; it avoids the question and breaks a copy of a project's file used from elsewhere
     recommended: (a) the working directory, always; Jeff's words are that the file's location in the working directory is simply for ease of use, so the location carries no meaning
+    answer: (a) The working directory, always. As recommended. Answered 2026-11-15.
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Does this item add environment variables, so that a setting can still be given once per machine without a file, now that ~/.config/warden/config.toml is gone? Six keys have a variable today ([runtime] driver, cli, relay_image, [relay] upstream_ca_certs, [output] verbose, and color through NO_COLOR); fourteen keys in use have none (design: Who is affected), of which [vm] dns, [relay] system_ca_bundle, the two image ages and windows_image_update have no flag either.'
     options:
       - '(a) none added: a machine''s settings go in a file the machine names with WARDEN_CONFIG, which is then the only file read, so a project''s own ./warden.toml is not; a user who had a user file and project files keeps one file per build'
       - '(b) variables for the settings that belong to a machine or its network and have neither flag nor variable: [vm] dns and [relay] system_ca_bundle, and WARDEN_BUILD_LINK beside --build-link; the corporate-network guide''s settings then need no file; three new names, chosen before driver-contract has settled which keys stay warden''s'
       - '(c) a variable for every key, by one naming scheme: fourteen new names, several of them for keys driver-contract renames'
     recommended: (a) none added; it is the model as Jeff stated it (one file, the environment, the command line), and driver-contract moves seven keys to the drivers, whose kit is where a variable per driver setting would be decided; UX-07 is therefore worded "at up to three levels", which holds under every option here
+    answer: (a) None added. As recommended. Answered 2026-11-15.
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: 'When is the transitional detection removed? It makes two errors: the one for an existing ~/.config/warden/config.toml (Jeff''s decision 4), and the one for WARDEN_UPSTREAM_CA_CERTS set together with [relay] upstream_ca_certs (a5). It lives in one file under one marker, TRANSITIONAL(one-config-file). After its removal an old user file is ignored without a word and the variable replaces the key without a word.'
     options:
       - (a) kept until 1.0, which is what Jeff answered on 2026-11-15 for runtime-cli-project-path's transitional detection (its a4, (d)); one removal point for both items, and Publish files this item's removal as its own small queue item whose source names the marker and 1.0
@@ -77,9 +79,10 @@ questions:
       - (c) the release that first carries the change and the one after it
       - (d) removed by driver-contract when it rewrites configuration loading; the date then depends on that item and its diff grows
     recommended: (a) kept until 1.0, the answer already given for runtime-cli-project-path's detection
+    answer: (a) At 1.0. As recommended. Answered 2026-11-15.
   - id: a4
     kind: assumed
-    status: open
+    status: confirmed
     question: 'What, if anything, protects the default: ./warden.toml in a working directory that is someone else''s repository? Under every option but the last, cd repo && warden build with no file named acts on the repository''s file: it chooses the driver, the runtime among the three, the relay image, the relay''s trust roots (certificates only, after this item), where output and work directories go, and with the hyperv driver the base image fetched into the user''s cache, which outlasts the run. The protection in every case is to name the file: --config, or WARDEN_CONFIG once in the machine''s environment; under sudo, which drops the variable by default, --config or sudo --preserve-env=WARDEN_CONFIG.'
     options:
       - (a) nothing more than --config, WARDEN_CONFIG and the reference saying so; warden doctor and --verbose say which file was read; the default is silent on an ordinary run
@@ -87,35 +90,39 @@ questions:
       - '(c) as (b), but only when the file was found by default: less output for someone who names their file; a special case, and a log does not show which file a named run used'
       - '(d) refuse given values from a file found by default (the relay image, CA paths, the Hyper-V base image, a directory outside the working directory): it protects the unwary run, but it is a two-level rule (the file I named over the file I did not), which Jeff removed on 2026-11-15, and it refuses an executor''s own ./warden.toml until they pass --config ./warden.toml'
     recommended: (b) the one config line on every command that reads configuration, and no refusal by where the file was found
+    answer: '(b) A config: line on every command that reads configuration; nothing refused by where the file was found. As recommended. Answered 2026-11-15.'
   - id: a5
     kind: assumed
-    status: open
+    status: confirmed
     question: WARDEN_UPSTREAM_CA_CERTS when [relay] upstream_ca_certs is also set. Today the variable's paths are added to the file's list (cmd/warden/config.go), the one variable of six that does not replace its key; design-principles listed it for the design that touches it. This item writes the environment into ORCH-03 and UX-07 as a level that replaces.
     options:
       - (a) the variable replaces the key (GLOBAL-10), and while the transitional detection stands (a3), setting both is an error that says the meaning changed and to put every path in one of them; nobody gets fewer trust roots without being told; the error is raised on the commands that use the CA paths (build, shell, doctor), not on clean, setup or image prepare (UX-08 as amended)
       - (b) the variable replaces the key at once, with no error; someone who relied on the sum gets upstream TLS failures and has to work out why
       - (c) the append stays and is named as a merge in the reference and in Defaults and overrides, which GLOBAL-10 allows; no behaviour changes, and the environment is then a level that replaces for five variables and adds for one
     recommended: (a) the variable replaces the key, with the transitional error when both are set
+    answer: (a) The variable replaces the key; both set is a transitional error on build, shell and doctor. As recommended. Answered 2026-11-15.
   - id: a6
     kind: assumed
-    status: open
+    status: confirmed
     question: 'How warden finds its source tree, to build the relay, warden-io and the holder and to find the relay VM assets (F9). Today driver.ModuleRoot walks up from the executable and then from the working directory, whatever the version. So a warden that does not have what it needs beside it, run in a repository that declares module github.com/buildwarden/buildwarden, builds the relay and warden-io from that repository: a development warden outside its tree, and also an installed release with a VM driver (the release ships no Linux or Windows guest binary under the name looked for) or with relay_image = "dev".'
     options:
       - '(a) from the executable only, and the module line matched whole; make build puts dist/warden in the tree with the guest binaries beside it, which is how CONTRIBUTING, CI and the native sessions run it, so nothing they do changes; what stops working: go run ./cmd/warden, a go-installed development warden, and an installed release used with a VM driver or with relay_image = "dev" from inside a checkout; each gets an error that says to run make build and use dist/warden; four tests in two drivers'' packages get the tree named once per package by a TestMain; no new surface'
       - (b) as (a), plus a variable (WARDEN_SOURCE_DIR) that names the tree and is used exclusively, so go run, go install and a release pointed at a checkout keep working for someone who sets it; one more variable outside the reference's knobs (UX-07), and one more thing the environment can point at code
       - '(c) the tree the binary was compiled from (the path the compiler recorded): nothing to set and go run works; it fails under -trimpath, and a binary that reads its own build paths is magic (GLOBAL-11)'
     recommended: (a) from the executable only, with no new variable
+    answer: 'None of the options. Jeff, 2026-11-15: "So warden shouldn''t need its own source directory for anything after componentization.  It should instead fully be based on pre-compiled existing binaries/artifacts which are managed and installed and it may have development tooling for helping with that, but it does not manage any compilation.  Those are purely development processes". Asked what this fix does now: "Remove compilation now.  warden looks for necessary artifacts  to be on PATH and searches its own directory if they''re not found or not on or above a minimum version". Asked where that is built: its own security item, started now and designed in parallel; project-config-trust keeps the small lookup fix (the tree is found from the executable only, option (a)), so the hole closes with its merge and K1 is not held behind native validation; the new item then removes the tree lookup and every go build.'
   - id: a7
     kind: assumed
-    status: open
+    status: confirmed
     question: 'How the queue holds this item behind runtime-cli-project-path''s merge. Both edit LoadConfig and the configuration reference, and this one edits UX-08 as that one leaves it. follows does not fit: wf next holds only a queued item behind the item it follows, this item is in progress, and the field would re-class it as a fix of that item. A blocking question raised by Design would hold Design itself (phase 1 is not done with one open), and with it the design review.'
     options:
       - (a) the design review, when it approves, raises a blocking question that names the merge (resume when runtime-cli-project-path's PR has merged), LOOP-04's form of a wait applied to an item in this repository; the loop then takes none of this item's steps and Jeff answers it once that PR is merged, so Plan and Implement start from a main that has it
       - '(b) no hold: FLOW-05 takes the items in priority order (64 before 65), so this one is planned and implemented while that one waits for its merge, and meets it in consolidation (FLOW-10), which then has real work in LoadConfig, the reference and UX-08 and may send it back to Implement'
     recommended: (a) a blocking question naming the merge, raised by the design review when it approves
+    answer: '(a) Hold until runtime-cli-project-path merges: on approval the review raises a blocking question naming that merge. As recommended. Answered 2026-11-15.'
   - id: a8
     kind: assumed
-    status: open
+    status: confirmed
     question: 'What an empty --config or WARDEN_CONFIG means. warden --config "$CFG" build with CFG unset passes an empty value; the next source down is in the end ./warden.toml, which in someone else''s repository is the file the executor meant not to use. For --driver and --runtime, where an empty value is "not set" today, the next source is not an untrusted file. (The other edges of the lookup are settled by rules and are in Decision 1: a named file that cannot be read is an error, GLOBAL-10; a ./warden.toml that exists and cannot be read is an error, GLOBAL-11; --config is a global flag, UX-05; reading no settings is done by naming an empty file.)'
     options:
       - (a) --config given with an empty value is an error; an empty WARDEN_CONFIG is not set, as every empty WARDEN_* variable is today; the typing mistake on the command line is caught; WARDEN_CONFIG="$CFG" with CFG unset still reads ./warden.toml, which the config line shows and the Security note lists as remaining
@@ -123,9 +130,10 @@ questions:
       - '(c) both are "not set", as an empty --driver, --runtime and WARDEN_CTR_CLI are: one meaning of empty everywhere, and the silent hand-over to the repository''s file for the flag as well'
       - '(d) empty means "read no file": a typing mistake then builds with the defaults and not with the repository''s file, also without a word'
     recommended: (a) an empty --config is an error; an empty WARDEN_CONFIG is not set
+    answer: (a) An empty --config is an error; an empty WARDEN_CONFIG counts as not set. As recommended. Answered 2026-11-15.
   - id: a9
     kind: assumed
-    status: open
+    status: confirmed
     question: What a path named as an upstream CA ([relay] upstream_ca_certs, WARDEN_UPSTREAM_CA_CERTS) may hold. A path is a file or a directory; of a directory, the files ending in .pem, .crt or .cer are read, one level deep. Today the bytes of each file are sent to the relay in its claim whatever they are, the relay uses the PEM certificates it can parse and skips the rest without a word, and the files are read only when the relay is claimed, after the output directory, the work directory and the relay exist. With the default ./warden.toml in someone else's repository, and a relay image the same file chooses, that sends any file the user can read off the host.
     options:
       - '(a) certificates only, one rule per file, the same for a file named directly and for each file read from a named directory, checked before anything is created: text outside PEM blocks (a distribution bundle''s comments) is allowed and not sent; an error naming the file for no PEM certificate, a certificate that does not parse, or any other PEM block; an error naming the directory when it holds no .pem, .crt or .cer file. What works today and stops: a file that holds a certificate and its private key (sent whole today); a directory that also holds a DER-encoded .crt or .cer, and a bundle with one certificate Go''s parser refuses (both skipped by the relay today, so the build ran without the root the user thought was added)'
@@ -133,24 +141,27 @@ questions:
       - '(c) send the certificates and drop everything else without an error: a combined file keeps working; a path that names the wrong file sends nothing and says nothing'
       - '(d) leave it: the file is the executor''s choice; the early read is still made'
     recommended: '(a) certificates only, per file, anything else an error naming the file (GLOBAL-10: a provided value that cannot be used is an error that names it and its fix)'
+    answer: 'None of the options as written. Jeff, 2026-11-15: "send valid pem certificates, log to stderr which files are specifically sent versus skipped with reason". Follow-up 1 (what is still an error): a named path that does not exist or cannot be read, and also a named path that yields no certificate at all; everything else is skipped with a logged reason. Follow-up 2 (how much is logged): every skipped file gets a line with its reason on every run; sent files get one line per configured path with the count; the per-file list of what was sent appears with --verbose.'
   - id: a10
     kind: assumed
-    status: open
+    status: confirmed
     question: May --config or WARDEN_CONFIG name ~/.config/warden/config.toml itself, and which fix does the transitional message give first? Jeff's decision 4 is an error "saying to move its settings into warden.toml or the environment"; keeping the old path in use by naming it is the design's own addition. It is not a second level (one file is read), and under every option a per-user file can stay in use for good, because decision 2 lets WARDEN_CONFIG name any file; the options differ in whether it may stay at the old path and in what the message says first.
     options:
       - '(a) the error does not fire when the named file is that file, and the message gives that first ("to keep using this file, set WARDEN_CONFIG=..."): one line in a shell profile and nothing moves; it reads as the user-level file surviving under another name'
       - (b) the error does not fire when the named file is that file, and the message leads with Jeff's words (move the settings into the warden.toml you build with, or into the environment) and gives naming the file second; a file the executor names is the config file whatever its path, so no path is special
       - '(c) no exemption: while the detection stands that path is an error even when it is the file named, and the message says only to move the settings; nearest to the decision as worded; someone who wants a per-user file moves it to another path and names it, and one path cannot be named until 1.0 and can be afterwards'
     recommended: (b) the exemption stays, and the message leads with moving the settings
+    answer: (b) Naming that file is allowed; the message leads with 'move its settings'. As recommended. Answered 2026-11-15.
   - id: a11
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Where the defects this item found and does not fix are recorded (design: What this item does not do). Four are not security matters: [relay] system_ca_bundle = false alone does nothing; --no-compress, -v and WARDEN_VERBOSE can only turn a setting one way; a mistyped local [vm] windows_image gives an HTTP error; the hyperv and qemu drivers read undocumented variables. Two reach the host from the build context without any config file: a work directory placed inside the build context (--tmpdir . or [build] tmpdir) is served to the build by the collector; and a Dockerfile''s FROM value reaches the container runtime''s command line unchecked (FROM --platform=... makes the option the image). The design agent may edit only its own queue item.'
     options:
       - (a) the session that records this design's review appends the four observations to configuration-bugfixes' source (queued, on hold behind the freeze, no design yet) and files the two others through intake as one security item, proposed slug workdir-in-context, whose source carries both; nothing waits on either
       - '(b) this item traces and fixes the two security findings itself: they are in driver/ and the collector, not in configuration, and the item grows by two fixes in every driver and a blocking native validation'
       - (c) they stay recorded in this design only
     recommended: '(a) the design-review session records them: four to configuration-bugfixes, two to a new security item through intake'
+    answer: '(a) Filed now: the four observations appended to configuration-bugfixes'' source, the two security findings filed through intake as one item. As recommended. Answered 2026-11-15.'
 history:
   - at: 2026-11-15T20:14:52Z
     by: human/jeff
@@ -179,3 +190,42 @@ history:
   - at: 2026-11-15T21:32:26Z
     by: cloud/20261112T230554Z
     event: entered phase 2 (plan)
+  - at: 2026-11-15T21:39:59Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-15T23:39:59Z
+  - at: 2026-11-15T21:39:59Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: (b) A config: line on every command that reads configuration; nothing refused by where the file was found. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T21:39:59Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: (a) The working directory, always. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T21:39:59Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: (a) None added. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T21:50:13Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: (a) At 1.0. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T21:50:13Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: (a) The variable replaces the key; both set is a transitional error on build, shell and doctor. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T21:55:11Z
+    by: human/jeff
+    event: 'assumed question a6 confirmed: None of the options. Jeff, 2026-11-15: "So warden shouldn''t need its own source directory for anything after componentization.  It should instead fully be based on pre-compiled existing binaries/artifacts which are managed and installed and it may have development tooling for helping with that, but it does not manage any compilation.  Those are purely development processes". Asked what this fix does now (interim lookup fix with the goal recorded; remove compilation now; interim only): "Remove compilation now.  warden looks for necessary artifacts  to be on PATH and searches its own directory if they''re not found or not on or above a minimum version".'
+  - at: 2026-11-15T21:55:11Z
+    by: human/jeff
+    event: 'assumed question a9 confirmed: None of the options as written. Jeff, 2026-11-15: "send valid pem certificates, log to stderr which files are specifically sent versus skipped with reason". Follow-up 1 (what is still an error): a named path that does not exist or cannot be read, and also a named path that yields no certificate at all; everything else is skipped with a logged reason. Follow-up 2 (how much is logged): every skipped file gets a line with its reason on every run; sent files get one line per configured path with the count; the per-file list of what was sent appears with --verbose.'
+  - at: 2026-11-15T21:55:11Z
+    by: human/jeff
+    event: 'assumed question a7 confirmed: (a) Hold until runtime-cli-project-path merges: on approval the review raises a blocking question naming that merge. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T21:56:46Z
+    by: human/jeff
+    event: 'assumed question a8 confirmed: (a) An empty --config is an error; an empty WARDEN_CONFIG counts as not set. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T21:56:46Z
+    by: human/jeff
+    event: 'assumed question a10 confirmed: (b) Naming that file is allowed; the message leads with ''move its settings''. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T21:56:46Z
+    by: human/jeff
+    event: 'assumed question a11 confirmed: (a) Filed now: the four observations appended to configuration-bugfixes'' source, the two security findings filed through intake as one item. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T21:56:46Z
+    by: human/jeff
+    event: 'assumed question a6 confirmed: None of the options. Jeff, 2026-11-15: "So warden shouldn''t need its own source directory for anything after componentization.  It should instead fully be based on pre-compiled existing binaries/artifacts which are managed and installed and it may have development tooling for helping with that, but it does not manage any compilation.  Those are purely development processes". Asked what this fix does now: "Remove compilation now.  warden looks for necessary artifacts  to be on PATH and searches its own directory if they''re not found or not on or above a minimum version". Asked where that is built: its own security item, started now and designed in parallel; project-config-trust keeps the small lookup fix (the tree is found from the executable only, option (a)), so the hole closes with its merge and K1 is not held behind native validation; the new item then removes the tree lookup and every go build.'

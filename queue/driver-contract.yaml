@@ -1,6 +1,6 @@
 feature: driver-contract
 title: 'The driver command contract, its suite and the kit: warden runs a driver binary, the container driver is one, and every build runs through warden''s build sequence (componentization K1)'
-priority: 67
+priority: 69
 status: in_progress
 round: feature
 phase: 2
@@ -489,3 +489,9 @@ history:
   - at: 2026-11-15T21:35:00Z
     by: human/jeff
     event: 'assumed question a8 confirmed: (a) All eleven, as recommended; and (i) for FLOW-02: K1 changes nothing in FLOW-02, and loop-parallel carries the two bullets (Jeff, in loop-parallel''s sitting the same day: ''Yes, carry it here''). Each rule change approved by name. Answered 2026-11-15.'
+  - at: 2026-11-15T21:57:17Z
+    by: human/jeff
+    event: 'priority 67 -> 68 (renumbered by wf new: prebuilt-artifacts queued at 66)'
+  - at: 2026-11-15T21:57:17Z
+    by: human/jeff
+    event: 'priority 68 -> 69 (renumbered by wf new: workdir-in-context queued at 67)'
