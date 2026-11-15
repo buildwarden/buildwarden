@@ -7098,8 +7098,8 @@ Not settled by this fold-in, and said where it arises:
 
 - Of the two designs K1 now leans on, one is approved and neither is
   merged. Their commits appeared while this fold-in was being written,
-  and it was brought into line with them. `runtime-cli-project-path` was
-  approved at `a2afd08` (below). `project-config-trust`, read at
+  and it was brought into line with them. `runtime-cli-project-path` has
+  its approval, at `a2afd08` (below). `project-config-trust`, read at
   `539fd38`, is still in Design. What K1 takes from each is in the new
   section. `project-config-trust` proposes that a config file found in
   the working directory may decide what a named file decides (its
