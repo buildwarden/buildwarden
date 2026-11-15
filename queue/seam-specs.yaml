@@ -186,7 +186,7 @@ questions:
     answer: (A) bootstrap-config. Jeff, design review, 2026-11-15.
   - id: a14
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Native validation (FLOW-09). Reworded 2026-11-14: nothing this item builds can run the relay suite on macOS (the relay targets and their sandbox are Linux only), so the macos-vz gap is deferred, not open.'
     options:
       - 'nothing blocking; two tracked gaps, both deferred: macos-vz until the exec launcher has a macOS form (the relay suite against the host-mode relay on macOS) and qemu-any until a VM launcher exists (the relay suite against the Go relay VM image)'
@@ -194,9 +194,10 @@ questions:
       - block on macos-vz (needs the macOS launcher built here)
       - no gaps recorded
     recommended: 'nothing blocking; two tracked gaps, both deferred: macos-vz until the exec launcher has a macOS form (the relay suite against the host-mode relay on macOS) and qemu-any until a VM launcher exists (the relay suite against the Go relay VM image)'
+    answer: (A) Nothing blocking; two tracked gaps, both deferred (macos-vz and qemu-any). Jeff, design review, 2026-11-15.
   - id: a15
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The release step, and what it rests on (Decision 12; reworded 2026-11-14). After Review, Jeff merges the specs pull request (FLOW-08), a release is tagged and the pin moves to it. wf records one branch and one PR per item, in this repository, so it cannot see that merge. Two sentences of the rules as they stand do not provide for a queue step that waits for it: FLOW-04''s list of what a human step is for (blocking questions, the design review, escalations), and FLOW-08''s "There is no sign-off step in the queue: the loop sees the merge". The merge remains the sign-off; the step is only the queue''s record of a merge wf cannot see. A feature''s design may not declare a change to a loop rule (FLOW-14 as amended, LOOP-09), so neither is declared. LOOP-09, on main since 2026-11-15, gives every change to a loop rule to a process item and provides for no exception granted in a feature''s design review; whether an exception that the owner of the rules grants for one item is within it is his to judge at this review, and the options other than the first ask for none. LOOP-04, merged with it, holds an item that waits on another component''s release with a blocking question that names the release (FLOW-07), which is the second option''s mechanism. It does not bind here: the specs repository has not adopted the contract and is not a component (LOOP-08), and the release is this item''s own product, made by the merge of its own pull request there; what the queue lacks is a way to see that merge. The first option is still recommended, for two reasons neither rule answers: the step is in the queue from the design review, and the release can be made as soon as Review is done, before the item takes the PR slot (the second option raises its question in Publish, when the slot is held). If Jeff judges that the exception is not one to grant in a feature''s review, the second option is what the merged rules already provide for, and Design then removes f6-release-specs. loop-repository (P1) makes the step unnecessary: wf then records the specs PR and confirms its merge. If Jeff wants the rules to provide for such a step meanwhile, the FLOW-04 and FLOW-08 clauses are a process item''s: the design proposes loop-parallel (tracked items), loop-native-lead being the item that is to amend FLOW-04 (loop-parallel''s draft design, read at 486ac8f and not reviewed, proposes both clauses as its a6); holding a human step back until its phase is a wf and FLOW-04 change for the same item. Reworded again after the independent review. Citations brought up to the merged rules on 2026-11-15, with the sentence on LOOP-09; the sentences on LOOP-04 and on loop-parallel''s draft added the same day, on the independent review of that update; the options and the recommended answer are unchanged.'
     options:
       - 'a human queue step f6-release-specs in phase 6, as an exception to those two sentences (FLOW-04''s list and FLOW-08''s "no sign-off step in the queue") that this review grants for this item only: Jeff merges the specs pull request (FLOW-08, his alone); the tag is then pushed and the pin moved on this branch (make pin-specs, make test, make lint, push) by him or by the attended session on his word; the step needs f2-design-review, is not to be done before Review is done (wf cannot hold a human step back until its phase), and the PR''s pin job is the backstop'
@@ -204,30 +205,34 @@ questions:
       - 'no step: f6-open-pr opens the PR on the pseudo-version, the pin job fails, and FLOW-11''s escalation asks Jeff for the release'
       - S1 waits for loop-repository
     recommended: 'a human queue step f6-release-specs in phase 6, as an exception to those two sentences (FLOW-04''s list and FLOW-08''s "no sign-off step in the queue") that this review grants for this item only: Jeff merges the specs pull request (FLOW-08, his alone); the tag is then pushed and the pin moved on this branch (make pin-specs, make test, make lint, push) by him or by the attended session on his word; the step needs f2-design-review, is not to be done before Review is done (wf cannot hold a human step back until its phase), and the PR''s pin job is the backstop'
+    answer: (A) A human step f6-release-specs, as an exception to FLOW-04's list and FLOW-08's sentence, granted by this review for this item only. Jeff, design review, 2026-11-15.
   - id: a16
     kind: assumed
-    status: open
+    status: confirmed
     question: What Part A of the collector specification is normative for (Decision 13). The umbrella's review (its a2) left the collector's storage boundary to the first alternative collector.
     options:
       - 'the wire only: the requests a collector accepts, its replies and their order; the disk layout is specified as the disk collector''s, and reading stored bytes back is something a target file may give the harness, not a requirement on a collector'
       - 'an object model for any collector: each output is an object a reader can fetch by its name with the bytes sent'
     recommended: 'the wire only: the requests a collector accepts, its replies and their order; the disk layout is specified as the disk collector''s, and reading stored bytes back is something a target file may give the harness, not a requirement on a collector'
+    answer: (A) The collector's outputs specification is normative for the wire only; the disk layout is the disk collector's and read-back is a target-file option. Jeff, design review, 2026-11-15.
   - id: a17
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Which relay files tier 1''s seam list names (design: Tier 1''s seam list; new 2026-11-14). relay/relay.go, relay/proxy.go and cmd/relay/ (all but dhcp.go) hold part of seams 1 and 3 together with most of the rest of the relay. Under either option the check asks only that the pin moved, to any release.'
     options:
       - 'leave them off: a change there needs no pin move; the pinned suite fails a change in behaviour a case tests, and an addition no case tests is caught only by Review''s judgment of GLOBAL-08'
       - list them; every change to the relay's core then needs a pin move or a Tier1-Allow trailer saying why it is not a seam change
     recommended: 'leave them off: a change there needs no pin move; the pinned suite fails a change in behaviour a case tests, and an addition no case tests is caught only by Review''s judgment of GLOBAL-08'
+    answer: (A) relay/relay.go, relay/proxy.go and cmd/relay/ stay off tier 1's seam list. Jeff, design review, 2026-11-15.
   - id: a18
     kind: assumed
-    status: open
+    status: confirmed
     question: 'What make conformance runs when no target is named (design: Defaults and overrides; new 2026-11-14). The relay targets run only on Linux; the disk collector''s runs on Linux, macOS and Windows.'
     options:
       - every target whose file declares the host's OS, printing each target left out and why; a target named in TARGETS that cannot run on the host is an error, and each CI job names its targets
       - every target in the directory; the default then fails on macOS and Windows, where a developer has to name collector-disk
     recommended: every target whose file declares the host's OS, printing each target left out and why; a target named in TARGETS that cannot run on the host is an error, and each CI job names its targets
+    answer: (A) make conformance with no TARGETS runs the targets that declare the host's OS and prints each one it leaves out. Jeff, design review, 2026-11-15.
 history:
   - at: 2026-11-12T23:22:53Z
     by: human/jeff
@@ -325,3 +330,18 @@ history:
   - at: 2026-11-15T20:54:38Z
     by: human/jeff
     event: 'assumed question a13 confirmed: (A) bootstrap-config. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:58:02Z
+    by: human/jeff
+    event: 'assumed question a14 confirmed: (A) Nothing blocking; two tracked gaps, both deferred (macos-vz and qemu-any). Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:58:03Z
+    by: human/jeff
+    event: 'assumed question a15 confirmed: (A) A human step f6-release-specs, as an exception to FLOW-04''s list and FLOW-08''s sentence, granted by this review for this item only. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:58:03Z
+    by: human/jeff
+    event: 'assumed question a16 confirmed: (A) The collector''s outputs specification is normative for the wire only; the disk layout is the disk collector''s and read-back is a target-file option. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:58:03Z
+    by: human/jeff
+    event: 'assumed question a17 confirmed: (A) relay/relay.go, relay/proxy.go and cmd/relay/ stay off tier 1''s seam list. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:58:03Z
+    by: human/jeff
+    event: 'assumed question a18 confirmed: (A) make conformance with no TARGETS runs the targets that declare the host''s OS and prints each one it leaves out. Jeff, design review, 2026-11-15.'
