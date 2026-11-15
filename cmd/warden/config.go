@@ -239,6 +239,10 @@ func LoadConfig() (*Config, error) {
 			return nil, err
 		}
 	}
+	// TRANSITIONAL(one-config-file)
+	if err := formerUserConfig(path); err != nil {
+		return nil, err
+	}
 	if path != "" {
 		if err := decodeConfig(path, data, cfg); err != nil {
 			return nil, err
