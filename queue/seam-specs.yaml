@@ -119,7 +119,7 @@ questions:
     answer: (A) exec, oci and external launchers now; the VM-image launcher is built by the first item with a VM image to test. Jeff, design review, 2026-11-15.
   - id: a7
     kind: assumed
-    status: open
+    status: confirmed
     question: How this repository pins a specs release (Decision 7).
     options:
       - tools/conformance/go.mod, a nested module requiring the specs module at one version; a release tag on a pull request and on main, a pseudo-version only on a branch while work is in progress; this file is tier 1's contract path for the five seams
@@ -127,6 +127,7 @@ questions:
       - a vendored copy of the documents
       - a lock file and a download script
     recommended: tools/conformance/go.mod, a nested module requiring the specs module at one version; a release tag on a pull request and on main, a pseudo-version only on a branch while work is in progress; this file is tier 1's contract path for the five seams
+    answer: '(A) tools/conformance/go.mod names each specification''s module at a version (restated for a tag per specification, a8): released tags on a pull request and on main, an unreleased commit only on a branch in progress. Jeff''s remark when first asked: ''I assumed that a specific release of the specs themselves is coincident with the build of the conformance tools that test them''. Jeff, design review, 2026-11-15.'
   - id: a8
     kind: assumed
     status: confirmed
@@ -158,28 +159,31 @@ questions:
     answer: '(B) Two documents: the collector''s outputs and the collector''s inputs and signals are separate specifications. Departs from the recommendation (one document in two parts); the design is revised. Jeff, design review, 2026-11-15.'
   - id: a11
     kind: assumed
-    status: open
+    status: confirmed
     question: Whether this item builds a suite that runs warden-io initialize itself (the executor's side of seams 3, 5 and 6).
     options:
       - defer it to S2's item, which changes what initialize does; seams 5 and 6 get specifications here and EXEC-04's conformance stays the tests in cmd/warden-io until then. Seam 5 then has no suite when S1 is done, and S2's intake has to carry it (the umbrella's S2 row does not name it)
       - build it here for Linux guests in a container, with Windows and macOS guests as tracked gaps
     recommended: defer it to S2's item, which changes what initialize does; seams 5 and 6 get specifications here and EXEC-04's conformance stays the tests in cmd/warden-io until then. Seam 5 then has no suite when S1 is done, and S2's intake has to carry it (the umbrella's S2 row does not name it)
+    answer: (A) The executor's suite is deferred to S2's item; seam 5 has no suite when S1 is done and S2's intake carries it. Jeff, design review, 2026-11-15.
   - id: a12
     kind: assumed
-    status: open
+    status: confirmed
     question: 'What to do with the nineteen places where the code differs from a rule, its own comment or the rest of the protocol (design: Divergences found, D1 to D19; D5 and D14 are against GLOBAL-10 and D13 against EXEC-02; the design proposes which later item carries each).'
     options:
       - record each in its specification as the code behaves and list it under Known divergences; fix none here; the review may turn any into a follow-up item and says what kind of item it is under FLOW-20
       - fix them in this item (puts relay/, collector/ and cmd/warden-io/ in the diff, with GLOBAL-06 and every driver's native validation)
     recommended: record each in its specification as the code behaves and list it under Known divergences; fix none here; the review may turn any into a follow-up item and says what kind of item it is under FLOW-20
+    answer: (A) Record each divergence as the code behaves and fix none here; the review may turn any into a follow-up. Jeff, design review, 2026-11-15.
   - id: a13
     kind: assumed
-    status: open
+    status: confirmed
     question: Seam 6's name. The umbrella's seam table gives it none and its front-matter lists bootstrap-model, which is the BOOT-07 model.
     options:
       - bootstrap-config, added to GLOBAL-08's executor bullet and to tier 1's seam list
       - bootstrap-model
     recommended: bootstrap-config, added to GLOBAL-08's executor bullet and to tier 1's seam list
+    answer: (A) bootstrap-config. Jeff, design review, 2026-11-15.
   - id: a14
     kind: assumed
     status: open
@@ -309,3 +313,15 @@ history:
   - at: 2026-11-15T20:51:13Z
     by: human/jeff
     event: 'assumed question a10 confirmed: (B) Two documents: the collector''s outputs and the collector''s inputs and signals are separate specifications. Departs from the recommendation (one document in two parts); the design is revised. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:54:38Z
+    by: human/jeff
+    event: 'assumed question a7 confirmed: (A) tools/conformance/go.mod names each specification''s module at a version (restated for a tag per specification, a8): released tags on a pull request and on main, an unreleased commit only on a branch in progress. Jeff''s remark when first asked: ''I assumed that a specific release of the specs themselves is coincident with the build of the conformance tools that test them''. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:54:38Z
+    by: human/jeff
+    event: 'assumed question a11 confirmed: (A) The executor''s suite is deferred to S2''s item; seam 5 has no suite when S1 is done and S2''s intake carries it. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:54:38Z
+    by: human/jeff
+    event: 'assumed question a12 confirmed: (A) Record each divergence as the code behaves and fix none here; the review may turn any into a follow-up. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:54:38Z
+    by: human/jeff
+    event: 'assumed question a13 confirmed: (A) bootstrap-config. Jeff, design review, 2026-11-15.'
