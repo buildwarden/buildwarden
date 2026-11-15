@@ -369,10 +369,11 @@ or crashed builds. Only removes resources not associated with a currently
 running warden process, and nothing a later build would reuse: prepared and
 downloaded VM images, the Hyper-V relay boot disk and the support images stay.
 
-It removes leftover containers under every driver but `firecracker` and
-`hyperv`, so under those a runtime in effect that is not `finch`, `docker` or
-`podman` fails the command before anything is listed or removed
-([Configuration](configuration.md#the-container-runtime)).
+Under the container driver, `qemu` and `vz` it removes leftover containers,
+so there a runtime in effect that is not `finch`, `docker` or `podman` fails
+the command before anything is listed or removed
+([Configuration](configuration.md#the-container-runtime)); under
+`firecracker` and `hyperv` the setting is not read.
 
 With `--driver firecracker` it needs no container runtime: it kills VMMs
 recorded on a network slot that no build holds (left by a warden that was
