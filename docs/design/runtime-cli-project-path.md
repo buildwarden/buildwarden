@@ -509,7 +509,7 @@ source clause and a message of its own:
 | A supported runtime in another letter case or with `.exe` | `Docker`, `docker.exe` | the runtime is named in lower case, without an extension | the name: `docker` |
 | A path whose last element is a supported runtime (after the row above) | `/opt/homebrew/bin/docker`, `C:\Program Files\Docker\docker.exe`, `./tools/docker` | the runtime is named, not given as a path | the name; and that `warden` looks it up on `PATH`, so a runtime installed outside `PATH` needs its directory added there. No directory is printed |
 | `nerdctl`, alone or as a path's last element | `nerdctl`, `/usr/local/bin/nerdctl` | the container driver supports `finch`, `docker` and `podman` and no longer runs another runtime | one of the three; and that there is no supported way to use `nerdctl` with the container driver |
-| A path to anything else | `/usr/local/bin/docker-ci`, `./rt` | the container driver runs `finch`, `docker` or `podman` by name and no longer runs another program | one of the three; if the file only set variables for one of them (`DOCKER_HOST`, `DOCKER_CONTEXT`, `CONTAINER_HOST`), set those in the environment; and that there is no supported way to run a program of one's own as the runtime |
+| A path to anything else | `/usr/local/bin/docker-ci`, `./rt` | the container driver runs `finch`, `docker` or `podman` by name and no longer runs another program | one of the three; if the program only set variables for one of them (`DOCKER_HOST`, `DOCKER_CONTEXT`, `CONTAINER_HOST`), set those in the environment; and that there is no supported way to run another program as the runtime |
 
 For example:
 
@@ -1260,8 +1260,11 @@ fail, which they do on every host but their own. Reading: the four rows run
 `doctor` in a child process, the test binary re-executed (`os.Args[0]`),
 which is pure Go and needs nothing installed (TEST-01), and assert that its
 output holds no error about the runtime: neither the configured value nor
-`[runtime] cli`. `doctor` is read-only under every driver (read at
-`119a0e1`).
+`[runtime] cli`. `doctor` runs no build under any driver (read at
+`119a0e1`). It is not read-only under every driver, as this note first
+said: under `firecracker` its reflink probe makes the driver's work
+directory in the user cache and writes and removes probe files there
+(corrected at Consolidation, on the Review's finding S1).
 
 *Note C (task 16: the build from a project's file, tier 1).* The design
 writes `cli = "docker"`. The script runs on any host where a runtime answers
@@ -1560,7 +1563,225 @@ flags); and the outcome.
 
 ## Consolidation
 
-Filled in at Publish (FLOW-10, FLOW-15).
+Publish, 2026-11-15, on the branch at `ebfdd8a` (FLOW-10, FLOW-15).
+
+**`main` since the fork.** The branch forked at `897a4a8` (#118,
+alters-slot). One PR has landed since: #119, the Loop Contract (`ad4ea50`),
+merged into the branch during the design review (`33b25c4`). `main` is
+still at `ad4ea50`, so Publish's merge had nothing to do and made no merge
+commit. #119 and this branch change no file in common. What #119 asks of
+this item is met, as the design review's entry records: UX-08 is a project
+invariant (`ux-cli-config.md`) and not a loop rule, so a feature may amend
+it (FLOW-14 as amended, LOOP-09); `seams` is empty, so there is no
+**Specification changes** section and none is added here (LOOP-02); the
+item works only in this repository (LOOP-04); no entry of the profile
+names UX-08 or a check of it (PROFILE-01, searched again here).
+
+**The order of merging** (task 22). This item, then `project-config-trust`,
+then `driver-contract` (K1); `prebuilt-artifacts` after
+`project-config-trust`. None of the three is on `main`, so this item
+merges onto two config files and onto the code it was designed against:
+**One config file** and **What K1 has to keep** stand as written, and
+neither of their "if it were to merge first" cases applies.
+
+**What each sibling inherits.** Each design names this item; they were
+read on their branches, which this step does not edit.
+
+- **`project-config-trust`** (in its design review; read at `0bda630`).
+  It keeps the rule and its code untouched: `containerRuntimes`,
+  `supportedRuntime`, `resolveRuntime`, the permanent error
+  (`unsupportedRuntime`), and `runtime_former.go` with its marker. It
+  reworks what this item wrote for two files, by the names they have on
+  the branch: the marker `unsetCLI` and the keep and put-back around the
+  project file's decode in `LoadConfig`; the user file as a value of
+  `RuntimeConfig.CLISource`, and with it the error that names that file
+  by its path; in `configuration.md`, the user-level file in the
+  precedence and "the user-level file's value" under the empty value; the
+  overview's "(`./warden.toml`, then the user's file)", which becomes
+  "(the config file)"; and in `runtime_test.go` the `user` level of the
+  tables (`nameRuntime`, `inRuntimeLevels`), `TestRuntimeUnsetMarker`, and
+  the cases of a user file under a project file. The fourth row of this
+  design's rule table goes with them. The helper those tests share is
+  `main`'s `inConfigFiles` (`vmdns_test.go`), which this branch extended
+  to clear `WARDEN_CTR_CLI` and `WARDEN_DRIVER` and to reset the flags a
+  case sets; its temporary `HOME` stays. The guide pages added in phase 5
+  (`drivers.md`, `first-build.md`, `installation.md`) name no user-level
+  file and need nothing from that item. UX-08 as merged here names no
+  level of config file, so that item changes no word of it; it amends
+  UX-07, the order UX-08 points to. Its own transitional code copies this
+  item's shape (one file, one marker, removed at 1.0) and gets its own
+  removal item. Its hold behind this item's merge (its a7) is a blocking
+  question its review session raises; it is not in the queue yet.
+- **`driver-contract`** (K1; approved at `a6c8f0b`, held behind
+  `project-config-trust`'s merge). It carries **What K1 has to keep** as
+  its own hand-off, the stricter point 4 included (the runtime read back
+  from the state file is compared with the list again), so point 8 has
+  nothing left open. What moves into the container driver, by name: the
+  list and its check (`containerRuntimes`, `supportedRuntime`,
+  `runtimeNames`), `DetectRuntime`, `resolveRuntime`'s three outcomes,
+  `unsupportedRuntime`, and `runtime_former.go` with its call and its
+  tests under the same marker; `CLISource` becomes the kit's label of the
+  source. The tables of `runtime_test.go` move with the code and gain the
+  rows for `[driver.container] cli`. Test 0 of `test-integration.sh` runs
+  the built `warden` and passes there unchanged but for `clean` under
+  `qemu` and `vz` (K1's Behaviour 5). UX-08: K1 edits the last paragraph
+  only, and the paragraph on this branch is byte for byte the one K1's
+  design quotes as current (compared here), so K1's condition for making
+  that edit holds once this merges. Left for K1 in `driver/container`,
+  which this item does not edit: the `nerdctl` arm of `copyExecutor`,
+  which no value can reach through `warden` any more. Three fixed
+  strings in `cmd/warden` name the three runtimes beside the list and
+  stay as they are, as the design says of the flag's help: the help of
+  `--runtime`, `warden doctor`'s help, and `DetectRuntime`'s "tried
+  finch, docker, podman". They move with the driver.
+- **`prebuilt-artifacts`** (in Design; read at `36e8051`). It shares no
+  code with this item. It takes the convention (an error at once for
+  what stops working, the detection of the old state kept until 1.0
+  under a `TRANSITIONAL(<name>)` marker) and UX-08 as amended, for when
+  its lookup is validated.
+- **`configuration-bugfixes`** (on hold): as **The same defect
+  elsewhere** says. F8 no longer reaches `[runtime] cli`; F6 and F7
+  stand.
+
+**A convention, not made a rule here.** "A change that refuses what
+worked before is an error at once with a message that says what to
+change, and the code that words it is transitional, in one file under one
+marker, removed at 1.0" is Jeff's answer to a3 and a4 for this item.
+`project-config-trust` follows it by his answer in its own review, and
+`prebuilt-artifacts`' draft proposes it. K1 does not for its renamed
+keys, which work and warn as UX-03 says; its design notes that a release
+then has two conventions. It is written in no rule: the only rule change
+this review approved is UX-08, and UX-03 is not edited (FLOW-10,
+FLOW-14). Whether it becomes a rule is Jeff's to decide;
+`project-config-trust`'s design leaves the same question to the review
+that is asked first. Nothing is filed for it here.
+
+**Versioned seams** (GLOBAL-08). None: `seams` is empty, the branch
+changes no seam, and #119 changed none.
+
+**Rule changes.** UX-08, as approved at `a2afd08`: the block in
+`ux-cli-config.md` and the removed line of `tools/tier1/rules.yaml`
+(commit `8c4c4fc`). Nothing else under `docs/development/`,
+`tools/tier1/`, `tools/workflow/` or `.claude/` is in the diff. The other
+citation of UX-08 on `main`, GLOBAL-10's, still holds for a value a run
+uses.
+
+**Terminology.** Code, reference, guides, `overview.md` and this design
+use the same terms: the *container runtime* is the program and the
+*container driver* its consumer; a runtime is *supported* or is refused;
+what is checked is the *value in effect*; a *level* is a place in the
+precedence, the word UX-07 and GLOBAL-10 use on `main`, and the *source*
+is where the value in effect was named (`CLISource`, as `main`'s
+`BuildLinkSource`); the error has a *permanent* part and a *transitional*
+part. Wording fixed here:
+
+- *The two phrases the Review left.* The transitional message for a path
+  to another program says "if the program only set variables" and "no
+  supported way to run another program as the runtime"; this design's
+  table said "the file" and "a program of one's own". The binary's words
+  are kept and the table's fourth row now has them. The message's first
+  clause already names a file (`[runtime] cli in warden.toml`), so "the
+  file" in its fix would read as the config file, and "another program"
+  repeats the words of the message's own first line. The tests pin the
+  binary's text (`runtime_former_test.go`).
+- *Note B.* Its sentence "`doctor` is read-only under every driver" was
+  wrong for `firecracker` and is corrected in place (Review S1).
+- *The marker is in five places, not four.* The Guide added an upgrade
+  note to `installation.md` that links to the transitional subsection of
+  the reference, so it carries `TRANSITIONAL(runtime-former-values)` and
+  goes with it. `runtime_former.go`'s header comment said "all four" and
+  now lists the five: the file, its call in `unsupportedRuntime`, its
+  test file, the subsection "A path, or another runtime" of
+  `configuration.md`, and that note. **Where the transitional part
+  lives** above lists the first four.
+
+**Plan notes A to D, and what Implement did beyond the plan** (FLOW-06;
+each is in the commit log, none is silent).
+
+- *Note A* stands, with the sentence Implement added on the Review's
+  word (`9af1a71`): tier 1 skips `clean --driver hyperv` on a Windows
+  host too.
+- *Note B* stands as corrected above. The four `doctor` rows still do
+  not move the user cache directory; that is Review S1, below.
+- *Note C* stands: the tier-1 build names the runtime `warden doctor`
+  reports on the host, which is `docker` on the CI runner.
+- *Note D* stands. The Security note's list for the TEST-08 suite is not
+  added to Arm A, because the corpus is not built
+  (`docs/development/security-suite.md`, "Remaining build work"), and no
+  queue item builds it, so there is nothing to hand the list to. It stays
+  in this design, which the item that builds the corpus finds by its
+  `concepts` (SEC-03, FLOW-12). Its proof is asserted in tiers 0 and 1.
+- *Task 12, widened.* The never-run cases also call `runBuild` and
+  `runShell`, beside `newDriver` (`8e41bd8`): more coverage, the same
+  assertions.
+
+**FLOW-15 sweep.**
+
+- *Dead code.* `make deadcode` on linux, darwin and windows, exit 0: 66
+  lines (17, 22 and 27), the same list as `main` at `ad4ea50`, compared
+  line for line. None is in `cmd/warden` or in a file this branch
+  touches. The 13 functions unreachable on all three are `main`'s: ten
+  in `driver/vz`, FLOW-15's cgo case, which is checked on a macOS host,
+  and three exported methods of the library packages `relay/` and
+  `collector/`. The branch adds no unreachable function and removes
+  none.
+- *Duplication.* One list (`containerRuntimes`) serves detection, the
+  check, the error's names and the transitional messages; `DetectRuntime`
+  lost its own literal. `Runtime.CLI` has one reader outside
+  `LoadConfig` and `resolveConfig`, which set it: `resolveRuntime`, with
+  the error it builds. No
+  second test helper was added for the two config files: the new tests
+  use `main`'s `inConfigFiles`. `main` also has `inConfigDirs`
+  (`buildlink_test.go`), an older helper for `build_link` alone; it
+  predates the branch, and `project-config-trust` turns the two-file
+  cases of both into one-file cases, so the two are not merged here.
+  `shipPrograms`
+  (programs in a project directory that write a marker) and `main`'s
+  `fakeRuntime` (a fake on a `PATH` of its own) do different jobs.
+- *The overview.* `overview.md`'s `warden build` has the five lines on
+  how the container driver's runtime is resolved and refused, and the
+  note on `warden clean`; both match `resolveRuntime` and `runClean` as
+  built. No other component's flow changes.
+
+**Review findings for the PR body** (report
+`reports/runtime-cli-project-path/9af1a7173fa5.md`: 0 MUST, 0
+MUST-review, 2 SHOULD, both in test code and both open, for the human to
+acknowledge at merge, FLOW-08).
+
+- *S1 (TEST-01), open.* `TestDoctorIgnoresAnUnusedRuntime` moves `HOME`
+  but not the user cache directory, so with `XDG_CACHE_HOME` set
+  `make test` leaves `warden/firecracker/work` in the caller's cache.
+  Fix: set `XDG_CACHE_HOME` and `LocalAppData` for the child, as the
+  `clean` rows do.
+- *S2 (TEST-02), open.* Test 3 of `test-integration.sh` runs its build
+  with the caller's environment; where `WARDEN_CTR_CLI` is set, the
+  file's value is never read and the case passes for the wrong reason.
+  Fix: run that build and its `doctor` call under
+  `env -u WARDEN_CTR_CLI -u WARDEN_DRIVER`. On the CI runner neither
+  variable is set.
+- *For the human's eye, not a finding.* The transitional message for a
+  path in a project's file does not end with "`--runtime` with one of
+  those replaces it for one command", as the permanent error for a file
+  does. That is the design's table as approved, and the reference says
+  it. Adding the clause would be a wording change for Design.
+
+**Validation.** `make lint`, `make test` and `make enforcement` pass at
+this step's head. `make integration-test` has not run for this branch:
+no container runtime answers on the host Publish runs on, and the PR's
+`integration` workflow is its first run (Test 0 of the script passed on
+its own at Review, 12 of 12). No host blocks merge (FLOW-09). The two
+tracked gaps are open in the native-gap backlog, as task 22 asks:
+`runtime-cli-project-path-windows` (`container-any`) and
+`runtime-cli-project-path-finch` (`macos-finch`).
+
+**Follow-ups.** Consolidation found no regression that `main` already
+has and files none (FLOW-09). The removal of the transitional detection
+at 1.0 (a4 (d), task 22) is filed by the attended session that runs this
+step's dispatch, not by this step: a queue item on hold until the change
+that prepares 1.0, whose `source` names the marker
+`TRANSITIONAL(runtime-former-values)`, the five places it is in, and
+that condition. It is its own item and does not `follow` this one: the
+design asks for no more, and it has nothing to fix.
 
 ## Rollback notes
 
