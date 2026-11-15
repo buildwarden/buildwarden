@@ -377,8 +377,8 @@ say.
       than the human agreed to.
 13. **The refresh is one step, `f6-refresh`, taken by the cloud, seeded
     whenever `main` has moved past an open PR** (a10), or past a feature
-    that merged `main` in Publish and has not finished Publish. It merges `main`,
-    runs the gates, and carries the consolidation pass and the sweep over
+    that merged `main` in Publish and has not finished Publish. It
+    merges `main`, runs the gates, and carries the consolidation pass and the sweep over
     what landed. It pushes only while the PR is still open and the remote
     branch is where it found it. It does not queue a native validation
     again. Since Decision 21 it is the gate before every merge after the
@@ -2080,7 +2080,8 @@ check, *waits for a refresh*.
 
    *Whose it is.* Jeff's. No agent changes a trunk's protection
    (FLOW-08, as amended below), which on GitHub is the branch
-   protection rule and the rulesets that apply to `main`. `main` has none today: branch protection reads "Branch
+   protection rule and the rulesets that apply to `main`. `main` has
+   none today: branch protection reads "Branch
    not protected", there is no ruleset, and `allow_update_branch` is off
    (read on 2026-11-15, after #119 merged; `loop-contract`'s a21 had
    asked for the protection before that merge). `rules.yaml` names
@@ -2131,8 +2132,9 @@ the fix when `main` is red (a16). Nothing reverts or blocks it.
 - *The daily tick.* After it confirms merges and records `main`'s CI,
   `wf stale` seeds a refresh on each open PR that is behind, and the run
   takes those steps first (FLOW-05's class 1). After the run every open
-  PR is current again, unless its refresh failed on a red `main` or sent
-  the item back. Which PRs get one is a10.
+  PR is current again, unless `main` is red, when no refresh is taken
+  (**`main`'s CI**), or its refresh sent the item back. Which PRs get
+  one is a10.
 - *An attended session, on request.* `/workflow-tick attended <item>`
   takes that item's refresh step. `workflow-human` offers it after each
   merge Jeff makes in the session (below).
@@ -2321,7 +2323,8 @@ and, when a PR is recorded, the design archived on the branch and the
 PR's CI green. For a process item:
 `main` merged, the branch pushed, the design archived, CI green. If `main`
 moved again meanwhile, the check fails, the step is released, and the next
-run takes it again.
+run takes it again; that second claim counts against the item (a10
+(d)).
 
 **What sends the item back.** The pass in step 3 is consolidation, and
 FLOW-10 already says what it does with real work: to Implement
@@ -2425,11 +2428,11 @@ loop reads it (Decision 22).
 - **What that costs.** While `main` is recorded red no open PR that is
   behind it can be made ready, whether its gates would reproduce the
   failure or not; `QUEUE.md` says so beside the red `main`. For a
-  failure that does not reproduce (a test that fails one run in several,
-  a job that runs only on a push to `main`), running `main`'s checks
-  again until they pass lifts it. That is Jeff's to do, or an attended
+  test that fails one run in several, running `main`'s checks again
+  lifts it once they pass. That is Jeff's to do, or an attended
   session's on his word; the next session that records `main`'s CI then
-  records green.
+  records green. For a job that runs only on a push to `main` and fails
+  every time, only the fix lifts it.
 - **What it does not do.** It blocks no merge and no claim but a
   refresh. Every other step goes on, and a PR that is ready (its branch
   contains the red head and its own checks are green) may still be
@@ -2606,7 +2609,8 @@ What is new, by section:
   says that no queued feature starts until one clears. Lines the limit
   does not count are listed after the others under their own heading:
   a queued item that needs him, a tracked item's step, and a `human`
-  step of a phase its item has not reached, with that phase. Before the count it says `main is red at <sha> since <sha>`, with
+  step of a phase its item has not reached, with that phase. Before
+  the count it says `main is red at <sha> since <sha>`, with
   the run and the follow-up, when `main.yaml` says so, and lists any
   holders over a limit. It lists the open PRs first, in two lists, each
   in FLOW-05's order (Decision 21). **Ready to merge**: the item is at
@@ -2802,7 +2806,8 @@ By file. Each cites the rule and does not restate it (FLOW-14).
 - `.claude/agents/wf-publish.md`. `f6-consolidate` records the trial
   merge; `f6-refresh` and `x2-refresh` as above, with the check before the
   push, the draft on a return, and a failure `main` has too recorded
-  with `dist/wf main -ci red -gates` (FLOW-09, FLOW-10); `f6-open-pr` on an item that has a PR
+  with `dist/wf main -ci red -gates` (FLOW-09, FLOW-10); `f6-open-pr`
+  on an item that has a PR
   recorded pushes to it and marks it ready; wherever it sets `pr.ci`
   it sets `pr.head` to the commit the result is for (FLOW-08).
 
@@ -3647,8 +3652,9 @@ feature is built, validated or consolidated"; nothing files one that CI
 reports on `main` itself, and a fix filed with nobody there has no
 areas, so it would collide with every feature (a4, a16). Under Decision
 21 a red `main` is no longer what a missed collision is expected to
-produce, but it costs more when it happens: every open PR's refresh
-fails on it, so nothing can merge until the fix does.
+produce, but it costs more when it happens: no refresh is taken onto
+it (FLOW-10), so nothing that is behind it can merge until the fix
+does.
 
 **Current wording**, the sentence on a regression `main` already has:
 
@@ -3699,9 +3705,11 @@ steps from the fix (**`main`'s CI**), so the rule says it waits.
 > step's checks pass. It pushes only while the pull
 > request is still open. A feature that has merged `main` in Publish and
 > has not finished Publish is refreshed the same way when `main` moves,
-> before its PR is opened or listed as ready. No refresh is taken while `main` is known to
+> before its PR is opened or listed as ready. No refresh is taken while
+> `main` is known to
 > fail its own checks, except for the item that fixes it (FLOW-09): it
-> would fail on the same failure. A refresh that finds work beyond conflict fixes
+> would fail on the same failure. A refresh that finds work beyond
+> conflict fixes
 > and wording sends the feature back as above; its pull request is then a
 > draft until the feature is published again, and it keeps the PR slot
 > (FLOW-05). A process item's open PR is refreshed the same way, without
@@ -3964,7 +3972,8 @@ whether it is still true with the proposed wording.
     refused while a related higher-priority one waits, ready or not; the
     highest-priority waiting item is refused only by a holder; over
     generated arrivals no waiting item is passed over without end).
-  - `TestWaitingLimit` (cases 25 to 31, 39 and 40): the count is each in-progress
+  - `TestWaitingLimit` (cases 25 to 31, 39 and 40): the count is each
+    in-progress
     item once, for a ready `human` step, an open blocking question, a PR
     at its merge step, a spent budget; a queued item on hold, a queued
     process item, a tracked item and an in-progress item whose only
@@ -4009,13 +4018,15 @@ whether it is still true with the proposed wording.
     `Next` goes on to a queued fix (case 35); it is offered again on a
     green result and on another head; its first claim leaves the item's
     spent steps alone, and a second claim of the same step after a
-    release adds one. `TestStale`, on temporary git repositories: `main` moved, a
+    release adds one. `TestStale`, on temporary git repositories: `main`
+    moved, a
     refresh is seeded; a feature in Publish with `f6-merge-main` done
     gets one that `f6-open-pr` then needs, with a PR recorded and
     without, and its completion lets `f6-open-pr`'s gate pass (case
     38); one whose `f6-merge-main` is pending, and one sent back with
     its PR open, get none; a PR merged while the item is in Publish
-    seeds nothing and is left to Publish's gate; PR merged and branch gone, none is seeded and
+    seeds nothing and is left to Publish's gate; PR merged and branch
+    gone, none is seeded and
     `merged:` is printed; PR closed and branch gone, none; an item sent
     back whose PR then merged is moved to Close with
     `f8-escalate-returned`; run twice, nothing is added twice.
@@ -4176,9 +4187,11 @@ steps.
 7. `Class` for `adopts`, `wf new -repos -areas -seams -adopts` and the
    copy on `-follows`, and the `tracked` round (FLOW-03, FLOW-05, FLOW-09,
    LOOP-07).
-8. The refresh: `IsRefresh`, `SeedRefresh`, `wf stale` with the merge
-   check first and `Landed`, the drops in `Complete` and `Back`, class 1
-   while pending, a claim of it left out of the item's budget (a10),
+8. The refresh: `IsRefresh`, `SeedRefresh` at the merge step and in
+   Publish, `wf stale` with the merge check first and `Landed`,
+   `pr.head`, the drops in `Complete` and `Back`, class 1
+   while pending, `cloudHold`'s refusal while `main` is red, its first
+   claim left out of the item's budget (a10),
    `check.Refresh`; `patchID` without context lines (a14)
    (FLOW-03, FLOW-06, FLOW-08, FLOW-10, FLOW-15, FLOW-16).
 9. `check/declared.go`, `check/areas.go`, `review.go`, and `wf declare`,
@@ -4190,7 +4203,7 @@ steps.
     `wf digest`, `wf status`, and `wf main` with `main.yaml`, the
     up-to-date setting included (FLOW-05, FLOW-08, FLOW-09, FLOW-13,
     LOOP-06).
-12. `wf areas -check | -list`, `wf validate -areas`, and `wf commit`'s
+12. `wf areas -check | -list`, `wf validate -areas [-repo]`, and `wf commit`'s
     refusal of a map change from a worker that is not human (FLOW-05,
     PROFILE-01).
 13. `docs/development/process.md`: the eleven FLOW amendments, word for
@@ -4261,6 +4274,72 @@ commit's time. The item is not done until it is.
 The review by Jeff is in progress, as the design step `x1-design`. Its
 outcome is not recorded yet, and no rule change has been put to him by
 name.
+
+- **2026-11-15: independent review of the fold-in (`7e14652`), before
+  the second sitting.** One reviewer read the folded-in design against
+  the code on `main` at `ad4ea50`, the live queue and the repository's
+  settings. Each finding was checked against the source before it was
+  acted on. All ten must and should findings held; none was rejected.
+  What changed:
+  - *With `main` red, one refresh could take every step of every run,
+    and the fix would get none* (must). True: `Release` only clears the
+    lease, `Next` returns the first pending step of the first item in
+    order, and a10 (d) took the refresh out of the item's budget, which
+    is what ends retries today. No refresh is offered while `main.yaml`
+    records `main` red, except on the item it names as the fix
+    (`cloudHold`; FLOW-10's proposed wording); a refresh that finds the
+    failure itself records it (`wf main -gates`); and under a10 (d)
+    only the first claim of a refresh step is free for the item.
+    Decisions 13 and 22, a10, **The refresh step**, **`main`'s CI**,
+    case 35.
+  - *A feature still in Publish when another PR merges could never pass
+    Publish's gate* (must). True: the gate at `f6-open-pr` runs
+    `mainMerged`, and no step after `f6-merge-main` merges `main`.
+    `wf stale` now seeds a refresh there too and `f6-open-pr` needs it.
+    Decision 13, **The refresh step**, case 38, FLOW-10.
+  - *The cap counted a `human` step of a later phase that `wf` offers
+    early* (should). True: `Offered` returns true for any `human` step;
+    this item's `x4-state` and `seam-specs`' `f6-release-specs` are two.
+    A `human` step counts once its item has reached its phase. Decision
+    24, **The waiting limit**, a17 (a) and its new option (e), case 39,
+    FLOW-05.
+  - *The cap could hold the fix for a red `main` that follows no item*
+    (should). True, when the red commit was no item's and Jeff files
+    the fix. The item `main.yaml` names as the follow-up is exempt, and
+    intake records a hand-filed one. a17 (a), case 40, FLOW-05; and
+    **Safety** now says what Jeff does when that fix is related to an
+    open PR that cannot be refreshed.
+  - *"At most 8 PRs are open" was false* (should). True: the cap stops
+    starts, not work in progress. a10's cost is stated for n open PRs.
+  - *The loop could list as ready a PR whose checks were read for
+    another head* (should). True: the queue recorded `pr.ci` with no
+    commit. `pr.head` records it; a branch head the loop did not check
+    gets a refresh before the PR is listed, which also makes case 37
+    agree with FLOW-08's proposed sentence.
+  - *"An ordered area reaches nothing" was a new rule, folded in and not
+    asked* (should). True, and the reviewer's figure for the narrower
+    reading was reproduced (188, 43, 22). It is now a18.
+  - *A map change takes effect on every branch in flight; an area added
+    ahead of its tree raised a standing alarm* (should). True of the
+    text. `wf validate -areas -repo` names the items a candidate would
+    put outside their areas, and `wf areas -check` prints an unmatched
+    pattern that an open item declares as expected.
+  - *A hold on `cloud` now also stops merging after the first PR*
+    (should). True (`Hold`). Stated under Decision 18 and **Merging**; a
+    refresh is not exempted, with the reason; handed to
+    `loop-native-lead` and `loop-repository`; case 41.
+  - *The ruleset refuses `auto-tidy.yml`'s weekly push to `main`*
+    (should). True; its last six scheduled runs failed, so it pushes
+    nothing today. Stated under **Merging**, and what becomes of the
+    workflow is Jeff's choice at `x4-state`.
+  - Nits taken, all five: #114 and #108 share two book pages; three
+    statements dated; a conflict in `main.yaml` keeps the remote's file;
+    the count is what `WaitsOnHuman` returns; the skills' **Never** line
+    says what FLOW-08's proposed sentence says.
+  - *Not changed here:* the note of the queue step `x4-state` still
+    names `wf areas -sync` and lacks the ruleset, the waiting limit and
+    `auto-tidy.yml`. This fold-in may edit only questions in the queue
+    file; the note is brought into line when the review is recorded.
 
 - **2026-11-15, first sitting: twelve questions answered; five answers
   folded in.** Jeff read the design at `f706bf7` and answered twelve of
