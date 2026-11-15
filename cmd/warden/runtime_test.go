@@ -335,3 +335,53 @@ func TestRuntimeUnsetMarker(t *testing.T) {
 		})
 	}
 }
+
+// The decoder fills [runtime] cli from a key in any letter case, in a table,
+// a dotted key or an inline table. The check is on the field, so it does not
+// depend on how the file spelled the key; the error names the key as
+// documented.
+func TestRuntimeKeyInOtherSpellings(t *testing.T) {
+	spellings := map[string]string{
+		"[runtime] CLI":   "[runtime]\nCLI = %s\n",
+		"[runtime] Cli":   "[runtime]\nCli = %s\n",
+		"[Runtime] cli":   "[Runtime]\ncli = %s\n",
+		"[RUNTIME] CLI":   "[RUNTIME]\nCLI = %s\n",
+		"dotted key":      "runtime.CLI = %s\n",
+		"an inline table": "Runtime = { CLI = %s }\n",
+	}
+	for name, format := range spellings {
+		for _, v := range []string{"./rt", "sh"} {
+			t.Run(name+" "+v, func(t *testing.T) {
+				// podman in the user's file is what a file that passed for
+				// one without the key would be replaced by.
+				inConfigFiles(t, cliFile("podman"), fmt.Sprintf(format, tomlString(v)))
+				got, err := resolvedRuntime(t)
+				if got != "" {
+					t.Errorf("resolveRuntime returned %q, want only the refusal", got)
+				}
+				wantRuntimeRefused(t, err, "[runtime] cli in warden.toml", v)
+			})
+		}
+	}
+	t.Run("[Runtime] CLI selects a supported runtime", func(t *testing.T) {
+		inConfigFiles(t, cliFile("docker"), "[Runtime]\nCLI = \"podman\"\n")
+		if got, err := resolvedRuntime(t); err != nil || got != "podman" {
+			t.Fatalf("resolveRuntime = %q, %v; want podman", got, err)
+		}
+	})
+	// Which of two spellings in one table the decoder takes varies from run
+	// to run. Whichever it is has been checked.
+	t.Run("both spellings in one table", func(t *testing.T) {
+		inConfigFiles(t, "", "[runtime]\ncli = \"docker\"\nCLI = \"./rt\"\n")
+		for range 200 {
+			got, err := resolvedRuntime(t)
+			if err == nil && got == "docker" {
+				continue
+			}
+			if got != "" {
+				t.Fatalf("resolveRuntime returned %q, want docker or the refusal", got)
+			}
+			wantRuntimeRefused(t, err, "[runtime] cli in warden.toml", "./rt")
+		}
+	})
+}
