@@ -1,0 +1,41 @@
+make: Entering directory 'C:/Users/jeff/buildwarden-native/.scratch/rcpp-cases'
+powershell -NoProfile -ExecutionPolicy Bypass -File env.ps1
+user config present: False
+WARDEN_* variables: 
+OS: Microsoft Windows NT 10.0.26300.0
+docker on PATH: False
+podman: C:\Program Files\RedHat\Podman\podman.exe
+--- (cd p-exe && ../../rcpp/dist/warden doctor --driver container --runtime docker.exe)
+[warden] ERROR: --runtime is "docker.exe"; the container runtime is named in lower case, without an extension
+  To fix: pass --runtime docker
+exit=1
+--- (cd p-exe && ../../rcpp/dist/warden build --driver container --runtime docker.exe -o out)
+[warden] ERROR: --runtime is "docker.exe"; the container runtime is named in lower case, without an extension
+  To fix: pass --runtime docker
+exit=1
+--- (cd p-exe && ../../rcpp/dist/warden clean --driver container --runtime docker.exe)
+[warden] ERROR: --runtime is "docker.exe"; the container runtime is named in lower case, without an extension
+  To fix: pass --runtime docker
+exit=1
+--- (cd p-exe && ../../rcpp/dist/warden build --driver container --runtime Docker.EXE -o out)
+[warden] ERROR: --runtime is "Docker.EXE"; the container runtime is named in lower case, without an extension
+  To fix: pass --runtime docker
+exit=1
+Dockerfile
+[runtime]
+cli = 'C:\Program Files\Docker\Docker\resources\bin\docker.exe'
+--- (cd p-path && ../../rcpp/dist/warden doctor --driver container)
+[warden] ERROR: [runtime] cli in warden.toml is "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe"; the container runtime is named, not given as a path
+  To fix: set it to docker; warden looks docker up on PATH, so if it is installed outside PATH, add its directory to PATH
+exit=1
+--- (cd p-path && ../../rcpp/dist/warden build --driver container -o out)
+[warden] ERROR: [runtime] cli in warden.toml is "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe"; the container runtime is named, not given as a path
+  To fix: set it to docker; warden looks docker up on PATH, so if it is installed outside PATH, add its directory to PATH
+exit=1
+--- (cd p-path && ../../rcpp/dist/warden clean --driver container)
+[warden] ERROR: [runtime] cli in warden.toml is "C:\\Program Files\\Docker\\Docker\\resources\\bin\\docker.exe"; the container runtime is named, not given as a path
+  To fix: set it to docker; warden looks docker up on PATH, so if it is installed outside PATH, add its directory to PATH
+exit=1
+Dockerfile
+warden.toml
+make: Leaving directory 'C:/Users/jeff/buildwarden-native/.scratch/rcpp-cases'

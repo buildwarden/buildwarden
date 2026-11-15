@@ -1,0 +1,136 @@
+make: Entering directory 'C:/Users/jeff/buildwarden-native/.scratch/rcpp-cases'
+=== bat-name
+[runtime]
+cli = "rt.bat"
+--- (cd p-bat && ../../../dist/warden doctor --driver container)
+container runtime: rt.bat
+ok
+exit=0
+--- (cd p-bat && ../../../dist/warden build --driver container -o out)
+[warden] Build ID: wy9awbp0
+[warden] Building relay from source...
+[warden] Tearing down environment...
+warden: build FAILED
+[warden] ERROR: error building relay image: exec: "rt.bat": executable file not found in %PATH%
+
+  If this is unexpected, please file a bug:
+  https://github.com/buildwarden/buildwarden/issues/new?title=Bug%3A+error+building+relay+image%3A+exec%3A+%22rt.bat%22%3A+executable+file+not+found+in+%25PATH%25&body=%23%23+Environment%0A-+OS%3A+windows%2Famd64%0A-+Version%3A+dev%0A%0A%23%23+Error%0A%60%60%60%0Aerror+building+relay+image%3A+exec%3A+%22rt.bat%22%3A+executable+file+not+found+in+%25PATH%25%0A%60%60%60%0A%0A%23%23+Steps+to+reproduce%0A1.+%0A
+
+exit=1
+--- (cd p-bat && ../../../dist/warden clean --driver container)
+Kept the cache (17297 MB, C:\Users\jeff\AppData\Local\warden); --cache removes it
+Nothing to clean.
+exit=0
+--- (cd p-bat && ../../../dist/warden clean)
+Kept the cache (17297 MB, C:\Users\jeff\AppData\Local\warden); --cache removes it
+Nothing to clean.
+exit=0
+--- (cd p-bat && ../../../dist/warden doctor)
+container runtime: rt.bat
+ok
+exit=0
+=== bat-dot
+[runtime]
+cli = '.\rt.bat'
+--- (cd p-bat && ../../../dist/warden doctor --driver container)
+container runtime: .\rt.bat
+ok
+exit=0
+--- (cd p-bat && ../../../dist/warden build --driver container -o out)
+[warden] Build ID: fl05fn6v
+[warden] Building relay from source...
+[warden] Pulling image: alpine:3.21
+[warden] WARNING: failed to record environment: could not resolve digest for alpine:3.21
+[warden] Allocating network...
+[warden] Starting relay...
+[warden] Tearing down environment...
+warden: build FAILED
+[warden] ERROR: connecting to relay: relaycfg: relay at 127.0.0.1:58007 never accepted the tunnel: context deadline exceeded (last error: dial tcp 127.0.0.1:58007: connectex: No connection could be made because the target machine actively refused it.)
+
+  If this is unexpected, please file a bug:
+  https://github.com/buildwarden/buildwarden/issues/new?title=Bug%3A+connecting+to+relay%3A+relaycfg%3A+relay+at+127.0.0.1%3A58007+never+accepted+the+tunnel%3A+context+deadline+exceeded+%28last+error%3A+dial+tcp+127.0.0.1%3A58007%3A+connectex%3A+No+connection+could+be+made+because+the+target+machine+actively+refused+it.%29&body=%23%23+Environment%0A-+OS%3A+windows%2Famd64%0A-+Version%3A+dev%0A%0A%23%23+Error%0A%60%60%60%0Aconnecting+to+relay%3A+relaycfg%3A+relay+at+127.0.0.1%3A58007+never+accepted+the+tunnel%3A+context+deadline+exceeded+%28last+error%3A+dial+tcp+127.0.0.1%3A58007%3A+connectex%3A+No+connection+could+be+made+because+the+target+machine+actively+refused+it.%29%0A%60%60%60%0A%0A%23%23+Steps+to+reproduce%0A1.+%0A
+
+exit=1
+--- (cd p-bat && ../../../dist/warden clean --driver container)
+Kept the cache (17297 MB, C:\Users\jeff\AppData\Local\warden); --cache removes it
+Nothing to clean.
+exit=0
+--- (cd p-bat && ../../../dist/warden clean)
+Kept the cache (17297 MB, C:\Users\jeff\AppData\Local\warden); --cache removes it
+Nothing to clean.
+exit=0
+--- (cd p-bat && ../../../dist/warden doctor)
+container runtime: .\rt.bat
+ok
+exit=0
+=== bat-abs
+[runtime]
+cli = 'C:\Users\jeff\buildwarden-native\.scratch\rcpp-cases\p-bat\rt.bat'
+--- (cd p-bat && ../../../dist/warden doctor --driver container)
+container runtime: C:\Users\jeff\buildwarden-native\.scratch\rcpp-cases\p-bat\rt.bat
+ok
+exit=0
+--- (cd p-bat && ../../../dist/warden build --driver container -o out)
+[warden] Build ID: pjve8841
+[warden] Building relay from source...
+[warden] Pulling image: alpine:3.21
+[warden] WARNING: failed to record environment: could not resolve digest for alpine:3.21
+[warden] Allocating network...
+[warden] Starting relay...
+[warden] Tearing down environment...
+warden: build FAILED
+[warden] ERROR: connecting to relay: relaycfg: relay at 127.0.0.1:54716 never accepted the tunnel: context deadline exceeded (last error: dial tcp 127.0.0.1:54716: connectex: No connection could be made because the target machine actively refused it.)
+
+  If this is unexpected, please file a bug:
+  https://github.com/buildwarden/buildwarden/issues/new?title=Bug%3A+connecting+to+relay%3A+relaycfg%3A+relay+at+127.0.0.1%3A54716+never+accepted+the+tunnel%3A+context+deadline+exceeded+%28last+error%3A+dial+tcp+127.0.0.1%3A54716%3A+connectex%3A+No+connection+could+be+made+because+the+target+machine+actively+refused+it.%29&body=%23%23+Environment%0A-+OS%3A+windows%2Famd64%0A-+Version%3A+dev%0A%0A%23%23+Error%0A%60%60%60%0Aconnecting+to+relay%3A+relaycfg%3A+relay+at+127.0.0.1%3A54716+never+accepted+the+tunnel%3A+context+deadline+exceeded+%28last+error%3A+dial+tcp+127.0.0.1%3A54716%3A+connectex%3A+No+connection+could+be+made+because+the+target+machine+actively+refused+it.%29%0A%60%60%60%0A%0A%23%23+Steps+to+reproduce%0A1.+%0A
+
+exit=1
+--- (cd p-bat && ../../../dist/warden clean --driver container)
+Kept the cache (17297 MB, C:\Users\jeff\AppData\Local\warden); --cache removes it
+Nothing to clean.
+exit=0
+--- (cd p-bat && ../../../dist/warden clean)
+Kept the cache (17297 MB, C:\Users\jeff\AppData\Local\warden); --cache removes it
+Nothing to clean.
+exit=0
+--- (cd p-bat && ../../../dist/warden doctor)
+container runtime: C:\Users\jeff\buildwarden-native\.scratch\rcpp-cases\p-bat\rt.bat
+ok
+exit=0
+Dockerfile
+out
+rt.bat
+rt-ran.txt
+warden.toml
+MARKER PRESENT: rt.bat was run
+ran image build --file C:\Users\jeff\AppData\Local\Temp\warden-container-fl05fn6v-366052334\relay-image\Containerfile --tag warden-relay:fl05fn6v C:\Users\jeff\AppData\Local\Temp\warden-container-fl05fn6v-366052334\relay-image 
+ran image inspect warden-holder:a4b9c4d61200b894 
+ran image inspect warden-netns:94b6fea0f2fd6cc2 
+ran pull alpine:3.21 
+ran image inspect --format "{{json .RepoDigests}}" alpine:3.21 
+ran network create --driver bridge --subnet 100.64.87.0/29 warden-fl05fn6v 
+ran container run --detach --name warden-relay-fl05fn6v --network warden-fl05fn6v --ip 100.64.87.2 --publish 127.0.0.1:58007:8301 --env WARDEN_CLAIM_TOKEN=<redacted> warden-relay:fl05fn6v 
+ran image rm warden-relay:fl05fn6v 
+ran network rm warden-fl05fn6v 
+ran container ls -a --filter name=warden- --format {{.Names}} 
+ran network ls --format {{.Name}} 
+ran image ls --format {{.Repository}}:{{.Tag}} 
+ran container ls -a --filter name=warden- --format {{.Names}} 
+ran network ls --format {{.Name}} 
+ran image ls --format {{.Repository}}:{{.Tag}} 
+ran image build --file C:\Users\jeff\AppData\Local\Temp\warden-container-pjve8841-363537348\relay-image\Containerfile --tag warden-relay:pjve8841 C:\Users\jeff\AppData\Local\Temp\warden-container-pjve8841-363537348\relay-image 
+ran image inspect warden-holder:a4b9c4d61200b894 
+ran image inspect warden-netns:94b6fea0f2fd6cc2 
+ran pull alpine:3.21 
+ran image inspect --format "{{json .RepoDigests}}" alpine:3.21 
+ran network create --driver bridge --subnet 100.64.87.0/29 warden-pjve8841 
+ran container run --detach --name warden-relay-pjve8841 --network warden-pjve8841 --ip 100.64.87.2 --publish 127.0.0.1:54716:8301 --env WARDEN_CLAIM_TOKEN=<redacted> warden-relay:pjve8841 
+ran image rm warden-relay:pjve8841 
+ran network rm warden-pjve8841 
+ran container ls -a --filter name=warden- --format {{.Names}} 
+ran network ls --format {{.Name}} 
+ran image ls --format {{.Repository}}:{{.Tag}} 
+ran container ls -a --filter name=warden- --format {{.Names}} 
+ran network ls --format {{.Name}} 
+ran image ls --format {{.Repository}}:{{.Tag}} 
+make: Leaving directory 'C:/Users/jeff/buildwarden-native/.scratch/rcpp-cases'

@@ -1,0 +1,629 @@
+=== RUN   TestResolveBuildLinkPrecedence
+=== RUN   TestResolveBuildLinkPrecedence/default_with_no_config_file
+=== RUN   TestResolveBuildLinkPrecedence/user_config
+=== RUN   TestResolveBuildLinkPrecedence/project_over_user
+=== RUN   TestResolveBuildLinkPrecedence/flag_over_both
+--- PASS: TestResolveBuildLinkPrecedence (0.01s)
+    --- PASS: TestResolveBuildLinkPrecedence/default_with_no_config_file (0.00s)
+    --- PASS: TestResolveBuildLinkPrecedence/user_config (0.00s)
+    --- PASS: TestResolveBuildLinkPrecedence/project_over_user (0.00s)
+    --- PASS: TestResolveBuildLinkPrecedence/flag_over_both (0.00s)
+=== RUN   TestBadBuildLinkFailsAtLoad
+--- PASS: TestBadBuildLinkFailsAtLoad (0.01s)
+=== RUN   TestBuildLinkInHyperVNATLoads
+--- PASS: TestBuildLinkInHyperVNATLoads (0.00s)
+=== RUN   TestBuildLinkFlagChecked
+--- PASS: TestBuildLinkFlagChecked (0.00s)
+=== RUN   TestBuildLinkFlagNeedsAVMDriver
+--- PASS: TestBuildLinkFlagNeedsAVMDriver (0.00s)
+=== RUN   TestBuildLinkFlagOnlyWhereItApplies
+--- PASS: TestBuildLinkFlagOnlyWhereItApplies (0.00s)
+=== RUN   TestResolvePath_Directory
+--- PASS: TestResolvePath_Directory (0.00s)
+=== RUN   TestResolvePath_File
+--- PASS: TestResolvePath_File (0.00s)
+=== RUN   TestResolvePath_Empty
+--- PASS: TestResolvePath_Empty (0.00s)
+=== RUN   TestResolvePath_Containerfile
+--- PASS: TestResolvePath_Containerfile (0.00s)
+=== RUN   TestResolvePath_NoDockerfile
+--- PASS: TestResolvePath_NoDockerfile (0.00s)
+=== RUN   TestResolvePath_NonExistent
+--- PASS: TestResolvePath_NonExistent (0.00s)
+=== RUN   TestLoadConfig_Defaults
+--- PASS: TestLoadConfig_Defaults (0.00s)
+=== RUN   TestLoadConfig_ProjectFile
+--- PASS: TestLoadConfig_ProjectFile (0.00s)
+=== RUN   TestLoadConfig_EnvOverrides
+--- PASS: TestLoadConfig_EnvOverrides (0.00s)
+=== RUN   TestLoadConfig_UpstreamCACertsEnv
+--- PASS: TestLoadConfig_UpstreamCACertsEnv (0.00s)
+=== RUN   TestLoadConfig_UpstreamCACertsToml
+--- PASS: TestLoadConfig_UpstreamCACertsToml (0.00s)
+=== RUN   TestBuildFailedExitCodes
+warden: build FAILED (exit code 7)
+warden: build FAILED: timed out after 30s (--timeout)
+warden: build FAILED
+warden: build interrupted
+warden: build FAILED
+--- PASS: TestBuildFailedExitCodes (0.00s)
+=== RUN   TestErrorWithFixHasRemedyAndNoIssueLink
+--- PASS: TestErrorWithFixHasRemedyAndNoIssueLink (0.00s)
+=== RUN   TestDetectRuntimeExplainsTheFix
+=== RUN   TestDetectRuntimeExplainsTheFix/none_installed
+=== RUN   TestDetectRuntimeExplainsTheFix/installed_but_stopped
+    fixable_test.go:67: shell-script fakes need a POSIX shell
+=== RUN   TestDetectRuntimeExplainsTheFix/running
+    fixable_test.go:76: shell-script fakes need a POSIX shell
+--- PASS: TestDetectRuntimeExplainsTheFix (0.00s)
+    --- PASS: TestDetectRuntimeExplainsTheFix/none_installed (0.00s)
+    --- SKIP: TestDetectRuntimeExplainsTheFix/installed_but_stopped (0.00s)
+    --- SKIP: TestDetectRuntimeExplainsTheFix/running (0.00s)
+=== RUN   TestInputErrorsAreFixable
+--- PASS: TestInputErrorsAreFixable (0.00s)
+=== RUN   TestHypervImageSource
+=== RUN   TestHypervImageSource/first_prepare_uses_the_default
+=== RUN   TestHypervImageSource/first_prepare_uses_the_config
+=== RUN   TestHypervImageSource/explicit_source_wins_and_is_strict
+=== RUN   TestHypervImageSource/refresh_re-checks_a_downloaded_base
+=== RUN   TestHypervImageSource/reuse_keeps_a_downloaded_base
+=== RUN   TestHypervImageSource/a_local_base_is_never_replaced
+=== RUN   TestHypervImageSource/refresh_follows_a_changed_config
+=== RUN   TestHypervImageSource/reuse_with_the_config_already_active
+--- PASS: TestHypervImageSource (0.00s)
+    --- PASS: TestHypervImageSource/first_prepare_uses_the_default (0.00s)
+    --- PASS: TestHypervImageSource/first_prepare_uses_the_config (0.00s)
+    --- PASS: TestHypervImageSource/explicit_source_wins_and_is_strict (0.00s)
+    --- PASS: TestHypervImageSource/refresh_re-checks_a_downloaded_base (0.00s)
+    --- PASS: TestHypervImageSource/reuse_keeps_a_downloaded_base (0.00s)
+    --- PASS: TestHypervImageSource/a_local_base_is_never_replaced (0.00s)
+    --- PASS: TestHypervImageSource/refresh_follows_a_changed_config (0.00s)
+    --- PASS: TestHypervImageSource/reuse_with_the_config_already_active (0.00s)
+=== RUN   TestFormatVZImages
+--- PASS: TestFormatVZImages (0.00s)
+=== RUN   TestCheckImageUpdate
+--- PASS: TestCheckImageUpdate (0.00s)
+=== RUN   TestInspectEnvironmentDiskChain
+--- PASS: TestInspectEnvironmentDiskChain (0.01s)
+=== RUN   TestInspectEnvironmentPayloadStates
+=== RUN   TestInspectEnvironmentPayloadStates/tampered
+=== RUN   TestInspectEnvironmentPayloadStates/missing
+=== RUN   TestInspectEnvironmentPayloadStates/lying_label
+=== RUN   TestInspectEnvironmentPayloadStates/legacy_label_without_record
+=== RUN   TestInspectEnvironmentPayloadStates/no_environment
+--- PASS: TestInspectEnvironmentPayloadStates (0.04s)
+    --- PASS: TestInspectEnvironmentPayloadStates/tampered (0.01s)
+    --- PASS: TestInspectEnvironmentPayloadStates/missing (0.00s)
+    --- PASS: TestInspectEnvironmentPayloadStates/lying_label (0.01s)
+    --- PASS: TestInspectEnvironmentPayloadStates/legacy_label_without_record (0.01s)
+    --- PASS: TestInspectEnvironmentPayloadStates/no_environment (0.01s)
+=== RUN   TestInspectEnvironmentOCIJSON
+--- PASS: TestInspectEnvironmentOCIJSON (0.01s)
+=== RUN   TestRunInspectImpl_ValidEmptyLedger
+--- PASS: TestRunInspectImpl_ValidEmptyLedger (0.01s)
+=== RUN   TestRunInspectImpl_ValidLedgerWithRecords
+--- PASS: TestRunInspectImpl_ValidLedgerWithRecords (0.00s)
+=== RUN   TestRunInspectImpl_JSONOutput
+--- PASS: TestRunInspectImpl_JSONOutput (0.00s)
+=== RUN   TestRunInspectImpl_JSONOutputWithRecords
+--- PASS: TestRunInspectImpl_JSONOutputWithRecords (0.00s)
+=== RUN   TestRunInspectImpl_InvalidFile
+--- PASS: TestRunInspectImpl_InvalidFile (0.00s)
+=== RUN   TestRunInspectImpl_EmptyFile
+--- PASS: TestRunInspectImpl_EmptyFile (0.00s)
+=== RUN   TestRunInspectImpl_NonexistentFile
+--- PASS: TestRunInspectImpl_NonexistentFile (0.00s)
+=== RUN   TestRunInspectImpl_Verbosity1
+--- PASS: TestRunInspectImpl_Verbosity1 (0.00s)
+=== RUN   TestRunInspectImpl_Verbosity2
+--- PASS: TestRunInspectImpl_Verbosity2 (0.00s)
+=== RUN   TestRunInspectImpl_NoColor
+--- PASS: TestRunInspectImpl_NoColor (0.01s)
+=== RUN   TestRunInspectImpl_ColorOutput
+--- PASS: TestRunInspectImpl_ColorOutput (0.01s)
+=== RUN   TestReadLedger_PlainFile
+--- PASS: TestReadLedger_PlainFile (0.00s)
+=== RUN   TestReadLedger_ZstdCompressed
+--- PASS: TestReadLedger_ZstdCompressed (0.01s)
+=== RUN   TestReadLedger_ZstdInvalidData
+--- PASS: TestReadLedger_ZstdInvalidData (0.00s)
+=== RUN   TestResolveLedgerPath_DirectFile
+--- PASS: TestResolveLedgerPath_DirectFile (0.00s)
+=== RUN   TestResolveLedgerPath_DirWithZst
+--- PASS: TestResolveLedgerPath_DirWithZst (0.00s)
+=== RUN   TestResolveLedgerPath_DirWithPlainLedger
+--- PASS: TestResolveLedgerPath_DirWithPlainLedger (0.00s)
+=== RUN   TestResolveLedgerPath_DirPreferZst
+--- PASS: TestResolveLedgerPath_DirPreferZst (0.00s)
+=== RUN   TestResolveLedgerPath_DirWithNeither
+--- PASS: TestResolveLedgerPath_DirWithNeither (0.00s)
+=== RUN   TestResolveLedgerPath_NonexistentPath
+--- PASS: TestResolveLedgerPath_NonexistentPath (0.00s)
+=== RUN   TestHumanBytes
+--- PASS: TestHumanBytes (0.00s)
+=== RUN   TestDirArrow
+--- PASS: TestDirArrow (0.00s)
+=== RUN   TestSigStatus
+--- PASS: TestSigStatus (0.00s)
+=== RUN   TestRunInspectImpl_ZstFile
+--- PASS: TestRunInspectImpl_ZstFile (0.01s)
+=== RUN   TestResolveBuildInputVMDrivers
+--- PASS: TestResolveBuildInputVMDrivers (0.01s)
+=== RUN   TestResolveBuildInputContainerNeedsDockerfile
+--- PASS: TestResolveBuildInputContainerNeedsDockerfile (0.00s)
+=== RUN   TestValidateFlagsForDriver
+--- PASS: TestValidateFlagsForDriver (0.00s)
+=== RUN   TestFirecrackerIsAVMDriver
+--- PASS: TestFirecrackerIsAVMDriver (0.00s)
+=== RUN   TestFormerRuntimeValues
+=== RUN   TestFormerRuntimeValues/Docker
+=== RUN   TestFormerRuntimeValues/docker.exe
+=== RUN   TestFormerRuntimeValues/PODMAN.EXE
+=== RUN   TestFormerRuntimeValues//opt/homebrew/bin/docker
+=== RUN   TestFormerRuntimeValues/C:\Program_Files\Docker\docker.exe
+=== RUN   TestFormerRuntimeValues/./tools/docker
+=== RUN   TestFormerRuntimeValues/C:docker
+=== RUN   TestFormerRuntimeValues//usr/local/bin/Finch
+=== RUN   TestFormerRuntimeValues/nerdctl
+=== RUN   TestFormerRuntimeValues//usr/local/bin/nerdctl
+=== RUN   TestFormerRuntimeValues//usr/local/bin/docker-ci
+=== RUN   TestFormerRuntimeValues/./rt
+=== RUN   TestFormerRuntimeValues/..\x.exe
+=== RUN   TestFormerRuntimeValues/sh
+=== RUN   TestFormerRuntimeValues/dokcer
+=== RUN   TestFormerRuntimeValues/_docker
+=== RUN   TestFormerRuntimeValues/docker_
+=== RUN   TestFormerRuntimeValues/sudo_docker
+--- PASS: TestFormerRuntimeValues (0.00s)
+    --- PASS: TestFormerRuntimeValues/Docker (0.00s)
+    --- PASS: TestFormerRuntimeValues/docker.exe (0.00s)
+    --- PASS: TestFormerRuntimeValues/PODMAN.EXE (0.00s)
+    --- PASS: TestFormerRuntimeValues//opt/homebrew/bin/docker (0.00s)
+    --- PASS: TestFormerRuntimeValues/C:\Program_Files\Docker\docker.exe (0.00s)
+    --- PASS: TestFormerRuntimeValues/./tools/docker (0.00s)
+    --- PASS: TestFormerRuntimeValues/C:docker (0.00s)
+    --- PASS: TestFormerRuntimeValues//usr/local/bin/Finch (0.00s)
+    --- PASS: TestFormerRuntimeValues/nerdctl (0.00s)
+    --- PASS: TestFormerRuntimeValues//usr/local/bin/nerdctl (0.00s)
+    --- PASS: TestFormerRuntimeValues//usr/local/bin/docker-ci (0.00s)
+    --- PASS: TestFormerRuntimeValues/./rt (0.00s)
+    --- PASS: TestFormerRuntimeValues/..\x.exe (0.00s)
+    --- PASS: TestFormerRuntimeValues/sh (0.00s)
+    --- PASS: TestFormerRuntimeValues/dokcer (0.00s)
+    --- PASS: TestFormerRuntimeValues/_docker (0.00s)
+    --- PASS: TestFormerRuntimeValues/docker_ (0.00s)
+    --- PASS: TestFormerRuntimeValues/sudo_docker (0.00s)
+=== RUN   TestFormerRuntimeValueInTheError
+--- PASS: TestFormerRuntimeValueInTheError (0.00s)
+=== RUN   TestSupportedRuntimeFromEverySource
+=== RUN   TestSupportedRuntimeFromEverySource/finch_from_user
+=== RUN   TestSupportedRuntimeFromEverySource/finch_from_project
+=== RUN   TestSupportedRuntimeFromEverySource/finch_from_env
+=== RUN   TestSupportedRuntimeFromEverySource/finch_from_flag
+=== RUN   TestSupportedRuntimeFromEverySource/docker_from_user
+=== RUN   TestSupportedRuntimeFromEverySource/docker_from_project
+=== RUN   TestSupportedRuntimeFromEverySource/docker_from_env
+=== RUN   TestSupportedRuntimeFromEverySource/docker_from_flag
+=== RUN   TestSupportedRuntimeFromEverySource/podman_from_user
+=== RUN   TestSupportedRuntimeFromEverySource/podman_from_project
+=== RUN   TestSupportedRuntimeFromEverySource/podman_from_env
+=== RUN   TestSupportedRuntimeFromEverySource/podman_from_flag
+--- PASS: TestSupportedRuntimeFromEverySource (0.03s)
+    --- PASS: TestSupportedRuntimeFromEverySource/finch_from_user (0.01s)
+    --- PASS: TestSupportedRuntimeFromEverySource/finch_from_project (0.00s)
+    --- PASS: TestSupportedRuntimeFromEverySource/finch_from_env (0.00s)
+    --- PASS: TestSupportedRuntimeFromEverySource/finch_from_flag (0.00s)
+    --- PASS: TestSupportedRuntimeFromEverySource/docker_from_user (0.01s)
+    --- PASS: TestSupportedRuntimeFromEverySource/docker_from_project (0.00s)
+    --- PASS: TestSupportedRuntimeFromEverySource/docker_from_env (0.00s)
+    --- PASS: TestSupportedRuntimeFromEverySource/docker_from_flag (0.00s)
+    --- PASS: TestSupportedRuntimeFromEverySource/podman_from_user (0.01s)
+    --- PASS: TestSupportedRuntimeFromEverySource/podman_from_project (0.00s)
+    --- PASS: TestSupportedRuntimeFromEverySource/podman_from_env (0.00s)
+    --- PASS: TestSupportedRuntimeFromEverySource/podman_from_flag (0.00s)
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"./docker"_from_user
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"./docker"_from_project
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"./docker"_from_env
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"./docker"_from_flag
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"tools/docker"_from_user
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"tools/docker"_from_project
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"tools/docker"_from_env
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"tools/docker"_from_flag
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"/usr/bin/docker"_from_user
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"/usr/bin/docker"_from_project
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"/usr/bin/docker"_from_env
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"/usr/bin/docker"_from_flag
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"..\\x.exe"_from_user
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"..\\x.exe"_from_project
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"..\\x.exe"_from_env
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"..\\x.exe"_from_flag
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"C:\\x\\docker.exe"_from_user
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"C:\\x\\docker.exe"_from_project
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"C:\\x\\docker.exe"_from_env
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"C:\\x\\docker.exe"_from_flag
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"C:docker"_from_user
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"C:docker"_from_project
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"C:docker"_from_env
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"C:docker"_from_flag
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"docker.exe"_from_user
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"docker.exe"_from_project
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"docker.exe"_from_env
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"docker.exe"_from_flag
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"Docker"_from_user
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"Docker"_from_project
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"Docker"_from_env
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"Docker"_from_flag
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"_docker"_from_user
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"_docker"_from_project
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"_docker"_from_env
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"_docker"_from_flag
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"docker_"_from_user
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"docker_"_from_project
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"docker_"_from_env
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"docker_"_from_flag
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"nerdctl"_from_user
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"nerdctl"_from_project
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"nerdctl"_from_env
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"nerdctl"_from_flag
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"sh"_from_user
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"sh"_from_project
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"sh"_from_env
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"sh"_from_flag
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"sudo_docker"_from_user
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"sudo_docker"_from_project
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"sudo_docker"_from_env
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"sudo_docker"_from_flag
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"_"_from_user
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"_"_from_project
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"_"_from_env
+=== RUN   TestUnsupportedRuntimeRefusedFromEverySource/"_"_from_flag
+--- PASS: TestUnsupportedRuntimeRefusedFromEverySource (0.16s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"./docker"_from_user (0.01s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"./docker"_from_project (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"./docker"_from_env (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"./docker"_from_flag (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"tools/docker"_from_user (0.01s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"tools/docker"_from_project (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"tools/docker"_from_env (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"tools/docker"_from_flag (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"/usr/bin/docker"_from_user (0.01s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"/usr/bin/docker"_from_project (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"/usr/bin/docker"_from_env (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"/usr/bin/docker"_from_flag (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"..\\x.exe"_from_user (0.01s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"..\\x.exe"_from_project (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"..\\x.exe"_from_env (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"..\\x.exe"_from_flag (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"C:\\x\\docker.exe"_from_user (0.02s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"C:\\x\\docker.exe"_from_project (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"C:\\x\\docker.exe"_from_env (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"C:\\x\\docker.exe"_from_flag (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"C:docker"_from_user (0.01s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"C:docker"_from_project (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"C:docker"_from_env (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"C:docker"_from_flag (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"docker.exe"_from_user (0.01s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"docker.exe"_from_project (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"docker.exe"_from_env (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"docker.exe"_from_flag (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"Docker"_from_user (0.01s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"Docker"_from_project (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"Docker"_from_env (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"Docker"_from_flag (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"_docker"_from_user (0.01s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"_docker"_from_project (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"_docker"_from_env (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"_docker"_from_flag (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"docker_"_from_user (0.01s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"docker_"_from_project (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"docker_"_from_env (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"docker_"_from_flag (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"nerdctl"_from_user (0.01s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"nerdctl"_from_project (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"nerdctl"_from_env (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"nerdctl"_from_flag (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"sh"_from_user (0.01s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"sh"_from_project (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"sh"_from_env (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"sh"_from_flag (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"sudo_docker"_from_user (0.01s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"sudo_docker"_from_project (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"sudo_docker"_from_env (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"sudo_docker"_from_flag (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"_"_from_user (0.01s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"_"_from_project (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"_"_from_env (0.00s)
+    --- PASS: TestUnsupportedRuntimeRefusedFromEverySource/"_"_from_flag (0.00s)
+=== RUN   TestDetectRuntimeProbesTheSupportedList
+    runtime_test.go:199: shell-script fakes need a POSIX shell
+--- SKIP: TestDetectRuntimeProbesTheSupportedList (0.00s)
+=== RUN   TestRuntimeOverridesComeFirst
+=== RUN   TestRuntimeOverridesComeFirst/flag_over_an_unsupported_project_value
+=== RUN   TestRuntimeOverridesComeFirst/variable_over_an_unsupported_project_value
+=== RUN   TestRuntimeOverridesComeFirst/project_over_an_unsupported_user_value
+=== RUN   TestRuntimeOverridesComeFirst/flag_over_an_unsupported_variable
+=== RUN   TestRuntimeOverridesComeFirst/unsupported_flag_over_a_supported_project_value
+=== RUN   TestRuntimeOverridesComeFirst/unsupported_variable_over_supported_files
+=== RUN   TestRuntimeOverridesComeFirst/unsupported_project_value_over_a_supported_user_value
+=== RUN   TestRuntimeOverridesComeFirst/both_files_hold_the_same_unsupported_string
+=== RUN   TestRuntimeOverridesComeFirst/only_the_user's_file_holds_it
+--- PASS: TestRuntimeOverridesComeFirst (0.03s)
+    --- PASS: TestRuntimeOverridesComeFirst/flag_over_an_unsupported_project_value (0.01s)
+    --- PASS: TestRuntimeOverridesComeFirst/variable_over_an_unsupported_project_value (0.00s)
+    --- PASS: TestRuntimeOverridesComeFirst/project_over_an_unsupported_user_value (0.00s)
+    --- PASS: TestRuntimeOverridesComeFirst/flag_over_an_unsupported_variable (0.00s)
+    --- PASS: TestRuntimeOverridesComeFirst/unsupported_flag_over_a_supported_project_value (0.00s)
+    --- PASS: TestRuntimeOverridesComeFirst/unsupported_variable_over_supported_files (0.00s)
+    --- PASS: TestRuntimeOverridesComeFirst/unsupported_project_value_over_a_supported_user_value (0.00s)
+    --- PASS: TestRuntimeOverridesComeFirst/both_files_hold_the_same_unsupported_string (0.00s)
+    --- PASS: TestRuntimeOverridesComeFirst/only_the_user's_file_holds_it (0.00s)
+=== RUN   TestEmptyRuntime
+=== RUN   TestEmptyRuntime/an_empty_flag_and_variable_leave_the_project's_value
+=== RUN   TestEmptyRuntime/an_empty_flag_and_variable_leave_the_user's_value
+=== RUN   TestEmptyRuntime/an_empty_project_value_hides_the_user's_and_is_detected
+--- PASS: TestEmptyRuntime (0.01s)
+    --- PASS: TestEmptyRuntime/an_empty_flag_and_variable_leave_the_project's_value (0.00s)
+    --- PASS: TestEmptyRuntime/an_empty_flag_and_variable_leave_the_user's_value (0.00s)
+    --- PASS: TestEmptyRuntime/an_empty_project_value_hides_the_user's_and_is_detected (0.01s)
+=== RUN   TestUnsupportedRuntimeMessage
+--- PASS: TestUnsupportedRuntimeMessage (0.00s)
+=== RUN   TestRuntimeErrorPrintsTheValueOnlyQuoted
+=== RUN   TestRuntimeErrorPrintsTheValueOnlyQuoted/value_0_from_user
+=== RUN   TestRuntimeErrorPrintsTheValueOnlyQuoted/value_0_from_project
+=== RUN   TestRuntimeErrorPrintsTheValueOnlyQuoted/value_0_from_env
+=== RUN   TestRuntimeErrorPrintsTheValueOnlyQuoted/value_0_from_flag
+=== RUN   TestRuntimeErrorPrintsTheValueOnlyQuoted/value_1_from_user
+=== RUN   TestRuntimeErrorPrintsTheValueOnlyQuoted/value_1_from_project
+=== RUN   TestRuntimeErrorPrintsTheValueOnlyQuoted/value_1_from_env
+=== RUN   TestRuntimeErrorPrintsTheValueOnlyQuoted/value_1_from_flag
+=== RUN   TestRuntimeErrorPrintsTheValueOnlyQuoted/value_2_from_user
+=== RUN   TestRuntimeErrorPrintsTheValueOnlyQuoted/value_2_from_project
+=== RUN   TestRuntimeErrorPrintsTheValueOnlyQuoted/value_2_from_env
+=== RUN   TestRuntimeErrorPrintsTheValueOnlyQuoted/value_2_from_flag
+--- PASS: TestRuntimeErrorPrintsTheValueOnlyQuoted (0.03s)
+    --- PASS: TestRuntimeErrorPrintsTheValueOnlyQuoted/value_0_from_user (0.01s)
+    --- PASS: TestRuntimeErrorPrintsTheValueOnlyQuoted/value_0_from_project (0.00s)
+    --- PASS: TestRuntimeErrorPrintsTheValueOnlyQuoted/value_0_from_env (0.00s)
+    --- PASS: TestRuntimeErrorPrintsTheValueOnlyQuoted/value_0_from_flag (0.00s)
+    --- PASS: TestRuntimeErrorPrintsTheValueOnlyQuoted/value_1_from_user (0.01s)
+    --- PASS: TestRuntimeErrorPrintsTheValueOnlyQuoted/value_1_from_project (0.00s)
+    --- PASS: TestRuntimeErrorPrintsTheValueOnlyQuoted/value_1_from_env (0.00s)
+    --- PASS: TestRuntimeErrorPrintsTheValueOnlyQuoted/value_1_from_flag (0.00s)
+    --- PASS: TestRuntimeErrorPrintsTheValueOnlyQuoted/value_2_from_user (0.01s)
+    --- PASS: TestRuntimeErrorPrintsTheValueOnlyQuoted/value_2_from_project (0.00s)
+    --- PASS: TestRuntimeErrorPrintsTheValueOnlyQuoted/value_2_from_env (0.00s)
+    --- PASS: TestRuntimeErrorPrintsTheValueOnlyQuoted/value_2_from_flag (0.00s)
+=== RUN   TestRuntimeUnsetMarker
+=== RUN   TestRuntimeUnsetMarker/no_project_file_restores_the_user's_value_and_source
+=== RUN   TestRuntimeUnsetMarker/a_project_file_with_other_keys_restores_the_user's_value_and_source
+=== RUN   TestRuntimeUnsetMarker/a_[runtime]_table_without_cli_restores_the_user's_value_and_source
+=== RUN   TestRuntimeUnsetMarker/a_project_file_with_only_comment_restores_the_user's_value_and_source
+=== RUN   TestRuntimeUnsetMarker/no_file_names_a_runtime
+=== RUN   TestRuntimeUnsetMarker/the_marker_in_a_basic_string_fails_the_load
+=== RUN   TestRuntimeUnsetMarker/the_marker_in_a_literal_string_fails_the_load
+=== RUN   TestRuntimeUnsetMarker/the_marker_in_a_multi-line_basic_string_fails_the_load
+=== RUN   TestRuntimeUnsetMarker/the_marker_in_a_multi-line_literal_string_fails_the_load
+=== RUN   TestRuntimeUnsetMarker/cli_=_"\xff"_is_the_project's_unsupported_value
+=== RUN   TestRuntimeUnsetMarker/cli_=_"\u00ff"_is_the_project's_unsupported_value
+=== RUN   TestRuntimeUnsetMarker/cli_=_"ÿ"_is_the_project's_unsupported_value
+--- PASS: TestRuntimeUnsetMarker (0.23s)
+    --- PASS: TestRuntimeUnsetMarker/no_project_file_restores_the_user's_value_and_source (0.00s)
+    --- PASS: TestRuntimeUnsetMarker/a_project_file_with_other_keys_restores_the_user's_value_and_source (0.01s)
+    --- PASS: TestRuntimeUnsetMarker/a_[runtime]_table_without_cli_restores_the_user's_value_and_source (0.01s)
+    --- PASS: TestRuntimeUnsetMarker/a_project_file_with_only_comment_restores_the_user's_value_and_source (0.01s)
+    --- PASS: TestRuntimeUnsetMarker/no_file_names_a_runtime (0.00s)
+    --- PASS: TestRuntimeUnsetMarker/the_marker_in_a_basic_string_fails_the_load (0.01s)
+    --- PASS: TestRuntimeUnsetMarker/the_marker_in_a_literal_string_fails_the_load (0.05s)
+    --- PASS: TestRuntimeUnsetMarker/the_marker_in_a_multi-line_basic_string_fails_the_load (0.01s)
+    --- PASS: TestRuntimeUnsetMarker/the_marker_in_a_multi-line_literal_string_fails_the_load (0.01s)
+    --- PASS: TestRuntimeUnsetMarker/cli_=_"\xff"_is_the_project's_unsupported_value (0.01s)
+    --- PASS: TestRuntimeUnsetMarker/cli_=_"\u00ff"_is_the_project's_unsupported_value (0.01s)
+    --- PASS: TestRuntimeUnsetMarker/cli_=_"ÿ"_is_the_project's_unsupported_value (0.11s)
+=== RUN   TestRuntimeKeyInOtherSpellings
+=== RUN   TestRuntimeKeyInOtherSpellings/[runtime]_CLI_./rt
+=== RUN   TestRuntimeKeyInOtherSpellings/[runtime]_CLI_sh
+=== RUN   TestRuntimeKeyInOtherSpellings/[runtime]_Cli_./rt
+=== RUN   TestRuntimeKeyInOtherSpellings/[runtime]_Cli_sh
+=== RUN   TestRuntimeKeyInOtherSpellings/[Runtime]_cli_./rt
+=== RUN   TestRuntimeKeyInOtherSpellings/[Runtime]_cli_sh
+=== RUN   TestRuntimeKeyInOtherSpellings/[RUNTIME]_CLI_./rt
+=== RUN   TestRuntimeKeyInOtherSpellings/[RUNTIME]_CLI_sh
+=== RUN   TestRuntimeKeyInOtherSpellings/dotted_key_./rt
+=== RUN   TestRuntimeKeyInOtherSpellings/dotted_key_sh
+=== RUN   TestRuntimeKeyInOtherSpellings/an_inline_table_./rt
+=== RUN   TestRuntimeKeyInOtherSpellings/an_inline_table_sh
+=== RUN   TestRuntimeKeyInOtherSpellings/[Runtime]_CLI_selects_a_supported_runtime
+=== RUN   TestRuntimeKeyInOtherSpellings/both_spellings_in_one_table
+--- PASS: TestRuntimeKeyInOtherSpellings (0.52s)
+    --- PASS: TestRuntimeKeyInOtherSpellings/[runtime]_CLI_./rt (0.04s)
+    --- PASS: TestRuntimeKeyInOtherSpellings/[runtime]_CLI_sh (0.06s)
+    --- PASS: TestRuntimeKeyInOtherSpellings/[runtime]_Cli_./rt (0.06s)
+    --- PASS: TestRuntimeKeyInOtherSpellings/[runtime]_Cli_sh (0.03s)
+    --- PASS: TestRuntimeKeyInOtherSpellings/[Runtime]_cli_./rt (0.12s)
+    --- PASS: TestRuntimeKeyInOtherSpellings/[Runtime]_cli_sh (0.01s)
+    --- PASS: TestRuntimeKeyInOtherSpellings/[RUNTIME]_CLI_./rt (0.01s)
+    --- PASS: TestRuntimeKeyInOtherSpellings/[RUNTIME]_CLI_sh (0.02s)
+    --- PASS: TestRuntimeKeyInOtherSpellings/dotted_key_./rt (0.01s)
+    --- PASS: TestRuntimeKeyInOtherSpellings/dotted_key_sh (0.02s)
+    --- PASS: TestRuntimeKeyInOtherSpellings/an_inline_table_./rt (0.08s)
+    --- PASS: TestRuntimeKeyInOtherSpellings/an_inline_table_sh (0.04s)
+    --- PASS: TestRuntimeKeyInOtherSpellings/[Runtime]_CLI_selects_a_supported_runtime (0.01s)
+    --- PASS: TestRuntimeKeyInOtherSpellings/both_spellings_in_one_table (0.02s)
+=== RUN   TestUnusedRuntimeIsNotValidated
+=== RUN   TestUnusedRuntimeIsNotValidated/resolveConfig_with_--driver_
+=== RUN   TestUnusedRuntimeIsNotValidated/resolveConfig_with_--driver_container
+=== RUN   TestUnusedRuntimeIsNotValidated/resolveConfig_with_--driver_qemu
+=== RUN   TestUnusedRuntimeIsNotValidated/resolveConfig_with_--driver_vz
+=== RUN   TestUnusedRuntimeIsNotValidated/resolveConfig_with_--driver_hyperv
+=== RUN   TestUnusedRuntimeIsNotValidated/resolveConfig_with_--driver_firecracker
+=== RUN   TestUnusedRuntimeIsNotValidated/newDriver_for_qemu
+=== RUN   TestUnusedRuntimeIsNotValidated/newDriver_for_vz
+=== RUN   TestUnusedRuntimeIsNotValidated/newDriver_for_hyperv
+=== RUN   TestUnusedRuntimeIsNotValidated/newDriver_for_firecracker
+=== RUN   TestUnusedRuntimeIsNotValidated/clean_with_--driver_hyperv
+    runtime_test.go:510: hyperv's clean would act on this host's VMs
+=== RUN   TestUnusedRuntimeIsNotValidated/clean_with_--driver_firecracker
+Nothing to clean.
+--- PASS: TestUnusedRuntimeIsNotValidated (0.98s)
+    --- PASS: TestUnusedRuntimeIsNotValidated/resolveConfig_with_--driver_ (0.01s)
+    --- PASS: TestUnusedRuntimeIsNotValidated/resolveConfig_with_--driver_container (0.00s)
+    --- PASS: TestUnusedRuntimeIsNotValidated/resolveConfig_with_--driver_qemu (0.18s)
+    --- PASS: TestUnusedRuntimeIsNotValidated/resolveConfig_with_--driver_vz (0.04s)
+    --- PASS: TestUnusedRuntimeIsNotValidated/resolveConfig_with_--driver_hyperv (0.08s)
+    --- PASS: TestUnusedRuntimeIsNotValidated/resolveConfig_with_--driver_firecracker (0.20s)
+    --- PASS: TestUnusedRuntimeIsNotValidated/newDriver_for_qemu (0.01s)
+    --- PASS: TestUnusedRuntimeIsNotValidated/newDriver_for_vz (0.08s)
+    --- PASS: TestUnusedRuntimeIsNotValidated/newDriver_for_hyperv (0.22s)
+    --- PASS: TestUnusedRuntimeIsNotValidated/newDriver_for_firecracker (0.13s)
+    --- SKIP: TestUnusedRuntimeIsNotValidated/clean_with_--driver_hyperv (0.00s)
+    --- PASS: TestUnusedRuntimeIsNotValidated/clean_with_--driver_firecracker (0.03s)
+=== RUN   TestDoctorChild
+--- PASS: TestDoctorChild (0.00s)
+=== RUN   TestDoctorIgnoresAnUnusedRuntime
+=== RUN   TestDoctorIgnoresAnUnusedRuntime/--driver_qemu
+=== RUN   TestDoctorIgnoresAnUnusedRuntime/--driver_vz
+=== RUN   TestDoctorIgnoresAnUnusedRuntime/--driver_hyperv
+=== RUN   TestDoctorIgnoresAnUnusedRuntime/--driver_firecracker
+--- PASS: TestDoctorIgnoresAnUnusedRuntime (9.44s)
+    --- PASS: TestDoctorIgnoresAnUnusedRuntime/--driver_qemu (0.15s)
+    --- PASS: TestDoctorIgnoresAnUnusedRuntime/--driver_vz (0.02s)
+    --- PASS: TestDoctorIgnoresAnUnusedRuntime/--driver_hyperv (9.26s)
+    --- PASS: TestDoctorIgnoresAnUnusedRuntime/--driver_firecracker (0.02s)
+=== RUN   TestUnsupportedRuntimeIsNeverRun
+=== RUN   TestUnsupportedRuntimeIsNeverRun/cli_=_"./rt",_newDriver
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/cli_=_"./rt",_build
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/cli_=_"./rt",_shell
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/cli_=_"./rt",_clean
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/cli_=_"./rt",_doctor
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/CLI_=_"./rt",_newDriver
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/CLI_=_"./rt",_build
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/CLI_=_"./rt",_shell
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/CLI_=_"./rt",_clean
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/CLI_=_"./rt",_doctor
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/cli_=_"sh",_newDriver
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/cli_=_"sh",_build
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/cli_=_"sh",_shell
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/cli_=_"sh",_clean
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/cli_=_"sh",_doctor
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/cli_=_"./rt"_beside_driver_=_"qemu",_clean
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/cli_=_"./rt"_with_--driver_vz,_clean
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_--runtime,_newDriver
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_--runtime,_build
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_--runtime,_shell
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_--runtime,_clean
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_--runtime,_doctor
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_WARDEN_CTR_CLI,_newDriver
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_WARDEN_CTR_CLI,_build
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_WARDEN_CTR_CLI,_shell
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_WARDEN_CTR_CLI,_clean
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_WARDEN_CTR_CLI,_doctor
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_the_user's_file,_newDriver
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_the_user's_file,_build
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_the_user's_file,_shell
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_the_user's_file,_clean
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_the_user's_file,_doctor
+    runtime_test.go:679: shell-script fakes need a POSIX shell
+--- PASS: TestUnsupportedRuntimeIsNeverRun (0.03s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/cli_=_"./rt",_newDriver (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/cli_=_"./rt",_build (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/cli_=_"./rt",_shell (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/cli_=_"./rt",_clean (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/cli_=_"./rt",_doctor (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/CLI_=_"./rt",_newDriver (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/CLI_=_"./rt",_build (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/CLI_=_"./rt",_shell (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/CLI_=_"./rt",_clean (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/CLI_=_"./rt",_doctor (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/cli_=_"sh",_newDriver (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/cli_=_"sh",_build (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/cli_=_"sh",_shell (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/cli_=_"sh",_clean (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/cli_=_"sh",_doctor (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/cli_=_"./rt"_beside_driver_=_"qemu",_clean (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/cli_=_"./rt"_with_--driver_vz,_clean (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_--runtime,_newDriver (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_--runtime,_build (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_--runtime,_shell (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_--runtime,_clean (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_--runtime,_doctor (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_WARDEN_CTR_CLI,_newDriver (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_WARDEN_CTR_CLI,_build (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_WARDEN_CTR_CLI,_shell (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_WARDEN_CTR_CLI,_clean (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_WARDEN_CTR_CLI,_doctor (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_the_user's_file,_newDriver (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_the_user's_file,_build (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_the_user's_file,_shell (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_the_user's_file,_clean (0.00s)
+    --- SKIP: TestUnsupportedRuntimeIsNeverRun/the_program's_path_in_the_user's_file,_doctor (0.00s)
+=== RUN   TestUnsupportedRuntimeHasNoFallback
+=== RUN   TestUnsupportedRuntimeHasNoFallback/newDriver
+    runtime_test.go:705: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeHasNoFallback/build
+    runtime_test.go:705: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeHasNoFallback/shell
+    runtime_test.go:705: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeHasNoFallback/clean
+    runtime_test.go:705: shell-script fakes need a POSIX shell
+=== RUN   TestUnsupportedRuntimeHasNoFallback/doctor
+    runtime_test.go:705: shell-script fakes need a POSIX shell
+--- PASS: TestUnsupportedRuntimeHasNoFallback (0.01s)
+    --- SKIP: TestUnsupportedRuntimeHasNoFallback/newDriver (0.00s)
+    --- SKIP: TestUnsupportedRuntimeHasNoFallback/build (0.00s)
+    --- SKIP: TestUnsupportedRuntimeHasNoFallback/shell (0.00s)
+    --- SKIP: TestUnsupportedRuntimeHasNoFallback/clean (0.00s)
+    --- SKIP: TestUnsupportedRuntimeHasNoFallback/doctor (0.00s)
+=== RUN   TestVMDNSAtLoad
+=== RUN   TestVMDNSAtLoad/unset
+=== RUN   TestVMDNSAtLoad/user_config
+=== RUN   TestVMDNSAtLoad/project_over_user
+=== RUN   TestVMDNSAtLoad/project_without_the_key_keeps_the_user's
+=== RUN   TestVMDNSAtLoad/loopback_accepted_at_load
+--- PASS: TestVMDNSAtLoad (0.02s)
+    --- PASS: TestVMDNSAtLoad/unset (0.00s)
+    --- PASS: TestVMDNSAtLoad/user_config (0.00s)
+    --- PASS: TestVMDNSAtLoad/project_over_user (0.00s)
+    --- PASS: TestVMDNSAtLoad/project_without_the_key_keeps_the_user's (0.00s)
+    --- PASS: TestVMDNSAtLoad/loopback_accepted_at_load (0.01s)
+=== RUN   TestBadVMDNSFailsAtLoad
+--- PASS: TestBadVMDNSFailsAtLoad (0.01s)
+=== RUN   TestBuildRequestDNSForVMDriversOnly
+--- PASS: TestBuildRequestDNSForVMDriversOnly (0.00s)
+=== RUN   TestSetupSlots
+--- PASS: TestSetupSlots (0.00s)
+=== RUN   TestDoctorResolvers
+--- PASS: TestDoctorResolvers (0.00s)
+PASS
+ok  	github.com/buildwarden/buildwarden/cmd/warden	11.792s
