@@ -5333,6 +5333,49 @@ no entry below is the outcome or an approval of the design.
     stays undeclared until it merges, which is the safe side. It is
     listed under **What this item does not do**.
 
+### 2026-11-15, second sitting, outcome: approved
+
+- **r1, 2026-11-15: approved at `636f18b`** (Jeff; read at `f706bf7`,
+  `63183c9`, `e692fad` and `636f18b` as his answers were folded in; page
+  https://claude.ai/artifact/NrjiEFjKVjiSbYcXt3qFu1). All eighteen
+  questions are answered, as the entries above record; a1, a3, a4, a5,
+  a15, a17 and a19 depart from what the draft recommended and are folded
+  in. Accepted by him in the sitting, as choices the design made without
+  a question: no refresh is taken while `main` is recorded red, except
+  for the item named as the fix; and a refresh is not exempt from a
+  process item's hold. Twelve rule changes were approved by name on the
+  wording at `63183c9`, which is byte-identical at `636f18b` (FLOW-03,
+  -04, -06, -08, -09, -10, -15, -19, -20, LOOP-01, LOOP-04, PROFILE-01);
+  FLOW-02 and FLOW-05 were approved by name on the wording at `636f18b`.
+- **rule change FLOW-02 approved at `636f18b`**, as worded under **Rule
+  changes**, with the two bullets `driver-contract` asked this item to carry ("the driver contract or `driver.Session`").
+- **rule change FLOW-03 approved at `636f18b`**, as worded under **Rule
+  changes**.
+- **rule change FLOW-04 approved at `636f18b`**, as worded under **Rule
+  changes**.
+- **rule change FLOW-05 approved at `636f18b`**, as worded under **Rule
+  changes**; of the two second sentences shown to him for **Waiting on the human**, he chose the one written ("Only the human marks a security fix urgent; ..."), and the check type stays `automated`.
+- **rule change FLOW-06 approved at `636f18b`**, as worded under **Rule
+  changes**.
+- **rule change FLOW-08 approved at `636f18b`**, as worded under **Rule
+  changes**.
+- **rule change FLOW-09 approved at `636f18b`**, as worded under **Rule
+  changes**.
+- **rule change FLOW-10 approved at `636f18b`**, as worded under **Rule
+  changes**.
+- **rule change FLOW-15 approved at `636f18b`**, as worded under **Rule
+  changes**.
+- **rule change FLOW-19 approved at `636f18b`**, as worded under **Rule
+  changes**.
+- **rule change FLOW-20 approved at `636f18b`**, as worded under **Rule
+  changes**.
+- **rule change LOOP-01 approved at `636f18b`**, as worded under **Rule
+  changes**.
+- **rule change LOOP-04 approved at `636f18b`**, as worded under **Rule
+  changes**.
+- **rule change PROFILE-01 approved at `636f18b`**, as worded under **Rule
+  changes**.
+
 ## Consolidation
 
 A process item has no Publish phase and no consolidation pass (FLOW-03).
