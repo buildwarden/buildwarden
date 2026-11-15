@@ -2885,6 +2885,26 @@ Not changed: the proposed wording of ORCH-03 and of UX-07, byte for
 byte as at `3c0caab` (compared by a script that extracts the two
 quoted blocks at both commits); every front-matter value.
 
+### 2026-11-15, first sitting, outcome: approved
+
+- **r1, 2026-11-15: approved at `a94133d`** (Jeff; read at `3c0caab` and,
+  with his answers folded in, at `a94133d`; page
+  https://claude.ai/artifact/1YpX4SdzhcWM9tY8df52db). All thirteen
+  questions are answered. a6 and a9 are his own words and are folded in,
+  as the entries above record. a12 and a13 were asked on `a94133d` and
+  each answered (a), on which the design already proceeds: the entries of
+  a CA directory that are never opened are counted on every run and
+  listed with `--verbose`; a file of a named CA directory that cannot be
+  read is skipped with its line. The Security note is accepted
+  (GLOBAL-06). The hold a7 asked for is not raised: `runtime-cli-project-path`
+  merged as `3cb0b2b` (#120) before this outcome, so Plan starts once
+  `main` is merged into this branch. Where this design describes that
+  item as unmerged, or PR #120 as open, Plan reads `main` as it is.
+- **rule change ORCH-03 approved at `a94133d`**, as worded under **Rule
+  changes**.
+- **rule change UX-07 approved at `a94133d`**, as worded under **Rule
+  changes**.
+
 ## Consolidation
 
 Filled in at Publish (FLOW-10, FLOW-15).
