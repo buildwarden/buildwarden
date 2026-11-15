@@ -691,3 +691,61 @@ gaps:
       Tracked, not blocking (design Validation plan, tier 2). finch is the default runtime CI does not
       run. Run once runtime-cli-project-path has merged, or against feat/runtime-cli-project-path once
       it is implemented.
+  - id: project-config-trust-windows
+    host: container-any
+    status: open
+    what: >-
+      On the Windows desktop: go test ./cmd/warden ./driver; with
+      %USERPROFILE%\.config\warden\config.toml present, warden doctor exits 1 naming that path, and
+      WARDEN_CONFIG set to it clears the error; --config C:\x\warden.toml is read and .\warden.toml is
+      not; WARDEN_UPSTREAM_CA_CERTS=C:\a.pem;C:\b.pem names two files, each with its upstream CA line
+      on stderr; --config NUL reads no settings.
+    design: docs/design/project-config-trust.md
+    note: >-
+      Tracked, not blocking (design Validation plan, tier 2). No driver's own code is changed and the
+      lookup is the same code on every OS; make test does not run on Windows in CI. Run once
+      project-config-trust has merged, or against feat/project-config-trust once it is implemented.
+  - id: project-config-trust-hyperv
+    host: windows-hyperv
+    status: open
+    what: >-
+      A hyperv build with --config naming a file outside the working directory whose
+      [vm] image_refresh_after is due starts the detached image prepare, and its log's config line
+      names that file; a development warden run from its tree builds.
+    design: docs/design/project-config-trust.md
+    note: >-
+      Tracked, not blocking (design Validation plan, tier 2). In driver/hyperv only test files are
+      added or edited, and CI runs them; the detached prepare's argument list is built in shared code
+      and unit-tested. Run once project-config-trust has merged, or against feat/project-config-trust
+      once it is implemented. prebuilt-artifacts removes the tree lookup afterwards; the second half
+      of this entry is then that item's to restate.
+  - id: project-config-trust-vz
+    host: macos-vz
+    status: open
+    what: >-
+      sudo warden image prepare --driver vz and warden build --driver vz with
+      ~/.config/warden/config.toml present each exit 1 naming the file, under sudo naming the file in
+      the home sudo gives, and the fix under sudo names --config; with WARDEN_CONFIG set in the user's
+      environment, sudo warden image prepare prints a config line that does not name that file (sudo
+      dropped the variable), and with sudo --preserve-env=WARDEN_CONFIG or --config it names it; a
+      development warden run from its tree builds with --driver vz.
+    design: docs/design/project-config-trust.md
+    note: >-
+      Tracked, not blocking (design Validation plan, tier 2). driver/vz is not edited; what only this
+      host adds is sudo keeping the user's home and dropping WARDEN_CONFIG. Run once
+      project-config-trust has merged, or against feat/project-config-trust once it is implemented.
+      prebuilt-artifacts removes the tree lookup afterwards; the last clause of this entry is then
+      that item's to restate.
+  - id: project-config-trust-qemu
+    host: qemu-any
+    status: open
+    what: >-
+      A development warden run from its tree builds with --driver qemu, the relay VM assets found in
+      the tree; a copy of that warden outside the tree, run inside the tree, reports the missing
+      source tree and builds nothing.
+    design: docs/design/project-config-trust.md
+    note: >-
+      Tracked, not blocking (design Validation plan, tier 2). In driver/qemu only a test file is
+      added, and CI runs it. Run once project-config-trust has merged, or against
+      feat/project-config-trust once it is implemented. prebuilt-artifacts removes the tree lookup
+      afterwards and restates this entry.

@@ -162,6 +162,15 @@ questions:
       - (c) they stay recorded in this design only
     recommended: '(a) the design-review session records them: four to configuration-bugfixes, two to a new security item through intake'
     answer: '(a) Filed now: the four observations appended to configuration-bugfixes'' source, the two security findings filed through intake as one item. As recommended. Answered 2026-11-15.'
+  - id: a12
+    kind: assumed
+    status: open
+    question: 'The entries of a named CA directory that are not read because of their names. New 2026-11-15, raised by the fold-in of a9''s answer. A directory path means its .pem, .crt and .cer files, one level deep; its other entries (a file of another ending, a subdirectory) are not opened, today and after. a9''s answer has every skipped file get a stderr line with its reason on every run. It was given for files that are read and hold something other than a valid PEM certificate; whether an entry that is never opened is a skipped file, the answer does not say. The case is common: on the design agent''s host /etc/ssl/certs has 248 entries, of which 124 are read, 123 are hash-named links (002c0b4f.0) and one is a subdirectory. The design proceeds with (a).'
+    options:
+      - '(a) counted on every run, listed with --verbose: the path''s line ends "; 124 other entries not read", and with --verbose each is a line with its reason (its name''s ending, or that it is a directory); a root saved as corp.der or corp.cert is in the count on every run and is named on request'
+      - '(b) one line each, on every run: "skips always" to the letter; a system certificate directory then prints 124 lines on every build, and the lines that matter (a private key, a DER file) are among them'
+      - '(c) not mentioned at all: by the reference they are not CA files; a root saved under another ending then gives no line and no count, which is the silent case the answer is against'
+    recommended: (a) counted on every run, listed with --verbose
 history:
   - at: 2026-11-15T20:14:52Z
     by: human/jeff
