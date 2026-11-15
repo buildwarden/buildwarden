@@ -61,10 +61,35 @@ type RelayConfig struct {
 }
 
 type RuntimeConfig struct {
-	CLI        string `toml:"cli"`
+	CLI string `toml:"cli"`
+	// CLISource says where CLI was named: cliFromFlag, cliFromEnv, or the
+	// config file that set it ("warden.toml", or the user's file by its
+	// path). It words the error that refuses an unsupported runtime; nothing
+	// that decides what is run reads it.
+	CLISource  string `toml:"-"`
 	Driver     string `toml:"driver"`
 	RelayImage string `toml:"relay_image"`
 }
+
+// What RuntimeConfig.CLISource holds for a runtime named outside a config
+// file.
+const (
+	cliFromFlag = "--runtime"
+	cliFromEnv  = "WARDEN_CTR_CLI"
+)
+
+// projectConfig is the project-level config file, read from the working
+// directory.
+const projectConfig = "warden.toml"
+
+// unsetCLI stands in for [runtime] cli while the project's file is decoded,
+// so that LoadConfig can tell whether that file set the key. The decoder's
+// IsDefined cannot: it compares a key's spelling exactly, while the decoder
+// also fills the field from CLI or [Runtime]. No TOML file can produce this
+// value: it is not valid UTF-8, which the decoder refuses in a file and no
+// escape in a TOML string can spell. So a file cannot pass for one that left
+// the key unset and have the user's value run in place of its own.
+const unsetCLI = "\xff"
 
 type BuildCfg struct {
 	Dockerfile string `toml:"dockerfile"`
@@ -93,16 +118,24 @@ func LoadConfig() (*Config, error) {
 		if err := loadTOML(userPath, cfg); err != nil {
 			return nil, err
 		}
+		cfg.Runtime.CLISource = userPath
 	}
 
 	// Project-level config (overrides user)
-	if err := loadTOML("warden.toml", cfg); err != nil {
+	userCLI, userCLISource := cfg.Runtime.CLI, cfg.Runtime.CLISource
+	cfg.Runtime.CLI = unsetCLI
+	if err := loadTOML(projectConfig, cfg); err != nil {
 		return nil, err
+	}
+	if cfg.Runtime.CLI == unsetCLI {
+		cfg.Runtime.CLI, cfg.Runtime.CLISource = userCLI, userCLISource
+	} else {
+		cfg.Runtime.CLISource = projectConfig
 	}
 
 	// Environment variable overrides
-	if cli := os.Getenv("WARDEN_CTR_CLI"); cli != "" {
-		cfg.Runtime.CLI = cli
+	if cli := os.Getenv(cliFromEnv); cli != "" {
+		cfg.Runtime.CLI, cfg.Runtime.CLISource = cli, cliFromEnv
 	}
 	if d := os.Getenv("WARDEN_DRIVER"); d != "" {
 		cfg.Runtime.Driver = d
@@ -195,11 +228,63 @@ func checkBuildLink(s string) (buildlink.Link, error) {
 	return link, nil
 }
 
-// DetectRuntime probes for a working container runtime.
-// Preference order: finch, docker, podman.
+// containerRuntimes are the runtimes the container driver supports, in the
+// order detection prefers them. A runtime named by a flag, a variable or a
+// config file is one of these or is refused (resolveRuntime).
+var containerRuntimes = []string{"finch", "docker", "podman"}
+
+// supportedRuntime returns the member of containerRuntimes that v equals.
+// The comparison is exact, and what is returned is the list's own string,
+// never v: no text from a flag, a variable or a config file reaches exec.
+func supportedRuntime(v string) (string, bool) {
+	for _, name := range containerRuntimes {
+		if v == name {
+			return name, true
+		}
+	}
+	return "", false
+}
+
+// runtimeNames lists containerRuntimes in prose, the last after conj:
+// "finch, docker or podman".
+func runtimeNames(conj string) string {
+	last := len(containerRuntimes) - 1
+	return strings.Join(containerRuntimes[:last], ", ") +
+		" " + conj + " " + containerRuntimes[last]
+}
+
+// unsupportedRuntime is the error for a runtime in effect that is not one of
+// containerRuntimes. It names the level that set the value and gives the fix
+// for that level. The value is printed once, quoted: it may come from a file
+// someone else wrote, and %q keeps control characters out of the terminal.
+// Nothing else in the message or the fix is taken from the value.
+func unsupportedRuntime(rt RuntimeConfig) error {
+	var setting, set, orNot string
+	switch rt.CLISource {
+	case cliFromFlag:
+		setting, set, orNot = cliFromFlag, "pass --runtime ", ", or leave it out"
+	case cliFromEnv:
+		setting, set, orNot = cliFromEnv, "set WARDEN_CTR_CLI to ", ", or unset it"
+	default:
+		setting, set = "[runtime] cli in "+rt.CLISource, "set it to "
+		orNot = ", or remove it; --runtime with one of those replaces it " +
+			"for one command"
+	}
+	what := "the container driver supports " + runtimeNames("and")
+	fix := set + runtimeNames("or") + orNot
+	// TRANSITIONAL(runtime-former-values): a value that ran before this
+	// check existed gets a message that says what to change.
+	if formerWhat, formerFix, ok := formerRuntimeValue(rt.CLI); ok {
+		what, fix = formerWhat, set+formerFix
+	}
+	return driver.Fixable(fix, "%s is %q; %s", setting, rt.CLI, what)
+}
+
+// DetectRuntime probes for a working container runtime, in
+// containerRuntimes' order.
 func DetectRuntime() (string, error) {
 	var installed []string
-	for _, name := range []string{"finch", "docker", "podman"} {
+	for _, name := range containerRuntimes {
 		if _, err := exec.LookPath(name); err != nil {
 			continue
 		}

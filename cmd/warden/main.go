@@ -188,7 +188,7 @@ func resolveConfig() (*Config, error) {
 	}
 
 	if flagRuntime != "" {
-		cfg.Runtime.CLI = flagRuntime
+		cfg.Runtime.CLI, cfg.Runtime.CLISource = flagRuntime, cliFromFlag
 	}
 	if flagDriver != "" {
 		cfg.Runtime.Driver = flagDriver
@@ -203,11 +203,19 @@ func resolveConfig() (*Config, error) {
 	return cfg, validateDriver(cfg.Runtime.Driver)
 }
 
+// resolveRuntime returns the container runtime to run: the one in effect
+// when it is a supported runtime, the detected one when no level names any.
+// Another value is refused here, before anything is looked up, run or
+// created. Only the commands that run the container runtime call this, so a
+// run that does not use the setting does not validate it (UX-08).
 func resolveRuntime(cfg *Config) (string, error) {
-	if cfg.Runtime.CLI != "" {
-		return cfg.Runtime.CLI, nil
+	if cfg.Runtime.CLI == "" {
+		return DetectRuntime()
 	}
-	return DetectRuntime()
+	if name, ok := supportedRuntime(cfg.Runtime.CLI); ok {
+		return name, nil
+	}
+	return "", unsupportedRuntime(cfg.Runtime)
 }
 
 func validateGuestOS(guestOS, driverName string) error {
