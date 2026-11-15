@@ -7252,6 +7252,43 @@ Jeff read them):
 Still to come: the umbrella's list once more (a18); the Security note's
 acceptance; then the outcome.
 
+### 2026-11-15, second sitting, outcome: approved
+
+- **r2, 2026-11-15: approved at `a6c8f0b`** (Jeff; read at `5808805` and,
+  with one config file folded in, at `3f2012a`; page
+  https://claude.ai/artifact/AGW8qkxVncdMhjna1bPsGH). `a6c8f0b` records
+  the last answers and changes no decision, contract clause or rule
+  wording since `3f2012a` (the entry above; checked by an independent
+  reviewer). Every question is answered: a5 (a), a26 (i) and (A), and a8
+  (a) with (i) for FLOW-02, in this sitting; the others as the entries
+  above record. Asked in the sitting and answered by him: the amendments
+  to the umbrella design were put to him once more, as a18's answer
+  required, and "they stand"; the date the umbrella's **Amendments**
+  entry and its Archive summary carry is 2026-11-15. The Bootstrap
+  comparison is accepted explicitly (BOOT-07), with BOOT-02. The Security
+  note is accepted (GLOBAL-06). Told to him with the request for the
+  outcome: the removal of the seven old key names at 1.0 is not tracked
+  by this design and falls to Plan; and the FLOW-02 fallback paragraph
+  covers a case he had not read. Plan stays held by `q1` until
+  `project-config-trust`'s PR has merged (Decision 23).
+- **rule change GLOBAL-08 approved at `a6c8f0b`**, as worded under **Rule
+  changes**.
+- **rule change ORCH-01 approved at `a6c8f0b`**, as worded there.
+- **rule change ORCH-02 approved at `a6c8f0b`**, as worded there.
+- **rule change ORCH-04 approved at `a6c8f0b`**, as worded there.
+- **rule change TEST-05 approved at `a6c8f0b`**, as worded there.
+- **rule change BOOT-02 approved at `a6c8f0b`**, as worded there, with
+  the Bootstrap comparison.
+- **rule change UX-01 approved at `a6c8f0b`**: enforcement only.
+- **rule change UX-03 approved at `a6c8f0b`**: enforcement only.
+- **rule change ORCH-03 approved at `a6c8f0b`**: K1's paragraph and
+  clause, in both settings (after `main`'s first paragraph, and after
+  `project-config-trust`'s).
+- **rule change PROFILE-01 approved at `a6c8f0b`**: four rows, the
+  Specifications row in both forms (K1's alone, and joined with
+  `seam-specs`' sentences).
+- **rule change UX-08 approved at `a6c8f0b`**: the last paragraph only.
+
 ## Consolidation
 
 ## Rollback notes
