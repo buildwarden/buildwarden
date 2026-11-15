@@ -24,7 +24,8 @@ rules: [GLOBAL-01, GLOBAL-02, GLOBAL-03, GLOBAL-04, GLOBAL-06, GLOBAL-07, GLOBAL
 rule_changes:
   - {rule: TEST-05, change: amend, paths: [docs/development/testing.md, tools/tier1/rules.yaml]}
   - {rule: TEST-02, change: amend, paths: [docs/development/testing.md]}
-  - {rule: GLOBAL-08, change: amend, paths: [docs/development/global.md, tools/tier1/rules.yaml]}
+  - {rule: GLOBAL-08, change: amend, paths: [docs/development/global.md, tools/tier1/rules.yaml,
+                                              tools/tier1/coupling/checks_test.go]}
   - {rule: EXEC-04, change: amend, paths: [docs/development/in-vm-executor.md]}
   - {rule: PROFILE-01, change: amend, paths: [docs/development/loop-profile.md]}
 concepts: [seams, specs-repo, conformance, conformance-harness, relay-claim, claim-protocol,
@@ -143,7 +144,8 @@ Three things follow.
   specs repository uses the same layout, extended (Decision 2).
 - [`tier1-static-checks`](tier1-static-checks.md) built `seam-contract` and
   kept its seam list as data in `rules.yaml`, "so new seams edit data, not
-  code". This item fills the list and changes no check code.
+  code". This item fills the list. The check's code does not change;
+  one test of it does (**Rule changes**, GLOBAL-08).
 - [`build-link-subnet`](build-link-subnet.md) (the claim's `build_link`, what
   each mode does with it, the refusal that leaves a relay claimable) and
   [`hyperv-relay-per-build-channel`](hyperv-relay-per-build-channel.md)
@@ -648,7 +650,7 @@ Nothing in any of the five is approved.
    ```
    module github.com/buildwarden/buildwarden/tools/conformance/relay-claim
 
-   go 1.26.3
+   go 1.26
 
    tool github.com/buildwarden/buildwarden-specs/relay-claim/cmd/bw-conformance-relay-claim
 
@@ -670,9 +672,11 @@ Nothing in any of the five is approved.
    The `relay-claim` line is the pin. The `conformance` line is the
    harness, at the version the pinned release names; it is not a pin,
    and nobody edits it. The other lines are the harness's third-party
-   modules, at the versions the release lists. `go.sum` holds the hashes of all of them, the
-   harness included, and the Go checksum database verifies each. The
-   kit's own `go.mod` gains no dependency.
+   modules, at the versions the release lists. The `go` line is the one
+   the pinned release's own `go.mod` has (below); in the model that was
+   `go 1.26`. `go.sum` holds the hashes of all of them, the harness
+   included, and the Go checksum database verifies each. The kit's own
+   `go.mod` gains no dependency.
 
    *Each command is built from exactly what its release names.* Go builds
    one module with one version of each dependency. A module that requires
@@ -682,9 +686,10 @@ Nothing in any of the five is approved.
    `go install <command>@<tag>` builds from (Decision 4). So what tests a
    pinned release here is built from the same modules, at the same
    versions, as that release's binaries: in the model the two builds
-   reported the same module versions with the same hashes. The compiler
-   and the build settings are this repository's; the source is the
-   release's. Two
+   reported the same module versions with the same hashes. The source
+   is the release's, and so is what Go takes from a module's `go` line.
+   The compiler is the Go that runs here, which is this repository's
+   unless the release names a newer one (both below). Two
    specifications pinned at releases with different harness versions run
    each with its own, and any set of pins builds, the newest of each or
    not: the model built one specification at a release with a newer
@@ -696,7 +701,7 @@ Nothing in any of the five is approved.
    model, taking a specification back to an older release kept the newer
    harness line, `go mod tidy` accepted it, and the older cases did not
    compile. So `make pin-specs` writes each module it moves from nothing:
-   the `module` and `go` lines, the `tool` directive and the one
+   the `module` line, the `go` line, the `tool` directive and the one
    requirement, then `go mod tidy`, with the old `go.sum` removed. The
    `pin` job does the same for the versions the files name and fails on
    a difference (**CI**), which is what holds the harness line and the
@@ -705,6 +710,40 @@ Nothing in any of the five is approved.
    later is not given these six directories, because its `go get` is the
    in-place edit this paragraph rules out and it would not rewrite the
    book page.
+
+   *The `go` line is the release's.* `make pin-specs` writes on each
+   module's `go` line what the pinned specification's own `go.mod` names
+   at that version, which it reads before it writes the module, from
+   the file `go list -m <module>@<version>` reports as `GoMod`. It does
+   not write this repository's. In a module that holds no Go code
+   the line still decides something: Go takes a build's default
+   `GODEBUG` settings from the `go` line of the module the build is run
+   in, and `go install <command>@<tag>`, which builds the release's
+   binaries, takes them from the specification's. In a trial, a
+   specification that names `go 1.24` was built with Go 1.26.3. In a
+   pin module with `go 1.24`, `go tool` built a command whose
+   `go version -m` output is that of the `go install` build, line for
+   line, and `go build` there wrote the same file as `go install`, byte
+   for byte. In a pin module with this repository's `go 1.26.3` the
+   build lost its `DefaultGODEBUG` line, which there set `tlssha1` and
+   `urlstrictcolons` among others. The line
+   also does not depend on the Go that writes it: Go 1.26.3 and
+   Go 1.26.11 wrote the same `go.mod` and `go.sum`, which the `pin`
+   job's comparison needs, and a change to this repository's own `go`
+   line touches no pin. `go mod tidy` raises a line that is lower than
+   one a dependency names and writes no `toolchain` line; a
+   specification's `go.mod` is tidy at its release (**Releases and how
+   they are consumed**), so the line stays as written. A release that
+   names a newer Go than the one that runs here cannot be built here
+   until this repository's Go moves, as its `go install` cannot: with
+   `GOTOOLCHAIN=local` the move of the pin stops with Go's message
+   ("requires go >= 1.27 (running go 1.26.3; GOTOOLCHAIN=local)") and
+   writes no `go.sum`, and with `GOTOOLCHAIN=auto` Go fetches that
+   toolchain. The released binaries need no Go. *Rejected:* this
+   repository's own `go` line, from the root `go.mod`. It is as
+   repeatable, but the build then differs from the release's as the
+   trial shows, and each change of this repository's Go would rewrite
+   the six modules.
 
    *No workspace.* This repository has no `go.work`, and this item adds
    none. A workspace that lists the six modules gives them one build
@@ -801,7 +840,7 @@ Nothing in any of the five is approved.
    branch holds the pins, the target files for the Go relay and the disk
    collector, the `conformance` workflow, the book links, tier 1's seam list
    and the rule changes. `wf` runs no gate in the specs repository. The
-   loop's mechanical checks reach it through the pin: this repository's
+   loop's mechanical checks reach it through the pins: this repository's
    `conformance` workflow cannot pass unless the pinned specs commit exists
    and its suites pass against the Go relay and the disk collector, first on
    a push of this branch during Implement and again on the pull request
@@ -809,7 +848,7 @@ Nothing in any of the five is approved.
    everything in a staging directory on this branch and exporting it at
    Publish. It keeps the work in one repository, but the branch that Review
    reads would not be the branch the PR merges (the staging tree has to be
-   deleted and the pin switched after Review), and the relay repository
+   deleted and the pins switched after Review), and the relay repository
    could read no draft until Publish. *Rejected:* waiting for
    `loop-repository`, the P1 item that gives `wf` its gates, branches and
    pull requests in a second repository. The umbrella's order puts S1 in
@@ -861,7 +900,7 @@ Nothing in any of the five is approved.
     not: both are loop rules (LOOP-09, FLOW-14). a15 asks for the step as
     an exception, and says which later item makes it unnecessary and
     which would carry a rule change if Jeff wants one.
-    *Rejected:* `f6-open-pr` moves the pin. Its definition in
+    *Rejected:* `f6-open-pr` moves the pins. Its definition in
     `.claude/agents/wf-publish.md` has no such duty, and a feature cannot
     change `.claude/` (FLOW-14). *Rejected:* no step, and a blocking
     question raised in Publish that names the release (a15, option B).
@@ -870,9 +909,9 @@ Nothing in any of the five is approved.
     release would be asked for only once the item holds the PR slot,
     and nothing would show in the queue before then; it is what the
     design falls back to if the review does not grant the step.
-    *Rejected:* releasing before Review and moving the pin in Implement. The specs content would be merged and
-    tagged before tier 2 had read it, and a finding would cost a second
-    release.
+    *Rejected:* releasing before Review and moving the pins in
+    Implement. The specs content would be merged and tagged before tier 2
+    had read it, and a finding would cost a second release.
 
 13. **The collector's outputs specification is normative for the wire; the
     disk layout is the disk collector's** (a16). `collector-outputs`
@@ -2568,6 +2607,26 @@ third-party module that has a newer version than the harness names.
 - *The same build as the release.* `go version -m` printed the same
   module lines, with the same hashes, for the binary `go tool` built in
   the pin module and for the one `go install <command>@<tag>` built.
+- *The `go` line,* tried on the second review of the fold-in. In the
+  model every module names `go 1.26`, so the line had made no
+  difference. With a specification that names `go 1.24`, built with
+  Go 1.26.3: `go install <command>@<tag>` and `go build` of the command
+  in a pin module whose line is `go 1.24` wrote the same file, with the
+  same SHA-256, and the binary `go tool` built there printed the same
+  `go version -m` lines as both (`go tool` keeps its own build in the
+  cache, which is not that file). With `go 1.26.3` on the pin module's
+  line, `go build` wrote a different file and both builds' `go version
+  -m` lacked the `DefaultGODEBUG` line. A pin module written
+  with `go 1.25` for a release that names `go 1.26` was raised to
+  `go 1.26` by `go mod tidy`, with no `toolchain` line. A release that
+  names `go 1.27` stopped `go mod tidy` under `GOTOOLCHAIN=local`, with
+  no `go.sum` written, and under `GOTOOLCHAIN=auto` Go tried to fetch
+  that toolchain. Its `go` line could still be read, from the file
+  `go list -m -f '{{.GoMod}}' <module>@<version>` names, run outside
+  the pin module; for a release or a commit that the running Go can
+  build, `go list -m -json` also gives it as `GoVersion`. Go 1.26.3 and
+  Go 1.26.11 wrote the same two files for one pin; Go 1.26.0, older
+  than a pin module's `go 1.26.3`, refused it under `GOTOOLCHAIN=local`.
 - *A mixed set builds and runs.* One specification at its newer
   release beside the other at its older one: each command ran and
   reported its own harness version.
@@ -2597,8 +2656,11 @@ third-party module that has a newer version than the harness names.
   them, and its `go mod tidy` changed nothing.
 - *Not tried:* the real module names, proxy and checksum database, as
   above; `go tool` for a command that needs the real harness's
-  dependencies; and the builds on `macos-latest` and `windows-latest`,
-  where the `collector` job builds and runs the commands too.
+  dependencies; the builds on `macos-latest` and `windows-latest`,
+  where the `collector` job builds and runs the commands too; and a
+  pin module written by a later minor version of Go than 1.26, which
+  the `pin` job's comparison would meet if a runner's Go ran ahead of a
+  developer's.
 
 ### CI
 
@@ -2657,8 +2719,9 @@ change to a shared package runs the suites (TEST-02's caveat): `relay/**`,
 `cmd/collector/**`, `driver/*.go`, `driver/buildlink/**`,
 `driver/script/**`, `go.mod`, `go.sum`, `Dockerfile.relay`, the `Makefile`,
 `tools/conformance/**` (the six pin modules and the target files, so a
-move of any pin starts a run) and the workflow itself. `cmd/warden-io/**` is not
-among them, because no suite runs the executor yet (a11). It runs:
+move of any pin starts a run) and the workflow itself.
+`cmd/warden-io/**` is not among them, because no suite runs the executor
+yet (a11). It runs:
 
 - on pull requests that reach those paths;
 - on a push to any branch other than `main` that changes one of those
@@ -2747,6 +2810,23 @@ above and `main`'s check code. `tools/workflow/enforcement-check.sh`
 passed, and tier 1 reported as the next paragraphs say. The same code
 given `contract: [<path>, <path>]` stopped with "cannot unmarshal !!seq
 into string".
+
+**One test of the check changes with the list.** `TestSeverities`
+(`tools/tier1/coupling/checks_test.go`) runs every coupling check with
+the real `rules.yaml` over a fixture that changes `cmd/warden-io/jks.go`,
+and fails on a finding whose severity is not in its table. The list
+puts that file on the `executor-initialize` seam, so `seam-contract`
+now reports the fixture, rightly, and the table gains
+`"GLOBAL-08": report.Must`. In the same clone, `go test ./...` in
+`tools/tier1` failed without that line ("GLOBAL-08: severity "MUST",
+want """) and passed with it, in every package there and in
+`tools/workflow`; `enforcement-check.sh` passed with the test edited and
+with TEST-05's new owner string in place. The file is under
+`tools/tier1/`, a rule path, and is among GLOBAL-08's `paths` (**Rule
+changes**). Until the second review of a20's fold-in the design said
+that only `rules.yaml` changed there: the fixture's file has been on the
+list since the revision of 2026-11-13 (`5ebe806`), and the test was not
+run against the list.
 
 **Seam 2 has two entries, both named `collector`.** It is one seam with
 two specifications (a10) and so two pins, and an entry holds one path.
@@ -2934,7 +3014,7 @@ named in the steps' evidence and in the design's Consolidation. A run
 that changes the specs branch records its head in the run's digest
 section, and names the specifications it changed apart from the code
 (LOOP-06, points 1 and 2). What ties
-the two repositories together mechanically is the pin, below.
+the two repositories together mechanically is the pins, below.
 
 **What changes later, and what does not need to.** `loop-parallel` gives
 the queue a field for an item's repositories. `loop-repository` gives `wf`
@@ -2943,16 +3023,16 @@ item like this one would then record its specs pull request, and the
 human step below would not be needed (a15). When the specs repository
 adopts the contract it becomes a component, coupled to the others only
 through releases (LOOP-08, LOOP-07). That is already how this repository
-consumes it: by the pin.
+consumes it: by its pins.
 
 | Phase | In this repository | In the specs repository |
 |---|---|---|
 | Plan | Every task names its repository | |
-| Implement | The pins (every specification at the specs branch's head commit), target files, `make conformance` and `make pin-specs`, the workflow, book pages, tier 1's seam list, the rule changes. `make lint` and `make test` green (FLOW-03). Task 8 is done when the `conformance` workflow's run for the pushed head is green on all three runners, and task 12, the last, when the run for the final pin is; the step's evidence names both runs | Documents, schemas, harness, suites and CI on `feat/seam-specs`, pushed at each green checkpoint (FLOW-17); its pull request opened in task 11, before the final pin, so Jeff can read it early |
+| Implement | The pins (every specification at the specs branch's head commit), target files, `make conformance` and `make pin-specs`, the workflow, book pages, tier 1's seam list, the rule changes. `make lint` and `make test` green (FLOW-03). Task 8 is done when the `conformance` workflow's run for the pushed head is green on all three runners, and task 12, the last, when the run for the final pins is; the step's evidence names both runs | Documents, schemas, harness, suites and CI on `feat/seam-specs`, pushed at each green checkpoint (FLOW-17); its pull request opened in task 11, before the final pins, so Jeff can read it early |
 | Review | Tier 1 and the tier-2 report on this branch. Review confirms that the latest `conformance` run on the branch is green and that every pin is the specs pull request's head | The same tier-2 report also reads the specs branch at the pinned commit: the documents against the code lists in this design, and the harness against the rules in the table above. Its findings say which repository they are in |
 | Publish | `f6-merge-main`, `f6-consolidate` and `f6-open-pr`, as for any feature. `f6-open-pr` finds the pins on the tags; if it does not, the PR's `pin` job fails. The PR's body lists the specification changes, from **Specification changes**, and the rule changes (LOOP-06, FLOW-08) | `f6-release-specs` (human, a15): Jeff reads the tier-2 report's MUST findings, which the session has listed in the specs pull request's body, and merges the pull request. The seven tags are then pushed on the merge commit, one push for each tag, `conformance/v0.1.0` first and then each specification's `v0.1.0` (Decision 4), and the pins moved on this branch (`make pin-specs SPECS=latest`, `make test`, `make lint`, commit, push), by him or by the attended session on his word |
 
-The mechanical link between the two is the pin. Before the release, the
+The mechanical link between the two is the pins. Before the release, the
 suites have passed on hosted runners against the exact commit the branch
 pins (the push run). After it, this repository's PR cannot have green CI
 (FLOW-03, phase 6) unless every pin names a release tag and those
@@ -2985,7 +3065,8 @@ exist until Plan is seeded.
 If the specs pull request changes between Review and its merge, the tags'
 tree differs from the commit Review read. The session that moves the pins
 compares the two in the specs repository and, if they differ, records the
-difference in the step's evidence and in the pin commit's message. The
+difference in the step's evidence and in the message of the commit
+that moves them. The
 `conformance` workflow judges the result; a failure is repaired under
 FLOW-11 or goes back under FLOW-06.
 
@@ -3089,7 +3170,8 @@ so. `SPECS=latest` is a value the caller writes, not a default. The
 written when the specification names a harness version that has no tag,
 which the command reads before it writes the module, and not after a
 build has failed (GLOBAL-11). `GOWORK=off` is set by the recipes and is
-not a setting. The
+not a setting. The `go` line of a pin module is read from the release
+it pins and is not a setting either (Decision 7). The
 harness's own timings (the readiness poll, a case's time limit) are
 constants of a harness release, not settings.
 
@@ -3230,8 +3312,13 @@ enforcement, and never to a LOOP, FLOW or LINT rule or its enforcement
   both kinds, and the rule ID on the `rule_changes` entry decides, not
   the path. This item edits two things in it: the `seams` list, which is
   the data of `seam-contract`, the check of GLOBAL-08 and EXEC-04, and
-  TEST-05's owner string. No FLOW or LINT entry is touched and no check
-  code changes.
+  TEST-05's owner string. No FLOW or LINT entry is touched. The check's
+  code does not change; one test of it does. `TestSeverities`
+  (`tools/tier1/coupling/checks_test.go`) runs the coupling checks with
+  the real `rules.yaml`, and its table of expected severities gains
+  GLOBAL-08 (**GLOBAL-08**, Enforcement change). The table's other rows
+  are BOOT-07, ORCH-01 and GLOBAL-04; it holds no row for a loop rule,
+  and none of its rows changes.
 - *What this item would want of a loop rule* it asks as a question and
   does not declare: FLOW-04's list and FLOW-08's sentence (a15).
 
@@ -3399,7 +3486,7 @@ wording above is byte for byte what it was at `e19cc1f`.
 enforcement change: the workflow is new and is none of the jobs FLOW-14
 names.
 
-### GLOBAL-08 (amend), `docs/development/global.md`, `tools/tier1/rules.yaml`
+### GLOBAL-08 (amend), `docs/development/global.md`, `tools/tier1/rules.yaml`, `tools/tier1/coupling/checks_test.go`
 
 **Why:** the contract documents of five seams now exist, in another
 repository, and the bootstrap config becomes a written seam. The rule's
@@ -3470,6 +3557,41 @@ listed in both `collector` entries is both pins. Because this edits
 configuration (FLOW-14). That code reads the list as written, which was
 tried at `ad4ea50` (**Tier 1's seam list**), and it should report
 nothing new on this branch, which touches none of the listed files.
+
+One test of the check changes with the data. `TestSeverities`
+(`tools/tier1/coupling/checks_test.go`) runs every check over a fixture
+that changes `cmd/warden-io/jks.go`, with the real `rules.yaml`. The
+list puts that file on the `executor-initialize` seam, so the test's
+table of expected severities gains GLOBAL-08 as MUST:
+
+```go
+want := map[string]report.Severity{"BOOT-07": report.Hint,
+	"ORCH-01": report.Must, "GLOBAL-04": report.Hint,
+	"GLOBAL-08": report.Must}[f.Rule]
+```
+
+The third line is added, and the second ends with a comma where on
+`main` it closes the table. No other test and no code under
+`tools/tier1/` changes. The edit was tried with the list at `ad4ea50`:
+without it `make test` fails in `tools/tier1`, and with it every
+package there passes (**Tier 1's seam list**).
+
+What differs from `e19cc1f` in this enforcement change, where the rule
+text differs as said above:
+
+- *The list.* At `e19cc1f` it had five entries, one for each seam, and
+  each named `tools/conformance/go.mod` as its contract. It now has six,
+  two of them for `collector`, each with its own specification's pin.
+- *The comment above `seams`,* in two places. Its second sentence ended
+  "the file that pins the release of each specification this repository
+  implements (TEST-05)." and now ends "the file that pins the release of
+  its specification here (TEST-05).", and it gains a third sentence, for
+  the collector seam's two entries.
+- *The test,* and its file among this entry's paths. At `e19cc1f` the
+  paths were `global.md` and `rules.yaml` alone, and the design said
+  that no file but `rules.yaml` changed under `tools/tier1/`. The second
+  review of a20's fold-in ran the test against the list and found that
+  it fails. The fixture's file was already on the list at `e19cc1f`.
 
 ### EXEC-04 (amend), `docs/development/in-vm-executor.md`
 
@@ -3621,7 +3743,7 @@ merge gate, and it is that repository's, not an entry of this profile.
 |---|---|
 | Impact vocabulary | It points to the `seams` list of `tools/tier1/rules.yaml` for the seam names, and this item fills that list. The entry states no name of its own |
 | Test tiers | It points to TEST-02, which this design amends |
-| Toolchain | "Go, at the version in each module's `go.mod`" takes in the six nested modules under `tools/conformance/` |
+| Toolchain | "Go, at the version in each module's `go.mod`" takes in the six nested modules under `tools/conformance/`. Each names the Go its pinned release names, which this repository's Go is at least (Decision 7) |
 | Fast gate | `make conformance` is not part of it. `make test` gains one tier-0 test |
 | Reference documents | No surface changes (`surfaces: []`). The new book page is a concept page |
 | Sweep | No Go package is added to this repository's module, and the modules under `tools/conformance/` hold no Go code |
@@ -3678,6 +3800,7 @@ for that rule, which agrees with the rows below.
 | GLOBAL-08, from "Versioned seams" | The executor bullet, which gains the bootstrap config. One new paragraph, placed directly before the rule's last paragraph | A third bullet, the driver contract. The paragraph that begins "Pre-1.0 these seams may still move", rewritten | The relay bullet. The last paragraph ("The automated part requires ...") |
 | TEST-05 | The title, and the whole body as it is on `main` | One new paragraph at the rule's end | |
 | `rules.yaml`, `seams` | Six entries for its five seams, two of them for `collector` (a20), and the comment above the list | One entry, `driver-contract` | |
+| `tools/tier1/coupling/checks_test.go` | One entry added to `TestSeverities`' table, under **GLOBAL-08** | Nothing. Its entry lists neither file of that test's fixture | |
 | `rules.yaml`, TEST-05's owner | The string, as under **TEST-05** | The string on `main`, with "the driver suite's static tier runs there" added inside its parentheses | |
 | TEST-02, EXEC-04 | All of each amendment | Nothing | |
 | PROFILE-01, the Specifications entry | The three sentences that replace its last one, "No specifications release is pinned today." | In its first sentence, "and the driver contract (`specs/driver-contract/`, GLOBAL-08)" after "(RELAY-05)". A new second sentence, "The driver contract's conformance suite is `conformance/driver/`." It keeps the last sentence as it is on `main` | The sentence that begins "For the seams of GLOBAL-08" |
@@ -3765,7 +3888,7 @@ of 2026-11-14, so that both sets are true together:
   contract tests are added ...", which the driver suite, in this
   repository until K2, would have made false.
 - *GLOBAL-08.* This design's paragraph names its five seams and says "For
-  them that file is the contract document". It says nothing of a seam
+  them those pin files are the contract documents". It says nothing of a seam
   specified elsewhere, and "The ledger format stays in `specs/`" does not
   say that only the ledger format is there, so the driver contract's
   bullet, which names `specs/driver-contract/v1.md`, stands beside it.
@@ -3806,9 +3929,10 @@ the approved wording (FLOW-14). If the merge needed a sentence reworded,
 that is a return to Design (FLOW-06).
 
 For the profile that rests on one reading, on which `driver-contract`'s
-approval is read here and which this review is asked to confirm: what a design's review approves in a row is the words the design
-adds or replaces, and not the rest of the row as it quoted it from
-`main`. Both designs already read GLOBAL-08 and TEST-05 that way. On it,
+approval is read here and which this review is asked to confirm: what a
+design's review approves in a row is the words the design adds or
+replaces, and not the rest of the row as it quoted it from `main`. Both
+designs already read GLOBAL-08 and TEST-05 that way. On it,
 `driver-contract` merging second adds its clause and its sentence to the
 Specifications entry it finds, which no longer has the sentence its
 quotation keeps, and its Consolidation corrects the quotation. Read the
@@ -3850,7 +3974,8 @@ the relay binary or image named in the target file.
   specs repository name the pinned ref); tier 1's rule index parses the
   amended rules, and `rules.yaml` parses with the new `seams` entries,
   in the branch's tier 1 and in the merge base's (`make enforcement`,
-  FLOW-14);
+  FLOW-14); tier 1's own tests pass with the list, `TestSeverities`
+  with GLOBAL-08 in its table (**Rule changes**, GLOBAL-08);
   `tier1 designs` accepts this design; the book-link test checks each
   row's ref against that specification's pin, read from its own module.
   In the specs repository:
@@ -3868,7 +3993,7 @@ the relay binary or image named in the target file.
   pass against the Go relay and the disk collector. The first green run is a
   push run on this branch during Implement, before anything is merged or
   tagged in the specs repository. The last push run of Implement is on the
-  final pin, the specs pull request's head (task 12), and it is the run
+  final pins, at the specs pull request's head (task 12), and it is the run
   Review and `f6-release-specs` rest on. The pull request's run repeats it
   on the six tags, with the `pin` job, which also writes each of the six
   modules again from the version it names and fails on a difference
@@ -3970,10 +4095,14 @@ its branch `feat/seam-specs`; **K** is this repository, on this branch.
    back to Design (FLOW-06, Decision 1).
 9. **K** The rule changes, each as approved: TEST-05, TEST-02, GLOBAL-08,
    EXEC-04 and `tools/tier1/rules.yaml` (the six `seams` entries, their
-   comment and TEST-05's owner; no check code), and PROFILE-01's two
-   entries and one row of its Checks table in
-   `docs/development/loop-profile.md` (FLOW-14, LINT-02, LOOP-01).
-   `make enforcement` passes: the merge base's tier 1 reads the list.
+   comment and TEST-05's owner), the one entry added to the table in
+   `tools/tier1/coupling/checks_test.go` that GLOBAL-08's enforcement
+   change gives (the check's code does not change; one test of it
+   does), and PROFILE-01's two entries and one row of its Checks table
+   in `docs/development/loop-profile.md` (FLOW-14, LINT-02, LOOP-01).
+   Done when `make test` passes, in `tools/tier1` as in the other two
+   modules, and `make enforcement` passes: the merge base's tier 1 reads
+   the list.
 10. **K** The book: `concepts/seams.md` and its entry in `SUMMARY.md`,
     the edits to `concepts/architecture.md` (its three tables),
     `contributing/structure.md`, the sentence in `specs/README.md`, the ref
@@ -3988,10 +4117,10 @@ its branch `feat/seam-specs`; **K** is this repository, on this branch.
     `make pin-specs REF=<the specs pull request's head commit>`,
     `make test`, `make lint`, push. Done when the `conformance` run for
     that push is green on all three runners and each of the six modules
-    names the specs pull request's head. So the commit Review reads in the specs
-    repository is the one the pull request would merge, and the head
-    Review reads here has a green run. A later commit to the specs branch
-    in Implement repeats this task.
+    names the specs pull request's head. So the commit Review reads in
+    the specs repository is the one the pull request would merge, and
+    the head Review reads here has a green run. A later commit to the
+    specs branch in Implement repeats this task.
 13. (Human, `f6-release-specs`, after Review) The tier-2 MUST findings
     that are in the specs repository are listed in the specs pull
     request's body, and Jeff merges it (FLOW-08). The seven tags are then
@@ -4000,10 +4129,10 @@ its branch `feat/seam-specs`; **K** is this repository, on this branch.
     specification's `v0.1.0`. The six pins are moved here with
     `make pin-specs SPECS=latest`, which writes each of the six modules
     again at its tag and drops its `replace` line, by him or by the
-    attended session on his word (a15). The step is done when the seven `release` runs are
-    green, the six specifications' with their binaries attached and the
-    harness's with none, and this branch's `conformance` run on the six
-    tags is green.
+    attended session on his word (a15). The step is done when the seven
+    `release` runs are green, the six specifications' with their
+    binaries attached and the harness's with none, and this branch's
+    `conformance` run on the six tags is green.
 
 No item is filed for seam 4 after the merge: its move is M6's (a1).
 
@@ -4236,8 +4365,9 @@ What a20's answer changed:
   file, with the plural that follows. The Specifications row is given
   alone and joined, as it will read. PROFILE-01's Checks row names no
   file and is unchanged. Each entry says what the wording at `e19cc1f`
-  was. `rule_changes` is unchanged: the same five rules and the same
-  paths.
+  was. `rule_changes` named the same five rules and the same paths when
+  this was written; the pass recorded below adds one path to GLOBAL-08's
+  entry.
 - *Smaller.* a7, a8, a10 and a17 each gain a dated note, and no recorded
   answer is edited. `make conformance`, the book's ref test, **How the
   loop treats the second repository**, **Defaults and overrides**,
@@ -4258,13 +4388,61 @@ changed in status. `design_review` stays `required`,
 `alters_relationships` stays `true`, and `native_validation` and the
 two tracked gaps are as they were.
 
+**The same sitting: a pass on a second independent review, of a20's
+fold-in.** Each of its six findings was checked against its source, and
+re-run where it reported a trial; all six held. No answer of Jeff's
+changes by it, and the wording of U1, U2 in both forms, U3 and TEST-02
+is still byte for byte that of `e19cc1f`: the same script was run on
+the head this paragraph is pushed with.
+
+- *A test of tier 1 changes with the seam list.* `TestSeverities`
+  (`tools/tier1/coupling/checks_test.go`) runs the coupling checks with
+  the real `rules.yaml` over a fixture that changes
+  `cmd/warden-io/jks.go`, which the list puts on a seam. With the list
+  in place `make test` failed in `tools/tier1`; with GLOBAL-08 added to
+  the test's table it passed, and `enforcement-check.sh` passed. The
+  design had said that only `rules.yaml` changes under `tools/tier1/`.
+  `rule_changes` gains that file among GLOBAL-08's paths, before
+  GLOBAL-08 is put to Jeff; the five rules are the same five. The
+  entry's Enforcement change gives the edit, **Tier 1's seam list** the
+  trial, and task 9 and the **Validation plan** name the test. The
+  fixture's file was already on the list at `e19cc1f`, so this is not
+  a20's doing.
+- *The `go` line of a pin module.* The design did not say what
+  `make pin-specs` writes there, and said that the compiler is always
+  this repository's. Decision 7 now says both. The review proposed the
+  root module's `go` line. Tried, that builds a command that differs
+  from the release's own binary, because Go takes a build's default
+  `GODEBUG` settings from that line; with the line the pinned release's
+  `go.mod` names, the build's settings were the release's. So the design
+  writes the release's line, and the root module's is a rejected
+  alternative there. A release that names a newer Go than runs here
+  cannot be pinned until this repository's Go moves, which Decision 7
+  states with what Go prints. The sample's `go` line is the model's.
+- *A quotation of the proposed GLOBAL-08,* under **With
+  `driver-contract`**, was the sentence as it stood at `e19cc1f`. It is
+  the proposed sentence again.
+- *The comment above `seams`* changed in two places for a20, and the
+  design named one. GLOBAL-08's entry now lists what differs from
+  `e19cc1f` in its enforcement change: the list, the comment in both
+  places, and the test.
+- *Smaller.* "The pins" where a sentence written for one file still
+  said "the pin"; the paragraphs the fold-in left unwrapped are
+  wrapped.
+
+The proposed rule text of TEST-05, GLOBAL-08, EXEC-04 and PROFILE-01 is
+not changed by this pass: it is that of `9bbc8ef`. What changes in a
+rule change is GLOBAL-08's paths and its Enforcement change. In the
+queue file nothing changes: a19, a20 and the note of `f6-release-specs`
+name no `go` line and no file under `tools/tier1/`.
+
 Still to come: the rule changes TEST-05, GLOBAL-08, EXEC-04 and
-PROFILE-01, each to be put to Jeff by name on the wording at the head
-this entry is pushed with, which for the four is the wording of
-`9bbc8ef` (PROFILE-01 as the Specifications row in both forms, the
-Consumables row and the tier-1 Specification row of Checks); then the
-outcome. This entry writes none of the lines FLOW-14's check
-reads for a rule change: those are recorded with the outcome.
+PROFILE-01, each to be put to Jeff by name on the head this entry is
+pushed with (PROFILE-01 as the Specifications row in both forms, the
+Consumables row and the tier-1 Specification row of Checks; GLOBAL-08
+with its three paths and the edit to the test); then the outcome. This
+entry writes none of the lines FLOW-14's check reads for a rule change:
+those are recorded with the outcome.
 
 ## Consolidation
 
