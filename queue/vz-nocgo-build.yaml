@@ -6,7 +6,8 @@ round: feature
 phase: 1
 design: docs/design/vz-nocgo-build.md
 branch: feat/vz-nocgo-build
-alters_relationships: null
+alters_relationships: false
+design_review: required
 source: 'Found by the design of prebuilt-artifacts (its ''Releases and install'', fault 3) and reproduced by the attended session on main at 3cb0b2b, 2026-11-15: ''GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/warden'' fails with driver/vz/vm.go:25:22: undefined: linuxVMConfig (also macOSVMConfig, createLinuxVM): the cgo file and its stub are both excluded under that build. .goreleaser.yaml builds the macOS arm64 warden with CGO_ENABLED=0, so no release can be cut once the release hook runs (the hook''s own two faults are prebuilt-artifacts'' to fix, its Decision 12). driver-contract''s design lists this as ''to be filed''. A regression main already has, exempt from the FLOW-20 freeze. Jeff, asked how to file it: ''Its own fix, started now'' (not a follow-up of prebuilt-artifacts, which would hold it until that item is done). Whether a no-cgo macOS warden is meant to run the vz driver at all, or to build without it and say so, is the design''s to settle; check the same build for the other release targets.'
 steps:
   - id: f0-branch-setup
@@ -23,6 +24,14 @@ steps:
     lease:
       claimed_by: cloud/20261112T230554Z
       expires: 2026-11-16T01:23:20.598816382Z
+  - id: f6-validate-macos-vz
+    phase: 6
+    affinity: host:macos-vz
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: "Blocking native validation (design Validation plan; FLOW-09), on the branch after consolidation. (1) make build (cgo on): go list -f '{{.CgoFiles}} {{.IgnoredGoFiles}}' ./driver/vz/ lists vz_darwin_arm64.go as cgo and vz_stub.go as ignored; make test passes; warden doctor --driver vz prints what main's prints; a vz build succeeds and its ledger verifies. (2) CGO_ENABLED=0 go build -o <scratch>/warden ./cmd/warden compiles (on main it fails with undefined: linuxVMConfig; capture that first). With that binary, doctor --driver vz, build --driver vz, shell --driver vz and image prepare --driver vz (without sudo) each print the ERROR and To fix lines of the design's The message, exit 1, and start no download, VM or relay; image list prints what the cgo build's does, and doctor for the container driver works. (3) The same binary signed with the entitlement (codesign --sign - --entitlements entitlements.plist) gives the same message, not the entitlement's and not a VM error. (4) make release-build passes. Evidence under native/macos-vz/<date>/."
 budget:
   estimate:
     runs: 1
