@@ -1822,7 +1822,7 @@ code these cases run through.
 | 34 | In an attended session Jeff merges the first of three ready PRs and names the one he wants next | Cannot arise | `wf stale` seeds a refresh on the other two. The session takes the named item's (`/workflow-tick attended <item>`), waits for CI and lists it as ready; he merges it; the third is refreshed the same way, or by the next run |
 | 35 | `main` is recorded red; four PRs are behind it | n/a | No refresh is offered: `wf next` prints `blocked <item> main is red at <sha>: no refresh until it is green` for each of the four and goes on, and none of them is ready. The run's steps go to the fix the tick filed, which starts whatever waits on Jeff (case 26); if `main` moves under the fix's own PR, its refresh is the one that is still taken. Once the fix merges and `main` is green, the next run refreshes the four |
 | 36 | A PR's refresh has passed and it is ready; before Jeff merges it, `main` moves again | n/a | It waits for a refresh again: the next `wf stale` seeds one. Under a10 (d) that costs the item no budget |
-| 37 | Jeff uses GitHub's **Update branch** on a PR that is behind, before any session has run `wf stale` | n/a | The next `wf stale` finds the branch current and seeds nothing; the PR is ready when CI is green on the new head. No consolidation pass ran over what landed; that is his choice |
+| 37 | Jeff uses GitHub's **Update branch** on a PR that is behind, before any session has run `wf stale` | n/a | The next `wf stale` finds the branch current with a head `pr.head` does not record: it sets `pr.ci` to `pending` and seeds a refresh. The refresh's merge is a no-op; its gates, consolidation pass and CI result are for the new head, and the PR is listed as ready after it. With the ruleset GitHub lets him merge sooner, once `ci-ok` is green; that merge is his |
 | 38 | Two disjoint features. One is in Publish, `f6-merge-main` and `f6-consolidate` done, waiting for `f6-validate-windows-hyperv`; Jeff merges the other's PR | Arises only when a process item's PR or a hand merge moves `main`: `f6-open-pr`'s done-when then fails on `current main merged`, and no step merges `main` again | `wf stale` adds `f6-refresh` to it and makes `f6-open-pr` need it. The refresh merges `main`, runs the gates and the pass, and pushes; the host validates when its session runs; `f6-open-pr` then passes its gate. The item holds the PR slot throughout |
 | 39 | Seven wait. An eighth item, in Implement, has only a pending `human` step of phase 6 (`f6-release-specs`) | n/a | Seven: a `human` step of a phase the item has not reached is not counted. A queued feature starts. `QUEUE.md` lists the step under the lines that are not counted |
 | 40 | Eight wait. `main` is red by a commit that is no item's, so the tick filed nothing; Jeff files the fix at intake, which records it with `wf main -followup` | n/a | Started: `main.yaml` names it as the fix for the red `main`, though it follows no item. Its refresh is also the one refresh taken while `main` is red (case 35) |
@@ -1936,9 +1936,12 @@ and none of those may merge until it has been refreshed.
 
 **The words.** An open PR is *current* when `origin/main` is an ancestor
 of its branch. It is *ready to merge* when the item is at its merge
-step, the PR is current, its checks are green on that head (`pr.ci`), and
-it is not a draft. A PR that `main` has moved past *waits for a
-refresh*.
+step, the PR is current, its checks are green on that head, and
+it is not a draft. The queue records the checks' result as `pr.ci` and
+the commit it was read for as `pr.head`, so "on that head" can be
+tested: a result recorded for another commit is not one. A PR that
+`main` has moved past, or whose branch has a head the loop did not
+check, *waits for a refresh*.
 
 **How the rule is held: by GitHub, and by the loop.**
 
@@ -1984,7 +1987,8 @@ refresh*.
 2. *The loop does not call the PR ready.* This holds whatever GitHub is
    set to.
    - `wf stale` finds each open PR whose branch does not contain
-     `origin/main`, seeds its refresh and sets `pr.ci` to `pending`. From
+     `origin/main`, or whose head is not the commit `pr.head` records,
+     seeds its refresh and sets `pr.ci` to `pending`. From
      then until the refresh's done-when has passed, `QUEUE.md` lists the
      PR under **After a refresh** and not under **Ready to merge**, and
      `workflow-human` offers only the ready ones for merging.
@@ -2019,12 +2023,16 @@ the fix when `main` is red (a16). Nothing reverts or blocks it.
 - *`wf stale`* refreshes nothing. It finds the PRs that are behind and
   seeds the step, in the tick and in the attended session.
 - *Jeff, on GitHub.* The **Update branch** button merges `main` into a
-  PR's branch for him, where GitHub shows it. It is his to use. If a
-  refresh step is already pending, the next run still takes it: its
-  merge is then a no-op, and the gates and the consolidation pass run
-  as usual. If he updates a branch before any session has run
-  `wf stale`, the loop finds a current branch and seeds nothing, so that
-  PR gets CI's checks and no consolidation pass over what landed.
+  PR's branch for him, where GitHub shows it. It is his to use, and
+  with the ruleset GitHub lets him merge that PR once `ci-ok` is green
+  on the new head. The loop did not make that push, so it does not call
+  the PR ready on it: the next `wf stale` finds a head that `pr.head`
+  does not record, sets `pr.ci` to `pending` and seeds a refresh, or
+  leaves the one already pending. That refresh's merge is a no-op; its
+  gates, its consolidation pass and its reading of CI are for the head
+  he made. So FLOW-08's sentence holds as written (the loop lists no PR
+  as ready until it has had a refresh), and a merge he makes before the
+  refresh is his merge (FLOW-08).
 
 **The throughput.** There is one cloud run a day (FLOW-13). A merge
 leaves every other open PR in the repository waiting for a refresh, and
@@ -2104,14 +2112,21 @@ confirmation, and GitHub deletes the branch when he does:
 - *Not merged, and the remote branch is gone* (the PR was closed). It
   seeds nothing and prints that.
 
-Then, for an item that has no pending refresh step and whose
-`origin/<branch>` does not contain `origin/main`:
+Then, for an item that has no pending refresh step:
 
-- *The item waits for the merge.* It adds a refresh step, sets `pr.ci`
+- *The item waits for the merge, and `origin/<branch>` does not contain
+  `origin/main`.* It adds a refresh step, sets `pr.ci`
   to `pending`, and writes what moved in the step's note: `main` at
   `<sha>`, the number of commits, and the files those commits and this
   branch both change.
-- *The feature is in Publish and its newest `f6-merge-main` is done*,
+- *The item waits for the merge, and `origin/<branch>` is not the commit
+  `pr.head` records*, or `pr.head` is absent: a push the loop did not
+  make (GitHub's **Update branch**, a commit pushed by hand), or a PR
+  recorded before this field existed. `pr.ci` was read for another
+  head, so it says nothing about this one. It adds a refresh step, sets
+  `pr.ci` to `pending`, and notes the head it found.
+- *The feature is in Publish, its newest `f6-merge-main` is done, and
+  `origin/<branch>` does not contain `origin/main`*,
   with a PR recorded or not: another item's PR merged while this one
   was being consolidated, waited for a host's validation, or had its CI
   repaired. It adds a refresh step in phase 6 with the same note, and
@@ -2168,7 +2183,7 @@ the next item in order (**`main`'s CI**).
    with commits `main` does not have, and Close would escalate it
    (FLOW-16).
 6. Push; with a PR recorded, wait for CI on the new head and set
-   `pr.ci`.
+   `pr.ci` and `pr.head`.
 
 On a feature in Publish whose PR is not open yet, steps 5 and 6 are the
 push alone, and step 4's Archive summary has not been written:
@@ -2473,7 +2488,8 @@ What is new, by section:
   the run and the follow-up, when `main.yaml` says so, and lists any
   holders over a limit. It lists the open PRs first, in two lists, each
   in FLOW-05's order (Decision 21). **Ready to merge**: the item is at
-  its merge step, no refresh is pending and `pr.ci` is green; the list
+  its merge step, no refresh is pending and `pr.ci` is green, which
+  `wf stale` has checked is for the branch's head (`pr.head`); the list
   opens with the line that each merge puts the others behind. **After a
   refresh**: a refresh step is pending, with what moved `main` and the
   overlapping files from that step's note, and, while `main` is red,
@@ -2524,6 +2540,7 @@ file names the item's repositories when it has more than this one.
 - `queue.go`: the seven fields on `Feature`, with `areas` a pointer to a
   list so that an absent key and an empty list stay apart through a load
   and a save (checked with the YAML library the module uses);
+  `PR.Head`, the commit `pr.ci` was read for;
   `Config.Repository`; `State.Main`, loaded from `main.yaml` as an optional
   file;
   `Limits.InProgress` as `*int` with `inProgressLimit()`, and
@@ -2565,7 +2582,9 @@ file names the item's repositories when it has more than this one.
 - `areas.go` (new): the diff inside the areas; the trial merge.
 - `check.go`: `Front` gains `Repos` and `Areas`; Design's done-when calls
   the declared checks; the later phases call the comparison and the diff
-  check; `Refresh`; `Merged`, exported for `wf stale`; a tracked item's
+  check; `Refresh`; `Merged`, exported for `wf stale`; `prGreen` also
+  requires `pr.head` to be the branch's pushed head, at Publish's gate
+  and at a refresh; a tracked item's
   result; `patchID` passes `-U0` in place of `-U3` (a14).
 - `review.go`: `impactDelta` includes `repos` and `areas`; a skip is
   invalid when Design narrowed.
@@ -2659,7 +2678,8 @@ By file. Each cites the rule and does not restate it (FLOW-14).
   merge; `f6-refresh` and `x2-refresh` as above, with the check before the
   push, the draft on a return, and a failure `main` has too recorded
   with `dist/wf main -ci red -gates` (FLOW-09, FLOW-10); `f6-open-pr` on an item that has a PR
-  recorded pushes to it and marks it ready.
+  recorded pushes to it and marks it ready; wherever it sets `pr.ci`
+  it sets `pr.head` to the commit the result is for (FLOW-08).
 
 `wf-plan` and `wf-guide` do not change.
 
@@ -3045,6 +3065,7 @@ or in one attended sitting with a refresh between.
 | `wf areas -check` without `-edges` | It compares the paths only, and prints `reaches: not compared` | `wf` cannot produce the edges itself (LOOP-08); the line says what was not checked (GLOBAL-11) |
 | `main.yaml` has no area-check result | `QUEUE.md` says `area map: not checked against main` | Unknown is not read as "no difference" (GLOBAL-10) |
 | The merge check's context lines | 0, fixed. *Changed:* 3 | a14, open |
+| `pr.head` absent on an item with a PR recorded | The commit `pr.ci` was read for is not known: `wf stale` treats the PR as not checked, sets `pr.ci` to `pending` and seeds a refresh, which records it | A PR recorded before the field existed. A result with no commit is not read as a result for the head (GLOBAL-10); the refresh step's note says why it was seeded (GLOBAL-11) |
 | `main.yaml` does not say whether GitHub requires an up-to-date branch | `QUEUE.md`'s header says `not recorded`. Nothing else depends on it: a PR is listed as ready or not by the loop's own test either way | Unknown is not read as "required" (GLOBAL-10) |
 | `limits.in_progress` absent | 5; a written value below 1 is an error | FLOW-05's written limit (Decision 8). *Changed:* absent or 0 was "no limit" |
 | `limits.alters_relationships` absent | 1; below 1 an error | Unchanged (`alters-slot`) |
@@ -3864,8 +3885,11 @@ whether it is still true with the proposed wording.
     with another head; `-followup` is
     recorded once; absent, `QUEUE.md` says `CI not recorded`;
     `-up-to-date` is recorded, and absent it reads `not recorded`.
-  - `TestReadyToMerge` (cases 18, 33, 36): a PR is ready only when the
+  - `TestReadyToMerge` (cases 18, 33, 36, 37): a PR is ready only when the
     item is at its merge step with `pr.ci` green and no refresh pending;
+    `wf stale` on a branch whose head is not `pr.head`, or with no
+    `pr.head`, sets `pr.ci` to `pending` and seeds a refresh though the
+    branch contains `main`, and seeds none when the two are equal;
     `wf stale` on a moved `main` makes every open PR of the repository
     not ready, whatever moved it; a passed refresh makes it ready again;
     `QUEUE.md` lists the two groups apart, and the Active table says
