@@ -735,10 +735,11 @@ Under `sudo`. The home is the one `sudo` gives the process, as today: the
 user's on macOS, root's on most Linux setups. And `sudo` resets the
 environment by default (`env_reset`), so a `WARDEN_CONFIG` the user set is
 not there: `WARDEN_CONFIG=/etc/warden/ci.toml sudo -n sh -c 'echo
-"[$WARDEN_CONFIG]"'` prints `[]` on this host. Three documented commands
-run under `sudo` and load configuration (`sudo warden image prepare
---driver vz`, `sudo warden setup --driver firecracker`, and `sudo warden
-doctor --driver firecracker` in CI). So someone who followed the second
+"[$WARDEN_CONFIG]"'` prints `[]` on this host. Three commands are run
+under `sudo` and load configuration: `sudo warden image prepare --driver
+vz` and `sudo warden setup --driver firecracker` (the guides), and `sudo
+dist/warden doctor --driver firecracker` (the firecracker workflow). So
+someone who followed the second
 way out with the variable meets the error again under `sudo` where the
 home is kept. When `SUDO_USER` is set, the fix therefore ends with one
 more sentence:
