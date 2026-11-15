@@ -4444,6 +4444,34 @@ with its three paths and the edit to the test); then the outcome. This
 entry writes none of the lines FLOW-14's check reads for a rule change:
 those are recorded with the outcome.
 
+### 2026-11-15, first sitting, outcome: approved
+
+- **r1, 2026-11-15: approved at `64a4a95`** (Jeff; read at `e4801d6`,
+  `e19cc1f` and `64a4a95` as his answers were folded in; page
+  https://claude.ai/artifact/GMZYnBWqKVGDAP8DfpiHVd). All twenty
+  questions are answered, as the entries above record; a1, a2, a7, a8,
+  a9, a10 and a20 depart from the draft and are folded in. Confirmed
+  with the outcome, as a mechanic the design settled without a question:
+  a pin module's `go` line is the pinned release's own (Decision 7). The
+  three amendments to the umbrella design (U1, U2 in both forms, U3)
+  were approved by name on the wording at `e19cc1f`, which is
+  byte-identical at `64a4a95`; so was TEST-02. TEST-05, GLOBAL-08,
+  EXEC-04 and PROFILE-01 were approved by name on the wording at
+  `64a4a95`. `buildwarden/buildwarden-specs` was created by Jeff during
+  the review (first commit `aeda265`: `README.md` and the Apache-2.0
+  `LICENSE`; `main` protected by a ruleset: pull request required, no
+  force-push, no deletion) and is attached to the session.
+- **rule change TEST-05 approved at `64a4a95`**, as worded under **Rule
+  changes**.
+- **rule change TEST-02 approved at `64a4a95`**, as worded there.
+- **rule change GLOBAL-08 approved at `64a4a95`**, as worded there, with
+  its enforcement change (six `seams` entries; one table entry in
+  `TestSeverities`).
+- **rule change EXEC-04 approved at `64a4a95`**, as worded there.
+- **rule change PROFILE-01 approved at `64a4a95`**: three rows, the
+  Specifications row in both forms (alone, and joined with
+  `driver-contract`'s clause and sentence).
+
 ## Consolidation
 
 Filled in at Publish.
