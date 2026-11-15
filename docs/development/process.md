@@ -50,6 +50,10 @@ that lands the feature links it. Changes that carry no design decisions
 (dependency bumps, typo fixes, CI-only changes) are exempt and are labelled
 `no-design` on the PR.
 
+A feature that changes behaviour a specification defines is also
+spec-first: the specification changes before the code that implements
+it, and the design lists the change (LOOP-02).
+
 The design phase starts by searching archived designs (FLOW-12) and these standards
 for overlap, and cites what it reuses.
 
@@ -124,8 +128,9 @@ A **process item** (queue `kind: process`) changes the rules the loops run
 under: `docs/development/`, `.claude/` or `tools/workflow/`. Its design is the
 human's, settled in a design review (FLOW-19); after that the loop works on its
 branch, and nothing it changes reaches the running loop until the human merges
-it (FLOW-14). A feature may also change the rules and their enforcement when
-its design review approves each change by name (FLOW-14); `.claude/` and the
+it (FLOW-14). A feature may also change the rules of a component it works in, and
+their enforcement, never a loop rule (LOOP-09), when its design review
+approves each change by name (FLOW-14); `.claude/` and the
 rest of `tools/workflow/` change only through a process item:
 
 | # | Phase | Done when |
@@ -416,8 +421,13 @@ merge (FLOW-08):
 - **A process item** (FLOW-03), whose design the human settles in a design
   review (FLOW-19) before the loop implements it on its branch. It is the only
   route for `.claude/` and for `tools/workflow/` outside `check/`, the loop's
-  own machinery, and the route for a rule change no feature needs.
-- **A rule change a feature's design declares.** A *rule change* is an edit to
+  own machinery, for a loop rule (LOOP-09), and the route for a rule change
+  no feature needs.
+- **A rule change a feature's design declares.** A feature's design may
+  declare a change to the invariants and profile of a component it works
+  in and to their enforcement, and never to a loop rule (LOOP-\*,
+  FLOW-\*, LINT-\*) or its enforcement (LOOP-09). A *rule
+  change* is an edit to
   this directory (a rule, its severity or check type, the README index), to
   the code that enforces the rules (`tools/tier1/`, `tools/workflow/check/`,
   and the jobs of `.github/workflows/` that run tier 1, `golangci-lint` or

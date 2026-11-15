@@ -54,8 +54,8 @@ Three efforts were planned separately and turn out to be one.
    specification is the Go code.
 3. **The loop's rules live in one repository.** `docs/development/process.md`,
    the `workflow` branch, `wf` and the skills govern this repository only. A
-   second repository with its own queue needs a shared contract, and the relay
-   repository already needs one.
+   second repository worked by the same loop needs a shared contract, and the
+   relay repository already needs one.
 
 Each of the three needs the same things: the seams written as specifications
 that two languages can be tested against, a loop that spans repositories, and
@@ -108,7 +108,11 @@ alternatives are the ones weighed in those sessions.
    and the loop change gates both.
 2. **Each component gets its own repository and its own queue**, coupled only
    through written seams and tagged releases. The end state is the component
-   table under **Design**.
+   table under **Design**. *Amended 2026-11-14 (`loop-contract`):* a
+   repository each, and one queue for all of them. There is one queue, one
+   order and one place of reporting for work in every repository, and an item
+   names the repositories it works in. Jeff's reason: separate queues would be
+   harder to track.
 3. **Seams are specifications with black-box conformance suites, in their own
    repository.** Alternative: Go contract tests in this repository (TEST-05 as
    it stands). It lost because a Rust relay cannot share them. The
@@ -220,7 +224,10 @@ what was drafted and what was decided.
   driver's release (wave 4).
 - **a5.** Confirmed. FLOW-05's `alters_relationships` limit is raised from 1
   to 3 in `config.yaml` while the program runs; the limit of 5 features in
-  progress is unchanged.
+  progress is unchanged. *Amended 2026-11-14 (`loop-contract`):* with one
+  queue for work in every repository (Decision 2), both limits are that
+  queue's. FLOW-05 says which items count against each, and `loop-parallel`
+  is the item that may change that.
 - **a6.** Confirmed. FLOW-15's overview sweep is deferred, within a phase, to
   the phase's last item.
 - **a7.** Changed. Drafted as the signed environment record naming the
@@ -274,7 +281,7 @@ specification and a black-box conformance suite in the specs repository. Seam
 | 7 | Build-link contract | Driver and the isolation guarantee | No | New (Decision 10). One shared suite proves the guarantee on every driver. |
 | 8 | Relay release forms | Relay releases and drivers | No | New: each form (host-mode binary per platform, unikernel image, appliance image, OCI image) with a published hash, and the devices a relay VM needs. The list is open-ended. |
 | 9 | Driver contract | Kit and drivers | The four-method `driver.Driver` | New Go API: registration, doctor, setup, images, clean, driver-owned configuration, the relay source and the claim connection; plus the convention by which the dispatcher finds and runs a driver binary. |
-| 10 | Loop Contract | Every component's loop | Draft, outside any repository | Finished against the running loop. |
+| 10 | Loop Contract | The loop and every repository it works in | Draft, outside any repository | Finished against the running loop. |
 
 ### The phases
 
@@ -286,7 +293,7 @@ no M4.
 | Phase | Work | Done when |
 |---|---|---|
 | P0 | This design, as a process item. | Jeff approves it and merges its PR. The merge starts the freeze. |
-| P1 | Finish the Loop Contract against the running loop, covering spec-first and design-first work. Split `docs/development/` into project invariants and loop rules. Move the queue, `wf`, the skills and the agents to the loop repository. Make `wf` work across repositories, with holds per component. | This repository's loop and the relay's loop each complete one item from the loop repository. |
+| P1 | Finish the Loop Contract against the running loop, covering spec-first and design-first work. Split `docs/development/` into project invariants and loop rules. Make the one queue work across repositories: items that run side by side where FLOW-05 lets them, items a native machine leads from their first step, and `wf`'s gates and checks in a second repository. Then move the queue, `wf`, the skills and the agents to the loop repository. The items, in order, are `loop-contract`, `alters-slot`, `loop-parallel`, `loop-native-lead`, `loop-repository` and, last, the move. | One item in this repository and one item in the relay repository each complete from the one queue in the loop repository. |
 
 **Track S, seams**
 
@@ -307,7 +314,7 @@ no M4.
 | K4 | Extract the remaining drivers. | This repository holds the kit, the collector, the executor, the dispatcher and the book. |
 | K5 | The driver index. | The dispatcher can report and fetch a newer release of one driver. |
 
-**Track R, relay** (run from the relay repository's own queue)
+**Track R, relay** (items in the one queue that name the relay repository, once P1 lets the queue hold them)
 
 | Milestone | Work |
 |---|---|
@@ -316,14 +323,14 @@ no M4.
 | M2 | `relay-core` on the Linux appliance and the OCI image, over the kernel path. UDP and DNS on the build link. |
 | M3 | The Hermit unikernel on firecracker, qemu and vz, over the frame path, with throughput measured. Host mode on Linux first (a3). |
 | M5 | Truststore endpoints to the S2 specification, PKCS12 included. |
-| M6 | Reconciliation: one "adopt relay version X" item per driver in that driver's queue. Then the Go relay is retired. |
+| M6 | Reconciliation: one "adopt relay version X" item per driver, each an item in the one queue that names that driver's repository. Then the Go relay is retired. |
 
 **Order**
 
 | Wave | Runs together | Gate |
 |---|---|---|
 | 0 | The queue drain, then P0 | P0 merged; the freeze starts |
-| 1 | P1, S1, M1 | Loop repository live; suites pass on the Go relay |
+| 1 | P1, S1, M1 | The one queue works across repositories; suites pass on the Go relay |
 | 2 | S2, S3, S4, K1, M2 | Driver contract complete |
 | 3 | K2, M3 | Modules isolated; unikernel and host mode pass the suites |
 | 4 | K3, M5 | Pilot driver released |
@@ -351,9 +358,12 @@ phase that touches a seam changes the seam's specification first, then the
 code (Decision 13). FLOW-19 decides, as for any item, whether its review can
 be skipped.
 
-Until P1 lands, program items run in this repository's queue under the rules
-as they are, plus FLOW-20. The relay's milestones run in the relay
-repository's queue.
+Program items run in the one queue, which is on this repository's `workflow`
+branch until P1's last item moves it to the loop repository. Until P1 lands
+they run under the rules as they are, plus FLOW-20. Until P1 makes the queue
+work across repositories, the queue's tools work in this repository only: an
+item that works in another repository says so in its design, and the relay's
+milestones are worked outside the queue.
 
 New repositories (the loop, the specs, one per driver) are created, and
 `buildwarden-relay` is made public, by Jeff, or by an attended session on his
@@ -394,7 +404,7 @@ approved in the design of the item shown (Decision 18).
 | RELAY-01 to RELAY-08 | Move to the relay or specs repository, restated where they describe Go internals. | M6 |
 | RELAY-05, TEST-05 | Contract tests for the seams become the specs repository's suites. | S1 |
 | ORCH-01 | Driver parity becomes passing `drivertest`. | K1 |
-| FLOW-*, LINT-* | Move to the loop repository as the Loop Contract's detail. | P1 |
+| FLOW-*, LINT-* | Become the Loop Contract's detail, in place, and move with it to the loop repository in P1's last item. The FLOW rules that one queue changes are amended by P1's later items, each declaring its own. | P1 |
 | FLOW-20 | Retired. | A process item, when Jeff ends the program |
 
 ### Risks
@@ -653,6 +663,19 @@ and file P1, S1 and K1 through intake.
 - **rule change FLOW-20 approved at `530beda`**, as worded under **Rule
   changes**.
 
+## Amendments
+
+**2026-11-14, by `loop-contract`**, approved in its design review. Jeff chose
+one queue for work in every repository in place of a queue per component. The
+loop repository of Decision 13 stands, and the move to it is P1's last item.
+Amended in place: Problem point 3; Decision 2; a5; seam 10; the P1 row; the
+heading of Track R; the M6 row; the wave-1 gate; the second paragraph of
+**How program items run**; the FLOW and LINT row of **Rule changes the program
+will make**; three sentences of the **Archive summary**. The wording each had
+is in [`loop-contract`](loop-contract.md), under **Amendments to the umbrella
+design**. FLOW-20 as quoted under **Rule changes** is the record of what was
+approved on 2026-11-12 and is not amended.
+
 ## Consolidation
 
 Reviewed on 2026-11-12 against `main` at `8d07f27`. The branch forked from
@@ -741,16 +764,16 @@ Implemented and published the same day as a process item (FLOW-03).
   `.claude/skills/workflow-intake/SKILL.md` step 3 cites it, and `AGENTS.md`
   points to this design. No code, driver, seam or user-facing surface
   changes. None of the program itself is built here: each phase (P1, S1 to
-  S4, K1 to K5, and M1 to M6 in the relay's queue) is its own queue item
-  with its own design.
+  S4, K1 to K5, and M1 to M6) is its own queue item with its own design.
 - **What the merge does.** Merging this PR is P0's gate and starts the
   feature freeze. Afterwards, in an attended session and outside the PR:
   `limits.alters_relationships` goes to 3 in the workflow branch's
   `config.yaml`, and P1, S1 and K1 are filed through intake. The six held
   items are already out of the queue (**Items closed for re-intake**).
 - **Decisions taken.** One program under one umbrella design (1). A
-  repository and a queue per component, coupled through written seams and
-  tagged releases (2). Seams as specifications with black-box conformance
+  repository per component, coupled through written seams and tagged
+  releases, and one queue for work in all of them (2, as amended on
+  2026-11-14). Seams as specifications with black-box conformance
   suites in `buildwarden/buildwarden-specs` (3, a10). Drivers as separate
   binaries on a public Go kit, then modules, then repositories, with Hyper-V
   as the pilot (4), behind a `warden` dispatcher that works like git's (5).
@@ -806,9 +829,12 @@ Implemented and published the same day as a process item (FLOW-03).
     durable slots (**Consolidation**), how the contract's wording covers the
     container driver, and what firecracker's unprivileged preflight can
     check.
-  - Until P1 lands, program items run in this repository's queue under the
-    rules as they are, plus FLOW-20. The relay's milestones run in the relay
-    repository's queue.
+  - There is one queue for work in every repository, on this repository's
+    `workflow` branch until P1's last item moves it to the loop repository,
+    and an item names the repositories it works in (the Loop Contract,
+    LOOP-04). Until P1 lands, program items run under the rules as they are,
+    plus FLOW-20. The relay's milestones are worked outside the queue until P1
+    makes it work across repositories.
   - New repositories are created, and `buildwarden-relay` is made public, by
     Jeff, or by an attended session on his word in that session (a11).
   - The six closed items' queue files are on the `workflow` branch at

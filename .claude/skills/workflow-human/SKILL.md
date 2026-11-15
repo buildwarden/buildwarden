@@ -54,7 +54,12 @@ Same as `workflow-tick` step 1 (the FLOW-18 check, build `dist/wf`, check out
       the components, seams and flows touched, before and after, and the
       `overview.md` pseudocode change where a flow changes. Where a diagram
       makes it clearer, add it to the design's page (publishing one if there
-      is none); the review itself stays in this session.
+      is none); the review itself stays in this session. Confirm with Jeff
+      the repositories the design names under **Design**, or that it names
+      none and so works only here (LOOP-04). Where the design has
+      **Specification changes**, go over it: each seam's specification and
+      the requirements that change, or that the seam has none and what
+      defines it (LOOP-02).
    2. **The Validation plan and what Plan will work from:** native
       validation steps (Design adds them; Plan only refines their notes),
       `tier2_gaps`, and, on a re-review, the finding, the tasks it touches,
@@ -66,7 +71,9 @@ Same as `workflow-tick` step 1 (the FLOW-18 check, build `dist/wf`, check out
       Ask each `rule_changes` entry on its own (FLOW-14), with its current
       and proposed wording: approve, approve with a change, or reject. Record
       each approval in the Outcome entry as `rule change <ID> approved at
-      <sha>`; a rejection is a change unless the design drops it.
+      <sha>`; a rejection is a change unless the design drops it. Refuse a
+      feature's entry that names a LOOP, FLOW or LINT rule, whatever its
+      paths: a loop rule changes only through a process item (LOOP-09).
    4. **Assumptions**, one per AskUserQuestion entry (FLOW-07): the question
       in full, each option with its consequence, the recommendation first,
       and the decision it rests on. Record each answer with `dist/wf answer`,
