@@ -496,13 +496,29 @@ Nothing in any of the five is approved.
      harness's models speak them. The six version numbers are independent
      as documents and as tags. As a tested set they are not: the set the
      specs repository tests together is the newest release of each
-     (above), and any other mix is tested only by the implementation
-     that pins it (Decision 7).
+     (above). Any other mix is tested only by the implementation that
+     pins it, and may not build there (Decision 7).
    - An implementation states six versions where it stated one, and a
      relay is run by five commands where it was run by one (**The
      harness**).
    - A change that needs both a specification and the harness is two
-     tags, pushed in order; the first release is seven.
+     tags, pushed in order. The first release is seven tags, seven
+     `release` runs and 36 binaries with six `SHA256SUMS` files (six
+     specifications, three operating systems, two architectures), where
+     one tag would have been one run and six binaries.
+   - A fix to the harness reaches a released binary only through a new
+     release of that specification. A fix to a launcher or to the
+     sandbox that every suite needs is seven tags, six `CHANGELOG.md`
+     entries and 36 binaries.
+   - A change to one specification can force releases of others. When it
+     changes what the harness's model of a protocol must do (a field a
+     claimant must send, a step a build environment takes), a suite that
+     drives a component through that protocol can test an
+     implementation of the change only once it is released again with
+     the new harness.
+   - What this repository runs for a pinned release is not always the
+     build that release carries: one `go.mod` builds all six commands
+     with one harness (Decision 7, a20).
    - There are seven modules to keep building. With the harness in a
      module of its own that is tagged in the same merge (a19, option A),
      three pieces of machinery keep them building while a harness version
@@ -652,12 +668,30 @@ Nothing in any of the five is approved.
    ways**).
 
    *Which sets are tested.* The newest release of each specification is
-   tested as a set in the specs repository. An implementation may hold
-   one specification at an older release while it moves another. Go then
-   builds the older cases with the newer harness, a combination the
-   specs repository did not test; this repository's `conformance`
-   workflow is what tests the set it pins. The released binaries differ
-   in one way: each carries the harness of its own release.
+   tested as a set in the specs repository, and `SPECS=latest` is the
+   set this design supports. An implementation may hold one
+   specification at an older release while it moves another. Go builds
+   one module with one version of each dependency, so it then builds the
+   older cases with the newer harness, a combination the specs
+   repository did not test. Such a set can fail to build, where the
+   harness changed a function the older cases call: in a model of the
+   layout it passed `go mod tidy` and every criterion of the `pin` job
+   and then did not compile. It can also run the older cases against
+   models that already speak a newer version of another protocol. The
+   harness promises nothing to cases older than the newest release of
+   each specification. So `make pin-specs` builds the six commands after
+   it moves a pin, and a set that does not build fails there; a set that
+   builds is tested by this repository's `conformance` workflow and by
+   nothing else.
+
+   *What runs here is not always the build a release carries.* Each
+   released binary carries the harness of its own release (Decision 4).
+   Here every command is built with the highest harness version any pin
+   names, so a specification pinned at a release whose harness is older
+   is tested with a newer harness than its binaries have. The report
+   names the harness version beside each specification's. a20 asks
+   whether that is acceptable, and gives two ways to run exactly a
+   release's build.
 
    *Rejected:* a git
    submodule (tier 1 reads files
@@ -672,7 +706,7 @@ Nothing in any of the five is approved.
    that a pin moved. *Rejected:* a `go.mod` for each specification under
    `tools/conformance/`, which would build each command with exactly its
    release's harness and give each seam its own contract path: a7's
-   answer names one file.
+   answer names one file. It is a20's option C, and is asked there.
 
 8. **This item works in two repositories, from the one queue, from the
    start of Implement.** It names them here, as LOOP-04 has an item do
@@ -785,7 +819,8 @@ he chose. Twelve were confirmed as recommended: a3 to a6 and a11 to a18.
 Five depart from what the design proposed, and the design is revised for
 each: a1 (C), a2 (B), a8 (B), a9 (A, and OpenAPI for the HTTP seams as
 well) and a10 (B). a7 was restated for a8's answer and then confirmed.
-a19 is new, raised by the fold-in of a8, and is not answered.
+a19 and a20 are new, raised by the fold-in of a8 and by its review, and
+are not answered.
 
 Each is confirmed in the design review (FLOW-19). The same entries are in the
 queue file. a1 to a16 date from `f1-design`; the revision of 2026-11-14
@@ -1247,6 +1282,64 @@ release; its recommended answer is still A.
   go away. Under every option the cases stay in each specification's
   module, and what Decision 4 says a tag per specification costs is the
   same.
+
+- **a20. Which build of a specification's tooling this repository
+  runs** (Decision 7). *(New 2026-11-15, raised by a8's and a7's answers
+  and by the review of their fold-in; not yet put to Jeff.)* A release of
+  a specification carries binaries built with the harness version its
+  `go.mod` names (Decision 4). `tools/conformance/go.mod` names all six
+  specifications in one module, and Go builds one module with one
+  version of each dependency: the highest harness version any pin names.
+  So a specification pinned here at a release whose harness is older is
+  tested here with a newer harness than its own binaries have. When a7
+  was first put to him Jeff said he assumed that "a specific release of
+  the specs themselves is coincident with the build of the conformance
+  tools that test them". On this repository's path that holds for the
+  cases and not always for the harness under them. Options:
+  - (A) As the design has it: one `go.mod`, `go tool`, one harness for
+    all six commands. One file to read and to move, which is what a7's
+    answer names, and one release of any specification brings a harness
+    fix to all six suites here. Cost: this repository and an
+    implementation that runs the released binaries, as the Rust relay
+    may, can test the same pinned release with different harness
+    versions; a set of pins that is not the newest of each can fail to
+    build (Decision 7); and the six version numbers are independent for
+    an implementation only as long as the harness stays compatible with
+    every release it pins.
+  - (B) The released binaries. `tools/conformance/go.mod` still names
+    the six versions, and `make conformance` fetches each release's
+    binary for the host and checks it against a hash kept in this
+    repository. What runs is the release's own build, the one the relay
+    repository runs. Cost: a file of hashes beside the `go.mod`, which
+    `make pin-specs` rewrites, and a download step, which together are
+    the lock file and script a7's option D was; a pin can move only once
+    the release's binaries exist; and a branch in progress pins a commit
+    that has no binaries, so the source build stays as a second path.
+  - (C) A `go.mod` for each specification,
+    `tools/conformance/<directory>/go.mod`, each naming one
+    specification. Go then builds each command from exactly the modules
+    its release names, which is what the `release` workflow builds from,
+    so the six versions are independent here as they are for the
+    binaries, and a mixed set always builds (tried in the model). Tier 1
+    can be given each seam's own pin as its contract path, so the check
+    asks for the pin of the seam that changed; the `collector` seam has
+    two. Cost: six small modules and six `go.sum` files where a7's
+    answer names one file; a harness fix reaches a suite here only
+    through that specification's release, as for the binaries; and a7's
+    text, Decision 7, **Tier 1's seam list**, the `pin` job and the
+    proposed wording of TEST-05, GLOBAL-08, EXEC-04 and PROFILE-01 change
+    where they name `tools/conformance/go.mod`.
+
+  *The design proceeds on A, because a7's recorded answer names one
+  file and a fold-in does not change a recorded answer. Recommended: C.*
+  It is the one in which what a8 chose is also true here: a
+  specification's version is independent of the other five, and what
+  tests a pinned release is built from what that release names. It
+  keeps Go's own verification, which B gives up, and it removes the set
+  that does not build. Its cost is five more small modules and one more
+  round of rewording, of a7 and of a path in four proposed rule
+  wordings. That is why it is best asked before the rule changes are
+  approved by name. If Jeff confirms A, nothing in the design changes.
 
 ## Design
 
@@ -2236,17 +2329,21 @@ This design keeps its names and proposes none to K1.
   as any feature. Jeff decided at `loop-contract`'s review that it ranks
   with the fixes, and `loop-parallel` is the item that amends FLOW-05 to
   say so (its a5 and a23).
-- A change to one specification releases that specification and no
-  other. The other five keep their versions, and an implementation that
-  does not implement the change moves nothing. That is what a tag per
-  specification buys.
+- A change to one specification releases that specification, and
+  another only when the harness's model of a protocol changes with it:
+  a released binary keeps the harness of its own release, so a suite
+  that must drive a component through the changed protocol is released
+  again with the new harness (Decision 4). Otherwise the other five keep
+  their versions, and an implementation that does not implement the
+  change moves nothing. That is what a tag per specification buys.
 - A tag is never moved. A failure found after a release is fixed by a new
   release of the directory at fault: a patch release when no passing
   implementation can fail by it, otherwise the next minor. It needs its
   own pull request in the specs repository and Jeff's merge.
 - The harness is released when it changes. A specification takes a newer
   harness by a release of its own, whose `go.mod` names it; until then
-  its binaries carry the harness they were released with.
+  its binaries carry the harness they were released with. A harness fix
+  that every binary needs is therefore a release of each of the six.
 - The relay repository consumes the same releases with its own target
   files: through a `go.mod` of its own if its CI has Go, or through the
   released binaries of the specifications it implements, each checked
