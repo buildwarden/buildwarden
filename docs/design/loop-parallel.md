@@ -91,7 +91,9 @@ merge (`ad4ea50`) changed none of the code named here.
    tree imports `relay/`, and `relay/` imports no driver package
    (`go list -deps -test` on Linux, macOS and Windows; the table is under
    **The area map**). Of the 52 first-parent merges on `main` whose change
-   this clone holds (it is shallow, and the 53rd commit is its boundary),
+   this clone holds, counted at `897a4a8` (it is shallow, and the 53rd
+   commit from there is its boundary; `loop-contract`'s merge has since
+   added one, which is loop work and outside the counts below),
    seven changed `driver/hyperv/` and five changed `relay/`;
    `hyperv-ps-done` (#116: `driver/hyperv/` and one book page) and
    `relay-leaf-crl` (#70: `relay/` and one book page) share no path but the
@@ -387,8 +389,8 @@ say.
       Publish seeds `f6-merge-main` again, so the item would give up the PR
       slot while its PR is open.
     - *Rejected: seeding only when a related change landed.* A change from
-      outside the queue (a hand-merged PR, the weekly tidy) relates to
-      nothing and still moves `main`.
+      outside the queue (a hand-merged PR; the weekly tidy, where it can
+      still push to `main`) relates to nothing and still moves `main`.
 14. **An item homed in another repository is tracked: two human steps, no
     gate, outside the limits** (a7). It shows in `QUEUE.md` with its
     repository, its PR and its relations.
@@ -1915,7 +1917,7 @@ code these cases run through.
 | 30 | Eight wait, counting two queued items filed on hold (FLOW-20) and a tracked item | n/a | Five: queued and tracked items are not counted. A queued feature starts |
 | 31 | `limits.waiting_on_human` is 0 | n/a | `wf validate` fails: below 1. Unset, it is 8 |
 | 32 | Two disjoint PRs are ready. Jeff merges one on GitHub and, before any session has run, goes to merge the other | Cannot arise | With the ruleset: GitHub refuses it, out of date. Without it: the merge goes through behind `main`. It is his merge and stands; the next tick confirms it (a14), reads CI on `main`, and files the fix if it is red (a16) |
-| 33 | `main` moves by a merge that is no item's (a PR merged by hand, the weekly tidy) while three PRs are open | No refresh exists | All three wait for a refresh, as after an item's merge |
+| 33 | `main` moves by a commit that is no item's (a PR merged by hand; the weekly tidy's push, where the ruleset is not set or gives it a bypass) while three PRs are open | No refresh exists | All three wait for a refresh, as after an item's merge |
 | 34 | In an attended session Jeff merges the first of three ready PRs and names the one he wants next | Cannot arise | `wf stale` seeds a refresh on the other two. The session takes the named item's (`/workflow-tick attended <item>`), waits for CI and lists it as ready; he merges it; the third is refreshed the same way, or by the next run |
 | 35 | `main` is recorded red; four PRs are behind it | n/a | No refresh is offered: `wf next` prints `blocked <item> main is red at <sha>: no refresh until it is green` for each of the four and goes on, and none of them is ready. The run's steps go to the fix the tick filed, which starts whatever waits on Jeff (case 26); if `main` moves under the fix's own PR, its refresh is the one that is still taken. Once the fix merges and `main` is green, the next run refreshes the four |
 | 36 | A PR's refresh has passed and it is ready; before Jeff merges it, `main` moves again | n/a | It waits for a refresh again: the next `wf stale` seeds one. Under a10 (d) that costs the item no budget |
@@ -1957,8 +1959,13 @@ skills. A commit that changes `areas.yaml` is refused unless `W` is
 
    A conflict in a *generated* file (`QUEUE.md`, `digest/<date>.md`) is
    settled by taking the remote's copy, since step 4 writes it again.
-   `areas.yaml` and `main.yaml` are not generated: a conflict in either
-   is a conflict in a queue file, below.
+   `main.yaml` is not generated, but every tick and attended session
+   writes it, and what it holds is a reading that can be taken again: a
+   conflict in it is settled by keeping the remote's file, and
+   `wf commit` prints `main.yaml: kept the remote's; record main again`,
+   on which the session runs `wf main` (and `wf areas -check`) again.
+   `areas.yaml` is Jeff's word and is never settled that way: a conflict
+   in it is a conflict in a queue file, below.
 4. It regenerates the generated files, commits with the same message, and
    pushes again. It tries three times.
 
@@ -2060,9 +2067,20 @@ check, *waits for a refresh*.
    `main` until the branch is updated and `ci-ok` is green on the new
    head.
 
-   *Whose it is.* Jeff's. It is a repository setting, and no agent
-   changes a repository's settings, protection or rulesets (FLOW-08, as
-   amended below). `main` has none today: branch protection reads "Branch
+   *What else it stops.* `.github/workflows/auto-tidy.yml` runs each
+   week and commits `go mod tidy` straight to `main` (`contents: write`,
+   `git-auto-commit-action`). "Require a pull request before merging"
+   refuses that push unless the workflow's actor is on the ruleset's
+   bypass list. Nothing is lost on the day: its last six scheduled runs
+   failed (2026-10-05 to 2026-11-09) and pushed nothing. When Jeff sets
+   the ruleset he chooses what becomes of it: it opens a pull request
+   instead, its actor gets a bypass, or it is retired. The first and
+   the last change a workflow file (the `build` area) and are an item
+   of their own; this item changes no workflow.
+
+   *Whose it is.* Jeff's. No agent changes a trunk's protection
+   (FLOW-08, as amended below), which on GitHub is the branch
+   protection rule and the rulesets that apply to `main`. `main` has none today: branch protection reads "Branch
    not protected", there is no ruleset, and `allow_update_branch` is off
    (read on 2026-11-15, after #119 merged; `loop-contract`'s a21 had
    asked for the protection before that merge). `rules.yaml` names
@@ -2247,7 +2265,9 @@ An item sent back with its PR open gets none: its new Publish merges
 The tick runs it right after confirming merges, every run;
 `workflow-human` runs it before it lists the open PRs, and again after
 each merge Jeff makes in that session. It is seeded whatever moved
-`main`: another item's merge, a PR merged by hand, the weekly tidy.
+`main`: another item's merge, a PR merged by hand, or the weekly tidy,
+which pushes to `main` only while no ruleset refuses it or its actor
+has a bypass (**Merging: a branch must contain `main`**).
 
 **Where it ranks.** An item with a pending refresh step is in
 implementation (FLOW-05's class 1), so a run refreshes open PRs before it
@@ -2725,8 +2745,9 @@ By file. Each cites the rule and does not restate it (FLOW-14).
   on Jeff**. Step 4: the run's own digest file, then `dist/wf digest`; a
   red `main` and an item sent back with its PR open are listed under
   **Blocked on Jeff**, and so is each open PR, as ready or as waiting
-  for a refresh. **Never** gains: change a repository's settings, its
-  branch protection or its rulesets (FLOW-08); the same line goes into
+  for a refresh. **Never** gains: change a trunk's protection, on
+  GitHub its branch protection rule and the rulesets that apply to it
+  (FLOW-08); the same line goes into
   `workflow-human` and `workflow-native`.
 - `.claude/skills/workflow-intake/SKILL.md`. Step 3: agree the
   repositories and areas with Jeff (`dist/wf areas -list`), show
@@ -2759,7 +2780,7 @@ By file. Each cites the rule and does not restate it (FLOW-14).
   next tick confirms the merge, and asks which PR he wants next; it
   refreshes that one with `/workflow-tick attended <item>`, waits for CI
   on the new head, and lists it as ready. It never merges, and never
-  changes the repository's settings. **Escalations** gains
+  changes the trunk's protection (FLOW-08). **Escalations** gains
   `f8-escalate-returned`, a red `main`, and holders over a limit. A
   tracked item's steps.
 - `.claude/skills/workflow-native/SKILL.md`. State pushes through
@@ -4030,7 +4051,9 @@ whether it is still true with the proposed wording.
     related item finished Guide in it, with `held by process item` when a
     hold started in it, and with `blocking question` when the human opened
     one in it; a conflict in a queue file gives exit 5 without `-claimed`;
-    a conflict in `QUEUE.md` is regenerated; only the paths given and the
+    a conflict in `QUEUE.md` is regenerated; a conflict in `main.yaml`
+    keeps the remote's file and says to record `main` again, and one in
+    `areas.yaml` gives exit 5; only the paths given and the
     generated files are staged; another session's uncommitted file is
     neither committed nor reset away (exit 5 names it); nothing is
     force-pushed.
@@ -4213,7 +4236,10 @@ commit's time. The item is not done until it is.
   not, in the repository's settings; the session reads
   `gh api repos/buildwarden/buildwarden/rules/branches/main` and records
   the answer with `wf main -up-to-date required|not-required`. The
-  session does not set it.
+  session does not set it. With it he says what becomes of
+  `auto-tidy.yml`, whose weekly push to `main` the ruleset refuses: a
+  pull request, a bypass, or retired; the first and the last are filed
+  as an item at intake.
 - `README.md`: the layout table (`areas.yaml`; `main.yaml`;
   `digest/<date>/`); the queue file's new fields; the `tracked` round;
   `wf next`'s paragraph (the guard, for every worker, the three limits
