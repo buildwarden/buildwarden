@@ -231,4 +231,4 @@ warden --version
 warden --help
 ```
 
-BuildWarden auto-detects your container runtime for the container driver (trying finch, docker, podman in order). Override with `--runtime` or the `WARDEN_CTR_CLI` environment variable.
+BuildWarden auto-detects your container runtime for the container driver (trying finch, docker, podman in order). Override with `--runtime` or the `WARDEN_CTR_CLI` environment variable; see [The container runtime](../guide/configuration.md#the-container-runtime).

@@ -239,6 +239,10 @@ the slots, `/dev/kvm` access (kvm group membership) and leftover VMMs of the
 user who ran sudo, skipping the reflink probe so nothing is written into that
 user's cache.
 
+With the container driver, a runtime in effect that is not `finch`, `docker`
+or `podman` fails doctor with the error a build would get
+([Configuration](configuration.md#the-container-runtime)).
+
 Every VM driver's doctor also prints its build link and where it came from
 (`build link 100.127.255.252/30 (default)`, or `warden.toml`, `config.toml`,
 `--build-link`), whether a host interface overlaps it (an address inside the
@@ -365,6 +369,11 @@ or crashed builds. Only removes resources not associated with a currently
 running warden process, and nothing a later build would reuse: prepared and
 downloaded VM images, the Hyper-V relay boot disk and the support images stay.
 
+It removes leftover containers under every driver but `firecracker` and
+`hyperv`, so under those a runtime in effect that is not `finch`, `docker` or
+`podman` fails the command before anything is listed or removed
+([Configuration](configuration.md#the-container-runtime)).
+
 With `--driver firecracker` it needs no container runtime: it kills VMMs
 recorded on a network slot that no build holds (left by a warden that was
 killed, or by `--keep-vms`), and removes the work dirs and per-build rootfs
@@ -389,7 +398,7 @@ Run it as a Hyper-V Administrator.
 | Flag | Description |
 |------|-------------|
 | `--driver <name>` | Orchestration driver (container, qemu, vz, hyperv, firecracker) |
-| `--runtime <name>` | Container runtime (finch, docker, podman) |
+| `--runtime <name>` | Container runtime: `finch`, `docker` or `podman`, the only values it takes (see [Configuration](configuration.md#the-container-runtime)) |
 | `--color <mode>` | Color output (auto, always, never) |
 | `-v, --verbose` | Verbose output |
 | `--version` | Print version |
