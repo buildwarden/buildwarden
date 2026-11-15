@@ -3,7 +3,8 @@ feature: project-config-trust
 status: draft
 drivers: [container, qemu, vz, hyperv, firecracker]  # conservatively (FLOW-02): the change is in
                          # cmd/warden and in three shared files of driver/ (hostutil.go, session.go,
-                         # detach.go) that every driver uses. No driver/<name>/ tree is edited
+                         # detach.go) that every driver uses. In the driver/<name>/ trees only
+                         # two test files change (hyperv, qemu), to name the source tree
 seams: []                # the claim's upstream_ca_certs field carries what it carried, PEM
                          # certificates; relaycfg/ is not edited
 surfaces: [cli, config, output]  # cli: --config, a global flag. config: one file, found by
@@ -19,10 +20,10 @@ alters_relationships: false  # inside the orchestrator's existing role, reading 
                          # no change of owner, no change to driver.Driver or driver.Session
 design_review: required  # FLOW-19: a security boundary, three rule changes, assumed questions
 native_validation:
-  - {host: container-any, blocking: false, reason: "no driver tree is reached and the lookup is the same code on every OS; what only a Windows host adds is go test ./cmd/warden and ./driver there (CI does not run make test on Windows), the transitional error naming the file under %USERPROFILE%, a drive-letter path in --config, and WARDEN_UPSTREAM_CA_CERTS split on ';'"}
-  - {host: windows-hyperv, blocking: false, reason: "driver/hyperv is not edited; what only this host adds is the detached image prepare reading the file its build read (the argument list is built in shared code and unit-tested), and a development warden run from its tree still finding its guest binaries from the executable"}
+  - {host: container-any, blocking: false, reason: "no driver's own code is changed and the lookup is the same code on every OS; what only a Windows host adds is go test ./cmd/warden and ./driver there (CI does not run make test on Windows), the transitional error naming the file under %USERPROFILE%, a drive-letter path in --config, and WARDEN_UPSTREAM_CA_CERTS split on ';'"}
+  - {host: windows-hyperv, blocking: false, reason: "in driver/hyperv only a test file is edited, and CI runs it; what only this host adds is the detached image prepare reading the file its build read (the argument list is built in shared code and unit-tested), and a development warden run from its tree still finding its guest binaries from the executable"}
   - {host: macos-vz, blocking: false, reason: "driver/vz is not edited; what only this host adds is sudo warden image prepare --driver vz with a ~/.config/warden/config.toml present (which home sudo gives), and a development warden run from its tree still staging the relay and warden-io from the executable"}
-  - {host: qemu-any, blocking: false, reason: "driver/qemu is not edited; what only this host adds is a development warden run from its tree still finding the relay VM assets in the source tree, by walking up from the executable"}
+  - {host: qemu-any, blocking: false, reason: "in driver/qemu only a test file is edited, and CI runs it; what only this host adds is a development warden run from its tree still finding the relay VM assets in the source tree, by walking up from the executable"}
 tier2_gaps:
   - {host: container-any, gap: "on the Windows desktop: go test ./cmd/warden ./driver; with %USERPROFILE%\\.config\\warden\\config.toml present, warden doctor exits 1 naming that path, and WARDEN_CONFIG set to it clears the error; --config C:\\x\\warden.toml is read and .\\warden.toml is not; WARDEN_UPSTREAM_CA_CERTS=C:\\a.pem;C:\\b.pem names two files; --config NUL reads no settings (backlog project-config-trust-windows)"}
   - {host: windows-hyperv, gap: "a hyperv build with --config naming a file outside the working directory whose [vm] image_refresh_after is due starts the detached image prepare, and its log's config line names that file; a development warden run from its tree builds (backlog project-config-trust-hyperv)"}
@@ -400,9 +401,10 @@ None.
     tree, which is how CONTRIBUTING, CI and the native sessions run it, so
     nothing they do changes. `go run ./cmd/warden` and a `go install`ed
     development `warden` (whose executable is in a cache or in `GOBIN`) get
-    an error that says to run `make build` and use `dist/warden`. Tests
-    that need the tree name it through a test-only hook. No new surface.
-    **Recommended.**
+    an error that says to run `make build` and use `dist/warden`. Three
+    tests in two drivers' test files rely on the working-directory step
+    today and name the tree through a test-only setter instead (**F9: the
+    source tree**). No new surface. **Recommended.**
   - (b) (a), plus a variable (`WARDEN_SOURCE_DIR`) that names the tree and
     is used exclusively. `go run` and `go install` keep working for someone
     who sets it. One more variable outside the reference's knobs (UX-07),
@@ -544,6 +546,8 @@ ERROR: /home/you/.config/warden/config.toml is no longer read: warden reads one 
   gives the process, as today. With no home directory there is nothing to
   look for.
 - "Exists" is `os.Stat` succeeding; the file is not opened.
+- A named config file that cannot be read is reported first: it is what
+  the user just asked for.
 - It does not fire when `--config` or `WARDEN_CONFIG` names that same file
   (`os.SameFile`): the first way out in the message is one line in a shell
   profile, with no file moved.
@@ -770,10 +774,17 @@ ModuleRoot():
   missing file as today, and no longer builds one from the working
   directory.
 - Tests: a `go test` binary lives in a temporary directory, so a test that
-  reaches `ModuleRoot` relies on the working-directory step today. `driver`
-  gains a test-only way to name the tree (an unexported variable set from a
-  `_test.go` helper that walks up from the test's own directory); no
-  environment variable and no exported API (a6).
+  reaches `ModuleRoot` relies on the working-directory step today. Run on a
+  copy of `ad4ea50` with that step deleted, `go test ./...` fails in three
+  tests and passes everywhere else: `TestStageSeedDir` and
+  `TestStageSeedDirConfiguredLink` (`driver/hyperv/winseed_test.go`) and
+  `TestWindowsSeedDirRunScript` (`driver/qemu/windows_test.go`), each of
+  which cross-builds `warden-io` through `GuestBinary`. They are in other
+  packages than `driver`, so `driver` gains one documented, test-only
+  setter of the tree, which those two test files call with the tree found
+  from the test's own directory. Those are the only edits in a driver's
+  tree, both to test files that CI runs on Linux. No environment variable
+  is added (a6).
 
 ### The background image prepare
 
@@ -965,8 +976,10 @@ relay image is the container driver's launch argument, as today.
 
 ## Cross-driver impact
 
-No `driver/<name>/` tree is edited (ORCH-01). Three shared files of
-`driver/` are, so every driver is declared:
+No file of a `driver/<name>/` tree that is built into `warden` is edited
+(ORCH-01); two test files are, in `driver/hyperv` and `driver/qemu`, to name
+the source tree (**F9: the source tree**). Three shared files of `driver/`
+are edited, so every driver is declared:
 
 - **container**: the relay image in effect is checked before anything is
   created. A development build finds its source from the executable only
@@ -1318,8 +1331,9 @@ and `test-integration.sh`), with the built `dist/warden`:
 - one of the builds the script already runs is run with `--config`, so a
   named file is built with at no extra build.
 
-**Tier 2.** No host blocks merge (FLOW-09): no driver's tree is reached,
-the lookup and the checks are the same code on every OS, and
+**Tier 2.** No host blocks merge (FLOW-09): no driver's own code is
+changed (the two test files edited in `driver/hyperv` and `driver/qemu` run
+in CI), the lookup and the checks are the same code on every OS, and
 `ModuleRoot`'s first step, the only one a `warden` run from its tree ever
 needed, is unchanged. Four gaps are tracked (`tier2_gaps`, and the
 native-gap backlog under the ids given there): the Windows desktop
@@ -1352,9 +1366,9 @@ For Plan to refine. One PR, started from a `main` that has
 6. The relay image check in `newRequest`, under the container driver
    (GLOBAL-06, UX-04, UX-08).
 7. `driver.ModuleRoot`: the executable only, the module line whole, the
-   fixable error at its callers, and the test-only hook; every test that
-   then fails names its tree through the hook (GLOBAL-06, GLOBAL-11,
-   UX-04).
+   fixable error at its callers, and the test-only setter; the three tests
+   in `driver/hyperv/winseed_test.go` and `driver/qemu/windows_test.go`
+   name their tree through it (GLOBAL-06, GLOBAL-11, UX-04).
 8. `driver.StartDetached` passes the config file (GLOBAL-10).
 9. Rework of what `runtime-cli-project-path` wrote for two files:
    `resolveRuntime`'s comment and messages, its reference text and its
