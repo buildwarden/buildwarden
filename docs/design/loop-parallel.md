@@ -47,7 +47,7 @@ related: [componentization.md, alters-slot.md, next-skips-merge-wait.md, queue-s
           regression-fixes-follow-up.md, design-approved-rule-changes.md,
           tier1-static-checks.md, wf-later-phase-host-steps.md, workflow-bootstrap.md,
           workflow-streamline.md, native-host-loop.md, design-principles.md,
-          wf-squash-after-base-moved.md]
+          wf-squash-after-base-moved.md, loop-contract.md]
 ---
 
 # Items that do not collide run side by side: repositories, areas, relations, the limits, the claim guard, the refresh step and `QUEUE.md`
@@ -55,8 +55,8 @@ related: [componentization.md, alters-slot.md, next-skips-merge-wait.md, queue-s
 A process item, and a program item under FLOW-20: P1's third item, and step 3
 of the loop change Jeff approved in direction on 2026-11-14 (one queue,
 parallel where items do not collide, native-led items). It follows
-`alters-slot` (#118, merged) and `loop-contract` (approved at `7af50ff`,
-implemented; its PR #119 waits for Jeff's merge), and comes before
+`alters-slot` (#118, merged) and `loop-contract` (#119, merged on
+2026-11-15 as `ad4ea50`), and comes before
 `loop-native-lead`, `loop-repository` and the move to the loop repository.
 It holds no worker (Decision 17).
 
@@ -73,7 +73,8 @@ Jeff, on 2026-11-14, asked for one queue "which allows for more
 parallelization for any features that are nearly or completely
 non-colliding, i.e. Hyper-V driver feature versus adding a new supported
 release target to the relay". The loop cannot give him that today, for seven
-reasons. Paths are under `tools/workflow/` at `897a4a8`.
+reasons. Paths are under `tools/workflow/` at `897a4a8`; `loop-contract`'s
+merge (`ad4ea50`) changed none of the code named here.
 
 1. **FLOW-05's limits are for the whole queue.** At most 5 features in
    progress, `limits.alters_relationships` features holding a slot, and one
@@ -145,8 +146,9 @@ say.
   checks each holder against the holders it collides with. Its two known
   gaps (a Plan step claimed past the limit; the queue's
   `alters_relationships` never compared again) are closed.
-- **`loop-contract`** (approved at `7af50ff` on `feat/loop-contract`; its
-  rule files are read from that branch at `31028a5`, the head of PR #119).
+- **`loop-contract`** (#119, on `main` since 2026-11-15 as `ad4ea50`; its
+  rule files are read from `main` at that commit, and are the files its
+  review approved at `7af50ff`).
   Decisions 17 to 20,
   the hand-off's `loop-parallel` row and points 5 and 7, and LOOP-04,
   LOOP-06 and LOOP-07 bind this design: one queue; an item names its
@@ -385,8 +387,8 @@ say.
     second repository (a6) make untrue as written; FLOW-09, for a red
     `main` the loop itself sees (Decision 22);
     LOOP-01, LOOP-04 and PROFILE-01, for the Areas term and the queue's new
-    field. The last three need `loop-contract` on `main`, so `x2-implement`
-    starts after its merge (Implementation plan, task 1).
+    field. The last three amend files `loop-contract` added, which are on
+    `main` since its merge.
 20. **The freeze stays.** FLOW-20 loses only its Limit bullet. This is the
     proposal's question 2, option (a), part of the approved direction.
 21. **Disjoint PRs in one repository merge in any order** (a1). Nothing
@@ -1849,14 +1851,13 @@ This item declares no `holds` (Decision 17, a13).
   `tracked` step id fails an old `wf validate` loudly; none exists before
   Close.
 - **`loop-contract` first.** This item amends files that `loop-contract`
-  adds, and thirteen of the files its PR changes are files PR #119 changes
-  too (`process.md`, `TEMPLATE.md`, the four skills, `wf-design.md`,
-  `wf-publish.md`, `queue/queue.go` and its test, `cmd/wf/main.go`, and
-  the two rule files it adds). `x2-implement` starts by merging
-  `origin/main` and releases the step, naming the reason, if
-  `docs/development/loop-contract.md` is not there. So the two PRs are
-  never open against each other: this item's work starts from a `main`
-  that has `loop-contract`.
+  added, and thirteen of the files its PR changes are files PR #119
+  changed too (`process.md`, `TEMPLATE.md`, the four skills,
+  `wf-design.md`, `wf-publish.md`, `queue/queue.go` and its test,
+  `cmd/wf/main.go`, and the two rule files it added). PR #119 merged on
+  2026-11-15 and the branch has merged that `main` (`26a1512`), so the two
+  PRs were never open against each other and this item's work starts from
+  a `main` that has `loop-contract`.
 
 ### Safety
 
@@ -2101,11 +2102,13 @@ each driver's tree; it describes them and changes nothing in them.
 ## Rule changes
 
 Fourteen, each for the design review to approve by name (FLOW-14, FLOW-19).
-"Current wording" is `docs/development/process.md` on `main` at `897a4a8`
-for the FLOW rules. For LOOP-01, LOOP-04 and PROFILE-01 it is the text
-approved at `7af50ff` in `loop-contract`'s review, read from
-`feat/loop-contract` at `31028a5` (PR #119); those files reach `main` with
-that item's merge, which this item's Implement waits for. Where a rule has
+"Current wording" is `main` at `ad4ea50`, which has `loop-contract`
+(#119): `docs/development/process.md` for the FLOW rules,
+`loop-contract.md` for LOOP-01 and LOOP-04, `loop-profile.md` for
+PROFILE-01, and `docs/design/TEMPLATE.md`. Every quotation below was
+compared with those files at that commit on 2026-11-15, after the branch
+merged it: none differs from what the draft quoted from `main` at
+`897a4a8` and from `feat/loop-contract` at `31028a5`. Where a rule has
 several paragraphs, only the amended ones are quoted, each in full; the
 rest of the rule is unchanged. No severity changes. One check type changes
 (PROFILE-01).
@@ -2913,9 +2916,8 @@ reached. Four to six runs are likely. The estimate is Jeff's to raise at
 the review (FLOW-13); the runaway check would otherwise escalate at 24
 steps.
 
-1. Merge `origin/main`. If `docs/development/loop-contract.md` is not on
-   it, release the step with that reason: tasks 14 and 15 amend files
-   `loop-contract` adds (FLOW-14, LOOP-09).
+1. Merge `origin/main`, which has had `loop-contract` since `ad4ea50`:
+   tasks 14 and 15 amend files it added (FLOW-14, FLOW-17, LOOP-09).
 2. Tests first: each of tasks 3 to 12 starts with the tests the
    Validation plan names for it, failing on the current code (TEST-01,
    TEST-02).
@@ -2953,8 +2955,7 @@ steps.
     **Machinery edits** (FLOW-14).
 17. `make test`, `make lint`, `make enforcement`, `flow18-check.sh`, and
     the live-queue comparison (FLOW-17, FLOW-18).
-18. Add `loop-contract.md` to this design's `related`, archive the design
-    with its summary, and open the PR (FLOW-12).
+18. Archive the design with its summary, and open the PR (FLOW-12).
 
 **Files the PR changes.** `tools/workflow/queue/`: `queue.go`, `next.go`,
 `phases.go`, `summary.go` and their tests, and the new `areas.go`,
