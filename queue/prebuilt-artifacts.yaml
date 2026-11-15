@@ -1,6 +1,6 @@
 feature: prebuilt-artifacts
 title: 'warden compiles nothing: it finds its executor, relay and relay VM artifacts on PATH, then in its own directory, at or above a minimum version (security fix, F9)'
-priority: 66
+priority: 67
 status: in_progress
 round: feature
 phase: 2
@@ -61,8 +61,8 @@ steps:
     affinity: human
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: human/jeff
+      expires: 2026-11-16T01:21:41.337235627Z
   - id: f2-plan
     phase: 2
     affinity: cloud
@@ -78,35 +78,38 @@ budget:
     steps: 25
   spent:
     runs: 0
-    steps: 2
+    steps: 3
 questions:
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The lookup, made precise (design: The lookup; Decision 2). Jeff''s sentence gives the two places and the trigger: "warden looks for necessary artifacts to be on PATH and searches its own directory if they''re not found or not on or above a minimum version". Proceeding with: the first directory on PATH that holds the artifact is the PATH candidate and no later entry is tried; warden''s own directory met on PATH is that candidate when it comes first, so a copy in a later entry is never used (driver-contract''s rule); a candidate reached through a relative or empty PATH entry stops the lookup with an error, as driver-contract''s lookup does; a PATH candidate that fails its check is passed over, with a stderr line on every run, for the copy beside warden; if that is missing or fails too, a fixable error names both; no flag, variable or config key names an artifact''s file; a kernel and initramfs set uses the same lookup as an executable, the whole set from one directory; no execute permission is asked for, since the host runs almost none of these files; a newer artifact is used without comment; every file is read once into the build''s work directory and the check, the digest and every later use are of that copy; every build writes <output>/host-files.json (each file''s path, version, digest, found: PATH or beside-warden, what was passed over; the container images with the IDs they resolved to; Hyper-V''s relay boot disk; vz''s baked executor) and warden doctor --driver <name> prints a Host files block. The name is host-files.json and not artifacts.json because artifacts/ in the output directory is the build''s own outputs. The lookup never runs a file. It finds BuildWarden''s own relay and executor wherever they are installed; a different build of them on PATH is used and recorded and is not a supported substitution (GLOBAL-08 stands).'
     options:
       - '(A) as stated: driver-contract''s lookup plus exactly what the sentence adds (a check, and the second place when it fails)'
       - '(B) every PATH entry in turn until one is acceptable, then beside warden: more forgiving, and which file wins is harder to predict'
       - '(C) executables by this lookup, kernels and initramfs only beside warden: PATH then holds only programs, at the cost of a second rule'
     recommended: (A) as stated
+    answer: '(A) As stated: the first PATH candidate, then beside warden. As recommended. Answered 2026-11-15.'
   - id: a9
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The order of this item and driver-contract (K1) (design: How it sits with the other items; In K1''s structure; Rule changes, the second setting). The two rewrite the same code (GuestBinary''s callers, the container driver, the relay''s lookups) and the same sentence of BOOT-02, and K1 was approved on 2026-11-15 at a6c8f0b on main''s sentence. Jeff''s reason for making this its own item (project-config-trust''s a6) was that K1 is not held behind its native validation, so "K1 waits for this item" is not proposed. What his words leave open is whether this item waits for K1. Proceeding with: K1 merges first. This item''s Plan starts when K1''s PR has merged (which implies project-config-trust''s, a8), held as a8 describes; the item then returns to Design once (FLOW-06) for the delta K1''s structure brings (who links the lookup, relaysource.Bundled without Source and GoBuild, and the record reported by a driver binary through the driver contract, which adds that seam), and is implemented once. Its BOOT-02 wording on top of K1''s sentence is in this design and approved by this review, so no rule is reviewed twice. The cost, plainly: "Remove compilation now" becomes "after K1 has merged". What F9 names, a repository''s source compiled on the host, is closed by project-config-trust''s merge either way; what waits is a warden inside its own tree compiling that tree.'
     options:
       - '(A) K1 first, as stated: no second review of K1, the program''s key item is not disturbed, no code is written twice, each of the four blocking native hosts validates this item once; it is FLOW-05''s own reasoning about two features that reshape the same structure'
       - '(B) no order: both are planned when project-config-trust has merged and whichever reaches Publish second consolidates on the other (FLOW-10). If that is this item, its Implement is redone in K1''s structure and its native hosts validate again. If it is K1, K1 goes back to Design (FLOW-06, FLOW-14) for its BOOT-02 wording, its named fallback "beside the binary, else the source tree" and its relaysource types, and its native hosts validate again, which delays K1 by this item after all. Sooner for this item only if it wins the race'
       - '(C) this item first, and K1''s Plan waits for it: shown for completeness; it is the order Jeff''s answer to project-config-trust''s a6 ruled out'
     recommended: (A) K1 first; this item's Plan waits for K1's merge
+    answer: '(A) K1 first: this item''s Plan waits for driver-contract''s merge, then one return to Design for the delta K1''s structure brings. As recommended. Answered 2026-11-15.'
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The minimum version, and BOOT-02 (design: Decision 3; The version; Rule changes; Bootstrap comparison; The front matter, argued). Proceeding with: the minimum for an executor or a relay binary is the version of the warden that looks for it, with nothing kept by hand in code; a newer artifact is accepted; a development warden (dev) takes only dev and a release never takes dev. BOOT-02 on main says the executor "matches the orchestrator''s version"; at or above is not that, so BOOT-02 is amended ("its version is at or above the orchestrator''s: an executor that states an older version, or none, is not delivered"), one paragraph defining the version line and dev is added to bootstrap.md''s model text, and the Bootstrap comparison is one the review must accept (BOOT-07). The amendment is the one ground that makes alters_relationships true (compilation leaving warden for development tooling moves no responsibility between components), so this item holds the third of FLOW-05''s three slots beside driver-contract and seam-specs: until one of the three has merged no other item that alters relationships can be planned (in the program''s second wave, S2, S3 and S4), and under a9 (A) this item holds its slot while it waits for K1. The design gives the BOOT-02 wording in both settings (as main has the sentence, and as driver-contract leaves it) and asks for both to be approved.'
     options:
       - '(A) as stated: at or above warden''s own version, BOOT-02 amended; it is "on or above a minimum version" in Jeff''s words, and the form that survives a driver living in its own repository (K3)'
       - '(B) exactly warden''s version: a newer file on PATH is passed over like an older one; BOOT-02 stands as written, no rule change, no Bootstrap comparison, alters_relationships false and the slot free'
       - (C) a minimum per artifact, kept in code and lower than warden's version; BOOT-02 amended as in (A); a table to keep, and a release could then run an older executor from PATH in place of the one it shipped with
     recommended: (A) at or above warden's own version, with BOOT-02 amended
+    answer: (A) At or above warden's own version; BOOT-02 amended. As recommended. Answered 2026-11-15.
   - id: a3
     kind: assumed
     status: open
@@ -183,3 +186,18 @@ history:
   - at: 2026-11-15T23:20:31Z
     by: cloud/20261112T230554Z
     event: entered phase 2 (plan)
+  - at: 2026-11-15T23:21:41Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-16T01:21:41Z
+  - at: 2026-11-15T23:22:53Z
+    by: human/jeff
+    event: 'assumed question a9 confirmed: (A) K1 first: this item''s Plan waits for driver-contract''s merge, then one return to Design for the delta K1''s structure brings. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T23:22:53Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: (A) As stated: the first PATH candidate, then beside warden. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T23:22:53Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: (A) At or above warden''s own version; BOOT-02 amended. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T23:22:53Z
+    by: human/jeff
+    event: 'priority 66 -> 67 (renumbered by wf new: vz-nocgo-build queued at 64)'

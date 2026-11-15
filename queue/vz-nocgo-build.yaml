@@ -1,0 +1,30 @@
+feature: vz-nocgo-build
+title: 'The macOS arm64 release build of warden does not compile without cgo: driver/vz excludes both its cgo file and its stub (regression on main)'
+priority: 64
+status: queued
+round: feature
+phase: 0
+design: docs/design/vz-nocgo-build.md
+branch: feat/vz-nocgo-build
+alters_relationships: null
+source: 'Found by the design of prebuilt-artifacts (its ''Releases and install'', fault 3) and reproduced by the attended session on main at 3cb0b2b, 2026-11-15: ''GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/warden'' fails with driver/vz/vm.go:25:22: undefined: linuxVMConfig (also macOSVMConfig, createLinuxVM): the cgo file and its stub are both excluded under that build. .goreleaser.yaml builds the macOS arm64 warden with CGO_ENABLED=0, so no release can be cut once the release hook runs (the hook''s own two faults are prebuilt-artifacts'' to fix, its Decision 12). driver-contract''s design lists this as ''to be filed''. A regression main already has, exempt from the FLOW-20 freeze. Jeff, asked how to file it: ''Its own fix, started now'' (not a follow-up of prebuilt-artifacts, which would hold it until that item is done). Whether a no-cgo macOS warden is meant to run the vz driver at all, or to build without it and say so, is the design''s to settle; check the same build for the other release targets.'
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 8
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-15T23:22:53Z
+    by: human/jeff
+    event: queued at priority 64 (intake)
