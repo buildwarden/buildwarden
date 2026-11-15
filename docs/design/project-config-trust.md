@@ -2,8 +2,9 @@
 feature: project-config-trust
 status: draft
 drivers: [container, qemu, vz, hyperv, firecracker]  # conservatively (FLOW-02): the change is in
-                         # cmd/warden and in three shared files of driver/ (hostutil.go, session.go,
-                         # detach.go) that every driver uses. In the driver/<name>/ trees only
+                         # cmd/warden and in four shared files of driver/ (hostutil.go, session.go,
+                         # detach.go, and driver.go for one field of the request) that every
+                         # driver uses. In the driver/<name>/ trees only
                          # test files change: a new main_test.go in hyperv and in qemu, which
                          # names the source tree once for the package, and one helper in
                          # hyperv/environment_test.go, which fails where it skipped
@@ -12,7 +13,8 @@ seams: []                # the claim's upstream_ca_certs field carries what it c
 surfaces: [cli, config, output]  # cli: --config, a global flag. config: one file, found by
                          # --config, WARDEN_CONFIG or ./warden.toml; ~/.config/warden/config.toml is
                          # no longer read; WARDEN_UPSTREAM_CA_CERTS replaces the key. output: one
-                         # "config:" line saying which file was read
+                         # "config:" line saying which file was read, and the "upstream CA" lines
+                         # (each skip, and a count per configured path)
 security_boundary: host-env  # which file warden acts on, on the host, before any isolation
                          # exists, and which source tree a development warden builds from. It
                          # also reaches env-relay: the file chooses the relay image and its
@@ -27,7 +29,7 @@ native_validation:
   - {host: macos-vz, blocking: false, reason: "driver/vz is not edited; what only this host adds is sudo warden image prepare --driver vz, where sudo keeps the user's home and drops WARDEN_CONFIG (which file is read, and which error a ~/.config/warden/config.toml gets), and a development warden run from its tree still staging the relay and warden-io from the executable"}
   - {host: qemu-any, blocking: false, reason: "in driver/qemu only a test file is added, and CI runs it; what only this host adds is a development warden run from its tree still finding the relay VM assets in the source tree, by walking up from the executable"}
 tier2_gaps:
-  - {host: container-any, gap: "on the Windows desktop: go test ./cmd/warden ./driver; with %USERPROFILE%\\.config\\warden\\config.toml present, warden doctor exits 1 naming that path, and WARDEN_CONFIG set to it clears the error; --config C:\\x\\warden.toml is read and .\\warden.toml is not; WARDEN_UPSTREAM_CA_CERTS=C:\\a.pem;C:\\b.pem names two files; --config NUL reads no settings (backlog project-config-trust-windows)"}
+  - {host: container-any, gap: "on the Windows desktop: go test ./cmd/warden ./driver; with %USERPROFILE%\\.config\\warden\\config.toml present, warden doctor exits 1 naming that path, and WARDEN_CONFIG set to it clears the error; --config C:\\x\\warden.toml is read and .\\warden.toml is not; WARDEN_UPSTREAM_CA_CERTS=C:\\a.pem;C:\\b.pem names two files, each with its upstream CA line on stderr; --config NUL reads no settings (backlog project-config-trust-windows)"}
   - {host: windows-hyperv, gap: "a hyperv build with --config naming a file outside the working directory whose [vm] image_refresh_after is due starts the detached image prepare, and its log's config line names that file; a development warden run from its tree builds (backlog project-config-trust-hyperv)"}
   - {host: macos-vz, gap: "sudo warden image prepare --driver vz and warden build --driver vz with ~/.config/warden/config.toml present each exit 1 naming the file, under sudo naming the file in the home sudo gives, and the fix under sudo names --config; with WARDEN_CONFIG set in the user's environment, sudo warden image prepare prints a config line that does not name that file (sudo dropped the variable), and with sudo --preserve-env=WARDEN_CONFIG or --config it names it; a development warden run from its tree builds with --driver vz (backlog project-config-trust-vz)"}
   - {host: qemu-any, gap: "a development warden run from its tree builds with --driver qemu, the relay VM assets found in the tree; a copy of that warden outside the tree, run inside the tree, reports the missing source tree and builds nothing (backlog project-config-trust-qemu)"}
@@ -297,19 +299,36 @@ level. The designs relied on carry front-matter already.
    - a relay image that is not shaped like an image reference (it starts
      with `-`, or holds a space or a control character) is refused, from
      the file and from `WARDEN_IMAGE`;
-   - an upstream CA path is read and checked before anything is created,
-     and only certificates are sent to the relay. The rule is per file, and
-     is the same for a file named directly and for each `*.pem`, `*.crt`
-     and `*.cer` file of a directory that is named: a file with no PEM
-     certificate, a certificate that does not parse, or a PEM block of any
-     other kind (a private key) is an error that names the file, and so is
-     a directory that holds no such file (assumed question a9);
+   - an upstream CA path is read once, before anything is created, and
+     only valid PEM certificates are sent to the relay (a9, as Jeff
+     answered it: "send valid pem certificates, log to stderr which files
+     are specifically sent versus skipped with reason"). The rule is per
+     file, and is the same for a file named directly and for each `*.pem`,
+     `*.crt` and `*.cer` file of a directory that is named. What is not a
+     valid PEM certificate (a private key or any other PEM block, a DER
+     file, a certificate that does not parse) is not sent, and each such
+     skip is a line on stderr, with its reason, on every run; a
+     certificate beside it is still sent. A configured path that does not
+     exist, cannot be read, or gives no certificate at all is an error.
+     Each configured path gets one line with the count of its
+     certificates, and `--verbose` adds the list per file (**F1 to F4, one
+     by one**, F2);
    - `WARDEN_UPSTREAM_CA_CERTS` is split on the OS's path-list separator
      (`;` on Windows), not on `:`, which cuts a drive letter in two.
 
    `warden doctor` makes the first two checks too, for the driver it
-   reports on, so that it does not print `ok` for a relay image or a CA
-   path a build would refuse.
+   reports on, and prints the same CA lines in its report, so that it
+   does not print `ok` for a relay image or a CA path a build would
+   refuse.
+   - *Rejected in the review: refuse a file that holds anything but
+     certificates* (a9's option (a), which this design proposed at
+     `3c0caab`). It stopped three kinds of build that run today: a
+     certificate with its key in one file, a directory that also holds a
+     DER file, a bundle with one certificate Go's parser refuses. Jeff's
+     answer keeps them running and has each skip said on every run; what
+     it gives up is in **Defaults and overrides**.
+   - *Rejected: skip without a line* (a9's option (c)). The skip is
+     allowed because it is said (GLOBAL-10, GLOBAL-11).
 9. **`warden` finds its source tree from its own executable only** (F9;
    assumed question a6). `driver.ModuleRoot` stops walking up from the
    working directory, and matches the module line exactly. A `warden` that
@@ -611,6 +630,33 @@ a12, raised by a9's fold-in.
     nothing and says nothing.
   - (d) Leave it: the file is the executor's choice. The early read is
     still made.
+
+  **Answered 2026-11-15: changed.** None of the four as written; nearest
+  is (b), with a private key or another PEM block skipped too, where (b)
+  refused the file. Jeff's words: "send valid pem certificates, log to
+  stderr which files are specifically sent versus skipped with reason".
+  Two follow-ups, each asked on its own. What is still an error that
+  stops the build before it starts: **"Also when nothing is sent"**, so a
+  named path that does not exist or cannot be read is an error, and so is
+  a named path that yields no certificate at all; everything else (a key
+  beside a certificate, a DER file, a certificate that does not parse, a
+  file in a directory with no certificate) is skipped with a logged
+  reason. How much is logged: **"Skips always, sends counted"**, so every
+  skipped file gets a stderr line with its reason on every run, sent
+  files get one line per configured path with the count, and the per-file
+  list of what was sent appears with `--verbose`. Folded in as Decision 8
+  and as F2 of **F1 to F4, one by one**, which gives every line and every
+  error.
+
+  The answer leaves edges. Each but one is settled by his words, by a
+  rule or by what `main` does today, and F2 says which: the system roots
+  are not a configured path; a path from `WARDEN_UPSTREAM_CA_CERTS` is
+  held to the same rule; an entry of a named directory that cannot be
+  read stays the error it is today; links are followed, as today; the
+  same certificate in two files is sent twice, as today; a private key
+  gets a `warning:` line; `warden doctor` prints the lines in its report,
+  on stdout. The review confirms them with the design. The one that is a
+  real fork is a12.
 - **a10. May `--config` or `WARDEN_CONFIG` name
   `~/.config/warden/config.toml` itself, and which fix does the
   transitional message give first?** Jeff's decision 4 is an error "saying
@@ -663,6 +709,29 @@ a12, raised by a9's fold-in.
   observations are appended to `configuration-bugfixes`' `source`, and the
   two security findings are filed as one item, `workdir-in-context`
   (priority 67, queued). Nothing of this item waits on either.
+- **a12. The entries of a named CA directory that are not read because
+  of their names.** New on 2026-11-15, raised by a9's answer. A directory
+  path means its `.pem`, `.crt` and `.cer` files, one level deep; its
+  other entries (a file of another ending, a subdirectory) are not
+  opened, today and after. The answer has every skipped file get a line
+  on every run. It was given for files that are read and hold something
+  other than a valid PEM certificate; whether an entry that is never
+  opened is a skipped file, his words do not say. The case is common: on
+  this host `/etc/ssl/certs` has 248 entries, of which 124 are read, 123
+  are hash-named links (`002c0b4f.0`) and one is a subdirectory.
+  Proceeding with (a); confirm.
+  - (a) Counted on every run, listed with `--verbose`. The path's line
+    ends "; 124 other entries not read", and with `--verbose` each is a
+    line with its reason (its name's ending, or that it is a directory).
+    A root saved as `corp.der` or `corp.cert` is in the count on every
+    run and is named on request. **Recommended.**
+  - (b) One line each, on every run: "skips always" to the letter. A
+    system certificate directory then prints 124 lines on every build,
+    and the lines that matter (a private key, a DER file) are among
+    them.
+  - (c) Not mentioned at all: by the reference they are not CA files. A
+    root saved under another ending then gives no line and no count,
+    which is the silent case the answer is against.
 
 ## Design
 
@@ -831,8 +900,10 @@ Where it lives, so that it is deleted in one place, as
 | No file | Nothing changes, but for the `config:` line |
 | `WARDEN_CONFIG` set in a user's environment, `warden` run under `sudo` | `sudo` drops the variable: `./warden.toml` is read, or none. Pass `--config`, or `sudo --preserve-env=WARDEN_CONFIG` |
 | `WARDEN_UPSTREAM_CA_CERTS` and `[relay] upstream_ca_certs` both set | The a5 error on `build`, `shell` and `doctor` while the detection stands; afterwards the variable replaces the key |
-| A CA file that also holds a private key, or holds no PEM certificate | Refused, naming the file (a9) |
-| A CA directory that also holds a DER-encoded `.crt` or `.cer`, or a bundle with a certificate Go cannot parse | Refused, naming the file, where today the relay skips it without a word (a9) |
+| A CA file that holds a certificate and its private key | Builds, as today. The certificate is sent and the key is not, where today the whole file is; a `warning:` line says so on every run (a9) |
+| A CA directory that also holds a DER-encoded `.crt` or `.cer`, or a bundle with a certificate Go cannot parse | Builds, as today, without that root, as today. A line names the file and the reason on every run, where today the relay drops it without a word (a9) |
+| A CA path that gives no certificate at all: a DER file, a key or a wrong file named directly, or a directory with no certificate in a `.pem`, `.crt` or `.cer` file | An error naming the path, before anything is created. Today the build runs with no root added (a9) |
+| Any configured CA path | One line per path on stderr with the number of certificates, on `build` and `shell`; in the report of `doctor` (a9) |
 | `relay_image` or `WARDEN_IMAGE` starting with `-` or holding a space | Refused |
 | A development `warden` run from outside its source tree, inside the tree (`go run`, `go install`, a copy) | An error naming `make build` and `dist/warden` (a6) |
 | An installed release with `--driver qemu`, `firecracker` or `vz`, or with `relay_image = "dev"`, run inside a buildwarden checkout | The same error. Today it takes the guest binaries, the relay VM assets or the relay's source from the checkout it is run in (a6) |
@@ -937,50 +1008,264 @@ where that is fixed.
     one function in `cmd/warden`, `resolveUpstreamCAs`, resolves the paths
     in effect (the variable's, else the key's; `LoadConfig` no longer
     folds the variable into the key, so that the function sees both), makes
-    the transitional a5 call, and reads and checks the paths through
-    `driver.LoadUpstreamCAs`. `newRequest` calls it for every driver before
-    anything is created, and `warden doctor` calls it too, for the driver
-    it reports on. No other command uses the paths, and none checks them.
+    the transitional a5 call, reads the paths through
+    `driver.LoadUpstreamCAs`, and prints what that function reports.
+    `newRequest` calls it for every driver before anything is created, and
+    `warden doctor` calls it too, for the driver it reports on. No other
+    command uses the paths, and none checks them.
+
+    The files are read once per run. Today `ClaimRelay` reads them, from
+    the paths in the request. After this the request carries what was
+    read: `driver.BuildRequest`'s `UpstreamCACerts`, today the paths,
+    becomes the certificates (`driver/driver.go`), and `ClaimRelay` sends
+    them and opens no file. So what the lines below say is what the claim
+    carries, and a file that changes between the check and the claim
+    changes nothing.
   - *A defect regardless:* the bytes of each file are sent to the relay
     whatever they are. A path that names the wrong file sends that file,
-    and a bundle with a private key in it sends the key. **Fixed here**
-    (a9): `driver.LoadUpstreamCAs` sends the certificates and refuses
-    everything else.
+    and a bundle with a private key in it sends the key. The relay then
+    uses what it can parse and drops the rest without a word. **Fixed
+    here**, as Jeff answered a9: "send valid pem certificates, log to
+    stderr which files are specifically sent versus skipped with reason".
+
+    **Terms.** A *configured path* is one entry of the list in effect:
+    `WARDEN_UPSTREAM_CA_CERTS`'s entries when the variable is set, else
+    those of `[relay] upstream_ca_certs`. Each is a file or a directory,
+    and a relative one is relative to the working directory (a1). The
+    system roots are not a configured path: `warden` reads no host file
+    for them. They are the relay's own (`x509.SystemCertPool` inside the
+    relay, `relay/proxy.go`), added by the relay unless `system_ca_bundle
+    = false`. They get no line and no count here, and they do not count
+    towards "this path gives a certificate".
+
+    **What is sent.** Every valid PEM certificate found under every
+    configured path, and nothing else. Per file, the same for a file named
+    directly and for each file read from a named directory:
+    - the file is read whole, and its PEM blocks are taken in order;
+    - a block is sent when its type is `CERTIFICATE`, it carries no PEM
+      headers, and it parses as an X.509 certificate (Go's
+      `x509.ParseCertificate`). Those three conditions are the ones the
+      relay's trust pool applies today (`AppendCertsFromPEM`), so, file
+      by file, the certificates sent are the ones the relay takes from
+      that file today, and what it drops today without a word is what is
+      skipped here with a line;
+    - it is sent re-encoded from its DER bytes, so no other byte of the
+      file reaches the claim: not the text between blocks (a distribution
+      bundle's comments), not a neighbouring block;
+    - the same certificate found in two files is sent twice and counted
+      in each, as today; the relay's pool keeps one. On this host
+      `/etc/ssl/certs`, named as a directory, gives 245 certificates from
+      124 files, 122 of them a second time from the bundle file.
+
+    **A directory** is read one level deep, as today: its entries whose
+    names end in `.pem`, `.crt` or `.cer`, in any letter case, in name
+    order. A symbolic link is followed, as today (a distribution's
+    certificate directory is made of them). An entry that is a directory,
+    or a link to one, is not read, and an entry with another ending is not
+    opened; both are the "other entries" of a12.
+
+    **What is skipped, each with its line.** A skip never stops the run
+    and never changes the exit code. The lines are shown as `build` and
+    `shell` print them; a path is absolute, and a block is numbered by its
+    position among the file's PEM blocks, from 1.
+
+    A block that is not sent, in a file whose other blocks are still
+    looked at:
 
     ```
-    ERROR: upstream CA file /etc/ssl/private/site.pem holds a PRIVATE KEY block; only certificates are sent to the relay
-      To fix: name a file that holds only PEM certificates, in [relay] upstream_ca_certs or WARDEN_UPSTREAM_CA_CERTS
+    [warden] warning: upstream CA /etc/warden/site.pem: block 2 is an RSA PRIVATE KEY and is not sent to the relay; a private key does not belong in a file of trust roots
+    [warden] upstream CA /etc/warden/site.pem: block 3 skipped: a CERTIFICATE REQUEST block, not a CERTIFICATE
+    [warden] upstream CA /etc/warden/bundle.pem: block 41 skipped: a CERTIFICATE that does not parse (x509: negative serial number)
+    [warden] upstream CA /etc/warden/bundle.pem: block 7 skipped: a CERTIFICATE block with PEM headers, which the relay's trust pool does not take
+    [warden] upstream CA /etc/warden/bundle.pem: skipped after block 122: text that begins a PEM block and does not complete one
+    ```
+
+    A file of a named directory that gives nothing:
+
+    ```
+    [warden] upstream CA /etc/warden/roots/corp.cer: skipped: DER-encoded, and only PEM is read (to convert: openssl x509 -inform der -in corp.cer -out corp.pem)
+    [warden] upstream CA /etc/warden/roots/notes.crt: skipped: no PEM block in it
+    [warden] upstream CA /etc/warden/roots/keys.pem: skipped: it holds 2 PEM blocks and none is a certificate that can be sent
+    [warden] upstream CA /etc/warden/roots/pipe.pem: skipped: not a regular file
+    ```
+
+    - *The private key line is stronger than the others*: it is a
+      `warning:`, the only one here, and it says in so many words that the
+      key is not sent. Every other skip is a root that was not added; this
+      one is a secret in a place `warden` was pointed at, often by a file
+      in a repository. A block is a private key when its type ends in
+      `PRIVATE KEY` (`PRIVATE KEY`, `RSA PRIVATE KEY`, `EC PRIVATE KEY`,
+      `ENCRYPTED PRIVATE KEY`, `OPENSSH PRIVATE KEY`). It is still a skip,
+      not an error: the answer lists "a key beside a certificate" among
+      what is skipped.
+    - *The third line of the second group* follows the block lines of the
+      same file, which say why each block was not sent.
+    - *DER* is recognised when a file with no PEM block parses whole as
+      one certificate; any other file with no PEM block, an empty one
+      included, gets "no PEM block in it".
+    - *Not a regular file*: a FIFO, a socket or a device under one of the
+      three endings is not opened. Today `warden` opens it, and on a FIFO
+      waits for ever.
+    - *Text outside PEM blocks* that begins no block is not sent and gets
+      no line. It is the one thing dropped without a word: it is not a
+      file and not a certificate, a distribution's bundle carries a
+      comment before every block, and none of it leaves the host.
+    - A block's type and a file's name are printed with control characters
+      escaped. Both can come from the repository being built.
+
+    **What is an error**, each a `driver.FixableError` (UX-04), exit 1
+    (UX-09), raised before the output directory, the work directory or the
+    relay exists. The paths are taken in order and the first error stops;
+    the lines of the paths before it, and the skip lines of the path that
+    fails, have been printed.
+
+    A configured path that does not exist:
+
+    ```
+    ERROR: upstream CA path /etc/warden/roots.pem (from [relay] upstream_ca_certs) does not exist
+      To fix: name an existing file or directory of PEM certificates, or remove the path
+    ```
+
+    A configured path that cannot be read: a file that cannot be opened, a
+    directory that cannot be listed, or a path that is neither a regular
+    file nor a directory ("is not a file or a directory"):
+
+    ```
+    ERROR: cannot read upstream CA path /etc/ssl/private (from WARDEN_UPSTREAM_CA_CERTS): permission denied
+      To fix: make it readable by the user warden runs as, or remove the path
+    ```
+
+    A file of a named directory, under one of the three endings, that
+    cannot be read (permission denied, a link to nothing). It is an error
+    today, at the claim, and stays one: the answer makes "cannot be read"
+    an error and names skipping for what is read and is not a valid PEM
+    certificate, and a read that fails stops by default (GLOBAL-11):
+
+    ```
+    ERROR: cannot read upstream CA file /etc/warden/roots/corp.pem, in /etc/warden/roots (from [relay] upstream_ca_certs): permission denied
+      To fix: make it readable, or take it out of the directory
+    ```
+
+    A configured path that gives no certificate at all. For a file named
+    directly the reason is in the error, and for a directory the skip
+    lines above it give the reasons:
+
+    ```
+    ERROR: upstream CA path /etc/warden/corp.cer (from [relay] upstream_ca_certs) gives no certificate to send: it is DER-encoded, and only PEM is read
+      To fix: convert it (openssl x509 -inform der -in corp.cer -out corp.pem) and name the result, or remove the path
     ```
 
     ```
-    ERROR: upstream CA file /etc/warden/roots/corp.cer holds no PEM certificate
-      To fix: if it is DER-encoded, convert it (openssl x509 -inform der -in corp.cer -out corp.pem); or remove it from the directory or the path list
+    ERROR: upstream CA path /etc/warden/site.key (from [relay] upstream_ca_certs) gives no certificate to send: it holds 1 PEM block and none is a certificate that can be sent
+      To fix: name a file or directory that holds at least one PEM certificate, or remove the path
     ```
 
-    The rule, per path of the list:
-    - *A file* is read whole. Text outside PEM blocks is ignored and not
-      sent. Each `CERTIFICATE` block must parse as an X.509 certificate
-      and is sent, re-encoded; a block of another type, a certificate that
-      does not parse (the message gives its position in the file and the
-      parser's reason), or no certificate at all is an error naming the
-      file.
-    - *A directory* is read one level deep, as today: its entries whose
-      names end in `.pem`, `.crt` or `.cer`, in any letter case, that are
-      not directories (a symbolic link is followed). Each is held to the
-      file rule. Other entries are not opened. A directory with no such
-      entry is an error naming it: a path that gives nothing is the wrong
-      path.
-    - *A path that does not exist* is an error naming it, as today, now
-      before anything is created.
+    ```
+    ERROR: upstream CA path /etc/warden/roots (from WARDEN_UPSTREAM_CA_CERTS) gives no certificate to send: 2 files skipped, 4 other entries not read
+      To fix: put at least one PEM certificate in a .pem, .crt or .cer file there, or remove the path
+    ```
 
-    What that stops that works today is in a9: a certificate with its
-    key, a DER file in a named directory, a bundle with a certificate Go
-    cannot parse. On this host the distribution's bundle parses whole (122
-    certificates, none refused, Go 1.24), and `/etc/ssl/certs` as a
-    directory holds only PEM files under those three endings.
+    (A directory with no entry under the three endings reads "it holds no
+    .pem, .crt or .cer file".) The error is per path: a path that gives
+    nothing is the wrong path, whatever the other paths give.
+
+    An empty entry in the list (a doubled or trailing separator in the
+    variable, `""` in the key). It is an error today, as a failed `stat`
+    of an empty name, and stays one; it is never read as the working
+    directory, which is what an empty entry of `PATH` means:
+
+    ```
+    ERROR: WARDEN_UPSTREAM_CA_CERTS has an empty entry
+      To fix: remove the doubled or trailing separator
+    ```
+
+    **What is logged.** On every run that has a configured path:
+    - *every skip*, one line each, as above;
+    - *one line per configured path*, after the lines of its files, with
+      the number of certificates and where the path was configured:
+
+      ```
+      [warden] upstream CA /etc/warden/corp.pem ([relay] upstream_ca_certs): 2 certificates to send
+      [warden] upstream CA /etc/warden/site.pem ([relay] upstream_ca_certs): 1 certificate to send; 1 block skipped
+      [warden] upstream CA /etc/warden/roots (WARDEN_UPSTREAM_CA_CERTS): 3 certificates to send from 2 files; 2 files skipped; 4 other entries not read
+      ```
+
+      A part whose count is zero is left out. "Blocks skipped" counts
+      every block that was not sent, a private key included. "Other
+      entries not read" is a12 (a).
+
+    With `--verbose` (or `WARDEN_VERBOSE`, or `[output] verbose`), also:
+    - *the per-file list of what is sent*, one line for each file of a
+      named directory that gives a certificate, in name order among the
+      skip lines (for a file named directly, the path's own line is that
+      line):
+
+      ```
+      [warden] upstream CA /etc/warden/roots/a.pem: 2 certificates to send
+      [warden] upstream CA /etc/warden/roots/b.crt: 1 certificate to send
+      ```
+
+    - *each other entry that was not read* (a12 (a)):
+
+      ```
+      [warden] upstream CA /etc/warden/roots/README: not read: its name does not end in .pem, .crt or .cer
+      [warden] upstream CA /etc/warden/roots/old: not read: a directory
+      ```
+
+    With no configured path nothing is read and nothing is printed.
+
+    The lines say "to send", not "sent": they are printed when the files
+    are read, before the relay exists, and a build that stops before its
+    claim has sent nothing. What they count is what the claim carries.
+
+    **Where the lines go.**
+    - `build` and `shell`: stderr, with the `[warden]` prefix, after the
+      `config:` line (a4), which stays the first line, and before anything
+      is created. `--quiet` does not remove them: it silences the echo of
+      the guest's console, not `warden`'s own lines. Stdout is not
+      touched.
+    - `doctor`: in its report, on stdout, without the prefix, as its
+      `config:` line and its build-link lines are: the report is what
+      `doctor` is run for, and a line of it on another stream would be
+      lost to `warden doctor > report`. The lines say "to send" there too.
+      An error is reported the way `doctor` reports a refusal a build
+      would get, and `doctor` then exits 1:
+
+      ```
+      upstream CA: BLOCKED: upstream CA path /etc/warden/roots.pem (from [relay] upstream_ca_certs) does not exist
+      upstream CA: to fix: name an existing file or directory of PEM certificates, or remove the path
+      ```
+
+    - `clean`, `setup`, `image prepare` and the detached prepare use no CA
+      path: they read none and print none.
+    - No flag is added (UX-05): `--verbose` is the existing global flag,
+      and there is none to silence a skip. The exit code says nothing
+      about skips (UX-09): 0, or the build's own.
+
+    **What works today and stops.** Less than under (a) as this design
+    proposed it at `3c0caab`. A certificate with its key in one file, a
+    named directory that also holds a DER file, and a bundle with a
+    certificate Go cannot parse all keep building, as today; each now has
+    its line, and the key no longer leaves the host. What stops:
+    - *a configured path that gives no certificate*: a DER file, a key
+      file or a wrong file named directly; a directory with no `.pem`,
+      `.crt` or `.cer` file, or with none that holds a certificate. Today
+      the build runs, with no root added and, for a file, with the file's
+      bytes sent to the relay;
+    - nothing else. A path that does not exist, a path or a directory's
+      file that cannot be read, and an empty entry are errors today, at
+      the claim; they are the same errors, before anything is created.
+
+    On this host the distribution's bundle parses whole (122 of 122
+    blocks sent, none skipped; Go 1.26.3), and `/etc/ssl/certs` as a
+    directory gives no skip line: 124 files read, each a certificate, and
+    124 other entries (123 hash-named links, one subdirectory).
 
     The same function serves the standalone `cmd/collector`
-    (`--upstream-ca`), which gets the same rule; it is not in the
+    (`--upstream-ca`, a comma-separated list), which gets the same rule
+    and the same errors. It prints the skip lines and the per-path lines
+    on stderr, each path's source given as `--upstream-ca`; it has no
+    `--verbose`, so it prints no per-file list. It is not in the
     reference.
 
     This also takes away the worst of what remains: with the default file
@@ -1165,17 +1450,28 @@ edited.
     "replaces `relay.upstream_ca_certs`; paths separated by `:` (`;` on
     Windows)"; one sentence on the order (flag, variable, file, default);
   - **CLI Flags**: `--config`, Global;
-  - the `[relay]` lines of the Full Reference (certificates only; a
-    directory's `.pem`, `.crt` and `.cer` files; DER is not read), the
-    Relay Image section (what is refused; `dev` needs a `warden` run from
-    its source tree);
+  - the `[relay]` lines of the Full Reference and a short **Upstream CA
+    paths** section beside them: a path is a file or a directory, and a
+    directory means its `.pem`, `.crt` and `.cer` files; every valid PEM
+    certificate is sent and nothing else is; what is skipped and why (a
+    private key, another block, a DER file and how to convert it, a
+    certificate that does not parse), named as a skip that does not stop
+    the build (GLOBAL-10); the lines, and what `--verbose` adds; the
+    errors (a path that does not exist, cannot be read or gives no
+    certificate); and that the system roots are the relay's own, which
+    the comment on `system_ca_bundle` ("host system CA bundle") is
+    corrected to say;
+  - the Relay Image section (what is refused; `dev` needs a `warden` run
+    from its source tree);
   - the two sentences that name both files: the build link's "Precedence:
     the flag, then `./warden.toml`, then `~/.config/warden/config.toml`,
     then the default" and `[vm] dns`'s "`./warden.toml` wins over
     `~/.config/warden/config.toml`".
 - `docs/book/src/guide/cli.md`: `--config <path>` under Global Flags;
   `warden doctor` (the `config:` line; the source label is the config
-  file's name).
+  file's name; the upstream CA lines, and that a CA path a build would
+  refuse is BLOCKED); `--verbose` (it adds the per-file list of upstream
+  CA certificates).
 - `docs/book/src/guide/corporate-networks.md`: its three mentions of
   `~/.config/warden/config.toml` and "the two files" become the config
   file, with the `WARDEN_CONFIG` route for a machine-wide setting.
@@ -1200,7 +1496,15 @@ edited.
              cannot be read is an error
       req := resolve each setting: flag, else its variable, else cfg,
              else the default (driver, runtime, output dir, ...)
+      req.UpstreamCACerts := the valid PEM certificates under each
+             upstream CA path (WARDEN_UPSTREAM_CA_CERTS, else [relay]
+             upstream_ca_certs), read once, before any driver work; each
+             skip and each path's count logged; a path that is missing,
+             unreadable or gives none is an error
   ```
+
+  and, in the claim's line of `StartBuild`, "upstream CAs" reads "the
+  upstream CA certificates of the request".
 
   `runtime-cli-project-path` adds a `container driver: runtime := ...` line
   there that says "(`./warden.toml`, then the user's file)"; it becomes
@@ -1213,9 +1517,10 @@ edited.
 No flag, subcommand or key is removed or renamed, so UX-03's alias does not
 apply as written and tier 1's `surface-removed` check sees nothing. Four
 things that work today stop: the user-level file; the sum of the variable
-and the key for CA paths; a CA path with something other than PEM
-certificates in it (a9 lists the cases); and a `warden` that takes its
-source tree from the working directory (a6 lists who). UX-03's "never a
+and the key for CA paths; a CA path that gives no certificate at all (F2
+lists the cases; a path that gives some keeps working and says what it
+skipped); and a `warden` that takes its source tree from the working
+directory (a6 lists who). UX-03's "never a
 silent break" is met for each by an error that says what to change, at
 once and not after a warning period, as Jeff decided for
 `runtime-cli-project-path`. The first two errors are transitional; the
@@ -1375,7 +1680,12 @@ in the config file (or no config file).
 | A relative path in the config file: relative to the working directory | **Unchanged**, stated for the first time (a1) | The same as the path given by a flag or a variable | An absolute path |
 | Every setting: flag, else its variable, else the file, else its default | **Unchanged** in the code; the rules now name the variable's level | The closer to the command, the stronger | Each level by the one above it |
 | `[relay] upstream_ca_certs` absent: the system roots only | Unchanged | | `WARDEN_UPSTREAM_CA_CERTS`, else the key |
-| A CA path that is a directory: its `.pem`, `.crt` and `.cer` files, one level deep | **Unchanged** in which files are read; **changed** in that each must hold only PEM certificates and the directory must hold at least one such file (a9) | What the reference says a directory is | Nothing |
+| A CA path that is a directory: its `.pem`, `.crt` and `.cer` files, one level deep, links followed | **Unchanged** in which files are read | What the reference says a directory is | Nothing |
+| What is sent of a CA file: its valid PEM certificates | **Changed** (a9): the whole file was sent, whatever it held | A trust root is a certificate; nothing else under the path has a use in the relay | Nothing |
+| A block or a file under a CA path that is not a valid PEM certificate (a private key or another block, a DER file, a certificate that does not parse): skipped, and the run goes on | **New, and named as a continuation on failure** (a9, Jeff's answer; below). On `main` the relay drops the same things without a word | The builds that run today keep running | Nothing: no flag makes a skip an error. A path that gives no certificate at all is an error |
+| The upstream CA lines: every skip, and one line per configured path with its count, on every run; the per-file list with `--verbose` | **New** (a9) | A root that was not added should not need a flag to learn; the list of what was added is long and rarely wanted | `--verbose`, `WARDEN_VERBOSE` or `[output] verbose` for the list; nothing silences a skip |
+| The entries of a CA directory that are not read by name: counted on the path's line, listed with `--verbose` | **New** (a12, open) | 124 such entries in a system certificate directory | `--verbose` for the list |
+| The system roots: the relay's own, with no line and no count on the host | **Unchanged** | `warden` reads no host file for them | `system_ca_bundle = false`, with a CA path |
 | `WARDEN_UPSTREAM_CA_CERTS` with the key also set | **Changed**: it replaced nothing and was added to the key's list; now it replaces it (a5), and both set is an error, on the commands that use the paths, while the transitional detection stands | One rule for every variable | Nothing is over the variable; the key has no flag |
 | The separator of `WARDEN_UPSTREAM_CA_CERTS` | **Changed**: `:` everywhere; now the OS's (`;` on Windows) | What `PATH` uses on each OS (GLOBAL-07) | Nothing |
 | The relay image absent: the release image, or a source build for a development `warden` | Unchanged | | `WARDEN_IMAGE`, else `relay_image` |
@@ -1383,8 +1693,8 @@ in the config file (or no config file).
 | The `config:` line: printed by every command that reads configuration | **New** (a4) | Which file is in force should not need a flag to learn | Nothing; `doctor` prints it on stdout |
 | A background `image prepare`: the file its build read | **Changed**: it looked in the working directory by itself | One build, one file | Nothing |
 
-**Fallbacks and merges.** None is added; two merges and one fallback are
-removed:
+**Fallbacks and merges.** Two merges and one fallback are removed, and
+one continuation on failure is added and named (below):
 
 - the merge of the user's file under the project's (two files decoded into
   one struct) is gone;
@@ -1397,10 +1707,36 @@ The lookup of the config file is an ordered choice among what is *set*,
 not a fallback on failure: a source that is set and cannot be used is an
 error. One case does pass to the next source without a word and is named
 here: an empty `WARDEN_CONFIG` counts as not set (a8). The transitional
-detection is not a fallback: it only produces errors. The relay skipping
-a certificate it cannot parse is a silent drop on `main`; under a9 (a)
-`warden` refuses the file first, so nothing reaches the relay to be
-skipped.
+detection is not a fallback: it only produces errors.
+
+**The skip under a CA path, named** (GLOBAL-10, GLOBAL-11). What triggers
+it: a PEM block or a file under a configured CA path that is not a valid
+PEM certificate (the reasons are F2's lines). What happens: it is not
+sent, a line says so, and the run goes on with the certificates the path
+does give. Honestly placed against the two rules:
+
+- It is not GLOBAL-10's fallback. Nothing is tried in place of what was
+  skipped, no default stands in for it, and a path that gives nothing is
+  the error the rule asks for ("a provided value that cannot be used is
+  an error that names it and its fix").
+- It is what GLOBAL-11 allows only when named: a path that could not be
+  used in full does not stop the run. So it is named, here and in the
+  reference (UX-01), with its trigger.
+- What keeps it from being silent: a line for every skip on every run,
+  without `--verbose`; a count on the path's line; a `warning:` for a
+  private key; an error when a path gives nothing.
+- What it costs, and the lines do not undo: a build can run without a
+  root its executor believes was added, and the notice is a line among a
+  build's output. The failure then shows later, as an upstream TLS error
+  inside the build. Option (a) would have stopped the build at the
+  start. Jeff chose the lines.
+- It is not new behaviour for the build: `main` runs these builds too,
+  and says nothing. `warden` now skips first, so nothing reaches the
+  relay to be dropped there; the relay's own silent drop is unchanged for
+  any other claimant, and is `seam-specs`' to record (its D5).
+
+One thing under a CA path is dropped with no line: text outside PEM
+blocks that begins no block (F2).
 
 No relay setting is added or moved (RELAY-08). The upstream trust roots
 keep their claim field, `upstream_ca_certs`, and `upstream_system_ca`; the
@@ -1413,14 +1749,17 @@ No file of a `driver/<name>/` tree that is built into `warden` is edited
 (Decision 13). Three test files are: a new `main_test.go` in `driver/hyperv`
 and in `driver/qemu`, which names the source tree once for the package,
 and `driver/hyperv/environment_test.go`, whose helper fails where it
-skipped (**F9: the source tree**). Three shared files of `driver/` are
-edited, so every driver is declared:
+skipped (**F9: the source tree**). Four shared files of `driver/` are
+edited (`hostutil.go`, `session.go`, `detach.go`, and `driver.go` for the
+request's CA field), so every driver is declared:
 
 - **container**: the relay image in effect is checked before anything is
   created. A build from source (a development `warden`, or `relay_image =
   "dev"`) finds its source from the executable only (`goBuildLinux`, which
-  is not edited: `ModuleRoot`'s error carries the fix). CA files are
-  checked early and sent as certificates.
+  is not edited: `ModuleRoot`'s error carries the fix). CA paths are read
+  once, before the driver is asked for anything, and the claim carries
+  their valid PEM certificates; no driver reads a CA file or prints a CA
+  line.
 - **qemu, firecracker**: the relay VM's kernel and initramfs, when not
   beside `warden`, come from the tree the executable is in and no longer
   from the working directory's (`relayvm.Find`); the guest binaries
@@ -1550,7 +1889,7 @@ checks:
 | Check | Where, and when | Under UX-08 as amended |
 |---|---|---|
 | The relay image's shape | `newRequest` and `doctor`, on the value in effect, under the container driver only | conforms: after the overrides, by the commands that use it |
-| CA paths: read, certificates only | `resolveUpstreamCAs`, from `newRequest` and `doctor`, on the paths in effect | conforms, likewise; `clean`, `setup` and `image prepare` do not check them |
+| CA paths: read once; a path that is missing, unreadable or gives no certificate is refused | `resolveUpstreamCAs`, from `newRequest` and `doctor`, on the paths in effect | conforms, likewise; `clean`, `setup` and `image prepare` do not check them. A skip is not a check that fails: it is logged and the run goes on |
 | The variable and the key both set (a5, transitional) | the same function | conforms, likewise. Raised as the file loads it would fail three commands for a setting they do not use |
 | The config file itself: named and unreadable; not TOML; `--config` empty | `LoadConfig`, every command that reads configuration | conforms: "a config file that cannot be parsed is an error for every run that reads it", and the file is what every such run reads |
 
@@ -1661,8 +2000,10 @@ the second and third itself (`driver = "qemu"`, `relay_image = "dev"`).
 - *Tightens:* no `warden`, development build or release, takes the working
   directory for its source tree (F9, closed for every driver and every
   version). A value that would be read as an option of the container
-  runtime is refused (F1). Only certificates are sent to the relay as
-  trust roots, and they are checked before anything is created (F2). An
+  runtime is refused (F1). Only valid PEM certificates are sent to the
+  relay as trust roots: a private key, and any other byte under a CA
+  path, stays on the host. The paths are read once, before anything is
+  created, so what was checked is what is sent (F2). An
   executor can now make `warden` ignore the working directory's
   `warden.toml` wherever it is run, with `--config` or `WARDEN_CONFIG`.
   Before this the only way was to run `warden` from another directory and
@@ -1670,6 +2011,11 @@ the second and third itself (`driver = "qemu"`, `relay_image = "dev"`).
   directory's, not the build context's.
 - *Changes shape:* the user-level file is gone, so nothing "outranks the
   user's file". The environment is the level over the file.
+- *Not tightened, by the answer to a9:* a CA path with a root that
+  cannot be used (a DER file, a certificate that does not parse) still
+  builds without that root, as on `main`; it now says so. A skip fails
+  closed: the relay trusts fewer roots than the executor meant, never
+  more, and a path that gives none stops the build.
 - *Loosens, for one kind of user:* someone who kept `driver = "qemu"` (or
   a relay image, or CA settings) in `~/.config/warden/config.toml` and
   builds repositories without a `warden.toml` was covered by that file.
@@ -1685,7 +2031,10 @@ the second and third itself (`driver = "qemu"`, `relay_image = "dev"`).
    "container"` is the one that isolates least; `--driver` or
    `WARDEN_DRIVER` pins it), the container runtime among the three, the
    relay image (so the repository can supply the relay that measures it;
-   `WARDEN_IMAGE` pins it), the relay's trust roots (certificates only),
+   `WARDEN_IMAGE` pins it), the relay's trust roots (certificates only,
+   but any certificate the user can read: a path in the repository's file
+   can name a directory of the host, and the certificates there go to the
+   relay the same file chose; `WARDEN_UPSTREAM_CA_CERTS` pins the paths),
    whether payloads are captured, and where the output and work directories
    are created. The `config:` line says the file was read; it does not stop
    it (a4).
@@ -1723,6 +2072,14 @@ the second and third itself (`driver = "qemu"`, `relay_image = "dev"`).
    merges.
 8. **A `warden` built in a tree is as trusted as that tree.** Unchanged:
    running `dist/warden` from a checkout builds from that checkout.
+9. **The upstream CA lines name host files.** They print, into the
+   build's log, the path of each file skipped and why (that it holds a
+   private key, for one), and the number of certificates under each
+   path. No content of a file is printed, and names and block types are
+   escaped. With the default file in someone else's repository the paths
+   are the repository's choice, so the log of such a build can say which
+   files of a host directory end in `.pem`, `.crt` or `.cer` and which
+   hold a key. The log is the executor's.
 
 **What the TEST-08 suite should exercise.** Arm A gains permanent entries
 (SEC-03), the attacker supplying the build context and the proof being
@@ -1742,7 +2099,10 @@ SEC-04's marker:
   `WARDEN_IMAGE`: exit 1, and a fake runtime on `PATH` records no `pull`;
 - (iv) `upstream_ca_certs` naming a file that holds a known token and no
   certificate: exit 1 before any container exists, and the token is in no
-  claim.
+  claim; and naming a file that holds a certificate followed by a
+  `PRIVATE KEY` block whose body carries a known token: the build is not
+  stopped, stderr has the `warning:` line, and the token is in no claim
+  and in no file of the output.
 
 As `runtime-cli-project-path` notes, the suite's matrix places the attacker
 inside the build environment; these come from files the host reads before
@@ -1782,8 +2142,18 @@ temporary one:
   transitional error in `newRequest` and in `doctor`, and is not an error
   for the config load of `clean`, `setup` and `image prepare`, which
   succeed with both set; the variable is split on the OS's separator (a
-  Windows-only test for `;` and a drive letter); a missing path fails in
-  `newRequest`, before any directory is made, and fails `doctor`.
+  Windows-only test for `;` and a drive letter); an empty entry is the
+  error; a missing path, and a path that gives no certificate, each fail
+  in `newRequest`, before any directory is made, and make `doctor` print
+  BLOCKED and exit 1.
+- *The upstream CA lines:* for a directory holding a certificate, a
+  certificate with its key, a DER `.cer` and a `README`, `newRequest`
+  succeeds and stderr has, in order, the `warning:` line, the DER skip
+  line and the path's line with its counts; with `--verbose` also the
+  per-file lines and the `README` line; without it neither; `--quiet`
+  changes nothing; nothing is written to stdout; `doctor` prints the
+  same lines on stdout without the prefix; with no configured path
+  nothing is printed; the lines follow the `config:` line.
 - *The relay image:* empty, `dev` and references pass; values starting
   with `-`, holding a space, or holding a control character are refused,
   from the file and from the variable, by `newRequest` and by `doctor`
@@ -1795,13 +2165,35 @@ temporary one:
 
 In `driver`:
 
-- `LoadUpstreamCAs`: a certificate; a bundle with comments between blocks;
-  a file with no certificate; a DER-encoded certificate; a certificate
-  block that does not parse; a file with a certificate and a private key;
-  a directory of PEM files, with a subdirectory and a file of another
-  ending that are not opened; a directory that also holds a DER `.cer`;
-  a directory with no `.pem`, `.crt` or `.cer` file; in each refusal
-  nothing is returned and the message names the file.
+- `LoadUpstreamCAs`, table-driven, each case asserting the bytes
+  returned, the report (per path and per file: certificates, skips with
+  their reasons, other entries) and the error:
+  - *sent:* a certificate; a bundle with comments between blocks, of
+    which only the blocks come back, re-encoded; the same certificate in
+    two files, returned twice;
+  - *skipped, with the certificate beside it still returned:* a private
+    key block of each of the five types, and no byte of the key in what
+    is returned; a block of another type; a certificate block that does
+    not parse; a certificate block with PEM headers; a block that is
+    begun and not completed;
+  - *skipped, in a directory that still gives a certificate:* a DER
+    `.cer`; a file with no PEM block; an empty file; a file whose blocks
+    are all skipped; a FIFO named `x.pem`, which is not opened (Unix);
+  - *not read:* a subdirectory, a link to a directory and a file of
+    another ending, each counted and none opened;
+  - *errors, with nothing returned:* a path that does not exist; a file
+    that cannot be read; a directory that cannot be listed; a file of a
+    directory that cannot be read, and a link to nothing there (Unix,
+    not as root); a path that is neither a file nor a directory; a DER
+    file, a key-only file and an empty file each named directly; a
+    directory with no `.pem`, `.crt` or `.cer` file; a directory whose
+    files are all skipped; an empty entry; the second of two paths
+    failing after the first gave certificates;
+  - a block type and a file name holding a control character are escaped
+    in the report's lines.
+- `ClaimRelay` sends the request's certificates and opens no file: with
+  the CA file deleted after `newRequest`, the claim carries what was
+  read.
 - `ModuleRoot`: with the working directory inside a tree that declares the
   module and the executable outside one, it fails with a `FixableError`,
   once with `WardenVersion` `dev` and once with a release version, and
@@ -1833,6 +2225,11 @@ and `test-integration.sh`), with the built `dist/warden`:
 - a CA path naming a file with no certificate: `build` exits 1, and no
   output directory is made; `doctor` exits 1 naming the file; `clean`
   exits 0;
+- a CA directory holding a certificate, a certificate with its key and a
+  DER `.cer`: `doctor` exits 0 and prints the `warning:` line, the DER
+  skip line and the path's line; one of the builds the script already
+  runs is given that directory, succeeds, and has the three lines on
+  stderr;
 - `--config ""`: `build` exits 1 with `To fix:`, in a directory whose
   `warden.toml` sets `output_dir = "from-repo"`, and no `from-repo` is
   made;
@@ -1874,9 +2271,17 @@ For Plan to refine. One PR, started from a `main` that has
 4. `resolveUpstreamCAs` in `cmd/warden`: `WARDEN_UPSTREAM_CA_CERTS`
    replaces the key and is split on the OS's separator; `LoadConfig` no
    longer folds the variable into the key (GLOBAL-07, GLOBAL-10, UX-08).
-5. `driver.LoadUpstreamCAs` sends certificates only, files and
-   directories by the rule of F2; `newRequest` and `doctor` call
-   `resolveUpstreamCAs` before anything is created (GLOBAL-06, UX-08).
+5. `driver.LoadUpstreamCAs` by the rule of F2: it returns the valid PEM
+   certificates, re-encoded, and a report of what each path and file
+   gave and what was skipped and why, or the error; it prints nothing.
+   `resolveUpstreamCAs` prints the report (the skips and the per-path
+   lines always, the per-file and not-read lines with `--verbose`) on
+   stderr for `build` and `shell` and into the report for `doctor`;
+   `newRequest` and `doctor` call it before anything is created. The
+   request carries the certificates (`driver.BuildRequest`,
+   `driver/driver.go`), `ClaimRelay` sends them and reads no file, and
+   `cmd/collector` reads `--upstream-ca` through the same function
+   (GLOBAL-06, GLOBAL-10, GLOBAL-11, UX-04, UX-08).
 6. The relay image check, one function called by `newRequest` and by
    `doctor`, under the container driver (GLOBAL-06, UX-04, UX-08).
 7. `driver.ModuleRoot`: the executable only, the module line whole, a
