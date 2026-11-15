@@ -267,3 +267,71 @@ func TestEmptyRuntime(t *testing.T) {
 		}
 	})
 }
+
+// loadedConfig is LoadConfig's result, which never holds the marker.
+func loadedConfig(t *testing.T) *Config {
+	t.Helper()
+	cfg, err := LoadConfig()
+	if err != nil {
+		t.Fatalf("LoadConfig: %v", err)
+	}
+	if cfg.Runtime.CLI == unsetCLI {
+		t.Fatal("LoadConfig returned the marker as the runtime")
+	}
+	return cfg
+}
+
+// While the project's file is decoded, [runtime] cli holds a marker; a file
+// that leaves it did not set the key, and the user's value is put back. A
+// file that could produce the marker would have the user's value run in
+// place of its own.
+func TestRuntimeUnsetMarker(t *testing.T) {
+	user := cliFile("podman")
+	for name, project := range map[string]string{
+		"no project file":                  "",
+		"a project file with other keys":   "[output]\nverbose = true\n",
+		"a [runtime] table without cli":    "[runtime]\ndriver = \"container\"\n",
+		"a project file with only comment": "# nothing set\n",
+	} {
+		t.Run(name+" restores the user's value and source", func(t *testing.T) {
+			inConfigFiles(t, user, project)
+			cfg := loadedConfig(t)
+			if cfg.Runtime.CLI != "podman" || cfg.Runtime.CLISource != userConfigFile(t) {
+				t.Errorf("runtime = %q from %q, want podman from the user's file",
+					cfg.Runtime.CLI, cfg.Runtime.CLISource)
+			}
+		})
+	}
+	t.Run("no file names a runtime", func(t *testing.T) {
+		inConfigFiles(t, "", "[runtime]\ndriver = \"container\"\n")
+		if cfg := loadedConfig(t); cfg.Runtime.CLI != "" {
+			t.Errorf("runtime = %q, want empty", cfg.Runtime.CLI)
+		}
+	})
+	for name, value := range map[string]string{
+		"basic string":              "\"\xff\"",
+		"literal string":            "'\xff'",
+		"multi-line basic string":   "\"\"\"\xff\"\"\"",
+		"multi-line literal string": "'''\xff'''",
+	} {
+		t.Run("the marker's byte in a "+name+" fails the load", func(t *testing.T) {
+			inConfigFiles(t, user, "[runtime]\ncli = "+value+"\n")
+			cfg, err := LoadConfig()
+			var fe *driver.FixableError
+			if !errors.As(err, &fe) || !strings.Contains(fe.Msg, "parsing warden.toml") {
+				t.Fatalf("LoadConfig = %+v, %v; want the file refused as not TOML", cfg, err)
+			}
+		})
+	}
+	for _, value := range []string{`"\xff"`, `"\u00ff"`, `"ÿ"`} {
+		t.Run("cli = "+value+" is an unsupported value of the project's", func(t *testing.T) {
+			inConfigFiles(t, user, "[runtime]\ncli = "+value+"\n")
+			cfg := loadedConfig(t)
+			got, err := resolveRuntime(cfg)
+			if got != "" {
+				t.Errorf("resolveRuntime returned %q, want only the refusal", got)
+			}
+			wantRuntimeRefused(t, err, "[runtime] cli in warden.toml", "\u00ff")
+		})
+	}
+}
