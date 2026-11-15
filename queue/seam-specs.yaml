@@ -60,39 +60,43 @@ budget:
 questions:
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: Whether seam 4 (the ledger format and schemas, today in specs/) moves to the specs repository in this item. The umbrella says it moves and names no phase.
     options:
       - a later item of phase S1, filed once this item's release and pin have run once; RELAY-05 is not changed here
       - in this item (rewrites RELAY-05, tier 1's schema-doc root, the book's specs mirror and redirects, specs/specs_test.go and the $id policy)
       - at M6, with RELAY-01 to RELAY-08
     recommended: a later item of phase S1, filed once this item's release and pin have run once; RELAY-05 is not changed here
+    answer: (C) Seam 4 (the ledger format) moves at M6, with RELAY-01 to RELAY-08. Departs from the recommendation (a later S1 item); the design is revised. Jeff, design review, 2026-11-15.
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: 'When buildwarden/buildwarden-specs is created and by whom (umbrella a11), and what has to exist before f3-implement starts (design: What Jeff creates).'
     options:
       - in or right after the design review, by Jeff or by that attended session on his word; Implement stops with a blocking question if it is missing
       - now, before the review
       - at Publish, after incubating the content on this repository's branch
     recommended: in or right after the design review, by Jeff or by that attended session on his word; Implement stops with a blocking question if it is missing
+    answer: (B) The repository is created now, before the review's approval. Departs from the recommendation (in or right after the review). The name and what it carries are confirmed with Jeff right before it is created (umbrella a11). Jeff, design review, 2026-11-15.
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: The specs repository's visibility.
     options:
       - public from creation (the Go module proxy and checksum database serve only public modules; the book links to it)
       - private until buildwarden-relay goes public at M1 (needs credentials in both repositories' CI)
     recommended: public from creation (the Go module proxy and checksum database serve only public modules; the book links to it)
+    answer: (A) Public from creation. Jeff, design review, 2026-11-15.
   - id: a4
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Which invariants apply to work in the specs repository, which has not adopted the Loop Contract (reworded 2026-11-14 for one queue, and again after the independent review: only the list is asked). That the worker is bound there by FLOW-08, FLOW-16, FLOW-17 and FLOW-18, and that the design lists the invariants that apply by rule ID, is LOOP-08''s (Jeff''s answer to loop-contract a17 of 2026-11-14, which also declined "the specs repository adopts first and S1 waits"). The item names buildwarden/buildwarden-specs as a repository it works in, in its design (LOOP-04). Citations brought up to the merged rules on 2026-11-15; the options and the recommended answer are unchanged.'
     options:
       - 'GLOBAL-01 to GLOBAL-04, GLOBAL-07, GLOBAL-09 to GLOBAL-11, TEST-04 and TEST-07 for the harness''s Go code, and RELAY-05''s schema-identity rule for the schemas: the rules a reader can judge from the code and the schemas alone; Review''s tier-2 report judges the first group and the specs repository''s ci holds the second'
       - 'a wider list: the first option, and also GLOBAL-05 for the harness and its release binaries, a GLOBAL-06 note for the sandbox (it runs as root and creates namespaces), and UX-02, UX-04, UX-05 and UX-09 for the bw-conformance command line and its report; tier 2 then reads more where no tier 1 runs, and each added rule is applied to something it was not written for'
       - only what the specs repository's own CI can enforce (the layout and $id check, go vet, go test, the check that the module does not require the kit); Review then reads nothing there and the harness's code is held to no rule of this project
     recommended: 'GLOBAL-01 to GLOBAL-04, GLOBAL-07, GLOBAL-09 to GLOBAL-11, TEST-04 and TEST-07 for the harness''s Go code, and RELAY-05''s schema-identity rule for the schemas: the rules a reader can judge from the code and the schemas alone; Review''s tier-2 report judges the first group and the specs repository''s ci holds the second'
+    answer: (A) GLOBAL-01 to GLOBAL-04, GLOBAL-07, GLOBAL-09 to GLOBAL-11, TEST-04 and TEST-07 for the harness's Go code, and RELAY-05's schema-identity rule for the schemas. Jeff, design review, 2026-11-15.
   - id: a5
     kind: assumed
     status: open
@@ -270,3 +274,15 @@ history:
   - at: 2026-11-15T20:32:23Z
     by: human/jeff
     event: claimed f2-design-review until 2026-11-15T22:32:23Z
+  - at: 2026-11-15T20:34:56Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: (C) Seam 4 (the ledger format) moves at M6, with RELAY-01 to RELAY-08. Departs from the recommendation (a later S1 item); the design is revised. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:34:56Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: (B) The repository is created now, before the review''s approval. Departs from the recommendation (in or right after the review). The name and what it carries are confirmed with Jeff right before it is created (umbrella a11). Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:34:56Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: (A) Public from creation. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:34:56Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: (A) GLOBAL-01 to GLOBAL-04, GLOBAL-07, GLOBAL-09 to GLOBAL-11, TEST-04 and TEST-07 for the harness''s Go code, and RELAY-05''s schema-identity rule for the schemas. Jeff, design review, 2026-11-15.'
