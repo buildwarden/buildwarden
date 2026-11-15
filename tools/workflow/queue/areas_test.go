@@ -394,7 +394,14 @@ func TestAreasCheck(t *testing.T) {
 		t.Fatalf("an area ahead of its tree:\n got %q, %d differences\nwant %q, 0",
 			got.Lines, got.Differences, want)
 	}
-	ahead.Status = "done"
+	// A tracked item's areas are not this map's, and a done item adds no tree.
+	s.Config.Repository = "o/r"
+	ahead.Repos = []string{"o/elsewhere"}
+	if got = check(s, tree[2:], edges, true); got.Differences != 2 {
+		t.Fatalf("declared by a tracked item: %q, %d differences; want 2", got.Lines,
+			got.Differences)
+	}
+	ahead.Repos, ahead.Status = nil, "done"
 	if got = check(s, tree[2:], edges, true); got.Differences != 2 {
 		t.Fatalf("after the item is done: %q, %d differences; want 2", got.Lines,
 			got.Differences)

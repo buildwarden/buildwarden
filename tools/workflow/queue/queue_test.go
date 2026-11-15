@@ -23,9 +23,12 @@ func feature(name string, prio int, status string) *Feature {
 func state(fs ...*Feature) *State {
 	s := &State{Features: fs}
 	s.Config.RunBudget.Steps = 12
-	s.Config.Limits.InProgress = 5
+	inProgress(s, 5)
 	return limited(s, 1)
 }
+
+// inProgress sets limits.in_progress as config.yaml would write it.
+func inProgress(s *State, n int) { s.Config.Limits.InProgress = &n }
 
 // limited sets limits.alters_relationships as config.yaml would write it.
 func limited(s *State, n int) *State {
@@ -85,7 +88,7 @@ func TestNextStartsFeatureOnlyWhenAllBlocked(t *testing.T) {
 	if len(blocked) != 1 || !strings.Contains(blocked[0].Reason, "q1") {
 		t.Fatalf("blocked = %+v", blocked)
 	}
-	s.Config.Limits.InProgress = 1
+	inProgress(s, 1)
 	if got := next(t, s, "cloud"); got != "none" {
 		t.Fatalf("next = %q, want none at the in-progress limit", got)
 	}
@@ -97,7 +100,7 @@ func TestNextForOneFeature(t *testing.T) {
 	if p, _ := s.NextFor("q", "cloud", now); p == nil || p.Feature != q || !p.Starts {
 		t.Fatalf("NextFor = %+v, want q started", p)
 	}
-	s.Config.Limits.InProgress = 1
+	inProgress(s, 1)
 	if p, _ := s.NextFor("q", "cloud", now); p != nil {
 		t.Fatal("NextFor ignored the in-progress limit")
 	}
@@ -112,7 +115,7 @@ func TestNextForOneFeature(t *testing.T) {
 func TestLimitSkipsProcessItems(t *testing.T) {
 	a, x := feature("a", 1, "in_progress"), process("x", 2, "in_progress")
 	s := state(a, x)
-	s.Config.Limits.InProgress = 1
+	inProgress(s, 1)
 	if errs := s.Validate(); len(errs) != 0 {
 		t.Fatalf("Validate = %v, want a process item not counted", errs)
 	}
@@ -130,7 +133,7 @@ func TestNextStartsFeatureBesideProcessItem(t *testing.T) {
 	x, q := process("x", 1, "in_progress"), feature("q", 2, "queued")
 	x.Steps[0].Affinity = "human"
 	s := state(x, q)
-	s.Config.Limits.InProgress = 1
+	inProgress(s, 1)
 	if p, _ := s.Next("cloud", now); p == nil || p.Feature != q || !p.Starts {
 		t.Fatalf("pick = %+v, want q started beside the process item", p)
 	}
@@ -140,7 +143,7 @@ func TestNextStartsFeatureBesideProcessItem(t *testing.T) {
 	a := feature("a", 1, "in_progress")
 	a.Steps[0].Affinity = "human"
 	s = state(a, q)
-	s.Config.Limits.InProgress = 1
+	inProgress(s, 1)
 	if got := next(t, s, "cloud"); got != "none" {
 		t.Fatalf("next = %q, want none with a feature at the limit", got)
 	}
@@ -152,7 +155,7 @@ func TestHumanStartsProcessItemAtLimit(t *testing.T) {
 	a, x := feature("a", 1, "in_progress"), process("x", 2, "queued")
 	a.Steps[0].Affinity = "human"
 	s := state(a, x)
-	s.Config.Limits.InProgress = 1
+	inProgress(s, 1)
 	p, _ := s.Next("human/jeff", now)
 	if p == nil || p.Feature != x || p.Step.ID != "x1-design" {
 		t.Fatalf("human pick = %+v, want x x1-design", p)
@@ -185,7 +188,7 @@ func TestNextTakesClassOrder(t *testing.T) {
 	if p, _ := s.Next("cloud", now); p == nil || p.Feature != fix || !p.Starts {
 		t.Fatalf("pick = %+v, want the queued fix started ahead of class-4 sec", p)
 	}
-	s.Config.Limits.InProgress = 1
+	inProgress(s, 1)
 	if got := next(t, s, "cloud"); got != "sec f0-branch-setup" {
 		t.Fatalf("at the in-progress limit next = %q, want sec's step", got)
 	}
@@ -1270,7 +1273,7 @@ func mergeWaitFeature(t *testing.T) {
 		}
 		q := feature("q", 2, "queued")
 		s := state(a, q)
-		s.Config.Limits.InProgress = 2
+		inProgress(s, 2)
 		if p, _ := s.Next("cloud", now); p == nil || p.Feature != q || !p.Starts {
 			t.Errorf("%s: pick = %+v, want q started past a's merge", id, p)
 		}
@@ -1675,4 +1678,321 @@ func TestAddedStepsDoNotMoveTheGate(t *testing.T) {
 		!IsDesignReview(&Step{ID: "f2-design-review-r3"}) {
 		t.Error("IsDesignReview: only phase 2's review, in any -r<n> form")
 	}
+}
+
+// limitTexts are config.yaml's limits lines for a limit that is absent,
+// written at its default, written higher, and written below 1 twice.
+func limitTexts(key string, def int) []string {
+	return []string{"", fmt.Sprintf("limits: {%s: %d}\n", key, def),
+		fmt.Sprintf("limits: {%s: %d}\n", key, def+2),
+		fmt.Sprintf("limits: {%s: 0}\n", key), fmt.Sprintf("limits: {%s: -1}\n", key)}
+}
+
+// loadConfig loads a state whose config.yaml is the run budget and text.
+func loadConfig(t *testing.T, text string) *State {
+	t.Helper()
+	dir := t.TempDir()
+	if err := os.WriteFile(filepath.Join(dir, "config.yaml"),
+		[]byte("run_budget: {steps: 8}\n"+text), 0o644); err != nil {
+		t.Fatal(err)
+	}
+	s, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return s
+}
+
+// TestInProgressLimitDefault: limits.in_progress is 5 when config.yaml does
+// not write it, a written value is used as written, and one below 1 is an
+// error under which nothing starts. Absent or 0 is no longer "no limit"
+// (FLOW-05; case 16 of the loop-parallel design).
+func TestInProgressLimitDefault(t *testing.T) {
+	texts := limitTexts("in_progress", 5)
+	for i, c := range []struct {
+		limit    int
+		started  string
+		findings []string
+	}{
+		{5, "none", nil},
+		{5, "none", nil},
+		{7, "q f0-branch-setup", nil},
+		{0, "none", []string{"config: limits.in_progress 0 is below 1"}},
+		{-1, "none", []string{"config: limits.in_progress -1 is below 1"}},
+	} {
+		s := loadConfig(t, texts[i])
+		if got := s.inProgressLimit(); got != c.limit {
+			t.Fatalf("%q: the limit is %d, want %d", texts[i], got, c.limit)
+		}
+		for n := 1; n <= 5; n++ {
+			f := feature(fmt.Sprintf("f%d", n), n, "in_progress")
+			f.Steps[0].Affinity = "human"
+			s.Features = append(s.Features, f)
+		}
+		s.Features = append(s.Features, feature("q", 6, "queued"))
+		wantNext(t, s, "cloud", c.started)
+		wantValidate(t, s, c.findings...)
+	}
+	// One more than the limit is the finding it was.
+	s := loadConfig(t, "")
+	for n := 1; n <= 6; n++ {
+		s.Features = append(s.Features, feature(fmt.Sprintf("f%d", n), n, "in_progress"))
+	}
+	wantValidate(t, s, "6 features in progress, limit 5 (FLOW-05)")
+}
+
+// TestWaitingLimitDefault: limits.waiting_on_human is 8 when config.yaml does
+// not write it, a written value is used as written, and one below 1 is an
+// error; no value means "no cap" (FLOW-05; case 31).
+func TestWaitingLimitDefault(t *testing.T) {
+	texts := limitTexts("waiting_on_human", 8)
+	for i, c := range []struct {
+		limit    int
+		findings []string
+	}{
+		{8, nil},
+		{8, nil},
+		{10, nil},
+		{0, []string{"config: limits.waiting_on_human 0 is below 1"}},
+		{-1, []string{"config: limits.waiting_on_human -1 is below 1"}},
+	} {
+		s := loadConfig(t, texts[i])
+		if got := s.waitingLimit(); got != c.limit {
+			t.Fatalf("%q: the limit is %d, want %d", texts[i], got, c.limit)
+		}
+		wantValidate(t, s, c.findings...)
+	}
+}
+
+// declaredState is a state whose config names the queue's own repository.
+func declaredState(fs ...*Feature) *State {
+	s := state(fs...)
+	s.Config.Repository = "o/here"
+	return s
+}
+
+// TestValidateDeclaredFields: Validate's checks of what an item declares
+// (FLOW-02, FLOW-03): repos, areas, declared and collides_with.
+func TestValidateDeclaredFields(t *testing.T) {
+	for _, c := range []struct {
+		name string
+		set  func(f, p *Feature)
+		want []string
+	}{
+		{"nothing declared", func(f, p *Feature) {}, nil},
+		{"every field", func(f, p *Feature) {
+			f.Repos = []string{"o/here", "o/specs"}
+			f.Areas = &[]string{"relay", "book"}
+			f.Seams, f.RulesChanged = []string{"relay-claim"}, []string{"GLOBAL-08"}
+			f.Declared, f.CollidesWith = "4c1d9e2", []string{"other"}
+			p.Repos, p.Areas = []string{"o/here"}, &[]string{}
+			p.Declared = strings.Repeat("a", 40)
+		}, nil},
+		{"repos that are not owner/name", func(f, p *Feature) {
+			f.Repos = []string{"o/here", "specs", "o/a/b", "/x", "o/"}
+		}, []string{`a: repos entry "specs" is not owner/name`,
+			`a: repos entry "o/a/b" is not owner/name`,
+			`a: repos entry "/x" is not owner/name`,
+			`a: repos entry "o/" is not owner/name`}},
+		{"a repository twice", func(f, p *Feature) {
+			f.Repos = []string{"o/here", "o/specs", "o/here"}
+		}, []string{"a: repos names o/here twice"}},
+		{"a process item homed elsewhere", func(f, p *Feature) {
+			p.Repos = []string{"o/specs", "o/here"}
+		}, []string{"p: a process item is homed in the queue's repository, not o/specs " +
+			"(an item homed in another repository is tracked)"}},
+		{"an area twice", func(f, p *Feature) {
+			f.Areas = &[]string{"relay", "book", "relay"}
+		}, []string{"a: areas names relay twice"}},
+		{"declared is not a commit", func(f, p *Feature) {
+			f.Declared, p.Declared = "HEAD", "4C1D9E2"
+		}, []string{`a: declared "HEAD" is not a commit id`,
+			`p: declared "4C1D9E2" is not a commit id`}},
+		{"seams with no declared", func(f, p *Feature) {
+			f.Seams = []string{"relay-claim"}
+		}, []string{"a: seams and rules_changed are what wf declare copies from the " +
+			"design, and declared is not set"}},
+		{"rules_changed with no declared", func(f, p *Feature) {
+			f.RulesChanged = []string{"GLOBAL-08"}
+		}, []string{"a: seams and rules_changed are what wf declare copies from the " +
+			"design, and declared is not set"}},
+		{"collides_with a name not in the queue", func(f, p *Feature) {
+			f.CollidesWith = []string{"other", "gone", "a"}
+		}, []string{`a: collides_with "gone", which is not another item in the queue`,
+			`a: collides_with "a", which is not another item in the queue`}},
+	} {
+		f, o := feature("a", 2, "queued"), feature("other", 3, "queued")
+		p := process("p", 1, "queued")
+		c.set(f, p)
+		s := declaredState(f, o, p)
+		var got []string
+		for _, err := range s.Validate() {
+			got = append(got, err.Error())
+		}
+		if !slices.Equal(got, c.want) {
+			t.Errorf("%s:\n got %q\nwant %q", c.name, got, c.want)
+		}
+	}
+
+	// config.yaml's repository has no default: an item that names repos
+	// needs it, and an item that names none does not.
+	f, o := feature("a", 1, "queued"), feature("other", 2, "queued")
+	f.Repos = []string{"o/here"}
+	s := state(f, o)
+	wantValidate(t, s, "config: repository is not set, and a names repos")
+}
+
+// TestValidateTracked: an item whose first repository is not the queue's own
+// is tracked; it is not a process item, holds no worker, and its round is
+// tracked. An item homed here that also works elsewhere is not tracked.
+func TestValidateTracked(t *testing.T) {
+	away := func() *Feature {
+		f := &Feature{Feature: "m1", Priority: 1, Status: "queued", Round: "tracked",
+			Phase: 1, Repos: []string{"o/relay"}}
+		return f
+	}
+	f := away()
+	s := declaredState(f)
+	if !s.Tracked(f) {
+		t.Fatal("an item homed in another repository is not tracked")
+	}
+	wantValidate(t, s)
+
+	f.Seams = []string{"relay-claim"}
+	wantValidate(t, s) // wf new -seams records them: wf declare cannot read its design.
+
+	f.Round = "feature"
+	wantValidate(t, s, `m1: a tracked item's round is tracked, not "feature"`)
+
+	f = away()
+	f.Holds = []string{"cloud"}
+	wantValidate(t, declaredState(f), "m1: only a process item holds workers")
+
+	both := feature("s1", 1, "queued")
+	both.Repos = []string{"o/here", "o/specs"}
+	s = declaredState(both)
+	if s.Tracked(both) || s.Tracked(feature("x", 2, "queued")) {
+		t.Fatal("an item homed here is tracked")
+	}
+	wantValidate(t, s)
+	both.Round = "tracked"
+	wantValidate(t, s, "s1: round tracked is for an item homed in another repository, "+
+		"and this one is homed in the queue's")
+}
+
+// TestAdoptsValidate: adopts marks a reconciliation item (LOOP-07): the
+// consumable and the version are both set, and the item is a feature.
+func TestAdoptsValidate(t *testing.T) {
+	f, p := feature("a", 2, "queued"), process("p", 1, "queued")
+	s := declaredState(f, p)
+	f.Adopts = &Adopts{Consumable: "buildwarden-relay", Version: "v0.3.0"}
+	wantValidate(t, s)
+	f.Adopts = &Adopts{Consumable: "buildwarden-relay"}
+	wantValidate(t, s, "a: adopts needs both its consumable and its version")
+	f.Adopts = &Adopts{Version: "v0.3.0"}
+	wantValidate(t, s, "a: adopts needs both its consumable and its version")
+	f.Adopts = nil
+	p.Adopts = &Adopts{Consumable: "buildwarden-relay", Version: "v0.3.0"}
+	wantValidate(t, s, "p: only a feature adopts a release (LOOP-07)")
+}
+
+// TestUrgentValidate: urgent is the human worker who marked the item, on a
+// feature the waiting limit could refuse: not a process item, a tracked item
+// or one that follows an item (FLOW-05). Nothing is checked about what the
+// item fixes, and the mark is not an error on an item in progress or done.
+func TestUrgentValidate(t *testing.T) {
+	const notHuman = ": only a human marks an item urgent (FLOW-05)"
+	f, parent := feature("a", 2, "queued"), feature("parent", 3, "done")
+	p := process("p", 1, "queued")
+	away := &Feature{Feature: "m1", Priority: 4, Status: "queued", Round: "tracked",
+		Phase: 1, Repos: []string{"o/relay"}}
+	s := declaredState(f, parent, p, away)
+	for _, ok := range []string{"human/jeff", "human"} {
+		f.Urgent = ok
+		for _, status := range []string{"queued", "in_progress", "done"} {
+			f.Status = status
+			wantValidate(t, s)
+		}
+	}
+	f.Status = "queued"
+	for _, bad := range []string{"cloud/tick-1", "host:macos-vz/s", "jeff", "true"} {
+		f.Urgent = bad
+		wantValidate(t, s, "a: urgent names "+bad+notHuman)
+	}
+	f.Urgent, f.Follows = "human/jeff", "parent"
+	wantValidate(t, s, "a: urgent, and it follows parent: "+
+		"the waiting limit never refuses a fix (FLOW-05)")
+	f.Urgent, f.Follows = "", ""
+	p.Urgent = "human/jeff"
+	wantValidate(t, s,
+		"p: urgent on a process item: the waiting limit never refuses one (FLOW-05)")
+	p.Urgent, away.Urgent = "", "human/jeff"
+	wantValidate(t, s,
+		"m1: urgent on a tracked item: the waiting limit never refuses one (FLOW-05)")
+}
+
+// queueFile is the text of the item's queue file under dir.
+func queueFile(t *testing.T, dir, name string) string {
+	t.Helper()
+	data, err := os.ReadFile(filepath.Join(dir, "queue", name+".yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return string(data)
+}
+
+// TestNewFieldsRoundTrip: the fields an item declares, the urgent mark and
+// pr.head survive a save and a load, and an item that has none of them is
+// written as it was before they existed.
+func TestNewFieldsRoundTrip(t *testing.T) {
+	dir := t.TempDir()
+	_ = os.MkdirAll(filepath.Join(dir, "queue"), 0o755)
+	_ = os.WriteFile(filepath.Join(dir, "config.yaml"),
+		[]byte("run_budget: {steps: 8}\nrepository: o/here\n"), 0o644)
+	s := &State{Dir: dir}
+	plain, full := feature("plain", 1, "queued"), feature("full", 2, "queued")
+	full.Repos = []string{"o/here", "o/specs"}
+	full.Seams, full.RulesChanged = []string{"relay-claim"}, []string{"GLOBAL-08", "TEST-05"}
+	full.Declared, full.CollidesWith = "4c1d9e2", []string{"plain"}
+	full.Adopts = &Adopts{Consumable: "buildwarden-relay", Version: "v0.3.0"}
+	full.Urgent = "human/jeff"
+	full.PR = &PR{Number: 12, CI: "green", Head: "0a1b2c3"}
+	for _, f := range []*Feature{plain, full} {
+		if err := s.Save(f); err != nil {
+			t.Fatal(err)
+		}
+	}
+	read := func(name string) string { return queueFile(t, dir, name) }
+	plainText, fullText := read("plain"), read("full")
+	for _, key := range []string{"repos", "areas", "seams", "rules_changed", "declared",
+		"adopts", "collides_with", "urgent", "head"} {
+		if strings.Contains(plainText, key+":") {
+			t.Errorf("an item with no %s is written with the key:\n%s", key, plainText)
+		}
+		if key != "areas" && !strings.Contains(fullText, key+":") {
+			t.Errorf("an item with %s is written without the key:\n%s", key, fullText)
+		}
+	}
+	got, err := Load(dir)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got.Config.Repository != "o/here" {
+		t.Fatalf("config.yaml's repository loaded as %q", got.Config.Repository)
+	}
+	g, err := got.Find("full")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if g.Urgent != "human/jeff" || g.PR == nil || g.PR.Head != "0a1b2c3" {
+		t.Fatalf("loaded urgent %q, pr %+v", g.Urgent, g.PR)
+	}
+	// Saved again, the loaded item is the file it was loaded from.
+	if err := got.Save(g); err != nil {
+		t.Fatal(err)
+	}
+	if again := read("full"); again != fullText {
+		t.Fatalf("a load and a save changed the file:\n%s\nwas:\n%s", again, fullText)
+	}
+	wantValidate(t, got)
 }

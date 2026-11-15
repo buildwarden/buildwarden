@@ -34,11 +34,19 @@ type Config struct {
 	// RunBudget.
 	NativeBudget *StepBudget `yaml:"native_budget,omitempty"`
 	Limits       struct {
-		InProgress int `yaml:"in_progress"`
+		// InProgress is how many features may be in progress at once
+		// (FLOW-05). Nil, the key absent, is 5 (inProgressLimit); a written
+		// value below 1 is an error.
+		InProgress *int `yaml:"in_progress,omitempty"`
 		// AltersRelationships is how many features may hold an
 		// alters_relationships slot at once (FLOW-05, FLOW-20). Nil, the key
 		// absent, is 1 (altersLimit); a written value below 1 is an error.
 		AltersRelationships *int `yaml:"alters_relationships,omitempty"`
+		// WaitingOnHuman is the number of items waiting on the human at
+		// which no queued feature starts (FLOW-05). Nil, the key absent, is
+		// 8 (waitingLimit); a written value below 1 is an error, and no value
+		// means "no cap".
+		WaitingOnHuman *int `yaml:"waiting_on_human,omitempty"`
 	} `yaml:"limits"`
 	LeaseMinutes  int     `yaml:"lease_minutes"`
 	RunawayFactor float64 `yaml:"runaway_factor"`
@@ -73,6 +81,11 @@ type Feature struct {
 	// follows an item is a fix (FLOW-05 class 3) and starts only once that
 	// item is done; on a process item it is only a record.
 	Follows string `yaml:"follows,omitempty"`
+	// Urgent is the human worker who marked the item urgent, as in
+	// human/jeff: the claim that starts it is not refused by the waiting
+	// limit (FLOW-05). Empty, the item is not marked. Only a human sets or
+	// clears it.
+	Urgent string `yaml:"urgent,omitempty"`
 	// Holds lists the affinity patterns (cloud, host:*, host:macos-vz) whose
 	// workers take no new step while this process item is in progress.
 	Holds  []string `yaml:"holds,omitempty"`
@@ -83,12 +96,29 @@ type Feature struct {
 	Phase  int    `yaml:"phase"` // FLOW-03 phase, 0..8
 	Design string `yaml:"design"`
 	Branch string `yaml:"branch"`
+	// Repos lists the repositories the item works in, as owner/name, its
+	// home first: the home holds its design, its branch and its PR
+	// (LOOP-04). Empty, the item works only in Config.Repository.
+	Repos []string `yaml:"repos,omitempty"`
 	// Areas names the areas of the area map whose files the item changes
 	// (FLOW-02, FLOW-05). Nil, the key absent, is undeclared: the item
 	// collides with every item it shares a repository with. An empty list is
 	// a declaration that it changes nothing but its own design, which is why
 	// this is a pointer: the two must stay apart through a save and a load.
 	Areas *[]string `yaml:"areas,omitempty"`
+	// Seams are the seams the item changes, the design's seams (FLOW-02).
+	Seams []string `yaml:"seams,omitempty"`
+	// RulesChanged are the rule IDs of the design's rule_changes (FLOW-14).
+	RulesChanged []string `yaml:"rules_changed,omitempty"`
+	// Declared is the commit of the item's branch whose design wf declare
+	// last copied into this file. Empty, the item was never declared, and no
+	// gate compares this file with its design.
+	Declared string `yaml:"declared,omitempty"`
+	// Adopts marks a reconciliation item (LOOP-07).
+	Adopts *Adopts `yaml:"adopts,omitempty"`
+	// CollidesWith names items the human has said this one collides with,
+	// whatever the areas say.
+	CollidesWith []string `yaml:"collides_with,omitempty"`
 	// AltersRelationships is nil until Design decides it (FLOW-02).
 	AltersRelationships *bool `yaml:"alters_relationships"`
 	// DesignReview is empty until Design decides it: required, or skip when
@@ -103,10 +133,20 @@ type Feature struct {
 	History      []Event    `yaml:"history"`
 }
 
+// Adopts is what a reconciliation item adopts: a release of a consumable
+// (LOOP-07).
+type Adopts struct {
+	Consumable string `yaml:"consumable"`
+	Version    string `yaml:"version"`
+}
+
 // PR records the feature's pull request, opened in Publish (FLOW-08, FLOW-11).
 type PR struct {
 	Number int    `yaml:"number"`
 	CI     string `yaml:"ci"` // pending | green | red
+	// Head is the commit CI was read for. Empty, on a PR recorded before
+	// the field existed, that commit is not known.
+	Head string `yaml:"head,omitempty"`
 }
 
 // Step is one unit of work a worker claims (FLOW-04).
@@ -390,11 +430,39 @@ func (s *State) altersLimit() int {
 	return 1
 }
 
-// Validate checks the schema of every feature and the FLOW-05 limits. The
-// alters_relationships limit is compared with the features that hold a slot
-// (altersHolders), the count Next withholds a Plan step by, so a state Next
-// produces never fails here.
-func (s *State) Validate() []error {
+// inProgressLimit is how many features may be in progress: the value
+// config.yaml writes, or FLOW-05's 5 when it writes none. A written value is
+// returned as it is, one below 1 included, which Validate reports and under
+// which nothing starts (GLOBAL-10).
+func (s *State) inProgressLimit() int {
+	if n := s.Config.Limits.InProgress; n != nil {
+		return *n
+	}
+	return 5
+}
+
+// waitingLimit is the number of items waiting on the human at which no
+// queued feature starts: the value config.yaml writes, or FLOW-05's 8 when it
+// writes none. A written value is returned as it is; Validate reports one
+// below 1.
+func (s *State) waitingLimit() int {
+	if n := s.Config.Limits.WaitingOnHuman; n != nil {
+		return *n
+	}
+	return 8
+}
+
+// Tracked reports whether the item's home, its first repository, is not the
+// queue's own: wf sees no branch, design or PR there, so it runs no gate for
+// the item and counts it in no limit (FLOW-03, FLOW-05).
+func (s *State) Tracked(f *Feature) bool {
+	return len(f.Repos) > 0 && f.Repos[0] != s.Config.Repository
+}
+
+// validateConfig checks config.yaml's budgets and limits. A limit is checked
+// as inProgressLimit, altersLimit and waitingLimit return it, so an absent
+// key is its default and a written value below 1 is the finding.
+func (s *State) validateConfig() []error {
 	var errs []error
 	if s.Config.RunBudget.Steps < 1 {
 		errs = append(errs, fmt.Errorf("config: run_budget.steps %d is below 1",
@@ -404,11 +472,26 @@ func (s *State) Validate() []error {
 		errs = append(errs, fmt.Errorf("config: native_budget.steps %d is below 1",
 			nb.Steps))
 	}
-	limit := s.altersLimit()
-	if limit < 1 {
-		errs = append(errs, fmt.Errorf(
-			"config: limits.alters_relationships %d is below 1", limit))
+	for _, l := range []struct {
+		key   string
+		value int
+	}{{"in_progress", s.inProgressLimit()}, {"alters_relationships", s.altersLimit()},
+		{"waiting_on_human", s.waitingLimit()}} {
+		if l.value < 1 {
+			errs = append(errs, fmt.Errorf("config: limits.%s %d is below 1", l.key,
+				l.value))
+		}
 	}
+	return errs
+}
+
+// Validate checks the schema of every feature and the FLOW-05 limits. The
+// alters_relationships limit is compared with the features that hold a slot
+// (altersHolders), the count Next withholds a Plan step by, so a state Next
+// produces never fails here.
+func (s *State) Validate() []error {
+	errs := s.validateConfig()
+	limit := s.altersLimit()
 	prio := map[int]string{}
 	inProgress := 0
 	for _, f := range s.Features {
@@ -424,9 +507,20 @@ func (s *State) Validate() []error {
 		if f.Status == "in_progress" && !f.IsProcess() {
 			inProgress++
 		}
-		f.validate(bad)
+		tracked := s.Tracked(f)
+		if len(f.Repos) > 0 && s.Config.Repository == "" {
+			errs = append(errs, fmt.Errorf(
+				"config: repository is not set, and %s names repos", f.Feature))
+			// Which repository is the queue's own is not known, so neither is
+			// whether the item is tracked: its round is checked as written.
+			tracked = f.Round == "tracked"
+		}
+		f.validate(bad, tracked)
+		s.validateDeclared(f, bad)
+		s.validateUrgent(f, bad)
 	}
-	if n := s.Config.Limits.InProgress; n > 0 && inProgress > n {
+	// No count means anything against a limit below 1.
+	if n := s.inProgressLimit(); n >= 1 && inProgress > n {
 		errs = append(errs, fmt.Errorf("%d features in progress, limit %d (FLOW-05)",
 			inProgress, n))
 	}
@@ -453,11 +547,94 @@ func (s *State) validateFollows(f *Feature, bad func(string, ...any)) {
 	}
 }
 
-func (f *Feature) validate(bad func(string, ...any)) {
+var (
+	repoRe   = regexp.MustCompile(`^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$`)
+	commitRe = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
+)
+
+// validateDeclared checks what the item declares (FLOW-02, FLOW-03): repos,
+// areas, declared, adopts and collides_with. An area the map lacks is not an
+// error: the item is undeclared until an attended session adds the area.
+func (s *State) validateDeclared(f *Feature, bad func(string, ...any)) {
+	s.validateRepos(f, bad)
+	if f.Areas != nil {
+		if dup := repeated(*f.Areas); dup != "" {
+			bad("areas names %s twice", dup)
+		}
+	}
+	if f.Declared != "" && !commitRe.MatchString(f.Declared) {
+		bad("declared %q is not a commit id", f.Declared)
+	}
+	// A tracked item's seams are what intake records: wf cannot read its
+	// design, so nothing was declared from one.
+	if f.Declared == "" && !s.Tracked(f) && len(f.Seams)+len(f.RulesChanged) > 0 {
+		bad("seams and rules_changed are what wf declare copies from the design, " +
+			"and declared is not set")
+	}
+	if a := f.Adopts; a != nil {
+		if a.Consumable == "" || a.Version == "" {
+			bad("adopts needs both its consumable and its version")
+		}
+		if f.IsProcess() {
+			bad("only a feature adopts a release (LOOP-07)")
+		}
+	}
+	for _, name := range f.CollidesWith {
+		if _, err := s.Find(name); err != nil || name == f.Feature {
+			bad("collides_with %q, which is not another item in the queue", name)
+		}
+	}
+}
+
+// validateRepos checks the form of the item's repos.
+func (s *State) validateRepos(f *Feature, bad func(string, ...any)) {
+	for _, r := range f.Repos {
+		if !repoRe.MatchString(r) {
+			bad("repos entry %q is not owner/name", r)
+		}
+	}
+	if dup := repeated(f.Repos); dup != "" {
+		bad("repos names %s twice", dup)
+	}
+}
+
+// repeated returns the first name the list has twice, or "".
+func repeated(names []string) string {
+	seen := map[string]bool{}
+	for _, n := range names {
+		if seen[n] {
+			return n
+		}
+		seen[n] = true
+	}
+	return ""
+}
+
+// validateUrgent checks the urgent mark: its value is the human worker who
+// set it, and the item is one whose start the waiting limit could refuse.
+// Any other value is honoured by nothing, so it is an error and is read
+// neither as marked nor as unmarked (GLOBAL-10). What the item fixes is not
+// checked: FLOW-05's words and intake hold the mark to a security fix.
+func (s *State) validateUrgent(f *Feature, bad func(string, ...any)) {
+	const never = "the waiting limit never refuses"
+	switch {
+	case f.Urgent == "":
+	case Kind(f.Urgent) != "human":
+		bad("urgent names %s: only a human marks an item urgent (FLOW-05)", f.Urgent)
+	case f.IsProcess():
+		bad("urgent on a process item: %s one (FLOW-05)", never)
+	case s.Tracked(f):
+		bad("urgent on a tracked item: %s one (FLOW-05)", never)
+	case f.Follows != "":
+		bad("urgent, and it follows %s: %s a fix (FLOW-05)", f.Follows, never)
+	}
+}
+
+func (f *Feature) validate(bad func(string, ...any), tracked bool) {
 	if !oneOf(f.Status, "queued", "in_progress", "done") {
 		bad("status %q is not queued, in_progress or done", f.Status)
 	}
-	f.validateKind(bad)
+	f.validateKind(bad, tracked)
 	if !oneOf(f.DesignReview, "", "required", "skip") {
 		bad("design_review %q is not required or skip", f.DesignReview)
 	}
@@ -475,29 +652,44 @@ func (f *Feature) validate(bad func(string, ...any)) {
 	}
 }
 
-func (f *Feature) validateKind(bad func(string, ...any)) {
+// validateKind checks the item's kind against its round. tracked says the
+// item is homed in another repository.
+func (f *Feature) validateKind(bad func(string, ...any), tracked bool) {
 	switch {
 	case !oneOf(f.Kind, "", "feature", "process"):
 		bad("kind %q is not feature or process", f.Kind)
+	case f.IsProcess() && tracked:
+		bad("a process item is homed in the queue's repository, not %s "+
+			"(an item homed in another repository is tracked)", f.Repos[0])
 	case f.IsProcess():
-		if f.Round != "process" {
-			bad("a process item's round is process, not %q", f.Round)
-		}
-		if f.Phase < 1 || f.Phase > 4 {
-			bad("process phase %d is outside 1..4", f.Phase)
-		}
-		for _, h := range f.Holds {
-			if _, err := path.Match(h, ""); err != nil || !holdRe.MatchString(h) {
-				bad("hold %q is not cloud, human or host:<pattern>", h)
-			}
-		}
+		f.validateProcess(bad)
 	default:
 		legacy := f.Status == "done" && oneOf(f.Round, "parallel", "merge")
-		if f.Round != "feature" && !legacy {
+		switch {
+		case tracked && f.Round != "tracked":
+			bad("a tracked item's round is tracked, not %q", f.Round)
+		case !tracked && f.Round == "tracked":
+			bad("round tracked is for an item homed in another repository, and this " +
+				"one is homed in the queue's")
+		case !tracked && f.Round != "feature" && !legacy:
 			bad("round %q is not feature (run wf migrate)", f.Round)
 		}
 		if len(f.Holds) > 0 {
 			bad("only a process item holds workers")
+		}
+	}
+}
+
+func (f *Feature) validateProcess(bad func(string, ...any)) {
+	if f.Round != "process" {
+		bad("a process item's round is process, not %q", f.Round)
+	}
+	if f.Phase < 1 || f.Phase > 4 {
+		bad("process phase %d is outside 1..4", f.Phase)
+	}
+	for _, h := range f.Holds {
+		if _, err := path.Match(h, ""); err != nil || !holdRe.MatchString(h) {
+			bad("hold %q is not cloud, human or host:<pattern>", h)
 		}
 	}
 }

@@ -141,8 +141,7 @@ func (s *State) atLimit() bool {
 			inProgress++
 		}
 	}
-	n := s.Config.Limits.InProgress
-	return n > 0 && inProgress >= n
+	return inProgress >= s.inProgressLimit()
 }
 
 // waitsForParent reports whether a queued fix follows an item still open, so

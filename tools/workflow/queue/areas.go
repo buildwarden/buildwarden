@@ -406,7 +406,12 @@ func (s *State) checkUnmatched(c *AreasCheck, files []string) {
 func (s *State) declares(area string) string {
 	var names []string
 	for _, f := range s.Features {
-		if f.Status != "done" && f.Areas != nil && slices.Contains(*f.Areas, area) {
+		// A tracked item's areas name no area of this map: its repository
+		// has none here.
+		if f.Status == "done" || f.Areas == nil || s.Tracked(f) {
+			continue
+		}
+		if slices.Contains(*f.Areas, area) {
 			names = append(names, f.Feature)
 		}
 	}
