@@ -75,7 +75,7 @@ questions:
     answer: '(a) and (c): areas are declared at intake with Jeff and confirmed by Design; the area map lives on the workflow branch and is changed in an attended session on his word. Departs from the recommendation on the map''s home (main, under FLOW-14); the design is revised. Jeff, design review, 2026-11-14.'
   - id: a5
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The map itself (design: The area map): 16 exclusive areas and 5 ordered ones. driver-core is one area, and holds the relay VM''s init and initramfs script (tools/relay-vm/), which driver code tests, writes for and copies; relay, relaycfg, ledger, collector and executor are five; cli (cmd/warden/) is exclusive; the book, docs/development/, the build files, other items'' designs and tier 1''s configuration are ordered.'
     options:
       - (a) As written.
@@ -83,31 +83,35 @@ questions:
       - '(c) Coarser: rules.yaml''s shared list (relay, ledger, collector, relaycfg, bootstrap, driver/*.go) as one area.'
       - (d) cli ordered, so two driver items that each edit cmd/warden/ do not collide (five of the 52 merges changed it).
     recommended: (a)
+    answer: (d) The map as written, with cli (cmd/warden) an ordered area, not exclusive. Departs from the recommendation; the map and the case table are revised. Jeff, design review, 2026-11-15.
   - id: a6
     kind: assumed
-    status: open
+    status: confirmed
     question: Steps in a second repository. (The proposal's question 11.)
     options:
       - '(a) Allowed for a repository with no loop of its own, as seam-specs does: the item lists it in repos, its design says which invariants apply there (LOOP-08), and a human step records a merge there that wf cannot see. FLOW-04 and FLOW-08 gain the sentence seam-specs'' a15 asked for as an exception.'
       - (b) Only through a release (LOOP-07).
     recommended: (a)
+    answer: (a) An item may have steps in a repository with no loop of its own; a human step records the merge there; FLOW-04 and FLOW-08 gain the sentence. Jeff, design review, 2026-11-15.
   - id: a7
     kind: assumed
-    status: open
+    status: confirmed
     question: Whether a tracked item (one homed in another repository, with two human steps and no gate) counts in the limits.
     options:
       - (a) It is shown with its relations and neither holds nor waits; nothing is enforced for it until loop-repository gives its work steps and gates.
       - (b) It counts like any feature, on the state the human enters.
     recommended: '(a): what wf counted would rest on state entered by hand, and a stale entry would hold real work'
+    answer: (a) A tracked item is shown with its relations; it neither holds nor waits. Jeff, design review, 2026-11-15.
   - id: a8
     kind: assumed
-    status: open
+    status: confirmed
     question: A reconciliation item's mark, its wait and its place. That it is a feature in FLOW-05's class 3 is decided (loop-contract a5).
     options:
       - '(a) Marked by adopts: {consumable, version}. Filed on hold with a blocking question that names the release when the release does not exist yet (LOOP-04), answered by Jeff or an attended session when it does. Intake places it below the open fixes; a regression''s fix still goes to the top.'
       - (b) As (a), placed at the top of the fixes.
       - '(c) As (a), with no default place: Jeff says each time.'
     recommended: '(a): a regression means main is broken now; an adoption is planned work'
+    answer: '(a) adopts: {consumable, version}; held by a blocking question naming the release; placed below the open fixes. Jeff, design review, 2026-11-15.'
   - id: a10
     kind: assumed
     status: open
@@ -184,3 +188,15 @@ history:
   - at: 2026-11-15T00:54:14Z
     by: human/jeff
     event: 'assumed question a4 confirmed: (a) and (c): areas are declared at intake with Jeff and confirmed by Design; the area map lives on the workflow branch and is changed in an attended session on his word. Departs from the recommendation on the map''s home (main, under FLOW-14); the design is revised. Jeff, design review, 2026-11-14.'
+  - at: 2026-11-15T19:51:03Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: (d) The map as written, with cli (cmd/warden) an ordered area, not exclusive. Departs from the recommendation; the map and the case table are revised. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T19:51:03Z
+    by: human/jeff
+    event: 'assumed question a6 confirmed: (a) An item may have steps in a repository with no loop of its own; a human step records the merge there; FLOW-04 and FLOW-08 gain the sentence. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T19:51:03Z
+    by: human/jeff
+    event: 'assumed question a7 confirmed: (a) A tracked item is shown with its relations; it neither holds nor waits. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T19:51:03Z
+    by: human/jeff
+    event: 'assumed question a8 confirmed: (a) adopts: {consumable, version}; held by a blocking question naming the release; placed below the open fixes. Jeff, design review, 2026-11-15.'
