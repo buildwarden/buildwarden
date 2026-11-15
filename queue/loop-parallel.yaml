@@ -115,15 +115,16 @@ questions:
   - id: a10
     kind: assumed
     status: open
-    question: 'The refresh step: its trigger, its budget, and native validation.'
+    question: 'The refresh, now that a PR may merge only when its branch contains main (a1 (b)): which PRs get one, its budget, and native validation. Reworded 2026-11-15: it was asked for a1 (a), where a refresh was a courtesy a merge did not wait for; it is now required before every merge after the first.'
     options:
-      - (a) Seeded for every item waiting on Jeff's merge whenever main is no longer contained in its branch, whatever moved main.
-      - (b) Seeded only when a related item's PR merged.
-      - (c) Each refresh is a claim and counts one step against the item's budget; intake's size guide adds two steps for it.
-      - (d) A refresh spends no budget, like the merge confirmation.
-      - '(e) A refresh does not queue a blocking native validation again: the validation stands for the branch as it was consolidated.'
-      - '(f) A refresh queues each done blocking host step again when the commits it merged changed a file outside the ordered areas: one more native session per such merge, with the open PR shown as waiting on a host.'
-    recommended: '(a), (c) and (e). With five PRs open and merged one a day, (a) and (c) cost 4 + 3 + 2 + 1 = 10 refreshes, up to four on the last item, against the two the size guide adds; merged in one sitting they cost none and four of the five merge behind main. An item that waits through many merges trips its runaway check and shows under Needs Jeff. Under (e) a break between two disjoint items that only a native host shows is found by the matrix before a release (TEST-02): CI runs neither Hyper-V nor VZ, and the native sweep covers only a machine''s open backlog gaps'
+      - '(a) Which PRs: every open PR that is behind main, whatever moved main, on every run. After a run each open PR is current, and he may merge any one of them.'
+      - '(b) Withdrawn. It was "only when a related item''s PR merged"; under a1 (b) a PR left behind by an unrelated merge could then never merge.'
+      - '(g) Which PRs: only the first open PR in the merge order (FLOW-05), and any PR an attended session is asked to refresh. One PR is ready after each run; he merges that one, or asks for another.'
+      - '(c) Budget: each refresh is a claim and counts one step against the item''s budget; intake''s size guide adds two steps for it.'
+      - '(d) Budget: a refresh counts in the run''s budget and not against the item''s: other items'' merges make it necessary, and it is required before the merge. (Narrowed from the draft''s "spends no budget, like the merge confirmation", so a run''s budget still bounds the refreshes it takes.)'
+      - '(e) Native: a refresh does not queue a blocking native validation again: the validation stands for the branch as it was consolidated.'
+      - '(f) Native: a refresh queues each done blocking host step again when the commits it merged changed a file this branch also changes, or a file in an area one of its areas reaches. The PR is then not ready until that host has run: one merge per cloud run and native session for such a PR.'
+    recommended: '(a), (d) and (e). With five PRs open and one merged a day, (a) costs 4 + 3 + 2 + 1 = 10 refreshes over four runs, four of them on the last PR, and (g) costs four, one per PR; either way the five merges take five days unattended, or one attended sitting with four refreshes. The waiting limit (a3) bounds it: at most 8 PRs are open, so 28 refreshes at worst under (a) and 7 under (g). (a) costs more and is recommended all the same: after every run each open PR has been checked against the main it will merge into, so one that conflicts is sent back that day and not when its turn comes, and the order of merging stays his. On the budget the recommendation changes from the draft''s (c) to (d): under (c) the fifth PR spends four steps on refreshes, and one more for every run in which main is red; an item that trips its runaway check that way gets no further step, its refresh included, until he raises its estimate. Under (e) a break that only a native host shows is found by the matrix before a release (TEST-02); with cli ordered (a5 (d)) a Hyper-V item can merge another item''s cmd/warden change at its refresh with no Hyper-V run on the result, and (f) closes that at its price'
   - id: a12
     kind: assumed
     status: confirmed
@@ -146,11 +147,12 @@ questions:
   - id: a14
     kind: assumed
     status: open
-    question: The merge check when a PR merged behind main. wf confirms a squash merge, for each ref of the branch that still exists, by ancestry, an equal tree, or an equal patch-id computed with three lines of context (wf-squash-after-base-moved, whose a3 said to change this "if adjacent-edit escalations show up in practice"). The third fails when the PR merged next to a line the earlier merge edited, which a1 (a) makes ordinary.
+    question: 'The merge check, now that a PR merges only with main in its branch (a1 (b)). Reworded 2026-11-15: it was asked for a PR merged behind main. wf confirms a squash merge, for each ref of the branch that still exists, by ancestry, an equal tree, or an equal patch-id computed with three lines of context (wf-squash-after-base-moved, whose a3 said to change this "if adjacent-edit escalations show up in practice"). The head that merges now contains main, so the tree proof confirms every ref at that head. The patch-id proof is still reached, and still fails beside an adjacent edit, in two cases: (1) a ref older than the head that merged, in a checkout that held the branch before its last refresh (an attended worktree, a native machine, Jeff''s clone), which is ordinary now that every PR after the first is refreshed before it merges; it matters at Close (FLOW-16) and to wf stale run in that checkout; (2) a merge made round the up-to-date requirement, before the ruleset exists or by his bypass.'
     options:
-      - '(a) Zero context (-U0), that design''s option (b): the proof becomes "the same lines added and removed in each file, in order". A squash GitHub made cannot move a hunk. It is the proof Close relies on before a squashed local branch is deleted (FLOW-16).'
-      - '(b) Keep three lines: each such merge fails its confirmation wherever the branch''s ref still exists; the item stays at its merge step, keeps the PR slot, and waits for Jeff to compare the two changes by hand.'
-    recommended: (a)
+      - '(a) Zero context (-U0), that design''s option (b): the proof becomes "the same lines added and removed in each file, in order". It covers both cases when the refresh merged cleanly; after a refresh that resolved a conflict an older ref has no proof, and a human compares, as today.'
+      - '(b) Keep three lines: through the protected path the tick confirms the merge by the tree; each older ref beside an adjacent edit fails, Close leaves that branch and FLOW-16''s escalation gives Jeff the commands; a merge made round the requirement fails wherever the ref exists, and the item keeps the PR slot until he compares the two changes by hand.'
+      - '(c) Keep three lines, and confirm an older ref as an ancestor of the head that merged, which GitHub keeps as refs/pull/<n>/head after it deletes the branch. It weakens no comparison; it makes the check fetch a ref only GitHub has, where it needs no network today, and it does not cover case 2.'
+    recommended: '(a), for a different reason than the draft''s: merging behind main is now the exception, and a ref older than the last refresh is the rule. The change is one flag. Case 2 was reproduced for the draft (A edits line 5, B line 8, B is squashed after A), and case 1 on 2026-11-15 in a scratch repository: the refreshed head has the squash''s tree, and B''s ref from before the refresh has a change that differs from the squash''s with three lines of context and equals it with none'
   - id: a15
     kind: assumed
     status: confirmed
@@ -170,6 +172,16 @@ questions:
       - '(b) It only reports: Needs Jeff opens with the red main, and the fix is filed when a later step''s gates meet the failure, as that step''s item''s follow-up (FLOW-09 as written), or by Jeff.'
     recommended: '(a): under a1 (a) a red main is the designed outcome of a missed collision, and every open PR''s refresh fails on it until a fix is filed'
     answer: (a) The run that sees a red main files the fix unattended, as the follow-up of the item whose merge it was, at the top of the fixes; nothing is filed when the merge was no item's. Jeff, design review, 2026-11-15.
+  - id: a17
+    kind: assumed
+    status: open
+    question: 'What the cap of 8 (a3 (b)) counts, and what it never stops. New 2026-11-15: the answer to a3 sets the cap and its number and leaves these to the design (design: The waiting limit).'
+    options:
+      - '(a) It counts items in progress that wait on him, each once: a ready human step, an open blocking question, a PR at its merge step (ready, or waiting for its refresh), a spent budget. Queued items are not counted, even one on hold or one whose first step is his review, and neither is a tracked item. It refuses only the start of a queued feature. It never refuses work in progress (so the count can pass 8), a process item, a tracked item, or a fix that follows an item. A security fix that follows no item is not exempt: wf has no mark for it, intake tells him, and he raises limits.waiting_on_human if he wants it started.'
+      - '(b) As (a), but every open item under Needs Jeff counts, queued ones included: 7 on the queue at f090401 (2026-11-15 20:16 UTC) where (a) counts 4. Each idea filed on hold behind the freeze counts, and eight of them stop every start until he answers or drops one.'
+      - '(c) As (a), with no exemption for a fix: while main is red no open PR can be refreshed (a1 (b)), so with 8 waiting he could not clear one by merging, and the fix for main would wait on him clearing something else.'
+      - '(d) As (a), with a mark he sets at intake for a security fix that follows no item (wf new -urgent), which the cap then lets start: one more field. Two such fixes are in the queue now: runtime-cli-project-path and project-config-trust.'
+    recommended: '(a): the loop''s own lever is whether it starts new work, so that is what the cap moves; and a fix for main is what lets his list get shorter'
 history:
   - at: 2026-11-14T20:57:45Z
     by: human/jeff
