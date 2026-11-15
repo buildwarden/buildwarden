@@ -4725,9 +4725,70 @@ commit's time. The item is not done until it is.
 
 ## Design review
 
-The review by Jeff is in progress, as the design step `x1-design`. Its
-outcome is not recorded yet, and no rule change has been put to him by
-name.
+The review by Jeff is in progress, as the design step `x1-design`, and
+its outcome is not recorded. In the second sitting three of the
+fourteen rule changes were put to him by name. The other eleven, one
+open question (a19) and the outcome are still to come, and no entry
+below is the outcome.
+
+- **2026-11-15, second sitting: four questions answered, two choices
+  accepted, one request taken, three rule changes put by name. Not the
+  review's outcome.** Jeff read the design at `63183c9`. The fold-in is
+  the commits after it on this branch.
+  - a10: (a), (d) and (e), as recommended. Every open PR behind `main`
+    is refreshed on every run; a refresh's first claim counts in the
+    run's budget and not the item's; a refresh does not queue a blocking
+    native validation again. The design already proceeded on these.
+    Folded in: the words that called them open are gone, and the
+    options not taken are rejected alternatives in Decision 13.
+  - a14: (a), as recommended: no context lines (`-U0`). Decision 23,
+    with options (b) and (c) as its rejected alternatives.
+  - a17: (d). *Departs* from the recommended (a): "as (a), plus a mark
+    set at intake (`wf new -urgent`) that lets a security fix following
+    no item start. One more field." The count is as (a) has it. Folded
+    in: Decision 24; **The urgent mark** under **The limits**; cases 42
+    to 44; `TestWaitingLimit` extended and `TestUrgent`; **Defaults and
+    overrides**; **Machinery edits**; the Implementation plan; and
+    FLOW-05's paragraph **Waiting on the human**.
+  - a18: (a), as recommended: an ordered area has no `reaches`.
+    Decision 5, with option (b) as its rejected alternative. The clause
+    under FLOW-05 that gave the wording for (b), and the open marks in
+    the map's format, the relation's examples and the Departures table,
+    are gone.
+  - *Accepted, a choice the design made without a question:* no refresh
+    is taken while `main` is recorded red, except for the item named as
+    the fix. He accepted it with its stated cost: a failure the gates
+    would not reproduce also holds every refresh. Recorded in Decision
+    22 and under **`main`'s CI**.
+  - *Accepted, a second such choice:* a refresh is not exempt from a
+    process item's hold. Recorded in Decision 18 and under **Merging**.
+  - *K1's request taken* (`driver-contract` a8, route (i)): "Yes, carry
+    it here." This item's FLOW-02 change also rewords the two bullets
+    of FLOW-02 that name `driver.Driver`, in the wording K1's design
+    offers, which holds before and after K1 merges. The design's
+    judgment of it against LOOP-08 and LOOP-01 is under **Rule
+    changes**, FLOW-02: the bullets are not neutral, they add no
+    assumption about a component, and the neutral rewording of FLOW-02
+    is left to the process item `loop-contract`'s a9 names. That
+    judgment is the review's to confirm (LOOP-08's agent part).
+  - *Rule changes approved by name in this sitting:* FLOW-03, FLOW-04
+    and FLOW-06, each on the wording at `63183c9`. Their proposed
+    wording is byte for byte what it was at that commit. Outside the
+    quoted wording, one mark in FLOW-03's enforcement note changed:
+    "a14, open" is now "a14 (a)". This entry is not the record FLOW-19
+    asks for: the line for each rule change, with its commit, goes in
+    the outcome's entry when the review ends.
+  - *Changed since `63183c9`, so still to be put by name, on the new
+    wording:* FLOW-02 (the two bullets) and FLOW-05 (one clause and one
+    sentence added to **Waiting on the human**; the note under the
+    rule quotes the old ending). The other nine proposed wordings
+    (FLOW-08, -09, -10, -15, -19 and -20, LOOP-01, LOOP-04 and
+    PROFILE-01) are byte for byte as at `63183c9`.
+  - *Raised by the fold-in:* a19, whether the urgent mark is the
+    human's to use, as the design proceeds, or is held to security
+    fixes by the rule's words or by a second field. Open.
+  - *Still to come:* a19; the eleven rule changes not yet put by name;
+    and the outcome.
 
 - **2026-11-15: independent review of the fold-in (`7e14652`), before
   the second sitting.** One reviewer read the folded-in design against
