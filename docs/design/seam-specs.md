@@ -664,13 +664,13 @@ Nothing in any of the five is approved.
    and how they are consumed** says what was tried). The `tool`
    directive keeps the requirement through `go mod tidy` although the
    module holds no Go code, and `go tool bw-conformance-relay-claim`, run
-   in that module, builds the command from the pinned source. `go mod
-   tidy` marks every line `// indirect`, the pin among them, because the
-   module reaches each only through the `tool` directive. The `relay-claim`
-   line is the pin. The `conformance` line is the harness, at the version
-   the pinned release names; it is not a pin, and nobody edits it. The
-   lines below it are the harness's third-party modules, at the versions
-   the release lists. `go.sum` holds the hashes of all of them, the
+   in that module, builds the command from the pinned source.
+   `go mod tidy` marks every line `// indirect`, the pin among them,
+   because the module reaches each only through the `tool` directive.
+   The `relay-claim` line is the pin. The `conformance` line is the
+   harness, at the version the pinned release names; it is not a pin,
+   and nobody edits it. The other lines are the harness's third-party
+   modules, at the versions the release lists. `go.sum` holds the hashes of all of them, the
    harness included, and the Go checksum database verifies each. The
    kit's own `go.mod` gains no dependency.
 
@@ -776,8 +776,8 @@ Nothing in any of the five is approved.
    Go builds one module with one harness, the highest any pin names. A
    specification pinned at a release whose harness is older was then
    tested here with a newer harness than its binaries carry, a set that
-   was not the newest of each could pass every check of the `pin` job
-   and not compile, and tier 1 had one contract path for five seams
+   was not the newest of each could pass every check the `pin` job then
+   had and not compile, and tier 1 had one contract path for five seams
    (a20, option A). *Rejected:* the released binaries, fetched and
    checked against a file of hashes (a20, option B): it is the lock file
    and download script below, and a branch in progress pins a commit
@@ -1441,8 +1441,8 @@ release; its recommended answer is still A.
   what tests a pinned release is built from what that release names. It
   keeps Go's own verification, which B gives up, and it removes the set
   that does not build. What it changed: a7 gains a note and keeps its
-  recorded answer; Decision 7 and Decision 4's list of costs; `make
-  conformance`, `make pin-specs` and the `pin` job; tier 1's seam list,
+  recorded answer; Decision 7 and Decision 4's list of costs;
+  `make conformance`, `make pin-specs` and the `pin` job; tier 1's seam list,
   where each seam has its own contract path and seam 2 two entries; and
   one path in the proposed wording of TEST-05, GLOBAL-08, EXEC-04 and
   two rows of PROFILE-01, re-derived before those four are put to him by
@@ -4188,7 +4188,7 @@ ended, and nothing in this entry records an outcome.
 - **a20, (C): a `go.mod` for each specification, under
   `tools/conformance/<directory>/`.** As recommended. The design had
   stood on A, one `go.mod`, which a7's recorded answer names, and is
-  revised (`56964d5` to the commit that adds this entry). Each command
+  revised (`56964d5` to the head this entry is pushed with). Each command
   is built from exactly what its release names, a mixed set of pins
   always builds, and each seam has its own contract path in tier 1.
 - **The amendments to the umbrella, U1, U2 and U3, by name,** on the
@@ -4201,7 +4201,8 @@ ended, and nothing in this entry records an outcome.
 The wording of U1, U2 in both forms, U3 and TEST-02 is byte for byte
 what it was at `e19cc1f`. A script compares the three table rows, the
 joined row and TEST-02's proposed wording in this file with the same
-lines of that commit, and was run on the commit that adds this entry.
+lines of that commit, and was run on the head this entry is pushed
+with.
 
 What a20's answer changed:
 
@@ -4258,10 +4259,11 @@ changed in status. `design_review` stays `required`,
 two tracked gaps are as they were.
 
 Still to come: the rule changes TEST-05, GLOBAL-08, EXEC-04 and
-PROFILE-01, each to be put to Jeff by name on the wording of the commit
-that adds this entry (PROFILE-01 as the Specifications row in both
-forms, the Consumables row and the tier-1 Specification row of Checks);
-then the outcome. This entry writes none of the lines FLOW-14's check
+PROFILE-01, each to be put to Jeff by name on the wording at the head
+this entry is pushed with, which for the four is the wording of
+`9bbc8ef` (PROFILE-01 as the Specifications row in both forms, the
+Consumables row and the tier-1 Specification row of Checks); then the
+outcome. This entry writes none of the lines FLOW-14's check
 reads for a rule change: those are recorded with the outcome.
 
 ## Consolidation
