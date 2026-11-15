@@ -86,8 +86,12 @@ func leasedTo(f *Feature, worker string, now time.Time) *Step {
 // an in-progress process item holds gets only the steps it already has
 // leased. No worker is offered a merge step (IsMerge): an item waiting on the
 // human's merge is blocked like one waiting on a human step, and the walk
-// goes on (FLOW-05, FLOW-08). It also returns why each in-progress item, and
-// each fix waiting on its parent, it passed over is blocked, for the digest.
+// goes on (FLOW-05, FLOW-08). The cloud is not offered the Plan step of a
+// feature that declares alters_relationships: true and holds no slot while
+// the features that hold one number the limit (altersWait); no other step
+// waits for a slot, so a holder is never stopped by it. It also returns why
+// each in-progress item, and each fix waiting on its parent, it passed over
+// is blocked, for the digest.
 func (s *State) Next(worker string, now time.Time) (*Pick, []Blocked) {
 	var blocked []Blocked
 	cloud := Kind(worker) == "cloud"
@@ -215,10 +219,9 @@ func (s *State) cloudHold(f *Feature, st *Step) string {
 			"escalate to human, FLOW-13)",
 			f.Budget.Spent.Steps, f.Budget.Estimate.Steps)
 	}
-	if f.alters() && st.Phase >= 2 && f.Phase < 6 {
-		if holder := s.altersHolder(f); holder != "" {
-			return fmt.Sprintf("the alters_relationships slot, held by %s (FLOW-05)",
-				holder)
+	if IsPlan(st) && f.alters() && !f.holdsAltersSlot() {
+		if why := s.altersWait(); why != "" {
+			return why
 		}
 	}
 	if base := retryRe.ReplaceAllString(st.ID, ""); base == StepID(f.Round, 6, "merge-main") {
@@ -255,15 +258,56 @@ func (f *Feature) stepDone(phase int, name string) bool {
 	return false
 }
 
-// altersHolder returns another in-progress feature that alters relationships
-// and is past Design, which holds the one slot FLOW-05 allows.
-func (s *State) altersHolder(f *Feature) string {
-	for _, o := range s.Features {
-		if o != f && o.Status == "in_progress" && o.alters() && o.Phase >= 2 {
-			return o.Feature
+// holdsAltersSlot reports whether the feature holds an alters_relationships
+// slot (FLOW-05): it is in progress, is not a process item, declares
+// alters_relationships: true, and one of its Plan steps is done or carries a
+// claim. An expired claim still counts, so the answer reads no clock and wf
+// next and wf validate cannot differ across an expiry; wf release gives the
+// slot back. A done Plan step survives a return to Design (Back), so a
+// feature with a finished plan keeps its slot through one (FLOW-06).
+func (f *Feature) holdsAltersSlot() bool {
+	if f.Status != "in_progress" || f.IsProcess() || !f.alters() {
+		return false
+	}
+	for i := range f.Steps {
+		st := &f.Steps[i]
+		if IsPlan(st) && (st.Status == "done" || st.Lease.ClaimedBy != "") {
+			return true
 		}
 	}
-	return ""
+	return false
+}
+
+// altersHolders returns the features that hold an alters_relationships slot,
+// in FLOW-05 order: the one list Next and Validate both compare with the
+// limit (altersLimit).
+func (s *State) altersHolders() []string {
+	var out []string
+	for _, f := range s.Ordered() {
+		if f.holdsAltersSlot() {
+			out = append(out, f.Feature)
+		}
+	}
+	return out
+}
+
+// altersWait returns why a feature that holds no alters_relationships slot
+// may not take its Plan step, whose claim would make it a holder, or "" when
+// a slot is free (FLOW-05). Only a feature without a slot is asked and only
+// holders are counted, so no two features wait for each other. Under a
+// written limit below 1 there is no slot to wait for, and the reason is the
+// value.
+func (s *State) altersWait() string {
+	limit := s.altersLimit()
+	if limit < 1 {
+		return fmt.Sprintf("limits.alters_relationships %d is below 1 (FLOW-05)", limit)
+	}
+	holders := s.altersHolders()
+	if len(holders) < limit {
+		return ""
+	}
+	return fmt.Sprintf("an alters_relationships slot (limit %d), held by %s (FLOW-05)",
+		limit, strings.Join(holders, ", "))
 }
 
 // NextFor is Next restricted to one feature, for an attended run on it: the
