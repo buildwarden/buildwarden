@@ -749,3 +749,31 @@ gaps:
       added, and CI runs it. Run once project-config-trust has merged, or against
       feat/project-config-trust once it is implemented. prebuilt-artifacts removes the tree lookup
       afterwards and restates this entry.
+  - id: prebuilt-artifacts-windows
+    host: container-any
+    status: open
+    what: >-
+      On the Windows desktop with a real container runtime: go test ./driver/... ./cmd/warden; make build
+      and make images CTR=<runtime> under Git Bash; a default container build with the development
+      images succeeds and its artifacts.json names warden-io-linux-<arch> found beside warden; a copy of
+      the executor in a PATH directory is used and one in the working directory is not; no go.exe is
+      started by warden.
+    design: docs/design/prebuilt-artifacts.md
+    note: >-
+      Tracked, not blocking (design Validation plan, tier 2). The container driver on a Windows host
+      runs the code CI runs on Linux, and the lookup's Windows PATH handling is exercised by the
+      blocking windows-hyperv step on the same machine; make test does not run on Windows in CI. Run
+      once prebuilt-artifacts has merged, or against feat/prebuilt-artifacts once it is implemented.
+  - id: prebuilt-artifacts-qemu-windows
+    host: macos-qemu
+    status: open
+    what: >-
+      A qemu Windows guest build (--guest-os windows) stages dist/warden-io-windows-arm64.exe found by
+      the artifact lookup, and is refused before any VM boots, with the fix naming make build, when
+      the file is moved away.
+    design: docs/design/prebuilt-artifacts.md
+    note: >-
+      Tracked, not blocking (design Validation plan, tier 2). The Windows executor's lookup is validated
+      by the blocking windows-hyperv step, and qemu Windows builds do not complete on main
+      (qemu-windows-guest-package). Run once that is fixed and prebuilt-artifacts has merged, or on
+      its branch if still waiting.

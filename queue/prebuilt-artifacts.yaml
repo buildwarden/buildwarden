@@ -6,7 +6,8 @@ round: feature
 phase: 1
 design: docs/design/prebuilt-artifacts.md
 branch: feat/prebuilt-artifacts
-alters_relationships: null
+alters_relationships: true
+design_review: required
 source: 'Jeff, 2026-11-15, in project-config-trust''s design review (a6): "So warden shouldn''t need its own source directory for anything after componentization. It should instead fully be based on pre-compiled existing binaries/artifacts which are managed and installed and it may have development tooling for helping with that, but it does not manage any compilation. Those are purely development processes"; and, asked what to do now: "Remove compilation now. warden looks for necessary artifacts to be on PATH and searches its own directory if they''re not found or not on or above a minimum version". Filed on his word as its own security item, started now (exempt from the FLOW-20 freeze as a security fix; finding F9 of runtime-cli-project-path''s design). project-config-trust keeps the interim fix (driver.ModuleRoot walks up from the executable only); this item removes ModuleRoot''s use by warden and every go build warden runs: GuestBinary (driver/hostutil.go: warden-io and the relay cross-built for a guest), the container driver''s goBuildLinux and relay_image = dev (driver/container/images.go), relayvm.Find''s tree lookup (driver/relayvm/assets.go). Development tooling (the Makefile) builds and places the artifacts. See project-config-trust''s design, ''F9: the source tree'', for who reaches the tree today and what no release yet ships.'
 steps:
   - id: f0-branch-setup
@@ -23,6 +24,38 @@ steps:
     lease:
       claimed_by: cloud/20261112T230554Z
       expires: 2026-11-15T23:58:07.853123431Z
+  - id: f6-validate-macos-finch
+    phase: 6
+    affinity: host:macos-finch
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (design Validation plan; FLOW-09), on the branch after consolidation, on macOS with finch. warden compiles nothing: a development warden uses the images make images built. (1) make build, then make images CTR=finch; dist/warden doctor prints an Artifacts block that lists warden-io-linux-arm64 beside warden at version dev. (2) with a go first on PATH that records being called, a default build succeeds and its ledger verifies; the recording go was never called; artifacts.json names the executor with found: beside-warden, its version and digest. (3) after finch rmi warden-relay:dev a build is refused before any container, network or work directory exists, and the fix names make images CTR=finch; the same for warden-holder:dev. (4) a copy of dist/warden-io-linux-arm64 in an absolute PATH directory is used (found: PATH); one built with VERSION=0.1.0 in that directory is passed over, the stderr line says so, and the copy beside warden runs; a copy in the working directory with no PATH entry for it is not used; with PATH holding "." and the copy in the working directory, the build is refused with the relative-entry error. (5) relay_image = "dev" in warden.toml uses warden-relay:dev and builds nothing; WARDEN_IMAGE=<ref> pulls that image. Evidence under native/macos-finch/<date>/.'
+  - id: f6-validate-macos-vz
+    phase: 6
+    affinity: host:macos-vz
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (design Validation plan; FLOW-09), on the branch after consolidation. The relay vz runs on the host and the executor image prepare installs come from the artifact lookup. (1) make build; sudo dist/warden image prepare --driver vz installs dist/warden-io-darwin-arm64 and prints the line naming it (sudo resets PATH, so the copy beside warden is the one found). (2) with a recording go first on PATH, a vz build succeeds and its ledger verifies; go was never called; the relay process is a copy of dist/warden-relay-darwin-arm64 and artifacts.json gives its path, version dev and digest. (3) with dist/warden-relay-darwin-arm64 moved away the build is refused before any VM boots, with the fix that names make build. (4) dist/warden doctor --driver vz prints the Artifacts block. Evidence under native/macos-vz/<date>/.'
+  - id: f6-validate-windows-hyperv
+    phase: 6
+    affinity: host:windows-hyperv
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (design Validation plan; FLOW-09), on the branch after consolidation. The Windows executor on the seed comes from the artifact lookup; the relay boot VHDX lookup is untouched. (1) make build under Git Bash produces dist/warden-io-windows-amd64.exe; warden doctor --driver hyperv prints the Artifacts block and the relay boot VHDX line as on main. (2) a non-elevated durable build and an elevated ephemeral build succeed and verify; the warden-io.exe on the seed has the digest artifacts.json records; no go.exe is started (a recording go.exe first on PATH). (3) with dist/warden-io-windows-amd64.exe moved away the build is refused before any VM or switch is created, and the fix names make build. (4) a copy of the executor in a PATH directory is used (found: PATH); a copy in the working directory, which is not on PATH, is not used. (5) go test ./driver/... ./cmd/warden passes on Windows. (6) tools/relay-vm/hyperv/refresh-cache.sh --check reports as on main. Evidence under native/windows-hyperv/<date>/.'
+  - id: f6-validate-qemu-any
+    phase: 6
+    affinity: host:qemu-any
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: 'Blocking native validation (design Validation plan; FLOW-09), on the branch after consolidation. The relay binary, the relay VM and direct-boot assets come from the artifact lookup, and direct boot delivers the executor per build (design Decision 8). (1) tools/relay-vm/build-initramfs.sh and tools/build-vm/build-initramfs.sh, then make build: dist holds relay-vm-vmlinuz, relay-vm-initramfs.cpio.gz, build-vm-vmlinuz, build-vm-initramfs.cpio.gz and its .link-channel stamp; warden doctor --driver qemu prints the Artifacts block. (2) with a recording go first on PATH, a direct-boot build and a cloud-image build succeed and verify; go was never called; artifacts.json lists the relay, the executor and each asset file. (3) the direct-boot build runs the executor appended per build: once with a rebuilt initramfs that carries none, and once with an initramfs built by main''s script, which still carries a baked one. (4) with the dist assets moved away a build is refused before any VM boots, and the fix names the script and make build; with the stamp removed the stale-stamp message appears. (5) run from a working directory that is another buildwarden checkout whose tools/relay-vm/output is filled, with dist assets moved away: still refused, nothing of that checkout is used. Evidence under native/qemu-any/<date>/.'
 budget:
   estimate:
     runs: 4
@@ -30,7 +63,76 @@ budget:
   spent:
     runs: 0
     steps: 2
-questions: []
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: 'The lookup, made precise (design: The lookup; Decision 2). Jeff''s sentence gives the two places and the trigger: "warden looks for necessary artifacts to be on PATH and searches its own directory if they''re not found or not on or above a minimum version". Proceeding with: the first directory on PATH that holds the artifact is the PATH candidate and no later entry is tried; a candidate reached through a relative or empty PATH entry stops the lookup with an error, as driver-contract''s lookup does; a PATH candidate that fails its check is passed over, with a stderr line on every run, for the copy beside warden; if that is missing or fails too, a fixable error names both; no flag, variable or config key names an artifact''s file; a kernel and initramfs set uses the same lookup as an executable, the whole set from one directory; no execute permission is asked for, since the host runs almost none of these files; a newer artifact is used without comment; every build writes <output>/artifacts.json (path, version, digest, found: PATH or beside-warden, what was passed over) and warden doctor --driver <name> lists the driver''s artifacts; the lookup never runs a file.'
+    options:
+      - '(A) as stated: driver-contract''s lookup plus exactly what the sentence adds (a check, and the second place when it fails)'
+      - '(B) every PATH entry in turn until one is acceptable, then beside warden: more forgiving, and which file wins is harder to predict'
+      - '(C) executables by this lookup, kernels and initramfs only beside warden: PATH then holds only programs, at the cost of a second rule'
+    recommended: '(A) as stated'
+  - id: a2
+    kind: assumed
+    status: open
+    question: 'The minimum version, and BOOT-02 (design: Decision 3; The version; Rule changes; Bootstrap comparison). Proceeding with: the minimum for an executor or a relay binary is the version of the warden that looks for it, with nothing kept by hand in code; a newer artifact is accepted; a development warden (dev) takes only dev and a release never takes dev. BOOT-02 on main says the executor "matches the orchestrator''s version"; at or above is not that, so BOOT-02 is amended ("its version is at or above the orchestrator''s: an executor that states an older version, or none, is not delivered"), with a Bootstrap comparison the review must accept (BOOT-07). Amending a BOOT rule makes alters_relationships true, so this item takes the third of FLOW-05''s three slots (driver-contract and seam-specs hold two). driver-contract amends the same sentence, so the design gives this item''s wording in both settings (as main has BOOT-02, and as driver-contract leaves it) and asks for both to be approved; if this item merges first, driver-contract re-quotes its amendment on this wording.'
+    options:
+      - '(A) as stated: at or above warden''s own version, BOOT-02 amended; it is "on or above a minimum version" in Jeff''s words, and the form that survives a driver living in its own repository (K3)'
+      - '(B) exactly warden''s version: a newer file on PATH is passed over like an older one; BOOT-02 stands as written, no rule change, no Bootstrap comparison, alters_relationships false; a customized executor must then be built with the release''s own version'
+      - '(C) a minimum per artifact, kept in code and lower than warden''s version; BOOT-02 amended as in (A); a table to keep, and a release could then run an older executor from PATH in place of the one it shipped with'
+    recommended: '(A) at or above warden''s own version, with BOOT-02 amended'
+  - id: a3
+    kind: assumed
+    status: open
+    question: 'How an executable artifact states its version without being run (design: Decision 4; The version). Most of these files are for another OS or architecture and cannot run on the host, and running a candidate to ask its version would execute a file the lookup may then reject. Proceeding with: one line of bytes in the file, buildwarden-version=<version>; set when the binary is linked (make build sets dev unless VERSION is given; goreleaser sets the release) and found by scanning the file; it is also what warden --version prints, so a binary has one version. Tried in a scratch module for linux/amd64, linux/arm64, windows/amd64, windows/arm64 and darwin/arm64 with -trimpath -s -w: each binary holds the line exactly once. A binary built with a bare go build states no version and is not accepted.'
+    options:
+      - '(A) as stated: one version, said by whoever builds the binary, the same in any language and under any way of building; cost: a format of this project''s own, and development builds are all dev, so a stale file left in dist/ beside a rebuilt warden is not detected (main rebuilt it automatically; make build rebuilds everything)'
+      - '(B) Go''s build information, read with debug/buildinfo (what go version -m prints; tried: a binary built in this worktree states v0.6.1-0.20261115193423-ad4ea5002e24, read from a Windows and a macOS binary on Linux): nothing to invent, development builds are ordered by commit, and the file''s OS and architecture can be checked; cost: no version without a git checkout with tags (go run, a source archive and -buildvcs=false give (devel); a shallow clone gives v0.0.0-...), a second version beside the one warden --version prints, and Go only, so a relay in another language cannot state it'
+      - '(C) a sidecar file beside each artifact, or one manifest per directory: works for any file; a copied binary loses its sidecar, and a manifest in a PATH directory is shared with whatever else is installed there'
+    recommended: '(A) the version line in the file'
+  - id: a4
+    kind: assumed
+    status: open
+    question: 'The container driver''s images, now that warden builds none (design: Decision 6; The relay image, the holder and the sidecar). On main a development warden, and any warden given relay_image = "dev", compiles the relay and builds an image per build, and a development warden also builds the holder and the iptables sidecar images. Proceeding with: a development warden uses warden-relay:dev, warden-holder:dev and warden-netns:dev from the runtime''s local images, built by a new make images CTR=<runtime> (the relay''s from Dockerfile.relay, the file the published image is built from), never pulled and never built by warden; when one is absent the build is refused before anything is created, with the fix naming make images; relay_image = "dev" and WARDEN_IMAGE=dev keep working and mean the local warden-relay:dev for any warden; a release''s defaults are untouched (the relay pulled from ghcr.io/buildwarden/relay:latest, the holder and sidecar by compiled-in digest); no version is checked on an image.'
+    options:
+      - '(A) as stated'
+      - '(B) as (A), and the value dev is removed: a release refuses it with the fix, and a development warden needs no key to use its images'
+      - '(C) as (A), and each development image carries a version label that warden checks like an executable''s; it would catch only a stale development image, which make images cures'
+    recommended: '(A) as stated; the release default staying the moving tag :latest is as on main and is left to seam 8'
+  - id: a5
+    kind: assumed
+    status: open
+    question: 'Boot assets, and what a release ships (design: Decisions 5 and 11; Releases and install). No release carries the relay VM or direct-boot kernel and initramfs for qemu or Firecracker, and there is no Windows release; on main those drivers work only from a source tree. Proceeding with: the boot-asset sets are found by the same lookup, each whole set from one directory, and checked by the link-channel stamp where the set has one (it is the staleness check they already have; requiring warden''s version would mean a kernel rebuild per release); make build copies the assets a tree has built into dist/; no release ships them, as today, and the error says so and how to build and place them; the release archive does gain every executable under the name it is looked up by, and install.sh installs them all, so an installed release has the relay and executor for qemu and Firecracker and lacks only the boot assets; Hyper-V''s relay boot VHDX stays in the hyperv cache or WARDEN_RELAY_BOOT_VHDX, since warden neither compiles it nor looks in a tree for it.'
+    options:
+      - '(A) as stated: the item removes compilation and changes no release''s reach; the relay''s appliance is track M''s to release (seam 8) and a driver''s own boot assets are its repository''s (K3, K4)'
+      - '(B) the release workflow also builds the qemu and Firecracker boot assets and ships them in the archive, so an installed release runs those drivers with nothing built; a kernel build and Alpine downloads in every release, and more to validate natively'
+      - '(C) as (A), and every boot-asset set also gets a version file and a minimum in code, so one rule covers every artifact'
+    recommended: '(A) as stated'
+  - id: a6
+    kind: assumed
+    status: open
+    question: 'qemu''s direct boot bakes the executor into its initramfs (design: Decision 8). Found while taking the inventory: tools/build-vm/build-initramfs.sh compiles warden-io into the direct-boot initramfs and the qemu driver boots it as it is, so the executor of a qemu direct-boot build is the one from the day the asset was built. That is not "delivered per build" (BOOT-02), it is not in the deviation register, and it would be the one executor the lookup never sees. Proceeding with: fixed in this item; the qemu driver appends the executor the lookup found to the initramfs per build, as Firecracker does (relayvm.AppendFileCPIO), and the script stops compiling it; the qemu / Linux row of bootstrap.md''s mapping is corrected to say so. It brings a driver into line with the model and is not a model change (BOOT-07).'
+    options:
+      - '(A) fixed here: a dozen lines in a driver this item already changes and validates on qemu-any'
+      - '(B) filed as its own item; this item''s Security note then says the direct-boot executor is the asset''s and is not found by the lookup'
+    recommended: '(A) fixed here'
+  - id: a7
+    kind: assumed
+    status: open
+    question: 'The release''s file names (design: Decision 9; What stops working, case 7). The archive names the Linux binaries warden-io and warden-relay, the container driver of a release reads warden-io, and every VM driver asks for warden-io-linux-<arch> and warden-relay-linux-<arch>, which the archive does not have. Proceeding with: the archive carries warden-io-<os>-<arch> and warden-relay-<os>-<arch> and no longer warden-io and warden-relay; install.sh installs every artifact in the archive and leaves an older warden-io where it is; a release upgraded by copying only warden gets an error at once that names the older install''s warden-io and the fix (on main the new warden silently runs the old executor); that detection is kept until 1.0 under TRANSITIONAL(artifact-names), as the two configuration items keep theirs.'
+    options:
+      - '(A) as stated: one name per file, the same in dist/, in the archive and on PATH'
+      - '(B) the archive carries both names for the Linux binaries until 1.0; nothing reads the old names, so it only delays the day a hand-made upgrade script fails'
+    recommended: '(A) as stated'
+  - id: a8
+    kind: assumed
+    status: open
+    question: 'How this item waits for project-config-trust (design: How it sits with the other items). Its merge comes after that item''s (Jeff, that item''s a6); both edit driver/hostutil.go, two drivers'' test files and the same doc sentences, and this item deletes what that one adds (ModuleRoot, the test-only setter of the tree, two TestMains, two messages, three doc sentences). driver-contract (K1) is not held behind this item, by the same answer; the two may merge in either order and the second consolidates. Proceeding with: this item''s Plan starts after project-config-trust''s PR has merged, held as K1 is: a blocking question that names the merge, with a human step that f2-plan needs, written by the session that records this design''s review (a blocking question raised by Design would hold Design itself).'
+    options:
+      - '(A) as stated: Implement then deletes code that is on main, and the hold costs nothing if that item merges first anyway'
+      - '(B) no hold: Plan and Implement run now on main at ad4ea50, and Publish''s merge of main resolves the overlap; sooner if that item is slow, and the conflicts are deletions'
+    recommended: '(A) Plan waits for project-config-trust''s merge'
 history:
   - at: 2026-11-15T21:57:17Z
     by: human/jeff
