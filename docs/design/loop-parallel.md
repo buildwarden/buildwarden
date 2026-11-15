@@ -493,12 +493,14 @@ say.
       would leave the branch in that checkout and hand Jeff the commands
       to compare and delete it by hand (FLOW-16).
 24. **No queued feature starts while 8 or more items wait on Jeff** (a3
-    (b), Jeff, 2026-11-14). The count is the in-progress items under
-    **Needs Jeff**, each once. The number is `limits.waiting_on_human`,
+    (b), Jeff, 2026-11-14). The count is the items that wait on the
+    human, each once, as **The waiting limit** defines them
+    (`WaitsOnHuman`); **Needs Jeff** lists them, and also lines that are
+    not counted. The number is `limits.waiting_on_human`,
     8 when unset. The guard refuses the claim that would start a queued
     feature, for every worker. Work in progress, a process item, a
-    tracked item and a fix that `follows` an item are never refused
-    (a17).
+    tracked item, a fix that `follows` an item, and the fix `main.yaml`
+    names for a red `main` are never refused (a17).
     - *Rejected: no cap, only the count* (the draft's recommendation).
       Jeff's answer.
     - *Rejected: counting the lines under **Needs Jeff***. One item with
@@ -512,6 +514,11 @@ say.
     - *Rejected: holding a regression's fix at the limit.* While `main`
       is red no open PR can be refreshed, so the list the cap protects
       could not get shorter by merging (a1 (b)).
+    - *Rejected: counting a `human` step of a phase the item has not
+      reached.* `wf` offers such a step early (FLOW-04), and its note
+      says when it is due. Counted, it would take one of the 8 places
+      for the item's whole time in progress while nothing waits on
+      Jeff.
 
 ## Questions
 
@@ -619,7 +626,7 @@ the answer to a3.
   starts while 8 or more items wait on you." It departs from the
   recommendation. Folded in: Decision 24; **The waiting limit** under
   **The limits**, which says what counts, where the number is kept, what
-  is refused and what never is; cases 25 to 31; FLOW-05's proposed
+  is refused and what never is; cases 25 to 31, 39 and 40; FLOW-05's proposed
   wording; `limits.waiting_on_human` under **Defaults and overrides**;
   the count line of `QUEUE.md`. What the answer leaves open (what counts
   as waiting, and whether a fix starts all the same) is decided there
@@ -991,18 +998,23 @@ the answer to a3.
   2026-11-15: Jeff's answer to a3 sets the cap and its number and leaves
   these to the design (**The waiting limit**). Proceeding with (a);
   confirm.
-  - (a) It counts items in progress that wait on him, each once: a ready
-    `human` step, an open blocking question, a PR at its merge step
+  - (a) It counts items in progress that wait on him, each once: a
+    `human` step that is ready and of a phase the item has reached, an
+    open blocking question, a PR at its merge step
     (mergeable or waiting for its refresh), a spent budget. Queued items
     are not counted, even one on hold or one whose first step is his
-    review, and neither is a tracked item. It refuses only the start of
+    review, and neither is a tracked item, nor a `human` step of a later
+    phase that `wf` offers early (this item's `x4-state`, `seam-specs`'
+    `f6-release-specs`). It refuses only the start of
     a queued feature. It never refuses work in progress (so the count
-    can pass 8), a process item, a tracked item, or a fix that `follows`
-    an item. A security fix that follows no item is not exempt: `wf` has
+    can pass 8), a process item, a tracked item, a fix that `follows`
+    an item, or the fix `main.yaml` names for a red `main`, whether the
+    tick filed it or he did at intake. Any other security fix that
+    follows no item is not exempt: `wf` has
     no mark for it, intake tells him, and he raises
     `limits.waiting_on_human` if he wants it started.
   - (b) As (a), but every open item under **Needs Jeff** counts, queued
-    ones included. On the queue as it is at `f090401` (2026-11-15 20:16
+    ones included. On the queue as it was at `f090401` (2026-11-15 20:14
     UTC) that is 7 where (a) counts 4: two queued process items whose
     first step is his review, and `configuration-bugfixes`, filed on
     hold behind the freeze that day. Each idea filed on hold counts, and
@@ -1013,9 +1025,14 @@ the answer to a3.
     something else.
   - (d) As (a), with a mark he sets at intake for a security fix that
     follows no item (`wf new -urgent`), which the cap then lets start:
-    one more field. Two such fixes are in the queue now, filed on his
+    one more field. Two such fixes are in the queue, filed on his
     word on 2026-11-14 and 2026-11-15: `runtime-cli-project-path`, in
-    progress, and `project-config-trust`, queued.
+    progress, and `project-config-trust`, queued at `f090401` and in
+    progress since its first claim at 20:30 UTC that day (`5f525cb`).
+  - (e) As (a), but a `human` step counts as soon as `wf` offers it,
+    whatever its phase. `x4-state` then holds one of the 8 places from
+    the day this item's review is approved until its PR has merged, and
+    `f6-release-specs` one from `seam-specs`' review until its Publish.
 
   Recommended: (a). The loop's own lever is whether it starts new work,
   so that is what the cap moves; and a fix for `main` is what lets his
@@ -1655,11 +1672,10 @@ it counts by no relation, nothing holds it, and it stops one thing.
 
 - **What it counts.** The items that *wait on the human*: every item that
   is in progress, is not tracked, and has at least one of
-  1. a `human` step it could take now (pending, and every step it needs
-     done; a `human` step is offered whatever the phase): a design
+  1. a `human` step that is due: pending, every step it needs done, and
+     of a phase the item has reached (`st.Phase <= f.Phase`): a design
      review, the answer to a blocking question, an escalation, a step
-     that records a merge in another repository (a6), or any other, such
-     as this item's `x4-state`;
+     that records a merge in another repository (a6);
   2. an open blocking question;
   3. a pull request that waits for his merge: the item is at its merge
      step with a PR recorded, whether the PR can be merged now or needs
@@ -1667,14 +1683,22 @@ it counts by no relation, nothing holds it, and it stops one thing.
   4. a spent runaway budget (FLOW-13).
 
   An item counts once, however many of these it has: an item with a
-  design review, two open questions and an escalation is one. These are
-  the in-progress items `QUEUE.md` lists under **Needs Jeff**, and the
-  number that section opens with.
+  design review, two open questions and an escalation is one. This is
+  the list `WaitsOnHuman` returns: `Guard` counts it, and it is the
+  number **Needs Jeff** opens with. That section also carries lines
+  that are not counted, under their own heading.
 - **What it does not count.** A queued item, even one whose first step is
   his (a queued process item's design review) or one that intake filed
   on hold (the freeze, FLOW-20; an adoption that waits for its release,
   a8): its blocking question parks it, and the loop has put no work
-  behind it. `QUEUE.md` lists these apart. A tracked item (a7). An item
+  behind it. `QUEUE.md` lists these apart. A tracked item (a7). A
+  `human` step of a phase the item has not reached: `wf` offers it
+  early so that Jeff can prepare (FLOW-04), and nothing waits on it
+  yet. This item's `x4-state` is one (phase 4; its note says "after
+  this item's PR has merged ... not before"), and `seam-specs`'
+  `f6-release-specs` another (phase 6; "not before Review (phase 4) is
+  done"). Counted, each would take one of the 8 places for the item's
+  whole time in progress. An item
   sent back to Implement or Design with its PR open: that work is the
   loop's until it is published again. A red `main` or a map that differs
   from `main`: they open **Needs Jeff** and are not items.
@@ -1701,7 +1725,15 @@ it counts by no relation, nothing holds it, and it stops one thing.
     a red `main` fails every refresh, so while it is red no open PR can
     be brought up to date, and Jeff could not shorten his own list by
     merging. `wf` knows a fix by `follows`, which also covers a follow-up
-    that finishes an item. A security fix that follows no item
+    that finishes an item.
+  - The fix for a red `main`: the item `main.yaml` names as the
+    follow-up, while `main` is recorded red, whether or not it
+    `follows` an item. When the red commit was no item's the tick files
+    nothing (a16), and the fix Jeff files at intake has no `follows`;
+    intake records it with `wf main -followup <slug>`. Held at the
+    limit, it would be the cap stopping the one item that lets his list
+    get shorter.
+  - Any other security fix that follows no item
     (`runtime-cli-project-path`, in the queue now, is one) carries no
     mark `wf` can read, so it is not exempt: intake says so when it
     files one while the count is at the limit, and the number in
@@ -1790,6 +1822,8 @@ code these cases run through.
 | 36 | A PR's refresh has passed and it is ready; before Jeff merges it, `main` moves again | n/a | It waits for a refresh again: the next `wf stale` seeds one. Under a10 (d) that costs the item no budget |
 | 37 | Jeff uses GitHub's **Update branch** on a PR that is behind, before any session has run `wf stale` | n/a | The next `wf stale` finds the branch current and seeds nothing; the PR is ready when CI is green on the new head. No consolidation pass ran over what landed; that is his choice |
 | 38 | Two disjoint features. One is in Publish, `f6-merge-main` and `f6-consolidate` done, waiting for `f6-validate-windows-hyperv`; Jeff merges the other's PR | Arises only when a process item's PR or a hand merge moves `main`: `f6-open-pr`'s done-when then fails on `current main merged`, and no step merges `main` again | `wf stale` adds `f6-refresh` to it and makes `f6-open-pr` need it. The refresh merges `main`, runs the gates and the pass, and pushes; the host validates when its session runs; `f6-open-pr` then passes its gate. The item holds the PR slot throughout |
+| 39 | Seven wait. An eighth item, in Implement, has only a pending `human` step of phase 6 (`f6-release-specs`) | n/a | Seven: a `human` step of a phase the item has not reached is not counted. A queued feature starts. `QUEUE.md` lists the step under the lines that are not counted |
+| 40 | Eight wait. `main` is red by a commit that is no item's, so the tick filed nothing; Jeff files the fix at intake, which records it with `wf main -followup` | n/a | Started: `main.yaml` names it as the fix for the red `main`, though it follows no item. Its refresh is also the one refresh taken while `main` is red (case 35) |
 
 ### `wf commit`: pushing queue state
 
@@ -2227,7 +2261,10 @@ loop reads it (Decision 22).
   the item whose pull request the `red_since` commit merged (its subject
   carries the PR number, which a queue file records), at the top of the
   fixes, with that item's repositories and areas (a16, FLOW-09). When the
-  commit is no item's, it files nothing. A failure that does not
+  commit is no item's, it files nothing; the fix Jeff then files at
+  intake is recorded with `wf main -followup <slug>`, so that the
+  waiting limit does not hold it and its own refresh is taken
+  (**The waiting limit**). A failure that does not
   reproduce is a flaky test and goes the way TEST-04 says, in the fix's
   Design.
 - **What it holds: every refresh but the fix's.** `cloudHold` refuses a
@@ -2345,7 +2382,7 @@ declared, it renders as:
     - **seam-specs**: design review (`f2-design-review`, FLOW-19) · [design](https://github.com/buildwarden/buildwarden/blob/feat/seam-specs/docs/design/seam-specs.md)
     - **driver-contract**: design review (`f2-design-review`, FLOW-19) · [design](https://github.com/buildwarden/buildwarden/blob/feat/driver-contract/docs/design/driver-contract.md)
 
-    ### Queued or tracked, not counted
+    ### Not counted: queued, tracked, or not yet due
 
     - **loop-native-lead**: design review (`x1-design`, FLOW-19)
     - **loop-repository**: design review (`x1-design`, FLOW-19)
@@ -2406,7 +2443,7 @@ after the Hyper-V pilot's PR has merged, with a relay task tracked:
 
     - **adopt-relay-qemu**: design review (`f2-design-review`, FLOW-19) · [design](...)
 
-    ### Queued or tracked, not counted
+    ### Not counted: queued, tracked, or not yet due
 
     - **relay-m1a** (tracked): buildwarden/buildwarden-relay#12, your merge (`t2-merge`)
 
@@ -2427,9 +2464,10 @@ What is new, by section:
   of the map with `main`.
 - **Needs Jeff** opens with the count of in-progress items waiting on
   him, by kind, beside the limit (a3 (b), Decision 24); at the limit it
-  says that no queued feature starts until one clears. Queued items that
-  need him, which the limit does not count, are listed after the others
-  under their own heading. Before the count it says `main is red at <sha> since <sha>`, with
+  says that no queued feature starts until one clears. Lines the limit
+  does not count are listed after the others under their own heading:
+  a queued item that needs him, a tracked item's step, and a `human`
+  step of a phase its item has not reached, with that phase. Before the count it says `main is red at <sha> since <sha>`, with
   the run and the follow-up, when `main.yaml` says so, and lists any
   holders over a limit. It lists the open PRs first, in two lists, each
   in FLOW-05's order (Decision 21). **Ready to merge**: the item is at
@@ -2456,6 +2494,8 @@ What is new, by section:
 - **Backlog** gains Repositories and Areas, and, while the count is at
   the limit, a line above the table:
   `No queued feature starts: 8 items wait on you (limit 8). Fixes and process items still start.`
+  (A fix is one that `follows` an item, or the one `main.yaml` names
+  for a red `main`.)
 - A **Workers** section (each machine's last run and its led items) is
   `loop-native-lead`'s.
 
@@ -2574,7 +2614,9 @@ By file. Each cites the rule and does not restate it (FLOW-14).
   with `-follows` will, and the number is Jeff's to change. The follow-up
   path: no `-areas`, so `wf new -follows` takes
   the followed item's repositories and areas; a fix for a red `main`
-  follows the item whose merge it was.
+  follows the item whose merge it was, and one Jeff files for a red
+  commit that was no item's is recorded with
+  `dist/wf main -followup <slug>` (FLOW-05, FLOW-09).
 - `.claude/skills/workflow-human/SKILL.md`. Its worker stays
   `human/<name>`, which cannot complete a `cloud` merge step, so it does
   not confirm merges. The review's overview gains the repositories, the
@@ -2795,6 +2837,22 @@ This item declares no `holds` (Decision 17, a13).
   imports: they were near while `cli` had its `reaches`, and are
   disjoint now. Where Jeff wants two such items in turn, he names the
   collision (`wf relate`).
+- **The fix for a red `main` beside a related open PR.** The fix takes
+  the areas of the item it follows, or the ones Jeff gives it, so it can
+  collide with, or be near, an item whose PR is open. That PR holds the
+  PR slot. If it is behind the red `main` its refresh is not taken, so
+  it cannot be made ready, and the fix cannot open its own PR: each
+  waits for the other. `wf` does not settle this by itself; the PR slot
+  has no exception for a fix. `wf next` prints both lines
+  (`the PR slot, held by <item>` for the fix,
+  `main is red at <sha>` for the holder), and **Needs Jeff** shows them
+  beside the red `main`. Jeff has two ways out. He closes the open PR:
+  an attended session removes `pr` from that item's queue file on his
+  word, the item gives the slot up, the fix publishes and merges, and
+  the item is published again on the fixed `main`. Or, when the open
+  PR's branch already contains the red commit and its own checks are
+  green, he merges it first: it is ready, and the fix then takes the
+  slot.
 - **Merge order.** A related item cannot open a PR while another's is
   recorded and unmerged, a returned item's included, so related PRs are
   never open together and order matters only among disjoint ones. There
@@ -3335,12 +3393,14 @@ definition that `alters-slot` built and FLOW-20's Limit bullet carried.
 > **Waiting on the human.** A fourth limit bounds what waits on the
 > human: a queued feature does not start while that many items, or more,
 > wait on the human. An item
-> waits on the human when it is in progress and has a `human` step it
-> could take now, an open blocking question, a pull request waiting for
+> waits on the human when it is in progress and has a `human` step of a
+> phase it has reached that could be taken now, an open blocking
+> question, a pull request waiting for
 > the merge, or a spent budget (FLOW-13); it counts once, and a tracked
 > item does not count. This limit counts by no relation and stops only a
 > start: work in progress goes on, so the count can pass it. A fix that
-> `follows` an item, a process item and a tracked item start whatever
+> `follows` an item, the fix for a failing `main` (FLOW-09), a process
+> item and a tracked item start whatever
 > the count.
 >
 > The in-progress limit, the `alters_relationships` limit and the waiting
@@ -3742,13 +3802,18 @@ whether it is still true with the proposed wording.
     refused while a related higher-priority one waits, ready or not; the
     highest-priority waiting item is refused only by a holder; over
     generated arrivals no waiting item is passed over without end).
-  - `TestWaitingLimit` (cases 25 to 31): the count is each in-progress
+  - `TestWaitingLimit` (cases 25 to 31, 39 and 40): the count is each in-progress
     item once, for a ready `human` step, an open blocking question, a PR
     at its merge step, a spent budget; a queued item on hold, a queued
-    process item and a tracked item are not counted; at 8 a queued
+    process item, a tracked item and an in-progress item whose only
+    `human` step is of a later phase are not counted (case 39), and
+    that item counts once it reaches the step's phase; at 8 a queued
     feature is refused for a `cloud` and a `host:` worker and through
-    `wf commit`'s re-asked claim; a fix with `follows`, a process item, a
-    tracked item and every step of an item in progress are not; `wf
+    `wf commit`'s re-asked claim; a fix with `follows`, the item
+    `main.yaml` names as the follow-up while `main` is red, with no
+    `follows` (case 40), a process item, a
+    tracked item and every step of an item in progress are not; the
+    same item is refused once `main.yaml` records `main` green; `wf
     validate` passes at 11 waiting; unset is 8, 0 and -1 fail `Load`;
     and `QUEUE.md`'s opening count is the number `Guard` used.
   - `TestGuardEveryWorker` (case 5): it replaces the host half of
