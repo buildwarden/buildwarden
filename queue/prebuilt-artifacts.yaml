@@ -59,16 +59,24 @@ steps:
   - id: f2-design-review
     phase: 2
     affinity: human
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-answer-q1
+    phase: 2
+    affinity: human
     status: pending
     lease:
-      claimed_by: human/jeff
-      expires: 2026-11-16T01:21:41.337235627Z
+      claimed_by: ""
+      expires: null
   - id: f2-plan
     phase: 2
     affinity: cloud
     status: pending
     needs:
       - f2-design-review
+      - f2-answer-q1
     lease:
       claimed_by: ""
       expires: null
@@ -112,55 +120,69 @@ questions:
     answer: (A) At or above warden's own version; BOOT-02 amended. As recommended. Answered 2026-11-15.
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: 'How an executable artifact states its version without being run (design: Decision 4; The version). Most of these files are for another OS or architecture and cannot run on the host, and running a candidate to ask its version would execute a file the lookup may then reject. Proceeding with: one line of bytes in the file, buildwarden-version=<version>; set when the binary is linked (make build sets dev unless VERSION is given; the release build sets the release) and found by scanning the file; it is what warden --version prints, and warden-io and the relay gain a --version that prints theirs, because a variable no reachable code reads is dropped by the linker (tried: imported and unread, 0 lines in the binary; printed by a --version branch with -trimpath, 1; without -trimpath, 3 identical, because Go''s build information records the linker flags; a bare go build, 0). Every build uses -trimpath; the reader takes all matches, identical ones are one statement, and a file with none or with two that differ states no version and is not accepted.'
     options:
       - '(A) as stated: one version, said by whoever builds the binary, the same in any language and under any way of building; cost: a format of this project''s own, and development builds are all dev, so a stale file left in dist/ beside a rebuilt warden is not detected (main rebuilt it automatically; make build rebuilds everything)'
       - '(B) Go''s build information, read with debug/buildinfo (what go version -m prints; tried: a binary built in this worktree states v0.6.1-0.20261115193423-ad4ea5002e24, read from a Windows and a macOS binary on Linux): nothing to invent, development builds are ordered by commit, and the file''s OS and architecture can be checked; cost: no version without a git checkout with tags (go run, a source archive and -buildvcs=false give (devel); a shallow clone gives v0.0.0-...), a second version beside the one warden --version prints, and Go only, so a relay in another language cannot state it'
       - '(C) a sidecar file beside each artifact, or one manifest per directory: works for any file; a copied binary loses its sidecar, and a manifest in a PATH directory is shared with whatever else is installed there'
     recommended: (A) the version line in the file
+    answer: (A) The line in the file, with --version on the three programs and -trimpath. As recommended. Answered 2026-11-15.
   - id: a4
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The container driver''s images, now that warden builds none (design: Decision 6; The relay image, the holder and the sidecar). On main a development warden, and any warden given relay_image = "dev", compiles the relay and builds an image per build, and any warden with no digest compiled in builds the holder and the iptables sidecar images tagged by content hash, so no checkout runs another''s images. Proceeding with: make images CTR=<runtime> builds the three images (the relay''s from Dockerfile.relay, the file the published image is built from), tags each by the hash of its inputs (warden-relay-dev:<hash>, warden-holder-dev:<hash>, warden-netns-dev:<hash>) and writes the three references to dist/warden-dev-images.json; a warden with no reference compiled in runs exactly those, read from beside itself only, never pulled and never built by warden; when the record or an image is absent the build is refused before anything is created, with the fix naming make images; relay_image = "dev" and WARDEN_IMAGE=dev keep working and mean the recorded relay image; a release''s defaults are untouched (the relay pulled from ghcr.io/buildwarden/relay:latest, the holder and sidecar by compiled-in digest); no version is checked on an image, and a rebuilt relay cannot run from a stale image because its tag changes. The first draft had three fixed tags (option B); the review showed that warden clean, on main and in every release, removes warden-relay:dev, and that one set per runtime is shared by every checkout on a machine, so a native session testing several branches could pass on another branch''s relay.'
     options:
       - '(A) as stated: each checkout runs the images it built, and no warden clean, old or new, removes them'
       - '(B) three fixed tags, warden-relay:dev, warden-holder:dev and warden-netns:dev, and no record: less to build; one set per runtime is shared by every checkout, warden clean must be taught to skip dev and every older warden''s clean still removes the relay''s, and each native container case must run make images from the branch under test immediately before its builds and record the image IDs'
       - '(C) as (A), and the value dev is removed: a release refuses it with the fix, and a development warden needs no key to use its images'
     recommended: (A) as stated; the release default staying the moving tag :latest is as on main and is left to seam 8
+    answer: (A) Content-hash-tagged -dev images recorded beside warden; relay_image = dev means the recorded relay image. As recommended. Answered 2026-11-15.
   - id: a5
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Boot assets, and what a release ships (design: Decisions 5 and 11; Releases and install). No release carries the relay VM or direct-boot kernel and initramfs for qemu or Firecracker, and there is no Windows release; on main those drivers work only from a source tree. Proceeding with: the boot-asset sets are found by the same lookup, each whole set from one directory; a directory is a candidate when it holds the set''s kernel and initramfs files, and the link-channel stamp is the check, applied where and when it is today (only to a build that boots the stamped file, which is direct boot; requiring warden''s version would mean a kernel rebuild per release); make build copies the assets a tree has built into dist/; no release ships them, as today, and the error says so and how to build and place them; the release archive does gain every executable under the name it is looked up by, so an installed release has the relay and executor for qemu and Firecracker and lacks only the boot assets; Hyper-V''s relay boot VHDX stays in the hyperv cache or WARDEN_RELAY_BOOT_VHDX, since warden neither compiles it nor looks in a tree for it.'
     options:
       - '(A) as stated: the item removes compilation and changes no release''s reach; the relay''s appliance is track M''s to release (seam 8) and a driver''s own boot assets are its repository''s (K3, K4)'
       - (B) the release workflow also builds the qemu and Firecracker boot assets and ships them in the archive, so an installed release runs those drivers with nothing built; a kernel build and Alpine downloads in every release, and more to validate natively
       - (C) as (A), and every boot-asset set also gets a version file and a minimum in code, so one rule covers every artifact
     recommended: (A) as stated
+    answer: (A) The same lookup; the stamp as the check where it is today; no release ships them; no Windows release. As recommended. Answered 2026-11-15.
   - id: a6
     kind: assumed
-    status: open
+    status: confirmed
     question: 'qemu''s direct boot bakes the executor into its initramfs (design: Decision 8). Found while taking the inventory: tools/build-vm/build-initramfs.sh compiles warden-io into the direct-boot initramfs and the qemu driver boots it as it is, so the executor of a qemu direct-boot build is the one from the day the asset was built. That is not "delivered per build" (BOOT-02), it is not in the deviation register, and it would be an executor the lookup never sees. Proceeding with: fixed in this item; the qemu driver appends the executor the lookup found to the initramfs per build, as Firecracker does (relayvm.AppendFileCPIO), and the script stops compiling it; the qemu / Linux row of bootstrap.md''s mapping is corrected to say so. It brings a driver into line with the model and is not a model change (BOOT-07).'
     options:
       - '(A) fixed here: a dozen lines in a driver this item already changes and validates on qemu-any'
       - (B) filed as its own item; this item's Security note then says the direct-boot executor is the asset's and is not found by the lookup
     recommended: (A) fixed here
+    answer: '(A) Fixed here: qemu direct boot appends the executor per build. As recommended. Answered 2026-11-15.'
   - id: a7
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The release''s file names, and the release build (design: Decisions 9 and 12; Inventory; Releases and install; What stops working, case 7). No published release has the layout main''s configuration describes: the last one, v0.5.0, holds warden and warden-io, and the only release attempted since (v0.6.0) failed in the before hook, which cannot run as written (sh -c with no argument); with its form corrected goreleaser refuses the hook''s output directory (dist is not empty), and then the macOS arm64 warden does not compile. install.sh is fetched from main and installs the latest published release, or any version named. Proceeding with: a new archive carries warden-io-<os>-<arch> and warden-relay-<os>-<arch> and no warden-io or warden-relay; install.sh names no file but warden and installs every warden* file of whatever archive it downloaded, so v0.5.0 still installs as it does today, and it leaves an older warden-io where it is; a release upgraded by copying only warden gets an error at once that names the older install''s warden-io and the fix (on main the new warden silently runs the old executor), kept until 1.0 under TRANSITIONAL(artifact-names); the hook becomes one make target that writes outside goreleaser''s dist, and CI''s build job runs goreleaser check and a snapshot release and checks each archive against the artifact list. The macOS arm64 compile failure is main''s regression and is filed as this item''s follow-up (FLOW-09); until it is fixed the snapshot leaves the darwin targets out and the macOS archive''s layout is unproven.'
     options:
       - '(A) as stated: one name per file, the same in dist/, in the archive and on PATH, and a release configuration that is run before it is relied on'
       - (B) the archive carries both names for the Linux binaries until 1.0; nothing reads the old names, so it only delays the day a hand-made upgrade script fails
     recommended: (A) as stated
+    answer: (A) New names only, as stated. As recommended. Answered 2026-11-15.
   - id: a8
     kind: assumed
-    status: open
+    status: confirmed
     question: 'How this item waits for project-config-trust (design: How it sits with the other items). Its merge comes after that item''s (Jeff, that item''s a6); both edit driver/hostutil.go, two drivers'' test files and the same doc sentences, and this item deletes what that one adds (ModuleRoot, the test-only setter of the tree, two TestMains, two messages, three doc sentences). Proceeding with: this item''s Plan starts after project-config-trust''s PR has merged, held as K1 is: a blocking question that names the merge, with a human step that f2-plan needs, written by the session that records this design''s review (a blocking question raised by Design would hold Design itself). Under a9 (A) the merge named is K1''s, which implies this one.'
     options:
       - '(A) as stated: Implement then deletes code that is on main, and the hold costs nothing if that item merges first anyway'
       - '(B) no hold: Plan and Implement run now on main at ad4ea50, and Publish''s merge of main resolves the overlap; sooner if that item is slow, and the conflicts are deletions'
     recommended: (A) Plan waits for project-config-trust's merge
+    answer: (A) Plan is held; under a9 (A) the merge named is driver-contract's. As recommended. Answered 2026-11-15.
+  - id: q1
+    kind: blocking
+    status: open
+    question: 'Hold (design a9 (A) and a8 (A), Jeff, 2026-11-15): K1 first. This item''s Plan starts only after driver-contract''s PR has merged to main (which itself follows project-config-trust''s). When it has, the item returns to Design once for the delta K1''s structure brings (the lookup as a kit package beside the driver, relaysource.Bundled, what a driver binary reports for host-files.json, BOOT-02 on K1''s sentence), and that delta is reviewed (FLOW-06, FLOW-19).'
+    options:
+      - 'resume: driver-contract''s PR has merged (name the PR and the merge commit); the item goes back to Design for the K1 delta'
+      - 'driver-contract was withdrawn or reordered: resume on main as it is, and say so'
+    recommended: 'resume: driver-contract''s PR has merged (name the PR and the merge commit); the item goes back to Design for the K1 delta'
 history:
   - at: 2026-11-15T21:57:17Z
     by: human/jeff
@@ -201,3 +223,24 @@ history:
   - at: 2026-11-15T23:22:53Z
     by: human/jeff
     event: 'priority 66 -> 67 (renumbered by wf new: vz-nocgo-build queued at 64)'
+  - at: 2026-11-15T23:27:37Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: (A) The line in the file, with --version on the three programs and -trimpath. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T23:27:37Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: (A) Content-hash-tagged -dev images recorded beside warden; relay_image = dev means the recorded relay image. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T23:27:37Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: (A) The same lookup; the stamp as the check where it is today; no release ships them; no Windows release. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T23:27:37Z
+    by: human/jeff
+    event: 'assumed question a6 confirmed: (A) Fixed here: qemu direct boot appends the executor per build. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T23:28:36Z
+    by: human/jeff
+    event: 'assumed question a7 confirmed: (A) New names only, as stated. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T23:28:36Z
+    by: human/jeff
+    event: 'assumed question a8 confirmed: (A) Plan is held; under a9 (A) the merge named is driver-contract''s. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T23:30:24Z
+    by: human/jeff
+    event: done f2-design-review

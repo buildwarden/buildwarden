@@ -668,7 +668,15 @@ gaps:
       driver-contract has merged.
   - id: runtime-cli-project-path-windows
     host: container-any
-    status: open
+    status: done
+    done: 2026-11-15
+    evidence: >-
+      host:container-any/20261115T231002Z, unattended, windows-desktop (logs: native/container-any/2026-11-15/):
+      every refusal case passes, a shipped .bat is never run, and a real build with cli = "podman" in the
+      project's warden.toml succeeded on main and on the branch. The one case not run, a build with
+      cli = "docker", was closed on Jeff's word in the attended session of 2026-11-15: the podman build
+      stands for it (the check is one string comparison shared by the three runtime names; docker is not
+      installed on that machine).
     what: >-
       On a Windows host with a real container runtime: go test ./cmd/warden; --runtime docker.exe and
       [runtime] cli set to the full path of docker.exe are each refused with the fix that names docker;
