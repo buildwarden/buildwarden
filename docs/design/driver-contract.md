@@ -51,7 +51,7 @@ rule_changes:
   - {rule: PROFILE-01, change: amend, paths: [docs/development/loop-profile.md]}
 concepts: [driver-contract, driver-binaries, driver-commands, driver-discovery, driver-conformance,
            driver-options, driver-owned-config, driver-common-keys, driver-config-reading,
-           config-key-aliases, teardown-timeout,
+           single-config-file, config-key-aliases, teardown-timeout,
            kit, drivercmd, build-sequence, session, claim,
            collector, collector-handoff, relay-source, relay-release-forms, reap, build-record,
            build-lock, doctor,
@@ -97,9 +97,9 @@ answers.
 
 | Jeff said, or the basis says | The redraft, as put to Jeff | Asked as |
 |---|---|---|
-| A driver is found "in the same way git finds its individual subcommands (i.e. existing on PATH)" | `warden`'s own directory is searched before `PATH`, the five bundled names never come from `PATH`, and a project's `warden.toml` may select only a bundled driver | a16. **Answered otherwise:** "overcontrolled". `PATH` is searched before what `warden` bundles, so a file earlier on `PATH` may replace a bundled driver; nothing checks owner or mode; one rule is kept, that a project's `warden.toml` names a driver and not a file |
+| A driver is found "in the same way git finds its individual subcommands (i.e. existing on PATH)" | `warden`'s own directory is searched before `PATH`, the five bundled names never come from `PATH`, and a project's `warden.toml` may select only a bundled driver | a16. **Answered otherwise:** "overcontrolled". `PATH` is searched before what `warden` bundles, so a file earlier on `PATH` may replace a bundled driver; nothing checks owner or mode; one rule is kept, that a project's `warden.toml` names a driver and not a file. Since 2026-11-15 there is one config file and no user-level one, so what that rule now is, is asked (a26) |
 | "each driver effectively being its own independent binary" | Only the container driver is a binary in K1. The four VM drivers move onto `warden`'s build sequence and stay linked into `warden` until K2 | a15 |
-| "a shared library [...] that helps mediate pieces like configuration-parsing/reading" | `warden` reads all configuration and hands a driver resolved values. The kit's part is the option declaration and typed access to the values; it reads no file | a21. **Answered otherwise:** (b). The kit reads the configuration inside the driver's process, and `warden` passes on the driver's flags and the paths of the config files |
+| "a shared library [...] that helps mediate pieces like configuration-parsing/reading" | `warden` reads all configuration and hands a driver resolved values. The kit's part is the option declaration and typed access to the values; it reads no file | a21. **Answered otherwise:** (b). The kit reads the configuration inside the driver's process, and `warden` passes on the driver's flags and the paths of the config files. Since 2026-11-15 that is the path of one file (Decision 23) |
 | A suite "that checks that both required and optional commands are all specified correctly" | As asked: a program run against a binary, in two tiers. `warden`'s calling side for every command is exercised in K1 through the reference fake | none |
 | "commands" | Ten commands run once and exit; the build is one `run` process that exchanges messages with `warden` for as long as the environment lives | a14 |
 | "a driver instantiates an on-host endpoint that it wires in" | `warden` starts the default collector; no driver starts one | a12 |
@@ -342,18 +342,23 @@ and a driver's `run` during one build.
    or the driver would have to bridge the tunnel for the whole build)
    (a13). The second stays addable: `start` reserves a `collector` field.
 5. **Lookup: an explicit path, then `PATH`, then what `warden` bundles; a
-   project's `warden.toml` may name a driver but not a file.** A path
-   comes from `--driver`, `WARDEN_DRIVER` or the user's own config file,
-   and is used exclusively. Otherwise `warden-driver-<name>` is searched
+   config file may name a driver but not a file.** A path comes from
+   `--driver` or `WARDEN_DRIVER`, and is used exclusively. Otherwise `warden-driver-<name>` is searched
    on `PATH`, in `PATH`'s own order, and only when `PATH` has none does
    `warden` take the copy it bundles: a file of that name in its own
    directory, else a driver linked into it. So a `warden-driver-container`
    earlier on `PATH` than the bundled one replaces it (anywhere on `PATH`,
    when `warden`'s own directory is not on it), and customizing an
    official driver needs no flag. Nothing checks who owns a driver file
-   or who may write it. The one rule kept is that the project's
-   `warden.toml` cannot name a path, so a cloned repository cannot point
-   `warden` at a driver binary it ships. Alternatives: the
+   or who may write it. The one rule kept is that `warden.toml` cannot
+   name a path, so a cloned repository cannot point `warden` at a driver
+   binary it ships. The answer to a16 worded that rule for two files: a
+   path "comes from `--driver`, `WARDEN_DRIVER` or the user's own
+   config". On 2026-11-15 Jeff decided that `warden` reads one config
+   file (Decision 23), so the third of those places is gone, and the
+   design takes the rule as it reads without it: no config file names a
+   path, whether it is `./warden.toml` or a file named with `--config`.
+   That reading is asked (a26). Alternatives: the
    redraft's guarded lookup (`warden`'s own directory before `PATH`, the
    five bundled names never from `PATH`, a project file limited to bundled
    drivers, owner and mode checks on Unix), which the review rejected as
@@ -365,7 +370,15 @@ and a driver's `run` during one build.
    directory always searched last, even where it is a `PATH` entry (a
    copy anywhere on `PATH` would then win, but the order would no longer
    be `PATH`'s, the one order a user already knows, and the answer as
-   recorded is for a copy "earlier on PATH") (a16).
+   recorded is for a copy "earlier on PATH") (a16). And, for the rule
+   with one file: a path refused in the defaulted `./warden.toml` and
+   accepted in a file the executor named with `--config` or
+   `WARDEN_CONFIG` (the named file would stand where the user's config
+   stood, but `warden` would treat one file in two ways by how it was
+   found, and it can be added later without breaking anything); a path
+   accepted in any config file (a cloned repository's `warden.toml`
+   could then name a binary the repository ships, which is what the
+   rule was kept to prevent) (a26).
 6. **No auto-detection of the driver.** None exists today and K1 adds
    none. Selection is unchanged: `--driver`, `WARDEN_DRIVER`, `[runtime]
    driver`, else `container`. A named driver that is not found is an
@@ -375,10 +388,10 @@ and a driver's `run` during one build.
 7. **A driver reads its own configuration, in its own process; the kit
    does it for a driver built on it** (and in `warden`'s process for the
    four drivers linked in K1). `warden` reads its own flags and
-   keys and hands a driver three things: the paths of the config files it
-   found, in precedence order; the driver's flags from the command line;
-   and its environment. The kit reads the same files with the precedence
-   `warden` uses (ORCH-03) and gives the driver typed values, validation
+   keys and hands a driver three things: the path of the one config file
+   it read, when there is one (Decision 23); the driver's flags from the
+   command line; and its environment. The kit reads that file with the
+   precedence `warden` uses (ORCH-03) and gives the driver typed values, validation
    and the error form; a driver written without the kit follows the
    contract's requirements for the same. This is a21's answer (b), "The
    kit reads it in the driver", and it is what Jeff's first note asked
@@ -390,7 +403,7 @@ and a driver's `run` during one build.
    re-implements the precedence and, if it has keys, needs a parser for
    the TOML version `warden` reads (v1.1.0). Alternatives: `warden` reads everything and hands the driver
    resolved values (the redraft's recommendation, not taken in the
-   review); `warden` parses the files and hands each driver its own
+   review); `warden` parses the file and hands each driver its own
    table as JSON (a driver would need no TOML parser, but the seven
    existing keys sit in `warden`'s tables, so `warden` would again have
    to know which key is whose, and it is not what was answered) (a21).
@@ -424,19 +437,22 @@ and a driver's `run` during one build.
    is unstable, and once a version is stable a new common key is a new
    version. A driver lists in `describe` the common keys it honours
    and the keys of its own; under its own table it may have any shape.
-   In one file the driver's own table is read before `[driver]`, and
-   the order of the files is ORCH-03's, unchanged: the project's file
-   before the user's, for both tables. Now that a driver reads the
-   files itself, nothing physical stops it reading any table, so the
+   The driver's own table is read before `[driver]`. There is one
+   config file (Decision 23), so that is the whole order: a setting's
+   flag, then its environment variable, then `[driver.<name>]`, then
+   `[driver]`, then the driver's default. The design read at `5808805`
+   had a user-level file as well and seven steps; Jeff did not confirm
+   that order and decided on one file (a25). Now that a driver reads the
+   file itself, nothing physical stops it reading any table, so the
    place is a rule of the contract, which `warden`, the suite and the
    kit each hold a `describe` to. The seven existing driver-owned keys take their places
    in the two tables, and their old names are still read as deprecated
-   aliases (UX-03); that part his sentence does not settle, and it is
-   asked (a25). Alternatives: `[driver.<name>]` alone, with the seven
-   keys left where they are, which the redraft recommended and the
-   review did not take; the more specific table winning across files
-   (the user's file would then beat the project's for one setting,
-   against ORCH-03, UX-07 and GLOBAL-10); the shared VM settings as
+   aliases (UX-03): a25's answer, (a). Whether an old name should be an
+   error at once, as two other changes Jeff decided on the same day
+   are, is asked (a26). Alternatives: `[driver.<name>]` alone, with the
+   seven keys left where they are, which the redraft recommended and the
+   review did not take; an order across a project's file and a user's
+   (moot: there is one file); the shared VM settings as
    common keys now (they are `warden`'s for K1, a9); a driver reading
    any table (collisions with `warden`'s tables and between drivers,
    and nothing left to check) (a4).
@@ -496,7 +512,7 @@ and a driver's `run` during one build.
 18. **`warden` keeps a record of each build beside its lock, and cleanup
     works from the record.** The record holds the driver binary that ran
     the build, the build's temporary directory, and the driver's flags
-    and the config file paths it was started with; the driver may keep a
+    and the path of the config file it was started with; the driver may keep a
     state file of its own beside
     it. `reap`, `attach` and `warden clean` get those values, not the
     current invocation's. Alternative: `reap` works "from the build ID
@@ -529,7 +545,7 @@ and a driver's `run` during one build.
     meant to bound); a flag as well (not added: the answer asked for a
     key, nothing about one invocation changes how long a teardown
     takes, and a flag can be added later without breaking anything; the
-    key therefore has two of UX-07's three levels, as `[vm] dns` has)
+    key is therefore set in the config file only, as `[vm] dns` is)
     (a20). The `reap` that `warden` runs at the end of a build takes the
     same wait, so the key bounds the whole of a stop.
 22. **`describe` declares a driver's flags and whether each takes a
@@ -545,6 +561,33 @@ and a driver's `run` during one build.
     (`--runtime docker` would stop working); passing an unknown flag on
     with a guessed arity (builds the wrong thing silently). Answered (a),
     as recommended (a24).
+23. **K1 is written on one config file, and waits for the item that
+    makes it so.** On 2026-11-15, asked which of two config files wins
+    for a driver's key, Jeff answered that there is to be one: "there
+    should only be one authoritative warden.toml for any build" (a25,
+    with his words in full). `warden` reads one `warden.toml`, the
+    environment and the command line. The file is `./warden.toml` by
+    default, or the one named by a new `--config` flag or
+    `WARDEN_CONFIG` variable, which is then the only one read;
+    `~/.config/warden/config.toml` stops being read, and one that exists
+    is an error that names it. The queue item `project-config-trust`
+    carries that change (the code, the ORCH-03 and UX-07 amendments, the
+    docs), and this design is written to fit it. So the contract hands a
+    driver one `config_file` and no list, no file has a level, and the
+    precedence has no step between files. K1 builds none of that item's
+    part. K1's Plan and Implement start after `project-config-trust` has
+    merged and `main` is merged into this branch, and K1 does not merge
+    first (**What K1 takes from the two configuration items**).
+    Alternatives: `config_files` kept as a list that holds one entry (a
+    driver written by hand would implement an order between files that
+    cannot occur, and the suite would have to test it); a `level` kept
+    on the one file, or a field saying whether the file was named or
+    defaulted (no bundled driver would read it, now that the container
+    runtime is limited from every source; a field can be added to a
+    request without a new contract version if a driver's rule comes to
+    need one); K1 carrying the one-file change itself (Jeff gave it to
+    `project-config-trust`, and two items would then rewrite
+    `LoadConfig` and amend the same sentence of ORCH-03).
 
 ## Questions
 
@@ -557,7 +600,7 @@ a recommended answer the design is complete under.
 
 The first draft's a1 to a11 were never answered. Four are retired because
 the redraft makes them moot (**Retired**, below); seven survive, reworded
-where the new contract requires it; a12 to a25 are new. They are in two
+where the new contract requires it; a12 to a26 are new. They are in two
 groups: first the seven where the draft departs from Jeff's notes or from
 the basis, then the rest.
 
@@ -572,6 +615,14 @@ as they were put, so "Proceeding with" in an answered question describes
 what was asked, not always what the design now does. Four are open: a5,
 a18 and a8, and a25, which a4's answer raised (what becomes of the seven
 existing driver-owned keys).
+
+**State on 2026-11-15.** Nineteen are answered: a25 and a18 were
+answered that day, both (a). One thing asked beside a25's letter was not
+confirmed, the order between the two tables across two config files;
+Jeff's answer to it was that there is one config file, and that is
+folded in as Decision 23. Three are open: a5 and a8, each reworded for
+that fold-in, and a26, which the fold-in and two decisions of the same
+day raised.
 
 **Where the draft departs from your notes or the basis**
 
@@ -612,6 +663,11 @@ existing driver-owned keys).
   or the user's own config. Folded in as Decision 5 and **Discovery and
   trust**: a path, then `PATH`, then the bundled copy (a file beside
   `warden`, then a linked driver).
+
+  *2026-11-15.* The answer names three places a path may come from, and
+  the third, "the user's own config", went with the user-level file
+  (a25's answer; Decision 23). The answer is not changed. What the guard
+  is with one config file is asked as the second part of a26.
 - **a15. K1's scope and done-when, against K2, K3 and S4.** Your note:
   "each driver effectively being its own independent binary". Proceeding
   with Decision 14: only the container driver is a binary in K1. K1 is
@@ -677,6 +733,9 @@ existing driver-owned keys).
   written without the kit needs a TOML parser as well as the
   precedence. What this reopens is asked again below: a4, a9, a5, a8,
   and a24, which is new.
+
+  *2026-11-15.* "The paths of the config files" is now the path of one
+  file, `config_file` (Decision 23).
 - **a14. One `run` process per build, or run-and-exit verbs?** Your note
   spoke of "commands". Proceeding with one process per build that
   exchanges messages with `warden` (Decision 2); the other ten commands
@@ -750,7 +809,7 @@ existing driver-owned keys).
   refusals that name another driver (`--network`, `--slots`, `--update`)
   become the one unknown-flag refusal, which names the selected driver
   only; (4) "unknown driver" becomes "driver not found", with
-  what was searched, and a project file whose `[runtime] driver` is a
+  what was searched, and a `warden.toml` whose `[runtime] driver` is a
   path is refused; (5) `warden clean --driver qemu|vz` no longer
   cleans containers; (6) `warden clean` first cleans up after dead builds
   of the selected driver; (7) the build-exit grace is 10 s on every
@@ -761,8 +820,7 @@ existing driver-owned keys).
   tears the build down on every driver, where it killed `warden` on
   three; (10) the output directory gains `driver.json`, written with
   `inputs/` before the driver starts; (11) `warden driver list` is new;
-  (12) a path is accepted in `--driver`, `WARDEN_DRIVER` and the user's
-  config; (13) a driver's keys are read only by that driver and only when
+  (12) a path is accepted in `--driver` and `WARDEN_DRIVER`; (13) a driver's keys are read only by that driver and only when
   it is selected: a malformed `[vm] image_refresh_after` or
   `image_min_grace`, and a wrong TOML type in any of the seven existing
   driver-owned keys, are refused by the driver that owns the key and
@@ -784,8 +842,21 @@ existing driver-owned keys).
   none of the redraft's fifteen goes; 1, 3, 4, 8, 10, 12 and 13 change
   (3 loses the hint that names the driver a flag belongs to, and 13
   loses the type check of the seven keys under every driver); 16, 17
-  and 18 are new. What 18 does with the old names is asked on its own
-  (a25); if a25 is answered otherwise, 18 is rewritten to that answer.
+  and 18 are new. What 18 does with the old names was asked on its own
+  and answered (a25, (a)).
+
+  *Reworded on 2026-11-15, after the one-file decision* (a25's answer,
+  Decision 23). Still eighteen. 4 and 12 change: there is no user-level
+  file, and no config file names a driver by path (a26's second part),
+  so 12 is the flag and the variable. If a26 is answered (ii) for the
+  old names, 18 is rewritten to it. The list is against `main` as
+  `project-config-trust` leaves it. That the user-level file is no
+  longer read, and `--config` and `WARDEN_CONFIG`, are that item's
+  changes and are not counted here; nor is the container runtime's limit
+  to `finch`, `docker` and `podman`, which is
+  `runtime-cli-project-path`'s and which K1 keeps under both names of
+  the key.
+
   Options: (a) accept all eighteen; (b) refuse nothing new:
   `warden` also asks the other four bundled drivers what flags they
   declare and accepts and ignores those, as today (2 goes, and 3 keeps
@@ -872,6 +943,12 @@ existing driver-owned keys).
   review, sentence by sentence. Recommended: (a). Your word is needed on
   each sentence. Nothing is proposed to `seam-specs`: its design already
   writes the collector's lifetime per session token.
+
+  **Answered 2026-11-15: (a), confirmed as recommended.** As proposed,
+  made in place in K1's PR. As recorded with the answer: the list is
+  shown to you again, checked once more against the umbrella as
+  `loop-contract` amended it, before the design is approved.
+
 - **a8. The rule changes.** The umbrella's table gives K1 GLOBAL-08 and
   ORCH-01 "for direction". Proceeding with those two reworded for a command
   contract, plus ORCH-02 (staging moves to `warden`), ORCH-04 (teardown on
@@ -882,14 +959,13 @@ existing driver-owned keys).
   and UX-03 (tier 1's surface check also reads the flags and keys the
   bundled drivers declare), PROFILE-01 (this repository's loop profile:
   four rows, below), and ORCH-03, which gets the same enforcement change,
-  one paragraph (a driver reads its own flags and keys, from the files
-  `warden` names to it, with the same precedence and before any work,
-  through the kit or as the contract requires; a driver run as a
+  one paragraph (a driver reads its own flags and keys, from the config
+  file `warden` names to it, with the same precedence and before any
+  work, through the kit or as the contract requires; a driver run as a
   separate binary does so in its own process; the keys the contract
   names as common live in `[driver]`, and a driver's overrides of those
-  and its own keys in `[driver.<name>]`; within one file the driver's
-  own table is read before `[driver]`, and the order of the files does
-  not change) and a clause on its last
+  and its own keys in `[driver.<name>]`, which is read before
+  `[driver]`) and a clause on its last
   sentence saying where the automated part looks. GLOBAL-08's sentence on a driver
   from outside was asked on its own and confirmed (a23). Re-derived on
   2026-11-14 after the answer to a21: the list has the same ten entries;
@@ -962,6 +1038,33 @@ existing driver-owned keys).
   Recommended: (i), and the design is written on it. A letter by itself
   answers the list only, and leaves (i) as a decision of the design,
   confirmed or not when the design is.
+
+  *Reworded a second time on 2026-11-15, after the one-file decision*
+  (a25's answer, Decision 23). Still ten entries, and the same ten.
+  - *ORCH-03's paragraph loses its words about files.* It said "from the
+    config files `warden` names to it" and ended "Within one file the
+    driver's own table is read before `[driver]`; the order of the files
+    does not change." It now says "the config file" and ends "which is
+    read before `[driver]`". The rule's first sentence, the precedence
+    itself, is `project-config-trust`'s to amend, with UX-07, and K1
+    changes no word of it. **Rule changes**, ORCH-03, says which
+    sentences each item owns and what K1, the second to merge, does.
+  - *UX-07 and UX-08 are still not K1's.* UX-07 is amended by
+    `project-config-trust`. UX-08 is amended by
+    `runtime-cli-project-path` (proposed, in review): the component that
+    uses a setting validates it when it initializes, after the
+    overrides, and only when the run uses it. K1's drivers already do
+    that. One thing follows that is not settled. That wording lists four
+    checks on `main` that predate it, and has the change that moves a
+    check take it off the list. K1 moves two: the type of the seven
+    driver-owned keys, and the two image ages on every `build` and
+    `shell`. If the wording merges with that list, K1's PR owes an edit
+    to it, which would be an eleventh entry here (UX-08, the list only).
+    It is not declared: the wording is not approved, and that item's own
+    a5 asks whether there is a list at all. If it is approved while this
+    review is open, the entry is added and put to you here; if after, it
+    is a delta for a fresh review (FLOW-19), and K1's Implement does not
+    edit UX-08 without one.
 
   Options: (a) as stated;
   (b) leave BOOT-02 to K2 (the sentence "matches the orchestrator's
@@ -1212,6 +1315,124 @@ existing driver-owned keys).
   for one setting). A letter by itself answers the seven keys only, and
   leaves (i) and (ii) as decisions of the design, confirmed or not when
   the design is.
+
+  **Answered 2026-11-15: (a), confirmed as recommended**, for the seven
+  keys: all seven move into `[driver]` and `[driver.<name>]`, each old
+  name is still read as a deprecated alias and warns, and a file that
+  sets a key under both names is refused. The two things asked beside
+  the letter: (i) version 1's common keys are the two ages and no
+  others: **confirmed**. (ii) The order between the two tables across
+  the project's file and the user's: **not confirmed**. Jeff's words:
+  "What do you mean by 'yours'? warden.toml is meant to be effectively
+  in full control by a build executor and there shouldn't be any
+  precedence necessary. Configuration should only be through a local
+  'warden.toml', environment variables, and command-line arguments. By
+  default, the warden.toml's location in the working directory is simply
+  for ease of use, but there should only be one authoritative
+  warden.toml for any build". Asked four things, each on its own, he
+  chose: the user-level file goes away; the one file is `./warden.toml`
+  by default, or the file named by a new `--config` flag or
+  `WARDEN_CONFIG` variable, which is then the only one read; the queue
+  item `project-config-trust` carries the change, and this design is
+  written to fit it; and an existing `~/.config/warden/config.toml` is
+  an error that names the file, with that detection removed later.
+  Folded in as Decision 23: one `config_file`, no level, and the order
+  flag, variable, `[driver.<name>]`, `[driver]`, default. The question's
+  text above is as it was put. Its sentence on
+  `runtime-cli-project-path` ("whichever of the two merges second") is
+  no longer so: that item merges first, and its rule is now that the
+  runtime is one of three names from every source (**What K1 takes from
+  the two configuration items**).
+
+- **a26. The old key names, and the one guard on the driver's file,
+  after 2026-11-15.** New on 2026-11-15, raised by decisions you made
+  that day after a25 was answered. It has two parts, and each wants its
+  own answer.
+
+  *The old names.* a25's answer (a) has each of the seven old key names
+  keep working, with one warning line per command. The same day, for
+  `runtime-cli-project-path` and for the user-level config file, you
+  decided that a change that refuses what worked before is an error at
+  once with a concrete message, not a warning: "Use the logic that would
+  be used for the warning to instead have a concrete error message about
+  what needs to be changed/updated. This logic will eventually be
+  removed like the warning would be". The cases differ: those two
+  changes refuse a value or a file, and an alias refuses nothing. But
+  the three land close together and you may want one convention. a25's
+  answer is not changed by this question; what you answer here is
+  recorded here. Proceeding with (i). Options:
+  (i) as answered: each old name is read as its new name and warns, for
+  at least two releases, and a file that sets both is refused. No config
+  stops working because of the rename. UX-03 is followed as written ("A
+  rename or removal ships an alias plus a deprecation notice with a
+  documented removal window"). The contract and the kit carry the
+  aliases: `describe`'s `aliases`, `Setting.Aliases`, requirement C11
+  with its rule for when the warning prints, and the specification's
+  list of the seven old names. The release then has two conventions, a
+  warning for a renamed key and an error for an unsupported runtime or a
+  user-level file. And the old names change twice: taking the aliases
+  out later refuses what worked, so by your rule that removal is first
+  an error that names the new key, and only then is the detection
+  removed;
+  (ii) an error at once: a file that sets an old name is refused by the
+  driver that owns the key, when that driver is selected, with a message
+  that names the file, the old name and the new one, and the value is
+  not used. The detection is transitional and is removed later, with the
+  other two items'. One convention. The contract loses `aliases` and
+  C11, and the kit loses the warning rule and the refusal of both names:
+  the detection is code of the five bundled drivers, not a requirement
+  on every driver. Every config that sets one of the seven fails on its
+  first run with the owning driver after the upgrade, until the key is
+  renamed, in a release where a user-level config must already be moved.
+  An old name under another driver is not reported, since nothing reads
+  it (Behaviour 13). UX-03's sentence asks for an alias, so its wording
+  has to change as well, as an eleventh rule change approved by name, to
+  allow an error that says what to write, with a documented removal
+  window, beside the alias. Decision 9, Behaviour 18, C4, C6 and C11,
+  the settings table and the validation plan are then rewritten;
+  (iii) (ii) for the five keys that one driver reads and (i) for the two
+  ages, or the reverse, named in the review.
+  Recommended: (i). Your rule is about a change that refuses, and this
+  one need not refuse; UX-03 gives a rename this route in so many words;
+  and K1 is a program item under the freeze, where the fewer configs
+  that break the better. (ii) is the better answer if one convention
+  matters more to you than a release in which old configs keep working:
+  it is simpler in the contract, and it ends in one step where (i) takes
+  two.
+
+  *The guard.* a16 kept one guard: "a project's `warden.toml` may name a
+  driver, never a file path; a path comes from `--driver`,
+  `WARDEN_DRIVER` or the user's own config". There is no user's own
+  config now. Your reason for the guard was that a cloned repository
+  must not make `warden` run a binary it ships. With one file, that
+  exposure is the defaulted `./warden.toml`; a file named with
+  `--config` or `WARDEN_CONFIG` is the executor's own choice. Proceeding
+  with (A). Options:
+  (A) no config file names a driver by path: `[runtime] driver` is a
+  name, in `./warden.toml` and in a file named with `--config` alike,
+  and a path comes from `--driver` or `WARDEN_DRIVER`. One rule for
+  every file, as you chose for the container runtime ("from every
+  source"), and `warden` need not know how the file was found. An
+  executor who wants a driver by path every time exports `WARDEN_DRIVER`
+  or puts the file on `PATH`. It gives up a path in the executor's own
+  file, which the design at `5808805` allowed in the user's;
+  (B) a path is refused in the defaulted `./warden.toml` and accepted,
+  when absolute, in a file named with `--config` or `WARDEN_CONFIG`: the
+  named file stands where the user's config stood, and is "in full
+  control" of the driver. `warden` then treats one file in two ways by
+  how it was found, and `--config ./warden.toml` in a cloned repository
+  turns the guard off, by the executor's own act;
+  (C) no guard: a path is accepted in any config file. `cd repo &&
+  warden build` then runs a binary that the repository's `warden.toml`
+  names, which is what the guard was kept to prevent.
+  Recommended: (A). It keeps your guard whatever `project-config-trust`
+  decides a defaulted file may do; that item's design is not written yet
+  (its branch held none on 2026-11-15), so this is written without it.
+  And (A) is the one that can be widened later without breaking anyone,
+  to (B), if that item comes to treat a named file differently from the
+  defaulted one. A letter by itself answers the old names only, and
+  leaves (A) as a decision of the design, confirmed or not when the
+  design is.
 
 ### Retired
 
