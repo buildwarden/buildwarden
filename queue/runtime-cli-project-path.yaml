@@ -50,7 +50,7 @@ budget:
 questions:
   - id: a1
     kind: assumed
-    status: open
+    status: confirmed
     question: 'What may a project''s warden.toml set [runtime] cli to? The item''s source says a name looked up on PATH; the design finds that a name is not enough: cli = "sh" with a file named pull in the repository makes a release warden build run sh pull <relay image>, which executes ./pull on the host (checked with sh; warden clean runs ./container the same way).'
     options:
       - (a) exactly finch, docker or podman, the names warden probes for, or empty
@@ -58,22 +58,25 @@ questions:
       - (c) any name without a path separator, looked up on PATH, as the source words it; this leaves host execution open through any interpreter on PATH
       - '(d) nothing: the key is read from the user''s file only'
     recommended: (a) exactly finch, docker or podman, the names warden probes for, or empty
+    answer: 'Changed, in Jeff''s words: ''If this is specifically for the container driver, then it should be limited to container-specific configuration which that driver should be limited to the runtimes it already knows it supports''. So the value is limited to the runtimes the container driver supports (finch, docker, podman). Whether that holds for every source or only for a project''s file is asked as a follow-up. Jeff, design review, 2026-11-15.'
   - id: a2
     kind: assumed
-    status: open
+    status: confirmed
     question: When is a refused [runtime] cli from the project's warden.toml an error?
     options:
       - '(a) when it is the value in effect on a command that resolves the container runtime: build, shell and doctor with the container driver, and clean with every driver except firecracker and hyperv (so also warden clean --driver qemu and --driver vz, which run the runtime today); --runtime and WARDEN_CTR_CLI replace it without an error, so a repository whose file is refused can be built without editing it; K1 can keep this unchanged, but for clean under qemu and vz, which K1 stops running the runtime'
       - '(b) as the file loads: every command that loads configuration, every driver, even when a flag overrides it, as [vm] build_link is; the way out is to edit the repository''s warden.toml, and K1 narrows it again to when the container driver is selected'
     recommended: '(a) when it is the value in effect on a command that resolves the container runtime: build, shell and doctor with the container driver, and clean with every driver except firecracker and hyperv (so also warden clean --driver qemu and --driver vz, which run the runtime today); --runtime and WARDEN_CTR_CLI replace it without an error, so a repository whose file is refused can be built without editing it; K1 can keep this unchanged, but for clean under qemu and vz, which K1 stops running the runtime'
+    answer: 'Changed, in Jeff''s words: ''Throughout the project, there should be a general rule that configuration checking should be validated by the consumer/user of that configuration on initialization after applying overrides like environment variables. This is only enforced/required for all of the software components within the buildwarden organization and highly recommended for those extending or writing their own components, but isn''t enforced programmatically. But since it is likely that the same warden.toml may have all of the configuration for multiple driver implementations where there is a loop running warden builds for different operating systems/architectures configured through CLI (not unlike its own cross-platform build), then it is reasonably lazily validated to only the configurations for the specific driver(s) actually used for a specific run. In other words, it should allow for configuration sections/configurations that may not be used and so aren''t validated''. So: validation is the consumer''s, at its initialization, after overrides, and only for what the run uses; and this is a general project rule, to be written as one. Jeff, design review, 2026-11-15.'
   - id: a3
     kind: assumed
-    status: open
+    status: confirmed
     question: The fix refuses a configuration that works today (a path, or a name other than finch, docker, podman, as [runtime] cli in a project's warden.toml). Does it take effect at once, with no release in which the old value still runs with a warning (UX-03)?
     options:
       - (a) refuse from the release that carries the fix; the refusal names the three ways out
       - (b) warn for one release, then refuse; the hole stays open for that release
     recommended: (a) refuse from the release that carries the fix; the refusal names the three ways out
+    answer: 'Changed, in Jeff''s words: ''Use the logic that would be used for the warning to instead have a concrete error message about what needs to be changed/updated. This logic will eventually be removed like the warning would be''. So: an error at once, not a warning, with a concrete message saying what to change; the detection that produces that message is transitional and is removed later, as a deprecation warning would be. Jeff, design review, 2026-11-15.'
 history:
   - at: 2026-11-14T22:51:20Z
     by: human/jeff
@@ -102,3 +105,12 @@ history:
   - at: 2026-11-15T19:54:39Z
     by: human/jeff
     event: claimed f2-design-review until 2026-11-15T21:54:39Z
+  - at: 2026-11-15T20:14:31Z
+    by: human/jeff
+    event: 'assumed question a1 confirmed: Changed, in Jeff''s words: ''If this is specifically for the container driver, then it should be limited to container-specific configuration which that driver should be limited to the runtimes it already knows it supports''. So the value is limited to the runtimes the container driver supports (finch, docker, podman). Whether that holds for every source or only for a project''s file is asked as a follow-up. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:14:31Z
+    by: human/jeff
+    event: 'assumed question a2 confirmed: Changed, in Jeff''s words: ''Throughout the project, there should be a general rule that configuration checking should be validated by the consumer/user of that configuration on initialization after applying overrides like environment variables. This is only enforced/required for all of the software components within the buildwarden organization and highly recommended for those extending or writing their own components, but isn''t enforced programmatically. But since it is likely that the same warden.toml may have all of the configuration for multiple driver implementations where there is a loop running warden builds for different operating systems/architectures configured through CLI (not unlike its own cross-platform build), then it is reasonably lazily validated to only the configurations for the specific driver(s) actually used for a specific run. In other words, it should allow for configuration sections/configurations that may not be used and so aren''t validated''. So: validation is the consumer''s, at its initialization, after overrides, and only for what the run uses; and this is a general project rule, to be written as one. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:14:31Z
+    by: human/jeff
+    event: 'assumed question a3 confirmed: Changed, in Jeff''s words: ''Use the logic that would be used for the warning to instead have a concrete error message about what needs to be changed/updated. This logic will eventually be removed like the warning would be''. So: an error at once, not a warning, with a concrete message saying what to change; the detection that produces that message is transitional and is removed later, as a deprecation warning would be. Jeff, design review, 2026-11-15.'
