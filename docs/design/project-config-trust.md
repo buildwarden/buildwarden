@@ -187,7 +187,7 @@ level. The designs relied on carry front-matter already.
      it cannot be opened. The error names the path and whether the flag or
      the variable gave it.
    - *`--config` given with an empty value is an error; an empty
-     `WARDEN_CONFIG` is not set* (assumed question a8). `warden --config
+     `WARDEN_CONFIG` is not set* (a8). `warden --config
      "$CFG" build` with `CFG` unset must not hand the build to the working
      directory's file without a word, which is what falling through would
      do. An empty variable is "not set" for every `WARDEN_*` variable
@@ -229,11 +229,11 @@ level. The designs relied on carry front-matter already.
    whichever way the config file was chosen. The message leads with what
    Jeff decided it says: move the settings into the `warden.toml` you build
    with, or into the environment. One exception, which is this design's
-   own and is asked (assumed question a10): when the file `--config` or
+   own and was confirmed in the review (a10): when the file `--config` or
    `WARDEN_CONFIG` names *is* that file, it is the config file, there is
    nothing stale, and the error does not fire; the message gives that as
    its second way out. The error is transitional: one file of code, one
-   marker, removed at one point (assumed question a3).
+   marker, removed at 1.0 (a3).
    - Why it fires even with `--config` or `WARDEN_CONFIG` set: the point of
      the error is that settings which applied yesterday do not silently stop
      applying. They stop applying whichever file is read now. A machine that
@@ -254,7 +254,7 @@ level. The designs relied on carry front-matter already.
    does not follow it, and is changed: `WARDEN_UPSTREAM_CA_CERTS` is
    appended to `[relay] upstream_ca_certs` instead of replacing it. It
    replaces it from this item on, and while the transitional detection
-   stands, setting both is an error that says so (assumed question a5).
+   stands, setting both is an error that says so (a5).
    That error is raised where the CA paths are used (`build`, `shell` and
    `doctor`), not as the file loads: `clean`, `setup` and `image prepare`
    use no CA path and do not fail on it (UX-08 as amended: only what a run
@@ -264,17 +264,17 @@ level. The designs relied on carry front-matter already.
      item that writes "a value set at any level replaces the lower levels'
      value" for the environment.
 5. **A relative path in the file is relative to the working directory**, as
-   today and as the same path given by a flag or a variable is (assumed
-   question a1). The file's own location carries no meaning: Jeff's "the
+   today and as the same path given by a flag or a variable is (a1). The
+   file's own location carries no meaning: Jeff's "the
    warden.toml's location in the working directory is simply for ease of
    use".
 6. **No environment variable is added for the keys that have none**
-   (assumed question a2). A machine's own settings go in the file the
+   (a2). A machine's own settings go in the file the
    machine names with `WARDEN_CONFIG`.
 7. **What a config file may decide is not limited by where the file was
    found.** A `./warden.toml` read by default decides what a named file
    decides. `warden` says which file it read, on every command that reads
-   one, so that the default is never silent (assumed question a4). The
+   one, so that the default is never silent (a4). The
    protection for a repository the executor does not control is to name the
    file: `--config`, or `WARDEN_CONFIG` once in the machine's environment.
    The variable does not reach a `warden` run under `sudo`, which resets
@@ -330,15 +330,17 @@ level. The designs relied on carry front-matter already.
     `runtime-cli-project-path`'s review approved it, it names no level of
     config file (**Rule changes**).
 12. **Other defects found are handed on, not fixed**, each to a named
-    item, and the design review records the hand-offs in the queue
-    (assumed question a11; **What this item does not do**).
+    item (a11; **What this item does not do**). The review session
+    recorded the hand-offs in the queue on 2026-11-15 (workflow
+    `4c59842`): four observations in `configuration-bugfixes`' `source`,
+    and the two security findings as the new item `workdir-in-context`.
 13. **`warden.toml` in a message means the config file in use.** Nineteen
     fix strings and messages name the file as `warden.toml` ("set `[vm]
     dns` in warden.toml ..."), seventeen of them in four drivers' trees and
     `driver/hostlink.go`. The seventeen stay as they are: Jeff's name for
     the one file is "the warden.toml", whichever path it has, and the
-    `config:` line at the top of the same output gives that path (under a4
-    (a), `warden doctor` and `--verbose` give it). The reference says so in
+    `config:` line at the top of the same output gives that path (a4).
+    The reference says so in
     one sentence. The two messages of `cmd/warden` that name the
     file for a key's bad value (`[vm] image_refresh_after` and
     `image_min_grace`; `[vm] windows_image_update`) name the file that was
@@ -360,6 +362,18 @@ level. The designs relied on carry front-matter already.
 None.
 
 ### Assumed
+
+**State after the review's first sitting, 2026-11-15.** The eleven that
+were asked are answered, and each carries its answer below; Jeff read the
+design at `3c0caab`. Nine were confirmed as recommended: a1 to a5, a7, a8,
+a10 and a11. Two were answered otherwise, with none of the offered options
+taken, and are folded into the design: a9 (what a CA path may hold: every
+valid PEM certificate is sent, the rest is skipped and logged) and a6 (this
+item keeps the lookup fix as designed, and a new item, `prebuilt-artifacts`,
+removes compilation). Each question's text and options are kept as they
+were put, so "Proceeding with" in an answered question describes what was
+asked, not always what the design now does. One question is new and open:
+a12, raised by a9's fold-in.
 
 - **a1. A relative path in the config file (`[build] output_dir`,
   `tmpdir`, `[relay] upstream_ca_certs`, a local `[vm] windows_image`) is
@@ -386,6 +400,9 @@ None.
   - (d) A relative path is refused in a file that `--config` or
     `WARDEN_CONFIG` names. It avoids the question and breaks the copy of a
     project's file used from elsewhere.
+
+  **Answered 2026-11-15: (a), confirmed as recommended.** The working
+  directory, always (Decision 5).
 - **a2. Does this item add environment variables, so that a setting can
   still be given once per machine without a file?** Today six keys have a
   variable (`[runtime] driver`, `cli`, `relay_image`, `[relay]
@@ -411,6 +428,9 @@ None.
     then reachable from the environment (seven keys would still have no
     flag). Fourteen new names, several of them for keys `driver-contract`
     renames.
+
+  **Answered 2026-11-15: (a), confirmed as recommended.** None added
+  (Decision 6).
 - **a3. When is the transitional detection removed?** It makes two errors:
   the one for an existing `~/.config/warden/config.toml`, and the one for
   `WARDEN_UPSTREAM_CA_CERTS` set together with the key (a5). After its
@@ -426,6 +446,9 @@ None.
   - (c) The release that first carries the change and the one after it.
   - (d) Removed by `driver-contract`, when it rewrites configuration
     loading. The date then depends on that item, and its diff grows.
+
+  **Answered 2026-11-15: (a), confirmed as recommended.** At 1.0, the
+  removal point of `runtime-cli-project-path`'s detection.
 - **a4. What, if anything, protects the default: `./warden.toml` in a
   working directory that is someone else's repository?** Proceeding with
   (b); confirm. Under every option but (d), `cd repo && warden build` acts
@@ -451,6 +474,10 @@ None.
     directory). It does protect the unwary run. It is a two-level rule,
     which Jeff removed on 2026-11-15, and it refuses an executor's own
     `./warden.toml` until they name it (Decision 7).
+
+  **Answered 2026-11-15: (b), confirmed as recommended.** A `config:`
+  line on every command that reads configuration, and nothing refused by
+  where the file was found (Decision 7).
 - **a5. `WARDEN_UPSTREAM_CA_CERTS` when `[relay] upstream_ca_certs` is also
   set.** Today the variable's paths are added to the file's. Proceeding
   with (a); confirm.
@@ -466,6 +493,10 @@ None.
     **Defaults and overrides** (GLOBAL-10 allows it). No behaviour changes;
     the environment is then a level that replaces for five variables and
     adds for one.
+
+  **Answered 2026-11-15: (a), confirmed as recommended.** The variable
+  replaces the key, and both set is a transitional error on `build`,
+  `shell` and `doctor` (Decision 4).
 - **a6. How `warden` finds its source tree (F9).** Today: walking up from
   the executable, then from the working directory. Proceeding with (a);
   confirm.
@@ -509,6 +540,11 @@ None.
     merge, and meets it in consolidation (FLOW-10), which then has real
     work in `LoadConfig`, the reference and UX-08 and may send it back to
     Implement.
+
+  **Answered 2026-11-15: (a), confirmed as recommended.** The hold is a
+  blocking question that names `runtime-cli-project-path`'s merge. It is
+  not in the queue file yet: the review session raises it when it records
+  this design's approval, and Jeff answers it once that PR has merged.
 - **a8. What an empty `--config` or `WARDEN_CONFIG` means.** `warden
   --config "$CFG" build` with `CFG` unset passes an empty value. The next
   source down is, in the end, `./warden.toml`, which in someone else's
@@ -530,6 +566,10 @@ None.
     case above for the flag as well.
   - (d) Empty means "read no file". A typing mistake then builds with the
     defaults and not with the repository's file, also without a word.
+
+  **Answered 2026-11-15: (a), confirmed as recommended.** An empty
+  `--config` is an error; an empty `WARDEN_CONFIG` counts as not set
+  (Decision 1).
 
   The other edges of the lookup are not asked, because a rule or Jeff's
   decision settles each: a named file that cannot be read is an error and
@@ -594,6 +634,10 @@ None.
     settings. Nearest to the decision as worded. Someone who wants a
     per-user file moves it (`mv` to another path, and `WARDEN_CONFIG`),
     and one path cannot be named until 1.0 and can be afterwards.
+
+  **Answered 2026-11-15: (b), confirmed as recommended.** Naming that
+  file is allowed, and the message leads with "move its settings"
+  (Decision 3).
 - **a11. Where the defects this item found and does not fix are
   recorded.** They are in **What this item does not do**: four
   observations that are not security matters, and two that reach the host
@@ -613,6 +657,12 @@ None.
     with them.
   - (c) They stay recorded in this design only, and are found again by
     whoever reads it.
+
+  **Answered 2026-11-15: (a), confirmed as recommended,** and done the
+  same day by the review session (workflow `4c59842`): the four
+  observations are appended to `configuration-bugfixes`' `source`, and the
+  two security findings are filed as one item, `workdir-in-context`
+  (priority 67, queued). Nothing of this item waits on either.
 
 ## Design
 
@@ -690,8 +740,7 @@ The path is absolute.
 - `warden doctor` prints it as the first line of its report, on stdout.
 - `build`, `shell`, `clean`, `setup` and `image prepare` print it on
   stderr with the `[warden]` prefix, before anything else, without
-  `--verbose` (a4). Under a4 (a) they would print it only with `--verbose`
-  (or `WARDEN_VERBOSE`, or `[output] verbose`).
+  `--verbose` (a4).
 - `warden doctor`'s source label for the build link and the resolvers
   (`build link 100.126.255.252/30 (warden.toml)`) stays the base name of
   the file that set the key, as today; with one file it is that file's
@@ -951,9 +1000,9 @@ where that is fixed.
     context root). What a driver's work directory holds that a build should
     not read was not traced (a relay VM's seed carries the claim token,
     `tools/relay-vm/README.md`; whether it is kept in the work directory
-    was not checked). It is listed for intake as its own security finding (**What
-    this item does not do**), because the flag does the same and the answer
-    is in the drivers.
+    was not checked). It is filed as its own security finding, in
+    `workdir-in-context` (**What this item does not do**), because the flag
+    does the same and the answer is in the drivers.
 - **F4, the Hyper-V base image.** With the executor's own file, this is how
   an operator pins a base ("an explicit URL is the operator's choice",
   `driver/hyperv/evalimage.go`). With the default file in someone else's
@@ -1187,7 +1236,7 @@ other:
 - This item keeps its rule and its code: the runtime is `finch`, `docker`
   or `podman` from every source, checked in `resolveRuntime`; its
   transitional file `runtime_former.go` and marker stay untouched, and are
-  kept until 1.0 (its a4), which is what a3 proposes for this item's.
+  kept until 1.0 (its a4), as this item's are (a3).
 - This item reworks what that one writes for two files, which its design
   lists: the fourth row of its rule's table, the marker step in
   `LoadConfig` that tells whether the project's file set the key, "else
@@ -1199,7 +1248,14 @@ other:
   "flags and environment variables over file configuration, in the order
   UX-07 gives". It names no level of config file, so this item changes no
   word of UX-08 (**Rule changes**).
-- The hold: a7.
+- The hold (a7, answered (a)): a blocking question on this item that
+  names that item's merge, "resume when `runtime-cli-project-path`'s PR
+  has merged". It is the review session's to raise, when it records this
+  design's approval, with the `human` step that `f2-plan` then needs; this
+  agent writes no step and no blocking question into the queue file. Until
+  it is raised nothing holds `f2-plan` but the review step itself, so the
+  session raises it in the same sitting as the approval, before the step
+  is marked done. Jeff answers it once that PR has merged.
 
 **`driver-contract` (K1) after.** K1 is written on one file and waits for
 this item's merge before its Plan (its Decision 23). What each owes the
@@ -1237,9 +1293,12 @@ other:
   question that names this item's merge, written by the session that
   records its review's outcome.
 
-**`configuration-bugfixes`** (queued, on hold behind the freeze) is handed
-four observations, and two findings go to intake (a11; **What this item
-does not do**).
+**`configuration-bugfixes`** (queued, on hold behind the freeze) was
+handed four observations, and **`workdir-in-context`** (a security fix,
+priority 67, queued) was filed with the two security findings, both by
+the review session on 2026-11-15 (a11; workflow `4c59842`; **What this
+item does not do**). This item waits on neither, and neither waits on
+it.
 
 ### What this item does not do
 
@@ -1261,17 +1320,17 @@ does not do**).
   that tree.
 
 **Handed on.** This agent edits only its own queue item, so the hand-offs
-are recorded by the session that records this design's review (a11). Each
-has a named home:
+were recorded by the session that holds this design's review (a11,
+answered (a)). Each has a named home:
 
-| What | Where it goes | Who records it |
+| What | Where it goes | Who records it, and when |
 |---|---|---|
-| `[relay] system_ca_bundle = false` with no CA path does nothing, silently (GLOBAL-10) | `configuration-bugfixes`, appended to its `source` | the design-review session |
-| `--no-compress` and `-v` cannot undo the file (`--no-compress=false`, `--verbose=false`), and `WARDEN_VERBOSE=0` turns verbose on | `configuration-bugfixes`, likewise | the design-review session |
-| A mistyped local `[vm] windows_image` is sent to the HTTP client, whose error does not say the path was not found (UX-04) | `configuration-bugfixes`, likewise | the design-review session |
-| The hyperv and qemu drivers read variables that are in no reference (`WARDEN_HYPERV_BUILD_IMAGE`, `WARDEN_RELAY_BOOT_VHDX`, `WARDEN_QEMU_VNC` and others), which UX-07 calls ad hoc before and after this item | `configuration-bugfixes`, likewise | the design-review session |
-| **A work directory inside the build context is served to the build** (below) | a new security item through intake, proposed slug `workdir-in-context` | the design-review session, with Jeff (`workflow-intake`) |
-| **A Dockerfile's `FROM` value reaches the container runtime's command line unchecked** (below) | the same new item's `source` | the same |
+| `[relay] system_ca_bundle = false` with no CA path does nothing, silently (GLOBAL-10) | `configuration-bugfixes`, appended to its `source` | the review session; done 2026-11-15, workflow `4c59842` |
+| `--no-compress` and `-v` cannot undo the file (`--no-compress=false`, `--verbose=false`), and `WARDEN_VERBOSE=0` turns verbose on | `configuration-bugfixes`, likewise | done, likewise |
+| A mistyped local `[vm] windows_image` is sent to the HTTP client, whose error does not say the path was not found (UX-04) | `configuration-bugfixes`, likewise | done, likewise |
+| The hyperv and qemu drivers read variables that are in no reference (`WARDEN_HYPERV_BUILD_IMAGE`, `WARDEN_RELAY_BOOT_VHDX`, `WARDEN_QEMU_VNC` and others), which UX-07 calls ad hoc before and after this item | `configuration-bugfixes`, likewise | done, likewise |
+| **A work directory inside the build context is served to the build** (below) | the security item `workdir-in-context` (priority 67, queued), filed through intake | the review session, with Jeff; done 2026-11-15, workflow `4c59842` |
+| **A Dockerfile's `FROM` value reaches the container runtime's command line unchecked** (below) | the same item's `source` | done, likewise |
 | The removal of the transitional detection, at 1.0 (a3) | its own small queue item | Publish |
 | The corpus entries of the Security note | `security-suite` (SEC-03) | Publish |
 
@@ -1463,9 +1522,9 @@ variable (`[vm] dns`, `[relay] system_ca_bundle`, the two image ages,
 affected**, the second table). "Any of them is easy to override at three
 levels", kept as it is, would be false of `main` on the day this merges
 for sixteen keys, and would read as requiring a2's option (c), a variable
-for every key. The wording holds under every answer to a2: under (a) and
-(b) some knobs have fewer levels; under (c) every key has the file and
-the environment.
+for every key. a2 was answered (a), none added, so some knobs have fewer
+levels; the wording was written to hold under each of a2's options, and
+the answer changes no word of it.
 
 ### UX-08, not changed
 
@@ -1538,8 +1597,8 @@ kept "at three levels", sixteen keys would not conform (above).
 Three things on `main` sit badly with UX-07 before this item and equally
 after it, and are not made worse: the two one-way flags and
 `WARDEN_VERBOSE` (a level that can turn a setting one way only), and the
-drivers' undocumented variables ("ad-hoc environment variables"). They go
-to `configuration-bugfixes` (a11).
+drivers' undocumented variables ("ad-hoc environment variables"). They
+are in `configuration-bugfixes`' `source` (a11).
 
 ### How the items' rule changes sit together
 
@@ -1659,8 +1718,9 @@ the second and third itself (`driver = "qemu"`, `relay_image = "dev"`).
    directory (a1 (a)), so a relative CA path in an executor's own file
    reads certificates from the repository being built.
 7. **A work directory inside the build context, and a `FROM` value read as
-   an option** (the two findings for intake, a11). Neither needs a config
-   file.
+   an option** (the two findings filed as `workdir-in-context`, a11).
+   Neither needs a config file, and both stay open until that item
+   merges.
 8. **A `warden` built in a tree is as trusted as that tree.** Unchanged:
    running `dist/warden` from a checkout builds from that checkout.
 
@@ -1858,10 +1918,12 @@ For Plan to refine. One PR, started from a `main` that has
     item (a3), and the corpus entries of the Security note handed to
     `security-suite` (SEC-03).
 
-Not Plan's, and before it: the session that records this design's review
-appends the four observations to `configuration-bugfixes`' `source` and
-files the two security findings through intake (a11; the table in **What
-this item does not do**).
+Not Plan's, and done before it: on 2026-11-15 the review session
+appended the four observations to `configuration-bugfixes`' `source` and
+filed the two security findings as `workdir-in-context` (a11; workflow
+`4c59842`; the table in **What this item does not do**). Still the review
+session's, when it records the approval: the hold behind
+`runtime-cli-project-path`'s merge (a7).
 
 ## Design review
 
