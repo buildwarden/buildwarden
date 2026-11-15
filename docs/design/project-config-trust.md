@@ -4,7 +4,9 @@ status: draft
 drivers: [container, qemu, vz, hyperv, firecracker]  # conservatively (FLOW-02): the change is in
                          # cmd/warden and in three shared files of driver/ (hostutil.go, session.go,
                          # detach.go) that every driver uses. In the driver/<name>/ trees only
-                         # two test files change (hyperv, qemu), to name the source tree
+                         # test files change: a new main_test.go in hyperv and in qemu, which
+                         # names the source tree once for the package, and one helper in
+                         # hyperv/environment_test.go, which fails where it skipped
 seams: []                # the claim's upstream_ca_certs field carries what it carried, PEM
                          # certificates; relaycfg/ is not edited
 surfaces: [cli, config, output]  # cli: --config, a global flag. config: one file, found by
@@ -18,16 +20,16 @@ security_boundary: host-env  # which file warden acts on, on the host, before an
 alters_relationships: false  # inside the orchestrator's existing role, reading its own
                          # configuration and finding its own source. No seam, no bootstrap change,
                          # no change of owner, no change to driver.Driver or driver.Session
-design_review: required  # FLOW-19: a security boundary, three rule changes, assumed questions
+design_review: required  # FLOW-19: a security boundary, two rule changes, assumed questions
 native_validation:
   - {host: container-any, blocking: false, reason: "no driver's own code is changed and the lookup is the same code on every OS; what only a Windows host adds is go test ./cmd/warden and ./driver there (CI does not run make test on Windows), the transitional error naming the file under %USERPROFILE%, a drive-letter path in --config, and WARDEN_UPSTREAM_CA_CERTS split on ';'"}
-  - {host: windows-hyperv, blocking: false, reason: "in driver/hyperv only a test file is edited, and CI runs it; what only this host adds is the detached image prepare reading the file its build read (the argument list is built in shared code and unit-tested), and a development warden run from its tree still finding its guest binaries from the executable"}
-  - {host: macos-vz, blocking: false, reason: "driver/vz is not edited; what only this host adds is sudo warden image prepare --driver vz with a ~/.config/warden/config.toml present (which home sudo gives), and a development warden run from its tree still staging the relay and warden-io from the executable"}
-  - {host: qemu-any, blocking: false, reason: "in driver/qemu only a test file is edited, and CI runs it; what only this host adds is a development warden run from its tree still finding the relay VM assets in the source tree, by walking up from the executable"}
+  - {host: windows-hyperv, blocking: false, reason: "in driver/hyperv only test files are added or edited, and CI runs them; what only this host adds is the detached image prepare reading the file its build read (the argument list is built in shared code and unit-tested), and a development warden run from its tree still finding its guest binaries from the executable"}
+  - {host: macos-vz, blocking: false, reason: "driver/vz is not edited; what only this host adds is sudo warden image prepare --driver vz, where sudo keeps the user's home and drops WARDEN_CONFIG (which file is read, and which error a ~/.config/warden/config.toml gets), and a development warden run from its tree still staging the relay and warden-io from the executable"}
+  - {host: qemu-any, blocking: false, reason: "in driver/qemu only a test file is added, and CI runs it; what only this host adds is a development warden run from its tree still finding the relay VM assets in the source tree, by walking up from the executable"}
 tier2_gaps:
   - {host: container-any, gap: "on the Windows desktop: go test ./cmd/warden ./driver; with %USERPROFILE%\\.config\\warden\\config.toml present, warden doctor exits 1 naming that path, and WARDEN_CONFIG set to it clears the error; --config C:\\x\\warden.toml is read and .\\warden.toml is not; WARDEN_UPSTREAM_CA_CERTS=C:\\a.pem;C:\\b.pem names two files; --config NUL reads no settings (backlog project-config-trust-windows)"}
   - {host: windows-hyperv, gap: "a hyperv build with --config naming a file outside the working directory whose [vm] image_refresh_after is due starts the detached image prepare, and its log's config line names that file; a development warden run from its tree builds (backlog project-config-trust-hyperv)"}
-  - {host: macos-vz, gap: "sudo warden image prepare --driver vz and warden build --driver vz with ~/.config/warden/config.toml present each exit 1 naming the file, under sudo naming the file in the home sudo gives; a development warden run from its tree builds with --driver vz (backlog project-config-trust-vz)"}
+  - {host: macos-vz, gap: "sudo warden image prepare --driver vz and warden build --driver vz with ~/.config/warden/config.toml present each exit 1 naming the file, under sudo naming the file in the home sudo gives, and the fix under sudo names --config; with WARDEN_CONFIG set in the user's environment, sudo warden image prepare prints a config line that does not name that file (sudo dropped the variable), and with sudo --preserve-env=WARDEN_CONFIG or --config it names it; a development warden run from its tree builds with --driver vz (backlog project-config-trust-vz)"}
   - {host: qemu-any, gap: "a development warden run from its tree builds with --driver qemu, the relay VM assets found in the tree; a copy of that warden outside the tree, run inside the tree, reports the missing source tree and builds nothing (backlog project-config-trust-qemu)"}
 rules: [GLOBAL-01, GLOBAL-04, GLOBAL-06, GLOBAL-07, GLOBAL-09, GLOBAL-10, GLOBAL-11, ORCH-01,
         ORCH-03, RELAY-08, UX-01, UX-03, UX-04, UX-05, UX-06, UX-07, UX-08, UX-09, TEST-01,
@@ -37,11 +39,11 @@ rules: [GLOBAL-01, GLOBAL-04, GLOBAL-06, GLOBAL-07, GLOBAL-09, GLOBAL-10, GLOBAL
 rule_changes:
   - {rule: ORCH-03, change: amend, paths: [docs/development/orchestrator.md]}
   - {rule: UX-07, change: amend, paths: [docs/development/ux-cli-config.md]}
-  - {rule: UX-08, change: amend, paths: [docs/development/ux-cli-config.md]}
 concepts: [config-file, config-lookup, config-precedence, config-levels, config-trust,
            build-context-trust, environment-variables, user-config-removed,
            transitional-detection, module-root, relay-image, upstream-ca, security-fix]
-related: [build-link-subnet.md, design-principles.md]
+related: [build-link-subnet.md, hyperv-relay-per-build-channel.md,
+          guest-binary-cache-per-tree.md, design-principles.md]
 ---
 
 # One warden.toml, in the control of whoever runs the build
@@ -71,9 +73,12 @@ defect elsewhere"):
 - **F4.** `[vm] windows_image` names the Hyper-V base image that goes into
   the user's cache, where builds of every project use it.
 - **F9.** Not a key: `driver.ModuleRoot` takes the working directory for
-  `warden`'s own source tree, so a development `warden` installed outside
-  its tree builds the relay and `warden-io` from a repository that declares
-  `module github.com/buildwarden/buildwarden`.
+  `warden`'s own source tree. So any `warden` whose guest binaries, relay
+  VM assets or relay source are not beside it builds them from, or takes
+  them from, a repository that declares `module
+  github.com/buildwarden/buildwarden`: a development `warden` outside its
+  tree, and also an installed release with a VM driver or with
+  `relay_image = "dev"` (**F9: the source tree**).
 - **The whole file.** `./warden.toml` outranks the user's own file for
   every key, so a repository can move a user onto a driver that isolates
   less, or change what the user chose to capture.
@@ -100,8 +105,9 @@ and then decided, each asked on its own (the queue item's history):
 3. This item carries the change; `driver-contract` and
    `runtime-cli-project-path` are written to fit it.
 4. An existing `~/.config/warden/config.toml` makes `warden` stop with an
-   error that names the file and says what to do. That detection is
-   transitional and removed later.
+   error that names the file and says to move its settings into
+   `warden.toml` or the environment. That detection is transitional and
+   removed later.
 
 So there is no project level and no user level, and the findings change
 shape. With one file in the control of whoever runs the build (the
@@ -116,28 +122,38 @@ problem.
 
 ## Prior art
 
-- **`runtime-cli-project-path`** (in its design review; not on `main`; read
-  at `3bf8784` on its branch, cited here as proposed). It merges before this
-  item. It limits the container runtime to `finch`, `docker` or `podman`
-  from every source, checked in `resolveRuntime` on the value in effect; it
-  proposes an amendment of UX-08 (the consumer validates, after the
-  overrides, only what the run uses); and it sets the pattern this design
-  copies for a change that refuses what worked before: an error at once,
-  with a transitional part in one file behind one marker
-  (`TRANSITIONAL(runtime-former-values)`), removed after a window (its a4).
-  Its findings F1 to F4 and F9 are this item's `source`; F5 to F8 are
-  `configuration-bugfixes`'.
+- **`runtime-cli-project-path`** (design approved, r1 at `a2afd08`, with
+  its UX-08 change approved by name; not on `main`; read at `119a0e1` on its
+  branch, and its code is cited here as designed, not as built). It merges
+  before this item. It limits the container runtime to `finch`, `docker` or
+  `podman` from every source, checked in `resolveRuntime` on the value in
+  effect; it amends UX-08 (the consumer validates, after the overrides,
+  only what the run uses); and it sets the pattern this design copies for a
+  change that refuses what worked before: an error at once, with a
+  transitional part in one file behind one marker
+  (`TRANSITIONAL(runtime-former-values)`), which Jeff decided is kept until
+  1.0 (its a4, answered (d)). Its section **One config file** is written to
+  fit this item. Its findings F1 to F4 and F9 are this item's `source`; F5
+  to F8 are `configuration-bugfixes`'.
 - **`driver-contract`** (K1, in its design review; not on `main`; read at
-  `8f61932`). It names the config files to a driver in `config_files`, each
-  with a `level` (`project` or `user`), proposes an ORCH-03 paragraph on
-  drivers, and decides that a project's file may name a driver but not give
-  a path (its a16). All three were written for two files. Jeff's decision 3
-  has K1 fit this design; what that means is in **How it sits with the
-  other items**.
-- **`build-link-subnet`** (archived). It added `BuildLinkSource` and
-  `DNSSource`, the name of the file that set a key (`warden.toml` or
+  `834c449`). Since its Decision 23 it is written on one file: the contract
+  hands a driver one `config_file` (the absolute path of the file `warden`
+  read, absent when there is none), no list and no `level`. It quotes
+  ORCH-03 and UX-07 as this design proposed them at `539fd38`, waits for
+  this item's merge before its Plan, and asks in its a26 what becomes of
+  the one guard it kept, that a config file names a driver and not a path.
+  What each owes the other is in **How it sits with the other items**.
+- **`build-link-subnet`** (archived) added `BuildLinkSource`, and
+  **`hyperv-relay-per-build-channel`** (archived) added `DNSSource` the
+  same way: the base name of the file that set a key (`warden.toml` or
   `config.toml`), which `warden doctor` prints. With one file the label is
   that file's name; the mechanism stays.
+- **`guest-binary-cache-per-tree`** (merged, #112). It keyed
+  `GuestBinary`'s cache by the source tree `ModuleRoot` returns, so that
+  two checkouts never stage each other's builds, and left how the tree is
+  found as it was ("Find the source tree (`ModuleRoot`). None: refuse,
+  naming the binary"). This design changes how the tree is found (F9) and
+  leaves the cache and its key alone.
 - **`design-principles`** (archived): GLOBAL-09 to GLOBAL-11. Its list
   "Fallbacks found while drafting" names `WARDEN_UPSTREAM_CA_CERTS`, which
   is appended to the files' list instead of replacing it, as "for the design
@@ -150,8 +166,8 @@ problem.
   directory's `warden.toml` today.
 - **Rules:** GLOBAL-06 (the boundary), GLOBAL-09 to GLOBAL-11 (defaults,
   exclusive overrides, no silent fallback), ORCH-03 and UX-07 (amended
-  here), UX-08 (as `runtime-cli-project-path` proposes it, plus one clause
-  here), UX-01 and FLOW-15 (the docs), UX-03 (**Compatibility**), UX-04 and
+  here), UX-08 (as `runtime-cli-project-path` amends it; this item changes
+  no word of it), UX-01 and FLOW-15 (the docs), UX-03 (**Compatibility**), UX-04 and
   UX-09 (the errors), UX-05 and UX-06 (the flag), SEC-01, SEC-03 and SEC-04
   (the corpus entries), the umbrella's Decision 18 (a rule changes in the
   item that makes it true).
@@ -165,20 +181,27 @@ level. The designs relied on carry front-matter already.
    (Jeff's decisions 1 and 2): the file `--config <path>` names; else the
    file `WARDEN_CONFIG` names; else `./warden.toml` when it exists; else no
    file, and the defaults apply. The flag is over the variable, as for every
-   setting. The edges (assumed question a8):
+   setting. The edges:
    - *A named file that cannot be read is an error*, never a reason to try
      the next source (GLOBAL-10): it does not exist, it is a directory, or
      it cannot be opened. The error names the path and whether the flag or
      the variable gave it.
-   - *An empty value is not set*: `--config ""` and `WARDEN_CONFIG=` fall
-     through to the next source, as an empty `--runtime`, `--driver` and
-     `WARDEN_CTR_CLI` do today.
+   - *`--config` given with an empty value is an error; an empty
+     `WARDEN_CONFIG` is not set* (assumed question a8). `warden --config
+     "$CFG" build` with `CFG` unset must not hand the build to the working
+     directory's file without a word, which is what falling through would
+     do. An empty variable is "not set" for every `WARDEN_*` variable
+     today, and `WARDEN_CONFIG= warden build` is how a shell unsets one for
+     a single command.
    - *To read no settings at all, name an empty file* (`--config /dev/null`
-     on Unix). There is no flag for it.
-   - *The default is read only when it exists.* A `./warden.toml` that
-     exists and cannot be read, or is not TOML, is an error, as today for
-     the syntax. Today any `stat` failure is read as "no file"; after this,
-     only "does not exist" is.
+     on Unix, `--config NUL` on Windows). There is no flag for it.
+   - *The default is the working directory's file, and is read only when it
+     exists.* It is `./warden.toml` of the directory `warden` runs in,
+     whatever `[path]` names: `warden build /src/repo` from another
+     directory does not read `/src/repo/warden.toml`, today or after. A
+     `./warden.toml` that exists and cannot be read, or is not TOML, is an
+     error, as today for the syntax (GLOBAL-11: today any `stat` failure is
+     read as "no file"; after this, only "does not exist" is).
    - *A file that is named is the only one.* With `--config` or
      `WARDEN_CONFIG` set, `./warden.toml` is not opened, parsed or checked.
      A variable the flag replaces is not opened either.
@@ -199,12 +222,18 @@ level. The designs relied on carry front-matter already.
      configuration flag that is not global, and `driver-contract` already
      proposes to refuse flags a command does not use (its Behaviour 2), for
      every flag at once.
+   - *Rejected: a command that reads no configuration refuses the flag.*
+     The same reason: it is `driver-contract`'s to do for every flag.
 3. **`~/.config/warden/config.toml` is not read, and its existence is an
    error** (Jeff's decision 4), on every command that reads configuration,
-   whichever way the config file was chosen. One exception: when the file
-   `--config` or `WARDEN_CONFIG` names *is* that file, it is the config
-   file and there is nothing stale. The error is transitional: one file of
-   code, one marker, removed after a window (assumed question a3).
+   whichever way the config file was chosen. The message leads with what
+   Jeff decided it says: move the settings into the `warden.toml` you build
+   with, or into the environment. One exception, which is this design's
+   own and is asked (assumed question a10): when the file `--config` or
+   `WARDEN_CONFIG` names *is* that file, it is the config file, there is
+   nothing stale, and the error does not fire; the message gives that as
+   its second way out. The error is transitional: one file of code, one
+   marker, removed at one point (assumed question a3).
    - Why it fires even with `--config` or `WARDEN_CONFIG` set: the point of
      the error is that settings which applied yesterday do not silently stop
      applying. They stop applying whichever file is read now. A machine that
@@ -224,8 +253,12 @@ level. The designs relied on carry front-matter already.
    Every key was checked against it (**The precedence, key by key**). One
    does not follow it, and is changed: `WARDEN_UPSTREAM_CA_CERTS` is
    appended to `[relay] upstream_ca_certs` instead of replacing it. It
-   replaces it from this item on, and for the transitional window setting
-   both is an error that says so (assumed question a5).
+   replaces it from this item on, and while the transitional detection
+   stands, setting both is an error that says so (assumed question a5).
+   That error is raised where the CA paths are used (`build`, `shell` and
+   `doctor`), not as the file loads: `clean`, `setup` and `image prepare`
+   use no CA path and do not fail on it (UX-08 as amended: only what a run
+   uses is validated).
    - *Rejected: keep the append and name it as a merge* (GLOBAL-10 allows a
      named merge). It would be the one variable of six that adds, in the
      item that writes "a value set at any level replaces the lower levels'
@@ -244,6 +277,9 @@ level. The designs relied on carry front-matter already.
    one, so that the default is never silent (assumed question a4). The
    protection for a repository the executor does not control is to name the
    file: `--config`, or `WARDEN_CONFIG` once in the machine's environment.
+   The variable does not reach a `warden` run under `sudo`, which resets
+   the environment by default: there the file is named with `--config`, or
+   `sudo` is told to keep the variable (**Security note**, what remains).
    - *Rejected: refuse some values from a file found by default* (the relay
      image, CA paths, the base image). It is a second level by another
      name: "the file I named" over "the file I did not", with a list of
@@ -261,19 +297,26 @@ level. The designs relied on carry front-matter already.
    - a relay image that is not shaped like an image reference (it starts
      with `-`, or holds a space or a control character) is refused, from
      the file and from `WARDEN_IMAGE`;
-   - an upstream CA file is read and checked before anything is created,
-     and only its certificates are sent to the relay: a file with no
+   - an upstream CA path is read and checked before anything is created,
+     and only certificates are sent to the relay. The rule is per file, and
+     is the same for a file named directly and for each `*.pem`, `*.crt`
+     and `*.cer` file of a directory that is named: a file with no PEM
      certificate, a certificate that does not parse, or a PEM block of any
-     other kind (a private key) is an error that names the file (assumed
-     question a9);
+     other kind (a private key) is an error that names the file, and so is
+     a directory that holds no such file (assumed question a9);
    - `WARDEN_UPSTREAM_CA_CERTS` is split on the OS's path-list separator
      (`;` on Windows), not on `:`, which cuts a drive letter in two.
-9. **A development `warden` finds its source tree from its own executable
-   only** (F9; assumed question a6). `driver.ModuleRoot` stops walking up
-   from the working directory, and matches the module line exactly. A
-   development `warden` whose executable is not inside its source tree
-   reports that, with the fix, instead of building from whatever tree the
-   working directory is in.
+
+   `warden doctor` makes the first two checks too, for the driver it
+   reports on, so that it does not print `ok` for a relay image or a CA
+   path a build would refuse.
+9. **`warden` finds its source tree from its own executable only** (F9;
+   assumed question a6). `driver.ModuleRoot` stops walking up from the
+   working directory, and matches the module line exactly. A `warden` that
+   needs the tree and is not inside it (a development build copied or
+   installed elsewhere; a release used with a VM driver or with
+   `relay_image = "dev"`) reports that, with the fix, instead of building
+   from whatever tree the working directory is in.
 10. **A background `warden image prepare` reads the file its build read.**
     A qemu Windows or hyperv build whose prepared image is due for refresh
     starts `warden image prepare` detached (`driver.StartDetached`). Today
@@ -281,13 +324,34 @@ level. The designs relied on carry front-matter already.
     directory it inherits. With `--config` on the parent that would be a
     different file, so the parent passes `--config <absolute path>` to the
     child when it read a file.
-11. **Three rule changes**, each made true by this item's code (the
+11. **Two rule changes**, each made true by this item's code (the
     umbrella's Decision 18): ORCH-03 and UX-07 state the one file and the
-    order with the environment in it; UX-08, as
-    `runtime-cli-project-path` will have amended it, loses one plural
-    (**Rule changes**).
-12. **Other defects found are handed on, not fixed** (**What this item
-    does not do**).
+    order with the environment in it. UX-08 is not changed: as
+    `runtime-cli-project-path`'s review approved it, it names no level of
+    config file (**Rule changes**).
+12. **Other defects found are handed on, not fixed**, each to a named
+    item, and the design review records the hand-offs in the queue
+    (assumed question a11; **What this item does not do**).
+13. **`warden.toml` in a message means the config file in use.** Nineteen
+    fix strings and messages name the file as `warden.toml` ("set `[vm]
+    dns` in warden.toml ..."), seventeen of them in four drivers' trees and
+    `driver/hostlink.go`. The seventeen stay as they are: Jeff's name for
+    the one file is "the warden.toml", whichever path it has, and the
+    `config:` line at the top of the same output gives that path (under a4
+    (a), `warden doctor` and `--verbose` give it). The reference says so in
+    one sentence. The two messages of `cmd/warden` that name the
+    file for a key's bad value (`[vm] image_refresh_after` and
+    `image_min_grace`; `[vm] windows_image_update`) name the file that was
+    read, by its path, where the build link's message names it by its
+    source label.
+    - *Rejected: reword the seventeen to "the config file".* It edits
+      built code in `driver/qemu`, `driver/firecracker`, `driver/vz` and
+      `driver/hyperv` for a wording change, in the item that otherwise
+      edits none, and `driver-contract` rewrites those drivers' reading of
+      configuration next.
+    - *Rejected: pass the path to the drivers so that each message names
+      it.* A new field on every driver's request for the text of a fix,
+      which K1's `config_file` gives them anyway.
 
 ## Questions
 
@@ -334,27 +398,32 @@ None.
     user who had both a user file and project files keeps one file per
     build. **Recommended**: it is the model as Jeff stated it, and
     `driver-contract` moves seven of the keys to the drivers, whose kit is
-    where a variable per driver setting would be decided.
+    where a variable per driver setting would be decided. Fourteen keys
+    then have no variable and five have neither a flag nor a variable, so
+    UX-07 is worded for a knob that has fewer than three levels (**Rule
+    changes**).
   - (b) Variables for the settings that belong to a machine or its network
     and have neither flag nor variable: `[vm] dns` and `[relay]
     system_ca_bundle` (and `WARDEN_BUILD_LINK` beside `--build-link`). The
     corporate-network guide's settings then need no file. Three new names,
     chosen before `driver-contract` has settled which keys stay `warden`'s.
   - (c) A variable for every key, by one naming scheme. Every setting is
-    then reachable at every level. Fourteen new names, several of them for
-    keys `driver-contract` renames.
+    then reachable from the environment (seven keys would still have no
+    flag). Fourteen new names, several of them for keys `driver-contract`
+    renames.
 - **a3. When is the transitional detection removed?** It makes two errors:
   the one for an existing `~/.config/warden/config.toml`, and the one for
   `WARDEN_UPSTREAM_CA_CERTS` set together with the key (a5). After its
   removal an old user file is ignored without a word, and the variable
   replaces the key without a word. Proceeding with (a); confirm.
-  - (a) The window `runtime-cli-project-path` gets for its own (its a4,
-    still open; it recommends the release that first carries the change and
-    the two after it, removed from the third). One window for both items'
-    transitional code, and Publish files this item's removal as its own
-    small queue item whose `source` names the marker. **Recommended.**
-  - (b) The release that first carries the change and the one after it.
-  - (c) Kept until 1.0.
+  - (a) Kept until 1.0, which is what Jeff answered on 2026-11-15 for
+    `runtime-cli-project-path`'s transitional detection (its a4, (d)). One
+    removal point for both items' transitional code. Publish files this
+    item's removal as its own small queue item whose `source` names the
+    marker and 1.0. **Recommended.**
+  - (b) The release that first carries the change and the two after it,
+    removed from the third. Sooner than the other item's, so two dates.
+  - (c) The release that first carries the change and the one after it.
   - (d) Removed by `driver-contract`, when it rewrites configuration
     loading. The date then depends on that item, and its diff grows.
 - **a4. What, if anything, protects the default: `./warden.toml` in a
@@ -363,7 +432,8 @@ None.
   on the repository's file: it chooses the driver, the relay image, the
   relay's trust roots, where output and work directories go, and (with
   `--driver hyperv`) the base image put in the user's cache. The protection
-  is to name the file.
+  is to name the file, and under `sudo` to name it with `--config`, because
+  `sudo` drops `WARDEN_CONFIG` by default.
   - (a) Nothing more than `--config`, `WARDEN_CONFIG` and the reference
     saying so. `warden doctor` and `--verbose` say which file was read.
     The default is silent on an ordinary run.
@@ -387,28 +457,36 @@ None.
   - (a) The variable replaces the key (GLOBAL-10), and while the
     transitional detection stands, setting both is an error that says the
     meaning changed and to put every path in one of them. Nobody gets fewer
-    trust roots without being told. **Recommended.**
+    trust roots without being told. The error is raised on the commands
+    that use the CA paths (`build`, `shell`, `doctor`), not on `clean`,
+    `setup` or `image prepare`. **Recommended.**
   - (b) The variable replaces the key at once, with no error. Someone who
     relied on the sum gets upstream TLS failures and has to work out why.
   - (c) The append stays and is named as a merge in the reference and in
     **Defaults and overrides** (GLOBAL-10 allows it). No behaviour changes;
     the environment is then a level that replaces for five variables and
     adds for one.
-- **a6. How a development `warden` finds its source tree (F9).** Today:
-  walking up from the executable, then from the working directory.
-  Proceeding with (a); confirm.
+- **a6. How `warden` finds its source tree (F9).** Today: walking up from
+  the executable, then from the working directory. Proceeding with (a);
+  confirm.
   - (a) From the executable only. `make build` puts `dist/warden` in the
-    tree, which is how CONTRIBUTING, CI and the native sessions run it, so
-    nothing they do changes. `go run ./cmd/warden` and a `go install`ed
-    development `warden` (whose executable is in a cache or in `GOBIN`) get
-    an error that says to run `make build` and use `dist/warden`. Three
-    tests in two drivers' test files rely on the working-directory step
-    today and name the tree through a test-only setter instead (**F9: the
-    source tree**). No new surface. **Recommended.**
+    tree, with the guest binaries beside it, which is how CONTRIBUTING, CI
+    and the native sessions run it, so nothing they do changes. What stops
+    working: `go run ./cmd/warden` and a `go install`ed development
+    `warden` (whose executable is in a cache or in `GOBIN`); and an
+    installed release used with a VM driver, or with `relay_image = "dev"`,
+    from inside a checkout, which works today only through the
+    working-directory step (the release ships no Linux or Windows guest
+    binary under the name `warden` looks for, and no relay VM assets). Each
+    gets an error that says to run `make build` and use `dist/warden`. Four
+    tests in two drivers' packages rely on the working-directory step today
+    and get the tree named once per package instead (**F9: the source
+    tree**). No new surface. **Recommended.**
   - (b) (a), plus a variable (`WARDEN_SOURCE_DIR`) that names the tree and
-    is used exclusively. `go run` and `go install` keep working for someone
-    who sets it. One more variable outside the reference's knobs (UX-07),
-    and one more thing the environment can point at code.
+    is used exclusively. `go run`, `go install` and a release pointed at a
+    checkout keep working for someone who sets it. One more variable
+    outside the reference's knobs (UX-07), and one more thing the
+    environment can point at code.
   - (c) The tree the binary was compiled from (the path the compiler
     recorded). Nothing to set, and `go run` works. It fails under
     `-trimpath`, and a binary that reads its own build paths is magic
@@ -431,29 +509,110 @@ None.
     merge, and meets it in consolidation (FLOW-10), which then has real
     work in `LoadConfig`, the reference and UX-08 and may send it back to
     Implement.
-- **a8. The edges of the lookup** (Decision 1). Proceeding with all five;
-  confirm.
-  - A named file that cannot be read is an error; nothing else is tried.
-  - An empty `--config` or `WARDEN_CONFIG` is not set.
-  - Reading no settings is done by naming an empty file; alternative: a
-    `--no-config` flag.
-  - `--config` is global and is not opened by a command that reads no
-    configuration; alternative: such a command refuses it.
-  - A `./warden.toml` that exists and cannot be read is an error;
-    alternative: as today, treated as absent.
-- **a9. What a file named as an upstream CA may hold** (Decision 8).
-  Today its bytes are sent to the relay whatever they are. Proceeding with
-  (a); confirm.
-  - (a) Certificates only. Text outside PEM blocks (the comments of a
-    distribution bundle) is allowed and not sent; a file with no
-    certificate, a certificate that does not parse, or any other PEM block
-    is an error naming the file and the block. A file that holds a
-    certificate and its private key, which is sent whole today, is refused.
-    **Recommended.**
-  - (b) Send the certificates and drop everything else without an error. A
-    combined file keeps working; a file that is the wrong file sends
+- **a8. What an empty `--config` or `WARDEN_CONFIG` means.** `warden
+  --config "$CFG" build` with `CFG` unset passes an empty value. The next
+  source down is, in the end, `./warden.toml`, which in someone else's
+  repository is the file the executor meant not to use. For `--driver` and
+  `--runtime`, where an empty value is "not set" today, the next source is
+  not an untrusted file. Proceeding with (a); confirm.
+  - (a) `--config` given with an empty value is an error (cobra tells a
+    flag that was given from one that was not); an empty `WARDEN_CONFIG` is
+    not set, as every empty `WARDEN_*` variable is today. The typing
+    mistake on the command line is caught. `WARDEN_CONFIG="$CFG" warden
+    build` with `CFG` unset still reads `./warden.toml`; the `config:` line
+    shows it (**Security note**, what remains). **Recommended.**
+  - (b) Both are an error when set and empty. Nothing falls through. It
+    breaks `WARDEN_CONFIG= warden build`, the shell's way to unset a
+    variable for one command, and is the one `WARDEN_*` variable whose
+    empty value is not "not set".
+  - (c) Both are "not set", as an empty `--driver`, `--runtime` and
+    `WARDEN_CTR_CLI` are. One meaning of empty everywhere, and the silent
+    case above for the flag as well.
+  - (d) Empty means "read no file". A typing mistake then builds with the
+    defaults and not with the repository's file, also without a word.
+
+  The other edges of the lookup are not asked, because a rule or Jeff's
+  decision settles each: a named file that cannot be read is an error and
+  nothing else is tried (GLOBAL-10); a `./warden.toml` that exists and
+  cannot be read is an error, not "no file" (GLOBAL-11); `--config` is a
+  global flag (UX-05). Reading no settings by naming an empty file, with no
+  `--no-config`, is Decision 1's rejected alternative. The review confirms
+  them with the Decisions.
+- **a9. What a path named as an upstream CA may hold** (Decision 8). A
+  path is a file or a directory; of a directory, the files whose names end
+  in `.pem`, `.crt` or `.cer` are read, not its subdirectories. Today the
+  bytes of each file are sent to the relay whatever they are, and the relay
+  uses the PEM certificates it can parse and skips the rest without a word.
+  Proceeding with (a); confirm.
+  - (a) Certificates only, one rule per file, the same for a file named
+    directly and for each file read from a named directory. Text outside
+    PEM blocks (the comments of a distribution bundle) is allowed and not
+    sent. An error naming the file: no PEM certificate in it; a
+    certificate that does not parse; any other PEM block. An error naming
+    the directory: no `.pem`, `.crt` or `.cer` file in it. What works
+    today and stops: a file that holds a certificate and its private key,
+    which is sent whole today; a directory that also holds a DER-encoded
+    `.crt` or `.cer` (common for a root exported on Windows), which is
+    skipped by the relay today; a bundle with one certificate Go's parser
+    refuses (a negative serial number, for one), which the relay skips
+    today. In the last two the build ran, without the root the user
+    thought was added; after this it stops and says which file (GLOBAL-10:
+    "a provided value that cannot be used is an error that names it and
+    its fix"). **Recommended.**
+  - (b) As (a) for what must not leave the host and for a path that gives
+    nothing (another PEM block; a file or a directory with no certificate
+    at all), and as today for what the relay skips: a file in a named
+    directory that holds no PEM, and a certificate that does not parse,
+    are not sent and each is named on one line of stderr. No build that
+    works today stops for a DER file or one odd certificate; the skipped
+    root is said once and then scrolls away.
+  - (c) Send the certificates and drop everything else without an error. A
+    combined file keeps working; a path that names the wrong file sends
     nothing and says nothing.
-  - (c) Leave it: the file is the executor's choice.
+  - (d) Leave it: the file is the executor's choice. The early read is
+    still made.
+- **a10. May `--config` or `WARDEN_CONFIG` name
+  `~/.config/warden/config.toml` itself, and which fix does the
+  transitional message give first?** Jeff's decision 4 is an error "saying
+  to move its settings into warden.toml or the environment". Keeping the
+  old path in use by naming it is this design's own addition. It is not a
+  second level: one file is read. Under every option a per-user file can
+  stay in use for good, because decision 2 lets `WARDEN_CONFIG` name any
+  file; the options differ in whether it may stay at the old path, and in
+  what the message says first. Proceeding with (b); confirm.
+  - (a) The error does not fire when the named file is that file, and the
+    message gives that first ("to keep using this file, set
+    `WARDEN_CONFIG=...`"): one line in a shell profile and nothing moves.
+    It reads as the user-level file surviving under another name.
+  - (b) The error does not fire when the named file is that file, and the
+    message leads with Jeff's words (move the settings into the
+    `warden.toml` you build with, or into the environment) and gives
+    naming the file second. A file the executor names is the config file
+    whatever its path, so no path is special. **Recommended.**
+  - (c) No exemption: while the detection stands, that path is an error
+    even when it is the file named, and the message says only to move the
+    settings. Nearest to the decision as worded. Someone who wants a
+    per-user file moves it (`mv` to another path, and `WARDEN_CONFIG`),
+    and one path cannot be named until 1.0 and can be afterwards.
+- **a11. Where the defects this item found and does not fix are
+  recorded.** They are in **What this item does not do**: four
+  observations that are not security matters, and two that reach the host
+  from the build context without any config file (a work directory placed
+  inside the build context is served to the build; a Dockerfile's `FROM`
+  value reaches the container runtime's command line unchecked). This
+  agent may edit only its own queue item. Proceeding with (a); confirm.
+  - (a) The session that records this design's review appends the four
+    observations to `configuration-bugfixes`' `source` (it is queued, on
+    hold behind the freeze, and has no design yet), and files the two
+    others through intake as one security item, proposed slug
+    `workdir-in-context`, whose `source` carries both. Nothing waits on
+    either. **Recommended.**
+  - (b) This item traces and fixes the two security findings itself. They
+    are in `driver/` and the collector, not in configuration; the item
+    grows by two fixes in every driver, and a blocking native validation
+    with them.
+  - (c) They stay recorded in this design only, and are found again by
+    whoever reads it.
 
 ## Design
 
@@ -463,24 +622,30 @@ It works only in this repository.
 
 ```
 configFile():                                  # once per command that reads configuration
-    --config not empty        -> that path, source "--config"
+    --config given, empty     -> error (a8)
+    --config given            -> that path, source "--config"
     WARDEN_CONFIG not empty   -> that path, source "WARDEN_CONFIG"
     ./warden.toml exists      -> it, source "found in the working directory"
     else                      -> none
 
 LoadConfig():
-    former user config        # transitional; see below
     path, source := configFile()
     path named and cannot be read  -> the error; nothing else is tried
+    former user config exists, and is not path  -> the transitional error (below)
     none                      -> defaults
     else                      -> decode that one file
     apply the environment variables, then (resolveConfig) the flags
 ```
 
+- `./warden.toml` is the working directory's, not the build context's:
+  `warden build /src/repo`, run from elsewhere, looks in the directory it
+  runs in.
 - A relative `--config` or `WARDEN_CONFIG` is relative to the working
-  directory, like any path argument. Symbolic links are followed.
+  directory, like any path argument, so a relative `WARDEN_CONFIG` names a
+  different file in each directory. A value set once for a machine should
+  be absolute, and the reference says so. Symbolic links are followed.
 - The file is decoded once, by the decoder used today. A file that is not
-  TOML is an error for every command that reads it (UX-08 as proposed: "a
+  TOML is an error for every command that reads it (UX-08 as amended: "a
   config file that cannot be parsed is an error for every run that reads
   it").
 - The errors, each a `driver.FixableError` (UX-04), exit 1 (UX-09):
@@ -491,8 +656,13 @@ LoadConfig():
   ```
 
   ```
-  ERROR: config file ci.toml (from WARDEN_CONFIG) does not exist
+  ERROR: config file /home/ci/warden.toml (from WARDEN_CONFIG) does not exist
     To fix: set WARDEN_CONFIG to an existing file, or unset it to use ./warden.toml
+  ```
+
+  ```
+  ERROR: --config was given an empty path
+    To fix: pass --config the path of a config file, or drop the flag to use WARDEN_CONFIG or ./warden.toml
   ```
 
   ```
@@ -500,7 +670,8 @@ LoadConfig():
     To fix: make it readable, or name another file with --config or WARDEN_CONFIG
   ```
 
-  A directory gets the second form with "is a directory". The syntax error
+  A path is printed absolute, whatever form it was given in. A directory
+  gets the first or second form with "is a directory". The syntax error
   keeps today's text, with the path of the one file.
 
 ### What says which file was read
@@ -526,6 +697,9 @@ The path is absolute.
   the file that set the key, as today; with one file it is that file's
   name, and the `config:` line gives its path. The label `config.toml`
   appears only when the named file is called that.
+- A fix that says "in warden.toml" (the drivers' messages about `[vm]
+  dns`, `[vm] build_link` and `[vm] network`) means the config file in
+  use, whose path this line gives (Decision 13).
 
 ### The user-level file
 
@@ -538,22 +712,42 @@ The transitional error, on `build`, `shell`, `clean`, `doctor`, `setup` and
 
 ```
 ERROR: /home/you/.config/warden/config.toml is no longer read: warden reads one config file, ./warden.toml or the one --config or WARDEN_CONFIG names
-  To fix: to keep using this file, set WARDEN_CONFIG=/home/you/.config/warden/config.toml (it is then the only config file read: ./warden.toml is not); or move its settings into the warden.toml you build with, or into the environment (WARDEN_DRIVER, WARDEN_CTR_CLI, WARDEN_IMAGE, WARDEN_UPSTREAM_CA_CERTS), and delete it
+  To fix: move its settings into the warden.toml you build with, or into the environment (WARDEN_DRIVER, WARDEN_CTR_CLI, WARDEN_IMAGE, WARDEN_UPSTREAM_CA_CERTS), and delete it; or name it as the config file with --config or WARDEN_CONFIG (it is then the only one read: ./warden.toml is not)
 ```
 
 - The path is the one `LoadConfig` reads today: `os.UserHomeDir()` joined
-  with `.config/warden/config.toml`. Under `sudo` that is the home `sudo`
-  gives the process, as today. With no home directory there is nothing to
-  look for.
+  with `.config/warden/config.toml`. With no home directory there is
+  nothing to look for.
 - "Exists" is `os.Stat` succeeding; the file is not opened.
 - A named config file that cannot be read is reported first: it is what
   the user just asked for.
 - It does not fire when `--config` or `WARDEN_CONFIG` names that same file
-  (`os.SameFile`): the first way out in the message is one line in a shell
-  profile, with no file moved.
+  (`os.SameFile`), which is the message's second way out (a10).
 - `warden doctor` exits 1 with it, like every other command: doctor
   reports what a build would get.
 - The commands that read no configuration do not look.
+- It is not a check of a setting, so UX-08's "only the configuration a
+  run uses is validated" does not reach it: nothing in the file is read.
+  It reports a source of settings that has stopped applying, on every
+  command where it used to apply.
+
+Under `sudo`. The home is the one `sudo` gives the process, as today: the
+user's on macOS, root's on most Linux setups. And `sudo` resets the
+environment by default (`env_reset`), so a `WARDEN_CONFIG` the user set is
+not there: `WARDEN_CONFIG=/etc/warden/ci.toml sudo -n sh -c 'echo
+"[$WARDEN_CONFIG]"'` prints `[]` on this host. Three documented commands
+run under `sudo` and load configuration (`sudo warden image prepare
+--driver vz`, `sudo warden setup --driver firecracker`, and `sudo warden
+doctor --driver firecracker` in CI). So someone who followed the second
+way out with the variable meets the error again under `sudo` where the
+home is kept. When `SUDO_USER` is set, the fix therefore ends with one
+more sentence:
+
+```
+  ... Under sudo, WARDEN_CONFIG is dropped unless sudo is told to keep it: pass --config, or run sudo --preserve-env=WARDEN_CONFIG
+```
+
+The docs subsection says the same.
 
 Where it lives, so that it is deleted in one place, as
 `runtime-cli-project-path` does for its own:
@@ -561,7 +755,12 @@ Where it lives, so that it is deleted in one place, as
 - One file, `cmd/warden/config_former.go`, with two functions: one that
   returns the error above or nothing, and one that returns the a5 error for
   the variable and the key set together, or nothing.
-- Two calls in `LoadConfig`, each a single line.
+- Two calls, each a single line: the first in `LoadConfig`; the second in
+  `resolveUpstreamCAs`, the function that resolves the CA paths for the
+  commands that use them (**F1 to F4, one by one**, F2). `LoadConfig` does
+  not raise the a5 error: it would fail `clean`, `setup` and `image
+  prepare`, which use no CA path (UX-08 as amended: "nothing validates a
+  file or environment setting the run does not use").
 - One test file, `config_former_test.go`.
 - One subsection of the configuration reference ("Moving from
   `~/.config/warden/config.toml`").
@@ -569,21 +768,24 @@ Where it lives, so that it is deleted in one place, as
   comment (which says why the code exists and when it goes, GLOBAL-01), at
   the two calls, at the head of the test file, and in an HTML comment above
   the docs subsection. A search for the marker finds everything to delete.
-- When: a3. Publish files the removal as a queue item whose `source` names
-  the marker and the condition.
+- When: a3 (at 1.0). Publish files the removal as a queue item whose
+  `source` names the marker and the condition.
 
 ### Who is affected, and what they do instead
 
 | Today | After |
 |---|---|
-| Settings in `~/.config/warden/config.toml`, no `./warden.toml` | The error. `WARDEN_CONFIG=<that file>` keeps everything as it was |
+| Settings in `~/.config/warden/config.toml`, no `./warden.toml` | The error. Move the settings into the `warden.toml` built with or into the environment; or name that file with `--config` or `WARDEN_CONFIG`, which keeps everything as it was (a10) |
 | Settings in both files, merged | The error. One file per build: combine them, or name the user file and stop using the project's |
 | Only `./warden.toml` | Nothing changes, but for the `config:` line |
 | No file | Nothing changes, but for the `config:` line |
-| `WARDEN_UPSTREAM_CA_CERTS` and `[relay] upstream_ca_certs` both set | The a5 error during the window; afterwards the variable replaces the key |
-| A CA file that also holds a private key, or is not a certificate file | Refused, naming the file (a9) |
+| `WARDEN_CONFIG` set in a user's environment, `warden` run under `sudo` | `sudo` drops the variable: `./warden.toml` is read, or none. Pass `--config`, or `sudo --preserve-env=WARDEN_CONFIG` |
+| `WARDEN_UPSTREAM_CA_CERTS` and `[relay] upstream_ca_certs` both set | The a5 error on `build`, `shell` and `doctor` while the detection stands; afterwards the variable replaces the key |
+| A CA file that also holds a private key, or holds no PEM certificate | Refused, naming the file (a9) |
+| A CA directory that also holds a DER-encoded `.crt` or `.cer`, or a bundle with a certificate Go cannot parse | Refused, naming the file, where today the relay skips it without a word (a9) |
 | `relay_image` or `WARDEN_IMAGE` starting with `-` or holding a space | Refused |
-| A development `warden` run from outside its source tree, inside the tree | An error naming `make build` and `dist/warden` (a6) |
+| A development `warden` run from outside its source tree, inside the tree (`go run`, `go install`, a copy) | An error naming `make build` and `dist/warden` (a6) |
+| An installed release with `--driver qemu`, `firecracker` or `vz`, or with `relay_image = "dev"`, run inside a buildwarden checkout | The same error. Today it takes the guest binaries, the relay VM assets or the relay's source from the checkout it is run in (a6) |
 
 What can be set without a file, today and after (a2 adds none):
 
@@ -625,7 +827,7 @@ the levels below.
 | `[runtime] driver` | `--driver`, `WARDEN_DRIVER`, file, `container` | yes |
 | `[runtime] cli` | `--runtime`, `WARDEN_CTR_CLI`, file, detection | yes |
 | `[runtime] relay_image` | `WARDEN_IMAGE`, file, the release image or a source build | yes |
-| `[relay] upstream_ca_certs` | the file's list **plus** `WARDEN_UPSTREAM_CA_CERTS`'s, split on `:` | **no**: a merge. Changed here (a5), and the split with it |
+| `[relay] upstream_ca_certs` | the file's list **plus** `WARDEN_UPSTREAM_CA_CERTS`'s, split on `:`, folded together in `LoadConfig` | **no**: a merge. Changed here (a5), and the split with it; resolved in `resolveUpstreamCAs` |
 | `[relay] system_ca_bundle` | file, `true` | yes. Honoured only together with CA paths: `false` alone does nothing, silently. Handed on |
 | `[build] output_dir` | `-o`, file, `warden-output` | yes |
 | `[build] capture` | `--capture`, file, none | yes |
@@ -634,7 +836,7 @@ the levels below.
 | `[build] dockerfile`, `context` | never read | F5, `configuration-bugfixes` |
 | `[vm] cpus`, `memory_mb` | flag, file, the driver's default; `0` is "not set" at both | yes |
 | `[vm] network` | `--network`, file, `warden-dev` (hyperv) | yes |
-| `[vm] build_link` | `--build-link`, file, the default | yes. The file's value is checked as it loads even when the flag replaces it: one of the checks UX-08 as proposed lists by name |
+| `[vm] build_link` | `--build-link`, file, the default | yes. The file's value is checked as it loads even when the flag replaces it: one of the checks UX-08 as amended lists by name |
 | `[vm] dns` | file, the host's resolvers | yes |
 | `[vm] image_refresh_after`, `image_min_grace` | file, the driver's default | yes |
 | `[vm] windows_image` | `--source`, file, the registry's default | yes |
@@ -663,7 +865,9 @@ where that is fixed.
     container driver is selected, the only driver that reads it: empty and
     `dev` are as today; anything else must not start with `-` and must hold
     no space or control character. It does not validate a reference
-    further: the runtime's own error does that.
+    further: the runtime's own error does that. `warden doctor` makes the
+    same check under the container driver, through the same function, so
+    it does not print `ok` for a value a build refuses.
 
     ```
     ERROR: [runtime] relay_image in /src/repo/warden.toml is "--volume=/:/host": not an image reference
@@ -672,7 +876,7 @@ where that is fixed.
 
     (`WARDEN_IMAGE is ...` when the variable set it.) The check is on the
     value in effect, after the overrides, and only when the run uses it
-    (UX-08 as proposed). `driver-contract` moves it with the setting.
+    (UX-08 as amended). `driver-contract` moves it with the setting.
   - *A defect regardless:* `relay_image = "dev"` builds from a tree that
     can be the working directory's. That is F9, fixed here.
 - **F2, the trust roots.** With the executor's own file, naming extra
@@ -680,8 +884,13 @@ where that is fixed.
   - *A defect regardless:* the files are read when the relay is claimed,
     after the output directory, the work directory and the relay exist, so
     a mistyped path fails deep into the build (UX-08). **Fixed here:**
-    `newRequest` reads and checks them once, for every driver, before
-    anything is created.
+    one function in `cmd/warden`, `resolveUpstreamCAs`, resolves the paths
+    in effect (the variable's, else the key's; `LoadConfig` no longer
+    folds the variable into the key, so that the function sees both), makes
+    the transitional a5 call, and reads and checks the paths through
+    `driver.LoadUpstreamCAs`. `newRequest` calls it for every driver before
+    anything is created, and `warden doctor` calls it too, for the driver
+    it reports on. No other command uses the paths, and none checks them.
   - *A defect regardless:* the bytes of each file are sent to the relay
     whatever they are. A path that names the wrong file sends that file,
     and a bundle with a private key in it sends the key. **Fixed here**
@@ -692,6 +901,37 @@ where that is fixed.
     ERROR: upstream CA file /etc/ssl/private/site.pem holds a PRIVATE KEY block; only certificates are sent to the relay
       To fix: name a file that holds only PEM certificates, in [relay] upstream_ca_certs or WARDEN_UPSTREAM_CA_CERTS
     ```
+
+    ```
+    ERROR: upstream CA file /etc/warden/roots/corp.cer holds no PEM certificate
+      To fix: if it is DER-encoded, convert it (openssl x509 -inform der -in corp.cer -out corp.pem); or remove it from the directory or the path list
+    ```
+
+    The rule, per path of the list:
+    - *A file* is read whole. Text outside PEM blocks is ignored and not
+      sent. Each `CERTIFICATE` block must parse as an X.509 certificate
+      and is sent, re-encoded; a block of another type, a certificate that
+      does not parse (the message gives its position in the file and the
+      parser's reason), or no certificate at all is an error naming the
+      file.
+    - *A directory* is read one level deep, as today: its entries whose
+      names end in `.pem`, `.crt` or `.cer`, in any letter case, that are
+      not directories (a symbolic link is followed). Each is held to the
+      file rule. Other entries are not opened. A directory with no such
+      entry is an error naming it: a path that gives nothing is the wrong
+      path.
+    - *A path that does not exist* is an error naming it, as today, now
+      before anything is created.
+
+    What that stops that works today is in a9: a certificate with its
+    key, a DER file in a named directory, a bundle with a certificate Go
+    cannot parse. On this host the distribution's bundle parses whole (122
+    certificates, none refused, Go 1.24), and `/etc/ssl/certs` as a
+    directory holds only PEM files under those three endings.
+
+    The same function serves the standalone `cmd/collector`
+    (`--upstream-ca`), which gets the same rule; it is not in the
+    reference.
 
     This also takes away the worst of what remains: with the default file
     in someone else's repository, F1 and F2 together could send any file
@@ -738,11 +978,40 @@ where that is fixed.
 
 `driver.ModuleRoot` (`driver/hostutil.go`) is used by `GuestBinary` (the
 relay and `warden-io` cross-built for a guest), by the container driver's
-`goBuildLinux` (the relay image, `warden-io` and the holder of a development
-build) and by `relayvm.Find` (the relay VM's kernel and initramfs for qemu
+`goBuildLinux` (the relay image, `warden-io` and the holder built from
+source) and by `relayvm.Find` (the relay VM's kernel and initramfs for qemu
 and Firecracker, when they are not beside `warden`). Today it walks up from
 the executable's directory and then from the working directory, taking the
 first `go.mod` that *contains* the module's declaration.
+
+Who reaches it. The lookup does not depend on the version: any `warden`
+that does not find what it needs beside its executable asks for the tree.
+
+- *A development `warden`* (version `dev`), for everything: the relay
+  image, `warden-io`, the holder, the guest binaries, the relay VM assets.
+  Inside its tree (`dist/warden`) the first step finds it. Outside (`go
+  install`, `go run`, a copy) the second step takes the working
+  directory's.
+- *An installed release with a VM driver.* `GuestBinary` looks beside the
+  executable for `warden-io-linux-<arch>`, `warden-relay-linux-<arch>` and
+  `warden-io-windows-<arch>.exe`. The release archive carries the Linux
+  ones as `warden-io` and `warden-relay` (`.goreleaser.yaml`), `install.sh`
+  installs `warden` and `warden-io` only, and no release carries the relay
+  VM assets. So `--driver qemu` and `firecracker`, and `vz` as
+  `install.sh` installs it (the archive has the two macOS binaries under
+  the names looked for; the script does not install them), go to
+  `ModuleRoot` for a guest binary, and today that is the working
+  directory's tree. Under `vz` the relay built that way runs on the host
+  (`startHostRelay`). There is no Windows release, so `hyperv` is always a
+  build from source.
+- *An installed release with `relay_image = "dev"`* (or
+  `WARDEN_IMAGE=dev`): the container driver builds the relay from source
+  whatever the version (`resolveRelayImage`), from the same tree.
+
+In each case a repository that declares the module supplies the source
+that `go build` compiles on the host into the relay or the executor. With
+the default `./warden.toml`, the repository can also ask for it: `driver =
+"qemu"` or `relay_image = "dev"`.
 
 After:
 
@@ -750,7 +1019,7 @@ After:
 ModuleRoot():
     walk up from the directory of the warden executable
         a go.mod with the line "module github.com/buildwarden/buildwarden" -> that directory
-    else -> error
+    else -> a fixable error
 ```
 
 - The working directory is not looked at. A repository that declares the
@@ -758,33 +1027,62 @@ ModuleRoot():
 - The module line is matched whole. Today a nested module of this
   repository (`tools/tier1`) or a sibling whose path starts the same would
   match.
-- When it is not found, the callers' errors gain the fix, as a
-  `FixableError` where the source tree is the only way left (a development
-  build's relay, `warden-io` and holder):
+- When it is not found, `ModuleRoot` itself returns the `FixableError`.
+  `GuestBinary` and `goBuildLinux` already wrap its error with `%w`, and
+  `main` finds a `FixableError` through the wrapping (`errors.As`), so the
+  callers say what they were doing and no file of `driver/container` is
+  edited. The message names the executable and its version and does not
+  call a release a development build:
 
   ```
-  ERROR: this is a development build of warden and its source tree was not found above /home/you/go/bin
-    To fix: build it in its tree with 'make build' and run dist/warden, or install a release
+  ERROR: building ./cmd/relay from source: /home/you/go/bin/warden (version dev) is not inside a buildwarden source tree
+    To fix: run 'make build' in warden's source tree and use its dist/warden
   ```
 
-  `relayvm.Find` already treats "no tree" as "look beside the binary only";
-  that stays.
-- A release `warden` is affected only where it reaches `ModuleRoot` at
-  all: with no `warden-io` or guest binary beside it. It then reports the
-  missing file as today, and no longer builds one from the working
-  directory.
+  ```
+  ERROR: warden-io-linux-amd64 not found next to warden, and no source tree to build it from: /usr/local/bin/warden (version 0.2.0) is not inside a buildwarden source tree
+    To fix: run 'make build' in warden's source tree and use its dist/warden
+  ```
+
+  The fix is the one that is true in every case. "Install a release" is
+  not offered: it is a fix only for the container driver. A release asked
+  for `relay_image = "dev"` gets the first form; the reference's Relay
+  Image section says that `dev` needs a `warden` run from its tree.
+- `relayvm.Find` already treats "no tree" as "look beside the binary only";
+  that stays, and its caller's existing message about missing assets is
+  the one shown.
+- What stops working, beside the attack: `go run ./cmd/warden` and a `go
+  install`ed development `warden`; and an installed release used with a VM
+  driver, or with `relay_image = "dev"`, from inside a buildwarden
+  checkout, which works today only because the checkout is the working
+  directory. The installation guide's "First-time QEMU Setup" builds the
+  relay VM assets in a checkout and does not say to build or run
+  `dist/warden` there; it gains `make build` and `dist/warden` (**Reference
+  docs**).
 - Tests: a `go test` binary lives in a temporary directory, so a test that
   reaches `ModuleRoot` relies on the working-directory step today. Run on a
-  copy of `ad4ea50` with that step deleted, `go test ./...` fails in three
-  tests and passes everywhere else: `TestStageSeedDir` and
-  `TestStageSeedDirConfiguredLink` (`driver/hyperv/winseed_test.go`) and
-  `TestWindowsSeedDirRunScript` (`driver/qemu/windows_test.go`), each of
-  which cross-builds `warden-io` through `GuestBinary`. They are in other
-  packages than `driver`, so `driver` gains one documented, test-only
-  setter of the tree, which those two test files call with the tree found
-  from the test's own directory. Those are the only edits in a driver's
-  tree, both to test files that CI runs on Linux. No environment variable
-  is added (a6).
+  copy of `ad4ea50` with that step deleted, `go test ./... -v` differs
+  from `main` in four tests and in nothing else. Three fail:
+  `TestStageSeedDir` and `TestStageSeedDirConfiguredLink`
+  (`driver/hyperv/winseed_test.go`) and `TestWindowsSeedDirRunScript`
+  (`driver/qemu/windows_test.go`). One stops running and says nothing:
+  `TestDescribeBuildEvalImage` (`driver/hyperv/environment_test.go`) goes
+  from PASS to SKIP, because its helper `stageTestSeed` skips when the
+  guest binary cannot be staged. All four cross-build `warden-io` through
+  `GuestBinary`. So:
+  - `driver` gains one documented, test-only setter of the tree;
+  - `driver/hyperv` and `driver/qemu` each gain a `main_test.go` whose
+    `TestMain` sets the tree once for the package, found by walking up from
+    the test's own directory, so no test names it by itself and a new test
+    cannot forget to;
+  - `stageTestSeed`'s `t.Skipf` becomes `t.Fatalf`, so a missing tree
+    cannot hide a test again.
+
+  Those are the only edits in a driver's tree: three test files, all run
+  by CI on Linux. Tests behind `darwin` and `windows` build tags were
+  searched for callers of `GuestBinary`, `relayvm.Find` and `goBuildLinux`
+  and none was found; they were not run. No environment variable is added
+  (a6).
 
 ### The background image prepare
 
@@ -801,18 +1099,26 @@ edited.
 
 - `docs/book/src/guide/configuration.md`:
   - the opening ("two places, merged in order") becomes **The config
-    file**: one file, the three ways it is found, a named file that is
-    missing, an empty file, the `config:` line, relative paths (a1), and a
-    paragraph for someone building a repository they do not control (name
-    the file; what a `./warden.toml` there decides);
+    file**: one file, the three ways it is found, that the default is the
+    working directory's file whatever `[path]` is, a named file that is
+    missing, an empty file, the `config:` line, relative paths (a1) and
+    that a `WARDEN_CONFIG` set for a machine should be absolute, that
+    `warden.toml` in a message means the config file in use (Decision 13),
+    and a paragraph for someone building a repository they do not control:
+    name the file; what a `./warden.toml` there decides; and that under
+    `sudo` the file is named with `--config`, or with `sudo
+    --preserve-env=WARDEN_CONFIG`, because `sudo` drops the variable;
   - the transitional subsection "Moving from
-    `~/.config/warden/config.toml`", under its marker;
+    `~/.config/warden/config.toml`", under its marker, with the `sudo`
+    case;
   - **Environment Variables**: `WARDEN_CONFIG`; `WARDEN_UPSTREAM_CA_CERTS`
     "replaces `relay.upstream_ca_certs`; paths separated by `:` (`;` on
     Windows)"; one sentence on the order (flag, variable, file, default);
   - **CLI Flags**: `--config`, Global;
-  - the `[relay]` lines of the Full Reference (certificates only), the
-    Relay Image section (what is refused);
+  - the `[relay]` lines of the Full Reference (certificates only; a
+    directory's `.pem`, `.crt` and `.cer` files; DER is not read), the
+    Relay Image section (what is refused; `dev` needs a `warden` run from
+    its source tree);
   - the two sentences that name both files: the build link's "Precedence:
     the flag, then `./warden.toml`, then `~/.config/warden/config.toml`,
     then the default" and `[vm] dns`'s "`./warden.toml` wins over
@@ -827,8 +1133,14 @@ edited.
   or the file --config or WARDEN_CONFIG names`) and its list of variables.
 - `CONTRIBUTING.md`: one sentence, that a development `warden` is run from
   its tree (`dist/warden`), if a6 (a) stands.
+- `docs/book/src/getting-started/installation.md`, "First-time QEMU
+  Setup": `make build` before the two asset scripts, and that the VM
+  drivers are run as `dist/warden` from the tree (the Firecracker section
+  already starts with `make build`), if a6 (a) stands.
 - `cmd/warden`: the help text of `--config`; `doctor`'s long help where it
-  lists the build link's sources.
+  lists the build link's sources; the two messages that name the file for
+  a bad `[vm]` value (Decision 13). The drivers' fix strings that say "in
+  warden.toml" are not edited.
 - `docs/book/src/concepts/overview.md`, in `warden build`, in place of the
   `req := resolve flags and config` line:
 
@@ -843,66 +1155,90 @@ edited.
   `runtime-cli-project-path` adds a `container driver: runtime := ...` line
   there that says "(`./warden.toml`, then the user's file)"; it becomes
   "(the config file)".
-- `install.sh` and `docs/book/src/getting-started/installation.md` name no
-  config file and do not change.
+- `install.sh` names no config file and does not change; nor does the rest
+  of `installation.md`.
 
 ### Compatibility (UX-03)
 
 No flag, subcommand or key is removed or renamed, so UX-03's alias does not
-apply as written and tier 1's `surface-removed` check sees nothing. Three
-things that work today stop: the user-level file, the sum of the variable
-and the key for CA paths, and a CA file with something other than
-certificates in it. UX-03's "never a silent break" is met for each by an
-error that says what to change, at once and not after a warning period, as
-Jeff decided for `runtime-cli-project-path`. The first two errors are
-transitional; the third is the permanent check's own message.
+apply as written and tier 1's `surface-removed` check sees nothing. Four
+things that work today stop: the user-level file; the sum of the variable
+and the key for CA paths; a CA path with something other than PEM
+certificates in it (a9 lists the cases); and a `warden` that takes its
+source tree from the working directory (a6 lists who). UX-03's "never a
+silent break" is met for each by an error that says what to change, at
+once and not after a warning period, as Jeff decided for
+`runtime-cli-project-path`. The first two errors are transitional; the
+other two are the permanent checks' own messages.
 
 ### How it sits with the other items
 
 The order of merging: `runtime-cli-project-path`, then this item, then
-`driver-contract` (K1).
+`driver-contract` (K1). Both sibling designs say the same order
+(`runtime-cli-project-path` at `119a0e1`, **One config file**;
+`driver-contract` at `834c449`, Decision 23).
 
-**`runtime-cli-project-path` first.** It is small and in review, and it
-closes host execution through `[runtime] cli` without waiting for this.
-What each owes the other:
+**`runtime-cli-project-path` first.** Its design is approved (r1 at
+`a2afd08`) and its Plan is next. It is small, and it closes host execution
+through `[runtime] cli` without waiting for this. What each owes the
+other:
 
 - This item keeps its rule and its code: the runtime is `finch`, `docker`
   or `podman` from every source, checked in `resolveRuntime`; its
-  transitional file `runtime_former.go` and marker stay untouched.
-- This item reworks what that one wrote for two files: "else the project's
-  file, else the user's" in `resolveRuntime`'s comment and the reference
-  becomes "else the config file"; an error that names the file a value came
-  from names the one file; its overview line (above); its tests' temporary
-  `HOME` stays, now so that no test meets the transitional error.
-- UX-08: that item amends it; this item changes one clause of what it
-  leaves (**Rule changes**). If its wording merges without the plural,
-  this item's entry edits nothing.
+  transitional file `runtime_former.go` and marker stay untouched, and are
+  kept until 1.0 (its a4), which is what a3 proposes for this item's.
+- This item reworks what that one writes for two files, which its design
+  lists: the fourth row of its rule's table, the marker step in
+  `LoadConfig` that tells whether the project's file set the key, "else
+  the user's" in `resolveRuntime`'s comment and the reference, the error
+  that names the user's file by its path, its overview line, and the tests
+  of those. Its tests' temporary `HOME` stays, now so that no test meets
+  the transitional error.
+- UX-08: that item amends it, and the wording its review approved says
+  "flags and environment variables over file configuration, in the order
+  UX-07 gives". It names no level of config file, so this item changes no
+  word of UX-08 (**Rule changes**).
 - The hold: a7.
 
-**`driver-contract` (K1) after.** K1 is written on one file and needs this
-item merged before its Implement. What each owes the other:
+**`driver-contract` (K1) after.** K1 is written on one file and waits for
+this item's merge before its Plan (its Decision 23). What each owes the
+other:
 
 - This item gives K1 one function that says which file was read and how
   (`configFile`), the `--config` flag and `WARDEN_CONFIG`, and no level.
-- K1's `config_files` then has at most one entry and no `level`; its
-  requirements on reading only the files named (C3), on precedence (C8) and
-  on what a build record keeps follow. K1's design says which.
-- K1's ORCH-03 paragraph on drivers is added to ORCH-03 as this item
-  leaves it, and its "the order of the files does not change" goes.
-- K1's rule that a project's file may name a driver but not give a path
-  (its a16) rested on the two levels. With one file in the executor's
-  control K1 decides it again; this item leaves `[runtime] driver` as the
-  five names it is today.
+  K1's request field `config_file` is that file's absolute path, absent
+  when there is none.
+- K1 quotes ORCH-03 and UX-07 as this design proposed them at `539fd38`.
+  ORCH-03's proposed wording has not changed since. UX-07's has: "at
+  three levels" is now "at up to three levels", and the sentence on knobs
+  is reworded (**Rule changes**). The sentence K1 leans on, "A value set
+  at any level replaces the default and the lower levels' value", is as it
+  was. K1 re-quotes when it next reads this design; this agent does not
+  edit K1's.
+- K1's ORCH-03 paragraph on drivers is added after the paragraph this
+  item rewrites, and K1 changes no word of this item's sentences (its
+  **Rule changes**).
+- K1's a26 asks what becomes of its one guard, that a config file names a
+  driver and never a path, now that there is no user's own config. This
+  item leaves `[runtime] driver` as the five names it is today, and its
+  Decision 7 (what a file may decide is not limited by where it was
+  found) is for the keys this item covers; K1's option (A) agrees with it
+  and its option (B) would not. That is K1's question.
 - K1 moves `relay_image` and its check to the container driver; the CA
   check stays with the claim, which K1 gives to `warden`; the transitional
   file and the `config:` line are `warden`'s own and stay in `cmd/warden`.
+  K1 keeps `[vm] build_link` and `[vm] dns` as `warden`'s keys, so the
+  drivers' fix strings that name them keep meaning the one config file
+  (Decision 13).
 - This item's tier-1 cases run the built `warden` and must pass on K1's
   branch unchanged.
-- K1's hold is K1's to record, in the same form as a7: a blocking question
-  that names this item's merge, raised when its Plan is done.
+- K1's hold is K1's to record, and its design says how: a blocking
+  question that names this item's merge, written by the session that
+  records its review's outcome.
 
-**`configuration-bugfixes`** (on hold behind the freeze) is handed four
-more observations (**What this item does not do**).
+**`configuration-bugfixes`** (queued, on hold behind the freeze) is handed
+four observations, and two findings go to intake (a11; **What this item
+does not do**).
 
 ### What this item does not do
 
@@ -913,27 +1249,56 @@ more observations (**What this item does not do**).
 - It does not change `[runtime] driver`, or what `runtime-cli-project-path`
   decides for `[runtime] cli`.
 - It does not move the load-time checks of `[vm] build_link` and `[vm]
-  dns` to their consumers; UX-08 as proposed lists them, and they are K1's
+  dns` to their consumers; UX-08 as amended lists them, and they are K1's
   or `configuration-bugfixes`'.
-- Handed to `configuration-bugfixes`, none a security matter: `[relay]
-  system_ca_bundle = false` alone does nothing, silently; `--no-compress`
-  and `-v` cannot undo the file (`--no-compress=false`, `--verbose=false`),
-  and `WARDEN_VERBOSE=0` turns verbose on; a mistyped local `[vm]
-  windows_image` gives an HTTP error; the hyperv and qemu drivers read
-  variables that are in no reference (`WARDEN_HYPERV_BUILD_IMAGE`,
-  `WARDEN_RELAY_BOOT_VHDX`, `WARDEN_QEMU_VNC` and others), which UX-07
-  calls ad hoc before and after this item.
-- Listed for intake as a security finding of its own (not a regression, so
-  FLOW-09 does not file it; a security fix, so FLOW-20 would not hold it):
-  **a work directory inside the build context is served to the build.**
-  `--tmpdir` or `[build] tmpdir` can place each build's work directory
-  under the context directory, and the collector serves the whole context
-  root to the build. What each driver keeps in its work directory was not
-  traced. Proposed slug: `workdir-in-context`.
-- Not traced: whether a `FROM` image in a Dockerfile that starts with `-`
-  reaches the runtime's command line as the relay image did. It is a build
-  input, not configuration; it belongs with the finding above or with the
-  translator.
+- It does not reword the drivers' messages that say "in warden.toml"
+  (Decision 13).
+- It does not change what a release ships. That a release has no Linux
+  guest binary under the name `GuestBinary` looks for is how the VM
+  drivers come to be run from a source tree, which the installation guide
+  describes; this item only stops the working directory standing in for
+  that tree.
+
+**Handed on.** This agent edits only its own queue item, so the hand-offs
+are recorded by the session that records this design's review (a11). Each
+has a named home:
+
+| What | Where it goes | Who records it |
+|---|---|---|
+| `[relay] system_ca_bundle = false` with no CA path does nothing, silently (GLOBAL-10) | `configuration-bugfixes`, appended to its `source` | the design-review session |
+| `--no-compress` and `-v` cannot undo the file (`--no-compress=false`, `--verbose=false`), and `WARDEN_VERBOSE=0` turns verbose on | `configuration-bugfixes`, likewise | the design-review session |
+| A mistyped local `[vm] windows_image` is sent to the HTTP client, whose error does not say the path was not found (UX-04) | `configuration-bugfixes`, likewise | the design-review session |
+| The hyperv and qemu drivers read variables that are in no reference (`WARDEN_HYPERV_BUILD_IMAGE`, `WARDEN_RELAY_BOOT_VHDX`, `WARDEN_QEMU_VNC` and others), which UX-07 calls ad hoc before and after this item | `configuration-bugfixes`, likewise | the design-review session |
+| **A work directory inside the build context is served to the build** (below) | a new security item through intake, proposed slug `workdir-in-context` | the design-review session, with Jeff (`workflow-intake`) |
+| **A Dockerfile's `FROM` value reaches the container runtime's command line unchecked** (below) | the same new item's `source` | the same |
+| The removal of the transitional detection, at 1.0 (a3) | its own small queue item | Publish |
+| The corpus entries of the Security note | `security-suite` (SEC-03) | Publish |
+
+None of the first four is a security matter. The two in bold are, and
+neither is a regression (so FLOW-09 does not file them) and neither is
+held by the freeze (FLOW-20 exempts a security fix):
+
+- **A work directory inside the build context.** `--tmpdir` or `[build]
+  tmpdir` can place each build's work directory under the context
+  directory (`tmpdir = "."`, or `--tmpdir .`), and the collector serves the
+  whole context root to the build (`/v1/context/`). What each driver keeps
+  in its work directory that a build should not read was not traced (a
+  relay VM's seed carries the claim token, `tools/relay-vm/README.md`;
+  whether it is kept in the work directory was not checked). The flag does
+  the same as the key, and the answer is in the drivers.
+- **`FROM` as an option.** The translator takes the first field after
+  `FROM` as the image (`parseFrom`, `driver/script/translate.go`), and the
+  container driver passes it to `<runtime> pull <value>`, `image inspect
+  <value>` and, in an option's position, `container create ... <value>
+  initialize ...` (`driver/container/container.go`, `environment.go`). So
+  `FROM --platform=linux/amd64 ubuntu`, which is ordinary Dockerfile
+  syntax, makes the image `--platform=linux/amd64`, and a build context
+  can put an option on the host runtime's command line. Read, not run: as
+  far as read, `pull` with an option and no image fails before the later
+  commands, which would make this a wrong error and not an escape; that
+  is for the item to establish. It is a build input, not configuration,
+  and it is the same defect as the relay image's (F1), which this item
+  fixes for the relay image only.
 
 ## Defaults and overrides
 
@@ -942,33 +1307,40 @@ in the config file (or no config file).
 
 | Default, override or fallback | Status | Why it is the obvious choice (GLOBAL-09) | What overrides it, exclusively (GLOBAL-10) |
 |---|---|---|---|
-| The config file when none is named: `./warden.toml`, if it exists | **Changed**: it was that file over `~/.config/warden/config.toml` | Jeff's decision 2: the working directory, for ease of use | `--config`, else `WARDEN_CONFIG`; the named file is the only one read, and a named file that cannot be read is an error, not a return to the default |
+| The config file when none is named: `./warden.toml` of the working directory (not of the build context `[path]` names), if it exists | **Changed**: it was that file over `~/.config/warden/config.toml` | Jeff's decision 2: the working directory, for ease of use | `--config`, else `WARDEN_CONFIG`; the named file is the only one read, and a named file that cannot be read is an error, not a return to the default |
 | No `./warden.toml` and none named: no config file | **Changed**: the user file was read | A first run needs no file (UX-07) | As above |
-| `~/.config/warden/config.toml` | **Removed** as a source. Its existence is an error while the transitional detection stands (a3), unless it is the file named | Jeff's decisions 1 and 4 | Nothing reads it; `WARDEN_CONFIG` can name it |
-| An empty `--config` or `WARDEN_CONFIG` | **New**: not set | What an empty `--driver`, `--runtime` and `WARDEN_CTR_CLI` mean today | Nothing (a8) |
+| `~/.config/warden/config.toml` | **Removed** as a source. Its existence is an error while the transitional detection stands (a3), unless it is the file named (a10) | Jeff's decisions 1 and 4 | Nothing reads it; `--config` or `WARDEN_CONFIG` can name it |
+| An empty `WARDEN_CONFIG` | **New**: not set | What every empty `WARDEN_*` variable means today | Nothing (a8) |
+| `--config` given with an empty value | **New**: an error, not "not set" (a8). Unlike an empty `--driver` or `--runtime`, which are not set | The next source down can be someone else's `./warden.toml` | Nothing |
 | A relative path in the config file: relative to the working directory | **Unchanged**, stated for the first time (a1) | The same as the path given by a flag or a variable | An absolute path |
 | Every setting: flag, else its variable, else the file, else its default | **Unchanged** in the code; the rules now name the variable's level | The closer to the command, the stronger | Each level by the one above it |
 | `[relay] upstream_ca_certs` absent: the system roots only | Unchanged | | `WARDEN_UPSTREAM_CA_CERTS`, else the key |
-| `WARDEN_UPSTREAM_CA_CERTS` with the key also set | **Changed**: it replaced nothing and was added to the key's list; now it replaces it (a5), and both set is an error during the window | One rule for every variable | Nothing is over the variable; the key has no flag |
+| A CA path that is a directory: its `.pem`, `.crt` and `.cer` files, one level deep | **Unchanged** in which files are read; **changed** in that each must hold only PEM certificates and the directory must hold at least one such file (a9) | What the reference says a directory is | Nothing |
+| `WARDEN_UPSTREAM_CA_CERTS` with the key also set | **Changed**: it replaced nothing and was added to the key's list; now it replaces it (a5), and both set is an error, on the commands that use the paths, while the transitional detection stands | One rule for every variable | Nothing is over the variable; the key has no flag |
 | The separator of `WARDEN_UPSTREAM_CA_CERTS` | **Changed**: `:` everywhere; now the OS's (`;` on Windows) | What `PATH` uses on each OS (GLOBAL-07) | Nothing |
 | The relay image absent: the release image, or a source build for a development `warden` | Unchanged | | `WARDEN_IMAGE`, else `relay_image` |
-| The source tree of a development `warden`: found by walking up from its executable | **Changed**: the working directory was tried second (a6) | A binary's source is where the binary was built | Nothing |
+| `warden`'s source tree, for any version that needs it: found by walking up from its executable | **Changed**: the working directory was tried second (a6) | A binary's source is where the binary was built | Nothing |
 | The `config:` line: printed by every command that reads configuration | **New** (a4) | Which file is in force should not need a flag to learn | Nothing; `doctor` prints it on stdout |
 | A background `image prepare`: the file its build read | **Changed**: it looked in the working directory by itself | One build, one file | Nothing |
 
-**Fallbacks and merges.** None is added, and two are removed:
+**Fallbacks and merges.** None is added; two merges and one fallback are
+removed:
 
 - the merge of the user's file under the project's (two files decoded into
   one struct) is gone;
 - the merge of `WARDEN_UPSTREAM_CA_CERTS` into the key's list is gone;
-- `ModuleRoot`'s second place to look (the working directory, tried when
-  the first found nothing) is gone, and the design drops it as a rejected
-  alternative (Decision 9).
+- the fallback, `ModuleRoot`'s second place to look (the working
+  directory, tried when the first found nothing), is gone, and the design
+  drops it as a rejected alternative (Decision 9).
 
 The lookup of the config file is an ordered choice among what is *set*,
 not a fallback on failure: a source that is set and cannot be used is an
-error. The transitional detection is not a fallback: it only produces
-errors.
+error. One case does pass to the next source without a word and is named
+here: an empty `WARDEN_CONFIG` counts as not set (a8). The transitional
+detection is not a fallback: it only produces errors. The relay skipping
+a certificate it cannot parse is a silent drop on `main`; under a9 (a)
+`warden` refuses the file first, so nothing reaches the relay to be
+skipped.
 
 No relay setting is added or moved (RELAY-08). The upstream trust roots
 keep their claim field, `upstream_ca_certs`, and `upstream_system_ca`; the
@@ -977,13 +1349,18 @@ relay image is the container driver's launch argument, as today.
 ## Cross-driver impact
 
 No file of a `driver/<name>/` tree that is built into `warden` is edited
-(ORCH-01); two test files are, in `driver/hyperv` and `driver/qemu`, to name
-the source tree (**F9: the source tree**). Three shared files of `driver/`
-are edited, so every driver is declared:
+(ORCH-01), the drivers' fix strings that say "in warden.toml" included
+(Decision 13). Three test files are: a new `main_test.go` in `driver/hyperv`
+and in `driver/qemu`, which names the source tree once for the package,
+and `driver/hyperv/environment_test.go`, whose helper fails where it
+skipped (**F9: the source tree**). Three shared files of `driver/` are
+edited, so every driver is declared:
 
 - **container**: the relay image in effect is checked before anything is
-  created. A development build finds its source from the executable only
-  (`goBuildLinux`). CA files are checked early and sent as certificates.
+  created. A build from source (a development `warden`, or `relay_image =
+  "dev"`) finds its source from the executable only (`goBuildLinux`, which
+  is not edited: `ModuleRoot`'s error carries the fix). CA files are
+  checked early and sent as certificates.
 - **qemu, firecracker**: the relay VM's kernel and initramfs, when not
   beside `warden`, come from the tree the executable is in and no longer
   from the working directory's (`relayvm.Find`); the guest binaries
@@ -999,10 +1376,10 @@ runs exactly as before.
 
 ## Rule changes
 
-Three entries. ORCH-03, UX-07 and UX-08 are project invariants of the
-component this item works in (`cmd/warden`), not loop rules (FLOW-14,
-LOOP-09). The current wording is quoted from `docs/development/` on `main`
-at `ad4ea50`.
+Two entries. ORCH-03 and UX-07 are project invariants of the component
+this item works in (`cmd/warden`), not loop rules (FLOW-14, LOOP-09). The
+current wording is quoted from `docs/development/` on `main` at `ad4ea50`.
+UX-08 is not changed; why is below.
 
 ### ORCH-03, amend
 
@@ -1053,64 +1430,77 @@ config, predictable defaults, layered overrides").
 **Proposed wording:**
 
 > Configuration can be minimal: predictable defaults cover the common use-cases, and
-> any of them is easy to override at three levels with clear precedence,
+> any of them is easy to override, at up to three levels with clear precedence,
 > command line > environment > config file (`flag > environment variable >
 > warden.toml`, the same order as ORCH-03). There is one config file for a run, in
 > the control of whoever runs the build: `warden.toml` in the working directory by
 > default, or the file `--config` or `WARDEN_CONFIG` names, which is then the only
 > one read. No user-level or system-level file is read. A first-time user should get
 > a sensible run with little or no config. Driver and build knobs are flags and
-> config keys, and a knob's environment variable is a documented one, not an ad-hoc
-> one, so they take part in that precedence and appear in the reference docs. A
-> value set at any level replaces the default and the lower levels' value
-> (GLOBAL-10).
+> config keys, with an environment variable where one is documented and never an
+> ad-hoc one; a knob need not have every level, and each level it has takes part
+> in that precedence and appears in the reference docs. A value set at any level
+> replaces the default and the lower levels' value (GLOBAL-10).
 >
 > The automated part checks that defaults resolve with no config file present.
 
-Three things change: the three levels are the command line, the environment
-and the config file (they were invocation, project and user); the two
-sentences on the one file are new; and the sentence on knobs admits a
-documented variable, because the environment is now a level of the rule and
-six knobs have had one all along.
+Four things change: the levels are the command line, the environment and
+the config file (they were invocation, project and user); "at three
+levels" becomes "at up to three levels", and the sentence on knobs says a
+knob need not have every level; the two sentences on the one file are new;
+and the sentence on knobs admits a documented variable, because the
+environment is now a level of the rule and six knobs have had one all
+along.
 
-### UX-08, amend (one clause, on top of `runtime-cli-project-path`'s)
+Why "up to". The current rule's three levels were two files and the
+command line, and every key had both files, so each could be set at two
+levels at least. With one file, a key that has neither a flag nor a
+variable can be set at one level only. Of the twenty keys in use, six
+have a variable, fourteen have none, and five have neither flag nor
+variable (`[vm] dns`, `[relay] system_ca_bundle`, the two image ages,
+`[vm] windows_image_update`); four have all three levels (**Who is
+affected**, the second table). "Any of them is easy to override at three
+levels", kept as it is, would be false of `main` on the day this merges
+for sixteen keys, and would read as requiring a2's option (c), a variable
+for every key. The wording holds under every answer to a2: under (a) and
+(b) some knobs have fewer levels; under (c) every key has the file and
+the environment.
 
-Path: `docs/development/ux-cli-config.md`.
+### UX-08, not changed
 
-**Current wording on `main` at `ad4ea50`:**
+Path: none. `runtime-cli-project-path` amends UX-08 and merges first; its
+review approved the change by name at `a2afd08`. An earlier draft of this
+design declared one clause of it, because that item's wording then said
+"the config files in precedence order". The wording that was approved
+says:
 
-> Configuration errors or mismatches are validated and surfaced as early as possible,
-> at load/parse/startup, before any real work begins, rather than failing deep into a
-> build. The automated part checks that config validation runs at startup.
+> after the overrides are applied (flags and environment variables over file
+> configuration, in the order UX-07 gives)
 
-This item changes nothing in that text. `runtime-cli-project-path` proposes
-to replace it (its design at `3bf8784`, **Rule changes**), and merges
-first. Its first paragraph, as proposed:
+and "A `warden.toml` and the environment may hold the settings of several
+drivers", "A config file that cannot be parsed is an error for every run
+that reads it". Nothing in it names a level of config file or more than
+one file, so it reads the same over one file, and that design says so
+(its **One config file**). This item's `rule_changes` therefore has no
+UX-08 entry.
 
-> A component validates the configuration it consumes, errors and mismatches
-> alike, when it initializes: after the overrides are applied (flags, environment
-> variables, and the config files in precedence order, UX-07) and before any real
-> work begins, rather than failing deep into a build. What it checks is the value
-> in effect, not a value that a higher level replaced.
+What UX-08 as amended asks of this item, which adds or touches four
+checks:
 
-**Proposed wording**, of the parenthesis in that paragraph only:
+| Check | Where, and when | Under UX-08 as amended |
+|---|---|---|
+| The relay image's shape | `newRequest` and `doctor`, on the value in effect, under the container driver only | conforms: after the overrides, by the commands that use it |
+| CA paths: read, certificates only | `resolveUpstreamCAs`, from `newRequest` and `doctor`, on the paths in effect | conforms, likewise; `clean`, `setup` and `image prepare` do not check them |
+| The variable and the key both set (a5, transitional) | the same function | conforms, likewise. Raised as the file loads it would fail three commands for a setting they do not use |
+| The config file itself: named and unreadable; not TOML; `--config` empty | `LoadConfig`, every command that reads configuration | conforms: "a config file that cannot be parsed is an error for every run that reads it", and the file is what every such run reads |
 
-> (flags, environment variables and the config file, in UX-07's order)
-
-The rest of UX-08 as that item leaves it holds for one file as written
-("One `warden.toml` may hold the settings of several drivers"; "A config
-file that cannot be parsed is an error for every run that reads it";
-"Checks that predate this wording still run as a config file loads"). If
-its wording has merged without "the config files", this entry edits nothing
-and the review's approval of it is unused. If that item's amendment is not
-approved at all, this entry falls with it: nothing in `main`'s UX-08 names
-a file.
+The transitional error for `~/.config/warden/config.toml` validates no
+setting (nothing in that file is read), so the rule's list of older checks
+gains nothing: "Nothing is added to the list" holds.
 
 ### Severity and check, before and after
 
-ORCH-03 and UX-07: MUST, `automated + agent-judgment`, unchanged. UX-08:
-whatever `runtime-cli-project-path` leaves (it proposes MUST,
-`agent-judgment`); this item changes neither.
+ORCH-03 and UX-07: MUST, `automated + agent-judgment`, unchanged.
 
 ### What the enforcement change does
 
@@ -1139,23 +1529,30 @@ them true (the umbrella's Decision 18): one file is read; `--config` and
 order is flag, variable, file, default for every key, the CA variable
 included.
 
+UX-07's "at up to three levels" is true of every key: each has the file;
+thirteen have a flag, six a variable, four both; five have the file only.
+Each flag and each of the six variables is in the reference. Had the rule
+kept "at three levels", sixteen keys would not conform (above).
+
 Three things on `main` sit badly with UX-07 before this item and equally
-after it, and are not made worse: the two one-way flags and `WARDEN_VERBOSE`
-(a level that can turn a setting one way only), and the drivers'
-undocumented variables ("ad-hoc environment variables"). Both are handed to
-`configuration-bugfixes`.
+after it, and are not made worse: the two one-way flags and
+`WARDEN_VERBOSE` (a level that can turn a setting one way only), and the
+drivers' undocumented variables ("ad-hoc environment variables"). They go
+to `configuration-bugfixes` (a11).
 
 ### How the items' rule changes sit together
 
 | Item | Rule | File | Merges |
 |---|---|---|---|
-| `runtime-cli-project-path` | UX-08 (rewritten), and its line in `tools/tier1/rules.yaml` | `ux-cli-config.md` | first |
-| this item | ORCH-03; UX-07; one clause of UX-08 | `orchestrator.md`, `ux-cli-config.md` | second |
+| `runtime-cli-project-path` | UX-08 (rewritten; approved), and its line in `tools/tier1/rules.yaml` | `ux-cli-config.md` | first |
+| this item | ORCH-03; UX-07 | `orchestrator.md`, `ux-cli-config.md` | second |
 | `driver-contract` | ORCH-03 (a paragraph on drivers, and the check's reach), GLOBAL-08, ORCH-01, ORCH-02 and others | `orchestrator.md` and others | third |
 
 UX-07 and UX-08 are neighbouring sections of one file; the two items edit
-different paragraphs. K1's ORCH-03 text is added after the paragraph this
-item rewrites.
+different rules. UX-08 as amended points at UX-07 for the order ("in the
+order UX-07 gives"), and UX-07 as amended here gives it: command line,
+environment, config file. K1's ORCH-03 text is added after the paragraph
+this item rewrites.
 
 **Not changed: UX-03.** Its text is about flags, subcommands and keys, and
 none is removed. Jeff's decision that a change which refuses what worked
@@ -1167,7 +1564,7 @@ for the review of whichever item is asked first.
 **The profile (PROFILE-01).** No entry goes stale: its Reference documents
 row points at the `surface` entry of `rules.yaml`, which does not change.
 
-The design review approves each of the three by name (FLOW-19).
+The design review approves each of the two by name (FLOW-19).
 
 ## Security note
 
@@ -1188,15 +1585,29 @@ leaves the host); build environment to relay, class 2 (F1: the measured
 supplies the measurer). As with `[runtime] cli`, the attacker escapes
 nothing: it happens before the environment exists.
 
+F9 is not limited to a development `warden`. The lookup is the same for
+every version, and three kinds of `warden` reach the working directory's
+tree today (**F9: the source tree**): a development build outside its
+tree, with any driver; an installed release with `--driver qemu` or
+`firecracker`, or `vz` as `install.sh` installs it, for the guest binaries
+(under `vz` the relay so built runs on the host); and an installed release
+with `relay_image = "dev"` or `WARDEN_IMAGE=dev`. Each needs `go` on the
+host's `PATH` for the binaries; the relay VM's kernel and initramfs are
+taken from the tree as files. With the default `./warden.toml` the repository can select
+the second and third itself (`driver = "qemu"`, `relay_image = "dev"`).
+
 **How the posture changes.**
 
-- *Tightens:* a development `warden` no longer takes the working directory
-  for its source tree (F9, closed for every driver). A value that would be
-  read as an option of the container runtime is refused (F1). Only
-  certificates are sent to the relay as trust roots, and they are checked
-  before anything is created (F2). An executor can now make `warden`
-  ignore the working directory's `warden.toml` altogether, with `--config`
-  or `WARDEN_CONFIG`; before this there was no way to.
+- *Tightens:* no `warden`, development build or release, takes the working
+  directory for its source tree (F9, closed for every driver and every
+  version). A value that would be read as an option of the container
+  runtime is refused (F1). Only certificates are sent to the relay as
+  trust roots, and they are checked before anything is created (F2). An
+  executor can now make `warden` ignore the working directory's
+  `warden.toml` wherever it is run, with `--config` or `WARDEN_CONFIG`.
+  Before this the only way was to run `warden` from another directory and
+  give the repository as `[path]`: the file has always been the working
+  directory's, not the build context's.
 - *Changes shape:* the user-level file is gone, so nothing "outranks the
   user's file". The environment is the level over the file.
 - *Loosens, for one kind of user:* someone who kept `driver = "qemu"` (or
@@ -1228,14 +1639,29 @@ nothing: it happens before the environment exists.
    and `WARDEN_IMAGE`, is the executor's. A tool that sets variables from a
    repository's files (a shell hook, a CI step that sources a file) hands
    the repository the same control.
-4. **A relative path in a named file** is looked up in the working
+4. **`WARDEN_CONFIG` does not survive `sudo`.** `sudo` resets the
+   environment by default, so `sudo warden image prepare --driver vz`,
+   `sudo warden setup --driver firecracker` and any other `sudo warden`
+   run in a repository reads that repository's `./warden.toml` although
+   the executor named another file in the machine's environment. The
+   protection there is `--config`, or `sudo
+   --preserve-env=WARDEN_CONFIG`, or a sudoers `env_keep`. `warden` does
+   not detect this in general; the `config:` line shows which file was
+   read, and the transitional message says it when it fires under `sudo`.
+5. **Two ways a named file is not the one read.** An empty
+   `WARDEN_CONFIG` is not set (a8), so `WARDEN_CONFIG="$CFG" warden build`
+   with `CFG` unset reads `./warden.toml`; and a relative `WARDEN_CONFIG`
+   names a different file in each directory, which in a repository can be
+   the repository's own. A machine-wide value should be absolute. The
+   `config:` line shows the file in both cases.
+6. **A relative path in a named file** is looked up in the working
    directory (a1 (a)), so a relative CA path in an executor's own file
    reads certificates from the repository being built.
-5. **A work directory inside the build context** (the finding listed for
-   intake).
-6. **A development `warden` built in a tree is as trusted as that tree.**
-   Unchanged: running `dist/warden` from a checkout builds from that
-   checkout.
+7. **A work directory inside the build context, and a `FROM` value read as
+   an option** (the two findings for intake, a11). Neither needs a config
+   file.
+8. **A `warden` built in a tree is as trusted as that tree.** Unchanged:
+   running `dist/warden` from a checkout builds from that checkout.
 
 **What the TEST-08 suite should exercise.** Arm A gains permanent entries
 (SEC-03), the attacker supplying the build context and the proof being
@@ -1248,7 +1674,9 @@ SEC-04's marker:
 - (ii) a context that declares `module github.com/buildwarden/buildwarden`
   with its own `cmd/relay` and `cmd/warden-io`, built by a development
   `warden` copied outside its tree, with a `go` first on `PATH` that writes
-  a marker: `warden` exits 1 and the marker is absent;
+  a marker: `warden` exits 1 and the marker is absent; and the same with a
+  release-versioned `warden` and a context `warden.toml` that sets
+  `relay_image = "dev"`;
 - (iii) `relay_image` starting with `-`, from the file and from
   `WARDEN_IMAGE`: exit 1, and a fake runtime on `PATH` records no `pull`;
 - (iv) `upstream_ca_certs` naming a file that holds a known token and no
@@ -1272,39 +1700,57 @@ temporary one:
   with a file named, a `./warden.toml` that is not TOML is not an error
   (it is not opened); a named file that does not exist, is a directory, or
   cannot be read is the error, with its source in the message, and the
-  `./warden.toml` beside it is not used; an empty flag and an empty
-  variable fall through; an empty file gives the defaults; a relative
-  `--config`.
+  `./warden.toml` beside it is not used; `--config ""` is the error and
+  the `./warden.toml` beside it is not used; an empty variable is not set;
+  an empty file gives the defaults; a relative `--config`; a `[path]`
+  argument naming a directory that holds a `warden.toml` does not make
+  that file the one read.
 - *The `config:` line:* its four forms; on stdout for `doctor`, on stderr
   for the others.
 - *The transitional error:* with the user file present, each of the six
   commands' config load fails with it, naming the path; with `--config` or
   `WARDEN_CONFIG` naming another file, the same; with either naming that
-  file, no error; with no home directory, no error; the file is never
-  opened (it is unreadable in the test).
+  file, no error (a10); with no home directory, no error; the file is
+  never opened (it is unreadable in the test); a named file that does not
+  exist is reported in its place; with `SUDO_USER` set the fix ends with
+  the `sudo` sentence, and without it does not.
 - *The precedence table:* for every key in **The precedence, key by key**,
   the flag over the variable over the file over the default, where each
   level exists.
 - *CA paths:* the variable alone, the key alone; both set is the
-  transitional error; the variable is split on the OS's separator (a
+  transitional error in `newRequest` and in `doctor`, and is not an error
+  for the config load of `clean`, `setup` and `image prepare`, which
+  succeed with both set; the variable is split on the OS's separator (a
   Windows-only test for `;` and a drive letter); a missing path fails in
-  `newRequest`, before any directory is made.
+  `newRequest`, before any directory is made, and fails `doctor`.
 - *The relay image:* empty, `dev` and references pass; values starting
   with `-`, holding a space, or holding a control character are refused,
-  from the file and from the variable; not checked under a VM driver.
+  from the file and from the variable, by `newRequest` and by `doctor`
+  under the container driver; not checked under a VM driver.
+- *Messages:* a bad `[vm] image_refresh_after` and a bad `[vm]
+  windows_image_update` name the path of the file read (Decision 13).
 - *Exit codes:* each new error is a `FixableError`, which `main` exits 1
   on (UX-09).
 
 In `driver`:
 
 - `LoadUpstreamCAs`: a certificate; a bundle with comments between blocks;
-  a directory; a file with no certificate; a certificate block that does
-  not parse; a file with a certificate and a private key; in each refusal
-  nothing is returned.
+  a file with no certificate; a DER-encoded certificate; a certificate
+  block that does not parse; a file with a certificate and a private key;
+  a directory of PEM files, with a subdirectory and a file of another
+  ending that are not opened; a directory that also holds a DER `.cer`;
+  a directory with no `.pem`, `.crt` or `.cer` file; in each refusal
+  nothing is returned and the message names the file.
 - `ModuleRoot`: with the working directory inside a tree that declares the
-  module and the executable outside one, it fails; a `go.mod` that declares
+  module and the executable outside one, it fails with a `FixableError`,
+  once with `WardenVersion` `dev` and once with a release version, and
+  neither message says "development"; the error wrapped by `GuestBinary`
+  is still found as a `FixableError`; a `go.mod` that declares
   `github.com/buildwarden/buildwarden/tools/tier1`, or a longer path, is
   not a match.
+- `driver/hyperv` and `driver/qemu`: the four tests that cross-build
+  `warden-io` pass with the tree named by the package's `TestMain`, and
+  `stageTestSeed` fails, not skips, when the binary cannot be staged.
 - `StartDetached`'s argument list: `--config <path>` first when a file was
   read, nothing added when none was.
 
@@ -1324,16 +1770,20 @@ and `test-integration.sh`), with the built `dist/warden`:
 - `relay_image = "--help"` in the file: `build` exits 1 before any
   container exists;
 - a CA path naming a file with no certificate: `build` exits 1, and no
-  output directory is made;
+  output directory is made; `doctor` exits 1 naming the file; `clean`
+  exits 0;
+- `--config ""`: `build` exits 1 with `To fix:`, in a directory whose
+  `warden.toml` sets `output_dir = "from-repo"`, and no `from-repo` is
+  made;
 - F9: `dist/warden` copied to a temporary directory and run, with a `go`
   first on `PATH` that writes a marker, in a directory that declares the
-  module: exit 1, the marker absent;
+  module: exit 1 with `To fix:`, the marker absent;
 - one of the builds the script already runs is run with `--config`, so a
   named file is built with at no extra build.
 
 **Tier 2.** No host blocks merge (FLOW-09): no driver's own code is
-changed (the two test files edited in `driver/hyperv` and `driver/qemu` run
-in CI), the lookup and the checks are the same code on every OS, and
+changed (the three test files added or edited in `driver/hyperv` and
+`driver/qemu` run in CI), the lookup and the checks are the same code on every OS, and
 `ModuleRoot`'s first step, the only one a `warden` run from its tree ever
 needed, is unchanged. Four gaps are tracked (`tier2_gaps`, and the
 native-gap backlog under the ids given there): the Windows desktop
@@ -1357,33 +1807,60 @@ For Plan to refine. One PR, started from a `main` that has
 2. The `config:` line: `doctor` on stdout, the other five on stderr
    (GLOBAL-09, UX-01).
 3. The transitional detection: `cmd/warden/config_former.go`, its two
-   calls, its test file, each under `TRANSITIONAL(one-config-file)`
+   calls (one in `LoadConfig`, one in `resolveUpstreamCAs`), its test
+   file, each under `TRANSITIONAL(one-config-file)`; the `sudo` sentence
    (GLOBAL-01, UX-03, UX-04).
-4. `WARDEN_UPSTREAM_CA_CERTS` replaces the key and is split on the OS's
-   separator (GLOBAL-07, GLOBAL-10).
-5. `driver.LoadUpstreamCAs` sends certificates only, and `newRequest`
-   calls it before anything is created (GLOBAL-06, UX-08).
-6. The relay image check in `newRequest`, under the container driver
-   (GLOBAL-06, UX-04, UX-08).
-7. `driver.ModuleRoot`: the executable only, the module line whole, the
-   fixable error at its callers, and the test-only setter; the three tests
-   in `driver/hyperv/winseed_test.go` and `driver/qemu/windows_test.go`
-   name their tree through it (GLOBAL-06, GLOBAL-11, UX-04).
+4. `resolveUpstreamCAs` in `cmd/warden`: `WARDEN_UPSTREAM_CA_CERTS`
+   replaces the key and is split on the OS's separator; `LoadConfig` no
+   longer folds the variable into the key (GLOBAL-07, GLOBAL-10, UX-08).
+5. `driver.LoadUpstreamCAs` sends certificates only, files and
+   directories by the rule of F2; `newRequest` and `doctor` call
+   `resolveUpstreamCAs` before anything is created (GLOBAL-06, UX-08).
+6. The relay image check, one function called by `newRequest` and by
+   `doctor`, under the container driver (GLOBAL-06, UX-04, UX-08).
+7. `driver.ModuleRoot`: the executable only, the module line whole, a
+   `FixableError` of its own that names the executable and its version,
+   and the test-only setter; a `main_test.go` with a `TestMain` in
+   `driver/hyperv` and in `driver/qemu` names the tree for the four tests
+   that need it, and `stageTestSeed` in
+   `driver/hyperv/environment_test.go` fails where it skipped (GLOBAL-04,
+   GLOBAL-06, GLOBAL-11, UX-04).
 8. `driver.StartDetached` passes the config file (GLOBAL-10).
-9. Rework of what `runtime-cli-project-path` wrote for two files:
-   `resolveRuntime`'s comment and messages, its reference text and its
-   overview line (FLOW-06, UX-01).
-10. The tier-0 tests of the Validation plan (GLOBAL-04, TEST-01, TEST-06).
-11. The tier-1 cases in `test-integration.sh` (GLOBAL-04, TEST-02).
-12. The reference docs, the README, the corporate-network guide and the
-    overview pseudocode (UX-01, FLOW-15).
-13. The rule changes, once the review has approved each by name: ORCH-03 in
-    `docs/development/orchestrator.md`, UX-07 and the clause of UX-08 in
+9. Rework of what was written for two files (FLOW-06, UX-01, GLOBAL-04):
+   - `runtime-cli-project-path`'s: the fourth row of its rule's table, the
+     marker step in `LoadConfig`, `resolveRuntime`'s comment and the
+     message that names the user's file, its reference text, its overview
+     line and the tests of those;
+   - `main`'s own two-file tests: the user-over-project cases of
+     `cmd/warden/buildlink_test.go` and `cmd/warden/vmdns_test.go` (their
+     helper writes both files) become one-file cases, with the labels
+     `warden doctor` prints;
+   - the `LoadConfig` tests that do not set `HOME`
+     (`TestLoadConfig_Defaults`, `TestLoadConfig_UpstreamCACertsEnv` and
+     the others in `cmd/warden/config_test.go`) get a temporary `HOME` and
+     `USERPROFILE`, so that a developer's own `~/.config/warden/config.toml`
+     does not fail them; `TestLoadConfig_UpstreamCACertsEnv` asserts the
+     variable's two paths on `LoadConfig`'s result and moves to
+     `resolveUpstreamCAs`.
+10. The two `cmd/warden` messages that name the file for a bad `[vm]`
+    value name the path read (Decision 13; UX-04).
+11. The tier-0 tests of the Validation plan (GLOBAL-04, TEST-01, TEST-06).
+12. The tier-1 cases in `test-integration.sh` (GLOBAL-04, TEST-02).
+13. The reference docs, the README, the corporate-network guide, the
+    installation guide's QEMU setup and the overview pseudocode (UX-01,
+    FLOW-15).
+14. The rule changes, once the review has approved each by name: ORCH-03 in
+    `docs/development/orchestrator.md` and UX-07 in
     `docs/development/ux-cli-config.md` (FLOW-14).
-14. `make lint` and `make test` green, then push (FLOW-17).
-15. At Publish: the removal of the transitional detection filed as a queue
+15. `make lint` and `make test` green, then push (FLOW-17).
+16. At Publish: the removal of the transitional detection filed as a queue
     item (a3), and the corpus entries of the Security note handed to
     `security-suite` (SEC-03).
+
+Not Plan's, and before it: the session that records this design's review
+appends the four observations to `configuration-bugfixes`' `source` and
+files the two security findings through intake (a11; the table in **What
+this item does not do**).
 
 ## Design review
 
