@@ -9,19 +9,19 @@ seams: []
 surfaces: [cli, config]  # config: [runtime] cli, in the user's file and the project's, and
                          # WARDEN_CTR_CLI take only finch, docker or podman. cli: --runtime
                          # takes only those three
-security_boundary: host-env  # a build context can no longer choose a program warden runs on
-                         # the host
+security_boundary: host-env  # a build context can no longer make warden run a program on the
+                         # host other than finch, docker or podman
 alters_relationships: false  # inside the orchestrator's existing role: resolving the
                          # container runtime it hands to the container driver. No seam, no
                          # bootstrap change, no change of owner
 design_review: required  # FLOW-19: a security boundary is touched, a rule change (UX-08), and
-                         # two open assumed questions
+                         # three open assumed questions
 native_validation:
   - {host: container-any, blocking: false, reason: "the change reaches no driver tree and its check is one string comparison, the same code on every OS; what only a Windows host with a real runtime adds is that --runtime docker.exe and a path to docker.exe get the message that names docker, that a .bat the project ships is not run, and a build with cli = \"docker\"; make test does not run on Windows in CI"}
   - {host: macos-finch, blocking: false, reason: "the change reaches no driver tree; what only this host adds is a build with cli = \"finch\" in the project's file, the default runtime CI does not run, and the message for finch given as a path; warden clean --driver vz takes the same path through cmd/warden as on Linux, where CI runs it"}
 tier2_gaps:
   - {host: container-any, gap: "on a Windows host with a real runtime: go test ./cmd/warden; --runtime docker.exe and [runtime] cli set to the full path of docker.exe are each refused with the fix that names docker; a project warden.toml whose cli is a .bat the directory ships is refused on build, clean and doctor and the file is not run; cli = \"docker\" in the project's file builds (backlog runtime-cli-project-path-windows)"}
-  - {host: macos-finch, gap: "a build with cli = \"finch\" in the project's warden.toml; --runtime with the full path of finch is refused on build and on clean --driver vz with the fix that names finch and its directory (backlog runtime-cli-project-path-finch)"}
+  - {host: macos-finch, gap: "a build with cli = \"finch\" in the project's warden.toml; --runtime with the full path of finch is refused on build and on clean --driver vz with the fix that names finch (backlog runtime-cli-project-path-finch)"}
 rules: [GLOBAL-01, GLOBAL-04, GLOBAL-06, GLOBAL-07, GLOBAL-09, GLOBAL-10, GLOBAL-11, ORCH-01,
         ORCH-03, UX-01, UX-03, UX-04, UX-05, UX-07, UX-08, UX-09, TEST-01, TEST-02, TEST-03,
         TEST-06, TEST-08, SEC-01, SEC-03, SEC-04, LINT-01, LINT-08, FLOW-01, FLOW-02, FLOW-07,
@@ -120,6 +120,15 @@ problem. It works only in this repository (LOOP-04).
   deprecated second name, and records this item as a follow-up it does not
   carry. This design lands first, on today's code; what K1 has to keep is
   in **What K1 has to keep**.
+- **`project-config-trust`** (in Design; not on `main`; its draft read at
+  `2c38687` on its branch). Jeff settled its scope on 2026-11-15, in
+  `driver-contract`'s review: "there should only be one authoritative
+  warden.toml for any build". `warden` will read one file, `./warden.toml`
+  by default or the one named with a new `--config` flag or `WARDEN_CONFIG`
+  variable, with the environment and the command line; the user-level
+  `~/.config/warden/config.toml` goes away. That item carries the change
+  and amends ORCH-03 and UX-07, and this item is written to fit it
+  (**One config file**).
 - **`build-link-subnet`** and **`hyperv-relay-per-build-channel`**
   (archived). They put the checks of `[vm] build_link` and `[vm] dns` in
   `loadTOML`, "refused by every command as the file loads", and cite UX-08
@@ -134,8 +143,9 @@ problem. It works only in this repository (LOOP-04).
   `warden` runs". After this item the variable chooses among three names.
 - **Rules:** GLOBAL-06 (the host and build-environment boundary), UX-04 and
   UX-09 (the error), UX-08 (who validates, and when: amended here), UX-03
-  (Decision 5), UX-07 and ORCH-03 (the precedence, unchanged), UX-01 and
-  FLOW-15 (the docs), SEC-01, SEC-03 and SEC-04 (the corpus entry in the
+  (Decision 5), UX-07 and ORCH-03 (the precedence, which this item does not
+  change and `project-config-trust` amends), UX-01 and FLOW-15 (the docs),
+  SEC-01, SEC-03 and SEC-04 (the corpus entry in the
   Security note), FLOW-14 (a feature's design may change the rules of a
   component it works in: UX-08 is a project rule, in `ux-cli-config.md`).
 
@@ -149,10 +159,13 @@ front-matter already.
    not set. From every source.** `--runtime`, `WARDEN_CTR_CLI`,
    `[runtime] cli` in the user's config file and `[runtime] cli` in the
    project's `warden.toml` take the same three values, and anything else is
-   refused, whichever of the four set it (a1). Those are the runtimes the
-   driver supports today: the names `DetectRuntime` probes, in that order,
-   and the only values the flag's help, the configuration reference, the
-   README and `warden doctor`'s help list. The edges:
+   refused, whichever of the four set it (a1). There are four on `main`
+   today; the user's file is one of them only until `project-config-trust`
+   removes it, and the rule does not depend on how many files there are:
+   the value in effect is checked against one list. The three are the
+   runtimes the driver supports today: the names `DetectRuntime` probes,
+   in that order, and the only values the flag's help, the configuration
+   reference, the README and `warden doctor`'s help list. The edges:
    - *Letter case.* The match is exact and in lower case. `Docker` is
      refused, on every OS. A lookup of `Docker` finds `docker` on macOS and
      Windows and not on Linux, and the driver's own switch on the runtime's
@@ -166,7 +179,8 @@ front-matter already.
    - *An empty value*, unchanged from today for each source. An empty
      `--runtime` and an empty `WARDEN_CTR_CLI` are not set, and the next
      level is read. `cli = ""` in a file is that file's value: in the
-     project's file it hides the user's, and the runtime is detected.
+     project's file it hides the user's (while there are two files), and
+     the runtime is detected.
    - *Not set anywhere:* detection, as today: the first of the three that
      answers `info`.
    - *The lookup.* An accepted name is run by that name, and `os/exec`
@@ -193,7 +207,8 @@ front-matter already.
    today is `resolveRuntime` in `cmd/warden`: the one function that reads
    it, on behalf of the container driver it constructs and of `warden
    clean`. It checks the value in effect: the flag if set, else the
-   variable, else the project's file, else the user's. So:
+   variable, else the project's file, else the user's while that file is
+   still read. So:
    - `[runtime] cli = "nonsense"` in a `warden.toml` is not an error for
      `warden build --driver hyperv`, or for any command in the last row of
      the Problem's table. The setting is not read there, as today.
@@ -211,7 +226,7 @@ front-matter already.
    | `warden build`, `warden shell`, container driver | the error, from `newDriver`, before the runtime is looked up or run and before an output directory, a container or a network is made. `newRequest` runs first and only parses flags and stats the build path |
    | `warden doctor`, container driver | the error; doctor reports what a build would get |
    | `warden clean`, container driver, `qemu`, `vz` | the error, before anything is listed or removed. Under `qemu` and `vz` this command cleans containers too, so the run uses the setting |
-   | every other command and driver | nothing: the setting is not read. `--runtime nonsense` with `--driver qemu` is accepted and ignored, as `--runtime` is today |
+   | every other command and driver | nothing: the setting is not read. `warden build --runtime nonsense --driver qemu` is accepted and the flag ignored, as `--runtime` is there today |
 
    This is a general rule, and Jeff asked for it to be written as one, in
    this item: the UX-08 amendment (**Rule changes**).
@@ -250,9 +265,13 @@ front-matter already.
    for the project's file it is the security hole; for the flag, the
    variable and the user's file it is Jeff's decision that the driver
    supports the runtimes it knows.
-6. **UX-08 is amended in this item**, and its wording names the checks on
-   `main` that it does not yet describe. This item brings the runtime
-   setting under the rule and moves none of the older checks (question a5).
+6. **UX-08 is amended in this item.** Its wording names the four checks on
+   `main` that it does not yet describe, and it is about settings held in a
+   config file or the environment: a flag a run cannot use may still be
+   refused at startup, as `main` does (question a6). This item brings the
+   runtime setting under the rule and moves none of the older checks
+   (question a5). The wording names no level of config file, so the change
+   to one file needs no second amendment of it.
 7. **The other findings of the first draft are two queue items now**, not
    this one's: `project-config-trust` and `configuration-bugfixes` (**The
    same defect elsewhere**).
@@ -261,8 +280,8 @@ What falls away from the first draft: the project-level special case and
 the table of what each source may hold; `Runtime.RefusedCLI`; and the
 case-insensitive walk of the decoder's metadata. None is needed when every
 value in effect is checked against one list. Which file set the value is
-still noted, but only to word the error: nothing that decides what is run
-depends on it.
+still noted while there are two files, but only to word the error: nothing
+that decides what is run depends on it.
 
 ## Questions
 
@@ -323,9 +342,10 @@ None.
     driver's whole transition, at a date that depends on that item.
   - (d) Kept until 1.0.
 - **a5. How do UX-08 as amended and `main` agree on the day this merges?**
-  Proceeding with (a); confirm. Four checks on `main` are made more widely
-  than the amended rule says (the table in **Rule changes**), and the
-  umbrella's Decision 18 has a rule change in the item that makes it true.
+  Proceeding with (a); confirm. Four checks of file settings on `main` are
+  made more widely than the amended rule says (the table in **Rule
+  changes**), and the umbrella's Decision 18 has a rule change in the item
+  that makes it true. Flags are a6.
   - (a) The amended wording lists the four by name as checks that predate
     it; each stays until the change that moves it to its consumer, and this
     item moves none. `driver-contract` already makes two of them true (the
@@ -346,6 +366,30 @@ None.
     cannot move without a reader for each table.
   - (d) The wording lists nothing, and `main` is out of step with UX-08
     until those checks move: the shape Decision 18 rejected.
+- **a6. Does "only what a run uses is validated" reach flags?** Proceeding
+  with (a); confirm. Jeff's words are about one `warden.toml` that holds
+  the settings of several drivers. A flag is given to one run, and `main`
+  refuses a flag the run cannot use: `--script`, `--image`, `--cpus`,
+  `--memory`, `--keep-vms` and `--build-link` without a VM driver;
+  `--network` without `hyperv`; `--guest-os` with a value that is not
+  `linux` or `windows`, under every driver; `setup --slots` without
+  `hyperv` or `firecracker`; `image prepare --update` without `vz`.
+  `--runtime` is the exception: under a driver that does not use it, it is
+  accepted and ignored.
+  - (a) No. The rule's second paragraph covers settings in a config file
+    or the environment, which serve several runs. For a flag it says only
+    that a command may refuse, at startup, one its run cannot use. Every
+    flag check on `main` conforms, `--runtime` being ignored conforms too,
+    and nothing on `main` changes. **Recommended.**
+  - (b) Yes: a flag the run does not use is not checked either. The flag
+    checks above are then five more entries in the rule's list of older
+    checks, each until some change removes it, and in the end `warden
+    build --cpus 4` with the container driver is accepted and the flag
+    ignored.
+  - (c) The opposite, as a requirement: a flag the run cannot use is
+    always refused. `--runtime` under the VM drivers then does not conform
+    on `main`, and this item or a later one has to refuse it, which breaks
+    a command line that passes `--runtime` with every driver.
 
 ## Design
 
@@ -363,7 +407,9 @@ A row is refused only when it is the row in effect, on a command that
 resolves the container runtime (Decision 2). Precedence is unchanged and is
 the table's order, top to bottom (`LoadConfig` and `resolveConfig` today;
 ORCH-03, UX-07): the highest level that sets the value is the value
-(GLOBAL-10).
+(GLOBAL-10). The fourth row is there while `main` reads the user-level
+file; `project-config-trust` removes the file and the row, and the other
+rows stand as written.
 
 ### In the code
 
@@ -380,7 +426,9 @@ containerRuntimes = [finch, docker, podman]   # the supported list, in
 LoadConfig:                    # precedence as today; each step that sets cli
                                # also notes where it came from, for the error
     load ~/.config/warden/config.toml         # source: that file's path
+    keep cli and its source; cli := unsetCLI  # a string no TOML file can hold
     load ./warden.toml                        # replaces; source: warden.toml
+    cli == unsetCLI -> put the kept two back  # the file did not set the key
     WARDEN_CTR_CLI not empty                  # replaces; source: the variable
 resolveConfig:
     --runtime not empty                       # replaces; source: the flag
@@ -397,11 +445,25 @@ resolveRuntime(cfg):           # the consumer: build, shell (newDriver) and
 - The source is a field beside the value (`toml:"-"`, as `BuildLinkSource`
   is). Which file set a key is decided by what the file's decode did to the
   field, not by the decoder's `IsDefined`, which compares a key's spelling
-  exactly while the decoder also fills the field from `CLI` or `[Runtime]`:
-  before the project's file is decoded the field is given a marker value,
-  and a file that leaves the marker did not set the key, so the user's
-  value and source are put back. The source is used for the error's wording
-  and for nothing else: a wrong source cannot make a value run.
+  exactly while the decoder also fills the field from `CLI` or `[Runtime]`.
+  Before the project's file is decoded the field is given a marker,
+  `unsetCLI`, and a file that leaves the marker did not set the key, so the
+  user's value and source are put back. The marker is a constant that
+  holds a byte which is not valid UTF-8 (`"\xff"`). No TOML file can
+  produce it: the decoder refuses that byte in a file, and an escape in a
+  TOML string always gives valid UTF-8 (run against the decoder `main`
+  pins, BurntSushi/toml v1.6.0: a raw `0xff` in a basic, a literal and a
+  multi-line string each fail the decode; `\xff` and `\u00ff` give the
+  two bytes of U+00FF; `\uD800` fails). So a file cannot pass for one that
+  left the key unset, and an unsupported value in the project's file is
+  never replaced by the user's (Decision 2, GLOBAL-10). A marker a file
+  could write, a NUL-prefixed string for one, would not do: `"\u0000..."`
+  decodes without error. The marker never leaves `LoadConfig`. The source
+  is used for the error's wording and for nothing else: a wrong source
+  cannot make a value run.
+- That step exists only because `main` reads two files. With one file
+  (`project-config-trust`) the source of a file's value is that file, and
+  the marker and the put-back go.
 - A table that holds the key in two spellings (`cli = "docker"` and
   `CLI = "./rt"`) gives one of its values, which one varies from run to
   run. That value is checked, so the result is the named runtime or the
@@ -430,10 +492,13 @@ wrote it. The fix follows the source: "pass `--runtime` finch, docker or
 podman, or leave it out"; "set `WARDEN_CTR_CLI` to finch, docker or podman,
 or unset it"; for a file, the text above, whose last clause is the way to
 build someone else's repository without editing it. The names come from
-`containerRuntimes`. The value is printed with `%q`: it may come from a
-file someone else wrote, and `%q` keeps control characters out of the
-terminal and shows a stray space. It goes to stderr and `warden` exits 1
-(UX-09: not a build's own exit).
+`containerRuntimes`. The value is printed once, in the first line, with
+`%q`: it may come from a file someone else wrote, and `%q` keeps control
+characters out of the terminal and shows a stray space. No other part of
+the message is taken from the value: the fix is made of the list's names,
+the source's own name and fixed text. That holds for the transitional
+messages too. The error goes to stderr and `warden` exits 1 (UX-09: not a
+build's own exit).
 
 **Transitional.** Four forms ran before this fix. For each, the same
 source clause and a message of its own:
@@ -441,20 +506,37 @@ source clause and a message of its own:
 | The value | Example | What the message says | The fix it gives |
 |---|---|---|---|
 | A supported runtime in another letter case or with `.exe` | `Docker`, `docker.exe` | the runtime is named in lower case, without an extension | the name: `docker` |
-| A path whose last element is a supported runtime (after the row above) | `/opt/homebrew/bin/docker`, `C:\Program Files\Docker\docker.exe`, `./tools/docker` | the runtime is named, not given as a path | the name, and for an absolute path: add its directory to `PATH` if the name is not found. For a relative path no directory is suggested: `warden` looks the name up on `PATH` and does not run the file |
+| A path whose last element is a supported runtime (after the row above) | `/opt/homebrew/bin/docker`, `C:\Program Files\Docker\docker.exe`, `./tools/docker` | the runtime is named, not given as a path | the name; and that `warden` looks it up on `PATH`, so a runtime installed outside `PATH` needs its directory added there. No directory is printed |
 | `nerdctl`, alone or as a path's last element | `nerdctl`, `/usr/local/bin/nerdctl` | the container driver supports `finch`, `docker` and `podman` and no longer runs another runtime | one of the three; and that there is no supported way to use `nerdctl` with the container driver |
-| A path to anything else | `/usr/local/bin/docker-ci`, `./rt` | the container driver runs `finch`, `docker` or `podman` by name and no longer runs another program | one of the three; if the file wraps one of them, set what it set (`DOCKER_HOST`, `DOCKER_CONTEXT`, `CONTAINER_HOST`) in the environment |
+| A path to anything else | `/usr/local/bin/docker-ci`, `./rt` | the container driver runs `finch`, `docker` or `podman` by name and no longer runs another program | one of the three; if the file only set variables for one of them (`DOCKER_HOST`, `DOCKER_CONTEXT`, `CONTAINER_HOST`), set those in the environment; and that there is no supported way to run a program of one's own as the runtime |
 
 For example:
 
 ```
 ERROR: WARDEN_CTR_CLI is "/opt/homebrew/bin/docker"; the container runtime is named, not given as a path
-To fix: set WARDEN_CTR_CLI to docker, and add /opt/homebrew/bin to PATH if docker is not found there
+To fix: set WARDEN_CTR_CLI to docker; warden looks docker up on PATH, so if it is installed outside PATH, add its directory to PATH
 ```
+
+The name in a fix is the list's member that the value's last element
+matched, not text cut from the value. The directory in the value is not
+repeated. When the value comes from a project's `warden.toml`, that
+directory is the repository's choice, and `warden` would be telling the
+user, in its own voice, to put a directory someone else named on `PATH`:
+the exposure the Security note leaves with the user. It would also carry
+whatever characters the directory holds into the `To fix:` line. One
+wording for every source and for absolute and relative paths alike keeps
+the detection to "is the last element a supported runtime".
 
 A bare name that is neither a supported runtime nor `nerdctl` (a wrapper
 on `PATH`, a typing error, `sh`) cannot be told apart from one another, and
 gets the permanent error, which already says what the supported values are.
+
+About a wrapper, plainly. A script that only set variables and then ran a
+supported runtime is replaced by setting those variables. A wrapper that
+did anything else (ran the runtime through `sudo`, added arguments such as
+`podman --remote` or a `nerdctl` namespace, chose between runtimes) has no
+supported replacement: the container driver runs the runtime by its name
+with `warden`'s arguments and nothing else.
 
 About `nerdctl` and other runtimes, plainly: there is no supported route
 today. Before this fix `WARDEN_CTR_CLI=nerdctl` ran `nerdctl`, untested and
@@ -464,7 +546,8 @@ once the driver contract (K1) has landed. Until then the answer is one of
 the three; Finch is the supported runtime built on `nerdctl`. A file named
 `docker` on the user's own `PATH` that runs something else is the user's
 arrangement: `warden` runs it as `docker`, and it is neither tested nor
-supported.
+supported. That is also all there is for a wrapper that did more than set
+variables.
 
 Where the transitional part lives, so that it can be deleted in one place:
 
@@ -497,7 +580,8 @@ A user-facing change of behavior, from every source. What stops working:
 | `--runtime /path/to/docker`, `WARDEN_CTR_CLI=/usr/local/bin/podman`, or `cli = "/opt/homebrew/bin/finch"` in either file | refused. Name the runtime, and put its directory on `PATH` |
 | `--runtime docker.exe`, `Docker` | refused. Write `docker` |
 | `WARDEN_CTR_CLI=nerdctl`, or another runtime's program | refused. No supported route today (above) |
-| A wrapper script, by path or by name (`docker-ci`, a script that sets `DOCKER_HOST` and runs `docker`) | refused. Name the runtime and set the wrapper's variables in the environment |
+| A wrapper script, by path or by name, that only sets variables and runs a supported runtime (`docker-ci` setting `DOCKER_HOST`) | refused. Name the runtime and set the wrapper's variables in the environment |
+| A wrapper that does anything else: `sudo docker`, `podman --remote`, `nerdctl --namespace`, a script that picks a runtime | refused. No supported route (above). By path it gets the transitional message; a bare name on `PATH` gets the permanent error, which does not mention wrappers |
 | `cli = "./tools/docker"` or `cli = "sh"` in a project's `warden.toml` | refused. This is the hole |
 
 Who is likely affected:
@@ -511,7 +595,12 @@ Who is likely affected:
 - A user who runs the Linux `warden` under WSL against Docker Desktop
   through `docker.exe`. Docker Desktop's WSL integration provides `docker`.
   Whether a build completes through `docker.exe` today was not checked.
-- A user with a wrapper around a supported runtime.
+- A user with a wrapper around a supported runtime. One whose wrapper
+  only sets variables sets them in the environment. One whose wrapper adds
+  `sudo` or arguments has nothing to move to: a rootful runtime reached
+  through `sudo`, or a remote podman reached through arguments and not
+  through `CONTAINER_HOST`, stops working with `warden` until it is
+  reachable by the runtime's name alone.
 - Nobody in this repository: its tests put a fake named `finch` or
   `podman` on a `PATH` of their own (`fakeRuntime`), `test-integration.sh`
   relies on detection, the native sessions pass `--runtime finch`, and no
@@ -539,8 +628,9 @@ ones: the flag's help, the configuration reference and the README list
 - It is not an error on any other command or driver, and not when a higher
   level replaces it.
 - Unchanged: the precedence; detection and its order; an empty value; a
-  supported name from any source; `--runtime` accepted and ignored by the
-  VM drivers.
+  supported name from any source; `--runtime` accepted and ignored by
+  `build`, `shell` and `doctor` under a VM driver, by `clean` under
+  `hyperv` and `firecracker`, and by `setup` and `image prepare`.
 
 ### Reference docs (UX-01) and the overview (FLOW-15)
 
@@ -585,8 +675,13 @@ and they are not this item's:
 - **`project-config-trust`** (a security fix, one design): F1 to F4 and F9
   (a project's file chooses the relay image, the relay's trust roots, host
   directories and the Hyper-V base image; `warden` takes the working
-  directory for its own source tree), and the question of what a project's
-  file may decide at all, including that it outranks the user's own file.
+  directory for its own source tree), and the whole-file question, which
+  Jeff settled on 2026-11-15: there is one authoritative `warden.toml` for
+  a build, `./warden.toml` by default or the file named with `--config` or
+  `WARDEN_CONFIG`, which is then the only one read; the user-level file
+  goes away, and one that still exists is an error that says what to do.
+  So a project's file no longer outranks a file of the user's: the user
+  names the file.
 - **`configuration-bugfixes`** (one feature, on hold behind the freeze):
   F5 to F8 (two documented keys that are never read; `doctor` printing `ok`
   for a runtime it never ran; a file in the working directory hiding an
@@ -601,15 +696,41 @@ key's spelling; F6 and F7 stand as they were. One more observation for
 `[output] color` and `--color` are not validated at all (an unknown value
 is read as `auto`).
 
+### One config file
+
+`project-config-trust` removes the user-level file, and this item is
+written to fit that (its queue item, Jeff, 2026-11-15). The order of
+merging is this item, then `project-config-trust`, then K1; that item's
+draft says the same and asks how the queue holds it behind this merge (its
+a7).
+
+- The rule does not count files. The value in effect is checked against
+  one list, and that is true with two files, with one, and with a file
+  named by `--config`.
+- What this item writes for two files, because `main` has two: the fourth
+  row of the rule's table, the marker step in `LoadConfig`, "else the
+  user's" in `resolveRuntime`'s comment and the reference, the error that
+  names the user's file by its path, and the tests of those. That item
+  removes them with the file. `runtime_former.go` and its marker are not
+  among them.
+- UX-08 as proposed here names no level of config file, so that item's
+  declared edit to it (one clause, "the config files in precedence order")
+  has nothing left to edit.
+- If that item were to merge first, this one meets one file when it merges
+  `main`: the fourth row and the marker step are not written, and nothing
+  else in this design changes.
+
 ### What K1 has to keep
 
 K1 (`driver-contract`) moves this setting out of `cmd/warden`'s `Config`:
 the container driver reads it through the kit, from `--runtime`,
-`WARDEN_CTR_CLI` and the config files `warden` names to it, under the key
-`[driver.container] cli` with `[runtime] cli` a deprecated second name.
+`WARDEN_CTR_CLI` and the one config file `warden` names to it, under the
+key `[driver.container] cli` with `[runtime] cli` a deprecated second name.
 This item merges first; K1 meets it in its consolidation (FLOW-10). The
 requirement below is for K1's Implementation plan and is handed to that
-item; this design does not edit K1's.
+item; this design does not edit K1's. K1's design at `4c3c8fc` already
+carries points 1 to 6, read from this redraft before it was committed;
+point 4 is stricter here than there.
 
 1. **The rule.** The container driver validates its runtime against its
    supported list (`finch`, `docker`, `podman`) when it initializes: in the
@@ -628,9 +749,11 @@ item; this design does not edit K1's.
 3. **No fallback.** An unsupported value in effect is not replaced by a
    lower level's or by detection.
 4. **A later command.** K1's `reap` and `attach` take the runtime from the
-   driver's state file, written during `run`; the value written there has
-   passed the check. Where the driver resolves its settings again, the
-   check runs again.
+   driver's state file, written during `run`. The value written there has
+   passed the check, and the value read back is compared with the list
+   again before it is run: one string comparison, so that "the value run
+   is the list's own" does not rest on the contents of a file. Where the
+   driver resolves its settings again, the check runs again.
 5. **The transitional detection moves with the check**, stays one file
    behind one call, keeps its marker and its removal point (a4). Its
    `nerdctl` message can then name the route: a driver of one's own.
@@ -640,23 +763,20 @@ item; this design does not edit K1's.
    `[driver.container] cli`, the rows this item has for `[runtime] cli`,
    the marker-file case among them: a K1 that checked the old name only
    would pass every test this item writes.
-7. **UX-08.** K1's design quotes UX-08 as it is before this item and says
-   it does not change it. After this merges, K1 quotes the amended rule,
-   and strikes from its list the checks K1 moves to a driver: the type of
-   the seven driver-owned keys and the two image ages. Whether K1 also
-   takes `[vm] build_link`, `[vm] dns` and the type of `warden`'s own keys
-   is question a5. K1's proposed ORCH-03 paragraph ("A driver reads its
-   own ... with the same precedence and before it does any work (UX-08)")
-   and its Errors table ("a driver's key, while another driver is
-   selected: it is not read") are this rule applied to drivers and need no
-   change for it.
-8. **K1's own text.** Its Questions (a25: "whichever of the two merges
-   second"), Discovery and trust ("K1 leaves it as"), Configuration ("K1
-   does not carry the fix"), Risks and Security note ("is not K1's") say
-   that a project's `[runtime] cli` is run as given, or leave open which
-   change merges second. Once this merges, K1 is the second. Its lifecycle
-   suite's example of a host setting passed as a config file is a runtime's
-   name; a runtime that is not on `PATH` needs `PATH`, not a path.
+7. **UX-08.** After this merges, K1 quotes the amended rule, and strikes
+   from its list the checks K1 moves to a driver: the type of the seven
+   driver-owned keys and the two image ages. That is an edit of UX-08 that
+   K1 has to declare (its a8 says so). Whether K1 also takes `[vm]
+   build_link`, `[vm] dns` and the type of `warden`'s own keys is question
+   a5; K1's design keeps them where they are (its Decision 8). K1's
+   proposed ORCH-03 paragraph ("A driver reads its own ... with the same
+   precedence and before it does any work (UX-08)") and its Errors table
+   ("a driver's key, while another driver is selected: it is not read")
+   are this rule applied to drivers and need no change for it.
+8. **K1's own text.** Its redraft of 2026-11-15 records that K1 is the
+   second to merge and that the rule has no levels. What is left for it
+   from this design: point 4 as written here, and the commit of this
+   design it names.
 
 If K1 were to merge first, the code this item changes would be gone and it
 would return to Design (FLOW-06).
@@ -667,7 +787,9 @@ would return to Design (FLOW-06).
   the file found. The runtime is looked up by `os/exec` as today.
 - It does not move the checks of `[vm] build_link`, `[vm] dns`, the image
   ages or TOML types (a5).
-- It does not fix F1 to F9.
+- It does not fix F1 to F9, and it does not remove the user-level file
+  (**One config file**).
+- It does not change which flags a command refuses (a6).
 - It does not edit `driver/container/`, the `nerdctl` arm of `copyExecutor`
   included.
 
@@ -736,28 +858,29 @@ is a project invariant of the component this item works in, not a loop rule
 > **Check:** agent-judgment
 >
 > A component validates the configuration it consumes, errors and mismatches
-> alike, when it initializes: after the overrides are applied (flags, environment
-> variables, and the config files in precedence order, UX-07) and before any real
-> work begins, rather than failing deep into a build. What it checks is the value
-> in effect, not a value that a higher level replaced.
+> alike, when it initializes: after the overrides are applied (flags and
+> environment variables over file configuration, in the order UX-07 gives) and
+> before any real work begins, rather than failing deep into a build. What it
+> checks is the value in effect, not a value that a higher level replaced.
 >
-> Only the configuration a run uses is validated. One `warden.toml` may hold the
-> settings of several drivers or components, for runs that choose among them on
-> the command line; a setting the run does not use is not checked, and a bad
-> value there is not an error. A config file that cannot be parsed is an error
-> for every run that reads it.
+> Only the configuration a run uses is validated. A `warden.toml` and the
+> environment may hold the settings of several drivers or components, for runs
+> that choose among them on the command line; a setting there that the run does
+> not use is not checked, and a bad value in it is not an error. A flag is given
+> to one run: a command may refuse, at startup, a flag that its run cannot use.
+> A config file that cannot be parsed is an error for every run that reads it.
 >
 > This is required of every component in the BuildWarden organization and
-> strongly recommended for components others write. It is not enforced
-> mechanically. The agent part judges, for each setting a change adds or touches,
-> that the component that uses it validates it at that point, and that nothing
-> validates a setting it does not use.
+> highly recommended for components others write. It is not enforced
+> mechanically. The check judges, for each setting a change adds or touches, that
+> the component that uses it validates it at that point, and that nothing
+> validates a file or environment setting the run does not use.
 >
-> Checks that predate this wording still run as a config file loads, whatever the
-> run uses: the TOML type of every key; `[vm] build_link` and `[vm] dns`; and, on
-> every `build` and `shell`, `[vm] image_refresh_after` and `image_min_grace`.
-> Each stays until the change that moves it to its consumer, which takes it off
-> this list. Nothing is added to the list.
+> Four checks predate this wording and are made whatever the run uses. As a
+> config file loads: the TOML type of every key, `[vm] build_link`, and
+> `[vm] dns`. On every `build` and `shell`: `[vm] image_refresh_after` and
+> `image_min_grace`. Each stays until the change that moves it to its consumer,
+> which takes it off this list. Nothing is added to the list.
 
 **Severity and check, before and after.** MUST, unchanged. Check:
 `automated + agent-judgment` before, `agent-judgment` after. The automated
@@ -766,6 +889,15 @@ test, not a static check: validation at startup"`. Jeff's words are that
 the rule "isn't enforced programmatically", so the wording says so and the
 check type follows (LINT-01: the `Check:` line is the rule's linter spec;
 LINT-08: the agent prompt is its third paragraph).
+- *The wording names no level of config file.* It says "file
+  configuration, in the order UX-07 gives", so it reads the same on `main`
+  today (a project's file over the user's) and after
+  `project-config-trust` (one file), and that item need not amend it
+  again.
+- *Flags.* The second paragraph is about what Jeff described: settings
+  kept in a file, and in the environment, that serve several runs. For a
+  flag it only permits what `main` does. Whether it should reach flags is
+  a6.
 - *Considered: keep `automated + agent-judgment`*, with the automated part
   defined as each component's own tests of its validation. A rule whose
   automated half is "the tests exist" has no check tier 1 can run, which is
@@ -793,7 +925,10 @@ fix"; that still holds, for a value a run uses, and GLOBAL-10 is not
 edited.
 
 **Against `cmd/warden` on `main`.** Every validation of configuration
-there, and whether the amended wording describes it:
+there, settings first and then flags, and whether the amended wording
+describes it (read from every fixable error `cmd/warden` returns at
+`ad4ea50`; errors about one command's arguments, such as a missing ISO or
+an unknown subcommand, are left out):
 
 | Check | Where | When | Under the amended wording |
 |---|---|---|---|
@@ -804,13 +939,29 @@ there, and whether the amended wording describes it:
 | `[vm] image_refresh_after`, `image_min_grace` | `newRequest` | `build` and `shell`, every driver, after the files are merged | **does not** under the drivers that do not read them (only qemu and hyperv do). Listed. K1 makes them the two drivers' |
 | `[runtime] driver`, `WARDEN_DRIVER`, `--driver` | `resolveConfig` (`validateDriver`) | every command that loads configuration, after the overrides | conforms: each of those commands dispatches on the driver |
 | `[build] capture`, `--capture` | `newRequest` | `build`, `shell`, after the override | conforms |
-| `--build-link` | `resolveBuildLink` | the VM-driver commands that use the link | conforms |
+| The value of `--build-link` | `resolveBuildLink` | the VM-driver commands that use the link | conforms |
 | `[vm] windows_image_update` | `prepareHyperVWindows` | `image prepare --driver hyperv` | conforms |
+| `--timeout`; `--tmpdir` and `[build] tmpdir` | `newRequest`; `clean` under `firecracker` and `hyperv` for the directory | `build`, `shell`, and that `clean` | conforms: each of those runs uses them |
 | `[runtime] cli`, `WARDEN_CTR_CLI`, `--runtime` | nowhere: run as given | | **this item**: `resolveRuntime`, on the commands that use the runtime, after the overrides |
+| `--script`, `--image`, `--cpus`, `--memory`, `--keep-vms`, `--build-link` without a VM driver; `--network` without `hyperv` | `validateFlagsForDriver`, from `newRequest` | `build`, `shell` | conforms: a flag the run cannot use, refused at startup (the flag sentence; a6) |
+| `--guest-os`: a value that is not `linux` or `windows`, under every driver; `windows` without `qemu` or `hyperv` | `validateGuestOS`, from `newRequest` | `build`, `shell` | conforms, likewise. The container driver never reads the flag, so `warden build --guest-os bogus` fails there for a flag the run does not use |
+| `--build-link` without a VM driver | `doctor` | `doctor` | conforms, likewise |
+| `--slots` without `hyperv` or `firecracker` | `setup` | `setup` | conforms, likewise |
+| `--update` without `vz`; `--os` against the driver; the source given twice | `runImagePrepare` (`checkImageUpdate`, `imageSource`) | `image prepare` | conforms: the first likewise, the others are the run's own arguments |
+| `--runtime` under a driver whose command does not resolve the runtime | nowhere: accepted and ignored | | conforms: the flag sentence permits a refusal and does not require one |
 
-So `main` conforms on the day this merges because the wording lists the
-four checks that do not, and this item makes the rule true for the setting
-it changes. That is the decision put as a5. Moving the four here was
+Not in the table, because nothing in `cmd/warden` validates them: the
+relay image, the CA paths, the output directory, the Hyper-V base image
+and `[output] color`. They are passed on as given, and are no nearer to
+UX-08 and no further from it under the new wording than under the old.
+`project-config-trust` (F1 to F4) and `configuration-bugfixes` hold them.
+
+So `main` conforms on the day this merges for three reasons: the wording
+lists the four checks of file settings that do not; its second paragraph
+is about file and environment settings and permits the flag checks; and
+this item makes the rule true for the setting it changes. This PR changes
+`resolveRuntime` and what feeds it, and no other check. The first is the
+decision put as a5 and the second as a6. Moving the four here was
 weighed and not chosen: the type check cannot move without a reader for
 each table, which is K1's work; the two `[vm]` checks were confirmed where
 they are by two archived designs and are rewritten by K1; and a security
@@ -826,6 +977,10 @@ written in this item (a2).
 probe, only when selected, and proposes an ORCH-03 paragraph that says so
 and cites UX-08. That is this rule applied to drivers; K1 is the item that
 takes two entries off the rule's list (**What K1 has to keep**, point 7).
+
+**How `project-config-trust` fits.** It amends ORCH-03 and UX-07, the
+order this rule points to, and removes the user-level file. Nothing in the
+wording above has to change for it (**One config file**).
 
 **The profile (PROFILE-01).** No entry becomes stale: the Rules entry names
 the directory, the Checks table names no UX-08 check, and its Safety row
@@ -867,12 +1022,18 @@ no more.
 
 **What remains**, each unchanged by this item:
 
-1. A repository can still choose among `finch`, `docker` and `podman`, and
-   its choice outranks the user's config file (project over user, ORCH-03).
-   A user with rootless podman configured and Docker also installed can be
-   moved to Docker by a repository. `WARDEN_CTR_CLI` or `--runtime` pins it.
-   The same holds for the driver (`[runtime] driver`). Both are
-   `project-config-trust`'s.
+1. A repository can still choose among `finch`, `docker` and `podman`,
+   and the driver (`[runtime] driver`), through the `warden.toml` in the
+   working directory. On `main` today that file also outranks the user's
+   own config file (project over user, ORCH-03): a user with rootless
+   podman configured there and Docker also installed can be moved to
+   Docker by a repository. `WARDEN_CTR_CLI` or `--runtime` pins it. Jeff
+   settled the rest on 2026-11-15, for `project-config-trust`: one
+   authoritative `warden.toml`, `./warden.toml` by default or the file
+   named with `--config` or `WARDEN_CONFIG`, which is then the only one
+   read, and no user-level file. After that item the way not to act on a
+   repository's file is to name one's own; what, if anything, guards the
+   default is that item's open question (its a4).
 2. The name is found on the user's `PATH`. A `PATH` entry a repository can
    write to is the user's exposure, as for any command. Go refuses a match
    in the working directory or through a relative `PATH` entry (`ErrDot`),
@@ -889,6 +1050,11 @@ no more.
    and a `warden` installed outside its source tree can take the repository
    for that tree (`project-config-trust`).
 
+5. The error prints the value, which a repository's file can set. It is
+   printed once, quoted with `%q`, and no other part of the message comes
+   from it: no directory from the value is suggested for `PATH`, and
+   control characters do not reach the terminal.
+
 **What the TEST-08 suite should exercise.** Arm A gains this as a permanent
 entry (SEC-03), with the attacker supplying the build context: (i) a
 `warden.toml` whose `cli` is a file the context ships; (ii) `cli = "sh"`
@@ -896,7 +1062,10 @@ with files named `pull`, `container`, `image` and `info` in the context;
 (iii) (i) again with the key respelled (`[Runtime]`, `CLI`). Each on
 `build`, `shell`, `clean` and `doctor`, and on `clean` with
 `driver = "qemu"` in the same file. The proof is SEC-04's: the file would
-write a marker; the marker is absent and `warden` exits 1. The suite's
+write a marker; the marker is absent and `warden` exits 1. Before the fix
+the marker is written on `build`, `shell` and `clean`, which run the
+file; `doctor` only printed the value, so there the exit code is the
+proof. The suite's
 matrix places the attacker inside the build environment; this finding came
 from outside it, from a file the host reads before the environment exists.
 The files of a build context that `warden` reads on the host
@@ -938,9 +1107,19 @@ to a temporary directory so that no test reads the real user's file:
   loaded 200 times: every result is `docker` or the error.
 - The source when both files hold the same string: the error names the
   project's file when it sets the key and the user's when it does not.
+- The marker. A project file that leaves the key unset, and no project
+  file at all, each restore the user's value and its source. No project
+  file can yield the marker: a file whose `cli` holds the marker's bytes
+  fails to load, and its escaped spellings (`\xff`, `\u00ff`) are
+  unsupported values that give the error naming `warden.toml`, with a
+  supported value in the user's file not used in their place. After
+  `LoadConfig` the field is never the marker.
 - Not used, not validated: with `cli = "nonsense"` in the project's file,
   `newDriver` for `qemu`, `vz`, `hyperv` and `firecracker` returns no
-  error, and `resolveConfig` returns none for any driver.
+  error, and `resolveConfig` returns none for any driver. Through the
+  commands that return before the runtime is resolved: `clean` under
+  `hyperv` and under `firecracker`, and `doctor` under each of the four VM
+  drivers, return no error about the runtime.
 - Used, and nothing is run: a project directory that ships an executable
   writing a marker, as `cli = "./rt"`, as `CLI = "./rt"` and as
   `cli = "sh"` with a file named `pull`; through the calls `build` and
@@ -949,20 +1128,29 @@ to a temporary directory so that no test reads the real user's file:
   project's file and with `--driver vz`. The same with the executable's
   absolute path in `--runtime`, in the variable and in the user's file.
   These use a shell script and skip on Windows, as `fakeRuntime` does
-  today.
+  today. What fails before the fix differs by command, and each case
+  asserts the one that does. `clean` runs the file on `main`, so there the
+  absent marker discriminates. `newDriver` and `doctor` do not run a
+  configured runtime on `main` (the driver runs it later; `doctor` prints
+  it and `ok`), so there the `FixableError` and exit 1 discriminate, and
+  the absent marker only guards against a fix that starts running it.
 - No fallback: with `cli = "podman"` in the user's file and an unsupported
   value in the project's, the result is the error, and detection is not run
   (a fake `finch` on `PATH` whose `info` writes a marker; the marker is
   absent).
 - The transitional forms, one table, the same on every OS: `Docker` and
-  `docker.exe` give a fix naming `docker`; `/opt/homebrew/bin/docker` and
-  `C:\Program Files\Docker\docker.exe` give a fix naming `docker` and the
-  directory; `./tools/docker` gives a fix naming `docker` and no directory;
+  `docker.exe` give a fix naming `docker`; `/opt/homebrew/bin/docker`,
+  `C:\Program Files\Docker\docker.exe` and `./tools/docker` give the
+  same fix, naming `docker` and `PATH` and no directory;
   `nerdctl` and `/usr/local/bin/nerdctl` give the `nerdctl` message;
   `/usr/local/bin/docker-ci` and `./rt` give the wrapper message; `sh`,
   `dokcer` and ` docker` are not recognized and give the permanent error.
   And for every row: the permanent check refuses the value, so the
   detection cannot accept anything.
+- Nothing of the value outside the quotes: for a path whose directory
+  holds an escape character and a newline, from each source, the value
+  appears in the message once, quoted, and neither the directory nor
+  either character appears anywhere else in the message or the fix.
 - The exit code: the error is a `FixableError`, which `main` exits 1 on
   (UX-09).
 - Detection still probes `finch`, `docker`, `podman` in that order, from
@@ -975,7 +1163,9 @@ a `warden.toml` and an executable that writes a marker,
 
 - `cli = "./rt"`: `warden build`, `warden clean` and `warden doctor` each
   exit 1 with `To fix:`, the marker is absent, and no output directory is
-  made;
+  made. On `main` the marker is written by `build` and `clean`; `doctor`
+  exits 0 without running the file, so its exit code is what the case
+  checks;
 - `[Runtime]` with `CLI = "./rt"`: `warden clean` likewise;
 - `cli = "./rt"` with `driver = "qemu"` in the same file, and with
   `--driver vz`: `warden clean` likewise (it needs neither qemu nor macOS:
@@ -985,8 +1175,8 @@ a `warden.toml` and an executable that writes a marker,
 - the `cli = "./rt"` file with `--runtime docker`, and with
   `WARDEN_CTR_CLI=docker`: `warden doctor` prints
   `container runtime: docker`;
-- the same file and `warden setup`: exit 0 (the run does not use the
-  setting);
+- the same file and `warden setup`, and `warden clean --driver hyperv`:
+  exit 0 (the run does not use the setting);
 - `cli = "docker"`: one of the builds the script already runs is run from
   such a directory, so a named runtime from a project's file is still built
   with, at no extra build.
@@ -1005,7 +1195,7 @@ OS. Two gaps are tracked (`tier2_gaps`, and the native-gap backlog):
   run; `cli = "docker"` in the project's file builds.
 - `macos-finch`: a build with `cli = "finch"` in the project's file;
   `--runtime` with the full path of `finch` is refused on `build` and on
-  `clean --driver vz`, with the fix that names `finch` and its directory.
+  `clean --driver vz`, with the fix that names `finch`.
 
 The release matrix (TEST-02) is the backstop, and the release that carries
 this trips GLOBAL-06, so TEST-08 runs.
@@ -1017,9 +1207,10 @@ One PR. Nothing already implemented is reworked beyond the functions named.
 1. One `containerRuntimes` list in `cmd/warden/config.go`; `DetectRuntime`
    ranges over it, in today's order (GLOBAL-09, GLOBAL-10).
 2. The source of the runtime setting, beside the value: set by `LoadConfig`
-   for each file (by what the file's decode did to the field, not by
-   `IsDefined`) and for `WARDEN_CTR_CLI`, and by `resolveConfig` for
-   `--runtime` (UX-04, UX-07, ORCH-03).
+   for each file (by what the file's decode did to the field, with the
+   `unsetCLI` marker no file can produce, not by `IsDefined`) and for
+   `WARDEN_CTR_CLI`, and by `resolveConfig` for `--runtime` (UX-04, UX-07,
+   ORCH-03).
 3. `resolveRuntime` checks the value in effect against the list and
    returns the list's member, or the permanent error as a `driver.Fixable`
    that names the source, the quoted value and the three names (GLOBAL-06,
@@ -1027,7 +1218,8 @@ One PR. Nothing already implemented is reworked beyond the functions named.
 4. The transitional detection: `cmd/warden/runtime_former.go`, its one
    call, its test file, each with the marker
    `TRANSITIONAL(runtime-former-values)` and the removal point a4 settles
-   (UX-03, UX-04, GLOBAL-01).
+   (UX-03, UX-04, GLOBAL-01). Its messages print nothing from the value
+   but the quoted value.
 5. The tier-0 tests of the Validation plan, in `cmd/warden`; the existing
    `LoadConfig` tests set `HOME` and `USERPROFILE` like the new ones
    (GLOBAL-04, GLOBAL-07, TEST-01, TEST-06).
@@ -1055,7 +1247,9 @@ Folded in, in this redraft:
 
 - a1: the runtime is `finch`, `docker` or `podman` from every source, not
   only from the project's file. The project-level special case,
-  `RefusedCLI` and the level-aware decode are gone (Decisions 1 and 3).
+  `RefusedCLI` and the decision by level are gone (Decisions 1 and 3).
+  Which file set the value is still noted, for the error's wording only,
+  while `main` reads two files.
 - a2: the consumer validates, when it initializes, after the overrides,
   and only when the run uses the setting (Decision 2); and the general rule
   is proposed as an amendment of UX-08 (`rule_changes`, **Rule changes**).
@@ -1069,10 +1263,37 @@ Folded in, in this redraft:
 - The survey and the nine findings are replaced by pointers to the two
   items; **What K1 has to keep** is rewritten for the new rule.
 
+An independent review read the redraft at `3bf8784` the same day. What it
+changed:
+
+- Jeff's decision of the same day, recorded on `project-config-trust`
+  (one authoritative `warden.toml`; the user-level file goes away), is now
+  fitted: **One config file**; UX-08's proposed wording names no level of
+  config file; the pointers to that item state its settled scope.
+- UX-08's second paragraph is about settings in a config file or the
+  environment, and a flag a run cannot use may be refused at startup. The
+  table against `main` now lists the flag checks, which the first table
+  left out. New question a6.
+- The transitional messages print no directory taken from the value.
+- The marker that tells whether the project's file set the key is
+  specified as a string no TOML file can produce.
+- The Compatibility table says that a wrapper which does more than set
+  variables has no supported replacement.
+- What K1 has to keep: the runtime read back from the state file is
+  compared with the list again.
+- The tests say which assertion fails before the fix for each command.
+
+Not done here, and for the attended session: the two follow-up choices
+this redraft rests on ("Every source"; the rule written in this item,
+amending UX-08) are in the dispatch and in this design, and the queue's
+recorded answers to a1 and a2 end before them. The queue item's title
+still states the first draft's scope.
+
 Still to come in this sitting: the UX-08 rule change, to be approved by
-name, approved with a change, or rejected; the two new assumed questions,
-a4 (when the transitional detection is removed) and a5 (how UX-08 and
-`main` agree on the day this merges); and the outcome.
+name, approved with a change, or rejected; the three new assumed
+questions, a4 (when the transitional detection is removed), a5 (how UX-08
+and `main` agree on the day this merges) and a6 (whether the rule reaches
+flags); and the outcome.
 
 ## Consolidation
 
