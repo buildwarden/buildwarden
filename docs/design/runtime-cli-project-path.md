@@ -328,8 +328,9 @@ None.
   will eventually be removed like the warning would be". Decision 4.
   - (a) Refuse from the release that carries the fix. Was recommended.
   - (b) Warn for one release, then refuse.
-- **a4. When is the transitional detection removed?** Proceeding with (a);
-  confirm. After its removal the forms it recognizes get the permanent
+- **a4. When is the transitional detection removed?** *Answered
+  2026-11-15: (d), kept until 1.0. The design proceeded with (a) and is
+  changed to (d).* After its removal the forms it recognizes get the permanent
   error, which lists the three supported values.
   - (a) It is in the release that first carries the fix and in the two
     releases after it, and is removed from the third. That is the window
@@ -340,9 +341,9 @@ None.
   - (c) Removed with the deprecated key name `[runtime] cli`, in the change
     that ends `driver-contract`'s window: one removal for the container
     driver's whole transition, at a date that depends on that item.
-  - (d) Kept until 1.0.
+  - (d) Kept until 1.0. **Chosen.**
 - **a5. How do UX-08 as amended and `main` agree on the day this merges?**
-  Proceeding with (a); confirm. Four checks of file settings on `main` are
+  *Answered 2026-11-15: (a).* Four checks of file settings on `main` are
   made more widely than the amended rule says (the table in **Rule
   changes**), and the umbrella's Decision 18 has a rule change in the item
   that makes it true. Flags are a6.
@@ -366,8 +367,8 @@ None.
     cannot move without a reader for each table.
   - (d) The wording lists nothing, and `main` is out of step with UX-08
     until those checks move: the shape Decision 18 rejected.
-- **a6. Does "only what a run uses is validated" reach flags?** Proceeding
-  with (a); confirm. Jeff's words are about one `warden.toml` that holds
+- **a6. Does "only what a run uses is validated" reach flags?** *Answered
+  2026-11-15: (a).* Jeff's words are about one `warden.toml` that holds
   the settings of several drivers. A flag is given to one run, and `main`
   refuses a flag the run cannot use: `--script`, `--image`, `--cpus`,
   `--memory`, `--keep-vms` and `--build-link` without a VM driver;
@@ -567,9 +568,10 @@ Where the transitional part lives, so that it can be deleted in one place:
   it goes: GLOBAL-01), at the call, at the head of the test file, and in an
   HTML comment above the docs subsection. A search for the marker finds
   everything to delete.
-- When: question a4. Proceeding with: present in the release that first
-  carries the fix and the two after it. Publish files the removal as a
-  queue item whose `source` names the marker and that condition.
+- When: at 1.0 (a4, answered 2026-11-15). The detection is in every
+  release before 1.0 and is removed in the change that prepares 1.0.
+  Publish files the removal as a queue item, on hold until then, whose
+  `source` names the marker and that condition.
 
 ### Compatibility (UX-03)
 
@@ -1231,7 +1233,8 @@ One PR. Nothing already implemented is reworked beyond the functions named.
    overview pseudocode (FLOW-15).
 9. `make lint` and `make test` green, then push (FLOW-17).
 10. At Publish: the removal of the transitional detection filed as a queue
-    item (a4), and the two tracked gaps confirmed in the backlog (FLOW-09).
+    item on hold until 1.0 (a4), and the two tracked gaps confirmed in the
+    backlog (FLOW-09).
 
 ## Design review
 
