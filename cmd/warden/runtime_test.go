@@ -4,6 +4,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"slices"
@@ -384,4 +385,106 @@ func TestRuntimeKeyInOtherSpellings(t *testing.T) {
 			wantRuntimeRefused(t, err, "[runtime] cli in warden.toml", "./rt")
 		}
 	})
+}
+
+// doctorChildEnv names the driver for TestDoctorChild, in the child process
+// only; doctorChildRan is the line that child prints before it runs doctor.
+const (
+	doctorChildEnv = "WARDEN_TEST_DOCTOR_DRIVER"
+	doctorChildRan = "doctor child: running"
+)
+
+// TestDoctorChild is the child process of the doctor rows of
+// TestUnusedRuntimeIsNotValidated and does nothing on its own. doctor ends
+// the process when the checks of hyperv or firecracker fail, as they do on
+// every host but their own, so those rows cannot call it in the test's
+// process.
+func TestDoctorChild(t *testing.T) {
+	drv := os.Getenv(doctorChildEnv)
+	if drv == "" {
+		return
+	}
+	flagDriver = drv
+	fmt.Println(doctorChildRan)
+	if err := doctorCmd.RunE(doctorCmd, nil); err != nil {
+		fmt.Printf("ERROR: %v\n", err)
+		var fe *driver.FixableError
+		if errors.As(err, &fe) {
+			fmt.Printf("To fix: %s\n", fe.Fix)
+		}
+	}
+}
+
+// A run that does not use the container runtime does not validate the
+// setting (UX-08): one warden.toml may hold the settings of several drivers,
+// for runs that choose among them on the command line.
+func TestUnusedRuntimeIsNotValidated(t *testing.T) {
+	const unused = "nonsense"
+	vmDrivers := []string{"qemu", "vz", "hyperv", "firecracker"}
+
+	for _, drv := range append([]string{"", "container"}, vmDrivers...) {
+		t.Run("resolveConfig with --driver "+drv, func(t *testing.T) {
+			inConfigFiles(t, "", cliFile(unused))
+			flagDriver = drv
+			if _, err := resolveConfig(); err != nil {
+				t.Fatalf("resolveConfig: %v", err)
+			}
+		})
+	}
+	for _, drv := range vmDrivers {
+		t.Run("newDriver for "+drv, func(t *testing.T) {
+			inConfigFiles(t, "", cliFile(unused))
+			flagDriver = drv
+			cfg, err := resolveConfig()
+			if err != nil {
+				t.Fatalf("resolveConfig: %v", err)
+			}
+			d, err := newDriver(cfg)
+			if err != nil || d.Name() != drv {
+				t.Fatalf("newDriver = %v, %v; want the %s driver", d, err, drv)
+			}
+		})
+	}
+	// These two return before the runtime is resolved, after their driver's
+	// own clean. That clean removes what it takes for the leftovers of builds
+	// that are not running, so it is given nothing to find: the user cache
+	// directory, where the build locks are, and --tmpdir are empty
+	// directories. On Windows hyperv's clean lists the host's real VMs, which
+	// a test cannot redirect, so that row is not run there.
+	for _, drv := range []string{"hyperv", "firecracker"} {
+		t.Run("clean with --driver "+drv, func(t *testing.T) {
+			if drv == "hyperv" && runtime.GOOS == "windows" {
+				t.Skip("hyperv's clean would act on this host's VMs")
+			}
+			inConfigFiles(t, "", cliFile(unused))
+			t.Setenv("XDG_CACHE_HOME", t.TempDir())
+			t.Setenv("LocalAppData", t.TempDir())
+			flagDriver, flagTempDir = drv, t.TempDir()
+			if err := runClean(cleanCmd, nil); err != nil {
+				t.Fatalf("clean: %v", err)
+			}
+		})
+	}
+	for _, drv := range vmDrivers {
+		t.Run("doctor with --driver "+drv, func(t *testing.T) {
+			inConfigFiles(t, "", cliFile(unused))
+			self, err := os.Executable()
+			if err != nil {
+				t.Fatal(err)
+			}
+			child := exec.Command(self, "-test.run=^TestDoctorChild$")
+			child.Env = append(os.Environ(), doctorChildEnv+"="+drv)
+			// doctor's own verdict on this host is not the subject: only
+			// that it says nothing about the runtime.
+			out, _ := child.CombinedOutput()
+			if !strings.Contains(string(out), doctorChildRan) {
+				t.Fatalf("the child did not run doctor:\n%s", out)
+			}
+			for _, about := range []string{unused, "[runtime] cli"} {
+				if strings.Contains(string(out), about) {
+					t.Errorf("doctor --driver %s mentions %q:\n%s", drv, about, out)
+				}
+			}
+		})
+	}
 }
