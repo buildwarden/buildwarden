@@ -3888,7 +3888,9 @@ would give a window (a5).
 One branch, one PR, each commit green on `make test` and `make lint` for
 the platforms it touches (FLOW-17).
 
-1. Characterization tests. No production code changes.
+1. Characterization tests; and the specification with its schema, which
+   LOOP-02 has written before the code that implements it. No production
+   code changes.
 2. `warden` stages the script and records inputs, and passes the staged
    path and the base image to each driver in the request. The drivers stop
    staging. Still `driver.Driver` and in-process sessions.
@@ -3901,7 +3903,7 @@ the platforms it touches (FLOW-17).
    signals become `warden`'s here.
 4. The container driver's `Exec` is split into the held start (`mode:
    shell`) and the attach.
-5. The specification and its schema; `driver/drivercmd`; the fake and
+5. `driver/drivercmd`; the fake and
    `stubrelay`; the suite's static tier; the tier-1 surface change; the
    `driver-contract` CI job.
 6. The exec transport and the lookup in `cmd/warden`; the setting
@@ -4325,7 +4327,8 @@ goes through. The guest families `driver/linuxguest` and
 
 Added on 2026-11-15 (LOOP-02, merged at `ad4ea50`; the template gained
 the section then). The table restates what the design says elsewhere
-and decides nothing; the last paragraph is new and marked so. `seams`
+and decides nothing; the paragraph on the order in Implement and the
+last paragraph are new and marked so. `seams`
 declares four names; the umbrella's seam 6 is listed as well, because
 the amendments reword its row.
 
@@ -4336,6 +4339,17 @@ the amendments reword its row.
 | `collector` (seam 2) | No written specification. The package comment in `collector/collector.go` defines it; S1 writes it | Nothing in the protocol. It is declared conservatively, because the collector's owner becomes `warden` for every driver. The driver contract says nothing of the collector's lifetime, which S1 writes per session token | No specification to change |
 | Bootstrap config (seam 6; not a name `seams` takes) | No written specification. `bootstrap/` defines it; S1 writes it | Nothing in what is served. Who selects it changes: `warden`'s session, from the `guest_os` the driver reports. The umbrella's row for it is reworded to say so | No specification to change |
 | `bootstrap-model` | No specification in LOOP-02's sense. Its contract document is `docs/development/bootstrap.md` (BOOT-07) | BOOT-02's sentence on the executor's version, and two labels of the model diagram (**Bootstrap comparison**; **Rule changes**, BOOT-02) | `docs/development/bootstrap.md`, here, as a rule change the review approves |
+
+**Order in Implement (LOOP-02).** "In Implement the specification
+changes first. The code follows and is tested against the changed
+specification." The specification and its schema are therefore written
+at step 1 of **Order of the work**, before `driver/host.go` and
+`cmd/warden/buildseq.go` (step 3), which carry the messages of a build
+and are code of the seam in the `seam-contract` entry (**Rule
+changes**, GLOBAL-08). The design read at `5808805` had the
+specification at step 5, after them. The kit, the suite and `warden`'s
+side are each tested against the specification and not against each
+other (**Shape**).
 
 One written specification is on the build's path and is not declared:
 the environment record (seam 4, `specs/metadata-environment/`). A driver
@@ -5571,7 +5585,8 @@ each task leaves `make test` and `make lint` green (FLOW-17).
     shell`) and `Attach` (BOOT-03, UX-09).
 12. Write `specs/driver-contract/v1.md` with numbered requirements and
     `v1.schema.json`, add it to `specs/README.md` and the book's specs
-    pages. It includes the build-lock convention, the failure table, the
+    pages. It is done at step 1 of **Order of the work**, ahead of tasks
+    2 to 11 (LOOP-02). It includes the build-lock convention, the failure table, the
     probe form of `start`, commands not started by `warden`, UTF-8 paths,
     teardown with closed output, the configuration requirements C1 to
     C11 (`config_files` with each file's level, the TOML version of the
@@ -6072,6 +6087,15 @@ Also added or changed:
   comparison. Its table restates the design. Its last paragraph is new:
   every numbered requirement is covered by a suite case that names it or
   is listed as not machine-checked (LOOP-03).
+- **The specification is written first.** LOOP-02 has the specification
+  change before the code that implements it. **Order of the work** had
+  the specification at step 5, after `driver/host.go` and `buildseq.go`
+  (step 3), which the `seam-contract` entry lists as code of the seam.
+  It moves to step 1, beside the characterization tests; step 5 keeps
+  the rest of its work, no step is renumbered, and task 12 of the
+  Implementation plan says so. Nobody asked for this change by name; it
+  follows from LOOP-02, and it is in a commit of its own so that it can
+  be taken back alone.
 - One line under **Design**: the item works only in this repository
   (LOOP-04).
 - The sentence on the dead-code sweep says that the kept list is
