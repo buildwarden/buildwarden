@@ -13,7 +13,7 @@ tier2_gaps: []
 rules: [FLOW-02, FLOW-03, FLOW-04, FLOW-05, FLOW-06, FLOW-07, FLOW-08, FLOW-09,
         FLOW-10, FLOW-11, FLOW-12, FLOW-13, FLOW-14, FLOW-15, FLOW-16, FLOW-17, FLOW-18,
         FLOW-19, FLOW-20, LOOP-01, LOOP-02, LOOP-03, LOOP-04, LOOP-05, LOOP-06, LOOP-07,
-        LOOP-08, LOOP-09, PROFILE-01, LINT-02, LINT-03, GLOBAL-08, GLOBAL-09, GLOBAL-10,
+        LOOP-08, LOOP-09, PROFILE-01, LINT-03, LINT-04, GLOBAL-08, GLOBAL-09, GLOBAL-10,
         GLOBAL-11, ORCH-01, RELAY-05, TEST-01, TEST-02, TEST-04, TEST-05]
 rule_changes:
   - {rule: FLOW-02, change: amend, paths: [docs/development/process.md,
@@ -37,8 +37,7 @@ rule_changes:
   - {rule: LOOP-04, change: amend, paths: [docs/development/loop-contract.md,
       docs/design/TEMPLATE.md]}
   - {rule: PROFILE-01, change: amend, paths: [docs/development/loop-profile.md,
-      tools/tier1/areas.yaml, tools/tier1/rules.yaml, tools/tier1/rules/rules.go, tools/tier1/coupling/checks.go,
-      tools/tier1/coupling/areamap.go, tools/tier1/coupling/areamap_test.go]}
+      tools/tier1/area-edges.sh]}
 concepts: [workflow, queue, one-queue, parallel-items, areas, area-map, relations, collision,
            flow-05-limits, alters-slot, pr-slot, claim-guard, wf-commit, wf-next, wf-claim,
            wf-validate, refresh, consolidation, tracked-items, reconciliation,
@@ -213,17 +212,24 @@ say.
      merge on.* `seam-specs` and `driver-contract` finished Design with no
      such fields in their queue files, and their designs list seams and rule
      changes; their Plan gate would fail on the day of the merge.
-3. **The area map is the repository's, on `main`, under FLOW-14; `wf`
-   computes from a generated copy in the queue state** (a4). The map is
-   `tools/tier1/areas.yaml`, named by the profile (PROFILE-01). `wf areas
-   -sync` copies `origin/main`'s map to `areas.yaml` on the `workflow`
-   branch at the start of every session. The map as written for today's
-   tree is a5.
-   - *Rejected: the map only on the `workflow` branch.* It could not be
-     checked against the tree in the pull request that changes the tree.
-   - *Rejected: `wf` reads `origin/main` on every command.* `wf next`,
-     `wf validate` and `QUEUE.md` would depend on each checkout's fetch, and
-     a state one worker produced could fail another's `wf validate`.
+3. **The area map is queue state: `areas.yaml` on the `workflow` branch,
+   beside `config.yaml` and `hosts.yaml`, changed in an attended session
+   on Jeff's word** (a4 (c), Jeff, 2026-11-14). No pull request carries a
+   map change, FLOW-14 does not guard it, and tier 1 does not read it.
+   `wf` reads the file as it reads `hosts.yaml`. `wf areas -check`
+   compares it with `main`'s tree and dependency edges and reports what
+   differs; it is not a gate. The map as written for today's tree is a5.
+   - *Rejected: the map on `main` at `tools/tier1/areas.yaml`, as a rule
+     file under FLOW-14, with a generated copy in the queue state and a
+     tier-1 check that holds it to the import graph* (the draft's
+     recommendation, a4 (d)). A map change would have needed a design that
+     declares it, a review that approves it by name, and a merge. What
+     that route gave and this one gives up is under **The area map**,
+     "What leaving `main` costs".
+   - *Rejected: `wf` computes `reaches` itself.* It would need this
+     repository's toolchain, and the loop's tool may assume none
+     (LOOP-08). The component supplies its dependency edges and `wf`
+     compares.
    - *Rejected: the map embedded in `wf`.* It would live under
      `tools/workflow/`, change only through a process item, and leave with
      the loop when the loop moves.
@@ -247,8 +253,8 @@ say.
 5. **`reaches` is the import graph and nothing else** (a15 (a), Jeff,
    2026-11-15). Area A reaches
    area B when a package in A, or its tests, imports a package in B,
-   directly or not, on Linux, macOS or Windows. Tier 1's new `area-map`
-   check fails when the map and the graph differ. The areas that hold
+   directly or not, on Linux, macOS or Windows. `wf areas -check` reports
+   where the map and the graph differ (Decision 3). The areas that hold
    the checks (`tier1`, `tier1-config`) reach what they import, like any
    other: an item that tightens a check and an item whose code the check
    would newly fail are disjoint. Where the two meet is under **Safety**.
@@ -406,8 +412,8 @@ say.
     `wf commit`, the refresh step, tracked items and a merge recorded in a
     second repository (a6) make untrue as written; FLOW-09, for a red
     `main` the loop itself sees (Decision 22);
-    LOOP-01, LOOP-04 and PROFILE-01, for the Areas term and the queue's new
-    field. The last three amend files `loop-contract` added, which are on
+    LOOP-01, LOOP-04 and PROFILE-01, for the Areas term, which points to
+    the map in the queue state (a4 (c)), and the queue's new field. The last three amend files `loop-contract` added, which are on
     `main` since its merge.
 20. **The freeze stays.** FLOW-20 loses only its Limit bullet. This is the
     proposal's question 2, option (a), part of the approved direction.
@@ -510,19 +516,33 @@ effect. a9 and a11 of the first draft are withdrawn: neither was a fork
     follow-up filed with nobody there (FLOW-09) takes the repositories and
     areas of the item it follows, which Jeff agreed for that item; its
     Design may add to them, and removing one needs the review.
+    **Chosen.**
   - (b) Areas are declared by Design only. A follow-up is then undeclared
     until its design: it collides with every feature, cannot start while
     five are in progress, and may open its PR only when no other feature
     has one open, which makes the fix for a red `main` the slowest item in
     the queue.
   - (c) The map is on the `workflow` branch, changed in an attended session
-    on Jeff's word.
+    on Jeff's word. **Chosen.**
   - (d) The map is on `main`, at `tools/tier1/areas.yaml`, as the profile's
     Areas entry: a feature changes it only as a rule change its design
     review approves by name (FLOW-14), and tier 1 checks it against the
     tree.
 
   Recommended: (a) and (d).
+
+  **Answered (a) and (c), Jeff, 2026-11-14:** areas are declared at intake
+  with him and confirmed by Design, as recommended; the map lives on the
+  `workflow` branch, "changed in an attended session on your word, with no
+  PR or tier-1 check". The second half departs from the recommendation.
+  Folded in: the map is `areas.yaml` in the queue state (Decision 3);
+  `wf areas -sync`, the generated copy, `tools/tier1/areas.yaml` and tier
+  1's `area-map` check are gone; `wf validate` checks the file itself and
+  `wf areas -check` reports how it differs from `main`, as a report and
+  not a gate; PROFILE-01's Areas entry points to the queue state and names
+  the command that lists this repository's dependency edges, and its
+  check type no longer changes; a feature's design no longer changes the
+  map, it asks. (a) of the answer is unchanged in the text.
 - **a5. The map itself**, written out under **The area map**: 16 exclusive
   areas and 5 ordered ones. `driver-core` is one area (`driver/*.go`,
   `buildlink`, `resolvers`, `relayvm`, `script`, `linuxguest`, `winguest`,
@@ -769,9 +789,9 @@ with it:
 ```yaml
 repos: []                # every repository the item works in, home first, when there is
                          # more than this one (LOOP-04); empty or absent: only this one
-# areas: []              # the areas the change edits (FLOW-02), from tools/tier1/areas.yaml.
-                         # Left out, the item is undeclared and collides with every item
-                         # in its repositories (FLOW-05)
+# areas: []              # the areas the change edits (FLOW-02), by the names of the
+                         # area map (`wf areas -list`). Left out, the item is undeclared
+                         # and collides with every item in its repositories (FLOW-05)
 ```
 
 `areas` is commented out in the template so that a design which says nothing
@@ -809,7 +829,7 @@ seam and no rule change. An added area is within the design when it is:
   `drivers-claim` requires it, not because it edits their trees, so for it
   a driver's tree is a design change.
 
-In every case the names must exist in the branch's area map, and the change
+In every case the names must exist in the area map, and the change
 must not put a limit over: `wf declare` applies the change in memory, runs
 the limits' predicate (**The limits**), and writes nothing when the change
 adds a limit error. Its error
@@ -840,10 +860,11 @@ before. The new sentence is under **Machinery edits**.
 
 - `repos`: each entry is `owner/name`; none repeats; `config.yaml` sets
   `repository`; a process item's first repository is that one.
-- `areas`: no name repeats. A name the copy of the map does not have is not
-  an error: the item is then treated as undeclared until `main` has the
-  area, and `QUEUE.md` marks the name with `*` (a design may add an area in
-  its own rule change, and `main` gets it at the merge).
+- `areas`: no name repeats. A name the map does not have is not an error:
+  the item is then treated as undeclared until the map has the area, and
+  `QUEUE.md` marks the name with `*` (a design may ask for an area the map
+  lacks; an attended session adds it on Jeff's word, usually at that
+  design's review).
 - `declared`: a commit id, and set whenever `seams` or `rules_changed` is,
   on an item homed in this repository.
 - `adopts`: `consumable` and `version` are both set, and the item is a
@@ -855,34 +876,134 @@ before. The new sentence is under **Machinery edits**.
 
 ### The area map
 
-**Where.** `tools/tier1/areas.yaml` on `main`. The profile names it
-(PROFILE-01, the new **Areas** term of LOOP-01), so it is the component's
-own: a feature changes it only through a `rule_changes` entry under
-PROFILE-01 that its design review approves by name (FLOW-14), and the
-rule-change clearance already guards every path under `tools/tier1/`. A
-repository whose profile has no Areas entry is one exclusive area.
+**Where.** `areas.yaml`, at the root of the `workflow` branch beside
+`config.yaml` and `hosts.yaml` (a4 (c)). It is queue state. It is not a
+rule file: no pull request carries a change to it, FLOW-14's clearance
+does not guard it, and tier 1 does not read it. The profile points to it
+(PROFILE-01, the new **Areas** term of LOOP-01), as its Native hosts entry
+points to the loop's `hosts.yaml`. A repository with no map in the queue
+state is one exclusive area.
 
-**How `wf` reads it.** `wf areas -sync -state DIR -repo DIR` writes
-`origin/main`'s map to `areas.yaml` in the queue state, with a header that
-names the repository and the commit, and the list of written seams (below).
-Every session runs it in its set-up, after the fetch; the changed file goes
-out with the session's first state push. `main`'s map is the truth, so the
-copy is written even when the new map relates two items that both already
-hold a limit; `wf areas -sync` then prints the limit and the holders, and
-`QUEUE.md` lists them under **Needs Jeff** (see **More holders than a
-limit**). `queue.Load` reads the copy as it
-reads `hosts.yaml`: an optional file. Every `wf` command then computes the
-same relations from the same pushed state, on every machine, with no git.
-`wf areas -check` fails when the copy differs from `origin/main`'s map;
-`wf areas -list` prints the areas. `wf validate -areas FILE` validates the
-queue against a candidate map, which is how the design review of a map
-change sees what it does to the open items.
+**Who changes it, and how.** Jeff, or an attended session on his word. No
+unattended run, phase agent or native session edits it. The session:
+
+1. writes the change to a candidate file and runs
+   `dist/wf validate -state .dev/workflow -areas <candidate>`, which checks
+   the candidate (below) and prints what it does to the open items: each
+   relation that changes, and any limit two holders would now share;
+2. shows Jeff that output, and on his word copies the candidate over
+   `areas.yaml`;
+3. pushes it with
+   `dist/wf commit -worker human/<name> -m "areas: <what> (<name>, <date>)" areas.yaml`.
+   `wf commit` refuses a commit that changes `areas.yaml` for any worker
+   that is not `human/<name>`, so a tick or a native session that goes
+   through `wf commit` cannot push one. Nothing stops a hand `git push`,
+   as nothing does for `config.yaml` today.
+
+The occasions are three: a design review whose design asks for an area or
+a link the map lacks (its **Design** section says which; the item is
+undeclared until the map has the area); a difference that
+`wf areas -check` reported; and a seam that gets a specification
+(`written_seams`). A feature's design never changes the map: it says what
+it needs, and the review decides.
+
+**How `wf` reads it.** `queue.Load` reads `areas.yaml` as it reads
+`hosts.yaml`: an optional file. Every `wf` command computes the same
+relations from the same pushed state, on every machine, with no git.
+`wf areas -list` prints the areas.
+
+**What `wf validate` checks about it.** The file, and its fit with the
+queue; it has no tree to check it against. It fails when the map does not
+parse or has an unknown key; when `repository` is not `config.yaml`'s;
+when an area has no `mode`; when `catch_all` does not name an exclusive
+area with no paths; when two areas list patterns with the same text
+before any `*`, the one way two areas can match a path equally; when an
+ordered area has `reaches` or is named in one; or when a `reaches` or
+`implies` entry names an area the map lacks. It then evaluates the three
+limits under the map (**The limits**). It cannot tell whether every
+tracked file has an area (the catch-all takes whatever no pattern
+matches, so nothing is ever outside the map) or whether `reaches` is
+true.
+
+**What compares it with `main`.**
+`wf areas -check -state DIR -repo DIR [-rev REV] [-edges FILE]` reads the
+tree of `REV` (`origin/main` when not given) with `git ls-tree`, and
+reports:
+
+- each path that falls to `catch_all`: a tree no area names;
+- each pattern that matches no file: an area whose tree moved or went;
+- with `-edges`, between exclusive areas: each dependency that `reaches`
+  lacks, with the two directories that make it, and each `reaches` entry
+  that no dependency supports.
+
+`-edges` is a file, or `-` for standard input, of lines `<dir> <dir>`: a
+package's directory, and the directory of a package it or its tests
+depend on, directly or not. The component's own command prints them, and
+the profile's Areas entry names it: here `tools/tier1/area-edges.sh`,
+which runs the 18 `go list` runs described below. `wf` runs no toolchain
+(LOOP-08); it maps each directory to its area and compares. Without
+`-edges` it checks the paths and says `reaches: not compared`.
+
+For `origin/main` it records the result in `main.yaml` (the commit and
+the lines), so `QUEUE.md` shows it; for another `-rev` it only prints. It
+exits 0 whatever it finds, and non-zero only when it could not run: **it
+is a report, not a gate**. Three places run it:
+
+- the tick, every run, after it records `main`'s CI:
+  `tools/tier1/area-edges.sh | dist/wf areas -check -state .dev/workflow -repo . -edges -`.
+  A difference goes in the digest under **Blocked on Jeff** and opens
+  `QUEUE.md`'s **Needs Jeff** as
+  `the area map differs from main at <sha>: <n> lines (wf areas -check)`;
+- `workflow-human`, before it edits the map and in a design review's
+  overview;
+- Review, on the branch (`-rev HEAD`), whose lines go in the tier-2
+  report: a branch that adds a dependency between two areas says so
+  before it merges.
+
+Until Jeff has the map changed, the relations are computed from the map
+as it is. A dependency the map lacks leaves two items disjoint that the
+code makes near: both PRs may be open, and the later one merges the
+earlier at its refresh, before its own merge (Decision 21). A path in the
+catch-all is in an exclusive area, which is the safe side.
+
+**What leaving `main` costs.** The draft had the map on `main` as a rule
+file. Jeff's answer gives that up, and this is what goes with it:
+
+- *No pull request.* A map change has no diff beside the code it
+  describes and no CI. Its history is the `workflow` branch's log.
+- *No review beyond Jeff's word.* FLOW-14's route (declared in a design,
+  approved by name, cleared at every gate) does not apply to it. What is
+  left is the attended session showing him the candidate's effect on the
+  open items before it saves.
+- *No tier-1 check.* Nothing fails when the map and the tree disagree. A
+  branch that adds an import between two areas merges without a map
+  change; Review's report and the next tick's say so, and the map is
+  wrong until an attended session changes it.
+- *The map and the tree cannot change in one commit.* A PR that adds a
+  tree or moves a package cannot carry the map change. Between the merge
+  and the edit, the new paths are in the catch-all and the old pattern
+  matches nothing; the tick reports both.
+- *`written_seams` is edited by hand.* The draft's copy took the written
+  seams from `rules.yaml`'s `seams` list, so a seam became written when
+  S1 listed its contract document. Now someone adds it here as well;
+  until then two items on that seam collide, which is the safe side.
+- *`implies` is unchecked against `rules.yaml`.* The draft's check held
+  `implies.drivers` and `implies.shared` to `drivers.all` and
+  `drivers.shared`. Now a driver added to `rules.yaml` and not to
+  `implies.drivers` shows only when a design that names it fails its
+  implied-areas check.
+
+What it gains: a map change takes effect when it is pushed, with no
+design, review round or merge; an item whose design adds a tree can be
+given its area at its own design review, where the draft left it
+undeclared until its merge; and there is one map, with no copy to keep in
+step and no difference between a branch's map and `main`'s.
 
 **Format.**
 
 ```yaml
 version: 1
-modules: [".", tools/tier1, tools/workflow]   # where the check runs `go list`
+repository: <owner>/<name>     # the repository this map describes
 catch_all: core
 areas:
   <name>:
@@ -917,20 +1038,21 @@ written_seams: [<seam>, ...]
   hold a path every driver depends on (`rules.yaml`'s `drivers.shared`): a
   design that changes one of them lists every driver and edits no driver's
   tree. `surfaces` gives each surface's areas.
-- **`written_seams`** lists seams that have a specification and that
-  `rules.yaml`'s `seams` list does not carry. `wf areas -sync` adds the
-  names in `rules.yaml`'s `seams` list, which S1 fills, so a seam becomes
-  written in the relation when its contract document is listed there, with
-  no second edit.
+- **`written_seams`** lists the seams that have a specification. Two
+  items that both change a seam not listed here collide (row 3). It is
+  edited like the rest of the map: when S1 lists a seam's contract
+  document in `rules.yaml`, an attended session adds the seam here on
+  Jeff's word.
 
-**The map for `main` at `897a4a8`**, in full. It was run against
-`git ls-files`: each of the 627 tracked files falls in one named area, with
-no tie, and `core` is empty today. It has 15 exclusive areas and 6 ordered
-ones.
+**The map for `main` at `ad4ea50`**, in full: what `x4-state` writes to
+`areas.yaml` on Jeff's word. It was run against the tree at that commit:
+each of the 630 tracked files falls in one named area, with no tie, no
+pattern matches nothing, and `core` is empty. It has 15 exclusive areas
+and 6 ordered ones.
 
 ```yaml
 version: 1
-modules: [".", tools/tier1, tools/workflow]
+repository: buildwarden/buildwarden
 catch_all: core
 areas:
   driver/container:
@@ -1008,7 +1130,7 @@ areas:
             Dockerfile.ledger.zst, test-integration.sh]
   tier1-config:
     mode: ordered
-    paths: [tools/tier1/rules.yaml, tools/tier1/golangci.yml, tools/tier1/areas.yaml]
+    paths: [tools/tier1/rules.yaml, tools/tier1/golangci.yml]
 implies:
   drivers:
     container: driver/container
@@ -1044,14 +1166,21 @@ Why each area is what it is:
 | `rules` | ordered | `docs/development/` | Changed by 22 of the 52. Two items that change the *same rule* are near by its ID, whatever the file |
 | `designs` | ordered | `docs/design/`: other items' designs and the template | An item's own design needs no area. This is for a retrofit or an amendment to an archived design |
 | `build` | ordered | CI workflows, `Makefile`, `go.mod`, `go.sum`, lint and release configuration, the root `Dockerfile` and its ledger, the install and integration scripts | Changed a line at a time by many items |
-| `tier1-config` | ordered | `rules.yaml`, `golangci.yml`, `areas.yaml` | Each item adds its own entry, so two may change it side by side (5 of the 52 merges changed it). It reaches nothing, as every ordered area (a15 (a), a5 (d)) |
+| `tier1-config` | ordered | `rules.yaml`, `golangci.yml` | Each item adds its own entry, so two may change it side by side (5 of the 52 merges changed it). It reaches nothing, as every ordered area (a15 (a), a5 (d)) |
 
-**`reaches`, as computed.** From `go list -deps -test ./...` in each of the
-three modules, for Linux, macOS and Windows on amd64 and arm64: 18 runs,
-about 2 s in all. `CGO_ENABLED` is 1 for macOS on arm64, so that
-`driver/vz`'s cgo files are seen, and 0 for the other five: with cgo on,
-macOS on amd64 fails on `driver/vz` (its Objective-C file has no cgo file
-beside it there). Each package's directory is mapped to its area:
+**`reaches`, as computed.** `tools/tier1/area-edges.sh` (new) runs
+`go list -deps -test ./...` in each of the three modules (`.`,
+`tools/tier1`, `tools/workflow`), for Linux, macOS and Windows on amd64
+and arm64: 18 runs, about 2 s in all. `CGO_ENABLED` is 1 for macOS on
+arm64, so that `driver/vz`'s cgo files are seen, and 0 for the other
+five: with cgo on, macOS on amd64 fails on `driver/vz` (its Objective-C
+file has no cgo file beside it there). For each package it prints the
+package's directory and the directory of each package in its `Deps`, its
+tests' included; a failed run fails the script. A script of that shape,
+run on the tree of `ad4ea50` on 2026-11-15, printed 157 directory pairs,
+and mapping each directory to its area gave the table below, which is
+the map's `reaches` for all 15 exclusive areas with no edge missing and
+none stale:
 
 | Area | Reaches |
 |---|---|
@@ -1069,50 +1198,31 @@ beside it there). Each package's directory is mapped to its area:
 reaches no driver package. That is why a Hyper-V item
 and an item in `relay/` or `cmd/relay/` are disjoint.
 
-**The check that the map and the graph agree** is a tier-1 check,
-`area-map`, mapped to PROFILE-01 in `rules.yaml`. It is tier 1's, not
-`wf`'s, because it needs the Go toolchain and the loop's tool may assume
-none (LOOP-08). It reads `tools/tier1/areas.yaml` from the checkout it
-checks, not from a copy embedded in the binary as `rules.yaml` is: the map
-describes one tree, and `main`'s tier 1 judging a branch (FLOW-14's
-comparison, `enforcement-check.sh`) must read the branch's map, which it
-then does with no change to that script or to FLOW-14's list of
-configuration files. A checkout with no map gets no finding. It runs when
-the diff touches `areas.yaml`, `rules.yaml`, a `.go` file or a `go.mod`,
-over the 18 `go list` runs above, and fails when:
+**How `reaches` is kept true.** Nothing in CI checks it (a4 (c)). The
+tick's `wf areas -check` compares it with `main` on every run, and
+Review's with the branch; each difference names the two directories.
+The map is brought back in step in an attended session, on Jeff's word,
+by adding or dropping the entries those lines name. Between the merge
+that adds a dependency and that edit, the map is behind the code by one
+edge.
 
-- the map does not parse, an area has no `mode`, `catch_all` does not name
-  an exclusive area with no paths, an ordered area has `reaches` or is
-  named in one, or a `reaches` or `implies` entry names an area the map
-  does not have;
-- a tracked file matches two areas equally;
-- a `go list` run fails. The finding is its error;
-- the import graph has an edge between two areas that `reaches` lacks, or
-  `reaches` lists an edge the graph does not have. The finding names a file
-  and the import that makes the edge. An edge from or to an ordered area
-  (`cmd/warden`'s imports) is not compared;
-- a driver in `rules.yaml`'s `drivers.all` has no entry in
-  `implies.drivers`, or `implies.shared` is not exactly the areas that hold
-  a path of `rules.yaml`'s `drivers.shared`.
+What the comparison cannot see is a dependency that is not an import: a
+script that copies another area's file, or a test that reads one by path.
+The one known today is placed by hand (`tools/relay-vm/`, above). Two more
+are tests that walk the whole tree (`driver/buildlink/stray_test.go`) or
+read the book (`specs/specs_test.go`); they are named under **Safety**.
 
-What the check cannot see is a dependency that is not an import: a script
-that copies another area's file, or a test that reads one by path. The one
-known today is placed by hand (`tools/relay-vm/`, above). Two more are
-tests that walk the whole tree (`driver/buildlink/stray_test.go`) or read
-the book (`specs/specs_test.go`); they are named under **Safety**.
-
-A new edge between areas therefore cannot land without a map change, which
-a feature can make only if its design review approved it. A feature that
-finds in Implement that it needs one returns to Design (FLOW-14): a new
-dependency between two areas changes which items its work is near.
+A new dependency between two areas can therefore land without a map
+change. The draft had tier 1 fail it and the feature return to Design;
+now Review's report names it, and Jeff decides whether the map follows.
 
 ### How two items relate
 
-`relation(a, b)` is computed from the two queue files, the copy of the map
-and nothing else. The first row that applies decides. "Has a repository in
+`relation(a, b)` is computed from the two queue files, the map and nothing
+else. The first row that applies decides. "Has a repository in
 common" compares the effective `repos` (an absent list is the queue's own
 repository). "Undeclared" is an absent `areas`, or one that names an area
-the copy of the map lacks.
+the map lacks.
 
 | # | When | Relation | The reason `wf` prints |
 |---|---|---|---|
@@ -1163,7 +1273,7 @@ Every combination, with examples from this repository:
 | An undeclared item and any feature here (`seam-specs` and `driver-contract` today, neither yet declared) | colliding | 5 |
 | `seam-specs` and `driver-contract` once a human `wf declare` has recorded their seams: both list `relay-claim` and `collector` | colliding, whatever areas they are given, until S1 lists those seams' contract documents | 3 |
 | An item that changes a tier-1 check (`tier1`) or adds a `rules.yaml` entry (`tier1-config`) and an item whose code the check runs over | disjoint (a15 (a)) | 10 |
-| An item whose design adds the area it declares, before its merge | colliding with every feature here | 5 |
+| An item that declares an area the map lacks (its design adds a tree), until an attended session adds the area | colliding with every feature here | 5 |
 | An item here and an item homed in the relay repository, no seam or rule in common | disjoint | 10 |
 | K1 here and the relay's M1 (tracked, its seams recorded at intake with `wf new -seams`), both on seam 8, which is not written | colliding, shown and not enforced | 3 |
 | Two items in a repository with no map (`buildwarden-specs`) | colliding | 4 |
@@ -1275,10 +1385,10 @@ related to that holder (case 21).
 (Jeff lowers a limit; a hand edit). Two new ones are closed at the source:
 `wf declare` and `wf relate` refuse a change that adds a limit error. A
 third is not: a change to the map can relate two items that both already
-hold. Its design review shows it against the open queue
-(`wf validate -areas`), which is a view of that day's queue; when the
-merged map is synced, `wf areas -sync` writes it, prints the limit and the
-holders, and `QUEUE.md`'s **Needs Jeff** lists
+hold. The attended session that makes it shows Jeff the change against
+the open queue first (`wf validate -areas`); if he has it saved all the
+same, the map is his, like a limit he lowers, and `QUEUE.md`'s **Needs
+Jeff** lists
 `over a limit: a and b both hold the PR slot (near: specs reaches relay)`
 until one of them merges. As with a lowered limit, no holder is stopped
 (an item that holds is never refused), no related item is given the limit
@@ -1321,9 +1431,10 @@ as in `config.yaml` today. "Today" is `wf` at `897a4a8`.
 
 ### `wf commit`: pushing queue state
 
-`wf commit -state DIR -m MESSAGE [-claimed FEATURE/STEP -worker W [-new-run]] [PATH...]`
+`wf commit -state DIR -worker W -m MESSAGE [-claimed FEATURE/STEP [-new-run]] [PATH...]`
 replaces the `git commit` and `git push origin workflow` in the four
-skills.
+skills. A commit that changes `areas.yaml` is refused unless `W` is
+`human/<name>` (**The area map**).
 
 1. It regenerates `QUEUE.md` and the digest pages (below), stages the
    paths it was given and the generated files, and commits. It stages
@@ -1347,9 +1458,10 @@ skills.
      `Claim`, which counts the step once, since the first claim's commit is
      gone.
 
-   A conflict in a *generated* file (`QUEUE.md`, `digest/<date>.md`,
-   `areas.yaml`, `main.yaml`) is settled by taking the remote's copy,
-   since step 4 writes it again.
+   A conflict in a *generated* file (`QUEUE.md`, `digest/<date>.md`) is
+   settled by taking the remote's copy, since step 4 writes it again.
+   `areas.yaml` and `main.yaml` are not generated: a conflict in either
+   is a conflict in a queue file, below.
 4. It regenerates the generated files, commits with the same message, and
    pushes again. It tries three times.
 
@@ -1372,10 +1484,10 @@ It pushes only the `workflow` branch.
 | When | What is checked | By | On failure |
 |---|---|---|---|
 | Intake | Jeff agrees the repositories and areas. `wf new` records them and `wf relations -feature F` shows what the new item is near or collides with | `workflow-intake`, with Jeff. A follow-up filed with nobody there (FLOW-09) takes the repositories and areas of the item it follows (`wf new -follows`) | Nothing fails: the areas are a proposal until Design |
-| Design's done-when | (1) The queue has `declared`, and its `repos`, `areas`, `seams`, `rules_changed`, `alters_relationships` and `design_review` equal the design's (`wf declare` made them so). (2) Each area exists in the branch's map. (3) *Implied areas*, below. An undeclared design skips 2 and 3 | `wf done f1-design` (`check/declared.go`) | The step is released and Design fixes the design |
-| The design review | Jeff sees the repositories, the areas and the relations with every open item, and may narrow, widen or name a collision | `workflow-human`; FLOW-19 | Changes, as for any review |
+| Design's done-when | (1) The queue has `declared`, and its `repos`, `areas`, `seams`, `rules_changed`, `alters_relationships` and `design_review` equal the design's (`wf declare` made them so). (2) Each area exists in the map; a name it lacks is reported and does not fail the step: the item is undeclared until an attended session adds the area. (3) *Implied areas*, below. An undeclared design skips 3 | `wf done f1-design` (`check/declared.go`) | The step is released and Design fixes the design |
+| The design review | Jeff sees the repositories, the areas and the relations with every open item, and may narrow, widen or name a collision. A map change the design asks for is made here, on his word (**The area map**) | `workflow-human`; FLOW-19 | Changes, as for any review |
 | Plan's done-when | For an item with `declared`: the queue still equals the design (closing the gap `alters-slot` named). `repos` and `areas` are impact fields: a design whose areas changed since its approval fails the Plan gate. An item with no `declared` is not compared, and the check says so | `check.go`, `review.go` | Back to Design (FLOW-06) |
-| Implement, Review, Publish and the refresh, at each done-when | For an item with `declared`: the queue still equals the design. *The diff stays inside the areas*: every path of `git diff --name-only --no-renames origin/main...<branch>` belongs, by the branch's map, to a declared area, or is the item's own design. An undeclared item passes | `check/areas.go` | See below |
+| Implement, Review, Publish and the refresh, at each done-when | For an item with `declared`: the queue still equals the design. *The diff stays inside the areas*: every path of `git diff --name-only --no-renames origin/main...<branch>` belongs, by the map, to a declared area, or is the item's own design. An undeclared item passes | `check/areas.go` | See below |
 | Review and `f6-consolidate` | *A trial merge*: `git merge-tree --write-tree` of the branch with the remote branch of each in-progress feature that is disjoint from it. It is a report: clean; or conflicts in ordered files, which the later of the two settles at its refresh; or a conflict in an exclusive area, which means one of the two is outside its areas | `check/areas.go`; the lines go into the tier-2 report and the consolidation section | It does not fail the step: an item outside its areas fails its own diff check. The run's digest lists a conflict in an exclusive area under what is blocked (LOOP-06) |
 
 **Implied areas** (Design's done-when, part 3). `areas` name what the
@@ -1543,7 +1655,9 @@ behind `main`, so the loop reads it (Decision 22).
   red), and the follow-up filed for it. `wf` reads no CI itself: the
   session passes what `gh api repos/<repo>/commits/<sha>/check-runs`
   returned, as `wf-publish` passes `pr.ci`. `green` is recorded only when
-  every check run on the head succeeded.
+  every check run on the head succeeded. `wf areas -check` adds its own
+  result to the same file: the commit of `main` it compared the map
+  with, and the lines it printed (**The area map**).
 - **Who records it.** The tick, right after confirming merges and before
   `wf stale`. `workflow-human`, before it lists the open PRs.
 - **What a red `main` does.** `QUEUE.md` opens **Needs Jeff** with
@@ -1758,7 +1872,8 @@ file names the item's repositories when it has more than this one.
   returns 3 for `adopts`; `inImplementation` is true for an item with a
   pending refresh step.
 - `areas.go` (new): the map's type, its parser (unknown keys rejected), the
-  path match, and the copy's loader in `Load`.
+  path match, its loader in `Load`, its checks in `Validate`, and
+  `CheckAreas`, which compares it with a tree and a list of edges.
 - `relation.go` (new): `Relation(a, b)` and its reason.
 - `limits.go` (new): the table, the predicate, `Guard`, the PR-slot
   holder and tie-break; `holdsAltersSlot`, `altersHolders` and `altersWait`
@@ -1791,24 +1906,27 @@ file names the item's repositories when it has more than this one.
 
 `tools/workflow/cmd/wf/main.go`: `areas`, `declare`, `relate`, `relations`,
 `stale`, `main`, `commit` and `digest`; `new -repos -areas -seams -adopts`,
-and `-follows` copying `repos` and `areas`; `validate -areas`; `claimable`
+and `-follows` copying `repos` and `areas`; `areas -list` and
+`areas -check`; `validate -areas`; `claimable`
 calls `Guard`; `done` runs `check.Refresh` for a refresh step; `status`
 prints the new lines.
 
-`tools/tier1/`: `areas.yaml`, read from the checkout and not embedded;
-`rules/rules.go` lists `area-map`; `rules.yaml` maps PROFILE-01 to it;
-`coupling/areamap.go` is the check, and uses the parser in
-`tools/workflow/queue`, which tier 1 already depends on through
-`tools/workflow/check`.
+`tools/tier1/`: `area-edges.sh` (new), the command the profile's Areas
+entry names. It is a script the tick and the attended session run, not a
+check: tier 1 does not call it, and `rules.yaml`, `rules/rules.go` and
+`coupling/` do not change.
 
 ### Machinery edits
 
 By file. Each cites the rule and does not restate it (FLOW-14).
 
-- `.claude/skills/workflow-tick/SKILL.md`. Step 1: `dist/wf areas -sync`
-  after the fetch, and `dist/wf validate`, keeping any `limit:` lines.
+- `.claude/skills/workflow-tick/SKILL.md`. Step 1: `dist/wf validate`
+  after the fetch, keeping any `limit:` lines. The tick never edits
+  `areas.yaml` (FLOW-05).
   Step 2: after confirming merges, read `main`'s check runs and record
-  them with `dist/wf main`; on a red `main` with no follow-up recorded,
+  them with `dist/wf main`, then
+  `tools/tier1/area-edges.sh | dist/wf areas -check -edges -`; on a red
+  `main` with no follow-up recorded,
   file one by the intake skill's follow-up path (FLOW-09) and record it;
   then `dist/wf stale`. Claim and state pushes go through
   `dist/wf commit` (exit 4: ask `wf next` again; exit 5: re-apply by
@@ -1829,8 +1947,12 @@ By file. Each cites the rule and does not restate it (FLOW-14).
 - `.claude/skills/workflow-human/SKILL.md`. Its worker stays
   `human/<name>`, which cannot complete a `cloud` merge step, so it does
   not confirm merges. The review's overview gains the repositories, the
-  areas and the relations with open items, and `dist/wf validate -areas`
-  for a map change; narrowing and `wf relate` on Jeff's word. **Open
+  areas and the relations with open items, and the lines of
+  `dist/wf areas -check`. A map change, here or at any other time, is
+  made only on Jeff's word: a candidate file, `dist/wf validate -areas`
+  shown to him, then the save and
+  `dist/wf commit -worker human/<name>` (FLOW-05). Narrowing and
+  `wf relate` on Jeff's word. **Open
   PRs** records `main`'s CI (`dist/wf main`), runs `dist/wf stale`, which
   skips a PR Jeff has already merged, and lists the merges in order with
   "behind `main`"; it runs both again after each merge he makes in the
@@ -1840,7 +1962,9 @@ By file. Each cites the rule and does not restate it (FLOW-14).
 - `.claude/skills/workflow-native/SKILL.md`. State pushes through
   `dist/wf commit`; the run's own digest file.
 - `.claude/agents/wf-design.md`. Step 2: declare `repos` and `areas` in the
-  front matter, starting from what intake recorded. Step 5: `wf declare`
+  front matter, starting from what intake recorded. A design that needs
+  an area or a link the map lacks says so under **Design** and never
+  edits the map (FLOW-05). Step 5: `wf declare`
   in place of the hand copy, and in place of `alters-slot`'s sentence:
   "Run `dist/wf declare` to copy the design's declarations into the queue.
   If it refuses because a limit would be exceeded, raise a blocking
@@ -1849,7 +1973,8 @@ By file. Each cites the rule and does not restate it (FLOW-14).
 - `.claude/agents/wf-implement.md` and `wf-review.md`. A path outside the
   areas: widen with `wf declare` when the design covers it, otherwise
   `back-to-design` (FLOW-06). Review records the trial merge's lines in its
-  report.
+  report, and those of
+  `tools/tier1/area-edges.sh | dist/wf areas -check -rev HEAD -edges -`.
 - `.claude/agents/wf-publish.md`. `f6-consolidate` records the trial
   merge; `f6-refresh` and `x2-refresh` as above, with the check before the
   push and the draft on a return; `f6-open-pr` on an item that has a PR
@@ -2059,13 +2184,11 @@ This item declares no `holds` (Decision 17, a13).
 - The `tracked` round is the placeholder it replaces: an item homed
   elsewhere gets real phases, a branch and a PR per repository (`work`),
   and then counts in the limits (a7).
-- One map per repository: the copy in the queue state becomes one file per
-  repository, an item's `areas` gain a repository prefix, and
-  `wf areas -sync`, `wf stale` and `wf main` run per repository.
-  `wf areas -sync` hard-codes two paths of this repository that the
-  profile should supply (its hand-off point 4): `tools/tier1/areas.yaml`,
-  and `tools/tier1/rules.yaml`, of which it reads the `name` of each entry
-  under `seams`.
+- One map per repository: `areas.yaml` becomes one file per repository
+  in the queue state, an item's `areas` gain a repository prefix, and
+  `wf areas -check`, `wf stale` and `wf main` run per repository. `wf`
+  hard-codes no path of this repository for the map (its hand-off point
+  4): the edges come from the command each profile names.
 - A hold that names repositories (Decision 18), and a `human` merge-recording step
   that is not offered before its phase (`seam-specs`' a15 asks; a `human`
   step is still offered early).
@@ -2082,8 +2205,8 @@ Where this design does not do what the proposal's sections 3 to 8 say.
 | "`tier1`, `rules` and `tier1-config` reach every area" | None of the three does: `reaches` is the import graph alone (a15 (a)) | Jeff's answer of 2026-11-15. An item that changes a check would otherwise take turns at the PR with every item; 22 of the 52 merges changed `docs/development/` |
 | The exclusive areas include `relay`, with the relay VM image tools | `tools/relay-vm/` is in `driver-core` | Its `init` is read, written for and copied by driver code, which no import shows |
 | A form for the Go relay "(`relay`, which reaches every driver) would be near" a Hyper-V item | Disjoint | The code: no driver tree imports `relay/`, and it imports none |
-| `wf areas -check` compares the map with `go list` | Tier 1's `area-map` does; `wf areas -check` compares the copy with `main` | The loop's tool assumes no language (LOOP-08) |
-| The map "on `main` under FLOW-14" | On `main`, with a generated copy in the queue state | `wf next` reads no git |
+| `wf areas -check` compares the map with `go list` | `wf areas -check` compares the map with dependency edges that a command of the component prints; `wf` runs no `go list` | The loop's tool assumes no language (LOOP-08) |
+| The map "on `main` under FLOW-14" | In the queue state on the `workflow` branch, changed on Jeff's word (a4 (c)) | Jeff's answer of 2026-11-14. The draft followed the proposal here, with a generated copy in the queue state |
 | A refresh that finds overlap "queues `f6-consolidate` again" | The refresh carries the pass itself | Re-entering Publish would give up the PR slot |
 | A refresh "when a PR merges" | Whenever `main` is not contained in the branch | `main` also moves from outside the queue |
 | A returned item's PR and the slot are not mentioned | An item keeps the PR slot while its PR is recorded, and a returned item's PR is a draft | Otherwise a related PR opens beside a stale one |
@@ -2109,12 +2232,13 @@ Where this design does not do what the proposal's sections 3 to 8 say.
 - No second cloud run a day (the proposal's question 4), and no change to
   FLOW-13.
 - No change to the freeze.
-- No area for a tree that is not on `main`, and no stand-in for one: an
-  item whose design adds the area it declares is undeclared, and collides
-  with every feature here, until its merge puts the area on `main`. Two
-  of the 52 merges added a tree. Relating such an item by where its new
-  paths fall on `main`'s map would need a copy of part of the branch's
-  map in the queue file; it is left out.
+- No area that a design gives itself. An item whose design adds a tree
+  names an area the map lacks, and is undeclared, colliding with every
+  feature here, until an attended session adds the area on Jeff's word;
+  its design review is the usual place, and a pattern may name a path
+  `main` does not have yet. Two of the 52 merges added a tree.
+- No check in CI that the map matches the tree (a4 (c)): `wf areas -check`
+  reports.
 - No gain for the two features in the queue now. See below.
 - No automatic answer to a reconciliation item's question.
 - No re-run of native validation at a refresh (a10 (e)), and no map entry
@@ -2168,14 +2292,16 @@ being read, and the refresh for any process item's PR that waits while
 | `repos` absent | The item works only in `config.yaml`'s `repository` | LOOP-04: "an item that names none works only in the repository that holds its design" (GLOBAL-09). A written list is used exclusively (GLOBAL-10) |
 | `config.yaml`'s `repository` absent | No default. An item that names `repos` then fails `wf validate` | A guessed repository name would be a silent fallback (GLOBAL-10, GLOBAL-11) |
 | `areas` absent | Undeclared: the item collides with every item it shares a repository with | Today's behaviour, and the safe side (GLOBAL-09). `areas: []` is a declaration, not an absence |
-| *Named fallback: "undeclared until merged".* `areas` names an area `main`'s map lacks | The item is treated as undeclared | Its design adds the area and `main` has it only after the merge. `QUEUE.md` marks the name with `*` (GLOBAL-11) |
+| *Named fallback: "area not in the map".* `areas` names an area the map lacks | The item is treated as undeclared | Its design asks for an area that an attended session has not added yet. `QUEUE.md` marks the name with `*`, and Design's done-when prints it (GLOBAL-11) |
 | *Named fallback: "no map".* The queue state has no `areas.yaml`, or a repository has none | The repository is one exclusive area: every two items in it collide | Today's behaviour (GLOBAL-09). `QUEUE.md`'s Relations gives it as the reason (GLOBAL-11) |
 | `seams`, `rules_changed`, `collides_with`, `adopts` absent | None; not a reconciliation item | The obvious reading |
 | `declared` absent | The item was never declared: no gate compares its queue file with its design, and the check prints that | An item that finished Design before `wf declare` existed must pass the gates it passes today (GLOBAL-09). Design's done-when requires it from this merge on, and a human `wf declare` sets it for an older item |
 | `wf new -follows X` without `-areas` | The new item takes X's `repos` and `areas`; none when X has none | A fix or finish of X is in X's areas to a first approximation, and Jeff agreed those for X (a4). `-repos` and `-areas` override it, and the history line says which was used (GLOBAL-10, GLOBAL-11) |
 | *Named fallback: "the design on the branch".* `wf declare` judging a widening when the design has no `approved at` entry (its review was skipped) | It reads `drivers`, `surfaces` and `rule_changes` from the branch | A skipped review has no approved commit, and the skip criteria allow no seam and no rule change. The history line says `(design on the branch: review skipped)` (GLOBAL-11) |
 | `main.yaml` absent | `main`'s CI is not known: `QUEUE.md` says `main: CI not recorded`, and nothing is filed | No session has recorded it yet. Unknown is not read as green (GLOBAL-10) |
-| The map's `implies.shared` absent | No area is shared: every driver in a design's `drivers` needs its own area declared | The obvious reading; the `area-map` check requires it to match `rules.yaml` in this repository |
+| The map's `implies.shared` absent | No area is shared: every driver in a design's `drivers` needs its own area declared | The obvious reading. Nothing holds it to `rules.yaml`'s `drivers.shared` any more (a4 (c)) |
+| `wf areas -check` without `-edges` | It compares the paths only, and prints `reaches: not compared` | `wf` cannot produce the edges itself (LOOP-08); the line says what was not checked (GLOBAL-11) |
+| `main.yaml` has no area-check result | `QUEUE.md` says `area map: not checked against main` | Unknown is not read as "no difference" (GLOBAL-10) |
 | The merge check's context lines | 0, fixed. *Changed:* 3 | a14 |
 | `limits.in_progress` absent | 5; a written value below 1 is an error | FLOW-05's written limit (Decision 8). *Changed:* absent or 0 was "no limit" |
 | `limits.alters_relationships` absent | 1; below 1 an error | Unchanged (`alters-slot`) |
@@ -2195,9 +2321,9 @@ PR slot given up by an item that goes back with its PR open; `interface`
 as an entry of `implies.drivers` (the first draft), which let a
 shared-package design pass only when it was spelled that way.
 
-**Merges.** `wf areas -sync` unions `areas.yaml`'s `written_seams` with the
-names in `rules.yaml`'s `seams` list. Neither overrides the other: a seam
-in either is written, and the copy lists the result.
+**Merges.** None. The draft's union of the map's `written_seams` with
+`rules.yaml`'s `seams` list went with the generated copy (a4 (c)):
+`written_seams` is the one list.
 
 ## Cross-driver impact
 
@@ -2215,8 +2341,7 @@ compared with those files at that commit on 2026-11-15, after the branch
 merged it: none differs from what the draft quoted from `main` at
 `897a4a8` and from `feat/loop-contract` at `31028a5`. Where a rule has
 several paragraphs, only the amended ones are quoted, each in full; the
-rest of the rule is unchanged. No severity changes. One check type changes
-(PROFILE-01).
+rest of the rule is unchanged. No severity and no check type changes.
 
 `loop-contract` amends one other sentence of FLOW-03 (a feature may change
 "the rules of a component it works in") and two of FLOW-14. None of the
@@ -2463,9 +2588,12 @@ definition that `alters-slot` built and FLOW-20's Limit bullet carried.
 > flight, and have pull requests open, side by side.
 >
 > **How two items relate.** An item names the repositories it works in and
-> the areas it changes (FLOW-02). A repository's *area map*, the Areas
-> entry of its profile (LOOP-01), gives each area its paths, its mode and
-> the areas it reaches. Two items cannot both change an *exclusive* area;
+> the areas it changes (FLOW-02). A repository's *area map* gives each
+> area its paths, its mode and the areas it reaches. The map is kept with
+> the queue state, where the Areas entry of the repository's profile says
+> (LOOP-01), and it changes only in an attended session, on the human's
+> word: no agent changes it otherwise. Two items cannot both change an
+> *exclusive* area;
 > any number may change an *ordered* area, and the later to merge is put in
 > order by its refresh (FLOW-10). Area A *reaches* area B when code in A
 > depends on code in B; only exclusive areas reach and are reached. A
@@ -2683,7 +2811,8 @@ criteria; the delta sentence; and the automated part:
 
 > - the repositories and areas it declares (FLOW-02), and the open items it
 >   is near or collides with, and why (FLOW-05); the human may narrow or
->   widen the areas, or name a collision the area map does not show;
+>   widen the areas, name a collision the area map does not show, or have
+>   the map changed;
 
 and the three passages become:
 
@@ -2732,9 +2861,12 @@ enforcement change.
 
 ### LOOP-01 (amend), `docs/development/loop-contract.md`
 
-**Why:** the area map is the component's, so the profile names it, and the
-contract's table of what is local has to say so (LOOP-08: no loop rule
-requires a path the profile does not name).
+**Why:** FLOW-05 reads a map of each component's tree. The map is kept
+with the queue state (a4 (c)), as the host table is, and it describes the
+component, so the contract's table of what is local says so and the
+profile says where the map is and which command lists the component's
+dependency edges (LOOP-08: no loop rule requires a path, a layout or a
+toolchain the profile does not name).
 
 **Current wording**, the queue's row of the first table (the terms table
 has no row for areas):
@@ -2743,11 +2875,11 @@ has no row for areas):
 
 **Proposed wording:**
 
-> | The queue | The kinds of item, the phases, the order and what blocks what (LOOP-04) | Its area map, which says what two items may change in it side by side. Otherwise nothing: there is one queue, and an item names the repositories it works in |
+> | The queue | The kinds of item, the phases, the order and what blocks what (LOOP-04) | The areas of its tree: the loop keeps them, with the queue, as the component's area map, which says what two items may change in it side by side (FLOW-05). Otherwise nothing: there is one queue, and an item names the repositories it works in |
 
 and the terms table gains a row, after **Rule and machinery paths**:
 
-> | Areas | Its area map: the areas of its tree, their paths and modes, and which area reaches which | FLOW-02, FLOW-05 |
+> | Areas | Where its area map is kept, and the command that lists its dependency edges | FLOW-02, FLOW-05 |
 
 **Severity and check:** MUST, `agent-judgment`, before and after. LOOP-01
 already says that a term a component does not have is `none`, and FLOW-05
@@ -2786,50 +2918,34 @@ and, in `TEMPLATE.md`:
 **Severity and check:** MUST, `agent-judgment`, before and after. No
 enforcement change.
 
-### PROFILE-01 (amend), `docs/development/loop-profile.md`, `tools/tier1/`
+### PROFILE-01 (amend), `docs/development/loop-profile.md`, `tools/tier1/area-edges.sh`
 
-**Why:** the profile gets its Areas entry, and the map a check that holds
-it to the tree.
+**Why:** LOOP-01 gains the Areas term, so this repository's profile fills
+it. The entry points to the map in the queue state (a4 (c)), as the
+Native hosts entry points to the loop's `hosts.yaml`, and names the
+command that lists this repository's dependency edges. The draft put the
+map itself under this rule, with a tier-1 check; Jeff's answer to a4
+takes both away, so the rule's check type and its Checks table stay as
+they are.
 
-**Current wording**, the header's check line; the paragraph on the agent
-part; and the Process row of the checks table (the profile's table has no
-Areas row):
+**Current wording.** The profile's table has no Areas row. The row it
+follows, and the one it is modelled on:
 
-> **Check:** agent-judgment
+> | Rule and machinery paths | Rule changes: `docs/development/`, `tools/tier1/`, `tools/workflow/check/`, the rule-running jobs of `.github/workflows/`, `docs/design/TEMPLATE.md`. Machinery: `.claude/` and `tools/workflow/` outside `check/`. |
 
-> The agent part: Review judges that the diff leaves no entry stale; the
-> design review of a change to this rule judges that every term is filled
-> or `none` (LOOP-01).
+> | Native hosts | The host names in the loop's `hosts.yaml`. All of them serve this repository's drivers today. |
 
-> | Process | Tier 1's `rule-index`, `design-front-matter`, `drivers-claim` and `suppression` checks; `wf`'s done-when checks and `wf validate`; `make enforcement`; `tools/workflow/flow18-check.sh` | 1 |
+**Proposed wording.** Both rows are unchanged, and the table gains a row
+after **Rule and machinery paths**:
 
-**Proposed wording:**
+> | Areas | The loop's `areas.yaml`, in the queue state on the `workflow` branch: this repository's areas, their paths and modes, which area reaches which, the area each `drivers` and `surfaces` value stands for, the areas every driver shares, and the seams that have a specification. It is not one of this repository's rule files: it changes in an attended session, on the human's word (FLOW-05). `tools/tier1/area-edges.sh` prints this repository's dependency edges, which the loop compares the map's `reaches` with. |
 
-> **Check:** automated + agent-judgment
-
-> The automated part: tier 1's `area-map` check fails when the area map
-> does not place every tracked file in one area or does not match the
-> import graph. The agent part: Review judges that the diff leaves no
-> entry stale; the design review of a change to this rule judges that
-> every term is filled or `none` (LOOP-01).
-
-> | Process | Tier 1's `rule-index`, `design-front-matter`, `drivers-claim`, `suppression` and `area-map` checks; `wf`'s done-when checks and `wf validate`; `make enforcement`; `tools/workflow/flow18-check.sh` | 1 |
-
-and the profile's table gains a row, after **Rule and machinery paths**:
-
-> | Areas | `tools/tier1/areas.yaml`: the areas, their paths and modes, which area reaches which, the area each `drivers` and `surfaces` value stands for, the areas every driver shares, and the seams that have a specification beyond the `seams` list of `tools/tier1/rules.yaml`. |
-
-**Severity and check:** MUST before and after; the check changes from
-`agent-judgment` to `automated + agent-judgment`. **Enforcement:** the new
-file `tools/tier1/areas.yaml` (the map above), which tier 1 reads from the
-checkout it checks and does not embed, so `tools/tier1/tier1.go`,
-`tools/workflow/enforcement-check.sh` and FLOW-14's list of the
-configuration files `main`'s tier 1 takes from the branch all stay as
-they are; `tools/tier1/rules.yaml` gains `PROFILE-01: {check: [area-map]}`;
-`tools/tier1/rules/rules.go` lists the check; `tools/tier1/coupling/`
-holds it, with what it fails on under **The area map**. From this merge on,
-a feature changes the map by declaring `{rule: PROFILE-01, change: amend,
-paths: [tools/tier1/areas.yaml]}`.
+**Severity and check:** MUST, `agent-judgment`, before and after.
+**Enforcement:** none. `tools/tier1/area-edges.sh` is new: the command the
+entry names, described under **The area map**. It is under a rule-change
+path, so a feature may change it only as an approved change to this rule;
+no check and no CI job runs it. A feature's design does not change the
+map: it says what it needs, and the map is changed on Jeff's word.
 
 ### The contract's citations, checked
 
@@ -2850,7 +2966,8 @@ whether it is still true with the proposed wording.
 | LOOP-06, item 1: each step's "kind and FLOW-05 class" | Yes. Class 3 is now named "Fixes and adoptions" |
 | LOOP-06, item 5: "everything blocked or parked, and why" | Yes. The guard's reasons are `wf next`'s `blocked` lines; a red `main`, holders over a limit and an item sent back with its PR open are listed with them |
 | LOOP-07, point 2: a reconciliation item "is a feature item (LOOP-04), filed through intake, and FLOW-05 gives its place in the order." | Yes. This is the amendment its Decision 7 left to this item |
-| LOOP-08: "No loop rule may require a language, a build tool, ... a directory layout beyond what the profile names" | Yes. The map is a profile term; the import-graph check is the component's (tier 1); `wf` reads a copy of the map |
+| LOOP-08: "No loop rule may require a language, a build tool, ... a directory layout beyond what the profile names" | Yes. The profile says where the map is and names the command that prints the component's dependency edges; `wf` runs no toolchain and compares what that command prints |
+| LOOP-01: the profile "is one of the component's own rules ... a change to it is declared and approved like a change to any of the component's invariants (FLOW-14)" | Yes. The Areas entry is a pointer and a command name, and a change to either is a rule change. The map's content is queue state, as the content of `hosts.yaml` is behind the Native hosts entry, and changes on the human's word (FLOW-05) |
 | LOOP-09: a branch "follows the old text until it merges trunk, which FLOW-05 has it do while it waits and Publish does at its start" | Yes. FLOW-05 keeps that sentence; the refresh adds a third occasion |
 | LOOP-09: a process item "declares the workers it holds (FLOW-05)" | Yes. A hold still names workers (Decision 18) |
 | LOOP-03, class 4: "the phase done-when checks (FLOW-03) and the queue's validity" | Yes. The new checks are done-when checks and `wf validate` |
@@ -2968,13 +3085,18 @@ whether it is still true with the proposed wording.
     existing `wf-squash-after-base-moved` tests keep passing, including
     the ones that refuse a head pushed past the squash.
 
-  `tools/tier1`:
-  - `TestAreaMapCheck` on fixtures (a missing edge, a stale edge, a tie, a
-    driver with no `implies` entry, an `implies.shared` that lacks `relay`,
-    an area with both `reaches` and `reaches_all`, a `go list` error, a
-    checkout with no map) and `TestRealAreaMap`, which runs the check on
-    the repository's own map and tree with the 18 runs the design names,
-    as `TestRealIndex` does for the rule index.
+  The map's checks, in `tools/workflow/queue`: `TestAreasValidate` (each
+  thing `wf validate` fails a map for; a `repository` that is not
+  `config.yaml`'s; the same pattern text in two areas) and
+  `TestAreasCheck`, on a scratch repository and edge lists: a path in the
+  catch-all, a pattern that matches nothing, a dependency `reaches`
+  lacks, a `reaches` entry nothing supports, an edge from an ordered
+  area, which is ignored, no `-edges`, which prints
+  `reaches: not compared`, the result recorded in `main.yaml` for
+  `origin/main` and not for another `-rev`, and exit 0 with differences.
+  `TestCommitAreasHumanOnly`: `wf commit` refuses a commit that changes
+  `areas.yaml` for a `cloud` or `host:` worker and makes it for
+  `human/<name>`.
 - **The live queue.** With `main`'s `dist/wf` and the branch's `wf` built
   to a scratch path, on a copy of the `workflow` checkout: `wf validate`
   prints `ok` both times; `wf next -worker cloud/check` and
@@ -2983,16 +3105,19 @@ whether it is still true with the proposed wording.
   columns and sections, and the two renamed headers, and by nothing else.
   `wf check -feature seam-specs` and `wf check -feature driver-contract`,
   run with both, give the same results, the new one adding the
-  `not declared` line. Then, on the copy, with `repository` set,
-  `wf areas -sync` and `wf main` run: a human `wf declare` on both
+  `not declared` line. Then, on the copy, with `repository` set, the
+  map of this design saved as `areas.yaml` and `wf main` run: a human
+  `wf declare` on both
   features, after which `wf relations` prints
   `seam-specs, driver-contract: colliding (seam collector, which has no specification)`
   and `wf check` for each still passes. The outputs go in the PR
   description.
-- **The map.** `make lint` runs `area-map` on the branch. The script that
-  produced the tables above is re-run, with the matrix the design names,
-  and its output compared with the shipped `reaches`: the draft's run
-  gave no missing and no stale edge for any of the 21 areas.
+- **The map.** On the branch,
+  `tools/tier1/area-edges.sh | wf areas -check -edges -` against the map
+  of this design prints no difference for `origin/main`, on Linux; the
+  run is in the PR description. The same comparison, made for this
+  design on the tree of `ad4ea50`, found none (**The area map**).
+  Nothing in CI runs it (a4 (c)).
 - **`make lint`** for the three modules, `make enforcement` (this PR
   changes `tools/tier1/` and `tools/workflow/check/`; a process item's
   branch is exempt from the clearance, and the comparison of findings still
@@ -3011,8 +3136,8 @@ A process item has no Plan phase; this is the work of `x2-implement`.
 
 **Size.** Large, and larger than the queue's estimate (12 steps, 3 runs)
 allows for. `alters-slot` changed 6 files under `tools/` and `.claude/`
-(+606, -55) and `loop-contract` 14 (+763, -45). This item adds nine Go
-source files and their tests, eight `wf` commands, rewrites `next.go` and
+(+606, -55) and `loop-contract` 14 (+763, -45). This item adds eight Go
+source files and their tests, a shell script, eight `wf` commands, rewrites `next.go` and
 `summary.go`, names about forty tests, amends fourteen rules and edits
 eight skill and agent files. It is one step, so it carries over runs the
 way a long Implement does: each run claims `x2-implement` again (one
@@ -3027,8 +3152,9 @@ steps.
 2. Tests first: each of tasks 3 to 12 starts with the tests the
    Validation plan names for it, failing on the current code (TEST-01,
    TEST-02).
-3. `queue/areas.go`, `tools/tier1/areas.yaml` and tier 1's `area-map`
-   check with its `rules.yaml` entry (PROFILE-01, LOOP-08, LINT-02).
+3. `queue/areas.go` (the map's parser, path match, `Validate` checks and
+   `CheckAreas`) and `tools/tier1/area-edges.sh` (FLOW-05, PROFILE-01,
+   LOOP-08).
 4. The queue's fields, `Config.Repository`, and `Validate`'s schema checks
    (FLOW-02, FLOW-03, GLOBAL-10).
 5. `queue/relation.go` (FLOW-05).
@@ -3049,7 +3175,8 @@ steps.
     FLOW-18).
 11. `summary.go`, `queue/digest.go`, `wf digest`, `wf status`, and
     `wf main` with `main.yaml` (FLOW-09, FLOW-13, LOOP-06).
-12. `wf areas -sync | -check | -list` and `wf validate -areas` (FLOW-05,
+12. `wf areas -check | -list`, `wf validate -areas`, and `wf commit`'s
+    refusal of a map change from a worker that is not human (FLOW-05,
     PROFILE-01).
 13. `docs/development/process.md`: the eleven FLOW amendments, word for
     word as approved (FLOW-14, FLOW-19).
@@ -3068,9 +3195,8 @@ steps.
 `relation.go`, `limits.go`, `declare.go`, `commit.go`, `digest.go` with
 tests. `tools/workflow/check/`: `check.go`, `review.go` and their tests,
 and the new `declared.go` and `areas.go` with tests.
-`tools/workflow/cmd/wf/main.go`. `tools/tier1/`: `areas.yaml` (new),
-`rules.yaml`, `rules/rules.go`, `coupling/checks.go`, and the
-new `coupling/areamap.go` with its test. `docs/development/process.md`,
+`tools/workflow/cmd/wf/main.go`. `tools/tier1/area-edges.sh` (new), and
+nothing else under `tools/tier1/`. `docs/development/process.md`,
 `loop-contract.md`, `loop-profile.md`. `docs/design/TEMPLATE.md` and this
 design. `.claude/skills/workflow-{tick,intake,human,native}/SKILL.md` and
 `.claude/agents/wf-{design,implement,review,publish}.md`. Nothing in the
@@ -3085,8 +3211,9 @@ commit's time. The item is not done until it is.
 
 - `config.yaml`: `repository: buildwarden/buildwarden`; the comment on
   `limits.in_progress` becomes "5 when unset". The values do not change.
-- `wf areas -sync`, which adds `areas.yaml`, and `wf main`, which adds
-  `main.yaml`.
+- `areas.yaml`: the map of this design, saved on Jeff's word as any map
+  change is (`wf validate -areas`, then `wf commit -worker human/<name>`),
+  and `wf areas -check` run on it; and `wf main`, which adds `main.yaml`.
 - `README.md`: the layout table (`areas.yaml`; `main.yaml`;
   `digest/<date>/`); the queue file's new fields; the `tracked` round;
   `wf next`'s paragraph (the guard, for every worker, and the three
