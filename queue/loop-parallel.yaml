@@ -126,21 +126,23 @@ questions:
     recommended: '(a), (c) and (e). With five PRs open and merged one a day, (a) and (c) cost 4 + 3 + 2 + 1 = 10 refreshes, up to four on the last item, against the two the size guide adds; merged in one sitting they cost none and four of the five merge behind main. An item that waits through many merges trips its runaway check and shows under Needs Jeff. Under (e) a break between two disjoint items that only a native host shows is found by the matrix before a release (TEST-02): CI runs neither Hyper-V nor VZ, and the native sweep covers only a machine''s open backlog gaps'
   - id: a12
     kind: assumed
-    status: open
+    status: confirmed
     question: Who gets a free PR slot when related items wait.
     options:
       - '(a) The higher priority, whether or not it could take the slot at that moment: an item is refused while a related item of higher priority waits (the proposal''s rule). A lower-priority item can then wait for a holder it is disjoint from, because the item ahead of it does.'
       - '(b) The higher priority only when it could take the slot itself (the first draft). More PRs are open at once, and a high-priority item related to two streams that are disjoint from each other can wait without end: a driver-core item behind alternating Hyper-V and VZ items.'
       - (c) The first to ask.
     recommended: '(a): it matters once a second worker exists (an attended run on a named item today, a machine''s led item after loop-native-lead)'
+    answer: (a) The higher priority goes first, whether or not it could take the slot now. Jeff, design review, 2026-11-15.
   - id: a13
     kind: assumed
-    status: open
+    status: confirmed
     question: Whether this item holds a worker while it is implemented, merged and closed.
     options:
       - '(a) None. Two things are handled without a hold: a session whose dist/wf predates the merge drops a new field when it saves a queue file that carries one, so the first new field is written only after no lease predates the merge, and every scheduled session rebuilds wf as it starts; and seam-specs and driver-contract, which finished Design before the queue could record what they declare, are not compared with their designs at any gate until a human wf declare records them (the attended step x4-state).'
       - '(b) holds: [cloud, host:*], set by hand for the day of the merge and Close and removed after.'
     recommended: '(a): a hold lasts while the item is in progress, days during which S1 and K1 would stop'
+    answer: (a) The item holds no worker. Jeff, design review, 2026-11-15.
   - id: a14
     kind: assumed
     status: open
@@ -151,21 +153,23 @@ questions:
     recommended: (a)
   - id: a15
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Whether the areas that hold the checks reach every area. The proposal has "tier1, rules and tier1-config reach every area: a tightened check meets all code". The first draft dropped it for the import graph alone, on the ground that make lint finds the failure at f6-merge-main or at the refresh; that does not hold under a1 (a), where a PR may merge before its refresh.'
     options:
       - '(a) The import graph alone: an item that tightens a check and an item whose code the check newly fails are disjoint, both PRs may be open and merge in either order, and the failure first shows on main.'
       - '(b) tier1 (the checks'' code) and tier1-config (rules.yaml, golangci.yml, the area map) reach every area: an item that changes either is near every item in the repository and takes turns at the PR with it. rules (docs/development/) does not: wording checks nothing mechanically, and 22 of the 52 merges changed it.'
       - '(c) As the proposal, rules too: nearly half of all items would take turns at the PR with every other item.'
     recommended: '(b): on history one of the 23 merges changed either area and 17 of the 253 pairs become near. It does not cover a whole-tree check that lives in a test of a code area (driver/buildlink/stray_test.go, specs/specs_test.go) or the root .golangci.yml; those are part of what a1 (a) accepts'
+    answer: '(a) Import graph only: the areas that hold the checks do not reach every area; a tightened check and the code it fails are disjoint and meet on main. Departs from the recommendation (b); the design is revised. Jeff, design review, 2026-11-15.'
   - id: a16
     kind: assumed
-    status: open
+    status: confirmed
     question: A regression that CI reports on main. FLOW-09 has a session file a regression main already has when it finds one "while the feature is built, validated or consolidated"; nothing files one that CI reports on main itself, and nothing in the loop reads that result today.
     options:
       - (a) The run that sees main red files the fix, unattended as FLOW-09 already allows, as the follow-up of the item whose pull request that merge was, at the top of the fixes; when the red commit is no item's, it files nothing and Needs Jeff says main is red. FLOW-09 gains two sentences.
       - '(b) It only reports: Needs Jeff opens with the red main, and the fix is filed when a later step''s gates meet the failure, as that step''s item''s follow-up (FLOW-09 as written), or by Jeff.'
     recommended: '(a): under a1 (a) a red main is the designed outcome of a missed collision, and every open PR''s refresh fails on it until a fix is filed'
+    answer: (a) The run that sees a red main files the fix unattended, as the follow-up of the item whose merge it was, at the top of the fixes; nothing is filed when the merge was no item's. Jeff, design review, 2026-11-15.
 history:
   - at: 2026-11-14T20:57:45Z
     by: human/jeff
@@ -200,3 +204,15 @@ history:
   - at: 2026-11-15T19:51:03Z
     by: human/jeff
     event: 'assumed question a8 confirmed: (a) adopts: {consumable, version}; held by a blocking question naming the release; placed below the open fixes. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T19:53:13Z
+    by: human/jeff
+    event: 'assumed question a12 confirmed: (a) The higher priority goes first, whether or not it could take the slot now. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T19:53:13Z
+    by: human/jeff
+    event: 'assumed question a13 confirmed: (a) The item holds no worker. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T19:53:14Z
+    by: human/jeff
+    event: 'assumed question a15 confirmed: (a) Import graph only: the areas that hold the checks do not reach every area; a tightened check and the code it fails are disjoint and meet on main. Departs from the recommendation (b); the design is revised. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T19:53:14Z
+    by: human/jeff
+    event: 'assumed question a16 confirmed: (a) The run that sees a red main files the fix unattended, as the follow-up of the item whose merge it was, at the top of the fixes; nothing is filed when the merge was no item''s. Jeff, design review, 2026-11-15.'
