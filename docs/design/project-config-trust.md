@@ -125,9 +125,10 @@ problem.
 ## Prior art
 
 - **`runtime-cli-project-path`** (design approved, r1 at `a2afd08`, with
-  its UX-08 change approved by name; not on `main`; read at `119a0e1` on its
-  branch, and its code is cited here as designed, not as built). It merges
-  before this item. It limits the container runtime to `finch`, `docker` or
+  its UX-08 change approved by name; not on `main`; its design read at
+  `119a0e1`, and again at `8e41bd8`, its branch's head on 2026-11-15, in
+  Implement, where only its Implementation plan differs; its code is
+  cited here as designed, not as built). It merges before this item. It limits the container runtime to `finch`, `docker` or
   `podman` from every source, checked in `resolveRuntime` on the value in
   effect; it amends UX-08 (the consumer validates, after the overrides,
   only what the run uses); and it sets the pattern this design copies for a
@@ -137,14 +138,23 @@ problem.
   1.0 (its a4, answered (d)). Its section **One config file** is written to
   fit this item. Its findings F1 to F4 and F9 are this item's `source`; F5
   to F8 are `configuration-bugfixes`'.
-- **`driver-contract`** (K1, in its design review; not on `main`; read at
-  `834c449`). Since its Decision 23 it is written on one file: the contract
-  hands a driver one `config_file` (the absolute path of the file `warden`
-  read, absent when there is none), no list and no `level`. It quotes
-  ORCH-03 and UX-07 as this design proposed them at `539fd38`, waits for
-  this item's merge before its Plan, and asks in its a26 what becomes of
-  the one guard it kept, that a config file names a driver and not a path.
-  What each owes the other is in **How it sits with the other items**.
+- **`driver-contract`** (K1, in its design review, its eleven rule
+  changes approved by name and its outcome pending; not on `main`; read
+  at `a6c8f0b`). Since its Decision 23 it is written on one file: the
+  contract hands a driver one `config_file` (a string, the absolute path
+  of the file `warden` read, absent when there is none), never a list and
+  with no `level`. It quotes ORCH-03 and UX-07 as this design proposed
+  them at `539fd38`, waits for this item's merge before its Plan (its
+  hold is in the queue, its `q1`), and kept one guard, that no config
+  file names a driver by path (its a26, answered (A)). What each owes the
+  other is in **How it sits with the other items**.
+- **`prebuilt-artifacts`** (a security fix, filed 2026-11-15 on Jeff's
+  answer to this design's a6; priority 66; in Design, with no design
+  committed when this was written: its branch is at `ad4ea50`, and it is
+  cited from its queue item, workflow `85669f6`). It takes compilation
+  out of `warden` after this item has merged. What each owes the other
+  is in **F9: the source tree** (the split) and **How it sits with the
+  other items**.
 - **`build-link-subnet`** (archived) added `BuildLinkSource`, and
   **`hyperv-relay-per-build-channel`** (archived) added `DNSSource` the
   same way: the base name of the file that set a key (`warden.toml` or
@@ -330,12 +340,27 @@ level. The designs relied on carry front-matter already.
    - *Rejected: skip without a line* (a9's option (c)). The skip is
      allowed because it is said (GLOBAL-10, GLOBAL-11).
 9. **`warden` finds its source tree from its own executable only** (F9;
-   assumed question a6). `driver.ModuleRoot` stops walking up from the
-   working directory, and matches the module line exactly. A `warden` that
+   a6). `driver.ModuleRoot` stops walking up from the working directory,
+   and matches the module line exactly. A `warden` that
    needs the tree and is not inside it (a development build copied or
    installed elsewhere; a release used with a VM driver or with
    `relay_image = "dev"`) reports that, with the fix, instead of building
    from whatever tree the working directory is in.
+
+   This is the small fix, and it is all this item does about F9. Jeff's
+   answer to a6 goes further than any option put to him: `warden` is to
+   need no source tree and to compile nothing. He gave that to its own
+   security item, `prebuilt-artifacts`, filed the same day and designed
+   in parallel, which merges after this one and then removes the tree
+   lookup and every `go build` `warden` runs (**F9: the source tree**,
+   the split).
+   - *Rejected by Jeff, for this item: remove compilation here.* Asked
+     where it is built, he chose its own item, so that the hole closes
+     with this item's merge and K1 is not held behind the native
+     validation that taking every `go build` out of `warden` needs.
+   - *Rejected: a variable that names the tree* (a6's option (b)), and
+     *the tree the compiler recorded* (its (c)). Neither is wanted by an
+     answer that ends with no tree at all.
 10. **A background `warden image prepare` reads the file its build read.**
     A qemu Windows or hyperv build whose prepared image is due for refresh
     starts `warden image prepare` detached (`driver.StartDetached`). Today
@@ -541,6 +566,28 @@ a12, raised by a9's fold-in.
     recorded). Nothing to set, and `go run` works. It fails under
     `-trimpath`, and a binary that reads its own build paths is magic
     (GLOBAL-11).
+
+  **Answered 2026-11-15: changed.** None of the three as written; this
+  item keeps (a), and a new item does what the answer asks for. Jeff's
+  words: "So warden shouldn't need its own source directory for anything
+  after componentization.  It should instead fully be based on
+  pre-compiled existing binaries/artifacts which are managed and
+  installed and it may have development tooling for helping with that,
+  but it does not manage any compilation.  Those are purely development
+  processes". Asked what this fix does now: "Remove compilation now.
+  warden looks for necessary artifacts  to be on PATH and searches its
+  own directory if they're not found or not on or above a minimum
+  version". Asked where that is built, he chose its own security item,
+  started now and designed in parallel. `project-config-trust` keeps the
+  small lookup fix, which is (a) as designed here (the tree found from
+  the executable only; the three test files), so the hole closes with
+  this item's merge and K1 is not held behind native validation. The new
+  item then removes the tree lookup and every `go build`. It is filed:
+  `prebuilt-artifacts`, priority 66, branch `feat/prebuilt-artifacts`, in
+  Design (workflow `85669f6`). Folded in as Decision 9, the split under
+  **F9: the source tree**, **How it sits with the other items** and item
+  8 of the Security note's **What remains**. No word of (a)'s design
+  changed.
 - **a7. How the queue holds this item behind `runtime-cli-project-path`'s
   merge.** Both items edit `LoadConfig` and the configuration reference,
   and this one edits UX-08 as that one leaves it. `follows` does not fit:
@@ -1419,6 +1466,43 @@ ModuleRoot():
   and none was found; they were not run. No environment variable is added
   (a6).
 
+**The split with `prebuilt-artifacts`** (a6). Jeff's answer is that
+`warden` should need no source tree at all and compile nothing: it finds
+its executor, its relay and the relay VM artifacts already built, on
+`PATH` and then in its own directory, at or above a minimum version, and
+building them is development tooling's work. He put that in its own
+security item and kept this item's fix small.
+
+- *What this item closes.* F9 as it was found: no `warden`, of any
+  version and with any driver, takes the working directory's tree for
+  its source. That is the hole a repository can open by being cloned and
+  built.
+- *What this item leaves.* `warden` still compiles. A `warden` whose
+  executable is inside a tree that declares the module still runs `go
+  build` on that tree (`GuestBinary`; `goBuildLinux` for a development
+  version or `relay_image = "dev"`) and still takes the relay VM assets
+  from it (`relayvm.Find`). The Security note says what that exposes
+  until the other item merges (**What remains**, 8).
+- *What `prebuilt-artifacts` does, after this item has merged.* As its
+  queue item states it (workflow `85669f6`; its design is being written
+  and nothing of it is cited here as designed): it removes
+  `ModuleRoot`'s use by `warden` and every `go build` `warden` runs,
+  which are `GuestBinary`'s cross-build, the container driver's
+  `goBuildLinux` and the source build behind `relay_image = "dev"`, and
+  `relayvm.Find`'s lookup in the tree; the Makefile builds and places
+  the artifacts. With no caller of `ModuleRoot` left in `warden`, it
+  also deletes what this item adds for the tests: the test-only setter
+  of the tree and the two `main_test.go` `TestMain`s. This item's two
+  error messages that say to run `make build` and use `dist/warden`,
+  and its sentences in `CONTRIBUTING.md`, the installation guide and
+  the Relay Image section, are that item's to replace.
+- *What this item does for that.* What it adds for the tree is small
+  and in one place each, so that it is deleted whole: one setter, one
+  `TestMain` per package, no test that names the tree by itself. And
+  its tier-1 case and corpus entry for F9 state the property that
+  outlives both items: a `warden` outside any source tree, run in a
+  repository that declares the module, runs no `go`.
+
 ### The background image prepare
 
 `driver.StartDetached(logPath, args...)` gains the config file: `cmd/warden`
@@ -1440,9 +1524,11 @@ edited.
     that a `WARDEN_CONFIG` set for a machine should be absolute, that
     `warden.toml` in a message means the config file in use (Decision 13),
     and a paragraph for someone building a repository they do not control:
-    name the file; what a `./warden.toml` there decides; and that under
+    name the file; what a `./warden.toml` there decides; that under
     `sudo` the file is named with `--config`, or with `sudo
-    --preserve-env=WARDEN_CONFIG`, because `sudo` drops the variable;
+    --preserve-env=WARDEN_CONFIG`, because `sudo` drops the variable; and
+    that `warden` is installed outside the repository it builds (Security
+    note, **What remains**, 8);
   - the transitional subsection "Moving from
     `~/.config/warden/config.toml`", under its marker, with the `sudo`
     case;
@@ -1478,11 +1564,13 @@ edited.
 - `README.md`: the Configuration block's first comment (`# ./warden.toml,
   or the file --config or WARDEN_CONFIG names`) and its list of variables.
 - `CONTRIBUTING.md`: one sentence, that a development `warden` is run from
-  its tree (`dist/warden`), if a6 (a) stands.
+  its tree (`dist/warden`).
 - `docs/book/src/getting-started/installation.md`, "First-time QEMU
   Setup": `make build` before the two asset scripts, and that the VM
   drivers are run as `dist/warden` from the tree (the Firecracker section
-  already starts with `make build`), if a6 (a) stands.
+  already starts with `make build`). These two, and the Relay Image
+  section's sentence on `dev`, are true from this item's merge until
+  `prebuilt-artifacts` merges, which rewrites them (a6).
 - `cmd/warden`: the help text of `--config`; `doctor`'s long help where it
   lists the build link's sources; the two messages that name the file for
   a bad `[vm]` value (Decision 13). The drivers' fix strings that say "in
@@ -1529,12 +1617,15 @@ other two are the permanent checks' own messages.
 ### How it sits with the other items
 
 The order of merging: `runtime-cli-project-path`, then this item, then
-`driver-contract` (K1). Both sibling designs say the same order
+`driver-contract` (K1) and `prebuilt-artifacts`, each of which waits for
+this item and neither for the other as far as this design goes. The two
+sibling designs that exist say the same order for the first three
 (`runtime-cli-project-path` at `119a0e1`, **One config file**;
-`driver-contract` at `834c449`, Decision 23).
+`driver-contract` at `a6c8f0b`, Decision 23).
 
 **`runtime-cli-project-path` first.** Its design is approved (r1 at
-`a2afd08`) and its Plan is next. It is small, and it closes host execution
+`a2afd08`) and it is being implemented (its branch at `8e41bd8`). It is
+small, and it closes host execution
 through `[runtime] cli` without waiting for this. What each owes the
 other:
 
@@ -1570,22 +1661,29 @@ other:
   (`configFile`), the `--config` flag and `WARDEN_CONFIG`, and no level.
   K1's request field `config_file` is that file's absolute path, absent
   when there is none.
-- K1 quotes ORCH-03 and UX-07 as this design proposed them at `539fd38`.
-  ORCH-03's proposed wording has not changed since. UX-07's has: "at
-  three levels" is now "at up to three levels", and the sentence on knobs
-  is reworded (**Rule changes**). The sentence K1 leans on, "A value set
-  at any level replaces the default and the lower levels' value", is as it
-  was. K1 re-quotes when it next reads this design; this agent does not
-  edit K1's.
+- K1's quotation of UX-07 is stale. At `a6c8f0b` K1 still quotes ORCH-03
+  and UX-07 as this design proposed them at `539fd38`. ORCH-03's proposed
+  wording has not changed since, so that quotation is exact. UX-07's
+  changed at `8ba86ad`: K1 quotes "any of them is easy to override at
+  three levels with clear precedence", and the proposal has read "easy to
+  override, at up to three levels with clear precedence" since then, with
+  the sentence on knobs reworded (**Rule changes**). The sentence K1 leans
+  on, "A value set at any level replaces the default and the lower
+  levels' value (GLOBAL-10)", is as it was, so nothing K1 decides rests
+  on the stale words. The proposal has not changed in this sitting
+  either: both wordings are byte for byte as at `3c0caab`. K1 re-quotes
+  when it next reads this design; this agent does not edit K1's.
 - K1's ORCH-03 paragraph on drivers is added after the paragraph this
   item rewrites, and K1 changes no word of this item's sentences (its
   **Rule changes**).
-- K1's a26 asks what becomes of its one guard, that a config file names a
-  driver and never a path, now that there is no user's own config. This
-  item leaves `[runtime] driver` as the five names it is today, and its
-  Decision 7 (what a file may decide is not limited by where it was
-  found) is for the keys this item covers; K1's option (A) agrees with it
-  and its option (B) would not. That is K1's question.
+- K1's a26 asked what becomes of its one guard, that a config file names
+  a driver and never a path, now that there is no user's own config. It
+  was answered (A) on 2026-11-15: no config file names a driver by path,
+  in `./warden.toml` and in a named file alike. That agrees with this
+  item's Decision 7 (what a file may decide is not limited by where it
+  was found), which a4's answer confirmed; K1's risk that a defaulted
+  `./warden.toml` might come to be limited is therefore closed. This item
+  leaves `[runtime] driver` as the five names it is today.
 - K1 moves `relay_image` and its check to the container driver; the CA
   check stays with the claim, which K1 gives to `warden`; the transitional
   file and the `config:` line are `warden`'s own and stay in `cmd/warden`.
@@ -1594,9 +1692,45 @@ other:
   (Decision 13).
 - This item's tier-1 cases run the built `warden` and must pass on K1's
   branch unchanged.
-- K1's hold is K1's to record, and its design says how: a blocking
-  question that names this item's merge, written by the session that
-  records its review's outcome.
+- K1's hold is K1's and is already in the queue: a blocking question
+  that names this item's merge (its `q1`, with the step `f2-answer-q1`
+  that its `f2-plan` needs), written by the attended session on
+  2026-11-15, during K1's review and before its outcome (workflow
+  `ea23718`). An earlier draft of this design said it would be raised
+  when K1's review outcome was recorded; K1's design explains why it was
+  raised sooner, and this design follows it.
+- Which config file a build read is recorded nowhere but in the
+  `config:` line. An earlier draft of this design left that to K1's
+  build record. That record does carry `config_file`, but it lives in
+  the lock directory, for `reap` and `attach`, and is removed when a
+  build ends cleanly; `driver.json`, in the output, does not name the
+  config file, and K1 adds nothing to the output for it (K1 at
+  `a6c8f0b`, **What K1 takes from the two configuration items**). If the
+  output is to name the file, that is a field for some item to add, and
+  neither design proposes it.
+
+**`prebuilt-artifacts` after.** Jeff's answer to a6. It is in Design, and
+what follows is from its queue item and from this design's side only.
+
+- This item gives it a `ModuleRoot` that no longer looks at the working
+  directory, so the hole is closed on `main` while that item is built,
+  and three test files and one setter that are written to be deleted
+  whole (**F9: the source tree**, the split).
+- It removes `ModuleRoot`'s use by `warden`, every `go build` `warden`
+  runs and the tree lookup of the relay VM assets, and with them this
+  item's setter, its two `TestMain`s, its two "run `make build`"
+  messages and its three doc sentences about running `dist/warden` from
+  the tree.
+- This item's tier-1 case and corpus entry for F9 must hold on that
+  item's branch: a `warden` outside any source tree, run in a repository
+  that declares the module, runs no `go`. What it prints and how it
+  exits there is that item's to say.
+- Its merge needs this item's first: Jeff's "the new item then removes
+  the tree lookup". How its queue item is held is its own to record,
+  as K1's is.
+- K1 is not held behind it. That is the reason Jeff gave for the split:
+  taking every `go build` out of `warden` needs native validation of the
+  VM drivers, and K1 waits only for this item.
 
 **`configuration-bugfixes`** (queued, on hold behind the freeze) was
 handed four observations, and **`workdir-in-context`** (a security fix,
@@ -1609,8 +1743,11 @@ it.
 
 - It does not limit what a config file may set by where the file was
   found (Decision 7).
-- It does not record in the build's output which config file was used.
-  `driver-contract`'s build record does.
+- It does not record in the build's output which config file was used,
+  and nor does `driver-contract`: its build record names the file but is
+  not part of the output and is removed when a build ends cleanly. The
+  `config:` line is the only record (**How it sits with the other
+  items**).
 - It does not change `[runtime] driver`, or what `runtime-cli-project-path`
   decides for `[runtime] cli`.
 - It does not move the load-time checks of `[vm] build_link` and `[vm]
@@ -1623,6 +1760,12 @@ it.
   drivers come to be run from a source tree, which the installation guide
   describes; this item only stops the working directory standing in for
   that tree.
+- It does not remove compilation. `warden` still runs `go build`, on the
+  tree its executable is in, and still takes the relay VM assets from
+  that tree. `prebuilt-artifacts` removes both, after this item merges,
+  and with them `ModuleRoot`'s use by `warden` and the two `TestMain`s
+  and the test-only setter this item adds (a6; **F9: the source tree**,
+  the split).
 
 **Handed on.** This agent edits only its own queue item, so the hand-offs
 were recorded by the session that holds this design's review (a11,
@@ -1636,6 +1779,7 @@ answered (a)). Each has a named home:
 | The hyperv and qemu drivers read variables that are in no reference (`WARDEN_HYPERV_BUILD_IMAGE`, `WARDEN_RELAY_BOOT_VHDX`, `WARDEN_QEMU_VNC` and others), which UX-07 calls ad hoc before and after this item | `configuration-bugfixes`, likewise | done, likewise |
 | **A work directory inside the build context is served to the build** (below) | the security item `workdir-in-context` (priority 67, queued), filed through intake | the review session, with Jeff; done 2026-11-15, workflow `4c59842` |
 | **A Dockerfile's `FROM` value reaches the container runtime's command line unchecked** (below) | the same item's `source` | done, likewise |
+| Removing compilation from `warden`: every `go build` it runs, `ModuleRoot`'s use, the tree lookup of the relay VM assets, and this item's test-only setter and `TestMain`s (a6) | the security item `prebuilt-artifacts` (priority 66, in Design), after this item merges | the review session, on Jeff's word; filed 2026-11-15, workflow `4c59842` |
 | The removal of the transitional detection, at 1.0 (a3) | its own small queue item | Publish |
 | The corpus entries of the Security note | `security-suite` (SEC-03) | Publish |
 
@@ -1689,7 +1833,7 @@ in the config file (or no config file).
 | `WARDEN_UPSTREAM_CA_CERTS` with the key also set | **Changed**: it replaced nothing and was added to the key's list; now it replaces it (a5), and both set is an error, on the commands that use the paths, while the transitional detection stands | One rule for every variable | Nothing is over the variable; the key has no flag |
 | The separator of `WARDEN_UPSTREAM_CA_CERTS` | **Changed**: `:` everywhere; now the OS's (`;` on Windows) | What `PATH` uses on each OS (GLOBAL-07) | Nothing |
 | The relay image absent: the release image, or a source build for a development `warden` | Unchanged | | `WARDEN_IMAGE`, else `relay_image` |
-| `warden`'s source tree, for any version that needs it: found by walking up from its executable | **Changed**: the working directory was tried second (a6) | A binary's source is where the binary was built | Nothing |
+| `warden`'s source tree, for any version that needs it: found by walking up from its executable | **Changed**: the working directory was tried second (a6). It lasts until `prebuilt-artifacts` merges, after which `warden` looks for no tree | A binary's source is where the binary was built | Nothing |
 | The `config:` line: printed by every command that reads configuration | **New** (a4) | Which file is in force should not need a flag to learn | Nothing; `doctor` prints it on stdout |
 | A background `image prepare`: the file its build read | **Changed**: it looked in the working directory by itself | One build, one file | Nothing |
 
@@ -2070,8 +2214,23 @@ the second and third itself (`driver = "qemu"`, `relay_image = "dev"`).
    an option** (the two findings filed as `workdir-in-context`, a11).
    Neither needs a config file, and both stay open until that item
    merges.
-8. **A `warden` built in a tree is as trusted as that tree.** Unchanged:
-   running `dist/warden` from a checkout builds from that checkout.
+8. **`warden` still compiles, from the tree its executable is in, until
+   `prebuilt-artifacts` merges** (a6). This item stops the working
+   directory standing in for that tree and nothing more. Three things
+   stand until that item removes compilation:
+   - A `warden` built in a tree is as trusted as that tree. Unchanged:
+     running `dist/warden` from a checkout runs the host's `go build` on
+     that checkout's `cmd/relay` and `cmd/warden-io`.
+   - A `warden` placed inside the repository being built is inside that
+     repository's tree: a CI job that unpacks a release into the
+     checkout's `./bin`, or a repository that ships the binary. If the
+     repository declares the module, the walk up from the executable
+     finds the repository's `go.mod`, and with a VM driver, or with
+     `relay_image = "dev"`, which the repository's own `warden.toml` can
+     set, `warden` builds the relay or the executor from the repository.
+     Keep `warden` outside what it builds; the reference says so.
+   - The `go` that compiles is the first on `PATH`, which is the
+     environment's (3).
 9. **The upstream CA lines name host files.** They print, into the
    build's log, the path of each file skipped and why (that it holds a
    private key, for one), and the number of certificates under each
