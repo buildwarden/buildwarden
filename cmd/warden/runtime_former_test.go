@@ -65,8 +65,9 @@ func TestFormerRuntimeValues(t *testing.T) {
 			}
 			what, fix, ok := formerRuntimeValue(tc.v)
 			if ok != (tc.what != "") || what != tc.what || fix != tc.fix {
-				t.Errorf("formerRuntimeValue(%q) =\n\t%q\n\t%q, %v\nwant\n\t%q\n\t%q",
-					tc.v, what, fix, ok, tc.what, tc.fix)
+				t.Errorf("formerRuntimeValue(%q) = %v\n"+
+					"got  %q\n     %q\nwant %q\n     %q",
+					tc.v, ok, what, fix, tc.what, tc.fix)
 			}
 		})
 	}
@@ -84,12 +85,13 @@ func TestFormerRuntimeValueInTheError(t *testing.T) {
 			"set WARDEN_CTR_CLI to docker; warden looks docker up on PATH, so " +
 				"if it is installed outside PATH, add its directory to PATH"},
 		{cliFromFlag, "docker.exe",
-			`--runtime is "docker.exe"; ` +
-				"the container runtime is named in lower case, without an extension",
+			`--runtime is "docker.exe"; the container runtime ` +
+				"is named in lower case, without an extension",
 			"pass --runtime docker"},
 		{projectConfig, "nerdctl",
 			`[runtime] cli in warden.toml is "nerdctl"; the container driver ` +
-				"supports finch, docker and podman and no longer runs another runtime",
+				"supports finch, docker and podman and no longer runs another " +
+				"runtime",
 			"set it to finch, docker or podman; there is no supported way to " +
 				"use nerdctl with the container driver"},
 	} {
