@@ -376,7 +376,8 @@ say.
     branch is where it found it. It does not queue a native validation
     again. Since Decision 21 it is the gate before every merge after the
     first: a PR that `main` has moved past cannot merge until its refresh
-    has passed.
+    has passed. No refresh is taken while `main` is recorded red, except
+    the refresh of the item that fixes it (Decision 22).
     - *Rejected: a refresh that re-queues `f6-consolidate`.* Returning to
       Publish seeds `f6-merge-main` again, so the item would give up the PR
       slot while its PR is open.
@@ -464,10 +465,19 @@ say.
     contains `main`, and CI on `main` is the backstop for what goes
     round it: a merge made by a bypass or before the setting exists, a
     job that runs only on a push to `main`, a test that fails one run in
-    several. It matters more than it did: while `main` is red every
-    refresh fails on it, so no other PR can be made ready until the fix
-    lands. That is why the fix is filed at once, and why the waiting
-    limit never holds it (Decision 24).
+    several. It matters more than it did: a refresh onto a red `main`
+    fails on `main`'s failure, so no refresh is taken while `main` is
+    recorded red, except the fix's own, and no other PR can be made ready
+    until the fix lands or `main` is green again. That is why the fix is
+    filed at once, why the run's steps go to it and not to refreshes that
+    cannot pass, and why the waiting limit never holds it (Decision 24).
+    - *Rejected: a red `main` blocks no claim* (the fold-in's first
+      text). A refresh that fails on `main` is released, and a released
+      step is the first one `wf next` offers again: `Release` only clears
+      the lease, and an item with a pending refresh is in class 1. Under
+      a10 (d) nothing would count those claims against the item, so one
+      refresh could take every step of every run, ahead of the fix, which
+      is in class 3 until it reaches Implement.
 23. **The merge check compares changes with no context lines** (a14,
     still open). `wf`'s proof that a squashed branch is on `main` takes
     `wf-squash-after-base-moved`'s reserve option, `-U0`. Under Decision
@@ -752,7 +762,10 @@ the answer to a3.
     it is made necessary by other items' merges, and it is now required
     before the merge. (The draft's (d) was "spends no budget, like the
     merge confirmation"; it is narrowed to the item's budget, so a run's
-    budget still bounds the refreshes it takes.)
+    budget still bounds the refreshes it takes.) Only the first claim of
+    a refresh step is free for the item: one that is released and claimed
+    again counts like any retried step, so a refresh that keeps failing
+    for a reason of its own still ends at the runaway check (FLOW-13).
 
   *Native validation:*
   - (e) A refresh does not queue a blocking native validation again. The
@@ -790,15 +803,24 @@ the answer to a3.
 
   On the budget the recommendation changes from the draft's (c) to (d).
   Under (c) the fifth of five PRs spends four steps on refreshes, twice
-  what the size guide would add, and each run in which `main` is red
-  spends one more on every open PR, because the refresh is tried, fails
-  on `main` and is released. An item that trips its runaway check this
-  way is taken no further by the loop (FLOW-13), its refresh included,
-  so its PR could not be made ready until Jeff raised its estimate: a
-  step of his own in front of a merge, for a wait the item did not
-  cause. Under (d) a refresh either passes, sends the item back to
-  Implement or Design, where its budget counts as always, or is released
-  because of `main`.
+  what the size guide would add. An item that trips its runaway check
+  this way is taken no further by the loop (FLOW-13), its refresh
+  included, so its PR could not be made ready until Jeff raised its
+  estimate: a step of his own in front of a merge, for a wait the item
+  did not cause. Under (d) a refresh's first claim costs the item
+  nothing. It passes, or sends the item back to Implement or Design,
+  where its budget counts as always, or is released; and a released
+  refresh that is claimed again counts.
+
+  Under either, no refresh is taken while `main` is recorded red
+  (**`main`'s CI**). A refresh onto a red `main` fails on `main`'s
+  failure and is released, and a released step is the first one
+  `wf next` offers again; without the refusal one refresh could take a
+  whole run's steps, ahead of the fix for `main`. What the refusal
+  costs: a red `main` whose failure the gates would not reproduce (a
+  test that fails one run in several, a job that runs only on `main`)
+  also holds every refresh, until its checks are run again and pass or
+  the fix merges.
 
   Under (e), what a native host alone would show is found by the matrix
   before a release (TEST-02): CI runs neither Hyper-V nor VZ, and the
@@ -1602,8 +1624,9 @@ Who calls it:
 - `wf next` and `wf next -feature`, in `ready`, for every worker. The two
   refusals that stay the cloud's alone (an open blocking question, a spent
   runaway budget) remain in `cloudHold`; they are FLOW-07's and FLOW-13's,
-  not limits. `atLimit`, `prSlotHolder` and the slot test in `cloudHold`
-  go.
+  not limits. It gains a third, FLOW-10's: a refresh step while `main`
+  is recorded red (**`main`'s CI**). `atLimit`, `prSlotHolder` and the
+  slot test in `cloudHold` go.
 - `wf claim`, in `claimable`, for every worker. A step the worker already
   holds stays claimable.
 - `wf commit`, when it asks a claim again after a rejected push (below).
@@ -1762,7 +1785,7 @@ code these cases run through.
 | 32 | Two disjoint PRs are ready. Jeff merges one on GitHub and, before any session has run, goes to merge the other | Cannot arise | With the ruleset: GitHub refuses it, out of date. Without it: the merge goes through behind `main`. It is his merge and stands; the next tick confirms it (a14), reads CI on `main`, and files the fix if it is red (a16) |
 | 33 | `main` moves by a merge that is no item's (a PR merged by hand, the weekly tidy) while three PRs are open | No refresh exists | All three wait for a refresh, as after an item's merge |
 | 34 | In an attended session Jeff merges the first of three ready PRs and names the one he wants next | Cannot arise | `wf stale` seeds a refresh on the other two. The session takes the named item's (`/workflow-tick attended <item>`), waits for CI and lists it as ready; he merges it; the third is refreshed the same way, or by the next run |
-| 35 | `main` is red with a failure the gates reproduce; four PRs are behind it | n/a | Each refresh fails on `main`'s failure and is released; none of the four is ready. The fix the tick filed starts whatever waits on Jeff (case 26). Once it merges, the next run refreshes the four |
+| 35 | `main` is recorded red; four PRs are behind it | n/a | No refresh is offered: `wf next` prints `blocked <item> main is red at <sha>: no refresh until it is green` for each of the four and goes on, and none of them is ready. The run's steps go to the fix the tick filed, which starts whatever waits on Jeff (case 26); if `main` moves under the fix's own PR, its refresh is the one that is still taken. Once the fix merges and `main` is green, the next run refreshes the four |
 | 36 | A PR's refresh has passed and it is ready; before Jeff merges it, `main` moves again | n/a | It waits for a refresh again: the next `wf stale` seeds one. Under a10 (d) that costs the item no budget |
 | 37 | Jeff uses GitHub's **Update branch** on a PR that is behind, before any session has run `wf stale` | n/a | The next `wf stale` finds the branch current and seeds nothing; the PR is ready when CI is green on the new head. No consolidation pass ran over what landed; that is his choice |
 
@@ -1789,9 +1812,10 @@ skills. A commit that changes `areas.yaml` is refused unless `W` is
    - *With `-claimed`*: it replays nothing. It asks the claim again on the
      new state, through what `wf claim` checks (`claimable`: the step is
      pending, its phase is reached, no one else holds it, no process item
-     holds the worker, and `Guard`), and, for a cloud worker, the two
+     holds the worker, and `Guard`), and, for a cloud worker, the
      refusals `wf next` adds (`cloudHold`: an open blocking question, a
-     spent runaway budget). If none refuses, it claims the step again with
+     spent runaway budget, a refresh while `main` is red). If none
+     refuses, it claims the step again with
      `Claim`, which counts the step once, since the first claim's commit is
      gone.
 
@@ -1806,7 +1830,7 @@ What ends it early:
 
 | Outcome | Exit | With `-claimed` | Without |
 |---|---|---|---|
-| The claim is refused on the new state | 4 | The checkout is left at `origin/workflow`, and the message is the refusal: the guard's reason, the tie-break's, `held by process item <x>`, `blocking question <id>`, or `leased to <worker>`. The worker asks `wf next` again | |
+| The claim is refused on the new state | 4 | The checkout is left at `origin/workflow`, and the message is the refusal: the guard's reason, the tie-break's, `held by process item <x>`, `blocking question <id>`, `main is red at <sha>`, or `leased to <worker>`. The worker asks `wf next` again | |
 | The replay conflicts in a queue file or any other file that is not generated | 5 | | The session's commit is restored, and the message names the files. The session re-applies its change by hand, as today |
 | `Validate` fails on the replayed state with an error the remote's state did not have | 5 | | The session's commit is restored, with the lines |
 | Three rejections | 5 | The claim is dropped | The commit is kept locally |
@@ -2050,7 +2074,9 @@ each merge Jeff makes in that session. It is seeded whatever moved
 **Where it ranks.** An item with a pending refresh step is in
 implementation (FLOW-05's class 1), so a run refreshes open PRs before it
 starts anything new. Until its refresh has passed, the PR is not ready
-to merge (**Merging: a branch must contain `main`**).
+to merge (**Merging: a branch must contain `main`**). While `main` is
+recorded red a refresh step is not offered, and the run's steps go to
+the next item in order (**`main`'s CI**).
 
 **What it runs.**
 
@@ -2062,9 +2088,12 @@ to merge (**Merging: a branch must contain `main`**).
    the design's Consolidation section that names the `main` commit merged.
    The step's note says which files overlap; with none, the entry says what
    landed and that nothing overlaps. A failure of step 2 that `main` has
-   too is not this branch's work: it is filed as the item's follow-up
-   (FLOW-09), unless a fix for the red `main` is already filed
-   (`main.yaml`), and the step is released.
+   too is not this branch's work. The agent records `main` as red at the
+   commit it merged (`wf main -ci red -gates`), files the fix as the
+   item's follow-up (FLOW-09) and records it, unless `main.yaml` already
+   names one, and the step is released. From then on no refresh is
+   offered until `main` is green or has another head
+   (**`main`'s CI**).
 4. Refresh the Archive summary if the PR's content changed (FLOW-12); run
    `flow18-check.sh`.
 5. *Before the push*, fetch and check that the PR is still open and
@@ -2125,10 +2154,13 @@ refresh step (the PR merged first), and so does `wf back` (Publish merges
 `main` again). FLOW-06 gains the clause.
 
 **Budget.** A refresh is a claim, and the run that takes it counts it in
-the run's budget. It does not count against the item's own budget: the
-refresh is required before the merge, and other items' merges cause it
-(a10 (d), open; the draft had it count, with two steps added to intake's
-size guide).
+the run's budget. Its first claim does not count against the item's own
+budget: the refresh is required before the merge, and other items'
+merges cause it. A refresh step that is released and claimed again
+counts, like any retried step: `Claim` looks for an earlier claim of
+that step in the item's history. So a refresh that keeps failing ends
+at the item's runaway check, as any step does (a10 (d), open; the draft
+had every refresh count, with two steps added to intake's size guide).
 
 ### `main`'s CI
 
@@ -2137,7 +2169,7 @@ checks on a branch that contains `main`; CI on `main` is the backstop
 for what goes round that, and a red `main` stops every refresh, so the
 loop reads it (Decision 22).
 
-- **What is recorded.** `wf main -state DIR -sha SHA -ci green|red|pending [-run URL] [-followup SLUG] [-up-to-date required|not-required]`
+- **What is recorded.** `wf main -state DIR -sha SHA -ci green|red|pending [-gates] [-run URL] [-followup SLUG] [-up-to-date required|not-required]`
   writes `main.yaml` in the queue state: the head of `main` the session
   saw, the result of its check runs, a failing run's URL, `red_since` (the
   first red commit after the last green one, kept while `main` stays
@@ -2146,7 +2178,11 @@ loop reads it (Decision 22).
   `gh api repos/<repo>/rules/branches/main`. `wf` reads no CI itself: the
   session passes what `gh api repos/<repo>/commits/<sha>/check-runs`
   returned, as `wf-publish` passes `pr.ci`. `green` is recorded only when
-  every check run on the head succeeded. `wf areas -check` adds its own
+  every check run on the head succeeded. `-gates` marks a red that a
+  session's own gates found on that commit (a refresh, step 3): it is
+  kept when a later reading of the check runs for the same commit is
+  green, since the gates fail on it whatever CI says, and it goes when
+  `main` has another head. `wf areas -check` adds its own
   result to the same file: the commit of `main` it compared the map
   with, and the lines it printed (**The area map**).
 - **Who records it.** The tick, right after confirming merges and before
@@ -2161,12 +2197,34 @@ loop reads it (Decision 22).
   commit is no item's, it files nothing. A failure that does not
   reproduce is a flaky test and goes the way TEST-04 says, in the fix's
   Design.
-- **What it does not do.** It blocks no claim and no merge. A red `main`
-  fails each open PR's refresh at its gates; those steps are released, and
-  taken again once `main` is green. Under Decision 21 that means that
-  while `main` is red with a failure the gates reproduce, no open PR can
-  be made ready: each is behind the red commit, and its refresh fails on
-  it. `QUEUE.md` says so beside the red `main`.
+- **What it holds: every refresh but the fix's.** `cloudHold` refuses a
+  refresh step while `main.yaml` records `main` red, with
+  `main is red at <sha>: no refresh until it is green (FLOW-10)`, for
+  every item except the one `main.yaml` names as the follow-up.
+  `wf next` prints that as the item's `blocked` line and goes on, so the
+  run's steps reach the fix; `wf next -feature` and a claim asked again
+  by `wf commit` go through the same test. The step is offered again
+  once `wf main` records `main` green, or a new head whose result is not
+  red. Without the refusal the refresh would be tried, fail on `main`'s
+  failure and be released, and `wf next` would offer it again at once:
+  `Release` only clears the lease, an item with a pending refresh is in
+  class 1, and the fix is in class 3 until it reaches Implement. Under
+  a10 (d) no budget of the item's would end that, so the fix would get
+  no step. The fix's own refresh is exempt because its PR, too, must
+  contain `main` before it can merge, and it is the PR that makes
+  `main` green.
+- **What that costs.** While `main` is recorded red no open PR that is
+  behind it can be made ready, whether its gates would reproduce the
+  failure or not; `QUEUE.md` says so beside the red `main`. For a
+  failure that does not reproduce (a test that fails one run in several,
+  a job that runs only on a push to `main`), running `main`'s checks
+  again until they pass lifts it. That is Jeff's to do, or an attended
+  session's on his word; the next session that records `main`'s CI then
+  records green.
+- **What it does not do.** It blocks no merge and no claim but a
+  refresh. Every other step goes on, and a PR that is ready (its branch
+  contains the red head and its own checks are green) may still be
+  merged.
 
 ### Tracked items
 
@@ -2345,7 +2403,8 @@ What is new, by section:
   its merge step, no refresh is pending and `pr.ci` is green; the list
   opens with the line that each merge puts the others behind. **After a
   refresh**: a refresh step is pending, with what moved `main` and the
-  overlapping files from that step's note; with the ruleset set, GitHub
+  overlapping files from that step's note, and, while `main` is red,
+  that the refresh waits for `main`; with the ruleset set, GitHub
   refuses these, and without it the page is what says not to. Both lists
   are as current as the last `wf stale`. Reviews, questions and
   escalations follow, each review of an item in progress with a link to
@@ -2407,7 +2466,10 @@ file names the item's repositories when it has more than this one.
   waiting limit and `summary.go` lists; `holdsAltersSlot`, `altersHolders` and `altersWait`
   move here from `next.go`.
 - `next.go`: `Next`, `NextFor` and `ready` call `Guard` for every worker;
-  `atLimit` and `prSlotHolder` go; `Claim` starts a tracked item.
+  `atLimit` and `prSlotHolder` go; `cloudHold` refuses a refresh step
+  while `main.yaml` records `main` red, except for the follow-up it
+  names; `Claim` starts a tracked item, and leaves the first claim of a
+  refresh step out of the item's budget (a10 (d)).
 - `phases.go`: the `tracked` round and the letter `t`; `IsRefresh`;
   `SeedRefresh`; `Complete` drops a pending refresh on a merge step; `Back`
   drops one; `Landed`, which moves an item whose PR merged while it was
@@ -2517,7 +2579,8 @@ By file. Each cites the rule and does not restate it (FLOW-14).
   `tools/tier1/area-edges.sh | dist/wf areas -check -rev HEAD -edges -`.
 - `.claude/agents/wf-publish.md`. `f6-consolidate` records the trial
   merge; `f6-refresh` and `x2-refresh` as above, with the check before the
-  push and the draft on a return; `f6-open-pr` on an item that has a PR
+  push, the draft on a return, and a failure `main` has too recorded
+  with `dist/wf main -ci red -gates` (FLOW-09, FLOW-10); `f6-open-pr` on an item that has a PR
   recorded pushes to it and marks it ready.
 
 `wf-plan` and `wf-guide` do not change.
@@ -3359,7 +3422,9 @@ consistency) does not change.
 
 **Why:** with several PRs open, a PR's consolidation goes stale each time
 another merges, and a PR may merge only with trunk in its branch (FLOW-08,
-a1 (b)): the refresh is what brings it there.
+a1 (b)): the refresh is what brings it there. A refresh onto a failing
+`main` cannot pass, and tried again and again it would take the run's
+steps from the fix (**`main`'s CI**), so the rule says it waits.
 
 **Current wording**, the rule's last paragraph:
 
@@ -3376,7 +3441,9 @@ a1 (b)): the refresh is what brings it there.
 > sweep, over what landed since the branch last merged `main`, as a dated
 > entry in the consolidation section. The PR is ready again when the
 > step's checks pass. It pushes only while the pull
-> request is still open. A refresh that finds work beyond conflict fixes
+> request is still open. No refresh is taken while `main` is known to
+> fail its own checks, except for the item that fixes it (FLOW-09): it
+> would fail on the same failure. A refresh that finds work beyond conflict fixes
 > and wording sends the feature back as above; its pull request is then a
 > draft until the feature is published again, and it keeps the PR slot
 > (FLOW-05). A process item's open PR is refreshed the same way, without
@@ -3384,7 +3451,8 @@ a1 (b)): the refresh is what brings it there.
 
 **Severity and check:** MUST, `agent-judgment`, before and after.
 **Enforcement:** the refresh's done-when, in `tools/workflow/check/check.go`
-(FLOW-03).
+(FLOW-03). The refusal while `main` is red is in `tools/workflow/queue/`
+(`cloudHold`), which is not a rule-change path.
 
 ### FLOW-15 (amend), `docs/development/process.md`
 
@@ -3671,13 +3739,21 @@ whether it is still true with the proposed wording.
     gives an undeclared item (case 23).
   - `TestRefreshStep`: seeded once; class 1 while pending; dropped by the
     merge step's completion and by `Back`; its completion leaves the phase
-    alone. `TestStale`, on temporary git repositories: `main` moved, a
+    alone; while `main.yaml` records `main` red it is not offered, by
+    `Next`, `NextFor` or a re-asked claim, except on the item `main.yaml`
+    names as the follow-up, the `blocked` line names the commit, and
+    `Next` goes on to a queued fix (case 35); it is offered again on a
+    green result and on another head; its first claim leaves the item's
+    spent steps alone, and a second claim of the same step after a
+    release adds one. `TestStale`, on temporary git repositories: `main` moved, a
     refresh is seeded; PR merged and branch gone, none is seeded and
     `merged:` is printed; PR closed and branch gone, none; an item sent
     back whose PR then merged is moved to Close with
     `f8-escalate-returned`; run twice, nothing is added twice.
   - `TestMainCI`: `wf main` writes and reads `main.yaml`; `red_since` is
-    kept across red commits and cleared by a green one; `-followup` is
+    kept across red commits and cleared by a green one; a red recorded
+    with `-gates` survives a green reading for the same commit and goes
+    with another head; `-followup` is
     recorded once; absent, `QUEUE.md` says `CI not recorded`;
     `-up-to-date` is recorded, and absent it reads `not recorded`.
   - `TestReadyToMerge` (cases 18, 33, 36): a PR is ready only when the
