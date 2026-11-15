@@ -114,17 +114,18 @@ questions:
     answer: '(a) adopts: {consumable, version}; held by a blocking question naming the release; placed below the open fixes. Jeff, design review, 2026-11-15.'
   - id: a10
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The refresh, now that a PR may merge only when its branch contains main (a1 (b)): which PRs get one, its budget, and native validation. Reworded 2026-11-15: it was asked for a1 (a), where a refresh was a courtesy a merge did not wait for; it is now required before every merge after the first.'
     options:
       - '(a) Which PRs: every open PR that is behind main, whatever moved main, on every run. After a run each open PR is current, and he may merge any one of them.'
-      - '(b) Withdrawn. It was "only when a related item''s PR merged"; under a1 (b) a PR left behind by an unrelated merge could then never merge.'
+      - (b) Withdrawn. It was "only when a related item's PR merged"; under a1 (b) a PR left behind by an unrelated merge could then never merge.
       - '(g) Which PRs: only the first open PR in the merge order (FLOW-05), and any PR an attended session is asked to refresh. One PR is ready after each run; he merges that one, or asks for another.'
       - '(c) Budget: each refresh is a claim and counts one step against the item''s budget; intake''s size guide adds two steps for it.'
       - '(d) Budget: a refresh counts in the run''s budget and not against the item''s: other items'' merges make it necessary, and it is required before the merge. (Narrowed from the draft''s "spends no budget, like the merge confirmation", so a run''s budget still bounds the refreshes it takes.) Only the first claim of a refresh step is free for the item: one that is released and claimed again counts like any retried step, so a refresh that keeps failing still ends at the runaway check (FLOW-13).'
       - '(e) Native: a refresh does not queue a blocking native validation again: the validation stands for the branch as it was consolidated.'
       - '(f) Native: a refresh queues each done blocking host step again when the commits it merged changed a file this branch also changes, or a file in an area one of its areas reaches. The PR is then not ready until that host has run: one merge per cloud run and native session for such a PR.'
     recommended: '(a), (d) and (e). With five PRs open and one merged a day, (a) costs 4 + 3 + 2 + 1 = 10 refreshes over four runs, four of them on the last PR, and (g) costs four, one per PR; either way the five merges take five days unattended, or one attended sitting with four refreshes. In general, with n PRs open, (a) costs n(n-1)/2 refreshes and (g) n-1. Nothing caps n: the waiting limit (a3) stops new starts, not work in progress, so more than 8 PRs can be open; what bounds a day''s refreshes is the run''s budget of 24 steps. (a) costs more and is recommended all the same: after every run each open PR has been checked against the main it will merge into, so one that conflicts is sent back that day and not when its turn comes, and the order of merging stays his. On the budget the recommendation changes from the draft''s (c) to (d): under (c) the fifth PR spends four steps on refreshes; an item that trips its runaway check that way gets no further step, its refresh included, until he raises its estimate. Under either, no refresh is taken while main is recorded red, except the refresh of the item that fixes it (design: main''s CI): a refresh onto a red main fails on main''s failure and is released, and a released step is the first one wf next offers again, so without that refusal one refresh could take a whole run''s steps ahead of the fix. Its cost: a red main whose failure the gates would not reproduce (a test that fails one run in several, a job that runs only on main) also holds every refresh until its checks are run again and pass, or the fix merges. Under (e) a break that only a native host shows is found by the matrix before a release (TEST-02); with cli ordered (a5 (d)) a Hyper-V item can merge another item''s cmd/warden change at its refresh with no Hyper-V run on the result, and (f) closes that at its price'
+    answer: '(a), (d) and (e), as recommended: every open PR behind main is refreshed every run; a refresh''s first claim counts in the run''s budget, not the item''s; a refresh does not queue a blocking native validation again. Answered 2026-11-15, second sitting.'
   - id: a12
     kind: assumed
     status: confirmed
@@ -146,13 +147,14 @@ questions:
     answer: (a) The item holds no worker. Jeff, design review, 2026-11-15.
   - id: a14
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The merge check, now that a PR merges only with main in its branch (a1 (b)). Reworded 2026-11-15: it was asked for a PR merged behind main. wf confirms a squash merge, for each ref of the branch that still exists, by ancestry, an equal tree, or an equal patch-id computed with three lines of context (wf-squash-after-base-moved, whose a3 said to change this "if adjacent-edit escalations show up in practice"). The head that merges now contains main, so the tree proof confirms every ref at that head. The patch-id proof is still reached, and still fails beside an adjacent edit, in two cases: (1) a ref older than the head that merged, in a checkout that held the branch before its last refresh (an attended worktree, a native machine, Jeff''s clone), which is ordinary now that every PR after the first is refreshed before it merges; it matters at Close (FLOW-16) and to wf stale run in that checkout; (2) a merge made round the up-to-date requirement, before the ruleset exists or by his bypass.'
     options:
       - '(a) Zero context (-U0), that design''s option (b): the proof becomes "the same lines added and removed in each file, in order". It covers both cases when the refresh merged cleanly; after a refresh that resolved a conflict an older ref has no proof, and a human compares, as today.'
       - '(b) Keep three lines: through the protected path the tick confirms the merge by the tree; each older ref beside an adjacent edit fails, Close leaves that branch and FLOW-16''s escalation gives Jeff the commands; a merge made round the requirement fails wherever the ref exists, and the item keeps the PR slot until he compares the two changes by hand.'
-      - '(c) Keep three lines, and confirm an older ref as an ancestor of the head that merged, which GitHub keeps as refs/pull/<n>/head after it deletes the branch. It weakens no comparison; it makes the check fetch a ref only GitHub has, where it needs no network today, and it does not cover case 2.'
+      - (c) Keep three lines, and confirm an older ref as an ancestor of the head that merged, which GitHub keeps as refs/pull/<n>/head after it deletes the branch. It weakens no comparison; it makes the check fetch a ref only GitHub has, where it needs no network today, and it does not cover case 2.
     recommended: '(a), for a different reason than the draft''s: merging behind main is now the exception, and a ref older than the last refresh is the rule. The change is one flag. Case 2 was reproduced for the draft (A edits line 5, B line 8, B is squashed after A), and case 1 on 2026-11-15 in a scratch repository: the refreshed head has the squash''s tree, and B''s ref from before the refresh has a change that differs from the squash''s with three lines of context and equals it with none'
+    answer: (a) Zero context (-U0), as recommended. Answered 2026-11-15, second sitting.
   - id: a15
     kind: assumed
     status: confirmed
@@ -174,7 +176,7 @@ questions:
     answer: (a) The run that sees a red main files the fix unattended, as the follow-up of the item whose merge it was, at the top of the fixes; nothing is filed when the merge was no item's. Jeff, design review, 2026-11-15.
   - id: a17
     kind: assumed
-    status: open
+    status: confirmed
     question: 'What the cap of 8 (a3 (b)) counts, and what it never stops. New 2026-11-15: the answer to a3 sets the cap and its number and leaves these to the design (design: The waiting limit).'
     options:
       - '(a) It counts items in progress that wait on him, each once: a human step that is ready and of a phase the item has reached, an open blocking question, a PR at its merge step (ready, or waiting for its refresh), a spent budget. Queued items are not counted, even one on hold or one whose first step is his review, and neither is a tracked item, nor a human step of a later phase that wf offers early (this item''s x4-state, seam-specs'' f6-release-specs). It refuses only the start of a queued feature. It never refuses work in progress (so the count can pass 8), a process item, a tracked item, a fix that follows an item, or the fix main.yaml names for a red main, whether the tick filed it or he did at intake. Any other security fix that follows no item is not exempt: wf has no mark for it, intake tells him, and he raises limits.waiting_on_human if he wants it started.'
@@ -183,14 +185,16 @@ questions:
       - '(d) As (a), with a mark he sets at intake for a security fix that follows no item (wf new -urgent), which the cap then lets start: one more field. Two such fixes are in the queue: runtime-cli-project-path, in progress, and project-config-trust, queued at f090401 and in progress since 20:30 UTC that day.'
       - '(e) As (a), but a human step counts as soon as wf offers it, whatever its phase: x4-state then holds one of the 8 places from the day this item''s review is approved until its PR has merged, and f6-release-specs one from seam-specs'' review until its Publish.'
     recommended: '(a): the loop''s own lever is whether it starts new work, so that is what the cap moves; and a fix for main is what lets his list get shorter'
+    answer: '(d): as (a), plus a mark set at intake (wf new -urgent) that lets a security fix that follows no item start past the cap. Answered 2026-11-15, second sitting. In the same sitting Jeff accepted two choices the design made without a question: no refresh is taken while main is recorded red, except for the item named as the fix (accepted with its cost: a failure the gates would not reproduce also holds every refresh); and a refresh is not exempt from a process item''s hold.'
   - id: a18
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Whether an ordered area has reaches: what an item that edits the CLI is to an item in a package the CLI imports. New 2026-11-15, raised by the independent review of the fold-in. His answer to a5 is about two items that both touch the CLI ("stay disjoint and take turns only through the refresh"); his answer to a15 is that reaches is the import graph. cmd/warden imports every driver and every shared package, so the two together do not say what an item that edits cmd/warden is to an item that does not and changes a package it imports. The fold-in settled that with a rule of its own (design: Decision 5): an ordered area reaches nothing and is reached by nothing.'
     options:
       - '(a) An ordered area has no reaches. An item that edits cmd/warden is disjoint from every item it shares no exclusive area with, whether or not that item edits the CLI too. On the 253 pairs of history: 197 disjoint, 34 near, 22 colliding. Ten pairs differ from cli exclusive, and in nine of them only one of the two merges touched cmd/warden (for example hyperv-ps-done, #116, beside vz-image-prepare-refresh, #108).'
       - '(b) cli keeps its imports as reaches, except between two items that both declare cli. Two items that both touch the CLI are disjoint, as his answer says; an item that touches it is near every item that does not and changes a package cmd/warden imports (a driver, driver-core, relay, relaycfg, ledger, collector, executor), and the two take turns at the PR. On history: 188 disjoint, 43 near, 22 colliding; only the one pair in which both merges touched cmd/warden differs from cli exclusive. The map''s format then allows reaches on an ordered area, and the relation''s row 9 gains the exception.'
     recommended: '(a). Under (b), adding cli to an item''s areas makes it less related to another item, not more: a Hyper-V item that adds a flag is near a vz item that adds none and disjoint from a vz item that adds one. And under a1 (b) the later of two such items merges main at its refresh and runs make lint and make test on the result before it can merge, so a CLI edit that no longer builds against a changed package fails there and not on main; where he wants two such items in turn, wf relate names the collision. Not offered: cli keeping its reaches between any two items (187, 44, 22), where the pair that both touch the CLI would be near, which his answer to a5 rules out'
+    answer: (a) An ordered area has no reaches, as recommended. Answered 2026-11-15, second sitting.
 history:
   - at: 2026-11-14T20:57:45Z
     by: human/jeff
@@ -237,3 +241,15 @@ history:
   - at: 2026-11-15T19:53:14Z
     by: human/jeff
     event: 'assumed question a16 confirmed: (a) The run that sees a red main files the fix unattended, as the follow-up of the item whose merge it was, at the top of the fixes; nothing is filed when the merge was no item''s. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T21:23:17Z
+    by: human/jeff
+    event: 'assumed question a10 confirmed: (a), (d) and (e), as recommended: every open PR behind main is refreshed every run; a refresh''s first claim counts in the run''s budget, not the item''s; a refresh does not queue a blocking native validation again. Answered 2026-11-15, second sitting.'
+  - at: 2026-11-15T21:23:17Z
+    by: human/jeff
+    event: 'assumed question a14 confirmed: (a) Zero context (-U0), as recommended. Answered 2026-11-15, second sitting.'
+  - at: 2026-11-15T21:25:51Z
+    by: human/jeff
+    event: 'assumed question a17 confirmed: (d): as (a), plus a mark set at intake (wf new -urgent) that lets a security fix that follows no item start past the cap. Answered 2026-11-15, second sitting. In the same sitting Jeff accepted two choices the design made without a question: no refresh is taken while main is recorded red, except for the item named as the fix (accepted with its cost: a failure the gates would not reproduce also holds every refresh); and a refresh is not exempt from a process item''s hold.'
+  - at: 2026-11-15T21:25:51Z
+    by: human/jeff
+    event: 'assumed question a18 confirmed: (a) An ordered area has no reaches, as recommended. Answered 2026-11-15, second sitting.'
