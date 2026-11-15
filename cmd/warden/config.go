@@ -195,11 +195,16 @@ func checkBuildLink(s string) (buildlink.Link, error) {
 	return link, nil
 }
 
-// DetectRuntime probes for a working container runtime.
-// Preference order: finch, docker, podman.
+// containerRuntimes are the runtimes the container driver supports, in the
+// order detection prefers them. A runtime named by a flag, a variable or a
+// config file is one of these or is refused (resolveRuntime).
+var containerRuntimes = []string{"finch", "docker", "podman"}
+
+// DetectRuntime probes for a working container runtime, in
+// containerRuntimes' order.
 func DetectRuntime() (string, error) {
 	var installed []string
-	for _, name := range []string{"finch", "docker", "podman"} {
+	for _, name := range containerRuntimes {
 		if _, err := exec.LookPath(name); err != nil {
 			continue
 		}
