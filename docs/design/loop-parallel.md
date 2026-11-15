@@ -268,15 +268,19 @@ say.
      them, and not in `relay` (a5). Any other such coupling is a seam, and
      the relation reads seams.
    - **Only an exclusive area has `reaches`; an ordered area reaches
-     nothing and is reached by nothing** (a5 (d)). `cmd/warden` imports
+     nothing and is reached by nothing** (a18, open). Neither answer
+     says this: a5 (d) speaks of two items that both touch the CLI, and
+     a15 (a) of the import graph. It is the fold-in's rule for what lies
+     between them, so it is put to Jeff. `cmd/warden` imports
      every driver and every shared package. If `cli` kept those links, an
      item that edits the CLI would be near every driver item and every
      relay item, and two driver items that both edit it would be near
      each other: they would take turns at the PR, which is what Jeff's
      answer says they do not do ("items that both touch the CLI stay
      disjoint and take turns only through the refresh"). On history the
-     difference is ten pairs of 253 (a5). What is given up is under
-     **Safety**.
+     difference is ten pairs of 253 (a5), and in nine of the ten only
+     one of the two merges touched `cmd/warden/` (a18). What is given
+     up is under **Safety**.
    - *Rejected: `tier1` and `tier1-config` reach every area* (the
      draft's recommendation, a15 (b), and the proposal's rule for those
      two). An item that changes a check or adds a `rules.yaml` entry would
@@ -541,7 +545,9 @@ and his answer after it. Seven answers confirm the recommendation (a2,
 a6, a7, a8, a12, a13, a16). Five depart from it (a1, a3, a4, a5, a15)
 and are folded into the design. a10 and a14 were written for a1 (a):
 they are derived again for a1 (b) and still open. a17 is new, raised by
-the answer to a3.
+the answer to a3. a18 is new, raised by the independent review of the
+fold-in: it asks about a rule the fold-in added to make a5 (d) and a15
+(a) fit together.
 
 - **a1. Disjoint PRs in one repository: in what order may they merge?**
   (The proposal's question 3.) CI does not run again when a PR's base moves.
@@ -690,11 +696,13 @@ the answer to a3.
   touch the CLI stay disjoint and take turns only through the refresh."
   It departs from the recommendation. Folded in: the map has 15 exclusive
   areas and 6 ordered ones; `cli` has no `reaches`, because an ordered
-  area has none (Decision 5); the numbers were run again. Of the 253
+  area has none (Decision 5; that rule is the fold-in's and goes beyond
+  his words, so it is asked as a18); the numbers were run again. Of the 253
   pairs, 197 are now disjoint, 34 near and 22 colliding (187, 43 and 23
   with `cli` exclusive): the one pair in which both merges changed
   `cmd/warden/` (`hyperv-clean`, #114, and `vz-image-prepare-refresh`,
-  #108, which share no file) goes from colliding to disjoint, and nine
+  #108, which share no file under `cmd/warden/`; they share two book
+  pages) goes from colliding to disjoint, and nine
   pairs go from near to disjoint, each a pair whose only link was
   `cmd/warden` importing the other merge's package. Among the last six
   product merges, 2 pairs are disjoint, 6 near and 7 colliding (none, 7
@@ -1039,6 +1047,48 @@ the answer to a3.
   Recommended: (a). The loop's own lever is whether it starts new work,
   so that is what the cap moves; and a fix for `main` is what lets his
   list get shorter.
+- **a18. Whether an ordered area has `reaches`: what an item that edits
+  the CLI is to an item in a package the CLI imports.** New on
+  2026-11-15, raised by the independent review of the fold-in. Jeff's
+  answer to a5 is about two items that both touch the CLI: they "stay
+  disjoint and take turns only through the refresh". His answer to a15
+  is that `reaches` is the import graph. `cmd/warden` imports every
+  driver and every shared package, so the two answers together do not
+  say what an item that edits `cmd/warden/` is to an item that does not
+  edit it and changes a package it imports. The fold-in settled that
+  with a rule of its own: an ordered area reaches nothing and is reached
+  by nothing. Proceeding with (a); confirm.
+  - (a) An ordered area has no `reaches`. An item that edits
+    `cmd/warden/` is disjoint from every item it shares no exclusive
+    area with, whether or not that item edits the CLI too. On the 253
+    pairs of history: 197 disjoint, 34 near, 22 colliding. Ten pairs
+    differ from `cli` exclusive, and in nine of them only one of the two
+    merges touched `cmd/warden/`: for example `hyperv-ps-done` (#116,
+    `driver/hyperv`) beside `vz-image-prepare-refresh` (#108, `cli` and
+    `driver/vz`), near before and disjoint now.
+  - (b) `cli` keeps its imports as `reaches`, except between two items
+    that both declare `cli`. Two items that both touch the CLI are
+    disjoint, as his answer says. An item that touches it is near every
+    item that does not and changes a package `cmd/warden` imports (a
+    driver, `driver-core`, `relay`, `relaycfg`, `ledger`, `collector`,
+    `executor`), and the two take turns at the PR. On history: 188
+    disjoint, 43 near, 22 colliding; only the one pair in which both
+    merges touched `cmd/warden/` differs from `cli` exclusive. The map's
+    format then allows `reaches` on an ordered area, and row 9 of the
+    relation gains the exception.
+
+  Not offered: `cli` keeping its `reaches` between any two items (187,
+  44 and 22). The pair in which both touch the CLI would be near and
+  take turns at the PR, which his answer to a5 rules out.
+
+  Recommended: (a). Under (b), adding `cli` to an item's areas makes it
+  less related to another item, not more: a Hyper-V item that adds a
+  flag is near a vz item that adds none and disjoint from a vz item
+  that adds one. And under a1 (b) the later of two such items merges
+  `main` at its refresh and runs `make lint` and `make test` on the
+  result before it can merge, so a CLI edit that no longer builds
+  against a changed package fails there and not on `main`. Where he
+  wants two such items in turn, `wf relate` names the collision.
 
 ## Design
 
@@ -1323,7 +1373,8 @@ written_seams: [<seam>, ...]
 - **`reaches`** lists the areas this one depends on, which is the import
   graph (Decision 5). Only an exclusive area may have it, and it may name
   only exclusive areas: an ordered area with `reaches`, or one named in
-  another area's `reaches`, is an error. Unknown keys are rejected, as in
+  another area's `reaches`, is an error (a18, open; under its option (b)
+  an ordered area may have `reaches`). Unknown keys are rejected, as in
   `rules.yaml`.
 - **`implies`** says which area a value in a design's front matter stands
   for, so `wf` holds none of this repository's vocabulary (LOOP-08).
@@ -2969,7 +3020,7 @@ Where this design does not do what the proposal's sections 3 to 8 say.
 | FLOW-02, -03, -05, -10, -15, -19, -20 | Also FLOW-04, -06, -08, -09, LOOP-01, LOOP-04, PROFILE-01 | Decision 19 |
 | No cap on the work waiting for Jeff: `QUEUE.md` shows the count (question 5, recommended) | No queued feature starts while 8 or more items wait on him (a3 (b), Decision 24) | Jeff's answer of 2026-11-14 |
 | Disjoint PRs merge in any order; `QUEUE.md` marks a PR that is behind (question 3, recommended) | A PR merges only when its branch contains `main`; the refresh is the gate before every merge after the first (a1 (b), Decision 21) | Jeff's answer of 2026-11-14 |
-| `cli` (`cmd/warden/`) among the exclusive areas | Ordered, with no `reaches` (a5 (d)) | Jeff's answer of 2026-11-15 |
+| `cli` (`cmd/warden/`) among the exclusive areas | Ordered (a5 (d)), with no `reaches` (a18, open) | Jeff's answer of 2026-11-15; the `reaches` half is the fold-in's reading of it |
 
 ### What this item does not do
 
@@ -3433,6 +3484,13 @@ definition that `alters-slot` built and FLOW-20's Limit bullet carried.
 > against the limits, whoever the worker is (FLOW-04). A feature waiting
 > behind others periodically merges `main` with conflict-only fixes, so its
 > consolidation stays as small as it can.
+
+**Clauses that rest on open questions.** "Only exclusive areas reach and
+are reached" is a18 (a). Under a18 (b) that clause goes, and the near
+bullet's first condition becomes "an area of one reaches an area of the
+other, unless the reaching area is ordered and both change it". The
+paragraph **Waiting on the human** says what counts and what starts
+whatever the count as a17 (a) has it.
 
 **Severity and check:** SHOULD, `automated`, before and after.
 **Enforcement:** `wf`'s queue code (`tools/workflow/queue/`), which
@@ -4150,7 +4208,8 @@ name.
     tightened check beside the code it would fail".
   - a16: (a), as recommended. No change to its text.
   - *Still to come:* a10 and a14, which were written for a1 (a) and are
-    derived again above; a17, which the answer to a3 raises; each of the
+    derived again above; a17, which the answer to a3 raises; a18, which
+    the review of the fold-in raises; each of the
     fourteen rule changes, asked by name; and the outcome.
 
 - **2026-11-14: independent review of the first draft (`0cd4e7c`), before
