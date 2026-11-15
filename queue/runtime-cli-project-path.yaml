@@ -3,7 +3,7 @@ title: 'A project''s warden.toml may name the container runtime, not a path to r
 priority: 64
 status: in_progress
 round: feature
-phase: 5
+phase: 6
 design: docs/design/runtime-cli-project-path.md
 branch: feat/runtime-cli-project-path
 alters_relationships: false
@@ -57,10 +57,35 @@ steps:
   - id: f5-guide
     phase: 5
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main
+    phase: 6
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261112T230554Z
-      expires: 2026-11-16T00:23:12.923696181Z
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-merge-main
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-consolidate
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -215,3 +240,9 @@ history:
   - at: 2026-11-15T22:23:12Z
     by: cloud/20261112T230554Z
     event: claimed f5-guide until 2026-11-16T00:23:12Z
+  - at: 2026-11-15T22:27:20Z
+    by: cloud/20261112T230554Z
+    event: done f5-guide
+  - at: 2026-11-15T22:27:20Z
+    by: cloud/20261112T230554Z
+    event: entered phase 6 (publish)
