@@ -272,6 +272,11 @@ func unsupportedRuntime(rt RuntimeConfig) error {
 	}
 	what := "the container driver supports " + runtimeNames("and")
 	fix := set + runtimeNames("or") + orNot
+	// TRANSITIONAL(runtime-former-values): a value that ran before this
+	// check existed gets a message that says what to change.
+	if formerWhat, formerFix, ok := formerRuntimeValue(rt.CLI); ok {
+		what, fix = formerWhat, set+formerFix
+	}
 	return driver.Fixable(fix, "%s is %q; %s", setting, rt.CLI, what)
 }
 
