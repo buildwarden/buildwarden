@@ -1,9 +1,9 @@
 feature: runtime-cli-project-path
 title: 'A project''s warden.toml may name the container runtime, not a path to run: [runtime] cli from a build context no longer executes a file the repository ships (security fix)'
 priority: 64
-status: in_progress
+status: done
 round: feature
-phase: 7
+phase: 8
 design: docs/design/runtime-cli-project-path.md
 branch: feat/runtime-cli-project-path
 alters_relationships: false
@@ -92,7 +92,14 @@ steps:
   - id: f7-merge
     phase: 7
     affinity: cloud
-    status: pending
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f8-close
+    phase: 8
+    affinity: cloud
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -102,7 +109,7 @@ budget:
     steps: 9
   spent:
     runs: 0
-    steps: 10
+    steps: 11
 questions:
   - id: a1
     kind: assumed
@@ -277,3 +284,18 @@ history:
   - at: 2026-11-15T22:51:20Z
     by: cloud/20261112T230554Z
     event: entered phase 7 (merge)
+  - at: 2026-11-15T23:13:45Z
+    by: cloud/20261112T230554Z
+    event: done f7-merge
+  - at: 2026-11-15T23:13:45Z
+    by: cloud/20261112T230554Z
+    event: entered phase 8 (close)
+  - at: 2026-11-15T23:13:53Z
+    by: cloud/20261112T230554Z
+    event: claimed f8-close until 2026-11-16T01:13:53Z
+  - at: 2026-11-15T23:13:54Z
+    by: cloud/20261112T230554Z
+    event: done f8-close
+  - at: 2026-11-15T23:13:54Z
+    by: cloud/20261112T230554Z
+    event: closed; feature done
