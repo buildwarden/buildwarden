@@ -1858,6 +1858,27 @@ the search (Decision 2); the order with K1 is a question (a9), with what
 K1's structure changes listed; `alters_relationships` is argued on one
 ground; GLOBAL-08, ORCH-03 and UX-07 are cited.
 
+### 2026-11-15, first sitting, outcome: approved
+
+- **r1, 2026-11-15: approved at `7a85a33`** (Jeff; page
+  https://claude.ai/artifact/CRVXjYapJ26Tp9WnUhomxu). All nine questions
+  were asked, each on its own, and answered as the design proceeds: a9
+  (A), K1 first; a1 (A); a2 (A); a3 (A); a4 (A); a5 (A); a6 (A); a7 (A);
+  a8 (A), the hold, which under a9 (A) names `driver-contract`'s merge.
+  The Bootstrap comparison is accepted explicitly (BOOT-07), with
+  BOOT-02. The Security note is accepted (GLOBAL-06). One correction to
+  the text as he read it, made on his word in the sitting: the macOS
+  arm64 release-build failure is not filed as this item's follow-up
+  (**Handed on**; a7's text) but as an item of its own, `vz-nocgo-build`,
+  started the same day, so that releases are not held behind this item.
+  The hold is written by the session that records this entry: a blocking
+  question `q1` with the step `f2-answer-q1` before `f2-plan`. When
+  `driver-contract`'s PR has merged, the item returns to Design once for
+  the delta K1's structure brings (a9 (A)), and that delta is reviewed.
+- **rule change BOOT-02 approved at `7a85a33`**, as worded under **Rule
+  changes**, in both settings (on `main`'s sentence, and on
+  `driver-contract`'s approved sentence), with the Bootstrap comparison.
+
 ## Consolidation
 
 Filled in at Publish.
