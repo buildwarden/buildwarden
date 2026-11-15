@@ -1122,7 +1122,8 @@ before. The new sentence is under **Machinery edits**.
 - `collides_with`: each entry names another item in the queue.
 - A tracked item: `kind` is not `process`, `holds` is empty, and its round
   is `tracked`.
-- The three limits, per holder (see **The limits**).
+- The three limits, per holder, and that `limits.waiting_on_human` is
+  not below 1 (see **The limits**).
 
 ### The area map
 
@@ -1566,8 +1567,9 @@ Changes from today, beyond counting by relation:
 func (s *State) Guard(f *Feature, st *Step, worker string) string
 ```
 
-It walks one table of the three limits, which is the only place a limit
-is written. For each limit this claim would take, where the item does not
+It first applies the waiting limit, which is a count and not a set
+(below). It then walks one table of the three limits, which is the only
+place one of them is written. For each limit this claim would take, where the item does not
 already hold it, it adds the item to the holders in memory and evaluates
 the predicate for the item and for each holder related to it. It refuses
 when any of those sets would number more than the limit, and names the
