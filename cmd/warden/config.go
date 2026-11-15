@@ -233,6 +233,25 @@ func checkBuildLink(s string) (buildlink.Link, error) {
 // config file is one of these or is refused (resolveRuntime).
 var containerRuntimes = []string{"finch", "docker", "podman"}
 
+// supportedRuntime returns the member of containerRuntimes that v equals.
+// The comparison is exact, and what is returned is the list's own string,
+// never v: no text from a flag, a variable or a config file reaches exec.
+func supportedRuntime(v string) (string, bool) {
+	for _, name := range containerRuntimes {
+		if v == name {
+			return name, true
+		}
+	}
+	return "", false
+}
+
+// unsupportedRuntime is the error for a runtime in effect that is not one of
+// containerRuntimes.
+func unsupportedRuntime(rt RuntimeConfig) error {
+	return driver.Fixable("set the container runtime to finch, docker or podman",
+		"container runtime %q is not supported", rt.CLI)
+}
+
 // DetectRuntime probes for a working container runtime, in
 // containerRuntimes' order.
 func DetectRuntime() (string, error) {
