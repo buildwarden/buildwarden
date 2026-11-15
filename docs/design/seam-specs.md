@@ -492,43 +492,53 @@ Nothing in any of the five is approved.
    **What this costs beside one tag for the repository,** which this
    design proposed and Jeff declined:
 
-   - A component implements several specifications at once, and one
+   - A component implements several specifications at once, and the
      harness drives it through all of them. So a run of one
      specification's cases also depends on the other protocols as the
-     harness's models speak them. The six version numbers are independent
-     as documents and as tags. As a tested set they are not: the set the
-     specs repository tests together is the newest release of each
-     (above). Any other mix is tested only by the implementation that
-     pins it, and may not build there (Decision 7).
+     harness of that specification's release speaks them. The six version
+     numbers are independent as documents and as tags. As a tested set
+     they are not: the set the specs repository tests together is the
+     newest release of each (above). Any other mix is tested only by the
+     implementation that pins it. Here such a mix always builds, each
+     suite with its own release's harness (Decision 7, a20); whether a
+     suite whose harness is older can still drive the component is what
+     that run finds.
    - An implementation states six versions where it stated one, and a
      relay is run by five commands where it was run by one (**The
-     harness**).
+     harness**). This repository states them in six small modules, with
+     twelve files, where one tag would have been one module (Decision 7).
    - A change that needs both a specification and the harness is two
      tags, pushed in order. The first release is seven tags, seven
      `release` runs and 36 binaries with six `SHA256SUMS` files (six
      specifications, three operating systems, two architectures), where
      one tag would have been one run and six binaries.
    - A fix to the harness reaches a released binary only through a new
-     release of that specification. A fix to a launcher or to the
-     sandbox that every suite needs is seven tags, six `CHANGELOG.md`
-     entries and 36 binaries.
+     release of that specification, and it reaches the suite this
+     repository runs the same way, because each suite here is built from
+     what its release names (Decision 7, a20). A fix to a launcher or to
+     the sandbox that every suite needs is seven tags, six `CHANGELOG.md`
+     entries and 36 binaries, and six pins moved here.
    - A change to one specification can force releases of others. When it
      changes what the harness's model of a protocol must do (a field a
      claimant must send, a step a build environment takes), a suite that
      drives a component through that protocol can test an
      implementation of the change only once it is released again with
      the new harness.
-   - What this repository runs for a pinned release is not always the
-     build that release carries: one `go.mod` builds all six commands
-     with one harness (Decision 7, a20).
-   - There are seven modules to keep building. With the harness in a
-     module of its own that is tagged in the same merge (a19, option A),
-     three pieces of machinery keep them building while a harness version
-     has no tag yet: a line in the workspace file, a command that tidies
-     each specification's `go.mod`, and a release built with `go install`
-     and not in a checkout (**Releases and how they are consumed**). A
-     branch elsewhere that pins an unmerged commit needs one extra line
-     (Decision 7).
+   - The suites one component is run through here need not share a
+     harness version. Two specifications pinned at releases made at
+     different times are each built with the harness their own release
+     names, so one run of a relay can use two versions of the launchers
+     and of the models. The report names the harness version beside each
+     specification's (Decision 7, a20).
+   - There are seven modules to keep building. The harness is a module
+     of its own that is tagged in the same merge as the specification
+     that needs it (a19), so three pieces of machinery keep them building
+     while a harness version has no tag yet: a line in the workspace
+     file, a command that tidies each specification's `go.mod`, and a
+     release built with `go install` and not in a checkout (**Releases
+     and how they are consumed**). A branch elsewhere that pins an
+     unmerged commit needs one extra line in each module whose
+     specification names such a version (Decision 7).
 
    *Rejected:* one tag for the repository as a whole (`v0.x.y`), with one
    `bw-conformance` binary: a8's option A, which this design proposed
@@ -543,8 +553,9 @@ Nothing in any of the five is approved.
 
 5. **The harness is Go, lives in the specs repository under
    `conformance/`, and does not import the kit; each specification's
-   cases live in its own module** (a5, as a8 reshapes it; where the
-   shared code lives is a19).
+   cases live in its own module** (a5, as a8 reshapes it; that the
+   shared code is a module of its own, tagged on its own, is a19, Jeff's
+   answer of 2026-11-15).
 
    - *The harness* is the module
      `github.com/buildwarden/buildwarden-specs/conformance`. It holds
@@ -614,108 +625,171 @@ Nothing in any of the five is approved.
    implementation's, not the harness's, and belongs in a file kept beside the
    implementation.
 
-7. **This repository pins a release of each specification in
-   `tools/conformance/go.mod`** (a7, as Jeff answered it for a tag per
-   specification). A small nested module, like `tools/tier1`, requires
-   the six specification modules, each at its own version:
+7. **This repository pins a release of each specification in a module of
+   its own, `tools/conformance/<directory>/go.mod`** (a7, as Jeff
+   answered it for a tag per specification, and a20, his answer of
+   2026-11-15, which makes the one file of a7 six).
 
    ```
+   tools/conformance/
+     bootstrap-config/      go.mod  go.sum
+     collector-inputs/      go.mod  go.sum
+     collector-outputs/     go.mod  go.sum
+     executor-initialize/   go.mod  go.sum
+     relay-claim/           go.mod  go.sum
+     relay-guest-api/       go.mod  go.sum
+     targets/               the five target files (**The harness**)
+   ```
+
+   Each of the six directories is a small nested module, like
+   `tools/tier1`, with the name of the specification it pins. It holds
+   two files and no Go code. Its `go.mod` requires that one
+   specification's module at one version and names its command in a
+   `tool` directive. `targets/` is not a module. For `relay-claim`:
+
+   ```
+   module github.com/buildwarden/buildwarden/tools/conformance/relay-claim
+
+   go 1.26.3
+
+   tool github.com/buildwarden/buildwarden-specs/relay-claim/cmd/bw-conformance-relay-claim
+
    require (
-       github.com/buildwarden/buildwarden-specs/bootstrap-config    v0.1.0 // indirect
-       github.com/buildwarden/buildwarden-specs/collector-inputs    v0.1.0 // indirect
-       github.com/buildwarden/buildwarden-specs/collector-outputs   v0.1.0 // indirect
-       github.com/buildwarden/buildwarden-specs/conformance         v0.1.0 // indirect
-       github.com/buildwarden/buildwarden-specs/executor-initialize v0.1.0 // indirect
-       github.com/buildwarden/buildwarden-specs/relay-claim         v0.1.0 // indirect
-       github.com/buildwarden/buildwarden-specs/relay-guest-api     v0.1.0 // indirect
+       github.com/buildwarden/buildwarden-specs/conformance v0.1.0 // indirect
+       github.com/buildwarden/buildwarden-specs/relay-claim v0.1.0 // indirect
        // and the harness's own dependencies, each marked the same way
    )
    ```
 
-   It names each specification's command in a `tool` directive. The
-   directives keep the six requirements through `go mod tidy` although
-   the module holds no Go code, and `go tool bw-conformance-<directory>`
-   builds each command from the pinned source. `go mod tidy` marks every
-   line `// indirect`, the six pins among them, because the module
-   reaches each only through a `tool` directive; the block above is as
-   it wrote it in a model of the layout. The Go checksum database
-   verifies every module, and the kit's own `go.mod` gains no dependency.
-   The `conformance` line is the harness, at the highest version any
-   pinned specification names; it is not a seventh pin, and nobody edits
-   it. The lines below it are the harness's third-party modules.
+   That is the file as `go mod tidy` wrote it in a model of the layout,
+   with the model's module names replaced by the real ones (**Releases
+   and how they are consumed** says what was tried). The `tool`
+   directive keeps the requirement through `go mod tidy` although the
+   module holds no Go code, and `go tool bw-conformance-relay-claim`, run
+   in that module, builds the command from the pinned source. `go mod
+   tidy` marks every line `// indirect`, the pin among them, because the
+   module reaches each only through the `tool` directive. The `relay-claim`
+   line is the pin. The `conformance` line is the harness, at the version
+   the pinned release names; it is not a pin, and nobody edits it. The
+   lines below it are the harness's third-party modules, at the versions
+   the release lists. `go.sum` holds the hashes of all of them, the
+   harness included, and the Go checksum database verifies each. The
+   kit's own `go.mod` gains no dependency.
 
-   *One file for all five seams.* That file is the contract path tier 1
-   checks for the five seams this item lists: a change to a listed file
-   must change the pin file. Each seam has its own line in it (seam 2 has
-   two), but tier 1's check is given a path and cannot ask for a line.
-   **Tier 1's seam list** says what that check holds and what it leaves
-   to the suites and to Review, who can now read from the file's diff
-   which specification's version moved.
+   *Each command is built from exactly what its release names.* Go builds
+   one module with one version of each dependency. A module that requires
+   one specification takes its whole build list from that specification's
+   own `go.mod`: the harness version it names and the third-party
+   versions it lists. That is the list the `release` workflow's
+   `go install <command>@<tag>` builds from (Decision 4). So what tests a
+   pinned release here is built from the same modules, at the same
+   versions, as that release's binaries: in the model the two builds
+   reported the same module versions with the same hashes. Two
+   specifications pinned at releases with different harness versions run
+   each with its own, and any set of pins builds, the newest of each or
+   not: the model built one specification at a release with a newer
+   harness beside another at a release with an older one, where the
+   harness had renamed a function the older cases call.
+
+   *A module is written from nothing, never edited in place.* Moving a
+   pin with `go get` leaves the other lines where they were: in the
+   model, taking a specification back to an older release kept the newer
+   harness line, `go mod tidy` accepted it, and the older cases did not
+   compile. So `make pin-specs` writes each module it moves from nothing:
+   the `module` and `go` lines, the `tool` directive and the one
+   requirement, then `go mod tidy`, with the old `go.sum` removed. The
+   `pin` job does the same for the versions the files name and fails on
+   a difference (**CI**), which is what holds the harness line and the
+   third-party lines to what the release names. Nothing else moves a
+   pin: the repository has no dependency bot, and one that is added
+   later is not given these six directories, because its `go get` is the
+   in-place edit this paragraph rules out and it would not rewrite the
+   book page.
+
+   *No workspace.* This repository has no `go.work`, and this item adds
+   none. A workspace that lists the six modules gives them one build
+   list, and so one harness for all six: in the model the mixed set
+   above then failed to compile, as it does in one module. The root
+   module, `tools/tier1` and `tools/workflow` are not joined by a
+   workspace either; `make test` and `make lint` enter each. The six
+   modules hold no Go package, so `go build ./...`, `make test`,
+   `make lint`, `make tidy` and the `auto-tidy` workflow, which work on
+   the root module, do not see them. The repository vendors nothing. The
+   recipes that use the six modules set `GOWORK=off`, so that a `go.work`
+   a developer keeps above the checkout cannot join them.
+
+   *Each seam's own contract path.* Each module's `go.mod` is the
+   contract path tier 1 checks for the seam its specification belongs
+   to: a change to a file listed for `relay-claim` must change
+   `tools/conformance/relay-claim/go.mod`, and so on. Seam 2 has two
+   specifications and so two pin files, and tier 1's list gives it an
+   entry for each. **Tier 1's seam list** says what the check holds and
+   what it leaves to the suites and to Review.
 
    *A release on trunk, a commit only on a branch.* On a pull request and
-   on `main` every line that names a module of the specs repository must
-   be a release tag; the harness's third-party lines are as the harness
-   names them, and one of those may be a commit. An unreleased commit of
-   the specs repository is for work in progress: the `conformance`
-   workflow runs the suites with it on a branch push and fails it on a
-   pull request. LOOP-07 has the same rule for a component's trunk and
-   its branches (point 5), and leaves how a release is pinned to the
-   component, which says it in its profile (LOOP-01; **Rule changes**,
-   PROFILE-01).
+   on `main` every module names its specification at a release tag, its
+   harness line is a release tag too, and it carries no `replace` line.
+   The harness's third-party lines are as the release names them, and
+   one of those may be a commit. An unreleased commit of the specs
+   repository is for work in progress: the `conformance` workflow runs
+   the suites with it on a branch push and fails it on a pull request.
+   LOOP-07 has the same rule for a component's trunk and its branches
+   (point 5), and leaves how a release is pinned to the component, which
+   says it in its profile (LOOP-01; **Rule changes**, PROFILE-01).
 
    *One command moves the pins,* `make pin-specs`, in one of two forms.
    `SPECS="<directory>@<version> ..."` moves the named specifications to
-   release tags, and `SPECS=latest` moves all six to their newest
-   releases, the set the specs repository tested together (Decision 4).
-   `REF=<commit>` pins all six at one commit of the specs repository,
-   for a branch in progress. A specification's `go.mod` at such a commit
-   may name a harness version that is not tagged yet, so this form also
-   writes one `replace` line that points the harness module at the same
-   commit; the first form removes it. The command rewrites the
-   requirements, `go.sum` and the one book page that links into the
-   specs repository (**The book and the specifications link both
-   ways**).
+   release tags and leaves the other modules as they are, and
+   `SPECS=latest` moves all six to their newest releases, the set the
+   specs repository tested together (Decision 4). `REF=<commit>` pins
+   all six at one commit of the specs repository, for a branch in
+   progress. A specification's `go.mod` at such a commit may name a
+   harness version that is not tagged yet. In each module where it does,
+   this form also writes one `replace` line that points the harness
+   module at the same commit. A module whose specification names a
+   harness version that has its tag gets no such line, and is built with
+   that harness, as its release is. The command asks whether the version
+   exists before it writes the module; nothing is tried and then
+   repaired. After `REF`, all six are at a commit, so the move back to
+   releases names all six or is `SPECS=latest`. In either form the
+   command rewrites the `go.mod` and `go.sum` of each module it moves
+   and the one book page that links into the specs repository (**The
+   book and the specifications link both ways**), and builds each
+   command it moved.
 
    *Which sets are tested.* The newest release of each specification is
    tested as a set in the specs repository, and `SPECS=latest` is the
    set this design supports. An implementation may hold one
-   specification at an older release while it moves another. Go builds
-   one module with one version of each dependency, so it then builds the
-   older cases with the newer harness, a combination the specs
-   repository did not test. Such a set can fail to build, where the
-   harness changed a function the older cases call: in a model of the
-   layout it passed `go mod tidy` and every criterion of the `pin` job
-   and then did not compile. It can also run the older cases against
-   models that already speak a newer version of another protocol. The
-   harness promises nothing to cases older than the newest release of
-   each specification. So `make pin-specs` builds the six commands after
-   it moves a pin, and a set that does not build fails there; a set that
-   builds is tested by this repository's `conformance` workflow and by
-   nothing else.
+   specification at an older release while it moves another. Here that
+   set builds, and each suite runs as its release built it. What it does
+   not promise is that the older suite can still drive the component: a
+   suite reaches a relay through the claim, the collector and the build
+   as the harness of its own release speaks them, and a relay that has
+   moved to a newer release of one of those protocols may refuse an
+   older claimant. Such a suite fails, and the remedy is a release of
+   that specification with the newer harness (Decision 4). A set other
+   than the newest of each is tested by this repository's `conformance`
+   workflow and by nothing else.
 
-   *What runs here is not always the build a release carries.* Each
-   released binary carries the harness of its own release (Decision 4).
-   Here every command is built with the highest harness version any pin
-   names, so a specification pinned at a release whose harness is older
-   is tested with a newer harness than its binaries have. The report
-   names the harness version beside each specification's. a20 asks
-   whether that is acceptable, and gives two ways to run exactly a
-   release's build.
-
-   *Rejected:* a git
+   *Rejected:* one `go.mod` for all six specifications, which is what
+   a7's answer named and what this design had until a20 was answered.
+   Go builds one module with one harness, the highest any pin names. A
+   specification pinned at a release whose harness is older was then
+   tested here with a newer harness than its binaries carry, a set that
+   was not the newest of each could pass every check of the `pin` job
+   and not compile, and tier 1 had one contract path for five seams
+   (a20, option A). *Rejected:* the released binaries, fetched and
+   checked against a file of hashes (a20, option B): it is the lock file
+   and download script below, and a branch in progress pins a commit
+   that has no binaries. *Rejected:* a git
    submodule (tier 1 reads files
    with `git show`, which does not see into a submodule; worktrees and CI
    checkouts each need extra steps). *Rejected:* a vendored copy of the
    documents, which is the duplication the specs repository exists to remove.
    *Rejected:* a plain lock file and a download script, which would
    reimplement what the module system already verifies. *Rejected:* a pin
-   file for each seam, so that tier 1 could ask for the right one. Each
-   would repeat a version that `go.mod` already states, with a test to
-   keep the two alike, for a check that a17 already leaves to say only
-   that a pin moved. *Rejected:* a `go.mod` for each specification under
-   `tools/conformance/`, which would build each command with exactly its
-   release's harness and give each seam its own contract path: a7's
-   answer names one file. It is a20's option C, and is asked there.
+   file for each seam beside one `go.mod`. Each would repeat a version
+   that `go.mod` already states, with a test to keep the two alike.
 
 8. **This item works in two repositories, from the one queue, from the
    start of Implement.** It names them here, as LOOP-04 has an item do
