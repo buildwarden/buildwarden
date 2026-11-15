@@ -5064,8 +5064,7 @@ enforcement change: tier 1 has no check for PROFILE-01, and
 `rules.yaml` gets no entry for it.
 
 Two other items amend the same rule. `loop-parallel` (in Design, at
-`f706bf7`) changes
-its header's check line, its paragraph on the agent part and the Process
+`f706bf7`) changes its header's check line, its paragraph on the agent part and the Process
 row of the Checks table, and adds an Areas row; none of those is a row
 changed here. `seam-specs` (S1) owes the Specifications and Consumables
 entries a change of its own, by `loop-contract`'s design. Whichever
@@ -5092,12 +5091,13 @@ filled in when the review approves; the sitting of 2026-11-14 sent the
 design back and approved nothing. Line numbers are the umbrella's on
 `main` at `ad4ea50`.
 
-`loop-contract` amended the umbrella in place on 2026-11-14 and gave it
-that **Amendments** section, where the design read at `5808805` put the
-note under the Decisions heading. Every sentence quoted as current below
-was compared again with the umbrella at `ad4ea50`: `loop-contract`
-changed none of them, so each quotation stands and only the line numbers
-moved (by 4 to 23 lines; the front matter's not at all). Its amendments are to other sentences (Problem
+`loop-contract` amended the umbrella in place (approved on 2026-11-14,
+merged on 2026-11-15) and gave it that **Amendments** section, where the
+design read at `5808805` put the note under the Decisions heading. Every
+sentence quoted as current below was compared again with the umbrella at
+`ad4ea50`: `loop-contract` changed none of them, so each quotation
+stands and only the line numbers moved (by 4 to 23 lines; the front
+matter's not at all). Its amendments are to other sentences (Problem
 point 3, Decision 2, a5, seam 10, the P1 and M6 rows, the heading of
 Track R, the wave-1 gate, **How program items run**, the FLOW and LINT
 row of the rule table, three sentences of the Archive summary), and
