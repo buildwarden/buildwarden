@@ -2,9 +2,9 @@ feature: loop-contract
 title: 'Loop Contract: finish it against the running loop (spec-first and design-first work) and split docs/development/ into project invariants and loop rules (componentization P1, first part)'
 priority: 60
 kind: process
-status: in_progress
+status: done
 round: process
-phase: 3
+phase: 4
 design: docs/design/loop-contract.md
 branch: feat/loop-contract
 alters_relationships: false
@@ -31,7 +31,14 @@ steps:
   - id: x3-merge
     phase: 3
     affinity: cloud
-    status: pending
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x4-close
+    phase: 4
+    affinity: cloud
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -41,7 +48,7 @@ budget:
     steps: 8
   spent:
     runs: 1
-    steps: 2
+    steps: 3
 questions:
   - id: a1
     kind: assumed
@@ -377,3 +384,18 @@ history:
   - at: 2026-11-14T21:34:50Z
     by: cloud/20261112T230554Z
     event: entered phase 3 (merge)
+  - at: 2026-11-15T19:35:32Z
+    by: cloud/20261112T230554Z
+    event: done x3-merge
+  - at: 2026-11-15T19:35:32Z
+    by: cloud/20261112T230554Z
+    event: entered phase 4 (close)
+  - at: 2026-11-15T19:35:32Z
+    by: cloud/20261112T230554Z
+    event: claimed x4-close until 2026-11-15T21:35:32Z
+  - at: 2026-11-15T19:35:44Z
+    by: cloud/20261112T230554Z
+    event: done x4-close
+  - at: 2026-11-15T19:35:44Z
+    by: cloud/20261112T230554Z
+    event: closed; feature done

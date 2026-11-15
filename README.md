@@ -115,6 +115,14 @@ new step and reports `held by process item <name>`; `wf claim` refuses it and
 claimed, and finishing the process item releases the hold. Intake:
 `wf new ... -kind process -holds cloud,host:*`.
 
+`wf new ... -hold "<why>"` files an item on hold (FLOW-20's freeze, FLOW-07): it
+writes a blocking question `q1` whose text is the reason, and a human step
+(`f0-answer-q1`, or `x1-answer-q1` for a process item) that the item's first
+step needs. `wf answer -question q1` releases it. Quote the reason: `wf` stops
+reading flags at the first bare word, so an unquoted reason, or an unquoted
+multi-word value before `-hold`, drops the hold without an error; check the
+file `wf new` wrote before committing.
+
 Design adds the steps it finds: `f1-answer-<q>` (human) for a blocking
 question, `f6-validate-<host>` (`host:<host>`) for blocking native validation.
 A return to Design (`wf back`, FLOW-06) re-seeds phase 1 with `-r<n>` ids, so
