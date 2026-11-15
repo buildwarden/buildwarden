@@ -49,6 +49,43 @@ memory: 16GiB
 datadisk: 150GiB
 ```
 
+### Choosing the runtime
+
+With no runtime named, `warden` uses the first of `finch`, `docker` and
+`podman` that answers. To name one, use `--runtime`, `WARDEN_CTR_CLI` or
+`[runtime] cli`:
+
+```sh
+warden build --runtime podman .
+```
+
+```toml
+[runtime]
+cli = "podman"
+```
+
+The value is one of those three names and nothing else: not a path, and not
+another program. `warden` runs the runtime by that name, looked up on
+`PATH`, with its own arguments, so whatever a runtime needs beyond its name
+is set up outside `warden`:
+
+- A runtime installed outside `PATH`: add its directory to `PATH`.
+- A remote daemon or a context other than the default: set the runtime's
+  own variables (`DOCKER_HOST`, `DOCKER_CONTEXT`, `CONTAINER_HOST`) in the
+  environment `warden` runs in. The runtime inherits them.
+
+Any other value in effect stops `build`, `shell`, `doctor` and `clean`
+before anything is run, with an error that says where the value is set and
+what to change. A project's `warden.toml` can choose among the three, and
+`--runtime` or `WARDEN_CTR_CLI` replaces its choice with yours.
+
+The setting belongs to the container driver. A build with a VM driver does
+not read it, so one `warden.toml` can hold `cli` beside the VM drivers'
+settings. `warden clean` is the exception: under `qemu` and `vz` it also
+removes leftover containers, and checks the setting there.
+[The container runtime](configuration.md#the-container-runtime) has the
+precedence, the commands that check the value and the error.
+
 ### How It Works
 
 - Uses your Dockerfile/Containerfile as the build specification
