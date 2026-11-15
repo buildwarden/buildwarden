@@ -171,6 +171,14 @@ questions:
       - '(b) one line each, on every run: "skips always" to the letter; a system certificate directory then prints 124 lines on every build, and the lines that matter (a private key, a DER file) are among them'
       - '(c) not mentioned at all: by the reference they are not CA files; a root saved under another ending then gives no line and no count, which is the silent case the answer is against'
     recommended: (a) counted on every run, listed with --verbose
+  - id: a13
+    kind: assumed
+    status: open
+    question: 'A file of a named CA directory that cannot be read. New 2026-11-15, raised by the independent review of the fold-in of a9''s answer. It is an entry of a directory that was named, under one of the three endings (.pem, .crt, .cer), that warden cannot open (permission denied) or that is a link to a file that does not exist. On main it is an error at the claim, whatever the directory''s other files give. a9''s answer makes two errors (a named path that does not exist or cannot be read; a named path that yields no certificate) and has everything else skipped with a logged reason. A file inside a named directory is not a named path, so by the answer''s letter it is a skip; the fold-in at 0bda630 had kept it an error (GLOBAL-11: a read that fails stops by default). The design proceeds with (a).'
+    options:
+      - '(a) skipped, with its line on every run ("[warden] upstream CA /etc/warden/roots/site.pem: skipped: cannot be read (permission denied)"), like every other file of the directory that gives nothing; the directory is an error only when it gives no certificate at all. The answer''s letter. A key file kept as it should be (mode 0600, another owner, named site.pem) beside the certificates then does not stop a build that a readable key in the same place does not stop. It is the one asked place where this design turns an error of main into a run that goes on: a root in a file the build''s user cannot read is not added, and a line says so'
+      - '(b) an error, as on main, raised before anything is created, naming the file and the directory. Nothing that fails today starts to pass. A protected key file in a directory of roots then stops the build where a readable one is a warning, and it is the one thing under a directory that stops a build although the directory gives certificates'
+    recommended: (a) skipped with its line; the directory fails only when it gives no certificate
 history:
   - at: 2026-11-15T20:14:52Z
     by: human/jeff
