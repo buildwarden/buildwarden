@@ -37,10 +37,10 @@ steps:
   - id: f2-design-review
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
-      claimed_by: human/jeff
-      expires: 2026-11-15T22:32:23.756687305Z
+      claimed_by: ""
+      expires: null
   - id: f2-plan
     phase: 2
     affinity: cloud
@@ -48,15 +48,15 @@ steps:
     needs:
       - f2-design-review
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261112T230554Z
+      expires: 2026-11-16T01:03:10.182429001Z
 budget:
   estimate:
     runs: 5
     steps: 30
   spent:
     runs: 1
-    steps: 3
+    steps: 4
 questions:
   - id: a1
     kind: assumed
@@ -385,3 +385,9 @@ history:
   - at: 2026-11-15T22:06:15Z
     by: human/jeff
     event: 'assumed question a19 confirmed: (A) A seventh module conformance/, tagged on its own; harness and specification in one pull request and one merge. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T23:03:00Z
+    by: human/jeff
+    event: done f2-design-review
+  - at: 2026-11-15T23:03:10Z
+    by: cloud/20261112T230554Z
+    event: claimed f2-plan until 2026-11-16T01:03:10Z
