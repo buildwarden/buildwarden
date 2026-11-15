@@ -2491,7 +2491,130 @@ session's, when it records the approval: the hold behind
 
 ## Design review
 
-None yet.
+### 2026-11-15, first sitting: eleven questions answered; a9 and a6 folded in
+
+Read at `3c0caab`. The sitting is not over and has no outcome. Nothing is
+approved by it: not a rule change, not the Security note, not the design.
+Jeff answered the eleven assumed questions, and the answers are in the
+queue file (workflow `4c59842`).
+
+**Confirmed as recommended, nine.** a1 (a): a relative path in the file is
+relative to the working directory. a2 (a): no environment variable is
+added. a3 (a): the transitional detection is removed at 1.0. a4 (b): a
+`config:` line on every command that reads configuration, and nothing
+refused by where the file was found. a5 (a): `WARDEN_UPSTREAM_CA_CERTS`
+replaces the key, and both set is a transitional error. a7 (a): a hold
+behind `runtime-cli-project-path`'s merge. a8 (a): an empty `--config` is
+an error and an empty `WARDEN_CONFIG` is not set. a10 (b): naming
+`~/.config/warden/config.toml` is allowed, and the message leads with
+moving its settings. a11 (a): the hand-offs are filed now.
+
+**Answered otherwise, two.** Neither is one of the options that were put.
+
+a9, what a CA path may hold:
+
+> send valid pem certificates, log to stderr which files are specifically
+> sent versus skipped with reason
+
+Asked what is still an error that stops the build before it starts, he
+chose "Also when nothing is sent": a named path that does not exist or
+cannot be read, and a named path that yields no certificate at all;
+everything else is skipped with a logged reason. Asked how much is logged,
+he chose "Skips always, sends counted": every skipped file gets a line
+with its reason on every run, sent files get one line per configured path
+with the count, and the per-file list appears with `--verbose`.
+
+a6, how `warden` finds its source tree:
+
+> So warden shouldn't need its own source directory for anything after
+> componentization.  It should instead fully be based on pre-compiled
+> existing binaries/artifacts which are managed and installed and it may
+> have development tooling for helping with that, but it does not manage
+> any compilation.  Those are purely development processes
+
+Asked what this fix does now:
+
+> Remove compilation now.  warden looks for necessary artifacts  to be on
+> PATH and searches its own directory if they're not found or not on or
+> above a minimum version
+
+Asked where that is built, he chose its own security item, started now
+and designed in parallel. This item keeps the small lookup fix, option
+(a) as designed, so the hole closes with this item's merge and K1 is not
+held behind native validation; the new item then removes the tree lookup
+and every `go build`.
+
+**Done by the review session the same day** (workflow `4c59842`,
+`85669f6`): the four observations appended to `configuration-bugfixes`'
+`source`; the two security findings filed as `workdir-in-context`
+(priority 67, queued); `prebuilt-artifacts` filed (priority 66, branch
+`feat/prebuilt-artifacts`, its Design claimed).
+
+**Folded in** (`0a84b36`, `c80ad22`, `d3efc4a` and the commit that carries
+this entry):
+
+- *The nine.* Each question carries its answer; the wording that treated
+  them as open is gone from the Decisions, the Design and the Rule
+  changes' reasoning; a11's filings and a7's hold are said where they
+  stand. The hold is not raised yet: it is the review session's, with the
+  approval.
+- *a9.* Decision 8 and F2 are rewritten to the answer: what is sent,
+  each skip with its exact line, the errors, the per-path line, what
+  `--verbose` adds, and where the lines go for `build`, `shell` and
+  `doctor`. With them: **Who is affected**, **Compatibility**, **Defaults
+  and overrides** (the skip is named there as a continuation on failure,
+  with what it costs), the reference docs and the overview line, the
+  Security note, both tiers of the Validation plan, and step 5 of the
+  Implementation plan; in the front-matter, the comments on `drivers`
+  and `surfaces` and one clause of the Windows gap. What works today and
+  stops is now one thing, a path that gives no certificate at all; under
+  the design as read it was three.
+- *a6.* Decision 9, a new part of **F9: the source tree** on the split,
+  **What this item does not do**, the hand-off table, **How it sits with
+  the other items** and item 8 of the Security note's **What remains**.
+  No word of the lookup fix itself changed.
+- *The sentences about K1*, corrected against its design at `a6c8f0b`:
+  K1's quotation of UX-07 is the stale one, not this design's wording;
+  which config file a build read is recorded only by the `config:` line,
+  not by K1's build record; K1's hold is already in the queue; its a26
+  is answered. That K1's field is one `config_file` and not a list was
+  already right at `3c0caab`.
+- *The native-gap backlog.* This item's four tracked gaps are appended
+  (`project-config-trust-windows`, `-hyperv`, `-vz`, `-qemu`), in the
+  workflow checkout, for the review session to commit.
+
+**Decided by the fold-in, for the review to confirm.** None was asked, and
+each is stated where it applies:
+
+- The CA files are read once, and the request carries the certificates
+  (`driver/driver.go`, a fourth shared file of `driver/`); `ClaimRelay`
+  opens no file. Logging what is sent requires it: a second read at the
+  claim would print twice or could differ from what was said.
+- The edges a9's answer leaves, in F2: the system roots are not a
+  configured path; a file of a named directory that cannot be read
+  stays an error, as today; a FIFO, socket or device there is skipped,
+  not opened; a certificate block with PEM headers is skipped, as the
+  relay's pool skips it today; the same certificate in two files is sent
+  twice, as today; an empty entry stays an error; a private key gets a
+  `warning:` line; the lines say "to send"; `doctor` prints them in its
+  report, on stdout.
+- One fork is asked and not decided: a12, the entries of a named
+  directory that are not read because of their names. The design
+  proceeds with (a).
+- A finding made while writing a6's part, not fixed here: a `warden`
+  placed inside the repository it builds takes that repository for its
+  tree when the repository declares the module (Security note, **What
+  remains**, 8). `prebuilt-artifacts` removes it.
+
+**Not changed.** The proposed wording of ORCH-03 and of UX-07, byte for
+byte as at `3c0caab`; the values of `rule_changes`, `seams`, `drivers`,
+`surfaces`, `security_boundary`, `alters_relationships`, `design_review`,
+`native_validation`, `rules` and `concepts`. No answer forces a word of either rule: a2 (a) is what
+"at up to three levels" was written for, and a9 and a6 touch neither.
+
+**Still to come in this review:** a12; the two rule changes, each by
+name (ORCH-03, UX-07); the Security note; the outcome; and, with an
+approval, the hold behind `runtime-cli-project-path`'s merge (a7).
 
 ## Consolidation
 
