@@ -27,10 +27,10 @@ steps:
   - id: f2-design-review
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
-      claimed_by: human/jeff
-      expires: 2026-11-15T23:39:59.496526603Z
+      claimed_by: ""
+      expires: null
   - id: f2-plan
     phase: 2
     affinity: cloud
@@ -38,15 +38,15 @@ steps:
     needs:
       - f2-design-review
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261112T230554Z
+      expires: 2026-11-16T01:18:40.869430782Z
 budget:
   estimate:
     runs: 2
     steps: 14
   spent:
     runs: 0
-    steps: 3
+    steps: 4
 questions:
   - id: a1
     kind: assumed
@@ -164,21 +164,23 @@ questions:
     answer: '(a) Filed now: the four observations appended to configuration-bugfixes'' source, the two security findings filed through intake as one item. As recommended. Answered 2026-11-15.'
   - id: a12
     kind: assumed
-    status: open
+    status: confirmed
     question: 'The entries of a named CA directory that are not read because of their names. New 2026-11-15, raised by the fold-in of a9''s answer. A directory path means its .pem, .crt and .cer files, one level deep; its other entries (a file of another ending, a subdirectory) are not opened, today and after. a9''s answer has every skipped file get a stderr line with its reason on every run. It was given for files that are read and hold something other than a valid PEM certificate; whether an entry that is never opened is a skipped file, the answer does not say. The case is common: on the design agent''s host /etc/ssl/certs has 248 entries, of which 124 are read, 123 are hash-named links (002c0b4f.0) and one is a subdirectory. The design proceeds with (a).'
     options:
       - '(a) counted on every run, listed with --verbose: the path''s line ends "; 124 other entries not read", and with --verbose each is a line with its reason (its name''s ending, or that it is a directory); a root saved as corp.der or corp.cert is in the count on every run and is named on request'
       - '(b) one line each, on every run: "skips always" to the letter; a system certificate directory then prints 124 lines on every build, and the lines that matter (a private key, a DER file) are among them'
       - '(c) not mentioned at all: by the reference they are not CA files; a root saved under another ending then gives no line and no count, which is the silent case the answer is against'
     recommended: (a) counted on every run, listed with --verbose
+    answer: (a) Counted on every run, listed with --verbose. As recommended. Answered 2026-11-15.
   - id: a13
     kind: assumed
-    status: open
+    status: confirmed
     question: 'A file of a named CA directory that cannot be read. New 2026-11-15, raised by the independent review of the fold-in of a9''s answer. It is an entry of a directory that was named, under one of the three endings (.pem, .crt, .cer), that warden cannot open (permission denied) or that is a link to a file that does not exist. On main it is an error at the claim, whatever the directory''s other files give. a9''s answer makes two errors (a named path that does not exist or cannot be read; a named path that yields no certificate) and has everything else skipped with a logged reason. A file inside a named directory is not a named path, so by the answer''s letter it is a skip; the fold-in at 0bda630 had kept it an error (GLOBAL-11: a read that fails stops by default). The design proceeds with (a).'
     options:
       - '(a) skipped, with its line on every run ("[warden] upstream CA /etc/warden/roots/site.pem: skipped: cannot be read (permission denied)"), like every other file of the directory that gives nothing; the directory is an error only when it gives no certificate at all. The answer''s letter. A key file kept as it should be (mode 0600, another owner, named site.pem) beside the certificates then does not stop a build that a readable key in the same place does not stop. It is the one asked place where this design turns an error of main into a run that goes on: a root in a file the build''s user cannot read is not added, and a line says so'
-      - '(b) an error, as on main, raised before anything is created, naming the file and the directory. Nothing that fails today starts to pass. A protected key file in a directory of roots then stops the build where a readable one is a warning, and it is the one thing under a directory that stops a build although the directory gives certificates'
+      - (b) an error, as on main, raised before anything is created, naming the file and the directory. Nothing that fails today starts to pass. A protected key file in a directory of roots then stops the build where a readable one is a warning, and it is the one thing under a directory that stops a build although the directory gives certificates
     recommended: (a) skipped with its line; the directory fails only when it gives no certificate
+    answer: (a) Skipped, with its line on every run; the directory is an error only when it gives no certificate at all. As recommended. Answered 2026-11-15.
 history:
   - at: 2026-11-15T20:14:52Z
     by: human/jeff
@@ -246,3 +248,15 @@ history:
   - at: 2026-11-15T21:56:46Z
     by: human/jeff
     event: 'assumed question a6 confirmed: None of the options. Jeff, 2026-11-15: "So warden shouldn''t need its own source directory for anything after componentization.  It should instead fully be based on pre-compiled existing binaries/artifacts which are managed and installed and it may have development tooling for helping with that, but it does not manage any compilation.  Those are purely development processes". Asked what this fix does now: "Remove compilation now.  warden looks for necessary artifacts  to be on PATH and searches its own directory if they''re not found or not on or above a minimum version". Asked where that is built: its own security item, started now and designed in parallel; project-config-trust keeps the small lookup fix (the tree is found from the executable only, option (a)), so the hole closes with its merge and K1 is not held behind native validation; the new item then removes the tree lookup and every go build.'
+  - at: 2026-11-15T23:18:25Z
+    by: human/jeff
+    event: 'assumed question a12 confirmed: (a) Counted on every run, listed with --verbose. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T23:18:25Z
+    by: human/jeff
+    event: 'assumed question a13 confirmed: (a) Skipped, with its line on every run; the directory is an error only when it gives no certificate at all. As recommended. Answered 2026-11-15.'
+  - at: 2026-11-15T23:18:40Z
+    by: human/jeff
+    event: done f2-design-review
+  - at: 2026-11-15T23:18:40Z
+    by: cloud/20261112T230554Z
+    event: claimed f2-plan until 2026-11-16T01:18:40Z
