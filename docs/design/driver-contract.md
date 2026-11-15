@@ -573,7 +573,7 @@ and a driver's `run` during one build.
     `~/.config/warden/config.toml` stops being read, and one that exists
     is an error that names it. The queue item `project-config-trust`
     carries that change (the code, the ORCH-03 and UX-07 amendments, the
-    docs; its design read at `2c38687`), and this design is written to
+    docs; its design read at `539fd38`), and this design is written to
     fit it. So the contract hands a
     driver one `config_file` and no list, no file has a level, and the
     precedence has no step between files. K1 builds none of that item's
@@ -1418,7 +1418,7 @@ day raised.
   must not make `warden` run a binary it ships. With one file, that
   exposure is the defaulted `./warden.toml`; a file named with
   `--config` or `WARDEN_CONFIG` is the executor's own choice.
-  `project-config-trust` (its design at `2c38687`) leaves this to K1:
+  `project-config-trust` (its design at `539fd38`) leaves this to K1:
   "K1 decides it again". For every other key it proposes that what a
   config file may decide is not limited by where the file was found, and
   that the protection for a repository the executor does not control is
@@ -2359,7 +2359,7 @@ none of `warden`'s beyond the fields the contract's requests carry
 The three rules this has to keep. Each is being amended by another item
 as this is written, and the design is written to the amended form
 (**What K1 takes from the two configuration items**). Quoted as
-proposed, from those items' designs at `2c38687` and `3bf8784`; neither
+proposed, from those items' designs at `539fd38` and `534b768`; neither
 is approved.
 
 - ORCH-03, as `project-config-trust` proposes it: "`warden` reads one
@@ -4147,8 +4147,8 @@ would give a window (a5).
 Two items in the queue change `warden`'s configuration while K1 is in
 review, and both merge before K1 does: `runtime-cli-project-path`, then
 `project-config-trust`, then K1. Neither design is approved. Each is
-cited here as proposed, `project-config-trust` at `2c38687` and
-`runtime-cli-project-path` at `3bf8784`, and K1 follows what merges.
+cited here as proposed, `project-config-trust` at `539fd38` and
+`runtime-cli-project-path` at `534b768`, and K1 follows what merges.
 
 **`project-config-trust`: one config file.** Jeff decided it on
 2026-11-15 (a25, with his words; Decision 23) and gave the work to that
@@ -4208,7 +4208,7 @@ into this branch.
   merges `main` again and checks the same.
 
 **`runtime-cli-project-path`: the container driver's runtime.** A
-security fix (`host-env`), in review, read at `3bf8784`. On `main` a
+security fix (`host-env`), in review, read at `534b768`. On `main` a
 `warden.toml` in the working directory can set `[runtime] cli` to a file
 the repository ships, and `warden` runs it. Jeff's decision in that
 review: the container driver's runtime is limited to the runtimes it
@@ -4232,8 +4232,11 @@ has to keep, which is that design's hand-off:
    clean --driver qemu` and `--driver vz` stop running the container
    runtime (Behaviour 5), so they stop checking it; that item's one test
    of it takes Behaviour 5's result.
-3. The state file holds a value that passed the check. Where `reap` or
-   `attach` resolves the setting again, the check runs again.
+3. The state file holds a value that passed the check, and the value
+   `reap` or `attach` reads back from it is compared with the list again
+   before it is run, so that "the value run is the list's own" does not
+   rest on the contents of a file. Where the driver resolves the setting
+   again, the check runs again.
 4. That item's transitional detection, which gives the forms that ran
    before the fix a message of their own, moves with the check: one file
    behind one call, with its marker and its removal point.
@@ -4261,14 +4264,17 @@ probe, after the kit has applied the flag and the variable over the file
 (C7, C8). A driver's key is read only when that driver is selected
 (Behaviour 13, and the row "A driver's key, while another driver is
 selected" of the errors table). And a driver ignores every table it does
-not own (C5). For a driver the project did not write, the contract asks
-the same and the suite checks what it can see; nothing makes such a
-driver run the suite. Two things in that proposal reach K1 and are not
-settled here. Its wording lists the checks on `main` that predate it,
-and K1 moves two of them to their consumer, so K1 would owe an edit to
-that list (a8). And it leaves `[vm] build_link`, `[vm] dns` and the type
-of `warden`'s own keys checked as the file loads, under every driver,
-and asks this review whether K1 moves those too. K1 does not: `warden`
+not own (C5). `warden`'s refusal of a flag that neither it nor the
+selected driver declares (Behaviour 2) is what that wording allows of a
+flag: "a command may refuse, at startup, a flag that its run cannot
+use". For a driver the project did not write, the contract asks the same
+and the suite checks what it can see; nothing makes such a driver run
+the suite. Two things in that proposal reach K1 and are not settled
+here. Its wording lists the checks on `main` that predate it, and K1
+moves two of them to their consumer, so K1 would owe an edit to that
+list (a8). And it leaves `[vm] build_link`, `[vm] dns` and the type of
+`warden`'s own keys checked as the file loads, under every driver, and
+asks this review whether K1 moves those too. K1 does not: `warden`
 checks the link and the resolvers as the file loads (Decision 8; a9,
 answered), and that stands unless a9 is opened again.
 
@@ -4440,8 +4446,8 @@ tests there (GLOBAL-07, ORCH-05).
   `runtime-cli-project-path` and is closed there, before K1 (**What K1
   takes from the two configuration items**).
 - **K1 is written to fit two designs that are not approved.**
-  `project-config-trust` (read at `2c38687`) and
-  `runtime-cli-project-path` (at `3bf8784`) are both in review. What K1
+  `project-config-trust` (read at `539fd38`) and
+  `runtime-cli-project-path` (at `534b768`) are both in review. What K1
   takes from each is listed (**What K1 takes from the two configuration
   items**), and a point that their reviews change is a finding for
   Design (FLOW-06). The one that would reach the contract is that item's
@@ -5368,7 +5374,7 @@ does not change." There is one file now (Decision 23), so it says "the
 config file", and its last two sentences are one.
 
 **With `project-config-trust`.** That item amends the same rule, for one
-config file (its design at `2c38687`, not approved). The two change
+config file (its design at `539fd38`, not approved). The two change
 different sentences:
 
 | Part of ORCH-03 | This design owns | `project-config-trust` owns | Neither changes |
@@ -5409,7 +5415,7 @@ The review of this design is asked to approve K1's paragraph and clause
 in both settings (a8): after `main`'s first paragraph, as proposed
 above, and after that item's, as here. K1's words are the same in both;
 "the same precedence" means the first paragraph's, whichever it is. The
-joined rule is quoted from that item's design at `2c38687`; if its
+joined rule is quoted from that item's design at `539fd38`; if its
 review changes its sentences, this quotation is read again against the
 outcome (FLOW-10), and a change that K1's paragraph would contradict or
 repeat is a finding for Design (FLOW-06). UX-07 is that item's alone.
@@ -6837,8 +6843,8 @@ Not settled by this fold-in, and said where it arises:
 
 - Both designs K1 now leans on are in review. Their commits appeared
   while this fold-in was being written, and it was brought into line
-  with them: `project-config-trust` at `2c38687` and
-  `runtime-cli-project-path` at `3bf8784`. What K1 takes from each is in
+  with them: `project-config-trust` at `539fd38` and
+  `runtime-cli-project-path` at `534b768`. What K1 takes from each is in
   the new section. `project-config-trust` proposes that a config file
   found in the working directory may decide what a named file decides
   (its Decision 7, its a4, not confirmed); if that changes, the drivers
