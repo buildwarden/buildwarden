@@ -197,9 +197,11 @@ Outside this repository: `buildwarden-relay` `main` at `e9b23d5`
 test must provide**: the Rust relay's build link is raw Ethernet frames on a
 socket, and its claim will arrive over vsock on VZ.
 
-**Revisions before the design review.** This design has not been reviewed
-(**Design review**). It was revised five times after `f1-design` was
-done, and none of the five is a return to Design (FLOW-06):
+**Revisions before the design review.** The design review began on
+2026-11-15 and has not ended (**Design review**, which records what its
+first sitting changed). Before it, the design was revised five times
+after `f1-design` was done, and none of the five is a return to Design
+(FLOW-06):
 
 - 2026-11-14, `618ae78`: the collector's lifetime is written per session
   token, on Jeff's word in the `driver-contract` design review (the
@@ -766,6 +768,14 @@ The release at the end is Jeff's too, and is a queue step, not a question
 
 ### Assumed
 
+**Answered on 2026-11-15.** Jeff answered a1 to a18 in the first sitting
+of the design review. Each entry below keeps its options and says which
+he chose. Twelve were confirmed as recommended: a3 to a6 and a11 to a18.
+Five depart from what the design proposed, and the design is revised for
+each: a1 (C), a2 (B), a8 (B), a9 (A, and OpenAPI for the HTTP seams as
+well) and a10 (B). a7 was restated for a8's answer and then confirmed.
+a19 is new, raised by the fold-in of a8, and is not answered.
+
 Each is confirmed in the design review (FLOW-19). The same entries are in the
 queue file. a1 to a16 date from `f1-design`; the revision of 2026-11-14
 reworded a4, a6, a14 and a15 and added a17 and a18, and the pass on its
@@ -811,8 +821,9 @@ release; its recommended answer is still A.
   question for the human, as `build-vm-busybox` q1 did. No agent creates
   it, and no agent adds a licence file to it.
 - **a3. Visibility.** Options: (A) public from creation; (B) private until
-  `buildwarden-relay` goes public at M1. *Proceeding with A; confirm.* It
-  specifies protocols of a public project, the book links to it, and the Go
+  `buildwarden-relay` goes public at M1.
+  **Answered 2026-11-15: (A), public from creation.**
+  It specifies protocols of a public project, the book links to it, and the Go
   module proxy and checksum database serve only public modules: a private
   repository would need credentials in this repository's CI and in the
   relay's.
@@ -853,7 +864,9 @@ release; its recommended answer is still A.
     repository, and the harness's code is held to no rule of this
     project.
 
-  *Proceeding with A; confirm.* Naming the list in the design is the
+  **Answered 2026-11-15: (A), the rules a reader can judge from the
+  code and the schemas alone.**
+  Naming the list in the design is the
   normal way to work in such a repository, not a stopgap until P1: it is
   the list LOOP-08 asks an item's design for. The **Security note** says
   what the sandbox does whichever option is taken.
@@ -862,7 +875,9 @@ release; its recommended answer is still A.
   released as a module tag plus static `bw-conformance` binaries with
   checksums; (B) Rust; (C) a separate harness repository; (D) Go tests in
   this repository that import the kit, which the umbrella's Decision 3
-  rejects. *Proceeding with A; confirm.* *(2026-11-15: a8's answer does
+  rejects.
+  **Answered 2026-11-15: (A).**
+  *(2026-11-15: a8's answer does
   not change this one. It changes what the words cover: the shared
   harness stays under `conformance/`, each specification's cases move
   into its own module, and the module tag and the `bw-conformance`
@@ -872,7 +887,9 @@ release; its recommended answer is still A.
   now; the VM-image launcher (qemu first) is built in the specs repository
   by the relay's M2 or M3 item, or by seam 8's item, whichever first has an
   image and a CI that boots it; (B) build a qemu launcher here and validate
-  it on `qemu-any`. *Proceeding with A; confirm.* The Go relay's VM form adds
+  it on `qemu-any`.
+  **Answered 2026-11-15: (A), `exec`, `oci` and `external` now.**
+  The Go relay's VM form adds
   no relay code to `-mode vm`, which the `exec` launcher covers in a network
   sandbox. What a VM adds is its init and boot channel
   (`tools/relay-vm/init`, the relay seed), which belong to seam 8 (relay
@@ -952,7 +969,9 @@ release; its recommended answer is still A.
   defer: S2 moves truststore generation out of `initialize`, so a suite
   written now would pin the behaviour S2 removes; (B) build it here, for
   Linux guests in a container, with Windows and macOS guests as tracked
-  gaps. *Proceeding with A; confirm.* Until then EXEC-04's conformance stays
+  gaps.
+  **Answered 2026-11-15: (A), deferred to S2's item.**
+  Until then EXEC-04's conformance stays
   the tests in `cmd/warden-io/`, and the amended TEST-05 says so. The
   umbrella says seams 1 to 8 each get a suite, and its S2 row does not name
   this one. With A, seam 5 has no suite when S1 is done, and S2's intake has
@@ -964,20 +983,23 @@ release; its recommended answer is still A.
   fix none here; the review may turn any into a follow-up item, and says
   what kind of item it is under FLOW-20; (B) fix them in this item, which
   puts `relay/`, `collector/` and `cmd/warden-io/` in the diff, with
-  GLOBAL-06 and every driver's native validation. *Proceeding with A;
-  confirm.*
+  GLOBAL-06 and every driver's native validation.
+  **Answered 2026-11-15: (A), record each and fix none here.**
 - **a13. Seam 6's name.** The umbrella's seam table gives seam 6 no name.
   Options: (A) `bootstrap-config`, added to GLOBAL-08's executor bullet and
   to tier 1's seam list; (B) `bootstrap-model`, which the umbrella's
   front-matter lists and which is also the name of the BOOT-07 model.
-  *Proceeding with A; confirm.*
+  **Answered 2026-11-15: (A), `bootstrap-config`.**
 - **a14. Native validation** (**Validation plan**). *(Reworded
   2026-11-14.)* Options: (A) nothing blocking; two tracked gaps, both
   deferred: `macos-vz` until the `exec` launcher has a macOS form, and
   `qemu-any` until a VM launcher exists; (B) build the macOS form of the
   launcher in this item, and keep the `macos-vz` gap open, to be run once
   the item has merged; (C) block on `macos-vz`, which needs B's launcher;
-  (D) record no gaps. *Proceeding with A; confirm.* At `f1-design` the
+  (D) record no gaps.
+  **Answered 2026-11-15: (A), nothing blocking, and two tracked gaps,
+  both deferred.**
+  At `f1-design` the
   `macos-vz` gap was recorded open. Nothing this item builds can start that
   run: the relay targets run on Linux only, and the sandbox is Linux
   namespaces. An open entry wakes the MacBook's scheduled session for a run
@@ -1050,7 +1072,11 @@ release; its recommended answer is still A.
     is red until then.
   - (D) S1 waits for `loop-repository`.
 
-  *Proceeding with A; confirm.* The recommended answer is unchanged by
+  **Answered 2026-11-15: (A), the human step `f6-release-specs`, as an
+  exception for this item only.** Under a8's answer the step pushes seven
+  tags and moves six pins, where this question's text says the tag and
+  the pin (Decision 12).
+  The recommended answer is unchanged by
   LOOP-09 and LOOP-04, for two reasons neither rule answers. Under A the
   step is in the queue from the design review, where Jeff sees it; under
   B nothing shows until Publish. And under A the release can be made as
@@ -1102,7 +1128,9 @@ release; its recommended answer is still A.
   read stored bytes back is something a target file may give the harness,
   not a requirement on a collector. (B) An object model for any collector:
   each output is an object a reader can fetch by its name with the bytes
-  sent. *Proceeding with A; confirm.* The umbrella's review (its a2) decided
+  sent.
+  **Answered 2026-11-15: (A), the wire only.**
+  The umbrella's review (its a2) decided
   that the collector gets no storage boundary in this program and that one
   is designed with the first alternative collector. B would decide part of
   it here.
@@ -1116,7 +1144,9 @@ release; its recommended answer is still A.
   `artifacts` path, a new step in one mode's claim) is caught only by
   Review's judgment of GLOBAL-08. (B) List them. Every change to the relay's
   core then needs a pin move, or a `Tier1-Allow` trailer that says why it
-  is not a seam change. *Proceeding with A; confirm.* The changes the
+  is not a seam change.
+  **Answered 2026-11-15: (A), left off the list.**
+  The changes the
   program still makes to the Go relay's seams are items that change the
   specification first by their own designs (S2's truststore endpoints),
   the freeze (FLOW-20) keeps other changes few, and the Go relay is retired
@@ -1131,7 +1161,9 @@ release; its recommended answer is still A.
   `TARGETS` that cannot run on the host is an error, and each CI job names
   its targets. (B) Every target in the directory, as at `f1-design`. The
   default then fails on macOS and Windows, and a developer there has to
-  know to name `collector-disk`. *Proceeding with A; confirm.* A is not a
+  know to name `collector-disk`.
+  **Answered 2026-11-15: (A), the targets that declare the host's OS.**
+  A is not a
   fallback (GLOBAL-11): which targets run is decided from what each file
   declares, before anything starts, and nothing is tried after a failure.
 - **a19. Where the code that every suite shares lives, and how it is
@@ -1247,6 +1279,13 @@ Read and not amended:
   suite in the specs repository"* stays true of seam 4 once M6 has moved
   it.
 - The umbrella's Decisions are untouched: none names a phase for seam 4.
+- *Nothing for a8, a9 or a10.* The umbrella's a1 has the collector
+  specification "written in two parts"; two documents are those parts.
+  Its components table gives the specs repository "One specification and
+  one black-box suite per seam"; seam 2 now has two of each, which this
+  design reads as what a1 already said. Decision 2 couples components
+  through "tagged releases", which a tag per specification still is, and
+  the umbrella says nothing of the documents' format.
 
 `driver-contract` proposes amendments of its own to the umbrella (seams 1,
 6 and 9 and the S4 row). None is to a line listed here.
@@ -2522,7 +2561,7 @@ difference in the step's evidence and in the pin commit's message. The
 `conformance` workflow judges the result; a failure is repaired under
 FLOW-11 or goes back under FLOW-06.
 
-If the item goes back after the tag (FLOW-06, FLOW-10) and the specs
+If the item goes back after the tags (FLOW-06, FLOW-10) and the specs
 content has to change, the change is a new branch and pull request in the
 specs repository and a new release of each directory it changes
 (**Releases and how they are consumed**). On a return to Design, the
@@ -3290,8 +3329,12 @@ the relay binary or image named in the target file.
 - **Tier 0** (`make test`, `make lint`): the book-link test (links to the
   specs repository name the pinned ref); tier 1's rule index parses the
   amended rules, and `rules.yaml` parses with the new `seams` entries;
-  `tier1 designs` accepts this design. In the specs repository: its `ci`
-  workflow, including the suites' self-test.
+  `tier1 designs` accepts this design; the book-link test checks each
+  row's ref against that specification's pin. In the specs repository:
+  its `ci` workflow, which for every specification runs the layout check,
+  the coverage check, the OpenAPI checks where it has such a file, and
+  its suite against the harness's own roles, and which holds the two
+  collector documents' common part alike (a8, a9, a10).
 - **Tier 1** (the `conformance` workflow): the relay suites (the five
   specifications' cases for a relay, **The harness**) against
   `dist/conformance/relay` in host, vm and container mode and against the
@@ -3445,7 +3488,101 @@ intake finds it:
 
 ## Design review
 
-None yet.
+**2026-11-15, first sitting: eighteen questions answered; five answers
+folded in.** Jeff read the design at `e4801d6` and answered a1 to a18 in
+the attended session. The review has not ended. Still to come: the five
+rule changes, to be approved by name (FLOW-14); the amendments to the
+umbrella, U1 to U3; the question the fold-in raised, a19; and the
+outcome. Nothing in this entry records an outcome.
+
+Confirmed as recommended, with no change to the design beyond marking
+the question answered:
+
+- a3: public from creation.
+- a4: the invariants that apply in the specs repository are GLOBAL-01 to
+  GLOBAL-04, GLOBAL-07, GLOBAL-09 to GLOBAL-11, TEST-04 and TEST-07 for
+  the harness's Go code, and RELAY-05's schema-identity rule for the
+  schemas.
+- a5: the harness is Go, in the specs repository, and imports nothing
+  from the kit.
+- a6: the `exec`, `oci` and `external` launchers now.
+- a11: the executor's suite is deferred to S2's item.
+- a12: each divergence is recorded as the code behaves, and none is fixed
+  here.
+- a13: seam 6 is `bootstrap-config`.
+- a14: nothing blocks natively; two tracked gaps, both deferred.
+- a15: the human step `f6-release-specs`, as an exception to FLOW-04's
+  list and FLOW-08's sentence, for this item only.
+- a16: the collector's outputs specification is normative for the wire
+  only.
+- a17: `relay/relay.go`, `relay/proxy.go` and `cmd/relay/` stay off tier
+  1's seam list.
+- a18: `make conformance` with no target runs the targets that declare
+  the host's OS.
+
+Five answers depart from what the design proposed. Each was folded in
+during the sitting, in its own commit; none is a return to Design
+(FLOW-06), and `f2-design-review` stayed claimed throughout.
+
+- **a1, (C): seam 4 moves at M6, with RELAY-01 to RELAY-08** (`c94b814`).
+  Decision 9 and a1 are rewritten. No later S1 item is owed for the
+  ledger's move; the move is listed among the work owed to M6. The ledger
+  format stays under `specs/` here, RELAY-05 is not changed, and the
+  harness's ledger verifier reads the format from this repository. The
+  umbrella's seam 4 row and one row of its rule table are listed for
+  amendment (**Amendments to the umbrella design**, new).
+- **a2, (B): the repository is created now, before the approval**
+  (`fa65b2e`). **What Jeff creates**, a2, the Blocking paragraph and task
+  0 are rewritten to what Jeff confirmed for creation:
+  `buildwarden/buildwarden-specs`, public, a README stub and the
+  Apache-2.0 `LICENSE` and no `NOTICE`, the protection of `main` and the
+  Claude GitHub App. Jeff creates it himself, because the cloud session
+  cannot. What Implement checks first is listed, and Implement's blocking
+  question stays for a repository that is still missing.
+- **a10, (B): two collector documents** (`e361370`). Seam 2 is written as
+  `collector-outputs/v1.md` and `collector-inputs/v1.md`, with the
+  prefixes `COLLOUT` and `COLLIN`. What the two share is written in full
+  in both and kept alike by a check. Seam 2 stays one seam, `collector`,
+  in GLOBAL-08 and in tier 1's list. Decisions 2, 3 and 13, a10, a16's
+  title, D16's row, the suites' table, **Specification changes** and task
+  3 follow.
+- **a9: the numbered requirements as proposed, and OpenAPI for the HTTP
+  seams as well** (`c09f668`). **The OpenAPI descriptions** is new: four
+  specifications get OpenAPI 3.1 files in JSON, the requirements stay
+  normative, three `ci` checks hold the files to them, and what OpenAPI
+  cannot say stays prose. Decisions 2 and 3, a9, **CI**, **Specification
+  changes** and tasks 1 to 4 follow.
+- **a8, (B), with a7 as restated: a tag per specification, each release
+  carrying the build of the tooling that tests it** (`b6f3d21`). Each
+  specification is a directory and a Go module, tagged
+  `<directory>/vX.Y.Z`, with its cases and its command; the shared harness
+  is the module `conformance/`; `tools/conformance/go.mod` names the six
+  specifications each at a version. Decisions 2, 4, 5, 7 and 12, a5's
+  note, a7, a8, **The harness** (its opening, to the instances), **What
+  the specs repository leaves room for**, **Releases and how they are
+  consumed**, **CI**, **Tier 1's seam list** (the comment and what the
+  check holds), the book's page, **How the loop treats the second
+  repository**, **Defaults and overrides**, **Specification changes**,
+  the **Validation plan** and tasks 1, 6 to 8 and 11 to 13 are rewritten.
+  Decision 4 states what the scheme costs beside the single tag.
+
+What the fold-in did to the rule changes, which are not yet put to Jeff:
+the proposed wording of TEST-05, GLOBAL-08, EXEC-04 and PROFILE-01 (three
+rows, and the two joined rows under **With `driver-contract`**) is
+re-derived for a8 and a10, and each entry says what the wording he read
+at `e4801d6` was. TEST-02's wording is as he read it. `rule_changes` is
+unchanged: the same five rules and the same paths. The wording on `main`
+was checked again at `ad4ea50`.
+
+One question is new: **a19**, where the code every suite shares lives and
+how it is versioned. The design proceeds on its option A, the module
+`conformance/` with tags of its own.
+
+In the queue file: a19 added, open; the note of `f6-release-specs`
+rewritten for seven tags and `make pin-specs SPECS=latest`; no step
+added or removed; no recorded answer touched. `design_review` stays
+`required`, `alters_relationships` stays `true`, and `native_validation`
+and the two tracked gaps are as they were.
 
 ## Consolidation
 
