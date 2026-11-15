@@ -177,3 +177,93 @@ func TestDetectRuntimeProbesTheSupportedList(t *testing.T) {
 		t.Errorf("detection ran %q, want info of finch, docker, podman in order", got)
 	}
 }
+
+// inRuntimeLevels runs the test with the runtime named at each level whose
+// value is not empty; user and project are file bodies.
+func inRuntimeLevels(t *testing.T, user, project, env, flag string) {
+	t.Helper()
+	inConfigFiles(t, user, project)
+	t.Setenv("WARDEN_CTR_CLI", env)
+	flagRuntime = flag
+}
+
+// The value in effect is the highest level that names a runtime. A level
+// below it is not read, so an unsupported value there is not an error; an
+// unsupported value in effect is one, and no lower level is used in its place.
+func TestRuntimeOverridesComeFirst(t *testing.T) {
+	const bad = "./rt"
+	inProject, inUser := "[runtime] cli in warden.toml", "the user's file"
+	for _, tc := range []struct {
+		name                     string
+		user, project, env, flag string
+		want                     string // the runtime, or
+		refused                  string // the setting the refusal names
+	}{
+		{name: "flag over an unsupported project value",
+			project: bad, flag: "docker", want: "docker"},
+		{name: "variable over an unsupported project value",
+			project: bad, env: "podman", want: "podman"},
+		{name: "project over an unsupported user value",
+			user: bad, project: "docker", want: "docker"},
+		{name: "flag over an unsupported variable",
+			env: bad, flag: "finch", want: "finch"},
+		{name: "unsupported flag over a supported project value",
+			project: "docker", flag: bad, refused: "--runtime"},
+		{name: "unsupported variable over supported files",
+			user: "finch", project: "docker", env: bad, refused: "WARDEN_CTR_CLI"},
+		{name: "unsupported project value over a supported user value",
+			user: "podman", project: bad, refused: inProject},
+		{name: "both files hold the same unsupported string",
+			user: bad, project: bad, refused: inProject},
+		{name: "only the user's file holds it",
+			user: bad, refused: inUser},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			user, project := "", ""
+			if tc.user != "" {
+				user = cliFile(tc.user)
+			}
+			if tc.project != "" {
+				project = cliFile(tc.project)
+			}
+			inRuntimeLevels(t, user, project, tc.env, tc.flag)
+			got, err := resolvedRuntime(t)
+			if tc.refused == "" {
+				if err != nil || got != tc.want {
+					t.Fatalf("resolveRuntime = %q, %v; want %q", got, err, tc.want)
+				}
+				return
+			}
+			if tc.refused == inUser {
+				tc.refused = "[runtime] cli in " + userConfigFile(t)
+			}
+			wantRuntimeRefused(t, err, tc.refused, bad)
+		})
+	}
+}
+
+// An empty flag and an empty variable are not set. cli = "" in a file is
+// that file's value: it hides a lower file's, and the runtime is detected.
+func TestEmptyRuntime(t *testing.T) {
+	t.Run("an empty flag and variable leave the project's value", func(t *testing.T) {
+		inRuntimeLevels(t, "", cliFile("podman"), "", "")
+		if got, err := resolvedRuntime(t); err != nil || got != "podman" {
+			t.Fatalf("resolveRuntime = %q, %v; want podman", got, err)
+		}
+	})
+	t.Run("an empty flag and variable leave the user's value", func(t *testing.T) {
+		inRuntimeLevels(t, cliFile("finch"), "", "", "")
+		if got, err := resolvedRuntime(t); err != nil || got != "finch" {
+			t.Fatalf("resolveRuntime = %q, %v; want finch", got, err)
+		}
+	})
+	t.Run("an empty project value hides the user's and is detected", func(t *testing.T) {
+		inRuntimeLevels(t, cliFile("podman"), cliFile(""), "", "")
+		t.Setenv("PATH", t.TempDir()) // detection finds nothing, on any host
+		got, err := resolvedRuntime(t)
+		if got != "" || err == nil ||
+			!strings.Contains(err.Error(), "no container runtime found") {
+			t.Fatalf("resolveRuntime = %q, %v; want detection's error", got, err)
+		}
+	})
+}
