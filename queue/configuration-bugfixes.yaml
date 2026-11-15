@@ -1,6 +1,6 @@
 feature: configuration-bugfixes
 title: 'Configuration bugfixes: two documented keys that are never read, doctor reporting ok for a runtime it never ran, a file in the working directory hiding an installed runtime, and load-time checks skipped for a key in another letter case'
-priority: 72
+priority: 73
 status: queued
 round: feature
 phase: 0
@@ -53,3 +53,6 @@ history:
   - at: 2026-11-15T21:57:17Z
     by: human/jeff
     event: 'priority 71 -> 72 (renumbered by wf new: workdir-in-context queued at 67)'
+  - at: 2026-11-15T23:22:53Z
+    by: human/jeff
+    event: 'priority 72 -> 73 (renumbered by wf new: vz-nocgo-build queued at 64)'

@@ -1,6 +1,6 @@
 feature: seam-specs
 title: 'Specs repository and conformance suites: write seams 1, 2, 3, 5 and 6, build the harness against any relay and any collector, link the book and the specs, fill tier 1''s seams list (componentization S1)'
-priority: 68
+priority: 69
 status: in_progress
 round: feature
 phase: 2
@@ -391,3 +391,6 @@ history:
   - at: 2026-11-15T23:03:10Z
     by: cloud/20261112T230554Z
     event: claimed f2-plan until 2026-11-16T01:03:10Z
+  - at: 2026-11-15T23:22:53Z
+    by: human/jeff
+    event: 'priority 68 -> 69 (renumbered by wf new: vz-nocgo-build queued at 64)'

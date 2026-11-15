@@ -1,6 +1,6 @@
 feature: driver-contract
 title: 'The driver command contract, its suite and the kit: warden runs a driver binary, the container driver is one, and every build runs through warden''s build sequence (componentization K1)'
-priority: 69
+priority: 70
 status: in_progress
 round: feature
 phase: 2
@@ -498,3 +498,6 @@ history:
   - at: 2026-11-15T22:04:34Z
     by: human/jeff
     event: done f2-design-review
+  - at: 2026-11-15T23:22:53Z
+    by: human/jeff
+    event: 'priority 69 -> 70 (renumbered by wf new: vz-nocgo-build queued at 64)'

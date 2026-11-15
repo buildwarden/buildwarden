@@ -1,6 +1,6 @@
 feature: workdir-in-context
 title: A work directory inside the build context is served to the build; a Dockerfile FROM value reaches the container runtime's command line unchecked (security fix)
-priority: 67
+priority: 68
 status: queued
 round: feature
 phase: 0
@@ -28,3 +28,6 @@ history:
   - at: 2026-11-15T21:57:17Z
     by: human/jeff
     event: queued at priority 67 (intake)
+  - at: 2026-11-15T23:22:53Z
+    by: human/jeff
+    event: 'priority 67 -> 68 (renumbered by wf new: vz-nocgo-build queued at 64)'

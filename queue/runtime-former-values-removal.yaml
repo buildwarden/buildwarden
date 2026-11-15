@@ -1,6 +1,6 @@
 feature: runtime-former-values-removal
 title: 'Remove the transitional detection of former container runtime values at 1.0: TRANSITIONAL(runtime-former-values)'
-priority: 73
+priority: 74
 status: queued
 round: feature
 phase: 0
@@ -47,3 +47,6 @@ history:
   - at: 2026-11-15T22:52:20Z
     by: human/jeff
     event: 'on hold (q1): Held until 1.0 (runtime-cli-project-path a4 (d), Jeff, 2026-11-15): resume in the change that prepares 1.0, and not before runtime-cli-project-path''s PR has merged. Not a program item and not exempt from the FLOW-20 freeze.'
+  - at: 2026-11-15T23:22:53Z
+    by: human/jeff
+    event: 'priority 73 -> 74 (renumbered by wf new: vz-nocgo-build queued at 64)'
