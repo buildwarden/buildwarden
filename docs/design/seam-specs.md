@@ -329,7 +329,7 @@ Nothing in any of the five is approved.
    ```
    buildwarden-specs/
      README.md                 index: each specification, its newest release, its implementations
-     go.work                   the seven modules, for the repository's own builds
+     go.work                   the seven modules; the harness version in progress
      relay-claim/              seam 1; module .../relay-claim, tags relay-claim/v0.x.y
        v1.md
        v1.openapi.json                 its HTTP exchange (a9)
@@ -435,13 +435,14 @@ Nothing in any of the five is approved.
      commit. The six specifications have six independent version
      numbers.
    - *What a release carries.* The `release` workflow builds that
-     specification's command, `bw-conformance-<directory>`, from the
-     module at the tag, with the harness version its `go.mod` names, as a
-     static binary for linux, darwin and windows on amd64 and arm64. It
-     attaches those binaries and a `SHA256SUMS` file to the tag's
-     release. So the tooling that tests a release of a specification is
-     part of that release: the same tag names the text and the cases, and
-     the binaries are their build.
+     specification's command, `bw-conformance-<directory>`, with
+     `go install <command>@<tag>`: from the module as the tag serves it,
+     with the harness and every other module at the versions its `go.mod`
+     names. It builds a static binary for linux, darwin and windows on
+     amd64 and arm64, and attaches those binaries and a `SHA256SUMS` file
+     to the tag's release. So the tooling that tests a release of a
+     specification is part of that release: the same tag names the text
+     and the cases, and the binaries are their build.
    - *What minor and patch mean,* for each specification on its own,
      before its 1.0. A minor release may make a passing implementation
      fail, or changes what an implementation must do: a requirement
@@ -497,9 +498,14 @@ Nothing in any of the five is approved.
      harness**).
    - A change that needs both a specification and the harness is two
      tags, pushed in order; the first release is seven.
-   - There are seven modules to keep building. The repository's own
-     builds use a Go workspace, so they need no tag; a branch elsewhere
-     that pins an unmerged commit needs one extra line (Decision 7).
+   - There are seven modules to keep building. With the harness in a
+     module of its own that is tagged in the same merge (a19, option A),
+     three pieces of machinery keep them building while a harness version
+     has no tag yet: a line in the workspace file, a command that tidies
+     each specification's `go.mod`, and a release built with `go install`
+     and not in a checkout (**Releases and how they are consumed**). A
+     branch elsewhere that pins an unmerged commit needs one extra line
+     (Decision 7).
 
    *Rejected:* one tag for the repository as a whole (`v0.x.y`), with one
    `bw-conformance` binary: a8's option A, which this design proposed
@@ -1181,18 +1187,28 @@ release; its recommended answer is still A.
     harness is one pull request and one merge, with the harness's tag
     pushed first. Cost: a seventh version number, though no
     implementation pins it. And in such a pull request a specification
-    names a harness version that has no tag yet, so the specs repository
-    builds through a Go workspace and an implementation's branch in
-    progress carries one `replace` line (**Releases and how they are
-    consumed**; the workspace was tried, the first real tags cannot be
-    until they are pushed).
+    names a harness version that has no tag yet. Go does not build that
+    as it stands once the harness imports anything outside the standard
+    library, which it must. Three pieces of machinery make it build, each
+    tried in a model (**Releases and how they are consumed**): a
+    `replace` line in the workspace file that names the harness version
+    in progress, edited each time that version rises; a command that
+    tidies each specification's `go.mod` through a temporary `replace`,
+    with a `ci` check that the result is complete; and a release built
+    with `go install <command>@<tag>`, because a build in a checkout at
+    the tag fails. A specification's `go.sum` never lists the harness. An
+    implementation's branch in progress carries one `replace` line. The
+    first real tags cannot be tried until they are pushed.
   - (B) The same module, tagged, and released ahead: a harness change is
     merged and tagged in a pull request of its own, before the
     specification that needs it. Nothing then names a version that does
-    not exist, and there is no workspace dependence and no `replace`
-    line. Cost: two merges by Jeff for every change that needs both, and
-    two pull requests for the first release, the second changing only
-    `go.mod` files.
+    not exist, so none of A's machinery is needed: `go mod tidy` runs as
+    it is, a release builds from a checkout, and no branch carries a
+    `replace` line. Cost: two merges by Jeff for every change that needs
+    both, and two pull requests for the first release, the second
+    changing only `go.mod` files. A harness change is also merged before
+    an implementation has run against it, unless that implementation's
+    branch carries the `replace` line after all.
   - (C) The same module, never tagged: each specification's `go.mod`
     names the commit of the harness it was written against. Six tags,
     not seven, and the harness has no version of its own, which is the
@@ -1214,13 +1230,18 @@ release; its recommended answer is still A.
 
   *Proceeding with A; confirm.* It is the option in which a release names
   everything it was built from by a tag, and a change that spans the
-  harness and a specification is still one merge. If Jeff would rather
-  have nothing depend on a version that does not exist yet than have one
-  merge, B changes only the order of release: Decision 4's tag order,
-  task 11 and `f6-release-specs` gain a second pull request, and the
-  `replace` line and the workspace's part in a release go away. Under
-  every option the cases stay in each specification's module, and what
-  Decision 4 says a tag per specification costs is the same.
+  harness and a specification is still one merge. Its machinery is the
+  specs repository's own and `ci` holds it; what it spares is a second
+  merge by Jeff for each such change, and those are expected to be
+  common while the specifications are below 1.0. If Jeff would rather
+  have plain Go mechanics and nothing that depends on a version that
+  does not exist yet, B changes the order of release and removes the
+  machinery: Decision 4's tag order, task 11 and `f6-release-specs` gain
+  a second pull request, and the workspace's `replace` line, the tidy
+  command and its check, and the `replace` line on a branch in progress
+  go away. Under every option the cases stay in each specification's
+  module, and what Decision 4 says a tag per specification costs is the
+  same.
 
 ## Design
 
@@ -2152,8 +2173,8 @@ This design keeps its names and proposes none to K1.
 - A release is a tag `<directory>/v0.x.y` on the specs repository's
   `main`, one specification at a time (Decision 4). The `release`
   workflow runs for the tag: it builds that specification's
-  `bw-conformance-<directory>` binaries from the module at the tag and
-  attaches them with `SHA256SUMS`. A `conformance/v0.x.y` tag releases
+  `bw-conformance-<directory>` binaries with `go install <command>@<tag>`
+  and attaches them with `SHA256SUMS`. A `conformance/v0.x.y` tag releases
   the harness and attaches nothing.
 - This repository names a release of each specification in
   `tools/conformance/go.mod` (Decision 7). `make conformance` runs
@@ -2207,31 +2228,62 @@ This design keeps its names and proposes none to K1.
 
 **How the seven modules are built and released together.** These are the
 mechanics behind Decisions 4, 5 and 7, stated so that Plan can order
-them. They hold whichever way a19 is answered, except where noted.
+them. The first three are what a19's option A needs; under its option B
+none of them is (a19). The last two hold either way.
 
-- *Inside the specs repository* every build and test uses the working
-  tree, through the workspace file `go.work`. A specification's `go.mod`
-  names the harness version it will be released with. In a pull request
-  that changes the harness, that version has no tag yet, and the
-  workspace does not need one: tried on 2026-11-15 with Go 1.26, a
-  module that requires a sibling at a version with no tag builds, vets
-  and runs in a workspace. Outside the workspace the same module does
-  not build until the tag exists, and `go mod tidy` cannot run in it
-  until then.
-- *The release build* runs outside the workspace, from the module at its
-  tag, so that the binary is built from exactly what a `go.mod` that
-  names the tag would get. That is why the harness's tag is pushed
-  before the specifications' tags that name it.
+They were tried on 2026-11-15 with Go 1.26.3, in a model of the layout:
+local git repositories, nested modules tagged `<directory>/vX.Y.Z`, and a
+harness that imports a module outside the standard library, as the real
+one will (a DNS library, a network stack, a TOML parser). The first trial
+used modules that import nothing, and with those the workspace needs
+none of this, which is how the first three were missed until the review
+of the fold-in.
+
+- *The workspace names the harness version in progress.* A
+  specification's `go.mod` names the harness version it will be released
+  with. In a pull request that changes the harness, that version has no
+  tag yet, and every build, vet and test in the workspace then fails
+  with "unknown revision", because Go reads the `go.mod` of the version
+  that is named. `go.work` therefore carries one line,
+  `replace <the harness module> v0.x.y => ./conformance`, for the
+  version at the head of `conformance/CHANGELOG.md`. With it they pass.
+  Go refuses the line without a version, so a pull request that raises
+  the harness's version edits it, and `ci` checks it against the
+  `CHANGELOG.md`. A specification that still names an older harness
+  version, which has its tag, builds in the workspace too, against the
+  tree's harness.
+- *Each specification's `go.mod` is tidied through a temporary
+  `replace`.* `go mod tidy` cannot resolve a harness version that has no
+  tag. `make tidy` in the specs repository adds a `replace` of the
+  harness by `../conformance` to the specification's `go.mod`, runs
+  `go mod tidy` outside the workspace, and drops the line. The `go.mod`
+  then lists the harness's own dependencies at the versions the harness
+  names, and `go.sum` their hashes; `go.sum` has no line for the harness
+  itself. `ci` runs the same command and fails on a difference, and
+  fails a `go.mod` that carries a `replace`. This is what makes a
+  release repeatable: built from a `go.mod` that had not been tidied,
+  the same tag was built with a newer version of a third-party module
+  as soon as one was published.
+- *The release build is `go install <command>@<tag>`,* for each
+  operating system and architecture, with `CGO_ENABLED=0`. It builds
+  from what the tag serves, with exactly the versions the module's
+  `go.mod` lists, which is what a `go.mod` that names the tag gets. A
+  `go build` in a checkout at the tag, outside the workspace, fails: the
+  specification's `go.sum` has no line for the harness. The harness's
+  tag is pushed before the specifications' tags that name it, because
+  `go install` resolves it.
 - *An implementation's branch in progress* pins a commit, where a
   specification may name a harness version that does not exist yet.
   `make pin-specs REF=<commit>` therefore adds a `replace` line for the
   harness (Decision 7). The `pin` job fails a `replace` line as it fails
   an unreleased commit.
-- *Not tried:* the first resolution of real tags, by the module proxy and
-  the checksum database, of a specification that names a harness tag
-  pushed moments before. It first happens in `f6-release-specs`. If it
-  fails, no tag is moved: the fault is fixed in a pull request and
-  released as the next patch versions.
+- *Not tried:* the module proxy and the checksum database, which the
+  model went around: the first resolution of real tags, of a
+  specification that names a harness tag pushed moments before. It first
+  happens in `f6-release-specs`. If it fails, no tag is moved: the fault
+  is fixed in a pull request and released as the next patch versions.
+  Nor was the real harness's set of dependencies tried; task 1 tries
+  the mechanics with one of them.
 
 ### CI
 
@@ -2257,6 +2309,10 @@ them. They hold whichever way a19 is answered, except where noted.
     this is also what holds a harness change to every specification's
     cases: the set on `main` is always tested together;
   - a check that no module's `go.mod` requires the kit;
+  - the module checks (**Releases and how they are consumed**): each
+    specification's `go.mod` and `go.sum` are what `make tidy` writes, no
+    `go.mod` carries a `replace`, and the `replace` line of `go.work`
+    names the harness version at the head of `conformance/CHANGELOG.md`;
   - the release checks: a pull request that changes a directory adds a
     version to that directory's `CHANGELOG.md`, higher than its newest
     tag, and a specification whose directory changed names in its
@@ -3386,13 +3442,17 @@ its branch `feat/seam-specs`; **K** is this repository, on this branch.
    first, against the list there, and stops with a blocking question if it
    is missing or differs.
 1. **S** The layout: `README.md`, the seven directories each with its
-   `go.mod` and `CHANGELOG.md`, the workspace file `go.work`,
+   `go.mod` and `CHANGELOG.md`, the workspace file `go.work` with its
+   `replace` line, `make tidy`,
    `.entire/settings.json` naming the private sessions repository, and
    the `ci` and `flow18` workflows (FLOW-17, FLOW-18, a4), the `ci` checks
-   of the layout, of the OpenAPI files (a9) and of a release (a8) among
-   them. This task also shows, with the modules still empty, that a
-   specification that names a harness version with no tag builds in the
-   workspace (**Releases and how they are consumed**).
+   of the layout, of the modules, of the OpenAPI files (a9) and of a
+   release (a8) among them. This task also shows that the mechanics
+   hold, with a harness that already imports one of its real
+   dependencies and a specification that names a harness version with no
+   tag: the workspace builds, vets and tests, `make tidy` leaves a
+   complete `go.mod`, and `ci` is green on the branch (**Releases and how
+   they are consumed**).
 2. **S** `relay-claim/v1.md` with its two schemas and its OpenAPI file
    (GLOBAL-08, RELAY-08, RELAY-04, a9). D17 is reproduced by hand first,
    against a relay built from `main` (**Divergences found**).
