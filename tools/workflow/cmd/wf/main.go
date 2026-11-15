@@ -22,6 +22,7 @@
 //	wf relate   -state DIR -worker human/NAME -feature A -with B [-clear]
 //	wf relations -state DIR [-feature F]
 //	wf stale    -state DIR -repo DIR -worker W
+//	wf commit   -state DIR -worker W -m MESSAGE [-claimed FEATURE/STEP [-new-run]] [PATH...]
 //	wf gate     -state DIR -repo DIR -machine M -stamp FILE [-sweep-days N] [-record]
 //	wf budget   -state DIR [-native]
 //	wf drops    -repo DIR -base REV -main FILE -branch FILE [-head REV]
@@ -103,8 +104,21 @@
 // DIR is a checkout of the workflow branch; -repo is a checkout of the code
 // with origin fetched. A worker is cloud, human or host:<name>, optionally
 // with a /<session> suffix that tells its leases apart. Commands that change
-// state write the queue file; the caller commits and pushes it, and re-reads
-// state if the push is rejected.
+// state write the queue file; the caller pushes it with wf commit.
+//
+// commit regenerates QUEUE.md, commits it with the PATHs given and nothing
+// else, and pushes the workflow branch. With nothing to commit it exits 0. On
+// a rejected push it fetches and, when the checkout holds no uncommitted
+// change that a reset would discard, resets to origin/workflow: a change is
+// replayed with cherry-pick and checked with Validate; a claim (-claimed) is
+// not replayed but asked again on the new state through what claim and, for
+// a cloud worker, next check, and claimed once more when nothing refuses it.
+// A conflict in a generated file, or in main.yaml, keeps the remote's copy;
+// one in any other file stops it. It tries three times. Exit 4: the claim is
+// refused on the new state, and the worker asks next again. Exit 5: settle it
+// by hand (a conflict, a new Validate error, another session's uncommitted
+// files, three rejections). A change to areas.yaml is committed for a human
+// worker only (FLOW-05). It never force-pushes and pushes only workflow.
 //
 // gate is the scheduled native session's go/no-go (FLOW-09): it exits 0 when
 // machine M (hosts.yaml) has a ready host step, or open backlog gaps and main
@@ -140,7 +154,7 @@ import (
 
 const usage = "usage: wf " +
 	"validate|status|next|claim|release|check|done|answer|back|new|urgent|declare|" +
-	"relate|relations|stale|gate|budget|migrate|drops [flags]"
+	"relate|relations|stale|commit|gate|budget|migrate|drops [flags]"
 
 // errIdle is gate's "nothing to do", exit status 3.
 var errIdle = errors.New("idle")
@@ -148,7 +162,7 @@ var errIdle = errors.New("idle")
 type opts struct {
 	state, repo, worker, feature, step, why, question, answer string
 	title, source, machine, stamp, kind, holds, follows, hold string
-	repos, areas, seams, adopts, with                         string
+	repos, areas, seams, adopts, with, message, claimed       string
 	urgent, clear                                             bool
 	// given holds the names of the flags the command line set, for a flag
 	// whose empty value means something.
@@ -169,6 +183,10 @@ func main() {
 			os.Exit(3)
 		}
 		fmt.Fprintln(os.Stderr, "wf:", err)
+		var ce *queue.CommitError
+		if errors.As(err, &ce) {
+			os.Exit(ce.Code)
+		}
 		os.Exit(1)
 	}
 }
@@ -205,6 +223,9 @@ func run(cmd string, args []string, now time.Time) error {
 		"new: mark the feature urgent, a human worker only (FLOW-05)")
 	fs.BoolVar(&o.clear, "clear", false,
 		"urgent: remove the mark; relate: remove the collision")
+	fs.StringVar(&o.message, "m", "", "commit: the commit message")
+	fs.StringVar(&o.claimed, "claimed", "",
+		"commit: FEATURE/STEP the change claims, asked again on a rejected push")
 	fs.StringVar(&o.with, "with", "", "relate: the item the feature collides with")
 	fs.IntVar(&o.priority, "priority", 0, "new: priority, 1 highest")
 	fs.IntVar(&o.estSteps, "estimate-steps", 0, "new: estimated steps")
@@ -225,8 +246,11 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.Visit(func(fl *flag.Flag) { o.given[fl.Name] = true })
 	// -hold given with an empty reason is refused by new, never read as no hold.
 	o.held = o.given["hold"]
-	if cmd == "drops" {
+	switch cmd {
+	case "drops":
 		return drops(o)
+	case "commit":
+		return commitCmd(o, fs.Args())
 	}
 
 	s, err := queue.Load(o.state)
@@ -247,6 +271,19 @@ func run(cmd string, args []string, now time.Time) error {
 		return fmt.Errorf("unknown command %q; %s", cmd, usage)
 	}
 	return f(s, o)
+}
+
+// commitCmd is wf commit: it pushes the session's paths with the generated
+// files, and on a rejected push replays the change or asks the claim again.
+func commitCmd(o opts, paths []string) error {
+	lines, err := queue.Commit(o.state, queue.CommitRequest{
+		Worker: o.worker, Message: o.message, Claimed: o.claimed, NewRun: o.newRun,
+		Paths: paths, Now: o.now,
+	})
+	for _, l := range lines {
+		fmt.Println(l)
+	}
+	return err
 }
 
 func validate(s *queue.State, _ opts) error {
@@ -350,7 +387,7 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 	}
 	switch cmd {
 	case "claim":
-		if err := claimable(s, f, st, o); err != nil {
+		if err := s.MayClaim(f, st, o.worker, o.now); err != nil {
 			return err
 		}
 		if line := s.Claim(f, st, o.worker, o.now, o.newRun); line != "" {
@@ -385,31 +422,6 @@ func finish(s *queue.State, f *queue.Feature, st *queue.Step, o opts) error {
 		return fmt.Errorf("%s done-when not met (FLOW-10)", st.ID)
 	}
 	queue.Complete(f, st, o.worker, o.now)
-	return nil
-}
-
-// claimable says why the worker may not claim the step: it is not pending,
-// its feature has not reached its phase (FLOW-04), someone else holds it, a
-// process item holds the worker, or a limit refuses the claim, whoever the
-// worker is (FLOW-05). A step the worker already holds stays claimable.
-func claimable(s *queue.State, f *queue.Feature, st *queue.Step, o opts) error {
-	if st.Status != "pending" {
-		return fmt.Errorf("%s is %s", st.ID, st.Status)
-	}
-	if err := queue.Early(f, st); err != nil {
-		return err
-	}
-	mine := st.Lease.Held(o.now) && st.Lease.ClaimedBy == o.worker
-	if st.Lease.Held(o.now) && !mine {
-		return fmt.Errorf("%s is leased to %s until %s",
-			st.ID, st.Lease.ClaimedBy, st.Lease.Expires)
-	}
-	if h := s.Hold(f, o.worker); h != "" && !mine {
-		return fmt.Errorf("%s is held by process item %s (FLOW-05)", o.worker, h)
-	}
-	if why := s.Guard(f, st, o.worker); why != "" && !mine {
-		return fmt.Errorf("%s may not be claimed: %s", st.ID, why)
-	}
 	return nil
 }
 
