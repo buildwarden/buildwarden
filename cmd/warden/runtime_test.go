@@ -567,13 +567,13 @@ func TestDoctorIgnoresAnUnusedRuntime(t *testing.T) {
 	}
 }
 
-// runtimeCommands are the calls that resolve the container runtime: the one
-// build and shell make, clean and doctor.
+// runtimeCommands are the commands that resolve the container runtime, and
+// newDriver, the call through which build and shell do.
 var runtimeCommands = []struct {
 	name string
 	run  func(t *testing.T) error
 }{
-	{"build and shell (newDriver)", func(t *testing.T) error {
+	{"newDriver", func(t *testing.T) error {
 		cfg, err := resolveConfig()
 		if err != nil {
 			t.Fatalf("resolveConfig: %v", err)
@@ -581,6 +581,8 @@ var runtimeCommands = []struct {
 		_, err = newDriver(cfg)
 		return err
 	}},
+	{"build", func(*testing.T) error { return runBuild(buildCmd, nil) }},
+	{"shell", func(*testing.T) error { return runShell(shellCmd, nil) }},
 	{"clean", func(*testing.T) error { return runClean(cleanCmd, nil) }},
 	{"doctor", func(t *testing.T) error {
 		doctorCmd.SetOut(io.Discard)
@@ -603,20 +605,35 @@ func shipPrograms(t *testing.T, dir, marker string, names ...string) string {
 	return filepath.Join(dir, names[0])
 }
 
-// wantNotRun checks that no shipped program ran.
+// wantNotRun checks that no shipped program ran, and that the command made
+// no output directory in the project.
 func wantNotRun(t *testing.T, marker string) {
 	t.Helper()
 	if _, err := os.Stat(marker); !os.IsNotExist(err) {
 		t.Errorf("a program the configuration named was run (marker: %v)", err)
 	}
+	if _, err := os.Stat("warden-output"); !os.IsNotExist(err) {
+		t.Errorf("an output directory was made (%v)", err)
+	}
+}
+
+// addDockerfile makes the working directory a build context, so that build
+// and shell get past their arguments to the runtime.
+func addDockerfile(t *testing.T) {
+	t.Helper()
+	dir, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	write(t, dir, "Dockerfile", "FROM alpine\n")
 }
 
 // The security fix. A build context ships a program and a warden.toml that
 // names it as the container runtime, by path or as an interpreter that runs
 // the file named like warden's first argument. Before the fix clean ran the
-// program, and newDriver and doctor accepted it for a later run; now each
-// refuses it and nothing is run. The same holds for a program the flag, the
-// variable or the user's file names.
+// program, doctor accepted it, and newDriver handed it to the driver, which
+// build and shell then ran; now each refuses it and nothing is run. The same
+// holds for a program the flag, the variable or the user's file names.
 func TestUnsupportedRuntimeIsNeverRun(t *testing.T) {
 	const viaShell = "sh" // runs ./pull, ./container, ... from the project
 	shipped := []string{"rt", "pull", "container", "network", "image", "info"}
@@ -654,6 +671,7 @@ func TestUnsupportedRuntimeIsNeverRun(t *testing.T) {
 					project := inConfigFiles(t, "", tc.project)
 					shipPrograms(t, project, marker, shipped...)
 				}
+				addDockerfile(t)
 				flagDriver = tc.driver
 				err := command.run(t)
 				wantNotRun(t, marker)
@@ -675,6 +693,7 @@ func TestUnsupportedRuntimeHasNoFallback(t *testing.T) {
 			bin := t.TempDir()
 			shipPrograms(t, bin, marker, "finch")
 			t.Setenv("PATH", bin)
+			addDockerfile(t)
 			err := command.run(t)
 			wantNotRun(t, marker)
 			wantRefusal(t, err, inProjectFile, "./rt")
