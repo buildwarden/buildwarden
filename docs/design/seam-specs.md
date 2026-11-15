@@ -682,7 +682,9 @@ Nothing in any of the five is approved.
    `go install <command>@<tag>` builds from (Decision 4). So what tests a
    pinned release here is built from the same modules, at the same
    versions, as that release's binaries: in the model the two builds
-   reported the same module versions with the same hashes. Two
+   reported the same module versions with the same hashes. The compiler
+   and the build settings are this repository's; the source is the
+   release's. Two
    specifications pinned at releases with different harness versions run
    each with its own, and any set of pins builds, the newest of each or
    not: the model built one specification at a release with a newer
@@ -796,7 +798,7 @@ Nothing in any of the five is approved.
    `buildwarden/buildwarden-specs` (a4). The documents, harness and suites
    are written on a branch `feat/seam-specs` of the specs repository and
    reach its `main` through a pull request Jeff merges. This repository's
-   branch holds the pin, the target files for the Go relay and the disk
+   branch holds the pins, the target files for the Go relay and the disk
    collector, the `conformance` workflow, the book links, tier 1's seam list
    and the rule changes. `wf` runs no gate in the specs repository. The
    loop's mechanical checks reach it through the pin: this repository's
@@ -2654,7 +2656,8 @@ change to a shared package runs the suites (TEST-02's caveat): `relay/**`,
 `relaycfg/**`, `collector/**`, `bootstrap/**`, `ledger/**`, `cmd/relay/**`,
 `cmd/collector/**`, `driver/*.go`, `driver/buildlink/**`,
 `driver/script/**`, `go.mod`, `go.sum`, `Dockerfile.relay`, the `Makefile`,
-`tools/conformance/**` and the workflow itself. `cmd/warden-io/**` is not
+`tools/conformance/**` (the six pin modules and the target files, so a
+move of any pin starts a run) and the workflow itself. `cmd/warden-io/**` is not
 among them, because no suite runs the executor yet (a11). It runs:
 
 - on pull requests that reach those paths;
