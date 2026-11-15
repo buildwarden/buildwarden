@@ -1107,9 +1107,10 @@ where that is fixed.
     **A directory** is read one level deep, as today: its entries whose
     names end in `.pem`, `.crt` or `.cer`, in any letter case, in name
     order. A symbolic link is followed, as today (a distribution's
-    certificate directory is made of them). An entry that is a directory,
-    or a link to one, is not read, and an entry with another ending is not
-    opened; both are the "other entries" of a12.
+    certificate directory is made of them). An entry that is a directory
+    is not read, as today, and nor is a link to one, which today is an
+    error at the claim; an entry with another ending is not opened. These
+    are the "other entries" of a12.
 
     **What is skipped, each with its line.** A skip never stops the run
     and never changes the exit code. The lines are shown as `build` and
@@ -2550,8 +2551,8 @@ and every `go build`.
 (priority 67, queued); `prebuilt-artifacts` filed (priority 66, branch
 `feat/prebuilt-artifacts`, its Design claimed).
 
-**Folded in** (`0a84b36`, `c80ad22`, `d3efc4a` and the commit that carries
-this entry):
+**Folded in** (`0a84b36`, `c80ad22`, `d3efc4a`, `6998358`, which first
+carried this entry, and one correction after it):
 
 - *The nine.* Each question carries its answer; the wording that treated
   them as open is gone from the Decisions, the Design and the Rule
@@ -2595,9 +2596,10 @@ each is stated where it applies:
   stays an error, as today; a FIFO, socket or device there is skipped,
   not opened; a certificate block with PEM headers is skipped, as the
   relay's pool skips it today; the same certificate in two files is sent
-  twice, as today; an empty entry stays an error; a private key gets a
-  `warning:` line; the lines say "to send"; `doctor` prints them in its
-  report, on stdout.
+  twice, as today; an empty entry stays an error; a link to a directory
+  under one of the three endings is not read, where today it is an
+  error; a private key gets a `warning:` line; the lines say "to send";
+  `doctor` prints them in its report, on stdout.
 - One fork is asked and not decided: a12, the entries of a named
   directory that are not read because of their names. The design
   proceeds with (a).
