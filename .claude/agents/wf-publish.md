@@ -14,7 +14,9 @@ FLOW-08, FLOW-10, FLOW-11, FLOW-12, FLOW-15, FLOW-16, FLOW-17, FLOW-18.
   and `make test`, push.
 - `f6-consolidate`: fill the design's Consolidation section against everything
   that landed on `main` since the fork (FLOW-10) and run the FLOW-15 sweep
-  (`make deadcode`, duplication, `docs/book/src/concepts/overview.md`). Fix
+  (`make deadcode`, duplication, `docs/book/src/concepts/overview.md`). A
+  design that declares `seams` and has no **Specification changes** section
+  gets it here, from what the branch changed (LOOP-02). Fix
   wording and terminology here. Work beyond that goes back: `wf back -to 3`
   when the plan already covers it, `wf back -to 1` with the finding
   when the design must change (FLOW-06, which seeds a new design review). A
@@ -32,8 +34,10 @@ FLOW-08, FLOW-10, FLOW-11, FLOW-12, FLOW-15, FLOW-16, FLOW-17, FLOW-18.
   (FLOW-01), the tier-2 report, and lists its MUST findings for the human to
   acknowledge at merge. A design with `rule_changes` gets a **Rule changes**
   section in the body: each rule, its change and paths, and the commit its
-  approval names (FLOW-14). A **Follow-ups filed** section lists each queue
-  item that `follows` this one, as "<slug> (follows <feature>)", or says
+  approval names (FLOW-14). A design with a **Specification changes**
+  section gets one in the body too, listing each specification the PR
+  changes apart from the code (LOOP-02, LOOP-06). A **Follow-ups filed**
+  section lists each queue item that `follows` this one, as "<slug> (follows <feature>)", or says
   none (FLOW-09). Record `pr.number` in the queue file. Then repair CI:
   at most three attempts per distinct failure, then add a `human` step and
   stop (FLOW-11). A failure that does not reproduce is a flaky test:

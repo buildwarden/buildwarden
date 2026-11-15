@@ -15,6 +15,8 @@ tamper-evident ledger and streams all of its outputs to a host-side
 |---|---|
 | The standards (rule IDs, severities, checks) | [`docs/development/README.md`](docs/development/README.md) and the files it lists |
 | How a feature is designed, built, reviewed and merged | [`docs/development/process.md`](docs/development/process.md) |
+| The Loop Contract: the rules the development loop runs under in every repository it works in (LOOP-01 to LOOP-09) | [`docs/development/loop-contract.md`](docs/development/loop-contract.md) |
+| This repository's profile under the contract: its trunk, gates, paths and checks (PROFILE-01) | [`docs/development/loop-profile.md`](docs/development/loop-profile.md) |
 | How each component works, as pseudocode | [`docs/book/src/concepts/overview.md`](docs/book/src/concepts/overview.md) |
 | The package layout | [`docs/book/src/contributing/structure.md`](docs/book/src/contributing/structure.md) |
 | The bootstrap model every driver follows | [`docs/development/bootstrap.md`](docs/development/bootstrap.md) |

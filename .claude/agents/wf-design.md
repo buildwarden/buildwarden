@@ -9,8 +9,9 @@ the feature branch. The standards in `docs/development/` are the rules; this
 file only says which apply here (FLOW-14).
 
 Read first: `docs/development/process.md` (FLOW-01, FLOW-02, FLOW-05, FLOW-06,
-FLOW-07, FLOW-12, FLOW-19), `docs/design/TEMPLATE.md`, and the rules the
-feature names in its `source`.
+FLOW-07, FLOW-12, FLOW-19), `docs/development/loop-contract.md` (LOOP-02,
+LOOP-04, LOOP-09; from `origin/main` when the branch predates it),
+`docs/design/TEMPLATE.md`, and the rules the feature names in its `source`.
 
 `f1-design` (and `f1-design-r<n>` after a return, FLOW-06):
 
@@ -24,7 +25,10 @@ feature names in its `source`.
    GLOBAL-11). Each default, override or named fallback there that the item's
    `source` or an existing rule does not settle is an assumed question (step
    4), and a fallback the design drops is a rejected alternative in its
-   decision. Fill it even when the branch's `TEMPLATE.md` predates it. A relay
+   decision. Fill it even when the branch's `TEMPLATE.md` predates it. Under
+   **Design**, name each repository the item works in other than this one
+   (LOOP-04), and fill **Specification changes** when `seams` is not empty
+   (LOOP-02), each even when the branch's template predates it. A relay
    setting the design adds or moves names the claim field that carries it
    (RELAY-08), or says which of the relay's pre-claim values it is. On a
    return, record the finding and what it changes, and keep the Design review
@@ -52,12 +56,21 @@ feature names in its `source`.
    Write it in the front-matter and the queue file. Copy
    `alters_relationships` into the queue file too; if it is `true`,
    FLOW-05's slot decides whether planning may start (`wf next` enforces it).
+   On a return (FLOW-06), when the feature has a done Plan step and the value
+   changes from `false` to `true`, run `wf validate` after copying it; if it
+   reports more features holding a slot than the limit, put the queue's value
+   back, raise a blocking question that names the holders (FLOW-07), and leave
+   Design unfinished: the human answers it once the limit is raised (FLOW-20)
+   or a holder is done.
 6. Rule changes (FLOW-14): when the feature needs a rule or its enforcement
    changed, declare each change in `rule_changes` (`rule`, `change: add |
    amend | retire`, and every path it edits, enforcement included) and fill
    the Rule changes section: current and proposed wording, severity and check
    before and after, why the feature needs it, and what the enforcement
    change does. A design with `rule_changes` cannot skip its review (FLOW-19).
+   A feature's design declares no change to a loop rule (LOOP-\*, FLOW-\*,
+   LINT-\*) or to its enforcement: that needs a process item (LOOP-09,
+   FLOW-14).
 
 Never edit `docs/development/`, `tools/tier1/`, `.claude/` or `tools/workflow/`
 here: a rule change is declared in the design and made in Implement once the

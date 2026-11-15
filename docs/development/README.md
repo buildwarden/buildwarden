@@ -16,6 +16,14 @@ comments from drifting out of sync with code. The same instinct applies to
 standards: a rule that no longer matches the code should be a visible, greppable,
 reviewable line, not an unwritten assumption.
 
+The standards are in two parts. The **project invariants** are this
+repository's own. The **loop rules** are the
+[Loop Contract](./loop-contract.md) and its detail, which the loop
+runs under in every repository it works in; they are kept here until
+the loop repository exists, and move to it then.
+[`loop-profile.md`](./loop-profile.md) is this repository's profile
+(PROFILE-01).
+
 ## Rule format
 
 Each rule is a subsection headed by its ID and title, followed by two metadata
@@ -30,20 +38,24 @@ lines and a body:
 Body describing the rule, the rationale, and how it is checked.
 ```
 
+This format is LINT-01's and is the same for every component.
+
 ### ID scheme
 
-| Prefix    | Domain                                             | File                    |
-|-----------|----------------------------------------------------|-------------------------|
-| `GLOBAL-` | Cross-cutting principles                           | `global.md`             |
-| `RELAY-`  | Relay (`relay/`, `cmd/relay/`)                     | `relay.md`              |
-| `ORCH-`   | Orchestrator (`cmd/warden/`)                       | `orchestrator.md`       |
-| `EXEC-`   | In-VM executor (`cmd/warden-io/`)                  | `in-vm-executor.md`     |
-| `BOOT-`   | Build-environment bootstrap model (all drivers)    | `bootstrap.md`          |
-| `UX-`     | UX / CLI / configuration                           | `ux-cli-config.md`      |
-| `TEST-`   | Testing and dev-velocity                           | `testing.md`            |
-| `LINT-`   | The behavioral-linter agent itself                 | `behavioral-linter.md`  |
-| `FLOW-`   | Development process: queue, phases, sign-off       | `process.md`            |
-| `SEC-`    | The TEST-08 security suite                         | `security-suite.md`     |
+| Prefix     | Domain                                             | File                    | Owner |
+|------------|----------------------------------------------------|-------------------------|-------|
+| `GLOBAL-`  | Cross-cutting principles                           | `global.md`             | `buildwarden/buildwarden` |
+| `RELAY-`   | Relay (`relay/`, `cmd/relay/`)                     | `relay.md`              | `buildwarden/buildwarden` |
+| `ORCH-`    | Orchestrator (`cmd/warden/`)                       | `orchestrator.md`       | `buildwarden/buildwarden` |
+| `EXEC-`    | In-VM executor (`cmd/warden-io/`)                  | `in-vm-executor.md`     | `buildwarden/buildwarden` |
+| `BOOT-`    | Build-environment bootstrap model (all drivers)    | `bootstrap.md`          | `buildwarden/buildwarden` |
+| `UX-`      | UX / CLI / configuration                           | `ux-cli-config.md`      | `buildwarden/buildwarden` |
+| `TEST-`    | Testing and dev-velocity                           | `testing.md`            | `buildwarden/buildwarden` |
+| `LINT-`    | The behavioral-linter agent itself                 | `behavioral-linter.md`  | the loop |
+| `FLOW-`    | Development process: queue, phases, sign-off       | `process.md`            | the loop |
+| `SEC-`     | The TEST-08 security suite                         | `security-suite.md`     | `buildwarden/buildwarden` |
+| `LOOP-`    | The Loop Contract                                 | `loop-contract.md`      | the loop |
+| `PROFILE-` | This repository's loop profile                    | `loop-profile.md`       | `buildwarden/buildwarden` |
 
 ### Severity
 
@@ -85,6 +97,8 @@ one monolith (see GLOBAL-08):
 
 ## Documents
 
+### Project invariants
+
 1. [`global.md`](./global.md) — cross-cutting principles (comments, errors,
    tests, reproducibility, security boundaries, cross-platform, component
    independence, defaults and overrides); GLOBAL-09 to GLOBAL-11 cover the
@@ -100,11 +114,18 @@ one monolith (see GLOBAL-08):
 6. [`testing.md`](./testing.md)
 7. [`security-suite.md`](./security-suite.md) — the TEST-08 security suite design
    (deep-dive #1).
-8. [`behavioral-linter.md`](./behavioral-linter.md) — the release-gate agent that
-   enforces this doc set.
-9. [`process.md`](./process.md) — how features are designed, sequenced, validated,
+8. [`loop-profile.md`](./loop-profile.md) — this repository's profile under the
+   Loop Contract (PROFILE-01).
+
+### Loop rules
+
+1. [`loop-contract.md`](./loop-contract.md) — the Loop Contract (LOOP-01 to
+   LOOP-09).
+2. [`process.md`](./process.md) — how features are designed, sequenced, validated,
    and signed off, by humans, attended agents, and the unattended feature loop.
    Design documents start from [`../design/TEMPLATE.md`](../design/TEMPLATE.md).
+3. [`behavioral-linter.md`](./behavioral-linter.md) — the release-gate agent that
+   enforces this doc set.
 
 ## Relationship to the other guidance files
 

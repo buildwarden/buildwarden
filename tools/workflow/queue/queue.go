@@ -30,8 +30,11 @@ type Config struct {
 	// RunBudget.
 	NativeBudget *StepBudget `yaml:"native_budget,omitempty"`
 	Limits       struct {
-		InProgress          int `yaml:"in_progress"`
-		AltersRelationships int `yaml:"alters_relationships"`
+		InProgress int `yaml:"in_progress"`
+		// AltersRelationships is how many features may hold an
+		// alters_relationships slot at once (FLOW-05, FLOW-20). Nil, the key
+		// absent, is 1 (altersLimit); a written value below 1 is an error.
+		AltersRelationships *int `yaml:"alters_relationships,omitempty"`
 	} `yaml:"limits"`
 	LeaseMinutes  int     `yaml:"lease_minutes"`
 	RunawayFactor float64 `yaml:"runaway_factor"`
@@ -291,6 +294,32 @@ func (s *State) Add(f *Feature, now time.Time, by string) ([]*Feature, error) {
 	return changed, nil
 }
 
+// PutOnHold files a queued item on hold (FLOW-20's freeze): an open blocking
+// question q1 whose text is why, and a human step <f0|x1>-answer-q1 that the
+// item's first step needs, so no worker is offered the item's work until the
+// human answers q1 (FLOW-07). wf answer completes that step. It is for an
+// item Add has just queued: holding one already in progress stays a
+// hand-edit, and one that already has a question is refused, never merged.
+func (f *Feature) PutOnHold(why string, now time.Time, by string) error {
+	if strings.TrimSpace(why) == "" {
+		return fmt.Errorf(
+			"a hold needs its reason, the blocking question's text (FLOW-07)")
+	}
+	if f.Status != "queued" || len(f.Steps) == 0 || len(f.Questions) > 0 {
+		return fmt.Errorf("%s: only a newly queued item with no question is put on hold",
+			f.Feature)
+	}
+	const resume = "resume it"
+	f.Questions = append(f.Questions, Question{ID: "q1", Kind: "blocking", Status: "open",
+		Question: why, Options: []string{resume}, Recommended: resume})
+	answer := Step{ID: StepID(f.Round, f.Phase, "answer-q1"), Phase: f.Phase,
+		Affinity: "human", Status: "pending"}
+	f.Steps[0].Needs = addNeeds(f.Steps[0].Needs, answer.ID)
+	f.Steps = append([]Step{answer}, f.Steps...)
+	f.Log(now, by, "on hold (q1): %s", why)
+	return nil
+}
+
 // Find returns the named feature.
 func (s *State) Find(name string) (*Feature, error) {
 	for _, f := range s.Features {
@@ -333,7 +362,22 @@ var (
 	holdRe     = regexp.MustCompile(`^(cloud|human|host:[a-z0-9*?-]+)$`)
 )
 
-// Validate checks the schema of every feature and the FLOW-05 limits.
+// altersLimit is how many features may hold an alters_relationships slot: the
+// value config.yaml writes (FLOW-20), or FLOW-05's 1 when it writes none. A
+// written value is returned as it is, one below 1 included, which Validate
+// reports and under which Next gives no slot: no default stands in for it
+// (GLOBAL-10).
+func (s *State) altersLimit() int {
+	if n := s.Config.Limits.AltersRelationships; n != nil {
+		return *n
+	}
+	return 1
+}
+
+// Validate checks the schema of every feature and the FLOW-05 limits. The
+// alters_relationships limit is compared with the features that hold a slot
+// (altersHolders), the count Next withholds a Plan step by, so a state Next
+// produces never fails here.
 func (s *State) Validate() []error {
 	var errs []error
 	if s.Config.RunBudget.Steps < 1 {
@@ -344,8 +388,13 @@ func (s *State) Validate() []error {
 		errs = append(errs, fmt.Errorf("config: native_budget.steps %d is below 1",
 			nb.Steps))
 	}
+	limit := s.altersLimit()
+	if limit < 1 {
+		errs = append(errs, fmt.Errorf(
+			"config: limits.alters_relationships %d is below 1", limit))
+	}
 	prio := map[int]string{}
-	inProgress, alters := 0, 0
+	inProgress := 0
 	for _, f := range s.Features {
 		bad := func(format string, a ...any) {
 			errs = append(errs, fmt.Errorf("%s: %s", f.Feature,
@@ -356,13 +405,8 @@ func (s *State) Validate() []error {
 		}
 		prio[f.Priority] = f.Feature
 		s.validateFollows(f, bad)
-		if f.Status == "in_progress" {
-			if !f.IsProcess() {
-				inProgress++
-			}
-			if f.alters() && f.Phase >= 2 {
-				alters++
-			}
+		if f.Status == "in_progress" && !f.IsProcess() {
+			inProgress++
 		}
 		f.validate(bad)
 	}
@@ -370,10 +414,11 @@ func (s *State) Validate() []error {
 		errs = append(errs, fmt.Errorf("%d features in progress, limit %d (FLOW-05)",
 			inProgress, n))
 	}
-	if n := s.Config.Limits.AltersRelationships; n > 0 && alters > n {
+	// No count of holders means anything against a limit below 1.
+	if holders := s.altersHolders(); limit >= 1 && len(holders) > limit {
 		errs = append(errs, fmt.Errorf(
-			"%d features past Design alter relationships, limit %d (FLOW-05)",
-			alters, n))
+			"%d features hold an alters_relationships slot, limit %d (FLOW-05): %s",
+			len(holders), limit, strings.Join(holders, ", ")))
 	}
 	for _, e := range s.validateNative() {
 		errs = append(errs, errors.New(e))
