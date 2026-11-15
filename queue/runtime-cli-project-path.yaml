@@ -27,10 +27,10 @@ steps:
   - id: f2-design-review
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
-      claimed_by: human/jeff
-      expires: 2026-11-15T21:54:39.104847515Z
+      claimed_by: ""
+      expires: null
   - id: f2-plan
     phase: 2
     affinity: cloud
@@ -38,15 +38,15 @@ steps:
     needs:
       - f2-design-review
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261112T230554Z
+      expires: 2026-11-15T23:05:40.305389526Z
 budget:
   estimate:
     runs: 1
     steps: 9
   spent:
     runs: 0
-    steps: 3
+    steps: 4
 questions:
   - id: a1
     kind: assumed
@@ -79,33 +79,36 @@ questions:
     answer: 'Changed, in Jeff''s words: ''Use the logic that would be used for the warning to instead have a concrete error message about what needs to be changed/updated. This logic will eventually be removed like the warning would be''. So: an error at once, not a warning, with a concrete message saying what to change; the detection that produces that message is transitional and is removed later, as a deprecation warning would be. Jeff, design review, 2026-11-15.'
   - id: a4
     kind: assumed
-    status: open
-    question: 'When is the transitional detection removed? It recognises the values that ran before this fix and are refused now (a supported runtime in another letter case or with .exe; a path to a supported runtime; nerdctl; a path to any other program) and gives each a message that says what to change. After its removal those values get the container driver''s ordinary error, which lists finch, docker and podman.'
+    status: confirmed
+    question: When is the transitional detection removed? It recognises the values that ran before this fix and are refused now (a supported runtime in another letter case or with .exe; a path to a supported runtime; nerdctl; a path to any other program) and gives each a message that says what to change. After its removal those values get the container driver's ordinary error, which lists finch, docker and podman.
     options:
       - '(a) it is in the release that first carries the fix and in the two releases after it, and is removed from the third: the window driver-contract proposes for its deprecated key names (at least two releases), the only window the project has proposed so far; Publish files the removal as its own small item'
       - (b) the release that first carries the fix and the one after it
       - '(c) removed with the deprecated key name [runtime] cli, in the change that ends driver-contract''s window: one removal for the container driver''s whole transition, at a date that depends on that item'
       - (d) kept until 1.0
     recommended: '(a) it is in the release that first carries the fix and in the two releases after it, and is removed from the third: the window driver-contract proposes for its deprecated key names (at least two releases), the only window the project has proposed so far; Publish files the removal as its own small item'
+    answer: (d) The transitional detection is kept until 1.0. Departs from the recommendation (removed after two more releases); folded into the design. Jeff, design review, 2026-11-15.
   - id: a5
     kind: assumed
-    status: open
+    status: confirmed
     question: 'How do UX-08 as amended and main agree on the day this merges? The amended rule says a setting is validated by its consumer, after the overrides, and only when the run uses it. Four checks of file settings on main are made more widely: the TOML type of every key, [vm] build_link and [vm] dns (each as a config file loads, on every command and driver), and [vm] image_refresh_after and image_min_grace (on every build and shell, under drivers that do not read them). The umbrella''s Decision 18 has a rule change in the item that makes it true. Flags are a6.'
     options:
-      - '(a) the amended wording lists the four by name as checks that predate it; each stays until the change that moves it to its consumer, and this item moves none. driver-contract already makes two of them true (the type of the driver-owned keys, and the two image ages) and strikes them; [vm] build_link, [vm] dns and the type of warden''s own keys are put to driver-contract''s review, whose Decision 8 keeps warden checking the link and the resolvers as the files load'
-      - '(b) as (a), but configuration-bugfixes moves [vm] build_link and [vm] dns (its finding F8 already reworks those two checks); it is on hold behind the freeze, so the two stay listed until the program ends'
+      - (a) the amended wording lists the four by name as checks that predate it; each stays until the change that moves it to its consumer, and this item moves none. driver-contract already makes two of them true (the type of the driver-owned keys, and the two image ages) and strikes them; [vm] build_link, [vm] dns and the type of warden's own keys are put to driver-contract's review, whose Decision 8 keeps warden checking the link and the resolvers as the files load
+      - (b) as (a), but configuration-bugfixes moves [vm] build_link and [vm] dns (its finding F8 already reworks those two checks); it is on hold behind the freeze, so the two stay listed until the program ends
       - '(c) this item also moves [vm] build_link and [vm] dns to the VM-driver commands, after --build-link: the rule lists two checks fewer; the security fix changes two more keys for every VM driver, undoes what build-link-subnet (a10) and hyperv-relay-per-build-channel confirmed, and edits the lines driver-contract rewrites; the type check still has to be listed'
       - '(d) the wording lists nothing, and main is out of step with UX-08 until those checks move: the shape Decision 18 rejected'
-    recommended: '(a) the amended wording lists the four by name as checks that predate it; each stays until the change that moves it to its consumer, and this item moves none. driver-contract already makes two of them true (the type of the driver-owned keys, and the two image ages) and strikes them; [vm] build_link, [vm] dns and the type of warden''s own keys are put to driver-contract''s review, whose Decision 8 keeps warden checking the link and the resolvers as the files load'
+    recommended: (a) the amended wording lists the four by name as checks that predate it; each stays until the change that moves it to its consumer, and this item moves none. driver-contract already makes two of them true (the type of the driver-owned keys, and the two image ages) and strikes them; [vm] build_link, [vm] dns and the type of warden's own keys are put to driver-contract's review, whose Decision 8 keeps warden checking the link and the resolvers as the files load
+    answer: (a) UX-08's wording lists the four older checks and this item moves none. Jeff, design review, 2026-11-15.
   - id: a6
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Does "only what a run uses is validated" in UX-08 as amended reach flags? Jeff''s words are about one warden.toml that holds the settings of several drivers. A flag is given to one run, and main refuses a flag the run cannot use: --script, --image, --cpus, --memory, --keep-vms and --build-link without a VM driver; --network without hyperv; --guest-os with a value that is not linux or windows, under every driver; setup --slots without hyperv or firecracker; image prepare --update without vz. --runtime is the exception: under a driver that does not use it, it is accepted and ignored.'
     options:
       - '(a) no: the rule''s second paragraph covers settings in a config file or the environment, which serve several runs; for a flag it says only that a command may refuse, at startup, one its run cannot use; every flag check on main conforms, --runtime being ignored conforms too, and nothing on main changes'
       - '(b) yes: a flag the run does not use is not checked either; the flag checks above are then five more entries in the rule''s list of older checks, each until some change removes it, and in the end warden build --cpus 4 with the container driver is accepted and the flag ignored'
       - '(c) the opposite, as a requirement: a flag the run cannot use is always refused; --runtime under the VM drivers then does not conform on main, and this item or a later one has to refuse it, which breaks a command line that passes --runtime with every driver'
     recommended: '(a) no: the rule''s second paragraph covers settings in a config file or the environment, which serve several runs; for a flag it says only that a command may refuse, at startup, one its run cannot use; every flag check on main conforms, --runtime being ignored conforms too, and nothing on main changes'
+    answer: '(a) No: the lazy rule covers file and environment settings; a command may refuse a flag its run cannot use. Jeff, design review, 2026-11-15.'
 history:
   - at: 2026-11-14T22:51:20Z
     by: human/jeff
@@ -149,3 +152,18 @@ history:
   - at: 2026-11-15T20:56:20Z
     by: cloud/20261112T230554Z
     event: 'design revised on an independent review of the redraft (fold-in, still in the review): fitted to the one authoritative warden.toml Jeff decided for project-config-trust; UX-08''s proposed wording names no level of config file and is scoped to file and environment settings; the flag checks on main added to its table; the transitional messages print no directory from the value; the source marker specified. Assumed question a6 (whether the rule reaches flags) raised. Not recorded here and for the attended session: Jeff''s follow-up choices to a1 (every source) and a2 (the rule is written in this item, amending UX-08).'
+  - at: 2026-11-15T21:03:28Z
+    by: human/jeff
+    event: 'assumed question a6 confirmed: (a) No: the lazy rule covers file and environment settings; a command may refuse a flag its run cannot use. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T21:03:28Z
+    by: human/jeff
+    event: 'assumed question a4 confirmed: (d) The transitional detection is kept until 1.0. Departs from the recommendation (removed after two more releases); folded into the design. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T21:03:28Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: (a) UX-08''s wording lists the four older checks and this item moves none. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T21:05:30Z
+    by: human/jeff
+    event: done f2-design-review
+  - at: 2026-11-15T21:05:40Z
+    by: cloud/20261112T230554Z
+    event: claimed f2-plan until 2026-11-15T23:05:40Z
