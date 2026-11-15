@@ -28,3 +28,6 @@ history:
   - at: 2026-11-15T20:14:52Z
     by: human/jeff
     event: queued at priority 65 (intake)
+  - at: 2026-11-15T20:40:00Z
+    by: human/jeff
+    event: 'scope settled in the attended session (driver-contract design review, 2026-11-15). Jeff: "warden.toml is meant to be effectively in full control by a build executor and there shouldn''t be any precedence necessary. Configuration should only be through a local warden.toml, environment variables, and command-line arguments. By default, the warden.toml''s location in the working directory is simply for ease of use, but there should only be one authoritative warden.toml for any build". Asked on their own: (1) the user-level file ~/.config/warden/config.toml goes away: warden reads one warden.toml, plus environment variables and the command line; ORCH-03 and UX-07 are amended. (2) The authoritative file is ./warden.toml by default, or the one named by a new --config flag or WARDEN_CONFIG variable, which is then the only one read. (3) This item carries the change (code, the two rule amendments, the docs); driver-contract and runtime-cli-project-path are written to fit it. (4) An existing ~/.config/warden/config.toml is an error that names the file and says what to do; that detection is transitional and removed later.'
