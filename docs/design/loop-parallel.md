@@ -1231,11 +1231,21 @@ state is one exclusive area.
 unattended run, phase agent or native session edits it. The session:
 
 1. writes the change to a candidate file and runs
-   `dist/wf validate -state .dev/workflow -areas <candidate>`, which checks
-   the candidate (below) and prints what it does to the open items: each
-   relation that changes, and any limit two holders would now share;
-2. shows Jeff that output, and on his word copies the candidate over
-   `areas.yaml`;
+   `dist/wf validate -state .dev/workflow -areas <candidate> -repo .`,
+   which checks the candidate (below) and prints what it does to the
+   open items: each relation that changes; any limit two holders would
+   now share; and each declared item in progress whose branch has paths
+   that the candidate puts outside the areas it declared. The last is
+   the gates' diff check (**When collision is decided, and checked
+   again**) run with the candidate in place of the map, which is why it
+   needs `-repo`; without `-repo` it prints
+   `in-flight branches: not checked`;
+2. shows Jeff that output. An item the candidate would put outside its
+   areas is settled in the same sitting, on his word, or the change
+   waits: its design's `areas` are changed on its branch and a human
+   `wf declare` records them, with a new `approved at` entry where the
+   design was approved (**Holds**, "Items already past Design"). On his
+   word the session then copies the candidate over `areas.yaml`;
 3. pushes it with
    `dist/wf commit -worker human/<name> -m "areas: <what> (<name>, <date>)" areas.yaml`.
    `wf commit` refuses a commit that changes `areas.yaml` for any worker
@@ -1274,7 +1284,10 @@ tree of `REV` (`origin/main` when not given) with `git ls-tree`, and
 reports:
 
 - each path that falls to `catch_all`: a tree no area names;
-- each pattern that matches no file: an area whose tree moved or went;
+- each pattern that matches no file: an area whose tree moved or went.
+  A pattern whose area an open item declares is printed as
+  `expected until <item> merges` and is not a difference: that item's
+  design adds the tree, and the area was put in the map ahead of it;
 - with `-edges`, between exclusive areas: each dependency that `reaches`
   lacks, with the two directories that make it, and each `reaches` entry
   that no dependency supports.
@@ -1326,6 +1339,23 @@ file. Jeff's answer gives that up, and this is what goes with it:
   tree or moves a package cannot carry the map change. Between the merge
   and the edit, the new paths are in the catch-all and the old pattern
   matches nothing; the tick reports both.
+- *A map change reaches every branch in flight at once.* There is one
+  map, and every gate's diff check reads it. Move a pattern from one
+  area to another, or split an area, and an item in progress has paths
+  outside the areas it declared, though its branch did not change. At
+  its next gate an agent's `wf declare` may widen only inside the
+  approved design, so the item would go back to Design and a fresh
+  review for a change it did not make. The draft judged a branch by
+  the branch's own copy of the map. Here the candidate is run against
+  the branches in flight before it is saved, and the sitting that saves
+  it re-declares the items it names (above).
+- *An area added ahead of its tree matches nothing on `main`.* The map
+  cannot change in the commit that adds a tree, so the area is added at
+  the item's design review, and until the item merges its pattern
+  matches no file. `wf areas -check` prints that as expected, naming
+  the item, and not as a difference; otherwise every tick would raise
+  it under **Needs Jeff** until the merge. `seam-specs`'
+  `tools/conformance/` would be the first.
 - *`written_seams` is edited by hand.* The draft's copy took the written
   seams from `rules.yaml`'s `seams` list, so a seam became written when
   S1 listed its contract document. Now someone adds it here as well;
@@ -2694,8 +2724,10 @@ By file. Each cites the rule and does not restate it (FLOW-14).
   not confirm merges. The review's overview gains the repositories, the
   areas and the relations with open items, and the lines of
   `dist/wf areas -check`. A map change, here or at any other time, is
-  made only on Jeff's word: a candidate file, `dist/wf validate -areas`
-  shown to him, then the save and
+  made only on Jeff's word: a candidate file,
+  `dist/wf validate -areas <candidate> -repo .` shown to him, any item
+  it would put outside its areas re-declared on his word, then the save
+  and
   `dist/wf commit -worker human/<name>` (FLOW-05). Narrowing and
   `wf relate` on Jeff's word. **Open
   PRs** records `main`'s CI and its ruleset (`dist/wf main`), runs
@@ -3039,7 +3071,8 @@ Where this design does not do what the proposal's sections 3 to 8 say.
   names an area the map lacks, and is undeclared, colliding with every
   feature here, until an attended session adds the area on Jeff's word;
   its design review is the usual place, and a pattern may name a path
-  `main` does not have yet. Two of the 52 merges added a tree.
+  `main` does not have yet, which `wf areas -check` prints as expected
+  until that item merges. Two of the 52 merges added a tree.
 - No check in CI that the map matches the tree (a4 (c)): `wf areas -check`
   reports.
 - No gain for the two features in the queue now. See below.
@@ -4007,11 +4040,17 @@ whether it is still true with the proposed wording.
 
   The map's checks, in `tools/workflow/queue`: `TestAreasValidate` (each
   thing `wf validate` fails a map for; a `repository` that is not
-  `config.yaml`'s; the same pattern text in two areas) and
+  `config.yaml`'s; the same pattern text in two areas; with `-areas` and
+  `-repo` on a scratch repository, a declared item in progress whose
+  branch has a path the candidate moves out of its areas is named, one
+  whose paths stay inside is not, and without `-repo` the line says the
+  branches were not checked) and
   `TestAreasCheck`, on a scratch repository and edge lists: a path in the
   catch-all, a pattern that matches nothing, a dependency `reaches`
   lacks, a `reaches` entry nothing supports, an edge from an ordered
-  area, which is ignored, no `-edges`, which prints
+  area, which is ignored, an unmatched pattern whose area an open item
+  declares, which is printed as expected and leaves the result at no
+  difference, no `-edges`, which prints
   `reaches: not compared`, the result recorded in `main.yaml` for
   `origin/main` and not for another `-rev`, and exit 0 with differences.
   `TestCommitAreasHumanOnly`: `wf commit` refuses a commit that changes
