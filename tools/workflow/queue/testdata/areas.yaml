@@ -1,0 +1,93 @@
+version: 1
+repository: buildwarden/buildwarden
+catch_all: core
+areas:
+  driver/container:
+    mode: exclusive
+    paths: [driver/container/, cmd/warden-pause/]
+    reaches: [collector, driver-core, executor, ledger, relaycfg]
+  driver/qemu:
+    mode: exclusive
+    paths: [driver/qemu/]
+    reaches: [collector, driver-core, executor, ledger, relaycfg]
+  driver/vz:
+    mode: exclusive
+    paths: [driver/vz/, cmd/warden-vmnet/, tools/vz-image-prep/, entitlements.plist]
+    reaches: [collector, driver-core, executor, ledger, relaycfg]
+  driver/hyperv:
+    mode: exclusive
+    paths: [driver/hyperv/, tools/relay-vm/hyperv/]
+    reaches: [collector, driver-core, executor, ledger, relaycfg]
+  driver/firecracker:
+    mode: exclusive
+    paths: [driver/firecracker/, tools/firecracker-vm/]
+    reaches: [collector, driver-core, executor, ledger, relaycfg]
+  driver-core:
+    mode: exclusive
+    paths: [driver/, tools/build-vm/, tools/relay-vm/, tools/win-image-prep/]
+    reaches: [collector, driver/firecracker, driver/hyperv, driver/qemu, executor, ledger,
+              relay, relaycfg]
+  relaycfg:
+    mode: exclusive
+    paths: [relaycfg/]
+  relay:
+    mode: exclusive
+    paths: [relay/, cmd/relay/, Dockerfile.relay]
+    reaches: [collector, ledger, relaycfg]
+  ledger:
+    mode: exclusive
+    paths: [ledger/]
+  collector:
+    mode: exclusive
+    paths: [collector/, cmd/collector/]
+    reaches: [driver-core, executor, ledger, relaycfg]
+  executor:
+    mode: exclusive
+    paths: [bootstrap/, cmd/warden-io/]
+  specs:
+    mode: exclusive
+    paths: [specs/, docs/book/src/specs/]
+    reaches: [collector, ledger, relay, relaycfg]
+  tier1:
+    mode: exclusive
+    paths: [tools/tier1/]
+    reaches: [loop]
+  loop:
+    mode: exclusive
+    paths: [tools/workflow/, .claude/, .entire/]
+  core:
+    mode: exclusive
+  cli:
+    mode: ordered
+    paths: [cmd/warden/]
+  book:
+    mode: ordered
+    paths: [docs/book/, examples/, README.md, CONTRIBUTING.md, SECURITY.md, AGENTS.md,
+            CLAUDE.md, LICENSE, NOTICE, logo.png]
+  rules:
+    mode: ordered
+    paths: [docs/development/]
+  designs:
+    mode: ordered
+    paths: [docs/design/]
+  build:
+    mode: ordered
+    paths: [.github/, Makefile, go.mod, go.sum, .gitattributes, .gitignore, .golangci.yml,
+            .goreleaser.yaml, .mise.toml, aqua.yaml, install.sh, Dockerfile,
+            Dockerfile.ledger.zst, test-integration.sh]
+  tier1-config:
+    mode: ordered
+    paths: [tools/tier1/rules.yaml, tools/tier1/golangci.yml]
+implies:
+  drivers:
+    container: driver/container
+    qemu: driver/qemu
+    vz: driver/vz
+    hyperv: driver/hyperv
+    firecracker: driver/firecracker
+  shared: [collector, driver-core, executor, ledger, relay, relaycfg]
+  surfaces:
+    cli: [cli, book]
+    config: [cli, book]
+    output: [book]
+written_seams: [ledger-format]

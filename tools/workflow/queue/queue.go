@@ -23,8 +23,12 @@ import (
 type Config struct {
 	// PriorityConfirmed gates unattended runs: the loop does no work until the
 	// human has confirmed the priority order.
-	PriorityConfirmed bool       `yaml:"priority_confirmed"`
-	RunBudget         StepBudget `yaml:"run_budget"`
+	PriorityConfirmed bool `yaml:"priority_confirmed"`
+	// Repository is the repository whose gates wf runs and whose area map an
+	// item's areas name, as owner/name. It has no default: unset, an item
+	// that names repos fails Validate.
+	Repository string     `yaml:"repository,omitempty"`
+	RunBudget  StepBudget `yaml:"run_budget"`
 	// NativeBudget bounds one scheduled native session's batch, so native
 	// work never competes with the cloud loop (FLOW-13). Nil falls back to
 	// RunBudget.
@@ -79,6 +83,12 @@ type Feature struct {
 	Phase  int    `yaml:"phase"` // FLOW-03 phase, 0..8
 	Design string `yaml:"design"`
 	Branch string `yaml:"branch"`
+	// Areas names the areas of the area map whose files the item changes
+	// (FLOW-02, FLOW-05). Nil, the key absent, is undeclared: the item
+	// collides with every item it shares a repository with. An empty list is
+	// a declaration that it changes nothing but its own design, which is why
+	// this is a pointer: the two must stay apart through a save and a load.
+	Areas *[]string `yaml:"areas,omitempty"`
 	// AltersRelationships is nil until Design decides it (FLOW-02).
 	AltersRelationships *bool `yaml:"alters_relationships"`
 	// DesignReview is empty until Design decides it: required, or skip when
@@ -163,6 +173,9 @@ type State struct {
 	Gaps     []Gap
 	// Statuses are native/status/*.yaml, one per machine (FLOW-09).
 	Statuses []MachineStatus
+	// Areas is areas.yaml, the area map of Config.Repository; the file is
+	// optional. Nil, the repository is one exclusive area (FLOW-05).
+	Areas *AreaMap
 }
 
 // Load reads config.yaml and queue/*.yaml under dir.
@@ -188,6 +201,9 @@ func Load(dir string) (*State, error) {
 	}
 	s.sortFeatures()
 	if err := s.loadNative(); err != nil {
+		return nil, err
+	}
+	if err := s.loadAreas(); err != nil {
 		return nil, err
 	}
 	return s, nil
@@ -420,7 +436,7 @@ func (s *State) Validate() []error {
 			"%d features hold an alters_relationships slot, limit %d (FLOW-05): %s",
 			len(holders), limit, strings.Join(holders, ", ")))
 	}
-	for _, e := range s.validateNative() {
+	for _, e := range append(s.validateNative(), s.validateAreas()...) {
 		errs = append(errs, errors.New(e))
 	}
 	return errs
