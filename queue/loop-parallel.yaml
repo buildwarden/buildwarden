@@ -197,22 +197,24 @@ questions:
     answer: (a) An ordered area has no reaches, as recommended. Answered 2026-11-15, second sitting.
   - id: a19
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Whether the urgent mark (a17 (d)) is for security fixes only, and what holds it to them. New 2026-11-15, raised by the fold-in of a17 (d). His answer names the case ("a security fix following no item") and the mark (wf new -urgent, "one more field"). wf cannot tell a security fix from any other feature: the queue has no field for what an item fixes, and FLOW-20 leaves "a fix for a security problem" to intake and the design review to judge. So the fold-in had to say whose the mark is (design: The urgent mark).'
     options:
-      - '(a) The mark is the human''s to use. wf checks who sets it, a human worker, and not what the item is. FLOW-05 says that a feature the human has marked urgent starts whatever the count, and names the security fix that follows no item as what the mark is for. Intake offers it for that case and for no other. Jeff may ask for it on any feature, and the attended session then sets it.'
-      - '(b) Security fixes only, by the rule''s words. FLOW-05 says "a security fix the human has marked urgent". wf checks the same as under (a) and no more. Intake judges whether the item is a security fix, as it judges FLOW-20''s exemption, and an attended session declines the mark for anything else until a process item changes the rule.'
+      - (a) The mark is the human's to use. wf checks who sets it, a human worker, and not what the item is. FLOW-05 says that a feature the human has marked urgent starts whatever the count, and names the security fix that follows no item as what the mark is for. Intake offers it for that case and for no other. Jeff may ask for it on any feature, and the attended session then sets it.
+      - (b) Security fixes only, by the rule's words. FLOW-05 says "a security fix the human has marked urgent". wf checks the same as under (a) and no more. Intake judges whether the item is a security fix, as it judges FLOW-20's exemption, and an attended session declines the mark for anything else until a process item changes the rule.
       - '(c) Security fixes only, held by wf: a second field that says the item is a security fix, set at intake, without which -urgent is refused. wf still takes the human''s word for the second field. Two fields, where his answer has one.'
     recommended: '(a). The cap is his instrument for his own attention, and the mark is the one exception to it that he grants item by item. No skill lets the loop set it, and wf refuses it from a worker that does not name a human and on any item that follows one, which is every item an unattended session files; wf takes a session''s word for its name, as wf answer does, so a session that gave a human''s name against its skill''s words is not refused (design: The urgent mark). Under (b) the next thing that cannot wait and is not a security fix (a fix for a fault a user reports, which follows no item and has not made main red) has no route but raising limits.waiting_on_human, which lets every queued feature start: the route his answer to a17 replaced. Under (a) the rule still says what the mark is for, so an agent has no ground to propose it for ordinary work'
+    answer: '(b) Security fixes only, by the rule''s words: FLOW-05 says ''a security fix the human has marked urgent''; wf checks no more than who sets it; intake judges whether the item is a security fix, as it judges FLOW-20''s exemption, and an attended session declines the mark for anything else until a process item changes the rule. NOT the recommended (a). Answered 2026-11-15, second sitting.'
   - id: a20
     kind: assumed
-    status: open
+    status: confirmed
     question: 'Whether the urgent mark can be set after intake, and cleared, by a command. New 2026-11-15, raised by the independent review of the second sitting''s fold-in. His answer to a17 names one way to set the mark: "a mark set at intake (wf new -urgent) ... One more field." The fold-in added a command to his words, wf urgent, the ninth this item adds: it sets the mark on a feature that is already queued and clears it from any item. It goes beyond what he said, so it is put to him by name (design: The urgent mark).'
     options:
-      - '(a) wf urgent sets and clears, for a human worker only. It sets the mark on a queued feature that follows no item and is not tracked, and -clear takes it from any item. Each logs a line in the item''s history under the worker.'
-      - '(b) wf urgent -clear only. The mark is set at intake and nowhere else, as his words have it, and a command takes back one set by mistake. A feature already queued that turns out to need the mark gets it only by a hand edit of its queue file.'
+      - (a) wf urgent sets and clears, for a human worker only. It sets the mark on a queued feature that follows no item and is not tracked, and -clear takes it from any item. Each logs a line in the item's history under the worker.
+      - (b) wf urgent -clear only. The mark is set at intake and nowhere else, as his words have it, and a command takes back one set by mistake. A feature already queued that turns out to need the mark gets it only by a hand edit of its queue file.
       - '(c) No command. wf new -urgent is the whole of it: one field and one flag. Setting the mark later and taking it back are both hand edits of the queue file in an attended session, which log nothing.'
     recommended: '(a). Whether a fix needs the mark is not known at intake: it depends on how many items wait on him on the day the fix is next, and intake offers the mark whatever the count is that day only because it cannot know. A security fix filed without it, or filed before this change, is otherwise marked by writing urgent: human/jeff into the file by hand, which wf validate passes and the history does not show. What (a) costs is a second place where wf takes a session''s word that it speaks for him, the same test as at wf new -urgent and at wf answer'
+    answer: (a) wf urgent sets and clears, for a human worker only. As recommended. Answered 2026-11-15, second sitting.
 history:
   - at: 2026-11-14T20:57:45Z
     by: human/jeff
@@ -271,3 +273,9 @@ history:
   - at: 2026-11-15T21:25:51Z
     by: human/jeff
     event: 'assumed question a18 confirmed: (a) An ordered area has no reaches, as recommended. Answered 2026-11-15, second sitting.'
+  - at: 2026-11-15T22:03:58Z
+    by: human/jeff
+    event: 'assumed question a19 confirmed: (b) Security fixes only, by the rule''s words: FLOW-05 says ''a security fix the human has marked urgent''; wf checks no more than who sets it; intake judges whether the item is a security fix, as it judges FLOW-20''s exemption, and an attended session declines the mark for anything else until a process item changes the rule. NOT the recommended (a). Answered 2026-11-15, second sitting.'
+  - at: 2026-11-15T22:03:58Z
+    by: human/jeff
+    event: 'assumed question a20 confirmed: (a) wf urgent sets and clears, for a human worker only. As recommended. Answered 2026-11-15, second sitting.'

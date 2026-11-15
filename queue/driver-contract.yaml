@@ -74,10 +74,10 @@ steps:
   - id: f2-design-review
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
-      claimed_by: human/jeff
-      expires: 2026-11-14T23:00:57.355995851Z
+      claimed_by: ""
+      expires: null
   - id: f2-answer-q1
     phase: 2
     affinity: human
@@ -495,3 +495,6 @@ history:
   - at: 2026-11-15T21:57:17Z
     by: human/jeff
     event: 'priority 68 -> 69 (renumbered by wf new: workdir-in-context queued at 67)'
+  - at: 2026-11-15T22:04:34Z
+    by: human/jeff
+    event: done f2-design-review
