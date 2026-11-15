@@ -39,8 +39,8 @@ rule_changes:
   - {rule: PROFILE-01, change: amend, paths: [docs/development/loop-profile.md,
       tools/tier1/area-edges.sh]}
 concepts: [workflow, queue, one-queue, parallel-items, areas, area-map, relations, collision,
-           flow-05-limits, alters-slot, pr-slot, waiting-limit, claim-guard, wf-commit,
-           wf-next, wf-claim, wf-validate, refresh, up-to-date-branch, ready-to-merge,
+           flow-05-limits, alters-slot, pr-slot, waiting-limit, urgent-mark, claim-guard,
+           wf-commit, wf-next, wf-claim, wf-validate, refresh, up-to-date-branch, ready-to-merge,
            consolidation, tracked-items, reconciliation, queue-summary, digest,
            merge-confirmation, main-ci, componentization, program]
 related: [componentization.md, alters-slot.md, next-skips-merge-wait.md, queue-summary.md,
@@ -563,8 +563,12 @@ say.
     not counted. The number is `limits.waiting_on_human`,
     8 when unset. The guard refuses the claim that would start a queued
     feature, for every worker. Work in progress, a process item, a
-    tracked item, a fix that `follows` an item, and the fix `main.yaml`
-    names for a red `main` are never refused (a17).
+    tracked item, a fix that `follows` an item, the fix `main.yaml`
+    names for a red `main`, and a feature Jeff has marked urgent are
+    never refused (a17 (d), Jeff, 2026-11-15). The mark is one field in
+    the queue file, `urgent`, which only a human sets, at intake or
+    later. It lifts this one refusal and nothing else (**The urgent
+    mark**).
     - *Rejected: no cap, only the count* (the draft's recommendation).
       Jeff's answer.
     - *Rejected: counting the lines under **Needs Jeff***. One item with
@@ -583,6 +587,24 @@ say.
       says when it is due. Counted, it would take one of the 8 places
       for the item's whole time in progress while nothing waits on
       Jeff.
+    - *Rejected: no mark; a security fix that follows no item waits, or
+      Jeff raises the number* (a17 (a), the recommendation). Jeff's
+      answer. Raising `limits.waiting_on_human` to start one item lets
+      every queued feature start, and has to be put back afterwards.
+    - *Rejected: the mark as a class or a priority.* It would change
+      the order every worker walks, for an item whose place Jeff
+      already sets with its priority at intake.
+    - *Rejected: the mark lifting the other limits too.* Those three
+      bound items that collide. A fix that collides with five features
+      in progress needs the same care as any sixth.
+    - *Rejected: the mark cleared when the item starts.* The claim that
+      starts it is a cloud worker's, and the mark is a human's to set
+      and to clear. Kept, it is the record of why the item started
+      past the count.
+    - *Rejected: `wf` holding the mark to security fixes.* The queue has
+      no field that says what an item fixes, and FLOW-20 leaves "a fix
+      for a security problem" to intake and the design review to judge.
+      Whether the rule's words hold the mark to them is a19.
 
 ## Questions
 
@@ -609,8 +631,11 @@ the answer to a3. a18 was new, raised by the independent review of the
 fold-in: it asked about a rule the fold-in added to make a5 (d) and a15
 (a) fit together.
 
-He answered a10, a14 and a18 in the second sitting, on 2026-11-15, each
-as recommended. They are marked below in the same way.
+He answered those four in the second sitting, on 2026-11-15. Three
+answers confirm the recommendation (a10, a14, a18). One departs from it
+(a17: option (d), a mark he sets on a feature the cap must not hold)
+and is folded into the design. They are marked below in the same way.
+a19 is new, raised by that fold-in, and is the one question still open.
 
 - **a1. Disjoint PRs in one repository: in what order may they merge?**
   (The proposal's question 3.) CI does not run again when a PR's base moves.
@@ -1117,6 +1142,7 @@ as recommended. They are marked below in the same way.
     word on 2026-11-14 and 2026-11-15: `runtime-cli-project-path`, in
     progress, and `project-config-trust`, queued at `f090401` and in
     progress since its first claim at 20:30 UTC that day (`5f525cb`).
+    **Chosen.**
   - (e) As (a), but a `human` step counts as soon as `wf` offers it,
     whatever its phase. `x4-state` then holds one of the 8 places from
     the day this item's review is approved until its PR has merged, and
@@ -1125,6 +1151,22 @@ as recommended. They are marked below in the same way.
   Recommended: (a). The loop's own lever is whether it starts new work,
   so that is what the cap moves; and a fix for `main` is what lets his
   list get shorter.
+
+  **Answered (d), Jeff, 2026-11-15** (second sitting): "as (a), plus a
+  mark set at intake (`wf new -urgent`) that lets a security fix
+  following no item start. One more field." It departs from the
+  recommendation. The count is as (a) has it: a `human` step counts
+  once its item has reached its phase, and queued items do not count.
+  Folded in: Decision 24; **The urgent mark** under **The limits** (the
+  field, who sets it and how `wf` refuses anyone else, what it lifts
+  and what it does not, what `wf validate`, `wf next`, `wf status` and
+  `QUEUE.md` show, and what becomes of it once the item has started);
+  cases 42 to 44; `urgent` under **Defaults and overrides**; FLOW-05's
+  paragraph **Waiting on the human**, which gains one clause and one
+  sentence; the intake skill's wording under **Machinery edits**;
+  `TestWaitingLimit` and `TestUrgent`. His words name the case, a
+  security fix that follows no item. Whether the mark is held to that
+  case, and by what, is a19.
 - **a18. Whether an ordered area has `reaches`: what an item that edits
   the CLI is to an item in a package the CLI imports.** New on
   2026-11-15, raised by the independent review of the fold-in. Jeff's
@@ -1174,6 +1216,40 @@ as recommended. They are marked below in the same way.
   (b) open are gone from Decision 5, the map's format, the relation's
   examples, the note under FLOW-05's proposed wording and the
   Departures table.
+- **a19. Whether the urgent mark is for security fixes only, and what
+  holds it to them.** New on 2026-11-15, raised by the fold-in of a17
+  (d). Open. Jeff's answer names the case ("a security fix following no
+  item") and the mark (`wf new -urgent`, "one more field"). `wf` cannot
+  tell a security fix from any other feature: the queue has no field
+  for what an item fixes, and FLOW-20 leaves "a fix for a security
+  problem" to intake and the design review to judge. So the fold-in had
+  to say whose the mark is. Proceeding with (a); confirm.
+  - (a) The mark is the human's to use. `wf` checks who sets it, a
+    `human` worker, and not what the item is. FLOW-05 says that a
+    feature the human has marked urgent starts whatever the count, and
+    names the security fix that follows no item as what the mark is
+    for. Intake offers it for that case and for no other. Jeff may ask
+    for it on any feature, and the attended session then sets it.
+  - (b) Security fixes only, by the rule's words. FLOW-05 says "a
+    security fix the human has marked urgent". `wf` checks the same as
+    under (a) and no more. Intake judges whether the item is a security
+    fix, as it judges FLOW-20's exemption, and an attended session
+    declines the mark for anything else until a process item changes
+    the rule.
+  - (c) Security fixes only, held by `wf`: a second field that says the
+    item is a security fix, set at intake, without which `-urgent` is
+    refused. `wf` still takes the human's word for the second field.
+    Two fields, where his answer has one.
+
+  Recommended: (a). The cap is his instrument for his own attention,
+  and the mark is the one exception to it that he grants item by item.
+  A mark only he can set cannot be spent by the loop. Under (b) the
+  next thing that cannot wait and is not a security fix (a fix for a
+  fault a user reports, which follows no item and has not made `main`
+  red) has no route but raising `limits.waiting_on_human`, which lets
+  every queued feature start: the route his answer to a17 replaced.
+  Under (a) the rule still says what the mark is for, so an agent has
+  no ground to propose it for ordinary work.
 
 ## Design
 
@@ -1209,6 +1285,10 @@ default. While it is unset, an item that writes `repos` fails `wf validate`
 
 An item whose first repository is not `config.yaml`'s `repository` is
 **tracked** (see **Tracked items**).
+
+The queue file gains an eighth field, `urgent`, which declares nothing
+about the change: it is the human's mark for the waiting limit, and is
+described with it (**The urgent mark**, under **The limits**).
 
 **In the design.** FLOW-02's front matter gains two keys, and the template
 with it:
@@ -1276,7 +1356,8 @@ it is refused, like `wf declare`, when the result would put a limit over.
 `-follows X` and no `-areas`, it copies X's `repos` and `areas` and logs
 `repos and areas taken from X`; when X has none, the new item has none.
 `-seams` is refused for an item homed in this repository, whose seams
-`wf declare` copies.
+`wf declare` copies. It also gains `-urgent`, for a `human` worker only
+(**The urgent mark**).
 
 This replaces the sentence `alters-slot` added to `wf-design`'s step 5 (its
 a4): a redesign that flips `alters_relationships` to `true` past the limit is
@@ -1299,6 +1380,8 @@ before. The new sentence is under **Machinery edits**.
 - `collides_with`: each entry names another item in the queue.
 - A tracked item: `kind` is not `process`, `holds` is empty, and its round
   is `tracked`.
+- `urgent`: its value is a `human` worker, and the item is a feature
+  that is not tracked (**The urgent mark**).
 - The three limits, per holder, and that `limits.waiting_on_human` is
   not below 1 (see **The limits**).
 
@@ -1900,19 +1983,120 @@ it counts by no relation, nothing holds it, and it stops one thing.
     intake records it with `wf main -followup <slug>`. Held at the
     limit, it would be the cap stopping the one item that lets his list
     get shorter.
-  - Any other security fix that follows no item
-    (`runtime-cli-project-path`, in the queue now, is one) carries no
-    mark `wf` can read, so it is not exempt: intake says so when it
-    files one while the count is at the limit, and the number in
-    `config.yaml` is his to raise (a17, where a mark for it is option
-    (d)).
-  - An adoption (a8) is planned work and is not exempt.
+  - A feature Jeff has marked urgent (a17 (d)). The mark is for a
+    security fix that follows no item, which nothing above covers:
+    `wf` knows a fix only by `follows` or by `main.yaml`. It is
+    described below (**The urgent mark**).
+  - An adoption (a8) is planned work and is not exempt, unless he marks
+    it.
 - **Where it shows.** `wf next`'s `blocked` line, which the digest keeps
   (LOOP-06); **Needs Jeff**'s opening line; a line above `QUEUE.md`'s
-  Backlog while the count is at the limit.
+  Backlog while the count is at the limit; and, for a marked feature
+  that starts past the count, the line its start writes in its history.
 - **`wf validate`** does not fail a queue whose count is over the limit:
   it gets there by work in progress. It fails a `limits.waiting_on_human`
   below 1.
+
+**The urgent mark** (a17 (d), Jeff, 2026-11-15: "a mark set at intake
+(`wf new -urgent`) that lets a security fix following no item start. One
+more field."). FLOW-20 exempts two kinds of item from the freeze: a fix
+for a regression on `main` and a fix for a security problem. The waiting
+limit never holds the first, which `wf` knows by `follows` or by
+`main.yaml`. The second, when it follows no item, left nothing `wf`
+could read. The mark is that.
+
+- **The field.** `urgent`, in the queue file. Its value is the worker
+  who set it, as in `urgent: human/jeff`, so the file says whose word it
+  is. Absent means not marked, which is every item today.
+- **Who sets it.** A human and no one else: Jeff, or an attended session
+  on his word, under a `human` worker name. Two commands write it:
+  - `wf new ... -urgent`, at intake;
+  - `wf urgent -state DIR -worker human/<name> -feature F [-clear]`,
+    later, for an item filed before the count grew or before this
+    change. It marks a queued feature; `-clear` removes the mark from
+    any item.
+
+  Each logs `marked urgent (FLOW-05)` or `urgent cleared` in the item's
+  history, under that worker.
+- **How `wf` refuses anyone else.** Both commands refuse a worker whose
+  kind is not `human`, with
+  `only a human marks an item urgent (FLOW-05)`. It is the test
+  `wf answer` makes before it records an answer (`queue.Kind(worker)`),
+  and it is as strong as that one: a worker name is the session's own
+  word, and no skill gives an unattended session a human one. So an
+  unattended session never sets the mark. The tick, a native session
+  and every phase agent run as `cloud` or `host:<name>`; the follow-up
+  the tick files with nobody there (FLOW-09) has `-follows` and needs
+  no mark; and the tick's **Never** list gains the line (**Machinery
+  edits**). A queue file edited by hand to carry the field fails
+  `wf validate` unless the value names a human worker, and `Guard`
+  honours no other value.
+- **What else `wf` refuses.** `-urgent` on a process item or a tracked
+  item, at `wf new` and at `wf urgent`: the waiting limit never refuses
+  either, so the mark could mean nothing there. `wf urgent` on an item
+  that is in progress or done, for the same reason; `-clear` is allowed
+  on any item.
+- **What it lifts.** One refusal. `Guard` skips the waiting limit's test
+  for the claim that starts a queued feature whose `urgent` names a
+  human worker. With 8 or more items waiting, that feature starts where
+  an unmarked one gets its `blocked` line.
+- **What it does not lift or change.**
+  - The order. A marked feature is in the class it would be in without
+    the mark (FLOW-05: class 4, or class 3 with `follows` or `adopts`),
+    at the priority intake gave it, and like any queued item it starts
+    only when every item ahead of it is blocked. If it is to go first,
+    that is its priority, which is Jeff's to give at intake as it is
+    today.
+  - The other three limits. A marked feature that collides with five
+    features in progress is refused by the in-progress limit, and it
+    waits for an `alters_relationships` slot and for the PR slot like
+    any other.
+  - Its relations. Its areas, seams and rules relate it to other items
+    as they would without the mark.
+  - A process item's hold; a blocking question on the item itself
+    (`wf new -urgent -hold` files it marked and parked, and it starts
+    past the count once he answers); the wait for the item it
+    `follows`; its budget and the runaway check; and the refusal of a
+    refresh while `main` is red.
+  - The count. A marked item that is in progress and waits on him
+    counts like any other.
+  - The freeze. FLOW-20 says which items intake files on hold, and the
+    mark says nothing about that.
+- **Once the item has started.** The mark has done its work: the waiting
+  limit refuses only a start, so the mark has no effect on an item in
+  progress or done. It stays in the queue file as the record of why the
+  item started, and no worker clears it, since clearing is a human's
+  (`wf urgent -clear`). The claim that starts a marked feature while
+  the count is at the limit or over logs
+  `started past the waiting limit (9 wait, limit 8): marked urgent by human/jeff (FLOW-05)`
+  where it would log `started (FLOW-05)`, and the run's digest carries
+  that line with the step (LOOP-06).
+- **What shows it.**
+  - `wf validate` fails an `urgent` whose value is not a `human` worker
+    (`<item>: urgent names cloud/<session>: only a human marks an item urgent (FLOW-05)`),
+    and an `urgent` on a process item or a tracked item. It does not
+    fail a marked item for being in progress or done.
+  - `wf next` prints no `blocked` line for a marked feature on the
+    waiting limit's account: it offers the feature's first step, as it
+    does for a fix. The refusal an unmarked feature gets keeps its text,
+    above.
+  - `wf status` prints `urgent: human/jeff` under the item, beside
+    `follows:`.
+  - `QUEUE.md`: the Kind column ends in `, urgent` for a marked item
+    (`feature, urgent`), in Backlog and in Active; and the line above
+    Backlog at the limit names the mark (**What Jeff sees**).
+- **Whether it is for security fixes only.** `wf` does not check what
+  the item is: it has no field to check, and FLOW-20's own exemption is
+  judged and not computed. The mark is the human's to use. FLOW-05 says
+  what it is for, and intake offers it only for a security fix that
+  follows no item. That choice goes beyond Jeff's words, so it is put
+  to him as a19.
+- **The queue as it stands.** The two security fixes in it
+  (`runtime-cli-project-path` and `project-config-trust`) are both in
+  progress, so neither needs the mark. Like every new field, the first
+  `urgent` is written only after `x4-state` (**Holds, and what the
+  merge does to running work**): an old `wf` that saves the file drops
+  the field, which leaves the item unmarked, the safe side.
 
 **The tie-break at the PR slot** (a12). An item *waits for the slot* when
 it is a counted feature in Publish whose newest `f6-merge-main` is pending
@@ -1992,6 +2176,9 @@ code these cases run through.
 | 39 | Seven wait. An eighth item, in Implement, has only a pending `human` step of phase 6 (`f6-release-specs`) | n/a | Seven: a `human` step of a phase the item has not reached is not counted. A queued feature starts. `QUEUE.md` lists the step under the lines that are not counted |
 | 40 | Eight wait. `main` is red by a commit that is no item's, so the tick filed nothing; Jeff files the fix at intake, which records it with `wf main -followup` | n/a | Started: `main.yaml` names it as the fix for the red `main`, though it follows no item. Its refresh is also the one refresh taken while `main` is red (case 35) |
 | 41 | A process item in progress holds `cloud`. Three PRs are ready; Jeff merges one | Cannot arise: one PR at a time | `wf stale` seeds a refresh on the other two. Neither is taken, by the tick or an attended run: `blocked <item> held by process item <x>`. They stay under **After a refresh** until the process item is done. He can use GitHub's **Update branch** himself (case 37) |
+| 42 | Eight wait, as in case 25. The next queued feature follows no item, and Jeff marked it at intake (`wf new -urgent`): a security fix | Started, as in case 25: there is no cap | Started, and its history says `started past the waiting limit (8 wait, limit 8): marked urgent by human/jeff`. An unmarked feature behind it is refused as in case 25 |
+| 43 | The same marked feature, undeclared, while five features are in progress; or while a process item in progress holds `cloud` | Not started: the in-progress limit; the hold | Not started, for the same reason: `the in-progress limit (limit 5): it collides with a, b, c, d, e`, or `held by process item <x>`. The mark lifts the waiting limit and nothing else |
+| 44 | A cloud run passes `-urgent` to `wf new`; a host session runs `wf urgent`; an agent writes `urgent: cloud/<session>` into a queue file by hand; Jeff's session passes `-urgent` with `-kind process` | n/a | The first two are refused: `only a human marks an item urgent (FLOW-05)`. `wf validate` fails the hand edit, and `Guard` does not honour it. The fourth is refused: the waiting limit never refuses a process item |
 
 ### `wf commit`: pushing queue state
 
@@ -2697,21 +2884,22 @@ What is new, by section:
   guard's reason for the item's next step, "your merge", or "a refresh,
   then your merge"), and PR. Kind
   reads `adoption (<consumable> <version>)` for a reconciliation item and
-  `tracked` for a tracked one. Two headers are renamed, in Active and in
+  `tracked` for a tracked one, and ends in `, urgent` for a feature Jeff
+  has marked (**The urgent mark**). Two headers are renamed, in Active and in
   Backlog: "Feature" becomes "Item", since process items are listed too,
   and "Steps spent / est." becomes "Steps".
 - **Relations** is new: every pair of open features that is near or
   colliding, with the reason. Disjoint pairs are not listed.
 - **Backlog** gains Repositories and Areas, and, while the count is at
   the limit, a line above the table:
-  `No queued feature starts: 8 items wait on you (limit 8). Fixes and process items still start.`
+  `No queued feature starts: 8 items wait on you (limit 8). Fixes, process items and features you marked urgent still start.`
   (A fix is one that `follows` an item, or the one `main.yaml` names
-  for a red `main`.)
+  for a red `main`. A marked feature shows `urgent` in its Kind.)
 - A **Workers** section (each machine's last run and its led items) is
   `loop-native-lead`'s.
 
-`wf status` prints `repos:`, `areas:`, `declared:` and `adopts:` lines
-under an item that has them. `wf relations [-feature F]` prints the relation rows.
+`wf status` prints `repos:`, `areas:`, `declared:`, `adopts:` and
+`urgent:` lines under an item that has them. `wf relations [-feature F]` prints the relation rows.
 
 **Digests.** Each run writes its own file,
 `digest/<date>/<UTC start>-<worker>.md` (`20261114T105653Z-cloud.md`,
@@ -2732,7 +2920,8 @@ file names the item's repositories when it has more than this one.
 
 - `queue.go`: the seven fields on `Feature`, with `areas` a pointer to a
   list so that an absent key and an empty list stay apart through a load
-  and a save (checked with the YAML library the module uses);
+  and a save (checked with the YAML library the module uses); `Urgent`,
+  the worker who marked the item;
   `PR.Head`, the commit `pr.ci` was read for;
   `Config.Repository`; `State.Main`, loaded from `main.yaml` as an optional
   file;
@@ -2748,13 +2937,16 @@ file names the item's repositories when it has more than this one.
 - `relation.go` (new): `Relation(a, b)` and its reason.
 - `limits.go` (new): the table, the predicate, `Guard`, the PR-slot
   holder and tie-break; `WaitsOnHuman`, which `Guard` counts for the
-  waiting limit and `summary.go` lists; `holdsAltersSlot`, `altersHolders` and `altersWait`
+  waiting limit and `summary.go` lists; `MarkUrgent`, the rule of
+  `wf new -urgent` and `wf urgent`, and `Guard`'s skip for a feature a
+  human marked; `holdsAltersSlot`, `altersHolders` and `altersWait`
   move here from `next.go`.
 - `next.go`: `Next`, `NextFor` and `ready` call `Guard` for every worker;
   `atLimit` and `prSlotHolder` go; `cloudHold` refuses a refresh step
   while `main.yaml` records `main` red, except for the follow-up it
-  names; `Claim` starts a tracked item, and leaves the first claim of a
-  refresh step out of the item's budget (a10 (d)).
+  names; `Claim` starts a tracked item, leaves the first claim of a
+  refresh step out of the item's budget (a10 (d)), and logs a marked
+  feature's start past the waiting limit.
 - `phases.go`: the `tracked` round and the letter `t`; `IsRefresh`;
   `SeedRefresh`, which in Publish also adds the need to `f6-open-pr`;
   `Complete` drops a pending refresh on a merge step; `Back`
@@ -2783,8 +2975,9 @@ file names the item's repositories when it has more than this one.
   invalid when Design narrowed.
 
 `tools/workflow/cmd/wf/main.go`: `areas`, `declare`, `relate`, `relations`,
-`stale`, `main`, `commit` and `digest`; `new -repos -areas -seams -adopts`,
-and `-follows` copying `repos` and `areas`; `areas -list` and
+`stale`, `main`, `commit`, `digest` and `urgent`;
+`new -repos -areas -seams -adopts -urgent`, and `-follows` copying `repos`
+and `areas`; `areas -list` and
 `areas -check`; `validate -areas [-repo]`; `claimable`
 calls `Guard`; `done` runs `check.Refresh` for a refresh step; `status`
 prints the new lines.
@@ -2819,15 +3012,23 @@ By file. Each cites the rule and does not restate it (FLOW-14).
   for a refresh. **Never** gains: change a trunk's protection, on
   GitHub its branch protection rule and the rulesets that apply to it
   (FLOW-08); the same line goes into
-  `workflow-human` and `workflow-native`.
+  `workflow-human` and `workflow-native`. **Never** also gains: mark
+  an item urgent, or clear the mark (FLOW-05); `workflow-native`
+  applies the tick's list unchanged.
 - `.claude/skills/workflow-intake/SKILL.md`. Step 3: agree the
   repositories and areas with Jeff (`dist/wf areas -list`), show
   `dist/wf relations -feature <slug>` after `wf new`; `-adopts` and its
   place; a tracked item, with `-seams`; nothing on the size guide for
   refreshes (a10 (d)). When the waiting
   limit is reached (`dist/wf next` prints it), say so: a new feature will not start until an item clears, a fix
-  with `-follows` will, and the number is Jeff's to change. The follow-up
-  path: no `-areas`, so `wf new -follows` takes
+  with `-follows` will, a feature Jeff marks urgent will, and the number
+  is Jeff's to change. Step 3 also gains: when the item is a security
+  fix that follows no item, offer `-urgent`, whatever the count is that
+  day, and pass it only on Jeff's word; do not offer it for anything
+  else (FLOW-05, FLOW-20). Step 4: `-urgent` in the command, and after
+  it `dist/wf status` must show the item's `urgent:` line, as after
+  `-hold`. The follow-up
+  path: no `-urgent`, and no `-areas`, so `wf new -follows` takes
   the followed item's repositories and areas; a fix for a red `main`
   follows the item whose merge it was, and one Jeff files for a red
   commit that was no item's is recorded with
@@ -2841,8 +3042,9 @@ By file. Each cites the rule and does not restate it (FLOW-14).
   `dist/wf validate -areas <candidate> -repo .` shown to him, any item
   it would put outside its areas re-declared on his word, then the save
   and
-  `dist/wf commit -worker human/<name>` (FLOW-05). Narrowing and
-  `wf relate` on Jeff's word. **Open
+  `dist/wf commit -worker human/<name>` (FLOW-05). Narrowing,
+  `wf relate`, and `dist/wf urgent` with its `-clear`, on Jeff's word
+  (FLOW-05). **Open
   PRs** records `main`'s CI and its ruleset (`dist/wf main`), runs
   `dist/wf stale`, which skips a PR Jeff has already merged, and lists
   the PRs that are ready to merge apart from those that wait for a
@@ -3170,7 +3372,7 @@ Where this design does not do what the proposal's sections 3 to 8 say.
 | FLOW-17: "a `feat/<item>` branch in each" repository | Not here | `loop-repository` |
 | The exclusive areas include `conformance` | Not in the map | `tools/conformance/` is not on `main`; `seam-specs` adds it |
 | FLOW-02, -03, -05, -10, -15, -19, -20 | Also FLOW-04, -06, -08, -09, LOOP-01, LOOP-04, PROFILE-01 | Decision 19 |
-| No cap on the work waiting for Jeff: `QUEUE.md` shows the count (question 5, recommended) | No queued feature starts while 8 or more items wait on him (a3 (b), Decision 24) | Jeff's answer of 2026-11-14 |
+| No cap on the work waiting for Jeff: `QUEUE.md` shows the count (question 5, recommended) | No queued feature starts while 8 or more items wait on him (a3 (b), Decision 24); a feature he marks urgent starts all the same (a17 (d)) | Jeff's answers of 2026-11-14 and 2026-11-15 |
 | Disjoint PRs merge in any order; `QUEUE.md` marks a PR that is behind (question 3, recommended) | A PR merges only when its branch contains `main`; the refresh is the gate before every merge after the first (a1 (b), Decision 21) | Jeff's answer of 2026-11-14 |
 | `cli` (`cmd/warden/`) among the exclusive areas | Ordered (a5 (d)), with no `reaches` (a18 (a)) | Jeff's answers of 2026-11-15: a5 for the mode, a18 for `reaches` |
 
@@ -3237,7 +3439,8 @@ Nothing, at first, and Jeff should expect that.
 - Three features were filed after the draft: `runtime-cli-project-path`,
   `project-config-trust` (both security fixes, exempt from the freeze)
   and `configuration-bugfixes` (on hold behind it). None is declared, so
-  each collides with every feature here until it is.
+  each collides with every feature here until it is. Both security
+  fixes are in progress, so neither needs the urgent mark (a17 (d)).
 - The one lever for earlier gain is row 8's grain: "the same rule" could
   be read as the same bullet of GLOBAL-08, not the same rule ID. `wf` has
   no way to tell bullets apart, and two edits to one rule are what
@@ -3274,11 +3477,12 @@ or in one attended sitting with a refresh between.
 | `limits.in_progress` absent | 5; a written value below 1 is an error | FLOW-05's written limit (Decision 8). *Changed:* absent or 0 was "no limit" |
 | `limits.alters_relationships` absent | 1; below 1 an error | Unchanged (`alters-slot`) |
 | `limits.waiting_on_human` absent | 8; a written value is used as written, and one below 1 is an error. There is no value that means "no cap": a large number is how it is switched off | Jeff's answer to a3, which FLOW-05 writes (GLOBAL-09). A cap that an absent key switched off would be a silent fallback (GLOBAL-10) |
+| `urgent` absent | Not marked: the waiting limit applies to the item's start | Today's behaviour for every item (GLOBAL-09). A written value is the human worker who set it and is used as written; any other value fails `wf validate` and is honoured by nothing, so it is read neither as marked nor silently as unmarked (GLOBAL-10) |
 | The PR slot | 1, not configurable | FLOW-05 |
 | A map area's `mode` | Required; no default | Exclusive by default would hide a missing line; ordered by default would be unsafe |
 | A map area's `reaches`, `paths` absent | Reaches nothing; `paths` may be absent only for `catch_all`. `reaches` on an ordered area is an error, not ignored (a5 (d), a18 (a), GLOBAL-10) | The obvious reading |
 | A design's `repos` empty or absent | Only the repository that holds the design | LOOP-04 |
-| `wf new` without `-repos`, `-areas`, `-adopts` | Home repository; undeclared; not a reconciliation item | As the fields |
+| `wf new` without `-repos`, `-areas`, `-adopts`, `-urgent` | Home repository; undeclared; not a reconciliation item; not marked | As the fields |
 | `wf commit`'s tries | 3, fixed | Enough for a busy minute; then the session decides |
 | `wf commit` with no paths | It stages only the generated files | Another session's uncommitted work in the same checkout is never swept in |
 | A reconciliation item's place | Just below the open fixes; Jeff's word overrides | a8 |
@@ -3473,7 +3677,8 @@ clauses of this rule (host names, the lease).
 
 **Why:** this is the rule the item is for. It gains the relations; its
 three limits count by relation; it gains the limit on what waits for the
-human (a3 (b)); class 3 takes in reconciliation items
+human (a3 (b)), with the human's mark for a feature that limit must not
+hold (a17 (d)); class 3 takes in reconciliation items
 (`loop-contract` a5, decided); and it now states the `alters_relationships`
 definition that `alters-slot` built and FLOW-20's Limit bullet carried.
 
@@ -3626,9 +3831,12 @@ definition that `alters-slot` built and FLOW-20's Limit bullet carried.
 > the merge, or a spent budget (FLOW-13); it counts once, and a tracked
 > item does not count. This limit counts by no relation and stops only a
 > start: work in progress goes on, so the count can pass it. A fix that
-> `follows` an item, the fix for a failing `main` (FLOW-09), a process
+> `follows` an item, the fix for a failing `main` (FLOW-09), a feature
+> the human has marked urgent, a process
 > item and a tracked item start whatever
-> the count.
+> the count. Only the human marks a feature urgent, as for a security
+> fix that follows no item; the mark lifts this limit for it, and
+> nothing else.
 >
 > The in-progress limit, the `alters_relationships` limit and the waiting
 > limit are the values the human sets in the workflow branch's
@@ -3638,11 +3846,36 @@ definition that `alters-slot` built and FLOW-20's Limit bullet carried.
 > behind others periodically merges `main` with conflict-only fixes, so its
 > consolidation stays as small as it can.
 
-**Clauses that rested on questions.** "Only exclusive areas reach and
-are reached" is a18 (a), which Jeff confirmed on 2026-11-15: the clause
-stands as written. The
-paragraph **Waiting on the human** says what counts and what starts
-whatever the count as a17 (a) has it.
+**Clauses that rested on questions, and the one that still does.**
+"Only exclusive areas reach and are reached" is a18 (a), which Jeff
+confirmed on 2026-11-15: the clause stands as written. The paragraph
+**Waiting on the human** says what counts as a17 (a) has it, which his
+answer (d) keeps, and gains the mark his answer adds. The second
+sitting changed the end of that paragraph and no other part of this
+rule's proposed wording. At `63183c9` the paragraph ended:
+
+> A fix that
+> `follows` an item, the fix for a failing `main` (FLOW-09), a process
+> item and a tracked item start whatever
+> the count.
+
+It now ends as shown in the rule above: the clause "a feature the human
+has marked urgent" is added to the list, and one sentence follows it,
+"Only the human marks a feature urgent, as for a security fix that
+follows no item; the mark lifts this limit for it, and nothing else."
+
+"Only the human marks a feature urgent" is in the rule because the
+skills cite a rule and do not restate it (FLOW-14): an agent that reads
+FLOW-05 must find there that the mark is not its to set. "As for a
+security fix that follows no item" says what the mark is for and does
+not confine it to that, which is a19 (a) and still open. Under a19 (b)
+the clause would read "a security fix the human has marked urgent" and
+the sentence "Only the human marks one; the mark lifts this limit for
+it, and nothing else." The wording names no file, command or field:
+`urgent` and `wf new -urgent` are `wf`'s. It asks nothing of a
+component beyond LOOP-08's list: a security fix is given as the example
+of what the mark is for, as FLOW-20 already names one, and no component
+is required to have a security boundary.
 
 **Severity and check:** SHOULD, `automated`, before and after.
 **Enforcement:** `wf`'s queue code (`tools/workflow/queue/`), which
@@ -4038,7 +4271,7 @@ whether it is still true with the proposed wording.
     refused while a related higher-priority one waits, ready or not; the
     highest-priority waiting item is refused only by a holder; over
     generated arrivals no waiting item is passed over without end).
-  - `TestWaitingLimit` (cases 25 to 31, 39 and 40): the count is each
+  - `TestWaitingLimit` (cases 25 to 31, 39, 40, 42 and 43): the count is each
     in-progress
     item once, for a ready `human` step, an open blocking question, a PR
     at its merge step, a spent budget; a queued item on hold, a queued
@@ -4050,9 +4283,25 @@ whether it is still true with the proposed wording.
     `main.yaml` names as the follow-up while `main` is red, with no
     `follows` (case 40), a process item, a
     tracked item and every step of an item in progress are not; the
-    same item is refused once `main.yaml` records `main` green; `wf
+    same item is refused once `main.yaml` records `main` green; a
+    feature a human marked urgent, following no item, starts at 8
+    waiting and at 11, for a `cloud` and a `host:` worker and through
+    `wf commit`'s re-asked claim, its history says it started past the
+    limit, and an unmarked feature behind it is refused (case 42); a
+    marked feature is still refused by the in-progress limit and under
+    a process item's hold, still waits for the item it follows and for
+    its own blocking question, and counts once it waits on the human
+    (case 43); a feature whose mark was cleared is refused again; `wf
     validate` passes at 11 waiting; unset is 8, 0 and -1 fail `Load`;
     and `QUEUE.md`'s opening count is the number `Guard` used.
+  - `TestUrgent` (case 44): `wf new -urgent` and `wf urgent` write the
+    worker and the history line for a `human` worker and refuse a
+    `cloud` and a `host:` worker; both refuse a process item and a
+    tracked item; `wf urgent` refuses an item in progress or done, and
+    its `-clear` does not; `Validate` fails a value that is not a human
+    worker, and an `urgent` on a process or a tracked item, and `Guard`
+    does not honour such a value; the field survives a save and a load;
+    `wf status` prints the line.
   - `TestGuardEveryWorker` (case 5): it replaces the host half of
     `TestAltersSlotCloudOnly`, which asserts today that the host's claim
     stands.
@@ -4136,7 +4385,9 @@ whether it is still true with the proposed wording.
     force-pushed.
   - `TestSummary`: `QUEUE.md` for the two states shown under **What Jeff
     sees**, as golden files, with the count beside the limit, the two
-    lists of open PRs and the items that are not counted; `TestDigestPage` (file order, the earlier
+    lists of open PRs and the items that are not counted; a marked
+    feature's Kind in Backlog and in Active, and the line above Backlog
+    at the limit; `TestDigestPage` (file order, the earlier
     page, the same input giving the same page).
 
   `tools/workflow/check`:
@@ -4224,7 +4475,7 @@ A process item has no Plan phase; this is the work of `x2-implement`.
 **Size.** Large, and larger than the queue's estimate (12 steps, 3 runs)
 allows for. `alters-slot` changed 6 files under `tools/` and `.claude/`
 (+606, -55) and `loop-contract` 14 (+763, -45). This item adds eight Go
-source files and their tests, a shell script, eight `wf` commands, rewrites `next.go` and
+source files and their tests, a shell script, nine `wf` commands, rewrites `next.go` and
 `summary.go`, names about forty tests, amends fourteen rules and edits
 eight skill and agent files. It is one step, so it carries over runs the
 way a long Implement does: each run claims `x2-implement` again (one
@@ -4247,12 +4498,14 @@ steps.
 5. `queue/relation.go` (FLOW-05).
 6. `queue/limits.go`: the table, the predicate, `Guard`, the PR-slot
    holder with a recorded PR, the tie-break, the in-progress default, and
-   the waiting limit with its default;
+   the waiting limit with its default and its skip for a feature a
+   human marked urgent;
    `next.go` and `cmd/wf` call it; `alters-slot`'s functions move
    (FLOW-04, FLOW-05, GLOBAL-09, GLOBAL-10).
 7. `Class` for `adopts`, `wf new -repos -areas -seams -adopts` and the
-   copy on `-follows`, and the `tracked` round (FLOW-03, FLOW-05, FLOW-09,
-   LOOP-07).
+   copy on `-follows`, the `tracked` round, and the urgent mark: the
+   field, `wf new -urgent` and `wf urgent` for a human worker only, and
+   `Validate`'s check of it (FLOW-03, FLOW-05, FLOW-09, LOOP-07).
 8. The refresh: `IsRefresh`, `SeedRefresh` at the merge step and in
    Publish, `wf stale` with the merge check first and `Landed`,
    `pr.head`, the drops in `Complete` and `Back`, class 1
@@ -4320,7 +4573,8 @@ commit's time. The item is not done until it is.
   pull request, a bypass, or retired; the first and the last are filed
   as an item at intake.
 - `README.md`: the layout table (`areas.yaml`; `main.yaml`;
-  `digest/<date>/`); the queue file's new fields; the `tracked` round;
+  `digest/<date>/`); the queue file's new fields, `urgent` among them;
+  the `tracked` round;
   `wf next`'s paragraph (the guard, for every worker, the three limits
   by relation and the waiting limit); `config.yaml`'s
   `limits.waiting_on_human`; the budget comment ("a claim counts a
