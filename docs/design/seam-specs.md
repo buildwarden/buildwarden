@@ -349,9 +349,9 @@ Nothing in any of the five is approved.
    (RELAY-05's schema-identity rule, applied to the new repository), and does
    not change once released; a schema that moves in from this repository
    keeps the `$id` it was released with. The directory names `build-ledger/`,
-   `metadata-<name>/` and `environment-<type>/` are reserved for seam 4 (a1),
-   and `driver-contract/` for seam 9 (**What the specs repository leaves
-   room for**).
+   `metadata-<name>/` and `environment-<type>/` are reserved for seam 4,
+   which M6 moves in (a1), and `driver-contract/` for seam 9 (**What the
+   specs repository leaves room for**).
    *Rejected:* one directory per JSON body (`relay-claim-config/`,
    `relay-claim-identity/`), which scatters one protocol over several
    directories; an OpenAPI tree, see Decision 3.
@@ -399,7 +399,7 @@ Nothing in any of the five is approved.
    metadata fields its cases need by the names `specs/metadata-<name>/v1.md`
    gives them. It holds no copy of a schema file from `specs/`; validating
    metadata against those schemas stays with `specs/specs_test.go` here until
-   seam 4 moves (a1). The module must not require
+   M6 moves seam 4 (a1). The module must not require
    `github.com/buildwarden/buildwarden`; its CI checks `go.mod` for it.
    Sharing `relaycfg`, `collector` or `ledger` with the Go relay would make
    the suite agree with that relay's bugs. Each release publishes the module
@@ -481,7 +481,17 @@ Nothing in any of the five is approved.
    wave 1, the relay has no written target until S1, and an item may work in
    a repository that has not adopted the Loop Contract (LOOP-08).
 
-9. **Seam 4 moves in a later item of phase S1, not this one** (a1).
+9. **Seam 4 moves at M6, with RELAY-01 to RELAY-08, and not in phase S1**
+   (a1, Jeff's answer of 2026-11-15). The ledger format and its schemas
+   stay under `specs/` in this repository until then, and RELAY-05 is not
+   changed by this item or by any other item of S1. The umbrella's seam
+   table says the format "moves to the specs repository" and names no
+   phase, and its table of rule changes lists RELAY-05 for S1; both are
+   amended to name M6 (**Amendments to the umbrella design**). The
+   harness's ledger verifier is written from `specs/build-ledger/v1.md`
+   here (Decision 5). *Rejected:* a later item of phase S1, which this
+   design proposed until the review; Jeff chose M6, where the rule that
+   governs the format moves too. *Rejected:* in this item (a1, option B).
 
 10. **Suites for the relay and the collector now; the executor's suite with
     S2** (a11). Seams 5 and 6 get their specifications here. What the relay
@@ -561,17 +571,20 @@ release; its recommended answer is still A.
 - **a1. Seam 4's move.** The umbrella's seam table says the ledger format
   "moves to the specs repository" and gives no phase. Options: (A) a later
   item of phase S1, filed when this one's release mechanism has run once;
-  (B) in this item; (C) at M6, with RELAY-01 to RELAY-08. *Proceeding with
-  A; confirm.* The move rewrites RELAY-05, tier 1's `schema-doc` root, the
-  book's `specs/` mirror and its redirects, `specs/specs_test.go` and the
-  `$id` policy for new ledger schemas, each of which a third party can see. It is a
-  move with no change in behaviour (FLOW-20), better reviewed alone, and it
-  can use the pin and the release steps this item proves. Until then the
-  specs repository's README links to `specs/` here, and the harness's ledger
-  verifier is written from `specs/build-ledger/v1.md`. Consequence: RELAY-05
-  is not changed here, although the umbrella's table lists it beside TEST-05
-  for S1 (the umbrella's Decision 18: a rule changes in the item that makes
-  the new wording true).
+  (B) in this item; (C) at M6, with RELAY-01 to RELAY-08.
+  **Answered 2026-11-15: (C), at M6, with RELAY-01 to RELAY-08.** The
+  design proposed A; it is revised (Decision 9). The move rewrites
+  RELAY-05, tier 1's `schema-doc` root, the book's `specs/` mirror and its
+  redirects, `specs/specs_test.go` and the `$id` policy for new ledger
+  schemas, each of which a third party can see. With C all of that is
+  M6's, in the item that moves the relay's rules, and no item of S1 is
+  filed for it. Until then the specs repository's README names the ledger
+  format as specified under `specs/` here and links to it, and the
+  harness's ledger verifier is written from `specs/build-ledger/v1.md`.
+  Consequence: RELAY-05 is not changed in S1, although the umbrella's
+  table lists it beside TEST-05 for S1. The umbrella's seam 4 row and that
+  row of its rule table are amended to name M6 (**Amendments to the
+  umbrella design**), for Jeff's approval by name.
 - **a2. When the repository is created, by whom, and what has to exist.**
   Options: (A) in or right after the design review, by Jeff or by that
   attended session on his word (umbrella a11); (B) now, before the review;
@@ -881,14 +894,49 @@ deviation register stand, and this design carries no Bootstrap comparison.
 
 The umbrella fixes what S1 is. In three places this design does less than
 its words, or other than its table. Each is asked as a question, so that
-the review accepts it knowingly. None reopens a decision of the umbrella,
-and this design proposes no amendment to it.
+the review accepts it knowingly. None reopens a decision of the umbrella.
+Jeff's answer to a1 changes two of its sentences, which name no phase or
+name S1 for what is now M6's; they are listed under **Amendments to the
+umbrella design**.
 
 | The umbrella says | This design | Asked as |
 |---|---|---|
 | S1's row: the harness runs "against any relay binary or image" | It runs against a binary (`exec`), an OCI image (`oci`) and a relay that is already running (`external`). No launcher boots a VM image, so when S1 is done no suite has run the Go relay VM image or the Hyper-V relay VM | a6 |
-| "Seams 1 to 8 each get a specification and a black-box conformance suite in the specs repository" | Seam 5, and the executor's side of seams 3 and 6, get a specification and no suite. Seam 4 does not move in this item | a11, a1 |
-| Its table of rule changes, "listed for direction": S1 changes RELAY-05 and TEST-05 | TEST-05, and also TEST-02, GLOBAL-08, EXEC-04 and PROFILE-01, a rule that did not exist when the table was written. RELAY-05 is left to seam 4's move | a1; **Rule changes** |
+| "Seams 1 to 8 each get a specification and a black-box conformance suite in the specs repository" | Seam 5, and the executor's side of seams 3 and 6, get a specification and no suite. Seam 4 does not move in S1: it moves at M6 | a11, a1 |
+| Its table of rule changes, "listed for direction": S1 changes RELAY-05 and TEST-05 | TEST-05, and also TEST-02, GLOBAL-08, EXEC-04 and PROFILE-01, a rule that did not exist when the table was written. RELAY-05 is left to M6, with seam 4's move | a1; **Rule changes**; **Amendments to the umbrella design** |
+
+### Amendments to the umbrella design
+
+Jeff's answer to a1 places the ledger format's move at M6, with RELAY-01
+to RELAY-08. Two sentences of [`componentization`](componentization.md)
+say otherwise or say nothing, and a third records the change. Each is
+listed with its line on `main` at `ad4ea50`, its wording there and the
+wording proposed. The umbrella was amended in place by `loop-contract` on
+2026-11-14; the wording quoted is the amended text. They are made in this
+item's PR (task 10) once Jeff approves them by name at the design review,
+as `loop-contract`'s were. They are not approved yet.
+
+| # | Line | Where | Wording on `main` | Proposed wording |
+|---|---|---|---|---|
+| U1 | 278 | **The seams**, seam 4's row, the column "Change in the program" | "Moves to the specs repository." | "Moves to the specs repository at M6, with RELAY-01 to RELAY-08." |
+| U2 | 404, 405 | **Rule changes the program will make**, two rows | "\| RELAY-01 to RELAY-08 \| Move to the relay or specs repository, restated where they describe Go internals. \| M6 \|" and "\| RELAY-05, TEST-05 \| Contract tests for the seams become the specs repository's suites. \| S1 \|" | "\| RELAY-01 to RELAY-08 \| Move to the relay or specs repository, restated where they describe Go internals. RELAY-05 moves with the ledger format (seam 4). \| M6 \|" and "\| TEST-05 \| Contract tests for the seams become the specs repository's suites. \| S1 \|" |
+| U3 | after 677 | **Amendments**, a new paragraph after `loop-contract`'s | None. | "**2026-11-15, by `seam-specs`**, approved in its design review. Jeff placed the ledger format's move to the specs repository at M6, with RELAY-01 to RELAY-08 (its a1). Amended in place: seam 4's row of **The seams**; the RELAY-01 to RELAY-08 row and the RELAY-05 and TEST-05 row of **Rule changes the program will make**. The wording each had is in [`seam-specs`](seam-specs.md), under **Amendments to the umbrella design**." |
+
+Read and not amended:
+
+- *S1's row* of Track S says "Write seams 1, 2, 3, 5 and 6", which already
+  leaves seam 4 out.
+- *M6's row* of Track R names the per-driver adoption items and the Go
+  relay's retirement. It does not list the rules' move, which the rule
+  table gives to M6, and so it does not list the ledger format's either.
+  Which M6 item moves the format is for M6's intake to say.
+- *"Seams 1 to 8 each get a specification and a black-box conformance
+  suite in the specs repository"* stays true of seam 4 once M6 has moved
+  it.
+- The umbrella's Decisions are untouched: none names a phase for seam 4.
+
+`driver-contract` proposes amendments of its own to the umbrella (seams 1,
+6 and 9 and the S4 row). None is to a line listed here.
 
 ### What each specification covers
 
@@ -1741,8 +1789,9 @@ none.
   in `buildwarden/buildwarden`; the Rust relay when it is public), and each
   document's header links the book's page for the concept
   (`https://buildwarden.github.io/buildwarden/`) and names its reference
-  implementation. Until seam 4 moves, the README links the ledger
-  specification under `specs/` here.
+  implementation. Until M6 moves seam 4 (a1), the README says that the
+  ledger format is specified in `buildwarden/buildwarden` under `specs/`,
+  links to it there, and says that it moves at M6.
 - `AGENTS.md` gains a row for the seam specifications and the pin,
   `CONTRIBUTING.md` a short section on `make conformance` and
   `make pin-specs`, and `contributing/structure.md` an entry for
@@ -2005,11 +2054,19 @@ lists the five documents under a heading of their own.
 
 - Seam 4, the ledger format (`ledger-format`): no change. Its
   specification stays in this repository, `specs/build-ledger/v1.md` and
-  the schema documents under `specs/` (a1). The harness's ledger verifier implements
+  the schema documents under `specs/`, until M6 moves it with RELAY-01 to
+  RELAY-08 (a1). The harness's ledger verifier implements
   the reader's side of that document (the header, each record's
   signature and chain, the hash blocks) and reads the metadata fields its
   cases need by the names `specs/metadata-<name>/v1.md` gives them. Those
-  documents carry no requirement identifiers to cite.
+  documents carry no requirement identifiers to cite. The verifier reads
+  the format from this repository: its package comment names the document
+  and the commit of `buildwarden/buildwarden` it was written from, and
+  the specs repository holds no copy of the document or of a schema.
+  RELAY-05 keeps a version 1 ledger readable, so a verifier written from
+  `v1.md` stays right until the format's version changes. A change to the
+  format before M6 is a RELAY-05 change in this repository, and its design
+  says whether a suite case reads what it changes.
 - The bootstrap model (`bootstrap-model`, BOOT-07): untouched.
 - Seam 9, the driver contract: `driver-contract`'s.
 
@@ -2062,7 +2119,8 @@ are stated so that the design review can judge them (LOOP-09):
 
 The umbrella's table of rule changes, which is "for direction", gives S1
 two: RELAY-05 and TEST-05. This design declares TEST-05 and leaves RELAY-05
-to seam 4's move (a1). It also declares four that the table does not give
+to M6, which moves seam 4 (a1; the table's row is amended, **Amendments to
+the umbrella design**). It also declares four that the table does not give
 S1: TEST-02, GLOBAL-08, EXEC-04 and PROFILE-01. The table gives GLOBAL-08
 to K1 and to S2, S3 and S4 for their seams; S1 needs it because S1 is the
 item in which the seams' contract documents come to exist. PROFILE-01 did
@@ -2614,7 +2672,9 @@ its branch `feat/seam-specs`; **K** is this repository, on this branch.
     the edits to `concepts/architecture.md` (its three tables),
     `contributing/structure.md`, the sentence in `specs/README.md`, the ref
     test in `specs/specs_test.go`, `AGENTS.md` and `CONTRIBUTING.md`
-    (UX-01, FLOW-15).
+    (UX-01, FLOW-15). And the amendments to the umbrella,
+    `docs/design/componentization.md`, each as approved (U1 to U3,
+    **Amendments to the umbrella design**).
 11. **S** The `release` and `implementations` workflows; open the pull
     request (FLOW-08).
 12. **K** The final pin, as Implement's last commit:
@@ -2631,11 +2691,16 @@ its branch `feat/seam-specs`; **K** is this repository, on this branch.
     pushed and the pin moved here with `make pin-specs REF=v0.1.0`, by him
     or by the attended session on his word (a15).
 
-After the merge, filed through intake as a program item: seam 4's move
-(a1).
+No item is filed for seam 4 after the merge: its move is M6's (a1).
 
 Owed to later items, and written into the Archive summary so that their
 intake finds it:
+
+- seam 4's move to the specs repository, at M6, with RELAY-01 to RELAY-08
+  (a1): RELAY-05, tier 1's `schema-doc` root, the book's `specs/` mirror
+  and its redirects, `specs/specs_test.go`, and the reserved directory
+  names (Decision 2). The harness's ledger verifier then reads the format
+  from its own repository;
 
 - the executor's suite, with S2's item (a11); the umbrella's S2 row does not
   name it;
