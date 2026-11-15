@@ -2,7 +2,9 @@ package main
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"io/fs"
 	"net/netip"
 	"os"
 	"os/exec"
@@ -25,6 +27,12 @@ type Config struct {
 	Build   BuildCfg      `toml:"build"`
 	VM      VMConfig      `toml:"vm"`
 	Output  OutputConfig  `toml:"output"`
+	// File is the absolute path of the one config file that was read, empty
+	// when none was, and FileSource how it was chosen (configFromFlag,
+	// configFromEnv or configFromDir). Every message that names the file by
+	// a path prints File.
+	File       string `toml:"-"`
+	FileSource string `toml:"-"`
 }
 
 // VMConfig holds defaults for the VM-driver flags (--cpus, --memory,
@@ -43,13 +51,15 @@ type VMConfig struct {
 	WindowsImage       string `toml:"windows_image"`
 	WindowsImageUpdate string `toml:"windows_image_update"`
 	// BuildLink is the relay-to-build link (an advanced option; empty means
-	// buildlink.DefaultCIDR), checked as the file loads. BuildLinkSource
-	// names the file that set it ("warden.toml" or "config.toml").
+	// buildlink.DefaultCIDR), checked as the file loads. BuildLinkSource is
+	// the base name of the config file when it set the key, the label
+	// warden doctor prints.
 	BuildLink       string `toml:"build_link"`
 	BuildLinkSource string `toml:"-"`
 	// DNS is [vm] dns, the relay's upstream resolvers for every VM driver, in
 	// order and used exclusively; unset means the host's. It is checked as
-	// the file loads into DNSAddrs, and DNSSource names the file that set it.
+	// the file loads into DNSAddrs, and DNSSource is the config file's base
+	// name when it set the key.
 	DNS       []string     `toml:"dns"`
 	DNSAddrs  []netip.Addr `toml:"-"`
 	DNSSource string       `toml:"-"`
@@ -63,9 +73,8 @@ type RelayConfig struct {
 type RuntimeConfig struct {
 	CLI string `toml:"cli"`
 	// CLISource says where CLI was named: cliFromFlag, cliFromEnv, or the
-	// config file that set it ("warden.toml", or the user's file by its
-	// path). It words the error that refuses an unsupported runtime; nothing
-	// that decides what is run reads it.
+	// path of the config file that set it. It words the error that refuses
+	// an unsupported runtime; nothing that decides what is run reads it.
 	CLISource  string `toml:"-"`
 	Driver     string `toml:"driver"`
 	RelayImage string `toml:"relay_image"`
@@ -78,18 +87,17 @@ const (
 	cliFromEnv  = "WARDEN_CTR_CLI"
 )
 
-// projectConfig is the project-level config file, read from the working
-// directory.
+// projectConfig is the config file read when none is named: the one of this
+// name in the working directory, when it exists.
 const projectConfig = "warden.toml"
 
-// unsetCLI stands in for [runtime] cli while the project's file is decoded,
-// so that LoadConfig can tell whether that file set the key. The decoder's
-// IsDefined cannot: it compares a key's spelling exactly, while the decoder
-// also fills the field from CLI or [Runtime]. No TOML file can produce this
-// value: it is not valid UTF-8, which the decoder refuses in a file and no
-// escape in a TOML string can spell. So a file cannot pass for one that left
-// the key unset and have the user's value run in place of its own.
-const unsetCLI = "\xff"
+// How the config file was chosen, as Config.FileSource holds it and as the
+// config: line and the errors print it.
+const (
+	configFromFlag = "--config"
+	configFromEnv  = "WARDEN_CONFIG"
+	configFromDir  = "found in the working directory"
+)
 
 type BuildCfg struct {
 	Dockerfile string `toml:"dockerfile"`
@@ -107,30 +115,125 @@ type OutputConfig struct {
 	Verbose bool   `toml:"verbose"`
 }
 
+// configFile chooses the one config file a command reads and says how it was
+// chosen: the file --config names, else the one WARDEN_CONFIG names, else
+// warden.toml in the working directory when it exists, else none (an empty
+// path). The path is absolute. A source that a higher one replaces is not
+// looked at, so a named file is the only one that is ever opened. Nothing
+// here falls through on a failure: an empty --config is an error because the
+// next source down can be the warden.toml of a repository the caller meant
+// not to use, and a working directory's warden.toml that cannot be examined
+// is an error, not "no file".
+func configFile() (path, source string, err error) {
+	if f := rootCmd.PersistentFlags().Lookup("config"); f != nil && f.Changed {
+		if flagConfig == "" {
+			return "", "", driver.Fixable("pass --config the path of a config "+
+				"file, or drop the flag to use WARDEN_CONFIG or ./warden.toml",
+				"--config was given an empty path")
+		}
+		path, err = filepath.Abs(flagConfig)
+		return path, configFromFlag, err
+	}
+	if named := os.Getenv(configFromEnv); named != "" {
+		path, err = filepath.Abs(named)
+		return path, configFromEnv, err
+	}
+	if path, err = filepath.Abs(projectConfig); err != nil {
+		return "", "", err
+	}
+	switch _, err := os.Stat(path); {
+	case err == nil:
+		return path, configFromDir, nil
+	case errors.Is(err, fs.ErrNotExist):
+		return "", "", nil
+	default:
+		return "", "", unreadableConfig(path, configFromDir, err)
+	}
+}
+
+// readConfigFile returns the bytes of the config file configFile chose, or
+// the error that says why it cannot be read. No other file is tried in its
+// place.
+func readConfigFile(path, source string) ([]byte, error) {
+	info, err := os.Stat(path)
+	if err == nil && info.IsDir() {
+		err = errIsDirectory
+	}
+	var data []byte
+	if err == nil {
+		data, err = os.ReadFile(path)
+	}
+	if err == nil {
+		return data, nil
+	}
+	if source == configFromDir {
+		return nil, unreadableConfig(path, source, err)
+	}
+	fix := "pass --config an existing file, or drop it to use WARDEN_CONFIG " +
+		"or ./warden.toml"
+	if source == configFromEnv {
+		fix = "set WARDEN_CONFIG to an existing file, or unset it to use " +
+			"./warden.toml"
+	}
+	switch {
+	case errors.Is(err, fs.ErrNotExist):
+		return nil, driver.Fixable(fix, "config file %s (from %s) does not exist",
+			path, source)
+	case errors.Is(err, errIsDirectory):
+		return nil, driver.Fixable(fix, "config file %s (from %s) is a directory",
+			path, source)
+	}
+	return nil, unreadableConfig(path, source, err)
+}
+
+// errIsDirectory marks a config file path that names a directory.
+var errIsDirectory = errors.New("is a directory")
+
+// unreadableConfig is the error for a config file that exists and cannot be
+// read; the reason is the operating system's. For a named file its source
+// follows "from", as in the other errors that name one.
+func unreadableConfig(path, source string, err error) error {
+	if source != configFromDir {
+		source = "from " + source
+	}
+	return driver.Fixable("make it readable, or name another file with "+
+		"--config or WARDEN_CONFIG",
+		"cannot read config file %s (%s): %s", path, source, osReason(err))
+}
+
+// osReason is the operating system's reason for a failed file operation,
+// without the operation and the path that *fs.PathError puts before it.
+func osReason(err error) string {
+	var pe *fs.PathError
+	if errors.As(err, &pe) {
+		return pe.Err.Error()
+	}
+	return err.Error()
+}
+
+// LoadConfig reads the one config file (configFile) and applies the
+// environment variables over it. It reads no other file and merges none.
 func LoadConfig() (*Config, error) {
 	cfg := &Config{
 		Output: OutputConfig{Color: "auto"},
 	}
 
-	// User-level config
-	if home, err := os.UserHomeDir(); err == nil {
-		userPath := filepath.Join(home, ".config", "warden", "config.toml")
-		if err := loadTOML(userPath, cfg); err != nil {
-			return nil, err
-		}
-		cfg.Runtime.CLISource = userPath
-	}
-
-	// Project-level config (overrides user)
-	userCLI, userCLISource := cfg.Runtime.CLI, cfg.Runtime.CLISource
-	cfg.Runtime.CLI = unsetCLI
-	if err := loadTOML(projectConfig, cfg); err != nil {
+	path, source, err := configFile()
+	if err != nil {
 		return nil, err
 	}
-	if cfg.Runtime.CLI == unsetCLI {
-		cfg.Runtime.CLI, cfg.Runtime.CLISource = userCLI, userCLISource
-	} else {
-		cfg.Runtime.CLISource = projectConfig
+	var data []byte
+	if path != "" {
+		if data, err = readConfigFile(path, source); err != nil {
+			return nil, err
+		}
+	}
+	if path != "" {
+		if err := decodeConfig(path, data, cfg); err != nil {
+			return nil, err
+		}
+		cfg.File, cfg.FileSource = path, source
+		cfg.Runtime.CLISource = path
 	}
 
 	// Environment variable overrides
@@ -157,11 +260,10 @@ func LoadConfig() (*Config, error) {
 	return cfg, nil
 }
 
-func loadTOML(path string, cfg *Config) error {
-	if _, err := os.Stat(path); err != nil {
-		return nil
-	}
-	md, err := toml.DecodeFile(path, cfg)
+// decodeConfig decodes the config file's bytes into cfg and makes the checks
+// that are made as the file loads ([vm] build_link, [vm] dns).
+func decodeConfig(path string, data []byte, cfg *Config) error {
+	md, err := toml.Decode(string(data), cfg)
 	if err != nil {
 		return driver.Fixable("fix the TOML syntax in "+path, "parsing %s: %v", path, err)
 	}

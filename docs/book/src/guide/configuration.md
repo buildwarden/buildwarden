@@ -73,6 +73,7 @@ verbose = false            # Verbose output (shows container runtime commands)
 
 | Flag | Scope | Description |
 |------|-------|-------------|
+| `--config` | Global | The config file to read, the only one that is (see [The config file](#the-config-file)) |
 | `--driver` | Global | Orchestration driver (container, qemu, vz, hyperv, firecracker) |
 | `--runtime` | Global | Container runtime: finch, docker or podman (see [The container runtime](#the-container-runtime)) |
 | `--color` | Global | Color mode |

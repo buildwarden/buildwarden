@@ -398,6 +398,7 @@ Run it as a Hyper-V Administrator.
 
 | Flag | Description |
 |------|-------------|
+| `--config <path>` | The config file to read, which is then the only one read (default: the file `WARDEN_CONFIG` names, then `./warden.toml` if it exists; see [Configuration](configuration.md#the-config-file)). It has no short form. Given with an empty value it is an error |
 | `--driver <name>` | Orchestration driver (container, qemu, vz, hyperv, firecracker) |
 | `--runtime <name>` | Container runtime: `finch`, `docker` or `podman`, the only values it takes (see [Configuration](configuration.md#the-container-runtime)) |
 | `--color <mode>` | Color output (auto, always, never) |

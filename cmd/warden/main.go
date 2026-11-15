@@ -25,6 +25,7 @@ import (
 var version = "dev"
 
 var (
+	flagConfig  string
 	flagRuntime string
 	flagDriver  string
 	flagVerbose bool
@@ -92,6 +93,9 @@ cannot attach an interactive session say so.`,
 
 func init() {
 	driver.WardenVersion = version
+	rootCmd.PersistentFlags().StringVar(&flagConfig, "config", "",
+		"config file to read, the only one that is "+
+			"(default: WARDEN_CONFIG, then ./warden.toml if it exists)")
 	rootCmd.PersistentFlags().StringVar(&flagRuntime, "runtime", "",
 		"container runtime (finch, docker, podman)")
 	rootCmd.PersistentFlags().StringVar(&flagDriver, "driver", "",
