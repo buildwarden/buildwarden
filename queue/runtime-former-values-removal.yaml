@@ -1,0 +1,49 @@
+feature: runtime-former-values-removal
+title: 'Remove the transitional detection of former container runtime values at 1.0: TRANSITIONAL(runtime-former-values)'
+priority: 73
+status: queued
+round: feature
+phase: 0
+design: docs/design/runtime-former-values-removal.md
+branch: feat/runtime-former-values-removal
+alters_relationships: null
+source: 'runtime-cli-project-path, design Decision 4 and question a4, answered (d) by Jeff in its design review on 2026-11-15: the transitional detection is kept until 1.0; plan task 22 files its removal at Publish. In the change that prepares 1.0, remove everything a search for the marker TRANSITIONAL(runtime-former-values) finds, five places on feat/runtime-cli-project-path at e8ed111: cmd/warden/runtime_former.go; its call in unsupportedRuntime (cmd/warden/config.go); cmd/warden/runtime_former_test.go; the subsection ''A path, or another runtime'' of docs/book/src/guide/configuration.md; and the section ''Upgrading: the Container Runtime Setting'' of docs/book/src/getting-started/installation.md. After the removal those values get the permanent error, which lists finch, docker and podman. If driver-contract (K1) has merged, the file, its call and its tests are in the container driver under the same marker (K1 plan task 20). project-config-trust''s transitional code has the same removal point and its own item.'
+steps:
+  - id: f0-answer-q1
+    phase: 0
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    needs:
+      - f0-answer-q1
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 7
+  spent:
+    runs: 0
+    steps: 0
+questions:
+  - id: q1
+    kind: blocking
+    status: open
+    question: 'Held until 1.0 (runtime-cli-project-path a4 (d), Jeff, 2026-11-15): resume in the change that prepares 1.0, and not before runtime-cli-project-path''s PR has merged. Not a program item and not exempt from the FLOW-20 freeze.'
+    options:
+      - resume it
+    recommended: resume it
+history:
+  - at: 2026-11-15T22:52:20Z
+    by: human/jeff
+    event: queued at priority 73 (intake)
+  - at: 2026-11-15T22:52:20Z
+    by: human/jeff
+    event: 'on hold (q1): Held until 1.0 (runtime-cli-project-path a4 (d), Jeff, 2026-11-15): resume in the change that prepares 1.0, and not before runtime-cli-project-path''s PR has merged. Not a program item and not exempt from the FLOW-20 freeze.'
