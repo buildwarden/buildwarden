@@ -1,9 +1,9 @@
 feature: prebuilt-artifacts
 title: 'warden compiles nothing: it finds its executor, relay and relay VM artifacts on PATH, then in its own directory, at or above a minimum version (security fix, F9)'
 priority: 66
-status: queued
+status: in_progress
 round: feature
-phase: 0
+phase: 1
 design: docs/design/prebuilt-artifacts.md
 branch: feat/prebuilt-artifacts
 alters_relationships: null
@@ -12,19 +12,41 @@ steps:
   - id: f0-branch-setup
     phase: 0
     affinity: cloud
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
+  - id: f1-design
+    phase: 1
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: cloud/20261112T230554Z
+      expires: 2026-11-15T23:58:07.853123431Z
 budget:
   estimate:
     runs: 4
     steps: 25
   spent:
     runs: 0
-    steps: 0
+    steps: 2
 questions: []
 history:
   - at: 2026-11-15T21:57:17Z
     by: human/jeff
     event: queued at priority 66 (intake)
+  - at: 2026-11-15T21:57:42Z
+    by: cloud/20261112T230554Z
+    event: started (FLOW-05)
+  - at: 2026-11-15T21:57:42Z
+    by: cloud/20261112T230554Z
+    event: claimed f0-branch-setup until 2026-11-15T23:57:42Z
+  - at: 2026-11-15T21:58:07Z
+    by: cloud/20261112T230554Z
+    event: done f0-branch-setup
+  - at: 2026-11-15T21:58:07Z
+    by: cloud/20261112T230554Z
+    event: entered phase 1 (design)
+  - at: 2026-11-15T21:58:07Z
+    by: cloud/20261112T230554Z
+    event: claimed f1-design until 2026-11-15T23:58:07Z
