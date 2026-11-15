@@ -394,7 +394,9 @@ say.
       hand-off point 7).
 16. **`QUEUE.md` shows repositories, areas, lease holders, what each item
     waits for, the merges in order and the relations; each run writes its
-    own digest file and `wf` builds the day's page** (a3).
+    own digest file and `wf` builds the day's page.** The count of items
+    waiting on Jeff that opens **Needs Jeff** is the number Decision 24
+    limits.
 17. **This item holds no worker** (a13). Nothing it changes reaches a
     running session before its merge; after it, an absent field means
     today's behaviour, an item with no `declared` passes every gate it
@@ -438,6 +440,26 @@ say.
     - *Rejected: keeping three lines and escalating each such merge.* The
       item would stay at its merge step, holding the PR slot, until Jeff
       compared the two changes by hand.
+24. **No queued feature starts while 8 or more items wait on Jeff** (a3
+    (b), Jeff, 2026-11-14). The count is the in-progress items under
+    **Needs Jeff**, each once. The number is `limits.waiting_on_human`,
+    8 when unset. The guard refuses the claim that would start a queued
+    feature, for every worker. Work in progress, a process item, a
+    tracked item and a fix that `follows` an item are never refused
+    (a17).
+    - *Rejected: no cap, only the count* (the draft's recommendation).
+      Jeff's answer.
+    - *Rejected: counting the lines under **Needs Jeff***. One item with
+      a review and three questions would count four times.
+    - *Rejected: counting queued items that wait on him.* Under the
+      freeze every new idea is filed on hold with a blocking question
+      (FLOW-20); eight parked ideas would stop every start.
+    - *Rejected: stopping work in progress at the limit.* A feature held
+      at Review until Jeff clears a merge goes stale on its branch, and
+      the loop would idle with a budget to spend.
+    - *Rejected: holding a regression's fix at the limit.* While `main`
+      is red no open PR can be refreshed, so the list the cap protects
+      could not get shorter by merging (a1 (b)).
 
 ## Questions
 
@@ -452,6 +474,15 @@ proposal's questions 3, 5, 6 and 11, whose recommended answers he approved
 as the direction; they are asked again here because this is where they take
 effect. a9 and a11 of the first draft are withdrawn: neither was a fork
 (Decisions 18 and 8). a14 to a16 are new after the independent review.
+
+Jeff answered twelve of the fourteen in the first sitting of the design
+review, on 2026-11-14 and 2026-11-15. Each answered question below keeps
+its text and options as he read them, with the option he chose marked
+and his answer after it. Seven answers confirm the recommendation (a2,
+a6, a7, a8, a12, a13, a16). Five depart from it (a1, a3, a4, a5, a15)
+and are folded into the design. a10 and a14 were written for a1 (a):
+they are derived again for a1 (b) and still open. a17 is new, raised by
+the answer to a3.
 
 - **a1. Disjoint PRs in one repository: in what order may they merge?**
   (The proposal's question 3.) CI does not run again when a PR's base moves.
@@ -505,10 +536,20 @@ effect. a9 and a11 of the first draft are withdrawn: neither was a fork
   Proceeding with (a); confirm.
   - (a) None. `QUEUE.md` opens **Needs Jeff** with the count of items
     waiting on him, by kind.
-  - (b) No queued item starts while 8 or more wait on him.
+  - (b) No queued item starts while 8 or more wait on him. **Chosen.**
 
   Recommended: (a). A cap would stop the loop on the one resource it cannot
   add to, and the count makes the backlog visible.
+
+  **Answered (b), Jeff, 2026-11-14:** "Cap at 8 waiting. No queued item
+  starts while 8 or more items wait on you." It departs from the
+  recommendation. Folded in: Decision 24; **The waiting limit** under
+  **The limits**, which says what counts, where the number is kept, what
+  is refused and what never is; cases 25 to 31; FLOW-05's proposed
+  wording; `limits.waiting_on_human` under **Defaults and overrides**;
+  the count line of `QUEUE.md`. What the answer leaves open (what counts
+  as waiting, and whether a fix starts all the same) is decided there
+  and put to Jeff as a17.
 - **a4. Who declares areas, and where the map lives.** (The proposal's
   question 6, with its letters.) Proceeding with (a) and (d); confirm.
   - (a) Areas are proposed at intake with Jeff and confirmed by Design; a
@@ -747,6 +788,39 @@ effect. a9 and a11 of the first draft are withdrawn: neither was a fork
   Recommended: (a). Under a1 (a) a red `main` is the designed outcome of a
   missed collision, and each open PR's refresh would otherwise fail on it,
   run after run, until some item's session filed the fix.
+- **a17. What the cap of 8 counts, and what it never stops.** New on
+  2026-11-15: Jeff's answer to a3 sets the cap and its number and leaves
+  these to the design (**The waiting limit**). Proceeding with (a);
+  confirm.
+  - (a) It counts items in progress that wait on him, each once: a ready
+    `human` step, an open blocking question, a PR at its merge step
+    (mergeable or waiting for its refresh), a spent budget. Queued items
+    are not counted, even one on hold or one whose first step is his
+    review, and neither is a tracked item. It refuses only the start of
+    a queued feature. It never refuses work in progress (so the count
+    can pass 8), a process item, a tracked item, or a fix that `follows`
+    an item. A security fix that follows no item is not exempt: `wf` has
+    no mark for it, intake tells him, and he raises
+    `limits.waiting_on_human` if he wants it started.
+  - (b) As (a), but every open item under **Needs Jeff** counts, queued
+    ones included. On the queue as it is at `f090401` (2026-11-15 20:16
+    UTC) that is 7 where (a) counts 4: two queued process items whose
+    first step is his review, and `configuration-bugfixes`, filed on
+    hold behind the freeze that day. Each idea filed on hold counts, and
+    eight of them stop every start until he answers or drops one.
+  - (c) As (a), with no exemption for a fix. While `main` is red no open
+    PR can be refreshed (a1 (b)), so with 8 waiting he could not clear
+    one by merging, and the fix for `main` would wait on him clearing
+    something else.
+  - (d) As (a), with a mark he sets at intake for a security fix that
+    follows no item (`wf new -urgent`), which the cap then lets start:
+    one more field. Two such fixes are in the queue now, filed on his
+    word on 2026-11-14 and 2026-11-15: `runtime-cli-project-path`, in
+    progress, and `project-config-trust`, queued.
+
+  Recommended: (a). The loop's own lever is whether it starts new work,
+  so that is what the cap moves; and a fix for `main` is what lets his
+  list get shorter.
 
 ## Design
 
@@ -1284,9 +1358,10 @@ Every combination, with examples from this repository:
 
 ### The limits
 
-Three limits. A *counted* item is a feature that is not tracked. Each limit
-is taken by one kind of claim and held by a state the item's own steps
-show. An item's *set* for a limit is the item and the holders of that limit
+Three limits that count by relation, and a fourth that does not (**The
+waiting limit**, below). A *counted* item is a feature that is not tracked.
+Each of the three is taken by one kind of claim and held by a state the
+item's own steps show. An item's *set* for a limit is the item and the holders of that limit
 that relate to it. **The predicate**, one for all three: no holder's set
 numbers more than the limit.
 
@@ -1332,7 +1407,9 @@ holders are counted, so no two items wait for each other. Its reasons:
   and `limits.alters_relationships 0 is below 1 (FLOW-05)` as before;
 - `the PR slot, held by a (colliding: area driver-core) (FLOW-05)`, or
   `(near: rule GLOBAL-08)`;
-- `the PR slot: a (priority 12) is ahead (FLOW-05)`, the tie-break below.
+- `the PR slot: a (priority 12) is ahead (FLOW-05)`, the tie-break below;
+- `the waiting limit: 8 items wait on the human (limit 8): a, b, c, d, e, f, g, h (FLOW-05)`,
+  the waiting limit below.
 
 Why the holders' sets are evaluated as well as the asker's: the relations
 are not transitive. H declares `driver-core`, `relay` and `collector`; P1
@@ -1353,7 +1430,8 @@ Who calls it:
   holds stays claimable.
 - `wf commit`, when it asks a claim again after a rejected push (below).
 
-A human claim takes none of the three today: a human step starts no
+A human claim takes none of the three today, and is not refused by the
+waiting limit: a human step starts no
 feature, and Plan and `f6-merge-main` are cloud steps. A host claim is now
 bounded: a Plan step whose affinity was edited to a host is refused past
 the limit, which closes `alters-slot`'s known gap.
@@ -1368,6 +1446,72 @@ for the `alters_relationships` limit. Because the guard evaluates the predicate 
 the state the claim would produce, a claim it allows leaves `wf validate`
 clean, which is the property `alters-slot` stated for `Next` and
 `Validate`.
+
+**The waiting limit** (a3 (b)). No queued feature starts while 8 or more
+items wait on Jeff. It is a limit of another kind than the three above:
+it counts by no relation, nothing holds it, and it stops one thing.
+
+- **What it counts.** The items that *wait on the human*: every item that
+  is in progress, is not tracked, and has at least one of
+  1. a `human` step it could take now (pending, and every step it needs
+     done; a `human` step is offered whatever the phase): a design
+     review, the answer to a blocking question, an escalation, a step
+     that records a merge in another repository (a6), or any other, such
+     as this item's `x4-state`;
+  2. an open blocking question;
+  3. a pull request that waits for his merge: the item is at its merge
+     step with a PR recorded, whether the PR can be merged now or needs
+     its refresh first (Decision 21);
+  4. a spent runaway budget (FLOW-13).
+
+  An item counts once, however many of these it has: an item with a
+  design review, two open questions and an escalation is one. These are
+  the in-progress items `QUEUE.md` lists under **Needs Jeff**, and the
+  number that section opens with.
+- **What it does not count.** A queued item, even one whose first step is
+  his (a queued process item's design review) or one that intake filed
+  on hold (the freeze, FLOW-20; an adoption that waits for its release,
+  a8): its blocking question parks it, and the loop has put no work
+  behind it. `QUEUE.md` lists these apart. A tracked item (a7). An item
+  sent back to Implement or Design with its PR open: that work is the
+  loop's until it is published again. A red `main` or a map that differs
+  from `main`: they open **Needs Jeff** and are not items.
+- **The number.** `limits.waiting_on_human` in the workflow branch's
+  `config.yaml`. 8 when unset, which is Jeff's answer and what FLOW-05
+  will say. A written value is used as written, and one below 1 is an
+  error, as for the other two.
+- **What is refused.** The claim that starts a queued feature, which is
+  the claim that takes the in-progress limit, by any worker, in `Guard`,
+  when the count before the claim is the limit or more. `wf next` prints
+  `blocked <item> the waiting limit: 8 items wait on the human (limit 8): ...`
+  and goes on to the next item, as for any limit.
+- **What is never refused.**
+  - A step of an item in progress. The cap stops starts; it does not
+    park work that has begun, which would leave branches to go stale. So
+    the count can pass the limit: with 8 waiting and three more features
+    in progress, it reaches 11 when those three open their PRs.
+  - A process item, which is outside every limit and whose first step is
+    his own.
+  - A tracked item, which any claim starts (a7).
+  - A fix: a feature that `follows` an item (FLOW-05, class 3). FLOW-20
+    exempts a regression's fix and a security fix from the freeze, and
+    the cap follows it for the same reason, which a1 (b) makes stronger:
+    a red `main` fails every refresh, so while it is red no open PR can
+    be brought up to date, and Jeff could not shorten his own list by
+    merging. `wf` knows a fix by `follows`, which also covers a follow-up
+    that finishes an item. A security fix that follows no item
+    (`runtime-cli-project-path`, in the queue now, is one) carries no
+    mark `wf` can read, so it is not exempt: intake says so when it
+    files one while the count is at the limit, and the number in
+    `config.yaml` is his to raise (a17, where a mark for it is option
+    (d)).
+  - An adoption (a8) is planned work and is not exempt.
+- **Where it shows.** `wf next`'s `blocked` line, which the digest keeps
+  (LOOP-06); **Needs Jeff**'s opening line; a line above `QUEUE.md`'s
+  Backlog while the count is at the limit.
+- **`wf validate`** does not fail a queue whose count is over the limit:
+  it gets there by work in progress. It fails a `limits.waiting_on_human`
+  below 1.
 
 **The tie-break at the PR slot** (a12). An item *waits for the slot* when
 it is a counted feature in Publish whose newest `f6-merge-main` is pending
@@ -1400,7 +1544,9 @@ under what waits on Jeff and carries on (`workflow-tick`, step 5). A new
 not count.
 
 **The cases.** `limits.in_progress` 5 and `limits.alters_relationships` 3,
-as in `config.yaml` today. "Today" is `wf` at `897a4a8`.
+as in `config.yaml` today, and `limits.waiting_on_human` unset, so 8.
+"Today" is `wf` at `897a4a8`; `loop-contract`'s merge changed none of the
+code these cases run through.
 
 | # | State | Today | After |
 |---|---|---|---|
@@ -1428,6 +1574,13 @@ as in `config.yaml` today. "Today" is `wf` at `897a4a8`.
 | 22 | Jeff merges a PR that is behind `main`; the earlier merge edited a line next to one of its hunks; the branch's ref still exists in the checkout | Cannot arise with one PR open | Confirmed: the changes are equal without context lines (a14). With three lines the confirmation fails and the item keeps the slot |
 | 23 | A regression's fix is filed with nobody there, following an item that declared `driver/hyperv`, `book` | No areas exist: one PR at a time for every feature | It takes `driver/hyperv`, `book`, and waits only for items related to those. Filed with no areas it would collide with every feature and open its PR only when no other feature has one open (a4 (b)) |
 | 24 | After this item's merge, `seam-specs` (never declared; its design lists five seams and four rule changes the queue file lacks) reaches its Plan gate | Passes on the approval | Passes on the approval: no `declared`, so the queue is not compared with the design, and the check prints `not declared: finished Design before wf declare` |
+| 25 | Eight in-progress items wait on Jeff: four features (three open PRs, a design review) and four process items (three design reviews, an escalation). A queued feature is next, disjoint from the four | Started: four features are in progress and the limit is 5 | Refused: `the waiting limit: 8 items wait on the human (limit 8): ...`. It starts once one of the eight clears |
+| 26 | The same, and the next queued item `follows` a done item: a regression's fix | Started | Started: a fix is never refused by the waiting limit |
+| 27 | The same, and a process item is queued | Its `x1-design` is offered to the human | The same |
+| 28 | The same, and a feature in progress reaches `f6-open-pr` | Offered | Offered: work in progress is never refused. Nine then wait |
+| 29 | Seven items wait, one of them with a design review, two open questions and an escalation | n/a | Seven: an item counts once. A queued feature starts |
+| 30 | Eight wait, counting two queued items filed on hold (FLOW-20) and a tracked item | n/a | Five: queued and tracked items are not counted. A queued feature starts |
+| 31 | `limits.waiting_on_human` is 0 | n/a | `wf validate` fails: below 1. Unset, it is 8 |
 
 ### `wf commit`: pushing queue state
 
@@ -1818,8 +1971,11 @@ What is new, by section:
 
 - The header names the files it is built from, the commit of the map's
   copy, and `main`'s CI as last recorded.
-- **Needs Jeff** opens with the count of items waiting on him, by kind
-  (a3). Before the count it says `main is red at <sha> since <sha>`, with
+- **Needs Jeff** opens with the count of in-progress items waiting on
+  him, by kind, beside the limit (a3 (b), Decision 24); at the limit it
+  says that no queued feature starts until one clears. Queued items that
+  need him, which the limit does not count, are listed after the others
+  under their own heading. Before the count it says `main is red at <sha> since <sha>`, with
   the run and the follow-up, when `main.yaml` says so, and lists any
   holders over a limit. It lists the merges first, in FLOW-05's order,
   each with its PR link, `pr.ci`, and "behind `main`" while a refresh
@@ -1837,7 +1993,9 @@ What is new, by section:
   and "Steps spent / est." becomes "Steps".
 - **Relations** is new: every pair of open features that is near or
   colliding, with the reason. Disjoint pairs are not listed.
-- **Backlog** gains Repositories and Areas.
+- **Backlog** gains Repositories and Areas, and, while the count is at
+  the limit, a line above the table:
+  `No queued feature starts: 8 items wait on you (limit 8). Fixes and process items still start.`
 - A **Workers** section (each machine's last run and its led items) is
   `loop-native-lead`'s.
 
@@ -1866,7 +2024,8 @@ file names the item's repositories when it has more than this one.
   and a save (checked with the YAML library the module uses);
   `Config.Repository`; `State.Main`, loaded from `main.yaml` as an optional
   file;
-  `Limits.InProgress` as `*int` with `inProgressLimit()`; `Validate`'s
+  `Limits.InProgress` as `*int` with `inProgressLimit()`, and
+  `Limits.WaitingOnHuman` with `waitingLimit()`; `Validate`'s
   checks of the new fields, and its limit checks replaced by the
   predicate over the limits table, its errors prefixed `limit:`; `Class`
   returns 3 for `adopts`; `inImplementation` is true for an item with a
@@ -1876,7 +2035,8 @@ file names the item's repositories when it has more than this one.
   `CheckAreas`, which compares it with a tree and a list of edges.
 - `relation.go` (new): `Relation(a, b)` and its reason.
 - `limits.go` (new): the table, the predicate, `Guard`, the PR-slot
-  holder and tie-break; `holdsAltersSlot`, `altersHolders` and `altersWait`
+  holder and tie-break; `WaitsOnHuman`, which `Guard` counts for the
+  waiting limit and `summary.go` lists; `holdsAltersSlot`, `altersHolders` and `altersWait`
   move here from `next.go`.
 - `next.go`: `Next`, `NextFor` and `ready` call `Guard` for every worker;
   `atLimit` and `prSlotHolder` go; `Claim` starts a tracked item.
@@ -1941,7 +2101,10 @@ By file. Each cites the rule and does not restate it (FLOW-14).
   repositories and areas with Jeff (`dist/wf areas -list`), show
   `dist/wf relations -feature <slug>` after `wf new`; `-adopts` and its
   place; a tracked item, with `-seams`; two steps on the size guide for
-  refreshes. The follow-up path: no `-areas`, so `wf new -follows` takes
+  refreshes. When the waiting limit is reached (`dist/wf next` prints
+  it), say so: a new feature will not start until an item clears, a fix
+  with `-follows` will, and the number is Jeff's to change. The follow-up
+  path: no `-areas`, so `wf new -follows` takes
   the followed item's repositories and areas; a fix for a red `main`
   follows the item whose merge it was.
 - `.claude/skills/workflow-human/SKILL.md`. Its worker stays
@@ -2222,6 +2385,7 @@ Where this design does not do what the proposal's sections 3 to 8 say.
 | FLOW-17: "a `feat/<item>` branch in each" repository | Not here | `loop-repository` |
 | The exclusive areas include `conformance` | Not in the map | `tools/conformance/` is not on `main`; `seam-specs` adds it |
 | FLOW-02, -03, -05, -10, -15, -19, -20 | Also FLOW-04, -06, -08, -09, LOOP-01, LOOP-04, PROFILE-01 | Decision 19 |
+| No cap on the work waiting for Jeff: `QUEUE.md` shows the count (question 5, recommended) | No queued feature starts while 8 or more items wait on him (a3 (b), Decision 24) | Jeff's answer of 2026-11-14 |
 
 ### What this item does not do
 
@@ -2305,6 +2469,7 @@ being read, and the refresh for any process item's PR that waits while
 | The merge check's context lines | 0, fixed. *Changed:* 3 | a14 |
 | `limits.in_progress` absent | 5; a written value below 1 is an error | FLOW-05's written limit (Decision 8). *Changed:* absent or 0 was "no limit" |
 | `limits.alters_relationships` absent | 1; below 1 an error | Unchanged (`alters-slot`) |
+| `limits.waiting_on_human` absent | 8; a written value is used as written, and one below 1 is an error. There is no value that means "no cap": a large number is how it is switched off | Jeff's answer to a3, which FLOW-05 writes (GLOBAL-09). A cap that an absent key switched off would be a silent fallback (GLOBAL-10) |
 | The PR slot | 1, not configurable | FLOW-05 |
 | A map area's `mode` | Required; no default | Exclusive by default would hide a missing line; ordered by default would be unsafe |
 | A map area's `reaches`, `paths` absent | Reaches nothing; `paths` may be absent only for `catch_all`. `reaches` on an ordered area is an error, not ignored (a5 (d), GLOBAL-10) | The obvious reading |
@@ -2501,7 +2666,8 @@ clauses of this rule (host names, the lease).
 ### FLOW-05 (amend), `docs/development/process.md`
 
 **Why:** this is the rule the item is for. It gains the relations; its
-three limits count by relation; class 3 takes in reconciliation items
+three limits count by relation; it gains the limit on what waits for the
+human (a3 (b)); class 3 takes in reconciliation items
 (`loop-contract` a5, decided); and it now states the `alters_relationships`
 definition that `alters-slot` built and FLOW-20's Limit bullet carried.
 
@@ -2645,9 +2811,20 @@ definition that `alters-slot` built and FLOW-20's Limit bullet carried.
 >   item may merge meanwhile, and the refresh (FLOW-10) then brings the
 >   open PR up to date.
 >
-> The first two limits are the values the human sets in the workflow
-> branch's `config.yaml`: 5 features in progress and 1
-> `alters_relationships` slot when it sets none. Every claim is checked
+> **Waiting on the human.** A queued feature does not start while the
+> items that wait on the human number a fourth limit or more. An item
+> waits on the human when it is in progress and has a `human` step it
+> could take now, an open blocking question, a pull request waiting for
+> the merge, or a spent budget (FLOW-13); it counts once, and a tracked
+> item does not count. This limit counts by no relation and stops only a
+> start: work in progress goes on, so the count can pass it. A fix that
+> `follows` an item, a process item and a tracked item start whatever
+> the count.
+>
+> The in-progress limit, the `alters_relationships` limit and the waiting
+> limit are the values the human sets in the workflow branch's
+> `config.yaml`: 5 features in progress, 1 `alters_relationships` slot
+> and 8 items waiting when it sets none. Every claim is checked
 > against the limits, whoever the worker is (FLOW-04). A feature waiting
 > behind others periodically merges `main` with conflict-only fixes, so its
 > consolidation stays as small as it can.
@@ -2954,7 +3131,8 @@ whether it is still true with the proposed wording.
 
 | Clause | Still true? |
 |---|---|
-| LOOP-04: "There is one order, and FLOW-05 gives it. FLOW-05 also says which items may be in progress side by side and which wait for another. This rule adds no order and no limit of its own." | Yes. The classes are the order; the relations and limits say the rest |
+| LOOP-04: "There is one order, and FLOW-05 gives it. FLOW-05 also says which items may be in progress side by side and which wait for another. This rule adds no order and no limit of its own." | Yes. The classes are the order; the relations and limits say the rest, the waiting limit among them, and LOOP-04 still adds none |
+| LOOP-04: "An item that cannot proceed says what it waits for, and its worker moves on (FLOW-05, FLOW-07)." | Yes. A feature the waiting limit refuses says so in `wf next`'s `blocked` line, and the worker goes on to the next item |
 | LOOP-04: "A process item ranks ahead of every item not already in implementation (FLOW-05). It stops other work only through the `holds` it declares (FLOW-05, LOOP-09)." | Yes. Class 2 is unchanged, and FLOW-05 now says outright that a process item is outside the relations |
 | LOOP-04: "Every item has the phases of its kind (FLOW-03), and every step says who may take it (FLOW-04)." | Yes. FLOW-03 now gives a tracked feature its two phases, and FLOW-04 names their steps as the human's |
 | LOOP-04: "the session that finds a regression trunk already has files its fix at the top of the fixes (FLOW-09), and the human may move it" | Yes. Class 3 keeps the fixes; adoptions go below them. FLOW-09's new sentence has the run that sees a red `main` file the fix the same way, at the same place |
@@ -3005,6 +3183,15 @@ whether it is still true with the proposed wording.
     refused while a related higher-priority one waits, ready or not; the
     highest-priority waiting item is refused only by a holder; over
     generated arrivals no waiting item is passed over without end).
+  - `TestWaitingLimit` (cases 25 to 31): the count is each in-progress
+    item once, for a ready `human` step, an open blocking question, a PR
+    at its merge step, a spent budget; a queued item on hold, a queued
+    process item and a tracked item are not counted; at 8 a queued
+    feature is refused for a `cloud` and a `host:` worker and through
+    `wf commit`'s re-asked claim; a fix with `follows`, a process item, a
+    tracked item and every step of an item in progress are not; `wf
+    validate` passes at 11 waiting; unset is 8, 0 and -1 fail `Load`;
+    and `QUEUE.md`'s opening count is the number `Guard` used.
   - `TestGuardEveryWorker` (case 5): it replaces the host half of
     `TestAltersSlotCloudOnly`, which asserts today that the host's claim
     stands.
@@ -3159,7 +3346,8 @@ steps.
    (FLOW-02, FLOW-03, GLOBAL-10).
 5. `queue/relation.go` (FLOW-05).
 6. `queue/limits.go`: the table, the predicate, `Guard`, the PR-slot
-   holder with a recorded PR, the tie-break, the in-progress default;
+   holder with a recorded PR, the tie-break, the in-progress default, and
+   the waiting limit with its default;
    `next.go` and `cmd/wf` call it; `alters-slot`'s functions move
    (FLOW-04, FLOW-05, GLOBAL-09, GLOBAL-10).
 7. `Class` for `adopts`, `wf new -repos -areas -seams -adopts` and the
@@ -3210,7 +3398,10 @@ Jeff once the PR has merged and no live lease was claimed before the merge
 commit's time. The item is not done until it is.
 
 - `config.yaml`: `repository: buildwarden/buildwarden`; the comment on
-  `limits.in_progress` becomes "5 when unset". The values do not change.
+  `limits.in_progress` becomes "5 when unset"; and
+  `limits.waiting_on_human: 8`, written out with its comment so the
+  number can be seen and changed, though 8 is also what unset means. The
+  other values do not change.
 - `areas.yaml`: the map of this design, saved on Jeff's word as any map
   change is (`wf validate -areas`, then `wf commit -worker human/<name>`),
   and `wf areas -check` run on it; and `wf main`, which adds `main.yaml`.
