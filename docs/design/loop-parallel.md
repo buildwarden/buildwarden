@@ -1658,7 +1658,7 @@ Every combination, with examples from this repository:
 | A Hyper-V item and an item in `driver-core` (`driver/session.go`) | near | 9 |
 | An item in `relaycfg` and any driver item or the relay | near | 9 |
 | Two driver items that each also edit `cmd/warden/` (`cli`): a Hyper-V item and a vz item | disjoint (a5 (d)) | 10 |
-| An item that edits only `cmd/warden/` (`cli`, `book`) and an item in `relaycfg`, `driver-core` or a driver | disjoint: `cli` is ordered and has no `reaches` | 10 |
+| An item that edits only `cmd/warden/` (`cli`, `book`) and an item in `relaycfg`, `driver-core` or a driver | disjoint: `cli` is ordered and has no `reaches` (a18 (a), open; near under its option (b)) | 10 |
 | Two items that amend GLOBAL-08, in different areas (S2 and K1) | near | 8 |
 | Two items that change `ledger-format`, in different areas | near | 7 |
 | Two items that change `relay-claim`, which has no specification until S1 lands | colliding | 3 |
