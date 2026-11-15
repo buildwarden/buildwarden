@@ -150,7 +150,7 @@ Three things follow.
 - [`ledger-environment-types`](ledger-environment-types.md): the claim's
   `environment` and the collector's `PUT /v1/environment`.
 - [`design-approved-rule-changes`](design-approved-rule-changes.md): the
-  route by which this design's four rule changes are approved by name.
+  route by which this design's five rule changes are approved by name.
 
 All twelve already carry front-matter; no retrofit is needed (FLOW-12).
 
@@ -815,7 +815,7 @@ and this design proposes no amendment to it.
 |---|---|---|
 | S1's row: the harness runs "against any relay binary or image" | It runs against a binary (`exec`), an OCI image (`oci`) and a relay that is already running (`external`). No launcher boots a VM image, so when S1 is done no suite has run the Go relay VM image or the Hyper-V relay VM | a6 |
 | "Seams 1 to 8 each get a specification and a black-box conformance suite in the specs repository" | Seam 5, and the executor's side of seams 3 and 6, get a specification and no suite. Seam 4 does not move in this item | a11, a1 |
-| Its table of rule changes, "listed for direction": S1 changes RELAY-05 and TEST-05 | TEST-05, and also TEST-02, GLOBAL-08 and EXEC-04. RELAY-05 is left to seam 4's move | a1; **Rule changes** |
+| Its table of rule changes, "listed for direction": S1 changes RELAY-05 and TEST-05 | TEST-05, and also TEST-02, GLOBAL-08, EXEC-04 and PROFILE-01, a rule that did not exist when the table was written. RELAY-05 is left to seam 4's move | a1; **Rule changes** |
 
 ### What each specification covers
 
@@ -1989,10 +1989,11 @@ are stated so that the design review can judge them (LOOP-09):
 
 The umbrella's table of rule changes, which is "for direction", gives S1
 two: RELAY-05 and TEST-05. This design declares TEST-05 and leaves RELAY-05
-to seam 4's move (a1). It also declares three that the table does not give
-S1: TEST-02, GLOBAL-08 and EXEC-04. The table gives GLOBAL-08 to K1 and to
-S2, S3 and S4 for their seams; S1 needs it because S1 is the item in which
-the seams' contract documents come to exist.
+to seam 4's move (a1). It also declares four that the table does not give
+S1: TEST-02, GLOBAL-08, EXEC-04 and PROFILE-01. The table gives GLOBAL-08
+to K1 and to S2, S3 and S4 for their seams; S1 needs it because S1 is the
+item in which the seams' contract documents come to exist. PROFILE-01 did
+not exist when the table was written.
 
 ### TEST-05 (amend), `docs/development/testing.md`, `tools/tier1/rules.yaml`
 
