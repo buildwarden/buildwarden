@@ -481,7 +481,11 @@ Nothing in any of the five is approved.
      `conformance/v0.1.0`, then `bootstrap-config/v0.1.0`,
      `collector-inputs/v0.1.0`, `collector-outputs/v0.1.0`,
      `executor-initialize/v0.1.0`, `relay-claim/v0.1.0` and
-     `relay-guest-api/v0.1.0` (who pushes them: a15).
+     `relay-guest-api/v0.1.0` (who pushes them: a15). Each tag is pushed
+     in a push of its own. GitHub starts no workflow run for a push that
+     carries more than three tags, and the `release` workflow runs on a
+     tag's push. The harness's tag goes first, and its `release` run is
+     green before the next tag is pushed.
 
    **What this costs beside one tag for the repository,** which this
    design proposed and Jeff declined:
@@ -729,8 +733,8 @@ Nothing in any of the five is approved.
     has read the specs branch. Then `f6-release-specs`: Jeff reads the tier-2
     report and merges the specs pull request. Only he merges it (FLOW-08).
     The tags are then pushed on the merge commit, the harness's first and
-    then one for each specification (Decision 4), and the pins moved on
-    this branch, by him or by
+    then one for each specification, each in its own push (Decision 4),
+    and the pins moved on this branch, by him or by
     the attended session on his word. The merge is the sign-off, as FLOW-08
     has it. The step is the queue's record of a merge in a repository `wf`
     cannot see, and what the tags and the pins' move wait on. Two sentences
@@ -2216,8 +2220,8 @@ This design keeps its names and proposes none to K1.
   for that push shows the suites passing on hosted runners; the
   implementing branch is reviewed with the specs branch; Jeff merges the
   specs pull request and the tags are pushed on its merge commit, one for
-  each directory it changed, the harness's first; the pin of each
-  specification that changed moves to its tag
+  each directory it changed, each in its own push, the harness's first;
+  the pin of each specification that changed moves to its tag
   (`make pin-specs SPECS=...`) and the implementing branch opens its PR,
   where the `pin` job requires tags.
   That is LOOP-02's order, the specification first and the code tested
@@ -2350,11 +2354,15 @@ of the fold-in.
   at its released version (the Go relay image first), published as a
   table in the run summary. It is not a gate because a specification
   change is merged before the code that implements it.
-- `release`, on a tag `<directory>/v*`: it checks that the tag is on
-  `main` and is the version at the head of that directory's
+- `release`, on the push of a tag `<directory>/v*`: it checks that the
+  tag is on `main` and is the version at the head of that directory's
   `CHANGELOG.md`, then builds and attaches that specification's binaries
   (**Releases and how they are consumed**). For `conformance/v*` it runs
-  the checks and attaches nothing.
+  the checks and attaches nothing. It can also be started by hand for a
+  tag that already exists (`workflow_dispatch`, with the tag as its
+  input), so that a run that was missed or that failed is made again
+  without touching the tag. Tags are pushed one to a push, because a
+  push of more than three tags starts no run.
 - `flow18`, the guard this repository has, so the public repository never
   carries `entire/` refs (FLOW-18).
 
@@ -2605,7 +2613,7 @@ consumes it: by the pin.
 | Plan | Every task names its repository | |
 | Implement | The pins (every specification at the specs branch's head commit), target files, `make conformance` and `make pin-specs`, the workflow, book pages, tier 1's seam list, the rule changes. `make lint` and `make test` green (FLOW-03). Task 8 is done when the `conformance` workflow's run for the pushed head is green on all three runners, and task 12, the last, when the run for the final pin is; the step's evidence names both runs | Documents, schemas, harness, suites and CI on `feat/seam-specs`, pushed at each green checkpoint (FLOW-17); its pull request opened in task 11, before the final pin, so Jeff can read it early |
 | Review | Tier 1 and the tier-2 report on this branch. Review confirms that the latest `conformance` run on the branch is green and that every pin is the specs pull request's head | The same tier-2 report also reads the specs branch at the pinned commit: the documents against the code lists in this design, and the harness against the rules in the table above. Its findings say which repository they are in |
-| Publish | `f6-merge-main`, `f6-consolidate` and `f6-open-pr`, as for any feature. `f6-open-pr` finds the pins on the tags; if it does not, the PR's `pin` job fails. The PR's body lists the specification changes, from **Specification changes**, and the rule changes (LOOP-06, FLOW-08) | `f6-release-specs` (human, a15): Jeff reads the tier-2 report's MUST findings, which the session has listed in the specs pull request's body, and merges the pull request. The seven tags are then pushed on the merge commit, `conformance/v0.1.0` first and then each specification's `v0.1.0` (Decision 4), and the pins moved on this branch (`make pin-specs SPECS=latest`, `make test`, `make lint`, commit, push), by him or by the attended session on his word |
+| Publish | `f6-merge-main`, `f6-consolidate` and `f6-open-pr`, as for any feature. `f6-open-pr` finds the pins on the tags; if it does not, the PR's `pin` job fails. The PR's body lists the specification changes, from **Specification changes**, and the rule changes (LOOP-06, FLOW-08) | `f6-release-specs` (human, a15): Jeff reads the tier-2 report's MUST findings, which the session has listed in the specs pull request's body, and merges the pull request. The seven tags are then pushed on the merge commit, one push for each tag, `conformance/v0.1.0` first and then each specification's `v0.1.0` (Decision 4), and the pins moved on this branch (`make pin-specs SPECS=latest`, `make test`, `make lint`, commit, push), by him or by the attended session on his word |
 
 The mechanical link between the two is the pin. Before the release, the
 suites have passed on hosted runners against the exact commit the branch
@@ -2716,9 +2724,10 @@ Implement stops with a blocking question (FLOW-07) and changes nothing.
 After Review: `f6-release-specs` (a15). The merge of its pull request,
 which is Jeff's alone (FLOW-08), preferably as a merge commit so that the
 commits this branch pinned while in progress stay in its history; then the
-seven tags on the merge commit, `conformance/v0.1.0` first and then one
-`v0.1.0` for each specification (a8, Decision 4), and the pins' move
-here, which the attended session may do on his word.
+seven tags on the merge commit, each pushed on its own,
+`conformance/v0.1.0` first and then one `v0.1.0` for each specification
+(a8, Decision 4), and the pins' move here, which the attended session
+may do on his word.
 
 Not needed: packages, Pages, secrets, or any change to `buildwarden-relay`.
 
@@ -3551,11 +3560,13 @@ its branch `feat/seam-specs`; **K** is this repository, on this branch.
 13. (Human, `f6-release-specs`, after Review) The tier-2 MUST findings
     that are in the specs repository are listed in the specs pull
     request's body, and Jeff merges it (FLOW-08). The seven tags are then
-    pushed on the merge commit, `conformance/v0.1.0` first and then each
-    specification's `v0.1.0`, and the six pins moved here with
+    pushed on the merge commit, one push for each: `conformance/v0.1.0`
+    first, its `release` run green before the next, and then each
+    specification's `v0.1.0`. The six pins are moved here with
     `make pin-specs SPECS=latest`, by him or by the attended session on
-    his word (a15). The step is done when each tag's `release` run has
-    attached its binaries and this branch's `conformance` run on the six
+    his word (a15). The step is done when the seven `release` runs are
+    green, the six specifications' with their binaries attached and the
+    harness's with none, and this branch's `conformance` run on the six
     tags is green.
 
 No item is filed for seam 4 after the merge: its move is M6's (a1).
