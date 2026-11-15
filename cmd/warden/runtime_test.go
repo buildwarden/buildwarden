@@ -3,6 +3,7 @@ package main
 import (
 	"errors"
 	"fmt"
+	"io"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -485,6 +486,123 @@ func TestUnusedRuntimeIsNotValidated(t *testing.T) {
 					t.Errorf("doctor --driver %s mentions %q:\n%s", drv, about, out)
 				}
 			}
+		})
+	}
+}
+
+// runtimeCommands are the calls that resolve the container runtime: the one
+// build and shell make, clean and doctor.
+var runtimeCommands = []struct {
+	name string
+	run  func(t *testing.T) error
+}{
+	{"build and shell (newDriver)", func(t *testing.T) error {
+		cfg, err := resolveConfig()
+		if err != nil {
+			t.Fatalf("resolveConfig: %v", err)
+		}
+		_, err = newDriver(cfg)
+		return err
+	}},
+	{"clean", func(*testing.T) error { return runClean(cleanCmd, nil) }},
+	{"doctor", func(t *testing.T) error {
+		doctorCmd.SetOut(io.Discard)
+		t.Cleanup(func() { doctorCmd.SetOut(nil) })
+		return doctorCmd.RunE(doctorCmd, nil)
+	}},
+}
+
+// shipPrograms writes executables of the given names into dir; each creates
+// marker when it is run. It returns the first one's path.
+func shipPrograms(t *testing.T, dir, marker string, names ...string) string {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("shell-script fakes need a POSIX shell")
+	}
+	script := fmt.Sprintf("#!/bin/sh\necho ran >> '%s'\n", marker)
+	for _, name := range names {
+		if err := os.WriteFile(filepath.Join(dir, name), []byte(script), 0o755); err != nil {
+			t.Fatal(err)
+		}
+	}
+	return filepath.Join(dir, names[0])
+}
+
+// wantNotRun checks that no shipped program ran.
+func wantNotRun(t *testing.T, marker string) {
+	t.Helper()
+	if _, err := os.Stat(marker); !os.IsNotExist(err) {
+		t.Errorf("a program the configuration named was run (marker: %v)", err)
+	}
+}
+
+// The security fix. A build context ships a program and a warden.toml that
+// names it as the container runtime, by path or as an interpreter that runs
+// the file named like warden's first argument. Before the fix clean ran the
+// program, and newDriver and doctor accepted it for a later run; now each
+// refuses it and nothing is run. The same holds for a program the flag, the
+// variable or the user's file names.
+func TestUnsupportedRuntimeIsNeverRun(t *testing.T) {
+	const viaShell = "sh" // runs ./pull, ./container, ... from the project
+	inProject := "[runtime] cli in warden.toml"
+	for _, tc := range []struct {
+		name      string
+		project   string // the project's file
+		elsewhere string // or the level that names the shipped path
+		driver    string // --driver
+		value     string // the value refused, when not the path
+		onlyClean bool
+	}{
+		{name: `cli = "./rt"`, project: cliFile("./rt"), value: "./rt"},
+		{name: `CLI = "./rt"`, project: "[runtime]\nCLI = \"./rt\"\n", value: "./rt"},
+		{name: `cli = "sh"`, project: cliFile(viaShell), value: viaShell},
+		{name: `cli = "./rt" beside driver = "qemu"`, value: "./rt", onlyClean: true,
+			project: "[runtime]\ncli = \"./rt\"\ndriver = \"qemu\"\n"},
+		{name: `cli = "./rt" with --driver vz`, value: "./rt", onlyClean: true,
+			project: cliFile("./rt"), driver: "vz"},
+		{name: "the program's path in --runtime", elsewhere: "flag"},
+		{name: "the program's path in WARDEN_CTR_CLI", elsewhere: "env"},
+		{name: "the program's path in the user's file", elsewhere: "user"},
+	} {
+		for _, command := range runtimeCommands {
+			if tc.onlyClean && command.name != "clean" {
+				continue
+			}
+			t.Run(tc.name+", "+command.name, func(t *testing.T) {
+				marker := filepath.Join(t.TempDir(), "ran")
+				program := shipPrograms(t, t.TempDir(), marker, "rt")
+				setting, value := inProject, tc.value
+				if tc.elsewhere != "" {
+					setting, value = nameRuntime(t, tc.elsewhere, program), program
+				} else {
+					project := inConfigFiles(t, "", tc.project)
+					shipPrograms(t, project, marker,
+						"rt", "pull", "container", "network", "image", "info")
+				}
+				flagDriver = tc.driver
+				err := command.run(t)
+				wantNotRun(t, marker)
+				wantRuntimeRefused(t, err, setting, value)
+			})
+		}
+	}
+}
+
+// An unsupported value in effect is the error. Neither the level below it
+// nor detection is tried in its place (GLOBAL-10).
+func TestUnsupportedRuntimeHasNoFallback(t *testing.T) {
+	for _, command := range runtimeCommands {
+		t.Run(command.name, func(t *testing.T) {
+			marker := filepath.Join(t.TempDir(), "ran")
+			project := inConfigFiles(t, cliFile("podman"), cliFile("./rt"))
+			shipPrograms(t, project, marker, "rt")
+			// A finch that answers detection, on a PATH with nothing else.
+			bin := t.TempDir()
+			shipPrograms(t, bin, marker, "finch")
+			t.Setenv("PATH", bin)
+			err := command.run(t)
+			wantNotRun(t, marker)
+			wantRuntimeRefused(t, err, "[runtime] cli in warden.toml", "./rt")
 		})
 	}
 }
