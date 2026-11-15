@@ -27,8 +27,8 @@ Arguments:
 The `workflow-tick` skill's Never list applies unchanged: no merge, approval or
 auto-merge; no push to `main`, force-push or remote branch delete; no edits to
 `docs/development/`, `.claude/` or `tools/workflow/`, except a rule change the
-feature's design review approved, in its `paths` (FLOW-14); no secrets in
-prompts.
+feature's design review approved, in its `paths` (FLOW-14), and never a loop
+rule or its enforcement (LOOP-09); no secrets in prompts.
 Also: never take `human` or `cloud` steps, never ask a question and wait (record
 it in the queue and the digest instead), and never change anything on the
 machine outside the checkout, the documented caches, and the VMs, images and
@@ -125,8 +125,13 @@ workflow branch; never push `main` or merge anything (FLOW-08, FLOW-17).
 Attended: finish with a summary per branch.
 
 Unattended: append a `## Run host:<machine>/<timestamp>` section to
-`.dev/workflow/digest/<YYYY-MM-DD>.md` (America/Los_Angeles date), with
-**Moved** (per host and branch: what ran, pass or fail, evidence),
+`.dev/workflow/digest/<YYYY-MM-DD>.md` (America/Los_Angeles date), checked
+against LOOP-06's list before the commit, with
+**Moved** (per host and branch: what ran, pass or fail, evidence; for each
+queue step, the item with its kind and FLOW-05 class, and the branch head it
+left; a **Specification changes** line under a step that
+changed a specification, LOOP-02; on a review step's line, tier 1's result and
+the tier-2 findings counted by severity, with the report's path, LINT-05),
 **Blocked on Jeff** (anything this machine cannot do: a missing tool, a
 failure that needs a decision), **Follow-ups filed** (each as
 "<slug> (follows <item>)", so Jeff can say otherwise; "none" when none),

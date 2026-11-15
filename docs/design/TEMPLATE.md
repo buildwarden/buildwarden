@@ -5,7 +5,8 @@ feature: <feature-slug>
 status: draft            # draft | active | archived
 drivers: []              # container, qemu, vz, hyperv, firecracker; or [interface]
 seams: []                # e.g. relay-claim, collector, executor-initialize, ledger-format,
-                         # bootstrap-model (BOOT-07: needs the Bootstrap comparison below)
+                         # bootstrap-model (BOOT-07: needs the Bootstrap comparison below).
+                         # Not empty: fill Specification changes below (LOOP-02)
 surfaces: []             # e.g. cli, config, output
 security_boundary: none  # none | host-env | env-relay | env-beyond (GLOBAL-06)
 alters_relationships: false  # true if a component's role or interactions change (FLOW-02, FLOW-05)
@@ -47,7 +48,9 @@ recommended answer.
 
 ## Design
 
-The behavior and structure of the change.
+The behavior and structure of the change. Name each repository the item
+works in other than this one (LOOP-04); a design that names none works
+only here.
 
 ## Defaults and overrides
 
@@ -61,6 +64,16 @@ or fallback.
 
 For each driver named in `drivers`, what changes; for the others, why they are
 unaffected (ORCH-01).
+
+## Specification changes
+
+Required when `seams` is not empty (LOOP-02); delete otherwise. For each
+seam: the specification document and the requirements the item changes,
+what changes in them, and where the change is made (the path here, or
+the other repository's pull request and the release this repository
+will pin). An item that only implements existing requirements lists
+them and says "no change". For a seam with no written specification,
+say so and name what defines it.
 
 ## Bootstrap comparison
 

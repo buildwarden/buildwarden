@@ -14,13 +14,16 @@
 //	wf back     -state DIR -worker W -feature F -why FINDING [-to 1|3]
 //	wf new      -state DIR -worker W -feature F -title T -priority N
 //	            -estimate-steps N -estimate-runs N [-source S] [-follows ITEM]
-//	            [-kind process -holds PATTERN,...]
+//	            [-kind process -holds PATTERN,...] [-hold WHY]
 //	wf gate     -state DIR -repo DIR -machine M -stamp FILE [-sweep-days N] [-record]
 //	wf budget   -state DIR [-native]
 //	wf drops    -repo DIR -base REV -main FILE -branch FILE [-head REV]
 //
 // new -follows ITEM queues a fix or follow-up of ITEM: FLOW-05 classes it
-// with the fixes, and wf next starts it only once ITEM is done.
+// with the fixes, and wf next starts it only once ITEM is done. new -hold WHY
+// queues the item on hold (FLOW-20's freeze): WHY is the text of a blocking
+// question q1, and the item's first step waits for the human's answer to it
+// (wf answer -question q1). Without -hold the loop may take the item at once.
 //
 // DIR is a checkout of the workflow branch; -repo is a checkout of the code
 // with origin fetched. A worker is cloud, human or host:<name>, optionally
@@ -66,10 +69,10 @@ var errIdle = errors.New("idle")
 
 type opts struct {
 	state, repo, worker, feature, step, why, question, answer string
-	title, source, machine, stamp, kind, holds, follows       string
+	title, source, machine, stamp, kind, holds, follows, hold string
 	base, head, mainReport, branchReport                      string
 	priority, estSteps, estRuns, sweepDays, to                int
-	newRun, run, record, native, md, all                      bool
+	newRun, run, record, native, md, all, held                bool
 	now                                                       time.Time
 }
 
@@ -107,6 +110,8 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.StringVar(&o.follows, "follows", "", "new: the item this one fixes or finishes")
 	fs.StringVar(&o.holds, "holds", "",
 		"new: process only, comma-separated affinity patterns it holds")
+	fs.StringVar(&o.hold, "hold", "",
+		"new: queue the item on hold; the reason is its blocking question q1 (FLOW-20)")
 	fs.IntVar(&o.priority, "priority", 0, "new: priority, 1 highest")
 	fs.IntVar(&o.estSteps, "estimate-steps", 0, "new: estimated steps")
 	fs.IntVar(&o.estRuns, "estimate-runs", 0, "new: estimated runs")
@@ -122,6 +127,8 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.StringVar(&o.mainReport, "main", "", "drops: the merge base's tier1 -json report")
 	fs.StringVar(&o.branchReport, "branch", "", "drops: the branch's tier1 -json report")
 	_ = fs.Parse(args)
+	// -hold given with an empty reason is refused by new, never read as no hold.
+	fs.Visit(func(fl *flag.Flag) { o.held = o.held || fl.Name == "hold" })
 	if cmd == "drops" {
 		return drops(o)
 	}
@@ -378,6 +385,11 @@ func newFeature(s *queue.State, o opts) error {
 	changed, err := s.Add(f, o.now, o.worker)
 	if err != nil {
 		return err
+	}
+	if o.held {
+		if err := f.PutOnHold(o.hold, o.now, o.worker); err != nil {
+			return fmt.Errorf("-hold: %w", err)
+		}
 	}
 	for _, c := range changed {
 		if err := s.Save(c); err != nil {
