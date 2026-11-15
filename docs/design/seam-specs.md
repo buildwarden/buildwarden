@@ -164,14 +164,15 @@ One design is not on `main` and so is not in `related`. This design
 depends on it, cites it by section or question ID, and quotes none of its
 rule text as final:
 
-- `driver-contract` (K1, on `feat/driver-contract`, read at `4d8544d`). It
+- `driver-contract` (K1, on `feat/driver-contract`, read at `a6c8f0b`). It
   is a redraft, sent back by its first review on 2026-11-14. Its second
   review has not ended, and has gone further than this one's. By its own
   record of 2026-11-15, Jeff has answered all twenty-two of its assumed
   questions, has approved its eleven rule changes by name on the wording
   he read at `3f2012a`, and has answered that its amendments to the
-  umbrella are made in its PR (its a18). The acceptance of its Security
-  note and the outcome are still to come.
+  umbrella are made in its PR (its a18), with the list to be shown to
+  him once more before the approval. That, the acceptance of its
+  Security note and the outcome are still to come.
   What this design relies on is among the answers, each confirmed
   as that design recommended: `warden` sends the claim, at an endpoint
   the driver reports (its a13); `warden` starts the default collector,
@@ -987,8 +988,9 @@ release; its recommended answer is still A.
   specification, how a document's `v<N>` and a tag's version relate, and
   what the scheme costs beside the single tag. Decisions 2, 5 and 7,
   **The harness**, **Releases and how they are consumed**, **CI** and
-  the proposed wording of four rules follow it. It raises one question,
-  a19: where the code that every suite shares lives.
+  the proposed wording of four rules follow it. It raises two
+  questions: a19, where the code that every suite shares lives, and a20,
+  which build of a release's tooling this repository runs.
 - **a9. Document format** (Decision 3). Options: (A) Markdown prose with RFC
   2119 words and a stable identifier per requirement that suite cases cite,
   plus JSON Schema 2020-12 for JSON bodies; the specs repository's CI fails
@@ -1415,8 +1417,9 @@ Read and not amended:
   the umbrella says nothing of the documents' format.
 
 `driver-contract` amends the umbrella too, in its own PR (its **Amendments
-to the umbrella design**, read at `4d8544d`; its a18, answered). Its list
-and this one meet in two places:
+to the umbrella design**, read at `a6c8f0b`; its a18, answered, with the
+list to be shown once more before its approval). Its list and this one
+meet in two places:
 
 - *Line 405, the row U2 rewords.* U2 takes "RELAY-05, " out of the row's
   first cell. `driver-contract` changes its last cell, from "S1" to "S1;
@@ -3381,7 +3384,7 @@ per specification and two collector documents (a8, a10). Which sentences
 each design owns did not change by that, and the joined row and the
 joined owner string below carry the new words.
 
-`driver-contract` is read here at `4d8544d`. Its review has gone further
+`driver-contract` is read here at `a6c8f0b`. Its review has gone further
 than this one's: on 2026-11-15 Jeff approved its eleven rule changes by
 name, GLOBAL-08, TEST-05 and PROFILE-01 among them, on the wording he
 read at `3f2012a`. Its outcome is not recorded yet. Neither item has
@@ -3389,7 +3392,7 @@ merged, and either may merge first.
 
 Its GLOBAL-08 and TEST-05 changes, and the entry it adds to tier 1's seam
 list, are word for word what this section was first written against at
-`0c29fc3`; they were compared again at `4d8544d`. Its PROFILE-01 change
+`0c29fc3`; they were compared again at `a6c8f0b`. Its PROFILE-01 change
 has moved since this section read it at `bb4d7c8`. It has withdrawn the
 words it added to the tier-1 Specification row of Checks, so it changes
 four rows of the profile where it changed five, and one row is changed
@@ -3410,7 +3413,7 @@ for that rule, which agrees with the rows below.
 | PROFILE-01, the rest | Nothing | Nothing | The rule's header and paragraphs, every other entry, the other rows of Checks and "Declared as not blocking" |
 
 A third item amends PROFILE-01. `loop-parallel`, a process item whose
-design is in review and not approved (read at `55428cd`), adds an Areas
+design is in review and not approved (read at `e692fad`), adds an Areas
 row to the profile's table and changes nothing else in the rule. Its
 draft at `486ac8f` also changed the header's check line, the paragraph on
 the agent part and the Process row of Checks; it no longer does. The
@@ -3839,13 +3842,13 @@ What changed (`8b5fa1b` to the commit that adds this paragraph):
   `replace` with a `ci` check, and a release built with
   `go install <command>@<tag>`. a19's options A and B carry those costs,
   and task 1 proves them with a real dependency.
-- *`driver-contract` had moved,* to `4d8544d`: Jeff approved its eleven
+- *`driver-contract` had moved,* to `a6c8f0b`: Jeff approved its eleven
   rule changes by name that evening. It withdrew its words in the tier-1
   Specification row of Checks, so the joined Checks row this design gave
   is removed, and one profile row is shared, the Specifications entry.
   Its own joined Specifications row quotes this design's sentences as
   they were before a8; that is pointed out. `loop-parallel`'s PROFILE-01
-  change is read at `55428cd`.
+  change is read at `e692fad`.
 - *The umbrella.* `driver-contract` also amends line 405, the row U2
   rewords, and adds a dated paragraph where U3 does. U2 is given in both
   forms, and the second to merge keeps both.
