@@ -46,6 +46,7 @@ make build
 
 # Absolute: the runtime cases below run warden from other directories.
 WARDEN="$(cd "$(dirname "$WARDEN")" && pwd)/$(basename "$WARDEN")"
+REPO="$PWD"
 
 # ─── Test 0: an unsupported container runtime is refused, not run ───────────
 
@@ -275,9 +276,16 @@ green "  Output: $OUTPUT_DIR"
 # ─── Test 3: npm (different ecosystem) ─────────────────────────────────────
 
 bold ""
-bold "━━━ Test 3: npm install (Node ecosystem) ━━━"
+bold "━━━ Test 3: npm install (Node ecosystem), the runtime named by a project's warden.toml ━━━"
 
-BUILD_OUT=$($WARDEN build -o /tmp/warden-integ-npm examples/Dockerfile.npm 2>&1) || true  # a failed build is reported below
+# A supported runtime named by a project's file is still built with: this
+# build runs from a directory whose warden.toml names the runtime that
+# detection finds on this host.
+NAMED_RUNTIME=$("$WARDEN" doctor 2>/dev/null | sed -n 's/^container runtime: //p') || true
+NAMED_PROJECT=$(mktemp -d)
+printf '[runtime]\ncli = "%s"\n' "$NAMED_RUNTIME" > "$NAMED_PROJECT/warden.toml"
+BUILD_OUT=$(cd "$NAMED_PROJECT" && "$WARDEN" build -o /tmp/warden-integ-npm "$REPO/examples/Dockerfile.npm" 2>&1) || true  # a failed build is reported below
+rm -rf "$NAMED_PROJECT"
 OUTPUT_DIR=$(echo "$BUILD_OUT" | extract_output_dir)
 if [ -z "$OUTPUT_DIR" ] || [ ! -d "$OUTPUT_DIR" ]; then
     red "FATAL: npm build failed"
@@ -292,6 +300,15 @@ echo "$INSPECT" > "$INSPECT_FILE"
 bold "  Ledger integrity:"
 assert_grep "All signatures valid" "All .* signatures valid" "$INSPECT_FILE"
 assert_grep "All channels closed" "All channels closed" "$INSPECT_FILE"
+
+bold "  The runtime the project's file named:"
+if [ -n "$NAMED_RUNTIME" ]; then
+    green "  ✓ built with cli = \"$NAMED_RUNTIME\" in the project's warden.toml"
+    PASS=$((PASS + 1))
+else
+    red "  ✗ warden doctor reported no container runtime to name in warden.toml"
+    FAIL=$((FAIL + 1))
+fi
 
 bold "  Expected sources:"
 assert_grep "npm registry" "registry.npmjs.org" "$INSPECT_FILE"
