@@ -70,7 +70,6 @@ rules:
   UX-02: {follow-up: "TTY detection and a structured mode per command"}
   UX-03: {check: [surface-removed]}
   UX-07: {follow-up: "a test, not a static check: defaults with no config"}
-  UX-08: {follow-up: "a test, not a static check: validation at startup"}
   UX-09: {follow-up: "a test, not a static check: exit-code tables"}
 
 # FLOW-01: a changed path that matches none of these is code, and code needs a

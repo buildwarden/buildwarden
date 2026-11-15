@@ -44,6 +44,123 @@ extract_output_dir() {
 bold "Building warden..."
 make build
 
+# Absolute: the runtime cases below run warden from other directories.
+WARDEN="$(cd "$(dirname "$WARDEN")" && pwd)/$(basename "$WARDEN")"
+REPO="$PWD"
+
+# ─── Test 0: an unsupported container runtime is refused, not run ───────────
+
+bold ""
+bold "━━━ Test 0: [runtime] cli, WARDEN_CTR_CLI and --runtime name finch, docker or podman ━━━"
+
+# A project that ships a program and names it as the container runtime. The
+# program leaves a marker when it is run. A home of its own keeps the caller's
+# config file and cache out of these cases.
+RT_PROJECT=$(mktemp -d)
+RT_HOME=$(mktemp -d)
+RT_MARKER="$RT_HOME/ran"
+printf 'FROM alpine\n' > "$RT_PROJECT/Dockerfile"
+printf '#!/bin/sh\necho ran >> "%s"\n' "$RT_MARKER" > "$RT_PROJECT/rt"
+chmod +x "$RT_PROJECT/rt"
+
+# rt_warden [VAR=value ...] <warden arguments>: runs warden in the project;
+# its output is in RT_OUT and its exit code in RT_RC.
+rt_warden() {
+    local env=()
+    while [ $# -gt 0 ] && [[ "$1" == *=* ]]; do
+        env+=("$1")
+        shift
+    done
+    RT_RC=0
+    RT_OUT=$(cd "$RT_PROJECT" && env -u WARDEN_CTR_CLI -u WARDEN_DRIVER \
+        HOME="$RT_HOME" USERPROFILE="$RT_HOME" ${env[@]+"${env[@]}"} \
+        "$WARDEN" "$@" 2>&1) || RT_RC=$?
+}
+
+rt_result() {
+    local desc="$1" ok="$2"
+    if [ "$ok" = yes ]; then
+        green "  ✓ $desc"
+        PASS=$((PASS + 1))
+    else
+        red "  ✗ $desc (exit $RT_RC)"
+        echo "$RT_OUT" | tail -5
+        FAIL=$((FAIL + 1))
+    fi
+    rm -rf "$RT_MARKER" "$RT_PROJECT/warden-output"
+}
+
+# The command exits 1 with a fix, the shipped program was not run, and no
+# output directory was made.
+assert_runtime_refused() {
+    local desc="$1" ok=no
+    if [ -e "$RT_MARKER" ]; then
+        desc="$desc: the program was run"
+    fi
+    if [ "$RT_RC" -eq 1 ] && grep -q 'To fix:' <<<"$RT_OUT" &&
+        [ ! -e "$RT_MARKER" ] && [ ! -e "$RT_PROJECT/warden-output" ]; then
+        ok=yes
+    fi
+    rt_result "$desc" "$ok"
+}
+
+# The command exits 0, the file's unsupported value notwithstanding, and
+# its output matches the pattern when one is given.
+assert_runtime_unchecked() {
+    local desc="$1" pattern="${2:-}" ok=no
+    if [ "$RT_RC" -eq 0 ] && grep -qE "$pattern" <<<"$RT_OUT"; then
+        ok=yes
+    fi
+    rt_result "$desc" "$ok"
+}
+
+bold "  A program the project ships, named by its warden.toml:"
+printf '[runtime]\ncli = "./rt"\n' > "$RT_PROJECT/warden.toml"
+for cmd in build clean doctor; do
+    rt_warden "$cmd"
+    assert_runtime_refused "warden $cmd refuses cli = \"./rt\" and does not run it"
+done
+rt_warden clean --driver vz
+assert_runtime_refused "warden clean --driver vz refuses it and does not run it"
+
+printf '[Runtime]\nCLI = "./rt"\n' > "$RT_PROJECT/warden.toml"
+rt_warden clean
+assert_runtime_refused "warden clean refuses [Runtime] CLI = \"./rt\" and does not run it"
+
+printf '[runtime]\ncli = "./rt"\ndriver = "qemu"\n' > "$RT_PROJECT/warden.toml"
+rt_warden clean
+assert_runtime_refused "warden clean refuses it beside driver = \"qemu\" and does not run it"
+
+bold "  A program named by the flag or the variable:"
+rm -f "$RT_PROJECT/warden.toml"
+rt_warden doctor --runtime "$RT_PROJECT/rt"
+assert_runtime_refused "warden doctor refuses the program's path in --runtime"
+rt_warden WARDEN_CTR_CLI="$RT_PROJECT/rt" doctor
+assert_runtime_refused "warden doctor refuses the program's path in WARDEN_CTR_CLI"
+
+bold "  The value in effect is the one checked:"
+printf '[runtime]\ncli = "./rt"\n' > "$RT_PROJECT/warden.toml"
+rt_warden doctor --runtime docker
+assert_runtime_unchecked "--runtime docker replaces the file's value" \
+    '^container runtime: docker$'
+rt_warden WARDEN_CTR_CLI=docker doctor
+assert_runtime_unchecked "WARDEN_CTR_CLI=docker replaces the file's value" \
+    '^container runtime: docker$'
+
+bold "  A run that does not use the container runtime does not check it:"
+rt_warden setup
+assert_runtime_unchecked "warden setup ignores the file's value"
+# On a Windows host this would clean the host's real Hyper-V leftovers.
+case "$(uname -s)" in
+MINGW* | MSYS* | CYGWIN*) ;;
+*)
+    rt_warden clean --driver hyperv
+    assert_runtime_unchecked "warden clean --driver hyperv ignores the file's value"
+    ;;
+esac
+
+rm -rf "$RT_PROJECT" "$RT_HOME"
+
 # ─── Test 1: Self-build ─────────────────────────────────────────────────────
 
 bold ""
@@ -159,9 +276,19 @@ green "  Output: $OUTPUT_DIR"
 # ─── Test 3: npm (different ecosystem) ─────────────────────────────────────
 
 bold ""
-bold "━━━ Test 3: npm install (Node ecosystem) ━━━"
+bold "━━━ Test 3: npm install (Node ecosystem), the runtime named by a project's warden.toml ━━━"
 
-BUILD_OUT=$($WARDEN build -o /tmp/warden-integ-npm examples/Dockerfile.npm 2>&1) || true  # a failed build is reported below
+# A supported runtime named by a project's file is still built with: this
+# build runs from a directory whose warden.toml names the runtime that
+# detection finds on this host. The caller's WARDEN_CTR_CLI and WARDEN_DRIVER
+# outrank the file, so both commands run without them: with either set, the
+# build would pass without reading the file's value.
+NAMED_RUNTIME=$(env -u WARDEN_CTR_CLI -u WARDEN_DRIVER "$WARDEN" doctor 2>/dev/null |
+    sed -n 's/^container runtime: //p') || true
+NAMED_PROJECT=$(mktemp -d)
+printf '[runtime]\ncli = "%s"\n' "$NAMED_RUNTIME" > "$NAMED_PROJECT/warden.toml"
+BUILD_OUT=$(cd "$NAMED_PROJECT" && env -u WARDEN_CTR_CLI -u WARDEN_DRIVER "$WARDEN" build -o /tmp/warden-integ-npm "$REPO/examples/Dockerfile.npm" 2>&1) || true  # a failed build is reported below
+rm -rf "$NAMED_PROJECT"
 OUTPUT_DIR=$(echo "$BUILD_OUT" | extract_output_dir)
 if [ -z "$OUTPUT_DIR" ] || [ ! -d "$OUTPUT_DIR" ]; then
     red "FATAL: npm build failed"
@@ -176,6 +303,15 @@ echo "$INSPECT" > "$INSPECT_FILE"
 bold "  Ledger integrity:"
 assert_grep "All signatures valid" "All .* signatures valid" "$INSPECT_FILE"
 assert_grep "All channels closed" "All channels closed" "$INSPECT_FILE"
+
+bold "  The runtime the project's file named:"
+if [ -n "$NAMED_RUNTIME" ]; then
+    green "  ✓ built with cli = \"$NAMED_RUNTIME\" in the project's warden.toml"
+    PASS=$((PASS + 1))
+else
+    red "  ✗ warden doctor reported no container runtime to name in warden.toml"
+    FAIL=$((FAIL + 1))
+fi
 
 bold "  Expected sources:"
 assert_grep "npm registry" "registry.npmjs.org" "$INSPECT_FILE"

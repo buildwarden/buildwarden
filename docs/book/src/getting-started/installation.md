@@ -12,6 +12,11 @@ A container runtime is required. Any of the following will work:
 - [Docker](https://docs.docker.com/get-docker/)
 - [Podman](https://podman.io/)
 
+`warden` runs the runtime by its name (`finch`, `docker` or `podman`), which
+it looks up on `PATH`. If yours is installed outside `PATH`, as it often is
+for a CI job or a service, add its directory to `PATH`: the runtime setting
+takes one of the three names, not a path.
+
 ### QEMU driver
 
 Requires `qemu-system-{arch}` and `qemu-img`:
@@ -224,6 +229,32 @@ the single `warden-dev` build switch of earlier setups. Until you do, durable
 service builds make their own switch and need only the relay disk. The qemu
 and Firecracker relay initramfs need no rebuild.
 
+<!-- TRANSITIONAL(runtime-former-values): this section is removed with the
+     "A path, or another runtime" subsection of guide/configuration.md, in
+     the change that prepares 1.0. -->
+## Upgrading: the Container Runtime Setting
+
+Earlier releases ran whatever program `--runtime`, `WARDEN_CTR_CLI` or
+`[runtime] cli` named. The setting now takes `finch`, `docker` or `podman`
+and nothing else, wherever it is set. If yours names one of the three or is
+unset, nothing changes. Any other value is refused by the first command that
+uses the container runtime (`build`, `shell` and `doctor` with the container
+driver; `clean` with the container driver, `qemu` or `vz`), before anything
+is run, and the error says where the value is set and what to change.
+
+Two kinds of value have a replacement:
+
+- A path to a supported runtime (`/opt/homebrew/bin/docker`), or its name in
+  another form (`Docker`, `docker.exe`): write the name, `docker`, and add
+  the runtime's directory to `PATH` if it is not there.
+- A wrapper script that only set variables for a supported runtime
+  (`DOCKER_HOST`, `DOCKER_CONTEXT`, `CONTAINER_HOST`): name the runtime and
+  set those variables in the environment `warden` runs in.
+
+`nerdctl`, and a wrapper that added `sudo` or arguments, have none.
+[A path, or another runtime](../guide/configuration.md#a-path-or-another-runtime)
+lists every value that stopped working and the message each one gets.
+
 ## Verify Installation
 
 ```sh
@@ -231,4 +262,4 @@ warden --version
 warden --help
 ```
 
-BuildWarden auto-detects your container runtime for the container driver (trying finch, docker, podman in order). Override with `--runtime` or the `WARDEN_CTR_CLI` environment variable.
+BuildWarden auto-detects your container runtime for the container driver (trying finch, docker, podman in order). Override with `--runtime` or the `WARDEN_CTR_CLI` environment variable; see [The container runtime](../guide/configuration.md#the-container-runtime).
