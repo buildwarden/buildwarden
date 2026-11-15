@@ -3,7 +3,8 @@ feature: seam-specs
 status: draft
 drivers: []              # no driver tree and no shared package changes (see Cross-driver impact)
 seams: [relay-claim, collector, relay-guest-api, executor-initialize, bootstrap-config]
-                         # each gets its contract document; none changes behaviour here
+                         # each gets its contract document, the collector seam two (a10);
+                         # none changes behaviour here
 surfaces: []
 security_boundary: none  # no code on a boundary changes; see the Security note
 alters_relationships: true   # the seams' definition and their contract tests move to another
@@ -27,8 +28,9 @@ rule_changes:
   - {rule: EXEC-04, change: amend, paths: [docs/development/in-vm-executor.md]}
   - {rule: PROFILE-01, change: amend, paths: [docs/development/loop-profile.md]}
 concepts: [seams, specs-repo, conformance, conformance-harness, relay-claim, claim-protocol,
-           collector, collector-protocol, relay-guest-api, executor-initialize,
-           bootstrap-config, specs-pin, seam-contract, program]
+           collector, collector-protocol, collector-outputs, collector-inputs,
+           relay-guest-api, executor-initialize, bootstrap-config, specs-pin,
+           seam-contract, program]
 related: [componentization.md, specs-migration.md, relay05-specs-wording.md,
           tier1-static-checks.md, build-link-subnet.md, hyperv-relay-per-build-channel.md,
           unified-bootstrap.md, relay-leaf-crl.md, ledger-environment-types.md,
@@ -329,8 +331,9 @@ Nothing in any of the five is approved.
      relay-claim/v1.md               seam 1
      relay-claim/v1.config.schema.json     the claim's request body
      relay-claim/v1.identity.schema.json   the claim's reply
-     collector/v1.md                 seam 2, in two parts (a10)
-     collector/v1.complete.schema.json     the completion signal
+     collector-outputs/v1.md         seam 2, the outputs a collector stores (a10)
+     collector-inputs/v1.md          seam 2, the inputs and signals it serves (a10)
+     collector-inputs/v1.complete.schema.json   the completion signal
      relay-guest-api/v1.md           seam 3
      executor-initialize/v1.md       seam 5
      bootstrap-config/v1.md          seam 6
@@ -352,13 +355,18 @@ Nothing in any of the five is approved.
    `metadata-<name>/` and `environment-<type>/` are reserved for seam 4,
    which M6 moves in (a1), and `driver-contract/` for seam 9 (**What the
    specs repository leaves room for**).
+   Seam 2 has two directories because it is two specifications
+   (a10): a directory is a specification, not a seam.
    *Rejected:* one directory per JSON body (`relay-claim-config/`,
    `relay-claim-identity/`), which scatters one protocol over several
-   directories; an OpenAPI tree, see Decision 3.
+   directories; an OpenAPI tree, see Decision 3. *Rejected:* one
+   `collector/v1.md` in two parts, each with its own requirement prefix
+   and suite, which this design proposed until the review (a10): Jeff
+   chose two documents.
 
 3. **Document format: Markdown prose with numbered requirements, and JSON
    Schema for JSON bodies.** Each normative statement uses the RFC 2119 words
-   and has a stable identifier (`CLAIM-7`, `COLL-A-3`, `COLL-B-2`,
+   and has a stable identifier (`CLAIM-7`, `COLLOUT-3`, `COLLIN-2`,
    `GUEST-12`, `INIT-4`, `BOOTCFG-2`). Every document has the same
    sections: scope and roles;
    transport; messages and fields; ordering; errors; limits; versioning;
@@ -537,9 +545,10 @@ Nothing in any of the five is approved.
     tagged before tier 2 had read it, and a finding would cost a second
     release.
 
-13. **The collector specification is normative for the wire; the disk
-    layout is the disk collector's** (a16). Part A requires what a collector
-    accepts, what it replies and in what order. The layout `warden inspect`
+13. **The collector's outputs specification is normative for the wire; the
+    disk layout is the disk collector's** (a16). `collector-outputs`
+    requires what a collector accepts, what it replies and in what order.
+    The layout `warden inspect`
     reads is specified as the disk collector's, in a section other collectors
     need not meet. *Rejected:* an abstract object model for any collector's
     storage. Nothing on `main` defines one, and the umbrella's review put the
@@ -691,14 +700,22 @@ release; its recommended answer is still A.
   on a requirement with no case and no stated reason; (B) OpenAPI for the
   HTTP seams; (C) prose without requirement identifiers. *Proceeding with A;
   confirm.*
-- **a10. The collector specification is one document in two parts**, A
-  (outputs a collector stores) and B (inputs and signals it serves), each
-  with its own requirement prefix and its own suite, so an implementation can
-  claim one part. Options: (A) one document; (B) two documents
-  (`collector-outputs/`, `collector-inputs/`). *Proceeding with A; confirm.*
-  The parts share transport, authentication and path rules, which one
-  document states once. Nothing on the wire changes: the claim still names
-  one `collector_url`.
+- **a10. How the collector specification's two parts are laid out**
+  (umbrella a1): the outputs a collector stores, and the inputs and
+  signals it serves. Options: (A) one document, `collector/v1.md`, with
+  Part A and Part B, each with its own requirement prefix and its own
+  suite; (B) two documents (`collector-outputs/`, `collector-inputs/`).
+  **Answered 2026-11-15: (B), two documents.** The design proposed A; it
+  is revised (**Seam 2**). Each is a specification of its own, with its
+  directory, its requirement prefix (`COLLOUT-<n>`, `COLLIN-<n>`), its
+  suite and, under a8, its releases, so an implementation can claim one.
+  The two share transport, authentication, the path rule and the session.
+  Those are written in full in both documents and kept the same by a
+  check, and are not put in a third document, because each is released on
+  its own (**Seam 2** gives the reason and the cost). Nothing on the wire
+  changes: the claim still names one `collector_url`. Seam 2 stays one
+  seam, `collector`, in the umbrella's numbering, in GLOBAL-08 and in
+  tier 1's seam list.
 - **a11. The executor's own suite is deferred to S2's item.** Options: (A)
   defer: S2 moves truststore generation out of `initialize`, so a suite
   written now would pin the behaviour S2 removes; (B) build it here, for
@@ -843,8 +860,10 @@ release; its recommended answer is still A.
     to FLOW-04's sentence on when a step is offered ("unless it is
     `human`, its feature has reached the step's phase"), for the same
     item.
-- **a16. What Part A of the collector specification is normative for**
-  (Decision 13). Options: (A) the wire only: the requests a collector
+- **a16. What the collector's outputs specification is normative for**
+  (Decision 13; "Part A of the collector specification" when it was
+  asked, before a10's answer). Options: (A) the wire only: the requests a
+  collector
   accepts, its replies and their order. The disk layout (`artifacts/<name>`,
   `payloads/<hash>`, `captures/<name>`, `ledger`, `environment.json`,
   `build-output.log`) is specified as the disk collector's, and a way to
@@ -1056,28 +1075,63 @@ between the two, so the specification holds under either.
   250 ms inside a 90 s limit; the numbers are the kit's), treats any reply
   other than 101 or 200 as final, and refuses an identity with no `ca_cert`.
 
-#### Seam 2, `collector/v1.md` (`collector/`, `relay/collector_client.go`)
+#### Seam 2, `collector-outputs/v1.md` and `collector-inputs/v1.md` (`collector/`, `relay/collector_client.go`)
 
-Roles: the *collector* serves; the *relay* is the only client of this
-protocol. Who starts a collector, and where it runs, is outside it: on
+Seam 2 is one seam, the collector protocol, written as two specifications
+(a10, Jeff's answer of 2026-11-15): the outputs a collector stores, and
+the inputs and signals it serves. Each has its own directory, its own
+requirement prefix (`COLLOUT-<n>`, `COLLIN-<n>`), its own suite and its
+own releases (a8), so a collector may implement one and claim it. Nothing
+on the wire changes: the claim still names one `collector_url`, and a
+relay sends the requests of both to it.
+
+Roles, in both: the *collector* serves; the *relay* is the only client of
+this protocol. Who starts a collector, and where it runs, is outside it: on
 `main` the session starts one in the claimant's process for each build, and
 under the redrafted driver contract `warden` does, one per build with a
 fresh token (its a12, answered as that design recommended).
 
-Common to both parts: HTTP, over the tunnel or to a `collector_url`. Where
-a session has a token, every `/v1/` endpoint except `/v1/status` requires
-it in the `Authorization` header, and the collector answers 401
-`unauthorized` to a request without a token it knows; `/healthz` and
-`/v1/status` never require one. The relay sends
-`Authorization: Bearer <token>`; the collector also takes the token with no
-scheme (D8). Names: an artifact name is a relative
-slash path of at most 255 bytes whose segments use `[A-Za-z0-9._-]` and start
-and end with an alphanumeric; a context path is the same except that a
-segment may start with `.`, `-` or `_`; a capture name is made safe by
-replacing every other byte with `_`. A successful write is 200 with an empty
-body; a body over a limit is 413.
+**Stated in both documents: transport, authentication, paths and the
+session.**
 
-**Part A, outputs a collector stores**
+- *Transport.* HTTP, over the tunnel or to a `collector_url`.
+- *Authentication.* Where a session has a token, every `/v1/` endpoint
+  except `/v1/status` requires it in the `Authorization` header, and the
+  collector answers 401 `unauthorized` to a request without a token it
+  knows; `/healthz` and `/v1/status` never require one. The relay sends
+  `Authorization: Bearer <token>`; the collector also takes the token with
+  no scheme (D8).
+- *Paths.* A name carried in a path is a relative slash path of at most
+  255 bytes whose segments use `[A-Za-z0-9._-]`. Each document adds the
+  rule for its own names.
+- *The session.* The protocol's unit is the build *session*: one build's
+  requests, identified by the collector token they carry (a collector
+  with no token has one session). Every rule of both documents holds per
+  session. Completion is terminal for the session: after
+  `POST /v1/complete`, which `collector-inputs` specifies, the collector
+  owes the relay nothing more and may close the connection at once. How
+  many sessions an instance serves is the collector's own, declared in
+  its target file: the reference disk collector (`cmd/collector`) serves
+  exactly one and exits, with status 0 for `exit_code` 0 and 1 otherwise.
+  A collector that serves several sessions, and any client-facing side
+  (opening a session, supplying inputs, watching console and status,
+  fetching outputs), is out of scope for this item and not specified here
+  (the umbrella's a2).
+
+These four are stated once here and written in full in each document,
+under that document's own identifiers. They are not put in a third
+document that both cite. Each specification is released on its own (a8),
+so a shared part would be one more released thing with a version of its
+own: a collector that implements only the outputs would have two versions
+to state, and a requirement of the shared part would have its cases in
+two other specifications' suites. Repeated, each document is whole at
+each of its releases. The cost of repeating is drift, and a check in the
+specs repository's `ci` removes it: the two sections must be the same
+text but for the identifiers' prefix. A change to them therefore changes
+both documents in one pull request and is released as a new version of
+each.
+
+**`collector-outputs/v1.md`, the outputs a collector stores**
 
 | Endpoint | Stored as | Notes |
 |---|---|---|
@@ -1087,14 +1141,26 @@ body; a body over a limit is 413.
 | `PUT /v1/environment` | `environment.json` | The environment record's signed payload, at most 1 MiB. `PUT` only |
 | `POST /v1/output` | `build-output.log`, appended | Chunks in arrival order; boundaries carry no meaning |
 
-Part A is normative for the wire: what a collector accepts, what it replies
-and in what order (a16). The "Stored as" column is the disk collector's
-layout, the one `warden inspect` reads. The specification gives it a section
-of its own, which a collector that is not a directory need not meet. The
-disk collector's directory may also hold files that are not outputs: the
-kit's session writes the relay's CA there as `ca.cert.pem`.
+Its own names: an artifact name's segments start and end with an
+alphanumeric; a capture name is made safe by replacing every byte outside
+`[A-Za-z0-9._-]` with `_`. A successful write is 200 with an empty body; a
+body over a limit is 413.
 
-**Part B, inputs and signals a collector serves**
+`collector-outputs` is normative for the wire: what a collector accepts,
+what it replies and in what order (a16). The "Stored as" column is the
+disk collector's layout, the one `warden inspect` reads. The specification
+gives it a section of its own, which a collector that is not a directory
+need not meet. The disk collector's directory may also hold files that are
+not outputs: the kit's session writes the relay's CA there as
+`ca.cert.pem`.
+
+The relay's side, as this document requires it: `PUT /v1/ledger` is opened
+before any other output; `PUT /v1/environment` precedes the environment
+record; and the ledger and every other output are delivered before the
+session's completion, the relay ending the ledger request and waiting for
+its reply first.
+
+**`collector-inputs/v1.md`, the inputs and signals a collector serves**
 
 | Endpoint | Reply |
 |---|---|
@@ -1107,32 +1173,26 @@ kit's session writes the relay's CA there as `ca.cert.pem`.
 | `GET /v1/status` | The first completion plus `received_at`, or `{"state":"running"}`. A relay never calls it; it can be reached only where a collector listens, which the disk collector does not. It takes no token (D1), so it is specified only for a collector with one session; what it answers on a collector that serves several is left to that collector's client-facing side |
 | `GET /healthz` | 200 `ok`. As `/v1/status`: not used by a relay |
 
-**A collector's lifetime.** The protocol's unit is the build *session*: one
-build's requests, identified by the collector token they carry (a collector
-with no token has one session). The rules here hold per session. A collector
-may give up on a session whose `ready` does not arrive (the kit's session
-waits 90 s from the start of the claim) and, once a first heartbeat has
-arrived, on one whose heartbeats stop (the kit: 30 s). Both limits are the
-collector's own. Completion is terminal for the session: after
-`POST /v1/complete` the collector owes the relay nothing more and may close
-the connection at once. A relay therefore delivers the ledger and every
-other output before it sends the completion, and does not depend on the
-reply. How many sessions an instance serves is the collector's own, declared
-in its target file: the reference disk collector (`cmd/collector`) serves
-exactly one and exits, with status 0 for `exit_code` 0 and 1 otherwise. A
-collector that serves several sessions, and any client-facing side (opening
-a session, supplying inputs, watching console and status, fetching outputs),
-is out of scope for this item and not specified here (the umbrella's a2).
+Its own names: a context path's segments end with an alphanumeric and may
+start with `.`, `-` or `_`.
 
-**The relay's side**, which the relay suite checks: `PUT /v1/ledger` is
-opened before any other output; at completion the relay ends that request
-and waits for its reply before it sends `POST /v1/complete`;
-`PUT /v1/environment` precedes the environment record; `ready` is sent
-before the claim is answered (seam 1, Ordering); a heartbeat is forwarded
-every 2 s while the build showed activity (its own `/heartbeat`, or any
-proxied request) in the last 5 s; an input that is not 200 becomes a 404 to
-the build; signals accept 200 or 204, a failed signal is logged, and none
-blocks the relay.
+A session's signals and its lifetime: a collector may give up on a session
+whose `ready` does not arrive (the kit's session waits 90 s from the start
+of the claim) and, once a first heartbeat has arrived, on one whose
+heartbeats stop (the kit: 30 s). Both limits are the collector's own.
+
+The relay's side, as this document requires it: `ready` is sent before the
+claim is answered (seam 1, Ordering); a heartbeat is forwarded every 2 s
+while the build showed activity (its own `/heartbeat`, or any proxied
+request) in the last 5 s; an input that is not 200 becomes a 404 to the
+build; signals accept 200 or 204, a failed signal is logged, and none
+blocks the relay; and `POST /v1/complete` is sent only after the ledger
+request has been answered, the relay not depending on the completion's
+reply.
+
+The per-session lifetime is as it was before a10's answer: the session and
+its end are in the part both documents state, and the two limits are with
+the signals they concern.
 
 #### Seam 3, `relay-guest-api/v1.md` (`relay/relay.go`, `controlplane.go`, `dns.go`, `heartbeat.go`, `proxy.go`, `cmd/relay/dhcp.go`)
 
@@ -1296,10 +1356,15 @@ and lists the point under "Known divergences"; none is changed here (a12).
 | D13 | 5 | A failure before the script runs (network, relay wait, CA, bootstrap config, baseline, workdir, script fetch) exits 1 without telling the relay, so the collector receives no completion | EXEC-02: failures "produce a structured exit reported back through the relay" |
 | D14 | 5 | `initialize` ignores a flag it does not know | GLOBAL-10 |
 | D15 | 3 | DNS over TCP is served in vm and container mode and not in host mode, where a TCP connection to port 53 reaches the HTTP proxy | The other two modes |
-| D16 | 2 | The collector records the completion before it replies, and `cmd/collector` closes the tunnel as soon as it has it. The relay can see a failed `POST /v1/complete` for a build that completed; it logs it | Part B's 200 reply |
+| D16 | 2 | The collector records the completion before it replies, and `cmd/collector` closes the tunnel as soon as it has it. The relay can see a failed `POST /v1/complete` for a build that completed; it logs it | `collector-inputs`' 200 reply |
 | D17 | 1 | In host mode, the refusal for an absent `upstream_dns` with no usable nameserver in the relay's `/etc/resolv.conf` is a 400 that closes the relay's frame socket. The claim is released, but a second claim builds its netstack on a closed descriptor | "A refused claim leaves the relay claimable" (`build-link-subnet`); vm and container mode keep to it |
 | D18 | 3 | After completion, a request the relay would record sends on the ledger's closed channel in a connection goroutine that has no recover, which ends the relay process | Nothing written: completion had no stated after-state |
 | D19 | 1, 3 | In vm and container mode the claim's 200 and `ready` are sent once the listeners' goroutines are started, not once the ports are bound. A port that fails to bind ends the relay after the 200, and a failed bind of UDP port 53 is not reported at all | "The relay is up" (`POST /v1/ready`); host mode has its listeners first |
+
+Seam 2's divergences are listed in the document they concern: D2, D3 and
+D4 in `collector-outputs`, D1 and D16 in `collector-inputs`, and D8 in
+both, with the authentication they state alike. D3's four endpoints are
+all outputs.
 
 D17 and D18 are read from the source and have not been run. Implement
 reproduces each once, by hand against a relay built from `main`, before
@@ -1364,8 +1429,8 @@ There is no skip for a case the target should pass, and no retry (TEST-04).
   a target that is also a claimant, as `cmd/collector` is, it accepts the
   tunnel and the claim and checks them as seam 1's claimant role (the
   tunnel before the claim, the claim's body against its schema, the
-  token). It then drives the endpoints of Part A or Part B, over the tunnel
-  or at the base URL of a `listens` target, with their error cases.
+  token). It then drives the endpoints of its specification, over the
+  tunnel or at the base URL of a `listens` target, with their error cases.
   `collector-outputs` also checks what a target with a read-back directory
   stored, against the disk layout.
 
@@ -1378,9 +1443,9 @@ machine-checked (Decision 3):
 |---|---|---|
 | 1 `relay-claim` | relay | `relay` |
 | 1 | claimant | `collector-outputs`, `collector-inputs` (the tunnel and claim a `claims` target sends). On `main` `cmd/collector` and every driver claim through the same `driver.Session`, so this checks the claimant of every build. The redraft keeps that code as `warden`'s session in K1, so the same holds there; it lists the session's move into `warden`'s own package among what K2 settles, and what checks `warden`'s claimant after that is K2's to say |
-| 2 `collector`, Part A | collector | `collector-outputs` |
-| 2, Part B | collector | `collector-inputs` |
-| 2 | relay | `relay` |
+| 2 `collector`, as `collector-outputs` specifies it | collector | `collector-outputs` |
+| 2, as `collector-inputs` specifies it | collector | `collector-inputs` |
+| 2, both specifications | relay | `relay` |
 | 3 `relay-guest-api` | relay | `relay` |
 | 3 | build environment | No suite yet (a11) |
 | 5 `executor-initialize` | executor | No suite yet (a11); the Go tests in `cmd/warden-io/` |
@@ -1707,6 +1772,12 @@ seams:
 
 Files are named one by one because the check's globs cannot leave tests out.
 
+Seam 2 is one entry, `collector`, although it has two specifications
+(a10). The code is not divided as the documents are: `collector.go` holds
+the handlers of both, `paths.go` the names of both, and
+`relay/collector_client.go` the relay's side of both. An entry for each
+specification would list the same files twice.
+
 **What the check holds.** `seam-contract` reports a change to a listed
 file when the diff does not also change that seam's contract path
 (`tools/tier1/coupling/checks.go`, `SeamContract`). For these five entries
@@ -1768,8 +1839,9 @@ none.
 - **Book to specifications.** A new page,
   `docs/book/src/concepts/seams.md` ("Component seams", listed in
   `SUMMARY.md` at the head of the Specifications part), has one row per
-  seam: what it is between, its specification, the package that implements
-  it here, and the suite that checks it. It is the only file in this
+  seam: what it is between, its specification (two for seam 2, a10), the
+  package that implements it here, and the suite that checks it. It is the
+  only file in this
   repository that links into the specs repository, and all its links name
   one ref: the pinned tag, or, while the pin is a pseudo-version, the commit
   that pseudo-version names. `make pin-specs` rewrites that ref together
@@ -2040,7 +2112,7 @@ new and states what `main` does.
 | Seam | Specification document, in the specs repository | Requirements | Checked by |
 |---|---|---|---|
 | 1 `relay-claim` | `relay-claim/v1.md`, with `v1.config.schema.json` and `v1.identity.schema.json` | `CLAIM-<n>`, all new | The `relay` suite (relay role); the collector suites (claimant role) |
-| 2 `collector` | `collector/v1.md`, Parts A and B, with `v1.complete.schema.json` | `COLL-A-<n>` for Part A and `COLL-B-<n>` for Part B (a10), all new | `collector-outputs`, `collector-inputs`; the `relay` suite (the relay's side) |
+| 2 `collector` | Two documents (a10): `collector-outputs/v1.md`, and `collector-inputs/v1.md` with `v1.complete.schema.json` | `COLLOUT-<n>` and `COLLIN-<n>`, all new | `collector-outputs`, `collector-inputs`; the `relay` suite (the relay's side) |
 | 3 `relay-guest-api` | `relay-guest-api/v1.md` | `GUEST-<n>`, all new | The `relay` suite (relay role). The build environment's side: no suite yet (a11) |
 | 5 `executor-initialize` | `executor-initialize/v1.md` | `INIT-<n>`, all new | No suite yet (a11); the Go tests in `cmd/warden-io/` |
 | 6 `bootstrap-config` | `bootstrap-config/v1.md`, with `v1.schema.json` | `BOOTCFG-<n>`, all new | The `relay` suite (as carried), `collector-inputs` (as produced). As the executor reads it: no suite yet (a11) |
@@ -2197,8 +2269,8 @@ proposes one paragraph more at the rule's end.
 >   carries it, and the RELAY-02 byte-exact round-trip (sent equals
 >   recorded);
 > - the collector suites against the disk collector (`cmd/collector`): both
->   parts of the collector protocol, and the claimant's side of the claim
->   protocol.
+>   specifications of the collector protocol, its outputs and its inputs
+>   and signals, and the claimant's side of the claim protocol.
 >
 > The contract tests of a seam specified there are added to its suite in
 > the specs repository, not to this repository. Two contracts stay as tests
@@ -2667,8 +2739,9 @@ its branch `feat/seam-specs`; **K** is this repository, on this branch.
 2. **S** `relay-claim/v1.md` with its two schemas (GLOBAL-08, RELAY-08,
    RELAY-04). D17 is reproduced by hand first, against a relay built from
    `main` (**Divergences found**).
-3. **S** `collector/v1.md`, parts A and B, with the completion schema
-   (RELAY-07, umbrella a1).
+3. **S** `collector-outputs/v1.md`, and `collector-inputs/v1.md` with the
+   completion schema; the part both state, written in each, and the check
+   that keeps the two the same (RELAY-07, umbrella a1, a10).
 4. **S** `relay-guest-api/v1.md` (BOOT-04, RELAY-02). D18 is reproduced by
    hand first, in the same way.
 5. **S** `executor-initialize/v1.md` and `bootstrap-config/v1.md` with its
