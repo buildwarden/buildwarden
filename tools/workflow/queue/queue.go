@@ -319,8 +319,9 @@ func (s *State) Listed(all bool) []*Feature {
 func (f *Feature) IsProcess() bool { return f.Kind == "process" }
 
 // Class returns the item's FLOW-05 class: 1 in implementation, 2 a process
-// item, 3 a fix (a feature that follows another item), 4 new functionality.
-// A done item has no class, 0.
+// item, 3 a fix (a feature that follows another item) or an adoption (one
+// that adopts a release, LOOP-07), 4 new functionality. A done item has no
+// class, 0. A tracked item is classed as the feature it is.
 func (f *Feature) Class() int {
 	switch {
 	case f.Status == "done":
@@ -329,7 +330,7 @@ func (f *Feature) Class() int {
 		return 1
 	case f.IsProcess():
 		return 2
-	case f.Follows != "":
+	case f.Follows != "", f.Adopts != nil:
 		return 3
 	}
 	return 4
@@ -337,9 +338,10 @@ func (f *Feature) Class() int {
 
 // inImplementation reports whether the item is in progress past Plan and not
 // waiting for the human's merge: a merge check must not go ahead of process
-// and fix work, and the merge is confirmed before wf next anyway.
+// and fix work, and the merge is confirmed before wf next anyway. A tracked
+// item never is: the loop takes none of its steps.
 func (f *Feature) inImplementation() bool {
-	if f.Status != "in_progress" {
+	if f.Status != "in_progress" || f.Round == "tracked" {
 		return false
 	}
 	if f.IsProcess() {
@@ -350,7 +352,7 @@ func (f *Feature) inImplementation() bool {
 
 // Add creates a queued feature at the given priority, moving the features at
 // or below it down one with a history line each, and returns every feature it
-// changed.
+// changed. An item homed in another repository gets the tracked round.
 func (s *State) Add(f *Feature, now time.Time, by string) ([]*Feature, error) {
 	if _, err := s.Find(f.Feature); err == nil {
 		return nil, fmt.Errorf("feature %q already queued", f.Feature)
@@ -365,8 +367,11 @@ func (s *State) Add(f *Feature, now time.Time, by string) ([]*Feature, error) {
 		}
 	}
 	f.Status, f.Round, f.Phase = "queued", "feature", 0
-	if f.IsProcess() {
+	switch {
+	case f.IsProcess():
 		f.Round, f.Phase = "process", 1
+	case s.Tracked(f):
+		f.Round, f.Phase = "tracked", 1
 	}
 	Seed(f)
 	f.Log(now, by, "queued at priority %d (intake)", f.Priority)
@@ -505,32 +510,65 @@ func (s *State) Validate() []error {
 	errs := s.validateConfig()
 	prio := map[int]string{}
 	for _, f := range s.Features {
-		bad := func(format string, a ...any) {
-			errs = append(errs, fmt.Errorf("%s: %s", f.Feature,
-				fmt.Sprintf(format, a...)))
-		}
 		if other, ok := prio[f.Priority]; ok {
-			bad("priority %d also held by %s", f.Priority, other)
+			errs = append(errs, fmt.Errorf("%s: priority %d also held by %s",
+				f.Feature, f.Priority, other))
 		}
 		prio[f.Priority] = f.Feature
-		s.validateFollows(f, bad)
-		tracked := s.Tracked(f)
-		if len(f.Repos) > 0 && s.Config.Repository == "" {
-			errs = append(errs, fmt.Errorf(
-				"config: repository is not set, and %s names repos", f.Feature))
-			// Which repository is the queue's own is not known, so neither is
-			// whether the item is tracked: its round is checked as written.
-			tracked = f.Round == "tracked"
-		}
-		f.validate(bad, tracked)
-		s.validateDeclared(f, bad)
-		s.validateUrgent(f, bad)
+		errs = append(errs, s.Problems(f)...)
 	}
 	errs = append(errs, s.validateLimits()...)
 	for _, e := range append(s.validateNative(), s.validateAreas()...) {
 		errs = append(errs, errors.New(e))
 	}
 	return errs
+}
+
+// Problems returns Validate's findings about one item's own fields, which wf
+// new refuses to write.
+func (s *State) Problems(f *Feature) []error {
+	var errs []error
+	bad := func(format string, a ...any) {
+		errs = append(errs, fmt.Errorf("%s: %s", f.Feature, fmt.Sprintf(format, a...)))
+	}
+	s.validateFollows(f, bad)
+	tracked := s.Tracked(f)
+	if len(f.Repos) > 0 && s.Config.Repository == "" {
+		errs = append(errs, fmt.Errorf(
+			"config: repository is not set, and %s names repos", f.Feature))
+		// Which repository is the queue's own is not known, so neither is
+		// whether the item is tracked: its round is checked as written.
+		tracked = f.Round == "tracked"
+	}
+	f.validate(bad, tracked)
+	s.validateDeclared(f, bad)
+	s.validateUrgent(f, bad)
+	return errs
+}
+
+// Inherit gives a new item that follows parent the parent's repositories and
+// areas: a fix or finish of an item is in that item's areas to a first
+// approximation, and the human agreed those (FLOW-09). It is for an item
+// filed with no areas of its own; ownRepos says it was given its
+// repositories, which are then kept. It returns the history line, which says
+// what was taken.
+func (f *Feature) Inherit(parent *Feature, ownRepos bool) string {
+	what, none := "repos and areas", parent.Areas == nil
+	if ownRepos {
+		what = "areas"
+	} else {
+		f.Repos = slices.Clone(parent.Repos)
+		none = none && len(parent.Repos) == 0
+	}
+	if parent.Areas != nil {
+		areas := slices.Clone(*parent.Areas)
+		f.Areas = &areas
+	}
+	line := what + " taken from " + parent.Feature
+	if none {
+		line += ": it has none"
+	}
+	return line
 }
 
 // validateFollows checks that follows, when set, names another item, done or

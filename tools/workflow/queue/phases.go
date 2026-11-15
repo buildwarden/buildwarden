@@ -16,11 +16,17 @@ var PhaseNames = []string{"branch-setup", "design", "plan", "implement", "review
 // processPhaseNames are a process item's phases, numbered from 1.
 var processPhaseNames = []string{"", "design", "implement", "merge", "close"}
 
+// trackedPhaseNames are a tracked item's phases, numbered from 1.
+var trackedPhaseNames = []string{"", "work", "merge"}
+
 // PhaseName names the feature's current phase.
 func PhaseName(f *Feature) string {
 	names := PhaseNames
-	if f.Round == "process" {
+	switch f.Round {
+	case "process":
 		names = processPhaseNames
+	case "tracked":
+		names = trackedPhaseNames
 	}
 	if f.Phase < 0 || f.Phase >= len(names) {
 		return "?"
@@ -72,6 +78,14 @@ var templates = map[string][][]template{
 		{{"merge", "cloud", nil, false}},
 		{{"close", "cloud", nil, false}},
 	},
+	// A tracked item is homed in another repository, where wf sees no
+	// branch, design or PR and runs no gate: the human records its work,
+	// until its PR is open, and then its merge (FLOW-03, FLOW-04).
+	"tracked": {
+		nil,
+		{{"work", "human", nil, false}},
+		{{"merge", "human", nil, false}},
+	},
 }
 
 // seeded reports whether the template step belongs in the feature's phase:
@@ -80,11 +94,11 @@ func seeded(f *Feature, t template) bool {
 	return t.name != "design-review" || f.DesignReview != "skip"
 }
 
-// roundLetters prefix step ids: f1-design, f6-open-pr, x3-merge. The
+// roundLetters prefix step ids: f1-design, f6-open-pr, x3-merge, t1-work. The
 // parallel and merge rounds' p and m ids remain only in finished items'
 // history (wf migrate moved the rest).
-var roundLetters = map[string]string{"feature": "f", "process": "x", "parallel": "p",
-	"merge": "m"}
+var roundLetters = map[string]string{"feature": "f", "process": "x", "tracked": "t",
+	"parallel": "p", "merge": "m"}
 
 func letterRound(l string) string {
 	for r, x := range roundLetters {
@@ -96,7 +110,7 @@ func letterRound(l string) string {
 }
 
 var (
-	stepIDRe = regexp.MustCompile(`^([fxpm])([0-8])-([a-z0-9-]+)$`)
+	stepIDRe = regexp.MustCompile(`^([fxtpm])([0-8])-([a-z0-9-]+)$`)
 	retryRe  = regexp.MustCompile(`-r[0-9]+$`)
 )
 

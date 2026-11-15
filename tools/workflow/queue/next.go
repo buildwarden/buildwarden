@@ -122,9 +122,10 @@ func (s *State) Next(worker string, now time.Time) (*Pick, []Blocked) {
 
 // Starts reports whether the worker's claim of a step of the item sets it in
 // progress: a cloud claim on a queued feature, and any claim on a queued
-// process item, whose steps are all human.
+// process item or tracked item, whose steps are all human.
 func (s *State) Starts(f *Feature, worker string) bool {
-	return f.Status == "queued" && (Kind(worker) == "cloud" || f.IsProcess())
+	return f.Status == "queued" &&
+		(Kind(worker) == "cloud" || f.IsProcess() || s.Tracked(f))
 }
 
 // inProgressStep is the in-progress item's step for the worker, or why there
@@ -267,24 +268,36 @@ func allDone(ids []string, done map[string]bool) bool {
 
 // Claim leases the step to worker for the configured lease time and counts it
 // against the feature's budget. newRun counts a run too, the first time a run
-// touches the feature. A cloud claim on a queued feature starts it, and so
-// does any claim on a queued process item, whose steps are all human.
-func (s *State) Claim(f *Feature, st *Step, worker string, now time.Time, newRun bool) {
+// touches the feature. A claim that starts the item (Starts) sets it in
+// progress and logs the start. When that start is a marked feature's past the
+// waiting limit, the history line says so, and Claim returns it for wf claim
+// to print; otherwise it returns "".
+func (s *State) Claim(
+	f *Feature, st *Step, worker string, now time.Time, newRun bool,
+) string {
 	mins := s.Config.LeaseMinutes
 	if mins == 0 {
 		mins = 120
 	}
 	exp := now.Add(time.Duration(mins) * time.Minute).UTC()
 	st.Lease = Lease{ClaimedBy: worker, Expires: &exp}
+	past := ""
 	if s.Starts(f, worker) {
+		// Read before the item is in progress and could itself wait.
+		past = s.startedPast(f)
 		f.Status = "in_progress"
-		f.Log(now, worker, "started (FLOW-05)")
+		if past == "" {
+			f.Log(now, worker, "started (FLOW-05)")
+		} else {
+			f.Log(now, worker, "%s", past)
+		}
 	}
 	f.Budget.Spent.Steps++
 	if newRun {
 		f.Budget.Spent.Runs++
 	}
 	f.Log(now, worker, "claimed %s until %s", st.ID, exp.Format(time.RFC3339))
+	return past
 }
 
 // Release drops a lease without completing the step.

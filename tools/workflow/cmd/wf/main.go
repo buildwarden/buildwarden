@@ -15,6 +15,9 @@
 //	wf new      -state DIR -worker W -feature F -title T -priority N
 //	            -estimate-steps N -estimate-runs N [-source S] [-follows ITEM]
 //	            [-kind process -holds PATTERN,...] [-hold WHY]
+//	            [-repos OWNER/NAME,...] [-areas AREA,...] [-seams SEAM,...]
+//	            [-adopts CONSUMABLE@VERSION] [-urgent]
+//	wf urgent   -state DIR -worker human/NAME -feature F [-clear]
 //	wf gate     -state DIR -repo DIR -machine M -stamp FILE [-sweep-days N] [-record]
 //	wf budget   -state DIR [-native]
 //	wf drops    -repo DIR -base REV -main FILE -branch FILE [-head REV]
@@ -24,6 +27,27 @@
 // queues the item on hold (FLOW-20's freeze): WHY is the text of a blocking
 // question q1, and the item's first step waits for the human's answer to it
 // (wf answer -question q1). Without -hold the loop may take the item at once.
+//
+// new -repos names the repositories the item works in, its home first; an
+// item homed in another repository than config.yaml's is tracked: wf seeds
+// it two human steps, t1-work and t2-merge, runs no gate for it and counts
+// it in no limit (FLOW-03). new -areas names the areas of the area map the
+// item changes; without it the item is undeclared and collides with every
+// item in its repositories, and given empty it declares that the item
+// changes no area (FLOW-05). With -follows ITEM and no -areas the new item
+// takes ITEM's repositories and areas, and its history says so; -repos and
+// -areas override that. new -seams records a tracked item's seams, which wf
+// cannot read from its design; for an item homed here wf declare copies
+// them. new -adopts marks a reconciliation item, which FLOW-05 classes with
+// the fixes (LOOP-07).
+//
+// new -urgent, and urgent for an item already queued, mark a feature so that
+// the waiting limit does not refuse its start (FLOW-05). Only a human worker
+// sets the mark, never on a process item, a tracked item or an item that
+// follows one, which that limit never refuses; urgent -clear takes it from
+// any item. wf does not check what the item fixes: FLOW-05 says what the
+// mark is for. claim prints the history line of a start past the waiting
+// limit.
 //
 // next and claim apply FLOW-05's limits to every worker: no step is offered
 // or claimed whose claim would put an item's set over the in-progress limit,
@@ -68,8 +92,8 @@ import (
 )
 
 const usage = "usage: wf " +
-	"validate|status|next|claim|release|check|done|answer|back|new|gate|budget|migrate|" +
-	"drops [flags]"
+	"validate|status|next|claim|release|check|done|answer|back|new|urgent|gate|budget|" +
+	"migrate|drops [flags]"
 
 // errIdle is gate's "nothing to do", exit status 3.
 var errIdle = errors.New("idle")
@@ -77,10 +101,15 @@ var errIdle = errors.New("idle")
 type opts struct {
 	state, repo, worker, feature, step, why, question, answer string
 	title, source, machine, stamp, kind, holds, follows, hold string
-	base, head, mainReport, branchReport                      string
-	priority, estSteps, estRuns, sweepDays, to                int
-	newRun, run, record, native, md, all, held                bool
-	now                                                       time.Time
+	repos, areas, seams, adopts                               string
+	urgent, clear                                             bool
+	// given holds the names of the flags the command line set, for a flag
+	// whose empty value means something.
+	given                                      map[string]bool
+	base, head, mainReport, branchReport       string
+	priority, estSteps, estRuns, sweepDays, to int
+	newRun, run, record, native, md, all, held bool
+	now                                        time.Time
 }
 
 func main() {
@@ -119,6 +148,15 @@ func run(cmd string, args []string, now time.Time) error {
 		"new: process only, comma-separated affinity patterns it holds")
 	fs.StringVar(&o.hold, "hold", "",
 		"new: queue the item on hold; the reason is its blocking question q1 (FLOW-20)")
+	fs.StringVar(&o.repos, "repos", "",
+		"new: comma-separated repositories the item works in, its home first")
+	fs.StringVar(&o.areas, "areas", "",
+		"new: comma-separated areas the item changes; given empty, it changes none")
+	fs.StringVar(&o.seams, "seams", "", "new: a tracked item's comma-separated seams")
+	fs.StringVar(&o.adopts, "adopts", "", "new: the release adopted, <consumable>@<version>")
+	fs.BoolVar(&o.urgent, "urgent", false,
+		"new: mark the feature urgent, a human worker only (FLOW-05)")
+	fs.BoolVar(&o.clear, "clear", false, "urgent: remove the mark")
 	fs.IntVar(&o.priority, "priority", 0, "new: priority, 1 highest")
 	fs.IntVar(&o.estSteps, "estimate-steps", 0, "new: estimated steps")
 	fs.IntVar(&o.estRuns, "estimate-runs", 0, "new: estimated runs")
@@ -134,8 +172,10 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.StringVar(&o.mainReport, "main", "", "drops: the merge base's tier1 -json report")
 	fs.StringVar(&o.branchReport, "branch", "", "drops: the branch's tier1 -json report")
 	_ = fs.Parse(args)
+	o.given = map[string]bool{}
+	fs.Visit(func(fl *flag.Flag) { o.given[fl.Name] = true })
 	// -hold given with an empty reason is refused by new, never read as no hold.
-	fs.Visit(func(fl *flag.Flag) { o.held = o.held || fl.Name == "hold" })
+	o.held = o.given["hold"]
 	if cmd == "drops" {
 		return drops(o)
 	}
@@ -146,8 +186,8 @@ func run(cmd string, args []string, now time.Time) error {
 	}
 	cmds := map[string]func(*queue.State, opts) error{
 		"validate": validate, "status": status, "next": next, "check": checkPhase,
-		"answer": answer, "back": back, "new": newFeature, "gate": gate,
-		"budget": budget, "migrate": migrate,
+		"answer": answer, "back": back, "new": newFeature, "urgent": urgent,
+		"gate": gate, "budget": budget, "migrate": migrate,
 	}
 	for _, c := range []string{"claim", "release", "done"} {
 		cmds[c] = func(s *queue.State, o opts) error { return stepCmd(c, s, o) }
@@ -191,6 +231,9 @@ func status(s *queue.State, o opts) error {
 		}
 		if f.Follows != "" {
 			fmt.Printf("\t  follows: %s\n", f.Follows)
+		}
+		if f.Urgent != "" {
+			fmt.Printf("\t  urgent: %s\n", f.Urgent)
 		}
 		for _, q := range f.Questions {
 			if q.Status == "open" {
@@ -260,7 +303,9 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 		if err := claimable(s, f, st, o); err != nil {
 			return err
 		}
-		s.Claim(f, st, o.worker, o.now, o.newRun)
+		if line := s.Claim(f, st, o.worker, o.now, o.newRun); line != "" {
+			fmt.Println(line)
+		}
 	case "release":
 		s.Release(f, st, o.worker, o.now, o.why)
 	case "done":
@@ -387,13 +432,18 @@ func newFeature(s *queue.State, o opts) error {
 		Design: "docs/design/" + o.feature + ".md", Branch: "feat/" + o.feature,
 		Budget: queue.Budget{Estimate: queue.Count{Runs: o.estRuns, Steps: o.estSteps}},
 	}
-	if o.follows != "" {
-		if _, err := s.Find(o.follows); err != nil {
-			return fmt.Errorf("-follows: %w", err)
-		}
+	taken, err := declare(s, f, o)
+	if err != nil {
+		return err
 	}
 	changed, err := s.Add(f, o.now, o.worker)
 	if err != nil {
+		return err
+	}
+	if taken != "" {
+		f.Log(o.now, o.worker, "%s", taken)
+	}
+	if err := accept(s, f, o); err != nil {
 		return err
 	}
 	if o.held {
@@ -409,17 +459,87 @@ func newFeature(s *queue.State, o opts) error {
 	return nil
 }
 
+// declare sets what new's -repos, -areas, -seams and -adopts say on the item.
+// With -follows and no -areas the item takes the repositories and areas of
+// the item it follows, and declare returns the history line that says so.
+func declare(s *queue.State, f *queue.Feature, o opts) (string, error) {
+	f.Repos, f.Seams = list(o.repos), list(o.seams)
+	if o.given["areas"] {
+		// Given empty, the item declares that it changes no area.
+		areas := append([]string{}, list(o.areas)...)
+		f.Areas = &areas
+	}
+	if o.given["adopts"] {
+		consumable, version, ok := strings.Cut(o.adopts, "@")
+		if !ok || consumable == "" || version == "" {
+			return "", fmt.Errorf("-adopts is <consumable>@<version>, not %q",
+				o.adopts)
+		}
+		f.Adopts = &queue.Adopts{Consumable: consumable, Version: version}
+	}
+	if o.follows == "" {
+		return "", nil
+	}
+	parent, err := s.Find(o.follows)
+	if err != nil {
+		return "", fmt.Errorf("-follows: %w", err)
+	}
+	if o.given["areas"] {
+		return "", nil
+	}
+	return f.Inherit(parent, o.given["repos"]), nil
+}
+
+// accept marks the queued item urgent when -urgent asks, and refuses an item
+// wf validate would fail, before anything is written.
+func accept(s *queue.State, f *queue.Feature, o opts) error {
+	if o.urgent {
+		if err := s.MarkUrgent(f, o.worker, o.now); err != nil {
+			return err
+		}
+	}
+	if len(f.Seams) > 0 && !s.Tracked(f) {
+		return fmt.Errorf("-seams is for a tracked item: wf declare copies the seams of "+
+			"%s, which is homed here, from its design (FLOW-02)", f.Feature)
+	}
+	return errors.Join(s.Problems(f)...)
+}
+
+// list splits a comma-separated flag value.
+func list(value string) []string {
+	var out []string
+	for _, v := range strings.Split(value, ",") {
+		if v = strings.TrimSpace(v); v != "" {
+			out = append(out, v)
+		}
+	}
+	return out
+}
+
+// urgent marks a queued feature urgent, or with -clear removes the mark, for
+// a human worker (FLOW-05).
+func urgent(s *queue.State, o opts) error {
+	f, err := s.Find(o.feature)
+	if err != nil {
+		return err
+	}
+	if o.clear {
+		err = s.ClearUrgent(f, o.worker, o.now)
+	} else {
+		err = s.MarkUrgent(f, o.worker, o.now)
+	}
+	if err != nil {
+		return err
+	}
+	return s.Save(f)
+}
+
 // kindFlags parses new's -kind and -holds; a plain feature stores no kind.
 func kindFlags(o opts) (string, []string, error) {
 	if o.kind != "" && o.kind != "feature" && o.kind != "process" {
 		return "", nil, fmt.Errorf("-kind is feature or process, not %q", o.kind)
 	}
-	var holds []string
-	for _, h := range strings.Split(o.holds, ",") {
-		if h = strings.TrimSpace(h); h != "" {
-			holds = append(holds, h)
-		}
-	}
+	holds := list(o.holds)
 	if len(holds) > 0 && o.kind != "process" {
 		return "", nil, fmt.Errorf("-holds needs -kind process")
 	}

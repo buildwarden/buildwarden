@@ -39,6 +39,13 @@ func Phase(env Env, f *queue.Feature) []Result {
 		c.process()
 		return c.out
 	}
+	if f.Round == "tracked" {
+		// The item's branch, design and PR are in its home repository,
+		// where wf sees none of them.
+		c.add("tracked", true, "wf runs no gate in %s (FLOW-03)",
+			strings.Join(f.Repos[:min(1, len(f.Repos))], ""))
+		return c.out
+	}
 	switch f.Phase {
 	case 0:
 		c.branchOnRemote()

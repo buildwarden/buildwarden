@@ -834,3 +834,21 @@ func TestCloseAfterASquash(t *testing.T) {
 		t.Errorf("x4 after a squash: %s", failures(rs))
 	}
 }
+
+// TestTrackedCheck: a tracked item has no done-when check. Its branch, design
+// and PR are in its home repository, where wf runs no gate, and the result
+// says so (FLOW-03).
+func TestTrackedCheck(t *testing.T) {
+	f := &queue.Feature{Feature: "m1", Round: "tracked", Status: "in_progress",
+		Repos: []string{"buildwarden/buildwarden-relay"}}
+	for _, phase := range []int{1, 2} {
+		f.Phase = phase
+		// No repository is given: nothing is read from one.
+		rs := Phase(Env{}, f)
+		want := Result{"tracked", true,
+			"wf runs no gate in buildwarden/buildwarden-relay (FLOW-03)"}
+		if len(rs) != 1 || rs[0] != want {
+			t.Errorf("phase %d: %+v, want %+v", phase, rs, want)
+		}
+	}
+}

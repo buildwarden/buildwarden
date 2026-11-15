@@ -1,9 +1,11 @@
 package queue
 
 import (
+	"errors"
 	"fmt"
 	"slices"
 	"strings"
+	"time"
 )
 
 // limit is one row of FLOW-05's limits table: the claim that takes the limit,
@@ -450,4 +452,61 @@ func (s *State) waitingRefusal(f *Feature, worker string) string {
 	return fmt.Sprintf(
 		"the waiting limit: %d items wait on the human (limit %d): %s (FLOW-05)",
 		len(waiting), limit, strings.Join(out, ", "))
+}
+
+// startedPast returns the history line for the start of a queued feature
+// that only its urgent mark lets start: the items that wait on the human
+// number the waiting limit or more, and the item is no fix. It is "" for
+// every other start.
+func (s *State) startedPast(f *Feature) string {
+	if !s.counted(f) || !f.marked() || f.Follows != "" || s.fixesMain(f) {
+		return ""
+	}
+	waiting, limit, past := s.pastWaitingLimit()
+	if !past {
+		return ""
+	}
+	return fmt.Sprintf("started past the waiting limit (%d wait, limit %d): "+
+		"marked urgent by %s (FLOW-05)", len(waiting), limit, f.Urgent)
+}
+
+// MarkUrgent marks a queued feature urgent for the human worker, so that the
+// waiting limit does not refuse its start (FLOW-05). It is the rule of wf new
+// -urgent and wf urgent. The mark is refused on an item the waiting limit
+// never refuses, whoever asks: a process item, a tracked item, an item that
+// follows one. It is refused for a worker that is not a human, and on an item
+// that has started. What the item fixes is not asked: FLOW-05's words hold
+// the mark to a security fix, and intake judges that.
+func (s *State) MarkUrgent(f *Feature, worker string, now time.Time) error {
+	const never = "the waiting limit never refuses"
+	switch {
+	case f.IsProcess():
+		return fmt.Errorf("%s is a process item: %s one (FLOW-05)", f.Feature, never)
+	case s.Tracked(f):
+		return fmt.Errorf("%s is tracked: %s one (FLOW-05)", f.Feature, never)
+	case f.Follows != "":
+		return fmt.Errorf("%s follows %s: %s a fix (FLOW-05)", f.Feature, f.Follows, never)
+	case Kind(worker) != "human":
+		return errors.New("only a human marks an item urgent (FLOW-05)")
+	case f.Status != "queued":
+		return fmt.Errorf("%s is %s: the waiting limit refuses only a start (FLOW-05)",
+			f.Feature, strings.ReplaceAll(f.Status, "_", " "))
+	}
+	f.Urgent = worker
+	f.Log(now, worker, "marked urgent (FLOW-05)")
+	return nil
+}
+
+// ClearUrgent removes the urgent mark from any item, for a human worker
+// only: clearing puts the waiting limit back, and the mark is a human's.
+func (s *State) ClearUrgent(f *Feature, worker string, now time.Time) error {
+	if Kind(worker) != "human" {
+		return errors.New("only a human clears the mark")
+	}
+	if f.Urgent == "" {
+		return fmt.Errorf("%s is not marked urgent", f.Feature)
+	}
+	f.Urgent = ""
+	f.Log(now, worker, "urgent cleared")
+	return nil
 }

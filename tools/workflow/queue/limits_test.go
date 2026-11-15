@@ -1089,3 +1089,146 @@ func TestNextUnchangedOnUndeclaredQueue(t *testing.T) {
 	// limit changes nothing for it either.
 	wantWaiting(t, s, 4)
 }
+
+// TestUrgent: the urgent mark is a human's, on a queued feature the waiting
+// limit could refuse; it is refused on a process item, a tracked item and an
+// item that follows one, under a human's name too; clearing it is a human's
+// and is allowed on any item (FLOW-05; case 44). Nothing is asked about what
+// the item fixes: the rule's words and intake hold the mark to a security
+// fix.
+func TestUrgent(t *testing.T) {
+	t.Run("marked", urgentMarked)
+	t.Run("cleared", urgentCleared)
+}
+
+func urgentMarked(t *testing.T) {
+	const never = ": the waiting limit never refuses "
+	f, parent := feature("a", 2, "queued"), feature("parent", 3, "done")
+	fix, p := fixing(feature("fix", 4, "queued"), "parent"), process("p", 1, "queued")
+	away := &Feature{Feature: "m1", Priority: 5, Status: "queued", Round: "tracked",
+		Phase: 1, Repos: []string{"o/relay"}}
+	s := declaredState(f, parent, fix, p, away)
+
+	events := len(f.History)
+	if err := s.MarkUrgent(f, "human/jeff", now); err != nil {
+		t.Fatal(err)
+	}
+	if f.Urgent != "human/jeff" || len(f.History) != events+1 ||
+		f.History[events] != (Event{At: now, By: "human/jeff",
+			Event: "marked urgent (FLOW-05)"}) {
+		t.Fatalf("marked: urgent %q, history %+v", f.Urgent, f.History[events:])
+	}
+	wantValidate(t, s)
+
+	for _, c := range []struct {
+		f      *Feature
+		worker string
+		want   string
+	}{
+		{feature("b", 6, "queued"), "cloud/tick-1",
+			"only a human marks an item urgent (FLOW-05)"},
+		{feature("b", 6, "queued"), "host:macos-vz/s",
+			"only a human marks an item urgent (FLOW-05)"},
+		{feature("b", 6, "queued"), "", "only a human marks an item urgent (FLOW-05)"},
+		{p, "human/jeff", "p is a process item" + never + "one (FLOW-05)"},
+		{away, "human/jeff", "m1 is tracked" + never + "one (FLOW-05)"},
+		{fix, "human/jeff", "fix follows parent" + never + "a fix (FLOW-05)"},
+		{fix, "cloud/tick-1", "fix follows parent" + never + "a fix (FLOW-05)"},
+		{feature("b", 6, "in_progress"), "human/jeff",
+			"b is in progress: the waiting limit refuses only a start (FLOW-05)"},
+		{feature("b", 6, "done"), "human/jeff",
+			"b is done: the waiting limit refuses only a start (FLOW-05)"},
+	} {
+		events := len(c.f.History)
+		err := s.MarkUrgent(c.f, c.worker, now)
+		if err == nil || err.Error() != c.want {
+			t.Errorf("%s by %q: %v, want %q", c.f.Feature, c.worker, err, c.want)
+		}
+		if c.f.Urgent != "" || len(c.f.History) != events {
+			t.Errorf("%s by %q: a refused mark changed it", c.f.Feature, c.worker)
+		}
+	}
+}
+
+func urgentCleared(t *testing.T) {
+	f := feature("a", 2, "queued")
+	f.Urgent = "human/jeff"
+	s := declaredState(f)
+	for _, w := range []string{"cloud/tick-1", "host:macos-vz/s", ""} {
+		if err := s.ClearUrgent(f, w, now); err == nil ||
+			err.Error() != "only a human clears the mark" || f.Urgent == "" {
+			t.Errorf("clear by %q: %v, urgent %q", w, err, f.Urgent)
+		}
+	}
+	// Clearing is allowed on any item: one in progress or done keeps the
+	// mark as the record of its start until a human takes it away.
+	for _, status := range []string{"queued", "in_progress", "done"} {
+		f.Status, f.Urgent = status, "human/jeff"
+		if err := s.ClearUrgent(f, "human/sam", now); err != nil || f.Urgent != "" {
+			t.Fatalf("clear on a %s item: %v, urgent %q", status, err, f.Urgent)
+		}
+		if last := f.History[len(f.History)-1]; last.Event != "urgent cleared" ||
+			last.By != "human/sam" {
+			t.Fatalf("clear logged %+v", last)
+		}
+	}
+	if err := s.ClearUrgent(f, "human/jeff", now); err == nil ||
+		err.Error() != "a is not marked urgent" {
+		t.Fatalf("clear on an unmarked item: %v", err)
+	}
+}
+
+// TestUrgentStartLine: the claim that starts a marked feature while the count
+// is at the waiting limit or over says so in the item's history, where an
+// unmarked start, or a marked one under the limit, logs started (FLOW-05;
+// case 42).
+func TestUrgentStartLine(t *testing.T) {
+	started := func(f *Feature) string {
+		for _, e := range f.History {
+			if strings.HasPrefix(e.Event, "started") {
+				return e.Event
+			}
+		}
+		return ""
+	}
+	for _, c := range []struct {
+		waiting int
+		urgent  string
+		line    string
+	}{
+		{8, "human/jeff", "started past the waiting limit (8 wait, limit 8): marked " +
+			"urgent by human/jeff (FLOW-05)"},
+		{11, "human/sam", "started past the waiting limit (11 wait, limit 8): marked " +
+			"urgent by human/sam (FLOW-05)"},
+		{7, "human/jeff", ""},
+		{7, "", ""},
+	} {
+		m := queuedItem("m", 20)
+		m.Urgent = c.urgent
+		s := waitingState(t, c.waiting, m)
+		if why := s.Guard(m, &m.Steps[0], "cloud/run"); why != "" {
+			t.Fatalf("%d waiting, urgent %q: %s", c.waiting, c.urgent, why)
+		}
+		line := s.Claim(m, &m.Steps[0], "cloud/run", now, true)
+		want := c.line
+		if want == "" {
+			want = "started (FLOW-05)"
+		}
+		if line != c.line || started(m) != want || m.Status != "in_progress" {
+			t.Errorf("%d waiting, urgent %q: Claim returned %q and logged %q",
+				c.waiting, c.urgent, line, started(m))
+		}
+		// The mark stays, as the record of why the item started.
+		if m.Urgent != c.urgent {
+			t.Errorf("the claim changed the mark to %q", m.Urgent)
+		}
+	}
+	// The fix for a red main starts for that reason, marked or not.
+	m := queuedItem("m", 20)
+	m.Urgent = "human/jeff"
+	s := waitingState(t, 8, m)
+	s.Main = &Main{SHA: "0a1b2c3", CI: "red", Followup: "m"}
+	if line := s.Claim(m, &m.Steps[0], "cloud/run", now, true); line != "" {
+		t.Fatalf("the fix for a red main: Claim returned %q", line)
+	}
+}

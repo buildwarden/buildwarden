@@ -1982,3 +1982,113 @@ func TestNewFieldsRoundTrip(t *testing.T) {
 	}
 	wantValidate(t, got)
 }
+
+// TestClassAdopts: a reconciliation item, which the queue marks with adopts,
+// is in class 3 with the fixes (FLOW-05, LOOP-07).
+func TestClassAdopts(t *testing.T) {
+	for _, c := range []struct {
+		kind, status, follows string
+		phase, want           int
+	}{
+		{"", "queued", "", 0, 3},
+		{"", "queued", "a", 0, 3},
+		{"", "in_progress", "", 2, 3},
+		{"", "in_progress", "", 3, 1},
+		{"", "in_progress", "", 7, 3},
+		{"", "done", "", 8, 0},
+		{"process", "queued", "", 1, 2},
+	} {
+		f := adopting(&Feature{Kind: c.kind, Status: c.status, Follows: c.follows,
+			Phase: c.phase})
+		if got := f.Class(); got != c.want {
+			t.Errorf("Class(%+v) with adopts = %d, want %d", c, got, c.want)
+		}
+	}
+	// It is taken ahead of new functionality, whatever the priorities.
+	newer, adoption := feature("newer", 1, "queued"), feature("adoption", 2, "queued")
+	wantNext(t, state(newer, adopting(adoption)), "cloud", "adoption f0-branch-setup")
+}
+
+// TestTrackedRound: an item homed in another repository is tracked. wf seeds
+// it two human steps, any claim starts it, it is outside every limit and is
+// never in implementation (FLOW-03, FLOW-04, FLOW-05).
+func TestTrackedRound(t *testing.T) {
+	away := func(name string, prio int) *Feature {
+		return &Feature{Feature: name, Priority: prio, Repos: []string{"o/relay"}}
+	}
+	f := away("m1", 9)
+	s := declaredState()
+	if _, err := s.Add(f, now, "human/jeff"); err != nil {
+		t.Fatal(err)
+	}
+	if adopting(away("m2", 2)).Class() != 3 || fixing(away("m3", 3), "m1").Class() != 3 {
+		t.Fatal("a tracked item is not classed as the feature it is")
+	}
+	trackedSeeded(t, s, f)
+	trackedOutsideLimits(t, s, f)
+	trackedWalk(t, s, f)
+}
+
+func trackedSeeded(t *testing.T, s *State, f *Feature) {
+	t.Helper()
+	if f.Round != "tracked" || f.Phase != 1 || ids(f) != "t1-work:pending:human" ||
+		PhaseName(f) != "work" {
+		t.Fatalf("seeded %s/%d %s: %+v", f.Round, f.Phase, PhaseName(f), f.Steps)
+	}
+	wantValidate(t, s)
+	if f.Class() != 4 {
+		t.Fatalf("a queued tracked item is in class %d", f.Class())
+	}
+}
+
+// trackedOutsideLimits: five undeclared features in progress and items
+// waiting past the limit neither stop the tracked item's start nor count it.
+func trackedOutsideLimits(t *testing.T, s *State, f *Feature) {
+	t.Helper()
+	var fs []*Feature
+	for n := 1; n <= 5; n++ {
+		fs = append(fs, working(fmt.Sprintf("f%d", n), n, 3))
+	}
+	s.Features = append(s.Features, parked(fs...)...)
+	s.Features = append(s.Features, waiters(8)[1], waiters(8)[5])
+	s.Features[len(s.Features)-2].Priority = 30
+	s.Features[len(s.Features)-1].Priority = 31
+	three := 3
+	s.Config.Limits.WaitingOnHuman = &three
+	wantNext(t, s, "cloud", "none")
+	pick, _ := s.NextFor("m1", "human/jeff", now)
+	if pick == nil || pick.Feature != f || pick.Step.ID != "t1-work" || !pick.Starts {
+		t.Fatalf("the human is offered %+v, want m1's t1-work, starting it", pick)
+	}
+	if why := s.Guard(f, pick.Step, "human/jeff"); why != "" {
+		t.Fatalf("Guard refuses a tracked item: %s", why)
+	}
+	s.Claim(f, pick.Step, "human/jeff", now, false)
+	if f.Status != "in_progress" || f.Class() != 4 {
+		t.Fatalf("after its first claim m1 is %s, class %d", f.Status, f.Class())
+	}
+	wantValidate(t, s)
+	wantWaiting(t, s, 7)
+	for _, l := range limits {
+		if slices.Contains(s.holders(l), f) {
+			t.Errorf("a tracked item holds %s", l.what)
+		}
+	}
+}
+
+// trackedWalk completes the tracked item's two steps, with no check.
+func trackedWalk(t *testing.T, s *State, f *Feature) {
+	t.Helper()
+	Complete(f, &f.Steps[0], "human/jeff", now)
+	if f.Phase != 2 || ids(f) != "t1-work:done:human t2-merge:pending:human" ||
+		PhaseName(f) != "merge" || f.Class() != 4 {
+		t.Fatalf("after its work m1 is %s/%d, class %d: %s", f.Round, f.Phase, f.Class(),
+			ids(f))
+	}
+	wantOfferTo(t, s, "m1", "human/jeff", "t2-merge")
+	Complete(f, &f.Steps[1], "human/jeff", now)
+	if f.Status != "done" {
+		t.Fatalf("after its merge m1 is %s", f.Status)
+	}
+	wantValidate(t, s)
+}
