@@ -164,14 +164,14 @@ One design is not on `main` and so is not in `related`. This design
 depends on it, cites it by section or question ID, and quotes none of its
 rule text as final:
 
-- `driver-contract` (K1, on `feat/driver-contract`, read at `bb4d7c8`). It
+- `driver-contract` (K1, on `feat/driver-contract`, read at `4d8544d`). It
   is a redraft, sent back by its first review on 2026-11-14. Its second
-  review has not ended: Jeff has answered seventeen of its twenty-one
-  questions, and no rule change and no amendment to the umbrella has
-  been put to him yet. He read it at `5808805`. Since then, by its own
-  record, it has merged `main` at `ad4ea50`, withdrawn the FLOW-02
-  change it declared and declared a PROFILE-01 one (`a280ba9`), and no
-  sitting has been held on those.
+  review has not ended, and has gone further than this one's. By its own
+  record of 2026-11-15, Jeff has answered all twenty-two of its assumed
+  questions, has approved its eleven rule changes by name on the wording
+  he read at `3f2012a`, and has answered that its amendments to the
+  umbrella are made in its PR (its a18). The acceptance of its Security
+  note and the outcome are still to come.
   What this design relies on is among the answers, each confirmed
   as that design recommended: `warden` sends the claim, at an endpoint
   the driver reports (its a13); `warden` starts the default collector,
@@ -186,11 +186,12 @@ rule text as final:
   environment. It amends GLOBAL-08, TEST-05 and PROFILE-01 and adds an
   entry to tier 1's seam list, as this design does; **With
   `driver-contract`** says which sentences each design owns, and gives
-  in full the two rows of the profile that both reword. It also proposes
-  to reword the
-  umbrella's seams 1, 6 and 9 and its S4 row (its **Amendments to the
-  umbrella design**); **Seam 1** below is written to hold under either
-  wording.
+  in full the one row of the profile that both reword. It also amends
+  the umbrella: seams 1, 6 and 9, its S4 row and, among others, the
+  TEST-05 row of its rule table (its **Amendments to the umbrella
+  design**). **Seam 1** below is written to hold under either wording,
+  and **Amendments to the umbrella design** here says where the two
+  designs' amendments meet.
 
 Outside this repository: `buildwarden-relay` `main` at `e9b23d5`
 (`spike/REPORT.md`). What the harness takes from it is in **What a relay under
@@ -1308,8 +1309,35 @@ Read and not amended:
   through "tagged releases", which a tag per specification still is, and
   the umbrella says nothing of the documents' format.
 
-`driver-contract` proposes amendments of its own to the umbrella (seams 1,
-6 and 9 and the S4 row). None is to a line listed here.
+`driver-contract` amends the umbrella too, in its own PR (its **Amendments
+to the umbrella design**, read at `4d8544d`; its a18, answered). Its list
+and this one meet in two places:
+
+- *Line 405, the row U2 rewords.* U2 takes "RELAY-05, " out of the row's
+  first cell. `driver-contract` changes its last cell, from "S1" to "S1;
+  K1 for the driver suite", and leaves the rest. With both, the row
+  reads:
+
+  > | TEST-05 | Contract tests for the seams become the specs repository's suites. | S1; K1 for the driver suite |
+
+  U2 is put to Jeff in both forms: as in the table above, which is the
+  row if this item merges first, and joined as here.
+- *The **Amendments** section.* Each design adds a dated paragraph after
+  `loop-contract`'s. The two stand in the order of their dates, each as
+  its review approved it; U3 is this design's.
+
+The second of the two to merge keeps both changes to line 405 when it
+merges `main` (`f6-merge-main`), as it does for the rule text (**With
+`driver-contract`**), and brings its quotation of the line's current
+wording up to date in Consolidation (FLOW-10). If the merge needed a
+word that neither review approved, that is a return to Design (FLOW-06).
+
+Pointed out to that design's review, which is not edited from here: it
+quotes line 405 as current with "RELAY-05, TEST-05" in its first cell,
+which is stale by U2 if this item merges first. None of its other
+amendments is to a line listed here. One is to a sentence this design
+reads and does not amend: at line 269 it makes "Seams 1 to 8" "Seams 1 to
+9", and adds where seam 9's specification starts.
 
 ### What each specification covers
 
@@ -3124,11 +3152,11 @@ three orders for that merge, this design's review and this item's pull
 request. The one that happened is the merge before the review, so the
 entry is here before the review and costs no return to Design.
 
-`driver-contract` proposes changes of its own to two of the three rows
-below, the Specifications entry and the Specification row of Checks. The
-wording here is this item's change to each row as it is on `main`.
-**With `driver-contract`** gives both rows as they read with both
-changes.
+`driver-contract` changes one of the three rows below as well, the
+Specifications entry. The wording here is this item's change to each row
+as it is on `main`. **With `driver-contract`** gives the Specifications
+entry as it reads with both changes; the other two rows are changed by
+this item alone.
 
 **Current wording, the Specifications row:**
 
@@ -3212,19 +3240,23 @@ so the rule-change clearance covers the edit through this entry (FLOW-14).
 This design's own wording for TEST-05, GLOBAL-08, EXEC-04 and PROFILE-01
 was reworded on 2026-11-15, in the first sitting of its review, for a tag
 per specification and two collector documents (a8, a10). Which sentences
-each design owns did not change by that, and the joined rows and the
-joined owner string below carry the new words. `driver-contract` was not
-read again for it: it is still read at `bb4d7c8`.
+each design owns did not change by that, and the joined row and the
+joined owner string below carry the new words.
 
-Neither design is through its review, and either may merge first. The
-redraft's rule changes were read at `bb4d7c8` and are proposed: none has
-been put to Jeff yet. Its GLOBAL-08 and TEST-05 changes, and the entry it
-adds to tier 1's seam list, are word for word what this section was
-written against at `0c29fc3`. Its PROFILE-01 change is new in `a280ba9`,
-committed on 2026-11-15 half a minute after this design declared its own,
-so neither was written with the other in front of it. The PROFILE-01 rows
-below were written against it afterwards. If its review changes any of
-them, this section is read again against the outcome.
+`driver-contract` is read here at `4d8544d`. Its review has gone further
+than this one's: on 2026-11-15 Jeff approved its eleven rule changes by
+name, GLOBAL-08, TEST-05 and PROFILE-01 among them, on the wording he
+read at `3f2012a`. Its outcome is not recorded yet. Neither item has
+merged, and either may merge first.
+
+Its GLOBAL-08 and TEST-05 changes, and the entry it adds to tier 1's seam
+list, are word for word what this section was first written against at
+`0c29fc3`; they were compared again at `4d8544d`. Its PROFILE-01 change
+has moved since this section read it at `bb4d7c8`. It has withdrawn the
+words it added to the tier-1 Specification row of Checks, so it changes
+four rows of the profile where it changed five, and one row is changed
+by both designs: the Specifications entry. It now has a table of its own
+for that rule, which agrees with the rows below.
 
 | Text | This design owns | `driver-contract` proposes | Neither changes |
 |---|---|---|---|
@@ -3234,25 +3266,25 @@ them, this section is read again against the outcome.
 | `rules.yaml`, TEST-05's owner | The string, as under **TEST-05** | The string on `main`, with "the driver suite's static tier runs there" added inside its parentheses | |
 | TEST-02, EXEC-04 | All of each amendment | Nothing | |
 | PROFILE-01, the Specifications entry | The three sentences that replace its last one, "No specifications release is pinned today." | In its first sentence, "and the driver contract (`specs/driver-contract/`, GLOBAL-08)" after "(RELAY-05)". A new second sentence, "The driver contract's conformance suite is `conformance/driver/`." It keeps the last sentence as it is on `main` | The sentence that begins "For the seams of GLOBAL-08" |
-| PROFILE-01, the tier-1 Specification row of Checks | The clause on the `conformance` workflow, placed before "the contract tests of TEST-05", and the words "that run in `make test`" after it | The words ", the driver conformance suite (`conformance/driver/`) among them" after "the contract tests of TEST-05" | The clause on the coupling checks; "the `keytool` job"; the tier |
-| PROFILE-01, the Consumables entry | All of it | Nothing. Its table of entries reads "Consumes: nothing" as still true after K1 | |
+| PROFILE-01, the tier-1 Specification row of Checks | The clause on the `conformance` workflow, placed before "the contract tests of TEST-05", and the words "that run in `make test`" after it | Nothing. At `bb4d7c8` it added ", the driver conformance suite (`conformance/driver/`) among them" after "the contract tests of TEST-05"; it has withdrawn those words | The clause on the coupling checks; "the `keytool` job"; the tier |
+| PROFILE-01, the Consumables entry | All of it | Nothing. Its table of entries reads "Consumes: nothing" as still true of K1, and says that this design rewrites the entry | |
 | PROFILE-01, the Impact vocabulary and Reference documents entries, and the tier-1 Safety row of Checks | Nothing | One sentence added to the first; the first sentence of the second rewritten; the `driver-contract` job added to the third | |
 | PROFILE-01, the rest | Nothing | Nothing | The rule's header and paragraphs, every other entry, the other rows of Checks and "Declared as not blocking" |
 
-A third item amends PROFILE-01. `loop-parallel`, a process item in Design
-(read at `486ac8f`, a draft), proposes to change the header's check line,
-the paragraph on the agent part and the Process row of Checks, and to add
-an Areas entry. None of those is a row either design here changes. If it
-merges first, this design's "Severity and check" and "Enforcement change"
-lines for PROFILE-01 are brought up to date in Consolidation (FLOW-10);
-this item changes neither.
+A third item amends PROFILE-01. `loop-parallel`, a process item whose
+design is in review and not approved (read at `55428cd`), adds an Areas
+row to the profile's table and changes nothing else in the rule. Its
+draft at `486ac8f` also changed the header's check line, the paragraph on
+the agent part and the Process row of Checks; it no longer does. The
+Areas row is none that either design here changes, and whichever merges
+after it keeps it.
 
 The result reads the same whichever merges first. GLOBAL-08: the relay
 bullet, the executor bullet, the driver-contract bullet, the "Pre-1.0"
 paragraph, this design's paragraph, the last paragraph. TEST-05: this
 design's title and body, then the driver contract's paragraph. For
-PROFILE-01 the two designs' words go into the same two rows, and in one
-place into the same clause, so both rows are given in full.
+PROFILE-01 the two designs' words go into one row, the Specifications
+entry, which is given in full.
 
 **The Specifications entry, with both changes:**
 
@@ -3265,36 +3297,39 @@ first, because after this item one is pinned. The row holds until K2,
 which moves the driver contract's specification and declares that change
 itself.
 
-**The tier-1 Specification row of Checks, with both changes:**
+**The tier-1 Specification row of Checks** is changed by this design
+alone, now that `driver-contract` has withdrawn its words there. With
+both items merged it reads as under **PROFILE-01** above. Its words "the
+contract tests of TEST-05 that run in `make test`" take in the driver
+suite's static tier, which runs in `make test` (that design's proposed
+TEST-05 and owner string); that design reads the row the same way. Until
+this pass the section gave a joined form of the row, with that design's
+withdrawn words in it. It is removed, and is not put to Jeff.
 
-> | Specification | The coupling checks that `tools/tier1/rules.yaml` maps to RELAY-05, GLOBAL-08, EXEC-04, UX-01, UX-03, ORCH-03 and BOOT-07; the `conformance` workflow, which runs TEST-05's suites at the pinned specification releases and whose `pin` job requires release tags on a pull request; the contract tests of TEST-05 that run in `make test`, the driver conformance suite (`conformance/driver/`) among them; the `keytool` job | 1 |
-
-Both designs add words directly after "the contract tests of TEST-05".
-This design's come first, then `driver-contract`'s. The joined clause is
-true of what each builds: the driver suite's static tier runs in `make
-test` (its proposed TEST-05 and owner string), and its lifecycle tier is
-in the Safety rows, as that design says.
-
-This design's review is asked to judge its PROFILE-01 wording in both
-forms: as under **PROFILE-01** above, which is what the two rows say if
-this item merges first, and joined as here, which is what they say once
-both have merged.
+This design's review is asked to judge the Specifications entry in both
+forms: as under **PROFILE-01** above, which is what it says if this item
+merges first, and joined as here, which is what it says once both have
+merged. The Consumables entry and the Checks row have one form each.
 
 **Pointed out to `driver-contract`'s review.** That design is not edited
-from here. At `bb4d7c8` three of its statements on PROFILE-01 were
-written without this design's entry in front of it:
+from here. One point is live. Its own joined Specifications row, which
+Jeff approved with its PROFILE-01 change on 2026-11-15, quotes this
+design's three sentences as they were at `e4801d6`: "pins one release of
+that repository in `tools/conformance/go.mod`" and "The pin is a release
+tag". a8's answer changed them the same day, to the wording above: "each
+specification released under its own version", "pins a release of each
+specification" and "Each pin is a release tag". That design says its
+quotation "is read again against the outcome" if this review changes
+the three sentences, and it has. On the reading stated at the end of
+this section, what that approval covers in the row is that design's own
+clause and sentence, which read the same in its joined row and in the
+one above; this design's three sentences are approved in this review, in
+the wording here.
 
-- Its proposed Specifications entry keeps "No specifications release is
-  pinned today." That is true if K1 merges first. If this item merges
-  first, the sentence is already replaced and does not come back.
-- Its table of entries says that "Consumes: nothing" stays true. It does
-  while K1 is the only one merged; this item's Consumables entry names
-  the specifications release.
-- It says this design "owes the Specifications and Consumables entries a
-  change of its own", and that whichever lands second keeps both. This
-  design also changes the tier-1 Specification row of Checks, which that
-  design changes too, and that design gives joined wording for neither
-  shared row.
+The three points this section made against that design at `bb4d7c8` are
+answered in it: it says this design declares a PROFILE-01 change and
+rewrites the Consumables entry, it gives a joined Specifications row,
+and it no longer changes the Checks row.
 
 Three sentences of this design were written, or reworded in the revision
 of 2026-11-14, so that both sets are true together:
@@ -3318,20 +3353,20 @@ of 2026-11-14, so that both sets are true together:
 1. It merges `main`. Git will report conflicts. In `global.md` the
    executor bullet and the new third bullet are adjacent lines. In
    `rules.yaml` the `seams` list and the TEST-05 owner are the same
-   lines. In `loop-profile.md` the Specifications entry and the tier-1
-   Specification row of Checks are one line each, changed by both. Each
-   is resolved by keeping both, in the order above.
+   lines. In `loop-profile.md` the Specifications entry is one line,
+   changed by both. Each is resolved by keeping both, in the order
+   above.
 2. `seams` holds all six entries under this design's comment. If this
    item is second, it replaces the comment it finds; if `driver-contract`
    is second, it leaves this one and may add a sentence for its own entry.
 3. TEST-05's owner is the two halves joined: `"the conformance workflow
    (the specs repository's suites at the pinned releases) and make test (the
    ledger round-trip tests; the driver suite's static tier runs there)"`.
-4. The two shared rows of the profile are the joined rows above, word for
-   word.
+4. The Specifications entry of the profile is the joined row above, word
+   for word.
 5. It brings its own quoted "current wording" up to date in Consolidation
    (FLOW-10). The redraft quotes GLOBAL-08 from "Versioned seams" to the
-   rule's end, all of TEST-05, and five rows of the profile; this design
+   rule's end, all of TEST-05, and four rows of the profile; this design
    quotes the executor bullet, all of TEST-05, and three rows of the
    profile.
 
@@ -3354,10 +3389,11 @@ returns to Design for it (FLOW-06).
 
 The redraft says the same of GLOBAL-08, the seam list and the owner string
 from its side (its **Rule changes**, GLOBAL-08 and TEST-05), and of
-PROFILE-01 that whichever lands second "merges `main` and keeps both, and
-Consolidation refreshes the quotation". It does not say which comment
-stands, or give the joined string or the joined rows; whichever design is
-reviewed second is read against this section.
+PROFILE-01 that whichever lands second "merges `main` and keeps both", with
+the quotation refreshed in Consolidation, and it gives the joined
+Specifications row. It does not say which comment stands above `seams`
+or give the joined owner string; for those, whichever design merges
+second is read against this section.
 
 ## Security note
 
