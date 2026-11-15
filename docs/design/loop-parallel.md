@@ -799,10 +799,12 @@ the answer to a3.
   consolidation pass and a CI wait, taken in class 1 ahead of new work:
   four of the first run's 24 steps under (a). In one attended sitting,
   under either: four refreshes, one before each merge after the first,
-  each PR once (**Merging: a branch must contain `main`**). The waiting
-  limit bounds it: at most 8 items wait on him, so at most 8 PRs are
-  open, and (a)'s worst case is 7 + 6 + ... + 1 = 28 refreshes over
-  seven runs, seven of them on the last PR, where (g)'s is seven. (a)
+  each PR once (**Merging: a branch must contain `main`**). In general,
+  with n PRs open and one merged after each run, (a) takes n(n-1)/2
+  refreshes and (g) n-1. Nothing caps n: the waiting limit stops new
+  starts, not work in progress, so more than 8 PRs can be open (**The
+  waiting limit**). What bounds a day's refreshes is the run's budget
+  of 24 steps, which they are taken from before anything new. (a)
   costs more and is recommended all the same: after every run each open
   PR has been built and checked against the `main` it will merge into,
   so a PR that conflicts or fails is sent back the day that becomes
@@ -1722,8 +1724,8 @@ it counts by no relation, nothing holds it, and it stops one thing.
   - A fix: a feature that `follows` an item (FLOW-05, class 3). FLOW-20
     exempts a regression's fix and a security fix from the freeze, and
     the cap follows it for the same reason, which a1 (b) makes stronger:
-    a red `main` fails every refresh, so while it is red no open PR can
-    be brought up to date, and Jeff could not shorten his own list by
+    no refresh is taken onto a red `main`, so while it is red no open PR
+    can be brought up to date, and Jeff could not shorten his own list by
     merging. `wf` knows a fix by `follows`, which also covers a follow-up
     that finishes an item.
   - The fix for a red `main`: the item `main.yaml` names as the
