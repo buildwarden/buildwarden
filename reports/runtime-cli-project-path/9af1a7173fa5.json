@@ -1,0 +1,165 @@
+{
+  "feature": "runtime-cli-project-path",
+  "branch": "feat/runtime-cli-project-path",
+  "head": "9af1a7173fa5",
+  "base": "ad4ea5002e24",
+  "round": "feature",
+  "step": "f4-review",
+  "previous_report": null,
+  "scope": "git diff origin/main...feat/runtime-cli-project-path (LINT-04): 15 files, +2856/-79, 34 commits. The merge base is ad4ea50, which is origin/main (up to date). First tier-2 pass for this feature. It covers the whole diff against the design as its review approved it at a2afd08 (review entry r1, recorded at 119a0e1), plan r1 (22 tasks, with plan notes A to D), and the rule change UX-08 approved at a2afd08. Since the approval the design file changed only in its Implementation plan and Design review sections; the front-matter, Decisions, Defaults and overrides and Rule changes are as approved.",
+  "model_note": "the session's pinned model, not named in the repository; tier 2 is report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "rule_index": "100 '### <ID> — <title>' headers extracted from docs/development/*.md on the branch (LINT-01): 99 rules, and README.md's format example, which repeats RELAY-01. Judged: every agent-judgment rule, and the judgment half of every hybrid rule, that the diff reaches, against the rules as the branch changes them (UX-08 as amended, check type agent-judgment).",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass (linux/amd64 host, go1.26.3, golangci-lint 2.15.0 from /root/go/bin): 0 issues in the root module, tools/workflow and tools/tier1; then dist/tier1 -base origin/main (ad4ea5002e24...9af1a7173fa5): 0 MUST, 0 MUST-review, 0 SHOULD, 0 hints, 0 suppressed, exit 0. That run includes the rule-index self-check with UX-08's entry gone from rules.yaml. No build-tagged file is touched, so no per-platform lint is owed (FLOW-17).",
+    "make_test": "pass (exit 0): every package ok in the root module, tools/workflow and tools/tier1. go test ./cmd/warden -count=1 (no cache) also passes, and -count=3 of the runtime and doctor tests passes; no subtest is skipped on Linux.",
+    "cross_compile": "GOOS=windows and GOOS=darwin: go vet ./cmd/warden and go test -c ./cmd/warden both succeed (the tests compile for the hosts CI does not run them on).",
+    "wf_check": "dist/wf check -feature runtime-cli-project-path with -repo on the branch checkout, before this report existed: 'ok checkout is the clean branch head' (9af1a7173fa5) and 'ok rule changes cleared (FLOW-14): cleared: docs/development/ux-cli-config.md (UX-08), tools/tier1/rules.yaml (UX-08)'. Its FAIL lines were this report, not yet written, and make lint/test skipped without -run (run directly, above). wf done -run repeats the whole check.",
+    "wf_check_merge_base": "wf built from a git worktree of the merge base ad4ea50 (tools/workflow), run with -repo on the branch checkout: the same two ok lines, rule changes cleared (UX-08) on both paths.",
+    "make_enforcement": "'ok main's tier 1 findings kept (FLOW-14): the branch's tier 1 reports every finding main's does (0)', exit 0. Main's tier-1 code runs with the branch's rules.yaml, so the rules.yaml edit itself is judged under rule_changes below.",
+    "make_deadcode": "exit 0; 66 'unreachable func' lines across linux, darwin and windows, none in cmd/warden and none in a file this diff touches. They are main's, for Publish's sweep (FLOW-15).",
+    "make_integration_test": "not run: no container runtime answers on this host, and the branch has no CI run yet (GitHub Actions lists none for the branch; the integration workflow runs on the PR, which Publish opens). Run here instead: Test 0 of test-integration.sh on its own, against a warden built from the branch head into a scratch directory: 12 of 12 assertions pass (the refusals on build, clean and doctor, clean --driver vz, [Runtime] CLI, driver = \"qemu\", the flag and the variable, the two overrides, setup, clean --driver hyperv). Test 3's build from a directory whose warden.toml names the runtime (task 16) is unverified until the PR's integration run.",
+    "by_hand": "the built warden, in a directory with cli = \"./tools/docker\": build, shell, clean and doctor each exit 1 with the transitional message and fix, and leave no file behind; doctor --driver qemu says nothing about the runtime; --runtime Docker and WARDEN_CTR_CLI=nerdctl get their own messages. The output is the text the configuration reference prints.",
+    "mutation_check": "in a scratch worktree of the head, with resolveRuntime put back to main's body: go test ./cmd/warden fails in 8 test functions, 138 subtests (TestUnsupportedRuntimeIsNeverRun, ...HasNoFallback, ...RefusedFromEverySource, TestRuntimeKeyInOtherSpellings, TestRuntimeUnsetMarker and others), so the tests discriminate (GLOBAL-04; plan task 12's 'seen to fail'). The worktree is removed.",
+    "fixes_made": "none; the linter changed nothing on the code checkout (clean at 9af1a71, equal to origin/feat/runtime-cli-project-path)"
+  },
+  "rule_changes": [
+    {
+      "rule": "UX-08",
+      "change": "amend",
+      "approved_at": "a2afd08",
+      "paths": [
+        "docs/development/ux-cli-config.md",
+        "tools/tier1/rules.yaml"
+      ],
+      "verdict": "matches",
+      "note": "ux-cli-config.md: the UX-08 block on the branch (heading, Severity, Check and the four paragraphs, 29 lines) is byte for byte the 'Proposed wording' of the design at a2afd08 (extracted with git show a2afd08:docs/design/runtime-cli-project-path.md, blockquote markers removed; cmp reports no difference). The design's 'Current wording' is byte for byte main's block. Severity MUST, unchanged; Check 'automated + agent-judgment' to 'agent-judgment', as the review approved ('with check type agent-judgment'). Nothing else in the file changes. rules.yaml: exactly the line 'UX-08: {follow-up: \"a test, not a static check: validation at startup\"}' is removed, which is what 'What the enforcement change does' says; no check stops running (none ran), and the rule-index self-check accepts it. No other path under docs/development/, tools/tier1/, tools/workflow/, .claude/, .github/workflows/ or docs/design/TEMPLATE.md is in the diff. UX-08 is a project rule, not a loop rule (FLOW-14, LOOP-09). Nothing else on the branch cites the old wording: GLOBAL-10's '(UX-04, UX-08)' still holds for a value a run uses, and loop-profile.md and the README index name no UX-08 check. LINT-01 and LINT-08: the amended rule has a check type and its third paragraph is a usable judgment prompt; this report applies it."
+    }
+  ],
+  "security_boundary": {
+    "rule": "GLOBAL-06",
+    "boundary": "host-env",
+    "tripped": true,
+    "note": "The change tightens the host / build-environment boundary and loosens nothing. Read against the code: resolveRuntime is the only reader of Runtime.CLI outside tests; what it returns is containerRuntimes' own string or detection's, never the configured one; its three callers (newDriver, runClean, doctor) return its error before anything is looked up, run or created; and the value is printed once, with %q. The design's Security note states the threat, the change and the five residuals accurately (a repository still chooses among the three runtimes and the driver; PATH is the user's; F1 to F4 and F9 are project-config-trust's). The design review r1 records the note as acknowledged; the merge acknowledges it (FLOW-08). TEST-08 runs for the release that carries this."
+  },
+  "plan_notes": [
+    {
+      "note": "A",
+      "topic": "clean under hyperv and firecracker in tier 0 removes nothing; the hyperv row is skipped on Windows, in tier 0 and tier 1",
+      "verdict": "accepted",
+      "detail": "The two rows run with HOME, XDG_CACHE_HOME, LocalAppData and --tmpdir at empty temporary directories, so the lock directory, the cache and the work root that firecracker.Clean and hyperv.Clean read are empty on Linux, macOS and Windows (read: driver.LockDir and driver.CacheDir are under os.UserCacheDir). Skipping hyperv's row on a Windows host is the safe reading; what it proves is run on Linux and macOS. The Implement-time addition to the note is recorded in the plan, so it is not a silent change (FLOW-06)."
+    },
+    {
+      "note": "B",
+      "topic": "doctor under the VM drivers runs in a child process",
+      "verdict": "accepted, with finding 1",
+      "detail": "Re-executing the test binary is pure Go and the assertion (no text about the runtime) does not depend on the host. The note's 'doctor is read-only under every driver' does not hold for firecracker: see finding 1."
+    },
+    {
+      "note": "C",
+      "topic": "the tier-1 build names the runtime doctor reports, not a fixed docker",
+      "verdict": "accepted, with finding 2",
+      "detail": "It keeps the case runnable on a host with only Finch or Podman and is docker on the CI runner, as the design's Compatibility says the script relies on detection."
+    },
+    {
+      "note": "D",
+      "topic": "no Arm A corpus entry is added (SEC-03)",
+      "verdict": "accepted",
+      "detail": "The corpus does not exist yet (security-suite.md, Remaining build work). The proof SEC-04 asks for (the marker is absent and warden exits 1) is asserted in tier 0 and tier 1, and the entry's text stays in the design's Security note for the item that builds the corpus. Worth one line at Publish so that item finds it (informational 4)."
+    }
+  ],
+  "findings": [
+    {
+      "id": 1,
+      "rule": "TEST-01",
+      "related_rules": [
+        "TEST-04",
+        "FLOW-06"
+      ],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "caused_by": "diff",
+      "status": "open",
+      "file": "cmd/warden/runtime_test.go",
+      "line": 552,
+      "finding": "TestDoctorIgnoresAnUnusedRuntime runs the real `warden doctor` of each VM driver in a child process with HOME and USERPROFILE moved, but not the user cache directory. firecracker's doctor is not read-only: its reflink probe creates <user cache>/warden/firecracker/work, writes and removes probe files there and runs `cp --reflink=always`, beside other host commands (`systemctl is-active firewalld` when not root). On Linux with XDG_CACHE_HOME set in the caller's environment `make test` therefore creates that directory in the developer's real cache and leaves it; by the same code it does on Windows, under LocalAppData (not run here). Reproduced here: XDG_CACHE_HOME=<scratch> go test ./cmd/warden -run TestDoctorIgnoresAnUnusedRuntime leaves <scratch>/warden/firecracker/work. With XDG_CACHE_HOME unset (this host, and the CI runner by default) the cache is under the moved HOME and nothing is left. The test's result does not depend on any of this. Plan note B's 'doctor is read-only under every driver' is the premise that does not hold. The clean rows of TestUnusedRuntimeIsNotValidated (line 512) do redirect XDG_CACHE_HOME and LocalAppData.",
+      "suggestion": "In the doctor rows, set XDG_CACHE_HOME and LocalAppData to t.TempDir() before the child starts, as the clean rows do (two lines; child.Env is built from os.Environ() afterwards). Correct note B's sentence at Consolidation."
+    },
+    {
+      "id": 2,
+      "rule": "TEST-02",
+      "related_rules": [
+        "GLOBAL-04"
+      ],
+      "severity": "SHOULD",
+      "check": "hybrid",
+      "caused_by": "diff",
+      "status": "open",
+      "file": "test-integration.sh",
+      "line": 287,
+      "finding": "Test 3's build is the one tier-1 proof that a supported runtime named by a project's warden.toml is still built with (task 16). It runs warden with the caller's environment. Where WARDEN_CTR_CLI is set (the design notes that the native launcher's allowlist admits it), the variable outranks the file, the build never reads the file's value, and the script still prints 'built with cli = ... in the project's warden.toml'. Test 0's rt_warden removes WARDEN_CTR_CLI and WARDEN_DRIVER for this reason; Test 3 does not. On the CI runner neither variable is set, so the case is sound there.",
+      "suggestion": "Run that build, and the doctor call that picks NAMED_RUNTIME (line 284), under `env -u WARDEN_CTR_CLI -u WARDEN_DRIVER`."
+    }
+  ],
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 0,
+    "SHOULD": 2
+  },
+  "resolved_since_previous": [],
+  "carried_forward": [],
+  "new_since_previous": [
+    1,
+    2
+  ],
+  "suppressions": [],
+  "suppressions_note": "None, and none to carry over: this is the feature's first report.",
+  "back_to_design": false,
+  "back_to_design_note": "No default, merge or fallback in the diff is missing from the design's Defaults and overrides section, no relay setting is added (RELAY-08), and no finding needs a design decision.",
+  "follow_ups_filed": [],
+  "follow_ups_note": "None. Tier 1 and tier 2 found nothing on behavior main already has that is not already a queue item: doctor printing ok for a runtime it never ran (F6) and a file in the working directory hiding an installed runtime (F7) are configuration-bugfixes'; what a project's file still chooses (F1 to F4, F9) is project-config-trust's.",
+  "routing": {
+    "to_wf_implement": [],
+    "pr_body": [
+      "Security note (GLOBAL-06, host-env): the merge acknowledges it (FLOW-08). A repository's warden.toml can no longer make warden run a program it ships; the container runtime is finch, docker or podman from every source.",
+      "A user-facing break, at once and from every source (UX-03, Decision 5, a3): a path, another letter case, .exe, nerdctl or a wrapper as --runtime, WARDEN_CTR_CLI or [runtime] cli is refused with a message that says what to change. A wrapper that adds sudo or arguments, and nerdctl without Finch, have no supported replacement.",
+      "Rule change UX-08, amended as approved at a2afd08 (check type agent-judgment); its entry leaves tools/tier1/rules.yaml. The wording lists four older checks that this item does not move.",
+      "Tier 2: 0 MUST, 0 MUST-review, 2 SHOULD (findings 1 and 2).",
+      "make integration-test has not run for this branch; the PR's integration workflow is its first run. Test 0 of the script passes here (12 of 12).",
+      "Two tracked native gaps, open in the backlog: runtime-cli-project-path-windows (container-any) and runtime-cli-project-path-finch (macos-finch). No host blocks merge (FLOW-09).",
+      "At Publish (task 22): file the removal of TRANSITIONAL(runtime-former-values) as a queue item on hold until 1.0; check the merge order (this item, then project-config-trust, then driver-contract)."
+    ],
+    "publish_consolidation": [
+      "Plan note B: firecracker's doctor writes a reflink probe into the user cache; correct the sentence (finding 1).",
+      "Plan task 12 was widened at Implement to call runBuild and runShell themselves, beside newDriver (commit 8e41bd8): more coverage, same assertions. Record it as a plan deviation (FLOW-06: it is in the commit log, so not silent).",
+      "The design's front-matter still says status: draft; Publish archives it (FLOW-12)."
+    ]
+  },
+  "informational": [
+    {
+      "id": 1,
+      "topic": "Tier 2, rule by rule",
+      "note": "UX-08 as amended: the one setting the diff touches is validated by its consumer (resolveRuntime), on the value in effect after the file, variable and flag are applied, before any work, and only on the commands that run the runtime; no other command starts reading it, and nothing is added to the rule's list of older checks. GLOBAL-09 to GLOBAL-11: every default the diff has is a row of Defaults and overrides (detection when unset, the three values, the exact spelling, the empty value, one list, the transitional detection); an unsupported value in effect is an error and neither a lower level nor detection is tried (TestUnsupportedRuntimeHasNoFallback); the marker step in LoadConfig restores the user's value only when the project's file did not set the key, which is the precedence main has. The transitional detection only words a refusal: its tests assert that supportedRuntime refuses every row first. UX-04 and UX-09: a FixableError with a fix per source, exit 1, before any work. UX-01 and FLOW-15: configuration.md, cli.md, installation.md and overview.md say what the code does; the error texts in the reference are the binary's. UX-07 and ORCH-03: precedence unchanged. ORCH-01: no file under driver/ is in the diff. GLOBAL-01: the new comments say why (the marker, the list's own string, the transitional file's removal). GLOBAL-07: the transitional detection uses string operations, one table on every OS; the shell-script fakes skip on Windows as fakeRuntime does, and that gap is tracked. TEST-04: no wall-clock, network or unseeded choice decides a result (the two-spellings case accepts both outcomes of the decoder's map order). TEST-06: the security path is covered from all four sources, in six spellings of the key, through build, shell, clean and doctor. FLOW-02: the declared impact matches the diff. FLOW-19: approval and the rule-change line are recorded; the impact fields are unchanged since a2afd08. FLOW-20: exempt as a security fix. BOOT, RELAY, EXEC, SEC-05, SEC-07 and the LOOP rules: not reached."
+    },
+    {
+      "id": 2,
+      "topic": "For the human's eye: the message a hostile repository's file gets",
+      "note": "With cli = \"./tools/docker\" in a cloned repository's warden.toml, the error is the transitional one: 'the container runtime is named, not given as a path' and 'To fix: set it to docker; warden looks docker up on PATH, so if it is installed outside PATH, add its directory to PATH'. That is the design's wording (The error, Transitional), no directory from the value is printed, and the tests pin it. Unlike the permanent error for a file, it does not end with '--runtime with one of those replaces it for one command', the way to build someone else's repository without editing it; the configuration reference does say so. Not a finding: the design's table gives each transitional form a fix of its own and the review approved it. If the clause is wanted on the file-sourced transitional messages too, that is a wording change for Design."
+    },
+    {
+      "id": 3,
+      "topic": "Tier 0 on a Windows host",
+      "note": "TestDoctorIgnoresAnUnusedRuntime's hyperv row runs doctor's Hyper-V host probes (PowerShell) on a Windows host, so its duration there depends on the host; not run here. CI does not run make test on Windows; the tracked gap runtime-cli-project-path-windows runs go test ./cmd/warden there and will show it."
+    },
+    {
+      "id": 4,
+      "topic": "The Arm A corpus entry (SEC-03, plan note D)",
+      "note": "The entry for the TEST-08 suite lives only in the design's Security note until the corpus is built. No queue item for the corpus exists to point at it."
+    },
+    {
+      "id": 5,
+      "topic": "Not judged here",
+      "note": "FLOW-18 (what a session put in its prompts) and FLOW-10 (Publish's consolidation) are outside a diff review."
+    }
+  ]
+}

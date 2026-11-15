@@ -3,7 +3,7 @@ title: 'A project''s warden.toml may name the container runtime, not a path to r
 priority: 64
 status: in_progress
 round: feature
-phase: 4
+phase: 5
 design: docs/design/runtime-cli-project-path.md
 branch: feat/runtime-cli-project-path
 alters_relationships: false
@@ -50,10 +50,17 @@ steps:
   - id: f4-review
     phase: 4
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f5-guide
+    phase: 5
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261112T230554Z
-      expires: 2026-11-16T00:09:26.283921541Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -199,3 +206,9 @@ history:
   - at: 2026-11-15T22:09:26Z
     by: cloud/20261112T230554Z
     event: claimed f4-review until 2026-11-16T00:09:26Z
+  - at: 2026-11-15T22:22:04Z
+    by: cloud/20261112T230554Z
+    event: done f4-review
+  - at: 2026-11-15T22:22:04Z
+    by: cloud/20261112T230554Z
+    event: entered phase 5 (guide)
