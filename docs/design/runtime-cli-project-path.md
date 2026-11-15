@@ -1298,6 +1298,26 @@ questions, a4 (when the transitional detection is removed), a5 (how UX-08
 and `main` agree on the day this merges) and a6 (whether the rule reaches
 flags); and the outcome.
 
+### 2026-11-15, first sitting, outcome: approved
+
+- **r1, 2026-11-15: approved at `a2afd08`** (Jeff; read at `b8f692f` and,
+  after the redraft on his answers, at `534b768`; page
+  https://claude.ai/artifact/Wchjm4BS8LognkSHAMiQup). Folded in at
+  `a2afd08`, by his word in the sitting: a4 (d), the transitional detection
+  is kept until 1.0, where the design proceeded with removal after two more
+  releases. Confirmed as drafted, each asked on its own: a5 (a), the amended
+  UX-08 lists the four older checks and this item moves none; a6 (a), the
+  rule covers file and environment settings and a command may refuse a flag
+  its run cannot use. a1 to a3 are as recorded in the entry above, with the
+  two follow-ups answered in the same sitting: the limit to the supported
+  runtimes holds for every source, and the general rule is written in this
+  item as an amendment to UX-08. The Security note is acknowledged
+  (GLOBAL-06). The nine separate findings were filed on his word as
+  `project-config-trust` (one security design) and `configuration-bugfixes`
+  (one feature, on hold behind the freeze).
+- **rule change UX-08 approved at `a2afd08`**, as worded under **Rule
+  changes**, with check type `agent-judgment`.
+
 ## Consolidation
 
 Filled in at Publish (FLOW-10, FLOW-15).
