@@ -30,7 +30,7 @@ rule_changes:
 concepts: [seams, specs-repo, conformance, conformance-harness, relay-claim, claim-protocol,
            collector, collector-protocol, collector-outputs, collector-inputs,
            relay-guest-api, executor-initialize, bootstrap-config, specs-pin,
-           seam-contract, program]
+           seam-contract, openapi, program]
 related: [componentization.md, specs-migration.md, relay05-specs-wording.md,
           tier1-static-checks.md, build-link-subnet.md, hyperv-relay-per-build-channel.md,
           unified-bootstrap.md, relay-leaf-crl.md, ledger-environment-types.md,
@@ -329,12 +329,18 @@ Nothing in any of the five is approved.
      README.md                       index: each specification, its suite, its implementations
      CHANGELOG.md                    one entry per release, by specification
      relay-claim/v1.md               seam 1
+     relay-claim/v1.openapi.json     its HTTP exchange (a9)
      relay-claim/v1.config.schema.json     the claim's request body
      relay-claim/v1.identity.schema.json   the claim's reply
      collector-outputs/v1.md         seam 2, the outputs a collector stores (a10)
+     collector-outputs/v1.openapi.json
      collector-inputs/v1.md          seam 2, the inputs and signals it serves (a10)
+     collector-inputs/v1.openapi.json
      collector-inputs/v1.complete.schema.json   the completion signal
      relay-guest-api/v1.md           seam 3
+     relay-guest-api/v1.artifacts.openapi.json  the reserved host `artifacts`
+     relay-guest-api/v1.cwd.openapi.json        the reserved host `cwd`
+     relay-guest-api/v1.control.openapi.json    the control plane
      executor-initialize/v1.md       seam 5
      bootstrap-config/v1.md          seam 6
      bootstrap-config/v1.schema.json
@@ -346,7 +352,10 @@ Nothing in any of the five is approved.
    schemas beside the document they belong to. The extension over RELAY-05's
    layout: a directory may hold more than one schema for a version, named
    `v<N>.<part>.schema.json`, because a protocol has several JSON bodies where
-   a ledger metadata schema has one. A schema's `$id` is a name that mirrors
+   a ledger metadata schema has one. A specification that is an HTTP
+   protocol also holds its OpenAPI description, `v<N>.openapi.json`, or
+   `v<N>.<part>.openapi.json` where it defines more than one HTTP server
+   (a9, **The OpenAPI descriptions**). A schema's `$id` is a name that mirrors
    its path in the specs repository,
    `https://github.com/buildwarden/buildwarden-specs/<directory>/v<N>.<part>.schema.json`
    (RELAY-05's schema-identity rule, applied to the new repository), and does
@@ -359,13 +368,17 @@ Nothing in any of the five is approved.
    (a10): a directory is a specification, not a seam.
    *Rejected:* one directory per JSON body (`relay-claim-config/`,
    `relay-claim-identity/`), which scatters one protocol over several
-   directories; an OpenAPI tree, see Decision 3. *Rejected:* one
+   directories; an OpenAPI tree apart from the documents, where a
+   description and the prose it must agree with would sit in different
+   places. *Rejected:* one
    `collector/v1.md` in two parts, each with its own requirement prefix
    and suite, which this design proposed until the review (a10): Jeff
    chose two documents.
 
-3. **Document format: Markdown prose with numbered requirements, and JSON
-   Schema for JSON bodies.** Each normative statement uses the RFC 2119 words
+3. **Document format: Markdown prose with numbered requirements, JSON
+   Schema for JSON bodies, and an OpenAPI description beside the prose for
+   the HTTP seams** (a9, Jeff's answer of 2026-11-15). Each normative
+   statement uses the RFC 2119 words
    and has a stable identifier (`CLAIM-7`, `COLLOUT-3`, `COLLIN-2`,
    `GUEST-12`, `INIT-4`, `BOOTCFG-2`). Every document has the same
    sections: scope and roles;
@@ -374,10 +387,19 @@ Nothing in any of the five is approved.
    requirements of that role). A suite case names the requirements it checks,
    and the specs repository's CI fails when a requirement is neither covered
    by a case nor listed, with a reason, as not machine-checked. That is the
-   coverage LOOP-03 asks of a specification that has a suite. *Rejected:*
-   OpenAPI for the HTTP seams. It cannot state the tunnel upgrade, HTTP
-   trailers, DNS and DHCP answers or ordering between endpoints, so prose
-   would still carry the contract and the two would drift. *Rejected:* prose
+   coverage LOOP-03 asks of a specification that has a suite. The
+   specifications that are HTTP protocols also carry an OpenAPI 3.1
+   description of their paths, methods, parameters, headers, bodies and
+   status codes (**The OpenAPI descriptions**). The requirements stay the
+   contract: they are what a case cites and what the coverage check
+   counts, and where the OpenAPI file and a requirement disagree, the
+   requirement stands. Checks in the specs repository's `ci` hold the file
+   to the requirements. *Rejected:* OpenAPI in place of the numbered
+   requirements, which is how this design read the option until the
+   review. It cannot state what follows the tunnel upgrade, HTTP trailers,
+   DNS and DHCP answers or ordering between endpoints, so prose would
+   still carry part of the contract with nothing to cite. Jeff's answer
+   keeps the requirements and adds the description. *Rejected:* prose
    with no identifiers, which leaves "is this sentence tested" to a reader.
 
 4. **Versioning: a major version per document, and semver tags for the
@@ -698,8 +720,16 @@ release; its recommended answer is still A.
   2119 words and a stable identifier per requirement that suite cases cite,
   plus JSON Schema 2020-12 for JSON bodies; the specs repository's CI fails
   on a requirement with no case and no stated reason; (B) OpenAPI for the
-  HTTP seams; (C) prose without requirement identifiers. *Proceeding with A;
-  confirm.*
+  HTTP seams; (C) prose without requirement identifiers. **Answered
+  2026-11-15, changed, in Jeff's words:** "Similar to the Markdown with
+  requirement IDs and CI failing on requirements without test cases or
+  conformance testing, but also with the OpenAPI for the HTTP seams as
+  well". So (A), and for the HTTP seams an OpenAPI description too. The
+  design proposed A alone and had B as a rejected alternative; it is
+  revised (Decision 3, **The OpenAPI descriptions**). Four specifications
+  get one: `relay-claim`, `collector-outputs`, `collector-inputs` and
+  `relay-guest-api`. The requirements stay the contract, and checks hold
+  the OpenAPI files to them.
 - **a10. How the collector specification's two parts are laid out**
   (umbrella a1): the outputs a collector stores, and the inputs and
   signals it serves. Options: (A) one document, `collector/v1.md`, with
@@ -1333,6 +1363,98 @@ with them), the *relay* (carries it), the *executor* (reads it).
   Linux guest, `append` for Windows and macOS. That choice is the kit's
   policy, stated as such and not required of other producers.
 
+### The OpenAPI descriptions
+
+Jeff's answer to a9 adds an OpenAPI description to the specifications
+that are HTTP protocols, beside the Markdown and not in place of it.
+
+**Which specifications get one,** decided from the code on `main`:
+
+| Specification | Over HTTP | OpenAPI file |
+|---|---|---|
+| `relay-claim` | Yes: `POST /v1/tunnel` and `POST /v1/claim` on the claim endpoint (`relaycfg.go`'s mux) | `v1.openapi.json` |
+| `collector-outputs` | Yes: its five endpoints (`collector.go`'s mux) | `v1.openapi.json` |
+| `collector-inputs` | Yes: its eight endpoints, `/healthz` and `/v1/status` among them | `v1.openapi.json` |
+| `relay-guest-api` | In part. Three HTTP servers with fixed paths: the reserved host `artifacts`, the reserved host `cwd`, and the control plane on port 8300. DHCP, ARP and DNS are not HTTP, and the proxy for every other host is HTTP with no path of its own | `v1.artifacts.openapi.json`, `v1.cwd.openapi.json`, `v1.control.openapi.json` |
+| `executor-initialize` | No: a command line, its steps and its exit. The requests it makes are the client's side of `relay-guest-api` | None |
+| `bootstrap-config` | No: a JSON document. The two paths that carry it are `collector-inputs`' and `relay-guest-api`'s | None; its JSON Schema is its machine description |
+
+The guest API has three files because an OpenAPI document keys its
+operations by path alone, and the three servers' paths overlap: `/ca.pem`
+is on `artifacts` and on the control plane, and on `artifacts` any other
+`POST` path is an artifact's name.
+
+**The version and the form.** OpenAPI 3.1, in JSON: the file's `openapi`
+field is `3.1.0` and its `jsonSchemaDialect` is JSON Schema 2020-12. 3.1
+is the first version whose schema language is JSON Schema 2020-12, so the
+file can refer to the schema files the specification already has and
+defines none of its own. 3.0 cannot, and 3.2 adds nothing these files
+use. JSON, not YAML, because the other machine files of the layout are
+JSON and the check that reads the file then needs no second parser.
+`info.version` is the document's major version, `v<N>`, as the file name
+has it; a release's version is its tag's.
+
+**Which is normative.** The requirements in `v<N>.md` are. They are the
+unit a suite case cites and the coverage check counts (Decision 3), and
+they say things OpenAPI cannot. The OpenAPI file describes the paths,
+methods, parameters, headers, bodies and status codes that the
+requirements state, and adds none. Where the two disagree, the
+requirement stands and the file is at fault. It describes the protocol
+as a conforming client uses it: what the Go relay or the disk collector
+does beyond that (D3, D7, D8, D9, D10) is in each document's "Known
+divergences", in prose.
+
+**How agreement is checked,** in the specs repository's `ci`, for each
+directory that holds an OpenAPI file:
+
+1. *The file is valid.* It validates against the OpenAPI Initiative's
+   JSON Schema for 3.1, a copy of which is kept in the repository.
+2. *One definition of each body.* Every JSON request or response body
+   whose shape the specification defines is a `$ref` to a schema file in
+   the same directory, and the OpenAPI file defines no schema of its own
+   for one. Every schema file in the directory is referred to by at least
+   one operation. So a body has one definition, the one the documents'
+   examples and the suite's cases are already checked against.
+3. *Every operation and every status is named by a requirement.* Each
+   operation, and each response status under it, carries
+   `x-requirements`: the identifiers of the requirements that state it.
+   The check fails on an operation or a status with none, and on an
+   identifier that is not in the directory's `v<N>.md`.
+
+What these do not catch: a requirement that states an endpoint, a status
+or a header the file lacks. No check parses prose for that. Review reads
+the two side by side, and the reader who finds one files it against the
+OpenAPI file. A check that validated the suite's own traffic against the
+file was considered and is not built here: the cases send requests the
+description does not allow on purpose (a wrong method, an unknown path),
+so it would need its own list of exceptions.
+
+An OpenAPI file refers only to schemas in its own directory. A body that
+another specification defines, the bootstrap config on
+`GET /v1/bootstrap` and on `http://artifacts/bootstrap`, is described as
+`application/json` and named in prose, so that no specification's files
+depend on another's directory.
+
+**What OpenAPI cannot say, and stays prose only:**
+
+- *Ordering.* The ledger request before any other output, `ready` before
+  the claim is answered, the outputs before the completion, one claim and
+  one tunnel for a relay's life. The file can give the 409 its status and
+  not the state that produces it.
+- *The tunnel.* The file states the `101` and its two headers. That the
+  connection then carries HTTP/2 with prior knowledge and the roles
+  reversed is prose.
+- *Timing.* The heartbeat's 2 s and 5 s, the collector's limits on a
+  session, the health poll.
+- *Trailers and streams.* The `Warden-Hash` request trailer, bodies sent
+  as they are produced, and the limits on a stream's size.
+- *Whatever is not one path.* "Any other method is 405" and "anything
+  else is 404", routing by the request's `Host` whatever its port, and
+  the proxy for every other host with its byte-exact reply (RELAY-02).
+- *The link below HTTP.* The frame path and the kernel path, ARP, DHCP
+  and DNS.
+- *Differences by mode* (RELAY-04) and the known divergences.
+
 ### Divergences found
 
 Places where the code differs from a rule, from its own comment, or from the
@@ -1688,7 +1810,12 @@ This design keeps its names and proposes none to K1.
   each schema's `$id` as Decision 2 has it; schemas valid 2020-12; the
   documents' JSON examples validate against them); requirement
   identifiers unique, and each covered by a case or listed as not
-  machine-checked; `go vet` and `go test ./...`, which includes a
+  machine-checked; the three OpenAPI checks (**The OpenAPI
+  descriptions**: each file valid 3.1, every JSON body a reference to a
+  schema file beside it, every operation and status named by a
+  requirement); the check that the two collector documents state their
+  common part alike (**Seam 2**); `go vet` and `go test ./...`, which
+  includes a
   self-test that runs each suite against the harness's own counterpart role
   (the `relay` suite against the harness's relay, the collector suites
   against its collector), so a suite and the model it was written from
@@ -1842,7 +1969,8 @@ none.
   seam: what it is between, its specification (two for seam 2, a10), the
   package that implements it here, and the suite that checks it. It is the
   only file in this
-  repository that links into the specs repository, and all its links name
+  repository that links into the specs repository (a row links the
+  seam's OpenAPI description too, where it has one), and all its links name
   one ref: the pinned tag, or, while the pin is a pseudo-version, the commit
   that pseudo-version names. `make pin-specs` rewrites that ref together
   with the pin. A tier-0 test in `specs/specs_test.go` fails when the page's
@@ -2111,11 +2239,15 @@ new and states what `main` does.
 
 | Seam | Specification document, in the specs repository | Requirements | Checked by |
 |---|---|---|---|
-| 1 `relay-claim` | `relay-claim/v1.md`, with `v1.config.schema.json` and `v1.identity.schema.json` | `CLAIM-<n>`, all new | The `relay` suite (relay role); the collector suites (claimant role) |
-| 2 `collector` | Two documents (a10): `collector-outputs/v1.md`, and `collector-inputs/v1.md` with `v1.complete.schema.json` | `COLLOUT-<n>` and `COLLIN-<n>`, all new | `collector-outputs`, `collector-inputs`; the `relay` suite (the relay's side) |
-| 3 `relay-guest-api` | `relay-guest-api/v1.md` | `GUEST-<n>`, all new | The `relay` suite (relay role). The build environment's side: no suite yet (a11) |
+| 1 `relay-claim` | `relay-claim/v1.md`, with `v1.openapi.json`, `v1.config.schema.json` and `v1.identity.schema.json` | `CLAIM-<n>`, all new | The `relay` suite (relay role); the collector suites (claimant role) |
+| 2 `collector` | Two documents (a10): `collector-outputs/v1.md` with `v1.openapi.json`, and `collector-inputs/v1.md` with `v1.openapi.json` and `v1.complete.schema.json` | `COLLOUT-<n>` and `COLLIN-<n>`, all new | `collector-outputs`, `collector-inputs`; the `relay` suite (the relay's side) |
+| 3 `relay-guest-api` | `relay-guest-api/v1.md`, with `v1.artifacts.openapi.json`, `v1.cwd.openapi.json` and `v1.control.openapi.json` | `GUEST-<n>`, all new | The `relay` suite (relay role). The build environment's side: no suite yet (a11) |
 | 5 `executor-initialize` | `executor-initialize/v1.md` | `INIT-<n>`, all new | No suite yet (a11); the Go tests in `cmd/warden-io/` |
 | 6 `bootstrap-config` | `bootstrap-config/v1.md`, with `v1.schema.json` | `BOOTCFG-<n>`, all new | The `relay` suite (as carried), `collector-inputs` (as produced). As the executor reads it: no suite yet (a11) |
+
+The four OpenAPI files' operations are new too (a9). They add no
+requirement: each operation and status names the requirements that state
+it (**The OpenAPI descriptions**).
 
 **What changes in them.** Each document is new. What it must state is
 listed seam by seam under **What each specification covers**, and that
@@ -2735,15 +2867,17 @@ its branch `feat/seam-specs`; **K** is this repository, on this branch.
    is missing or differs.
 1. **S** Layout, `README.md`, `CHANGELOG.md`, `go.mod`, `.entire/settings.json`
    naming the private sessions repository, and the `ci` and `flow18`
-   workflows (FLOW-17, FLOW-18, a4).
-2. **S** `relay-claim/v1.md` with its two schemas (GLOBAL-08, RELAY-08,
-   RELAY-04). D17 is reproduced by hand first, against a relay built from
-   `main` (**Divergences found**).
+   workflows (FLOW-17, FLOW-18, a4), the `ci` checks of the layout and of
+   the OpenAPI files among them (a9).
+2. **S** `relay-claim/v1.md` with its two schemas and its OpenAPI file
+   (GLOBAL-08, RELAY-08, RELAY-04, a9). D17 is reproduced by hand first,
+   against a relay built from `main` (**Divergences found**).
 3. **S** `collector-outputs/v1.md`, and `collector-inputs/v1.md` with the
-   completion schema; the part both state, written in each, and the check
-   that keeps the two the same (RELAY-07, umbrella a1, a10).
-4. **S** `relay-guest-api/v1.md` (BOOT-04, RELAY-02). D18 is reproduced by
-   hand first, in the same way.
+   completion schema, each with its OpenAPI file; the part both state,
+   written in each, and the check that keeps the two the same (RELAY-07,
+   umbrella a1, a10, a9).
+4. **S** `relay-guest-api/v1.md` with its three OpenAPI files (BOOT-04,
+   RELAY-02, a9). D18 is reproduced by hand first, in the same way.
 5. **S** `executor-initialize/v1.md` and `bootstrap-config/v1.md` with its
    schema (EXEC-04, BOOT-05).
 6. **S** The harness core: target files, the `exec`, `oci` and `external`
