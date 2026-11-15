@@ -1,6 +1,6 @@
 ---
 feature: runtime-cli-project-path
-status: draft
+status: archived
 drivers: [container, qemu, vz]  # the setting is the container driver's; warden clean also
                          # runs the container runtime under qemu and vz, so it validates
                          # the setting there. The change is in cmd/warden (resolveRuntime
@@ -1789,4 +1789,122 @@ None.
 
 ## Archive summary
 
-Filled in at Publish (FLOW-12).
+Designed 2026-11-14 and 2026-11-15 as a security fix, exempt from FLOW-20's
+freeze. The first draft limited only the project's file; the design review
+of 2026-11-15 changed a1, a2 and a3 in Jeff's words and approved the
+redraft at `a2afd08`, with rule change UX-08 (amend) approved by name at
+the same commit. Planned (22 tasks) and implemented the same day; tier 2 at
+`9af1a7173fa5`: 0 MUST, 0 MUST-review, 2 SHOULD open. `main` moved once
+since the fork (#119, merged into the branch during the review). Published
+2026-11-15.
+
+- **The hole.** `[runtime] cli` in the working directory's `warden.toml`
+  was run with `exec.Command` as given, so a cloned repository could make
+  `warden build`, `shell` or `clean` run a program it ships, on the host,
+  before any isolation exists and outside the ledger: `cli =
+  "./tools/docker"`, or `cli = "sh"` with a file named `pull` beside it.
+  `warden doctor` printed the value without running it.
+- **Built** (all in `cmd/warden`; no `driver/` tree is edited). The
+  container runtime is `finch`, `docker` or `podman`, or not set, from
+  every source: `--runtime`, `WARDEN_CTR_CLI`, and `[runtime] cli` in
+  either config file. One list, `containerRuntimes` (`config.go`), serves
+  detection, the check (`supportedRuntime`), the error's names and the
+  transitional messages. `resolveRuntime` (`main.go`) is the only reader
+  of `Runtime.CLI`: empty means `DetectRuntime`, a member of the list
+  returns the list's own string, and anything else is the error from
+  `unsupportedRuntime`, before anything is looked up, run or created. Its
+  callers are `newDriver` (`build`, `shell`), `doctor` and `runClean`
+  (every driver but `firecracker` and `hyperv`). The match is exact:
+  no letter case folded, no `.exe` stripped, nothing trimmed. The error is
+  a `driver.FixableError`, exit 1; it names the source (`CLISource`, a
+  field beside the value), prints the value once with `%q`, and takes no
+  other text from it. `LoadConfig` tells whether the project's file set
+  the key with a marker no TOML file can hold (`unsetCLI`, `"\xff"`), not
+  with the decoder's `IsDefined`, so every spelling of the key is seen.
+- **Built: the transitional part.** `runtime_former.go`
+  (`formerRuntimeValue`) words the refusal for the four forms that ran
+  before the fix: a supported runtime in another letter case or with
+  `.exe`; a path to a supported runtime; `nerdctl`; a path to any other
+  program. It only words: every value it sees has already been refused.
+  The marker `TRANSITIONAL(runtime-former-values)` is in five places: that
+  file, its call in `unsupportedRuntime`, `runtime_former_test.go`, the
+  subsection "A path, or another runtime" of `configuration.md`, and the
+  upgrade note in `installation.md`. All five go at 1.0 (a4).
+- **Built: the rule.** UX-08 as amended (`ux-cli-config.md`, check type
+  `agent-judgment`; its follow-up line leaves `tools/tier1/rules.yaml`): a
+  setting held in a config file or the environment is validated by its
+  consumer, when it initializes, after the overrides, and only when the
+  run uses it. It lists four older checks on `main` that it does not yet
+  describe, and this item moves none (a5). A command may still refuse, at
+  startup, a flag its run cannot use (a6).
+- **Built: tests and docs.** `runtime_test.go` covers the four sources,
+  six spellings of the key, `build`, `shell`, `clean` and `doctor`, that
+  the shipped program is never run (a marker file stays absent) and that
+  an unsupported value has no fallback; with `resolveRuntime` put back to
+  `main`'s body, 8 test functions fail. Test 0 of `test-integration.sh`
+  runs the built `warden` against project directories, and Test 3 builds
+  with the runtime named in the project's file. Reference:
+  `configuration.md` (the container runtime section) and `cli.md`; guides:
+  `drivers.md`, `first-build.md`, `installation.md`; `overview.md`'s
+  `warden build` and its note on `warden clean`.
+- **Decisions taken.** Three values from every source, not only from the
+  project's file (1, a1). The consumer validates the value in effect, and
+  a run that does not use the setting does not read it: `[runtime] cli =
+  "nonsense"` is no error under `--driver hyperv`, and `--runtime docker`
+  builds in a directory whose file is refused (2, a2). The value run is
+  the list's own string, never the configured one (3). An error from the
+  first release, with a permanent part and a transitional part kept until
+  1.0 (4, a3, a4). A break for values that ran before, from every source,
+  with no warning period (5, UX-03): a wrapper that does more than set
+  variables, and `nerdctl` without Finch, have no supported replacement.
+  UX-08 amended here, naming no level of config file (6).
+- **Rejected.** Limiting only the project's file (the first draft, with
+  `Runtime.RefusedCLI` and a walk of the decoder's metadata). Any bare
+  name looked up on `PATH` (`cli = "sh"` shows a name is not enough).
+  Adding `nerdctl`. Normalizing case, `.exe` or space. Validating as the
+  file loads, on every command and driver. Skipping an unsupported value
+  for the next level or detection (GLOBAL-10, GLOBAL-11). A release that
+  warns and still runs the value. Removing the transitional detection
+  after two releases. Printing a directory from the value in a fix.
+  Resolving the name to an absolute path or checking the file's owner.
+- **Open.** Review SHOULDs S1 (TEST-01: `TestDoctorIgnoresAnUnusedRuntime`
+  does not move the user cache directory, and firecracker's doctor writes
+  a probe there) and S2 (TEST-02: Test 3 of `test-integration.sh` inherits
+  the caller's `WARDEN_CTR_CLI`), for Jeff at merge. `make
+  integration-test` has its first run in the PR's `integration` workflow:
+  no container runtime answers on the host the loop built this on. Two
+  tracked native gaps, neither blocking: `runtime-cli-project-path-windows`
+  (`container-any`) and `runtime-cli-project-path-finch` (`macos-finch`).
+  The Security note's entry for the TEST-08 suite (Arm A) is in this
+  design only, because the corpus is not built. The removal of the
+  transitional detection at 1.0 is a queue item of its own, on hold, which
+  the attended session files; it does not `follow` this item. Whether "an
+  error at once, with transitional wording kept until 1.0" becomes a rule
+  is Jeff's to decide; it is written in no rule here.
+- **Not this item's.** What a project's file still chooses (the relay
+  image, the relay's trust roots, host directories, the Hyper-V base
+  image, the driver, and which of the three runtimes) and the user-level
+  config file are `project-config-trust`'s (F1 to F4, F9). F5 to F8 are
+  `configuration-bugfixes`'. The order of merging is this item, then
+  `project-config-trust`, then `driver-contract` (K1).
+- **For future designs touching `container-runtime`, `runtime-cli`,
+  `supported-runtimes`, `config-validation`, `consumer-validates`,
+  `lazy-validation`, `project-config`, `build-context-trust`,
+  `host-execution`, `path-lookup` or `transitional-detection`:** a value a
+  build context can set never reaches `exec` as a program; compare it with
+  a fixed list and run the list's own string. Keep one reader of such a
+  setting, and check the value in effect, so that the check does not
+  depend on which file set the key or how the key was spelled. Add a
+  runtime by adding it to `containerRuntimes` (K1 moves the list, the
+  check, detection and the transitional file into the container driver;
+  **What K1 has to keep** is the hand-off, and it compares the runtime
+  read back from the driver's state file with the list again). An
+  unsupported value in effect is an error, never a fallback. A new setting
+  follows UX-08 as amended: validated by its consumer, after the
+  overrides, only when the run uses it. An error that quotes a value from
+  a file someone else wrote prints it once with `%q` and builds the fix
+  from fixed text. What is left open on this boundary is in the Security
+  note: the name is looked up on the user's `PATH`, and a repository
+  still chooses among the three runtimes until `project-config-trust`.
+  Code that exists only to word a refusal of what once worked sits in one
+  file, behind one call, under one `TRANSITIONAL(<name>)` marker.
