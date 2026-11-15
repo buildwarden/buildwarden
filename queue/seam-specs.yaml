@@ -129,30 +129,33 @@ questions:
     recommended: tools/conformance/go.mod, a nested module requiring the specs module at one version; a release tag on a pull request and on main, a pseudo-version only on a branch while work is in progress; this file is tier 1's contract path for the five seams
   - id: a8
     kind: assumed
-    status: open
+    status: confirmed
     question: The specs repository's versioning and release scheme (Decision 4).
     options:
       - 'a major version per document (v<N>.md, edited in place before 1.0) and semver tags v0.x.y for the repository as a whole; minor may break a passing implementation, patch may not; first release v0.1.0 (who cuts it: a15)'
       - a tag per specification
       - the harness versioned apart from the documents
     recommended: 'a major version per document (v<N>.md, edited in place before 1.0) and semver tags v0.x.y for the repository as a whole; minor may break a passing implementation, patch may not; first release v0.1.0 (who cuts it: a15)'
+    answer: '(B) A tag per specification. Departs from the recommendation (one tag for the repository). Read with his remark on a7: ''I assumed that a specific release of the specs themselves is coincident with the build of the conformance tools that test them'', so each specification''s release carries the build of the conformance tooling that tests it. The design is revised. Jeff, design review, 2026-11-15.'
   - id: a9
     kind: assumed
-    status: open
+    status: confirmed
     question: The specification document format (Decision 3).
     options:
       - Markdown prose with RFC 2119 words and a stable identifier per requirement that suite cases cite, plus JSON Schema 2020-12 for JSON bodies; CI fails on a requirement with no case and no stated reason
       - OpenAPI for the HTTP seams
       - prose without requirement identifiers
     recommended: Markdown prose with RFC 2119 words and a stable identifier per requirement that suite cases cite, plus JSON Schema 2020-12 for JSON bodies; CI fails on a requirement with no case and no stated reason
+    answer: 'Changed, in Jeff''s words: ''Similar to the Markdown with requirement IDs and CI failing on requirements without test cases or conformance testing, but also with the OpenAPI for the HTTP seams as well''. So option (A) and, for the HTTP seams, an OpenAPI description too. The design is revised. Jeff, design review, 2026-11-15.'
   - id: a10
     kind: assumed
-    status: open
+    status: confirmed
     question: How the collector specification's two parts (umbrella a1) are laid out.
     options:
       - one document, collector/v1.md, with Part A (outputs stored) and Part B (inputs and signals served), each with its own requirement prefix and suite
       - two documents, collector-outputs/ and collector-inputs/
     recommended: one document, collector/v1.md, with Part A (outputs stored) and Part B (inputs and signals served), each with its own requirement prefix and suite
+    answer: '(B) Two documents: the collector''s outputs and the collector''s inputs and signals are separate specifications. Departs from the recommendation (one document in two parts); the design is revised. Jeff, design review, 2026-11-15.'
   - id: a11
     kind: assumed
     status: open
@@ -297,3 +300,12 @@ history:
   - at: 2026-11-15T21:05:00Z
     by: human/jeff
     event: 'repository confirmed for creation (umbrella a11), design review 2026-11-15: the name is buildwarden/buildwarden-specs; public; its first commit carries a README stub and the Apache-2.0 LICENSE only, with no NOTICE file. The session cannot create repositories, so Jeff creates it (main protected with a pull request required, no force-push, no deletion; head branches deleted on merge; Actions enabled; the Claude GitHub App installed) and the session then attaches it.'
+  - at: 2026-11-15T20:51:13Z
+    by: human/jeff
+    event: 'assumed question a8 confirmed: (B) A tag per specification. Departs from the recommendation (one tag for the repository). Read with his remark on a7: ''I assumed that a specific release of the specs themselves is coincident with the build of the conformance tools that test them'', so each specification''s release carries the build of the conformance tooling that tests it. The design is revised. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:51:13Z
+    by: human/jeff
+    event: 'assumed question a9 confirmed: Changed, in Jeff''s words: ''Similar to the Markdown with requirement IDs and CI failing on requirements without test cases or conformance testing, but also with the OpenAPI for the HTTP seams as well''. So option (A) and, for the HTTP seams, an OpenAPI description too. The design is revised. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:51:13Z
+    by: human/jeff
+    event: 'assumed question a10 confirmed: (B) Two documents: the collector''s outputs and the collector''s inputs and signals are separate specifications. Departs from the recommendation (one document in two parts); the design is revised. Jeff, design review, 2026-11-15.'
