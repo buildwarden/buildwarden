@@ -4,7 +4,7 @@ priority: 61
 kind: process
 status: in_progress
 round: process
-phase: 1
+phase: 2
 design: docs/design/loop-parallel.md
 branch: feat/loop-parallel
 alters_relationships: false
@@ -14,10 +14,10 @@ steps:
   - id: x1-design
     phase: 1
     affinity: human
-    status: pending
+    status: done
     lease:
-      claimed_by: human/jeff
-      expires: 2026-11-14T22:58:10.653512627Z
+      claimed_by: ""
+      expires: null
   - id: x4-state
     phase: 4
     affinity: human
@@ -26,6 +26,13 @@ steps:
       claimed_by: ""
       expires: null
     note: 'After this item''s PR has merged, and once no live lease was claimed before the merge commit''s time; not before. In an attended session with Jeff, on the workflow branch (design: Implementation plan, "After the merge"): config.yaml gains repository: buildwarden/buildwarden, the limits.in_progress comment becomes "5 when unset", and limits.waiting_on_human: 8 is written out; areas.yaml saved on Jeff''s word (dist/wf validate -areas, then dist/wf commit -worker human/<name>) and dist/wf areas -check run on it; dist/wf main; the ruleset on main is Jeff''s to set or decline, the session reads it and records it with dist/wf main -up-to-date required|not-required, and with it he says what becomes of auto-tidy.yml; README.md (layout table, the queue file''s new fields and pr.head, the tracked round, wf next''s paragraph, limits.waiting_on_human, the budget comment, wf commit in the commands); a human dist/wf declare on seam-specs and on driver-contract; seam-specs'' repos on Jeff''s word.'
+  - id: x2-implement
+    phase: 2
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 3
@@ -279,3 +286,9 @@ history:
   - at: 2026-11-15T22:03:58Z
     by: human/jeff
     event: 'assumed question a20 confirmed: (a) wf urgent sets and clears, for a human worker only. As recommended. Answered 2026-11-15, second sitting.'
+  - at: 2026-11-15T22:24:27Z
+    by: human/jeff
+    event: done x1-design
+  - at: 2026-11-15T22:24:27Z
+    by: human/jeff
+    event: entered phase 2 (implement)
