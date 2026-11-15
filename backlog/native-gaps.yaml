@@ -680,6 +680,36 @@ gaps:
       check is one string comparison, the same code on every OS; make test does not run on Windows in
       CI. Run once runtime-cli-project-path has merged, or against feat/runtime-cli-project-path once
       it is implemented.
+      2026-11-15 (host:container-any/20261115T231002Z, unattended, windows-desktop, Windows 11 Pro 26300,
+      go1.26.3, main ad4ea50 and feat/runtime-cli-project-path 3357713 (PR #120), no user config file, no
+      WARDEN_* variable): every case passes but the last, which this host cannot run with docker. Kept open
+      on that one: docker is not installed here (podman 5.8.3 is the only runtime).
+      `go test ./cmd/warden`: ok on main; on the branch ok with -count=1 -v, 249 PASS lines, 0 FAIL (the
+      shell-script cases skip on Windows, as designed).
+      `--runtime docker.exe` on doctor, build and clean (and `Docker.EXE` on build): exit 1, "--runtime is
+      "docker.exe"; the container runtime is named in lower case, without an extension", "To fix: pass
+      --runtime docker", no output directory.
+      `[runtime] cli = 'C:\Program Files\Docker\Docker\resources\bin\docker.exe'` in the project's
+      warden.toml, on doctor, build and clean: exit 1, "... the container runtime is named, not given as a
+      path", "To fix: set it to docker; warden looks docker up on PATH, ...", no output directory. (The path
+      names no file on this host; the check is on the string.)
+      A project warden.toml whose cli is the rt.bat the directory ships (appends a line to rt-ran.txt), as
+      "rt.bat", '.\rt.bat' and its absolute path, on doctor, build and clean (each with --driver container,
+      and doctor and clean with no --driver): 15 runs, all exit 1 with `To fix:`, no output directory, and
+      rt-ran.txt absent. On main the same runs execute the file: doctor prints "container runtime: .\rt.bat"
+      and "ok", and build and clean run it (rt-ran.txt holds 30 lines, among them `image build`, `pull
+      alpine:3.21`, `container run`, `container ls -a`), for the '.\rt.bat' and absolute spellings; the bare
+      "rt.bat" is not found by main's lookup.
+      `cli = "docker"` in the project's file: accepted on the branch (doctor "container runtime: docker",
+      ok), and the build then fails on "exec: "docker": executable file not found in %PATH%", the same as on
+      main: no docker here. In its place, `cli = "podman"` in the project's file, with the existing
+      podman-machine-default started for the run and stopped after: `warden build --driver container` of a
+      FROM alpine:3.21 Dockerfile SUCCEEDED on main and on the branch; inspect on each: oci-image/v1
+      payload verified, 7 signatures valid, all channels closed. So a runtime named in a project's file
+      builds on Windows; the docker spelling of it needs docker installed, or Jeff's word that podman
+      stands for it.
+      The cases ran from a scratch Makefile (warden reads warden.toml from the working directory and has no
+      flag for it). Logs, the Makefile and the case files: native/container-any/2026-11-15/.
   - id: runtime-cli-project-path-finch
     host: macos-finch
     status: open
@@ -705,6 +735,9 @@ gaps:
       Tracked, not blocking (design Validation plan, tier 2). No driver's own code is changed and the
       lookup is the same code on every OS; make test does not run on Windows in CI. Run once
       project-config-trust has merged, or against feat/project-config-trust once it is implemented.
+      2026-11-15 (host:container-any/20261115T231002Z, unattended, main ad4ea50): not run.
+      feat/project-config-trust is design-only (a94133d, docs/design/project-config-trust.md alone against
+      main) and waits on its design review (f2-design-review).
   - id: project-config-trust-hyperv
     host: windows-hyperv
     status: open
@@ -719,6 +752,8 @@ gaps:
       and unit-tested. Run once project-config-trust has merged, or against feat/project-config-trust
       once it is implemented. prebuilt-artifacts removes the tree lookup afterwards; the second half
       of this entry is then that item's to restate.
+      2026-11-15 (host:windows-hyperv/20261115T231002Z, unattended, main ad4ea50): not run.
+      feat/project-config-trust is design-only (a94133d) and waits on its design review.
   - id: project-config-trust-vz
     host: macos-vz
     status: open
@@ -767,6 +802,9 @@ gaps:
       runs the code CI runs on Linux, and the lookup's Windows PATH handling is exercised by the
       blocking windows-hyperv step on the same machine; make test does not run on Windows in CI. Run
       once prebuilt-artifacts has merged, or against feat/prebuilt-artifacts once it is implemented.
+      2026-11-15 (host:container-any/20261115T231002Z, unattended, main ad4ea50): not run.
+      feat/prebuilt-artifacts is design-only (36e8051, docs/design/prebuilt-artifacts.md alone against
+      main), still in Design (f1-design).
   - id: prebuilt-artifacts-qemu-windows
     host: macos-qemu
     status: open

@@ -1,0 +1,19 @@
+make: Entering directory 'C:/Users/jeff/buildwarden-native/.scratch/rcpp-cases'
+[runtime]
+cli = "docker"
+--- (cd p-docker && ../../rcpp/dist/warden doctor --driver container)
+container runtime: docker
+ok
+exit=0
+--- (cd p-docker && ../../rcpp/dist/warden build --driver container -o out)
+[warden] Build ID: 14j7yozm
+[warden] Building relay from source...
+[warden] Tearing down environment...
+warden: build FAILED
+[warden] ERROR: error building relay image: exec: "docker": executable file not found in %PATH%
+
+  If this is unexpected, please file a bug:
+  https://github.com/buildwarden/buildwarden/issues/new?title=Bug%3A+error+building+relay+image%3A+exec%3A+%22docker%22%3A+executable+file+not+found+in+%25PATH%25&body=%23%23+Environment%0A-+OS%3A+windows%2Famd64%0A-+Version%3A+dev%0A%0A%23%23+Error%0A%60%60%60%0Aerror+building+relay+image%3A+exec%3A+%22docker%22%3A+executable+file+not+found+in+%25PATH%25%0A%60%60%60%0A%0A%23%23+Steps+to+reproduce%0A1.+%0A
+
+exit=1
+make: Leaving directory 'C:/Users/jeff/buildwarden-native/.scratch/rcpp-cases'

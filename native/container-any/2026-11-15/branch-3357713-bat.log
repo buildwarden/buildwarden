@@ -1,0 +1,75 @@
+make: Entering directory 'C:/Users/jeff/buildwarden-native/.scratch/rcpp-cases'
+=== bat-name
+[runtime]
+cli = "rt.bat"
+--- (cd p-bat && ../../rcpp/dist/warden doctor --driver container)
+[warden] ERROR: [runtime] cli in warden.toml is "rt.bat"; the container driver supports finch, docker and podman
+  To fix: set it to finch, docker or podman, or remove it; --runtime with one of those replaces it for one command
+exit=1
+--- (cd p-bat && ../../rcpp/dist/warden build --driver container -o out)
+[warden] ERROR: [runtime] cli in warden.toml is "rt.bat"; the container driver supports finch, docker and podman
+  To fix: set it to finch, docker or podman, or remove it; --runtime with one of those replaces it for one command
+exit=1
+--- (cd p-bat && ../../rcpp/dist/warden clean --driver container)
+[warden] ERROR: [runtime] cli in warden.toml is "rt.bat"; the container driver supports finch, docker and podman
+  To fix: set it to finch, docker or podman, or remove it; --runtime with one of those replaces it for one command
+exit=1
+--- (cd p-bat && ../../rcpp/dist/warden clean)
+[warden] ERROR: [runtime] cli in warden.toml is "rt.bat"; the container driver supports finch, docker and podman
+  To fix: set it to finch, docker or podman, or remove it; --runtime with one of those replaces it for one command
+exit=1
+--- (cd p-bat && ../../rcpp/dist/warden doctor)
+[warden] ERROR: [runtime] cli in warden.toml is "rt.bat"; the container driver supports finch, docker and podman
+  To fix: set it to finch, docker or podman, or remove it; --runtime with one of those replaces it for one command
+exit=1
+=== bat-dot
+[runtime]
+cli = '.\rt.bat'
+--- (cd p-bat && ../../rcpp/dist/warden doctor --driver container)
+[warden] ERROR: [runtime] cli in warden.toml is ".\\rt.bat"; the container driver runs finch, docker or podman by name and no longer runs another program
+  To fix: set it to finch, docker or podman; if the program only set variables for one of them (DOCKER_HOST, DOCKER_CONTEXT, CONTAINER_HOST), set those in the environment; there is no supported way to run another program as the runtime
+exit=1
+--- (cd p-bat && ../../rcpp/dist/warden build --driver container -o out)
+[warden] ERROR: [runtime] cli in warden.toml is ".\\rt.bat"; the container driver runs finch, docker or podman by name and no longer runs another program
+  To fix: set it to finch, docker or podman; if the program only set variables for one of them (DOCKER_HOST, DOCKER_CONTEXT, CONTAINER_HOST), set those in the environment; there is no supported way to run another program as the runtime
+exit=1
+--- (cd p-bat && ../../rcpp/dist/warden clean --driver container)
+[warden] ERROR: [runtime] cli in warden.toml is ".\\rt.bat"; the container driver runs finch, docker or podman by name and no longer runs another program
+  To fix: set it to finch, docker or podman; if the program only set variables for one of them (DOCKER_HOST, DOCKER_CONTEXT, CONTAINER_HOST), set those in the environment; there is no supported way to run another program as the runtime
+exit=1
+--- (cd p-bat && ../../rcpp/dist/warden clean)
+[warden] ERROR: [runtime] cli in warden.toml is ".\\rt.bat"; the container driver runs finch, docker or podman by name and no longer runs another program
+  To fix: set it to finch, docker or podman; if the program only set variables for one of them (DOCKER_HOST, DOCKER_CONTEXT, CONTAINER_HOST), set those in the environment; there is no supported way to run another program as the runtime
+exit=1
+--- (cd p-bat && ../../rcpp/dist/warden doctor)
+[warden] ERROR: [runtime] cli in warden.toml is ".\\rt.bat"; the container driver runs finch, docker or podman by name and no longer runs another program
+  To fix: set it to finch, docker or podman; if the program only set variables for one of them (DOCKER_HOST, DOCKER_CONTEXT, CONTAINER_HOST), set those in the environment; there is no supported way to run another program as the runtime
+exit=1
+=== bat-abs
+[runtime]
+cli = 'C:\Users\jeff\buildwarden-native\.scratch\rcpp-cases\p-bat\rt.bat'
+--- (cd p-bat && ../../rcpp/dist/warden doctor --driver container)
+[warden] ERROR: [runtime] cli in warden.toml is "C:\\Users\\jeff\\buildwarden-native\\.scratch\\rcpp-cases\\p-bat\\rt.bat"; the container driver runs finch, docker or podman by name and no longer runs another program
+  To fix: set it to finch, docker or podman; if the program only set variables for one of them (DOCKER_HOST, DOCKER_CONTEXT, CONTAINER_HOST), set those in the environment; there is no supported way to run another program as the runtime
+exit=1
+--- (cd p-bat && ../../rcpp/dist/warden build --driver container -o out)
+[warden] ERROR: [runtime] cli in warden.toml is "C:\\Users\\jeff\\buildwarden-native\\.scratch\\rcpp-cases\\p-bat\\rt.bat"; the container driver runs finch, docker or podman by name and no longer runs another program
+  To fix: set it to finch, docker or podman; if the program only set variables for one of them (DOCKER_HOST, DOCKER_CONTEXT, CONTAINER_HOST), set those in the environment; there is no supported way to run another program as the runtime
+exit=1
+--- (cd p-bat && ../../rcpp/dist/warden clean --driver container)
+[warden] ERROR: [runtime] cli in warden.toml is "C:\\Users\\jeff\\buildwarden-native\\.scratch\\rcpp-cases\\p-bat\\rt.bat"; the container driver runs finch, docker or podman by name and no longer runs another program
+  To fix: set it to finch, docker or podman; if the program only set variables for one of them (DOCKER_HOST, DOCKER_CONTEXT, CONTAINER_HOST), set those in the environment; there is no supported way to run another program as the runtime
+exit=1
+--- (cd p-bat && ../../rcpp/dist/warden clean)
+[warden] ERROR: [runtime] cli in warden.toml is "C:\\Users\\jeff\\buildwarden-native\\.scratch\\rcpp-cases\\p-bat\\rt.bat"; the container driver runs finch, docker or podman by name and no longer runs another program
+  To fix: set it to finch, docker or podman; if the program only set variables for one of them (DOCKER_HOST, DOCKER_CONTEXT, CONTAINER_HOST), set those in the environment; there is no supported way to run another program as the runtime
+exit=1
+--- (cd p-bat && ../../rcpp/dist/warden doctor)
+[warden] ERROR: [runtime] cli in warden.toml is "C:\\Users\\jeff\\buildwarden-native\\.scratch\\rcpp-cases\\p-bat\\rt.bat"; the container driver runs finch, docker or podman by name and no longer runs another program
+  To fix: set it to finch, docker or podman; if the program only set variables for one of them (DOCKER_HOST, DOCKER_CONTEXT, CONTAINER_HOST), set those in the environment; there is no supported way to run another program as the runtime
+exit=1
+Dockerfile
+rt.bat
+warden.toml
+marker absent: rt.bat was not run
+make: Leaving directory 'C:/Users/jeff/buildwarden-native/.scratch/rcpp-cases'

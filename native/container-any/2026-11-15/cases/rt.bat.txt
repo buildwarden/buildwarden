@@ -1,0 +1,1 @@
+@echo ran %* >> "%~dp0rt-ran.txt"
