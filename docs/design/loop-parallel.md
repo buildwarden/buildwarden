@@ -420,6 +420,22 @@ say.
     hand-off leaves it to this item). No step of a second repository is
     taken by a worker a hold could stop until `loop-repository`, which
     adds it with the first such step.
+
+    Under Decision 21 a hold stops more than it did. A refresh is a new
+    cloud step, so while a process item in progress holds `cloud`, no
+    other item's refresh is taken, by the tick or by an attended run
+    (`Hold`, `queue/next.go`). Jeff can merge one of the PRs that are
+    ready when the hold starts; that merge puts the rest behind `main`,
+    and none of them can be made ready by the loop until the process
+    item is done, which can be days (Decision 17). GitHub's **Update
+    branch** is still his. No item in the queue holds a worker today,
+    and this one holds none.
+    - *Rejected: a refresh exempt from a hold.* A hold makes running
+      work wait for rules that are about to change. A refresh is
+      consolidation: it can find work and send an item back, which is
+      what the hold is there to stop, and it would be done under rules
+      the holding item is about to replace. The cost is handed to the
+      two designs that will decide a hold, with this paragraph.
 19. **Fourteen rule changes, in this item's PR.** FLOW-02, -03, -05, -10,
     -15, -19 and -20, as the proposal lists; FLOW-04, -06 and -08, which
     `wf commit`, the refresh step, tracked items and a merge recorded in a
@@ -1907,6 +1923,7 @@ code these cases run through.
 | 38 | Two disjoint features. One is in Publish, `f6-merge-main` and `f6-consolidate` done, waiting for `f6-validate-windows-hyperv`; Jeff merges the other's PR | Arises only when a process item's PR or a hand merge moves `main`: `f6-open-pr`'s done-when then fails on `current main merged`, and no step merges `main` again | `wf stale` adds `f6-refresh` to it and makes `f6-open-pr` need it. The refresh merges `main`, runs the gates and the pass, and pushes; the host validates when its session runs; `f6-open-pr` then passes its gate. The item holds the PR slot throughout |
 | 39 | Seven wait. An eighth item, in Implement, has only a pending `human` step of phase 6 (`f6-release-specs`) | n/a | Seven: a `human` step of a phase the item has not reached is not counted. A queued feature starts. `QUEUE.md` lists the step under the lines that are not counted |
 | 40 | Eight wait. `main` is red by a commit that is no item's, so the tick filed nothing; Jeff files the fix at intake, which records it with `wf main -followup` | n/a | Started: `main.yaml` names it as the fix for the red `main`, though it follows no item. Its refresh is also the one refresh taken while `main` is red (case 35) |
+| 41 | A process item in progress holds `cloud`. Three PRs are ready; Jeff merges one | Cannot arise: one PR at a time | `wf stale` seeds a refresh on the other two. Neither is taken, by the tick or an attended run: `blocked <item> held by process item <x>`. They stay under **After a refresh** until the process item is done. He can use GitHub's **Update branch** himself (case 37) |
 
 ### `wf commit`: pushing queue state
 
@@ -2103,6 +2120,10 @@ the fix when `main` is red (a16). Nothing reverts or blocks it.
   merge Jeff makes in the session (below).
 - *`wf stale`* refreshes nothing. It finds the PRs that are behind and
   seeds the step, in the tick and in the attended session.
+- *Not under a hold.* While a process item in progress holds `cloud`
+  (FLOW-05), neither the tick nor an attended run takes another item's
+  refresh, so after the first merge no other PR can be made ready until
+  that item is done (Decision 18).
 - *Jeff, on GitHub.* The **Update branch** button merges `main` into a
   PR's branch for him, where GitHub shows it. It is his to use, and
   with the ruleset GitHub lets him merge that PR once `ci-ok` is green
@@ -2673,7 +2694,7 @@ file names the item's repositories when it has more than this one.
 `tools/workflow/cmd/wf/main.go`: `areas`, `declare`, `relate`, `relations`,
 `stale`, `main`, `commit` and `digest`; `new -repos -areas -seams -adopts`,
 and `-follows` copying `repos` and `areas`; `areas -list` and
-`areas -check`; `validate -areas`; `claimable`
+`areas -check`; `validate -areas [-repo]`; `claimable`
 calls `Guard`; `done` runs `check.Refresh` for a refresh step; `status`
 prints the new lines.
 
@@ -2986,6 +3007,10 @@ This item declares no `holds` (Decision 17, a13).
   steps a machine takes; `f6-refresh` is seeded `cloud` here and its design
   may leave it so. Under Decision 21 a led item's PR needs that refresh
   before it can merge, like any other.
+- A hold on `cloud` now also stops merging after the first PR: no other
+  item's refresh is taken while it lasts (Decision 18). Its design
+  decides its own hold with that cost in view, and may revisit whether
+  a refresh is exempt.
 - The PR-slot tie-break means a led item of lower priority waits for a
   cloud-led one that waits for the slot. Its design says whether that is
   wanted.
@@ -3017,7 +3042,9 @@ This item declares no `holds` (Decision 17, a13).
   an up-to-date branch rests on the loop's listing alone. `wf`
   hard-codes no path of this repository for the map (its hand-off point
   4): the edges come from the command each profile names.
-- A hold that names repositories (Decision 18), and a `human` merge-recording step
+- A hold that names repositories (Decision 18), with what a hold on
+  `cloud` now costs: no refresh, so no second merge, in any repository
+  the held worker serves, while it lasts. And a `human` merge-recording step
   that is not offered before its phase (`seam-specs`' a15 asks; a `human`
   step is still offered early).
 - What a tracked item of a private repository may show in the public
@@ -3952,7 +3979,8 @@ whether it is still true with the proposed wording.
   - `TestNewFollowsCopiesAreas`: `-follows X` with no `-areas` copies X's
     `repos` and `areas` and logs it; `-areas` overrides; an undeclared X
     gives an undeclared item (case 23).
-  - `TestRefreshStep`: seeded once; class 1 while pending; dropped by the
+  - `TestRefreshStep`: seeded once; class 1 while pending; not taken by
+    a worker a process item holds (case 41); dropped by the
     merge step's completion and by `Back`; its completion leaves the phase
     alone; while `main.yaml` records `main` red it is not offered, by
     `Next`, `NextFor` or a re-asked claim, except on the item `main.yaml`
