@@ -4032,30 +4032,36 @@ Written by Plan from the design as its review approved it at `64a4a95`
 (**Design review**, r1). It replaces the draft list Design kept here, and
 **What changed from the draft**, at the end, says where each draft task
 went and where the order differs. Nothing outside this section is
-changed by it.
+changed by it. The plan was revised once, after an independent check of
+it against the design and both repositories; the numbers below are the
+revised ones.
 
 The work is in two repositories (LOOP-04). **S** is
 `buildwarden/buildwarden-specs`, on its branch `feat/seam-specs`. **K** is
 this repository, on this branch. Every task names one. A task's rules
 are in parentheses at its end. A task that adds tests names their tier
 (TEST-02); a tier-0 test is pure Go and needs nothing outside its
-checkout (TEST-01). No task changes a package of the relay, the
-collector, the executor or a driver, or any behaviour (Decisions 1 and
-11): a task that finds it would need to stops and the item goes back to
-Design (FLOW-06).
+checkout (TEST-01). No test in any of S's seven modules needs root, a
+namespace, a container runtime or a network beyond loopback: S's `ci`
+runs `go test ./...` in each of them (**CI**), and the design gives
+that job no privilege and no runtime. What needs more is tier 1 and is
+run from K. No task changes a package of the relay, the collector, the
+executor or a driver, or any behaviour (Decisions 1 and 11): a task
+that finds it would need to stops and the item goes back to Design
+(FLOW-06).
 
 ### The two repositories
 
 | | S, `buildwarden/buildwarden-specs` | K, this repository |
 |---|---|---|
 | Branch | `feat/seam-specs`, created by task 0. Nothing else is pushed there: not `main`, not a tag, not a second branch (FLOW-17, FLOW-16) | `feat/seam-specs` |
-| What binds a worker | The four loop rules and the invariants listed under **How the loop treats the second repository** (LOOP-08) | Every rule of this repository |
-| Green, before a push | `go vet ./...` and `go test ./...` in each of the seven modules (FLOW-17), and the `make` target the stage names: `make check-docs` for a stage that writes documents, `make check` from the end of stage 6 (both are task 1's). Then this repository's `tools/workflow/flow18-check.sh`, run from the S checkout (FLOW-18) | `make test` and `make lint` (FLOW-03, FLOW-17); `make enforcement` when the stage edits `tools/tier1/` (FLOW-14); then `tools/workflow/flow18-check.sh` (FLOW-18) |
-| Hosted runs | None before its pull request. `ci` runs on pull requests and on `main` (**CI**), and the pull request is opened in task 31, so until then what `ci` runs is run in the checkout by `make check`. `flow18` first runs with the pull request too. `release` first runs in `f6-release-specs`, and `implementations` after the merge | The `conformance` workflow, on every push of this branch that changes a path on its list (**CI**), from task 7 on. `ci` runs on the pull request, which Publish opens |
+| What binds a worker | The four loop rules and the invariants listed under **How the loop treats the second repository** (LOOP-08). Sessions that commit there are recorded: task 1 turns recording on in the S clone (FLOW-18) | Every rule of this repository |
+| Green, before a push | `go vet ./...` and `go test ./...` in each of the seven modules (FLOW-17), and the `make` target the stage names: `make tidy` changing nothing in stage 1a; `make check-docs` for a stage that writes documents; `make check-suite DIRS="<directories>"` for a suite stage and for the merge of one; `make check` once every suite is merged (the last three are task 4's). Then this repository's `tools/workflow/flow18-check.sh`, run from the S checkout (FLOW-18) | `make test` and `make lint` (FLOW-03, FLOW-17); `make enforcement` when the stage edits `tools/tier1/` (FLOW-14); then `tools/workflow/flow18-check.sh` (FLOW-18) |
+| Hosted runs | None before its pull request. `ci` runs on pull requests and on `main` (**CI**), and the pull request is opened in task 34, so until then what `ci` runs is run in the checkout by `make check`. `flow18` first runs with the pull request too. `release` first runs in `f6-release-specs`, and `implementations` by hand after the merge | The `conformance` workflow, on every push of this branch that changes a path on its list (**CI**), from task 7 on. `ci` runs on the pull request, which Publish opens |
 | Who merges | Jeff, in `f6-release-specs` (FLOW-08) | Jeff (FLOW-08) |
 
-S has a README stub and a `LICENSE` today, and no Makefile and no
-workflow: tasks 1 and 2 create them.
+S has a README stub and a `LICENSE` today, and no Makefile, no workflow
+and no Entire hook in its clone: tasks 1 and 4 create them.
 
 ### How the two branches depend on each other
 
@@ -4066,20 +4072,20 @@ through `make pin-specs`:
 
 | When | What each of the six modules names | Its `replace` line | The refs on `concepts/seams.md` | The `pin` job |
 |---|---|---|---|---|
-| Tasks 5 to 31, while S is written | One commit of S's branch, the same in all six, written by `make pin-specs REF=<commit>` | One in each module, pointing the harness at the same commit: every specification names `conformance` `v0.1.0`, which has no tag before the release (a19, a20) | That commit | Does not run on a branch push |
-| Task 32, the end of Implement, and through Review | The head of the specs pull request | As above | That commit | Does not run |
-| After `f6-release-specs` (task 33) | The tag `<directory>/v0.1.0`, written by `make pin-specs SPECS=latest` | None | The tags | Runs on this branch's pull request, and passes |
+| Tasks 6 to 34, while S is written | One commit of S's branch, the same in all six, written by `make pin-specs REF=<commit>` | One in each module, pointing the harness at the same commit: every specification names `conformance` `v0.1.0`, which has no tag before the release (a19, a20) | That commit | Does not run on a branch push |
+| Task 35, the end of Implement, and through Review | The head of the specs pull request | As above | That commit | Does not run |
+| After `f6-release-specs` (task 36) | The tag `<directory>/v0.1.0`, written by `make pin-specs SPECS=latest` | None | The tags | Runs on this branch's pull request, and passes |
 
 The work alternates on one rule: S moves first and K follows by a pin
-move. K pins only a commit that is pushed in S and was green there.
-Each K stage that follows a change in S starts with
-`make pin-specs REF=<S's pushed head>`, and that push starts a
-`conformance` run, because `tools/conformance/**` is on the workflow's
-list. A K stage that changes none of the listed paths (the rule changes,
-the book) starts no run, and the latest run still covers the head
-(**CI**). A run of the loop that pushes S records S's head in its digest
-section, and names the documents it changed apart from the code
-(LOOP-06).
+move. K pins only a commit that is pushed in S and was green there, by
+the green the table above gives its stage. Each K stage that follows a
+change in S starts with `make pin-specs REF=<S's pushed head>`, and that
+push starts a `conformance` run, because `tools/conformance/**` is on
+the workflow's list. A K stage that changes none of the listed paths
+(the rule changes, the book) starts no run, and the latest run still
+covers the head (**CI**). A run of the loop that pushes S records S's
+head in its digest section, and names the documents it changed apart
+from the code (LOOP-06).
 
 Three things this branch does not do before the seven tags exist. It
 opens no pull request to `main`: the `pin` job fails a module whose pin
@@ -4087,47 +4093,60 @@ is a commit or that carries a `replace` line, so `f6-open-pr` comes
 after `f6-release-specs` (Decision 12). No pin module is made to name a
 tag by hand or with `go get` (Decision 7). And `make pin-specs SPECS=...`
 is not run against the real repository: before the release it is tried
-on a model only (task 7).
+on a model only (tasks 5 and 7).
 
 ### Stages
 
 A stage is what one implementing agent finishes and leaves green and
 pushed in its repository. Stages run in the order of their numbers
-unless the table says otherwise.
+unless the table says otherwise. "Green" is the row of **The two
+repositories** for the stage's repository, with what the last column
+adds.
 
-| Stage | Repository | Tasks | Order | Leaves |
+| Stage | Repository | Tasks | Order | Leaves, and what its green adds |
 |---|---|---|---|---|
 | 0, preflight | S, read; one push | 0 | First | The branch `feat/seam-specs` in S, at `main`'s commit |
-| 1, layout and conventions | S | 1 to 4 | Serial, after 0 | Seven modules that build, `make check-docs` and `make tidy` working, six commands in their first form |
-| 2, pins and mechanics | K | 5 to 7 | After 1. May run beside stage 3 | Six pin modules at S's head, `make pin-specs`, the seams page, the `conformance` workflow green on three runners in its first form |
-| 3a to 3d, the documents | S | 8, 9, 10, 11 | After 1. The four may run in parallel (below) | Six documents with their schemas and OpenAPI files; `make check-docs` green |
-| 4a, 4b, 4c, the harness | S | 12, 13, 14 | Serial, after all of stage 3 is merged | The `conformance` module complete and tested against itself |
-| 5, first cases end to end | S, then K | 15, 16 | Serial, after 4c and 2 | One relay case and one collector case passing on hosted runners against every target |
-| 6a to 6d, the suites | S | 17, 18, 19 then 20, 21 | After 5. The four may run in parallel (below); 19 and 20 are one stage, in that order | Every suite complete; `make check` green |
-| 7, the full run | K | 22 | After all of stage 6 is merged | The first green `conformance` run of every suite: S1's done-when |
-| 8, the rule changes | K | 23 to 27 | After 2, before 11 | Five rules as approved; `make enforcement` green |
-| 9, the book and the umbrella | K | 28, 29 | After 2, before 11 | Reference docs and the amended umbrella |
-| 10, release machinery and the specs pull request | S | 30, 31 | After 7 | The specs pull request open, its `ci` green |
-| 11, the final pins | K | 32 | Last of Implement, after 8, 9 and 10 | The six pins at the specs pull request's head, with a green run |
-| The release | S and K, human | 33 | After Review, before `f6-open-pr` | Seven tags; the six pins on them |
+| 1a, layout, conventions and mechanics | S | 1, 2, 3 | Serial, after 0 | Seven modules that build, vet and test; `make tidy` changing nothing on a second run; six commands in their first form; recording on in the clone |
+| 1b, the checks | S | 4 | Serial, after 1a | Every check `ci` runs, with its tests; `make check-docs` green on the skeletons |
+| 2, pins and mechanics | K | 5, 6, 7 | After 1a. May run beside 1b and stage 3 | `make pin-specs`, the seams page, six pin modules at S's head, and a `conformance` run for the pushed head green on three runners in its first form |
+| 3a to 3d, the documents | S | 8, 9, 10, 11 | After 1b. The four may run in parallel (below) | Six documents with their schemas and OpenAPI files; `make check-docs` green |
+| 4a, the harness's core | S | 12 | Serial, after all of stage 3 is merged | The target-file format, the runner, the commands in their final form, on three operating systems |
+| 4b, the roles that test a relay's claim and outputs | S | 13 | Serial, after 4a | The claimant, the collector in every form, the ledger verifier |
+| 4c, the build side | S | 14 | Serial, after 4b | The in-memory network, the build environment on both link kinds, the resolver, the origins and their CA |
+| 4d, the relay model, claim and collector side | S | 15 | Serial, after 4c | "A relay to test a collector" (Decision 5), with its ledger writer, on three operating systems |
+| 4e, the relay model, build side, and the in-process attachment | S | 16 | Serial, after 4d | The model as a role under test in all three modes; every role run against its counterpart under `go test` |
+| 5, first cases against the harness itself | S | 17 | Serial, after 4e | One relay case and one collector case passing in their modules' `go test`: the proof of the in-process attachment |
+| 6, the sandbox and the launchers | S | 18 | Serial, after 5 | What starts a real relay on Linux. Its green adds a by-hand run as root against a relay built from K, named in the evidence |
+| 7, first cases end to end | K | 19 | After 6 and 2 | Both cases passing on hosted runners against every target: the first proof of the `oci` launcher and of the sandbox on a hosted runner |
+| 8a to 8e, the suites | S | 20, 21, 22, 23, 24 | After 7. 8a, 8b, 8c and 8e may run in parallel (below); 8d follows 8c, serially | Every suite complete; `make check-suite` green for each stage's directories, `make check` green once all are merged |
+| 9, a hosted run for each suite, and the full run | K | 25 | Repeated: after each merge of a stage-8 stage | A green `conformance` run for each merged suite; its last repetition is S1's done-when |
+| 10, the rule changes | K | 26 to 30 | After 2, before 13 | Five rules as approved; `make enforcement` green |
+| 11, the book and the umbrella | K | 31, 32 | After 2, before 13 | Reference docs and the amended umbrella |
+| 12, release machinery and the specs pull request | S | 33, 34 | After the last repetition of 9 | The specs pull request open, its `ci` and `flow18` green |
+| 13, the final pins | K | 35 | Last of Implement, after 10, 11 and 12 | The six pins at the specs pull request's head, with a green run |
+| The release | S and K, human | 36 | After Review, before `f6-open-pr` | Seven tags; the six pins on them |
 
 **K is one checkout, so K's stages are serial among themselves,** in the
-order 2, 8, 9, the K half of 5, 7, 11; stages 8 and 9 may come at any
-point after 2 and before 11. A K stage and an S stage touch no file in
-common and may run at the same time, where the K stage does not wait on
-that S stage by the table.
+order 2, 7, 9 (each repetition), 13; stages 10 and 11 may come at any
+point after 2 and before 13, between two repetitions of 9 among them. A
+K stage and an S stage touch no file in common and may run at the same
+time, where the K stage does not wait on that S stage by the table.
 
 **The parallel stages of S, and what each may edit.** Stages 3a to 3d,
-and later 6a to 6d, may each be given to its own agent, under the
-conditions below. The conditions are what lets the branches merge
-without a conflict; a stage that cannot keep to them is run serially
-instead, in the order of its letter.
+and later 8a, 8b, 8c with 8d, and 8e, may each be given to its own
+agent, under the conditions below. The conditions are what lets the
+branches merge without a conflict; a stage that cannot keep to them is
+run serially instead, in the order of its letter.
 
 *One clone.* Each stage works in a worktree of one local clone of S, on
 a local branch of its own that is never pushed. S's remote gets no
 branch but `feat/seam-specs`, since no agent may delete one afterwards
 (FLOW-16). Where the stages can only be given to separate machines they
-are serial.
+are serial. The pushed branch is the backup (FLOW-17), and a parallel
+stage's work is not on it until its merge, so the stage commits on its
+local branch at each point where its own green holds, and the
+dispatching session may merge and push what is green there if the
+stage's agent ends early.
 
 *One session merges.* When a stage is green, the session that dispatched
 it merges its branch into `feat/seam-specs`, by fast-forward or a merge
@@ -4136,40 +4155,68 @@ the result, and pushes (FLOW-17).
 
 *Its own directories only.* A stage edits these files and no others:
 
-| Stage | Directories | In stage 3 it may edit there | In stage 6 it may edit there |
-|---|---|---|---|
-| a | `relay-claim/` | `v1.md`, the schema files, the OpenAPI files, the list of requirements that are not machine-checked | `cases/`, `cmd/`, `go.mod` and `go.sum` (through `make tidy`), that list, and the stage-3 files where a case shows that the document misread the code (**Specification changes**) |
-| b | `collector-outputs/`, `collector-inputs/` | The same | The same |
-| c | `relay-guest-api/` | The same | The same |
-| d | `executor-initialize/`, `bootstrap-config/` | The same | The same |
+| Directories | Stage 3 | It may edit there | Stage 8 | It may edit there |
+|---|---|---|---|---|
+| `relay-claim/` | 3a | `v1.md`, the schema files, the OpenAPI files, the list of requirements that are not machine-checked | 8a | `cases/`, `cmd/`, `go.mod` and `go.sum` (through `make tidy`), that list, and the stage-3 files where a case shows that the document misread the code (**Specification changes**) |
+| `collector-outputs/`, `collector-inputs/` | 3b | The same | 8b | The same, but for the part the two documents state alike (below) |
+| `relay-guest-api/` | 3c | The same | 8c, then 8d | The same |
+| `executor-initialize/`, `bootstrap-config/` | 3d | The same | 8e | The same |
 
 *Nothing shared.* No parallel stage edits `conformance/`, a root file
 (`README.md`, `Makefile`, `go.work`, `go.work.sum`, `.github/`,
-`.entire/`), a `CHANGELOG.md`, or another stage's directory. Task 3 has
+`.entire/`), a `CHANGELOG.md`, or another stage's directory. Task 2 has
 already written each directory's `CHANGELOG.md` entry for `v0.1.0`, and
-tasks 2 and 3 every check and convention the stages share, so none needs
+tasks 2 and 4 every convention and check the stages share, so none needs
 to.
 
-*The two collector documents are one stage* in both rounds, because the
-part they state alike is held alike by a check (**Seam 2**).
+*No new module.* A suite imports the harness, its own specification's
+packages and the standard library, and no third-party module that the
+harness's `go.mod` does not already require: a new one would change
+`go.work.sum`, which no parallel stage may edit. A stage that needs one
+hands the need back, as it does a harness change (below).
+
+*The two collector documents are one stage in stage 3,* because the part
+they state alike is held alike by a check (**Seam 2**), and that check
+constrains documents, not cases. Stage 8b may therefore be given to two
+agents, one for each specification, each with its own directory. A
+correction to the common part touches both documents, so neither makes
+it: it is handed to the dispatching session, which makes it in both
+documents in one serial commit, as it does a harness change.
 
 *No identifier of another document.* A stage-3 document names another
 specification by its directory and section, and cites none of its
 requirement identifiers, which do not exist until that stage is merged.
 
-*The harness is frozen during stage 6.* A suite stage that needs a
-change to `conformance/` (a helper, a fault in a model or a launcher)
-stops and hands back what it needs. The dispatching session makes that
-change on `feat/seam-specs` itself, as a serial commit that is green in
-all seven modules, and the open stages merge `feat/seam-specs` into
-their branches before they go on.
+*The harness is frozen during stage 8, and so are K's target files.* A
+suite stage that needs a change to `conformance/` (a helper, a fault in
+a model or a launcher), a module the harness does not require, or a
+change to a file in `tools/conformance/targets/`, stops and hands back
+what it needs. The dispatching session makes that change itself, as a
+serial commit: in S on `feat/seam-specs`, green in all seven modules,
+after which the open stages merge `feat/seam-specs` into their
+branches before they go on; in K on this branch, in its turn among K's
+stages.
 
-*A K worktree for each.* A stage-6 agent that runs its cases against the
-Go relay or the disk collector does it with
-`make conformance SPECS_DIR=<its S worktree> SUITES=<its directories>`
-from a K worktree of its own, in which it commits nothing:
-`make conformance` builds into `dist/conformance/` and one image name,
-which two runs in one checkout would share (**Defaults and overrides**).
+*Running a suite against the real targets from a stage.* A stage-8
+agent whose host has root or user namespaces runs its cases against the
+Go relay and the disk collector before it hands its branch over, with
+
+```
+make conformance SPECS_DIR=<its S worktree> SUITES="<its directories>" \
+    TARGETS="relay-host relay-vm relay-container collector-disk"
+```
+
+from a K worktree of its own at this branch's head, in which it commits
+nothing: `make conformance` builds into `dist/conformance/`, which two
+runs in one checkout would share. The targets are named because the
+default would add `relay-oci`, which is an error on a host whose
+runtime is not running (**Defaults and overrides**). `relay-oci` is not
+run from a parallel stage at all: its image name and its container
+networks, in the three documentation ranges, are the runtime's and not
+the checkout's, so one session at a time may run it on a machine, and
+its run for a suite is the hosted one (stage 9). The `exec` sandboxes
+of two runs do not meet (task 18). This local run is a help and not a
+gate: what counts for a suite is its stage-9 run.
 
 ### Tasks
 
@@ -4183,14 +4230,16 @@ which two runs in one checkout would share (**Defaults and overrides**).
    `feat/seam-specs` at `main`'s commit, which creates it and shows that
    the session can push it. That the session can open a pull request is
    read from the permissions its credentials report; none is opened to
-   test it, because the specs pull request is task 31's (**The release
+   test it, because the specs pull request is task 34's (**The release
    step**), and nothing is tested by a push to `main`. What could not be
    read is named in the step's evidence. If the repository is missing,
    differs from the list or refuses the branch, Implement stops with a
    blocking question and changes nothing (FLOW-07, FLOW-08, LOOP-08).
 
-**Stage 1, layout and conventions (S, serial).** It fixes everything the
-later stages share, so that they can split.
+**Stage 1a, layout, conventions and mechanics (S, serial).** With 1b it
+fixes everything the later stages share, so that they can split. It is
+green on `go vet` and `go test` in the seven modules and on `make tidy`
+changing nothing, which is all K's stage 2 waits for.
 
 1. **S** The layout of Decision 2: `README.md` (the index of the six
    specifications, the reserved directory names, the "Implementations"
@@ -4200,14 +4249,53 @@ later stages share, so that they can split.
    `github.com/buildwarden/buildwarden-specs/<directory>` with its
    `go.mod`; `go.work` with its versioned `replace` line for the
    harness; a `Makefile` with `make tidy` (each specification's `go.mod`
-   tidied through a temporary `replace`), `make check-docs` (the checks
-   that read documents only) and `make check` (everything `ci` runs);
-   `.entire/settings.json` naming the private sessions repository, in
-   the first commit; and the `ci` and `flow18` workflows, `ci` calling
-   `make check`. Every module's `go` line is no higher than this
-   repository's root module's, so that K can pin it (Decision 7). No
-   module requires the kit (FLOW-17, FLOW-18, LOOP-08, GLOBAL-09).
-2. **S** The checks `ci` runs, as code of the `conformance` module with
+   tidied through a temporary `replace`) and `make check` (everything
+   `ci` runs: at this task `go vet` and `go test` in each module, and
+   task 4 completes it); and the `ci` and `flow18` workflows, `ci`
+   calling `make check`. Every module's `go` line is no higher than
+   this repository's root module's, so that K can pin it (Decision 7).
+   No module requires the kit. For FLOW-18: `.entire/settings.json`,
+   naming the private sessions repository, and `.entire/.gitignore`, as
+   this repository has it, are in the first commit; Entire is enabled
+   in the S clone, whose hooks its worktrees share, before a commit of
+   this task is pushed; and the step's evidence names that its pre-push
+   sent the checkpoints to the private repository only and that S's
+   remote carries no `entire/` ref. S's `flow18` workflow holds its
+   check in the workflow file itself, with the two conditions of this
+   repository's `tools/workflow/flow18-check.sh`, since it cannot call
+   that script. If recording in S turns out to need a file there that
+   the design does not name (an agent-hook file, as this repository's
+   `.claude/settings.json` is), it is not added on the worker's word:
+   the evidence says what was and was not recorded, and the question
+   goes to Jeff (FLOW-17, FLOW-18, LOOP-08, GLOBAL-09, FLOW-07).
+2. **S** The conventions the six directories share (Decision 3): each
+   `v1.md` as a skeleton with the sections every document has, "Known
+   divergences" and a header that links the book and names the reference
+   implementation; the form of a requirement identifier and the six
+   prefixes (`CLAIM`, `COLLOUT`, `COLLIN`, `GUEST`, `INIT`, `BOOTCFG`);
+   the file and form of the list of requirements that are not
+   machine-checked; how a case names the requirements it cites, in the
+   harness's runner; each directory's `CHANGELOG.md` with its `v0.1.0`
+   entry and each specification's `go.mod` naming the harness at
+   `v0.1.0`; and the six commands `bw-conformance-<directory>` in their
+   first form, with `requirements` and `version` working and `run`
+   reporting that there are no cases yet (LOOP-02, LOOP-03, GLOBAL-10).
+3. **S** Show that the mechanics of **Releases and how they are
+   consumed** hold with the real module names: the harness imports one
+   of its real third-party dependencies (the TOML parser the target
+   files need), and each specification names a harness version that has
+   no tag. Done when the workspace builds, vets and tests, `make tidy`
+   leaves each `go.mod` complete and unchanged on a second run, and the
+   branch is pushed. If one of the three mechanics a19's answer rests on
+   cannot be made to hold, the item goes back to Design with what was
+   seen (FLOW-06, FLOW-17, GLOBAL-09).
+
+**Stage 1b, the checks (S, serial).** It follows 1a because every check
+reads a convention task 2 fixed: the identifier form, the list's file,
+how a case cites, the section skeleton, the prefixes, and
+`conformance/CHANGELOG.md`.
+
+4. **S** The checks `ci` runs, as code of the `conformance` module with
    table-driven tests over fixtures (tier 0: `go test` there): the
    layout check, accepting `v<N>.schema.json` and
    `v<N>.<part>.schema.json`, each schema's `$id`, schemas valid
@@ -4221,40 +4309,23 @@ later stages share, so that they can split.
    the version at the head of `conformance/CHANGELOG.md`); and the
    release checks (a changed directory adds a version to its
    `CHANGELOG.md` higher than its newest tag, and names the harness
-   version at the head of `conformance/CHANGELOG.md`). All of them are
-   written here, the coverage check and the collector check among them,
-   so that no parallel stage edits `conformance/` (LOOP-03, RELAY-05,
+   version at the head of `conformance/CHANGELOG.md`). With them three
+   `make` targets: `make check-docs` (the checks that read documents
+   only, coverage not among them); `make check-suite DIRS="<directories>"`
+   (`make check-docs`, then `go vet`, `go test` and the coverage check
+   for the named directories), which is the green of a suite stage and
+   of its merge; and `make check` completed, as everything `ci` runs,
+   for all seven. All of the checks are written here, the coverage
+   check and the collector check among them, so that no parallel stage
+   edits `conformance/` or the `Makefile`. Done when `make check-docs`
+   passes on the skeletons and the branch is pushed (LOOP-03, RELAY-05,
    TEST-04, GLOBAL-04).
-3. **S** The conventions the six directories share (Decision 3): each
-   `v1.md` as a skeleton with the sections every document has, "Known
-   divergences" and a header that links the book and names the reference
-   implementation; the form of a requirement identifier and the six
-   prefixes (`CLAIM`, `COLLOUT`, `COLLIN`, `GUEST`, `INIT`, `BOOTCFG`);
-   the file and form of the list of requirements that are not
-   machine-checked; how a case names the requirements it cites, in the
-   harness's runner; each directory's `CHANGELOG.md` with its `v0.1.0`
-   entry and each specification's `go.mod` naming the harness at
-   `v0.1.0`; and the six commands `bw-conformance-<directory>` in their
-   first form, with `requirements` and `version` working and `run`
-   reporting that there are no cases yet (LOOP-02, LOOP-03, GLOBAL-10).
-4. **S** Show that the mechanics of **Releases and how they are
-   consumed** hold with the real module names: the harness imports one
-   of its real third-party dependencies (the TOML parser the target
-   files need), and each specification names a harness version that has
-   no tag. Done when the workspace builds, vets and tests, `make tidy`
-   leaves each `go.mod` complete and unchanged on a second run,
-   `make check-docs` passes, and the branch is pushed. If one of the
-   three mechanics a19's answer rests on cannot be made to hold, the
-   item goes back to Design with what was seen (FLOW-06, FLOW-17,
-   GLOBAL-09).
 
 **Stage 2, pins and mechanics (K).** It is ahead of the documents
 because it tries, on hosted runners, the part of a20's answer the design
 lists as not tried.
 
-5. **K** `make pin-specs`, and with it the six pin modules under
-   `tools/conformance/`, written by
-   `make pin-specs REF=<S's head after stage 1>`. The target takes
+5. **K** `make pin-specs`, the recipe alone. The target takes
    `SPECS="<directory>@<version> ..."`, `SPECS=latest` or `REF=<commit>`,
    and with neither or both it is an error that says so. It writes each
    module it moves from nothing (the `module` line, the `go` line read
@@ -4266,7 +4337,14 @@ lists as not tried.
    the refs on the seams page; and it builds each command it moved. It
    is a recipe or a shell script the recipe calls: no Go package joins
    the root module, and no file joins a pin module beside its `go.mod`
-   and `go.sum` (TEST-05, GLOBAL-08, GLOBAL-10, GLOBAL-11, LOOP-07).
+   and `go.sum`. This task writes no pin module and does not run the
+   recipe against S; its rewriting of the page is first used in task
+   6. It is done when the three forms and the error have been tried
+   by hand on a model, as the design's trial was: tagged local
+   repositories, a mixed set of releases, a commit with its `replace`
+   line, and the move back from a commit. Nothing of the model is
+   committed, and the evidence says what was run (TEST-05, GLOBAL-08,
+   GLOBAL-10, GLOBAL-11, LOOP-07).
 6. **K** `docs/book/src/concepts/seams.md`, "Component seams", with its
    entry in `SUMMARY.md` at the head of the Specifications part: one row
    per seam, two specifications for seam 2, each row's links at the ref
@@ -4274,8 +4352,11 @@ lists as not tried.
    it the test in `specs/specs_test.go` that fails when a row's ref and
    that specification's version in its pin module disagree (tier 0). It
    is with `make pin-specs` because the recipe, the page and the test
-   share one form of ref; the page is written before the recipe's first
-   run, which fills its refs (UX-01, TEST-02, TEST-05).
+   share one form of ref. The task ends with the recipe's first run,
+   `make pin-specs REF=<S's head after stage 1a>`, which writes the six
+   pin modules under `tools/conformance/` and fills the page's refs;
+   the page, the test and the twelve files are one commit, so the test
+   never runs without its modules (UX-01, TEST-02, TEST-05).
 7. **K** The `conformance` workflow (**CI**): its `paths` list, its
    triggers (pull requests; pushes to a branch other than `main`;
    weekly on `main`; on demand), and its jobs `pin` (not on a branch
@@ -4288,15 +4369,14 @@ lists as not tried.
    names through the module proxy and the checksum database at a commit,
    the `replace` line, and `go tool` on `macos-latest` and
    `windows-latest`, where `make` runs in this repository's CI for the
-   first time. Before this task is done, the `SPECS` forms of
-   `make pin-specs` and the `pin` job's criteria are tried by hand on a
-   model, as the design's trial was and with the real recipe: tagged
-   local repositories, a mixed set of releases, the move back from a
-   commit, and a commit, a `replace` line, a harness line raised by hand
-   and a second specification in one module each failing. Nothing of
-   the model is committed, and the step's evidence says what was run.
-   If a pin module cannot be made to resolve or build as Decision 7 has
-   it, the item goes back to Design (TEST-02, GLOBAL-07, FLOW-06).
+   first time. Before this task is done, the `pin` job's criteria are
+   tried by hand on task 5's model, with the real recipe: a commit, a
+   `replace` line, a harness line raised by hand and a second
+   specification in one module each failing, and a set of tags passing.
+   Nothing of the model is committed, and the step's evidence says what
+   was run. If a pin module cannot be made to resolve or build as
+   Decision 7 has it, the item goes back to Design (TEST-02, GLOBAL-07,
+   FLOW-06).
 
 **Stage 3, the documents (S; 3a to 3d may run in parallel).** Each
 document states at least what **What each specification covers** lists
@@ -4305,7 +4385,10 @@ divergences" the rows of **Divergences found** named here, as the code
 behaves (Decision 1). The writer reads the files named, on this branch
 of K; where the list in the design and the code differ, the code decides
 and the difference is recorded for Consolidation. Each stage is green on
-`make check-docs`.
+`make check-docs`. The relay that D17 and D18 are reproduced against is
+built from a detached worktree of K at `origin/main`, into a directory
+outside both repositories; nothing is committed in that worktree, and
+it is not the checkout K's stage 2 may be working in.
 
 8. **S, stage 3a** `relay-claim/v1.md`, `v1.config.schema.json`,
    `v1.identity.schema.json` and `v1.openapi.json`. First, D17 is
@@ -4315,11 +4398,15 @@ and the difference is recorded for Consolidation. Each stage is green on
    and `relaycfg/buildlink.go`; `cmd/relay/main.go`, `vmlink.go`,
    `mode_host.go`, `segment.go` and `buildif_linux.go` for what each
    mode does with a claim; `relay/relay.go` for what a start does before
-   the claim's reply; `ledger/environment.go` for the payload's type;
-   `driver/session.go` for the claimant's side; their tests; and the
-   designs `build-link-subnet` and `hyperv-relay-per-build-channel`,
-   against whose text the document is checked. Divergences: D5, D6, D7,
-   D8, D17, D19 (GLOBAL-08, RELAY-08, RELAY-04, BOOT-06, LOOP-02).
+   the claim's reply; `relay/proxy.go` for `buildTransport` (an
+   `upstream_ca_certs` entry with no PEM, and `upstream_system_ca`, D5)
+   and for `safeDialContext` and `blockedDial` (the refused dials into
+   the build link, which the by-mode text states);
+   `ledger/environment.go` for the payload's type; `driver/session.go`
+   for the claimant's side; their tests; and the designs
+   `build-link-subnet` and `hyperv-relay-per-build-channel`, against
+   whose text the document is checked. Divergences: D5, D6, D7, D8,
+   D17, D19 (GLOBAL-08, RELAY-08, RELAY-04, BOOT-06, LOOP-02).
 9. **S, stage 3b** `collector-outputs/v1.md` with `v1.openapi.json`, and
    `collector-inputs/v1.md` with `v1.openapi.json`,
    `v1.complete.schema.json` and `v1.status.schema.json`. Transport,
@@ -4341,10 +4428,13 @@ and the difference is recorded for Consolidation. Each stage is green on
     D17 is. Read: `relay/relay.go` (`handleArtifacts`,
     `handleContextGet`, the CA, its leaves and CRL, `DetectSelfIP`),
     `relay/controlplane.go`, `relay/dns.go`, `relay/heartbeat.go` and
-    `relay/proxy.go`; `cmd/relay/dhcp.go`, `dhcp_vm.go`, `ingress_fd.go`
-    and `ingress_dhcp.go` for the lease and the frame link;
-    `tools/relay-vm/init`, read for what is the driver's and so is not
-    specified; their tests; and the design `relay-leaf-crl`.
+    `relay/proxy.go`; `cmd/relay/mode_host.go` for the frame link's
+    dispatch by port (443, 8300, every other port to the proxy) and its
+    one UDP listener on port 53, which is where "the port alone selects
+    the service" and D15 come from; `cmd/relay/dhcp.go`, `dhcp_vm.go`,
+    `ingress_fd.go` and `ingress_dhcp.go` for the lease and the frame
+    link; `tools/relay-vm/init`, read for what is the driver's and so
+    is not specified; their tests; and the design `relay-leaf-crl`.
     Divergences: D9, D10, D11, D12, D15, D18, D19 (BOOT-04, RELAY-02,
     RELAY-04, GLOBAL-08, LOOP-02).
 11. **S, stage 3d** `executor-initialize/v1.md`, and
@@ -4360,10 +4450,22 @@ and the difference is recorded for Consolidation. Each stage is green on
     `executor-initialize`; none in `bootstrap-config` (EXEC-04, EXEC-02,
     EXEC-03, BOOT-05, BOOT-02, BOOT-03, LOOP-02).
 
-**Stage 4, the harness (S, serial: one module).** The models are written
-from the documents of stage 3 and import nothing of the kit (Decision
-5). Each stage is green on the harness's own tests, in which each role
-is run against its counterpart (tier 0: `go test` there).
+**Stage 4, the harness (S, serial: one module, five stages).** The
+models are written from the documents of stage 3 and import nothing of
+the kit (Decision 5). Every test in `conformance/` is tier 0 and runs
+under plain `go test` there. Everything in stages 4a to 4e builds and
+tests on Linux, macOS and Windows; only stage 6 is Linux, with stubs.
+
+The design names the harness's relay twice, and the plan reads the two
+as one model. Decision 5 lists "a relay to test a collector". **The
+harness** and **CI** have each module's `go test ./...` run "the relay
+cases against the harness's relay", with no privilege named for it,
+and the relay cases are DHCP, DNS, the frame link, interception and
+the RELAY-02 round trip among others. So the harness's relay is also a
+role under test, which serves seams 1, 3 and 6, is the client of seam 2
+and writes a signed ledger, and the cases must reach it with no
+namespace, no root and no runtime. Tasks 15 and 16 build it, in that
+order, and task 16 builds what lets a case reach it.
 
 12. **S, stage 4a** The core: the target-file format (TOML: the role,
     the launcher, the attachment points, the host operating systems; a
@@ -4377,77 +4479,223 @@ is run against its counterpart (tier 0: `go test` there).
     its specification, its version, the harness's version and the
     requirements it cites); the table of the specification versions the
     models were written from; and the commands' three subcommands in
-    their final form. The core builds for Linux, macOS and Windows
-    (GLOBAL-07, GLOBAL-10, GLOBAL-11, TEST-04).
-13. **S, stage 4b** The roles, each a package: the claimant and the
-    collector that test a relay, the relay that tests a collector, the
-    build environment, the upstream resolver and the origin servers
-    with their CA; and the ledger verifier, written from this
-    repository's `specs/build-ledger/v1.md` at a commit its package
-    comment names, reading metadata fields by the names
-    `specs/metadata-<name>/v1.md` gives them and holding no copy of a
-    document or schema (Decision 9). The harness's collector can be
-    started in every form a target may declare, so that the cases that
-    are not applicable to the disk collector run against it (GLOBAL-01,
-    GLOBAL-02, GLOBAL-03, GLOBAL-09, RELAY-05, TEST-07).
-14. **S, stage 4c** What starts a relay under test on Linux: the
-    network namespaces that are the relay's whole upstream, addressed
-    from the documentation ranges, with the resolver on port 53 and the
-    origins on 80 and 443; the mount namespace that binds the relay's
-    `/etc/resolv.conf`; the `frames` link with the harness's own network
-    stack and its lease from the relay's DHCP; the `ip` link; the `oci`
-    launcher, run by the runtime the target file names, with the order
-    of a container-mode relay's interfaces settled and recorded in the
-    target file; and the instances (a fresh one for each case that ends
-    one, a shared one otherwise, and the poll of `/health` before the
-    first build-side request, D19). A sandbox that cannot be built, for
-    want of root or of user namespaces, is an error that names what is
-    missing, and never a skip. Other platforms get build-tagged stubs
-    (GLOBAL-07, GLOBAL-11, RELAY-04, TEST-04, TEST-07).
+    their final form. The runner is given the component under test and
+    the roles around it through one Go interface, the *attachment*, so
+    that a case is written once and does not know whether a launcher or
+    the harness itself stands behind it, and every role takes its
+    listeners and connections from the attachment and never opens a
+    socket of its own choosing. Tier 0: table-driven tests of the
+    format, with each error it names, of the placeholders and of the
+    report (GLOBAL-07, GLOBAL-10, GLOBAL-11, TEST-04).
+13. **S, stage 4b** Three roles, each a package: the claimant and the
+    collector that test a relay, and the ledger verifier. The collector
+    can be started in every form a target may declare (with and without
+    a build script, a context, a bootstrap config and a token; serving
+    on after a completion or not), so that the cases that are not
+    applicable to the disk collector run against it. The verifier is
+    written from this repository's `specs/build-ledger/v1.md` at a
+    commit its package comment names, reads metadata fields by the
+    names `specs/metadata-<name>/v1.md` gives them and holds no copy of
+    a document or schema (Decision 9). Tier 0: the claimant and the
+    collector against a stand-in for a relay's claim endpoint and
+    tunnel that lives in the test files, the relay model being task
+    15's; the collector's replies against the two documents' schemas
+    and examples; the verifier over ledgers the tests build from the
+    format's document, one valid and the others each broken in one way
+    (GLOBAL-01, GLOBAL-02, GLOBAL-03, GLOBAL-09, RELAY-05, TEST-07).
+14. **S, stage 4c** The build side. An in-memory network: named
+    addresses, stream listeners and connections, datagram endpoints
+    with the broadcast a lease needs, and a frame pipe that carries one
+    Ethernet frame per datagram. On it, the build environment, in both
+    link kinds: on `frames` with the harness's own network stack, which
+    takes its lease from the relay's DHCP and connects to the address
+    DNS returned; on `ip`, connecting to the relay's own address with
+    the origin's name in `Host` or SNI; in both, the poll of `/health`
+    on port 8300 before its first request (D19). The upstream resolver
+    on port 53, which a case can make silent or failing; the origin
+    servers on ports 80 and 443, on addresses in the documentation
+    ranges; and their CA, which a claim carries in `upstream_ca_certs`
+    with `upstream_system_ca: false`. Tier 0, all on the in-memory
+    network: the network itself; two ends of the frame pipe each with
+    the harness's stack; the lease against a responder scripted in the
+    test files; the build environment against the resolver and the
+    origins with no relay between them (GLOBAL-07, RELAY-04, TEST-04,
+    TEST-07).
+15. **S, stage 4d** The relay model, first part: what Decision 5 calls
+    a relay to test a collector. Seam 1 as `relay-claim` states it for
+    a relay: the claim endpoint with its token, `POST /v1/tunnel`,
+    `POST /v1/claim` with the field table's validation and every reply,
+    one claim. Seam 2 as the two collector documents state the relay's
+    side: the ledger request before any other output, the environment
+    record, the capture modes with the `Warden-Hash` trailer, the
+    output and the artifacts, every output before the completion;
+    `ready` before the claim's 200, the heartbeat's forwarding, an
+    input that is not 200, the completion after the ledger's reply. A
+    ledger writer, written from the same commit of
+    `specs/build-ledger/v1.md` as the verifier and holding no copy of
+    it, with a key of its own for each instance, which the claim's
+    reply names. A `claims` collector target reaches this model at a
+    loopback claim address. Tier 0: the model against task 13's
+    claimant and collector, in every form of the collector; its
+    ledgers verify under task 13's verifier, which still refuses each
+    broken one. The verifier first reads a ledger the Go relay wrote
+    in stage 9 (GLOBAL-03, GLOBAL-07, RELAY-07, RELAY-08, TEST-04).
+16. **S, stage 4e** The relay model, second part, and the in-process
+    attachment. Seam 3 as `relay-guest-api` states it for a relay: the
+    lease; on a frame link, ARP and the capture of connections to any
+    address, with the port selecting the service; on a kernel
+    interface, its own address and four ports; DNS with the reserved
+    names, the list order, the 5 s failover and SERVFAIL; the reserved
+    hosts `artifacts` and `cwd`; the control plane; interception over
+    HTTP and TLS with its CA, a leaf for each name and the CRL the
+    leaf names; the upstream dials each mode refuses; and nothing
+    recorded after a completion. Seam 6: the collector's bootstrap
+    config served byte for byte and recorded. The model takes its mode
+    as a start parameter, and what `relay-claim` states by mode for
+    `build_link` and `upstream_dns` holds in each.
 
-**Stage 5, first cases end to end (S, then K; one agent).** It runs the
-launchers and the sandbox against the real relay and collector on hosted
-runners before the suites are written in bulk.
+    The in-process attachment is a Go API of the `conformance` module
+    that a module's tests hand to the runner in place of a target
+    file. It is not a launcher: the target-file format gains no name
+    for it and no command can select it (Decision 6 is unchanged). It
+    gives the model, from memory, each thing **What a relay under test
+    must provide** has a launcher give a real relay from the kernel: a
+    fresh instance for each start; a claim endpoint; the build link, a
+    frame pipe for host mode (`frames`) and the model's listeners at
+    its own address on the in-memory network for vm and container mode
+    (`ip`); the upstream, task 14's resolver and origins on the
+    in-memory network; as start parameters, the resolver configuration
+    that stands for `/etc/resolv.conf` and the build interface's
+    addresses and routes; and the mode. For the collector cases it
+    gives the harness's collector, in each form, with the claimant in
+    front of it as a `claims` target has, and task 15's model as the
+    relay that drives it.
 
-15. **S** Two cases, with their modules' tests against the harness's
-    own roles: in `relay-claim/cases`, an authorized claim over the
-    tunnel that is answered 200 with an identity; in
-    `collector-outputs/cases`, one output a collector accepts. Pushed
-    green (TEST-05, TEST-04, TEST-07).
-16. **K** The five target files in `tools/conformance/targets/`
+    The self-test therefore runs the relay cases against the model
+    once in each of the three modes, host on `frames` and vm and
+    container on `ip`, and the collector cases against the collector
+    in each form, so that each case runs at least once where it
+    applies. A case that no in-process configuration can carry is
+    reported not applicable by what that target declares, as for any
+    target, and never skipped. The plan expects no such case. One that
+    is found is listed with its reason in the attachment's package
+    comment and in the evidence of the stage that found it, so that a
+    reader knows it first ran against the Go relay.
+
+    Tier 0, and the stage's done-when: in `conformance/`, with no case
+    and no requirement cited, every role is run against its
+    counterpart in each of those configurations: a whole build (claim,
+    lease, a name resolved, an origin fetched over HTTP and over TLS,
+    an artifact, the exit) after which the collector holds every
+    output in order, the ledger verifies under the reply's key, and
+    the hash of each body in it is the hash of the bytes the build
+    environment received (GLOBAL-07, RELAY-02, RELAY-04, BOOT-04,
+    TEST-04, TEST-07).
+
+**Stage 5, first cases against the harness itself (S).** It is small on
+purpose: it is the proof that a case in a specification's module
+reaches the harness's own roles through the in-process attachment,
+before the sandbox is built on the same interface.
+
+17. **S** Two cases, with their modules' tests (tier 0): in
+    `relay-claim/cases`, an authorized claim over the tunnel that is
+    answered 200 with an identity, which `go test` in `relay-claim`
+    runs against the model relay in each of the three modes; in
+    `collector-outputs/cases`, one output a collector accepts, which
+    `go test` in `collector-outputs` runs against the harness's
+    collector. Done when both pass as an ordinary user, with no
+    namespace created, and are pushed (TEST-05, TEST-04, TEST-07).
+
+**Stage 6, the sandbox and the launchers (S).** It is the one part of
+the harness that cannot be tested under `go test`, so its green is
+stated in three parts.
+
+18. **S** What starts a real relay under test on Linux, behind the same
+    attachment as task 16's: the network namespaces that are the
+    relay's whole upstream, addressed from the documentation ranges,
+    with the resolver on port 53 and the origins on 80 and 443; the
+    mount namespace that binds the relay's `/etc/resolv.conf`; the
+    `frames` link over an inherited socketpair, with the stack and the
+    lease of task 14; the `ip` link; the `oci` launcher, run by the
+    runtime the target file names, with the order of a container-mode
+    relay's interfaces settled and recorded in the target file; and
+    the instances (a fresh one for each case that ends one, a shared
+    one otherwise). A sandbox that cannot be built, for want of root
+    or of user namespaces, is an error that names what is missing, and
+    never a skip. Other platforms get build-tagged stubs. The sandbox
+    starts no program but the relay the target file names and, for
+    `oci`, the runtime it names (**Security note**). Every namespace,
+    link, container and container network it creates has a name that
+    is unique to the harness process and the instance, and is removed
+    when the instance ends, so that two harness processes with `exec`
+    targets run on one host at once; a second process with an `oci`
+    target on the same runtime either runs or fails with an error that
+    names the conflict.
+
+    Its green. (a) Tier 0, under `go test` as an ordinary user: the
+    address plan; the instances' bookkeeping; the argument list each
+    launcher builds; the error for a missing privilege, with the probe
+    for it injected; and `go vet` for `GOOS` linux, darwin and windows.
+    No test here creates a namespace or calls a runtime, so S's `ci`
+    passes on a hosted runner. (b) By hand, as root, on the session's
+    host: task 17's relay case with
+    `bw-conformance-relay-claim run -target <file>` against a relay
+    built from a detached worktree of K at this branch's head, in host,
+    vm and container mode, with three target files written outside
+    both repositories; the evidence names the commands and their
+    reports. A session whose host has neither root nor user namespaces
+    says so in the evidence, and its stage is then green only with
+    stage 7's run. (c) The `oci` launcher is tier 1 and is first run
+    in stage 7, on the hosted runner: no session is assumed to have a
+    running container runtime (GLOBAL-07, GLOBAL-11, RELAY-04, TEST-02,
+    TEST-04, TEST-07).
+
+**Stage 7, first cases end to end (K).** It runs the launchers and the
+sandbox against the real relay and collector on hosted runners before
+the suites are written in bulk.
+
+19. **K** The five target files in `tools/conformance/targets/`
     (`relay-host.toml`, `relay-vm.toml`, `relay-container.toml`,
     `relay-oci.toml`, `collector-disk.toml`), each declaring its `os`;
     `make conformance` in its final form, which builds
-    `dist/conformance/relay`, `dist/conformance/collector` and the image
+    `dist/conformance/relay`, `dist/conformance/collector` and, when
+    `relay-oci` is among the targets it runs, the image
     `buildwarden-relay:conformance`, runs each pinned specification's
     command from its own module against each target, and prints one
     table per target, with `TARGETS`, `SUITES`, `SPECS_DIR` and
     `OCI_RUNTIME` and the default of a18, in which a target left out is
     printed with its reason and a named target that cannot run on the
     host is an error; the workflow's `relay` and
-    `collector` jobs in their final form, each naming its targets; and
-    the pins moved to S's head. Tier 1. Done when the run for the pushed
-    head is green on all three runners and reports both cases as passed:
-    the relay case against each of the four relay targets, the collector
-    case against `collector-disk` on each operating system (TEST-02,
-    TEST-05, GLOBAL-09, GLOBAL-10, GLOBAL-11, RELAY-04).
+    `collector` jobs in their final form, each naming its targets, the
+    `relay` job running the sandbox as root (**Security note**); and
+    the pins moved to S's head. Tier 1. Done when the run for the
+    pushed head is green on all three runners and reports both cases
+    as passed: the relay case against each of the four relay targets,
+    the collector case against `collector-disk` on each operating
+    system. A fault it finds in the harness is fixed in S, serially,
+    and the task repeated on the new head (TEST-02, TEST-05, GLOBAL-09,
+    GLOBAL-10, GLOBAL-11, RELAY-04).
 
-**Stage 6, the suites (S; 6a to 6d may run in parallel, the harness
-frozen).** Each case cites requirements of its own specification only.
-Each module's `go test ./...` runs its cases against the harness's own
-model of the role under test (tier 0), and each stage ends with the
-coverage check passing for its directories: every requirement cited by
-a case or on the list with a reason. No case asserts the `Authorization`
-scheme (D8), sends anything recorded after a completion (D16, D18) or
-asserts on the listeners at the moment of a claim's 200 (D19); the D17
-case has a relay of its own. A case that fails against the Go relay or
-the disk collector because the document misread the code is corrected in
-the document, in the same stage. One that fails because the code does
-something this design does not record sends the item back to Design. No
-case is weakened and no code is changed to make a suite pass (FLOW-06,
-LOOP-02).
+**Stage 8, the suites (S; 8a, 8b, 8c with 8d, and 8e may run in
+parallel, the harness and K's target files frozen).** Each case cites
+requirements of its own specification only. Each module's
+`go test ./...` runs its cases against the harness's own model of the
+role under test, in every configuration of task 16 (tier 0). A stage
+is green on `make check-suite DIRS="<its directories>"`, which ends
+with the coverage check for them: every requirement cited by a case or
+on the list with a reason. Its evidence names each case that is not
+applicable to every in-process configuration. No case asserts the
+`Authorization` scheme (D8), sends anything recorded after a
+completion (D16, D18) or asserts on the listeners at the moment of a
+claim's 200 (D19); the D17 case has a relay of its own. A case that
+fails against the Go relay or the disk collector because the document
+misread the code is corrected in the document, in the same stage, or
+by the stage's agent after its stage-9 run. One that fails because the
+code does something this design does not record sends the item back to
+Design. No case is weakened and no code is changed to make a suite pass
+(FLOW-06, LOOP-02).
 
-17. **S, stage 6a** `relay-claim`'s cases. For a relay: authorization
+20. **S, stage 8a** `relay-claim`'s cases. For a relay: authorization
     and refusal, a refused claim leaving the relay claimable and a spent
     relay not listening; one case for each rule of seam 1's field table;
     `build_link` and `upstream_dns` by mode; the ordering at the claim;
@@ -4456,8 +4704,9 @@ LOOP-02).
     against a collector target that claims: the tunnel before the claim,
     the claim's body against its schema, the token (TEST-05, RELAY-04,
     RELAY-08, TEST-04, TEST-07).
-18. **S, stage 6b** `collector-outputs`' and `collector-inputs`' cases.
-    For a collector: each endpoint of each specification with its error
+21. **S, stage 8b** `collector-outputs`' and `collector-inputs`' cases;
+    the stage may be given to two agents, one for each. For a
+    collector: each endpoint of each specification with its error
     cases, over the tunnel, and for `collector-outputs` what a target
     with a read-back directory stored, against the disk layout. For a
     relay, as their client: the ledger request before any other output,
@@ -4466,39 +4715,51 @@ LOOP-02).
     an input that is not 200, the completion signal. The cases the disk
     collector's forms make not applicable run against the harness's own
     collector (TEST-05, RELAY-07, TEST-04, TEST-07).
-19. **S, stage 6c, first half** `relay-guest-api`'s cases below HTTP:
-    DHCP; DNS (the reserved names, list order, the 5 s failover,
-    SERVFAIL); on a frame link, ARP and the capture of connections to
-    any address; and the refused upstream dials (TEST-05, RELAY-04,
-    TEST-04, TEST-07).
-20. **S, stage 6c, second half** `relay-guest-api`'s cases over HTTP:
-    each `artifacts`, `cwd` and control-plane endpoint with its error
-    replies; interception over HTTP and TLS, with the leaf's chain and
-    its CRL distribution point; the RELAY-02 round trip, in which the
-    ledger verifier checks the hash of each body against the bytes the
-    build received; and that nothing is recorded after a completion
+22. **S, stage 8c** `relay-guest-api`'s cases below HTTP: DHCP; DNS
+    (the reserved names, list order, the 5 s failover, SERVFAIL); on a
+    frame link, ARP and the capture of connections to any address; and
+    the refused upstream dials. The directory's coverage cannot pass on
+    this half alone, so this stage is green on `make check-docs` and on
+    `go vet` and `go test` in `relay-guest-api`, and is merged and
+    pushed on that (TEST-05, RELAY-04, TEST-04, TEST-07).
+23. **S, stage 8d** `relay-guest-api`'s cases over HTTP, after 8c's
+    merge: each `artifacts`, `cwd` and control-plane endpoint with its
+    error replies; interception over HTTP and TLS, with the leaf's
+    chain and its CRL distribution point; the RELAY-02 round trip, in
+    which the ledger verifier checks the hash of each body against the
+    bytes the build received; and that nothing is recorded after a
+    completion. Green on `make check-suite DIRS=relay-guest-api`
     (TEST-05, RELAY-02, BOOT-04, TEST-04).
-21. **S, stage 6d** `bootstrap-config`'s cases: a relay serves the
+24. **S, stage 8e** `bootstrap-config`'s cases: a relay serves the
     collector's document byte for byte and records it; the document a
     collector serves validates against the schema.
     `executor-initialize`'s command lists its requirements, each with
     the reason it has no case, and runs nothing (TEST-05, BOOT-05,
     EXEC-04, LOOP-03).
 
-**Stage 7, the full run (K).**
+**Stage 9, a hosted run for each suite, and the full run (K).** Stage
+8's own green is tier 0, and its local run against the real targets
+leaves out `relay-oci`, macOS and Windows. So each suite gets its
+hosted run while its stage is fresh, and the full run is the last of
+them and not the first.
 
-22. **K** The pins moved to S's head, once every suite is merged there
-    and `make check` is green at that head. Tier 1. Done when the
-    `conformance` run
-    for the pushed head is green on all three runners: the relay suites
-    against `relay-host`, `relay-vm`, `relay-container` and `relay-oci`,
-    the collector suites against `collector-disk` on `ubuntu-latest`,
-    `macos-latest` and `windows-latest`. This is S1's done-when, and the
-    first of the two runs Implement's evidence names. A failure is
-    handled as stage 6 says, in S, and this task is repeated on the new
-    head (TEST-02, TEST-05, FLOW-06, LOOP-02).
+25. **K, repeated** After each merge of a stage-8 stage is pushed in S,
+    the dispatching session moves the pins,
+    `make pin-specs REF=<S's head>`, runs `make test` and `make lint`,
+    pushes, and waits for the `conformance` run (tier 1). One
+    repetition may cover two merges that were pushed together. Done,
+    for a repetition, when the run for the pushed head is green on all
+    three runners. A failure is handled as stage 8 says, in S, by the
+    agent of the stage it belongs to, and the repetition is made again
+    on the new head. The last repetition is made once every suite is
+    merged and `make check` is green at S's head: the relay suites
+    against `relay-host`, `relay-vm`, `relay-container` and
+    `relay-oci`, the collector suites against `collector-disk` on
+    `ubuntu-latest`, `macos-latest` and `windows-latest`. That run is
+    S1's done-when, and the first of the two runs Implement's evidence
+    names (TEST-02, TEST-05, FLOW-06, LOOP-02).
 
-**Stage 8, the rule changes (K).** One task for each change the review
+**Stage 10, the rule changes (K).** One task for each change the review
 approved (`rule change <ID> approved at 64a4a95`), with the paths its
 `rule_changes` entry names and no other file under a rule path
 (FLOW-14). The wording is copied word for word from **Rule changes** as
@@ -4510,13 +4771,13 @@ joined form. A word that neither review approved is a return to Design
 `tools/workflow` as in the root module, `make lint` and
 `make enforcement`, in which the merge base's tier 1 reads the list.
 
-23. **K** Rule change TEST-05. `docs/development/testing.md`: the title
+26. **K** Rule change TEST-05. `docs/development/testing.md`: the title
     and the whole body. `tools/tier1/rules.yaml`: the TEST-05 entry's
     owner string (FLOW-14, TEST-05, LINT-02).
-24. **K** Rule change TEST-02. `docs/development/testing.md`: the one
+27. **K** Rule change TEST-02. `docs/development/testing.md`: the one
     sentence added to the tier-1 bullet of "Where each tier runs today"
     (FLOW-14, TEST-02).
-25. **K** Rule change GLOBAL-08. `docs/development/global.md`: the
+28. **K** Rule change GLOBAL-08. `docs/development/global.md`: the
     executor bullet, and the new paragraph before the rule's last one.
     `tools/tier1/rules.yaml`: the six `seams` entries and the comment
     above them, in place of `seams: []` and its comment, as under
@@ -4524,16 +4785,16 @@ joined form. A word that neither review approved is a return to Design
     one entry `"GLOBAL-08": report.Must` in `TestSeverities`' table
     (tier 0). No other file under `tools/tier1/` changes, and the
     check's code does not (FLOW-14, GLOBAL-08, LINT-02, LINT-05).
-26. **K** Rule change EXEC-04. `docs/development/in-vm-executor.md`:
+29. **K** Rule change EXEC-04. `docs/development/in-vm-executor.md`:
     the rule's body (FLOW-14, EXEC-04).
-27. **K** Rule change PROFILE-01. `docs/development/loop-profile.md`:
+30. **K** Rule change PROFILE-01. `docs/development/loop-profile.md`:
     the Specifications entry, the Consumables entry and the tier-1
     Specification row of the Checks table (FLOW-14, PROFILE-01,
     LOOP-01).
 
-**Stage 9, the book and the umbrella (K).**
+**Stage 11, the book and the umbrella (K).**
 
-28. **K** The reference documents: in `concepts/architecture.md` the
+31. **K** The reference documents: in `concepts/architecture.md` the
     collector's endpoint table, `build_link`'s validation rules and
     by-mode table, and the endpoint table under "Communication paths"
     are each replaced by a sentence and a link to the seams page, the
@@ -4545,34 +4806,48 @@ joined form. A word that neither review approved is a return to Design
     and `make pin-specs`, which says a pin is never moved with `go get`.
     `concepts/overview.md` is not edited, because no component's flow
     changes (UX-01, FLOW-15).
-29. **K** The amendments to `docs/design/componentization.md`, U1, U2
+32. **K** The amendments to `docs/design/componentization.md`, U1, U2
     and U3, word for word as approved (**Amendments to the umbrella
     design**). U2's row is the form in the table, or the joined form if
     `driver-contract`'s change to that line is already on this branch;
     U3 stands after the paragraphs already there (FLOW-20, FLOW-10).
 
-**Stage 10, release machinery and the specs pull request (S).**
+**Stage 12, release machinery and the specs pull request (S).**
 
-30. **S** The `release` workflow (on a tag `<directory>/v*`, and by hand
+33. **S** The `release` workflow (on a tag `<directory>/v*`, and by hand
     for an existing tag: the tag is on `main` and is the version at the
     head of that directory's `CHANGELOG.md`; the binaries built with
     `go install <command>@<tag>` for three operating systems and two
     architectures and attached with `SHA256SUMS`; nothing attached for
     `conformance/v*`) and the `implementations` workflow (weekly and on
-    demand, not a merge gate). Neither can run before the merge;
-    `release` first runs in task 33. The `README.md` index and each
-    `CHANGELOG.md` are read once more against what was built (LOOP-07,
-    FLOW-08, GLOBAL-09).
-31. **S** Open the pull request from `feat/seam-specs` to `main`. Its
+    demand, not a merge gate). For `implementations` the design names
+    the Go relay image first and does not say where its target file
+    is. Decision 6 keeps a target file beside its implementation, and
+    Decision 2's layout has no directory for one in S, so the plan
+    adds none: the workflow takes `relay-oci.toml` from
+    `tools/conformance/targets/` of `buildwarden/buildwarden` at that
+    repository's newest release tag, pulls the image that release's
+    `relay-image` run published, `ghcr.io/buildwarden/relay:<tag>`,
+    under the name the target file names, and runs each specification's
+    newest released binary, checked against its `SHA256SUMS`. No
+    release of this repository carries that file until this item's
+    pull request here is merged and a release follows it; until then
+    the workflow's table says so for the Go relay and nothing is run
+    against it. Neither workflow can run before the merge: `release`
+    first runs in task 36, and `implementations` is first started by
+    hand after it. The `README.md` index and each `CHANGELOG.md` are
+    read once more against what was built (LOOP-07, FLOW-08,
+    GLOBAL-09, GLOBAL-11).
+34. **S** Open the pull request from `feat/seam-specs` to `main`. Its
     body lists the six documents under a heading of their own. No agent
     approves it, merges it or enables auto-merge. Done when its `ci` and
     `flow18` runs are green, which are the first hosted runs of S's
     workflows; a failure is repaired on the branch (FLOW-08, LOOP-06,
     FLOW-18, LOOP-03).
 
-**Stage 11, the final pins (K).**
+**Stage 13, the final pins (K).**
 
-32. **K** Implement's last commit:
+35. **K** Implement's last commit:
     `make pin-specs REF=<the specs pull request's head>`, `make test`,
     `make lint`, push. Tier 1. Done when the `conformance` run for that
     push is green on all three runners and each of the six modules names
@@ -4580,13 +4855,14 @@ joined form. A word that neither review approved is a return to Design
     is the one the pull request would merge and the head Review reads
     here has a green run. A later commit to S's branch, in Implement or
     for a Review finding, repeats this task. The step's evidence names
-    S's branch, its head and its pull request, and the runs of tasks 22
-    and 32; the run's digest names the six documents apart from the code
-    (FLOW-03, FLOW-17, LOOP-06, TEST-02).
+    S's branch, its head and its pull request, and the two runs: the
+    last repetition of task 25, and this task's; the run's digest names
+    the six documents apart from the code (FLOW-03, FLOW-17, LOOP-06,
+    TEST-02).
 
 **After Implement.**
 
-33. **S and K, human, `f6-release-specs`.** Not before Review (phase 4)
+36. **S and K, human, `f6-release-specs`.** Not before Review (phase 4)
     is done, and before `f6-open-pr`; it does not wait for the PR slot.
     The session lists in the specs pull request's body the tier-2 MUST
     findings that are in S, and checks that the latest `conformance` run
@@ -4605,29 +4881,55 @@ joined form. A word that neither review approved is a return to Design
     between the commit Review read and the tagged one. This is the first
     time a real tag is resolved through the proxy; if that fails no tag
     is moved, and the fault is fixed by a pull request in S and the next
-    patch versions (FLOW-08, FLOW-16, LOOP-07, FLOW-11).
+    patch versions. The `implementations` workflow is then started by
+    hand, once, and what it reported is named in the evidence; it does
+    not gate the step (FLOW-08, FLOW-16, LOOP-07, FLOW-11).
 
 ### Validation by tier
 
 | Tier (TEST-02) | What | Task |
 |---|---|---|
-| 0, in K | The ref test in `specs/specs_test.go`; `TestSeverities` with GLOBAL-08; tier 1's rule index and `rules.yaml` parsing with the amended rules, in the branch's tier 1 and in the merge base's; `tier1 designs` accepting this design | 6, 25, stage 8's green |
-| 0, in S | The tests of the `ci` checks; the harness's roles against each other; each suite against the harness's own roles; `make check` | 2, 12 to 14, 15, 17 to 21 |
-| 1, in K | The `conformance` workflow: first form, first cases, the full run, the final pins, and after the release the six tags with the `pin` job | 7, 16, 22, 32, 33 |
+| 0, in K | The ref test in `specs/specs_test.go`; `TestSeverities` with GLOBAL-08; tier 1's rule index and `rules.yaml` parsing with the amended rules, in the branch's tier 1 and in the merge base's; `tier1 designs` accepting this design | 6, 28, stage 10's green |
+| 0, in S | The tests of the `ci` checks; the harness's packages, and its roles against each other on the in-memory network; each suite against the harness's own roles through the in-process attachment; the parts of the sandbox that need no privilege; `make check` | 4, 12 to 16, 17, 18 (a), 20 to 24 |
+| 1, by hand | The `exec` sandbox as root, against a relay built from K, with the first relay case | 18 (b) |
+| 1, in K | The `conformance` workflow: first form, first cases, a run for each merged suite and the full run, the final pins, and after the release the six tags with the `pin` job | 7, 19, 25, 35, 36 |
 | 2, native | Nothing blocks, and no task. The two tracked gaps, `macos-vz` and `qemu-any`, are `deferred` on the native-gap backlog (FLOW-09, a14) | None |
 
 ### What goes back to Design, and what does not
 
 A missing or different specs repository, or a refused branch, is a
-blocking question in Implement and not a return (task 0, FLOW-07). These
-are returns to Design, with the finding recorded (FLOW-06): a mechanic
-of **Releases and how they are consumed** that does not hold with the
-real modules (tasks 4 and 7); a case that fails because the code does
-something this design does not record, or a divergence the table lacks
-(stages 3 and 6, task 22); a rule edit that needs a word the review did
-not approve, or a file under a rule path that no approved entry names
-(stage 8, FLOW-14); and any need to change the relay, the collector, the
-executor or a driver (Decisions 1 and 11).
+blocking question in Implement and not a return (task 0, FLOW-07). So
+is a file that recording sessions in S would need and the design does
+not name (task 1). These are returns to Design, with the finding
+recorded (FLOW-06): a mechanic of **Releases and how they are
+consumed** that does not hold with the real modules (tasks 3 and 7); a
+case that fails because the code does something this design does not
+record, or a divergence the table lacks (stages 3 and 8, task 25); a
+rule edit that needs a word the review did not approve, or a file under
+a rule path that no approved entry names (stage 10, FLOW-14); and any
+need to change the relay, the collector, the executor or a driver
+(Decisions 1 and 11).
+
+Two readings of the design are Plan's, and each is written where a
+later reader will look for it, so that Review and Consolidation can
+hold the design's text to them or send them back:
+
+*The harness's relay is one model with two duties* (the paragraph at
+the head of stage 4; tasks 15 and 16). The design says both things and
+sizes neither: the model is a second implementation of the relay's
+side of four specifications, written from the documents, and with the
+in-process attachment it is the largest part of the harness. The
+attachment and the in-memory network are named nowhere in the design.
+They add no launcher, no target-file field and no command-line
+surface, which is why Plan takes them to be how the self-test is built
+and not a decision. If Design meant a narrower self-test, one mode or
+no relay cases at all, that is a change to **The harness** and to
+**CI** and is Design's.
+
+*The `implementations` workflow reads the Go relay's target file from
+this repository's release* (task 33), which follows Decision 6 and
+adds no directory to Decision 2's layout. A target file kept in S
+would be a layout change and is Design's.
 
 ### Owed to later items
 
@@ -4637,7 +4939,7 @@ is filed for seam 4 after the merge: its move is M6's (a1).
 
 | Owed | To |
 |---|---|
-| Seam 4's move to the specs repository, with RELAY-01 to RELAY-08: RELAY-05, tier 1's `schema-doc` root, the book's `specs/` mirror and its redirects, `specs/specs_test.go`, and the reserved directory names (Decision 2). The harness's ledger verifier then reads the format from its own repository | M6 (a1) |
+| Seam 4's move to the specs repository, with RELAY-01 to RELAY-08: RELAY-05, tier 1's `schema-doc` root, the book's `specs/` mirror and its redirects, `specs/specs_test.go`, and the reserved directory names (Decision 2). The harness's ledger verifier and writer then read the format from their own repository | M6 (a1) |
 | The executor's suite. The umbrella's S2 row does not name it | S2's item (a11) |
 | The VM-image launcher. That item also sets the `qemu-any` backlog entry `open` | The first item that has a VM image to test (a6) |
 | The macOS form of the `exec` launcher. That item also sets the `macos-vz` backlog entry `open` | The first item that needs the relay suites on macOS (a14) |
@@ -4657,16 +4959,16 @@ numbers up to date (FLOW-10).
 | Draft task | Here | What differs |
 |---|---|---|
 | 0 | 0 | The check also creates the branch, at `main`'s commit, which is how "can push the branch" is shown before any work rests on it |
-| 1 | 1 to 4 | Split. "`ci` is green on the branch" is `make check` in the checkout, because `ci` runs on pull requests and `main` and the pull request is task 31's; its first hosted run is there |
+| 1 | 1 to 4 | Split in two stages, the conventions before the checks that read them. "`ci` is green on the branch" is `make check` in the checkout, because `ci` runs on pull requests and `main` and the pull request is task 34's; its first hosted run is there. Recording is turned on in the S clone, and S's `flow18` workflow holds its own check |
 | 2, 3, 4, 5 | 8, 9, 10, 11 | One stage for each, which may run in parallel. The files a writer reads and the divergences each records are named |
-| 6 | 12, 13, 14 | Split into three serial stages |
-| 7 | 15, 17 to 21 | Two first cases are run end to end before the rest. The coverage check and the collector documents' check, which the draft wrote in tasks 7 and 3, are written in task 2, so that no parallel stage edits the harness |
-| 8 | 5, 7, 16, 22 | The commit that shows the pin mechanics is moved ahead of the documents (task 7), because it tries what the design lists as not tried, and it is repeated with the real harness's dependencies at each pin move from task 16 on. The draft's done-when is task 22's |
-| 9 | 23 to 27 | One task for each approved rule change, with its paths (FLOW-14) |
-| 10 | 6, 28, 29 | The seams page and its test are written with `make pin-specs` (task 6), which rewrites the page |
-| 11 | 3, 30, 31 | Each `CHANGELOG.md` names `v0.1.0`, and each `go.mod` the harness at `v0.1.0`, from task 3; task 30 reads them again |
-| 12 | 32 | None |
-| 13 | 33 | None; the note of `f6-release-specs` in the queue is unchanged |
+| 6 | 12 to 16, 18 | Split into six serial stages. The relay model as a role under test, the in-memory network and the in-process attachment are named (tasks 14 to 16); the sandbox comes after the first cases, with its green stated (task 18) |
+| 7 | 17, 20 to 24 | Two first cases are run against the harness itself, and then end to end, before the rest. The coverage check and the collector documents' check, which the draft wrote in tasks 7 and 3, are written in task 4, so that no parallel stage edits the harness |
+| 8 | 5, 7, 19, 25 | The commit that shows the pin mechanics is moved ahead of the documents (task 7), because it tries what the design lists as not tried, and it is repeated with the real harness's dependencies at each pin move from task 19 on. Each suite has a hosted run after its merge; the draft's done-when is the last repetition of task 25 |
+| 9 | 26 to 30 | One task for each approved rule change, with its paths (FLOW-14) |
+| 10 | 6, 31, 32 | The seams page and its test are written with `make pin-specs` (task 6), which rewrites the page |
+| 11 | 2, 33, 34 | Each `CHANGELOG.md` names `v0.1.0`, and each `go.mod` the harness at `v0.1.0`, from task 2; task 33 reads them again, and says where the `implementations` workflow finds the Go relay's target file |
+| 12 | 35 | None |
+| 13 | 36 | The note of `f6-release-specs` in the queue gains three sentences that this task has and the note lacked: the six named at `v0.1.0` if the proxy does not list a tag yet; that a failed first resolution moves no tag; and the first `implementations` run |
 
 ## Design review
 
