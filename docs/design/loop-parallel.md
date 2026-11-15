@@ -2101,8 +2101,8 @@ it counts by no relation, nothing holds it, and it stops one thing.
     is for a security fix that follows no item, which nothing above
     covers: `wf` knows a fix only by `follows` or by `main.yaml`. It is
     described below (**The urgent mark**).
-  - An adoption (a8) is planned work and is not exempt. The mark is
-    not for it (a19 (b)).
+  - An adoption (a8) is planned work and is not exempt as such. The
+    mark is for it only when it is itself a security fix (a19 (b)).
 - **Where it shows.** `wf next`'s `blocked` line, which the digest keeps
   (LOOP-06); **Needs Jeff**'s opening line; a line above `QUEUE.md`'s
   Backlog while the count is at the limit; and, for a marked item
@@ -2244,7 +2244,9 @@ could read. The mark is that.
     queue has no field for that, FLOW-20's own exemption is judged
     and not computed, and a second field that said it was a19 (c),
     which he did not choose. So `wf`'s messages and history lines say
-    "item" and "marked urgent" and name no kind of fix, `wf validate`
+    "item" and "marked urgent" and name no kind of fix; the one line
+    that does is the line above `QUEUE.md`'s Backlog, which states the
+    rule to Jeff and tests nothing. `wf validate`
     passes a mark on a feature that is no security fix, and `Guard`
     honours it. Such a mark is against the rule and is found by
     reading: `QUEUE.md` shows every marked item, `wf status` shows the
@@ -4211,6 +4213,16 @@ clause "as for a security fix that follows no item" is gone: it named
 the security fix as what the mark is for, which the two sentences now
 say themselves.
 
+The second sentence is not the one this note announced. At `e692fad`,
+the design he answered a19 on, the note gave the sentence option (b)
+would bring as "Only the human marks one; the mark lifts this limit for
+it, and nothing else." The rule reads "Only the human marks a security
+fix urgent; the mark lifts this limit for it, and nothing else."
+instead, because "one" left "urgent" unsaid, and it follows a list of
+five kinds of item. The two sentences mean the same. Both are shown to
+him when FLOW-05 is put to him by name, and the announced one is his
+to choose.
+
 "A security fix the human has marked urgent" are the words of his
 answer to a19, and they are what confines the mark: nothing in `wf`
 does (**The urgent mark**). "Only the human marks a security fix
@@ -4228,6 +4240,11 @@ have a security boundary.
 **Severity and check:** SHOULD, `automated`, before and after.
 **Enforcement:** `wf`'s queue code (`tools/workflow/queue/`), which
 `rules.yaml` already names as the rule's owner; that entry does not change.
+The words "a security fix" have no check in `wf`: intake and the
+attended session judge them (a19 (b); **Machinery edits**). The check
+type is left `automated`, as it is today; whether it should read
+`automated + agent-judgment` for that clause is his to say when the
+rule is put to him by name.
 
 ### FLOW-06 (amend), `docs/development/process.md`
 
@@ -5057,11 +5074,37 @@ no entry below is the outcome or an approval of the design.
     urgent, as for a security fix that follows no item" is now "Only
     the human marks a security fix urgent". No other part of FLOW-05's
     proposed wording changed, and FLOW-02's is byte for byte as at
-    `e692fad`.
+    `e692fad`. At `e692fad` the note under FLOW-05 gave the sentence
+    for (b) as "Only the human marks one; the mark lifts this limit
+    for it, and nothing else."; it reads "Only the human marks a
+    security fix urgent; the mark lifts this limit for it, and nothing
+    else." instead, because "one" left "urgent" unsaid. The two mean
+    the same, and the note now says so.
   - *Still to come:* FLOW-02, with the two bullets carried for K1, and
     FLOW-05, each to be put to him by name on the commit that folds in
-    a19 (b); and the outcome. Nothing in this entry approves the
-    design.
+    a19 (b) and its review (the entry below), FLOW-05 with both
+    sentences shown and with the question
+    of its check type (the words "a security fix" are judged, not
+    checked by `wf`); and the outcome. Nothing in this entry approves
+    the design.
+
+- **2026-11-15: independent review of the fold-in of a19 (b) and a20
+  (a) (`238e620`).** One reviewer read the delta from `e692fad`. Four
+  findings, all of which held; none changes a decision or any rule's
+  proposed wording.
+  - *The sentence for (b) was not the one announced* (should): fixed by
+    disclosure, as in the entry above and in the note under FLOW-05.
+    The rule's sentence stays.
+  - *"The mark is not for it" said more than a19 (b)* (nit): an
+    adoption that is itself a security fix qualifies, and the design
+    already places a marked adoption in class 3. **The limits** now
+    says the mark is for an adoption only when it is itself a security
+    fix.
+  - *One line `wf` writes does name a kind of fix* (nit): the line
+    above `QUEUE.md`'s Backlog. **The urgent mark** now names it as the
+    exception.
+  - *FLOW-05's Enforcement line did not say that one clause is judged*
+    (nit): it now does. The check type is unchanged.
 
 - **2026-11-15: independent review of the second sitting's fold-in
   (`55428cd`).** One reviewer read the fold-in against the code and the
