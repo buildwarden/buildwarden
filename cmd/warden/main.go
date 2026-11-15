@@ -207,6 +207,18 @@ func resolveConfig() (*Config, error) {
 	return cfg, validateDriver(cfg.Runtime.Driver)
 }
 
+// announcedConfig is resolveConfig for the commands that say on stderr which
+// config file they read, before any other line. doctor says it in its
+// report instead. A load that fails prints its error, which names the file.
+func announcedConfig() (*Config, error) {
+	cfg, err := resolveConfig()
+	if err != nil {
+		return nil, err
+	}
+	log.Info(configLine(cfg))
+	return cfg, nil
+}
+
 // resolveRuntime returns the container runtime to run: the one in effect
 // when it is a supported runtime, the detected one when no level names any.
 // Another value is refused here, before anything is looked up, run or
@@ -492,7 +504,7 @@ func buildContext() (context.Context, context.CancelFunc) {
 
 // prepare resolves everything a build or shell needs.
 func prepare(args []string) (driver.Driver, *driver.BuildRequest, error) {
-	cfg, err := resolveConfig()
+	cfg, err := announcedConfig()
 	if err != nil {
 		return nil, nil, err
 	}

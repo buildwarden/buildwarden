@@ -68,6 +68,7 @@ or agent gate.`,
 			return err
 		}
 		out := cmd.OutOrStdout()
+		fmt.Fprintln(out, configLine(cfg))
 		drv := cfg.Runtime.Driver
 		if flagBuildLink != "" && !isVMDriver(drv) {
 			return driver.Fixable("", "--build-link requires a VM driver "+
@@ -148,7 +149,7 @@ Other drivers need no host setup; their base images are prepared with
 'warden image prepare'.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		cfg, err := resolveConfig()
+		cfg, err := announcedConfig()
 		if err != nil {
 			return err
 		}

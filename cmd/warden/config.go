@@ -211,6 +211,17 @@ func osReason(err error) string {
 	return err.Error()
 }
 
+// configLine says which config file a command read and how it was chosen.
+// Every command that reads configuration prints it, so that the working
+// directory's file is never used without a word.
+func configLine(cfg *Config) string {
+	if cfg.File == "" {
+		return "config: none (no --config, no WARDEN_CONFIG, no " +
+			"./warden.toml): defaults apply"
+	}
+	return "config: " + cfg.File + " (" + cfg.FileSource + ")"
+}
+
 // LoadConfig reads the one config file (configFile) and applies the
 // environment variables over it. It reads no other file and merges none.
 func LoadConfig() (*Config, error) {
