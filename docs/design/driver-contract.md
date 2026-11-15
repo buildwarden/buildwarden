@@ -32,7 +32,8 @@ rules: [GLOBAL-01, GLOBAL-03, GLOBAL-04, GLOBAL-06, GLOBAL-07, GLOBAL-08, GLOBAL
         BOOT-01, BOOT-02, BOOT-03, BOOT-04, BOOT-06, BOOT-07, UX-01, UX-02, UX-03, UX-04, UX-05,
         UX-07, UX-08, UX-09, TEST-01, TEST-02, TEST-03, TEST-04, TEST-05, TEST-07, TEST-08,
         LINT-05, FLOW-01, FLOW-02, FLOW-05, FLOW-06, FLOW-07, FLOW-09, FLOW-10, FLOW-12,
-        FLOW-14, FLOW-15, FLOW-17, FLOW-19, FLOW-20]
+        FLOW-14, FLOW-15, FLOW-17, FLOW-19, FLOW-20, LOOP-01, LOOP-02, LOOP-03, LOOP-04,
+        LOOP-08, LOOP-09, PROFILE-01]
 rule_changes:
   - {rule: GLOBAL-08, change: amend, paths: [docs/development/global.md, tools/tier1/rules.yaml]}
   - {rule: ORCH-01, change: amend, paths: [docs/development/orchestrator.md, tools/tier1/rules.yaml]}
@@ -40,7 +41,6 @@ rule_changes:
   - {rule: ORCH-04, change: amend, paths: [docs/development/orchestrator.md]}
   - {rule: TEST-05, change: amend, paths: [docs/development/testing.md, tools/tier1/rules.yaml]}
   - {rule: BOOT-02, change: amend, paths: [docs/development/bootstrap.md]}
-  - {rule: FLOW-02, change: amend, paths: [docs/development/process.md]}
   - {rule: UX-01, change: amend, paths: [tools/tier1/surface/surface.go,
       tools/tier1/surface/surface_test.go, tools/tier1/surface/testdata/driver.go.txt]}
   - {rule: UX-03, change: amend, paths: [tools/tier1/surface/surface.go,
@@ -48,6 +48,7 @@ rule_changes:
   - {rule: ORCH-03, change: amend, paths: [docs/development/orchestrator.md,
       tools/tier1/surface/surface.go, tools/tier1/surface/surface_test.go,
       tools/tier1/surface/testdata/driver.go.txt]}
+  - {rule: PROFILE-01, change: amend, paths: [docs/development/loop-profile.md]}
 concepts: [driver-contract, driver-binaries, driver-commands, driver-discovery, driver-conformance,
            driver-options, driver-owned-config, driver-common-keys, driver-config-reading,
            config-key-aliases, teardown-timeout,
@@ -60,7 +61,7 @@ related: [componentization.md, unified-bootstrap.md, firecracker-driver.md, buil
           vm-driver-release-plan.md, platform-compatibility.md, ledger-environment-types.md,
           hyperv-windows-prepare.md, vz-image-prepare-refresh.md, hyperv-clean.md,
           guest-binary-cache-per-tree.md, design-approved-rule-changes.md, design-principles.md,
-          container-inputs.md, specs-migration.md]
+          container-inputs.md, specs-migration.md, loop-contract.md]
 ---
 
 # The driver command contract: `warden` runs a driver binary (componentization K1)
@@ -252,6 +253,11 @@ them as separate processes (Decision 14).
   takes that form.
 - [`design-approved-rule-changes`](design-approved-rule-changes.md): the
   route for this design's ten rule-change entries (FLOW-14).
+- [`loop-contract`](loop-contract.md) (merged on 2026-11-15, after the
+  review of this design began): the **Specification changes** section
+  (LOOP-02), this repository's loop profile (PROFILE-01), which K1 amends,
+  and FLOW-14 as amended, which lets no feature's design declare a change
+  to a loop rule (**Rule changes**, on FLOW-02).
 - [`vm-driver-release-plan`](vm-driver-release-plan.md) (relay VM
   distribution), [`guest-binary-cache-per-tree`](guest-binary-cache-per-tree.md)
   (`driver.GuestBinary`'s lookup): the relay lookups the relay source wraps,
@@ -872,10 +878,10 @@ existing driver-owned keys).
   end of input, and `reap` from the build's record), TEST-05 (the driver
   suite), BOOT-02 (the executor's version is the driver's; with a
   Bootstrap comparison, since the wording differs from the one the
-  umbrella's review accepted for K2), FLOW-02 (it names `driver.Driver`,
-  which K1 removes), an enforcement-only change to UX-01 and UX-03
-  (tier 1's surface check also reads the flags and keys the bundled
-  drivers declare), and ORCH-03, which gets the same enforcement change,
+  umbrella's review accepted for K2), an enforcement-only change to UX-01
+  and UX-03 (tier 1's surface check also reads the flags and keys the
+  bundled drivers declare), PROFILE-01 (this repository's loop profile:
+  five rows, below), and ORCH-03, which gets the same enforcement change,
   one paragraph (a driver reads its own flags and keys, from the files
   `warden` names to it, with the same precedence and before any work,
   through the kit or as the contract requires; a driver run as a
@@ -898,7 +904,53 @@ existing driver-owned keys).
   of its path (**Rule changes**; a25). a16 changes no rule, but it reaches the Bootstrap comparison
   this question accepts: BOOT-02's per-driver effect and its security
   cost now say what a file that takes a bundled name changes. UX-07 and UX-08 are kept by the design and quoted under
-  **Configuration**; neither needs new words. Options: (a) as stated;
+  **Configuration**; neither needs new words.
+
+  *Reworded on 2026-11-15, after you read the design at `5808805`.*
+  `main` at `ad4ea50` (`loop-contract`) was merged into the branch, and
+  the list was derived a third time: still ten entries, but not the same
+  ten.
+  - *FLOW-02 is out.* It is a loop rule, and FLOW-14 and LOOP-09 as
+    merged let no feature's design declare a change to one. K1's PR
+    edits nothing in `process.md`.
+  - *PROFILE-01 is in.* K1's PR would leave three entries of this
+    repository's loop profile stale, and the rule has the change that
+    does so change the entry: Specifications (it names the driver
+    contract's specification and its suite), the Specification and
+    Safety rows of Checks (the suite, and the `driver-contract` CI job),
+    and Reference documents (the surface is also what the drivers
+    declare). A fourth, Impact vocabulary, gains one sentence for
+    FLOW-02's sake. Sweep and Consumables stay as they are (**Rule
+    changes**, PROFILE-01, says why).
+  - No other entry names a loop rule or edits a loop rule's check, and
+    the current wording quoted for each was compared again with `main`
+    at `ad4ea50` and stands.
+
+  FLOW-02 wants an answer of its own, beside the letter, because K1
+  still removes `driver.Driver` and FLOW-02 names it in two bullets
+  (what `interface` in a design's `drivers` means, and one of the
+  relationships `alters_relationships` covers):
+  (i) K1 changes nothing in FLOW-02. PROFILE-01's Impact vocabulary
+  entry says what `interface` stands for in this repository, so that
+  LOOP-01's reading rule, which LOOP-08 applies to a name the loop's
+  detail takes from this repository, gives a design the right meaning
+  from K1's merge. The two bullets are reworded by a process item, and
+  K1 asks `loop-parallel` to carry them: it is in Design, it already
+  amends FLOW-02, and you settle its wording at its review. If K1
+  merges first, FLOW-02's text names a Go interface that no longer
+  exists from K1's merge to that item's; no check reads those words.
+  (ii) As (i), with a process item of its own, filed now, in place of
+  `loop-parallel`: one more item and one more review for two bullets.
+  (iii) As (i) without the sentence in PROFILE-01: ORCH-01 as amended
+  and FLOW-02's case of a versioned seam carry the meaning, and once
+  FLOW-02 is made neutral nothing in this repository's rules says what
+  `interface` stands for.
+  (iv) K1 waits for the process item to merge before it does.
+  Recommended: (i), and the design is written on it. A letter by itself
+  answers the list only, and leaves (i) as a decision of the design,
+  confirmed or not when the design is.
+
+  Options: (a) as stated;
   (b) leave BOOT-02 to K2 (the sentence "matches the orchestrator's
   version" is then false for the container driver from K1's merge until
   K2's); (c) no enforcement change, a `Tier1-Allow` trailer on the move,
@@ -1165,6 +1217,8 @@ on the `workflow` branch at `3f95f20`.
   command contract, as a23.
 
 ## Design
+
+This item works only in this repository (LOOP-04).
 
 ### Shape
 
@@ -4090,8 +4144,9 @@ and `conformance/driver`.
 
 The dead-code sweep: `make deadcode` runs over the new programs too, so a
 kit function no driver or test calls is reported and removed. FLOW-15's
-stated reasons for keeping an unreachable exported function do not cover
-`driver/`; widening them is a rule change for K2, when the kit has
+stated reasons for keeping an unreachable exported function, which for
+this repository are PROFILE-01's Sweep entry, do not cover `driver/`;
+widening them is a change to that entry for K2, when the kit has
 consumers outside this repository.
 
 ## Defaults and overrides
@@ -4266,6 +4321,33 @@ checked against its path, and removable), which every driver's build now
 goes through. The guest families `driver/linuxguest` and
 `driver/winguest` change only by the removal of `ContainerfileImage`.
 
+## Specification changes
+
+Added on 2026-11-15 (LOOP-02, merged at `ad4ea50`; the template gained
+the section then). The table restates what the design says elsewhere
+and decides nothing; the last paragraph is new and marked so. `seams`
+declares four names; the umbrella's seam 6 is listed as well, because
+the amendments reword its row.
+
+| Seam | Its specification | What this item changes in it | Where |
+|---|---|---|---|
+| `driver-contract` (the umbrella's seam 9) | None today: the four-method `driver.Driver` in Go defines it. This item writes it: `specs/driver-contract/v1.md`, with numbered requirements, and `v1.schema.json` beside it | The whole document is new: how `warden` finds a driver binary; `describe`; the commands with their requests, results and exit codes; the messages of a build and their order; the build-lock convention; the failure table; the configuration requirements C1 to C11 and the common keys of version 1 (Implementation plan, task 12, has the full list). Its suite is `conformance/driver/` | Here, in this item's PR. Both move to `buildwarden/buildwarden-specs` in K2 (a17); until then no release is pinned |
+| `relay-claim` (seam 1) | No written specification. `relaycfg/` on `main` defines it and GLOBAL-08 names it; `seam-specs` (S1, in review) writes it | Nothing in the protocol: no message, field or order. It is declared conservatively, because the claimant becomes `warden`'s session for every driver, at an endpoint the driver reports in `relay-started`, with three claim fields the driver supplies (`claim_values`) whose shape stays the claim protocol's. The umbrella's row for it is reworded to name those parties | No specification to change. What is left for S4 is the transport section of S1's |
+| `collector` (seam 2) | No written specification. The package comment in `collector/collector.go` defines it; S1 writes it | Nothing in the protocol. It is declared conservatively, because the collector's owner becomes `warden` for every driver. The driver contract says nothing of the collector's lifetime, which S1 writes per session token | No specification to change |
+| Bootstrap config (seam 6; not a name `seams` takes) | No written specification. `bootstrap/` defines it; S1 writes it | Nothing in what is served. Who selects it changes: `warden`'s session, from the `guest_os` the driver reports. The umbrella's row for it is reworded to say so | No specification to change |
+| `bootstrap-model` | No specification in LOOP-02's sense. Its contract document is `docs/development/bootstrap.md` (BOOT-07) | BOOT-02's sentence on the executor's version, and two labels of the model diagram (**Bootstrap comparison**; **Rule changes**, BOOT-02) | `docs/development/bootstrap.md`, here, as a rule change the review approves |
+
+One written specification is on the build's path and is not declared:
+the environment record (seam 4, `specs/metadata-environment/`). A driver
+reports the record it reports today, as `claim_values.environment`. No
+change.
+
+*New, for LOOP-03 as merged:* each numbered requirement of `v1.md` is
+covered by a suite case that names it, or is listed in the specification
+with the reason it is not machine-checked, as the table under
+**Configuration** already does for C9 and for part of C11; and each case
+names the requirements it checks.
+
 ## Bootstrap comparison
 
 Required because K1 changes one invariant's wording (BOOT-07). The
@@ -4343,16 +4425,40 @@ Everything else in the diagram stands, including `collector <==== tunnel
 
 Ten entries. The umbrella's table gives K1 GLOBAL-08 and ORCH-01 "for
 direction", worded for a Go API; both are reworded here for a command
-contract. ORCH-02, ORCH-04, TEST-05, BOOT-02 and FLOW-02 are what the
+contract. ORCH-02, ORCH-04, TEST-05 and BOOT-02 are what the
 redraft makes true or stale; UX-01 and UX-03 change in enforcement only;
-and ORCH-03 changes in enforcement and gains one paragraph and a clause
-on its last sentence (a8). The
+ORCH-03 changes in enforcement and gains one paragraph and a clause
+on its last sentence; and PROFILE-01, this repository's loop profile, is
+amended where K1's PR would leave an entry stale (a8). The
 list was derived again after the review's answers of 2026-11-14: a16 and
 a20 change no rule, and a21 changes the last three entries as said
-there. No rule was approved in that sitting. Each is approved by name in
+there. It was derived a third time on 2026-11-15, after `main` at
+`ad4ea50` (`loop-contract`, #119) was merged into the branch: FLOW-02
+left the list and PROFILE-01 joined it, each under its own heading
+below. No rule has been approved yet. Each is approved by name in
 the design review
 (FLOW-19) and made in Implement (FLOW-14). Each is worded so that it is
 true when K1 merges, with four drivers still linked (umbrella Decision 18).
+
+**Checked against FLOW-14 and LOOP-09 as merged.** A feature's design
+may declare a change "to the invariants and profile of a component it
+works in and to their enforcement, and never to a loop rule (LOOP-\*,
+FLOW-\*, LINT-\*) or its enforcement (LOOP-09)". Every entry was read
+again for that. GLOBAL-08, ORCH-01 to ORCH-04, TEST-05, BOOT-02, UX-01,
+UX-03 and PROFILE-01 are this repository's own (the Owner column of the
+ID scheme in `docs/development/README.md`), and their paths are their
+own rule files, `tools/tier1/rules.yaml` and `tools/tier1/surface/`.
+FLOW-02 was the one loop rule on the list, and it is withdrawn (below).
+One path serves a loop rule as well as a project rule: `rules.yaml` maps
+the `drivers-claim` check to FLOW-02 and to ORCH-01, and the ORCH-01
+entry adds eight paths to its `drivers.shared` list. That list is this
+repository's data and not the loop's: PROFILE-01's Impact vocabulary
+entry names "the shared packages that declare every dependent driver"
+as the `drivers` list of `rules.yaml`, under ORCH-01. The check's code is
+not edited. The surface check serves UX-01, UX-03 and ORCH-03 only, and
+`seam-contract` GLOBAL-08 and EXEC-04 only. The current wording quoted
+under each entry was compared again with `main` at `ad4ea50`; the merge
+changed none of those files, and every quotation stands.
 
 ### GLOBAL-08 (amend), `docs/development/global.md`, `tools/tier1/rules.yaml`
 
@@ -4665,14 +4771,20 @@ do not change.
 enforcement change. The `bootstrap-surface` check sees the edit to
 `bootstrap.md` beside a design whose `rules` cites BOOT-07.
 
-### FLOW-02 (amend), `docs/development/process.md`
+### FLOW-02: no entry; its wording is handed to a process item
 
-**Why:** FLOW-02 names `driver.Driver` twice, as what `interface` in a
-design's `drivers` means and as a relationship `alters_relationships`
-covers. K1 removes that interface. The meaning is kept and the name
-updated; nothing about how designs declare impact changes.
+The design Jeff read at `5808805` declared an amendment to FLOW-02, whose
+two bullets name `driver.Driver`. FLOW-02 is a loop rule. Since `ad4ea50`
+FLOW-14 lets a feature's design declare no change to one, and LOOP-09
+says: "No component signs off a change, and no feature's design declares
+one. A component that needs a loop rule changed asks for a process item."
+The entry is withdrawn. K1's PR edits nothing in
+`docs/development/process.md`.
 
-**Current wording** (the two bullets; the rest of the rule is unchanged):
+**What K1 leaves untrue, and for how long.** K1 removes the four-method
+`driver.Driver`. From K1's merge, two bullets of FLOW-02 name a Go
+interface that no longer exists (current wording on `main` at `ad4ea50`;
+the rest of the rule does not name it):
 
 > - `drivers` — which drivers are touched, or `interface` for a change made at the
 >   `driver.Driver` / `driver.Session` level (ORCH-01).
@@ -4684,7 +4796,30 @@ updated; nothing about how designs declare impact changes.
 >   contract. Changes inside one component's existing role are `false`. FLOW-05
 >   limits how many such features are in flight.
 
-**Proposed wording:**
+No check reads those words: tier 1 reads the value `interface`, not the
+sentence. What they mean is not lost either. The first bullet cites
+ORCH-01, which K1 amends to say that a lifecycle change is expressed in
+the driver contract. A change to the driver contract alters
+relationships under the second bullet's first case, a versioned seam,
+which K1 makes the driver contract (GLOBAL-08). `driver.Session` still
+exists. And LOOP-08 says of a name the loop's detail takes from this
+repository that "LOOP-01's reading rule applies, and the wording is made
+neutral when the rule is next changed": a design here reads the two
+bullets through this repository's Impact vocabulary entry, to which the
+PROFILE-01 change below adds what `interface` stands for. The two bullets
+stay as quoted until a process item changes them: from K1's merge to
+that item's merge if K1 merges first, and not at all if that item
+merges first.
+
+**What is asked, and of which item (a8).** K1 asks `loop-parallel` to
+carry the rewording. It is P1's third item, a process item in Design on
+2026-11-15; its `rule_changes` already amend FLOW-02 (at `f706bf7`: two
+keys added to the list and the two paragraphs after it reworded, the two
+bullets above untouched); and its design review is still to come, so
+Jeff settles the two bullets there. This design does not edit that
+design or its queue file; the request is passed on in the review session
+once a8 is answered. What K1 would have written, as a starting point for
+that item:
 
 > - `drivers` — which drivers are touched, or `interface` for a change made at the
 >   level of the driver contract or `driver.Session` (ORCH-01).
@@ -4696,9 +4831,18 @@ updated; nothing about how designs declare impact changes.
 >   `driver.Session`. Changes inside one component's existing role are `false`.
 >   FLOW-05 limits how many such features are in flight.
 
-**Severity and check:** MUST, `automated + agent-judgment`, before and
-after. No enforcement change: tier 1 reads the value `interface`, not the
-sentence.
+That wording is true before K1 merges as well as after: the umbrella
+names seam 9 "Driver contract" and gives the four-method `driver.Driver`
+as its form today. So the order of the two merges does not matter.
+Whether it is neutral enough for LOOP-08 is for that item's review.
+
+Considered, and put under a8: a process item of its own, filed now, in
+place of `loop-parallel` (one more item and one more review for two
+bullets); no sentence in PROFILE-01 (ORCH-01 as amended and the
+versioned-seam case then carry the meaning, and once FLOW-02 is made
+neutral nothing in this repository's rules says what `interface` stands
+for); K1 waiting for the process item to merge (nothing depends on the
+words, so the wait buys nothing).
 
 ### UX-01, UX-03 and ORCH-03 (amend), `tools/tier1/surface/`, `docs/development/orchestrator.md`
 
@@ -4836,6 +4980,84 @@ The GLOBAL-08, ORCH-01 and TEST-05 entries edit `rules.yaml` within its
 present format (`seams` gains an entry, `drivers.shared` eight paths, one
 owner string changes), which `main`'s tier 1 reads without change.
 
+### PROFILE-01 (amend), `docs/development/loop-profile.md`
+
+New on 2026-11-15: the rule did not exist when Jeff read the design at
+`5808805`. It merged with `loop-contract` at `ad4ea50`.
+
+**Why:** PROFILE-01 is this repository's profile under the Loop Contract,
+and says: "An entry that no longer matches the repository is a finding,
+and the change that makes it stale changes the entry." `loop-contract`'s
+design gives the test: a fact an entry states needs a change to the
+entry, and a fact in a file the entry points to does not. K1's PR against
+that test, for the entries it could reach:
+
+| Entry | Stale after K1? | Why |
+|---|---|---|
+| Specifications | Yes | It says what `specs/` holds. K1 adds `specs/driver-contract/`, and a conformance suite that is outside `specs/` (**The conformance suite**, Home). "No specifications release is pinned today" stays true: both stay in this repository until K2 |
+| Checks | Yes, two rows | K1 adds a CI job, `driver-contract`, that blocks (it joins `ci-ok`'s `needs`) and is none of the jobs the table accounts for; LOOP-03 has a check that a change adds carry a class and a tier. The suite is a conformance suite, which LOOP-03 puts in the Specification class. Its lifecycle tier runs in the `integration` workflow and in native validation, which the Safety rows already name |
+| Reference documents | Yes | It says the surface is the `surface` entry of `rules.yaml`. After K1 the surface is also the flags and keys the drivers under `driver/` declare, which that entry does not name: its `dir` stays `cmd/warden/` and the root `driver/` is a constant in `surface.go`, for the reason given under UX-01 above |
+| Impact vocabulary | No | It points to the `drivers` and `seams` lists of `rules.yaml`, which the GLOBAL-08 and ORCH-01 entries edit (one seam name, eight shared paths), and to `TEMPLATE.md`, which K1 does not edit. It gains a sentence for another reason: FLOW-02, above |
+| Sweep | No | K1 keeps no unreachable function: a kit function that no driver or test calls is removed (**The overview**). The kept list stands until K2 gives the kit consumers outside this repository. `make deadcode` and the overview's path do not change |
+| Consumables | No | "Releases: the `v*` tags" stays true with one more binary in the archive. "Consumes: nothing" stays true: the specification is in this repository and no release of it exists |
+
+The other thirteen entries name nothing K1 changes: the component is
+still "the kit, the orchestrator, the collector, the executor, the
+drivers"; the fast gate is still `make lint` and `make test` (`make
+driver-conformance` is not run on every change); the release is one more
+GoReleaser build in the same workflow; no host name, rule path or session
+setting changes.
+
+**Current wording** (three rows of the profile's table and two of its
+Checks table; every other row and the rule's own paragraphs are
+unchanged):
+
+> | Impact vocabulary | The keys and values in `docs/design/TEMPLATE.md`'s front-matter. The driver names, the shared packages that declare every dependent driver, and the seam names are the `drivers` and `seams` lists of `tools/tier1/rules.yaml` (ORCH-01, GLOBAL-08). The `security_boundary` values are GLOBAL-06's. |
+
+> | Specifications | `specs/`: the ledger wire format and the metadata and environment schemas (RELAY-05), mirrored in the book. For the seams of GLOBAL-08, their contract documents are the `seams` list of `tools/tier1/rules.yaml` and their tests are TEST-05's. No specifications release is pinned today. |
+
+> | Reference documents | The surface and its documents are the `surface` entry of `tools/tier1/rules.yaml` (UX-01, ORCH-03). Guides: `docs/book/src/guide/`, `docs/book/src/getting-started/`, `examples/`, `README.md`. |
+
+> | Specification | The coupling checks that `tools/tier1/rules.yaml` maps to RELAY-05, GLOBAL-08, EXEC-04, UX-01, UX-03, ORCH-03 and BOOT-07; the contract tests of TEST-05; the `keytool` job | 1 |
+
+> | Safety | `make lint` (`golangci-lint`, and tier 1's analyzers as `rules.yaml` maps them) and `make test`; the `integration` workflow (TEST-02's tier 1) | 1 |
+
+**Proposed wording** (the same five rows):
+
+> | Impact vocabulary | The keys and values in `docs/design/TEMPLATE.md`'s front-matter. The driver names, the shared packages that declare every dependent driver, and the seam names are the `drivers` and `seams` lists of `tools/tier1/rules.yaml` (ORCH-01, GLOBAL-08). In `drivers`, `interface` is a change made at the level of the driver contract or `driver.Session` (ORCH-01), and a change to either alters relationships. The `security_boundary` values are GLOBAL-06's. |
+
+> | Specifications | `specs/`: the ledger wire format and the metadata and environment schemas (RELAY-05) and the driver contract (`specs/driver-contract/`, GLOBAL-08), mirrored in the book. The driver contract's conformance suite is `conformance/driver/`. For the seams of GLOBAL-08, their contract documents are the `seams` list of `tools/tier1/rules.yaml` and their tests are TEST-05's. No specifications release is pinned today. |
+
+> | Reference documents | The surface is the flags and keys in the directory that the `surface` entry of `tools/tier1/rules.yaml` names and those the drivers under `driver/` declare; its documents are that entry's `docs` (UX-01, ORCH-03). Guides: `docs/book/src/guide/`, `docs/book/src/getting-started/`, `examples/`, `README.md`. |
+
+> | Specification | The coupling checks that `tools/tier1/rules.yaml` maps to RELAY-05, GLOBAL-08, EXEC-04, UX-01, UX-03, ORCH-03 and BOOT-07; the contract tests of TEST-05, the driver conformance suite (`conformance/driver/`) among them; the `keytool` job | 1 |
+
+> | Safety | `make lint` (`golangci-lint`, and tier 1's analyzers as `rules.yaml` maps them) and `make test`; the `driver-contract` job of `.github/workflows/main.yml`, which runs the tests of the packages it lists on Linux, macOS and Windows; the `integration` workflow (TEST-02's tier 1) | 1 |
+
+What changes, row by row. Impact vocabulary gains one sentence, "In
+`drivers`, `interface` is ... alters relationships." Specifications
+gains "and the driver contract (`specs/driver-contract/`, GLOBAL-08)"
+and the sentence on the suite. Reference documents has its first
+sentence rewritten. The Specification row gains "the driver conformance
+suite (`conformance/driver/`) among them". The Safety row gains the
+`driver-contract` job. Each is true when K1 merges. K2 changes
+Specifications and Consumables again when the specification moves to the
+specs repository, and the Sweep entry if the kit's exported API is then
+kept; those are K2's to declare.
+
+**Severity and check:** MUST, `agent-judgment`, before and after. No
+enforcement change: tier 1 has no check for PROFILE-01, and
+`rules.yaml` gets no entry for it.
+
+Two other items amend the same rule. `loop-parallel` (in Design, at
+`f706bf7`) changes
+its header's check line, its paragraph on the agent part and the Process
+row of the Checks table, and adds an Areas row; none of those is a row
+changed here. `seam-specs` (S1) owes the Specifications and Consumables
+entries a change of its own, by `loop-contract`'s design. Whichever
+lands second merges `main` and keeps both, and Consolidation refreshes
+the quotation above if another item's wording landed first.
+
 ## Amendments to the umbrella design
 
 [`componentization`](componentization.md) is merged and archived, and its
@@ -4845,61 +5067,80 @@ made in this item's PR once the design review approves them (a18). Nothing
 here touches the freeze, the program's scope, the track structure or any
 other decision; those are FLOW-20's and the umbrella's.
 
-A dated note is added under the umbrella's Decisions heading: "Decisions 4
-and 5, seams 1, 6 and 9 and the K1, K2 and S4 rows were reworded by the
-design review of `driver-contract` (K1), approved <date>." The date is
+A dated entry is added to the umbrella's **Amendments** section, after
+`loop-contract`'s and in its form: "**<date>, by `driver-contract`
+(K1)**, approved in its design review. Decisions 4 and 5, seams 1, 6 and 9
+and the K1, K2 and S4 rows were reworded, and the sentences that follow
+from them. The wording each had is in
+[`driver-contract`](driver-contract.md), under **Amendments to the
+umbrella design**." The date is
 filled in when the review approves; the sitting of 2026-11-14 sent the
 design back and approved nothing. Line numbers are the umbrella's on
-`main` at `b903f65`.
+`main` at `ad4ea50`.
+
+`loop-contract` amended the umbrella in place on 2026-11-14 and gave it
+that **Amendments** section, where the design read at `5808805` put the
+note under the Decisions heading. Every sentence quoted as current below
+was compared again with the umbrella at `ad4ea50`: `loop-contract`
+changed none of them, so each quotation stands and only the line numbers
+moved (by 4 to 23 lines; the front matter's not at all). Its amendments are to other sentences (Problem
+point 3, Decision 2, a5, seam 10, the P1 and M6 rows, the heading of
+Track R, the wave-1 gate, **How program items run**, the FLOW and LINT
+row of the rule table, three sentences of the Archive summary), and
+none of the proposals below meets one. One difference in form is Jeff's
+to see under a18: `loop-contract` kept the approved sentence of Decision
+2 and of a5 and added the amendment after it, while the proposals below
+replace the sentences of Decisions 4 and 5, with the wording they had
+kept here.
 
 **A. The decisions and seam 9.**
 
 | Where | Current | Proposed |
 |---|---|---|
-| Decision 4 (116) | "**Drivers become separate binaries on a public Go kit, then separate modules, then separate repositories.** Alternatives: only complete the in-tree contract (does not let an integrator ship a driver); drivers as RPC plugins (a second protocol to version, and no gain over a binary that links the kit). Hyper-V is extracted first as the pilot." | "**Drivers become separate binaries that `warden` runs through a written command contract, then separate modules, then separate repositories.** A public Go kit implements the contract for a driver that wants it; a driver may be written without it, in any language. Alternatives: only complete the in-tree contract (does not let an integrator ship a driver); a Go API that every driver links (an existing `warden` could not run a new driver without being rebuilt); drivers as long-lived RPC plugin processes behind a plugin framework (commands, JSON and the standard streams are enough). The command contract is a second protocol to version, and that cost is accepted. Hyper-V is extracted first as the pilot." |
-| Decision 5 (121) | "**A top-level `warden` dispatcher that works like git's CLI.** It finds a driver binary by name and runs it. Alternative: users call driver binaries directly; it lost because driver auto-detection and one entry point are worth keeping." | "**`warden` finds a driver binary the way git finds a subcommand, and stays the orchestrator.** It keeps the session, the collector and the reporting, and calls the driver's commands for primitives: start the relay, create the environment, tear both down. Alternatives: users call driver binaries directly (one entry point and one configuration are worth keeping); a dispatcher that hands the whole build to the driver (every driver would carry the session and a collector, and the collector could not be chosen apart from the driver)." This drops "driver auto-detection" from the reason: `warden` has none today (the driver is the one named, else `container`) and K1's Decision 6 adds none (a16) |
-| The seams, intro (262) | "Seams 1 to 8 each get a specification and a black-box conformance suite in the specs repository. Seam 9 is a Go API. Seam 10 is a document." | "Seams 1 to 9 each get a specification and a black-box conformance suite in the specs repository; seam 9's start in this repository (K1) and move there in K2. Seam 10 is a document." Seam 8 still has no phase that writes it; that gap is a11's and this sentence does not close it |
-| Seam 1 (268) | "Claim protocol (`relay-claim`) \| Driver and relay \| No \| Written down. The connection it runs over is supplied by the driver (TCP or vsock)." | "Claim protocol (`relay-claim`) \| Claimant (`warden`'s session) and relay \| No \| Written down. The claimant opens the connection at an endpoint the driver reports (TCP in K1; other transports are what remains of S4)." |
-| Seam 6 (273) | "Bootstrap config \| Driver and executor, through the relay \| Code only (`bootstrap/`) \| Written down." | "Bootstrap config \| `warden`'s session and executor, through the collector and the relay; the driver reports the guest OS \| Code only (`bootstrap/`) \| Written down." |
-| Seam 9 (276) | "Driver contract \| Kit and drivers \| The four-method `driver.Driver` \| New Go API: registration, doctor, setup, images, clean, driver-owned configuration, the relay source and the claim connection; plus the convention by which the dispatcher finds and runs a driver binary." | "Driver contract \| `warden` and a driver binary \| The four-method `driver.Driver` \| New command contract: how `warden` finds a driver binary, and the required and optional commands it runs on it (describe, the build, cleanup after a dead driver, doctor, setup, images, clean, shell, a driver's own), with driver-owned configuration and the claim endpoint. A Go kit implements it; the relay source is the kit's." |
+| Decision 4 (120) | "**Drivers become separate binaries on a public Go kit, then separate modules, then separate repositories.** Alternatives: only complete the in-tree contract (does not let an integrator ship a driver); drivers as RPC plugins (a second protocol to version, and no gain over a binary that links the kit). Hyper-V is extracted first as the pilot." | "**Drivers become separate binaries that `warden` runs through a written command contract, then separate modules, then separate repositories.** A public Go kit implements the contract for a driver that wants it; a driver may be written without it, in any language. Alternatives: only complete the in-tree contract (does not let an integrator ship a driver); a Go API that every driver links (an existing `warden` could not run a new driver without being rebuilt); drivers as long-lived RPC plugin processes behind a plugin framework (commands, JSON and the standard streams are enough). The command contract is a second protocol to version, and that cost is accepted. Hyper-V is extracted first as the pilot." |
+| Decision 5 (125) | "**A top-level `warden` dispatcher that works like git's CLI.** It finds a driver binary by name and runs it. Alternative: users call driver binaries directly; it lost because driver auto-detection and one entry point are worth keeping." | "**`warden` finds a driver binary the way git finds a subcommand, and stays the orchestrator.** It keeps the session, the collector and the reporting, and calls the driver's commands for primitives: start the relay, create the environment, tear both down. Alternatives: users call driver binaries directly (one entry point and one configuration are worth keeping); a dispatcher that hands the whole build to the driver (every driver would carry the session and a collector, and the collector could not be chosen apart from the driver)." This drops "driver auto-detection" from the reason: `warden` has none today (the driver is the one named, else `container`) and K1's Decision 6 adds none (a16) |
+| The seams, intro (269) | "Seams 1 to 8 each get a specification and a black-box conformance suite in the specs repository. Seam 9 is a Go API. Seam 10 is a document." | "Seams 1 to 9 each get a specification and a black-box conformance suite in the specs repository; seam 9's start in this repository (K1) and move there in K2. Seam 10 is a document." Seam 8 still has no phase that writes it; that gap is a11's and this sentence does not close it |
+| Seam 1 (275) | "Claim protocol (`relay-claim`) \| Driver and relay \| No \| Written down. The connection it runs over is supplied by the driver (TCP or vsock)." | "Claim protocol (`relay-claim`) \| Claimant (`warden`'s session) and relay \| No \| Written down. The claimant opens the connection at an endpoint the driver reports (TCP in K1; other transports are what remains of S4)." |
+| Seam 6 (280) | "Bootstrap config \| Driver and executor, through the relay \| Code only (`bootstrap/`) \| Written down." | "Bootstrap config \| `warden`'s session and executor, through the collector and the relay; the driver reports the guest OS \| Code only (`bootstrap/`) \| Written down." |
+| Seam 9 (283) | "Driver contract \| Kit and drivers \| The four-method `driver.Driver` \| New Go API: registration, doctor, setup, images, clean, driver-owned configuration, the relay source and the claim connection; plus the convention by which the dispatcher finds and runs a driver binary." | "Driver contract \| `warden` and a driver binary \| The four-method `driver.Driver` \| New command contract: how `warden` finds a driver binary, and the required and optional commands it runs on it (describe, the build, cleanup after a dead driver, doctor, setup, images, clean, shell, a driver's own), with driver-owned configuration and the claim endpoint. A Go kit implements it; the relay source is the kit's." |
 
 **B. The phases and the order.**
 
 | Where | Current | Proposed |
 |---|---|---|
-| S4 (298) | "The claim connection: `driver.Session` takes a connection from the driver, not a TCP address. \| Every driver claims through it." | "Mostly absorbed into K1, which settles that `warden` claims at an endpoint the driver reports. What remains: the claim specification's transport section, and a claim endpoint that is not TCP. \| A relay reachable only over a non-TCP endpoint is claimed without a driver-side forward." |
-| K1 (304) | "Complete the driver contract in-tree, including the relay source. `cmd/warden` stops naming drivers. `drivertest` exists. \| Adding a driver touches only its own directory." | "The driver command contract, its conformance suite and the kit, including the relay source. `warden` runs a driver binary; the container driver is one, and every driver's build runs through `warden`'s build sequence. \| An unmodified `warden` runs a driver it was not built with, and the suite passes against the container driver." (If a3's option (e) is chosen, "including the relay source" moves to K2's row.) |
-| K2 (305) | "Each driver becomes its own Go module and binary in-tree. `warden` becomes the dispatcher. A tier-1 check limits each driver to the kit's public packages. \| The check passes for all five, and `warden` runs each driver as a separate binary." | "Each VM driver becomes a binary and adopts the relay source; then every driver becomes its own Go module in-tree. `warden` links no driver. The driver specification and suite move to the specs repository. A tier-1 check limits each driver to the kit's public packages. \| The check and the suite pass for all five, and `warden` runs each driver as a separate binary." |
-| K4 (307) | "This repository holds the kit, the collector, the executor, the dispatcher and the book." | "This repository holds the kit, the collector, the executor, `warden` and the book." |
-| K5 (308) | "The dispatcher can report and fetch a newer release of one driver." | "`warden` can report and fetch a newer release of one driver binary." |
-| Order, wave 2 (327) | "S2, S3, S4, K1, M2 \| Driver contract complete" | "S2, S3, K1, M2 \| `warden` runs a driver binary; the suite passes" (what remains of S4 moves to wave 3) |
-| Order, wave 3 | "K2, M3 \| Modules isolated; unikernel and host mode pass the suites" | "K2, M3, S4 \| Modules isolated; unikernel and host mode pass the suites" |
-| What sets the order (335) | "K1 does not depend on the relay and can start as soon as P0 merges." | Unchanged, with one sentence added: "Its specification and suite start in this repository and move to the specs repository in K2." |
-| What sets the order (336) | "M6 needs K1's relay source, not driver extraction." | "M6 needs the relay source, not repository extraction: K1's for the container driver, and K2's adoption of it for the four VM drivers." |
-| Later, not scheduled (338) | "alternative collectors and a collector repository (seam 2; the collector's storage boundary is designed with the first of them);" | "alternative collectors and a collector repository (seam 2; the collector's storage boundary is designed with the first of them), among them a shared local or remote collector with a session token per build and a client-facing side for opening a session, supplying inputs, watching console and status, and fetching outputs;" (a22) |
+| S4 (305) | "The claim connection: `driver.Session` takes a connection from the driver, not a TCP address. \| Every driver claims through it." | "Mostly absorbed into K1, which settles that `warden` claims at an endpoint the driver reports. What remains: the claim specification's transport section, and a claim endpoint that is not TCP. \| A relay reachable only over a non-TCP endpoint is claimed without a driver-side forward." |
+| K1 (311) | "Complete the driver contract in-tree, including the relay source. `cmd/warden` stops naming drivers. `drivertest` exists. \| Adding a driver touches only its own directory." | "The driver command contract, its conformance suite and the kit, including the relay source. `warden` runs a driver binary; the container driver is one, and every driver's build runs through `warden`'s build sequence. \| An unmodified `warden` runs a driver it was not built with, and the suite passes against the container driver." (If a3's option (e) is chosen, "including the relay source" moves to K2's row.) |
+| K2 (312) | "Each driver becomes its own Go module and binary in-tree. `warden` becomes the dispatcher. A tier-1 check limits each driver to the kit's public packages. \| The check passes for all five, and `warden` runs each driver as a separate binary." | "Each VM driver becomes a binary and adopts the relay source; then every driver becomes its own Go module in-tree. `warden` links no driver. The driver specification and suite move to the specs repository. A tier-1 check limits each driver to the kit's public packages. \| The check and the suite pass for all five, and `warden` runs each driver as a separate binary." |
+| K4 (314) | "This repository holds the kit, the collector, the executor, the dispatcher and the book." | "This repository holds the kit, the collector, the executor, `warden` and the book." |
+| K5 (315) | "The dispatcher can report and fetch a newer release of one driver." | "`warden` can report and fetch a newer release of one driver binary." |
+| Order, wave 2 (334) | "S2, S3, S4, K1, M2 \| Driver contract complete" | "S2, S3, K1, M2 \| `warden` runs a driver binary; the suite passes" (what remains of S4 moves to wave 3) |
+| Order, wave 3 (335) | "K2, M3 \| Modules isolated; unikernel and host mode pass the suites" | "K2, M3, S4 \| Modules isolated; unikernel and host mode pass the suites" |
+| What sets the order (342) | "K1 does not depend on the relay and can start as soon as P0 merges." | Unchanged, with one sentence added: "Its specification and suite start in this repository and move to the specs repository in K2." |
+| What sets the order (343) | "M6 needs K1's relay source, not driver extraction." | "M6 needs the relay source, not repository extraction: K1's for the container driver, and K2's adoption of it for the four VM drivers." |
+| Later, not scheduled (346) | "alternative collectors and a collector repository (seam 2; the collector's storage boundary is designed with the first of them);" | "alternative collectors and a collector repository (seam 2; the collector's storage boundary is designed with the first of them), among them a shared local or remote collector with a session token per build and a client-facing side for opening a session, supplying inputs, watching console and status, and fetching outputs;" (a22) |
 
 **C. The tables and prose that follow from A and B.**
 
 | Where | Current | Proposed |
 |---|---|---|
-| Component table, Kit (251) | "Session, claim client, ledger reader, script translator, the driver contract, `drivertest`, the `warden` dispatcher, the book" | "`warden` (the orchestrator: session, claim client, collector hand-off), the kit's Go library for drivers, ledger reader, script translator, the book" |
-| Component table, Drivers (254) | "One driver, as its own binary built on the kit" | "One driver, as its own binary that speaks the driver contract; the project's own are built on the kit" |
-| Rule table, GLOBAL-08 (391) | "The driver contract becomes a supported seam, unstable before 1.0. The seam list gains the truststore endpoints, the build-link contract and the claim connection. \| K1; S2, S3, S4 for their seams" | "The driver contract (the commands `warden` runs on a driver binary) becomes a supported seam, unstable before 1.0. The seam list gains the truststore endpoints and the build-link contract. \| K1; S2, S3 for their seams" |
-| Rule table, BOOT-02 (392) | "BOOT-02, BOOT-05, the `bootstrap.md` mapping \| As in the Bootstrap comparison. \| K2; S2; S3" | "... \| As in the Bootstrap comparison; BOOT-02 as in K1's own comparison. \| K1; S2; S3" |
-| Rule table, TEST-05 (395) | "RELAY-05, TEST-05 \| Contract tests for the seams become the specs repository's suites. \| S1" | "... \| S1; K1 for the driver suite" |
-| Rule table, ORCH-01 (396) | "Driver parity becomes passing `drivertest`. \| K1" | "Driver parity is held by the driver contract and its suite. \| K1" |
-| Rule table, new rows | none | "ORCH-02 \| `warden` stages and records inputs; a driver alters none. \| K1"; "ORCH-04 \| A driver tears down when its input ends; `reap` reaches what a killed driver left. \| K1"; "FLOW-02 \| Names the driver contract where it named `driver.Driver`. \| K1"; "UX-01, UX-03 \| Enforcement only: tier 1 also reads the flags and keys the bundled drivers declare. \| K1"; and "ORCH-03 \| The same enforcement change; and one paragraph and a clause: a driver reads its own flags and keys, with the same precedence. \| K1" |
-| Risks (415) | "**A public Go API** has to be kept usable for integrators." | "**A command contract** has to be kept usable for integrators, and is a second protocol to version beside the kit's Go API." |
-| Defaults and overrides (420) | "which driver the dispatcher picks when none is named and how it finds a driver binary (K2)" | "which driver `warden` picks when none is named and how it finds a driver binary (K1)" |
-| Cross-driver impact (427) | "it implements the completed driver contract (K1), becomes a module and a binary (K2), declares its build-link class (S3), supplies its claim connection (S4)" | "its build runs through `warden`'s build sequence (K1), it becomes a binary that speaks the driver contract (K1 for container, K2 for the rest) and a module (K2), declares its build-link class (S3), reports its claim endpoint (K1)" |
-| Bootstrap comparison, proposed diagram (469) | "per build, from the driver's own kit version" | "per build, the driver's version" |
-| Bootstrap comparison, BOOT-02 row (490) | "It is delivered per build and comes from the kit version the driver was built from. The relay is versioned separately; the executor and the relay agree through the relay guest API's version. \| None in what is delivered. Each driver binary carries its own executor version. D2 (vz) is unchanged. \| K2" | "It is delivered per build by the driver and matches the version of the driver that delivers it. The relay is versioned separately; the executor and the relay agree through the relay guest API's version. \| None in what is delivered. Each driver binary carries its own executor version. D2 (vz) is unchanged. \| K1 (its own comparison)" |
-| Security note (597) | "The kit cannot make an integrator's driver safe; the build-link suite and `drivertest` are what an integrator runs to show theirs is." | "`warden` runs whichever binary of that name it finds, and records it; it cannot make an integrator's driver safe. The build-link suite and the driver suite are what an integrator runs to show theirs is." |
-| Validation plan (616) | "`drivertest` and the build-link suite validate each driver." | "The driver suite and the build-link suite validate each driver." |
-| Archive summary, Decisions taken (755) | "Drivers as separate binaries on a public Go kit, then modules, then repositories, with Hyper-V as the pilot (4), behind a `warden` dispatcher that works like git's (5)." | "Drivers as separate binaries that `warden` runs through a written command contract, then modules, then repositories, with Hyper-V as the pilot (4); `warden` finds them as git finds a subcommand and stays the orchestrator (5); both reworded by the design review of `driver-contract`, approved <date>." |
-| Archive summary, the comparison (770) | "The Bootstrap comparison is accepted for three model changes, BOOT-01 (S3), BOOT-02 (K2) and BOOT-05 (S2), each made later by the item named (a12)." | "The Bootstrap comparison is accepted for two model changes, BOOT-01 (S3) and BOOT-05 (S2), each made later by the item named (a12); BOOT-02's change is made in K1 under K1's own comparison." |
-| Archive summary, rule changes (796) | "That includes the three `bootstrap.md` edits, whose comparison is already accepted here (BOOT-07)." | "That includes the BOOT-01 and BOOT-05 edits to `bootstrap.md`, whose comparison is accepted here (BOOT-07); BOOT-02's is accepted in K1's design." |
-| Archive summary, Rejected (775) | "Completing only the in-tree driver contract; drivers as RPC plugins; users calling driver binaries directly." | "Completing only the in-tree driver contract; a Go API every driver links; drivers behind an RPC plugin framework; users calling driver binaries directly; a dispatcher that hands the whole build to the driver." |
+| Component table, Kit (258) | "Session, claim client, ledger reader, script translator, the driver contract, `drivertest`, the `warden` dispatcher, the book" | "`warden` (the orchestrator: session, claim client, collector hand-off), the kit's Go library for drivers, ledger reader, script translator, the book" |
+| Component table, Drivers (261) | "One driver, as its own binary built on the kit" | "One driver, as its own binary that speaks the driver contract; the project's own are built on the kit" |
+| Rule table, GLOBAL-08 (401) | "The driver contract becomes a supported seam, unstable before 1.0. The seam list gains the truststore endpoints, the build-link contract and the claim connection. \| K1; S2, S3, S4 for their seams" | "The driver contract (the commands `warden` runs on a driver binary) becomes a supported seam, unstable before 1.0. The seam list gains the truststore endpoints and the build-link contract. \| K1; S2, S3 for their seams" |
+| Rule table, BOOT-02 (402) | "BOOT-02, BOOT-05, the `bootstrap.md` mapping \| As in the Bootstrap comparison. \| K2; S2; S3" | "... \| As in the Bootstrap comparison; BOOT-02 as in K1's own comparison. \| K1; S2; S3" |
+| Rule table, TEST-05 (405) | "RELAY-05, TEST-05 \| Contract tests for the seams become the specs repository's suites. \| S1" | "... \| S1; K1 for the driver suite" |
+| Rule table, ORCH-01 (406) | "Driver parity becomes passing `drivertest`. \| K1" | "Driver parity is held by the driver contract and its suite. \| K1" |
+| Rule table, new rows | none | "ORCH-02 \| `warden` stages and records inputs; a driver alters none. \| K1"; "ORCH-04 \| A driver tears down when its input ends; `reap` reaches what a killed driver left. \| K1"; "UX-01, UX-03 \| Enforcement only: tier 1 also reads the flags and keys the bundled drivers declare. \| K1"; "ORCH-03 \| The same enforcement change; and one paragraph and a clause: a driver reads its own flags and keys, with the same precedence. \| K1"; and "PROFILE-01 \| The profile names the driver contract's specification, its suite and its CI job, the surface the drivers declare, and what `interface` stands for. \| K1" |
+| Risks (425) | "**A public Go API** has to be kept usable for integrators." | "**A command contract** has to be kept usable for integrators, and is a second protocol to version beside the kit's Go API." |
+| Defaults and overrides (430) | "which driver the dispatcher picks when none is named and how it finds a driver binary (K2)" | "which driver `warden` picks when none is named and how it finds a driver binary (K1)" |
+| Cross-driver impact (438) | "it implements the completed driver contract (K1), becomes a module and a binary (K2), declares its build-link class (S3), supplies its claim connection (S4)" | "its build runs through `warden`'s build sequence (K1), it becomes a binary that speaks the driver contract (K1 for container, K2 for the rest) and a module (K2), declares its build-link class (S3), reports its claim endpoint (K1)" |
+| Bootstrap comparison, proposed diagram (480) | "per build, from the driver's own kit version" | "per build, the driver's version" |
+| Bootstrap comparison, BOOT-02 row (500) | "It is delivered per build and comes from the kit version the driver was built from. The relay is versioned separately; the executor and the relay agree through the relay guest API's version. \| None in what is delivered. Each driver binary carries its own executor version. D2 (vz) is unchanged. \| K2" | "It is delivered per build by the driver and matches the version of the driver that delivers it. The relay is versioned separately; the executor and the relay agree through the relay guest API's version. \| None in what is delivered. Each driver binary carries its own executor version. D2 (vz) is unchanged. \| K1 (its own comparison)" |
+| Security note (608) | "The kit cannot make an integrator's driver safe; the build-link suite and `drivertest` are what an integrator runs to show theirs is." | "`warden` runs whichever binary of that name it finds, and records it; it cannot make an integrator's driver safe. The build-link suite and the driver suite are what an integrator runs to show theirs is." |
+| Validation plan (626) | "`drivertest` and the build-link suite validate each driver." | "The driver suite and the build-link suite validate each driver." |
+| Archive summary, Decisions taken (777) | "Drivers as separate binaries on a public Go kit, then modules, then repositories, with Hyper-V as the pilot (4), behind a `warden` dispatcher that works like git's (5)." | "Drivers as separate binaries that `warden` runs through a written command contract, then modules, then repositories, with Hyper-V as the pilot (4); `warden` finds them as git finds a subcommand and stays the orchestrator (5); both reworded by the design review of `driver-contract`, approved <date>." |
+| Archive summary, the comparison (793) | "The Bootstrap comparison is accepted for three model changes, BOOT-01 (S3), BOOT-02 (K2) and BOOT-05 (S2), each made later by the item named (a12)." | "The Bootstrap comparison is accepted for two model changes, BOOT-01 (S3) and BOOT-05 (S2), each made later by the item named (a12); BOOT-02's change is made in K1 under K1's own comparison." |
+| Archive summary, rule changes (819) | "That includes the three `bootstrap.md` edits, whose comparison is already accepted here (BOOT-07)." | "That includes the BOOT-01 and BOOT-05 edits to `bootstrap.md`, whose comparison is accepted here (BOOT-07); BOOT-02's is accepted in K1's design." |
+| Archive summary, Rejected (797) | "Completing only the in-tree driver contract; drivers as RPC plugins; users calling driver binaries directly." | "Completing only the in-tree driver contract; a Go API every driver links; drivers behind an RPC plugin framework; users calling driver binaries directly; a dispatcher that hands the whole build to the driver." |
 | Front matter (8) | "the program's reach (the `warden` dispatcher)" | "the program's reach (`warden` and the driver binaries)" |
 
 What stands: Decision 8 and a2 (the collector is specified like every
@@ -5416,9 +5657,10 @@ each task leaves `make test` and `make lint` green (FLOW-17).
 24. Make the approved rule edits: GLOBAL-08 in `global.md`; ORCH-01,
     ORCH-02, ORCH-03 and ORCH-04 in `orchestrator.md`; TEST-05 in
     `testing.md`;
-    BOOT-02 and the diagram in `bootstrap.md`; FLOW-02 in `process.md`;
+    BOOT-02 and the diagram in `bootstrap.md`; PROFILE-01's five rows in
+    `loop-profile.md`;
     `seams`, `drivers.shared` and the TEST-05 owner in `rules.yaml`
-    (FLOW-14, BOOT-07).
+    (FLOW-14, BOOT-07). Nothing in `process.md` is edited (LOOP-09).
 25. Make the approved amendments to `docs/design/componentization.md`
     (FLOW-12, FLOW-20).
 26. Update `guide/cli.md`, `guide/configuration.md`, `guide/output.md` and
@@ -5768,6 +6010,84 @@ Still to come in this sitting: a5 (the behaviour that changes, now
 eighteen items), a18 (the umbrella's wording, sentence by sentence), a8
 (the rule changes, each by name, and the Bootstrap comparison) and a25
 (the seven existing keys); then the outcome.
+
+### 2026-11-15: `main` at `ad4ea50` merged; what changed after Jeff read `5808805`
+
+No sitting, and no outcome. The review is still in progress: a25, a5, a8
+and a18 are open, no rule change is approved and no amendment to the
+umbrella is approved. `loop-contract` merged on 2026-11-15 (`ad4ea50`,
+#119) with the Loop Contract (LOOP-01 to LOOP-09), this repository's
+profile (PROFILE-01), FLOW-01, FLOW-03 and FLOW-14 amended, a
+**Specification changes** section in the template, and the umbrella
+amended in place. `main` was merged into the branch (`f91aef3`), and the
+design was brought into line with it. Everything below is new since
+`5808805`, the commit Jeff read. No recorded answer is touched.
+
+Rule changes: the list is still ten entries, with one out and one in.
+
+- **FLOW-02: the entry is withdrawn.** It is a loop rule, and FLOW-14 and
+  LOOP-09 as merged let no feature's design declare a change to one. The
+  section that held its current and proposed wording now says what K1
+  leaves untrue in FLOW-02 (two bullets name `driver.Driver`), for how
+  long, and that the rewording is asked of `loop-parallel`. Nothing in
+  `process.md` is edited by K1. Put to Jeff inside a8, with three other
+  ways to do it.
+- **PROFILE-01: a new entry**, `{rule: PROFILE-01, change: amend, paths:
+  [docs/development/loop-profile.md]}`. Five rows of the profile:
+  Specifications, Reference documents and the Specification and Safety
+  rows of Checks, which K1's PR would leave stale; and Impact
+  vocabulary, which gains one sentence on what `interface` stands for.
+  Current and proposed wording are under **Rule changes**. Sweep,
+  Consumables and the other thirteen entries are not changed, and the
+  section says why.
+- **The other nine entries** were checked against FLOW-14 and LOOP-09:
+  all are this repository's rules. Their wording, current and proposed,
+  is as Jeff read it. Every "current wording" was compared again with
+  `main` at `ad4ea50` and none needed a change: the merge did not touch
+  `global.md`, `orchestrator.md`, `testing.md`, `bootstrap.md`,
+  `ux-cli-config.md`, `tools/tier1/` or `.github/`.
+- **a8 is reworded** in the design and in the queue: its first option
+  lists PROFILE-01 where it listed FLOW-02, and it asks for FLOW-02's
+  route beside the letter. Its options (a) to (d) are otherwise as they
+  were.
+
+The umbrella amendments (a18):
+
+- Every "Current" cell was compared again with the umbrella at
+  `ad4ea50`, which `loop-contract` amended in place. All 34 quotations
+  still match. The line numbers were renumbered; six that were one
+  line off are corrected, and the wave-3 row gains its number.
+- The dated note moves: it was to go under the umbrella's Decisions
+  heading, and is now an entry in the umbrella's new **Amendments**
+  section, after `loop-contract`'s and in its form.
+- In "Rule table, new rows", the FLOW-02 row is replaced by a PROFILE-01
+  row.
+- One difference from `loop-contract`'s amendments is pointed out for
+  a18 and not changed: those kept the approved sentence of Decision 2 and
+  added to it, while these replace the sentences of Decisions 4 and 5.
+
+Also added or changed:
+
+- A **Specification changes** section (LOOP-02), before the Bootstrap
+  comparison. Its table restates the design. Its last paragraph is new:
+  every numbered requirement is covered by a suite case that names it or
+  is listed as not machine-checked (LOOP-03).
+- One line under **Design**: the item works only in this repository
+  (LOOP-04).
+- The sentence on the dead-code sweep says that the kept list is
+  PROFILE-01's Sweep entry, and that widening it in K2 is a change to
+  that entry.
+- Front matter: `rule_changes` as above; `rules` gains LOOP-01 to
+  LOOP-04, LOOP-08, LOOP-09 and PROFILE-01; `related` gains
+  `loop-contract.md`. Prior art gains one entry for it. Implementation
+  plan, task 24, names `loop-profile.md` where it named `process.md`.
+
+Not changed: `seams`, `drivers`, `surfaces`, `security_boundary`,
+`alters_relationships`, `native_validation` and `tier2_gaps`; every
+decision; every answered question; the Bootstrap comparison.
+
+Still to come: a25, a5, a18 and a8, each rule change by name and the
+Bootstrap comparison; then the outcome.
 
 ## Consolidation
 
