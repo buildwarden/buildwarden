@@ -188,7 +188,7 @@ func resolveConfig() (*Config, error) {
 	}
 
 	if flagRuntime != "" {
-		cfg.Runtime.CLI = flagRuntime
+		cfg.Runtime.CLI, cfg.Runtime.CLISource = flagRuntime, cliFromFlag
 	}
 	if flagDriver != "" {
 		cfg.Runtime.Driver = flagDriver

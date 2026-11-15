@@ -61,10 +61,35 @@ type RelayConfig struct {
 }
 
 type RuntimeConfig struct {
-	CLI        string `toml:"cli"`
+	CLI string `toml:"cli"`
+	// CLISource says where CLI was named: cliFromFlag, cliFromEnv, or the
+	// config file that set it ("warden.toml", or the user's file by its
+	// path). It words the error that refuses an unsupported runtime; nothing
+	// that decides what is run reads it.
+	CLISource  string `toml:"-"`
 	Driver     string `toml:"driver"`
 	RelayImage string `toml:"relay_image"`
 }
+
+// What RuntimeConfig.CLISource holds for a runtime named outside a config
+// file.
+const (
+	cliFromFlag = "--runtime"
+	cliFromEnv  = "WARDEN_CTR_CLI"
+)
+
+// projectConfig is the project-level config file, read from the working
+// directory.
+const projectConfig = "warden.toml"
+
+// unsetCLI stands in for [runtime] cli while the project's file is decoded,
+// so that LoadConfig can tell whether that file set the key. The decoder's
+// IsDefined cannot: it compares a key's spelling exactly, while the decoder
+// also fills the field from CLI or [Runtime]. No TOML file can produce this
+// value: it is not valid UTF-8, which the decoder refuses in a file and no
+// escape in a TOML string can spell. So a file cannot pass for one that left
+// the key unset and have the user's value run in place of its own.
+const unsetCLI = "\xff"
 
 type BuildCfg struct {
 	Dockerfile string `toml:"dockerfile"`
@@ -93,16 +118,24 @@ func LoadConfig() (*Config, error) {
 		if err := loadTOML(userPath, cfg); err != nil {
 			return nil, err
 		}
+		cfg.Runtime.CLISource = userPath
 	}
 
 	// Project-level config (overrides user)
-	if err := loadTOML("warden.toml", cfg); err != nil {
+	userCLI, userCLISource := cfg.Runtime.CLI, cfg.Runtime.CLISource
+	cfg.Runtime.CLI = unsetCLI
+	if err := loadTOML(projectConfig, cfg); err != nil {
 		return nil, err
+	}
+	if cfg.Runtime.CLI == unsetCLI {
+		cfg.Runtime.CLI, cfg.Runtime.CLISource = userCLI, userCLISource
+	} else {
+		cfg.Runtime.CLISource = projectConfig
 	}
 
 	// Environment variable overrides
-	if cli := os.Getenv("WARDEN_CTR_CLI"); cli != "" {
-		cfg.Runtime.CLI = cli
+	if cli := os.Getenv(cliFromEnv); cli != "" {
+		cfg.Runtime.CLI, cfg.Runtime.CLISource = cli, cliFromEnv
 	}
 	if d := os.Getenv("WARDEN_DRIVER"); d != "" {
 		cfg.Runtime.Driver = d
