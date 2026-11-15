@@ -98,7 +98,7 @@ answers.
 
 | Jeff said, or the basis says | The redraft, as put to Jeff | Asked as |
 |---|---|---|
-| A driver is found "in the same way git finds its individual subcommands (i.e. existing on PATH)" | `warden`'s own directory is searched before `PATH`, the five bundled names never come from `PATH`, and a project's `warden.toml` may select only a bundled driver | a16. **Answered otherwise:** "overcontrolled". `PATH` is searched before what `warden` bundles, so a file earlier on `PATH` may replace a bundled driver; nothing checks owner or mode; one rule is kept, that a project's `warden.toml` names a driver and not a file. Since 2026-11-15 there is one config file and no user-level one, so what that rule now is, is asked (a26) |
+| A driver is found "in the same way git finds its individual subcommands (i.e. existing on PATH)" | `warden`'s own directory is searched before `PATH`, the five bundled names never come from `PATH`, and a project's `warden.toml` may select only a bundled driver | a16. **Answered otherwise:** "overcontrolled". `PATH` is searched before what `warden` bundles, so a file earlier on `PATH` may replace a bundled driver; nothing checks owner or mode; one rule is kept, that a project's `warden.toml` names a driver and not a file. Since 2026-11-15 there is one config file and no user-level one; what that rule now is was asked as a26's second part and answered (A): no config file names a driver by path |
 | "each driver effectively being its own independent binary" | Only the container driver is a binary in K1. The four VM drivers move onto `warden`'s build sequence and stay linked into `warden` until K2 | a15 |
 | "a shared library [...] that helps mediate pieces like configuration-parsing/reading" | `warden` reads all configuration and hands a driver resolved values. The kit's part is the option declaration and typed access to the values; it reads no file | a21. **Answered otherwise:** (b). The kit reads the configuration inside the driver's process, and `warden` passes on the driver's flags and the paths of the config files. Since 2026-11-15 that is the path of one file (Decision 23) |
 | A suite "that checks that both required and optional commands are all specified correctly" | As asked: a program run against a binary, in two tiers. `warden`'s calling side for every command is exercised in K1 through the reference fake | none |
@@ -642,13 +642,15 @@ decisions of the same day raised. a8 now lists eleven rule changes: the
 eleventh, UX-08, was added that evening, when the wording it edits was
 approved in `runtime-cli-project-path`'s review.
 
-**State at the end of the second sitting, 2026-11-15.** All twenty-two
+**State on 2026-11-15, after a5, a26 and a8.** All twenty-two
 are answered, and none is open: a5, a26 (both of its parts) and a8 were
 answered that evening, each as recommended, after Jeff read the design
 at `3f2012a`. The design was already written on those answers, so they
 change no decision, requirement or rule wording. One thing they settle
 that the design had left without a date: the seven old key names are
-kept until 1.0 (a26).
+kept until 1.0 (a26). One answer carries a condition that was not yet
+met when this was written: a18's, that the umbrella's list is shown
+once more before the design is approved.
 
 **Where the draft departs from your notes or the basis**
 
@@ -3086,20 +3088,9 @@ means here:
   [warden] warning: warden.toml: [vm] network is deprecated; use [driver.hyperv] network
   ```
 
-- *The window.* The old names are read until 1.0, which is to say in
-  every release before it (a26's answer), and the configuration
-  reference says so beside each. Taking them out, in the change that
-  prepares 1.0, is a change of its own, with its own design. Until then
-  the seven names follow the convention `runtime-cli-project-path` set
-  for code with a removal point (its design, "Where the transitional
-  part lives"): one marker of that form, `TRANSITIONAL(<name>)`, which
-  Plan names, on what goes with them (the seven `Aliases` entries in
-  the bundled drivers' declarations, their tests, the specification's
-  list and the reference's table), and Publish files the removal as a
-  queue item on hold until 1.0 whose `source` names the marker. What
-  becomes of the alias mechanism itself (`describe`'s `aliases`,
-  `Setting.Aliases`, C11) once no name is left is that change's to
-  decide.
+- *The window.* The old names are read until 1.0 (a26's answer), and
+  the configuration reference says so beside each. Taking them out is a
+  change of its own, with its own design.
 - *Nothing else is renamed.* `--runtime`, `--network` and every other
   flag, `WARDEN_CTR_CLI` and `WARDEN_IMAGE` keep their names and their
   places in the order.
@@ -4329,7 +4320,8 @@ into this branch.
   merged that PR.
 - *When it was written: during this review, before its outcome.*
   Recording an approval marks `f2-design-review` done and does nothing
-  else, and `f2-plan` needs only that step. On a copy of the queue state
+  else, and before the hold was written `f2-plan` needed only that
+  step. On a copy of the queue state
   with the review marked done and nothing else changed, `wf next` offers
   `driver-contract f2-plan` to the cloud; with the question and the step
   added, `wf validate` passes and `wf next` reports the item blocked,
@@ -6464,8 +6456,7 @@ from the two configuration items**).
     UX-02, UX-04, UX-09, ORCH-04, ORCH-05).
 18. Move every driver-owned flag and key into its driver's `Setting`
     declaration, the seven keys under their new names in `[driver]` and
-    `[driver.<name>]` with their old names as `Aliases`, marked for
-    removal at 1.0 (**Configuration**, the window); `warden` finds
+    `[driver.<name>]` with their old names as `Aliases`; `warden` finds
     the driver before parsing flags (the `ext` form, the command, then
     the scan for `--driver` and `--config`), registers
     the flags the selected driver declares, refuses one nobody declares
@@ -7167,13 +7158,13 @@ Still to come: a5, a8 with each of the eleven rule changes by name and
 the Bootstrap comparison, a26, the umbrella's list once more (a18), the
 hold written into the queue file; then the outcome.
 
-### 2026-11-15, second sitting, concluded: a5, a26 and a8 answered; eleven rule changes approved by name
+### 2026-11-15, second sitting, continued: a5, a26 and a8 answered; eleven rule changes approved by name
 
 This entry records three answers and the rule changes Jeff approved by
 name. It is not the review's outcome, and the design is not approved by
-it: the Security note's acceptance and the outcome are still to come in
-this sitting and are recorded when they are given. Jeff read the design
-at `3f2012a`.
+it: the umbrella's list shown once more (a18), the Security note's
+acceptance and the outcome are still to come in this sitting and are
+recorded when they are given. Jeff read the design at `3f2012a`.
 
 Three answers, each the recommended option, on which the design was
 already written:
@@ -7217,30 +7208,49 @@ Jeff read them):
 
 - a5, a26 and a8 carry their answers under **Questions**, and the
   places that treated them as open or gave what an unchosen option
-  would do now say what was answered: Decisions 5 and 9, **Discovery
-  and trust**, **Configuration**, **Behaviour** (its head, 2, 18 and its
-  closing paragraph), **What K1 takes from the two configuration
-  items**, **Defaults and overrides**, the head of **Rule changes**,
-  ORCH-03's commentary, UX-08's last note, and tasks 18 and 26 of the
-  Implementation plan.
+  would do now say what was answered: the a16 row of the table at the
+  head of the design ("Where the redraft was narrower"), Decisions 5
+  and 9, **Discovery and trust**, **Configuration**, **Behaviour** (its
+  head, 2, 18 and its closing paragraph), **What K1 takes from the two
+  configuration items**, **Defaults and overrides**, the head of **Rule
+  changes**, ORCH-03's commentary, UX-08's last note, and task 26 of
+  the Implementation plan. a16 and a25 each carry a dated note pointing
+  to a26's answer.
 - The old names' window is "until 1.0" where the design said "at least
-  two releases" or "a stated window" (a26's answer, within a25's). The
-  seven names take `runtime-cli-project-path`'s convention for code
-  with a removal point, a marker and a removal item filed at Publish
-  on hold until 1.0, stated once, under **Configuration**.
+  two releases" or "a stated window" (a26's answer, within a25's).
+  Nothing else is said of the removal: "Taking them out is a change of
+  its own, with its own design" stands as Jeff read it. How that
+  removal is kept track of until 1.0 is not stated by this design. The
+  first state of this pass (`f830755`) gave the seven names
+  `runtime-cli-project-path`'s convention for code with a removal
+  point, a `TRANSITIONAL(<name>)` marker and a removal item filed at
+  Publish on hold until 1.0; that was more than the answer says and
+  Jeff had not read it, so it was taken out again. It is Plan's to
+  raise, or Jeff's to ask for.
 - The hold is in the queue file: `q1`, blocking and open, with the step
   `f2-answer-q1` before `f2-plan`, written by the attended session at
   workflow `ea23718`. The places that said it was still to be written
   are corrected.
 - FLOW-02's section under **Rule changes** says where the two bullets
-  now are, and keeps the one fallback that is still possible.
+  now are. Its fallback paragraph is rewritten, and this is a case
+  Jeff has not read: the case it provided for (that item's review
+  approved before the request reached it) did not arise, and the
+  paragraph now provides for the one still possible (that review ends
+  without approving the FLOW-02 amendment with the two bullets in it).
+  The two destinations are the ones he read, `loop-native-lead` or a
+  process item of their own, and the choice is still his, made then.
+- One sentence of the previous entry was reworded ("was approved at" to
+  "has its approval, at", for `runtime-cli-project-path` at `a2afd08`)
+  so that FLOW-19's check does not read it as an approval of this
+  design; its meaning is unchanged.
 - Three sentences still say what the review "is asked" or "must" do
   for a8 (the Bootstrap comparison's first paragraph, and the last
   paragraphs on ORCH-03's two settings and on the Specifications row's
   two forms). They are left as Jeff read them; the list above is the
   record of what he approved.
 
-Still to come: the Security note's acceptance; then the outcome.
+Still to come: the umbrella's list once more (a18); the Security note's
+acceptance; then the outcome.
 
 ## Consolidation
 
