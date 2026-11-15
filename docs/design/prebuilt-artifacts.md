@@ -888,11 +888,11 @@ images` for the container driver) runs every driver it ran.
 
 **Order of merges:** `runtime-cli-project-path`, then
 `project-config-trust`, then this item. K1 (`driver-contract`) waits only
-for `project-config-trust` and is not held behind this item: that is
-Jeff's reason for making this its own item (that design's a6: "so the
-hole closes with its merge and K1 is not held behind native validation").
-So this item and K1 may merge in either order, and the second
-consolidates (FLOW-10).
+for `project-config-trust` and is not held behind this item. That is why
+this is its own item: as that design's a6 records Jeff's answer, the
+small fix stays there "so the hole closes with its merge and K1 is not
+held behind native validation". So this item and K1 may merge in either
+order, and the second consolidates (FLOW-10).
 
 **`project-config-trust`** (read at `d3efc4a`). This item deletes what it
 adds for the tree: `ModuleRoot` with its fixable error, the test-only
@@ -927,9 +927,11 @@ until 1.0. UX-08 as it amends it is what **When** in the lookup follows.
 - *If K1 merges first*, this item's consolidation makes the same edits
   inside `driver/relaysource` and the container driver's binary, and
   re-quotes its BOOT-02 wording on K1's.
-- Either way the two BOOT-02 amendments touch one sentence, and the
-  second to merge returns to Design for a review of its wording as it
-  then reads (FLOW-06, FLOW-14).
+- Either way the two BOOT-02 amendments touch one sentence. This
+  design gives its wording in both settings (**Rule changes**), so that
+  its review clears the edit whichever of the two is on `main` when
+  Implement makes it. K1's wording on top of this item's is K1's to put
+  to its own review.
 
 **K2** makes the VM drivers binaries; they keep the lookup as K1's
 container driver has it. **K3 and K4** give each driver its own
@@ -1103,10 +1105,26 @@ enforcement change: `tools/tier1/` is not edited. The `bootstrap-surface`
 check sees the edit to `bootstrap.md` beside a design whose `rules` cites
 BOOT-07.
 
-**With K1.** K1 amends the same sentence ("by the driver and matches the
-version of the driver that delivers it"). The second of the two to merge
-re-quotes its wording on the first's and has it reviewed (**How it sits
-with the other items**).
+**In the other setting.** K1 amends the same sentence, and its wording
+was approved by name in its review (design at `a6c8f0b`; the review's
+outcome is not yet recorded): "It is delivered per build by the driver
+and matches the version of the driver that delivers it; a driver linked
+into `warden` has `warden`'s version." If that is the sentence on `main`
+when this item's Implement reaches it, the proposed wording is:
+
+> The host delivers exactly one thing to the build environment outside the relay:
+> the executor (`warden-io`) and the minimal launcher that starts it. It is
+> delivered per build by the driver, and its version is at or above that of the
+> driver that delivers it: an executor that states an older version, or none, is
+> not delivered; a driver linked into `warden` has `warden`'s version. The build
+> script, context files, the CA and extension material never travel this way.
+
+and the diagram's label, which K1 makes `per build, the driver's
+version`, becomes `per build, at or above the driver's version`. The
+review is asked to approve the change in both settings, as K1's review
+was for ORCH-03. If `main` then holds neither sentence as quoted, nothing
+of BOOT-02 is edited and the item returns to Design (FLOW-06). If this
+item merges first, K1's amendment is re-quoted on this wording by K1.
 
 ## Security note
 
@@ -1159,10 +1177,10 @@ BOOT-02's one input that does not pass through the relay.
   where it was found; `warden doctor --driver <name>`. A build's output
   therefore says that a file other than the bundled one was used exactly
   when `found` is `PATH`. None of this is signed.
-- **`sudo`.** `sudo warden image prepare --driver vz` runs with sudo's
-  `PATH`, so a file on the user's `PATH` is not used there and the copy
-  beside `warden` is; a file in a directory of sudo's `PATH` is root's to
-  control.
+- **`sudo`.** `sudo warden image prepare --driver vz` runs with the
+  `PATH` sudo gives it, which by default is not the user's, so the copy
+  beside `warden` is what is usually found there; a file in a directory
+  of that `PATH` is root's to control.
 
 **What the TEST-08 suite should exercise** (corpus entries, SEC-03):
 
