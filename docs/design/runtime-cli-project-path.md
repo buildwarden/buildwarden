@@ -1249,7 +1249,10 @@ finds nothing; the `hyperv` row is skipped on Windows, the one OS where
 `hyperv.Clean` reaches Hyper-V and what it lists cannot be redirected. What
 the row proves, that `runClean` returns before the runtime is resolved, is
 the same Go code on every OS and is run on Linux and macOS, and by tier 1
-(task 15).
+(task 15). Tier 1 skips `clean --driver hyperv` on a Windows host for the
+same reason; it runs on Linux and macOS (added at Implement, on the Review's
+finding: task 15 and the Validation plan list the case without the
+condition).
 
 *Note B (task 11: `doctor` under the VM drivers, tier 0).* `doctor` ends
 the process with `os.Exit(1)` when the checks of `hyperv` or `firecracker`
