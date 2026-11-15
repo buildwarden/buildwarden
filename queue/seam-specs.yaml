@@ -39,8 +39,8 @@ steps:
     affinity: human
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: human/jeff
+      expires: 2026-11-15T22:32:23.756687305Z
   - id: f2-plan
     phase: 2
     affinity: cloud
@@ -56,7 +56,7 @@ budget:
     steps: 30
   spent:
     runs: 1
-    steps: 2
+    steps: 3
 questions:
   - id: a1
     kind: assumed
@@ -267,3 +267,6 @@ history:
   - at: 2026-11-15T20:16:39Z
     by: cloud/attended-20261115
     event: 'design revised again before its review, on an independent review of the update of 2026-11-15 (to e4801d6; not a return to Design; f2-design-review not held): driver-contract is read at bb4d7c8, where it declares a PROFILE-01 amendment of its own (a280ba9) over five rows of the profile, two of which this design also rewords; the ownership section has a row for each part of the profile, gives the Specifications entry and the tier-1 Specification row of Checks in full as they read with both changes, and counts loop-profile.md among the files the second to merge resolves; this design''s own PROFILE-01 wording is unchanged. a15 and Decision 12 say what LOOP-04 holds for an item that waits on a component''s release (the second option''s mechanism), why it does not bind here and why the first option is still recommended. Prior art says what loop-contract amended in the umbrella; Part B''s requirement prefix is named (COLL-B). Questions: the text of a15 gains those sentences; no option or recommended answer changed; none added or retired. Steps: none added or removed. design_review required and alters_relationships true, unchanged.'
+  - at: 2026-11-15T20:32:23Z
+    by: human/jeff
+    event: claimed f2-design-review until 2026-11-15T22:32:23Z
