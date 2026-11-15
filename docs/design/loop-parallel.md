@@ -39,9 +39,10 @@ rule_changes:
   - {rule: PROFILE-01, change: amend, paths: [docs/development/loop-profile.md,
       tools/tier1/area-edges.sh]}
 concepts: [workflow, queue, one-queue, parallel-items, areas, area-map, relations, collision,
-           flow-05-limits, alters-slot, pr-slot, claim-guard, wf-commit, wf-next, wf-claim,
-           wf-validate, refresh, consolidation, tracked-items, reconciliation,
-           queue-summary, digest, merge-confirmation, main-ci, componentization, program]
+           flow-05-limits, alters-slot, pr-slot, waiting-limit, claim-guard, wf-commit,
+           wf-next, wf-claim, wf-validate, refresh, up-to-date-branch, ready-to-merge,
+           consolidation, tracked-items, reconciliation, queue-summary, digest,
+           merge-confirmation, main-ci, componentization, program]
 related: [componentization.md, alters-slot.md, next-skips-merge-wait.md, queue-summary.md,
           regression-fixes-follow-up.md, design-approved-rule-changes.md,
           tier1-static-checks.md, wf-later-phase-host-steps.md, workflow-bootstrap.md,
@@ -180,8 +181,9 @@ say.
 - **`wf-squash-after-base-moved`**: how `wf` proves a squash-merged branch
   is on `main` (ancestor, equal tree, or equal patch-id). Its a3 kept three
   lines of context in the patch-id and held zero context in reserve, "if
-  adjacent-edit escalations show up in practice". Merging a PR that is
-  behind `main` makes them routine (a14).
+  adjacent-edit escalations show up in practice". A branch that is
+  refreshed in one checkout while another still holds its older head
+  makes them routine (a14).
 - **`workflow-bootstrap`** and **`workflow-streamline`**: the PR slot and
   the single round. **`native-host-loop`**: what a native session may do,
   for the boundary with `loop-native-lead`.
@@ -372,7 +374,9 @@ say.
     runs the gates, and carries the consolidation pass and the sweep over
     what landed. It pushes only while the PR is still open and the remote
     branch is where it found it. It does not queue a native validation
-    again.
+    again. Since Decision 21 it is the gate before every merge after the
+    first: a PR that `main` has moved past cannot merge until its refresh
+    has passed.
     - *Rejected: a refresh that re-queues `f6-consolidate`.* Returning to
       Publish seeds `f6-merge-main` again, so the item would give up the PR
       slot while its PR is open.
@@ -393,7 +397,8 @@ say.
       release cut outside the queue has no item to name (`loop-contract`,
       hand-off point 7).
 16. **`QUEUE.md` shows repositories, areas, lease holders, what each item
-    waits for, the merges in order and the relations; each run writes its
+    waits for, the open PRs as ready or waiting for a refresh, and the
+    relations; each run writes its
     own digest file and `wf` builds the day's page.** The count of items
     waiting on Jeff that opens **Needs Jeff** is the number Decision 24
     limits.
@@ -419,27 +424,62 @@ say.
     `main` since its merge.
 20. **The freeze stays.** FLOW-20 loses only its Limit bullet. This is the
     proposal's question 2, option (a), part of the approved direction.
-21. **Disjoint PRs in one repository merge in any order** (a1). Nothing
-    makes the second wait for its refresh; `QUEUE.md` says when a PR is
-    behind `main`, and CI on the push to `main` is the gate.
-    - *Rejected: requiring an up-to-date branch.* Each merge would block the
-      rest for a cloud run.
-    - *Rejected: one open PR per repository.* That is today's rule again.
+21. **A pull request merges only when its branch contains `main`** (a1
+    (b), Jeff, 2026-11-14). Disjoint PRs may be open together; each merge
+    leaves every other open PR in that repository waiting for a refresh,
+    and that refresh is the gate before its merge. Two things hold the
+    rule. GitHub is asked to refuse any other merge: a ruleset on `main`
+    that requires the PR's check and an up-to-date branch, which is
+    Jeff's to set. And the loop lists a PR as ready to merge only while
+    its branch contains `main` with its checks green on that head, so
+    the rule does not rest on a setting alone. Unattended, that is about
+    one merge per cloud run in each repository; in an attended sitting
+    the session refreshes the next PR after each merge. The whole of it
+    is under **Merging: a branch must contain `main`**.
+    - *Rejected: any order* (the draft's recommendation, a1 (a)). A break
+      between two disjoint items that neither branch shows alone would
+      land on `main` and be fixed there.
+    - *Rejected: one open PR per repository.* That is today's rule again:
+      it puts Publish, native validation and Jeff's reading of each PR in
+      turn, where this puts only the merge in turn.
+    - *Rejected: the GitHub setting alone.* The loop could not say which
+      open PR can be merged, and a repository whose host has no such
+      setting would have no rule (LOOP-08).
+    - *Rejected: the loop's listing alone.* `QUEUE.md` is as current as
+      the last session that ran `wf stale`; a second merge made on GitHub
+      between sessions would go through.
+    - *Not taken: GitHub's merge queue*, which merges each PR onto the
+      queue's head, runs the checks on that and merges what passes. It
+      would lift the limit of one merge per run with no attended session.
+      It is a host feature the contract does not assume (LOOP-08); no
+      workflow here has the `merge_group` trigger it needs, so `ci-ok`
+      would not run for it; and what it merges has had no refresh: no
+      consolidation pass and no areas check on the merged tree.
 22. **The loop reads CI on `main`** (a16). Each tick, and the attended session
     before it lists the PRs, records the result of `main`'s head in the
     queue state. A red `main` opens **Needs Jeff**, and the tick files its
     fix as the follow-up of the item whose merge it was (FLOW-09, amended).
-    Decision 21 rests on this: without a reader, "CI on `main` is the
-    gate" gates nothing.
-23. **The merge check compares changes with no context lines** (a14).
-    `wf`'s proof that a squashed branch is on `main` takes
-    `wf-squash-after-base-moved`'s reserve option, `-U0`. A PR merged
-    while behind `main`, next to a line the earlier merge edited, is the
-    normal case under Decision 21 and fails the three-line comparison
-    wherever the branch's ref still exists.
-    - *Rejected: keeping three lines and escalating each such merge.* The
-      item would stay at its merge step, holding the PR slot, until Jeff
-      compared the two changes by hand.
+    Under Decision 21 the gate is the PR's own checks on a branch that
+    contains `main`, and CI on `main` is the backstop for what goes
+    round it: a merge made by a bypass or before the setting exists, a
+    job that runs only on a push to `main`, a test that fails one run in
+    several. It matters more than it did: while `main` is red every
+    refresh fails on it, so no other PR can be made ready until the fix
+    lands. That is why the fix is filed at once, and why the waiting
+    limit never holds it (Decision 24).
+23. **The merge check compares changes with no context lines** (a14,
+    still open). `wf`'s proof that a squashed branch is on `main` takes
+    `wf-squash-after-base-moved`'s reserve option, `-U0`. Under Decision
+    21 the head that merged contains `main`, so the squash has that
+    head's tree and the proof by tree confirms it. The proof by change is
+    reached for a ref that is older than the merged head: a checkout
+    that held the branch before its last refresh. Its change equals the
+    squash's only without context when the refresh merged an edit next
+    to one of its hunks, and a ref of that kind is ordinary now that
+    every PR after the first is refreshed before it merges.
+    - *Rejected: keeping three lines and escalating each such ref.* Close
+      would leave the branch in that checkout and hand Jeff the commands
+      to compare and delete it by hand (FLOW-16).
 24. **No queued feature starts while 8 or more items wait on Jeff** (a3
     (b), Jeff, 2026-11-14). The count is the in-progress items under
     **Needs Jeff**, each once. The number is `limits.waiting_on_human`,
@@ -502,20 +542,33 @@ the answer to a3.
     - *The merge check.* A PR merged while behind `main` is still confirmed
       as merged (a14).
   - (b) An up-to-date branch is required. Each merge blocks the rest until
-    their refresh, about one merge per cloud run.
+    their refresh, about one merge per cloud run. **Chosen.**
   - (c) One open PR per repository: today's rule, per repository.
 
   Recommended: (a). Disjoint PRs share no exclusive area, and GitHub refuses
   a merge that conflicts in a shared file. What (a) accepts is under
   **Safety**: a break between two disjoint items that neither branch shows
   alone lands on `main` and is fixed there.
+
+  **Answered (b), Jeff, 2026-11-14:** "Up-to-date branch required. GitHub
+  refuses a merge until the branch contains main. Each merge blocks the
+  rest until a refresh runs: about one merge per cloud run." It departs
+  from the recommendation. Folded in: Decision 21 and the section
+  **Merging: a branch must contain `main`** (the GitHub setting and who
+  makes it, the loop's own listing, who refreshes and when, the
+  throughput, what an attended sitting does, what disjoint still buys
+  over near); the refresh as the gate (Decision 13, **The refresh
+  step**); `main`'s CI as the backstop (Decision 22); cases 7, 8, 18 and
+  22, and 32 to 37; FLOW-03, FLOW-05, FLOW-08 and FLOW-10; **Safety**;
+  the two listings of open PRs in `QUEUE.md`. a10 and a14 were written
+  for (a) and are derived again below.
 - **a2. What sharing only ordered areas costs** (the book, build files,
   rule files, other items' designs). Proceeding with (a); confirm. This
   departs from the proposal, whose section 1 put "lightly shared files"
   with "one PR at a time".
   - (a) Nothing but the refresh: the two items are disjoint, and both PRs
     may be open. The later one merges `main` at its refresh, where a
-    conflict in the shared file is resolved.
+    conflict in the shared file is resolved. **Chosen.**
   - (b) They are near and take turns at the PR, as the proposal has it.
 
   Recommended: (a). Measured on history, with the map below and the areas
@@ -532,6 +585,15 @@ the answer to a3.
   disjoint pairs changed a common file, most often
   `docs/development/README.md`. CI on `main` is the net, as in a1. The
   change between the two options is one row of the relation table.
+
+  **Answered (a), Jeff, 2026-11-14,** as recommended: sharing only
+  ordered areas leaves two items disjoint. Nothing in the text changes.
+  Two things around it did. With a1 (b) the later PR merges `main` at its
+  refresh before it may merge, so a shared file that merges cleanly and
+  wrongly is in front of the refresh's gates, and CI on `main` is the
+  backstop behind them. With a5 (d) `cmd/warden/` is one of the ordered
+  areas, and the figures are 197 disjoint, 34 near and 22 colliding
+  (a5).
 - **a3. A cap on work waiting for Jeff.** (The proposal's question 5.)
   Proceeding with (a); confirm.
   - (a) None. `QUEUE.md` opens **Needs Jeff** with the count of items
@@ -627,19 +689,26 @@ the answer to a3.
     does: the item lists the repository in `repos`, its design says which
     invariants apply there (LOOP-08), and a `human` step records a merge
     there that `wf` cannot see. FLOW-04 and FLOW-08 gain the sentence that
-    `seam-specs`' a15 asked for as an exception.
+    `seam-specs`' a15 asked for as an exception. **Chosen.**
   - (b) Only through a release (LOOP-07).
 
   Recommended: (a).
+
+  **Answered (a), Jeff, 2026-11-15,** as recommended. Nothing in the text
+  changes.
 - **a7. Whether a tracked item counts in the limits.** Proceeding with (a);
   confirm.
   - (a) It is shown with its relations and neither holds nor waits. K1 and
     the relay's M1 both define parts of seam 8, which has no specification;
     `QUEUE.md` says they collide, and nothing is enforced until
-    `loop-repository` gives the relay's work steps and gates.
+    `loop-repository` gives the relay's work steps and gates. **Chosen.**
   - (b) It counts like any feature, on the state the human enters.
 
   Recommended: (a).
+
+  **Answered (a), Jeff, 2026-11-15,** as recommended. Nothing in the text
+  changes. The waiting limit, which his answer to a3 adds, does not count
+  a tracked item either (a17).
 - **a8. A reconciliation item's mark, its wait and its place.** That it is
   a feature in class 3 is decided (`loop-contract` a5). Proceeding with (a);
   confirm.
@@ -647,47 +716,103 @@ the answer to a3.
     blocking question that names the release when the release does not exist
     yet (LOOP-04), which Jeff or an attended session answers when it does.
     Intake places it below the open fixes; a regression's fix still goes to
-    the top.
+    the top. **Chosen.**
   - (b) As (a), placed at the top of the fixes.
   - (c) As (a), with no default place: Jeff says each time.
 
   Recommended: (a). A regression means `main` is broken now; an adoption is
   planned work.
-- **a10. The refresh: its trigger, its budget, and native validation.**
-  Proceeding with (a), (c) and (e); confirm.
-  - (a) Seeded for every item waiting on Jeff's merge whenever `main` is no
-    longer contained in its branch, whatever moved `main`.
-  - (b) Seeded only when a related item's PR merged.
+
+  **Answered (a), Jeff, 2026-11-15,** as recommended. Nothing in the text
+  changes.
+- **a10. The refresh, now that every merge after the first needs one:
+  which PRs it is seeded for, its budget, and native validation.** Open.
+  Derived again on 2026-11-15 for a1 (b). The draft asked this for a1
+  (a), where a refresh was a courtesy that a merge did not wait for. Now
+  a PR that `main` has moved past cannot merge until its refresh has
+  passed, so the three choices cost more and one of the old options is
+  gone. Proceeding with (a), (d) and (e); confirm.
+
+  *Which PRs:*
+  - (a) Every open PR that is behind `main`, whatever moved `main`, on
+    every run. After a run each open PR is current, and he may merge any
+    one of them.
+  - (b) Withdrawn. It was "only when a related item's PR merged". Under
+    a1 (b) a PR that is behind for any reason cannot merge, so a PR left
+    behind by an unrelated merge would wait without end.
+  - (g) Only the first open PR in the merge order (FLOW-05), and any PR
+    an attended session is asked to refresh. One PR is ready after each
+    run; he merges that one, or asks for another.
+
+  *Budget:*
   - (c) Each refresh is a claim and counts one step against the item's
     budget; intake's size guide adds two steps for it.
-  - (d) A refresh spends no budget, like the merge confirmation.
-  - (e) A refresh does not queue a blocking native validation again. The
-    validation stands for the branch as it was consolidated; what merged
-    since came from items disjoint from this one.
-  - (f) A refresh queues each done blocking host step again when the
-    commits it merged changed a file outside the ordered areas: one more
-    native session per such merge, with the open PR shown as waiting on a
-    host.
+  - (d) A refresh counts in the run's budget and not against the item's:
+    it is made necessary by other items' merges, and it is now required
+    before the merge. (The draft's (d) was "spends no budget, like the
+    merge confirmation"; it is narrowed to the item's budget, so a run's
+    budget still bounds the refreshes it takes.)
 
-  Recommended: (a), (c) and (e). The cost of (a) and (c) with five PRs
-  open: merged one a day, they take 4 + 3 + 2 + 1 = 10 refreshes, up to
-  four on the last item, against the two the size guide adds; each is a
-  merge, lint, test, deadcode, a consolidation pass and a CI wait, taken
-  in class 1 ahead of new work. Merged in one sitting they take none, and
-  four of the five merge behind `main` (a1). An item that waits through
-  many merges trips its runaway check and shows under **Needs Jeff**,
-  which is the right place for a PR that has waited that long. Under (e),
-  a break between two disjoint items that only a native host shows is
-  found by the matrix before a release (TEST-02): CI runs neither Hyper-V
-  nor VZ, and the scheduled native session sweeps only a machine's open
-  backlog gaps.
+  *Native validation:*
+  - (e) A refresh does not queue a blocking native validation again. The
+    validation stands for the branch as it was consolidated; what the
+    refresh merged came from items disjoint from this one, from a process
+    item, or from a merge made by hand.
+  - (f) A refresh queues each done blocking host step again when the
+    commits it merged changed a file this branch also changes, or a file
+    in an area one of its areas reaches. The PR is then not ready until
+    that host has run: `QUEUE.md` lists it under **Waiting on a host**,
+    and "one merge per cloud run" becomes one merge per cloud run and
+    native session for such a PR. (The draft's test was "a file outside
+    the ordered areas", which no longer says "code": `cli` is ordered,
+    a5 (d).)
+
+  Recommended: (a), (d) and (e).
+
+  The cost with five PRs open, all current, and one merged a day after
+  the run. Under (a): 4 + 3 + 2 + 1 = 10 refreshes over four runs, the
+  last PR refreshed four times; the five merges take five days. Under
+  (g): four refreshes, each PR once, the same five days. Each refresh is
+  a merge of `main`, `make lint`, `make test`, `make deadcode`, a
+  consolidation pass and a CI wait, taken in class 1 ahead of new work:
+  four of the first run's 24 steps under (a). In one attended sitting,
+  under either: four refreshes, one before each merge after the first,
+  each PR once (**Merging: a branch must contain `main`**). The waiting
+  limit bounds it: at most 8 items wait on him, so at most 8 PRs are
+  open, and (a)'s worst case is 7 + 6 + ... + 1 = 28 refreshes over
+  seven runs, seven of them on the last PR, where (g)'s is seven. (a)
+  costs more and is recommended all the same: after every run each open
+  PR has been built and checked against the `main` it will merge into,
+  so a PR that conflicts or fails is sent back the day that becomes
+  true and not on the day its turn comes, and the order of merging stays
+  his.
+
+  On the budget the recommendation changes from the draft's (c) to (d).
+  Under (c) the fifth of five PRs spends four steps on refreshes, twice
+  what the size guide would add, and each run in which `main` is red
+  spends one more on every open PR, because the refresh is tried, fails
+  on `main` and is released. An item that trips its runaway check this
+  way is taken no further by the loop (FLOW-13), its refresh included,
+  so its PR could not be made ready until Jeff raised its estimate: a
+  step of his own in front of a merge, for a wait the item did not
+  cause. Under (d) a refresh either passes, sends the item back to
+  Implement or Design, where its budget counts as always, or is released
+  because of `main`.
+
+  Under (e), what a native host alone would show is found by the matrix
+  before a release (TEST-02): CI runs neither Hyper-V nor VZ, and the
+  scheduled native session sweeps only a machine's open backlog gaps.
+  a5 (d) widens that a little: two items that both edit `cmd/warden/`
+  are disjoint, so a Hyper-V item validated on its host can merge another
+  item's change to the CLI at its refresh, and nothing runs Hyper-V on
+  the result before the merge. (f) closes that at the price above.
 - **a12. Who gets a free PR slot when related items wait.** Proceeding
   with (a); confirm.
   - (a) The higher priority, whether or not it could take the slot at that
     moment: an item is refused while a related item of higher priority
     waits. This is the proposal's rule. A lower-priority item can then
     wait for a holder it is disjoint from, because the item ahead of it
-    does.
+    does. **Chosen.**
   - (b) The higher priority only when it could take the slot itself (the
     first draft). More PRs are open at once, and a high-priority item
     related to two streams that are disjoint from each other can wait
@@ -700,6 +825,9 @@ the answer to a3.
 
   Recommended: (a). It only matters once a second worker exists: an attended
   run on a named item today, a machine's led item after `loop-native-lead`.
+
+  **Answered (a), Jeff, 2026-11-15,** as recommended. Nothing in the text
+  changes.
 - **a13. Whether this item holds a worker.** Proceeding with (a); confirm.
   - (a) None. Two things are then handled without a hold. A session whose
     `dist/wf` was built before the merge drops a new field when it saves a
@@ -709,32 +837,69 @@ the answer to a3.
     Design before the queue could record what they declare: no gate
     compares their queue files with their designs until a human
     `wf declare` records them, which the attended step `x4-state` does.
+    **Chosen.**
   - (b) `holds: [cloud, host:*]`, set by hand for the day of the merge and
     Close and removed after.
 
   Recommended: (a).
-- **a14. The merge check when a PR merged behind `main`.** `wf` confirms a
-  squash merge by one of three proofs for each ref of the branch that
+
+  **Answered (a), Jeff, 2026-11-15,** as recommended. Nothing in the text
+  changes.
+- **a14. The merge check, now that a PR merges only with `main` in its
+  branch.** Open. Derived again on 2026-11-15 for a1 (b). `wf` confirms
+  a squash merge by one of three proofs for each ref of the branch that
   still exists: the ref is an ancestor of `main`, a PR commit has its
   tree, or a PR commit makes the same change by patch-id
   (`wf-squash-after-base-moved`). The third is computed with three lines
-  of context, so it fails when the PR merged behind `main` next to a line
-  the earlier merge edited. That design's a3 chose three lines and said to
-  change "if adjacent-edit escalations show up in practice". Proceeding
-  with (a); confirm.
-  - (a) Zero context (`-U0`), that design's option (b). The proof becomes
-    "the same lines added and removed in each file, in order", without the
-    lines around them. A squash GitHub made cannot move a hunk. It is the
-    proof Close relies on before a squashed local branch is deleted
-    (FLOW-16).
-  - (b) Keep three lines. Each such merge fails its confirmation wherever
-    the branch's ref still exists (an attended checkout with a worktree, a
-    run that worked on the branch): the item stays at its merge step,
-    keeps the PR slot, and waits for Jeff to compare the two changes by
-    hand.
+  of context; that design's a3 chose three and said to change "if
+  adjacent-edit escalations show up in practice". The draft asked this
+  because under a1 (a) a PR could merge behind `main`. Under a1 (b) the
+  head that merges contains `main`, so the squash has that head's tree,
+  and the second proof confirms every ref that is at that head. The
+  third is still reached, and still fails beside an adjacent edit, in
+  two cases:
+  1. *A ref older than the head that merged.* A checkout that held the
+     branch before its last refresh (an attended checkout's worktree, a
+     native machine's branch, Jeff's own clone) has a ref without the
+     refresh's merge commit. Its tree is not the squash's, and its
+     change equals the squash's only without context lines when the
+     refresh merged an edit next to one of its hunks. Every PR after the
+     first is refreshed before it merges, so such refs are ordinary
+     wherever a second checkout holds the branch. They matter at Close,
+     which deletes a squashed local branch only on this proof (FLOW-16),
+     and to `wf stale` run in that checkout, which reads the PR as not
+     merged.
+  2. *A merge that went round the up-to-date requirement*: made before
+     the setting exists, or by Jeff's own bypass.
 
-  Recommended: (a). Under a1 (a) the case is ordinary: any two PRs that
-  each add an entry to the rule index, `rules.yaml` or a book table.
+  A merge in another repository is not a case: `wf` confirms none there
+  until `loop-repository`. Proceeding with (a); confirm.
+  - (a) Zero context (`-U0`), that design's option (b). The proof becomes
+    "the same lines added and removed in each file, in order", without
+    the lines around them. A squash GitHub made cannot move a hunk. It
+    covers both cases when the refresh merged cleanly. A refresh that
+    resolved a conflict changed the branch's own change, and an older
+    ref then has no proof: a human compares, as today.
+  - (b) Keep three lines. Through the protected path the tick confirms
+    the merge by the tree. Each older ref beside an adjacent edit fails:
+    Close leaves the branch in that checkout and FLOW-16's escalation
+    gives Jeff the commands. A merge made round the requirement fails in
+    every checkout that holds the ref: the item stays at its merge step,
+    keeps the PR slot, and waits for him to compare the two changes.
+  - (c) Keep three lines, and confirm an older ref another way: it is an
+    ancestor of the head that merged, which GitHub keeps as
+    `refs/pull/<n>/head` after it deletes the branch, and that head is
+    confirmed by the tree. It weakens no comparison. It makes the check
+    fetch a ref only GitHub has, where it needs no network today, and it
+    does not cover case 2.
+
+  Recommended: (a), for a different reason than the draft's. Merging
+  behind `main` is now the exception; a ref older than the last refresh
+  is the rule. The change is one flag, and it was reproduced for the
+  draft: A edits line 5, B line 8, B is squashed after A; B's change and
+  the squash's differ with three lines of context and are equal with
+  none. That is case 1 exactly, with B's ref left where it was before the
+  refresh.
 - **a15. Whether the areas that hold the checks reach every area.** The
   proposal has "`tier1`, `rules` and `tier1-config` reach every area: a
   tightened check meets all code". The first draft dropped it for the
@@ -780,7 +945,7 @@ the answer to a3.
     already allows, as the follow-up of the item whose pull request that
     merge was, at the top of the fixes. When the red commit is no item's
     (a hand merge, the weekly tidy), it files nothing and **Needs Jeff**
-    says `main` is red.
+    says `main` is red. **Chosen.**
   - (b) It only reports: **Needs Jeff** opens with the red `main`, and the
     fix is filed when a later step's gates meet the failure, as the
     follow-up of that step's item (FLOW-09 as written), or by Jeff.
@@ -788,6 +953,14 @@ the answer to a3.
   Recommended: (a). Under a1 (a) a red `main` is the designed outcome of a
   missed collision, and each open PR's refresh would otherwise fail on it,
   run after run, until some item's session filed the fix.
+
+  **Answered (a), Jeff, 2026-11-15,** as recommended. Nothing in the text
+  changes. Under a1 (b) a red `main` is no longer the designed outcome of
+  a missed collision; it is what is left when a merge goes round the
+  requirement, a job runs only on `main`, or a test fails one run in
+  several. The answer matters more for it: while `main` is red no open
+  PR can be refreshed, so nothing else can merge until the fix does
+  (Decision 22).
 - **a17. What the cap of 8 counts, and what it never stops.** New on
   2026-11-15: Jeff's answer to a3 sets the cap and its number and leaves
   these to the design (**The waiting limit**). Proceeding with (a);
@@ -1550,14 +1723,14 @@ code these cases run through.
 
 | # | State | Today | After |
 |---|---|---|---|
-| 1 | Live now (queue state at `0d5e755`): `loop-contract` at its merge with PR #119 open, and `loop-parallel` in Design (both process); `seam-specs` and `driver-contract` past Design, reviews pending, never declared | `wf next -worker cloud`: `blocked loop-contract waiting on the human's merge of PR #119`, and nothing for the cloud. `wf validate`: ok | The same lines. One relation: the two features collide (`driver-contract declares no areas`). `loop-contract` is a process item and holds no slot |
+| 1 | On 2026-11-14 (queue state at `0d5e755`): `loop-contract` at its merge with PR #119 open, and `loop-parallel` in Design (both process); `seam-specs` and `driver-contract` past Design, reviews pending, never declared | `wf next -worker cloud`: `blocked loop-contract waiting on the human's merge of PR #119`, and nothing for the cloud. `wf validate`: ok | The same lines. One relation: the two features collide (`driver-contract declares no areas`). `loop-contract` is a process item and holds no slot |
 | 2 | Both features approved, never declared | `seam-specs` plans, then `driver-contract`: 2 of 3 slots | The same. Their Plan gates pass as today: with no `declared`, nothing is compared (case 24) |
 | 3 | `seam-specs` has claimed `f6-merge-main`; `driver-contract` reaches its own | Offered: only a done `f6-merge-main` holds | Refused: `the PR slot, held by seam-specs` |
 | 4 | `seam-specs` merged and in Close; `driver-contract` at `f6-merge-main` | Refused until Close is done | Offered |
 | 5 | A host claims a Plan step past the limit (affinity edited) | The claim stands; the next `wf validate` fails | `wf claim` refuses it |
 | 6 | Wave 2: S3, S4 and K1 declare `driver-core`; S2 declares `relay`, `executor`, `rules`, `book`; all four amend GLOBAL-08 | Four altering features, three slots: the fourth waits at Plan. One PR at a time | S3, S4 and K1 collide and hold the three slots. S2 is near each (row 8) and is in none of their sets: it plans too. All four take turns at the PR |
-| 7 | Wave 4: K3 (`driver/hyperv`, `build`, `book`) and an item in the Go relay (`relay`, `book`) | One PR at a time | Disjoint: both PRs open; either merges first; the other is refreshed |
-| 8 | Wave 5: five reconciliation items, one per driver (`driver/<name>`, `book`) | Five features in progress, the limit; one PR at a time; ranked as new functionality | Class 3. Pairwise disjoint: none is in another's set, and five PRs may be open |
+| 7 | Wave 4: K3 (`driver/hyperv`, `build`, `book`) and an item in the Go relay (`relay`, `book`) | One PR at a time | Disjoint: both PRs are open together. He merges either one; the other then waits for its refresh and merges after it (Decision 21) |
+| 8 | Wave 5: five reconciliation items, one per driver (`driver/<name>`, `book`) | Five features in progress, the limit; one PR at a time; ranked as new functionality | Class 3. Pairwise disjoint: none is in another's set, and five PRs may be open. They merge one per refresh: five days unattended, or one attended sitting with four refreshes |
 | 9 | Five undeclared features in progress; a sixth queued | Not started | Not started: all five collide with it |
 | 10 | Five declared features in progress, each disjoint from a sixth | Not started | Started |
 | 11 | Two workers claim Plan for two colliding items at the last slot | The second push is rejected and its claim lost | The second push is rejected; `wf commit` asks the claim again on the new state; the guard refuses it and the reason names the holders |
@@ -1567,11 +1740,11 @@ code these cases run through.
 | 15 | The same item with its PR open finds, at its refresh, a path in `driver/vz`; another open PR declares `driver/vz` | n/a | `wf declare` refuses: two colliding items would hold the PR slot. Back to Design, keeping the slot; its PR becomes a draft (case 20) |
 | 16 | `limits.in_progress` is not set | No limit | 5 |
 | 17 | A process item in any state | Outside the limits | Outside |
-| 18 | Three disjoint PRs open; Jeff merges one | Cannot arise | The next `wf stale` seeds a refresh on the other two; both then show "behind `main`" |
+| 18 | Three disjoint PRs open and ready; Jeff merges one | Cannot arise | The other two stop being ready. The next `wf stale` seeds a refresh on each and `QUEUE.md` lists them under **After a refresh**; where the ruleset is set, GitHub refuses them meanwhile. The next run refreshes both, he merges one, and the last needs a second refresh |
 | 19 | H (`driver-core`, `relay`, `collector`), P1 (`relay`) and P2 (`collector`) hold the three slots; X (`driver-core`) reaches Plan | Refused: three holders | Refused: `h, which collides with it, is already with p1, p2`. X's own set is 2; H's would be 4 |
 | 20 | An item with an open PR is sent back to Implement by its refresh; a near item reaches `f6-merge-main` | Offered: an item before Publish holds nothing | Refused: the returned item still has its PR recorded, so it holds the slot. Its PR is a draft and **Needs Jeff** says not to merge it |
 | 21 | An item in `driver-core` (priority 1) and a VZ item (priority 3) wait while a Hyper-V item holds the slot | One PR at a time | The `driver-core` item is refused by the holder (near). The VZ item, disjoint from the holder, is refused too: `the PR slot: <driver-core item> (priority 1) is ahead`. When Jeff merges the Hyper-V PR the `driver-core` item goes next |
-| 22 | Jeff merges a PR that is behind `main`; the earlier merge edited a line next to one of its hunks; the branch's ref still exists in the checkout | Cannot arise with one PR open | Confirmed: the changes are equal without context lines (a14). With three lines the confirmation fails and the item keeps the slot |
+| 22 | An attended checkout holds a branch's ref from before its last refresh; the refresh merged an edit next to one of the branch's hunks; Jeff merges the PR | Cannot arise with one PR open | The tick confirms the merge by the tree: the head that merged contains `main`. In the attended checkout the older ref is confirmed without context lines (a14 (a)); with three lines it is not, `wf stale` there reads the PR as unmerged, and Close there escalates the branch (FLOW-16) |
 | 23 | A regression's fix is filed with nobody there, following an item that declared `driver/hyperv`, `book` | No areas exist: one PR at a time for every feature | It takes `driver/hyperv`, `book`, and waits only for items related to those. Filed with no areas it would collide with every feature and open its PR only when no other feature has one open (a4 (b)) |
 | 24 | After this item's merge, `seam-specs` (never declared; its design lists five seams and four rule changes the queue file lacks) reaches its Plan gate | Passes on the approval | Passes on the approval: no `declared`, so the queue is not compared with the design, and the check prints `not declared: finished Design before wf declare` |
 | 25 | Eight in-progress items wait on Jeff: four features (three open PRs, a design review) and four process items (three design reviews, an escalation). A queued feature is next, disjoint from the four | Started: four features are in progress and the limit is 5 | Refused: `the waiting limit: 8 items wait on the human (limit 8): ...`. It starts once one of the eight clears |
@@ -1581,6 +1754,12 @@ code these cases run through.
 | 29 | Seven items wait, one of them with a design review, two open questions and an escalation | n/a | Seven: an item counts once. A queued feature starts |
 | 30 | Eight wait, counting two queued items filed on hold (FLOW-20) and a tracked item | n/a | Five: queued and tracked items are not counted. A queued feature starts |
 | 31 | `limits.waiting_on_human` is 0 | n/a | `wf validate` fails: below 1. Unset, it is 8 |
+| 32 | Two disjoint PRs are ready. Jeff merges one on GitHub and, before any session has run, goes to merge the other | Cannot arise | With the ruleset: GitHub refuses it, out of date. Without it: the merge goes through behind `main`. It is his merge and stands; the next tick confirms it (a14), reads CI on `main`, and files the fix if it is red (a16) |
+| 33 | `main` moves by a merge that is no item's (a PR merged by hand, the weekly tidy) while three PRs are open | No refresh exists | All three wait for a refresh, as after an item's merge |
+| 34 | In an attended session Jeff merges the first of three ready PRs and names the one he wants next | Cannot arise | `wf stale` seeds a refresh on the other two. The session takes the named item's (`/workflow-tick attended <item>`), waits for CI and lists it as ready; he merges it; the third is refreshed the same way, or by the next run |
+| 35 | `main` is red with a failure the gates reproduce; four PRs are behind it | n/a | Each refresh fails on `main`'s failure and is released; none of the four is ready. The fix the tick filed starts whatever waits on Jeff (case 26). Once it merges, the next run refreshes the four |
+| 36 | A PR's refresh has passed and it is ready; before Jeff merges it, `main` moves again | n/a | It waits for a refresh again: the next `wf stale` seeds one. Under a10 (d) that costs the item no budget |
+| 37 | Jeff uses GitHub's **Update branch** on a PR that is behind, before any session has run `wf stale` | n/a | The next `wf stale` finds the branch current and seeds nothing; the PR is ready when CI is green on the new head. No consolidation pass ran over what landed; that is his choice |
 
 ### `wf commit`: pushing queue state
 
@@ -1680,6 +1859,152 @@ an area or a repository after Design.
 **What a missed area costs when nothing above catches it** is under
 **Safety**.
 
+### Merging: a branch must contain `main`
+
+Jeff's answer to a1 is (b). A pull request may be merged only when its
+branch contains the head of `main`. Disjoint PRs may still be open
+together; the PR slot decides that, as before. What changes is the merge:
+each one leaves every other open PR in that repository behind `main`,
+and none of those may merge until it has been refreshed.
+
+**The words.** An open PR is *current* when `origin/main` is an ancestor
+of its branch. It is *ready to merge* when the item is at its merge
+step, the PR is current, its checks are green on that head (`pr.ci`), and
+it is not a draft. A PR that `main` has moved past *waits for a
+refresh*.
+
+**How the rule is held: by GitHub, and by the loop.**
+
+1. *GitHub refuses the merge.* A ruleset on `main` (Settings, Rules,
+   Rulesets). The older branch protection rule has the same options, but
+   its settings can be read back only with the repository's admin right,
+   and the loop records what is set from a ruleset's rules for the
+   branch, which any session can read. The ruleset has:
+   - **Require a pull request before merging**;
+   - **Require status checks to pass**, naming the check `ci-ok`, the job
+     that `.github/workflows/main.yml` calls "the one check to require",
+     and under it **Require branches to be up to date before merging**
+     (`strict_required_status_checks_policy: true` in a ruleset's
+     `required_status_checks` rule; `required_status_checks.strict: true`
+     in branch protection).
+
+   GitHub then disables the merge of a PR whose branch does not contain
+   `main` until the branch is updated and `ci-ok` is green on the new
+   head.
+
+   *Whose it is.* Jeff's. It is a repository setting, and no agent
+   changes a repository's settings, protection or rulesets (FLOW-08, as
+   amended below). `main` has none today: branch protection reads "Branch
+   not protected", there is no ruleset, and `allow_update_branch` is off
+   (read on 2026-11-15, after #119 merged; `loop-contract`'s a21 had
+   asked for the protection before that merge). `rules.yaml` names
+   "branch protection and PR checks" as what enforces FLOW-08, so the
+   rule has had no automated part on `main` so far.
+
+   *When.* Before a second PR can be open beside another, which is from
+   this item's merge on. The attended step `x4-state`, which this item
+   already has for the state edits after its merge, is where it is set
+   or declined, and where what GitHub is set to is first recorded:
+   `wf main -up-to-date required|not-required`, from
+   `gh api repos/<repo>/rules/branches/main`, into `main.yaml`. Every
+   session that records `main`'s CI records it again, and `QUEUE.md`'s
+   header says which it is.
+
+   *His bypass.* If the ruleset lets him bypass it, a merge behind `main`
+   is still possible by his own hand. The loop treats it as any merge of
+   his (below).
+
+2. *The loop does not call the PR ready.* This holds whatever GitHub is
+   set to.
+   - `wf stale` finds each open PR whose branch does not contain
+     `origin/main`, seeds its refresh and sets `pr.ci` to `pending`. From
+     then until the refresh's done-when has passed, `QUEUE.md` lists the
+     PR under **After a refresh** and not under **Ready to merge**, and
+     `workflow-human` offers only the ready ones for merging.
+   - FLOW-08, as amended, says a PR is ready for the human's merge only
+     while its branch contains trunk with its checks green on that head.
+
+   *How far this reaches without the setting.* The page is as current as
+   the last session that ran `wf stale`: the daily tick, and the
+   attended session, which runs it before it lists the PRs and after
+   each merge made in it. If Jeff merges one PR on GitHub between
+   sessions and then a second that the page still lists as ready, only
+   GitHub's setting stops the second. Without the setting, a1 (b) holds
+   for merges made from the attended listing and for the first merge
+   after each tick, and for no other. That is why the design asks for
+   the setting and does not rest on the listing.
+
+**A merge made behind `main` all the same** (the setting absent, or his
+bypass) is his merge and stands: the merge is the sign-off (FLOW-08).
+The tick confirms it (a14 is about how), records CI on `main`, and files
+the fix when `main` is red (a16). Nothing reverts or blocks it.
+
+**Who refreshes, and when.**
+
+- *The daily tick.* After it confirms merges and records `main`'s CI,
+  `wf stale` seeds a refresh on each open PR that is behind, and the run
+  takes those steps first (FLOW-05's class 1). After the run every open
+  PR is current again, unless its refresh failed on a red `main` or sent
+  the item back. Which PRs get one is a10.
+- *An attended session, on request.* `/workflow-tick attended <item>`
+  takes that item's refresh step. `workflow-human` offers it after each
+  merge Jeff makes in the session (below).
+- *`wf stale`* refreshes nothing. It finds the PRs that are behind and
+  seeds the step, in the tick and in the attended session.
+- *Jeff, on GitHub.* The **Update branch** button merges `main` into a
+  PR's branch for him, where GitHub shows it. It is his to use. If a
+  refresh step is already pending, the next run still takes it: its
+  merge is then a no-op, and the gates and the consolidation pass run
+  as usual. If he updates a branch before any session has run
+  `wf stale`, the loop finds a current branch and seeds nothing, so that
+  PR gets CI's checks and no consolidation pass over what landed.
+
+**The throughput.** There is one cloud run a day (FLOW-13). A merge
+leaves every other open PR in the repository waiting for a refresh, and
+the next run gives it one. Unattended, that is about one merge per run
+in each repository: five open PRs take five days when he merges one
+after each run, and several ready PRs do not change that, because the
+first merge of the day puts the rest behind again. Under a1 (a) he could
+have merged all five in one sitting. Another repository has its own
+trunk and is not affected.
+
+**Several merges in one sitting** need an attended session. After each
+merge Jeff makes, `workflow-human` records `main`'s CI, runs `wf stale`,
+shows the PRs that now wait for a refresh, and asks which he wants next.
+It refreshes that one (`/workflow-tick attended <item>`): `main` merged
+into the branch, `make lint`, `make test`, `make deadcode`, the
+consolidation pass, the push, and the wait for CI on the new head. It
+tells him when the PR is ready, and he merges it. Then the next. The
+wait is the gates plus one CI run: the checks on PR #119 took two
+minutes (2026-11-14), and a PR that reaches the container driver or a
+shared package also runs the `integration` workflow. Five PRs are four
+refreshes, one after another. The session refreshes only the PR he
+names: refreshing all four after the first merge would be wasted on
+three of them, which the second merge puts behind again.
+
+**What disjoint still buys over near.** Under a1 (a) the difference was
+"merge in any order" against "take turns". Now both wait for something
+between two merges, and the difference is what they wait for.
+
+| | Near, or colliding | Disjoint |
+|---|---|---|
+| What takes turns | Opening the PR | Only the merge |
+| What the second item does after the first merges | Its whole Publish: `main` merged, consolidation, each blocking native validation, the PR opened, CI | One refresh step |
+| When Jeff can read the second PR | After the first has merged, and Publish has run: a cloud run, and a native session where a host blocks | While the first is still open: both are consolidated, validated and open together |
+| In one attended sitting | The first merges; the second's PR does not exist yet | Both merge, with a refresh and a CI run between |
+| The in-progress and `alters_relationships` limits | Colliding items count against each other; near items do not | Neither counts against the other |
+
+So disjoint items still cost each other nothing until the moment of
+merging, and there they cost one step. Near items still cost each other
+a turn at Publish.
+
+**What falls away.** Decision 21's "any order". The "behind `main`" mark
+as a notice Jeff could act on or not: it is now a state that decides
+whether a PR is listed as ready. CI on `main` as the gate: it is the
+backstop (Decision 22). And the reason a14 was asked: a PR merged behind
+`main` cannot come through the protected path. a14 is asked again for
+what is left.
+
 ### The refresh step
 
 **What it is.** A step named `f6-refresh` (`-r2`, `-r3`, ... as needed) on
@@ -1719,7 +2044,8 @@ each merge Jeff makes in that session. It is seeded whatever moved
 
 **Where it ranks.** An item with a pending refresh step is in
 implementation (FLOW-05's class 1), so a run refreshes open PRs before it
-starts anything new.
+starts anything new. Until its refresh has passed, the PR is not ready
+to merge (**Merging: a branch must contain `main`**).
 
 **What it runs.**
 
@@ -1777,7 +2103,7 @@ mistaken for one that is ready:
   returns (in a cloud session through the session's `convert_to_draft`
   route for the pull request, elsewhere `gh pr ready --undo`). Neither
   merges, approves or closes anything (FLOW-08);
-- `QUEUE.md` moves it from **Merges, in order** to the escalations, as
+- `QUEUE.md` moves it from the lists of open PRs to the escalations, as
   `open PR #<n>, returned to Implement: do not merge`;
 - when the item is published again, `f6-open-pr` finds the PR recorded,
   pushes to it and marks it ready, and opens no second one.
@@ -1786,26 +2112,33 @@ If Jeff closes the PR instead, an attended session removes `pr` from the
 queue file on his word, and the item then holds nothing.
 
 **Native validation.** A refresh does not queue a done `f6-validate-<host>`
-step again (a10 (e)). The validation stands for the branch as it was
+step again (a10 (e), open). The validation stands for the branch as it was
 consolidated.
 
 **When the step goes away.** `wf done` on the merge step drops a pending
 refresh step (the PR merged first), and so does `wf back` (Publish merges
 `main` again). FLOW-06 gains the clause.
 
-**Budget.** A refresh is a claim like any other and counts one step
-against the item's budget (a10). Intake's size guide adds two steps.
+**Budget.** A refresh is a claim, and the run that takes it counts it in
+the run's budget. It does not count against the item's own budget: the
+refresh is required before the merge, and other items' merges cause it
+(a10 (d), open; the draft had it count, with two steps added to intake's
+size guide).
 
 ### `main`'s CI
 
-Nothing reads it today. Under Decision 21 it is the gate for a PR merged
-behind `main`, so the loop reads it (Decision 22).
+Nothing reads it today. Under Decision 21 the gate is the PR's own
+checks on a branch that contains `main`; CI on `main` is the backstop
+for what goes round that, and a red `main` stops every refresh, so the
+loop reads it (Decision 22).
 
-- **What is recorded.** `wf main -state DIR -sha SHA -ci green|red|pending [-run URL] [-followup SLUG]`
+- **What is recorded.** `wf main -state DIR -sha SHA -ci green|red|pending [-run URL] [-followup SLUG] [-up-to-date required|not-required]`
   writes `main.yaml` in the queue state: the head of `main` the session
   saw, the result of its check runs, a failing run's URL, `red_since` (the
   first red commit after the last green one, kept while `main` stays
-  red), and the follow-up filed for it. `wf` reads no CI itself: the
+  red), the follow-up filed for it, and whether GitHub requires an
+  up-to-date branch on `main`, which the session reads from
+  `gh api repos/<repo>/rules/branches/main`. `wf` reads no CI itself: the
   session passes what `gh api repos/<repo>/commits/<sha>/check-runs`
   returned, as `wf-publish` passes `pr.ci`. `green` is recorded only when
   every check run on the head succeeded. `wf areas -check` adds its own
@@ -1825,7 +2158,10 @@ behind `main`, so the loop reads it (Decision 22).
   Design.
 - **What it does not do.** It blocks no claim and no merge. A red `main`
   fails each open PR's refresh at its gates; those steps are released, and
-  taken again once `main` is green.
+  taken again once `main` is green. Under Decision 21 that means that
+  while `main` is red with a failure the gates reproduce, no open PR can
+  be made ready: each is behind the red commit, and its refresh fails on
+  it. `QUEUE.md` says so beside the red `main`.
 
 ### Tracked items
 
@@ -1885,28 +2221,38 @@ feature with the feature phases (LOOP-07); `Class` returns 3 for it.
 **`QUEUE.md`** stays a function of the queue state, with no clock and no
 git. For the queue as it is at `0d5e755` on the `workflow` branch
 (2026-11-14 21:34 UTC), with `config.yaml`'s `repository` set, the map
-synced, `main`'s CI recorded and no item yet declared, it renders as:
+saved, `main`'s CI and the map's comparison recorded, and no item yet
+declared, it renders as:
 
     # Queue
 
-    Generated by `wf` from `queue/*.yaml`, `areas.yaml` and `main.yaml`; do not edit. Updated 2026-11-14 21:34 UTC.
-    Areas: `buildwarden/buildwarden` at `897a4a8`. `main`: CI green at `897a4a8`.
+    Generated by `wf` from `queue/*.yaml`, `config.yaml`, `areas.yaml` and `main.yaml`; do not edit. Updated 2026-11-14 21:34 UTC.
+    `main`: CI green at `897a4a8`. GitHub does not require an up-to-date branch on `main` (FLOW-08). Area map: no difference from `main` at `897a4a8`.
 
     ## Needs Jeff
 
-    6 items wait on you: 1 merge, 5 design reviews. No question or escalation.
+    4 items in progress wait on you (limit 8): 1 merge, 3 design reviews. No question or escalation.
 
-    ### Merges, in order
+    ### Ready to merge
+
+    One at a time: each merge puts every other open PR behind `main`, and it needs a refresh before it can merge (FLOW-08).
 
     - **loop-contract**: [PR #119](https://github.com/buildwarden/buildwarden/pull/119), CI green
+
+    ### After a refresh
+
+    None.
 
     ### Reviews, questions and escalations
 
     - **loop-parallel**: design review (`x1-design`, FLOW-19) · [design](https://github.com/buildwarden/buildwarden/blob/feat/loop-parallel/docs/design/loop-parallel.md)
-    - **loop-native-lead**: design review (`x1-design`, FLOW-19)
-    - **loop-repository**: design review (`x1-design`, FLOW-19)
     - **seam-specs**: design review (`f2-design-review`, FLOW-19) · [design](https://github.com/buildwarden/buildwarden/blob/feat/seam-specs/docs/design/seam-specs.md)
     - **driver-contract**: design review (`f2-design-review`, FLOW-19) · [design](https://github.com/buildwarden/buildwarden/blob/feat/driver-contract/docs/design/driver-contract.md)
+
+    ### Queued or tracked, not counted
+
+    - **loop-native-lead**: design review (`x1-design`, FLOW-19)
+    - **loop-repository**: design review (`x1-design`, FLOW-19)
 
     ## Active
 
@@ -1937,56 +2283,73 @@ synced, `main`'s CI recorded and no item yet declared, it renders as:
     | 62 | loop-native-lead | process | buildwarden/buildwarden | - | 12 |
     | 63 | loop-repository | process | buildwarden/buildwarden | - | 10 |
 
-`loop-contract`'s branch contains `origin/main`, so it is not behind.
-Today's `QUEUE.md` for the same state has one **Needs Jeff** list of six
-lines, and Active and Backlog tables with the columns Pri, Feature, Kind,
-Phase, Next steps and "Steps spent / est.".
+`loop-contract`'s branch contained `origin/main`, so it was ready. The
+two queued process items need Jeff to start them and are not counted
+(a17). `QUEUE.md` as `wf` wrote it for that state has one **Needs Jeff**
+list of six lines, and Active and Backlog tables with the columns Pri,
+Feature, Kind, Phase, Next steps and "Steps spent / est.".
 
 And for a later state, to show the parts that are empty today: case 7
 after the Hyper-V pilot's PR has merged, with a relay task tracked:
 
+    `main`: CI green at `4f1c2aa`. GitHub requires an up-to-date branch on `main` (FLOW-08). Area map: no difference from `main` at `4f1c2aa`.
+
     ## Needs Jeff
 
-    3 items wait on you: 2 merges, 1 design review.
+    2 items in progress wait on you (limit 8): 1 merge, 1 design review.
 
-    ### Merges, in order
+    ### Ready to merge
 
-    - **relay-host-mode**: [PR #131](https://github.com/buildwarden/buildwarden/pull/131), CI pending. Behind `main`: refresh pending (`f6-refresh`); overlaps in `docs/book/src/guide/drivers.md`
-    - **relay-m1a** (tracked): buildwarden/buildwarden-relay#12
+    None.
+
+    ### After a refresh
+
+    - **relay-host-mode**: [PR #131](https://github.com/buildwarden/buildwarden/pull/131). Behind `main` since the merge of #130: refresh pending (`f6-refresh`), then CI; overlaps in `docs/book/src/guide/drivers.md`
 
     ### Reviews, questions and escalations
 
     - **adopt-relay-qemu**: design review (`f2-design-review`, FLOW-19) · [design](...)
 
+    ### Queued or tracked, not counted
+
+    - **relay-m1a** (tracked): buildwarden/buildwarden-relay#12, your merge (`t2-merge`)
+
     ## Active
 
     | Pri | Item | Kind | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
     |---|---|---|---|---|---|---|---|---|---|
-    | 70 | relay-host-mode | feature | buildwarden/buildwarden | relay, book | 7 merge | f6-refresh (cloud) | your merge | [#131](...) behind `main` | 16 / 18 |
+    | 70 | relay-host-mode | feature | buildwarden/buildwarden | relay, book | 7 merge | f6-refresh (cloud) | a refresh, then your merge | [#131](...) behind `main` | 16 / 18 |
     | 71 | driver-claim-conn | feature | buildwarden/buildwarden | driver-core, rules | 6 publish | f6-merge-main (cloud) | the PR slot, held by relay-host-mode (near: driver-core reaches relay) | - | 20 / 25 |
     | 72 | adopt-relay-qemu | adoption (buildwarden-relay v0.3.0) | buildwarden/buildwarden | driver/qemu, book | 2 plan | f2-design-review (human) | - | - | 3 / 12 |
     | 74 | relay-m1a | tracked | buildwarden/buildwarden-relay | - | 2 merge | t2-merge (human) | your merge | buildwarden/buildwarden-relay#12 | 2 / 2 |
 
 What is new, by section:
 
-- The header names the files it is built from, the commit of the map's
-  copy, and `main`'s CI as last recorded.
+- The header names the files it is built from, `main`'s CI as last
+  recorded, whether GitHub requires an up-to-date branch on `main`
+  (`not recorded` until a session has read it), and the last comparison
+  of the map with `main`.
 - **Needs Jeff** opens with the count of in-progress items waiting on
   him, by kind, beside the limit (a3 (b), Decision 24); at the limit it
   says that no queued feature starts until one clears. Queued items that
   need him, which the limit does not count, are listed after the others
   under their own heading. Before the count it says `main is red at <sha> since <sha>`, with
   the run and the follow-up, when `main.yaml` says so, and lists any
-  holders over a limit. It lists the merges first, in FLOW-05's order,
-  each with its PR link, `pr.ci`, and "behind `main`" while a refresh
-  step is pending, with the overlapping files from that step's note. The
-  mark is as current as the last `wf stale` (a1). Reviews, questions and
+  holders over a limit. It lists the open PRs first, in two lists, each
+  in FLOW-05's order (Decision 21). **Ready to merge**: the item is at
+  its merge step, no refresh is pending and `pr.ci` is green; the list
+  opens with the line that each merge puts the others behind. **After a
+  refresh**: a refresh step is pending, with what moved `main` and the
+  overlapping files from that step's note; with the ruleset set, GitHub
+  refuses these, and without it the page is what says not to. Both lists
+  are as current as the last `wf stale`. Reviews, questions and
   escalations follow, each review of an item in progress with a link to
   the design on its branch; an item sent back with its PR open is here,
   as `open PR #<n>, returned to Implement: do not merge`.
 - **Active** gains Repositories, Areas (`undeclared`, or the names, `*`
-  after one `main` lacks), the lease holder in Next steps, Waits for (the
-  guard's reason for the item's next step, or "your merge"), and PR. Kind
+  after one the map lacks), the lease holder in Next steps, Waits for (the
+  guard's reason for the item's next step, "your merge", or "a refresh,
+  then your merge"), and PR. Kind
   reads `adoption (<consumable> <version>)` for a reconciliation item and
   `tracked` for a tracked one. Two headers are renamed, in Active and in
   Backlog: "Feature" becomes "Item", since process items are listed too,
@@ -2083,8 +2446,9 @@ By file. Each cites the rule and does not restate it (FLOW-14).
 - `.claude/skills/workflow-tick/SKILL.md`. Step 1: `dist/wf validate`
   after the fetch, keeping any `limit:` lines. The tick never edits
   `areas.yaml` (FLOW-05).
-  Step 2: after confirming merges, read `main`'s check runs and record
-  them with `dist/wf main`, then
+  Step 2: after confirming merges, read `main`'s check runs and whether
+  its ruleset requires an up-to-date branch, and record both with
+  `dist/wf main`, then
   `tools/tier1/area-edges.sh | dist/wf areas -check -edges -`; on a red
   `main` with no follow-up recorded,
   file one by the intake skill's follow-up path (FLOW-09) and record it;
@@ -2096,13 +2460,16 @@ By file. Each cites the rule and does not restate it (FLOW-14).
   step 1 already printed does not fail the step; it goes under **Blocked
   on Jeff**. Step 4: the run's own digest file, then `dist/wf digest`; a
   red `main` and an item sent back with its PR open are listed under
-  **Blocked on Jeff**.
+  **Blocked on Jeff**, and so is each open PR, as ready or as waiting
+  for a refresh. **Never** gains: change a repository's settings, its
+  branch protection or its rulesets (FLOW-08); the same line goes into
+  `workflow-human` and `workflow-native`.
 - `.claude/skills/workflow-intake/SKILL.md`. Step 3: agree the
   repositories and areas with Jeff (`dist/wf areas -list`), show
   `dist/wf relations -feature <slug>` after `wf new`; `-adopts` and its
-  place; a tracked item, with `-seams`; two steps on the size guide for
-  refreshes. When the waiting limit is reached (`dist/wf next` prints
-  it), say so: a new feature will not start until an item clears, a fix
+  place; a tracked item, with `-seams`; nothing on the size guide for
+  refreshes (a10 (d); two steps if Jeff answers (c)). When the waiting
+  limit is reached (`dist/wf next` prints it), say so: a new feature will not start until an item clears, a fix
   with `-follows` will, and the number is Jeff's to change. The follow-up
   path: no `-areas`, so `wf new -follows` takes
   the followed item's repositories and areas; a fix for a red `main`
@@ -2116,10 +2483,15 @@ By file. Each cites the rule and does not restate it (FLOW-14).
   shown to him, then the save and
   `dist/wf commit -worker human/<name>` (FLOW-05). Narrowing and
   `wf relate` on Jeff's word. **Open
-  PRs** records `main`'s CI (`dist/wf main`), runs `dist/wf stale`, which
-  skips a PR Jeff has already merged, and lists the merges in order with
-  "behind `main`"; it runs both again after each merge he makes in the
-  session, and tells him the next tick confirms it. **Escalations** gains
+  PRs** records `main`'s CI and its ruleset (`dist/wf main`), runs
+  `dist/wf stale`, which skips a PR Jeff has already merged, and lists
+  the PRs that are ready to merge apart from those that wait for a
+  refresh (FLOW-08); it offers only the ready ones for merging. After
+  each merge he makes in the session it runs both again, tells him the
+  next tick confirms the merge, and asks which PR he wants next; it
+  refreshes that one with `/workflow-tick attended <item>`, waits for CI
+  on the new head, and lists it as ready. It never merges, and never
+  changes the repository's settings. **Escalations** gains
   `f8-escalate-returned`, a red `main`, and holders over a limit. A
   tracked item's steps.
 - `.claude/skills/workflow-native/SKILL.md`. State pushes through
@@ -2197,8 +2569,10 @@ This item declares no `holds` (Decision 17, a13).
 
 - **FLOW-08.** Nothing here merges, approves or enables auto-merge
   (LINT-03). More
-  PRs are open at once and each is still Jeff's to merge. "Merges, in
-  order" is the order FLOW-05 gives; he may merge in another. Making a
+  PRs are open at once and each is still Jeff's to merge. The lists of
+  open PRs are in the order FLOW-05 gives; he may merge any PR that is
+  ready, and a merge he makes of one that is not is still his merge. No
+  agent sets or changes the ruleset on `main`. Making a
   returned item's PR a draft, and ready again when it is republished, is
   neither a merge nor an approval, and Jeff can undo either.
 - **FLOW-16.** Close is per item and unchanged. A refresh adds commits to a
@@ -2212,13 +2586,15 @@ This item declares no `holds` (Decision 17, a13).
   before its push. A run's digest file carries what the run's section
   carries now.
 - **`main` is unprotected today** (`gh api
-  repos/buildwarden/buildwarden/branches/main/protection`: 404; no
-  rulesets; `allow_auto_merge` true, `allow_update_branch` false,
-  `delete_branch_on_merge` true; read on 2026-11-14). `loop-contract`'s a21
-  has Jeff protect it before that PR merges. This item works either way.
-  What it asks of the protection, under a1 (a): require a pull request and
-  the PR's checks, and do *not* require the branch to be up to date, or a
-  disjoint PR could not merge until its refresh.
+  repos/buildwarden/buildwarden/branches/main/protection`: "Branch not
+  protected"; `rulesets` and `rules/branches/main`: empty;
+  `allow_auto_merge` true, `allow_update_branch` false,
+  `delete_branch_on_merge` true; read on 2026-11-15, after #119 merged).
+  `loop-contract`'s a21 had Jeff protect it before that merge. This item
+  now asks more of the protection than the draft did: a ruleset that
+  requires a pull request, the check `ci-ok`, and an up-to-date branch
+  (Decision 21). Until it is set, the rule rests on the loop's listing,
+  whose reach **Merging: a branch must contain `main`** states.
 - **What a missed collision costs, and where it is caught.** In order:
   1. Design's done-when, when the front matter implies an area the design
      left out. Cost: a fix to the design, before its review.
@@ -2229,11 +2605,16 @@ This item declares no `holds` (Decision 17, a13).
      item early.
   4. `make lint` and `make test` at `f6-merge-main`, `make deadcode` at
      `f6-consolidate`, and all three at each refresh, on the branch with
-     `main` merged. This net holds only for a PR that is refreshed before
-     it merges; under a1 (a) Jeff may merge first.
-  5. GitHub, which refuses a merge that conflicts.
+     `main` merged, and then CI's `ci-ok` on that head. Under Decision 21
+     this is the net every merge passes through: a PR merges only with
+     `main` in its branch, so what merges is the tree these ran on. The
+     draft had it hold only for a PR that happened to be refreshed
+     first.
+  5. GitHub, which refuses a merge that conflicts, and, with the
+     ruleset, one whose branch does not contain `main`.
   6. CI on the push to `main`, which the tick and the attended session now
-     read (Decision 22). A failure there is a regression on `main`: it
+     read (Decision 22). It is the backstop for what went round net 4.
+     A failure there is a regression on `main`: it
      opens **Needs Jeff**, and its fix is filed as the follow-up of the
      item whose merge it was and goes to the top of the fixes (FLOW-09 as
      amended, a16). Before this item nothing in the loop read that result.
@@ -2246,16 +2627,25 @@ This item declares no `holds` (Decision 17, a13).
      validation again (a10 (e)). So a break between two disjoint items
      that only a native host shows is found before a release, not before.
 
-  What reaches 6 or 7 is a break between two items whose declarations
-  were true: no shared exclusive area and no import between them. Three
-  kinds are known. A semantic break at run time, such as a relay change
-  and a driver that boots the relay. A whole-tree test in a code area:
-  `driver/buildlink/stray_test.go` walks every file, so a literal one
-  item forbids and another item adds are green apart and red together;
-  `specs/specs_test.go` reads the book's `SUMMARY.md`. And a check one
-  item tightens over code another item adds: no check's area reaches the
-  code it runs over (a15 (a)), whether the check is tier 1's
-  (`tier1`, `tier1-config`) or the root `.golangci.yml` (`build`).
+  A break between two items whose declarations were true (no shared
+  exclusive area and no import between them) is of four known kinds, and
+  Decision 21 moves three of them from `main` to net 4. A whole-tree
+  test in a code area: `driver/buildlink/stray_test.go` walks every
+  file, so a literal one item forbids and another item adds are green
+  apart and red together; `specs/specs_test.go` reads the book's
+  `SUMMARY.md`. A check one item tightens over code another item adds,
+  since no check's area reaches the code it runs over (a15 (a)), whether
+  the check is tier 1's (`tier1`, `tier1-config`) or the root
+  `.golangci.yml` (`build`); the next bullet takes it case by case. Two
+  edits to one file of an ordered area that merge cleanly and do not
+  build or pass together (a5 (d)). Each of these now fails on the later
+  PR's refreshed branch, before its merge, wherever a check reads the
+  whole tree; under a1 (a) it would have failed on `main`. The fourth
+  still reaches net 7: a break only a native host shows, such as a relay
+  change and a driver that boots the relay, because CI runs neither
+  Hyper-V nor VZ and a refresh does not run native validation again
+  (a10 (e)). And anything reaches net 6 when a merge goes round the
+  requirement.
 - **A tightened check beside the code it would fail** (a15 (a)). The two
   items are disjoint and both PRs may be open. Whichever merges second
   has merged the first at its refresh (a1 (b)), and what happens there
@@ -2306,11 +2696,16 @@ This item declares no `holds` (Decision 17, a13).
 - **Merge order.** A related item cannot open a PR while another's is
   recorded and unmerged, a returned item's included, so related PRs are
   never open together and order matters only among disjoint ones. There
-  any order merges cleanly or is refused by GitHub, a PR that is behind
-  `main` says so as of the last `wf stale`, and what a clean merge can
-  still break is the list above.
-- **The merge check.** A PR merged while behind `main` is confirmed by
-  the same three proofs as today, the third without context lines (a14).
+  Jeff merges the ready PRs in whatever order he likes, one at a time:
+  each merge puts the rest behind `main`, and each of them is refreshed
+  and checked against the new `main` before it can merge (Decision 21).
+  What a clean, green refresh can still let through is in the list
+  above.
+- **The merge check.** A PR that merged with `main` in its branch is
+  confirmed by the tree, as today. A ref of the branch that is older
+  than the head that merged, and a merge made behind `main` by a bypass
+  or before the ruleset, are confirmed by the third proof, without
+  context lines (a14, open).
   An item whose merge cannot be confirmed stays at its merge step and
   keeps the PR slot until a human compares, as today. `wf stale` never
   seeds a refresh on a PR that has merged, and the refresh never pushes
@@ -2324,7 +2719,8 @@ This item declares no `holds` (Decision 17, a13).
   claims an item's first step, its Plan step or `f6-merge-main` is bounded
   by the same limits as the cloud. Its design adds `lead` and decides which
   steps a machine takes; `f6-refresh` is seeded `cloud` here and its design
-  may leave it so.
+  may leave it so. Under Decision 21 a led item's PR needs that refresh
+  before it can merge, like any other.
 - The PR-slot tie-break means a led item of lower priority waits for a
   cloud-led one that waits for the slot. Its design says whether that is
   wanted.
@@ -2349,7 +2745,11 @@ This item declares no `holds` (Decision 17, a13).
   and then counts in the limits (a7).
 - One map per repository: `areas.yaml` becomes one file per repository
   in the queue state, an item's `areas` gain a repository prefix, and
-  `wf areas -check`, `wf stale` and `wf main` run per repository. `wf`
+  `wf areas -check`, `wf stale` and `wf main` run per repository. The
+  rule that a PR merges only with trunk in its branch is per trunk
+  (FLOW-08): once `wf` records PRs in a second repository, `wf stale`
+  seeds their refreshes too, and a repository whose host cannot require
+  an up-to-date branch rests on the loop's listing alone. `wf`
   hard-codes no path of this repository for the map (its hand-off point
   4): the edges come from the command each profile names.
 - A hold that names repositories (Decision 18), and a `human` merge-recording step
@@ -2374,7 +2774,7 @@ Where this design does not do what the proposal's sections 3 to 8 say.
 | A refresh "when a PR merges" | Whenever `main` is not contained in the branch | `main` also moves from outside the queue |
 | A returned item's PR and the slot are not mentioned | An item keeps the PR slot while its PR is recorded, and a returned item's PR is a draft | Otherwise a related PR opens beside a stale one |
 | The guard counts the holders that relate to the asker | No holder's set may exceed the limit, the asker's and each related holder's | The relations are not transitive; the guard and `wf validate` must agree |
-| Nothing reads CI on `main`; nothing about the merge check | The tick records `main`'s CI and files a red `main`'s fix (FLOW-09); the patch-id proof drops its context lines (a14, a16) | Merging behind `main` relies on the first and trips the second |
+| Nothing reads CI on `main`; nothing about the merge check | The tick records `main`'s CI and files a red `main`'s fix (FLOW-09); the patch-id proof drops its context lines (a14, open; a16) | A red `main` stops every refresh; a branch refreshed in one checkout leaves an older ref in another |
 | A follow-up is undeclared until its design | It takes the areas of the item it follows (a4) | Undeclared, the fix for a red `main` waits for every open PR |
 | `wf check` fails when areas do not cover what `seams` imply | Seams are not mapped to areas; the relation reads them | A design may list a seam it does not edit the code of (`driver-contract` lists two "conservatively") |
 | An agent may widen within the design's `drivers` and `seams` | Within the approved design's `surfaces` and `rule_changes` paths, and its `drivers` when it declares no shared area; only while no limit goes over | The same reason; a shared-package design lists every driver; and a widening can put a limit over |
@@ -2386,6 +2786,8 @@ Where this design does not do what the proposal's sections 3 to 8 say.
 | The exclusive areas include `conformance` | Not in the map | `tools/conformance/` is not on `main`; `seam-specs` adds it |
 | FLOW-02, -03, -05, -10, -15, -19, -20 | Also FLOW-04, -06, -08, -09, LOOP-01, LOOP-04, PROFILE-01 | Decision 19 |
 | No cap on the work waiting for Jeff: `QUEUE.md` shows the count (question 5, recommended) | No queued feature starts while 8 or more items wait on him (a3 (b), Decision 24) | Jeff's answer of 2026-11-14 |
+| Disjoint PRs merge in any order; `QUEUE.md` marks a PR that is behind (question 3, recommended) | A PR merges only when its branch contains `main`; the refresh is the gate before every merge after the first (a1 (b), Decision 21) | Jeff's answer of 2026-11-14 |
+| `cli` (`cmd/warden/`) among the exclusive areas | Ordered, with no `reaches` (a5 (d)) | Jeff's answer of 2026-11-15 |
 
 ### What this item does not do
 
@@ -2394,7 +2796,11 @@ Where this design does not do what the proposal's sections 3 to 8 say.
 - No gate, branch, PR or check in a second repository, and no `work` list:
   `loop-repository`.
 - No second cloud run a day (the proposal's question 4), and no change to
-  FLOW-13.
+  FLOW-13: with a1 (b) that is what keeps unattended merging at about
+  one a day in each repository.
+- No change to a repository's settings. The ruleset on `main` is Jeff's
+  to make; no agent, skill or `wf` command sets it.
+- No merge queue (Decision 21).
 - No change to the freeze.
 - No area that a design gives itself. An item whose design adds a tree
   names an area the map lacks, and is undeclared, colliding with every
@@ -2405,8 +2811,9 @@ Where this design does not do what the proposal's sections 3 to 8 say.
   reports.
 - No gain for the two features in the queue now. See below.
 - No automatic answer to a reconciliation item's question.
-- No re-run of native validation at a refresh (a10 (e)), and no map entry
-  for a dependency that is not an import, beyond `tools/relay-vm/`.
+- No re-run of native validation at a refresh (a10 (e), open), and no
+  map entry for a dependency that is not an import, beyond
+  `tools/relay-vm/`.
 
 ### What changes for the queue as it stands
 
@@ -2438,7 +2845,13 @@ Nothing, at first, and Jeff should expect that.
 - The freeze stays, so only program items run. The first pair that may
   have PRs open together is in wave 4: a driver pilot beside an item in
   the Go relay (case 7). Wave 5's per-driver adoptions are the first
-  large gain (case 8).
+  large gain (case 8). Under Decision 21 the gain is in what is built,
+  validated and open for Jeff to read at the same time; the merges still
+  go one per refresh.
+- Three features were filed after the draft: `runtime-cli-project-path`,
+  `project-config-trust` (both security fixes, exempt from the freeze)
+  and `configuration-bugfixes` (on hold behind it). None is declared, so
+  each collides with every feature here until it is.
 - The one lever for earlier gain is row 8's grain: "the same rule" could
   be read as the same bullet of GLOBAL-08, not the same rule ID. `wf` has
   no way to tell bullets apart, and two edits to one rule are what
@@ -2446,8 +2859,11 @@ Nothing, at first, and Jeff should expect that.
 
 What does change at once: the guard for every worker and for `wf claim`,
 `wf commit`, the digest files, `QUEUE.md`'s new sections, `main`'s CI
-being read, and the refresh for any process item's PR that waits while
-`main` moves.
+being read, the waiting limit, and the rule that a PR merges only with
+`main` in its branch, with the refresh for any PR, a process item's
+included, that waits while `main` moves. That last one costs something
+from the first day: two process items with PRs open merge a run apart,
+or in one attended sitting with a refresh between.
 
 ## Defaults and overrides
 
@@ -2466,7 +2882,8 @@ being read, and the refresh for any process item's PR that waits while
 | The map's `implies.shared` absent | No area is shared: every driver in a design's `drivers` needs its own area declared | The obvious reading. Nothing holds it to `rules.yaml`'s `drivers.shared` any more (a4 (c)) |
 | `wf areas -check` without `-edges` | It compares the paths only, and prints `reaches: not compared` | `wf` cannot produce the edges itself (LOOP-08); the line says what was not checked (GLOBAL-11) |
 | `main.yaml` has no area-check result | `QUEUE.md` says `area map: not checked against main` | Unknown is not read as "no difference" (GLOBAL-10) |
-| The merge check's context lines | 0, fixed. *Changed:* 3 | a14 |
+| The merge check's context lines | 0, fixed. *Changed:* 3 | a14, open |
+| `main.yaml` does not say whether GitHub requires an up-to-date branch | `QUEUE.md`'s header says `not recorded`. Nothing else depends on it: a PR is listed as ready or not by the loop's own test either way | Unknown is not read as "required" (GLOBAL-10) |
 | `limits.in_progress` absent | 5; a written value below 1 is an error | FLOW-05's written limit (Decision 8). *Changed:* absent or 0 was "no limit" |
 | `limits.alters_relationships` absent | 1; below 1 an error | Unchanged (`alters-slot`) |
 | `limits.waiting_on_human` absent | 8; a written value is used as written, and one below 1 is an error. There is no value that means "no cap": a large number is how it is switched off | Jeff's answer to a3, which FLOW-05 writes (GLOBAL-09). A cap that an absent key switched off would be a silent fallback (GLOBAL-10) |
@@ -2560,7 +2977,8 @@ key is required.
 ### FLOW-03 (amend), `docs/development/process.md`
 
 **Why:** the queue records more than a phase and a branch; two done-when
-entries change; a tracked item has no done-when at all.
+entries change; the Merge phase says when a PR is ready (a1 (b)); a
+tracked item has no done-when at all.
 
 **Current wording**, the sentence before the phase table; rows 1 and 7 of
 it; the paragraph after it; and row 3 of the process table:
@@ -2586,7 +3004,7 @@ it; the paragraph after it; and row 3 of the process table:
 
 > | 1 | Design | Design doc complete per FLOW-02; the queue records what it declares, and its areas cover what its other fields imply (FLOW-02); no unanswered blocking question (FLOW-07); whether it needs a design review decided (FLOW-19). |
 
-> | 7 | Merge | The human merged the PR (FLOW-08). The loop confirms it; there is no step for the human to claim. While the PR waits and `main` moves, a refresh step keeps it current (FLOW-10). |
+> | 7 | Merge | The human merged the PR (FLOW-08). The loop confirms it; there is no step for the human to claim. The PR is ready for the merge only while its branch contains `main` (FLOW-08); when `main` moves past it, a refresh step brings it up to date (FLOW-10). |
 
 > A transition happens only when the phase's done-when checks pass mechanically
 > (files present, sections filled, commands green), never on an agent's own report
@@ -2596,7 +3014,7 @@ it; the paragraph after it; and row 3 of the process table:
 > path outside them is settled by widening the declaration inside the
 > approved design, or by a return to Design (FLOW-06).
 
-> | 3 | Merge | A human merged it into `main` (FLOW-08). Its PR is refreshed meanwhile, as a feature's is (FLOW-10). |
+> | 3 | Merge | A human merged it into `main` (FLOW-08). Its PR is ready and is refreshed as a feature's is (FLOW-08, FLOW-10). |
 
 and one paragraph is added before "Queue state lives on the `workflow`
 orphan branch":
@@ -2614,7 +3032,8 @@ records a declaration for, the diff check at phases 3, 4 and 6, the
 refresh's done-when, and a tracked item's one-line result. Phase 7's
 check, the merge confirmation, compares a squashed branch's change with
 the PR commit's without context lines (`patchID`, `-U0` in place of `-U3`;
-a14), so a PR merged behind `main` is still confirmed.
+a14, open), so a ref of the branch from before its last refresh is still
+confirmed.
 
 ### FLOW-04 (amend), `docs/development/process.md`
 
@@ -2751,7 +3170,8 @@ definition that `alters-slot` built and FLOW-20's Limit bullet carried.
 > blocked. Two items that change the same thing are likely to need an
 > involved consolidation once the first lands, so the limits below bound
 > how many such items are in flight. Items that do not collide may be in
-> flight, and have pull requests open, side by side.
+> flight, and have pull requests open, side by side; their pull requests
+> merge one at a time (FLOW-08).
 >
 > **How two items relate.** An item names the repositories it works in and
 > the areas it changes (FLOW-02). A repository's *area map* gives each
@@ -2808,8 +3228,8 @@ definition that `alters-slot` built and FLOW-20's Limit bullet carried.
 >   slot, the higher priority goes first. A feature finished through Guide
 >   waits for the slot, so its consolidation runs against a `main` that
 >   the items related to it leave alone until its PR merges. A disjoint
->   item may merge meanwhile, and the refresh (FLOW-10) then brings the
->   open PR up to date.
+>   item may merge meanwhile; the open PR then waits for its refresh
+>   (FLOW-10) before it may merge (FLOW-08).
 >
 > **Waiting on the human.** A queued feature does not start while the
 > items that wait on the human number a fourth limit or more. An item
@@ -2855,16 +3275,20 @@ enforcement path: `Back` is in `tools/workflow/queue/`.
 
 ### FLOW-08 (amend), `docs/development/process.md`
 
-**Why:** `wf` cannot see a merge in a repository where its gates do not
-run, and the rule says the queue has no step for a merge. `seam-specs`' a15
-asked for an exception for one item; this makes it the rule (a6).
+**Why:** two things. `wf` cannot see a merge in a repository where its
+gates do not run, and the rule says the queue has no step for a merge;
+`seam-specs`' a15 asked for an exception for one item, and this makes it
+the rule (a6). And with several PRs open, the rule has to say when one
+may be merged: Jeff's answer to a1 is that its branch must contain
+trunk. The rule says nothing about that today.
 
-**Current wording**, the paragraph's last sentence:
+**Current wording**, the first paragraph's last sentence (the rule has no
+sentence on when a pull request may be merged):
 
 > There is no sign-off step in the queue: the loop sees the merge (FLOW-03, phase
 > 7).
 
-**Proposed wording:**
+**Proposed wording.** That sentence becomes:
 
 > There is no sign-off step in the queue for a pull request the loop can
 > see: the loop sees the merge (FLOW-03, phase 7). For a pull request in a
@@ -2872,16 +3296,35 @@ asked for an exception for one item; this makes it the rule (a6).
 > merge (FLOW-04). The merge is still the sign-off; the step is only the
 > queue's record of it.
 
-**Severity and check:** MUST, `automated`, before and after. No enforcement
-change.
+and one paragraph is added after that one, before "Neither pushing a
+feature branch":
+
+> A pull request is ready for the human's merge only while its branch
+> contains trunk and its checks have passed on that head. Each merge to
+> trunk therefore leaves every other open pull request waiting for a
+> refresh (FLOW-10), and the loop lists none of them as ready until it
+> has had one. Where the trunk's host can refuse a merge that is not
+> ready, the human has it do so (LOOP-08). That setting is the human's,
+> as the merge is: no agent changes a trunk's protection. A merge the
+> human makes all the same is still the sign-off.
+
+**Severity and check:** MUST, `automated`, before and after.
+**Enforcement:** `rules.yaml` already names "branch protection and PR
+checks" as what enforces this rule, and that entry does not change; the
+ruleset this design asks Jeff for is that protection (**Merging: a branch
+must contain `main`**). The loop's part is in `tools/workflow/queue/`
+(`wf stale`, `QUEUE.md`) and the refresh's done-when
+(`tools/workflow/check/check.go`, under FLOW-10).
 
 ### FLOW-09 (amend), `docs/development/process.md`
 
-**Why:** under Decision 21 a PR may merge behind `main`, and CI on the push
-to `main` is then the gate. The rule has a session file a regression it
-finds "while the feature is built, validated or consolidated"; nothing
-files one that CI reports on `main` itself, and a fix filed with nobody
-there has no areas, so it would collide with every feature (a4, a16).
+**Why:** the rule has a session file a regression it finds "while the
+feature is built, validated or consolidated"; nothing files one that CI
+reports on `main` itself, and a fix filed with nobody there has no
+areas, so it would collide with every feature (a4, a16). Under Decision
+21 a red `main` is no longer what a missed collision is expected to
+produce, but it costs more when it happens: every open PR's refresh
+fails on it, so nothing can merge until the fix does.
 
 **Current wording**, the sentence on a regression `main` already has:
 
@@ -2910,7 +3353,8 @@ consistency) does not change.
 ### FLOW-10 (amend), `docs/development/process.md`
 
 **Why:** with several PRs open, a PR's consolidation goes stale each time
-another merges.
+another merges, and a PR may merge only with trunk in its branch (FLOW-08,
+a1 (b)): the refresh is what brings it there.
 
 **Current wording**, the rule's last paragraph:
 
@@ -2920,11 +3364,13 @@ another merges.
 
 **Proposed wording.** That paragraph is unchanged, and one follows it:
 
-> A PR that waits for the human's merge is kept current. Whenever `main`
+> A PR that waits for the human's merge may be merged only while its
+> branch contains `main` (FLOW-08). Whenever `main`
 > has moved past its branch, a **refresh** step merges `main` into the
 > branch again, runs the gates, and repeats this review, and FLOW-15's
 > sweep, over what landed since the branch last merged `main`, as a dated
-> entry in the consolidation section. It pushes only while the pull
+> entry in the consolidation section. The PR is ready again when the
+> step's checks pass. It pushes only while the pull
 > request is still open. A refresh that finds work beyond conflict fixes
 > and wording sends the feature back as above; its pull request is then a
 > draft until the feature is published again, and it keeps the PR slot
@@ -3146,7 +3592,11 @@ whether it is still true with the proposed wording.
 | LOOP-07, point 2: a reconciliation item "is a feature item (LOOP-04), filed through intake, and FLOW-05 gives its place in the order." | Yes. This is the amendment its Decision 7 left to this item |
 | LOOP-08: "No loop rule may require a language, a build tool, ... a directory layout beyond what the profile names" | Yes. The profile says where the map is and names the command that prints the component's dependency edges; `wf` runs no toolchain and compares what that command prints |
 | LOOP-01: the profile "is one of the component's own rules ... a change to it is declared and approved like a change to any of the component's invariants (FLOW-14)" | Yes. The Areas entry is a pointer and a command name, and a change to either is a rule change. The map's content is queue state, as the content of `hosts.yaml` is behind the Native hosts entry, and changes on the human's word (FLOW-05) |
-| LOOP-09: a branch "follows the old text until it merges trunk, which FLOW-05 has it do while it waits and Publish does at its start" | Yes. FLOW-05 keeps that sentence; the refresh adds a third occasion |
+| LOOP-09: a branch "follows the old text until it merges trunk, which FLOW-05 has it do while it waits and Publish does at its start" | Yes. FLOW-05 keeps that sentence; the refresh adds a third occasion, and FLOW-08 now has every branch merge trunk before its own merge, so no pull request merges on rule text older than trunk's |
+| LOOP-08, step 6: "seeing that only a human merges to its trunk (FLOW-08), and protecting the trunk where its host offers that" | Yes. FLOW-08 now says what that protection is asked to refuse, in words that name no host: a merge of a pull request whose branch does not contain trunk or whose checks have not passed |
+| LOOP-08: in a repository that has not adopted the contract "the worker is bound by FLOW-08, FLOW-16, FLOW-17 and FLOW-18" | Yes. FLOW-08's new paragraph binds the worker there as well: it tells the human a pull request is ready only when its branch contains that repository's trunk. `wf` lists no pull request there until `loop-repository`, so there the session checks it itself |
+| LOOP-08: the contract assumes "pull requests that a human merges, a deterministic check that can block a pull request", and no loop rule may require "a CI system" | Yes. FLOW-08's paragraph speaks of a pull request's checks and of what the trunk's host can refuse, and requires no host feature: where the host cannot refuse, the loop's listing is the rule's whole enforcement |
+| LOOP-03: "A judgment check informs: its findings go to the human, who signs off by merging ... No agent holds a veto over trunk, and none approves it." | Yes. The loop calls a pull request ready or not; it does not stop the human's merge, and a merge he makes of one it did not call ready is still the sign-off |
 | LOOP-09: a process item "declares the workers it holds (FLOW-05)" | Yes. A hold still names workers (Decision 18) |
 | LOOP-03, class 4: "the phase done-when checks (FLOW-03) and the queue's validity" | Yes. The new checks are done-when checks and `wf validate` |
 
@@ -3223,7 +3673,14 @@ whether it is still true with the proposed wording.
     `f8-escalate-returned`; run twice, nothing is added twice.
   - `TestMainCI`: `wf main` writes and reads `main.yaml`; `red_since` is
     kept across red commits and cleared by a green one; `-followup` is
-    recorded once; absent, `QUEUE.md` says `CI not recorded`.
+    recorded once; absent, `QUEUE.md` says `CI not recorded`;
+    `-up-to-date` is recorded, and absent it reads `not recorded`.
+  - `TestReadyToMerge` (cases 18, 33, 36): a PR is ready only when the
+    item is at its merge step with `pr.ci` green and no refresh pending;
+    `wf stale` on a moved `main` makes every open PR of the repository
+    not ready, whatever moved it; a passed refresh makes it ready again;
+    `QUEUE.md` lists the two groups apart, and the Active table says
+    `a refresh, then your merge`.
   - `TestDeclare`: each row of the `wf declare` table; a widening that
     would put a limit over is refused and changes nothing (cases 14, 15);
     a widening is judged on the design at its approved commit, so an
@@ -3246,7 +3703,8 @@ whether it is still true with the proposed wording.
     neither committed nor reset away (exit 5 names it); nothing is
     force-pushed.
   - `TestSummary`: `QUEUE.md` for the two states shown under **What Jeff
-    sees**, as golden files; `TestDigestPage` (file order, the earlier
+    sees**, as golden files, with the count beside the limit, the two
+    lists of open PRs and the items that are not counted; `TestDigestPage` (file order, the earlier
     page, the same input giving the same page).
 
   `tools/workflow/check`:
@@ -3355,14 +3813,18 @@ steps.
    LOOP-07).
 8. The refresh: `IsRefresh`, `SeedRefresh`, `wf stale` with the merge
    check first and `Landed`, the drops in `Complete` and `Back`, class 1
-   while pending, `check.Refresh`; `patchID` without context lines
+   while pending, a claim of it left out of the item's budget (a10),
+   `check.Refresh`; `patchID` without context lines (a14)
    (FLOW-03, FLOW-06, FLOW-08, FLOW-10, FLOW-15, FLOW-16).
 9. `check/declared.go`, `check/areas.go`, `review.go`, and `wf declare`,
    `wf relate`, `wf relations` (FLOW-02, FLOW-03, FLOW-06, FLOW-19).
 10. `queue/commit.go` and `wf commit` (FLOW-04, FLOW-13, FLOW-17,
     FLOW-18).
-11. `summary.go`, `queue/digest.go`, `wf digest`, `wf status`, and
-    `wf main` with `main.yaml` (FLOW-09, FLOW-13, LOOP-06).
+11. `summary.go` (the count beside the limit, the ready and
+    after-a-refresh lists, the items not counted), `queue/digest.go`,
+    `wf digest`, `wf status`, and `wf main` with `main.yaml`, the
+    up-to-date setting included (FLOW-05, FLOW-08, FLOW-09, FLOW-13,
+    LOOP-06).
 12. `wf areas -check | -list`, `wf validate -areas`, and `wf commit`'s
     refusal of a map change from a worker that is not human (FLOW-05,
     PROFILE-01).
@@ -3405,11 +3867,17 @@ commit's time. The item is not done until it is.
 - `areas.yaml`: the map of this design, saved on Jeff's word as any map
   change is (`wf validate -areas`, then `wf commit -worker human/<name>`),
   and `wf areas -check` run on it; and `wf main`, which adds `main.yaml`.
+- The ruleset on `main` (Decision 21): Jeff sets it, or says he will
+  not, in the repository's settings; the session reads
+  `gh api repos/buildwarden/buildwarden/rules/branches/main` and records
+  the answer with `wf main -up-to-date required|not-required`. The
+  session does not set it.
 - `README.md`: the layout table (`areas.yaml`; `main.yaml`;
   `digest/<date>/`); the queue file's new fields; the `tracked` round;
-  `wf next`'s paragraph (the guard, for every worker, and the three
-  limits by relation); the commands (`wf commit` in place of the `git`
-  lines).
+  `wf next`'s paragraph (the guard, for every worker, the three limits
+  by relation and the waiting limit); `config.yaml`'s
+  `limits.waiting_on_human`; the commands (`wf commit` in place of the
+  `git` lines).
 - A human `wf declare` on `seam-specs` and on `driver-contract`, which
   records their seams and rule changes and sets `declared`. Both stay
   undeclared for areas, and collide (**What changes for the queue as it
@@ -3422,8 +3890,51 @@ commit's time. The item is not done until it is.
 
 ## Design review
 
-No review by Jeff yet. This draft is put to him as the design step,
-`x1-design`.
+The review by Jeff is in progress, as the design step `x1-design`. Its
+outcome is not recorded yet, and no rule change has been put to him by
+name.
+
+- **2026-11-15, first sitting: twelve questions answered; five answers
+  folded in.** Jeff read the design at `f706bf7` and answered twelve of
+  its fourteen assumed questions, on 2026-11-14 and 2026-11-15. Before
+  the fold-in the branch merged `main` at `ad4ea50` (`loop-contract`,
+  #119), and every quoted current wording was compared with it: none
+  differs.
+  - a1: (b), an up-to-date branch is required. *Departs.* Folded in:
+    Decision 21 rewritten; the new section **Merging: a branch must
+    contain `main`** (the ruleset Jeff is asked for, the loop's own
+    listing, who refreshes, the throughput, a sitting with several
+    merges, disjoint against near); Decisions 13, 22 and 23; cases 7, 8,
+    18, 22 and 32 to 37; the proposed wording of FLOW-03, FLOW-05,
+    FLOW-08 and FLOW-10; **Safety**; `QUEUE.md`'s two lists of open PRs;
+    `wf main -up-to-date`.
+  - a2: (a), as recommended. No change to its text.
+  - a3: (b), a cap of 8. *Departs.* Folded in: Decision 24; **The
+    waiting limit**; `limits.waiting_on_human`; cases 25 to 31; FLOW-05's
+    proposed wording; the count in `QUEUE.md`.
+  - a4: (a) and (c): areas declared at intake and confirmed by Design, as
+    recommended; the map on the `workflow` branch, changed on Jeff's
+    word. *Departs* on the map's home. Folded in: Decision 3; **The area
+    map** (who changes it and how, what `wf validate` checks,
+    `wf areas -check` as a report, what leaving `main` costs);
+    `wf areas -sync`, the generated copy and tier 1's `area-map` check
+    removed; `tools/tier1/area-edges.sh`; LOOP-01 and PROFILE-01
+    re-derived, PROFILE-01 with no change of check type.
+  - a5: (d), `cli` ordered. *Departs.* Folded in: the map (15 exclusive
+    areas, 6 ordered); an ordered area has no `reaches`; the figures run
+    again (197 disjoint, 34 near, 22 colliding of 253); cases 14 and 15;
+    K1 under **What changes for the queue as it stands**; the risk under
+    **Safety**.
+  - a6, a7, a8: (a), as recommended. No change to their text.
+  - a12, a13: (a), as recommended. No change to their text.
+  - a15: (a), the import graph only. *Departs.* Folded in: Decision 5;
+    `reaches_all` removed from the map and its format; the relation
+    examples; FLOW-05's sentence on what reaches means; **Safety**, "A
+    tightened check beside the code it would fail".
+  - a16: (a), as recommended. No change to its text.
+  - *Still to come:* a10 and a14, which were written for a1 (a) and are
+    derived again above; a17, which the answer to a3 raises; each of the
+    fourteen rule changes, asked by name; and the outcome.
 
 - **2026-11-14: independent review of the first draft (`0cd4e7c`), before
   Jeff's review.** Two reviewers read it, one against the code and the
