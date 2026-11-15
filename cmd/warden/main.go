@@ -282,8 +282,8 @@ func newDriver(cfg *Config) (driver.Driver, error) {
 }
 
 // newRequest resolves config and flags into the BuildRequest every driver
-// takes. Precedence everywhere: flag, then warden.toml / user config, then
-// the driver's default.
+// takes. Precedence everywhere: flag, then the environment variable, then
+// the config file, then the driver's default.
 func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 	d := cfg.Runtime.Driver
 	if err := validateFlagsForDriver(d); err != nil {
@@ -325,11 +325,11 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 		return nil, err
 	}
 
-	refreshAfter, err := configAge("image_refresh_after", cfg.VM.ImageRefreshAfter)
+	refreshAfter, err := configAge(cfg, "image_refresh_after", cfg.VM.ImageRefreshAfter)
 	if err != nil {
 		return nil, err
 	}
-	minGrace, err := configAge("image_min_grace", cfg.VM.ImageMinGrace)
+	minGrace, err := configAge(cfg, "image_min_grace", cfg.VM.ImageMinGrace)
 	if err != nil {
 		return nil, err
 	}
@@ -442,8 +442,8 @@ func addBuildLinkFlag(c *cobra.Command) {
 }
 
 // resolveBuildLink returns the build link and where it came from: the flag,
-// then [vm] build_link (project over user, already checked at load), then
-// the default. The flag is checked here, before any driver work.
+// then [vm] build_link (already checked at load), then the default. The flag
+// is checked here, before any driver work.
 func resolveBuildLink(cfg *Config) (buildlink.Link, string, error) {
 	if flagBuildLink != "" {
 		link, err := checkBuildLink(flagBuildLink)
@@ -603,8 +603,9 @@ func buildFailed(
 	return err
 }
 
-// configAge parses a [vm] age setting; empty means the driver default.
-func configAge(key, v string) (time.Duration, error) {
+// configAge parses a [vm] age setting; empty means the driver default. The
+// key has no flag and no variable, so a value is the config file's.
+func configAge(cfg *Config, key, v string) (time.Duration, error) {
 	if v == "" {
 		return 0, nil
 	}
@@ -612,7 +613,7 @@ func configAge(key, v string) (time.Duration, error) {
 	if err != nil {
 		return 0, driver.Fixable(
 			"set it to an age such as \"7d\" or \"36h\"",
-			"warden.toml [vm] %s: %v", key, err)
+			"%s [vm] %s: %v", cfg.File, key, err)
 	}
 	return d, nil
 }

@@ -37,7 +37,10 @@ var (
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Preflight the host for the selected driver",
-	Long: `Read-only preflight for the selected driver (--driver or warden.toml):
+	Long: `Read-only preflight for the selected driver (--driver, WARDEN_DRIVER or
+the config file). The report's first line says which config file was read
+and how it was chosen (--config, WARDEN_CONFIG, or ./warden.toml found in
+the working directory).
 
   container  a container runtime (finch, docker, podman) is available
   qemu       qemu-system-* and qemu-img are on PATH; relay VM assets exist
@@ -58,6 +61,14 @@ vz prepared image, which every build uses; on the qemu and firecracker
 direct-boot initramfs it is reported only. Each VM driver also prints the
 relay's upstream resolvers and their source ([vm] dns, or the host's), or
 the refusal a build would get, which fails doctor.
+
+With upstream CA paths configured (WARDEN_UPSTREAM_CA_CERTS, else [relay]
+upstream_ca_certs), every driver's doctor reads them as a build would and
+prints the same lines: each block or file that is skipped, with its reason,
+and each path's count of certificates to send. A path a build would refuse
+(it does not exist, cannot be read or gives no certificate) is BLOCKED and
+fails doctor. With the container driver, a relay image that is not shaped
+like an image reference fails doctor with the error a build would get.
 
 Exits non-zero when a required capability is unmet, so it is usable as a CI
 or agent gate.`,

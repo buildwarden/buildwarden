@@ -291,7 +291,7 @@ func prepareHyperVWindows(ctx context.Context, source string, cfg *Config) (stri
 	case "", "auto", "reuse":
 	default:
 		return "", driver.Fixable(`set it to "auto" or "reuse"`,
-			"warden.toml [vm] windows_image_update = %q", cfg.VM.WindowsImageUpdate)
+			"%s [vm] windows_image_update = %q", cfg.File, cfg.VM.WindowsImageUpdate)
 	}
 	if src, fetch, tolerant := hypervImageSource(source, cfg, hyperv.Status()); fetch {
 		_, err := hyperv.FetchEvalImage(ctx, hyperv.FetchOptions{
