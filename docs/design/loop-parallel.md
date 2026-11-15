@@ -189,6 +189,15 @@ say.
 - **`workflow-bootstrap`** and **`workflow-streamline`**: the PR slot and
   the single round. **`native-host-loop`**: what a native session may do,
   for the boundary with `loop-native-lead`.
+- **`driver-contract`** (K1; a feature in its design review, not
+  merged; its design is read on `feat/driver-contract` at `3f2012a`). K1
+  removes the four-method `driver.Driver`, which two bullets of FLOW-02
+  name. Its design withdrew its own FLOW-02 entry, because a feature
+  declares no change to a loop rule (FLOW-14, LOOP-09), and asked this
+  item to carry the rewording (its a8, route (i); the section "FLOW-02:
+  no entry; its wording is handed to a process item"). Jeff took the
+  request in this item's review on 2026-11-15 (Decision 19, **Rule
+  changes**, FLOW-02).
 
 ## Decisions
 
@@ -474,6 +483,16 @@ say.
     LOOP-01, LOOP-04 and PROFILE-01, for the Areas term, which points to
     the map in the queue state (a4 (c)), and the queue's new field. The last three amend files `loop-contract` added, which are on
     `main` since its merge.
+
+    The FLOW-02 change also rewords the two bullets of that rule that
+    name `driver.Driver`, at `driver-contract`'s request (its a8, route
+    (i)): "Yes, carry it here" (Jeff, 2026-11-15, second sitting). It
+    adds no rule to the fourteen and no path to FLOW-02's entry.
+    - *Rejected: the two bullets left to `loop-native-lead`, or to a
+      process item of their own* (K1's other routes). Jeff's answer.
+      This item already amends FLOW-02 and its review was open when the
+      request came; either other route leaves the rule naming a removed
+      interface for longer if K1 merges first.
 20. **The freeze stays.** FLOW-20 loses only its Limit bullet. This is the
     proposal's question 2, option (a), part of the approved direction.
 21. **A pull request merges only when its branch contains `main`** (a1
@@ -3522,11 +3541,29 @@ paragraphs below is one of those.
 
 ### FLOW-02 (amend), `docs/development/process.md`, `docs/design/TEMPLATE.md`
 
-**Why:** the relation between two items is computed from what their designs
-declare, so the design has to declare where the change is made.
+**Why:** two things. The relation between two items is computed from what their designs
+declare, so the design has to declare where the change is made. And two
+bullets of the list name `driver.Driver`, a Go interface that
+`driver-contract` (K1) removes, so from K1's merge they would name
+something that no longer exists. K1 is a feature and may declare no
+change to a loop rule (FLOW-14, LOOP-09). Its design asked this item to
+carry the rewording (its a8, route (i)), and Jeff took the request in
+the second sitting, on 2026-11-15: "Yes, carry it here."
 
-**Current wording.** The list of keys has no `repos` and no `areas`. The
-two paragraphs after the list:
+**Current wording.** The list of keys has no `repos` and no `areas`. Two
+of its bullets, the first and the fifth:
+
+> - `drivers` — which drivers are touched, or `interface` for a change made at the
+>   `driver.Driver` / `driver.Session` level (ORCH-01).
+
+> - `alters_relationships` — `true` when the change alters a component's role or
+>   how components interact: a versioned seam (GLOBAL-08), the bootstrap model
+>   (BOOT rules), which component owns a responsibility (relay, collector,
+>   executor, orchestrator, a driver), or the `driver.Driver` / `driver.Session`
+>   contract. Changes inside one component's existing role are `false`. FLOW-05
+>   limits how many such features are in flight.
+
+and the two paragraphs after the list:
 
 > Declarations are derived conservatively: a change to a shared package (`relay/`,
 > `ledger/`, `collector/`, `driver/`) declares every dependent driver and host, per
@@ -3535,7 +3572,19 @@ two paragraphs after the list:
 > The automated part diffs the declared `drivers` / `seams` / `surfaces` against the
 > trees and files the change reaches; the agent part judges the security note.
 
-**Proposed wording.** Two keys are added to the list, after `surfaces`:
+**Proposed wording.** The two bullets become:
+
+> - `drivers` — which drivers are touched, or `interface` for a change made at the
+>   level of the driver contract or `driver.Session` (ORCH-01).
+
+> - `alters_relationships` — `true` when the change alters a component's role or
+>   how components interact: a versioned seam (GLOBAL-08), the bootstrap model
+>   (BOOT rules), which component owns a responsibility (relay, collector,
+>   executor, orchestrator, a driver), or the driver contract or
+>   `driver.Session`. Changes inside one component's existing role are `false`.
+>   FLOW-05 limits how many such features are in flight.
+
+Two keys are added to the list, after `surfaces`:
 
 > - `repos` — every repository the change works in, the one that holds the
 >   design first, when there is more than that one (LOOP-04).
@@ -3563,7 +3612,90 @@ declares**.
 after. **Enforcement:** `tools/workflow/check/declared.go` (new) and
 `check.go`: Design's done-when gains the comparison with the queue and the
 implied areas. Tier 1's `design-front-matter` check is unchanged: neither
-key is required.
+key is required. The two reworded bullets change no enforcement and add
+no path (below).
+
+**The two bullets: where the wording is from, and why it holds in either
+order.** It is the wording K1's design offers "as a starting point for
+whichever item carries it", taken unchanged. It is true before K1 merges
+and after:
+
+- *Before.* `componentization`, which is on `main`, names seam 9 "Driver
+  contract" and gives its form today as "the four-method
+  `driver.Driver`". So "the driver contract" is that interface, and the
+  bullets say what they say now. ORCH-01, which the first bullet cites,
+  has a lifecycle change "expressed at the `driver.Driver` interface
+  level": the same thing. Until K1 merges, the term is defined in that
+  design and not in a rule file.
+- *After.* As K1's design has it, which is still in its review, K1
+  completes the contract and amends ORCH-01 and GLOBAL-08 to name it: a
+  lifecycle change is expressed in the driver contract, which is then a
+  versioned seam. A change to it is `true` under the second
+  bullet twice over, by its first case and by its last. `driver.Session`
+  exists before and after.
+
+So if this item merges first, nothing is untrue at any time. If K1
+merges first, the bullets as they stand on `main` name a removed
+interface from K1's merge until this item's, as K1's design says.
+Neither PR edits what the other edits here: K1's design has its PR
+change nothing in `process.md`.
+
+**What reads those words.** Nothing mechanical. Tier 1's `drivers-claim`
+check reads the value `interface` in a design's `drivers`
+(`tools/tier1/coupling/checks.go`), and `rules.yaml` names the value in
+a comment; no file under `tools/tier1/` or `tools/workflow/check/`
+contains `driver.Driver` or the bullets' text (searched on this branch,
+2026-11-15), and no skill or agent definition does. `TEMPLATE.md`'s
+comments on `drivers` ("or [interface]") and on `alters_relationships`
+name neither the interface nor the contract, so the template's two new
+lines are still its whole change. The `rule_changes` paths for FLOW-02
+are therefore the ones declared before this sitting. In this design,
+nothing names `driver.Driver`. Two things read the value `interface`:
+the implied-areas rule at Design's done-when (**When collision is
+decided, and checked again**) and the dropped `interface` entry of
+`implies.drivers` (**Defaults and overrides**). Both rest on the value
+and on what it means, a change at the level every driver shares, which
+the rewording keeps. The `alters_relationships` slot (FLOW-05) counts
+the declared value, and the set of changes that are `true` is the same
+before and after.
+
+**Against LOOP-08 and LOOP-01.** The reworded bullets are not neutral
+and are not offered as neutral. `drivers`, `interface`, the driver
+contract and `driver.Session` are this repository's, and so are the
+relay, the collector, the executor and the orchestrator in the second
+bullet and the shared packages in the paragraph after the list. The
+rewording replaces one name of this repository's, a Go interface, with
+another, the contract the umbrella numbers seam 9. It adds no assumption
+about a component, which is the test LOOP-08 gives this review ("a new
+or amended loop rule assumes nothing beyond the list"): FLOW-02 required
+no component to have drivers before and requires none after. A component
+reads the `drivers` key and its values as its own profile's Impact
+vocabulary entry (LOOP-01's reading rule), and one with no drivers
+declares none. That entry is where this repository's meaning of
+`interface` lives (PROFILE-01). Today it points to `TEMPLATE.md`'s
+front-matter, which gives `[interface]` as a value, and to
+`rules.yaml`'s `drivers` lists; K1's design proposes a PROFILE-01
+change of its own that adds a sentence there on what `interface` stands
+for. This item's PROFILE-01 change adds the Areas row and does not
+touch that entry.
+
+LOOP-08 also says that wording which names such a thing from this
+repository "is made neutral when the rule is next changed", and this
+item changes FLOW-02. It does not make FLOW-02 neutral, in these two
+bullets or in the paragraphs it already amended, and the same is true
+of every FLOW rule it amends. The reading it follows is
+`loop-contract`'s Decision 2 and its a9, which Jeff answered on
+2026-11-14: the neutral rewording of FLOW and LINT is one process item
+after P1, with the profile's term list as its specification, and
+rewording rule by rule under running work was rejected. A neutral
+FLOW-02 moves `drivers`, `interface`, the shared packages and the
+component names out of the rule and into the profile; that is that
+item's work, and for the first bullet it needs the profile sentence K1
+proposes, which is not on `main`. Until then a second component reads
+FLOW-02 through LOOP-01's reading rule, as it reads it today. The
+design review judges this (LOOP-08's agent part). If it finds that
+"next changed" binds here, the bullets are not approved as proposed and
+go to the neutral-rewording item with the rest of the rule.
 
 ### FLOW-03 (amend), `docs/development/process.md`
 
