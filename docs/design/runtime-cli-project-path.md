@@ -1204,37 +1204,274 @@ this trips GLOBAL-06, so TEST-08 runs.
 
 ## Implementation plan
 
-One PR. Nothing already implemented is reworked beyond the functions named.
+Plan r1 (phase 2, `f2-plan`, 2026-11-15, attended), written from the design
+as its review approved it at `a2afd08` (review entry r1, recorded at
+`119a0e1`), after reading the code it reaches on the branch at `119a0e1`:
+`cmd/warden/config.go` (`LoadConfig`, `loadTOML`, `DetectRuntime`), `main.go`
+(`resolveConfig`, `resolveRuntime`, `newDriver`, `prepare`, `main`),
+`clean.go` (`runClean`), `host.go` (`doctor`, `setup`), the tests beside
+them, `test-integration.sh`, the reference docs, and UX-08 with its entry in
+tier 1's map. Design's ten-line outline of this section is at `119a0e1`;
+this replaces it. One PR, one `f3-implement` step. Planning found the design
+workable as written and sends nothing back.
 
-1. One `containerRuntimes` list in `cmd/warden/config.go`; `DetectRuntime`
-   ranges over it, in today's order (GLOBAL-09, GLOBAL-10).
-2. The source of the runtime setting, beside the value: set by `LoadConfig`
-   for each file (by what the file's decode did to the field, with the
-   `unsetCLI` marker no file can produce, not by `IsDefined`) and for
-   `WARDEN_CTR_CLI`, and by `resolveConfig` for `--runtime` (UX-04, UX-07,
-   ORCH-03).
-3. `resolveRuntime` checks the value in effect against the list and
-   returns the list's member, or the permanent error as a `driver.Fixable`
-   that names the source, the quoted value and the three names (GLOBAL-06,
-   GLOBAL-10, GLOBAL-11, UX-04, UX-08, UX-09).
-4. The transitional detection: `cmd/warden/runtime_former.go`, its one
-   call, its test file, each with the marker
-   `TRANSITIONAL(runtime-former-values)` and the removal point a4 settles
-   (UX-03, UX-04, GLOBAL-01). Its messages print nothing from the value
-   but the quoted value.
-5. The tier-0 tests of the Validation plan, in `cmd/warden`; the existing
-   `LoadConfig` tests set `HOME` and `USERPROFILE` like the new ones
-   (GLOBAL-04, GLOBAL-07, TEST-01, TEST-06).
-6. The tier-1 cases in `test-integration.sh` (GLOBAL-04, TEST-02).
-7. The rule change, once the review has approved it by name: UX-08's
-   wording in `docs/development/ux-cli-config.md`, and the removal of its
-   entry from `tools/tier1/rules.yaml` (FLOW-14, LINT-01).
-8. The reference docs, with the marked subsection (UX-01, UX-05), and the
-   overview pseudocode (FLOW-15).
-9. `make lint` and `make test` green, then push (FLOW-17).
-10. At Publish: the removal of the transitional detection filed as a queue
-    item on hold until 1.0 (a4), and the two tracked gaps confirmed in the
-    backlog (FLOW-09).
+Tasks 1 to 3, 6 and 16 rework code that exists (FLOW-06). Task 17 is the
+approved rule change (FLOW-14). Tasks 18 to 20 are the reference docs and
+`overview.md` (UX-01, FLOW-15). Tasks 6 to 14 are tier 0 and 15 and 16 are
+tier 1 (TEST-02); tier 0 stays pure Go and table-driven, with no network and
+no container runtime (TEST-01). All code is in `cmd/warden`: no file under
+`driver/` is edited, `driver/container/` and the `nerdctl` arm of
+`copyExecutor` included (ORCH-01). Under `docs/development/`, `tools/tier1/`,
+`.claude/` and `tools/workflow/` only the two paths of task 17 are edited
+(FLOW-14). No host blocks merge (FLOW-09): the two tracked gaps are open in
+the native-gap backlog as `runtime-cli-project-path-windows` and
+`runtime-cli-project-path-finch`, and no later-phase host step exists or is
+added.
+
+**Plan notes.** Where the design's text is silent on how a case is run, the
+plan takes the reading below. None changes a decision, a behavior, an impact
+field or the rule change; each is for the Review, and for Design only if the
+reading is wrong.
+
+*Note A (task 11: `clean` under `hyperv` and `firecracker`, tier 0).* Called
+in process, those two commands do their real work before they return:
+`hyperv.Clean` removes the VMs, the switch and the work directory of every
+build whose lock is not held, `--keep-vms` leftovers included, and
+`firecracker.Clean` kills VMMs and removes work directories the same way.
+The cases also run with `HOME` moved, and on Linux and macOS that moves the
+lock directory (`driver.LockDir` is under `os.UserCacheDir`), so a build
+that is running would look abandoned. On the Windows desktop the tracked
+gap runs `go test ./cmd/warden` beside real Hyper-V VMs. The design names
+the case and not how it runs. Reading: the case removes nothing. Both rows
+run with the user cache directory (`HOME`, `XDG_CACHE_HOME`, `LocalAppData`)
+and `--tmpdir` at empty temporary directories, so that the driver's clean
+finds nothing; the `hyperv` row is skipped on Windows, the one OS where
+`hyperv.Clean` reaches Hyper-V and what it lists cannot be redirected. What
+the row proves, that `runClean` returns before the runtime is resolved, is
+the same Go code on every OS and is run on Linux and macOS, and by tier 1
+(task 15).
+
+*Note B (task 11: `doctor` under the VM drivers, tier 0).* `doctor` ends
+the process with `os.Exit(1)` when the checks of `hyperv` or `firecracker`
+fail, which they do on every host but their own. Reading: the four rows run
+`doctor` in a child process, the test binary re-executed (`os.Args[0]`),
+which is pure Go and needs nothing installed (TEST-01), and assert that its
+output holds no error about the runtime: neither the configured value nor
+`[runtime] cli`. `doctor` is read-only under every driver (read at
+`119a0e1`).
+
+*Note C (task 16: the build from a project's file, tier 1).* The design
+writes `cli = "docker"`. The script runs on any host where a runtime answers
+and relies on detection (the design's Compatibility says so), and a fixed
+`docker` would fail it on a host with only Finch or Podman. Reading: the
+file names the runtime `warden doctor` reports on that host, which is
+`docker` on the CI runner.
+
+*Note D (the Security note's entry for the TEST-08 suite).* No task adds it
+to Arm A: the corpus is not built yet (`security-suite.md`, "Remaining build
+work"), so there is no file to add it to. Its proof (SEC-04: the marker is
+absent and `warden` exits 1) is what tasks 12 and 15 assert, in tiers 0 and
+1, and the note's list stays in the archived design for the item that builds
+the corpus (SEC-03, FLOW-12).
+
+1. **One supported list.** `containerRuntimes` (`finch`, `docker`, `podman`,
+   in detection's order) in `cmd/warden/config.go`, beside `DetectRuntime`,
+   which ranges over it in place of its own literal. Detection's order, its
+   3-second `info` probe and its two errors are unchanged (Decision 1;
+   GLOBAL-09, GLOBAL-10).
+2. **The source of the setting, beside the value.** A field next to
+   `RuntimeConfig.CLI`, `toml:"-"`, as `BuildLinkSource` is. `LoadConfig`
+   follows the design's pseudocode (**In the code**): the user's file, by
+   its path; then the value and its source are kept and the field is set to
+   `unsetCLI` (the constant `"\xff"`, with a comment that says why no TOML
+   file can produce it: GLOBAL-01); the project's file, whose decode
+   replaces the marker when the file sets the key in any spelling, an empty
+   value included; a field still equal to the marker gets the kept value
+   and source back; a non-empty `WARDEN_CTR_CLI` replaces both. The marker
+   never leaves `LoadConfig`, and `IsDefined` is not used for this key.
+   `resolveConfig` sets the source where a non-empty `--runtime` replaces
+   the value. Precedence and the meaning of an empty value are unchanged
+   (ORCH-03, UX-07, GLOBAL-10); the source feeds the error's wording and
+   nothing else (UX-04).
+3. **`resolveRuntime` validates the value in effect** (Decisions 2 and 3):
+   empty, `DetectRuntime()`; equal to a member of `containerRuntimes`, that
+   member, never the configured string; anything else, the error of task 4,
+   with nothing looked up, run or created. The comparison is exact: nothing
+   is trimmed, lowered or stripped (GLOBAL-11). Its three callers
+   (`newDriver`, `runClean`, `doctor`) already return its error before they
+   run or create anything, so `clean.go` and `host.go` need no edit; task 12
+   proves it. No other command starts reading the setting (UX-08,
+   GLOBAL-06, GLOBAL-10).
+4. **The permanent error** (**The error**, Permanent): a `driver.Fixable`
+   whose first clause names the source (`--runtime`, `WARDEN_CTR_CLI`,
+   `[runtime] cli in warden.toml`, `[runtime] cli in <the user's file by its
+   path>`), then the value once with `%q`, then the three names; the fix is
+   the design's wording for that source. The names come from
+   `containerRuntimes`, and no part of the message but the quoted value is
+   taken from the value. It leaves `warden` through `main`'s `FixableError`
+   path, exit 1 (UX-04, UX-09, GLOBAL-06).
+5. **The transitional detection** (**The error**, Transitional; Decision 4;
+   a4): `cmd/warden/runtime_former.go`, one function from the value to a
+   message and a fix for the four forms of the design's table, in the
+   table's order, or nothing. String operations only, no `path/filepath`,
+   so `/`, `\` and a drive letter read the same on every OS (GLOBAL-07). The
+   name in a fix is the list's member the last element matched; no
+   directory and no other text from the value is printed (GLOBAL-06). One
+   call, in the function that builds the error of task 4, reached only
+   after the value failed the check of task 3. The marker
+   `TRANSITIONAL(runtime-former-values)` is in the file's header comment,
+   which says why the code exists and that it is removed in the change
+   that prepares 1.0 (GLOBAL-01), and at the call (UX-03, UX-04).
+6. **Tier 0, the existing `LoadConfig` tests reworked** (TEST-01, TEST-02).
+   The five `TestLoadConfig_*` tests in `config_test.go` set `HOME` and
+   `USERPROFILE` to a temporary directory and clear `WARDEN_CTR_CLI`, as
+   the new tests do, through one helper that also writes a user file and a
+   project file and resets the flag variables a case sets (`flagRuntime`,
+   `flagDriver`, `flagTempDir`). No test in `cmd/warden` reads the real
+   user's file. `TestLoadConfig_ProjectFile` and
+   `TestLoadConfig_EnvOverrides` keep their assertions (GLOBAL-04,
+   GLOBAL-07).
+7. **Tier 0, by value and source** (TEST-01, TEST-02; Validation plan, its
+   first two bullets and its last two). One table, the same on every OS
+   (GLOBAL-07): the three names accepted from each of the four sources, and
+   what `resolveRuntime` returns is the list's member; the design's
+   fourteen other values refused from each of the four, each a
+   `FixableError` naming the source and the quoted value. The error is not
+   an `exitStatusError`, so `main` exits 1 on it (UX-09).
+   `TestDetectRuntimeExplainsTheFix` stands, and detection probes the
+   shared list in its order (GLOBAL-04, GLOBAL-06, UX-04).
+8. **Tier 0, the overrides come first, and the empty value** (TEST-01,
+   TEST-02; Validation plan, "The overrides come first", "An empty value",
+   "The source when both files hold the same string"): an unsupported file
+   value under `--runtime docker` and under `WARDEN_CTR_CLI=podman` is no
+   error; an unsupported value in the user's file under a supported one in
+   the project's is no error; an unsupported `--runtime` over a supported
+   file value is the error naming the flag; an empty flag and an empty
+   variable leave the lower level in effect; `cli = ""` in the project's
+   file over `podman` in the user's gives detection; the error names the
+   file that set the key (UX-08, ORCH-03, UX-07, GLOBAL-10).
+9. **Tier 0, the marker** (TEST-01, TEST-02; Validation plan, "The
+   marker"): a project file that leaves the key unset, and no project file,
+   each restore the user's value and source; a file whose `cli` holds the
+   marker's raw byte fails to load; `\xff` and `ÿ` are unsupported
+   values that give the error naming `warden.toml`, with a supported value
+   in the user's file not used in their place; after `LoadConfig` the field
+   is never the marker (GLOBAL-10, GLOBAL-11).
+10. **Tier 0, the key in other spellings** (TEST-01, TEST-02; Validation
+    plan, "The key in other spellings"): the six spellings, each with
+    `./rt` and with `sh`, give the error naming `warden.toml`; `[Runtime]`
+    with `CLI = "podman"` selects podman; one table holding `cli =
+    "docker"` and `CLI = "./rt"`, loaded 200 times, gives `docker` or the
+    error every time (GLOBAL-06, GLOBAL-04).
+11. **Tier 0, not used, not validated** (TEST-01, TEST-02; Validation plan,
+    "Not used, not validated"; Decision 2), with `cli = "nonsense"` in the
+    project's file: `newDriver` for `qemu`, `vz`, `hyperv` and
+    `firecracker` returns no error; `resolveConfig` returns none for any
+    driver; `clean` under `hyperv` and under `firecracker`, run as Note A
+    says, and `doctor` under each of the four VM drivers, run as Note B
+    says, give no error about the runtime (UX-08).
+12. **Tier 0, used, and nothing is run** (TEST-01, TEST-02; Validation
+    plan, "Used, and nothing is run" and "No fallback"; SEC-04). A project
+    directory that ships an executable writing a marker, as `cli =
+    "./rt"`, as `CLI = "./rt"` and as `cli = "sh"` with a file named
+    `pull`: through `newDriver` (what `build` and `shell` call), `runClean`
+    and `doctor` the result is the error and the marker is absent;
+    `runClean` again with `driver = "qemu"` in the file and with `--driver
+    vz`; the same with the executable's absolute path in `--runtime`, in
+    the variable and in the user's file. No fallback: `podman` in the
+    user's file and an unsupported value in the project's give the error,
+    and a fake `finch` on `PATH` whose `info` writes a marker is not run.
+    These use a shell script and skip on Windows, as `fakeRuntime` does.
+    Each case asserts what fails before the fix, as the design lists it by
+    command, and is seen to fail against `resolveRuntime` as it is at
+    `119a0e1` (GLOBAL-04, GLOBAL-06, GLOBAL-10, GLOBAL-11).
+13. **Tier 0, the transitional forms** (TEST-01, TEST-02; Validation plan,
+    "The transitional forms"): `cmd/warden/runtime_former_test.go`, headed
+    by the marker `TRANSITIONAL(runtime-former-values)`, one table, the
+    same on every OS, with the design's rows: the fix names `docker` for
+    `Docker` and `docker.exe`; the three paths to `docker` give that name
+    and `PATH` and no directory; the two `nerdctl` rows give its message;
+    `/usr/local/bin/docker-ci` and `./rt` give the wrapper message; `sh`,
+    `dokcer` and ` docker` are not recognized. Every row of the detection
+    has a case (TEST-06), and for every row the check of task 3 refuses the
+    value, so the detection cannot accept anything (UX-03, UX-04,
+    GLOBAL-07).
+14. **Tier 0, nothing of the value outside the quotes** (TEST-01, TEST-02;
+    Validation plan, the bullet of that name; Security note, point 5): for
+    a path whose directory holds an escape character and a newline, from
+    each source, the value is in the message once, quoted, and neither the
+    directory nor either character is anywhere else in the message or the
+    fix. It lives with the permanent error's tests, not in
+    `runtime_former_test.go`: it holds without the detection and stays when
+    the detection is removed (GLOBAL-06, UX-04).
+15. **Tier 1, the refusal cases in `test-integration.sh`** (TEST-02;
+    Validation plan, Tier 1, all but its last bullet; SEC-04). A temporary
+    project directory with a Dockerfile, a `warden.toml` and an executable
+    `rt` that writes a marker; `$WARDEN` is made absolute first, because the
+    cases change directory. The cases are the design's: `cli = "./rt"` on
+    `build`, `clean` and `doctor` (exit 1, `To fix:`, no marker, no output
+    directory); `[Runtime]` with `CLI = "./rt"` on `clean`; `cli = "./rt"`
+    with `driver = "qemu"` in the file, and with `--driver vz`, on `clean`;
+    the executable's absolute path in `--runtime` and in `WARDEN_CTR_CLI`,
+    with no `cli` in the file, on `doctor` (exit 1, no marker); the `./rt`
+    file under `--runtime docker` and under
+    `WARDEN_CTR_CLI=docker` on `doctor`, which prints `container runtime:
+    docker`; the `./rt` file with `warden setup` and with `warden clean
+    --driver hyperv`, exit 0. They count in the script's `PASS` and `FAIL`
+    as its other assertions do (GLOBAL-04, GLOBAL-06, UX-08, UX-09).
+16. **Tier 1, a named runtime from a project's file still builds**
+    (TEST-02; Validation plan, Tier 1, its last bullet). One of the three
+    builds the script already runs is run from a directory whose
+    `warden.toml` names the runtime, as Note C says, at no extra build; its
+    existing assertions stay (GLOBAL-04, FLOW-06).
+17. **The rule change UX-08, amend** (`rule change UX-08 approved at
+    a2afd08`; FLOW-14). Paths: `docs/development/ux-cli-config.md` and
+    `tools/tier1/rules.yaml`. In the first, the UX-08 block (heading,
+    severity, check and body) is replaced by the wording under **Rule
+    changes**, "Proposed wording", copied word for word and not
+    paraphrased: the heading "UX-08 — Fail fast on config, in the component
+    that uses it", severity MUST, check `agent-judgment`, and its four
+    paragraphs (LINT-01, LINT-08). In the second, the line `UX-08:
+    {follow-up: ...}` is removed. Both in one commit, so that the
+    `rule-index` self-check never sees one without the other. Nothing else
+    in either file changes, GLOBAL-10 is not edited, and
+    `docs/development/loop-profile.md` needs no edit (PROFILE-01).
+18. **`docs/book/src/guide/configuration.md`** (UX-01; **Reference docs**):
+    the `cli` line of the Full Reference; a section on the container
+    runtime in place of "Runtime Autodetection", with the three values and
+    that they are the same from every source, the precedence, detection,
+    which commands check the value and that a run with another driver does
+    not, and the error; inside it the subsection "A path, or another
+    runtime" with the Compatibility table, under an HTML comment that
+    carries `TRANSITIONAL(runtime-former-values)`; the `WARDEN_CTR_CLI` row
+    ("finch, docker or podman") and the `--runtime` row (UX-03, UX-07).
+19. **`docs/book/src/guide/cli.md` and `installation.md`** (UX-01, UX-05):
+    in `cli.md`, `--runtime <name>` under Global Flags says the three are
+    the only values, one sentence in `warden doctor` and one in `warden
+    clean` say that an unsupported runtime in effect fails the command (for
+    `clean`, under every driver but `firecracker` and `hyperv`);
+    `docs/book/src/getting-started/installation.md` gains the link to the
+    section of task 18. The help of `--runtime` in `cmd/warden/main.go` and
+    `README.md` stay as they are: what they say stays true.
+20. **`docs/book/src/concepts/overview.md`** (FLOW-15): in `warden build`,
+    after the `req := resolve flags and config` line, the design's five
+    lines on how the container driver's runtime is resolved and refused,
+    and the note that `warden clean` resolves it the same way under every
+    driver but `firecracker` and `hyperv`.
+21. **Green, then push** (FLOW-17). `make lint` (which runs tier 1), `make
+    test` and `make enforcement` (the branch changes `tools/tier1/`:
+    FLOW-14) pass in the feature checkout; `make integration-test` is run
+    where a container runtime answers, and the PR's `integration` workflow
+    runs it otherwise (TEST-02, TEST-03); the branch is pushed at each
+    green checkpoint, never forced.
+22. **At Publish** (FLOW-09, FLOW-10). The removal of the transitional
+    detection is filed as a queue item on hold until 1.0, whose `source`
+    names the marker `TRANSITIONAL(runtime-former-values)` and that
+    condition (a4; UX-03). The two tracked gaps are confirmed open in the
+    native-gap backlog (TEST-03). The merge of `main` checks the order the
+    design assumes (this item, then `project-config-trust`, then K1): if
+    either has merged first, **One config file** and **What K1 has to
+    keep** say what follows (FLOW-06).
 
 ## Design review
 
