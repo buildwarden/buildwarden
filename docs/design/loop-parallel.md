@@ -417,7 +417,8 @@ say.
 19. **Fourteen rule changes, in this item's PR.** FLOW-02, -03, -05, -10,
     -15, -19 and -20, as the proposal lists; FLOW-04, -06 and -08, which
     `wf commit`, the refresh step, tracked items and a merge recorded in a
-    second repository (a6) make untrue as written; FLOW-09, for a red
+    second repository (a6) make untrue as written, FLOW-08 also for when
+    a pull request may be merged (a1 (b)); FLOW-09, for a red
     `main` the loop itself sees (Decision 22);
     LOOP-01, LOOP-04 and PROFILE-01, for the Areas term, which points to
     the map in the queue state (a4 (c)), and the queue's new field. The last three amend files `loop-contract` added, which are on
@@ -895,11 +896,13 @@ the answer to a3.
 
   Recommended: (a), for a different reason than the draft's. Merging
   behind `main` is now the exception; a ref older than the last refresh
-  is the rule. The change is one flag, and it was reproduced for the
-  draft: A edits line 5, B line 8, B is squashed after A; B's change and
-  the squash's differ with three lines of context and are equal with
-  none. That is case 1 exactly, with B's ref left where it was before the
-  refresh.
+  is the rule. The change is one flag. Case 2 was reproduced for the
+  draft (A edits line 5, B line 8, B is squashed after A). Case 1 was
+  reproduced on 2026-11-15 in a scratch repository: A edits line 5 and
+  merges; B, which edits line 8, merges `main` and is squashed. The
+  refreshed head has the squash's tree. B's ref from before the refresh
+  does not, and its change differs from the squash's with three lines of
+  context and equals it with none.
 - **a15. Whether the areas that hold the checks reach every area.** The
   proposal has "`tier1`, `rules` and `tier1-config` reach every area: a
   tightened check meets all code". The first draft dropped it for the
@@ -3179,9 +3182,8 @@ definition that `alters-slot` built and FLOW-20's Limit bullet carried.
 > the queue state, where the Areas entry of the repository's profile says
 > (LOOP-01), and it changes only in an attended session, on the human's
 > word: no agent changes it otherwise. Two items cannot both change an
-> *exclusive* area;
-> any number may change an *ordered* area, and the later to merge is put in
-> order by its refresh (FLOW-10). Area A *reaches* area B when code in A
+> *exclusive* area; any number may change an *ordered* area, and the
+> later to merge is put in order by its refresh (FLOW-10). Area A *reaches* area B when code in A
 > depends on code in B; only exclusive areas reach and are reached. A
 > repository with no map is one exclusive area, and
 > an item that declares no areas is taken to change the whole of each
@@ -3231,8 +3233,9 @@ definition that `alters-slot` built and FLOW-20's Limit bullet carried.
 >   item may merge meanwhile; the open PR then waits for its refresh
 >   (FLOW-10) before it may merge (FLOW-08).
 >
-> **Waiting on the human.** A queued feature does not start while the
-> items that wait on the human number a fourth limit or more. An item
+> **Waiting on the human.** A fourth limit bounds what waits on the
+> human: a queued feature does not start while that many items, or more,
+> wait on the human. An item
 > waits on the human when it is in progress and has a `human` step it
 > could take now, an open blocking question, a pull request waiting for
 > the merge, or a spent budget (FLOW-13); it counts once, and a tracked
@@ -3725,8 +3728,12 @@ whether it is still true with the proposed wording.
     that is not on the remote), `TestRefreshDoneWhen` (each check; the
     local head ahead of the remote fails "pushed"), `TestImpactDeltaAreas`,
     `TestSkipNarrowing`, `TestTrackedCheck`, and `TestSquashBesideEdit`:
-    in a scratch repository, A edits line 5 and B line 8 of one file, B is
-    squash-merged after A, and B's branch is confirmed as merged; the
+    in a scratch repository, A edits line 5 and B line 8 of one file, A
+    merges, B's branch merges `main` and is squash-merged, and both of
+    B's refs are confirmed as merged: the refreshed head by the tree, and
+    a ref left at the head before the refresh by the change (a14); so is
+    B squash-merged after A with no refresh, the merge made round the
+    requirement; the
     existing `wf-squash-after-base-moved` tests keep passing, including
     the ones that refuse a head pushed past the squash.
 
