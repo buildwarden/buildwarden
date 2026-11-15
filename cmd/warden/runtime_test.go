@@ -12,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"testing"
+	"unicode/utf8"
 	"unsafe"
 
 	"github.com/buildwarden/buildwarden/driver"
@@ -391,13 +392,20 @@ func TestRuntimeUnsetMarker(t *testing.T) {
 			t.Errorf("runtime = %q, want empty", cfg.Runtime.CLI)
 		}
 	})
+	// What keeps every TOML string from spelling the marker: a file that
+	// is not UTF-8 is refused, and an escape yields a Unicode scalar value,
+	// which Go encodes as valid UTF-8.
+	if utf8.ValidString(unsetCLI) {
+		t.Fatalf("the marker %q is valid UTF-8, so a TOML string can spell it",
+			unsetCLI)
+	}
 	for name, value := range map[string]string{
-		"basic string":              "\"\xff\"",
-		"literal string":            "'\xff'",
-		"multi-line basic string":   "\"\"\"\xff\"\"\"",
-		"multi-line literal string": "'''\xff'''",
+		"basic string":              `"` + unsetCLI + `"`,
+		"literal string":            "'" + unsetCLI + "'",
+		"multi-line basic string":   `"""` + unsetCLI + `"""`,
+		"multi-line literal string": "'''" + unsetCLI + "'''",
 	} {
-		t.Run("the marker's byte in a "+name+" fails the load", func(t *testing.T) {
+		t.Run("the marker in a "+name+" fails the load", func(t *testing.T) {
 			inConfigFiles(t, user, "[runtime]\ncli = "+value+"\n")
 			cfg, err := LoadConfig()
 			if err == nil || !strings.Contains(err.Error(), "parsing warden.toml") {
