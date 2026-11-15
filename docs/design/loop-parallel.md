@@ -244,13 +244,14 @@ say.
      items that each add a flag or a subcommand would collide, and K1,
      which rewrites `cmd/warden`, would collide with every other item
      that edits it.
-5. **`reaches` is the import graph, with one declared exception: the two
-   areas that hold the checks reach every area** (a15). Area A reaches
+5. **`reaches` is the import graph and nothing else** (a15 (a), Jeff,
+   2026-11-15). Area A reaches
    area B when a package in A, or its tests, imports a package in B,
    directly or not, on Linux, macOS or Windows. Tier 1's new `area-map`
-   check fails when the map and the graph differ. `tier1` and
-   `tier1-config` carry `reaches_all: true`, as the proposal has it: a
-   check that an item tightens runs over every other item's code.
+   check fails when the map and the graph differ. The areas that hold
+   the checks (`tier1`, `tier1-config`) reach what they import, like any
+   other: an item that tightens a check and an item whose code the check
+   would newly fail are disjoint. Where the two meet is under **Safety**.
    - *Rejected: links written by hand for couplings the graph cannot see.*
      A hand-written link can be neither checked nor kept current. A file
      one area's code reads or copies by path is placed in the area of the
@@ -268,16 +269,17 @@ say.
      disjoint and take turns only through the refresh"). On history the
      difference is ten pairs of 253 (a5). What is given up is under
      **Safety**.
-   - *Rejected: the import graph alone* (the first draft). A tightened
-     check and the code it newly fails would be disjoint, and under a1 (a)
-     the two may merge before either is refreshed, so the failure would
-     first show on `main`.
+   - *Rejected: `tier1` and `tier1-config` reach every area* (the
+     draft's recommendation, a15 (b), and the proposal's rule for those
+     two). An item that changes a check or adds a `rules.yaml` entry would
+     be near every item in the repository and take turns at the PR with
+     each. On history 17 of the 253 pairs would be near for that reason
+     alone.
    - *Rejected: `rules` (`docs/development/`) reaching every area too*, as
      the proposal also has it. 22 of the 52 merges changed it, so nearly
      half of all items would take turns at the PR with every other item. A
-     rule's wording checks nothing mechanically; its enforcement is in the
-     two areas above, and two items that change the same rule are near by
-     its ID.
+     rule's wording checks nothing mechanically, and two items that change
+     the same rule are near by its ID.
 6. **Near items work side by side and take turns at the PR.** Two items are
    near when an area of one reaches an area of the other, when both change
    the same rule, or when both change a seam that has a specification. This
@@ -682,6 +684,7 @@ effect. a9 and a11 of the first draft are withdrawn: neither was a fork
   - (a) The import graph alone. An item that tightens a check and an item
     whose code the check newly fails are disjoint: both PRs may be open
     and merge in either order, and the failure first shows on `main`.
+    **Chosen.**
   - (b) `tier1` (the checks' code) and `tier1-config` (`rules.yaml`,
     `golangci.yml`, the area map) reach every area: an item that changes
     either is near every item in the repository and takes turns at the PR
@@ -697,6 +700,17 @@ effect. a9 and a11 of the first draft are withdrawn: neither was a fork
   tree (`driver/buildlink/stray_test.go` reads every file;
   `specs/specs_test.go` reads the book's `SUMMARY.md`), nor the root
   `.golangci.yml`; those are part of what a1 (a) accepts.
+
+  **Answered (a), Jeff, 2026-11-15:** "Import graph only. A tightened
+  check and the code it would fail are disjoint and meet on main, where
+  the break is then fixed." It departs from the recommendation. Folded
+  in: `reaches_all` is gone from the map's format and from `tier1` and
+  `tier1-config`; `tier1` reaches `loop`, which it imports, and
+  `tier1-config` nothing; FLOW-05's proposed sentence on what reaches
+  means loses its clause on checks. The option was written for a1 (a).
+  With a1 (b), which Jeff also chose, the two usually meet one step
+  before `main`, at the refresh of whichever merges second; **Safety**
+  says when, and when they still meet on `main` (a16).
 - **a16. A regression that CI reports on `main`.** FLOW-09 has a session
   file a regression `main` already has when it finds one "while the
   feature is built, validated or consolidated". Nothing files one that CI
@@ -875,7 +889,6 @@ areas:
     mode: exclusive | ordered
     paths: [<pattern>, ...]
     reaches: [<area>, ...]
-    reaches_all: true          # in place of reaches, where declared
 implies:
   drivers: {<driver>: <area>, ...}
   shared: [<area>, ...]
@@ -898,10 +911,6 @@ written_seams: [<seam>, ...]
   only exclusive areas: an ordered area with `reaches`, or one named in
   another area's `reaches`, is an error. Unknown keys are rejected, as in
   `rules.yaml`.
-- **`reaches_all: true`** says the area reaches every area of the map,
-  itself included, and takes the place of `reaches`. It is for the areas
-  whose files check all the others (a15), and it is the one relation the
-  map states that the import graph does not give.
 - **`implies`** says which area a value in a design's front matter stands
   for, so `wf` holds none of this repository's vocabulary (LOOP-08).
   `drivers` gives each driver's own area. `shared` lists the areas that
@@ -973,7 +982,7 @@ areas:
   tier1:
     mode: exclusive
     paths: [tools/tier1/]
-    reaches_all: true
+    reaches: [loop]
   loop:
     mode: exclusive
     paths: [tools/workflow/, .claude/, .entire/]
@@ -1000,7 +1009,6 @@ areas:
   tier1-config:
     mode: ordered
     paths: [tools/tier1/rules.yaml, tools/tier1/golangci.yml, tools/tier1/areas.yaml]
-    reaches_all: true
 implies:
   drivers:
     container: driver/container
@@ -1028,7 +1036,7 @@ Why each area is what it is:
 | `collector` | exclusive | `collector/`, `cmd/collector/` | The collector and its reference consumer |
 | `executor` | exclusive | `bootstrap/`, `cmd/warden-io/` | The in-environment pieces and the bootstrap configuration they read |
 | `specs` | exclusive | `specs/` and its mirror pages in the book | The ledger wire format and schemas (RELAY-05) |
-| `tier1` | exclusive | Tier 1's code | A check's code is changed by few items (3 of the 52 merges), each by an approved rule change. `reaches_all`: a changed check runs over every area (a15) |
+| `tier1` | exclusive | Tier 1's code | A check's code is changed by few items (3 of the 52 merges), each by an approved rule change. It reaches `loop`, which it imports, and no other area: a changed check is disjoint from the code it runs over (a15 (a)) |
 | `loop` | exclusive | `tools/workflow/`, `.claude/`, `.entire/` | The loop's machinery. Process items change it and are outside the relations. A feature may not: `loop-contract`'s FLOW-14 lets a feature's design declare no change to a loop rule or its enforcement |
 | `core` | exclusive | Every path no pattern matches. Empty today | A new top-level tree collides with any other until the design that adds it gives it an area |
 | `cli` | ordered | `cmd/warden/` | The orchestrator's entry point, and the one ordered area that holds code (a5 (d)). Five of the 52 merges changed it; three of the last six product merges did, two of them by a file or two beside one driver's tree. Such items no longer collide, and none of them is near another item because `cmd/warden` imports it: an ordered area has no `reaches` |
@@ -1036,7 +1044,7 @@ Why each area is what it is:
 | `rules` | ordered | `docs/development/` | Changed by 22 of the 52. Two items that change the *same rule* are near by its ID, whatever the file |
 | `designs` | ordered | `docs/design/`: other items' designs and the template | An item's own design needs no area. This is for a retrofit or an amendment to an archived design |
 | `build` | ordered | CI workflows, `Makefile`, `go.mod`, `go.sum`, lint and release configuration, the root `Dockerfile` and its ledger, the install and integration scripts | Changed a line at a time by many items |
-| `tier1-config` | ordered | `rules.yaml`, `golangci.yml`, `areas.yaml` | Each item adds its own entry, so two may change it side by side (5 of the 52 merges changed it). `reaches_all`: an entry turns a check on for every area (a15) |
+| `tier1-config` | ordered | `rules.yaml`, `golangci.yml`, `areas.yaml` | Each item adds its own entry, so two may change it side by side (5 of the 52 merges changed it). It reaches nothing, as every ordered area (a15 (a), a5 (d)) |
 
 **`reaches`, as computed.** From `go list -deps -test ./...` in each of the
 three modules, for Linux, macOS and Windows on amd64 and arm64: 18 runs,
@@ -1053,9 +1061,8 @@ beside it there). Each package's directory is mapped to its area:
 | each `driver/<name>` | `collector`, `driver-core`, `executor`, `ledger`, `relaycfg` |
 | `relay` | `collector`, `ledger`, `relaycfg` |
 | `specs` | `collector`, `ledger`, `relay`, `relaycfg` (its tests) |
-| `tier1` | `loop` by import (`tools/tier1` imports `tools/workflow/check`); the map says `reaches_all` |
-| `relaycfg`, `ledger`, `executor`, `loop`, `core`, `book`, `rules`, `designs`, `build` | nothing |
-| `tier1-config` | nothing by import; the map says `reaches_all` |
+| `tier1` | `loop` (`tools/tier1` imports `tools/workflow/check`) |
+| `relaycfg`, `ledger`, `executor`, `loop`, `core`, `book`, `rules`, `designs`, `build`, `tier1-config` | nothing |
 
 `relay` is reached by `driver-core`'s tests and by no driver tree
 (`cmd/warden`'s tests reach it too, which the map does not record), and it
@@ -1075,15 +1082,15 @@ the diff touches `areas.yaml`, `rules.yaml`, a `.go` file or a `go.mod`,
 over the 18 `go list` runs above, and fails when:
 
 - the map does not parse, an area has no `mode`, `catch_all` does not name
-  an exclusive area with no paths, an area has both `reaches` and
-  `reaches_all`, or a `reaches` or `implies` entry names an area the map
+  an exclusive area with no paths, an ordered area has `reaches` or is
+  named in one, or a `reaches` or `implies` entry names an area the map
   does not have;
 - a tracked file matches two areas equally;
 - a `go list` run fails. The finding is its error;
 - the import graph has an edge between two areas that `reaches` lacks, or
   `reaches` lists an edge the graph does not have. The finding names a file
-  and the import that makes the edge. An area with `reaches_all` is not
-  compared;
+  and the import that makes the edge. An edge from or to an ordered area
+  (`cmd/warden`'s imports) is not compared;
 - a driver in `rules.yaml`'s `drivers.all` has no entry in
   `implies.drivers`, or `implies.shared` is not exactly the areas that hold
   a path of `rules.yaml`'s `drivers.shared`.
@@ -1105,8 +1112,7 @@ dependency between two areas changes which items its work is near.
 and nothing else. The first row that applies decides. "Has a repository in
 common" compares the effective `repos` (an absent list is the queue's own
 repository). "Undeclared" is an absent `areas`, or one that names an area
-the copy of the map lacks. An area with `reaches_all` reaches every area
-of its map.
+the copy of the map lacks.
 
 | # | When | Relation | The reason `wf` prints |
 |---|---|---|---|
@@ -1156,7 +1162,7 @@ Every combination, with examples from this repository:
 | Two items that change `relay-claim`, which has no specification until S1 lands | colliding | 3 |
 | An undeclared item and any feature here (`seam-specs` and `driver-contract` today, neither yet declared) | colliding | 5 |
 | `seam-specs` and `driver-contract` once a human `wf declare` has recorded their seams: both list `relay-claim` and `collector` | colliding, whatever areas they are given, until S1 lists those seams' contract documents | 3 |
-| An item that changes a tier-1 check (`tier1`) or adds a `rules.yaml` entry (`tier1-config`) and any item that declares an area | near | 9 |
+| An item that changes a tier-1 check (`tier1`) or adds a `rules.yaml` entry (`tier1-config`) and an item whose code the check runs over | disjoint (a15 (a)) | 10 |
 | An item whose design adds the area it declares, before its merge | colliding with every feature here | 5 |
 | An item here and an item homed in the relay repository, no seam or rule in common | disjoint | 10 |
 | K1 here and the relay's M1 (tracked, its seams recorded at intake with `wf new -seams`), both on seam 8, which is not written | colliding, shown and not enforced | 3 |
@@ -1273,7 +1279,7 @@ hold. Its design review shows it against the open queue
 (`wf validate -areas`), which is a view of that day's queue; when the
 merged map is synced, `wf areas -sync` writes it, prints the limit and the
 holders, and `QUEUE.md`'s **Needs Jeff** lists
-`over a limit: a and b both hold the PR slot (near: tier1 reaches relay)`
+`over a limit: a and b both hold the PR slot (near: specs reaches relay)`
 until one of them merges. As with a lowered limit, no holder is stopped
 (an item that holds is never refused), no related item is given the limit
 meanwhile, and `wf validate` reports the `limit:` line on every run. The
@@ -1958,10 +1964,36 @@ This item declares no `holds` (Decision 17, a13).
   and a driver that boots the relay. A whole-tree test in a code area:
   `driver/buildlink/stray_test.go` walks every file, so a literal one
   item forbids and another item adds are green apart and red together;
-  `specs/specs_test.go` reads the book's `SUMMARY.md`. And lint
-  configuration outside `tier1-config`: the root `.golangci.yml` is in
-  `build`. That is the risk the direction accepted; the map cannot remove
-  it, and a1 (b) is the option that does.
+  `specs/specs_test.go` reads the book's `SUMMARY.md`. And a check one
+  item tightens over code another item adds: no check's area reaches the
+  code it runs over (a15 (a)), whether the check is tier 1's
+  (`tier1`, `tier1-config`) or the root `.golangci.yml` (`build`).
+- **A tightened check beside the code it would fail** (a15 (a)). The two
+  items are disjoint and both PRs may be open. Whichever merges second
+  has merged the first at its refresh (a1 (b)), and what happens there
+  depends on what the check reads:
+  - *The check item merged first.* The code item's refresh runs
+    `make lint` with the tightened check over its own diff and fails. That
+    is a lint failure a merged check now reports on the branch's code:
+    the item goes back to Implement (FLOW-10), before its merge.
+  - *The code item merged first, and the check reads the whole tree*
+    (`golangci-lint`, a whole-tree test). The check item's refresh fails
+    on code that is now on `main` and outside its areas. Fixing it there
+    is a path outside its areas: `wf declare` refuses the widening unless
+    the approved design covers it, and the item returns to Design
+    (FLOW-06), before its merge.
+  - *The code item merged first, and the check is diff-scoped* (tier 1's
+    own checks, LINT-04, which report only what a branch changes). The
+    check item's refresh is green, it merges, and nothing fails: the
+    tightened check binds the other item's code when a later change
+    next touches those lines, or at the next release, whose tier-1 run
+    is over everything since the last tag (LINT-03, LINT-04). That is
+    how every tier-1 check added so far has met code already on `main`.
+  - *Either merged round the up-to-date requirement* (a1: a bypass, or a
+    merge made before the setting exists). Then the two meet on `main`,
+    as the answer has it: CI on the push fails where the check reads the
+    whole tree, **Needs Jeff** opens with it, and the run that sees it
+    files the fix (a16).
 - **Two items in `cmd/warden/`** (a5 (d)). `cli` is ordered, so two items
   that edit the same CLI files are disjoint: both PRs may be open, and
   they merge one after the other, the second after its refresh has
@@ -1969,8 +2001,9 @@ This item declares no `holds` (Decision 17, a13).
   textual conflict: the refresh resolves it when the fix is a conflict
   fix, and sends the item back to Implement when it is more (FLOW-10).
   A clean merge that does not build or fails a test (one item renames a
-  function the other calls; both register the same flag, which panics
-  when `cmd/warden`'s tests build the command): `make lint` and
+  function the other calls; both register a flag of the same name in an
+  `init`, and the flag library panics when `cmd/warden`'s test binary
+  starts): `make lint` and
   `make test` fail on the refreshed branch, before the merge. A clean
   merge that builds, passes and is wrong (two edits to the order of the
   same command's steps, with no test on the order): nothing catches it
@@ -2046,7 +2079,7 @@ Where this design does not do what the proposal's sections 3 to 8 say.
 | The proposal | This design | Why |
 |---|---|---|
 | Sharing only ordered areas makes two items near: one PR at a time | They are disjoint; the refresh orders them (a2) | 36 of 253 historical pairs, Jeff's example among them, would take turns over a book page or a build file |
-| "`tier1`, `rules` and `tier1-config` reach every area" | `tier1` and `tier1-config` do; `rules` does not (a15) | 22 of the 52 merges changed `docs/development/`; wording checks nothing mechanically, and the same rule is near by its ID |
+| "`tier1`, `rules` and `tier1-config` reach every area" | None of the three does: `reaches` is the import graph alone (a15 (a)) | Jeff's answer of 2026-11-15. An item that changes a check would otherwise take turns at the PR with every item; 22 of the 52 merges changed `docs/development/` |
 | The exclusive areas include `relay`, with the relay VM image tools | `tools/relay-vm/` is in `driver-core` | Its `init` is read, written for and copied by driver code, which no import shows |
 | A form for the Go relay "(`relay`, which reaches every driver) would be near" a Hyper-V item | Disjoint | The code: no driver tree imports `relay/`, and it imports none |
 | `wf areas -check` compares the map with `go list` | Tier 1's `area-map` does; `wf areas -check` compares the copy with `main` | The loop's tool assumes no language (LOOP-08) |
@@ -2142,7 +2175,6 @@ being read, and the refresh for any process item's PR that waits while
 | `wf new -follows X` without `-areas` | The new item takes X's `repos` and `areas`; none when X has none | A fix or finish of X is in X's areas to a first approximation, and Jeff agreed those for X (a4). `-repos` and `-areas` override it, and the history line says which was used (GLOBAL-10, GLOBAL-11) |
 | *Named fallback: "the design on the branch".* `wf declare` judging a widening when the design has no `approved at` entry (its review was skipped) | It reads `drivers`, `surfaces` and `rule_changes` from the branch | A skipped review has no approved commit, and the skip criteria allow no seam and no rule change. The history line says `(design on the branch: review skipped)` (GLOBAL-11) |
 | `main.yaml` absent | `main`'s CI is not known: `QUEUE.md` says `main: CI not recorded`, and nothing is filed | No session has recorded it yet. Unknown is not read as green (GLOBAL-10) |
-| A map area's `reaches_all` absent | False | Only the areas that hold the checks declare it |
 | The map's `implies.shared` absent | No area is shared: every driver in a design's `drivers` needs its own area declared | The obvious reading; the `area-map` check requires it to match `rules.yaml` in this repository |
 | The merge check's context lines | 0, fixed. *Changed:* 3 | a14 |
 | `limits.in_progress` absent | 5; a written value below 1 is an error | FLOW-05's written limit (Decision 8). *Changed:* absent or 0 was "no limit" |
@@ -2436,7 +2468,7 @@ definition that `alters-slot` built and FLOW-20's Limit bullet carried.
 > the areas it reaches. Two items cannot both change an *exclusive* area;
 > any number may change an *ordered* area, and the later to merge is put in
 > order by its refresh (FLOW-10). Area A *reaches* area B when code in A
-> depends on code in B, or when A holds checks that run over B. A
+> depends on code in B; only exclusive areas reach and are reached. A
 > repository with no map is one exclusive area, and
 > an item that declares no areas is taken to change the whole of each
 > repository it names. Two features are:
