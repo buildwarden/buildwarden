@@ -191,7 +191,8 @@ Full documentation is available at **[buildwarden.github.io/buildwarden](https:/
 [CONTRIBUTING.md](CONTRIBUTING.md) covers setup, building, testing and pull
 requests. [How It Works](docs/book/src/concepts/overview.md) describes each
 component as pseudocode, and [`docs/development/`](docs/development/README.md)
-holds the standards and the development process.
+holds the standards and the development process. The development loop runs
+under the [Loop Contract](docs/development/loop-contract.md).
 
 ## License
 

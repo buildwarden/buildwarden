@@ -417,6 +417,128 @@ func TestAddLogsRenumbering(t *testing.T) {
 	}
 }
 
+// held queues an item of the given kind through Add and puts it on hold, as
+// wf new -hold does, in a state whose directory Save can write to.
+func held(t *testing.T, kind, why string) (*State, *Feature) {
+	t.Helper()
+	s := state()
+	s.Dir = t.TempDir()
+	_ = os.MkdirAll(filepath.Join(s.Dir, "queue"), 0o755)
+	f := &Feature{Feature: "held", Priority: 1, Kind: kind,
+		Budget: Budget{Estimate: Count{Runs: 1, Steps: 7}}}
+	if _, err := s.Add(f, now, "human/jeff"); err != nil {
+		t.Fatal(err)
+	}
+	if err := f.PutOnHold(why, now, "human/jeff"); err != nil {
+		t.Fatal(err)
+	}
+	if err := s.Save(f); err != nil {
+		t.Fatal(err)
+	}
+	if errs := s.Validate(); len(errs) != 0 {
+		t.Fatalf("Validate: %v", errs)
+	}
+	return s, f
+}
+
+// TestPutOnHoldWrites: wf new -hold writes what the hand-edit wrote for a
+// queued item (FLOW-20): q1 with the reason as given, the human answer step,
+// and the item's first step needing it. The file it writes validates.
+func TestPutOnHoldWrites(t *testing.T) {
+	const why = "frozen while the componentization program runs"
+	for kind, ids := range map[string][2]string{
+		"":        {"f0-answer-q1", "f0-branch-setup"},
+		"process": {"x1-answer-q1", "x1-design"},
+	} {
+		s, f := held(t, kind, why)
+		q := f.OpenBlocking()
+		if len(q) != 1 || q[0].ID != "q1" || q[0].Question != why {
+			t.Errorf("%q: open blocking %+v, want q1 with the reason", kind, q)
+		}
+		if len(f.Steps) != 2 || f.Steps[0].ID != ids[0] ||
+			f.Steps[0].Affinity != "human" || f.Steps[0].Phase != f.Phase ||
+			f.Steps[1].ID != ids[1] ||
+			!slices.Equal(f.Steps[1].Needs, ids[:1]) {
+			t.Errorf("%q: steps %+v, want %v", kind, f.Steps, ids)
+		}
+		last := f.History[len(f.History)-1].Event
+		if last != "on hold (q1): "+why {
+			t.Errorf("%q: last history line %q", kind, last)
+		}
+		if md := Summary(s); !strings.Contains(md, "blocking question q1: "+why) {
+			t.Errorf("%q: QUEUE.md does not list the hold:\n%s", kind, md)
+		}
+	}
+}
+
+// TestHeldItemWaitsForItsAnswer: the cloud gets no step of a held item and,
+// while it is queued, no blocked line; the human is offered only the answer
+// step. Answering q1 leaves the item queued with its first step ready
+// (FLOW-07, FLOW-20).
+func TestHeldItemWaitsForItsAnswer(t *testing.T) {
+	for kind, want := range map[string][2]string{
+		"":        {"cloud/run", "held f0-branch-setup"},
+		"process": {"human/jeff", "held x1-design"},
+	} {
+		s, f := held(t, kind, "why")
+		if p, blocked := s.Next("cloud/run", now); p != nil || len(blocked) != 0 {
+			t.Errorf("%q: cloud pick %+v, blocked %v; want neither", kind, p, blocked)
+		}
+		if got := next(t, s, "human/jeff"); got != "held "+f.Steps[0].ID {
+			t.Errorf("%q: human pick = %s, want only the answer step", kind, got)
+		}
+		// With the answer step leased to someone else, only the needs link
+		// keeps a human from the process item's own first step.
+		exp := now.Add(time.Hour)
+		f.Steps[0].Lease = Lease{ClaimedBy: "human/other", Expires: &exp}
+		if got := next(t, s, "human/jeff"); got != "none" {
+			t.Errorf("%q: human pick = %s past a leased answer step", kind, got)
+		}
+		f.Steps[0].Lease = Lease{}
+
+		// What wf answer does: the question answered, its step complete.
+		f.Questions[0].Status = "answered"
+		Complete(f, &f.Steps[0], "human/jeff", now)
+		if f.Status != "queued" || len(f.OpenBlocking()) != 0 {
+			t.Errorf("%q: status %s, open %v; want queued, none open", kind,
+				f.Status, f.OpenBlocking())
+		}
+		if got := next(t, s, want[0]); got != want[1] {
+			t.Errorf("%q: %s pick = %s, want %s", kind, want[0], got, want[1])
+		}
+		if errs := s.Validate(); len(errs) != 0 {
+			t.Errorf("%q: Validate after the answer: %v", kind, errs)
+		}
+	}
+}
+
+// TestPutOnHoldRefusals: a hold is explicit and never merged into an item
+// that is not newly queued (GLOBAL-10).
+func TestPutOnHoldRefusals(t *testing.T) {
+	asked := feature("asked", 3, "queued")
+	asked.Questions = []Question{{ID: "q1", Kind: "blocking", Status: "open",
+		Question: "?", Options: []string{"a"}, Recommended: "a"}}
+	unseeded := &Feature{Feature: "c", Status: "queued", Round: "feature"}
+	for name, tc := range map[string]struct {
+		f   *Feature
+		why string
+	}{
+		"no reason":        {feature("a", 1, "queued"), " "},
+		"in progress":      {feature("b", 2, "in_progress"), "why"},
+		"has a question":   {asked, "why"},
+		"no step to gate":  {unseeded, "why"},
+		"already finished": {feature("d", 4, "done"), "why"},
+	} {
+		before := len(tc.f.Steps)
+		if err := tc.f.PutOnHold(tc.why, now, "human/jeff"); err == nil {
+			t.Errorf("%s: PutOnHold succeeded", name)
+		}
+		if len(tc.f.Steps) != before || len(tc.f.History) != 0 {
+			t.Errorf("%s: a refused hold changed the item: %+v", name, tc.f)
+		}
+	}
+}
+
 // altering is an in-progress feature that declares alters_relationships: true
 // and has finished Design: its review and its Plan step are pending.
 func altering(name string, prio int) *Feature {
