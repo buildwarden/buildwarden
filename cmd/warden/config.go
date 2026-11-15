@@ -245,11 +245,34 @@ func supportedRuntime(v string) (string, bool) {
 	return "", false
 }
 
+// runtimeNames lists containerRuntimes in prose, the last after conj:
+// "finch, docker or podman".
+func runtimeNames(conj string) string {
+	last := len(containerRuntimes) - 1
+	return strings.Join(containerRuntimes[:last], ", ") +
+		" " + conj + " " + containerRuntimes[last]
+}
+
 // unsupportedRuntime is the error for a runtime in effect that is not one of
-// containerRuntimes.
+// containerRuntimes. It names the level that set the value and gives the fix
+// for that level. The value is printed once, quoted: it may come from a file
+// someone else wrote, and %q keeps control characters out of the terminal.
+// Nothing else in the message or the fix is taken from the value.
 func unsupportedRuntime(rt RuntimeConfig) error {
-	return driver.Fixable("set the container runtime to finch, docker or podman",
-		"container runtime %q is not supported", rt.CLI)
+	var setting, set, orNot string
+	switch rt.CLISource {
+	case cliFromFlag:
+		setting, set, orNot = cliFromFlag, "pass --runtime ", ", or leave it out"
+	case cliFromEnv:
+		setting, set, orNot = cliFromEnv, "set WARDEN_CTR_CLI to ", ", or unset it"
+	default:
+		setting, set = "[runtime] cli in "+rt.CLISource, "set it to "
+		orNot = ", or remove it; --runtime with one of those replaces it " +
+			"for one command"
+	}
+	what := "the container driver supports " + runtimeNames("and")
+	fix := set + runtimeNames("or") + orNot
+	return driver.Fixable(fix, "%s is %q; %s", setting, rt.CLI, what)
 }
 
 // DetectRuntime probes for a working container runtime, in
