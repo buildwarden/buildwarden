@@ -370,7 +370,8 @@ say.
     - *Rejected: an agent may narrow.* Narrowing claims more parallelism
       than the human agreed to.
 13. **The refresh is one step, `f6-refresh`, taken by the cloud, seeded
-    whenever `main` has moved past an open PR** (a10). It merges `main`,
+    whenever `main` has moved past an open PR** (a10), or past a feature
+    that merged `main` in Publish and has not finished Publish. It merges `main`,
     runs the gates, and carries the consolidation pass and the sweep over
     what landed. It pushes only while the PR is still open and the remote
     branch is where it found it. It does not queue a native validation
@@ -1758,7 +1759,7 @@ code these cases run through.
 | 5 | A host claims a Plan step past the limit (affinity edited) | The claim stands; the next `wf validate` fails | `wf claim` refuses it |
 | 6 | Wave 2: S3, S4 and K1 declare `driver-core`; S2 declares `relay`, `executor`, `rules`, `book`; all four amend GLOBAL-08 | Four altering features, three slots: the fourth waits at Plan. One PR at a time | S3, S4 and K1 collide and hold the three slots. S2 is near each (row 8) and is in none of their sets: it plans too. All four take turns at the PR |
 | 7 | Wave 4: K3 (`driver/hyperv`, `build`, `book`) and an item in the Go relay (`relay`, `book`) | One PR at a time | Disjoint: both PRs are open together. He merges either one; the other then waits for its refresh and merges after it (Decision 21) |
-| 8 | Wave 5: five reconciliation items, one per driver (`driver/<name>`, `book`) | Five features in progress, the limit; one PR at a time; ranked as new functionality | Class 3. Pairwise disjoint: none is in another's set, and five PRs may be open. They merge one per refresh: five days unattended, or one attended sitting with four refreshes |
+| 8 | Wave 5: five reconciliation items, one per driver (`driver/<name>`, `book`) | Five features in progress, the limit; one PR at a time; ranked as new functionality | Class 3. Pairwise disjoint: none is in another's set, and five PRs may be open. They merge one per refresh: five days unattended, or one attended sitting with four refreshes. One that is still in Publish when another merges is refreshed there, before its PR opens (case 38) |
 | 9 | Five undeclared features in progress; a sixth queued | Not started | Not started: all five collide with it |
 | 10 | Five declared features in progress, each disjoint from a sixth | Not started | Started |
 | 11 | Two workers claim Plan for two colliding items at the last slot | The second push is rejected and its claim lost | The second push is rejected; `wf commit` asks the claim again on the new state; the guard refuses it and the reason names the holders |
@@ -1788,6 +1789,7 @@ code these cases run through.
 | 35 | `main` is recorded red; four PRs are behind it | n/a | No refresh is offered: `wf next` prints `blocked <item> main is red at <sha>: no refresh until it is green` for each of the four and goes on, and none of them is ready. The run's steps go to the fix the tick filed, which starts whatever waits on Jeff (case 26); if `main` moves under the fix's own PR, its refresh is the one that is still taken. Once the fix merges and `main` is green, the next run refreshes the four |
 | 36 | A PR's refresh has passed and it is ready; before Jeff merges it, `main` moves again | n/a | It waits for a refresh again: the next `wf stale` seeds one. Under a10 (d) that costs the item no budget |
 | 37 | Jeff uses GitHub's **Update branch** on a PR that is behind, before any session has run `wf stale` | n/a | The next `wf stale` finds the branch current and seeds nothing; the PR is ready when CI is green on the new head. No consolidation pass ran over what landed; that is his choice |
+| 38 | Two disjoint features. One is in Publish, `f6-merge-main` and `f6-consolidate` done, waiting for `f6-validate-windows-hyperv`; Jeff merges the other's PR | Arises only when a process item's PR or a hand merge moves `main`: `f6-open-pr`'s done-when then fails on `current main merged`, and no step merges `main` again | `wf stale` adds `f6-refresh` to it and makes `f6-open-pr` need it. The refresh merges `main`, runs the gates and the pass, and pushes; the host validates when its session runs; `f6-open-pr` then passes its gate. The item holds the PR slot throughout |
 
 ### `wf commit`: pushing queue state
 
@@ -2037,14 +2039,16 @@ what is left.
 ### The refresh step
 
 **What it is.** A step named `f6-refresh` (`-r2`, `-r3`, ... as needed) on
-a feature that waits for Jeff's merge, and `x2-refresh` on a process item
-that does. Affinity `cloud`; the agent is `wf-publish`. It is not a
+a feature that waits for Jeff's merge, or that is still in Publish after
+it merged `main` there; and `x2-refresh` on a process item that waits
+for his merge. Affinity `cloud`; the agent is `wf-publish`. It is not a
 template step: nothing seeds it at a phase's start.
 
 **When it is seeded.** `wf stale -state DIR -repo DIR -worker W` looks at
-every open item homed in this repository that has a PR recorded. For each
-it first runs the merge check `wf done` runs on a merge step
-(`check.merged`), because Jeff may have merged since the last
+every open item homed in this repository that has a PR recorded, and at
+every feature in Publish whose newest `f6-merge-main` is done. For an
+item with a PR it first runs the merge check `wf done` runs on a merge
+step (`check.merged`), because Jeff may have merged since the last
 confirmation, and GitHub deletes the branch when he does:
 
 - *Merged, and the item is at its merge step.* It seeds nothing and prints
@@ -2052,7 +2056,10 @@ confirmation, and GitHub deletes the branch when he does:
   arises in an attended session, whose worker is `human` and cannot
   complete a `cloud` step (`wf done` refuses it); the next tick confirms
   the merge and moves the item to Close.
-- *Merged, and the item is before its merge step* (it was sent back with
+- *Merged, and the item is in Publish* (he merged before `f6-open-pr`
+  was recorded). It seeds nothing: Publish's done-when sees the merge
+  and passes on it, as today (`mergedEarly`).
+- *Merged, and the item is before Publish* (it was sent back with
   its PR open, and Jeff merged the draft all the same). The merge is the
   sign-off and supersedes the phases (FLOW-08): `wf stale` drops the
   item's pending steps before Close, moves it to Close, and adds a `human`
@@ -2060,11 +2067,29 @@ confirmation, and GitHub deletes the branch when he does:
   for Jeff to file as a follow-up or drop.
 - *Not merged, and the remote branch is gone* (the PR was closed). It
   seeds nothing and prints that.
-- *Not merged, `origin/main` is not contained in `origin/<branch>`, the
-  item waits for the merge, and it has no pending refresh step.* It adds
-  one, sets `pr.ci` to `pending`, and writes what moved in the step's
-  note: `main` at `<sha>`, the number of commits, and the files those
-  commits and this branch both change.
+
+Then, for an item that has no pending refresh step and whose
+`origin/<branch>` does not contain `origin/main`:
+
+- *The item waits for the merge.* It adds a refresh step, sets `pr.ci`
+  to `pending`, and writes what moved in the step's note: `main` at
+  `<sha>`, the number of commits, and the files those commits and this
+  branch both change.
+- *The feature is in Publish and its newest `f6-merge-main` is done*,
+  with a PR recorded or not: another item's PR merged while this one
+  was being consolidated, waited for a host's validation, or had its CI
+  repaired. It adds a refresh step in phase 6 with the same note, and
+  makes the pending `f6-open-pr` need it; the refresh needs the newest
+  `f6-consolidate` while that one is still pending. Without this the
+  item could never finish Publish: the gate at `f6-open-pr` checks that
+  `origin/main` is an ancestor of the branch (`mainMerged`,
+  `check/check.go`), `f6-merge-main` is done, and no later step of
+  Publish merges `main`. Before Decision 21 Jeff could have merged such
+  a PR as it stood; now it would never be listed as ready, and with the
+  ruleset GitHub would refuse it.
+
+An item sent back with its PR open gets none: its new Publish merges
+`main` at its start.
 
 The tick runs it right after confirming merges, every run;
 `workflow-human` runs it before it lists the open PRs, and again after
@@ -2096,7 +2121,8 @@ the next item in order (**`main`'s CI**).
    (**`main`'s CI**).
 4. Refresh the Archive summary if the PR's content changed (FLOW-12); run
    `flow18-check.sh`.
-5. *Before the push*, fetch and check that the PR is still open and
+5. *Before the push*, on an item that has a PR recorded, fetch and
+   check that the PR is still open and
    unmerged (`gh api repos/<repo>/pulls/<n>`) and that `origin/<branch>`
    is still the commit the merge in step 1 was made on. If the PR merged
    or the branch is gone, Jeff merged while the refresh ran: the agent
@@ -2105,15 +2131,21 @@ the next item in order (**`main`'s CI**).
    on and drops the step. A push here would bring a deleted branch back,
    with commits `main` does not have, and Close would escalate it
    (FLOW-16).
-6. Push; wait for CI on the new head and set `pr.ci`.
+6. Push; with a PR recorded, wait for CI on the new head and set
+   `pr.ci`.
+
+On a feature in Publish whose PR is not open yet, steps 5 and 6 are the
+push alone, and step 4's Archive summary has not been written:
+`f6-open-pr` follows and does both.
 
 **Its done-when.** Current `main` merged (`origin/main` is an ancestor of
 the branch); the branch pushed, which is new for a feature (the local
 head equals `origin/<branch>`, the check a process item's Implement has
 today; Publish's own done-when reads only the local branch); the
 Consolidation section names the merged `main` commit; the rule-change
-clearance; the design archived on the branch; the PR's CI green; the diff
-inside the areas; the queue equal to the design. For a process item:
+clearance; the diff inside the areas; the queue equal to the design;
+and, when a PR is recorded, the design archived on the branch and the
+PR's CI green. For a process item:
 `main` merged, the branch pushed, the design archived, CI green. If `main`
 moved again meanwhile, the check fails, the step is released, and the next
 run takes it again.
@@ -2147,7 +2179,8 @@ queue file on his word, and the item then holds nothing.
 
 **Native validation.** A refresh does not queue a done `f6-validate-<host>`
 step again (a10 (e), open). The validation stands for the branch as it was
-consolidated.
+consolidated. A host step that is still pending when a refresh runs in
+Publish validates the branch as it then finds it.
 
 **When the step goes away.** `wf done` on the merge step drops a pending
 refresh step (the PR merged first), and so does `wf back` (Publish merges
@@ -2471,7 +2504,8 @@ file names the item's repositories when it has more than this one.
   names; `Claim` starts a tracked item, and leaves the first claim of a
   refresh step out of the item's budget (a10 (d)).
 - `phases.go`: the `tracked` round and the letter `t`; `IsRefresh`;
-  `SeedRefresh`; `Complete` drops a pending refresh on a merge step; `Back`
+  `SeedRefresh`, which in Publish also adds the need to `f6-open-pr`;
+  `Complete` drops a pending refresh on a merge step; `Back`
   drops one; `Landed`, which moves an item whose PR merged while it was
   sent back to Close with its escalation step.
 - `declare.go` (new): the rules of `wf declare` and `wf relate`.
@@ -3441,7 +3475,9 @@ steps from the fix (**`main`'s CI**), so the rule says it waits.
 > sweep, over what landed since the branch last merged `main`, as a dated
 > entry in the consolidation section. The PR is ready again when the
 > step's checks pass. It pushes only while the pull
-> request is still open. No refresh is taken while `main` is known to
+> request is still open. A feature that has merged `main` in Publish and
+> has not finished Publish is refreshed the same way when `main` moves,
+> before its PR is opened or listed as ready. No refresh is taken while `main` is known to
 > fail its own checks, except for the item that fixes it (FLOW-09): it
 > would fail on the same failure. A refresh that finds work beyond conflict fixes
 > and wording sends the feature back as above; its pull request is then a
@@ -3746,7 +3782,12 @@ whether it is still true with the proposed wording.
     green result and on another head; its first claim leaves the item's
     spent steps alone, and a second claim of the same step after a
     release adds one. `TestStale`, on temporary git repositories: `main` moved, a
-    refresh is seeded; PR merged and branch gone, none is seeded and
+    refresh is seeded; a feature in Publish with `f6-merge-main` done
+    gets one that `f6-open-pr` then needs, with a PR recorded and
+    without, and its completion lets `f6-open-pr`'s gate pass (case
+    38); one whose `f6-merge-main` is pending, and one sent back with
+    its PR open, get none; a PR merged while the item is in Publish
+    seeds nothing and is left to Publish's gate; PR merged and branch gone, none is seeded and
     `merged:` is printed; PR closed and branch gone, none; an item sent
     back whose PR then merged is moved to Close with
     `f8-escalate-returned`; run twice, nothing is added twice.
