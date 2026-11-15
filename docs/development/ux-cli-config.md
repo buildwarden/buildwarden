@@ -119,14 +119,35 @@ The automated part checks that defaults resolve with no config file present.
 
 ---
 
-### UX-08 — Fail fast on config
+### UX-08 — Fail fast on config, in the component that uses it
 
 **Severity:** MUST
-**Check:** automated + agent-judgment
+**Check:** agent-judgment
 
-Configuration errors or mismatches are validated and surfaced as early as possible,
-at load/parse/startup, before any real work begins, rather than failing deep into a
-build. The automated part checks that config validation runs at startup.
+A component validates the configuration it consumes, errors and mismatches
+alike, when it initializes: after the overrides are applied (flags and
+environment variables over file configuration, in the order UX-07 gives) and
+before any real work begins, rather than failing deep into a build. What it
+checks is the value in effect, not a value that a higher level replaced.
+
+Only the configuration a run uses is validated. A `warden.toml` and the
+environment may hold the settings of several drivers or components, for runs
+that choose among them on the command line; a setting there that the run does
+not use is not checked, and a bad value in it is not an error. A flag is given
+to one run: a command may refuse, at startup, a flag that its run cannot use.
+A config file that cannot be parsed is an error for every run that reads it.
+
+This is required of every component in the BuildWarden organization and
+highly recommended for components others write. It is not enforced
+mechanically. The check judges, for each setting a change adds or touches, that
+the component that uses it validates it at that point, and that nothing
+validates a file or environment setting the run does not use.
+
+Four checks predate this wording and are made whatever the run uses. As a
+config file loads: the TOML type of every key, `[vm] build_link`, and
+`[vm] dns`. On every `build` and `shell`: `[vm] image_refresh_after` and
+`image_min_grace`. Each stays until the change that moves it to its consumer,
+which takes it off this list. Nothing is added to the list.
 
 ---
 
