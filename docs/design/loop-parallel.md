@@ -270,10 +270,11 @@ say.
      them, and not in `relay` (a5). Any other such coupling is a seam, and
      the relation reads seams.
    - **Only an exclusive area has `reaches`; an ordered area reaches
-     nothing and is reached by nothing** (a18, open). Neither answer
-     says this: a5 (d) speaks of two items that both touch the CLI, and
-     a15 (a) of the import graph. It is the fold-in's rule for what lies
-     between them, so it is put to Jeff. `cmd/warden` imports
+     nothing and is reached by nothing** (a18 (a), Jeff, 2026-11-15).
+     Neither earlier answer said this: a5 (d) speaks of two items that
+     both touch the CLI, and a15 (a) of the import graph. It was the
+     fold-in's rule for what lies between them, so it was put to Jeff,
+     who confirmed it. `cmd/warden` imports
      every driver and every shared package. If `cli` kept those links, an
      item that edits the CLI would be near every driver item and every
      relay item, and two driver items that both edit it would be near
@@ -283,6 +284,12 @@ say.
      difference is ten pairs of 253 (a5), and in nine of the ten only
      one of the two merges touched `cmd/warden/` (a18). What is given
      up is under **Safety**.
+   - *Rejected: `cli` keeps its imports as `reaches`, except between two
+     items that both declare it* (a18 (b)). Adding `cli` to an item's
+     areas would then make it less related to another item, not more: a
+     Hyper-V item that adds a flag would be near a vz item that adds
+     none and disjoint from one that adds one. And the map's format
+     would allow `reaches` on an ordered area for that one exception.
    - *Rejected: `tier1` and `tier1-config` reach every area* (the
      draft's recommendation, a15 (b), and the proposal's rule for those
      two). An item that changes a check or adds a `rules.yaml` entry would
@@ -376,7 +383,8 @@ say.
     - *Rejected: an agent may narrow.* Narrowing claims more parallelism
       than the human agreed to.
 13. **The refresh is one step, `f6-refresh`, taken by the cloud, seeded
-    whenever `main` has moved past an open PR** (a10), or past a feature
+    whenever `main` has moved past an open PR** (a10 (a), (d) and (e),
+    Jeff, 2026-11-15), or past a feature
     that merged `main` in Publish and has not finished Publish. It
     merges `main`, runs the gates, and carries the consolidation pass and the sweep over
     what landed. It pushes only while the PR is still open and the remote
@@ -391,6 +399,20 @@ say.
     - *Rejected: seeding only when a related change landed.* A change from
       outside the queue (a hand-merged PR; the weekly tidy, where it can
       still push to `main`) relates to nothing and still moves `main`.
+    - *Rejected: a refresh only for the first open PR in the merge
+      order* (a10 (g)). It takes n-1 refreshes for n open PRs where
+      refreshing all takes n(n-1)/2. But a PR that conflicts with what
+      landed, or fails on it, would be found on the day its turn comes
+      and not on the day it became true, and the order of merging would
+      be the loop's and not Jeff's.
+    - *Rejected: each refresh counts against the item's budget* (a10
+      (c)). An item could trip its runaway check on refreshes that other
+      items' merges caused, and would then wait for Jeff to raise its
+      estimate before its PR could be made ready.
+    - *Rejected: a refresh queues a done native validation again when
+      what it merged overlaps the branch* (a10 (f)). Such a PR would be
+      ready only after a native session as well as a cloud run. What
+      that leaves open is under **Safety**, net 7.
 14. **An item homed in another repository is tracked: two human steps, no
     gate, outside the limits** (a7). It shows in `QUEUE.md` with its
     repository, its PR and its relations.
@@ -438,6 +460,11 @@ say.
       what the hold is there to stop, and it would be done under rules
       the holding item is about to replace. The cost is handed to the
       two designs that will decide a hold, with this paragraph.
+      **Accepted by Jeff on 2026-11-15**, in the second sitting of the
+      design review, as a choice this design made without a question,
+      with its cost as stated above: while a process item in progress
+      holds `cloud`, after the first merge no other PR can be made ready
+      by the loop until that item is done, which can be days.
 19. **Fourteen rule changes, in this item's PR.** FLOW-02, -03, -05, -10,
     -15, -19 and -20, as the proposal lists; FLOW-04, -06 and -08, which
     `wf commit`, the refresh step, tracked items and a merge recorded in a
@@ -494,6 +521,14 @@ say.
     until the fix lands or `main` is green again. That is why the fix is
     filed at once, why the run's steps go to it and not to refreshes that
     cannot pass, and why the waiting limit never holds it (Decision 24).
+    That no refresh is taken while `main` is recorded red, except for
+    the item named as the fix, was a choice this design made without a
+    question. **Jeff accepted it on 2026-11-15**, in the second sitting
+    of the design review, with its cost: a red `main` whose failure the
+    gates would not reproduce (a test that fails one run in several, a
+    job that runs only on a push to `main`) also holds every refresh,
+    until its checks are run again and pass or the fix merges
+    (**`main`'s CI**, "What that costs").
     - *Rejected: a red `main` blocks no claim* (the fold-in's first
       text). A refresh that fails on `main` is released, and a released
       step is the first one `wf next` offers again: `Release` only clears
@@ -501,8 +536,9 @@ say.
       a10 (d) nothing would count those claims against the item, so one
       refresh could take every step of every run, ahead of the fix, which
       is in class 3 until it reaches Implement.
-23. **The merge check compares changes with no context lines** (a14,
-    still open). `wf`'s proof that a squashed branch is on `main` takes
+23. **The merge check compares changes with no context lines** (a14
+    (a), Jeff, 2026-11-15). `wf`'s proof that a squashed branch is on
+    `main` takes
     `wf-squash-after-base-moved`'s reserve option, `-U0`. Under Decision
     21 the head that merged contains `main`, so the squash has that
     head's tree and the proof by tree confirms it. The proof by change is
@@ -511,9 +547,15 @@ say.
     squash's only without context when the refresh merged an edit next
     to one of its hunks, and a ref of that kind is ordinary now that
     every PR after the first is refreshed before it merges.
-    - *Rejected: keeping three lines and escalating each such ref.* Close
+    - *Rejected: keeping three lines and escalating each such ref* (a14
+      (b)). Close
       would leave the branch in that checkout and hand Jeff the commands
       to compare and delete it by hand (FLOW-16).
+    - *Rejected: keeping three lines and confirming an older ref as an
+      ancestor of the head that merged* (a14 (c)). The check would fetch
+      a ref only GitHub has, where it needs no network today, and a
+      merge made round the up-to-date requirement would still have no
+      proof.
 24. **No queued feature starts while 8 or more items wait on Jeff** (a3
     (b), Jeff, 2026-11-14). The count is the items that wait on the
     human, each once, as **The waiting limit** defines them
@@ -561,11 +603,14 @@ review, on 2026-11-14 and 2026-11-15. Each answered question below keeps
 its text and options as he read them, with the option he chose marked
 and his answer after it. Seven answers confirm the recommendation (a2,
 a6, a7, a8, a12, a13, a16). Five depart from it (a1, a3, a4, a5, a15)
-and are folded into the design. a10 and a14 were written for a1 (a):
-they are derived again for a1 (b) and still open. a17 is new, raised by
-the answer to a3. a18 is new, raised by the independent review of the
-fold-in: it asks about a rule the fold-in added to make a5 (d) and a15
+and are folded into the design. a10 and a14 were written for a1 (a)
+and were derived again for a1 (b). a17 was new, raised by
+the answer to a3. a18 was new, raised by the independent review of the
+fold-in: it asked about a rule the fold-in added to make a5 (d) and a15
 (a) fit together.
+
+He answered a10, a14 and a18 in the second sitting, on 2026-11-15, each
+as recommended. They are marked below in the same way.
 
 - **a1. Disjoint PRs in one repository: in what order may they merge?**
   (The proposal's question 3.) CI does not run again when a PR's base moves.
@@ -771,7 +816,7 @@ fold-in: it asks about a rule the fold-in added to make a5 (d) and a15
   **Answered (a), Jeff, 2026-11-15,** as recommended. Nothing in the text
   changes.
 - **a10. The refresh, now that every merge after the first needs one:
-  which PRs it is seeded for, its budget, and native validation.** Open.
+  which PRs it is seeded for, its budget, and native validation.**
   Derived again on 2026-11-15 for a1 (b). The draft asked this for a1
   (a), where a refresh was a courtesy that a merge did not wait for. Now
   a PR that `main` has moved past cannot merge until its refresh has
@@ -781,7 +826,7 @@ fold-in: it asks about a rule the fold-in added to make a5 (d) and a15
   *Which PRs:*
   - (a) Every open PR that is behind `main`, whatever moved `main`, on
     every run. After a run each open PR is current, and he may merge any
-    one of them.
+    one of them. **Chosen.**
   - (b) Withdrawn. It was "only when a related item's PR merged". Under
     a1 (b) a PR that is behind for any reason cannot merge, so a PR left
     behind by an unrelated merge would wait without end.
@@ -800,12 +845,13 @@ fold-in: it asks about a rule the fold-in added to make a5 (d) and a15
     a refresh step is free for the item: one that is released and claimed
     again counts like any retried step, so a refresh that keeps failing
     for a reason of its own still ends at the runaway check (FLOW-13).
+    **Chosen.**
 
   *Native validation:*
   - (e) A refresh does not queue a blocking native validation again. The
     validation stands for the branch as it was consolidated; what the
     refresh merged came from items disjoint from this one, from a process
-    item, or from a merge made by hand.
+    item, or from a merge made by hand. **Chosen.**
   - (f) A refresh queues each done blocking host step again when the
     commits it merged changed a file this branch also changes, or a file
     in an area one of its areas reaches. The PR is then not ready until
@@ -865,6 +911,16 @@ fold-in: it asks about a rule the fold-in added to make a5 (d) and a15
   are disjoint, so a Hyper-V item validated on its host can merge another
   item's change to the CLI at its refresh, and nothing runs Hyper-V on
   the result before the merge. (f) closes that at the price above.
+
+  **Answered (a), (d) and (e), Jeff, 2026-11-15** (second sitting), as
+  recommended: every open PR behind `main` is refreshed every run; a
+  refresh's first claim counts in the run's budget and not the item's;
+  a refresh does not queue a blocking native validation again. The
+  design already proceeded on these, so only the words that called
+  them open change (Decision 13). In the same sitting he accepted the
+  refusal described two paragraphs up, no refresh while `main` is
+  recorded red except the fix's own, with the cost stated there
+  (Decision 22).
 - **a12. Who gets a free PR slot when related items wait.** Proceeding
   with (a); confirm.
   - (a) The higher priority, whether or not it could take the slot at that
@@ -905,7 +961,7 @@ fold-in: it asks about a rule the fold-in added to make a5 (d) and a15
   **Answered (a), Jeff, 2026-11-15,** as recommended. Nothing in the text
   changes.
 - **a14. The merge check, now that a PR merges only with `main` in its
-  branch.** Open. Derived again on 2026-11-15 for a1 (b). `wf` confirms
+  branch.** Derived again on 2026-11-15 for a1 (b). `wf` confirms
   a squash merge by one of three proofs for each ref of the branch that
   still exists: the ref is an ancestor of `main`, a PR commit has its
   tree, or a PR commit makes the same change by patch-id
@@ -938,7 +994,7 @@ fold-in: it asks about a rule the fold-in added to make a5 (d) and a15
     the lines around them. A squash GitHub made cannot move a hunk. It
     covers both cases when the refresh merged cleanly. A refresh that
     resolved a conflict changed the branch's own change, and an older
-    ref then has no proof: a human compares, as today.
+    ref then has no proof: a human compares, as today. **Chosen.**
   - (b) Keep three lines. Through the protected path the tick confirms
     the merge by the tree. Each older ref beside an adjacent edit fails:
     Close leaves the branch in that checkout and FLOW-16's escalation
@@ -961,6 +1017,10 @@ fold-in: it asks about a rule the fold-in added to make a5 (d) and a15
   refreshed head has the squash's tree. B's ref from before the refresh
   does not, and its change differs from the squash's with three lines of
   context and equals it with none.
+
+  **Answered (a), Jeff, 2026-11-15** (second sitting), as recommended:
+  zero context (`-U0`). The design already proceeded on it, so only the
+  words that called it open change (Decision 23).
 - **a15. Whether the areas that hold the checks reach every area.** The
   proposal has "`tier1`, `rules` and `tier1-config` reach every area: a
   tightened check meets all code". The first draft dropped it for the
@@ -1083,7 +1143,7 @@ fold-in: it asks about a rule the fold-in added to make a5 (d) and a15
     differ from `cli` exclusive, and in nine of them only one of the two
     merges touched `cmd/warden/`: for example `hyperv-ps-done` (#116,
     `driver/hyperv`) beside `vz-image-prepare-refresh` (#108, `cli` and
-    `driver/vz`), near before and disjoint now.
+    `driver/vz`), near before and disjoint now. **Chosen.**
   - (b) `cli` keeps its imports as `reaches`, except between two items
     that both declare `cli`. Two items that both touch the CLI are
     disjoint, as his answer says. An item that touches it is near every
@@ -1107,6 +1167,13 @@ fold-in: it asks about a rule the fold-in added to make a5 (d) and a15
   result before it can merge, so a CLI edit that no longer builds
   against a changed package fails there and not on `main`. Where he
   wants two such items in turn, `wf relate` names the collision.
+
+  **Answered (a), Jeff, 2026-11-15** (second sitting), as recommended:
+  an ordered area has no `reaches`. The rule was the fold-in's and is
+  now his answer; nothing it does changes. The words that kept option
+  (b) open are gone from Decision 5, the map's format, the relation's
+  examples, the note under FLOW-05's proposed wording and the
+  Departures table.
 
 ## Design
 
@@ -1421,9 +1488,8 @@ written_seams: [<seam>, ...]
 - **`reaches`** lists the areas this one depends on, which is the import
   graph (Decision 5). Only an exclusive area may have it, and it may name
   only exclusive areas: an ordered area with `reaches`, or one named in
-  another area's `reaches`, is an error (a18, open; under its option (b)
-  an ordered area may have `reaches`). Unknown keys are rejected, as in
-  `rules.yaml`.
+  another area's `reaches`, is an error (a18 (a)). Unknown keys are
+  rejected, as in `rules.yaml`.
 - **`implies`** says which area a value in a design's front matter stands
   for, so `wf` holds none of this repository's vocabulary (LOOP-08).
   `drivers` gives each driver's own area. `shared` lists the areas that
@@ -1658,7 +1724,7 @@ Every combination, with examples from this repository:
 | A Hyper-V item and an item in `driver-core` (`driver/session.go`) | near | 9 |
 | An item in `relaycfg` and any driver item or the relay | near | 9 |
 | Two driver items that each also edit `cmd/warden/` (`cli`): a Hyper-V item and a vz item | disjoint (a5 (d)) | 10 |
-| An item that edits only `cmd/warden/` (`cli`, `book`) and an item in `relaycfg`, `driver-core` or a driver | disjoint: `cli` is ordered and has no `reaches` (a18 (a), open; near under its option (b)) | 10 |
+| An item that edits only `cmd/warden/` (`cli`, `book`) and an item in `relaycfg`, `driver-core` or a driver | disjoint: `cli` is ordered and has no `reaches` (a18 (a)) | 10 |
 | Two items that amend GLOBAL-08, in different areas (S2 and K1) | near | 8 |
 | Two items that change `ledger-format`, in different areas | near | 7 |
 | Two items that change `relay-claim`, which has no specification until S1 lands | colliding | 3 |
@@ -2133,8 +2199,8 @@ the fix when `main` is red (a16). Nothing reverts or blocks it.
   `wf stale` seeds a refresh on each open PR that is behind, and the run
   takes those steps first (FLOW-05's class 1). After the run every open
   PR is current again, unless `main` is red, when no refresh is taken
-  (**`main`'s CI**), or its refresh sent the item back. Which PRs get
-  one is a10.
+  (**`main`'s CI**), or its refresh sent the item back. Every PR that
+  is behind gets one (a10 (a)).
 - *An attended session, on request.* `/workflow-tick attended <item>`
   takes that item's refresh step. `workflow-human` offers it after each
   merge Jeff makes in the session (below).
@@ -2143,7 +2209,7 @@ the fix when `main` is red (a16). Nothing reverts or blocks it.
 - *Not under a hold.* While a process item in progress holds `cloud`
   (FLOW-05), neither the tick nor an attended run takes another item's
   refresh, so after the first merge no other PR can be made ready until
-  that item is done (Decision 18).
+  that item is done (Decision 18; Jeff accepted this on 2026-11-15).
 - *Jeff, on GitHub.* The **Update branch** button merges `main` into a
   PR's branch for him, where GitHub shows it. It is his to use, and
   with the ruleset GitHub lets him merge that PR once `ci-ok` is green
@@ -2199,8 +2265,8 @@ a turn at Publish.
 as a notice Jeff could act on or not: it is now a state that decides
 whether a PR is listed as ready. CI on `main` as the gate: it is the
 backstop (Decision 22). And the reason a14 was asked: a PR merged behind
-`main` cannot come through the protected path. a14 is asked again for
-what is left.
+`main` cannot come through the protected path. a14 was asked again for
+what is left, and answered (a).
 
 ### The refresh step
 
@@ -2354,7 +2420,7 @@ If Jeff closes the PR instead, an attended session removes `pr` from the
 queue file on his word, and the item then holds nothing.
 
 **Native validation.** A refresh does not queue a done `f6-validate-<host>`
-step again (a10 (e), open). The validation stands for the branch as it was
+step again (a10 (e)). The validation stands for the branch as it was
 consolidated. A host step that is still pending when a refresh runs in
 Publish validates the branch as it then finds it.
 
@@ -2368,7 +2434,7 @@ budget: the refresh is required before the merge, and other items'
 merges cause it. A refresh step that is released and claimed again
 counts, like any retried step: `Claim` looks for an earlier claim of
 that step in the item's history. So a refresh that keeps failing ends
-at the item's runaway check, as any step does (a10 (d), open; the draft
+at the item's runaway check, as any step does (a10 (d); the draft
 had every refresh count, with two steps added to intake's size guide).
 
 ### `main`'s CI
@@ -2432,7 +2498,8 @@ loop reads it (Decision 22).
   lifts it once they pass. That is Jeff's to do, or an attended
   session's on his word; the next session that records `main`'s CI then
   records green. For a job that runs only on a push to `main` and fails
-  every time, only the fix lifts it.
+  every time, only the fix lifts it. Jeff accepted this cost on
+  2026-11-15 (Decision 22).
 - **What it does not do.** It blocks no merge and no claim but a
   refresh. Every other step goes on, and a PR that is ready (its branch
   contains the red head and its own checks are green) may still be
@@ -2757,7 +2824,7 @@ By file. Each cites the rule and does not restate it (FLOW-14).
   repositories and areas with Jeff (`dist/wf areas -list`), show
   `dist/wf relations -feature <slug>` after `wf new`; `-adopts` and its
   place; a tracked item, with `-seams`; nothing on the size guide for
-  refreshes (a10 (d); two steps if Jeff answers (c)). When the waiting
+  refreshes (a10 (d)). When the waiting
   limit is reached (`dist/wf next` prints it), say so: a new feature will not start until an item clears, a fix
   with `-follows` will, and the number is Jeff's to change. The follow-up
   path: no `-areas`, so `wf new -follows` takes
@@ -3017,7 +3084,7 @@ This item declares no `holds` (Decision 17, a13).
   confirmed by the tree, as today. A ref of the branch that is older
   than the head that merged, and a merge made behind `main` by a bypass
   or before the ruleset, are confirmed by the third proof, without
-  context lines (a14, open).
+  context lines (a14 (a)).
   An item whose merge cannot be confirmed stays at its merge step and
   keeps the PR slot until a human compares, as today. `wf stale` never
   seeds a refresh on a PR that has merged, and the refresh never pushes
@@ -3092,7 +3159,7 @@ Where this design does not do what the proposal's sections 3 to 8 say.
 | A refresh "when a PR merges" | Whenever `main` is not contained in the branch | `main` also moves from outside the queue |
 | A returned item's PR and the slot are not mentioned | An item keeps the PR slot while its PR is recorded, and a returned item's PR is a draft | Otherwise a related PR opens beside a stale one |
 | The guard counts the holders that relate to the asker | No holder's set may exceed the limit, the asker's and each related holder's | The relations are not transitive; the guard and `wf validate` must agree |
-| Nothing reads CI on `main`; nothing about the merge check | The tick records `main`'s CI and files a red `main`'s fix (FLOW-09); the patch-id proof drops its context lines (a14, open; a16) | A red `main` stops every refresh; a branch refreshed in one checkout leaves an older ref in another |
+| Nothing reads CI on `main`; nothing about the merge check | The tick records `main`'s CI and files a red `main`'s fix (FLOW-09); the patch-id proof drops its context lines (a14 (a); a16) | A red `main` stops every refresh; a branch refreshed in one checkout leaves an older ref in another |
 | A follow-up is undeclared until its design | It takes the areas of the item it follows (a4) | Undeclared, the fix for a red `main` waits for every open PR |
 | `wf check` fails when areas do not cover what `seams` imply | Seams are not mapped to areas; the relation reads them | A design may list a seam it does not edit the code of (`driver-contract` lists two "conservatively") |
 | An agent may widen within the design's `drivers` and `seams` | Within the approved design's `surfaces` and `rule_changes` paths, and its `drivers` when it declares no shared area; only while no limit goes over | The same reason; a shared-package design lists every driver; and a widening can put a limit over |
@@ -3105,7 +3172,7 @@ Where this design does not do what the proposal's sections 3 to 8 say.
 | FLOW-02, -03, -05, -10, -15, -19, -20 | Also FLOW-04, -06, -08, -09, LOOP-01, LOOP-04, PROFILE-01 | Decision 19 |
 | No cap on the work waiting for Jeff: `QUEUE.md` shows the count (question 5, recommended) | No queued feature starts while 8 or more items wait on him (a3 (b), Decision 24) | Jeff's answer of 2026-11-14 |
 | Disjoint PRs merge in any order; `QUEUE.md` marks a PR that is behind (question 3, recommended) | A PR merges only when its branch contains `main`; the refresh is the gate before every merge after the first (a1 (b), Decision 21) | Jeff's answer of 2026-11-14 |
-| `cli` (`cmd/warden/`) among the exclusive areas | Ordered (a5 (d)), with no `reaches` (a18, open) | Jeff's answer of 2026-11-15; the `reaches` half is the fold-in's reading of it |
+| `cli` (`cmd/warden/`) among the exclusive areas | Ordered (a5 (d)), with no `reaches` (a18 (a)) | Jeff's answers of 2026-11-15: a5 for the mode, a18 for `reaches` |
 
 ### What this item does not do
 
@@ -3130,7 +3197,7 @@ Where this design does not do what the proposal's sections 3 to 8 say.
   reports.
 - No gain for the two features in the queue now. See below.
 - No automatic answer to a reconciliation item's question.
-- No re-run of native validation at a refresh (a10 (e), open), and no
+- No re-run of native validation at a refresh (a10 (e)), and no
   map entry for a dependency that is not an import, beyond
   `tools/relay-vm/`.
 
@@ -3201,7 +3268,7 @@ or in one attended sitting with a refresh between.
 | The map's `implies.shared` absent | No area is shared: every driver in a design's `drivers` needs its own area declared | The obvious reading. Nothing holds it to `rules.yaml`'s `drivers.shared` any more (a4 (c)) |
 | `wf areas -check` without `-edges` | It compares the paths only, and prints `reaches: not compared` | `wf` cannot produce the edges itself (LOOP-08); the line says what was not checked (GLOBAL-11) |
 | `main.yaml` has no area-check result | `QUEUE.md` says `area map: not checked against main` | Unknown is not read as "no difference" (GLOBAL-10) |
-| The merge check's context lines | 0, fixed. *Changed:* 3 | a14, open |
+| The merge check's context lines | 0, fixed. *Changed:* 3 | a14 (a) |
 | `pr.head` absent on an item with a PR recorded | The commit `pr.ci` was read for is not known: `wf stale` treats the PR as not checked, sets `pr.ci` to `pending` and seeds a refresh, which records it | A PR recorded before the field existed. A result with no commit is not read as a result for the head (GLOBAL-10); the refresh step's note says why it was seeded (GLOBAL-11) |
 | `main.yaml` does not say whether GitHub requires an up-to-date branch | `QUEUE.md`'s header says `not recorded`. Nothing else depends on it: a PR is listed as ready or not by the loop's own test either way | Unknown is not read as "required" (GLOBAL-10) |
 | `limits.in_progress` absent | 5; a written value below 1 is an error | FLOW-05's written limit (Decision 8). *Changed:* absent or 0 was "no limit" |
@@ -3209,7 +3276,7 @@ or in one attended sitting with a refresh between.
 | `limits.waiting_on_human` absent | 8; a written value is used as written, and one below 1 is an error. There is no value that means "no cap": a large number is how it is switched off | Jeff's answer to a3, which FLOW-05 writes (GLOBAL-09). A cap that an absent key switched off would be a silent fallback (GLOBAL-10) |
 | The PR slot | 1, not configurable | FLOW-05 |
 | A map area's `mode` | Required; no default | Exclusive by default would hide a missing line; ordered by default would be unsafe |
-| A map area's `reaches`, `paths` absent | Reaches nothing; `paths` may be absent only for `catch_all`. `reaches` on an ordered area is an error, not ignored (a5 (d), GLOBAL-10) | The obvious reading |
+| A map area's `reaches`, `paths` absent | Reaches nothing; `paths` may be absent only for `catch_all`. `reaches` on an ordered area is an error, not ignored (a5 (d), a18 (a), GLOBAL-10) | The obvious reading |
 | A design's `repos` empty or absent | Only the repository that holds the design | LOOP-04 |
 | `wf new` without `-repos`, `-areas`, `-adopts` | Home repository; undeclared; not a reconciliation item | As the fields |
 | `wf commit`'s tries | 3, fixed | Enough for a busy minute; then the session decides |
@@ -3352,7 +3419,7 @@ records a declaration for, the diff check at phases 3, 4 and 6, the
 refresh's done-when, and a tracked item's one-line result. Phase 7's
 check, the merge confirmation, compares a squashed branch's change with
 the PR commit's without context lines (`patchID`, `-U0` in place of `-U3`;
-a14, open), so a ref of the branch from before its last refresh is still
+a14 (a)), so a ref of the branch from before its last refresh is still
 confirmed.
 
 ### FLOW-04 (amend), `docs/development/process.md`
@@ -3571,10 +3638,9 @@ definition that `alters-slot` built and FLOW-20's Limit bullet carried.
 > behind others periodically merges `main` with conflict-only fixes, so its
 > consolidation stays as small as it can.
 
-**Clauses that rest on open questions.** "Only exclusive areas reach and
-are reached" is a18 (a). Under a18 (b) that clause goes, and the near
-bullet's first condition becomes "an area of one reaches an area of the
-other, unless the reaching area is ordered and both change it". The
+**Clauses that rested on questions.** "Only exclusive areas reach and
+are reached" is a18 (a), which Jeff confirmed on 2026-11-15: the clause
+stands as written. The
 paragraph **Waiting on the human** says what counts and what starts
 whatever the count as a17 (a) has it.
 
@@ -4258,8 +4324,8 @@ commit's time. The item is not done until it is.
   `wf next`'s paragraph (the guard, for every worker, the three limits
   by relation and the waiting limit); `config.yaml`'s
   `limits.waiting_on_human`; the budget comment ("a claim counts a
-  step" gains the exception for a refresh's first claim, if a10 (d)
-  stands); `pr.head`; the commands (`wf commit` in place of the
+  step" gains the exception for a refresh's first claim, a10 (d));
+  `pr.head`; the commands (`wf commit` in place of the
   `git` lines).
 - A human `wf declare` on `seam-specs` and on `driver-contract`, which
   records their seams and rule changes and sets `declared`. Both stay
