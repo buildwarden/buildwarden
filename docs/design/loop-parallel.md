@@ -236,6 +236,14 @@ say.
      would then open one PR at a time, since a Hyper-V item and a relay item
      each touch a book page. Measured on history, 36 of 253 pairs change
      from disjoint to near under that reading (a2).
+   - **`cmd/warden/` is an ordered area** (a5 (d), Jeff, 2026-11-15). It is
+     the one ordered area that holds code. Two items that both edit the
+     CLI are disjoint, both PRs may be open, and the later one meets the
+     other's edit when its refresh merges `main`.
+   - *Rejected: `cli` exclusive* (the draft's recommendation). Two driver
+     items that each add a flag or a subcommand would collide, and K1,
+     which rewrites `cmd/warden`, would collide with every other item
+     that edits it.
 5. **`reaches` is the import graph, with one declared exception: the two
    areas that hold the checks reach every area** (a15). Area A reaches
    area B when a package in A, or its tests, imports a package in B,
@@ -250,6 +258,16 @@ say.
      script are in `driver-core`, beside `driver/relayvm`, which tests
      them, and not in `relay` (a5). Any other such coupling is a seam, and
      the relation reads seams.
+   - **Only an exclusive area has `reaches`; an ordered area reaches
+     nothing and is reached by nothing** (a5 (d)). `cmd/warden` imports
+     every driver and every shared package. If `cli` kept those links, an
+     item that edits the CLI would be near every driver item and every
+     relay item, and two driver items that both edit it would be near
+     each other: they would take turns at the PR, which is what Jeff's
+     answer says they do not do ("items that both touch the CLI stay
+     disjoint and take turns only through the refresh"). On history the
+     difference is ten pairs of 253 (a5). What is given up is under
+     **Safety**.
    - *Rejected: the import graph alone* (the first draft). A tightened
      check and the code it newly fails would be disjoint, and under a1 (a)
      the two may merge before either is refreshed, so the failure would
@@ -519,9 +537,27 @@ effect. a9 and a11 of the first draft are withdrawn: neither was a fork
     `collector/`, `relaycfg/`, `bootstrap/`, `driver/*.go`) as one area.
   - (d) `cli` ordered, so two driver items that each edit `cmd/warden/` do
     not collide. They collide today until K1 moves the driver flags out:
-    five of the 52 merges changed it.
+    five of the 52 merges changed it. **Chosen.**
 
   Recommended: (a).
+
+  **Answered (d), Jeff, 2026-11-15:** the map as written, with `cli` an
+  ordered area: "cmd/warden becomes an ordered area: items that both
+  touch the CLI stay disjoint and take turns only through the refresh."
+  It departs from the recommendation. Folded in: the map has 15 exclusive
+  areas and 6 ordered ones; `cli` has no `reaches`, because an ordered
+  area has none (Decision 5); the numbers were run again. Of the 253
+  pairs, 197 are now disjoint, 34 near and 22 colliding (187, 43 and 23
+  with `cli` exclusive): the one pair in which both merges changed
+  `cmd/warden/` (`hyperv-clean`, #114, and `vz-image-prepare-refresh`,
+  #108, which share no file) goes from colliding to disjoint, and nine
+  pairs go from near to disjoint, each a pair whose only link was
+  `cmd/warden` importing the other merge's package. Among the last six
+  product merges, 2 pairs are disjoint, 6 near and 7 colliding (none, 7
+  and 8 before). Had `cli` kept its `reaches`, the figures would be 187,
+  44 and 22: the colliding pair would be near, not disjoint. What the
+  answer changes for K1 is under **What changes for the queue as it
+  stands**, and its risk under **Safety**.
 - **a6. Steps in a second repository.** (The proposal's question 11.)
   Proceeding with (a); confirm.
   - (a) Allowed for a repository with no loop of its own, as `seam-specs`
@@ -858,7 +894,10 @@ written_seams: [<seam>, ...]
   collide. *Ordered*: any number of items may change it side by side, and
   the later one to merge is put in order by its refresh (Decision 4).
 - **`reaches`** lists the areas this one depends on, which is the import
-  graph (Decision 5). Unknown keys are rejected, as in `rules.yaml`.
+  graph (Decision 5). Only an exclusive area may have it, and it may name
+  only exclusive areas: an ordered area with `reaches`, or one named in
+  another area's `reaches`, is an error. Unknown keys are rejected, as in
+  `rules.yaml`.
 - **`reaches_all: true`** says the area reaches every area of the map,
   itself included, and takes the place of `reaches`. It is for the areas
   whose files check all the others (a15), and it is the one relation the
@@ -877,7 +916,8 @@ written_seams: [<seam>, ...]
 
 **The map for `main` at `897a4a8`**, in full. It was run against
 `git ls-files`: each of the 627 tracked files falls in one named area, with
-no tie, and `core` is empty today.
+no tie, and `core` is empty today. It has 15 exclusive areas and 6 ordered
+ones.
 
 ```yaml
 version: 1
@@ -926,11 +966,6 @@ areas:
   executor:
     mode: exclusive
     paths: [bootstrap/, cmd/warden-io/]
-  cli:
-    mode: exclusive
-    paths: [cmd/warden/]
-    reaches: [collector, driver-core, driver/container, driver/firecracker, driver/hyperv,
-              driver/qemu, driver/vz, executor, ledger, relay, relaycfg]
   specs:
     mode: exclusive
     paths: [specs/, docs/book/src/specs/]
@@ -944,6 +979,9 @@ areas:
     paths: [tools/workflow/, .claude/, .entire/]
   core:
     mode: exclusive
+  cli:
+    mode: ordered
+    paths: [cmd/warden/]
   book:
     mode: ordered
     paths: [docs/book/, examples/, README.md, CONTRIBUTING.md, SECURITY.md, AGENTS.md,
@@ -989,11 +1027,11 @@ Why each area is what it is:
 | `ledger` | exclusive | `ledger/` | The format's reader and writer |
 | `collector` | exclusive | `collector/`, `cmd/collector/` | The collector and its reference consumer |
 | `executor` | exclusive | `bootstrap/`, `cmd/warden-io/` | The in-environment pieces and the bootstrap configuration they read |
-| `cli` | exclusive | `cmd/warden/` | The orchestrator's entry point. Three of the last six product merges changed it, two of them by a file or two beside one driver's tree; such items collide until K1 moves the per-driver flags out |
 | `specs` | exclusive | `specs/` and its mirror pages in the book | The ledger wire format and schemas (RELAY-05) |
 | `tier1` | exclusive | Tier 1's code | A check's code is changed by few items (3 of the 52 merges), each by an approved rule change. `reaches_all`: a changed check runs over every area (a15) |
 | `loop` | exclusive | `tools/workflow/`, `.claude/`, `.entire/` | The loop's machinery. Process items change it and are outside the relations. A feature may not: `loop-contract`'s FLOW-14 lets a feature's design declare no change to a loop rule or its enforcement |
 | `core` | exclusive | Every path no pattern matches. Empty today | A new top-level tree collides with any other until the design that adds it gives it an area |
+| `cli` | ordered | `cmd/warden/` | The orchestrator's entry point, and the one ordered area that holds code (a5 (d)). Five of the 52 merges changed it; three of the last six product merges did, two of them by a file or two beside one driver's tree. Such items no longer collide, and none of them is near another item because `cmd/warden` imports it: an ordered area has no `reaches` |
 | `book` | ordered | The book, `examples/`, and the root documents | Changed by 16 of the 52 merges, a page or two each |
 | `rules` | ordered | `docs/development/` | Changed by 22 of the 52. Two items that change the *same rule* are near by its ID, whatever the file |
 | `designs` | ordered | `docs/design/`: other items' designs and the template | An item's own design needs no area. This is for a retrofit or an amendment to an archived design |
@@ -1009,7 +1047,7 @@ beside it there). Each package's directory is mapped to its area:
 
 | Area | Reaches |
 |---|---|
-| `cli` | `collector`, `driver-core`, all five drivers, `executor`, `ledger`, `relay`, `relaycfg` |
+| `cli` | By import: `collector`, `driver-core`, all five drivers, `executor`, `ledger`, `relay`, `relaycfg`. The map records none of it: `cli` is ordered (a5 (d)) |
 | `collector` | `driver-core`, `executor`, `ledger`, `relaycfg` (`cmd/collector` imports `driver`) |
 | `driver-core` | `collector`, `executor`, `ledger`, `relay`, `relaycfg`; and `driver/firecracker`, `driver/hyperv`, `driver/qemu` through `driver/buildlink`'s tests |
 | each `driver/<name>` | `collector`, `driver-core`, `executor`, `ledger`, `relaycfg` |
@@ -1019,8 +1057,9 @@ beside it there). Each package's directory is mapped to its area:
 | `relaycfg`, `ledger`, `executor`, `loop`, `core`, `book`, `rules`, `designs`, `build` | nothing |
 | `tier1-config` | nothing by import; the map says `reaches_all` |
 
-`relay` is reached by `driver-core`'s and `cmd/warden`'s tests and by no
-driver tree, and it reaches no driver package. That is why a Hyper-V item
+`relay` is reached by `driver-core`'s tests and by no driver tree
+(`cmd/warden`'s tests reach it too, which the map does not record), and it
+reaches no driver package. That is why a Hyper-V item
 and an item in `relay/` or `cmd/relay/` are disjoint.
 
 **The check that the map and the graph agree** is a tier-1 check,
@@ -1109,8 +1148,9 @@ Every combination, with examples from this repository:
 | A Hyper-V item (`driver/hyperv`, `book`) and a Go relay release target (`relay`, `build`, `book`) | disjoint | 10 |
 | A Hyper-V item (`driver/hyperv`) and a vz item (`driver/vz`), both with a book page | disjoint | 10 |
 | A Hyper-V item and an item in `driver-core` (`driver/session.go`) | near | 9 |
-| An item in `relaycfg` and any driver item, the relay or the CLI | near | 9 |
-| Two driver items that each also edit `cmd/warden/` (`cli`) | colliding | 6 |
+| An item in `relaycfg` and any driver item or the relay | near | 9 |
+| Two driver items that each also edit `cmd/warden/` (`cli`): a Hyper-V item and a vz item | disjoint (a5 (d)) | 10 |
+| An item that edits only `cmd/warden/` (`cli`, `book`) and an item in `relaycfg`, `driver-core` or a driver | disjoint: `cli` is ordered and has no `reaches` | 10 |
 | Two items that amend GLOBAL-08, in different areas (S2 and K1) | near | 8 |
 | Two items that change `ledger-format`, in different areas | near | 7 |
 | Two items that change `relay-claim`, which has no specification until S1 lands | colliding | 3 |
@@ -1174,7 +1214,7 @@ holders are counted, so no two items wait for each other. Its reasons:
   text `alters-slot` gave it;
   `an alters_relationships slot (limit 3): h, which collides with it, is already with a, b (FLOW-05)`;
   and `limits.alters_relationships 0 is below 1 (FLOW-05)` as before;
-- `the PR slot, held by a (colliding: area cli) (FLOW-05)`, or
+- `the PR slot, held by a (colliding: area driver-core) (FLOW-05)`, or
   `(near: rule GLOBAL-08)`;
 - `the PR slot: a (priority 12) is ahead (FLOW-05)`, the tie-break below.
 
@@ -1261,8 +1301,8 @@ as in `config.yaml` today. "Today" is `wf` at `897a4a8`.
 | 11 | Two workers claim Plan for two colliding items at the last slot | The second push is rejected and its claim lost | The second push is rejected; `wf commit` asks the claim again on the new state; the guard refuses it and the reason names the holders |
 | 12 | Two workers claim unrelated steps at the same moment | The second loses its claim and asks again | The second's claim is asked again on the new state and stands |
 | 13 | Two near items wait at `f6-merge-main`; an attended run names the lower priority | It takes the slot | Refused: the other `is ahead` |
-| 14 | An item in Review widens to `cli`, inside its approved design, while a `cli` item holds the PR slot | n/a | `wf declare` accepts: the item holds no PR slot yet, and it will wait for one |
-| 15 | An item with an open PR finds, at its refresh, a path in `cli`; another open PR declares `cli` | n/a | `wf declare` refuses: two colliding items would hold the PR slot. Back to Design, keeping the slot; its PR becomes a draft (case 20) |
+| 14 | An item whose approved design has `drivers: [hyperv, vz]` and `areas: [driver/hyperv]` widens to `driver/vz` in Review, while a vz item holds the PR slot | n/a | `wf declare` accepts: the item holds no PR slot yet, and it will wait for one. (A widening to `cli` through `surfaces` relates the item to nothing: `cli` is ordered) |
+| 15 | The same item with its PR open finds, at its refresh, a path in `driver/vz`; another open PR declares `driver/vz` | n/a | `wf declare` refuses: two colliding items would hold the PR slot. Back to Design, keeping the slot; its PR becomes a draft (case 20) |
 | 16 | `limits.in_progress` is not set | No limit | 5 |
 | 17 | A process item in any state | Outside the limits | Outside |
 | 18 | Three disjoint PRs open; Jeff merges one | Cannot arise | The next `wf stale` seeds a refresh on the other two; both then show "behind `main`" |
@@ -1922,6 +1962,26 @@ This item declares no `holds` (Decision 17, a13).
   configuration outside `tier1-config`: the root `.golangci.yml` is in
   `build`. That is the risk the direction accepted; the map cannot remove
   it, and a1 (b) is the option that does.
+- **Two items in `cmd/warden/`** (a5 (d)). `cli` is ordered, so two items
+  that edit the same CLI files are disjoint: both PRs may be open, and
+  they merge one after the other, the second after its refresh has
+  merged the first. Three things can then happen at that refresh. A
+  textual conflict: the refresh resolves it when the fix is a conflict
+  fix, and sends the item back to Implement when it is more (FLOW-10).
+  A clean merge that does not build or fails a test (one item renames a
+  function the other calls; both register the same flag, which panics
+  when `cmd/warden`'s tests build the command): `make lint` and
+  `make test` fail on the refreshed branch, before the merge. A clean
+  merge that builds, passes and is wrong (two edits to the order of the
+  same command's steps, with no test on the order): nothing catches it
+  before the merge. The consolidation pass reads what landed in the
+  files both changed, which the step's note lists; beyond that it rests
+  on the tests `cmd/warden` has. This is the same exposure every ordered
+  area has (`go.mod`, a CI workflow), now for code. The same holds for an
+  item that edits only the CLI beside an item in a package the CLI
+  imports: they were near while `cli` had its `reaches`, and are
+  disjoint now. Where Jeff wants two such items in turn, he names the
+  collision (`wf relate`).
 - **Merge order.** A related item cannot open a PR while another's is
   recorded and unmerged, a returned item's included, so related PRs are
   never open together and order matters only among disjoint ones. There
@@ -2041,6 +2101,19 @@ Nothing, at first, and Jeff should expect that.
   they are near one another (row 8): they are built side by side, three
   of them holding the `alters_relationships` slots, and still open one PR
   at a time (case 6).
+- K1 (`driver-contract`) rewrites `cmd/warden`. With `cli` exclusive it
+  would have collided with every other item that edits the CLI. With
+  `cli` ordered (a5 (d)) it does not on that account: it still collides
+  with any item in `driver-core`, which it also rewrites, and is near
+  every driver item through `driver-core`. An item that edits only the
+  CLI, as `runtime-cli-project-path` may (it is in the queue now, and
+  its source says it "touches cmd/warden's configuration, which
+  driver-contract also changes"), is disjoint from K1 by the map once
+  both are declared and share no unwritten seam. Jeff says at either
+  item's review whether they go in turn (`wf relate`); if he does not,
+  the later one meets the other at its refresh, and a refresh that
+  lands on a rewritten `cmd/warden` is work for Implement, not a
+  conflict fix (FLOW-10).
 - The freeze stays, so only program items run. The first pair that may
   have PRs open together is in wave 4: a driver pilot beside an item in
   the Go relay (case 7). Wave 5's per-driver adoptions are the first
@@ -2076,7 +2149,7 @@ being read, and the refresh for any process item's PR that waits while
 | `limits.alters_relationships` absent | 1; below 1 an error | Unchanged (`alters-slot`) |
 | The PR slot | 1, not configurable | FLOW-05 |
 | A map area's `mode` | Required; no default | Exclusive by default would hide a missing line; ordered by default would be unsafe |
-| A map area's `reaches`, `paths` absent | Reaches nothing; `paths` may be absent only for `catch_all` | The obvious reading |
+| A map area's `reaches`, `paths` absent | Reaches nothing; `paths` may be absent only for `catch_all`. `reaches` on an ordered area is an error, not ignored (a5 (d), GLOBAL-10) | The obvious reading |
 | A design's `repos` empty or absent | Only the repository that holds the design | LOOP-04 |
 | `wf new` without `-repos`, `-areas`, `-adopts` | Home repository; undeclared; not a reconciliation item | As the fields |
 | `wf commit`'s tries | 3, fixed | Enough for a busy minute; then the session decides |
@@ -2766,7 +2839,8 @@ whether it is still true with the proposed wording.
   - `TestRelationUnknownArea`: an area the map lacks makes the item
     undeclared.
   - `TestAreaMapParse` (unknown key, missing `mode`, a `catch_all` with
-    paths) and `TestAreaMapMatch` (directory, file, `*`, the longest prefix,
+    paths, `reaches` on an ordered area, an ordered area named in
+    `reaches`) and `TestAreaMapMatch` (directory, file, `*`, the longest prefix,
     a tie, the catch-all).
   - `TestAreasAbsentAndEmpty`: an absent `areas` and `areas: []` survive a
     save and a load as two different things.
