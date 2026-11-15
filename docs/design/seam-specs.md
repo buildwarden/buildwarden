@@ -3845,9 +3845,12 @@ the relay binary or image named in the target file.
 
 - **Tier 0** (`make test`, `make lint`): the book-link test (links to the
   specs repository name the pinned ref); tier 1's rule index parses the
-  amended rules, and `rules.yaml` parses with the new `seams` entries;
+  amended rules, and `rules.yaml` parses with the new `seams` entries,
+  in the branch's tier 1 and in the merge base's (`make enforcement`,
+  FLOW-14);
   `tier1 designs` accepts this design; the book-link test checks each
-  row's ref against that specification's pin. In the specs repository:
+  row's ref against that specification's pin, read from its own module.
+  In the specs repository:
   its `ci` workflow, which for every specification runs the layout check,
   the coverage check, the OpenAPI checks where it has such a file, and
   its suite against the harness's own roles, and which holds the two
@@ -3864,7 +3867,9 @@ the relay binary or image named in the target file.
   tagged in the specs repository. The last push run of Implement is on the
   final pin, the specs pull request's head (task 12), and it is the run
   Review and `f6-release-specs` rest on. The pull request's run repeats it
-  on the six tags, with the `pin` job. The existing `integration` workflow
+  on the six tags, with the `pin` job, which also writes each of the six
+  modules again from the version it names and fails on a difference
+  (Decision 7). The existing `integration` workflow
   does
   not run for this branch's paths and is not affected.
 - **Tier 2, native:** nothing blocks. The change reaches no driver's tree
@@ -3941,21 +3946,31 @@ its branch `feat/seam-specs`; **K** is this repository, on this branch.
    command, with its requirements listed and the reason they have no
    case; each module's test against the harness's own roles; and the
    coverage check for each specification (TEST-04, TEST-05, TEST-07).
-8. **K** `tools/conformance/` (the module with its six requirements and
-   their `tool` directives, and the five target files); the `Makefile`'s
+8. **K** `tools/conformance/` (the six pin modules, each with its one
+   requirement and its `tool` directive, and the five target files in
+   `targets/`); the `Makefile`'s
    `conformance` target, which
    builds `dist/conformance/relay`, `dist/conformance/collector` and the
-   `relay-oci` image, and its `pin-specs` target; and the `conformance`
-   workflow (TEST-02, TEST-05, GLOBAL-09 to GLOBAL-11). Done when the
+   `relay-oci` image and runs each specification's command from its own
+   module with `GOWORK=off`, and its `pin-specs` target, which writes
+   each module it moves from nothing; and the `conformance`
+   workflow with its `pin` job (TEST-02, TEST-05, GLOBAL-09 to
+   GLOBAL-11). The first commit of this task shows that the mechanics
+   hold with the real module names and the real harness's dependencies:
+   a pin module at the specs branch's head resolves, with its `replace`
+   line, and `go tool` builds its command on each of the three runners
+   (**Releases and how they are consumed**). Done when the
    workflow's run for the pushed head is green on all three runners. A
    case that fails because the
    specification misread the code is fixed in **S**, and one that fails
    because the code misbehaves in a way this design does not record goes
    back to Design (FLOW-06, Decision 1).
 9. **K** The rule changes, each as approved: TEST-05, TEST-02, GLOBAL-08,
-   EXEC-04 and `tools/tier1/rules.yaml`, and PROFILE-01's two entries and
-   one row of its Checks table in `docs/development/loop-profile.md`
-   (FLOW-14, LINT-02, LOOP-01).
+   EXEC-04 and `tools/tier1/rules.yaml` (the six `seams` entries, their
+   comment and TEST-05's owner; no check code), and PROFILE-01's two
+   entries and one row of its Checks table in
+   `docs/development/loop-profile.md` (FLOW-14, LINT-02, LOOP-01).
+   `make enforcement` passes: the merge base's tier 1 reads the list.
 10. **K** The book: `concepts/seams.md` and its entry in `SUMMARY.md`,
     the edits to `concepts/architecture.md` (its three tables),
     `contributing/structure.md`, the sentence in `specs/README.md`, the ref
@@ -3969,8 +3984,8 @@ its branch `feat/seam-specs`; **K** is this repository, on this branch.
 12. **K** The final pins, as Implement's last commit:
     `make pin-specs REF=<the specs pull request's head commit>`,
     `make test`, `make lint`, push. Done when the `conformance` run for
-    that push is green on all three runners and every pin names the specs
-    pull request's head. So the commit Review reads in the specs
+    that push is green on all three runners and each of the six modules
+    names the specs pull request's head. So the commit Review reads in the specs
     repository is the one the pull request would merge, and the head
     Review reads here has a green run. A later commit to the specs branch
     in Implement repeats this task.
@@ -3980,8 +3995,9 @@ its branch `feat/seam-specs`; **K** is this repository, on this branch.
     pushed on the merge commit, one push for each: `conformance/v0.1.0`
     first, its `release` run green before the next, and then each
     specification's `v0.1.0`. The six pins are moved here with
-    `make pin-specs SPECS=latest`, by him or by the attended session on
-    his word (a15). The step is done when the seven `release` runs are
+    `make pin-specs SPECS=latest`, which writes each of the six modules
+    again at its tag and drops its `replace` line, by him or by the
+    attended session on his word (a15). The step is done when the seven `release` runs are
     green, the six specifications' with their binaries attached and the
     harness's with none, and this branch's `conformance` run on the six
     tags is green.
@@ -4014,10 +4030,11 @@ intake finds it:
 
 **2026-11-15, first sitting: eighteen questions answered; five answers
 folded in.** Jeff read the design at `e4801d6` and answered a1 to a18 in
-the attended session. The review has not ended. Still to come: the five
-rule changes, to be approved by name (FLOW-14); the amendments to the
-umbrella, U1 to U3; the two questions the fold-in raised, a19 and a20;
-and the outcome. Nothing in this entry records an outcome.
+the attended session. The review has not ended. When this entry was
+written, the five rule changes, the amendments to the umbrella, the two
+questions the fold-in raised and the outcome were all still to come;
+the last entry of this section says which of them have happened since.
+Nothing in this section records an outcome.
 
 Confirmed as recommended, with no change to the design beyond marking
 the question answered:
@@ -4090,21 +4107,23 @@ during the sitting, in its own commit; none is a return to Design
   the **Validation plan** and tasks 1, 6 to 8 and 11 to 13 are rewritten.
   Decision 4 states what the scheme costs beside the single tag.
 
-What the fold-in did to the rule changes, which are not yet put to Jeff:
-the proposed wording of TEST-05, GLOBAL-08, EXEC-04 and PROFILE-01 (three
+What the fold-in did to the rule changes, which had not then been put to
+Jeff: the proposed wording of TEST-05, GLOBAL-08, EXEC-04 and PROFILE-01 (three
 rows, and the joined Specifications row under **With `driver-contract`**)
 is re-derived for a8 and a10, and each entry says what the wording he
 read at `e4801d6` was. TEST-02's sentence changed in four words, for six
 pins. `rule_changes` is unchanged: the same five rules and the same
 paths. The wording on `main` was checked again at `ad4ea50`.
 
-Two questions are new. **a19**: where the code every suite shares lives
-and how it is versioned. The design proceeds on its option A, the module
+Two questions were new, and Jeff has answered both since (the last
+entry of this section). **a19**: where the code every suite shares lives
+and how it is versioned. The design stood on its option A, the module
 `conformance/` with tags of its own. **a20**: which build of a release's
-tooling this repository runs. The design proceeds on a7's recorded
-answer, one `go.mod`, and recommends a `go.mod` for each specification.
+tooling this repository runs. Until it was answered the design stood on
+a7's recorded answer, one `go.mod`, and recommended a `go.mod` for each
+specification.
 
-In the queue file: a19 and a20 added, open; the note of
+In the queue file: a19 and a20 added, open at the time; the note of
 `f6-release-specs` rewritten for seven tags, each in its own push, and
 `make pin-specs SPECS=latest`; no step added or removed; no recorded
 answer touched. `design_review` stays `required`, `alters_relationships`
@@ -4142,10 +4161,10 @@ What changed (`8b5fa1b` to the commit that adds this paragraph):
   on seven green runs, six with binaries.
 - *What a tag per specification costs* is stated in full in Decision 4:
   the counts, what a harness fix costs, and that one specification's
-  change can force releases of others. Decision 7 says that a mixed set
+  change can force releases of others. Decision 7 said that a mixed set
   of pins can fail to build and that `SPECS=latest` is the supported
-  set.
-- *a20 is new* (above).
+  set; a20's answer has since removed that failure (below).
+- *a20 was new* (above).
 - *OpenAPI.* `collector-inputs` gains a schema for the reply to
   `GET /v1/status`, so that the check on JSON bodies can hold, and the
   list of what OpenAPI cannot say gains names that span path segments.
@@ -4153,6 +4172,94 @@ What changed (`8b5fa1b` to the commit that adds this paragraph):
   counted five and four; "no cases yet" for "no suite yet" in the
   proposed TEST-05; the `pin` job's rule and Decision 7's sample as
   `go mod tidy` writes it.
+
+**The same sitting, continued, 2026-11-15: a19 and a20 answered; the
+amendments to the umbrella and TEST-02 approved by name; a20's answer
+folded in.** Jeff read the design at `e19cc1f`. The review has not
+ended, and nothing in this entry records an outcome.
+
+- **a19, (A): a seventh module `conformance/`, tagged on its own; a
+  change that needs both the harness and a specification is one pull
+  request and one merge.** As recommended, and as the design already
+  stood. Nothing changes but the wording that treated it as open.
+- **a20, (C): a `go.mod` for each specification, under
+  `tools/conformance/<directory>/`.** As recommended. The design had
+  stood on A, one `go.mod`, which a7's recorded answer names, and is
+  revised (`56964d5` to the commit that adds this entry). Each command
+  is built from exactly what its release names, a mixed set of pins
+  always builds, and each seam has its own contract path in tier 1.
+- **The amendments to the umbrella, U1, U2 and U3, by name,** on the
+  wording he read at `e19cc1f`; U2 in both of its forms, the row alone
+  and the row joined with `driver-contract`'s change to the same line.
+- **The rule change TEST-02, by name,** on the wording he read at
+  `e19cc1f`. Its sentence names the directory `tools/conformance/` and
+  no file in it, so a20's answer does not touch it.
+
+The wording of U1, U2 in both forms, U3 and TEST-02 is byte for byte
+what it was at `e19cc1f`. A script compares the three table rows, the
+joined row and TEST-02's proposed wording in this file with the same
+lines of that commit, and was run on the commit that adds this entry.
+
+What a20's answer changed:
+
+- *Decision 7* is rewritten: six small modules under `tools/conformance/`
+  beside `targets/`, each requiring one specification and naming its
+  command in a `tool` directive; the file as `go mod tidy` writes it;
+  why a module is written from nothing by `make pin-specs` and never
+  edited in place; why there is no `go.work`, and `GOWORK=off` in the
+  recipes; `REF` and its `replace` line, now in each module whose
+  specification names a harness version with no tag; and the two
+  options not taken, among the rejected alternatives.
+- *Decision 4's list of costs.* The mixed set that does not build and
+  the one harness for all six commands are gone. Stated in their place:
+  six modules and twelve files; a harness fix reaches a suite here only
+  through that specification's release; and the suites one component is
+  run through need not share a harness version.
+- *The mechanics* were tried in the model, with Go 1.26.3, and are under
+  **Releases and how they are consumed** with what was not tried.
+- *The `pin` job* checks each of the six modules and writes each again
+  from the version it names (**CI**).
+- *Tier 1's seam list.* Each seam's contract path is its own
+  specification's pin. `seam-contract` reads one path for an entry and
+  its code is not edited, so seam 2, with two specifications, has two
+  entries, both named `collector`; a file that holds code of both is
+  asked for both pins. Tried with `main`'s check code at `ad4ea50`,
+  where `tools/workflow/enforcement-check.sh` passed (FLOW-14).
+- *The rule changes still to be put to him.* The proposed wording of
+  TEST-05, GLOBAL-08 and EXEC-04, and of the Specifications and
+  Consumables rows of PROFILE-01, names
+  `tools/conformance/<specification>/go.mod` where it named the one
+  file, with the plural that follows. The Specifications row is given
+  alone and joined, as it will read. PROFILE-01's Checks row names no
+  file and is unchanged. Each entry says what the wording at `e19cc1f`
+  was. `rule_changes` is unchanged: the same five rules and the same
+  paths.
+- *Smaller.* a7, a8, a10 and a17 each gain a dated note, and no recorded
+  answer is edited. `make conformance`, the book's ref test, **How the
+  loop treats the second repository**, **Defaults and overrides**,
+  **Specification changes**, the **Validation plan** and tasks 8, 9, 12
+  and 13 name the six modules.
+- *`driver-contract`* is stated as approved: its design review approved
+  it on 2026-11-15 at `a6c8f0b` (its entry is at `c767992`), with its
+  PROFILE-01 change and the Specifications row "in both forms". Its
+  joined form quotes this design's sentences as they stood before a8
+  and a20. That approval is read here as covering its own clause and
+  sentence in the row; this design's sentences are approved in this
+  review (**With `driver-contract`**).
+
+In the queue file: the text of a19 and a20 and the note of
+`f6-release-specs` are brought in line with this; the recorded answers
+are as the review session wrote them, and no step is added, removed or
+changed in status. `design_review` stays `required`,
+`alters_relationships` stays `true`, and `native_validation` and the
+two tracked gaps are as they were.
+
+Still to come: the rule changes TEST-05, GLOBAL-08, EXEC-04 and
+PROFILE-01, each to be put to Jeff by name on the wording of the commit
+that adds this entry (PROFILE-01 as the Specifications row in both
+forms, the Consumables row and the tier-1 Specification row of Checks);
+then the outcome. This entry writes none of the lines FLOW-14's check
+reads for a rule change: those are recorded with the outcome.
 
 ## Consolidation
 
