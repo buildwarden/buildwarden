@@ -166,13 +166,11 @@ rule text as final:
 
 - `driver-contract` (K1, on `feat/driver-contract`, read at `a6c8f0b`). It
   is a redraft, sent back by its first review on 2026-11-14. Its second
-  review has not ended, and has gone further than this one's. By its own
-  record of 2026-11-15, Jeff has answered all twenty-two of its assumed
-  questions, has approved its eleven rule changes by name on the wording
-  he read at `3f2012a`, and has answered that its amendments to the
-  umbrella are made in its PR (its a18), with the list to be shown to
-  him once more before the approval. That, the acceptance of its
-  Security note and the outcome are still to come.
+  review approved it on 2026-11-15, at `a6c8f0b` (its Design review
+  entry, at `c767992`): every question answered, its eleven rule changes
+  approved by name, its Security note accepted, and its amendments to
+  the umbrella, which are made in its PR (its a18), put to Jeff once
+  more and left to stand. It has not merged.
   What this design relies on is among the answers, each confirmed
   as that design recommended: `warden` sends the claim, at an endpoint
   the driver reports (its a13); `warden` starts the default collector,
@@ -1485,8 +1483,10 @@ say otherwise or say nothing, and a third records the change. Each is
 listed with its line on `main` at `ad4ea50`, its wording there and the
 wording proposed. The umbrella was amended in place by `loop-contract` on
 2026-11-14; the wording quoted is the amended text. They are made in this
-item's PR (task 10) once Jeff approves them by name at the design review,
-as `loop-contract`'s were. They are not approved yet.
+item's PR (task 10), as `loop-contract`'s were. Jeff approved the three
+by name on 2026-11-15, on the wording he read at `e19cc1f`, U2 in both
+of its forms (**Design review**). The proposed wording in the table and
+in the joined row below is byte for byte what he read.
 
 | # | Line | Where | Wording on `main` | Proposed wording |
 |---|---|---|---|---|
@@ -1515,9 +1515,8 @@ Read and not amended:
   the umbrella says nothing of the documents' format.
 
 `driver-contract` amends the umbrella too, in its own PR (its **Amendments
-to the umbrella design**, read at `a6c8f0b`; its a18, answered, with the
-list to be shown once more before its approval). Its list and this one
-meet in two places:
+to the umbrella design**, read at `a6c8f0b`, where its review approved
+it on 2026-11-15; its a18). Its list and this one meet in two places:
 
 - *Line 405, the row U2 rewords.* U2 takes "RELAY-05, " out of the row's
   first cell. `driver-contract` changes its last cell, from "S1" to "S1;
@@ -1526,8 +1525,9 @@ meet in two places:
 
   > | TEST-05 | Contract tests for the seams become the specs repository's suites. | S1; K1 for the driver suite |
 
-  U2 is put to Jeff in both forms: as in the table above, which is the
-  row if this item merges first, and joined as here.
+  U2 was put to Jeff in both forms, and he approved it in both: as in
+  the table above, which is the row if this item merges first, and
+  joined as here.
 - *The **Amendments** section.* Each design adds a dated paragraph after
   `loop-contract`'s. The two stand in the order of their dates, each as
   its review approved it; U3 is this design's.
@@ -1538,7 +1538,7 @@ merges `main` (`f6-merge-main`), as it does for the rule text (**With
 wording up to date in Consolidation (FLOW-10). If the merge needed a
 word that neither review approved, that is a return to Design (FLOW-06).
 
-Pointed out to that design's review, which is not edited from here: it
+Pointed out to that design, which is not edited from here: it
 quotes line 405 as current with "RELAY-05, TEST-05" in its first cell,
 which is stale by U2 if this item merges first. None of its other
 amendments is to a line listed here. One is to a sentence this design
@@ -1564,7 +1564,7 @@ is `driver.Session`, which each driver and `cmd/collector` start. Under
 the redrafted driver contract `warden` starts it for every driver and
 the driver reports the endpoint to claim at (its Decisions and a13,
 which Jeff answered as that design recommended; its amendment to the
-umbrella's seam 1, not yet put to him, reads "Claimant (`warden`'s
+umbrella's seam 1, approved with it, reads "Claimant (`warden`'s
 session) and relay"). Neither the roles nor the wire differ
 between the two, so the specification holds under either.
 
@@ -2369,8 +2369,8 @@ Under the redrafted driver contract, seam 9's specification and
 suite start in this repository, as `specs/driver-contract/v1.md` with its
 schema and `conformance/driver/`, and move to the specs repository in K2,
 where "the suite joins S1's harness as a `driver` role" (its Decision 13,
-**Home** and a17, which Jeff answered as that design recommended; its
-review has not ended). This item builds none of that.
+**Home** and a17, which Jeff answered as that design recommended; the
+design was approved on 2026-11-15). This item builds none of that.
 It keeps the following open, each at no cost now:
 
 1. *The directory name* `driver-contract/` is reserved (Decision 2), as
@@ -3294,8 +3294,9 @@ proposes one paragraph more at the rule's end.
 > to verify against. Each specification there is released under its own
 > version, and a release carries the suite that checks it. This repository
 > pins a tagged release of each specification in
-> `tools/conformance/go.mod` and runs those releases' suites against the
-> components it holds, in the `conformance` workflow (TEST-02):
+> `tools/conformance/<specification>/go.mod` and runs those releases'
+> suites against the components it holds, in the `conformance` workflow
+> (TEST-02):
 >
 > - against the Go relay in each of its modes (RELAY-04) and as its OCI
 >   image: the suites of the claim protocol, of both specifications of the
@@ -3326,6 +3327,14 @@ repository" and "runs that release's suites", and its two bullets began
 the collector protocol", and its third paragraph ended "have no suite
 yet", where a specification now has a suite with no cases. The current
 wording above is `main`'s, checked again against `ad4ea50`.
+
+Reworded again on 2026-11-15 for a20, in one path. The wording at
+`e19cc1f` read "pins a tagged release of each specification in
+`tools/conformance/go.mod`"; it now names
+`tools/conformance/<specification>/go.mod`. No other word of the rule
+changes. In the rule text `<specification>` is a specification's name,
+which is the name of its directory in the specs repository and of its
+module here (`<directory>` elsewhere in this design).
 
 **Severity and check:** MUST and `automated + agent-judgment`, before and
 after.
@@ -3377,6 +3386,12 @@ Reworded on 2026-11-15 for a8, in four words: the sentence Jeff read at
 (`tools/conformance/`)". The bullet's wording on `main` was checked again
 against `ad4ea50`.
 
+Not changed by a20, and approved by name on 2026-11-15 on the wording at
+`e19cc1f` (**Design review**). The sentence names the directory
+`tools/conformance/`, which holds the six pin modules and the target
+files as it held the one module, and names no file in it. The proposed
+wording above is byte for byte what it was at `e19cc1f`.
+
 **Severity and check:** unchanged (MUST; automated + agent-judgment). No
 enforcement change: the workflow is new and is none of the jobs FLOW-14
 names.
@@ -3386,7 +3401,8 @@ names.
 **Why:** the contract documents of five seams now exist, in another
 repository, and the bootstrap config becomes a written seam. The rule's
 automated part says "contract document"; for these five, what this
-repository holds of that document is the file that pins its release.
+repository holds of a specification's document is the file that pins
+its release.
 
 **Current wording** (the executor bullet of "Versioned seams"):
 
@@ -3409,15 +3425,16 @@ to also change that seam's contract document.") is not changed:
 > (TEST-05), each released under its own version; the collector protocol
 > is two specifications, its outputs and its inputs and signals. A change
 > to one of those five seams changes its specification first: that
-> specification is released, and the change here moves its pin in
-> `tools/conformance/go.mod` to that release. For them that file is the
-> contract document the automated part checks. The ledger format stays in
-> `specs/` (RELAY-05).
+> specification is released, and the change here moves its pin,
+> `tools/conformance/<specification>/go.mod`, to that release. For them
+> those pin files are the contract documents the automated part checks.
+> The ledger format stays in `specs/` (RELAY-05).
 
 The paragraph states the obligation ("changes its specification first")
-and names the pin file only as what the automated part checks. The check
-cannot tell which specification's pin moved; **Tier 1's seam list** says
-what is left to Review.
+and names the pin files only as what the automated part checks. The
+check asks for the pin of the seam whose file changed, and for both
+pins of seam 2 where a file holds code of both its specifications;
+**Tier 1's seam list** says what that holds and what is left to Review.
 
 Reworded on 2026-11-15 for a8 and a10. The paragraph Jeff read at
 `e4801d6` had no clause on versions or on the collector's two
@@ -3429,16 +3446,27 @@ until M6, whose item rewrites the sentence with RELAY-05. The executor
 bullet, above, is unchanged, and `main`'s wording was checked again
 against `ad4ea50`.
 
+Reworded again on 2026-11-15 for a20, in two sentences of the added
+paragraph. At `e19cc1f` they read "the change here moves its pin in
+`tools/conformance/go.mod` to that release. For them that file is the
+contract document the automated part checks." They now name
+`tools/conformance/<specification>/go.mod` and read "those pin files are
+the contract documents". The executor bullet and the rest of the
+paragraph are as at `e19cc1f`.
+
 **Severity and check:** unchanged (MUST; automated + agent-judgment).
 
 **Enforcement change:** `tools/tier1/rules.yaml` gets the `seams` entries
-and the comment under **Tier 1's seam list**, in place of `seams: []`. The
+and the comment under **Tier 1's seam list**, in place of `seams: []`:
+six entries for the five seams, two of them for `collector`. The
 `seam-contract`
 check's code does not change; it starts reporting a change to a listed file
-that does not also change `tools/conformance/go.mod`. Because this edits
+that does not also change the pin its entry names, which for a file
+listed in both `collector` entries is both pins. Because this edits
 `tools/tier1/`, Review also runs the merge base's tier 1 with the branch's
-configuration (FLOW-14); it should report nothing new on this branch, which
-touches none of the listed files.
+configuration (FLOW-14). That code reads the list as written, which was
+tried at `ad4ea50` (**Tier 1's seam list**), and it should report
+nothing new on this branch, which touches none of the listed files.
 
 ### EXEC-04 (amend), `docs/development/in-vm-executor.md`
 
@@ -3475,12 +3503,24 @@ the interface differently.
 > first (GLOBAL-08): `executor-initialize`, `bootstrap-config` and
 > `relay-guest-api` in the specs repository, each released under its own
 > version. The automated part requires a change to the contract surface,
-> as `tools/tier1/rules.yaml` lists it, to also change the file that pins
-> those releases (`tools/conformance/go.mod`).
+> as `tools/tier1/rules.yaml` lists it, to also change the pin of the
+> specification it is listed under
+> (`tools/conformance/<specification>/go.mod`).
 
 Reworded on 2026-11-15 for a8: the last paragraph Jeff read at `e4801d6`
 ended "to also move the specs pin (`tools/conformance/go.mod`)" and had no
 clause on versions. `main`'s wording was checked again against `ad4ea50`.
+
+Reworded again on 2026-11-15 for a20, in the end of the last sentence.
+At `e19cc1f` it ended "to also change the file that pins those releases
+(`tools/conformance/go.mod`)". There is no longer one such file. Tier
+1's list puts the files of `cmd/warden-io/` under `executor-initialize`
+and `bootstrap/bootstrap.go` under `bootstrap-config`, and the check
+asks for that specification's pin. The executor's use of the relay
+guest API is in `cmd/warden-io/` and is stated by `executor-initialize`
+(**Seam 5**), so the `relay-guest-api` pin is asked of a change to the
+relay's files and not of the executor's. Nothing else in the rule
+changes.
 
 **Severity and check:** unchanged (MUST; automated + agent-judgment). No
 enforcement change beyond GLOBAL-08's.
@@ -3511,7 +3551,10 @@ entry is here before the review and costs no return to Design.
 Specifications entry. The wording here is this item's change to each row
 as it is on `main`. **With `driver-contract`** gives the Specifications
 entry as it reads with both changes; the other two rows are changed by
-this item alone.
+this item alone. That design was approved on 2026-11-15 at `a6c8f0b`,
+with its PROFILE-01 change. The approval covers its own clause and
+sentence in the Specifications entry; this design's sentences in that
+entry are approved here, in the wording below.
 
 **Current wording, the Specifications row:**
 
@@ -3520,7 +3563,7 @@ this item alone.
 **Proposed wording, the same row.** The first two sentences are kept word
 for word, and the third is replaced by three:
 
-> | Specifications | `specs/`: the ledger wire format and the metadata and environment schemas (RELAY-05), mirrored in the book. For the seams of GLOBAL-08, their contract documents are the `seams` list of `tools/tier1/rules.yaml` and their tests are TEST-05's. The claim protocol, the collector protocol, the relay guest API, the `initialize` contract and the bootstrap config are specified in `buildwarden/buildwarden-specs`, each specification released under its own version. This repository implements them and pins a release of each specification in `tools/conformance/go.mod`, which is their contract in that list (GLOBAL-08). Each pin is a release tag on `main` and on a pull request to it; a branch may pin a commit of an unmerged specifications branch while its work is in progress. |
+> | Specifications | `specs/`: the ledger wire format and the metadata and environment schemas (RELAY-05), mirrored in the book. For the seams of GLOBAL-08, their contract documents are the `seams` list of `tools/tier1/rules.yaml` and their tests are TEST-05's. The claim protocol, the collector protocol, the relay guest API, the `initialize` contract and the bootstrap config are specified in `buildwarden/buildwarden-specs`, each specification released under its own version. This repository implements them and pins a release of each specification in `tools/conformance/<specification>/go.mod`; those files are their contracts in that list (GLOBAL-08). Each pin is a release tag on `main` and on a pull request to it; a branch may pin a commit of an unmerged specifications branch while its work is in progress. |
 
 **Current wording, the Consumables row:**
 
@@ -3528,7 +3571,7 @@ for word, and the third is replaced by three:
 
 **Proposed wording, the same row:**
 
-> | Consumables | Releases: the `v*` tags. A release that carries `tools/conformance/go.mod` implements each seam specification at the version that file pins for it. Consumes: the releases of the seam specifications in `buildwarden/buildwarden-specs`, each with its conformance suite, at the versions in `tools/conformance/go.mod`. |
+> | Consumables | Releases: the `v*` tags. A release that carries the files `tools/conformance/<specification>/go.mod` implements each seam specification at the version its file pins. Consumes: the releases of the seam specifications in `buildwarden/buildwarden-specs`, each with its conformance suite, at the versions in those files. |
 
 **Current wording, the Specification row of the Checks table** (the row
 for tier 1; the row beneath it, for the judgment half, is not changed):
@@ -3549,6 +3592,18 @@ the Checks row read "at the pinned specifications release and whose `pin`
 job requires a release tag". The three rows' wording on `main` was
 checked again against `ad4ea50`.
 
+Reworded again on 2026-11-15 for a20, in two of the three rows. In the
+Specifications row one sentence changes: at `e19cc1f` it read "pins a
+release of each specification in `tools/conformance/go.mod`, which is
+their contract in that list (GLOBAL-08)"; it now names
+`tools/conformance/<specification>/go.mod` and reads "those files are
+their contracts in that list". In the Consumables row both sentences
+that named the file change: at `e19cc1f` they read "A release that
+carries `tools/conformance/go.mod` implements each seam specification
+at the version that file pins for it" and "at the versions in
+`tools/conformance/go.mod`". The Checks row names no file and is byte
+for byte as at `e19cc1f`.
+
 The tier in that table is LINT-02's: 1 is deterministic and blocks. The
 `conformance` workflow is also tier 1 of TEST-02's test tiers, which the
 proposed TEST-02 sentence says; the two numbers agree here and mean
@@ -3563,10 +3618,10 @@ merge gate, and it is that repository's, not an entry of this profile.
 |---|---|
 | Impact vocabulary | It points to the `seams` list of `tools/tier1/rules.yaml` for the seam names, and this item fills that list. The entry states no name of its own |
 | Test tiers | It points to TEST-02, which this design amends |
-| Toolchain | "Go, at the version in each module's `go.mod`" takes in the nested module `tools/conformance` |
+| Toolchain | "Go, at the version in each module's `go.mod`" takes in the six nested modules under `tools/conformance/` |
 | Fast gate | `make conformance` is not part of it. `make test` gains one tier-0 test |
 | Reference documents | No surface changes (`surfaces: []`). The new book page is a concept page |
-| Sweep | No Go package is added to this repository's module, and `tools/conformance` holds no Go code |
+| Sweep | No Go package is added to this repository's module, and the modules under `tools/conformance/` hold no Go code |
 | Release | This repository's release is as it was. The specs repository's `release` workflow is its own |
 | Sessions | This repository's are as they were. The specs repository's `.entire/settings.json` is its own |
 | Component, Trunk, Rules, Designs, Native hosts, Boundary rule, Flaky-test rule, Rule and machinery paths | Nothing they state changes |
@@ -3594,15 +3649,17 @@ so the rule-change clearance covers the edit through this entry (FLOW-14).
 
 This design's own wording for TEST-05, GLOBAL-08, EXEC-04 and PROFILE-01
 was reworded on 2026-11-15, in the first sitting of its review, for a tag
-per specification and two collector documents (a8, a10). Which sentences
-each design owns did not change by that, and the joined row and the
+per specification and two collector documents (a8, a10), and again the
+same day for a `go.mod` for each specification (a20). Which sentences
+each design owns did not change by either, and the joined row and the
 joined owner string below carry the new words.
 
-`driver-contract` is read here at `a6c8f0b`. Its review has gone further
-than this one's: on 2026-11-15 Jeff approved its eleven rule changes by
-name, GLOBAL-08, TEST-05 and PROFILE-01 among them, on the wording he
-read at `3f2012a`. Its outcome is not recorded yet. Neither item has
-merged, and either may merge first.
+`driver-contract` is read here at `a6c8f0b`, the commit its design
+review approved on 2026-11-15 (its Design review entry, at `c767992`).
+The approval names its eleven rule changes, GLOBAL-08, TEST-05 and
+PROFILE-01 among them, and for PROFILE-01 "four rows, the Specifications
+row in both forms (K1's alone, and joined with `seam-specs`'
+sentences)". Neither item has merged, and either may merge first.
 
 Its GLOBAL-08 and TEST-05 changes, and the entry it adds to tier 1's seam
 list, are word for word what this section was first written against at
@@ -3617,7 +3674,7 @@ for that rule, which agrees with the rows below.
 |---|---|---|---|
 | GLOBAL-08, from "Versioned seams" | The executor bullet, which gains the bootstrap config. One new paragraph, placed directly before the rule's last paragraph | A third bullet, the driver contract. The paragraph that begins "Pre-1.0 these seams may still move", rewritten | The relay bullet. The last paragraph ("The automated part requires ...") |
 | TEST-05 | The title, and the whole body as it is on `main` | One new paragraph at the rule's end | |
-| `rules.yaml`, `seams` | Five entries, and the comment above the list | One entry, `driver-contract` | |
+| `rules.yaml`, `seams` | Six entries for its five seams, two of them for `collector` (a20), and the comment above the list | One entry, `driver-contract` | |
 | `rules.yaml`, TEST-05's owner | The string, as under **TEST-05** | The string on `main`, with "the driver suite's static tier runs there" added inside its parentheses | |
 | TEST-02, EXEC-04 | All of each amendment | Nothing | |
 | PROFILE-01, the Specifications entry | The three sentences that replace its last one, "No specifications release is pinned today." | In its first sentence, "and the driver contract (`specs/driver-contract/`, GLOBAL-08)" after "(RELAY-05)". A new second sentence, "The driver contract's conformance suite is `conformance/driver/`." It keeps the last sentence as it is on `main` | The sentence that begins "For the seams of GLOBAL-08" |
@@ -3643,7 +3700,7 @@ entry, which is given in full.
 
 **The Specifications entry, with both changes:**
 
-> | Specifications | `specs/`: the ledger wire format and the metadata and environment schemas (RELAY-05) and the driver contract (`specs/driver-contract/`, GLOBAL-08), mirrored in the book. The driver contract's conformance suite is `conformance/driver/`. For the seams of GLOBAL-08, their contract documents are the `seams` list of `tools/tier1/rules.yaml` and their tests are TEST-05's. The claim protocol, the collector protocol, the relay guest API, the `initialize` contract and the bootstrap config are specified in `buildwarden/buildwarden-specs`, each specification released under its own version. This repository implements them and pins a release of each specification in `tools/conformance/go.mod`, which is their contract in that list (GLOBAL-08). Each pin is a release tag on `main` and on a pull request to it; a branch may pin a commit of an unmerged specifications branch while its work is in progress. |
+> | Specifications | `specs/`: the ledger wire format and the metadata and environment schemas (RELAY-05) and the driver contract (`specs/driver-contract/`, GLOBAL-08), mirrored in the book. The driver contract's conformance suite is `conformance/driver/`. For the seams of GLOBAL-08, their contract documents are the `seams` list of `tools/tier1/rules.yaml` and their tests are TEST-05's. The claim protocol, the collector protocol, the relay guest API, the `initialize` contract and the bootstrap config are specified in `buildwarden/buildwarden-specs`, each specification released under its own version. This repository implements them and pins a release of each specification in `tools/conformance/<specification>/go.mod`; those files are their contracts in that list (GLOBAL-08). Each pin is a release tag on `main` and on a pull request to it; a branch may pin a commit of an unmerged specifications branch while its work is in progress. |
 
 In order: `driver-contract`'s first sentence and its sentence on the
 suite; the sentence neither changes; this design's three. "No
@@ -3666,20 +3723,31 @@ forms: as under **PROFILE-01** above, which is what it says if this item
 merges first, and joined as here, which is what it says once both have
 merged. The Consumables entry and the Checks row have one form each.
 
-**Pointed out to `driver-contract`'s review.** That design is not edited
-from here. One point is live. Its own joined Specifications row, which
-Jeff approved with its PROFILE-01 change on 2026-11-15, quotes this
-design's three sentences as they were at `e4801d6`: "pins one release of
-that repository in `tools/conformance/go.mod`" and "The pin is a release
-tag". a8's answer changed them the same day, to the wording above: "each
+Both forms are given as they read with a20's answer. `driver-contract`'s
+approval at `a6c8f0b` took the row "in both forms" too, and its joined
+form quotes this design's three sentences as they stood before a8 and
+a20. What that approval covers in the row is that design's own clause
+and sentence, which are word for word the same in its joined row and in
+the one above. This design's three sentences are approved in this
+review, in the wording here, and the joined row above is the row as it
+will read once both have merged.
+
+**Pointed out to `driver-contract`.** That design is not edited from
+here, and its review has ended. One point is live. Its own joined
+Specifications row, approved with its PROFILE-01 change at `a6c8f0b`,
+quotes this design's three sentences as they were at `e4801d6`: "pins
+one release of that repository in `tools/conformance/go.mod`" and "The
+pin is a release tag". a8's answer changed them the same day, and a20's
+changed the second of the three again, to the wording above: "each
 specification released under its own version", "pins a release of each
-specification" and "Each pin is a release tag". That design says its
-quotation "is read again against the outcome" if this review changes
-the three sentences, and it has. On the reading stated at the end of
-this section, what that approval covers in the row is that design's own
-clause and sentence, which read the same in its joined row and in the
-one above; this design's three sentences are approved in this review, in
-the wording here.
+specification in `tools/conformance/<specification>/go.mod`; those
+files are their contracts in that list" and "Each pin is a release tag".
+That design says its quotation "is read again against the outcome" if
+this review changes the three sentences, and it has. On the reading
+stated at the end of this section, what that approval covers in the row
+is that design's own clause and sentence; this design's three sentences
+are approved in this review, in the wording here. Whichever merges
+second corrects its quotation in Consolidation (FLOW-10).
 
 The three points this section made against that design at `bb4d7c8` are
 answered in it: it says this design declares a PROFILE-01 change and
@@ -3698,8 +3766,9 @@ of 2026-11-14, so that both sets are true together:
   specified elsewhere, and "The ledger format stays in `specs/`" does not
   say that only the ledger format is there, so the driver contract's
   bullet, which names `specs/driver-contract/v1.md`, stands beside it.
-- *The comment above `seams`.* Its first sentence is true of any entry and
-  its second speaks only of a seam specified in the specs repository. The
+- *The comment above `seams`.* Its first sentence is true of any entry,
+  its second speaks only of a seam specified in the specs repository,
+  and its third, added for a20, only of the collector seam. The
   redraft says it corrects the comment "to match" and gives no wording.
 
 **What the second to merge does**, in `f6-merge-main` and
@@ -3711,7 +3780,8 @@ of 2026-11-14, so that both sets are true together:
    lines. In `loop-profile.md` the Specifications entry is one line,
    changed by both. Each is resolved by keeping both, in the order
    above.
-2. `seams` holds all six entries under this design's comment. If this
+2. `seams` holds all seven entries, this design's six and that
+   design's one, under this design's comment. If this
    item is second, it replaces the comment it finds; if `driver-contract`
    is second, it leaves this one and may add a sentence for its own entry.
 3. TEST-05's owner is the two halves joined: `"the conformance workflow
@@ -3732,8 +3802,8 @@ approved paths of both designs, and Review judges that each edit matches
 the approved wording (FLOW-14). If the merge needed a sentence reworded,
 that is a return to Design (FLOW-06).
 
-For the profile that rests on one reading, which the reviews are asked to
-confirm: what a design's review approves in a row is the words the design
+For the profile that rests on one reading, on which `driver-contract`'s
+approval is read here and which this review is asked to confirm: what a design's review approves in a row is the words the design
 adds or replaces, and not the rest of the row as it quoted it from
 `main`. Both designs already read GLOBAL-08 and TEST-05 that way. On it,
 `driver-contract` merging second adds its clause and its sentence to the
