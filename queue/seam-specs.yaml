@@ -99,7 +99,7 @@ questions:
     answer: (A) GLOBAL-01 to GLOBAL-04, GLOBAL-07, GLOBAL-09 to GLOBAL-11, TEST-04 and TEST-07 for the harness's Go code, and RELAY-05's schema-identity rule for the schemas. Jeff, design review, 2026-11-15.
   - id: a5
     kind: assumed
-    status: open
+    status: confirmed
     question: The conformance harness's language, home and form (Decision 5).
     options:
       - Go, in the specs repository under conformance/, importing nothing from the kit, released as a module tag plus static bw-conformance binaries with checksums
@@ -107,14 +107,16 @@ questions:
       - a separate harness repository
       - Go tests in this repository that import the kit (rejected by the umbrella's Decision 3)
     recommended: Go, in the specs repository under conformance/, importing nothing from the kit, released as a module tag plus static bw-conformance binaries with checksums
+    answer: (A) Go, in the specs repository under conformance/, importing nothing from the kit, released as a module tag plus static bw-conformance binaries with checksums. Jeff, design review, 2026-11-15.
   - id: a6
     kind: assumed
-    status: open
+    status: confirmed
     question: Which launchers the harness gets in this item (how a relay under test is supplied).
     options:
       - 'exec (a binary), oci (an image) and external (already running) now; the VM-image launcher is specified by the same attachment points and built by the first item with a VM image to test (the relay''s M2 or M3, or seam 8''s, which no phase writes yet). Narrower than the umbrella''s S1 row ("any relay binary or image"): no suite runs the Go relay VM image or the Hyper-V relay VM when S1 is done'
       - also build a qemu launcher here and validate it on qemu-any
     recommended: 'exec (a binary), oci (an image) and external (already running) now; the VM-image launcher is specified by the same attachment points and built by the first item with a VM image to test (the relay''s M2 or M3, or seam 8''s, which no phase writes yet). Narrower than the umbrella''s S1 row ("any relay binary or image"): no suite runs the Go relay VM image or the Hyper-V relay VM when S1 is done'
+    answer: (A) exec, oci and external launchers now; the VM-image launcher is built by the first item with a VM image to test. Jeff, design review, 2026-11-15.
   - id: a7
     kind: assumed
     status: open
@@ -286,3 +288,12 @@ history:
   - at: 2026-11-15T20:34:56Z
     by: human/jeff
     event: 'assumed question a4 confirmed: (A) GLOBAL-01 to GLOBAL-04, GLOBAL-07, GLOBAL-09 to GLOBAL-11, TEST-04 and TEST-07 for the harness''s Go code, and RELAY-05''s schema-identity rule for the schemas. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:38:42Z
+    by: human/jeff
+    event: 'assumed question a5 confirmed: (A) Go, in the specs repository under conformance/, importing nothing from the kit, released as a module tag plus static bw-conformance binaries with checksums. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T20:38:42Z
+    by: human/jeff
+    event: 'assumed question a6 confirmed: (A) exec, oci and external launchers now; the VM-image launcher is built by the first item with a VM image to test. Jeff, design review, 2026-11-15.'
+  - at: 2026-11-15T21:05:00Z
+    by: human/jeff
+    event: 'repository confirmed for creation (umbrella a11), design review 2026-11-15: the name is buildwarden/buildwarden-specs; public; its first commit carries a README stub and the Apache-2.0 LICENSE only, with no NOTICE file. The session cannot create repositories, so Jeff creates it (main protected with a pull request required, no force-push, no deletion; head branches deleted on merge; Actions enabled; the Claude GitHub App installed) and the session then attaches it.'
