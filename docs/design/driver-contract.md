@@ -881,7 +881,7 @@ existing driver-owned keys).
   umbrella's review accepted for K2), an enforcement-only change to UX-01
   and UX-03 (tier 1's surface check also reads the flags and keys the
   bundled drivers declare), PROFILE-01 (this repository's loop profile:
-  five rows, below), and ORCH-03, which gets the same enforcement change,
+  four rows, below), and ORCH-03, which gets the same enforcement change,
   one paragraph (a driver reads its own flags and keys, from the files
   `warden` names to it, with the same precedence and before any work,
   through the kit or as the contract requires; a driver run as a
@@ -916,15 +916,20 @@ existing driver-owned keys).
   - *PROFILE-01 is in.* K1's PR would leave three entries of this
     repository's loop profile stale, and the rule has the change that
     does so change the entry: Specifications (it names the driver
-    contract's specification and its suite), the Specification and
-    Safety rows of Checks (the suite, and the `driver-contract` CI job),
-    and Reference documents (the surface is also what the drivers
-    declare). A fourth, Impact vocabulary, gains one sentence for
-    FLOW-02's sake. Sweep and Consumables stay as they are (**Rule
-    changes**, PROFILE-01, says why).
-  - No other entry names a loop rule or edits a loop rule's check, and
-    the current wording quoted for each was compared again with `main`
-    at `ad4ea50` and stands.
+    contract's specification and its suite), the Safety row of Checks
+    (the `driver-contract` CI job), and Reference documents (the surface
+    is also what the drivers declare). A fourth, Impact vocabulary,
+    gains one sentence for FLOW-02's sake. That is four rows. Sweep,
+    Consumables and the Specification row of Checks stay as they are
+    (**Rule changes**, PROFILE-01, says why). `seam-specs` rewords the
+    Specifications row as well, in other sentences of it, so you are
+    asked to approve that row in two forms: as K1 leaves it alone, and
+    joined with S1's words.
+  - No other entry names a loop rule or edits the code of a loop rule's
+    check. One list that a loop rule's check also reads, `drivers.shared`
+    in `rules.yaml`, gains eight paths under ORCH-01; the check's code is
+    not edited (**Rule changes**). The current wording quoted for each
+    entry was compared again with `main` at `ad4ea50` and stands.
 
   FLOW-02 wants an answer of its own, beside the letter, because K1
   still removes `driver.Driver` and FLOW-02 names it in two bullets
@@ -935,10 +940,18 @@ existing driver-owned keys).
   LOOP-01's reading rule, which LOOP-08 applies to a name the loop's
   detail takes from this repository, gives a design the right meaning
   from K1's merge. The two bullets are reworded by a process item, and
-  K1 asks `loop-parallel` to carry them: it is in Design, it already
-  amends FLOW-02, and you settle its wording at its review. If K1
-  merges first, FLOW-02's text names a Go interface that no longer
-  exists from K1's merge to that item's; no check reads those words.
+  K1 asks `loop-parallel` to carry them, because it already amends
+  FLOW-02. Its design review has been under way since 2026-11-15: 12 of
+  its 14 questions are answered (workflow `f5b7acc`), a10 and a14 are
+  open, and no outcome is recorded. So the request is put to you in
+  that sitting now and does not wait for this answer, because that
+  sitting may end first. If that review is approved before the request
+  reaches it, `loop-parallel` is not reopened for two bullets: they go
+  to `loop-native-lead`, P1's fourth process item, whose design is not
+  yet written, or to an item of their own as in (ii), as you choose
+  then. If K1 merges first, FLOW-02's text names a Go interface that no
+  longer exists from K1's merge to that item's; no check reads those
+  words.
   (ii) As (i), with a process item of its own, filed now, in place of
   `loop-parallel`: one more item and one more review for two bullets.
   (iii) As (i) without the sentence in PROFILE-01: ORCH-01 as amended
@@ -4360,7 +4373,11 @@ change.
 covered by a suite case that names it, or is listed in the specification
 with the reason it is not machine-checked, as the table under
 **Configuration** already does for C9 and for part of C11; and each case
-names the requirements it checks.
+names the requirements it checks. The Implementation plan carries it:
+task 12 has the specification list what is not machine-checked, tasks
+14 and 23 have each case name its requirements, and task 23, where both
+tiers exist, adds the test that fails on a requirement no case names and
+the specification does not list.
 
 ## Bootstrap comparison
 
@@ -4826,14 +4843,27 @@ that item's merge if K1 merges first, and not at all if that item
 merges first.
 
 **What is asked, and of which item (a8).** K1 asks `loop-parallel` to
-carry the rewording. It is P1's third item, a process item in Design on
-2026-11-15; its `rule_changes` already amend FLOW-02 (at `f706bf7`: two
-keys added to the list and the two paragraphs after it reworded, the two
-bullets above untouched); and its design review is still to come, so
-Jeff settles the two bullets there. This design does not edit that
-design or its queue file; the request is passed on in the review session
-once a8 is answered. What K1 would have written, as a starting point for
-that item:
+carry the rewording. It is P1's third item, a process item, and its
+`rule_changes` already amend FLOW-02 (at `6d432f9`: two keys added to
+the list and the two paragraphs after it reworded, the two bullets above
+untouched; its design does not name `driver.Driver`). Its design review
+is under way: it began on 2026-11-15, 12 of its 14 questions are
+answered at workflow `f5b7acc` (a10 and a14 are open), and no outcome is
+recorded. Jeff settles the two bullets in that review, so the request is
+put to him in that sitting now and does not wait for a8's answer,
+because that sitting may end first. This design does not edit that
+design or its queue file.
+
+If that review is approved before the request reaches it,
+`loop-parallel` is not reopened for two bullets, which would cost it a
+return to its design review (FLOW-06). They go to `loop-native-lead`,
+P1's fourth process item, queued and with no design yet (its scope
+today is FLOW-04, -09, -13, -16 and -18, and FLOW-02 would be added to
+it), or to a process item of their own (a8's option (ii)), as Jeff
+chooses then. What K1 leaves untrue then lasts until that item merges.
+
+What K1 would have written, as a starting point for whichever item
+carries it:
 
 > - `drivers` — which drivers are touched, or `interface` for a change made at the
 >   level of the driver contract or `driver.Session` (ORCH-01).
@@ -5008,12 +5038,12 @@ that test, for the entries it could reach:
 
 | Entry | Stale after K1? | Why |
 |---|---|---|
-| Specifications | Yes | It says what `specs/` holds. K1 adds `specs/driver-contract/`, and a conformance suite that is outside `specs/` (**The conformance suite**, Home). "No specifications release is pinned today" stays true: both stay in this repository until K2 |
-| Checks | Yes, two rows | K1 adds a CI job, `driver-contract`, that blocks (it joins `ci-ok`'s `needs`) and is none of the jobs the table accounts for; LOOP-03 has a check that a change adds carry a class and a tier. The suite is a conformance suite, which LOOP-03 puts in the Specification class. Its lifecycle tier runs in the `integration` workflow and in native validation, which the Safety rows already name |
+| Specifications | Yes | It says what `specs/` holds. K1 adds `specs/driver-contract/`, and a conformance suite that is outside `specs/` (**The conformance suite**, Home). "No specifications release is pinned today" stays true of K1: both stay in this repository until K2. `seam-specs` replaces that sentence (below) |
+| Checks | Yes, one row | K1 adds a CI job, `driver-contract`, that blocks (it joins `ci-ok`'s `needs`) and is none of the jobs the table accounts for; LOOP-03 has a check that a change adds carry a class and a tier, and the tier-1 Safety row gains the job. The suite needs no new words. LOOP-03 puts a conformance suite in the Specification class, whose tier-1 row names "the contract tests of TEST-05", and the TEST-05 change above names the suite there: the row points to the fact and stays true as it is. The suite's static tier runs in `make test`, and its lifecycle tier in the `integration` workflow and in native validation, all of which the Safety rows already name |
 | Reference documents | Yes | It says the surface is the `surface` entry of `rules.yaml`. After K1 the surface is also the flags and keys the drivers under `driver/` declare, which that entry does not name: its `dir` stays `cmd/warden/` and the root `driver/` is a constant in `surface.go`, for the reason given under UX-01 above |
 | Impact vocabulary | No | It points to the `drivers` and `seams` lists of `rules.yaml`, which the GLOBAL-08 and ORCH-01 entries edit (one seam name, eight shared paths), and to `TEMPLATE.md`, which K1 does not edit. It gains a sentence for another reason: FLOW-02, above |
 | Sweep | No | K1 keeps no unreachable function: a kit function that no driver or test calls is removed (**The overview**). The kept list stands until K2 gives the kit consumers outside this repository. `make deadcode` and the overview's path do not change |
-| Consumables | No | "Releases: the `v*` tags" stays true with one more binary in the archive. "Consumes: nothing" stays true: the specification is in this repository and no release of it exists |
+| Consumables | No | "Releases: the `v*` tags" stays true with one more binary in the archive. "Consumes: nothing" stays true of K1: the specification is in this repository and no release of it exists. `seam-specs` rewrites the entry for the release it pins |
 
 The other thirteen entries name nothing K1 changes: the component is
 still "the kit, the orchestrator, the collector, the executor, the
@@ -5022,7 +5052,7 @@ driver-conformance` is not run on every change); the release is one more
 GoReleaser build in the same workflow; no host name, rule path or session
 setting changes.
 
-**Current wording** (three rows of the profile's table and two of its
+**Current wording** (three rows of the profile's table and one of its
 Checks table; every other row and the rule's own paragraphs are
 unchanged):
 
@@ -5032,11 +5062,9 @@ unchanged):
 
 > | Reference documents | The surface and its documents are the `surface` entry of `tools/tier1/rules.yaml` (UX-01, ORCH-03). Guides: `docs/book/src/guide/`, `docs/book/src/getting-started/`, `examples/`, `README.md`. |
 
-> | Specification | The coupling checks that `tools/tier1/rules.yaml` maps to RELAY-05, GLOBAL-08, EXEC-04, UX-01, UX-03, ORCH-03 and BOOT-07; the contract tests of TEST-05; the `keytool` job | 1 |
-
 > | Safety | `make lint` (`golangci-lint`, and tier 1's analyzers as `rules.yaml` maps them) and `make test`; the `integration` workflow (TEST-02's tier 1) | 1 |
 
-**Proposed wording** (the same five rows):
+**Proposed wording** (the same four rows):
 
 > | Impact vocabulary | The keys and values in `docs/design/TEMPLATE.md`'s front-matter. The driver names, the shared packages that declare every dependent driver, and the seam names are the `drivers` and `seams` lists of `tools/tier1/rules.yaml` (ORCH-01, GLOBAL-08). In `drivers`, `interface` is a change made at the level of the driver contract or `driver.Session` (ORCH-01), and a change to either alters relationships. The `security_boundary` values are GLOBAL-06's. |
 
@@ -5044,32 +5072,80 @@ unchanged):
 
 > | Reference documents | The surface is the flags and keys in the directory that the `surface` entry of `tools/tier1/rules.yaml` names and those the drivers under `driver/` declare; its documents are that entry's `docs` (UX-01, ORCH-03). Guides: `docs/book/src/guide/`, `docs/book/src/getting-started/`, `examples/`, `README.md`. |
 
-> | Specification | The coupling checks that `tools/tier1/rules.yaml` maps to RELAY-05, GLOBAL-08, EXEC-04, UX-01, UX-03, ORCH-03 and BOOT-07; the contract tests of TEST-05, the driver conformance suite (`conformance/driver/`) among them; the `keytool` job | 1 |
-
 > | Safety | `make lint` (`golangci-lint`, and tier 1's analyzers as `rules.yaml` maps them) and `make test`; the `driver-contract` job of `.github/workflows/main.yml`, which runs the tests of the packages it lists on Linux, macOS and Windows; the `integration` workflow (TEST-02's tier 1) | 1 |
 
 What changes, row by row. Impact vocabulary gains one sentence, "In
 `drivers`, `interface` is ... alters relationships." Specifications
 gains "and the driver contract (`specs/driver-contract/`, GLOBAL-08)"
 and the sentence on the suite. Reference documents has its first
-sentence rewritten. The Specification row gains "the driver conformance
-suite (`conformance/driver/`) among them". The Safety row gains the
+sentence rewritten. The tier-1 Safety row of Checks gains the
 `driver-contract` job. Each is true when K1 merges. K2 changes
 Specifications and Consumables again when the specification moves to the
 specs repository, and the Sweep entry if the kit's exported API is then
 kept; those are K2's to declare.
 
+The tier-1 Specification row of Checks is not changed. The design at
+`bb4d7c8` added ", the driver conformance suite (`conformance/driver/`)
+among them" after "the contract tests of TEST-05". By the test above the
+row was not stale, since it points to TEST-05 and TEST-05 names the
+suite, so those words are withdrawn and the entry has four rows where it
+had five.
+
 **Severity and check:** MUST, `agent-judgment`, before and after. No
 enforcement change: tier 1 has no check for PROFILE-01, and
 `rules.yaml` gets no entry for it.
 
-Two other items amend the same rule. `loop-parallel` (in Design, at
-`f706bf7`) changes its header's check line, its paragraph on the agent part and the Process
-row of the Checks table, and adds an Areas row; none of those is a row
-changed here. `seam-specs` (S1) owes the Specifications and Consumables
-entries a change of its own, by `loop-contract`'s design. Whichever
-lands second merges `main` and keeps both, and Consolidation refreshes
-the quotation above if another item's wording landed first.
+**With `seam-specs` and `loop-parallel`.** Two other items amend the
+same rule, and neither is through its review.
+
+`seam-specs` (S1, read at `e4801d6`) does not owe a PROFILE-01 change,
+as this section said at `bb4d7c8`: it declares one, to three rows, the
+Specifications entry, the Consumables entry and the tier-1 Specification
+row of Checks. It was first committed (`1023b02`) half a minute before
+this design's (`a280ba9`), so neither was written with the other in
+front of it. Its section **With `driver-contract`** was then written
+against this design at `bb4d7c8`, and what follows against that section.
+One row is changed by both, the Specifications entry, and the two
+designs change different sentences of it:
+
+| Row | This design owns | `seam-specs` owns | Neither changes |
+|---|---|---|---|
+| Specifications | In its first sentence, "and the driver contract (`specs/driver-contract/`, GLOBAL-08)" after "(RELAY-05)"; and the new second sentence, "The driver contract's conformance suite is `conformance/driver/`." | The three sentences that replace its last one, "No specifications release is pinned today." | The sentence that begins "For the seams of GLOBAL-08" |
+| Consumables; the tier-1 Specification row of Checks | Nothing | All of its change to each | |
+| Impact vocabulary; Reference documents; the tier-1 Safety row of Checks | All of the change to each | Nothing | |
+
+The proposed Specifications row above ends with "No specifications
+release is pinned today." That sentence is S1's to replace, and is in
+K1's wording only as the row reads if K1 merges first. If S1 merges
+first, K1 adds its clause and its sentence to the row it finds and does
+not bring the sentence back. With both changes the row reads, in either
+order, as S1's design also gives it:
+
+> | Specifications | `specs/`: the ledger wire format and the metadata and environment schemas (RELAY-05) and the driver contract (`specs/driver-contract/`, GLOBAL-08), mirrored in the book. The driver contract's conformance suite is `conformance/driver/`. For the seams of GLOBAL-08, their contract documents are the `seams` list of `tools/tier1/rules.yaml` and their tests are TEST-05's. The claim protocol, the collector protocol, the relay guest API, the `initialize` contract and the bootstrap config are specified in `buildwarden/buildwarden-specs`. This repository implements them and pins one release of that repository in `tools/conformance/go.mod`, which is their contract in that list (GLOBAL-08). The pin is a release tag on `main` and on a pull request to it; a branch may pin a commit of an unmerged specifications branch while its work is in progress. |
+
+The review of this design is asked to approve the Specifications row in
+both forms (a8): as proposed above, which is what it says if K1 merges
+first, and joined as here. The second to merge then finds a row its
+review approved, and does not return to Design for it. The joined row is
+quoted from S1's design at `e4801d6`; if S1's review changes its three
+sentences, this quotation is read again against the outcome.
+
+S1's section also gives the tier-1 Specification row of Checks joined
+with the clause this design proposed at `bb4d7c8`. With that clause
+withdrawn, the row with both changes is S1's proposed row alone, and its
+words "the contract tests of TEST-05 that run in `make test`" take in
+the driver suite's static tier. S1's design is not edited from here;
+this is pointed out to its review.
+
+`loop-parallel` (in review, read at `6d432f9`) adds an Areas row to the
+profile's table and changes nothing else in the rule, where its draft at
+`f706bf7` also changed the header's check line, the paragraph on the
+agent part and the Process row of Checks. No row changed here is one it
+touches.
+
+Whichever lands second merges `main` and keeps both. Where a quotation
+of current wording above no longer matches `main` because another item's
+approved words landed first, Consolidation refreshes it (FLOW-10).
 
 ## Amendments to the umbrella design
 
@@ -5586,7 +5662,9 @@ each task leaves `make test` and `make lint` green (FLOW-17).
 12. Write `specs/driver-contract/v1.md` with numbered requirements and
     `v1.schema.json`, add it to `specs/README.md` and the book's specs
     pages. It is done at step 1 of **Order of the work**, ahead of tasks
-    2 to 11 (LOOP-02). It includes the build-lock convention, the failure table, the
+    2 to 11 (LOOP-02). It lists each requirement that is not
+    machine-checked, with the reason (LOOP-03). It includes the
+    build-lock convention, the failure table, the
     probe form of `start`, commands not started by `warden`, UTF-8 paths,
     teardown with closed output, the configuration requirements C1 to
     C11 (`config_files` with each file's level, the TOML version of the
@@ -5616,7 +5694,8 @@ each task leaves `make test` and `make lint` green (FLOW-17).
     hand, `stubrelay`, the suite's
     static tier with the configuration checks, its self-test with the
     fault switches, and the imports test; run the static tier under `make
-    test` (TEST-01, TEST-05, GLOBAL-07).
+    test`. Each case names the requirements of `v1.md` it checks
+    (TEST-01, TEST-05, GLOBAL-07, LOOP-03).
 15. Add the `driver-contract` job to `.github/workflows/main.yml` (three
     platforms) and to `ci-ok`'s `needs`, leaving the `test` job as it is;
     run `cmd/warden`'s and `driver`'s existing tests on macOS and Windows
@@ -5668,11 +5747,15 @@ each task leaves `make test` and `make lint` green (FLOW-17).
     `driver/relaysource/**`, `conformance/driver/**` and
     `specs/driver-contract/**` to that workflow's `paths` and
     `driver/drivercmd/**` to the `firecracker` workflow's; extend the
-    `firecracker` workflow's cases (TEST-02, TEST-05, TEST-07).
+    `firecracker` workflow's cases. Each lifecycle case names the
+    requirements it checks, and a test under `make test` fails on a
+    requirement of `v1.md` that no case of either tier names and the
+    specification does not list as not machine-checked (TEST-02,
+    TEST-05, TEST-07, LOOP-03).
 24. Make the approved rule edits: GLOBAL-08 in `global.md`; ORCH-01,
     ORCH-02, ORCH-03 and ORCH-04 in `orchestrator.md`; TEST-05 in
     `testing.md`;
-    BOOT-02 and the diagram in `bootstrap.md`; PROFILE-01's five rows in
+    BOOT-02 and the diagram in `bootstrap.md`; PROFILE-01's four rows in
     `loop-profile.md`;
     `seams`, `drivers.shared` and the TEST-05 owner in `rules.yaml`
     (FLOW-14, BOOT-07). Nothing in `process.md` is edited (LOOP-09).
@@ -6044,27 +6127,33 @@ Rule changes: the list is still ten entries, with one out and one in.
   LOOP-09 as merged let no feature's design declare a change to one. The
   section that held its current and proposed wording now says what K1
   leaves untrue in FLOW-02 (two bullets name `driver.Driver`), for how
-  long, and that the rewording is asked of `loop-parallel`. Nothing in
-  `process.md` is edited by K1. Put to Jeff inside a8, with three other
-  ways to do it.
+  long, and that the rewording is asked of `loop-parallel`, whose review
+  is under way, with where the two bullets go if that review ends first.
+  Nothing in `process.md` is edited by K1. Put to Jeff inside a8, with
+  three other ways to do it.
 - **PROFILE-01: a new entry**, `{rule: PROFILE-01, change: amend, paths:
-  [docs/development/loop-profile.md]}`. Five rows of the profile:
-  Specifications, Reference documents and the Specification and Safety
-  rows of Checks, which K1's PR would leave stale; and Impact
-  vocabulary, which gains one sentence on what `interface` stands for.
-  Current and proposed wording are under **Rule changes**. Sweep,
-  Consumables and the other thirteen entries are not changed, and the
-  section says why.
+  [docs/development/loop-profile.md]}`. Four rows of the profile:
+  Specifications, Reference documents and the tier-1 Safety row of
+  Checks, which K1's PR would leave stale; and Impact vocabulary, which
+  gains one sentence on what `interface` stands for. Current and
+  proposed wording are under **Rule changes**. Sweep, Consumables, the
+  Specification row of Checks and the other thirteen entries are not
+  changed, and the section says why. `seam-specs` changes the
+  Specifications row too; the section says which words are whose and
+  gives the row with both.
 - **The other nine entries** were checked against FLOW-14 and LOOP-09:
   all are this repository's rules. Their wording, current and proposed,
   is as Jeff read it. Every "current wording" was compared again with
   `main` at `ad4ea50` and none needed a change: the merge did not touch
   `global.md`, `orchestrator.md`, `testing.md`, `bootstrap.md`,
   `ux-cli-config.md`, `tools/tier1/` or `.github/`.
-- **a8 is reworded** in the design and in the queue: its first option
-  lists PROFILE-01 where it listed FLOW-02, and it asks for FLOW-02's
-  route beside the letter. Its options (a) to (d) are otherwise as they
-  were.
+- **a8 is reworded** in the design, and the queue file's a8 is edited
+  to match: its first option lists PROFILE-01 where it listed FLOW-02,
+  and it asks for FLOW-02's route beside the letter. Its options (a) to
+  (d) are otherwise as they were. The workflow branch carries the first
+  rewording at `f090401`. The corrections of the pass below are an edit
+  to the queue file that the review session commits; this branch's
+  agent does not commit to the workflow branch.
 
 The umbrella amendments (a18):
 
@@ -6086,7 +6175,9 @@ Also added or changed:
 - A **Specification changes** section (LOOP-02), before the Bootstrap
   comparison. Its table restates the design. Its last paragraph is new:
   every numbered requirement is covered by a suite case that names it or
-  is listed as not machine-checked (LOOP-03).
+  is listed as not machine-checked (LOOP-03). Tasks 12, 14 and 23 of
+  the Implementation plan carry it, task 23 with a test that fails on a
+  requirement nothing covers.
 - **The specification is written first.** LOOP-02 has the specification
   change before the code that implements it. **Order of the work** had
   the specification at step 5, after `driver/host.go` and `buildseq.go`
@@ -6105,6 +6196,42 @@ Also added or changed:
   LOOP-04, LOOP-08, LOOP-09 and PROFILE-01; `related` gains
   `loop-contract.md`. Prior art gains one entry for it. Implementation
   plan, task 24, names `loop-profile.md` where it named `process.md`.
+
+**Corrected the same day, after an independent review of this update**
+(read at `bb4d7c8`). Each finding was checked against its source, and
+the list above is written as the design now stands. What the pass
+changed from `bb4d7c8`:
+
+- *`loop-parallel`'s review is not still to come.* The FLOW-02 section
+  and a8 said it was. It began on 2026-11-15 and 12 of its 14 questions
+  are answered (workflow `f5b7acc`); no outcome is recorded. Both places
+  now say so, say that the request is put to Jeff in that sitting and
+  does not wait for a8, and say where the two bullets go if that review
+  is approved first: `loop-native-lead` or an item of their own, and
+  `loop-parallel` is not reopened. `loop-parallel`'s design is cited at
+  `6d432f9`, where its FLOW-02 change is the same as at `f706bf7`.
+- *PROFILE-01 is four rows, not five.* The tier-1 Specification row of
+  Checks is withdrawn from the change: it points to TEST-05, and the
+  TEST-05 change names the suite, so K1 does not leave it stale. The
+  other four rows are word for word as at `bb4d7c8`. a8, the section
+  and task 24 say four.
+- *`seam-specs` declares a PROFILE-01 change; it does not owe one.* Its
+  `1023b02` was committed half a minute before this design's `a280ba9`.
+  The section's last part is rewritten for it (read at `e4801d6`): which
+  sentences of the Specifications row each design owns, that row with
+  both changes, and a request under a8 to approve it in both forms.
+  The sentences on "No specifications release is pinned today" and on
+  "Consumes: nothing" now say they are true of K1 alone. The sentence on
+  `loop-parallel`'s PROFILE-01 change is corrected to what it is at
+  `6d432f9`, one added row.
+- *The LOOP-03 sentence had no task.* Tasks 12, 14 and 23 gain it.
+- *a8 names the shared list.* The ORCH-01 entry adds eight paths to
+  `drivers.shared`, which the `drivers-claim` check reads for FLOW-02 as
+  well as for ORCH-01. **Rule changes** already said so; a8 now does.
+
+Not changed by the pass: `rule_changes` (ten entries, PROFILE-01's path
+the same), the other nine entries, the umbrella amendments, any option
+(a) to (d) of a8, any other question.
 
 Not changed: `seams`, `drivers`, `surfaces`, `security_boundary`,
 `alters_relationships`, `native_validation` and `tier2_gaps`; every
