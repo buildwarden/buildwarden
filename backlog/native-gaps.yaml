@@ -666,3 +666,28 @@ gaps:
       start message. Needs a prepared Windows image and an attended run; see
       qemu-windows-guest-package for the state of Windows builds on this host. Run once
       driver-contract has merged.
+  - id: runtime-cli-project-path-windows
+    host: container-any
+    status: open
+    what: >-
+      On a Windows host with a real container runtime: go test ./cmd/warden; --runtime docker.exe and
+      [runtime] cli set to the full path of docker.exe are each refused with the fix that names docker;
+      a project warden.toml whose cli is a .bat the directory ships is refused on warden build, clean
+      and doctor and the file is not run; cli = "docker" in the project's warden.toml builds.
+    design: docs/design/runtime-cli-project-path.md
+    note: >-
+      Tracked, not blocking (design Validation plan, tier 2). The change is in cmd/warden only and its
+      check is one string comparison, the same code on every OS; make test does not run on Windows in
+      CI. Run once runtime-cli-project-path has merged, or against feat/runtime-cli-project-path once
+      it is implemented.
+  - id: runtime-cli-project-path-finch
+    host: macos-finch
+    status: open
+    what: >-
+      A build with cli = "finch" in the project's warden.toml; --runtime with the full path of finch is
+      refused on warden build and on warden clean --driver vz, with the fix that names finch.
+    design: docs/design/runtime-cli-project-path.md
+    note: >-
+      Tracked, not blocking (design Validation plan, tier 2). finch is the default runtime CI does not
+      run. Run once runtime-cli-project-path has merged, or against feat/runtime-cli-project-path once
+      it is implemented.
