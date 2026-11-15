@@ -554,6 +554,12 @@ func TestDoctorIgnoresAnUnusedRuntime(t *testing.T) {
 	for _, drv := range []string{"qemu", "vz", "hyperv", "firecracker"} {
 		t.Run("--driver "+drv, func(t *testing.T) {
 			inConfigFiles(t, "", cliFile(unused))
+			// doctor is not read-only: under firecracker it probes reflink
+			// copies in the user cache directory and leaves the driver's
+			// work root there. The child gets an empty cache directory, set
+			// before its environment is copied from this process's.
+			t.Setenv("XDG_CACHE_HOME", t.TempDir())
+			t.Setenv("LocalAppData", t.TempDir())
 			self, err := os.Executable()
 			if err != nil {
 				t.Fatal(err)

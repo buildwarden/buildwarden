@@ -280,11 +280,14 @@ bold "━━━ Test 3: npm install (Node ecosystem), the runtime named by a pro
 
 # A supported runtime named by a project's file is still built with: this
 # build runs from a directory whose warden.toml names the runtime that
-# detection finds on this host.
-NAMED_RUNTIME=$("$WARDEN" doctor 2>/dev/null | sed -n 's/^container runtime: //p') || true
+# detection finds on this host. The caller's WARDEN_CTR_CLI and WARDEN_DRIVER
+# outrank the file, so both commands run without them: with either set, the
+# build would pass without reading the file's value.
+NAMED_RUNTIME=$(env -u WARDEN_CTR_CLI -u WARDEN_DRIVER "$WARDEN" doctor 2>/dev/null |
+    sed -n 's/^container runtime: //p') || true
 NAMED_PROJECT=$(mktemp -d)
 printf '[runtime]\ncli = "%s"\n' "$NAMED_RUNTIME" > "$NAMED_PROJECT/warden.toml"
-BUILD_OUT=$(cd "$NAMED_PROJECT" && "$WARDEN" build -o /tmp/warden-integ-npm "$REPO/examples/Dockerfile.npm" 2>&1) || true  # a failed build is reported below
+BUILD_OUT=$(cd "$NAMED_PROJECT" && env -u WARDEN_CTR_CLI -u WARDEN_DRIVER "$WARDEN" build -o /tmp/warden-integ-npm "$REPO/examples/Dockerfile.npm" 2>&1) || true  # a failed build is reported below
 rm -rf "$NAMED_PROJECT"
 OUTPUT_DIR=$(echo "$BUILD_OUT" | extract_output_dir)
 if [ -z "$OUTPUT_DIR" ] || [ ! -d "$OUTPUT_DIR" ]; then

@@ -1,8 +1,10 @@
 // TRANSITIONAL(runtime-former-values): removed in the change that prepares
-// 1.0, together with the call in unsupportedRuntime, runtime_former_test.go,
-// the "A path, or another runtime" subsection of the configuration reference
-// and the upgrade note in installation.md that links to it. A search for the
-// marker finds all five.
+// 1.0, together with the call in unsupportedRuntime (config.go),
+// runtime_former_test.go, the "A path, or another runtime" subsection of the
+// configuration reference (guide/configuration.md) and the upgrade note in
+// getting-started/installation.md that links to it. A search for the marker
+// finds all five. It also finds docs/design/runtime-cli-project-path.md, the
+// archived design that records them, which is kept.
 //
 // Until the container runtime was limited to containerRuntimes, warden ran
 // whatever program the setting named, and four forms of that were in use: a

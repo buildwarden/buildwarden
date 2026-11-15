@@ -1264,7 +1264,10 @@ output holds no error about the runtime: neither the configured value nor
 `119a0e1`). It is not read-only under every driver, as this note first
 said: under `firecracker` its reflink probe makes the driver's work
 directory in the user cache and writes and removes probe files there
-(corrected at Consolidation, on the Review's finding S1).
+(corrected at Consolidation, on the Review's finding S1). The four rows
+therefore give the child an empty user cache directory (`XDG_CACHE_HOME`,
+`LocalAppData`), as Note A's rows have (added after Publish, with the fix
+of S1).
 
 *Note C (task 16: the build from a project's file, tier 1).* The design
 writes `cli = "docker"`. The script runs on any host where a runtime answers
@@ -1693,7 +1696,9 @@ part. Wording fixed here:
   now lists the five: the file, its call in `unsupportedRuntime`, its
   test file, the subsection "A path, or another runtime" of
   `configuration.md`, and that note. **Where the transitional part
-  lives** above lists the first four.
+  lives** above lists the first four. A search for the marker finds those
+  five and this design, which is kept; the header comment says so and
+  names each place by its file (after Publish, below).
 
 **Plan notes A to D, and what Implement did beyond the plan** (FLOW-06;
 each is in the commit log, none is silent).
@@ -1701,8 +1706,9 @@ each is in the commit log, none is silent).
 - *Note A* stands, with the sentence Implement added on the Review's
   word (`9af1a71`): tier 1 skips `clean --driver hyperv` on a Windows
   host too.
-- *Note B* stands as corrected above. The four `doctor` rows still do
-  not move the user cache directory; that is Review S1, below.
+- *Note B* stands as corrected above. At Publish the four `doctor` rows
+  did not move the user cache directory (Review S1); they do since the
+  fix after Publish, below, and the note says so.
 - *Note C* stands: the tier-1 build names the runtime `warden doctor`
   reports on the host, which is `docker` on the CI runner.
 - *Note D* stands. The Security note's list for the TEST-08 suite is not
@@ -1745,18 +1751,19 @@ each is in the commit log, none is silent).
 
 **Review findings for the PR body** (report
 `reports/runtime-cli-project-path/9af1a7173fa5.md`: 0 MUST, 0
-MUST-review, 2 SHOULD, both in test code and both open, for the human to
-acknowledge at merge, FLOW-08).
+MUST-review, 2 SHOULD, both in test code. Both were open at Publish, for
+the human to acknowledge at merge, FLOW-08; both are fixed since, in the
+commit after `9cb1dc0`: **After Publish**, below).
 
-- *S1 (TEST-01), open.* `TestDoctorIgnoresAnUnusedRuntime` moves `HOME`
-  but not the user cache directory, so with `XDG_CACHE_HOME` set
-  `make test` leaves `warden/firecracker/work` in the caller's cache.
+- *S1 (TEST-01), fixed after Publish.* `TestDoctorIgnoresAnUnusedRuntime`
+  moved `HOME` but not the user cache directory, so with `XDG_CACHE_HOME`
+  set `make test` left `warden/firecracker/work` in the caller's cache.
   Fix: set `XDG_CACHE_HOME` and `LocalAppData` for the child, as the
   `clean` rows do.
-- *S2 (TEST-02), open.* Test 3 of `test-integration.sh` runs its build
-  with the caller's environment; where `WARDEN_CTR_CLI` is set, the
-  file's value is never read and the case passes for the wrong reason.
-  Fix: run that build and its `doctor` call under
+- *S2 (TEST-02), fixed after Publish.* Test 3 of `test-integration.sh`
+  ran its build with the caller's environment; where `WARDEN_CTR_CLI` was
+  set, the file's value was never read and the case passed for the wrong
+  reason. Fix: run that build and its `doctor` call under
   `env -u WARDEN_CTR_CLI -u WARDEN_DRIVER`. On the CI runner neither
   variable is set.
 - *For the human's eye, not a finding.* The transitional message for a
@@ -1766,10 +1773,11 @@ acknowledge at merge, FLOW-08).
   it. Adding the clause would be a wording change for Design.
 
 **Validation.** `make lint`, `make test` and `make enforcement` pass at
-this step's head. `make integration-test` has not run for this branch:
-no container runtime answers on the host Publish runs on, and the PR's
-`integration` workflow is its first run (Test 0 of the script passed on
-its own at Review, 12 of 12). No host blocks merge (FLOW-09). The two
+this step's head. At Publish `make integration-test` had not run for this
+branch: no container runtime answers on the host Publish runs on, and the
+PR's `integration` workflow was its first run (Test 0 of the script
+passed on its own at Review, 12 of 12). That run has passed since:
+**After Publish**, below. No host blocks merge (FLOW-09). The two
 tracked gaps are open in the native-gap backlog, as task 22 asks:
 `runtime-cli-project-path-windows` (`container-any`) and
 `runtime-cli-project-path-finch` (`macos-finch`).
@@ -1781,7 +1789,46 @@ step's dispatch, not by this step: a queue item on hold until the change
 that prepares 1.0, whose `source` names the marker
 `TRANSITIONAL(runtime-former-values)`, the five places it is in, and
 that condition. It is its own item and does not `follow` this one: the
-design asks for no more, and it has nothing to fix.
+design asks for no more, and it has nothing to fix. It is filed:
+`runtime-former-values-removal` (**After Publish**, below).
+
+**After Publish** (2026-11-15, PR #120 open at `9cb1dc0`; FLOW-12). One
+commit after `9cb1dc0` changes test code, one header comment and this
+design, and no behavior of `warden`.
+
+- *Tier 1 has run.* The PR's `integration` workflow passed on `9cb1dc0`:
+  42 assertions, none failed, Test 0's twelve among them, and Test 3's
+  build from a directory whose `warden.toml` names the runtime ("built
+  with cli = "docker" in the project's warden.toml"). Task 16 is
+  verified on the CI runner. All 22 checks of the PR passed on that
+  commit.
+- *The removal at 1.0 is filed.* Queue item
+  `runtime-former-values-removal` (workflow branch, `7e9d092`): priority
+  73, on hold until the change that prepares 1.0 and not before this
+  item's PR has merged. It does not `follow` this item. Its `source`
+  names the marker and the five places.
+- *S1 is fixed.* The four rows of `TestDoctorIgnoresAnUnusedRuntime` set
+  `XDG_CACHE_HOME` and `LocalAppData` to empty temporary directories
+  before the child's environment is copied. Seen on Linux with
+  `XDG_CACHE_HOME` at a scratch directory: before, the test left
+  `warden/firecracker/work` there; after, it leaves nothing, and neither
+  does `go test ./cmd/warden` as a whole. No other test of
+  `runtime_test.go` or `runtime_former_test.go` runs a command under a
+  VM driver without that: the `clean` rows of Note A already move the
+  cache, `clean` under `qemu` and `vz` is refused before any work, and
+  the `newDriver` rows construct a driver and write nothing.
+- *S2 is fixed.* Test 3's `doctor` call and its build run under
+  `env -u WARDEN_CTR_CLI -u WARDEN_DRIVER`. Seen with fakes of `docker`
+  and `podman` on `PATH`, `WARDEN_CTR_CLI=podman` in the caller and
+  `cli = "docker"` in the project's file: the build line ran `podman`
+  before and runs `docker` now. Test 0's twelve cases already run
+  through `rt_warden`, which removes both variables and sets
+  `WARDEN_CTR_CLI` only in the two cases that are about it; they pass,
+  12 of 12, with `WARDEN_CTR_CLI=bogus` in the caller. Tests 1 and 2
+  are `main`'s, name no runtime in a file, and are not changed.
+- *The marker's places.* `runtime_former.go`'s header comment names each
+  of the five by its file, and says that a search also finds this
+  design, which is kept.
 
 ## Rollback notes
 
@@ -1794,9 +1841,10 @@ freeze. The first draft limited only the project's file; the design review
 of 2026-11-15 changed a1, a2 and a3 in Jeff's words and approved the
 redraft at `a2afd08`, with rule change UX-08 (amend) approved by name at
 the same commit. Planned (22 tasks) and implemented the same day; tier 2 at
-`9af1a7173fa5`: 0 MUST, 0 MUST-review, 2 SHOULD open. `main` moved once
-since the fork (#119, merged into the branch during the review). Published
-2026-11-15.
+`9af1a7173fa5`: 0 MUST, 0 MUST-review, 2 SHOULD, both fixed after Publish.
+`main` moved once since the fork (#119, merged into the branch during the
+review). Published 2026-11-15 as PR #120; this summary was refreshed the
+same day, for the commit after `9cb1dc0` (FLOW-12).
 
 - **The hole.** `[runtime] cli` in the working directory's `warden.toml`
   was run with `exec.Command` as given, so a cloned repository could make
@@ -1829,7 +1877,9 @@ since the fork (#119, merged into the branch during the review). Published
   The marker `TRANSITIONAL(runtime-former-values)` is in five places: that
   file, its call in `unsupportedRuntime`, `runtime_former_test.go`, the
   subsection "A path, or another runtime" of `configuration.md`, and the
-  upgrade note in `installation.md`. All five go at 1.0 (a4).
+  upgrade note in `installation.md`. All five go at 1.0 (a4), by the
+  queue item `runtime-former-values-removal`; a search for the marker
+  also finds this design, which is kept.
 - **Built: the rule.** UX-08 as amended (`ux-cli-config.md`, check type
   `agent-judgment`; its follow-up line leaves `tools/tier1/rules.yaml`): a
   setting held in a config file or the environment is validated by its
@@ -1843,7 +1893,12 @@ since the fork (#119, merged into the branch during the review). Published
   an unsupported value has no fallback; with `resolveRuntime` put back to
   `main`'s body, 8 test functions fail. Test 0 of `test-integration.sh`
   runs the built `warden` against project directories, and Test 3 builds
-  with the runtime named in the project's file. Reference:
+  with the runtime named in the project's file, with the caller's
+  `WARDEN_CTR_CLI` and `WARDEN_DRIVER` removed so that the file's value
+  is the one read. The PR's `integration` workflow passed on `9cb1dc0`
+  (42 assertions, Test 3's build with `cli = "docker"` among them). The
+  tests that run `clean` or `doctor` under a VM driver give it an empty
+  user cache directory: firecracker's `doctor` writes there. Reference:
   `configuration.md` (the container runtime section) and `cli.md`; guides:
   `drivers.md`, `first-build.md`, `installation.md`; `overview.md`'s
   `warden build` and its note on `warden clean`.
@@ -1867,18 +1922,22 @@ since the fork (#119, merged into the branch during the review). Published
   warns and still runs the value. Removing the transitional detection
   after two releases. Printing a directory from the value in a fix.
   Resolving the name to an absolute path or checking the file's owner.
-- **Open.** Review SHOULDs S1 (TEST-01: `TestDoctorIgnoresAnUnusedRuntime`
-  does not move the user cache directory, and firecracker's doctor writes
-  a probe there) and S2 (TEST-02: Test 3 of `test-integration.sh` inherits
-  the caller's `WARDEN_CTR_CLI`), for Jeff at merge. `make
-  integration-test` has its first run in the PR's `integration` workflow:
-  no container runtime answers on the host the loop built this on. Two
-  tracked native gaps, neither blocking: `runtime-cli-project-path-windows`
-  (`container-any`) and `runtime-cli-project-path-finch` (`macos-finch`).
+- **Closed after Publish.** Review SHOULDs S1 (TEST-01:
+  `TestDoctorIgnoresAnUnusedRuntime` did not move the user cache
+  directory, and firecracker's doctor writes a probe there) and S2
+  (TEST-02: Test 3 of `test-integration.sh` inherited the caller's
+  `WARDEN_CTR_CLI`) are fixed in the commit after `9cb1dc0`. `make
+  integration-test` had its first run in the PR's `integration` workflow,
+  on `9cb1dc0`, and passed; no container runtime answers on the host the
+  loop built this on.
+- **Open.** Two tracked native gaps, neither blocking:
+  `runtime-cli-project-path-windows` (`container-any`) and
+  `runtime-cli-project-path-finch` (`macos-finch`).
   The Security note's entry for the TEST-08 suite (Arm A) is in this
   design only, because the corpus is not built. The removal of the
-  transitional detection at 1.0 is a queue item of its own, on hold, which
-  the attended session files; it does not `follow` this item. Whether "an
+  transitional detection at 1.0 is a queue item of its own,
+  `runtime-former-values-removal`: priority 73, on hold until the change
+  that prepares 1.0; it does not `follow` this item. Whether "an
   error at once, with transitional wording kept until 1.0" becomes a rule
   is Jeff's to decide; it is written in no rule here.
 - **Not this item's.** What a project's file still chooses (the relay
