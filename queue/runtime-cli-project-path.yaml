@@ -3,10 +3,11 @@ title: 'A project''s warden.toml may name the container runtime, not a path to r
 priority: 64
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/runtime-cli-project-path.md
 branch: feat/runtime-cli-project-path
-alters_relationships: null
+alters_relationships: false
+design_review: required
 source: 'Found by the reviewers of driver-contract''s redraft, 2026-11-14: on main, [runtime] cli in a project''s warden.toml is used as given (cmd/warden/main.go:207-208) and run with exec.Command (driver/container/container.go), so a cloned repository can make ''warden build'' or ''warden doctor'' run a binary it ships, on the host, outside any isolation. Jeff, attended session 2026-11-14: ''File it as a security fix''. Not a program item; FLOW-20''s freeze exempts a security fix. Scope: a project file may name a runtime (finch, docker, podman, or another name looked up on PATH) but not a path; a path comes from --runtime, WARDEN_CTR_CLI or the user''s own config, as driver-contract decides for a driver''s path (its a16: ''a project''s warden.toml may name a driver, never a file path''). A user-facing change (UX-01, UX-03): the refusal says what to do (UX-04). GLOBAL-06: host-env boundary. It touches cmd/warden''s configuration, which driver-contract also changes: its design says how the two fit and which merges first.'
 steps:
   - id: f0-branch-setup
@@ -19,10 +20,26 @@ steps:
   - id: f1-design
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review
+    phase: 2
+    affinity: human
     status: pending
     lease:
-      claimed_by: cloud/20261112T230554Z
-      expires: 2026-11-15T00:51:45.913947703Z
+      claimed_by: ""
+      expires: null
+  - id: f2-plan
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - f2-design-review
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -30,7 +47,33 @@ budget:
   spent:
     runs: 0
     steps: 2
-questions: []
+questions:
+  - id: a1
+    kind: assumed
+    status: open
+    question: 'What may a project''s warden.toml set [runtime] cli to? The item''s source says a name looked up on PATH; the design finds that a name is not enough: cli = "sh" with a file named pull in the repository makes a release warden build run sh pull <relay image>, which executes ./pull on the host (checked with sh; warden clean runs ./container the same way).'
+    options:
+      - (a) exactly finch, docker or podman, the names warden probes for, or empty
+      - (b) those three and nerdctl
+      - (c) any name without a path separator, looked up on PATH, as the source words it; this leaves host execution open through any interpreter on PATH
+      - '(d) nothing: the key is read from the user''s file only'
+    recommended: (a) exactly finch, docker or podman, the names warden probes for, or empty
+  - id: a2
+    kind: assumed
+    status: open
+    question: When is a refused [runtime] cli from the project's warden.toml an error?
+    options:
+      - '(a) when it is the value in effect on a command that resolves the container runtime: build, shell and doctor with the container driver, and clean with every driver except firecracker and hyperv (so also warden clean --driver qemu and --driver vz, which run the runtime today); --runtime and WARDEN_CTR_CLI replace it without an error, so a repository whose file is refused can be built without editing it; K1 can keep this unchanged, but for clean under qemu and vz, which K1 stops running the runtime'
+      - '(b) as the file loads: every command that loads configuration, every driver, even when a flag overrides it, as [vm] build_link is; the way out is to edit the repository''s warden.toml, and K1 narrows it again to when the container driver is selected'
+    recommended: '(a) when it is the value in effect on a command that resolves the container runtime: build, shell and doctor with the container driver, and clean with every driver except firecracker and hyperv (so also warden clean --driver qemu and --driver vz, which run the runtime today); --runtime and WARDEN_CTR_CLI replace it without an error, so a repository whose file is refused can be built without editing it; K1 can keep this unchanged, but for clean under qemu and vz, which K1 stops running the runtime'
+  - id: a3
+    kind: assumed
+    status: open
+    question: The fix refuses a configuration that works today (a path, or a name other than finch, docker, podman, as [runtime] cli in a project's warden.toml). Does it take effect at once, with no release in which the old value still runs with a warning (UX-03)?
+    options:
+      - (a) refuse from the release that carries the fix; the refusal names the three ways out
+      - (b) warn for one release, then refuse; the hole stays open for that release
+    recommended: (a) refuse from the release that carries the fix; the refusal names the three ways out
 history:
   - at: 2026-11-14T22:51:20Z
     by: human/jeff
@@ -50,3 +93,9 @@ history:
   - at: 2026-11-14T22:51:45Z
     by: cloud/20261112T230554Z
     event: claimed f1-design until 2026-11-15T00:51:45Z
+  - at: 2026-11-15T00:54:47Z
+    by: cloud/20261112T230554Z
+    event: done f1-design
+  - at: 2026-11-15T00:54:47Z
+    by: cloud/20261112T230554Z
+    event: entered phase 2 (plan)
