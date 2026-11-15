@@ -550,8 +550,9 @@ Nothing in any of the five is approved.
 
 ### Blocking
 
-None. The repository's creation is Jeff's (umbrella a11); it is needed
-when Implement starts, not for this design, and a2 says how it is asked for.
+None. The repository's creation is Jeff's (umbrella a11). By his answer
+to a2 it is created during the design review, before the approval, and by
+Jeff himself (**What Jeff creates**); Implement checks it before it starts.
 The release at the end is Jeff's too, and is a queue step, not a question
 (a15). Whether that step may exist is a15.
 
@@ -589,12 +590,18 @@ release; its recommended answer is still A.
   Options: (A) in or right after the design review, by Jeff or by that
   attended session on his word (umbrella a11); (B) now, before the review;
   (C) at Publish, after incubating on this branch (Decision 8's rejected
-  alternative). *Proceeding with A; confirm.* What has to exist before
-  `f3-implement` starts is listed under **What Jeff creates**. If it does not
-  exist then, Implement stops and the tick records a blocking question for
-  the human, as `build-vm-busybox` q1 did. No agent creates it unasked,
-  and which licence files it carries is Jeff's choice (**What Jeff
-  creates**).
+  alternative). **Answered 2026-11-15: (B), now, before the review's
+  approval.** The design proposed A; it is revised. What is created was
+  confirmed with Jeff in the review session, right before creation
+  (umbrella a11): the name `buildwarden/buildwarden-specs`; public (a3);
+  a first commit that carries a README stub and the Apache-2.0 `LICENSE`
+  and no `NOTICE` file. Jeff creates it himself, because the cloud session
+  that holds the review cannot create a repository; the session then
+  attaches it. **What Jeff creates** lists the settings and what Implement
+  checks before it starts. If the repository is missing then, or a branch
+  cannot be pushed to it, Implement stops and the tick records a blocking
+  question for the human, as `build-vm-busybox` q1 did. No agent creates
+  it, and no agent adds a licence file to it.
 - **a3. Visibility.** Options: (A) public from creation; (B) private until
   `buildwarden-relay` goes public at M1. *Proceeding with A; confirm.* It
   specifies protocols of a public project, the book links to it, and the Go
@@ -880,8 +887,8 @@ release; its recommended answer is still A.
 ## Design
 
 This item works in one repository other than this one:
-`buildwarden/buildwarden-specs` (LOOP-04). Jeff creates it before
-Implement starts (**What Jeff creates**). It has not adopted the Loop
+`buildwarden/buildwarden-specs` (LOOP-04). Jeff creates it during the
+design review (a2, **What Jeff creates**). It has not adopted the Loop
 Contract, and **How the loop treats the second repository** says what
 binds a worker there (LOOP-08).
 The item reads `buildwarden/buildwarden-relay` and changes nothing in it.
@@ -1924,15 +1931,18 @@ second to merge does.
 
 ### What Jeff creates
 
-Before `f3-implement` starts (a2), by Jeff or by an attended session on his
-word in that session (umbrella a11):
+**The repository, during the design review** (a2, Jeff's answer of
+2026-11-15: now, before the review's approval). Jeff creates it himself.
+The cloud session that holds the review cannot create a repository, so
+the session's part is to attach it once it exists. What is created was
+confirmed with him in that session, right before creation (umbrella a11):
 
 1. The repository `buildwarden/buildwarden-specs`, public (a3), **with a
-   first commit on `main`**, so that no agent ever pushes `main`: a README
-   stub and the licence files Jeff chooses. This design proposes Apache-2.0,
-   as here. This repository's `NOTICE` reads "Copyright Amazon.com, Inc. or
-   its affiliates"; whether the new repository carries it is Jeff's call,
-   and no agent copies it.
+   first commit on `main`**, so that no agent ever pushes `main`. The
+   commit carries a README stub and the Apache-2.0 `LICENSE`, the licence
+   this repository has, and nothing else. It carries no `NOTICE` file.
+   This repository's `NOTICE` reads "Copyright Amazon.com, Inc. or its
+   affiliates"; it is not copied, and no agent adds one.
 2. On it: `main` protected (pull request required, no force-push, no
    deletion), "Automatically delete head branches" on (FLOW-16), Actions
    enabled. The repository is public, so its host offers protection.
@@ -1940,9 +1950,26 @@ word in that session (umbrella a11):
    it (step 6); the specs repository is not yet a component, and is
    protected from its creation so that FLOW-08 is held there by more than
    the workers' settings.
-3. Push access to branches, and pull requests, for the credentials the loop's
-   sessions use; and the repository added to what the cloud environment may
-   reach.
+3. The Claude GitHub App installed on it. That is what lets the loop's
+   sessions push branches and open pull requests there; the session then
+   attaches the repository.
+
+The repository did not exist when this was written, during the first
+sitting of the review on 2026-11-15. Creating it before the approval
+fixes its name (umbrella a10), its visibility (a3) and its licence file,
+each confirmed with him, and nothing else: nothing is pushed to it
+before Implement, and a design that is sent back leaves it with its
+stub.
+
+**What Implement checks before it starts** (task 0). The repository
+exists and is public. `main` has one commit, with a README and the
+Apache-2.0 `LICENSE` and no `NOTICE`. The session can read it, push the
+branch `feat/seam-specs` and open a pull request. The protection of
+`main`, the head-branch setting and Actions are read where the session's
+credentials can read them; what it could not read is named in the step's
+evidence, and nothing is tested by trying a push to `main`. If the
+repository is missing, differs from this list, or refuses the branch,
+Implement stops with a blocking question (FLOW-07) and changes nothing.
 
 After Review: `f6-release-specs` (a15). The merge of its pull request,
 which is Jeff's alone (FLOW-08), preferably as a merge commit so that the
@@ -2630,9 +2657,10 @@ the relay binary or image named in the target file.
 Tasks name their repository: **S** is `buildwarden/buildwarden-specs`, on
 its branch `feat/seam-specs`; **K** is this repository, on this branch.
 
-0. (Human, umbrella a11, before this phase) The repository exists as **What
-   Jeff creates** says. Implement checks it first and stops with a blocking
-   question if it does not (a2).
+0. (Human, umbrella a11, during the design review) Jeff creates the
+   repository as **What Jeff creates** says (a2). Implement checks it
+   first, against the list there, and stops with a blocking question if it
+   is missing or differs.
 1. **S** Layout, `README.md`, `CHANGELOG.md`, `go.mod`, `.entire/settings.json`
    naming the private sessions repository, and the `ci` and `flow18`
    workflows (FLOW-17, FLOW-18, a4).
