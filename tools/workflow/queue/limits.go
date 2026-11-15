@@ -178,12 +178,14 @@ func (s *State) Guard(f *Feature, st *Step, worker string) string {
 	return s.guard(f, st, worker).why
 }
 
-// refusal is Guard's answer: the reason, and whether it is the waiting
-// limit's, which wf next reports for a queued item where it passes over the
-// in-progress limit's in silence.
+// refusal is why a step is not offered: Guard's reason, and whether it is the
+// waiting limit's, which wf next reports for a queued item where it passes
+// over the in-progress limit's in silence; or, with red set, that the step is
+// a refresh and main is recorded red (cloudHold).
 type refusal struct {
 	why     string
 	waiting bool
+	red     bool
 }
 
 func (s *State) guard(f *Feature, st *Step, worker string) refusal {

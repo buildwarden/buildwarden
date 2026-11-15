@@ -18,6 +18,7 @@
 //	            [-repos OWNER/NAME,...] [-areas AREA,...] [-seams SEAM,...]
 //	            [-adopts CONSUMABLE@VERSION] [-urgent]
 //	wf urgent   -state DIR -worker human/NAME -feature F [-clear]
+//	wf stale    -state DIR -repo DIR -worker W
 //	wf gate     -state DIR -repo DIR -machine M -stamp FILE [-sweep-days N] [-record]
 //	wf budget   -state DIR [-native]
 //	wf drops    -repo DIR -base REV -main FILE -branch FILE [-head REV]
@@ -56,6 +57,22 @@
 // more. next prints a blocked line with the reason and goes on to the next
 // item.
 //
+// stale seeds a refresh step on every item main has moved past (FLOW-10): an
+// open pull request whose branch does not contain origin/main, or whose head
+// is not the commit pr.head records, and a feature that merged main in
+// Publish and has not finished it. It sets such a PR's pr.ci to pending, so
+// it is not listed as ready to merge until its refresh has passed (FLOW-08).
+// For an item with a PR it runs the merge check first: a PR the human merged
+// gets no refresh, and prints "merged: ITEM" at its merge step; one merged
+// while the item was sent back moves the item to Close with a human step
+// that carries the finding. It refreshes nothing itself, and run again it
+// adds nothing. done on a refresh step runs the refresh's done-when: main
+// merged, the branch pushed, the consolidation entry naming the main commit
+// and, with a PR recorded, the archived design and CI green on the pushed
+// head. The first claim of a refresh step is not counted in the item's
+// budget; next offers none while main.yaml records main red, except to the
+// item it names as the fix.
+//
 // DIR is a checkout of the workflow branch; -repo is a checkout of the code
 // with origin fetched. A worker is cloud, human or host:<name>, optionally
 // with a /<session> suffix that tells its leases apart. Commands that change
@@ -80,10 +97,13 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"flag"
 	"fmt"
 	"os"
+	"os/exec"
+	"slices"
 	"strings"
 	"time"
 
@@ -92,8 +112,8 @@ import (
 )
 
 const usage = "usage: wf " +
-	"validate|status|next|claim|release|check|done|answer|back|new|urgent|gate|budget|" +
-	"migrate|drops [flags]"
+	"validate|status|next|claim|release|check|done|answer|back|new|urgent|stale|gate|" +
+	"budget|migrate|drops [flags]"
 
 // errIdle is gate's "nothing to do", exit status 3.
 var errIdle = errors.New("idle")
@@ -187,7 +207,7 @@ func run(cmd string, args []string, now time.Time) error {
 	cmds := map[string]func(*queue.State, opts) error{
 		"validate": validate, "status": status, "next": next, "check": checkPhase,
 		"answer": answer, "back": back, "new": newFeature, "urgent": urgent,
-		"gate": gate, "budget": budget, "migrate": migrate,
+		"gate": gate, "budget": budget, "migrate": migrate, "stale": stale,
 	}
 	for _, c := range []string{"claim", "release", "done"} {
 		cmds[c] = func(s *queue.State, o opts) error { return stepCmd(c, s, o) }
@@ -309,22 +329,33 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 	case "release":
 		s.Release(f, st, o.worker, o.now, o.why)
 	case "done":
-		if err := queue.Early(f, st); err != nil {
+		if err := finish(f, st, o); err != nil {
 			return err
 		}
-		// The design review precedes Plan, so it is not its phase's gate;
-		// its approval is checked here (FLOW-19).
-		if queue.IsDesignReview(st) && !printResults(check.Review(check.Env{Repo: o.repo,
-			Workflow: o.state, Run: o.run}, f)) {
-			return fmt.Errorf("%s has no recorded approval (FLOW-19)", st.ID)
-		}
-		if queue.IsGate(f, st) && !runChecks(o, f) {
-			return fmt.Errorf("%s done-when not met; phase stays %d (FLOW-03)", st.ID,
-				f.Phase)
-		}
-		queue.Complete(f, st, o.worker, o.now)
 	}
 	return s.Save(f)
+}
+
+// finish is wf done: it completes the step once its done-when passes. A gate
+// has its phase's, and two steps that are not gates have their own: the
+// design review, which precedes Plan, its approval (FLOW-19), and a refresh,
+// which no phase seeds, the refresh's (FLOW-10).
+func finish(f *queue.Feature, st *queue.Step, o opts) error {
+	if err := queue.Early(f, st); err != nil {
+		return err
+	}
+	if queue.IsDesignReview(st) && !printResults(check.Review(env(o), f)) {
+		return fmt.Errorf("%s has no recorded approval (FLOW-19)", st.ID)
+	}
+	if queue.IsGate(f, st) && !runChecks(o, f) {
+		return fmt.Errorf("%s done-when not met; phase stays %d (FLOW-03)", st.ID,
+			f.Phase)
+	}
+	if queue.IsRefresh(st) && !printResults(check.Refresh(env(o), f)) {
+		return fmt.Errorf("%s done-when not met (FLOW-10)", st.ID)
+	}
+	queue.Complete(f, st, o.worker, o.now)
+	return nil
 }
 
 // claimable says why the worker may not claim the step: it is not pending,
@@ -549,8 +580,204 @@ func kindFlags(o opts) (string, []string, error) {
 	return "", nil, nil
 }
 
+// env is where the done-when checks look for this command line.
+func env(o opts) check.Env {
+	return check.Env{Repo: o.repo, Workflow: o.state, Run: o.run}
+}
+
 func runChecks(o opts, f *queue.Feature) bool {
-	return printResults(check.Phase(check.Env{Repo: o.repo, Workflow: o.state, Run: o.run}, f))
+	return printResults(check.Phase(env(o), f))
+}
+
+// git runs git in the code checkout and returns what it printed.
+func git(repo string, args ...string) (string, error) {
+	cmd := exec.Command("git", args...)
+	cmd.Dir = repo
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	out, err := cmd.Output()
+	if err != nil {
+		return "", fmt.Errorf("git %s: %w: %s", strings.Join(args, " "), err,
+			strings.TrimSpace(stderr.String()))
+	}
+	return strings.TrimSpace(string(out)), nil
+}
+
+// stale seeds a refresh on each item main has moved past, after the merge
+// check (FLOW-08, FLOW-10). It prints one line for each item it changed or
+// found merged or gone, and saves each item it changed.
+func stale(s *queue.State, o opts) error {
+	if o.worker == "" {
+		return errors.New("stale needs -worker")
+	}
+	for _, f := range s.Ordered() {
+		line, changed, err := staleItem(s, f, o)
+		if err != nil {
+			return fmt.Errorf("%s: %w", f.Feature, err)
+		}
+		if line != "" {
+			fmt.Println(line)
+		}
+		if changed {
+			if err := s.Save(f); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
+// staleItem is wf stale for one item: the line to print, and whether the
+// item changed. It looks at an item in progress and homed here that has a PR
+// recorded and has not reached Close, or is a feature that merged main in
+// Publish.
+func staleItem(s *queue.State, f *queue.Feature, o opts) (string, bool, error) {
+	hasPR := f.PR != nil && f.PR.Number > 0
+	open := hasPR && f.Phase <= f.PublishPhase()+1
+	if f.Status != "in_progress" || s.Tracked(f) || (!open && !f.MergedMainInPublish()) {
+		return "", false, nil
+	}
+	if hasPR && check.Merged(env(o), f) {
+		line, changed := staleMerged(f, o)
+		return line, changed, nil
+	}
+	head, err := remoteHead(o.repo, f.Branch)
+	if err != nil {
+		return "", false, err
+	}
+	if head == "" {
+		what := ""
+		if hasPR {
+			what = fmt.Sprintf("PR #%d is not merged and ", f.PR.Number)
+		}
+		return fmt.Sprintf("gone\t%s\t%sorigin/%s is gone: no refresh", f.Feature, what,
+			f.Branch), false, nil
+	}
+	return staleSeed(f, head, o)
+}
+
+// staleSeed seeds the refresh of an item whose branch is on origin at head
+// and whose PR, if it has one, is not merged, when it needs one and has none
+// pending. A PR that waits for the merge is then not ready: its pr.ci is set
+// to pending. An item sent back with its PR open gets none: its next Publish
+// merges main at its start.
+func staleSeed(f *queue.Feature, head string, o opts) (string, bool, error) {
+	waits := f.PR != nil && f.PR.Number > 0 && f.AtMerge()
+	if f.PendingRefresh() != nil || (!waits && !f.MergedMainInPublish()) {
+		return "", false, nil
+	}
+	note, err := staleNote(o.repo, f, head, waits)
+	if err != nil || note == "" {
+		return "", false, err
+	}
+	st := queue.SeedRefresh(f, note, o.worker, o.now)
+	if waits {
+		f.PR.CI = "pending"
+	}
+	return fmt.Sprintf("refresh\t%s\t%s\t%s", f.Feature, st.ID, note), true, nil
+}
+
+// staleMerged is wf stale for an item whose PR the human has merged: no
+// refresh is seeded, since a push would bring the deleted branch back
+// (FLOW-16). At its merge step the item is only named: that step is the
+// cloud's, which the tick's merge confirmation completes and an attended
+// session cannot. In Publish nothing is done: its gate passes on the merge.
+// Before Publish, the item was sent back with its PR open, and the merge
+// supersedes its phases (FLOW-08).
+func staleMerged(f *queue.Feature, o opts) (line string, changed bool) {
+	switch {
+	case f.AtMerge():
+		return "merged: " + f.Feature, false
+	case f.Phase < f.PublishPhase():
+		queue.Landed(f, o.worker, o.now)
+		return fmt.Sprintf("landed\t%s\tPR #%d merged while it was sent back: "+
+			"moved to Close with %s (FLOW-08)", f.Feature, f.PR.Number,
+			queue.StepID(f.Round, f.Phase, "escalate-returned")), true
+	}
+	return "", false
+}
+
+// remoteHead is the commit origin has for the branch, "" when it has none.
+func remoteHead(repo, branch string) (string, error) {
+	out, err := git(repo, "ls-remote", "--heads", "origin", "refs/heads/"+branch)
+	if err != nil || out == "" {
+		return "", err
+	}
+	return strings.Fields(out)[0], nil
+}
+
+// staleNote says why the item needs a refresh, or "" when it needs none:
+// main has moved past its branch, or, for a PR that waits for the merge, the
+// branch's head is not the commit pr.ci was read for. head is the branch's
+// commit on origin, which the checkout must have fetched.
+func staleNote(repo string, f *queue.Feature, head string, waits bool) (string, error) {
+	if _, err := git(repo, "cat-file", "-e", head+"^{commit}"); err != nil {
+		return "", fmt.Errorf("origin/%s is at %s, which %s does not have: "+
+			"git fetch origin, then run wf stale again", f.Branch, short(head), repo)
+	}
+	if _, err := git(repo, "merge-base", "--is-ancestor", "origin/main", head); err != nil {
+		return movedNote(repo, head)
+	}
+	if waits && !f.PR.HeadIs(head) {
+		was := "no commit"
+		if f.PR.Head != "" {
+			was = short(f.PR.Head)
+		}
+		return fmt.Sprintf("origin/%s is at %s, and pr.head records %s: pr.ci was read "+
+			"for another commit", f.Branch, short(head), was), nil
+	}
+	return "", nil
+}
+
+// movedNote is a refresh step's note when main has moved past the branch's
+// head: where main is, how many commits the branch lacks, and the files
+// those commits and the branch both change, which the consolidation pass
+// reads first.
+func movedNote(repo, head string) (string, error) {
+	main, err := git(repo, "rev-parse", "origin/main")
+	if err != nil {
+		return "", err
+	}
+	count, err := git(repo, "rev-list", "--count", head+"..origin/main")
+	if err != nil {
+		return "", err
+	}
+	base, err := git(repo, "merge-base", "origin/main", head)
+	if err != nil {
+		return "", err
+	}
+	var changed [2][]string
+	for i, rev := range []string{"origin/main", head} {
+		out, err := git(repo, "diff", "--name-only", "--no-renames", base, rev)
+		if err != nil {
+			return "", err
+		}
+		changed[i] = strings.Fields(out)
+	}
+	var both []string
+	for _, p := range changed[0] {
+		if slices.Contains(changed[1], p) {
+			both = append(both, p)
+		}
+	}
+	commits := "commits"
+	if count == "1" {
+		commits = "commit"
+	}
+	overlap := "no file changed by both"
+	if len(both) > 0 {
+		overlap = "both change " + strings.Join(both, ", ")
+	}
+	return fmt.Sprintf("main at %s: %s %s since the branch merged it; %s", short(main),
+		count, commits, overlap), nil
+}
+
+// short abbreviates a commit id to 7 digits.
+func short(sha string) string {
+	if len(sha) > 7 {
+		return sha[:7]
+	}
+	return sha
 }
 
 // printResults prints each check's outcome and reports whether all passed.

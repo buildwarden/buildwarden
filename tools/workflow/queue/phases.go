@@ -231,6 +231,159 @@ func IsMerge(st *Step) bool {
 		((r.round == "feature" && r.phase == 7) || (r.round == "process" && r.phase == 3))
 }
 
+// IsRefresh reports whether the step is a refresh, in any of its -r<n> forms:
+// f6-refresh or x2-refresh, which merges main into a branch that main has
+// moved past and runs the gates and the consolidation pass again (FLOW-10).
+// No template seeds it: SeedRefresh adds it when wf stale finds main moved.
+func IsRefresh(st *Step) bool {
+	r, ok := stepTemplates(st.ID)
+	return ok && r.name == "refresh" &&
+		((r.round == "feature" && r.phase == 6) || (r.round == "process" && r.phase == 2))
+}
+
+// PendingRefresh returns the item's pending refresh step, or nil.
+func (f *Feature) PendingRefresh() *Step {
+	for i := range f.Steps {
+		if st := &f.Steps[i]; st.Status == "pending" && IsRefresh(st) {
+			return st
+		}
+	}
+	return nil
+}
+
+// AtMerge reports whether the item waits for the human's merge: it is in
+// progress at its round's merge phase (FLOW-08).
+func (f *Feature) AtMerge() bool {
+	return f.Status == "in_progress" && ((f.Round == "feature" && f.Phase == 7) ||
+		(f.Round == "process" && f.Phase == 3))
+}
+
+// ReadyToMerge reports whether the item's pull request is ready for the
+// human's merge (FLOW-08): the item is at its merge step, no refresh is
+// pending, and pr.ci is green. wf stale keeps that result to the branch's
+// head: it sets pr.ci to pending and seeds a refresh when main has moved past
+// the branch, or when the branch's head is not the commit pr.head records.
+func (f *Feature) ReadyToMerge() bool {
+	return f.AtMerge() && f.hasPR() && f.PR.CI == "green" && f.PendingRefresh() == nil
+}
+
+// PublishPhase is the phase that publishes the item's branch as a pull
+// request: a feature's Publish, a process item's Implement.
+func (f *Feature) PublishPhase() int {
+	if f.IsProcess() {
+		return 2
+	}
+	return 6
+}
+
+// MergedMainInPublish reports whether the feature is in Publish with its
+// newest f6-merge-main done: no later step of Publish merges main, so when
+// main moves again only a refresh brings the branch to it (FLOW-10).
+func (f *Feature) MergedMainInPublish() bool {
+	st := f.mergeMain()
+	return f.Status == "in_progress" && f.Round == "feature" && f.Phase == 6 &&
+		st != nil && st.Status == "done"
+}
+
+// newest returns the feature's newest step with the template name in the
+// phase, the last of its -r<n> forms, or nil.
+func (f *Feature) newest(phase int, name string) *Step {
+	var out *Step
+	for i := range f.Steps {
+		r, ok := stepTemplates(f.Steps[i].ID)
+		if ok && r.round == f.Round && r.phase == phase && r.name == name {
+			out = &f.Steps[i]
+		}
+	}
+	return out
+}
+
+// SeedRefresh adds a pending refresh step whose note says what moved, logs it
+// and returns it. An item that has one pending gets no second, and nil is
+// returned. The step is of the phase that publishes the branch (a feature's
+// Publish, a process item's Implement), so it is offered at the merge step and
+// its completion never moves the phase. On a feature still in Publish the
+// pending f6-open-pr needs it: that gate requires current main, and no later
+// step of Publish merges main. There it needs the newest f6-consolidate while
+// that one is pending, so the refresh runs on the consolidated branch
+// (FLOW-10).
+func SeedRefresh(f *Feature, note, by string, now time.Time) *Step {
+	if f.PendingRefresh() != nil {
+		return nil
+	}
+	phase := f.PublishPhase()
+	id := StepID(f.Round, phase, "refresh")
+	for n := 2; f.hasStep(id); n++ {
+		id = fmt.Sprintf("%s-r%d", StepID(f.Round, phase, "refresh"), n)
+	}
+	st := Step{ID: id, Phase: phase, Affinity: "cloud", Status: "pending", Note: note}
+	if f.Round == "feature" && f.Phase == phase {
+		if c := f.newest(phase, "consolidate"); c != nil && c.Status == "pending" {
+			st.Needs = []string{c.ID}
+		}
+		if o := f.newest(phase, "open-pr"); o != nil && o.Status == "pending" {
+			o.Needs = addNeeds(o.Needs, id)
+		}
+	}
+	f.Steps = append(f.Steps, st)
+	f.Log(now, by, "seeded %s: %s", id, note)
+	return &f.Steps[len(f.Steps)-1]
+}
+
+// dropRefresh removes the item's pending refresh steps and the needs on them,
+// and logs why.
+func (f *Feature) dropRefresh(now time.Time, by, why string) {
+	dropped := map[string]bool{}
+	f.Steps = slices.DeleteFunc(f.Steps, func(st Step) bool {
+		if st.Status != "pending" || !IsRefresh(&st) {
+			return false
+		}
+		dropped[st.ID] = true
+		f.Log(now, by, "dropped %s: %s", st.ID, why)
+		return true
+	})
+	for i := range f.Steps {
+		f.Steps[i].Needs = slices.DeleteFunc(f.Steps[i].Needs,
+			func(id string) bool { return dropped[id] })
+	}
+}
+
+// Landed moves an item to Close whose pull request the human merged while it
+// was sent back, before its branch was published again: the merge is the
+// sign-off and supersedes the phases (FLOW-08). The pending steps before
+// Close are dropped, Close is seeded, and a human step
+// <f8|x4>-escalate-returned carries the finding that sent the item back, for
+// the human to file as a follow-up or drop.
+func Landed(f *Feature, by string, now time.Time) {
+	last := len(templates[f.Round]) - 1
+	note := fmt.Sprintf("%s merged while the item was in phase %d (%s), sent back",
+		prRef(f), f.Phase, PhaseName(f))
+	for _, e := range slices.Backward(f.History) {
+		if strings.HasPrefix(e.Event, "back to ") {
+			note += ": " + e.Event
+			break
+		}
+	}
+	dropped := map[string]bool{}
+	f.Steps = slices.DeleteFunc(f.Steps, func(st Step) bool {
+		if st.Status != "pending" || st.Phase >= last {
+			return false
+		}
+		dropped[st.ID] = true
+		return true
+	})
+	for i := range f.Steps {
+		f.Steps[i].Needs = slices.DeleteFunc(f.Steps[i].Needs,
+			func(id string) bool { return dropped[id] })
+	}
+	f.Phase = last
+	f.Log(now, by, "%s; entered phase %d (%s) (FLOW-08)", note, f.Phase, PhaseName(f))
+	Seed(f)
+	f.Steps = append(f.Steps, Step{ID: StepID(f.Round, last, "escalate-returned"),
+		Phase: last, Affinity: "human", Status: "pending",
+		Note: note + ". File the finding as a follow-up, or drop it."})
+}
+
 // Seed adds the template steps for the feature's current round and phase.
 // A template step's need on a step not seeded (a skipped design review) is
 // dropped. When the phase's gate has waitsAdded (Publish), the gate also
@@ -329,12 +482,16 @@ func (f *Feature) hasStep(id string) bool {
 // review before Plan (FLOW-19). Pending steps added for later phases stay,
 // without their leases and without needs on dropped steps, for Design to
 // reconcile; a host step already done in Publish is queued again, since the
-// branch it validated will change. After the second return to Design the
-// redesign waits on a human step instead of looping again.
+// branch it validated will change. A pending refresh step is dropped: the
+// branch merges main again when it is next published (FLOW-06). After the
+// second return to Design the redesign waits on a human step instead of
+// looping again.
 func Back(f *Feature, by string, now time.Time, finding string, to int) {
 	if to != 3 {
 		to = 1
 	}
+	f.dropRefresh(now, by, "main is merged again when the branch is next published "+
+		"(FLOW-06)")
 	returns := 0
 	for _, e := range f.History {
 		if strings.HasPrefix(e.Event, "back to design") {
@@ -435,11 +592,16 @@ func rerunPublishHostSteps(f *Feature, steps []Step, now time.Time, by string) [
 
 // Complete marks a step done and, once every step of the current phase is
 // done, moves the feature on: the next phase, or done after Close. The caller
-// has already run the done-when check for gate steps.
+// has already run the done-when check for gate steps. The merge step's
+// completion drops a pending refresh step: the PR merged first (FLOW-10). st
+// is not valid after that drop, which moves the steps.
 func Complete(f *Feature, st *Step, by string, now time.Time) {
 	st.Status = "done"
 	st.Lease = Lease{}
 	f.Log(now, by, "done %s", st.ID)
+	if IsMerge(st) {
+		f.dropRefresh(now, by, "the PR merged first (FLOW-10)")
+	}
 
 	for _, o := range f.Steps {
 		if o.Status != "done" && o.Phase == f.Phase && stepRound(o.ID) == f.Round {

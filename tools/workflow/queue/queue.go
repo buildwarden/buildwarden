@@ -149,6 +149,13 @@ type PR struct {
 	Head string `yaml:"head,omitempty"`
 }
 
+// HeadIs reports whether pr.head records the commit: its full id, or an
+// abbreviation of it of 7 digits or more. A PR with no head recorded has a
+// result for no commit that is known.
+func (p *PR) HeadIs(sha string) bool {
+	return p != nil && len(p.Head) >= 7 && strings.HasPrefix(sha, p.Head)
+}
+
 // Step is one unit of work a worker claims (FLOW-04).
 type Step struct {
 	ID       string   `yaml:"id"`
@@ -338,11 +345,16 @@ func (f *Feature) Class() int {
 
 // inImplementation reports whether the item is in progress past Plan and not
 // waiting for the human's merge: a merge check must not go ahead of process
-// and fix work, and the merge is confirmed before wf next anyway. A tracked
-// item never is: the loop takes none of its steps.
+// and fix work, and the merge is confirmed before wf next anyway. An item
+// with a pending refresh step is, at its merge step too, so a run refreshes
+// open PRs before it starts anything new (FLOW-05, FLOW-10). A tracked item
+// never is: the loop takes none of its steps.
 func (f *Feature) inImplementation() bool {
 	if f.Status != "in_progress" || f.Round == "tracked" {
 		return false
+	}
+	if f.PendingRefresh() != nil {
+		return true
 	}
 	if f.IsProcess() {
 		return f.Phase == 2 || f.Phase == 4
@@ -543,6 +555,9 @@ func (s *State) Problems(f *Feature) []error {
 	f.validate(bad, tracked)
 	s.validateDeclared(f, bad)
 	s.validateUrgent(f, bad)
+	if f.PR != nil && f.PR.Head != "" && !commitRe.MatchString(f.PR.Head) {
+		bad("pr.head %q is not a commit id", f.PR.Head)
+	}
 	return errs
 }
 

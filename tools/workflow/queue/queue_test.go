@@ -1794,6 +1794,10 @@ func TestValidateDeclaredFields(t *testing.T) {
 			f.Declared, p.Declared = "HEAD", "4C1D9E2"
 		}, []string{`a: declared "HEAD" is not a commit id`,
 			`p: declared "4C1D9E2" is not a commit id`}},
+		{"pr.head is not a commit", func(f, p *Feature) {
+			f.PR = &PR{Number: 7, CI: "green", Head: "HEAD"}
+			p.PR = &PR{Number: 8, CI: "green", Head: "0a1b2c3"}
+		}, []string{`a: pr.head "HEAD" is not a commit id`}},
 		{"seams with no declared", func(f, p *Feature) {
 			f.Seams = []string{"relay-claim"}
 		}, []string{"a: seams and rules_changed are what wf declare copies from the " +

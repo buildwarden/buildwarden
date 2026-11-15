@@ -98,6 +98,66 @@ func Review(env Env, f *queue.Feature) []Result {
 	return c.out
 }
 
+// Merged reports whether the human has merged the item's pull request, by
+// the merge step's own check (FLOW-08). wf stale asks it before it seeds a
+// refresh: the human may have merged since the last confirmation, and a
+// refresh pushed after that would bring a deleted branch back (FLOW-16).
+func Merged(env Env, f *queue.Feature) bool {
+	c := &checker{env: env, f: f}
+	c.merged()
+	return OK(c.out)
+}
+
+// Refresh runs the done-when check of a refresh step (FLOW-10): the branch
+// contains current main and is pushed, and what Publish's gate checks holds
+// again on the branch with main merged. The archive and the PR's CI are
+// checked only when a PR is recorded: a feature refreshed in Publish opens
+// its PR afterwards, at f6-open-pr. A process item has no consolidation pass
+// to record. It does not pass on a merge the human made meanwhile: the
+// refresh then pushes nothing, and the merge confirmation drops the step.
+func Refresh(env Env, f *queue.Feature) []Result {
+	c := &checker{env: env, f: f}
+	c.mainMerged()
+	c.pushed()
+	hasPR := f.PR != nil && f.PR.Number > 0
+	if f.Round != "process" {
+		c.consolidationNamesMain()
+		c.ruleClearance()
+	}
+	if hasPR || f.Round == "process" {
+		c.archivedOn(f.Branch)
+		c.prGreen()
+	}
+	return c.out
+}
+
+var commitIDRe = regexp.MustCompile(`\b[0-9a-f]{7,40}\b`)
+
+// consolidationNamesMain checks that the design's Consolidation section
+// names the commit of main the branch merged: the refresh's pass over what
+// landed is recorded against that commit (FLOW-10).
+func (c *checker) consolidationNamesMain() {
+	const name = "consolidation names the main commit merged (FLOW-10)"
+	d, err := c.loadDesign(c.f.Branch)
+	if err != nil {
+		c.add(name, false, "%v", err)
+		return
+	}
+	main, err := c.git("rev-parse", "origin/main")
+	if err != nil {
+		c.add(name, false, "%v", err)
+		return
+	}
+	for _, id := range commitIDRe.FindAllString(d.Sections["Consolidation"], -1) {
+		if strings.HasPrefix(main, id) {
+			c.add(name, true, "origin/main %s", short(main))
+			return
+		}
+	}
+	c.add(name, false, "the Consolidation section on %s does not name origin/main %s",
+		c.f.Branch, short(main))
+}
+
 // process runs a process item's done-when checks: x1 design written and
 // reviewed, x2 archived on the pushed branch with its PR green (the FLOW-14
 // clearance reports it exempt), x3 merged by a human, x4 closed.
@@ -245,9 +305,19 @@ func (c *checker) tier2Report() {
 	}
 }
 
+// prGreen checks that the PR is open with its checks green on the branch's
+// pushed head: pr.ci is a result for the commit pr.head records, and says
+// nothing about another (FLOW-08).
 func (c *checker) prGreen() {
-	ok := c.f.PR != nil && c.f.PR.Number > 0 && c.f.PR.CI == "green"
-	c.add("PR open with CI green (FLOW-11)", ok, "pr %+v", c.f.PR)
+	const name = "PR open with CI green (FLOW-11)"
+	pr := c.f.PR
+	if pr == nil || pr.Number == 0 || pr.CI != "green" {
+		c.add(name, false, "pr %+v", pr)
+		return
+	}
+	head := c.remoteHead(c.f.Branch)
+	c.add(name, pr.HeadIs(head), "pr %+v; origin/%s is at %s, and pr.ci counts only for "+
+		"the commit pr.head records (FLOW-08)", *pr, c.f.Branch, orNone(head))
 }
 
 // merged confirms the human's merge (FLOW-08). Each branch head still
@@ -371,10 +441,15 @@ func (c *checker) sameChange(ref, sha string) (string, bool) {
 // patchID returns the whitespace-exact patch-id of the change from a to b,
 // or "" for no change. Every option that shapes the diff is pinned, so no
 // user or repository configuration changes the id, and an id in a detail
-// reproduces with the same command elsewhere.
+// reproduces with the same command elsewhere. The diff has no context lines:
+// the id is of the lines added and removed in each file, in order. A ref of
+// the branch from before its last refresh makes the squash's change only
+// without the lines around it, when the refresh merged an edit next to one of
+// its hunks, and every PR after the first is refreshed before it merges
+// (FLOW-08).
 func (c *checker) patchID(a, b string) string {
 	diff := exec.Command("git", "diff", "--no-color", "--no-ext-diff", "--no-textconv",
-		"--no-renames", "--no-relative", "-U3", "--diff-algorithm=myers",
+		"--no-renames", "--no-relative", "-U0", "--diff-algorithm=myers",
 		"--indent-heuristic", "--inter-hunk-context=0", "--src-prefix=a/",
 		"--dst-prefix=b/", a, b)
 	diff.Dir = c.env.Repo

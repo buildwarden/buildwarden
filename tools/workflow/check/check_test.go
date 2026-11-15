@@ -280,7 +280,7 @@ func TestPublishArchivesOnTheBranch(t *testing.T) {
 	work := repo(t, design)
 	env := Env{Repo: work}
 	f := demo(6)
-	f.PR = &queue.PR{Number: 5, CI: "green"}
+	f.PR = greenPR(t, work, 5)
 	got := failures(Phase(env, f))
 	for _, want := range []string{"Consolidation", "design archived", "Archive summary"} {
 		if !strings.Contains(got, want) {
@@ -288,6 +288,7 @@ func TestPublishArchivesOnTheBranch(t *testing.T) {
 		}
 	}
 	commit(t, work, archived)
+	f.PR = greenPR(t, work, 5)
 	if rs := Phase(env, f); !OK(rs) {
 		t.Errorf("phase 6: %s", failures(rs))
 	}
@@ -456,11 +457,12 @@ func TestProcessChecks(t *testing.T) {
 	if rs := Phase(env, f); !OK(rs) {
 		t.Errorf("x1: %s", failures(rs))
 	}
-	f.Phase, f.PR = 2, &queue.PR{Number: 5, CI: "green"}
+	f.Phase, f.PR = 2, greenPR(t, work, 5)
 	if got := failures(Phase(env, f)); !strings.Contains(got, "design archived") {
 		t.Errorf("x2 before the archive: %q", got)
 	}
 	commit(t, work, archived)
+	f.PR = greenPR(t, work, 5)
 	if rs := Phase(env, f); !OK(rs) {
 		t.Errorf("x2: %s", failures(rs))
 	}
@@ -850,5 +852,241 @@ func TestTrackedCheck(t *testing.T) {
 		if len(rs) != 1 || rs[0] != want {
 			t.Errorf("phase %d: %+v, want %+v", phase, rs, want)
 		}
+	}
+}
+
+// fullHead is the commit the ref names in the checkout.
+func fullHead(t *testing.T, work, ref string) string {
+	t.Helper()
+	out, err := exec.Command("git", "-C", work, "rev-parse", ref).Output()
+	if err != nil {
+		t.Fatalf("rev-parse %s: %v", ref, err)
+	}
+	return strings.TrimSpace(string(out))
+}
+
+// greenPR is PR n with CI green for the branch's pushed head.
+func greenPR(t *testing.T, work string, n int) *queue.PR {
+	t.Helper()
+	return &queue.PR{Number: n, CI: "green", Head: fullHead(t, work, "origin/feat/demo")}
+}
+
+// TestPRGreenIsForTheHead: a CI result counts only for the commit it was
+// read for, so Publish's gate fails on a pr.head that is absent or is not the
+// branch's pushed head (FLOW-08).
+func TestPRGreenIsForTheHead(t *testing.T) {
+	work := repo(t, archived)
+	env, f := Env{Repo: work}, demo(6)
+	f.PR = greenPR(t, work, 5)
+	if rs := Phase(env, f); !OK(rs) {
+		t.Fatalf("phase 6 with CI green for the head: %s", failures(rs))
+	}
+	f.PR.Head = f.PR.Head[:7]
+	if rs := Phase(env, f); !OK(rs) {
+		t.Fatalf("phase 6 with pr.head abbreviated: %s", failures(rs))
+	}
+	const name = "PR open with CI green (FLOW-11)"
+	for _, head := range []string{"", "abc", "0000000"} {
+		f.PR.Head = head
+		if got := failures(Phase(env, f)); !strings.Contains(got, name) {
+			t.Errorf("pr.head %q: failures %q, want %q", head, got, name)
+		}
+	}
+	// A push the loop did not read CI for leaves the result behind.
+	f.PR = greenPR(t, work, 5)
+	commitEdit(t, work, "late.txt", "pushed after CI", func(string) string { return "x\n" })
+	git(t, work, "push", "-q", "origin", "feat/demo")
+	if got := failures(Phase(env, f)); !strings.Contains(got, name) {
+		t.Errorf("a head pushed after CI was read: failures %q, want %q", got, name)
+	}
+}
+
+// besideEdit builds a14's case: lines.txt is on main; feat/demo (B) edits
+// its line 8 and main (A) then edits its line 5, so each change lies within
+// three lines of the other. It returns the checkout, on feat/demo, and B's
+// head.
+func besideEdit(t *testing.T) (work, pre string) {
+	t.Helper()
+	work = repo(t, design)
+	edit := func(n string) func(string) string {
+		return func(s string) string {
+			return strings.Replace(s, "line "+n+"\n", "line "+n+" edited\n", 1)
+		}
+	}
+	git(t, work, "checkout", "-q", "main")
+	commitEdit(t, work, "lines.txt", "lines", func(string) string {
+		return "line 1\nline 2\nline 3\nline 4\nline 5\nline 6\nline 7\nline 8\n" +
+			"line 9\nline 10\n"
+	})
+	git(t, work, "push", "-q", "origin", "main")
+	git(t, work, "checkout", "-q", "feat/demo")
+	git(t, work, "merge", "-q", "--no-edit", "main")
+	commitEdit(t, work, "lines.txt", "B edits line 8", edit("8"))
+	git(t, work, "push", "-q", "origin", "feat/demo")
+	git(t, work, "checkout", "-q", "main")
+	commitEdit(t, work, "lines.txt", "A edits line 5", edit("5"))
+	git(t, work, "push", "-q", "origin", "main")
+	git(t, work, "fetch", "-q", "origin")
+	git(t, work, "checkout", "-q", "feat/demo")
+	return work, fullHead(t, work, "feat/demo")
+}
+
+// TestSquashBesideEdit: a branch refreshed onto a main that edited a line
+// beside one of its hunks, and then squash-merged, is confirmed for both of
+// its refs: the refreshed head by the tree, and a ref left at the head from
+// before the refresh by the change, which is compared with no context lines.
+// So is a squash made with no refresh, round the up-to-date requirement
+// (FLOW-08, FLOW-16; a14 and case 22 of the loop-parallel design).
+func TestSquashBesideEdit(t *testing.T) {
+	const local, remote = "refs/heads/feat/demo", "refs/remotes/origin/feat/demo"
+	byChange := func(ref string) *regexp.Regexp {
+		return regexp.MustCompile(regexp.QuoteMeta(ref) +
+			` squash-merged as [0-9a-f]+ after main moved \(change [0-9a-f]{40}, `)
+	}
+	t.Run("refreshed", func(t *testing.T) {
+		work, pre := besideEdit(t)
+		git(t, work, "merge", "-q", "--no-edit", "origin/main")
+		git(t, work, "push", "-q", "origin", "feat/demo")
+		// An attended checkout that held the branch before its refresh.
+		git(t, work, "checkout", "-q", "main")
+		git(t, work, "branch", "-q", "-f", "feat/demo", pre)
+		git(t, work, "merge", "-q", "--squash", "origin/feat/demo")
+		git(t, work, "commit", "-q", "-m", "Demo (#9)")
+		git(t, work, "push", "-q", "origin", "main")
+		git(t, work, "fetch", "-q", "origin")
+		rs := Phase(Env{Repo: work}, x3(9))
+		if !OK(rs) {
+			t.Fatalf("x3 after a refresh beside an edit: %s", failures(rs))
+		}
+		if !strings.Contains(rs[0].Info, remote+" squash-merged as ") ||
+			!strings.Contains(rs[0].Info, "(tree ") {
+			t.Errorf("info %q, want the refreshed head confirmed by the tree",
+				rs[0].Info)
+		}
+		if !byChange(local).MatchString(rs[0].Info) {
+			t.Errorf("info %q, want the older ref confirmed by its change", rs[0].Info)
+		}
+	})
+	t.Run("no refresh", func(t *testing.T) {
+		work, _ := besideEdit(t)
+		squash(t, work, "#9")
+		rs := Phase(Env{Repo: work}, x3(9))
+		if !OK(rs) {
+			t.Fatalf("x3 on a squash made behind main beside an edit: %s",
+				failures(rs))
+		}
+		for _, ref := range []string{local, remote} {
+			if !byChange(ref).MatchString(rs[0].Info) {
+				t.Errorf("info %q, want %s confirmed by its change", rs[0].Info,
+					ref)
+			}
+		}
+	})
+}
+
+// consolidated is the archived design with a Consolidation entry that names
+// the commit of main the branch merged.
+func consolidated(main string) string {
+	return strings.Replace(archived, "Nothing landed that overlaps.",
+		"Nothing landed that overlaps.\n\n- 2026-11-15: merged `main` at `"+main+
+			"`; nothing overlaps.", 1)
+}
+
+// refreshed moves main, merges it into feat/demo with a Consolidation entry
+// that names it, and pushes; it returns main's commit.
+func refreshed(t *testing.T, work string) string {
+	t.Helper()
+	git(t, work, "checkout", "-q", "main")
+	commitEdit(t, work, "other.txt", "another item", func(s string) string {
+		return s + "other\n"
+	})
+	git(t, work, "push", "-q", "origin", "main")
+	git(t, work, "fetch", "-q", "origin")
+	main := fullHead(t, work, "origin/main")
+	git(t, work, "checkout", "-q", "feat/demo")
+	git(t, work, "merge", "-q", "--no-edit", "origin/main")
+	commit(t, work, consolidated(main[:9]))
+	return main
+}
+
+// TestRefreshDoneWhen: a refresh is done when the branch contains current
+// main and is pushed, its Consolidation section names the main commit merged,
+// and, with a PR recorded, the design is archived and CI is green for the
+// pushed head (FLOW-03, FLOW-10).
+func TestRefreshDoneWhen(t *testing.T) {
+	work := repo(t, archived)
+	env, f := Env{Repo: work}, demo(7)
+	wantFails := func(why string, want ...string) {
+		t.Helper()
+		got := failures(Refresh(env, f))
+		for _, w := range want {
+			if !strings.Contains(got, w) {
+				t.Errorf("%s: failures %q, want %q", why, got, w)
+			}
+		}
+		if len(want) == 0 && got != "" {
+			t.Errorf("%s: %s", why, got)
+		}
+	}
+	const named = "consolidation names the main commit merged (FLOW-10)"
+	f.PR = greenPR(t, work, 5)
+	wantFails("main not moved, no entry", named)
+
+	git(t, work, "checkout", "-q", "main")
+	commitEdit(t, work, "other.txt", "another item", func(string) string { return "o\n" })
+	git(t, work, "push", "-q", "origin", "main")
+	git(t, work, "fetch", "-q", "origin")
+	git(t, work, "checkout", "-q", "feat/demo")
+	wantFails("main moved", "current main merged")
+	// Case 38: Publish's gate fails on the same ground, and no later step of
+	// Publish merges main; the refresh is what lets it pass.
+	pub := demo(6)
+	pub.PR = greenPR(t, work, 5)
+	if got := failures(Phase(env, pub)); !strings.Contains(got, "current main merged") {
+		t.Errorf("f6-open-pr's gate behind main: %q", got)
+	}
+
+	main := refreshed(t, work)
+	wantFails("CI read for the head before the refresh", "PR open with CI green")
+	f.PR = greenPR(t, work, 5)
+	wantFails("refreshed")
+	pub.PR = greenPR(t, work, 5)
+	if rs := Phase(env, pub); !OK(rs) {
+		t.Errorf("f6-open-pr's gate after the refresh: %s", failures(rs))
+	}
+	f.PR.CI = "pending"
+	wantFails("CI pending", "PR open with CI green")
+	f.PR = greenPR(t, work, 5)
+
+	// The entry must name the commit merged, not an older main.
+	old := fullHead(t, work, "origin/main~1")
+	commit(t, work, consolidated(old[:9]))
+	f.PR = greenPR(t, work, 5)
+	wantFails("the entry names an older main", named)
+	commit(t, work, strings.Replace(consolidated(main), "status: archived",
+		"status: active", 1))
+	f.PR = greenPR(t, work, 5)
+	wantFails("not archived with a PR recorded", "design archived")
+
+	// A feature still in Publish has no PR yet: the archive and CI are
+	// f6-open-pr's.
+	f.Phase, f.PR = 6, nil
+	wantFails("in Publish, no PR")
+
+	// The local head ahead of the remote is not pushed.
+	commitEdit(t, work, "late.txt", "not pushed", func(string) string { return "x\n" })
+	wantFails("local head ahead", "branch pushed (FLOW-17)")
+	git(t, work, "push", "-q", "origin", "feat/demo")
+
+	// A process item: main merged, pushed, archived, CI green.
+	x := x3(5)
+	x.PR = greenPR(t, work, 5)
+	f = x
+	wantFails("a process item, not archived", "design archived")
+	commit(t, work, archived)
+	x.PR = greenPR(t, work, 5)
+	wantFails("a process item")
+	if Merged(env, x) {
+		t.Error("Merged reports an open PR as merged")
 	}
 }

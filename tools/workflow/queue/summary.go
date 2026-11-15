@@ -85,12 +85,6 @@ func readySteps(f *Feature) []*Step {
 	return out
 }
 
-// waitsOnMerge reports whether the item's PR waits for the human's merge.
-func waitsOnMerge(f *Feature) bool {
-	return f.Status == "in_progress" && ((f.Round == "feature" && f.Phase == 7) ||
-		(f.Round == "process" && f.Phase == 3))
-}
-
 func prRef(f *Feature) string {
 	if f.PR == nil || f.PR.Number == 0 {
 		return "no PR recorded"
@@ -116,7 +110,7 @@ func (s *State) needsHuman() []string {
 				add("%s", humanStep(st))
 			}
 		}
-		if waitsOnMerge(f) {
+		if f.AtMerge() {
 			add("%s waiting for your merge", prRef(f))
 		}
 		if s.Runaway(f) {

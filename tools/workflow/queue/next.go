@@ -3,6 +3,7 @@ package queue
 import (
 	"fmt"
 	"path"
+	"slices"
 	"strings"
 	"time"
 )
@@ -92,7 +93,10 @@ func leasedTo(f *Feature, worker string, now time.Time) *Step {
 // also returns why each item it passed over is blocked, for the digest: an
 // in-progress item, a fix waiting on its parent, and a queued feature the
 // waiting limit refuses. A queued feature the in-progress limit refuses is
-// passed over without a line, as it always was.
+// passed over without a line, as it always was. An item with a pending
+// refresh step is in class 1, so open PRs are refreshed before anything new
+// starts; while main.yaml records main red its line is that, and the walk
+// goes on to the fix (FLOW-10).
 func (s *State) Next(worker string, now time.Time) (*Pick, []Blocked) {
 	var blocked []Blocked
 	held := s.Hold(nil, worker) != ""
@@ -160,7 +164,9 @@ func (s *State) waitsForParent(f *Feature) bool {
 // a limit refuses is skipped for every worker (Guard). For a queued feature
 // that refusal is the whole reason, since every step of it waits on the
 // start; reported says it is the waiting limit's, the one such refusal wf
-// next prints for a queued item.
+// next prints for a queued item. For an item whose refresh waits for a red
+// main, that is the whole reason too: its other waits end only after the
+// refresh (FLOW-10).
 func (s *State) offer(f *Feature, worker string, now time.Time) (
 	st *Step, why string, reported bool,
 ) {
@@ -171,6 +177,7 @@ func (s *State) offer(f *Feature, worker string, now time.Time) (
 		}
 	}
 	var waits []string
+	red := ""
 	for i := range f.Steps {
 		st := &f.Steps[i]
 		if st.Status != "pending" || !Offered(f, st) || !allDone(st.Needs, done) {
@@ -183,7 +190,13 @@ func (s *State) offer(f *Feature, worker string, now time.Time) (
 		if wait == "" {
 			return st, "", false
 		}
+		if refused.red {
+			red = wait
+		}
 		waits = append(waits, wait)
+	}
+	if red != "" {
+		return nil, red, false
 	}
 	if len(waits) == 0 {
 		return nil, "no pending step (phase done-when not yet advanced?)", false
@@ -203,8 +216,8 @@ func (s *State) wait(f *Feature, st *Step, worker string, now time.Time) (string
 		return fmt.Sprintf("step %s leased to %s", st.ID, st.Lease.ClaimedBy), refusal{}
 	}
 	if Kind(worker) == "cloud" {
-		if why := s.cloudHold(f); why != "" {
-			return why, refusal{}
+		if why, red := s.cloudHold(f, st); why != "" {
+			return why, refusal{red: red}
 		}
 	}
 	r := s.guard(f, st, worker)
@@ -219,20 +232,32 @@ func mergeWait(f *Feature) string {
 	return "the human's merge (no PR recorded, FLOW-08)"
 }
 
-// cloudHold returns why the unattended loop must not take a step of the item
-// yet: an open blocking question (FLOW-07) or a spent runaway budget
-// (FLOW-13). These two are the cloud's alone and are not limits; the limits
-// are Guard's, for every worker.
-func (s *State) cloudHold(f *Feature) string {
+// cloudHold returns why the unattended loop must not take the item's step
+// yet: an open blocking question (FLOW-07), a spent runaway budget (FLOW-13),
+// or, for a refresh step, a main that main.yaml records red (FLOW-10), which
+// red reports. These are the cloud's alone and are not limits; the limits are
+// Guard's, for every worker.
+//
+// A refresh onto a red main fails on main's failure and is released, and a
+// released step is the first one wf next offers again, ahead of the fix: so
+// none is offered until main is recorded green or at another head whose
+// result is not red. The refresh of the item main.yaml names as the fix is
+// exempt: its PR, too, must contain main before it can merge, and it is the
+// PR that makes main green.
+func (s *State) cloudHold(f *Feature, st *Step) (why string, red bool) {
 	if q := f.OpenBlocking(); len(q) > 0 {
-		return fmt.Sprintf("blocking question %s", q[0].ID)
+		return fmt.Sprintf("blocking question %s", q[0].ID), false
 	}
 	if s.Runaway(f) {
 		return fmt.Sprintf("runaway budget (%d of %d estimated steps spent; "+
 			"escalate to human, FLOW-13)",
-			f.Budget.Spent.Steps, f.Budget.Estimate.Steps)
+			f.Budget.Spent.Steps, f.Budget.Estimate.Steps), false
 	}
-	return ""
+	if IsRefresh(st) && s.Main != nil && s.Main.CI == "red" && !s.fixesMain(f) {
+		return fmt.Sprintf("main is red at %s: no refresh until it is green (FLOW-10)",
+			s.Main.SHA), true
+	}
+	return "", false
 }
 
 // NextFor is Next restricted to one feature, for an attended run on it. The
@@ -268,7 +293,11 @@ func allDone(ids []string, done map[string]bool) bool {
 
 // Claim leases the step to worker for the configured lease time and counts it
 // against the feature's budget. newRun counts a run too, the first time a run
-// touches the feature. A claim that starts the item (Starts) sets it in
+// touches the feature. The first claim of a refresh step is not counted
+// against the item: other items' merges cause it, and the run that takes it
+// counts it in its own budget. A refresh that is released and claimed again
+// counts like any retried step, so one that keeps failing still ends at the
+// runaway check (FLOW-13). A claim that starts the item (Starts) sets it in
 // progress and logs the start. When that start is a marked feature's past the
 // waiting limit, the history line says so, and Claim returns it for wf claim
 // to print; otherwise it returns "".
@@ -292,12 +321,22 @@ func (s *State) Claim(
 			f.Log(now, worker, "%s", past)
 		}
 	}
-	f.Budget.Spent.Steps++
+	if !IsRefresh(st) || f.claimedBefore(st) {
+		f.Budget.Spent.Steps++
+	}
 	if newRun {
 		f.Budget.Spent.Runs++
 	}
 	f.Log(now, worker, "claimed %s until %s", st.ID, exp.Format(time.RFC3339))
 	return past
+}
+
+// claimedBefore reports whether the item's history has a claim of the step.
+func (f *Feature) claimedBefore(st *Step) bool {
+	prefix := "claimed " + st.ID + " until "
+	return slices.ContainsFunc(f.History, func(e Event) bool {
+		return strings.HasPrefix(e.Event, prefix)
+	})
 }
 
 // Release drops a lease without completing the step.
