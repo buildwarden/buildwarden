@@ -200,6 +200,14 @@ func IsPlan(st *Step) bool {
 	return ok && r.round == "feature" && r.phase == 2 && r.name == "plan"
 }
 
+// IsMergeMain reports whether the step merges main at the start of a
+// feature's Publish, in any of its -r<n> forms: f6-merge-main, whose claim
+// takes the PR slot (FLOW-05). A process item has none.
+func IsMergeMain(st *Step) bool {
+	r, ok := stepTemplates(st.ID)
+	return ok && r.round == "feature" && r.phase == 6 && r.name == "merge-main"
+}
+
 // IsMerge reports whether the step is its round's merge step, in any of its
 // -r<n> forms: f7-merge or x3-merge, which completes only once the human has
 // merged the PR (FLOW-08). wf next never offers it (FLOW-05).

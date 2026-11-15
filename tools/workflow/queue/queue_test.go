@@ -650,7 +650,7 @@ func slotWait(limit int, holders ...string) string {
 
 // overLimit is Validate's finding for more holders than the limit.
 func overLimit(limit int, holders ...string) string {
-	return fmt.Sprintf("%d features hold an alters_relationships slot, limit %d "+
+	return fmt.Sprintf("limit: %d features hold an alters_relationships slot, limit %d "+
 		"(FLOW-05): %s", len(holders), limit, strings.Join(holders, ", "))
 }
 
@@ -969,23 +969,6 @@ func returnToTrueOverLimit(t *testing.T) {
 	wantOffer(t, s, "c", slotWait(1, "a"))
 }
 
-// TestAltersSlotCloudOnly: only the cloud's Plan step waits for a slot. While
-// every slot is held a design review is offered, and so is a Plan step whose
-// affinity was set to a host; that host's claim then fails Validate, since wf
-// claim checks no limit.
-func TestAltersSlotCloudOnly(t *testing.T) {
-	a, b, c := approved("a", 1), altering("b", 2), approved("c", 3)
-	s := nativeState(a, b, c)
-	finishPlan(t, s, a)
-	plan(t, c).Affinity = "host:macos-vz"
-	wantNext(t, s, "human/jeff", "b f2-design-review")
-	wantNext(t, s, "host:macos-vz/s", "c f2-plan")
-	wantOffer(t, s, "c", "waiting on host:macos-vz step f2-plan")
-	wantValidate(t, s)
-	s.Claim(c, plan(t, c), "host:macos-vz/s", now, true)
-	wantValidate(t, s, overLimit(1, "a", "c"))
-}
-
 // TestAltersSlotExpiredClaim is case 11: an abandoned claim keeps the slot,
 // with no clock read, until its Plan step is taken up again or released.
 func TestAltersSlotExpiredClaim(t *testing.T) {
@@ -1179,6 +1162,7 @@ func TestPRSlotIsSerial(t *testing.T) {
 	a, b := feature("a", 1, "in_progress"), feature("b", 2, "in_progress")
 	a.Phase, a.Steps = 7, []Step{{ID: "f7-merge", Phase: 7, Affinity: "cloud",
 		Status: "pending"}}
+	a.PR = &PR{Number: 7}
 	b.Phase, b.Steps = 6, nil
 	Seed(b)
 	s := state(a, b)
@@ -1191,8 +1175,9 @@ func TestPRSlotIsSerial(t *testing.T) {
 			got[b.Feature] = b.Reason
 		}
 		want := map[string]string{
-			"a": "waiting on the human's merge (no PR recorded, FLOW-08)",
-			"b": "waiting on the PR slot, held by a (FLOW-05)"}
+			"a": "waiting on the human's merge of PR #7 (FLOW-08)",
+			"b": "waiting on the PR slot, held by a (colliding: the queue's " +
+				"repository has no area map) (FLOW-05)"}
 		if pick != nil || len(blocked) != 2 || !maps.Equal(got, want) {
 			t.Fatalf("next = %+v, blocked %+v; want b on the slot, a on its merge",
 				pick, blocked)
@@ -1738,7 +1723,8 @@ func TestInProgressLimitDefault(t *testing.T) {
 	for n := 1; n <= 6; n++ {
 		s.Features = append(s.Features, feature(fmt.Sprintf("f%d", n), n, "in_progress"))
 	}
-	wantValidate(t, s, "6 features in progress, limit 5 (FLOW-05)")
+	wantValidate(t, s,
+		"limit: 6 features in progress, limit 5 (FLOW-05): f1, f2, f3, f4, f5, f6")
 }
 
 // TestWaitingLimitDefault: limits.waiting_on_human is 8 when config.yaml does

@@ -15,8 +15,9 @@ type Pick struct {
 	Starts bool
 }
 
-// Blocked says why an in-progress item, or a fix waiting on the item it
-// follows, has no step for the worker.
+// Blocked says why an item has no step for the worker: an in-progress item,
+// a fix waiting on the item it follows, or a queued feature the waiting limit
+// refuses.
 type Blocked struct {
 	Feature string
 	Reason  string
@@ -79,45 +80,51 @@ func leasedTo(f *Feature, worker string, now time.Time) *Step {
 // Next picks the worker's next step in FLOW-05 order (Ordered): by class,
 // in-progress before queued within a class, then priority. An in-progress
 // item gives its first ready step. A queued item starts only when every item
-// ahead of it is blocked: never under a hold, for the cloud only within the
-// in-progress limit (which counts no process items), and for a fix only once
-// the item it follows is done. A human or host may take a queued item's step
-// of its affinity without starting it, unless it is a process item. A worker
-// an in-progress process item holds gets only the steps it already has
-// leased. No worker is offered a merge step (IsMerge): an item waiting on the
-// human's merge is blocked like one waiting on a human step, and the walk
-// goes on (FLOW-05, FLOW-08). The cloud is not offered the Plan step of a
-// feature that declares alters_relationships: true and holds no slot while
-// the features that hold one number the limit (altersWait); no other step
-// waits for a slot, so a holder is never stopped by it. It also returns why
-// each in-progress item, and each fix waiting on its parent, it passed over
-// is blocked, for the digest.
+// ahead of it is blocked: never under a hold, only when the limits allow the
+// claim (Guard), and for a fix only once the item it follows is done. A human
+// may take a queued item's step of its affinity without starting it, unless
+// it is a process item. A worker an in-progress process item holds gets only
+// the steps it already has leased. No worker is offered a merge step
+// (IsMerge): an item waiting on the human's merge is blocked like one waiting
+// on a human step, and the walk goes on (FLOW-05, FLOW-08). No worker is
+// offered a step whose claim a limit refuses; only a claim that takes a limit
+// the item does not hold is asked, so a holder is never stopped by one. It
+// also returns why each item it passed over is blocked, for the digest: an
+// in-progress item, a fix waiting on its parent, and a queued feature the
+// waiting limit refuses. A queued feature the in-progress limit refuses is
+// passed over without a line, as it always was.
 func (s *State) Next(worker string, now time.Time) (*Pick, []Blocked) {
 	var blocked []Blocked
-	cloud := Kind(worker) == "cloud"
-	mayStart := s.Hold(nil, worker) == "" && (!cloud || !s.atLimit())
+	held := s.Hold(nil, worker) != ""
 	for _, f := range s.Ordered() {
 		var st *Step
 		why := ""
 		switch {
 		case f.Status == "in_progress":
 			st, why = s.inProgressStep(f, worker, now)
-		case f.Status != "queued" || !mayStart:
+		case f.Status != "queued" || held:
 			continue
 		case s.waitsForParent(f):
 			why = "follows " + f.Follows + ", not yet done (FLOW-05)"
 		default:
-			if st, _ = s.ready(f, worker, now); st == nil {
+			var reported bool
+			if st, why, reported = s.offer(f, worker, now); st == nil && !reported {
 				continue
 			}
 		}
 		if st != nil {
-			starts := f.Status == "queued" && (cloud || f.IsProcess())
-			return &Pick{Feature: f, Step: st, Starts: starts}, blocked
+			return &Pick{Feature: f, Step: st, Starts: s.Starts(f, worker)}, blocked
 		}
 		blocked = append(blocked, Blocked{f.Feature, why})
 	}
 	return nil, blocked
+}
+
+// Starts reports whether the worker's claim of a step of the item sets it in
+// progress: a cloud claim on a queued feature, and any claim on a queued
+// process item, whose steps are all human.
+func (s *State) Starts(f *Feature, worker string) bool {
+	return f.Status == "queued" && (Kind(worker) == "cloud" || f.IsProcess())
 }
 
 // inProgressStep is the in-progress item's step for the worker, or why there
@@ -129,19 +136,8 @@ func (s *State) inProgressStep(f *Feature, worker string, now time.Time) (*Step,
 		}
 		return nil, "held by process item " + h
 	}
-	return s.ready(f, worker, now)
-}
-
-// atLimit reports whether the cloud may start no more items (FLOW-05).
-// Process items do not count toward the limit.
-func (s *State) atLimit() bool {
-	inProgress := 0
-	for _, f := range s.Features {
-		if f.Status == "in_progress" && !f.IsProcess() {
-			inProgress++
-		}
-	}
-	return inProgress >= s.inProgressLimit()
+	st, why, _ := s.offer(f, worker, now)
+	return st, why
 }
 
 // waitsForParent reports whether a queued fix follows an item still open, so
@@ -155,12 +151,18 @@ func (s *State) waitsForParent(f *Feature) bool {
 	return err == nil && p.Status != "done"
 }
 
-// ready returns the feature's first step the worker can take now, or why
+// offer returns the feature's first step the worker can take now, or why
 // there is none. A step of a later phase is skipped without adding to the
 // reasons: the current phase's steps already say why the feature waits. A
 // merge step is skipped for every worker, whatever its affinity: only wf done
-// in the tick's merge confirmation completes it (FLOW-08).
-func (s *State) ready(f *Feature, worker string, now time.Time) (*Step, string) {
+// in the tick's merge confirmation completes it (FLOW-08). A step whose claim
+// a limit refuses is skipped for every worker (Guard). For a queued feature
+// that refusal is the whole reason, since every step of it waits on the
+// start; reported says it is the waiting limit's, the one such refusal wf
+// next prints for a queued item.
+func (s *State) offer(f *Feature, worker string, now time.Time) (
+	st *Step, why string, reported bool,
+) {
 	done := map[string]bool{}
 	for _, st := range f.Steps {
 		if st.Status == "done" {
@@ -173,31 +175,39 @@ func (s *State) ready(f *Feature, worker string, now time.Time) (*Step, string) 
 		if st.Status != "pending" || !Offered(f, st) || !allDone(st.Needs, done) {
 			continue
 		}
-		if IsMerge(st) {
-			waits = append(waits, mergeWait(f))
-			continue
+		wait, refused := s.wait(f, st, worker, now)
+		if refused.why != "" && f.Status == "queued" {
+			return nil, refused.why, refused.waiting
 		}
-		if !Satisfies(worker, st.Affinity) {
-			waits = append(waits, fmt.Sprintf("%s step %s", st.Affinity, st.ID))
-			continue
+		if wait == "" {
+			return st, "", false
 		}
-		if st.Lease.Held(now) && st.Lease.ClaimedBy != worker {
-			waits = append(waits, fmt.Sprintf("step %s leased to %s", st.ID,
-				st.Lease.ClaimedBy))
-			continue
-		}
-		if Kind(worker) == "cloud" {
-			if why := s.cloudHold(f, st); why != "" {
-				waits = append(waits, why)
-				continue
-			}
-		}
-		return st, ""
+		waits = append(waits, wait)
 	}
 	if len(waits) == 0 {
-		return nil, "no pending step (phase done-when not yet advanced?)"
+		return nil, "no pending step (phase done-when not yet advanced?)", false
 	}
-	return nil, "waiting on " + strings.Join(waits, ", ")
+	return nil, "waiting on " + strings.Join(waits, ", "), false
+}
+
+// wait returns what the worker waits on before it can take the offered step,
+// or "", with Guard's refusal when that is the reason.
+func (s *State) wait(f *Feature, st *Step, worker string, now time.Time) (string, refusal) {
+	switch {
+	case IsMerge(st):
+		return mergeWait(f), refusal{}
+	case !Satisfies(worker, st.Affinity):
+		return fmt.Sprintf("%s step %s", st.Affinity, st.ID), refusal{}
+	case st.Lease.Held(now) && st.Lease.ClaimedBy != worker:
+		return fmt.Sprintf("step %s leased to %s", st.ID, st.Lease.ClaimedBy), refusal{}
+	}
+	if Kind(worker) == "cloud" {
+		if why := s.cloudHold(f); why != "" {
+			return why, refusal{}
+		}
+	}
+	r := s.guard(f, st, worker)
+	return r.why, r
 }
 
 // mergeWait is the reason an item at its merge step waits.
@@ -208,8 +218,11 @@ func mergeWait(f *Feature) string {
 	return "the human's merge (no PR recorded, FLOW-08)"
 }
 
-// cloudHold returns why the unattended loop must not take the step yet.
-func (s *State) cloudHold(f *Feature, st *Step) string {
+// cloudHold returns why the unattended loop must not take a step of the item
+// yet: an open blocking question (FLOW-07) or a spent runaway budget
+// (FLOW-13). These two are the cloud's alone and are not limits; the limits
+// are Guard's, for every worker.
+func (s *State) cloudHold(f *Feature) string {
 	if q := f.OpenBlocking(); len(q) > 0 {
 		return fmt.Sprintf("blocking question %s", q[0].ID)
 	}
@@ -218,107 +231,17 @@ func (s *State) cloudHold(f *Feature, st *Step) string {
 			"escalate to human, FLOW-13)",
 			f.Budget.Spent.Steps, f.Budget.Estimate.Steps)
 	}
-	if IsPlan(st) && f.alters() && !f.holdsAltersSlot() {
-		if why := s.altersWait(); why != "" {
-			return why
-		}
-	}
-	if base := retryRe.ReplaceAllString(st.ID, ""); base == StepID(f.Round, 6, "merge-main") {
-		if holder := s.prSlotHolder(f); holder != "" {
-			return fmt.Sprintf("the PR slot, held by %s (FLOW-05)", holder)
-		}
-	}
 	return ""
 }
 
-// prSlotHolder returns another in-progress feature past the start of
-// Publish, which holds the one open feature PR FLOW-05 allows.
-func (s *State) prSlotHolder(f *Feature) string {
-	for _, o := range s.Features {
-		if o == f || o.IsProcess() || o.Status != "in_progress" || o.Phase < 6 {
-			continue
-		}
-		if o.Phase > 6 || o.stepDone(6, "merge-main") {
-			return o.Feature
-		}
-	}
-	return ""
-}
-
-// stepDone reports whether a step of the given phase and template name is
-// done, in any of its -r<n> forms.
-func (f *Feature) stepDone(phase int, name string) bool {
-	for _, st := range f.Steps {
-		if st.Phase == phase && st.Status == "done" &&
-			retryRe.ReplaceAllString(st.ID, "") == StepID(f.Round, phase, name) {
-			return true
-		}
-	}
-	return false
-}
-
-// holdsAltersSlot reports whether the feature holds an alters_relationships
-// slot (FLOW-05): it is in progress, is not a process item, declares
-// alters_relationships: true, and one of its Plan steps is done or carries a
-// claim. An expired claim still counts, so the answer reads no clock and wf
-// next and wf validate cannot differ across an expiry; wf release gives the
-// slot back. A done Plan step survives a return to Design (Back), so a
-// feature with a finished plan keeps its slot through one (FLOW-06).
-func (f *Feature) holdsAltersSlot() bool {
-	if f.Status != "in_progress" || f.IsProcess() || !f.alters() {
-		return false
-	}
-	for i := range f.Steps {
-		st := &f.Steps[i]
-		if IsPlan(st) && (st.Status == "done" || st.Lease.ClaimedBy != "") {
-			return true
-		}
-	}
-	return false
-}
-
-// altersHolders returns the features that hold an alters_relationships slot,
-// in FLOW-05 order: the one list Next and Validate both compare with the
-// limit (altersLimit).
-func (s *State) altersHolders() []string {
-	var out []string
-	for _, f := range s.Ordered() {
-		if f.holdsAltersSlot() {
-			out = append(out, f.Feature)
-		}
-	}
-	return out
-}
-
-// altersWait returns why a feature that holds no alters_relationships slot
-// may not take its Plan step, whose claim would make it a holder, or "" when
-// a slot is free (FLOW-05). Only a feature without a slot is asked and only
-// holders are counted, so no two features wait for each other. Under a
-// written limit below 1 there is no slot to wait for, and the reason is the
-// value.
-func (s *State) altersWait() string {
-	limit := s.altersLimit()
-	if limit < 1 {
-		return fmt.Sprintf("limits.alters_relationships %d is below 1 (FLOW-05)", limit)
-	}
-	holders := s.altersHolders()
-	if len(holders) < limit {
-		return ""
-	}
-	return fmt.Sprintf("an alters_relationships slot (limit %d), held by %s (FLOW-05)",
-		limit, strings.Join(holders, ", "))
-}
-
-// NextFor is Next restricted to one feature, for an attended run on it: the
-// in-progress limit counts every feature but process items. It does not wait for the item
-// a fix follows: naming the item is the human's explicit word.
+// NextFor is Next restricted to one feature, for an attended run on it. The
+// limits apply as they do in Next (Guard), and the reason a start is refused
+// is returned whichever limit it is. It does not wait for the item a fix
+// follows: naming the item is the human's explicit word.
 func (s *State) NextFor(name, worker string, now time.Time) (*Pick, []Blocked) {
 	f, err := s.Find(name)
 	if err != nil {
 		return nil, []Blocked{{name, err.Error()}}
-	}
-	if f.Status == "queued" && Kind(worker) == "cloud" && s.atLimit() {
-		return nil, []Blocked{{name, "the in-progress limit (FLOW-05)"}}
 	}
 	if h := s.Hold(f, worker); h != "" {
 		if st := leasedTo(f, worker, now); st != nil {
@@ -326,12 +249,11 @@ func (s *State) NextFor(name, worker string, now time.Time) (*Pick, []Blocked) {
 		}
 		return nil, []Blocked{{name, "held by process item " + h}}
 	}
-	st, why := s.ready(f, worker, now)
+	st, why, _ := s.offer(f, worker, now)
 	if st == nil {
 		return nil, []Blocked{{name, why}}
 	}
-	return &Pick{Feature: f, Step: st, Starts: f.Status == "queued" &&
-		(Kind(worker) == "cloud" || f.IsProcess())}, nil
+	return &Pick{Feature: f, Step: st, Starts: s.Starts(f, worker)}, nil
 }
 
 func allDone(ids []string, done map[string]bool) bool {
@@ -354,7 +276,7 @@ func (s *State) Claim(f *Feature, st *Step, worker string, now time.Time, newRun
 	}
 	exp := now.Add(time.Duration(mins) * time.Minute).UTC()
 	st.Lease = Lease{ClaimedBy: worker, Expires: &exp}
-	if f.Status == "queued" && (Kind(worker) == "cloud" || f.IsProcess()) {
+	if s.Starts(f, worker) {
 		f.Status = "in_progress"
 		f.Log(now, worker, "started (FLOW-05)")
 	}

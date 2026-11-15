@@ -25,6 +25,13 @@
 // question q1, and the item's first step waits for the human's answer to it
 // (wf answer -question q1). Without -hold the loop may take the item at once.
 //
+// next and claim apply FLOW-05's limits to every worker: no step is offered
+// or claimed whose claim would put an item's set over the in-progress limit,
+// the alters_relationships limit or the PR slot, and no queued feature starts
+// while the items waiting on the human number limits.waiting_on_human or
+// more. next prints a blocked line with the reason and goes on to the next
+// item.
+//
 // DIR is a checkout of the workflow branch; -repo is a checkout of the code
 // with origin fetched. A worker is cloud, human or host:<name>, optionally
 // with a /<session> suffix that tells its leases apart. Commands that change
@@ -276,9 +283,9 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 }
 
 // claimable says why the worker may not claim the step: it is not pending,
-// its feature has not reached its phase (FLOW-04), someone else holds it, or
-// a process item holds the worker (FLOW-05). A step the worker already holds
-// stays claimable.
+// its feature has not reached its phase (FLOW-04), someone else holds it, a
+// process item holds the worker, or a limit refuses the claim, whoever the
+// worker is (FLOW-05). A step the worker already holds stays claimable.
 func claimable(s *queue.State, f *queue.Feature, st *queue.Step, o opts) error {
 	if st.Status != "pending" {
 		return fmt.Errorf("%s is %s", st.ID, st.Status)
@@ -293,6 +300,9 @@ func claimable(s *queue.State, f *queue.Feature, st *queue.Step, o opts) error {
 	}
 	if h := s.Hold(f, o.worker); h != "" && !mine {
 		return fmt.Errorf("%s is held by process item %s (FLOW-05)", o.worker, h)
+	}
+	if why := s.Guard(f, st, o.worker); why != "" && !mine {
+		return fmt.Errorf("%s may not be claimed: %s", st.ID, why)
 	}
 	return nil
 }

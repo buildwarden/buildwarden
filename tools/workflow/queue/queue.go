@@ -216,6 +216,18 @@ type State struct {
 	// Areas is areas.yaml, the area map of Config.Repository; the file is
 	// optional. Nil, the repository is one exclusive area (FLOW-05).
 	Areas *AreaMap
+	// Main is main.yaml, what a session last recorded about main; the file
+	// is optional. Nil, main's CI is not known, which is not read as green.
+	Main *Main
+}
+
+// Main is main.yaml: the head of main a session saw and the result of its
+// check runs (FLOW-09, FLOW-10).
+type Main struct {
+	SHA string `yaml:"sha"`
+	CI  string `yaml:"ci"` // green | red | pending
+	// Followup is the item filed to fix a red main.
+	Followup string `yaml:"followup,omitempty"`
 }
 
 // Load reads config.yaml and queue/*.yaml under dir.
@@ -246,7 +258,20 @@ func Load(dir string) (*State, error) {
 	if err := s.loadAreas(); err != nil {
 		return nil, err
 	}
+	if err := s.loadMain(); err != nil {
+		return nil, err
+	}
 	return s, nil
+}
+
+// loadMain reads the optional main.yaml.
+func (s *State) loadMain() error {
+	p := filepath.Join(s.Dir, "main.yaml")
+	if _, err := os.Stat(p); errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	s.Main = &Main{}
+	return readYAML(p, s.Main)
 }
 
 // sortFeatures puts s.Features in FLOW-05 order, a stable starting order for
@@ -418,22 +443,10 @@ var (
 	holdRe     = regexp.MustCompile(`^(cloud|human|host:[a-z0-9*?-]+)$`)
 )
 
-// altersLimit is how many features may hold an alters_relationships slot: the
-// value config.yaml writes (FLOW-20), or FLOW-05's 1 when it writes none. A
-// written value is returned as it is, one below 1 included, which Validate
-// reports and under which Next gives no slot: no default stands in for it
-// (GLOBAL-10).
-func (s *State) altersLimit() int {
-	if n := s.Config.Limits.AltersRelationships; n != nil {
-		return *n
-	}
-	return 1
-}
-
 // inProgressLimit is how many features may be in progress: the value
 // config.yaml writes, or FLOW-05's 5 when it writes none. A written value is
 // returned as it is, one below 1 included, which Validate reports and under
-// which nothing starts (GLOBAL-10).
+// which Guard starts nothing (GLOBAL-10).
 func (s *State) inProgressLimit() int {
 	if n := s.Config.Limits.InProgress; n != nil {
 		return *n
@@ -485,15 +498,12 @@ func (s *State) validateConfig() []error {
 	return errs
 }
 
-// Validate checks the schema of every feature and the FLOW-05 limits. The
-// alters_relationships limit is compared with the features that hold a slot
-// (altersHolders), the count Next withholds a Plan step by, so a state Next
-// produces never fails here.
+// Validate checks the schema of every feature and the FLOW-05 limits. Each
+// limit is the predicate Guard evaluates before a claim (validateLimits), so
+// a state Guard allows has no limit finding here.
 func (s *State) Validate() []error {
 	errs := s.validateConfig()
-	limit := s.altersLimit()
 	prio := map[int]string{}
-	inProgress := 0
 	for _, f := range s.Features {
 		bad := func(format string, a ...any) {
 			errs = append(errs, fmt.Errorf("%s: %s", f.Feature,
@@ -504,9 +514,6 @@ func (s *State) Validate() []error {
 		}
 		prio[f.Priority] = f.Feature
 		s.validateFollows(f, bad)
-		if f.Status == "in_progress" && !f.IsProcess() {
-			inProgress++
-		}
 		tracked := s.Tracked(f)
 		if len(f.Repos) > 0 && s.Config.Repository == "" {
 			errs = append(errs, fmt.Errorf(
@@ -519,17 +526,7 @@ func (s *State) Validate() []error {
 		s.validateDeclared(f, bad)
 		s.validateUrgent(f, bad)
 	}
-	// No count means anything against a limit below 1.
-	if n := s.inProgressLimit(); n >= 1 && inProgress > n {
-		errs = append(errs, fmt.Errorf("%d features in progress, limit %d (FLOW-05)",
-			inProgress, n))
-	}
-	// No count of holders means anything against a limit below 1.
-	if holders := s.altersHolders(); limit >= 1 && len(holders) > limit {
-		errs = append(errs, fmt.Errorf(
-			"%d features hold an alters_relationships slot, limit %d (FLOW-05): %s",
-			len(holders), limit, strings.Join(holders, ", ")))
-	}
+	errs = append(errs, s.validateLimits()...)
 	for _, e := range append(s.validateNative(), s.validateAreas()...) {
 		errs = append(errs, errors.New(e))
 	}

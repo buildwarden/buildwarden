@@ -1,0 +1,12 @@
+# The live queue's settings on 2026-11-15, before the loop-parallel merge:
+# no repository, no limits.waiting_on_human, no areas.yaml beside this file.
+priority_confirmed: true
+run_budget:
+  steps: 24
+native_budget:
+  steps: 8
+limits:
+  in_progress: 5
+  alters_relationships: 3
+lease_minutes: 120
+runaway_factor: 2

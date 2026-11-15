@@ -1,0 +1,148 @@
+feature: runtime-cli-project-path
+title: The item runtime-cli-project-path
+priority: 64
+status: in_progress
+round: feature
+phase: 7
+design: docs/design/runtime-cli-project-path.md
+branch: feat/runtime-cli-project-path
+alters_relationships: false
+design_review: required
+pr:
+  number: 120
+  ci: green
+steps:
+- id: f0-branch-setup
+  phase: 0
+  affinity: cloud
+  status: done
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f1-design
+  phase: 1
+  affinity: cloud
+  status: done
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f2-design-review
+  phase: 2
+  affinity: human
+  status: done
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f2-plan
+  phase: 2
+  affinity: cloud
+  status: done
+  needs:
+  - f2-design-review
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f3-implement
+  phase: 3
+  affinity: cloud
+  status: done
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f4-review
+  phase: 4
+  affinity: cloud
+  status: done
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f5-guide
+  phase: 5
+  affinity: cloud
+  status: done
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f6-merge-main
+  phase: 6
+  affinity: cloud
+  status: done
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f6-consolidate
+  phase: 6
+  affinity: cloud
+  status: done
+  needs:
+  - f6-merge-main
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f6-open-pr
+  phase: 6
+  affinity: cloud
+  status: done
+  needs:
+  - f6-consolidate
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f7-merge
+  phase: 7
+  affinity: cloud
+  status: pending
+  lease:
+    claimed_by: ''
+    expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 9
+  spent:
+    runs: 0
+    steps: 10
+questions:
+- id: a1
+  kind: assumed
+  status: confirmed
+  question: The question a1
+  options:
+  - (a)
+  recommended: (a)
+- id: a2
+  kind: assumed
+  status: confirmed
+  question: The question a2
+  options:
+  - (a)
+  recommended: (a)
+- id: a3
+  kind: assumed
+  status: confirmed
+  question: The question a3
+  options:
+  - (a)
+  recommended: (a)
+- id: a4
+  kind: assumed
+  status: confirmed
+  question: The question a4
+  options:
+  - (a)
+  recommended: (a)
+- id: a5
+  kind: assumed
+  status: confirmed
+  question: The question a5
+  options:
+  - (a)
+  recommended: (a)
+- id: a6
+  kind: assumed
+  status: confirmed
+  question: The question a6
+  options:
+  - (a)
+  recommended: (a)
+history: []
