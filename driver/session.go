@@ -108,7 +108,9 @@ func StartSession(cfg SessionConfig) (*Session, error) {
 // the relay is up), opens the collector tunnel, pushes the build's
 // configuration, waits for the relay to report ready, and writes its CA
 // certificate to <output>/ca.cert.pem. env is the optional environment record
-// (the container driver's base image manifest).
+// (the container driver's base image manifest). The upstream CA certificates
+// it sends are the request's, read before the build started; it opens no
+// file for them.
 //
 // link is the build link the relay configures its build segment from (nil
 // sends none: the container driver, and a claimant whose relay is already
@@ -119,10 +121,6 @@ func StartSession(cfg SessionConfig) (*Session, error) {
 func (s *Session) ClaimRelay(ctx context.Context, addr, claimToken string,
 	req *BuildRequest, env *relaycfg.Environment,
 	link *relaycfg.BuildLink, oldRelayFix string) (relaycfg.Identity, error) {
-	cas, _, err := LoadUpstreamCAs(req.UpstreamCACerts, CAFromConfig)
-	if err != nil {
-		return relaycfg.Identity{}, err
-	}
 	cfg := relaycfg.Config{
 		CollectorURL:   relaycfg.TunnelURL,
 		CollectorToken: s.Token,
@@ -133,8 +131,8 @@ func (s *Session) ClaimRelay(ctx context.Context, addr, claimToken string,
 	for _, a := range req.DNS {
 		cfg.UpstreamDNS = append(cfg.UpstreamDNS, a.String())
 	}
-	if len(cas) > 0 {
-		cfg.UpstreamCACerts = []string{string(cas)}
+	if len(req.UpstreamCACerts) > 0 {
+		cfg.UpstreamCACerts = []string{string(req.UpstreamCACerts)}
 		if !req.UpstreamSystemCA {
 			f := false
 			cfg.UpstreamSystemCA = &f

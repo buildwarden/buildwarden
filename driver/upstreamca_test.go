@@ -2,6 +2,7 @@ package driver
 
 import (
 	"bytes"
+	"context"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -15,6 +16,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/buildwarden/buildwarden/relaycfg"
 )
 
 // testCert is a self-signed certificate made for one test: its DER bytes and
@@ -464,5 +467,40 @@ func TestEscapeOutside(t *testing.T) {
 		if got := escapeOutside(in); got != want {
 			t.Errorf("escapeOutside(%q) = %q, want %q", in, got, want)
 		}
+	}
+}
+
+// TestClaimRelaySendsTheRequestsCertificates: the claim carries the
+// certificates the request holds, read before the build started; the CA
+// file is gone by the claim, and nothing is read from it then.
+func TestClaimRelaySendsTheRequestsCertificates(t *testing.T) {
+	a := newTestCert(t, "a")
+	p := writeCAFile(t, t.TempDir(), "site.pem", join(a.pem, pemBlock("RSA PRIVATE KEY", keyBytes)))
+	certs, _, err := LoadUpstreamCAs([]string{p}, CAFromConfig)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err := os.Remove(p); err != nil {
+		t.Fatal(err)
+	}
+	got := make(chan relaycfg.Config, 1)
+	addr, _ := fakeRelayWith(t, "", func(c relaycfg.Config) error {
+		got <- c
+		return nil
+	})
+	s := newSession(t)
+	if _, err := s.ClaimRelay(context.Background(), addr, "",
+		&BuildRequest{UpstreamCACerts: certs}, nil, nil, "fix"); err != nil {
+		t.Fatal(err)
+	}
+	c := <-got
+	if len(c.UpstreamCACerts) != 1 || c.UpstreamCACerts[0] != string(a.pem) {
+		t.Errorf("upstream_ca_certs = %q, want the certificate alone", c.UpstreamCACerts)
+	}
+	if strings.Contains(strings.Join(c.UpstreamCACerts, ""), string(keyBytes)) {
+		t.Error("the key beside the certificate reached the claim")
+	}
+	if c.UpstreamSystemCA == nil || *c.UpstreamSystemCA {
+		t.Errorf("upstream_system_ca = %v, want false as the request says", c.UpstreamSystemCA)
 	}
 }
