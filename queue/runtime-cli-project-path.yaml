@@ -3,7 +3,7 @@ title: 'A project''s warden.toml may name the container runtime, not a path to r
 priority: 64
 status: in_progress
 round: feature
-phase: 2
+phase: 4
 design: docs/design/runtime-cli-project-path.md
 branch: feat/runtime-cli-project-path
 alters_relationships: false
@@ -34,19 +34,33 @@ steps:
   - id: f2-plan
     phase: 2
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f2-design-review
     lease:
-      claimed_by: cloud/20261112T230554Z
-      expires: 2026-11-15T23:05:40.305389526Z
+      claimed_by: ""
+      expires: null
+  - id: f3-implement
+    phase: 3
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f4-review
+    phase: 4
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
     steps: 9
   spent:
     runs: 0
-    steps: 4
+    steps: 5
 questions:
   - id: a1
     kind: assumed
@@ -167,3 +181,18 @@ history:
   - at: 2026-11-15T21:05:40Z
     by: cloud/20261112T230554Z
     event: claimed f2-plan until 2026-11-15T23:05:40Z
+  - at: 2026-11-15T22:07:37Z
+    by: cloud/20261112T230554Z
+    event: done f2-plan
+  - at: 2026-11-15T22:07:37Z
+    by: cloud/20261112T230554Z
+    event: entered phase 3 (implement)
+  - at: 2026-11-15T22:07:37Z
+    by: cloud/20261112T230554Z
+    event: claimed f3-implement until 2026-11-16T00:07:37Z
+  - at: 2026-11-15T22:07:37Z
+    by: cloud/20261112T230554Z
+    event: done f3-implement
+  - at: 2026-11-15T22:07:37Z
+    by: cloud/20261112T230554Z
+    event: entered phase 4 (review)
