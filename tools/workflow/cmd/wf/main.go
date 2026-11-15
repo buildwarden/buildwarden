@@ -18,6 +18,9 @@
 //	            [-repos OWNER/NAME,...] [-areas AREA,...] [-seams SEAM,...]
 //	            [-adopts CONSUMABLE@VERSION] [-urgent]
 //	wf urgent   -state DIR -worker human/NAME -feature F [-clear]
+//	wf declare  -state DIR -repo DIR -worker W -feature F
+//	wf relate   -state DIR -worker human/NAME -feature A -with B [-clear]
+//	wf relations -state DIR [-feature F]
 //	wf stale    -state DIR -repo DIR -worker W
 //	wf gate     -state DIR -repo DIR -machine M -stamp FILE [-sweep-days N] [-record]
 //	wf budget   -state DIR [-native]
@@ -56,6 +59,30 @@
 // while the items waiting on the human number limits.waiting_on_human or
 // more. next prints a blocked line with the reason and goes on to the next
 // item.
+//
+// declare copies what the design on the item's branch declares into its
+// queue file: repos, areas, seams, the rule IDs of rule_changes,
+// alters_relationships and design_review, with the branch's commit as
+// declared (FLOW-02). Until Design is done any worker may declare any value,
+// except that a design with design_review: skip may not narrow: remove a
+// repository or an area the queue has, or declare areas where it has none
+// (FLOW-19). In Plan an agent's declare is refused. From Implement on an
+// agent may only add areas, each one the area map has and the design implies
+// as it stood at the commit its last approval names: the area of a path of a
+// rule change, of a surface, or of a driver when the design declares no
+// shared area. A design whose review was skipped is read on the branch.
+// Every other difference is a design change, for a return to Design
+// (FLOW-06). A human may declare any value after Design. No declaration is
+// accepted that would put a limit over. For a process item only repos are
+// recorded. relate records the human's word that two items collide whatever
+// the areas say, and -clear removes it; relations prints each pair of open
+// items that collide or are near, with the reason.
+//
+// The done-when checks compare the queue with the design from Plan on, for
+// an item that has declared, and from Implement on require every path the
+// branch changes to lie in a declared area (FLOW-03). check at Review and in
+// Publish also reports a trial merge with the branch of each in-progress
+// feature the item is disjoint from; the report never fails the check.
 //
 // stale seeds a refresh step on every item main has moved past (FLOW-10): an
 // open pull request whose branch does not contain origin/main, or whose head
@@ -112,8 +139,8 @@ import (
 )
 
 const usage = "usage: wf " +
-	"validate|status|next|claim|release|check|done|answer|back|new|urgent|stale|gate|" +
-	"budget|migrate|drops [flags]"
+	"validate|status|next|claim|release|check|done|answer|back|new|urgent|declare|" +
+	"relate|relations|stale|gate|budget|migrate|drops [flags]"
 
 // errIdle is gate's "nothing to do", exit status 3.
 var errIdle = errors.New("idle")
@@ -121,7 +148,7 @@ var errIdle = errors.New("idle")
 type opts struct {
 	state, repo, worker, feature, step, why, question, answer string
 	title, source, machine, stamp, kind, holds, follows, hold string
-	repos, areas, seams, adopts                               string
+	repos, areas, seams, adopts, with                         string
 	urgent, clear                                             bool
 	// given holds the names of the flags the command line set, for a flag
 	// whose empty value means something.
@@ -176,7 +203,9 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.StringVar(&o.adopts, "adopts", "", "new: the release adopted, <consumable>@<version>")
 	fs.BoolVar(&o.urgent, "urgent", false,
 		"new: mark the feature urgent, a human worker only (FLOW-05)")
-	fs.BoolVar(&o.clear, "clear", false, "urgent: remove the mark")
+	fs.BoolVar(&o.clear, "clear", false,
+		"urgent: remove the mark; relate: remove the collision")
+	fs.StringVar(&o.with, "with", "", "relate: the item the feature collides with")
 	fs.IntVar(&o.priority, "priority", 0, "new: priority, 1 highest")
 	fs.IntVar(&o.estSteps, "estimate-steps", 0, "new: estimated steps")
 	fs.IntVar(&o.estRuns, "estimate-runs", 0, "new: estimated runs")
@@ -208,6 +237,7 @@ func run(cmd string, args []string, now time.Time) error {
 		"validate": validate, "status": status, "next": next, "check": checkPhase,
 		"answer": answer, "back": back, "new": newFeature, "urgent": urgent,
 		"gate": gate, "budget": budget, "migrate": migrate, "stale": stale,
+		"declare": declareItem, "relate": relate, "relations": relations,
 	}
 	for _, c := range []string{"claim", "release", "done"} {
 		cmds[c] = func(s *queue.State, o opts) error { return stepCmd(c, s, o) }
@@ -298,7 +328,7 @@ func checkPhase(s *queue.State, o opts) error {
 	if err != nil {
 		return err
 	}
-	if !runChecks(o, f) {
+	if !runChecks(s, o, f) {
 		return fmt.Errorf("phase %d done-when not met", f.Phase)
 	}
 	return nil
@@ -329,7 +359,7 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 	case "release":
 		s.Release(f, st, o.worker, o.now, o.why)
 	case "done":
-		if err := finish(f, st, o); err != nil {
+		if err := finish(s, f, st, o); err != nil {
 			return err
 		}
 	}
@@ -340,18 +370,18 @@ func stepCmd(cmd string, s *queue.State, o opts) error {
 // has its phase's, and two steps that are not gates have their own: the
 // design review, which precedes Plan, its approval (FLOW-19), and a refresh,
 // which no phase seeds, the refresh's (FLOW-10).
-func finish(f *queue.Feature, st *queue.Step, o opts) error {
+func finish(s *queue.State, f *queue.Feature, st *queue.Step, o opts) error {
 	if err := queue.Early(f, st); err != nil {
 		return err
 	}
-	if queue.IsDesignReview(st) && !printResults(check.Review(env(o), f)) {
+	if queue.IsDesignReview(st) && !printResults(check.Review(env(s, o), f)) {
 		return fmt.Errorf("%s has no recorded approval (FLOW-19)", st.ID)
 	}
-	if queue.IsGate(f, st) && !runChecks(o, f) {
+	if queue.IsGate(f, st) && !runChecks(s, o, f) {
 		return fmt.Errorf("%s done-when not met; phase stays %d (FLOW-03)", st.ID,
 			f.Phase)
 	}
-	if queue.IsRefresh(st) && !printResults(check.Refresh(env(o), f)) {
+	if queue.IsRefresh(st) && !printResults(check.Refresh(env(s, o), f)) {
 		return fmt.Errorf("%s done-when not met (FLOW-10)", st.ID)
 	}
 	queue.Complete(f, st, o.worker, o.now)
@@ -581,12 +611,96 @@ func kindFlags(o opts) (string, []string, error) {
 }
 
 // env is where the done-when checks look for this command line.
-func env(o opts) check.Env {
-	return check.Env{Repo: o.repo, Workflow: o.state, Run: o.run}
+func env(s *queue.State, o opts) check.Env {
+	return check.Env{Repo: o.repo, Workflow: o.state, Run: o.run, State: s}
 }
 
-func runChecks(o opts, f *queue.Feature) bool {
-	return printResults(check.Phase(env(o), f))
+// declareItem is wf declare: it copies what the item's design declares on
+// its branch into the queue file, by the rule for where the item is and who
+// asks (FLOW-02), and prints the history line.
+func declareItem(s *queue.State, o opts) error {
+	f, err := s.Find(o.feature)
+	if err != nil {
+		return err
+	}
+	if err := s.MayDeclare(f, o.worker); err != nil {
+		return err
+	}
+	d, err := check.Declarations(env(s, o), f)
+	if err != nil {
+		return err
+	}
+	if err := s.Declare(f, d, o.worker, o.now); err != nil {
+		return err
+	}
+	fmt.Printf("%s\t%s\n", f.Feature, f.History[len(f.History)-1].Event)
+	return s.Save(f)
+}
+
+// relate is wf relate: the human's word that two items collide, or with
+// -clear that they no longer do by that word (FLOW-05).
+func relate(s *queue.State, o opts) error {
+	f, err := s.Find(o.feature)
+	if err != nil {
+		return err
+	}
+	if o.with == "" {
+		return errors.New("relate needs -with, the item it collides with")
+	}
+	if err := s.Relate(f, o.with, o.clear, o.worker, o.now); err != nil {
+		return err
+	}
+	return s.Save(f)
+}
+
+// relations is wf relations: each pair of open items that collide or are
+// near, with the reason, in FLOW-05's order; with -feature only that item's
+// pairs. Disjoint pairs are not printed, and a process item is outside the
+// relations.
+func relations(s *queue.State, o opts) error {
+	var open []*queue.Feature
+	for _, f := range s.Listed(false) {
+		if !f.IsProcess() {
+			open = append(open, f)
+		}
+	}
+	if o.feature != "" {
+		f, err := s.Find(o.feature)
+		if err != nil {
+			return err
+		}
+		if f.IsProcess() {
+			fmt.Printf("%s is a process item: outside the relations (FLOW-05)\n",
+				f.Feature)
+			return nil
+		}
+	}
+	printed := false
+	for i, a := range open {
+		for _, b := range open[i+1:] {
+			if o.feature != "" && a.Feature != o.feature && b.Feature != o.feature {
+				continue
+			}
+			r := s.Relation(a, b)
+			if r.Kind != queue.Colliding && r.Kind != queue.Near {
+				continue
+			}
+			first, second := a.Feature, b.Feature
+			if second == o.feature {
+				first, second = second, first
+			}
+			fmt.Printf("%s, %s: %s\n", first, second, r)
+			printed = true
+		}
+	}
+	if !printed {
+		fmt.Println("none: every pair is disjoint")
+	}
+	return nil
+}
+
+func runChecks(s *queue.State, o opts, f *queue.Feature) bool {
+	return printResults(check.Phase(env(s, o), f))
 }
 
 // git runs git in the code checkout and returns what it printed.
@@ -637,7 +751,7 @@ func staleItem(s *queue.State, f *queue.Feature, o opts) (string, bool, error) {
 	if f.Status != "in_progress" || s.Tracked(f) || (!open && !f.MergedMainInPublish()) {
 		return "", false, nil
 	}
-	if hasPR && check.Merged(env(o), f) {
+	if hasPR && check.Merged(env(s, o), f) {
 		line, changed := staleMerged(f, o)
 		return line, changed, nil
 	}

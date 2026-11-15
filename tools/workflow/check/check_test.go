@@ -195,7 +195,7 @@ func repoWith(t *testing.T, template, designText string) string {
 func demo(phase int) *queue.Feature {
 	no := false
 	return &queue.Feature{Feature: "demo", Round: "feature", Phase: phase,
-		Branch: "feat/demo", DesignReview: "skip",
+		Branch: "feat/demo", DesignReview: "skip", Declared: "0a1b2c3",
 		Design: "docs/design/demo.md", AltersRelationships: &no}
 }
 
@@ -356,6 +356,9 @@ func TestPlanGateGuardsTheApprovedDesign(t *testing.T) {
 	approved := commit(t, work, ruled+"\n<!-- as approved -->\n")
 	review := "\n## Design review\n\n- r1: approved at `" + approved + "`.\n"
 	commit(t, work, ruled+review)
+	// The queue records what each design below declares, as wf declare
+	// leaves it.
+	f.RulesChanged = []string{"TEST-09"}
 	if rs := Phase(env, f); !OK(rs) {
 		t.Fatalf("plan as approved: %s", failures(rs))
 	}
@@ -394,6 +397,7 @@ func TestPlanGateGuardsTheApprovedDesign(t *testing.T) {
 	added := commit(t, work, late+review)
 	commit(t, work, late+review+"- r1 addendum: rule change TEST-10 approved at `"+
 		added+"`.\n")
+	f.RulesChanged = []string{"TEST-10", "TEST-09"}
 	if rs := Phase(env, f); !OK(rs) {
 		t.Errorf("a rule change with its own approval: %s", failures(rs))
 	}
@@ -402,6 +406,7 @@ func TestPlanGateGuardsTheApprovedDesign(t *testing.T) {
 	seams := strings.Replace(ruled, "seams: []", "seams: [relay-claim]", 1)
 	second := commit(t, work, seams+review)
 	commit(t, work, seams+review+"- r2: approved at `"+second+"`.\n")
+	f.RulesChanged, f.Seams = []string{"TEST-09"}, []string{"relay-claim"}
 	if rs := Phase(env, f); !OK(rs) {
 		t.Errorf("a design as its last approval left it: %s", failures(rs))
 	}
@@ -438,6 +443,7 @@ func TestReReviewJudgesTheDeltaFromTheApproval(t *testing.T) {
 	skip := strings.Replace(req, "design_review: required", "design_review: skip", 1)
 	commit(t, work, strings.Replace(skip, "Write inputs/.", "Write inputs/ first.", 1)+review)
 	f := demo(1)
+	f.Seams = []string{"relay-claim"}
 	if rs := Phase(env, f); !OK(rs) {
 		t.Errorf("minimal change after approval: %s", failures(rs))
 	}

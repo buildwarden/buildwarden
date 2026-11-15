@@ -23,6 +23,9 @@ type Env struct {
 	// Run enables the checks that run make targets; off, they are reported
 	// as skipped and fail.
 	Run bool
+	// State is the queue state, for the area map and the other items. Nil,
+	// there is no map: every item is undeclared.
+	State *queue.State
 }
 
 // Result is one check's outcome.
@@ -55,21 +58,28 @@ func Phase(env Env, f *queue.Feature) []Result {
 		c.plan()
 		c.reviewed()
 		c.approvalDelta()
+		c.declaredStill()
 	case 3:
 		c.onBranchHead()
 		c.make("lint")
 		c.make("test")
 		c.docsTouched("UX-01 reference docs updated", "docs/")
 		c.ruleClearance()
+		c.declaredStill()
+		c.insideAreas()
 	case 4:
 		c.onBranchHead()
 		c.make("lint")
 		c.make("test")
 		c.tier2Report()
 		c.ruleClearance()
+		c.declaredStill()
+		c.insideAreas()
+		c.trialMerge()
 	case 5:
 		c.docsTouched("guides or examples updated", "docs/book/src/guide/",
 			"docs/book/src/getting-started/", "examples/", "README.md")
+		c.declaredStill()
 	case 6:
 		if c.mergedEarly() {
 			break
@@ -79,6 +89,9 @@ func Phase(env Env, f *queue.Feature) []Result {
 			c.section(d, "Consolidation")
 		}
 		c.ruleClearance()
+		c.declaredStill()
+		c.insideAreas()
+		c.trialMerge()
 		c.archivedOn(c.f.Branch)
 		c.prGreen()
 	case 7:
@@ -110,7 +123,9 @@ func Merged(env Env, f *queue.Feature) bool {
 
 // Refresh runs the done-when check of a refresh step (FLOW-10): the branch
 // contains current main and is pushed, and what Publish's gate checks holds
-// again on the branch with main merged. The archive and the PR's CI are
+// again on the branch with main merged: the consolidation entry, the
+// rule-change clearance, the queue equal to the design and the diff inside
+// the areas. The archive and the PR's CI are
 // checked only when a PR is recorded: a feature refreshed in Publish opens
 // its PR afterwards, at f6-open-pr. A process item has no consolidation pass
 // to record. It does not pass on a merge the human made meanwhile: the
@@ -123,6 +138,8 @@ func Refresh(env Env, f *queue.Feature) []Result {
 	if f.Round != "process" {
 		c.consolidationNamesMain()
 		c.ruleClearance()
+		c.declaredStill()
+		c.insideAreas()
 	}
 	if hasPR || f.Round == "process" {
 		c.archivedOn(f.Branch)
@@ -541,6 +558,7 @@ func (c *checker) design() {
 		c.add("alters_relationships recorded in queue", false, "design %v, queue %v",
 			ptr(d.Front.Alters), ptr(c.f.AltersRelationships))
 	}
+	c.declaredAtDesign(d)
 	for _, s := range []string{"Problem", "Prior art", "Decisions", "Design",
 		"Defaults and overrides", "Cross-driver impact", "Validation plan"} {
 		c.section(d, s)
@@ -593,14 +611,20 @@ type Design struct {
 
 // Front is the FLOW-02 front-matter.
 type Front struct {
-	Feature          string   `yaml:"feature"`
-	Status           string   `yaml:"status"`
-	DesignReview     string   `yaml:"design_review"`
-	Drivers          []string `yaml:"drivers"`
-	Seams            []string `yaml:"seams"`
-	Surfaces         []string `yaml:"surfaces"`
-	SecurityBoundary string   `yaml:"security_boundary"`
-	Alters           *bool    `yaml:"alters_relationships"`
+	Feature      string `yaml:"feature"`
+	Status       string `yaml:"status"`
+	DesignReview string `yaml:"design_review"`
+	// Repos are the repositories the item works in, its home first; empty
+	// or absent, only the one that holds the design (LOOP-04).
+	Repos []string `yaml:"repos"`
+	// Areas are the areas of the area map the change edits (FLOW-02). Nil,
+	// the key absent, the design is undeclared, which an empty list is not.
+	Areas            *[]string `yaml:"areas"`
+	Drivers          []string  `yaml:"drivers"`
+	Seams            []string  `yaml:"seams"`
+	Surfaces         []string  `yaml:"surfaces"`
+	SecurityBoundary string    `yaml:"security_boundary"`
+	Alters           *bool     `yaml:"alters_relationships"`
 	NativeValidation []struct {
 		Host     string `yaml:"host"`
 		Blocking *bool  `yaml:"blocking"`
