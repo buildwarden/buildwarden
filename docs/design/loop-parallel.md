@@ -4257,7 +4257,9 @@ commit's time. The item is not done until it is.
   `digest/<date>/`); the queue file's new fields; the `tracked` round;
   `wf next`'s paragraph (the guard, for every worker, the three limits
   by relation and the waiting limit); `config.yaml`'s
-  `limits.waiting_on_human`; the commands (`wf commit` in place of the
+  `limits.waiting_on_human`; the budget comment ("a claim counts a
+  step" gains the exception for a refresh's first claim, if a10 (d)
+  stands); `pr.head`; the commands (`wf commit` in place of the
   `git` lines).
 - A human `wf declare` on `seam-specs` and on `driver-contract`, which
   records their seams and rule changes and sets `declared`. Both stay
