@@ -621,6 +621,83 @@ was already `required`.
 
 ## Consolidation
 
+Filled at Publish, 2026-11-16, on the branch at `0f12cfd` (FLOW-10, FLOW-15).
+
+**Landed on `main` since the fork.** Nothing. The branch forked from
+`3cb0b2b`, which is still `origin/main`; the design was written against the
+same commit, so its tables and quotes hold as written. No terminology,
+abstraction or seam to reconcile.
+
+**Items in flight on the same ground** (read on their branches, not
+changed):
+
+- **`prebuilt-artifacts`** (approved at `7a85a33`, held until
+  `driver-contract` merges; its branch holds only its design). This item
+  merges first. Its Publish then merges a `main` whose `build` job ends with
+  this item's `make release-build` step: that one hunk is resolved as
+  **The guard** says, its snapshot step taking this step's place, and its
+  consolidation decides whether `make release-build` stays as the check
+  that needs no goreleaser, or goes. Its **Releases and install** runs the
+  snapshot without the darwin targets only until this fix merges, so that
+  reduction is not needed and is not to be written. Its wording "vz has
+  everything once a macOS arm64 archive can be built" changes once this
+  merges: the macOS arm64 archive holds the files a vz build needs, but its
+  `warden` is built without cgo and has no vz driver (Decision 2), and says
+  so (**The message**). Its **Handed on** row for this fault is done: it
+  was filed as this item.
+- **`driver-contract`** (K1, approved; branch holds only its design). Its
+  "Carried over, not K1's" lists this fault as "to be filed": it is filed
+  and fixed here. Its table row **Runs on** for vz ("`vz_darwin_arm64.go`
+  (cgo); `vz_stub.go` elsewhere") stays true and gains a case: the stub is
+  also what darwin/arm64 compiles without cgo. Its K2 note that `warden`
+  then needs neither cgo nor signing is where a release with a working vz
+  driver would come from (Decision 2, **Handed on**). No file in common.
+- **`project-config-trust`** (implementing, at `5a57e55`, forked from
+  `3cb0b2b`). It edits four of the files this item edits:
+  `CONTRIBUTING.md`, `installation.md`, `cli.md` and `configuration.md`. A
+  trial merge (`git merge-tree`) of the two branches is clean: the hunks
+  are apart. Its new wording (run the VM drivers as `dist/warden` from the
+  tree) agrees with this item's (vz needs a `warden` built from source).
+- **`seam-specs`** (implementing, not named in the dispatch, found by
+  comparing files). Both add a name to the `Makefile`'s `.PHONY` line
+  (`release-build` here, `pin-specs conformance` there): a trial merge
+  conflicts on that one line. Whichever merges second keeps all three
+  names. No other line in common.
+
+**Sweep (FLOW-15).**
+
+- *Dead code.* `make deadcode` reports what it reports on `main` at
+  `3cb0b2b` (17 on Linux, 22 on macOS, 27 on Windows; compared line for
+  line); the only difference is
+  the stub's `createLinuxVM`, moved from line 7 to line 16 by the new file
+  comment. It and the vz entries beside it (`NewLinuxVM`, `VM.State`,
+  `VM.IsRunning`, the image-setup helpers) are cgo-only code the
+  cross-platform run cannot see, kept as FLOW-15 allows and checked on the
+  macOS host (`f6-validate-macos-vz`). `platformError` and `hasBindings`
+  are reached on every platform.
+- *Duplication.* One platform check: `checkPlatform` takes its verdict
+  from `platformError`, and nothing else in the tree tests for
+  darwin/arm64 or builds the platform error. The target list of `make
+  release-build` is a second copy of `.goreleaser.yaml`'s, accepted by
+  **The guard** until `prebuilt-artifacts`' snapshot reads the
+  configuration itself.
+- *The overview.* No component's flow changes; `overview.md` names neither
+  `checkPlatform` nor the vz build files, and is unchanged.
+- *Wording.* No stale reference to `vz_darwin.m` or to the stub as the
+  "non-macOS" one remains outside designs. Every guide page that says what
+  a released binary runs now says it has no vz driver (`installation.md`,
+  `drivers.md`, `cli.md`, `first-build.md`); `README.md` makes no vz
+  claim. Nothing changed here.
+
+**Rules proposed.** None.
+
+**Handed on.** The rows of **Handed on** are filed or passed on by the
+parent session, not by this step: the note on `prebuilt-artifacts`' queue
+item (its guard hunk and its wording), a held item for a release that
+carries a working vz driver, the stale `integration` build tag of `make
+integration-test-vz`, and the missing CI compile of `cmd/warden` for
+Windows. No regression of `main` beyond this item's was found here.
+
 ## Rollback notes
 
 ## Archive summary
