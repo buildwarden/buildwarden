@@ -474,3 +474,23 @@ func (m *AreaMap) checkReaches(c *AreasCheck, edges []Edge) error {
 func (m *AreaMap) dirArea(dir string) (string, error) {
 	return m.AreaOf(path.Clean(dir) + "/")
 }
+
+// WithAreas returns the state with a candidate map in place of areas.yaml,
+// for wf validate -areas to judge the candidate by. The state is not changed.
+func (s *State) WithAreas(m *AreaMap) *State {
+	c := *s
+	c.Areas = m
+	return &c
+}
+
+// RecordAreas records in main.yaml what wf areas -check found for the commit
+// of origin/main, so QUEUE.md shows it.
+func (s *State) RecordAreas(sha string, c AreasCheck) error {
+	m := Main{}
+	if s.Main != nil {
+		m = *s.Main
+	}
+	m.Areas = &AreasResult{SHA: sha, Differences: c.Differences, Lines: c.Lines}
+	s.Main = &m
+	return s.SaveMain()
+}

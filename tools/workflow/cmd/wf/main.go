@@ -3,7 +3,7 @@
 // queue state by hand, so that step selection, leases and phase transitions
 // are mechanical.
 //
-//	wf validate -state DIR
+//	wf validate -state DIR [-areas CANDIDATE [-repo DIR]]
 //	wf status   -state DIR [-all | -md]
 //	wf next     -state DIR -worker cloud [-feature F]
 //	wf claim    -state DIR -worker W -feature F -step S [-new-run]
@@ -26,6 +26,8 @@
 //	wf main     -state DIR [-sha SHA -ci green|red|pending [-gates] [-run URL]]
 //	            [-followup ITEM] [-up-to-date required|not-required]
 //	wf digest   -state DIR
+//	wf areas    -state DIR -list
+//	wf areas    -state DIR -check -repo DIR [-rev REV] [-edges FILE|-]
 //	wf gate     -state DIR -repo DIR -machine M -stamp FILE [-sweep-days N] [-record]
 //	wf budget   -state DIR [-native]
 //	wf drops    -repo DIR -base REV -main FILE -branch FILE [-head REV]
@@ -138,6 +140,22 @@
 // file-name order; a page written by hand is first moved into the directory.
 // commit runs it.
 //
+// areas -list prints the area map. areas -check compares it with the tree of
+// REV (origin/main by default) and, with -edges, with the dependency lines
+// the profile's command prints (tools/tier1/area-edges.sh): each path in the
+// catch-all, each pattern that matches no file (a pattern whose area an open
+// item declares is expected until that item merges), and each dependency
+// between exclusive areas that reaches lacks or does not support. For
+// origin/main it records the result in main.yaml. It is a report: it exits 0
+// whatever it finds (FLOW-05, PROFILE-01).
+//
+// validate -areas checks a candidate map in place of areas.yaml, without
+// saving it, and prints what it does to the open items: each relation that
+// changes, the limit findings under it, and, with -repo, each declared item in
+// progress whose branch has a path the candidate puts outside its areas, and
+// the candidate's comparison with the paths of origin/main. It fails when the
+// candidate fails validation or puts an item outside its areas.
+//
 // gate is the scheduled native session's go/no-go (FLOW-09): it exits 0 when
 // machine M (hosts.yaml) has a ready host step, or open backlog gaps and main
 // or a waiting branch moved since the stamp; 3 when idle. -record writes the
@@ -172,7 +190,7 @@ import (
 
 const usage = "usage: wf " +
 	"validate|status|next|claim|release|check|done|answer|back|new|urgent|declare|" +
-	"relate|relations|stale|commit|main|digest|gate|budget|migrate|drops [flags]"
+	"relate|relations|stale|commit|main|digest|areas|gate|budget|migrate|drops [flags]"
 
 // errIdle is gate's "nothing to do", exit status 3.
 var errIdle = errors.New("idle")
@@ -181,7 +199,8 @@ type opts struct {
 	state, repo, worker, feature, step, why, question, answer string
 	title, source, machine, stamp, kind, holds, follows, hold string
 	repos, areas, seams, adopts, with, message, claimed       string
-	urgent, clear                                             bool
+	rev, edges                                                string
+	urgent, clear, check, list                                bool
 	// given holds the names of the flags the command line set, for a flag
 	// whose empty value means something.
 	given                                      map[string]bool
@@ -237,7 +256,13 @@ func run(cmd string, args []string, now time.Time) error {
 	fs.StringVar(&o.repos, "repos", "",
 		"new: comma-separated repositories the item works in, its home first")
 	fs.StringVar(&o.areas, "areas", "",
-		"new: comma-separated areas the item changes; given empty, it changes none")
+		"new: comma-separated areas the item changes; given empty, it changes none; "+
+			"validate: a candidate area map")
+	fs.BoolVar(&o.check, "check", false, "areas: compare the map with a tree of -repo")
+	fs.BoolVar(&o.list, "list", false, "areas: print the map's areas")
+	fs.StringVar(&o.rev, "rev", "origin/main", "areas -check: the tree to compare")
+	fs.StringVar(&o.edges, "edges", "",
+		"areas -check: the dependency lines, a file or - for standard input")
 	fs.StringVar(&o.seams, "seams", "", "new: a tracked item's comma-separated seams")
 	fs.StringVar(&o.adopts, "adopts", "", "new: the release adopted, <consumable>@<version>")
 	fs.BoolVar(&o.urgent, "urgent", false,
@@ -283,7 +308,7 @@ func run(cmd string, args []string, now time.Time) error {
 		"answer": answer, "back": back, "new": newFeature, "urgent": urgent,
 		"gate": gate, "budget": budget, "migrate": migrate, "stale": stale,
 		"declare": declareItem, "relate": relate, "relations": relations,
-		"digest": digest,
+		"digest": digest, "areas": areasCmd,
 	}
 	for _, c := range []string{"claim", "release", "done"} {
 		cmds[c] = func(s *queue.State, o opts) error { return stepCmd(c, s, o) }
@@ -342,7 +367,10 @@ func digest(s *queue.State, _ opts) error {
 	return err
 }
 
-func validate(s *queue.State, _ opts) error {
+func validate(s *queue.State, o opts) error {
+	if o.given["areas"] {
+		return validateCandidate(s, o)
+	}
 	errs := s.Validate()
 	for _, e := range errs {
 		fmt.Println(e)
@@ -1043,4 +1071,196 @@ func gate(s *queue.State, o opts) error {
 		return errIdle
 	}
 	return nil
+}
+
+// validateCandidate is wf validate -areas: the candidate map's checks and
+// what it does to the open items (FLOW-05).
+func validateCandidate(s *queue.State, o opts) error {
+	m, err := queue.LoadAreas(o.areas)
+	if err != nil {
+		return err
+	}
+	c := s.WithAreas(m)
+	errs := c.Validate()
+	for _, e := range errs {
+		fmt.Println(e)
+	}
+	changed := false
+	var open []*queue.Feature
+	for _, f := range s.Listed(false) {
+		if !f.IsProcess() {
+			open = append(open, f)
+		}
+	}
+	for i, a := range open {
+		for _, b := range open[i+1:] {
+			was, is := s.Relation(a, b), c.Relation(a, b)
+			if was.Kind != is.Kind || was.Reason != is.Reason {
+				fmt.Printf("%s, %s: %s -> %s\n", a.Feature, b.Feature, was, is)
+				changed = true
+			}
+		}
+	}
+	if !changed {
+		fmt.Println("relations: no change")
+	}
+	if !o.given["repo"] {
+		fmt.Println("in-flight branches: not checked")
+	} else {
+		outside, err := inFlight(c, o.repo)
+		if err != nil {
+			return err
+		}
+		if err := tracedTree(c, o.repo); err != nil {
+			return err
+		}
+		if outside > 0 {
+			return fmt.Errorf("%d items would be outside their areas: settle them "+
+				"before the map is saved (FLOW-05)", outside)
+		}
+	}
+	if len(errs) > 0 {
+		return fmt.Errorf("%d problems", len(errs))
+	}
+	return nil
+}
+
+// inFlight prints each path of a declared item in progress that the state's
+// map puts outside the item's areas, which is the gates' diff check run with
+// that map, and returns how many items it named.
+func inFlight(s *queue.State, repo string) (int, error) {
+	named := 0
+	for _, f := range s.Ordered() {
+		if f.Status != "in_progress" || f.IsProcess() || s.Tracked(f) || f.Areas == nil ||
+			f.Branch == "" {
+			continue
+		}
+		if _, err := git(repo, "rev-parse", "--verify", "--quiet",
+			"refs/remotes/origin/"+f.Branch); err != nil {
+			fmt.Printf("%s: origin/%s is not on the remote: not checked\n", f.Feature,
+				f.Branch)
+			continue
+		}
+		out, err := git(repo, "diff", "--name-only", "--no-renames",
+			"origin/main...origin/"+f.Branch)
+		if err != nil {
+			return 0, err
+		}
+		was := named
+		for _, p := range strings.Fields(out) {
+			area, err := s.Areas.AreaOf(p)
+			if err != nil {
+				return 0, err
+			}
+			if p != f.Design && !slices.Contains(*f.Areas, area) {
+				fmt.Printf("%s: %s would be in %s, outside its areas %v\n",
+					f.Feature, p, area, *f.Areas)
+				if named == was {
+					named++
+				}
+			}
+		}
+	}
+	if named == 0 {
+		fmt.Println("in-flight branches: every declared item stays inside its areas")
+	}
+	return named, nil
+}
+
+// tracedTree prints the state's map compared with the paths of origin/main:
+// a pattern added ahead of its tree is printed as expected.
+func tracedTree(s *queue.State, repo string) error {
+	files, err := treeFiles(repo, "origin/main")
+	if err != nil {
+		return err
+	}
+	c, err := s.CheckAreas(files, nil, false)
+	if err != nil {
+		return err
+	}
+	for _, l := range c.Lines {
+		fmt.Println("origin/main: " + l)
+	}
+	return nil
+}
+
+// treeFiles lists the files of the revision's tree.
+func treeFiles(repo, rev string) ([]string, error) {
+	out, err := git(repo, "ls-tree", "-r", "--name-only", rev)
+	if err != nil {
+		return nil, err
+	}
+	return strings.Split(out, "\n"), nil
+}
+
+// areasCmd is wf areas -list and -check.
+func areasCmd(s *queue.State, o opts) error {
+	if s.Areas == nil {
+		return fmt.Errorf("%s has no areas.yaml: each repository is one exclusive area",
+			o.state)
+	}
+	switch {
+	case o.list:
+		m := s.Areas
+		for _, name := range m.Names() {
+			a := m.Areas[name]
+			line := name + "\t" + a.Mode
+			if name == m.CatchAll {
+				line += "\tcatch-all"
+			}
+			if len(a.Paths) > 0 {
+				line += "\tpaths: " + strings.Join(a.Paths, ", ")
+			}
+			if len(a.Reaches) > 0 {
+				line += "\treaches: " + strings.Join(a.Reaches, ", ")
+			}
+			fmt.Println(line)
+		}
+		return nil
+	case o.check:
+		return checkAreas(s, o)
+	}
+	return errors.New("areas needs -check or -list")
+}
+
+// checkAreas is wf areas -check. It is a report: what it finds does not fail
+// it, and only a failure to run does.
+func checkAreas(s *queue.State, o opts) error {
+	sha, err := git(o.repo, "rev-parse", o.rev+"^{commit}")
+	if err != nil {
+		return err
+	}
+	files, err := treeFiles(o.repo, sha)
+	if err != nil {
+		return err
+	}
+	var edges []queue.Edge
+	if o.edges != "" {
+		r := os.Stdin
+		if o.edges != "-" {
+			if r, err = os.Open(o.edges); err != nil {
+				return err
+			}
+			defer func() { _ = r.Close() }()
+		}
+		if edges, err = queue.ParseEdges(r); err != nil {
+			return err
+		}
+	}
+	c, err := s.CheckAreas(files, edges, o.edges != "")
+	if err != nil {
+		return err
+	}
+	for _, l := range c.Lines {
+		fmt.Println(l)
+	}
+	if c.Differences == 0 {
+		fmt.Printf("no difference from %s at %s\n", o.rev, short(sha))
+	} else {
+		fmt.Printf("%d differences from %s at %s\n", c.Differences, o.rev, short(sha))
+	}
+	if o.rev != "origin/main" {
+		return nil
+	}
+	return s.RecordAreas(sha, c)
 }
