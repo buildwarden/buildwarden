@@ -55,7 +55,11 @@ relay boot disk from a source tree also needs Git Bash and WSL.
 
 ### VZ driver
 
-Requires macOS on Apple Silicon. No extra installation is needed — Virtualization.framework is built into macOS.
+Requires macOS on Apple Silicon. Virtualization.framework is built into macOS,
+but the vz driver is only in a `warden` you build [from source](#from-source)
+on the Mac: a released `warden` has none, and `--driver vz` says so (see the
+[drivers guide](../guide/drivers.md#vz-driver)). The build also needs the
+Xcode Command Line Tools (`xcode-select --install`).
 
 ## One-liner Install
 
@@ -79,6 +83,9 @@ tar xzf buildwarden_*_linux_amd64.tar.gz
 mv warden /usr/local/bin/
 ```
 
+These are the same binaries the one-liner installs, so the macOS one has no vz
+driver either.
+
 ## From Source
 
 ```sh
@@ -87,7 +94,9 @@ cd buildwarden
 make build
 ```
 
-Requires Go 1.26+ (managed via [mise](https://mise.jdx.dev/) if present).
+Requires Go 1.26+ (managed via [mise](https://mise.jdx.dev/) if present). On
+a Mac it also needs the Xcode Command Line Tools: `make build` compiles the vz
+driver with cgo, which a release does not.
 
 The build produces the following binaries in `dist/`:
 
