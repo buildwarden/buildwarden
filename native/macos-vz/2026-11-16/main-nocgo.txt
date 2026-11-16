@@ -1,0 +1,12 @@
+# github.com/buildwarden/buildwarden/driver/vz
+driver/vz/vm.go:25:22: undefined: linuxVMConfig
+driver/vz/vm.go:28:22: undefined: macOSVMConfig
+driver/vz/vm.go:32:21: undefined: linuxVMConfig
+driver/vz/vm.go:33:17: undefined: createLinuxVM
+driver/vz/vm.go:42:21: undefined: macOSVMConfig
+driver/vz/vm.go:43:17: undefined: createMacOSVM
+driver/vz/driver.go:375:24: undefined: macOSVMConfig
+driver/vz/image.go:277:10: undefined: restoreIPSW
+driver/vz/image.go:347:9: undefined: latestSupportedIPSW
+driver/vz/image.go:967:24: undefined: macOSVMConfig
+driver/vz/vm.go:43:17: too many errors

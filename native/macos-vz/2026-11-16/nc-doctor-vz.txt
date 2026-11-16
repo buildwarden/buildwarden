@@ -1,0 +1,5 @@
+build link 100.127.255.252/30 (default)
+build link: no host interface overlaps it
+vz prepared macOS image (warden-boot): link-channel stamp current
+relay resolvers: 8.8.8.8, 8.8.4.4, 1.1.1.1 (from /etc/resolv.conf)
+ok

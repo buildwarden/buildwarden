@@ -1,0 +1,3 @@
+warden: build FAILED
+[warden] ERROR: this warden was built without cgo, so it has no vz driver (released binaries are built this way)
+  To fix: build warden from source on this Mac (xcode-select --install, then make build), or use --driver container or --driver qemu

@@ -1,0 +1,5 @@
+vz      macos    /Users/jeff/.cache/warden/images/macos-0181f7e0b146845c  active  UniversalMac_27.2.1_26B131_Restore.ipsw
+vz      macos    /Users/jeff/.cache/warden/images/macos-a139c218a2010753  older   UniversalMac_27.2_26B123_Restore.ipsw
+qemu    linux    /Users/jeff/Library/Caches/warden/images/alpine_3_21.qcow2
+qemu    linux    /Users/jeff/Library/Caches/warden/images/ubuntu_24_04.qcow2
+qemu    windows  /Users/jeff/Library/Caches/warden/images/windows-arm64.qcow2

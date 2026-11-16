@@ -1,0 +1,2 @@
+[warden] ERROR: container runtime finch is installed but not running (`finch info` failed)
+  To fix: start its VM: finch vm start (or finch vm init the first time)

@@ -27,12 +27,12 @@ steps:
   - id: f6-validate-macos-vz
     phase: 6
     affinity: host:macos-vz
-    status: pending
+    status: done
     needs:
       - f6-consolidate
     lease:
-      claimed_by: host:macos-vz/20261116T170552Z
-      expires: 2026-11-16T19:06:12.461865Z
+      claimed_by: ""
+      expires: null
     note: 'Blocking native validation (design Validation plan; FLOW-09), on the branch after consolidation. (1) make build (cgo on): go list -f ''{{.CgoFiles}} {{.MFiles}} {{.IgnoredGoFiles}}'' ./driver/vz/ lists vz_darwin_arm64.go as cgo, vz_darwin_arm64.m as the M file and vz_stub.go as ignored; make test passes; warden doctor --driver vz prints what main''s prints; a vz build succeeds and its ledger verifies. (2) CGO_ENABLED=0 go build -o <scratch>/warden ./cmd/warden compiles (on main it fails with undefined: linuxVMConfig; capture that first). With that binary, doctor --driver vz, build --driver vz, shell --driver vz and image prepare --driver vz (without sudo) each print the ERROR and To fix lines of the design''s The message, exit 1, and start no download, VM or relay; image list prints what the cgo build''s does, and doctor for the container driver works. (3) The same binary signed with the entitlement (codesign --sign - --entitlements entitlements.plist) gives the same message, not the entitlement''s and not a VM error. (4) make release-build passes. (5) GOARCH=amd64 CGO_ENABLED=1 go build -o <scratch>/warden-amd64 ./cmd/warden compiles (on main it fails on vz_darwin.m: Objective-C source files not allowed when not using cgo; capture that first). Evidence under native/macos-vz/<date>/.'
   - id: f2-design-review
     phase: 2
@@ -190,3 +190,6 @@ history:
   - at: 2026-11-16T17:06:12Z
     by: host:macos-vz/20261116T170552Z
     event: claimed f6-validate-macos-vz until 2026-11-16T19:06:12Z
+  - at: 2026-11-16T17:09:26Z
+    by: host:macos-vz/20261116T170552Z
+    event: done f6-validate-macos-vz

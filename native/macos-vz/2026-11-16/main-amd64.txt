@@ -1,0 +1,2 @@
+package github.com/buildwarden/buildwarden/cmd/warden
+	imports github.com/buildwarden/buildwarden/driver/vz: Objective-C source files not allowed when not using cgo or SWIG: vz_darwin.m
