@@ -1,0 +1,77 @@
+{
+  "feature": "project-config-trust",
+  "branch": "feat/project-config-trust",
+  "head": "5a57e557c454",
+  "base": "3cb0b2b07847",
+  "round": "feature",
+  "step": "f4-review",
+  "previous_report": null,
+  "scope": "git diff origin/main...feat/project-config-trust: 44 files, +7915/-457, 39 commits (design, merge of origin/main 3cb0b2b, plan, tasks 1-24, two review-fix commits). The merge base is 3cb0b2b, which is origin/main. First tier-2 pass for this feature. Judged against the design as approved at a94133d (r1; ORCH-03 and UX-07 approved by name) and the plan's 26 tasks.",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "rule_index": "Headers extracted from docs/development/*.md (LINT-01); 58 agent-judgment or hybrid rules in the product files (GLOBAL, ORCH, UX, RELAY, TEST, SEC, BOOT, EXEC) plus the process rules. The branch amends ORCH-03 and UX-07 (body only; Severity MUST and Check 'automated + agent-judgment' unchanged). Reached by the diff: GLOBAL-01, -03, -04, -06, -07, -08, -09, -10, -11, ORCH-01, -02, -03, UX-01, -03, -04, -07, -08, -09, RELAY-08, TEST-01, -02, -04, FLOW-06, FLOW-14, FLOW-15, FLOW-17. Not reached: BOOT, EXEC, SEC (beyond the handed-on corpus entries), RELAY-01..07.",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass (linux, /root/go/bin golangci-lint): 0 issues in the root module, tools/workflow and tools/tier1; dist/tier1 -base origin/main (3cb0b2b07847...5a57e557c454): 0 MUST, 0 MUST-review, 0 SHOULD, 0 hints, 0 suppressed",
+    "make_lint_per_platform": "GOOS=windows make lint and GOOS=darwin make lint: both pass, same tier-1 result (FLOW-17: driver/upstreamca_unix_test.go and cmd/warden/upstreamca_windows_test.go are build-tagged)",
+    "make_test": "pass: exit 0, no FAIL, 34 ok lines across the root module, tools/workflow and tools/tier1",
+    "make_enforcement": "pass: tools/workflow/enforcement-check.sh origin/main: the branch changes no enforcement (FLOW-14). No file under tools/tier1/, tools/workflow/check/ or .github/workflows/ changes, as the design's 'What the enforcement change does' says; rules.yaml and .golangci.yml are untouched",
+    "make_deadcode": "exit 0; 66 unreachable functions reported, none in a file the diff touches (cmd/warden, cmd/collector, driver/session.go, hostutil.go, detach.go, driver.go)",
+    "wf_check": "dist/wf check -feature project-config-trust -repo <worktree>: clean branch head ok; rule changes cleared (FLOW-14): docs/development/orchestrator.md (ORCH-03), docs/development/ux-cli-config.md (UX-07). make lint/test reported skipped (no -run) and run above; the tier-2 report lines were missing before this report",
+    "merge_base_wf_check": "not built separately: the branch changes neither tools/tier1/ nor tools/workflow/check/, and the merge base 3cb0b2b is the main checkout dist/wf was built from",
+    "integration_test": "not run: no container runtime answers here (docker is installed, 'docker info' fails). The PR's integration workflow runs make integration-test, including the tier-1 cases task 18 added to test-integration.sh",
+    "fixes_made": "none; the code checkout is still clean at 5a57e55"
+  },
+  "rule_changes_flow14": [
+    {"rule": "ORCH-03", "file": "docs/development/orchestrator.md", "verdict": "matches", "how": "The proposed-wording blockquote under 'Rule changes' at a94133d, '> ' stripped, diffed against the rule body on the branch: byte-identical, line breaks included. Severity and Check unchanged, as the design says."},
+    {"rule": "UX-07", "file": "docs/development/ux-cli-config.md", "verdict": "matches", "how": "Same extraction and diff: byte-identical, line breaks included; title kept; Severity and Check unchanged."}
+  ],
+  "implement_reported": [
+    "The fix pass (d153126) added a refusal the design does not name: a ./warden.toml that is not a regular file once links are followed is an error, while a file named by --config or WARDEN_CONFIG is read whatever kind it is. Judged as finding 1."
+  ],
+  "findings": [
+    {
+      "id": "F1",
+      "rule": "FLOW-06",
+      "also": "GLOBAL-09 (SHOULD): the default 'the working directory's warden.toml, if it exists' gains a condition the Defaults and overrides section does not list",
+      "severity": "MUST",
+      "file": "cmd/warden/config.go:171",
+      "lines": "cmd/warden/config.go:171-213 (readConfigFile, errNotRegular); docs/book/src/guide/configuration.md:28-31; docs/book/src/concepts/overview.md:35; cmd/warden/configfile_test.go:257",
+      "what": "readConfigFile refuses a ./warden.toml found in the working directory that is not a regular file once links are followed (a link to /dev/zero, a terminal, a FIFO), with 'cannot read config file ... (found in the working directory): not a regular file'. The design approved at a94133d does not decide this. Its lookup (How the config file is found) is './warden.toml exists -> it', and the only errors for that file are a stat failure other than 'does not exist' and a file that cannot be read; a device or FIFO can be read. Its Defaults and overrides row for the default file has no such condition. Its Security note item 10 weighs the same hazard (a FIFO nobody writes to, an endless device, chosen by the repository through its warden.toml) for CA paths and leaves it as on main; the config file itself being such a file is not discussed. On main such a ./warden.toml is read (and hangs or exhausts memory). The behaviour is reasonable, conservative, documented in the reference and tested, but it is a design decision made in code: FLOW-06 asks for it to go back to Design, and code alone does not name a change to a default.",
+      "fix": "back-to-design (FLOW-06), recommended: Design adds the condition to the default's row in Defaults and overrides (and the asymmetry: a named file is read whatever kind it is), the error to 'How the config file is found', and one sentence to Security note item 10; a delta review approves it, and the code stays as it is. Alternative with no return to Design: remove the errNotRegular case and its reference text and test, so ./warden.toml is read whatever kind it is, as the approved design and main have it."
+    },
+    {
+      "id": "F2",
+      "rule": "GLOBAL-06",
+      "severity": "MUST-review",
+      "file": "driver/session.go:275",
+      "lines": "driver/session.go (LoadUpstreamCAs, scanCAFile, ClaimRelay); driver/hostutil.go:126 (ModuleRoot); cmd/warden/config.go:138 (configFile); driver/driver.go:83",
+      "what": "The change alters trust-root handling across the host-relay boundary (only valid PEM certificates, re-encoded, are sent in the claim; paths are read once, before anything is created; the claim opens no file), removes the user-level config file, and stops ModuleRoot from treating the working directory's go.mod as warden's source tree (a host code-execution path). This is a security-boundary change by GLOBAL-06's definition. The design carries the Security note the rule asks for (accepted at r1) and says TEST-08 runs; its four corpus entries are handed to security-suite at Publish (task 26).",
+      "fix": "Nothing to change in the code. The human acknowledges at merge with the Security note in the PR body, and TEST-08's adversarial arm runs before the release that carries this (the design says the change trips it)."
+    }
+  ],
+  "counts": {
+    "MUST": 1,
+    "MUST-review": 1,
+    "SHOULD": 0
+  },
+  "resolved_since_previous": [],
+  "carried_forward": [],
+  "new_since_previous": ["F1", "F2"],
+  "suppressions": [],
+  "suppressions_note": "None: no previous report, no Tier1-Allow trailers on the branch.",
+  "back_to_design": true,
+  "back_to_design_note": "F1 recommends back-to-design (FLOW-06) to name the regular-file condition on ./warden.toml; the alternative is its removal, which needs no return. Everything else matches the design: one file chosen by --config, WARDEN_CONFIG, ./warden.toml (cobra's Changed for 'given', empty --config an error, empty variable not set, a source a higher one replaces never stat'ed); the four errors with the design's texts; the config: line on stderr for build/shell/clean/setup/image prepare and first on doctor's stdout; the transitional detection under TRANSITIONAL(one-config-file) with the sudo sentence; WARDEN_UPSTREAM_CA_CERTS replaces the key, split by filepath.SplitList, both set an error where the paths are used; LoadUpstreamCAs by F2 (skips with lines, a path that gives none an error, directory entries that are not regular files never opened, a path named directly read whatever it is); the relay image check in newRequest and doctor under the container driver; ModuleRoot from the executable only, module line matched whole, SetModuleRootForTests from TestMain; StartDetached passes --config.",
+  "routing": "One MUST (F1) for wf-implement only if the human chooses removal; otherwise it is a back-to-design for Design to name the condition. F2 (MUST-review) goes to the PR body for the human's acknowledgement at merge.",
+  "follow_ups_filed": [],
+  "follow_ups_note": "No new behaviour on main found that this diff does not cause. The pre-existing items the design already handed on (configuration-bugfixes' four observations, workdir-in-context, the drivers' undocumented variables) stay where it filed them.",
+  "informational": [
+    "checkRelayImage (cmd/warden/config.go:680) refuses any rune for which unicode.IsPrint is false, so format characters (a right-to-left override, a zero-width space, a BOM) and non-ASCII spaces too, added in d153126. Judged within the design's 'a space or a control character' (Unicode format characters are control characters in the broad sense, and no valid image reference holds any of them); no finding, noted for the human.",
+    "Escaping: every path and outside string in a line or error goes through driver.EscapeOutside, including the config file's path in the config: line, the load-time [vm] messages, configAge and windows_image_update; within the design ('every outside string escaped', a94133d) and Plan Note A.",
+    "osReason is defined twice, in cmd/warden/config.go and driver/session.go, with the same body; cmd/warden could use a driver export. No rule asks for it; a cleanup, not a finding.",
+    "GLOBAL-10/11: the only continuation on failure is the named CA skip (Defaults and overrides, 'The skip under a CA path, named'), with a line on every run; the only pass-through is the named empty WARDEN_CONFIG. No other default, merge or fallback is added. The merge of the user file, the merge of the CA variable into the key and ModuleRoot's working-directory fallback are removed as the design says.",
+    "RELAY-08: no relay setting is added or moved; the claim's upstream_ca_certs carries the certificates read before the build, and the relay image stays the container driver's launch argument.",
+    "UX-01 / FLOW-15: cli.md (--config row), configuration.md (the config file, the CA paths, the relay image check, moving from ~/.config/warden), corporate-networks.md, installation.md, README, CONTRIBUTING and overview.md change with the code; tier 1's surface-docs check passes.",
+    "TEST-01/04: tier-0 tests are pure Go, no network or runtime; FIFO, socket, self-link and mode-0 rows skip with a reason where the platform cannot make them; mode-0 rows skip under root (this session), as Plan Note C records.",
+    "Integration (tier 1, test-integration.sh) did not run here; the PR's integration workflow runs it. Native gaps project-config-trust-windows, -hyperv, -vz, -qemu are open in the backlog and block nothing (FLOW-09)."
+  ]
+}
