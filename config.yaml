@@ -4,6 +4,10 @@
 # queue/*.yaml (set by the workflow-human skill).
 priority_confirmed: true
 
+# The repository whose gates wf runs and whose area map areas.yaml is
+# (FLOW-05, PROFILE-01).
+repository: buildwarden/buildwarden
+
 # Steps one daily run may take; calibrate against /usage. Doubled from 12 on
 # 2026-11-12 (Jeff): weekly usage was very low.
 run_budget:
@@ -16,8 +20,9 @@ native_budget:
   steps: 8
 
 limits:
-  in_progress: 5           # features in progress at once, process items not counted (FLOW-05)
+  in_progress: 5           # features in progress at once, process items not counted (FLOW-05); 5 when unset
   alters_relationships: 3  # FLOW-05: features holding an alters_relationships slot; 1 when unset. Raised from 1 for the componentization program (FLOW-20, a5), 2026-11-12
+  waiting_on_human: 8      # FLOW-05: items in progress waiting on the human at which no queued feature starts; 8 when unset
 
 lease_minutes: 120         # a claimed step's lease; an expired lease may be reclaimed (FLOW-04)
 runaway_factor: 2          # a feature escalates to the human at this multiple of its step estimate (FLOW-13)
