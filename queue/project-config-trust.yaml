@@ -10,7 +10,7 @@ alters_relationships: false
 design_review: required
 pr:
   number: 124
-  ci: pending
+  ci: green
   head: fa83378d27b243fda7128a506177fa448bb43c04
 source: 'Found by the design of runtime-cli-project-path (its section ''The same defect elsewhere'' and Security note, branch feat/runtime-cli-project-path at b8f692f), 2026-11-14. Jeff, design review 2026-11-15: ''Security item as one design''. A security fix, exempt from FLOW-20''s freeze; not a program item. Scope, one design: what a project''s warden.toml (the build context''s own file) may decide on the host. F1: [runtime] relay_image chooses the relay, and a value starting with ''-'' is read as an option. F2: [relay] upstream_ca_certs and system_ca_bundle name host paths that are read and sent to the relay as trust roots. F3: [build] output_dir and tmpdir name host directories that are created and written. F4: [vm] windows_image names the Hyper-V base image for the user''s cache. F9: driver.ModuleRoot falls back to the working directory, so a dev-versioned warden installed outside its tree builds the relay or warden-io from the repository''s source. And the whole-file question: [runtime] driver and cli in a project''s file outrank the user''s own config, so a repository can move a user to a driver that isolates less. GLOBAL-06: host-env boundary. It follows runtime-cli-project-path''s rule and the general configuration-validation rule Jeff stated in that review.'
 steps:
