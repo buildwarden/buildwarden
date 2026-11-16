@@ -1,8 +1,11 @@
 package vz
 
 import (
+	"bufio"
 	"fmt"
 	"go/build"
+	"go/build/constraint"
+	"os"
 	"slices"
 	"testing"
 )
@@ -48,4 +51,45 @@ func TestPlatformFileSelection(t *testing.T) {
 			}
 		})
 	}
+}
+
+// The two //go:build lines must be exact complements over darwin, arm64 and
+// cgo. TestPlatformFileSelection cannot see a dropped cgo term in the
+// bindings' line, because their import "C" already leaves them out without
+// cgo; this test reads the lines themselves.
+func TestPlatformConstraintsComplement(t *testing.T) {
+	stub := buildLine(t, "vz_stub.go")
+	bindings := buildLine(t, "vz_darwin_arm64.go")
+	for mask := range 8 {
+		set := map[string]bool{
+			"darwin": mask&1 != 0, "arm64": mask&2 != 0, "cgo": mask&4 != 0,
+		}
+		has := func(tag string) bool { return set[tag] }
+		if stub.Eval(has) == bindings.Eval(has) {
+			t.Errorf("with %v, stub %q and bindings %q agree; want exactly one",
+				set, stub, bindings)
+		}
+	}
+}
+
+// buildLine returns the //go:build constraint of the named file.
+func buildLine(t *testing.T, name string) constraint.Expr {
+	t.Helper()
+	f, err := os.Open(name)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer f.Close()
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		if constraint.IsGoBuild(sc.Text()) {
+			expr, err := constraint.Parse(sc.Text())
+			if err != nil {
+				t.Fatalf("%s: %v", name, err)
+			}
+			return expr
+		}
+	}
+	t.Fatalf("%s has no //go:build line", name)
+	return nil
 }

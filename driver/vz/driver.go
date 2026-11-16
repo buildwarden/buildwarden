@@ -53,8 +53,9 @@ func (d *Driver) Name() string { return "vz" }
 // StartBuild implements driver.Driver. It starts the host relay, boots the
 // macOS build VM with the relay as its only network path, and waits for the
 // build to finish. It fails with a fixable platform error on any host but
-// macOS/arm64, and on macOS/arm64 when the binary lacks the virtualization
-// entitlement.
+// macOS/arm64, and on macOS/arm64 when the binary was built without the
+// Virtualization.framework bindings (cgo) or lacks the virtualization
+// entitlement (see checkPlatform).
 func (d *Driver) StartBuild(
 	ctx context.Context, req *driver.BuildRequest,
 ) (*driver.BuildResult, error) {
@@ -244,8 +245,9 @@ func (d *Driver) setupNetworkAndRelay(
 
 // Exec implements driver.Driver. Interactive mode is not implemented for vz:
 // it returns driver.ErrExecNotSupported once the platform checks pass, and
-// otherwise the same fixable platform error as StartBuild (another host, or a
-// binary without the virtualization entitlement).
+// otherwise the same fixable platform error as StartBuild (another host, a
+// build without the Virtualization.framework bindings, or a binary without
+// the virtualization entitlement).
 func (d *Driver) Exec(ctx context.Context, req *driver.BuildRequest) error {
 	if err := checkPlatform(); err != nil {
 		return err
@@ -538,7 +540,8 @@ func launcherStamps(cache *ImageCache) []driver.LauncherStamp {
 	return []driver.LauncherStamp{imageStamp(dir, cache)}
 }
 
-// Preflight checks the host can run vz builds (Apple Silicon macOS and a
-// binary signed with the virtualization entitlement). It is
+// Preflight checks the host can run vz builds (Apple Silicon macOS, a build
+// with the Virtualization.framework bindings (cgo), and a binary signed with
+// the virtualization entitlement); checkPlatform is the check. It is
 // `warden doctor --driver vz`.
 func Preflight() error { return checkPlatform() }
