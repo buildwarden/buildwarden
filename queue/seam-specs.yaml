@@ -43,7 +43,7 @@ steps:
   - id: f6-release-specs
     phase: 6
     affinity: human
-    status: pending
+    status: done
     needs:
       - f2-design-review
     lease:
@@ -641,3 +641,6 @@ history:
   - at: 2026-11-16T19:00:50Z
     by: cloud/20261116T174717Z
     event: done f6-consolidate
+  - at: 2026-11-16T22:12:31Z
+    by: human/jeff
+    event: done f6-release-specs
