@@ -579,9 +579,41 @@ say.
       more than one, the third proof does not hold for that commit, and
       a ref that no proof confirms falls to the existing hand
       confirmation: the item stays at its merge step and Close's
-      escalation gives Jeff the commands (FLOW-16). It reads only local
-      objects, so, like the proofs it joins, it needs no network. It
+      escalation gives Jeff the commands (FLOW-16). Like the proofs it
+      joins, it needs no network: it reads local objects and writes only
+      the loose objects of the trial merge's trees, so in a checkout it
+      cannot write to it fails to "not compared", the safe side. It
       needs git 2.40 or later for `--merge-base`.
+    - *Git's text merge, whatever the merge drivers* (the review of the
+      implementation, F-P1, 2026-11-16). A merge driver resolves a
+      conflict its own way: `union` keeps both sides' lines, and a
+      driver the config defines may keep one side. Named by an attribute
+      in the checkout's `.gitattributes`, in the ref's or C^'s tree, in
+      `info/attributes` or by `merge.default`, it let the trial merge
+      write C's tree although the ref dropped a line after the squash,
+      and Close would then delete that work. So the trial merge gives
+      the built-in `union`, every driver the config defines and
+      `merge.default` git's own three-way text merge (`git merge-file`),
+      with no renormalizing; a file whose attribute is `binary` or
+      `-merge` still conflicts, which refuses the proof. Overriding the
+      drivers works on every git the proof runs on; reading no
+      attributes (`--attr-source`) would need git 2.41 and still reads
+      `info/attributes`. An honest squash of a file with such a driver
+      is still proven when the text merge is clean; one GitHub could
+      only make through the driver falls to hand confirmation. The
+      `repeat:` command in a refusal does not carry these options, so a
+      human repeating it in a checkout with such a driver may see
+      another tree.
+    - *Known cases.* A ref refreshed from `main` after the squash, once
+      `main` has moved past it, has C^ as its merge base, the trial merge
+      writes the ref's own tree, and the proof does not hold although the
+      ref holds nothing `main` lacks; it falls to hand confirmation, and
+      `wf stale` asks `Merged` before it seeds a refresh, so it is rare.
+      A squash later reverted on `main` still proves the ref merged: the
+      PR did merge, and Close deletes a branch whose work is then only in
+      `main`'s history. An older ref is proven only when nothing was
+      committed to the branch after the refresh it predates; a review
+      fix after the refresh leaves it to hand confirmation.
     - *Why it changed.* The review of the implementation (F1, 2026-11-16)
       showed a14 (a)'s zero-context patch-id proving merged two refs that
       are not: a ref with a commit after the squash that moves an added
@@ -2382,7 +2414,7 @@ code these cases run through.
 | 19 | H (`driver-core`, `relay`, `collector`), P1 (`relay`) and P2 (`collector`) hold the three slots; X (`driver-core`) reaches Plan | Refused: three holders | Refused: `h, which collides with it, is already with p1, p2`. X's own set is 2; H's would be 4 |
 | 20 | An item with an open PR is sent back to Implement by its refresh; a near item reaches `f6-merge-main` | Offered: an item before Publish holds nothing | Refused: the returned item still has its PR recorded, so it holds the slot. Its PR is a draft and **Needs Jeff** says not to merge it |
 | 21 | An item in `driver-core` (priority 1) and a VZ item (priority 3) wait while a Hyper-V item holds the slot | One PR at a time | The `driver-core` item is refused by the holder (near). The VZ item, disjoint from the holder, is refused too: `the PR slot: <driver-core item> (priority 1) is ahead`. When Jeff merges the Hyper-V PR the `driver-core` item goes next |
-| 22 | An attended checkout holds a branch's ref from before its last refresh; the refresh merged an edit next to one of the branch's hunks; Jeff merges the PR | Cannot arise with one PR open | The tick confirms the merge by the tree: the head that merged contains `main`. In the attended checkout the older ref is confirmed by the merge-tree proof: merged onto the squash's parent it writes the squash's tree (a14 (d)); with three lines of patch-id it was not, `wf stale` there read the PR as unmerged, and Close there escalated the branch (FLOW-16) |
+| 22 | An attended checkout holds a branch's ref from before its last refresh; the refresh merged an edit next to one of the branch's hunks; Jeff merges the PR | Cannot arise with one PR open | The tick confirms the merge by the tree: the head that merged contains `main`. In the attended checkout the older ref is confirmed by the merge-tree proof when nothing was committed to the branch after the refresh: merged onto the squash's parent it writes the squash's tree (a14 (d)); with three lines of patch-id it was not, `wf stale` there read the PR as unmerged, and Close there escalated the branch (FLOW-16) |
 | 23 | A regression's fix is filed with nobody there, following an item that declared `driver/hyperv`, `book` | No areas exist: one PR at a time for every feature | It takes `driver/hyperv`, `book`, and waits only for items related to those. Filed with no areas it would collide with every feature and open its PR only when no other feature has one open (a4 (b)) |
 | 24 | After this item's merge, `seam-specs` (never declared; its design lists five seams and four rule changes the queue file lacks) reaches its Plan gate | Passes on the approval | Passes on the approval: no `declared`, so the queue is not compared with the design, and the check prints `not declared: finished Design before wf declare` |
 | 25 | Eight in-progress items wait on Jeff: four features (three open PRs, a design review) and four process items (three design reviews, an escalation). A queued feature is next, disjoint from the four | Started: four features are in progress and the limit is 5 | Refused: `the waiting limit: 8 items wait on the human (limit 8): ...`. It starts once one of the eight clears |
@@ -3365,9 +3397,23 @@ This item declares no `holds` (Decision 17, a13).
   branch's pushed head, so from the merge until `x4-state` Publish's gate
   and a refresh of an item with a PR recorded do not pass "PR open with
   CI green", and `wf stale` seeds a refresh on each PR at its merge step
-  whose `pr.head` is absent. Those steps return released and wait for
-  `x4-state`, which is attended and comes at the item's Close; the
-  window is that short. The skills also say that `wf areas -list` and
+  whose `pr.head` is absent. Those steps return released until
+  `x4-state`, which is attended and comes at the item's Close. Design
+  cannot finish either: its done-when includes "declared recorded in
+  queue (FLOW-02)", which only `wf declare` passes, and "queue records
+  what the design declares" and "alters_relationships recorded in
+  queue", which `wf declare` now writes, so every `f1-design` and
+  `x1-design` in the window fails `wf done` and returns released. A
+  released step is the first `wf next` offers again (`Release` only
+  clears the lease, and a pending refresh is class 1), and each claim
+  after the first counts against the item's budget, so in a run the
+  tick takes such a step again until `run_budget.steps` is spent, and
+  the item heads to the runaway check. The window is short only if
+  `x4-state` follows the merge at once. **Open for Jeff** (the review of
+  the implementation, design-code findings 1 and 3, 2026-11-16): accept
+  that cost, exempt `wf declare` and `pr.head` from the hold, or have
+  the tick not take again a step it released in the same run; this
+  branch changes none of it. The skills also say that `wf areas -list` and
   `wf areas -check` exit 1 while the queue state has no `areas.yaml`,
   which is expected until `x4-state` writes it (F7); the tool's
   behaviour does not change.
@@ -3410,9 +3456,18 @@ This item declares no `holds` (Decision 17, a13).
   agent sets or changes the ruleset on `main`. Making a
   returned item's PR a draft, and ready again when it is republished, is
   neither a merge nor an approval, and Jeff can undo either.
-- **FLOW-16.** Close is per item and unchanged. A refresh adds commits to a
+- **FLOW-16.** Close is per item. A refresh adds commits to a
   branch that is still open, checks that it is still open before it
-  pushes, and deletes nothing.
+  pushes, and deletes nothing. What changes is the proof Close's
+  `git branch -D` waits for: FLOW-16 allows it "only after `wf check` has
+  shown the equal tree or change", the change being the same
+  `git patch-id`, and `wf check` now shows the equal tree or the
+  merge-tree proof (Decision 23), which confirms refs the patch-id did
+  not (an older ref beside an adjacent edit) and refuses refs it
+  confirmed. The rule's wording is not among this item's approved
+  changes; it is amended by the follow-up `loop-parallel-rule-wording`
+  (filed 2026-11-16 on Jeff's decision), and until then FLOW-16's text
+  names a proof `wf` no longer runs.
 - **FLOW-17.** A refresh pushes a merge commit to the item's own branch:
   never a rebase, never a force-push, never `main`. `wf commit` pushes only
   `workflow`, rewrites only a commit it has not pushed, and never forces.
@@ -4037,7 +4092,7 @@ orphan branch":
 **Severity and check:** MUST, `automated`, before and after.
 **Enforcement:** `tools/workflow/check/check.go`, `declared.go` and
 `areas.go` (new): the comparison at phases 2 to 6 for an item the queue
-records a declaration for, the diff check at phases 3, 4 and 6, the
+records a declaration for, the diff check at phases 3 to 6, the
 refresh's done-when, and a tracked item's one-line result. Phase 7's
 check, the merge confirmation, proves a squash by merging the ref onto
 the PR commit's parent, from their single merge base, and comparing the
@@ -4881,11 +4936,19 @@ whether it is still true with the proposed wording.
     `adjacent_old` (a ref from before a refresh that merged an edit next
     to its hunk) proven; `move_after` (a commit after the squash moves
     the added line) not proven; `other_pr` (a branch never merged, and
-    another commit on `main` names `(#N)` and adds the same line
-    elsewhere) not proven, and `wf stale` does not land the item; a
+    another commit on `main` names `(#N)` and makes the branch's whole
+    change, its design file included, with the line elsewhere, which
+    the zero-context patch-id proved merged) not proven, and `wf stale`
+    does not land the item; a
     chmod-only, a binary-only and an empty-file commit after the squash,
     each not proven; a ref with no merge base, or several, with the PR's
     commit not proven, with a line that says why.
+    `TestMergeTreeProofIgnoresMergeDrivers`: a `union` attribute in
+    `main`'s tree (with `main` and with the ref checked out), in the
+    ref's tree and in `info/attributes`, a driver the config defines,
+    and `merge.default=union`: a ref that dropped a line after the
+    squash, which `main` changed, is not proven, and the same squash
+    with no commit after it is.
 
   The map's checks, in `tools/workflow/queue`: `TestAreasValidate` (each
   thing `wf validate` fails a map for; a `repository` that is not
