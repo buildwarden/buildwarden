@@ -3,7 +3,7 @@ title: 'One warden.toml in the control of whoever runs the build: found by --con
 priority: 66
 status: in_progress
 round: feature
-phase: 1
+phase: 2
 design: docs/design/project-config-trust.md
 branch: feat/project-config-trust
 alters_relationships: false
@@ -57,10 +57,26 @@ steps:
   - id: f1-design-r2
     phase: 1
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f2-design-review-r2
+    phase: 2
+    affinity: human
     status: pending
     lease:
-      claimed_by: cloud/20261112T230554Z
-      expires: 2026-11-16T02:34:48.760150786Z
+      claimed_by: ""
+      expires: null
+  - id: f2-plan-r2
+    phase: 2
+    affinity: cloud
+    status: pending
+    needs:
+      - f2-design-review-r2
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -202,6 +218,15 @@ questions:
       - (b) an error, as on main, raised before anything is created, naming the file and the directory. Nothing that fails today starts to pass. A protected key file in a directory of roots then stops the build where a readable one is a warning, and it is the one thing under a directory that stops a build although the directory gives certificates
     recommended: (a) skipped with its line; the directory fails only when it gives no certificate
     answer: (a) Skipped, with its line on every run; the directory is an error only when it gives no certificate at all. As recommended. Answered 2026-11-15.
+  - id: a14
+    kind: assumed
+    status: open
+    question: 'A size cap on the working directory''s warden.toml, asked again. New 2026-11-16 in r2, raised by the independent review of the r2 delta. Jeff kept the regular-file check (Decision 14) and did not take a size cap on every config file. Not in front of him then: a ./warden.toml that is a link to a Linux procfs file such as /proc/self/pagemap passes the check (stat reports a regular, empty file) and reading it still exhausts warden''s memory (reproduced: fatal error: out of memory, no error before it); a very large regular file does the same. The outcome is a crash of warden on the host before anything is created; nothing is read into a build or sent. Naming the file closes it. The design proceeds with (a).'
+    options:
+      - (a) no cap, as built and as Jeff decided; the case is named in the Security note (What remains, 10), and the reference already tells someone building a repository they do not control to name the file; no change to code or reference
+      - '(b) a cap on the working directory''s file only (read at most, say, 1 MiB and one byte; more is the error "cannot read config file <path> (found in the working directory): larger than 1 MiB"), a named file unbounded; closes the procfs link and the large file with a few lines and a test, and reopens Implement for them'
+      - (c) a cap on every config file, the one Jeff did not take; it also bounds --config <(...) and a named device, which the executor chose
+    recommended: (a) no cap, as built; it is Jeff's decision, and the case is a denial of service of warden itself that naming the file avoids
 history:
   - at: 2026-11-15T20:14:52Z
     by: human/jeff
@@ -314,3 +339,9 @@ history:
   - at: 2026-11-16T00:34:48Z
     by: cloud/20261112T230554Z
     event: claimed f1-design-r2 until 2026-11-16T02:34:48Z
+  - at: 2026-11-16T00:48:42Z
+    by: cloud/20261112T230554Z
+    event: done f1-design-r2
+  - at: 2026-11-16T00:48:42Z
+    by: cloud/20261112T230554Z
+    event: entered phase 2 (plan)
