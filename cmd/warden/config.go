@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"io/fs"
 	"net/netip"
 	"os"
@@ -166,8 +167,11 @@ func configFile() (path, source string, err error) {
 // the error that says why it cannot be read. No other file is tried in its
 // place. The working directory's file must be a regular file once links are
 // followed: nobody named it, and a repository can make it a link to a device
-// (/dev/zero, a terminal) that would exhaust memory or wait for ever. A file
-// named with --config or WARDEN_CONFIG is read whatever kind it is.
+// (/dev/zero, a terminal) that would exhaust memory or wait for ever. For the
+// same reason it is read up to maxProjectConfig and no further, counted as
+// read: a link to a procfs file such as /proc/self/pagemap passes as an
+// empty regular file and gives far more. A file named with --config or
+// WARDEN_CONFIG is read whole, whatever kind it is.
 func readConfigFile(path, source string) ([]byte, error) {
 	info, err := os.Stat(path)
 	switch {
@@ -178,11 +182,21 @@ func readConfigFile(path, source string) ([]byte, error) {
 		err = errNotRegular
 	}
 	var data []byte
-	if err == nil {
+	switch {
+	case err != nil:
+	case source == configFromDir:
+		data, err = readProjectConfig(path)
+	default:
 		data, err = os.ReadFile(path)
 	}
 	if err == nil {
 		return data, nil
+	}
+	if errors.Is(err, errTooLarge) {
+		return nil, driver.Fixable("make it 1 MiB or smaller, or name it with "+
+			"--config or WARDEN_CONFIG, which reads it whatever its size",
+			"cannot read config file %s (%s): %v", driver.EscapeOutside(path),
+			source, err)
 	}
 	if source == configFromDir {
 		return nil, unreadableConfig(path, source, err)
@@ -203,6 +217,40 @@ func readConfigFile(path, source string) ([]byte, error) {
 			shown, source)
 	}
 	return nil, unreadableConfig(path, source, err)
+}
+
+// maxProjectConfig is how many bytes of the working directory's warden.toml
+// are read: 1 MiB, far past any real config file.
+const maxProjectConfig = 1 << 20
+
+// errTooLarge marks a working directory's warden.toml that gives more than
+// maxProjectConfig bytes, 1 MiB, when read.
+var errTooLarge = errors.New("larger than 1 MiB")
+
+// readProjectConfig reads the working directory's warden.toml through
+// readCapped.
+func readProjectConfig(path string) ([]byte, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+	return readCapped(f)
+}
+
+// readCapped reads r to its end, or errTooLarge when it gives more than
+// maxProjectConfig bytes. It reads at most one byte past the cap, so the
+// count is of the bytes read: a procfs file that stat reports as empty, or
+// a reader that never ends, costs no more than the cap.
+func readCapped(r io.Reader) ([]byte, error) {
+	data, err := io.ReadAll(io.LimitReader(r, maxProjectConfig+1))
+	if err != nil {
+		return nil, err
+	}
+	if len(data) > maxProjectConfig {
+		return nil, errTooLarge
+	}
+	return data, nil
 }
 
 // errIsDirectory marks a config file path that names a directory.
