@@ -111,7 +111,8 @@ func TestMergeTreeProof(t *testing.T) {
 			})
 		},
 		"empty_after": func(t *testing.T, work string) {
-			commitEdit(t, work, "empty", "an empty file", func(string) string { return "" })
+			commitEdit(t, work, "empty", "an empty file",
+				func(string) string { return "" })
 		},
 	}
 	for name, fn := range after {
@@ -180,7 +181,8 @@ func TestMergeTreeProofNeedsGit240(t *testing.T) {
 	if ok {
 		t.Fatal("proven with a git that refuses --merge-base")
 	}
-	for _, want := range []string{"not compared", "unknown option", "git 2.40", "git version"} {
+	for _, want := range []string{"not compared", "unknown option", "git 2.40",
+		"git version"} {
 		if !strings.Contains(info, want) {
 			t.Errorf("info %q, want %q", info, want)
 		}

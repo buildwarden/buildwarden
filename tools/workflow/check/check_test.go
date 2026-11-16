@@ -658,10 +658,11 @@ func TestSquashAfterMainMoved(t *testing.T) {
 	}
 	for _, ref := range []string{"refs/heads/feat/demo", "refs/remotes/origin/feat/demo"} {
 		re := regexp.MustCompile(regexp.QuoteMeta(ref) + ` squash-merged as [0-9a-f]+ ` +
-			`after main moved \(merged onto [0-9a-f]+\^ from base [0-9a-f]{7} writes tree ` +
-			`[0-9a-f]{7}\)`)
+			`after main moved \(merged onto [0-9a-f]+\^ from base [0-9a-f]{7} ` +
+			`writes tree [0-9a-f]{7}\)`)
 		if !re.MatchString(rs[0].Info) {
-			t.Errorf("info %q, want %s named with its merge-tree proof", rs[0].Info, ref)
+			t.Errorf("info %q, want %s named with its merge-tree proof",
+				rs[0].Info, ref)
 		}
 	}
 }
