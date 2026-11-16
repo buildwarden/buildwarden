@@ -3,7 +3,7 @@ title: 'Specs repository and conformance suites: write seams 1, 2, 3, 5 and 6, b
 priority: 71
 status: in_progress
 round: feature
-phase: 3
+phase: 1
 design: docs/design/seam-specs.md
 branch: feat/seam-specs
 repos:
@@ -66,20 +66,20 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: f3-implement
-    phase: 3
+  - id: f1-design-r2
+    phase: 1
     affinity: cloud
     status: pending
     lease:
       claimed_by: cloud/20261112T230554Z
-      expires: 2026-11-16T11:56:47.124405679Z
+      expires: 2026-11-16T13:01:12.06901169Z
 budget:
   estimate:
     runs: 5
     steps: 30
   spent:
     runs: 1
-    steps: 8
+    steps: 9
 questions:
   - id: a1
     kind: assumed
@@ -444,3 +444,12 @@ history:
   - at: 2026-11-16T09:56:47Z
     by: cloud/20261112T230554Z
     event: claimed f3-implement until 2026-11-16T11:56:47Z
+  - at: 2026-11-16T11:00:37Z
+    by: human/jeff
+    event: kept f6-release-specs pending for phase 6
+  - at: 2026-11-16T11:00:37Z
+    by: human/jeff
+    event: 'back to design: Jeff, 2026-11-16: divergences the design''s table lacks are recorded as found and reviewed once after the suites. Implement''s tasks 0 to 35 are done (S at 9abf66c, PR buildwarden-specs#1 open and green; K at 9734cbd, hosted conformance run 43851944441 green). The table is now amended with the whole list (34 entries, N-numbered, and the correction of D6) for one approval.'
+  - at: 2026-11-16T11:01:12Z
+    by: cloud/20261112T230554Z
+    event: claimed f1-design-r2 until 2026-11-16T13:01:12Z
