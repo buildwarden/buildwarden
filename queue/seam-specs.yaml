@@ -3,7 +3,7 @@ title: 'Specs repository and conformance suites: write seams 1, 2, 3, 5 and 6, b
 priority: 71
 status: in_progress
 round: feature
-phase: 6
+phase: 7
 design: docs/design/seam-specs.md
 branch: feat/seam-specs
 repos:
@@ -27,7 +27,7 @@ design_review: required
 source: 'componentization (docs/design/componentization.md, merged as b903f65, PR #117): phase S1, wave 1. Done when the suites pass against the Go relay and the disk collector. The repository buildwarden/buildwarden-specs (a10) is confirmed with Jeff right before it is created (a11). Jeff, attended session 2026-11-12: go ahead.'
 pr:
   number: 125
-  ci: pending
+  ci: green
   head: 244199b864e15305d73fff3a3508d4c8e757af11
 steps:
   - id: f0-branch-setup
@@ -133,13 +133,20 @@ steps:
   - id: f6-open-pr
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f6-consolidate
       - f6-release-specs
     lease:
-      claimed_by: cloud/20261112T230554Z
-      expires: 2026-11-17T00:12:58.663837909Z
+      claimed_by: ""
+      expires: null
+  - id: f7-merge
+    phase: 7
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 5
@@ -651,3 +658,9 @@ history:
   - at: 2026-11-16T22:12:58Z
     by: cloud/20261112T230554Z
     event: claimed f6-open-pr until 2026-11-17T00:12:58Z
+  - at: 2026-11-16T23:19:55Z
+    by: cloud/20261112T230554Z
+    event: done f6-open-pr
+  - at: 2026-11-16T23:19:55Z
+    by: cloud/20261112T230554Z
+    event: entered phase 7 (merge)
