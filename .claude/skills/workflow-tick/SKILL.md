@@ -95,7 +95,7 @@ item whose PR that merge was, and record it with
 merge was no item's, and list it under **Blocked on Jeff**. Then
 `dist/wf stale -state .dev/workflow -repo . -worker $W`, which seeds a
 refresh step on each item `main` has moved past (FLOW-10). Push what moved
-with `wf commit` (below).
+with `wf commit` (below): `main.yaml` and the `queue/` files these wrote.
 
 Every push of the workflow branch in this skill goes through `wf commit`,
 never `git commit` and `git push`:
@@ -109,7 +109,11 @@ It pushes only the paths given and the files it generates (FLOW-13). Exit 4:
 the claim was asked again on the moved branch and refused (FLOW-04); go back
 to 1 and ask `wf next` again. Exit 5: the change could not be replayed onto
 the moved branch; `wf commit` names the files, and the change is re-applied
-by hand on top of `origin/workflow` and committed again.
+by hand on top of `origin/workflow` and committed again. Exit 5 with
+`-claimed`: the push was rejected on every try and the claim was dropped; ask
+`wf next` again, and never re-make the claim by hand. On
+`main.yaml: kept the remote's; record main again`, run the `dist/wf main` and
+`wf areas -check` lines above again, then `wf commit` `main.yaml`.
 
 Then repeat while this run has taken fewer than `run_budget.steps` steps:
 

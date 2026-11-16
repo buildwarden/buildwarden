@@ -118,7 +118,8 @@ apply, with these defaults in place of step 3's agreement:
 
 A fix for a red `main` is recorded with
 `dist/wf main -state .dev/workflow -followup <slug>`; so is one Jeff files
-for a red commit that was no item's (FLOW-05, FLOW-09). Report each one as
+for a red commit that was no item's (FLOW-05, FLOW-09), and `main.yaml` is
+then among the paths step 5 passes to `wf commit`. Report each one as
 "<slug> (follows <item>)" in the step's evidence and in the run's
 **Follow-ups filed** line. Jeff's explicit word overrides the
 default and is recorded in the queue history: he may fold the fix into the
