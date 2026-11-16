@@ -478,8 +478,8 @@ func TestWorkingDirectoryConfigIsCapped(t *testing.T) {
 				if err != nil {
 					t.Fatalf("LoadConfig: %v", err)
 				}
-				if cfg.Build.OutputDir != "sized" {
-					t.Errorf("output_dir = %q, want %q", cfg.Build.OutputDir, "sized")
+				if got := cfg.Build.OutputDir; got != "sized" {
+					t.Errorf("output_dir = %q, want %q", got, "sized")
 				}
 				return
 			}
