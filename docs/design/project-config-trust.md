@@ -2442,6 +2442,12 @@ with `relay_image = "dev"` or `WARDEN_IMAGE=dev`. Each needs `go` on the
 host's `PATH` for the binaries; the relay VM's kernel and initramfs are
 taken from the tree as files. With the default `./warden.toml` the repository can select
 the second and third itself (`driver = "qemu"`, `relay_image = "dev"`).
+Since `vz-nocgo-build` (#123, `c5ab2d5`, merged into this branch at
+Publish), a released `warden` has no vz driver. `--driver vz` stops at its
+platform check, before any relay or guest binary, so the only `vz` case
+left is a `warden` built from source, which is the first kind. The second
+kind is now `qemu` and `firecracker`, and this item closes it for both, as
+designed.
 
 **How the posture changes.**
 
@@ -3911,7 +3917,106 @@ question, and every earlier entry of this section.
 
 ## Consolidation
 
-Filled in at Publish (FLOW-10, FLOW-15).
+Filled at Publish, 2026-11-16, on the branch at `f7d67ad`, the merge of
+`origin/main` at `c5ab2d5` into `ce32836` (FLOW-10, FLOW-15).
+
+**The merge.** A merge commit, no conflict: git merged `CONTRIBUTING.md`,
+`first-build.md`, `installation.md`, `cli.md` and `configuration.md` on its
+own, the hunks being apart. Gates on `f7d67ad`: `make lint` for linux,
+windows and darwin (tier1 `c5ab2d5940d3...f7d67add6d63`: 0 MUST,
+0 MUST-review, 0 SHOULD, 0 hints, 0 suppressed); `make test` exit 0, no
+FAIL; `make enforcement`: the branch changes no enforcement (FLOW-14);
+`tools/workflow/flow18-check.sh` ok.
+
+**Landed on `main` since the fork.** The branch forked from `3cb0b2b`,
+which is `runtime-cli-project-path` (#120). Where the design calls #120
+open, the r1 review outcome already reads `main` as it is. Since then:
+
+- **`loop-parallel` (#121, `623131a`) and its follow-up (#122,
+  `8c41eaa`).** Loop rules and `tools/workflow/`: repositories, areas,
+  relations, the limits, the claim guard, the refresh step. They change no
+  code or rule this item touches. `TEMPLATE.md` gained `repos` and
+  `areas`. This design names neither: absent `repos` means this repository
+  only, which is true, and with no `areas` the item is undeclared, so it
+  collides with every item and runs alone (FLOW-05). It ran that way
+  through Publish, and declaring areas now would be a queue change, not
+  consolidation. Neither touches `orchestrator.md` or
+  `ux-cli-config.md`, so ORCH-03 and UX-07 still read as approved at
+  `a94133d`, which `wf check` confirms.
+- **`vz-nocgo-build` (#123, `c5ab2d5`).** A released `warden` is built
+  without cgo and has no vz driver. `--driver vz` stops at `checkPlatform`
+  before any relay, download or guest binary. Three effects here:
+  - *Terminology and docs agree.* Its wording (vz needs a `warden` built
+    from source on the Mac) and this item's (run the VM drivers as
+    `dist/warden` from the tree; a `warden` finds its source only from
+    its executable) describe the same binary. Its consolidation reached
+    the same conclusion from its side.
+  - *The Security note's F9 paragraph* listed "`vz` as `install.sh`
+    installs it" among releases that reach the working directory's tree.
+    On `main` that case is gone, so it was the only line that went stale
+    in the merge. It is worded current now (a wording fix): of `vz`, only
+    a source-built `warden` remains, the first kind, and this item still
+    closes it. The table row under **Who is affected** describes the
+    error a release run inside a checkout gets. For `vz` that error is
+    now the platform error, which comes first; the row is kept as the
+    record of what was decided.
+  - *No code overlap.* `driver/vz` does not call `ModuleRoot`, and
+    `GuestBinary` is unchanged by #123.
+
+**Items in flight** (each trial merge with `git merge-tree` against the
+remote branch; nothing changed on them):
+
+- `driver-contract` (`c767992`): clean, no file in common.
+- `prebuilt-artifacts` (`49b513a`): clean, no file in common.
+- `seam-specs` (`4c2e482`): one file in common, `CONTRIBUTING.md`, which
+  merges clean. The one conflict, in `Makefile`, is between `seam-specs`
+  (forked from `ad4ea50`) and `main`'s `release-build` target. This branch
+  does not change `Makefile`, so `seam-specs` settles it at its own
+  refresh.
+
+**`dist/wf check` on `f7d67ad`** printed no trial-merge line: the item is
+undeclared, so no in-progress item is disjoint from it and the check
+tries none (FLOW-10's report covers disjoint items only). Its lines:
+
+```
+ok   current main merged: origin/main is an ancestor of feat/project-config-trust
+ok   rule changes cleared (FLOW-14): cleared: docs/development/orchestrator.md (ORCH-03), docs/development/ux-cli-config.md (UX-07)
+ok   queue records what the design declares (FLOW-03): not declared: finished Design before wf declare
+ok   diff inside the declared areas (FLOW-03): undeclared: the item collides with every item in its repositories, and no path is outside it (FLOW-05)
+```
+
+**Seams.** `seams: []`. No file under `specs/` or `relaycfg/` changes,
+and the claim's `upstream_ca_certs` still carries PEM certificates. No
+**Specification changes** section is needed (LOOP-02).
+
+**Rules proposed.** Only ORCH-03 and UX-07, approved at `a94133d`. The
+consolidation surfaced no new convention.
+
+**Sweep (FLOW-15).**
+
+- *Dead code.* `make deadcode` reports, for linux, darwin and windows, the
+  same unreachable functions as `origin/main` at `c5ab2d5` (sorted, line
+  numbers dropped, no difference). None is in a file this branch changes,
+  so the branch adds none.
+- *Duplication.* One path per job. Upstream CAs are read once, in
+  `driver.LoadUpstreamCAs` (`driver/session.go`). `warden` calls it
+  through `cmd/warden/upstreamca.go`, for a run and for `doctor`, and
+  `collector` calls it for its flag. The claim carries its bytes, and
+  there is no second reader. The other
+  `pem.Decode` (`cmd/warden-io/initialize.go`) is the executor installing
+  the relay's CA in the guest, a different job on the other side of the
+  boundary. `EscapeOutside` is the only escaper for host paths on stderr;
+  `collector`'s `sanitizeCaptureName`, `relay`'s `escapePath` and hyperv's
+  `psEscapeSingle` each do a different job. The config file is found in
+  one place (`configFile`), and the source tree in one place
+  (`ModuleRoot`, from the executable only).
+- *The overview.* `concepts/overview.md` has the one-file lookup, the
+  per-setting precedence and the upstream CA read in `warden build`, and
+  the claim's field, as the design specified. `main` changed no line of it
+  since the fork.
+
+**Regressions `main` already has.** None found: every gate is green on the
+merge.
 
 ## Rollback notes
 
