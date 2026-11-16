@@ -422,14 +422,25 @@ level. The designs relied on carry front-matter already.
     on `main`; a named file is the executor's own choice, as a CA path
     named directly is (Decision 8; Security note, **What remains**, 10).
     The default file is also read up to 1 MiB (1048576 bytes) and no
-    further (Jeff, 2026-11-16, a14 (b)): `warden` reads at most 1048577
-    bytes of it, and a file that gives more than 1048576 is an error,
-    `larger than 1 MiB`, whatever `stat` reported. That closes a link to
+    further (Jeff, 2026-11-16, a14 (b)): `warden` reads it in fixed
+    blocks of 64 KiB (65536 bytes, a multiple of 8), every read asking
+    for a whole block, and stops once more than 1048576 bytes have
+    arrived, so it reads at most 1114112 bytes (the cap and one block);
+    a file that gives more than 1048576 is an error, `larger than 1
+    MiB`, whatever `stat` reported (Jeff, 2026-11-16, r3: "Read in
+    blocks"). That closes a link to
     a Linux procfs file such as `/proc/self/pagemap`, which `stat`
     reports as a regular, empty file and so passes the check, and a very
     large regular file. A named file is not capped. The check and the
     cap limit how the default file is read, not what it may decide:
     Decision 7 stands.
+    - *Rejected (r3): read at most 1048577 bytes, one byte past the
+      cap.* As r2 had it. Its last read asks for one byte, and
+      `/proc/self/pagemap` refuses a read whose length is not a
+      multiple of 8 (`EINVAL`), so the link this cap exists for would
+      give the unreadable-file error with the OS's reason instead of
+      `larger than 1 MiB`. Reading whole blocks gives the one error for
+      every file.
     - *Rejected by Jeff: a size cap on every config file.* Offered with
       the finding, and not taken; put to him again as a14 with the
       procfs case, and still not taken for a named file: it would also
@@ -910,7 +921,8 @@ LoadConfig():
     path found in the working directory, and not a regular file once
         links are followed  -> the error, and it is not opened (Decision 14)
     path found in the working directory, and more than 1048576 bytes
-        read from it (at most 1048577 are read)  -> the error (Decision 14, a14)
+        read from it, in blocks of 65536 (at most 1114112 are read)
+                              -> the error (Decision 14, a14)
     former user config exists, and is not path  -> the transitional error (below)
     none                      -> defaults
     else                      -> decode that one file
@@ -934,9 +946,15 @@ LoadConfig():
   `WARDEN_CONFIG` is read whatever kind of file it is, a pipe or a device
   included.
 - The working directory's file is read up to 1 MiB, 1048576 bytes
-  (Decision 14, a14 (b)). `warden` reads at most 1048577 bytes of it; a
-  file of 1048576 bytes or fewer is decoded as today, and one that gives
-  more is the error `larger than 1 MiB`, before anything is decoded. The
+  (Decision 14, a14 (b)). `warden` reads it in fixed blocks of 64 KiB
+  (65536 bytes), each read asking for a whole block, and stops once more
+  than 1048576 bytes have arrived, so it reads at most 1114112 bytes
+  (the cap and one block). A block is a multiple of 8 bytes because
+  `/proc/self/pagemap` refuses a read of any other length. A file of
+  1048576 bytes or fewer is decoded as today, and one that gives more is
+  the error `larger than 1 MiB`, before anything is decoded. A read that
+  fails before more than 1048576 bytes have arrived is the OS's error,
+  with the unreadable-file text and fix, as for any other read. The
   count is of the bytes read, not of the size `stat` reports, so a link
   to a procfs file such as `/proc/self/pagemap`, which `stat` reports as
   empty, is the error too. A file named with `--config` or
@@ -2086,7 +2104,7 @@ in the config file (or no config file).
 | Default, override or fallback | Status | Why it is the obvious choice (GLOBAL-09) | What overrides it, exclusively (GLOBAL-10) |
 |---|---|---|---|
 | The config file when none is named: `./warden.toml` of the working directory (not of the build context `[path]` names), if it exists; it must be a regular file once links are followed, and one that is not (a FIFO, a socket, a device, or a link to one) is an error, not "no file"; a link to nothing is no file, as today | **Changed**: it was that file over `~/.config/warden/config.toml`, read whatever kind of file it was | Jeff's decision 2: the working directory, for ease of use; Jeff's decision on the review's F1 (Decision 14): nobody named that file, and it can be a repository's | `--config`, else `WARDEN_CONFIG`; the named file is the only one read, it is read whatever kind of file it is, and a named file that cannot be read is an error, not a return to the default |
-| How much of the working directory's `./warden.toml` is read: up to 1 MiB (1048576 bytes), counted as read and not as `stat` reports it; one that gives more is the error `larger than 1 MiB`, not a file read in part. Only the file found by default; a named file is read whole | **New** (a14 (b)): it was read whole whatever its size, and a link to a procfs file such as `/proc/self/pagemap` exhausted `warden`'s memory | Jeff's answer to a14: nobody named that file, and a config file of a megabyte is far past any real one | Nothing: no flag or variable changes the cap. Naming the file with `--config` or `WARDEN_CONFIG` reads it unbounded |
+| How much of the working directory's `./warden.toml` is read: up to 1 MiB (1048576 bytes), counted as read and not as `stat` reports it, in blocks of 64 KiB (65536 bytes) until more than 1048576 have arrived, so at most 1114112 bytes are read; one that gives more is the error `larger than 1 MiB`, not a file read in part. Only the file found by default; a named file is read whole | **New** (a14 (b)): it was read whole whatever its size, and a link to a procfs file such as `/proc/self/pagemap` exhausted `warden`'s memory | Jeff's answer to a14: nobody named that file, and a config file of a megabyte is far past any real one | Nothing: no flag or variable changes the cap. Naming the file with `--config` or `WARDEN_CONFIG` reads it unbounded |
 | No `./warden.toml` and none named: no config file | **Changed**: the user file was read | A first run needs no file (UX-07) | As above |
 | `~/.config/warden/config.toml` | **Removed** as a source. Its existence is an error while the transitional detection stands (a3), unless it is the file named (a10) | Jeff's decisions 1 and 4 | Nothing reads it; `--config` or `WARDEN_CONFIG` can name it |
 | An empty `WARDEN_CONFIG` | **New**: not set | What every empty `WARDEN_*` variable means today | Nothing (a8) |
@@ -2571,12 +2589,15 @@ the second and third itself (`driver = "qemu"`, `relay_image = "dev"`).
     and the start of a value it could not read), so a fragment of that
     file can appear in the error and in the build's log. The size is
     now bounded for the default file (a14 (b), Jeff, 2026-11-16): at
-    most 1 MiB (1048576 bytes) of a `./warden.toml` is read, counted as
-    read, and more is an error before anything is decoded. That closes
+    most 1 MiB (1048576 bytes) of a `./warden.toml` is kept, counted as
+    read, and more is an error before anything is decoded. It is read
+    in blocks of 64 KiB (65536 bytes) until more than 1 MiB has
+    arrived, so at most 1114112 bytes (the cap and one block) are read.
+    That closes
     a link to a Linux procfs file such as `/proc/self/pagemap`, which
     `stat` reports as a regular, empty file and so passes the check, and
     a very large regular file; at worst the default file costs `warden`
-    a read of 1 MiB. What remains is for a named file only: a file named
+    a read of 1 MiB and one block. What remains is for a named file only: a file named
     with `--config` or `WARDEN_CONFIG` is read whole whatever its size,
     so naming such a procfs file, a very large file or an endless device
     still makes `warden` read until it runs out of memory, by the
@@ -2639,9 +2660,14 @@ temporary one:
   `cannot read config file <path> (found in the working directory):
   larger than 1 MiB` and gives no configuration; a `./warden.toml` that
   `stat` reports as an empty regular file but that yields more than
-  1048576 bytes when read is the same error (a link to `/proc/self/pagemap`
-  on Linux, or a reader standing in for one where the test cannot use
-  procfs); a file over the cap named with `--config`, and again with
+  1048576 bytes when read is the same error, `larger than 1 MiB`, and
+  not the OS's (a link to `/proc/self/pagemap` on Linux, which refuses
+  a read whose length is not a multiple of 8, or a reader standing in
+  for one where the test cannot use procfs); a reader that yields more
+  than 1048576 bytes is read no further than 1114112 (the cap and one
+  block of 65536); a read that fails before more than 1048576 bytes
+  have arrived is still the OS's error, with the unreadable-file text
+  and fix; a file over the cap named with `--config`, and again with
   `WARDEN_CONFIG`, is read whole and decoded.
 - *The `config:` line:* its four forms; on stdout for `doctor`, on stderr
   for the others; a path that holds a newline or an escape sequence is
@@ -3402,13 +3428,16 @@ built code (FLOW-06); tasks 29 and 30 are the reference and the overview
 planning sends nothing back to Design. Tasks 27 and 28 are one green
 checkpoint.
 
-*Note F (where the cap is counted).* The design has "at most 1048577
-bytes" read and the count "of the bytes read, not of the size `stat`
-reports". Reading: `readConfigFile` keeps its `os.Stat` checks first, so a
+*Note F (where the cap is counted).* The design has the file read in
+blocks of 65536 bytes until more than 1048576 have arrived, at most
+1114112 bytes read (r3; r2 had "at most 1048577"), and the count "of the
+bytes read, not of the size `stat` reports". Reading: `readConfigFile` keeps its `os.Stat` checks first, so a
 FIFO or a device found by default is still not opened (Decision 14's
 first half, unchanged); then, for the default file only, it opens the file
-and reads it through one helper that reads at most `limit + 1` bytes from
-an `io.Reader` and returns an error when it got more than `limit`. The
+and reads it through one helper that reads an `io.Reader` in whole blocks
+of 65536 bytes, every read asking for a full block, stops once it has more
+than `limit`, and then returns an error, so it reads at most `limit` plus
+one block; a read error before that is returned as it is. The
 helper is the seam for the test double the design allows where procfs
 cannot be used. A named file is read with `os.ReadFile`, as today.
 
@@ -3424,24 +3453,29 @@ cannot be used. A named file is read with `os.ReadFile`, as today.
     whatever its size`, a `driver.FixableError`, and `LoadConfig` returns
     no configuration; on Linux, a `./warden.toml` that is a link to
     `/proc/self/pagemap` (which `stat` reports as an empty regular file)
-    is the same error, skipped with its reason where that file is absent;
-    the helper of Note F given a reader that yields more than 1048576
-    bytes (an endless reader) is the error and reads no more than 1048577,
-    and given exactly 1048576 bytes returns them all, so the case runs on
-    every OS; a file of 1048577 bytes and more named with `--config`, and
-    again with `WARDEN_CONFIG`, is read whole and its key decoded. Pure
+    is the same error, `larger than 1 MiB` and not the OS's `invalid
+    argument`, skipped with its reason where that file is absent; the
+    helper of Note F given a reader that yields more than 1048576 bytes
+    (an endless reader) is the error and reads no more than 1114112 (the
+    cap and one block of 65536), given a reader that refuses a read whose
+    length is not a multiple of 8 is still that error, given a reader that
+    fails before the cap returns that reader's error, and given exactly
+    1048576 bytes returns them all, so the cases run on every OS; a
+    file of 1048577 bytes and more named with `--config`, and again with `WARDEN_CONFIG`, is read whole and its key decoded. Pure
     Go, no network, no container runtime (GLOBAL-04, GLOBAL-07,
     GLOBAL-11, UX-04, UX-08, UX-09, TEST-01, TEST-02, SEC-04).
 28. **The cap in `readConfigFile`** (Decision 14, a14 (b); **How the
     config file is found**; FLOW-06, rework of task 2's code). In
-    `cmd/warden/config.go`: one named constant for 1048576 bytes; for a
+    `cmd/warden/config.go`: one named constant for 1048576 bytes and one
+    for the block of 65536 bytes (r3); for a
     file whose source is "found in the working directory", after the
     `stat` checks of Decision 14's first half, the file is opened and read
     through Note F's helper, and more than the cap is the design's error
     and fix, printed with the escaped absolute path, before anything is
     decoded and before the transitional call, as the design's pseudocode
     orders it. Its fix is the design's own, not `unreadableConfig`'s; an
-    open or read that fails keeps `unreadableConfig`'s error. A named file
+    open or read that fails before more than the cap has arrived keeps
+    `unreadableConfig`'s error. A named file
     is read as today, whole. `readConfigFile`'s comment says the default
     file is capped and why, and the comment of the error value names the
     cap. No caller changes: `LoadConfig` is the one caller, and every
@@ -3808,6 +3842,46 @@ matter, the proposed wording of ORCH-03 and UX-07, every other decision
 and question, and every earlier entry of this section.
 
 - **r2, 2026-11-16: approved at `fff2b5f`** (Jeff: the delta of Decision 14 with a14 (b) folded in; ORCH-03 and UX-07 unchanged).
+
+### 2026-11-16, r3: returned from Implement; the cap read in blocks
+
+**The return** (FLOW-06). Implement (`f3-implement-r2`) found that the
+r2 wording, "`warden` reads at most 1048577 bytes", cannot give the
+design's error `larger than 1 MiB` on a `./warden.toml` that is a link
+to `/proc/self/pagemap`: that file refuses a read whose length is not a
+multiple of 8, so the final one-byte read fails with `EINVAL` and the
+result is the unreadable-file error with the OS's reason. The link to a
+procfs file is the case the cap exists for.
+
+**Jeff's answer**, 2026-11-16: "Read in blocks". The default file is
+read in fixed blocks and reading stops once more than 1 MiB has arrived;
+the error is then `larger than 1 MiB` for every file, pagemap included.
+The cap (1048576 bytes), the error and its fix are the same, and a named
+file stays unbounded. He gave it as his approval of this reworded delta,
+subject to an independent check.
+
+**The delta**, in this design only:
+
+- Decision 14: the block of 64 KiB (65536 bytes, a multiple of 8), every
+  read a whole block, at most 1114112 bytes read (the cap and one
+  block); the r2 one-byte-past-the-cap read is a rejected alternative.
+- **How the config file is found:** the pseudocode's line for the cap
+  and its bullet say the block and the bound, and that a read that fails
+  before the cap is the OS's error with the unreadable-file text.
+- **Defaults and overrides:** the cap's row says the block and the
+  bound.
+- **Security note**, **What remains**, 10: the block, the bound, and
+  the worst case of a read of 1 MiB and one block.
+- **Validation plan**, tier 0: pagemap gives `larger than 1 MiB`, not
+  the OS's error; a reader is read no further than the cap and one
+  block; a read error before the cap is still the OS's error with the
+  unreadable-file text.
+- **Implementation plan**, r2 delta: Note F and tasks 27 and 28 state
+  the block and the bound.
+
+**Not changed:** the front matter, the proposed wording of ORCH-03 and
+UX-07, the question a14 as asked and answered, every other decision and
+question, and every earlier entry of this section.
 
 ## Consolidation
 
