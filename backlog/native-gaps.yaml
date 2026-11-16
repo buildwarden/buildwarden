@@ -731,7 +731,18 @@ gaps:
       it is implemented.
   - id: project-config-trust-windows
     host: container-any
-    status: open
+    status: done
+    done: 2026-11-16
+    evidence: >-
+      host:container-any/20261116T111001Z, unattended, windows-desktop, Windows 11 Pro 26300, go1.26.3,
+      main 8c41eaa and feat/project-config-trust ce32836. The one case that failed on 2026-11-15 now
+      passes: `go test -count=1 ./cmd/warden ./driver` is ok on main and on the branch, and
+      TestLoadUpstreamCAsEscapes passes on the branch (-v, PASS, not skipped). The other cases were not
+      rerun and stand from the host:container-any/20261116T051002Z run on 3733c4b and main 623131a
+      (note below): since then the branch changed driver/upstreamca_test.go only (ce32836) and main
+      two .claude/skills files only (#122), so the warden those cases ran is the same code.
+      Log: native/container-any/2026-11-16/project-config-trust-go-test.log; the earlier cases:
+      native/container-any/2026-11-15/project-config-trust/.
     what: >-
       On the Windows desktop: go test ./cmd/warden ./driver; with
       %USERPROFILE%\.config\warden\config.toml present, warden doctor exits 1 naming that path, and
@@ -869,6 +880,8 @@ gaps:
       2026-11-15 (host:container-any/20261116T051002Z, unattended, main 623131a): not run.
       feat/prebuilt-artifacts is still design-only (49b513a, docs/design/prebuilt-artifacts.md alone against
       main), and the item is held in Plan on q1 until driver-contract's PR has merged.
+      2026-11-16 (host:container-any/20261116T111001Z, unattended, main 8c41eaa): not run, nothing
+      changed. feat/prebuilt-artifacts is still 49b513a (design only), and q1 (the hold in Plan) is still open.
   - id: prebuilt-artifacts-qemu-windows
     host: macos-qemu
     status: open

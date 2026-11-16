@@ -1,0 +1,24 @@
+host:container-any/20261116T111001Z, unattended, windows-desktop, go version go1.26.3 windows/amd64
+
+== main 8c41eaa: go test -count=1 ./cmd/warden ./driver
+ok  	github.com/buildwarden/buildwarden/cmd/warden	8.814s
+ok  	github.com/buildwarden/buildwarden/driver	0.752s
+
+== feat/project-config-trust ce32836 (worktree .scratch/pct): go -C .scratch/pct test -count=1 ./cmd/warden ./driver
+ok  	github.com/buildwarden/buildwarden/cmd/warden	8.453s
+ok  	github.com/buildwarden/buildwarden/driver	0.994s
+
+== feat/project-config-trust ce32836: go -C .scratch/pct test -count=1 -v -run TestLoadUpstreamCAsEscapes ./driver
+=== RUN   TestLoadUpstreamCAsEscapes
+--- PASS: TestLoadUpstreamCAsEscapes (0.02s)
+PASS
+ok  	github.com/buildwarden/buildwarden/driver	0.144s
+
+== what moved since the 2026-11-15 run (host:container-any/20261116T051002Z)
+git diff --stat 3733c4b origin/feat/project-config-trust
+ driver/upstreamca_test.go | 17 +++++++++++++++--
+ 1 file changed, 15 insertions(+), 2 deletions(-)
+git diff --stat 623131a origin/main
+ .claude/skills/workflow-human/SKILL.md  | 4 ----
+ .claude/skills/workflow-intake/SKILL.md | 4 ----
+ 2 files changed, 8 deletions(-)
