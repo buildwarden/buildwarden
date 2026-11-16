@@ -14,6 +14,8 @@ warden build --driver firecracker .      # Firecracker driver
 
 The VM drivers need a one-time setup first; see
 [Installation](./installation.md) and the [drivers guide](../guide/drivers.md).
+For vz that starts with building `warden` from source on the Mac: a released
+`warden` has no vz driver.
 
 For the container driver you can also point at a specific Dockerfile:
 

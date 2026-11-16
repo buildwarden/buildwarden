@@ -1,4 +1,4 @@
-.PHONY: build test integration-test lint tier1 enforcement fmt tidy cover clean sign relay-vm deadcode
+.PHONY: build test release-build integration-test lint tier1 enforcement fmt tidy cover clean sign relay-vm deadcode
 
 UNAME_S := $(shell uname -s)
 UNAME_M := $(shell uname -m)
@@ -34,6 +34,17 @@ test:
 	go test ./...
 	cd tools/workflow && go test ./...
 	cd tools/tier1 && go test ./...
+
+# What a release compiles (.goreleaser.yaml, its hook, release.yml): each
+# program, for each target, without cgo. Nothing is kept. A target or
+# program added there is added here.
+RELEASE_TARGETS := linux/amd64 linux/arm64 darwin/amd64 darwin/arm64
+release-build:
+	@for t in $(RELEASE_TARGETS); do \
+		echo "== $$t"; \
+		GOOS=$${t%/*} GOARCH=$${t#*/} CGO_ENABLED=0 \
+			go build ./cmd/warden ./cmd/warden-io ./cmd/relay ./cmd/warden-pause || exit 1; \
+	done
 
 integration-test:
 	./test-integration.sh

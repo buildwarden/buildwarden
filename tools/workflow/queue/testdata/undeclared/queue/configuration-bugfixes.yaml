@@ -1,0 +1,42 @@
+feature: configuration-bugfixes
+title: The item configuration-bugfixes
+priority: 72
+status: queued
+round: feature
+phase: 0
+design: docs/design/configuration-bugfixes.md
+branch: feat/configuration-bugfixes
+alters_relationships: null
+steps:
+- id: f0-answer-q1
+  phase: 0
+  affinity: human
+  status: pending
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f0-branch-setup
+  phase: 0
+  affinity: cloud
+  status: pending
+  needs:
+  - f0-answer-q1
+  lease:
+    claimed_by: ''
+    expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 9
+  spent:
+    runs: 0
+    steps: 0
+questions:
+- id: q1
+  kind: blocking
+  status: open
+  question: The question q1
+  options:
+  - (a)
+  recommended: (a)
+history: []

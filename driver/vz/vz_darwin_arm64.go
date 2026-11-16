@@ -1,4 +1,4 @@
-//go:build darwin && arm64
+//go:build darwin && arm64 && cgo
 
 package vz
 
@@ -14,6 +14,10 @@ import (
 	"fmt"
 	"unsafe"
 )
+
+// hasBindings reports whether this build compiles the Virtualization.framework
+// bindings. checkPlatform refuses the driver when it is false.
+const hasBindings = true
 
 // createLinuxVM creates a Linux VM (used for the relay).
 func createLinuxVM(cfg linuxVMConfig) (unsafe.Pointer, error) {

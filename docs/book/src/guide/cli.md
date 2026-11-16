@@ -229,7 +229,8 @@ which config file was read and how it was chosen, the same `config:` line
 the other commands print on stderr
 ([Configuration](configuration.md#the-config-file)). It then checks a container runtime
 (container), `qemu-system-*` + `qemu-img` and relay VM assets (qemu), Apple
-Silicon macOS and the virtualization entitlement (vz), or the hypervisor and
+Silicon macOS, a `warden` built with cgo (a released binary is not, and has no
+vz driver) and the virtualization entitlement (vz), or the hypervisor and
 management stack and the privilege tier this process holds (hyperv). For
 firecracker it checks `/dev/kvm`, the `firecracker` binary (v1.17.0 or later),
 the boot assets, the disk-image tools (`qemu-img`, `genisoimage`; a warning

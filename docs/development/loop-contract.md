@@ -50,7 +50,7 @@ What is shared and what is local:
 |---|---|---|
 | Specifications | When a specification changes before code (LOOP-02) | The specifications, where they are kept, their format, and how a release of them is pinned |
 | Checks | The classes, the tiers, when they run and what a failure does (LOOP-03) | The concrete checks and their implementations; the component's invariants |
-| The queue | The kinds of item, the phases, the order and what blocks what (LOOP-04) | Nothing: there is one queue, and an item names the repositories it works in |
+| The queue | The kinds of item, the phases, the order and what blocks what (LOOP-04) | The areas of its tree: the loop keeps them, with the queue, as the component's area map, which says what two items may change in it side by side (FLOW-05). Otherwise nothing: there is one queue, and an item names the repositories it works in |
 | Workers | Affinities, leases, budgets and the host table (LOOP-05) | Each machine's schedule and credentials; the host names a component's work uses |
 | Reporting | What a run records and where (LOOP-06) | Nothing |
 | Other components | Reconciliation (LOOP-07) | What it releases and what it consumes |
@@ -80,6 +80,7 @@ entry for each of these terms:
 | Boundary rule | Its rule for changes that need a security note | FLOW-02, FLOW-08 |
 | Flaky-test rule | Its rule for a failure that does not reproduce | FLOW-11 |
 | Rule and machinery paths | The paths whose change is a rule change, and the loop's machinery in its tree | FLOW-14 |
+| Areas | Where its area map is kept, and the command that lists its dependency edges | FLOW-02, FLOW-05 |
 | Release | How a release is cut and where its gate is wired | LINT-03 |
 | Consumables | What it releases, and what it consumes at which version | LOOP-07 |
 | Sessions | Its session-recording configuration | FLOW-18 |
@@ -201,8 +202,8 @@ change adds has a class and a tier.
 **Check:** agent-judgment
 
 There is one queue, for work in every repository. An item names the
-repositories it works in. Until the queue records them, it names them in
-its design; an item that names none works only in the repository that
+repositories it works in: its design declares them and the queue records
+them (FLOW-02). An item that names none works only in the repository that
 holds its design. An item is one of two kinds (FLOW-03): a *feature*,
 which changes a component, or a *process item*, which changes the rules
 the loop runs under: the loop rules, the loop's machinery, or a

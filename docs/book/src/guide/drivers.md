@@ -230,6 +230,11 @@ relay — no vmnet entitlement is needed.
 ### Requirements
 
 - macOS on Apple Silicon (arm64)
+- A `warden` built from source with cgo (`make build`, which needs the Xcode
+  Command Line Tools). A released binary is built without cgo and has no vz
+  driver: `--driver vz` stops with
+  `ERROR: this warden was built without cgo, so it has no vz driver (released binaries are built this way)`
+  and a `To fix:` line naming the build from source, and exits 1
 - The `warden` binary must be codesigned with the
   `com.apple.security.virtualization` entitlement
 - `make build` handles codesigning automatically if you have a Developer ID
