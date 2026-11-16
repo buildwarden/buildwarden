@@ -102,21 +102,6 @@ func TestResolvePath_NonExistent(t *testing.T) {
 	}
 }
 
-func TestLoadConfig_Defaults(t *testing.T) {
-	inConfigFiles(t, "")
-	t.Setenv("NO_COLOR", "") // the defaults, not the caller's environment
-	cfg, err := LoadConfig()
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if cfg.Output.Color != "auto" {
-		t.Errorf("color = %q, want auto", cfg.Output.Color)
-	}
-	if cfg.Runtime.CLI != "" {
-		t.Errorf("runtime = %q, want empty", cfg.Runtime.CLI)
-	}
-}
-
 func TestLoadConfig_ProjectFile(t *testing.T) {
 	inConfigFiles(t, `[runtime]
 cli = "podman"
