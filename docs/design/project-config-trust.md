@@ -421,17 +421,21 @@ level. The designs relied on carry front-matter already.
     configuration read until `warden` ran out of memory, as it still does
     on `main`; a named file is the executor's own choice, as a CA path
     named directly is (Decision 8; Security note, **What remains**, 10).
-    The check limits how the default file is read, not what it may
-    decide: Decision 7 stands.
+    The default file is also read up to 1 MiB (1048576 bytes) and no
+    further (Jeff, 2026-11-16, a14 (b)): `warden` reads at most 1048577
+    bytes of it, and a file that gives more than 1048576 is an error,
+    `larger than 1 MiB`, whatever `stat` reported. That closes a link to
+    a Linux procfs file such as `/proc/self/pagemap`, which `stat`
+    reports as a regular, empty file and so passes the check, and a very
+    large regular file. A named file is not capped. The check and the
+    cap limit how the default file is read, not what it may decide:
+    Decision 7 stands.
     - *Rejected by Jeff: a size cap on every config file.* Offered with
-      the finding, and not taken: the check as built is kept, and no
-      config file is bounded, the default included. A `./warden.toml`
-      that is a regular file, or a link to one, is read whole whatever
-      its size; that includes a Linux procfs file such as
-      `/proc/self/pagemap`, which `stat` reports as a regular, empty
-      file, so such a link still makes `warden` run out of memory
-      (Security note, **What remains**, 10). The cap is put to Jeff
-      again with that case, as **a14**.
+      the finding, and not taken; put to him again as a14 with the
+      procfs case, and still not taken for a named file: it would also
+      bound `--config <(...)` and a named device, which the executor
+      chose. The default file is capped (a14 (b)); a file named with
+      `--config` or `WARDEN_CONFIG` is read whole whatever its size.
     - *Rejected: the same check on a named file.* It would refuse
       `--config /dev/null`, which Decision 1 gives as the way to read no
       settings on Unix, and a config handed over as `--config <(...)`,
@@ -456,8 +460,9 @@ removes compilation). Each question's text and options are kept as they
 were put, so "Proceeding with" in an answered question describes what was
 asked, not always what the design now does. Two questions are new and
 open: a12, raised by a9's fold-in, and a13, raised by the independent
-review of that fold-in. a14 is new in r2 (2026-11-16) and open, raised by the
-independent review of the r2 delta.
+review of that fold-in. a14 is new in r2 (2026-11-16), raised by the
+independent review of the r2 delta, and answered by Jeff at the r2 review
+the same day: (b), not the recommended (a), and folded into the design.
 
 - **a1. A relative path in the config file (`[build] output_dir`,
   `tmpdir`, `[relay] upstream_ca_certs`, a local `[vm] windows_image`) is
@@ -875,6 +880,15 @@ independent review of the r2 delta.
   - (c) A cap on every config file, the one Jeff did not take. It also
     bounds `--config <(...)` and a named device, which the executor
     chose.
+  - **Answered (b) by Jeff, 2026-11-16, at the r2 review:** "Cap the
+    default file". A `./warden.toml` found by default in the working
+    directory is read up to 1 MiB (1048576 bytes); more is the error
+    `cannot read config file <path> (found in the working directory):
+    larger than 1 MiB`. A file named with `--config` or `WARDEN_CONFIG`
+    stays unbounded. Folded into Decision 14, **How the config file is
+    found**, **Who is affected**, **Defaults and overrides**, the
+    Security note (**What remains**, 10) and the Validation plan; it
+    reopens Implement for the cap and its tests.
 
 ## Design
 
@@ -895,6 +909,8 @@ LoadConfig():
     path named and cannot be read  -> the error; nothing else is tried
     path found in the working directory, and not a regular file once
         links are followed  -> the error, and it is not opened (Decision 14)
+    path found in the working directory, and more than 1048576 bytes
+        read from it (at most 1048577 are read)  -> the error (Decision 14, a14)
     former user config exists, and is not path  -> the transitional error (below)
     none                      -> defaults
     else                      -> decode that one file
@@ -916,7 +932,16 @@ LoadConfig():
   line says `no ./warden.toml`. A link to itself is an error (`too many
   levels of symbolic links`). A file named with `--config` or
   `WARDEN_CONFIG` is read whatever kind of file it is, a pipe or a device
-  included. The reason for the difference is the one Decision 7 and the
+  included.
+- The working directory's file is read up to 1 MiB, 1048576 bytes
+  (Decision 14, a14 (b)). `warden` reads at most 1048577 bytes of it; a
+  file of 1048576 bytes or fewer is decoded as today, and one that gives
+  more is the error `larger than 1 MiB`, before anything is decoded. The
+  count is of the bytes read, not of the size `stat` reports, so a link
+  to a procfs file such as `/proc/self/pagemap`, which `stat` reports as
+  empty, is the error too. A file named with `--config` or
+  `WARDEN_CONFIG` is read whole whatever its size. The reason for both
+  differences is the one Decision 7 and the
   Security note give for the rest of the default: in a working directory
   that is someone else's repository, `./warden.toml` is the repository's,
   and nobody named it; a named file is the executor's own choice, as a CA
@@ -950,6 +975,11 @@ LoadConfig():
   ```
   ERROR: cannot read config file /src/repo/warden.toml (found in the working directory): not a regular file
     To fix: make it readable, or name another file with --config or WARDEN_CONFIG
+  ```
+
+  ```
+  ERROR: cannot read config file /src/repo/warden.toml (found in the working directory): larger than 1 MiB
+    To fix: make it 1 MiB or smaller, or name it with --config or WARDEN_CONFIG, which reads it whatever its size
   ```
 
   A path is printed absolute, whatever form it was given in, and escaped:
@@ -1075,6 +1105,7 @@ Where it lives, so that it is deleted in one place, as
 | Settings in both files, merged | The error. One file per build: combine them, or name the user file and stop using the project's |
 | Only `./warden.toml` | Nothing changes, but for the `config:` line |
 | A `./warden.toml` in the working directory that is a FIFO, a socket or a device, or a link to one (`/dev/null`, `/dev/zero`, a terminal) | The error `not a regular file`, naming the path, and nothing is read (Decision 14). Today it is read: a FIFO someone writes to and a link to `/dev/null` work; a FIFO nobody writes to makes `warden` wait, and a link to `/dev/zero` exhausts its memory. Naming the same path with `--config` or `WARDEN_CONFIG` reads it as before |
+| A `./warden.toml` in the working directory larger than 1 MiB (1048576 bytes), or a link to a file that gives more when read (a procfs file such as `/proc/self/pagemap`, which `stat` reports as empty) | The error `larger than 1 MiB`, naming the path, and nothing is decoded (Decision 14, a14). Today it is read whole: a large file is decoded, and a link to such a procfs file exhausts `warden`'s memory. Naming the same path with `--config` or `WARDEN_CONFIG` reads it whole, as before |
 | No file | Nothing changes, but for the `config:` line |
 | `WARDEN_CONFIG` set in a user's environment, `warden` run under `sudo` | `sudo` drops the variable: `./warden.toml` is read, or none. Pass `--config`, or `sudo --preserve-env=WARDEN_CONFIG` |
 | `WARDEN_UPSTREAM_CA_CERTS` and `[relay] upstream_ca_certs` both set | The a5 error on `build`, `shell` and `doctor` while the detection stands; afterwards the variable replaces the key |
@@ -1723,8 +1754,8 @@ edited.
   - the opening ("two places, merged in order") becomes **The config
     file**: one file, the three ways it is found, that the default is the
     working directory's file whatever `[path]` is, a named file that is
-    missing, that `./warden.toml` must be a regular file and a named file
-    need not be (Decision 14), an empty file, the `config:` line and that
+    missing, that `./warden.toml` must be a regular file of at most 1 MiB
+    and a named file need not be either (Decision 14, a14), an empty file, the `config:` line and that
     its path is escaped, relative paths (a1) and
     that a `WARDEN_CONFIG` set for a machine should be absolute, that
     `warden.toml` in a message means the config file in use (Decision 13),
@@ -1825,7 +1856,8 @@ lists the cases; a path that gives some keeps working and says what it
 skipped; a pipe or a device named as a CA path is read as today); a
 `warden` that takes its source tree from the working directory (a6 lists
 who); and a `./warden.toml` found in the working directory that is a FIFO
-or a link to a device, which is read today (Decision 14; the same path
+or a link to a device, or that gives more than 1 MiB, each of which is
+read today (Decision 14, a14; the same path
 named with `--config` or `WARDEN_CONFIG` is read as today). Two things that fail today run, both under a named CA directory
 (F2, **What fails today and runs**; one is a13). UX-03's "never a
 silent break" is met for each by an error that says what to change, at
@@ -2054,6 +2086,7 @@ in the config file (or no config file).
 | Default, override or fallback | Status | Why it is the obvious choice (GLOBAL-09) | What overrides it, exclusively (GLOBAL-10) |
 |---|---|---|---|
 | The config file when none is named: `./warden.toml` of the working directory (not of the build context `[path]` names), if it exists; it must be a regular file once links are followed, and one that is not (a FIFO, a socket, a device, or a link to one) is an error, not "no file"; a link to nothing is no file, as today | **Changed**: it was that file over `~/.config/warden/config.toml`, read whatever kind of file it was | Jeff's decision 2: the working directory, for ease of use; Jeff's decision on the review's F1 (Decision 14): nobody named that file, and it can be a repository's | `--config`, else `WARDEN_CONFIG`; the named file is the only one read, it is read whatever kind of file it is, and a named file that cannot be read is an error, not a return to the default |
+| How much of the working directory's `./warden.toml` is read: up to 1 MiB (1048576 bytes), counted as read and not as `stat` reports it; one that gives more is the error `larger than 1 MiB`, not a file read in part. Only the file found by default; a named file is read whole | **New** (a14 (b)): it was read whole whatever its size, and a link to a procfs file such as `/proc/self/pagemap` exhausted `warden`'s memory | Jeff's answer to a14: nobody named that file, and a config file of a megabyte is far past any real one | Nothing: no flag or variable changes the cap. Naming the file with `--config` or `WARDEN_CONFIG` reads it unbounded |
 | No `./warden.toml` and none named: no config file | **Changed**: the user file was read | A first run needs no file (UX-07) | As above |
 | `~/.config/warden/config.toml` | **Removed** as a source. Its existence is an error while the transitional detection stands (a3), unless it is the file named (a10) | Jeff's decisions 1 and 4 | Nothing reads it; `--config` or `WARDEN_CONFIG` can name it |
 | An empty `WARDEN_CONFIG` | **New**: not set | What every empty `WARDEN_*` variable means today | Nothing (a8) |
@@ -2095,7 +2128,9 @@ detection is not a fallback: it only produces errors. Nor is the check
 that the working directory's file is a regular file: one that exists and
 is not is an error, never "no file", and nothing is tried in its place
 (Decision 14). A `./warden.toml` that is a link to nothing does not
-exist once links are followed, and is no file, as today.
+exist once links are followed, and is no file, as today. Nor is the cap
+on its size: one that gives more than 1 MiB is an error, not read in
+part and not replaced by another source (a14).
 
 **The skip under a CA path, named** (GLOBAL-10, GLOBAL-11). What triggers
 it: a PEM block or a file under a configured CA path that is not a valid
@@ -2534,17 +2569,18 @@ the second and third itself (`driver = "qemu"`, `relay_image = "dev"`).
     the host, is still followed and parsed, and a TOML syntax error quotes
     part of what it read, as the parser gives it (the last key's name,
     and the start of a value it could not read), so a fragment of that
-    file can appear in the error and in the build's log. And a
-    `./warden.toml` that is a regular file, or a link to one, is read
-    whole whatever its size: nothing bounds a config file, the default
-    included. That includes a Linux procfs file such as
-    `/proc/self/pagemap`, which `stat` reports as a regular, empty file,
-    so a repository's `warden.toml` that links to it still makes every
-    command that reads configuration read until `warden` runs out of
-    memory, with no error before it; a very large regular file does the
-    same. The check closes the device and the FIFO, not this. Naming the
-    file closes both, as for the rest of the default; a size cap on the
-    file would close this one too, and is asked again as **a14**.
+    file can appear in the error and in the build's log. The size is
+    now bounded for the default file (a14 (b), Jeff, 2026-11-16): at
+    most 1 MiB (1048576 bytes) of a `./warden.toml` is read, counted as
+    read, and more is an error before anything is decoded. That closes
+    a link to a Linux procfs file such as `/proc/self/pagemap`, which
+    `stat` reports as a regular, empty file and so passes the check, and
+    a very large regular file; at worst the default file costs `warden`
+    a read of 1 MiB. What remains is for a named file only: a file named
+    with `--config` or `WARDEN_CONFIG` is read whole whatever its size,
+    so naming such a procfs file, a very large file or an endless device
+    still makes `warden` read until it runs out of memory, by the
+    executor's own choice, as on `main`.
 
 **What the TEST-08 suite should exercise.** Arm A gains permanent entries
 (SEC-03), the attacker supplying the build context and the proof being
@@ -2597,6 +2633,16 @@ temporary one:
   configuration (`TestWorkingDirectoryConfigThatCannotBeRead`); a link to
   a device named with `--config` or with `WARDEN_CONFIG` is read (Unix;
   `TestNamedConfigFileThatIsADevice`).
+- *The cap on the working directory's file* (Decision 14, a14 (b)): a
+  `./warden.toml` of exactly 1048576 bytes (a valid TOML file padded with
+  a comment) is read and decoded; one of 1048577 bytes is the error
+  `cannot read config file <path> (found in the working directory):
+  larger than 1 MiB` and gives no configuration; a `./warden.toml` that
+  `stat` reports as an empty regular file but that yields more than
+  1048576 bytes when read is the same error (a link to `/proc/self/pagemap`
+  on Linux, or a reader standing in for one where the test cannot use
+  procfs); a file over the cap named with `--config`, and again with
+  `WARDEN_CONFIG`, is read whole and decoded.
 - *The `config:` line:* its four forms; on stdout for `doctor`, on stderr
   for the others; a path that holds a newline or an escape sequence is
   printed escaped, on stderr and in `doctor`'s report, and so is it in the
@@ -3636,6 +3682,41 @@ the branch changed two rules in `docs/development/` since that commit
 (ORCH-03 and UX-07, as approved), so the delta rule's skip does not
 hold; and the delta is a check on the `host-env` boundary that the
 Security note now describes.
+
+### 2026-11-16, r2 review: a14 answered (b) and folded in
+
+Jeff read the r2 delta and answered a14 (b), not the recommended (a):
+"Cap the default file". A `./warden.toml` found by default in the
+working directory is read up to 1 MiB (1048576 bytes), counted as read;
+more is the error `cannot read config file <path> (found in the working
+directory): larger than 1 MiB`. A file named with `--config` or
+`WARDEN_CONFIG` stays unbounded. Outcome of r2: approve, with the a14
+answer folded in. The fold-in, in this design only:
+
+- Decision 14: the cap on the default file, its exact size and error;
+  the rejected alternative is now a cap on every config file, still not
+  taken for a named file.
+- **Questions:** a14 carries its answer; the state paragraph says so.
+- **How the config file is found:** the pseudocode's line for the cap, a
+  bullet with the count and the procfs case, and the error with its fix.
+- **Who is affected:** a row for a default file over the cap.
+- **Reference docs:** the reference's opening says the cap.
+- **Compatibility:** the fifth thing that stops includes a default file
+  over the cap.
+- **Defaults and overrides:** a row for the cap (1 MiB, the default file
+  only, no override; naming the file reads it whole); the paragraph on
+  the lookup says the cap is no fallback.
+- **Security note**, **What remains**, 10: the procfs link and the large
+  file are closed for the default file; what remains is a named file,
+  read whole by the executor's choice.
+- **Validation plan**, tier 0: the cap's tests (at the cap; one byte
+  over; a file `stat` reports empty that yields more; a named file over
+  the cap).
+
+The code and its tests do not have the cap yet: Implement is reopened
+for it (the r2 Plan step adds the task). **Not changed:** the front
+matter, the proposed wording of ORCH-03 and UX-07, every other decision
+and question, and every earlier entry of this section.
 
 ## Consolidation
 
