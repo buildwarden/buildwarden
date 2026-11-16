@@ -7,7 +7,7 @@ tool github.com/buildwarden/buildwarden-specs/relay-claim/cmd/bw-conformance-rel
 require (
 	github.com/BurntSushi/toml v1.6.0 // indirect
 	github.com/buildwarden/buildwarden-specs/conformance v0.1.0 // indirect
-	github.com/buildwarden/buildwarden-specs/relay-claim v0.0.0-20261116100509-f3087fc53892 // indirect
+	github.com/buildwarden/buildwarden-specs/relay-claim v0.0.0-20261116103657-9abf66cc70fe // indirect
 	github.com/google/btree v1.1.2 // indirect
 	github.com/miekg/dns v1.1.73 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.2 // indirect
@@ -20,4 +20,4 @@ require (
 	gvisor.dev/gvisor v0.0.0-20260907062237-d1e35511e5a4 // indirect
 )
 
-replace github.com/buildwarden/buildwarden-specs/conformance v0.1.0 => github.com/buildwarden/buildwarden-specs/conformance v0.0.0-20261116100509-f3087fc53892
+replace github.com/buildwarden/buildwarden-specs/conformance v0.1.0 => github.com/buildwarden/buildwarden-specs/conformance v0.0.0-20261116103657-9abf66cc70fe
