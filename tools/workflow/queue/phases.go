@@ -313,7 +313,10 @@ func SeedRefresh(f *Feature, note, by string, now time.Time) *Step {
 	}
 	phase := f.PublishPhase()
 	id := StepID(f.Round, phase, "refresh")
-	for n := 2; f.hasStep(id); n++ {
+	// An id once seeded is not used again, even after its step was dropped:
+	// a claim of the old step in the history would count the new step's first
+	// claim against the budget (a10 (d)).
+	for n := 2; f.hasStep(id) || f.seededBefore(id); n++ {
 		id = fmt.Sprintf("%s-r%d", StepID(f.Round, phase, "refresh"), n)
 	}
 	st := Step{ID: id, Phase: phase, Affinity: "cloud", Status: "pending", Note: note}
@@ -328,6 +331,14 @@ func SeedRefresh(f *Feature, note, by string, now time.Time) *Step {
 	f.Steps = append(f.Steps, st)
 	f.Log(now, by, "seeded %s: %s", id, note)
 	return &f.Steps[len(f.Steps)-1]
+}
+
+// seededBefore reports whether the item's history has the step seeded.
+func (f *Feature) seededBefore(id string) bool {
+	prefix := "seeded " + id + ":"
+	return slices.ContainsFunc(f.History, func(e Event) bool {
+		return strings.HasPrefix(e.Event, prefix)
+	})
 }
 
 // dropRefresh removes the item's pending refresh steps and the needs on them,

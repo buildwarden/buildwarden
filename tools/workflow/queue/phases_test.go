@@ -262,6 +262,22 @@ func refreshBudget(t *testing.T) {
 		t.Fatalf("a second refresh's first claim: %d steps spent, want %d", got,
 			spent.Steps+1)
 	}
+	// A refresh claimed and then dropped by a return leaves its id to no
+	// later refresh, whose first claim is free too (a10 (d)).
+	c := openPR("c", 3, 7)
+	sc := state(c)
+	st = refresh(t, c)
+	sc.Claim(c, st, "cloud/run-4", now, false)
+	cSpent := c.Budget.Spent.Steps
+	Back(c, "cloud/run-4", now, "a merged check fails on the branch", 3)
+	st = refresh(t, c)
+	if st.ID == "f6-refresh" {
+		t.Fatal("a later refresh reused the dropped refresh's id")
+	}
+	sc.Claim(c, st, "cloud/run-5", now, false)
+	if got := c.Budget.Spent.Steps; got != cSpent {
+		t.Fatalf("the later refresh's first claim: %d steps spent, want %d", got, cSpent)
+	}
 	// Any other step counts at once.
 	b := feature("b", 2, "in_progress")
 	s.Claim(b, &b.Steps[0], "cloud/run-3", now, false)
