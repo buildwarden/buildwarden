@@ -454,8 +454,9 @@ func (c *checker) mergeTreeProof(ref, sha string) (string, bool) {
 	base := strings.TrimSpace(bases)
 	repeat := fmt.Sprintf("git merge-tree --write-tree --merge-base=%s %s^ %s",
 		short(base), sha, ref)
-	cmd := exec.Command("git", "merge-tree", "--write-tree", "--no-messages",
+	args := append(c.textMergeOnly(), "merge-tree", "--write-tree", "--no-messages",
 		"--merge-base="+base, sha+"^", ref)
+	cmd := exec.Command("git", args...)
 	cmd.Dir = c.env.Repo
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -477,6 +478,37 @@ func (c *checker) mergeTreeProof(ref, sha string) (string, bool) {
 	return fmt.Sprintf("%s, base %s, not compared: %s could not run (%v: %s); "+
 		"--merge-base needs git 2.40 or later, and this is %s", desc, short(base),
 		repeat, err, firstLine(strings.TrimSpace(stderr.String())), orNone(version)), false
+}
+
+// textMerge is the merge driver the trial merge gives every driver name: git
+// merge-file is git's own three-way text merge, writes the result to %A and
+// exits non-zero on a conflict, as a driver must.
+const textMerge = "git merge-file -q %A %O %B"
+
+// textMergeOnly returns the -c options that make the trial merge git's text
+// merge of every file, whatever an attribute or the config says. A merge
+// attribute can come from the checkout's .gitattributes, from the ref's or
+// C^'s tree, from info/attributes or from the global attributes file, and a
+// driver such as union resolves a conflict by keeping both sides' or one
+// side's lines: the trial merge would then write C's tree although the ref
+// changed a line C does not have (F-P1 of the implementation's review). So
+// the built-in union, every driver the config defines, and merge.default are
+// all made the text merge, and no file is renormalized. A file whose
+// attribute is binary, or -merge, still conflicts, which refuses the proof:
+// the safe side. Overriding the driver works on every git the proof runs on,
+// where reading no attributes (--attr-source) needs git 2.41 and leaves
+// info/attributes read.
+func (c *checker) textMergeOnly() []string {
+	opts := []string{"-c", "merge.renormalize=false", "-c", "merge.default=text",
+		"-c", "merge.union.driver=" + textMerge}
+	defined, _ := c.git("config", "--name-only", "--get-regexp", `^merge\..*\.driver$`)
+	for _, key := range strings.Fields(defined) {
+		if strings.EqualFold(key, "merge.union.driver") {
+			continue
+		}
+		opts = append(opts, "-c", key+"="+textMerge)
+	}
+	return opts
 }
 
 func orNone(id string) string {

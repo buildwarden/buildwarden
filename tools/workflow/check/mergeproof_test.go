@@ -191,3 +191,100 @@ func TestMergeTreeProofNeedsGit240(t *testing.T) {
 		t.Errorf("x3 with a git that refuses --merge-base: %s", rs[0].Info)
 	}
 }
+
+// TestMergeTreeProofIgnoresMergeDrivers: the trial merge is git's own text
+// merge whatever merge driver an attribute or the config names, so a driver
+// cannot resolve away a line the ref changed after the squash. Main changes
+// line 20 before the squash, and the ref then drops line 20: the text merge
+// conflicts, and a union driver would silently take main's line and write
+// the squash's tree. Each placement is one the review of the implementation
+// found (F-P1): the attribute in main's tree, in the ref's tree, in
+// info/attributes, a driver the config defines, and merge.default. The
+// control, the same squash with no commit after it, is still proven, so the
+// override merges text and does not refuse every merge.
+func TestMergeTreeProofIgnoresMergeDrivers(t *testing.T) {
+	const local = "refs/heads/feat/demo"
+	attrs := func(t *testing.T, work, text string) {
+		t.Helper()
+		if err := os.WriteFile(filepath.Join(work, ".gitattributes"), []byte(text),
+			0o644); err != nil {
+			t.Fatal(err)
+		}
+		git(t, work, "add", ".gitattributes")
+		git(t, work, "commit", "-q", "-m", "merge attribute")
+	}
+	info := func(t *testing.T, work, text string) {
+		t.Helper()
+		p := filepath.Join(work, ".git", "info", "attributes")
+		if err := os.MkdirAll(filepath.Dir(p), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		if err := os.WriteFile(p, []byte(text), 0o644); err != nil {
+			t.Fatal(err)
+		}
+	}
+	// Each place sets its driver up with feat/demo checked out, before main
+	// changes line 20, and names the branch to check out for the proof.
+	places := map[string]func(t *testing.T, work string) string{
+		"main_tree": func(t *testing.T, work string) string {
+			git(t, work, "checkout", "-q", "main")
+			attrs(t, work, "f.txt merge=union\n")
+			return "main"
+		},
+		"main_tree_ref_checked_out": func(t *testing.T, work string) string {
+			git(t, work, "checkout", "-q", "main")
+			attrs(t, work, "f.txt merge=union\n")
+			return "feat/demo"
+		},
+		"ref_tree": func(t *testing.T, work string) string {
+			attrs(t, work, "f.txt merge=union\n")
+			git(t, work, "push", "-q", "origin", "feat/demo")
+			return "feat/demo"
+		},
+		"info_attributes": func(t *testing.T, work string) string {
+			info(t, work, "f.txt merge=union\n")
+			return "feat/demo"
+		},
+		// The driver keeps the current side, so it is defined only after the
+		// squash, which GitHub makes without it.
+		"config_driver": func(t *testing.T, work string) string {
+			info(t, work, "f.txt merge=keep\n")
+			return "feat/demo"
+		},
+		"merge_default": func(t *testing.T, work string) string {
+			git(t, work, "config", "merge.default", "union")
+			return "feat/demo"
+		},
+	}
+	twenty := func(to string) func(string) string {
+		return func(s string) string { return strings.Replace(s, "\n20\n", "\n"+to, 1) }
+	}
+	for name, place := range places {
+		for _, dropAfter := range []bool{false, true} {
+			t.Run(fmt.Sprintf("%s/drop_after=%v", name, dropAfter), func(t *testing.T) {
+				work := proofRepo(t)
+				co := place(t, work)
+				git(t, work, "checkout", "-q", "main")
+				commitEdit(t, work, "f.txt", "main edits line 20", twenty("TWENTY\n"))
+				git(t, work, "push", "-q", "origin", "main")
+				git(t, work, "fetch", "-q", "origin")
+				git(t, work, "checkout", "-q", "feat/demo")
+				sha := squashed(t, work)
+				if dropAfter {
+					commitEdit(t, work, "f.txt", "UNMERGED: drop line 20", twenty(""))
+				}
+				if name == "config_driver" {
+					git(t, work, "config", "merge.keep.driver", "true")
+				}
+				git(t, work, "checkout", "-q", co)
+				got, ok := proof(work, local, sha)
+				if ok == dropAfter {
+					t.Errorf("proof: %v (%s), want %v", ok, got, !dropAfter)
+				}
+				if Merged(Env{Repo: work}, x3(42)) == dropAfter {
+					t.Errorf("Merged: %v, want %v", dropAfter, !dropAfter)
+				}
+			})
+		}
+	}
+}
