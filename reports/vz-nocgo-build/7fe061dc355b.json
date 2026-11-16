@@ -1,0 +1,51 @@
+{
+  "feature": "vz-nocgo-build",
+  "branch": "feat/vz-nocgo-build",
+  "head": "7fe061dc355b",
+  "base": "3cb0b2b07847",
+  "round": "feature",
+  "step": "f4-review",
+  "previous_report": null,
+  "scope": "git diff origin/main...feat/vz-nocgo-build: 14 files, +901/-19, 14 commits (3 design, 11 plan and implementation). The merge base is 3cb0b2b, which is origin/main. First tier-2 pass for this feature. Judged against the design as approved at d391343 (r1) and its implementation plan (10 tasks).",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "rule_index": "100 '### <ID> — <title>' headers extracted from docs/development/*.md (LINT-01): 56 automated, 44 agent-judgment, no hybrid. The branch changes no rule. Judged: every agent-judgment rule; those the diff reaches are UX-04, GLOBAL-09, GLOBAL-10, GLOBAL-11, FLOW-06, FLOW-17, FLOW-20, PROFILE-01, TEST-04, TEST-06, GLOBAL-05, GLOBAL-06; the BOOT, EXEC, RELAY, SEC, LOOP, ORCH-04, UX-05, UX-06 and UX-08 rules are not reached (no bootstrap, relay, ledger, executor, flag or config change).",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass (linux/amd64, go1.26.3, /root/go/bin golangci-lint): 0 issues in the root module, tools/workflow and tools/tier1. Then dist/tier1 -base origin/main (3cb0b2b07847...7fe061dc355b): 0 MUST, 0 MUST-review, 0 SHOULD, 0 hints, 0 suppressed, exit 0",
+    "make_lint_per_platform": "GOOS=darwin make lint (darwin/amd64, the stub) and GOOS=darwin GOARCH=arm64 make lint (darwin/arm64 without cgo, the build this item fixes): both pass, 0 issues, same tier-1 result (FLOW-17: driver/vz build-tagged files are touched). darwin/arm64 with cgo cannot be compiled here (no darwin C toolchain); its file set is unchanged but for the .m rename and one constant, and f6-validate-macos-vz builds it.",
+    "make_test": "pass: 34 ok lines across the root module, tools/workflow and tools/tier1, no FAIL (exit 0); driver/vz ok",
+    "release_build": "make release-build: pass for linux/amd64, linux/arm64, darwin/amd64, darwin/arm64 (warden, warden-io, relay, warden-pause, CGO_ENABLED=0)",
+    "file_selection_sweep": "go list -e ./... for darwin, linux and windows on amd64 and arm64, CGO_ENABLED=1 and 0: no package error in any of the 12; GOOS=darwin GOARCH=amd64 CGO_ENABLED=1 go vet ./driver/vz/ ./cmd/warden/ passes (on main it fails on vz_darwin.m)",
+    "custom_static_checks": "dist/tier1: no finding and no hint on the diff",
+    "enforcement": "not run: the branch changes neither tools/tier1/ nor tools/workflow/check/ (FLOW-14)",
+    "wf_check": "dist/wf check -state .dev/workflow -repo <worktree> -feature vz-nocgo-build: clean branch head ok; rule changes cleared (FLOW-14): the branch changes no rule or its enforcement. make lint and make test reported as skipped (no -run) and run above instead; the tier-2 report lines were missing before this report.",
+    "fixes_made": "none; the code checkout is still clean at 7fe061d"
+  },
+  "implement_reported": [],
+  "findings": [],
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 0,
+    "SHOULD": 0
+  },
+  "resolved_since_previous": [],
+  "carried_forward": [],
+  "new_since_previous": [],
+  "suppressions": [],
+  "suppressions_note": "None: no previous report, no Tier1-Allow trailers on the branch.",
+  "back_to_design": false,
+  "back_to_design_note": "No. The diff is what The fix, The guard and the Reference docs list say, file by file: vz_stub.go '!darwin || !arm64 || !cgo' and vz_darwin_arm64.go 'darwin && arm64 && cgo' with hasBindings false/true; vz_darwin.m renamed vz_darwin_arm64.m, content unchanged (similarity 100%), vz_darwin.h kept; platformError(goos, goarch, bindings) pure, called by checkPlatform before the unchanged entitlement check; the message and its fix verbatim from The message; RELEASE_TARGETS and release-build verbatim, in .PHONY; the CI step verbatim as the last step of the build job; no new job. Tests are the three tier-0 tests of the Validation plan, plus TestPlatformConstraintsComplement (reads the two //go:build lines and checks they are complements) and TestPlatformErrorWithoutBindingsNeverNil, which only strengthen Decisions 1 and 3.",
+  "routing": "Verdict pass. No MUST goes back to wf-implement; nothing for the PR body beyond this report. Native validation f6-validate-macos-vz (blocking) remains pending.",
+  "follow_ups_filed": [],
+  "informational": [
+    "UX-04: every refusal is a driver.FixableError with a non-empty fix; the darwin/arm64-without-cgo message and fix match The message verbatim, and are asserted in TestPlatformError. checkPlatform is the first statement of StartBuild and Exec, and Preflight is it, so doctor, build, shell and image prepare (Preflight before RequireRoot in cmd/warden/image.go prepareVZMacos) all refuse before any relay, download or VM. Exit 1 is the existing fixable-error path (UX-09).",
+    "GLOBAL-09 to GLOBAL-11: the design's Defaults and overrides says none; the diff adds no flag, config key, default, merge or fallback. A build without the bindings stops with an error rather than falling back to another driver. No RELAY-08 surface is touched.",
+    "FLOW-06: no departure from the plan. Tasks 1 to 9 are on the branch as commits 1 to 9 plus task 10's review fixes (doc comments, the complement test); task 10 of the plan (native) is the pending queue step.",
+    "FLOW-20: a regression main already has, exempt from the freeze as the design and the queue item record.",
+    "PROFILE-01: the Build checks entry names the build, tidy and book jobs; the diff adds a step to build, not a job, so the profile stays current.",
+    "TEST-04 / GLOBAL-04: the new tests are pure and deterministic: go/build ImportDir and constraint.Parse on the package's own files (no compile, no network), a table over platformError, and runtime/debug.ReadBuildInfo as the oracle for hasBindings (skips when CGO_ENABLED is not recorded).",
+    "UX-01: drivers.md (VZ Requirements), cli.md (doctor), installation.md (anchor #first-time-vz-setup resolves to '## First-time VZ Setup'), structure.md and CONTRIBUTING.md (command list and Cutting a release) are updated as the design lists; overview.md unchanged, as no component's flow changes (FLOW-15).",
+    "The design's Handed on table (a note on prebuilt-artifacts' queue item, a vz-release feature on hold, the integration-test-vz build tag cleanup, Windows cmd/warden in CI) is for the session that received the design to file or pass on; this review files none of it and found no further behavior on main to file (FLOW-09).",
+    "Native validation f6-validate-macos-vz (blocking) remains pending: the cgo build's file set, the message from a no-cgo binary on the Mac (signed and unsigned), make release-build there, and the darwin/amd64 cgo build run only there."
+  ]
+}
