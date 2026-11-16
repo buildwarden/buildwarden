@@ -1165,21 +1165,7 @@ func urgentCleared(t *testing.T) {
 			t.Errorf("clear by %q: %v, urgent %q", w, err, f.Urgent)
 		}
 	}
-	for _, w := range []string{"human", "human/"} {
-		if err := s.ClearUrgent(f, w, now); err == nil || err.Error() != unnamed ||
-			f.Urgent == "" {
-			t.Errorf("clear by %q: %v, urgent %q", w, err, f.Urgent)
-		}
-	}
-	// An unnamed mark is honoured by nothing, and Validate fails it.
-	for _, v := range []string{"human", "human/"} {
-		g := feature("u", 3, "queued")
-		g.Urgent = v
-		if g.marked() {
-			t.Errorf("urgent %q is honoured", v)
-		}
-		wantValidate(t, declaredState(g), "u: urgent names \""+v+"\": "+unnamed)
-	}
+	urgentUnnamedRefused(t, s, f)
 	// Clearing is allowed on any item: one in progress or done keeps the
 	// mark as the record of its start until a human takes it away.
 	for _, status := range []string{"queued", "in_progress", "done"} {
@@ -1195,6 +1181,24 @@ func urgentCleared(t *testing.T) {
 	if err := s.ClearUrgent(f, "human/jeff", now); err == nil ||
 		err.Error() != "a is not marked urgent" {
 		t.Fatalf("clear on an unmarked item: %v", err)
+	}
+}
+
+// urgentUnnamedRefused: a human worker with no name neither clears a mark
+// nor makes one that anything honours; Validate fails it.
+func urgentUnnamedRefused(t *testing.T, s *State, f *Feature) {
+	t.Helper()
+	for _, w := range []string{"human", "human/"} {
+		if err := s.ClearUrgent(f, w, now); err == nil || err.Error() != unnamed ||
+			f.Urgent == "" {
+			t.Errorf("clear by %q: %v, urgent %q", w, err, f.Urgent)
+		}
+		g := feature("u", 3, "queued")
+		g.Urgent = w
+		if g.marked() {
+			t.Errorf("urgent %q is honoured", w)
+		}
+		wantValidate(t, declaredState(g), "u: urgent names \""+w+"\": "+unnamed)
 	}
 }
 

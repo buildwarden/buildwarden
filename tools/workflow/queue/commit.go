@@ -242,9 +242,9 @@ func (g stateGit) push() (rejected bool, err error) {
 		return false, nil
 	}
 	msg := err.Error()
-	if strings.Contains(msg, "[rejected]") || strings.Contains(msg, "fetch first") ||
-		strings.Contains(msg, "non-fast-forward") ||
-		(strings.Contains(msg, "cannot lock ref") && strings.Contains(msg, "but expected")) {
+	raced := strings.Contains(msg, "cannot lock ref") && strings.Contains(msg, "but expected")
+	if raced || strings.Contains(msg, "[rejected]") || strings.Contains(msg, "fetch first") ||
+		strings.Contains(msg, "non-fast-forward") {
 		return true, nil
 	}
 	return false, err
