@@ -123,9 +123,22 @@ func TestMergeTreeProof(t *testing.T) {
 			check(t, work, sha, false)
 		})
 	}
+	// other_pr: another commit on main names (#42) and makes the branch's
+	// whole change, the design file with the branch's text included, but
+	// adds the line somewhere else. Its added and removed lines are the
+	// branch's, so a patch-id without context matched it (F1).
 	t.Run("other_pr", func(t *testing.T) {
 		work := proofRepo(t)
+		const doc = "docs/design/demo.md"
+		body, err := os.ReadFile(filepath.Join(work, doc))
+		if err != nil {
+			t.Fatal(err)
+		}
 		git(t, work, "checkout", "-q", "main")
+		if err := os.WriteFile(filepath.Join(work, doc), body, 0o644); err != nil {
+			t.Fatal(err)
+		}
+		git(t, work, "add", doc)
 		commitEdit(t, work, "f.txt", "a fix naming (#42)", addAfter(35))
 		git(t, work, "push", "-q", "origin", "main")
 		git(t, work, "fetch", "-q", "origin")
