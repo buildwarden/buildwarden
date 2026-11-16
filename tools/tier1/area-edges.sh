@@ -21,9 +21,8 @@ trap 'rm -rf "$tmp"' EXIT
 for module in . tools/tier1 tools/workflow; do
 	for os in linux darwin windows; do
 		for arch in amd64 arm64; do
-			# cgo is on only where driver/vz's cgo files build: with it on,
-			# darwin/amd64 fails on the Objective-C file that has no cgo
-			# file beside it there.
+			# cgo is on only where driver/vz's cgo files build; every
+			# other target compiles its stub, with cgo on or off.
 			cgo=0
 			if [ "$os/$arch" = darwin/arm64 ]; then
 				cgo=1

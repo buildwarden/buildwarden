@@ -1,6 +1,6 @@
 ---
 feature: vz-nocgo-build
-status: draft
+status: archived
 drivers: [vz]            # driver/vz only: the build constraints of vz_stub.go and vz_darwin_arm64.go, vz_darwin.m renamed vz_darwin_arm64.m, and checkPlatform in driver.go; no shared driver/ package, so no other driver is reached (FLOW-02)
 seams: []                # no versioned seam: which file of driver/vz a build compiles is inside the driver
 surfaces: [output]       # the error a warden built without cgo gives for the vz driver (UX-04); no flag, subcommand or config key changes
@@ -698,6 +698,70 @@ carries a working vz driver, the stale `integration` build tag of `make
 integration-test-vz`, and the missing CI compile of `cmd/warden` for
 Windows. No regression of `main` beyond this item's was found here.
 
+**2026-11-16, at Publish (`f6-open-pr`): merged `main` at `8c41eaa`.** What
+landed since the fork (`3cb0b2b`): #121 (`loop-parallel`: areas, the claim
+guard, the refresh step, `QUEUE.md`) and #122 (its hold lines removed from
+two skills). Both change the feature loop (`tools/workflow/`, `.claude/`,
+`docs/development/`, `docs/design/TEMPLATE.md`), a `CONTRIBUTING.md` line on
+git 2.40 for `wf`, and add `tools/tier1/area-edges.sh`. The merge was clean;
+`make lint` (linux and darwin/arm64) and `make test` pass on it.
+
+- *Wording.* `area-edges.sh` said darwin/amd64 with cgo on "fails on the
+  Objective-C file that has no cgo file beside it": the fault this item
+  fixes (Decision 1). Its comment now says every target but darwin/arm64
+  compiles the stub; what the script runs is unchanged.
+- *Terminology and seams.* The template's new `repos` and `areas` fields
+  are optional; this design declares neither, so the item stays undeclared
+  and collides with every item (FLOW-05), which `wf check` reports. No
+  code, test or guide page of this item is touched by the merge;
+  `overview.md` is unchanged on both sides.
+- *Native validation.* `f6-validate-macos-vz` ran on `ad1fc70`, the branch
+  before this merge; the merge brings no file under `driver/`, `cmd/` or
+  the `Makefile`, so its result holds.
+- *Trial merge (`dist/wf check`).* It prints no trial-merge lines for this
+  item: undeclared, it is checked as colliding with every item rather than
+  merged against each (FLOW-05).
+
 ## Rollback notes
 
 ## Archive summary
+
+**Built.** `GOOS=darwin GOARCH=arm64 CGO_ENABLED=0 go build ./cmd/warden`,
+the build `.goreleaser.yaml` makes for every release, failed on `main`
+because `driver/vz` excluded both its cgo file and its stub there. Now
+`vz_stub.go` is `!darwin || !arm64 || !cgo` and `vz_darwin_arm64.go` is
+`darwin && arm64 && cgo`, complements in the text; `vz_darwin.m` is
+`vz_darwin_arm64.m`, which also fixes darwin/amd64 with cgo on. Each file
+sets a constant saying whether the bindings are in the build, and
+`checkPlatform` (through the pure `platformError`) refuses a build without
+them with a fixable error before the entitlement check, so `doctor`,
+`build`, `shell` and `image prepare --driver vz` exit 1 with "this warden
+was built without cgo, so it has no vz driver" and a To fix line, before
+any relay, download or VM. `make release-build` compiles warden, warden-io,
+relay and warden-pause for the four release targets without cgo, and CI's
+`build` job runs it on its Linux leg; a tier-0 test checks `driver/vz`'s
+file selection for every target, cgo on and off. Guide pages say the vz
+driver needs `warden` built from source. Validated on macos-vz (all five
+cases passed).
+
+**Decisions.** A released macOS arm64 `warden` stays a build without cgo,
+with no vz driver, and says so (confirmed by Jeff at review). Rejected: a
+release built with cgo on a macOS runner and signed (a feature of its own,
+not filed here); a third file for darwin/arm64 without cgo (repeats the
+stub); changing only the stub; an error in the stub functions instead of
+the platform check (they run too late); goreleaser in CI
+(`prebuilt-artifacts` designs that step); a Go test running the
+cross-builds (too slow for `make test`); a new CI job (a PROFILE-01
+change).
+
+**For a future design touching vz, cgo, build constraints or the release
+build.** Keep the two Go constraints complementary and the `.m` file's name
+suffixed for its target; the tier-0 test fails otherwise. `hasBindings` is
+the only "is vz here" signal: `checkPlatform` must stay first in every vz
+entry point, since the stub's functions return its error and nothing else.
+`make release-build`'s target list copies `.goreleaser.yaml`'s until
+`prebuilt-artifacts`' snapshot step replaces or keeps it (its Publish
+resolves the `build` job hunk). `make deadcode` lists cgo-only vz functions
+where it runs without the bindings; that is expected (FLOW-15). A release that runs
+vz needs cgo, a macOS runner and the virtualization entitlement, or
+`driver-contract`'s K2, under which `warden` needs neither.
