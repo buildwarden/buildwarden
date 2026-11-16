@@ -3428,6 +3428,21 @@ built code (FLOW-06); tasks 29 and 30 are the reference and the overview
 planning sends nothing back to Design. Tasks 27 and 28 are one green
 checkpoint.
 
+*r3* (Plan, 2026-11-16). Checked against the design as its r3 review
+approved it (**approved at `b7ddd0e`**; the outcome entry is the branch at
+`c09aae1`), after reading `readConfigFile`, `readProjectConfig`,
+`readCapped` and the cap's tests as the branch holds them. The branch has
+r2's tasks 27 and 28 partly built and not green (`36c1b68`, `b21763e`,
+`eaa2d81`, not pushed): `readCapped` reads through
+`io.LimitReader(r, maxProjectConfig+1)`, so its last read asks for one
+byte, and `TestCappedReadStopsPastTheCap` asserts at most 1048577 bytes
+read. Both are what r3 rejects, and tasks 27 and 28 as written below are
+rework of them (FLOW-06): the tests are changed first, then the code.
+Tasks 29 to 31 are unchanged by r3: the block is how the file is read,
+not what the reference or the overview says of it (the design's
+**Reference docs** keeps "a regular file of at most 1 MiB"). No rule
+change, host step or question is added, and nothing goes back to Design.
+
 *Note F (where the cap is counted).* The design has the file read in
 blocks of 65536 bytes until more than 1048576 have arrived, at most
 1114112 bytes read (r3; r2 had "at most 1048577"), and the count "of the
@@ -3454,13 +3469,19 @@ cannot be used. A named file is read with `os.ReadFile`, as today.
     no configuration; on Linux, a `./warden.toml` that is a link to
     `/proc/self/pagemap` (which `stat` reports as an empty regular file)
     is the same error, `larger than 1 MiB` and not the OS's `invalid
-    argument`, skipped with its reason where that file is absent; the
-    helper of Note F given a reader that yields more than 1048576 bytes
+    argument`, skipped with its reason where that file is absent; on
+    Linux, a `./warden.toml` that is a link to `/proc/self/mem` (also an
+    empty regular file to `stat`, whose first read fails with `EIO`) is
+    the OS's error with `unreadableConfig`'s text and fix, not `larger
+    than 1 MiB`, skipped with its reason where that file is absent or
+    reads; the helper of Note F given a reader that yields more than 1048576 bytes
     (an endless reader) is the error and reads no more than 1114112 (the
     cap and one block of 65536), given a reader that refuses a read whose
     length is not a multiple of 8 is still that error, given a reader that
     fails before the cap returns that reader's error, and given exactly
-    1048576 bytes returns them all, so the cases run on every OS; a
+    1048576 bytes returns them all, so the cases run on every OS (r3:
+    `TestCappedReadStopsPastTheCap`'s bound of `maxProjectConfig+1`
+    becomes the cap and one block, and the two readers are added); a
     file of 1048577 bytes and more named with `--config`, and again with `WARDEN_CONFIG`, is read whole and its key decoded. Pure
     Go, no network, no container runtime (GLOBAL-04, GLOBAL-07,
     GLOBAL-11, UX-04, UX-08, UX-09, TEST-01, TEST-02, SEC-04).
@@ -3475,7 +3496,9 @@ cannot be used. A named file is read with `os.ReadFile`, as today.
     decoded and before the transitional call, as the design's pseudocode
     orders it. Its fix is the design's own, not `unreadableConfig`'s; an
     open or read that fails before more than the cap has arrived keeps
-    `unreadableConfig`'s error. A named file
+    `unreadableConfig`'s error. r3: `readCapped`'s `io.LimitReader` of
+    one byte past the cap is replaced by the block reads of Note F, and
+    its comment says the block and why it is a multiple of 8. A named file
     is read as today, whole. `readConfigFile`'s comment says the default
     file is capped and why, and the comment of the error value names the
     cap. No caller changes: `LoadConfig` is the one caller, and every
@@ -3495,7 +3518,8 @@ cannot be used. A named file is read with `os.ReadFile`, as today.
     a regular file is an error, adds "or that gives more than 1 MiB". No
     other line changes (FLOW-15, UX-01).
 31. **Re-check of the regular-file half against the design** (Decision
-    14; FLOW-06). Read in planning at `705f92d`, and to be read again
+    14; FLOW-06). Read in planning at `705f92d`, again at r3 at `c09aae1`
+    (the `stat` checks unchanged since), and to be read again
     after task 28: `configFile` makes only "does not exist" no file, so a
     link to nothing is no file and a link to itself is the error;
     `readConfigFile` refuses a default file that is not regular once
