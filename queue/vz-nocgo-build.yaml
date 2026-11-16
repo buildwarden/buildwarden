@@ -3,7 +3,7 @@ title: 'The macOS arm64 release build of warden does not compile without cgo: dr
 priority: 64
 status: in_progress
 round: feature
-phase: 3
+phase: 4
 design: docs/design/vz-nocgo-build.md
 branch: feat/vz-nocgo-build
 alters_relationships: false
@@ -51,6 +51,13 @@ steps:
   - id: f3-implement
     phase: 3
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f4-review
+    phase: 4
+    affinity: cloud
     status: pending
     lease:
       claimed_by: ""
@@ -61,7 +68,7 @@ budget:
     steps: 8
   spent:
     runs: 0
-    steps: 4
+    steps: 5
 questions: []
 history:
   - at: 2026-11-15T23:22:53Z
@@ -103,3 +110,12 @@ history:
   - at: 2026-11-16T00:07:03Z
     by: cloud/20261112T230554Z
     event: entered phase 3 (implement)
+  - at: 2026-11-16T00:07:30Z
+    by: cloud/20261112T230554Z
+    event: claimed f3-implement until 2026-11-16T02:07:30Z
+  - at: 2026-11-16T00:13:43Z
+    by: cloud/20261112T230554Z
+    event: done f3-implement
+  - at: 2026-11-16T00:13:43Z
+    by: cloud/20261112T230554Z
+    event: entered phase 4 (review)
