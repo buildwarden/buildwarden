@@ -1,0 +1,20 @@
+ok  	github.com/buildwarden/buildwarden/cmd/warden	8.621s
+2026/11/15 21:12:09 relay: upstream resolvers: 127.0.0.1 (claim)
+2026/11/15 21:12:09 relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp
+2026/11/15 21:12:09 relay: upstream resolvers: 127.0.0.1 (claim)
+2026/11/15 21:12:09 relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp
+2026/11/15 21:12:09 relay: upstream resolvers: 127.0.0.1 (claim)
+2026/11/15 21:12:09 relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp
+2026/11/15 21:12:09 relay: upstream resolvers: 127.0.0.1 (claim)
+2026/11/15 21:12:09 relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp
+2026/11/15 21:12:09 relay: upstream resolvers: 127.0.0.1 (claim)
+2026/11/15 21:12:09 relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp
+2026/11/15 21:12:09 relay: upstream resolvers: 127.0.0.1 (claim)
+2026/11/15 21:12:09 relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp
+--- FAIL: TestLoadUpstreamCAsEscapes (0.01s)
+    upstreamca_test.go:511: message "upstream CA path C:\\no\\such\\n\\x1b[2Jpath� (from [relay] upstream_ca_certs) does not exist", want "upstream CA path /no/such\\n\\x1b[2Jpath\\xff (from [relay] upstream_ca_certs) does not exist"
+2026/11/15 21:12:09 relay: upstream resolvers: 127.0.0.1 (claim)
+2026/11/15 21:12:09 relay: listening on :53/udp :80/tcp :443/tcp :8300/tcp
+FAIL
+FAIL	github.com/buildwarden/buildwarden/driver	0.931s
+FAIL

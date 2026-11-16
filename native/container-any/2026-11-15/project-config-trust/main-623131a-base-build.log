@@ -1,0 +1,46 @@
+make: Entering directory 'C:/Users/jeff/buildwarden-native/.scratch/pct-cases'
+--- (cd p-base &&  ../../../dist/warden build --driver container -o out)
+[warden] Build ID: 0237wgha
+[warden] Building relay from source...
+[warden] Pulling image: alpine:3.21
+Trying to pull docker.io/library/alpine:3.21...
+Getting image source signatures
+Copying blob sha256:871d48e9bf6b789a439a4a19c1e152009924d818e60f7c51e498573223cd7cda
+Copying config sha256:e50d940e9d2c4d81e5b3506b2ed87bfc7e91267b36ff016eb4b4cb21c39a3331
+Writing manifest to image destination
+e50d940e9d2c4d81e5b3506b2ed87bfc7e91267b36ff016eb4b4cb21c39a3331
+[warden] Allocating network...
+[warden] Starting relay...
+[warden] Starting build container...
+[warden] Executing build...
+fetch https://dl-cdn.alpinelinux.org/alpine/v3.21/main/x86_64/APKINDEX.tar.gz
+fetch https://dl-cdn.alpinelinux.org/alpine/v3.21/community/x86_64/APKINDEX.tar.gz
+(1/2) Installing oniguruma (6.9.9-r0)
+(2/2) Installing jq (1.7.1-r0)
+Executing busybox-1.37.0-r14.trigger
+OK: 8 MiB in 17 packages
+jq-1.7.1
+[warden] Tearing down environment...
+warden: build SUCCEEDED (output: out)
+exit=0
+--- (cd p-base &&  ../../../dist/warden inspect out)
+════════════════════════════════════════════════════════════════════════════════
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  ✅
+  ENVIRONMENT  oci-image/v1  payload verified
+    alpine:3.21 sha256:2d8a11041a92082ba21e364dec73559ce44f1de69b60fa68315f6d3774e59117 (not the payload's own hash: the runtime re-serialized the manifest, or the digest names an index)
+════════════════════════════════════════════════════════════════════════════════
+[1;35m✅ ENVIRONMENT alpine:3.21 (13064 bytes)[0m
+[1;32m✅ GET /bootstrap (42 bytes)[0m
+[1;32m✅ GET /build-script (55 bytes)[0m
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.21/main/x86_64/APKINDEX.tar.gz (487484 bytes)
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.21/community/x86_64/APKINDEX.tar.gz (1993560 bytes)
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.21/main/x86_64/oniguruma-6.9.9-r0.apk (185677 bytes)
+✅ GET https://dl-cdn.alpinelinux.org/alpine/v3.21/main/x86_64/jq-1.7.1-r0.apk (281385 bytes)
+
+════════════════════════════════════════════════════════════════════════════════
+  SUMMARY: 22 records, 7 requests, 2.8 MB audited
+  SIGNATURES: ✅ All 23 signatures valid
+  COMPLETENESS: ✅ All channels closed
+════════════════════════════════════════════════════════════════════════════════
+exit=0
+make: Leaving directory 'C:/Users/jeff/buildwarden-native/.scratch/pct-cases'
