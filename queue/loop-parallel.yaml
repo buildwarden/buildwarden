@@ -4,12 +4,15 @@ priority: 61
 kind: process
 status: in_progress
 round: process
-phase: 2
+phase: 3
 design: docs/design/loop-parallel.md
 branch: feat/loop-parallel
 alters_relationships: false
 design_review: required
 source: 'Jeff approved the loop change proposal''s direction on 2026-11-14 and the loop-contract design at 7af50ff, whose hand-off names this item and its order in P1 (loop-contract, alters-slot, loop-parallel, loop-native-lead, loop-repository, then the move). A program item (FLOW-20): its design lists componentization.md in related. Scope, from the proposal''s step 3 and loop-contract''s hand-off: repos and tracked items; areas, relations (disjoint, near, colliding) and FLOW-05''s limits; one guard for wf next and wf claim, and wf commit; the checks; the f6-refresh step; QUEUE.md and per-run digests; FLOW-02, -03, -05, -10, -15, -19, -20. Decided already and not to be reopened: a reconciliation item is a feature that FLOW-05 ranks with the fixes (loop-contract a5, a23). Whether it holds any worker is its design''s to say.'
+pr:
+  number: 121
+  ci: green
 steps:
   - id: x1-design
     phase: 1
@@ -29,10 +32,17 @@ steps:
   - id: x2-implement
     phase: 2
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: x3-merge
+    phase: 3
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261112T230554Z
-      expires: 2026-11-16T00:24:51.252683632Z
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 3
@@ -295,3 +305,9 @@ history:
   - at: 2026-11-15T22:24:51Z
     by: cloud/20261112T230554Z
     event: claimed x2-implement until 2026-11-16T00:24:51Z
+  - at: 2026-11-16T01:42:09Z
+    by: cloud/20261112T230554Z
+    event: done x2-implement
+  - at: 2026-11-16T01:42:09Z
+    by: cloud/20261112T230554Z
+    event: entered phase 3 (merge)
