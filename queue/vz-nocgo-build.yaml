@@ -95,15 +95,15 @@ steps:
       - f6-consolidate
       - f6-validate-macos-vz
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261116T174717Z
+      expires: 2026-11-16T19:47:26.19647237Z
 budget:
   estimate:
     runs: 1
     steps: 8
   spent:
-    runs: 0
-    steps: 10
+    runs: 1
+    steps: 11
 questions: []
 history:
   - at: 2026-11-15T23:22:53Z
@@ -193,3 +193,6 @@ history:
   - at: 2026-11-16T17:09:26Z
     by: host:macos-vz/20261116T170552Z
     event: done f6-validate-macos-vz
+  - at: 2026-11-16T17:47:26Z
+    by: cloud/20261116T174717Z
+    event: claimed f6-open-pr until 2026-11-16T19:47:26Z
