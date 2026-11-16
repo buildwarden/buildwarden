@@ -95,3 +95,13 @@ groups:
       - {n: none, class: flake, ref: "GUEST-46; TEST-04 (no retry)",
          at: "buildwarden-specs relay-guest-api/cases/refused.go:140 (refusedHost, the host-mode GUEST-46 case, at 9abf66c; the case is identified from its description, not from the log)",
          what: "relay-guest-api's host-mode GUEST-46 case timed out once under full make check load, seen in S at f3087fc; the cause was not found and it has not been reproduced."}
+  - item: "The collector-outputs suite and the harness (buildwarden/buildwarden-specs): a patch release, v0.1.1, then the pins here moved to it"
+    queued: false
+    design: "docs/design/seam-specs.md (The harness; TEST-04)"
+    observations:
+      - {n: none, class: harness-defect, ref: "COLLOUT-26 (collector-outputs v0.1.0, conformance v0.1.0)",
+         at: "buildwarden-specs collector-outputs/cases/relay_cases.go:202 (ledgerFirst, the check at :219) with conformance/collector/collector.go:314 (Collector.begin numbers a request when its handler starts)",
+         what: "ledgerFirst fails now and then with 'PUT /v1/environment (event 1) began before PUT /v1/ledger (event 3)'. The relay meets COLLOUT-26: over the claim tunnel (one HTTP/2 connection, relaycfg/tunnel.go:35) it writes the ledger's HEADERS before the environment's (x/net http2 writeRequest). Go's HTTP/2 server starts one handler goroutine per stream, so handler-entry order is not send order, and the relay has no signal to wait on. Seen on PR #125's relay job (run 43968407619, relay-vm, 2026-11-16); locally about 1 in 220 sessions idle and 5 to 10 percent under load, on relay-host, relay-vm and relay-container. Fix: number tunnel requests by the order their HEADERS frames arrive, or stop reading handler-entry order across streams of one connection as send order. Not a relay defect: an Expect: 100-continue on the ledger request was measured and does not help on the tunnel."}
+      - {n: none, class: flake, ref: "COLLOUT-25, COLLOUT-27",
+         at: "buildwarden-specs collector-outputs relay cases (seen only under artificial load)",
+         what: "Under four busy-loop processes only, one failure each with 'dial tcp 10.100.0.1:80: connect: connection refused' from the build environment; not seen in CI or idle runs. Logs were in the session's scratchpad (chk2/load-*.log)."}
