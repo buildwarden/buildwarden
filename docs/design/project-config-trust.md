@@ -3883,6 +3883,8 @@ subject to an independent check.
 UX-07, the question a14 as asked and answered, every other decision and
 question, and every earlier entry of this section.
 
+- **r3, 2026-11-16: approved at `b7ddd0e`** (Jeff: the cap read in blocks; nothing else changed).
+
 ## Consolidation
 
 Filled in at Publish (FLOW-10, FLOW-15).
