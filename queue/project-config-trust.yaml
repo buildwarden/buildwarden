@@ -1,9 +1,9 @@
 feature: project-config-trust
 title: 'One warden.toml in the control of whoever runs the build: found by --config, WARDEN_CONFIG or the working directory; the user-level file removed; and warden''s source tree found from its executable only (security fix)'
 priority: 67
-status: in_progress
+status: done
 round: feature
-phase: 7
+phase: 8
 design: docs/design/project-config-trust.md
 branch: feat/project-config-trust
 alters_relationships: false
@@ -174,7 +174,14 @@ steps:
   - id: f7-merge
     phase: 7
     affinity: cloud
-    status: pending
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f8-close
+    phase: 8
+    affinity: cloud
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -184,7 +191,7 @@ budget:
     steps: 14
   spent:
     runs: 2
-    steps: 20
+    steps: 21
 questions:
   - id: a1
     kind: assumed
@@ -570,3 +577,18 @@ history:
   - at: 2026-11-16T18:38:52Z
     by: cloud/20261116T174717Z
     event: entered phase 7 (merge)
+  - at: 2026-11-16T18:40:37Z
+    by: cloud/20261116T174717Z
+    event: done f7-merge
+  - at: 2026-11-16T18:40:37Z
+    by: cloud/20261116T174717Z
+    event: entered phase 8 (close)
+  - at: 2026-11-16T18:40:37Z
+    by: cloud/20261116T174717Z
+    event: claimed f8-close until 2026-11-16T20:40:37Z
+  - at: 2026-11-16T18:40:37Z
+    by: cloud/20261116T174717Z
+    event: done f8-close
+  - at: 2026-11-16T18:40:37Z
+    by: cloud/20261116T174717Z
+    event: closed; feature done
