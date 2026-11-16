@@ -45,7 +45,7 @@ func newTestCert(t *testing.T, name string) testCert {
 	if err != nil {
 		t.Fatal(err)
 	}
-	return testCert{der: der, pem: pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})}
+	return testCert{der: der, pem: pemBlock("CERTIFICATE", der)}
 }
 
 // pemBlock encodes body under typ, as a file of keys or requests holds it.
@@ -76,7 +76,8 @@ func assertSameAsPool(t *testing.T, data, got []byte) {
 	have := x509.NewCertPool()
 	have.AppendCertsFromPEM(got)
 	if !want.Equal(have) {
-		t.Errorf("the certificates returned are not the ones AppendCertsFromPEM takes from the file")
+		t.Errorf("the certificates returned are not the ones AppendCertsFromPEM takes " +
+			"from the file")
 	}
 }
 
@@ -104,50 +105,77 @@ func TestLoadUpstreamCAsFile(t *testing.T) {
 		{"an RSA key beside a certificate",
 			join(a.pem, pemBlock("RSA PRIVATE KEY", keyBytes)), [][]byte{a.der},
 			[]string{
-				"warning: block 2 is an RSA PRIVATE KEY and is not sent to the relay; a private key does not belong in a file of trust roots",
-				" ([relay] upstream_ca_certs): 1 certificate to send; 1 block skipped"}},
+				"warning: block 2 is an RSA PRIVATE KEY and is not sent to the " +
+					"relay; a private key does not belong in a file of " +
+					"trust roots",
+				" ([relay] upstream_ca_certs): 1 certificate to send; 1 block " +
+					"skipped"}},
 		{"a request", join(a.pem, pemBlock("CERTIFICATE REQUEST", []byte("csr"))),
 			[][]byte{a.der}, []string{
-				": block 2 skipped: a CERTIFICATE REQUEST block, not a CERTIFICATE",
-				" ([relay] upstream_ca_certs): 1 certificate to send; 1 block skipped"}},
+				": block 2 skipped: a CERTIFICATE REQUEST block, not a " +
+					"CERTIFICATE",
+				" ([relay] upstream_ca_certs): 1 certificate to send; 1 block " +
+					"skipped"}},
 		{"a certificate with PEM headers", join(a.pem, headers), [][]byte{a.der},
 			[]string{
-				": block 2 skipped: a CERTIFICATE block with PEM headers, which the relay's trust pool does not take",
-				" ([relay] upstream_ca_certs): 1 certificate to send; 1 block skipped"}},
+				": block 2 skipped: a CERTIFICATE block with PEM headers, which " +
+					"the relay's trust pool does not take",
+				" ([relay] upstream_ca_certs): 1 certificate to send; 1 block " +
+					"skipped"}},
 		{"a certificate that does not parse", join(unparsable, a.pem),
 			[][]byte{a.der}, []string{
-				": block 1 skipped: a CERTIFICATE that does not parse (" + parseErr.Error() + ")",
-				" ([relay] upstream_ca_certs): 1 certificate to send; 1 block skipped"}},
+				": block 1 skipped: a CERTIFICATE that does not parse " +
+					"(" + parseErr.Error() + ")",
+				" ([relay] upstream_ca_certs): 1 certificate to send; 1 block " +
+					"skipped"}},
 		{"a body that is not base64, in the middle",
-			join(a.pem, []byte("-----BEGIN CERTIFICATE-----\n!!!!\n-----END CERTIFICATE-----\n"), b.pem),
+			join(a.pem, []byte("-----BEGIN CERTIFICATE-----\n!!!!\n-----END "+
+				"CERTIFICATE-----\n"), b.pem),
 			[][]byte{a.der, b.der}, []string{
-				": block 2 skipped: a damaged CERTIFICATE block (its body is not base64)",
-				" ([relay] upstream_ca_certs): 2 certificates to send; 1 block skipped"}},
+				": block 2 skipped: a damaged CERTIFICATE block (its body is " +
+					"not base64)",
+				" ([relay] upstream_ca_certs): 2 certificates to send; 1 block " +
+					"skipped"}},
 		{"an END line for another type",
-			join(a.pem, []byte("-----BEGIN CERTIFICATE-----\nAAAA\n-----END X509 CRL-----\n"), b.pem),
+			join(a.pem, []byte("-----BEGIN CERTIFICATE-----\nAAAA\n-----END X509 "+
+				"CRL-----\n"), b.pem),
 			[][]byte{a.der, b.der}, []string{
-				": block 2 skipped: a damaged CERTIFICATE block (its END line is for another type)",
-				" ([relay] upstream_ca_certs): 2 certificates to send; 1 block skipped"}},
+				": block 2 skipped: a damaged CERTIFICATE block (its END line " +
+					"is for another type)",
+				" ([relay] upstream_ca_certs): 2 certificates to send; 1 block " +
+					"skipped"}},
 		{"no END line, in the middle",
 			join(a.pem, []byte("-----BEGIN CERTIFICATE-----\nAAAA\n"), b.pem),
 			[][]byte{a.der, b.der}, []string{
-				": block 2 skipped: a damaged CERTIFICATE block (it has no END line)",
-				" ([relay] upstream_ca_certs): 2 certificates to send; 1 block skipped"}},
+				": block 2 skipped: a damaged CERTIFICATE block (it has no END " +
+					"line)",
+				" ([relay] upstream_ca_certs): 2 certificates to send; 1 block " +
+					"skipped"}},
 		{"no END line, at the end",
 			join(a.pem, []byte("-----BEGIN CERTIFICATE-----\nAAAA\n")),
 			[][]byte{a.der}, []string{
-				": block 2 skipped: a damaged CERTIFICATE block (it has no END line)",
-				" ([relay] upstream_ca_certs): 1 certificate to send; 1 block skipped"}},
+				": block 2 skipped: a damaged CERTIFICATE block (it has no END " +
+					"line)",
+				" ([relay] upstream_ca_certs): 1 certificate to send; 1 block " +
+					"skipped"}},
 		{"a BEGIN line that is not complete",
-			join([]byte("-----BEGIN CERTIFICATE\nAAAA\n-----END CERTIFICATE-----\n"), a.pem),
+			join([]byte("-----BEGIN CERTIFICATE\nAAAA\n-----END "+
+				"CERTIFICATE-----\n"), a.pem),
 			[][]byte{a.der}, []string{
-				": block 1 skipped: a damaged PEM block (its BEGIN line is not complete)",
-				" ([relay] upstream_ca_certs): 1 certificate to send; 1 block skipped"}},
+				": block 1 skipped: a damaged PEM block (its BEGIN line is not " +
+					"complete)",
+				" ([relay] upstream_ca_certs): 1 certificate to send; 1 block " +
+					"skipped"}},
 		{"a damaged key",
-			join(a.pem, []byte("-----BEGIN RSA PRIVATE KEY-----\n"+string(keyBytes)+"!\n-----END RSA PRIVATE KEY-----\n")),
+			join(a.pem, []byte("-----BEGIN RSA PRIVATE "+
+				"KEY-----\n"+string(keyBytes)+"!\n-----END RSA PRIVATE "+
+				"KEY-----\n")),
 			[][]byte{a.der}, []string{
-				"warning: block 2 is a damaged RSA PRIVATE KEY (its body is not base64) and is not sent to the relay; a private key does not belong in a file of trust roots",
-				" ([relay] upstream_ca_certs): 1 certificate to send; 1 block skipped"}},
+				"warning: block 2 is a damaged RSA PRIVATE KEY (its body is not " +
+					"base64) and is not sent to the relay; a private key " +
+					"does not belong in a file of trust roots",
+				" ([relay] upstream_ca_certs): 1 certificate to send; 1 block " +
+					"skipped"}},
 		{"CRLF line endings", bytes.ReplaceAll(a.pem, []byte("\n"), []byte("\r\n")),
 			[][]byte{a.der},
 			[]string{" ([relay] upstream_ca_certs): 1 certificate to send"}},
@@ -170,7 +198,8 @@ func TestLoadUpstreamCAsFile(t *testing.T) {
 			var wantLines []string
 			for _, l := range tc.lines {
 				if rest, ok := strings.CutPrefix(l, "warning: "); ok {
-					wantLines = append(wantLines, "warning: upstream CA "+p+": "+rest)
+					wantLines = append(wantLines, "warning: upstream "+
+						"CA "+p+": "+rest)
 				} else {
 					wantLines = append(wantLines, "upstream CA "+p+l)
 				}
@@ -184,7 +213,8 @@ func TestLoadUpstreamCAsFile(t *testing.T) {
 func assertLines(t *testing.T, got, want []string) {
 	t.Helper()
 	if strings.Join(got, "\n") != strings.Join(want, "\n") {
-		t.Errorf("lines:\n%s\nwant:\n%s", strings.Join(got, "\n"), strings.Join(want, "\n"))
+		t.Errorf("lines:\n%s\nwant:\n%s",
+			strings.Join(got, "\n"), strings.Join(want, "\n"))
 	}
 }
 
@@ -214,9 +244,12 @@ func TestLoadUpstreamCAsNeverSendsAKey(t *testing.T) {
 				article = "a"
 			}
 			assertLines(t, report.Lines(false), []string{
-				"warning: upstream CA " + p + ": block 1 is " + article + " " + typ +
-					" and is not sent to the relay; a private key does not belong in a file of trust roots",
-				"upstream CA " + p + " (WARDEN_UPSTREAM_CA_CERTS): 1 certificate to send; 1 block skipped",
+				"warning: upstream CA " + p + ": block 1 " +
+					"is " + article + " " + typ +
+					" and is not sent to the relay; a private key does not " +
+					"belong in a file of trust roots",
+				"upstream CA " + p + " (WARDEN_UPSTREAM_CA_CERTS): 1 " +
+					"certificate to send; 1 block skipped",
 			})
 		})
 	}
@@ -226,7 +259,8 @@ func TestLoadUpstreamCAsNeverSendsAKey(t *testing.T) {
 // certificate is an error that says why.
 func TestLoadUpstreamCAsFileErrors(t *testing.T) {
 	a := newTestCert(t, "a")
-	const noCert = "name a file or directory that holds at least one PEM certificate, or remove the path"
+	const noCert = "name a file or directory that holds at least one PEM certificate, or " +
+		"remove the path"
 	tests := []struct {
 		name, file string
 		data       []byte
@@ -235,12 +269,16 @@ func TestLoadUpstreamCAsFileErrors(t *testing.T) {
 	}{
 		{"DER", "corp.cer", a.der,
 			"gives no certificate to send: it is DER-encoded, and only PEM is read",
-			"convert it to PEM (openssl x509 -inform der -in <file> -out <file>.pem) and name the result, or remove the path",
+			"convert it to PEM (openssl x509 -inform der -in <file> -out " +
+				"<file>.pem) and name the result, or remove the path",
 			nil},
 		{"a key alone", "site.key", pemBlock("RSA PRIVATE KEY", keyBytes),
-			"gives no certificate to send: it holds 1 PEM block and none is a certificate that can be sent",
+			"gives no certificate to send: it holds 1 PEM block and none is a " +
+				"certificate that can be sent",
 			noCert,
-			[]string{"warning: upstream CA %s: block 1 is an RSA PRIVATE KEY and is not sent to the relay; a private key does not belong in a file of trust roots"}},
+			[]string{"warning: upstream CA %s: block 1 is an RSA PRIVATE KEY and is " +
+				"not sent to the relay; a private key does not belong in a file " +
+				"of trust roots"}},
 		{"text", "notes.pem", []byte("hello\n"),
 			"gives no certificate to send: there is no PEM block in it", noCert, nil},
 		{"empty", "empty.pem", nil,
@@ -257,7 +295,8 @@ func TestLoadUpstreamCAsFileErrors(t *testing.T) {
 			if got != nil {
 				t.Errorf("returned %q with the error", got)
 			}
-			if want := "upstream CA path " + p + " (from [relay] upstream_ca_certs) " + tc.msg; fe.Msg != want {
+			if want := "upstream CA path " + p + " (from [relay] " +
+				"upstream_ca_certs) " + tc.msg; fe.Msg != want {
 				t.Errorf("message:\n%s\nwant:\n%s", fe.Msg, want)
 			}
 			if fe.Fix != tc.fix {
@@ -306,23 +345,27 @@ func TestLoadUpstreamCAsDirectory(t *testing.T) {
 		t.Error("a key's bytes are in what is returned")
 	}
 	at := func(name string) string { return "upstream CA " + filepath.Join(dir, name) }
-	const keyNotSent = " and is not sent to the relay; a private key does not belong in a file of trust roots"
+	const keyNotSent = " and is not sent to the relay; a private key does not belong in a " +
+		"file of trust roots"
 	verbose := []string{
 		at("README") + ": not read: its name does not end in .pem, .crt or .cer",
 		at("a.pem") + ": 2 certificates to send",
 		"warning: " + at("b.CRT") + ": block 2 is a PRIVATE KEY" + keyNotSent,
 		at("b.CRT") + ": 1 certificate to send; 1 block skipped",
-		at("corp.cer") + ": skipped: DER-encoded, and only PEM is read (to convert: openssl x509 -inform der -in <file> -out <file>.pem)",
+		at("corp.cer") + ": skipped: DER-encoded, and only PEM is read (to convert: " +
+			"openssl x509 -inform der -in <file> -out <file>.pem)",
 		at("gone.crt") + ": skipped: a link to a file that does not exist",
 		"warning: " + at("keys.pem") + ": block 1 is an EC PRIVATE KEY" + keyNotSent,
 		at("keys.pem") + ": block 2 skipped: an X509 CRL block, not a CERTIFICATE",
-		at("keys.pem") + ": skipped: it holds 2 PEM blocks and none is a certificate that can be sent",
+		at("keys.pem") + ": skipped: it holds 2 PEM blocks and none is a certificate " +
+			"that can be sent",
 		at("linked.pem") + ": not read: a directory",
 		at("notes.crt") + ": skipped: no PEM block in it",
 		at("old") + ": not read: a directory",
 		at("sub.pem") + ": not read: a directory",
 		at("z.pem") + ": 2 certificates to send",
-		"upstream CA " + dir + " (WARDEN_UPSTREAM_CA_CERTS): 5 certificates to send from 3 files; 4 files skipped; 4 other entries not read",
+		"upstream CA " + dir + " (WARDEN_UPSTREAM_CA_CERTS): 5 certificates to send " +
+			"from 3 files; 4 files skipped; 4 other entries not read",
 	}
 	assertLines(t, report.Lines(true), verbose)
 	// Without --verbose: the skips and the path's line, not the per-file
@@ -352,7 +395,8 @@ func TestLoadUpstreamCAsErrors(t *testing.T) {
 	writeCAFile(t, onlySkips, "README", nil)
 	noCAFiles := t.TempDir()
 	writeCAFile(t, noCAFiles, "README", a.pem)
-	const dirFix = "put at least one PEM certificate in a .pem, .crt or .cer file there, or remove the path"
+	const dirFix = "put at least one PEM certificate in a .pem, .crt or .cer file there, or " +
+		"remove the path"
 	tests := []struct {
 		name     string
 		paths    []string
@@ -361,12 +405,16 @@ func TestLoadUpstreamCAsErrors(t *testing.T) {
 		lines    int // the report's lines with the error
 	}{
 		{"does not exist", []string{missing}, CAFromConfig,
-			"upstream CA path " + missing + " (from [relay] upstream_ca_certs) does not exist",
-			"name an existing file or directory of PEM certificates, or remove the path", 0},
+			"upstream CA path " + missing + " (from [relay] upstream_ca_certs) does " +
+				"not exist",
+			"name an existing file or directory of PEM certificates, or remove the " +
+				"path", 0},
 		{"the second path fails after the first gave certificates",
 			[]string{good, missing}, CAFromEnv,
-			"upstream CA path " + missing + " (from WARDEN_UPSTREAM_CA_CERTS) does not exist",
-			"name an existing file or directory of PEM certificates, or remove the path", 1},
+			"upstream CA path " + missing + " (from WARDEN_UPSTREAM_CA_CERTS) does " +
+				"not exist",
+			"name an existing file or directory of PEM certificates, or remove the " +
+				"path", 1},
 		{"an empty entry in the variable", []string{good, ""}, CAFromEnv,
 			"WARDEN_UPSTREAM_CA_CERTS has an empty entry",
 			"remove the doubled or trailing separator", 1},
@@ -377,10 +425,14 @@ func TestLoadUpstreamCAsErrors(t *testing.T) {
 			"--upstream-ca has an empty entry",
 			"remove the doubled or trailing separator", 0},
 		{"a directory whose files give nothing", []string{onlySkips}, CAFromEnv,
-			"upstream CA path " + onlySkips + " (from WARDEN_UPSTREAM_CA_CERTS) gives no certificate to send: 2 files skipped, 1 other entry not read",
+			"upstream CA path " + onlySkips + " (from WARDEN_UPSTREAM_CA_CERTS) " +
+				"gives no certificate to send: 2 files skipped, 1 other entry " +
+				"not read",
 			dirFix, 2},
 		{"a directory with no CA file", []string{noCAFiles}, CAFromConfig,
-			"upstream CA path " + noCAFiles + " (from [relay] upstream_ca_certs) gives no certificate to send: it holds no .pem, .crt or .cer file",
+			"upstream CA path " + noCAFiles + " (from [relay] upstream_ca_certs) " +
+				"gives no certificate to send: it holds no .pem, .crt or .cer " +
+				"file",
 			dirFix, 0},
 	}
 	for _, tc := range tests {
@@ -394,10 +446,12 @@ func TestLoadUpstreamCAsErrors(t *testing.T) {
 				t.Errorf("returned %q with the error", got)
 			}
 			if fe.Msg != tc.msg || fe.Fix != tc.fix {
-				t.Errorf("error:\n%s\n  To fix: %s\nwant:\n%s\n  To fix: %s", fe.Msg, fe.Fix, tc.msg, tc.fix)
+				t.Errorf("error:\n%s\n  To fix: %s\nwant:\n%s\n  To fix: "+
+					"%s", fe.Msg, fe.Fix, tc.msg, tc.fix)
 			}
 			if n := len(report.Lines(false)); n != tc.lines {
-				t.Errorf("%d lines with the error, want %d: %q", n, tc.lines, report.Lines(false))
+				t.Errorf("%d lines with the error, want %d: "+
+					"%q", n, tc.lines, report.Lines(false))
 			}
 		})
 	}
@@ -433,8 +487,10 @@ func TestLoadUpstreamCAsEscapes(t *testing.T) {
 	}
 	lines := strings.Join(report.Lines(true), "\n")
 	for _, want := range []string{
-		filepath.Join(dir, "$(id).cer") + ": skipped: DER-encoded, and only PEM is read (to convert: openssl x509 -inform der -in <file> -out <file>.pem)",
-		filepath.Join(dir, "ok.pem") + `: block 2 skipped: a \x1b[2J\u202e block, not a CERTIFICATE`,
+		filepath.Join(dir, "$(id).cer") + ": skipped: DER-encoded, and only PEM is read " +
+			"(to convert: openssl x509 -inform der -in <file> -out <file>.pem)",
+		filepath.Join(dir, "ok.pem") +
+			`: block 2 skipped: a \x1b[2J\u202e block, not a CERTIFICATE`,
 	} {
 		if !strings.Contains(lines, want) {
 			t.Errorf("no line %q in:\n%s", want, lines)
@@ -449,7 +505,9 @@ func TestLoadUpstreamCAsEscapes(t *testing.T) {
 	if !errors.As(err, &fe) {
 		t.Fatalf("error %v", err)
 	}
-	if want := `upstream CA path /no/such\n\x1b[2Jpath\xff (from [relay] upstream_ca_certs) does not exist`; fe.Msg != want {
+	want := `upstream CA path /no/such\n\x1b[2Jpath\xff` +
+		" (from [relay] upstream_ca_certs) does not exist"
+	if fe.Msg != want {
 		t.Errorf("message %q, want %q", fe.Msg, want)
 	}
 }
@@ -475,7 +533,8 @@ func TestEscapeOutside(t *testing.T) {
 // file is gone by the claim, and nothing is read from it then.
 func TestClaimRelaySendsTheRequestsCertificates(t *testing.T) {
 	a := newTestCert(t, "a")
-	p := writeCAFile(t, t.TempDir(), "site.pem", join(a.pem, pemBlock("RSA PRIVATE KEY", keyBytes)))
+	p := writeCAFile(t, t.TempDir(), "site.pem", join(a.pem, pemBlock("RSA PRIVATE "+
+		"KEY", keyBytes)))
 	certs, _, err := LoadUpstreamCAs([]string{p}, CAFromConfig)
 	if err != nil {
 		t.Fatal(err)
@@ -501,6 +560,7 @@ func TestClaimRelaySendsTheRequestsCertificates(t *testing.T) {
 		t.Error("the key beside the certificate reached the claim")
 	}
 	if c.UpstreamSystemCA == nil || *c.UpstreamSystemCA {
-		t.Errorf("upstream_system_ca = %v, want false as the request says", c.UpstreamSystemCA)
+		t.Errorf("upstream_system_ca = %v, want false as the request "+
+			"says", c.UpstreamSystemCA)
 	}
 }

@@ -593,9 +593,11 @@ func scanCAFile(data []byte) caFile {
 			case typ == nil:
 				skip(false, "skipped: a damaged PEM block (%s)", why)
 			case isPrivateKey(*typ):
-				skip(true, "is a damaged %s (%s)%s", blockType(*typ), why, keyNotSent)
+				skip(true, "is a damaged %s (%s)%s", blockType(*typ), why,
+					keyNotSent)
 			default:
-				skip(false, "skipped: a damaged %s block (%s)", blockType(*typ), why)
+				skip(false, "skipped: a damaged %s block (%s)",
+					blockType(*typ), why)
 			}
 			continue
 		}

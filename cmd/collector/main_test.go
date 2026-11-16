@@ -71,7 +71,8 @@ func TestReadUpstreamCAs(t *testing.T) {
 	dir := t.TempDir()
 	good := filepath.Join(dir, "corp.pem")
 	keyBlock := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: []byte("SECRET")})
-	if err := os.WriteFile(good, append(append([]byte{}, cert...), keyBlock...), 0o600); err != nil {
+	data := append(append([]byte{}, cert...), keyBlock...)
+	if err := os.WriteFile(good, data, 0o600); err != nil {
 		t.Fatal(err)
 	}
 	var out bytes.Buffer
@@ -80,8 +81,10 @@ func TestReadUpstreamCAs(t *testing.T) {
 		t.Fatalf("got %q, %v", got, err)
 	}
 	want := "collector: warning: upstream CA " + good + ": block 2 is a PRIVATE KEY and " +
-		"is not sent to the relay; a private key does not belong in a file of trust roots\n" +
-		"collector: upstream CA " + good + " (--upstream-ca): 1 certificate to send; 1 block skipped\n"
+		"is not sent to the relay; a private key does not belong in a file of trust " +
+		"roots\n" +
+		"collector: upstream CA " + good + " (--upstream-ca): 1 certificate to send; 1 " +
+		"block skipped\n"
 	if out.String() != want {
 		t.Errorf("printed:\n%s\nwant:\n%s", out.String(), want)
 	}

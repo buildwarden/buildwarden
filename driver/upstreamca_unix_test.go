@@ -98,7 +98,8 @@ func TestLoadUpstreamCAsDirectoryEntriesNotOpened(t *testing.T) {
 		at("loop.cer") + ": skipped: cannot be read (" + syscall.ELOOP.Error() + ")",
 		at("pipe.pem") + ": skipped: not a regular file",
 		at("s.crt") + ": skipped: not a regular file",
-		"upstream CA " + dir + " ([relay] upstream_ca_certs): 1 certificate to send from 1 file; 3 files skipped",
+		"upstream CA " + dir + " ([relay] upstream_ca_certs): 1 certificate to send " +
+			"from 1 file; 3 files skipped",
 	})
 }
 
@@ -134,7 +135,8 @@ func assertCannotRead(t *testing.T, err error, path, reason string) {
 	if !errors.As(err, &fe) {
 		t.Fatalf("error %v is not a FixableError", err)
 	}
-	want := "cannot read upstream CA path " + path + " (from WARDEN_UPSTREAM_CA_CERTS): " + reason
+	want := "cannot read upstream CA path " + path + " (from " +
+		"WARDEN_UPSTREAM_CA_CERTS): " + reason
 	if fe.Msg != want {
 		t.Errorf("message:\n%s\nwant:\n%s", fe.Msg, want)
 	}
@@ -147,7 +149,9 @@ func assertCannotRead(t *testing.T, err error, path, reason string) {
 // nothing to root: run as another user, as CI is.
 func TestLoadUpstreamCAsPermissionDenied(t *testing.T) {
 	if os.Geteuid() == 0 {
-		t.Skip("root reads a file at mode 0; the rows that run as root are TestLoadUpstreamCAsCannotRead and TestLoadUpstreamCAsDirectoryEntriesNotOpened")
+		t.Skip("root reads a file at mode 0; the rows that run as root are " +
+			"TestLoadUpstreamCAsCannotRead and " +
+			"TestLoadUpstreamCAsDirectoryEntriesNotOpened")
 	}
 	a := newTestCert(t, "a")
 	denied := syscall.EACCES.Error()
@@ -177,8 +181,10 @@ func TestLoadUpstreamCAsPermissionDenied(t *testing.T) {
 		t.Fatalf("got %q, %v", got, err)
 	}
 	assertLines(t, report.Lines(false), []string{
-		"upstream CA " + filepath.Join(dir, "site.pem") + ": skipped: cannot be read (" + denied + ")",
-		"upstream CA " + dir + " (WARDEN_UPSTREAM_CA_CERTS): 1 certificate to send from 1 file; 1 file skipped",
+		"upstream CA " + filepath.Join(dir, "site.pem") + ": skipped: cannot be read " +
+			"(" + denied + ")",
+		"upstream CA " + dir + " (WARDEN_UPSTREAM_CA_CERTS): 1 certificate to send from " +
+			"1 file; 1 file skipped",
 	})
 }
 
@@ -194,7 +200,8 @@ func TestLoadUpstreamCAsEscapesNames(t *testing.T) {
 		t.Fatal(err)
 	}
 	lines := report.Lines(true)
-	want := "upstream CA " + filepath.Join(dir, `x\n[warden] all good\x1b[2K.crt`) + ": skipped: no PEM block in it"
+	want := "upstream CA " + filepath.Join(dir, `x\n[warden] all good\x1b[2K.crt`) + ": " +
+		"skipped: no PEM block in it"
 	if !strings.Contains(strings.Join(lines, "\n"), want) {
 		t.Errorf("no line %q in %q", want, lines)
 	}

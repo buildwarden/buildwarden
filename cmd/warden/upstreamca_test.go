@@ -117,7 +117,8 @@ func TestUpstreamCAPaths(t *testing.T) {
 			t.Fatal(err)
 		}
 		if len(cfg.Relay.UpstreamCACerts) != 0 {
-			t.Errorf("LoadConfig put the variable in the key: %q", cfg.Relay.UpstreamCACerts)
+			t.Errorf("LoadConfig put the variable in the key: "+
+				"%q", cfg.Relay.UpstreamCACerts)
 		}
 		paths, source, err := upstreamCAPaths(cfg)
 		if err != nil || source != driver.CAFromEnv ||
@@ -140,7 +141,8 @@ func TestUpstreamCAPaths(t *testing.T) {
 	t.Run("an empty variable is not set", func(t *testing.T) {
 		inConfigFiles(t, caKeyFile("/my/corp-ca.pem"))
 		cfg, _ := LoadConfig()
-		if _, source, err := upstreamCAPaths(cfg); err != nil || source != driver.CAFromConfig {
+		_, source, err := upstreamCAPaths(cfg)
+		if err != nil || source != driver.CAFromConfig {
 			t.Errorf("source %s, %v", source, err)
 		}
 	})
@@ -187,7 +189,8 @@ func TestUpstreamCAsBothSet(t *testing.T) {
 				t.Fatalf("the configuration does not load: %v", err)
 			}
 			_ = captureStdout(t, func() {
-				if err := run(); err != nil && strings.Contains(err.Error(), driver.CAFromEnv) {
+				err := run()
+				if err != nil && strings.Contains(err.Error(), driver.CAFromEnv) {
 					t.Errorf("%s uses the CA paths: %v", name, err)
 				}
 			})
@@ -220,7 +223,8 @@ func TestUpstreamCALinesOfABuild(t *testing.T) {
 				if err != nil {
 					t.Fatal(err)
 				}
-				if req, err = newRequest(cfg, []string{buildProject(t)}); err != nil {
+				req, err = newRequest(cfg, []string{buildProject(t)})
+				if err != nil {
 					t.Fatal(err)
 				}
 			})
@@ -236,7 +240,8 @@ func TestUpstreamCALinesOfABuild(t *testing.T) {
 				t.Errorf("stdout: %q", stdout)
 			}
 			if !bytes.Equal(req.UpstreamCACerts, sent) {
-				t.Errorf("the request carries:\n%s\nwant:\n%s", req.UpstreamCACerts, sent)
+				t.Errorf("the request "+
+					"carries:\n%s\nwant:\n%s", req.UpstreamCACerts, sent)
 			}
 			if bytes.Contains(req.UpstreamCACerts, []byte(caKeyBody)) {
 				t.Error("the key beside a certificate is in the request")
@@ -278,8 +283,10 @@ func TestUpstreamCALinesOfDoctor(t *testing.T) {
 			return []string{
 				at + ": skipped: no PEM block in it",
 				"upstream CA: BLOCKED: upstream CA path " + noCert +
-					" (from WARDEN_UPSTREAM_CA_CERTS) gives no certificate to send: 1 file skipped",
-				"upstream CA: to fix: put at least one PEM certificate in a .pem, " +
+					" (from WARDEN_UPSTREAM_CA_CERTS) gives no certificate " +
+					"to send: 1 file skipped",
+				"upstream CA: to fix: put at least one PEM certificate in a " +
+					".pem, " +
 					".crt or .cer file there, or remove the path",
 				"container runtime: docker",
 			}
@@ -309,11 +316,13 @@ func TestUpstreamCALinesOfDoctor(t *testing.T) {
 				exit = ee.ExitCode()
 			}
 			want := doctorChildRan + "\n" +
-				"config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply\n" +
+				"config: none (no --config, no WARDEN_CONFIG, no " +
+				"./warden.toml): defaults apply\n" +
 				strings.Join(tc.lines(paths), "\n") + "\n"
 			got := strings.TrimSuffix(stdout.String(), "PASS\n")
 			if got != want || exit != tc.exit {
-				t.Errorf("exit %d, stdout:\n%s\nwant exit %d, stdout:\n%s", exit, got, tc.exit, want)
+				t.Errorf("exit %d, stdout:\n%s\nwant exit %d, "+
+					"stdout:\n%s", exit, got, tc.exit, want)
 			}
 			if strings.Contains(stderr.String(), "upstream CA") {
 				t.Errorf("doctor put a CA line on stderr: %s", stderr.String())
@@ -343,7 +352,8 @@ func TestUpstreamCAErrorsStopABuildBeforeAnythingIsMade(t *testing.T) {
 		{"does not exist", missing, "upstream CA path " + missing +
 			" (from WARDEN_UPSTREAM_CA_CERTS) does not exist"},
 		{"gives no certificate", noCert, "upstream CA path " + noCert +
-			" (from WARDEN_UPSTREAM_CA_CERTS) gives no certificate to send: it holds " +
+			" (from WARDEN_UPSTREAM_CA_CERTS) gives no certificate to send: it " +
+			"holds " +
 			"1 PEM block and none is a certificate that can be sent"},
 		{"an empty entry", goodFile + sep, "WARDEN_UPSTREAM_CA_CERTS has an empty entry"},
 	} {
