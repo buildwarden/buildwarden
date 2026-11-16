@@ -3387,6 +3387,95 @@ Each row is recorded where it is acted on, and Consolidation repeats it
 | The removal of the transitional detection, at 1.0 | its own queue item, held | filed at Publish by the parent session (task 26) |
 | The four corpus entries of the Security note | `security-suite` | Publish (task 26) |
 
+**r2 delta** (Plan, 2026-11-16). Written from the design as its r2 review
+approved it (**approved at `fff2b5f`**; the outcome entry is the branch at
+`705f92d`), after reading `cmd/warden/config.go` (`configFile`,
+`readConfigFile`, `unreadableConfig`, `LoadConfig`),
+`cmd/warden/configfile_test.go`, the configuration reference and
+`overview.md` there. Tasks 1 to 26 stand as recorded and are not reopened
+but for what tasks 27 to 31 name. Decision 14's first half, the regular
+file, is built (`d153126`, with `5a57e55`); its second half, the cap
+(a14 (b)), is not, and is tasks 27 to 30. Task 28 is rework of task 2's
+built code (FLOW-06); tasks 29 and 30 are the reference and the overview
+(UX-01, FLOW-15). No rule change is added (the front matter and
+`rule_changes` are as approved), no host step is added or removed, and
+planning sends nothing back to Design. Tasks 27 and 28 are one green
+checkpoint.
+
+*Note F (where the cap is counted).* The design has "at most 1048577
+bytes" read and the count "of the bytes read, not of the size `stat`
+reports". Reading: `readConfigFile` keeps its `os.Stat` checks first, so a
+FIFO or a device found by default is still not opened (Decision 14's
+first half, unchanged); then, for the default file only, it opens the file
+and reads it through one helper that reads at most `limit + 1` bytes from
+an `io.Reader` and returns an error when it got more than `limit`. The
+helper is the seam for the test double the design allows where procfs
+cannot be used. A named file is read with `os.ReadFile`, as today.
+
+27. **Tests first for the cap** (Decision 14, a14 (b); **Validation
+    plan**, tier 0; TEST-02: tier 0). In `cmd/warden/configfile_test.go`,
+    table-driven, through `inConfigFiles` and `LoadConfig`, written before
+    task 28, the default file's cases failing on the branch as it is: a `./warden.toml` of
+    exactly 1048576 bytes (a valid TOML file that sets one key, padded
+    with a comment) is read and its key decoded; one of 1048577 bytes is
+    the error `cannot read config file <path> (found in the working
+    directory): larger than 1 MiB` with the fix `make it 1 MiB or
+    smaller, or name it with --config or WARDEN_CONFIG, which reads it
+    whatever its size`, a `driver.FixableError`, and `LoadConfig` returns
+    no configuration; on Linux, a `./warden.toml` that is a link to
+    `/proc/self/pagemap` (which `stat` reports as an empty regular file)
+    is the same error, skipped with its reason where that file is absent;
+    the helper of Note F given a reader that yields more than 1048576
+    bytes (an endless reader) is the error and reads no more than 1048577,
+    and given exactly 1048576 bytes returns them all, so the case runs on
+    every OS; a file of 1048577 bytes and more named with `--config`, and
+    again with `WARDEN_CONFIG`, is read whole and its key decoded. Pure
+    Go, no network, no container runtime (GLOBAL-04, GLOBAL-07,
+    GLOBAL-11, UX-04, UX-08, UX-09, TEST-01, TEST-02, SEC-04).
+28. **The cap in `readConfigFile`** (Decision 14, a14 (b); **How the
+    config file is found**; FLOW-06, rework of task 2's code). In
+    `cmd/warden/config.go`: one named constant for 1048576 bytes; for a
+    file whose source is "found in the working directory", after the
+    `stat` checks of Decision 14's first half, the file is opened and read
+    through Note F's helper, and more than the cap is the design's error
+    and fix, printed with the escaped absolute path, before anything is
+    decoded and before the transitional call, as the design's pseudocode
+    orders it. Its fix is the design's own, not `unreadableConfig`'s; an
+    open or read that fails keeps `unreadableConfig`'s error. A named file
+    is read as today, whole. `readConfigFile`'s comment says the default
+    file is capped and why, and the comment of the error value names the
+    cap. No caller changes: `LoadConfig` is the one caller, and every
+    command reads configuration through it (GLOBAL-01, GLOBAL-06,
+    GLOBAL-10, GLOBAL-11, UX-04, UX-08, UX-09, SEC-01).
+29. **The configuration reference** (UX-01; **Reference docs**). In
+    `docs/book/src/guide/configuration.md`, **The config file**: the bullet
+    on `./warden.toml` that must be a regular file also says it is read up
+    to 1 MiB, more is the error `larger than 1 MiB` whatever its size on
+    disk appears to be, and a file named with `--config` or
+    `WARDEN_CONFIG` is read whole whatever its size. The other pages that
+    say how the file is found (`cli.md`'s `--config` row, `README.md`'s
+    Configuration comment, `corporate-networks.md`) say nothing of its
+    kind or size and are not edited (UX-01, UX-07, GLOBAL-09).
+30. **The overview** (FLOW-15), in `docs/book/src/concepts/overview.md`.
+    `warden build`'s `cfg` line, which says a `./warden.toml` that is not
+    a regular file is an error, adds "or that gives more than 1 MiB". No
+    other line changes (FLOW-15, UX-01).
+31. **Re-check of the regular-file half against the design** (Decision
+    14; FLOW-06). Read in planning at `705f92d`, and to be read again
+    after task 28: `configFile` makes only "does not exist" no file, so a
+    link to nothing is no file and a link to itself is the error;
+    `readConfigFile` refuses a default file that is not regular once
+    links are followed, before any open, with `not a regular file` and
+    `unreadableConfig`'s fix as the design's error block has it; a named
+    file is read whatever kind it is; the reference and the overview say
+    the same. All of it matched the design; the tests the Validation plan
+    names for it (`TestWorkingDirectoryConfigThatCannotBeRead`,
+    `TestNamedConfigFileThatIsADevice`) exist and pass. After task 28 they
+    pass unchanged, and a mismatch found then goes back to Design, not
+    into the code (GLOBAL-04, GLOBAL-11, TEST-01). The gates are task 25's,
+    with the permission rows run as an unprivileged user where the session
+    is root (Note C), then a plain push (FLOW-17).
+
 ## Design review
 
 ### 2026-11-15, first sitting: eleven questions answered; a9 and a6 folded in
