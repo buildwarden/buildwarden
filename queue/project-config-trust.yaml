@@ -3,7 +3,7 @@ title: 'One warden.toml in the control of whoever runs the build: found by --con
 priority: 66
 status: in_progress
 round: feature
-phase: 2
+phase: 3
 design: docs/design/project-config-trust.md
 branch: feat/project-config-trust
 alters_relationships: false
@@ -34,19 +34,26 @@ steps:
   - id: f2-plan
     phase: 2
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f2-design-review
     lease:
+      claimed_by: ""
+      expires: null
+  - id: f3-implement
+    phase: 3
+    affinity: cloud
+    status: pending
+    lease:
       claimed_by: cloud/20261112T230554Z
-      expires: 2026-11-16T01:18:40.869430782Z
+      expires: 2026-11-16T02:25:41.422670645Z
 budget:
   estimate:
     runs: 2
     steps: 14
   spent:
     runs: 0
-    steps: 4
+    steps: 5
 questions:
   - id: a1
     kind: assumed
@@ -263,3 +270,12 @@ history:
   - at: 2026-11-15T23:22:53Z
     by: human/jeff
     event: 'priority 65 -> 66 (renumbered by wf new: vz-nocgo-build queued at 64)'
+  - at: 2026-11-16T00:25:41Z
+    by: cloud/20261112T230554Z
+    event: done f2-plan
+  - at: 2026-11-16T00:25:41Z
+    by: cloud/20261112T230554Z
+    event: entered phase 3 (implement)
+  - at: 2026-11-16T00:25:41Z
+    by: cloud/20261112T230554Z
+    event: claimed f3-implement until 2026-11-16T02:25:41Z
