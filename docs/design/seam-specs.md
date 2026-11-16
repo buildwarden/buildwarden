@@ -5794,10 +5794,13 @@ ok   diff inside the declared areas (FLOW-03): undeclared: the item collides wit
 section, written at Design; what the branch changed matches it. The six
 pins, `tools/conformance/<directory>/go.mod`, each name
 `v0.0.0-20261116171557-b808a9192ccb`, with the harness replaced at the
-same commit, and `b808a91` is still the head of
-`buildwarden/buildwarden-specs#1`, which is open and unmerged. The seams
-page names the same ref in every link. The pins move to the seven tags
-at `f6-release-specs` (Decision 12).
+same commit, and `b808a91` is the head of
+`buildwarden/buildwarden-specs#1`, which Jeff merged at 18:47Z as the
+merge commit `adfb98b` (parents `aeda265` and `b808a91`, the same tree as
+`b808a91`, so the tagged commit will hold what Review read); its branch
+is deleted, and no tag is pushed yet. The seams page names the same ref
+in every link. The pins move to the seven tags at `f6-release-specs`
+(Decision 12).
 
 **Rules proposed.** Only the five rule changes approved at `09de3f6`
 (TEST-05, TEST-02, GLOBAL-08, EXEC-04, PROFILE-01). The consolidation
