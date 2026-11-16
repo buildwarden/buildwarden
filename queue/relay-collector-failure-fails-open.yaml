@@ -1,0 +1,33 @@
+feature: relay-collector-failure-fails-open
+title: 'Relay: a collector failure on build-script, bootstrap or cwd is served as 404, so exclusive trust becomes append (fails open)'
+priority: 78
+status: queued
+round: feature
+phase: 0
+design: docs/design/relay-collector-failure-fails-open.md
+branch: feat/relay-collector-failure-fails-open
+areas:
+  - relay
+  - executor
+alters_relationships: null
+source: 'seam-specs r2, divergence N24 (docs/design/seam-specs.md, table ''Found during Implement: N1 to N33 (r2)'', branch feat/seam-specs at c6078b7; relay-guest-api GUEST-25, GUEST-34 and the paragraph after GUEST-26; bootstrap-config BOOTCFG-3, BOOTCFG-10). relay/relay.go:719-738 (comment :728-731) and :751-752 serve any collector failure (error or non-200) on build-script, bootstrap and cwd to the build as 404; the executor reads a bootstrap 404 as the empty config, so a bootstrap config the collector failed to serve reads as ''no config'' and a producer''s trust mode exclusive becomes append (GLOBAL-10: the default tried when the provided value fails). Run in seam-specs stage 8e against relay-host, relay-vm and relay-container (a collector''s 500 gives the build 404). Jeff, 2026-11-16, seam-specs r2 design review: filed now as a security fix, exempt from the FLOW-20 freeze; not marked urgent (wf urgent is Jeff''s).'
+steps:
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 9
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-16T17:02:18Z
+    by: cloud/20261112T230554Z
+    event: queued at priority 78 (intake)

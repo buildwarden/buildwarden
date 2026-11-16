@@ -1,0 +1,51 @@
+feature: relay-exit-code-unreadable
+title: 'Relay: an exit code it cannot read is recorded as 0, success'
+priority: 79
+status: queued
+round: feature
+phase: 0
+design: docs/design/relay-exit-code-unreadable.md
+branch: feat/relay-exit-code-unreadable
+areas:
+  - relay
+alters_relationships: null
+source: 'seam-specs r2, divergence N21 (docs/design/seam-specs.md, table ''Found during Implement: N1 to N33 (r2)'', branch feat/seam-specs at c6078b7; relay-guest-api GUEST-22, GUEST-54 (D13)). relay/relay.go:505-508 and relay/controlplane.go:56-60 read the completion''s code with Sscanf("%d") and ignore its error: an unreadable or out-of-range value is 0, success; ''7x'' is 7, ''+5'' is 5 (GLOBAL-10: a failure recorded as success). Jeff, 2026-11-16, seam-specs r2 design review: filed now and held by the FLOW-20 freeze (not a program item, not a regression on main, not a security fix).'
+steps:
+  - id: f0-answer-q1
+    phase: 0
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    needs:
+      - f0-answer-q1
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 7
+  spent:
+    runs: 0
+    steps: 0
+questions:
+  - id: q1
+    kind: blocking
+    status: open
+    question: 'FLOW-20 freeze: not a program item and not exempt (not a fix for a regression on main under FLOW-09, nor a security fix). Resume when Jeff says, or when the freeze ends.'
+    options:
+      - resume it
+    recommended: resume it
+history:
+  - at: 2026-11-16T17:02:25Z
+    by: cloud/20261112T230554Z
+    event: queued at priority 79 (intake)
+  - at: 2026-11-16T17:02:25Z
+    by: cloud/20261112T230554Z
+    event: 'on hold (q1): FLOW-20 freeze: not a program item and not exempt (not a fix for a regression on main under FLOW-09, nor a security fix). Resume when Jeff says, or when the freeze ends.'
