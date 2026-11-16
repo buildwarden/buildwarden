@@ -82,15 +82,15 @@ steps:
     affinity: cloud
     status: pending
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261112T230554Z
+      expires: 2026-11-16T03:17:28.72956261Z
 budget:
   estimate:
     runs: 2
     steps: 14
   spent:
     runs: 0
-    steps: 9
+    steps: 10
 questions:
   - id: a1
     kind: assumed
@@ -377,3 +377,6 @@ history:
   - at: 2026-11-16T01:16:03Z
     by: cloud/20261112T230554Z
     event: 'priority 66 -> 67 (renumbered by wf new: loop-parallel-rule-wording queued at 62)'
+  - at: 2026-11-16T01:17:28Z
+    by: cloud/20261112T230554Z
+    event: claimed f1-design-r3 until 2026-11-16T03:17:28Z
