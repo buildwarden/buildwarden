@@ -4,6 +4,12 @@ The BuildWarden ledger format, versioned and long-lived (RELAY-05). The relay
 is a reference implementation of these documents; a third-party reader or
 writer needs nothing else.
 
+The specifications of BuildWarden's other component seams (the claim, the
+collector, the relay's guest API, the executor's `initialize` and the bootstrap
+config) are kept in their own repository; the
+[Component seams](https://github.com/buildwarden/buildwarden/blob/main/docs/book/src/concepts/seams.md)
+page lists them, with the version of each this repository implements.
+
 ## Layout
 
 ```

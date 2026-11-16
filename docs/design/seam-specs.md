@@ -1,0 +1,5938 @@
+---
+feature: seam-specs
+status: archived
+drivers: []              # no driver tree and no shared package changes (see Cross-driver impact)
+seams: [relay-claim, collector, relay-guest-api, executor-initialize, bootstrap-config]
+                         # each gets its contract document, the collector seam two (a10);
+                         # none changes behaviour here
+surfaces: []
+repos: [buildwarden/buildwarden, buildwarden/buildwarden-specs]
+                         # home first; the specifications and suites live in the second
+                         # (recorded at loop-parallel's x4-state on Jeff's word, 2026-11-16)
+security_boundary: none  # no code on a boundary changes; see the Security note
+alters_relationships: true   # the seams' definition and their contract tests move to another
+                         # repository, and this one depends on a tagged release of it
+design_review: required
+native_validation: []    # nothing blocking; two tracked gaps (Validation plan)
+tier2_gaps:
+  - {host: macos-vz, what: "relay suite against the host-mode Go relay on macOS; deferred until the exec launcher has a macOS form"}
+  - {host: qemu-any, what: "relay suite against the Go relay VM image; deferred until a VM launcher exists"}
+rules: [GLOBAL-01, GLOBAL-02, GLOBAL-03, GLOBAL-04, GLOBAL-06, GLOBAL-07, GLOBAL-08, GLOBAL-09,
+        GLOBAL-10, GLOBAL-11, RELAY-02, RELAY-04, RELAY-05, RELAY-07, RELAY-08, EXEC-02,
+        EXEC-03, EXEC-04, BOOT-02, BOOT-03, BOOT-04, BOOT-05, BOOT-06, BOOT-07, TEST-02,
+        TEST-03, TEST-04, TEST-05, TEST-07, LINT-02, LINT-05, UX-01, FLOW-01, FLOW-02,
+        FLOW-03, FLOW-04, FLOW-05, FLOW-06, FLOW-07, FLOW-08, FLOW-09, FLOW-10, FLOW-11,
+        FLOW-12, FLOW-14, FLOW-15, FLOW-16, FLOW-17, FLOW-18, FLOW-19, FLOW-20, LOOP-01,
+        LOOP-02, LOOP-03, LOOP-04, LOOP-06, LOOP-07, LOOP-08, LOOP-09, PROFILE-01]
+rule_changes:
+  - {rule: TEST-05, change: amend, paths: [docs/development/testing.md, tools/tier1/rules.yaml]}
+  - {rule: TEST-02, change: amend, paths: [docs/development/testing.md]}
+  - {rule: GLOBAL-08, change: amend, paths: [docs/development/global.md, tools/tier1/rules.yaml,
+                                              tools/tier1/coupling/checks_test.go]}
+  - {rule: EXEC-04, change: amend, paths: [docs/development/in-vm-executor.md]}
+  - {rule: PROFILE-01, change: amend, paths: [docs/development/loop-profile.md]}
+concepts: [seams, specs-repo, conformance, conformance-harness, relay-claim, claim-protocol,
+           collector, collector-protocol, collector-outputs, collector-inputs,
+           relay-guest-api, executor-initialize, bootstrap-config, specs-pin,
+           specs-release, seam-contract, openapi, program]
+related: [componentization.md, specs-migration.md, relay05-specs-wording.md,
+          tier1-static-checks.md, build-link-subnet.md, hyperv-relay-per-build-channel.md,
+          unified-bootstrap.md, relay-leaf-crl.md, ledger-environment-types.md,
+          design-approved-rule-changes.md, loop-contract.md, alters-slot.md]
+---
+
+# Seam specifications and conformance suites (componentization S1)
+
+This is a program item (FLOW-20): phase S1 of
+[`componentization`](componentization.md). That design fixes what S1 is:
+create `buildwarden/buildwarden-specs` (its a10), write seams 1, 2, 3, 5 and 6,
+build a conformance harness that runs black-box against any relay binary or
+image and against any collector, link the book and the specs both ways, and
+fill `seams` in `tools/tier1/rules.yaml`. It is done when the suites pass
+against the Go relay and the disk collector. This design works inside those
+decisions and does not reopen them. Where it does less than those words,
+**Where this design is narrower than the umbrella** lists it.
+
+The umbrella was amended in place on 2026-11-14 by `loop-contract` (its
+**Amendments**), and is read here as amended. S1's row is as it was.
+The wave-1 gate now reads "The one queue works across repositories; suites
+pass on the Go relay". This item's done-when is its second half; the first
+is P1's, and this item does not wait for it (Decision 8).
+
+It works in two repositories: this one and `buildwarden/buildwarden-specs`
+(LOOP-04; **Design**).
+
+## Problem
+
+Five of the seams between BuildWarden's components have no specification.
+Each is defined by Go code:
+
+| # | Seam | Where it is defined today |
+|---|---|---|
+| 1 | Claim protocol (`relay-claim`) | `relaycfg/` and its package comment; what each relay mode does with a claim is in `cmd/relay/` |
+| 2 | Collector protocol (`collector`) | `collector/` and its package comment; the relay's side is `relay/collector_client.go` |
+| 3 | Relay guest API (`relay-guest-api`) | `relay/relay.go` (`handleArtifacts`, `handleContextGet`), `relay/controlplane.go`, `relay/dns.go`, `relay/heartbeat.go`, `cmd/relay/dhcp.go` |
+| 5 | `initialize` contract (`executor-initialize`) | `cmd/warden-io/main.go`, `initialize.go`, `baseline.go`, `platform_<os>.go` |
+| 6 | Bootstrap config (`bootstrap-config`) | `bootstrap/bootstrap.go` |
+
+The book describes three of them in part.
+`docs/book/src/concepts/architecture.md` has the collector's endpoint
+table, the claim's steps, `build_link`'s validation and its by-mode table,
+and the ordering rule, and #115 updated it; under "Communication paths" it
+also lists the relay guest API's endpoints as the build sees them. It is an explanation for the book's
+readers: it leaves out replies, limits and error cases, nothing checks it
+against the code, and no implementation can be tested against it.
+
+Three things follow.
+
+- The Rust relay (`buildwarden/buildwarden-relay`) has to implement seams 1,
+  2, 3 and 6 and has nothing to implement them from but another
+  implementation. Its milestone M1 takes its conformance harness from this
+  item.
+- GLOBAL-08 and EXEC-04 say a change to a versioned seam also changes the
+  seam's contract document, and tier 1's `seam-contract` check enforces that
+  for the seams `rules.yaml` lists. The list is empty, because there are no
+  documents. PR #115 changed the claim (`upstream_dns`, the claim token on
+  Hyper-V) and updated the book page; there was no contract document to
+  update and no check that asked for one.
+- TEST-05 asks for conformance tests "so a third-party substitute has
+  something to verify against". The tests that exist are Go unit tests that
+  import the packages under test. A relay in another language cannot run
+  them, and neither can a third party who has only a binary.
+
+## Prior art
+
+- [`componentization`](componentization.md): Decisions 2 and 3 (components
+  coupled through written seams and tagged releases; specifications with
+  black-box suites in their own repository), "a phase that touches a seam
+  changes the seam's specification first, then the code", Decision 18 (a rule
+  changes in the item that makes it true), and its assumptions a1 (the collector specification in
+  two parts), a10 and a11 (the repository's name, and who creates it). Its
+  Consolidation records what #115 added to the claim and to BOOT-06; the
+  specifications describe `main` with both. `loop-contract` amended it in
+  place on 2026-11-14 (its **Amendments**): one queue for work in every
+  repository, the relay's milestones as items in that queue, and the
+  wave-1 gate. Decision 2 gained a sentence on the one queue, and seam
+  10's row and the FLOW and LINT row of the rule table were reworded.
+  What this design reads of them is as it was: Decision 2's coupling
+  through written seams and tagged releases, Decision 3, Decision 18,
+  the rows of seams 1 to 6 and 9, S1's row, and the rule table's rows
+  for S1 and K1.
+- [`loop-contract`](loop-contract.md) (the first item of P1, merged as
+  `ad4ea50`, #119, on 2026-11-15): the Loop Contract, LOOP-01 to LOOP-09,
+  this repository's profile, PROFILE-01, and the amended FLOW-01, FLOW-03
+  and FLOW-14. This design is brought under them: the specification comes
+  first at a seam and the design lists the change (LOOP-02, **Specification
+  changes**); a suite's cases name the requirements they check and every
+  requirement is covered or listed (LOOP-03, Decision 3); an item names
+  the repositories it works in (LOOP-04, Decision 8); a run reports a
+  specification change apart from the code (LOOP-06); a consumer's trunk
+  names only a release (LOOP-07, Decision 7); what binds a worker in a
+  repository that has not adopted the contract (LOOP-08, a4); a feature's
+  design declares no change to a loop rule (LOOP-09, FLOW-14, a15); and
+  the profile entries this item makes stale are a rule change it declares
+  (PROFILE-01, **Rule changes**).
+- [`alters-slot`](alters-slot.md) (a process item, merged as `897a4a8`,
+  #118, on 2026-11-14): `wf next` and `wf validate` count the features
+  that hold an `alters_relationships` slot against `config.yaml`'s limit
+  of 3, a slot being held from the claim of the Plan step (**Beside
+  `driver-contract` in the queue**). It changed `tools/workflow/`, two
+  settings files and one agent definition, and no file a specification is
+  taken from.
+- [`specs-migration`](specs-migration.md) and
+  [`relay05-specs-wording`](relay05-specs-wording.md): the layout of `specs/`
+  (one directory per document family, `v<N>.md` beside `v<N>.schema.json`,
+  an index in `README.md`), the rule that a schema's `$id` is a name and not a
+  location, and the tier-0 test that ties the producer to the documents. The
+  specs repository uses the same layout, extended (Decision 2).
+- [`tier1-static-checks`](tier1-static-checks.md) built `seam-contract` and
+  kept its seam list as data in `rules.yaml`, "so new seams edit data, not
+  code". This item fills the list. The check's code does not change;
+  one test of it does (**Rule changes**, GLOBAL-08).
+- [`build-link-subnet`](build-link-subnet.md) (the claim's `build_link`, what
+  each mode does with it, the refusal that leaves a relay claimable) and
+  [`hyperv-relay-per-build-channel`](hyperv-relay-per-build-channel.md)
+  (`upstream_dns`, the claim token, RELAY-08, BOOT-06's boot channel) are the
+  two designs whose text the claim specification is checked against.
+- [`unified-bootstrap`](unified-bootstrap.md): `GET /bootstrap` and the
+  `bootstrap` package (seam 6), and the baseline `initialize` applies.
+- [`relay-leaf-crl`](relay-leaf-crl.md): `/ca.crl` on the reserved host and
+  the CRL distribution point in every leaf (seam 3).
+- [`ledger-environment-types`](ledger-environment-types.md): the claim's
+  `environment` and the collector's `PUT /v1/environment`.
+- [`design-approved-rule-changes`](design-approved-rule-changes.md): the
+  route by which this design's five rule changes are approved by name.
+
+All twelve already carry front-matter; no retrofit is needed (FLOW-12).
+
+One design is not on `main` and so is not in `related`. This design
+depends on it, cites it by section or question ID, and quotes none of its
+rule text as final:
+
+- `driver-contract` (K1, on `feat/driver-contract`, read at `a6c8f0b`). It
+  is a redraft, sent back by its first review on 2026-11-14. Its second
+  review approved it on 2026-11-15, at `a6c8f0b` (its Design review
+  entry, at `c767992`): every question answered, its eleven rule changes
+  approved by name, its Security note accepted, and its amendments to
+  the umbrella, which are made in its PR (its a18), put to Jeff once
+  more and left to stand. It has not merged.
+  What this design relies on is among the answers, each confirmed
+  as that design recommended: `warden` sends the claim, at an endpoint
+  the driver reports (its a13); `warden` starts the default collector,
+  one per build with a fresh token, and the driver starts none (its a12);
+  seam 9's specification and suite start in this repository and move to
+  the specs repository in K2 (its a17); seam 8 is to be filed as its own
+  S-track item (its a11); and a shared collector is noted in the
+  umbrella's "Later, not scheduled" and not queued (its a22). Seam 9 is
+  a command contract: `warden` finds a `warden-driver-<name>` binary and
+  runs commands on it, `warden` keeps the session, the collector, the
+  claim and the reporting, and a driver starts the relay and the
+  environment. It amends GLOBAL-08, TEST-05 and PROFILE-01 and adds an
+  entry to tier 1's seam list, as this design does; **With
+  `driver-contract`** says which sentences each design owns, and gives
+  in full the one row of the profile that both reword. It also amends
+  the umbrella: seams 1, 6 and 9, its S4 row and, among others, the
+  TEST-05 row of its rule table (its **Amendments to the umbrella
+  design**). **Seam 1** below is written to hold under either wording,
+  and **Amendments to the umbrella design** here says where the two
+  designs' amendments meet.
+
+Outside this repository: `buildwarden-relay` `main` at `e9b23d5`
+(`spike/REPORT.md`). What the harness takes from it is in **What a relay under
+test must provide**: the Rust relay's build link is raw Ethernet frames on a
+socket, and its claim will arrive over vsock on VZ.
+
+**Revisions before the design review.** The design review began on
+2026-11-15 and has not ended (**Design review**, which records what its
+first sitting changed). Before it, the design was revised five times
+after `f1-design` was done, and none of the five is a return to Design
+(FLOW-06):
+
+- 2026-11-14, `618ae78`: the collector's lifetime is written per session
+  token, on Jeff's word in the `driver-contract` design review (the
+  collector is to be pluggable).
+- 2026-11-14, `d60aff3` to `6e56fed`, the revision before review. It
+  folds in what Jeff settled that day in the attended session: one queue
+  for work in every repository (his answers to `loop-contract`'s
+  questions and the change proposal he approved as the direction), and
+  the redrafted driver
+  contract. It also acts on an
+  independent reader's fifteen concerns. What changed:
+  - for one queue: Decisions 8 and 12, a4 and a15, **How the loop treats
+    the second repository** (rewritten), **Beside `driver-contract` in the
+    queue** (new), and the note on PROFILE-01 under **Rule changes**;
+  - for the driver contract: seam 1's roles and transport, seam 2's roles,
+    the collector target's two attachments, the proposed home of D5 to D8,
+    **What the specs repository leaves room for** (new), Decisions 2 and 5,
+    and **With `driver-contract`** (rewritten, with one sentence of the
+    proposed TEST-05 reworded);
+  - for the concerns: **Where this design is narrower than the umbrella**
+    (new) and a6; the `macos-vz` gap, now deferred (a14); the push trigger,
+    the final pin (task 12) and the order in which D17 and D18 are
+    reproduced; tier 1's seam list (Decision 7, one file added, what the
+    check holds, a17); the book's third table; the proposed TEST-02
+    sentence and EXEC-04's bullets; and the default of `make conformance`
+    (a18).
+
+  Questions a4, a6, a14 and a15 are reworded and a17 and a18 are new; none
+  is retired.
+- 2026-11-14, a pass on an independent review of that revision. Its
+  findings on the design were verified against the sources and taken:
+  - `alters-slot` merged as `897a4a8` while the revision was written, so
+    **Prior art** and **Beside `driver-contract` in the queue** state it as
+    done;
+  - the claim specification gives the start of the build environment to
+    no role, and three places that tied a collector to its claimant or to
+    one build are reworded (seam 1's Ordering, seam 6's roles, the
+    collector suites and the read-back);
+  - a15, Decision 12 and **The release step** name FLOW-08's "no sign-off
+    step in the queue" beside FLOW-04's list, and a15 names the later
+    items that would carry a rule change;
+  - a4 asks only the list of invariants, the four loop rules being settled
+    by Jeff's answer to `loop-contract` a17;
+  - the PROFILE-01 note is rewritten for the order Jeff approved, in which
+    the return it describes is expected;
+  - FLOW-05 joins `rules`, and a15 says that FLOW-14 on `main` does not
+    yet bar a feature's design from a loop rule.
+
+  a4 and a15 are reworded again; no question is added or retired.
+- 2026-11-15, after `loop-contract` merged (`ad4ea50`, #119). This branch
+  merged `main` (`99f38de`), and the design was brought under the merged
+  rules. What changed:
+  - *The rule change owed.* PROFILE-01 is declared in `rule_changes` and
+    under **Rule changes**, with the current and proposed wording of the
+    Specifications and Consumables entries and of one row of the Checks
+    table. The note that said it was owed is replaced by the entry. The
+    other four rule changes were checked against FLOW-14 as amended;
+    their wording is unchanged.
+  - *The template.* **Specification changes** is new (LOOP-02), filled
+    from **What each specification covers**, and the item's second
+    repository is named at the head of **Design** (LOOP-04).
+  - *Citations.* Where the design cited `loop-contract`'s questions or
+    its branch, it cites the rule: LOOP-04 for one queue and the
+    repositories an item names, LOOP-08 for work in a repository that
+    has not adopted the contract and for trunk protection, LOOP-07 for a
+    reconciliation item and for what a trunk may pin, LOOP-09 and FLOW-14
+    for who may change a loop rule. LOOP-03 and LOOP-06 are cited where
+    the design already did what they ask. The umbrella is cited as
+    amended, with its wave-1 gate.
+  - *What the merge made untrue.* That `loop-contract` is in review and
+    its rules proposed; that FLOW-14 on `main` does not bar a feature's
+    design from a loop rule; that `alters-slot`'s design is not on this
+    branch; and the three orders of the PROFILE-01 note, of which the
+    one that happened is the merge before this design's review.
+  - *`driver-contract`* is read at `5808805` in place of `0c29fc3`: five
+    of the answers Jeff has given in its second review are what this
+    design relied on as proposals (**Prior art**). Its GLOBAL-08 and
+    TEST-05 changes are word for word as at `0c29fc3`, so the ownership
+    table stands, with a row added for PROFILE-01.
+  - *Plan.* Task 9 gains the profile's entries.
+
+  No question is added or retired, and no option or recommended answer
+  changes. a4 and a15 cite the rules in place of `loop-contract`'s
+  questions; a15 also says what LOOP-09 adds to it; a6 records that the
+  question it cites in `driver-contract` is answered. `design_review`
+  stays `required` and `alters_relationships` `true`.
+- 2026-11-15, a pass on an independent review of that update. Each
+  finding was checked against its source. What changed:
+  - *`driver-contract` had moved.* The update read it at `5808805`. Its
+    `a280ba9`, committed half a minute after this design declared
+    PROFILE-01, declares a PROFILE-01 amendment of its own over five
+    rows of the profile, two of which this design also rewords: the
+    Specifications entry and the tier-1 Specification row of the Checks
+    table. It is now read at `bb4d7c8`. **With `driver-contract`** has
+    a row for each part of the profile, the two shared rows in full as
+    they read with both changes, `loop-profile.md` among the files the
+    second to merge resolves, and what is pointed out to that design's
+    review. This design's own PROFILE-01 wording is unchanged.
+  - *a15 and LOOP-04.* LOOP-04 holds an item that waits on another
+    component's release with a blocking question that names the
+    release, which is option B's mechanism. a15 and Decision 12 now say
+    so, why the bullet does not bind here, and why A is still proposed.
+    a15 also records that `loop-parallel`'s draft design proposes the
+    two clauses that would make the step the rule. No option and no
+    recommended answer changes.
+  - *Smaller.* Prior art says what `loop-contract` amended in the
+    umbrella's Decision 2, seam 10 and rule table; Part B's requirement
+    prefix is named, `COLL-B-<n>`.
+
+Nothing in any of the five is approved.
+
+## Decisions
+
+1. **The specifications say what `main` does, and this item changes no
+   behaviour.** Where the code and a rule or a comment disagree, the
+   specification records the code and marks the point as a divergence
+   (**Divergences found**); none is fixed here. *Rejected:* fixing them in
+   this item. Each fix is a seam change on the relay, the collector or the
+   executor, which would put `relay/` and `cmd/warden-io/` in this item's
+   diff, with GLOBAL-06 and every driver's native validation, and would give
+   the Rust relay a target that moved while it was being written down.
+
+2. **Repository layout: the `specs-migration` layout, extended.**
+
+   ```
+   buildwarden-specs/
+     README.md                 index: each specification, its newest release, its implementations
+     go.work                   the seven modules; the harness version in progress
+     relay-claim/              seam 1; module .../relay-claim, tags relay-claim/v0.x.y
+       v1.md
+       v1.openapi.json                 its HTTP exchange (a9)
+       v1.config.schema.json           the claim's request body
+       v1.identity.schema.json         the claim's reply
+       CHANGELOG.md  go.mod
+       cases/                          its suite: the cases, each citing CLAIM identifiers
+       cmd/bw-conformance-relay-claim/ the command that runs them
+     collector-outputs/        seam 2, the outputs a collector stores (a10)
+       v1.md  v1.openapi.json  CHANGELOG.md  go.mod  cases/  cmd/...
+     collector-inputs/         seam 2, the inputs and signals it serves (a10)
+       v1.md  v1.openapi.json  v1.complete.schema.json  v1.status.schema.json
+       CHANGELOG.md  go.mod  cases/  cmd/...
+     relay-guest-api/          seam 3
+       v1.md  v1.artifacts.openapi.json  v1.cwd.openapi.json  v1.control.openapi.json
+       CHANGELOG.md  go.mod  cases/  cmd/...
+     executor-initialize/      seam 5
+       v1.md  CHANGELOG.md  go.mod  cmd/...      no cases yet (a11)
+     bootstrap-config/         seam 6
+       v1.md  v1.schema.json  CHANGELOG.md  go.mod  cases/  cmd/...
+     conformance/              the harness the six share (Decision 5, a19);
+       CHANGELOG.md  go.mod            module .../conformance, tags conformance/v0.x.y
+   ```
+
+   One directory per specification, and the directory is the unit that is
+   versioned and released (a8, Decision 4). It holds everything a release
+   of that specification is made of: the document, one `v<N>.md` per major
+   version; its machine schemas; its OpenAPI description where it is an
+   HTTP protocol; its suite, the cases that cite its requirements; the
+   command that runs them; and its own `CHANGELOG.md`. Each directory is a
+   Go module, `github.com/buildwarden/buildwarden-specs/<directory>`, so
+   that a tag `<directory>/vX.Y.Z` is a version of it that a `go.mod` can
+   name (Decision 7). `conformance/` is the one directory that is not a
+   specification: the code every suite shares (Decision 5).
+
+   The extension over RELAY-05's
+   layout: a directory may hold more than one schema for a version, named
+   `v<N>.<part>.schema.json`, because a protocol has several JSON bodies where
+   a ledger metadata schema has one. A specification that is an HTTP
+   protocol also holds its OpenAPI description, `v<N>.openapi.json`, or
+   `v<N>.<part>.openapi.json` where it defines more than one HTTP server
+   (a9, **The OpenAPI descriptions**). A schema's `$id` is a name that mirrors
+   its path in the specs repository,
+   `https://github.com/buildwarden/buildwarden-specs/<directory>/v<N>.<part>.schema.json`
+   (RELAY-05's schema-identity rule, applied to the new repository), and does
+   not change once released; a schema that moves in from this repository
+   keeps the `$id` it was released with. The directory names `build-ledger/`,
+   `metadata-<name>/` and `environment-<type>/` are reserved for seam 4,
+   which M6 moves in (a1), and `driver-contract/` for seam 9 (**What the
+   specs repository leaves room for**).
+   Seam 2 has two directories because it is two specifications
+   (a10): a directory is a specification, not a seam.
+   *Rejected:* one directory per JSON body (`relay-claim-config/`,
+   `relay-claim-identity/`), which scatters one protocol over several
+   directories; an OpenAPI tree apart from the documents, where a
+   description and the prose it must agree with would sit in different
+   places. *Rejected:* one
+   `collector/v1.md` in two parts, each with its own requirement prefix
+   and suite, which this design proposed until the review (a10): Jeff
+   chose two documents.
+
+3. **Document format: Markdown prose with numbered requirements, JSON
+   Schema for JSON bodies, and an OpenAPI description beside the prose for
+   the HTTP seams** (a9, Jeff's answer of 2026-11-15). Each normative
+   statement uses the RFC 2119 words
+   and has a stable identifier (`CLAIM-7`, `COLLOUT-3`, `COLLIN-2`,
+   `GUEST-12`, `INIT-4`, `BOOTCFG-2`). Every document has the same
+   sections: scope and roles;
+   transport; messages and fields; ordering; errors; limits; versioning;
+   conformance (which role a conforming implementation may claim, and the
+   requirements of that role). A suite case names the requirements it checks,
+   which are requirements of its own specification, and the specs
+   repository's CI fails, specification by specification, when a
+   requirement is neither covered by a case of that specification's suite
+   nor listed, with a reason, as not machine-checked (**The harness**).
+   That is the
+   coverage LOOP-03 asks of a specification that has a suite. The
+   specifications that are HTTP protocols also carry an OpenAPI 3.1
+   description of their paths, methods, parameters, headers, bodies and
+   status codes (**The OpenAPI descriptions**). The requirements stay the
+   contract: they are what a case cites and what the coverage check
+   counts, and where the OpenAPI file and a requirement disagree, the
+   requirement stands. Checks in the specs repository's `ci` hold the file
+   to the requirements. *Rejected:* OpenAPI in place of the numbered
+   requirements, which is how this design read the option until the
+   review. It cannot state what follows the tunnel upgrade, HTTP trailers,
+   DNS and DHCP answers or ordering between endpoints, so prose would
+   still carry part of the contract with nothing to cite. Jeff's answer
+   keeps the requirements and adds the description. *Rejected:* prose
+   with no identifiers, which leaves "is this sentence tested" to a reader.
+
+4. **Versioning: a tag per specification, and each release carries the
+   build of the tooling that tests it** (a8, Jeff's answer of 2026-11-15,
+   read with his remark on a7: "I assumed that a specific release of the
+   specs themselves is coincident with the build of the conformance tools
+   that test them").
+
+   - *What a release is.* A release of a specification is a tag
+     `<directory>/vX.Y.Z` on a commit of the specs repository's `main`,
+     for example `relay-claim/v0.1.0`. That is Go's tag form for a module
+     in a subdirectory, so the tag is also the version a `go.mod` names.
+     The tag covers that directory: the document, its schemas, its
+     OpenAPI files, its cases and its command, as they are at that
+     commit. The six specifications have six independent version
+     numbers.
+   - *What a release carries.* The `release` workflow builds that
+     specification's command, `bw-conformance-<directory>`, with
+     `go install <command>@<tag>`: from the module as the tag serves it,
+     with the harness and every other module at the versions its `go.mod`
+     names. It builds a static binary for linux, darwin and windows on
+     amd64 and arm64, and attaches those binaries and a `SHA256SUMS` file
+     to the tag's release. So the tooling that tests a release of a
+     specification is part of that release: the same tag names the text
+     and the cases, and the binaries are their build.
+   - *What minor and patch mean,* for each specification on its own,
+     before its 1.0. A minor release may make a passing implementation
+     fail, or changes what an implementation must do: a requirement
+     added, changed or removed, with the schema and OpenAPI operation
+     that state it, or a case added or changed that can change a verdict.
+     A patch release cannot make a passing implementation fail: wording,
+     an example or an OpenAPI file corrected to agree with the
+     requirements, a case or a newer harness that removes a wrong
+     failure.
+   - *The document's version and the tag's.* The file name is the major
+     version of the protocol or format, as RELAY-05 has it for the
+     ledger: `v1.md` is version 1, the one the `/v1/` paths name. The
+     tag's version is that of the text and its suite. While it is
+     `v0.x.y`, `v1.md` is edited in place and may still change
+     incompatibly (GLOBAL-08's posture before 1.0). `<directory>/v1.0.0`
+     is the release from which `v1.md` changes only compatibly. A
+     breaking change after it adds `v2.md` beside `v1.md` and is released
+     under the module's next major version, which Go spells with a `/v2`
+     path; the item that first needs one says how. So from 1.0 on the
+     tag's major version is the highest `v<N>.md` in the directory, and
+     before it the tag's major is 0 and the document is `v1`. A schema's
+     `$id` and an OpenAPI file's `info.version` carry the document's
+     `v<N>` and never a tag's version, so neither changes with a release.
+   - *The harness* is tagged too, `conformance/v0.x.y`, and is not a
+     specification: it has no requirement, no binary and no release
+     assets. Each specification's `go.mod` names the harness version it
+     is released with (Decision 5, a19).
+   - *No unreleased change on `main`.* A pull request that changes a
+     directory adds the new version to that directory's `CHANGELOG.md`,
+     which `ci` checks, and the tag is pushed on its merge commit. So the
+     newest release of every specification is what `main` holds, and that
+     set is tested together on every pull request (**CI**). A tag is
+     never moved.
+   - *The first releases* are seven tags on one commit:
+     `conformance/v0.1.0`, then `bootstrap-config/v0.1.0`,
+     `collector-inputs/v0.1.0`, `collector-outputs/v0.1.0`,
+     `executor-initialize/v0.1.0`, `relay-claim/v0.1.0` and
+     `relay-guest-api/v0.1.0` (who pushes them: a15). Each tag is pushed
+     in a push of its own. GitHub starts no workflow run for a push that
+     carries more than three tags, and the `release` workflow runs on a
+     tag's push. The harness's tag goes first, and its `release` run is
+     green before the next tag is pushed.
+
+   **What this costs beside one tag for the repository,** which this
+   design proposed and Jeff declined:
+
+   - A component implements several specifications at once, and the
+     harness drives it through all of them. So a run of one
+     specification's cases also depends on the other protocols as the
+     harness of that specification's release speaks them. The six version
+     numbers are independent as documents and as tags. As a tested set
+     they are not: the set the specs repository tests together is the
+     newest release of each (above). Any other mix is tested only by the
+     implementation that pins it. Here such a mix always builds, each
+     suite with its own release's harness (Decision 7, a20); whether a
+     suite whose harness is older can still drive the component is what
+     that run finds.
+   - An implementation states six versions where it stated one, and a
+     relay is run by five commands where it was run by one (**The
+     harness**). This repository states them in six small modules, with
+     twelve files, where one tag would have been one module (Decision 7).
+   - A change that needs both a specification and the harness is two
+     tags, pushed in order. The first release is seven tags, seven
+     `release` runs and 36 binaries with six `SHA256SUMS` files (six
+     specifications, three operating systems, two architectures), where
+     one tag would have been one run and six binaries.
+   - A fix to the harness reaches a released binary only through a new
+     release of that specification, and it reaches the suite this
+     repository runs the same way, because each suite here is built from
+     what its release names (Decision 7, a20). A fix to a launcher or to
+     the sandbox that every suite needs is seven tags, six `CHANGELOG.md`
+     entries and 36 binaries, and six pins moved here.
+   - A change to one specification can force releases of others. When it
+     changes what the harness's model of a protocol must do (a field a
+     claimant must send, a step a build environment takes), a suite that
+     drives a component through that protocol can test an
+     implementation of the change only once it is released again with
+     the new harness.
+   - The suites one component is run through here need not share a
+     harness version. Two specifications pinned at releases made at
+     different times are each built with the harness their own release
+     names, so one run of a relay can use two versions of the launchers
+     and of the models. The report names the harness version beside each
+     specification's (Decision 7, a20).
+   - There are seven modules to keep building. The harness is a module
+     of its own that is tagged in the same merge as the specification
+     that needs it (a19), so three pieces of machinery keep them building
+     while a harness version has no tag yet: a line in the workspace
+     file, a command that tidies each specification's `go.mod`, and a
+     release built with `go install` and not in a checkout (**Releases
+     and how they are consumed**). A branch elsewhere that pins an
+     unmerged commit needs one extra line in each module whose
+     specification names such a version (Decision 7).
+
+   *Rejected:* one tag for the repository as a whole (`v0.x.y`), with one
+   `bw-conformance` binary: a8's option A, which this design proposed
+   because the harness spans seams and a relay implements several. Jeff
+   chose a tag per specification. *Rejected:* versioning the harness
+   apart from the documents and releasing its binary on its own (a8's
+   option C): a suite and the text it checks would be free to disagree,
+   and a specification's release would carry no tooling. *Rejected:* a
+   plain git tag per directory over one Go module: a `go.mod` could then
+   name only one version for all six, which is not what a7's answer asks
+   of the pin.
+
+5. **The harness is Go, lives in the specs repository under
+   `conformance/`, and does not import the kit; each specification's
+   cases live in its own module** (a5, as a8 reshapes it; that the
+   shared code is a module of its own, tagged on its own, is a19, Jeff's
+   answer of 2026-11-15).
+
+   - *The harness* is the module
+     `github.com/buildwarden/buildwarden-specs/conformance`. It holds
+     what every suite shares and no case: the target-file format and the
+     launchers, the Linux sandbox, the frame link, the runner and its
+     report, the checks `ci` runs (layout, coverage, OpenAPI), and the
+     test side of each protocol, written from the specifications. Those
+     are a claimant and collector to test a relay, a relay to test a
+     collector, a build environment, an upstream resolver and origin
+     servers, and a ledger verifier written from this repository's
+     `specs/build-ledger/v1.md`. Each role is a package the suites share.
+     The verifier checks the header, every record's signature and chain,
+     and the hash blocks, and reads the metadata fields its cases need by
+     the names `specs/metadata-<name>/v1.md` gives them. It holds no copy
+     of a schema file from `specs/`; validating metadata against those
+     schemas stays with `specs/specs_test.go` here until M6 moves seam 4
+     (a1).
+   - *A specification's suite* is the package `cases/` in its module:
+     the cases that cite its requirements, written against the harness.
+     Its command, `cmd/bw-conformance-<directory>`, runs them against a
+     target. The module requires the harness at one tagged version.
+   - *No module requires the kit.* None of the seven may require
+     `github.com/buildwarden/buildwarden`; `ci` checks each `go.mod` for
+     it. Sharing `relaycfg`, `collector` or `ledger` with the Go relay
+     would make a suite agree with that relay's bugs.
+   - *What is released* is Decision 4's: a tag per module and, for each
+     specification, its static `bw-conformance-<directory>` binaries with
+     a `SHA256SUMS` file, for consumers without a Go toolchain.
+
+   The harness's models are written from the documents, so a
+   specification change that changes what a model must do changes the
+   harness in the same pull request, and both are tagged on its merge.
+   The harness keeps a table of the version of each specification its
+   models were written from. Every command prints it with its own
+   version, and every report carries it. The table is kept by hand, in
+   the pull request that changes a model.
+
+   *Rejected:* Rust. The first implementation under test
+   and the loop that will write the harness are Go, and a Rust consumer runs a
+   binary either way. *Rejected:* a declarative HTTP test tool or shell: the
+   suites need HTTP/2 inside an upgraded connection, request trailers, DNS,
+   DHCP, raw Ethernet frames and ledger verification. *Rejected:* a separate
+   harness repository: one more repository to create (a2), and a suite
+   that could be released apart from the text it checks. *Rejected:* Go
+   tests in this repository (the umbrella's Decision 3 already rejects
+   them). *Rejected:* each specification's module holding its own role
+   models and requiring the others' for theirs. A relay's claim cannot be
+   tested without a collector, and a collector that claims cannot be
+   tested without a relay's claim endpoint, so the modules would require
+   one another in a circle. *Rejected:* the other homes for the shared
+   code, which a19 lists with what each costs.
+
+6. **A component under test is described by a target file.** The harness
+   never guesses how to start a relay or a collector. A target file (TOML)
+   names the role under test, a launcher, and the attachment points the
+   suites need (**What a relay under test must provide**, **What a collector
+   under test must provide**). It names no specification and no version:
+   the commands that are run say what it is tested against. The format is
+   the harness's, and so are the launchers. This item builds three: `exec` (a
+   binary), `oci` (an image reference, run by the container runtime the
+   target file names) and
+   `external` (already running; addresses only). A launcher for VM images is
+   specified by the same attachment points and built by the first item that
+   has a VM image to test (a6). *Rejected:* flags on the harness for each
+   form (`--relay-binary`, `--relay-image`): each relay form needs its own
+   launch wiring (a mode flag, an fd number, a token variable), which is the
+   implementation's, not the harness's, and belongs in a file kept beside the
+   implementation.
+
+7. **This repository pins a release of each specification in a module of
+   its own, `tools/conformance/<directory>/go.mod`** (a7, as Jeff
+   answered it for a tag per specification, and a20, his answer of
+   2026-11-15, which makes the one file of a7 six).
+
+   ```
+   tools/conformance/
+     bootstrap-config/      go.mod  go.sum
+     collector-inputs/      go.mod  go.sum
+     collector-outputs/     go.mod  go.sum
+     executor-initialize/   go.mod  go.sum
+     relay-claim/           go.mod  go.sum
+     relay-guest-api/       go.mod  go.sum
+     targets/               the five target files (**The harness**)
+   ```
+
+   Each of the six directories is a small nested module, like
+   `tools/tier1`, with the name of the specification it pins. It holds
+   two files and no Go code. Its `go.mod` requires that one
+   specification's module at one version and names its command in a
+   `tool` directive. `targets/` is not a module. For `relay-claim`:
+
+   ```
+   module github.com/buildwarden/buildwarden/tools/conformance/relay-claim
+
+   go 1.26
+
+   tool github.com/buildwarden/buildwarden-specs/relay-claim/cmd/bw-conformance-relay-claim
+
+   require (
+       github.com/buildwarden/buildwarden-specs/conformance v0.1.0 // indirect
+       github.com/buildwarden/buildwarden-specs/relay-claim v0.1.0 // indirect
+       // and the harness's own dependencies, each marked the same way
+   )
+   ```
+
+   That is the file as `go mod tidy` wrote it in a model of the layout,
+   with the model's module names replaced by the real ones (**Releases
+   and how they are consumed** says what was tried). The `tool`
+   directive keeps the requirement through `go mod tidy` although the
+   module holds no Go code, and `go tool bw-conformance-relay-claim`, run
+   in that module, builds the command from the pinned source.
+   `go mod tidy` marks every line `// indirect`, the pin among them,
+   because the module reaches each only through the `tool` directive.
+   The `relay-claim` line is the pin. The `conformance` line is the
+   harness, at the version the pinned release names; it is not a pin,
+   and nobody edits it. The other lines are the harness's third-party
+   modules, at the versions the release lists. The `go` line is the one
+   the pinned release's own `go.mod` has (below); in the model that was
+   `go 1.26`. `go.sum` holds the hashes of all of them, the harness
+   included, and the Go checksum database verifies each. The kit's own
+   `go.mod` gains no dependency.
+
+   *Each command is built from exactly what its release names.* Go builds
+   one module with one version of each dependency. A module that requires
+   one specification takes its whole build list from that specification's
+   own `go.mod`: the harness version it names and the third-party
+   versions it lists. That is the list the `release` workflow's
+   `go install <command>@<tag>` builds from (Decision 4). So what tests a
+   pinned release here is built from the same modules, at the same
+   versions, as that release's binaries: in the model the two builds
+   reported the same module versions with the same hashes. The source
+   is the release's, and so is what Go takes from a module's `go` line.
+   The compiler is the Go that runs here, which is this repository's
+   unless the release names a newer one (both below). Two
+   specifications pinned at releases with different harness versions run
+   each with its own, and any set of pins builds, the newest of each or
+   not: the model built one specification at a release with a newer
+   harness beside another at a release with an older one, where the
+   harness had renamed a function the older cases call.
+
+   *A module is written from nothing, never edited in place.* Moving a
+   pin with `go get` leaves the other lines where they were: in the
+   model, taking a specification back to an older release kept the newer
+   harness line, `go mod tidy` accepted it, and the older cases did not
+   compile. So `make pin-specs` writes each module it moves from nothing:
+   the `module` line, the `go` line, the `tool` directive and the one
+   requirement, then `go mod tidy`, with the old `go.sum` removed. The
+   `pin` job does the same for the versions the files name and fails on
+   a difference (**CI**), which is what holds the harness line and the
+   third-party lines to what the release names. Nothing else moves a
+   pin: the repository has no dependency bot, and one that is added
+   later is not given these six directories, because its `go get` is the
+   in-place edit this paragraph rules out and it would not rewrite the
+   book page.
+
+   *The `go` line is the release's.* `make pin-specs` writes on each
+   module's `go` line what the pinned specification's own `go.mod` names
+   at that version, which it reads before it writes the module, from
+   the file `go list -m <module>@<version>` reports as `GoMod`. It does
+   not write this repository's. In a module that holds no Go code
+   the line still decides something: Go takes a build's default
+   `GODEBUG` settings from the `go` line of the module the build is run
+   in, and `go install <command>@<tag>`, which builds the release's
+   binaries, takes them from the specification's. In a trial, a
+   specification that names `go 1.24` was built with Go 1.26.3. In a
+   pin module with `go 1.24`, `go tool` built a command whose
+   `go version -m` output is that of the `go install` build, line for
+   line, and `go build` there wrote the same file as `go install`, byte
+   for byte. In a pin module with this repository's `go 1.26.3` the
+   build lost its `DefaultGODEBUG` line, which there set `tlssha1` and
+   `urlstrictcolons` among others. The line
+   also does not depend on the Go that writes it: Go 1.26.3 and
+   Go 1.26.11 wrote the same `go.mod` and `go.sum`, which the `pin`
+   job's comparison needs, and a change to this repository's own `go`
+   line touches no pin. `go mod tidy` raises a line that is lower than
+   one a dependency names and writes no `toolchain` line; a
+   specification's `go.mod` is tidy at its release (**Releases and how
+   they are consumed**), so the line stays as written. A release that
+   names a newer Go than the one that runs here cannot be built here
+   until this repository's Go moves, as its `go install` cannot: with
+   `GOTOOLCHAIN=local` the move of the pin stops with Go's message
+   ("requires go >= 1.27 (running go 1.26.3; GOTOOLCHAIN=local)") and
+   writes no `go.sum`, and with `GOTOOLCHAIN=auto` Go fetches that
+   toolchain. The released binaries need no Go. *Rejected:* this
+   repository's own `go` line, from the root `go.mod`. It is as
+   repeatable, but the build then differs from the release's as the
+   trial shows, and each change of this repository's Go would rewrite
+   the six modules.
+
+   *No workspace.* This repository has no `go.work`, and this item adds
+   none. A workspace that lists the six modules gives them one build
+   list, and so one harness for all six: in the model the mixed set
+   above then failed to compile, as it does in one module. The root
+   module, `tools/tier1` and `tools/workflow` are not joined by a
+   workspace either; `make test` and `make lint` enter each. The six
+   modules hold no Go package, so `go build ./...`, `make test`,
+   `make lint`, `make tidy` and the `auto-tidy` workflow, which work on
+   the root module, do not see them. The repository vendors nothing. The
+   recipes that use the six modules set `GOWORK=off`, so that a `go.work`
+   a developer keeps above the checkout cannot join them.
+
+   *Each seam's own contract path.* Each module's `go.mod` is the
+   contract path tier 1 checks for the seam its specification belongs
+   to: a change to a file listed for `relay-claim` must change
+   `tools/conformance/relay-claim/go.mod`, and so on. Seam 2 has two
+   specifications and so two pin files, and tier 1's list gives it an
+   entry for each. **Tier 1's seam list** says what the check holds and
+   what it leaves to the suites and to Review.
+
+   *A release on trunk, a commit only on a branch.* On a pull request and
+   on `main` every module names its specification at a release tag, its
+   harness line is a release tag too, and it carries no `replace` line.
+   The harness's third-party lines are as the release names them, and
+   one of those may be a commit. An unreleased commit of the specs
+   repository is for work in progress: the `conformance` workflow runs
+   the suites with it on a branch push and fails it on a pull request.
+   LOOP-07 has the same rule for a component's trunk and its branches
+   (point 5), and leaves how a release is pinned to the component, which
+   says it in its profile (LOOP-01; **Rule changes**, PROFILE-01).
+
+   *One command moves the pins,* `make pin-specs`, in one of two forms.
+   `SPECS="<directory>@<version> ..."` moves the named specifications to
+   release tags and leaves the other modules as they are, and
+   `SPECS=latest` moves all six to their newest releases, the set the
+   specs repository tested together (Decision 4). `REF=<commit>` pins
+   all six at one commit of the specs repository, for a branch in
+   progress. A specification's `go.mod` at such a commit may name a
+   harness version that is not tagged yet. In each module where it does,
+   this form also writes one `replace` line that points the harness
+   module at the same commit. A module whose specification names a
+   harness version that has its tag gets no such line, and is built with
+   that harness, as its release is. The command asks whether the version
+   exists before it writes the module; nothing is tried and then
+   repaired. After `REF`, all six are at a commit, so the move back to
+   releases names all six or is `SPECS=latest`. In either form the
+   command rewrites the `go.mod` and `go.sum` of each module it moves
+   and the one book page that links into the specs repository (**The
+   book and the specifications link both ways**), and builds each
+   command it moved.
+
+   *Which sets are tested.* The newest release of each specification is
+   tested as a set in the specs repository, and `SPECS=latest` is the
+   set this design supports. An implementation may hold one
+   specification at an older release while it moves another. Here that
+   set builds, and each suite runs as its release built it. What it does
+   not promise is that the older suite can still drive the component: a
+   suite reaches a relay through the claim, the collector and the build
+   as the harness of its own release speaks them, and a relay that has
+   moved to a newer release of one of those protocols may refuse an
+   older claimant. Such a suite fails, and the remedy is a release of
+   that specification with the newer harness (Decision 4). A set other
+   than the newest of each is tested by this repository's `conformance`
+   workflow and by nothing else.
+
+   *Rejected:* one `go.mod` for all six specifications, which is what
+   a7's answer named and what this design had until a20 was answered.
+   Go builds one module with one harness, the highest any pin names. A
+   specification pinned at a release whose harness is older was then
+   tested here with a newer harness than its binaries carry, a set that
+   was not the newest of each could pass every check the `pin` job then
+   had and not compile, and tier 1 had one contract path for five seams
+   (a20, option A). *Rejected:* the released binaries, fetched and
+   checked against a file of hashes (a20, option B): it is the lock file
+   and download script below, and a branch in progress pins a commit
+   that has no binaries. *Rejected:* a git
+   submodule (tier 1 reads files
+   with `git show`, which does not see into a submodule; worktrees and CI
+   checkouts each need extra steps). *Rejected:* a vendored copy of the
+   documents, which is the duplication the specs repository exists to remove.
+   *Rejected:* a plain lock file and a download script, which would
+   reimplement what the module system already verifies. *Rejected:* a pin
+   file for each seam beside one `go.mod`. Each would repeat a version
+   that `go.mod` already states, with a test to keep the two alike.
+
+8. **This item works in two repositories, from the one queue, from the
+   start of Implement.** It names them here, as LOOP-04 has an item do
+   until the queue records them: `buildwarden/buildwarden`, which
+   holds its design, its queue item and its reviews, and
+   `buildwarden/buildwarden-specs` (a4). The documents, harness and suites
+   are written on a branch `feat/seam-specs` of the specs repository and
+   reach its `main` through a pull request Jeff merges. This repository's
+   branch holds the pins, the target files for the Go relay and the disk
+   collector, the `conformance` workflow, the book links, tier 1's seam list
+   and the rule changes. `wf` runs no gate in the specs repository. The
+   loop's mechanical checks reach it through the pins: this repository's
+   `conformance` workflow cannot pass unless the pinned specs commit exists
+   and its suites pass against the Go relay and the disk collector, first on
+   a push of this branch during Implement and again on the pull request
+   (**How the loop treats the second repository**). *Rejected:* writing
+   everything in a staging directory on this branch and exporting it at
+   Publish. It keeps the work in one repository, but the branch that Review
+   reads would not be the branch the PR merges (the staging tree has to be
+   deleted and the pins switched after Review), and the relay repository
+   could read no draft until Publish. *Rejected:* waiting for
+   `loop-repository`, the P1 item that gives `wf` its gates, branches and
+   pull requests in a second repository. The umbrella's order puts S1 in
+   wave 1, the relay has no written target until S1, and an item may work in
+   a repository that has not adopted the Loop Contract (LOOP-08).
+
+9. **Seam 4 moves at M6, with RELAY-01 to RELAY-08, and not in phase S1**
+   (a1, Jeff's answer of 2026-11-15). The ledger format and its schemas
+   stay under `specs/` in this repository until then, and RELAY-05 is not
+   changed by this item or by any other item of S1. The umbrella's seam
+   table says the format "moves to the specs repository" and names no
+   phase, and its table of rule changes lists RELAY-05 for S1; both are
+   amended to name M6 (**Amendments to the umbrella design**). The
+   harness's ledger verifier is written from `specs/build-ledger/v1.md`
+   here (Decision 5). *Rejected:* a later item of phase S1, which this
+   design proposed until the review; Jeff chose M6, where the rule that
+   governs the format moves too. *Rejected:* in this item (a1, option B).
+
+10. **Suites for the relay and the collector now; the executor's suite with
+    S2** (a11). Seams 5 and 6 get their specifications here. What the relay
+    and the collector do for them (serve the bootstrap config byte for byte
+    and record it; serve the endpoints `initialize` calls) is in the relay
+    and collector suites. A suite that runs `warden-io initialize` itself is
+    left to S2's item, which changes what `initialize` does. Until it exists
+    the executor's seam files are held by tier 1's pin check and by the Go
+    tests in `cmd/warden-io/`, not by a suite (**Tier 1's seam list**).
+
+11. **No package of the relay, the collector, the executor or a driver
+    changes.** The package comments of
+    `relaycfg` and `collector` keep their protocol text for now. Pointing them
+    at the specifications is a comment-only edit to shared packages that
+    would declare every driver (FLOW-02); it is left to the next item that
+    changes those packages.
+
+12. **The releases and the pins' move to them are one human step, after
+    Review** (a15). Nothing is merged or tagged in the specs repository
+    until the suites have passed on hosted runners for this branch and tier 2
+    has read the specs branch. Then `f6-release-specs`: Jeff reads the tier-2
+    report and merges the specs pull request. Only he merges it (FLOW-08).
+    The tags are then pushed on the merge commit, the harness's first and
+    then one for each specification, each in its own push (Decision 4),
+    and the pins moved on this branch, by him or by
+    the attended session on his word. The merge is the sign-off, as FLOW-08
+    has it. The step is the queue's record of a merge in a repository `wf`
+    cannot see, and what the tags and the pins' move wait on. Two sentences
+    of the rules as they stand do not provide for such a step: FLOW-04's
+    list of what a `human` step is for, and FLOW-08's "There is no sign-off
+    step in the queue". This design declares a change to neither, and may
+    not: both are loop rules (LOOP-09, FLOW-14). a15 asks for the step as
+    an exception, and says which later item makes it unnecessary and
+    which would carry a rule change if Jeff wants one.
+    *Rejected:* `f6-open-pr` moves the pins. Its definition in
+    `.claude/agents/wf-publish.md` has no such duty, and a feature cannot
+    change `.claude/` (FLOW-14). *Rejected:* no step, and a blocking
+    question raised in Publish that names the release (a15, option B).
+    It is how LOOP-04 holds an item that waits on another component's
+    release, and it needs no exception. It is not taken because the
+    release would be asked for only once the item holds the PR slot,
+    and nothing would show in the queue before then; it is what the
+    design falls back to if the review does not grant the step.
+    *Rejected:* releasing before Review and moving the pins in
+    Implement. The specs content would be merged and tagged before tier 2
+    had read it, and a finding would cost a second release.
+
+13. **The collector's outputs specification is normative for the wire; the
+    disk layout is the disk collector's** (a16). `collector-outputs`
+    requires what a collector accepts, what it replies and in what order.
+    The layout `warden inspect`
+    reads is specified as the disk collector's, in a section other collectors
+    need not meet. *Rejected:* an abstract object model for any collector's
+    storage. Nothing on `main` defines one, and the umbrella's review put the
+    collector's storage boundary off to the first alternative collector (its
+    a2).
+
+## Questions
+
+### Blocking
+
+None. The repository's creation is Jeff's (umbrella a11). By his answer
+to a2 it is created during the design review, before the approval, and by
+Jeff himself (**What Jeff creates**); Implement checks it before it starts.
+The release at the end is Jeff's too, and is a queue step, not a question
+(a15). Whether that step may exist is a15.
+
+### Assumed
+
+**Answered on 2026-11-15.** Jeff answered a1 to a18 in the first sitting
+of the design review. Each entry below keeps its options and says which
+he chose. Twelve were confirmed as recommended: a3 to a6 and a11 to a18.
+Five depart from what the design proposed, and the design is revised for
+each: a1 (C), a2 (B), a8 (B), a9 (A, and OpenAPI for the HTTP seams as
+well) and a10 (B). a7 was restated for a8's answer and then confirmed.
+a19 and a20 were raised by the fold-in of a8 and by its review, and he
+answered both as the sitting continued, each as recommended: a19 (A),
+which the design already stood on, and a20 (C), which it did not, and
+for which it is revised (Decision 7).
+
+Each is confirmed in the design review (FLOW-19). The same entries are in the
+queue file. a1 to a16 date from `f1-design`; the revision of 2026-11-14
+reworded a4, a6, a14 and a15 and added a17 and a18, and the pass on its
+review reworded a4 and a15 again. None is retired. The revision of
+2026-11-15, after `loop-contract` merged, changed no option and no
+recommended answer: a4 and a15 cite the merged rules where they cited
+`loop-contract`'s questions, a15 gains what LOOP-09 adds, and a6 records
+an answer given in `driver-contract`'s review. The pass on its review,
+the same day, added to a15 what LOOP-04 says of an item that waits for a
+release; its recommended answer is still A.
+
+- **a1. Seam 4's move.** The umbrella's seam table says the ledger format
+  "moves to the specs repository" and gives no phase. Options: (A) a later
+  item of phase S1, filed when this one's release mechanism has run once;
+  (B) in this item; (C) at M6, with RELAY-01 to RELAY-08.
+  **Answered 2026-11-15: (C), at M6, with RELAY-01 to RELAY-08.** The
+  design proposed A; it is revised (Decision 9). The move rewrites
+  RELAY-05, tier 1's `schema-doc` root, the book's `specs/` mirror and its
+  redirects, `specs/specs_test.go` and the `$id` policy for new ledger
+  schemas, each of which a third party can see. With C all of that is
+  M6's, in the item that moves the relay's rules, and no item of S1 is
+  filed for it. Until then the specs repository's README names the ledger
+  format as specified under `specs/` here and links to it, and the
+  harness's ledger verifier is written from `specs/build-ledger/v1.md`.
+  Consequence: RELAY-05 is not changed in S1, although the umbrella's
+  table lists it beside TEST-05 for S1. The umbrella's seam 4 row and that
+  row of its rule table are amended to name M6 (**Amendments to the
+  umbrella design**), for Jeff's approval by name.
+- **a2. When the repository is created, by whom, and what has to exist.**
+  Options: (A) in or right after the design review, by Jeff or by that
+  attended session on his word (umbrella a11); (B) now, before the review;
+  (C) at Publish, after incubating on this branch (Decision 8's rejected
+  alternative). **Answered 2026-11-15: (B), now, before the review's
+  approval.** The design proposed A; it is revised. What is created was
+  confirmed with Jeff in the review session, right before creation
+  (umbrella a11): the name `buildwarden/buildwarden-specs`; public (a3);
+  a first commit that carries a README stub and the Apache-2.0 `LICENSE`
+  and no `NOTICE` file. Jeff creates it himself, because the cloud session
+  that holds the review cannot create a repository; the session then
+  attaches it. **What Jeff creates** lists the settings and what Implement
+  checks before it starts. If the repository is missing then, or a branch
+  cannot be pushed to it, Implement stops and the tick records a blocking
+  question for the human, as `build-vm-busybox` q1 did. No agent creates
+  it, and no agent adds a licence file to it.
+- **a3. Visibility.** Options: (A) public from creation; (B) private until
+  `buildwarden-relay` goes public at M1.
+  **Answered 2026-11-15: (A), public from creation.**
+  It specifies protocols of a public project, the book links to it, and the Go
+  module proxy and checksum database serve only public modules: a private
+  repository would need credentials in this repository's CI and in the
+  relay's.
+- **a4. Which invariants apply to work in the specs repository, which has
+  not adopted the Loop Contract.** *(Reworded 2026-11-14 for one queue,
+  and again after the independent review: the question is now the list of
+  invariants alone. On 2026-11-15 its citations were brought up to the
+  merged rules; the options and the answer proposed are as they were.)*
+  There is one queue, for work in every repository, and an item names
+  the repositories it works in (LOOP-04). This item names two
+  (Decision 8). The specs repository has no profile and no invariants of
+  its own, so it is not a component; it adopts the contract when Jeff
+  files the item that does that. What binds a worker in such a
+  repository is not asked here. LOOP-08 says it: the worker is bound
+  there by FLOW-08, FLOW-16, FLOW-17 and FLOW-18, and the item's design
+  says which invariants apply, by rule ID. That rule is Jeff's answer to
+  `loop-contract` a17 of 2026-11-14, which also declined what was this
+  question's option B, that the specs repository adopt first and S1
+  wait. Its option C, no rules there, cannot stand beside the
+  four loop rules. What is left for this review is the list. Options:
+  - (A) GLOBAL-01 to GLOBAL-04, GLOBAL-07, GLOBAL-09 to GLOBAL-11, TEST-04
+    and TEST-07 for the harness's Go code, and RELAY-05's schema-identity
+    rule for the schemas. These are the rules a reader can judge from the
+    code and the schemas alone. Review's tier-2 report judges the first
+    group and the specs repository's `ci` holds the second (**How the loop
+    treats the second repository**).
+  - (B) A wider list: A, and also GLOBAL-05 for the harness and its
+    release binaries, a GLOBAL-06 note for the sandbox, which runs as root
+    and creates namespaces, and UX-02, UX-04, UX-05 and UX-09 for the
+    `bw-conformance` command line and its report. Tier 2 then reads more
+    in a repository where no tier 1 runs. GLOBAL-05 and GLOBAL-06 are
+    written for a build under `warden` and for the product's three
+    boundaries, and the UX rules for `warden`'s surfaces, so each would be
+    applied to something it was not written for.
+  - (C) Only what the specs repository's own CI can enforce: the layout
+    and `$id` check, `go vet`, `go test` and the check that the module
+    does not require the kit. Review then reads nothing in the specs
+    repository, and the harness's code is held to no rule of this
+    project.
+
+  **Answered 2026-11-15: (A), the rules a reader can judge from the
+  code and the schemas alone.**
+  Naming the list in the design is the
+  normal way to work in such a repository, not a stopgap until P1: it is
+  the list LOOP-08 asks an item's design for. The **Security note** says
+  what the sandbox does whichever option is taken.
+- **a5. Harness language, home and form** (Decision 5). Options: (A) Go, in
+  the specs repository under `conformance/`, importing nothing from the kit,
+  released as a module tag plus static `bw-conformance` binaries with
+  checksums; (B) Rust; (C) a separate harness repository; (D) Go tests in
+  this repository that import the kit, which the umbrella's Decision 3
+  rejects.
+  **Answered 2026-11-15: (A).**
+  *(2026-11-15: a8's answer does
+  not change this one. It changes what the words cover: the shared
+  harness stays under `conformance/`, each specification's cases move
+  into its own module, and the module tag and the `bw-conformance`
+  binaries are one set for each specification, `bw-conformance-<directory>`
+  (Decisions 4 and 5).)*
+- **a6. Launchers built now.** Options: (A) `exec`, `oci` and `external`
+  now; the VM-image launcher (qemu first) is built in the specs repository
+  by the relay's M2 or M3 item, or by seam 8's item, whichever first has an
+  image and a CI that boots it; (B) build a qemu launcher here and validate
+  it on `qemu-any`.
+  **Answered 2026-11-15: (A), `exec`, `oci` and `external` now.**
+  The Go relay's VM form adds
+  no relay code to `-mode vm`, which the `exec` launcher covers in a network
+  sandbox. What a VM adds is its init and boot channel
+  (`tools/relay-vm/init`, the relay seed), which belong to seam 8 (relay
+  release forms), not to seams 1 to 3. No phase writes seam 8 yet:
+  Jeff's answer to `driver-contract` a11 is that it is filed as its own
+  S-track item, to exist before M6 adopts a release, and none is filed.
+  *(Reworded 2026-11-14: one sentence added. On 2026-11-15 the sentence
+  before this note was brought up to that answer.)* A is narrower than
+  the umbrella's S1 row, which has the harness run "against any relay
+  binary or image": the OCI image is run here, and the Go relay VM image
+  and the Hyper-V relay VM are run by no suite when S1 is done (**Where
+  this design is narrower than the umbrella**).
+- **a7. How this repository pins a specs release** (Decision 7). Options:
+  (A) `tools/conformance/go.mod`, a nested module that requires the specs
+  module at one version: a release tag on a pull request and on `main`, a
+  pseudo-version only on a branch while work is in progress; the file is
+  tier 1's contract path for the five seams; (B) a git submodule; (C) a
+  vendored copy of the documents; (D) a lock file and a download script.
+  **Answered 2026-11-15: (A), restated for a tag per specification.**
+  When first asked, Jeff said: "What is meant by this repository and
+  where by comparison are the specifications? I assumed that a specific
+  release of the specs themselves is coincident with the build of the
+  conformance tools that test them". The question was then put again
+  with a8's answer in it, and he chose A in this form:
+  `tools/conformance/go.mod` names each specification's module at a
+  version, released tags on a pull request and on `main`, an unreleased
+  commit only on a branch in progress. The design is revised
+  (Decision 7). The file is still tier 1's contract path for the five
+  seams.
+  *(2026-11-15, later in the sitting: a20's answer, (C), replaces that
+  one file with six, `tools/conformance/<directory>/go.mod`, one for
+  each specification. The answer recorded above is as he gave it and is
+  not edited. What it settled stands: a nested module that names a
+  specification at a version, a release tag on a pull request and on
+  `main`, an unreleased commit only on a branch in progress. Each file
+  is tier 1's contract path for the seam its specification belongs to,
+  so seam 2 has two (Decision 7, **Tier 1's seam list**).)*
+- **a8. Versioning and release scheme** (Decision 4). Options: (A) a major
+  version per document (`v<N>.md`, edited in place before 1.0) and semver
+  tags `v0.x.y` for the repository as a whole; a minor release may make a
+  passing implementation fail, a patch release may not; the first release is
+  `v0.1.0`; (B) a tag per specification; (C) the harness versioned apart
+  from the documents. **Answered 2026-11-15: (B), a tag per
+  specification.** The design proposed A; it is revised. Read with his
+  remark on a7, each specification is versioned and tagged on its own,
+  and a specification's release carries the build of the conformance
+  tooling that tests that specification. Decision 4 says what a release
+  is in git, what it carries, what minor and patch mean for each
+  specification, how a document's `v<N>` and a tag's version relate, and
+  what the scheme costs beside the single tag. Decisions 2, 5 and 7,
+  **The harness**, **Releases and how they are consumed**, **CI** and
+  the proposed wording of four rules follow it. It raised two
+  questions, both answered since: a19, where the code that every suite
+  shares lives, and a20, which build of a release's tooling this
+  repository runs.
+- **a9. Document format** (Decision 3). Options: (A) Markdown prose with RFC
+  2119 words and a stable identifier per requirement that suite cases cite,
+  plus JSON Schema 2020-12 for JSON bodies; the specs repository's CI fails
+  on a requirement with no case and no stated reason; (B) OpenAPI for the
+  HTTP seams; (C) prose without requirement identifiers. **Answered
+  2026-11-15, changed, in Jeff's words:** "Similar to the Markdown with
+  requirement IDs and CI failing on requirements without test cases or
+  conformance testing, but also with the OpenAPI for the HTTP seams as
+  well". So (A), and for the HTTP seams an OpenAPI description too. The
+  design proposed A alone and had B as a rejected alternative; it is
+  revised (Decision 3, **The OpenAPI descriptions**). Four specifications
+  get one: `relay-claim`, `collector-outputs`, `collector-inputs` and
+  `relay-guest-api`. The requirements stay the contract, and checks hold
+  the OpenAPI files to them.
+- **a10. How the collector specification's two parts are laid out**
+  (umbrella a1): the outputs a collector stores, and the inputs and
+  signals it serves. Options: (A) one document, `collector/v1.md`, with
+  Part A and Part B, each with its own requirement prefix and its own
+  suite; (B) two documents (`collector-outputs/`, `collector-inputs/`).
+  **Answered 2026-11-15: (B), two documents.** The design proposed A; it
+  is revised (**Seam 2**). Each is a specification of its own, with its
+  directory, its requirement prefix (`COLLOUT-<n>`, `COLLIN-<n>`), its
+  suite and, under a8, its releases, so an implementation can claim one.
+  The two share transport, authentication, the path rule and the session.
+  Those are written in full in both documents and kept the same by a
+  check, and are not put in a third document, because each is released on
+  its own (**Seam 2** gives the reason and the cost). Nothing on the wire
+  changes: the claim still names one `collector_url`. Seam 2 stays one
+  seam, `collector`, in the umbrella's numbering, in GLOBAL-08 and in
+  tier 1's seam list.
+  *(2026-11-15, a20: in tier 1's list the seam `collector` now has two
+  entries, one for each specification's pin. It is still one seam, and
+  both entries carry its name.)*
+- **a11. The executor's own suite is deferred to S2's item.** Options: (A)
+  defer: S2 moves truststore generation out of `initialize`, so a suite
+  written now would pin the behaviour S2 removes; (B) build it here, for
+  Linux guests in a container, with Windows and macOS guests as tracked
+  gaps.
+  **Answered 2026-11-15: (A), deferred to S2's item.**
+  Until then EXEC-04's conformance stays
+  the tests in `cmd/warden-io/`, and the amended TEST-05 says so. The
+  umbrella says seams 1 to 8 each get a suite, and its S2 row does not name
+  this one. With A, seam 5 has no suite when S1 is done, and S2's intake has
+  to carry it: it is on the list of work owed after the merge
+  (**Implementation plan**).
+- **a12. What to do with the nineteen divergences** (D1 to D19,
+  **Divergences found**; Decision 1). Options: (A) record each in its
+  specification as the code behaves and list it under "Known divergences";
+  fix none here; the review may turn any into a follow-up item, and says
+  what kind of item it is under FLOW-20; (B) fix them in this item, which
+  puts `relay/`, `collector/` and `cmd/warden-io/` in the diff, with
+  GLOBAL-06 and every driver's native validation.
+  **Answered 2026-11-15: (A), record each and fix none here.**
+- **a13. Seam 6's name.** The umbrella's seam table gives seam 6 no name.
+  Options: (A) `bootstrap-config`, added to GLOBAL-08's executor bullet and
+  to tier 1's seam list; (B) `bootstrap-model`, which the umbrella's
+  front-matter lists and which is also the name of the BOOT-07 model.
+  **Answered 2026-11-15: (A), `bootstrap-config`.**
+- **a14. Native validation** (**Validation plan**). *(Reworded
+  2026-11-14.)* Options: (A) nothing blocking; two tracked gaps, both
+  deferred: `macos-vz` until the `exec` launcher has a macOS form, and
+  `qemu-any` until a VM launcher exists; (B) build the macOS form of the
+  launcher in this item, and keep the `macos-vz` gap open, to be run once
+  the item has merged; (C) block on `macos-vz`, which needs B's launcher;
+  (D) record no gaps.
+  **Answered 2026-11-15: (A), nothing blocking, and two tracked gaps,
+  both deferred.**
+  At `f1-design` the
+  `macos-vz` gap was recorded open. Nothing this item builds can start that
+  run: the relay targets run on Linux only, and the sandbox is Linux
+  namespaces. An open entry wakes the MacBook's scheduled session for a run
+  it cannot make.
+- **a15. The release step, and what it rests on** (Decision 12).
+  *(Reworded 2026-11-14, and again after the independent review.)* After
+  Review three things happen in order: Jeff merges the specs pull request,
+  which is FLOW-08's merge in that repository and his alone; a release is
+  tagged; and the pin on this branch moves to the tag. `wf` records one
+  branch and one pull request for an item, in this repository, so it
+  cannot see the first, and the loop has to wait for it somewhere Jeff
+  will see. Two sentences of the rules as they stand do not provide for a
+  queue step that does that:
+  - FLOW-04 (MUST, automated) lists what a `human` step is for: blocking
+    questions, the design review and escalations. A step for a merge in a
+    second repository is none of those.
+  - FLOW-08 (MUST, automated), which binds in the specs repository
+    (LOOP-08), says "There is no sign-off step in the queue:
+    the loop sees the merge". The loop cannot see this one.
+
+  The merge remains the sign-off, and nothing else signs off. The step is
+  only the queue's record that the merge happened, and what the tag and
+  the pin's move wait on. This design declares a change to neither rule: a
+  feature's design may not declare a change to a loop rule (FLOW-14 as
+  amended, LOOP-09). *(On 2026-11-15 this paragraph and the next were
+  brought up to the merged rules; the options and the answer proposed
+  are as they were.)*
+
+  LOOP-09 is on `main` since this question was written, and bears on
+  option A. It gives every change to a loop rule to a process item, and it
+  provides for no exception granted in a feature's design review. Option A
+  changes no rule's text and ends with this item; whether an exception
+  that the owner of the rules grants for one item is within LOOP-09 is
+  his to judge at this review. Options B, C and D ask for none.
+
+  LOOP-04 merged with it, and bears on option B. *(Added 2026-11-15, on
+  the review of that day's update.)* Its last bullet holds an item that
+  waits on another component "with a blocking question that names the
+  release (FLOW-07)", and the item "resumes when the release exists".
+  That is option B's mechanism, and it is what this design already does
+  when a return to Implement needs a second release (**The release
+  step**). The bullet does not bind here. The specs repository has not
+  adopted the contract and is not a component (LOOP-08). And this item
+  does not wait on work that is another item's: the release is its own
+  product, made by the merge of its own pull request in a repository it
+  names (LOOP-04). What the queue lacks is a way to see that merge, not
+  a way to wait for a release. The bullet still shows what the merged
+  rules do where a release is waited for, and B asks for no exception.
+  Options:
+  - (A) A `human` queue step `f6-release-specs` in phase 6, as an exception
+    to those two sentences that this review grants for this item and no
+    other. Jeff merges the specs pull request. The tag is then pushed and
+    the pin moved on this branch (`make pin-specs`, `make test`,
+    `make lint`, push), by him or by the attended session on his word. The
+    step needs `f2-design-review`, so `wf` does not offer it before this
+    question is confirmed. It cannot be held back until Review: `wf`
+    offers a `human` step whatever its phase, and a step can only need one
+    that already exists. Its note says not before Review is done, there is
+    no specs pull request to merge until Implement's task 11, and the PR's
+    `pin` job stops a pin that is not a release tag.
+  - (B) No step now. The Publish step that finds the pin on a
+    pseudo-version stops and raises a blocking question that asks for the
+    release, with its answer step, as Implement does for a missing
+    repository (a2). That is inside FLOW-04's list, and a step that
+    answers a question is no sign-off step. Nothing shows in the queue
+    until Publish, the release cannot be made while the item waits for the
+    PR slot, and the slot is held while Jeff releases.
+  - (C) No step: `f6-open-pr` opens the PR on the pseudo-version, the `pin`
+    job fails, and FLOW-11's escalation asks Jeff for the release. The PR
+    is red until then.
+  - (D) S1 waits for `loop-repository`.
+
+  **Answered 2026-11-15: (A), the human step `f6-release-specs`, as an
+  exception for this item only.** Under a8's answer the step pushes seven
+  tags and moves six pins, where this question's text says the tag and
+  the pin (Decision 12).
+  The recommended answer is unchanged by
+  LOOP-09 and LOOP-04, for two reasons neither rule answers. Under A the
+  step is in the queue from the design review, where Jeff sees it; under
+  B nothing shows until Publish. And under A the release can be made as
+  soon as Review is done, before the item takes the PR slot (FLOW-05);
+  B raises its question in Publish, and the slot is held while Jeff
+  merges and the tag is pushed. If Jeff judges that the exception is not
+  one to grant in a feature's review (LOOP-09), B is the answer the
+  merged rules already provide for, at that cost. The design then drops
+  the step: Decision 12, **The release step** and task 13 are rewritten
+  for the question, and Design removes `f6-release-specs` from the queue
+  file.
+
+  Under A no rule changes, and the exception ends with this item. Three
+  things could change, each in a later item and none in this design:
+  - *What makes the step unnecessary* is a tool change, not a rule change.
+    `loop-repository`, the P1 item that gives `wf` its gates, branches and
+    pull requests in a second repository, lets an item record the specs
+    pull request. The loop then confirms its merge as it confirms this
+    repository's (FLOW-03, phase 7), with no step for Jeff to claim, and
+    FLOW-08's sentence is true of the specs repository as written.
+  - *If Jeff wants the rules to provide for such a step in the meantime*,
+    the change is one clause in FLOW-04's list and one in FLOW-08's
+    sentence, and a process item carries it (FLOW-14). Two of P1's are
+    placed for it. `loop-parallel` brings in items tracked in another
+    repository, whose steps are Jeff's or an attended session's (the
+    change proposal, section 3). `loop-native-lead` is the item whose
+    list of rules has FLOW-04 (`loop-contract`, **What this item hands to
+    the later items**); FLOW-08 is on no later item's list there.
+    This design proposes `loop-parallel`: it is the earlier, and it is
+    where such steps come to exist. The proposal has FLOW-08 staying as
+    written, so its clause is an addition Jeff would ask of that item.
+    *(Added 2026-11-15.)* `loop-parallel`'s design, in Design and not
+    reviewed (read at `486ac8f`, a draft), now proposes both clauses and
+    asks them as its a6: a `human` step records a merge in a repository
+    where the loop's gates do not run. If that is approved and merges
+    before this item reaches `f6-release-specs`, the rules provide for
+    the step by then, and the exception covers only the time between.
+  - *Holding a `human` step back until its phase* is a change to `wf` and
+    to FLOW-04's sentence on when a step is offered ("unless it is
+    `human`, its feature has reached the step's phase"), for the same
+    item.
+- **a16. What the collector's outputs specification is normative for**
+  (Decision 13; "Part A of the collector specification" when it was
+  asked, before a10's answer). Options: (A) the wire only: the requests a
+  collector
+  accepts, its replies and their order. The disk layout (`artifacts/<name>`,
+  `payloads/<hash>`, `captures/<name>`, `ledger`, `environment.json`,
+  `build-output.log`) is specified as the disk collector's, and a way to
+  read stored bytes back is something a target file may give the harness,
+  not a requirement on a collector. (B) An object model for any collector:
+  each output is an object a reader can fetch by its name with the bytes
+  sent.
+  **Answered 2026-11-15: (A), the wire only.**
+  The umbrella's review (its a2) decided
+  that the collector gets no storage boundary in this program and that one
+  is designed with the first alternative collector. B would decide part of
+  it here.
+- **a17. Which relay files tier 1's seam list names** (**Tier 1's seam
+  list**). *(New 2026-11-14.)* `relay/relay.go`, `relay/proxy.go` and
+  `cmd/relay/` (all but `dhcp.go`) hold part of seams 1 and 3: the reserved
+  hosts' handlers, the proxy, and what each mode does with a claim. They
+  also hold most of the rest of the relay. Options: (A) leave them off the
+  list. A change there needs no pin move. The pinned suite fails a change
+  in behaviour that a case tests; an addition that no case tests (a new
+  `artifacts` path, a new step in one mode's claim) is caught only by
+  Review's judgment of GLOBAL-08. (B) List them. Every change to the relay's
+  core then needs a pin move, or a `Tier1-Allow` trailer that says why it
+  is not a seam change.
+  **Answered 2026-11-15: (A), left off the list.**
+  The changes the
+  program still makes to the Go relay's seams are items that change the
+  specification first by their own designs (S2's truststore endpoints),
+  the freeze (FLOW-20) keeps other changes few, and the Go relay is retired
+  at M6. Under either option the check asks only that the pin moved, to any
+  release; whether that release changed the right specification is Review's
+  to judge.
+  *(2026-11-15, a20: each seam now has its own pin, so the check asks
+  for the pin of the seam whose file changed. Whether the release it
+  moved to states the change is still Review's to judge. The answer
+  stands.)*
+- **a18. What `make conformance` runs when no target is named**
+  (**Defaults and overrides**). *(New 2026-11-14.)* The relay targets run
+  only on Linux; the disk collector's runs on Linux, macOS and Windows.
+  Options: (A) every target whose file declares the host's OS (`os`), with
+  a line printed for each target left out and why. A target named in
+  `TARGETS` that cannot run on the host is an error, and each CI job names
+  its targets. (B) Every target in the directory, as at `f1-design`. The
+  default then fails on macOS and Windows, and a developer there has to
+  know to name `collector-disk`.
+  **Answered 2026-11-15: (A), the targets that declare the host's OS.**
+  A is not a
+  fallback (GLOBAL-11): which targets run is decided from what each file
+  declares, before anything starts, and nothing is tried after a failure.
+- **a19. Where the code that every suite shares lives, and how it is
+  versioned** (Decisions 4 and 5). *(New 2026-11-15, raised by a8's
+  answer.)* With a tag per specification, the
+  launchers, the sandbox, the target-file format, the runner and the test
+  side of each protocol are used by all six suites and belong to no one
+  specification. A relay cannot be tested on one seam without the others
+  (**The harness**), so that code cannot simply be divided among the
+  six. Options:
+  - (A) One more module in the specs repository, `conformance/`, tagged
+    on its own (`conformance/v0.x.y`). Each specification's module names
+    the harness version it is released with, and its binaries are built
+    with exactly that. A change that needs both a specification and the
+    harness is one pull request and one merge, with the harness's tag
+    pushed first. Cost: a seventh version number, though no
+    implementation pins it. And in such a pull request a specification
+    names a harness version that has no tag yet. Go does not build that
+    as it stands once the harness imports anything outside the standard
+    library, which it must. Three pieces of machinery make it build, each
+    tried in a model (**Releases and how they are consumed**): a
+    `replace` line in the workspace file that names the harness version
+    in progress, edited each time that version rises; a command that
+    tidies each specification's `go.mod` through a temporary `replace`,
+    with a `ci` check that the result is complete; and a release built
+    with `go install <command>@<tag>`, because a build in a checkout at
+    the tag fails. A specification's `go.sum` never lists the harness. An
+    implementation's branch in progress carries one `replace` line. The
+    first real tags cannot be tried until they are pushed.
+  - (B) The same module, tagged, and released ahead: a harness change is
+    merged and tagged in a pull request of its own, before the
+    specification that needs it. Nothing then names a version that does
+    not exist, so none of A's machinery is needed: `go mod tidy` runs as
+    it is, a release builds from a checkout, and no branch carries a
+    `replace` line. Cost: two merges by Jeff for every change that needs
+    both, and two pull requests for the first release, the second
+    changing only `go.mod` files. A harness change is also merged before
+    an implementation has run against it, unless that implementation's
+    branch carries the `replace` line after all.
+  - (C) The same module, never tagged: each specification's `go.mod`
+    names the commit of the harness it was written against. Six tags,
+    not seven, and the harness has no version of its own, which is the
+    closest to "a release of a specification is the specification and
+    the build of its tools". Cost: a released specification names an
+    unreleased commit, and through it so does this repository's `main`,
+    which sits badly with LOOP-07's point 5; and the specs repository
+    must merge by merge commit, because a squashed pull request leaves
+    the named commit outside `main`.
+  - (D) One `bw-conformance` binary, built from a module that requires
+    all six specifications. One command for a user, as before a8. Cost:
+    its version is a set of six versions, which is the single tag under
+    another name, and a specification's release no longer carries the
+    tooling that tests it, which is what Jeff said he assumed.
+  - (E) No shared module: each specification's module carries its own
+    copy of the shared code. No shared version at all. Cost: six copies
+    of the launchers, the sandbox and the models to keep alike, and
+    every fix made six times.
+
+  **Answered 2026-11-15: (A), a seventh module `conformance/`, tagged on
+  its own; a change that needs both the harness and a specification is
+  one pull request and one merge.** As recommended, and as the design
+  already stood. It is the option in which a release names everything it
+  was built from by a tag, and a change that spans the harness and a
+  specification is still one merge. Its machinery is the specs
+  repository's own and `ci` holds it; what it spares is a second merge
+  by Jeff for each such change, and those are expected to be common
+  while the specifications are below 1.0. B would have removed the
+  machinery at the price of that second merge, and is not taken. The
+  cases stay in each specification's module, and what Decision 4 says a
+  tag per specification costs is the same under every option.
+
+- **a20. Which build of a specification's tooling this repository
+  runs** (Decision 7). *(New 2026-11-15, raised by a8's and a7's answers
+  and by the review of their fold-in. The paragraph and the options are
+  as they were put to Jeff, when the design had one `go.mod`.)* A
+  release of
+  a specification carries binaries built with the harness version its
+  `go.mod` names (Decision 4). `tools/conformance/go.mod` names all six
+  specifications in one module, and Go builds one module with one
+  version of each dependency: the highest harness version any pin names.
+  So a specification pinned here at a release whose harness is older is
+  tested here with a newer harness than its own binaries have. When a7
+  was first put to him Jeff said he assumed that "a specific release of
+  the specs themselves is coincident with the build of the conformance
+  tools that test them". On this repository's path that holds for the
+  cases and not always for the harness under them. Options:
+  - (A) As the design has it: one `go.mod`, `go tool`, one harness for
+    all six commands. One file to read and to move, which is what a7's
+    answer names, and one release of any specification brings a harness
+    fix to all six suites here. Cost: this repository and an
+    implementation that runs the released binaries, as the Rust relay
+    may, can test the same pinned release with different harness
+    versions; a set of pins that is not the newest of each can fail to
+    build (Decision 7); and the six version numbers are independent for
+    an implementation only as long as the harness stays compatible with
+    every release it pins.
+  - (B) The released binaries. `tools/conformance/go.mod` still names
+    the six versions, and `make conformance` fetches each release's
+    binary for the host and checks it against a hash kept in this
+    repository. What runs is the release's own build, the one the relay
+    repository runs. Cost: a file of hashes beside the `go.mod`, which
+    `make pin-specs` rewrites, and a download step, which together are
+    the lock file and script a7's option D was; a pin can move only once
+    the release's binaries exist; and a branch in progress pins a commit
+    that has no binaries, so the source build stays as a second path.
+  - (C) A `go.mod` for each specification,
+    `tools/conformance/<directory>/go.mod`, each naming one
+    specification. Go then builds each command from exactly the modules
+    its release names, which is what the `release` workflow builds from,
+    so the six versions are independent here as they are for the
+    binaries, and a mixed set always builds (tried in the model). Tier 1
+    can be given each seam's own pin as its contract path, so the check
+    asks for the pin of the seam that changed; the `collector` seam has
+    two. Cost: six small modules and six `go.sum` files where a7's
+    answer names one file; a harness fix reaches a suite here only
+    through that specification's release, as for the binaries; and a7's
+    text, Decision 7, **Tier 1's seam list**, the `pin` job and the
+    proposed wording of TEST-05, GLOBAL-08, EXEC-04 and PROFILE-01 change
+    where they name `tools/conformance/go.mod`.
+
+  **Answered 2026-11-15: (C), a `go.mod` for each specification under
+  `tools/conformance/<directory>/`.** As recommended. The design stood
+  on A until he answered, because a7's recorded answer names one file
+  and a fold-in does not change a recorded answer; it is now revised
+  (Decision 7). C is the option in which what a8 chose is also true
+  here: a specification's version is independent of the other five, and
+  what tests a pinned release is built from what that release names. It
+  keeps Go's own verification, which B gives up, and it removes the set
+  that does not build. What it changed: a7 gains a note and keeps its
+  recorded answer; Decision 7 and Decision 4's list of costs;
+  `make conformance`, `make pin-specs` and the `pin` job; tier 1's seam list,
+  where each seam has its own contract path and seam 2 two entries; and
+  one path in the proposed wording of TEST-05, GLOBAL-08, EXEC-04 and
+  two rows of PROFILE-01, re-derived before those four are put to him by
+  name (**Rule changes**). The proposed TEST-02 sentence names the
+  directory `tools/conformance/` and not a file, and is unchanged.
+
+**Raised in r2, 2026-11-16; answered 2026-11-16.** a21 to a25 come from
+the rows Implement found (**Divergences found**, N1 to N33) and were put
+to Jeff in r2's sitting (**What Jeff decided in r2**). He answered all
+five (A), each as recommended, so no requirement of the six documents
+changes and no case changes; a25's answer moves N31 to class (b), which
+task 37 marks in `relay-claim` (its introduction and CLAIM-17's note).
+
+- **a21. Strict or lenient reading where the documents allow lenient**
+  (N1, N7, N8, N16). BOOTCFG-14, CLAIM-18's MAY paragraph and CLAIM-28's
+  let a reader accept bodies a strict reader refuses (names folded in
+  case, duplicates, trailing data, `null` as absent, a `null` or tagged
+  CBOR map), and COLLIN-23 leaves such completions unspecified, so the
+  executor, the Go relay and the disk collector conform. Options: (A)
+  keep the MAY paragraphs in v0.1 as written; the Rust relay reads
+  strictly from the start, S2's item makes `bootstrap.Parse` strict as
+  its comment says, and a later minor version of each document narrows
+  the MAY to a MUST refuse once no reference relies on it; (B) narrow
+  now: the documents require a strict reading, the three are recorded as
+  breaking it, class (b), and the cases for it wait for their fixes; (C)
+  make the lenient reading the contract, required of every reader.
+  **Answered 2026-11-16 by Jeff: (A), as recommended**: the MAY
+  paragraphs stay in v0.1, the Rust relay reads strictly from the start,
+  S2's item makes `bootstrap.Parse` strict, and a later minor version
+  narrows each MAY to a MUST refuse. A keeps the done-when (the suites
+  pass on the Go relay and the disk collector) without making
+  `encoding/json`'s habits a contract; B reopens three documents and
+  leaves cases out; C writes the opposite of GLOBAL-10 into the contract.
+- **a22. The tunnel is never released** (N6). CLAIM-15 makes one tunnel
+  for a relay's life the contract, and CLAIM-22 lets a claim that selects
+  a closed tunnel spend the relay. Options: (A) as written: a relay
+  serves one build, and a claimant that lost its tunnel before its claim
+  discards the relay; (B) a relay MUST notice a closed tunnel: a new
+  tunnel is accepted before a claim, and a claim that selects a closed
+  one is a `400` that leaves the relay claimable; the Go relay is then
+  class (b); (C) A in v0.1, and B as a SHOULD in a later version, for the
+  Rust relay. **Answered 2026-11-16 by Jeff: (A), as recommended**: one
+  tunnel per relay, as written. A relay is cheap to start
+  again; B adds state to every relay for a case no driver has met, and C
+  leaves a choice open in the contract.
+- **a23. `exclusive` replaced by `append` on macOS and Windows** (N28).
+  Options: (A) S2's item makes the executor refuse `exclusive` there,
+  with an error that names it (GLOBAL-10), and INIT-23 and BOOTCFG-8 say
+  so in their next version; (B) keep the replacement and name it as a
+  fallback, in the reference docs and in the **Defaults and overrides**
+  of the item that next changes the executor; (C) implement exclusive
+  trust on macOS and Windows (EXEC-03) in a later item, keeping the
+  replacement until then. **Answered 2026-11-16 by Jeff: (A), as
+  recommended**: S2's item makes `exclusive` there an error. The kit's
+  producer sends `append` to those guests, so only another producer
+  meets the case; an error is what GLOBAL-10 asks of a value that cannot
+  be used, and C remains open as an item of its own.
+- **a24. `--ip` accepted and ignored on Linux and macOS** (N29). Options:
+  (A) S2's item makes the executor refuse `--ip` and `WARDEN_IP` where it
+  does not use them, INIT-15 says they are Windows-only, and vz stops
+  passing `--ip` in that item or in K1; (B) INIT-15 states them as
+  accepted and ignored there, named as such; (C) use them on Linux and
+  macOS too, as a static address in place of DHCP. **Answered
+  2026-11-16 by Jeff: (A), as recommended**: `--ip` and `WARDEN_IP` are
+  Windows-only and an error elsewhere, and vz stops passing `--ip`, in
+  S2's item or in K1. B names an ignored value as a feature, and C adds a
+  behaviour no driver needs.
+- **a25. The proxy environment** (N2, N31). `warden-io` and the reference
+  claimant use Go's default transport, which honours `HTTP_PROXY` and
+  `NO_PROXY`. Options: (A) neither honours a proxy variable: INIT-1 and
+  CLAIM-1 stand as written, and the fixes are S2's item (the executor's
+  transport with no proxy) and K1 (the claimant, with the claim
+  connection it takes over from S4); (B) as A, but now, as a security
+  fix the freeze exempts; (C) honour them, and INIT-1 and CLAIM-1 allow
+  a proxy, so the relay is no longer the build's one network path.
+  **Answered 2026-11-16 by Jeff: (A), as recommended**: neither honours
+  a proxy variable, INIT-1 and CLAIM-1 stand, and the fixes are S2's
+  item and K1; N31 moves to class (b), a divergence the documents do not
+  allow, as N2 is. The variables come from the build's
+  own image or script, or from the host's operator, so neither is a hole
+  that another party opens, and the items that change each side are
+  near; C gives up the property the relay exists for.
+
+## Design
+
+This item works in one repository other than this one:
+`buildwarden/buildwarden-specs` (LOOP-04). Jeff creates it during the
+design review (a2, **What Jeff creates**). It has not adopted the Loop
+Contract, and **How the loop treats the second repository** says what
+binds a worker there (LOOP-08).
+The item reads `buildwarden/buildwarden-relay` and changes nothing in it.
+
+Nothing in the relay, the collector, the executor or any driver changes. The
+bootstrap model (BOOT-07) is untouched: its diagram, invariants, mapping and
+deviation register stand, and this design carries no Bootstrap comparison.
+
+### Where this design is narrower than the umbrella
+
+The umbrella fixes what S1 is. In three places this design does less than
+its words, or other than its table. Each is asked as a question, so that
+the review accepts it knowingly. None reopens a decision of the umbrella.
+Jeff's answer to a1 changes two of its sentences, which name no phase or
+name S1 for what is now M6's; they are listed under **Amendments to the
+umbrella design**.
+
+| The umbrella says | This design | Asked as |
+|---|---|---|
+| S1's row: the harness runs "against any relay binary or image" | It runs against a binary (`exec`), an OCI image (`oci`) and a relay that is already running (`external`). No launcher boots a VM image, so when S1 is done no suite has run the Go relay VM image or the Hyper-V relay VM | a6 |
+| "Seams 1 to 8 each get a specification and a black-box conformance suite in the specs repository" | Seam 5, and the executor's side of seams 3 and 6, get a specification and no suite. Seam 4 does not move in S1: it moves at M6 | a11, a1 |
+| Its table of rule changes, "listed for direction": S1 changes RELAY-05 and TEST-05 | TEST-05, and also TEST-02, GLOBAL-08, EXEC-04 and PROFILE-01, a rule that did not exist when the table was written. RELAY-05 is left to M6, with seam 4's move | a1; **Rule changes**; **Amendments to the umbrella design** |
+
+### Amendments to the umbrella design
+
+Jeff's answer to a1 places the ledger format's move at M6, with RELAY-01
+to RELAY-08. Two sentences of [`componentization`](componentization.md)
+say otherwise or say nothing, and a third records the change. Each is
+listed with its line on `main` at `ad4ea50`, its wording there and the
+wording proposed. The umbrella was amended in place by `loop-contract` on
+2026-11-14; the wording quoted is the amended text. They are made in this
+item's PR (task 10), as `loop-contract`'s were. Jeff approved the three
+by name on 2026-11-15, on the wording he read at `e19cc1f`, U2 in both
+of its forms (**Design review**). The proposed wording in the table and
+in the joined row below is byte for byte what he read.
+
+| # | Line | Where | Wording on `main` | Proposed wording |
+|---|---|---|---|---|
+| U1 | 278 | **The seams**, seam 4's row, the column "Change in the program" | "Moves to the specs repository." | "Moves to the specs repository at M6, with RELAY-01 to RELAY-08." |
+| U2 | 404, 405 | **Rule changes the program will make**, two rows | "\| RELAY-01 to RELAY-08 \| Move to the relay or specs repository, restated where they describe Go internals. \| M6 \|" and "\| RELAY-05, TEST-05 \| Contract tests for the seams become the specs repository's suites. \| S1 \|" | "\| RELAY-01 to RELAY-08 \| Move to the relay or specs repository, restated where they describe Go internals. RELAY-05 moves with the ledger format (seam 4). \| M6 \|" and "\| TEST-05 \| Contract tests for the seams become the specs repository's suites. \| S1 \|" |
+| U3 | after 677 | **Amendments**, a new paragraph after `loop-contract`'s | None. | "**2026-11-15, by `seam-specs`**, approved in its design review. Jeff placed the ledger format's move to the specs repository at M6, with RELAY-01 to RELAY-08 (its a1). Amended in place: seam 4's row of **The seams**; the RELAY-01 to RELAY-08 row and the RELAY-05 and TEST-05 row of **Rule changes the program will make**. The wording each had is in [`seam-specs`](seam-specs.md), under **Amendments to the umbrella design**." |
+
+Read and not amended:
+
+- *S1's row* of Track S says "Write seams 1, 2, 3, 5 and 6", which already
+  leaves seam 4 out.
+- *M6's row* of Track R names the per-driver adoption items and the Go
+  relay's retirement. It does not list the rules' move, which the rule
+  table gives to M6, and so it does not list the ledger format's either.
+  Which M6 item moves the format is for M6's intake to say.
+- *"Seams 1 to 8 each get a specification and a black-box conformance
+  suite in the specs repository"* stays true of seam 4 once M6 has moved
+  it.
+- The umbrella's Decisions are untouched: none names a phase for seam 4.
+- *Nothing for a8, a9 or a10.* The umbrella's a1 has the collector
+  specification "written in two parts"; two documents are those parts.
+  Its components table gives the specs repository "One specification and
+  one black-box suite per seam"; seam 2 now has two of each, which this
+  design reads as what a1 already said. Decision 2 couples components
+  through "tagged releases", which a tag per specification still is, and
+  the umbrella says nothing of the documents' format.
+
+`driver-contract` amends the umbrella too, in its own PR (its **Amendments
+to the umbrella design**, read at `a6c8f0b`, where its review approved
+it on 2026-11-15; its a18). Its list and this one meet in two places:
+
+- *Line 405, the row U2 rewords.* U2 takes "RELAY-05, " out of the row's
+  first cell. `driver-contract` changes its last cell, from "S1" to "S1;
+  K1 for the driver suite", and leaves the rest. With both, the row
+  reads:
+
+  > | TEST-05 | Contract tests for the seams become the specs repository's suites. | S1; K1 for the driver suite |
+
+  U2 was put to Jeff in both forms, and he approved it in both: as in
+  the table above, which is the row if this item merges first, and
+  joined as here.
+- *The **Amendments** section.* Each design adds a dated paragraph after
+  `loop-contract`'s. The two stand in the order of their dates, each as
+  its review approved it; U3 is this design's.
+
+The second of the two to merge keeps both changes to line 405 when it
+merges `main` (`f6-merge-main`), as it does for the rule text (**With
+`driver-contract`**), and brings its quotation of the line's current
+wording up to date in Consolidation (FLOW-10). If the merge needed a
+word that neither review approved, that is a return to Design (FLOW-06).
+
+Pointed out to that design, which is not edited from here: it
+quotes line 405 as current with "RELAY-05, TEST-05" in its first cell,
+which is stale by U2 if this item merges first. None of its other
+amendments is to a line listed here. One is to a sentence this design
+reads and does not amend: at line 269 it makes "Seams 1 to 8" "Seams 1 to
+9", and adds where seam 9's specification starts.
+
+### What each specification covers
+
+The lists below are what the documents must state, taken from `main` at
+`b903f65`. `main` at `ad4ea50`, which this branch has merged, changed none
+of the files they are taken from. The file named in each heading is where
+the behaviour is defined today. A specification may say more; it may not
+say less, and where it would differ from this list the code decides
+(Decision 1).
+
+#### Seam 1, `relay-claim/v1.md` (`relaycfg/`, `cmd/relay/main.go`, `vmlink.go`, `mode_host.go`)
+
+Roles: the *relay* serves one claim; the *claimant* pushes it. The claimant
+is a role, defined by what it does: it opens the connection, serves the
+collector protocol on the tunnel when it selects the tunnel, and sends the
+claim. The specification names no component for it. On `main` the claimant
+is `driver.Session`, which each driver and `cmd/collector` start. Under
+the redrafted driver contract `warden` starts it for every driver and
+the driver reports the endpoint to claim at (its Decisions and a13,
+which Jeff answered as that design recommended; its amendment to the
+umbrella's seam 1, approved with it, reads "Claimant (`warden`'s
+session) and relay"). Neither the roles nor the wire differ
+between the two, so the specification holds under either.
+
+- **Transport.** HTTP/1.1 over a connection the claimant opens to the
+  relay's claim endpoint. Today that is TCP, port 8301 by default
+  (`relaycfg.DefaultPort`, the Go relay's `-claim-addr`). The relay never
+  dials the claimant. The specification keeps "a byte stream the claimant
+  opens" apart from "TCP", so that a later transport edits one section.
+  The umbrella gives that change to S4. The redrafted driver contract
+  has K1 settle who claims, and proposes that what remains of S4 is this
+  section and a claim endpoint that is not TCP (its **The boundary with S4
+  and K2**; the S4 row is the umbrella's, and its rewording has not been
+  put to Jeff).
+- **Authorization.** Both endpoints take `POST` only; anything else is 405
+  `POST only`, decided before the token is looked at. A relay started with a
+  claim token requires it in the `Authorization` header and answers 401
+  `unauthorized` otherwise, comparing in constant time; a 401 does not consume
+  the claim. A claimant sends `Authorization: Bearer <token>`; the relay also
+  takes the token with no scheme (D8). A relay started without a token
+  accepts any request. The token
+  is a pre-claim value: it reaches the relay on its boot channel (RELAY-08,
+  BOOT-06; `WARDEN_CLAIM_TOKEN` for the Go binary), never in the claim.
+- **`POST /v1/tunnel`.** The claimant sends `Connection: Upgrade`,
+  `Upgrade: warden-tunnel` and `Content-Length: 0`. The relay answers
+  `101 Switching Protocols` with the same two headers. From then on the
+  connection carries HTTP/2 with prior knowledge and no TLS, with the roles
+  reversed: the relay is the HTTP/2 client and the claimant serves the
+  collector protocol on it. One tunnel per relay: a second request, or one
+  made while a claim is being processed or after one succeeded, is 409
+  `tunnel already open`. The tunnel
+  outlives a refused claim.
+- **`POST /v1/claim`.** A JSON body of at most 16 MiB; an unknown field is
+  refused. Fields:
+
+  | Field | Type | Meaning and validation |
+  |---|---|---|
+  | `collector_url` | string, required | `http://collector.tunnel` selects the open tunnel; any other value is a base URL the relay dials itself. A value the relay cannot use, or a collector it cannot reach or that refuses the ledger stream, fails the relay's start (D6) |
+  | `collector_token` | string | Sent as the bearer token on every collector request; empty sends none. It is the session token: it names this build's session at the collector (seam 2) |
+  | `capture_mode` | string, optional | `""`, `none`, `headers`, `bodies`, `all` |
+  | `upstream_ca_certs` | array of PEM strings, optional | Extra roots for the relay's upstream TLS. An entry that holds no PEM certificate is ignored (D5) |
+  | `upstream_system_ca` | boolean, optional | `false` leaves the system roots out, and only together with `upstream_ca_certs` |
+  | `environment` | object, optional | `type` (optional), `payload` and `metadata` (both base64, both required). The payload is at most 1 MiB and is a JSON object that names its own type: a member `type` that is a non-empty string, or the shape of an OCI or Docker image manifest or index, whose type is `oci-image/v1`. `type`, when given, must equal it. The metadata decodes as a CBOR map |
+  | `build_link` | object, optional | `prefix`, `relay`, `guest`: IPv4; the prefix is its own network address, length 8 to 30; relay and guest are distinct hosts inside it, neither its network nor its broadcast address; nothing in 0.0.0.0/8, loopback, link-local, multicast or class E |
+  | `upstream_dns` | array of strings, optional | When present: not empty; each an IPv4 address (port 53 implied), not unspecified, multicast or broadcast, and not inside `build_link` |
+
+- **Replies.** 200 with `application/json`:
+  `{"ca_cert": <PEM>, "ledger_public_key": <hex Ed25519 key>}`. 400
+  `invalid claim: ...` for a body that does not decode (the text of an
+  unknown field is `unknown field "<name>"`, which a claimant reads to
+  recognise an older relay), an invalid `build_link` or `upstream_dns`, a
+  missing `collector_url`, or the tunnel selected with none open; 400 also
+  for a claim the relay's mode refuses (`claim refused: ...`). After a 400
+  the relay stays claimable, with one exception in host mode (D17). 409
+  `already claimed` while another claim is being processed or after one
+  succeeded. 500 `relay start failed: ...` when the relay could not start
+  with a claim it accepted, an unusable `environment` or `collector_url`
+  among the causes (D6); that relay is spent.
+- **One claim.** After a 200 the relay stops accepting connections on the
+  claim endpoint. The tunnel stays open for the build.
+- **Ordering.** The relay replies 200 only after it has configured its build
+  segment (address and DHCP responder, where it serves one), opened the
+  ledger stream, landed the environment payload, created its CA, begun
+  starting its build-facing listeners and sent `POST /v1/ready` (a failed
+  `ready` is logged and does not fail the claim). A host-mode relay has its
+  listeners before it replies. A vm- or container-mode relay may still be
+  binding its ports when the claim returns, and a port it then fails to bind
+  ends the relay after the 200 (D19). The build environment may be started
+  as soon as the claim returns, by whoever starts it: on `main` whoever
+  holds the session (a driver, or the orchestrator that runs
+  `cmd/collector`); under the redrafted driver contract the driver, once
+  `warden` has told it of the claim (its `claimed` message). The
+  specification gives that start to no role. The build environment
+  waits for `GET /health` on port 8300 to answer before its first request,
+  as `initialize` does.
+- **By mode (RELAY-04).** `build_link`: a vm-mode relay replaces the build
+  interface's IPv4 addresses with `relay/len`, serves the guest's lease there
+  and refuses a link that collides with another interface's address or
+  route; without the field it keeps the address already on the interface, and
+  refuses the claim if there is none. A host-mode relay builds its netstack
+  on the link; without the field it uses its `--subnet`. A container-mode
+  relay refuses a claim that carries one. `upstream_dns` absent: the usable
+  nameservers of the relay's own `/etc/resolv.conf`, excluding its own
+  address, 127.0.0.1 and the build link; none usable refuses the claim
+  (in host mode after the relay has built its netstack, D17).
+  A relay that has a build link (vm and host mode, with or without the
+  field) refuses upstream dials into it.
+- **The claimant's side.** It opens the tunnel before the claim when it
+  selects the tunnel, retries connection failures (the kit retries every
+  250 ms inside a 90 s limit; the numbers are the kit's), treats any reply
+  other than 101 or 200 as final, and refuses an identity with no `ca_cert`.
+
+#### Seam 2, `collector-outputs/v1.md` and `collector-inputs/v1.md` (`collector/`, `relay/collector_client.go`)
+
+Seam 2 is one seam, the collector protocol, written as two specifications
+(a10, Jeff's answer of 2026-11-15): the outputs a collector stores, and
+the inputs and signals it serves. Each has its own directory, its own
+requirement prefix (`COLLOUT-<n>`, `COLLIN-<n>`), its own suite and its
+own releases (a8), so a collector may implement one and claim it. Nothing
+on the wire changes: the claim still names one `collector_url`, and a
+relay sends the requests of both to it.
+
+Roles, in both: the *collector* serves; the *relay* is the only client of
+this protocol. Who starts a collector, and where it runs, is outside it: on
+`main` the session starts one in the claimant's process for each build, and
+under the redrafted driver contract `warden` does, one per build with a
+fresh token (its a12, answered as that design recommended).
+
+**Stated in both documents: transport, authentication, paths and the
+session.**
+
+- *Transport.* HTTP, over the tunnel or to a `collector_url`.
+- *Authentication.* Where a session has a token, every `/v1/` endpoint
+  except `/v1/status` requires it in the `Authorization` header, and the
+  collector answers 401 `unauthorized` to a request without a token it
+  knows; `/healthz` and `/v1/status` never require one. The relay sends
+  `Authorization: Bearer <token>`; the collector also takes the token with
+  no scheme (D8).
+- *Paths.* A name carried in a path is a relative slash path of at most
+  255 bytes whose segments use `[A-Za-z0-9._-]`. Each document adds the
+  rule for its own names.
+- *The session.* The protocol's unit is the build *session*: one build's
+  requests, identified by the collector token they carry (a collector
+  with no token has one session). Every rule of both documents holds per
+  session. Completion is terminal for the session: after
+  `POST /v1/complete`, which `collector-inputs` specifies, the collector
+  owes the relay nothing more and may close the connection at once. How
+  many sessions an instance serves is the collector's own, declared in
+  its target file: the reference disk collector (`cmd/collector`) serves
+  exactly one and exits, with status 0 for `exit_code` 0 and 1 otherwise.
+  A collector that serves several sessions, and any client-facing side
+  (opening a session, supplying inputs, watching console and status,
+  fetching outputs), is out of scope for this item and not specified here
+  (the umbrella's a2).
+
+These four are stated once here and written in full in each document,
+under that document's own identifiers. They are not put in a third
+document that both cite. Each specification is released on its own (a8),
+so a shared part would be one more released thing with a version of its
+own: a collector that implements only the outputs would have two versions
+to state, and a requirement of the shared part would have its cases in
+two other specifications' suites. Repeated, each document is whole at
+each of its releases. The cost of repeating is drift, and a check in the
+specs repository's `ci` removes it: the two sections must be the same
+text but for the identifiers' prefix. A change to them therefore changes
+both documents in one pull request and is released as a new version of
+each.
+
+**`collector-outputs/v1.md`, the outputs a collector stores**
+
+| Endpoint | Stored as | Notes |
+|---|---|---|
+| `PUT /v1/artifacts/<name>` | `artifacts/<name>` | Streamed. 400 for an unsafe name. Limit 4 GiB by default. A failed upload leaves nothing |
+| `PUT /v1/captures/<name>` | `payloads/<hash>`, and `captures/<name>` referring to it | Chunked, with the trailer `Warden-Hash`: 64 hex digits, the BLAKE2b-256 of the body as the relay computed it. Identical content is stored once. The disk collector makes `captures/<name>` a symlink to `../payloads/<hash>`, or a copy where it cannot create one |
+| `PUT /v1/ledger` | `ledger` | One request for the whole build, written as it arrives. If the stream breaks, what arrived is kept: every record is signed, so a truncated ledger verifies up to its last record |
+| `PUT /v1/environment` | `environment.json` | The environment record's signed payload, at most 1 MiB. `PUT` only |
+| `POST /v1/output` | `build-output.log`, appended | Chunks in arrival order; boundaries carry no meaning |
+
+Its own names: an artifact name's segments start and end with an
+alphanumeric; a capture name is made safe by replacing every byte outside
+`[A-Za-z0-9._-]` with `_`. A successful write is 200 with an empty body; a
+body over a limit is 413.
+
+`collector-outputs` is normative for the wire: what a collector accepts,
+what it replies and in what order (a16). The "Stored as" column is the
+disk collector's layout, the one `warden inspect` reads. The specification
+gives it a section of its own, which a collector that is not a directory
+need not meet. The disk collector's directory may also hold files that are
+not outputs: the kit's session writes the relay's CA there as
+`ca.cert.pem`.
+
+The relay's side, as this document requires it: `PUT /v1/ledger` is opened
+before any other output; `PUT /v1/environment` precedes the environment
+record; and the ledger and every other output are delivered before the
+session's completion, the relay ending the ledger request and waiting for
+its reply first.
+
+**`collector-inputs/v1.md`, the inputs and signals a collector serves**
+
+| Endpoint | Reply |
+|---|---|
+| `GET /v1/build-script` | 200, `application/octet-stream`; 404 when the build has none |
+| `GET /v1/bootstrap` | 200, `application/json`, the bootstrap config (seam 6); 404 when the build has none |
+| `GET /v1/context/<path>` | A file: 200 with `Warden-Context: file`. A directory, the root, or a directory with a trailing slash: 200 with `Warden-Context: list` and `text/plain`, the sorted safe file paths beneath it, relative to the context root, one per line. 403 for an unsafe path; 404 for a missing one, for no context, and for a file named with a trailing slash. A symlink that leaves the context is neither served nor listed |
+| `POST /v1/ready` | 200. The relay is up |
+| `POST /v1/heartbeat` | 200. The build is alive |
+| `POST /v1/complete` | 200. Body `{"exit_code": int, "message": string, "error": string}`; 400 for a body that is not JSON. The first completion is the build's result. A collector may close the connection once it has the completion, before the reply (D16) |
+| `GET /v1/status` | The first completion plus `received_at`, or `{"state":"running"}`. A relay never calls it; it can be reached only where a collector listens, which the disk collector does not. It takes no token (D1), so it is specified only for a collector with one session; what it answers on a collector that serves several is left to that collector's client-facing side |
+| `GET /healthz` | 200 `ok`. As `/v1/status`: not used by a relay |
+
+Its own names: a context path's segments end with an alphanumeric and may
+start with `.`, `-` or `_`.
+
+A session's signals and its lifetime: a collector may give up on a session
+whose `ready` does not arrive (the kit's session waits 90 s from the start
+of the claim) and, once a first heartbeat has arrived, on one whose
+heartbeats stop (the kit: 30 s). Both limits are the collector's own.
+
+The relay's side, as this document requires it: `ready` is sent before the
+claim is answered (seam 1, Ordering); a heartbeat is forwarded every 2 s
+while the build showed activity (its own `/heartbeat`, or any proxied
+request) in the last 5 s; an input that is not 200 becomes a 404 to the
+build; signals accept 200 or 204, a failed signal is logged, and none
+blocks the relay; and `POST /v1/complete` is sent only after the ledger
+request has been answered, the relay not depending on the completion's
+reply.
+
+The per-session lifetime is as it was before a10's answer: the session and
+its end are in the part both documents state, and the two limits are with
+the signals they concern.
+
+#### Seam 3, `relay-guest-api/v1.md` (`relay/relay.go`, `controlplane.go`, `dns.go`, `heartbeat.go`, `proxy.go`, `cmd/relay/dhcp.go`)
+
+Roles: the *relay* serves; the *build environment* (the executor, and the
+build's own tools) is the client. Everything here is on the build link.
+
+- **Address.** Where the relay serves the lease (vm mode with a
+  `build_link`, host mode always), it answers every DHCP DISCOVER with an
+  OFFER and every REQUEST with an ACK for the link's guest address, with the
+  relay as server identifier, router and DNS server, the link's mask and an
+  infinite lease, echoing the request's `xid` and `chaddr`; it answers
+  nothing else. It keeps no state, so the build can only ever be told its
+  own address.
+- **On a frame link** (the Go relay's host mode; the second network path of
+  the umbrella's Decision 12, which the Rust relay's host mode and unikernel
+  use). The relay is the build's whole network below IP. It answers ARP
+  requests for its own address and for no other, and takes the build's MAC
+  address from the first frame it receives. The Go relay also broadcasts a
+  gratuitous ARP for its own address every 500 ms for the first 60 s, which
+  a macOS guest needs before it treats the link as up. It accepts a TCP
+  connection to any destination address and any port, and the port alone
+  selects the service: 443 is TLS interception, 8300 the control plane,
+  every other port the HTTP proxy. UDP is served only on port 53 of the
+  relay's own address. So on a frame link the build connects to the
+  addresses DNS gave it, and the relay captures the connections itself.
+- **On a kernel interface** (vm and container mode; Decision 12's first
+  path). The relay serves only on its own address, ports 53, 80, 443 and
+  8300. Bringing the build's connections to other addresses onto those ports
+  is not the relay's: the relay VM's init redirects them
+  (`tools/relay-vm/init`), and the container driver rewrites them in the
+  build's namespace. That part is the driver's (seam 7).
+- **DNS**, port 53 (UDP; TCP as well where the relay binds kernel sockets).
+  `artifacts` and `cwd` resolve to the relay's own address with TTL 0; any
+  other query type for those names gets an empty answer. Every other query is
+  forwarded to the relay's resolvers in list order, the next one after a 5 s
+  silence; if none answers, the reply is SERVFAIL.
+- **The reserved host `artifacts`** (by the request's `Host`, port ignored):
+
+  | Request | Reply | Effect |
+  |---|---|---|
+  | `/heartbeat` | 200 `ok` | Marks the build alive |
+  | `/exit?code=<n>` | 200 `ok` | Ends the ledger, flushes it to the collector, then `POST /v1/complete` with `exit_code` n (0 when absent). Terminal (After completion, below) |
+  | `/ca.pem` | 200, `application/x-pem-file` | The relay's CA, the same bytes as the claim's `ca_cert`. Not recorded |
+  | `/ca.crl` | 200, `application/pkix-crl` | The CA's empty CRL, which every leaf names. Not recorded |
+  | `/build-script` | 200, `application/octet-stream`; 404 | The collector's build script, byte for byte, recorded in the ledger |
+  | `/bootstrap` | 200, `application/json`; 404 | The collector's bootstrap config, byte for byte, recorded |
+  | `POST /<name>` | 200 `artifact stored: <name> (<n> bytes)`; 400 unsafe name; 413 over 2 GiB; 500 when the collector fails | Streams the body to `PUT /v1/artifacts/<name>` and records an artifact; an empty name is `unnamed` |
+  | anything else | 404 `not found` | |
+
+- **The reserved host `cwd`**, `GET` only: a context file (200, recorded), a
+  listing for the root, a directory or a trailing slash (200 `text/plain`,
+  not recorded), 403 for an unsafe path, 404 for a missing one.
+- **The control plane**, HTTP on port 8300 of the relay's address:
+  `/health` (200 `ok`), `/ca.pem`, `POST /v1/output` (the body goes to the
+  collector's `/v1/output`; 256 MiB in total per build, then 413) and
+  `POST /v1/complete?code=<n>` (as `/exit`).
+- **Every other host.** Port 80 is an HTTP/1.x proxy keyed on `Host`. Port
+  443 terminates TLS with a leaf for the SNI name, signed by the relay's CA
+  and naming `http://artifacts/ca.crl` as its CRL distribution point, then
+  proxies the HTTP inside. The response reaches the build as the upstream
+  sent it (RELAY-02). An upstream the relay cannot reach, or one it refuses
+  to dial (the build link in vm and host mode; loopback, private, link-local
+  and metadata addresses as well in host mode), is 502 `upstream unreachable`. How the
+  build's connections reach these ports depends on the link (above).
+- **After completion.** `/exit` and `/v1/complete` are terminal for the
+  guest API: the ledger has ended, and the build environment sends nothing
+  more. The specification leaves a relay's replies after completion
+  undefined and requires only that nothing more is recorded. The Go relay
+  keeps its listeners and still answers `/heartbeat`, `/ca.pem`, `/ca.crl`,
+  listings and a repeated `/exit`; any request it would record (a proxied
+  request, `/build-script`, `/bootstrap`, a `cwd` file, an artifact upload)
+  ends its process (D18).
+- **Versioning.** The API carries no version today beyond `/v1/` on two
+  control-plane paths. The umbrella's proposed BOOT-02 has the executor and
+  the relay "agree through the relay guest API's version"; that version is
+  S2's to add with the truststore endpoints, and this document says so.
+
+#### Seam 5, `executor-initialize/v1.md` (`cmd/warden-io/`)
+
+Roles: the *launcher* (a driver's delivery and start, BOOT-02, BOOT-03)
+invokes; the *executor* runs.
+
+- **Invocation.** `warden-io initialize` (alias `init`) with `--gateway`
+  (the relay's address), `--ip` (the build's own address with its prefix
+  length), `--script` (the local name the build script is saved under, which
+  picks its interpreter), `--workdir` (created and entered before the
+  script) and `--hold` (stop after setup, write the environment to
+  `<data dir>/shell.env` and wait). Each value flag takes `--flag=value` or
+  `--flag value`. `WARDEN_GATEWAY` and `WARDEN_IP` stand in for the first two
+  when the flag is absent.
+- **Steps, in order,** all over the relay: point DNS at the gateway
+  (per OS; `--ip` only for a launcher that does not address the NIC itself);
+  poll `http://<gateway>:8300/health` every 500 ms for at most 60 s;
+  `GET http://artifacts/ca.pem`; `GET http://artifacts/bootstrap` (404 is
+  the empty config; any other status, or a config it cannot parse, stops);
+  install the CA per the trust mode (EXEC-03); apply the baseline; enter the
+  workdir; `GET http://artifacts/build-script` into the temporary directory;
+  run it.
+- **The baseline** (BOOT-05; not configurable): `SOURCE_DATE_EPOCH=0`,
+  `UV_NATIVE_TLS=1`; the system CA bundle's path, when one is found, in
+  `SSL_CERT_FILE`, `REQUESTS_CA_BUNDLE`, `CURL_CA_BUNDLE`,
+  `NODE_EXTRA_CA_CERTS`, `PIP_CERT`, `CARGO_HTTP_CAINFO`,
+  `NIX_SSL_CERT_FILE` and `HEX_CACERTS_PATH`; a Java truststore
+  `<data dir>/certs.jks` holding the CA under the alias `warden`, password
+  `changeit`, named in `MAVEN_OPTS`, `GRADLE_OPTS` and the system bazelrc.
+  The executor's own directory is put first on the script's `PATH`.
+- **Per guest OS:** the data directory (`/etc/warden`; `%ProgramData%\warden`
+  on Windows), the default script name (`build.sh`; `build.ps1`), the
+  interpreter (`/bin/bash` when it exists, else `/bin/sh`; PowerShell, or
+  `cmd.exe /c` for `.cmd` and `.bat`), and the trust-store procedure.
+- **While the script runs:** its stdout and stderr go to the console and, in
+  chunks of at most 32 KiB, to `POST http://<gateway>:8300/v1/output`; after
+  the first failed chunk the executor stops sending and says so on stderr,
+  and the build continues. `GET http://artifacts/heartbeat` every 2 s.
+- **Exit.** `POST http://artifacts/exit?code=<n>` with the script's exit
+  code, after the last output chunk; the process then exits with that code.
+- **The other subcommands**, as the executor's use of seam 3: `fetch`
+  (`http://cwd/<path>`, a listing then each file for a directory), `post`
+  (`POST http://artifacts/<name>`) and `trust` (the CA, appended).
+
+#### Seam 6, `bootstrap-config/v1.md` (`bootstrap/`)
+
+Roles: the *producer* (whoever supplies a session's inputs to the
+collector; on `main` the claimant's session, which starts the collector
+with them), the *relay* (carries it), the *executor* (reads it).
+
+- The document: `{"version": 1, "trust": {"mode": "append" | "exclusive"}}`.
+  It carries policy only: no path, file content, command or environment
+  variable (BOOT-05).
+- Reading is strict: an unknown field, trailing data, a version other than 1
+  or an unknown mode is an error, so an executor never guesses at a newer
+  config. An empty body, and a 404 from the relay, are the empty config,
+  whose trust mode is `append`.
+- Path: `GET /v1/bootstrap` on the collector, `GET http://artifacts/bootstrap`
+  on the relay, which serves the collector's bytes unchanged and records
+  them.
+- What the kit's producer sends (`bootstrap.ForGuest`): `exclusive` for a
+  Linux guest, `append` for Windows and macOS. That choice is the kit's
+  policy, stated as such and not required of other producers.
+
+### The OpenAPI descriptions
+
+Jeff's answer to a9 adds an OpenAPI description to the specifications
+that are HTTP protocols, beside the Markdown and not in place of it.
+
+**Which specifications get one,** decided from the code on `main`:
+
+| Specification | Over HTTP | OpenAPI file |
+|---|---|---|
+| `relay-claim` | Yes: `POST /v1/tunnel` and `POST /v1/claim` on the claim endpoint (`relaycfg.go`'s mux) | `v1.openapi.json` |
+| `collector-outputs` | Yes: its five endpoints (`collector.go`'s mux) | `v1.openapi.json` |
+| `collector-inputs` | Yes: its eight endpoints, `/healthz` and `/v1/status` among them | `v1.openapi.json` |
+| `relay-guest-api` | In part. Three HTTP servers with fixed paths: the reserved host `artifacts`, the reserved host `cwd`, and the control plane on port 8300. DHCP, ARP and DNS are not HTTP, and the proxy for every other host is HTTP with no path of its own | `v1.artifacts.openapi.json`, `v1.cwd.openapi.json`, `v1.control.openapi.json` |
+| `executor-initialize` | No: a command line, its steps and its exit. The requests it makes are the client's side of `relay-guest-api` | None |
+| `bootstrap-config` | No: a JSON document. The two paths that carry it are `collector-inputs`' and `relay-guest-api`'s | None; its JSON Schema is its machine description |
+
+The guest API has three files because an OpenAPI document keys its
+operations by path alone, and the three servers' paths overlap: `/ca.pem`
+is on `artifacts` and on the control plane, and on `artifacts` any other
+`POST` path is an artifact's name.
+
+**The version and the form.** OpenAPI 3.1, in JSON: the file's `openapi`
+field is `3.1.0` and its `jsonSchemaDialect` is JSON Schema 2020-12. 3.1
+is the first version whose schema language is JSON Schema 2020-12, so the
+file can refer to the schema files the specification already has and
+defines none of its own. 3.0 cannot, and 3.2 adds nothing these files
+use. JSON, not YAML, because the other machine files of the layout are
+JSON and the check that reads the file then needs no second parser.
+`info.version` is the document's major version, `v<N>`, as the file name
+has it; a release's version is its tag's.
+
+**Which is normative.** The requirements in `v<N>.md` are. They are the
+unit a suite case cites and the coverage check counts (Decision 3), and
+they say things OpenAPI cannot. The OpenAPI file describes the paths,
+methods, parameters, headers, bodies and status codes that the
+requirements state, and adds none. Where the two disagree, the
+requirement stands and the file is at fault. It describes the protocol
+as a conforming client uses it: what the Go relay or the disk collector
+does beyond that (D3, D7, D8, D9, D10) is in each document's "Known
+divergences", in prose.
+
+**How agreement is checked,** in the specs repository's `ci`, for each
+directory that holds an OpenAPI file:
+
+1. *The file is valid.* It validates against the OpenAPI Initiative's
+   JSON Schema for 3.1, a copy of which is kept in the repository.
+2. *One definition of each body.* Every JSON request or response body
+   whose shape the specification defines is a `$ref` to a schema file in
+   the same directory, and the OpenAPI file defines no schema of its own
+   for one. Every schema file in the directory is referred to by at least
+   one operation. So a body has one definition, the one the documents'
+   examples and the suite's cases are already checked against. The JSON
+   bodies are the claim's request and reply, the completion's body and
+   the reply to `GET /v1/status`; the last has a schema for this check,
+   `collector-inputs/v1.status.schema.json`.
+3. *Every operation and every status is named by a requirement.* Each
+   operation, and each response status under it, carries
+   `x-requirements`: the identifiers of the requirements that state it.
+   The check fails on an operation or a status with none, and on an
+   identifier that is not in the directory's `v<N>.md`.
+
+What these do not catch: a requirement that states an endpoint, a status
+or a header the file lacks. No check parses prose for that. Review reads
+the two side by side, and the reader who finds one files it against the
+OpenAPI file. A check that validated the suite's own traffic against the
+file was considered and is not built here: the cases send requests the
+description does not allow on purpose (a wrong method, an unknown path),
+so it would need its own list of exceptions.
+
+An OpenAPI file refers only to schemas in its own directory. A body that
+another specification defines, the bootstrap config on
+`GET /v1/bootstrap` and on `http://artifacts/bootstrap`, is described as
+`application/json` and named in prose, so that no specification's files
+depend on another's directory.
+
+**What OpenAPI cannot say, and stays prose only:**
+
+- *Ordering.* The ledger request before any other output, `ready` before
+  the claim is answered, the outputs before the completion, one claim and
+  one tunnel for a relay's life. The file can give the 409 its status and
+  not the state that produces it.
+- *The tunnel.* The file states the `101` and its two headers. That the
+  connection then carries HTTP/2 with prior knowledge and the roles
+  reversed is prose.
+- *Timing.* The heartbeat's 2 s and 5 s, the collector's limits on a
+  session, the health poll.
+- *Trailers and streams.* The `Warden-Hash` request trailer, bodies sent
+  as they are produced, and the limits on a stream's size.
+- *Names that span path segments.* An artifact's name and a context path
+  are slash paths of several segments, and an OpenAPI path parameter may
+  not hold an unescaped `/` (3.1.0, Path Templating). Four of the six
+  files have such a path: `PUT /v1/artifacts/<name>`,
+  `GET /v1/context/<path>`, `POST /<name>` on `artifacts` and
+  `GET /<path>` on `cwd`. Each file writes it as one template with one
+  parameter, `/v1/artifacts/{name}`, marks the parameter
+  `x-multi-segment: true`, and leaves the rule for the name to the
+  requirements the operation names. Check 3 still ties the operation and
+  its statuses to those requirements. A client generated from the file
+  would send the slashes escaped, which is not how a relay sends them;
+  the requirement, and not the file, says what a collector must accept.
+- *Whatever is not one path.* "Any other method is 405" and "anything
+  else is 404", routing by the request's `Host` whatever its port, and
+  the proxy for every other host with its byte-exact reply (RELAY-02).
+- *The link below HTTP.* The frame path and the kernel path, ARP, DHCP
+  and DNS.
+- *Differences by mode* (RELAY-04) and the known divergences.
+
+### Divergences found
+
+Places where the code differs from a rule, from its own comment, or from the
+rest of the same protocol. Each specification records the code's behaviour
+and lists the point under "Known divergences"; none is changed here (a12).
+
+| # | Seam | What the code does | What it differs from |
+|---|---|---|---|
+| D1 | 2 | `GET /v1/status` is served without the token | `collector`'s package comment: "all but /healthz require Authorization" |
+| D2 | 2 | A capture with a missing or malformed `Warden-Hash` trailer is 500 | Every other bad request is 4xx |
+| D3 | 2 | `POST` is accepted where the protocol says `PUT` (artifacts, captures, ledger), and `PUT` where it says `POST` (`/v1/output`); `/v1/environment` alone is strict | The handlers' own "PUT only" and "POST only" replies |
+| D4 | 2 | The collector does not check a capture's body against its trailer hash | Nothing written; the specification states that the hash is the relay's claim |
+| D5 | 1 | An unknown `capture_mode` is accepted and means no capture. An `upstream_ca_certs` entry with no PEM certificate in it is ignored, which with `upstream_system_ca` false leaves the relay trusting no upstream | GLOBAL-10: a provided value that cannot be used is an error |
+| D6 | 1 | An unusable `environment` (empty, over 1 MiB, a payload that names no type, a `type` that differs from the payload's, metadata that is not a CBOR map) or `collector_url` (not a URL the relay can request, a collector that cannot be reached, or a tunnel that has closed, N6) fails the relay's start: 500, and the relay is spent. A collector that refuses the ledger stream does not fail it: the claim is answered 200 and `ready` is sent (N5). *Corrected in r2:* the row named a collector that "refuses the ledger stream" among the failures, which the code does not bear out; `null`, `undefined` and a tagged map count as maps (N8) | Every other invalid field: 400, and the relay stays claimable |
+| D7 | 1 | The relay upgrades any authorized `POST /v1/tunnel`, whether or not it asks for `warden-tunnel` | The claimant always sends the upgrade headers |
+| D8 | 1, 2 | Both sides accept the token with no `Bearer` scheme. The relay strips `Bearer` and any spacing after it; the collector strips exactly `Bearer ` | The header every client sends, `Authorization: Bearer <token>`; and each other |
+| D9 | 3 | The fixed `artifacts` paths ignore the method: `GET /exit?code=3` ends the build | The executor uses `POST` for `/exit` |
+| D10 | 3 | A request to `cwd` that is not a `GET` is proxied as if `cwd` were an upstream host | `cwd` is a reserved name |
+| D11 | 3 | The `/v1/output` request that crosses the 256 MiB limit is cut short and still answered 200; the next one is 413 | A limit that is reported when it is hit |
+| D12 | 3, 5 | `http://artifacts/health` does not exist (404). `initialize` with no `--gateway` and no `WARDEN_GATEWAY` polls it and gives up after 60 s. Every driver passes `--gateway` | `waitForRelay`'s no-gateway path |
+| D13 | 5 | A failure before the script runs (network, relay wait, CA, bootstrap config, baseline, workdir, script fetch) exits 1 without telling the relay, so the collector receives no completion | EXEC-02: failures "produce a structured exit reported back through the relay" |
+| D14 | 5 | `initialize` ignores a flag it does not know | GLOBAL-10 |
+| D15 | 3 | DNS over TCP is served in vm and container mode and not in host mode, where a TCP connection to port 53 reaches the HTTP proxy | The other two modes |
+| D16 | 2 | The collector records the completion before it replies, and `cmd/collector` closes the tunnel as soon as it has it. The relay can see a failed `POST /v1/complete` for a build that completed; it logs it | `collector-inputs`' 200 reply |
+| D17 | 1 | In host mode, the refusal for an absent `upstream_dns` with no usable nameserver in the relay's `/etc/resolv.conf` is a 400 that closes the relay's frame socket. The claim is released, but a later claim builds its link on the closed descriptor's number, which the next claimant's own connection may then hold: in stage 3a's run the relay wrote a gratuitous ARP frame to that claimant, failed its start, closed the connection with no reply and exited. *Corrected in r2:* the row said only that a second claim "builds its netstack on a closed descriptor" | "A refused claim leaves the relay claimable" (`build-link-subnet`); vm and container mode keep to it |
+| D18 | 3 | After completion, a request the relay would record sends on the ledger's closed channel in a connection goroutine that has no recover, which ends the relay process | Nothing written: completion had no stated after-state |
+| D19 | 1, 3 | In vm and container mode the claim's 200 and `ready` are sent once the listeners' goroutines are started, not once the ports are bound. A port that fails to bind ends the relay after the 200, and a failed bind of UDP port 53 is not reported at all | "The relay is up" (`POST /v1/ready`); host mode has its listeners first |
+
+Seam 2's divergences are listed in the document they concern: D2, D3 and
+D4 in `collector-outputs`, D1 and D16 in `collector-inputs`, and D8 in
+both, with the authentication they state alike. D3's four endpoints are
+all outputs.
+
+D17 and D18 are read from the source and have not been run. Implement
+reproduces each once, by hand against a relay built from `main`, before
+the task that writes its specification: D17 before `relay-claim/v1.md`
+(task 2) and D18 before `relay-guest-api/v1.md` (task 4). Neither needs
+the harness. If one does not reproduce, the specification states what the
+relay was seen to do (Decision 1), and the row here is corrected at
+Consolidation; what was seen is a finding for Design (FLOW-06) only if it
+is a divergence this table does not record. Both were reproduced in
+stage 3, D17 by 3a and D18 by 3c: D18 as its row says, D17 otherwise,
+and its row is corrected in r2.
+
+The suites do not assert the header's scheme (D8), send nothing recorded
+after a completion (D16, D18), give the D17 case its own relay, and wait
+for the listeners (D19); **The harness** says how.
+
+Three of the nineteen stand against a rule, all MUST and agent-judged: D5
+and D14 against GLOBAL-10, and D13 against EXEC-02. D15, D17 and D19 are
+differences between the relay's modes; RELAY-04 asks a relay change to say
+which modes it touches and does not require the modes to behave alike, so
+they break no rule as written. D9, D13 and D18 have a security or
+measurement angle (**Security note**). None takes away something `main`
+once did: each dates from the change that added the code (D17 from #115's
+`upstream_dns` default).
+
+#### Found during Implement: N1 to N33 (r2)
+
+Implement found 33 behaviours of the code that the table above lacks,
+and recorded each as found (Jeff, 2026-11-16, **Design review**). They
+keep the numbers the six documents gave them, shared by the documents,
+so that every reference in them stays valid: this table's numbers carry
+no order, so its convention does not ask for D20 onwards. The text of
+each is in its document's "Known divergences". K's lines are those of
+`origin/main` at `8c41eaa`, where `relay/`, `relaycfg/`, `collector/`,
+`cmd/` and `bootstrap/` are as at `623131a` and the files cited as at
+`3cb0b2b`, the commit the stage-3 probes ran against. "Read only" marks
+an entry confirmed from the code and not run; every other one was run.
+
+Each row has a class, which says what the review has to decide for it:
+
+- **(a) specified as is.** The document's requirement, a MAY or a MUST as
+  written, states what the code does as the contract. What the code
+  differs from is this design's text, the rest of the protocol or an RFC,
+  not a rule of this project or the code's own comment.
+- **(b) divergence kept.** The document states the intended contract and
+  names the reference implementation as breaking a MUST of it.
+- **(c) looks like a bug.** The document allows the behaviour, or leaves
+  it unspecified, but it is against a rule of this project or the code's
+  own comment, named in the row. The row names the later item that
+  should fix it; nothing is fixed here (a12).
+
+The class is the one each document's entry implies by what it says the
+behaviour differs from. Where this design reads it otherwise, the last
+column says so; N31's class is Jeff's, from his answer to a25 in r2.
+Count: (a) 13, (b) 6, (c) 14.
+
+| # | Specification: requirements | What the code does | K | Class | Later item; where the readings differ |
+|---|---|---|---|---|---|
+| N1 | `bootstrap-config`: BOOTCFG-14 (MAY), BOOTCFG-10, BOOTCFG-12 | `bootstrap.Parse` matches member names under Unicode case folding, merges a duplicate into the first, ignores what follows a `}` or `]`, and reads a body of only Unicode white space (`\f`, U+00A0, U+2028) as the empty config | `bootstrap/bootstrap.go:67`, `:72`, `:75-77`, `:80` | (c): Parse's own comment ("strictly") and seam 6's "Reading is strict"; GLOBAL-10 | S2's item; a21. The document allows it by BOOTCFG-14 |
+| N2 | `executor-initialize`: INIT-1 | Go's default transport: with `HTTP_PROXY` or `NO_PROXY` in its environment, `initialize`, `fetch` and `post` send every request, the gateway's included, to that proxy and not to the relay | `cmd/warden-io/main.go:132`, `:163`, `:211`; `initialize.go:153`, `:180`, `:245`, `:351`, `:371`, `:424` | (b): INIT-1 states the contract and that the reference meets it only with no proxy variable | S2's item; a25. Security angle: the relay is no longer the build's one path |
+| N3 | `executor-initialize`: INIT-19 | The exclusive-trust hook `99warden` rebuilds `/etc/ssl/certs` only, not the three other bundles `initialize` replaced, and runs from `update-ca-certificates` only, not from `update-ca-trust` | `cmd/warden-io/trust_linux.go:30-40`, `:65-72` | (c): the hook's comment, "gets exclusive trust back"; EXEC-03 | S2's item |
+| N4 | `executor-initialize`: INIT-14 | Each rewrite of the Windows hosts file adds an empty line when the file ends with `\n` | `cmd/warden-io/platform_windows.go:113-116`, `:117-138` | (c): the function's comment, "idempotent ... preserves all other content"; minor | S2's item. Read only |
+| N5 | `relay-claim`: CLAIM-23, CLAIM-44, CLAIM-50 | A collector that refuses `PUT /v1/ledger` does not fail the start: the header is written into the streaming body before the reply arrives, the claim is answered 200 and `ready` is sent. The correction of D6 | `relay/relay.go:211-220`; `relay/collector_client.go:154` | (a): CLAIM-23 and CLAIM-50 allow it | None. Implement's list read it as bug-like (GLOBAL-11: the start goes on past a refusal it has not seen); a very fast refusal may still fail the start |
+| N6 | `relay-claim`: CLAIM-15 (MUST), CLAIM-22 (MAY), CLAIM-50 | The first tunnel is kept for the relay's life: a second is 409 whether or not the first is open, and a claim that selects a closed tunnel is accepted and fails the start (500, the relay spent) | `relaycfg/relaycfg.go:238-251` (set at `:249`) | (a): CLAIM-15 makes one tunnel for a relay's life the contract | a22. Run with a stand-in transport; a real closed HTTP/2 tunnel not tried |
+| N7 | `relay-claim`: CLAIM-17, CLAIM-18 (its MAY paragraph) | The claim's body is decoded leniently: `null` as absent, names without regard to case, the last of duplicates, what follows the object ignored, line breaks inside base64 | `relaycfg/relaycfg.go:268-270` | (c): GLOBAL-10, as the D5 row reads it | The Rust relay reads strictly (M2); the Go relay is left as it is; a21 |
+| N8 | `relay-claim`: CLAIM-28 (its MAY paragraph) | The environment's CBOR metadata: `null` and `undefined` as an empty map, a tag on the map accepted, the last of repeated keys kept | `relay/relay.go:476-478` | (a): the document names only D6's text | a21. This design reads it as N7, (c) under GLOBAL-10 |
+| N9 | `relay-claim`: CLAIM-46, Limits | No time limit on a claim's body, and the relay is marked claimed before it reads it: a stalled body holds every other claim and tunnel at 409 until its connection closes | `relaycfg/relaycfg.go:263-268`, `:353` | (a): CLAIM-46 counts the body's reading as processing | None for the Go relay; another relay may bound it. This design reads it as a denial of service, open only to a holder of the claim token (`authorized` runs first) |
+| N10 | `relay-claim`: CLAIM-30, CLAIM-32 | The `/etc/resolv.conf` default keeps IPv6 nameservers, 127.0.0.53 and 127.0.0.11, which `upstream_dns` refuses in a claim | `relay/relay.go:407-428` | (a): CLAIM-32 states the default, and the function's comment keeps 127.0.0.11 on purpose | None. Read only |
+| N11 | `relay-claim`: CLAIM-38 and the paragraph after it, CLAIM-48 | vm mode: a claim with `build_link` puts its address on the build interface before the resolver check; a refusal there leaves it, and a later claim with no `build_link` adopts it | `cmd/relay/vmlink.go:60-66`, `:77-89`; `cmd/relay/main.go:104-130` | (a): CLAIM-48 allows it; like D17 it differs from `build-link-subnet`'s "a refused claim leaves the relay claimable" | With D17: not fixed in the Go relay. Read only |
+| N12 | `collector-inputs`: COLLIN-12 (the relay's half), COLLIN-29 | `http://cwd//` is forwarded as `GET /v1/context//`; the disk collector answers 307 to `/v1/context/`, which the relay follows (N13) and serves the root's listing | `relay/relay.go:744-751`; `relay/collector_client.go:265-271` | (b): COLLIN-12 forbids it, and the document names it | The Rust relay's M-items, or after the freeze |
+| N13 | `collector-inputs`: COLLIN-28; `collector-outputs`: COLLOUT-25 | The collector client has no redirect policy: up to ten redirects are followed on inputs, signals and outputs, the token kept on the same host, 301 to 303 turned into `GET` | `relay/collector_client.go:42`, `:59`, `:212`, `:235` | (b): both MUSTs broken, named in both documents | The Rust relay's M-items, or after the freeze; Jeff may class it as a security fix. This design adds RELAY-07 (the collector is the only output path) |
+| N14 | `collector-inputs`: COLLIN-28 | An input over 2 GiB is cut at 2 GiB by `io.LimitReader` with no error, and served and recorded as the collector's 200 | `relay/collector_client.go:228`; `relay/relay.go:161` | (b): COLLIN-28 broken, named | As N12. Read only |
+| N15 | `collector-outputs`: COLLOUT-16 | A capture's name is built from an unbounded `Host`; over 255 bytes the collector answers 400 and the capture is lost with one log line, or the tunnel ends (N32) | `relay/relay.go:903-914`; `relay/capture.go:86-92`; `collector/paths.go:66-67` | (c): RELAY-07, every output streamed to the collector | The Rust relay bounds the name (M2). The document states the relay's role and not the rule's number. Read only |
+| N16 | `collector-inputs`: COLLIN-23 (cases it leaves unspecified) | The disk collector reads the completion leniently: a `null` body, missing or `null` members (0 or empty), trailing data, case-folded and duplicate names, 4294967296 accepted; a missing `exit_code` is success | `collector/signals.go:43-51` | (c): GLOBAL-10, as the D5 row reads it | After the freeze or with the first alternative collector, as D1 to D4; a21 |
+| N17 | `relay-guest-api`: GUEST-46, GUEST-47 | The proxy keeps an HTTP/1.1 connection open after a response framed by its close (its own 502 with no length; an upstream's `Connection: close` or length-less response), so a client that reads to the close hangs | `relay/proxy.go:283-354`, `:362-372`, `:381-393` | (a): the document names RFC 9112, no rule of this project | The Rust relay's M-items. This design reads it as a defect |
+| N18 | `relay-guest-api`: GUEST-7 | gVisor on a frame link answers ICMP echo at the relay's address, and ICMP port unreachable for unserved UDP at any address, with the datagram's destination as source | `cmd/relay/ingress_fd.go:93-98` | (a): GUEST-7 allows it; it differs from a relay that answers only for what it states | The Rust relay's frame path (M3) |
+| N19 | `relay-guest-api`: GUEST-42, GUEST-48 | The authority and each leaf are valid for 24 hours, and leaves are cached for the relay's life, never renewed: a build over 24 hours is presented an expired chain | `relay/relay.go:338`; `relay/proxy.go:234-277` (`:246`) | (a): nothing states a limit on a build's length | The Rust relay's M-items, or a stated limit on a build's length |
+| N20 | `relay-guest-api`: GUEST-44, GUEST-49 | A response's header fields are recorded before `Connection: close` is added, in canonical case and Go's order; for its own 502 the record has `Content-Length: 0` and no `Connection`, the reply no length and `Connection: close` | `relay/relay.go:589-610` | (c): RELAY-02, the record is what was sent | An observation for the Rust relay (M2); RELAY-02 is restated at M6 |
+| N21 | `relay-guest-api`: GUEST-22; GUEST-54 (D13) | `code` is read with `Sscanf("%d")` and its error ignored: an unreadable or out-of-range value is 0, success; `7x` is 7, `+5` is 5 | `relay/relay.go:505-508`; `relay/controlplane.go:56-60` | (c): GLOBAL-10; a failure recorded as success | A new item, `relay-exit-code-unreadable`, filed 2026-11-16 and held by the freeze |
+| N22 | `relay-guest-api`: GUEST-47 | HTTP/1.0 keep-alive only when `Connection` is exactly `keep-alive` | `relay/proxy.go:391` | (a): RFC 9110 only; minor | The Rust relay's M-items |
+| N23 | `relay-guest-api`: GUEST-18 (other spellings undefined) | `artifacts` and `cwd` are matched exactly in DNS and in `Host`: `ARTIFACTS` and `artifacts.` are proxied upstream (502), and the query is forwarded upstream | `relay/dns.go:59-62`; `relay/relay.go:527-535` | (a): GUEST-18 leaves it undefined; RFC 4343 and RFC 9110 only | The Rust relay's M-items. This design notes that the request leaks upstream, recorded as any upstream request |
+| N24 | `relay-guest-api`: the paragraph after GUEST-26, GUEST-25, GUEST-34; `bootstrap-config`: BOOTCFG-3, BOOTCFG-10 | Any collector failure on `build-script`, `bootstrap` and `cwd` is served as 404, and the executor reads a bootstrap 404 as the empty config, `append`: a failing collector turns a producer's `exclusive` into `append` | `relay/relay.go:719-738` (comment `:728-731`), `:751-752` | (c): GLOBAL-10, the default tried when the provided value fails, and the comment "A collector without one gives 404"; it fails open | A new item, `relay-collector-failure-fails-open`, filed 2026-11-16 as a security fix the freeze exempts. Run in stage 8e against `relay-host`, `relay-vm` and `relay-container` (a collector's 500 gives the build 404); both documents still say "read from the code; not run", which task 37 corrects |
+| N25 | `relay-guest-api`: GUEST-29 | A refused artifact (413 or 500) leaves the exchange's open and its request-header checkpoint with no close; the bytes already streamed have reached the collector's `PUT` | `relay/relay.go:650-666`, `:672-680` | (c): `specs/build-ledger/v1.md`, which expects a closed exchange (seam 4) | An observation for the Rust relay (M2) and for the ledger verifier at M6. Read only |
+| N26 | `relay-claim`: CLAIM-8, beside D8 | `Bearer` is stripped in its case only: `bearer <token>` is 401 | `relaycfg/relaycfg.go:223` | (a): RFC 9110 only; minor | With D8 |
+| N27 | `collector-outputs`: COLLOUT-12, COLLOUT-14; `collector-inputs`: COLLIN-12, COLLIN-15 | `http.ServeMux` answers a dot segment, `//`, and `/v1/artifacts` or `/v1/context` with no trailing `/`, with 307 to the cleaned path, before the handler and the token check | `collector/collector.go:171-183` | (a): the requirements state it; it differs from seam 2's text (400 for an unsafe name, 403 for an unsafe path) | With D1 to D4 |
+| N28 | `executor-initialize`: INIT-23; `bootstrap-config`: BOOTCFG-8 | On macOS and Windows `exclusive` is logged as unsupported and applied as `append` | `cmd/warden-io/platform_darwin.go:91-93`; `platform_windows.go:155-157` | (c): GLOBAL-10; the deferral is `unified-bootstrap`'s assumed question 2, and no **Defaults and overrides** names it | S2's item; a23. Read only |
+| N29 | `executor-initialize`: INIT-15 | `--ip` and `WARDEN_IP` are read on every system and used only on Windows; vz passes `--ip` and gets neither an effect nor an error | `cmd/warden-io/initialize.go:42`; `platform_windows.go:59-73`; `platform_linux.go:44`; `platform_darwin.go:37` | (c): GLOBAL-10 | S2's item; a24. Read only |
+| N30 | `executor-initialize`: INIT-13, INIT-14, INIT-20, INIT-21, INIT-22 | Steps that fail and go on: on Linux, `append` falls back from a failed `update-ca-certificates` to appending to a bundle; on macOS the resolver, `resolv.conf` and `scutil` steps are unchecked and a failed `security add-trusted-cert` is passed; on Windows a failed hosts file, network step or `certutil -addstore Root` is passed, so the CA can be missing from `Root` | `cmd/warden-io/platform_linux.go:78-100`; `platform_darwin.go:46-70`, `:100-108`; `platform_windows.go:53-56`, `:83-86`, `:169-174` | (c): GLOBAL-10, GLOBAL-11; EXEC-03 | S2's item. The macOS and Windows parts read only |
+| N31 | `relay-claim`: CLAIM-1, CLAIM-2 to CLAIM-5, CLAIM-17 | The reference claimant sends the claim on Go's default transport: with `HTTP_PROXY` set and a relay not on loopback, the claim, its claim token and its `collector_token` go to the proxy, whose reply is taken as the relay's; the tunnel is dialled directly | `relaycfg/relaycfg.go:381`, `:393`; `relaycfg/tunnel.go:79-81` | (b): CLAIM-1 has the tunnel and the claim travel on connections the claimant opened to the relay, and the claim then travels on a connection the proxy opened; it is the claimant's twin of N2. Moved from (a) by Jeff, 2026-11-16 (a25, (A)); the document read it as (a), saying only that it differs from the rest of the protocol (CLAIM-1), with CLAIM-17's note naming it without refusing it | K1, with the claim connection it takes over from S4; a25. Task 37 marks it as not allowed in `relay-claim`'s introduction and in CLAIM-17's note, as `executor-initialize` marks N2. Security angle: the tokens reach a host that is not the relay |
+| N32 | `collector-outputs`: COLLOUT-28, COLLOUT-25, COLLOUT-18 | The disk collector answers a refused capture (400 for its name, 401 for its token) before it reads the body; the `Warden-Hash` trailer then arrives on an answered stream, `x/net/http2` raises `PROTOCOL_ERROR` and ends the tunnel, with the open ledger `PUT` and the rest of the session | `relaycfg/tunnel.go:58-59`; `collector/collector.go:177`, `:242-244` | (b): COLLOUT-28 broken, named | A new item for the disk collector, after the freeze; it can end a Go relay's session today, through N15 |
+| N33 | `relay-guest-api`: GUEST-29 (413 required from 2 GiB and two bytes, recommended for 2 GiB and one) | An artifact of exactly 2 GiB and one byte is stored and answered 200: the `limitedReader` fails only on a read after the last byte, which `net/http` does not make | `relay/relay.go:161`, `:670`; `relay/collector_client.go:290-301` | (c): its own `maxArtifactBytes` and 413 text, 2 GiB; it meets the MUST and misses the SHOULD | Accept; the Rust relay keeps the SHOULD (M2) |
+
+Implement also reported observations that are not rows here: behaviours
+the documents state, or leave unspecified, that differ from no rule,
+comment or text of this design, and places where the code differs from
+the seam lists of **What each specification covers**. Those are
+Consolidation's (FLOW-10) and later items' to judge; none is a
+divergence.
+
+#### Which item fixes each
+
+What kind of item fixes one is Jeff's to say (FLOW-20): a program item, an
+exempt fix (a regression or a security problem), or an item after the
+freeze. This design proposed, and r2's review approved it (Jeff,
+2026-11-16), with N24 and N21 filed as items and N31 in class (b):
+
+| Divergence | Proposed |
+|---|---|
+| D13, D14, D12 (`initialize`) | With S2's item, which changes `initialize` and builds the executor's suite |
+| D5, D6, D7, D8 (the claim and the token) | With the item that next edits the claim specification, or after the freeze. That item was S4's; the redrafted driver contract proposes that most of S4 is absorbed into K1, which changes neither the claim's fields nor its replies, and that the rest of S4 (the transport section) moves to wave 3 |
+| D17, D18, D19 (the Go relay's robustness) | Not fixed in the Go relay, which the program retires. The specification allows what the Go relay does, and another relay may do better. Jeff may class D18 as a security fix |
+| D1, D2, D3, D4, D16 (the collector) | After the freeze, or with the first alternative collector |
+| D9, D10, D11, D15 (the guest API) | With the Rust relay's M-items, which implement the specification, or after the freeze |
+| N1, N2, N3, N4, N28, N29, N30 (the executor and its reading of the config) | With S2's item, as D12 to D14; N1 by a21, N2 by a25, N28 by a23, N29 by a24 |
+| N31 (the reference claimant), class (b) by a25 | K1, with the claim connection it takes over from S4; a25 |
+| N24 (a failing collector served as "none") | `relay-collector-failure-fails-open`, filed now as a security fix the freeze exempts (FLOW-20) |
+| N21 (an exit code that cannot be read) | `relay-exit-code-unreadable`, filed now and held by the freeze |
+| N12 to N15, N17 to N20, N22, N23, N25, N33 (the Go relay's guest and collector sides) | With the Rust relay's M-items, which implement the specifications, or after the freeze; not fixed in the Go relay, which M6 retires. Jeff may class N13 as a security fix |
+| N5 to N11, N26 (the claim) | Nothing for the rows of class (a), or with D5 to D8; N7 and N8 by a21, N6 by a22 |
+| N16, N27, N32 (the disk collector) | After the freeze, or with the first alternative collector, as D1 to D4; N32 as a new item, since it can end a session today |
+
+#### What Jeff decided in r2
+
+The table is part of the design r1's review approved, so its amendment was
+reviewed (FLOW-19), in one sitting, on 2026-11-16 (**Design review**).
+Jeff decided:
+
+1. **The classes**, row by row, and the corrections of D6 and D17: as
+   proposed, with N31 moved to (b) by his answer to a25. A row moved out
+   of (b) would have changed its document's requirement; none did. N31's
+   move into (b) is marked in `relay-claim` by task 37.
+2. **Each row of class (c)**, as recommended:
+   - N1, `bootstrap.Parse` reads loosely: an observation for S2's item;
+     the contract is a21.
+   - N3, the exclusive-trust hook restores `/etc/ssl/certs` only: an
+     observation for S2's item.
+   - N4, the Windows hosts file gains an empty line: accepted, with an
+     observation for S2's item.
+   - N7, the claim's body read leniently: accepted for the Go relay; the
+     contract is a21.
+   - N15, a capture's name longer than a collector takes: an observation
+     for the Rust relay (M2).
+   - N16, the completion read leniently: an observation for after the
+     freeze; the contract is a21.
+   - N20, the record of a response's header fields: an observation for
+     M2, and for M6, where RELAY-02 is restated.
+   - N21, an exit code that cannot be read is success: an item,
+     `relay-exit-code-unreadable`, filed now and held by the freeze.
+   - N24, a failing collector turns `exclusive` into `append`: an item,
+     `relay-collector-failure-fails-open`, filed now as a security fix
+     the freeze exempts.
+   - N25, a refused artifact leaves an open record: an observation for
+     M2 and for M6's ledger verifier.
+   - N28, `exclusive` applied as `append` on macOS and Windows: a23 (A),
+     an error in S2's item.
+   - N29, `--ip` accepted and ignored: a24 (A), Windows-only and an error
+     elsewhere, in S2's item; vz stops passing it in S2's item or K1.
+   - N30, steps of `initialize` that fail and go on: an observation for
+     S2's item.
+   - N33, 2 GiB and one byte stored: accepted.
+3. **Where the rows of class (b) go**: as proposed, N31 among them. N2
+   and N31 are a25: S2's item fixes N2 and K1 fixes N31.
+4. **a21 to a25** (**Questions**, Assumed): each answered (A), as
+   recommended, so no requirement of the six documents changes and no
+   case changes.
+5. **The front-matter's `repos` line**: covered by r2's approval with the
+   rest of the delta. It was added after r1's approval and before r2, at
+   the queue's x4 state on Jeff's word.
+
+At the same sitting: the queue offers `f6-release-specs` now, as it needs
+only r1's review. The specs pull request is neither merged nor tagged
+before Review: task 37 moves its head off `9abf66c`, and a release made
+before it would tag the old head.
+
+"File an observation" means it is written into the Archive summary for
+the later item's intake (**Owed to later items**); "file an item" means
+an item is queued for it through intake. Neither changes code here (a12).
+
+
+### The harness
+
+Each specification has a *suite*: the cases that cite its requirements,
+in its own module, run by its own command (Decisions 2 and 5). The
+command, `bw-conformance-<directory>`, runs that suite against one
+*target* and reports each case as pass, fail, or not applicable to what
+the target declares (its mode, its link kind, the forms it can be started
+as). There is no skip for a case the target should pass, and no retry
+(TEST-04). What the six commands share is the harness, the module
+`conformance/`: they are six thin programs over one body of code.
+
+**A component is tested through several suites.** A relay cannot be
+driven on one seam without the others: to check one reply of the guest
+API, the harness must claim the relay, be its collector and be its build.
+So every suite's cases for a relay start from the same thing, a claimed
+relay with the harness's own claimant, collector, build environment and
+upstream around it, which the harness's models supply. What differs
+between suites is which requirements the cases assert. A case lives in
+the module of the specification whose requirements it checks, and cites
+only that specification's identifiers. Where one behaviour spans two
+specifications, each states its own half as its own requirement, with
+its own case: that `ready` precedes the claim's 200 is a requirement of
+`relay-claim`'s Ordering and one of `collector-inputs`, the relay's side.
+The harness holds no case and cites nothing.
+
+This design calls the suites a relay target runs *the relay suites*, and
+those a collector target runs *the collector suites*:
+
+| Target | Suites it runs, and the role each tests |
+|---|---|
+| A relay | `relay-claim` (relay), `collector-outputs` and `collector-inputs` (the relay as their client), `relay-guest-api` (relay), `bootstrap-config` (the relay as its carrier) |
+| A collector | `collector-outputs` and `collector-inputs` (collector), `bootstrap-config` (as it is produced), and for a target that is also a claimant, `relay-claim` (claimant) |
+
+**What the suites check.**
+
+- *Against a relay,* the harness is the claimant and the collector (over
+  the tunnel), the build environment, and the upstream world. The case
+  groups, by the specification that holds them:
+  - `relay-claim`: claim authorization and refusal (a refused claim
+    leaves the relay claimable; a spent relay stops listening); field
+    validation, one case per rule in seam 1's table; `build_link` and
+    `upstream_dns` by mode; ordering at the claim; upstream TLS against
+    `upstream_ca_certs`; and that the records of the ledger verify under
+    the reply's `ledger_public_key`.
+  - `collector-outputs`, the relay's side: the ledger request before any
+    other output, the environment record, capture modes and the capture
+    trailer, and that every output is delivered before the completion.
+  - `collector-inputs`, the relay's side: `ready`, the heartbeat's
+    forwarding, an input that is not 200, and the completion signal.
+  - `relay-guest-api`: DHCP; DNS (reserved names, list order, the 5 s
+    failover, SERVFAIL); on a frame link, ARP and the capture of
+    connections to any address; each `artifacts`, `cwd` and
+    control-plane endpoint with its error replies; interception over
+    HTTP and TLS, including the leaf's chain and CRL distribution point;
+    refused upstream dials; and the RELAY-02 round trip, in which the
+    harness's ledger verifier checks the hash of each body the build
+    received against the bytes it received.
+  - `bootstrap-config`: the relay serves the collector's document byte
+    for byte and records it.
+- *Against a collector,* the harness is the relay. `collector-outputs`
+  and `collector-inputs` each drive the endpoints of their own
+  specification, over the tunnel or at the base URL of a `listens`
+  target, with their error cases. `collector-outputs` also checks what a
+  target with a read-back directory stored, against the disk layout.
+  `bootstrap-config` checks that the document the collector serves
+  validates against the schema. For a target that is also a claimant, as
+  `cmd/collector` is, `relay-claim` accepts the tunnel and the claim and
+  checks them as the claimant's role (the tunnel before the claim, the
+  claim's body against its schema, the token).
+
+**Seams, roles and suites.** Each requirement of each specification is
+covered by a case of its own suite or is listed there as not
+machine-checked (Decision 3):
+
+| Seam | Specification | Role | Checked by |
+|---|---|---|---|
+| 1 | `relay-claim` | relay | Its suite, against a relay target |
+| 1 | `relay-claim` | claimant | Its suite, against a collector target that claims (the tunnel and claim such a target sends). On `main` `cmd/collector` and every driver claim through the same `driver.Session`, so this checks the claimant of every build. The redraft keeps that code as `warden`'s session in K1, so the same holds there; it lists the session's move into `warden`'s own package among what K2 settles, and what checks `warden`'s claimant after that is K2's to say |
+| 2 | `collector-outputs` | collector | Its suite, against a collector target |
+| 2 | `collector-outputs` | relay | Its suite, against a relay target |
+| 2 | `collector-inputs` | collector | Its suite, against a collector target |
+| 2 | `collector-inputs` | relay | Its suite, against a relay target |
+| 3 | `relay-guest-api` | relay | Its suite, against a relay target |
+| 3 | `relay-guest-api` | build environment | No cases yet (a11) |
+| 5 | `executor-initialize` | executor | No cases yet (a11); the Go tests in `cmd/warden-io/` |
+| 6 | `bootstrap-config` | relay, which carries it | Its suite, against a relay target |
+| 6 | `bootstrap-config` | producer | Its suite, against a collector target: the document served validates against the schema |
+| 6 | `bootstrap-config` | executor, which reads it | No cases yet (a11); the Go tests in `bootstrap/` and `cmd/warden-io/` |
+
+The umbrella says "one specification and one black-box suite per seam" and
+that seams 1 to 8 each get a suite. When this item lands, seam 5 and the
+executor's side of seams 3 and 6 have a specification and no cases. S1's
+done-when (the suites pass against the Go relay and the disk collector)
+does not ask for them; a11 puts the deferral to the review.
+`executor-initialize` still has its module, its releases and its command,
+so that it is pinned and versioned like the others. Until S2's item adds
+cases the command lists the requirements and runs nothing.
+
+**The coverage check is per specification** (a9, LOOP-03). For each
+directory, `ci` fails when an identifier in its `v<N>.md` is neither
+cited by a case in its own `cases/` nor listed in that directory, with a
+reason, as not machine-checked. It also fails on a case that cites an
+identifier its own document does not have. A case in another
+specification's module never counts, and the harness has nothing to
+count: the rule that a case cites only its own specification is what
+makes the check a matter of one directory. Every requirement of
+`executor-initialize` is listed, with the reason that its suite is S2's
+(a11).
+
+**What a user runs.** One command per specification:
+
+```
+bw-conformance-relay-claim run -target relay-host.toml
+bw-conformance-relay-claim requirements
+bw-conformance-relay-claim version
+```
+
+`run` runs the suite's cases for the roles the target has, and says so,
+without failing, when it has none for that target. `requirements` lists
+the specification's requirements, each with the cases that cite it or
+the reason it has none. `version` prints the specification's version,
+the harness's, and the table of the specification versions the harness's
+models were written from (Decision 5). A target file names no version:
+which versions a component is tested against is said by the commands
+that are run, in this repository by the pins (Decision 7). A report
+names, for each case, the specification, its version, the harness's
+version and the requirements the case cites, so a run of a relay names
+the five versions it tested.
+
+To run a relay through everything it implements takes the five commands
+of the table above; a collector that claims takes four. Each starts its
+own instances. In this repository `make conformance` does it: for each
+target it runs every pinned specification's command, each from its own
+module (Decision 7), and prints one table per target, a row for each
+specification with its version, the harness version it was built with
+and its counts.
+
+**Each suite is tested against the harness itself.** A module's
+`go test ./...` runs its cases against the harness's own model of the
+role under test (the relay cases against the harness's relay, the
+collector cases against its collector), so a suite and the model it was
+written beside cannot disagree unnoticed.
+
+**Instances.** A case that ends an instance gets a fresh one: every
+accepted claim, every 500, the host-mode refusal of D17, and every
+completion (a relay after `/exit`, D18; a collector after
+`POST /v1/complete`, which ends its session and, for the disk collector, the
+instance, D16). The completion is the last request such a case
+sends. Cases that leave an instance usable (401s, the other refused claims,
+validation) share one (TEST-07). After a claim returns, the harness polls
+the relay's `/health` on port 8300, every 100 ms for at most 10 s, before
+its first build-side request, and asserts nothing about the listeners at the
+moment of the 200 (D19).
+
+**What a relay under test must provide.** A target file states these; the
+launcher makes them true.
+
+1. *A fresh, unclaimed relay on demand.* A relay takes one claim, so the
+   harness starts many. `exec` runs an argv with an environment; `oci` runs
+   an image; `external` is told how to ask for one, or runs the cases one
+   relay allows.
+2. *The claim endpoint*: an address the harness can connect to, and the
+   claim token if the relay was started with one. TCP now; a vsock or
+   inherited connection is added by the item that writes that transport
+   into the claim specification (S4, or what the redrafted driver contract
+   leaves of it).
+3. *The build link*, in one of two kinds. `frames`: a socket carrying one
+   Ethernet frame per datagram, which is the Go relay's host mode (an
+   inherited socketpair, `-fd`) and the Rust relay's build NIC; the harness
+   brings its own network stack and takes its lease from the relay's DHCP.
+   `ip`: a kernel interface in a network namespace or container network the
+   harness joins, for vm and container mode. The kind also tells the harness
+   where to connect: on `frames`, to the address DNS returned for the
+   origin, which the relay captures; on `ip`, to the relay's own address
+   with the origin's name in `Host` or SNI, because redirection there is the
+   driver's (seam 3). The file also gives the link the harness should send
+   as `build_link`, or says the relay's address is assigned by the launcher
+   (container mode). A container-mode relay takes the first non-loopback
+   IPv4 address it finds as its own (`relay.DetectSelfIP`); with one
+   interface for the build and one for the upstream, which it finds depends
+   on their order. Task 6 settles how the launcher orders them and the
+   target file records it.
+4. *The upstream network is the harness's.* The claim's `upstream_dns` holds
+   addresses only, port 53 implied, so the harness's resolver must listen on
+   port 53 of an address the relay reaches, and its origin servers on ports
+   80 and 443. A host-mode relay refuses to dial loopback, private and
+   link-local addresses, so those servers sit on addresses outside those
+   ranges. On Linux the `exec` and `oci` launchers build this themselves: a
+   network namespace or container network that is the relay's whole upstream,
+   addressed from the documentation ranges (192.0.2.0/24, 198.51.100.0/24,
+   203.0.113.0/24). That needs root or unprivileged user namespaces. The
+   harness's origin CA goes in `upstream_ca_certs` with
+   `upstream_system_ca: false`.
+5. *Its resolver configuration.* The default for an absent `upstream_dns`
+   reads the relay's `/etc/resolv.conf`, a fixed path, so the launcher
+   supplies that file: `exec` starts the relay in a mount namespace with the
+   file bound over it, and `oci` mounts it into the container. `external`
+   cannot, and the default's cases are not applicable to it.
+6. *Its mode* (`host`, `vm` or `container`, RELAY-04), which selects the
+   cases whose expected result differs by mode.
+
+Results are observed only through the protocols: what the harness's collector
+received and in what order, what the build side was answered, and the ledger.
+A relay's log and exit status are attached to a failure and never asserted
+on.
+
+**What a collector under test must provide.**
+
+1. *How the harness's relay reaches it.* The file names one of two
+   attachments. `claims`: the target is also the claimant. It is started
+   against a claim address, opens the tunnel and sends the claim, and the
+   file gives a command line with placeholders for the claim address, the
+   output location, the context directory, the build script and the capture
+   mode. For the disk collector:
+   `collector --relay {claim} --dir {out} --context {context} --script {script} --capture {capture}`,
+   with `WARDEN_CLAIM_TOKEN` in its environment. Each start gives the
+   harness one session, so it starts one for each case that sends a
+   completion. `listens`: the target is a collector that is already
+   serving, and the file gives its base URL and a way to get a session
+   token for each case; the harness's relay dials it as a `collector_url`
+   that is not the tunnel, and seam 1's claimant cases do not apply. This
+   item builds `claims`. `listens` is named so that the format does not
+   assume a collector is its own claimant or serves one build; it is built
+   by the first item that has such a collector to test. That is the shared
+   local or remote collector Jeff described in the `driver-contract`
+   review, which this program does not design (its a22, answered: one
+   clause for the umbrella's "Later, not scheduled", and nothing queued).
+2. *What it can be started as.* The file says whether the collector can run
+   with no build script, no context, no bootstrap config and no token, and
+   whether it keeps serving after a completion. `cmd/collector` can run
+   without a script or a context. It always serves a bootstrap config
+   (`{"version":1,"trust":{"mode":"exclusive"}}`, the kit's choice for a
+   Linux guest), always sets a collector token, serves exactly one session
+   and exits at the first
+   completion. For this target the cases for a 404 from `GET /v1/bootstrap`,
+   a collector with no token, `GET /v1/status` after a completion and "the
+   first completion wins" are therefore reported not applicable. They run
+   in the specs repository's self-test against the harness's own collector,
+   and against any target that declares the form.
+3. *Its limits are not what a case measures.* The harness sends `ready` as
+   a relay does, before it answers the claim, and a case that has sent a
+   heartbeat sends one every 2 s until it ends, so the disk collector's 90 s
+   and 30 s limits never decide a verdict.
+4. *A way to read back what it stored* (optional): a directory in the disk
+   layout, or a command that produces one, read after the session's
+   completion (for the disk collector, after it has exited). Files the
+   layout does not name (`ca.cert.pem`) are ignored.
+   Without it, `collector-outputs` checks replies only, and its report says
+   so.
+
+The reply to `POST /v1/complete` from a collector that exits at completion
+is not asserted (D16). A collector's log and exit status are attached to a
+failure and never asserted on, as a relay's are.
+
+**Target files for this repository** live in `tools/conformance/targets/`,
+beside the six pin modules and in none of them (Decision 7):
+`relay-host.toml`, `relay-vm.toml` and `relay-container.toml` (`exec`, the
+relay binary with `-mode host`, `vm` or `container`), `relay-oci.toml`
+(`oci`, the image built from `Dockerfile.relay`, whose entry point passes
+no `-mode` and so runs container mode) and `collector-disk.toml`. Each file
+declares the host operating systems it can run on (`os`): `linux` for the
+four relay targets, whose sandbox is Linux namespaces, and `linux`,
+`darwin` and `windows` for `collector-disk` (a18).
+
+`make build` produces nothing these can name on every platform (it writes
+`dist/warden-relay-linux-<arch>` and builds no collector), and
+`Dockerfile.relay` expects `relay-<arch>` files that only the `relay-image`
+workflow makes. So `make conformance` builds what it tests, into
+`dist/conformance/`: `relay` (`./cmd/relay` for the host, `CGO_ENABLED=0`;
+the relay targets run on Linux only), `collector` (`./cmd/collector` for
+the host, `collector.exe` on Windows), and for `relay-oci` a build context
+holding `relay-<arch>`, from which it builds the image
+`buildwarden-relay:conformance` with `Dockerfile.relay`. The `Makefile`
+gains two targets, `conformance` and `pin-specs`.
+
+### What the specs repository leaves room for
+
+Under the redrafted driver contract, seam 9's specification and
+suite start in this repository, as `specs/driver-contract/v1.md` with its
+schema and `conformance/driver/`, and move to the specs repository in K2,
+where "the suite joins S1's harness as a `driver` role" (its Decision 13,
+**Home** and a17, which Jeff answered as that design recommended; the
+design was approved on 2026-11-15). This item builds none of that.
+It keeps the following open, each at no cost now:
+
+1. *The directory name* `driver-contract/` is reserved (Decision 2), as
+   seam 4's names are. With a tag per specification, seam 9's move in K2
+   adds one more specification directory: a module of its own, with its
+   document, its schema, its cases and its command, released under its own
+   tags, `driver-contract/v0.x.y`. It changes no other specification's
+   version, and what it needs of the harness is a harness release.
+2. *The layout check* accepts a version's one schema as
+   `v<N>.schema.json`, RELAY-05's form, as well as
+   `v<N>.<part>.schema.json`. The driver contract's schema and seam 4's
+   schemas have the first form.
+3. *A schema that moves in keeps its `$id`* (Decision 2). The rule that an
+   `$id` mirrors the path applies to a schema first released in the specs
+   repository.
+4. *The roles are packages* (Decision 5). The driver suite plays `warden`
+   against a driver binary: it claims the relay the driver started and
+   receives the build. In this repository it proposes to import `relaycfg`
+   and `collector` for that. In the specs repository it cannot, because the
+   no module there requires the kit, so it would use the harness's own
+   claimant, collector and ledger verifier. Those are packages of the
+   `conformance` module, which holds no case and so depends on no suite.
+5. *A target file's role is not a closed pair.* `relay` and `collector`
+   are the roles built here, and a file that names any other is an error
+   that says which roles this harness knows. Nothing in the format assumes
+   the component under test is reached over a network: a driver is a
+   process spoken to on its standard streams, which K2 adds to the `exec`
+   launcher.
+6. *The harness core builds and runs on Linux, macOS and Windows.* Only
+   the relay targets' sandbox is Linux-only. The driver suite's static tier
+   runs on all three.
+7. *"Not applicable" comes only from what the target declares.* The
+   driver suite takes its skips from the driver's own `describe`, which is
+   the same state.
+
+Not prepared here, and K2's to design: how a release that changes the
+driver contract reaches `warden` and its pin, which by then is one more
+module under `tools/conformance/`; the driver suite's lifecycle tier,
+which needs a host
+the driver runs on; and the requirement identifiers of the driver
+specification.
+
+One naming point for both reviews. After K1 this repository would have
+`conformance/driver/` (the driver suite's source, K1) beside
+`tools/conformance/` (the pins and the target files, this item), a
+`driver-contract` CI job beside the `conformance` workflow, and
+`make driver-conformance` beside `make conformance`. They do not collide.
+This design keeps its names and proposes none to K1.
+
+### Releases and how they are consumed
+
+- A release is a tag `<directory>/v0.x.y` on the specs repository's
+  `main`, one specification at a time (Decision 4). The `release`
+  workflow runs for the tag: it builds that specification's
+  `bw-conformance-<directory>` binaries with `go install <command>@<tag>`
+  and attaches them with `SHA256SUMS`. A `conformance/v0.x.y` tag releases
+  the harness and attaches nothing.
+- This repository names a release of each specification in a module of
+  its own, `tools/conformance/<directory>/go.mod` (Decision 7). For each
+  pinned specification `make conformance` runs
+  `go tool bw-conformance-<directory>` in that specification's module,
+  against the target files.
+- A seam change goes in this order: a pull request to the specs repository
+  changes the specification's document and its cases, and its
+  `CHANGELOG.md` names the version it will be released as; the
+  implementing branch pins that pull request's head commit
+  (`make pin-specs REF=<commit>`), and the `conformance` workflow's run
+  for that push shows the suites passing on hosted runners; the
+  implementing branch is reviewed with the specs branch; Jeff merges the
+  specs pull request and the tags are pushed on its merge commit, one for
+  each directory it changed, each in its own push, the harness's first;
+  the pins move to tags (`make pin-specs SPECS=...`), each specification
+  that changed to its new release and the rest back to the releases
+  they were at, and the implementing branch opens its PR, where the
+  `pin` job requires tags.
+  That is LOOP-02's order, the specification first and the code tested
+  against it, and LOOP-07's rule for a pin: a branch may name an
+  unreleased commit while its work is in progress, and trunk names only a
+  release (point 5).
+  Until M6 there are two relays, and each moves its own pins when it
+  implements a release; an older pin keeps passing. An item that only
+  moves a consumer's pin to a newer release, with no seam change of its
+  own, is a reconciliation item (LOOP-07): a feature in the one queue,
+  filed through intake, whose place FLOW-05 gives. Today FLOW-05 ranks it
+  as any feature. Jeff decided at `loop-contract`'s review that it ranks
+  with the fixes, and `loop-parallel` is the item that amends FLOW-05 to
+  say so (its a5 and a23).
+- A change to one specification releases that specification, and
+  another only when the harness's model of a protocol changes with it:
+  a released binary keeps the harness of its own release, so a suite
+  that must drive a component through the changed protocol is released
+  again with the new harness (Decision 4). Otherwise the other five keep
+  their versions, and an implementation that does not implement the
+  change moves nothing. That is what a tag per specification buys.
+- A tag is never moved. A failure found after a release is fixed by a new
+  release of the directory at fault: a patch release when no passing
+  implementation can fail by it, otherwise the next minor. It needs its
+  own pull request in the specs repository and Jeff's merge.
+- The harness is released when it changes. A specification takes a newer
+  harness by a release of its own, whose `go.mod` names it; until then
+  its binaries carry the harness they were released with, and so does
+  the suite this repository builds from that release. A harness fix
+  that every binary needs is therefore a release of each of the six,
+  and a move of each pin here.
+- The relay repository consumes the same releases with its own target
+  files: through pin modules of its own if its CI has Go, or through the
+  released binaries of the specifications it implements, each checked
+  against its `SHA256SUMS`. It runs released binaries, never a build of
+  an unreleased commit, on its trunk. That wiring is M1's, in the relay
+  repository. The relay has no
+  queue of its own (LOOP-08): its milestones are items in the one queue
+  that name the relay repository once P1 lets the queue hold them, and
+  until then they are worked outside the queue (the umbrella's Track R and
+  **How program items run**, as amended).
+
+**How the seven modules are built and released together.** These are the
+mechanics behind Decisions 4, 5 and 7, stated so that Plan can order
+them. The first three follow from a19's answer: the harness is a module
+of its own, and a specification may name a harness version before that
+version has its tag. The last two would hold wherever the harness
+lived.
+
+They were tried on 2026-11-15 with Go 1.26.3, in a model of the layout:
+local git repositories, nested modules tagged `<directory>/vX.Y.Z`, and a
+harness that imports a module outside the standard library, as the real
+one will (a DNS library, a network stack, a TOML parser). The first trial
+used modules that import nothing, and with those the workspace needs
+none of this, which is how the first three were missed until the review
+of the fold-in.
+
+- *The workspace names the harness version in progress.* A
+  specification's `go.mod` names the harness version it will be released
+  with. In a pull request that changes the harness, that version has no
+  tag yet, and every build, vet and test in the workspace then fails
+  with "unknown revision", because Go reads the `go.mod` of the version
+  that is named. `go.work` therefore carries one line,
+  `replace <the harness module> v0.x.y => ./conformance`, for the
+  version at the head of `conformance/CHANGELOG.md`. With it they pass.
+  Go refuses the line without a version, so a pull request that raises
+  the harness's version edits it, and `ci` checks it against the
+  `CHANGELOG.md`. A specification that still names an older harness
+  version, which has its tag, builds in the workspace too, against the
+  tree's harness.
+- *Each specification's `go.mod` is tidied through a temporary
+  `replace`.* `go mod tidy` cannot resolve a harness version that has no
+  tag. `make tidy` in the specs repository adds a `replace` of the
+  harness by `../conformance` to the specification's `go.mod`, runs
+  `go mod tidy` outside the workspace, and drops the line. The `go.mod`
+  then lists the harness's own dependencies at the versions the harness
+  names, and `go.sum` their hashes; `go.sum` has no line for the harness
+  itself. `ci` runs the same command and fails on a difference, and
+  fails a `go.mod` that carries a `replace`. This is what makes a
+  release repeatable: built from a `go.mod` that had not been tidied,
+  the same tag was built with a newer version of a third-party module
+  as soon as one was published.
+- *The release build is `go install <command>@<tag>`,* for each
+  operating system and architecture, with `CGO_ENABLED=0`. It builds
+  from what the tag serves, with exactly the versions the module's
+  `go.mod` lists, which is what a `go.mod` that names the tag gets. A
+  `go build` in a checkout at the tag, outside the workspace, fails: the
+  specification's `go.sum` has no line for the harness. The harness's
+  tag is pushed before the specifications' tags that name it, because
+  `go install` resolves it.
+- *An implementation's branch in progress* pins a commit, where a
+  specification may name a harness version that does not exist yet.
+  `make pin-specs REF=<commit>` therefore adds a `replace` line for the
+  harness to each pin module whose specification names such a version
+  (Decision 7). The `pin` job fails a `replace` line as it fails an
+  unreleased commit.
+- *Not tried:* the module proxy and the checksum database, which the
+  model went around: the first resolution of real tags, of a
+  specification that names a harness tag pushed moments before. It first
+  happens in `f6-release-specs`. If it fails, no tag is moved: the fault
+  is fixed in a pull request and released as the next patch versions.
+  Nor was the real harness's set of dependencies tried; task 1 tries
+  the mechanics with one of them.
+
+**How this repository's six pin modules are built.** These are the
+mechanics behind Decision 7 as a20's answer has it. They were tried on
+2026-11-15, after that answer, with Go 1.26.3, in the same model: two
+specifications, each released twice, the later releases naming a harness
+version that renames a function the earlier cases call, and a
+third-party module that has a newer version than the harness names.
+
+- *One module for each specification, written from nothing.* A `go.mod`
+  with the `module` and `go` lines, the specification's command in a
+  `tool` directive and one requirement, then `go mod tidy`. The result
+  is Decision 7's sample: the specification, the harness at the version
+  that release names and the harness's third-party module at the
+  version it names, not the newer one, each marked `// indirect`, and a
+  `go.sum` that lists all three. `go tool bw-conformance-<directory>`,
+  run in the module, builds and runs the command.
+- *The same build as the release.* `go version -m` printed the same
+  module lines, with the same hashes, for the binary `go tool` built in
+  the pin module and for the one `go install <command>@<tag>` built.
+- *The `go` line,* tried on the second review of the fold-in. In the
+  model every module names `go 1.26`, so the line had made no
+  difference. With a specification that names `go 1.24`, built with
+  Go 1.26.3: `go install <command>@<tag>` and `go build` of the command
+  in a pin module whose line is `go 1.24` wrote the same file, with the
+  same SHA-256, and the binary `go tool` built there printed the same
+  `go version -m` lines as both (`go tool` keeps its own build in the
+  cache, which is not that file). With `go 1.26.3` on the pin module's
+  line, `go build` wrote a different file and both builds' `go version
+  -m` lacked the `DefaultGODEBUG` line. A pin module written
+  with `go 1.25` for a release that names `go 1.26` was raised to
+  `go 1.26` by `go mod tidy`, with no `toolchain` line. A release that
+  names `go 1.27` stopped `go mod tidy` under `GOTOOLCHAIN=local`, with
+  no `go.sum` written, and under `GOTOOLCHAIN=auto` Go tried to fetch
+  that toolchain. Its `go` line could still be read, from the file
+  `go list -m -f '{{.GoMod}}' <module>@<version>` names, run outside
+  the pin module; for a release or a commit that the running Go can
+  build, `go list -m -json` also gives it as `GoVersion`. Go 1.26.3 and
+  Go 1.26.11 wrote the same two files for one pin; Go 1.26.0, older
+  than a pin module's `go 1.26.3`, refused it under `GOTOOLCHAIN=local`.
+- *A mixed set builds and runs.* One specification at its newer
+  release beside the other at its older one: each command ran and
+  reported its own harness version.
+- *A workspace undoes it.* With a `go.work` that lists the two modules,
+  the older specification was built with the newer harness and did not
+  compile. With `GOWORK=off` beside that file both ran again. So there
+  is no `go.work`, and the recipes set `GOWORK=off`.
+- *`go get` in place does too.* Taking the newer pin back to the older
+  release with `go get` left the harness line at the newer version,
+  `go mod tidy` kept it and `go mod tidy -diff` reported nothing to
+  change, and the command did not compile. Written again from nothing,
+  the module named the older harness and ran.
+- *A branch in progress.* A commit on a branch of the model's specs
+  repository raised the harness's version without a tag and named it in
+  one specification. That specification's pin module did not resolve
+  without a `replace` line and ran with one that points the harness at
+  the same commit. The other specification's module, pinned at the same
+  commit, named a tagged harness, needed no line, and ran with that
+  harness. Whether a named version has its tag is read with
+  `go list -m <harness>@<version>`, which answered rightly for both.
+- *The `pin` job's criteria,* as a script over `go mod edit -json`: it
+  passed the mixed set of releases, and failed a commit, a `replace`
+  line, a harness line raised by hand, and a second specification
+  required in one module.
+- *The root module is not affected.* `go build ./...`, `go vet ./...`
+  and `go list ./...` in a root module above the six did not enter
+  them, and its `go mod tidy` changed nothing.
+- *Not tried:* the real module names, proxy and checksum database, as
+  above; `go tool` for a command that needs the real harness's
+  dependencies; the builds on `macos-latest` and `windows-latest`,
+  where the `collector` job builds and runs the commands too; and a
+  pin module written by a later minor version of Go than 1.26, which
+  the `pin` job's comparison would meet if a runner's Go ran ahead of a
+  developer's.
+
+### CI
+
+**Specs repository** (`.github/workflows/` there):
+
+- `ci`, on pull requests and `main`, over every directory, built from the
+  working tree (the workspace):
+  - the layout check (every `v<N>.schema.json` or
+    `v<N>.<part>.schema.json` beside its `v<N>.md`; each schema's `$id` as
+    Decision 2 has it; schemas valid 2020-12; the documents' JSON examples
+    validate against them);
+  - for each specification, requirement identifiers unique, and each
+    covered by a case of its own suite or listed as not machine-checked
+    (**The harness**);
+  - the three OpenAPI checks (**The OpenAPI descriptions**: each file
+    valid 3.1, every JSON body a reference to a schema file beside it,
+    every operation and status named by a requirement);
+  - the check that the two collector documents state their common part
+    alike (**Seam 2**);
+  - `go vet` and `go test ./...` in each of the seven modules, which
+    includes each suite's test against the harness's own counterpart role
+    (**The harness**). Because every module is built against the tree,
+    this is also what holds a harness change to every specification's
+    cases: the set on `main` is always tested together;
+  - a check that no module's `go.mod` requires the kit;
+  - the module checks (**Releases and how they are consumed**): each
+    specification's `go.mod` and `go.sum` are what `make tidy` writes, no
+    `go.mod` carries a `replace`, and the `replace` line of `go.work`
+    names the harness version at the head of `conformance/CHANGELOG.md`;
+  - the release checks: a pull request that changes a directory adds a
+    version to that directory's `CHANGELOG.md`, higher than its newest
+    tag, and a specification whose directory changed names in its
+    `go.mod` the harness version at the head of `conformance/CHANGELOG.md`.
+- `implementations`, weekly and on demand, not a merge gate: the newest
+  release of each specification's suite against each known implementation
+  at its released version (the Go relay image first), published as a
+  table in the run summary. It is not a gate because a specification
+  change is merged before the code that implements it.
+- `release`, on the push of a tag `<directory>/v*`: it checks that the
+  tag is on `main` and is the version at the head of that directory's
+  `CHANGELOG.md`, then builds and attaches that specification's binaries
+  (**Releases and how they are consumed**). For `conformance/v*` it runs
+  the checks and attaches nothing. It can also be started by hand for a
+  tag that already exists (`workflow_dispatch`, with the tag as its
+  input), so that a run that was missed or that failed is made again
+  without touching the tag. Tags are pushed one to a push, because a
+  push of more than three tags starts no run.
+- `flow18`, the guard this repository has, so the public repository never
+  carries `entire/` refs (FLOW-18).
+
+**This repository:** a new `conformance` workflow, shaped like
+`integration`. Its paths are every package the relay and the disk collector
+are built from (`go list -deps ./cmd/relay ./cmd/collector`), so that a
+change to a shared package runs the suites (TEST-02's caveat): `relay/**`,
+`relaycfg/**`, `collector/**`, `bootstrap/**`, `ledger/**`, `cmd/relay/**`,
+`cmd/collector/**`, `driver/*.go`, `driver/buildlink/**`,
+`driver/script/**`, `go.mod`, `go.sum`, `Dockerfile.relay`, the `Makefile`,
+`tools/conformance/**` (the six pin modules and the target files, so a
+move of any pin starts a run) and the workflow itself.
+`cmd/warden-io/**` is not among them, because no suite runs the executor
+yet (a11). It runs:
+
+- on pull requests that reach those paths;
+- on a push to any branch other than `main` that changes one of those
+  paths. This is how a branch gets hosted runs before it has a pull
+  request: GitHub offers a manual run only for a workflow that is already
+  on the default branch. The list is the same as for pull requests, so
+  every commit that could change a verdict starts a run, and the latest run
+  on a branch covers its head: a commit after it that changed a listed path
+  would have started its own. At `f1-design` the push trigger was
+  `tools/conformance/**` and the workflow alone; the rule changes, the book
+  and a merge of `main` would then have left the head with no run. A branch
+  with an open pull request gets two runs for such a push, one on its head
+  and one on the merge with `main`;
+- weekly on `main`, and on demand.
+
+Jobs: `pin` (each of the six modules under `tools/conformance/` is
+there, names its own specification at a release tag and no other module
+of the specs repository but the harness, whose line is a release tag
+too, and carries no `replace` line; and `make pin-specs`, given the
+versions the six files name, changes no file, which holds each `go.mod`
+and `go.sum` to what that release names (Decision 7); not run on a
+branch push, where an unreleased commit is allowed); `relay` on
+`ubuntu-latest`, which runs
+`make conformance TARGETS="relay-host relay-vm relay-container relay-oci"`;
+`collector` on `ubuntu-latest`, `macos-latest` and `windows-latest`, which
+runs `make conformance TARGETS=collector-disk` (the disk collector, whose
+capture links differ on Windows). For each target `make conformance` runs
+every pinned specification's suite (**The harness**), so the jobs name
+targets and not suites. Each job names its targets, so a target
+the default leaves out on some host can never make CI green (a18). It is
+tier 1 in TEST-02's terms. In the profile's Checks table it is a check of
+the Specification class, deterministic and blocking (LOOP-03; **Rule
+changes**, PROFILE-01).
+
+### Tier 1's seam list
+
+`tools/tier1/rules.yaml`, replacing `seams: []` and the comment above it:
+
+```yaml
+# GLOBAL-08, EXEC-04: versioned seams, each with the code that defines it
+# and the contract path a change to that code must also touch. For a seam
+# specified in the specs repository that path is the file that pins the
+# release of its specification here (TEST-05). The collector seam has two
+# specifications and so two entries, one for each pin.
+seams:
+  - name: relay-claim
+    code: [relaycfg/relaycfg.go, relaycfg/tunnel.go, relaycfg/buildlink.go]
+    contract: tools/conformance/relay-claim/go.mod
+  - name: collector
+    code: [collector/collector.go, collector/paths.go, collector/store.go,
+           relay/collector_client.go]
+    contract: tools/conformance/collector-outputs/go.mod
+  - name: collector
+    code: [collector/collector.go, collector/paths.go, collector/signals.go,
+           collector/store.go, relay/collector_client.go]
+    contract: tools/conformance/collector-inputs/go.mod
+  - name: relay-guest-api
+    code: [relay/controlplane.go, relay/heartbeat.go, relay/dns.go, cmd/relay/dhcp.go]
+    contract: tools/conformance/relay-guest-api/go.mod
+  - name: executor-initialize
+    code: [cmd/warden-io/main.go, cmd/warden-io/initialize.go,
+           cmd/warden-io/baseline.go, cmd/warden-io/jks.go,
+           cmd/warden-io/platform_darwin.go, cmd/warden-io/platform_linux.go,
+           cmd/warden-io/platform_windows.go, cmd/warden-io/trust_linux.go]
+    contract: tools/conformance/executor-initialize/go.mod
+  - name: bootstrap-config
+    code: [bootstrap/bootstrap.go]
+    contract: tools/conformance/bootstrap-config/go.mod
+```
+
+Files are named one by one because the check's globs cannot leave tests out.
+
+Each seam's contract path is the pin of its own specification (a20,
+Decision 7). Until a20 was answered all five named one file,
+`tools/conformance/go.mod`.
+
+**Within what the check's code accepts.** `seam-contract` reads
+`contract` as one path: the field is a string
+(`tools/tier1/rules/rules.go`, `Seam.Contract`), and the parser on
+`main` refuses a list in it. The check's code is not edited. FLOW-14
+has Review and CI run tier 1 built from the merge base's code with the
+branch's `rules.yaml`, so the list has to be one that code reads. It
+is: one path for each entry, and an entry for each pin. This was tried
+on 2026-11-15 in a clone of this repository at `ad4ea50`, with the list
+above and `main`'s check code. `tools/workflow/enforcement-check.sh`
+passed, and tier 1 reported as the next paragraphs say. The same code
+given `contract: [<path>, <path>]` stopped with "cannot unmarshal !!seq
+into string".
+
+**One test of the check changes with the list.** `TestSeverities`
+(`tools/tier1/coupling/checks_test.go`) runs every coupling check with
+the real `rules.yaml` over a fixture that changes `cmd/warden-io/jks.go`,
+and fails on a finding whose severity is not in its table. The list
+puts that file on the `executor-initialize` seam, so `seam-contract`
+now reports the fixture, rightly, and the table gains
+`"GLOBAL-08": report.Must`. In the same clone, `go test ./...` in
+`tools/tier1` failed without that line ("GLOBAL-08: severity "MUST",
+want """) and passed with it, in every package there and in
+`tools/workflow`; `enforcement-check.sh` passed with the test edited and
+with TEST-05's new owner string in place. The file is under
+`tools/tier1/`, a rule path, and is among GLOBAL-08's `paths` (**Rule
+changes**). Until the second review of a20's fold-in the design said
+that only `rules.yaml` changed there: the fixture's file has been on the
+list since the revision of 2026-11-13 (`5ebe806`), and the test was not
+run against the list.
+
+**Seam 2 has two entries, both named `collector`.** It is one seam with
+two specifications (a10) and so two pins, and an entry holds one path.
+The code is not divided as the documents are. `collector/signals.go`
+holds only the handlers `collector-inputs` specifies, and is listed in
+that entry alone. The other four hold code of both: `collector.go` the
+routes and the handlers of both, `paths.go` the names of both,
+`store.go` the outputs' files and the listing of the context, and
+`relay/collector_client.go` the relay's side of both. They are listed
+in both entries. Nothing in tier 1 needs an entry's name to be unique;
+the name appears only in the finding, which also names the pin that is
+missing.
+
+**What the check holds.** `seam-contract` reports a change to a listed
+file when the diff does not also change the contract path of that
+file's entry (`tools/tier1/coupling/checks.go`, `SeamContract`). So a
+change to a file of one seam asks for that seam's pin, and a pin of
+another seam does not satisfy it: in the trial a change to
+`relaycfg/relaycfg.go` with only the `collector-inputs` pin moved was
+reported. For seam 2, a change to `signals.go` asks for the
+`collector-inputs` pin. A change to one of the four files listed twice
+asks for both pins, and is reported once for each pin the diff does not
+change. That is more than the rule asks when the change concerns one of
+the two specifications. Such a change moves that specification's pin
+and carries a trailer for the other,
+`Tier1-Allow: GLOBAL-08 <path>: <reason>` (LINT-05), whose reason says
+that the other specification is not changed. A trailer is matched by
+rule and path, so it clears both entries' findings on that file: with
+it the check holds nothing for the file, as with any trailer, and tier 1
+prints the trailer and its reason for Review to judge. The two entries
+never ask less than one pin for a change on the seam.
+
+What the check still cannot tell is whether the release a pin moved to
+states the change. That is Review's to judge (the agent half of
+GLOBAL-08 and EXEC-04), from that specification's own `CHANGELOG.md`.
+The proposed GLOBAL-08 paragraph states the obligation, "changes its
+specification first", and names the pin files only as what the
+automated part checks.
+
+*Rejected:* one entry for seam 2 that names one of its two pins. A
+change on the other specification's side would be asked for a pin that
+has nothing to do with it, and not for its own. *Rejected:* a list in
+`contract`, satisfied by any one of its paths. It would fit seam 2
+exactly. It needs a change to the check's code and a `rules.yaml` that
+`main`'s code cannot read, so the merge base's tier 1 could not run on
+this branch and the change would rest on Review alone (FLOW-14). The
+two entries need neither, and where they differ from it they ask for
+more.
+
+**What is left off** (a17). Three sets of relay code are on a seam and not
+on the list. `relay/relay.go` holds the reserved hosts' handlers
+(`handleArtifacts`, `handleContextGet`) with the CA and the ledger
+recording. `relay/proxy.go` holds interception and the proxy, which is
+most of what the relay does. `cmd/relay/`, all but `dhcp.go`, holds what
+each mode does with a claim, with the rest of the binary. Listing them
+would ask most relay changes for a pin move or a `Tier1-Allow` trailer.
+What covers them is weaker than the check: the `conformance` workflow runs
+on any change under `relay/` and `cmd/relay/`, and the pinned suite fails
+a change to behaviour that a case tests. A change that adds behaviour no
+case tests (a new `artifacts` path, a new step in one mode's claim) passes
+the pinned suite and needs no pin move. Only Review's judgment of GLOBAL-08
+stands against that.
+
+**The executor's entry.** The executor has no suite (a11), so nothing
+covers its files that way, and the entry lists every non-test file of
+`cmd/warden-io/`: the invocation and the steps (`main.go`,
+`initialize.go`), the baseline (`baseline.go`, and `jks.go` for the
+truststore's alias and password), the per-OS values and each OS's
+`installCA` (`platform_<os>.go`), and Linux's exclusive trust store
+(`trust_linux.go`). Its contract path is the `executor-initialize` pin:
+that specification states every step the executor takes, its use of the
+relay guest API among them (**Seam 5**). Until S2's suite exists, a
+change to them is held by
+this check, by the Go tests in `cmd/warden-io/` under `make test`, and by
+EXEC-04's agent-judged part. The specification says what each trust mode
+means for what the build trusts, and names the per-OS procedure without
+fixing its steps (EXEC-03), so a change to the steps that keeps the outcome
+carries a trailer. At `f1-design` `trust_linux.go` was left off for that
+reason while the three platform files, each of which holds `installCA`,
+were listed: a trust change needed a pin move or a trailer on macOS, on
+Windows and in Linux's append mode, and nothing in Linux's exclusive mode.
+Listing the file treats the four alike.
+
+The list is shared with `driver-contract`, whose redraft proposes one
+entry, `driver-contract`, with a document in this repository as its
+contract (`specs/driver-contract/v1.md`). The two designs' entries name no
+file in common. **With `driver-contract`** says what the second to merge
+does with the list and the comment above it.
+
+A change that touches a listed file and changes no behaviour (a refactor)
+carries a `Tier1-Allow: GLOBAL-08 <path>: <reason>` trailer (LINT-05), as
+a prose-only fix to a specification does under RELAY-05. A change to a Go
+file's comments or layout alone is not counted by the check and needs
+none.
+
+### The book and the specifications link both ways
+
+- **Book to specifications.** A new page,
+  `docs/book/src/concepts/seams.md` ("Component seams", listed in
+  `SUMMARY.md` at the head of the Specifications part), has one row per
+  seam: what it is between, its specification (two for seam 2, a10), the
+  package that implements it here, and the suite that checks it. It is the
+  only file in this
+  repository that links into the specs repository (a row links the
+  seam's OpenAPI description too, where it has one). Each row's links name
+  the ref its specification is pinned at: the tag `<directory>/v0.x.y`,
+  or, while the pin is an unreleased commit, that commit. The page also
+  shows each pinned version. `make pin-specs` rewrites the refs together
+  with the pins. A tier-0 test in `specs/specs_test.go` fails when a row's
+  ref and that specification's version in
+  `tools/conformance/<directory>/go.mod` disagree, so the book
+  never points at a release CI does not test. `specs/README.md` gains one
+  sentence pointing to the page for the seams that are not the ledger.
+- **`concepts/architecture.md` keeps what explains and gives up what
+  enumerates.** Its sections on the collector and the claim keep their
+  narrative (why the config is pushed, the tunnel, what the build link is
+  for, the ordering rule and its reason), and each opens by saying that the
+  specification is the contract, with a link to the seams page. The
+  collector's endpoint table, `build_link`'s validation rules and the
+  by-mode table are replaced by a sentence and that link. So is the
+  endpoint table under "Communication paths", which lists the relay guest
+  API as the build sees it (seam 3): the paragraphs after it, on the
+  control plane's port, the two reserved names and the collector being a
+  plane the build never sees, stay. The headings stay, so links into the
+  page keep working. *Rejected:* keeping the tables and marking them
+  non-normative. They would be a third description of the same protocol
+  (code, specification, book), kept in step by hand.
+- **Specifications to book.** The specs repository's README has an
+  "Implementations" table (the Go relay, the disk collector and the executor
+  in `buildwarden/buildwarden`; the Rust relay when it is public), and each
+  document's header links the book's page for the concept
+  (`https://buildwarden.github.io/buildwarden/`) and names its reference
+  implementation. Until M6 moves seam 4 (a1), the README says that the
+  ledger format is specified in `buildwarden/buildwarden` under `specs/`,
+  links to it there, and says that it moves at M6.
+- `AGENTS.md` gains a row for the seam specifications and their pins,
+  `CONTRIBUTING.md` a short section on `make conformance` and
+  `make pin-specs`, which says that a pin is moved by that command and
+  never by `go get`, and `contributing/structure.md` an entry for
+  `tools/conformance/`, its six pin modules and its target files, and
+  the new duty of `specs/specs_test.go`.
+- `concepts/overview.md` is unchanged: no component's flow changes
+  (FLOW-15), so the phase's overview sweep (FLOW-20) has nothing from this
+  item.
+
+### How the loop treats the second repository
+
+There is one queue, the one on this repository's `workflow` branch, for
+work in every repository, and an item names the repositories it works in
+(LOOP-04). This item names two:
+
+- `buildwarden/buildwarden`, its home. The design, the queue item, both
+  reviews, the branch and the pull request `wf` records are here.
+- `buildwarden/buildwarden-specs`. The queue file has no field for it; the
+  design is where it is named until the queue records it (LOOP-04), which
+  `loop-parallel` is to make it do.
+
+Working in a second repository from this queue is the normal pattern. It
+is not a stopgap that ends with P1.
+
+**The rules that bind there.** The specs repository has not adopted the
+Loop Contract: it has no profile and no invariants of its own, so it is
+not a component, and it adopts when Jeff files the item that does that.
+Until then the worker is bound there by four loop rules, which LOOP-08
+names, and this design lists the invariants that apply, by rule ID, as
+LOOP-08 asks; a4 asks Jeff to confirm the list. The first four rows
+are the loop rules; the last two are the list:
+
+| Rule | In the specs repository | Held by |
+|---|---|---|
+| FLOW-08 | Only Jeff merges to its `main`. No agent approves a pull request, merges one or enables auto-merge. His merge is the sign-off; before it, the session that does `f6-release-specs` lists in the specs pull request's body the tier-2 MUST findings that are in the specs repository, so that the merge acknowledges them there. The one sentence that does not hold there is "no sign-off step in the queue" (a15) | `main`'s protection (**What Jeff creates**); the workers' settings; the step's note |
+| FLOW-16 | The branch is deleted when its pull request merges; no agent deletes a remote branch | The repository's setting. `wf`'s Close checks only this repository, so the session that does `f6-release-specs` confirms the branch is gone and names it in the step's evidence |
+| FLOW-17 | Agents push `feat/seam-specs` at each green checkpoint (`go vet` and `go test ./...` in each module there), and never `main`, a force-push or a rewrite of pushed history. Release tags are pushed only in `f6-release-specs` | The rule; `main`'s protection |
+| FLOW-18 | Sessions that commit there are recorded to the private sessions repository, and the public repository carries no `entire/` refs | `.entire/settings.json` and the `flow18` workflow there (task 1) |
+| GLOBAL-01 to GLOBAL-04, GLOBAL-07, GLOBAL-09 to GLOBAL-11, TEST-04, TEST-07 | The harness's Go code: the `conformance` module and each specification's cases and command | Review's tier-2 report, which reads the specs branch; tier 1 does not run there |
+| RELAY-05's schema-identity rule | Each schema's `$id` (Decision 2) | The specs repository's `ci` layout check |
+
+No other rule of this repository binds there, and none of them is
+enforced there by `wf` or by tier 1.
+
+**What `wf` does not do there.** Until `loop-repository`, `wf` runs no
+gate in the specs repository and records no branch or pull request of it.
+The specs branch, its pull request and the commits this branch pinned are
+named in the steps' evidence and in the design's Consolidation. A run
+that changes the specs branch records its head in the run's digest
+section, and names the specifications it changed apart from the code
+(LOOP-06, points 1 and 2). What ties
+the two repositories together mechanically is the pins, below.
+
+**What changes later, and what does not need to.** `loop-parallel` gives
+the queue a field for an item's repositories. `loop-repository` gives `wf`
+its gates, branches, pull requests and checks in a second repository; an
+item like this one would then record its specs pull request, and the
+human step below would not be needed (a15). When the specs repository
+adopts the contract it becomes a component, coupled to the others only
+through releases (LOOP-08, LOOP-07). That is already how this repository
+consumes it: by its pins.
+
+| Phase | In this repository | In the specs repository |
+|---|---|---|
+| Plan | Every task names its repository | |
+| Implement | The pins (every specification at the specs branch's head commit), target files, `make conformance` and `make pin-specs`, the workflow, book pages, tier 1's seam list, the rule changes. `make lint` and `make test` green (FLOW-03). Task 8 is done when the `conformance` workflow's run for the pushed head is green on all three runners, and task 12, the last, when the run for the final pins is; the step's evidence names both runs | Documents, schemas, harness, suites and CI on `feat/seam-specs`, pushed at each green checkpoint (FLOW-17); its pull request opened in task 11, before the final pins, so Jeff can read it early |
+| Review | Tier 1 and the tier-2 report on this branch. Review confirms that the latest `conformance` run on the branch is green and that every pin is the specs pull request's head | The same tier-2 report also reads the specs branch at the pinned commit: the documents against the code lists in this design, and the harness against the rules in the table above. Its findings say which repository they are in |
+| Publish | `f6-merge-main`, `f6-consolidate` and `f6-open-pr`, as for any feature. `f6-open-pr` finds the pins on the tags; if it does not, the PR's `pin` job fails. The PR's body lists the specification changes, from **Specification changes**, and the rule changes (LOOP-06, FLOW-08) | `f6-release-specs` (human, a15): Jeff reads the tier-2 report's MUST findings, which the session has listed in the specs pull request's body, and merges the pull request. The seven tags are then pushed on the merge commit, one push for each tag, `conformance/v0.1.0` first and then each specification's `v0.1.0` (Decision 4), and the pins moved on this branch (`make pin-specs SPECS=latest`, `make test`, `make lint`, commit, push), by him or by the attended session on his word |
+
+The mechanical link between the two is the pins. Before the release, the
+suites have passed on hosted runners against the exact commit the branch
+pins (the push run). After it, this repository's PR cannot have green CI
+(FLOW-03, phase 6) unless every pin names a release tag and those
+releases' suites pass here. The pins' move comes after Review and changes
+thirteen files: the `go.mod` and `go.sum` of each of the six modules
+under `tools/conformance/`, and `docs/book/src/concepts/seams.md`. The
+PR's CI runs everything on the result.
+
+**The release step.** `f6-release-specs` is a `human` step that neither
+FLOW-04's list nor FLOW-08's "no sign-off step in the queue" provides
+for; a15 asks Jeff for it as an exception to both, for this item. It does
+not sign anything off. The merge does that (FLOW-08), and the step records
+that the merge happened where `wf` cannot see it. `wf` offers a `human`
+step whatever its phase, once the steps it
+needs are done. The step needs `f2-design-review`, so it is not offered,
+and `QUEUE.md` does not list it, before the review has confirmed a15. From
+then until Review is done it is offered and must not be done: the tier-2
+report and the green hosted run are what the merge rests on (FLOW-08).
+`wf` cannot hold it back further, because a step can only need one that
+exists and Review's step is seeded with its phase. Three things stand in
+for that: the step's note says so; no specs pull request exists to merge
+before task 11; and a step marked done early, or without the pins' move,
+is caught by the `pin` job, which stops the PR. If the item returns to
+Design (FLOW-06), the need no longer holds the step back: the review step
+it names is done, or `wf back` dropped it and the need with it. The step
+is then offered again until the next review. Design keeps the step and its
+note, and cannot add a need on the next review's step, which does not
+exist until Plan is seeded.
+
+If the specs pull request changes between Review and its merge, the tags'
+tree differs from the commit Review read. The session that moves the pins
+compares the two in the specs repository and, if they differ, records the
+difference in the step's evidence and in the message of the commit
+that moves them. The
+`conformance` workflow judges the result; a failure is repaired under
+FLOW-11 or goes back under FLOW-06.
+
+If the item goes back after the tags (FLOW-06, FLOW-10) and the specs
+content has to change, the change is a new branch and pull request in the
+specs repository and a new release of each directory it changes
+(**Releases and how they are consumed**). On a return to Design, the
+Design step adds a human step
+`f6-release-specs-r<n>` for it. On a return to Implement alone, Implement
+stops with a blocking question that names the release it needs, as it does
+for a missing repository (a2).
+
+### Beside `driver-contract` in the queue
+
+This item and `driver-contract` both declare `alters_relationships: true`
+and both are past Design. `alters-slot` (merged as `897a4a8`, #118) made
+`wf next` and `wf validate` count the features that hold a slot against
+`config.yaml`'s limit of 3, a slot being held from the claim of the Plan
+step. Under that limit this item and `driver-contract` do not hold each
+other's Plan, and the two may be planned and implemented side by side.
+They still take the PR slot one at a time (FLOW-05). Before that merge
+`wf next` gave the cloud loop one slot whatever the limit said, and each
+of the two would have held the other's Plan; that is no longer so.
+
+Nothing in this design depends on which of the two merges first for that
+reason. The order matters in one place only, the rule text and the tier-1
+configuration both edit, and **With `driver-contract`** says what the
+second to merge does.
+
+### What Jeff creates
+
+**The repository, during the design review** (a2, Jeff's answer of
+2026-11-15: now, before the review's approval). Jeff creates it himself.
+The cloud session that holds the review cannot create a repository, so
+the session's part is to attach it once it exists. What is created was
+confirmed with him in that session, right before creation (umbrella a11):
+
+1. The repository `buildwarden/buildwarden-specs`, public (a3), **with a
+   first commit on `main`**, so that no agent ever pushes `main`. The
+   commit carries a README stub and the Apache-2.0 `LICENSE`, the licence
+   this repository has, and nothing else. It carries no `NOTICE` file.
+   This repository's `NOTICE` reads "Copyright Amazon.com, Inc. or its
+   affiliates"; it is not copied, and no agent adds one.
+2. On it: `main` protected (pull request required, no force-push, no
+   deletion), "Automatically delete head branches" on (FLOW-16), Actions
+   enabled. The repository is public, so its host offers protection.
+   LOOP-08 asks protection of a component's trunk where its host offers
+   it (step 6); the specs repository is not yet a component, and is
+   protected from its creation so that FLOW-08 is held there by more than
+   the workers' settings.
+3. The Claude GitHub App installed on it. That is what lets the loop's
+   sessions push branches and open pull requests there; the session then
+   attaches the repository.
+
+The repository did not exist when this was written, during the first
+sitting of the review on 2026-11-15. Creating it before the approval
+fixes its name (umbrella a10), its visibility (a3) and its licence file,
+each confirmed with him, and nothing else: nothing is pushed to it
+before Implement, and a design that is sent back leaves it with its
+stub.
+
+**What Implement checks before it starts** (task 0). The repository
+exists and is public. `main` has one commit, with a README and the
+Apache-2.0 `LICENSE` and no `NOTICE`. The session can read it, push the
+branch `feat/seam-specs` and open a pull request. The protection of
+`main`, the head-branch setting and Actions are read where the session's
+credentials can read them; what it could not read is named in the step's
+evidence, and nothing is tested by trying a push to `main`. If the
+repository is missing, differs from this list, or refuses the branch,
+Implement stops with a blocking question (FLOW-07) and changes nothing.
+
+After Review: `f6-release-specs` (a15). The merge of its pull request,
+which is Jeff's alone (FLOW-08), preferably as a merge commit so that the
+commits this branch pinned while in progress stay in its history; then the
+seven tags on the merge commit, each pushed on its own,
+`conformance/v0.1.0` first and then one `v0.1.0` for each specification
+(a8, Decision 4), and the pins' move here, which the attended session
+may do on his word.
+
+Not needed: packages, Pages, secrets, or any change to `buildwarden-relay`.
+
+## Defaults and overrides
+
+This item adds no default, override or fallback to the relay, the collector,
+the executor, `warden` or any driver, and no relay setting: the claim gains
+and loses no field (RELAY-08).
+
+It adds these to the tooling:
+
+| Default | Why it is the obvious one | Override, used exclusively |
+|---|---|---|
+| `make conformance` runs every target in `tools/conformance/targets/` whose file declares the host's OS, and prints one line for each target it leaves out, with the reason (a18) | A developer who names nothing wants every check that can run on their machine. On Linux that is the whole check CI runs; on macOS and Windows it is the disk collector's | `TARGETS="relay-host collector-disk"` runs exactly those. A named target that cannot run on the host is an error |
+| Each specification's suite comes from the release its own module pins, `tools/conformance/<directory>/go.mod`, built with the harness that release names | They are the releases this repository claims to implement, each as it was released | `SPECS_DIR=<checkout>` runs every suite from a local checkout of the specs repository instead, and prints that the run is not the pins. CI never sets it |
+| For each target, `make conformance` runs the suite of every pinned specification; a suite with no case for the target's role says so and does not fail | A component is conformant to what it implements only if all of them pass | `SUITES="relay-claim relay-guest-api"` runs exactly those specifications' suites |
+| `relay-oci.toml` names its container runtime, `runtime = "docker"` | It is what the hosted runner has; an `oci` target must name one, and the harness has no default of its own | `OCI_RUNTIME=podman make conformance` runs that target with `podman` and nothing else |
+
+`make pin-specs` has no default: it is given `SPECS` or `REF`
+(Decision 7), and with neither, or with both, it is an error that says
+so. `SPECS=latest` is a value the caller writes, not a default. The
+`replace` line `REF` writes in a module is not a fallback either: it is
+written when the specification names a harness version that has no tag,
+which the command reads before it writes the module, and not after a
+build has failed (GLOBAL-11). `GOWORK=off` is set by the recipes and is
+not a setting. The `go` line of a pin module is read from the release
+it pins and is not a setting either (Decision 7). The
+harness's own timings (the readiness poll, a case's time limit) are
+constants of a harness release, not settings.
+
+No fallback is added, and three that might be expected are rejected:
+
+- A target that was named, or that declares the host's OS, and cannot run
+  there (a relay target named off Linux, or run without root or user
+  namespaces; `relay-oci` without the runtime it names) is an error that
+  names what is missing. It is not skipped, the harness does not look for
+  another runtime, and `exec` is not tried in place of `oci` (GLOBAL-11).
+  The default's leaving out a target whose file does not declare the host's
+  OS is not a fallback: it is decided from the file before anything
+  starts, and it is printed (a18).
+- A failed case is not retried (TEST-04).
+- A pin that cannot be fetched fails the run. There is no cached or bundled
+  copy of an older release, and a specification whose pin cannot be
+  fetched is not left out of the run.
+
+The specifications record defaults and named fallbacks that already exist and
+that earlier designs settled; none changes: the absent `upstream_dns` default
+and the resolver list's in-order failover (`hyperv-relay-per-build-channel`),
+what each mode does with an absent `build_link`, host mode's `--subnet`
+included (`build-link-subnet`), the empty bootstrap config and its `append`
+trust mode (`unified-bootstrap`), and the disk collector's copy where it
+cannot create a capture symlink.
+
+The documents also record fallbacks of today's code that no design's
+**Defaults and overrides** names (GLOBAL-10, GLOBAL-11), found during
+Implement: a collector's failure served to the build as "none" (N24),
+`exclusive` applied as `append` on macOS and Windows (N28), and the steps
+of `initialize` that fail and go on (N30). This item neither adds them
+nor names them as allowed: each is a row of class (c) under **Divergences
+found**, and its fix is the later item's (**What Jeff decided in r2**).
+
+## Cross-driver impact
+
+No driver is named in `drivers`, and none is affected. No file under
+`driver/` changes, and no shared package (`relay/`, `relaycfg/`,
+`collector/`, `ledger/`, `bootstrap/`) changes either (Decision 11), so no
+driver's build path differs after this item. Every driver's later seam
+changes are affected the same way: a change to a listed seam file must move
+that seam's pin.
+
+## Specification changes
+
+The five seams this design declares have no written specification today.
+Each is defined by Go code, which the table in **Problem** names. This
+item writes the first version of each. It changes no behaviour
+(Decision 1), so it changes no existing requirement: every requirement is
+new and states what `main` does.
+
+| Seam | Specification document, in the specs repository | Requirements | Checked by |
+|---|---|---|---|
+| 1 `relay-claim` | `relay-claim/v1.md`, with `v1.openapi.json`, `v1.config.schema.json` and `v1.identity.schema.json` | `CLAIM-<n>`, all new | Its suite: against a relay (relay role) and against a collector that claims (claimant role) |
+| 2 `collector` | Two documents (a10): `collector-outputs/v1.md` with `v1.openapi.json`, and `collector-inputs/v1.md` with `v1.openapi.json`, `v1.complete.schema.json` and `v1.status.schema.json` | `COLLOUT-<n>` and `COLLIN-<n>`, all new | Each one's suite: against a collector, and against a relay (the relay's side) |
+| 3 `relay-guest-api` | `relay-guest-api/v1.md`, with `v1.artifacts.openapi.json`, `v1.cwd.openapi.json` and `v1.control.openapi.json` | `GUEST-<n>`, all new | Its suite, against a relay (relay role). The build environment's side: no cases yet (a11) |
+| 5 `executor-initialize` | `executor-initialize/v1.md` | `INIT-<n>`, all new | No cases yet (a11); the Go tests in `cmd/warden-io/` |
+| 6 `bootstrap-config` | `bootstrap-config/v1.md`, with `v1.schema.json` | `BOOTCFG-<n>`, all new | Its suite: against a relay (as carried) and against a collector (as produced). As the executor reads it: no cases yet (a11) |
+
+Each row's document is released under its own version (a8). The six
+first releases are each `v0.1.0`.
+
+The operations of the six OpenAPI files, which four specifications
+have, are new too (a9). They add no requirement: each operation and
+status names the requirements that state it (**The OpenAPI
+descriptions**).
+
+**What changes in them.** Each document is new. What it must state is
+listed seam by seam under **What each specification covers**, and that
+list, with Decision 1, is what the design review decides (LOOP-02). The
+identifiers are given when the documents are written (Decision 3), so the
+design names the prefixes and not the numbers. Each document also lists
+the divergences that concern its seam (**Divergences found**) under
+"Known divergences", as the code behaves.
+
+**Where the change is made.** In `buildwarden/buildwarden-specs`, on its
+branch `feat/seam-specs`, in one pull request that Jeff merges
+(`f6-release-specs`, a15). The releases this repository will pin are the
+six specifications' `v0.1.0` (Decision 4), each in its own module,
+`tools/conformance/<directory>/go.mod` (Decision 7). Until those releases
+exist, this branch pins a commit of the specs branch.
+No specification under `specs/` in this repository changes.
+`specs/README.md` gains one sentence that points to the book's seams
+page, and `specs/specs_test.go` one test (**The book and the
+specifications link both ways**).
+
+**The order in Implement** (LOOP-02). The documents are written first
+(tasks 2 to 5), then the harness and the suites (tasks 6 and 7), then the
+Go relay and the disk collector are tested against them (task 8). No code
+in this repository follows a specification here, because no behaviour
+changes. A case that fails because a document misread the code is
+corrected in the document. One that fails because the code does
+something this design does not record returns the item to Design with
+the finding (FLOW-06). No case is weakened and no code is changed to
+make a suite pass.
+
+**How it is reported** (LOOP-06). A run that changes a document names it
+in its digest section apart from the code, and the pull request's body
+lists the six documents under a heading of their own.
+
+**Seams this design does not declare.**
+
+- Seam 4, the ledger format (`ledger-format`): no change. Its
+  specification stays in this repository, `specs/build-ledger/v1.md` and
+  the schema documents under `specs/`, until M6 moves it with RELAY-01 to
+  RELAY-08 (a1). The harness's ledger verifier implements
+  the reader's side of that document (the header, each record's
+  signature and chain, the hash blocks) and reads the metadata fields its
+  cases need by the names `specs/metadata-<name>/v1.md` gives them. Those
+  documents carry no requirement identifiers to cite. The verifier reads
+  the format from this repository: its package comment names the document
+  and the commit of `buildwarden/buildwarden` it was written from, and
+  the specs repository holds no copy of the document or of a schema.
+  RELAY-05 keeps a version 1 ledger readable, so a verifier written from
+  `v1.md` stays right until the format's version changes. A change to the
+  format before M6 is a RELAY-05 change in this repository, and its design
+  says whether a suite case reads what it changes.
+- The bootstrap model (`bootstrap-model`, BOOT-07): untouched.
+- Seam 9, the driver contract: `driver-contract`'s.
+
+After this item a change to one of the five seams is a pull request to
+the specs repository, a release of the specification it changes, and a
+move of that specification's pin here (**Releases and how they are
+consumed**).
+
+## Rule changes
+
+Five amendments: TEST-05, TEST-02, GLOBAL-08, EXEC-04 and PROFILE-01. Each
+is made in Implement, after the review approves it by name (FLOW-14).
+`driver-contract` amends three of the same rules, GLOBAL-08, TEST-05
+and PROFILE-01; **With `driver-contract`**, after the five, says which
+sentences each design owns.
+
+**None is a loop rule.** A feature's design may declare a change to the
+invariants and profile of a component it works in and to their
+enforcement, and never to a LOOP, FLOW or LINT rule or its enforcement
+(FLOW-14 as amended, LOOP-09). The five were checked against that on
+2026-11-15:
+
+- *The rules.* GLOBAL-, EXEC-, TEST- and PROFILE- are prefixes whose
+  owner is `buildwarden/buildwarden` in the ID scheme table of
+  `docs/development/README.md`, and the four files edited
+  (`global.md`, `in-vm-executor.md`, `testing.md`, `loop-profile.md`) are
+  on its list of project invariants.
+- *The enforcement.* `tools/tier1/rules.yaml` holds entries for rules of
+  both kinds, and the rule ID on the `rule_changes` entry decides, not
+  the path. This item edits two things in it: the `seams` list, which is
+  the data of `seam-contract`, the check of GLOBAL-08 and EXEC-04, and
+  TEST-05's owner string. No FLOW or LINT entry is touched. The check's
+  code does not change; one test of it does. `TestSeverities`
+  (`tools/tier1/coupling/checks_test.go`) runs the coupling checks with
+  the real `rules.yaml`, and its table of expected severities gains
+  GLOBAL-08 (**GLOBAL-08**, Enforcement change). The table's other rows
+  are BOOT-07, ORCH-01 and GLOBAL-04; it holds no row for a loop rule,
+  and none of its rows changes.
+- *What this item would want of a loop rule* it asks as a question and
+  does not declare: FLOW-04's list and FLOW-08's sentence (a15).
+
+Two things this item builds are near a loop rule and change none. They
+are stated so that the design review can judge them (LOOP-09):
+
+- The `pin` job of the `conformance` workflow fails a pull request in
+  which a specification's pin is not a release tag. That is this
+  repository's own check of how it pins releases (TEST-05 and GLOBAL-08
+  as proposed; the profile's
+  Specifications entry). LOOP-07, point 5, says the same of any
+  component's trunk and is agent-judged; the job is not its enforcement
+  and no loop rule names it.
+- The specs repository gets `.entire/settings.json` and a `flow18`
+  workflow (task 1). They are how a worker bound there by FLOW-18 keeps
+  to it (LOOP-08), set up as this repository has them. The loop's own
+  check, `tools/workflow/flow18-check.sh`, and this repository's `flow18`
+  workflow are not edited.
+
+The umbrella's table of rule changes, which is "for direction", gives S1
+two: RELAY-05 and TEST-05. This design declares TEST-05 and leaves RELAY-05
+to M6, which moves seam 4 (a1; the table's row is amended, **Amendments to
+the umbrella design**). It also declares four that the table does not give
+S1: TEST-02, GLOBAL-08, EXEC-04 and PROFILE-01. The table gives GLOBAL-08
+to K1 and to S2, S3 and S4 for their seams; S1 needs it because S1 is the
+item in which the seams' contract documents come to exist. PROFILE-01 did
+not exist when the table was written.
+
+### TEST-05 (amend), `docs/development/testing.md`, `tools/tier1/rules.yaml`
+
+**Why:** after this item the contract tests for the relay's and the
+collector's seams are the specs repository's suites, run black-box. The rule
+as written describes Go tests inside this repository. This design rewrites
+the rule's title and its whole body as it is on `main`; `driver-contract`
+proposes one paragraph more at the rule's end.
+
+**Current wording:**
+
+> ### TEST-05 — Contract tests for the seams
+>
+> **Severity:** MUST
+> **Check:** automated + agent-judgment
+>
+> The relay and executor public contracts (the GLOBAL-08 versioned seams) carry
+> conformance / round-trip tests, so a third-party substitute has something to verify
+> against:
+>
+> - RELAY-02 byte-exact round-trip (sent equals recorded),
+> - RELAY-05 signature round-trip plus reader backward-compatibility,
+> - EXEC-04 protocol conformance.
+
+**Proposed wording:**
+
+> ### TEST-05 — Conformance suites for the seams
+>
+> **Severity:** MUST
+> **Check:** automated + agent-judgment
+>
+> The claim protocol, the collector protocol and the relay guest API (three
+> of the GLOBAL-08 versioned seams) are specified in the specs repository,
+> `buildwarden/buildwarden-specs`, and checked there by black-box
+> conformance suites, so a substitute written in any language has something
+> to verify against. Each specification there is released under its own
+> version, and a release carries the suite that checks it. This repository
+> pins a tagged release of each specification in
+> `tools/conformance/<specification>/go.mod` and runs those releases'
+> suites against the components it holds, in the `conformance` workflow
+> (TEST-02):
+>
+> - against the Go relay in each of its modes (RELAY-04) and as its OCI
+>   image: the suites of the claim protocol, of both specifications of the
+>   collector protocol (its outputs, and its inputs and signals) as the
+>   relay is their client, of the relay guest API, with the RELAY-02
+>   byte-exact round-trip (sent equals recorded), and of the bootstrap
+>   config as the relay carries it;
+> - against the disk collector (`cmd/collector`): the suites of both
+>   specifications of the collector protocol, of the claim protocol as
+>   its claimant, and of the bootstrap config as it is produced.
+>
+> The contract tests of a seam specified there are added to the suite of
+> its specification in the specs repository, not to this repository. Two
+> contracts stay as tests
+> here until a suite covers them: RELAY-05's signature round-trip and reader
+> backward-compatibility (`relay/`, `ledger/`), and EXEC-04's protocol
+> conformance (`cmd/warden-io/`, `bootstrap/`), whose specifications
+> (`executor-initialize`, and `bootstrap-config` as the executor reads it)
+> have no cases yet.
+>
+> The automated part is the `conformance` workflow and `make test`; the
+> agent part judges whether a seam change added its cases to the suite.
+
+Reworded on 2026-11-15 for a8 and a10, in the review's first sitting. The
+wording Jeff read at `e4801d6` said "pins one tagged release of the specs
+repository" and "runs that release's suites", and its two bullets began
+"the relay suite" and "the collector suites" and spoke of "both parts of
+the collector protocol", and its third paragraph ended "have no suite
+yet", where a specification now has a suite with no cases. The current
+wording above is `main`'s, checked again against `ad4ea50`.
+
+Reworded again on 2026-11-15 for a20, in one path. The wording at
+`e19cc1f` read "pins a tagged release of each specification in
+`tools/conformance/go.mod`"; it now names
+`tools/conformance/<specification>/go.mod`. No other word of the rule
+changes. In the rule text `<specification>` is a specification's name,
+which is the name of its directory in the specs repository and of its
+module here (`<directory>` elsewhere in this design).
+
+**Severity and check:** MUST and `automated + agent-judgment`, before and
+after.
+
+**Enforcement change:** in `tools/tier1/rules.yaml` the TEST-05 entry's owner
+changes from `"make test (the round-trip tests exist as tests)"` to
+`"the conformance workflow (the specs repository's suites at the pinned
+releases) and make test (the ledger round-trip tests)"`. No check code
+changes.
+
+### TEST-02 (amend), `docs/development/testing.md`
+
+**Why:** TEST-02 lists where each tier runs today. The `conformance`
+workflow is a new tier-1 run and the list would be incomplete without it.
+
+**Current wording** (the tier-1 bullet of "Where each tier runs today"):
+
+> - Tier 1: the `integration` workflow (`make integration-test` on a hosted
+>   Ubuntu runner with Docker). It runs on PRs that reach `driver/container/`,
+>   the `driver/` root, a shared package (`relay/`, `ledger/`, `collector/`),
+>   `cmd/`, `test-integration.sh`, a `Dockerfile` or `go.mod`; weekly on
+>   `main`; and on demand for a branch that has the workflow
+>   (`gh workflow run integration.yml --ref <branch>`).
+
+**Proposed wording** (the same bullet, with one sentence added at its end):
+
+> - Tier 1: the `integration` workflow (`make integration-test` on a hosted
+>   Ubuntu runner with Docker). It runs on PRs that reach `driver/container/`,
+>   the `driver/` root, a shared package (`relay/`, `ledger/`, `collector/`),
+>   `cmd/`, `test-integration.sh`, a `Dockerfile` or `go.mod`; weekly on
+>   `main`; and on demand for a branch that has the workflow
+>   (`gh workflow run integration.yml --ref <branch>`). The `conformance`
+>   workflow (TEST-05) is tier 1 too: it runs the seams' suites on hosted
+>   runners, on PRs and on pushes to a branch other than `main` that change
+>   a package the relay or the disk collector is built from, a file their
+>   builds read, the pins of the specification releases and the target
+>   files (`tools/conformance/`) or the workflow itself; weekly on `main`;
+>   and on demand.
+>   `conformance.yml`'s `paths` list is that set's implementation.
+
+The sentence names the kinds of path and points to the workflow for the
+list, as the tier-0 bullet does with `main.yml`'s `changes` job. At
+`f1-design` it copied the list, which would have been a second copy to
+keep in step, and it left out the workflow file itself and the wider push
+trigger (**CI**).
+
+Reworded on 2026-11-15 for a8, in four words: the sentence Jeff read at
+`e4801d6` said "the specs pin and its target files
+(`tools/conformance/`)". The bullet's wording on `main` was checked again
+against `ad4ea50`.
+
+Not changed by a20, and approved by name on 2026-11-15 on the wording at
+`e19cc1f` (**Design review**). The sentence names the directory
+`tools/conformance/`, which holds the six pin modules and the target
+files as it held the one module, and names no file in it. The proposed
+wording above is byte for byte what it was at `e19cc1f`.
+
+**Severity and check:** unchanged (MUST; automated + agent-judgment). No
+enforcement change: the workflow is new and is none of the jobs FLOW-14
+names.
+
+### GLOBAL-08 (amend), `docs/development/global.md`, `tools/tier1/rules.yaml`, `tools/tier1/coupling/checks_test.go`
+
+**Why:** the contract documents of five seams now exist, in another
+repository, and the bootstrap config becomes a written seam. The rule's
+automated part says "contract document"; for these five, what this
+repository holds of a specification's document is the file that pins
+its release.
+
+**Current wording** (the executor bullet of "Versioned seams"):
+
+> - Executor public interface: the `initialize` invocation contract plus its
+>   side of the relay protocol.
+
+**Proposed wording** (the same bullet):
+
+> - Executor public interface: the `initialize` invocation contract, the
+>   bootstrap config it reads (`bootstrap/`), plus its side of the relay
+>   protocol.
+
+**Added,** as a new paragraph before the rule's last one. The last
+paragraph ("The automated part requires a change touching a versioned seam
+to also change that seam's contract document.") is not changed:
+
+> The claim protocol, the collector protocol, the relay guest API, the
+> `initialize` contract and the bootstrap config are written as
+> specifications in the specs repository, `buildwarden/buildwarden-specs`
+> (TEST-05), each released under its own version; the collector protocol
+> is two specifications, its outputs and its inputs and signals. A change
+> to one of those five seams changes its specification first: that
+> specification is released, and the change here moves its pin,
+> `tools/conformance/<specification>/go.mod`, to that release. For them
+> those pin files are the contract documents the automated part checks.
+> The ledger format stays in `specs/` (RELAY-05).
+
+The paragraph states the obligation ("changes its specification first")
+and names the pin files only as what the automated part checks. The
+check asks for the pin of the seam whose file changed, and for both
+pins of seam 2 where a file holds code of both its specifications;
+**Tier 1's seam list** says what that holds and what is left to Review.
+
+Reworded on 2026-11-15 for a8 and a10. The paragraph Jeff read at
+`e4801d6` had no clause on versions or on the collector's two
+specifications, and read "the specification is released, and the change
+here moves the pin (`tools/conformance/go.mod`) to that release. For
+them the pin is the contract document the automated part checks." Its
+last sentence is unchanged by a1: the ledger format stays in `specs/`
+until M6, whose item rewrites the sentence with RELAY-05. The executor
+bullet, above, is unchanged, and `main`'s wording was checked again
+against `ad4ea50`.
+
+Reworded again on 2026-11-15 for a20, in two sentences of the added
+paragraph. At `e19cc1f` they read "the change here moves its pin in
+`tools/conformance/go.mod` to that release. For them that file is the
+contract document the automated part checks." They now name
+`tools/conformance/<specification>/go.mod` and read "those pin files are
+the contract documents". The executor bullet and the rest of the
+paragraph are as at `e19cc1f`.
+
+**Severity and check:** unchanged (MUST; automated + agent-judgment).
+
+**Enforcement change:** `tools/tier1/rules.yaml` gets the `seams` entries
+and the comment under **Tier 1's seam list**, in place of `seams: []`:
+six entries for the five seams, two of them for `collector`. The
+`seam-contract`
+check's code does not change; it starts reporting a change to a listed file
+that does not also change the pin its entry names, which for a file
+listed in both `collector` entries is both pins. Because this edits
+`tools/tier1/`, Review also runs the merge base's tier 1 with the branch's
+configuration (FLOW-14). That code reads the list as written, which was
+tried at `ad4ea50` (**Tier 1's seam list**), and it should report
+nothing new on this branch, which touches none of the listed files.
+
+One test of the check changes with the data. `TestSeverities`
+(`tools/tier1/coupling/checks_test.go`) runs every check over a fixture
+that changes `cmd/warden-io/jks.go`, with the real `rules.yaml`. The
+list puts that file on the `executor-initialize` seam, so the test's
+table of expected severities gains GLOBAL-08 as MUST:
+
+```go
+want := map[string]report.Severity{"BOOT-07": report.Hint,
+	"ORCH-01": report.Must, "GLOBAL-04": report.Hint,
+	"GLOBAL-08": report.Must}[f.Rule]
+```
+
+The third line is added, and the second ends with a comma where on
+`main` it closes the table. No other test and no code under
+`tools/tier1/` changes. The edit was tried with the list at `ad4ea50`:
+without it `make test` fails in `tools/tier1`, and with it every
+package there passes (**Tier 1's seam list**).
+
+What differs from `e19cc1f` in this enforcement change, where the rule
+text differs as said above:
+
+- *The list.* At `e19cc1f` it had five entries, one for each seam, and
+  each named `tools/conformance/go.mod` as its contract. It now has six,
+  two of them for `collector`, each with its own specification's pin.
+- *The comment above `seams`,* in two places. Its second sentence ended
+  "the file that pins the release of each specification this repository
+  implements (TEST-05)." and now ends "the file that pins the release of
+  its specification here (TEST-05).", and it gains a third sentence, for
+  the collector seam's two entries.
+- *The test,* and its file among this entry's paths. At `e19cc1f` the
+  paths were `global.md` and `rules.yaml` alone, and the design said
+  that no file but `rules.yaml` changed under `tools/tier1/`. The second
+  review of a20's fold-in ran the test against the list and found that
+  it fails. The fixture's file was already on the list at `e19cc1f`.
+
+### EXEC-04 (amend), `docs/development/in-vm-executor.md`
+
+**Why:** the same change, for the executor's rule. Its list of what the
+executor's interface is gains the bootstrap config, so that it and
+GLOBAL-08's executor bullet name the same three things. At `f1-design`
+only the last paragraph was amended, and the two rules would have listed
+the interface differently.
+
+**Current wording** (the rule's body):
+
+> The executor exposes a versioned public interface under GLOBAL-08:
+>
+> - the `initialize` invocation contract: how an orchestrator launches it, its env,
+>   args, and exit reporting; and
+> - its side of the relay protocol: CA install, artifact `POST`, heartbeat, and exit
+>   report.
+>
+> Changes follow the pre/post-1.0 seam posture and update the contract document. The
+> automated part requires a change to the contract surface to also change its contract
+> doc.
+
+**Proposed wording:**
+
+> The executor exposes a versioned public interface under GLOBAL-08:
+>
+> - the `initialize` invocation contract: how an orchestrator launches it, its env,
+>   args, and exit reporting;
+> - the bootstrap config it reads (`bootstrap/`); and
+> - its side of the relay protocol: CA install, artifact `POST`, heartbeat, and exit
+>   report.
+>
+> Changes follow the pre/post-1.0 seam posture and change the specification
+> first (GLOBAL-08): `executor-initialize`, `bootstrap-config` and
+> `relay-guest-api` in the specs repository, each released under its own
+> version. The automated part requires a change to the contract surface,
+> as `tools/tier1/rules.yaml` lists it, to also change the pin of the
+> specification it is listed under
+> (`tools/conformance/<specification>/go.mod`).
+
+Reworded on 2026-11-15 for a8: the last paragraph Jeff read at `e4801d6`
+ended "to also move the specs pin (`tools/conformance/go.mod`)" and had no
+clause on versions. `main`'s wording was checked again against `ad4ea50`.
+
+Reworded again on 2026-11-15 for a20, in the end of the last sentence.
+At `e19cc1f` it ended "to also change the file that pins those releases
+(`tools/conformance/go.mod`)". There is no longer one such file. Tier
+1's list puts the files of `cmd/warden-io/` under `executor-initialize`
+and `bootstrap/bootstrap.go` under `bootstrap-config`, and the check
+asks for that specification's pin. The executor's use of the relay
+guest API is in `cmd/warden-io/` and is stated by `executor-initialize`
+(**Seam 5**), so the `relay-guest-api` pin is asked of a change to the
+relay's files and not of the executor's. Nothing else in the rule
+changes.
+
+**Severity and check:** unchanged (MUST; automated + agent-judgment). No
+enforcement change beyond GLOBAL-08's.
+
+### PROFILE-01 (amend), `docs/development/loop-profile.md`
+
+**Why:** PROFILE-01 is this repository's profile under the Loop Contract.
+It says of itself: "An entry that no longer matches the repository is a
+finding, and the change that makes it stale changes the entry." This item
+makes three of its statements stale. It pins specification releases,
+where the Specifications entry says none is pinned. It consumes those
+releases, where the Consumables entry says the repository consumes nothing.
+And it adds the `conformance` workflow, a deterministic check of the
+Specification class that the Checks table does not list. LOOP-01 asks the
+Specifications entry for "the seams it owns or implements, where each
+specification is, and how it pins a release", and LOOP-07 asks the
+profile for the specifications each release implements, so the proposed
+wording says those too.
+
+This entry was owed from the day `loop-contract` merged ahead of this
+item (its **What `seam-specs` and `driver-contract` owe the profile**).
+Until 2026-11-15 this design carried a note in its place, which set out
+three orders for that merge, this design's review and this item's pull
+request. The one that happened is the merge before the review, so the
+entry is here before the review and costs no return to Design.
+
+`driver-contract` changes one of the three rows below as well, the
+Specifications entry. The wording here is this item's change to each row
+as it is on `main`. **With `driver-contract`** gives the Specifications
+entry as it reads with both changes; the other two rows are changed by
+this item alone. That design was approved on 2026-11-15 at `a6c8f0b`,
+with its PROFILE-01 change. The approval covers its own clause and
+sentence in the Specifications entry; this design's sentences in that
+entry are approved here, in the wording below.
+
+**Current wording, the Specifications row:**
+
+> | Specifications | `specs/`: the ledger wire format and the metadata and environment schemas (RELAY-05), mirrored in the book. For the seams of GLOBAL-08, their contract documents are the `seams` list of `tools/tier1/rules.yaml` and their tests are TEST-05's. No specifications release is pinned today. |
+
+**Proposed wording, the same row.** The first two sentences are kept word
+for word, and the third is replaced by three:
+
+> | Specifications | `specs/`: the ledger wire format and the metadata and environment schemas (RELAY-05), mirrored in the book. For the seams of GLOBAL-08, their contract documents are the `seams` list of `tools/tier1/rules.yaml` and their tests are TEST-05's. The claim protocol, the collector protocol, the relay guest API, the `initialize` contract and the bootstrap config are specified in `buildwarden/buildwarden-specs`, each specification released under its own version. This repository implements them and pins a release of each specification in `tools/conformance/<specification>/go.mod`; those files are their contracts in that list (GLOBAL-08). Each pin is a release tag on `main` and on a pull request to it; a branch may pin a commit of an unmerged specifications branch while its work is in progress. |
+
+**Current wording, the Consumables row:**
+
+> | Consumables | Releases: the `v*` tags. Consumes: nothing. |
+
+**Proposed wording, the same row:**
+
+> | Consumables | Releases: the `v*` tags. A release that carries the files `tools/conformance/<specification>/go.mod` implements each seam specification at the version its file pins. Consumes: the releases of the seam specifications in `buildwarden/buildwarden-specs`, each with its conformance suite, at the versions in those files. |
+
+**Current wording, the Specification row of the Checks table** (the row
+for tier 1; the row beneath it, for the judgment half, is not changed):
+
+> | Specification | The coupling checks that `tools/tier1/rules.yaml` maps to RELAY-05, GLOBAL-08, EXEC-04, UX-01, UX-03, ORCH-03 and BOOT-07; the contract tests of TEST-05; the `keytool` job | 1 |
+
+**Proposed wording, the same row:**
+
+> | Specification | The coupling checks that `tools/tier1/rules.yaml` maps to RELAY-05, GLOBAL-08, EXEC-04, UX-01, UX-03, ORCH-03 and BOOT-07; the `conformance` workflow, which runs TEST-05's suites at the pinned specification releases and whose `pin` job requires release tags on a pull request; the contract tests of TEST-05 that run in `make test`; the `keytool` job | 1 |
+
+Reworded on 2026-11-15 for a8, in all three rows. At `e4801d6` the
+Specifications row read "pins one release of that repository" and "The
+pin is a release tag", with no clause on versions; the Consumables row
+read "at the version that file pins" and "Consumes: one release of
+`buildwarden/buildwarden-specs`, the seam specifications and their
+conformance suites, at the version in `tools/conformance/go.mod`"; and
+the Checks row read "at the pinned specifications release and whose `pin`
+job requires a release tag". The three rows' wording on `main` was
+checked again against `ad4ea50`.
+
+Reworded again on 2026-11-15 for a20, in two of the three rows. In the
+Specifications row one sentence changes: at `e19cc1f` it read "pins a
+release of each specification in `tools/conformance/go.mod`, which is
+their contract in that list (GLOBAL-08)"; it now names
+`tools/conformance/<specification>/go.mod` and reads "those files are
+their contracts in that list". In the Consumables row both sentences
+that named the file change: at `e19cc1f` they read "A release that
+carries `tools/conformance/go.mod` implements each seam specification
+at the version that file pins for it" and "at the versions in
+`tools/conformance/go.mod`". The Checks row names no file and is byte
+for byte as at `e19cc1f`.
+
+The tier in that table is LINT-02's: 1 is deterministic and blocks. The
+`conformance` workflow is also tier 1 of TEST-02's test tiers, which the
+proposed TEST-02 sentence says; the two numbers agree here and mean
+different things. The paragraph under the table, "Declared as not
+blocking", is not changed: this item adds no hint and no report to this
+repository. The specs repository's `implementations` workflow is not a
+merge gate, and it is that repository's, not an entry of this profile.
+
+**Entries that are not reworded,** and why this item leaves each true:
+
+| Entry | Why it stands |
+|---|---|
+| Impact vocabulary | It points to the `seams` list of `tools/tier1/rules.yaml` for the seam names, and this item fills that list. The entry states no name of its own |
+| Test tiers | It points to TEST-02, which this design amends |
+| Toolchain | "Go, at the version in each module's `go.mod`" takes in the six nested modules under `tools/conformance/`. Each names the Go its pinned release names, which this repository's Go is at least (Decision 7) |
+| Fast gate | `make conformance` is not part of it. `make test` gains one tier-0 test |
+| Reference documents | No surface changes (`surfaces: []`). The new book page is a concept page |
+| Sweep | No Go package is added to this repository's module, and the modules under `tools/conformance/` hold no Go code |
+| Release | This repository's release is as it was. The specs repository's `release` workflow is its own |
+| Sessions | This repository's are as they were. The specs repository's `.entire/settings.json` is its own |
+| Component, Trunk, Rules, Designs, Native hosts, Boundary rule, Flaky-test rule, Rule and machinery paths | Nothing they state changes |
+
+`driver-contract` rewords the Impact vocabulary and Reference documents
+entries, and the Safety row of Checks, for what K1 changes. Nothing this
+item builds gives a reason to.
+
+One thing was seen in passing and is not this item's. The Impact
+vocabulary entry says the seam names are the `seams` list of
+`rules.yaml`. The template's examples and the `seams` of other designs
+include `ledger-format` and `bootstrap-model`, which are not in that list
+today, when it is empty, and are not in it after this item. The review may
+place that where it belongs.
+
+**Severity and check:** MUST and `agent-judgment`, before and after. After
+the change every term is still filled and none is `none`, which is what
+the design review of a change to this rule judges (LOOP-01).
+
+**Enforcement change:** none. PROFILE-01 has no automated part and no
+entry in `tools/tier1/rules.yaml`. The file is under `docs/development/`,
+so the rule-change clearance covers the edit through this entry (FLOW-14).
+
+### With `driver-contract`: which sentences each design owns
+
+This design's own wording for TEST-05, GLOBAL-08, EXEC-04 and PROFILE-01
+was reworded on 2026-11-15, in the first sitting of its review, for a tag
+per specification and two collector documents (a8, a10), and again the
+same day for a `go.mod` for each specification (a20). Which sentences
+each design owns did not change by either, and the joined row and the
+joined owner string below carry the new words.
+
+`driver-contract` is read here at `a6c8f0b`, the commit its design
+review approved on 2026-11-15 (its Design review entry, at `c767992`).
+The approval names its eleven rule changes, GLOBAL-08, TEST-05 and
+PROFILE-01 among them, and for PROFILE-01 "four rows, the Specifications
+row in both forms (K1's alone, and joined with `seam-specs`'
+sentences)". Neither item has merged, and either may merge first.
+
+Its GLOBAL-08 and TEST-05 changes, and the entry it adds to tier 1's seam
+list, are word for word what this section was first written against at
+`0c29fc3`; they were compared again at `a6c8f0b`. Its PROFILE-01 change
+has moved since this section read it at `bb4d7c8`. It has withdrawn the
+words it added to the tier-1 Specification row of Checks, so it changes
+four rows of the profile where it changed five, and one row is changed
+by both designs: the Specifications entry. It now has a table of its own
+for that rule, which agrees with the rows below.
+
+| Text | This design owns | `driver-contract` proposes | Neither changes |
+|---|---|---|---|
+| GLOBAL-08, from "Versioned seams" | The executor bullet, which gains the bootstrap config. One new paragraph, placed directly before the rule's last paragraph | A third bullet, the driver contract. The paragraph that begins "Pre-1.0 these seams may still move", rewritten | The relay bullet. The last paragraph ("The automated part requires ...") |
+| TEST-05 | The title, and the whole body as it is on `main` | One new paragraph at the rule's end | |
+| `rules.yaml`, `seams` | Six entries for its five seams, two of them for `collector` (a20), and the comment above the list | One entry, `driver-contract` | |
+| `tools/tier1/coupling/checks_test.go` | One entry added to `TestSeverities`' table, under **GLOBAL-08** | Nothing. Its entry lists neither file of that test's fixture | |
+| `rules.yaml`, TEST-05's owner | The string, as under **TEST-05** | The string on `main`, with "the driver suite's static tier runs there" added inside its parentheses | |
+| TEST-02, EXEC-04 | All of each amendment | Nothing | |
+| PROFILE-01, the Specifications entry | The three sentences that replace its last one, "No specifications release is pinned today." | In its first sentence, "and the driver contract (`specs/driver-contract/`, GLOBAL-08)" after "(RELAY-05)". A new second sentence, "The driver contract's conformance suite is `conformance/driver/`." It keeps the last sentence as it is on `main` | The sentence that begins "For the seams of GLOBAL-08" |
+| PROFILE-01, the tier-1 Specification row of Checks | The clause on the `conformance` workflow, placed before "the contract tests of TEST-05", and the words "that run in `make test`" after it | Nothing. At `bb4d7c8` it added ", the driver conformance suite (`conformance/driver/`) among them" after "the contract tests of TEST-05"; it has withdrawn those words | The clause on the coupling checks; "the `keytool` job"; the tier |
+| PROFILE-01, the Consumables entry | All of it | Nothing. Its table of entries reads "Consumes: nothing" as still true of K1, and says that this design rewrites the entry | |
+| PROFILE-01, the Impact vocabulary and Reference documents entries, and the tier-1 Safety row of Checks | Nothing | One sentence added to the first; the first sentence of the second rewritten; the `driver-contract` job added to the third | |
+| PROFILE-01, the rest | Nothing | Nothing | The rule's header and paragraphs, every other entry, the other rows of Checks and "Declared as not blocking" |
+
+A third item amends PROFILE-01. `loop-parallel`, a process item whose
+design is in review and not approved (read at `e692fad`), adds an Areas
+row to the profile's table and changes nothing else in the rule. Its
+draft at `486ac8f` also changed the header's check line, the paragraph on
+the agent part and the Process row of Checks; it no longer does. The
+Areas row is none that either design here changes, and whichever merges
+after it keeps it.
+
+The result reads the same whichever merges first. GLOBAL-08: the relay
+bullet, the executor bullet, the driver-contract bullet, the "Pre-1.0"
+paragraph, this design's paragraph, the last paragraph. TEST-05: this
+design's title and body, then the driver contract's paragraph. For
+PROFILE-01 the two designs' words go into one row, the Specifications
+entry, which is given in full.
+
+**The Specifications entry, with both changes:**
+
+> | Specifications | `specs/`: the ledger wire format and the metadata and environment schemas (RELAY-05) and the driver contract (`specs/driver-contract/`, GLOBAL-08), mirrored in the book. The driver contract's conformance suite is `conformance/driver/`. For the seams of GLOBAL-08, their contract documents are the `seams` list of `tools/tier1/rules.yaml` and their tests are TEST-05's. The claim protocol, the collector protocol, the relay guest API, the `initialize` contract and the bootstrap config are specified in `buildwarden/buildwarden-specs`, each specification released under its own version. This repository implements them and pins a release of each specification in `tools/conformance/<specification>/go.mod`; those files are their contracts in that list (GLOBAL-08). Each pin is a release tag on `main` and on a pull request to it; a branch may pin a commit of an unmerged specifications branch while its work is in progress. |
+
+In order: `driver-contract`'s first sentence and its sentence on the
+suite; the sentence neither changes; this design's three. "No
+specifications release is pinned today." is not in it whichever merges
+first, because after this item one is pinned. The row holds until K2,
+which moves the driver contract's specification and declares that change
+itself.
+
+**The tier-1 Specification row of Checks** is changed by this design
+alone, now that `driver-contract` has withdrawn its words there. With
+both items merged it reads as under **PROFILE-01** above. Its words "the
+contract tests of TEST-05 that run in `make test`" take in the driver
+suite's static tier, which runs in `make test` (that design's proposed
+TEST-05 and owner string); that design reads the row the same way. Until
+this pass the section gave a joined form of the row, with that design's
+withdrawn words in it. It is removed, and is not put to Jeff.
+
+This design's review is asked to judge the Specifications entry in both
+forms: as under **PROFILE-01** above, which is what it says if this item
+merges first, and joined as here, which is what it says once both have
+merged. The Consumables entry and the Checks row have one form each.
+
+Both forms are given as they read with a20's answer. `driver-contract`'s
+approval at `a6c8f0b` took the row "in both forms" too, and its joined
+form quotes this design's three sentences as they stood before a8 and
+a20. What that approval covers in the row is that design's own clause
+and sentence, which are word for word the same in its joined row and in
+the one above. This design's three sentences are approved in this
+review, in the wording here, and the joined row above is the row as it
+will read once both have merged.
+
+**Pointed out to `driver-contract`.** That design is not edited from
+here, and its review has ended. One point is live. Its own joined
+Specifications row, approved with its PROFILE-01 change at `a6c8f0b`,
+quotes this design's three sentences as they were at `e4801d6`: "pins
+one release of that repository in `tools/conformance/go.mod`" and "The
+pin is a release tag". a8's answer changed them the same day, and a20's
+changed the second of the three again, to the wording above: "each
+specification released under its own version", "pins a release of each
+specification in `tools/conformance/<specification>/go.mod`; those
+files are their contracts in that list" and "Each pin is a release tag".
+That design says its quotation "is read again against the outcome" if
+this review changes the three sentences, and it has. On the reading
+stated at the end of this section, what that approval covers in the row
+is that design's own clause and sentence; this design's three sentences
+are approved in this review, in the wording here. Whichever merges
+second corrects its quotation in Consolidation (FLOW-10).
+
+The three points this section made against that design at `bb4d7c8` are
+answered in it: it says this design declares a PROFILE-01 change and
+rewrites the Consumables entry, it gives a joined Specifications row,
+and it no longer changes the Checks row.
+
+Three sentences of this design were written, or reworded in the revision
+of 2026-11-14, so that both sets are true together:
+
+- *TEST-05.* "The contract tests of a seam specified there are added to
+  the suite of its specification in the specs repository" read "A seam's
+  contract tests are added ...", which the driver suite, in this
+  repository until K2, would have made false.
+- *GLOBAL-08.* This design's paragraph names its five seams and says "For
+  them those pin files are the contract documents". It says nothing of a seam
+  specified elsewhere, and "The ledger format stays in `specs/`" does not
+  say that only the ledger format is there, so the driver contract's
+  bullet, which names `specs/driver-contract/v1.md`, stands beside it.
+- *The comment above `seams`.* Its first sentence is true of any entry,
+  its second speaks only of a seam specified in the specs repository,
+  and its third, added for a20, only of the collector seam. The
+  redraft says it corrects the comment "to match" and gives no wording.
+
+**What the second to merge does**, in `f6-merge-main` and
+`f6-consolidate`:
+
+1. It merges `main`. Git will report conflicts. In `global.md` the
+   executor bullet and the new third bullet are adjacent lines. In
+   `rules.yaml` the `seams` list and the TEST-05 owner are the same
+   lines. In `loop-profile.md` the Specifications entry is one line,
+   changed by both. Each is resolved by keeping both, in the order
+   above.
+2. `seams` holds all seven entries, this design's six and that
+   design's one, under this design's comment. If this
+   item is second, it replaces the comment it finds; if `driver-contract`
+   is second, it leaves this one and may add a sentence for its own entry.
+3. TEST-05's owner is the two halves joined: `"the conformance workflow
+   (the specs repository's suites at the pinned releases) and make test (the
+   ledger round-trip tests; the driver suite's static tier runs there)"`.
+4. The Specifications entry of the profile is the joined row above, word
+   for word.
+5. It brings its own quoted "current wording" up to date in Consolidation
+   (FLOW-10). The redraft quotes GLOBAL-08 from "Versioned seams" to the
+   rule's end, all of TEST-05, and four rows of the profile; this design
+   quotes the executor bullet, all of TEST-05, and three rows of the
+   profile.
+
+Every sentence stays as its review approved it, so the second to merge
+needs no new rule change and no new review: `tools/tier1/rules.yaml` and
+the three rule files (`global.md`, `testing.md`, `loop-profile.md`) are
+approved paths of both designs, and Review judges that each edit matches
+the approved wording (FLOW-14). If the merge needed a sentence reworded,
+that is a return to Design (FLOW-06).
+
+For the profile that rests on one reading, on which `driver-contract`'s
+approval is read here and which this review is asked to confirm: what a
+design's review approves in a row is the words the design adds or
+replaces, and not the rest of the row as it quoted it from `main`. Both
+designs already read GLOBAL-08 and TEST-05 that way. On it,
+`driver-contract` merging second adds its clause and its sentence to the
+Specifications entry it finds, which no longer has the sentence its
+quotation keeps, and its Consolidation corrects the quotation. Read the
+other way, the second to merge has a row its review did not approve, and
+returns to Design for it (FLOW-06).
+
+The redraft says the same of GLOBAL-08, the seam list and the owner string
+from its side (its **Rule changes**, GLOBAL-08 and TEST-05), and of
+PROFILE-01 that whichever lands second "merges `main` and keeps both", with
+the quotation refreshed in Consolidation, and it gives the joined
+Specifications row. It does not say which comment stands above `seams`
+or give the joined owner string; for those, whichever design merges
+second is read against this section.
+
+## Security note
+
+Not required: `security_boundary` is `none`. No code on the host, environment
+or relay boundary changes, and no relay code changes at all (GLOBAL-06).
+
+What the review should still know: the specifications state today's posture
+on the environment-to-relay boundary, and the relay suites are the check the
+umbrella's Security note relies on when the Rust relay replaces the Go one.
+Their cases therefore include the refusals, not only the happy paths: a claim
+without or with the wrong token, a claim that would put a resolver or an
+upstream dial inside the build link, the host-mode dial filter, unsafe
+artifact and context names, and the RELAY-02 round trip. D9, D13 and D18
+are the divergences with a security or measurement angle: a build can end
+itself with a `GET`; a failed setup reports nothing; and a build can end the
+relay process after its own completion, when the ledger is already with the
+collector. All three are today's behaviour.
+
+Of the rows Implement found (N1 to N33), N2, N24 and N31 have a security
+angle, and N3, N13 and N28 bear on trust or on the collector as the one
+path: a proxy variable takes the executor's requests (N2), or the claim
+with its claim token and `collector_token` (N31), off the relay; a
+failing collector turns a producer's `exclusive` into `append` (N24);
+exclusive trust can be lost after a reinstall (N3) and is `append` on
+macOS and Windows (N28); the relay follows a collector's redirects
+(N13). N21 has a measurement angle: an exit code the relay cannot read
+is recorded as success. All are today's behaviour, and none is changed
+here (a12). r2 filed N24's fix as `relay-collector-failure-fails-open`, a
+security fix the freeze exempts, and N21's as `relay-exit-code-unreadable`,
+held by the freeze; N2 and N31 are class (b), fixed in S2's item and K1
+(a25).
+
+The harness's sandbox runs as root on CI runners and creates network and
+mount namespaces, virtual links and container networks there. It runs only
+the relay binary or image named in the target file.
+
+## Validation plan
+
+- **Tier 0** (`make test`, `make lint`): the book-link test (links to the
+  specs repository name the pinned ref); tier 1's rule index parses the
+  amended rules, and `rules.yaml` parses with the new `seams` entries,
+  in the branch's tier 1 and in the merge base's (`make enforcement`,
+  FLOW-14); tier 1's own tests pass with the list, `TestSeverities`
+  with GLOBAL-08 in its table (**Rule changes**, GLOBAL-08);
+  `tier1 designs` accepts this design; the book-link test checks each
+  row's ref against that specification's pin, read from its own module.
+  In the specs repository:
+  its `ci` workflow, which for every specification runs the layout check,
+  the coverage check, the OpenAPI checks where it has such a file, and
+  its suite against the harness's own roles, and which holds the two
+  collector documents' common part alike (a8, a9, a10).
+- **Tier 1** (the `conformance` workflow): the relay suites (the five
+  specifications' cases for a relay, **The harness**) against
+  `dist/conformance/relay` in host, vm and container mode and against the
+  image built from `Dockerfile.relay`, on `ubuntu-latest`; the collector
+  suites (four specifications' cases) against `dist/conformance/collector`
+  on `ubuntu-latest`,
+  `macos-latest` and `windows-latest`. This is S1's done-when: the suites
+  pass against the Go relay and the disk collector. The first green run is a
+  push run on this branch during Implement, before anything is merged or
+  tagged in the specs repository. The last push run of Implement is on the
+  final pins, at the specs pull request's head (task 12), and it is the run
+  Review and `f6-release-specs` rest on. The pull request's run repeats it
+  on the six tags, with the `pin` job, which also writes each of the six
+  modules again from the version it names and fails on a difference
+  (Decision 7). The existing `integration` workflow
+  does
+  not run for this branch's paths and is not affected.
+- **Tier 2, native:** nothing blocks. The change reaches no driver's tree
+  and alters no behaviour a native host exercises (FLOW-09). Two gaps are
+  tracked, in `tier2_gaps` and on the native-gap backlog, and both are
+  `deferred`, so no scheduled native session is woken for either (a14):
+  - `macos-vz`: the relay suites against the host-mode relay on macOS,
+    where vz runs it. The frame link is the same code as on Linux; what
+    differs is the platform (the link kickstart, socketpair behaviour). It
+    cannot run with what this item builds: the relay targets declare Linux
+    only, because the `exec` launcher's sandbox (the relay's upstream
+    network and its `/etc/resolv.conf`) is Linux namespaces. The entry's
+    note names what it waits on: a macOS form of the launcher, in which
+    the harness's upstream is loopback aliases in the documentation ranges
+    with ports 53, 80 and 443, which needs root, and the cases for the
+    resolver default are not applicable. The first item that needs the
+    relay suites on macOS builds it and sets the entry `open`; that is
+    expected to be the Rust relay's host mode on VZ (the umbrella's M3).
+    At `f1-design` the entry was `open` and named `dist/relay`; the
+    revision before review corrected both.
+  - `qemu-any`: the relay suites against the Go relay VM image
+    (`tools/relay-vm`). It cannot run until a VM launcher exists (a6), so
+    its backlog entry is `deferred`, with a note that names what it waits
+    on, and no scheduled native session is woken for it. The item that
+    builds the launcher sets it `open`; the Archive summary tells it to.
+  The Hyper-V relay VM is the same relay binary in vm mode behind a
+  different boot channel, which is seam 8's; no entry is added for it.
+
+## Implementation plan
+
+Written by Plan from the design as its review approved it at `64a4a95`
+(**Design review**, r1). It replaces the draft list Design kept here, and
+**What changed from the draft**, at the end, says where each draft task
+went and where the order differs. Nothing outside this section is
+changed by it. The plan was revised once, after an independent check of
+it against the design and both repositories; the numbers below are the
+revised ones.
+
+The work is in two repositories (LOOP-04). **S** is
+`buildwarden/buildwarden-specs`, on its branch `feat/seam-specs`. **K** is
+this repository, on this branch. Every task names one. A task's rules
+are in parentheses at its end. A task that adds tests names their tier
+(TEST-02); a tier-0 test is pure Go and needs nothing outside its
+checkout (TEST-01). No test in any of S's seven modules needs root, a
+namespace, a container runtime or a network beyond loopback: S's `ci`
+runs `go test ./...` in each of them (**CI**), and the design gives
+that job no privilege and no runtime. What needs more is tier 1 and is
+run from K. No task changes a package of the relay, the collector, the
+executor or a driver, or any behaviour (Decisions 1 and 11): a task
+that finds it would need to stops and the item goes back to Design
+(FLOW-06).
+
+### The two repositories
+
+| | S, `buildwarden/buildwarden-specs` | K, this repository |
+|---|---|---|
+| Branch | `feat/seam-specs`, created by task 0. Nothing else is pushed there: not `main`, not a tag, not a second branch (FLOW-17, FLOW-16) | `feat/seam-specs` |
+| What binds a worker | The four loop rules and the invariants listed under **How the loop treats the second repository** (LOOP-08). Sessions that commit there are recorded: task 1 turns recording on in the S clone (FLOW-18) | Every rule of this repository |
+| Green, before a push | `go vet ./...` and `go test ./...` in each of the seven modules (FLOW-17), and the `make` target the stage names: `make tidy` changing nothing in stage 1a; `make check-docs` for a stage that writes documents; `make check-suite DIRS="<directories>"` for a suite stage and for the merge of one; `make check` once every suite is merged (the last three are task 4's). Then this repository's `tools/workflow/flow18-check.sh`, run from the S checkout (FLOW-18) | `make test` and `make lint` (FLOW-03, FLOW-17); `make enforcement` when the stage edits `tools/tier1/` (FLOW-14); then `tools/workflow/flow18-check.sh` (FLOW-18) |
+| Hosted runs | None before its pull request. `ci` runs on pull requests and on `main` (**CI**), and the pull request is opened in task 34, so until then what `ci` runs is run in the checkout by `make check`. `flow18` first runs with the pull request too. `release` first runs in `f6-release-specs`, and `implementations` by hand after the merge | The `conformance` workflow, on every push of this branch that changes a path on its list (**CI**), from task 7 on. `ci` runs on the pull request, which Publish opens |
+| Who merges | Jeff, in `f6-release-specs` (FLOW-08) | Jeff (FLOW-08) |
+
+S has a README stub and a `LICENSE` today, and no Makefile, no workflow
+and no Entire hook in its clone: tasks 1 and 4 create them.
+
+### How the two branches depend on each other
+
+K holds no copy of anything in S, and no module of S requires K
+(Decision 5). What ties them is the six pin modules,
+`tools/conformance/<directory>/go.mod` (Decision 7), and they change only
+through `make pin-specs`:
+
+| When | What each of the six modules names | Its `replace` line | The refs on `concepts/seams.md` | The `pin` job |
+|---|---|---|---|---|
+| Tasks 6 to 34, while S is written | One commit of S's branch, the same in all six, written by `make pin-specs REF=<commit>` | One in each module, pointing the harness at the same commit: every specification names `conformance` `v0.1.0`, which has no tag before the release (a19, a20) | That commit | Does not run on a branch push |
+| Task 35, the end of Implement, and through Review | The head of the specs pull request | As above | That commit | Does not run |
+| After `f6-release-specs` (task 36) | The tag `<directory>/v0.1.0`, written by `make pin-specs SPECS=latest` | None | The tags | Runs on this branch's pull request, and passes |
+
+The work alternates on one rule: S moves first and K follows by a pin
+move. K pins only a commit that is pushed in S and was green there, by
+the green the table above gives its stage. Each K stage that follows a
+change in S starts with `make pin-specs REF=<S's pushed head>`, and that
+push starts a `conformance` run, because `tools/conformance/**` is on
+the workflow's list. A K stage that changes none of the listed paths
+(the rule changes, the book) starts no run, and the latest run still
+covers the head (**CI**). A run of the loop that pushes S records S's
+head in its digest section, and names the documents it changed apart
+from the code (LOOP-06).
+
+Three things this branch does not do before the seven tags exist. It
+opens no pull request to `main`: the `pin` job fails a module whose pin
+is a commit or that carries a `replace` line, so `f6-open-pr` comes
+after `f6-release-specs` (Decision 12). No pin module is made to name a
+tag by hand or with `go get` (Decision 7). And `make pin-specs SPECS=...`
+is not run against the real repository: before the release it is tried
+on a model only (tasks 5 and 7).
+
+### Stages
+
+A stage is what one implementing agent finishes and leaves green and
+pushed in its repository. Stages run in the order of their numbers
+unless the table says otherwise. "Green" is the row of **The two
+repositories** for the stage's repository, with what the last column
+adds.
+
+| Stage | Repository | Tasks | Order | Leaves, and what its green adds |
+|---|---|---|---|---|
+| 0, preflight | S, read; one push | 0 | First | The branch `feat/seam-specs` in S, at `main`'s commit |
+| 1a, layout, conventions and mechanics | S | 1, 2, 3 | Serial, after 0 | Seven modules that build, vet and test; `make tidy` changing nothing on a second run; six commands in their first form; recording on in the clone |
+| 1b, the checks | S | 4 | Serial, after 1a | Every check `ci` runs, with its tests; `make check-docs` green on the skeletons |
+| 2, pins and mechanics | K | 5, 6, 7 | After 1a. May run beside 1b and stage 3 | `make pin-specs`, the seams page, six pin modules at S's head, and a `conformance` run for the pushed head green on three runners in its first form |
+| 3a to 3d, the documents | S | 8, 9, 10, 11 | After 1b. The four may run in parallel (below) | Six documents with their schemas and OpenAPI files; `make check-docs` green |
+| 4a, the harness's core | S | 12 | Serial, after all of stage 3 is merged | The target-file format, the runner, the commands in their final form, on three operating systems |
+| 4b, the roles that test a relay's claim and outputs | S | 13 | Serial, after 4a | The claimant, the collector in every form, the ledger verifier |
+| 4c, the build side | S | 14 | Serial, after 4b | The in-memory network, the build environment on both link kinds, the resolver, the origins and their CA |
+| 4d, the relay model, claim and collector side | S | 15 | Serial, after 4c | "A relay to test a collector" (Decision 5), with its ledger writer, on three operating systems |
+| 4e, the relay model, build side, and the in-process attachment | S | 16 | Serial, after 4d | The model as a role under test in all three modes; every role run against its counterpart under `go test` |
+| 5, first cases against the harness itself | S | 17 | Serial, after 4e | One relay case and one collector case passing in their modules' `go test`: the proof of the in-process attachment |
+| 6, the sandbox and the launchers | S | 18 | Serial, after 5 | What starts a real relay on Linux. Its green adds a by-hand run as root against a relay built from K, named in the evidence |
+| 7, first cases end to end | K | 19 | After 6 and 2 | Both cases passing on hosted runners against every target: the first proof of the `oci` launcher and of the sandbox on a hosted runner |
+| 8a to 8e, the suites | S | 20, 21, 22, 23, 24 | After 7. 8a, 8b, 8c and 8e may run in parallel (below); 8d follows 8c, serially | Every suite complete; `make check-suite` green for each stage's directories, `make check` green once all are merged |
+| 9, a hosted run for each suite, and the full run | K | 25 | Repeated: after each merge of a stage-8 stage | A green `conformance` run for each merged suite; its last repetition is S1's done-when |
+| 10, the rule changes | K | 26 to 30 | After 2, before 13 | Five rules as approved; `make enforcement` green |
+| 11, the book and the umbrella | K | 31, 32 | After 2, before 13 | Reference docs and the amended umbrella |
+| 12, release machinery and the specs pull request | S | 33, 34 | After the last repetition of 9 | The specs pull request open, its `ci` and `flow18` green |
+| 13, the final pins | K | 35 | Last of Implement, after 10, 11 and 12 | The six pins at the specs pull request's head, with a green run |
+| 14, the r2 delta | S, then K | 37, then 35 again | After r2's review, before Review | The mark "not yet in the design's table" gone from S's six documents; the specs pull request's head moved; the six pins at that head, with a green run |
+| The release | S and K, human | 36 | After Review, before `f6-open-pr` | Seven tags; the six pins on them |
+
+**K is one checkout, so K's stages are serial among themselves,** in the
+order 2, 7, 9 (each repetition), 13; stages 10 and 11 may come at any
+point after 2 and before 13, between two repetitions of 9 among them. A
+K stage and an S stage touch no file in common and may run at the same
+time, where the K stage does not wait on that S stage by the table.
+
+**The parallel stages of S, and what each may edit.** Stages 3a to 3d,
+and later 8a, 8b, 8c with 8d, and 8e, may each be given to its own
+agent, under the conditions below. The conditions are what lets the
+branches merge without a conflict; a stage that cannot keep to them is
+run serially instead, in the order of its letter.
+
+*One clone.* Each stage works in a worktree of one local clone of S, on
+a local branch of its own that is never pushed. S's remote gets no
+branch but `feat/seam-specs`, since no agent may delete one afterwards
+(FLOW-16). Where the stages can only be given to separate machines they
+are serial. The pushed branch is the backup (FLOW-17), and a parallel
+stage's work is not on it until its merge, so the stage commits on its
+local branch at each point where its own green holds, and the
+dispatching session may merge and push what is green there if the
+stage's agent ends early.
+
+*One session merges.* When a stage is green, the session that dispatched
+it merges its branch into `feat/seam-specs`, by fast-forward or a merge
+commit and never by rewriting a pushed commit, runs the stage's green on
+the result, and pushes (FLOW-17).
+
+*Its own directories only.* A stage edits these files and no others:
+
+| Directories | Stage 3 | It may edit there | Stage 8 | It may edit there |
+|---|---|---|---|---|
+| `relay-claim/` | 3a | `v1.md`, the schema files, the OpenAPI files, the list of requirements that are not machine-checked | 8a | `cases/`, `cmd/`, `go.mod` and `go.sum` (through `make tidy`), that list, and the stage-3 files where a case shows that the document misread the code (**Specification changes**) |
+| `collector-outputs/`, `collector-inputs/` | 3b | The same | 8b | The same, but for the part the two documents state alike (below) |
+| `relay-guest-api/` | 3c | The same | 8c, then 8d | The same |
+| `executor-initialize/`, `bootstrap-config/` | 3d | The same | 8e | The same |
+
+*Nothing shared.* No parallel stage edits `conformance/`, a root file
+(`README.md`, `Makefile`, `go.work`, `go.work.sum`, `.github/`,
+`.entire/`), a `CHANGELOG.md`, or another stage's directory. Task 2 has
+already written each directory's `CHANGELOG.md` entry for `v0.1.0`, and
+tasks 2 and 4 every convention and check the stages share, so none needs
+to.
+
+*No new module.* A suite imports the harness, its own specification's
+packages and the standard library, and no third-party module that the
+harness's `go.mod` does not already require: a new one would change
+`go.work.sum`, which no parallel stage may edit. A stage that needs one
+hands the need back, as it does a harness change (below).
+
+*The two collector documents are one stage in stage 3,* because the part
+they state alike is held alike by a check (**Seam 2**), and that check
+constrains documents, not cases. Stage 8b may therefore be given to two
+agents, one for each specification, each with its own directory. A
+correction to the common part touches both documents, so neither makes
+it: it is handed to the dispatching session, which makes it in both
+documents in one serial commit, as it does a harness change.
+
+*No identifier of another document.* A stage-3 document names another
+specification by its directory and section, and cites none of its
+requirement identifiers, which do not exist until that stage is merged.
+
+*The harness is frozen during stage 8, and so are K's target files.* A
+suite stage that needs a change to `conformance/` (a helper, a fault in
+a model or a launcher), a module the harness does not require, or a
+change to a file in `tools/conformance/targets/`, stops and hands back
+what it needs. The dispatching session makes that change itself, as a
+serial commit: in S on `feat/seam-specs`, green in all seven modules,
+after which the open stages merge `feat/seam-specs` into their
+branches before they go on; in K on this branch, in its turn among K's
+stages.
+
+*Running a suite against the real targets from a stage.* A stage-8
+agent whose host has root or user namespaces runs its cases against the
+Go relay and the disk collector before it hands its branch over, with
+
+```
+make conformance SPECS_DIR=<its S worktree> SUITES="<its directories>" \
+    TARGETS="relay-host relay-vm relay-container collector-disk"
+```
+
+from a K worktree of its own at this branch's head, in which it commits
+nothing: `make conformance` builds into `dist/conformance/`, which two
+runs in one checkout would share. The targets are named because the
+default would add `relay-oci`, which is an error on a host whose
+runtime is not running (**Defaults and overrides**). `relay-oci` is not
+run from a parallel stage at all: its image name and its container
+networks, in the three documentation ranges, are the runtime's and not
+the checkout's, so one session at a time may run it on a machine, and
+its run for a suite is the hosted one (stage 9). The `exec` sandboxes
+of two runs do not meet (task 18). This local run is a help and not a
+gate: what counts for a suite is its stage-9 run.
+
+### Tasks
+
+**Stage 0, preflight.**
+
+0. **S, read.** Check `buildwarden/buildwarden-specs` against **What
+   Jeff creates**: it exists and is public; `main` has one commit, with
+   a README and the Apache-2.0 `LICENSE` and no `NOTICE`; the protection
+   of `main`, the head-branch setting and Actions are read where the
+   session's credentials can read them. Then push the branch
+   `feat/seam-specs` at `main`'s commit, which creates it and shows that
+   the session can push it. That the session can open a pull request is
+   read from the permissions its credentials report; none is opened to
+   test it, because the specs pull request is task 34's (**The release
+   step**), and nothing is tested by a push to `main`. What could not be
+   read is named in the step's evidence. If the repository is missing,
+   differs from the list or refuses the branch, Implement stops with a
+   blocking question and changes nothing (FLOW-07, FLOW-08, LOOP-08).
+
+**Stage 1a, layout, conventions and mechanics (S, serial).** With 1b it
+fixes everything the later stages share, so that they can split. It is
+green on `go vet` and `go test` in the seven modules and on `make tidy`
+changing nothing, which is all K's stage 2 waits for.
+
+1. **S** The layout of Decision 2: `README.md` (the index of the six
+   specifications, the reserved directory names, the "Implementations"
+   table, and that the ledger format is specified in
+   `buildwarden/buildwarden` under `specs/` until M6); the seven
+   directories, each a Go module
+   `github.com/buildwarden/buildwarden-specs/<directory>` with its
+   `go.mod`; `go.work` with its versioned `replace` line for the
+   harness; a `Makefile` with `make tidy` (each specification's `go.mod`
+   tidied through a temporary `replace`) and `make check` (everything
+   `ci` runs: at this task `go vet` and `go test` in each module, and
+   task 4 completes it); and the `ci` and `flow18` workflows, `ci`
+   calling `make check`. Every module's `go` line is no higher than
+   this repository's root module's, so that K can pin it (Decision 7).
+   No module requires the kit. For FLOW-18: `.entire/settings.json`,
+   naming the private sessions repository, and `.entire/.gitignore`, as
+   this repository has it, are in the first commit; Entire is enabled
+   in the S clone, whose hooks its worktrees share, before a commit of
+   this task is pushed; and the step's evidence names that its pre-push
+   sent the checkpoints to the private repository only and that S's
+   remote carries no `entire/` ref. S's `flow18` workflow holds its
+   check in the workflow file itself, with the two conditions of this
+   repository's `tools/workflow/flow18-check.sh`, since it cannot call
+   that script. If recording in S turns out to need a file there that
+   the design does not name (an agent-hook file, as this repository's
+   `.claude/settings.json` is), it is not added on the worker's word:
+   the evidence says what was and was not recorded, and the question
+   goes to Jeff (FLOW-17, FLOW-18, LOOP-08, GLOBAL-09, FLOW-07).
+2. **S** The conventions the six directories share (Decision 3): each
+   `v1.md` as a skeleton with the sections every document has, "Known
+   divergences" and a header that links the book and names the reference
+   implementation; the form of a requirement identifier and the six
+   prefixes (`CLAIM`, `COLLOUT`, `COLLIN`, `GUEST`, `INIT`, `BOOTCFG`);
+   the file and form of the list of requirements that are not
+   machine-checked; how a case names the requirements it cites, in the
+   harness's runner; each directory's `CHANGELOG.md` with its `v0.1.0`
+   entry and each specification's `go.mod` naming the harness at
+   `v0.1.0`; and the six commands `bw-conformance-<directory>` in their
+   first form, with `requirements` and `version` working and `run`
+   reporting that there are no cases yet (LOOP-02, LOOP-03, GLOBAL-10).
+3. **S** Show that the mechanics of **Releases and how they are
+   consumed** hold with the real module names: the harness imports one
+   of its real third-party dependencies (the TOML parser the target
+   files need), and each specification names a harness version that has
+   no tag. Done when the workspace builds, vets and tests, `make tidy`
+   leaves each `go.mod` complete and unchanged on a second run, and the
+   branch is pushed. If one of the three mechanics a19's answer rests on
+   cannot be made to hold, the item goes back to Design with what was
+   seen (FLOW-06, FLOW-17, GLOBAL-09).
+
+**Stage 1b, the checks (S, serial).** It follows 1a because every check
+reads a convention task 2 fixed: the identifier form, the list's file,
+how a case cites, the section skeleton, the prefixes, and
+`conformance/CHANGELOG.md`.
+
+4. **S** The checks `ci` runs, as code of the `conformance` module with
+   table-driven tests over fixtures (tier 0: `go test` there): the
+   layout check, accepting `v<N>.schema.json` and
+   `v<N>.<part>.schema.json`, each schema's `$id`, schemas valid
+   2020-12 and the documents' JSON examples against them; requirement
+   identifiers unique, and the coverage check for each specification;
+   the three OpenAPI checks, with a copy of the OpenAPI Initiative's
+   schema for 3.1; the check that the two collector documents state
+   their common part alike but for the prefix; that no `go.mod`
+   requires the kit; the module checks (`make tidy` changes nothing, no
+   `go.mod` carries a `replace`, the `replace` line of `go.work` names
+   the version at the head of `conformance/CHANGELOG.md`); and the
+   release checks (a changed directory adds a version to its
+   `CHANGELOG.md` higher than its newest tag, and names the harness
+   version at the head of `conformance/CHANGELOG.md`). With them three
+   `make` targets: `make check-docs` (the checks that read documents
+   only, coverage not among them); `make check-suite DIRS="<directories>"`
+   (`make check-docs`, then `go vet`, `go test` and the coverage check
+   for the named directories), which is the green of a suite stage and
+   of its merge; and `make check` completed, as everything `ci` runs,
+   for all seven. All of the checks are written here, the coverage
+   check and the collector check among them, so that no parallel stage
+   edits `conformance/` or the `Makefile`. Done when `make check-docs`
+   passes on the skeletons and the branch is pushed (LOOP-03, RELAY-05,
+   TEST-04, GLOBAL-04).
+
+**Stage 2, pins and mechanics (K).** It is ahead of the documents
+because it tries, on hosted runners, the part of a20's answer the design
+lists as not tried.
+
+5. **K** `make pin-specs`, the recipe alone. The target takes
+   `SPECS="<directory>@<version> ..."`, `SPECS=latest` or `REF=<commit>`,
+   and with neither or both it is an error that says so. It writes each
+   module it moves from nothing (the `module` line, the `go` line read
+   from the pinned specification's own `go.mod`, the `tool` directive
+   and the one requirement, then `go mod tidy`, the old `go.sum`
+   removed); with `REF` it writes the harness's `replace` line in each
+   module whose specification names a harness version that has no tag,
+   which it asks before it writes; it sets `GOWORK=off`; it rewrites
+   the refs on the seams page; and it builds each command it moved. It
+   is a recipe or a shell script the recipe calls: no Go package joins
+   the root module, and no file joins a pin module beside its `go.mod`
+   and `go.sum`. This task writes no pin module and does not run the
+   recipe against S; its rewriting of the page is first used in task
+   6. It is done when the three forms and the error have been tried
+   by hand on a model, as the design's trial was: tagged local
+   repositories, a mixed set of releases, a commit with its `replace`
+   line, and the move back from a commit. Nothing of the model is
+   committed, and the evidence says what was run (TEST-05, GLOBAL-08,
+   GLOBAL-10, GLOBAL-11, LOOP-07).
+6. **K** `docs/book/src/concepts/seams.md`, "Component seams", with its
+   entry in `SUMMARY.md` at the head of the Specifications part: one row
+   per seam, two specifications for seam 2, each row's links at the ref
+   its specification is pinned at, and each pinned version shown. With
+   it the test in `specs/specs_test.go` that fails when a row's ref and
+   that specification's version in its pin module disagree (tier 0). It
+   is with `make pin-specs` because the recipe, the page and the test
+   share one form of ref. The task ends with the recipe's first run,
+   `make pin-specs REF=<S's head after stage 1a>`, which writes the six
+   pin modules under `tools/conformance/` and fills the page's refs;
+   the page, the test and the twelve files are one commit, so the test
+   never runs without its modules (UX-01, TEST-02, TEST-05).
+7. **K** The `conformance` workflow (**CI**): its `paths` list, its
+   triggers (pull requests; pushes to a branch other than `main`;
+   weekly on `main`; on demand), and its jobs `pin` (not on a branch
+   push), `relay` on `ubuntu-latest` and `collector` on `ubuntu-latest`,
+   `macos-latest` and `windows-latest`. With it `make conformance` in
+   its first form: for each pin module it builds the command with
+   `go tool`, with `GOWORK=off`, and prints its `version`. Tier 1. Done
+   when the run for the pushed head is green on all three runners, which
+   shows what the design could not try in its model: the real module
+   names through the module proxy and the checksum database at a commit,
+   the `replace` line, and `go tool` on `macos-latest` and
+   `windows-latest`, where `make` runs in this repository's CI for the
+   first time. Before this task is done, the `pin` job's criteria are
+   tried by hand on task 5's model, with the real recipe: a commit, a
+   `replace` line, a harness line raised by hand and a second
+   specification in one module each failing, and a set of tags passing.
+   Nothing of the model is committed, and the step's evidence says what
+   was run. If a pin module cannot be made to resolve or build as
+   Decision 7 has it, the item goes back to Design (TEST-02, GLOBAL-07,
+   FLOW-06).
+
+**Stage 3, the documents (S; 3a to 3d may run in parallel).** Each
+document states at least what **What each specification covers** lists
+for it, with numbered requirements, and records under "Known
+divergences" the rows of **Divergences found** named here, as the code
+behaves (Decision 1). The writer reads the files named, on this branch
+of K; where the list in the design and the code differ, the code decides
+and the difference is recorded for Consolidation. A behaviour of the
+code that the table of **Divergences found** does not list is not a
+return to Design (Jeff, 2026-11-16, **Design review**): the document
+states what the code does and lists the behaviour under its "Known
+divergences", marked "not yet in the design's table (found <stage>)",
+the stage's report names it with file, line and evidence, and the stage
+goes on; the whole list goes back to Design once, after the suites (it
+did, as r2: the rows are now in the table, and task 37 removes the
+mark). One that looks like a bug is reported as an observation for a later item,
+and the code is not changed. Each stage is green on
+`make check-docs`. The relay that D17 and D18 are reproduced against is
+built from a detached worktree of K at `origin/main`, into a directory
+outside both repositories; nothing is committed in that worktree, and
+it is not the checkout K's stage 2 may be working in.
+
+8. **S, stage 3a** `relay-claim/v1.md`, `v1.config.schema.json`,
+   `v1.identity.schema.json` and `v1.openapi.json`. First, D17 is
+   reproduced once by hand against a relay built from `main`, and what
+   was seen is named in the evidence (**Divergences found**). Read:
+   `relaycfg/relaycfg.go` with its package comment, `relaycfg/tunnel.go`
+   and `relaycfg/buildlink.go`; `cmd/relay/main.go`, `vmlink.go`,
+   `mode_host.go`, `segment.go` and `buildif_linux.go` for what each
+   mode does with a claim; `relay/relay.go` for what a start does before
+   the claim's reply; `relay/proxy.go` for `buildTransport` (an
+   `upstream_ca_certs` entry with no PEM, and `upstream_system_ca`, D5)
+   and for `safeDialContext` and `blockedDial` (the refused dials into
+   the build link, which the by-mode text states);
+   `ledger/environment.go` for the payload's type; `driver/session.go`
+   for the claimant's side; their tests; and the designs
+   `build-link-subnet` and `hyperv-relay-per-build-channel`, against
+   whose text the document is checked. Divergences: D5, D6, D7, D8,
+   D17, D19 (GLOBAL-08, RELAY-08, RELAY-04, BOOT-06, LOOP-02).
+9. **S, stage 3b** `collector-outputs/v1.md` with `v1.openapi.json`, and
+   `collector-inputs/v1.md` with `v1.openapi.json`,
+   `v1.complete.schema.json` and `v1.status.schema.json`. Transport,
+   authentication, paths and the session are written in full in both,
+   alike but for the prefix. `collector-outputs` gives the disk layout a
+   section of its own, which is the disk collector's (Decision 13).
+   Read: `collector/collector.go` with its package comment, `paths.go`,
+   `store.go` and `signals.go`; `relay/collector_client.go`,
+   `relay/capture.go`, `relay/heartbeat.go`, `relay/ledger.go` and
+   `relay/relay.go` for the relay's side and its order;
+   `cmd/collector/main.go` for the one session and the exit status;
+   `driver/session.go` for the two limits and `ca.cert.pem`; their
+   tests; and the book's `guide/output.md` for the layout. Divergences:
+   D2, D3, D4 and D8 in `collector-outputs`; D1, D16 and D8 in
+   `collector-inputs` (RELAY-07, GLOBAL-08, LOOP-02).
+10. **S, stage 3c** `relay-guest-api/v1.md` with
+    `v1.artifacts.openapi.json`, `v1.cwd.openapi.json` and
+    `v1.control.openapi.json`. First, D18 is reproduced once by hand, as
+    D17 is. Read: `relay/relay.go` (`handleArtifacts`,
+    `handleContextGet`, the CA, its leaves and CRL, `DetectSelfIP`),
+    `relay/controlplane.go`, `relay/dns.go`, `relay/heartbeat.go` and
+    `relay/proxy.go`; `cmd/relay/mode_host.go` for the frame link's
+    dispatch by port (443, 8300, every other port to the proxy) and its
+    one UDP listener on port 53, which is where "the port alone selects
+    the service" and D15 come from; `cmd/relay/dhcp.go`, `dhcp_vm.go`,
+    `ingress_fd.go` and `ingress_dhcp.go` for the lease and the frame
+    link; `tools/relay-vm/init`, read for what is the driver's and so
+    is not specified; their tests; and the design `relay-leaf-crl`.
+    Divergences: D9, D10, D11, D12, D15, D18, D19 (BOOT-04, RELAY-02,
+    RELAY-04, GLOBAL-08, LOOP-02).
+11. **S, stage 3d** `executor-initialize/v1.md`, and
+    `bootstrap-config/v1.md` with `v1.schema.json`. Every `INIT`
+    requirement, and each `BOOTCFG` requirement on how the executor
+    reads the config, is on its directory's list as not machine-checked,
+    with the reason that its cases are S2's (a11). Read: every non-test
+    file of `cmd/warden-io/` (`main.go`, `initialize.go`, `baseline.go`,
+    `jks.go`, `platform_darwin.go`, `platform_linux.go`,
+    `platform_windows.go`, `trust_linux.go`); `bootstrap/bootstrap.go`;
+    their tests; `docs/development/bootstrap.md`; and the design
+    `unified-bootstrap`. Divergences: D12, D13 and D14 in
+    `executor-initialize`; none in `bootstrap-config` (EXEC-04, EXEC-02,
+    EXEC-03, BOOT-05, BOOT-02, BOOT-03, LOOP-02).
+
+**Stage 4, the harness (S, serial: one module, five stages).** The
+models are written from the documents of stage 3 and import nothing of
+the kit (Decision 5). Every test in `conformance/` is tier 0 and runs
+under plain `go test` there. Everything in stages 4a to 4e builds and
+tests on Linux, macOS and Windows; only stage 6 is Linux, with stubs.
+
+The design names the harness's relay twice, and the plan reads the two
+as one model. Decision 5 lists "a relay to test a collector". **The
+harness** and **CI** have each module's `go test ./...` run "the relay
+cases against the harness's relay", with no privilege named for it,
+and the relay cases are DHCP, DNS, the frame link, interception and
+the RELAY-02 round trip among others. So the harness's relay is also a
+role under test, which serves seams 1, 3 and 6, is the client of seam 2
+and writes a signed ledger, and the cases must reach it with no
+namespace, no root and no runtime. Tasks 15 and 16 build it, in that
+order, and task 16 builds what lets a case reach it.
+
+12. **S, stage 4a** The core: the target-file format (TOML: the role,
+    the launcher, the attachment points, the host operating systems; a
+    role the harness does not know is an error that names the ones it
+    knows; no specification and no version); the `exec` and `external`
+    launchers; a collector target's `claims` attachment, its command
+    line with placeholders, the forms it declares and its optional
+    read-back, with `listens` named in the format and not built; the
+    runner and its report (pass, fail, or not applicable
+    by what the target declares; no skip and no retry; each case with
+    its specification, its version, the harness's version and the
+    requirements it cites); the table of the specification versions the
+    models were written from; and the commands' three subcommands in
+    their final form. The runner is given the component under test and
+    the roles around it through one Go interface, the *attachment*, so
+    that a case is written once and does not know whether a launcher or
+    the harness itself stands behind it, and every role takes its
+    listeners and connections from the attachment and never opens a
+    socket of its own choosing. Tier 0: table-driven tests of the
+    format, with each error it names, of the placeholders and of the
+    report (GLOBAL-07, GLOBAL-10, GLOBAL-11, TEST-04).
+13. **S, stage 4b** Three roles, each a package: the claimant and the
+    collector that test a relay, and the ledger verifier. The collector
+    can be started in every form a target may declare (with and without
+    a build script, a context, a bootstrap config and a token; serving
+    on after a completion or not), so that the cases that are not
+    applicable to the disk collector run against it. The verifier is
+    written from this repository's `specs/build-ledger/v1.md` at a
+    commit its package comment names, reads metadata fields by the
+    names `specs/metadata-<name>/v1.md` gives them and holds no copy of
+    a document or schema (Decision 9). Tier 0: the claimant and the
+    collector against a stand-in for a relay's claim endpoint and
+    tunnel that lives in the test files, the relay model being task
+    15's; the collector's replies against the two documents' schemas
+    and examples; the verifier over ledgers the tests build from the
+    format's document, one valid and the others each broken in one way
+    (GLOBAL-01, GLOBAL-02, GLOBAL-03, GLOBAL-09, RELAY-05, TEST-07).
+14. **S, stage 4c** The build side. An in-memory network: named
+    addresses, stream listeners and connections, datagram endpoints
+    with the broadcast a lease needs, and a frame pipe that carries one
+    Ethernet frame per datagram. On it, the build environment, in both
+    link kinds: on `frames` with the harness's own network stack, which
+    takes its lease from the relay's DHCP and connects to the address
+    DNS returned; on `ip`, connecting to the relay's own address with
+    the origin's name in `Host` or SNI; in both, the poll of `/health`
+    on port 8300 before its first request (D19). The upstream resolver
+    on port 53, which a case can make silent or failing; the origin
+    servers on ports 80 and 443, on addresses in the documentation
+    ranges; and their CA, which a claim carries in `upstream_ca_certs`
+    with `upstream_system_ca: false`. Tier 0, all on the in-memory
+    network: the network itself; two ends of the frame pipe each with
+    the harness's stack; the lease against a responder scripted in the
+    test files; the build environment against the resolver and the
+    origins with no relay between them (GLOBAL-07, RELAY-04, TEST-04,
+    TEST-07).
+15. **S, stage 4d** The relay model, first part: what Decision 5 calls
+    a relay to test a collector. Seam 1 as `relay-claim` states it for
+    a relay: the claim endpoint with its token, `POST /v1/tunnel`,
+    `POST /v1/claim` with the field table's validation and every reply,
+    one claim. Seam 2 as the two collector documents state the relay's
+    side: the ledger request before any other output, the environment
+    record, the capture modes with the `Warden-Hash` trailer, the
+    output and the artifacts, every output before the completion;
+    `ready` before the claim's 200, the heartbeat's forwarding, an
+    input that is not 200, the completion after the ledger's reply. A
+    ledger writer, written from the same commit of
+    `specs/build-ledger/v1.md` as the verifier and holding no copy of
+    it, with a key of its own for each instance, which the claim's
+    reply names. A `claims` collector target reaches this model at a
+    loopback claim address. Tier 0: the model against task 13's
+    claimant and collector, in every form of the collector; its
+    ledgers verify under task 13's verifier, which still refuses each
+    broken one. The verifier first reads a ledger the Go relay wrote
+    in stage 9 (GLOBAL-03, GLOBAL-07, RELAY-07, RELAY-08, TEST-04).
+16. **S, stage 4e** The relay model, second part, and the in-process
+    attachment. Seam 3 as `relay-guest-api` states it for a relay: the
+    lease; on a frame link, ARP and the capture of connections to any
+    address, with the port selecting the service; on a kernel
+    interface, its own address and four ports; DNS with the reserved
+    names, the list order, the 5 s failover and SERVFAIL; the reserved
+    hosts `artifacts` and `cwd`; the control plane; interception over
+    HTTP and TLS with its CA, a leaf for each name and the CRL the
+    leaf names; the upstream dials each mode refuses; and nothing
+    recorded after a completion. Seam 6: the collector's bootstrap
+    config served byte for byte and recorded. The model takes its mode
+    as a start parameter, and what `relay-claim` states by mode for
+    `build_link` and `upstream_dns` holds in each.
+
+    The in-process attachment is a Go API of the `conformance` module
+    that a module's tests hand to the runner in place of a target
+    file. It is not a launcher: the target-file format gains no name
+    for it and no command can select it (Decision 6 is unchanged). It
+    gives the model, from memory, each thing **What a relay under test
+    must provide** has a launcher give a real relay from the kernel: a
+    fresh instance for each start; a claim endpoint; the build link, a
+    frame pipe for host mode (`frames`) and the model's listeners at
+    its own address on the in-memory network for vm and container mode
+    (`ip`); the upstream, task 14's resolver and origins on the
+    in-memory network; as start parameters, the resolver configuration
+    that stands for `/etc/resolv.conf` and the build interface's
+    addresses and routes; and the mode. For the collector cases it
+    gives the harness's collector, in each form, with the claimant in
+    front of it as a `claims` target has, and task 15's model as the
+    relay that drives it.
+
+    The self-test therefore runs the relay cases against the model
+    once in each of the three modes, host on `frames` and vm and
+    container on `ip`, and the collector cases against the collector
+    in each form, so that each case runs at least once where it
+    applies. A case that no in-process configuration can carry is
+    reported not applicable by what that target declares, as for any
+    target, and never skipped. The plan expects no such case. One that
+    is found is listed with its reason in the attachment's package
+    comment and in the evidence of the stage that found it, so that a
+    reader knows it first ran against the Go relay.
+
+    Tier 0, and the stage's done-when: in `conformance/`, with no case
+    and no requirement cited, every role is run against its
+    counterpart in each of those configurations: a whole build (claim,
+    lease, a name resolved, an origin fetched over HTTP and over TLS,
+    an artifact, the exit) after which the collector holds every
+    output in order, the ledger verifies under the reply's key, and
+    the hash of each body in it is the hash of the bytes the build
+    environment received (GLOBAL-07, RELAY-02, RELAY-04, BOOT-04,
+    TEST-04, TEST-07).
+
+**Stage 5, first cases against the harness itself (S).** It is small on
+purpose: it is the proof that a case in a specification's module
+reaches the harness's own roles through the in-process attachment,
+before the sandbox is built on the same interface.
+
+17. **S** Two cases, with their modules' tests (tier 0): in
+    `relay-claim/cases`, an authorized claim over the tunnel that is
+    answered 200 with an identity, which `go test` in `relay-claim`
+    runs against the model relay in each of the three modes; in
+    `collector-outputs/cases`, one output a collector accepts, which
+    `go test` in `collector-outputs` runs against the harness's
+    collector. Done when both pass as an ordinary user, with no
+    namespace created, and are pushed (TEST-05, TEST-04, TEST-07).
+
+**Stage 6, the sandbox and the launchers (S).** It is the one part of
+the harness that cannot be tested under `go test`, so its green is
+stated in three parts.
+
+18. **S** What starts a real relay under test on Linux, behind the same
+    attachment as task 16's: the network namespaces that are the
+    relay's whole upstream, addressed from the documentation ranges,
+    with the resolver on port 53 and the origins on 80 and 443; the
+    mount namespace that binds the relay's `/etc/resolv.conf`; the
+    `frames` link over an inherited socketpair, with the stack and the
+    lease of task 14; the `ip` link; the `oci` launcher, run by the
+    runtime the target file names, with the order of a container-mode
+    relay's interfaces settled and recorded in the target file; and
+    the instances (a fresh one for each case that ends one, a shared
+    one otherwise). A sandbox that cannot be built, for want of root
+    or of user namespaces, is an error that names what is missing, and
+    never a skip. Other platforms get build-tagged stubs. The sandbox
+    starts no program but the relay the target file names and, for
+    `oci`, the runtime it names (**Security note**). Every namespace,
+    link, container and container network it creates has a name that
+    is unique to the harness process and the instance, and is removed
+    when the instance ends, so that two harness processes with `exec`
+    targets run on one host at once; a second process with an `oci`
+    target on the same runtime either runs or fails with an error that
+    names the conflict.
+
+    Its green. (a) Tier 0, under `go test` as an ordinary user: the
+    address plan; the instances' bookkeeping; the argument list each
+    launcher builds; the error for a missing privilege, with the probe
+    for it injected; and `go vet` for `GOOS` linux, darwin and windows.
+    No test here creates a namespace or calls a runtime, so S's `ci`
+    passes on a hosted runner. (b) By hand, as root, on the session's
+    host: task 17's relay case with
+    `bw-conformance-relay-claim run -target <file>` against a relay
+    built from a detached worktree of K at this branch's head, in host,
+    vm and container mode, with three target files written outside
+    both repositories; the evidence names the commands and their
+    reports. A session whose host has neither root nor user namespaces
+    says so in the evidence, and its stage is then green only with
+    stage 7's run. (c) The `oci` launcher is tier 1 and is first run
+    in stage 7, on the hosted runner: no session is assumed to have a
+    running container runtime (GLOBAL-07, GLOBAL-11, RELAY-04, TEST-02,
+    TEST-04, TEST-07).
+
+**Stage 7, first cases end to end (K).** It runs the launchers and the
+sandbox against the real relay and collector on hosted runners before
+the suites are written in bulk.
+
+19. **K** The five target files in `tools/conformance/targets/`
+    (`relay-host.toml`, `relay-vm.toml`, `relay-container.toml`,
+    `relay-oci.toml`, `collector-disk.toml`), each declaring its `os`;
+    `make conformance` in its final form, which builds
+    `dist/conformance/relay`, `dist/conformance/collector` and, when
+    `relay-oci` is among the targets it runs, the image
+    `buildwarden-relay:conformance`, runs each pinned specification's
+    command from its own module against each target, and prints one
+    table per target, with `TARGETS`, `SUITES`, `SPECS_DIR` and
+    `OCI_RUNTIME` and the default of a18, in which a target left out is
+    printed with its reason and a named target that cannot run on the
+    host is an error; the workflow's `relay` and
+    `collector` jobs in their final form, each naming its targets, the
+    `relay` job running the sandbox as root (**Security note**); and
+    the pins moved to S's head. Tier 1. Done when the run for the
+    pushed head is green on all three runners and reports both cases
+    as passed: the relay case against each of the four relay targets,
+    the collector case against `collector-disk` on each operating
+    system. A fault it finds in the harness is fixed in S, serially,
+    and the task repeated on the new head (TEST-02, TEST-05, GLOBAL-09,
+    GLOBAL-10, GLOBAL-11, RELAY-04).
+
+**Stage 8, the suites (S; 8a, 8b, 8c with 8d, and 8e may run in
+parallel, the harness and K's target files frozen).** Each case cites
+requirements of its own specification only. Each module's
+`go test ./...` runs its cases against the harness's own model of the
+role under test, in every configuration of task 16 (tier 0). A stage
+is green on `make check-suite DIRS="<its directories>"`, which ends
+with the coverage check for them: every requirement cited by a case or
+on the list with a reason. Its evidence names each case that is not
+applicable to every in-process configuration. No case asserts the
+`Authorization` scheme (D8), sends anything recorded after a
+completion (D16, D18) or asserts on the listeners at the moment of a
+claim's 200 (D19); the D17 case has a relay of its own. A case that
+fails against the Go relay or the disk collector because the document
+misread the code is corrected in the document, in the same stage, or
+by the stage's agent after its stage-9 run. One that fails because the
+code does something this design does not record is handled as stage 3
+handles a divergence the table lacks: the document states what the code
+does and lists it under "Known divergences", marked "not yet in the
+design's table (found <stage>)", the case asserts the document, the
+stage's report names the behaviour with file, line and evidence, and the
+stage goes on; the whole list goes back to Design once, after the
+suites, which is r2 (task 37 then removes the mark). No case is
+weakened and no code is changed to make a suite pass (FLOW-06,
+LOOP-02).
+
+20. **S, stage 8a** `relay-claim`'s cases. For a relay: authorization
+    and refusal, a refused claim leaving the relay claimable and a spent
+    relay not listening; one case for each rule of seam 1's field table;
+    `build_link` and `upstream_dns` by mode; the ordering at the claim;
+    upstream TLS against `upstream_ca_certs`; the ledger's records
+    verifying under the reply's `ledger_public_key`. For a claimant, run
+    against a collector target that claims: the tunnel before the claim,
+    the claim's body against its schema, the token (TEST-05, RELAY-04,
+    RELAY-08, TEST-04, TEST-07).
+21. **S, stage 8b** `collector-outputs`' and `collector-inputs`' cases;
+    the stage may be given to two agents, one for each. For a
+    collector: each endpoint of each specification with its error
+    cases, over the tunnel, and for `collector-outputs` what a target
+    with a read-back directory stored, against the disk layout. For a
+    relay, as their client: the ledger request before any other output,
+    the environment record, the capture modes and the trailer, every
+    output before the completion; `ready`, the heartbeat's forwarding,
+    an input that is not 200, the completion signal. The cases the disk
+    collector's forms make not applicable run against the harness's own
+    collector (TEST-05, RELAY-07, TEST-04, TEST-07).
+22. **S, stage 8c** `relay-guest-api`'s cases below HTTP: DHCP; DNS
+    (the reserved names, list order, the 5 s failover, SERVFAIL); on a
+    frame link, ARP and the capture of connections to any address; and
+    the refused upstream dials. The directory's coverage cannot pass on
+    this half alone, so this stage is green on `make check-docs` and on
+    `go vet` and `go test` in `relay-guest-api`, and is merged and
+    pushed on that (TEST-05, RELAY-04, TEST-04, TEST-07).
+23. **S, stage 8d** `relay-guest-api`'s cases over HTTP, after 8c's
+    merge: each `artifacts`, `cwd` and control-plane endpoint with its
+    error replies; interception over HTTP and TLS, with the leaf's
+    chain and its CRL distribution point; the RELAY-02 round trip, in
+    which the ledger verifier checks the hash of each body against the
+    bytes the build received; and that nothing is recorded after a
+    completion. Green on `make check-suite DIRS=relay-guest-api`
+    (TEST-05, RELAY-02, BOOT-04, TEST-04).
+24. **S, stage 8e** `bootstrap-config`'s cases: a relay serves the
+    collector's document byte for byte and records it; the document a
+    collector serves validates against the schema.
+    `executor-initialize`'s command lists its requirements, each with
+    the reason it has no case, and runs nothing (TEST-05, BOOT-05,
+    EXEC-04, LOOP-03).
+
+**Stage 9, a hosted run for each suite, and the full run (K).** Stage
+8's own green is tier 0, and its local run against the real targets
+leaves out `relay-oci`, macOS and Windows. So each suite gets its
+hosted run while its stage is fresh, and the full run is the last of
+them and not the first.
+
+25. **K, repeated** After each merge of a stage-8 stage is pushed in S,
+    the dispatching session moves the pins,
+    `make pin-specs REF=<S's head>`, runs `make test` and `make lint`,
+    pushes, and waits for the `conformance` run (tier 1). One
+    repetition may cover two merges that were pushed together. Done,
+    for a repetition, when the run for the pushed head is green on all
+    three runners. A failure is handled as stage 8 says, in S, by the
+    agent of the stage it belongs to, and the repetition is made again
+    on the new head. The last repetition is made once every suite is
+    merged and `make check` is green at S's head: the relay suites
+    against `relay-host`, `relay-vm`, `relay-container` and
+    `relay-oci`, the collector suites against `collector-disk` on
+    `ubuntu-latest`, `macos-latest` and `windows-latest`. That run is
+    S1's done-when, and the first of the two runs Implement's evidence
+    names (TEST-02, TEST-05, FLOW-06, LOOP-02).
+
+**Stage 10, the rule changes (K).** One task for each change the review
+approved (`rule change <ID> approved at 64a4a95`), with the paths its
+`rule_changes` entry names and no other file under a rule path
+(FLOW-14). The wording is copied word for word from **Rule changes** as
+it is at `64a4a95`. If `main`, merged into this branch, already holds
+`driver-contract`'s changes to the same text, both are kept in the order
+**With `driver-contract`** gives, and the Specifications entry is its
+joined form. A word that neither review approved is a return to Design
+(FLOW-06). The stage is green on `make test`, in `tools/tier1` and
+`tools/workflow` as in the root module, `make lint` and
+`make enforcement`, in which the merge base's tier 1 reads the list.
+
+26. **K** Rule change TEST-05. `docs/development/testing.md`: the title
+    and the whole body. `tools/tier1/rules.yaml`: the TEST-05 entry's
+    owner string (FLOW-14, TEST-05, LINT-02).
+27. **K** Rule change TEST-02. `docs/development/testing.md`: the one
+    sentence added to the tier-1 bullet of "Where each tier runs today"
+    (FLOW-14, TEST-02).
+28. **K** Rule change GLOBAL-08. `docs/development/global.md`: the
+    executor bullet, and the new paragraph before the rule's last one.
+    `tools/tier1/rules.yaml`: the six `seams` entries and the comment
+    above them, in place of `seams: []` and its comment, as under
+    **Tier 1's seam list**. `tools/tier1/coupling/checks_test.go`: the
+    one entry `"GLOBAL-08": report.Must` in `TestSeverities`' table
+    (tier 0). No other file under `tools/tier1/` changes, and the
+    check's code does not (FLOW-14, GLOBAL-08, LINT-02, LINT-05).
+29. **K** Rule change EXEC-04. `docs/development/in-vm-executor.md`:
+    the rule's body (FLOW-14, EXEC-04).
+30. **K** Rule change PROFILE-01. `docs/development/loop-profile.md`:
+    the Specifications entry, the Consumables entry and the tier-1
+    Specification row of the Checks table (FLOW-14, PROFILE-01,
+    LOOP-01).
+
+**Stage 11, the book and the umbrella (K).**
+
+31. **K** The reference documents: in `concepts/architecture.md` the
+    collector's endpoint table, `build_link`'s validation rules and
+    by-mode table, and the endpoint table under "Communication paths"
+    are each replaced by a sentence and a link to the seams page, the
+    sections on the collector and the claim open by saying that the
+    specification is the contract, and every heading stays;
+    `contributing/structure.md` gains `tools/conformance/` and the new
+    duty of `specs/specs_test.go`; `specs/README.md` one sentence;
+    `AGENTS.md` a row; `CONTRIBUTING.md` a section on `make conformance`
+    and `make pin-specs`, which says a pin is never moved with `go get`.
+    `concepts/overview.md` is not edited, because no component's flow
+    changes (UX-01, FLOW-15).
+32. **K** The amendments to `docs/design/componentization.md`, U1, U2
+    and U3, word for word as approved (**Amendments to the umbrella
+    design**). U2's row is the form in the table, or the joined form if
+    `driver-contract`'s change to that line is already on this branch;
+    U3 stands after the paragraphs already there (FLOW-20, FLOW-10).
+
+**Stage 12, release machinery and the specs pull request (S).**
+
+33. **S** The `release` workflow (on a tag `<directory>/v*`, and by hand
+    for an existing tag: the tag is on `main` and is the version at the
+    head of that directory's `CHANGELOG.md`; the binaries built with
+    `go install <command>@<tag>` for three operating systems and two
+    architectures and attached with `SHA256SUMS`; nothing attached for
+    `conformance/v*`) and the `implementations` workflow (weekly and on
+    demand, not a merge gate). For `implementations` the design names
+    the Go relay image first and does not say where its target file
+    is. Decision 6 keeps a target file beside its implementation, and
+    Decision 2's layout has no directory for one in S, so the plan
+    adds none: the workflow takes `relay-oci.toml` from
+    `tools/conformance/targets/` of `buildwarden/buildwarden` at that
+    repository's newest release tag, pulls the image that release's
+    `relay-image` run published, `ghcr.io/buildwarden/relay:<tag>`,
+    under the name the target file names, and runs each specification's
+    newest released binary, checked against its `SHA256SUMS`. No
+    release of this repository carries that file until this item's
+    pull request here is merged and a release follows it; until then
+    the workflow's table says so for the Go relay and nothing is run
+    against it. Neither workflow can run before the merge: `release`
+    first runs in task 36, and `implementations` is first started by
+    hand after it. The `README.md` index and each `CHANGELOG.md` are
+    read once more against what was built (LOOP-07, FLOW-08,
+    GLOBAL-09, GLOBAL-11).
+34. **S** Open the pull request from `feat/seam-specs` to `main`. Its
+    body lists the six documents under a heading of their own. No agent
+    approves it, merges it or enables auto-merge. Done when its `ci` and
+    `flow18` runs are green, which are the first hosted runs of S's
+    workflows; a failure is repaired on the branch (FLOW-08, LOOP-06,
+    FLOW-18, LOOP-03).
+
+**Stage 13, the final pins (K).**
+
+35. **K** Implement's last commit:
+    `make pin-specs REF=<the specs pull request's head>`, `make test`,
+    `make lint`, push. Tier 1. Done when the `conformance` run for that
+    push is green on all three runners and each of the six modules names
+    the specs pull request's head, so that the commit Review reads in S
+    is the one the pull request would merge and the head Review reads
+    here has a green run. A later commit to S's branch, in Implement or
+    for a Review finding, repeats this task. The step's evidence names
+    S's branch, its head and its pull request, and the two runs: the
+    last repetition of task 25, and this task's; the run's digest names
+    the six documents apart from the code (FLOW-03, FLOW-17, LOOP-06,
+    TEST-02).
+
+**After Implement.**
+
+36. **S and K, human, `f6-release-specs`.** Not before Review (phase 4)
+    is done, and before `f6-open-pr`; it does not wait for the PR slot.
+    The session lists in the specs pull request's body the tier-2 MUST
+    findings that are in S, and checks that the latest `conformance` run
+    here is green and that the six pins name the pull request's head.
+    Jeff merges the specs pull request, preferably as a merge commit.
+    The seven tags are pushed on the merge commit, one push for each:
+    `conformance/v0.1.0` first, its `release` run green before the next,
+    then each specification's `v0.1.0`. Then, on this branch,
+    `make pin-specs SPECS=latest` (or the six named at `v0.1.0`, should
+    the proxy not list a tag yet), `make test`, `make lint`, commit and
+    push, by Jeff or by the attended session on his word. Done when the
+    seven `release` runs are green, six with their binaries attached,
+    and this branch's `conformance` run on the six tags is green. The
+    evidence names the specs pull request and the seven tags, confirms
+    that S's branch was deleted on merge, and records any difference
+    between the commit Review read and the tagged one. This is the first
+    time a real tag is resolved through the proxy; if that fails no tag
+    is moved, and the fault is fixed by a pull request in S and the next
+    patch versions. The `implementations` workflow is then started by
+    hand, once, and what it reported is named in the evidence; it does
+    not gate the step (FLOW-08, FLOW-16, LOOP-07, FLOW-11).
+
+### The r2 delta
+
+The return to Design of 2026-11-16 (r2, **Design review**) adds one
+task and repeats one. They run once r2's review has ended, on its
+answers, and before Review (phase 4). K's stages stay serial: stage 14
+comes after stage 13.
+
+**Stage 14, the r2 delta (S, then K).**
+
+37. **S, then K.** In S, on `feat/seam-specs`: in each of the six
+    documents, remove the line "Not yet in the design's table (found
+    <stage>)" from each N entry, and reword each "Known divergences"
+    introduction that says the N entries are not yet in the design's
+    table, so that it names that table as holding D1 to D19 and N1 to
+    N33. In `bootstrap-config` and `relay-guest-api`, N24's "Read from
+    the code; not run" becomes what stage 8e ran. Each sentence that
+    describes this design's table, its **Defaults and overrides** or its
+    **Security note** as they stood before r2 is reworded to describe
+    them as amended: in `relay-claim`, D6's "though the design's table
+    names it there", N5's "The design's row for D6 has ...", N6's "The
+    design's D6 row names neither", N8's "The design's D6 row has
+    'metadata that is not a CBOR map' fail" and N9's "Nothing in the
+    design records a limit on this or its absence"; in
+    `bootstrap-config`, the introduction's "lists none for this seam"
+    and N24's "named neither in the design's table nor in its security
+    note"; in `executor-initialize`, N28's "no design names it under
+    its **Defaults and overrides**" and N30's "a fallback no design's
+    **Defaults and overrides** names", which this design's **Defaults
+    and overrides** now names as fallbacks of today's code that it
+    neither adds nor allows, rows of class (c). r2 moved N31 to class
+    (b) (a25): `relay-claim`'s introduction says that N31 is the one
+    the requirements above do not allow, as `executor-initialize` says
+    of N2; CLAIM-17's note says so too; and N31's own entry, whose
+    "This differs from the rest of this protocol" is the class-(a)
+    reading, says that the reference claimant breaks CLAIM-1, as N2's
+    entry says it differs from INIT-1. Every answer of r2 is the
+    recommended one (a21 to a25, each (A)), and no row moved out of
+    class (b) or, other than N31, into it, so no requirement changes
+    and no case changes: the edits above are the whole of S's change
+    for r2, in the six `v1.md` files and no other file. Green is S's
+    row of **The two repositories** for a stage that writes documents,
+    with `make check`: then commit, push, and the specs pull request's
+    head moves to that commit, with its `ci` and `flow18` runs green on
+    it. Then in K, task 35 again on the new head: `make pin-specs
+    REF=<the new head>`, K's green (`make test`, `make lint`,
+    `tools/workflow/flow18-check.sh`), push, and the `conformance` run
+    for that push green on all three runners. No code of K changes
+    (a12). The step's evidence names the old head `9abf66c`, the new
+    one, the specs pull request's two runs and the `conformance` run
+    (FLOW-06, FLOW-17, FLOW-18, LOOP-02, LOOP-06, TEST-02, TEST-05).
+
+### Validation by tier
+
+| Tier (TEST-02) | What | Task |
+|---|---|---|
+| 0, in K | The ref test in `specs/specs_test.go`; `TestSeverities` with GLOBAL-08; tier 1's rule index and `rules.yaml` parsing with the amended rules, in the branch's tier 1 and in the merge base's; `tier1 designs` accepting this design | 6, 28, stage 10's green |
+| 0, in S | The tests of the `ci` checks; the harness's packages, and its roles against each other on the in-memory network; each suite against the harness's own roles through the in-process attachment; the parts of the sandbox that need no privilege; `make check` | 4, 12 to 16, 17, 18 (a), 20 to 24 |
+| 1, by hand | The `exec` sandbox as root, against a relay built from K, with the first relay case | 18 (b) |
+| 1, in K | The `conformance` workflow: first form, first cases, a run for each merged suite and the full run, the final pins, and after the release the six tags with the `pin` job | 7, 19, 25, 35, 36 |
+| 2, native | Nothing blocks, and no task. The two tracked gaps, `macos-vz` and `qemu-any`, are `deferred` on the native-gap backlog (FLOW-09, a14) | None |
+
+### What goes back to Design, and what does not
+
+A missing or different specs repository, or a refused branch, is a
+blocking question in Implement and not a return (task 0, FLOW-07). So
+is a file that recording sessions in S would need and the design does
+not name (task 1). These are returns to Design, with the finding
+recorded (FLOW-06): a mechanic of **Releases and how they are
+consumed** that does not hold with the real modules (tasks 3 and 7); a
+rule edit that needs a word the review did not approve, or a file under
+a rule path that no approved entry names (stage 10, FLOW-14); and any
+need to change the relay, the collector, the executor or a driver
+(Decisions 1 and 11).
+
+A case that fails because the code does something this design does not
+record, or a divergence the table lacks (stages 3 and 8, task 25), is
+recorded as found and is not a return during Implement (Jeff,
+2026-11-16, **Design review**). The document states what the code does
+and lists the behaviour under its "Known divergences", marked "not yet
+in the design's table (found <stage>)"; each stage's report names it
+with file, line and evidence; and Implement continues. When the suites
+are done the item goes back to Design once (FLOW-06): the table is
+amended with the whole list, the correction of D6 among it, and Jeff
+reviews it in one sitting. That return is r2 (**Design review**): the
+table now holds N1 to N33 and the corrections of D6 and D17, and after
+its review task 37 removes the mark from S's documents. A behaviour
+that looks like a bug is reported as an observation for a later item; no code of K changes for
+it. Any other finding that the approved design cannot be built as
+written is still a return, as above.
+
+Two readings of the design are Plan's, and each is written where a
+later reader will look for it, so that Review and Consolidation can
+hold the design's text to them or send them back:
+
+*The harness's relay is one model with two duties* (the paragraph at
+the head of stage 4; tasks 15 and 16). The design says both things and
+sizes neither: the model is a second implementation of the relay's
+side of four specifications, written from the documents, and with the
+in-process attachment it is the largest part of the harness. The
+attachment and the in-memory network are named nowhere in the design.
+They add no launcher, no target-file field and no command-line
+surface, which is why Plan takes them to be how the self-test is built
+and not a decision. If Design meant a narrower self-test, one mode or
+no relay cases at all, that is a change to **The harness** and to
+**CI** and is Design's.
+
+*The `implementations` workflow reads the Go relay's target file from
+this repository's release* (task 33), which follows Decision 6 and
+adds no directory to Decision 2's layout. A target file kept in S
+would be a layout change and is Design's.
+
+### Owed to later items
+
+None of these is a task of this item. Each is written into the Archive
+summary at Publish, so that the later item's intake finds it. No item
+is filed for seam 4 after the merge: its move is M6's (a1).
+
+| Owed | To |
+|---|---|
+| Seam 4's move to the specs repository, with RELAY-01 to RELAY-08: RELAY-05, tier 1's `schema-doc` root, the book's `specs/` mirror and its redirects, `specs/specs_test.go`, and the reserved directory names (Decision 2). The harness's ledger verifier and writer then read the format from their own repository | M6 (a1) |
+| The executor's suite. The umbrella's S2 row does not name it | S2's item (a11) |
+| The VM-image launcher. That item also sets the `qemu-any` backlog entry `open` | The first item that has a VM image to test (a6) |
+| The macOS form of the `exec` launcher. That item also sets the `macos-vz` backlog entry `open` | The first item that needs the relay suites on macOS (a14) |
+| The specs repository's adoption of the Loop Contract, and the driver contract's move there (**What the specs repository leaves room for**) | An item Jeff files (a4, LOOP-08); K2 |
+| Each divergence the review turned into work (**Divergences found**) | The item the review names |
+
+### What changed from the draft
+
+The draft Design kept here had fourteen tasks, 0 to 13. Each is carried
+out; none is dropped. The rest of this design names tasks by the draft's
+numbers (in **Divergences found**, **The harness**, **How the loop
+treats the second repository**, the **Validation plan** and the
+**Design review** among others). Those sentences are not edited by
+Plan. Each is read through this table, and Consolidation brings the
+numbers up to date (FLOW-10).
+
+| Draft task | Here | What differs |
+|---|---|---|
+| 0 | 0 | The check also creates the branch, at `main`'s commit, which is how "can push the branch" is shown before any work rests on it |
+| 1 | 1 to 4 | Split in two stages, the conventions before the checks that read them. "`ci` is green on the branch" is `make check` in the checkout, because `ci` runs on pull requests and `main` and the pull request is task 34's; its first hosted run is there. Recording is turned on in the S clone, and S's `flow18` workflow holds its own check |
+| 2, 3, 4, 5 | 8, 9, 10, 11 | One stage for each, which may run in parallel. The files a writer reads and the divergences each records are named |
+| 6 | 12 to 16, 18 | Split into six serial stages. The relay model as a role under test, the in-memory network and the in-process attachment are named (tasks 14 to 16); the sandbox comes after the first cases, with its green stated (task 18) |
+| 7 | 17, 20 to 24 | Two first cases are run against the harness itself, and then end to end, before the rest. The coverage check and the collector documents' check, which the draft wrote in tasks 7 and 3, are written in task 4, so that no parallel stage edits the harness |
+| 8 | 5, 7, 19, 25 | The commit that shows the pin mechanics is moved ahead of the documents (task 7), because it tries what the design lists as not tried, and it is repeated with the real harness's dependencies at each pin move from task 19 on. Each suite has a hosted run after its merge; the draft's done-when is the last repetition of task 25 |
+| 9 | 26 to 30 | One task for each approved rule change, with its paths (FLOW-14) |
+| 10 | 6, 31, 32 | The seams page and its test are written with `make pin-specs` (task 6), which rewrites the page |
+| 11 | 2, 33, 34 | Each `CHANGELOG.md` names `v0.1.0`, and each `go.mod` the harness at `v0.1.0`, from task 2; task 33 reads them again, and says where the `implementations` workflow finds the Go relay's target file |
+| 12 | 35 | None |
+| 13 | 36 | The note of `f6-release-specs` in the queue gains three sentences that this task has and the note lacked: the six named at `v0.1.0` if the proxy does not list a tag yet; that a failed first resolution moves no tag; and the first `implementations` run |
+
+## Design review
+
+**2026-11-15, first sitting: eighteen questions answered; five answers
+folded in.** Jeff read the design at `e4801d6` and answered a1 to a18 in
+the attended session. The review has not ended. When this entry was
+written, the five rule changes, the amendments to the umbrella, the two
+questions the fold-in raised and the outcome were all still to come;
+the last entry of this section says which of them have happened since.
+Nothing in this section records an outcome.
+
+Confirmed as recommended, with no change to the design beyond marking
+the question answered:
+
+- a3: public from creation.
+- a4: the invariants that apply in the specs repository are GLOBAL-01 to
+  GLOBAL-04, GLOBAL-07, GLOBAL-09 to GLOBAL-11, TEST-04 and TEST-07 for
+  the harness's Go code, and RELAY-05's schema-identity rule for the
+  schemas.
+- a5: the harness is Go, in the specs repository, and imports nothing
+  from the kit.
+- a6: the `exec`, `oci` and `external` launchers now.
+- a11: the executor's suite is deferred to S2's item.
+- a12: each divergence is recorded as the code behaves, and none is fixed
+  here.
+- a13: seam 6 is `bootstrap-config`.
+- a14: nothing blocks natively; two tracked gaps, both deferred.
+- a15: the human step `f6-release-specs`, as an exception to FLOW-04's
+  list and FLOW-08's sentence, for this item only.
+- a16: the collector's outputs specification is normative for the wire
+  only.
+- a17: `relay/relay.go`, `relay/proxy.go` and `cmd/relay/` stay off tier
+  1's seam list.
+- a18: `make conformance` with no target runs the targets that declare
+  the host's OS.
+
+Five answers depart from what the design proposed. Each was folded in
+during the sitting, in its own commit; none is a return to Design
+(FLOW-06), and `f2-design-review` stayed claimed throughout.
+
+- **a1, (C): seam 4 moves at M6, with RELAY-01 to RELAY-08** (`c94b814`).
+  Decision 9 and a1 are rewritten. No later S1 item is owed for the
+  ledger's move; the move is listed among the work owed to M6. The ledger
+  format stays under `specs/` here, RELAY-05 is not changed, and the
+  harness's ledger verifier reads the format from this repository. The
+  umbrella's seam 4 row and two rows of its rule table are listed for
+  amendment (**Amendments to the umbrella design**, new).
+- **a2, (B): the repository is created now, before the approval**
+  (`fa65b2e`). **What Jeff creates**, a2, the Blocking paragraph and task
+  0 are rewritten to what Jeff confirmed for creation:
+  `buildwarden/buildwarden-specs`, public, a README stub and the
+  Apache-2.0 `LICENSE` and no `NOTICE`, the protection of `main` and the
+  Claude GitHub App. Jeff creates it himself, because the cloud session
+  cannot. What Implement checks first is listed, and Implement's blocking
+  question stays for a repository that is still missing.
+- **a10, (B): two collector documents** (`e361370`). Seam 2 is written as
+  `collector-outputs/v1.md` and `collector-inputs/v1.md`, with the
+  prefixes `COLLOUT` and `COLLIN`. What the two share is written in full
+  in both and kept alike by a check. Seam 2 stays one seam, `collector`,
+  in GLOBAL-08 and in tier 1's list. Decisions 2, 3 and 13, a10, a16's
+  title, D16's row, the suites' table, **Specification changes** and task
+  3 follow.
+- **a9: the numbered requirements as proposed, and OpenAPI for the HTTP
+  seams as well** (`c09f668`). **The OpenAPI descriptions** is new: four
+  specifications get OpenAPI 3.1 files in JSON, the requirements stay
+  normative, three `ci` checks hold the files to them, and what OpenAPI
+  cannot say stays prose. Decisions 2 and 3, a9, **CI**, **Specification
+  changes** and tasks 1 to 4 follow.
+- **a8, (B), with a7 as restated: a tag per specification, each release
+  carrying the build of the tooling that tests it** (`b6f3d21`). Each
+  specification is a directory and a Go module, tagged
+  `<directory>/vX.Y.Z`, with its cases and its command; the shared harness
+  is the module `conformance/`; `tools/conformance/go.mod` names the six
+  specifications each at a version. Decisions 2, 4, 5, 7 and 12, a5's
+  note, a7, a8, **The harness** (its opening, to the instances), **What
+  the specs repository leaves room for**, **Releases and how they are
+  consumed**, **CI**, **Tier 1's seam list** (the comment and what the
+  check holds), the book's page, **How the loop treats the second
+  repository**, **Defaults and overrides**, **Specification changes**,
+  the **Validation plan** and tasks 1, 6 to 8 and 11 to 13 are rewritten.
+  Decision 4 states what the scheme costs beside the single tag.
+
+What the fold-in did to the rule changes, which had not then been put to
+Jeff: the proposed wording of TEST-05, GLOBAL-08, EXEC-04 and PROFILE-01 (three
+rows, and the joined Specifications row under **With `driver-contract`**)
+is re-derived for a8 and a10, and each entry says what the wording he
+read at `e4801d6` was. TEST-02's sentence changed in four words, for six
+pins. `rule_changes` is unchanged: the same five rules and the same
+paths. The wording on `main` was checked again at `ad4ea50`.
+
+Two questions were new, and Jeff has answered both since (the last
+entry of this section). **a19**: where the code every suite shares lives
+and how it is versioned. The design stood on its option A, the module
+`conformance/` with tags of its own. **a20**: which build of a release's
+tooling this repository runs. Until it was answered the design stood on
+a7's recorded answer, one `go.mod`, and recommended a `go.mod` for each
+specification.
+
+In the queue file: a19 and a20 added, open at the time; the note of
+`f6-release-specs` rewritten for seven tags, each in its own push, and
+`make pin-specs SPECS=latest`; no step added or removed; no recorded
+answer touched. `design_review` stays `required`, `alters_relationships`
+stays `true`, and `native_validation` and the two tracked gaps are as
+they were.
+
+**The same sitting: a pass on an independent review of the fold-in.**
+Each finding was checked against its source before it was acted on, and
+all held. No recorded answer and no decision of Jeff's changes by it.
+What changed (`8b5fa1b` to the commit that adds this paragraph):
+
+- *The mechanics behind a19's option A* had been tried only with modules
+  that import nothing. With a harness that imports a third-party module,
+  as the real one must, the workspace does not build a harness version
+  that has no tag, a specification's `go.mod` cannot be tidied, and a
+  build in a checkout at the tag fails. **Releases and how they are
+  consumed** now states what makes each work, as tried again: a
+  versioned `replace` line in `go.work`, `make tidy` through a temporary
+  `replace` with a `ci` check, and a release built with
+  `go install <command>@<tag>`. a19's options A and B carry those costs,
+  and task 1 proves them with a real dependency.
+- *`driver-contract` had moved,* to `a6c8f0b`: Jeff approved its eleven
+  rule changes by name that evening. It withdrew its words in the tier-1
+  Specification row of Checks, so the joined Checks row this design gave
+  is removed, and one profile row is shared, the Specifications entry.
+  Its own joined Specifications row quotes this design's sentences as
+  they were before a8; that is pointed out. `loop-parallel`'s PROFILE-01
+  change is read at `e692fad`.
+- *The umbrella.* `driver-contract` also amends line 405, the row U2
+  rewords, and adds a dated paragraph where U3 does. U2 is given in both
+  forms, and the second to merge keeps both.
+- *The release step.* Each tag is pushed in its own push, because GitHub
+  starts no run for a push of more than three tags; the `release`
+  workflow can be started by hand for an existing tag; the step is done
+  on seven green runs, six with binaries.
+- *What a tag per specification costs* is stated in full in Decision 4:
+  the counts, what a harness fix costs, and that one specification's
+  change can force releases of others. Decision 7 said that a mixed set
+  of pins can fail to build and that `SPECS=latest` is the supported
+  set; a20's answer has since removed that failure (below).
+- *a20 was new* (above).
+- *OpenAPI.* `collector-inputs` gains a schema for the reply to
+  `GET /v1/status`, so that the check on JSON bodies can hold, and the
+  list of what OpenAPI cannot say gains names that span path segments.
+- *Smaller.* Six documents and six OpenAPI files where two sentences
+  counted five and four; "no cases yet" for "no suite yet" in the
+  proposed TEST-05; the `pin` job's rule and Decision 7's sample as
+  `go mod tidy` writes it.
+
+**The same sitting, continued, 2026-11-15: a19 and a20 answered; the
+amendments to the umbrella and TEST-02 approved by name; a20's answer
+folded in.** Jeff read the design at `e19cc1f`. The review has not
+ended, and nothing in this entry records an outcome.
+
+- **a19, (A): a seventh module `conformance/`, tagged on its own; a
+  change that needs both the harness and a specification is one pull
+  request and one merge.** As recommended, and as the design already
+  stood. Nothing changes but the wording that treated it as open.
+- **a20, (C): a `go.mod` for each specification, under
+  `tools/conformance/<directory>/`.** As recommended. The design had
+  stood on A, one `go.mod`, which a7's recorded answer names, and is
+  revised (`56964d5` to the head this entry is pushed with). Each command
+  is built from exactly what its release names, a mixed set of pins
+  always builds, and each seam has its own contract path in tier 1.
+- **The amendments to the umbrella, U1, U2 and U3, by name,** on the
+  wording he read at `e19cc1f`; U2 in both of its forms, the row alone
+  and the row joined with `driver-contract`'s change to the same line.
+- **The rule change TEST-02, by name,** on the wording he read at
+  `e19cc1f`. Its sentence names the directory `tools/conformance/` and
+  no file in it, so a20's answer does not touch it.
+
+The wording of U1, U2 in both forms, U3 and TEST-02 is byte for byte
+what it was at `e19cc1f`. A script compares the three table rows, the
+joined row and TEST-02's proposed wording in this file with the same
+lines of that commit, and was run on the head this entry is pushed
+with.
+
+What a20's answer changed:
+
+- *Decision 7* is rewritten: six small modules under `tools/conformance/`
+  beside `targets/`, each requiring one specification and naming its
+  command in a `tool` directive; the file as `go mod tidy` writes it;
+  why a module is written from nothing by `make pin-specs` and never
+  edited in place; why there is no `go.work`, and `GOWORK=off` in the
+  recipes; `REF` and its `replace` line, now in each module whose
+  specification names a harness version with no tag; and the two
+  options not taken, among the rejected alternatives.
+- *Decision 4's list of costs.* The mixed set that does not build and
+  the one harness for all six commands are gone. Stated in their place:
+  six modules and twelve files; a harness fix reaches a suite here only
+  through that specification's release; and the suites one component is
+  run through need not share a harness version.
+- *The mechanics* were tried in the model, with Go 1.26.3, and are under
+  **Releases and how they are consumed** with what was not tried.
+- *The `pin` job* checks each of the six modules and writes each again
+  from the version it names (**CI**).
+- *Tier 1's seam list.* Each seam's contract path is its own
+  specification's pin. `seam-contract` reads one path for an entry and
+  its code is not edited, so seam 2, with two specifications, has two
+  entries, both named `collector`; a file that holds code of both is
+  asked for both pins. Tried with `main`'s check code at `ad4ea50`,
+  where `tools/workflow/enforcement-check.sh` passed (FLOW-14).
+- *The rule changes still to be put to him.* The proposed wording of
+  TEST-05, GLOBAL-08 and EXEC-04, and of the Specifications and
+  Consumables rows of PROFILE-01, names
+  `tools/conformance/<specification>/go.mod` where it named the one
+  file, with the plural that follows. The Specifications row is given
+  alone and joined, as it will read. PROFILE-01's Checks row names no
+  file and is unchanged. Each entry says what the wording at `e19cc1f`
+  was. `rule_changes` named the same five rules and the same paths when
+  this was written; the pass recorded below adds one path to GLOBAL-08's
+  entry.
+- *Smaller.* a7, a8, a10 and a17 each gain a dated note, and no recorded
+  answer is edited. `make conformance`, the book's ref test, **How the
+  loop treats the second repository**, **Defaults and overrides**,
+  **Specification changes**, the **Validation plan** and tasks 8, 9, 12
+  and 13 name the six modules.
+- *`driver-contract`* is stated as approved: its design review approved
+  it on 2026-11-15 at `a6c8f0b` (its entry is at `c767992`), with its
+  PROFILE-01 change and the Specifications row "in both forms". Its
+  joined form quotes this design's sentences as they stood before a8
+  and a20. That approval is read here as covering its own clause and
+  sentence in the row; this design's sentences are approved in this
+  review (**With `driver-contract`**).
+
+In the queue file: the text of a19 and a20 and the note of
+`f6-release-specs` are brought in line with this; the recorded answers
+are as the review session wrote them, and no step is added, removed or
+changed in status. `design_review` stays `required`,
+`alters_relationships` stays `true`, and `native_validation` and the
+two tracked gaps are as they were.
+
+**The same sitting: a pass on a second independent review, of a20's
+fold-in.** Each of its six findings was checked against its source, and
+re-run where it reported a trial; all six held. No answer of Jeff's
+changes by it, and the wording of U1, U2 in both forms, U3 and TEST-02
+is still byte for byte that of `e19cc1f`: the same script was run on
+the head this paragraph is pushed with.
+
+- *A test of tier 1 changes with the seam list.* `TestSeverities`
+  (`tools/tier1/coupling/checks_test.go`) runs the coupling checks with
+  the real `rules.yaml` over a fixture that changes
+  `cmd/warden-io/jks.go`, which the list puts on a seam. With the list
+  in place `make test` failed in `tools/tier1`; with GLOBAL-08 added to
+  the test's table it passed, and `enforcement-check.sh` passed. The
+  design had said that only `rules.yaml` changes under `tools/tier1/`.
+  `rule_changes` gains that file among GLOBAL-08's paths, before
+  GLOBAL-08 is put to Jeff; the five rules are the same five. The
+  entry's Enforcement change gives the edit, **Tier 1's seam list** the
+  trial, and task 9 and the **Validation plan** name the test. The
+  fixture's file was already on the list at `e19cc1f`, so this is not
+  a20's doing.
+- *The `go` line of a pin module.* The design did not say what
+  `make pin-specs` writes there, and said that the compiler is always
+  this repository's. Decision 7 now says both. The review proposed the
+  root module's `go` line. Tried, that builds a command that differs
+  from the release's own binary, because Go takes a build's default
+  `GODEBUG` settings from that line; with the line the pinned release's
+  `go.mod` names, the build's settings were the release's. So the design
+  writes the release's line, and the root module's is a rejected
+  alternative there. A release that names a newer Go than runs here
+  cannot be pinned until this repository's Go moves, which Decision 7
+  states with what Go prints. The sample's `go` line is the model's.
+- *A quotation of the proposed GLOBAL-08,* under **With
+  `driver-contract`**, was the sentence as it stood at `e19cc1f`. It is
+  the proposed sentence again.
+- *The comment above `seams`* changed in two places for a20, and the
+  design named one. GLOBAL-08's entry now lists what differs from
+  `e19cc1f` in its enforcement change: the list, the comment in both
+  places, and the test.
+- *Smaller.* "The pins" where a sentence written for one file still
+  said "the pin"; the paragraphs the fold-in left unwrapped are
+  wrapped.
+
+The proposed rule text of TEST-05, GLOBAL-08, EXEC-04 and PROFILE-01 is
+not changed by this pass: it is that of `9bbc8ef`. What changes in a
+rule change is GLOBAL-08's paths and its Enforcement change. In the
+queue file nothing changes: a19, a20 and the note of `f6-release-specs`
+name no `go` line and no file under `tools/tier1/`.
+
+Still to come: the rule changes TEST-05, GLOBAL-08, EXEC-04 and
+PROFILE-01, each to be put to Jeff by name on the head this entry is
+pushed with (PROFILE-01 as the Specifications row in both forms, the
+Consumables row and the tier-1 Specification row of Checks; GLOBAL-08
+with its three paths and the edit to the test); then the outcome. This
+entry writes none of the lines FLOW-14's check reads for a rule change:
+those are recorded with the outcome.
+
+### 2026-11-15, first sitting, outcome: approved
+
+- **r1, 2026-11-15: approved at `64a4a95`** (Jeff; read at `e4801d6`,
+  `e19cc1f` and `64a4a95` as his answers were folded in; page
+  https://claude.ai/artifact/GMZYnBWqKVGDAP8DfpiHVd). All twenty
+  questions are answered, as the entries above record; a1, a2, a7, a8,
+  a9, a10 and a20 depart from the draft and are folded in. Confirmed
+  with the outcome, as a mechanic the design settled without a question:
+  a pin module's `go` line is the pinned release's own (Decision 7). The
+  three amendments to the umbrella design (U1, U2 in both forms, U3)
+  were approved by name on the wording at `e19cc1f`, which is
+  byte-identical at `64a4a95`; so was TEST-02. TEST-05, GLOBAL-08,
+  EXEC-04 and PROFILE-01 were approved by name on the wording at
+  `64a4a95`. `buildwarden/buildwarden-specs` was created by Jeff during
+  the review (first commit `aeda265`: `README.md` and the Apache-2.0
+  `LICENSE`; `main` protected by a ruleset: pull request required, no
+  force-push, no deletion) and is attached to the session.
+- **rule change TEST-05 approved at `64a4a95`**, as worded under **Rule
+  changes**.
+- **rule change TEST-02 approved at `64a4a95`**, as worded there.
+- **rule change GLOBAL-08 approved at `64a4a95`**, as worded there, with
+  its enforcement change (six `seams` entries; one table entry in
+  `TestSeverities`).
+- **rule change EXEC-04 approved at `64a4a95`**, as worded there.
+- **rule change PROFILE-01 approved at `64a4a95`**: three rows, the
+  Specifications row in both forms (alone, and joined with
+  `driver-contract`'s clause and sentence).
+
+### 2026-11-16, during Implement: divergences the table lacks
+
+Jeff's decision, asked during stage 3 ("Record as found, one review at
+the end"). A behaviour of K's code that the table of **Divergences
+found** (D1 to D19) does not list is not a return to Design during
+Implement. The document states what the code does and lists the
+behaviour under its "Known divergences", marked "not yet in the
+design's table (found <stage>)", and Implement continues. Every such
+behaviour is listed in the stage's report with file, line and evidence.
+When the suites are done the item returns to Design once: the table is
+amended with the whole list, including the correction of D6 (the relay
+may answer 200 to a claim although the collector refuses
+`PUT /v1/ledger`), and Jeff reviews the amendment in one sitting. A
+behaviour that looks like a bug (for example against GLOBAL-10) is
+reported as an observation for a later item; nothing in K's code
+changes. Any other finding that the approved design cannot be built as
+written is still a return to Design. **What goes back to Design, and
+what does not** and stages 3 and 8 of the Implementation plan are
+reworded to match; nothing else in the design changes.
+
+### 2026-11-16, r2: the divergence table amended
+
+- **r2, 2026-11-16: back to Design once, on Jeff's decision of the same
+  day** ("Record as found, one review at the end"; the entry above).
+  Implement's tasks 0 to 35 are done: every suite is merged in S, and
+  the six pins name the specs pull request's head, `9abf66c`
+  (buildwarden/buildwarden-specs#1), at K's `9734cbd`. Stages 3 and 8
+  found 33 behaviours of K's code that **Divergences found** did not
+  list, N1 to N33, each recorded in its document and marked "not yet in
+  the design's table", and two rows that the code does not bear out:
+  D6, which named a collector that refuses the ledger stream among the
+  start's failures (N5), and D17, whose second claim met the next
+  claimant's connection and not merely a closed descriptor. No code of
+  K changed for any of them.
+- What changed in the design: in **Divergences found**, D6 and D17
+  corrected, N1 to N33 added under their own numbers, each with its
+  specification and requirements, what the code does, K's lines and a
+  class, the proposal of which item takes each extended to them, and
+  **What Jeff decides in r2**; a21 to a25 under **Questions**, and in the
+  queue file; a paragraph in **Defaults and overrides** and one in the
+  **Security note**; and in the **Implementation plan**, stage 14 and
+  task 37, the r2 delta, and the sentences that spoke of the mark. The
+  front-matter, the five rule changes' wording and the three amendments
+  to the umbrella are unchanged.
+- Count by class: (a) specified as is, 14; (b) divergence kept, 5 (N2,
+  N12, N13, N14, N32); (c) looks like a bug, 14 (N1, N3, N4, N7, N15,
+  N16, N20, N21, N24, N25, N28, N29, N30, N33). N31 is (a) as its
+  document treats it, and proposed for (b).
+- An independent check of the delta, before the sitting, found that
+  task 37 left sentences in S that describe the table as it stood
+  before r2, that N31's class was this design's reading and not its
+  document's, and that the proposal table sat under the N heading. Task
+  37 now names those sentences, N31 is (a) and proposed for (b), and
+  the proposal has its own heading; **What Jeff decides in r2** adds the
+  `repos` line and the early `f6-release-specs`.
+- `design_review` stays `required`: the table is part of the design r1
+  approved, and five assumed questions are open (FLOW-19, judged on this
+  delta). The outcome is recorded here with Jeff's answers.
+
+### 2026-11-16, r2 sitting, outcome
+
+- Jeff's answers, each as recommended: **a21 (A)**, the MAY paragraphs
+  stay in v0.1; the Rust relay reads strictly from the start, S2's item
+  makes `bootstrap.Parse` strict, and a later minor version narrows each
+  MAY to a MUST refuse (N1, N7, N8, N16). **a22 (A)**, one tunnel per
+  relay, as written (N6). **a23 (A)**, S2's item makes `exclusive` on
+  macOS and Windows an error (N28). **a24 (A)**, `--ip` and `WARDEN_IP`
+  refused where unused: Windows-only, an error elsewhere, and vz stops
+  passing `--ip` (S2's item or K1) (N29). **a25 (A)**, neither the
+  executor nor the reference claimant honours proxy variables; INIT-1
+  and CLAIM-1 stand, the fixes are S2's item and K1, and N31 moves to
+  class (b), a divergence the documents do not allow, as N2 is.
+- Items: N24, a failing collector served as 404 so that `exclusive`
+  becomes `append` (it fails open), is filed now as its own item,
+  `relay-collector-failure-fails-open`, a security fix the freeze
+  exempts. N21, an exit code the relay cannot read recorded as 0, is
+  filed now as `relay-exit-code-unreadable`, held by the freeze. The
+  other rows of class (c) are filed as observations for the items the
+  table names.
+- Outcome: approve r2 with the answers folded in, after an independent
+  check of the fold-in; the approval also covers the front-matter's
+  `repos` line added at the queue's x4 state. The specs pull request is
+  neither merged nor tagged before Review.
+- Folded in: a21 to a25 recorded as answered under **Questions**; N31's
+  row moved to (b) and the count is (a) 13, (b) 6, (c) 14; the rows and
+  the proposal table name the two items by slug; **What Jeff decides in
+  r2** became **What Jeff decided in r2**; task 37 states that with every
+  answer (A) its edits are S's whole change for r2, N31's marking in
+  `relay-claim`'s introduction and CLAIM-17's note among them; one
+  sentence in the **Security note**. The front-matter, the five rule
+  changes' wording and the three amendments to the umbrella are
+  unchanged.
+- **r2, 2026-11-16: approved at `09de3f6`** (Jeff: the divergence table with N1 to N33 and the corrections of D6 and D17, a21 to a25 answered (A), the repos line).
+
+## Consolidation
+
+Filled at Publish, 2026-11-16, on the branch at `0ac3572`, the merge of
+`origin/main` at `417fabd` into `4c2e482` (FLOW-10, FLOW-15).
+
+**The merge.** A merge commit, one conflict: the `.PHONY` line of
+`Makefile`, where `main` added `release-build` (`vz-nocgo-build`, #123) and
+this branch `pin-specs` and `conformance`. The line keeps all three; the
+targets themselves merged on their own. Git merged `CONTRIBUTING.md`,
+`structure.md`, `loop-profile.md` and `rules.yaml` without a conflict, the
+hunks being apart. Gates on `0ac3572`:
+
+- `make lint` for linux (tier1 `417fabdd0176...0ac3572199f3`: 0 MUST,
+  0 MUST-review, 0 SHOULD, 0 hints, 0 suppressed). The branch touches no
+  build-tagged file, so no other platform's lint is owed (FLOW-17).
+- `make test`: exit 0, no FAIL.
+- `make enforcement`: main's tier 1 findings kept (0) (FLOW-14).
+- `make conformance TARGETS="relay-host relay-vm collector-disk"`, locally
+  as root: every suite passed against the three targets. `relay-container`
+  and `relay-oci` need a container runtime this machine lacks; the
+  `conformance` workflow runs all five on the push (run 43932986928).
+- `tools/workflow/flow18-check.sh`: ok.
+
+**Landed on `main` since the fork.** The branch forked from `ad4ea50`,
+which is `loop-contract` (#119). Since then:
+
+- **`runtime-cli-project-path` (#120, `3cb0b2b`).** `cmd/warden/` and the
+  book's guide: the container runtime is one of finch, docker or podman. No
+  seam's code changes, and no page this branch edits.
+- **`loop-parallel` (#121, `623131a`) and its follow-up (#122,
+  `8c41eaa`).** Loop rules and `tools/workflow/`: repositories, areas,
+  relations and limits. This design's `repos` line was recorded at its
+  `x4-state` on Jeff's word, so the queue and the design agree (`wf check`:
+  "as declared at 9be9c8c"). It declares no `areas`, so it collides with
+  every item and runs alone (FLOW-05), as it has. The queue's map
+  `areas.yaml` gained `tools/conformance/` in the `specs` area at
+  `816049b` (Review F3). Its `written_seams` lists `ledger-format` only;
+  once this branch merges, the five seams it declares have a specification,
+  and adding them is a change to the map in an attended session on Jeff's
+  word (`loop-profile.md`, Areas). That is not this branch's change.
+- **`vz-nocgo-build` (#123, `c5ab2d5`).** `driver/vz/`, `Makefile`'s
+  `release-build` and the install docs. The `Makefile` line above is the
+  only overlap.
+- **`project-config-trust` (#124, `417fabd`).** One config file, and the
+  upstream CA certificates read once, on the host, before any driver work.
+  It is the one change that reaches a seam:
+  - *The claim.* `driver.Session`, the claimant this branch's `relay-claim`
+    names, now sends `upstream_ca_certs` as one entry holding the valid
+    PEM certificates the request read, re-encoded, and no longer reads the
+    files itself. `relaycfg/` and the relay are unchanged, so the wire
+    format is too: CLAIM-26 ("each entry is a PEM bundle of one or more
+    certificates") holds for what the claimant sends now as before, and
+    D5, the Go relay ignoring an entry with no certificate, is the relay's
+    side and still stands. The claimant cases of `relay-claim` passed
+    against `collector-disk` on the merge.
+  - *No seam changed by two features* (GLOBAL-08). `driver/session.go` is
+    not on tier 1's seam list, and #124 changes no file that is.
+  - *The divergences' line numbers.* Each document gives its line
+    numbers at `623131a`. None of the files they cite (`relay/`,
+    `relaycfg/`, `collector/`, `bootstrap/`, `cmd/relay/`,
+    `cmd/warden-io/`) changed between `ad4ea50` and `417fabd`, so the
+    numbers hold on `main` as merged.
+  - *The book.* `architecture.md`, which this branch rewrote to point at
+    the specifications, has no hunk from #124; its overview changes are
+    to warden's config and CA reading, which no specification here
+    describes.
+
+**Items in flight** (each trial merge with `git merge-tree` against the
+remote branch; nothing changed on them):
+
+- `driver-contract` (`c767992`): clean; it changes only its design.
+- `prebuilt-artifacts` (`49b513a`): clean; it changes only its design.
+
+**`dist/wf check` on `0ac3572`** printed no trial-merge line: the item is
+undeclared, so no in-progress item is disjoint from it and the check tries
+none (FLOW-10's report covers disjoint items only). Its lines for this
+section:
+
+```
+ok   current main merged: origin/main is an ancestor of feat/seam-specs
+ok   rule changes cleared (FLOW-14): cleared: docs/development/global.md (GLOBAL-08), docs/development/in-vm-executor.md (EXEC-04), docs/development/loop-profile.md (PROFILE-01), docs/development/testing.md (TEST-02), tools/tier1/coupling/checks_test.go (GLOBAL-08), tools/tier1/rules.yaml (GLOBAL-08)
+ok   queue records what the design declares (FLOW-03): as declared at 9be9c8c
+ok   diff inside the declared areas (FLOW-03): undeclared: the item collides with every item in its repositories, and no path is outside it (FLOW-05)
+```
+
+**Seams.** The five declared seams have their **Specification changes**
+section, written at Design; what the branch changed matches it. The six
+pins, `tools/conformance/<directory>/go.mod`, each name
+`v0.0.0-20261116171557-b808a9192ccb`, with the harness replaced at the
+same commit, and `b808a91` is the head of
+`buildwarden/buildwarden-specs#1`, which Jeff merged at 18:47Z as the
+merge commit `adfb98b` (parents `aeda265` and `b808a91`, the same tree as
+`b808a91`, so the tagged commit will hold what Review read); its branch
+is deleted, and no tag is pushed yet. The seams page names the same ref
+in every link. The pins move to the seven tags at `f6-release-specs`
+(Decision 12).
+
+**Rules proposed.** Only the five rule changes approved at `09de3f6`
+(TEST-05, TEST-02, GLOBAL-08, EXEC-04, PROFILE-01). The consolidation
+surfaced no new convention.
+
+**Sweep (FLOW-15).**
+
+- *Dead code.* `make deadcode` reports 17 (linux), 22 (darwin) and
+  27 (windows) unreachable functions, the same list, line for line, as on
+  `417fabd`. The branch adds no production Go code: its Go is
+  `specs/specs_test.go` and `tools/tier1/coupling/checks_test.go`.
+- *Duplication.* The two scripts that move and check pins,
+  `pin-specs.sh` and `check-pins.sh`, read the same six directories, and
+  `check-pins.sh` runs `make pin-specs` to prove the files are what a
+  release names rather than restating its rules. Nothing on `main`
+  duplicates them.
+- *`overview.md`.* Unchanged, as the design says: no component's flow
+  changes. Its claim and collector pseudocode, as #124 left it, agrees
+  with the specifications on what crosses each seam.
+- *Terminology.* "Specification", "suite", "pin" and "target" are used
+  as the design defines them across `seams.md`, `architecture.md`,
+  `CONTRIBUTING.md` and `structure.md`; no wording fix was needed.
+
+**Tier 2 (`reports/seam-specs/4c2e482df0e0.md`): 0 MUST, 0 MUST-review,
+3 SHOULD.** For the pull request's body; there are no MUST findings to
+acknowledge. Each SHOULD is settled outside this branch:
+
+- F1 (FLOW-08), the specs pull request's body was stale: its body now
+  names r2's approval at `09de3f6`, the table as D1 to D19 and N1 to N33,
+  and run 43917046943.
+- F2 (FLOW-09), a native-gap entry described the old pin layout: reworded
+  on the workflow branch at `2f21274`.
+- F3 (FLOW-03), `tools/conformance/` was in no area: added to the `specs`
+  area at `816049b`.
+
+**Follow-ups.** None. Consolidation found no regression on `main`, and no
+work for Implement or Design.
+
+**2026-11-16, after `f6-release-specs`.** Jeff pushed the seven `v0.1.0`
+tags on `adfb98b`; the six specifications' release runs attached their
+binaries and `SHA256SUMS` (the release workflow fixed after the tags by
+buildwarden/buildwarden-specs#2 and #3, no tag moved). `805570e` moved the
+six pins to `v0.1.0` with no `replace` line; conformance run 43965474049
+is green (relay suites on ubuntu; collector suites on ubuntu, macos and
+windows). The implementations workflow
+(run 43964684565) verified the released binaries and ran no suite, K's
+newest release (v0.6.0) having no `relay-oci.toml`.
+
+## Rollback notes
+
+None.
+
+## Archive summary
+
+Built on 2026-11-12 to 2026-11-16 as phase S1, wave 1, of the
+componentization program (FLOW-20), in two repositories: this one and
+`buildwarden/buildwarden-specs`. Design review r1 approved the design at
+`64a4a95` (2026-11-15) and r2, the divergence table, at `09de3f6`
+(2026-11-16), both by Jeff. `main` moved once after the fork, to `417fabd`
+(#120 to #124), merged in as `0ac3572` (**Consolidation**). The specs pull
+request, buildwarden/buildwarden-specs#1, merged as `adfb98b`; seven
+annotated `v0.1.0` tags sit on that commit, and the six pins here name
+them (`805570e`).
+
+- **Built, in the specs repository: six specifications.** `relay-claim`,
+  `collector-outputs`, `collector-inputs`, `relay-guest-api`,
+  `executor-initialize` and `bootstrap-config`, for the five seams this
+  item declares (the collector's in two parts, a10). Each is Markdown with
+  numbered RFC 2119 requirements that its cases cite, JSON Schema 2020-12
+  for JSON bodies and OpenAPI for HTTP interfaces, a "Known divergences"
+  list of what `main` does that the text does not ask for, and its own
+  suite and command, `bw-conformance-<name>` (Decisions 2, 3, 13).
+- **Built, in the specs repository: the harness.** A seventh module,
+  `conformance/`, in Go: a target file (TOML) describes the component
+  under test; exec, oci and external launchers start it (a6); claimant,
+  collector and build-side roles and an in-memory network drive it
+  black-box (Decision 5). Its CI fails a requirement with no case and no
+  stated reason. Each tag is released on its own: a specification's
+  release carries the six platform binaries of its command and
+  `SHA256SUMS`, the harness's none (a8, Decision 4).
+- **Built, here: the pins and the gate.** Six modules,
+  `tools/conformance/<directory>/go.mod`, each requiring one
+  specification's release and naming its command in a `tool` directive
+  (a20, Decision 7); `make pin-specs` writes them, `check-pins.sh` checks
+  them, and the `pin` job fails a module that names anything but a release
+  tag or carries a `replace` line. `make conformance` and the
+  `conformance` workflow run the suites against five targets
+  (`relay-host`, `relay-vm`, `relay-container`, `relay-oci`,
+  `collector-disk`): the relay targets on Linux, the disk collector on
+  Linux, macOS and Windows.
+- **Built, here: the book and the rules.** `concepts/seams.md` names each
+  seam, its specification and its suite; `architecture.md` points at them;
+  `specs/README.md` and `CONTRIBUTING.md` say where the contracts live.
+  Five rule changes, approved by name at `64a4a95`: TEST-05 (contract
+  tests are the specs repository's suites), TEST-02, GLOBAL-08 (six
+  `seams` entries in `tools/tier1/rules.yaml`), EXEC-04 and PROFILE-01.
+  Three amendments to [`componentization`](componentization.md), U1, U2
+  and U3: the ledger format (seam 4) moves at M6, with RELAY-01 to
+  RELAY-08 (a1, Decision 9).
+- **Decided: the specifications say what `main` does; no code of the
+  relay, the collector, the executor or a driver changes** (Decisions 1,
+  11). What `main` does that a specification would not ask for is a
+  divergence in a table: D1 to D19 from Design, N1 to N33 from Implement,
+  each classed (a) specified as is, (b) divergence kept, or (c) looks
+  like a bug, with the item that fixes it (**Divergences found**).
+- **Decided in r2 (Jeff, 2026-11-16):** a21 to a25 each (A). The MAY
+  paragraphs that allow a lenient reading stay in v0.1 and later narrow to
+  a MUST refuse; one tunnel per relay; `exclusive` on macOS and Windows
+  and `--ip` outside Windows become errors in S2's item; neither the
+  executor nor the reference claimant honours proxy variables, so N2 and
+  N31 are class (b), fixed by S2's item and K1. N24, a failing collector
+  served as 404 so that `exclusive` becomes `append`, is filed as
+  `relay-collector-failure-fails-open`, a security fix the freeze exempts;
+  N21, an unreadable exit code recorded as success, as
+  `relay-exit-code-unreadable`, held by the freeze.
+- **Rejected:** one tag for the whole specs repository (a8); one
+  `go.mod` for all six specifications (a20, option A); fetching released
+  binaries, a git submodule or a vendored copy in place of the pin
+  modules; Rust, a declarative HTTP tool or shell for the harness;
+  moving seam 4 in S1 (a1); fixing any divergence in this item.
+- **Not verified:** the relay suites on macOS and Windows hosts
+  (`tier2_gaps`: `macos-vz`, against the host-mode Go relay once the exec
+  launcher has a macOS form; `qemu-any`, against the Go relay VM image
+  once a VM launcher exists). The executor's suite has no target here;
+  S2's item builds one.
+- **For a future design touching these concepts:** a change to what
+  crosses one of the five seams is a pull request in the specs repository
+  first, a new tag of that specification, and then `make pin-specs` here
+  (LOOP-02, LOOP-07); a branch may pin an unreleased commit, a pull
+  request may not. Each document's "Known divergences" and this design's
+  table are where a fix to `main`'s behaviour at a seam starts, and
+  moving a row out of class (b) changes its document. Seam 4 and
+  RELAY-01 to RELAY-08 move at M6; seams 7 and 8 have no specification
+  yet. Adding the five seams to the queue's `written_seams` is a change to
+  `areas.yaml` on Jeff's word, not done here.

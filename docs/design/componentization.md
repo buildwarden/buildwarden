@@ -275,7 +275,7 @@ specification and a black-box conformance suite in the specs repository. Seam
 | 1 | Claim protocol (`relay-claim`) | Driver and relay | No | Written down. The connection it runs over is supplied by the driver (TCP or vsock). |
 | 2 | Collector protocol (`collector`) | Relay and collector | A package comment in `collector/collector.go` | Written down, with a suite that runs against any collector as well as any relay (a1). |
 | 3 | Relay guest API (`relay-guest-api`) | Relay and executor | No | Written down. Truststore endpoints added. |
-| 4 | Ledger format and schemas (`ledger-format`) | Relay and every reader | Yes, `specs/` | Moves to the specs repository. |
+| 4 | Ledger format and schemas (`ledger-format`) | Relay and every reader | Yes, `specs/` | Moves to the specs repository at M6, with RELAY-01 to RELAY-08. |
 | 5 | `initialize` contract (`executor-initialize`) | Driver and executor | No | Written down. |
 | 6 | Bootstrap config | Driver and executor, through the relay | Code only (`bootstrap/`) | Written down. |
 | 7 | Build-link contract | Driver and the isolation guarantee | No | New (Decision 10). One shared suite proves the guarantee on every driver. |
@@ -401,8 +401,8 @@ approved in the design of the item shown (Decision 18).
 | GLOBAL-08 | The driver contract becomes a supported seam, unstable before 1.0. The seam list gains the truststore endpoints, the build-link contract and the claim connection. | K1; S2, S3, S4 for their seams |
 | BOOT-02, BOOT-05, the `bootstrap.md` mapping | As in the Bootstrap comparison. | K2; S2; S3 |
 | RELAY-04 | Three-mode parity is restated for the Rust relay's release forms and its two network paths. | M6 |
-| RELAY-01 to RELAY-08 | Move to the relay or specs repository, restated where they describe Go internals. | M6 |
-| RELAY-05, TEST-05 | Contract tests for the seams become the specs repository's suites. | S1 |
+| RELAY-01 to RELAY-08 | Move to the relay or specs repository, restated where they describe Go internals. RELAY-05 moves with the ledger format (seam 4). | M6 |
+| TEST-05 | Contract tests for the seams become the specs repository's suites. | S1 |
 | ORCH-01 | Driver parity becomes passing `drivertest`. | K1 |
 | FLOW-*, LINT-* | Become the Loop Contract's detail, in place, and move with it to the loop repository in P1's last item. The FLOW rules that one queue changes are amended by P1's later items, each declaring its own. | P1 |
 | FLOW-20 | Retired. | A process item, when Jeff ends the program |
@@ -675,6 +675,13 @@ will make**; three sentences of the **Archive summary**. The wording each had
 is in [`loop-contract`](loop-contract.md), under **Amendments to the umbrella
 design**. FLOW-20 as quoted under **Rule changes** is the record of what was
 approved on 2026-11-12 and is not amended.
+
+**2026-11-15, by `seam-specs`**, approved in its design review. Jeff placed the
+ledger format's move to the specs repository at M6, with RELAY-01 to RELAY-08
+(its a1). Amended in place: seam 4's row of **The seams**; the RELAY-01 to
+RELAY-08 row and the RELAY-05 and TEST-05 row of **Rule changes the program
+will make**. The wording each had is in [`seam-specs`](seam-specs.md), under
+**Amendments to the umbrella design**.
 
 ## Consolidation
 

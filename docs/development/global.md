@@ -140,14 +140,26 @@ intentional.
   the collector protocol carried over that tunnel, control plane, and the DNS /
   artifact / heartbeat protocol. `cmd/collector` is the reference standalone
   consumer for third-party orchestrators.
-- Executor public interface: the `initialize` invocation contract plus its side
-  of the relay protocol.
+- Executor public interface: the `initialize` invocation contract, the
+  bootstrap config it reads (`bootstrap/`), plus its side of the relay
+  protocol.
 
 Pre-1.0 these seams may still move. Post-1.0 they are stable and change rarely and
 deliberately, with explicit interface versioning. The `driver.Driver` interface
 and other orchestrator internals are **not** covered by this obligation; the
 orchestrator may treat them as internal extension points and stay rigid about its
 expected components.
+
+The claim protocol, the collector protocol, the relay guest API, the
+`initialize` contract and the bootstrap config are written as
+specifications in the specs repository, `buildwarden/buildwarden-specs`
+(TEST-05), each released under its own version; the collector protocol
+is two specifications, its outputs and its inputs and signals. A change
+to one of those five seams changes its specification first: that
+specification is released, and the change here moves its pin,
+`tools/conformance/<specification>/go.mod`, to that release. For them
+those pin files are the contract documents the automated part checks.
+The ledger format stays in `specs/` (RELAY-05).
 
 The automated part requires a change touching a versioned seam to also change that
 seam's contract document.

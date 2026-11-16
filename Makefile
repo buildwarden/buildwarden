@@ -1,4 +1,4 @@
-.PHONY: build test release-build integration-test lint tier1 enforcement fmt tidy cover clean sign relay-vm deadcode
+.PHONY: build test release-build integration-test lint tier1 enforcement fmt tidy cover clean sign relay-vm deadcode pin-specs conformance
 
 UNAME_S := $(shell uname -s)
 UNAME_M := $(shell uname -m)
@@ -109,6 +109,29 @@ fmt:
 
 tidy:
 	go mod tidy
+
+# Moves the pins of the seam specifications, tools/conformance/<directory>/
+# (Decision 7 of docs/design/seam-specs.md). Give SPECS="<directory>@<version>
+# ...", SPECS=latest or REF=<commit>; it has no default. A pin is moved by this
+# target and never by go get, which keeps the old pin's harness version.
+pin-specs:
+	SPECS='$(SPECS)' REF='$(REF)' sh tools/conformance/pin-specs.sh
+
+# The seam specifications' suites against the relay and the disk collector
+# built from this checkout (docs/design/seam-specs.md, The harness). Each
+# suite's command is built from the release its own module
+# tools/conformance/<directory>/ pins, with that release's harness, and runs
+# against each target in tools/conformance/targets/; one table is printed per
+# target. With TARGETS unset it runs every target whose file declares this
+# host's OS and prints each one it leaves out; a named target that cannot run
+# here is an error. SUITES names the specifications whose suites run (all six
+# by default), SPECS_DIR=<checkout> builds the suites from a checkout of the
+# specs repository instead of the pins, and OCI_RUNTIME runs relay-oci with
+# that runtime. The relay targets need Linux and root or user namespaces, and
+# relay-oci root and its runtime.
+conformance:
+	@TARGETS='$(TARGETS)' SUITES='$(SUITES)' SPECS_DIR='$(SPECS_DIR)' OCI_RUNTIME='$(OCI_RUNTIME)' \
+		sh tools/conformance/conformance.sh
 
 cover:
 	go test -coverprofile=coverage.out ./...

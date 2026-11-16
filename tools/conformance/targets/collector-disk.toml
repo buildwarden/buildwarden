@@ -1,0 +1,28 @@
+# The disk collector, cmd/collector, as make conformance builds it into
+# dist/conformance/collector (collector.exe on Windows; docs/design/
+# seam-specs.md, The harness). It is its own claimant: the harness starts one
+# for each session, against the claim address of the harness's relay. A
+# program path is relative to this file's directory.
+#
+# What it can be started as: without a build script and without a context
+# (each flag is an optional group, left out to start it without one). It
+# always serves a bootstrap config, always sets a collector token, serves one
+# session and exits at its first completion, so the forms for those are not
+# declared. What it stored is read back from its output directory, in the
+# disk layout.
+role = "collector"
+os = ["linux", "darwin", "windows"]
+launcher = "exec"
+
+[exec]
+argv = ["../../../dist/conformance/collector", "--relay", "{claim}", "--dir", "{out}",
+        ["--context", "{context}"], ["--script", "{script}"], "--capture", "{capture}"]
+env = { WARDEN_CLAIM_TOKEN = "{token}" }
+# Nothing of the harness's environment reaches it but these: the search path,
+# Windows' system root, and where each system keeps temporary files.
+pass_env = ["PATH", "SYSTEMROOT", "TMPDIR", "TEMP", "TMP"]
+
+[collector]
+attachment = "claims"
+forms = { no_script = true, no_context = true }
+read_back = { dir = "{out}" }

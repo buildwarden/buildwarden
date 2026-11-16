@@ -1,0 +1,20 @@
+# The Go relay in host mode, as make conformance builds it into
+# dist/conformance/relay (docs/design/seam-specs.md, The harness). The harness
+# starts it in its Linux sandbox and hands it the frames link as its file
+# descriptor 3, which is the relay's -fd default. A program path is relative
+# to this file's directory.
+role = "relay"
+os = ["linux"]
+launcher = "exec"
+
+[exec]
+argv = ["../../../dist/conformance/relay", "-mode", "host", "-claim-addr", "{claim}"]
+env = { WARDEN_CLAIM_TOKEN = "{token}" }
+
+[relay]
+mode = "host"
+link = "frames"
+# The relay's own -subnet default. It is outside the ranges the sandbox
+# addresses itself from (the documentation ranges, 100.64.0.0/24 and
+# 10.0.2.0/24).
+build_link = { prefix = "10.100.0.0/30", relay = "10.100.0.1", guest = "10.100.0.2" }

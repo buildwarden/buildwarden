@@ -57,7 +57,14 @@ Where each tier runs today:
   the `driver/` root, a shared package (`relay/`, `ledger/`, `collector/`),
   `cmd/`, `test-integration.sh`, a `Dockerfile` or `go.mod`; weekly on
   `main`; and on demand for a branch that has the workflow
-  (`gh workflow run integration.yml --ref <branch>`).
+  (`gh workflow run integration.yml --ref <branch>`). The `conformance`
+  workflow (TEST-05) is tier 1 too: it runs the seams' suites on hosted
+  runners, on PRs and on pushes to a branch other than `main` that change
+  a package the relay or the disk collector is built from, a file their
+  builds read, the pins of the specification releases and the target
+  files (`tools/conformance/`) or the workflow itself; weekly on `main`;
+  and on demand.
+  `conformance.yml`'s `paths` list is that set's implementation.
 - Tier 2: native sessions (FLOW-09) on the machines in the `workflow`
   branch's `hosts.yaml`.
 
@@ -97,18 +104,43 @@ golden fixtures and seeded inputs so a failure is real signal.
 
 ---
 
-### TEST-05 — Contract tests for the seams
+### TEST-05 — Conformance suites for the seams
 
 **Severity:** MUST
 **Check:** automated + agent-judgment
 
-The relay and executor public contracts (the GLOBAL-08 versioned seams) carry
-conformance / round-trip tests, so a third-party substitute has something to verify
-against:
+The claim protocol, the collector protocol and the relay guest API (three
+of the GLOBAL-08 versioned seams) are specified in the specs repository,
+`buildwarden/buildwarden-specs`, and checked there by black-box
+conformance suites, so a substitute written in any language has something
+to verify against. Each specification there is released under its own
+version, and a release carries the suite that checks it. This repository
+pins a tagged release of each specification in
+`tools/conformance/<specification>/go.mod` and runs those releases'
+suites against the components it holds, in the `conformance` workflow
+(TEST-02):
 
-- RELAY-02 byte-exact round-trip (sent equals recorded),
-- RELAY-05 signature round-trip plus reader backward-compatibility,
-- EXEC-04 protocol conformance.
+- against the Go relay in each of its modes (RELAY-04) and as its OCI
+  image: the suites of the claim protocol, of both specifications of the
+  collector protocol (its outputs, and its inputs and signals) as the
+  relay is their client, of the relay guest API, with the RELAY-02
+  byte-exact round-trip (sent equals recorded), and of the bootstrap
+  config as the relay carries it;
+- against the disk collector (`cmd/collector`): the suites of both
+  specifications of the collector protocol, of the claim protocol as
+  its claimant, and of the bootstrap config as it is produced.
+
+The contract tests of a seam specified there are added to the suite of
+its specification in the specs repository, not to this repository. Two
+contracts stay as tests
+here until a suite covers them: RELAY-05's signature round-trip and reader
+backward-compatibility (`relay/`, `ledger/`), and EXEC-04's protocol
+conformance (`cmd/warden-io/`, `bootstrap/`), whose specifications
+(`executor-initialize`, and `bootstrap-config` as the executor reads it)
+have no cases yet.
+
+The automated part is the `conformance` workflow and `make test`; the
+agent part judges whether a seam change added its cases to the suite.
 
 ---
 

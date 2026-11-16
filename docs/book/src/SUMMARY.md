@@ -33,6 +33,7 @@
 
 # Specifications
 
+- [Component seams](./concepts/seams.md)
 - [Specifications](./specs/README.md)
   - [Ledger Wire Format v1](./specs/build-ledger/v1.md)
   - [http-open v1](./specs/metadata-http-open/v1.md)

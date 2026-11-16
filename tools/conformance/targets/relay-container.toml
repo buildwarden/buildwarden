@@ -1,0 +1,21 @@
+# The Go relay in container mode, as make conformance builds it into
+# dist/conformance/relay (docs/design/seam-specs.md, The harness). A program
+# path is relative to this file's directory.
+#
+# The order of its interfaces: a container-mode relay takes the first
+# non-loopback IPv4 address it finds as its own (relay.DetectSelfIP). The
+# sandbox creates the build link before the upstream link, and the build
+# link's name sorts first, so the relay takes its build address, which the
+# launcher assigns.
+role = "relay"
+os = ["linux"]
+launcher = "exec"
+
+[exec]
+argv = ["../../../dist/conformance/relay", "-mode", "container", "-claim-addr", "{claim}"]
+env = { WARDEN_CLAIM_TOKEN = "{token}" }
+
+[relay]
+mode = "container"
+link = "ip"
+address_by_launcher = true
