@@ -1,4 +1,4 @@
-.PHONY: build test integration-test lint tier1 enforcement fmt tidy cover clean sign relay-vm deadcode pin-specs
+.PHONY: build test integration-test lint tier1 enforcement fmt tidy cover clean sign relay-vm deadcode pin-specs conformance
 
 UNAME_S := $(shell uname -s)
 UNAME_M := $(shell uname -m)
@@ -105,6 +105,19 @@ tidy:
 # target and never by go get, which keeps the old pin's harness version.
 pin-specs:
 	SPECS='$(SPECS)' REF='$(REF)' sh tools/conformance/pin-specs.sh
+
+# The seam specifications' suites, each built from the release its own module
+# tools/conformance/<directory>/ pins, with that release's harness. GOWORK=off
+# keeps a go.work above the checkout from giving the six one build list. In
+# this first form it builds each pinned command with go tool and prints its
+# version; it runs no suite yet.
+CONFORMANCE_SPECS := bootstrap-config collector-inputs collector-outputs \
+	executor-initialize relay-claim relay-guest-api
+conformance:
+	@set -e; for d in $(CONFORMANCE_SPECS); do \
+		echo "== $$d"; \
+		(cd tools/conformance/$$d && GOWORK=off go tool bw-conformance-$$d version); \
+	done
 
 cover:
 	go test -coverprofile=coverage.out ./...
