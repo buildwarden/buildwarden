@@ -76,6 +76,11 @@ jobs:
           cache: false
       - run: sh tools/conformance/check-pins.sh
 
+  # The four relay targets run in the harness's Linux sandbox, which creates
+  # network and mount namespaces and virtual links, so make conformance runs
+  # as root; relay-oci's image is built and run by docker, which the runner
+  # has (docs/design/seam-specs.md, Security note). The job names its targets,
+  # so a target the default would leave out can never make it green.
   relay:
     runs-on: ubuntu-latest
     timeout-minutes: 30
@@ -87,7 +92,14 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - run: make conformance
+      - run: docker version
+      - run: sudo env "PATH=$PATH" make conformance TARGETS="relay-host relay-vm relay-container relay-oci"
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-relay
+          path: dist/conformance/reports/
+          if-no-files-found: ignore
 
   # The disk collector's capture links differ on Windows, so its suites run
   # on all three operating systems.
@@ -109,4 +121,10 @@ jobs:
         with:
           go-version-file: go.mod
           cache: false
-      - run: make conformance
+      - run: make conformance TARGETS=collector-disk
+      - if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: conformance-collector-${{ matrix.os }}
+          path: dist/conformance/reports/
+          if-no-files-found: ignore

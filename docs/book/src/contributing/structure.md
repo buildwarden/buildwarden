@@ -125,6 +125,8 @@ buildwarden/
 ├── tools/
 │   ├── conformance/          # Pins of the seam specifications (buildwarden/buildwarden-specs)
 │   │   ├── <directory>/          # One Go module per specification: go.mod pins it, a tool directive names its command
+│   │   ├── targets/              # Target files: the relay in each mode and as an image, the disk collector
+│   │   ├── conformance.sh        # make conformance: every pinned suite against each target
 │   │   ├── pin-specs.sh          # make pin-specs: moves the pins and the seams page's refs together
 │   │   └── check-pins.sh         # The conformance workflow's pin job: release tags only, no replace line
 │   ├── relay-vm/              # Relay VM assets (Alpine + kernel)
@@ -191,7 +193,7 @@ buildwarden/
 - **`ledger/`** — Shared wire format library. Binary ledger types, reader, verifier. Used by `warden inspect` and the relay's test suite.
 - **`specs/`** — The ledger format's documents, not code: one wire-format spec per ledger major version and each schema's document beside its machine schema (RELAY-05). `docs/book/src/specs/` mirrors it with one-line includes. Its only Go file is a test.
 - **`specs/specs_test.go`** — Besides the ledger documents, holds the seams page to the pins: a tier-0 test fails when a row of `docs/book/src/concepts/seams.md` links a specification at a ref other than the version its module in `tools/conformance/` pins.
-- **`tools/conformance/`** — Not part of any binary. Six Go modules, one per seam specification kept in [buildwarden/buildwarden-specs](https://github.com/buildwarden/buildwarden-specs), each pinning one version of that specification and naming its conformance command; the root module requires none of them. The pins are moved with `make pin-specs` and never with `go get`, and the `conformance` workflow builds each pinned command from its own module. See [Component seams](../concepts/seams.md).
+- **`tools/conformance/`** — Not part of any binary. Six Go modules, one per seam specification kept in [buildwarden/buildwarden-specs](https://github.com/buildwarden/buildwarden-specs), each pinning one version of that specification and naming its conformance command; the root module requires none of them. The pins are moved with `make pin-specs` and never with `go get`, and `make conformance` builds each pinned command from its own module and runs it against each target file in `tools/conformance/targets/`, which the `conformance` workflow does on every change to the relay, the disk collector or a pin. See [Component seams](../concepts/seams.md).
 
 ## Key Patterns
 

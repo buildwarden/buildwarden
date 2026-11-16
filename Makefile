@@ -106,18 +106,21 @@ tidy:
 pin-specs:
 	SPECS='$(SPECS)' REF='$(REF)' sh tools/conformance/pin-specs.sh
 
-# The seam specifications' suites, each built from the release its own module
-# tools/conformance/<directory>/ pins, with that release's harness. GOWORK=off
-# keeps a go.work above the checkout from giving the six one build list. In
-# this first form it builds each pinned command with go tool and prints its
-# version; it runs no suite yet.
-CONFORMANCE_SPECS := bootstrap-config collector-inputs collector-outputs \
-	executor-initialize relay-claim relay-guest-api
+# The seam specifications' suites against the relay and the disk collector
+# built from this checkout (docs/design/seam-specs.md, The harness). Each
+# suite's command is built from the release its own module
+# tools/conformance/<directory>/ pins, with that release's harness, and runs
+# against each target in tools/conformance/targets/; one table is printed per
+# target. With TARGETS unset it runs every target whose file declares this
+# host's OS and prints each one it leaves out; a named target that cannot run
+# here is an error. SUITES names the specifications whose suites run (all six
+# by default), SPECS_DIR=<checkout> builds the suites from a checkout of the
+# specs repository instead of the pins, and OCI_RUNTIME runs relay-oci with
+# that runtime. The relay targets need Linux and root or user namespaces, and
+# relay-oci root and its runtime.
 conformance:
-	@set -e; for d in $(CONFORMANCE_SPECS); do \
-		echo "== $$d"; \
-		(cd tools/conformance/$$d && GOWORK=off go tool bw-conformance-$$d version); \
-	done
+	@TARGETS='$(TARGETS)' SUITES='$(SUITES)' SPECS_DIR='$(SPECS_DIR)' OCI_RUNTIME='$(OCI_RUNTIME)' \
+		sh tools/conformance/conformance.sh
 
 cover:
 	go test -coverprofile=coverage.out ./...

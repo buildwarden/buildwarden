@@ -139,18 +139,37 @@ This repository pins one version of each in a Go module of its own,
 specification at it.
 
 ```sh
-make conformance                                   # Build each pinned suite's command from its own module
+make conformance                                   # Every pinned suite against every target this OS can run
+make conformance TARGETS="relay-host collector-disk"  # Exactly those targets
+make conformance SUITES="relay-claim"              # Exactly those specifications' suites
+make conformance SPECS_DIR=../buildwarden-specs    # Suites from a specs checkout, not the pins
+OCI_RUNTIME=podman make conformance                # relay-oci with podman in place of docker
 make pin-specs SPECS="relay-claim@v0.2.0"          # Move named pins to those releases
 make pin-specs SPECS=latest                        # Move all six pins to their newest releases
 make pin-specs REF=<commit>                        # Pin all six at one commit, on a branch only
 ```
 
-- **`make conformance`** builds each pinned specification's command,
-  `bw-conformance-<directory>`, with `go tool` in its own module and with
-  `GOWORK=off`, so each runs with the harness its own release names. In its
-  current form it prints each command's version and runs no suite yet. The
-  `conformance` workflow runs it on pull requests and on pushes to branches
-  other than `main` that change a path on its list, weekly and on demand.
+- **`make conformance`** runs the seam specifications' suites against the
+  relay and the disk collector built from this checkout. It builds each pinned
+  specification's command, `bw-conformance-<directory>`, from its own module
+  with `GOWORK=off`, so each runs with the harness its own release names, and
+  builds what the targets run into `dist/conformance/`: `relay`, `collector`
+  and, for `relay-oci`, the image `buildwarden-relay:conformance` from
+  `Dockerfile.relay`. A target is a file in `tools/conformance/targets/`
+  (`relay-host`, `relay-vm`, `relay-container`, `relay-oci`, `collector-disk`)
+  that declares the operating systems it runs on. With `TARGETS` unset it runs
+  every target that declares this host's, and prints a line for each one it
+  leaves out; a target named in `TARGETS` that cannot run here is an error.
+  The relay targets run in the harness's sandbox, which needs Linux and root
+  or unprivileged user namespaces; `relay-oci` needs root and the runtime its
+  file names, with the image built from this checkout. It prints one table per
+  target, a row for each specification with its version, its harness's and
+  its counts, and keeps each report in `dist/conformance/reports/`. A failed
+  case is not retried. `SPECS_DIR` runs the suites from a local checkout of
+  the specifications instead, and says so. The `conformance` workflow runs it
+  on pull requests and on pushes to branches other than `main` that change a
+  path on its list, weekly and on demand: the relay targets as root on Linux,
+  `collector-disk` on Linux, macOS and Windows.
 - **`make pin-specs`** is the only way a pin moves. It takes `SPECS` or `REF`,
   never both and never neither. It writes each module it moves from nothing,
   builds every command in a scratch directory first, and only then moves the
