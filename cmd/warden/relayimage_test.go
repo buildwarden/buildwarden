@@ -53,8 +53,9 @@ func TestRelayImageShape(t *testing.T) {
 			t.Run(cmd+" refuses "+name+" from the file", func(t *testing.T) {
 				inConfigFiles(t, "[runtime]\nrelay_image = "+tomlString(v)+"\n")
 				captureLog(t)
-				wantFixable(t, run(t), "[runtime] relay_image in "+configPath(t)+
-					" is "+strconv.Quote(v)+": not an image reference", relayImageFix)
+				msg := "[runtime] relay_image in " + configPath(t) + " is " +
+					strconv.Quote(v) + ": not an image reference"
+				wantFixable(t, run(t), msg, relayImageFix)
 			})
 			t.Run(cmd+" refuses "+name+" from WARDEN_IMAGE", func(t *testing.T) {
 				inConfigFiles(t, "[runtime]\nrelay_image = \"dev\"\n")
