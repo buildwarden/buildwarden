@@ -202,13 +202,18 @@ func (g stateGit) commitOnce(r CommitRequest) (lines []string, made bool, err er
 	return nil, err == nil, err
 }
 
-// generate writes the files wf builds from the state and returns their paths.
+// generate writes the files wf builds from the state, QUEUE.md and the
+// digest's day pages, and returns their paths.
 func generate(dir string) ([]string, error) {
 	s, err := Load(dir)
 	if err != nil {
 		return nil, err
 	}
-	return []string{SummaryFile}, s.WriteSummary()
+	pages, err := s.Digest()
+	if err != nil {
+		return nil, err
+	}
+	return append([]string{SummaryFile}, pages...), s.WriteSummary()
 }
 
 // push pushes the checkout's head to the workflow branch. rejected reports a

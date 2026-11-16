@@ -229,12 +229,154 @@ type State struct {
 }
 
 // Main is main.yaml: the head of main a session saw and the result of its
-// check runs (FLOW-09, FLOW-10).
+// check runs, whether GitHub requires an up-to-date branch on main, and the
+// last comparison of the area map with main (FLOW-08, FLOW-09, FLOW-10). wf
+// reads no CI itself: wf main records what the session read.
 type Main struct {
-	SHA string `yaml:"sha"`
-	CI  string `yaml:"ci"` // green | red | pending
+	SHA string `yaml:"sha,omitempty"`
+	CI  string `yaml:"ci,omitempty"` // green | red | pending
+	// Run is a failing run's URL, kept while main is red.
+	Run string `yaml:"run,omitempty"`
+	// RedSince is the first red commit after the last green one, kept while
+	// main is not green.
+	RedSince string `yaml:"red_since,omitempty"`
+	// Gates marks a red that a session's own gates found on SHA: a later
+	// green reading of the check runs for the same commit does not clear it.
+	Gates bool `yaml:"gates,omitempty"`
 	// Followup is the item filed to fix a red main.
 	Followup string `yaml:"followup,omitempty"`
+	// UpToDate is whether GitHub requires an up-to-date branch on main:
+	// required or not-required. Empty, no session has read it.
+	UpToDate string `yaml:"up_to_date,omitempty"`
+	// Areas is the last comparison of the area map with origin/main.
+	Areas *AreasResult `yaml:"areas,omitempty"`
+}
+
+// AreasResult is what wf areas -check printed for a commit of main.
+type AreasResult struct {
+	SHA         string   `yaml:"sha"`
+	Differences int      `yaml:"differences"`
+	Lines       []string `yaml:"lines"`
+}
+
+// MainReading is what wf main is asked to record. A field left empty
+// changes nothing.
+type MainReading struct {
+	SHA, CI, Run, Followup, UpToDate string
+	Gates                            bool
+}
+
+var shaRe = regexp.MustCompile(`^[0-9a-f]{7,40}$`)
+
+// RecordMain records a reading of main's CI, the follow-up filed for a red
+// main, and whether GitHub requires an up-to-date branch on main, in
+// main.yaml (FLOW-09, FLOW-10). A red keeps red_since while main stays red,
+// and a green clears it with the run and the follow-up. A red the gates found
+// (-gates) stays when a later reading for the same commit is green, and goes
+// with another head. The follow-up is recorded once while main is red.
+func (s *State) RecordMain(r MainReading) error {
+	m := Main{}
+	if s.Main != nil {
+		m = *s.Main
+	}
+	if r.CI != "" || r.SHA != "" {
+		if !shaRe.MatchString(r.SHA) {
+			return fmt.Errorf("main: -sha %q is not a commit id", r.SHA)
+		}
+		if !slices.Contains([]string{"green", "red", "pending"}, r.CI) {
+			return fmt.Errorf("main: -ci is green, red or pending, not %q", r.CI)
+		}
+		if r.Gates && r.CI != "red" {
+			return errors.New("main: -gates marks a red the gates found; give -ci red")
+		}
+		m.reading(r)
+	}
+	if err := s.followup(&m, r.Followup); err != nil {
+		return err
+	}
+	if r.UpToDate != "" {
+		if r.UpToDate != "required" && r.UpToDate != "not-required" {
+			return fmt.Errorf("main: -up-to-date is required or not-required, not %q",
+				r.UpToDate)
+		}
+		m.UpToDate = r.UpToDate
+	}
+	s.Main = &m
+	return s.SaveMain()
+}
+
+// followup records the item filed to fix a red main, once.
+func (s *State) followup(m *Main, item string) error {
+	if item == "" {
+		return nil
+	}
+	if m.CI != "red" {
+		return fmt.Errorf("main: -followup %s: main is not recorded red", item)
+	}
+	if m.Followup != "" && m.Followup != item {
+		return fmt.Errorf("main: the follow-up %s is already recorded for main red "+
+			"since %s", m.Followup, m.RedSince)
+	}
+	if _, err := s.Find(item); err != nil {
+		return fmt.Errorf("main: -followup: %w", err)
+	}
+	m.Followup = item
+	return nil
+}
+
+// reading applies a reading of main's check runs.
+func (m *Main) reading(r MainReading) {
+	if m.Gates && m.SHA == r.SHA && r.CI != "red" {
+		// The gates fail on this commit whatever CI says.
+		return
+	}
+	m.SHA, m.CI, m.Gates = r.SHA, r.CI, r.Gates
+	switch r.CI {
+	case "green":
+		m.RedSince, m.Run, m.Followup = "", "", ""
+	case "red":
+		if m.RedSince == "" {
+			m.RedSince = r.SHA
+		}
+		m.Run = r.Run
+	default:
+		m.Run = ""
+	}
+}
+
+// SaveMain writes main.yaml.
+func (s *State) SaveMain() error {
+	var buf bytes.Buffer
+	enc := yaml.NewEncoder(&buf)
+	enc.SetIndent(2)
+	if err := enc.Encode(s.Main); err != nil {
+		return err
+	}
+	if err := os.WriteFile(filepath.Join(s.Dir, "main.yaml"), buf.Bytes(), 0o644); err != nil {
+		return err
+	}
+	return s.WriteSummary()
+}
+
+// validateMain checks main.yaml's values.
+func (s *State) validateMain() []string {
+	m := s.Main
+	if m == nil {
+		return nil
+	}
+	var out []string
+	if m.CI != "" && !slices.Contains([]string{"green", "red", "pending"}, m.CI) {
+		out = append(out, fmt.Sprintf("main.yaml: ci %q is not green, red or pending",
+			m.CI))
+	}
+	if m.SHA != "" && !shaRe.MatchString(m.SHA) {
+		out = append(out, fmt.Sprintf("main.yaml: sha %q is not a commit id", m.SHA))
+	}
+	if m.UpToDate != "" && m.UpToDate != "required" && m.UpToDate != "not-required" {
+		out = append(out, fmt.Sprintf("main.yaml: up_to_date %q is not required or "+
+			"not-required", m.UpToDate))
+	}
+	return out
 }
 
 // Load reads config.yaml and queue/*.yaml under dir.
@@ -530,7 +672,7 @@ func (s *State) Validate() []error {
 		errs = append(errs, s.Problems(f)...)
 	}
 	errs = append(errs, s.validateLimits()...)
-	for _, e := range append(s.validateNative(), s.validateAreas()...) {
+	for _, e := range slices.Concat(s.validateNative(), s.validateAreas(), s.validateMain()) {
 		errs = append(errs, errors.New(e))
 	}
 	return errs

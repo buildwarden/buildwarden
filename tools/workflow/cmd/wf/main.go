@@ -23,6 +23,9 @@
 //	wf relations -state DIR [-feature F]
 //	wf stale    -state DIR -repo DIR -worker W
 //	wf commit   -state DIR -worker W -m MESSAGE [-claimed FEATURE/STEP [-new-run]] [PATH...]
+//	wf main     -state DIR [-sha SHA -ci green|red|pending [-gates] [-run URL]]
+//	            [-followup ITEM] [-up-to-date required|not-required]
+//	wf digest   -state DIR
 //	wf gate     -state DIR -repo DIR -machine M -stamp FILE [-sweep-days N] [-record]
 //	wf budget   -state DIR [-native]
 //	wf drops    -repo DIR -base REV -main FILE -branch FILE [-head REV]
@@ -106,8 +109,9 @@
 // with a /<session> suffix that tells its leases apart. Commands that change
 // state write the queue file; the caller pushes it with wf commit.
 //
-// commit regenerates QUEUE.md, commits it with the PATHs given and nothing
-// else, and pushes the workflow branch. With nothing to commit it exits 0. On
+// commit regenerates QUEUE.md and the digest pages (digest), commits them
+// with the PATHs given and nothing else, and pushes the workflow branch. With
+// nothing to commit it exits 0. On
 // a rejected push it fetches and, when the checkout holds no uncommitted
 // change that a reset would discard, resets to origin/workflow: a change is
 // replayed with cherry-pick and checked with Validate; a claim (-claimed) is
@@ -119,6 +123,20 @@
 // by hand (a conflict, a new Validate error, another session's uncommitted
 // files, three rejections). A change to areas.yaml is committed for a human
 // worker only (FLOW-05). It never force-pushes and pushes only workflow.
+//
+// main records in main.yaml what the session read about main: the head it
+// saw and its check runs' result (green only when every run succeeded), a
+// failing run's URL, the item filed to fix a red main, and whether GitHub
+// requires an up-to-date branch on main (FLOW-08, FLOW-09). It reads no CI
+// itself. A red keeps red_since, its first red commit, while main stays red;
+// -gates marks a red the session's own gates found on the commit, which a
+// green reading of the same commit does not clear. The follow-up is recorded
+// once, while main is red. While main is red no refresh is offered but the
+// follow-up's.
+//
+// digest builds digest/<date>.md from the run files in digest/<date>/, in
+// file-name order; a page written by hand is first moved into the directory.
+// commit runs it.
 //
 // gate is the scheduled native session's go/no-go (FLOW-09): it exits 0 when
 // machine M (hosts.yaml) has a ready host step, or open backlog gaps and main
@@ -154,7 +172,7 @@ import (
 
 const usage = "usage: wf " +
 	"validate|status|next|claim|release|check|done|answer|back|new|urgent|declare|" +
-	"relate|relations|stale|commit|gate|budget|migrate|drops [flags]"
+	"relate|relations|stale|commit|main|digest|gate|budget|migrate|drops [flags]"
 
 // errIdle is gate's "nothing to do", exit status 3.
 var errIdle = errors.New("idle")
@@ -192,6 +210,9 @@ func main() {
 }
 
 func run(cmd string, args []string, now time.Time) error {
+	if cmd == "main" {
+		return mainCmd(args)
+	}
 	o := opts{now: now}
 	fs := flag.NewFlagSet(cmd, flag.ExitOnError)
 	fs.StringVar(&o.state, "state", ".", "checkout of the workflow branch")
@@ -262,6 +283,7 @@ func run(cmd string, args []string, now time.Time) error {
 		"answer": answer, "back": back, "new": newFeature, "urgent": urgent,
 		"gate": gate, "budget": budget, "migrate": migrate, "stale": stale,
 		"declare": declareItem, "relate": relate, "relations": relations,
+		"digest": digest,
 	}
 	for _, c := range []string{"claim", "release", "done"} {
 		cmds[c] = func(s *queue.State, o opts) error { return stepCmd(c, s, o) }
@@ -282,6 +304,40 @@ func commitCmd(o opts, paths []string) error {
 	})
 	for _, l := range lines {
 		fmt.Println(l)
+	}
+	return err
+}
+
+// mainCmd is wf main: it records what the session read about main in
+// main.yaml. Its flags are its own, since its -run is a URL.
+func mainCmd(args []string) error {
+	var r queue.MainReading
+	var state string
+	fs := flag.NewFlagSet("main", flag.ExitOnError)
+	fs.StringVar(&state, "state", ".", "checkout of the workflow branch")
+	fs.StringVar(&r.SHA, "sha", "", "the head of main the session saw")
+	fs.StringVar(&r.CI, "ci", "", "the result of its check runs: green, red or pending")
+	fs.BoolVar(&r.Gates, "gates", false, "the red is the session's own gates' on the commit")
+	fs.StringVar(&r.Run, "run", "", "a failing run's URL")
+	fs.StringVar(&r.Followup, "followup", "", "the item filed to fix a red main")
+	fs.StringVar(&r.UpToDate, "up-to-date", "",
+		"whether GitHub requires an up-to-date branch on main: required or not-required")
+	_ = fs.Parse(args)
+	if r == (queue.MainReading{}) {
+		return errors.New("main needs -sha and -ci, -followup or -up-to-date")
+	}
+	s, err := queue.Load(state)
+	if err != nil {
+		return err
+	}
+	return s.RecordMain(r)
+}
+
+// digest is wf digest: it builds each day's page from the day's run files.
+func digest(s *queue.State, _ opts) error {
+	paths, err := s.Digest()
+	for _, p := range paths {
+		fmt.Println("wrote", p)
 	}
 	return err
 }
@@ -318,6 +374,18 @@ func status(s *queue.State, o opts) error {
 		}
 		if f.Follows != "" {
 			fmt.Printf("\t  follows: %s\n", f.Follows)
+		}
+		if len(f.Repos) > 0 {
+			fmt.Printf("\t  repos: %s\n", strings.Join(f.Repos, ", "))
+		}
+		if f.Areas != nil {
+			fmt.Printf("\t  areas: %s\n", holdList(*f.Areas))
+		}
+		if f.Declared != "" {
+			fmt.Printf("\t  declared: %s\n", f.Declared)
+		}
+		if f.Adopts != nil {
+			fmt.Printf("\t  adopts: %s %s\n", f.Adopts.Consumable, f.Adopts.Version)
 		}
 		if f.Urgent != "" {
 			fmt.Printf("\t  urgent: %s\n", f.Urgent)
