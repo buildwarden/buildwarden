@@ -1,0 +1,49 @@
+feature: auto-tidy-pull-request
+title: auto-tidy.yml opens a pull request with the go mod tidy instead of pushing to main
+priority: 76
+status: queued
+round: feature
+phase: 0
+design: docs/design/auto-tidy-pull-request.md
+branch: feat/auto-tidy-pull-request
+alters_relationships: null
+source: 'Jeff''s decision, 2026-11-16, at loop-parallel x4-state (docs/design/loop-parallel.md, After the merge): .github/workflows/auto-tidy.yml pushes go mod tidy straight to main weekly, which main''s ruleset 27339039 (pull request required, ci-ok required, up to date required, no bypass) refuses; its last six scheduled runs failed before pushing. It is changed to open a pull request with the tidy instead. Kind feature, small. Not a program item; repos, areas and seams not declared (intake flags held until x4-state); its design declares them.'
+steps:
+  - id: f0-answer-q1
+    phase: 0
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f0-branch-setup
+    phase: 0
+    affinity: cloud
+    status: pending
+    needs:
+      - f0-answer-q1
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 8
+  spent:
+    runs: 0
+    steps: 0
+questions:
+  - id: q1
+    kind: blocking
+    status: open
+    question: 'FLOW-20 freeze: not a program item, and not exempt (not a fix for a regression on main under FLOW-09, nor a security fix; FLOW-20 names no CI or infrastructure exemption). Resume when Jeff says, or when the freeze ends.'
+    options:
+      - resume it
+    recommended: resume it
+history:
+  - at: 2026-11-16T02:08:40Z
+    by: cloud/20261112T230554Z
+    event: queued at priority 76 (intake)
+  - at: 2026-11-16T02:08:40Z
+    by: cloud/20261112T230554Z
+    event: 'on hold (q1): FLOW-20 freeze: not a program item, and not exempt (not a fix for a regression on main under FLOW-09, nor a security fix; FLOW-20 names no CI or infrastructure exemption). Resume when Jeff says, or when the freeze ends.'
