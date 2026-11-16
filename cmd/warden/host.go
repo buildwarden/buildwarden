@@ -122,6 +122,11 @@ or agent gate.`,
 				blocked = true
 			}
 		default:
+			// The check a build makes, so that doctor does not pass a relay
+			// image the build refuses.
+			if err = checkRelayImage(cfg.Runtime); err != nil {
+				return err
+			}
 			var rt string
 			if rt, err = resolveRuntime(cfg); err == nil {
 				fmt.Fprintf(out, "container runtime: %s\n", rt)

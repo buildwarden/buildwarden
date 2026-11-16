@@ -292,6 +292,11 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 	if err := validateGuestOS(flagGuestOS, d); err != nil {
 		return nil, err
 	}
+	if !isVMDriver(d) {
+		if err := checkRelayImage(cfg.Runtime); err != nil {
+			return nil, err
+		}
+	}
 
 	capture, err := resolveCapture(cfg)
 	if err != nil {

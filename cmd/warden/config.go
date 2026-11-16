@@ -11,6 +11,7 @@ import (
 	"path/filepath"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/BurntSushi/toml"
 
@@ -78,7 +79,13 @@ type RuntimeConfig struct {
 	CLISource  string `toml:"-"`
 	Driver     string `toml:"driver"`
 	RelayImage string `toml:"relay_image"`
+	// RelayImageSource says where RelayImage was set: relayImageFromEnv, or
+	// the path of the config file. It words checkRelayImage's error.
+	RelayImageSource string `toml:"-"`
 }
+
+// What RuntimeConfig.RelayImageSource holds for the variable.
+const relayImageFromEnv = "WARDEN_IMAGE"
 
 // What RuntimeConfig.CLISource holds for a runtime named outside a config
 // file.
@@ -251,6 +258,7 @@ func LoadConfig() (*Config, error) {
 		}
 		cfg.File, cfg.FileSource = path, source
 		cfg.Runtime.CLISource = path
+		cfg.Runtime.RelayImageSource = path
 	}
 
 	// Environment variable overrides
@@ -260,8 +268,8 @@ func LoadConfig() (*Config, error) {
 	if d := os.Getenv("WARDEN_DRIVER"); d != "" {
 		cfg.Runtime.Driver = d
 	}
-	if img := os.Getenv("WARDEN_IMAGE"); img != "" {
-		cfg.Runtime.RelayImage = img
+	if img := os.Getenv(relayImageFromEnv); img != "" {
+		cfg.Runtime.RelayImage, cfg.Runtime.RelayImageSource = img, relayImageFromEnv
 	}
 	if os.Getenv("NO_COLOR") != "" {
 		cfg.Output.Color = "never"
@@ -634,4 +642,31 @@ func validateFlagsForDriver(d string) error {
 		return driver.Fixable(fix, "--network is only used by --driver hyperv")
 	}
 	return nil
+}
+
+// checkRelayImage refuses a relay image that is not shaped like an image
+// reference. The value goes to `<runtime> pull` and to the container's
+// creation as one argument, so one that starts with "-" would be read as an
+// option, and a space or a control character has no place in a reference.
+// Empty and "dev" are the release's image and a development build; nothing
+// more of a reference is checked here, which the runtime's own error does.
+// Only the container driver uses the image, so only its runs call this.
+func checkRelayImage(rt RuntimeConfig) error {
+	img := rt.RelayImage
+	if img == "" || img == "dev" {
+		return nil
+	}
+	bad := strings.HasPrefix(img, "-") || strings.IndexFunc(img, func(r rune) bool {
+		return unicode.IsSpace(r) || unicode.IsControl(r)
+	}) >= 0
+	if !bad {
+		return nil
+	}
+	where := relayImageFromEnv
+	if rt.RelayImageSource != relayImageFromEnv {
+		where = "[runtime] relay_image in " + rt.RelayImageSource
+	}
+	return driver.Fixable("set it to an image reference such as "+
+		"ghcr.io/buildwarden/relay:v0.2.0 or to \"dev\", or remove it",
+		"%s is %q: not an image reference", where, img)
 }
