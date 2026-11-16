@@ -2,7 +2,7 @@ feature: loop-parallel
 title: 'Items that do not collide run side by side: an item''s repositories and areas, the relations between items and the three limits, the claim guard, the refresh step and QUEUE.md (componentization P1, third item)'
 priority: 61
 kind: process
-status: in_progress
+status: done
 round: process
 phase: 4
 design: docs/design/loop-parallel.md
@@ -46,7 +46,7 @@ steps:
   - id: x4-close
     phase: 4
     affinity: cloud
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -56,7 +56,7 @@ budget:
     steps: 12
   spent:
     runs: 0
-    steps: 3
+    steps: 4
 questions:
   - id: a1
     kind: assumed
@@ -330,3 +330,12 @@ history:
   - at: 2026-11-16T04:28:44Z
     by: human/jeff
     event: done x4-state
+  - at: 2026-11-16T04:28:59Z
+    by: cloud/20261112T230554Z
+    event: claimed x4-close until 2026-11-16T06:28:59Z
+  - at: 2026-11-16T04:29:00Z
+    by: cloud/20261112T230554Z
+    event: done x4-close
+  - at: 2026-11-16T04:29:00Z
+    by: cloud/20261112T230554Z
+    event: closed; feature done
