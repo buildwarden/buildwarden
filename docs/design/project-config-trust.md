@@ -407,6 +407,27 @@ level. The designs relied on carry front-matter already.
     - *Rejected: pass the path to the drivers so that each message names
       it.* A new field on every driver's request for the text of a fix,
       which K1's `config_file` gives them anyway.
+14. **The working directory's `warden.toml` must be a regular file; a
+    named file need not be** (Jeff, 2026-11-15, on the review's finding
+    F1: "Keep it; amend the design"; added in r2, FLOW-06). Once links
+    are followed, a `./warden.toml` found by default that is a FIFO, a
+    socket or a device is an error, `not a regular file`, and is not
+    opened; a file `--config` or `WARDEN_CONFIG` names is read whatever
+    kind of file it is (**How the config file is found**). Nobody named
+    the default file, and in someone else's repository a `warden.toml`
+    that is a link to `/dev/zero` made every command that reads
+    configuration read until `warden` ran out of memory, as it still does
+    on `main`; a named file is the executor's own choice, as a CA path
+    named directly is (Decision 8; Security note, **What remains**, 10).
+    The check limits how the default file is read, not what it may
+    decide: Decision 7 stands.
+    - *Rejected by Jeff: a size cap on every config file.* Offered with
+      the finding, and not taken: the check as built is kept, and a named
+      file is not bounded.
+    - *Rejected: the same check on a named file.* It would refuse
+      `--config /dev/null`, which Decision 1 gives as the way to read no
+      settings on Unix, and a config handed over as `--config <(...)`,
+      for a file the executor chose.
 
 ## Questions
 
@@ -837,6 +858,8 @@ configFile():                                  # once per command that reads con
 LoadConfig():
     path, source := configFile()
     path named and cannot be read  -> the error; nothing else is tried
+    path found in the working directory, and not a regular file once
+        links are followed  -> the error, and it is not opened (Decision 14)
     former user config exists, and is not path  -> the transitional error (below)
     none                      -> defaults
     else                      -> decode that one file
@@ -850,6 +873,16 @@ LoadConfig():
   directory, like any path argument, so a relative `WARDEN_CONFIG` names a
   different file in each directory. A value set once for a machine should
   be absolute, and the reference says so. Symbolic links are followed.
+- The working directory's file must be a regular file once links are
+  followed (Decision 14). A `./warden.toml` that is a FIFO, a socket or a
+  device, or a link to one (`/dev/zero`, a terminal), is an error, `not a
+  regular file`, and is not opened. A file named with `--config` or
+  `WARDEN_CONFIG` is read whatever kind of file it is, a pipe or a device
+  included. The reason for the difference is the one Decision 7 and the
+  Security note give for the rest of the default: in a working directory
+  that is someone else's repository, `./warden.toml` is the repository's,
+  and nobody named it; a named file is the executor's own choice, as a CA
+  path named directly is (F2).
 - The file is decoded once, by the decoder used today. A file that is not
   TOML is an error for every command that reads it (UX-08 as amended: "a
   config file that cannot be parsed is an error for every run that reads
@@ -876,9 +909,20 @@ LoadConfig():
     To fix: make it readable, or name another file with --config or WARDEN_CONFIG
   ```
 
-  A path is printed absolute, whatever form it was given in. A directory
-  gets the first or second form with "is a directory". The syntax error
-  keeps today's text, with the path of the one file.
+  ```
+  ERROR: cannot read config file /src/repo/warden.toml (found in the working directory): not a regular file
+    To fix: make it readable, or name another file with --config or WARDEN_CONFIG
+  ```
+
+  A path is printed absolute, whatever form it was given in, and escaped:
+  a control character, another character that does not print, or a byte
+  that is not valid UTF-8 in it (a newline or an escape sequence in a
+  directory's name) is written as an escape (`\n`, `\x1b`, `‮`), in
+  these errors, in the `config:` line and in every other message that
+  names the config file, through the function F2's lines use
+  (`driver.EscapeOutside`). A directory gets the first or second form with
+  "is a directory". The syntax error keeps today's text, with the path of
+  the one file.
 
 ### What says which file was read
 
@@ -891,12 +935,17 @@ config: /src/repo/warden.toml (found in the working directory)
 config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
 ```
 
-The path is absolute.
+The path is absolute, and escaped as in the errors above, so that a
+directory's name cannot add a line of its own or erase this one.
 
 - `warden doctor` prints it as the first line of its report, on stdout.
 - `build`, `shell`, `clean`, `setup` and `image prepare` print it on
   stderr with the `[warden]` prefix, before anything else, without
   `--verbose` (a4).
+- A driver the file names that `warden` does not have is reported after
+  the line, by every one of the six, so that the error is read beside the
+  file that named the driver, which can be a repository's. An error in
+  loading the file itself comes with no line: that error names the file.
 - `warden doctor`'s source label for the build link and the resolvers
   (`build link 100.126.255.252/30 (warden.toml)`) stays the base name of
   the file that set the key, as today; with one file it is that file's
@@ -962,18 +1011,21 @@ Where it lives, so that it is deleted in one place, as
   returns the error above or nothing, and one that returns the a5 error for
   the variable and the key set together, or nothing.
 - Two calls, each a single line: the first in `LoadConfig`; the second in
-  `resolveUpstreamCAs`, the function that resolves the CA paths for the
-  commands that use them (**F1 to F4, one by one**, F2). `LoadConfig` does
+  `upstreamCAPaths`, which `resolveUpstreamCAs` and `doctor`'s
+  `doctorUpstreamCAs` share to resolve the CA paths for the commands that
+  use them (**F1 to F4, one by one**, F2). `LoadConfig` does
   not raise the a5 error: it would fail `clean`, `setup` and `image
   prepare`, which use no CA path (UX-08 as amended: "nothing validates a
   file or environment setting the run does not use").
 - One test file, `config_former_test.go`.
 - One subsection of the configuration reference ("Moving from
   `~/.config/warden/config.toml`").
+- One tier-1 case in `test-integration.sh`, which expects the error.
 - One marker on each: `TRANSITIONAL(one-config-file)`, in the file's header
   comment (which says why the code exists and when it goes, GLOBAL-01), at
-  the two calls, at the head of the test file, and in an HTML comment above
-  the docs subsection. A search for the marker finds everything to delete.
+  the two calls, at the head of the test file, in an HTML comment above
+  the docs subsection, and above the tier-1 case: six places. A search for
+  the marker finds everything to delete.
 - When: a3 (at 1.0). Publish files the removal as a queue item whose
   `source` names the marker and the condition.
 
@@ -984,6 +1036,7 @@ Where it lives, so that it is deleted in one place, as
 | Settings in `~/.config/warden/config.toml`, no `./warden.toml` | The error. Move the settings into the `warden.toml` built with or into the environment; or name that file with `--config` or `WARDEN_CONFIG`, which keeps everything as it was (a10) |
 | Settings in both files, merged | The error. One file per build: combine them, or name the user file and stop using the project's |
 | Only `./warden.toml` | Nothing changes, but for the `config:` line |
+| A `./warden.toml` in the working directory that is a FIFO, a socket or a device, or a link to one (`/dev/null`, `/dev/zero`, a terminal) | The error `not a regular file`, naming the path, and nothing is read (Decision 14). Today it is read: a FIFO someone writes to and a link to `/dev/null` work; a FIFO nobody writes to makes `warden` wait, and a link to `/dev/zero` exhausts its memory. Naming the same path with `--config` or `WARDEN_CONFIG` reads it as before |
 | No file | Nothing changes, but for the `config:` line |
 | `WARDEN_CONFIG` set in a user's environment, `warden` run under `sudo` | `sudo` drops the variable: `./warden.toml` is read, or none. Pass `--config`, or `sudo --preserve-env=WARDEN_CONFIG` |
 | `WARDEN_UPSTREAM_CA_CERTS` and `[relay] upstream_ca_certs` both set | The a5 error on `build`, `shell` and `doctor` while the detection stands; afterwards the variable replaces the key |
@@ -993,7 +1046,7 @@ Where it lives, so that it is deleted in one place, as
 | A CA directory with a `.pem`, `.crt` or `.cer` file that cannot be read, beside files that give a certificate | Builds, without that file's roots, and a line names the file and the reason on every run. Today it is an error at the claim (a13, open) |
 | A CA path that is a pipe or a device (`<(cat a.pem b.pem)`, `/dev/stdin`) | Read, as today, once per run |
 | Any configured CA path | One line per path on stderr with the number of certificates, on `build` and `shell`; in the report of `doctor` (a9) |
-| `relay_image` or `WARDEN_IMAGE` starting with `-` or holding a space | Refused |
+| `relay_image` or `WARDEN_IMAGE` starting with `-`, or holding a space or a character that does not print (a control character; a format character such as U+202E; a no-break space) | Refused |
 | A development `warden` run from outside its source tree, inside the tree (`go run`, `go install`, a copy) | An error naming `make build` and `dist/warden` (a6) |
 | An installed release with `--driver qemu`, `firecracker` or `vz`, or with `relay_image = "dev"`, run inside a buildwarden checkout | The same error. Today it takes the guest binaries, the relay VM assets or the relay's source from the checkout it is run in (a6) |
 
@@ -1074,7 +1127,9 @@ where that is fixed.
     checks the relay image in effect (the variable, else the file) when the
     container driver is selected, the only driver that reads it: empty and
     `dev` are as today; anything else must not start with `-` and must hold
-    no space or control character. It does not validate a reference
+    no space, no byte that is not valid UTF-8 and no character that does
+    not print (a control character, and a format character such as U+202E,
+    U+200B or U+FEFF, or a no-break space). It does not validate a reference
     further: the runtime's own error does that. `warden doctor` makes the
     same check under the container driver, through the same function, so
     it does not print `ok` for a value a build refuses.
@@ -1630,7 +1685,9 @@ edited.
   - the opening ("two places, merged in order") becomes **The config
     file**: one file, the three ways it is found, that the default is the
     working directory's file whatever `[path]` is, a named file that is
-    missing, an empty file, the `config:` line, relative paths (a1) and
+    missing, that `./warden.toml` must be a regular file and a named file
+    need not be (Decision 14), an empty file, the `config:` line and that
+    its path is escaped, relative paths (a1) and
     that a `WARDEN_CONFIG` set for a machine should be absolute, that
     `warden.toml` in a message means the config file in use (Decision 13),
     and a paragraph for someone building a repository they do not control:
@@ -1700,7 +1757,8 @@ edited.
   ```
       cfg := the one config file: --config, else WARDEN_CONFIG, else
              ./warden.toml if it exists, else none; a named file that
-             cannot be read is an error
+             cannot be read is an error, and so is a ./warden.toml that is
+             not a regular file
       req := resolve each setting: flag, else its variable, else cfg,
              else the default (driver, runtime, output dir, ...)
       req.UpstreamCACerts := the valid PEM certificates under each
@@ -1722,18 +1780,20 @@ edited.
 ### Compatibility (UX-03)
 
 No flag, subcommand or key is removed or renamed, so UX-03's alias does not
-apply as written and tier 1's `surface-removed` check sees nothing. Four
+apply as written and tier 1's `surface-removed` check sees nothing. Five
 things that work today stop: the user-level file; the sum of the variable
 and the key for CA paths; a CA path that gives no certificate at all (F2
 lists the cases; a path that gives some keeps working and says what it
-skipped; a pipe or a device named as a CA path is read as today); and a
+skipped; a pipe or a device named as a CA path is read as today); a
 `warden` that takes its source tree from the working directory (a6 lists
-who). Two things that fail today run, both under a named CA directory
+who); and a `./warden.toml` found in the working directory that is a FIFO
+or a link to a device, which is read today (Decision 14; the same path
+named with `--config` or `WARDEN_CONFIG` is read as today). Two things that fail today run, both under a named CA directory
 (F2, **What fails today and runs**; one is a13). UX-03's "never a
 silent break" is met for each by an error that says what to change, at
 once and not after a warning period, as Jeff decided for
 `runtime-cli-project-path`. The first two errors are transitional; the
-other two are the permanent checks' own messages.
+other three are the permanent checks' own messages.
 
 ### How it sits with the other items
 
@@ -1955,7 +2015,7 @@ in the config file (or no config file).
 
 | Default, override or fallback | Status | Why it is the obvious choice (GLOBAL-09) | What overrides it, exclusively (GLOBAL-10) |
 |---|---|---|---|
-| The config file when none is named: `./warden.toml` of the working directory (not of the build context `[path]` names), if it exists | **Changed**: it was that file over `~/.config/warden/config.toml` | Jeff's decision 2: the working directory, for ease of use | `--config`, else `WARDEN_CONFIG`; the named file is the only one read, and a named file that cannot be read is an error, not a return to the default |
+| The config file when none is named: `./warden.toml` of the working directory (not of the build context `[path]` names), if it exists; it must be a regular file once links are followed, and one that is not (a FIFO, a socket, a device, or a link to one) is an error, not "no file" | **Changed**: it was that file over `~/.config/warden/config.toml`, read whatever kind of file it was | Jeff's decision 2: the working directory, for ease of use; Jeff's decision on the review's F1 (Decision 14): nobody named that file, and it can be a repository's | `--config`, else `WARDEN_CONFIG`; the named file is the only one read, it is read whatever kind of file it is, and a named file that cannot be read is an error, not a return to the default |
 | No `./warden.toml` and none named: no config file | **Changed**: the user file was read | A first run needs no file (UX-07) | As above |
 | `~/.config/warden/config.toml` | **Removed** as a source. Its existence is an error while the transitional detection stands (a3), unless it is the file named (a10) | Jeff's decisions 1 and 4 | Nothing reads it; `--config` or `WARDEN_CONFIG` can name it |
 | An empty `WARDEN_CONFIG` | **New**: not set | What every empty `WARDEN_*` variable means today | Nothing (a8) |
@@ -1993,7 +2053,10 @@ The lookup of the config file is an ordered choice among what is *set*,
 not a fallback on failure: a source that is set and cannot be used is an
 error. One case does pass to the next source without a word and is named
 here: an empty `WARDEN_CONFIG` counts as not set (a8). The transitional
-detection is not a fallback: it only produces errors.
+detection is not a fallback: it only produces errors. Nor is the check
+that the working directory's file is a regular file: one that is not is
+an error, never "no file", and nothing is tried in its place
+(Decision 14).
 
 **The skip under a CA path, named** (GLOBAL-10, GLOBAL-11). What triggers
 it: a PEM block or a file under a configured CA path that is not a valid
@@ -2419,7 +2482,21 @@ the second and third itself (`driver = "qemu"`, `relay_image = "dev"`).
     and the memory of the `warden` process, and nothing is sent. Not
     changed here: `<(...)` and `/dev/stdin` are how an executor hands
     `warden` a bundle without a file, and they work today. Inside a
-    named directory such an entry is no longer opened.
+    named directory such an entry is no longer opened. The config file
+    itself did the same on `main`: a repository that ships `warden.toml`
+    as a FIFO, or as a link to `/dev/zero` or a terminal, made every
+    command that reads configuration wait, or read until `warden` ran out
+    of memory. Now a `./warden.toml` found in the working directory that
+    is not a regular file once links are followed is an error and is not
+    opened (Decision 14). A file named with `--config` or `WARDEN_CONFIG`
+    that is a device or a FIFO is still read, by the executor's own
+    choice. What remains of the default: a `./warden.toml` that is a
+    symbolic link to another regular file the user can read, anywhere on
+    the host, is still followed and parsed, and a TOML syntax error quotes
+    part of what it read, as the parser gives it (the last key's name,
+    and the start of a value it could not read), so a fragment of that
+    file can appear in the error and in the build's log. Naming the file
+    closes it, as for the rest of the default.
 
 **What the TEST-08 suite should exercise.** Arm A gains permanent entries
 (SEC-03), the attacker supplying the build context and the proof being
@@ -2465,9 +2542,19 @@ temporary one:
   the `./warden.toml` beside it is not used; an empty variable is not set;
   an empty file gives the defaults; a relative `--config`; a `[path]`
   argument naming a directory that holds a `warden.toml` does not make
-  that file the one read.
+  that file the one read; a `./warden.toml` that is a link to itself, has
+  mode 0, is a directory or is a link to a device (`/dev/null`; Unix) is
+  the error `cannot read config file <path> (found in the working
+  directory): <reason>`, the last with `not a regular file`, and gives no
+  configuration (`TestWorkingDirectoryConfigThatCannotBeRead`); a link to
+  a device named with `--config` or with `WARDEN_CONFIG` is read (Unix;
+  `TestNamedConfigFileThatIsADevice`).
 - *The `config:` line:* its four forms; on stdout for `doctor`, on stderr
-  for the others.
+  for the others; a path that holds a newline or an escape sequence is
+  printed escaped, on stderr and in `doctor`'s report, and so is it in the
+  errors that name it (`TestConfigLineEscapesThePath`); a driver the file
+  names that `warden` does not have is reported after the line
+  (`TestConfigLineBeforeAnUnknownDriver`).
 - *The transitional error:* with the user file present, each of the six
   commands' config load fails with it, naming the path; with `--config` or
   `WARDEN_CONFIG` naming another file, the same; with either naming that
@@ -2495,7 +2582,9 @@ temporary one:
   same lines on stdout without the prefix; with no configured path
   nothing is printed; the lines follow the `config:` line.
 - *The relay image:* empty, `dev` and references pass; values starting
-  with `-`, holding a space, or holding a control character are refused,
+  with `-`, holding a space, or holding a control character or another
+  character that does not print (U+202E, U+200B, a leading U+FEFF, a
+  no-break space) are refused,
   from the file and from the variable, by `newRequest` and by `doctor`
   under the container driver; not checked under a VM driver.
 - *Messages:* a bad `[vm] image_refresh_after` and a bad `[vm]
@@ -3424,6 +3513,67 @@ quoted blocks at both commits); every front-matter value.
   changes**.
 - **rule change UX-07 approved at `a94133d`**, as worded under **Rule
   changes**.
+
+### 2026-11-16, r2: returned from Review for one undesigned check
+
+**The return** (FLOW-06). Review of the branch at `5a57e55` (report
+`5a57e557c454`, finding F1) found one thing the code does that the design
+approved at `a94133d` does not name: the fix pass `d153126` made a
+`./warden.toml` found in the working directory that is not a regular file
+once links are followed an error (`cannot read config file <path> (found
+in the working directory): not a regular file`), while a file named with
+`--config` or `WARDEN_CONFIG` is read whatever kind of file it is.
+Without it, a repository that ships `warden.toml` as a link to
+`/dev/zero` makes `warden` run out of memory, as on `main`. Jeff, on
+2026-11-15: "Keep it; amend the design". The code stays as it is; he was
+offered a size cap on every config file and did not take it.
+
+**The delta**, in this design only (no code, test or reference doc
+changes: they already do and say this):
+
+- Decision 14, new: the check, its reason, and the two alternatives not
+  taken (Jeff's size cap; the same check on a named file).
+- **How the config file is found:** the pseudocode's line for it, a
+  bullet with the condition and the asymmetry, the error's text, and that
+  a path is printed escaped.
+- **What says which file was read:** the path is escaped; a driver the
+  file names that `warden` does not have is reported after the line.
+- **The user-level file:** the second call is in `upstreamCAPaths`, which
+  `resolveUpstreamCAs` and `doctor` share, and the tier-1 case is the
+  sixth marked place.
+- **Who is affected:** a row for a `./warden.toml` that is a FIFO, a
+  socket or a device; the relay image row names the characters that do
+  not print.
+- **F1 to F4, one by one** (F1): the characters the relay image check
+  refuses, as built.
+- **Reference docs and the overview:** the reference's opening says the
+  check and the escaping; the overview's quoted `cfg :=` line is the one
+  the overview has.
+- **Compatibility:** five things that work today stop, the fifth this
+  one.
+- **Defaults and overrides:** the default's row gains the condition, and
+  the named file's override says it is read whatever kind it is; the
+  paragraph on the lookup says the check is no fallback.
+- **Security note**, **What remains**, 10: what the config file did on
+  `main` as a FIFO or a device, what it does now, that a named one is
+  still read, and what remains (a link to another regular file is
+  parsed, and a TOML error can quote a fragment of it).
+- **Validation plan**, tier 0: the tests that exist for the check, the
+  escaping, the line before a bad driver, and the relay image's
+  characters.
+
+**Not changed.** The proposed wording of ORCH-03 and UX-07; every
+front-matter value (`rule_changes` and the impact fields included);
+Decisions 1 to 13, the Questions and every earlier entry of this
+section. No question is raised: the one fork, whether to keep the check
+or bound every file instead, Jeff decided.
+
+**`design_review: required`** (FLOW-19, judged on the delta from
+`a94133d`). The impact fields are unchanged and no question is open, but
+the branch changed two rules in `docs/development/` since that commit
+(ORCH-03 and UX-07, as approved), so the delta rule's skip does not
+hold; and the delta is a check on the `host-env` boundary that the
+Security note now describes.
 
 ## Consolidation
 
