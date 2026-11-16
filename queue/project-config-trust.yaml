@@ -3,7 +3,7 @@ title: 'One warden.toml in the control of whoever runs the build: found by --con
 priority: 67
 status: in_progress
 round: feature
-phase: 5
+phase: 6
 design: docs/design/project-config-trust.md
 branch: feat/project-config-trust
 alters_relationships: false
@@ -138,10 +138,35 @@ steps:
   - id: f5-guide-r2
     phase: 5
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main
+    phase: 6
+    affinity: cloud
     status: pending
     lease:
-      claimed_by: cloud/20261112T230554Z
-      expires: 2026-11-16T10:25:56.950150456Z
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-merge-main
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-consolidate
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 2
@@ -507,3 +532,9 @@ history:
   - at: 2026-11-16T08:25:56Z
     by: cloud/20261112T230554Z
     event: claimed f5-guide-r2 until 2026-11-16T10:25:56Z
+  - at: 2026-11-16T08:26:04Z
+    by: cloud/20261112T230554Z
+    event: done f5-guide-r2
+  - at: 2026-11-16T08:26:04Z
+    by: cloud/20261112T230554Z
+    event: entered phase 6 (publish)
