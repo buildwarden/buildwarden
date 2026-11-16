@@ -87,7 +87,7 @@ steps:
   - id: f2-design-review-r3
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -402,3 +402,6 @@ history:
   - at: 2026-11-16T01:19:16Z
     by: cloud/20261112T230554Z
     event: entered phase 2 (plan)
+  - at: 2026-11-16T01:21:04Z
+    by: human/jeff
+    event: done f2-design-review-r3
