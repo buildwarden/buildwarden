@@ -3,7 +3,7 @@ title: 'One warden.toml in the control of whoever runs the build: found by --con
 priority: 67
 status: in_progress
 round: feature
-phase: 6
+phase: 3
 design: docs/design/project-config-trust.md
 branch: feat/project-config-trust
 alters_relationships: false
@@ -121,28 +121,10 @@ steps:
     lease:
       claimed_by: ""
       expires: null
-  - id: f6-merge-main
-    phase: 6
+  - id: f3-implement-r3
+    phase: 3
     affinity: cloud
     status: pending
-    lease:
-      claimed_by: ""
-      expires: null
-  - id: f6-consolidate
-    phase: 6
-    affinity: cloud
-    status: pending
-    needs:
-      - f6-merge-main
-    lease:
-      claimed_by: ""
-      expires: null
-  - id: f6-open-pr
-    phase: 6
-    affinity: cloud
-    status: pending
-    needs:
-      - f6-consolidate
     lease:
       claimed_by: ""
       expires: null
@@ -487,3 +469,6 @@ history:
   - at: 2026-11-16T01:41:19Z
     by: cloud/20261112T230554Z
     event: entered phase 6 (publish)
+  - at: 2026-11-16T05:26:33Z
+    by: host:container-any/20261116T051002Z
+    event: 'back to implement: Tier-2 gap project-config-trust-windows (host:container-any/20261116T051002Z, windows-desktop, go1.26.3 windows/amd64, branch 3733c4b): go test ./driver fails on Windows in the branch''s own new test TestLoadUpstreamCAsEscapes (driver/upstreamca_test.go:503-512). It passes a path that starts /no/such and holds a newline, an escape sequence and a 0xff byte, and expects that string back, escaped. On Windows LoadUpstreamCAs makes the path absolute, so the message names C:\no\such..., and the 0xff byte comes back as U+FFFD (the path conversion replaced it), not as the escape the test wants. The newline and the escape sequence are still escaped, so the product''s behaviour looks right and the test''s expected string is what is not portable. main 623131a: go test ./cmd/warden ./driver ok on the same host. Every other case of the gap passes on the branch. Logs: native/container-any/2026-11-15/project-config-trust/ (branch-3733c4b-go-test.log).'

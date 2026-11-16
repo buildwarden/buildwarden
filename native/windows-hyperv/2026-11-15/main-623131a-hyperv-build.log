@@ -1,0 +1,4 @@
+warden: build VM "warden-build-i3vr50c0" COM1 -> \\.\pipe\warden-build-i3vr50c0 (attach a serial reader to observe guest boot)
+guest: Microsoft Windows NT 10.0.26100.0
+example.com: 200 577 bytes
+warden: build SUCCEEDED (output: .scratch/pct-hv/out-main)

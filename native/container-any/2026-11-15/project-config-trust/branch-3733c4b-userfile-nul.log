@@ -1,0 +1,121 @@
+make: Entering directory 'C:/Users/jeff/buildwarden-native/.scratch/pct-cases'
+powershell -NoProfile -ExecutionPolicy Bypass -File env.ps1
+user config present: False
+WARDEN_* variables: 
+OS: Microsoft Windows NT 10.0.26300.0
+docker on PATH: False
+podman: C:\Program Files\RedHat\Podman\podman.exe
+mkdir -p ca
+openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj '//CN=pct-case-a' -keyout ca/a.key -out ca/a.pem
+.+.....+.+...+...+..+.+............+..+.+...........+......+...+......+...............+.+..+++++++++++++++++++++++++++++++++++++++*.+...............+..+....+........+......+....+...+..+......+......+.+.........+++++++++++++++++++++++++++++++++++++++*..........+......+.........+.+........+.+......+.....+.+..+...+....+...+...+.....+...+.........+...............+.......+...+........+....+...............+........+......+......+.+.....+....+...+..+.+...+...........+...+.+......+.....+......+...+.+...........+.......+..+.........+.+.....+......+...+......+.+..............+......+.............+.........+............+......+...+..+...+.+......+........+.......+...+..............+.......+...........+.........+...+.+......+...+........+.......+.....+.+.....+....+...+.........++++++
+.+.....+..........+..+.........+.+........+.+..............+....+..+...+...+...+...............+.......+.........+...+.....+.......+...+........+...+......+...+.+...........+.+..+.......+.....+.+++++++++++++++++++++++++++++++++++++++*..+.....+.+........+......+.........+...+++++++++++++++++++++++++++++++++++++++*........................+.+......+..+.............+..+...+..........+..+.......+.....+.........+.........+.......+...+...............+...+..+...+...+.+.....+...+......+......+....+..+....+......+..+..........+...+...+.....................+.........+......+...+.....+......+.........+.............+..+.+......+...+..+.+.........+..................+...+.....+.............+.....+.+.........+.....+.........+............+.+.....+...+.+...............+.........+..+...+......+.............+..+...+.+..+....+.....................+...+............+..+.+.....+.+...........+...+.+...+..+......+...+.......+....................+..........+..+.+..+.......+..+.........+.+.........+..+...++++++
+-----
+req warning: Skipping unknown subject name attribute "/CN"
+openssl req -x509 -newkey rsa:2048 -nodes -days 2 -subj '//CN=pct-case-b' -keyout ca/b.key -out ca/b.pem
+.+..+....+...+...+...+.....+.+.....+....+.........+...+............+++++++++++++++++++++++++++++++++++++++*.........+..+....+..+....+...+.....+...+...+....+...+..+++++++++++++++++++++++++++++++++++++++*........+............+.....+.........+.........+.+..+.........+....+.................+...................+...............+...+..+.........+....+..+.............+.....................+..+...+....+.....+......+....+...++++++
+...+...............+.......+........+....+...+.....+......+....+++++++++++++++++++++++++++++++++++++++*.+........+++++++++++++++++++++++++++++++++++++++*...........+......+..............+.+......+.........+..........................+...+....+..+.+............+...............+...............+...............+..+.........+......+.............+.....+......+......+....+............+..+............+...+.+......+...+........+....+.....+....+.....+.+......+..+...+..........+.....+...+....+......+..+...+....+......+......+........+...+...+.........+......+.+.....+...+.+.....+......+.+..+............+......+....+...........+............+.+..+............+.............+...+.........+......+.....+..........+.....+......+.............+..+.+...............+...+..++++++
+-----
+req warning: Skipping unknown subject name attribute "/CN"
+rm -f ca/a.key ca/b.key
+ls -l ca
+total 8
+-rw-r--r-- 1 jeff 197611 1076 Nov 15 21:13 a.pem
+-rw-r--r-- 1 jeff 197611 1076 Nov 15 21:13 b.pem
+[runtime]
+driver = "container"
+--- (cd p-user && USERPROFILE='C:\Users\jeff\buildwarden-native\.scratch\pct-cases\home' ../../pct/dist/warden doctor)
+[warden] ERROR: C:\Users\jeff\buildwarden-native\.scratch\pct-cases\home\.config\warden\config.toml is no longer read: warden reads one config file, ./warden.toml or the one --config or WARDEN_CONFIG names
+  To fix: move its settings into the warden.toml you build with, or into the environment (WARDEN_DRIVER, WARDEN_CTR_CLI, WARDEN_IMAGE, WARDEN_UPSTREAM_CA_CERTS), and delete it; or name it as the config file with --config or WARDEN_CONFIG (it is then the only one read: ./warden.toml is not)
+exit=1
+--- (cd p-user && USERPROFILE='C:\Users\jeff\buildwarden-native\.scratch\pct-cases\home' ../../pct/dist/warden doctor --driver container)
+[warden] ERROR: C:\Users\jeff\buildwarden-native\.scratch\pct-cases\home\.config\warden\config.toml is no longer read: warden reads one config file, ./warden.toml or the one --config or WARDEN_CONFIG names
+  To fix: move its settings into the warden.toml you build with, or into the environment (WARDEN_DRIVER, WARDEN_CTR_CLI, WARDEN_IMAGE, WARDEN_UPSTREAM_CA_CERTS), and delete it; or name it as the config file with --config or WARDEN_CONFIG (it is then the only one read: ./warden.toml is not)
+exit=1
+--- (cd p-user && USERPROFILE='C:\Users\jeff\buildwarden-native\.scratch\pct-cases\home' ../../pct/dist/warden doctor --driver hyperv)
+[warden] ERROR: C:\Users\jeff\buildwarden-native\.scratch\pct-cases\home\.config\warden\config.toml is no longer read: warden reads one config file, ./warden.toml or the one --config or WARDEN_CONFIG names
+  To fix: move its settings into the warden.toml you build with, or into the environment (WARDEN_DRIVER, WARDEN_CTR_CLI, WARDEN_IMAGE, WARDEN_UPSTREAM_CA_CERTS), and delete it; or name it as the config file with --config or WARDEN_CONFIG (it is then the only one read: ./warden.toml is not)
+exit=1
+--- (cd p-user && USERPROFILE='C:\Users\jeff\buildwarden-native\.scratch\pct-cases\home' ../../pct/dist/warden build --driver container -o out)
+[warden] ERROR: C:\Users\jeff\buildwarden-native\.scratch\pct-cases\home\.config\warden\config.toml is no longer read: warden reads one config file, ./warden.toml or the one --config or WARDEN_CONFIG names
+  To fix: move its settings into the warden.toml you build with, or into the environment (WARDEN_DRIVER, WARDEN_CTR_CLI, WARDEN_IMAGE, WARDEN_UPSTREAM_CA_CERTS), and delete it; or name it as the config file with --config or WARDEN_CONFIG (it is then the only one read: ./warden.toml is not)
+exit=1
+--- (cd p-user && USERPROFILE='C:\Users\jeff\buildwarden-native\.scratch\pct-cases\home' ../../pct/dist/warden clean --driver container)
+[warden] ERROR: C:\Users\jeff\buildwarden-native\.scratch\pct-cases\home\.config\warden\config.toml is no longer read: warden reads one config file, ./warden.toml or the one --config or WARDEN_CONFIG names
+  To fix: move its settings into the warden.toml you build with, or into the environment (WARDEN_DRIVER, WARDEN_CTR_CLI, WARDEN_IMAGE, WARDEN_UPSTREAM_CA_CERTS), and delete it; or name it as the config file with --config or WARDEN_CONFIG (it is then the only one read: ./warden.toml is not)
+exit=1
+--- (cd p-user && USERPROFILE='C:\Users\jeff\buildwarden-native\.scratch\pct-cases\home' WARDEN_CONFIG='C:\Users\jeff\buildwarden-native\.scratch\pct-cases\home\.config\warden\config.toml' ../../pct/dist/warden doctor --driver hyperv)
+config: C:\Users\jeff\buildwarden-native\.scratch\pct-cases\home\.config\warden\config.toml (WARDEN_CONFIG)
+build link 100.127.255.252/30 (default)
+build link: no host interface overlaps it
+hyperv relay boot VHDX: link-channel stamp current
+Hyper-V hypervisor present ........... yes
+Hyper-V feature enabled .............. yes
+Token read ........................... current process (non-elevated)
+Full Administrator ................... no  (needed for: New-VMSwitch, New-NetNat, New-NetIPAddress)
+Hyper-V Administrators ............... yes (covers: New-VM, Start-VM, Remove-VM, adapters, VHDX)
+Durable build switches 'warden-dev-<i>'  present
+Privileged service ................... reachable
+Image cache .......................... C:\Users\jeff\AppData\Local\warden\hyperv
+Prepared base ........................ windows-server-2025-20261112T183421Z.vhdx, 3.4d old, evaluation grace ends 2026-11-22 18:35Z (6.6d left)
+
+Resolved:
+  VM lifecycle ......... OK (direct, Hyper-V Administrators)
+  Network .............. OK (fresh per-build via privileged service)
+
+Build network:
+  NAT .................................. warden-dev-nat (192.168.250.0/24, host 192.168.250.1)
+  Relay resolvers ...................... 8.8.8.8, 8.8.4.4 (from interface Ethernet (the IPv4 default route's))
+  Slot warden-dev-0 .................... free
+  Slot warden-dev-1 .................... free
+exit=0
+--- (cd p-user && USERPROFILE='C:\Users\jeff\buildwarden-native\.scratch\pct-cases\home' ../../pct/dist/warden doctor --driver hyperv --config 'C:\Users\jeff\buildwarden-native\.scratch\pct-cases\home\.config\warden\config.toml')
+config: C:\Users\jeff\buildwarden-native\.scratch\pct-cases\home\.config\warden\config.toml (--config)
+build link 100.127.255.252/30 (default)
+build link: no host interface overlaps it
+hyperv relay boot VHDX: link-channel stamp current
+Hyper-V hypervisor present ........... yes
+Hyper-V feature enabled .............. yes
+Token read ........................... current process (non-elevated)
+Full Administrator ................... no  (needed for: New-VMSwitch, New-NetNat, New-NetIPAddress)
+Hyper-V Administrators ............... yes (covers: New-VM, Start-VM, Remove-VM, adapters, VHDX)
+Durable build switches 'warden-dev-<i>'  present
+Privileged service ................... reachable
+Image cache .......................... C:\Users\jeff\AppData\Local\warden\hyperv
+Prepared base ........................ windows-server-2025-20261112T183421Z.vhdx, 3.4d old, evaluation grace ends 2026-11-22 18:35Z (6.6d left)
+
+Resolved:
+  VM lifecycle ......... OK (direct, Hyper-V Administrators)
+  Network .............. OK (fresh per-build via privileged service)
+
+Build network:
+  NAT .................................. warden-dev-nat (192.168.250.0/24, host 192.168.250.1)
+  Relay resolvers ...................... 8.8.8.8, 8.8.4.4 (from interface Ethernet (the IPv4 default route's))
+  Slot warden-dev-0 .................... free
+  Slot warden-dev-1 .................... free
+exit=0
+--- (cd p-user && USERPROFILE='C:\Users\jeff\buildwarden-native\.scratch\pct-cases\home' WARDEN_CONFIG='C:\Users\jeff\buildwarden-native\.scratch\pct-cases\named\warden.toml' ../../pct/dist/warden doctor --driver hyperv)
+[warden] ERROR: C:\Users\jeff\buildwarden-native\.scratch\pct-cases\home\.config\warden\config.toml is no longer read: warden reads one config file, ./warden.toml or the one --config or WARDEN_CONFIG names
+  To fix: move its settings into the warden.toml you build with, or into the environment (WARDEN_DRIVER, WARDEN_CTR_CLI, WARDEN_IMAGE, WARDEN_UPSTREAM_CA_CERTS), and delete it; or name it as the config file with --config or WARDEN_CONFIG (it is then the only one read: ./warden.toml is not)
+exit=1
+[runtime]
+driver = "nonesuch"
+--- (cd p-nul &&  ../../pct/dist/warden doctor)
+config: C:\Users\jeff\buildwarden-native\.scratch\pct-cases\p-nul\warden.toml (found in the working directory)
+[warden] ERROR: unknown driver "nonesuch" (valid: container, qemu, vz, hyperv, firecracker)
+exit=1
+--- (cd p-nul &&  ../../pct/dist/warden doctor --config NUL)
+config: \\.\NUL (--config)
+[warden] ERROR: container runtime podman is installed but not running (`podman info` failed)
+  To fix: start its machine: podman machine start (or podman machine init the first time)
+exit=1
+--- (cd p-nul &&  ../../pct/dist/warden doctor --driver container --config NUL)
+config: \\.\NUL (--config)
+[warden] ERROR: container runtime podman is installed but not running (`podman info` failed)
+  To fix: start its machine: podman machine start (or podman machine init the first time)
+exit=1
+--- (cd p-nul && WARDEN_CONFIG=NUL ../../pct/dist/warden doctor --driver container)
+config: \\.\NUL (WARDEN_CONFIG)
+[warden] ERROR: container runtime podman is installed but not running (`podman info` failed)
+  To fix: start its machine: podman machine start (or podman machine init the first time)
+exit=1
+make: Leaving directory 'C:/Users/jeff/buildwarden-native/.scratch/pct-cases'

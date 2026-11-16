@@ -1,6 +1,6 @@
 feature: driver-contract
 title: 'The driver command contract, its suite and the kit: warden runs a driver binary, the container driver is one, and every build runs through warden''s build sequence (componentization K1)'
-priority: 71
+priority: 72
 status: in_progress
 round: feature
 phase: 2
@@ -525,3 +525,6 @@ history:
   - at: 2026-11-16T02:07:28Z
     by: human/jeff
     event: 'declared at c767992: seams +driver-contract +relay-claim +collector +bootstrap-model; rules_changed +GLOBAL-08 +ORCH-01 +ORCH-02 +ORCH-04 +TEST-05 +BOOT-02 +UX-01 +UX-03 +ORCH-03 +PROFILE-01 +UX-08'
+  - at: 2026-11-16T05:27:02Z
+    by: host:windows-hyperv/20261116T051002Z
+    event: 'priority 71 -> 72 (renumbered by wf new: detached-prepare-windows-exe queued at 68)'

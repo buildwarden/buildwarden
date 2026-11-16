@@ -1,0 +1,58 @@
+make: Entering directory 'C:/Users/jeff/buildwarden-native/.scratch/pct-cases'
+[runtime]
+driver = "nonesuch"
+--- (cd p-nul &&  ../../pct/dist/warden doctor)
+config: C:\Users\jeff\buildwarden-native\.scratch\pct-cases\p-nul\warden.toml (found in the working directory)
+[warden] ERROR: unknown driver "nonesuch" (valid: container, qemu, vz, hyperv, firecracker)
+exit=1
+--- (cd p-nul &&  ../../pct/dist/warden doctor --config NUL)
+config: \\.\NUL (--config)
+container runtime: podman
+ok
+exit=0
+--- (cd p-nul &&  ../../pct/dist/warden doctor --driver container --config NUL)
+config: \\.\NUL (--config)
+container runtime: podman
+ok
+exit=0
+--- (cd p-nul && WARDEN_CONFIG=NUL ../../pct/dist/warden doctor --driver container)
+config: \\.\NUL (WARDEN_CONFIG)
+container runtime: podman
+ok
+exit=0
+p-named/warden.toml:
+[build]
+output_dir = "from-repo"
+named/warden.toml:
+[build]
+output_dir = "from-named"
+--- (cd p-named &&  ../../pct/dist/warden doctor --driver container)
+config: C:\Users\jeff\buildwarden-native\.scratch\pct-cases\p-named\warden.toml (found in the working directory)
+container runtime: podman
+ok
+exit=0
+--- (cd p-named &&  ../../pct/dist/warden doctor --driver container --config 'C:\Users\jeff\buildwarden-native\.scratch\pct-cases\named\warden.toml')
+config: C:\Users\jeff\buildwarden-native\.scratch\pct-cases\named\warden.toml (--config)
+container runtime: podman
+ok
+exit=0
+--- (cd p-named && WARDEN_CONFIG='C:\Users\jeff\buildwarden-native\.scratch\pct-cases\named\warden.toml' ../../pct/dist/warden doctor --driver container)
+config: C:\Users\jeff\buildwarden-native\.scratch\pct-cases\named\warden.toml (WARDEN_CONFIG)
+container runtime: podman
+ok
+exit=0
+--- (cd p-ca && WARDEN_UPSTREAM_CA_CERTS='C:\Users\jeff\buildwarden-native\.scratch\pct-cases\ca\a.pem;C:\Users\jeff\buildwarden-native\.scratch\pct-cases\ca\b.pem' ../../pct/dist/warden doctor --driver container)
+config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+upstream CA C:\Users\jeff\buildwarden-native\.scratch\pct-cases\ca\a.pem (WARDEN_UPSTREAM_CA_CERTS): 1 certificate to send
+upstream CA C:\Users\jeff\buildwarden-native\.scratch\pct-cases\ca\b.pem (WARDEN_UPSTREAM_CA_CERTS): 1 certificate to send
+container runtime: podman
+ok
+exit=0
+--- (cd p-ca && WARDEN_UPSTREAM_CA_CERTS='C:\Users\jeff\buildwarden-native\.scratch\pct-cases\ca\a.pem;;C:\Users\jeff\buildwarden-native\.scratch\pct-cases\ca\b.pem' ../../pct/dist/warden doctor --driver container)
+config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+upstream CA C:\Users\jeff\buildwarden-native\.scratch\pct-cases\ca\a.pem (WARDEN_UPSTREAM_CA_CERTS): 1 certificate to send
+upstream CA: BLOCKED: WARDEN_UPSTREAM_CA_CERTS has an empty entry
+upstream CA: to fix: remove the doubled or trailing separator
+container runtime: podman
+exit=1
+make: Leaving directory 'C:/Users/jeff/buildwarden-native/.scratch/pct-cases'

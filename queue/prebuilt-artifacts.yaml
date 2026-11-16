@@ -1,6 +1,6 @@
 feature: prebuilt-artifacts
 title: 'warden compiles nothing: it finds its executor, relay and relay VM artifacts on PATH, then in its own directory, at or above a minimum version (security fix, F9)'
-priority: 68
+priority: 69
 status: in_progress
 round: feature
 phase: 2
@@ -247,3 +247,6 @@ history:
   - at: 2026-11-16T01:16:03Z
     by: cloud/20261112T230554Z
     event: 'priority 67 -> 68 (renumbered by wf new: loop-parallel-rule-wording queued at 62)'
+  - at: 2026-11-16T05:27:02Z
+    by: host:windows-hyperv/20261116T051002Z
+    event: 'priority 68 -> 69 (renumbered by wf new: detached-prepare-windows-exe queued at 68)'

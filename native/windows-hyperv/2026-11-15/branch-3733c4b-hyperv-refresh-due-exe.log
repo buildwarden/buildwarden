@@ -1,0 +1,6 @@
+[warden] config: C:\Users\jeff\buildwarden-native\.scratch\pct-hv\named\warden.toml (--config)
+[warden] prepared base is 4m old; refreshing it in the background (log: C:\Users\jeff\AppData\Local\warden\hyperv\prepare.log)
+warden: build VM "warden-build-jtf4rb05" COM1 -> \\.\pipe\warden-build-jtf4rb05 (attach a serial reader to observe guest boot)
+guest: Microsoft Windows NT 10.0.26100.0
+example.com: 200 577 bytes
+warden: build SUCCEEDED (output: .scratch/pct-hv/out-branch-refresh)

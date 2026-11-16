@@ -1,0 +1,48 @@
+make: Entering directory 'C:/Users/jeff/buildwarden-native/.scratch/pct-hv'
+[vm]
+image_refresh_after = "1d"
+cd named && ../../../dist/warden build --driver hyperv --guest-os windows -o ../out-main-refresh ../proj/build.ps1; echo "exit=$?"
+[warden] prepared base is 3.4d old; refreshing it in the background (log: C:\Users\jeff\AppData\Local\warden\hyperv\prepare.log)
+warden: build VM "warden-build-7k7hi6le" COM1 -> \\.\pipe\warden-build-7k7hi6le (attach a serial reader to observe guest boot)
+guest: Microsoft Windows NT 10.0.26100.0
+example.com: 200 577 bytes
+warden: build SUCCEEDED (output: ../out-main-refresh)
+exit=0
+powershell -NoProfile -ExecutionPolicy Bypass -File state.ps1
+now (UTC): 2026-11-16T05:20:01.4357582Z
+warden processes:
+
+
+Id        : 65540
+StartTime : 
+Path      : 
+
+Id        : 67200
+StartTime : 11/15/2026 9:19:25 PM
+Path      : 
+
+
+
+prepare.log:
+
+
+Length           : 521
+LastWriteTimeUtc : 11/16/2026 5:19:30 AM
+CreationTimeUtc  : 11/16/2026 5:17:39 AM
+
+
+
+cache:
+
+Name                         Length    LastWriteTimeUtc      
+----                         ------    ----------------      
+images                                 11/16/2026 5:19:27 AM 
+prepare.log                  521       11/16/2026 5:19:30 AM 
+relay-boot.link-channel      22        11/12/2026 11:10:21 PM
+relay-boot.link-channel.prev 22        11/12/2026 11:10:21 PM
+relay-boot.source            41        11/12/2026 11:10:21 PM
+relay-boot.vhdx              119537664 11/12/2026 11:10:21 PM
+relay-boot.vhdx.prev         119537664 11/12/2026 11:10:21 PM
+
+
+make: Leaving directory 'C:/Users/jeff/buildwarden-native/.scratch/pct-hv'

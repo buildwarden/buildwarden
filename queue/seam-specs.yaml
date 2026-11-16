@@ -1,6 +1,6 @@
 feature: seam-specs
 title: 'Specs repository and conformance suites: write seams 1, 2, 3, 5 and 6, build the harness against any relay and any collector, link the book and the specs, fill tier 1''s seams list (componentization S1)'
-priority: 70
+priority: 71
 status: in_progress
 round: feature
 phase: 3
@@ -435,6 +435,9 @@ history:
   - at: 2026-11-16T04:30:03Z
     by: cloud/20261112T230554Z
     event: claimed f3-implement until 2026-11-16T06:30:03Z
+  - at: 2026-11-16T05:27:02Z
+    by: host:windows-hyperv/20261116T051002Z
+    event: 'priority 70 -> 71 (renumbered by wf new: detached-prepare-windows-exe queued at 68)'
   - at: 2026-11-16T08:15:34Z
     by: cloud/20261112T230554Z
     event: claimed f3-implement until 2026-11-16T10:15:34Z

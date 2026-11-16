@@ -1,0 +1,5 @@
+[warden] config: C:\Users\jeff\buildwarden-native\.scratch\pct-hv\named\warden.toml (--config)
+warden: build VM "warden-build-8yip0tce" COM1 -> \\.\pipe\warden-build-8yip0tce (attach a serial reader to observe guest boot)
+guest: Microsoft Windows NT 10.0.26100.0
+example.com: 200 577 bytes
+warden: build SUCCEEDED (output: .scratch/pct-hv/out-branch)

@@ -1,6 +1,6 @@
 feature: configuration-bugfixes
 title: 'Configuration bugfixes: two documented keys that are never read, doctor reporting ok for a runtime it never ran, a file in the working directory hiding an installed runtime, and load-time checks skipped for a key in another letter case'
-priority: 74
+priority: 75
 status: queued
 round: feature
 phase: 0
@@ -59,3 +59,6 @@ history:
   - at: 2026-11-16T01:16:03Z
     by: cloud/20261112T230554Z
     event: 'priority 73 -> 74 (renumbered by wf new: loop-parallel-rule-wording queued at 62)'
+  - at: 2026-11-16T05:27:02Z
+    by: host:windows-hyperv/20261116T051002Z
+    event: 'priority 74 -> 75 (renumbered by wf new: detached-prepare-windows-exe queued at 68)'
