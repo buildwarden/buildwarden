@@ -22,7 +22,8 @@ FLOW-08, FLOW-10, FLOW-11, FLOW-12, FLOW-15, FLOW-16, FLOW-17, FLOW-18.
   when the design must change (FLOW-06, which seeds a new design review). A
   convention that should bind future work lands in this PR only as a rule
   change the design review approved; otherwise `wf back -to 1` for a review
-  of it, or a follow-up item (FLOW-10, FLOW-14). A regression `main` already
+  of it, or a follow-up item (FLOW-10, FLOW-14). Record the trial merge's
+  lines `dist/wf check` prints in the Consolidation section (FLOW-10). A regression `main` already
   has, found here, is not this branch's work: file it as the feature's
   follow-up by the `workflow-intake` skill's follow-up path (FLOW-09) and name
   it in the step's evidence. Never write into
@@ -38,12 +39,37 @@ FLOW-08, FLOW-10, FLOW-11, FLOW-12, FLOW-15, FLOW-16, FLOW-17, FLOW-18.
   section gets one in the body too, listing each specification the PR
   changes apart from the code (LOOP-02, LOOP-06). A **Follow-ups filed**
   section lists each queue item that `follows` this one, as "<slug> (follows <feature>)", or says
-  none (FLOW-09). Record `pr.number` in the queue file. Then repair CI:
+  none (FLOW-09). Record `pr.number` in the queue file. When the queue
+  already records a PR (the item was sent back and is published again),
+  push to it and mark it ready (`gh pr ready`); open no second one. Then repair CI:
   at most three attempts per distinct failure, then add a `human` step and
   stop (FLOW-11). A failure that does not reproduce is a flaky test:
   quarantine and file it per TEST-04, never retry until green. Set `pr.ci:
-  green` only from a green check run on the PR's head. On any later push
+  green` only from a green check run on the PR's head, and wherever you set
+  `pr.ci`, set `pr.head` to the commit the result is for (FLOW-08). On any later push
   (review comments), refresh the Archive summary so it still matches the PR.
+- `f6-refresh` and `x2-refresh` (any `-r<n>`): bring the branch up to date
+  with `main` (FLOW-08, FLOW-10). Merge `origin/main` (a merge commit,
+  conflict-only fixes, never a rebase), run `make lint`, `make test` and
+  `make deadcode`, and write the consolidation pass over what landed since
+  the branch last merged `main`, with the FLOW-15 sweep, as a dated entry in
+  the Consolidation section naming the `main` commit merged (a process item:
+  no review, FLOW-10). Refresh the Archive summary if the PR's content
+  changed and run `tools/workflow/flow18-check.sh`. A gate failure `main`
+  has too is not this branch's work: record it with
+  `dist/wf main -state <workflow checkout> -sha <merged main> -ci red -gates`,
+  file the fix as the item's follow-up (FLOW-09) unless `main.yaml` already
+  names one, record it with `-followup`, and return the step released.
+  Work beyond conflict fixes and wording goes back as in `f6-consolidate`;
+  before returning, convert the PR to a draft (`gh pr ready --undo`, or the
+  session's draft route), which keeps it from being taken as ready
+  (FLOW-10). Before the push, with a PR recorded: check that the PR is still
+  open and unmerged (`gh api repos/<repo>/pulls/<n>`) and that
+  `origin/<branch>` is still the commit you merged onto. If it merged or
+  the branch is gone, discard the local merge, push nothing, and return
+  `merged meanwhile`. Otherwise push, and with a PR recorded wait for CI on
+  the new head and set `pr.ci` and `pr.head`. A feature in Publish whose PR
+  is not open yet only pushes: `f6-open-pr` follows.
 - `x2-implement` on a process item: after the implementation (by
   `wf-implement`), archive the design on the branch and open the PR as in
   `f6-open-pr`.

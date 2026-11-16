@@ -18,7 +18,12 @@ findings never block on their own. Tier 2 is report-only (LINT-07).
    the approved wording yourself), and `wf check -feature <F>` built from the merge base
    (a `git worktree add` of `git merge-base origin/main <branch>`, its
    `tools/workflow` built to a scratch `wf`, run with `-repo` on the branch
-   checkout). Record each result.
+   checkout). Record each result. Record too, in the report, the trial
+   merge's lines `dist/wf check` prints (FLOW-10) and those of
+   `tools/tier1/area-edges.sh | dist/wf areas -state <workflow checkout> -check -rev HEAD -edges -`.
+   A path outside the declared areas: widen it with `dist/wf declare` when
+   the approved design covers it, otherwise `back-to-design` (FLOW-03,
+   FLOW-06).
 3. Tier 2: extract the rule index from `docs/development/*.md` (LINT-01: the
    `### <ID> — <title>` headers with their Severity and Check lines). For each
    `agent-judgment` rule and the judgment half of each `hybrid` rule, judge the

@@ -29,6 +29,9 @@ feature's cloud steps.
   enforcement, LOOP-09). Otherwise, on a feature branch, propose the change
   in the design for its review.
 - Put secrets in prompts (FLOW-18).
+- Change a trunk's protection: on GitHub, its branch protection rule and
+  the rulesets that apply to it (FLOW-08).
+- Mark an item urgent (FLOW-05).
 
 ## 1. Set up
 
@@ -47,7 +50,12 @@ command -v entire && entire doctor --force && entire status
 git fetch origin main workflow
 git worktree add -B workflow .dev/workflow origin/workflow 2>/dev/null ||
   git -C .dev/workflow reset --hard origin/workflow
+dist/wf validate -state .dev/workflow
 ```
+
+Keep any `limit:` lines `wf validate` prints for the digest (step 2.5
+and step 4). The tick never edits `.dev/workflow/areas.yaml`: the
+area map changes only on Jeff's word (FLOW-05).
 
 `entire doctor --force` installs Entire's git hooks, which a fresh clone lacks;
 `entire status` must name `buildwarden/buildwarden-sessions` as the
@@ -65,7 +73,43 @@ feature in phase 7 (`f7-merge`) and each process item in phase 3 (`x3-merge`),
 run `dist/wf done -state .dev/workflow -repo . -worker $W -feature F -step S`.
 It passes once the human has merged the PR (FLOW-08) and moves the item to
 Close; otherwise leave it pending. `wf next` never offers these steps
-(FLOW-05); this is where they complete. Commit and push any that moved.
+(FLOW-05); this is where they complete.
+
+Then record `main` (FLOW-08, FLOW-09). Read the check runs of `origin/main`'s
+head (`gh api repos/buildwarden/buildwarden/commits/<sha>/check-runs`) and
+whether its ruleset requires an up-to-date branch
+(`gh api repos/buildwarden/buildwarden/rules/branches/main`), and record
+both:
+
+```bash
+dist/wf main -state .dev/workflow -sha <sha> -ci green|red|pending \
+  [-run <failing run's URL>] -up-to-date required|not-required
+tools/tier1/area-edges.sh | dist/wf areas -state .dev/workflow -repo . -check -edges -
+```
+
+Keep the lines `wf areas -check` prints for the digest. On a red `main`
+that `wf status` shows with no follow-up recorded, file the fix by the
+`workflow-intake` skill's follow-up path (FLOW-09), as the follow-up of the
+item whose PR that merge was, and record it with
+`dist/wf main -state .dev/workflow -followup <slug>`; file nothing when the
+merge was no item's, and list it under **Blocked on Jeff**. Then
+`dist/wf stale -state .dev/workflow -repo . -worker $W`, which seeds a
+refresh step on each item `main` has moved past (FLOW-10). Push what moved
+with `wf commit` (below).
+
+Every push of the workflow branch in this skill goes through `wf commit`,
+never `git commit` and `git push`:
+
+```bash
+dist/wf commit -state .dev/workflow -worker $W -m "<message>" \
+  [-claimed F/S [-new-run]] <paths changed>
+```
+
+It pushes only the paths given and the files it generates (FLOW-13). Exit 4:
+the claim was asked again on the moved branch and refused (FLOW-04); go back
+to 1 and ask `wf next` again. Exit 5: the change could not be replayed onto
+the moved branch; `wf commit` names the files, and the change is re-applied
+by hand on top of `origin/workflow` and committed again.
 
 Then repeat while this run has taken fewer than `run_budget.steps` steps:
 
@@ -73,10 +117,10 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
    `-feature <feature>`). `none` ends the loop; keep the `blocked` lines for
    the digest.
 2. Claim it: `dist/wf claim -state .dev/workflow -worker $W -feature F -step S`,
-   adding `-new-run` on this run's first claim of F. Commit on the workflow
-   checkout (`F: claim S`) and `git push origin workflow`. A rejected push
-   means the claim lost (FLOW-04): `git fetch origin workflow`,
-   `git -C .dev/workflow reset --hard origin/workflow`, and go back to 1.
+   adding `-new-run` on this run's first claim of F, then
+   `dist/wf commit ... -m "F: claim S" -claimed F/S [-new-run] queue/F.yaml`.
+   Keep any line `wf claim` printed for a start past the waiting limit
+   (FLOW-05) for the step's **Moved** line.
 3. Check out the feature branch in the code checkout (`git switch <branch>`
    after a fetch; `f0-branch-setup` creates it). The tree must be clean.
    Close is the exception: it works on `main`.
@@ -85,6 +129,7 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
    | Step | Agent |
    |---|---|
    | `f0-branch-setup`, `f6-merge-main`, `f6-consolidate`, `f6-open-pr` | `wf-publish` |
+   | `f6-refresh`, `x2-refresh` (any `-r<n>`) | `wf-publish` |
    | `f1-design` | `wf-design` |
    | `*-plan` | `wf-plan` |
    | `f3-implement`, `f3-implement-r<n>` | `wf-implement` |
@@ -107,6 +152,10 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
    the workflow checkout path. In Review, a red tier 1 goes to `wf-implement`
    for the fix and back to `wf-review`, inside the same step.
 5. Finish the step on the workflow checkout:
+   - The agent returned `merged meanwhile` (Jeff merged the PR while a
+     refresh ran, FLOW-10): end the step with the merge confirmation above
+     (`dist/wf done` on the item's merge step), not with `wf done` on the
+     refresh, which the confirmation drops.
    - The agent returned `back-to-design`:
      `dist/wf back -state .dev/workflow -worker $W -feature F -why "<finding>"`.
      Consolidation returning work the plan already covers adds `-to 3`
@@ -116,10 +165,11 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
      It runs the phase's done-when check (FLOW-03). If it fails, run
      `dist/wf release ... -why "<failed checks>"`; the next run retries.
    - `dist/wf validate -state .dev/workflow` must pass; fix what the agent
-     wrote into the queue file if it does not.
-   - Commit (`F: <what happened>`) and push the workflow branch (FLOW-13:
-     state after every step). A rejected push: fetch, re-apply the step's
-     state change on top of `origin/workflow`, push again.
+     wrote into the queue file if it does not. A `limit:` line that step 1
+     already printed does not fail the step: it goes under **Blocked on
+     Jeff**.
+   - `dist/wf commit ... -m "F: <what happened>" <paths changed>` (FLOW-13:
+     state after every step).
 6. If the step raised a new blocking question, notify the human now (the
    PushNotification tool when available), naming the feature and question.
 
@@ -130,10 +180,12 @@ Then repeat while this run has taken fewer than `run_budget.steps` steps:
 
 ## 4. Digest
 
-Write `.dev/workflow/digest/<YYYY-MM-DD>.md`, the date in America/Los_Angeles.
-If the file exists, append a new `## Run <W>` section. The section is the
-run's report (LOOP-06): check it against that rule's list before the commit.
-Sections, in order:
+Write the run's own file, `.dev/workflow/digest/<YYYY-MM-DD>/<UTC start>-<W>.md`
+(the date in America/Los_Angeles, `/` in `W` written as `-`), starting with a
+`## Run <W>` heading, then run `dist/wf digest -state .dev/workflow`, which
+builds the day's page from the day's run files. The file is the run's report
+(LOOP-06): check it against that rule's list before the commit. Sections, in
+order:
 
 - **Process items** first, when any is queued or in progress (FLOW-03,
   FLOW-05): each one's phase and what it holds (`dist/wf status` prints
@@ -143,14 +195,17 @@ Sections, in order:
 - **Moved**: each step taken: the item, its kind and FLOW-05 class, the
   step, its outcome, and the branch head it left; for an
   `f2-plan` step, also the plan's task count, so Jeff can call a review back
-  (FLOW-19). A step that changed a specification adds a **Specification
+  (FLOW-19). A step whose claim started a feature past the waiting limit
+  carries the line `wf claim` printed (FLOW-05). A step that changed a specification adds a **Specification
   changes** line under its own, naming each one apart from the code (LOOP-02).
   A review step's line gives tier 1's result and the tier-2 findings counted
   by severity, with the report's path (LINT-05).
 - **Blocked on Jeff**: open blocking questions (options and recommendation),
-  design reviews waiting (`*-design-review` steps, FLOW-19), open PRs waiting
-  for his merge (phase 7), `escalate` steps, runaway budgets, priority
-  confirmation. List a runaway budget only as `QUEUE.md`'s **Needs Jeff**
+  design reviews waiting (`*-design-review` steps, FLOW-19), each open PR,
+  as ready to merge or as waiting for a refresh (FLOW-08, FLOW-10),
+  `escalate` steps, an item sent back with its PR open, a red `main`
+  (FLOW-09), the `limit:` lines and holders over a limit (FLOW-05), the
+  lines of `wf areas -check`, runaway budgets, priority confirmation. List a runaway budget only as `QUEUE.md`'s **Needs Jeff**
   does, one line per open item it names (FLOW-13); do not judge budgets
   yourself, and never call a run overrun a runaway.
 - **Follow-ups filed**: each follow-up a step filed this run (FLOW-09), as
@@ -167,5 +222,6 @@ Sections, in order:
   is in **Moved**, not here (FLOW-13).
 - **Notes**: FLOW-18 check result, whether Entire recorded the session.
 
-Commit and push. End the session with the digest's text as the final message,
+`dist/wf commit ... -m "digest: run $W" <the run's file>`, which also commits
+the day's page. End the session with the run's section as the final message,
 so the scheduled task's notification carries it.

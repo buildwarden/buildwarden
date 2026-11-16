@@ -21,13 +21,16 @@ LOOP-04, LOOP-09; from `origin/main` when the branch predates it),
 2. Write `docs/design/<feature>.md` from the template, front-matter derived
    conservatively (FLOW-02). A change to `bootstrap-model` fills the Bootstrap
    comparison (BOOT-07); a `security_boundary` other than `none` fills the
-   Security note (GLOBAL-06). Fill **Defaults and overrides** (GLOBAL-09 to
+   Security note (GLOBAL-06). Declare `repos` and `areas` in the
+   front-matter, starting from what intake recorded in the queue file
+   (FLOW-02). A design that needs an area or a link the area map lacks says
+   so under **Design** and never edits the map (FLOW-05). Fill **Defaults and overrides** (GLOBAL-09 to
    GLOBAL-11). Each default, override or named fallback there that the item's
    `source` or an existing rule does not settle is an assumed question (step
    4), and a fallback the design drops is a rejected alternative in its
    decision. Fill it even when the branch's `TEMPLATE.md` predates it. Under
-   **Design**, name each repository the item works in other than this one
-   (LOOP-04), and fill **Specification changes** when `seams` is not empty
+   **Design**, say for each repository in `repos` other than this one what
+   is done there (LOOP-04), and fill **Specification changes** when `seams` is not empty
    (LOOP-02), each even when the branch's template predates it. A relay
    setting the design adds or moves names the claim field that carries it
    (RELAY-08), or says which of the relay's pre-claim values it is. On a
@@ -53,15 +56,14 @@ LOOP-04, LOOP-09; from `origin/main` when the branch predates it),
    on the delta from the last `approved at <sha>` when the design was approved
    before; otherwise `required`. A `required` review is seeded at the start
    of phase 2, before Plan, and Plan works from the design it approves.
-   Write it in the front-matter and the queue file. Copy
-   `alters_relationships` into the queue file too; if it is `true`,
-   FLOW-05's slot decides whether planning may start (`wf next` enforces it).
-   On a return (FLOW-06), when the feature has a done Plan step and the value
-   changes from `false` to `true`, run `wf validate` after copying it; if it
-   reports more features holding a slot than the limit, put the queue's value
-   back, raise a blocking question that names the holders (FLOW-07), and leave
-   Design unfinished: the human answers it once the limit is raised (FLOW-20)
-   or a holder is done.
+   Write it in the front-matter. Commit, then run
+   `dist/wf declare -state <workflow checkout> -repo . -worker <the tick's worker> -feature <F>`
+   to copy the design's declarations into the queue: `repos`, `areas`,
+   `seams`, the `rule_changes` rules, `alters_relationships` and
+   `design_review`; if `alters_relationships` is `true`, FLOW-05's slot
+   decides whether planning may start. If it refuses because a limit would
+   be exceeded, raise a blocking question that names the holders it printed
+   (FLOW-07) and leave Design unfinished.
 6. Rule changes (FLOW-14): when the feature needs a rule or its enforcement
    changed, declare each change in `rule_changes` (`rule`, `change: add |
    amend | retire`, and every path it edits, enforcement included) and fill
