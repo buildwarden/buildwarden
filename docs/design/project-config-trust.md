@@ -1,6 +1,6 @@
 ---
 feature: project-config-trust
-status: draft
+status: archived
 drivers: [container, qemu, vz, hyperv, firecracker]  # conservatively (FLOW-02): the change is in
                          # cmd/warden and in four shared files of driver/ (hostutil.go, session.go,
                          # detach.go, and driver.go for one field of the request) that every
@@ -4024,4 +4024,84 @@ None.
 
 ## Archive summary
 
-Filled in at Publish (FLOW-12).
+**Built.** `warden` reads one config file and merges none. The file is the
+one `--config <path>` names (a global flag), else the one `WARDEN_CONFIG`
+names, else `./warden.toml` of the working directory when it exists, else
+none. A named file that cannot be read is an error, never a reason to try
+the next one. `--config ""` is an error and an empty `WARDEN_CONFIG` counts
+as unset. An empty file (`--config /dev/null`, `NUL`) means no settings.
+Every command that reads configuration prints a `config:` line naming the
+file (escaped) and how it was found.
+
+`~/.config/warden/config.toml` is no longer read, and while it exists it is
+a transitional error. The exception is when it is the named file. The error
+lives in `cmd/warden/config_former.go` and goes at 1.0. The order for every
+key is flag, variable, file, default (`configFile`, `LoadConfig`).
+`WARDEN_UPSTREAM_CA_CERTS` now replaces `[relay] upstream_ca_certs` instead
+of adding to it. It is split on the OS's path-list separator, and setting
+both is a transitional error where CA paths are used.
+
+Three defects are fixed for whoever owns the file:
+
+- **F1.** A `relay_image` or `WARDEN_IMAGE` that starts with `-` or holds a
+  space or a character that does not print is refused.
+- **F2.** Upstream CA paths are read once, before anything is created, by
+  `driver.LoadUpstreamCAs`. Only valid PEM certificates go to the relay.
+  Each skip (a key, another block, DER, a damaged or unparseable
+  certificate) is a line with its reason, and each path gets a count.
+  `doctor` runs the same checks.
+- **F9.** `driver.ModuleRoot` walks up from the executable only, never from
+  the working directory, and matches the module line exactly.
+
+The default `./warden.toml` must be a regular file. It is read in 64 KiB
+blocks and refused above 1 MiB. A named file has neither limit. A detached
+`image prepare` gets the parent's file as `--config <absolute path>`.
+ORCH-03 and UX-07 are amended to say all this (approved at `a94133d`).
+
+**Decisions taken.** There is still a default file, for ease of use (Jeff).
+What a file may decide does not depend on where it was found: the
+protection is to name the file, and the `config:` line keeps the default
+from being silent. A relative path in the file is relative to the working
+directory. No new variables were added for keys that have none. Messages
+saying "warden.toml" mean the config file in use. F9 got the small fix
+only: removing every `go build` from `warden` belongs to
+`prebuilt-artifacts`.
+
+**Rejected.**
+
+- Refusing some keys from a file found by default: it is the two-level
+  rule again.
+- No default file.
+- A per-user approval list.
+- Falling back from a named file that cannot be read.
+- `--no-config`.
+- Keeping the CA variable's append.
+- Refusing a CA file that holds anything but certificates (a9 (a)), or
+  skipping silently (a9 (c)).
+- A variable naming the source tree.
+- A size cap or a regular-file check on a named file, and a cap read one
+  byte past the limit (r3).
+
+**For a future design touching these concepts.**
+
+- The precedence is flag > variable > the one file > default. There is no
+  user or system level. A new setting that wants one reopens ORCH-03 and
+  UX-07.
+- A `./warden.toml` found by default can still choose the driver, the
+  runtime, the relay image, the CA paths, `output_dir`, `tmpdir` and the
+  hyperv base image in the user's cache. The Security note's **What
+  remains** lists each; a design that adds a key adds to that list.
+- `WARDEN_CONFIG` does not survive `sudo`.
+- The two transitional errors (`config_former.go`) and
+  `runtime-former-values` go at 1.0 (`runtime-former-values-removal`).
+- K1 (`driver-contract`) takes `configFile`'s absolute path as its
+  `config_file`.
+- `prebuilt-artifacts` removes `ModuleRoot` and compilation altogether.
+- Handed on, still open: `workdir-in-context` (a work directory inside the
+  context, and a `FROM` value read as an option), and the four
+  observations in `configuration-bugfixes`.
+- Filed as a follow-up: `detached-prepare-windows-exe`. On Windows a
+  `dist/warden` with no `.exe` cannot start the detached prepare. `main`
+  has the same fault.
+- The native gaps (Windows, hyperv, vz under `sudo`, qemu from the tree)
+  are non-blocking and in the backlog as `project-config-trust-*`.
