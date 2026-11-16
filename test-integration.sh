@@ -232,6 +232,8 @@ done
 cfg_warden build --config ""
 cfg_expect "warden build --config \"\" exits 1 and makes no from-repo" 1 'To fix:'
 
+# TRANSITIONAL(one-config-file): removed with cmd/warden/config_former.go, in
+# the change that prepares 1.0.
 bold "  ~/.config/warden/config.toml is no longer read, and says so:"
 mkdir -p "$CFG_HOME/.config/warden"
 printf '[output]\nverbose = false\n' > "$CFG_HOME/.config/warden/config.toml"
