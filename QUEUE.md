@@ -39,7 +39,7 @@ None.
 | Pri | Item | Kind | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|
 | 65 | vz-nocgo-build | feature | buildwarden/buildwarden | undeclared | 8 close | f8-escalate-branch (human) | - | [#123](https://github.com/buildwarden/buildwarden/pull/123) | 11 / 8 |
-| 67 | project-config-trust | feature | buildwarden/buildwarden | undeclared | 6 publish | f6-merge-main (cloud) | - | - | 17 / 14 |
+| 67 | project-config-trust | feature | buildwarden/buildwarden | undeclared | 6 publish | f6-merge-main (cloud, leased to cloud/20261116T174717Z) | - | - | 18 / 14 |
 | 71 | seam-specs | feature | buildwarden/buildwarden, buildwarden/buildwarden-specs | undeclared | 6 publish | f6-release-specs (human), f6-merge-main (cloud) | - | - | 13 / 30 |
 | 69 | prebuilt-artifacts | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 72 | driver-contract | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 5 / 30 |
