@@ -1,0 +1,60 @@
+{
+  "feature": "project-config-trust",
+  "branch": "feat/project-config-trust",
+  "head": "11c2b1947a8d",
+  "base": "3cb0b2b07847",
+  "round": "feature",
+  "step": "f4-review-r2",
+  "previous_report": "5a57e557c454",
+  "scope": "git diff origin/main...feat/project-config-trust: 44 files, +8655/-457. Merge base 3cb0b2b is origin/main. Since the previous report (5a57e55): cmd/warden/config.go, cmd/warden/configfile_test.go, docs/book/src/guide/configuration.md, docs/book/src/concepts/overview.md, docs/design/project-config-trust.md (r2 and r3 of Decision 14, the r2/r3 plan deltas, the review records). Judged against the design as approved at b7ddd0e (r3).",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "rule_index": "Headers extracted from docs/development/*.md (LINT-01), unchanged since the previous report: the branch changes no file under docs/development/ since 5a57e55. ORCH-03 and UX-07 are the only rule bodies the branch changes. Reached by the delta: FLOW-06, FLOW-14, FLOW-15, GLOBAL-06, GLOBAL-09, GLOBAL-10, GLOBAL-11, UX-01, UX-03, TEST-01, TEST-04.",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass (linux, PATH=/root/go/bin): 0 issues; dist/tier1 -base origin/main (3cb0b2b07847...11c2b1947a8d): 0 MUST, 0 MUST-review, 0 SHOULD, 0 hints, 0 suppressed; exit 0",
+    "make_lint_per_platform": "not rerun as make lint: no build-tagged file changed since 5a57e55, where GOOS=windows and GOOS=darwin make lint passed. GOOS=windows and GOOS=darwin go vet ./cmd/warden ./driver pass at 11c2b19",
+    "make_test": "pass: exit 0, no FAIL line",
+    "targeted_tests": "go test ./cmd/warden -run 'Capped|IsCapped|CannotBeRead|ADevice|Regular' -count=1: ok",
+    "make_enforcement": "pass: enforcement-check.sh origin/main: the branch changes no enforcement (FLOW-14)",
+    "wf_check": "dist/wf check -feature project-config-trust: clean branch head at 11c2b19; rule changes cleared (FLOW-14) for ORCH-03 and UX-07; make lint/test skipped without -run (run above); report lines missing before this report",
+    "merge_base_wf_check": "not built: the branch changes neither tools/tier1/ nor tools/workflow/check/",
+    "integration_test": "not run: no container runtime here; the PR's integration workflow runs it",
+    "fixes_made": "none"
+  },
+  "rule_changes_flow14": [
+    {"rule": "ORCH-03", "file": "docs/development/orchestrator.md", "verdict": "matches", "how": "No change under docs/development/ since 5a57e55, where the body was byte-identical to the approved wording; the design's Rule changes section is not edited after approval (r2 and r3 left it, the r3 approval at b7ddd0e says nothing else changed); wf check clears it."},
+    {"rule": "UX-07", "file": "docs/development/ux-cli-config.md", "verdict": "matches", "how": "As ORCH-03."}
+  ],
+  "design_code_docs_agreement": {
+    "regular_file": "Agrees. Design Decision 14, How the config file is found, Defaults and overrides row, Security note item 10: a ./warden.toml found by default that is not a regular file once links are followed is the error 'not a regular file' and is not opened; a link to nothing is no file; a named file is read whatever kind. Code: readConfigFile (cmd/warden/config.go:175-220) applies errNotRegular only when source == configFromDir, after os.Stat (follows links); configFile treats ErrNotExist (dangling link) as no file. Reference configuration.md:28-34 and overview.md:32-35 say the same.",
+    "cap": "Agrees. Design: read in 65536-byte blocks, stop once more than 1048576 bytes arrived (at most 1114112 read), error 'larger than 1 MiB' with the fix 'make it 1 MiB or smaller, or name it with --config or WARDEN_CONFIG, which reads it whatever its size'; a read error before the cap is the OS's error with the unreadable-file text; a named file is unbounded. Code: maxProjectConfig = 1<<20, configBlock = 1<<16, readCapped (config.go:252-267) appends each block and returns errTooLarge when len(data) > cap, so at most cap+block is read; other errors returned unchanged and wrapped by unreadableConfig; named sources use os.ReadFile. Reference says 'read up to 1 MiB ... larger than 1 MiB ... read whole'. Tests (configfile_test.go) cover exactly 1 MiB, 1 MiB + 1, /proc/self/pagemap, /proc/self/mem (EIO), endless readers bounded at cap+block, a reader failing before the cap, and named over-cap files under --config and WARDEN_CONFIG, as the Validation plan lists. The verifier's runtime matrix under all six config-reading commands matches."
+  },
+  "findings": [
+    {
+      "id": "F2",
+      "rule": "GLOBAL-06",
+      "severity": "MUST-review",
+      "file": "driver/session.go:275",
+      "lines": "driver/session.go (LoadUpstreamCAs, scanCAFile, ClaimRelay); driver/hostutil.go (ModuleRoot); cmd/warden/config.go (configFile, readConfigFile)",
+      "what": "Carried forward. A security-boundary change: trust roots sent across host-relay as re-encoded valid PEM only, the user-level config file removed, ModuleRoot found from the executable only; the delta adds how the default config file is read (regular-file check and 1 MiB cap). The design carries the Security note the rule asks for, updated at r2/r3 (What remains, 10).",
+      "fix": "No code change. The human acknowledges at merge with the Security note in the PR body; TEST-08's adversarial arm runs before the release that carries it."
+    }
+  ],
+  "counts": {"MUST": 0, "MUST-review": 1, "SHOULD": 0},
+  "resolved_since_previous": [
+    {"id": "F1", "rule": "FLOW-06", "how": "back-to-design taken: Decision 14 (r2, approved at fff2b5f; r3, approved at b7ddd0e) names the regular-file check and its asymmetry, and the Defaults and overrides section lists it and the cap; GLOBAL-09's half resolves with it. Code unchanged for the check, as the fix proposed."}
+  ],
+  "carried_forward": ["F2"],
+  "new_since_previous": [],
+  "judged_not_findings": [
+    "The fix line for 'not a regular file' is 'make it readable, or name another file ...', the unreadable-file fix; the design's example (design lines ~993-995) gives that text, so it matches.",
+    "Stat-then-open window in readConfigFile: a ./warden.toml swapped for a FIFO after os.Stat would block os.Open. Needs a concurrent writer on the host, outside the design's static-repository model; no rule covers it. Opening first and checking the opened file (f.Stat, or O_NONBLOCK) would close it; noted for the human, not a finding.",
+    "driver/detach.go passes the parent's config path to the background image prepare as --config (Decision 10, approved): when the parent read the default ./warden.toml, the child reads the same path as a named file, unbounded and without the regular-file check. Only matters if the file is replaced between the two reads; same race-only class. Noted for the human.",
+    "GLOBAL-10/11: the cap is not a fallback (the design says so under Defaults and overrides): over the cap is an error, not a partial read and not another source. No new default or merge outside the section.",
+    "UX-01 and FLOW-15: configuration.md and overview.md change with the code.",
+    "Design edits after the r3 approval (b7ddd0e..11c2b19) are the r3 plan delta and the approval record only.",
+    "TEST-01/TEST-04: procfs cases skip with a reason off Linux or where the file is absent; readCapped's cases use in-memory readers and run on every OS."
+  ],
+  "follow_ups": [],
+  "suppressions": []
+}

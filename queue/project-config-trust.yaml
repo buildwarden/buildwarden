@@ -3,7 +3,7 @@ title: 'One warden.toml in the control of whoever runs the build: found by --con
 priority: 67
 status: in_progress
 round: feature
-phase: 4
+phase: 5
 design: docs/design/project-config-trust.md
 branch: feat/project-config-trust
 alters_relationships: false
@@ -110,6 +110,13 @@ steps:
   - id: f4-review-r2
     phase: 4
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f5-guide
+    phase: 5
+    affinity: cloud
     status: pending
     lease:
       claimed_by: ""
@@ -120,7 +127,7 @@ budget:
     steps: 14
   spent:
     runs: 0
-    steps: 12
+    steps: 13
 questions:
   - id: a1
     kind: assumed
@@ -437,3 +444,12 @@ history:
   - at: 2026-11-16T01:32:08Z
     by: cloud/20261112T230554Z
     event: entered phase 4 (review)
+  - at: 2026-11-16T01:36:38Z
+    by: cloud/20261112T230554Z
+    event: claimed f4-review-r2 until 2026-11-16T03:36:38Z
+  - at: 2026-11-16T01:39:15Z
+    by: cloud/20261112T230554Z
+    event: done f4-review-r2
+  - at: 2026-11-16T01:39:15Z
+    by: cloud/20261112T230554Z
+    event: entered phase 5 (guide)
