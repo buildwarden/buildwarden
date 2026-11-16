@@ -1,0 +1,97 @@
+# Observations owed to later items that are not yet in the queue (FLOW-10,
+# FLOW-20). Each group names the item a design's review assigned the
+# observations to; that item's intake (workflow-intake) copies its group into
+# the item's source, as configuration-bugfixes' source carries the
+# observations project-config-trust's review handed it, and removes the group
+# here. An observation is not a divergence to fix in the filing item and asks
+# for no step. Not read by wf.
+#
+# Seeded 2026-11-16 from seam-specs' r2 design review (Jeff): the class (c)
+# rows not filed as items and the class (b) rows of the table "Found during
+# Implement: N1 to N33 (r2)" in docs/design/seam-specs.md (feat/seam-specs at
+# c6078b7). K's lines are those of origin/main at 8c41eaa, as the table says;
+# S is buildwarden/buildwarden-specs.
+groups:
+  - item: "S2 (truststore endpoints; the item that changes initialize and builds the executor's suite)"
+    queued: false
+    design: "docs/design/componentization.md (S2); docs/design/seam-specs.md (Which item fixes each)"
+    observations:
+      - {n: N1, class: c, ref: "bootstrap-config BOOTCFG-14 (MAY), BOOTCFG-10, BOOTCFG-12; a21 (A)",
+         at: "bootstrap/bootstrap.go:67, :72, :75-77, :80",
+         what: "bootstrap.Parse folds member names in case, merges duplicates, ignores trailing data and reads a body of Unicode white space as the empty config, against its own comment ('strictly'); S2's item makes Parse strict (a21 (A))."}
+      - {n: N2, class: b, ref: "executor-initialize INIT-1; a25 (A)",
+         at: "cmd/warden-io/main.go:132, :163, :211; cmd/warden-io/initialize.go:153, :180, :245, :351, :371, :424",
+         what: "warden-io uses Go's default transport, so with HTTP_PROXY or NO_PROXY set every request, the gateway's included, goes to that proxy and not to the relay; S2's item gives the executor a transport with no proxy (security angle: the relay is no longer the build's one path)."}
+      - {n: N3, class: c, ref: "executor-initialize INIT-19; EXEC-03",
+         at: "cmd/warden-io/trust_linux.go:30-40, :65-72",
+         what: "The exclusive-trust hook 99warden rebuilds /etc/ssl/certs only, not the other three bundles initialize replaced, and runs from update-ca-certificates only, not update-ca-trust, against its comment 'gets exclusive trust back'."}
+      - {n: N4, class: c, ref: "executor-initialize INIT-14 (accepted, minor; read only)",
+         at: "cmd/warden-io/platform_windows.go:113-116, :117-138",
+         what: "Each rewrite of the Windows hosts file adds an empty line when the file ends with a newline, against the function's 'idempotent' comment."}
+      - {n: N28, class: c, ref: "executor-initialize INIT-23; bootstrap-config BOOTCFG-8; GLOBAL-10; a23 (A)",
+         at: "cmd/warden-io/platform_darwin.go:91-93; cmd/warden-io/platform_windows.go:155-157",
+         what: "On macOS and Windows exclusive is logged as unsupported and applied as append; S2's item makes it an error that names it, and INIT-23 and BOOTCFG-8 say so in their next version (a23 (A))."}
+      - {n: N29, class: c, ref: "executor-initialize INIT-15; GLOBAL-10; a24 (A)",
+         at: "cmd/warden-io/initialize.go:42; platform_windows.go:59-73; platform_linux.go:44; platform_darwin.go:37",
+         what: "--ip and WARDEN_IP are read everywhere and used only on Windows; S2's item refuses them elsewhere, INIT-15 says Windows-only, and vz stops passing --ip in S2's item or in K1 (a24 (A))."}
+      - {n: N30, class: c, ref: "executor-initialize INIT-13, INIT-14, INIT-20 to INIT-22; GLOBAL-10, GLOBAL-11, EXEC-03",
+         at: "cmd/warden-io/platform_linux.go:78-100; platform_darwin.go:46-70, :100-108; platform_windows.go:53-56, :83-86, :169-174",
+         what: "Steps of initialize that fail and go on (Linux append's fallback, unchecked macOS resolver and trust steps, passed Windows hosts, network and certutil failures), so the CA can be missing from Root."}
+
+  - item: "K1 (driver-contract, queued as driver-contract; in progress, Plan held by q1)"
+    queued: true
+    design: "docs/design/driver-contract.md; docs/design/seam-specs.md (Which item fixes each)"
+    observations:
+      - {n: N31, class: b, ref: "relay-claim CLAIM-1, CLAIM-2 to CLAIM-5, CLAIM-17; moved to (b) by a25 (A)",
+         at: "relaycfg/relaycfg.go:381, :393; relaycfg/tunnel.go:79-81",
+         what: "The reference claimant sends the claim on Go's default transport, so with HTTP_PROXY set and a relay not on loopback the claim and its tokens go to the proxy, whose reply is taken as the relay's; K1 fixes it with the claim connection it takes over from S4 (security angle: the tokens reach a host that is not the relay)."}
+      - {n: N29, class: c, ref: "a24 (A)", at: "driver/vz (the --ip it passes to warden-io)",
+         what: "vz stops passing --ip, in S2's item or in K1, whichever comes first (the executor half is under S2)."}
+
+  - item: "The Rust relay's M-items (M2 relay-core; M6 reconciliation and the ledger verifier)"
+    queued: false
+    design: "docs/design/componentization.md (M2, M6); docs/design/seam-specs.md (Which item fixes each)"
+    observations:
+      - {n: N7, class: c, ref: "relay-claim CLAIM-17, CLAIM-18 (MAY); GLOBAL-10; a21 (A)",
+         at: "relaycfg/relaycfg.go:268-270",
+         what: "The Go relay decodes the claim's body leniently (null as absent, case-folded and duplicate names, trailing data, line breaks in base64); accepted for the Go relay, the Rust relay reads strictly (M2), and a later minor version narrows the MAY to a MUST refuse."}
+      - {n: N12, class: b, ref: "collector-inputs COLLIN-12 (the relay's half), COLLIN-29",
+         at: "relay/relay.go:744-751; relay/collector_client.go:265-271",
+         what: "http://cwd// is forwarded as GET /v1/context//, which the disk collector redirects to /v1/context/ and the relay follows, serving the root's listing; M-items or after the freeze."}
+      - {n: N13, class: b, ref: "collector-inputs COLLIN-28; collector-outputs COLLOUT-25; RELAY-07",
+         at: "relay/collector_client.go:42, :59, :212, :235",
+         what: "The collector client has no redirect policy and follows up to ten redirects on inputs, signals and outputs, the token kept on the same host; M-items or after the freeze, and Jeff may class it as a security fix."}
+      - {n: N14, class: b, ref: "collector-inputs COLLIN-28 (read only)",
+         at: "relay/collector_client.go:228; relay/relay.go:161",
+         what: "An input over 2 GiB is cut at 2 GiB by io.LimitReader with no error and served and recorded as the collector's 200; M-items or after the freeze."}
+      - {n: N15, class: c, ref: "collector-outputs COLLOUT-16; RELAY-07 (read only)",
+         at: "relay/relay.go:903-914; relay/capture.go:86-92; collector/paths.go:66-67",
+         what: "A capture's name is built from an unbounded Host, so over 255 bytes the collector answers 400 and the capture is lost with one log line, or the tunnel ends (N32); the Rust relay bounds the name (M2)."}
+      - {n: N20, class: c, ref: "relay-guest-api GUEST-44, GUEST-49; RELAY-02 (restated at M6)",
+         at: "relay/relay.go:589-610",
+         what: "A response's header fields are recorded before Connection: close is added, in canonical case and Go's order, and the relay's own 502 is recorded with Content-Length: 0 and no Connection while the reply has neither length nor that header; for M2 and M6."}
+      - {n: N25, class: c, ref: "relay-guest-api GUEST-29; specs/build-ledger/v1.md (read only)",
+         at: "relay/relay.go:650-666, :672-680",
+         what: "A refused artifact (413 or 500) leaves the exchange's open and its request-header checkpoint with no close, the bytes already streamed having reached the collector's PUT; for M2 and for M6's ledger verifier."}
+      - {n: N33, class: c, ref: "relay-guest-api GUEST-29 (the SHOULD); accepted",
+         at: "relay/relay.go:161, :670; relay/collector_client.go:290-301",
+         what: "An artifact of exactly 2 GiB and one byte is stored and answered 200 (the MUST is met, the SHOULD missed); accepted for the Go relay, the Rust relay keeps the SHOULD (M2)."}
+
+  - item: "After the freeze, or the first alternative collector (the disk collector)"
+    queued: false
+    design: "docs/design/seam-specs.md (Which item fixes each: D1 to D4, N16, N27, N32)"
+    observations:
+      - {n: N16, class: c, ref: "collector-inputs COLLIN-23 (unspecified cases); GLOBAL-10; a21 (A)",
+         at: "collector/signals.go:43-51",
+         what: "The disk collector reads the completion leniently (null body, missing or null members, trailing data, case-folded and duplicate names, 4294967296), and a missing exit_code is success."}
+      - {n: N32, class: b, ref: "collector-outputs COLLOUT-28, COLLOUT-25, COLLOUT-18",
+         at: "relaycfg/tunnel.go:58-59; collector/collector.go:177, :242-244",
+         what: "The disk collector answers a refused capture (400 or 401) before reading its body, so the Warden-Hash trailer arrives on an answered stream and x/net/http2 ends the tunnel with the open ledger PUT and the session; the table proposes a new disk-collector item after the freeze, since it can end a Go relay's session today (through N15)."}
+
+  - item: "The relay-guest-api suite (buildwarden/buildwarden-specs), with seam-specs' Consolidation or the next item that changes the suite"
+    queued: false
+    design: "docs/design/seam-specs.md (The harness; TEST-04)"
+    observations:
+      - {n: none, class: flake, ref: "GUEST-46; TEST-04 (no retry)",
+         at: "buildwarden-specs relay-guest-api/cases/refused.go:140 (refusedHost, the host-mode GUEST-46 case, at 9abf66c; the case is identified from its description, not from the log)",
+         what: "relay-guest-api's host-mode GUEST-46 case timed out once under full make check load, seen in S at f3087fc; the cause was not found and it has not been reproduced."}
