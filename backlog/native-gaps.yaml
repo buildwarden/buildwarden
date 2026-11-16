@@ -897,6 +897,8 @@ gaps:
       main), and the item is held in Plan on q1 until driver-contract's PR has merged.
       2026-11-16 (host:container-any/20261116T111001Z, unattended, main 8c41eaa): not run, nothing
       changed. feat/prebuilt-artifacts is still 49b513a (design only), and q1 (the hold in Plan) is still open.
+      2026-11-16 (host:container-any/20261116T171002Z, unattended, main 8c41eaa): not run, nothing
+      changed. feat/prebuilt-artifacts is still 49b513a (design only), and q1 (the hold in Plan) is still open.
   - id: prebuilt-artifacts-qemu-windows
     host: macos-qemu
     status: open
