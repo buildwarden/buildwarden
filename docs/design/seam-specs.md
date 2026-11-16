@@ -2217,7 +2217,8 @@ Each row has a class, which says what the review has to decide for it:
 
 The class is the one each document's entry implies by what it says the
 behaviour differs from. Where this design reads it otherwise, the last
-column says so. Count: (a) 13, (b) 6, (c) 14.
+column says so. Count: (a) 14, (b) 5, (c) 14; N31 is (a) and proposed
+for (b).
 
 | # | Specification: requirements | What the code does | K | Class | Later item; where the readings differ |
 |---|---|---|---|---|---|
@@ -2251,7 +2252,7 @@ column says so. Count: (a) 13, (b) 6, (c) 14.
 | N28 | `executor-initialize`: INIT-23; `bootstrap-config`: BOOTCFG-8 | On macOS and Windows `exclusive` is logged as unsupported and applied as `append` | `cmd/warden-io/platform_darwin.go:91-93`; `platform_windows.go:155-157` | (c): GLOBAL-10; the deferral is `unified-bootstrap`'s assumed question 2, and no **Defaults and overrides** names it | S2's item; a23. Read only |
 | N29 | `executor-initialize`: INIT-15 | `--ip` and `WARDEN_IP` are read on every system and used only on Windows; vz passes `--ip` and gets neither an effect nor an error | `cmd/warden-io/initialize.go:42`; `platform_windows.go:59-73`; `platform_linux.go:44`; `platform_darwin.go:37` | (c): GLOBAL-10 | S2's item; a24. Read only |
 | N30 | `executor-initialize`: INIT-13, INIT-14, INIT-20, INIT-21, INIT-22 | Steps that fail and go on: on Linux, `append` falls back from a failed `update-ca-certificates` to appending to a bundle; on macOS the resolver, `resolv.conf` and `scutil` steps are unchecked and a failed `security add-trusted-cert` is passed; on Windows a failed hosts file, network step or `certutil -addstore Root` is passed, so the CA can be missing from `Root` | `cmd/warden-io/platform_linux.go:78-100`; `platform_darwin.go:46-70`, `:100-108`; `platform_windows.go:53-56`, `:83-86`, `:169-174` | (c): GLOBAL-10, GLOBAL-11; EXEC-03 | S2's item. The macOS and Windows parts read only |
-| N31 | `relay-claim`: CLAIM-1, CLAIM-2 to CLAIM-5, CLAIM-17 | The reference claimant sends the claim on Go's default transport: with `HTTP_PROXY` set and a relay not on loopback, the claim, its claim token and its `collector_token` go to the proxy, whose reply is taken as the relay's; the tunnel is dialled directly | `relaycfg/relaycfg.go:381`, `:393`; `relaycfg/tunnel.go:79-81` | (b): CLAIM-1 has the tunnel and the claim on connections the claimant opened to the relay; the claimant's twin of N2 | K1, with the claim connection it takes over from S4; a25. Security angle: the tokens reach a host that is not the relay |
+| N31 | `relay-claim`: CLAIM-1, CLAIM-2 to CLAIM-5, CLAIM-17 | The reference claimant sends the claim on Go's default transport: with `HTTP_PROXY` set and a relay not on loopback, the claim, its claim token and its `collector_token` go to the proxy, whose reply is taken as the relay's; the tunnel is dialled directly | `relaycfg/relaycfg.go:381`, `:393`; `relaycfg/tunnel.go:79-81` | (a): the document says only that it differs from the rest of the protocol (CLAIM-1), and CLAIM-17's note names it without refusing it | K1, with the claim connection it takes over from S4; a25. This design reads it as (b): CLAIM-1 has the tunnel and the claim travel on connections the claimant opened to the relay, and the claim then travels on a connection the proxy opened; it is the claimant's twin of N2. Proposed: Jeff moves it to (b), and task 37 marks it in `relay-claim`'s introduction as not allowed, as `executor-initialize` marks N2. Security angle: the tokens reach a host that is not the relay |
 | N32 | `collector-outputs`: COLLOUT-28, COLLOUT-25, COLLOUT-18 | The disk collector answers a refused capture (400 for its name, 401 for its token) before it reads the body; the `Warden-Hash` trailer then arrives on an answered stream, `x/net/http2` raises `PROTOCOL_ERROR` and ends the tunnel, with the open ledger `PUT` and the rest of the session | `relaycfg/tunnel.go:58-59`; `collector/collector.go:177`, `:242-244` | (b): COLLOUT-28 broken, named | A new item for the disk collector, after the freeze; it can end a Go relay's session today, through N15 |
 | N33 | `relay-guest-api`: GUEST-29 (413 required from 2 GiB and two bytes, recommended for 2 GiB and one) | An artifact of exactly 2 GiB and one byte is stored and answered 200: the `limitedReader` fails only on a read after the last byte, which `net/http` does not make | `relay/relay.go:161`, `:670`; `relay/collector_client.go:290-301` | (c): its own `maxArtifactBytes` and 413 text, 2 GiB; it meets the MUST and misses the SHOULD | Accept; the Rust relay keeps the SHOULD (M2) |
 
@@ -2261,6 +2262,8 @@ comment or text of this design, and places where the code differs from
 the seam lists of **What each specification covers**. Those are
 Consolidation's (FLOW-10) and later items' to judge; none is a
 divergence.
+
+#### Which item fixes each
 
 What kind of item fixes one is Jeff's to say (FLOW-20): a program item, an
 exempt fix (a regression or a security problem), or an item after the
@@ -2288,7 +2291,8 @@ reviewed (FLOW-19), in one sitting. Jeff decides:
 
 1. **The classes**, row by row, and the corrections of D6 and D17. Each
    class is a proposal; a row moved to (c) gains a later item, and a row
-   moved out of (b) changes its document's requirement (task 37).
+   moved out of (b) changes its document's requirement (task 37). N31
+   is proposed for (b) (its row).
 2. **Each row of class (c)**, on this recommendation:
    - N1, `bootstrap.Parse` reads loosely: file an observation for S2's
      item; the contract is a21.
@@ -2314,11 +2318,20 @@ reviewed (FLOW-19), in one sitting. Jeff decides:
    - N30, steps of `initialize` that fail and go on: file an observation
      for S2's item.
    - N33, 2 GiB and one byte stored: accept.
-3. **Where the rows of class (b) go**: the proposal above. N2 and N31 are
-   a25.
+3. **Where the rows of class (b) go**: the proposal above, and N31's if
+   it moves there. N2 and N31 are a25.
 4. **a21 to a25** (**Questions**, Assumed). Each proceeds on its
    recommended answer until he confirms it; with those answers no
    requirement of the six documents changes.
+5. **The front-matter's `repos` line**, which r2's approval covers with
+   the rest of the delta. It was added after r1's approval and before r2,
+   at the queue's x4 state on Jeff's word, and `wf check` reads the
+   design as changed since that approval until r2 is approved.
+
+At the same sitting: the queue offers `f6-release-specs` now, as it needs
+only r1's review. It is not to be done before Review: task 37 moves the
+specs pull request's head off `9abf66c`, and a release made before it
+would tag the old head.
 
 "File an observation" means it is written into the Archive summary for
 the later item's intake (**Owed to later items**); "file an item" means
@@ -4607,8 +4620,8 @@ states what the code does and lists the behaviour under its "Known
 divergences", marked "not yet in the design's table (found <stage>)",
 the stage's report names it with file, line and evidence, and the stage
 goes on; the whole list goes back to Design once, after the suites (it
-did, as r2: the rows are now in the table, and task 37 removes the mark). One
-that looks like a bug is reported as an observation for a later item,
+did, as r2: the rows are now in the table, and task 37 removes the
+mark). One that looks like a bug is reported as an observation for a later item,
 and the code is not changed. Each stage is green on
 `make check-docs`. The relay that D17 and D18 are reproduced against is
 built from a detached worktree of K at `origin/main`, into a directory
@@ -4922,8 +4935,9 @@ does and lists it under "Known divergences", marked "not yet in the
 design's table (found <stage>)", the case asserts the document, the
 stage's report names the behaviour with file, line and evidence, and the
 stage goes on; the whole list goes back to Design once, after the
-suites, which is r2 (task 37 then removes the mark). No case is weakened and no code is changed to make a suite pass
-(FLOW-06, LOOP-02).
+suites, which is r2 (task 37 then removes the mark). No case is
+weakened and no code is changed to make a suite pass (FLOW-06,
+LOOP-02).
 
 20. **S, stage 8a** `relay-claim`'s cases. For a relay: authorization
     and refusal, a refused claim leaving the relay claimable and a spent
@@ -5130,9 +5144,24 @@ comes after stage 13.
     introduction that says the N entries are not yet in the design's
     table, so that it names that table as holding D1 to D19 and N1 to
     N33. In `bootstrap-config` and `relay-guest-api`, N24's "Read from
-    the code; not run" becomes what stage 8e ran. Where an answer of r2
+    the code; not run" becomes what stage 8e ran. Each sentence that
+    describes this design's table, its **Defaults and overrides** or its
+    **Security note** as they stood before r2 is reworded to describe
+    them as amended: in `relay-claim`, D6's "though the design's table
+    names it there", N5's "The design's row for D6 has ...", N6's "The
+    design's D6 row names neither", N8's "The design's D6 row has
+    'metadata that is not a CBOR map' fail" and N9's "Nothing in the
+    design records a limit on this or its absence"; in
+    `bootstrap-config`, the introduction's "lists none for this seam"
+    and N24's "named neither in the design's table nor in its security
+    note"; in `executor-initialize`, N28's and N30's "no design names it
+    under its **Defaults and overrides**", which this design now names
+    as not allowed. If r2 moves N31 to class (b), `relay-claim`'s
+    introduction says that N31 is the one the requirements above do not
+    allow, as `executor-initialize` says of N2, and CLAIM-17's note
+    says so too. Where an answer of r2
     departs from the recommended one (a21 to a25), or moves a row out of
-    class (b), the requirement it names changes in this task, with its
+    class (b) or, other than N31, into it, the requirement it names changes in this task, with its
     case (**Specification changes**); with the recommended answers no
     requirement changes and no case changes. `make check`, commit,
     push: the specs pull request's head moves to that commit, and its
@@ -5177,8 +5206,8 @@ are done the item goes back to Design once (FLOW-06): the table is
 amended with the whole list, the correction of D6 among it, and Jeff
 reviews it in one sitting. That return is r2 (**Design review**): the
 table now holds N1 to N33 and the corrections of D6 and D17, and after
-its review task 37 removes the mark from S's documents. A behaviour that looks like a bug is
-reported as an observation for a later item; no code of K changes for
+its review task 37 removes the mark from S's documents. A behaviour
+that looks like a bug is reported as an observation for a later item; no code of K changes for
 it. Any other finding that the approved design cannot be built as
 written is still a return, as above.
 
@@ -5600,9 +5629,17 @@ reworded to match; nothing else in the design changes.
   task 37, the r2 delta, and the sentences that spoke of the mark. The
   front-matter, the five rule changes' wording and the three amendments
   to the umbrella are unchanged.
-- Count by class: (a) specified as is, 13; (b) divergence kept, 6 (N2,
-  N12, N13, N14, N31, N32); (c) looks like a bug, 14 (N1, N3, N4, N7,
-  N15, N16, N20, N21, N24, N25, N28, N29, N30, N33).
+- Count by class: (a) specified as is, 14; (b) divergence kept, 5 (N2,
+  N12, N13, N14, N32); (c) looks like a bug, 14 (N1, N3, N4, N7, N15,
+  N16, N20, N21, N24, N25, N28, N29, N30, N33). N31 is (a) as its
+  document treats it, and proposed for (b).
+- An independent check of the delta, before the sitting, found that
+  task 37 left sentences in S that describe the table as it stood
+  before r2, that N31's class was this design's reading and not its
+  document's, and that the proposal table sat under the N heading. Task
+  37 now names those sentences, N31 is (a) and proposed for (b), and
+  the proposal has its own heading; **What Jeff decides in r2** adds the
+  `repos` line and the early `f6-release-specs`.
 - `design_review` stays `required`: the table is part of the design r1
   approved, and five assumed questions are open (FLOW-19, judged on this
   delta). The outcome is recorded here with Jeff's answers.
