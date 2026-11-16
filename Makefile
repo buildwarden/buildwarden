@@ -1,4 +1,4 @@
-.PHONY: build test integration-test lint tier1 enforcement fmt tidy cover clean sign relay-vm deadcode
+.PHONY: build test integration-test lint tier1 enforcement fmt tidy cover clean sign relay-vm deadcode pin-specs
 
 UNAME_S := $(shell uname -s)
 UNAME_M := $(shell uname -m)
@@ -98,6 +98,13 @@ fmt:
 
 tidy:
 	go mod tidy
+
+# Moves the pins of the seam specifications, tools/conformance/<directory>/
+# (Decision 7 of docs/design/seam-specs.md). Give SPECS="<directory>@<version>
+# ...", SPECS=latest or REF=<commit>; it has no default. A pin is moved by this
+# target and never by go get, which keeps the old pin's harness version.
+pin-specs:
+	SPECS='$(SPECS)' REF='$(REF)' sh tools/conformance/pin-specs.sh
 
 cover:
 	go test -coverprofile=coverage.out ./...
