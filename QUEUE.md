@@ -35,7 +35,7 @@ None.
 | Pri | Item | Kind | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|
 | 65 | vz-nocgo-build | feature | buildwarden/buildwarden | undeclared | 6 publish | f6-validate-macos-vz (host:macos-vz) | - | - | 9 / 8 |
-| 67 | project-config-trust | feature | buildwarden/buildwarden | undeclared | 5 guide | f5-guide-r2 (cloud) | - | - | 16 / 14 |
+| 67 | project-config-trust | feature | buildwarden/buildwarden | undeclared | 5 guide | f5-guide-r2 (cloud, leased to cloud/20261112T230554Z) | - | - | 17 / 14 |
 | 71 | seam-specs | feature | buildwarden/buildwarden, buildwarden/buildwarden-specs | undeclared | 3 implement | f6-release-specs (human), f3-implement (cloud, leased to cloud/20261112T230554Z) | - | - | 7 / 30 |
 | 69 | prebuilt-artifacts | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 72 | driver-contract | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 5 / 30 |
