@@ -274,17 +274,20 @@ func TestMergeTreeProofIgnoresMergeDrivers(t *testing.T) {
 	}
 	for name, place := range places {
 		for _, dropAfter := range []bool{false, true} {
-			t.Run(fmt.Sprintf("%s/drop_after=%v", name, dropAfter), func(t *testing.T) {
+			sub := fmt.Sprintf("%s/drop_after=%v", name, dropAfter)
+			t.Run(sub, func(t *testing.T) {
 				work := proofRepo(t)
 				co := place(t, work)
 				git(t, work, "checkout", "-q", "main")
-				commitEdit(t, work, "f.txt", "main edits line 20", twenty("TWENTY\n"))
+				commitEdit(t, work, "f.txt", "main edits line 20",
+					twenty("TWENTY\n"))
 				git(t, work, "push", "-q", "origin", "main")
 				git(t, work, "fetch", "-q", "origin")
 				git(t, work, "checkout", "-q", "feat/demo")
 				sha := squashed(t, work)
 				if dropAfter {
-					commitEdit(t, work, "f.txt", "UNMERGED: drop line 20", twenty(""))
+					commitEdit(t, work, "f.txt", "UNMERGED: drop line 20",
+						twenty(""))
 				}
 				if name == "config_driver" {
 					git(t, work, "config", "merge.keep.driver", "true")
