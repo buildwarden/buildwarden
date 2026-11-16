@@ -506,19 +506,84 @@ branch after consolidation:
 
 ## Implementation plan
 
-1. `driver/vz`: the two build constraints, the rename of `vz_darwin.m` to
-   `vz_darwin_arm64.m`, the constant in both files, the
-   platform function and its use in `checkPlatform`, with doc comments
-   (GLOBAL-07, UX-04, GLOBAL-01).
-2. `driver/vz` tests: the table test, the file-selection test and the
-   constant's test (GLOBAL-04, TEST-01).
-3. `Makefile`: `release-build`, in `.PHONY` (GLOBAL-07).
-4. `.github/workflows/main.yml`: the step at the end of the `build` job
-   (GLOBAL-07, FLOW-14: `build` is not a rule-running job).
-5. Reference docs: `drivers.md`, `cli.md`, `installation.md`,
-   `structure.md`, `CONTRIBUTING.md` (UX-01).
-6. `make test`, `make lint`, `GOOS=darwin make lint`, `GOOS=darwin
-   GOARCH=arm64 make lint`, `make release-build` (FLOW-17).
+Planned from the design as approved at `d391343`. Tests come first and fail
+on `main`'s code (TEST-01); the fix then makes them pass.
+
+1. **Tier-0 test: file selection** (TEST-02 tier 0, TEST-01, GLOBAL-04,
+   GLOBAL-07). A test in `driver/vz` that, for darwin, linux and windows on
+   amd64 and arm64, with cgo on and off, runs `go/build`'s
+   `Context.ImportDir` on the package directory and asserts that exactly
+   one of `vz_stub.go` and `vz_darwin_arm64.go` is selected, and that with
+   cgo on no `.m` file is selected unless a cgo file is (**Validation
+   plan**). Pure Go, compiles nothing, runs in `make test` on every host.
+   Fails before task 4 for darwin/arm64 without cgo and darwin/amd64 with
+   cgo.
+2. **Tier-0 test: the platform function** (TEST-02 tier 0, TEST-01,
+   GLOBAL-04, UX-04, UX-09, GLOBAL-10). A table test over the rows of
+   **The fix**: not darwin/arm64 without bindings gives today's error;
+   darwin/arm64 without bindings gives the error of **The message**, text
+   and fix; darwin/arm64 with bindings gives nil. Every error is a
+   `driver.FixableError` with a non-empty fix, and no row without bindings
+   returns nil (Decision 3). It needs no host, no `codesign` and no
+   entitlement.
+3. **Tier-0 test: the constant agrees with the build** (TEST-02 tier 0,
+   TEST-01, GLOBAL-04, GLOBAL-07). The oracle is the `CGO_ENABLED` setting
+   `runtime/debug.ReadBuildInfo` reports for the test binary, not a build
+   tag: the constant is true exactly when `runtime.GOOS`/`GOARCH` is
+   darwin/arm64 and that setting is `1`; the test skips when the setting is
+   absent (**Validation plan**).
+4. **`driver/vz`: the fix** (GLOBAL-07, UX-04, UX-09, GLOBAL-01, GLOBAL-10,
+   GLOBAL-11, ORCH-01; Decisions 1 and 3; rework of code already on
+   `main`, FLOW-06). Only the files **The fix** names:
+   - `vz_stub.go`: `//go:build !darwin || !arm64 || !cgo`, its file
+     comment saying it is the stub for every build without the bindings,
+     and the constant, false;
+   - `vz_darwin_arm64.go`: `//go:build darwin && arm64 && cgo`, and the
+     same constant, true;
+   - `vz_darwin.m` renamed `vz_darwin_arm64.m` with `git mv`, content
+     unchanged; `vz_darwin.h` stays;
+   - `driver.go`: a pure function of `(GOOS, GOARCH, bindings)` that
+     returns today's platform error, the new error of **The message**
+     (`driver.Fixable`, exit 1 through the existing error path), or nil;
+     `checkPlatform` calls it with `runtime.GOOS`, `runtime.GOARCH` and the
+     constant before the entitlement check, which is unchanged. Doc
+     comments on the function and the constant (GLOBAL-01).
+   No other driver, shared `driver/` package, `relay/`, `ledger/` or
+   `collector/` file changes. Tasks 1 to 3 pass after it.
+5. **`Makefile`: `release-build`** (GLOBAL-07, TEST-01; Decision 4).
+   `RELEASE_TARGETS` and the `release-build` target exactly as **The
+   guard** writes them, with its comment, and `release-build` added to
+   `.PHONY`. It is not part of `make test`.
+6. **`.github/workflows/main.yml`: the guard step** (GLOBAL-07, FLOW-14,
+   PROFILE-01; Decision 4). The step of **The guard**, with its comment,
+   as the last step of the `build` job, `if: runner.os == 'Linux'`. No new
+   job, no change to `changes`, `ci-ok` or any rule-running job.
+7. **Reference docs** (UX-01, UX-04), as **Reference docs (UX-01) and the
+   overview (FLOW-15)** lists them:
+   - `docs/book/src/guide/drivers.md`, VZ **Requirements**: a `warden`
+     built from source with cgo (`make build`); a released binary has no
+     vz driver and says so;
+   - `docs/book/src/guide/cli.md`, `warden doctor`: the vz check also
+     covers a `warden` built without cgo;
+   - `docs/book/src/getting-started/installation.md`: the sentence on what
+     the released binary is ready for names the vz driver as needing a
+     build from source and points at the vz first-time setup;
+   - `CONTRIBUTING.md`: `make release-build` in the command list and in
+     "Cutting a release".
+8. **`docs/book/src/contributing/structure.md`** (UX-01, FLOW-15):
+   `vz_darwin.m` listed as `vz_darwin_arm64.m`, and `vz_stub.go` described
+   as the stub for every build without the bindings (not "non-macOS
+   platforms"). `overview.md` is not changed: no component's flow changes
+   (FLOW-15).
+9. **Fast gate and cross-platform lint** (TEST-01, TEST-02 tier 0,
+   FLOW-17, GLOBAL-07): `make test`, `make lint`, `GOOS=darwin make lint`,
+   `GOOS=darwin GOARCH=arm64 make lint` and `make release-build` pass; the
+   branch is pushed at the green checkpoint
+   (`flow18-check.sh` first). Tier 1 is not reached (**Validation plan**).
+10. **Tier 2, native, blocking: macos-vz** (TEST-02 tier 2, TEST-03,
+    FLOW-09): queue step `f6-validate-macos-vz`, cases 1 to 5 of the
+    **Validation plan** as its note already lists them, on the branch
+    after consolidation, by the Mac's native session. Not done in the cloud.
 
 ## Design review
 
