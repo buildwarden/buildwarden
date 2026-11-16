@@ -190,6 +190,8 @@ func resolveConfig() (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	// A background image prepare this run starts reads the same file.
+	driver.ConfigFile = cfg.File
 
 	if flagRuntime != "" {
 		cfg.Runtime.CLI, cfg.Runtime.CLISource = flagRuntime, cliFromFlag

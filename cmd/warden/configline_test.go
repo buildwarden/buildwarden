@@ -8,6 +8,8 @@ import (
 	"testing"
 
 	"github.com/fatih/color"
+
+	"github.com/buildwarden/buildwarden/driver"
 )
 
 // captureLog collects what warden prints through its logger, which is its
@@ -162,4 +164,24 @@ func TestNoConfigLineWhenTheLoadFails(t *testing.T) {
 	if got := stderr.String() + report.String(); got != "" {
 		t.Errorf("a failed load printed %q", got)
 	}
+}
+
+// The file a command read is recorded for the background image prepare,
+// absolute, and none is recorded when none was read.
+func TestConfigFileRecordedForTheDetachedPrepare(t *testing.T) {
+	t.Cleanup(func() { driver.ConfigFile = "" })
+	t.Run("a file", func(t *testing.T) {
+		inConfigFiles(t, "")
+		path := write(t, t.TempDir(), "ci.toml", "")
+		giveConfigFlag(t, path)
+		if _, err := resolveConfig(); err != nil || driver.ConfigFile != path {
+			t.Errorf("recorded %q, %v; want %s", driver.ConfigFile, err, path)
+		}
+	})
+	t.Run("none", func(t *testing.T) {
+		inConfigFiles(t, "")
+		if _, err := resolveConfig(); err != nil || driver.ConfigFile != "" {
+			t.Errorf("recorded %q, %v; want none", driver.ConfigFile, err)
+		}
+	})
 }
