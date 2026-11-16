@@ -53,8 +53,9 @@ func (d *Driver) Name() string { return "vz" }
 // StartBuild implements driver.Driver. It starts the host relay, boots the
 // macOS build VM with the relay as its only network path, and waits for the
 // build to finish. It fails with a fixable platform error on any host but
-// macOS/arm64, and on macOS/arm64 when the binary lacks the virtualization
-// entitlement.
+// macOS/arm64, and on macOS/arm64 when the binary was built without the
+// Virtualization.framework bindings (cgo) or lacks the virtualization
+// entitlement (see checkPlatform).
 func (d *Driver) StartBuild(
 	ctx context.Context, req *driver.BuildRequest,
 ) (*driver.BuildResult, error) {
@@ -244,8 +245,9 @@ func (d *Driver) setupNetworkAndRelay(
 
 // Exec implements driver.Driver. Interactive mode is not implemented for vz:
 // it returns driver.ErrExecNotSupported once the platform checks pass, and
-// otherwise the same fixable platform error as StartBuild (another host, or a
-// binary without the virtualization entitlement).
+// otherwise the same fixable platform error as StartBuild (another host, a
+// build without the Virtualization.framework bindings, or a binary without
+// the virtualization entitlement).
 func (d *Driver) Exec(ctx context.Context, req *driver.BuildRequest) error {
 	if err := checkPlatform(); err != nil {
 		return err
@@ -390,11 +392,13 @@ func (d *Driver) bootBuildVM(
 	return vm, nil
 }
 
+// checkPlatform refuses the driver unless this host and this build can run
+// it: macOS on Apple Silicon, a build with the bindings, and a warden signed
+// with the virtualization entitlement. It is the first thing every entry
+// point runs, before any relay, download or VM.
 func checkPlatform() error {
-	if runtime.GOOS != "darwin" || runtime.GOARCH != "arm64" {
-		return driver.Fixable("use --driver qemu or --driver container on this host",
-			"vz driver requires macOS on Apple Silicon (got %s/%s)",
-			runtime.GOOS, runtime.GOARCH)
+	if err := platformError(runtime.GOOS, runtime.GOARCH, hasBindings); err != nil {
+		return err
 	}
 	exe, err := os.Executable()
 	if err != nil {
@@ -409,6 +413,25 @@ func checkPlatform() error {
 				" (make build does this)",
 			"vz driver requires warden to be signed with the "+
 				"com.apple.security.virtualization entitlement")
+	}
+	return nil
+}
+
+// platformError is checkPlatform's verdict on the target and on whether the
+// build compiled the bindings, as a pure function so every row is testable
+// on any host. A build without the bindings is refused even on darwin/arm64,
+// where its stub would otherwise hand a build a nil VM and no error.
+func platformError(goos, goarch string, bindings bool) error {
+	if goos != "darwin" || goarch != "arm64" {
+		return driver.Fixable("use --driver qemu or --driver container on this host",
+			"vz driver requires macOS on Apple Silicon (got %s/%s)", goos, goarch)
+	}
+	if !bindings {
+		return driver.Fixable("build warden from source on this Mac "+
+			"(xcode-select --install, then make build), "+
+			"or use --driver container or --driver qemu",
+			"this warden was built without cgo, so it has no vz driver "+
+				"(released binaries are built this way)")
 	}
 	return nil
 }
@@ -517,7 +540,8 @@ func launcherStamps(cache *ImageCache) []driver.LauncherStamp {
 	return []driver.LauncherStamp{imageStamp(dir, cache)}
 }
 
-// Preflight checks the host can run vz builds (Apple Silicon macOS and a
-// binary signed with the virtualization entitlement). It is
+// Preflight checks the host can run vz builds (Apple Silicon macOS, a build
+// with the Virtualization.framework bindings (cgo), and a binary signed with
+// the virtualization entitlement); checkPlatform is the check. It is
 // `warden doctor --driver vz`.
 func Preflight() error { return checkPlatform() }

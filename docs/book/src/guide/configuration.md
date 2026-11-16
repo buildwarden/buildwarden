@@ -281,7 +281,8 @@ When `driver` is empty (the default), the **container** driver is used. Use `--d
 
 - `container` — Unprivileged container with iptables isolation (default)
 - `qemu` — Two-VM topology, cross-platform, requires `qemu-system-*`
-- `vz` — macOS/arm64 only, uses Virtualization.framework
+- `vz` — macOS/arm64 only, uses Virtualization.framework; needs a `warden`
+  built from source (a released one has no vz driver)
 - `hyperv` — Windows, two-VM topology on Hyper-V with a host-only NAT switch
 - `firecracker` — x86_64 Linux with KVM, two Firecracker microVMs on a network
   slot made by `sudo warden setup --driver firecracker`; no config keys of its own

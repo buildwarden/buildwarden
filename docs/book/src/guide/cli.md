@@ -226,7 +226,8 @@ warden doctor --driver <name> [--build-link <cidr>]
 
 Read-only preflight for the selected driver. Checks a container runtime
 (container), `qemu-system-*` + `qemu-img` and relay VM assets (qemu), Apple
-Silicon macOS and the virtualization entitlement (vz), or the hypervisor and
+Silicon macOS, a `warden` built with cgo (a released binary is not, and has no
+vz driver) and the virtualization entitlement (vz), or the hypervisor and
 management stack and the privilege tier this process holds (hyperv). For
 firecracker it checks `/dev/kvm`, the `firecracker` binary (v1.17.0 or later),
 the boot assets, the disk-image tools (`qemu-img`, `genisoimage`; a warning
