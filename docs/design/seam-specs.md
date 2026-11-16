@@ -4384,7 +4384,15 @@ for it, with numbered requirements, and records under "Known
 divergences" the rows of **Divergences found** named here, as the code
 behaves (Decision 1). The writer reads the files named, on this branch
 of K; where the list in the design and the code differ, the code decides
-and the difference is recorded for Consolidation. Each stage is green on
+and the difference is recorded for Consolidation. A behaviour of the
+code that the table of **Divergences found** does not list is not a
+return to Design (Jeff, 2026-11-16, **Design review**): the document
+states what the code does and lists the behaviour under its "Known
+divergences", marked "not yet in the design's table (found <stage>)",
+the stage's report names it with file, line and evidence, and the stage
+goes on; the whole list goes back to Design once, after the suites. One
+that looks like a bug is reported as an observation for a later item,
+and the code is not changed. Each stage is green on
 `make check-docs`. The relay that D17 and D18 are reproduced against is
 built from a detached worktree of K at `origin/main`, into a directory
 outside both repositories; nothing is committed in that worktree, and
@@ -4691,8 +4699,13 @@ claim's 200 (D19); the D17 case has a relay of its own. A case that
 fails against the Go relay or the disk collector because the document
 misread the code is corrected in the document, in the same stage, or
 by the stage's agent after its stage-9 run. One that fails because the
-code does something this design does not record sends the item back to
-Design. No case is weakened and no code is changed to make a suite pass
+code does something this design does not record is handled as stage 3
+handles a divergence the table lacks: the document states what the code
+does and lists it under "Known divergences", marked "not yet in the
+design's table (found <stage>)", the case asserts the document, the
+stage's report names the behaviour with file, line and evidence, and the
+stage goes on; the whole list goes back to Design once, after the
+suites. No case is weakened and no code is changed to make a suite pass
 (FLOW-06, LOOP-02).
 
 20. **S, stage 8a** `relay-claim`'s cases. For a relay: authorization
@@ -4903,12 +4916,24 @@ is a file that recording sessions in S would need and the design does
 not name (task 1). These are returns to Design, with the finding
 recorded (FLOW-06): a mechanic of **Releases and how they are
 consumed** that does not hold with the real modules (tasks 3 and 7); a
-case that fails because the code does something this design does not
-record, or a divergence the table lacks (stages 3 and 8, task 25); a
 rule edit that needs a word the review did not approve, or a file under
 a rule path that no approved entry names (stage 10, FLOW-14); and any
 need to change the relay, the collector, the executor or a driver
 (Decisions 1 and 11).
+
+A case that fails because the code does something this design does not
+record, or a divergence the table lacks (stages 3 and 8, task 25), is
+recorded as found and is not a return during Implement (Jeff,
+2026-11-16, **Design review**). The document states what the code does
+and lists the behaviour under its "Known divergences", marked "not yet
+in the design's table (found <stage>)"; each stage's report names it
+with file, line and evidence; and Implement continues. When the suites
+are done the item goes back to Design once (FLOW-06): the table is
+amended with the whole list, the correction of D6 among it, and Jeff
+reviews it in one sitting. A behaviour that looks like a bug is
+reported as an observation for a later item; no code of K changes for
+it. Any other finding that the approved design cannot be built as
+written is still a return, as above.
 
 Two readings of the design are Plan's, and each is written where a
 later reader will look for it, so that Review and Consolidation can
@@ -5283,6 +5308,26 @@ those are recorded with the outcome.
 - **rule change PROFILE-01 approved at `64a4a95`**: three rows, the
   Specifications row in both forms (alone, and joined with
   `driver-contract`'s clause and sentence).
+
+### 2026-11-16, during Implement: divergences the table lacks
+
+Jeff's decision, asked during stage 3 ("Record as found, one review at
+the end"). A behaviour of K's code that the table of **Divergences
+found** (D1 to D19) does not list is not a return to Design during
+Implement. The document states what the code does and lists the
+behaviour under its "Known divergences", marked "not yet in the
+design's table (found <stage>)", and Implement continues. Every such
+behaviour is listed in the stage's report with file, line and evidence.
+When the suites are done the item returns to Design once: the table is
+amended with the whole list, including the correction of D6 (the relay
+may answer 200 to a claim although the collector refuses
+`PUT /v1/ledger`), and Jeff reviews the amendment in one sitting. A
+behaviour that looks like a bug (for example against GLOBAL-10) is
+reported as an observation for a later item; nothing in K's code
+changes. Any other finding that the approved design cannot be built as
+written is still a return to Design. **What goes back to Design, and
+what does not** and stages 3 and 8 of the Implementation plan are
+reworded to match; nothing else in the design changes.
 
 ## Consolidation
 
