@@ -1101,6 +1101,9 @@ func TestUrgent(t *testing.T) {
 	t.Run("cleared", urgentCleared)
 }
 
+// unnamed is the refusal of a mark by a human worker with no name.
+const unnamed = "the mark names the human who sets it, as human/<name> (FLOW-05)"
+
 func urgentMarked(t *testing.T) {
 	const never = ": the waiting limit never refuses "
 	f, parent := feature("a", 2, "queued"), feature("parent", 3, "done")
@@ -1130,6 +1133,8 @@ func urgentMarked(t *testing.T) {
 		{feature("b", 6, "queued"), "host:macos-vz/s",
 			"only a human marks an item urgent (FLOW-05)"},
 		{feature("b", 6, "queued"), "", "only a human marks an item urgent (FLOW-05)"},
+		{feature("b", 6, "queued"), "human", unnamed},
+		{feature("b", 6, "queued"), "human/", unnamed},
 		{p, "human/jeff", "p is a process item" + never + "one (FLOW-05)"},
 		{away, "human/jeff", "m1 is tracked" + never + "one (FLOW-05)"},
 		{fix, "human/jeff", "fix follows parent" + never + "a fix (FLOW-05)"},
@@ -1159,6 +1164,21 @@ func urgentCleared(t *testing.T) {
 			err.Error() != "only a human clears the mark" || f.Urgent == "" {
 			t.Errorf("clear by %q: %v, urgent %q", w, err, f.Urgent)
 		}
+	}
+	for _, w := range []string{"human", "human/"} {
+		if err := s.ClearUrgent(f, w, now); err == nil || err.Error() != unnamed ||
+			f.Urgent == "" {
+			t.Errorf("clear by %q: %v, urgent %q", w, err, f.Urgent)
+		}
+	}
+	// An unnamed mark is honoured by nothing, and Validate fails it.
+	for _, v := range []string{"human", "human/"} {
+		g := feature("u", 3, "queued")
+		g.Urgent = v
+		if g.marked() {
+			t.Errorf("urgent %q is honoured", v)
+		}
+		wantValidate(t, declaredState(g), "u: urgent names \""+v+"\": "+unnamed)
 	}
 	// Clearing is allowed on any item: one in progress or done keeps the
 	// mark as the record of its start until a human takes it away.

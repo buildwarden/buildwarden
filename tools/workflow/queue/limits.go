@@ -419,8 +419,18 @@ func (s *State) fixesMain(f *Feature) bool {
 }
 
 // marked reports whether a human marked the item urgent. A value that is not
-// a human worker is honoured by nothing: Validate fails it (GLOBAL-10).
-func (f *Feature) marked() bool { return f.Urgent != "" && Kind(f.Urgent) == "human" }
+// a named human worker is honoured by nothing: Validate fails it (GLOBAL-10).
+func (f *Feature) marked() bool { return namedHuman(f.Urgent) }
+
+// urgentUnnamed is why a mark by a human worker with no name is refused: the
+// mark says whose word it is.
+const urgentUnnamed = "the mark names the human who sets it, as human/<name> (FLOW-05)"
+
+// namedHuman reports whether the worker is human/<name> with a name.
+func namedHuman(worker string) bool {
+	kind, name, ok := strings.Cut(worker, "/")
+	return ok && kind == "human" && name != ""
+}
 
 // pastWaitingLimit reports whether the items that wait on the human number
 // the waiting limit or more, with the count and the limit.
@@ -490,6 +500,8 @@ func (s *State) MarkUrgent(f *Feature, worker string, now time.Time) error {
 		return fmt.Errorf("%s follows %s: %s a fix (FLOW-05)", f.Feature, f.Follows, never)
 	case Kind(worker) != "human":
 		return errors.New("only a human marks an item urgent (FLOW-05)")
+	case !namedHuman(worker):
+		return errors.New(urgentUnnamed)
 	case f.Status != "queued":
 		return fmt.Errorf("%s is %s: the waiting limit refuses only a start (FLOW-05)",
 			f.Feature, strings.ReplaceAll(f.Status, "_", " "))
@@ -504,6 +516,9 @@ func (s *State) MarkUrgent(f *Feature, worker string, now time.Time) error {
 func (s *State) ClearUrgent(f *Feature, worker string, now time.Time) error {
 	if Kind(worker) != "human" {
 		return errors.New("only a human clears the mark")
+	}
+	if !namedHuman(worker) {
+		return errors.New(urgentUnnamed)
 	}
 	if f.Urgent == "" {
 		return fmt.Errorf("%s is not marked urgent", f.Feature)

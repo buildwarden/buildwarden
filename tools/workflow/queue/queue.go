@@ -813,6 +813,8 @@ func (s *State) validateUrgent(f *Feature, bad func(string, ...any)) {
 	case f.Urgent == "":
 	case Kind(f.Urgent) != "human":
 		bad("urgent names %s: only a human marks an item urgent (FLOW-05)", f.Urgent)
+	case !namedHuman(f.Urgent):
+		bad("urgent names %q: %s", f.Urgent, urgentUnnamed)
 	case f.IsProcess():
 		bad("urgent on a process item: %s one (FLOW-05)", never)
 	case s.Tracked(f):

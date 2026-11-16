@@ -1897,7 +1897,7 @@ func TestUrgentValidate(t *testing.T) {
 	away := &Feature{Feature: "m1", Priority: 4, Status: "queued", Round: "tracked",
 		Phase: 1, Repos: []string{"o/relay"}}
 	s := declaredState(f, parent, p, away)
-	for _, ok := range []string{"human/jeff", "human"} {
+	for _, ok := range []string{"human/jeff", "human/sam"} {
 		f.Urgent = ok
 		for _, status := range []string{"queued", "in_progress", "done"} {
 			f.Status = status
@@ -1908,6 +1908,10 @@ func TestUrgentValidate(t *testing.T) {
 	for _, bad := range []string{"cloud/tick-1", "host:macos-vz/s", "jeff", "true"} {
 		f.Urgent = bad
 		wantValidate(t, s, "a: urgent names "+bad+notHuman)
+	}
+	for _, bad := range []string{"human", "human/"} {
+		f.Urgent = bad
+		wantValidate(t, s, "a: urgent names \""+bad+"\": "+unnamed)
 	}
 	f.Urgent, f.Follows = "human/jeff", "parent"
 	wantValidate(t, s, "a: urgent, and it follows parent: "+
