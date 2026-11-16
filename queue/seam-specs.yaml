@@ -6,6 +6,22 @@ round: feature
 phase: 3
 design: docs/design/seam-specs.md
 branch: feat/seam-specs
+repos:
+  - buildwarden/buildwarden
+  - buildwarden/buildwarden-specs
+seams:
+  - relay-claim
+  - collector
+  - relay-guest-api
+  - executor-initialize
+  - bootstrap-config
+rules_changed:
+  - TEST-05
+  - TEST-02
+  - GLOBAL-08
+  - EXEC-04
+  - PROFILE-01
+declared: ee78534
 alters_relationships: true
 design_review: required
 source: 'componentization (docs/design/componentization.md, merged as b903f65, PR #117): phase S1, wave 1. Done when the suites pass against the Go relay and the disk collector. The repository buildwarden/buildwarden-specs (a10) is confirmed with Jeff right before it is created (a11). Jeff, attended session 2026-11-12: go ahead.'
@@ -413,3 +429,6 @@ history:
   - at: 2026-11-16T01:16:03Z
     by: cloud/20261112T230554Z
     event: 'priority 69 -> 70 (renumbered by wf new: loop-parallel-rule-wording queued at 62)'
+  - at: 2026-11-16T04:28:42Z
+    by: human/jeff
+    event: 'declared at ee78534: repos +buildwarden/buildwarden-specs; seams +relay-claim +collector +relay-guest-api +executor-initialize +bootstrap-config; rules_changed +TEST-05 +TEST-02 +GLOBAL-08 +EXEC-04 +PROFILE-01'
