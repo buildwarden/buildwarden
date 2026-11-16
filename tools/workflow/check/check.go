@@ -80,6 +80,7 @@ func Phase(env Env, f *queue.Feature) []Result {
 		c.docsTouched("guides or examples updated", "docs/book/src/guide/",
 			"docs/book/src/getting-started/", "examples/", "README.md")
 		c.declaredStill()
+		c.insideAreas()
 	case 6:
 		if c.mergedEarly() {
 			break

@@ -91,10 +91,10 @@ func insideUndeclared(t *testing.T, env Env, f *queue.Feature) {
 			t.Errorf("%s: %+v", name, r)
 		}
 	}
-	// Review, Publish and the refresh run it too.
+	// Review, Guide, Publish and the refresh run it too.
 	queueAreas(f, "book")
 	env.State = mapped(t, f)
-	for _, phase := range []int{4, 6} {
+	for _, phase := range []int{4, 5, 6} {
 		f.Phase = phase
 		if r := check(); r.OK {
 			t.Errorf("phase %d passed with paths outside the areas", phase)
