@@ -746,9 +746,62 @@ gaps:
       2026-11-15 (host:container-any/20261115T231002Z, unattended, main ad4ea50): not run.
       feat/project-config-trust is design-only (a94133d, docs/design/project-config-trust.md alone against
       main) and waits on its design review (f2-design-review).
+      2026-11-15 (host:container-any/20261116T051002Z, unattended, windows-desktop, Windows 11 Pro 26300,
+      go1.26.3, podman 5.8.3, main 623131a and feat/project-config-trust 3733c4b, no user config file and no
+      WARDEN_* variable on the host): FAILED on the first case; every other case passes. Kept open, and the
+      feature is back in Implement (f3-implement-r3).
+      `go test -count=1 ./cmd/warden ./driver`: ok on main. On the branch ./cmd/warden is ok and ./driver
+      FAILS in the branch's own new test TestLoadUpstreamCAsEscapes (driver/upstreamca_test.go:503-512):
+      it gives LoadUpstreamCAs a path that starts /no/such and holds a newline, an escape sequence and a
+      0xff byte, and expects the same string back, escaped. On Windows the path is made absolute, so the
+      message names C:\no\such..., and the 0xff byte comes back as U+FFFD, not as an escape. The newline and
+      the escape sequence are still escaped, so the expected string is what is not portable. The other
+      driver packages pass.
+      The former user file: with USERPROFILE set to a scratch home that holds .config\warden\config.toml
+      (nothing was written under the real home), `warden doctor` (alone, --driver container, --driver
+      hyperv), `build` and `clean` each exit 1 with "<home>\.config\warden\config.toml is no longer read"
+      and `To fix:`, and no output directory. With WARDEN_CONFIG, and again with --config, naming that file,
+      doctor --driver hyperv exits 0 and its first line is "config: <that path> (WARDEN_CONFIG)" or
+      "(--config)"; with WARDEN_CONFIG naming another file the error stays.
+      `--config C:\...\named\warden.toml` (output_dir = "from-named") in a directory whose warden.toml sets
+      output_dir = "from-repo": doctor's first line names the named file with --config and with
+      WARDEN_CONFIG, and `warden build --driver container` of a FROM alpine:3.21 Dockerfile (apk add jq)
+      SUCCEEDED with output in from-named and no from-repo.
+      `WARDEN_UPSTREAM_CA_CERTS=C:\...\a.pem;C:\...\b.pem`: doctor prints one "upstream CA <path>
+      (WARDEN_UPSTREAM_CA_CERTS): 1 certificate to send" line per file on stdout and exits 0; the build has
+      the same two lines on stderr after the config line, SUCCEEDED, and inspect shows 23 signatures valid,
+      all channels closed. A doubled `;;` gives "BLOCKED: WARDEN_UPSTREAM_CA_CERTS has an empty entry", exit 1.
+      `--config NUL`, and WARDEN_CONFIG=NUL, in a directory whose warden.toml names a driver warden lacks:
+      "config: \\.\NUL (--config)", doctor ok, exit 0; without it, "unknown driver "nonesuch"", exit 1.
+      Baseline: the same container build with no settings SUCCEEDED on main and on the branch (23 signatures
+      valid each). The cases ran from a scratch Makefile (they need a working directory, USERPROFILE and
+      WARDEN_* variables per case). Logs, the Makefile and the case files:
+      native/container-any/2026-11-15/project-config-trust/.
   - id: project-config-trust-hyperv
     host: windows-hyperv
-    status: open
+    status: done
+    done: 2026-11-15
+    evidence: >-
+      host:windows-hyperv/20261116T051002Z, unattended, windows-desktop, Windows 11 Pro 26300, Hyper-V
+      Administrators (not elevated), privileged service reachable, relay boot VHDX stamp current, main
+      623131a and feat/project-config-trust 3733c4b, each built with make build and run from its tree.
+      A development warden run from its tree builds: `warden build --driver hyperv --guest-os windows` of
+      a build.ps1 (an HTTPS fetch of example.com) SUCCEEDED on main and on the branch (200, 577 bytes).
+      The detached prepare: the branch run as dist/warden.exe with `--config
+      C:\...\.scratch\pct-hv\named\warden.toml` (a file outside the working directory, [vm]
+      image_refresh_after = "1m") printed "config: <that file> (--config)" and "prepared base is 4m old;
+      refreshing it in the background", and the build SUCCEEDED; prepare.log's first line is "[warden]
+      config: C:\...\.scratch\pct-hv\named\warden.toml (--config)", and the prepare finished
+      (windows-server-2025-20261116T052354Z.vhdx, sha256:0d6d31e3c136, grace ends 2026-11-26T05:24Z).
+      `inspect --verify-disks` on the branch build: vm-disk-chain/v1 verified, both disks [ok], 11
+      signatures valid, all channels closed. main then built on the new base: SUCCEEDED, both disks [ok],
+      11 signatures valid.
+      Found on main too, and filed as detached-prepare-windows-exe (follows project-config-trust): run
+      under the name make build gives it on Windows (dist/warden, no .exe), warden cannot start the
+      detached prepare and says nothing (no "refreshing" line, prepare.log left at 0 bytes, no process),
+      on main and on the branch alike; and with a warden.exe beside it that file is started instead (a
+      stale dist/warden.exe of 2026-11-04 ran main's first prepare this run, whose base the branch's
+      prepare then replaced). Logs, the scratch Makefile and build.ps1: native/windows-hyperv/2026-11-15/.
     what: >-
       A hyperv build with --config naming a file outside the working directory whose
       [vm] image_refresh_after is due starts the detached image prepare, and its log's config line
@@ -813,6 +866,9 @@ gaps:
       2026-11-15 (host:container-any/20261115T231002Z, unattended, main ad4ea50): not run.
       feat/prebuilt-artifacts is design-only (36e8051, docs/design/prebuilt-artifacts.md alone against
       main), still in Design (f1-design).
+      2026-11-15 (host:container-any/20261116T051002Z, unattended, main 623131a): not run.
+      feat/prebuilt-artifacts is still design-only (49b513a, docs/design/prebuilt-artifacts.md alone against
+      main), and the item is held in Plan on q1 until driver-contract's PR has merged.
   - id: prebuilt-artifacts-qemu-windows
     host: macos-qemu
     status: open

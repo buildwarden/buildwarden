@@ -1,0 +1,22 @@
+warden: build VM "warden-build-yyw7g1c1" COM1 -> \\.\pipe\warden-build-yyw7g1c1 (attach a serial reader to observe guest boot)
+guest: Microsoft Windows NT 10.0.26100.0
+example.com: 200 577 bytes
+warden: build SUCCEEDED (output: .scratch/pct-hv/out-main-after)
+════════════════════════════════════════════════════════════════════════════════
+  LEDGER  scheme=ed25519-sha512  hashes=[blake2b_256 sha256 sha1 md5]  ✅
+  ENVIRONMENT  vm-disk-chain/v1  payload verified
+    hyperv windows/amd64 gen2
+    disk     26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx  10.9 GB  sha256:2d175924c8e6  url https://software-static.download.prss.microsoft.com/dbazure/888969d5-f34g-4e03-ac9d-1f9786c66749/26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx  [ok]
+    disk     windows-server-2025-20261116T052354Z.vhdx  2.2 GB  sha256:0d6d31e3c136  prepared by warden dev from 3 input(s)  [ok]
+    seed     3 per-build files
+════════════════════════════════════════════════════════════════════════════════
+[1;35m✅ ENVIRONMENT  (1778 bytes)[0m
+[1;32m✅ GET /bootstrap (39 bytes)[0m
+[1;32m✅ GET /build-script (215 bytes)[0m
+✅ GET https://example.com/ (577 bytes)
+
+════════════════════════════════════════════════════════════════════════════════
+  SUMMARY: 10 records, 4 requests, 3.0 KB audited
+  SIGNATURES: ✅ All 11 signatures valid
+  COMPLETENESS: ✅ All channels closed
+════════════════════════════════════════════════════════════════════════════════

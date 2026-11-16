@@ -1,0 +1,43 @@
+make: Entering directory 'C:/Users/jeff/buildwarden-native/.scratch/pct-hv'
+[vm]
+image_refresh_after = "1m"
+cd named && ../../../dist/warden build --driver hyperv --guest-os windows -o ../out-main-refresh ../proj/build.ps1; echo "exit=$?"
+warden: build VM "warden-build-pp0u4m7k" COM1 -> \\.\pipe\warden-build-pp0u4m7k (attach a serial reader to observe guest boot)
+guest: Microsoft Windows NT 10.0.26100.0
+example.com: 200 577 bytes
+warden: build SUCCEEDED (output: ../out-main-refresh)
+exit=0
+powershell -NoProfile -ExecutionPolicy Bypass -File state.ps1
+now (UTC): 2026-11-16T05:23:44.0043582Z
+warden processes:
+
+
+Id        : 65540
+StartTime : 
+Path      : 
+
+
+
+prepare.log:
+
+
+Length           : 0
+LastWriteTimeUtc : 11/16/2026 5:23:14 AM
+CreationTimeUtc  : 11/16/2026 5:17:39 AM
+
+
+
+cache:
+
+Name                         Length    LastWriteTimeUtc      
+----                         ------    ----------------      
+images                                 11/16/2026 5:22:52 AM 
+prepare.log                  0         11/16/2026 5:23:14 AM 
+relay-boot.link-channel      22        11/12/2026 11:10:21 PM
+relay-boot.link-channel.prev 22        11/12/2026 11:10:21 PM
+relay-boot.source            41        11/12/2026 11:10:21 PM
+relay-boot.vhdx              119537664 11/12/2026 11:10:21 PM
+relay-boot.vhdx.prev         119537664 11/12/2026 11:10:21 PM
+
+
+make: Leaving directory 'C:/Users/jeff/buildwarden-native/.scratch/pct-hv'

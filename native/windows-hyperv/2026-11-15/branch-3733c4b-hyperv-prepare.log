@@ -1,0 +1,13 @@
+[warden] config: C:\Users\jeff\buildwarden-native\.scratch\pct-hv\named\warden.toml (--config)
+base 26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx is current (https://go.microsoft.com/fwlink/?linkid=2293215&clcid=0x409&culture=en-us&country=us)
+activated "windows-server-2025" as the Hyper-V base: C:\Users\jeff\AppData\Local\warden\hyperv\images\26100.1742.amd64fre.ge_release_svc_refresh.240906-0331_server_serverdatacentereval_en-us.vhdx
+preparing windows-server-2025-20261116T052354Z.vhdx from windows-server-2025 in VM warden-prepare-20261116t052354z (no network)
+  guest: running:services
+  guest: running:scheduled-tasks
+  guest: running:defender
+  guest: running:reboot
+  guest: running:ngen
+  guest: done
+retired prepared layer windows-server-2025-20261112T183421Z.vhdx
+prepared windows-server-2025-20261116T052354Z.vhdx (sha256:0d6d31e3c136); evaluation grace ends 2026-11-26T05:24:41Z
+Base image ready: C:\Users\jeff\AppData\Local\warden\hyperv\images\prepared\windows-server-2025-20261116T052354Z.vhdx
