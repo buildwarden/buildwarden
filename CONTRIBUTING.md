@@ -60,7 +60,10 @@ make clean               # Remove built binaries
 
 `make build` cross-compiles the relay and `warden-io` for linux/amd64 and
 linux/arm64; on macOS/arm64 it also builds `warden-io` for darwin/arm64 and signs
-the host binary. Platform-specific code has build-tagged stubs, so `make test`
+the host binary. Run a development `warden` from its tree as `dist/warden`: it
+finds its source only from where its executable is, never from the working
+directory, so `go run ./cmd/warden` or a copy elsewhere stops at the first
+thing it would build from source. Platform-specific code has build-tagged stubs, so `make test`
 passes everywhere. The test tiers and what each one needs are in
 [`testing.md`](https://github.com/buildwarden/buildwarden/blob/main/docs/development/testing.md).
 The `warden-io` keytool comparison skips where no JDK's `keytool` runs; CI's
