@@ -82,10 +82,10 @@ buildwarden/
 │   │   ├── image.go              # IPSW restore, image preparation, personalization
 │   │   ├── network.go            # Socketpair networking for build VM
 │   │   ├── vm.go                 # VM lifecycle helpers
-│   │   ├── vz_darwin_arm64.go    # Virtualization.framework CGo bindings
+│   │   ├── vz_darwin_arm64.go    # Virtualization.framework CGo bindings (darwin/arm64, cgo)
 │   │   ├── vz_darwin.h           # Objective-C header
-│   │   ├── vz_darwin.m           # Objective-C implementation
-│   │   └── vz_stub.go            # Build stub for non-macOS platforms
+│   │   ├── vz_darwin_arm64.m     # Objective-C implementation
+│   │   └── vz_stub.go            # Stub for every build without the bindings (incl. darwin/arm64 without cgo)
 │   ├── hyperv/                # Hyper-V driver (Windows)
 │   │   ├── driver.go             # StartBuild: boot relay VM + build VM, claim, wait
 │   │   ├── setup.go              # warden setup: durable switches + NAT

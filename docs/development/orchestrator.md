@@ -64,9 +64,13 @@ a reserved output name; the agent part judges new input-handling paths.
 **Severity:** MUST
 **Check:** automated + agent-judgment
 
-Configuration precedence stays `flag > warden.toml > ~/.config/warden`. Defaults
-are sane and changes are additive. A new or changed config key is documented in the
-same change; this is the config half of the docs-coupling rule (UX-01).
+`warden` reads one config file: the one `--config` names, else the one
+`WARDEN_CONFIG` names, else `warden.toml` in the working directory when it
+exists. It reads no other file and merges none; a named file that cannot be
+read is an error. Configuration precedence stays `flag > environment variable >
+the config file > default`. Defaults are sane and changes are additive. A new
+or changed config key is documented in the same change; this is the config half
+of the docs-coupling rule (UX-01).
 
 The automated part is a config-key diff against a docs diff.
 

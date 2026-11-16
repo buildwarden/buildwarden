@@ -28,7 +28,10 @@ The `workflow-tick` skill's Never list applies unchanged: no merge, approval or
 auto-merge; no push to `main`, force-push or remote branch delete; no edits to
 `docs/development/`, `.claude/` or `tools/workflow/`, except a rule change the
 feature's design review approved, in its `paths` (FLOW-14), and never a loop
-rule or its enforcement (LOOP-09); no secrets in prompts.
+rule or its enforcement (LOOP-09); no secrets in prompts; no change to a
+trunk's protection (on GitHub, its branch protection rule and the rulesets
+that apply to it, FLOW-08); no urgent mark on an item (FLOW-05).
+
 Also: never take `human` or `cloud` steps, never ask a question and wait (record
 it in the queue and the digest instead), and never change anything on the
 machine outside the checkout, the documented caches, and the VMs, images and
@@ -38,7 +41,8 @@ containers this session creates.
 
 Nobody is there to approve a prompt, and `settings.native.json` allows git on
 the workflow checkout only in this form, run from the checkout root:
-`git -C .dev/workflow <add|commit|push origin workflow|...>`. Never an
+`git -C .dev/workflow <add|commit|push origin workflow|...>`; state is pushed
+with `dist/wf commit` (**Record**), which runs git itself. Never an
 absolute path, and never `cd .dev/workflow && git ...`. A branch under test
 goes in a worktree under `.scratch/` (`git worktree add .scratch/<name> <ref>`),
 driven with `git -C .scratch/<name> ...`, with its binaries run as
@@ -69,8 +73,10 @@ session id in the prompt as the timestamp).
 For each host this session serves:
 
 - Queue steps: repeat `dist/wf next -state .dev/workflow -worker $W` and claim
-  each (`dist/wf claim`), pushing the workflow branch after each claim. A
-  rejected push lost the claim (FLOW-04): reset to `origin/workflow`, ask again.
+  each (`dist/wf claim`), pushing each claim with
+  `dist/wf commit -state .dev/workflow -worker $W -m "F: claim S" -claimed F/S`.
+  Exit 4: the claim was asked again on the moved branch and refused
+  (FLOW-04); ask `wf next` again. Exit 5: as `workflow-tick` step 2 says.
 - Backlog: every `open` entry for this host in `backlog/native-gaps.yaml`.
   A `deferred` entry is not retried: its note says what it waits on.
 
@@ -115,17 +121,24 @@ finish as in its step 2.5. Push the feature branch at each green checkpoint
 - Backlog entries: set `status: done` with the date and evidence, or keep them
   open with what was found.
 - `dist/wf validate -state .dev/workflow` must pass before each push.
+- Every push of the workflow branch goes through
+  `dist/wf commit -state .dev/workflow -worker $W -m "<message>" <paths>`,
+  as in `workflow-tick` step 2, never `git commit` and `git push`.
 
 ## Close
 
 Clean up test images, VMs, containers and scratch output outside the documented
-caches (FLOW-16). Switch the checkout back to `main`. Commit and push the
-workflow branch; never push `main` or merge anything (FLOW-08, FLOW-17).
+caches (FLOW-16). Switch the checkout back to `main`. Push the workflow
+branch with `dist/wf commit`; never push `main` or merge anything (FLOW-08,
+FLOW-17).
 
 Attended: finish with a summary per branch.
 
-Unattended: append a `## Run host:<machine>/<timestamp>` section to
-`.dev/workflow/digest/<YYYY-MM-DD>.md` (America/Los_Angeles date), checked
+Unattended: write the run's own file,
+`.dev/workflow/digest/<YYYY-MM-DD>/<UTC start>-host-<machine>.md`
+(America/Los_Angeles date), starting with a
+`## Run host:<machine>/<timestamp>` heading, and run
+`dist/wf digest -state .dev/workflow`, which builds the day's page; checked
 against LOOP-06's list before the commit, with
 **Moved** (per host and branch: what ran, pass or fail, evidence; for each
 queue step, the item with its kind and FLOW-05 class, and the branch head it
@@ -137,7 +150,8 @@ failure that needs a decision), **Follow-ups filed** (each as
 "<slug> (follows <item>)", so Jeff can say otherwise; "none" when none),
 **Spent** (steps and
 backlog entries against the native budget), and **Notes** (FLOW-18 check,
-whether Entire recorded the session, free disk at the end). Commit and push it.
+whether Entire recorded the session, free disk at the end). Push it with
+`dist/wf commit`, which also commits the day's page.
 If a feature was unblocked or returned to Design, or a backlog entry failed,
 notify Jeff (the PushNotification tool when available) naming the feature and
 outcome. End with the digest section as the final message.

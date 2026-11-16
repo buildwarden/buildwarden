@@ -14,12 +14,38 @@ warden build --driver firecracker .      # Firecracker driver
 
 The VM drivers need a one-time setup first; see
 [Installation](./installation.md) and the [drivers guide](../guide/drivers.md).
+For vz that starts with building `warden` from source on the Mac: a released
+`warden` has no vz driver.
 
 For the container driver you can also point at a specific Dockerfile:
 
 ```sh
 warden build ./my-project/Dockerfile.prod
 ```
+
+The container driver uses the first of `finch`, `docker` and `podman` that
+answers. To choose one, name it:
+
+```sh
+warden build --runtime podman .
+```
+
+Those three names are the only values the runtime takes, on the command
+line, in `WARDEN_CTR_CLI` and in a `warden.toml`. A build whose runtime
+setting holds anything else (a path, a wrapper script, another runtime)
+stops before it runs anything, and the error says where the value is set and
+what to change. When it is set in the `warden.toml` of a repository you
+cloned, `--runtime` with one of the three builds it without editing the
+file. [The container runtime](../guide/configuration.md#the-container-runtime)
+has the rule and the error.
+
+Built from its own directory, a repository's `warden.toml` is the config
+file, and it chooses more than the runtime: the driver, the relay image and
+its trust roots. It must be a regular file of at most 1 MiB. To build a
+repository you do not control, name your own file with `--config` or
+`WARDEN_CONFIG`; [Building a repository you do not
+control](../guide/configuration.md#building-a-repository-you-do-not-control)
+has the list.
 
 ## What you'll see
 

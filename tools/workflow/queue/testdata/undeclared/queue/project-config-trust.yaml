@@ -1,0 +1,134 @@
+feature: project-config-trust
+title: The item project-config-trust
+priority: 65
+status: in_progress
+round: feature
+phase: 2
+design: docs/design/project-config-trust.md
+branch: feat/project-config-trust
+alters_relationships: false
+design_review: required
+steps:
+- id: f0-branch-setup
+  phase: 0
+  affinity: cloud
+  status: done
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f1-design
+  phase: 1
+  affinity: cloud
+  status: done
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f2-design-review
+  phase: 2
+  affinity: human
+  status: pending
+  lease:
+    claimed_by: human/jeff
+    expires: 2099-01-01T00:00:00Z
+- id: f2-plan
+  phase: 2
+  affinity: cloud
+  status: pending
+  needs:
+  - f2-design-review
+  lease:
+    claimed_by: ''
+    expires: null
+budget:
+  estimate:
+    runs: 2
+    steps: 14
+  spent:
+    runs: 0
+    steps: 3
+questions:
+- id: a1
+  kind: assumed
+  status: confirmed
+  question: The question a1
+  options:
+  - (a)
+  recommended: (a)
+- id: a2
+  kind: assumed
+  status: confirmed
+  question: The question a2
+  options:
+  - (a)
+  recommended: (a)
+- id: a3
+  kind: assumed
+  status: confirmed
+  question: The question a3
+  options:
+  - (a)
+  recommended: (a)
+- id: a4
+  kind: assumed
+  status: confirmed
+  question: The question a4
+  options:
+  - (a)
+  recommended: (a)
+- id: a5
+  kind: assumed
+  status: confirmed
+  question: The question a5
+  options:
+  - (a)
+  recommended: (a)
+- id: a6
+  kind: assumed
+  status: confirmed
+  question: The question a6
+  options:
+  - (a)
+  recommended: (a)
+- id: a7
+  kind: assumed
+  status: confirmed
+  question: The question a7
+  options:
+  - (a)
+  recommended: (a)
+- id: a8
+  kind: assumed
+  status: confirmed
+  question: The question a8
+  options:
+  - (a)
+  recommended: (a)
+- id: a9
+  kind: assumed
+  status: confirmed
+  question: The question a9
+  options:
+  - (a)
+  recommended: (a)
+- id: a10
+  kind: assumed
+  status: confirmed
+  question: The question a10
+  options:
+  - (a)
+  recommended: (a)
+- id: a11
+  kind: assumed
+  status: confirmed
+  question: The question a11
+  options:
+  - (a)
+  recommended: (a)
+- id: a12
+  kind: assumed
+  status: open
+  question: The question a12
+  options:
+  - (a)
+  recommended: (a)
+history: []

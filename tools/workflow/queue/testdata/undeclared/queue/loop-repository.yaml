@@ -1,0 +1,27 @@
+feature: loop-repository
+title: The item loop-repository
+priority: 63
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/loop-repository.md
+branch: feat/loop-repository
+alters_relationships: null
+steps:
+- id: x1-design
+  phase: 1
+  affinity: human
+  status: pending
+  lease:
+    claimed_by: ''
+    expires: null
+budget:
+  estimate:
+    runs: 3
+    steps: 10
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history: []

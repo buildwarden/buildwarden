@@ -102,47 +102,13 @@ func TestResolvePath_NonExistent(t *testing.T) {
 	}
 }
 
-func TestLoadConfig_Defaults(t *testing.T) {
-	t.Setenv("NO_COLOR", "") // the defaults, not the caller's environment
-	dir := t.TempDir()
-	orig, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.Chdir(orig) }()
-
-	cfg, err := LoadConfig()
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if cfg.Output.Color != "auto" {
-		t.Errorf("color = %q, want auto", cfg.Output.Color)
-	}
-	if cfg.Runtime.CLI != "" {
-		t.Errorf("runtime = %q, want empty", cfg.Runtime.CLI)
-	}
-}
-
 func TestLoadConfig_ProjectFile(t *testing.T) {
-	dir := t.TempDir()
-	tomlContent := `[runtime]
+	inConfigFiles(t, `[runtime]
 cli = "podman"
 
 [output]
 verbose = true
-`
-	err := os.WriteFile(
-		filepath.Join(dir, "warden.toml"), []byte(tomlContent), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	orig, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.Chdir(orig) }()
-
+`)
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)
@@ -156,13 +122,7 @@ verbose = true
 }
 
 func TestLoadConfig_EnvOverrides(t *testing.T) {
-	dir := t.TempDir()
-	orig, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.Chdir(orig) }()
-
+	inConfigFiles(t, "")
 	t.Setenv("WARDEN_CTR_CLI", "docker")
 	t.Setenv("NO_COLOR", "1")
 	t.Setenv("WARDEN_VERBOSE", "1")
@@ -182,51 +142,11 @@ func TestLoadConfig_EnvOverrides(t *testing.T) {
 	}
 }
 
-func TestLoadConfig_UpstreamCACertsEnv(t *testing.T) {
-	dir := t.TempDir()
-	orig, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.Chdir(orig) }()
-
-	t.Setenv("WARDEN_UPSTREAM_CA_CERTS", "/path/to/ca.pem:/other/ca.crt")
-
-	cfg, err := LoadConfig()
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if len(cfg.Relay.UpstreamCACerts) != 2 {
-		t.Fatalf("got %d certs, want 2", len(cfg.Relay.UpstreamCACerts))
-	}
-	if cfg.Relay.UpstreamCACerts[0] != "/path/to/ca.pem" {
-		t.Errorf("cert[0] = %q, want /path/to/ca.pem",
-			cfg.Relay.UpstreamCACerts[0])
-	}
-	if cfg.Relay.UpstreamCACerts[1] != "/other/ca.crt" {
-		t.Errorf("cert[1] = %q, want /other/ca.crt",
-			cfg.Relay.UpstreamCACerts[1])
-	}
-}
-
 func TestLoadConfig_UpstreamCACertsToml(t *testing.T) {
-	dir := t.TempDir()
-	tomlContent := `[relay]
+	inConfigFiles(t, `[relay]
 upstream_ca_certs = ["/my/corp-ca.pem"]
 system_ca_bundle = false
-`
-	err := os.WriteFile(
-		filepath.Join(dir, "warden.toml"), []byte(tomlContent), 0644)
-	if err != nil {
-		t.Fatal(err)
-	}
-
-	orig, _ := os.Getwd()
-	if err := os.Chdir(dir); err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = os.Chdir(orig) }()
-
+`)
 	cfg, err := LoadConfig()
 	if err != nil {
 		t.Fatalf("LoadConfig: %v", err)

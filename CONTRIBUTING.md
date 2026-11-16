@@ -14,6 +14,9 @@ and the process for designing, reviewing and merging a feature is
   run `mise exec -- go ...` if your `GOROOT` is misconfigured)
 - golangci-lint v2
 - A container runtime: finch, docker, or podman
+- git 2.40 or later where the feature loop's `wf` runs: its merge check
+  proves a squash merge with `git merge-tree --merge-base`, and with an
+  older git it leaves the branch unconfirmed and says why
 
 **VZ driver (macOS 13+ on Apple Silicon):**
 
@@ -48,6 +51,7 @@ and the process for designing, reviewing and merging a feature is
 ```sh
 make build               # Compile all binaries to dist/
 make test                # Unit tests: run on every platform, no external dependencies
+make release-build       # Compile what a release compiles: each target, without cgo
 make lint                # golangci-lint, then the tier-1 checks on your diff
 make fmt                 # gofmt -s -w
 make tidy                # go mod tidy
@@ -60,8 +64,12 @@ make clean               # Remove built binaries
 
 `make build` cross-compiles the relay and `warden-io` for linux/amd64 and
 linux/arm64; on macOS/arm64 it also builds `warden-io` for darwin/arm64 and signs
-the host binary. Platform-specific code has build-tagged stubs, so `make test`
-passes everywhere. The test tiers and what each one needs are in
+the host binary. Run a development `warden` from its tree as `dist/warden`: it
+finds its source only from where its executable is, never from the working
+directory, so `go run ./cmd/warden` or a copy elsewhere stops at the first
+thing it would build from source. Platform-specific code has build-tagged
+stubs, so `make test` passes everywhere. The test tiers and what each one
+needs are in
 [`testing.md`](https://github.com/buildwarden/buildwarden/blob/main/docs/development/testing.md).
 The `warden-io` keytool comparison skips where no JDK's `keytool` runs; CI's
 `keytool` job installs Java and runs it on Linux, macOS and Windows.
@@ -203,7 +211,10 @@ make pin-specs REF=<commit>                        # Pin all six at one commit, 
    The full release gate (tier-1 checks, the test matrix, the security suite
    and the behavioral report) is described in
    [`behavioral-linter.md`](https://github.com/buildwarden/buildwarden/blob/main/docs/development/behavioral-linter.md)
-   and is being built out.
+   and is being built out. Run `make release-build` too: it compiles each
+   program a release builds, for each release target, without cgo, as
+   GoReleaser does (CI's `build` job runs it on every PR that changes code).
+   A released macOS arm64 `warden` therefore has no vz driver, and says so.
 2. Tag the commit and push the tag: `git tag v0.x.y && git push origin v0.x.y`.
 3. GoReleaser, run by GitHub Actions, builds and publishes the binaries.
 

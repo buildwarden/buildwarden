@@ -37,7 +37,10 @@ var (
 var doctorCmd = &cobra.Command{
 	Use:   "doctor",
 	Short: "Preflight the host for the selected driver",
-	Long: `Read-only preflight for the selected driver (--driver or warden.toml):
+	Long: `Read-only preflight for the selected driver (--driver, WARDEN_DRIVER or
+the config file). The report's first line says which config file was read
+and how it was chosen (--config, WARDEN_CONFIG, or ./warden.toml found in
+the working directory).
 
   container  a container runtime (finch, docker, podman) is available
   qemu       qemu-system-* and qemu-img are on PATH; relay VM assets exist
@@ -59,27 +62,43 @@ direct-boot initramfs it is reported only. Each VM driver also prints the
 relay's upstream resolvers and their source ([vm] dns, or the host's), or
 the refusal a build would get, which fails doctor.
 
+With upstream CA paths configured (WARDEN_UPSTREAM_CA_CERTS, else [relay]
+upstream_ca_certs), every driver's doctor reads them as a build would and
+prints the same lines: each block or file that is skipped, with its reason,
+and each path's count of certificates to send. A path a build would refuse
+(it does not exist, cannot be read or gives no certificate) is BLOCKED and
+fails doctor. With the container driver, a relay image that is not shaped
+like an image reference fails doctor with the error a build would get.
+
 Exits non-zero when a required capability is unmet, so it is usable as a CI
 or agent gate.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		cfg, err := resolveConfig()
+		out := cmd.OutOrStdout()
+		if cfg != nil {
+			fmt.Fprintln(out, configLine(cfg))
+		}
 		if err != nil {
 			return err
 		}
-		out := cmd.OutOrStdout()
 		drv := cfg.Runtime.Driver
 		if flagBuildLink != "" && !isVMDriver(drv) {
 			return driver.Fixable("", "--build-link requires a VM driver "+
 				"(--driver qemu, vz, hyperv or firecracker)")
 		}
+		blocked, err := doctorUpstreamCAs(out, cfg)
+		if err != nil {
+			return err
+		}
 		var link buildlink.Link
 		var vmDNS []netip.Addr
-		blocked := false
 		if isVMDriver(drv) {
-			if link, blocked, err = doctorBuildLink(out, cfg); err != nil {
+			var linkBlocked bool
+			if link, linkBlocked, err = doctorBuildLink(out, cfg); err != nil {
 				return err
 			}
+			blocked = blocked || linkBlocked
 			vmDNS = cfg.VM.DNSAddrs
 		}
 		switch drv {
@@ -105,6 +124,11 @@ or agent gate.`,
 				blocked = true
 			}
 		default:
+			// The check a build makes, so that doctor does not pass a relay
+			// image the build refuses.
+			if err = checkRelayImage(cfg.Runtime); err != nil {
+				return err
+			}
 			var rt string
 			if rt, err = resolveRuntime(cfg); err == nil {
 				fmt.Fprintf(out, "container runtime: %s\n", rt)
@@ -148,7 +172,7 @@ Other drivers need no host setup; their base images are prepared with
 'warden image prepare'.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
-		cfg, err := resolveConfig()
+		cfg, err := announcedConfig()
 		if err != nil {
 			return err
 		}

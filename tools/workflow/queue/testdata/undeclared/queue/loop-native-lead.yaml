@@ -1,0 +1,27 @@
+feature: loop-native-lead
+title: The item loop-native-lead
+priority: 62
+kind: process
+status: queued
+round: process
+phase: 1
+design: docs/design/loop-native-lead.md
+branch: feat/loop-native-lead
+alters_relationships: null
+steps:
+- id: x1-design
+  phase: 1
+  affinity: human
+  status: pending
+  lease:
+    claimed_by: ''
+    expires: null
+budget:
+  estimate:
+    runs: 3
+    steps: 12
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history: []

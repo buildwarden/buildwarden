@@ -48,8 +48,9 @@ as building without BuildWarden.
 Name the resolvers yourself when the host's are not the ones a build should
 use: a VPN's split-DNS resolvers (macOS leaves its per-domain resolvers out
 of `/etc/resolv.conf`), a filtering resolver only builds go through, or a
-host whose only resolver is local to it. In `warden.toml` or
-`~/.config/warden/config.toml`:
+host whose only resolver is local to it. In the config file (`warden.toml`,
+or for every build on the machine the file an absolute `WARDEN_CONFIG`
+names):
 
 ```toml
 [vm]
@@ -90,8 +91,8 @@ Pick any free `/30` and check it before you commit to it:
 warden doctor --driver qemu --build-link 100.126.255.252/30
 ```
 
-Then set it in `warden.toml` (or `~/.config/warden/config.toml`), so every
-build and `warden doctor` use it:
+Then set it in the config file (`warden.toml`, or the file `WARDEN_CONFIG`
+names for a machine-wide setting), so every build and `warden doctor` use it:
 
 ```toml
 [vm]
@@ -102,7 +103,7 @@ Changing the link needs no rebuild, refresh or re-prepare. A host network
 that only contains the link, such as a carrier-grade NAT WAN on
 `100.64.0.0/10`, is a doctor warning, not a collision: only the link's own
 four addresses are shadowed. The rules a value must satisfy, and the
-precedence of the flag and the two files, are in
+precedence of the flag and the config file, are in
 [Configuration](./configuration.md#the-build-link-vm-build_link---build-link).
 
 ## Address Collisions with the Hyper-V NAT

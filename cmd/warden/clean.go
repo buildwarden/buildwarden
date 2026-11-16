@@ -45,7 +45,7 @@ func init() {
 }
 
 func runClean(cmd *cobra.Command, args []string) error {
-	cfg, err := resolveConfig()
+	cfg, err := announcedConfig()
 	if err != nil {
 		return err
 	}
