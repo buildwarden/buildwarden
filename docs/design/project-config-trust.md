@@ -314,8 +314,10 @@ level. The designs relied on carry front-matter already.
 8. **Three things are fixed whoever owns the file**, because each is a
    defect with the executor's own file too (**F1 to F4, one by one**):
    - a relay image that is not shaped like an image reference (it starts
-     with `-`, or holds a space or a control character) is refused, from
-     the file and from `WARDEN_IMAGE`;
+     with `-`, or holds a space, a byte that is not valid UTF-8 or a
+     character that does not print, a control character among them;
+     **F1 to F4, one by one**, F1) is refused, from the file and from
+     `WARDEN_IMAGE`;
    - an upstream CA path is read once, before anything is created, and
      only valid PEM certificates are sent to the relay (a9, as Jeff
      answered it: "send valid pem certificates, log to stderr which files
@@ -422,8 +424,14 @@ level. The designs relied on carry front-matter already.
     The check limits how the default file is read, not what it may
     decide: Decision 7 stands.
     - *Rejected by Jeff: a size cap on every config file.* Offered with
-      the finding, and not taken: the check as built is kept, and a named
-      file is not bounded.
+      the finding, and not taken: the check as built is kept, and no
+      config file is bounded, the default included. A `./warden.toml`
+      that is a regular file, or a link to one, is read whole whatever
+      its size; that includes a Linux procfs file such as
+      `/proc/self/pagemap`, which `stat` reports as a regular, empty
+      file, so such a link still makes `warden` run out of memory
+      (Security note, **What remains**, 10). The cap is put to Jeff
+      again with that case, as **a14**.
     - *Rejected: the same check on a named file.* It would refuse
       `--config /dev/null`, which Decision 1 gives as the way to read no
       settings on Unix, and a config handed over as `--config <(...)`,
@@ -448,7 +456,8 @@ removes compilation). Each question's text and options are kept as they
 were put, so "Proceeding with" in an answered question describes what was
 asked, not always what the design now does. Two questions are new and
 open: a12, raised by a9's fold-in, and a13, raised by the independent
-review of that fold-in.
+review of that fold-in. a14 is new in r2 (2026-11-16) and open, raised by the
+independent review of the r2 delta.
 
 - **a1. A relative path in the config file (`[build] output_dir`,
   `tmpdir`, `[relay] upstream_ca_certs`, a local `[vm] windows_image`) is
@@ -840,6 +849,32 @@ review of that fold-in.
     the build where a readable one is a warning, and it is the one
     thing under a directory that stops a build although the directory
     gives certificates.
+- **a14. A size cap on the working directory's `warden.toml`, asked
+  again.** New in r2 (2026-11-16), raised by the independent review of
+  the r2 delta. Jeff kept the regular-file check (Decision 14) and did
+  not take a size cap on every config file, offered with the review's
+  F1. One case was not in front of him then: a `./warden.toml` that is
+  a link to a Linux procfs file such as `/proc/self/pagemap` passes the
+  check, because `stat` reports it as a regular, empty file, and
+  reading it still exhausts `warden`'s memory (reproduced: `fatal
+  error: out of memory`, no error before it); a very large regular file
+  does the same. The outcome is a crash of `warden` on the host, before
+  anything is created; nothing is read into a build or sent. Naming the
+  file closes it. Proceeding with (a), the code as built; confirm.
+  - (a) No cap, as built and as Jeff decided: the case is named in the
+    Security note (**What remains**, 10), and the reference's paragraph
+    for someone building a repository they do not control already says
+    to name the file. No change to the code or the reference.
+    **Recommended**, because it is his decision and the case is a denial
+    of service of `warden` itself, which naming the file avoids.
+  - (b) A cap on the working directory's file only (read at most, say,
+    1 MiB and one byte; more is the error `cannot read config file
+    <path> (found in the working directory): larger than 1 MiB`), a
+    named file unbounded. Closes the procfs link and the large file
+    with a few lines and a test; reopens Implement for them.
+  - (c) A cap on every config file, the one Jeff did not take. It also
+    bounds `--config <(...)` and a named device, which the executor
+    chose.
 
 ## Design
 
@@ -876,7 +911,10 @@ LoadConfig():
 - The working directory's file must be a regular file once links are
   followed (Decision 14). A `./warden.toml` that is a FIFO, a socket or a
   device, or a link to one (`/dev/zero`, a terminal), is an error, `not a
-  regular file`, and is not opened. A file named with `--config` or
+  regular file`, and is not opened. A `./warden.toml` that is a link to
+  nothing counts as no file, as today: defaults apply, and the `config:`
+  line says `no ./warden.toml`. A link to itself is an error (`too many
+  levels of symbolic links`). A file named with `--config` or
   `WARDEN_CONFIG` is read whatever kind of file it is, a pipe or a device
   included. The reason for the difference is the one Decision 7 and the
   Security note give for the rest of the default: in a working directory
@@ -917,7 +955,7 @@ LoadConfig():
   A path is printed absolute, whatever form it was given in, and escaped:
   a control character, another character that does not print, or a byte
   that is not valid UTF-8 in it (a newline or an escape sequence in a
-  directory's name) is written as an escape (`\n`, `\x1b`, `‮`), in
+  directory's name) is written as an escape (`\n`, `\x1b`, `\u202e`), in
   these errors, in the `config:` line and in every other message that
   names the config file, through the function F2's lines use
   (`driver.EscapeOutside`). A directory gets the first or second form with
@@ -2015,7 +2053,7 @@ in the config file (or no config file).
 
 | Default, override or fallback | Status | Why it is the obvious choice (GLOBAL-09) | What overrides it, exclusively (GLOBAL-10) |
 |---|---|---|---|
-| The config file when none is named: `./warden.toml` of the working directory (not of the build context `[path]` names), if it exists; it must be a regular file once links are followed, and one that is not (a FIFO, a socket, a device, or a link to one) is an error, not "no file" | **Changed**: it was that file over `~/.config/warden/config.toml`, read whatever kind of file it was | Jeff's decision 2: the working directory, for ease of use; Jeff's decision on the review's F1 (Decision 14): nobody named that file, and it can be a repository's | `--config`, else `WARDEN_CONFIG`; the named file is the only one read, it is read whatever kind of file it is, and a named file that cannot be read is an error, not a return to the default |
+| The config file when none is named: `./warden.toml` of the working directory (not of the build context `[path]` names), if it exists; it must be a regular file once links are followed, and one that is not (a FIFO, a socket, a device, or a link to one) is an error, not "no file"; a link to nothing is no file, as today | **Changed**: it was that file over `~/.config/warden/config.toml`, read whatever kind of file it was | Jeff's decision 2: the working directory, for ease of use; Jeff's decision on the review's F1 (Decision 14): nobody named that file, and it can be a repository's | `--config`, else `WARDEN_CONFIG`; the named file is the only one read, it is read whatever kind of file it is, and a named file that cannot be read is an error, not a return to the default |
 | No `./warden.toml` and none named: no config file | **Changed**: the user file was read | A first run needs no file (UX-07) | As above |
 | `~/.config/warden/config.toml` | **Removed** as a source. Its existence is an error while the transitional detection stands (a3), unless it is the file named (a10) | Jeff's decisions 1 and 4 | Nothing reads it; `--config` or `WARDEN_CONFIG` can name it |
 | An empty `WARDEN_CONFIG` | **New**: not set | What every empty `WARDEN_*` variable means today | Nothing (a8) |
@@ -2054,9 +2092,10 @@ not a fallback on failure: a source that is set and cannot be used is an
 error. One case does pass to the next source without a word and is named
 here: an empty `WARDEN_CONFIG` counts as not set (a8). The transitional
 detection is not a fallback: it only produces errors. Nor is the check
-that the working directory's file is a regular file: one that is not is
-an error, never "no file", and nothing is tried in its place
-(Decision 14).
+that the working directory's file is a regular file: one that exists and
+is not is an error, never "no file", and nothing is tried in its place
+(Decision 14). A `./warden.toml` that is a link to nothing does not
+exist once links are followed, and is no file, as today.
 
 **The skip under a CA path, named** (GLOBAL-10, GLOBAL-11). What triggers
 it: a PEM block or a file under a configured CA path that is not a valid
@@ -2495,8 +2534,17 @@ the second and third itself (`driver = "qemu"`, `relay_image = "dev"`).
     the host, is still followed and parsed, and a TOML syntax error quotes
     part of what it read, as the parser gives it (the last key's name,
     and the start of a value it could not read), so a fragment of that
-    file can appear in the error and in the build's log. Naming the file
-    closes it, as for the rest of the default.
+    file can appear in the error and in the build's log. And a
+    `./warden.toml` that is a regular file, or a link to one, is read
+    whole whatever its size: nothing bounds a config file, the default
+    included. That includes a Linux procfs file such as
+    `/proc/self/pagemap`, which `stat` reports as a regular, empty file,
+    so a repository's `warden.toml` that links to it still makes every
+    command that reads configuration read until `warden` runs out of
+    memory, with no error before it; a very large regular file does the
+    same. The check closes the device and the FIFO, not this. Naming the
+    file closes both, as for the rest of the default; a size cap on the
+    file would close this one too, and is asked again as **a14**.
 
 **What the TEST-08 suite should exercise.** Arm A gains permanent entries
 (SEC-03), the attacker supplying the build context and the proof being
@@ -3518,7 +3566,7 @@ quoted blocks at both commits); every front-matter value.
 
 **The return** (FLOW-06). Review of the branch at `5a57e55` (report
 `5a57e557c454`, finding F1) found one thing the code does that the design
-approved at `a94133d` does not name: the fix pass `d153126` made a
+as Jeff approved it in r1 (`a94133d`) does not name: the fix pass `d153126` made a
 `./warden.toml` found in the working directory that is not a regular file
 once links are followed an error (`cannot read config file <path> (found
 in the working directory): not a regular file`), while a file named with
@@ -3532,10 +3580,18 @@ offered a size cap on every config file and did not take it.
 changes: they already do and say this):
 
 - Decision 14, new: the check, its reason, and the two alternatives not
-  taken (Jeff's size cap; the same check on a named file).
+  taken (Jeff's size cap; the same check on a named file); that no
+  config file is bounded, the default included, so a link to a procfs
+  file such as `/proc/self/pagemap` still exhausts memory.
+- Decision 8: the relay image's first bullet names the characters the
+  check refuses as built (a byte that is not valid UTF-8, a character
+  that does not print), as **F1 to F4, one by one** says.
+- **Questions:** a14, new: the size cap asked again, with the procfs
+  case Jeff did not have in front of him.
 - **How the config file is found:** the pseudocode's line for it, a
-  bullet with the condition and the asymmetry, the error's text, and that
-  a path is printed escaped.
+  bullet with the condition and the asymmetry, that a link to nothing is
+  no file as today and a link to itself an error, the error's text, and
+  that a path is printed escaped.
 - **What says which file was read:** the path is escaped; a driver the
   file names that `warden` does not have is reported after the line.
 - **The user-level file:** the second call is in `upstreamCAPaths`, which
@@ -3553,23 +3609,29 @@ changes: they already do and say this):
   one.
 - **Defaults and overrides:** the default's row gains the condition, and
   the named file's override says it is read whatever kind it is; the
-  paragraph on the lookup says the check is no fallback.
+  paragraph on the lookup says the check is no fallback; a link to
+  nothing is no file, as today.
 - **Security note**, **What remains**, 10: what the config file did on
   `main` as a FIFO or a device, what it does now, that a named one is
   still read, and what remains (a link to another regular file is
-  parsed, and a TOML error can quote a fragment of it).
+  parsed, and a TOML error can quote a fragment of it; nothing bounds
+  the file's size, so a link to a procfs file or a very large file still
+  exhausts memory).
 - **Validation plan**, tier 0: the tests that exist for the check, the
   escaping, the line before a bad driver, and the relay image's
   characters.
 
 **Not changed.** The proposed wording of ORCH-03 and UX-07; every
 front-matter value (`rule_changes` and the impact fields included);
-Decisions 1 to 13, the Questions and every earlier entry of this
-section. No question is raised: the one fork, whether to keep the check
-or bound every file instead, Jeff decided.
+Decisions 1 to 7 and 9 to 13, Decision 8 but for the relay image's
+wording, the questions a1 to a13 and every earlier entry of this
+section. One question is raised, a14, non-blocking: whether to bound
+the working directory's file after all, now that a link to a procfs
+file is known to pass the check. The design proceeds with the code as
+built, Jeff's decision; the review confirms it or changes it.
 
 **`design_review: required`** (FLOW-19, judged on the delta from
-`a94133d`). The impact fields are unchanged and no question is open, but
+`a94133d`). The impact fields are unchanged, but a14 is open, and
 the branch changed two rules in `docs/development/` since that commit
 (ORCH-03 and UX-07, as approved), so the delta rule's skip does not
 hold; and the delta is a check on the `host-env` boundary that the
