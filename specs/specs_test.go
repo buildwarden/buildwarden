@@ -1,7 +1,9 @@
 // Package specs_test ties the ledger producer, the specification documents
-// under specs/ and the book's mirror of them together (RELAY-05). It holds no
-// code of its own: specs/ is a documentation tree, and this test only reads
-// it, through the exported relay and ledger APIs.
+// under specs/ and the book's mirror of them together (RELAY-05), and the
+// book's seams page to the pins of the seam specifications under
+// tools/conformance/ (TEST-05). It holds no code of its own: specs/ is a
+// documentation tree, and this test only reads it, through the exported relay
+// and ledger APIs.
 package specs_test
 
 import (
@@ -11,6 +13,7 @@ import (
 	"io/fs"
 	"os"
 	"path"
+	"regexp"
 	"sort"
 	"strings"
 	"testing"
@@ -245,6 +248,231 @@ func TestChecks(t *testing.T) {
 				t.Fatalf("want clean, got %v", errs)
 			}
 			if !tt.wantOK && len(errs) == 0 {
+				t.Fatal("want a failure, got none")
+			}
+		})
+	}
+}
+
+// The seam specifications this repository pins, each in its own module
+// tools/conformance/<directory>/go.mod (Decision 7 of
+// docs/design/seam-specs.md), and the book page that links them.
+const (
+	specsRepo = "github.com/buildwarden/buildwarden-specs"
+	seamsPage = "docs/book/src/concepts/seams.md"
+)
+
+var seamSpecs = []string{
+	"bootstrap-config", "collector-inputs", "collector-outputs",
+	"executor-initialize", "relay-claim", "relay-guest-api",
+}
+
+var (
+	// pseudoRev captures the commit a pseudo-version names.
+	pseudoRev = regexp.MustCompile(`[0-9]{14}-([0-9a-f]{12})$`)
+	// specsLink captures the path after blob/ or tree/ of a link into the
+	// specs repository: <ref>/<directory>/<one segment>.
+	specsLink = regexp.MustCompile(
+		`https://github\.com/buildwarden/buildwarden-specs/(?:blob|tree)/([^)\s]+)\)`)
+	// pinCell captures a row's pin, shown as `<directory>@<version>`.
+	pinCell = regexp.MustCompile("`([a-z-]+)@([^`]+)`")
+)
+
+// seamRef is the ref the seams page links a specification at, for the version
+// its module pins: the tag <directory>/<version> for a release, and the
+// twelve-digit commit of a pseudo-version. tools/conformance/pin-specs.sh
+// writes the page with the same form.
+func seamRef(dir, version string) string {
+	if m := pseudoRev.FindStringSubmatch(version); m != nil {
+		return m[1]
+	}
+	return dir + "/" + version
+}
+
+// pinnedVersion returns the version tools/conformance/<dir>/go.mod requires
+// the specification's module at, in the one-line or the block form.
+func pinnedVersion(fsys fs.FS, dir string) (string, error) {
+	file := "tools/conformance/" + dir + "/go.mod"
+	data, err := fs.ReadFile(fsys, file)
+	if err != nil {
+		return "", fmt.Errorf("read pin module: %w", err)
+	}
+	mod := specsRepo + "/" + dir
+	for _, line := range strings.Split(string(data), "\n") {
+		f := strings.Fields(line)
+		if len(f) > 0 && f[0] == "require" {
+			f = f[1:]
+		}
+		if len(f) >= 2 && f[0] == mod {
+			return f[1], nil
+		}
+	}
+	return "", fmt.Errorf("%s does not require %s", file, mod)
+}
+
+// checkSeamRefs fails unless the seams page shows each specification's pin as
+// its module states it, and every link into the specs repository names a
+// specification at the ref of that pin.
+func checkSeamRefs(fsys fs.FS) error {
+	page, err := fs.ReadFile(fsys, seamsPage)
+	if err != nil {
+		return fmt.Errorf("read seams page: %w", err)
+	}
+	pins := map[string]string{}
+	for _, dir := range seamSpecs {
+		if pins[dir], err = pinnedVersion(fsys, dir); err != nil {
+			return err
+		}
+	}
+	shown := map[string]bool{}
+	for _, m := range pinCell.FindAllStringSubmatch(string(page), -1) {
+		dir, version := m[1], m[2]
+		want, ok := pins[dir]
+		if !ok {
+			continue
+		}
+		if shown[dir] {
+			return fmt.Errorf("%s shows the pin of %s twice", seamsPage, dir)
+		}
+		shown[dir] = true
+		if version != want {
+			return fmt.Errorf("%s shows %s@%s; its module pins %s",
+				seamsPage, dir, version, want)
+		}
+	}
+	linked := map[string]bool{}
+	for _, m := range specsLink.FindAllStringSubmatch(string(page), -1) {
+		parts := strings.Split(m[1], "/")
+		if len(parts) < 3 {
+			return fmt.Errorf("%s: link %s names no specification", seamsPage, m[0])
+		}
+		dir := parts[len(parts)-2]
+		ref := strings.Join(parts[:len(parts)-2], "/")
+		want, ok := pins[dir]
+		if !ok {
+			return fmt.Errorf("%s: link %s is to %s, which is not pinned",
+				seamsPage, m[0], dir)
+		}
+		if ref != seamRef(dir, want) {
+			return fmt.Errorf("%s: link %s is at %s; %s is pinned at %s",
+				seamsPage, m[0], ref, dir, seamRef(dir, want))
+		}
+		linked[parts[len(parts)-1]+" "+dir] = true
+	}
+	for _, dir := range seamSpecs {
+		if !shown[dir] {
+			return fmt.Errorf("%s does not show the pin of %s", seamsPage, dir)
+		}
+		if !linked["v1.md "+dir] {
+			return fmt.Errorf("%s does not link %s/v1.md", seamsPage, dir)
+		}
+	}
+	return nil
+}
+
+func TestSeamRefs(t *testing.T) {
+	if err := checkSeamRefs(repo()); err != nil {
+		t.Error(err)
+	}
+}
+
+const (
+	specsURL   = "https://" + specsRepo
+	releasePin = "v0.1.0"
+	commitPin  = "v0.0.0-20261116000050-bc03f6fdc96e"
+)
+
+// atTag and atCommit give the ref a fixture's page links a directory at.
+func atTag(dir string) string { return dir + "/v0.1.0" }
+func atCommit(string) string  { return "bc03f6fdc96e" }
+
+// seamFixture is a tree whose six pin modules each pin version, in the block
+// form go mod tidy writes, and whose seams page shows each pin and links each
+// specification at ref(directory).
+func seamFixture(version string, ref func(string) string) fstest.MapFS {
+	m := fstest.MapFS{}
+	var page strings.Builder
+	page.WriteString("| Specification | Pinned at |\n|---|---|\n")
+	for _, dir := range seamSpecs {
+		m["tools/conformance/"+dir+"/go.mod"] = file("module x/" + dir +
+			"\n\ngo 1.26.3\n\nrequire (\n" +
+			"\t" + specsRepo + "/conformance v0.1.0 // indirect\n" +
+			"\t" + specsRepo + "/" + dir + " " + version + " // indirect\n)\n")
+		fmt.Fprintf(&page,
+			"| [%s](%s/blob/%s/%s/v1.md) ([cases](%s/tree/%s/%s/cases)) | `%s@%s` |\n",
+			dir, specsURL, ref(dir), dir, specsURL, ref(dir), dir, dir, version)
+	}
+	m[seamsPage] = file(page.String())
+	return m
+}
+
+// oneLine is relay-claim's pin module with its requirement in the one-line
+// form, at version.
+func oneLine(version string) string {
+	return "module x\n\nrequire " + specsRepo + "/relay-claim " + version + "\n"
+}
+
+func TestSeamRefChecks(t *testing.T) {
+	rc := "tools/conformance/relay-claim/go.mod"
+	tests := []struct {
+		name   string
+		fsys   fstest.MapFS
+		edit   func(fstest.MapFS)
+		wantOK bool
+	}{
+		{name: "release", fsys: seamFixture(releasePin, atTag), wantOK: true},
+		{name: "commit", fsys: seamFixture(commitPin, atCommit), wantOK: true},
+		{
+			name: "one-line require",
+			fsys: seamFixture(releasePin, atTag),
+			edit: func(m fstest.MapFS) {
+				m[rc] = file(oneLine("v0.1.0"))
+			},
+			wantOK: true,
+		},
+		{name: "commit pinned, page at a tag", fsys: seamFixture(commitPin, atTag)},
+		{name: "release pinned, page at a commit",
+			fsys: seamFixture(releasePin, atCommit)},
+		{
+			name: "module moved without the page",
+			fsys: seamFixture(releasePin, atTag),
+			edit: func(m fstest.MapFS) {
+				m[rc] = file(oneLine("v0.2.0"))
+			},
+		},
+		{
+			name: "pin module missing",
+			fsys: seamFixture(releasePin, atTag),
+			edit: func(m fstest.MapFS) { delete(m, rc) },
+		},
+		{
+			name: "pin not shown",
+			fsys: seamFixture(releasePin, atTag),
+			edit: func(m fstest.MapFS) {
+				m[seamsPage] = file(strings.ReplaceAll(string(m[seamsPage].Data),
+					"`relay-claim@v0.1.0`", "v0.1.0"))
+			},
+		},
+		{
+			name: "link to a directory that is not pinned",
+			fsys: seamFixture(releasePin, atTag),
+			edit: func(m fstest.MapFS) {
+				m[seamsPage] = file(string(m[seamsPage].Data) +
+					"[x](" + specsURL + "/blob/x/v1/build-ledger/v1.md)\n")
+			},
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			m := tt.fsys
+			if tt.edit != nil {
+				tt.edit(m)
+			}
+			err := checkSeamRefs(m)
+			if tt.wantOK && err != nil {
+				t.Fatalf("want clean, got %v", err)
+			}
+			if !tt.wantOK && err == nil {
 				t.Fatal("want a failure, got none")
 			}
 		})

@@ -1,0 +1,6 @@
+github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
+github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
+github.com/buildwarden/buildwarden-specs/conformance v0.0.0-20261116000050-bc03f6fdc96e h1:dtU9DloKy2fksuVbpf76ZIxqs40bnTfktCz4zDfn55Q=
+github.com/buildwarden/buildwarden-specs/conformance v0.0.0-20261116000050-bc03f6fdc96e/go.mod h1:9FnJ85+Qa8lKFT13VF+SjiT2wzIGlGvOsXSJXyLJUj4=
+github.com/buildwarden/buildwarden-specs/relay-guest-api v0.0.0-20261116000050-bc03f6fdc96e h1:VnFkiPrIXjYb28JPnkv9zl7CgUKLfllm8tn9W7VsLAU=
+github.com/buildwarden/buildwarden-specs/relay-guest-api v0.0.0-20261116000050-bc03f6fdc96e/go.mod h1:ZS9RoiEHlY71VAXnNa1lGRk4pbIeCnLOM3MBH3q1XtE=
