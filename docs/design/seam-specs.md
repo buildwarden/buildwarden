@@ -6,6 +6,9 @@ seams: [relay-claim, collector, relay-guest-api, executor-initialize, bootstrap-
                          # each gets its contract document, the collector seam two (a10);
                          # none changes behaviour here
 surfaces: []
+repos: [buildwarden/buildwarden, buildwarden/buildwarden-specs]
+                         # home first; the specifications and suites live in the second
+                         # (recorded at loop-parallel's x4-state on Jeff's word, 2026-11-16)
 security_boundary: none  # no code on a boundary changes; see the Security note
 alters_relationships: true   # the seams' definition and their contract tests move to another
                          # repository, and this one depends on a tagged release of it
