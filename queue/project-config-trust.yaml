@@ -98,15 +98,15 @@ steps:
     needs:
       - f2-design-review-r3
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261112T230554Z
+      expires: 2026-11-16T03:21:35.06813212Z
 budget:
   estimate:
     runs: 2
     steps: 14
   spent:
     runs: 0
-    steps: 10
+    steps: 11
 questions:
   - id: a1
     kind: assumed
@@ -405,3 +405,6 @@ history:
   - at: 2026-11-16T01:21:04Z
     by: human/jeff
     event: done f2-design-review-r3
+  - at: 2026-11-16T01:21:35Z
+    by: cloud/20261112T230554Z
+    event: claimed f2-plan-r3 until 2026-11-16T03:21:35Z
