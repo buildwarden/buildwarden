@@ -27,8 +27,11 @@ nor `./warden.toml` is opened.
   cannot be read is an error, not "no file".
 - `./warden.toml`, which nobody named, must be a regular file once links are
   followed: a link to a device or a pipe (`/dev/zero`, a terminal) is an
-  error, `not a regular file`. A file named with `--config` or
-  `WARDEN_CONFIG` is read whatever kind of file it is.
+  error, `not a regular file`. It is read up to 1 MiB: one that gives more
+  is the error `larger than 1 MiB`, whatever size it appears to have on
+  disk (a link to `/proc/self/pagemap` appears empty). A file named with
+  `--config` or `WARDEN_CONFIG` is read whole, whatever kind of file it is
+  and whatever its size.
 - An empty file is a file: every setting is its default.
 - A relative `--config` or `WARDEN_CONFIG` is relative to the working
   directory, like any path argument, so a relative `WARDEN_CONFIG` names a
