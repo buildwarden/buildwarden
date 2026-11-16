@@ -21,6 +21,22 @@ For the container driver you can also point at a specific Dockerfile:
 warden build ./my-project/Dockerfile.prod
 ```
 
+The container driver uses the first of `finch`, `docker` and `podman` that
+answers. To choose one, name it:
+
+```sh
+warden build --runtime podman .
+```
+
+Those three names are the only values the runtime takes, on the command
+line, in `WARDEN_CTR_CLI` and in a `warden.toml`. A build whose runtime
+setting holds anything else (a path, a wrapper script, another runtime)
+stops before it runs anything, and the error says where the value is set and
+what to change. When it is set in the `warden.toml` of a repository you
+cloned, `--runtime` with one of the three builds it without editing the
+file. [The container runtime](../guide/configuration.md#the-container-runtime)
+has the rule and the error.
+
 ## What you'll see
 
 The output is consistent across all drivers:

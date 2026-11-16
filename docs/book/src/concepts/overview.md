@@ -30,6 +30,11 @@ Three rules hold for every driver (the full model is
 ```
 warden build <context>:
     req := resolve flags and config (driver, runtime, output dir, ...)
+    container driver: runtime := --runtime, else WARDEN_CTR_CLI, else
+                [runtime] cli (./warden.toml, then the user's file), else
+                the first of finch, docker, podman that answers; a value
+                that is not one of those three is refused here, before
+                anything is run
     VM drivers: req.BuildLink := --build-link, else [vm] build_link (checked as
                 the file loads), else 100.127.255.252/30; each checked /30,
                 disjoint from BuildWarden's own ranges, before any driver work
@@ -40,6 +45,10 @@ warden build <context>:
     driver.StartBuild(req)                  # below; every driver has this shape
     print the result; exit with the build script's exit code
 ```
+
+`warden clean` resolves the container runtime the same way, and refuses it
+the same way, under every driver but `firecracker` and `hyperv`: under the
+container driver, `qemu` and `vz` it removes leftover containers.
 
 Every driver's `StartBuild` follows the same skeleton. Only the marked steps
 differ per driver.

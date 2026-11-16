@@ -14,12 +14,19 @@ import (
 )
 
 // inConfigFiles points the user config at a fresh home and runs from a fresh
-// project directory, writing each non-empty body as that level's file.
+// project directory, writing each non-empty body as that level's file. The
+// variables that choose the runtime and the driver start unset, and the
+// flags a case sets for them and for --tmpdir are cleared when the test
+// ends, so a case sees only the levels it sets. It returns the project
+// directory.
 func inConfigFiles(t *testing.T, user, project string) string {
 	t.Helper()
 	home, proj := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
+	t.Setenv("WARDEN_CTR_CLI", "")
+	t.Setenv("WARDEN_DRIVER", "")
+	t.Cleanup(func() { flagRuntime, flagDriver, flagTempDir = "", "", "" })
 	if user != "" {
 		dir := filepath.Join(home, ".config", "warden")
 		if err := os.MkdirAll(dir, 0o755); err != nil {

@@ -11,7 +11,8 @@ CLI flags override everything.
 
 ```toml
 [runtime]
-cli = "finch"              # Container runtime: finch, docker, podman
+cli = "finch"              # Container runtime: finch, docker or podman, and nothing
+                           #   else (unset = detected; see The container runtime)
 driver = ""                # Build driver: container, qemu, vz, hyperv, firecracker
                            #   (default: auto, the container driver)
 relay_image = ""           # Relay image override (container driver)
@@ -63,7 +64,7 @@ verbose = false            # Verbose output (shows container runtime commands)
 |----------|-----------|-------------|
 | `WARDEN_DRIVER` | `runtime.driver` | Override driver selection |
 | `WARDEN_IMAGE` | `runtime.relay_image` | Relay image override |
-| `WARDEN_CTR_CLI` | `runtime.cli` | Container runtime binary name |
+| `WARDEN_CTR_CLI` | `runtime.cli` | Container runtime: finch, docker or podman (see [The container runtime](#the-container-runtime)) |
 | `WARDEN_UPSTREAM_CA_CERTS` | `relay.upstream_ca_certs` | Extra upstream CA files/dirs (colon-separated) |
 | `NO_COLOR` | `output.color` | Disable colored output (any value) |
 | `WARDEN_VERBOSE` | `output.verbose` | Enable verbose mode (any value) |
@@ -73,7 +74,7 @@ verbose = false            # Verbose output (shows container runtime commands)
 | Flag | Scope | Description |
 |------|-------|-------------|
 | `--driver` | Global | Orchestration driver (container, qemu, vz, hyperv, firecracker) |
-| `--runtime` | Global | Container runtime |
+| `--runtime` | Global | Container runtime: finch, docker or podman (see [The container runtime](#the-container-runtime)) |
 | `--color` | Global | Color mode |
 | `-v, --verbose` | Global | Verbose output |
 | `-o, --output` | build/shell | Output directory |
@@ -177,9 +178,102 @@ link, and so on), naming it, rather than drop it. The container driver
 ignores `[vm]` and its relay uses its container's resolvers. `warden doctor`
 prints the resolvers and where they came from.
 
-## Runtime Autodetection
+## The container runtime
 
-If no runtime is configured, BuildWarden probes in order: **finch** → docker → podman. The first one that responds to `<runtime> info` within 3 seconds wins.
+The container driver runs one of three runtimes: `finch`, `docker` or
+`podman`. The runtime setting takes one of those three names, written as
+they are here (lower case, no directory, no `.exe`), or is left unset. The
+values are the same wherever the runtime is named. The highest of these
+levels that names a runtime is the one in effect:
+
+1. `--runtime`
+2. `WARDEN_CTR_CLI`
+3. `[runtime] cli` in `./warden.toml`
+4. `[runtime] cli` in `~/.config/warden/config.toml`
+
+An empty `--runtime` or `WARDEN_CTR_CLI` is not set, and the next level is
+read. `cli = ""` in a file is that file's value: in `./warden.toml` it hides
+the user-level file's value, and the runtime is detected.
+
+`warden` runs the runtime by its name, which is looked up on `PATH`. A
+runtime installed outside `PATH` needs its directory added to `PATH`.
+
+### Detection
+
+When no level names a runtime, BuildWarden probes `finch`, then `docker`,
+then `podman`. The first one that answers `<runtime> info` within 3 seconds
+is used.
+
+### Which commands check the value
+
+Only a command that runs the container runtime checks the setting, and it
+checks the value in effect:
+
+| Command | The runtime setting |
+|---------|---------------------|
+| `warden build`, `warden shell` and `warden doctor` with the container driver | checked |
+| `warden clean` with the container driver, `qemu` or `vz` (under all three it removes leftover containers) | checked |
+| `build`, `shell` and `doctor` with a VM driver; `clean` with `hyperv` or `firecracker`; `setup`; `image prepare` | not read |
+
+So one `warden.toml` can hold the settings of several drivers:
+`warden build --driver qemu` does not fail on a `[runtime] cli` it does not
+use, and `--runtime` is accepted and ignored there. A value that a higher
+level replaces is not checked either. With an unsupported `cli` in
+`./warden.toml`, `warden build --runtime docker` builds with Docker, which is
+also the way to build someone else's repository without editing its file.
+
+### A value that is not supported
+
+A value in effect that is not `finch`, `docker` or `podman` is an error. The
+command stops before it looks up or runs anything and before it makes an
+output directory, a container or a network, and `warden` exits 1. The message
+says where the value was set and what to change:
+
+```
+[warden] ERROR: [runtime] cli in warden.toml is "dokcer"; the container driver supports finch, docker and podman
+  To fix: set it to finch, docker or podman, or remove it; --runtime with one of those replaces it for one command
+```
+
+No other value is tried in its place: neither a lower level's nor a detected
+runtime.
+
+<!-- TRANSITIONAL(runtime-former-values): this subsection is removed with
+     cmd/warden/runtime_former.go, in the change that prepares 1.0. -->
+### A path, or another runtime
+
+Earlier releases ran whatever program the setting named, from every level.
+A repository's `warden.toml` could therefore make `warden` run a program of
+the repository's own on the host. The setting is now limited to the three
+runtimes the container driver supports, and these values stopped working:
+
+| Before | Now |
+|--------|-----|
+| `--runtime /path/to/docker`, `WARDEN_CTR_CLI=/usr/local/bin/podman`, or `cli = "/opt/homebrew/bin/finch"` in either file | Refused. Name the runtime, and put its directory on `PATH` |
+| `--runtime docker.exe`, `Docker` | Refused. Write `docker` |
+| `WARDEN_CTR_CLI=nerdctl`, or another runtime's program | Refused. There is no supported way to use another runtime with the container driver |
+| A wrapper script, by path or by name, that only sets variables and then runs a supported runtime (`docker-ci` setting `DOCKER_HOST`) | Refused. Name the runtime and set the wrapper's variables (`DOCKER_HOST`, `DOCKER_CONTEXT`, `CONTAINER_HOST`) in the environment |
+| A wrapper that does anything else: `sudo docker`, `podman --remote`, `nerdctl --namespace`, a script that picks a runtime | Refused. There is no supported replacement |
+| `cli = "./tools/docker"` or `cli = "sh"` in a project's `warden.toml` | Refused. This is the hole the limit closes |
+
+A value in one of these forms gets a message that says what to change in
+place of the list of supported values: a supported runtime in another letter
+case or with `.exe`, a path to one, `nerdctl`, and a path to any other
+program. For example:
+
+```
+[warden] ERROR: WARDEN_CTR_CLI is "/opt/homebrew/bin/docker"; the container runtime is named, not given as a path
+  To fix: set WARDEN_CTR_CLI to docker; warden looks docker up on PATH, so if it is installed outside PATH, add its directory to PATH
+```
+
+A wrapper named without a path cannot be told from a typing error and gets
+the error of the section above.
+
+The container driver runs the runtime by its name with `warden`'s arguments
+and nothing else, so a wrapper that added `sudo` or arguments has nothing to
+move to: the runtime has to be reachable by its name alone. For `nerdctl`,
+Finch is the supported runtime built on it. A file named `docker` on your own
+`PATH` that runs something else is run as `docker`; that arrangement is
+neither tested nor supported.
 
 ## Driver Selection
 
