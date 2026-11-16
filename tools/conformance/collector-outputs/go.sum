@@ -1,9 +1,9 @@
 github.com/BurntSushi/toml v1.6.0 h1:dRaEfpa2VI55EwlIW72hMRHdWouJeRF7TPYhI+AUQjk=
 github.com/BurntSushi/toml v1.6.0/go.mod h1:ukJfTF/6rtPPRCnwkur4qwRxa8vTRFBF0uk2lLoLwho=
-github.com/buildwarden/buildwarden-specs/collector-outputs v0.0.0-20261116103657-9abf66cc70fe h1:1dI8sAXAXLIDaEtvq4webT7PTe01zARi1VYqHl9grEY=
-github.com/buildwarden/buildwarden-specs/collector-outputs v0.0.0-20261116103657-9abf66cc70fe/go.mod h1:pMsUDI8wW0rTvIHyf/Nl1cnoTRsICOgmXYLRa6kx4Bc=
-github.com/buildwarden/buildwarden-specs/conformance v0.0.0-20261116103657-9abf66cc70fe h1:YZ1lLO0juj3blZNLnfFmsZtgWD2q9cEc/mQdoPRZRwU=
-github.com/buildwarden/buildwarden-specs/conformance v0.0.0-20261116103657-9abf66cc70fe/go.mod h1:5TbwBNDV0DIr9sFOVtAJOEDcwq7XE9RI0hoI+kjXnVw=
+github.com/buildwarden/buildwarden-specs/collector-outputs v0.0.0-20261116171557-b808a9192ccb h1:meWQ9ELlB6ciWmhkCMs30oBZfr9ntaSohj0JMhCJK2Y=
+github.com/buildwarden/buildwarden-specs/collector-outputs v0.0.0-20261116171557-b808a9192ccb/go.mod h1:pMsUDI8wW0rTvIHyf/Nl1cnoTRsICOgmXYLRa6kx4Bc=
+github.com/buildwarden/buildwarden-specs/conformance v0.0.0-20261116171557-b808a9192ccb h1:ZNJBwJboigWzs7sqBYbTb6aA2gZPVZZsPW5gNinCgx0=
+github.com/buildwarden/buildwarden-specs/conformance v0.0.0-20261116171557-b808a9192ccb/go.mod h1:5TbwBNDV0DIr9sFOVtAJOEDcwq7XE9RI0hoI+kjXnVw=
 github.com/dlclark/regexp2 v1.11.0 h1:G/nrcoOa7ZXlpoa/91N3X7mM3r8eIlMBBJZvsz/mxKI=
 github.com/dlclark/regexp2 v1.11.0/go.mod h1:DHkYz0B9wPfa6wondMfaivmHpzrQ3v9q8cnmRbL6yW8=
 github.com/google/btree v1.1.2 h1:xf4v41cLI2Z6FxbKm+8Bu+m8ifhj15JuZ9sa0jZCMUU=
