@@ -13,6 +13,7 @@ import (
 	"math/big"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 	"time"
@@ -505,8 +506,20 @@ func TestLoadUpstreamCAsEscapes(t *testing.T) {
 	if !errors.As(err, &fe) {
 		t.Fatalf("error %v", err)
 	}
-	want := `upstream CA path /no/such\n\x1b[2Jpath\xff` +
-		" (from [relay] upstream_ca_certs) does not exist"
+	// The path is shown absolute, so on Windows it starts with the working
+	// directory's drive. Windows' path conversion has already replaced the
+	// 0xff byte with U+FFFD, a valid character that prints, before
+	// anything escapes it: the path named is the one the OS looked up.
+	parent, err := filepath.Abs("/no")
+	if err != nil {
+		t.Fatal(err)
+	}
+	invalid := `\xff`
+	if runtime.GOOS == "windows" {
+		invalid = "�"
+	}
+	want := "upstream CA path " + parent + string(filepath.Separator) +
+		`such\n\x1b[2Jpath` + invalid + " (from [relay] upstream_ca_certs) does not exist"
 	if fe.Msg != want {
 		t.Errorf("message %q, want %q", fe.Msg, want)
 	}
