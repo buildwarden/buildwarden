@@ -639,15 +639,16 @@ func x3(pr int) *queue.Feature {
 	return p
 }
 
-// pid is the patch-id the check computes for the change from a to b.
-func pid(work, a, b string) string {
-	return (&checker{env: Env{Repo: work}}).patchID(a, b)
+// proof is the merge-tree proof the check makes for ref and PR commit sha.
+func proof(work, ref, sha string) (string, bool) {
+	return (&checker{env: Env{Repo: work}}).mergeTreeProof(ref, sha)
 }
 
 // TestSquashAfterMainMoved: main moved under the branch before the squash,
 // as with design-principles' #104, so the squash's tree is not the branch's.
-// The squash still made exactly the branch's change, so both refs count as
-// merged by the patch-id proof, and the info says so (FLOW-08, GLOBAL-11).
+// Merging either ref onto the squash's parent still writes the squash's tree,
+// so both count as merged by the merge-tree proof, and the info says so
+// (FLOW-08, GLOBAL-11).
 func TestSquashAfterMainMoved(t *testing.T) {
 	work := mainMoved(t)
 	squash(t, work, "#9")
@@ -657,16 +658,17 @@ func TestSquashAfterMainMoved(t *testing.T) {
 	}
 	for _, ref := range []string{"refs/heads/feat/demo", "refs/remotes/origin/feat/demo"} {
 		re := regexp.MustCompile(regexp.QuoteMeta(ref) + ` squash-merged as [0-9a-f]+ ` +
-			`after main moved \(change [0-9a-f]{40}, base [0-9a-f]{7}\)`)
+			`after main moved \(merged onto [0-9a-f]+\^ from base [0-9a-f]{7} writes tree ` +
+			`[0-9a-f]{7}\)`)
 		if !re.MatchString(rs[0].Info) {
-			t.Errorf("info %q, want %s named with its patch-id proof", rs[0].Info, ref)
+			t.Errorf("info %q, want %s named with its merge-tree proof", rs[0].Info, ref)
 		}
 	}
 }
 
 // TestSquashWithADifferentChangeFails: a human resolved a conflict, or edited
-// the change, while squashing. The check fails, names both patch-ids and the
-// commands to compare them, and prints the deletion commands for the human;
+// the change, while squashing. The check fails, names both trees and the
+// command to repeat the merge, and prints the deletion commands for the human;
 // the remote-tracking one only once GitHub has deleted the branch.
 func TestSquashWithADifferentChangeFails(t *testing.T) {
 	work := mainMoved(t)
@@ -677,14 +679,14 @@ func TestSquashWithADifferentChangeFails(t *testing.T) {
 	git(t, work, "push", "-q", "origin", "main")
 	git(t, work, "fetch", "-q", "origin")
 	got := failures(Phase(Env{Repo: work}, x3(9)))
-	ids := regexp.MustCompile(`change ([0-9a-f]{40})`).FindAllStringSubmatch(got, -1)
-	if len(ids) != 2 || ids[0][1] == ids[1][1] {
-		t.Errorf("detail %q, want two different patch-ids", got)
+	ids := regexp.MustCompile(`tree ([0-9a-f]{7})`).FindAllStringSubmatch(got, -1)
+	if len(ids) != 3 || ids[1][1] == ids[2][1] {
+		t.Errorf("detail %q, want the squash's tree and a different merged tree", got)
 	}
 	for _, want := range []string{
-		"no PR commit has its tree or its change",
-		"compare: git diff ",
-		" refs/heads/feat/demo; git diff ",
+		"no PR commit has its tree or is its merge",
+		"repeat: git merge-tree --write-tree --merge-base=",
+		"^ refs/heads/feat/demo)",
 		"after comparing, a human may delete: git branch -D feat/demo",
 	} {
 		if !strings.Contains(got, want) {
@@ -712,7 +714,7 @@ func TestPushedPastASquashAfterMainMovedFails(t *testing.T) {
 	})
 	got := failures(Phase(Env{Repo: work}, x3(9)))
 	if !strings.Contains(got, "refs/heads/feat/demo (tree ") ||
-		!strings.Contains(got, "no PR commit has its tree or its change") {
+		!strings.Contains(got, "no PR commit has its tree or is its merge") {
 		t.Errorf("head past the squash: %q, want it named as unmerged", got)
 	}
 }
@@ -729,13 +731,8 @@ func TestTwoParentPRCommitNotCompared(t *testing.T) {
 	git(t, work, "merge", "-q", "--no-ff", "-m", "Merge pull request #9 from o/side", "side")
 	git(t, work, "push", "-q", "origin", "main")
 	git(t, work, "fetch", "-q", "origin")
-	base, err := exec.Command("git", "-C", work, "merge-base", "feat/demo", "main^1").Output()
-	if err != nil {
-		t.Fatal(err)
-	}
-	if a, b := pid(work, "main^1", "main"), pid(work, strings.TrimSpace(string(base)),
-		"feat/demo"); a == "" || a != b {
-		t.Fatalf("first-parent patch-id %q, branch's %q: the case needs them equal", a, b)
+	if info, ok := proof(work, "refs/heads/feat/demo", fullHead(t, work, "side")); !ok {
+		t.Fatalf("the squash on side is not proven (%s): the case needs it proven", info)
 	}
 	got := failures(Phase(Env{Repo: work}, x3(9)))
 	if !strings.Contains(got, "(2 parents, not compared)") {
@@ -743,8 +740,8 @@ func TestTwoParentPRCommitNotCompared(t *testing.T) {
 	}
 }
 
-// TestWhitespaceOnlyDifferenceFails: the patch-id is whitespace-exact, so a
-// squash that changed only a line's whitespace is a different change.
+// TestWhitespaceOnlyDifferenceFails: the trees compare bytes, so a squash
+// that changed only a line's whitespace is not the ref's merge.
 func TestWhitespaceOnlyDifferenceFails(t *testing.T) {
 	work := mainMoved(t)
 	git(t, work, "merge", "-q", "--squash", "feat/demo")
@@ -756,7 +753,7 @@ func TestWhitespaceOnlyDifferenceFails(t *testing.T) {
 	git(t, work, "push", "-q", "origin", "main")
 	git(t, work, "fetch", "-q", "origin")
 	if got := failures(Phase(Env{Repo: work}, x3(9))); !strings.Contains(got,
-		"no PR commit has its tree or its change") {
+		"no PR commit has its tree or is its merge") {
 		t.Errorf("x3 on a whitespace-only difference: %q, want it unmerged", got)
 	}
 }
@@ -801,7 +798,7 @@ func head(t *testing.T, work string) string {
 
 // TestSquashAfterMainMovedIgnoresDiffConfig: the diffs pin every option that
 // shapes them, so repository configuration, and running from a subdirectory,
-// change neither the verdict nor the patch-ids.
+// change neither the verdict nor the info.
 func TestSquashAfterMainMovedIgnoresDiffConfig(t *testing.T) {
 	work := mainMoved(t)
 	squash(t, work, "#9")
@@ -940,14 +937,14 @@ func besideEdit(t *testing.T) (work, pre string) {
 // TestSquashBesideEdit: a branch refreshed onto a main that edited a line
 // beside one of its hunks, and then squash-merged, is confirmed for both of
 // its refs: the refreshed head by the tree, and a ref left at the head from
-// before the refresh by the change, which is compared with no context lines.
+// before the refresh by the merge-tree proof.
 // So is a squash made with no refresh, round the up-to-date requirement
 // (FLOW-08, FLOW-16; a14 and case 22 of the loop-parallel design).
 func TestSquashBesideEdit(t *testing.T) {
 	const local, remote = "refs/heads/feat/demo", "refs/remotes/origin/feat/demo"
 	byChange := func(ref string) *regexp.Regexp {
 		return regexp.MustCompile(regexp.QuoteMeta(ref) +
-			` squash-merged as [0-9a-f]+ after main moved \(change [0-9a-f]{40}, `)
+			` squash-merged as [0-9a-f]+ after main moved \(merged onto `)
 	}
 	t.Run("refreshed", func(t *testing.T) {
 		work, pre := besideEdit(t)
@@ -970,7 +967,7 @@ func TestSquashBesideEdit(t *testing.T) {
 				rs[0].Info)
 		}
 		if !byChange(local).MatchString(rs[0].Info) {
-			t.Errorf("info %q, want the older ref confirmed by its change", rs[0].Info)
+			t.Errorf("info %q, want the older ref confirmed by its merge", rs[0].Info)
 		}
 	})
 	t.Run("no refresh", func(t *testing.T) {
@@ -983,7 +980,7 @@ func TestSquashBesideEdit(t *testing.T) {
 		}
 		for _, ref := range []string{local, remote} {
 			if !byChange(ref).MatchString(rs[0].Info) {
-				t.Errorf("info %q, want %s confirmed by its change", rs[0].Info,
+				t.Errorf("info %q, want %s confirmed by its merge", rs[0].Info,
 					ref)
 			}
 		}
