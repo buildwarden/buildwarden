@@ -81,7 +81,7 @@ steps:
   - id: f6-consolidate
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f6-merge-main
     lease:
@@ -103,7 +103,7 @@ budget:
     steps: 8
   spent:
     runs: 0
-    steps: 8
+    steps: 9
 questions: []
 history:
   - at: 2026-11-15T23:22:53Z
@@ -178,3 +178,9 @@ history:
   - at: 2026-11-16T00:27:14Z
     by: cloud/20261112T230554Z
     event: done f6-merge-main
+  - at: 2026-11-16T00:27:40Z
+    by: cloud/20261112T230554Z
+    event: claimed f6-consolidate until 2026-11-16T02:27:40Z
+  - at: 2026-11-16T00:30:20Z
+    by: cloud/20261112T230554Z
+    event: done f6-consolidate
