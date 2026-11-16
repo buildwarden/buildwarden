@@ -64,7 +64,7 @@ steps:
   - id: f2-design-review-r2
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -349,3 +349,6 @@ history:
   - at: 2026-11-16T00:53:48Z
     by: human/jeff
     event: 'assumed question a14 confirmed: (b) cap the working directory''s file only, about 1 MiB; a named file unbounded (Jeff, 2026-11-16)'
+  - at: 2026-11-16T00:59:28Z
+    by: human/jeff
+    event: done f2-design-review-r2
