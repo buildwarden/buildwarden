@@ -1,9 +1,9 @@
 feature: seam-specs
 title: 'Specs repository and conformance suites: write seams 1, 2, 3, 5 and 6, build the harness against any relay and any collector, link the book and the specs, fill tier 1''s seams list (componentization S1)'
 priority: 71
-status: in_progress
+status: done
 round: feature
-phase: 7
+phase: 8
 design: docs/design/seam-specs.md
 branch: feat/seam-specs
 repos:
@@ -143,7 +143,14 @@ steps:
   - id: f7-merge
     phase: 7
     affinity: cloud
-    status: pending
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f8-close
+    phase: 8
+    affinity: cloud
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -153,7 +160,7 @@ budget:
     steps: 30
   spent:
     runs: 2
-    steps: 16
+    steps: 18
 questions:
   - id: a1
     kind: assumed
@@ -664,3 +671,21 @@ history:
   - at: 2026-11-16T23:19:55Z
     by: cloud/20261112T230554Z
     event: entered phase 7 (merge)
+  - at: 2026-11-16T23:40:13Z
+    by: cloud/20261112T230554Z
+    event: claimed f7-merge until 2026-11-17T01:40:13Z
+  - at: 2026-11-16T23:40:13Z
+    by: cloud/20261112T230554Z
+    event: done f7-merge
+  - at: 2026-11-16T23:40:13Z
+    by: cloud/20261112T230554Z
+    event: entered phase 8 (close)
+  - at: 2026-11-16T23:40:19Z
+    by: cloud/20261112T230554Z
+    event: claimed f8-close until 2026-11-17T01:40:19Z
+  - at: 2026-11-16T23:40:20Z
+    by: cloud/20261112T230554Z
+    event: done f8-close
+  - at: 2026-11-16T23:40:20Z
+    by: cloud/20261112T230554Z
+    event: closed; feature done
