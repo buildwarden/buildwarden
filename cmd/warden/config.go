@@ -12,6 +12,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/BurntSushi/toml"
 
@@ -31,7 +32,8 @@ type Config struct {
 	// File is the absolute path of the one config file that was read, empty
 	// when none was, and FileSource how it was chosen (configFromFlag,
 	// configFromEnv or configFromDir). Every message that names the file by
-	// a path prints File.
+	// a path prints File through driver.EscapeOutside: the path can be the
+	// working directory's, which a repository or an archive names.
 	File       string `toml:"-"`
 	FileSource string `toml:"-"`
 }
@@ -74,13 +76,15 @@ type RelayConfig struct {
 type RuntimeConfig struct {
 	CLI string `toml:"cli"`
 	// CLISource says where CLI was named: cliFromFlag, cliFromEnv, or the
-	// path of the config file that set it. It words the error that refuses
-	// an unsupported runtime; nothing that decides what is run reads it.
+	// path of the config file that set it, escaped for printing. It words
+	// the error that refuses an unsupported runtime; nothing that decides
+	// what is run reads it.
 	CLISource  string `toml:"-"`
 	Driver     string `toml:"driver"`
 	RelayImage string `toml:"relay_image"`
 	// RelayImageSource says where RelayImage was set: relayImageFromEnv, or
-	// the path of the config file. It words checkRelayImage's error.
+	// the path of the config file, escaped for printing. It words
+	// checkRelayImage's error.
 	RelayImageSource string `toml:"-"`
 }
 
@@ -160,11 +164,18 @@ func configFile() (path, source string, err error) {
 
 // readConfigFile returns the bytes of the config file configFile chose, or
 // the error that says why it cannot be read. No other file is tried in its
-// place.
+// place. The working directory's file must be a regular file once links are
+// followed: nobody named it, and a repository can make it a link to a device
+// (/dev/zero, a terminal) that would exhaust memory or wait for ever. A file
+// named with --config or WARDEN_CONFIG is read whatever kind it is.
 func readConfigFile(path, source string) ([]byte, error) {
 	info, err := os.Stat(path)
-	if err == nil && info.IsDir() {
+	switch {
+	case err != nil:
+	case info.IsDir():
 		err = errIsDirectory
+	case source == configFromDir && !info.Mode().IsRegular():
+		err = errNotRegular
 	}
 	var data []byte
 	if err == nil {
@@ -176,6 +187,7 @@ func readConfigFile(path, source string) ([]byte, error) {
 	if source == configFromDir {
 		return nil, unreadableConfig(path, source, err)
 	}
+	shown := driver.EscapeOutside(path)
 	fix := "pass --config an existing file, or drop it to use WARDEN_CONFIG " +
 		"or ./warden.toml"
 	if source == configFromEnv {
@@ -185,16 +197,20 @@ func readConfigFile(path, source string) ([]byte, error) {
 	switch {
 	case errors.Is(err, fs.ErrNotExist):
 		return nil, driver.Fixable(fix, "config file %s (from %s) does not exist",
-			path, source)
+			shown, source)
 	case errors.Is(err, errIsDirectory):
 		return nil, driver.Fixable(fix, "config file %s (from %s) is a directory",
-			path, source)
+			shown, source)
 	}
 	return nil, unreadableConfig(path, source, err)
 }
 
 // errIsDirectory marks a config file path that names a directory.
 var errIsDirectory = errors.New("is a directory")
+
+// errNotRegular marks a working directory's warden.toml that is a device, a
+// pipe or a socket, or a link to one.
+var errNotRegular = errors.New("not a regular file")
 
 // unreadableConfig is the error for a config file that exists and cannot be
 // read; the reason is the operating system's. For a named file its source
@@ -205,28 +221,32 @@ func unreadableConfig(path, source string, err error) error {
 	}
 	return driver.Fixable("make it readable, or name another file with "+
 		"--config or WARDEN_CONFIG",
-		"cannot read config file %s (%s): %s", path, source, osReason(err))
+		"cannot read config file %s (%s): %s", driver.EscapeOutside(path),
+		source, osReason(err))
 }
 
 // osReason is the operating system's reason for a failed file operation,
-// without the operation and the path that *fs.PathError puts before it.
+// without the operation and the path that *fs.PathError puts before it,
+// escaped for printing.
 func osReason(err error) string {
 	var pe *fs.PathError
 	if errors.As(err, &pe) {
-		return pe.Err.Error()
+		err = pe.Err
 	}
-	return err.Error()
+	return driver.EscapeOutside(err.Error())
 }
 
 // configLine says which config file a command read and how it was chosen.
 // Every command that reads configuration prints it, so that the working
-// directory's file is never used without a word.
+// directory's file is never used without a word. The path is escaped: a
+// directory whose name holds a newline or an escape sequence would
+// otherwise print a second line, or erase this one, in a terminal.
 func configLine(cfg *Config) string {
 	if cfg.File == "" {
 		return "config: none (no --config, no WARDEN_CONFIG, no " +
 			"./warden.toml): defaults apply"
 	}
-	return "config: " + cfg.File + " (" + cfg.FileSource + ")"
+	return "config: " + driver.EscapeOutside(cfg.File) + " (" + cfg.FileSource + ")"
 }
 
 // LoadConfig reads the one config file (configFile) and applies the
@@ -257,8 +277,8 @@ func LoadConfig() (*Config, error) {
 			return nil, err
 		}
 		cfg.File, cfg.FileSource = path, source
-		cfg.Runtime.CLISource = path
-		cfg.Runtime.RelayImageSource = path
+		cfg.Runtime.CLISource = driver.EscapeOutside(path)
+		cfg.Runtime.RelayImageSource = driver.EscapeOutside(path)
 	}
 
 	// Environment variable overrides
@@ -282,8 +302,10 @@ func LoadConfig() (*Config, error) {
 }
 
 // decodeConfig decodes the config file's bytes into cfg and makes the checks
-// that are made as the file loads ([vm] build_link, [vm] dns).
-func decodeConfig(path string, data []byte, cfg *Config) error {
+// that are made as the file loads ([vm] build_link, [vm] dns). Its messages
+// and the source labels it sets print the path escaped.
+func decodeConfig(file string, data []byte, cfg *Config) error {
+	path := driver.EscapeOutside(file)
 	md, err := toml.Decode(string(data), cfg)
 	if err != nil {
 		return driver.Fixable("fix the TOML syntax in "+path, "parsing %s: %v", path, err)
@@ -296,7 +318,7 @@ func decodeConfig(path string, data []byte, cfg *Config) error {
 					path, exampleBuildLink),
 				"[vm] build_link in %s: %v", path, err)
 		}
-		cfg.VM.BuildLinkSource = filepath.Base(path)
+		cfg.VM.BuildLinkSource = driver.EscapeOutside(filepath.Base(file))
 	}
 	if md.IsDefined("vm", "dns") {
 		if len(cfg.VM.DNS) == 0 {
@@ -315,7 +337,7 @@ func decodeConfig(path string, data []byte, cfg *Config) error {
 				"[vm] dns in %s: %v", path, err)
 		}
 		cfg.VM.DNSAddrs = addrs
-		cfg.VM.DNSSource = filepath.Base(path)
+		cfg.VM.DNSSource = driver.EscapeOutside(filepath.Base(file))
 	}
 	return nil
 }
@@ -648,6 +670,10 @@ func validateFlagsForDriver(d string) error {
 // reference. The value goes to `<runtime> pull` and to the container's
 // creation as one argument, so one that starts with "-" would be read as an
 // option, and a space or a control character has no place in a reference.
+// A control character here is any that does not print: the C0 and C1
+// controls, and the format characters (a right-to-left override, a
+// zero-width space, a byte order mark) that reorder or hide the text around
+// them where the value is printed; a byte that is not valid UTF-8 too.
 // Empty and "dev" are the release's image and a development build; nothing
 // more of a reference is checked here, which the runtime's own error does.
 // Only the container driver uses the image, so only its runs call this.
@@ -657,7 +683,7 @@ func checkRelayImage(rt RuntimeConfig) error {
 		return nil
 	}
 	bad := strings.HasPrefix(img, "-") || strings.IndexFunc(img, func(r rune) bool {
-		return unicode.IsSpace(r) || unicode.IsControl(r)
+		return r == ' ' || r == utf8.RuneError || !unicode.IsPrint(r)
 	}) >= 0
 	if !bad {
 		return nil

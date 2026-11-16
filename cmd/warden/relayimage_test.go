@@ -17,12 +17,16 @@ func TestRelayImageShape(t *testing.T) {
 	passes := []string{"", "dev", "ghcr.io/buildwarden/relay:v0.2.0",
 		"localhost:5000/relay@sha256:0123", "relay"}
 	refused := map[string]string{
-		"an option":           "--volume=/:/host",
-		"a short option":      "-v",
-		"a space":             "relay --privileged",
-		"a tab":               "relay\t--privileged",
-		"a line break":        "relay\nx",
-		"an escape character": "relay\x1b[2J",
+		"an option":                 "--volume=/:/host",
+		"a short option":            "-v",
+		"a space":                   "relay --privileged",
+		"a tab":                     "relay\t--privileged",
+		"a line break":              "relay\nx",
+		"an escape character":       "relay\x1b[2J",
+		"a right-to-left override":  "a\u202eb",
+		"a zero-width space":        "a\u200bb",
+		"a leading byte order mark": "\ufeff--x",
+		"a no-break space":          "relay\u00a0x",
 	}
 	newBuild := func(t *testing.T) error {
 		cfg, err := resolveConfig()

@@ -1,8 +1,10 @@
 // TRANSITIONAL(one-config-file): removed in the change that prepares 1.0,
-// together with the two calls (LoadConfig in config.go, resolveUpstreamCAs
-// in upstreamca.go), config_former_test.go and the "Moving from
+// together with the two calls (LoadConfig in config.go; upstreamCAPaths in
+// upstreamca.go, which resolveUpstreamCAs and doctor's doctorUpstreamCAs
+// share), config_former_test.go, the "Moving from
 // ~/.config/warden/config.toml" subsection of the configuration reference
-// (guide/configuration.md). A search for the marker finds all five. It also
+// (guide/configuration.md) and the tier-1 case in test-integration.sh that
+// expects this file's error. A search for the marker finds all six. It also
 // finds docs/design/project-config-trust.md, the design that records them,
 // which is kept.
 //
@@ -72,5 +74,5 @@ func formerCAVariableAdded(cfg *Config) error {
 		"variable or remove the key",
 		"WARDEN_UPSTREAM_CA_CERTS and [relay] upstream_ca_certs in %s are both "+
 			"set: the variable now replaces the key, and no longer adds its "+
-			"paths to the key's", cfg.File)
+			"paths to the key's", driver.EscapeOutside(cfg.File))
 }

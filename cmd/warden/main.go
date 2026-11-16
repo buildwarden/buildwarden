@@ -185,6 +185,10 @@ func fixableArgs(c *cobra.Command) {
 	}
 }
 
+// resolveConfig loads the config file and applies the flags over it. When
+// the driver in effect is not one warden has, it returns the configuration
+// with the error, so that the caller can say which file it read before the
+// error: the file can be a repository's.
 func resolveConfig() (*Config, error) {
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -211,13 +215,17 @@ func resolveConfig() (*Config, error) {
 
 // announcedConfig is resolveConfig for the commands that say on stderr which
 // config file they read, before any other line. doctor says it in its
-// report instead. A load that fails prints its error, which names the file.
+// report instead. A load that fails prints its error, which names the file;
+// a driver the file names that warden does not have is reported after the
+// line, which names the file.
 func announcedConfig() (*Config, error) {
 	cfg, err := resolveConfig()
+	if cfg != nil {
+		log.Info(configLine(cfg))
+	}
 	if err != nil {
 		return nil, err
 	}
-	log.Info(configLine(cfg))
 	return cfg, nil
 }
 
@@ -626,7 +634,7 @@ func configAge(cfg *Config, key, v string) (time.Duration, error) {
 	if err != nil {
 		return 0, driver.Fixable(
 			"set it to an age such as \"7d\" or \"36h\"",
-			"%s [vm] %s: %v", cfg.File, key, err)
+			"%s [vm] %s: %v", driver.EscapeOutside(cfg.File), key, err)
 	}
 	return d, nil
 }

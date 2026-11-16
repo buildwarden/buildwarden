@@ -75,11 +75,13 @@ or agent gate.`,
 	Args: cobra.NoArgs,
 	RunE: func(cmd *cobra.Command, _ []string) error {
 		cfg, err := resolveConfig()
+		out := cmd.OutOrStdout()
+		if cfg != nil {
+			fmt.Fprintln(out, configLine(cfg))
+		}
 		if err != nil {
 			return err
 		}
-		out := cmd.OutOrStdout()
-		fmt.Fprintln(out, configLine(cfg))
 		drv := cfg.Runtime.Driver
 		if flagBuildLink != "" && !isVMDriver(drv) {
 			return driver.Fixable("", "--build-link requires a VM driver "+

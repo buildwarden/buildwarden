@@ -522,8 +522,8 @@ func TestEscapeOutside(t *testing.T) {
 		"\u0085\u202e\u2028": `\x85\u202e\u2028`,
 		"\U000e0001":         `\U000e0001`,
 	} {
-		if got := escapeOutside(in); got != want {
-			t.Errorf("escapeOutside(%q) = %q, want %q", in, got, want)
+		if got := EscapeOutside(in); got != want {
+			t.Errorf("EscapeOutside(%q) = %q, want %q", in, got, want)
 		}
 	}
 }

@@ -25,6 +25,10 @@ nor `./warden.toml` is opened.
   directory or cannot be read is an error, and no other file is tried in its
   place. `--config ""` is an error too. A `./warden.toml` that exists but
   cannot be read is an error, not "no file".
+- `./warden.toml`, which nobody named, must be a regular file once links are
+  followed: a link to a device or a pipe (`/dev/zero`, a terminal) is an
+  error, `not a regular file`. A file named with `--config` or
+  `WARDEN_CONFIG` is read whatever kind of file it is.
 - An empty file is a file: every setting is its default.
 - A relative `--config` or `WARDEN_CONFIG` is relative to the working
   directory, like any path argument, so a relative `WARDEN_CONFIG` names a
@@ -36,7 +40,9 @@ nor `./warden.toml` is opened.
 Every command that reads configuration says which file it read, without
 `--verbose`. `build`, `shell`, `clean`, `setup` and `image prepare` print it
 first on stderr; `warden doctor` prints it as the first line of its report.
-The path is absolute:
+The path is absolute, and a control character in it (a newline, an escape
+sequence from a directory's name) is printed escaped (`\n`, `\x1b`), here and
+in every message that names the file:
 
 ```
 [warden] config: /etc/warden/ci.toml (--config)
@@ -89,8 +95,8 @@ Earlier releases also read `~/.config/warden/config.toml`
 (`%USERPROFILE%\.config\warden\config.toml` on Windows) and merged it under
 `./warden.toml`. It is no longer read. While it exists, `build`, `shell`,
 `clean`, `doctor`, `setup` and `image prepare` stop with an error that names
-it, before any config file is read, rather than drop its settings without a
-word:
+it, before any setting of the config file is applied, rather than drop its
+settings without a word:
 
 ```
 [warden] ERROR: /home/you/.config/warden/config.toml is no longer read: warden reads one config file, ./warden.toml or the one --config or WARDEN_CONFIG names
@@ -463,8 +469,9 @@ Override with `relay_image`, or `WARDEN_IMAGE`, which replaces it:
 - `""` — automatic (pull for releases, build for dev)
 
 Any other value must be shaped like an image reference: one that starts with
-`-` or holds a space or a control character would reach the container
-runtime's command line as an option. It is refused, with the container
+`-` or holds a space or a control character (any character that does not
+print, a right-to-left override or a zero-width space among them) would reach
+the container runtime's command line as an option. It is refused, with the container
 driver, by `build`, `shell` and `doctor` before anything is created:
 
 ```

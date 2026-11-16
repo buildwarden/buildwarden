@@ -339,7 +339,7 @@ func (r *CAReport) add(detail bool, format string, args ...any) {
 // it.
 //
 // Every string in a line or an error that is not warden's own is escaped
-// (escapeOutside): each can come from the repository being built.
+// (EscapeOutside): each can come from the repository being built.
 func LoadUpstreamCAs(paths []string, source string) ([]byte, *CAReport, error) {
 	report := &CAReport{}
 	var certs []byte
@@ -368,7 +368,7 @@ func (r *CAReport) loadPath(p, source string) ([]byte, error) {
 	if abs, err := filepath.Abs(p); err == nil {
 		name = abs
 	}
-	shown := escapeOutside(name)
+	shown := EscapeOutside(name)
 	const noCertFix = "name a file or directory that holds at least one PEM " +
 		"certificate, or remove the path"
 	info, err := os.Stat(p)
@@ -405,7 +405,7 @@ func (r *CAReport) loadPath(p, source string) ([]byte, error) {
 // loadDir reads a configured path that is a directory; name is its absolute
 // path.
 func (r *CAReport) loadDir(p, name, source string) ([]byte, error) {
-	shown := escapeOutside(name)
+	shown := EscapeOutside(name)
 	entries, err := os.ReadDir(p)
 	if err != nil {
 		return nil, unreadableCAPath(shown, source, err)
@@ -413,7 +413,7 @@ func (r *CAReport) loadDir(p, name, source string) ([]byte, error) {
 	var certs []byte
 	var sent, gave, skipped, other int
 	for _, e := range entries {
-		entry := escapeOutside(filepath.Join(name, e.Name()))
+		entry := EscapeOutside(filepath.Join(name, e.Name()))
 		file, why := readCAEntry(p, e)
 		switch {
 		case why.notRead != "":
@@ -614,7 +614,7 @@ func scanCAFile(data []byte) caFile {
 		default:
 			if _, err := x509.ParseCertificate(block.Bytes); err != nil {
 				skip(false, "skipped: a CERTIFICATE that does not parse (%s)",
-					escapeOutside(err.Error()))
+					EscapeOutside(err.Error()))
 				continue
 			}
 			f.certs++
@@ -712,7 +712,7 @@ func blockType(typ string) string {
 	if typ == "" {
 		return "PEM"
 	}
-	return escapeOutside(typ)
+	return EscapeOutside(typ)
 }
 
 // article is "an" before a block type that is read aloud with a vowel first:
@@ -757,17 +757,17 @@ func osReason(err error) string {
 	if errors.As(err, &pe) {
 		err = pe.Err
 	}
-	return escapeOutside(err.Error())
+	return EscapeOutside(err.Error())
 }
 
-// escapeOutside makes a string that did not come from warden safe to print
+// EscapeOutside makes a string that did not come from warden safe to print
 // in a line or an error: a configured path, a directory entry's name, a PEM
 // block's type, the X.509 parser's reason, the operating system's. Control
 // characters, other characters that are not printable and bytes that are not
 // valid UTF-8 are written as escapes (\n, \x1b, \u202e), so none of them
 // can move the cursor, clear a line or start a line of its own in a terminal
 // or a log.
-func escapeOutside(s string) string {
+func EscapeOutside(s string) string {
 	var b strings.Builder
 	for i := 0; i < len(s); {
 		r, size := utf8.DecodeRuneInString(s[i:])

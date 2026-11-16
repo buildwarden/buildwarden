@@ -254,6 +254,7 @@ func TestWorkingDirectoryConfigThatCannotBeRead(t *testing.T) {
 				t.Fatal(err)
 			}
 		}, "is a directory"},
+		"a link to a device": {linkToDevice, "not a regular file"},
 	} {
 		t.Run(name, func(t *testing.T) {
 			inConfigFiles(t, "")
@@ -265,6 +266,41 @@ func TestWorkingDirectoryConfigThatCannotBeRead(t *testing.T) {
 			}
 			wantFixable(t, err, "cannot read config file "+path+
 				" (found in the working directory): "+tc.reason, fix)
+		})
+	}
+}
+
+// linkToDevice makes path a symbolic link to /dev/null, a device that a
+// repository's warden.toml can point at as well as /dev/zero or a terminal.
+func linkToDevice(t *testing.T, path string) {
+	t.Helper()
+	if runtime.GOOS == "windows" {
+		t.Skip("needs /dev/null and a symbolic link")
+	}
+	if err := os.Symlink(os.DevNull, path); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// A file named with --config or WARDEN_CONFIG is read whatever kind of file
+// it is: only the working directory's, which nobody named, must be a regular
+// file.
+func TestNamedConfigFileThatIsADevice(t *testing.T) {
+	for name, give := range map[string]func(*testing.T, string){
+		"--config": giveConfigFlag, "WARDEN_CONFIG": giveConfigEnv,
+	} {
+		t.Run(name, func(t *testing.T) {
+			inConfigFiles(t, "")
+			path := filepath.Join(t.TempDir(), "warden.toml")
+			linkToDevice(t, path)
+			give(t, path)
+			cfg, err := LoadConfig()
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if cfg.File != path {
+				t.Errorf("read %q, want %s", cfg.File, path)
+			}
 		})
 	}
 }

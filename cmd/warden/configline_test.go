@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 
@@ -92,6 +93,78 @@ func TestConfigLineForms(t *testing.T) {
 				t.Errorf("got  %q\nwant %q", got, want)
 			}
 		})
+	}
+}
+
+// A path that holds a newline or an escape sequence is printed escaped, so
+// the config: line stays one line and cannot forge or erase another, on
+// stderr and in doctor's report alike. Its errors print it escaped too.
+func TestConfigLineEscapesThePath(t *testing.T) {
+	if runtime.GOOS == "windows" {
+		t.Skip("Windows file names cannot hold control characters")
+	}
+	const evil = "evil\n[warden] config: none\x1b[2K\x1b[1Ax"
+	const shown = `evil\n[warden] config: none\x1b[2K\x1b[1Ax`
+	setup := func(t *testing.T, body string) string {
+		inConfigFiles(t, "")
+		parent := filepath.Dir(configPath(t))
+		dir := filepath.Join(parent, evil)
+		if err := os.Mkdir(dir, 0o755); err != nil {
+			t.Fatal(err)
+		}
+		write(t, dir, projectConfig, body)
+		if err := os.Chdir(dir); err != nil {
+			t.Fatal(err)
+		}
+		return filepath.Join(parent, shown, projectConfig)
+	}
+	t.Run("the line", func(t *testing.T) {
+		want := "[warden] config: " + setup(t, "") + " (found in the working directory)\n"
+		t.Setenv("PATH", t.TempDir())
+		stderr := captureLog(t)
+		_ = runClean(cleanCmd, nil)
+		line, _, _ := strings.Cut(stderr.String(), "\n")
+		if line+"\n" != want {
+			t.Errorf("stderr starts %q, want %q", stderr.String(), want)
+		}
+		if strings.ContainsRune(line, 0x1b) {
+			t.Errorf("the line holds an escape character: %q", line)
+		}
+	})
+	t.Run("an error", func(t *testing.T) {
+		path := setup(t, notTOML)
+		_, err := LoadConfig()
+		if err == nil || !strings.Contains(err.Error(), "parsing "+path+":") {
+			t.Fatalf("got %v, want it to name %s", err, path)
+		}
+		if strings.ContainsAny(err.Error(), "\n\x1b") {
+			t.Errorf("the error holds a control character: %q", err)
+		}
+	})
+}
+
+// A driver the file names that warden does not have is reported after the
+// config: line, which says which file named it.
+func TestConfigLineBeforeAnUnknownDriver(t *testing.T) {
+	const msg = `unknown driver "bogus"`
+	inConfigFiles(t, "[runtime]\ndriver = \"bogus\"\n")
+	want := "config: " + configPath(t) + " (found in the working directory)"
+	stderr := captureLog(t)
+	if _, err := announcedConfig(); err == nil || !strings.Contains(err.Error(), msg) {
+		t.Fatalf("announcedConfig: %v, want %s", err, msg)
+	}
+	if got := stderr.String(); got != "[warden] "+want+"\n" {
+		t.Errorf("stderr is %q, want the config: line", got)
+	}
+	var report bytes.Buffer
+	doctorCmd.SetOut(&report)
+	t.Cleanup(func() { doctorCmd.SetOut(nil) })
+	if err := doctorCmd.RunE(doctorCmd, nil); err == nil ||
+		!strings.Contains(err.Error(), msg) {
+		t.Fatalf("doctor: %v, want %s", err, msg)
+	}
+	if got := report.String(); got != want+"\n" {
+		t.Errorf("doctor's report is %q, want the config: line", got)
 	}
 }
 
