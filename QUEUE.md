@@ -37,7 +37,7 @@ None.
 
 | Pri | Item | Kind | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|
-| 65 | vz-nocgo-build | feature | buildwarden/buildwarden | undeclared | 6 publish | f6-open-pr (cloud, leased to cloud/20261116T174717Z) | - | - | 11 / 8 |
+| 65 | vz-nocgo-build | feature | buildwarden/buildwarden | undeclared | 6 publish | f6-open-pr (cloud, leased to cloud/20261116T174717Z) | - | [#123](https://github.com/buildwarden/buildwarden/pull/123) | 11 / 8 |
 | 67 | project-config-trust | feature | buildwarden/buildwarden | undeclared | 6 publish | f6-merge-main (cloud) | the PR slot, held by vz-nocgo-build (colliding: project-config-trust declares no areas) (FLOW-05) | - | 17 / 14 |
 | 71 | seam-specs | feature | buildwarden/buildwarden, buildwarden/buildwarden-specs | undeclared | 6 publish | f6-release-specs (human), f6-merge-main (cloud) | - | - | 13 / 30 |
 | 69 | prebuilt-artifacts | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
