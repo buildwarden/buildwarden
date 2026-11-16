@@ -432,3 +432,17 @@ func TestRelationString(t *testing.T) {
 		}
 	}
 }
+
+// TestRelationBadModeCollides: an area whose mode is missing or misspelled is
+// taken as exclusive, so only an explicit ordered area relaxes anything; wf
+// validate reports the mode (FLOW-05).
+func TestRelationBadModeCollides(t *testing.T) {
+	for _, mode := range []string{"", "Exclusive", "shared"} {
+		s := mapped(t)
+		ledger := s.Areas.Areas["ledger"]
+		ledger.Mode = mode
+		s.Areas.Areas["ledger"] = ledger
+		wantRelation(t, s, relationCase{fmt.Sprintf("mode %q", mode),
+			item("a", "ledger"), item("b", "ledger"), Colliding, 6, "area ledger"})
+	}
+}

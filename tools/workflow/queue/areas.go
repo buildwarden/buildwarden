@@ -115,8 +115,14 @@ func (m *AreaMap) Has(name string) bool {
 	return ok
 }
 
-// Exclusive reports whether the named area is in the map and exclusive.
-func (m *AreaMap) Exclusive(name string) bool { return m.Areas[name].Mode == ModeExclusive }
+// Exclusive reports whether the named area is in the map and exclusive. A
+// mode that is missing or neither exclusive nor ordered counts as exclusive:
+// only an explicit ordered area relaxes anything, and wf validate reports the
+// mode (FLOW-05).
+func (m *AreaMap) Exclusive(name string) bool {
+	a, ok := m.Areas[name]
+	return ok && a.Mode != ModeOrdered
+}
 
 // Reaches reports whether area from lists area to in its reaches.
 func (m *AreaMap) Reaches(from, to string) bool {
