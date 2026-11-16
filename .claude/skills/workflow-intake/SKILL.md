@@ -69,10 +69,6 @@ FLOW-20.
    dist/wf relations -state .dev/workflow -feature <slug>
    ```
 
-   **Until `loop-parallel`'s `x4-state` is done** (F9; remove this at `x4-state`): pass no `-repos`, `-areas`, `-seams`, `-adopts` or `-urgent`.
-   The item is filed undeclared, and a security fix is marked at
-   `x4-state` with `wf urgent`; note what was agreed in `-source`.
-
    `<name>` is the human at the intake. Show Jeff the relations `wf
    relations` prints: the open items the new one is near or collides with,
    and why (FLOW-05).
