@@ -1,0 +1,73 @@
+{
+  "feature": "project-config-trust",
+  "branch": "feat/project-config-trust",
+  "head": "ce3283697156",
+  "base": "3cb0b2b07847",
+  "round": "feature",
+  "step": "f4-review-r3",
+  "previous_report": "11c2b1947a8d",
+  "scope": "git diff origin/main...feat/project-config-trust: 45 files, +8682/-457. Merge base 3cb0b2b; origin/main is 8c41eaa (two workflow-only commits past it), trial merge clean. Since the previous report (11c2b19): 3733c4b (f5-guide: first-build.md, configuration.md) and ce32836 (f3-implement-r3: driver/upstreamca_test.go TestLoadUpstreamCAsEscapes portable on Windows). Judged against the design as approved at b7ddd0e (r3).",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "rule_index": "Headers extracted from docs/development/*.md (LINT-01), unchanged since the previous report. Reached by the delta: GLOBAL-06, GLOBAL-07, TEST-01, TEST-04, UX-01.",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass (linux, PATH=/root/go/bin): tier1 3cb0b2b07847...ce3283697156: 0 MUST, 0 MUST-review, 0 SHOULD, 0 hints, 0 suppressed; exit 0",
+    "make_lint_per_platform": "GOOS=windows make lint and GOOS=darwin make lint: pass, same counts, exit 0",
+    "make_test": "pass: exit 0, no FAIL line",
+    "make_enforcement": "pass: the branch changes no enforcement (FLOW-14)",
+    "wf_check": "clean branch head at ce32836; rule changes cleared (FLOW-14) for ORCH-03 and UX-07; FLOW-03: undeclared, collides with every item in its repositories, no path outside it; make lint/test skipped without -run (run above); report lines missing before this report",
+    "trial_merge": "git merge-tree origin/main (8c41eaa) HEAD: clean; wf check printed no trial-merge line",
+    "areas_check": "main's tools/tier1/area-edges.sh | wf areas -check -rev HEAD -edges -: no difference from HEAD at ce32836",
+    "merge_base_wf_check": "not built: the branch changes neither tools/tier1/ nor tools/workflow/check/",
+    "flow18": "ok",
+    "integration_test": "not run: no container runtime here; the PR's integration workflow runs it",
+    "windows_tests": "not run: this host is Linux only; the native Windows session confirms go test ./driver",
+    "fixes_made": "none"
+  },
+  "rule_changes_flow14": [
+    {
+      "rule": "ORCH-03",
+      "file": "docs/development/orchestrator.md",
+      "verdict": "matches",
+      "how": "No change under docs/development/ since 11c2b19, where it matched the approved wording; wf check clears it."
+    },
+    {
+      "rule": "UX-07",
+      "file": "docs/development/ux-cli-config.md",
+      "verdict": "matches",
+      "how": "As ORCH-03."
+    }
+  ],
+  "delta_judgment": {
+    "test_fix": "TestLoadUpstreamCAsEscapes builds want from filepath.Abs(\"/no\") + separator and expects U+FFFD for the 0xff byte on Windows. Matches the Windows conversion (syscall.FullPath via UTF-16 replaces 0xff with U+FFFD; GetFullPathName gives C:\\no\\such...) and the native log's got line (branch-3733c4b-go-test.log:15). Unchanged expectation on Linux/darwin, so broken escaping still fails. Product unchanged; design 1003-1005 stays true.",
+    "guide": "first-build.md:40-46 and configuration.md:92-97 agree with errNotRegular (config.go:274), errTooLarge (config.go:233) and Decision 14 (named files have neither limit). Anchor exists (configuration.md:64). UX-01 holds."
+  },
+  "findings": [
+    {
+      "id": "F2",
+      "rule": "GLOBAL-06",
+      "severity": "MUST-review",
+      "file": "driver/session.go:275",
+      "lines": "driver/session.go (LoadUpstreamCAs, scanCAFile, ClaimRelay); driver/hostutil.go (ModuleRoot); cmd/warden/config.go (configFile, readConfigFile)",
+      "what": "Carried forward. A security-boundary change: trust roots sent across host-relay as re-encoded valid PEM only, the user-level config file removed, ModuleRoot found from the executable only, the default config file read only if regular and up to 1 MiB. The design carries the Security note (What remains, 10). The delta (guide text and a test expectation) adds nothing to the boundary.",
+      "fix": "No code change. The human acknowledges at merge with the Security note in the PR body; TEST-08's adversarial arm runs before the release that carries it."
+    }
+  ],
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 1,
+    "SHOULD": 0
+  },
+  "resolved_since_previous": [],
+  "carried_forward": [
+    "F2"
+  ],
+  "new_since_previous": [],
+  "judged_not_findings": [
+    "upstreamca_test.go:519 writes U+FFFD as a literal character; \"\\uFFFD\" would read better in an editor (same bytes EF BF BD). Cosmetic, no rule.",
+    "Stat-then-open window in readConfigFile and detach.go passing the parent's path as --config: unchanged by the delta, race-only, outside the design's model (noted at 11c2b19).",
+    "Not run natively yet: go test ./cmd/collector ./driver/hyperv ./driver/qemu on Windows, and any macOS run of the branch; portable by reading and by GOOS=windows|darwin make lint."
+  ],
+  "follow_ups": [],
+  "suppressions": []
+}
