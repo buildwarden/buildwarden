@@ -3,7 +3,7 @@ title: 'One warden.toml in the control of whoever runs the build: found by --con
 priority: 67
 status: in_progress
 round: feature
-phase: 3
+phase: 4
 design: docs/design/project-config-trust.md
 branch: feat/project-config-trust
 alters_relationships: false
@@ -124,6 +124,13 @@ steps:
   - id: f3-implement-r3
     phase: 3
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f4-review-r3
+    phase: 4
+    affinity: cloud
     status: pending
     lease:
       claimed_by: ""
@@ -133,8 +140,8 @@ budget:
     runs: 2
     steps: 14
   spent:
-    runs: 0
-    steps: 14
+    runs: 1
+    steps: 15
 questions:
   - id: a1
     kind: assumed
@@ -472,3 +479,12 @@ history:
   - at: 2026-11-16T05:26:33Z
     by: host:container-any/20261116T051002Z
     event: 'back to implement: Tier-2 gap project-config-trust-windows (host:container-any/20261116T051002Z, windows-desktop, go1.26.3 windows/amd64, branch 3733c4b): go test ./driver fails on Windows in the branch''s own new test TestLoadUpstreamCAsEscapes (driver/upstreamca_test.go:503-512). It passes a path that starts /no/such and holds a newline, an escape sequence and a 0xff byte, and expects that string back, escaped. On Windows LoadUpstreamCAs makes the path absolute, so the message names C:\no\such..., and the 0xff byte comes back as U+FFFD (the path conversion replaced it), not as the escape the test wants. The newline and the escape sequence are still escaped, so the product''s behaviour looks right and the test''s expected string is what is not portable. main 623131a: go test ./cmd/warden ./driver ok on the same host. Every other case of the gap passes on the branch. Logs: native/container-any/2026-11-15/project-config-trust/ (branch-3733c4b-go-test.log).'
+  - at: 2026-11-16T08:19:34Z
+    by: cloud/20261112T230554Z
+    event: claimed f3-implement-r3 until 2026-11-16T10:19:34Z
+  - at: 2026-11-16T08:19:38Z
+    by: cloud/20261112T230554Z
+    event: done f3-implement-r3
+  - at: 2026-11-16T08:19:38Z
+    by: cloud/20261112T230554Z
+    event: entered phase 4 (review)
