@@ -1,6 +1,6 @@
 ---
 feature: loop-parallel
-status: draft
+status: archived
 drivers: []              # the loop's queue code, its checks and its rules; no driver tree is reached
 seams: []                # no GLOBAL-08 seam changes
 surfaces: []             # `wf` is the loop's tool, not a user-facing surface of the product
@@ -5619,5 +5619,105 @@ None.
 
 ## Archive summary
 
-Filled in when the item is implemented (FLOW-12).
+**What was built.** The queue learns what an item changes, and `wf`
+limits work by how items relate instead of across the whole queue.
+
+- *Fields and declaration.* A queue file gains `repos`, `areas`, `seams`,
+  `rules_changed`, `adopts`, `collides_with`, `declared`, `urgent` and
+  `pr.head`, all optional, absent meaning today's behaviour.
+  `wf declare` copies the design's front matter into the queue and
+  records the commit it read; every later gate of a declared item compares
+  the two (`check/declared.go`), and Implement, Review, Publish and the
+  refresh fail a changed path outside the item's areas (`check/areas.go`).
+  An agent may widen areas only inside its approved design, read at the
+  commit the approval names; narrowing is the human's.
+- *Areas and relations.* The area map is queue state (`areas.yaml` on
+  the `workflow` branch, changed on Jeff's word), each area exclusive or
+  ordered; `reaches` is the import graph on Linux, macOS and Windows
+  (`tools/tier1/area-edges.sh`), and `wf areas -check` reports where the
+  map and the graph differ, as a report, not a gate. Two items are
+  colliding, near or disjoint by a total function of what they declare
+  (`queue/relation.go`); `wf relate` records a human's "these collide",
+  and `wf relations` lists them. An undeclared item collides with every
+  item in its repositories.
+- *Limits and the guard.* FLOW-05's three limits (in progress,
+  `alters_relationships`, the PR slot) and the new waiting limit
+  (`limits.waiting_on_human`, 8 when unset; a queued feature does not
+  start while that many items wait on Jeff, unless he marks a security
+  fix `urgent`) are each one predicate over the holders in a holder's
+  related set (`queue/limits.go`). `Guard` evaluates it for `wf next`
+  and `wf claim`, for every worker, and `wf validate` evaluates the same
+  predicate, so a state the guard allows never fails validation. The PR
+  slot is held from the claim of `f6-merge-main` until the PR merges,
+  and an item in Close holds nothing. `limits.in_progress` is 5 when
+  unset and an error below 1.
+- *The refresh.* `f6-refresh` is one cloud step, seeded by `wf stale`
+  whenever `main` has moved past an open PR (or past a feature that
+  merged `main` in Publish). It merges `main`, runs the gates and the
+  consolidation pass over what landed, and pushes only while the PR is
+  open and the remote branch is where it found it. A PR merges only
+  when its branch contains `main` (Decision 21): `QUEUE.md` lists a PR
+  as ready only on a green head that contains `main`, and a ruleset on
+  `main` requiring an up-to-date branch is Jeff's to set.
+- *Merge confirmation.* `wf` proves a squash merge C of a ref by
+  `git merge-tree --write-tree --merge-base=B C^ <ref>` writing exactly
+  `C^{tree}`, B the single merge base (Decision 23, a14 (d)); it
+  replaces the zero-context patch-id proof.
+- *State pushes and reporting.* `wf commit` pushes queue state and,
+  when the push is rejected, replays a finished or released step and asks
+  a claim again on the new state. `wf main` records CI on `main` in
+  `main.yaml`; a red `main` opens **Needs Jeff** and its fix is filed as
+  the follow-up of the merge that broke it (FLOW-09). `QUEUE.md` shows
+  repositories, areas, lease holders, what each item waits for, ready and
+  waiting PRs, relations, and the waiting count; each run writes its own
+  digest file and `wf digest` builds the day's page.
+- *Other items.* An item homed in another repository is tracked (two
+  human steps, no gate, outside the limits). A reconciliation item is
+  marked by `adopts` and ranked with the fixes (`Class` 3).
+- *Rules.* Fourteen rule changes, approved by name at `636f18b` and
+  landed word for word: FLOW-02, -03, -04, -05, -06, -08, -09, -10,
+  -15, -19, -20, LOOP-01, LOOP-04 and PROFILE-01; with the template's
+  two front-matter lines, the four skills and the four agents.
+
+**Decisions taken, and rejected.** Relations are computed by `wf`, not
+judged by an agent (Decision 1). Sharing only ordered areas (the book,
+build files, rule files) relates nothing; the refresh orders them
+(Decision 4, a2 (a)). The map lives on the `workflow` branch, not on
+`main` under tier 1 (a4 (c); rejected (d)). A rejected push no longer
+loses a claim (Decision 10). A hold still names workers, not repositories
+(Decision 18; deferred to `loop-repository`). The freeze stays; FLOW-20
+loses only its Limit bullet (Decision 20). Jeff departed from three
+recommendations: disjoint PRs merge only up to date (a1 (b), rejected
+"any order"), a cap on work waiting for him (a3 (b), rejected "no cap"),
+and the urgent mark only for a security fix and only by a human (a19,
+rejected the mark for any feature and `wf` judging what a fix is). On
+2026-11-16 he replaced the patch-id squash proof with the merge-tree
+proof, and narrowed the hold: `wf declare` and `pr.head` are written
+from the merge on, while `wf relate`, `wf urgent` and the intake flags
+`wf new -repos -areas -seams -adopts -urgent` wait for `x4-state`.
+
+**What a future design touching these concepts needs to know.**
+
+- This item is not done at the merge. `x4-state`, an attended step on
+  the `workflow` branch, writes `config.yaml`'s `repository` and limits,
+  saves `areas.yaml` and `main.yaml`, records the ruleset answer and the
+  fate of `auto-tidy.yml`, updates the `workflow` README, declares
+  `seam-specs` and `driver-contract`, and removes the hold lines in
+  `workflow-human` and `workflow-intake` in a pull request to `main`.
+  Until then no `areas.yaml` exists, every item is undeclared for areas
+  and collides, and `wf areas -list` and `-check` exit 1.
+- An old `wf` that saves a queue file drops every new field. Losing
+  `declared`, `repos` or `areas` leaves an item undeclared, the safe side;
+  losing `collides_with` is not safe, which is why `wf relate` is held.
+- An item with no `declared` passes every gate it passed before; the
+  queue is compared with the design only once `wf declare` has run.
+- The relation table, the limit predicate and the guard are one place
+  each (`relation.go`, `limits.go`); a new limit is a row there, and
+  `Validate` must evaluate whatever `Guard` evaluates.
+- Left for the follow-up `loop-parallel-rule-wording` (follows this
+  item): `areas: []` read as declared-empty in FLOW-02 and FLOW-05's
+  wording, the PR-slot paragraph of `process.md`, FLOW-03's area check
+  at phases 7 and 8 and before `wf declare`, and FLOW-16's merge proof.
+- Not verified here: git's `merge.renames` setting under the merge-tree
+  proof, whether GitHub's squash applies merge drivers, and Windows.
 
