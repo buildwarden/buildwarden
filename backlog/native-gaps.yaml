@@ -828,7 +828,22 @@ gaps:
       feat/project-config-trust is design-only (a94133d) and waits on its design review.
   - id: project-config-trust-vz
     host: macos-vz
-    status: open
+    status: done
+    done: 2026-11-16
+    evidence: >-
+      host:macos-vz/20261116T170552Z, attended (Jeff ran native/macos-vz/2026-11-16/project-config-trust-vz/pct-vz.sh,
+      which calls sudo), feat/project-config-trust ce32836 built with make build sign. A: with
+      ~/.config/warden/config.toml present, `warden build --driver vz` exits 1: "/Users/jeff/.config/warden/
+      config.toml is no longer read …" with the move-or-name fix. B: `sudo warden image prepare --driver
+      vz` exits 1 naming the same file (sudo keeps the user's home) and its fix adds "Under sudo,
+      WARDEN_CONFIG is dropped unless sudo is told to keep it: pass --config, or run sudo
+      --preserve-env=WARDEN_CONFIG". C: with WARDEN_CONFIG=<scratch>/named.toml exported, plain sudo prints
+      `config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply` (dropped). D: sudo
+      --preserve-env=WARDEN_CONFIG prints `config: …/named.toml (WARDEN_CONFIG)`. E: sudo … --config
+      …/named.toml prints `config: …/named.toml (--config)`. C–E each refreshed the active image in place,
+      rc 0. F: the development warden run from its tree built with --driver vz (fetch 200), 11 signatures
+      valid, all channels closed. The temporary user config and named file were removed afterwards.
+      Logs: native/macos-vz/2026-11-16/project-config-trust-vz/.
     what: >-
       sudo warden image prepare --driver vz and warden build --driver vz with
       ~/.config/warden/config.toml present each exit 1 naming the file, under sudo naming the file in

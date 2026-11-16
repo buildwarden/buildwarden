@@ -1,0 +1,36 @@
+=== A: user build with ~/.config/warden/config.toml present
+$ /Users/jeff/src/buildwarden-native/.scratch/pct/dist/warden build --driver vz --script ./build.sh -o /Users/jeff/src/buildwarden-native/.scratch/out-a .
+[warden] ERROR: /Users/jeff/.config/warden/config.toml is no longer read: warden reads one config file, ./warden.toml or the one --config or WARDEN_CONFIG names
+  To fix: move its settings into the warden.toml you build with, or into the environment (WARDEN_DRIVER, WARDEN_CTR_CLI, WARDEN_IMAGE, WARDEN_UPSTREAM_CA_CERTS), and delete it; or name it as the config file with --config or WARDEN_CONFIG (it is then the only one read: ./warden.toml is not)
+rc=1
+=== B: sudo image prepare with ~/.config/warden/config.toml present
+$ sudo /Users/jeff/src/buildwarden-native/.scratch/pct/dist/warden image prepare --driver vz
+[warden] ERROR: /Users/jeff/.config/warden/config.toml is no longer read: warden reads one config file, ./warden.toml or the one --config or WARDEN_CONFIG names
+  To fix: move its settings into the warden.toml you build with, or into the environment (WARDEN_DRIVER, WARDEN_CTR_CLI, WARDEN_IMAGE, WARDEN_UPSTREAM_CA_CERTS), and delete it; or name it as the config file with --config or WARDEN_CONFIG (it is then the only one read: ./warden.toml is not). Under sudo, WARDEN_CONFIG is dropped unless sudo is told to keep it: pass --config, or run sudo --preserve-env=WARDEN_CONFIG
+rc=1
+ls: /Users/jeff/.config/warden: No such file or directory
+=== C: WARDEN_CONFIG=/Users/jeff/src/buildwarden-native/.scratch/named.toml set; plain sudo image prepare (sudo drops it)
+$ sudo /Users/jeff/src/buildwarden-native/.scratch/pct/dist/warden image prepare --driver vz
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+Refreshing boot agent on /Users/jeff/.cache/warden/images/macos-0181f7e0b146845c
+Base image ready: /Users/jeff/.cache/warden/images/macos-0181f7e0b146845c
+rc=0
+=== D: sudo --preserve-env=WARDEN_CONFIG image prepare
+$ sudo --preserve-env=WARDEN_CONFIG /Users/jeff/src/buildwarden-native/.scratch/pct/dist/warden image prepare --driver vz
+[warden] config: /Users/jeff/src/buildwarden-native/.scratch/named.toml (WARDEN_CONFIG)
+Refreshing boot agent on /Users/jeff/.cache/warden/images/macos-0181f7e0b146845c
+Base image ready: /Users/jeff/.cache/warden/images/macos-0181f7e0b146845c
+rc=0
+=== E: sudo image prepare --config /Users/jeff/src/buildwarden-native/.scratch/named.toml
+$ sudo /Users/jeff/src/buildwarden-native/.scratch/pct/dist/warden --config /Users/jeff/src/buildwarden-native/.scratch/named.toml image prepare --driver vz
+[warden] config: /Users/jeff/src/buildwarden-native/.scratch/named.toml (--config)
+Refreshing boot agent on /Users/jeff/.cache/warden/images/macos-0181f7e0b146845c
+Base image ready: /Users/jeff/.cache/warden/images/macos-0181f7e0b146845c
+rc=0
+=== F: development warden from its tree, vz build
+$ /Users/jeff/src/buildwarden-native/.scratch/pct/dist/warden build --driver vz -q --script ./build.sh -o /Users/jeff/src/buildwarden-native/.scratch/out-f .
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+warden: build SUCCEEDED (output: /Users/jeff/src/buildwarden-native/.scratch/out-f)
+rc=0
+  SIGNATURES: ✅ All 11 signatures valid
+  COMPLETENESS: ✅ All channels closed
