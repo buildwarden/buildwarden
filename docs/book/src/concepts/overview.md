@@ -32,7 +32,7 @@ warden build <context>:
     cfg := the one config file: --config, else WARDEN_CONFIG, else
            ./warden.toml if it exists, else none; a named file that
            cannot be read is an error, and so is a ./warden.toml that is
-           not a regular file
+           not a regular file or that gives more than 1 MiB
     req := resolve each setting: flag, else its variable, else cfg,
            else the default (driver, runtime, output dir, ...)
     req.UpstreamCACerts := the valid PEM certificates under each
