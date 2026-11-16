@@ -72,14 +72,14 @@ steps:
     status: pending
     lease:
       claimed_by: cloud/20261112T230554Z
-      expires: 2026-11-16T01:49:43.960093963Z
+      expires: 2026-11-16T06:30:03.488652037Z
 budget:
   estimate:
     runs: 5
     steps: 30
   spent:
     runs: 1
-    steps: 5
+    steps: 6
 questions:
   - id: a1
     kind: assumed
@@ -432,3 +432,6 @@ history:
   - at: 2026-11-16T04:28:42Z
     by: human/jeff
     event: 'declared at ee78534: repos +buildwarden/buildwarden-specs; seams +relay-claim +collector +relay-guest-api +executor-initialize +bootstrap-config; rules_changed +TEST-05 +TEST-02 +GLOBAL-08 +EXEC-04 +PROFILE-01'
+  - at: 2026-11-16T04:30:03Z
+    by: cloud/20261112T230554Z
+    event: claimed f3-implement until 2026-11-16T06:30:03Z
