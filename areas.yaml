@@ -46,7 +46,7 @@ areas:
     paths: [bootstrap/, cmd/warden-io/]
   specs:
     mode: exclusive
-    paths: [specs/, docs/book/src/specs/]
+    paths: [specs/, docs/book/src/specs/, tools/conformance/]
     reaches: [collector, ledger, relay, relaycfg]
   tier1:
     mode: exclusive

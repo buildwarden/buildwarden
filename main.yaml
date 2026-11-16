@@ -2,7 +2,8 @@ sha: 623131ad49590a65c679f0f9d949f3cd96f0abac
 ci: green
 up_to_date: required
 areas:
-  sha: 623131ad49590a65c679f0f9d949f3cd96f0abac
-  differences: 0
+  sha: 8c41eaa4c738032809b5a23afcf6f5b4dd7ba6a8
+  differences: 1
   lines:
+    - 'pattern: tools/conformance/ of area specs matches no file'
     - 'reaches: not compared'
