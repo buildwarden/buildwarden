@@ -13,36 +13,57 @@ import (
 	"github.com/buildwarden/buildwarden/driver/buildlink"
 )
 
-// inConfigFiles points the user config at a fresh home and runs from a fresh
-// project directory, writing each non-empty body as that level's file. The
-// variables that choose the runtime and the driver start unset, and the
-// flags a case sets for them and for --tmpdir are cleared when the test
-// ends, so a case sees only the levels it sets. It returns the project
-// directory.
-func inConfigFiles(t *testing.T, user, project string) string {
+// inConfigFiles runs the test from a fresh working directory, with body as
+// its warden.toml when body is not empty, and returns that directory. The
+// home directory is a fresh one, so that no test meets the transitional
+// error for a ~/.config/warden/config.toml of whoever runs the tests. The
+// variables that name the config file, the runtime, the driver and the CA
+// paths start unset, and --config and the flags a case sets for the runtime,
+// the driver and --tmpdir are cleared when the test ends, so a case sees only
+// the levels it sets.
+func inConfigFiles(t *testing.T, body string) string {
 	t.Helper()
-	home, proj := t.TempDir(), t.TempDir()
+	home, dir := t.TempDir(), t.TempDir()
 	t.Setenv("HOME", home)
 	t.Setenv("USERPROFILE", home)
-	t.Setenv("WARDEN_CTR_CLI", "")
-	t.Setenv("WARDEN_DRIVER", "")
-	t.Cleanup(func() { flagRuntime, flagDriver, flagTempDir = "", "", "" })
-	if user != "" {
-		dir := filepath.Join(home, ".config", "warden")
-		if err := os.MkdirAll(dir, 0o755); err != nil {
-			t.Fatal(err)
-		}
-		write(t, dir, "config.toml", user)
+	for _, name := range []string{configFromEnv, "WARDEN_CTR_CLI", "WARDEN_DRIVER",
+		"WARDEN_UPSTREAM_CA_CERTS"} {
+		t.Setenv(name, "")
 	}
-	if project != "" {
-		write(t, proj, "warden.toml", project)
+	t.Cleanup(func() {
+		flagRuntime, flagDriver, flagTempDir = "", "", ""
+		flagConfig = ""
+		rootCmd.PersistentFlags().Lookup("config").Changed = false
+	})
+	if body != "" {
+		write(t, dir, projectConfig, body)
 	}
 	orig, _ := os.Getwd()
-	if err := os.Chdir(proj); err != nil {
+	if err := os.Chdir(dir); err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = os.Chdir(orig) })
-	return proj
+	return dir
+}
+
+// giveConfigFlag passes --config on the command line, as cobra records a
+// flag that was given; an empty path is given too.
+func giveConfigFlag(t *testing.T, path string) {
+	t.Helper()
+	if err := rootCmd.PersistentFlags().Set("config", path); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// configPath is the path a message gives the working directory's
+// warden.toml: absolute, as the working directory names itself.
+func configPath(t *testing.T) string {
+	t.Helper()
+	wd, err := os.Getwd()
+	if err != nil {
+		t.Fatal(err)
+	}
+	return filepath.Join(wd, projectConfig)
 }
 
 func vmDNSFile(entries string) string { return "[vm]\ndns = [" + entries + "]\n" }
@@ -57,24 +78,30 @@ func addrList(ss ...string) []netip.Addr {
 
 func TestVMDNSAtLoad(t *testing.T) {
 	tests := []struct {
-		name, user, project string
-		want                []netip.Addr
-		source              string
+		name, file string
+		named      string // the file's name when --config names it elsewhere
+		want       []netip.Addr
+		source     string
 	}{
-		{"unset", "", "", nil, ""},
-		{"user config", vmDNSFile(`"10.20.0.53", "10.20.0.54"`), "",
-			addrList("10.20.0.53", "10.20.0.54"), "config.toml"},
-		{"project over user", vmDNSFile(`"10.20.0.53", "10.20.0.54"`),
-			vmDNSFile(`"10.30.0.53"`), addrList("10.30.0.53"), "warden.toml"},
-		{"project without the key keeps the user's", vmDNSFile(`"10.20.0.53"`),
-			"[vm]\ncpus = 2\n", addrList("10.20.0.53"), "config.toml"},
+		{name: "unset"},
+		{name: "the config file", file: vmDNSFile(`"10.20.0.53", "10.20.0.54"`),
+			want: addrList("10.20.0.53", "10.20.0.54"), source: "warden.toml"},
+		{name: "a file without the key", file: "[vm]\ncpus = 2\n"},
+		{name: "a file --config names, under its own name",
+			file: vmDNSFile(`"10.30.0.53"`), named: "ci.toml",
+			want: addrList("10.30.0.53"), source: "ci.toml"},
 		// Loopback is left to the drivers' rules: vz's relay runs on the host.
-		{"loopback accepted at load", "", vmDNSFile(`"127.0.0.1"`),
-			addrList("127.0.0.1"), "warden.toml"},
+		{name: "loopback accepted at load", file: vmDNSFile(`"127.0.0.1"`),
+			want: addrList("127.0.0.1"), source: "warden.toml"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inConfigFiles(t, tt.user, tt.project)
+			if tt.named == "" {
+				inConfigFiles(t, tt.file)
+			} else {
+				inConfigFiles(t, "")
+				giveConfigFlag(t, write(t, t.TempDir(), tt.named, tt.file))
+			}
 			cfg, err := LoadConfig()
 			if err != nil {
 				t.Fatal(err)
@@ -98,17 +125,18 @@ func TestBadVMDNSFailsAtLoad(t *testing.T) {
 		`"10.20.0.53", "10.20.0.300"`: "entry 1",
 		``:                            "is empty",
 	} {
-		inConfigFiles(t, "", vmDNSFile(entries))
+		inConfigFiles(t, vmDNSFile(entries))
 		_, err := LoadConfig()
 		var fe *driver.FixableError
-		if !errors.As(err, &fe) || !strings.Contains(fe.Msg, "[vm] dns in warden.toml") ||
+		if !errors.As(err, &fe) ||
+			!strings.Contains(fe.Msg, "[vm] dns in "+configPath(t)) ||
 			!strings.Contains(fe.Msg, want) ||
 			!strings.Contains(fe.Fix, "remove [vm] dns") {
 			t.Errorf("dns = [%s]: err = %#v, want it to say %q", entries, err, want)
 		}
 	}
 	// The empty list's fix is the one way to get the default.
-	inConfigFiles(t, "", vmDNSFile(""))
+	inConfigFiles(t, vmDNSFile(""))
 	_, err := LoadConfig()
 	var fe *driver.FixableError
 	if !errors.As(err, &fe) ||
@@ -119,7 +147,7 @@ func TestBadVMDNSFailsAtLoad(t *testing.T) {
 
 func TestBuildRequestDNSForVMDriversOnly(t *testing.T) {
 	defer func() { flagDriver = "" }()
-	proj := inConfigFiles(t, "", vmDNSFile(`"10.20.0.53", "10.20.0.54"`))
+	proj := inConfigFiles(t, vmDNSFile(`"10.20.0.53", "10.20.0.54"`))
 	write(t, proj, "Dockerfile", "FROM alpine")
 	cfg, err := LoadConfig()
 	if err != nil {
@@ -146,7 +174,7 @@ func TestBuildRequestDNSForVMDriversOnly(t *testing.T) {
 
 func TestSetupSlots(t *testing.T) {
 	defer func() { flagDriver, flagSetupSlots = "", 0 }()
-	inConfigFiles(t, "", "")
+	inConfigFiles(t, "")
 	// Out-of-range counts are refused before any host work, so these run on
 	// every platform without touching it.
 	for _, c := range []struct {

@@ -29,9 +29,19 @@ Three rules hold for every driver (the full model is
 
 ```
 warden build <context>:
-    req := resolve flags and config (driver, runtime, output dir, ...)
+    cfg := the one config file: --config, else WARDEN_CONFIG, else
+           ./warden.toml if it exists, else none; a named file that
+           cannot be read is an error, and so is a ./warden.toml that is
+           not a regular file or that gives more than 1 MiB
+    req := resolve each setting: flag, else its variable, else cfg,
+           else the default (driver, runtime, output dir, ...)
+    req.UpstreamCACerts := the valid PEM certificates under each
+           upstream CA path (WARDEN_UPSTREAM_CA_CERTS, else [relay]
+           upstream_ca_certs), read once, before any driver work; each
+           skip and each path's count logged; a path that is missing,
+           unreadable or gives none is an error
     container driver: runtime := --runtime, else WARDEN_CTR_CLI, else
-                [runtime] cli (./warden.toml, then the user's file), else
+                [runtime] cli (the config file), else
                 the first of finch, docker, podman that answers; a value
                 that is not one of those three is refused here, before
                 anything is run
@@ -87,7 +97,8 @@ ClaimRelay(addr, token, link, oldRelayFix):
     tunnel := POST addr/v1/tunnel           # host dials the relay, never the reverse
     serve collector over tunnel (HTTP/2)
     identity := POST addr/v1/claim {collector URL = the tunnel, token, capture mode,
-                                    upstream CAs, environment record,
+                                    the upstream CA certificates of the request,
+                                    environment record,
                                     build_link {prefix, relay, guest} when given,
                                     upstream_dns = req.DNS when given}
         a relay that refuses any field as unknown (it predates build_link or

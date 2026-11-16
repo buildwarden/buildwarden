@@ -30,7 +30,7 @@ func stageTestSeed(t *testing.T, workDir string) (seed, script string) {
 	t.Helper()
 	seed, err := stageSeedDir(workDir, runtime.GOARCH, nil)
 	if err != nil {
-		t.Skipf("no warden-io guest binary here: %v", err)
+		t.Fatalf("no warden-io guest binary here: %v", err)
 	}
 	if seed != buildSeedDir(workDir) {
 		t.Fatalf("buildSeedDir = %q, want %q", buildSeedDir(workDir), seed)

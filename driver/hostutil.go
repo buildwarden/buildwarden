@@ -107,31 +107,72 @@ func isStale(cached, root string) bool {
 	return false
 }
 
-// ModuleRoot finds the buildwarden source tree (the directory holding go.mod),
-// walking up from the warden executable and then from the working directory.
+// moduleDecl is the line of go.mod that declares this module.
+const moduleDecl = "module github.com/buildwarden/buildwarden"
+
+// testModuleRoot is the tree SetModuleRootForTests names; empty outside
+// tests.
+var testModuleRoot string
+
+// SetModuleRootForTests makes ModuleRoot return root. It is for test
+// binaries only, and is the only way other than the executable's location
+// that the tree is named: a go test binary is built in a temporary directory
+// outside any tree, so a package whose tests reach ModuleRoot (through
+// GuestBinary) calls it once, from its TestMain, with the tree found from
+// the test's own directory. There is no environment variable for it.
+func SetModuleRootForTests(root string) { testModuleRoot = root }
+
+// ModuleRoot finds the buildwarden source tree that warden itself is in: the
+// first directory, walking up from the warden executable's, whose go.mod
+// holds the line "module github.com/buildwarden/buildwarden" whole. The
+// working directory is not looked at: a repository being built that declares
+// the module is not warden's source, and go build on it would run its code
+// on the host. A nested module of the tree (tools/tier1) or a module whose
+// path only starts the same does not match.
 func ModuleRoot() (string, error) {
-	const moduleDecl = "module github.com/buildwarden/buildwarden"
-	var starts []string
-	if exe, err := os.Executable(); err == nil {
-		starts = append(starts, filepath.Dir(exe))
+	if testModuleRoot != "" {
+		return testModuleRoot, nil
 	}
-	if wd, err := os.Getwd(); err == nil {
-		starts = append(starts, wd)
+	exe, err := os.Executable()
+	if err != nil {
+		return "", fmt.Errorf("finding the warden executable: %w", err)
 	}
-	for _, dir := range starts {
-		for {
-			if data, err := os.ReadFile(filepath.Join(dir, "go.mod")); err == nil &&
-				strings.Contains(string(data), moduleDecl) {
-				return dir, nil
-			}
-			parent := filepath.Dir(dir)
-			if parent == dir {
-				break
-			}
-			dir = parent
+	if root, ok := moduleRootAbove(filepath.Dir(exe)); ok {
+		return root, nil
+	}
+	return "", Fixable("run 'make build' in warden's source tree and use its "+
+		"dist/warden", "%s (version %s) is not inside a buildwarden source tree",
+		exe, WardenVersion)
+}
+
+// moduleRootAbove walks up from dir to the first directory whose go.mod
+// declares this module.
+func moduleRootAbove(dir string) (string, bool) {
+	for {
+		if declaresModule(filepath.Join(dir, "go.mod")) {
+			return dir, true
+		}
+		parent := filepath.Dir(dir)
+		if parent == dir {
+			return "", false
+		}
+		dir = parent
+	}
+}
+
+// declaresModule reports whether the go.mod at path has the module line of
+// this module, matched whole.
+func declaresModule(path string) bool {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return false
+	}
+	for _, line := range strings.Split(string(data), "\n") {
+		if strings.TrimSpace(line) == moduleDecl {
+			return true
 		}
 	}
-	return "", fmt.Errorf("buildwarden source tree (go.mod) not found")
+	return false
 }
 
 // CopyFile copies src to dst, preserving the permission bits.

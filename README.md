@@ -139,7 +139,7 @@ warden clean                  # Remove orphaned containers/networks/volumes
 ## Configuration
 
 ```toml
-# ~/.config/warden/config.toml or ./warden.toml
+# ./warden.toml, or the file --config or WARDEN_CONFIG names
 
 [runtime]
 cli = "finch"                # container runtime (finch, docker, podman)
@@ -155,7 +155,7 @@ color = "auto"               # auto, always, never
 verbose = false
 ```
 
-Environment overrides: `WARDEN_CTR_CLI`, `NO_COLOR`, `WARDEN_VERBOSE`.
+Environment overrides: `WARDEN_CONFIG`, `WARDEN_CTR_CLI`, `NO_COLOR`, `WARDEN_VERBOSE`.
 
 ## Examples
 

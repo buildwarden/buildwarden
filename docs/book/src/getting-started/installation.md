@@ -141,9 +141,15 @@ every option.
 
 ```sh
 brew install qemu                           # macOS (or apt install qemu-system on Linux)
+make build                                  # dist/warden and the guest binaries
 tools/relay-vm/build-initramfs.sh           # Build relay VM kernel + initramfs
 tools/build-vm/build-initramfs.sh           # Build test VM initramfs (includes warden-io)
+dist/warden doctor --driver qemu
 ```
+
+Run the VM drivers as `dist/warden` from this tree: `warden` finds the relay
+VM assets and the source it builds guest binaries from only in the tree its
+executable is in.
 
 ## First-time Firecracker Setup
 

@@ -12,17 +12,20 @@ import (
 	"strconv"
 	"strings"
 	"testing"
-	"unicode/utf8"
 	"unsafe"
 
 	"github.com/buildwarden/buildwarden/driver"
 )
 
-// The four levels that can name the container runtime, lowest first.
-var runtimeLevels = []string{"user", "project", "env", "flag"}
+// The three levels that can name the container runtime, lowest first.
+var runtimeLevels = []string{"file", "env", "flag"}
 
-// inProjectFile is what the error calls [runtime] cli of the project's file.
-const inProjectFile = "[runtime] cli in warden.toml"
+// inProjectFile is what the error calls [runtime] cli of the working
+// directory's warden.toml: the key, in the file by its path.
+func inProjectFile(t *testing.T) string {
+	t.Helper()
+	return "[runtime] cli in " + configPath(t)
+}
 
 // tomlString writes v as a TOML basic string.
 func tomlString(v string) string {
@@ -45,36 +48,22 @@ func tomlString(v string) string {
 
 func cliFile(v string) string { return "[runtime]\ncli = " + tomlString(v) + "\n" }
 
-// userConfigFile is the path of the user's config file under the test's
-// home, as the error names it.
-func userConfigFile(t *testing.T) string {
-	t.Helper()
-	home, err := os.UserHomeDir()
-	if err != nil {
-		t.Fatal(err)
-	}
-	return filepath.Join(home, ".config", "warden", "config.toml")
-}
-
-// nameRuntime runs the test from fresh config directories with the runtime
+// nameRuntime runs the test from a fresh working directory with the runtime
 // named v at one level and nowhere else. It returns what the error calls
 // that level. The flag's value is a copy, so that it shares no memory with a
 // string constant of the test binary.
 func nameRuntime(t *testing.T, level, v string) string {
 	t.Helper()
 	switch level {
-	case "user":
-		inConfigFiles(t, cliFile(v), "")
-		return "[runtime] cli in " + userConfigFile(t)
-	case "project":
-		inConfigFiles(t, "", cliFile(v))
-		return inProjectFile
+	case "file":
+		inConfigFiles(t, cliFile(v))
+		return inProjectFile(t)
 	case "env":
-		inConfigFiles(t, "", "")
+		inConfigFiles(t, "")
 		t.Setenv("WARDEN_CTR_CLI", v)
 		return "WARDEN_CTR_CLI"
 	case "flag":
-		inConfigFiles(t, "", "")
+		inConfigFiles(t, "")
 		flagRuntime = strings.Clone(v)
 		return "--runtime"
 	}
@@ -83,10 +72,10 @@ func nameRuntime(t *testing.T, level, v string) string {
 }
 
 // inRuntimeLevels runs the test with the runtime named at each level whose
-// value is not empty; user and project are file bodies.
-func inRuntimeLevels(t *testing.T, user, project, env, flag string) {
+// value is not empty; file is the config file's body.
+func inRuntimeLevels(t *testing.T, file, env, flag string) {
 	t.Helper()
-	inConfigFiles(t, user, project)
+	inConfigFiles(t, file)
 	t.Setenv("WARDEN_CTR_CLI", env)
 	flagRuntime = flag
 }
@@ -220,46 +209,37 @@ func TestDetectRuntimeProbesTheSupportedList(t *testing.T) {
 // below it is not read, so an unsupported value there is not an error; an
 // unsupported value in effect is one, and no lower level is used in its place.
 func TestRuntimeOverridesComeFirst(t *testing.T) {
-	const bad, inUserFile = "./rt", "the user's file"
+	const bad, inFile = "./rt", "the config file"
 	for _, tc := range []struct {
-		name                     string
-		user, project, env, flag string
-		want                     string // the runtime, or
-		refused                  string // the setting the refusal names
+		name            string
+		file, env, flag string
+		want            string // the runtime, or
+		refused         string // the setting the refusal names
 	}{
-		{name: "flag over an unsupported project value",
-			project: bad, flag: "docker", want: "docker"},
-		{name: "variable over an unsupported project value",
-			project: bad, env: "podman", want: "podman"},
-		{name: "project over an unsupported user value",
-			user: bad, project: "docker", want: "docker"},
+		{name: "flag over an unsupported file value",
+			file: bad, flag: "docker", want: "docker"},
+		{name: "variable over an unsupported file value",
+			file: bad, env: "podman", want: "podman"},
 		{name: "flag over an unsupported variable",
 			env: bad, flag: "finch", want: "finch"},
-		{name: "unsupported flag over a supported project value",
-			project: "docker", flag: bad, refused: "--runtime"},
-		{name: "unsupported variable over supported files",
-			user: "finch", project: "docker", env: bad, refused: "WARDEN_CTR_CLI"},
-		{name: "unsupported project value over a supported user value",
-			user: "podman", project: bad, refused: inProjectFile},
-		{name: "both files hold the same unsupported string",
-			user: bad, project: bad, refused: inProjectFile},
-		{name: "only the user's file holds it",
-			user: bad, refused: inUserFile},
+		{name: "unsupported flag over a supported file value",
+			file: "docker", flag: bad, refused: "--runtime"},
+		{name: "unsupported variable over a supported file value",
+			file: "docker", env: bad, refused: "WARDEN_CTR_CLI"},
+		{name: "unsupported file value with no level over it",
+			file: bad, refused: inFile},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
-			user, project := "", ""
-			if tc.user != "" {
-				user = cliFile(tc.user)
+			file := ""
+			if tc.file != "" {
+				file = cliFile(tc.file)
 			}
-			if tc.project != "" {
-				project = cliFile(tc.project)
-			}
-			inRuntimeLevels(t, user, project, tc.env, tc.flag)
+			inRuntimeLevels(t, file, tc.env, tc.flag)
 			switch tc.refused {
 			case "":
 				wantRuntime(t, tc.want)
-			case inUserFile:
-				wantRuntimeRefused(t, "[runtime] cli in "+userConfigFile(t), bad)
+			case inFile:
+				wantRuntimeRefused(t, inProjectFile(t), bad)
 			default:
 				wantRuntimeRefused(t, tc.refused, bad)
 			}
@@ -267,19 +247,15 @@ func TestRuntimeOverridesComeFirst(t *testing.T) {
 	}
 }
 
-// An empty flag and an empty variable are not set. cli = "" in a file is
-// that file's value: it hides a lower file's, and the runtime is detected.
+// An empty flag and an empty variable are not set. cli = "" in the file sets
+// nothing either: the runtime is detected.
 func TestEmptyRuntime(t *testing.T) {
-	t.Run("an empty flag and variable leave the project's value", func(t *testing.T) {
-		inRuntimeLevels(t, "", cliFile("podman"), "", "")
+	t.Run("an empty flag and variable leave the file's value", func(t *testing.T) {
+		inRuntimeLevels(t, cliFile("podman"), "", "")
 		wantRuntime(t, "podman")
 	})
-	t.Run("an empty flag and variable leave the user's value", func(t *testing.T) {
-		inRuntimeLevels(t, cliFile("finch"), "", "", "")
-		wantRuntime(t, "finch")
-	})
-	t.Run("an empty project value hides the user's and is detected", func(t *testing.T) {
-		inRuntimeLevels(t, cliFile("podman"), cliFile(""), "", "")
+	t.Run(`cli = "" in the file is detected`, func(t *testing.T) {
+		inRuntimeLevels(t, cliFile(""), "", "")
 		t.Setenv("PATH", t.TempDir()) // detection finds nothing, on any host
 		got, err := resolvedRuntime(t)
 		if got != "" || err == nil ||
@@ -296,15 +272,14 @@ func TestUnsupportedRuntimeMessage(t *testing.T) {
 		supports = `is "dokcer"; the container driver supports finch, docker and podman`
 		fileFix  = "set it to finch, docker or podman, or remove it; " +
 			"--runtime with one of those replaces it for one command"
-		userFile = "/home/u/.config/warden/config.toml"
+		file = "/src/repo/warden.toml"
 	)
 	for _, tc := range []struct{ source, msg, fix string }{
 		{cliFromFlag, "--runtime " + supports,
 			"pass --runtime finch, docker or podman, or leave it out"},
 		{cliFromEnv, "WARDEN_CTR_CLI " + supports,
 			"set WARDEN_CTR_CLI to finch, docker or podman, or unset it"},
-		{projectConfig, inProjectFile + " " + supports, fileFix},
-		{userFile, "[runtime] cli in " + userFile + " " + supports, fileFix},
+		{file, "[runtime] cli in " + file + " " + supports, fileFix},
 	} {
 		err := unsupportedRuntime(RuntimeConfig{CLI: "dokcer", CLISource: tc.source})
 		var fe *driver.FixableError
@@ -352,77 +327,6 @@ func wantOnlyQuoted(t *testing.T, msg, fix, v string) {
 	}
 }
 
-// loadedConfig is LoadConfig's result, which never holds the marker.
-func loadedConfig(t *testing.T) *Config {
-	t.Helper()
-	cfg, err := LoadConfig()
-	if err != nil {
-		t.Fatalf("LoadConfig: %v", err)
-	}
-	if cfg.Runtime.CLI == unsetCLI {
-		t.Fatal("LoadConfig returned the marker as the runtime")
-	}
-	return cfg
-}
-
-// While the project's file is decoded, [runtime] cli holds a marker; a file
-// that leaves it did not set the key, and the user's value is put back. A
-// file that could produce the marker would have the user's value run in
-// place of its own.
-func TestRuntimeUnsetMarker(t *testing.T) {
-	user := cliFile("podman")
-	for name, project := range map[string]string{
-		"no project file":                  "",
-		"a project file with other keys":   "[output]\nverbose = true\n",
-		"a [runtime] table without cli":    "[runtime]\ndriver = \"container\"\n",
-		"a project file with only comment": "# nothing set\n",
-	} {
-		t.Run(name+" restores the user's value and source", func(t *testing.T) {
-			inConfigFiles(t, user, project)
-			rt := loadedConfig(t).Runtime
-			if rt.CLI != "podman" || rt.CLISource != userConfigFile(t) {
-				t.Errorf("runtime = %q from %q, want podman from the user's file",
-					rt.CLI, rt.CLISource)
-			}
-		})
-	}
-	t.Run("no file names a runtime", func(t *testing.T) {
-		inConfigFiles(t, "", "[runtime]\ndriver = \"container\"\n")
-		if cfg := loadedConfig(t); cfg.Runtime.CLI != "" {
-			t.Errorf("runtime = %q, want empty", cfg.Runtime.CLI)
-		}
-	})
-	// What keeps every TOML string from spelling the marker: a file that
-	// is not UTF-8 is refused, and an escape yields a Unicode scalar value,
-	// which Go encodes as valid UTF-8.
-	if utf8.ValidString(unsetCLI) {
-		t.Fatalf("the marker %q is valid UTF-8, so a TOML string can spell it",
-			unsetCLI)
-	}
-	for name, value := range map[string]string{
-		"basic string":              `"` + unsetCLI + `"`,
-		"literal string":            "'" + unsetCLI + "'",
-		"multi-line basic string":   `"""` + unsetCLI + `"""`,
-		"multi-line literal string": "'''" + unsetCLI + "'''",
-	} {
-		t.Run("the marker in a "+name+" fails the load", func(t *testing.T) {
-			inConfigFiles(t, user, "[runtime]\ncli = "+value+"\n")
-			cfg, err := LoadConfig()
-			if err == nil || !strings.Contains(err.Error(), "parsing warden.toml") {
-				t.Fatalf("LoadConfig = %+v, %v; want the file refused as not TOML",
-					cfg, err)
-			}
-		})
-	}
-	for _, value := range []string{`"\xff"`, `"\u00ff"`, `"ÿ"`} {
-		t.Run("cli = "+value+" is the project's unsupported value", func(t *testing.T) {
-			inConfigFiles(t, user, "[runtime]\ncli = "+value+"\n")
-			loadedConfig(t)
-			wantRuntimeRefused(t, inProjectFile, "\u00ff")
-		})
-	}
-}
-
 // The decoder fills [runtime] cli from a key in any letter case, in a table,
 // a dotted key or an inline table. The check is on the field, so it does not
 // depend on how the file spelled the key; the error names the key as
@@ -439,22 +343,19 @@ func TestRuntimeKeyInOtherSpellings(t *testing.T) {
 	for name, format := range spellings {
 		for _, v := range []string{"./rt", "sh"} {
 			t.Run(name+" "+v, func(t *testing.T) {
-				// podman in the user's file is what a file that passed for
-				// one without the key would be replaced by.
-				project := fmt.Sprintf(format, tomlString(v))
-				inConfigFiles(t, cliFile("podman"), project)
-				wantRuntimeRefused(t, inProjectFile, v)
+				inConfigFiles(t, fmt.Sprintf(format, tomlString(v)))
+				wantRuntimeRefused(t, inProjectFile(t), v)
 			})
 		}
 	}
 	t.Run("[Runtime] CLI selects a supported runtime", func(t *testing.T) {
-		inConfigFiles(t, cliFile("docker"), "[Runtime]\nCLI = \"podman\"\n")
+		inConfigFiles(t, "[Runtime]\nCLI = \"podman\"\n")
 		wantRuntime(t, "podman")
 	})
 	// Which of two spellings in one table the decoder takes varies from run
 	// to run. Whichever it is has been checked.
 	t.Run("both spellings in one table", func(t *testing.T) {
-		inConfigFiles(t, "", "[runtime]\ncli = \"docker\"\nCLI = \"./rt\"\n")
+		inConfigFiles(t, "[runtime]\ncli = \"docker\"\nCLI = \"./rt\"\n")
 		for range 200 {
 			got, err := resolvedRuntime(t)
 			if err == nil && got == "docker" {
@@ -463,7 +364,7 @@ func TestRuntimeKeyInOtherSpellings(t *testing.T) {
 			if got != "" {
 				t.Fatalf("resolveRuntime = %q, want docker or the refusal", got)
 			}
-			wantRefusal(t, err, inProjectFile, "./rt")
+			wantRefusal(t, err, inProjectFile(t), "./rt")
 		}
 	})
 }
@@ -477,7 +378,7 @@ func TestUnusedRuntimeIsNotValidated(t *testing.T) {
 
 	for _, drv := range append([]string{"", "container"}, vmDrivers...) {
 		t.Run("resolveConfig with --driver "+drv, func(t *testing.T) {
-			inConfigFiles(t, "", cliFile(unused))
+			inConfigFiles(t, cliFile(unused))
 			flagDriver = drv
 			if _, err := resolveConfig(); err != nil {
 				t.Fatalf("resolveConfig: %v", err)
@@ -486,7 +387,7 @@ func TestUnusedRuntimeIsNotValidated(t *testing.T) {
 	}
 	for _, drv := range vmDrivers {
 		t.Run("newDriver for "+drv, func(t *testing.T) {
-			inConfigFiles(t, "", cliFile(unused))
+			inConfigFiles(t, cliFile(unused))
 			flagDriver = drv
 			cfg, err := resolveConfig()
 			if err != nil {
@@ -509,7 +410,7 @@ func TestUnusedRuntimeIsNotValidated(t *testing.T) {
 			if drv == "hyperv" && runtime.GOOS == "windows" {
 				t.Skip("hyperv's clean would act on this host's VMs")
 			}
-			inConfigFiles(t, "", cliFile(unused))
+			inConfigFiles(t, cliFile(unused))
 			t.Setenv("XDG_CACHE_HOME", t.TempDir())
 			t.Setenv("LocalAppData", t.TempDir())
 			flagDriver, flagTempDir = drv, t.TempDir()
@@ -553,7 +454,7 @@ func TestDoctorIgnoresAnUnusedRuntime(t *testing.T) {
 	const unused = "nonsense"
 	for _, drv := range []string{"qemu", "vz", "hyperv", "firecracker"} {
 		t.Run("--driver "+drv, func(t *testing.T) {
-			inConfigFiles(t, "", cliFile(unused))
+			inConfigFiles(t, cliFile(unused))
 			// doctor is not read-only: under firecracker it probes reflink
 			// copies in the user cache directory and leaves the driver's
 			// work root there. The child gets an empty cache directory, set
@@ -647,7 +548,7 @@ func addDockerfile(t *testing.T) {
 // the file named like warden's first argument. Before the fix clean ran the
 // program, doctor accepted it, and newDriver handed it to the driver, which
 // build and shell then ran; now each refuses it and nothing is run. The same
-// holds for a program the flag, the variable or the user's file names.
+// holds for a program the flag or the variable names.
 func TestUnsupportedRuntimeIsNeverRun(t *testing.T) {
 	const viaShell = "sh" // runs ./pull, ./container, ... from the project
 	shipped := []string{"rt", "pull", "container", "network", "image", "info"}
@@ -668,7 +569,6 @@ func TestUnsupportedRuntimeIsNeverRun(t *testing.T) {
 			project: cliFile("./rt"), driver: "vz"},
 		{name: "the program's path in --runtime", elsewhere: "flag"},
 		{name: "the program's path in WARDEN_CTR_CLI", elsewhere: "env"},
-		{name: "the program's path in the user's file", elsewhere: "user"},
 	} {
 		for _, command := range runtimeCommands {
 			if tc.onlyClean && command.name != "clean" {
@@ -677,13 +577,15 @@ func TestUnsupportedRuntimeIsNeverRun(t *testing.T) {
 			t.Run(tc.name+", "+command.name, func(t *testing.T) {
 				marker := filepath.Join(t.TempDir(), "ran")
 				program := shipPrograms(t, t.TempDir(), marker, "rt")
-				setting, value := inProjectFile, tc.value
+				var setting string
+				value := tc.value
 				if tc.elsewhere != "" {
 					setting = nameRuntime(t, tc.elsewhere, program)
 					value = program
 				} else {
-					project := inConfigFiles(t, "", tc.project)
+					project := inConfigFiles(t, tc.project)
 					shipPrograms(t, project, marker, shipped...)
+					setting = inProjectFile(t)
 				}
 				addDockerfile(t)
 				flagDriver = tc.driver
@@ -695,13 +597,13 @@ func TestUnsupportedRuntimeIsNeverRun(t *testing.T) {
 	}
 }
 
-// An unsupported value in effect is the error. Neither the level below it
-// nor detection is tried in its place (GLOBAL-10).
+// An unsupported value in effect is the error. Detection is not tried in its
+// place (GLOBAL-10).
 func TestUnsupportedRuntimeHasNoFallback(t *testing.T) {
 	for _, command := range runtimeCommands {
 		t.Run(command.name, func(t *testing.T) {
 			marker := filepath.Join(t.TempDir(), "ran")
-			project := inConfigFiles(t, cliFile("podman"), cliFile("./rt"))
+			project := inConfigFiles(t, cliFile("./rt"))
 			shipPrograms(t, project, marker, "rt")
 			// A finch that answers detection, on a PATH with nothing else.
 			bin := t.TempDir()
@@ -710,7 +612,7 @@ func TestUnsupportedRuntimeHasNoFallback(t *testing.T) {
 			addDockerfile(t)
 			err := command.run(t)
 			wantNotRun(t, marker)
-			wantRefusal(t, err, inProjectFile, "./rt")
+			wantRefusal(t, err, inProjectFile(t), "./rt")
 		})
 	}
 }

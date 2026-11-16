@@ -224,7 +224,10 @@ warden image verify --driver hyperv
 warden doctor --driver <name> [--build-link <cidr>]
 ```
 
-Read-only preflight for the selected driver. Checks a container runtime
+Read-only preflight for the selected driver. The report's first line says
+which config file was read and how it was chosen, the same `config:` line
+the other commands print on stderr
+([Configuration](configuration.md#the-config-file)). It then checks a container runtime
 (container), `qemu-system-*` + `qemu-img` and relay VM assets (qemu), Apple
 Silicon macOS, a `warden` built with cgo (a released binary is not, and has no
 vz driver) and the virtualization entitlement (vz), or the hypervisor and
@@ -242,11 +245,21 @@ user's cache.
 
 With the container driver, a runtime in effect that is not `finch`, `docker`
 or `podman` fails doctor with the error a build would get
-([Configuration](configuration.md#the-container-runtime)).
+([Configuration](configuration.md#the-container-runtime)), and so does a
+relay image that is not shaped like an image reference
+([Configuration](configuration.md#relay-image)).
+
+With upstream CA paths configured (`WARDEN_UPSTREAM_CA_CERTS`, else `[relay]
+upstream_ca_certs`), every driver's doctor reads them as a build would and
+prints the same lines in its report: each block or file that is skipped, with
+its reason, and each path's count of certificates to send. A CA path a build
+would refuse (it does not exist, cannot be read or gives no certificate) is
+`upstream CA: BLOCKED` and fails doctor
+([Configuration](configuration.md#upstream-ca-paths)).
 
 Every VM driver's doctor also prints its build link and where it came from
-(`build link 100.127.255.252/30 (default)`, or `warden.toml`, `config.toml`,
-`--build-link`), whether a host interface overlaps it (an address inside the
+(`build link 100.127.255.252/30 (default)`, the config file's name such as
+`warden.toml`, or `--build-link`), whether a host interface overlaps it (an address inside the
 link is BLOCKED, since every build would refuse it; a host network that only
 contains it is a warning), and the state of each launcher asset's
 link-channel stamp: `current`, or `missing`/`stale` with the one-time rebuild
@@ -399,9 +412,10 @@ Run it as a Hyper-V Administrator.
 
 | Flag | Description |
 |------|-------------|
+| `--config <path>` | The config file to read, which is then the only one read (default: the file `WARDEN_CONFIG` names, then `./warden.toml` if it exists; see [Configuration](configuration.md#the-config-file)). It has no short form. Given with an empty value it is an error |
 | `--driver <name>` | Orchestration driver (container, qemu, vz, hyperv, firecracker) |
 | `--runtime <name>` | Container runtime: `finch`, `docker` or `podman`, the only values it takes (see [Configuration](configuration.md#the-container-runtime)) |
 | `--color <mode>` | Color output (auto, always, never) |
-| `-v, --verbose` | Verbose output |
+| `-v, --verbose` | Verbose output; with upstream CA paths, also the list of the files that give a certificate and of the entries not read |
 | `--version` | Print version |
 | `-h, --help` | Help |

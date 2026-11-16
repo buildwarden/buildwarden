@@ -18,6 +18,11 @@ var log = &Logger{out: os.Stderr}
 
 var prefixWarden = color.New(color.FgCyan).Sprint("[warden]")
 
+// Info prints one of warden's own lines, with its prefix.
+func (l *Logger) Info(msg string) {
+	fmt.Fprintf(l.out, "%s %s\n", prefixWarden, msg)
+}
+
 func (l *Logger) Error(msg string) {
 	fmt.Fprintf(l.out, "%s %s\n", prefixWarden, color.RedString("ERROR: %s", msg))
 }

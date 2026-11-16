@@ -1,11 +1,126 @@
 # Configuration
 
-BuildWarden looks for configuration in two places, merged in order:
+BuildWarden reads one config file, chosen by whoever runs `warden`. Every
+setting can come from a flag, an environment variable, that file or its
+default, in that order: a flag replaces the variable, the variable replaces
+the file, and the file replaces the default.
 
-1. `~/.config/warden/config.toml` — user-level defaults
-2. `./warden.toml` — project-level overrides
+## The config file
 
-CLI flags override everything.
+A command that reads configuration reads exactly one file, the first of:
+
+1. the file `--config <path>` names;
+2. else the file `WARDEN_CONFIG` names (an empty `WARDEN_CONFIG` is not set);
+3. else `warden.toml` in the working directory, when it exists;
+4. else none, and every setting is its default.
+
+No other file is read and nothing is merged. A source that a higher one
+replaces is not looked at: with `--config` given, neither the variable's file
+nor `./warden.toml` is opened.
+
+- The default is the working directory's `warden.toml`, whatever `[path]` is:
+  `warden build /src/repo`, run from elsewhere, does not read
+  `/src/repo/warden.toml`.
+- A file named with `--config` or `WARDEN_CONFIG` that does not exist, is a
+  directory or cannot be read is an error, and no other file is tried in its
+  place. `--config ""` is an error too. A `./warden.toml` that exists but
+  cannot be read is an error, not "no file".
+- `./warden.toml`, which nobody named, must be a regular file once links are
+  followed: a link to a device or a pipe (`/dev/zero`, a terminal) is an
+  error, `not a regular file`. It is read up to 1 MiB: one that gives more
+  is the error `larger than 1 MiB`, whatever size it appears to have on
+  disk (a link to `/proc/self/pagemap` appears empty). A file named with
+  `--config` or `WARDEN_CONFIG` is read whole, whatever kind of file it is
+  and whatever its size.
+- An empty file is a file: every setting is its default.
+- A relative `--config` or `WARDEN_CONFIG` is relative to the working
+  directory, like any path argument, so a relative `WARDEN_CONFIG` names a
+  different file in each directory. A `WARDEN_CONFIG` set once for a machine
+  should be absolute. A relative path inside the file (a CA path, `tmpdir`,
+  `output_dir`) is relative to the working directory too.
+- A file that is not valid TOML is an error for every command that reads it.
+
+Every command that reads configuration says which file it read, without
+`--verbose`. `build`, `shell`, `clean`, `setup` and `image prepare` print it
+first on stderr; `warden doctor` prints it as the first line of its report.
+The path is absolute, and a control character in it (a newline, an escape
+sequence from a directory's name) is printed escaped (`\n`, `\x1b`), here and
+in every message that names the file:
+
+```
+[warden] config: /etc/warden/ci.toml (--config)
+[warden] config: /home/ci/warden.toml (WARDEN_CONFIG)
+[warden] config: /src/repo/warden.toml (found in the working directory)
+[warden] config: none (no --config, no WARDEN_CONFIG, no ./warden.toml): defaults apply
+```
+
+`warden inspect`, `image list`, `image verify`, `hyperv service`,
+`--version` and help read no configuration: they accept `--config` and open
+nothing.
+
+A message or a fix that says "in warden.toml" means the config file in use,
+whatever its name; the `config:` line gives its path.
+
+### Building a repository you do not control
+
+With no file named, `cd repo && warden build` reads the repository's
+`warden.toml`, and that file decides how the repository is measured: the
+driver, the container runtime among finch, docker and podman, the relay
+image, the relay's extra trust roots, whether payloads are captured, where
+the output and work directories go, and, with `--driver hyperv`, a base image
+that later builds of every project boot. The `config:` line says the file was
+read; it does not stop it. On a machine that builds repositories it does not
+control:
+
+- name the file: `--config /etc/warden/ci.toml`, or an absolute
+  `WARDEN_CONFIG` in the machine's environment. An empty file gives the
+  defaults. `WARDEN_DRIVER`, `WARDEN_CTR_CLI`, `WARDEN_IMAGE` and
+  `WARDEN_UPSTREAM_CA_CERTS` pin those settings whatever file is read;
+- under `sudo`, pass `--config`: `sudo` resets the environment by default, so
+  a `WARDEN_CONFIG` you set is dropped and the repository's `./warden.toml`
+  is read. `sudo --preserve-env=WARDEN_CONFIG`, or a sudoers `env_keep`,
+  keeps the variable;
+- keep `warden` outside the repository it builds. A `warden` whose executable
+  is inside a source tree that declares the `github.com/buildwarden/buildwarden`
+  module builds its relay and executor from that tree with a VM driver or
+  with `relay_image = "dev"`, and a repository can declare that module;
+- a repository's file can name any host directory as an upstream CA path and
+  turn on `verbose`. The build's log then names that directory's entries and
+  what was skipped there (see [Upstream CA paths](#upstream-ca-paths)). Where
+  others can read the log, name the file, or pin the paths with
+  `WARDEN_UPSTREAM_CA_CERTS`.
+- the repository's `warden.toml` is the one file warden reads that nobody
+  named, so it is read with two limits: it must be a regular file once links
+  are followed, and it is read up to 1 MiB. A repository whose `warden.toml`
+  is, or links to, a device, a pipe or a file that gives more than 1 MiB
+  stops with `not a regular file` or `larger than 1 MiB` rather than hang
+  the build. A file you name has neither limit, so name a file you control.
+
+<!-- TRANSITIONAL(one-config-file): this subsection is removed with
+     cmd/warden/config_former.go, in the change that prepares 1.0. -->
+### Moving from `~/.config/warden/config.toml`
+
+Earlier releases also read `~/.config/warden/config.toml`
+(`%USERPROFILE%\.config\warden\config.toml` on Windows) and merged it under
+`./warden.toml`. It is no longer read. While it exists, `build`, `shell`,
+`clean`, `doctor`, `setup` and `image prepare` stop with an error that names
+it, before any setting of the config file is applied, rather than drop its
+settings without a word:
+
+```
+[warden] ERROR: /home/you/.config/warden/config.toml is no longer read: warden reads one config file, ./warden.toml or the one --config or WARDEN_CONFIG names
+  To fix: move its settings into the warden.toml you build with, or into the environment (WARDEN_DRIVER, WARDEN_CTR_CLI, WARDEN_IMAGE, WARDEN_UPSTREAM_CA_CERTS), and delete it; or name it as the config file with --config or WARDEN_CONFIG (it is then the only one read: ./warden.toml is not)
+```
+
+The file is not opened. Naming it with `--config` or `WARDEN_CONFIG` keeps
+your settings as they were, and it is then the only file read. Under `sudo`
+the variable is dropped (see above), so the error comes back there; the fix
+then adds: pass `--config`, or run `sudo --preserve-env=WARDEN_CONFIG`.
+
+`WARDEN_UPSTREAM_CA_CERTS` used to add its paths to `[relay]
+upstream_ca_certs`; it now replaces them. While both are set, `build`,
+`shell` and `doctor` stop with an error that says so: put every path in one
+of the two.
 
 ## Full Reference
 
@@ -35,8 +150,10 @@ tmpdir = ""                # Where each build's private work dir is created
                            #   ("" = the OS temp dir; --tmpdir wins)
 
 [relay]
-upstream_ca_certs = []     # Paths to additional CA cert bundles for upstream
-system_ca_bundle = true    # Include host system CA bundle in relay trust store
+upstream_ca_certs = []     # Files or directories of PEM certificates the relay
+                           #   also trusts upstream (see Upstream CA paths)
+system_ca_bundle = true    # With upstream_ca_certs: keep the relay's own system
+                           #   roots beside them (false: only the listed ones)
 
 [vm]                       # Defaults for the VM-driver flags; a flag always wins
 cpus = 0                   # Build VM vCPUs (0 = per-driver default; vz, qemu,
@@ -58,14 +175,80 @@ color = "auto"             # Color mode: auto, always, never
 verbose = false            # Verbose output (shows container runtime commands)
 ```
 
+## Upstream CA paths
+
+`[relay] upstream_ca_certs`, or `WARDEN_UPSTREAM_CA_CERTS`, which replaces
+it, lists extra roots the relay trusts for its upstream TLS connections,
+beside its own system roots (which `system_ca_bundle = false` drops). They
+are read once, by `build`, `shell` and `doctor`, before anything is created;
+`clean`, `setup` and `image prepare` do not read them.
+
+Each path is a file or a directory; a relative one is relative to the working
+directory.
+
+- **A file named directly** is read whatever kind of file it is, a pipe
+  included (`WARDEN_UPSTREAM_CA_CERTS=<(cat a.pem b.pem)` works). A path that
+  never ends, or a pipe nobody writes to, makes `warden` wait.
+- **A directory** means its files whose names end in `.pem`, `.crt` or
+  `.cer`, in any letter case, one level deep and in name order; links are
+  followed. A subdirectory, a link to one and an entry with another ending
+  are not read, and an entry that is not a regular file (a pipe, a socket, a
+  device) is not opened.
+
+Every valid PEM certificate found is sent to the relay, and nothing else: no
+private key, no other block, no text between blocks. What is not sent is
+skipped, with a line that says why, and the build goes on with the
+certificates the path does give:
+
+- a private key (a block whose type ends in `PRIVATE KEY`), which gets a
+  `warning:` line because a key does not belong in a file of trust roots;
+- another kind of block (a `CERTIFICATE REQUEST`, an `X509 CRL`), or a
+  `CERTIFICATE` block with PEM headers;
+- a damaged block (its BEGIN line is not complete, it has no END line, its
+  END line is for another type, or its body is not base64);
+- a certificate Go's X.509 parser refuses, with the parser's reason;
+- in a directory, a DER-encoded file (convert it with `openssl x509 -inform
+  der -in <file> -out <file>.pem`), a file with no PEM block, one whose
+  blocks hold no certificate to send, one that cannot be read, and a link to
+  a file that does not exist.
+
+The lines go to stderr with `build` and `shell` (after the `config:` line;
+`--quiet` does not remove them) and into the report with `doctor`. Every skip
+and one line per path are printed on every run; `--verbose` adds one line per
+file of a directory that gives a certificate and one per entry that was not
+read:
+
+```
+[warden] warning: upstream CA /etc/warden/site.pem: block 2 is an RSA PRIVATE KEY and is not sent to the relay; a private key does not belong in a file of trust roots
+[warden] upstream CA /etc/warden/site.pem ([relay] upstream_ca_certs): 1 certificate to send; 1 block skipped
+[warden] upstream CA /etc/warden/roots/corp.cer: skipped: DER-encoded, and only PEM is read (to convert: openssl x509 -inform der -in <file> -out <file>.pem)
+[warden] upstream CA /etc/warden/roots (WARDEN_UPSTREAM_CA_CERTS): 3 certificates to send from 2 files; 1 file skipped; 4 other entries not read
+```
+
+A path that does not exist, cannot be read or gives no certificate at all is
+an error, before anything is created; `doctor` reports it as `BLOCKED` and
+exits 1. An empty entry (a doubled or trailing separator, `""` in the list)
+is an error too, never read as the working directory.
+
+The lines describe the host: for each path whether it exists, the counts, the
+name of each file skipped and why, and with `--verbose` the name of every
+entry of a named directory. A repository's `warden.toml` can name any host
+directory and turn `verbose` on; see [Building a repository you do not
+control](#building-a-repository-you-do-not-control). Names and other strings
+that do not come from `warden` are printed with control characters escaped.
+
 ## Environment Variables
+
+A variable replaces the config file's key, and a flag replaces the variable:
+flag, variable, file, default.
 
 | Variable | Overrides | Description |
 |----------|-----------|-------------|
 | `WARDEN_DRIVER` | `runtime.driver` | Override driver selection |
 | `WARDEN_IMAGE` | `runtime.relay_image` | Relay image override |
 | `WARDEN_CTR_CLI` | `runtime.cli` | Container runtime: finch, docker or podman (see [The container runtime](#the-container-runtime)) |
-| `WARDEN_UPSTREAM_CA_CERTS` | `relay.upstream_ca_certs` | Extra upstream CA files/dirs (colon-separated) |
+| `WARDEN_CONFIG` | the config file | The config file to read when `--config` is not given (see [The config file](#the-config-file)); set it absolute |
+| `WARDEN_UPSTREAM_CA_CERTS` | `relay.upstream_ca_certs` | Replaces `relay.upstream_ca_certs`; paths separated by `:` (`;` on Windows) |
 | `NO_COLOR` | `output.color` | Disable colored output (any value) |
 | `WARDEN_VERBOSE` | `output.verbose` | Enable verbose mode (any value) |
 
@@ -73,6 +256,7 @@ verbose = false            # Verbose output (shows container runtime commands)
 
 | Flag | Scope | Description |
 |------|-------|-------------|
+| `--config` | Global | The config file to read, the only one that is (see [The config file](#the-config-file)) |
 | `--driver` | Global | Orchestration driver (container, qemu, vz, hyperv, firecracker) |
 | `--runtime` | Global | Container runtime: finch, docker or podman (see [The container runtime](#the-container-runtime)) |
 | `--color` | Global | Color mode |
@@ -116,9 +300,8 @@ build_link = "100.126.255.252/30"
 ```
 
 or, for one command, `--build-link 100.126.255.252/30` on `build`, `shell`
-or `doctor`. Precedence: the flag, then `./warden.toml`, then
-`~/.config/warden/config.toml`, then the default. `warden doctor` prints the
-link and where it came from.
+or `doctor`. Precedence: the flag, then the config file, then the default.
+`warden doctor` prints the link and where it came from.
 
 The value must be an IPv4 network address with prefix exactly `/30`
 (`100.126.0.1/30` is refused with "did you mean 100.126.0.0/30"), outside
@@ -167,8 +350,8 @@ sent to the relay in its claim. Every VM driver sends one:
   time, as `resolv.conf`'s `nameserver` lines are asked; that is the one
   fallback, and it stays inside your list.
 
-The key has no flag or environment variable; `./warden.toml` wins over
-`~/.config/warden/config.toml`. Each entry must be an IPv4 address, not
+The key has no flag or environment variable: the config file's value is the
+one used. Each entry must be an IPv4 address, not
 unspecified, multicast or broadcast, and the list must not be empty
 (`dns = []` is refused: remove the key to use the host's resolvers); this is
 checked when the file loads, by every command. At build start and in
@@ -188,12 +371,10 @@ levels that names a runtime is the one in effect:
 
 1. `--runtime`
 2. `WARDEN_CTR_CLI`
-3. `[runtime] cli` in `./warden.toml`
-4. `[runtime] cli` in `~/.config/warden/config.toml`
+3. `[runtime] cli` in the config file
 
 An empty `--runtime` or `WARDEN_CTR_CLI` is not set, and the next level is
-read. `cli = ""` in a file is that file's value: in `./warden.toml` it hides
-the user-level file's value, and the runtime is detected.
+read. `cli = ""` in the file is not set either, and the runtime is detected.
 
 `warden` runs the runtime by its name, which is looked up on `PATH`. A
 runtime installed outside `PATH` needs its directory added to `PATH`.
@@ -230,7 +411,7 @@ output directory, a container or a network, and `warden` exits 1. The message
 says where the value was set and what to change:
 
 ```
-[warden] ERROR: [runtime] cli in warden.toml is "dokcer"; the container driver supports finch, docker and podman
+[warden] ERROR: [runtime] cli in /src/repo/warden.toml is "dokcer"; the container driver supports finch, docker and podman
   To fix: set it to finch, docker or podman, or remove it; --runtime with one of those replaces it for one command
 ```
 
@@ -248,7 +429,7 @@ runtimes the container driver supports, and these values stopped working:
 
 | Before | Now |
 |--------|-----|
-| `--runtime /path/to/docker`, `WARDEN_CTR_CLI=/usr/local/bin/podman`, or `cli = "/opt/homebrew/bin/finch"` in either file | Refused. Name the runtime, and put its directory on `PATH` |
+| `--runtime /path/to/docker`, `WARDEN_CTR_CLI=/usr/local/bin/podman`, or `cli = "/opt/homebrew/bin/finch"` in a config file | Refused. Name the runtime, and put its directory on `PATH` |
 | `--runtime docker.exe`, `Docker` | Refused. Write `docker` |
 | `WARDEN_CTR_CLI=nerdctl`, or another runtime's program | Refused. There is no supported way to use another runtime with the container driver |
 | A wrapper script, by path or by name, that only sets variables and then runs a supported runtime (`docker-ci` setting `DOCKER_HOST`) | Refused. Name the runtime and set the wrapper's variables (`DOCKER_HOST`, `DOCKER_CONTEXT`, `CONTAINER_HOST`) in the environment |
@@ -291,7 +472,22 @@ When `driver` is empty (the default), the **container** driver is used. Use `--d
 
 For release builds (`warden --version` shows a version tag), the relay is pulled as a pre-built container image. For development builds (`version = "dev"`), it's compiled from source.
 
-Override with `relay_image`:
-- `"dev"` — force build from source (requires Go toolchain)
+Override with `relay_image`, or `WARDEN_IMAGE`, which replaces it:
+- `"dev"` — force build from source (requires Go toolchain, and a `warden`
+  run from its source tree: `dist/warden` after `make build`)
 - `"ghcr.io/buildwarden/relay:v0.1.0"` — pin a specific version
 - `""` — automatic (pull for releases, build for dev)
+
+Any other value must be shaped like an image reference: one that starts with
+`-` or holds a space or a control character (any character that does not
+print, a right-to-left override or a zero-width space among them) would reach
+the container runtime's command line as an option. It is refused, with the container
+driver, by `build`, `shell` and `doctor` before anything is created:
+
+```
+[warden] ERROR: [runtime] relay_image in /src/repo/warden.toml is "--volume=/:/host": not an image reference
+  To fix: set it to an image reference such as ghcr.io/buildwarden/relay:v0.2.0 or to "dev", or remove it
+```
+
+Nothing more of a reference is checked: the runtime's own error says what is
+wrong with a well-shaped one.
