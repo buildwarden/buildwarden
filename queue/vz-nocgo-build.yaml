@@ -3,7 +3,7 @@ title: 'The macOS arm64 release build of warden does not compile without cgo: dr
 priority: 64
 status: in_progress
 round: feature
-phase: 5
+phase: 6
 design: docs/design/vz-nocgo-build.md
 branch: feat/vz-nocgo-build
 alters_relationships: false
@@ -28,6 +28,8 @@ steps:
     phase: 6
     affinity: host:macos-vz
     status: pending
+    needs:
+      - f6-consolidate
     lease:
       claimed_by: ""
       expires: null
@@ -65,7 +67,33 @@ steps:
   - id: f5-guide
     phase: 5
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main
+    phase: 6
+    affinity: cloud
     status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-merge-main
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-consolidate
+      - f6-validate-macos-vz
     lease:
       claimed_by: ""
       expires: null
@@ -75,7 +103,7 @@ budget:
     steps: 8
   spent:
     runs: 0
-    steps: 6
+    steps: 7
 questions: []
 history:
   - at: 2026-11-15T23:22:53Z
@@ -135,3 +163,12 @@ history:
   - at: 2026-11-16T00:22:54Z
     by: cloud/20261112T230554Z
     event: entered phase 5 (guide)
+  - at: 2026-11-16T00:23:58Z
+    by: cloud/20261112T230554Z
+    event: claimed f5-guide until 2026-11-16T02:23:58Z
+  - at: 2026-11-16T00:24:56Z
+    by: cloud/20261112T230554Z
+    event: done f5-guide
+  - at: 2026-11-16T00:24:56Z
+    by: cloud/20261112T230554Z
+    event: entered phase 6 (publish)
