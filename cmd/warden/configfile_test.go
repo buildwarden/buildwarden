@@ -420,3 +420,130 @@ func TestConfigFlagOnACommandThatReadsNoConfiguration(t *testing.T) {
 		}
 	}
 }
+
+// capFix is the fix the error for a ./warden.toml over the cap gives.
+const capFix = "make it 1 MiB or smaller, or name it with --config or " +
+	"WARDEN_CONFIG, which reads it whatever its size"
+
+// sizedConfig is a config file of exactly size bytes that sets output_dir to
+// "sized", padded with a comment.
+func sizedConfig(t *testing.T, size int) string {
+	t.Helper()
+	body := outputDirFile("sized") + "#"
+	if size < len(body) {
+		t.Fatalf("a config file of %d bytes cannot hold %q", size, body)
+	}
+	return body + strings.Repeat("x", size-len(body))
+}
+
+// linkToPagemap makes path a symbolic link to /proc/self/pagemap, which stat
+// reports as an empty regular file and which gives far more than 1 MiB when
+// read.
+func linkToPagemap(t *testing.T, path string) {
+	t.Helper()
+	const pagemap = "/proc/self/pagemap"
+	if runtime.GOOS != "linux" {
+		t.Skip("needs " + pagemap + ", which only Linux has")
+	}
+	if _, err := os.Stat(pagemap); err != nil {
+		t.Skipf("needs %s: %v", pagemap, err)
+	}
+	if err := os.Symlink(pagemap, path); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// The working directory's warden.toml is read up to 1 MiB, counted as read
+// and not as stat reports it: a file that gives more is an error and nothing
+// is decoded (Decision 14, a14).
+func TestWorkingDirectoryConfigIsCapped(t *testing.T) {
+	for name, tc := range map[string]struct {
+		make    func(t *testing.T, path string)
+		tooLong bool
+	}{
+		"exactly 1 MiB": {make: func(t *testing.T, path string) {
+			write(t, filepath.Dir(path), projectConfig, sizedConfig(t, 1<<20))
+		}},
+		"1 MiB and one byte": {tooLong: true, make: func(t *testing.T, path string) {
+			write(t, filepath.Dir(path), projectConfig, sizedConfig(t, 1<<20+1))
+		}},
+		"a link to /proc/self/pagemap": {tooLong: true, make: linkToPagemap},
+	} {
+		t.Run(name, func(t *testing.T) {
+			inConfigFiles(t, "")
+			path := configPath(t)
+			tc.make(t, path)
+			cfg, err := LoadConfig()
+			if !tc.tooLong {
+				if err != nil {
+					t.Fatalf("LoadConfig: %v", err)
+				}
+				if cfg.Build.OutputDir != "sized" {
+					t.Errorf("output_dir = %q, want %q", cfg.Build.OutputDir, "sized")
+				}
+				return
+			}
+			if cfg != nil {
+				t.Error("LoadConfig returned a configuration with its error")
+			}
+			wantFixable(t, err, "cannot read config file "+path+
+				" (found in the working directory): larger than 1 MiB", capFix)
+		})
+	}
+}
+
+// endless is a reader that never ends and counts the bytes it gives.
+type endless struct{ given int64 }
+
+func (e *endless) Read(p []byte) (int, error) {
+	for i := range p {
+		p[i] = '#'
+	}
+	e.given += int64(len(p))
+	return len(p), nil
+}
+
+// The capped read stops one byte past the cap whatever the reader would
+// give, and returns all of a reader that gives exactly the cap. It needs no
+// procfs, so it runs on every OS.
+func TestCappedReadStopsPastTheCap(t *testing.T) {
+	t.Run("an endless reader", func(t *testing.T) {
+		r := &endless{}
+		data, err := readCapped(r)
+		if !errors.Is(err, errTooLarge) || data != nil {
+			t.Errorf("readCapped = %d bytes, %v; want no bytes and %v",
+				len(data), err, errTooLarge)
+		}
+		if r.given > maxProjectConfig+1 {
+			t.Errorf("read %d bytes, want at most %d", r.given, maxProjectConfig+1)
+		}
+	})
+	t.Run("exactly the cap", func(t *testing.T) {
+		data, err := readCapped(strings.NewReader(strings.Repeat("#", maxProjectConfig)))
+		if err != nil || len(data) != maxProjectConfig {
+			t.Errorf("readCapped = %d bytes, %v; want %d bytes", len(data), err,
+				maxProjectConfig)
+		}
+	})
+}
+
+// A file named with --config or WARDEN_CONFIG is read whole whatever its
+// size: the cap is for the file nobody named.
+func TestNamedConfigFileIsNotCapped(t *testing.T) {
+	for name, give := range map[string]func(*testing.T, string){
+		"--config": giveConfigFlag, "WARDEN_CONFIG": giveConfigEnv,
+	} {
+		t.Run(name, func(t *testing.T) {
+			inConfigFiles(t, "")
+			path := write(t, t.TempDir(), "big.toml", sizedConfig(t, 2<<20))
+			give(t, path)
+			cfg, err := LoadConfig()
+			if err != nil {
+				t.Fatalf("LoadConfig: %v", err)
+			}
+			if cfg.Build.OutputDir != "sized" {
+				t.Errorf("output_dir = %q, want %q", cfg.Build.OutputDir, "sized")
+			}
+		})
+	}
+}
