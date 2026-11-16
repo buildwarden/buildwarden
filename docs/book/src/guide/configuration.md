@@ -89,6 +89,12 @@ control:
   what was skipped there (see [Upstream CA paths](#upstream-ca-paths)). Where
   others can read the log, name the file, or pin the paths with
   `WARDEN_UPSTREAM_CA_CERTS`.
+- the repository's `warden.toml` is the one file warden reads that nobody
+  named, so it is read with two limits: it must be a regular file once links
+  are followed, and it is read up to 1 MiB. A repository whose `warden.toml`
+  is, or links to, a device, a pipe or a file that gives more than 1 MiB
+  stops with `not a regular file` or `larger than 1 MiB` rather than hang
+  the build. A file you name has neither limit, so name a file you control.
 
 <!-- TRANSITIONAL(one-config-file): this subsection is removed with
      cmd/warden/config_former.go, in the change that prepares 1.0. -->

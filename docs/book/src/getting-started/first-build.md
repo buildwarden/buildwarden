@@ -37,6 +37,14 @@ cloned, `--runtime` with one of the three builds it without editing the
 file. [The container runtime](../guide/configuration.md#the-container-runtime)
 has the rule and the error.
 
+Built from its own directory, a repository's `warden.toml` is the config
+file, and it chooses more than the runtime: the driver, the relay image and
+its trust roots. It must be a regular file of at most 1 MiB. To build a
+repository you do not control, name your own file with `--config` or
+`WARDEN_CONFIG`; [Building a repository you do not
+control](../guide/configuration.md#building-a-repository-you-do-not-control)
+has the list.
+
 ## What you'll see
 
 The output is consistent across all drivers:
