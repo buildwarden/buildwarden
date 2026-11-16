@@ -5694,6 +5694,7 @@ reworded to match; nothing else in the design changes.
   sentence in the **Security note**. The front-matter, the five rule
   changes' wording and the three amendments to the umbrella are
   unchanged.
+- **r2, 2026-11-16: approved at `09de3f6`** (Jeff: the divergence table with N1 to N33 and the corrections of D6 and D17, a21 to a25 answered (A), the repos line).
 
 ## Consolidation
 
