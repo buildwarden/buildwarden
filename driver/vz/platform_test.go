@@ -14,23 +14,31 @@ import (
 // refusal must name its fix (UX-04).
 func TestPlatformError(t *testing.T) {
 	const (
-		noCgo    = "this warden was built without cgo, so it has no vz driver (released binaries are built this way)"
-		noCgoFix = "build warden from source on this Mac (xcode-select --install, then make build), or use --driver container or --driver qemu"
+		otherFix = "use --driver qemu or --driver container on this host"
+		noCgo    = "this warden was built without cgo, so it has no vz driver " +
+			"(released binaries are built this way)"
+		noCgoFix = "build warden from source on this Mac " +
+			"(xcode-select --install, then make build), " +
+			"or use --driver container or --driver qemu"
 	)
+	other := func(target string) string {
+		return "vz driver requires macOS on Apple Silicon (got " + target + ")"
+	}
 	for _, tc := range []struct {
 		goos, goarch string
 		bindings     bool
 		wantMsg      string
 		wantFix      string
 	}{
-		{"linux", "amd64", false, "vz driver requires macOS on Apple Silicon (got linux/amd64)", "use --driver qemu or --driver container on this host"},
-		{"linux", "arm64", false, "vz driver requires macOS on Apple Silicon (got linux/arm64)", "use --driver qemu or --driver container on this host"},
-		{"windows", "amd64", false, "vz driver requires macOS on Apple Silicon (got windows/amd64)", "use --driver qemu or --driver container on this host"},
-		{"darwin", "amd64", false, "vz driver requires macOS on Apple Silicon (got darwin/amd64)", "use --driver qemu or --driver container on this host"},
+		{"linux", "amd64", false, other("linux/amd64"), otherFix},
+		{"linux", "arm64", false, other("linux/arm64"), otherFix},
+		{"windows", "amd64", false, other("windows/amd64"), otherFix},
+		{"darwin", "amd64", false, other("darwin/amd64"), otherFix},
 		{"darwin", "arm64", false, noCgo, noCgoFix},
 		{"darwin", "arm64", true, "", ""},
 	} {
-		t.Run(fmt.Sprintf("%s/%s bindings=%v", tc.goos, tc.goarch, tc.bindings), func(t *testing.T) {
+		name := fmt.Sprintf("%s/%s bindings=%v", tc.goos, tc.goarch, tc.bindings)
+		t.Run(name, func(t *testing.T) {
 			err := platformError(tc.goos, tc.goarch, tc.bindings)
 			if tc.wantMsg == "" {
 				if err != nil {
@@ -43,7 +51,8 @@ func TestPlatformError(t *testing.T) {
 				t.Fatalf("platformError = %v, want a FixableError", err)
 			}
 			if fe.Msg != tc.wantMsg || fe.Fix != tc.wantFix {
-				t.Errorf("platformError = %q / fix %q, want %q / fix %q", fe.Msg, fe.Fix, tc.wantMsg, tc.wantFix)
+				t.Errorf("platformError = %q / fix %q, want %q / fix %q",
+					fe.Msg, fe.Fix, tc.wantMsg, tc.wantFix)
 			}
 		})
 	}
@@ -58,7 +67,8 @@ func TestPlatformErrorWithoutBindingsNeverNil(t *testing.T) {
 			err := platformError(goos, goarch, false)
 			var fe *driver.FixableError
 			if !errors.As(err, &fe) || fe.Fix == "" {
-				t.Errorf("platformError(%s, %s, false) = %v, want a FixableError with a fix", goos, goarch, err)
+				t.Errorf("platformError(%s, %s, false) = %v, "+
+					"want a FixableError with a fix", goos, goarch, err)
 			}
 		}
 	}
