@@ -6,6 +6,24 @@ round: feature
 phase: 2
 design: docs/design/driver-contract.md
 branch: feat/driver-contract
+seams:
+  - driver-contract
+  - relay-claim
+  - collector
+  - bootstrap-model
+rules_changed:
+  - GLOBAL-08
+  - ORCH-01
+  - ORCH-02
+  - ORCH-04
+  - TEST-05
+  - BOOT-02
+  - UX-01
+  - UX-03
+  - ORCH-03
+  - PROFILE-01
+  - UX-08
+declared: c767992
 alters_relationships: true
 design_review: required
 source: 'componentization (docs/design/componentization.md, merged as b903f65, PR #117): phase K1 (wave 2 by the order table; the design says it does not depend on the relay and can start as soon as P0 merges). Done when adding a driver touches only its own directory. Jeff, attended session 2026-11-12: go ahead.'
@@ -504,3 +522,6 @@ history:
   - at: 2026-11-16T01:16:03Z
     by: cloud/20261112T230554Z
     event: 'priority 70 -> 71 (renumbered by wf new: loop-parallel-rule-wording queued at 62)'
+  - at: 2026-11-16T02:07:28Z
+    by: human/jeff
+    event: 'declared at c767992: seams +driver-contract +relay-claim +collector +bootstrap-model; rules_changed +GLOBAL-08 +ORCH-01 +ORCH-02 +ORCH-04 +TEST-05 +BOOT-02 +UX-01 +UX-03 +ORCH-03 +PROFILE-01 +UX-08'
