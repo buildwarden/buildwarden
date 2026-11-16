@@ -5172,22 +5172,31 @@ comes after stage 13.
     design records a limit on this or its absence"; in
     `bootstrap-config`, the introduction's "lists none for this seam"
     and N24's "named neither in the design's table nor in its security
-    note"; in `executor-initialize`, N28's and N30's "no design names it
-    under its **Defaults and overrides**", which this design now names
-    as not allowed. r2 moved N31 to class (b) (a25): `relay-claim`'s
-    introduction says that N31 is the one the requirements above do not
-    allow, as `executor-initialize` says of N2, and CLAIM-17's note
-    says so too. Every answer of r2 is the recommended one (a21 to a25,
-    each (A)), and no row moved out of class (b) or, other than N31,
-    into it, so no requirement changes and no case changes: the edits
-    above are the whole of S's change for r2. `make check`, commit,
-    push: the specs pull request's head moves to that commit, and its
-    `ci` and `flow18` runs are green on it. Then in K, task 35 again on
-    the new head: `make pin-specs REF=<the new head>`, `make test`,
-    `make lint`, push, and the `conformance` run for that push green on
-    all three runners. No code of K changes (a12). The step's evidence
-    names the old head `9abf66c`, the new one, and the run (FLOW-06,
-    FLOW-17, LOOP-02, LOOP-06, TEST-02, TEST-05).
+    note"; in `executor-initialize`, N28's "no design names it under
+    its **Defaults and overrides**" and N30's "a fallback no design's
+    **Defaults and overrides** names", which this design's **Defaults
+    and overrides** now names as fallbacks of today's code that it
+    neither adds nor allows, rows of class (c). r2 moved N31 to class
+    (b) (a25): `relay-claim`'s introduction says that N31 is the one
+    the requirements above do not allow, as `executor-initialize` says
+    of N2; CLAIM-17's note says so too; and N31's own entry, whose
+    "This differs from the rest of this protocol" is the class-(a)
+    reading, says that the reference claimant breaks CLAIM-1, as N2's
+    entry says it differs from INIT-1. Every answer of r2 is the
+    recommended one (a21 to a25, each (A)), and no row moved out of
+    class (b) or, other than N31, into it, so no requirement changes
+    and no case changes: the edits above are the whole of S's change
+    for r2, in the six `v1.md` files and no other file. Green is S's
+    row of **The two repositories** for a stage that writes documents,
+    with `make check`: then commit, push, and the specs pull request's
+    head moves to that commit, with its `ci` and `flow18` runs green on
+    it. Then in K, task 35 again on the new head: `make pin-specs
+    REF=<the new head>`, K's green (`make test`, `make lint`,
+    `tools/workflow/flow18-check.sh`), push, and the `conformance` run
+    for that push green on all three runners. No code of K changes
+    (a12). The step's evidence names the old head `9abf66c`, the new
+    one, the specs pull request's two runs and the `conformance` run
+    (FLOW-06, FLOW-17, FLOW-18, LOOP-02, LOOP-06, TEST-02, TEST-05).
 
 ### Validation by tier
 
