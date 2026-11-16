@@ -3718,6 +3718,8 @@ for it (the r2 Plan step adds the task). **Not changed:** the front
 matter, the proposed wording of ORCH-03 and UX-07, every other decision
 and question, and every earlier entry of this section.
 
+- **r2, 2026-11-16: approved at `fff2b5f`** (Jeff: the delta of Decision 14 with a14 (b) folded in; ORCH-03 and UX-07 unchanged).
+
 ## Consolidation
 
 Filled in at Publish (FLOW-10, FLOW-15).
