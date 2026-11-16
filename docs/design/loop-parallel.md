@@ -446,7 +446,9 @@ say.
 17. **This item holds no worker** (a13). Nothing it changes reaches a
     running session before its merge; after it, an absent field means
     today's behaviour, an item with no `declared` passes every gate it
-    passes today, and the first new field is written at Close.
+    passes today, and the first new field is written at Close, but for
+    `declared` and `pr.head`, written from the merge on (Jeff,
+    2026-11-16; **Holds, and what the merge does to running work**).
     - *Rejected: `holds: [cloud, host:*]`.* A hold lasts while the item is
       in progress, from its design to its close: days during which S1 and K1
       would stop.
@@ -3374,46 +3376,59 @@ This item declares no `holds` (Decision 17, a13).
   unchanged (Validation plan: the live queue through both). An old `wf`
   reads a queue file with new fields and ignores them. The one loss is an
   old `wf` *saving* such a file, which drops the fields. So the first new
-  field is written at Close (the attended step `x4-state`), once no live
-  lease was claimed before the merge commit's time, and attended
-  sessions rebuild `dist/wf` before their next command, as after
-  `alters-slot`.
-- **The skills and agents hold the new fields until `x4-state` is done**
-  (F9, Jeff, 2026-11-16). They go live at the merge, so each one that
-  would write a new field says to leave it until this item's `x4-state`
-  is done, and the line is removed at `x4-state`:
-  - `workflow-human`: no `wf urgent`, `wf relate` or `wf declare`;
+  field the hold below covers is written at Close (the attended step
+  `x4-state`), once no live lease was claimed before the merge commit's
+  time, and attended sessions rebuild `dist/wf` before their next
+  command, as after `alters-slot`. `declared`, with the fields
+  `wf declare` copies beside it, and `pr.head` are written from the
+  merge on (below).
+- **The skills and agents hold some new fields until `x4-state` is done**
+  (F9, Jeff, 2026-11-16; narrowed the same day, design-code findings 1
+  and 3). They go live at the merge, so each one that would write a held
+  field says to leave it until this item's `x4-state` is done, and the
+  line is removed at `x4-state`:
+  - `workflow-human`: no `wf urgent` or `wf relate`;
   - `workflow-intake`: no `wf new -repos`, `-areas`, `-seams`, `-adopts`
     or `-urgent` (an item filed meanwhile is undeclared, and a security
-    fix is marked at `x4-state` with `wf urgent`);
-  - the agents `wf-design`, `wf-implement` and `wf-review`: no
-    `wf declare`;
-  - `wf-publish`: no `pr.head` written beside `pr.ci`.
+    fix is marked at `x4-state` with `wf urgent`).
 
   Losing `collides_with` to an old `wf` that saves the file is the case
   that is not safe: two items Jeff said must take turns would become
-  disjoint again. The other fields are lost on the safe side.
-  *What the hold costs.* `prGreen` requires `pr.head` to be the
-  branch's pushed head, so from the merge until `x4-state` Publish's gate
-  and a refresh of an item with a PR recorded do not pass "PR open with
-  CI green", and `wf stale` seeds a refresh on each PR at its merge step
-  whose `pr.head` is absent. Those steps return released until
-  `x4-state`, which is attended and comes at the item's Close. Design
-  cannot finish either: its done-when includes "declared recorded in
-  queue (FLOW-02)", which only `wf declare` passes, and "queue records
-  what the design declares" and "alters_relationships recorded in
-  queue", which `wf declare` now writes, so every `f1-design` and
-  `x1-design` in the window fails `wf done` and returns released. A
-  released step is the first `wf next` offers again (`Release` only
-  clears the lease, and a pending refresh is class 1), and each claim
-  after the first counts against the item's budget, so in a run the
-  tick takes such a step again until `run_budget.steps` is spent, and
-  the item heads to the runaway check. The window is short only if
-  `x4-state` follows the merge at once. **Open for Jeff** (the review of
-  the implementation, design-code findings 1 and 3, 2026-11-16): accept
-  that cost, exempt `wf declare` and `pr.head` from the hold, or have
-  the tick not take again a step it released in the same run; this
-  branch changes none of it. The skills also say that `wf areas -list` and
+  disjoint again, and nothing in the queue shows that the relation was
+  ever there. That is why `wf relate` stays held. A lost `urgent` leaves
+  the item unmarked, and the fields lost from an intake leave the item
+  undeclared, both the safe side; they stay held because nothing in the
+  window needs them.
+
+  *`wf declare` and `pr.head` are not held* (Jeff, 2026-11-16: "Exempt
+  declare and pr.head"). Holding them cost more than it saved: Design's
+  done-when ("declared recorded in queue (FLOW-02)", "queue records what
+  the design declares", "alters_relationships recorded in queue") passes
+  only after `wf declare`, and Publish's "PR open with CI green" only
+  with `pr.head` the branch's pushed head, so every design step and
+  every Publish gate in the window would have failed `wf done` and
+  returned released, and been taken again until the run's budget was
+  spent. What an old `wf` that saves the file does to them, read from
+  the code:
+  - It drops `declared` together with `repos`, `areas`, `seams` and
+    `rules_changed`, which it does not know either
+    (`alters_relationships` and `design_review` it keeps). The item then
+    reads as undeclared: it collides with every item in its
+    repositories (FLOW-05), the safe side. In Design its `wf done` fails
+    "declared recorded in queue" until `wf declare` is run again; from
+    Plan on its gates pass "queue records what the design declares" as
+    "not declared", so the queue is no longer compared with the design
+    until a `wf declare` records it again, by an agent in Design or by a
+    human after it.
+  - It drops `pr.head`. Publish's gate and a refresh of an item with a PR
+    recorded fail "PR open with CI green" until `pr.ci` and `pr.head`
+    are written again, and `wf stale` seeds a refresh on a PR at its
+    merge step whose `pr.head` is absent, which reads CI again and
+    writes both.
+
+  A session that started before the merge keeps its old `wf` and its
+  old agents: its gates are today's, which ask for neither field, and a
+  queue file it saves loses them as above. The skills also say that `wf areas -list` and
   `wf areas -check` exit 1 while the queue state has no `areas.yaml`,
   which is expected until `x4-state` writes it (F7); the tool's
   behaviour does not change.
@@ -5128,6 +5143,12 @@ commit's time. The item is not done until it is.
   records their seams and rule changes and sets `declared`. Both stay
   undeclared for areas, and collide (**What changes for the queue as it
   stands**).
+- The hold lines (**Holds**), which are on `main`: the "Until
+  `loop-parallel`'s `x4-state` is done" lines in `workflow-human` (no
+  `wf urgent` or `wf relate`) and `workflow-intake` (no `wf new -repos`,
+  `-areas`, `-seams`, `-adopts` or `-urgent`, and the security fix
+  marked with `wf urgent`), removed in a pull request to `main` that
+  Jeff merges (FLOW-08).
 - `seam-specs`' `repos`, on Jeff's word: its design names
   `buildwarden/buildwarden-specs` in its text, so the design's front
   matter gains `repos` first, and the review entry records it if the
@@ -5136,12 +5157,13 @@ commit's time. The item is not done until it is.
 
 ## Design review
 
-The review by Jeff is in progress, as the design step `x1-design`, and
-its outcome is not recorded. In the second sitting he answered every
-question that was open, a19 and a20 last, and approved twelve of the
-fourteen rule changes by name. FLOW-02 and FLOW-05, whose proposed
-wording changed in that sitting, and the outcome are still to come, and
-no entry below is the outcome or an approval of the design.
+The review by Jeff, the design step `x1-design`, ended in its second
+sitting on 2026-11-15: the entry **2026-11-15, second sitting, outcome:
+approved** below is its outcome, with the fourteen rule changes each
+approved by name. The entries before it record the sittings and the
+independent reviews that led to it, and none of them is the outcome.
+The entry for 2026-11-16 records Jeff's decisions on the review of the
+implementation, which are not a new approval of the design.
 
 - **2026-11-15, second sitting: six questions answered, two choices
   accepted, one request taken, twelve rule changes approved by name.
@@ -5563,6 +5585,18 @@ by finding:
   `wf relate` and the `pr.head` writes until `x4-state` is done. Folded
   in: **Holds, and what the merge does to running work**, which names
   the skills and agents and what the hold costs.
+- **F9 narrowed, design-code findings 1 and 3** (the hold kept Design
+  and Publish from finishing until `x4-state`): "Exempt declare and
+  pr.head": `wf declare` and `pr.head` are written from the merge on;
+  if an old `wf` drops them the item reads as undeclared, the safe
+  side. `wf relate`, `wf urgent` and the intake flags (`wf new -repos`,
+  `-areas`, `-seams`, `-adopts`, `-urgent`) stay held until `x4-state`.
+  Folded in: **Holds, and what the merge does to running work** (what
+  stays held and why, and what an old `wf` dropping `declared` or
+  `pr.head` does); Decision 17; the hold on `wf declare` leaves
+  `workflow-human`, `wf-design`, `wf-implement` and `wf-review`, and the
+  hold on `pr.head` leaves `wf-publish`; **After the merge** lists the
+  hold lines `x4-state` removes. No change to the tool.
 - **F7**: the skills say that `wf areas -list` and `-check` exit 1 until
   a map exists, which is expected until `x4-state`. No change to the
   tool. Recorded under **Holds**.

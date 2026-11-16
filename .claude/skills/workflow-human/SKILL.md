@@ -137,9 +137,9 @@ Read the latest file in `.dev/workflow/digest/`.
   it as `.dev/workflow/areas.yaml` and push it with
   `dist/wf commit -worker human/<name>`.
 - **Until `loop-parallel`'s `x4-state` is done** (F9; remove this at
-  `x4-state`): run no `dist/wf urgent`, `dist/wf relate` or `dist/wf declare`. An old `wf` that
+  `x4-state`): run no `dist/wf urgent` or `dist/wf relate`. An old `wf` that
   saves a queue file drops the fields they write; tell Jeff that his
-  decision is recorded at `x4-state`.
+  decision is recorded at `x4-state`. `dist/wf declare` is not held.
 - *Narrowing an item's areas* (`dist/wf declare`), and *a collision* the map
   does not show (`dist/wf relate -feature F -with G`, `-clear` to remove it).
 - *The urgent mark* (`dist/wf urgent -feature F`, `-clear` to remove it):

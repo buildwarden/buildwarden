@@ -58,8 +58,7 @@ LOOP-04, LOOP-09; from `origin/main` when the branch predates it),
    of phase 2, before Plan, and Plan works from the design it approves.
    Write it in the front-matter. Commit, then run
    `dist/wf declare -state <workflow checkout> -repo . -worker <the tick's worker> -feature <F>`
-   to copy the design's declarations into the queue (**Until `loop-parallel`'s `x4-state` is done** (F9; remove this at `x4-state`): do not
-   run it; the design's front-matter keeps the declarations for `x4-state`): `repos`, `areas`,
+   to copy the design's declarations into the queue: `repos`, `areas`,
    `seams`, the `rule_changes` rules, `alters_relationships` and
    `design_review`; if `alters_relationships` is `true`, FLOW-05's slot
    decides whether planning may start. If it refuses because a limit would
