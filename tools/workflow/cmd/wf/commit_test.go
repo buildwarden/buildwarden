@@ -98,6 +98,51 @@ func TestCommitReplay(t *testing.T) {
 	t.Run("a replay that Validate fails", commitReplayInvalid)
 	t.Run("only the named paths are staged", commitStagesOnlyPaths)
 	t.Run("nothing to commit", commitNothing)
+	t.Run("the remote moves on every try", commitGivesUp)
+}
+
+// commitGivesUp: when every push is rejected, wf commit stops after the last
+// try with exit 5. A claim is dropped and the checkout left at origin's
+// state; a change keeps its commit locally (FLOW-04).
+func commitGivesUp(t *testing.T) {
+	setup := func(t *testing.T) (a string) {
+		a, b := stateRepos(t, "", "x")
+		// Before each of a's pushes, b pushes a commit of its own, so the
+		// remote has always moved.
+		hook := "#!/bin/sh\nunset GIT_DIR GIT_INDEX_FILE GIT_WORK_TREE\n" +
+			"cd '" + b + "' && git pull -q --rebase origin workflow && " +
+			"git commit -q --allow-empty -m move && git push -q origin workflow\n"
+		p := filepath.Join(a, ".git", "hooks", "pre-push")
+		if err := os.WriteFile(p, []byte(hook), 0o755); err != nil {
+			t.Fatal(err)
+		}
+		return a
+	}
+	t.Run("a claim", func(t *testing.T) {
+		a := setup(t)
+		claimStep(t, a, "cloud/a", "x", "f0-branch-setup")
+		out, code := commit(t, a, "cloud/a", "x: claim", "-claimed", "x/f0-branch-setup")
+		if code != 5 || !strings.Contains(out, "the claim is dropped; ask wf next again") {
+			t.Fatalf("exit %d, want 5 dropping the claim:\n%s", code, out)
+		}
+		if gitT(t, a, "rev-parse", "HEAD") != gitT(t, a, "rev-parse", "origin/workflow") {
+			t.Fatal("the checkout was not left at origin/workflow")
+		}
+		if x := item(t, a, "x"); x.Status != "queued" {
+			t.Fatalf("the dropped claim left x %s", x.Status)
+		}
+	})
+	t.Run("a change", func(t *testing.T) {
+		a := setup(t)
+		edit(t, a, "x", func(f *queue.Feature) { f.Title = "A's title" })
+		out, code := commit(t, a, "human/jeff", "x: title", "queue/x.yaml")
+		if code != 5 || !strings.Contains(out, "the commit is kept locally") {
+			t.Fatalf("exit %d, want 5 keeping the commit:\n%s", code, out)
+		}
+		if got := gitT(t, a, "log", "-1", "--format=%s"); got != "x: title" {
+			t.Fatalf("the checkout's head is %q, want the kept commit", got)
+		}
+	})
 }
 
 func commitReplaysChange(t *testing.T) {

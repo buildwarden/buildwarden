@@ -234,7 +234,8 @@ func generate(dir string) ([]string, error) {
 }
 
 // push pushes the checkout's head to the workflow branch. rejected reports a
-// push refused because the remote moved; any other failure is an error.
+// push refused because the remote moved, before git sent the push or while
+// the remote updated its ref; any other failure is an error.
 func (g stateGit) push() (rejected bool, err error) {
 	_, err = g.run("push", "-q", "origin", "HEAD:refs/heads/"+workflowBranch)
 	if err == nil {
@@ -242,7 +243,8 @@ func (g stateGit) push() (rejected bool, err error) {
 	}
 	msg := err.Error()
 	if strings.Contains(msg, "[rejected]") || strings.Contains(msg, "fetch first") ||
-		strings.Contains(msg, "non-fast-forward") {
+		strings.Contains(msg, "non-fast-forward") ||
+		(strings.Contains(msg, "cannot lock ref") && strings.Contains(msg, "but expected")) {
 		return true, nil
 	}
 	return false, err
