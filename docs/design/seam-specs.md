@@ -1,6 +1,6 @@
 ---
 feature: seam-specs
-status: draft
+status: archived
 drivers: []              # no driver tree and no shared package changes (see Cross-driver impact)
 seams: [relay-claim, collector, relay-guest-api, executor-initialize, bootstrap-config]
                          # each gets its contract document, the collector seam two (a10);
@@ -5839,10 +5839,100 @@ acknowledge. Each SHOULD is settled outside this branch:
 **Follow-ups.** None. Consolidation found no regression on `main`, and no
 work for Implement or Design.
 
+**2026-11-16, after `f6-release-specs`.** Jeff pushed the seven `v0.1.0`
+tags on `adfb98b`; the six specifications' release runs attached their
+binaries and `SHA256SUMS` (the release workflow fixed after the tags by
+buildwarden/buildwarden-specs#2 and #3, no tag moved). `805570e` moved the
+six pins to `v0.1.0` with no `replace` line; conformance run 43965474049
+is green (relay suites on ubuntu; collector suites on ubuntu, macos and
+windows). The implementations workflow
+(run 43964684565) verified the released binaries and ran no suite, K's
+newest release (v0.6.0) having no `relay-oci.toml`.
+
 ## Rollback notes
 
 None.
 
 ## Archive summary
 
-Filled in at Publish.
+Built on 2026-11-12 to 2026-11-16 as phase S1, wave 1, of the
+componentization program (FLOW-20), in two repositories: this one and
+`buildwarden/buildwarden-specs`. Design review r1 approved the design at
+`64a4a95` (2026-11-15) and r2, the divergence table, at `09de3f6`
+(2026-11-16), both by Jeff. `main` moved once after the fork, to `417fabd`
+(#120 to #124), merged in as `0ac3572` (**Consolidation**). The specs pull
+request, buildwarden/buildwarden-specs#1, merged as `adfb98b`; seven
+annotated `v0.1.0` tags sit on that commit, and the six pins here name
+them (`805570e`).
+
+- **Built, in the specs repository: six specifications.** `relay-claim`,
+  `collector-outputs`, `collector-inputs`, `relay-guest-api`,
+  `executor-initialize` and `bootstrap-config`, for the five seams this
+  item declares (the collector's in two parts, a10). Each is Markdown with
+  numbered RFC 2119 requirements that its cases cite, JSON Schema 2020-12
+  for JSON bodies and OpenAPI for HTTP interfaces, a "Known divergences"
+  list of what `main` does that the text does not ask for, and its own
+  suite and command, `bw-conformance-<name>` (Decisions 2, 3, 13).
+- **Built, in the specs repository: the harness.** A seventh module,
+  `conformance/`, in Go: a target file (TOML) describes the component
+  under test; exec, oci and external launchers start it (a6); claimant,
+  collector and build-side roles and an in-memory network drive it
+  black-box (Decision 5). Its CI fails a requirement with no case and no
+  stated reason. Each tag is released on its own: a specification's
+  release carries the six platform binaries of its command and
+  `SHA256SUMS`, the harness's none (a8, Decision 4).
+- **Built, here: the pins and the gate.** Six modules,
+  `tools/conformance/<directory>/go.mod`, each requiring one
+  specification's release and naming its command in a `tool` directive
+  (a20, Decision 7); `make pin-specs` writes them, `check-pins.sh` checks
+  them, and the `pin` job fails a module that names anything but a release
+  tag or carries a `replace` line. `make conformance` and the
+  `conformance` workflow run the suites against five targets
+  (`relay-host`, `relay-vm`, `relay-container`, `relay-oci`,
+  `collector-disk`): the relay targets on Linux, the disk collector on
+  Linux, macOS and Windows.
+- **Built, here: the book and the rules.** `concepts/seams.md` names each
+  seam, its specification and its suite; `architecture.md` points at them;
+  `specs/README.md` and `CONTRIBUTING.md` say where the contracts live.
+  Five rule changes, approved by name at `64a4a95`: TEST-05 (contract
+  tests are the specs repository's suites), TEST-02, GLOBAL-08 (six
+  `seams` entries in `tools/tier1/rules.yaml`), EXEC-04 and PROFILE-01.
+  Three amendments to [`componentization`](componentization.md), U1, U2
+  and U3: the ledger format (seam 4) moves at M6, with RELAY-01 to
+  RELAY-08 (a1, Decision 9).
+- **Decided: the specifications say what `main` does; no code of the
+  relay, the collector, the executor or a driver changes** (Decisions 1,
+  11). What `main` does that a specification would not ask for is a
+  divergence in a table: D1 to D19 from Design, N1 to N33 from Implement,
+  each classed (a) specified as is, (b) divergence kept, or (c) looks
+  like a bug, with the item that fixes it (**Divergences found**).
+- **Decided in r2 (Jeff, 2026-11-16):** a21 to a25 each (A). The MAY
+  paragraphs that allow a lenient reading stay in v0.1 and later narrow to
+  a MUST refuse; one tunnel per relay; `exclusive` on macOS and Windows
+  and `--ip` outside Windows become errors in S2's item; neither the
+  executor nor the reference claimant honours proxy variables, so N2 and
+  N31 are class (b), fixed by S2's item and K1. N24, a failing collector
+  served as 404 so that `exclusive` becomes `append`, is filed as
+  `relay-collector-failure-fails-open`, a security fix the freeze exempts;
+  N21, an unreadable exit code recorded as success, as
+  `relay-exit-code-unreadable`, held by the freeze.
+- **Rejected:** one tag for the whole specs repository (a8); one
+  `go.mod` for all six specifications (a20, option A); fetching released
+  binaries, a git submodule or a vendored copy in place of the pin
+  modules; Rust, a declarative HTTP tool or shell for the harness;
+  moving seam 4 in S1 (a1); fixing any divergence in this item.
+- **Not verified:** the relay suites on macOS and Windows hosts
+  (`tier2_gaps`: `macos-vz`, against the host-mode Go relay once the exec
+  launcher has a macOS form; `qemu-any`, against the Go relay VM image
+  once a VM launcher exists). The executor's suite has no target here;
+  S2's item builds one.
+- **For a future design touching these concepts:** a change to what
+  crosses one of the five seams is a pull request in the specs repository
+  first, a new tag of that specification, and then `make pin-specs` here
+  (LOOP-02, LOOP-07); a branch may pin an unreleased commit, a pull
+  request may not. Each document's "Known divergences" and this design's
+  table are where a fix to `main`'s behaviour at a seam starts, and
+  moving a row out of class (b) changes its document. Seam 4 and
+  RELAY-01 to RELAY-08 move at M6; seams 7 and 8 have no specification
+  yet. Adding the five seams to the queue's `written_seams` is a change to
+  `areas.yaml` on Jeff's word, not done here.
