@@ -6,7 +6,7 @@ tool github.com/buildwarden/buildwarden-specs/collector-inputs/cmd/bw-conformanc
 
 require (
 	github.com/BurntSushi/toml v1.6.0 // indirect
-	github.com/buildwarden/buildwarden-specs/collector-inputs v0.0.0-20261116171557-b808a9192ccb // indirect
+	github.com/buildwarden/buildwarden-specs/collector-inputs v0.1.0 // indirect
 	github.com/buildwarden/buildwarden-specs/conformance v0.1.0 // indirect
 	github.com/google/btree v1.1.2 // indirect
 	github.com/miekg/dns v1.1.73 // indirect
@@ -19,5 +19,3 @@ require (
 	golang.org/x/time v0.15.0 // indirect
 	gvisor.dev/gvisor v0.0.0-20260907062237-d1e35511e5a4 // indirect
 )
-
-replace github.com/buildwarden/buildwarden-specs/conformance v0.1.0 => github.com/buildwarden/buildwarden-specs/conformance v0.0.0-20261116171557-b808a9192ccb
