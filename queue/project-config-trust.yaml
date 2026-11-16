@@ -3,16 +3,16 @@ title: 'One warden.toml in the control of whoever runs the build: found by --con
 priority: 67
 status: in_progress
 round: feature
-phase: 6
+phase: 7
 design: docs/design/project-config-trust.md
 branch: feat/project-config-trust
 alters_relationships: false
 design_review: required
+source: 'Found by the design of runtime-cli-project-path (its section ''The same defect elsewhere'' and Security note, branch feat/runtime-cli-project-path at b8f692f), 2026-11-14. Jeff, design review 2026-11-15: ''Security item as one design''. A security fix, exempt from FLOW-20''s freeze; not a program item. Scope, one design: what a project''s warden.toml (the build context''s own file) may decide on the host. F1: [runtime] relay_image chooses the relay, and a value starting with ''-'' is read as an option. F2: [relay] upstream_ca_certs and system_ca_bundle name host paths that are read and sent to the relay as trust roots. F3: [build] output_dir and tmpdir name host directories that are created and written. F4: [vm] windows_image names the Hyper-V base image for the user''s cache. F9: driver.ModuleRoot falls back to the working directory, so a dev-versioned warden installed outside its tree builds the relay or warden-io from the repository''s source. And the whole-file question: [runtime] driver and cli in a project''s file outrank the user''s own config, so a repository can move a user to a driver that isolates less. GLOBAL-06: host-env boundary. It follows runtime-cli-project-path''s rule and the general configuration-validation rule Jeff stated in that review.'
 pr:
   number: 124
   ci: green
   head: fa83378d27b243fda7128a506177fa448bb43c04
-source: 'Found by the design of runtime-cli-project-path (its section ''The same defect elsewhere'' and Security note, branch feat/runtime-cli-project-path at b8f692f), 2026-11-14. Jeff, design review 2026-11-15: ''Security item as one design''. A security fix, exempt from FLOW-20''s freeze; not a program item. Scope, one design: what a project''s warden.toml (the build context''s own file) may decide on the host. F1: [runtime] relay_image chooses the relay, and a value starting with ''-'' is read as an option. F2: [relay] upstream_ca_certs and system_ca_bundle name host paths that are read and sent to the relay as trust roots. F3: [build] output_dir and tmpdir name host directories that are created and written. F4: [vm] windows_image names the Hyper-V base image for the user''s cache. F9: driver.ModuleRoot falls back to the working directory, so a dev-versioned warden installed outside its tree builds the relay or warden-io from the repository''s source. And the whole-file question: [runtime] driver and cli in a project''s file outrank the user''s own config, so a repository can move a user to a driver that isolates less. GLOBAL-06: host-env boundary. It follows runtime-cli-project-path''s rule and the general configuration-validation rule Jeff stated in that review.'
 steps:
   - id: f0-branch-setup
     phase: 0
@@ -149,14 +149,14 @@ steps:
   - id: f6-merge-main
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     lease:
-      claimed_by: cloud/20261116T174717Z
-      expires: 2026-11-16T20:19:23.227634775Z
+      claimed_by: ""
+      expires: null
   - id: f6-consolidate
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f6-merge-main
     lease:
@@ -165,9 +165,16 @@ steps:
   - id: f6-open-pr
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f6-consolidate
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f7-merge
+    phase: 7
+    affinity: cloud
+    status: pending
     lease:
       claimed_by: ""
       expires: null
@@ -177,7 +184,7 @@ budget:
     steps: 14
   spent:
     runs: 2
-    steps: 18
+    steps: 20
 questions:
   - id: a1
     kind: assumed
@@ -545,3 +552,21 @@ history:
   - at: 2026-11-16T18:19:23Z
     by: cloud/20261116T174717Z
     event: claimed f6-merge-main until 2026-11-16T20:19:23Z
+  - at: 2026-11-16T18:38:51Z
+    by: cloud/20261116T174717Z
+    event: done f6-merge-main
+  - at: 2026-11-16T18:38:51Z
+    by: cloud/20261116T174717Z
+    event: claimed f6-consolidate until 2026-11-16T20:38:51Z
+  - at: 2026-11-16T18:38:51Z
+    by: cloud/20261116T174717Z
+    event: done f6-consolidate
+  - at: 2026-11-16T18:38:51Z
+    by: cloud/20261116T174717Z
+    event: claimed f6-open-pr until 2026-11-16T20:38:51Z
+  - at: 2026-11-16T18:38:52Z
+    by: cloud/20261116T174717Z
+    event: done f6-open-pr
+  - at: 2026-11-16T18:38:52Z
+    by: cloud/20261116T174717Z
+    event: entered phase 7 (merge)
