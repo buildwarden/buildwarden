@@ -99,7 +99,7 @@ steps:
   - id: f2-answer-q1
     phase: 2
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
@@ -353,12 +353,13 @@ questions:
     answer: '(i) for the old names: each old name works and warns, kept until 1.0; a file that sets both is refused. (A) for the guard: no config file names a driver by path; a path comes only from --driver or WARDEN_DRIVER. Both as recommended. Answered 2026-11-15.'
   - id: q1
     kind: blocking
-    status: open
+    status: answered
     question: 'Hold (design, Decision 23): K1 is written on one config file and builds none of project-config-trust''s part, so its Plan and Implement start only after project-config-trust''s PR has merged to main. Resume when it has; main is then merged into feat/driver-contract before Plan.'
     options:
       - 'resume: project-config-trust''s PR has merged (name the PR and the merge commit)'
       - 'project-config-trust was withdrawn, or merged with another answer to which file is read: return K1 to Design (FLOW-06)'
     recommended: 'resume: project-config-trust''s PR has merged (name the PR and the merge commit)'
+    answer: 'resume: project-config-trust''s PR has merged (#124, 417fabd) (Jeff, 2026-11-16)'
 history:
   - at: 2026-11-12T23:22:53Z
     by: human/jeff
@@ -528,3 +529,9 @@ history:
   - at: 2026-11-16T05:27:02Z
     by: host:windows-hyperv/20261116T051002Z
     event: 'priority 71 -> 72 (renumbered by wf new: detached-prepare-windows-exe queued at 68)'
+  - at: 2026-11-16T18:41:27Z
+    by: human/jeff
+    event: 'blocking question q1 answered: resume: project-config-trust''s PR has merged (#124, 417fabd) (Jeff, 2026-11-16)'
+  - at: 2026-11-16T18:41:27Z
+    by: human/jeff
+    event: done f2-answer-q1
