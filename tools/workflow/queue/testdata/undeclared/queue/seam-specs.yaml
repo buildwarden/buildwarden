@@ -1,0 +1,199 @@
+feature: seam-specs
+title: The item seam-specs
+priority: 68
+status: in_progress
+round: feature
+phase: 2
+design: docs/design/seam-specs.md
+branch: feat/seam-specs
+alters_relationships: true
+design_review: required
+steps:
+- id: f0-branch-setup
+  phase: 0
+  affinity: cloud
+  status: done
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f1-design
+  phase: 1
+  affinity: cloud
+  status: done
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f6-release-specs
+  phase: 6
+  affinity: human
+  status: pending
+  needs:
+  - f2-design-review
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f2-design-review
+  phase: 2
+  affinity: human
+  status: pending
+  lease:
+    claimed_by: human/jeff
+    expires: 2099-01-01T00:00:00Z
+- id: f2-plan
+  phase: 2
+  affinity: cloud
+  status: pending
+  needs:
+  - f2-design-review
+  lease:
+    claimed_by: ''
+    expires: null
+budget:
+  estimate:
+    runs: 5
+    steps: 30
+  spent:
+    runs: 1
+    steps: 3
+questions:
+- id: a1
+  kind: assumed
+  status: confirmed
+  question: The question a1
+  options:
+  - (a)
+  recommended: (a)
+- id: a2
+  kind: assumed
+  status: confirmed
+  question: The question a2
+  options:
+  - (a)
+  recommended: (a)
+- id: a3
+  kind: assumed
+  status: confirmed
+  question: The question a3
+  options:
+  - (a)
+  recommended: (a)
+- id: a4
+  kind: assumed
+  status: confirmed
+  question: The question a4
+  options:
+  - (a)
+  recommended: (a)
+- id: a5
+  kind: assumed
+  status: confirmed
+  question: The question a5
+  options:
+  - (a)
+  recommended: (a)
+- id: a6
+  kind: assumed
+  status: confirmed
+  question: The question a6
+  options:
+  - (a)
+  recommended: (a)
+- id: a7
+  kind: assumed
+  status: confirmed
+  question: The question a7
+  options:
+  - (a)
+  recommended: (a)
+- id: a8
+  kind: assumed
+  status: confirmed
+  question: The question a8
+  options:
+  - (a)
+  recommended: (a)
+- id: a9
+  kind: assumed
+  status: confirmed
+  question: The question a9
+  options:
+  - (a)
+  recommended: (a)
+- id: a10
+  kind: assumed
+  status: confirmed
+  question: The question a10
+  options:
+  - (a)
+  recommended: (a)
+- id: a11
+  kind: assumed
+  status: confirmed
+  question: The question a11
+  options:
+  - (a)
+  recommended: (a)
+- id: a12
+  kind: assumed
+  status: confirmed
+  question: The question a12
+  options:
+  - (a)
+  recommended: (a)
+- id: a13
+  kind: assumed
+  status: confirmed
+  question: The question a13
+  options:
+  - (a)
+  recommended: (a)
+- id: a14
+  kind: assumed
+  status: confirmed
+  question: The question a14
+  options:
+  - (a)
+  recommended: (a)
+- id: a15
+  kind: assumed
+  status: confirmed
+  question: The question a15
+  options:
+  - (a)
+  recommended: (a)
+- id: a16
+  kind: assumed
+  status: confirmed
+  question: The question a16
+  options:
+  - (a)
+  recommended: (a)
+- id: a17
+  kind: assumed
+  status: confirmed
+  question: The question a17
+  options:
+  - (a)
+  recommended: (a)
+- id: a18
+  kind: assumed
+  status: confirmed
+  question: The question a18
+  options:
+  - (a)
+  recommended: (a)
+- id: a19
+  kind: assumed
+  status: confirmed
+  question: The question a19
+  options:
+  - (a)
+  recommended: (a)
+- id: a20
+  kind: assumed
+  status: confirmed
+  question: The question a20
+  options:
+  - (a)
+  recommended: (a)
+history: []

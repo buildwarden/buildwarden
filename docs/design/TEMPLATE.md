@@ -8,6 +8,11 @@ seams: []                # e.g. relay-claim, collector, executor-initialize, led
                          # bootstrap-model (BOOT-07: needs the Bootstrap comparison below).
                          # Not empty: fill Specification changes below (LOOP-02)
 surfaces: []             # e.g. cli, config, output
+repos: []                # every repository the item works in, home first, when there is
+                         # more than this one (LOOP-04); empty or absent: only this one
+# areas: []              # the areas the change edits (FLOW-02), by the names of the
+                         # area map (`wf areas -list`). Left out, the item is undeclared
+                         # and collides with every item in its repositories (FLOW-05)
 security_boundary: none  # none | host-env | env-relay | env-beyond (GLOBAL-06)
 alters_relationships: false  # true if a component's role or interactions change (FLOW-02, FLOW-05)
 design_review: required  # required | skip (FLOW-19: skip only when its criteria hold)
@@ -48,9 +53,9 @@ recommended answer.
 
 ## Design
 
-The behavior and structure of the change. Name each repository the item
-works in other than this one (LOOP-04); a design that names none works
-only here.
+The behavior and structure of the change. For each repository in `repos`
+other than this one, say what is done there and which invariants apply
+(LOOP-04, LOOP-08).
 
 ## Defaults and overrides
 

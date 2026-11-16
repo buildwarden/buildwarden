@@ -1,0 +1,118 @@
+feature: prebuilt-artifacts
+title: The item prebuilt-artifacts
+priority: 66
+status: in_progress
+round: feature
+phase: 1
+design: docs/design/prebuilt-artifacts.md
+branch: feat/prebuilt-artifacts
+alters_relationships: true
+design_review: required
+steps:
+- id: f0-branch-setup
+  phase: 0
+  affinity: cloud
+  status: done
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f1-design
+  phase: 1
+  affinity: cloud
+  status: pending
+  lease:
+    claimed_by: cloud/20261112T230554Z
+    expires: 2099-01-01T00:00:00Z
+- id: f6-validate-macos-finch
+  phase: 6
+  affinity: host:macos-finch
+  status: pending
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f6-validate-macos-vz
+  phase: 6
+  affinity: host:macos-vz
+  status: pending
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f6-validate-windows-hyperv
+  phase: 6
+  affinity: host:windows-hyperv
+  status: pending
+  lease:
+    claimed_by: ''
+    expires: null
+- id: f6-validate-qemu-any
+  phase: 6
+  affinity: host:qemu-any
+  status: pending
+  lease:
+    claimed_by: ''
+    expires: null
+budget:
+  estimate:
+    runs: 4
+    steps: 25
+  spent:
+    runs: 0
+    steps: 2
+questions:
+- id: a1
+  kind: assumed
+  status: open
+  question: The question a1
+  options:
+  - (a)
+  recommended: (a)
+- id: a2
+  kind: assumed
+  status: open
+  question: The question a2
+  options:
+  - (a)
+  recommended: (a)
+- id: a3
+  kind: assumed
+  status: open
+  question: The question a3
+  options:
+  - (a)
+  recommended: (a)
+- id: a4
+  kind: assumed
+  status: open
+  question: The question a4
+  options:
+  - (a)
+  recommended: (a)
+- id: a5
+  kind: assumed
+  status: open
+  question: The question a5
+  options:
+  - (a)
+  recommended: (a)
+- id: a6
+  kind: assumed
+  status: open
+  question: The question a6
+  options:
+  - (a)
+  recommended: (a)
+- id: a7
+  kind: assumed
+  status: open
+  question: The question a7
+  options:
+  - (a)
+  recommended: (a)
+- id: a8
+  kind: assumed
+  status: open
+  question: The question a8
+  options:
+  - (a)
+  recommended: (a)
+history: []

@@ -1,0 +1,168 @@
+feature: loop-parallel
+title: The item loop-parallel
+priority: 61
+kind: process
+status: in_progress
+round: process
+phase: 2
+design: docs/design/loop-parallel.md
+branch: feat/loop-parallel
+alters_relationships: false
+design_review: required
+steps:
+- id: x1-design
+  phase: 1
+  affinity: human
+  status: done
+  lease:
+    claimed_by: ''
+    expires: null
+- id: x4-state
+  phase: 4
+  affinity: human
+  status: pending
+  lease:
+    claimed_by: ''
+    expires: null
+- id: x2-implement
+  phase: 2
+  affinity: cloud
+  status: pending
+  lease:
+    claimed_by: cloud/20261112T230554Z
+    expires: 2099-01-01T00:00:00Z
+budget:
+  estimate:
+    runs: 3
+    steps: 12
+  spent:
+    runs: 0
+    steps: 2
+questions:
+- id: a1
+  kind: assumed
+  status: confirmed
+  question: The question a1
+  options:
+  - (a)
+  recommended: (a)
+- id: a2
+  kind: assumed
+  status: confirmed
+  question: The question a2
+  options:
+  - (a)
+  recommended: (a)
+- id: a3
+  kind: assumed
+  status: confirmed
+  question: The question a3
+  options:
+  - (a)
+  recommended: (a)
+- id: a4
+  kind: assumed
+  status: confirmed
+  question: The question a4
+  options:
+  - (a)
+  recommended: (a)
+- id: a5
+  kind: assumed
+  status: confirmed
+  question: The question a5
+  options:
+  - (a)
+  recommended: (a)
+- id: a6
+  kind: assumed
+  status: confirmed
+  question: The question a6
+  options:
+  - (a)
+  recommended: (a)
+- id: a7
+  kind: assumed
+  status: confirmed
+  question: The question a7
+  options:
+  - (a)
+  recommended: (a)
+- id: a8
+  kind: assumed
+  status: confirmed
+  question: The question a8
+  options:
+  - (a)
+  recommended: (a)
+- id: a10
+  kind: assumed
+  status: confirmed
+  question: The question a10
+  options:
+  - (a)
+  recommended: (a)
+- id: a12
+  kind: assumed
+  status: confirmed
+  question: The question a12
+  options:
+  - (a)
+  recommended: (a)
+- id: a13
+  kind: assumed
+  status: confirmed
+  question: The question a13
+  options:
+  - (a)
+  recommended: (a)
+- id: a14
+  kind: assumed
+  status: confirmed
+  question: The question a14
+  options:
+  - (a)
+  recommended: (a)
+- id: a15
+  kind: assumed
+  status: confirmed
+  question: The question a15
+  options:
+  - (a)
+  recommended: (a)
+- id: a16
+  kind: assumed
+  status: confirmed
+  question: The question a16
+  options:
+  - (a)
+  recommended: (a)
+- id: a17
+  kind: assumed
+  status: confirmed
+  question: The question a17
+  options:
+  - (a)
+  recommended: (a)
+- id: a18
+  kind: assumed
+  status: confirmed
+  question: The question a18
+  options:
+  - (a)
+  recommended: (a)
+- id: a19
+  kind: assumed
+  status: confirmed
+  question: The question a19
+  options:
+  - (a)
+  recommended: (a)
+- id: a20
+  kind: assumed
+  status: confirmed
+  question: The question a20
+  options:
+  - (a)
+  recommended: (a)
+history: []

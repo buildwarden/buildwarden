@@ -12,8 +12,17 @@ skill is the procedure (FLOW-14). The human decides; you present and record.
 ## Set up
 
 Same as `workflow-tick` step 1 (the FLOW-18 check, build `dist/wf`, check out
-`.dev/workflow`). Worker: `W=human/jeff`. Read the latest file in
-`.dev/workflow/digest/`.
+`.dev/workflow`). Worker: `W=human/jeff`; it cannot complete a `cloud`
+merge step, so this session does not confirm merges: the next tick does.
+Read the latest file in `.dev/workflow/digest/`.
+
+## Never
+
+- Merge, approve, or enable auto-merge on any PR (FLOW-08, LINT-03).
+- Change a trunk's protection: on GitHub, its branch protection rule and
+  the rulesets that apply to it (FLOW-08).
+- Change `.dev/workflow/areas.yaml`, mark an item urgent, narrow an item's
+  areas or relate two items, except on Jeff's word as below (FLOW-05).
 
 ## Work through, in this order
 
@@ -56,7 +65,13 @@ Same as `workflow-tick` step 1 (the FLOW-18 check, build `dist/wf`, check out
       makes it clearer, add it to the design's page (publishing one if there
       is none); the review itself stays in this session. Confirm with Jeff
       the repositories the design names under **Design**, or that it names
-      none and so works only here (LOOP-04). Where the design has
+      none and so works only here (LOOP-04). Show the repositories and
+      areas it declares, the open items it is near or collides with and why
+      (`dist/wf relations -state .dev/workflow -feature F`), and the lines of
+      `tools/tier1/area-edges.sh | dist/wf areas -state .dev/workflow -check -edges -`
+      (FLOW-05, FLOW-19); `wf areas -list` and `wf areas -check` exit 1 while the queue state has no `areas.yaml`, which is expected until `loop-parallel`'s `x4-state` writes it: say so and go on. Jeff may narrow or widen the areas, name a
+      collision the map does not show, or have the map changed (below).
+      Where the design has
       **Specification changes**, go over it: each seam's specification and
       the requirements that change, or that the seam has none and what
       defines it (LOOP-02).
@@ -88,18 +103,51 @@ Same as `workflow-tick` step 1 (the FLOW-18 check, build `dist/wf`, check out
       fold-in commit. Commit and push the branch, then `dist/wf done` the
       step, which checks the approval. Changes: record his notes in the
       entry, then `dist/wf back -worker $W -feature F -why "<his notes>"`.
-4. **Escalations** (`escalate` steps, a runaway budget on an open item
-   (FLOW-13), CI repair exhausted, a branch that did not delete on merge):
+4. **Escalations** (`escalate` steps, `f8-escalate-returned` (a PR Jeff
+   merged while its item was sent back; file its finding as a follow-up or
+   drop it, on his word), a red `main` (FLOW-09), holders over a limit
+   (FLOW-05), a runaway budget on an open item
+   (FLOW-13), CI repair exhausted, a branch that did not delete on merge),
+   and a tracked item's steps (FLOW-03, FLOW-04):
    show the decision or the command needed; record the outcome in the queue
    history; raise an estimate only on Jeff's word.
-5. **Open PRs**: list the features in phase 7 with their PR and the tier-2
-   MUST findings it lists. Jeff merges them himself; you never do (FLOW-08,
-   LINT-03), and the next tick sees the merge. A finding he dismisses is
-   recorded as a PR comment with his reason.
+5. **Open PRs**: record `main`'s CI and its ruleset as `workflow-tick`
+   step 2 does (`dist/wf main`), then run
+   `dist/wf stale -state .dev/workflow -repo . -worker $W`, which skips a PR
+   Jeff has already merged. List the PRs that are ready to merge apart from
+   those that wait for a refresh (FLOW-08, FLOW-10), each with the tier-2
+   MUST findings it lists, and offer only the ready ones for merging. Jeff
+   merges them himself; you never do (FLOW-08, LINT-03). After each merge he
+   makes in the session, run `dist/wf main` and `dist/wf stale` again, tell
+   him the next tick confirms the merge, and ask which PR he wants next;
+   refresh that one with `/workflow-tick attended <item>`, wait for CI on the
+   new head, and list it as ready. A finding he dismisses is recorded as a
+   PR comment with his reason.
 6. **Retrospective**, only when Jeff asks for one, by name or by asking how
    done items went (FLOW-13): run `dist/wf status -all` and read the done
    items' queue history, digests and archived designs. Otherwise leave done
    items out.
 
-Commit and push the workflow branch after each decision. Finish with a short
+**On Jeff's word only** (FLOW-05):
+
+- *A change to the area map*, here or at any other time: write a candidate
+  file, show him
+  `dist/wf validate -state .dev/workflow -areas <candidate> -repo .`,
+  re-declare on his word any item it would put outside its areas, then save
+  it as `.dev/workflow/areas.yaml` and push it with
+  `dist/wf commit -worker human/<name>`.
+- **Until `loop-parallel`'s `x4-state` is done** (F9; remove this at
+  `x4-state`): run no `dist/wf urgent` or `dist/wf relate`. An old `wf` that
+  saves a queue file drops the fields they write; tell Jeff that his
+  decision is recorded at `x4-state`. `dist/wf declare` is not held.
+- *Narrowing an item's areas* (`dist/wf declare`), and *a collision* the map
+  does not show (`dist/wf relate -feature F -with G`, `-clear` to remove it).
+- *The urgent mark* (`dist/wf urgent -feature F`, `-clear` to remove it):
+  only for a security fix, judged as `workflow-intake` judges it, and
+  declined for anything else, saying that the mark is for a security fix and
+  that the limit is his to raise.
+
+Push the workflow branch after each decision with
+`dist/wf commit -state .dev/workflow -worker $W -m "<what was decided>" <paths>`
+(`workflow-tick` step 2 gives its exit codes). Finish with a short
 summary of what was decided and what the next tick will pick up.
