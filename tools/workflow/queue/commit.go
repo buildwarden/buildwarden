@@ -157,21 +157,38 @@ func parseClaimed(v string) (*claimRef, error) {
 }
 
 // refuseMapChange refuses a change to areas.yaml from a worker that is not
-// human: the map is the human's word (FLOW-05). A hand push is not stopped.
+// human: the map is the human's word (FLOW-05). It looks at the session's
+// paths and at the unpushed commits the push would carry with them. A hand
+// push is not stopped.
 func (g stateGit) refuseMapChange(r CommitRequest) error {
-	if Kind(r.Worker) == "human" || len(r.Paths) == 0 {
+	if Kind(r.Worker) == "human" {
 		return nil
 	}
-	changed, err := g.lines(append([]string{"status", "--porcelain", "--"}, r.Paths...)...)
+	refused := fmt.Sprintf("%s may not commit a change to areas.yaml: the area "+
+		"map is changed on the human's word, by a human worker (FLOW-05)", r.Worker)
+	if len(r.Paths) > 0 {
+		changed, err := g.lines(append([]string{"status", "--porcelain", "--"},
+			r.Paths...)...)
+		if err != nil {
+			return err
+		}
+		for _, l := range changed {
+			if len(l) > 3 && l[3:] == "areas.yaml" {
+				return errors.New(refused)
+			}
+		}
+	}
+	if _, err := g.run("fetch", "-q", "origin", workflowBranch); err != nil {
+		return err
+	}
+	unpushed, err := g.lines("log", "--format=%h %s", "origin/"+workflowBranch+"..HEAD",
+		"--", "areas.yaml")
 	if err != nil {
 		return err
 	}
-	for _, l := range changed {
-		if len(l) > 3 && l[3:] == "areas.yaml" {
-			return fmt.Errorf("%s may not commit a change to areas.yaml: the area "+
-				"map is changed on the human's word, by a human worker (FLOW-05)",
-				r.Worker)
-		}
+	if len(unpushed) > 0 {
+		return fmt.Errorf("%s, and the push would carry the unpushed commit %s, "+
+			"which changes it", refused, strings.Join(unpushed, "; "))
 	}
 	return nil
 }

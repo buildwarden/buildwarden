@@ -312,3 +312,27 @@ func TestCommitAreasHumanOnly(t *testing.T) {
 		t.Fatal("the human's map change was not pushed")
 	}
 }
+
+// TestCommitAreasUnpushedCommit: a worker that is not human does not push an
+// earlier unpushed commit that changed areas.yaml under its own (FLOW-05).
+func TestCommitAreasUnpushedCommit(t *testing.T) {
+	a, _ := stateRepos(t, "repository: o/here\n", "x")
+	write(t, a, "areas.yaml", areasYAML("o/here", "a/"))
+	gitT(t, a, "add", "areas.yaml")
+	gitT(t, a, "commit", "-q", "-m", "hand areas")
+	hand := gitT(t, a, "rev-parse", "--short", "HEAD")
+	before := gitT(t, a, "rev-parse", "origin/workflow")
+	edit(t, a, "x", func(f *queue.Feature) { f.Title = "A's title" })
+	out, code := commit(t, a, "cloud/run", "x: title", "queue/x.yaml")
+	if code == 0 || !strings.Contains(out, "areas.yaml") || !strings.Contains(out, hand) {
+		t.Fatalf("exit %d, want a refusal naming areas.yaml and %s:\n%s", code, hand, out)
+	}
+	gitT(t, a, "fetch", "-q", "origin")
+	if gitT(t, a, "rev-parse", "origin/workflow") != before {
+		t.Fatal("the refused commit pushed the unpushed map change")
+	}
+	pushed(t, a, "human/jeff", "x: title", "queue/x.yaml")
+	if !strings.Contains(remoteFile(t, a, "areas.yaml"), "a/") {
+		t.Fatal("the human's push did not carry the map change")
+	}
+}
