@@ -223,6 +223,11 @@ func readConfigFile(path, source string) ([]byte, error) {
 // are read: 1 MiB, far past any real config file.
 const maxProjectConfig = 1 << 20
 
+// configBlock is how much each read of the working directory's warden.toml
+// asks for: 64 KiB, a multiple of 8, because /proc/self/pagemap refuses a
+// read of any other length.
+const configBlock = 1 << 16
+
 // errTooLarge marks a working directory's warden.toml that gives more than
 // maxProjectConfig bytes, 1 MiB, when read.
 var errTooLarge = errors.New("larger than 1 MiB")
@@ -238,19 +243,27 @@ func readProjectConfig(path string) ([]byte, error) {
 	return readCapped(f)
 }
 
-// readCapped reads r to its end, or errTooLarge when it gives more than
-// maxProjectConfig bytes. It reads at most one byte past the cap, so the
-// count is of the bytes read: a procfs file that stat reports as empty, or
-// a reader that never ends, costs no more than the cap.
+// readCapped reads r to its end, or errTooLarge once it has given more than
+// maxProjectConfig bytes. Every read asks for a whole configBlock, so it reads
+// at most maxProjectConfig+configBlock bytes, and the count is of the bytes
+// read: a procfs file that stat reports as empty, or a reader that never
+// ends, costs no more than that. A read error before the cap is returned as
+// it is.
 func readCapped(r io.Reader) ([]byte, error) {
-	data, err := io.ReadAll(io.LimitReader(r, maxProjectConfig+1))
-	if err != nil {
-		return nil, err
+	var data []byte
+	block := make([]byte, configBlock)
+	for {
+		n, err := r.Read(block)
+		data = append(data, block[:n]...)
+		switch {
+		case len(data) > maxProjectConfig:
+			return nil, errTooLarge
+		case errors.Is(err, io.EOF):
+			return data, nil
+		case err != nil:
+			return nil, err
+		}
 	}
-	if len(data) > maxProjectConfig {
-		return nil, errTooLarge
-	}
-	return data, nil
 }
 
 // errIsDirectory marks a config file path that names a directory.
