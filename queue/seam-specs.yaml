@@ -3,7 +3,7 @@ title: 'Specs repository and conformance suites: write seams 1, 2, 3, 5 and 6, b
 priority: 71
 status: in_progress
 round: feature
-phase: 5
+phase: 6
 design: docs/design/seam-specs.md
 branch: feat/seam-specs
 repos:
@@ -106,7 +106,33 @@ steps:
   - id: f5-guide
     phase: 5
     affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-merge-main
+    phase: 6
+    affinity: cloud
     status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-consolidate
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-merge-main
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f6-open-pr
+    phase: 6
+    affinity: cloud
+    status: pending
+    needs:
+      - f6-consolidate
+      - f6-release-specs
     lease:
       claimed_by: ""
       expires: null
@@ -116,7 +142,7 @@ budget:
     steps: 30
   spent:
     runs: 1
-    steps: 12
+    steps: 13
 questions:
   - id: a1
     kind: assumed
@@ -594,3 +620,12 @@ history:
   - at: 2026-11-16T17:40:03Z
     by: cloud/20261112T230554Z
     event: entered phase 5 (guide)
+  - at: 2026-11-16T17:40:58Z
+    by: cloud/20261112T230554Z
+    event: claimed f5-guide until 2026-11-16T19:40:58Z
+  - at: 2026-11-16T17:41:06Z
+    by: cloud/20261112T230554Z
+    event: done f5-guide
+  - at: 2026-11-16T17:41:06Z
+    by: cloud/20261112T230554Z
+    event: entered phase 6 (publish)
