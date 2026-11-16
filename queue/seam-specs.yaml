@@ -134,15 +134,15 @@ steps:
       - f6-consolidate
       - f6-release-specs
     lease:
-      claimed_by: ""
-      expires: null
+      claimed_by: cloud/20261112T230554Z
+      expires: 2026-11-17T00:12:58.663837909Z
 budget:
   estimate:
     runs: 5
     steps: 30
   spent:
     runs: 2
-    steps: 15
+    steps: 16
 questions:
   - id: a1
     kind: assumed
@@ -644,3 +644,6 @@ history:
   - at: 2026-11-16T22:12:31Z
     by: human/jeff
     event: done f6-release-specs
+  - at: 2026-11-16T22:12:58Z
+    by: cloud/20261112T230554Z
+    event: claimed f6-open-pr until 2026-11-17T00:12:58Z
