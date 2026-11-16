@@ -5707,7 +5707,134 @@ reworded to match; nothing else in the design changes.
 
 ## Consolidation
 
-Filled in at Publish.
+Filled at Publish, 2026-11-16, on the branch at `0ac3572`, the merge of
+`origin/main` at `417fabd` into `4c2e482` (FLOW-10, FLOW-15).
+
+**The merge.** A merge commit, one conflict: the `.PHONY` line of
+`Makefile`, where `main` added `release-build` (`vz-nocgo-build`, #123) and
+this branch `pin-specs` and `conformance`. The line keeps all three; the
+targets themselves merged on their own. Git merged `CONTRIBUTING.md`,
+`structure.md`, `loop-profile.md` and `rules.yaml` without a conflict, the
+hunks being apart. Gates on `0ac3572`:
+
+- `make lint` for linux (tier1 `417fabdd0176...0ac3572199f3`: 0 MUST,
+  0 MUST-review, 0 SHOULD, 0 hints, 0 suppressed). The branch touches no
+  build-tagged file, so no other platform's lint is owed (FLOW-17).
+- `make test`: exit 0, no FAIL.
+- `make enforcement`: main's tier 1 findings kept (0) (FLOW-14).
+- `make conformance TARGETS="relay-host relay-vm collector-disk"`, locally
+  as root: every suite passed against the three targets. `relay-container`
+  and `relay-oci` need a container runtime this machine lacks; the
+  `conformance` workflow runs all five on the push (run 43932986928).
+- `tools/workflow/flow18-check.sh`: ok.
+
+**Landed on `main` since the fork.** The branch forked from `ad4ea50`,
+which is `loop-contract` (#119). Since then:
+
+- **`runtime-cli-project-path` (#120, `3cb0b2b`).** `cmd/warden/` and the
+  book's guide: the container runtime is one of finch, docker or podman. No
+  seam's code changes, and no page this branch edits.
+- **`loop-parallel` (#121, `623131a`) and its follow-up (#122,
+  `8c41eaa`).** Loop rules and `tools/workflow/`: repositories, areas,
+  relations and limits. This design's `repos` line was recorded at its
+  `x4-state` on Jeff's word, so the queue and the design agree (`wf check`:
+  "as declared at 9be9c8c"). It declares no `areas`, so it collides with
+  every item and runs alone (FLOW-05), as it has. The queue's map
+  `areas.yaml` gained `tools/conformance/` in the `specs` area at
+  `816049b` (Review F3). Its `written_seams` lists `ledger-format` only;
+  once this branch merges, the five seams it declares have a specification,
+  and adding them is a change to the map in an attended session on Jeff's
+  word (`loop-profile.md`, Areas). That is not this branch's change.
+- **`vz-nocgo-build` (#123, `c5ab2d5`).** `driver/vz/`, `Makefile`'s
+  `release-build` and the install docs. The `Makefile` line above is the
+  only overlap.
+- **`project-config-trust` (#124, `417fabd`).** One config file, and the
+  upstream CA certificates read once, on the host, before any driver work.
+  It is the one change that reaches a seam:
+  - *The claim.* `driver.Session`, the claimant this branch's `relay-claim`
+    names, now sends `upstream_ca_certs` as one entry holding the valid
+    PEM certificates the request read, re-encoded, and no longer reads the
+    files itself. `relaycfg/` and the relay are unchanged, so the wire
+    format is too: CLAIM-26 ("each entry is a PEM bundle of one or more
+    certificates") holds for what the claimant sends now as before, and
+    D5, the Go relay ignoring an entry with no certificate, is the relay's
+    side and still stands. The claimant cases of `relay-claim` passed
+    against `collector-disk` on the merge.
+  - *No seam changed by two features* (GLOBAL-08). `driver/session.go` is
+    not on tier 1's seam list, and #124 changes no file that is.
+  - *The divergences' line numbers.* Each document gives its line
+    numbers at `623131a`. None of the files they cite (`relay/`,
+    `relaycfg/`, `collector/`, `bootstrap/`, `cmd/relay/`,
+    `cmd/warden-io/`) changed between `ad4ea50` and `417fabd`, so the
+    numbers hold on `main` as merged.
+  - *The book.* `architecture.md`, which this branch rewrote to point at
+    the specifications, has no hunk from #124; its overview changes are
+    to warden's config and CA reading, which no specification here
+    describes.
+
+**Items in flight** (each trial merge with `git merge-tree` against the
+remote branch; nothing changed on them):
+
+- `driver-contract` (`c767992`): clean; it changes only its design.
+- `prebuilt-artifacts` (`49b513a`): clean; it changes only its design.
+
+**`dist/wf check` on `0ac3572`** printed no trial-merge line: the item is
+undeclared, so no in-progress item is disjoint from it and the check tries
+none (FLOW-10's report covers disjoint items only). Its lines for this
+section:
+
+```
+ok   current main merged: origin/main is an ancestor of feat/seam-specs
+ok   rule changes cleared (FLOW-14): cleared: docs/development/global.md (GLOBAL-08), docs/development/in-vm-executor.md (EXEC-04), docs/development/loop-profile.md (PROFILE-01), docs/development/testing.md (TEST-02), tools/tier1/coupling/checks_test.go (GLOBAL-08), tools/tier1/rules.yaml (GLOBAL-08)
+ok   queue records what the design declares (FLOW-03): as declared at 9be9c8c
+ok   diff inside the declared areas (FLOW-03): undeclared: the item collides with every item in its repositories, and no path is outside it (FLOW-05)
+```
+
+**Seams.** The five declared seams have their **Specification changes**
+section, written at Design; what the branch changed matches it. The six
+pins, `tools/conformance/<directory>/go.mod`, each name
+`v0.0.0-20261116171557-b808a9192ccb`, with the harness replaced at the
+same commit, and `b808a91` is still the head of
+`buildwarden/buildwarden-specs#1`, which is open and unmerged. The seams
+page names the same ref in every link. The pins move to the seven tags
+at `f6-release-specs` (Decision 12).
+
+**Rules proposed.** Only the five rule changes approved at `09de3f6`
+(TEST-05, TEST-02, GLOBAL-08, EXEC-04, PROFILE-01). The consolidation
+surfaced no new convention.
+
+**Sweep (FLOW-15).**
+
+- *Dead code.* `make deadcode` reports 17 (linux), 22 (darwin) and
+  27 (windows) unreachable functions, the same list, line for line, as on
+  `417fabd`. The branch adds no production Go code: its Go is
+  `specs/specs_test.go` and `tools/tier1/coupling/checks_test.go`.
+- *Duplication.* The two scripts that move and check pins,
+  `pin-specs.sh` and `check-pins.sh`, read the same six directories, and
+  `check-pins.sh` runs `make pin-specs` to prove the files are what a
+  release names rather than restating its rules. Nothing on `main`
+  duplicates them.
+- *`overview.md`.* Unchanged, as the design says: no component's flow
+  changes. Its claim and collector pseudocode, as #124 left it, agrees
+  with the specifications on what crosses each seam.
+- *Terminology.* "Specification", "suite", "pin" and "target" are used
+  as the design defines them across `seams.md`, `architecture.md`,
+  `CONTRIBUTING.md` and `structure.md`; no wording fix was needed.
+
+**Tier 2 (`reports/seam-specs/4c2e482df0e0.md`): 0 MUST, 0 MUST-review,
+3 SHOULD.** For the pull request's body; there are no MUST findings to
+acknowledge. Each SHOULD is settled outside this branch:
+
+- F1 (FLOW-08), the specs pull request's body was stale: its body now
+  names r2's approval at `09de3f6`, the table as D1 to D19 and N1 to N33,
+  and run 43917046943.
+- F2 (FLOW-09), a native-gap entry described the old pin layout: reworded
+  on the workflow branch at `2f21274`.
+- F3 (FLOW-03), `tools/conformance/` was in no area: added to the `specs`
+  area at `816049b`.
+
+**Follow-ups.** None. Consolidation found no regression on `main`, and no
+work for Implement or Design.
 
 ## Rollback notes
 
