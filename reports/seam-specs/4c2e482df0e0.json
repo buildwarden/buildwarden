@@ -1,0 +1,133 @@
+{
+  "feature": "seam-specs",
+  "branch": "feat/seam-specs",
+  "head": "4c2e482df0e0",
+  "base": "ad4ea5002e24",
+  "round": "feature",
+  "step": "f4-review",
+  "previous_report": null,
+  "scope": "git diff origin/main...feat/seam-specs: 38 files, +7244/-73 (docs/design/seam-specs.md alone +5718). Merge base ad4ea50; origin/main is 8c41eaa (#120, #121, #122 past it); trial merge clean (loop-profile.md and rules.yaml auto-merged). Also reviewed: buildwarden/buildwarden-specs feat/seam-specs at b808a91 (PR #1), 223 files, +43560/-3 against its main aeda265. Judged against the design as approved at 09de3f6 (r2, 2026-11-16).",
+  "model_note": "claude-opus-5-5, tier 2 report-only (LINT-07); findings are advisory and never block on their own (LINT-03)",
+  "rule_index": "Headers extracted from docs/development/*.md (LINT-01) as the branch changes them. Reached: GLOBAL-01, GLOBAL-08, GLOBAL-09 to GLOBAL-11, RELAY-04, RELAY-08, EXEC-04, TEST-02, TEST-04, TEST-05, UX-01, FLOW-03, FLOW-08, FLOW-09, FLOW-14, FLOW-15, FLOW-18, PROFILE-01.",
+  "tier1": {
+    "result": "green",
+    "make_lint": "pass (linux, PATH=/root/go/bin): golangci-lint 0 issues in root, tools/workflow, tools/tier1; tier1 ad4ea5002e24...4c2e482df0e0: 0 MUST, 0 MUST-review, 0 SHOULD, 0 hints, 0 suppressed; exit 0",
+    "make_lint_per_platform": "not needed: the diff touches no build-tagged file (its only Go files are specs/specs_test.go and tools/tier1/coupling/checks_test.go)",
+    "make_test": "pass: exit 0, 34 ok lines, no FAIL (specs and tools/tier1/coupling included)",
+    "make_enforcement": "pass: main's tier1 built with the branch's rules.yaml and golangci.yml reports every finding main's does (0); exit 0. The rules.yaml edit (TEST-05 owner, seams list) judged against the approved wording below",
+    "wf_check": "dist/wf check: clean branch head 4c2e482; rule changes cleared (FLOW-14): global.md (GLOBAL-08), in-vm-executor.md (EXEC-04), loop-profile.md (PROFILE-01), testing.md (TEST-02, the file also carrying TEST-05), tools/tier1/coupling/checks_test.go and rules.yaml (GLOBAL-08); queue records what the design declares (as declared at 9be9c8c); diff inside the declared areas (undeclared: collides with every item in its repositories, no path outside it); make lint/test skipped without -run (run above); report lines missing before this report",
+    "merge_base_wf_check": "wf built from merge base ad4ea50 (scratch worktree), run with -repo on the branch checkout: same lines as dist/wf check (clean head; rule changes cleared for the same six files); FLOW-03 lines not printed by that older wf",
+    "trial_merge": "git merge-tree origin/main HEAD: clean. Trial merge 6673539 (origin/main 8c41eaa + 4c2e482): wf check built from it prints the same rule-change and FLOW-03 ok lines; its only FAIL besides the report lines is 'checkout is the clean branch head' (expected: the trial merge is not the branch head). No FLOW-10 conflict line",
+    "areas_check": "tools/tier1/area-edges.sh (from the trial merge, 157 edges) | dist/wf areas -state <queue> -check -rev HEAD -edges -: exit 0, '20 differences from HEAD at 6673539', all of them catch-all lines: each new file under tools/conformance/ is in no area's paths and falls to core (finding F3). areas.yaml exists in the queue now, so -check ran",
+    "flow18": "K: FLOW-18 ok. S: FLOW-18 ok",
+    "s_make_check": "buildwarden-specs at b808a91, Go 1.26.3, GOTOOLCHAIN=local: make check exit 0 (speccheck docs, vet, test in seven modules, coverage, modules ok, tidy unchanged, release ok from origin/main)",
+    "hosted": "K conformance run 43917046943 on 4c2e482: success (relay job: relay-host, relay-vm, relay-container, relay-oci; collector on ubuntu, macos, windows; pin skipped on a branch push, as designed). S PR #1 at b808a91: open, not merged; check (ci 43916593741) success, sessions-private (flow18 43916593431) success",
+    "fixes_made": "none"
+  },
+  "rule_changes_flow14": [
+    {
+      "rule": "TEST-05",
+      "file": "docs/development/testing.md, tools/tier1/rules.yaml",
+      "verdict": "matches",
+      "how": "The design's Proposed wording block (title and whole body) occurs byte for byte in testing.md; main's body is fully removed. rules.yaml's TEST-05 owner equals the design's Enforcement change string (wrapped in the design, one line in YAML)."
+    },
+    {
+      "rule": "TEST-02",
+      "file": "docs/development/testing.md",
+      "verdict": "matches",
+      "how": "The 13-line proposed tier-1 bullet occurs byte for byte, line breaks included."
+    },
+    {
+      "rule": "GLOBAL-08",
+      "file": "docs/development/global.md, tools/tier1/rules.yaml, tools/tier1/coupling/checks_test.go",
+      "verdict": "matches",
+      "how": "The executor bullet and the added paragraph occur byte for byte, the paragraph before the unchanged last one. The seams comment and list in rules.yaml are identical to the design's yaml block under Tier 1's seam list (six entries, two for collector). checks_test.go's change is exactly the design's three-line table."
+    },
+    {
+      "rule": "EXEC-04",
+      "file": "docs/development/in-vm-executor.md",
+      "verdict": "matches",
+      "how": "The 15-line proposed body occurs byte for byte."
+    },
+    {
+      "rule": "PROFILE-01",
+      "file": "docs/development/loop-profile.md",
+      "verdict": "matches",
+      "how": "The Specifications, Consumables and Checks/Specification rows each occur byte for byte; no other row changes. The trial merge with main's loop-parallel edits to the file is clean."
+    }
+  ],
+  "umbrella_amendments": [
+    {
+      "id": "U1",
+      "verdict": "matches",
+      "how": "componentization.md seam 4's row reads 'Moves to the specs repository at M6, with RELAY-01 to RELAY-08.'"
+    },
+    {
+      "id": "U2",
+      "verdict": "matches",
+      "how": "The RELAY-01 to RELAY-08 row gains 'RELAY-05 moves with the ledger format (seam 4).' and the row reads '| TEST-05 | ... | S1 |' (the form for this item merging before driver-contract, which has not merged)."
+    },
+    {
+      "id": "U3",
+      "verdict": "matches",
+      "how": "The dated paragraph follows loop-contract's in Amendments, its words as approved (rewrapped)."
+    }
+  ],
+  "tier2_judgment": {
+    "K_behaviour": "No package of the relay, collector, executor, bootstrap, ledger or any driver changes: the diff's code is two test files, three shell scripts, a workflow, six pin modules holding no Go code, and target files. GLOBAL-09 to GLOBAL-11: the only defaults are the four tooling rows of the design's Defaults and overrides (TARGETS, the pins, SUITES, relay-oci's runtime) and conformance.sh/pin-specs.sh implement exactly those: a named target that cannot run is an error, a missing runtime is an error, no retry, pin-specs has no default and errors on neither/both, the REF replace line is decided before writing. RELAY-08: the target files hand the relay only -mode, -claim-addr and WARDEN_CLAIM_TOKEN, RELAY-08's pre-claim values and launch wiring.",
+    "UX-01": "surfaces: [] holds: no CLI, config or output of warden changes. The new make targets are documented in CONTRIBUTING.md and structure.md, the pins in AGENTS.md, the seams page added to SUMMARY.md; architecture.md replaces its endpoint and build_link tables by links exactly as the design's 'The book and the specifications link both ways' says, keeping the headings (the specs' Concept links to #claim-protocol-relaycfg resolve).",
+    "FLOW-15": "overview.md unchanged; no component flow changes, as the design states.",
+    "TEST-05_agent_half": "The seam contract tests moved to the suites; no seam file changed, so no case was owed. specs_test.go's TestSeamRefs holds the seams page to the pins, with fixture tests for both forms and failures.",
+    "native_gaps": "tier2_gaps names macos-vz and qemu-any; backlog/native-gaps.yaml holds seam-specs-relay-suite-macos-host-mode (macos-vz, deferred) and seam-specs-relay-suite-relay-vm (qemu-any, deferred), each pointing at the design. Recorded; F2 is a wording staleness only.",
+    "S": "Applied to S: the six documents' headers (seam, identifiers, roles, Concept link into the book, reference implementation, status), the Known-divergences sections against the design's table (no 'Not yet in the design's table' remains; each of D1 to D19 and N1 to N33 appears; each introduction names the table as D1 to D19 and N1 to N33), the README's Implementations table and Releases, the four workflows (release: the tag is checked on main and against its CHANGELOG before use, TAG only in quoted env, contents: write on the release job only, persist-credentials false, the harness tag releases no binary; ci runs make check with full history; flow18; implementations is not a gate), the Makefile's check targets, and S's gates and hosted checks. Not checked: a line-by-line reading of the harness (~15k lines of Go under conformance/) and of every case against the Go code it describes (the suites passing against the Go relay and disk collector on hosted runners is the evidence); release.yml and implementations.yml, which cannot run before the merge; resolving a real tag through the module proxy and checksum database (first done at f6-release-specs); the relay suites on macOS and Windows (the two tracked gaps)."
+  },
+  "findings": [
+    {
+      "id": "F1",
+      "rule": "FLOW-08",
+      "severity": "SHOULD",
+      "file": "buildwarden/buildwarden-specs#1 (pull request body)",
+      "lines": "body: first paragraph, the 'Known divergences' paragraph, 'How it was verified'",
+      "what": "The specs PR's body, which Jeff reads at the merge that signs the specs half off, is stale since r2: it says the design was 'approved 2026-11-15' (r2 approved it again on 2026-11-16 at 09de3f6), that some entries 'are marked \"not yet in the design's table\"' (b808a91 removed all 36; the table now holds N1 to N33), and its hosted evidence is conformance run 43847018915 at f3087fc, not the latest green run 43917046943 on K 4c2e482 pinned at b808a91.",
+      "fix": "Update the three passages of the PR body (not a commit) before f6-release-specs: r2's approval at 09de3f6, the table as holding D1 to D19 and N1 to N33, and run 43917046943."
+    },
+    {
+      "id": "F2",
+      "rule": "FLOW-09",
+      "severity": "SHOULD",
+      "file": "backlog/native-gaps.yaml:626 (workflow branch)",
+      "lines": "seam-specs-relay-suite-macos-host-mode, 'what'",
+      "what": "The tracked gap names the pre-a20 layout: 'bw-conformance, the release pinned in tools/conformance/go.mod'. After a20 there are six pin modules, tools/conformance/<directory>/go.mod, and six commands bw-conformance-<directory>. The gap itself (macos-vz, deferred) and its sibling seam-specs-relay-suite-relay-vm (qemu-any, deferred) are recorded as the design's tier2_gaps and Validation plan say.",
+      "fix": "Reword the entry's 'what' to name the six pin modules and their commands; no status change."
+    },
+    {
+      "id": "F3",
+      "rule": "FLOW-03",
+      "severity": "SHOULD",
+      "file": "areas.yaml (workflow branch)",
+      "lines": "area-edges.sh | wf areas -check on the trial merge: 20 catch-all lines",
+      "what": "Every new file under tools/conformance/ (the six pin modules' go.mod and go.sum, the three scripts, the five target files) is in no area's paths and falls to the catch-all area core. It changes nothing for this item, which is undeclared and collides with every item in its repositories, but once it merges a later item touching tools/conformance/ is placed in core.",
+      "fix": "When the area map is next edited (loop-parallel's area-map owner, or this item's Consolidation), add tools/conformance/ to an area (the specs area, beside specs/ and docs/book/src/specs/, is the natural one); it is queue state, not a change on this branch."
+    }
+  ],
+  "counts": {
+    "MUST": 0,
+    "MUST-review": 0,
+    "SHOULD": 3
+  },
+  "resolved_since_previous": [],
+  "carried_forward": [],
+  "new_since_previous": [
+    "F1",
+    "F2",
+    "F3"
+  ],
+  "judged_not_findings": [
+    "S relay-claim/v1.md:607: one line of the r2-edited D6 paragraph runs past the file's wrap width; make check does not flag it and no rule asks for a width. Cosmetic.",
+    "CONTRIBUTING.md:135 and docs/book/src/contributing/structure.md:196 link the specs repository's root, while the design calls seams.md 'the only file in this repository that links into the specs repository'. Those links name no ref, so the book still never points at an untested release; the design itself asks for both sections.",
+    "docs/design/seam-specs.md front matter still says status: draft; the status moves at Consolidation (f6), as for other items.",
+    "The pins name a pseudo-version of b808a91 with a replace line for the harness: allowed on a branch by PROFILE-01 as amended; the pin job fails it on the PR until f6-release-specs moves the pins to the seven tags."
+  ],
+  "follow_ups": [],
+  "suppressions": []
+}
