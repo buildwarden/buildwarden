@@ -544,6 +544,16 @@ design and tried the fix; five findings, each verified here:
 None of them is a fork for Jeff, and none changes `design_review`, which
 was already `required`.
 
+### 2026-11-15, outcome: approved
+
+- **r1, 2026-11-15: approved at `d391343`** (Jeff; page
+  https://claude.ai/artifact/7WYgvKyCo337Z247LDDwv7). The design raises no
+  question and declares no rule change. Put to him with the outcome and
+  confirmed: a release's macOS arm64 `warden` stays a build without cgo,
+  has no vz driver and says so (Decision 2); the alternative, a release
+  that carries a working vz driver, was offered and not taken. Native
+  validation on `macos-vz` blocks merge (FLOW-09).
+
 ## Consolidation
 
 ## Rollback notes
