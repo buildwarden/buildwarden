@@ -3,7 +3,7 @@ title: 'The macOS arm64 release build of warden does not compile without cgo: dr
 priority: 65
 status: in_progress
 round: feature
-phase: 6
+phase: 8
 design: docs/design/vz-nocgo-build.md
 branch: feat/vz-nocgo-build
 alters_relationships: false
@@ -94,13 +94,36 @@ steps:
   - id: f6-open-pr
     phase: 6
     affinity: cloud
-    status: pending
+    status: done
     needs:
       - f6-consolidate
       - f6-validate-macos-vz
     lease:
-      claimed_by: cloud/20261116T174717Z
-      expires: 2026-11-16T19:47:26.19647237Z
+      claimed_by: ""
+      expires: null
+  - id: f7-merge
+    phase: 7
+    affinity: cloud
+    status: done
+    lease:
+      claimed_by: ""
+      expires: null
+  - id: f8-escalate-branch
+    phase: 8
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+    note: "a publish push after the merge re-created the remote branch (5eb9a32, unmerged comment revert and note); delete it with: git push origin --delete feat/vz-nocgo-build"
+  - id: f8-close
+    phase: 8
+    affinity: cloud
+    status: pending
+    needs: [f8-escalate-branch]
+    lease:
+      claimed_by: ""
+      expires: null
 budget:
   estimate:
     runs: 1
@@ -200,3 +223,6 @@ history:
   - at: 2026-11-16T17:47:26Z
     by: cloud/20261116T174717Z
     event: claimed f6-open-pr until 2026-11-16T19:47:26Z
+  - {at: 2026-11-16T18:40:00Z, by: human/jeff, event: "f6-open-pr and f7-merge done by hand (Jeff): PR #123 green on d4cc55d and merged as c5ab2d5; a publish push after the merge re-created origin/feat/vz-nocgo-build at 5eb9a32, so the checks could not pass"}
+  - {at: 2026-11-16T18:40:01Z, by: human/jeff, event: "FLOW-14 acknowledged after the fact (Jeff): #123 carried a comment-only edit to tools/tier1/area-edges.sh (the stale darwin/amd64 cgo note) outside any approved rule change; main keeps it"}
+  - {at: 2026-11-16T18:40:02Z, by: human/jeff, event: entered phase 8 (close)}
