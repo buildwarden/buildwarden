@@ -22,7 +22,7 @@ FLOW-20.
    Jeff which repositories the item works in, its home first (`-repos`,
    when there is more than this one, LOOP-04), and which areas it changes,
    by the names `dist/wf areas -state .dev/workflow -list` prints
-   (`-areas`; FLOW-02, FLOW-05). Leaving `-areas` out files the item
+   (`-areas`; FLOW-02, FLOW-05); `wf areas -list` and `wf areas -check` exit 1 while the queue state has no `areas.yaml`, which is expected until `loop-parallel`'s `x4-state` writes it: say so and go on. Leaving `-areas` out files the item
    undeclared, colliding with every item in its repositories until its
    design declares them. A feature whose home is a repository where the
    loop's gates do not run is tracked (FLOW-03): give it `-repos` with that
@@ -68,6 +68,10 @@ FLOW-20.
    dist/wf validate -state .dev/workflow
    dist/wf relations -state .dev/workflow -feature <slug>
    ```
+
+   **Until `loop-parallel`'s `x4-state` is done** (F9; remove this at `x4-state`): pass no `-repos`, `-areas`, `-seams`, `-adopts` or `-urgent`.
+   The item is filed undeclared, and a security fix is marked at
+   `x4-state` with `wf urgent`; note what was agreed in `-source`.
 
    `<name>` is the human at the intake. Show Jeff the relations `wf
    relations` prints: the open items the new one is near or collides with,

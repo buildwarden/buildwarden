@@ -21,7 +21,8 @@ findings never block on their own. Tier 2 is report-only (LINT-07).
    checkout). Record each result. Record too, in the report, the trial
    merge's lines `dist/wf check` prints (FLOW-10) and those of
    `tools/tier1/area-edges.sh | dist/wf areas -state <workflow checkout> -check -rev HEAD -edges -`.
-   A path outside the declared areas: widen it with `dist/wf declare` when
+   `wf areas -list` and `wf areas -check` exit 1 while the queue state has no `areas.yaml`, which is expected until `loop-parallel`'s `x4-state` writes it: say so and go on.
+   A path outside the declared areas: widen it with `dist/wf declare` (**Until `loop-parallel`'s `x4-state` is done** (F9; remove this at `x4-state`): in the design only) when
    the approved design covers it, otherwise `back-to-design` (FLOW-03,
    FLOW-06).
 3. Tier 2: extract the rule index from `docs/development/*.md` (LINT-01: the

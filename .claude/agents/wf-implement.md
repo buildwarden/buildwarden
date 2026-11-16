@@ -27,7 +27,7 @@ writing code, plus GLOBAL-01 (comments), GLOBAL-02 and TEST-01 (tests).
    other route and is exempt.
 5. A path the branch changes outside the areas the design declares
    (FLOW-03): when the approved design covers it, widen the declaration with
-   `dist/wf declare`; otherwise return `back-to-design` with the path
+   `dist/wf declare` (**Until `loop-parallel`'s `x4-state` is done** (F9; remove this at `x4-state`): widen it in the design only); otherwise return `back-to-design` with the path
    (FLOW-06).
 6. If the plan is not viable or uncovers complexity the design missed, a
    fallback the design's **Defaults and overrides** does not name among them

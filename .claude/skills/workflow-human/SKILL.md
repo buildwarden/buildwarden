@@ -69,7 +69,7 @@ Read the latest file in `.dev/workflow/digest/`.
       areas it declares, the open items it is near or collides with and why
       (`dist/wf relations -state .dev/workflow -feature F`), and the lines of
       `tools/tier1/area-edges.sh | dist/wf areas -state .dev/workflow -check -edges -`
-      (FLOW-05, FLOW-19). Jeff may narrow or widen the areas, name a
+      (FLOW-05, FLOW-19); `wf areas -list` and `wf areas -check` exit 1 while the queue state has no `areas.yaml`, which is expected until `loop-parallel`'s `x4-state` writes it: say so and go on. Jeff may narrow or widen the areas, name a
       collision the map does not show, or have the map changed (below).
       Where the design has
       **Specification changes**, go over it: each seam's specification and
@@ -136,6 +136,10 @@ Read the latest file in `.dev/workflow/digest/`.
   re-declare on his word any item it would put outside its areas, then save
   it as `.dev/workflow/areas.yaml` and push it with
   `dist/wf commit -worker human/<name>`.
+- **Until `loop-parallel`'s `x4-state` is done** (F9; remove this at
+  `x4-state`): run no `dist/wf urgent`, `dist/wf relate` or `dist/wf declare`. An old `wf` that
+  saves a queue file drops the fields they write; tell Jeff that his
+  decision is recorded at `x4-state`.
 - *Narrowing an item's areas* (`dist/wf declare`), and *a collision* the map
   does not show (`dist/wf relate -feature F -with G`, `-clear` to remove it).
 - *The urgent mark* (`dist/wf urgent -feature F`, `-clear` to remove it):

@@ -46,7 +46,10 @@ FLOW-08, FLOW-10, FLOW-11, FLOW-12, FLOW-15, FLOW-16, FLOW-17, FLOW-18.
   stop (FLOW-11). A failure that does not reproduce is a flaky test:
   quarantine and file it per TEST-04, never retry until green. Set `pr.ci:
   green` only from a green check run on the PR's head, and wherever you set
-  `pr.ci`, set `pr.head` to the commit the result is for (FLOW-08). On any later push
+  `pr.ci`, set `pr.head` to the commit the result is for (FLOW-08).
+  **Until `loop-parallel`'s `x4-state` is done** (F9; remove this at `x4-state`): write no `pr.head`. Without it Publish's gate and a refresh
+  of an item with a PR recorded do not pass "PR open with CI green"; return
+  the step released and say it waits for `x4-state`. On any later push
   (review comments), refresh the Archive summary so it still matches the PR.
 - `f6-refresh` and `x2-refresh` (any `-r<n>`): bring the branch up to date
   with `main` (FLOW-08, FLOW-10). Merge `origin/main` (a merge commit,
@@ -68,7 +71,8 @@ FLOW-08, FLOW-10, FLOW-11, FLOW-12, FLOW-15, FLOW-16, FLOW-17, FLOW-18.
   `origin/<branch>` is still the commit you merged onto. If it merged or
   the branch is gone, discard the local merge, push nothing, and return
   `merged meanwhile`. Otherwise push, and with a PR recorded wait for CI on
-  the new head and set `pr.ci` and `pr.head`. A feature in Publish whose PR
+  the new head and set `pr.ci` and `pr.head` (`pr.head`: not until
+  `x4-state`, above). A feature in Publish whose PR
   is not open yet only pushes: `f6-open-pr` follows.
 - `x2-implement` on a process item: after the implementation (by
   `wf-implement`), archive the design on the branch and open the PR as in

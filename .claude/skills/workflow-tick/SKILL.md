@@ -87,7 +87,7 @@ dist/wf main -state .dev/workflow -sha <sha> -ci green|red|pending \
 tools/tier1/area-edges.sh | dist/wf areas -state .dev/workflow -repo . -check -edges -
 ```
 
-Keep the lines `wf areas -check` prints for the digest. On a red `main`
+Keep the lines `wf areas -check` prints for the digest; `wf areas -list` and `wf areas -check` exit 1 while the queue state has no `areas.yaml`, which is expected until `loop-parallel`'s `x4-state` writes it: say so and go on. On a red `main`
 that `wf status` shows with no follow-up recorded, file the fix by the
 `workflow-intake` skill's follow-up path (FLOW-09), as the follow-up of the
 item whose PR that merge was, and record it with
