@@ -2,6 +2,7 @@ package vz
 
 import (
 	"errors"
+	"fmt"
 	"runtime"
 	"runtime/debug"
 	"testing"
@@ -29,7 +30,7 @@ func TestPlatformError(t *testing.T) {
 		{"darwin", "arm64", false, noCgo, noCgoFix},
 		{"darwin", "arm64", true, "", ""},
 	} {
-		t.Run(tc.goos+"/"+tc.goarch, func(t *testing.T) {
+		t.Run(fmt.Sprintf("%s/%s bindings=%v", tc.goos, tc.goarch, tc.bindings), func(t *testing.T) {
 			err := platformError(tc.goos, tc.goarch, tc.bindings)
 			if tc.wantMsg == "" {
 				if err != nil {
