@@ -48,6 +48,7 @@ and the process for designing, reviewing and merging a feature is
 ```sh
 make build               # Compile all binaries to dist/
 make test                # Unit tests: run on every platform, no external dependencies
+make release-build       # Compile what a release compiles: each target, without cgo
 make lint                # golangci-lint, then the tier-1 checks on your diff
 make fmt                 # gofmt -s -w
 make tidy                # go mod tidy
@@ -153,7 +154,10 @@ changing the relay or orchestrator, a quick end-to-end check is:
    The full release gate (tier-1 checks, the test matrix, the security suite
    and the behavioral report) is described in
    [`behavioral-linter.md`](https://github.com/buildwarden/buildwarden/blob/main/docs/development/behavioral-linter.md)
-   and is being built out.
+   and is being built out. Run `make release-build` too: it compiles each
+   program a release builds, for each release target, without cgo, as
+   GoReleaser does (CI's `build` job runs it on every PR that changes code).
+   A released macOS arm64 `warden` therefore has no vz driver, and says so.
 2. Tag the commit and push the tag: `git tag v0.x.y && git push origin v0.x.y`.
 3. GoReleaser, run by GitHub Actions, builds and publishes the binaries.
 

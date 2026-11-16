@@ -63,7 +63,7 @@ Requires macOS on Apple Silicon. No extra installation is needed — Virtualizat
 curl -sSfL https://raw.githubusercontent.com/buildwarden/buildwarden/main/install.sh | sh
 ```
 
-This detects your OS and architecture, downloads the latest release, and installs to `/usr/local/bin/`. The released binary is ready for the container driver out of the box.
+This detects your OS and architecture, downloads the latest release, and installs to `/usr/local/bin/`. The released binary is ready for the container driver out of the box. It is built without cgo, so it has no vz driver: for vz, build `warden` from source on the Mac and follow the [first-time VZ setup](#first-time-vz-setup).
 
 ## From Releases
 
