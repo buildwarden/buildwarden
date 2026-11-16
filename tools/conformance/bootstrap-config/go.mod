@@ -6,7 +6,7 @@ tool github.com/buildwarden/buildwarden-specs/bootstrap-config/cmd/bw-conformanc
 
 require (
 	github.com/BurntSushi/toml v1.6.0 // indirect
-	github.com/buildwarden/buildwarden-specs/bootstrap-config v0.0.0-20261116093303-f3506b32c17b // indirect
+	github.com/buildwarden/buildwarden-specs/bootstrap-config v0.0.0-20261116100509-f3087fc53892 // indirect
 	github.com/buildwarden/buildwarden-specs/conformance v0.1.0 // indirect
 	github.com/google/btree v1.1.2 // indirect
 	github.com/miekg/dns v1.1.73 // indirect
@@ -20,4 +20,4 @@ require (
 	gvisor.dev/gvisor v0.0.0-20260907062237-d1e35511e5a4 // indirect
 )
 
-replace github.com/buildwarden/buildwarden-specs/conformance v0.1.0 => github.com/buildwarden/buildwarden-specs/conformance v0.0.0-20261116093303-f3506b32c17b
+replace github.com/buildwarden/buildwarden-specs/conformance v0.1.0 => github.com/buildwarden/buildwarden-specs/conformance v0.0.0-20261116100509-f3087fc53892
