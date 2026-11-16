@@ -25,6 +25,10 @@ declared: 9be9c8c
 alters_relationships: true
 design_review: required
 source: 'componentization (docs/design/componentization.md, merged as b903f65, PR #117): phase S1, wave 1. Done when the suites pass against the Go relay and the disk collector. The repository buildwarden/buildwarden-specs (a10) is confirmed with Jeff right before it is created (a11). Jeff, attended session 2026-11-12: go ahead.'
+pr:
+  number: 125
+  ci: pending
+  head: 244199b864e15305d73fff3a3508d4c8e757af11
 steps:
   - id: f0-branch-setup
     phase: 0

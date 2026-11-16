@@ -35,7 +35,7 @@ None.
 
 | Pri | Item | Kind | Repositories | Areas | Phase | Next steps | Waits for | PR | Steps |
 |---|---|---|---|---|---|---|---|---|---|
-| 71 | seam-specs | feature | buildwarden/buildwarden, buildwarden/buildwarden-specs | undeclared | 6 publish | f6-open-pr (cloud, leased to cloud/20261112T230554Z) | - | - | 16 / 30 |
+| 71 | seam-specs | feature | buildwarden/buildwarden, buildwarden/buildwarden-specs | undeclared | 6 publish | f6-open-pr (cloud, leased to cloud/20261112T230554Z) | - | [#125](https://github.com/buildwarden/buildwarden/pull/125) | 16 / 30 |
 | 69 | prebuilt-artifacts | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-answer-q1 (human) | - | - | 3 / 25 |
 | 72 | driver-contract | feature | buildwarden/buildwarden | undeclared | 2 plan | f2-plan (cloud) | - | - | 5 / 30 |
 
