@@ -57,7 +57,14 @@ Where each tier runs today:
   the `driver/` root, a shared package (`relay/`, `ledger/`, `collector/`),
   `cmd/`, `test-integration.sh`, a `Dockerfile` or `go.mod`; weekly on
   `main`; and on demand for a branch that has the workflow
-  (`gh workflow run integration.yml --ref <branch>`).
+  (`gh workflow run integration.yml --ref <branch>`). The `conformance`
+  workflow (TEST-05) is tier 1 too: it runs the seams' suites on hosted
+  runners, on PRs and on pushes to a branch other than `main` that change
+  a package the relay or the disk collector is built from, a file their
+  builds read, the pins of the specification releases and the target
+  files (`tools/conformance/`) or the workflow itself; weekly on `main`;
+  and on demand.
+  `conformance.yml`'s `paths` list is that set's implementation.
 - Tier 2: native sessions (FLOW-09) on the machines in the `workflow`
   branch's `hosts.yaml`.
 
