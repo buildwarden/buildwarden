@@ -1,6 +1,6 @@
 feature: loop-native-lead
 title: 'A native machine may lead an item from its first step: the lead, general host names, any-capability work under a refreshable 20-hour lease, the wrapper and the push script (componentization P1, fourth item)'
-priority: 62
+priority: 63
 kind: process
 status: queued
 round: process
@@ -29,3 +29,6 @@ history:
   - at: 2026-11-14T20:57:45Z
     by: human/jeff
     event: queued at priority 62 (intake)
+  - at: 2026-11-16T01:16:03Z
+    by: cloud/20261112T230554Z
+    event: 'priority 62 -> 63 (renumbered by wf new: loop-parallel-rule-wording queued at 62)'

@@ -1,6 +1,6 @@
 feature: runtime-cli-project-path
 title: 'A project''s warden.toml may name the container runtime, not a path to run: [runtime] cli from a build context no longer executes a file the repository ships (security fix)'
-priority: 65
+priority: 66
 status: done
 round: feature
 phase: 8
@@ -302,3 +302,6 @@ history:
   - at: 2026-11-15T23:22:53Z
     by: human/jeff
     event: 'priority 64 -> 65 (renumbered by wf new: vz-nocgo-build queued at 64)'
+  - at: 2026-11-16T01:16:03Z
+    by: cloud/20261112T230554Z
+    event: 'priority 65 -> 66 (renumbered by wf new: loop-parallel-rule-wording queued at 62)'

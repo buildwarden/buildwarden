@@ -1,6 +1,6 @@
 feature: project-config-trust
 title: 'One warden.toml in the control of whoever runs the build: found by --config, WARDEN_CONFIG or the working directory; the user-level file removed; and warden''s source tree found from its executable only (security fix)'
-priority: 66
+priority: 67
 status: in_progress
 round: feature
 phase: 1
@@ -374,3 +374,6 @@ history:
   - at: 2026-11-16T01:05:24Z
     by: cloud/20261112T230554Z
     event: 'back to design: Decision 14 / a14 (b) is not buildable as written: /proc/self/pagemap, the design''s named case, refuses (EINVAL) any read whose count is not a multiple of 8, so a read that stops at exactly 1048577 bytes cannot reach ''larger than 1 MiB'' on it. Its final 1-byte read gives ''invalid argument'', which comes out as unreadableConfig''s error and fix. Memory stays bounded, but the error text and the Validation plan''s expectation do not match. Design must choose, for example (a) reading in aligned blocks, at most 1 MiB plus one block, with ''more than 1 MiB read'' as the error, and changing ''at most 1048577'' and task 27''s endless-reader bound; or (b) keeping 1048577 and accepting the OS''s error for files like pagemap. Treating a read error at the cap as ''larger'' would be an unnamed fallback (GLOBAL-10). Evidence: feat/project-config-trust local b21763e (unpushed), test TestWorkingDirectoryConfigIsCapped/a_link_to_/proc/self/pagemap; a probe shows reads of 1, 7 and 9 bytes give EINVAL, and reads of 8 and 512 succeed.'
+  - at: 2026-11-16T01:16:03Z
+    by: cloud/20261112T230554Z
+    event: 'priority 66 -> 67 (renumbered by wf new: loop-parallel-rule-wording queued at 62)'

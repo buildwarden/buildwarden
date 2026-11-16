@@ -1,6 +1,6 @@
 feature: seam-specs
 title: 'Specs repository and conformance suites: write seams 1, 2, 3, 5 and 6, build the harness against any relay and any collector, link the book and the specs, fill tier 1''s seams list (componentization S1)'
-priority: 69
+priority: 70
 status: in_progress
 round: feature
 phase: 3
@@ -410,3 +410,6 @@ history:
   - at: 2026-11-15T23:49:43Z
     by: cloud/20261112T230554Z
     event: claimed f3-implement until 2026-11-16T01:49:43Z
+  - at: 2026-11-16T01:16:03Z
+    by: cloud/20261112T230554Z
+    event: 'priority 69 -> 70 (renumbered by wf new: loop-parallel-rule-wording queued at 62)'

@@ -1,0 +1,32 @@
+feature: loop-parallel-rule-wording
+title: 'Rule wording loop-parallel left: areas: [] is declared-empty, the PR slot paragraph, FLOW-03''s area check at phases 7-8 and before wf declare, and FLOW-16''s merge proof'
+priority: 62
+kind: process
+follows: loop-parallel
+status: queued
+round: process
+phase: 1
+design: docs/design/loop-parallel-rule-wording.md
+branch: feat/loop-parallel-rule-wording
+alters_relationships: null
+source: 'Jeff''s decisions of 2026-11-16 on the review of loop-parallel''s implementation: F4, F6 and F5''s wording for phases 7-8 go to one follow-up rule-change item, not changed on loop-parallel''s branch. A program item (FLOW-20): it amends rules loop-parallel changes; its design lists componentization.md in related. Scope: (F4) FLOW-02/FLOW-05''s approved wording reads as if areas: [] were undeclared, while wf treats it as declared-empty (relation.go''s ''declares no areas'' text and its tests move with it); (F6) process.md''s ''one feature at a time through the PR slot'' (line 27) predates the limits; (F5) FLOW-03 ''from Implement on'' overclaims for phases 7-8 and does not name the exemption before wf declare; (review F-P2 / design-code 2) FLOW-16 (process.md 648-656) still names the patch-id proof (''the equal tree or change''), while wf now proves a squash by merge-tree onto the squash''s parent (loop-parallel a14 (d), Decision 23). Holds no worker: rule text only.'
+steps:
+  - id: x1-design
+    phase: 1
+    affinity: human
+    status: pending
+    lease:
+      claimed_by: ""
+      expires: null
+budget:
+  estimate:
+    runs: 1
+    steps: 9
+  spent:
+    runs: 0
+    steps: 0
+questions: []
+history:
+  - at: 2026-11-16T01:16:03Z
+    by: cloud/20261112T230554Z
+    event: queued at priority 62 (intake)
