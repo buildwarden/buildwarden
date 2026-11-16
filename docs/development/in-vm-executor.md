@@ -61,13 +61,18 @@ The automated part checks `platform_*.go` coverage for the trust path.
 The executor exposes a versioned public interface under GLOBAL-08:
 
 - the `initialize` invocation contract: how an orchestrator launches it, its env,
-  args, and exit reporting; and
+  args, and exit reporting;
+- the bootstrap config it reads (`bootstrap/`); and
 - its side of the relay protocol: CA install, artifact `POST`, heartbeat, and exit
   report.
 
-Changes follow the pre/post-1.0 seam posture and update the contract document. The
-automated part requires a change to the contract surface to also change its contract
-doc.
+Changes follow the pre/post-1.0 seam posture and change the specification
+first (GLOBAL-08): `executor-initialize`, `bootstrap-config` and
+`relay-guest-api` in the specs repository, each released under its own
+version. The automated part requires a change to the contract surface,
+as `tools/tier1/rules.yaml` lists it, to also change the pin of the
+specification it is listed under
+(`tools/conformance/<specification>/go.mod`).
 
 ---
 
