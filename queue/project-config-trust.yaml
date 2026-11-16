@@ -220,13 +220,14 @@ questions:
     answer: (a) Skipped, with its line on every run; the directory is an error only when it gives no certificate at all. As recommended. Answered 2026-11-15.
   - id: a14
     kind: assumed
-    status: open
+    status: confirmed
     question: 'A size cap on the working directory''s warden.toml, asked again. New 2026-11-16 in r2, raised by the independent review of the r2 delta. Jeff kept the regular-file check (Decision 14) and did not take a size cap on every config file. Not in front of him then: a ./warden.toml that is a link to a Linux procfs file such as /proc/self/pagemap passes the check (stat reports a regular, empty file) and reading it still exhausts warden''s memory (reproduced: fatal error: out of memory, no error before it); a very large regular file does the same. The outcome is a crash of warden on the host before anything is created; nothing is read into a build or sent. Naming the file closes it. The design proceeds with (a).'
     options:
       - (a) no cap, as built and as Jeff decided; the case is named in the Security note (What remains, 10), and the reference already tells someone building a repository they do not control to name the file; no change to code or reference
       - '(b) a cap on the working directory''s file only (read at most, say, 1 MiB and one byte; more is the error "cannot read config file <path> (found in the working directory): larger than 1 MiB"), a named file unbounded; closes the procfs link and the large file with a few lines and a test, and reopens Implement for them'
       - (c) a cap on every config file, the one Jeff did not take; it also bounds --config <(...) and a named device, which the executor chose
     recommended: (a) no cap, as built; it is Jeff's decision, and the case is a denial of service of warden itself that naming the file avoids
+    answer: (b) cap the working directory's file only, about 1 MiB; a named file unbounded (Jeff, 2026-11-16)
 history:
   - at: 2026-11-15T20:14:52Z
     by: human/jeff
@@ -345,3 +346,6 @@ history:
   - at: 2026-11-16T00:48:42Z
     by: cloud/20261112T230554Z
     event: entered phase 2 (plan)
+  - at: 2026-11-16T00:53:48Z
+    by: human/jeff
+    event: 'assumed question a14 confirmed: (b) cap the working directory''s file only, about 1 MiB; a named file unbounded (Jeff, 2026-11-16)'
