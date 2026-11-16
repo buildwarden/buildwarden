@@ -1,7 +1,7 @@
 feature: vz-nocgo-build
 title: 'The macOS arm64 release build of warden does not compile without cgo: driver/vz excludes both its cgo file and its stub (regression on main)'
 priority: 65
-status: in_progress
+status: done
 round: feature
 phase: 8
 design: docs/design/vz-nocgo-build.md
@@ -111,16 +111,17 @@ steps:
   - id: f8-escalate-branch
     phase: 8
     affinity: human
-    status: pending
+    status: done
     lease:
       claimed_by: ""
       expires: null
-    note: "a publish push after the merge re-created the remote branch (5eb9a32, unmerged comment revert and note); delete it with: git push origin --delete feat/vz-nocgo-build"
+    note: 'a publish push after the merge re-created the remote branch (5eb9a32, unmerged comment revert and note); delete it with: git push origin --delete feat/vz-nocgo-build'
   - id: f8-close
     phase: 8
     affinity: cloud
-    status: pending
-    needs: [f8-escalate-branch]
+    status: done
+    needs:
+      - f8-escalate-branch
     lease:
       claimed_by: ""
       expires: null
@@ -130,7 +131,7 @@ budget:
     steps: 8
   spent:
     runs: 1
-    steps: 11
+    steps: 13
 questions: []
 history:
   - at: 2026-11-15T23:22:53Z
@@ -223,6 +224,27 @@ history:
   - at: 2026-11-16T17:47:26Z
     by: cloud/20261116T174717Z
     event: claimed f6-open-pr until 2026-11-16T19:47:26Z
-  - {at: 2026-11-16T18:40:00Z, by: human/jeff, event: "f6-open-pr and f7-merge done by hand (Jeff): PR #123 green on d4cc55d and merged as c5ab2d5; a publish push after the merge re-created origin/feat/vz-nocgo-build at 5eb9a32, so the checks could not pass"}
-  - {at: 2026-11-16T18:40:01Z, by: human/jeff, event: "FLOW-14 acknowledged after the fact (Jeff): #123 carried a comment-only edit to tools/tier1/area-edges.sh (the stale darwin/amd64 cgo note) outside any approved rule change; main keeps it"}
-  - {at: 2026-11-16T18:40:02Z, by: human/jeff, event: entered phase 8 (close)}
+  - at: 2026-11-16T18:40:00Z
+    by: human/jeff
+    event: 'f6-open-pr and f7-merge done by hand (Jeff): PR #123 green on d4cc55d and merged as c5ab2d5; a publish push after the merge re-created origin/feat/vz-nocgo-build at 5eb9a32, so the checks could not pass'
+  - at: 2026-11-16T18:40:01Z
+    by: human/jeff
+    event: 'FLOW-14 acknowledged after the fact (Jeff): #123 carried a comment-only edit to tools/tier1/area-edges.sh (the stale darwin/amd64 cgo note) outside any approved rule change; main keeps it'
+  - at: 2026-11-16T18:40:02Z
+    by: human/jeff
+    event: entered phase 8 (close)
+  - at: 2026-11-16T19:11:10Z
+    by: human/jeff
+    event: claimed f8-escalate-branch until 2026-11-16T21:11:10Z
+  - at: 2026-11-16T19:11:10Z
+    by: human/jeff
+    event: done f8-escalate-branch
+  - at: 2026-11-16T19:11:11Z
+    by: cloud/20261116T174717Z
+    event: claimed f8-close until 2026-11-16T21:11:11Z
+  - at: 2026-11-16T19:11:11Z
+    by: cloud/20261116T174717Z
+    event: done f8-close
+  - at: 2026-11-16T19:11:11Z
+    by: cloud/20261116T174717Z
+    event: closed; feature done
