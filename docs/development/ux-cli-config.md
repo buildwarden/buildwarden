@@ -108,12 +108,17 @@ with a widely-expected meaning; when in doubt, long-form only.
 **Check:** automated + agent-judgment
 
 Configuration can be minimal: predictable defaults cover the common use-cases, and
-any of them is easy to override at three levels with clear precedence,
-invocation > project > user (`flag > warden.toml > ~/.config/warden`, the same order
-as ORCH-03). A first-time user should get a sensible run with little or no config.
-Driver and build knobs are flags and config keys, not ad-hoc environment variables,
-so they take part in that precedence and appear in the reference docs. A value set
-at any level replaces the default and the lower levels' value (GLOBAL-10).
+any of them is easy to override, at up to three levels with clear precedence,
+command line > environment > config file (`flag > environment variable >
+warden.toml`, the same order as ORCH-03). There is one config file for a run, in
+the control of whoever runs the build: `warden.toml` in the working directory by
+default, or the file `--config` or `WARDEN_CONFIG` names, which is then the only
+one read. No user-level or system-level file is read. A first-time user should get
+a sensible run with little or no config. Driver and build knobs are flags and
+config keys, with an environment variable where one is documented and never an
+ad-hoc one; a knob need not have every level, and each level it has takes part
+in that precedence and appears in the reference docs. A value set at any level
+replaces the default and the lower levels' value (GLOBAL-10).
 
 The automated part checks that defaults resolve with no config file present.
 
