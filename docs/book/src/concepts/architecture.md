@@ -107,24 +107,16 @@ the claim address they hand the session.
 
 ### Collector (`collector/` library, `cmd/collector/` binary)
 
+The protocol between the relay and the collector is specified in two
+documents, the outputs a collector stores and the inputs and signals it
+serves; the specifications are the contract, and the
+[seams page](./seams.md#the-seams) links them at the version this repository
+implements. This section explains it.
+
 The collector is the relay's single output path and the source of its build
 inputs, so the relay needs no shared filesystem. The relay authenticates every
-request with a bearer token. Endpoints:
-
-| Endpoint | Purpose |
-|----------|---------|
-| `PUT /v1/artifacts/<name>` | Store a build artifact |
-| `PUT /v1/captures/<name>` | Store a captured payload (hash in the `Warden-Hash` trailer) |
-| `PUT /v1/ledger` | Stream the ledger for the whole build |
-| `PUT /v1/environment` | The environment record's signed payload, landed as `environment.json` |
-| `POST /v1/output` | Append build console output |
-| `GET /v1/build-script` | The staged build script |
-| `GET /v1/bootstrap` | The bootstrap config (trust policy) |
-| `GET /v1/context/<path>` | A context file, or a directory listing |
-| `POST /v1/ready` | Relay is up |
-| `POST /v1/heartbeat` | Build guest is alive |
-| `POST /v1/complete` | Build finished (JSON exit code) |
-| `GET /v1/status` | Last completion, else running |
+request with a bearer token. Its endpoints, what each takes and what each
+answers, are listed in the two specifications.
 
 The ledger is streamed throughout the build, so even a relay that dies mid-build
 leaves a truncated-but-verifiable ledger. `cmd/collector` is the standalone host
@@ -132,6 +124,10 @@ side for third-party orchestrators: it claims an already-running relay, serves
 inputs, lands outputs, and exits with the build result.
 
 ### Claim protocol (`relaycfg/`)
+
+The claim is specified in its own document; the specification is the
+contract, and the [seams page](./seams.md#the-seams) links it at the version
+this repository implements. This section explains it.
 
 A relay boots unconfigured and listens for a single claim on port 8301. The
 orchestrator:
@@ -166,19 +162,10 @@ between the relay and the build environment:
                "guest":  "100.127.255.254"}
 ```
 
-It is optional on the wire and validated the same way for every mode: IPv4;
-`prefix` is its own network address with a length from 8 to 30; `relay` and
-`guest` are distinct hosts inside it, neither its network nor its broadcast
-address; and none is unspecified, loopback, link-local, multicast or class E.
-(warden itself is stricter: exactly `/30`, disjoint from its own ranges.) A
-claim that fails validation is refused with 400 and does not consume the
-relay. What each mode does with it:
-
-| Mode | With `build_link` | Without |
-|---|---|---|
-| vm | flushes the build interface's IPv4 addresses, adds `relay/len` (netlink), serves the guest's DHCP lease bound to that interface, sets its self address, and blocks upstream dials into `prefix` | keeps the address already on the build interface as self address and blocked prefix; refuses the claim if the interface has none ("build_link is required") |
-| host | builds the netstack, ARP, DHCP and listeners on `relay`/`guest`/`prefix`, and blocks upstream dials into `prefix` | falls back to `--subnet` |
-| container | refuses the claim (the runtime assigns the relay's address) | as before |
+How a relay validates `build_link`, and what each mode does with it or
+without it, are the claim specification's requirements, linked from the
+[seams page](./seams.md#the-seams). warden itself is stricter than a relay
+requires: it sends only a `/30` link, disjoint from its own ranges.
 
 A relay refuses a claim it cannot apply (a link another interface already
 uses, a field its mode does not take) with 400 and stays claimable: its start
@@ -394,18 +381,9 @@ warden build .
 
 ## Communication paths
 
-The build environment talks only to the relay (guest-facing API, unchanged):
-
-| Endpoint | Purpose |
-|----------|---------|
-| `http://<relay>:8300/health` | Relay readiness probe (control plane) |
-| `http://artifacts/ca.pem` | Ephemeral CA certificate |
-| `http://artifacts/bootstrap` | Bootstrap config (trust policy) |
-| `http://artifacts/build-script` | Build script |
-| `http://cwd/<path>` | Context files |
-| `http://artifacts/heartbeat` | Heartbeat |
-| `http://artifacts/exit?code=<n>` | Exit code report |
-| `http://artifacts/<name>` | Artifact upload |
+The build environment talks only to the relay. The endpoints it sees, the
+relay's guest API, are specified in their own document, linked from the
+[seams page](./seams.md#the-seams).
 
 The relay's control plane binds `:8300`; `artifacts` and `cwd` are reserved
 hostnames that resolve to the relay. The relay in turn serves build inputs

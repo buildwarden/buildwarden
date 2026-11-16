@@ -128,6 +128,37 @@ changing the relay or orchestrator, a quick end-to-end check is:
 ./warden clean                            # if a build crashed or was interrupted
 ```
 
+### Seam specifications and conformance
+
+The specifications of the component seams (the claim, the collector, the
+relay's guest API, the executor's `initialize` and the bootstrap config) live in
+[buildwarden/buildwarden-specs](https://github.com/buildwarden/buildwarden-specs).
+This repository pins one version of each in a Go module of its own,
+`tools/conformance/<directory>/go.mod`, which the root module does not require;
+[Component seams](docs/book/src/concepts/seams.md) shows each pin and links each
+specification at it.
+
+```sh
+make conformance                                   # Build each pinned suite's command from its own module
+make pin-specs SPECS="relay-claim@v0.2.0"          # Move named pins to those releases
+make pin-specs SPECS=latest                        # Move all six pins to their newest releases
+make pin-specs REF=<commit>                        # Pin all six at one commit, on a branch only
+```
+
+- **`make conformance`** builds each pinned specification's command,
+  `bw-conformance-<directory>`, with `go tool` in its own module and with
+  `GOWORK=off`, so each runs with the harness its own release names. In its
+  current form it prints each command's version and runs no suite yet. The
+  `conformance` workflow runs it on pull requests and on pushes to branches
+  other than `main` that change a path on its list, weekly and on demand.
+- **`make pin-specs`** is the only way a pin moves. It takes `SPECS` or `REF`,
+  never both and never neither. It writes each module it moves from nothing,
+  builds every command in a scratch directory first, and only then moves the
+  files into place and rewrites the refs on the seams page, so a failure changes
+  nothing. Never move a pin with `go get`: it keeps the old pin's harness
+  version. `main` pins releases only; the workflow's `pin` job fails a pull
+  request whose pins name a commit or carry a `replace` line.
+
 ## Pull requests
 
 1. Fork the repo and branch from `main`.
