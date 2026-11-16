@@ -85,13 +85,18 @@ or agent gate.`,
 			return driver.Fixable("", "--build-link requires a VM driver "+
 				"(--driver qemu, vz, hyperv or firecracker)")
 		}
+		blocked, err := doctorUpstreamCAs(out, cfg)
+		if err != nil {
+			return err
+		}
 		var link buildlink.Link
 		var vmDNS []netip.Addr
-		blocked := false
 		if isVMDriver(drv) {
-			if link, blocked, err = doctorBuildLink(out, cfg); err != nil {
+			var linkBlocked bool
+			if link, linkBlocked, err = doctorBuildLink(out, cfg); err != nil {
 				return err
 			}
+			blocked = blocked || linkBlocked
 			vmDNS = cfg.VM.DNSAddrs
 		}
 		switch drv {

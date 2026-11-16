@@ -333,6 +333,12 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 	if err != nil {
 		return nil, err
 	}
+	// Read here, before the output directory, the work directory or the
+	// relay exists; the claim sends what was read.
+	upstreamCAs, err := resolveUpstreamCAs(cfg, log.Info)
+	if err != nil {
+		return nil, err
+	}
 
 	return &driver.BuildRequest{
 		ImageRefreshAfter: refreshAfter,
@@ -355,7 +361,7 @@ func newRequest(cfg *Config, args []string) (*driver.BuildRequest, error) {
 		DNS:               dns,
 		TempDir:           tempDir,
 		RelayImage:        cfg.Runtime.RelayImage,
-		UpstreamCACerts:   cfg.Relay.UpstreamCACerts,
+		UpstreamCACerts:   upstreamCAs,
 		UpstreamSystemCA:  resolveSystemCA(cfg),
 		Stdin:             os.Stdin,
 		Stdout:            os.Stdout,

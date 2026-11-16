@@ -224,6 +224,8 @@ func configLine(cfg *Config) string {
 
 // LoadConfig reads the one config file (configFile) and applies the
 // environment variables over it. It reads no other file and merges none.
+// WARDEN_UPSTREAM_CA_CERTS is not applied here: it replaces [relay]
+// upstream_ca_certs, and resolveUpstreamCAs reads both.
 func LoadConfig() (*Config, error) {
 	cfg := &Config{
 		Output: OutputConfig{Color: "auto"},
@@ -260,10 +262,6 @@ func LoadConfig() (*Config, error) {
 	}
 	if img := os.Getenv("WARDEN_IMAGE"); img != "" {
 		cfg.Runtime.RelayImage = img
-	}
-	if caCerts := os.Getenv("WARDEN_UPSTREAM_CA_CERTS"); caCerts != "" {
-		paths := strings.Split(caCerts, ":")
-		cfg.Relay.UpstreamCACerts = append(cfg.Relay.UpstreamCACerts, paths...)
 	}
 	if os.Getenv("NO_COLOR") != "" {
 		cfg.Output.Color = "never"
