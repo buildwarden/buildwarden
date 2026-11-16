@@ -1491,6 +1491,73 @@ release; its recommended answer is still A.
   name (**Rule changes**). The proposed TEST-02 sentence names the
   directory `tools/conformance/` and not a file, and is unchanged.
 
+**Raised in r2, 2026-11-16, open.** a21 to a25 come from the rows
+Implement found (**Divergences found**, N1 to N33) and are put to Jeff in
+r2's sitting (**What Jeff decides in r2**). Each proceeds on its
+recommended answer until he confirms it. With the recommended answers no
+requirement of the six documents changes; an answer that departs changes
+the requirement it names, in S, in task 37.
+
+- **a21. Strict or lenient reading where the documents allow lenient**
+  (N1, N7, N8, N16). BOOTCFG-14, CLAIM-18's MAY paragraph and CLAIM-28's
+  let a reader accept bodies a strict reader refuses (names folded in
+  case, duplicates, trailing data, `null` as absent, a `null` or tagged
+  CBOR map), and COLLIN-23 leaves such completions unspecified, so the
+  executor, the Go relay and the disk collector conform. Options: (A)
+  keep the MAY paragraphs in v0.1 as written; the Rust relay reads
+  strictly from the start, S2's item makes `bootstrap.Parse` strict as
+  its comment says, and a later minor version of each document narrows
+  the MAY to a MUST refuse once no reference relies on it; (B) narrow
+  now: the documents require a strict reading, the three are recorded as
+  breaking it, class (b), and the cases for it wait for their fixes; (C)
+  make the lenient reading the contract, required of every reader.
+  **Proceeding with (A); confirm.** A keeps the done-when (the suites
+  pass on the Go relay and the disk collector) without making
+  `encoding/json`'s habits a contract; B reopens three documents and
+  leaves cases out; C writes the opposite of GLOBAL-10 into the contract.
+- **a22. The tunnel is never released** (N6). CLAIM-15 makes one tunnel
+  for a relay's life the contract, and CLAIM-22 lets a claim that selects
+  a closed tunnel spend the relay. Options: (A) as written: a relay
+  serves one build, and a claimant that lost its tunnel before its claim
+  discards the relay; (B) a relay MUST notice a closed tunnel: a new
+  tunnel is accepted before a claim, and a claim that selects a closed
+  one is a `400` that leaves the relay claimable; the Go relay is then
+  class (b); (C) A in v0.1, and B as a SHOULD in a later version, for the
+  Rust relay. **Proceeding with (A); confirm.** A relay is cheap to start
+  again; B adds state to every relay for a case no driver has met, and C
+  leaves a choice open in the contract.
+- **a23. `exclusive` replaced by `append` on macOS and Windows** (N28).
+  Options: (A) S2's item makes the executor refuse `exclusive` there,
+  with an error that names it (GLOBAL-10), and INIT-23 and BOOTCFG-8 say
+  so in their next version; (B) keep the replacement and name it as a
+  fallback, in the reference docs and in the **Defaults and overrides**
+  of the item that next changes the executor; (C) implement exclusive
+  trust on macOS and Windows (EXEC-03) in a later item, keeping the
+  replacement until then. **Proceeding with (A); confirm.** The kit's
+  producer sends `append` to those guests, so only another producer
+  meets the case; an error is what GLOBAL-10 asks of a value that cannot
+  be used, and C remains open as an item of its own.
+- **a24. `--ip` accepted and ignored on Linux and macOS** (N29). Options:
+  (A) S2's item makes the executor refuse `--ip` and `WARDEN_IP` where it
+  does not use them, INIT-15 says they are Windows-only, and vz stops
+  passing `--ip` in that item or in K1; (B) INIT-15 states them as
+  accepted and ignored there, named as such; (C) use them on Linux and
+  macOS too, as a static address in place of DHCP. **Proceeding with
+  (A); confirm.** B names an ignored value as a feature, and C adds a
+  behaviour no driver needs.
+- **a25. The proxy environment** (N2, N31). `warden-io` and the reference
+  claimant use Go's default transport, which honours `HTTP_PROXY` and
+  `NO_PROXY`. Options: (A) neither honours a proxy variable: INIT-1 and
+  CLAIM-1 stand as written, and the fixes are S2's item (the executor's
+  transport with no proxy) and K1 (the claimant, with the claim
+  connection it takes over from S4); (B) as A, but now, as a security
+  fix the freeze exempts; (C) honour them, and INIT-1 and CLAIM-1 allow
+  a proxy, so the relay is no longer the build's one network path.
+  **Proceeding with (A); confirm.** The variables come from the build's
+  own image or script, or from the host's operator, so neither is a hole
+  that another party opens, and the items that change each side are
+  near; C gives up the property the relay exists for.
+
 ## Design
 
 This item works in one repository other than this one:
@@ -2078,7 +2145,7 @@ and lists the point under "Known divergences"; none is changed here (a12).
 | D3 | 2 | `POST` is accepted where the protocol says `PUT` (artifacts, captures, ledger), and `PUT` where it says `POST` (`/v1/output`); `/v1/environment` alone is strict | The handlers' own "PUT only" and "POST only" replies |
 | D4 | 2 | The collector does not check a capture's body against its trailer hash | Nothing written; the specification states that the hash is the relay's claim |
 | D5 | 1 | An unknown `capture_mode` is accepted and means no capture. An `upstream_ca_certs` entry with no PEM certificate in it is ignored, which with `upstream_system_ca` false leaves the relay trusting no upstream | GLOBAL-10: a provided value that cannot be used is an error |
-| D6 | 1 | An unusable `environment` (empty, over 1 MiB, a `type` that differs from the payload's, metadata that is not a CBOR map) or `collector_url` (not a URL the relay can request, or a collector that cannot be reached or refuses the ledger stream) fails the relay's start: 500, and the relay is spent | Every other invalid field: 400, and the relay stays claimable |
+| D6 | 1 | An unusable `environment` (empty, over 1 MiB, a payload that names no type, a `type` that differs from the payload's, metadata that is not a CBOR map) or `collector_url` (not a URL the relay can request, a collector that cannot be reached, or a tunnel that has closed, N6) fails the relay's start: 500, and the relay is spent. A collector that refuses the ledger stream does not fail it: the claim is answered 200 and `ready` is sent (N5). *Corrected in r2:* the row named a collector that "refuses the ledger stream" among the failures, which the code does not bear out; `null`, `undefined` and a tagged map count as maps (N8) | Every other invalid field: 400, and the relay stays claimable |
 | D7 | 1 | The relay upgrades any authorized `POST /v1/tunnel`, whether or not it asks for `warden-tunnel` | The claimant always sends the upgrade headers |
 | D8 | 1, 2 | Both sides accept the token with no `Bearer` scheme. The relay strips `Bearer` and any spacing after it; the collector strips exactly `Bearer ` | The header every client sends, `Authorization: Bearer <token>`; and each other |
 | D9 | 3 | The fixed `artifacts` paths ignore the method: `GET /exit?code=3` ends the build | The executor uses `POST` for `/exit` |
@@ -2089,7 +2156,7 @@ and lists the point under "Known divergences"; none is changed here (a12).
 | D14 | 5 | `initialize` ignores a flag it does not know | GLOBAL-10 |
 | D15 | 3 | DNS over TCP is served in vm and container mode and not in host mode, where a TCP connection to port 53 reaches the HTTP proxy | The other two modes |
 | D16 | 2 | The collector records the completion before it replies, and `cmd/collector` closes the tunnel as soon as it has it. The relay can see a failed `POST /v1/complete` for a build that completed; it logs it | `collector-inputs`' 200 reply |
-| D17 | 1 | In host mode, the refusal for an absent `upstream_dns` with no usable nameserver in the relay's `/etc/resolv.conf` is a 400 that closes the relay's frame socket. The claim is released, but a second claim builds its netstack on a closed descriptor | "A refused claim leaves the relay claimable" (`build-link-subnet`); vm and container mode keep to it |
+| D17 | 1 | In host mode, the refusal for an absent `upstream_dns` with no usable nameserver in the relay's `/etc/resolv.conf` is a 400 that closes the relay's frame socket. The claim is released, but a later claim builds its link on the closed descriptor's number, which the next claimant's own connection may then hold: in stage 3a's run the relay wrote a gratuitous ARP frame to that claimant, failed its start, closed the connection with no reply and exited. *Corrected in r2:* the row said only that a second claim "builds its netstack on a closed descriptor" | "A refused claim leaves the relay claimable" (`build-link-subnet`); vm and container mode keep to it |
 | D18 | 3 | After completion, a request the relay would record sends on the ledger's closed channel in a connection goroutine that has no recover, which ends the relay process | Nothing written: completion had no stated after-state |
 | D19 | 1, 3 | In vm and container mode the claim's 200 and `ready` are sent once the listeners' goroutines are started, not once the ports are bound. A port that fails to bind ends the relay after the 200, and a failed bind of UDP port 53 is not reported at all | "The relay is up" (`POST /v1/ready`); host mode has its listeners first |
 
@@ -2105,7 +2172,9 @@ the task that writes its specification: D17 before `relay-claim/v1.md`
 the harness. If one does not reproduce, the specification states what the
 relay was seen to do (Decision 1), and the row here is corrected at
 Consolidation; what was seen is a finding for Design (FLOW-06) only if it
-is a divergence this table does not record.
+is a divergence this table does not record. Both were reproduced in
+stage 3, D17 by 3a and D18 by 3c: D18 as its row says, D17 otherwise,
+and its row is corrected in r2.
 
 The suites do not assert the header's scheme (D8), send nothing recorded
 after a completion (D16, D18), give the D17 case its own relay, and wait
@@ -2120,6 +2189,79 @@ measurement angle (**Security note**). None takes away something `main`
 once did: each dates from the change that added the code (D17 from #115's
 `upstream_dns` default).
 
+#### Found during Implement: N1 to N33 (r2)
+
+Implement found 33 behaviours of the code that the table above lacks,
+and recorded each as found (Jeff, 2026-11-16, **Design review**). They
+keep the numbers the six documents gave them, shared by the documents,
+so that every reference in them stays valid: this table's numbers carry
+no order, so its convention does not ask for D20 onwards. The text of
+each is in its document's "Known divergences". K's lines are those of
+`origin/main` at `8c41eaa`, where `relay/`, `relaycfg/`, `collector/`,
+`cmd/` and `bootstrap/` are as at `623131a` and the files cited as at
+`3cb0b2b`, the commit the stage-3 probes ran against. "Read only" marks
+an entry confirmed from the code and not run; every other one was run.
+
+Each row has a class, which says what the review has to decide for it:
+
+- **(a) specified as is.** The document's requirement, a MAY or a MUST as
+  written, states what the code does as the contract. What the code
+  differs from is this design's text, the rest of the protocol or an RFC,
+  not a rule of this project or the code's own comment.
+- **(b) divergence kept.** The document states the intended contract and
+  names the reference implementation as breaking a MUST of it.
+- **(c) looks like a bug.** The document allows the behaviour, or leaves
+  it unspecified, but it is against a rule of this project or the code's
+  own comment, named in the row. The row names the later item that
+  should fix it; nothing is fixed here (a12).
+
+The class is the one each document's entry implies by what it says the
+behaviour differs from. Where this design reads it otherwise, the last
+column says so. Count: (a) 13, (b) 6, (c) 14.
+
+| # | Specification: requirements | What the code does | K | Class | Later item; where the readings differ |
+|---|---|---|---|---|---|
+| N1 | `bootstrap-config`: BOOTCFG-14 (MAY), BOOTCFG-10, BOOTCFG-12 | `bootstrap.Parse` matches member names under Unicode case folding, merges a duplicate into the first, ignores what follows a `}` or `]`, and reads a body of only Unicode white space (`\f`, U+00A0, U+2028) as the empty config | `bootstrap/bootstrap.go:67`, `:72`, `:75-77`, `:80` | (c): Parse's own comment ("strictly") and seam 6's "Reading is strict"; GLOBAL-10 | S2's item; a21. The document allows it by BOOTCFG-14 |
+| N2 | `executor-initialize`: INIT-1 | Go's default transport: with `HTTP_PROXY` or `NO_PROXY` in its environment, `initialize`, `fetch` and `post` send every request, the gateway's included, to that proxy and not to the relay | `cmd/warden-io/main.go:132`, `:163`, `:211`; `initialize.go:153`, `:180`, `:245`, `:351`, `:371`, `:424` | (b): INIT-1 states the contract and that the reference meets it only with no proxy variable | S2's item; a25. Security angle: the relay is no longer the build's one path |
+| N3 | `executor-initialize`: INIT-19 | The exclusive-trust hook `99warden` rebuilds `/etc/ssl/certs` only, not the three other bundles `initialize` replaced, and runs from `update-ca-certificates` only, not from `update-ca-trust` | `cmd/warden-io/trust_linux.go:30-40`, `:65-72` | (c): the hook's comment, "gets exclusive trust back"; EXEC-03 | S2's item |
+| N4 | `executor-initialize`: INIT-14 | Each rewrite of the Windows hosts file adds an empty line when the file ends with `\n` | `cmd/warden-io/platform_windows.go:113-116`, `:117-138` | (c): the function's comment, "idempotent ... preserves all other content"; minor | S2's item. Read only |
+| N5 | `relay-claim`: CLAIM-23, CLAIM-44, CLAIM-50 | A collector that refuses `PUT /v1/ledger` does not fail the start: the header is written into the streaming body before the reply arrives, the claim is answered 200 and `ready` is sent. The correction of D6 | `relay/relay.go:211-220`; `relay/collector_client.go:154` | (a): CLAIM-23 and CLAIM-50 allow it | None. Implement's list read it as bug-like (GLOBAL-11: the start goes on past a refusal it has not seen); a very fast refusal may still fail the start |
+| N6 | `relay-claim`: CLAIM-15 (MUST), CLAIM-22 (MAY), CLAIM-50 | The first tunnel is kept for the relay's life: a second is 409 whether or not the first is open, and a claim that selects a closed tunnel is accepted and fails the start (500, the relay spent) | `relaycfg/relaycfg.go:238-251` (set at `:249`) | (a): CLAIM-15 makes one tunnel for a relay's life the contract | a22. Run with a stand-in transport; a real closed HTTP/2 tunnel not tried |
+| N7 | `relay-claim`: CLAIM-17, CLAIM-18 (its MAY paragraph) | The claim's body is decoded leniently: `null` as absent, names without regard to case, the last of duplicates, what follows the object ignored, line breaks inside base64 | `relaycfg/relaycfg.go:268-270` | (c): GLOBAL-10, as the D5 row reads it | The Rust relay reads strictly (M2); the Go relay is left as it is; a21 |
+| N8 | `relay-claim`: CLAIM-28 (its MAY paragraph) | The environment's CBOR metadata: `null` and `undefined` as an empty map, a tag on the map accepted, the last of repeated keys kept | `relay/relay.go:476-478` | (a): the document names only D6's text | a21. This design reads it as N7, (c) under GLOBAL-10 |
+| N9 | `relay-claim`: CLAIM-46, Limits | No time limit on a claim's body, and the relay is marked claimed before it reads it: a stalled body holds every other claim and tunnel at 409 until its connection closes | `relaycfg/relaycfg.go:263-268`, `:353` | (a): CLAIM-46 counts the body's reading as processing | None for the Go relay; another relay may bound it. This design reads it as a denial of service, open only to a holder of the claim token (`authorized` runs first) |
+| N10 | `relay-claim`: CLAIM-30, CLAIM-32 | The `/etc/resolv.conf` default keeps IPv6 nameservers, 127.0.0.53 and 127.0.0.11, which `upstream_dns` refuses in a claim | `relay/relay.go:407-428` | (a): CLAIM-32 states the default, and the function's comment keeps 127.0.0.11 on purpose | None. Read only |
+| N11 | `relay-claim`: CLAIM-38 and the paragraph after it, CLAIM-48 | vm mode: a claim with `build_link` puts its address on the build interface before the resolver check; a refusal there leaves it, and a later claim with no `build_link` adopts it | `cmd/relay/vmlink.go:60-66`, `:77-89`; `cmd/relay/main.go:104-130` | (a): CLAIM-48 allows it; like D17 it differs from `build-link-subnet`'s "a refused claim leaves the relay claimable" | With D17: not fixed in the Go relay. Read only |
+| N12 | `collector-inputs`: COLLIN-12 (the relay's half), COLLIN-29 | `http://cwd//` is forwarded as `GET /v1/context//`; the disk collector answers 307 to `/v1/context/`, which the relay follows (N13) and serves the root's listing | `relay/relay.go:744-751`; `relay/collector_client.go:265-271` | (b): COLLIN-12 forbids it, and the document names it | The Rust relay's M-items, or after the freeze |
+| N13 | `collector-inputs`: COLLIN-28; `collector-outputs`: COLLOUT-25 | The collector client has no redirect policy: up to ten redirects are followed on inputs, signals and outputs, the token kept on the same host, 301 to 303 turned into `GET` | `relay/collector_client.go:42`, `:59`, `:212`, `:235` | (b): both MUSTs broken, named in both documents | The Rust relay's M-items, or after the freeze; Jeff may class it as a security fix. This design adds RELAY-07 (the collector is the only output path) |
+| N14 | `collector-inputs`: COLLIN-28 | An input over 2 GiB is cut at 2 GiB by `io.LimitReader` with no error, and served and recorded as the collector's 200 | `relay/collector_client.go:228`; `relay/relay.go:161` | (b): COLLIN-28 broken, named | As N12. Read only |
+| N15 | `collector-outputs`: COLLOUT-16 | A capture's name is built from an unbounded `Host`; over 255 bytes the collector answers 400 and the capture is lost with one log line, or the tunnel ends (N32) | `relay/relay.go:903-914`; `relay/capture.go:86-92`; `collector/paths.go:66-67` | (c): RELAY-07, every output streamed to the collector | The Rust relay bounds the name (M2). The document states the relay's role and not the rule's number. Read only |
+| N16 | `collector-inputs`: COLLIN-23 (cases it leaves unspecified) | The disk collector reads the completion leniently: a `null` body, missing or `null` members (0 or empty), trailing data, case-folded and duplicate names, 4294967296 accepted; a missing `exit_code` is success | `collector/signals.go:43-51` | (c): GLOBAL-10, as the D5 row reads it | After the freeze or with the first alternative collector, as D1 to D4; a21 |
+| N17 | `relay-guest-api`: GUEST-46, GUEST-47 | The proxy keeps an HTTP/1.1 connection open after a response framed by its close (its own 502 with no length; an upstream's `Connection: close` or length-less response), so a client that reads to the close hangs | `relay/proxy.go:283-354`, `:362-372`, `:381-393` | (a): the document names RFC 9112, no rule of this project | The Rust relay's M-items. This design reads it as a defect |
+| N18 | `relay-guest-api`: GUEST-7 | gVisor on a frame link answers ICMP echo at the relay's address, and ICMP port unreachable for unserved UDP at any address, with the datagram's destination as source | `cmd/relay/ingress_fd.go:93-98` | (a): GUEST-7 allows it; it differs from a relay that answers only for what it states | The Rust relay's frame path (M3) |
+| N19 | `relay-guest-api`: GUEST-42, GUEST-48 | The authority and each leaf are valid for 24 hours, and leaves are cached for the relay's life, never renewed: a build over 24 hours is presented an expired chain | `relay/relay.go:338`; `relay/proxy.go:234-277` (`:246`) | (a): nothing states a limit on a build's length | The Rust relay's M-items, or a stated limit on a build's length |
+| N20 | `relay-guest-api`: GUEST-44, GUEST-49 | A response's header fields are recorded before `Connection: close` is added, in canonical case and Go's order; for its own 502 the record has `Content-Length: 0` and no `Connection`, the reply no length and `Connection: close` | `relay/relay.go:589-610` | (c): RELAY-02, the record is what was sent | An observation for the Rust relay (M2); RELAY-02 is restated at M6 |
+| N21 | `relay-guest-api`: GUEST-22; GUEST-54 (D13) | `code` is read with `Sscanf("%d")` and its error ignored: an unreadable or out-of-range value is 0, success; `7x` is 7, `+5` is 5 | `relay/relay.go:505-508`; `relay/controlplane.go:56-60` | (c): GLOBAL-10; a failure recorded as success | A new item |
+| N22 | `relay-guest-api`: GUEST-47 | HTTP/1.0 keep-alive only when `Connection` is exactly `keep-alive` | `relay/proxy.go:391` | (a): RFC 9110 only; minor | The Rust relay's M-items |
+| N23 | `relay-guest-api`: GUEST-18 (other spellings undefined) | `artifacts` and `cwd` are matched exactly in DNS and in `Host`: `ARTIFACTS` and `artifacts.` are proxied upstream (502), and the query is forwarded upstream | `relay/dns.go:59-62`; `relay/relay.go:527-535` | (a): GUEST-18 leaves it undefined; RFC 4343 and RFC 9110 only | The Rust relay's M-items. This design notes that the request leaks upstream, recorded as any upstream request |
+| N24 | `relay-guest-api`: the paragraph after GUEST-26, GUEST-25, GUEST-34; `bootstrap-config`: BOOTCFG-3, BOOTCFG-10 | Any collector failure on `build-script`, `bootstrap` and `cwd` is served as 404, and the executor reads a bootstrap 404 as the empty config, `append`: a failing collector turns a producer's `exclusive` into `append` | `relay/relay.go:719-738` (comment `:728-731`), `:751-752` | (c): GLOBAL-10, the default tried when the provided value fails, and the comment "A collector without one gives 404"; it fails open | A new item, as a security fix the freeze exempts. Run in stage 8e against `relay-host`, `relay-vm` and `relay-container` (a collector's 500 gives the build 404); both documents still say "read from the code; not run", which task 37 corrects |
+| N25 | `relay-guest-api`: GUEST-29 | A refused artifact (413 or 500) leaves the exchange's open and its request-header checkpoint with no close; the bytes already streamed have reached the collector's `PUT` | `relay/relay.go:650-666`, `:672-680` | (c): `specs/build-ledger/v1.md`, which expects a closed exchange (seam 4) | An observation for the Rust relay (M2) and for the ledger verifier at M6. Read only |
+| N26 | `relay-claim`: CLAIM-8, beside D8 | `Bearer` is stripped in its case only: `bearer <token>` is 401 | `relaycfg/relaycfg.go:223` | (a): RFC 9110 only; minor | With D8 |
+| N27 | `collector-outputs`: COLLOUT-12, COLLOUT-14; `collector-inputs`: COLLIN-12, COLLIN-15 | `http.ServeMux` answers a dot segment, `//`, and `/v1/artifacts` or `/v1/context` with no trailing `/`, with 307 to the cleaned path, before the handler and the token check | `collector/collector.go:171-183` | (a): the requirements state it; it differs from seam 2's text (400 for an unsafe name, 403 for an unsafe path) | With D1 to D4 |
+| N28 | `executor-initialize`: INIT-23; `bootstrap-config`: BOOTCFG-8 | On macOS and Windows `exclusive` is logged as unsupported and applied as `append` | `cmd/warden-io/platform_darwin.go:91-93`; `platform_windows.go:155-157` | (c): GLOBAL-10; the deferral is `unified-bootstrap`'s assumed question 2, and no **Defaults and overrides** names it | S2's item; a23. Read only |
+| N29 | `executor-initialize`: INIT-15 | `--ip` and `WARDEN_IP` are read on every system and used only on Windows; vz passes `--ip` and gets neither an effect nor an error | `cmd/warden-io/initialize.go:42`; `platform_windows.go:59-73`; `platform_linux.go:44`; `platform_darwin.go:37` | (c): GLOBAL-10 | S2's item; a24. Read only |
+| N30 | `executor-initialize`: INIT-13, INIT-14, INIT-20, INIT-21, INIT-22 | Steps that fail and go on: on Linux, `append` falls back from a failed `update-ca-certificates` to appending to a bundle; on macOS the resolver, `resolv.conf` and `scutil` steps are unchecked and a failed `security add-trusted-cert` is passed; on Windows a failed hosts file, network step or `certutil -addstore Root` is passed, so the CA can be missing from `Root` | `cmd/warden-io/platform_linux.go:78-100`; `platform_darwin.go:46-70`, `:100-108`; `platform_windows.go:53-56`, `:83-86`, `:169-174` | (c): GLOBAL-10, GLOBAL-11; EXEC-03 | S2's item. The macOS and Windows parts read only |
+| N31 | `relay-claim`: CLAIM-1, CLAIM-2 to CLAIM-5, CLAIM-17 | The reference claimant sends the claim on Go's default transport: with `HTTP_PROXY` set and a relay not on loopback, the claim, its claim token and its `collector_token` go to the proxy, whose reply is taken as the relay's; the tunnel is dialled directly | `relaycfg/relaycfg.go:381`, `:393`; `relaycfg/tunnel.go:79-81` | (b): CLAIM-1 has the tunnel and the claim on connections the claimant opened to the relay; the claimant's twin of N2 | K1, with the claim connection it takes over from S4; a25. Security angle: the tokens reach a host that is not the relay |
+| N32 | `collector-outputs`: COLLOUT-28, COLLOUT-25, COLLOUT-18 | The disk collector answers a refused capture (400 for its name, 401 for its token) before it reads the body; the `Warden-Hash` trailer then arrives on an answered stream, `x/net/http2` raises `PROTOCOL_ERROR` and ends the tunnel, with the open ledger `PUT` and the rest of the session | `relaycfg/tunnel.go:58-59`; `collector/collector.go:177`, `:242-244` | (b): COLLOUT-28 broken, named | A new item for the disk collector, after the freeze; it can end a Go relay's session today, through N15 |
+| N33 | `relay-guest-api`: GUEST-29 (413 required from 2 GiB and two bytes, recommended for 2 GiB and one) | An artifact of exactly 2 GiB and one byte is stored and answered 200: the `limitedReader` fails only on a read after the last byte, which `net/http` does not make | `relay/relay.go:161`, `:670`; `relay/collector_client.go:290-301` | (c): its own `maxArtifactBytes` and 413 text, 2 GiB; it meets the MUST and misses the SHOULD | Accept; the Rust relay keeps the SHOULD (M2) |
+
+Implement also reported observations that are not rows here: behaviours
+the documents state, or leave unspecified, that differ from no rule,
+comment or text of this design, and places where the code differs from
+the seam lists of **What each specification covers**. Those are
+Consolidation's (FLOW-10) and later items' to judge; none is a
+divergence.
+
 What kind of item fixes one is Jeff's to say (FLOW-20): a program item, an
 exempt fix (a regression or a security problem), or an item after the
 freeze. This design proposes, and the review decides:
@@ -2131,6 +2273,57 @@ freeze. This design proposes, and the review decides:
 | D17, D18, D19 (the Go relay's robustness) | Not fixed in the Go relay, which the program retires. The specification allows what the Go relay does, and another relay may do better. Jeff may class D18 as a security fix |
 | D1, D2, D3, D4, D16 (the collector) | After the freeze, or with the first alternative collector |
 | D9, D10, D11, D15 (the guest API) | With the Rust relay's M-items, which implement the specification, or after the freeze |
+| N1, N2, N3, N4, N28, N29, N30 (the executor and its reading of the config) | With S2's item, as D12 to D14; N1 by a21, N2 by a25, N28 by a23, N29 by a24 |
+| N31 (the reference claimant) | K1, with the claim connection it takes over from S4; a25 |
+| N24 (a failing collector served as "none") | A new item now, as a security fix the freeze exempts (FLOW-20) |
+| N21 (an exit code that cannot be read) | A new item, after the freeze, unless Jeff classes it with D18 |
+| N12 to N15, N17 to N20, N22, N23, N25, N33 (the Go relay's guest and collector sides) | With the Rust relay's M-items, which implement the specifications, or after the freeze; not fixed in the Go relay, which M6 retires. Jeff may class N13 as a security fix |
+| N5 to N11, N26 (the claim) | Nothing for the rows of class (a), or with D5 to D8; N7 and N8 by a21, N6 by a22 |
+| N16, N27, N32 (the disk collector) | After the freeze, or with the first alternative collector, as D1 to D4; N32 as a new item, since it can end a session today |
+
+#### What Jeff decides in r2
+
+The table is part of the design r1's review approved, so its amendment is
+reviewed (FLOW-19), in one sitting. Jeff decides:
+
+1. **The classes**, row by row, and the corrections of D6 and D17. Each
+   class is a proposal; a row moved to (c) gains a later item, and a row
+   moved out of (b) changes its document's requirement (task 37).
+2. **Each row of class (c)**, on this recommendation:
+   - N1, `bootstrap.Parse` reads loosely: file an observation for S2's
+     item; the contract is a21.
+   - N3, the exclusive-trust hook restores `/etc/ssl/certs` only: file an
+     observation for S2's item.
+   - N4, the Windows hosts file gains an empty line: accept, with an
+     observation for S2's item.
+   - N7, the claim's body read leniently: accept for the Go relay; the
+     contract is a21.
+   - N15, a capture's name longer than a collector takes: file an
+     observation for the Rust relay (M2).
+   - N16, the completion read leniently: file an observation for after the
+     freeze; the contract is a21.
+   - N20, the record of a response's header fields: file an observation
+     for M2, and for M6, where RELAY-02 is restated.
+   - N21, an exit code that cannot be read is success: file an item.
+   - N24, a failing collector turns `exclusive` into `append`: file an
+     item, as a security fix the freeze exempts.
+   - N25, a refused artifact leaves an open record: file an observation
+     for M2 and for M6's ledger verifier.
+   - N28, `exclusive` applied as `append` on macOS and Windows: a23.
+   - N29, `--ip` accepted and ignored: a24.
+   - N30, steps of `initialize` that fail and go on: file an observation
+     for S2's item.
+   - N33, 2 GiB and one byte stored: accept.
+3. **Where the rows of class (b) go**: the proposal above. N2 and N31 are
+   a25.
+4. **a21 to a25** (**Questions**, Assumed). Each proceeds on its
+   recommended answer until he confirms it; with those answers no
+   requirement of the six documents changes.
+
+"File an observation" means it is written into the Archive summary for
+the later item's intake (**Owed to later items**); "file an item" means
+an item is queued for it through intake. Neither changes code here (a12).
+
 
 ### The harness
 
@@ -3201,6 +3394,14 @@ included (`build-link-subnet`), the empty bootstrap config and its `append`
 trust mode (`unified-bootstrap`), and the disk collector's copy where it
 cannot create a capture symlink.
 
+The documents also record fallbacks of today's code that no design's
+**Defaults and overrides** names (GLOBAL-10, GLOBAL-11), found during
+Implement: a collector's failure served to the build as "none" (N24),
+`exclusive` applied as `append` on macOS and Windows (N28), and the steps
+of `initialize` that fail and go on (N30). This item neither adds them
+nor names them as allowed: each is a row of class (c) under **Divergences
+found**, and its fix is the later item's (**What Jeff decides in r2**).
+
 ## Cross-driver impact
 
 No driver is named in `drivers`, and none is affected. No file under
@@ -3967,6 +4168,17 @@ itself with a `GET`; a failed setup reports nothing; and a build can end the
 relay process after its own completion, when the ledger is already with the
 collector. All three are today's behaviour.
 
+Of the rows Implement found (N1 to N33), N2, N24 and N31 have a security
+angle, and N3, N13 and N28 bear on trust or on the collector as the one
+path: a proxy variable takes the executor's requests (N2), or the claim
+with its claim token and `collector_token` (N31), off the relay; a
+failing collector turns a producer's `exclusive` into `append` (N24);
+exclusive trust can be lost after a reinstall (N3) and is `append` on
+macOS and Windows (N28); the relay follows a collector's redirects
+(N13). N21 has a measurement angle: an exit code the relay cannot read
+is recorded as success. All are today's behaviour, and none is changed
+here (a12).
+
 The harness's sandbox runs as root on CI runners and creates network and
 mount namespaces, virtual links and container networks there. It runs only
 the relay binary or image named in the target file.
@@ -4127,6 +4339,7 @@ adds.
 | 11, the book and the umbrella | K | 31, 32 | After 2, before 13 | Reference docs and the amended umbrella |
 | 12, release machinery and the specs pull request | S | 33, 34 | After the last repetition of 9 | The specs pull request open, its `ci` and `flow18` green |
 | 13, the final pins | K | 35 | Last of Implement, after 10, 11 and 12 | The six pins at the specs pull request's head, with a green run |
+| 14, the r2 delta | S, then K | 37, then 35 again | After r2's review, before Review | The mark "not yet in the design's table" gone from S's six documents; the specs pull request's head moved; the six pins at that head, with a green run |
 | The release | S and K, human | 36 | After Review, before `f6-open-pr` | Seven tags; the six pins on them |
 
 **K is one checkout, so K's stages are serial among themselves,** in the
@@ -4393,7 +4606,8 @@ return to Design (Jeff, 2026-11-16, **Design review**): the document
 states what the code does and lists the behaviour under its "Known
 divergences", marked "not yet in the design's table (found <stage>)",
 the stage's report names it with file, line and evidence, and the stage
-goes on; the whole list goes back to Design once, after the suites. One
+goes on; the whole list goes back to Design once, after the suites (it
+did, as r2: the rows are now in the table, and task 37 removes the mark). One
 that looks like a bug is reported as an observation for a later item,
 and the code is not changed. Each stage is green on
 `make check-docs`. The relay that D17 and D18 are reproduced against is
@@ -4708,7 +4922,7 @@ does and lists it under "Known divergences", marked "not yet in the
 design's table (found <stage>)", the case asserts the document, the
 stage's report names the behaviour with file, line and evidence, and the
 stage goes on; the whole list goes back to Design once, after the
-suites. No case is weakened and no code is changed to make a suite pass
+suites, which is r2 (task 37 then removes the mark). No case is weakened and no code is changed to make a suite pass
 (FLOW-06, LOOP-02).
 
 20. **S, stage 8a** `relay-claim`'s cases. For a relay: authorization
@@ -4901,6 +5115,34 @@ joined form. A word that neither review approved is a return to Design
     hand, once, and what it reported is named in the evidence; it does
     not gate the step (FLOW-08, FLOW-16, LOOP-07, FLOW-11).
 
+### The r2 delta
+
+The return to Design of 2026-11-16 (r2, **Design review**) adds one
+task and repeats one. They run once r2's review has ended, on its
+answers, and before Review (phase 4). K's stages stay serial: stage 14
+comes after stage 13.
+
+**Stage 14, the r2 delta (S, then K).**
+
+37. **S, then K.** In S, on `feat/seam-specs`: in each of the six
+    documents, remove the line "Not yet in the design's table (found
+    <stage>)" from each N entry, and reword each "Known divergences"
+    introduction that says the N entries are not yet in the design's
+    table, so that it names that table as holding D1 to D19 and N1 to
+    N33. In `bootstrap-config` and `relay-guest-api`, N24's "Read from
+    the code; not run" becomes what stage 8e ran. Where an answer of r2
+    departs from the recommended one (a21 to a25), or moves a row out of
+    class (b), the requirement it names changes in this task, with its
+    case (**Specification changes**); with the recommended answers no
+    requirement changes and no case changes. `make check`, commit,
+    push: the specs pull request's head moves to that commit, and its
+    `ci` and `flow18` runs are green on it. Then in K, task 35 again on
+    the new head: `make pin-specs REF=<the new head>`, `make test`,
+    `make lint`, push, and the `conformance` run for that push green on
+    all three runners. No code of K changes (a12). The step's evidence
+    names the old head `9abf66c`, the new one, and the run (FLOW-06,
+    FLOW-17, LOOP-02, LOOP-06, TEST-02, TEST-05).
+
 ### Validation by tier
 
 | Tier (TEST-02) | What | Task |
@@ -4933,7 +5175,9 @@ in the design's table (found <stage>)"; each stage's report names it
 with file, line and evidence; and Implement continues. When the suites
 are done the item goes back to Design once (FLOW-06): the table is
 amended with the whole list, the correction of D6 among it, and Jeff
-reviews it in one sitting. A behaviour that looks like a bug is
+reviews it in one sitting. That return is r2 (**Design review**): the
+table now holds N1 to N33 and the corrections of D6 and D17, and after
+its review task 37 removes the mark from S's documents. A behaviour that looks like a bug is
 reported as an observation for a later item; no code of K changes for
 it. Any other finding that the approved design cannot be built as
 written is still a return, as above.
@@ -5331,6 +5575,37 @@ changes. Any other finding that the approved design cannot be built as
 written is still a return to Design. **What goes back to Design, and
 what does not** and stages 3 and 8 of the Implementation plan are
 reworded to match; nothing else in the design changes.
+
+### 2026-11-16, r2: the divergence table amended
+
+- **r2, 2026-11-16: back to Design once, on Jeff's decision of the same
+  day** ("Record as found, one review at the end"; the entry above).
+  Implement's tasks 0 to 35 are done: every suite is merged in S, and
+  the six pins name the specs pull request's head, `9abf66c`
+  (buildwarden/buildwarden-specs#1), at K's `9734cbd`. Stages 3 and 8
+  found 33 behaviours of K's code that **Divergences found** did not
+  list, N1 to N33, each recorded in its document and marked "not yet in
+  the design's table", and two rows that the code does not bear out:
+  D6, which named a collector that refuses the ledger stream among the
+  start's failures (N5), and D17, whose second claim met the next
+  claimant's connection and not merely a closed descriptor. No code of
+  K changed for any of them.
+- What changed in the design: in **Divergences found**, D6 and D17
+  corrected, N1 to N33 added under their own numbers, each with its
+  specification and requirements, what the code does, K's lines and a
+  class, the proposal of which item takes each extended to them, and
+  **What Jeff decides in r2**; a21 to a25 under **Questions**, and in the
+  queue file; a paragraph in **Defaults and overrides** and one in the
+  **Security note**; and in the **Implementation plan**, stage 14 and
+  task 37, the r2 delta, and the sentences that spoke of the mark. The
+  front-matter, the five rule changes' wording and the three amendments
+  to the umbrella are unchanged.
+- Count by class: (a) specified as is, 13; (b) divergence kept, 6 (N2,
+  N12, N13, N14, N31, N32); (c) looks like a bug, 14 (N1, N3, N4, N7,
+  N15, N16, N20, N21, N24, N25, N28, N29, N30, N33).
+- `design_review` stays `required`: the table is part of the design r1
+  approved, and five assumed questions are open (FLOW-19, judged on this
+  delta). The outcome is recorded here with Jeff's answers.
 
 ## Consolidation
 
