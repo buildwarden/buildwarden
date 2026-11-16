@@ -489,7 +489,8 @@ func TestWorkingDirectoryConfigIsCapped(t *testing.T) {
 		}},
 		"1 MiB and one byte": {reason: "larger than 1 MiB", fix: capFix,
 			make: func(t *testing.T, path string) {
-				write(t, filepath.Dir(path), projectConfig, sizedConfig(t, 1<<20+1))
+				body := sizedConfig(t, 1<<20+1)
+				write(t, filepath.Dir(path), projectConfig, body)
 			}},
 		"a link to /proc/self/pagemap": {make: linkToPagemap,
 			reason: "larger than 1 MiB", fix: capFix},
@@ -579,7 +580,8 @@ func TestCappedReadStopsPastTheCap(t *testing.T) {
 		boom := errors.New("boom")
 		data, err := readCapped(&failing{n: 1000, err: boom})
 		if !errors.Is(err, boom) || data != nil {
-			t.Errorf("readCapped = %d bytes, %v; want no bytes and %v", len(data), err, boom)
+			t.Errorf("readCapped = %d bytes, %v; want no bytes and %v",
+				len(data), err, boom)
 		}
 	})
 	t.Run("exactly the cap", func(t *testing.T) {
