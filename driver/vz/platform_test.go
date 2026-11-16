@@ -2,6 +2,8 @@ package vz
 
 import (
 	"errors"
+	"runtime"
+	"runtime/debug"
 	"testing"
 
 	"github.com/buildwarden/buildwarden/driver"
@@ -58,5 +60,29 @@ func TestPlatformErrorWithoutBindingsNeverNil(t *testing.T) {
 				t.Errorf("platformError(%s, %s, false) = %v, want a FixableError with a fix", goos, goarch, err)
 			}
 		}
+	}
+}
+
+// hasBindings must agree with the build it is compiled into. The oracle is
+// the CGO_ENABLED setting the go command records in the test binary, not a
+// build tag, which would only repeat the constraint under test.
+func TestHasBindingsMatchesBuild(t *testing.T) {
+	info, ok := debug.ReadBuildInfo()
+	if !ok {
+		t.Skip("no build info in this binary")
+	}
+	cgo := ""
+	for _, s := range info.Settings {
+		if s.Key == "CGO_ENABLED" {
+			cgo = s.Value
+		}
+	}
+	if cgo == "" {
+		t.Skip("build info records no CGO_ENABLED setting")
+	}
+	want := runtime.GOOS == "darwin" && runtime.GOARCH == "arm64" && cgo == "1"
+	if hasBindings != want {
+		t.Errorf("hasBindings = %v on %s/%s with CGO_ENABLED=%s, want %v",
+			hasBindings, runtime.GOOS, runtime.GOARCH, cgo, want)
 	}
 }
